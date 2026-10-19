@@ -5,7 +5,6 @@
 import type { AgentFeedback, AgentFeedbackArgs, AgentLifecycleDecide, AgentLifecycleProposal, AgentLifecycleQuery, AgentLifecycleSnapshot } from '../../shared/agent-lifecycle';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
 import type { AgentProposal } from '../../shared/agent-authoring';
-import type { LearnedRuleProposal } from '../../shared/agent-pack';
 import type { AgentLifecycle } from './lifecycle';
 import { AGENT_LIFECYCLE_PATH, parseAgentFeedbackArgs } from '../../shared/agent-lifecycle';
 import type { BrainService } from '../services';
@@ -45,7 +44,6 @@ export interface LifecycleActions {
 export interface LifecycleApiOptions {
   /** the catalog now (active and archived): stale trial/probation entries are hidden and refused */
   agents?: () => AgentProfile[];
-  learned?: () => LearnedRuleProposal[];
   drafts?: () => AgentProposal[];
   actions?: LifecycleActions;
   /** a feedback record was stored (the trial of its agent is evaluated again) */
@@ -78,7 +76,6 @@ export function createLifecycleApi(service: AgentLifecycle, runById: (id: string
         evaluations: service.evaluations().filter(e => !agentId || e.agentId === agentId),
         feedback: agentId ? structuredClone(service.feedback.list(agentId)) : [],
         problem: service.problem ?? service.feedback.problem,
-        learned: (o.learned?.() ?? []).filter(p => p.status === 'pending' && (!agentId || p.agentId === agentId)),
         drafts: (o.drafts?.() ?? []).filter(p => p.state === 'pending' && (!agentId || p.agentId === agentId)),
       };
     },

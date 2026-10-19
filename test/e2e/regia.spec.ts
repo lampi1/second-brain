@@ -1,7 +1,7 @@
-// E2E tests of the Regia on the demo (SB_DEMO=1, frozen): the Regia's ⋯ menu (the chat menu plus "Ricomincia da
-// capo" and "Cambia motore"), the Nuova Regia confirm (engine, "porta un riassunto") opened from the menu, Ctrl+Shift+R
-// and the palette, the old Regia staying as a normal chat, and the new chat dialog adding a named Regia tab when a
-// Regia already exists (ADR 0021). Screenshots, dark and light, in test-results/shots/.
+// E2E tests of the Orchestrator on the demo (SB_DEMO=1, frozen): the Orchestrator's ⋯ menu (the chat menu plus "Ricomincia da
+// capo" and "Cambia motore"), the Nuovo Orchestrator confirm (engine, "porta un riassunto") opened from the menu, Ctrl+Shift+R
+// and the palette, the old Orchestrator staying as a normal chat, and the new chat dialog adding a named Orchestrator tab when a
+// Orchestrator already exists (ADR 0021). Screenshots, dark and light, in test-results/shots/.
 import { expect, test, type Page } from '@playwright/test';
 import { launchDemo, shot } from './helpers';
 
@@ -44,7 +44,7 @@ test('the Regia menu, Ricomincia da capo (Ctrl+Shift+R) and Cambia motore Claude
   await expect(dlg).toHaveCount(0);
   expect(await regiaIdOf(page)).toBe('regia');
 
-  // Ctrl+Shift+R: same engine = Ricomincia da capo; Enter confirms; the new Regia starts from the summary
+  // Ctrl+Shift+R: same engine = Ricomincia da capo; Enter confirms; the new Orchestrator starts from the summary
   await page.keyboard.press('Control+Shift+R');
   await expect(page.getByTestId('regia-renew-claude')).toHaveAttribute('aria-checked', 'true');
   await expect(page.getByTestId('regia-renew-go')).toHaveText('Ricomincia da capo');
@@ -60,7 +60,7 @@ test('the Regia menu, Ricomincia da capo (Ctrl+Shift+R) and Cambia motore Claude
   await expect(first).toContainText('Orchestrator precedente · Claude');
   await expect(page.getByTestId('toasts')).toContainText('Orchestrator nuovo su Claude');
   await expect(page.getByTestId('regia-input')).toBeFocused();
-  // through the routing table (ADR 0032): a Regia's work is 'regia', its route reaches the ledger
+  // through the routing table (ADR 0032): an Orchestrator's work is 'regia', its route reaches the ledger
   const renewed = await regiaIdOf(page);
   const listed = await page.evaluate(() => window.sb.invoke('chat:list', undefined));
   expect(listed.find(c => c.id === renewed)).toMatchObject({ harness: 'claude', route: { policy: 'routing', kind: 'regia' } });
@@ -79,7 +79,7 @@ test('the Regia menu, Ricomincia da capo (Ctrl+Shift+R) and Cambia motore Claude
   await expect(page.getByTestId(`tile-chat-${second}`)).toContainText(`Regia precedente · Claude · ${when} (2)`); // same minute: never two equal names
   await expect(page.getByTestId('tile-regia')).not.toContainText('Passaggio di consegne');
   await expect(page.locator('[data-testid="tile-regia"]')).toHaveCount(1);
-  // the Cursor Regia's menu: Cursor models, no effort/permissions, the way back
+  // the Cursor Orchestrator's menu: Cursor models, no effort/permissions, the way back
   const third = await regiaIdOf(page);
   await page.getByTestId('regia-menu').click();
   await expect(page.getByTestId(`chat-engine-${third}`)).toContainText('Cambia motore → Claude Code');

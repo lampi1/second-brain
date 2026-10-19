@@ -8,13 +8,14 @@ export const HISTORY_PER_AGENT = 50;
 /** Below the local store's 8 MB cap, with headroom for the entry being added. */
 export const HISTORY_BYTES = 7_000_000;
 const STATES: readonly AgentVersionState[] = ['active', 'trial', 'kept', 'rejected', 'superseded'];
-const AUTHORS: readonly AgentAuthor[] = ['user', 'orchestrator', 'preset', 'migration'];
+const AUTHORS: readonly AgentAuthor[] = ['user', 'orchestrator', 'preset', 'migration', 'maintenance'];
 const ID = /^[a-z][a-z0-9_-]{0,79}$/;
 const count = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) >= 1;
 
 export function behaviourOf(p: AgentBehaviour): AgentBehaviour {
   return structuredClone({ instructions: p.instructions, ...(p.manifest !== undefined ? { manifest: p.manifest } : {}), engine: p.engine, model: p.model,
-    ...(p.effort !== undefined ? { effort: p.effort } : {}), ...(p.knowhow !== undefined ? { knowhow: p.knowhow } : {}), tools: p.tools ?? null, permissionCeiling: p.permissionCeiling ?? null });
+    ...(p.effort !== undefined ? { effort: p.effort } : {}), ...(p.knowhow !== undefined ? { knowhow: p.knowhow } : {}), tools: p.tools ?? null, permissionCeiling: p.permissionCeiling ?? null,
+    ...(typeof p.maxContext === 'number' ? { maxContext: p.maxContext } : {}) });
 }
 /** Field-order independent: two saves of the same behaviour never create a version. */
 export function sameBehaviour(a: AgentBehaviour, b: AgentBehaviour): boolean {

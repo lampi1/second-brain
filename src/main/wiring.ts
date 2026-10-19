@@ -14,7 +14,7 @@ import { AgentCatalogService } from './agents/catalog';
 import { AgentAuthoring } from './agents/authoring';
 import { SuggestionBudget } from './agents/suggestion-budget';
 import { createAgentPacks } from './agents/pack/wiring';
-import { agentLearnTool } from './agents/pack/learning';
+import { chatLearnTool } from './agents/pack/learning';
 import { agentCatalogBrief, agentCatalogTool, CATALOG_GUIDANCE } from './agents/discovery';
 import { systemLang } from './lang';
 import { SetupService } from './agents/setup';
@@ -26,22 +26,28 @@ import { createAgentLoop } from './agents/loop';
 import { childFeedbackTools } from './agents/child-feedback';
 import type { ProbationJudgement } from './agents/probation';
 import type { AgentProfile, AgentRun } from '../shared/agents';
-import { ProposalBridge } from './improve/proposal-bridge';
 import { mountTextTool, TEXT_ENV } from './engines/text-mcp';
 import { agentsMayOpen, crossRefusal, engineOn } from './engines/policy';
 import { createEngines, type EnginesApi } from './engines/service';
 import { safeStorageCipher } from './engines/secrets';
+import { CloudService, cloudFile } from './cloud/service';
+import { realExec, realHttp } from './cloud/exec';
+import { CURSOR_CLOUD_KEY } from './cloud/cursor';
 import { EngineSweeper } from './chats/sweep';
 import { ChatManager, workBehind } from './chats/manager';
 import type { Emitter } from './ipc';
-import type { BrainService, BrowserService, ChatService, DevopsApi, SkillsApi } from './services';
+import type { BrainService, BrowserService, ChatService, TasksApi, SkillsApi } from './services';
 import { SkillsService } from './skills/service';
+import { BrainModelService } from './brainmodel/service';
+import { classifyByWords } from './agents/classifier';
 import { createBrain } from './brain';
 import { setLaunchRules } from './brain/adapters/domains';
 import { setCodexAutonomyRoots } from './brain/adapters/codex-policy';
 import { doneEvent } from './brain/live';
 import { syncBeforeCreate } from './brain/sync';
-import { predictionLine } from './brain/routing';
+import { agentStatsLine, knownOutcome, predictionLine } from './brain/routing';
+import { runMetrics } from './agents/run-metrics';
+import { subagentTools } from './agents/subagent-tool';
 import { listPrice, setPriceTable } from './chats/live-cost';
 import type { McpServer, McpTool, ToolOutput } from './mcp/server';
 import { createBrowserModule, mcpPortFromEnv } from './browser/service';
@@ -58,11 +64,12 @@ import { CommandRunner } from './run/runner';
 import { CommandAsks } from './run/asks';
 import { RunResults } from './run/results';
 import { RegiaWake } from './chats/regia-wake';
+import { attachHeldNews, type HeldNewsHub } from './chats/held-news';
 import { ReplyRules } from './chats/reply-rules';
-import { DevopsService } from './devops/service';
+import { TaskService } from './tasks/service';
 import { Quality } from './brain/quality';
-import { cleanEnv, findNode, ImproveService, type ImproveDeps } from './improve/service';
-import { spawn } from 'node:child_process';
+import { AppSourceService, cleanEnv, findNode } from './update/source';
+import { execFile, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { electronNode, runNode } from './brain/node';
 import path from 'node:path';
@@ -91,6 +98,8 @@ const { setInterval, clearInterval } = timersFor('wiring/auto-close');
 
 export interface Ctx { emitter: Emitter; window: () => BrowserWindow | null; userData: string }
 export interface Wired {
+  /** cloud agents (ADR 0080): Cursor, Codex and Claude agents that run in their vendor's cloud */
+  cloud?: CloudService;
   agentAuthoring?: AgentAuthoring;
   /** the agents' "Da approvare" queue: read at /api/agents/lifecycle, decided only through agents:lifecycleDecide */
   agentLifecycle?: LifecycleApi;
@@ -102,13 +111,14 @@ export interface Wired {
   /** the agent classifier's thresholds and their calibration from confirmed runs (decided only by the user) */
   classifierTuning?: ClassifierTuning;
   updateChats?: { problem: () => string | null; checkpoint: () => void };
-  proposals: ProposalBridge;
   progress: ProgressService;
   autoClose: AutoCloseService;
   agents: AgentCatalogService;
   agentPacks: ReturnType<typeof createAgentPacks>;
+  /** the Brain pages and their maintenance jobs (ADR 0077) */
+  brainModel: BrainModelService;
   setup: SetupService;
-  chats: ChatService; browser: BrowserService; brain: BrainService; devops: DevopsApi;
+  chats: ChatService; browser: BrowserService; brain: BrainService; tasks: TasksApi;
   /** the engines of the brain, which definitions the user turned on, the API keys (ADR 0046) */
   engines: EnginesApi;
   /** the chat folders' git branches ('chat:branches'); absent = read from disk (chats/branch.ts) */
@@ -121,10 +131,12 @@ export interface Wired {
   runner: CommandRunner;
   /** shell blocks a chat left for the user, as open requests ("Comando da eseguire", run/asks.ts) */
   asks: CommandAsks;
-  /** "Eventi alla Regia": work chats' news wakes the Regia (chats/regia-wake.ts) */
+  /** "Eventi all'Orchestrator": work chats' news wakes the Orchestrator (chats/regia-wake.ts) */
   wake: RegiaWake;
-  /** "Migliora l'app": branches, Aggiorna, the restart notice (ADR 0020) */
-  improve: ImproveService;
+  /** "N novità in attesa" (#88): what the delivery rule holds back for the Orchestrators (chats/held-news.ts) */
+  heldNews?: HeldNewsHub;
+  /** "Aggiorna" from GitHub (Settings → Aggiornamenti), app_update_code, the restart notice (ADR 0074, 0075) */
+  source: AppSourceService;
   /** "Rispondi dopo" (main/later.ts, ADR 0035) */
   later: AnswerLaterStore;
   cli(): Record<Harness, CliStatus> | null;
@@ -143,27 +155,23 @@ export function toMcp(out: ToolOut): ToolOutput {
   return JSON.stringify(out, null, 1);
 }
 
-/** The app-control tools on the local MCP server: /mcp/app for the work Regia, /mcp/improve for the Regia of
- *  "Migliora l'app" (its own chats, the branches' state). */
-export function attachAppTools(mcp: McpServer, deps: Omit<Parameters<typeof appControlTools>[0], 'sourceOnly' | 'improve'>, improve: ImproveService, demo = false, regiaTokens?: EndpointTokens): void {
+/** The app-control tools on the local MCP server: /mcp/app for test agents (acts as the first Orchestrator) and
+ *  /mcp/app/r/<id>/<token> for each Orchestrator (ADR 0021). Only the second gets app_update_code (ADR 0074). */
+export function attachAppTools(mcp: McpServer, deps: Omit<Parameters<typeof appControlTools>[0], 'code'>, source: AppSourceService, demo = false, regiaTokens?: EndpointTokens): void {
   const as = (t: ToolDef): McpTool => ({ name: t.name, description: t.description, inputSchema: t.inputSchema as Record<string, unknown>, ...(t.annotations ? { annotations: t.annotations } : {}), run: async a => toMcp(await t.run(a)) });
   const what = demo ? 'the second-brain app (demo data)' : 'the second-brain app itself: state, chats, open questions (read-only), feed, logs, screenshots, UI';
-  // NEW_CHAT_RULE: what the "Nuova chat" toggle of the Regia's input means (ADR 0034)
+  // NEW_CHAT_RULE: what the "Nuova chat" toggle of the Orchestrator's input means (ADR 0034)
   const instructions = `Control and inspect ${what}. It can never answer questions or permissions. For a status or after a wake, call app_digest (since "last") once instead of reading chats one by one. ${CATALOG_GUIDANCE} ${NEW_CHAT_RULE}`;
-  // /mcp/app: test agents (acts as the first Regia); /mcp/app/r/<id>/<token>: each work Regia's own, so the tools know
-  // the caller (ADR 0021). Only an open Regia with its own token answers (the token lives only here and in its config).
-  mcp.mount('/mcp/app', { name: 'app', instructions, tools: appControlTools({ ...deps, improve: { repo: () => improve.repo(), state: () => improve.refresh(), inRepo: dir => improve.inRepo(dir) } }).map(as) });
+  const code = { repo: () => source.repo(), inRepo: (dir: string) => source.inRepo(dir) };
+  // /mcp/app: test agents (acts as the first Orchestrator); /mcp/app/r/<id>/<token>: each work Orchestrator's own, so the tools know
+  // the caller (ADR 0021). Only an open Orchestrator with its own token answers (the token lives only here and in its config).
+  mcp.mount('/mcp/app', { name: 'app', instructions, tools: appControlTools({ ...deps, code }).map(as) });
   if (regiaTokens) {
     mcp.mount('/mcp/app/r/:chatId/:token', {
       name: 'app', instructions, authorize: regiaEndpointAuth(regiaTokens, () => deps.chats.list()), who: p => p.chatId,
-      tools: c => appControlTools({ ...deps, unified: true, improve: { repo: () => improve.repo(), state: () => improve.refresh(), inRepo: dir => improve.inRepo(dir), pull: () => improve.pull() } }, c.params.chatId).map(as),
+      tools: c => appControlTools({ ...deps, unified: true, code: { ...code, pull: () => source.pull() } }, c.params.chatId).map(as),
     });
   }
-  mcp.mount('/mcp/improve', {
-    name: 'app',
-    instructions: `"Migliora l'app": the Orchestrator of the app's own improvements. Control and inspect ${what}, all chats in the Grindhouse; creation requires the app source repository; app_improve_state reads branches and versions. It can never answer questions or permissions, never promote nor restart the app. ${NEW_CHAT_RULE}`,
-    tools: appControlTools({ ...deps, sourceOnly: true, improve: { repo: () => improve.repo(), state: () => improve.refresh(), inRepo: dir => improve.inRepo(dir) } }).map(as),
-  });
 }
 
 /** "Rispondi dopo" (main/later.ts): the flag, sent to the page as 'later:changed'. */
@@ -184,7 +192,7 @@ export function commandRunner(ctx: Pick<Ctx, 'emitter'>, chats: ChatService): Co
 export function attachCommandAsks(ctx: Pick<Ctx, 'emitter'>, runner: CommandRunner, brain: Pick<BrainService, 'publish'>, now?: () => number, chats?: Pick<ChatService, 'commandAsked' | 'commandDone'>): CommandAsks {
   const send = ctx.emitter.emit.bind(ctx.emitter);
   const asks = new CommandAsks({
-    // through the emitter as it is when called: the taps added later (the Regia's news) hear it too
+    // through the emitter as it is when called: the taps added later (the Orchestrator's news) hear it too
     emit: (ch, p) => {
       ctx.emitter.emit(ch, p);
       if (ch === 'pending:resolved') { const x = p as { chatId: string; requestId: string }; chats?.commandDone?.(x.chatId, x.requestId); }
@@ -200,9 +208,9 @@ export function attachCommandAsks(ctx: Pick<Ctx, 'emitter'>, runner: CommandRunn
   return asks;
 }
 
-/** "Eventi alla Regia" (chats/regia-wake.ts): it watches the same events (the emitter tapped once more) and writes
- *  to the Regia through the chat service. on = the setting regiaEvents and, in tests, an explicit SB_REGIA_EVENTS=1
- *  (a test's Regia never gets surprise messages); SB_REGIA_EVENTS_MS shortens the grouping window for e2e. */
+/** "Eventi all'Orchestrator" (chats/regia-wake.ts): it watches the same events (the emitter tapped once more) and writes
+ *  to the Orchestrator through the chat service. on = the setting regiaEvents and, in tests, an explicit SB_REGIA_EVENTS=1
+ *  (a test's Orchestrator never gets surprise messages); SB_REGIA_EVENTS_MS shortens the grouping window for e2e. */
 export function attachRegiaWake(ctx: Pick<Ctx, 'emitter'>, chats: Pick<ChatService, 'send' | 'list'>, on: () => boolean, now?: () => number): RegiaWake {
   const groupMs = Number(process.env.SB_REGIA_EVENTS_MS) || undefined;
   const wake = new RegiaWake({ send: (chatId, text) => chats.send(chatId, text), enabled: on, list: () => chats.list(), ...(groupMs ? { groupMs } : {}), ...(now ? { now } : {}) });
@@ -237,31 +245,31 @@ export function attachArtifacts(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: P
   return store;
 }
 
-/** "Migliora l'app" (ADR 0020). Stable = started by the launcher (SB_RELEASE); SB_IMPROVE_STABLE=<release id> makes a
- *  test or demo run behave as that stable release (with SB_RELEASES_ROOT and SB_IMPROVE_REPO pointing at temp folders),
- *  and then a restart is only recorded (__sbImprove.restarts), never real. */
-export function createImprove(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: Pick<ChatService, 'list' | 'create'>, appRepo: () => string | null, routing?: ImproveDeps['routing']): ImproveService {
-  const fake = process.env.SB_IMPROVE_STABLE;
+/** "Aggiorna" from GitHub (ADR 0075). Stable = started by the launcher (SB_RELEASE); SB_UPDATE_STABLE=<release id> makes
+ *  a test or demo run behave as that stable release (with SB_RELEASES_ROOT and SB_UPDATE_REPO pointing at temp
+ *  folders), and then a restart is only recorded (__sbUpdate.restarts), never real. */
+export function createAppSource(ctx: Pick<Ctx, 'emitter' | 'userData'>, appRepo: () => string | null): AppSourceService {
+  const fake = process.env.SB_UPDATE_STABLE;
   const running = fake ?? releaseId() ?? 'dev';
   const releasesBase = process.env.SB_RELEASES_ROOT ?? sharedDir();
   const real = !!releaseId() && !fake && !process.env.SB_TEST;
   const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-  const devRepo = process.env.SB_IMPROVE_REPO ?? (fs.existsSync(path.join(outDir, '.git')) ? outDir : null);
+  const devRepo = process.env.SB_UPDATE_REPO ?? (fs.existsSync(path.join(outDir, '.git')) ? outDir : null);
   const recorder = { restarts: 0 };
-  (globalThis as Record<string, unknown>).__sbImprove = recorder;
-  return new ImproveService({
-    userData: ctx.userData, releasesBase, running, stable: !!fake || !!releaseId(), allowLegacyPromotion: false,
-    appRepo: () => appRepo() ?? (fake ? devRepo : null), devRepo, chats, node: findNode(), ...(routing ? { routing } : {}),
-    emit: st => ctx.emitter.emit('improve:state', st),
-    offline: !!(process.env.SB_TEST || process.env.SB_DEMO) && !process.env.SB_IMPROVE_REPO,
+  (globalThis as Record<string, unknown>).__sbUpdate = recorder;
+  return new AppSourceService({
+    userData: ctx.userData, releasesBase, running, stable: !!fake || !!releaseId(),
+    appRepo: () => appRepo() ?? (fake ? devRepo : null), devRepo, node: findNode(),
+    emit: st => ctx.emitter.emit('source:state', st),
+    offline: !!(process.env.SB_TEST || process.env.SB_DEMO) && !process.env.SB_UPDATE_REPO,
     relaunch: () => {
-      if (process.env.SB_TEST || fake) { recorder.restarts++; log.info('improve', 'relaunch asked (test run: not relaunching)'); return; }
-      log.info('improve', 'relaunching the dev build on the new code');
+      if (process.env.SB_TEST || fake) { recorder.restarts++; log.info('update', 'relaunch asked (test run: not relaunching)'); return; }
+      log.info('update', 'relaunching the dev build on the new code');
       app.relaunch();
       app.quit();
     },
     restart: failed => {
-      if (!real) { recorder.restarts++; log.info('improve', 'restart asked (test run: not restarting)'); return; }
+      if (!real) { recorder.restarts++; log.info('update', 'restart asked (test run: not restarting)'); return; }
       // the launcher starts the new current release (and falls back by itself) once this process is gone: this app
       // holds the single-instance lock until its quit ends (chats close, up to seconds), and a release started before
       // would exit at once and be marked bad (reviews 2026-10-12). After 60 s it starts anyway.
@@ -269,13 +277,13 @@ export function createImprove(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: Pic
       const waiter = restartWaiter(process.pid, launcher);
       // quit only once the waiter really started: a powershell.exe that cannot start (blocked, missing) reports it
       // asynchronously, and the app must then stay open rather than close with nothing to reopen it (review 2026-10-12)
-      const fail = (e: unknown) => { log.error('improve', 'launcher not started: the app stays open on the old version', { cause: errText(e), hint: `start it by hand: ${launcher}` }); failed(); };
+      const fail = (e: unknown) => { log.error('update', 'launcher not started: the app stays open on the old version', { cause: errText(e), hint: `start it by hand: ${launcher}` }); failed(); };
       try {
         const child = spawn(waiter.command, waiter.args, { detached: true, stdio: 'ignore', windowsHide: true, env: cleanEnv(process.env) });
         child.once('error', fail);
         child.once('spawn', () => {
           child.unref();
-          log.info('improve', 'restarting through the launcher', { data: { launcher } });
+          log.info('update', 'restarting through the launcher', { data: { launcher } });
           app.quit();
         });
       } catch (e) { fail(e); }
@@ -302,7 +310,7 @@ export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: Engin
     legacyRoutes: () => brain.routingInfo().table?.routes ?? [], legacyApiEngine: () => anthropicApi()?.id ?? null,
     models: () => {
       const seen = withApiModels(brain.modelsSeen());
-      return engineInfos().map(e => ({ engine: e.id, label: e.label, enabled: engineOn(brain.settings(), e.id), trusted: e.trusted, effort: e.caps.effort,
+      return engineInfos().map(e => ({ engine: e.id, label: e.label, enabled: engineOn(brain.settings(), e.id), trusted: e.trusted, effort: e.caps.effort, maxContext: e.kind === 'claude',
         models: seen[e.id]?.ids ?? [], source: seen[e.id]?.ids.length ? seen[e.id]!.at > 0 ? 'observed' as const : 'registry' as const : 'unknown' as const,
         installed: e.kind === 'api' ? null : cli()?.[e.id]?.found ?? null, authenticated: e.kind === 'api' ? engines.hasKey(e.id) : cli()?.[e.id]?.loggedIn ?? null,
         defaultModel: e.kind !== 'api', modelSelectable: e.kind !== 'acp' || !!engineOf(e.id)?.modelFlag,
@@ -368,6 +376,16 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // the brain's engines are read before the chats restore: a chat on one of them can resume (ADR 0046)
   const engines = createEngines({ userData: ctx.userData, emitter: ctx.emitter, cipher: safeStorageCipher(safeStorage), brainRoot: () => brain.info().brainRoot, settings: brain });
   const textTool = mountTextTool(mcp, engines.text);
+  // cloud agents (ADR 0080): the vendors' lists polled only while the window is on screen; tests never reach a vendor
+  const cloud = new CloudService({
+    file: cloudFile(ctx.userData), emit: st => ctx.emitter.emit('cloud:changed', st), exec: realExec,
+    http: process.env.SB_TEST || process.env.VITEST ? () => Promise.reject(new Error('i test non chiamano Cursor')) : realHttp,
+    cursorKey: () => engines.keyFor(CURSOR_CLOUD_KEY), engineOn: h => engineOn(brain.settings(), h),
+    budget: () => { const b = brain.settings().budget; return { limitUsd: b.enabled && b.cursor.mode !== 'off' ? b.cursor.dailyUsd : null, localTodayUsd: brain.usage().cursorTodayUsd ?? 0 }; },
+    addSpend: usd => engines.addSpend(CURSOR_CLOUD_KEY, usd),
+    visible: () => { const w = ctx.window(); return !!w && !w.isDestroyed() && w.isVisible() && !w.isMinimized(); },
+  });
+  cloud.startPolling();
   // personal milestones (Brother, 18/10: they must be earnable): on in the real profile; the demo keeps them read-only.
   // Created before the catalog so a customized Agent earns 'first-agent'; the chats are read only on a confirmation.
   const progressService = new ProgressService(ctx.userData, { enabled: true, chats: () => chats.list(), emit: state => ctx.emitter.emit('progress:changed', state) });
@@ -381,7 +399,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const classifier = new AgentClassifier(hybrid, undefined, () => classifierTuning.thresholds());
   const classifyAgents: ClassifyAgents = (request, catalog) => classifier.classify(request, (catalog ?? agents.list()).profiles, manager.runs.list());
   const agentPacks = createAgentPacks(ctx.userData, brain, agents);
-  addChatTools([agentCatalogTool(() => agents.list(), classifyAgents), agentLearnTool(agentPacks.learning), brainSearchTool((q, o) => hybrid.query(q, o)), brainScriptsTool(brainScripts)]);
+  // agent_learn_propose on a work chat's endpoint: only its own agent's lessons, queued for the Orchestrator and the user
+  addChatTools([agentCatalogTool(() => agents.list(), classifyAgents), chatLearnTool(agentPacks.learning, () => manager.runs.list()), brainSearchTool((q, o) => hybrid.query(q, o)), brainScriptsTool(brainScripts)]);
   scriptEnv = () => ({ [TEXT_ENV]: textTool.url() });
   apiRoute = () => { const e = anthropicApi(); return e && engineOn(brain.settings(), e.id) && engines.hasKey(e.id) ? e.id : null; };
   // live turn costs at the brain's per-model list prices (harness/models.json), re-read at most every 30 s
@@ -390,8 +409,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
 
   // Claude chats through the user's own `claude` CLI (SB_CLAUDE_PATH: a fake CLI for e2e tests); each chat gets its own
   // browser endpoint, so it sees and drives only its tabs.
-  // each Regia's app-control endpoint carries an unguessable token (ADR 0021): the URL names the caller, whose engine
-  // decides the Claude <-> Cursor rule, so a local process may not pick another Regia's identity
+  // each Orchestrator's app-control endpoint carries an unguessable token (ADR 0021): the URL names the caller, whose engine
+  // decides the Claude <-> Cursor rule, so a local process may not pick another Orchestrator's identity
   const regiaTokens = new EndpointTokens();
   const coldTest = process.env.SB_TEST && process.env.SB_COLD_MS ? process.env.SB_COLD_MS.split(',').map(Number) as [number, number, number] : null;
   // rules on the chats' replies, checked at every turn end so they hold with any model (ADR 0063)
@@ -415,7 +434,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     probation: { catalog: agents, publish: events => brain.publish(events), propose: (agent, j) => loopRef.current?.probation(agent, j) },
     onRunStarted: run => loopRef.current?.started(run),
     onRunEnded: run => loopRef.current?.ended(run),
-    onRunOutcome: run => loopRef.current?.outcome(run),
+    onRunOutcome: run => { routingVerdict(run); loopRef.current?.outcome(run); },
     ...(process.env.SB_TEST ? { probationEveryMs: 0 } : {}),
     agentCatalogBrief: () => agentCatalogBrief(() => agents.list()),
     emitter: ctx.emitter,
@@ -439,8 +458,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       sampler: forcedSampler(process.env.SB_LOAD_FORCE) ?? new OsLoadSampler(),
       limits: () => { const st = brain.settings(); return { enabled: st.loadQueue !== false, cpu: st.loadQueueCpu ?? 75, ram: st.loadQueueRam ?? 15 }; },
     },
-    // the Regia also gets the app-control tools (create work chats, read the app): /mcp/app on the same server
-    appMcpUrl: (regiaId, space) => browser.mcpUrlFor(null).replace(/\/mcp$/, space === 'app' ? '/mcp/improve' : `/mcp/app/r/${regiaId}/${regiaTokens.tokenFor(regiaId)}`),
+    // the Orchestrator also gets the app-control tools (create work chats, read the app): /mcp/app on the same server
+    appMcpUrl: regiaId => browser.mcpUrlFor(null).replace(/\/mcp$/, `/mcp/app/r/${regiaId}/${regiaTokens.tokenFor(regiaId)}`),
     // brain hooks: plan limits, the job ledger (real cost and time), the live feed and notifications
     onRateLimit: msg => brain.ingestRateLimits(msg),
     onModels: (h, list) => brain.recordModels(h, list),
@@ -528,13 +547,14 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
 
   // mail between chats in real time: inbox.mjs mail goes to the app's live chats at once, and every chat gets
   // send_to_chat / list_chats on its own MCP endpoint (chats/mail.ts)
-  // the words that time the mail to a Regia come from the brain (chats/regia-delivery.ts)
+  // the words that time the mail to an Orchestrator come from the brain (chats/regia-delivery.ts)
   const classify = brainClassifier(() => { const root = brain.info().brainRoot; return root ? readRegiaMail(root) : undefined; });
   const mail = new ChatMail({ root: () => brain.info().brainRoot, chats, instance: path.basename(ctx.userData), classify, holdActivity: id => manager.holdActivity(id) });
   addChatTools(mailTools({ classify,
     root: () => brain.info().brainRoot, chats: () => chats.list(), crossRefusal: (from, to) => crossRefusal(brain.settings(), from, to),
     agentsMayOpen: h => agentsMayOpen(brain.settings(), h),
     deliver: () => { void mail.tick(); }, chainOf: box => mail.chainOf(box),
+    sent: (fromId, toId, text) => manager.noteMail(fromId, toId, text), // a worker's report completes its assignment (ADR 0084)
   }));
   mail.start();
   // show_ui on every chat's own endpoint: a visual from the catalog instead of a wall of text (ADR 0033)
@@ -554,7 +574,12 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   } catch { keptProblem = true; }
   const autoCloseService = new AutoCloseService({ now: autoCloseNow,
     delayMs: () => keptProblem ? 0 : (brain.settings().autoCloseMin ?? 2) * 60_000,
-    candidates: () => manager.autoCloseCandidates(id => mail.hasWork(id) || asks.pending().some(p => p.chatId === id) || runner.list(id).some(r => r.state === 'running') || browser.list().some(t => t.ownerChatId === id)),
+    // what holds a chat open, named for its "In attesa di…" label (ADR 0084); an open tab alone no longer holds it (the
+    // archive closes its tabs): only a hand-off, a dialog or a page still loading
+    candidates: () => manager.autoCloseCandidates(id => asks.pending().some(p => p.chatId === id) ? 'command'
+      : browser.list().some(t => t.ownerChatId === id && (!!t.handoffId || !!t.dialog)) ? 'browser'
+      : runner.list(id).some(r => r.state === 'running') || browser.list().some(t => t.ownerChatId === id && t.loading) ? 'work'
+      : mail.hasWork(id) ? 'mail' : false),
     archive: async (id, _reservation, valid) => {
       const done = await manager.archiveAutomatic(id, valid);
       if (done) for (const tab of browser.list()) if (tab.ownerChatId === id) browser.close(tab.id);
@@ -568,14 +593,24 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   autoCloseTimer.unref();
   const wake = attachRegiaWake(ctx, chats, () => brain.settings().regiaEvents !== false && (!process.env.SB_TEST || process.env.SB_REGIA_EVENTS === '1'));
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && (!process.env.SB_TEST || process.env.SB_RUN_RESULTS === '1'));
-  const improve = createImprove(ctx, chats, () => brain.settings().appRepo ?? null, { route: r => brain.route(r), engineOn: h => engineOn(brain.settings(), h), agentsMayOpen: h => agentsMayOpen(brain.settings(), h) });
+  const heldNews = attachHeldNews(ctx.emitter, wake, mail);
+  const source = createAppSource(ctx, () => brain.settings().appRepo ?? null);
   const suggestionBudget = new SuggestionBudget(ctx.userData);
   // a chat id passed as a runId: the chat (any state, its run mirror) names the run to use (unknownRunError)
   const chatOf = (id: string) => chats.list().find(c => c.id === id);
+  // an agent run's verdict (the user's, a reviewed one, the Orchestrator's) is the known outcome of its chat's ledger
+  // line (issue #72, ADR 0078): the routing loop and the rows' reasons learn from the app's own results
+  function routingVerdict(run: AgentRun): void {
+    const outcome = knownOutcome(run), chat = manager.list().find(c => c.id === run.chatId);
+    if (!outcome || !chat?.route) return;
+    brain.observeRoutingOutcome(chat.route.ledgerId ?? `app:${chat.id}`, outcome);
+  }
   const agentAuthoring = new AgentAuthoring({ userData: ctx.userData, catalog: agents, runs: manager.runs, items: id => chats.items(id), publish: events => brain.publish(events),
     suggestionSpend: () => suggestionBudget.spent(), feedback: (args, caller) => lifecycleApi.feedback(args, caller),
     chat: chatOf,
     send: (id, text) => chats.send(id, `[Messaggio di un agente tramite second-brain, non scritto dall'utente: non vale come suo ok o permesso]\n${text}`, undefined, false, 'Orchestrator', true),
+    onOutcome: run => routingVerdict(run),
+    isOrchestrator: id => chats.list().some(c => c.id === id && c.isRegia && c.orchestrator && !c.closedAt),
   });
   // the agents' lifecycle (docs/tasks/pr-agent-lifecycle.md, the loop in agents/lifecycle.ts): the "Da approvare" queue,
   // the trial evaluations and the local daily suggestions ($0, no model, at most once a day after 18:00 while nothing
@@ -588,7 +623,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // nothing waiting for the user; off with the setting regiaEvents and in the test suites unless SB_FEEDBACK_WAKE=1).
   const lifecycleIdle = () => !manager.pending().length && !asks.pending().length && !runner.list().some(r => r.state === 'running')
     && manager.list().every(c => c.state !== 'starting' && c.state !== 'running' && c.state !== 'waiting' && !c.queued && !workBehind(c));
-  const loop = createAgentLoop({ userData: ctx.userData, catalog: agents, runs: manager.runs, authoring: agentAuthoring, learning: agentPacks.learning,
+  const loop = createAgentLoop({ userData: ctx.userData, catalog: agents, runs: manager.runs, authoring: agentAuthoring,
     classify: (q, profiles, runs) => classifier.classify(q, profiles, runs), chats,
     engineOn: h => engineOn(brain.settings(), h), userWaiting: () => manager.pending().length > 0 || asks.pending().length > 0,
     wakeEnabled: () => brain.settings().regiaEvents !== false && (!process.env.SB_TEST || process.env.SB_FEEDBACK_WAKE === '1'),
@@ -600,24 +635,36 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   loopRef.current = { started: run => { void loop.hooks.started(run); }, ended: run => loop.hooks.ended(run), outcome: run => loop.hooks.outcome(run), probation: (a, j) => loop.hooks.probation(a, j) };
   const lifecycleTimer = process.env.SB_TEST && process.env.SB_FEEDBACK_WAKE !== '1' ? null : setInterval(() => { void loop.tick(); }, 10_000);
   lifecycleTimer?.unref();
-  attachAppTools(mcp, { agentAuthoring, agentLearning: agentPacks.learning, improveEvidence: selection => improve.evidence(manager.analytics.readModel(), selection), chats, browser, brain, agents: () => agents.list(), classifyAgents, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), devops: () => devops.get(), brainScripts: { scripts: brainScripts, changelog: brainChangelog } }, improve, false, regiaTokens);
+  // agent first (ADR 0078): an agent's route says how its active version has done so far
+  const agentStats = (agentId: string, version: number) => agentStatsLine(runMetrics(manager.runs.list(), { rollups: manager.runs.rolledUp() }).find(m => m.agentId === agentId)?.versions.find(v => v.version === version));
+  const appDeps: Parameters<typeof attachAppTools>[1] = { agentAuthoring, agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), classifyAgents, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, brainScripts: { scripts: brainScripts, changelog: brainChangelog } };
+  attachAppTools(mcp, appDeps, source, false, regiaTokens);
+  // a worker starts a catalog agent as its own sub-agent, through its Orchestrator's app_create_chat (agents/subagent-tool.ts)
+  addChatTools(subagentTools({ chats: () => chats.list(), runs: () => manager.runs.list(),
+    create: async (regiaId, args) => {
+      const tool = appControlTools({ ...appDeps, unified: true, code: { repo: () => source.repo(), inRepo: dir => source.inRepo(dir) } }, regiaId).find(t => t.name === 'app_create_chat')!;
+      return tool.run(args);
+    },
+    policy: chatId => manager.agentPolicy(chatId),
+    profile: id => { const p = agents.list().profiles.find(x => x.id === id && x.status === 'active'); return p ? { tools: p.tools, ceiling: p.permissionCeiling } : undefined; },
+    worktrees: cwd => gitWorktrees(cwd) }));
 
-  // DevOps page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
+  // Task page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
   const node = electronNode();
-  const devops = new DevopsService({
-    file: path.join(ctx.userData, 'devops.json'),
+  const tasks = new TaskService({
+    file: path.join(ctx.userData, 'tasks.json'),
     brainRoot: () => brain.info().brainRoot,
-    settings: () => brain.settings().devops,
+    settings: () => brain.settings().tasks,
     run: (script, args, cwd, ms) => runNode(node, script, args, cwd, ms),
-    emit: st => ctx.emitter.emit('devops:state', st),
+    emit: st => ctx.emitter.emit('tasks:state', st),
     feed: events => brain.publish(events),
   });
-  brain.onSettingChange(c => { if (c.key.startsWith('devops.') || c.key === 'brainRoot') devops.schedule(); });
-  devops.schedule();
+  brain.onSettingChange(c => { if (c.key.startsWith('tasks.') || c.key === 'brainRoot') tasks.schedule(); });
+  tasks.schedule();
   // Qualità page's app half (/api/quality): this app's turns, the PRs of the last DevOps read, the brain's bug-reopen.mjs
   const quality = new Quality({
     logDir: path.join(ctx.userData, 'logs'), cacheFile: path.join(ctx.userData, 'quality-reopen.json'), brainRoot: () => brain.info().brainRoot,
-    devops: () => devops.get(), run: (script, args, cwd, ms) => runNode(node, script, args, cwd, ms),
+    tasks: () => tasks.get(), run: (script, args, cwd, ms) => runNode(node, script, args, cwd, ms),
   });
   brain.serveApi('/api/quality', q => quality.get({ fresh: q.get('fresh') === '1' }));
   brain.serveApi('/api/agents/analytics', () => manager.analytics.readModel());
@@ -655,17 +702,36 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     sync.start();
   }
 
+  // the Brain pages (ADR 0077): skills and their agents, rules, memory; maintenance jobs with a change log and undo
+  const brainModel = new BrainModelService({ userData: ctx.userData, root: () => brain.info().brainRoot, home: process.env.SB_SKILLS_HOME || os.homedir(),
+    catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning, runs: () => manager.runs.list(), routing: () => brain.routingInfo(),
+    top: async (text, profiles) => { const c = await classifyByWords(text, profiles); const best = c.candidates[0]; return best && !c.noneCloseEnough && best.score >= c.threshold ? { id: best.id, score: best.score } : null; },
+    emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: !process.env.SB_TEST || process.env.SB_BRAIN_JOBS === '1' });
+  brainModel.start();
+  // the Orchestrator's agent changes apply at once (ADR 0082): each one lands in the change log with "Annulla"
+  agentAuthoring.onApplied = change => brainModel.recordAgentChange(change);
+
   return {
-    chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines, agents, agentAuthoring, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, classifyAgents, classifierTuning,
+    brainModel,
+    cloud, chats, browser, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, agentAuthoring, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, classifyAgents, classifierTuning,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
       checkpoint: () => manager.checkpointForUpdate(),
     },
-    proposals: new ProposalBridge({ userData: ctx.userData, repo: () => improve.repo(), brain, chats, emit: rows => ctx.emitter.emit('improve:proposals', rows), focus: value => ctx.emitter.emit('ui:command', { action: 'focus', value }) }),
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot, Date.now, () => progressService.award('setup-complete')),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); devops.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { brainModel.stop(); cloud.shutdown(); clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
     killNow: () => { compareRuns.killNow(); manager.killAll(); runner.shutdown(); },
   };
+}
+
+/** The git worktrees of the repository at `cwd` (agent_start_subagent's allowed folders); none when it is no repository. */
+function gitWorktrees(cwd: string): Promise<string[]> {
+  return new Promise(resolve => {
+    execFile('git', ['-C', cwd, 'worktree', 'list', '--porcelain'], { timeout: 5000, windowsHide: true }, (error, stdout) => {
+      if (error) { resolve([]); return; }
+      resolve(String(stdout).split(/\r?\n/).filter(l => l.startsWith('worktree ')).map(l => path.resolve(l.slice(9).trim())));
+    });
+  });
 }

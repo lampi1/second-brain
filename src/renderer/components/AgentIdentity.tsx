@@ -26,7 +26,6 @@ export function AgentIdentity({chat}:{chat:ChatSummary}){
     <option value="" disabled>{t('product.workUnset')}</option><option value="assigned">{t('product.workAssigned')}</option><option value="waiting-mail">{t('product.workWaiting')}</option><option value="completed">{t('product.workCompleted')}</option>
    </Select></label>
    <p>{t('product.model')}: {chat.model||t('product.notReported')}</p>
-   <p>{t('chat.menu.effortLabel')}: {chat.effortStatus?.effectiveSource==='provider'?chat.effortStatus.effective||t('product.notReported'):t('product.notReported')}</p>
    <b>{summary}</b><p>{t('product.teamExplain')}</p>
    {children?.observedAt?<small>{new Intl.DateTimeFormat(locale(),{timeStyle:'short'}).format(children.observedAt)}</small>:null}
    {children?.children.length?<ul>{children.children.slice(0,100).map(child=><li key={child.key}><b>{child.task||t('product.noTask')}</b> · {t(`product.${child.state}`)}<small>{t('product.parent')}: {child.parentNativeId===null?t('product.notReported'):children.children.find(candidate=>candidate.nativeId===child.parentNativeId)?.task||t('product.parentMissing')}{child.source==='replay'?` · ${t('product.replayed')}`:''}</small></li>)}</ul>:<p>{children?.coverage==='complete'?t('product.teamEmpty'):t('product.teamIncomplete')}</p>}

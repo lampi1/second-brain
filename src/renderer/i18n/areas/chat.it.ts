@@ -80,6 +80,7 @@ export const chatIt = {
   'chat.menu.switchEngine': (p: { engine: string }) => `Cambia motore → ${p.engine}…`,
   'chat.menu.opacityWord': 'Opacità',
   'chat.menu.opacityLabel': 'Opacità dell’Orchestrator',
+  'chat.menu.profileNote': (p: { name: string }) => `Modello e impegno stabili sono nel profilo di ${p.name}: qui li cambi solo per questa chat.`,
   'chat.menu.modelLabel': 'Modello',
   'chat.menu.effortLabel': 'Quanto ragiona',
   'chat.menu.permissionLabel': 'Quando chiede il permesso',

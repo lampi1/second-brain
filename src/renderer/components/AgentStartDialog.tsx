@@ -1,5 +1,6 @@
 // Starts a conversation owned by an explicit catalog agent. Engine/model come from that profile in main, with
-// technical permissions kept progressive and no per-task routing matrix in the ordinary work flow.
+// technical permissions kept progressive and no per-task routing matrix in the ordinary work flow. "Dove: Locale /
+// Cloud" (CloudWhere.tsx, ADR 0080): Cloud starts the task as an agent in a vendor's cloud (Cursor, Codex, Claude Code).
 import { useEffect, useRef, useState } from 'react';
 import { createChat, useApp } from '../store/store';
 import { useAgents } from '../store/agents';
@@ -19,6 +20,11 @@ import {roleAgents,profileCanStart} from '../lib/role-consumers';
 import {t} from '../i18n';
 import { Select } from './Select';
 import type { AgentClassification } from '@shared/agent-classifier';
+import type { CloudEngine } from '@shared/contract';
+import { CloudWhere, type Where } from './CloudWhere';
+import { startCloud } from '../store/cloud';
+import { toast } from '../store/ui';
+import { engineLabel } from '../lib/engines';
 
 export function AgentStartDialog() {
   const { catalog, setup, error: catalogError } = useAgents();
@@ -35,6 +41,8 @@ export function AgentStartDialog() {
   const [cwd, setCwd] = useState(info?.brainRoot || prefs.cwd || '');
   const [permissionMode, setPermissionMode] = useState<PermissionMode | ''>(prefs.permissionMode);
   const [busy, setBusy] = useState(false), [problem, setProblem] = useState<string | null>(null);
+  const [where, setWhere] = useState<Where>('local'), [cloudEngine, setCloudEngine] = useState<CloudEngine | null>(null), [cloudEnv, setCloudEnv] = useState('');
+  const cloud = where === 'cloud' && !regia;
   const [matching, setMatching] = useState<{ request: string; result: AgentClassification } | null>(null);
   // the task field alone: context and expected result describe the case, not which agent fits it, and dilute the match
   const request = prompt.trim().slice(0, 2000);
@@ -57,7 +65,22 @@ export function AgentStartDialog() {
   const profile = chosen===null?(suggested[0]??profiles.find(p => preferred.includes(p.id))??profiles[0]):profiles.find(p=>p.id===chosen);
   const choice = catalog?.models.find(e => e.engine === profile?.engine);
   const unavailable = !profileCanStart(profile,choice) || !!catalog?.problem;
+  const createCloud = async () => {
+    const folder = cwd.trim() || info?.brainRoot || '';
+    if (creating.current) return;
+    if (!prompt.trim()) { setProblem(t('start.needTask')); return; }
+    if (!cloudEngine) { setProblem(t('cloud.notReady')); return; }
+    creating.current = true; setBusy(true); setProblem(null);
+    try {
+      const r = await startCloud({ engine: cloudEngine, cwd: folder, prompt: workBrief({ path: 'general', request: prompt, context, outcome }) || prompt.trim(),
+        ...(title.trim() ? { title: title.trim() } : {}), ...(cloudEnv.trim() ? { env: cloudEnv.trim() } : {}) });
+      if (!live.current) return;
+      if (typeof r === 'string') setProblem(t('cloud.failed', { why: r }));
+      else { closeModal(); toast(t('cloud.started', { engine: engineLabel(cloudEngine) }), 'ok'); }
+    } finally { creating.current = false; if (live.current) setBusy(false); }
+  };
   const create = async () => {
+    if (cloud) { await createCloud(); return; }
     if (creating.current || unavailable || !profile) return;
     const folder = cwd.trim() || info?.brainRoot || '';
     if (!folder) { setProblem(t('start.needMemory')); return; }
@@ -95,8 +118,9 @@ export function AgentStartDialog() {
         <button type="button" className="link-btn" onClick={() => { closeModal(); go({ page: 'agenti' }); }}>{t('start.editAgent')}</button>
         <label className="field"><span>{t(regia?'start.firstMessage':'start.task')}</span><textarea rows={4} value={prompt} onChange={e => setPrompt(e.target.value)} autoFocus data-testid="newchat-prompt" placeholder={t('start.promptHint')} /></label>
         <details className="advanced" data-testid="newchat-work-context"><summary>{t('start.contextTitle')}</summary><label className="field"><span>{t('start.context')}</span><textarea rows={2} value={context} onChange={e => setContext(e.target.value)} data-testid="newchat-context" /></label><label className="field"><span>{t('start.outcome')}</span><input value={outcome} onChange={e => setOutcome(e.target.value)} data-testid="newchat-outcome" /></label></details>
-        <AgentReadiness choice={choice} />
-        {profile && <small>{t('start.configuration',{engine:choice?.label??profile.engine,model:profile.model||t('start.defaultModel')})}</small>}
+        {!regia && <CloudWhere cwd={cwd.trim() || info?.brainRoot || ''} where={where} onWhere={w => { setWhere(w); setProblem(null); }} engine={cloudEngine} onEngine={setCloudEngine} env={cloudEnv} onEnv={setCloudEnv} />}
+        {!cloud && <AgentReadiness choice={choice} />}
+        {!cloud && profile && <small>{t('start.configuration',{engine:choice?.label??profile.engine,model:profile.model||t('start.defaultModel')})}</small>}
         {regia && hasRegia && <label className="field"><span>{t('start.regiaName')}</span><input value={regiaName} onChange={e => setRegiaName(e.target.value)} maxLength={30} data-testid="newchat-regia-name" /></label>}
         <label className="check"><input type="checkbox" checked={regia} onChange={e => setRegia(e.target.checked)} aria-describedby={regia && current ? 'newchat-regia-note' : undefined} data-testid="newchat-regia" /><span>{t('start.coordinate')}</span></label>
         {regia && current && <p className="regia-note" id="newchat-regia-note" data-testid="newchat-regia-note"><HarnessMark harness={current.harness} regia size={16} /><span>{t('dialogs.newChat.regiaNote')}<b>{current.title}</b>{t('dialogs.newChat.regiaNoteSuffix')}</span></p>}
@@ -109,7 +133,7 @@ export function AgentStartDialog() {
         {!info?.brainRoot && !cwd && <button type="button" className="btn btn-ghost" onClick={() => { closeModal(); openModal('setup'); }}>{t('start.connectMemory')}</button>}
         {(problem || catalogError || catalog?.problem) && <p role="alert" className="field-error">{problem || catalogError || catalog?.problem}</p>}
       </div>
-      <div className="modal-foot"><button type="button" className="btn btn-ghost" onClick={closeModal} data-testid="newchat-cancel">{t('start.cancel')}</button><button type="submit" className="btn btn-primary" disabled={busy || unavailable} data-testid="newchat-create">{t(busy?'start.starting':regia?'start.startRegia':'start.startAgent')}</button></div>
+      <div className="modal-foot"><button type="button" className="btn btn-ghost" onClick={closeModal} data-testid="newchat-cancel">{t('start.cancel')}</button><button type="submit" className="btn btn-primary" disabled={busy || (cloud ? !cloudEngine : unavailable)} data-testid="newchat-create">{t(busy?'start.starting':cloud?'cloud.create':regia?'start.startRegia':'start.startAgent')}</button></div>
     </form>
   </Modal>;
 }

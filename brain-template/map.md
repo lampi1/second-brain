@@ -17,7 +17,7 @@ thread's `now.md` line when its state or next step changes; today's `journal/` o
 | `AGENTS.md` | Short boot index: hard rules, on-demand pointers, routing | Every session | Only to add a hard rule or a pointer; keep it ≤ ~70 lines |
 | `START-HERE.md` | First-day guide: first steps, what each app page shows and when it fills up | Day one; an app page is empty or in error | Never routinely; delete it (and this row) once {{OWNER}} no longer needs it |
 | `me.md` | Who {{OWNER}} is, how to work with them, safety rules, machine | Every session, first | {{OWNER}} states a preference or corrects how you work |
-| `hub.md` | Orchestrator: how the hub "Regia" runs work chats and decisions | You are the hub | A hub rule changes |
+| `hub.md` | How the Orchestrator runs work chats and decisions | You are the hub | A hub rule changes |
 | `code.md` | Code work: repos, review, definition of done | Any code work | A code-work rule changes |
 | `now.md` | Open threads: what is in progress, where, next step | "Cosa devo fare oggi", resuming anything | A thread opens, moves or closes (closed → removed) |
 | `journal/` | Daily diary, tagged lines (`journal/index.md`) | "Cosa ho fatto oggi", a review | `fatto`, `attrito`, `interruzione`, `decisione`, `lezione`; append-only |

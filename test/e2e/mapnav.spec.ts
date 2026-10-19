@@ -3,9 +3,9 @@ import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { launchDemo, shot } from './helpers';
+import { launchDemo, shot, openNotesMap } from './helpers';
 
-test('Dashboard and the 3D map keep the coordinator beside exploration and discussion', async () => {
+test('The Mappa notes view and the 3D map keep the coordinator beside exploration and discussion', async () => {
   const brain = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-mapnav-'));
   const tools = path.join(brain, 'ops', 'tools');
   fs.mkdirSync(tools, { recursive: true });
@@ -14,10 +14,9 @@ test('Dashboard and the 3D map keep the coordinator beside exploration and discu
   fs.copyFileSync(path.join(fixture, 'data.mjs'), path.join(tools, 'brain-ui-data.mjs'));
   const { app, page } = await launchDemo({ env: { SB_BRAIN: brain } });
   try {
-    await page.getByTestId('nav-dashboard').click();
-    await page.getByRole('tab', { name: 'Mappa brain' }).click();
+    await openNotesMap(page);
     const coordinator = page.getByTestId('regia-overlay');
-    const dashboard = page.getByTestId('dashboard');
+    const dashboard = page.getByTestId('bm-map-page');
     const besideCoordinator = async (selector: string) => {
       await expect(coordinator).toBeVisible();
       await expect.poll(async () => {
@@ -26,7 +25,7 @@ test('Dashboard and the 3D map keep the coordinator beside exploration and discu
         return !!content && !!column && content.width > 0 && content.x + content.width <= column.x + 1;
       }).toBe(true);
     };
-    await besideCoordinator('[data-testid="dashboard"]');
+    await besideCoordinator('[data-testid="bm-map-page"]');
     await expect(page.getByLabel('Legenda')).toBeVisible();
     await expect(page.locator('.dash-label').first()).toBeVisible();
     await page.locator('.dash-node').first().click();
@@ -52,7 +51,7 @@ test('Dashboard and the 3D map keep the coordinator beside exploration and discu
     await expect(page.getByTestId('regia-overlay')).toBeVisible();
     await expect(dashboard).toBeVisible();
     await expect(page.locator('.dash-inspector h2')).toBeVisible();
-    await besideCoordinator('[data-testid="dashboard"]');
+    await besideCoordinator('[data-testid="bm-map-page"]');
     await expect.poll(() => coordinator.evaluate(el => el.contains(document.activeElement))).toBe(true);
     await page.keyboard.press('Control+r');
     await expect(page.getByTestId('regia-overlay')).toBeVisible();

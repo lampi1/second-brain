@@ -39,7 +39,7 @@ export function PreparedUpdateCard({ update: u, apply }: { update: PreparedUpdat
     });
   };
   const state = { preparing: auditText('cmp.preparedUpdate.phase.preparing'), ready: auditText('cmp.preparedUpdate.phase.ready'), applying: auditText('cmp.preparedUpdate.phase.applying'), applied: auditText('cmp.preparedUpdate.phase.applied'), failed: auditText('cmp.preparedUpdate.phase.failed'), restored: auditText('cmp.preparedUpdate.phase.restored') };
-  return <section className="imp-card" data-testid="prepared-update">
+  return <section className="upd-card" data-testid="prepared-update">
     <h3>{state[u.phase]}</h3><p>{u.version}</p>
     <ul>{u.changes.map((c, i) => <li key={i}>{c}</li>)}</ul>
     {(u.blocked || failed) && <p role="status">{u.blocked || auditText('cmp.preparedUpdate.opFailed')}</p>}

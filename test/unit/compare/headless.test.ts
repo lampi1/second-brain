@@ -68,7 +68,7 @@ describe('read-only answers (pure)', () => {
     expect(refusal('claude', ON, FAKE, env)).toBeNull();
     expect(refusal('claude', { ...ON, engineOn: { claude: false } }, FAKE, env)).toMatch(/Claude è spento/);
     expect(refusal('anthropic', { engineOn: { anthropic: true }, engines: { anthropic: true } }, FAKE_CURSOR, env)).toMatch(/Anthropic API è spento/); // on, but its definition never trusted
-    // on, but «Le Regie possono usare Claude» off: the run comes from files agents write
+    // on, but «Gli Orchestrator possono usare Claude» off: the run comes from files agents write
     expect(refusal('claude', { ...ON, engines: { claude: false } }, FAKE, env)).toMatch(/Gli Orchestrator possono usare Claude/);
     expect(refusal('nope', ON, undefined, env)).toBe('motore sconosciuto: nope');
     expect(refusal('claude', ON, undefined, env)).toMatch(/serve il fake \(SB_CLAUDE_PATH\)/);

@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { ChatLink, ChatSpace, ChatSummary, Effort, HandoffSource, Harness, PermissionMode, RouteDecision } from '../../shared/contract';
+import type { ChatLink, ChatSummary, Effort, HandoffSource, Harness, PermissionMode, RouteDecision } from '../../shared/contract';
 import { validRoute } from '../brain/routing';
 import { errText, log } from '../log';
 import { isUuid } from './session';
@@ -34,6 +34,8 @@ export interface StoredChat {
   agentChildren?: AgentChildren;
   /** the agent's tool policy and ceiling (A2); unreadable → the narrowest policy, never none */
   agentPolicy?: AgentPolicy;
+  /** the agent's "Contesto massimo" (tokens), frozen at start like its policy (#80) */
+  agentMaxContext?: number;
   /** mirror of the chat's agent run (A5); agent-runs.json is the source of truth. Additive: chats.json stays version 2 */
   run?: AgentRun;
   /** when nothing last waited on the user in this run (a reopen, an answer): the stale clock's start across restarts */
@@ -52,9 +54,9 @@ export interface StoredChat {
   permissionMode: PermissionMode | null;
   isRegia: boolean;
   orchestrator?: true;
-  /** the Orchestrator's former titles (migrated Regie): mail sent to those boxes still reaches it (mail.ts) */
+  /** the Orchestrator's former titles (migrated Orchestrators): mail sent to those boxes still reaches it (mail.ts) */
   mailAliases?: string[];
-  /** a Regia's tab name; a work chat's Regia (ADR 0021) */
+  /** an Orchestrator's tab name; a work chat's Orchestrator (ADR 0021) */
   regiaName?: string;
   regiaOf?: string;
   regiaSince?: number;
@@ -71,7 +73,7 @@ export interface StoredChat {
   /** its saved hand-off is a cold note (ADR 0031) written at this time: a message after the cache expired continues
    *  the chat in a fresh session from it */
   coldNoteAt?: number;
-  /** when the context in force began (first turn since the session start or the last compaction): a Regia's day
+  /** when the context in force began (first turn since the session start or the last compaction): an Orchestrator's day
    *  compaction (continuity.ts regiaDayDue) */
   ctxSince?: number;
   /** the sessions this chat had before its cold continuations, oldest first (their transcripts show folded above) */
@@ -86,8 +88,9 @@ export interface StoredChat {
   closedBy?: 'auto' | 'user';
   /** a turn was running when this was written: if the app stops now, the next start resumes the chat by itself */
   working?: true;
-  /** Legacy input markers; space is dropped on load, appRegia feeds coordinator migration. */
-  space?: ChatSpace;
+  /** Legacy markers of the retired "Migliora l'app" (ADR 0079): space is dropped on load; appRegia (that section's
+   *  coordinator) is read once by migrateOrchestrator, which makes it the Orchestrator or a normal chat. */
+  space?: unknown;
   appRegia?: true;
   /** how an agent's app_create_chat chose its engine (the routing table, ADR 0032) */
   route?: RouteDecision;
@@ -121,6 +124,7 @@ function extras(c: Record<string, unknown>): Partial<StoredChat> {
     ...(validAssets(c.agentAssets) ? { agentAssets: c.agentAssets } : {}),
     ...(c.agentChildren ? { agentChildren: sanitizeAgentChildren(c.agentChildren) } : {}),
     ...(readPolicy(c.agentPolicy) ? { agentPolicy: readPolicy(c.agentPolicy)! } : {}),
+    ...(Number.isSafeInteger(c.agentMaxContext) && (c.agentMaxContext as number) >= 100_000 && (c.agentMaxContext as number) <= 1_000_000 ? { agentMaxContext: c.agentMaxContext as number } : {}),
     ...(run && run.chatId === c.id ? { run, ...(num(c.runIdleSince) ? { runIdleSince: c.runIdleSince } : {}) } : {}),
     ...(typeof c.runPruned === 'string' && RUN_ID.test(c.runPruned) ? { runPruned: c.runPruned } : {}),
     ...(route ? { route } : {}),
@@ -163,7 +167,7 @@ function valid(x: unknown, version: number): StoredChat | null {
     createdAt: typeof c.createdAt === 'number' ? c.createdAt : Date.now(),
     ...(typeof c.costTotalUsd === 'number' && Number.isFinite(c.costTotalUsd) ? { costTotalUsd: c.costTotalUsd } : {}),
     ...extras(c),
-    // the Regia (and the app's Regia) is never archived, whatever the file says
+    // the Orchestrator (and the app's Orchestrator) is never archived, whatever the file says
     ...(typeof c.closedAt === 'number' && Number.isFinite(c.closedAt) && c.isRegia !== true && c.appRegia !== true ? { closedAt: c.closedAt, closedBy: c.closedBy === 'user' ? 'user' as const : 'auto' as const } : {}),
     ...(c.working === true && typeof c.closedAt !== 'number' ? { working: true as const } : {}),
   };

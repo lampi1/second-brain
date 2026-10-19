@@ -2,7 +2,7 @@
 // answerable there). Browser tabs are native views drawn ABOVE the app page, so a DOM
 // overlay would hide under a browser tile: the layer is its own small, transparent, top-most WebContentsView that loads
 // the same renderer bundle (index.html#overlay) with the same preload. Main owns it: it is attached only while it has
-// cards or toasts (so it never intercepts clicks or shows up as a view otherwise), placed bottom-right (beside the Regia widget: the model's `avoid`), sized to what its page
+// cards or toasts (so it never intercepts clicks or shows up as a view otherwise), placed bottom-right (beside the Orchestrator widget: the model's `avoid`), sized to what its page
 // reports (overlay:size), kept on top whenever other views are added, and focused only on demand (overlay:focus from
 // Ctrl+J or a click: it never steals the keyboard while the user types). The app page decides the cards (overlay:model);
 // what the user does in the layer goes back to the app page (overlay:action). Used by index.ts.
@@ -147,7 +147,7 @@ export class OverlayLayer {
     const win = this.win();
     if (!win || win.isDestroyed() || !this.view || !this.attached) return;
     const [cw = 0, ch = 0] = win.getContentSize();
-    // the Regia widget's corner (ADR 0028): left of the expanded panel, above the collapsed bar
+    // the Orchestrator widget's corner (ADR 0028): left of the expanded panel, above the collapsed bar
     const right = clampAvoid(this.model?.avoid?.right, cw, 200 + 2 * MARGIN), bottom = clampAvoid(this.model?.avoid?.bottom, ch, MIN_TOP + MARGIN + 120);
     const width = Math.min(this.size.width, Math.max(200, cw - 2 * MARGIN - right));
     const top=Math.max(MIN_TOP,clampAvoid(this.model?.avoid?.top,ch,0));

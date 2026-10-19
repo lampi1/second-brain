@@ -16,7 +16,11 @@ export function checkAuthorPolicy(draft: AgentDraft, enabledMcp: readonly string
 }
 
 export function checkPermissionInstructions(draft: AgentDraft): void {
-  const text = `${draft.instructions}\n${JSON.stringify(draft.manifest ?? {})}`.normalize('NFKC');
+  checkPermissionText(`${draft.instructions}\n${JSON.stringify(draft.manifest ?? {})}`);
+}
+/** The same check on free text that ends up in instructions, a skill or a rule (a lesson, pack/learning.ts). */
+export function checkPermissionText(raw: string): void {
+  const text = raw.normalize('NFKC');
   if (/auto[\s-]*approv|bypass\s*permissions|skip\s+(?:all\s+)?permissions|you\s+(?:may|can|are allowed to)\s+(?:deploy|approve)|(?:permesso|autorizzat[oa])\s+(?:di|a)\s+(?:deploy|distribuire|approvare)|approv[ae]\s+(?:automaticamente|tutto)/i.test(text)) throw new Error('Instructions cannot grant permissions.');
 }
 

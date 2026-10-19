@@ -1,5 +1,5 @@
 // Main-only acceptance for the "Da approvare" inbox on the Agenti page: seeded pending changes (an Orchestrator
-// suggestion, a learned rule, two lifecycle suggestions) appear in one place with a sidebar count; each decision asks
+// suggestion, two lifecycle suggestions; lessons are applied by the maintenance, never asked here, ADR 0077) appear in one place with a sidebar count; each decision asks
 // for a confirmation, applies through its channel, an approval can be undone and a suggestion can be set aside. Hidden window (helpers.launchDemo).
 import fs from 'node:fs';
 import os from 'node:os';
@@ -14,9 +14,6 @@ test('pending agent changes gather in Da approvare and are decided only after co
     evidence: [{ kind: 'run', ref: 'r_000000000007', at: 1 }],
     draft: { name: 'Verificatore fonti', purpose: 'Verificare fonti', instructions: 'Riporta fonti verificabili.\nSegnala quelle dubbie.', engine: 'claude', model: null, avatar: { kind: 'symbol', value: 'eye' }, tools: { allow: ['read'] }, permissionCeiling: 'default' },
   }] }));
-  fs.writeFileSync(path.join(userData, 'agent-learn-proposals.json'), JSON.stringify({ version: 1, proposals: [{
-    id: '0123456789abcdef', agentId: 'default-general', rule: 'Cita sempre il file e la riga che hai letto.', evidence: 'Due correzioni sulle citazioni', createdAt: Date.now() - 3_600_000, status: 'pending',
-  }] }));
   fs.writeFileSync(path.join(userData, 'agent-lifecycle.json'), JSON.stringify({ version: 1, pendingRuns: [], lastDay: '', trials: [], proposals: [{
     key: 'work:fixture', kind: 'create', agentIds: [], reason: 'Tre revisioni ripetute', evidence: [{ kind: 'run', ref: 'r_000000000001', at: Date.now() - 86_400_000 }], at: Date.now() - 7_200_000, state: 'pending',
   }, {
@@ -24,12 +21,11 @@ test('pending agent changes gather in Da approvare and are decided only after co
   }] }));
   const { app, page } = await launchDemo({ userData });
   try {
-    await expect(page.getByTestId('nav-badge-approvals')).toHaveText('4');
+    await expect(page.getByTestId('nav-badge-approvals')).toHaveText('3');
     await page.getByTestId('nav-agenti').click();
     const inbox = page.getByTestId('agent-approvals');
-    await expect(inbox.getByTestId('approval-card')).toHaveCount(4);
+    await expect(inbox.getByTestId('approval-card')).toHaveCount(3);
     await expect(inbox).toContainText('Verificatore fonti');
-    await expect(inbox).toContainText('Cita sempre il file e la riga che hai letto.');
     await expect(inbox).toContainText('Tre revisioni ripetute');
     await shot(page, 'agent-approvals-inbox');
 
@@ -44,7 +40,7 @@ test('pending agent changes gather in Da approvare and are decided only after co
     await shot(page, 'agent-approvals-confirm');
     await page.keyboard.press('Enter');
     await expect(inbox.getByRole('status')).toContainText('Verificatore fonti: modifica applicata.');
-    await expect(inbox.getByTestId('approval-card')).toHaveCount(3);
+    await expect(inbox.getByTestId('approval-card')).toHaveCount(2);
     let list = await page.evaluate(() => window.sb.invoke('agents:list', undefined));
     expect(list.profiles.some(p => p.name === 'Verificatore fonti')).toBe(true);
     await shot(page, 'agent-approvals-done');
@@ -54,15 +50,6 @@ test('pending agent changes gather in Da approvare and are decided only after co
     await expect(inbox.getByRole('status')).toContainText('Decisione annullata.');
     list = await page.evaluate(() => window.sb.invoke('agents:list', undefined));
     expect(list.profiles.some(p => p.name === 'Verificatore fonti')).toBe(false);
-
-    // discarding the learned rule leaves the agent as it was
-    const before = list.profiles.find(p => p.id === 'default-general');
-    const rule = inbox.getByTestId('approval-card').filter({ hasText: 'Cita sempre' });
-    await rule.getByRole('button', { name: 'Scarta', exact: true }).click();
-    await rule.getByRole('button', { name: 'Conferma: Scarta' }).click();
-    await expect(inbox.getByTestId('approval-card')).toHaveCount(2);
-    list = await page.evaluate(() => window.sb.invoke('agents:list', undefined));
-    expect(list.profiles.find(p => p.id === 'default-general')).toEqual(before);
 
     // Ignora sets a suggestion aside: it leaves the queue and nothing on the agent changes
     const trial = inbox.getByTestId('approval-card').filter({ hasText: 'Stessi esiti a un terzo del costo' });

@@ -79,7 +79,7 @@ export function scriptWriteTools(scripts: BrainScripts, changelog: BrainChangelo
     },
     {
       name: 'brain_changelog_add',
-      description: `Log a change you or a worker made to the user's brain outside the script tools (a rule, procedure, note, agent or skill file added, edited, fixed or deleted) in the brain's changelog, shown on its Changelog page. One entry per change the user would want to know about; brain_script_save and brain_script_delete log themselves. kind: ${CHANGELOG_KINDS.join(', ')}; action: ${CHANGELOG_ACTIONS.join(', ')}.`,
+      description: `Log a change you or a worker made to the user's brain outside the script tools (a rule, skill, note or agent file added, edited, fixed or deleted) in the brain's changelog, shown on its Changelog page. One entry per change the user would want to know about; brain_script_save and brain_script_delete log themselves. kind: ${CHANGELOG_KINDS.join(', ')}; action: ${CHANGELOG_ACTIONS.join(', ')}.`,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
       inputSchema: { type: 'object', properties: {
         kind: { type: 'string', enum: [...CHANGELOG_KINDS] }, action: { type: 'string', enum: [...CHANGELOG_ACTIONS] },

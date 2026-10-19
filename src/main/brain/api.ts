@@ -17,7 +17,7 @@ import { log, errText } from '../log';
 import type { NodeRunner } from './node';
 import { brainScript } from '../rules/tools';
 
-export const API_PATHS = new Set(['/api/tables', '/api/now', '/api/cost', '/api/day', '/api/map', '/api/files', '/api/file', '/api/search', '/api/themes', '/api/version', '/api/status', '/api/quality', '/api/procedures', '/api/procedure', '/api/scripts', '/api/script', '/api/changelog', '/api/improve', '/api/agents/analytics']);
+export const API_PATHS = new Set(['/api/tables', '/api/now', '/api/cost', '/api/day', '/api/map', '/api/files', '/api/file', '/api/search', '/api/themes', '/api/version', '/api/status', '/api/quality', '/api/scripts', '/api/script', '/api/changelog', '/api/improve', '/api/agents/analytics']);
 API_PATHS.add(AGENT_LIFECYCLE_PATH);
 
 /** Paths answered by main itself instead of the brain's server (brain.serveApi); undefined = not now, ask the server. */

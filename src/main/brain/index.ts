@@ -1,8 +1,8 @@
 // The brain module: implements BrainService (src/main/services.ts) for wiring.ts. It owns the settings (config.ts),
 // the live feed of the brain folder and chats (live.ts), calm Windows toasts (notify.ts), the top-bar usage
 // (usage.ts), the spending limits (budget.ts), the job ledger (estimates.ts: real cost and time, feeding the brain's
-// routing table, ADR 0053), the GET-only proxy to the brain's own data server (api.ts) and the brain's procedures
-// (procedures.ts, /api/procedures) and the domains' multi-PC sync (domains.ts, sync.ts, guard.ts: ADR 0059). Why one module: they share the
+// routing table, ADR 0053), the GET-only proxy to the brain's own data server (api.ts) and the Brain pages' live
+// refresh (a markdown file changed on disk → 'brainmodel:changed') and the domains' multi-PC sync (domains.ts, sync.ts, guard.ts: ADR 0059). Why one module: they share the
 // brain folder, the Electron-node runner and the feed, and they restart together when the brain folder changes. Only
 // this file touches Electron (Notification, the window); the parts are plain Node and unit-tested apart. App state
 // lives in userData (config.json, live-state.json, budget-state.json, jobs.jsonl, jobs-meta.json). It writes into the
@@ -28,7 +28,7 @@ import { BrainEstimates } from './brain-estimates';
 import { Routing, routeChat } from './routing';
 import { BrainApi, type LocalApi } from './api';
 import { Compare } from './compare';
-import { Procedures, touchesProcedures } from './procedures';
+import { touchesBrainModel } from '../brainmodel/model';
 import { Learn, learnStatusWithoutCli } from './learn';
 import { ModelsSeenStore } from './models-seen';
 import { electronNode } from './node';
@@ -81,7 +81,7 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
   };
   const showToast = (t: Toast) => {
     try {
-      // never sounds (Regia 2026-10-11: "mai suoni di default"); urgency only changes how Windows ranks it
+      // never sounds (Orchestrator 2026-10-11: "mai suoni di default"); urgency only changes how Windows ranks it
       const n = new Notification({ title: t.title, body: t.body, silent: true, urgency: t.urgent ? 'critical' : 'normal' });
       n.on('click', focusWindow);
       n.on('failed', (_e, error) => {
@@ -140,17 +140,13 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
   const brainEst = new BrainEstimates(() => cfg.get().brainRoot, estNode);
   const routing = new Routing(() => cfg.get().brainRoot, file('routing-api.json'));
   const models = new ModelsSeenStore(file('cursor-models.json'));
-  // the Procedure page: read-only, credentials masked here (procedures.ts); a change on disk reloads the page's list
-  const procedures = new Procedures(() => cfg.get().brainRoot);
-  localApi.set('/api/procedures', () => procedures.list());
-  localApi.set('/api/procedure', q => procedures.get(q.get('id') ?? ''));
+  // the Brain pages (skills, rules, memory: ADR 0077) reload when a markdown file of the brain changes on disk
   let procTimer: NodeJS.Timeout | null = null;
   const onBrainFile = (f: string) => {
     ctx.onFile?.(f);
-    if (!touchesProcedures(f)) return;
-    procedures.invalidate();
+    if (!touchesBrainModel(f)) return;
     if (procTimer) clearTimeout(procTimer);
-    procTimer = setTimeout(() => { procTimer = null; ctx.emitter.emit('procedures:changed', undefined); }, 500);
+    procTimer = setTimeout(() => { procTimer = null; ctx.emitter.emit('brainmodel:changed', undefined); }, 500);
   };
   // ── domains and their sync (ADR 0059): only "everywhere" domains with a remote; a brain of today has none ──
   const domains = () => {
@@ -210,7 +206,7 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
     if (!testing) { const a = api; warmTimer = setTimeout(() => { warmTimer = null; a.warm(); }, 10e3); }
   };
   const stopParts = () => {
-    live?.stop(); usage?.stop(); api?.stop(); brainEst.stop(); procedures.invalidate(); sync.stop();
+    live?.stop(); usage?.stop(); api?.stop(); brainEst.stop(); sync.stop();
     if (procTimer) { clearTimeout(procTimer); procTimer = null; }
     if (backfillTimer) clearTimeout(backfillTimer);
     if (warmTimer) { clearTimeout(warmTimer); warmTimer = null; }
@@ -273,10 +269,13 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
       log.info('brain', 'routing table restored', { data: { from: version, version: info.table?.version ?? null, by } });
       return info;
     },
-    route: req => routeChat({ counts: k => routing.armCounts(k), api: ctx.apiRoute?.() ?? null, ...req }, routing.table(), routing.registry(), brainEst.table() as { kinds?: [string, string, string][]; tasks?: [string, string, string][] } | null),
+    route: req => routeChat({ counts: k => routing.armCounts(k), stats: k => routing.kindStats(k), api: ctx.apiRoute?.() ?? null, ...req }, routing.table(), routing.registry(), brainEst.table() as { kinds?: [string, string, string][]; tasks?: [string, string, string][] } | null),
     lastRoutingActual: id => { try { return routing.lastActual(id); } catch { return null; } },
     observeRouting: rec => {
       try { routing.observe(rec); } catch (e) { log.warn('brain', 'routing outcome not written', { cause: errText(e), hint: 'check <brain>/ops/state/improve is writable' }); }
+    },
+    observeRoutingOutcome: (id, outcome) => {
+      try { routing.observeOutcome(id, outcome); } catch (e) { log.warn('brain', 'routing verdict not written', { cause: errText(e), hint: 'check <brain>/ops/state/improve is writable' }); }
     },
     api: p => api ? api.get(p) : Promise.resolve({ ok: false as const, error: 'nessun cervello configurato' }),
     serveApi: (p, fn) => { localApi.set(p, fn); },

@@ -1,7 +1,7 @@
-// End-to-end: "Eventi alla Regia" (main/chats/regia-wake.ts) on the demo. A work chat ends its turn: once the Regia is
+// End-to-end: "Eventi all'Orchestrator" (main/chats/regia-wake.ts) on the demo. A work chat ends its turn: once the Orchestrator is
 // free (here after the user answered its open question) the app writes it one message labelled as the app's, with the
-// chat's title and what it left (here a command for the user, through the real wiring), and the Regia answers it (a
-// turn of its own). While the Regia waits for the user nothing is sent. The demo turns the news on only with SB_REGIA_EVENTS=1; SB_REGIA_EVENTS_MS shortens the grouping window.
+// chat's title and what it left (here a command for the user, through the real wiring), and the Orchestrator answers it (a
+// turn of its own). While the Orchestrator waits for the user nothing is sent. The demo turns the news on only with SB_REGIA_EVENTS=1; SB_REGIA_EVENTS_MS shortens the grouping window.
 // Screenshot: test-results/shots/regia-wake.png.
 import { expect, test } from '@playwright/test';
 import { launchDemo, shot } from './helpers';
@@ -15,7 +15,7 @@ test('a work chat that finishes wakes the Regia with an app message, never while
 
   const text = ['Fatto: la mappa carica in 2 secondi. Ora lancia:', '', '```powershell', "Write-Output 'ok'", '```'].join('\n');
   await app.evaluate((_e, t) => { (globalThis as unknown as { __sbDemo: Demo }).__sbDemo.turn('mappa', t); }, text);
-  // the Regia waits for the user (its open question): the news waits too (held by its gate),
+  // the Orchestrator waits for the user (its open question): the news waits too (held by its gate),
   // once the command (asks.ts settles it after the turn end) has replaced the bare 'done'
   const wake = () => app.evaluate(() => (globalThis as unknown as { __sbDemo: Demo }).__sbDemo.wake());
   await expect.poll(async () => { const w = await wake(); return w.held > 0 && w.queued.includes('mappa:command'); }).toBe(true);

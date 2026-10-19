@@ -14,7 +14,7 @@ export function appBoot(root: string, tools?: string): string {
     `# Personal brain: ${brain}`, '',
     'This folder holds only the owner\'s own content. Product rules, tools, agents and skills come from the app at each',
     'launch (`{tools}`); the copy there is never edited. Files that do not exist yet are created on first real use; never',
-    'seed rules, procedures, skills or example notes the owner did not ask for. me.md is the owner\'s profile.',
+    'seed rules, skills or example notes the owner did not ask for. me.md is the owner\'s profile.',
     'Safety: production and shared systems: propose the exact action; the owner runs it. Production queries, read-only',
     'too: show the full text first, run only after an explicit ok. No secrets in this folder; credentials stay outside',
     'and must not be read. Do not recursively search the home directory. Do not change global CLI settings.',

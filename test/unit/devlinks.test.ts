@@ -1,7 +1,7 @@
 // Unit tests of lib/devlinks.ts: the DevOps links of a chat found locally in its messages and tool calls (URLs of
 // both hosts, DevOps MCP tool ids and titles, cached titles, dedup and newest-first order).
 import { describe, expect, it } from 'vitest';
-import type { ChatItem, DevopsState } from '../../src/shared/contract';
+import type { ChatItem, TasksState } from '../../src/shared/contract';
 import { devopsToolName, extractDevLinks, linkLabel, parseDevopsUrl, toolRefs } from '../../src/renderer/lib/devlinks';
 
 const user = (at: number, text: string): ChatItem => ({ kind: 'user', id: `u${at}`, at, text });
@@ -78,7 +78,7 @@ describe('extractDevLinks', () => {
       prs: [{ id: 81, title: 'Rimborso con sconto', url: 'https://dev.azure.com/o/Shop/_git/web/pullrequest/81', workItems: [] }],
       assigned: [{ id: 4711, type: 'Bug', title: 'Reso sbagliato', url: 'https://dev.azure.com/o/Shop/_workitems/edit/4711' }],
       news: [], urgent: [], reviews: [], oldReviews: [], details: {},
-    } as unknown as DevopsState;
+    } as unknown as TasksState;
     const links = extractDevLinks([
       asst(1, 'PR https://dev.azure.com/o/Shop/_git/web/pullrequest/81'),
       tool(2, 'mcp__my-devops__wit_get_work_item', { id: 4711 }),

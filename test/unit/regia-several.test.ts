@@ -1,4 +1,4 @@
-// Several Regie (ADR 0021): which Regia a chat answers to (src/shared/regia.ts), tab labels and names, the opacity
+// Several Orchestrators (ADR 0021): which Orchestrator a chat answers to (src/shared/regia.ts), tab labels and names, the opacity
 // setting's schema. The widget's size and room: regia-dock.test.ts.
 import { describe, expect, it } from 'vitest';
 import { chatName, cleanRegiaName, regiaLabel, regiaOfChat, regieOf } from '../../src/shared/regia';
@@ -35,7 +35,6 @@ describe('which Regia a chat answers to', () => {
   it('a tab shows its name, "Lavoro" for the Regia from before names; names are 1-30 characters on one line', () => {
     expect(regiaLabel({ regiaName: 'App' })).toBe('App');
     expect(regiaLabel({})).toBe('Lavoro');
-    expect(regiaLabel({ appRegia: true, regiaName: 'X' })).toBe('App'); // the app's own Regia ("Migliora l'app")
     expect(regiaLabel({ regiaName: '  ' })).toBe('Lavoro');
     expect(cleanRegiaName('  Miglioramento\n app ')).toBe('Miglioramento app');
     for (const bad of ['', '   ', 'x'.repeat(31), 3, null, undefined]) expect(cleanRegiaName(bad), String(bad)).toBe(null);

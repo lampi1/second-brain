@@ -37,7 +37,7 @@ export const delivered = text => {
     .find(l => l.length > 3 && !/^[-=]+$/.test(l));
   return line ? field(line, 120) : '?';
 };
-// Area: the "<Area> · <cosa>" prefix of the chat title, the Regia, else the repo folder of the cwd.
+// Area: the "<Area> · <cosa>" prefix of the chat title, the Orchestrator, else the repo folder of the cwd.
 export const areaOf = (chat, cwd) => {
   const t = String(chat ?? '');
   if (/^regia\b/i.test(t)) return 'Regia';

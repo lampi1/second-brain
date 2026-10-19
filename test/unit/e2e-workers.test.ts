@@ -73,7 +73,7 @@ describe('unit tests with real processes (scripts/process-units.mjs)', () => {
   });
   it('follows src imports to any depth, and a type-only import starts nothing', () => {
     expect(units).toContain('test/unit/brain/live.test.ts');   // Live → brain/node → execFile
-    expect(units).not.toContain('test/unit/devops.test.ts');   // imports brain/node's types only, injects its runner
+    expect(units).not.toContain('test/unit/tasks.test.ts');   // imports brain/node's types only, injects its runner
   });
   it('each EXTRA file exists', () => {
     for (const f of EXTRA as string[]) expect(fs.existsSync(path.join(root, f)), f).toBe(true);

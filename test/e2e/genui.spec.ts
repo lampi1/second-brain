@@ -2,7 +2,7 @@
 // test-results/shots/genui-<component>.png), the full-width view (click, Esc closes), a wrong call answered with a clear
 // error; a visual attached to the chat's next question (hidden in the list until the question comes, then on the panel;
 // an option preview's ```sb-ui fence drawn in the context) that never answers it: keys 1-9 still do; with no question in
-// time it falls back to a card; a visual sent to the Regia shows in the Regia widget with the sender's name.
+// time it falls back to a card; a visual sent to the Orchestrator shows in the Orchestrator widget with the sender's name.
 import { expect, test, type ElectronApplication } from '@playwright/test';
 import { expandChats, launchDemo, shot } from './helpers';
 

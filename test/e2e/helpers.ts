@@ -151,7 +151,7 @@ export async function demoLayout(app: ElectronApplication): Promise<Layout> {
 }
 
 /** Opens detail pages whose sidebar entries depend on the user's role (ADR 0068). */
-const GO_KEY = { home: 'h', agenti: 'a', devops: 'o', dashboard: 'd', fatto: 'f', idee: 'i', costi: 'c', qualita: 'q', procedure: 'l', script: 't', changelog: 'n', confronto: 'm', miglioramento: 'r', skill: 's', impostazioni: 'p', migliora: 'u' } as const;
+const GO_KEY = { home: 'h', agenti: 'a', task: 'o', dashboard: 'd', fatto: 'f', idee: 'i', costi: 'c', qualita: 'q', regole: 'l', memoria: 'y', classificatori: 'k', collegamenti: 'b', script: 't', changelog: 'n', confronto: 'm', skill: 's', impostazioni: 'p', guida: 'e' } as const;
 export async function goPage(page: Page, id: keyof typeof GO_KEY): Promise<void> {
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await page.keyboard.press('g');
@@ -168,16 +168,27 @@ export async function openAgentOverview(page: Page): Promise<void> {
   await expect(page.getByTestId('agent-overview')).toBeVisible();
 }
 
-/** Opens the agent studio (editor, catalog list, proposals, progress) on one agent's page, from its overview card;
- *  Generale is in every catalog. */
+/** Opens the agent studio (editor, catalog list, proposals, progress) on one agent's page, from its overview card: a
+ *  click flips the card (#81), "Apri profilo" on its back opens the page; Generale is in every catalog. */
 export async function openAgents(page: Page, agent = 'Generale'): Promise<void> {
   await openAgentOverview(page);
-  await page.getByTestId('agent-overview').getByRole('heading', { name: agent, exact: true }).getByRole('button').click();
+  const card = page.getByTestId('agent-overview').locator('article.catalog-card').filter({ has: page.getByRole('heading', { name: agent, exact: true }) });
+  await card.getByRole('heading', { name: agent, exact: true }).getByRole('button').click();
+  await expect(card).toHaveAttribute('data-flipped', 'true');
+  await card.getByRole('button', { name: /^(Apri profilo|Open profile)$/ }).click();
   await expect(page.getByTestId('agent-studio')).toBeVisible();
 }
 
-/** Runs an action of the top bar's "…" menu (browsers, Credenziali, Migliora: TopBar.tsx MoreButton). */
-export async function moreAction(page: Page, item: 'more-browsers' | 'more-credentials' | 'more-improve'): Promise<void> {
+/** Opens the brain's notes map: the Mappa page (G B) and its "Note del brain" view (ADR 0077; it was a Dashboard tab). */
+export async function openNotesMap(page: Page): Promise<void> {
+  await goPage(page, 'collegamenti');
+  await expect(page.getByTestId('bm-map-page')).toBeVisible();
+  await page.getByTestId('bm-map-page').getByRole('button', { name: /^(Note del brain|Brain notes)$/ }).click();
+  await expect(page.getByTestId('dash-map')).toBeVisible();
+}
+
+/** Runs an action of the top bar's "…" menu (Credenziali: TopBar.tsx MoreButton). */
+export async function moreAction(page: Page, item: 'more-credentials'): Promise<void> {
   await page.getByTestId('topbar-more').click();
   await page.getByTestId(item).click();
   await expect(page.getByTestId('topbar-more-pop')).toHaveCount(0);

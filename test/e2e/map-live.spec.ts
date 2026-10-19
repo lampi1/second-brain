@@ -1,5 +1,5 @@
 // End-to-end: the live brain map in the real app (frozen demo + the synthetic brain of test/fixtures/brain-ui). The
-// demo's chats work (two running, the Regia waiting); a test hook (__sbDemo.tool) makes them read a brain file and
+// demo's chats work (two running, the Orchestrator waiting); a test hook (__sbDemo.tool) makes them read a brain file and
 // send a message: the legend lists the chats at work and opens one, the lit pieces carry "Adesso" with the chats to
 // open, a live chat's neuron opens its chat, the switch turns the live map off. Also measures what the live map costs
 // (engine.ts, ADR 0039): with chats at work it animates on requestAnimationFrame (about 30 frames a second while the
@@ -11,7 +11,7 @@ import { test, expect, type ElectronApplication, type Page } from '@playwright/t
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { launch, setSize, shot } from './helpers';
+import { launch, setSize, shot, openNotesMap } from './helpers';
 
 const FIX = path.resolve(import.meta.dirname, '..', 'fixtures', 'brain-ui');
 function fixtureBrain(): string {
@@ -49,8 +49,7 @@ async function rate(ms: number): Promise<number> {
   return Math.round(((await frames()) - a) / (ms / 1000) * 10) / 10;
 }
 const openMap = async () => {
-  await page.getByTestId('nav-dashboard').click();
-    await page.getByRole('tab', { name: 'Mappa brain' }).click();
+  await openNotesMap(page);
     await page.getByRole('button', { name: 'Esplora in 3D' }).click();
   await expect(page.getByTestId('brain-map')).toBeVisible();
   await page.getByTestId('bx-map-live').locator('summary').click();
@@ -81,7 +80,7 @@ test.beforeAll(async () => {
       return ctx;
     } as typeof orig;
   });
-  // what the chats do now: Fix reads the brain's now.md and calls the reviewer, the Regia writes to App · Feedback
+  // what the chats do now: Fix reads the brain's now.md and calls the reviewer, the Orchestrator writes to App · Feedback
   await tool('fix', { id: 'live-read', name: 'Read', input: { file_path: 'C:\\brains\\demo\\now.md' }, summary: 'now.md' });
   await tool('fix', { id: 'live-agent', name: 'Agent', input: { subagent_type: 'reviewer' }, summary: 'reviewer' });
   await tool('regia', { id: 'live-send', name: 'mcp__second-brain-app__app_send_to_chat', input: { chatId: 'feedback', text: 'vai' }, summary: 'a App · Feedback' });

@@ -84,7 +84,7 @@ describe('Quality service', () => {
     const held = pr({ build: { result: 'failed', status: 'completed', number: '1', url: '', at: null } });
     const deps: QualityDeps = {
       logDir, cacheFile: path.join(dir, 'quality-reopen.json'), brainRoot: () => root, now: () => NOW,
-      devops: () => ({ at: NOW - 6e4, prs: [held, pr({ id: 9 })], details: {}, error: null, enabled: opts.enabled !== false }),
+      tasks: () => ({ at: NOW - 6e4, prs: [held, pr({ id: 9 })], details: {}, error: null, enabled: opts.enabled !== false }),
       run: async (script, args) => { calls.push([script, ...args]); return answer; },
       ...over,
     };

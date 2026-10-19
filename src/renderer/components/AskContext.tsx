@@ -2,11 +2,11 @@
 // contesto e il contenuto magari in un qualcosa di espandibile o il link dei report o pr"): the links the chat named
 // (web pages and PRs open in the system browser, local files in the app's read-only file viewer, ADR 0068) always in
 // sight as chips; under a toggle, the prose of the turn that ends with the request (its reasoning too, when that is where the model wrote it) and the options' previews, as sanitized markdown. Folded in
-// a chat's own tile (the transcript is right above), open in the Regia's card and in the questions window. Its keys
+// a chat's own tile (the transcript is right above), open in the Orchestrator's card and in the questions window. Its keys
 // stay its own: the panel ignores Enter on its links and toggle (RequestPanel.tsx). Visuals (ADR 0033): the ones the chat
 // attached to this question (show_ui next-ask) always in sight on top, and an option's ```sb-ui preview fences drawn as
 // catalog views (GenUi.tsx). A text to send in that prose (a mail, a comment: lib/sendable.ts) shows as the chat's own
-// code block, with Copia and Mandato (ADR 0038); the other code blocks stay plain (the Regia's card lists the turn's
+// code block, with Copia and Mandato (ADR 0038); the other code blocks stay plain (the Orchestrator's card lists the turn's
 // commands with Esegui apart). In the questions window (`layout="window"`, ADR 0049) it reads as a page: a text to approve
 // stands on its own as a document (never folded, never inside a scrolling box), the lead above the question is the
 // agent's context sentence or two lines of "why" that unfold with a click, the links stay chips. Used by RequestPanel.tsx and CommandRequest.tsx.

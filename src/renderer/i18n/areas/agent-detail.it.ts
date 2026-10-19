@@ -8,7 +8,6 @@ export const agentDetailIt = {
   'agentDetail.promptSize': ({ n }: { n: number }) => n === 1 ? '1 carattere' : `${n} caratteri`,
   'agentDetail.purpose': 'Scopo',
   'agentDetail.config': 'Configurazione',
-  'agentDetail.learning': 'Apprendimento e pacchetto',
   'agentDetail.results': 'Risultati osservati',
   'agentDetail.tools': 'Strumenti',
   'agentDetail.toolsNone': 'Nessuno', 'agentDetail.toolsAll': 'Quelli del motore',

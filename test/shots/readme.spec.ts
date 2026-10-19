@@ -31,7 +31,7 @@ test.afterAll(async () => { await app?.close(); });
 
 /** Screenshot → WebP in the page (Chromium's encoder: no image dependency), lowering the quality until < 300 KB. */
 async function save(name: string): Promise<void> {
-  // transient toasts ("DevOps aggiornato") would cover the page
+  // transient toasts ("Task aggiornati") would cover the page
   for (const x of await page.getByTestId('toast-close').all()) await x.click();
   await expect(page.getByTestId('toast')).toHaveCount(0);
   await page.mouse.move(2, 2);
@@ -70,7 +70,7 @@ test('README screenshots', async () => {
   // 1. The agents column: chats as strips, their questions as panels, each browser tab under the chat that drives it
   await expect(page.getByTestId('view-agents')).toBeVisible();
   await waitThumbs(page);
-  await save('mosaic');
+  await save('grindhouse');
 
   // 1b. Agenti: the agent catalog as cards, with the changes waiting for the user's approval
   await page.getByTestId('nav-agenti').click();
@@ -83,7 +83,7 @@ test('README screenshots', async () => {
   // 2. The Orchestrator: the coordinating chat, in its column on the right, with its decision waiting
   await openRegia(page);
   await waitThumbs(page);
-  await save('regia');
+  await save('orchestrator');
 
   // 3. A browser driven by an agent, big next to its chat (focus mode on the chat)
   await page.getByTestId('tile-chat-qa').locator('.tile-head').click();
@@ -106,13 +106,13 @@ test('README screenshots', async () => {
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('brain-map')).toHaveCount(0);
 
-  // 5. DevOps: pull requests, work items and the QA status of each PR, read on demand
-  await page.getByTestId('nav-devops').click();
-  const dv = page.getByTestId('brain-page-devops');
-  await dv.getByTestId('devops-refresh').click();
-  await expect(dv.getByTestId('devops-qa')).toBeVisible({ timeout: 30_000 });
+  // 5. Task: pull requests, work items and the QA status of each PR, read on demand
+  await page.getByTestId('nav-task').click();
+  const dv = page.getByTestId('brain-page-task');
+  await dv.getByTestId('task-refresh').click();
+  await expect(dv.getByTestId('task-qa')).toBeVisible({ timeout: 30_000 });
   await dv.evaluate(el => { el.scrollTop = 0; });
-  await save('devops');
+  await save('task');
 
   // 6. Qualità: four measured metrics about how the agents work, each with its source
   await goPage(page, 'qualita');

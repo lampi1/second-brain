@@ -19,7 +19,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 export const LAYERS = [
   { id: 'persone', label: 'Persone', hint: '{{OWNER}} e i colleghi' },
-  { id: 'chat', label: 'Chat', hint: 'la Regia e le chat di lavoro' },
+  { id: 'chat', label: 'Chat', hint: 'l’Orchestrator e le chat di lavoro' },
   { id: 'agenti', label: 'Agenti e skill', hint: 'specialisti, i loro taccuini, le skill' },
   { id: 'tool', label: 'Tool e hook', hint: 'script di ops/tools e hook che scattano da soli' },
   { id: 'memoria', label: 'Memoria', hint: 'dove il cervello scrive quello che succede' },
@@ -165,9 +165,9 @@ export function collect({ root = DEFAULT_ROOT, home = os.homedir(), usage = null
   // People and chats
   add(node('owner', 'persone', 'persona', 'Owner', { what: 'Il proprietario del cervello: lavora con le chat, decide, lancia lui i comandi di produzione.', file: `${root}/me.md`, modified: modified(path.join(root, 'me.md')) }));
   if (fs.existsSync(path.join(root, 'people.md'))) add(node('colleghi', 'persone', 'persona', 'Colleghi e QA', { what: 'Colleghi, soprannomi, ruoli e chi taggare su DevOps (people.md).', file: `${root}/people.md`, modified: modified(path.join(root, 'people.md')) }));
-  add(node('chat:regia-claude', 'chat', 'regia', 'Regia (Claude)', { what: 'La chat fissa dove {{OWNER}} scrive: apre le chat di lavoro, segue stato e avanzamento, ti dice quale chat ti aspetta, resta libera.', file: doc('hub.md').replace(/\\/g, '/'), modified: modified(doc('hub.md')) }));
+  add(node('chat:regia-claude', 'chat', 'regia', 'Orchestrator (Claude)', { what: 'La chat fissa dove {{OWNER}} scrive: apre le chat di lavoro, segue stato e avanzamento, ti dice quale chat ti aspetta, resta libero.', file: doc('hub.md').replace(/\\/g, '/'), modified: modified(doc('hub.md')) }));
   const cursorRegia = path.join(root, '.cursor', 'skills', 'regia', 'SKILL.md');
-  if (fs.existsSync(cursorRegia)) fileNode('chat:regia-cursor', 'chat', 'regia', 'Regia (Cursor)', cursorRegia, { what: 'La stessa Regia dentro Cursor, accesa con /regia; legge le chat Cursor con chats.mjs.' });
+  if (fs.existsSync(cursorRegia)) fileNode('chat:regia-cursor', 'chat', 'regia', 'Orchestrator (Cursor)', cursorRegia, { what: 'Lo stesso Orchestrator dentro Cursor, acceso con /regia; legge le chat Cursor con chats.mjs.' });
   add(node('chat:lavoro', 'chat', 'chat', 'Chat di lavoro', { what: 'Una chat per ogni lavoro (fix, QA, produzione, OS): tiene la sua riga in now.md e parla alle altre con inbox.mjs.', file: doc('hub.md').replace(/\\/g, '/'), modified: modified(doc('hub.md')) }));
   for (const b of inbox?.boxes ?? []) {
     if (/^regia$/.test(b.who)) continue;
@@ -360,7 +360,7 @@ export function collect({ root = DEFAULT_ROOT, home = os.homedir(), usage = null
 // SHORT: one Italian line per main piece for the label; a piece not here gets the first sentence of its own header.
 export const SHORT = {
   owner: 'decide e lancia lui la produzione', colleghi: 'QA e colleghi, chi taggare',
-  'chat:regia-claude': 'dove scrivi: apre le chat, ti dice come procedono', 'chat:regia-cursor': 'la stessa Regia dentro Cursor',
+  'chat:regia-claude': 'dove scrivi: apre le chat, ti dice come procedono', 'chat:regia-cursor': 'la stessa Orchestrator dentro Cursor',
   'chat:lavoro': 'una chat per ogni lavoro', 'harness:claude': 'le chat Claude e i loro hook', 'harness:cursor': 'le chat Cursor, stesse regole',
   'agent:reviewer': 'controlla un diff prima del merge', 'agent:code-investigator': 'trova la causa di un bug nel codice',
   'agent:prod-log-reader': 'legge log e stato di produzione', 'agent:qa': 'prova i test case del prodotto nel browser',

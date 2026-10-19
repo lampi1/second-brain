@@ -1,4 +1,4 @@
-// A Codex Regia's app_create_chat path over an isolated real MCP server and ChatManager, ending at a fake Codex
+// A Codex Orchestrator's app_create_chat path over an isolated real MCP server and ChatManager, ending at a fake Codex
 // app-server's turn/start. Proves title, engine, ownership and the full labelled brief survive without duplicate
 // real chats, credentials, network services or model calls. Also checks the existing engine policy stays enforced.
 import { afterEach, describe, expect, it } from 'vitest';

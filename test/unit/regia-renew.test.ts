@@ -1,6 +1,6 @@
-// Unit tests of the new-Regia action (src/renderer/actions.ts renewRegia, regiaHandoff) with a fake bridge: it asks
-// main for a Regia on the chosen engine in the same folder, optionally starting from the handoff (the old Regia's
-// last exchanges, a link to it, now.md), and renames the old one with a unique "Regia precedente" name.
+// Unit tests of the new-Orchestrator action (src/renderer/actions.ts renewRegia, regiaHandoff) with a fake bridge: it asks
+// main for an Orchestrator on the chosen engine in the same folder, optionally starting from the handoff (the old Orchestrator's
+// last exchanges, a link to it, now.md), and renames the old one with a unique "Orchestrator precedente" name.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatItem, ChatSummary } from '@shared/contract';
 import { engineInfos } from '../../src/main/engines/registry';
@@ -53,7 +53,7 @@ describe('renewRegia', () => {
     });
     expect(await renewRegia('r', 'cursor', true)).toBe(true);
     const create = invoke.mock.calls.find(c => c[0] === 'chat:createRouted')![1] as Record<string, unknown>;
-    // main moves the role (replaces) and sends the old one's update; the new one keeps the mail address "Regia"
+    // main moves the role (replaces) and sends the old one's update; the new one keeps the mail address "Orchestrator"
     // through the routing table (ADR 0032): the engine the user picked is the ask, kind 'regia' is main's
     expect(create).toMatchObject({ defaults: { harness: 'cursor' }, ask: { harness: 'cursor' }, cwd: 'C:/brain', regia: true, replaces: 'r', title: 'Regia' });
     expect(String(create.prompt)).toContain('Passaggio di consegne');

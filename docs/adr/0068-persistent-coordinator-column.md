@@ -45,5 +45,6 @@ the window or collapse, and the agents lived in two places: the home rows and a 
 ## Consequences
 
 One place to look for every agent and one way back (Esc, Ctrl+1, the page's back button). The browsers lose their
-own zone: hiding them (Ctrl+Shift+B) still keeps the tabs working off screen. Global naming (Regia → Orchestrator on
+own zone: a folded browser (the strip's globe) still keeps working off screen. (The "Nascondi browser" switch,
+Ctrl+Shift+B, was removed on 2026-10-19, #82: it hid a browser the globe had just opened.) Global naming (Regia → Orchestrator on
 the main side), the Dashboard and settings content are separate workstreams.

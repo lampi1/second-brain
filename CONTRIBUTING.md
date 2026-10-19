@@ -115,12 +115,12 @@ Good places to start are marked ★: self-contained, well tested, easy to verify
 | Browser | `src/main/browser/` | tabs as WebContentsViews, trusted input over CDP, page snapshots and refs, environments and logins, hand-offs to the user |
 | MCP | `src/main/mcp/`, `src/main/appctl/` | the local MCP server (per-chat endpoints with tokens) and the app-control tools for agents |
 | Brain | `src/main/brain/` | the brain folder, live feed, notifications, usage, costs, budgets, estimates, quality, model routing |
-| DevOps ★ | `src/main/devops/`, `src/renderer/brain/pages/` | the DevOps page: model, service, demo data |
+| Task ★ | `src/main/tasks/`, `src/renderer/brain/pages/Task.tsx` | the Task page (Azure DevOps, read only): model, service, demo data |
 | Esegui | `src/main/run/` | running a chat's shell block on the user's click, the result back to the chat |
 | Search ★ | `src/main/search/` | the Ctrl+K full-text index |
 | Skills ★ | `src/main/skills/` | the skills and agents page |
-| Migliora l'app | `src/main/improve/` | the app's own Regia, branch stages, promotion |
-| Renderer shell | `src/renderer/components/`, `store/`, `lib/` | tiles, views, Regia widget, panels, palette; one external store; pure helpers (★ `lib/` is all unit-tested) |
+| Update | `src/main/update/` | Settings → Aggiornamenti: main's tip, pull, promote-now and restart, the start notice |
+| Renderer shell | `src/renderer/components/`, `store/`, `lib/` | strips, the Orchestrator column, panels, palette; one external store; pure helpers (★ `lib/` is all unit-tested) |
 | Brain pages | `src/renderer/brain/` | today, to-do, ideas, explore, 3D map (`map/`), Qualità, Costi |
 | Demo | `src/main/demo*.ts` | fake chats, browser pages and brain for `npm run demo`, tests and screenshots |
 | Scripts | `scripts/` | build, light check, doctor, logs, release (promote/rollback), demo, screenshots |

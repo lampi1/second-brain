@@ -1,6 +1,6 @@
 // The brain's changelog (ADR 0076; the owner, 2026-10-19: "i cambiamenti finiscono nel changelog del brain che farei
 // una sezione a parte"): one Markdown file at the brain's root, `changelog.md`, one line per change an agent or the app
-// made to the brain (a script added, fixed or deleted, a rule or procedure rewritten…), newest first. Plain text the user
+// made to the brain (a script added, fixed or deleted, a rule or skill rewritten…), newest first. Plain text the user
 // can read and edit like any note; the Changelog page parses the lines it recognises and shows the rest as they are.
 // Written only by main (the Orchestrator's brain_script_* and brain_changelog_add tools); created on its first entry
 // (ADR 0072: a fresh brain holds no file of the app's). Line format, `·` separated, the summary last so it may contain
@@ -9,7 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ChangelogAction, ChangelogEntry, ChangelogKind } from '../../shared/contract';
-import { maskSecrets } from './procedures';
+import { maskSecrets } from './mask';
 
 export const CHANGELOG_FILE = 'changelog.md';
 export const CHANGELOG_KINDS: readonly ChangelogKind[] = ['script', 'rule', 'procedure', 'note', 'agent', 'skill', 'other'];

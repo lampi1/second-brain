@@ -1,13 +1,14 @@
 // An agent's own page and the hand editor of a profile, in the Dashboard's look (owner, 18/10: the old two-column studio
 // looked out of place). The page leads with who the agent is (glyph, name, role, state, engine and model, Avvia), its
-// run numbers, then the prompt that makes it an agent (its instructions, in full), its configuration, its learned rules
-// and its lifecycle. "Modifica" opens the editor in place; "Duplica" opens the copy's page with its editor. New agents
+// run numbers, then the prompt that makes it an agent (its instructions, in full), its configuration, the skills it
+// declares and its memory (ADR 0077: preloaded when it starts; changed by the maintenance or from the Skill page) and
+// its lifecycle. "Modifica" opens the editor in place; "Duplica" opens the copy's page with its editor. New agents
 // are not made here: "Crea agente" (AgentCreateDialog) asks the Orchestrator. With no profile (arg 'studio') the page
 // holds a draft prepared from an approval and the automatic proposals. Editing never changes the identity/model of
 // running sessions. Rendered by AgentCatalogPage.tsx. Styles: styles/agent-studio.css.
 import { Select } from './Select';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { AGENT_CATEGORIES, AGENT_TONES, inProbation, type AgentDraft, type AgentMetrics, type AgentProfile } from '@shared/agents';
+import { AGENT_CATEGORIES, AGENT_TONES, MAX_CONTEXT_RANGE, inProbation, type AgentDraft, type AgentMetrics, type AgentProfile } from '@shared/agents';
 import { ROLE_GLYPHS } from '@shared/agent-glyphs';
 import { duplicateAgentAvatars, unusedAgentTone } from '../lib/agent-avatar-choice';
 import { GLYPH_ART, GLYPH_LABELS_IT } from '../lib/agent-glyph-art';
@@ -20,7 +21,7 @@ import { forgetAgentEditor, readAgentEditor, rememberAgentEditor } from '../lib/
 import { validateAvatarImage } from '../lib/avatar-raster';
 import { holdUpdate } from '../lib/update-barrier';
 import { profileCanStart } from '../lib/role-consumers';
-import { go } from '../actions';
+import { go, goTarget } from '../actions';
 import { lang, locale, t } from '../i18n';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentReadiness } from './AgentReadiness';
@@ -30,7 +31,9 @@ import { ProgressPanel } from './ProgressPanel';
 import { AgentProposals } from './AgentProposals';
 import { CatalogRun } from './CatalogRun';
 import { checkedManifest } from '@shared/agent-manifest';
+import { useBrainModel } from '../store/brain-model';
 import '../styles/agent-studio.css';
+import '../styles/brain-model.css';
 
 const percent = (v: number) => new Intl.NumberFormat(locale(), { style: 'percent', maximumFractionDigits: 0 }).format(v);
 const usd = (v: number) => new Intl.NumberFormat(locale(), { style: 'currency', currency: 'USD', maximumFractionDigits: 3 }).format(v);
@@ -152,6 +155,10 @@ export function AgentStudio({ initialProfile, children }: { initialProfile?: Age
           <AgentReadiness choice={choice} />
           {!choice?.modelSelectable && choice?.modelReason && <p role="status">{choice.modelReason}</p>}
           {choice?.effort && <label className="field"><span>{t('studio.effort')}</span><Select value={editing.effort ?? ''} onChange={e => change({ effort: EFFORTS.find(effort => effort === e.target.value) })}><option value="">{t('studio.defaultModel')}</option>{EFFORTS.map(e => <option key={e} value={e}>{effortLabel(e)}</option>)}</Select></label>}
+          <label className="field"><span>{t('studio.maxContext')}</span><input type="number" inputMode="numeric" min={MAX_CONTEXT_RANGE.min / 1000} max={MAX_CONTEXT_RANGE.max / 1000} step={10}
+            value={editing.maxContext ? Math.round(editing.maxContext / 1000) : ''} placeholder={t('studio.maxContextDefault')} data-testid="agent-max-context"
+            onChange={e => { const k = Number(e.target.value); change({ maxContext: e.target.value === '' || !Number.isFinite(k) ? null : Math.round(k) * 1000 }); }} />
+            <small data-testid="agent-max-context-note">{choice?.maxContext ? t('studio.maxContextHint') : t('studio.maxContextUnsupported')}</small></label>
           <fieldset className="agent-editor-avatar"><legend>{t('studio.avatar')}</legend><div className="avatar-options">{ROLE_GLYPHS.map(value => {
             const tone = editing.avatar.kind === 'symbol' ? editing.avatar.tone ?? 'blue' : unusedAgentTone(catalog.profiles, editing.category, id);
             const label = lang() === 'it' ? GLYPH_LABELS_IT[value] : GLYPH_ART[value].label;
@@ -206,10 +213,14 @@ function AgentDetail({ profile, busy, editorOpen, hasUpdate, status, editor, onE
     { label: t('catalog.last'), value: last },
   ];
   const instructions = profile.instructions.trim();
+  const { state: brain } = useBrainModel();
+  const linked = brain?.agents.find(a => a.id === profile.id)?.skills ?? profile.knowhow?.linked ?? [];
+  const memory = brain?.memory.find(m => m.kind === 'agent' && m.agentId === profile.id) ?? null;
   const config: [string, string][] = [
     [t('catalog.engine'), engine],
     [t('studio.model'), profile.model ?? t('studio.defaultEngine')],
     [t('studio.effort'), profile.effort ? effortLabel(profile.effort) ?? profile.effort : t('studio.defaultModel')],
+    [t('studio.maxContext'), profile.maxContext ? t('studio.maxContextValue', { n: Math.round(profile.maxContext / 1000) }) : t('studio.maxContextDefault')],
     [t('studio.category'), t(`studio.category.${profile.category}`)],
     [t('agentDetail.tools'), profile.tools ? [...profile.tools.allow, ...(profile.tools.mcp ?? []).map(s => `mcp:${s}`)].join(', ') || t('agentDetail.toolsNone') : t('agentDetail.toolsAll')],
     [t('agentDetail.ceiling'), profile.permissionCeiling ? t(`agentDetail.ceiling.${profile.permissionCeiling}`) : t('agentDetail.ceilingNone')],
@@ -259,8 +270,12 @@ function AgentDetail({ profile, busy, editorOpen, hasUpdate, status, editor, onE
             <header className="ad-card-head"><h3 id={`ad-config-${profile.id}`}>{t('agentDetail.config')}</h3></header>
             <dl className="ad-config">{config.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
           </section>
-          <section className="ad-card" aria-labelledby={`ad-learn-${profile.id}`}>
-            <header className="ad-card-head"><h3 id={`ad-learn-${profile.id}`}>{t('agentDetail.learning')}</h3></header>
+          <section className="ad-card bm-studio-skills" aria-labelledby={`ad-skills-${profile.id}`} data-testid="agent-skills">
+            <header className="ad-card-head"><h3 id={`ad-skills-${profile.id}`}>{t('bm.studio.skills')}</h3></header>
+            <p>{t('bm.studio.skillsHint')}</p>
+            {linked.length ? <div className="bm-chips">{linked.map(s => <button key={s} type="button" className="bm-chip" onClick={() => go({ page: 'skill', arg: s })}>{s}</button>)}</div> : <p>{t('bm.card.noSkills')}</p>}
+            <p>{t('bm.card.memory')}: {memory?.entries ? <button type="button" className="link-btn" onClick={() => goTarget(`file/${memory.file}`)}>{t('bm.mem.entries', { n: memory.entries })}</button> : t('bm.card.memoryNone')}</p>
+            <button type="button" className="link-btn" onClick={() => go({ page: 'skill' })}>{t('bm.studio.manage')}</button>
             <AgentPackDetails profile={profile} />
           </section>
         </div>

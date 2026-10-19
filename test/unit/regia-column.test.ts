@@ -20,7 +20,7 @@ describe('persistent coordinator column', () => {
   it('the column shows the Orchestrator only: open, a Regia and marked by main', () => {
     const chats = Object.fromEntries([
       { id: 'closed', isRegia: true, orchestrator: true, closedAt: 1 },
-      { id: 'app', appRegia: true },
+      { id: 'app', isRegia: false },
       { id: 'work', isRegia: true },
       { id: 'orch', isRegia: true, orchestrator: true },
     ].map(chat => [chat.id, chat as ChatSummary]));

@@ -16,11 +16,10 @@ export const EXCLUSIVE: Record<string, string> = {
   'questions-perf.spec.ts': 'questions window open time against a 100 ms budget',
   // these read the real system clipboard back (Copia in the renderer writes it): two at once would read each other's
   'brain-nav.spec.ts': 'system clipboard',
-  'devops-qa.spec.ts': 'system clipboard',
+  'task-qa.spec.ts': 'system clipboard',
   'genui.spec.ts': 'system clipboard',
   'navigation.spec.ts': 'system clipboard',
   'link-peek.spec.ts': 'system clipboard',
-  'procedure.spec.ts': 'system clipboard',
   'codeblocks.spec.ts': 'system clipboard',
 };
 const exclusive = Object.keys(EXCLUSIVE).map(f => `**/${f}`);

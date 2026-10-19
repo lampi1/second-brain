@@ -91,17 +91,17 @@ const BASE: readonly SettingDef[] = [
   { key: 'mute.*', type: 'boolean', default: false, protected: true, label: 'Silenzia un tipo di novità',
     description: 'Nessuna notifica per questo tipo (idea, errore, chat finita…); resta nel feed.' },
   // the engines' own keys (engineOn.<id>, engines.<id>, regiaChats.harness) come from engineDefs below
-  { key: 'devops.enabled', type: 'boolean', default: false, protected: true, label: 'Aggiornamento DevOps automatico',
-    description: 'Rilegge da sola i tuoi work item, le PR e le novità sui ticket che segui, con gli script del cervello (niente IA, zero token). Spento: solo con «Aggiorna ora».' },
-  { key: 'devops.everyMin', type: 'int', min: 5, max: 720, default: 30, protected: false, label: 'DevOps: ogni quanti minuti',
-    description: 'Ogni quanto rileggere DevOps quando l’aggiornamento automatico è acceso (da 5 a 720 minuti).' },
-  { key: 'devops.sound', type: 'boolean', default: true, protected: true, label: 'DevOps: suono degli avvisi',
-    description: 'Un suono breve con l’avviso di una menzione o di un cambio sulle tue cose in DevOps. Spento: solo l’avviso a schermo.' },
+  { key: 'tasks.enabled', type: 'boolean', default: false, protected: true, label: 'Task: importazione automatica',
+    description: 'Rilegge da sola i tuoi task dagli strumenti collegati (oggi Azure DevOps: work item, PR e novità sui ticket che segui), con gli script del cervello (niente IA, zero token). Spento: solo con «Aggiorna ora».' },
+  { key: 'tasks.everyMin', type: 'int', min: 5, max: 720, default: 30, protected: false, label: 'Task: ogni quanti minuti',
+    description: 'Ogni quanto rileggere i task quando l’aggiornamento automatico è acceso (da 5 a 720 minuti).' },
+  { key: 'tasks.sound', type: 'boolean', default: true, protected: true, label: 'Task: suono degli avvisi',
+    description: 'Un suono breve con l’avviso di una menzione o di un cambio sulle tue cose (task, PR). Spento: solo l’avviso a schermo.' },
   { key: 'budget.enabled', type: 'boolean', default: true, protected: true, label: 'Limiti di spesa',
     description: "Interruttore generale degli avvisi di spesa (all'80% e al 100%)." },
   ...budgetDefs('claude'),
   ...budgetDefs('cursor'),
-  // the chats the Regia opens (and where "Nuova chat" starts). Protected: an agent choosing the engine or the model
+  // the chats the Orchestrator opens (and where "Nuova chat" starts). Protected: an agent choosing the engine or the model
   // chooses whose credits and how many are spent
   { key: 'regiaChats.claudeModel', type: 'model', default: '', protected: true, label: 'Modello per le chat Claude',
     description: 'Il modello delle chat Claude aperte dall’Orchestrator. Vuoto = il predefinito di Claude Code.' },
@@ -114,10 +114,10 @@ const BASE: readonly SettingDef[] = [
     description: 'Quanto ragiona il modello di ogni chat Cursor. Vuoto = il predefinito del modello. Se il modello non lo offre, la chat lo dice.' },
   { key: 'regiaChats.cursorFast', type: 'boolean', default: false, protected: true, label: 'Fast per le chat Cursor',
     description: 'Acceso: ogni chat Cursor usa la variante fast del modello, se c’è (più veloce, consuma di più).' },
-  // the floating Regia (ADR 0021; the user, 2026-10-12: "voglio poter scegliere l'opacità della regia")
+  // the floating Orchestrator (ADR 0021; the user, 2026-10-12: "voglio poter scegliere l'opacità della regia")
   { key: 'regiaOpacity', type: 'int', min: 40, max: 100, default: 100, protected: false, label: 'Opacità dell’Orchestrator (%)',
     description: 'Quanto si vede il riquadro dell’Orchestrator sopra le chat. Con il mouse sopra o mentre scrivi torna pieno.' },
-  // the Regia hears about the other chats by itself (the user, 2026-10-12: "quando le chat finiscono non ti notificano nulla")
+  // the Orchestrator hears about the other chats by itself (the user, 2026-10-12: "quando le chat finiscono non ti notificano nulla")
   { key: 'regiaEvents', type: 'boolean', default: true, protected: true, label: 'Eventi all’Orchestrator',
     description: "Quando una chat di lavoro finisce, si ferma su un errore, aspetta una tua risposta o ti lascia un comando, l'app lo scrive all’Orchestrator (una riga per chat, al massimo una volta ogni 2 minuti per chat) e lo sveglia se è fermo: decide lui se dirtelo. Ogni risveglio è un turno dell’Orchestrator." },
   // the chat learns how its command went (the user, 2026-10-12: "vorrei che ti accorgessi da sola quando eseguo un
@@ -127,9 +127,9 @@ const BASE: readonly SettingDef[] = [
   // the user, 2026-10-12: "le domande vorrei un toggle per farle comparire proprio come modale"
   { key: 'questionsModal', type: 'boolean', default: false, protected: true, label: 'Domande in finestra',
     description: 'Ogni domanda e permesso compare in una finestra in primo piano, una alla volta in coda, con il contesto. Mentre scrivi aspetta che ti fermi e non ti prende la tastiera. Spento: le domande restano nelle chat e nell’Orchestrator.' },
-  // "Migliora l'app" (ADR 0020): the chats there change and run this code, and "Aggiorna" builds from it
+  // the app's own code: "Aggiorna" (Settings → Aggiornamenti, ADR 0075) updates and builds it; a chat working there is app work
   { key: 'appRepo', type: 'path', nullable: true, default: null, protected: true, label: "Cartella del codice dell'app",
-    description: "Dove «Migliora l'app» lavora e da dove «Aggiorna» prende la nuova versione (una cartella git). Vuoto = quella da cui è stata fatta la versione in uso." },
+    description: "Da dove «Aggiorna» prende la nuova versione (una cartella git); le chat che lavorano lì lavorano sull'app. Vuoto = quella da cui è stata fatta la versione in uso." },
 ];
 /** a CLI model id as the CLIs accept it ("claude-opus-5-5", "grok-4.7", "gpt-5.6-sol[effort=high]"), '' = the default */
 export const MODEL_ID = /^[\w.:@/=[\],-]{0,120}$/;
@@ -137,7 +137,7 @@ export const MODEL_ID = /^[\w.:@/=[\],-]{0,120}$/;
 const MUTE_KEY = /^mute\.([a-z][a-z-]{0,40})$/;
 const ENGINE_KEY = /^(engineOn|engines)\.(.+)$/;
 
-// the engines (ADR 0046, engines/policy.ts): each on or off, and whether the Regie may use it; engines.* keeps the key
+// the engines (ADR 0046, engines/policy.ts): each on or off, and whether the Orchestrators may use it; engines.* keeps the key
 // older releases read, with the same meaning (safe rollback). Default: on only for the built-ins (registry defaultOn)
 function engineDef(group: 'engineOn' | 'engines', id: string): SettingDef {
   const label = engineLabel(id), on = engineOf(id)?.defaultOn ?? false;
@@ -148,7 +148,7 @@ function engineDef(group: 'engineOn' | 'engines', id: string): SettingDef {
       description: `Spento: nessun Orchestrator apre o riprende chat su ${label}; tu sì, da Nuova chat.` };
 }
 
-/** The engine a Regia's work chats start on: one that works with tools (an API model cannot, ADR 0046). */
+/** The engine an Orchestrator's work chats start on: one that works with tools (an API model cannot, ADR 0046). */
 function regiaEngineDef(): SettingDef {
   return { key: 'regiaChats.harness', type: 'enum', values: engines().filter(e => e.caps.tools).map(e => e.id), default: 'claude', protected: true, label: 'Chat aperte dall’Orchestrator: motore',
     description: 'Con cosa l’Orchestrator apre le chat di lavoro quando non lo dice lui. Anche il punto di partenza di "Nuova chat".' };
@@ -222,7 +222,7 @@ export function defaults(): Settings {
     engineOn: Object.fromEntries(engines().map(e => [e.id, e.defaultOn])),
     engines: Object.fromEntries(engines().map(e => [e.id, e.defaultOn])),
     messaging: { crossHarness: true },
-    devops: { enabled: false, everyMin: 30, sound: true },
+    tasks: { enabled: false, everyMin: 30, sound: true },
     budget: { enabled: true, claude: { mode: 'warn', dailyUsd: null, perChatUsd: null }, cursor: { mode: 'warn', dailyUsd: null, perChatUsd: null } },
     regiaChats: { harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '', cursorReasoning: 'medium', cursorFast: false },
     regiaOpacity: 100,
@@ -261,7 +261,7 @@ export function flattenPatch(patch: unknown): [string, unknown][] {
   const walk = (o: Record<string, unknown>, prefix: string) => {
     for (const [k, v] of Object.entries(o)) {
       const key = prefix ? `${prefix}.${k}` : k;
-      if ((['pulse', 'pulse.types', 'pulse.places', 'pulse.headline', 'jobs'].includes(key) || key === 'mute' || key === 'engineOn' || key === 'engines' || key === 'messaging' || key === 'regiaChats' || key === 'devops' || key === 'budget' || key === 'budget.claude' || key === 'budget.cursor')) {
+      if ((['pulse', 'pulse.types', 'pulse.places', 'pulse.headline', 'jobs'].includes(key) || key === 'mute' || key === 'engineOn' || key === 'engines' || key === 'messaging' || key === 'regiaChats' || key === 'tasks' || key === 'budget' || key === 'budget.claude' || key === 'budget.cursor')) {
         if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error(`${key}: oggetto atteso`);
         walk(v as Record<string, unknown>, key);
       } else if (key === 'locked') continue; // echoed back by a client: never settable

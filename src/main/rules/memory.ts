@@ -1,5 +1,8 @@
 // Validated single-line memory mutations for the product CLI; locks prevent lost updates between concurrent chats.
-import { atomicWrite, locked, read } from './storage';
+// One memory per agent (ADR 0077): agents/<id>/memory.md, written only through `agent <brain> <id> <text>`.
+import fs from 'node:fs';
+import path from 'node:path';
+import { atomicWrite, confined, locked, read } from './storage';
 
 function line(text: string, cap: number): string {
   if (!text.trim() || /[\x00-\x1f\x7f]/.test(text) || text.length > cap) throw new Error(`Use one nonempty line of at most ${cap} characters, without control characters.`);
@@ -25,4 +28,17 @@ export function writeError(root: string, text: string, agent: string): void {
     const before = read(root, 'ai-errors.md') || '# AI errors\n\nDate | agent | correction and prevention\n\n';
     atomicWrite(root, 'ai-errors.md', before.trimEnd() + '\n' + entry + '\n');
   });
+}
+/** Adds one dated line to an agent's own memory (agents/<id>/memory.md; the last 300 lines are kept). */
+export function writeAgentMemory(root: string, agentId: string, text: string): string {
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(agentId) || agentId.length > 64) throw new Error('Use the agent id given at launch.');
+  const rel = `agents/${agentId}/memory.md`, entry = `- ${new Date().toISOString().slice(0, 10)} · ${line(text, 1000)}`;
+  fs.mkdirSync(path.dirname(confined(root, rel)), { recursive: true });
+  locked(root, rel, () => {
+    const before = read(root, rel) || '# Memoria\n\n';
+    const lines = before.trimEnd().split('\n'), head = lines.filter(l => !l.startsWith('- ')), rows = lines.filter(l => l.startsWith('- '));
+    if (rows.includes(entry)) return;
+    atomicWrite(root, rel, `${head.join('\n').trim() || '# Memoria'}\n\n${[...rows, entry].slice(-300).join('\n')}\n`);
+  });
+  return rel;
 }

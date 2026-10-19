@@ -1,4 +1,4 @@
-// Accessible onboarding copy shared by the wizard screen and the Regia action.
+// Accessible onboarding copy shared by the wizard screen and the Orchestrator action.
 export const copy = {
   it: {
     title: 'Collega i tuoi strumenti', intro: 'Troviamo le cartelle di lavoro nei posti noti. Leggiamo solo metadati locali, senza aprire file cloud o contattare servizi.',

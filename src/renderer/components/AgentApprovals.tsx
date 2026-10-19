@@ -20,7 +20,6 @@ function doneText(item: ApprovalItem, d: ApprovalDecision): string {
     return t(item.type === 'lifecycle' && item.proposal.kind === 'model-trial' ? 'approvals.done.trialStarted' : 'approvals.done.draftAsked', { name: label });
   }
   if (d.type === 'definition') return t(d.accept ? 'approvals.done.approved' : 'approvals.done.rejected', { name });
-  if (d.type === 'rule') return t(d.decision === 'discard' ? 'approvals.done.discarded' : 'approvals.done.rule', { name });
   if (d.type === 'trial') return t(d.decision === 'keep' ? 'approvals.done.kept' : 'approvals.done.rolledBack', { name });
   return t(d.decision === 'keep' ? 'approvals.done.keptAgent' : 'approvals.done.retired', { name });
 }

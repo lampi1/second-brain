@@ -1,4 +1,4 @@
-// Optional installed hooks must redact labeled credentials before they persist a feed entry or forward it to Regia.
+// Optional installed hooks must redact labeled credentials before they persist a feed entry or forward it to Orchestrator.
 // Run the public hook in a fake brain only; no actual sessions, transcript contents or user settings are read.
 import fs from 'node:fs';
 import os from 'node:os';

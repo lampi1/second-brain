@@ -2,11 +2,11 @@
 // Keeping them here lets the modules be built and tested apart (chats, browser + MCP, brain + feed).
 import type {
   Answer, AppInfo, ChatCommand, BrainApiResult, CredentialEntry, BrowserEnv, BrowserHandoff, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, CompareState, ContextStats, LearnResult, Effort, FeedAction, FeedEvent, HandoffInfo, Harness, ImageAttachment, JobRecordInput, ModelsSeen, RoutingInfo, RoutingRow,
-  NewChat, PendingRequest, PermissionMode, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, SyncChoice, SyncState, Usage, ViewLayout, DevopsState, SkillCatalog, SkillDoc, SkillSave, SkillSaveResult,
+  NewChat, PendingRequest, PermissionMode, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, SyncChoice, SyncState, Usage, ViewLayout, TasksState, SkillCatalog, SkillDoc, SkillSave, SkillSaveResult,
 } from '../shared/contract';
 import type { AgentMetrics, AgentRunOutcome } from '../shared/agents';
 import type { Emitter } from './ipc';
-import type { RouteRequest, RouteResult, RoutingActual, RoutingPrediction } from './brain/routing';
+import type { KnownOutcome, RouteRequest, RouteResult, RoutingActual, RoutingPrediction } from './brain/routing';
 
 export interface ChatService {
   list(): ChatSummary[];
@@ -17,7 +17,7 @@ export interface ChatService {
   /** by agent = an agent's chat (app_create_chat): its first turn may wait in the CPU queue (ADR 0036) */
   create(req: NewChat, by?: 'user' | 'agent'): Promise<ChatSummary>;
   /** images: the chat:send attachments, checked by the service (main/chats/images.ts) */
-  /** from = not the user's message: who sent it (another chat, the Regia), shown above the bubble */
+  /** from = not the user's message: who sent it (another chat, the Orchestrator), shown above the bubble */
   /** liveOnly = mail: fails instead of starting or reopening the chat (main/chats/mail.ts) */
   send(chatId: string, text: string, images?: ImageAttachment[], resumed?: boolean, from?: string, liveOnly?: boolean): Promise<void>;
   answer(chatId: string, requestId: string, answer: Answer): Promise<void>;
@@ -124,6 +124,8 @@ export interface BrainService {
   observeRouting(rec: RoutingPrediction | RoutingActual): void;
   /** The last actuals written for a ledger id: totals carry over an app restart or a hand-off. */
   lastRoutingActual(id: string): RoutingActual['actual'] | null;
+  /** An agent run's verdict as the known outcome of its chat's ledger line (issue #72, ADR 0078). */
+  observeRoutingOutcome(id: string, outcome: KnownOutcome): void;
   /** GET-only proxy to the brain's own data server (ops/tools/brain-site.mjs makeServer), run as an Electron-node child. */
   api(path: string): Promise<BrainApiResult>;
   /** Answers one of the allowed /api/ paths from main itself (e.g. /api/quality: brain/quality.ts), not the brain's server. */
@@ -152,12 +154,12 @@ export interface BrainService {
   shutdown(): Promise<void>;
 }
 
-/** The DevOps page (devops/service.ts): read-only reads by the brain's devops-me.mjs, never an AI chat. */
-export interface DevopsApi {
-  get(): DevopsState;
-  refresh(): Promise<DevopsState>;
-  refreshFresh(): Promise<DevopsState>;
-  markRead(keys?: string[]): DevopsState;
+/** The Task page (tasks/service.ts): read-only reads by the brain's devops-me.mjs, never an AI chat. */
+export interface TasksApi {
+  get(): TasksState;
+  refresh(): Promise<TasksState>;
+  refreshFresh(): Promise<TasksState>;
+  markRead(keys?: string[]): TasksState;
   shutdown(): void;
 }
 

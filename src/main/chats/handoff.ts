@@ -165,7 +165,7 @@ export function nextTitle(title: string, taken: readonly string[]): string {
   return `${base} (${n})`;
 }
 
-/** <userData>/handoffs/<chatId>.md with a small JSON header line (when, source, size): read by the UI and the Regia. */
+/** <userData>/handoffs/<chatId>.md with a small JSON header line (when, source, size): read by the UI and the Orchestrator. */
 export class HandoffStore {
   readonly dir: string;
   constructor(userData: string) { this.dir = path.join(userData, 'handoffs'); }

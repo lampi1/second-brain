@@ -148,10 +148,10 @@ test('ui:command from main steers the UI (maximize, restore, page, palette)', as
   await expect(page.getByTestId('maximized')).toHaveAttribute('data-key', 'chat:qa');
   await send('restore');
   await expect(page.getByTestId('maximized')).toHaveCount(0);
-  await send('page', 'oggi'); // an old name: Oggi is now DevOps
-  await expect(page.getByTestId('brain-page-devops')).toBeVisible();
+  await send('page', 'oggi'); // an old name: Oggi is now Task
+  await expect(page.getByTestId('brain-page-task')).toBeVisible();
   await send('page', 'workspace');
-  await expect(page.getByTestId('brain-page-devops')).toHaveCount(0);
+  await expect(page.getByTestId('brain-page-task')).toHaveCount(0);
   await send('palette');
   await expect(page.getByTestId('palette')).toBeVisible();
   await app.close();

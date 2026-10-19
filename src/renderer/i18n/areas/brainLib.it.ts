@@ -13,16 +13,13 @@ export const brainLibIt = {
   'brainLib.charts.nPointsMax': (p: { n: number; max: string }) => `${p.n} punti; massimo ${p.max}.`,
   'brainLib.charts.firstLabel': (p: { n: number; first: string; value: string }) => `${p.n} voci; la prima: ${p.first}, ${p.value}.`,
 
-  // appwork.ts
-  'brainLib.appwork.untitled': '(senza titolo)',
 
-  // devops-chat.ts
-  'brainLib.devopsChat.untitled': 'senza titolo',
+  // task-chat.ts
+  'brainLib.taskChat.untitled': 'senza titolo',
 
   // discuss.ts
   'brainLib.discuss.kindIdea': 'Idea',
   'brainLib.discuss.kindReflection': 'Riflessione',
-  'brainLib.discuss.kindProcedure': 'Procedura',
   'brainLib.discuss.kindError': 'Errore',
   'brainLib.discuss.kindNumber': 'Numero',
 

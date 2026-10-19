@@ -1,4 +1,4 @@
-// Pure rules of the DevOps page's "Test e QA" section (pages/DevopsQa.tsx), from what the brain's read-only
+// Pure rules of the Task page's "Test e QA" section (pages/TaskQa.tsx), from what the brain's read-only
 // qa-status.mjs --mine read (zero tokens): each outcome in Italian with its tone, the points in stand-up order (failed,
 // blocked, still to do, then the rest), who ran how many across all PRs, one headline per PR and the stand-up text to
 // copy. Names and titles only: ids stay inside links (the user, 2026-10-06, "se mi dici i numeri non capisco").

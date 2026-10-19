@@ -61,7 +61,7 @@ const LOG: [number, string, string, string, string, string, string][] = [
   [1, '18:03', 'script', 'edited', 'scripts/conta-righe-log.sh', 'Orchestrator', 'Il test di oggi fallisce: nuovo formato data nei log, da correggere'],
   [2, '16:20', 'script', 'added', 'scripts/export-ticket.py', 'Orchestrator', 'Export CSV dei ticket aperti per la riunione del lunedì'],
   [3, '11:47', 'script', 'deleted', 'scripts/export-ticket-vecchio.py', 'Orchestrator', 'Sostituito da export-ticket.py (copia in scripts/.deleted/)'],
-  [4, '14:05', 'procedure', 'added', 'runbook/rilasci.md', 'Orchestrator', 'Procedura per pubblicare una versione in test'],
+  [4, '14:05', 'skill', 'added', 'skills/rilasci/SKILL.md', 'Orchestrator', 'Skill per pubblicare una versione in test'],
   [5, '10:30', 'script', 'fixed', 'scripts/pulisci-branch.ps1', 'Orchestrator', 'Non elimina più il branch corrente'],
   [6, '08:55', 'note', 'edited', 'now.md', 'Orchestrator', 'Aggiornate le priorità della settimana'],
 ];

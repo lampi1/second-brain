@@ -24,7 +24,7 @@ Durable knowledge lives in this folder, **not** in agent-private memory, so ever
 | When | Read (absolute: `{{BRAIN_WIN}}\...`) |
 |------|------|
 | Before reading or writing any memory file; unsure where something lives | `map.md` |
-| You are the hub "Regia", or you coordinate other chats/agents | `hub.md` |
+| You are the Orchestrator, or you coordinate other chats/agents | `hub.md` |
 | Code work (fix, implement, review, PR) | `code.md` |
 | Production, a customer, an incident | `ops/AGENTS.md`, then `ops/runbook/` |
 | Changing a rule, a skill, an agent or a test | `brain-rules.md` |

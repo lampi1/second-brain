@@ -35,7 +35,7 @@ export type AgentOrigin =
   | { kind: 'preset'; presetId: string; presetRevision: number }
   | { kind: 'user' }
   | { kind: 'orchestrator'; reason: string; evidence: AgentEvidenceRef[] };
-export type AgentAuthor = 'user' | 'orchestrator' | 'preset' | 'migration';
+export type AgentAuthor = 'user' | 'orchestrator' | 'preset' | 'migration' | 'maintenance';
 
 export interface AgentDraft {
   knowhow?: AgentKnowhow;
@@ -56,12 +56,18 @@ export interface AgentDraft {
   tools?: AgentToolPolicy | null;
   /** null/omitted = inherit Brother's own permission settings. */
   permissionCeiling?: PermissionCeiling | null;
+  /** "Contesto massimo": the context (tokens) the agent's chat may fill before its engine compacts it (issue #80);
+   *  null/omitted = the user's setting (Impostazioni → compattazione). Honoured where the engine supports it
+   *  (AgentModelChoice.maxContext; today the Claude engines, CLAUDE_CODE_AUTO_COMPACT_WINDOW). */
+  maxContext?: number | null;
 }
+/** The bounds of an agent's "Contesto massimo" (the Claude engine accepts 100k..1M as its compaction window). */
+export const MAX_CONTEXT_RANGE = { min: 100_000, max: 1_000_000 } as const;
 /** The agents.json v1 record, still produced by the legacy routing import and read by the v1 → v2 migration. */
 export type AgentProfileV1 = AgentDraft & { id: string; createdAt: number; updatedAt: number };
 /** Fields that change what a run does. Saving a change to any of them creates a new version. */
-export const BEHAVIOUR_FIELDS = ['instructions', 'manifest', 'engine', 'model', 'effort', 'tools', 'permissionCeiling', 'knowhow'] as const;
-export type AgentBehaviour = Pick<AgentDraft, 'instructions' | 'manifest' | 'engine' | 'model' | 'effort' | 'tools' | 'permissionCeiling' | 'knowhow'>;
+export const BEHAVIOUR_FIELDS = ['instructions', 'manifest', 'engine', 'model', 'effort', 'tools', 'permissionCeiling', 'knowhow', 'maxContext'] as const;
+export type AgentBehaviour = Pick<AgentDraft, 'instructions' | 'manifest' | 'engine' | 'model' | 'effort' | 'tools' | 'permissionCeiling' | 'knowhow' | 'maxContext'>;
 export interface AgentProfile extends AgentDraft {
   /** Canonical behaviour digest at the last packaged install/update; absent on legacy/user definitions. */
   presetHash?: string;
@@ -205,6 +211,8 @@ export interface AgentRunTags { skills: string[]; app: string | null; repo: stri
 export interface AgentMetricsFilter { since?: number; skill?: string; app?: string; repo?: string }
 export interface AgentModelChoice {
   engine: Harness; label: string; enabled: boolean; trusted: boolean; effort: boolean;
+  /** the engine honours an agent's maxContext ("Contesto massimo"); absent = no */
+  maxContext?: boolean;
   models: { id: string; name: string }[];
   source: 'observed' | 'registry' | 'unknown';
   /** Model discovery does not prove installation or login. */
@@ -258,6 +266,9 @@ export interface ChildObservation {
   kind: 'agent' | 'shell' | 'unknown';
   state: ChildState;
   task: string | null;
+  /** The agent type the engine was asked to run the child as (Claude's subagent_type, Cursor's subagentType), as the
+   *  engine sent it; the UI matches it to an app agent (lib/agent-children.ts childAgent). Missing = not reported. */
+  agentType?: string | null;
   observedAt: number;
   source: 'live' | 'replay';
   /** When the app first saw this child (its start as far as the app knows: the first event's time, kept across the

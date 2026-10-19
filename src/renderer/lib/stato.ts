@@ -5,9 +5,9 @@
 // test case). Names, not ids: a PR is named after the bug it fixes. Why: the owner, 2026-10-13, asked "a che punto
 // siamo" ~8 times a day, ~80 s and millions of cache-read tokens each. Used by components/StatoDialog.tsx; unit-tested
 // in test/unit/stato.test.ts.
-import type { ChatSummary, DevopsPr, DevopsState, Harness, PendingRequest } from '@shared/contract';
+import type { ChatSummary, DevopsPr, TasksState, Harness, PendingRequest } from '@shared/contract';
 import { chatName } from '@shared/regia';
-import { BUILD_WORDS, firstName, prWait, type Wait } from '../brain/lib/devops';
+import { BUILD_WORDS, firstName, prWait, type Wait } from '../brain/lib/tasks';
 import { bugName, clean } from '../brain/lib/text';
 import type { Tone } from '../brain/components/ui';
 import { stateInfo } from './format';
@@ -29,7 +29,7 @@ export interface StatoPr {
 export interface Stato {
   chats: StatoChat[];
   prs: StatoPr[];
-  devops: { at: number | null; error: string | null; read: boolean };
+  tasks: { at: number | null; error: string | null; read: boolean };
   counts: { asks: number; waiting: number; running: number; errors: number; prs: number; prsMine: number; qa: number };
 }
 
@@ -40,7 +40,7 @@ export interface StatoInput {
   /** chats being closed (the undo toast is running): not shown */
   hidden?: readonly string[];
   branches: Readonly<Record<string, string | null>>;
-  devops: DevopsState | null;
+  tasks: TasksState | null;
 }
 
 const folderOf = (cwd: string): string => cwd.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? cwd;
@@ -52,7 +52,7 @@ export function askText(r: PendingRequest): string {
   return oneLine(q || r.title || r.tool);
 }
 
-// waiting first (the user unblocks them), then failed, working, starting, finished; the Regie last among equals
+// waiting first (the user unblocks them), then failed, working, starting, finished; the Orchestrators last among equals
 const RANK: Record<string, number> = { wait: 0, err: 1, run: 2, off: 3, done: 4, regia: 5 };
 
 /** The open chats (not closed, not being closed), the ones that wait for the user first, then newest. */
@@ -66,7 +66,7 @@ export function statoChats(inp: StatoInput): StatoChat[] {
     // a command left to run does not block the chat (ChatSummary.pending skips it) but still waits for the user
     const st = stateInfo({ ...c, pending: c.pending + asks.length });
     rows.push({
-      id, name: c.appRegia ? 'Orchestrator' : chatName(c), harness: c.harness, regia: c.isRegia || c.appRegia === true, app: c.route?.area === 'App',
+      id, name: chatName(c), harness: c.harness, regia: c.isRegia === true, app: c.route?.area === 'App',
       state: st, lastLine: oneLine(c.lastError && c.state === 'error' ? c.lastError : c.lastText ?? ''), asks,
       folder: folderOf(c.cwd), branch: inp.branches[c.cwd] ?? null, updatedAt: c.updatedAt,
     });
@@ -87,7 +87,7 @@ const VOTE: Record<string, { vote: string; tone: Tone }> = {
 
 /** "Rimborso con sconto: 1 test fallito" for the work items of the PR whose test cases failed or are blocked; the
  *  work item the PR is already named after (`named`) is not named twice. */
-export function qaBlock(p: Pick<DevopsPr, 'workItems'>, details: DevopsState['details'], named = ''): string | null {
+export function qaBlock(p: Pick<DevopsPr, 'workItems'>, details: TasksState['details'], named = ''): string | null {
   const parts: string[] = [];
   for (const w of p.workItems) {
     const tests = details[String(w.id)]?.tests ?? [];
@@ -101,7 +101,7 @@ export function qaBlock(p: Pick<DevopsPr, 'workItems'>, details: DevopsState['de
   return parts.length ? parts.join(' · ') : null;
 }
 
-export function statoPr(p: DevopsPr, details: DevopsState['details']): StatoPr {
+export function statoPr(p: DevopsPr, details: TasksState['details']): StatoPr {
   const b = p.build;
   const word = b ? BUILD_WORDS[b.result ?? b.status] ?? b.result ?? b.status : '';
   const tone: Tone = b?.result === 'failed' ? 'bad' : b?.result === 'succeeded' ? 'good' : b?.result ? 'warn' : 'blue';
@@ -115,7 +115,7 @@ export function statoPr(p: DevopsPr, details: DevopsState['details']): StatoPr {
 }
 
 /** QA-blocked first (they come before any new work), then the ones that wait for the user, then the rest. */
-export function statoPrs(d: DevopsState | null): StatoPr[] {
+export function statoPrs(d: TasksState | null): StatoPr[] {
   if (!d) return [];
   const rank = (p: StatoPr) => (p.qa ? 0 : p.wait.who === 'me' ? 1 : 2);
   return d.prs.map(p => statoPr(p, d.details)).sort((a, b) => rank(a) - rank(b));
@@ -123,11 +123,11 @@ export function statoPrs(d: DevopsState | null): StatoPr[] {
 
 export function buildStato(inp: StatoInput): Stato {
   const chats = statoChats(inp);
-  const prs = statoPrs(inp.devops);
-  const d = inp.devops;
+  const prs = statoPrs(inp.tasks);
+  const d = inp.tasks;
   return {
     chats, prs,
-    devops: { at: d?.at ?? null, error: d?.error?.message ?? null, read: !!d?.at },
+    tasks: { at: d?.at ?? null, error: d?.error?.message ?? null, read: !!d?.at },
     counts: {
       asks: chats.reduce((n, c) => n + c.asks.length, 0),
       waiting: chats.filter(c => c.state.tone === 'wait').length,
@@ -148,7 +148,7 @@ export function headline(s: Stato): string {
     c.errors && plural(c.errors, 'in errore', 'in errore'),
     c.running && `${c.running} al lavoro`,
   ].filter(Boolean).join(', ') || (s.chats.length ? 'nessuna chat ti aspetta' : 'nessuna chat aperta');
-  if (!s.devops.read) return chats;
+  if (!s.tasks.read) return chats;
   const prs = !c.prs ? 'nessuna PR aperta'
     : `${plural(c.prs, 'PR aperta', 'PR aperte')}${c.qa ? `: ${plural(c.qa, 'bloccata dalla QA', 'bloccate dalla QA')}` : c.prsMine ? `: ${plural(c.prsMine, 'aspetta te', 'aspettano te')}` : ''}`;
   return `${chats} · ${prs}`;

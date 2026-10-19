@@ -61,6 +61,46 @@ test('strips: collapsed with their facts, click to expand and collapse, "Ti aspe
   }
 });
 
+test('a click expands a strip every time: repeated, on any part of it, with text selected elsewhere (#78)', async () => {
+  const { app, page } = await launchDemo({ width: 1600, height: 900 });
+  try {
+    const expand = page.getByTestId('chat-expand-fix');
+    await expect(expand).toHaveAttribute('aria-expanded', 'false');
+    // the strip's title, its facts line, its last-answer line: each click on a collapsed strip expands it
+    for (const part of ['.th-title', '.strip-facts', '.chat-strip-line']) {
+      await page.getByTestId('tile-chat-fix').locator(part).first().click();
+      await expect(expand, part).toHaveAttribute('aria-expanded', 'true');
+      await expect(page.getByTestId('chat-input-fix')).toBeVisible();
+      await page.getByTestId('tile-chat-fix').locator('.th-title').click();
+      await expect(expand, part).toHaveAttribute('aria-expanded', 'false');
+    }
+    // text selected somewhere else (an answer in the Orchestrator's column) used to swallow every strip click: the
+    // body is not selectable, so the click never cleared the selection and the strip read it as a drag-select
+    const selected = await page.evaluate(() => {
+      const el = document.querySelector('[data-regia-overlay] .md, [data-regia-overlay] .bubble');
+      if (!el) return '';
+      const range = document.createRange(); range.selectNodeContents(el);
+      const sel = window.getSelection()!; sel.removeAllRanges(); sel.addRange(range);
+      return sel.toString();
+    });
+    expect(selected.length).toBeGreaterThan(0);
+    await page.getByTestId('tile-chat-fix').locator('.chat-strip-line').click();
+    await expect(expand).toHaveAttribute('aria-expanded', 'true');
+    await page.getByTestId('tile-chat-fix').locator('.th-title').click();
+    await expect(expand).toHaveAttribute('aria-expanded', 'false');
+    // the same after a reload (the saved choice is read back, a click still flips it)
+    await page.waitForTimeout(300);
+    await page.reload();
+    await expect(page.getByTestId('regia-overlay')).toBeVisible();
+    await page.getByTestId('tile-chat-fix').locator('.chat-strip-line').click();
+    await expect(page.getByTestId('chat-expand-fix')).toHaveAttribute('aria-expanded', 'true');
+    await page.mouse.move(2, 2);
+    await shot(page, 'strips-expand-every-time');
+  } finally {
+    await app.close();
+  }
+});
+
 test('an expanded strip opens its own browser beside its chat from its globe, each with its own full-screen control', async () => {
   const { app, page } = await launchDemo({ width: 1600, height: 900 });
   try {
@@ -89,6 +129,37 @@ test('an expanded strip opens its own browser beside its chat from its globe, ea
     await page.getByTestId('browser-max-tab-sms').click();
     await page.getByTestId('chat-max-sms').click();
     await expect(page.getByTestId('maximized')).toHaveAttribute('data-key', 'chat:sms');
+  } finally {
+    await app.close();
+  }
+});
+
+test('the globe of a collapsed strip opens the strip and shows its browser; a second click hides it (#74)', async () => {
+  const { app, page } = await launchDemo({ width: 1600, height: 900 });
+  try {
+    // the old "Nascondi browser" switch left on (#82, the cause of #74): it is dropped and hides nothing
+    await page.waitForTimeout(300);
+    await page.evaluate(() => { const p = JSON.parse(localStorage.getItem('sb.prefs.v1') ?? '{}'); localStorage.setItem('sb.prefs.v1', JSON.stringify({ ...p, browsersHidden: true })); });
+    await page.reload();
+    await expect(page.getByTestId('regia-overlay')).toBeVisible();
+    await expect(page.getByTestId('chat-expand-sms')).toHaveAttribute('aria-expanded', 'false');
+    const globe = page.getByTestId('chat-browser-sms');
+    await globe.click();
+    await expect(globe).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('chat-expand-sms')).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByTestId('strip-pair-sms').getByTestId('tile-browser-tab-sms')).toBeVisible();
+    await page.mouse.move(2, 2);
+    await shot(page, 'strips-globe-from-collapsed');
+    await globe.click();
+    await expect(globe).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByTestId('tile-browser-tab-sms')).toHaveCount(0);
+    // collapsed again with its browser left on: the globe reads off, one click shows the browser again
+    await globe.click();
+    await page.getByTestId('tile-chat-sms').locator('.th-title').click();
+    await expect(page.getByTestId('chat-expand-sms')).toHaveAttribute('aria-expanded', 'false');
+    await expect(globe).toHaveAttribute('aria-pressed', 'false');
+    await globe.click();
+    await expect(page.getByTestId('tile-browser-tab-sms')).toBeVisible();
   } finally {
     await app.close();
   }

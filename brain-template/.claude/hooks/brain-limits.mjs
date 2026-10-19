@@ -59,7 +59,7 @@ try {
     process.exit(0);
   }
 
-  if (brain && /^hub\.md$/i.test(brain[2])) { // the Regia's own file: its own cap (2026-10-13)
+  if (brain && /^hub\.md$/i.test(brain[2])) { // the Orchestrator's own file: its own cap (2026-10-13)
     if (a.length > b.length && a.length > HUB_BUDGET)
       block(`hub.md ${b.length} → ${a.length} chars, budget ${HUB_BUDGET}: shorten or move to harness/ first (brain-rules.md 3), then retry.`);
     process.exit(0);

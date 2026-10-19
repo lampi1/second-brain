@@ -3,11 +3,11 @@ import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { checkedKnowhow, checkedPackIdentity } from '../../shared/agent-pack';
 import type { Effort, NewChat, RoutingRow } from '../../shared/contract';
-import { AGENT_CATEGORIES, AGENT_SYMBOLS, AGENT_TONES, PERMISSION_CEILINGS, type AgentAuthor, type AgentAvatar, type AgentCatalog, type AgentCategory, type AgentDraft, type AgentEvidenceRef, type AgentModelChoice, type AgentOrigin, type AgentOwnerSnapshot, type AgentProfile, type AgentProfileV1, type AgentToolPolicy, type AgentVersion, type PermissionCeiling, GENERAL_AGENT_ID, inProbation, type AgentProbation, type AgentProbationDecision, type AgentProbationSource } from '../../shared/agents';
+import { AGENT_CATEGORIES, AGENT_SYMBOLS, AGENT_TONES, MAX_CONTEXT_RANGE, PERMISSION_CEILINGS, type AgentAuthor, type AgentAvatar, type AgentCatalog, type AgentCategory, type AgentDraft, type AgentEvidenceRef, type AgentModelChoice, type AgentOrigin, type AgentOwnerSnapshot, type AgentProfile, type AgentProfileV1, type AgentToolPolicy, type AgentVersion, type PermissionCeiling, GENERAL_AGENT_ID, inProbation, type AgentProbation, type AgentProbationDecision, type AgentProbationSource } from '../../shared/agents';
 import { checkImages } from '../chats/images';
 import { readLocal, writeLocal } from './local-store';
 import { boundedRaster } from './raster';
-import { legacyAgentProfiles } from './legacy';
+import { legacyAgentProfiles, legacyGuidance, legacyKindOf } from './legacy';
 import { checkedManifest } from '../../shared/agent-manifest';
 import { DEFAULT_MANIFESTS, DEFAULT_MANIFESTS_EN } from './manifest-defaults';
 import { AgentHistory, behaviourOf, firstVersion, sameBehaviour, upgradeProfile } from './versions';
@@ -23,7 +23,7 @@ import { PROBATION_CAP } from './probation';
 const MODEL = /^[\w.:@/[\]][\w.:@/=[\],-]{0,119}$/;
 const ID = /^[a-z][a-z0-9_-]{0,79}$/;
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
-const AUTHORS: readonly AgentAuthor[] = ['user', 'orchestrator', 'preset', 'migration'];
+const AUTHORS: readonly AgentAuthor[] = ['user', 'orchestrator', 'preset', 'migration', 'maintenance'];
 const EVIDENCE: readonly AgentEvidenceRef['kind'][] = ['journal', 'chat', 'ai-error', 'cost', 'run', 'feedback'];
 /** Launchable definitions; archived ones only count toward the file bound. */
 export const MAX_ACTIVE_AGENTS = 64;
@@ -31,6 +31,8 @@ export const MAX_AGENTS = 256;
 const obj = (v: unknown): Record<string, unknown> => v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {};
 const count = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) >= 1;
 const has = <T>(list: readonly T[], v: unknown): v is T => (list as readonly unknown[]).includes(v);
+/** A profile without its "Contesto massimo": merged under a validated draft, an omitted value stays cleared. */
+const withoutMaxContext = <T extends { maxContext?: number | null }>(p: T): Omit<T, 'maxContext'> => { const { maxContext: _mc, ...rest } = p; void _mc; return rest; };
 /** Validated draft with the v2 definition fields resolved (older clients omit them). */
 type CheckedDraft = AgentDraft & { role: string; category: AgentCategory; tools: AgentToolPolicy | null; permissionCeiling: PermissionCeiling | null };
 function text(v: unknown, max: number, label: string, empty = false): string {
@@ -76,6 +78,7 @@ export function checkedAvatar(value: unknown, size?: AgentCatalogDeps['imageSize
     if (a.tone !== undefined && !has(AGENT_TONES, a.tone)) throw new Error('Colore del simbolo non valido.');
     return { kind: 'symbol', value: a.value, ...(a.tone !== undefined ? { tone: a.tone } : {}) };
   }
+  if (a.kind === 'symbol') throw new Error(`Simbolo non valido: ${AGENT_SYMBOLS.join(' | ')} (tone: ${AGENT_TONES.join(' | ')}).`);
   const { avatar, data, header } = checkedImage(value);
   const dims = size?.(data);
   if (!dims || !(dims.width === header.width && dims.height === header.height || dims.width === header.height && dims.height === header.width)) throw new Error('L’immagine deve essere leggibile e misurare tra 16 e 1024 pixel per lato.');
@@ -101,7 +104,7 @@ export function compatibleOwner(engine: string, model: string | null, legacy = f
   const key = createHash('sha256').update(`${engine}\n${model ?? ''}`).digest('hex').slice(0, 12);
   return { id: `${legacy ? 'legacy' : 'routed'}-${key}`, name: 'Assistente', purpose: legacy ? 'Sessione esistente, configurazione conservata' : 'Assistente per questa attività', avatar: { kind: 'symbol', value: 'briefcase' }, engine, model, revision: 1, source: legacy ? 'legacy' : 'routed' };
 }
-/** A Regia's owner: the session's engine/model with the Orchestrator profile's face (name, purpose, avatar); still no
+/** An Orchestrator's owner: the session's engine/model with the Orchestrator profile's face (name, purpose, avatar); still no
  *  catalog run. Without the profile, the preset's own face. Chats saved before this fix carry the "Assistente" one. */
 export function orchestratorOwner(base: AgentOwnerSnapshot, p?: Pick<AgentProfile, 'name' | 'purpose' | 'avatar'>): AgentOwnerSnapshot {
   return { ...base, name: p?.name ?? 'Orchestrator', purpose: p?.purpose ?? ORCHESTRATOR_PURPOSE, avatar: p ? structuredClone(p.avatar) : { kind: 'symbol', value: 'compass' } };
@@ -202,6 +205,30 @@ export class AgentCatalogService {
     this.ensureGeneral(this.renamed);
     this.renamed = false;
     this.installPresets();
+    this.completeLegacy();
+  }
+  /** Profiles imported from the routing table before ADR 0078 carry no whenToUse and no instructions, so the classifier
+   *  could hardly tell them apart: each untouched one (never edited since the import) gets its kind's guidance as a new
+   *  version by the migration. The kind is its source row's (same id from today's table), else read from its name. */
+  private completeLegacy(): void {
+    if (this.problem || this.store.problem) return;
+    try {
+      const fresh = legacyAgentProfiles(this.d.legacyRoutes?.() ?? [], this.now(), { apiEngine: this.d.legacyApiEngine?.() ?? null }).profiles;
+      const versions: AgentVersion[] = [], states: Parameters<AgentHistory['commit']>[1] = [];
+      const next = this.profiles.map(p => {
+        if (!p.id.startsWith('legacy-') || p.lastEditedBy !== 'migration' || p.trial || p.instructions.trim() || p.manifest?.whenToUse?.trim() || !p.purpose.startsWith('Importazione legacy')) return p;
+        const row = fresh.find(f => f.id === p.id);
+        const kind = legacyKindOf(p.name);
+        const guide = row ? { whenToUse: row.manifest?.whenToUse ?? '', instructions: row.instructions } : kind ? legacyGuidance(kind, p.name.split(' · ').slice(1).join(' · ').split(', ').filter(Boolean)) : null;
+        if (!guide?.whenToUse || !guide.instructions) return p;
+        const at = Math.max(this.now(), p.updatedAt + 1), version = p.version + 1;
+        const profile: AgentProfile = { ...p, instructions: guide.instructions, manifest: checkedManifest({ ...(p.manifest ?? {}), whenToUse: guide.whenToUse }), version, activeVersion: version, updatedAt: at };
+        versions.push({ agentId: p.id, version, parentVersion: p.activeVersion, behaviour: behaviourOf(profile), author: 'migration', reason: 'Profilo importato completato: quando usarlo e istruzioni brevi (ADR 0078)', at, state: 'active' });
+        states.push({ agentId: p.id, version: p.activeVersion, state: 'superseded' });
+        return profile;
+      });
+      if (versions.length) this.commit(next, versions, states);
+    } catch (e) { log.warn('agents', 'legacy agent profiles not completed', { cause: errText(e), hint: 'they keep working; the classifier just scores them on their names' }); }
   }
   /** One conservative startup transaction; corrupt usage data prevents retirement, never implies no usage. */
   private installPresets(): void {
@@ -455,15 +482,18 @@ export class AgentCatalogService {
     }
     const manifest = checkedManifest(p.manifest);
     const purpose = text(p.purpose, 400, 'Scopo');
-    if (p.category !== undefined && !has(AGENT_CATEGORIES, p.category)) throw new Error('Categoria non valida.');
+    if (p.category !== undefined && !has(AGENT_CATEGORIES, p.category)) throw new Error(`Categoria non valida: ${AGENT_CATEGORIES.join(' | ')}.`);
     if (!(p.permissionCeiling === undefined || p.permissionCeiling === null || has(PERMISSION_CEILINGS, p.permissionCeiling))) throw new Error('Limite dei permessi non valido.');
+    if (!(p.maxContext === undefined || p.maxContext === null || Number.isSafeInteger(p.maxContext) && (p.maxContext as number) >= MAX_CONTEXT_RANGE.min && (p.maxContext as number) <= MAX_CONTEXT_RANGE.max))
+      throw new Error(`Contesto massimo: un numero intero di token da ${MAX_CONTEXT_RANGE.min} a ${MAX_CONTEXT_RANGE.max}, oppure vuoto (l’impostazione dell’app).`);
     return { name: text(p.name, 80, 'Nome'), purpose, instructions: text(p.instructions, 8000, 'Istruzioni', true), engine, model: p.model as string | null,
       ...(manifest !== undefined ? { manifest } : {}),
       ...(p.knowhow !== undefined ? { knowhow: checkedKnowhow(p.knowhow) } : {}),
       ...(p.pack !== undefined ? { pack: checkedPackIdentity(p.pack) } : {}),
       ...(p.effort !== undefined ? { effort: p.effort as Effort } : {}), avatar: checkedAvatar(p.avatar, this.d.imageSize),
       role: p.role === undefined || p.role === '' ? purpose : text(p.role, 160, 'Ruolo'), category: (p.category ?? 'other') as AgentCategory,
-      tools: checkedTools(p.tools), permissionCeiling: (p.permissionCeiling ?? null) as PermissionCeiling | null };
+      tools: checkedTools(p.tools), permissionCeiling: (p.permissionCeiling ?? null) as PermissionCeiling | null,
+      ...(typeof p.maxContext === 'number' ? { maxContext: p.maxContext } : {}) };
   }
   /** Brother's edit. A behaviour change becomes a new active version; a cosmetic one (name, avatar, role…) saves in place. */
   validateDraft(value: unknown): AgentDraft { this.writable(); return this.validate(value, true); }
@@ -473,7 +503,7 @@ export class AgentCatalogService {
     if (old?.status === 'archived') throw new Error('Ripristina l’Agente prima di modificarlo.');
     const input = obj(value);
     // Old clients omit additive fields: keep the stored ones. An explicit empty manifest or null policy clears them.
-    const kept = old ? Object.fromEntries((['manifest', 'role', 'category', 'tools', 'permissionCeiling', 'knowhow', 'pack'] as const).filter(k => input[k] === undefined && old[k] !== undefined).map(k => [k, old[k]])) : {};
+    const kept = old ? Object.fromEntries((['manifest', 'role', 'category', 'tools', 'permissionCeiling', 'knowhow', 'pack', 'maxContext'] as const).filter(k => input[k] === undefined && old[k] !== undefined).map(k => [k, old[k]])) : {};
     const draft = this.validate({ ...input, ...kept }, true);
     if (createdId !== undefined && (!ID.test(createdId) || this.profiles.some(p => p.id === createdId))) throw new Error('Agent id already exists');
     if (!old && this.profiles.filter(p => p.status === 'active').length >= MAX_ACTIVE_AGENTS) throw new Error(`Il catalogo contiene già ${MAX_ACTIVE_AGENTS} Agenti attivi. Archiviane uno prima di crearne un altro.`);
@@ -484,8 +514,8 @@ export class AgentCatalogService {
       profile = { ...draft, id: createdId ?? `agent-${randomUUID()}`, createdAt: at, updatedAt: at, origin: { kind: 'user' }, version: 1, activeVersion: 1, lastEditedBy: 'user', userLocked: true, status: 'active' };
       versions = [firstVersion(profile, 'user', 'Creato da Brother', at)];
     } else {
-      const { manifest: _m, effort: _e, ...rest } = old;
-      void _m; void _e;
+      const { manifest: _m, effort: _e, maxContext: _mc, ...rest } = old;
+      void _m; void _e; void _mc;
       profile = { ...rest, ...draft, updatedAt: at, lastEditedBy: 'user', userLocked: true };
       if (!sameBehaviour(draft, old)) {
         if (old.trial) throw new Error('C’è una prova in corso su questo Agente: chiudila prima di cambiarne il comportamento.');
@@ -515,8 +545,8 @@ export class AgentCatalogService {
     if (old && (protectedAgent(old) || old.status !== 'active')) throw new Error('Protected or archived agent: propose the change instead.');
     const draft = this.validate(old ? { ...old, ...withoutPackFields(value) } : withoutPackFields(value), true);
     checkAuthorPolicy(draft, this.d.enabledMcp?.() ?? []);
-    const base = old ?? (options.presetId ? this.find(options.presetId) : undefined);
-    if (!old && (!base || base.origin.kind !== 'preset' || base.status !== 'active')) throw new Error('Choose an active base preset.');
+    const base = old ?? (options.presetId ? this.profiles.find(x => x.id === options.presetId) : undefined);
+    if (!old && (!base || base.origin.kind !== 'preset' || base.status !== 'active')) throw new Error(`Choose an active base preset: ${this.profiles.filter(x => x.origin.kind === 'preset' && x.status === 'active' && x.routable !== false && x.id !== ORCHESTRATOR_AGENT_ID).map(x => x.id).join(' | ') || 'none available'}.`);
     if (base?.tools && draft.tools?.allow.some(c => !base.tools!.allow.includes(c))) throw new Error('Automatic tools must be a subset of the base policy.');
     const at = Math.max(this.now(), (old?.updatedAt ?? 0) + 1);
     const reason = text(options.reason, 600, 'Reason');
@@ -533,7 +563,7 @@ export class AgentCatalogService {
     if (changed && this.history(old.id).some(v => v.author === 'orchestrator' && new Date(v.at).toDateString() === new Date(at).toDateString())) throw new Error('At most one behavioural change per agent per day.');
     if (changed && (options.baseline ?? 0) < 5) throw new Error('At least five verified baseline runs are required; propose the change instead.');
     const version = changed ? old.version + 1 : old.version;
-    const p: AgentProfile = { ...old, ...draft, updatedAt: at, lastEditedBy: 'orchestrator', version, activeVersion: changed ? version : old.activeVersion, ...(changed ? { trial: { version, baseline: old.activeVersion, startedAt: at } } : {}) };
+    const p: AgentProfile = { ...withoutMaxContext(old), ...draft, updatedAt: at, lastEditedBy: 'orchestrator', version, activeVersion: changed ? version : old.activeVersion, ...(changed ? { trial: { version, baseline: old.activeVersion, startedAt: at } } : {}) };
     this.commit(this.profiles.map(x => x.id === p.id ? p : x), changed ? [{ agentId: p.id, version, parentVersion: old.activeVersion, behaviour: behaviourOf(draft), author: 'orchestrator', reason, at, state: 'trial' }] : []);
     return structuredClone(p);
   }
@@ -545,7 +575,7 @@ export class AgentCatalogService {
     if (old.origin.kind !== 'orchestrator' || protectedAgent(old) || old.status !== 'active') throw new Error('Only owned, unlocked active agents may be rolled back.');
     if (!entry || !count(version) || version >= old.activeVersion) throw new Error('Choose an earlier version.');
     // A version without know-how restores none: the newer skill files must not survive the rollback.
-    const draft = this.validate({ ...old, manifest: undefined, effort: undefined, knowhow: undefined, ...entry.behaviour }, true);
+    const draft = this.validate({ ...old, manifest: undefined, effort: undefined, knowhow: undefined, maxContext: undefined, ...entry.behaviour }, true);
     checkAuthorPolicy(draft, this.d.enabledMcp?.() ?? []);
     const { trial: _trial, knowhow: _k, ...rest } = old; void _trial; void _k;
     const p: AgentProfile = { ...rest, ...draft, activeVersion: version, updatedAt: Math.max(this.now(), old.updatedAt + 1), lastEditedBy: 'orchestrator' };
@@ -606,8 +636,8 @@ export class AgentCatalogService {
   resolveTrial(id: string, decision: 'keep' | 'rollback'): AgentProfile {
     this.writable(); const p = this.find(id);
     if (!['keep', 'rollback'].includes(decision) || !p.trial) throw new Error('No agent trial to resolve');
-    const { trial, knowhow: _k, manifest: _m, effort: _e, ...rest } = p;
-    void _k; void _m; void _e;
+    const { trial, knowhow: _k, manifest: _m, effort: _e, maxContext: _mc, ...rest } = p;
+    void _k; void _m; void _e; void _mc;
     const baseline = decision === 'rollback' ? this.store.get(id, trial.baseline) : undefined;
     if (decision === 'rollback' && !baseline) throw new Error('Missing trial baseline');
     const at = Math.max(this.now(), p.updatedAt + 1);
@@ -619,10 +649,11 @@ export class AgentCatalogService {
     this.knowhowChanged(p, profile);
     return structuredClone(profile);
   }
-  /** The user's approval of a proposed behavioural change (an Orchestrator draft, a cheaper-model trial): a new version on
-   *  trial against the active one, measured by the lifecycle (trials.ts) until the user keeps it or rolls it back. Only
-   *  sender-checked UI decisions reach it (AgentAuthoring.decide, the lifecycle's decide); know-how and pack identity are
-   *  never taken from the proposal. */
+  /** A behavioural change applied as a trial (an Orchestrator agent_update, applied at once since ADR 0082 unless it touches
+   *  tools, permissions or the engine; a cheaper-model trial; the user's approval of a queued proposal): a new version on
+   *  trial against the active one, measured by the lifecycle (trials.ts) until it is kept or rolled back. Callers:
+   *  AgentAuthoring (applyNow, decide) and the lifecycle's decide; know-how and pack identity are never taken from the
+   *  proposal. */
   approveTrial(id: string, value: unknown, reason: string): AgentProfile {
     this.writable();
     const old = this.find(id);
@@ -632,7 +663,7 @@ export class AgentCatalogService {
     const draft = this.validate({ ...old, ...withoutPackFields(input) }, true);
     if (sameBehaviour(old, draft)) throw new Error('La proposta non cambia il comportamento dell’Agente.');
     const at = Math.max(this.now(), old.updatedAt + 1), version = old.version + 1;
-    const p: AgentProfile = { ...old, ...draft, knowhow: old.knowhow, updatedAt: at, lastEditedBy: 'user', version, activeVersion: version, trial: { version, baseline: old.activeVersion, startedAt: at } };
+    const p: AgentProfile = { ...withoutMaxContext(old), ...draft, knowhow: old.knowhow, updatedAt: at, lastEditedBy: 'user', version, activeVersion: version, trial: { version, baseline: old.activeVersion, startedAt: at } };
     if (p.knowhow === undefined) delete p.knowhow;
     this.commit(this.profiles.map(x => x.id === id ? p : x), [{ agentId: id, version, parentVersion: old.activeVersion, behaviour: behaviourOf(p), author: 'orchestrator', reason: text(reason, 600, 'Reason'), at, state: 'trial' }]);
     this.d.onCustomized?.();
@@ -709,14 +740,52 @@ export class AgentCatalogService {
     if (!p.trial || p.trial.version !== p.activeVersion || p.trial.baseline !== baseline) throw new Error('Nessuna prova da annullare su questa versione.');
     const entry = this.store.get(id, baseline);
     if (!entry) throw new Error('Questa versione non è più nella cronologia.');
-    const { manifest: _m, effort: _e, trial: _t, knowhow: _k, ...rest } = p;
-    void _m; void _e; void _t; void _k;
+    const { manifest: _m, effort: _e, maxContext: _mc, trial: _t, knowhow: _k, ...rest } = p;
+    void _m; void _e; void _mc; void _t; void _k;
     const draft = this.validate({ ...rest, ...entry.behaviour }, true);
     const at = Math.max(this.now(), p.updatedAt + 1);
     const profile: AgentProfile = { ...rest, ...draft, activeVersion: baseline, updatedAt: at, lastEditedBy: 'user', userLocked: true };
     this.commit(this.profiles.map(x => x.id === id ? profile : x), [], [{ agentId: id, version: p.activeVersion, state: 'rejected' }, { agentId: id, version: baseline, state: 'active' }]);
     this.knowhowChanged(p, profile);
     this.d.onCustomized?.();
+    return structuredClone(profile);
+  }
+  /** A maintenance job's change (ADR 0077: no approval for agent changes, every change logged with a rollback by
+   *  brainmodel/changes.ts): only the role text (a lesson from the user's corrections) or the declared skills
+   *  (know-how). Tools, permissions, engine and model are never changed here (tools, permissions and engine are the user's,
+   *  ADR 0082; model and effort change through the Orchestrator's agent_update, as a trial).
+   *  A new active version authored "maintenance"; null when nothing changes. Refused during an open trial. */
+  maintain(id: string, patch: { instructions?: string; knowhow?: AgentProfile['knowhow'] }, reason: string): { profile: AgentProfile; before: number } | null {
+    this.writable();
+    const old = this.find(id);
+    if (old.status !== 'active') throw new Error('Archived agent');
+    if (old.trial) throw new Error('Open trial: maintenance waits');
+    if (Object.keys(patch).some(k => k !== 'instructions' && k !== 'knowhow')) throw new Error('Maintenance changes only the role and the skills');
+    const { manifest: _m, effort: _e, ...rest } = old; void _m; void _e;
+    const draft = this.validate({ ...old, ...(patch.instructions !== undefined ? { instructions: patch.instructions } : {}), ...(patch.knowhow !== undefined ? { knowhow: patch.knowhow } : {}) }, true);
+    if (sameBehaviour(old, draft)) return null;
+    const at = Math.max(this.now(), old.updatedAt + 1), version = old.version + 1;
+    const profile: AgentProfile = { ...rest, ...draft, updatedAt: at, lastEditedBy: 'maintenance', version, activeVersion: version };
+    if (profile.knowhow === undefined) delete profile.knowhow;
+    this.commit(this.profiles.map(x => x.id === id ? profile : x), [{ agentId: id, version, parentVersion: old.activeVersion, behaviour: behaviourOf(draft), author: 'maintenance', reason: text(reason, 600, 'Reason'), at, state: 'active' }],
+      [{ agentId: id, version: old.activeVersion, state: 'superseded' }]);
+    this.knowhowChanged(old, profile);
+    return { profile: structuredClone(profile), before: old.activeVersion };
+  }
+  /** Undo of a maintenance change: the version before it is active again (the user's click in a change log). */
+  maintainRestore(id: string, version: number, expected: number): AgentProfile {
+    this.writable();
+    const p = this.find(id);
+    if (p.activeVersion !== expected) throw new Error('The agent changed since: undo the newer change first');
+    if (p.trial || p.status !== 'active') throw new Error('Open trial or archived agent');
+    const entry = this.store.get(id, version);
+    if (!entry) throw new Error('Version no longer in the history');
+    const { manifest: _m, effort: _e, knowhow: _k, ...rest } = p; void _m; void _e; void _k;
+    const draft = this.validate({ ...rest, ...entry.behaviour }, true);
+    const at = Math.max(this.now(), p.updatedAt + 1);
+    const profile: AgentProfile = { ...rest, ...draft, activeVersion: version, updatedAt: at, lastEditedBy: 'maintenance' };
+    this.commit(this.profiles.map(x => x.id === id ? profile : x), [], [{ agentId: id, version: p.activeVersion, state: 'rejected' }, { agentId: id, version, state: 'active' }]);
+    this.knowhowChanged(p, profile);
     return structuredClone(profile);
   }
   /** Makes an older version the one new runs use. The next edit records it as the parent. */
@@ -729,8 +798,8 @@ export class AgentCatalogService {
     if (version === p.activeVersion) return structuredClone(p);
     const entry = this.store.get(id, version);
     if (!entry) throw new Error('Questa versione non è più nella cronologia.');
-    const { manifest: _m, effort: _e, knowhow: _k, ...rest } = p;
-    void _m; void _e; void _k;
+    const { manifest: _m, effort: _e, maxContext: _mc, knowhow: _k, ...rest } = p;
+    void _m; void _e; void _mc; void _k;
     // Same availability checks as a save: an engine or model that is gone is refused, never replaced.
     const draft = this.validate({ ...rest, ...entry.behaviour }, true);
     const at = Math.max(this.now(), p.updatedAt + 1);
@@ -741,13 +810,14 @@ export class AgentCatalogService {
     this.d.onCustomized?.();
     return structuredClone(profile);
   }
-  resolve(req: NewChat): { request: NewChat; owner: AgentOwnerSnapshot; instructions: string; policy: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string } } {
-    if (req.agentId === ORCHESTRATOR_AGENT_ID && !req.regia && !req.appRegia) throw new Error('Orchestrator è il coordinatore: apri la chat Orchestrator, non una chat di lavoro.');
+  /** maxContext = the agent's "Contesto massimo" (tokens) for its chat's engine, absent = the user's setting (#80). */
+  resolve(req: NewChat): { request: NewChat; owner: AgentOwnerSnapshot; instructions: string; policy: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; maxContext?: number } {
+    if (req.agentId === ORCHESTRATOR_AGENT_ID && !req.regia) throw new Error('Orchestrator è il coordinatore: apri la chat Orchestrator, non una chat di lavoro.');
     if (req.agentId === undefined) {
       const compatible = { request: req, owner: compatibleOwner(req.harness, req.model ?? null), instructions: '', policy: null };
       // The Orchestrator is no agent's run (no run, no metrics): it keeps the selected harness/model and takes only the
       // preset's instructions and policy.
-      if (req.regia || req.appRegia) {
+      if (req.regia) {
         const p = this.profiles.find(x => x.id === ORCHESTRATOR_AGENT_ID && x.status === 'active');
         if (!p) return { ...compatible, owner: orchestratorOwner(compatible.owner), instructions: ORCHESTRATOR_INSTRUCTIONS };
         return { ...compatible, owner: orchestratorOwner(compatible.owner, p), instructions: p.instructions,
@@ -760,7 +830,8 @@ export class AgentCatalogService {
       }
       // engine, model and effort stay the chat's (Brother's choice or the routing table); a null ceiling = his settings
       return { request: req, owner: { ...ownerOf(g), engine: req.harness, model: req.model ?? null }, instructions: g.instructions,
-        policy: g.tools || g.permissionCeiling ? { tools: g.tools ? structuredClone(g.tools) : null, ceiling: g.permissionCeiling ?? null } : null };
+        policy: g.tools || g.permissionCeiling ? { tools: g.tools ? structuredClone(g.tools) : null, ceiling: g.permissionCeiling ?? null } : null,
+        ...(typeof g.maxContext === 'number' ? { maxContext: g.maxContext } : {}) };
     }
     const p = this.profiles.find(x => x.id === req.agentId);
     if (!p) throw new Error('L’Agente selezionato non esiste più. Scegline un altro.');
@@ -774,9 +845,13 @@ export class AgentCatalogService {
     }
     const e = this.d.models().find(x => x.engine === p.engine)!;
     if (!e.enabled || !e.trusted) throw new Error('Il motore dell’Agente è spento o deve essere riconfermato nelle Impostazioni.');
-    if (req.harness !== p.engine || req.model !== undefined && req.model !== p.model || req.effort !== undefined && req.effort !== p.effort) throw new Error('La configurazione della nuova chat non corrisponde all’Agente scelto.');
+    // Agent first (ADR 0078): the profile decides; where it names no model (or no effort) the chat may bring one, the
+    // routing table's default for this kind of work. A named value that differs from the profile's is refused.
+    if (req.harness !== p.engine || req.model !== undefined && p.model !== null && req.model !== p.model || req.effort !== undefined && p.effort !== undefined && req.effort !== p.effort) throw new Error('La configurazione della nuova chat non corrisponde all’Agente scelto.');
     const { model: _model, effort: _effort, ...rest } = req;
     void _model; void _effort;
-    return { request: { ...rest, ...(p.model ? { model: p.model } : {}), ...(p.effort ? { effort: p.effort } : {}) }, owner: ownerOf(p), instructions: p.instructions, policy: p.tools || p.permissionCeiling ? { tools: p.tools ? structuredClone(p.tools) : null, ceiling: p.permissionCeiling ?? null } : null };
+    const model = p.model ?? req.model, effort = p.effort ?? req.effort;
+    return { request: { ...rest, ...(model ? { model } : {}), ...(effort ? { effort } : {}) }, owner: ownerOf(p), instructions: p.instructions, policy: p.tools || p.permissionCeiling ? { tools: p.tools ? structuredClone(p.tools) : null, ceiling: p.permissionCeiling ?? null } : null,
+      ...(typeof p.maxContext === 'number' ? { maxContext: p.maxContext } : {}) };
   }
 }

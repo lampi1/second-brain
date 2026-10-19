@@ -1,6 +1,6 @@
 // A clean install starts from an EMPTY brain (the owner, 2026-10-18; ADR 0072): a brain created the way setup does
 // (the automatic memory, BrainCreator's staged installer output) holds only the owner's profile and brain.json, the
-// brain pages find no rules, procedures or skills in it, and the app still delivers its machinery (boot rules, topic
+// brain pages find no rules, skills or memory in it, and the app still delivers its machinery (boot rules, topic
 // rules, agents, skills, hooks, the model table) from its own copy outside the folder. Temp folders only: the release
 // template is the repo's brain-template; no real brain, global settings, app or model is used.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -15,7 +15,8 @@ import { claudeLaunch } from '../../../src/main/brain/adapters/claude-plugin';
 import { productInstructions } from '../../../src/main/rules/instructions';
 import { runHook } from '../../../src/main/rules/runtime';
 import { isBrainFolder } from '../../../src/main/brain/detect';
-import { Procedures } from '../../../src/main/brain/procedures';
+import { legacySections } from '../../../src/main/brainmodel/legacy-sources';
+import { readMemory, readRules, readSkills } from '../../../src/main/brainmodel/model';
 import { SkillsService } from '../../../src/main/skills/service';
 import { parseProfile } from '../../../src/main/brain/profile';
 import { Routing } from '../../../src/main/brain/routing';
@@ -64,9 +65,12 @@ describe('a fresh brain is empty of app content', () => {
     expect(isBrainFolder(root)).toBe(true);
   });
 
-  it('shows no procedures, skills or agents on the brain pages', () => {
+  it('shows no skills, rules, memory or former runbooks on the brain pages', () => {
     const root = fresh();
-    expect(new Procedures(() => root).list().procedures).toEqual([]);
+    expect(legacySections(root)).toEqual([]); // nothing for the one-time migration
+    expect(readSkills([{ dir: path.join(root, '.claude', 'skills'), home: 'brain' }], root, [])).toEqual([]);
+    expect(readRules(root)).toEqual([]);
+    expect(readMemory(root, [])).toEqual([]);
     const home = path.join(base, 'home'); fs.mkdirSync(home);
     const skills = new SkillsService({ home, roots: () => [root], guard: async () => null, trash: async () => {} });
     expect(skills.list().entries).toEqual([]);

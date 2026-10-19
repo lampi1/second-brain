@@ -5,7 +5,7 @@
 // the window, follows the light/dark tokens, hides the browser views it covers (native views draw above the page) and
 // stays open while the pointer is on it. Esc closes it before any dialog sees the key; a click pins it; one at a time.
 // Accessible: a real button, aria-describedby points at the bubble (in the DOM, hidden while closed).
-// Used by Settings, Costi, Qualità, DevOps, Stato, "Migliora l'app", the long-chat notice; other branches import it as
+// Used by Settings, Costi, Qualità, Task, Stato, the long-chat notice; other branches import it as
 // `import { HelpTip } from '../components/HelpTip'` (from src/renderer/components: './HelpTip').
 import { createPortal } from 'react-dom';
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';

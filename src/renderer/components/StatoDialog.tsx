@@ -1,14 +1,14 @@
 // "Stato": the answer to "a che punto siamo / come siamo messi" in one click, with zero tokens: a one-sentence headline,
 // then every open chat (state, name, folder and git branch, last line, what it waits for from the user) and the user's
 // open PRs from the last DevOps read (who each waits for, build, votes, QA-blocked). A chat row brings that chat on
-// screen, a waiting question opens that card; a PR opens in DevOps. Only data the app already holds (lib/stato.ts) plus
-// the folders' branches read from disk ('chat:branches'): no model, no new network call. Opened from the Regia's head
+// screen, a waiting question opens that card; the button opens the Task page. Only data the app already holds (lib/stato.ts) plus
+// the folders' branches read from disk ('chat:branches'): no model, no new network call. Opened from the Orchestrator's head
 // (RegiaTile.tsx), the command palette and Ctrl+Shift+S. Used by App.tsx (modal 'stato').
 import { t as auditText } from '../i18n';
 import { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../store/store';
 import { closeModal, ui } from '../store/ui';
-import { useDevops } from '../store/devops';
+import { useTasks } from '../store/tasks';
 import { sameList } from '../store/state';
 import { useNow } from '../lib/clock';
 import { ago } from '../lib/format';
@@ -32,7 +32,7 @@ function ChatRow({ c, now }: { c: StatoChat; now: number }) {
           <span className="stato-line1">
             <span className="stato-name">{c.name}</span>
             <span className={`pill pill-${c.state.tone}`}><span className="pill-dot" />{c.state.label}</span>
-            {c.app && <span className="pill pill-off">{auditText('audit.StatoDialog.improveTheApp')}</span>}
+            {c.app && <span className="pill pill-off">{auditText('audit.StatoDialog.appCode')}</span>}
             <span className="sp" />
             <span className="stato-age">{ago(c.updatedAt, now)}</span>
           </span>
@@ -80,7 +80,7 @@ export function StatoDialog() {
   const order = useApp(s => s.order);
   const pending = useApp(s => s.pending);
   const hidden = ui.use(s => s.hidden, sameList);
-  const devops = useDevops(s => s);
+  const tasks = useTasks(s => s);
   const now = useNow(15_000);
   const [branches, setBranches] = useState<Record<string, string | null>>({});
   const cwds = useMemo(() => [...new Set(order.map(id => chats[id]).filter(c => c && !c.closedAt).map(c => c!.cwd))].sort(), [chats, order]);
@@ -91,8 +91,8 @@ export function StatoDialog() {
     void window.sb.invoke('chat:branches', { cwds }).then(b => { if (live) setBranches(b); }, () => {});
     return () => { live = false; };
   }, [cwdKey]);
-  const s = useMemo(() => buildStato({ chats, order, pending, hidden, branches, devops }), [chats, order, pending, hidden, branches, devops]);
-  const toDevops = () => { closeModal(); go({ page: 'devops' }); };
+  const s = useMemo(() => buildStato({ chats, order, pending, hidden, branches, tasks }), [chats, order, pending, hidden, branches, tasks]);
+  const toTasks = () => { closeModal(); go({ page: 'task' }); };
   return (
     <Modal onClose={closeModal} label={auditText('audit.StatoDialog.status')} testid="stato" className="modal-stato">
       <div className="modal-head">
@@ -109,13 +109,13 @@ export function StatoDialog() {
         <section aria-label={auditText('audit.StatoDialog.myPrs')}>
           <div className="stato-h"><h3 className="stato-h-t">{auditText('audit.StatoDialog.myPrs')}{' '}<span className="count">{s.prs.length}</span></h3>
             <HelpTip label={auditText('audit.StatoDialog.myPrs')} testid="stato-help-prs">{auditText('audit.StatoDialog.forEachPrWhoNeedsTo')}</HelpTip>
-            <span className="stato-h-note" data-testid="stato-devops-at">{s.devops.read ? auditText('auditExpression.StatoDialog.text166', { v0: ago(s.devops.at!, now) === auditText('auditExpression.StatoDialog.text167') ? auditText('auditExpression.StatoDialog.text167') : auditText('auditExpression.StatoDialog.text168', { v0: ago(s.devops.at!, now) }) }) : auditText('auditExpression.StatoDialog.text169')}</span>
+            <span className="stato-h-note" data-testid="stato-tasks-at">{s.tasks.read ? auditText('auditExpression.StatoDialog.text166', { v0: ago(s.tasks.at!, now) === auditText('auditExpression.StatoDialog.text167') ? auditText('auditExpression.StatoDialog.text167') : auditText('auditExpression.StatoDialog.text168', { v0: ago(s.tasks.at!, now) }) }) : auditText('auditExpression.StatoDialog.text169')}</span>
             <span className="sp" />
-            <button type="button" className="btn btn-ghost btn-s" onClick={toDevops} data-testid="stato-open-devops">{auditText('audit.StatoDialog.openDevops')}</button>
+            <button type="button" className="btn btn-ghost btn-s" onClick={toTasks} data-testid="stato-open-tasks">{auditText('audit.StatoDialog.openTasks')}</button>
           </div>
-          {s.devops.error && <p className="stato-qa"><IconAlert size={13} /> {s.devops.error}</p>}
+          {s.tasks.error && <p className="stato-qa"><IconAlert size={13} /> {s.tasks.error}</p>}
           {s.prs.length ? <ul className="stato-list">{s.prs.map(p => <PrRow key={p.id} p={p} />)}</ul>
-            : <p className="stato-empty">{s.devops.read ? auditText('auditExpression.StatoDialog.text170') : auditText('auditExpression.StatoDialog.text171')}</p>}
+            : <p className="stato-empty">{s.tasks.read ? auditText('auditExpression.StatoDialog.text170') : auditText('auditExpression.StatoDialog.text171')}</p>}
         </section>
       </div>
     </Modal>

@@ -230,7 +230,7 @@ const errorCmd = (text, agent, work, run) => {
     if ([...lines].reverse().find(l => /^## \d{4}-\d{2}/.test(l)) !== month) lines.push('', month);
     lines.push(line, '');
     if (!same.length) return 'appended';
-    return `appended. SECONDA VOLTA (stesso tipo "${type}", stessa area): manda alla Regia una proposta di regola ` +
+    return `appended. SECONDA VOLTA (stesso tipo "${type}", stessa area): manda all’Orchestrator una proposta di regola ` +
       `(file + testo esatto, brain-rules.md):\n${same.map(l => '  ' + l.slice(0, 200)).join('\n')}`;
   });
 };

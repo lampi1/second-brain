@@ -4,7 +4,7 @@
 // 2025): numbered points, each citing the error or praise it comes from, helpful/harmful counters, only small edits
 // (add / edit / remove / vote one point), never a rewrite of the whole notebook (that is what collapses a context).
 // Files: playbooks/<agent>.md in the MAIN checkout (from worktrees too), read only by that specialist at its start.
-// A point enters "Punti" only after {{OWNER}}'s yes: a chat or agent `propose`s it (→ "Proposti"), the Regia asks him
+// A point enters "Punti" only after {{OWNER}}'s yes: a chat or agent `propose`s it (→ "Proposti"), the Orchestrator asks him
 // in a panel, `accept` moves it. Votes are free: the chat that launched the specialist votes the points the
 // specialist says it used (helpful when the result held, harmful when {{OWNER}}/reviewer/QA proved it wrong).
 // Limits (Hermes: a hard cap forces consolidation): a point ≤ 300 chars, "Punti" ≤ 2500 chars per notebook, a

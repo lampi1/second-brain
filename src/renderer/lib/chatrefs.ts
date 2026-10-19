@@ -1,4 +1,4 @@
-// The chats a Regia's transcript points to, found locally (no model, no tokens; ADR 0034): the chat an
+// The chats an Orchestrator's transcript points to, found locally (no model, no tokens; ADR 0034): the chat an
 // app_create_chat opened (its result: chatId, title), the chat an app_send_to_chat wrote to (its input's chatId), and
 // the known chats an assistant message names (a title in «…», or a bare "Area · cosa" title). The chat view turns each
 // into an "Apri" chip that brings that chat on screen from anywhere (actions.ts openChatRef). Pure: no React, no store.
@@ -40,12 +40,12 @@ export function toolChatRef(item: Tool): ToolChatRef | null {
   return null;
 }
 
-/** title → chat id, for the chats an assistant message may name (not the Regie: they are a tab away already). */
+/** title → chat id, for the chats an assistant message may name (not the Orchestrators: they are a tab away already). */
 export type TitleIndex = ReadonlyMap<string, string>;
 
 /** A stable key of the work chats' titles (the store changes often; the index is rebuilt only when this does). */
 export const titlesKey = (chats: Record<string, ChatSummary>): string =>
-  Object.values(chats).filter(c => !c.isRegia && !c.appRegia && c.title.trim()).map(c => `${c.id}\t${c.title.trim()}`).sort().join('\n');
+  Object.values(chats).filter(c => !c.isRegia && c.title.trim()).map(c => `${c.id}\t${c.title.trim()}`).sort().join('\n');
 
 export function titleIndex(key: string): TitleIndex {
   const m = new Map<string, string>();
@@ -90,7 +90,7 @@ const cache = new WeakMap<ChatItem, { sig: string; ids: string[] }>();
 let lastIndex: { key: string; index: TitleIndex } = { key: '', index: new Map() };
 const EMPTY: string[] = [];
 
-/** For a Regia's transcript: assistant message id → the chats it names that the same turn's app_create_chat /
+/** For an Orchestrator's transcript: assistant message id → the chats it names that the same turn's app_create_chat /
  *  app_send_to_chat rows do not already show. Streaming messages wait until they end. */
 export function chatRefsOf(items: readonly ChatItem[], key: string): ReadonlyMap<string, string[]> {
   const out = new Map<string, string[]>();

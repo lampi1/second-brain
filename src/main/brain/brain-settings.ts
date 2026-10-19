@@ -54,7 +54,7 @@ export function migrateCrossHarness(root: string): 'unchanged' | 'migrated' | 'u
   } finally { try { fs.unlinkSync(tmp); } catch { /* renamed or already removed */ } }
 }
 
-/** The words that time the mail to a Regia without a sender's kind (`regiaMail`: { urgent, progress, action } lists,
+/** The words that time the mail to an Orchestrator without a sender's kind (`regiaMail`: { urgent, progress, action } lists,
  *  chats/regia-delivery.ts). undefined = the file says nothing or is unreadable: the defaults apply. */
 export function readRegiaMail(root: string): unknown {
   const r = readRaw(root);

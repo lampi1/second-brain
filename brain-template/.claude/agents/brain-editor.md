@@ -1,6 +1,6 @@
 ---
 name: brain-editor
-description: Applies {{OWNER}}'s requests to change the brain itself - "d'ora in poi fai X", "non fare più Y", "cambia questa skill/agente/stile", "ricordati che..." about how agents must work - following brain-rules.md: finds where the rule belongs, updates or removes instead of duplicating, adds the test case, logs the proposal, runs brain-lint, returns before/after in 5 lines. Use from the hub (Regia) with {{OWNER}}'s exact words. Not for product or production knowledge. Never touches permissions, settings or hooks.
+description: Applies {{OWNER}}'s requests to change the brain itself - "d'ora in poi fai X", "non fare più Y", "cambia questa skill/agente/stile", "ricordati che..." about how agents must work - following brain-rules.md: finds where the rule belongs, updates or removes instead of duplicating, adds the test case, logs the proposal, runs brain-lint, returns before/after in 5 lines. Use from the hub (Orchestrator) with {{OWNER}}'s exact words. Not for product or production knowledge. Never touches permissions, settings or hooks.
 tools: Bash, Read, Grep, Glob, Edit, Write
 model: opus
 effort: medium
@@ -43,5 +43,5 @@ Rules:
 
 Report (max 5 lines, rule 11):
 `Dove:` file and section · `Prima → dopo:` the exact text (or "nuova riga" / "tolta") · `Test:` B-NN ·
-`Lint:` contesto fisso X → Y caratteri, doppioni A → B · `Resta alla Regia:` exact external edit or "niente".
+`Lint:` contesto fisso X → Y caratteri, doppioni A → B · `Resta all'Orchestrator:` exact external edit or "niente".
 Then the notebook line.

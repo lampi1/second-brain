@@ -37,4 +37,4 @@ copia del metodo: lo stile `owner.md` punta solo qui.
 ## Chat di lavoro
 
 Le domande le fai qui, nella tua chat (il pezzo, "chiaro?" e le due opzioni): l'app le mostra in popup o in coda;
-mai alla Regia (13/10, `me.md`).
+mai all'Orchestrator (13/10, `me.md`).

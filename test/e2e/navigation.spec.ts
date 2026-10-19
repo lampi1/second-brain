@@ -3,7 +3,7 @@
 // role-specific section badges (count, cleared on visit); back/forward; Ctrl+1 back to the chats; the persistent Orchestrator on a brain page;
 // G-letter keys; copying an internal link and pasting it in Ctrl+K.
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { launchDemo, layerPage, shot, windowShot } from './helpers';
+import { launchDemo, layerPage, shot, windowShot, openNotesMap } from './helpers';
 
 const event = (app: ElectronApplication, e: { kind: string; title: string; detail?: string; chatId?: string }) =>
   app.evaluate((_e, ev) => (globalThis as unknown as { __sbDemo: { event(x: object): void } }).__sbDemo.event(ev), e);
@@ -162,13 +162,13 @@ test('back/forward, recents, Ctrl+1, G-letter keys, the persistent Orchestrator 
   await page.keyboard.press('g');
   await page.keyboard.press('q');
   await expect(page.getByTestId('page-qualita')).toBeVisible();
-  // the Regia without leaving the page
+  // the Orchestrator without leaving the page
   await page.keyboard.press('Control+R');
   await expect(page.getByTestId('regia-overlay')).toBeVisible();
   await expect(page.getByTestId('regia-input')).toBeFocused();
   await page.getByTestId('regia-input').fill('che si fa adesso?');
   await page.getByTestId('regia-input').press('Enter');
-  // the Regia waits on its decision: the message is queued (sent when it is free), the decision answerable right here
+  // the Orchestrator waits on its decision: the message is queued (sent when it is free), the decision answerable right here
   await expect(page.getByTestId('regia-input-queued-0')).toContainText('che si fa adesso?');
   await page.locator('[data-testid="regia-overlay"] [data-request-key="regia/regia-q1"]').focus();
   await page.keyboard.press('1');
@@ -179,8 +179,7 @@ test('back/forward, recents, Ctrl+1, G-letter keys, the persistent Orchestrator 
   await expect(page.getByTestId('regia-overlay')).toBeVisible();
   await expect(page.getByTestId('regia-input')).toBeFocused();
   // the map: full screen, browser views hidden, Esc closes
-  await page.getByTestId('nav-dashboard').click();
-    await page.getByRole('tab', { name: 'Mappa brain' }).click();
+  await openNotesMap(page);
     await page.getByRole('button', { name: 'Esplora in 3D' }).click();
   await expect(page.getByTestId('brain-map')).toBeVisible();
   await page.keyboard.press('Escape');

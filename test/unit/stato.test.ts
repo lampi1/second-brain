@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { ChatSummary, DevopsPr, DevopsState, PendingRequest } from '../../src/shared/contract';
+import type { ChatSummary, DevopsPr, TasksState, PendingRequest } from '../../src/shared/contract';
 import { askText, buildStato, headline, prName, qaBlock, statoChats, statoPrs, type StatoInput } from '../../src/renderer/lib/stato';
 import { gitBranch, gitBranches, headOf } from '../../src/main/chats/branch';
 
@@ -17,14 +17,14 @@ const chat = (id: string, o: Partial<ChatSummary> = {}): ChatSummary => ({
 const req = (chatId: string, id: string, o: Partial<PendingRequest> = {}): PendingRequest =>
   ({ id, chatId, type: 'permission', tool: 'Bash', title: 'Eseguire npm test?', detail: 'npm test', input: {}, at: 1, ...o }) as PendingRequest;
 const input = (chats: ChatSummary[], o: Partial<StatoInput> = {}): StatoInput => ({
-  chats: Object.fromEntries(chats.map(c => [c.id, c])), order: chats.map(c => c.id), pending: [], branches: {}, devops: null, ...o,
+  chats: Object.fromEntries(chats.map(c => [c.id, c])), order: chats.map(c => c.id), pending: [], branches: {}, tasks: null, ...o,
 });
 const wi = (id: number, type: string, title: string) => ({ id, type, title, state: 'Active', project: 'P', priority: 2, assignedTo: null, iteration: null, changedAt: null, url: `https://x/${id}` });
 const pr = (id: number, o: Partial<DevopsPr> = {}): DevopsPr => ({
   id, title: `feat: PR ${id}`, repo: 'shop', project: 'P', author: 'Me', createdAt: '2026-10-01T00:00:00Z', url: `https://x/pr/${id}`,
   target: 'main', draft: false, autoComplete: false, reviewers: [], build: null, workItems: [], ...o,
 });
-const devops = (prs: DevopsPr[], details: DevopsState['details'] = {}): DevopsState => ({
+const devops = (prs: DevopsPr[], details: TasksState['details'] = {}): TasksState => ({
   enabled: false, everyMin: 30, sound: true, running: false, at: 5000, nextAt: null, error: null, news: [], assigned: [], urgent: [], oldReviews: [], reviews: [], prs, details, unread: 0, qa: [], qaError: null, repoDirs: {},
 });
 
@@ -92,7 +92,7 @@ describe('headline', () => {
   it('says chats and PRs in one sentence', () => {
     const t = { id: 1, title: 't', outcome: 'Failed', url: 'https://x' };
     const s = buildStato(input([chat('a', { state: 'waiting', pending: 1 }), chat('b', { state: 'running' })], {
-      devops: devops([pr(1, { workItems: [wi(8, 'Bug', 'x')] }), pr(2)], { 8: { description: null, stateSince: null, createdAt: null, comments: [], tests: [t] } }),
+      tasks: devops([pr(1, { workItems: [wi(8, 'Bug', 'x')] }), pr(2)], { 8: { description: null, stateSince: null, createdAt: null, comments: [], tests: [t] } }),
     }));
     expect(headline(s)).toBe('1 chat ti aspetta, 1 al lavoro · 2 PR aperte: 1 bloccata dalla QA');
     expect(s.counts).toMatchObject({ waiting: 1, running: 1, prs: 2, qa: 1 });

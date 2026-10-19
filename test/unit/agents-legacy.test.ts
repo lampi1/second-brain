@@ -1,6 +1,6 @@
 /** Checks that legacy imports preserve effective choices and reject malformed persistence without replacements. */
 import { describe, expect, it } from 'vitest';
-import { legacyAgentProfiles } from '../../src/main/agents/legacy';
+import { legacyAgentProfiles, legacyKindOf } from '../../src/main/agents/legacy';
 import { AGENT_SYMBOLS } from '../../src/shared/agents';
 import type { RoutingRow } from '../../src/shared/contract';
 
@@ -11,16 +11,24 @@ const row = (extra: Partial<RoutingRow> = {}): RoutingRow => ({
 const untrusted = (values: unknown) => values as readonly RoutingRow[];
 
 describe('legacy Agent profiles', () => {
-  it('preserves engine, model and effort without inventing instructions or availability', () => {
+  it('preserves engine, model and effort and gives each kind its guidance, never the row\'s private text (ADR 0078)', () => {
     const input = row({ area: 'IT' });
     const result = legacyAgentProfiles([input], 123);
     expect(result.skipped).toBe(0);
-    expect(result.profiles[0]).toMatchObject({ name: 'Revisione · IT', engine: 'claude', model: 'retired-model', effort: 'high', instructions: '', createdAt: 123, updatedAt: 123 });
+    expect(result.profiles[0]).toMatchObject({ name: 'Revisione · IT', engine: 'claude', model: 'retired-model', effort: 'high', createdAt: 123, updatedAt: 123 });
+    expect(result.profiles[0]!.instructions).toMatch(/problemi in ordine di gravità/);
+    expect(result.profiles[0]!.manifest?.whenToUse).toMatch(/Rivedere una modifica.*Area: IT\./);
     expect(result.profiles[0]!.purpose).toContain('legacy');
     expect(AGENT_SYMBOLS).toContain(result.profiles[0]!.avatar.kind === 'symbol' ? result.profiles[0]!.avatar.value : '');
     expect(JSON.stringify(result)).not.toContain(input.why);
     expect(JSON.stringify(result)).not.toContain(input.evidence);
     expect(input).toEqual(row({ area: 'IT' }));
+  });
+
+  it('reads a legacy profile\'s kind back from its name', () => {
+    expect(legacyKindOf('Correzione bug · App')).toBe('bug-fix');
+    expect(legacyKindOf('Lettura operativa')).toBe('ops-read');
+    expect(legacyKindOf('Il mio agente')).toBeNull();
   });
 
   it('deduplicates normalized area sets while distinguishing every effective choice and scope', () => {

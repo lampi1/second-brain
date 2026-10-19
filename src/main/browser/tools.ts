@@ -146,7 +146,7 @@ export function browserTools(tabs: BrowserTabs, actions: BrowserActions, scopeOf
     },
     {
       name: 'screenshot', annotations: RO,
-      description: 'See the tab when text is not enough (try read_page, find or get_page_text first: far fewer tokens). The image is scaled to a long side of ~1000 px; its text gives the factor (click coordinate = image px × factor). region [x0,y0,x1,y1] zooms on an area (sharper), full_page captures the whole scrollable page. save_to "name.png" stores the full-size PNG as QA evidence and returns only its path and size, no image; add view: true to see it too.',
+      description: 'See the tab when text is not enough (try read_page, find or get_page_text first: far fewer tokens). The image is scaled to a long side of ~1000 px; its text gives the factor (click coordinate = image px × factor). region [x0,y0,x1,y1] zooms on an area (sharper), full_page captures the whole scrollable page. save_to "name.png" stores the full-size PNG as QA evidence and returns only its path and size, no image; add view: true to see it too. To show it to the user, write that Saved path in your message, question or report: the app shows it as a thumbnail that opens large.',
       inputSchema: schema({
         region: { type: 'array', items: { type: 'number' }, minItems: 4, maxItems: 4 }, full_page: { type: 'boolean' },
         save_to: { type: 'string', description: 'File name inside the evidence folder of your chat, e.g. "TC-12/step-3.png"' },

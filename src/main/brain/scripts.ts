@@ -6,7 +6,7 @@
 //   // @description Zip of the notes…    # @tags backup, git
 //   // @tested 2026-10-19 ok: ran on 120 files
 // A hand-written script without a header still shows (its file name as title, its first comment line as description).
-// Reads mask every line that may hold a credential (procedures.ts maskSecrets), like the Procedure page; a save that
+// Reads mask every line that may hold a credential (mask.ts maskSecrets); a save that
 // holds one is refused (no secrets in files, AGENTS.md rule 2). A delete moves the file to `scripts/.deleted/`, never
 // destroys it. Every save and delete adds a changelog line (changelog.ts). Nothing here runs a script: the tools only
 // write files; the Orchestrator's workers run them with their own permissions. Created on first save (ADR 0072).
@@ -14,7 +14,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrainScript, BrainScriptSummary } from '../../shared/contract';
-import { maskSecrets } from './procedures';
+import { maskSecrets } from './mask';
 import type { BrainChangelog } from './changelog';
 
 export const SCRIPTS_DIR = 'scripts';

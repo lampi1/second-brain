@@ -111,7 +111,7 @@ export function send(P, { to, from, text, replyTo, harness = null, now = new Dat
     const orig = findMessage(P, replyTo);
     if (!orig) { const e = new Error(`unknown --reply-to ${replyTo}`); e.code = 4; throw e; }
     thread = orig.thread; hop = (orig.hop || 1) + 1;
-    if (hop > MAX_HOPS) { const e = new Error(`thread ${thread} is at ${MAX_HOPS} hops: stop the ping-pong, tell the Regia/{{OWNER}} instead`); e.code = 4; throw e; }
+    if (hop > MAX_HOPS) { const e = new Error(`thread ${thread} is at ${MAX_HOPS} hops: stop the ping-pong, tell the Orchestrator/{{OWNER}} instead`); e.code = 4; throw e; }
   }
   const stamp = now.toISOString().replace(/[-:.TZ]/g, '').slice(0, 17);
   const id = `${stamp}-${crypto.randomBytes(3).toString('hex')}`;

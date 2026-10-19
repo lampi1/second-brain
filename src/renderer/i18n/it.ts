@@ -1,4 +1,6 @@
+import { cloudIt } from './areas/cloud.it';
 import { agentPackIt } from './areas/agent-pack.it';
+import { brainModelIt } from './areas/brain-model.it';
 import { costsIt } from './areas/costs.it';
 import { auditIt } from './areas/audit.it';
 import { auditExpressionsIt } from './areas/audit-expressions.it';
@@ -42,6 +44,7 @@ export const it = {
   ...reviewedContextIt,
   ...setupIt,
   ...homeIt,
+  ...cloudIt,
   ...guideIt,
   ...genuiRequestIt,
   'genui.request.question': 'Domanda',
@@ -60,6 +63,7 @@ export const it = {
   'genui.permission.session': "Consenti per questa sessione",
   'genui.permission.deny': "Non autorizzare questa operazione.",
   ...studioIt,
+  ...brainModelIt,
   ...productIt,
   ...lifecycleIt,
   ...agentsGridIt,

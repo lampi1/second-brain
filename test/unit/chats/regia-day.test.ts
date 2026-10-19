@@ -1,4 +1,4 @@
-// «Regie corte» (chats/continuity.ts regiaDayDue, ADR 0051): the pure rule (a Regia on Claude, idle a few minutes, with a long
+// «Orchestrators corte» (chats/continuity.ts regiaDayDue, ADR 0051): the pure rule (an Orchestrator on Claude, idle a few minutes, with a long
 // context begun on an earlier Rome day, once a day) and the ChatManager flow on the fake Claude engine: one quiet
 // `/compact` turn, the engine's «Contesto compattato» line in the tile, same chat and session, nothing else shown; never
 // twice a day, never a work chat, never with the setting off; a restart keeps when the context began.
@@ -21,7 +21,6 @@ describe('regia day rule', () => {
   it('a Regia with a context from yesterday, idle a few minutes, compacts once today', () => {
     expect(romeDay(Date.parse('2026-10-13T22:30:00Z'))).toBe('2026-10-14'); // past midnight in Rome
     expect(regiaDayDue(v, NOW)).toBe(true);
-    expect(regiaDayDue({ ...v, isRegia: false, appRegia: true }, NOW)).toBe(true);
     for (const x of [
       { isRegia: false }, { harness: 'cursor' }, { state: 'running' }, { pending: 1 }, { busy: true }, { alive: false }, { handoffTurn: true },
       { contextTokens: REGIA_DAY_MIN - 1 }, { lastTurnAt: NOW - REGIA_DAY_IDLE_MS + 1 }, { ctxSince: undefined },

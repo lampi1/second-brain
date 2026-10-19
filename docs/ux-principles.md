@@ -6,7 +6,7 @@ References: Linear, Raycast, Arc, Claude desktop, Cursor, VS Code (and the harne
 
 1. **Few things, clear.** One primary action per surface; secondary actions in the palette or a menu. Empty space is
    fine; clutter is not.
-2. **What needs the user is always visible first** (needs-you lane, Regia tile, `Ctrl+J` next). Nothing that needs the user is
+2. **What needs the user is always visible first** (the question panel, the agent's strip, the Orchestrator column, `Ctrl+J` next). Nothing that needs the user is
    ever only in a menu or a hidden tab.
 3. **Everything by keyboard, discoverable**: `Ctrl+K` palette lists every action with its shortcut; shortcuts shown in
    tooltips and menus; focus always visible (2px ring); `Esc` always backs out one level.
@@ -25,7 +25,7 @@ References: Linear, Raycast, Arc, Claude desktop, Cursor, VS Code (and the harne
    text).
 10. **A design system, not one-offs**: tokens for color, spacing (4/8 px grid), radius, type scale; light/dark from the
     system; density setting (comfortable / compact).
-11. **The app remembers**: window size/position, view (Mosaico/Corsie), tile sizes, collapsed sections, last focus.
+11. **The app remembers**: window size/position, which strips and browsers are open, the Orchestrator column's width, collapsed sections, last focus.
 12. **Honest numbers**: costs labelled (real / list-price estimate); estimates show a range or "stima senza dati".
 
 Validation: AI-driven usability tests run the user's real scenarios on the demo (answer a question from the lane, start a

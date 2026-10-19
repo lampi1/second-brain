@@ -1,7 +1,7 @@
 // Unit tests of generative UI (ADR 0033): the catalog's schemas and caps (shared/genui.ts checkUi: clean copies, one
 // clear error a model can act on, links limited to http(s) and local absolute paths), the ```sb-ui fences of question
 // previews (splitUiFences), and the store behind show_ui (main/genui/artifacts.ts): where a visual goes (chat, its
-// Regia, its next question with the 60 s fallback), replace by id, at most 20 per chat, persistence across a restart,
+// Orchestrator, its next question with the 60 s fallback), replace by id, at most 20 per chat, persistence across a restart,
 // merge into the chat's items by time, removal with the chat.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ChatItem, ChatSummary, PendingRequest } from '../../src/shared/contract';
 import { ARTIFACT_MAX_BYTES, ARTIFACT_MAX_PER_CHAT, checkUi, describeUi, hasUiFence, safeHref, splitUiFences, textOfUi } from '../../src/shared/genui';
 import { Artifacts, showUiTool, type Artifact } from '../../src/main/genui/artifacts';
+import { SCREENSHOT_HINT } from '../../src/main/ask-image';
 import type { CallCtx } from '../../src/main/mcp/server';
 
 const table = { columns: ['Test', 'Esito'], rows: [{ cells: ['TC 1', 'ok'], status: 'ok', link: { label: 'evidenza', href: 'C:\\qa\\tc1.png' } }, { cells: ['TC 2'] }] };
@@ -130,15 +131,15 @@ describe('Artifacts: the store behind show_ui', () => {
     expect(ids[0]).toBe('n3');
   });
 
-  it('target regia: shown in the Regia the chat answers to, with the sender; the app section uses its own Regia', () => {
+  it('target regia: shown in the Regia the chat answers to, with the sender; a chat with no Regia goes to the first', () => {
     const all = [chat('r1', { isRegia: true, regiaSince: 1, title: 'Regia' }), chat('r2', { isRegia: true, regiaSince: 2, title: 'Regia · B' }), chat('w', { regiaOf: 'r2', title: 'QA · Rimborsi' }),
-      chat('ar', { appRegia: true, space: 'app', title: 'Regia dell\'app' }), chat('aw', { space: 'app' })];
+      chat('aw')];
     const { store, sent } = setup(all);
     expect(store.show('w', args({ target: 'regia' }))).toContain('nell’Orchestrator «Regia · B»');
     expect(sent.at(-1)).toMatchObject({ chatId: 'r2', item: { from: 'QA · Rimborsi', target: 'regia' } });
     store.show('aw', args({ target: 'regia' }));
     expect(sent.at(-1)?.chatId).toBe('r1');
-    // two chats of the same Regia with the same id never replace each other; the sender's folder goes along
+    // two chats of the same Orchestrator with the same id never replace each other; the sender's folder goes along
     const w2 = chat('w2', { regiaOf: 'r2', cwd: 'C:\\repo2' });
     all.push(w2);
     store.show('w', args({ id: 'status', target: 'regia' }));
@@ -149,8 +150,8 @@ describe('Artifacts: the store behind show_ui', () => {
     expect((sent.at(-1)?.item as Artifact).from).toBeUndefined();
   });
 
-  it('target regia from an app chat with no app Regia (unified Orchestrator): the Regia it answers to', () => {
-    const all = [chat('o', { isRegia: true, orchestrator: true, title: 'Orchestrator' }), chat('aw', { space: 'app', regiaOf: 'o' })];
+  it('target regia from an app-code chat (unified Orchestrator): the Regia it answers to', () => {
+    const all = [chat('o', { isRegia: true, orchestrator: true, title: 'Orchestrator' }), chat('aw', { cwd: 'C:/repo', regiaOf: 'o' })];
     const { store, sent } = setup(all);
     expect(store.show('aw', args({ target: 'regia' }))).toContain('nell’Orchestrator «Orchestrator»');
     expect(sent.at(-1)?.chatId).toBe('o');
@@ -227,5 +228,11 @@ describe('Artifacts: the store behind show_ui', () => {
     const ctx = { mount: 'browser-chat', params: { chatId: 'w', token: 't' }, sessionId: '', signal: new AbortController().signal, progress: () => false } satisfies CallCtx;
     await expect(Promise.resolve(tool.run(args(), ctx))).resolves.toContain('Mostrato in questa chat');
     expect(sent[0]?.chatId).toBe('w');
+  });
+
+  it('show_ui says how to attach a screenshot: a local path, never a remote URL (issue #83)', () => {
+    const tool = showUiTool(setup([chat('w')]).store);
+    expect(tool.description).toContain(SCREENSHOT_HINT);
+    expect(SCREENSHOT_HINT).toMatch(/absolute path/);expect(SCREENSHOT_HINT).toMatch(/AskUserQuestion/);expect(SCREENSHOT_HINT).toMatch(/data: PNG/);expect(SCREENSHOT_HINT).toMatch(/Never an http URL/);
   });
 });

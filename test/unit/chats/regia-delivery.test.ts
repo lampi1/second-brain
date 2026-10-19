@@ -1,5 +1,5 @@
-// Unit tests of main/chats/regia-delivery.ts, the one rule for what reaches a Regia and when (news and mail alike):
-// the gate from the Regia's state, the classes, the brain's words (escaped literals, whole words or "stem*").
+// Unit tests of main/chats/regia-delivery.ts, the one rule for what reaches an Orchestrator and when (news and mail alike):
+// the gate from the Orchestrator's state, the classes, the brain's words (escaped literals, whole words or "stem*").
 import { describe, expect, it } from 'vitest';
 import { brainClassifier, DEFAULT_WORDS, mailClassifier, newsClass, passes, REGIA_GROUP_MS, REGIA_HOLD_MS, regiaGate, waitOf, wordsFrom } from '../../../src/main/chats/regia-delivery';
 

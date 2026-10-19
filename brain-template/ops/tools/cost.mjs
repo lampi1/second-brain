@@ -124,9 +124,9 @@ export function advice(S) {
   const chats = Object.values(S.chats);
   const longChats = chats.filter(c => c.longSave > 0).sort((a, b) => b.longSave - a.longSave);
   if (S.longSave > 0) out.push({ usd: S.longSave, text: `Chat lunghe: ${longChats.length} chat oltre ${LONG / 1000}k token di contesto; ripartire (chat nuova o /clear) a ~${TARGET / 1000}k avrebbe risparmiato ~${f$(S.longSave)}. Le più care: ${longChats.slice(0, 3).map(c => `${c.title} ${f$(c.longSave)}`).join(', ')}` });
-  const regia = chats.filter(c => /^Regia/i.test(c.title));
+  const regia = chats.filter(c => /^(Regia|Orchestrator)/i.test(c.title));
   const regiaUsd = regia.reduce((n, c) => n + c.usd, 0);
-  if (regiaUsd > 0.15 * S.total) out.push({ usd: regia.reduce((n, c) => n + c.longSave, 0), text: `Regia: ${pct(regiaUsd, S.total)} della spesa (${f$(regiaUsd)}): la Regia resta "libera" solo se fa poche chiamate e riparte spesso` });
+  if (regiaUsd > 0.15 * S.total) out.push({ usd: regia.reduce((n, c) => n + c.longSave, 0), text: `Orchestrator: ${pct(regiaUsd, S.total)} della spesa (${f$(regiaUsd)}): l’Orchestrator resta "libero" solo se fa poche chiamate e riparte spesso` });
   const k = S.byKind;
   const mem = k['memoria (now, errori, diario)'];
   if (mem && mem.calls > 50) out.push({ usd: mem.usd / 2, text: `Memoria a mano: ${mem.calls} chiamate, ${f$(mem.usd)}; con un solo comando mem.mjs per riga si dimezzano` });

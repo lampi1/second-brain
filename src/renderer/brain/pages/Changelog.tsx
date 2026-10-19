@@ -63,7 +63,7 @@ export function Changelog() {
   return (
     <div className="dashboard bs-page" data-testid="brain-changelog">
       <header className="dash-header bs-header"><div><span className="dash-eyebrow">{copy('IL TUO BRAIN', 'YOUR BRAIN')}</span><h1>Changelog</h1>
-        <p>{copy('Ogni cambiamento che gli agenti fanno al tuo brain: script, regole, procedure, note. Il più recente in alto.', 'Every change the agents make to your brain: scripts, rules, procedures, notes. Newest first.')}</p></div>
+        <p>{copy('Ogni cambiamento che gli agenti fanno al tuo brain: script, regole, skill, note. Il più recente in alto.', 'Every change the agents make to your brain: scripts, rules, skills, notes. Newest first.')}</p></div>
         <button type="button" className="btn btn-ghost btn-s" onClick={() => go({ page: 'script' })} data-testid="bc-to-scripts"><span aria-hidden="true">↗</span> Script</button></header>
       <div className="dash-stats">
         <div className="dash-stat"><span>{copy('Cambiamenti in 7 giorni', 'Changes in 7 days')}</span><strong data-testid="bc-week">{log.data ? week : '—'}</strong><small>{copy('Da changelog.md nel brain', 'From changelog.md in the brain')}</small></div>
@@ -80,7 +80,7 @@ export function Changelog() {
       {log.error && !log.data ? <div className="dash-empty">{copy('Non riesco a leggere il changelog', 'Cannot read the changelog')}: {log.error} <button type="button" className="btn btn-subtle btn-s" onClick={() => log.reload()}>{copy('Riprova', 'Retry')}</button></div>
         : !log.data ? <div className="bc-days"><div className="dash-panel bs-skeleton" /></div>
         : !all.length ? <div className="bs-empty" data-testid="bc-empty"><span className="dash-orbit-icon" aria-hidden="true">↻</span><h2>{copy('Ancora nessun cambiamento', 'No changes yet')}</h2>
-          <p>{copy('Quando l’Orchestrator aggiunge, corregge o elimina uno script, o cambia una regola o una procedura del brain, lo trovi qui con il motivo.', 'When the Orchestrator adds, fixes or deletes a script, or changes a rule or procedure of the brain, you find it here with the reason.')}</p></div>
+          <p>{copy('Quando l’Orchestrator aggiunge, corregge o elimina uno script, o cambia una regola o una skill del brain, lo trovi qui con il motivo.', 'When the Orchestrator adds, fixes or deletes a script, or changes a rule or skill of the brain, you find it here with the reason.')}</p></div>
         : !days.length ? <div className="dash-empty" data-testid="bc-none">{copy('Nessun cambiamento corrisponde alla ricerca.', 'No change matches the search.')}</div>
         : <div className="bc-days" data-testid="bc-days">{days.map(([d, es]) => (
           <section key={d} className="dash-panel bc-day" aria-label={dayLabel(d, today)}>

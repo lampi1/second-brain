@@ -1,5 +1,8 @@
 # ADR 0047 · Model routing is voted and priced per work, with a sample judge
 
+> Routing parts superseded by [ADR 0078](0078-agent-first-routing.md): an agent's profile decides engine, model and
+> effort; the table only fills a model the profile leaves open, and the override rule applies only to agentless chats.
+
 Date: 2026-10-14 · Status: accepted
 
 ## Context

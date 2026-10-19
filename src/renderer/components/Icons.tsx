@@ -1,4 +1,4 @@
-// Inline SVG icons (stroke, currentColor, 24-unit grid drawn at 16 px) and the harness marks (Claude, Cursor, Regia).
+// Inline SVG icons (stroke, currentColor, 24-unit grid drawn at 16 px) and the harness marks (Claude, Cursor, Orchestrator).
 // Why: crisp at any DPI, themeable with CSS, no icon font or package. Used by every component.
 import type { ReactNode, SVGProps } from 'react';
 import type { Harness } from '@shared/contract';
@@ -76,12 +76,12 @@ export const IconSpinner = ({ size = 16, ...rest }: P) => (
   </svg>
 );
 
-/** The harness mark of a tile: Claude (warm spark), Cursor (cursor arrow), Regia (violet R). */
+/** The harness mark of a tile: Claude (warm spark), Cursor (cursor arrow), Orchestrator (violet four-point star, the ✦ of its column; once a Regia "R"). */
 export function HarnessMark({ harness, regia, size = 20 }: { harness: Harness; regia?: boolean; size?: number }) {
   if (regia) {
     return (
       <span className="mark mark-regia" style={{ width: size, height: size }} aria-hidden="true">
-        <svg width={size * 0.62} height={size * 0.62} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M7 20V4h6a4.5 4.5 0 0 1 0 9H7M12.5 13 18 20" /></svg>
+        <svg width={size * 0.66} height={size * 0.66} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5 14.4 9.6 21.5 12l-7.1 2.4L12 21.5l-2.4-7.1L2.5 12l7.1-2.4z" /></svg>
       </span>
     );
   }

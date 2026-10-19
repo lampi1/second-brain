@@ -29,7 +29,7 @@ async function settingsWork(page: Page): Promise<void> {
 }
 
 /** "…" is always on screen and lists the actions used now and then. */
-const ALWAYS_MORE = ['more-browsers', 'more-credentials', 'more-improve'];
+const ALWAYS_MORE = ['more-credentials'];
 async function everyHiddenListed(page: Page): Promise<void> {
   await expect(page.getByTestId('topbar-more')).toBeInViewport({ ratio: 1 });
   await page.getByTestId('topbar-more').click();

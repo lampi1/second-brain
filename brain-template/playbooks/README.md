@@ -10,7 +10,7 @@ Nessun taccuino: il primo nasce quando un errore di uno specialista (riga in `ai
 (`ai-wins.md`) diventa un consiglio per la volta dopo. Il giro, sempre lo stesso:
 
 1. una chat propone il punto: `node ops/tools/playbook.mjs propose reviewer --text "<consiglio>" --source "<riga di ai-errors.md o le tue parole>"`;
-2. la Regia te lo chiede in un pannello; al tuo sì: `playbook.mjs accept reviewer <id>`;
+2. l'Orchestrator te lo chiede in un pannello; al tuo sì: `playbook.mjs accept reviewer <id>`;
 3. ogni volta che lo specialista usa il punto, la chat che l'ha lanciato lo vota (`vote ... helpful|harmful`);
 4. in manutenzione, `playbook.mjs list` mostra i punti con più voti contrari che a favore: tornano a te.
 

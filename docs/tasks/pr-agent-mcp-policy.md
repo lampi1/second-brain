@@ -86,7 +86,7 @@ index a1c8c85..778e19d 100644
 +  });
 +  attachAppTools(mcp, { agentAuthoring, improveEvidence: selection => improve.evidence(manager.analytics.readModel(), selection), chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), devops: () => devops.get() }, improve, false, regiaTokens);
  
-   // DevOps page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
+   // Task page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
    const node = electronNode();
 @@ -566,7 +575,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
    }

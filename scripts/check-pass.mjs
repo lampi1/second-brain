@@ -1,8 +1,8 @@
 // Records a green `npm run check` (ADR 0020): `--start` is the first step of the check script (it notes the commit
 // being checked), the plain call is the last one, so it runs only when every step passed; `--kind light` marks the
 // light check of a branch (`npm run check:branch`, ADR 0027; entries without a kind are full). Writes the commit into
-// <git-common-dir>/sb-checks.json (shared by every worktree, never committed), where the "Migliora l'app" section reads
-// which branches are tested. A check on uncommitted changes proves nothing about a commit, and a commit made while the
+// <git-common-dir>/sb-checks.json (shared by every worktree, never committed): the record of which commits are
+// tested, for the integrator and the hand-offs. A check on uncommitted changes proves nothing about a commit, and a commit made while the
 // check ran was never checked: then it records nothing. Used by package.json "check" and scripts/check-branch.mjs.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';

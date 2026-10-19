@@ -11,7 +11,7 @@
 //   → session/prompt {sessionId, prompt:[{type:'image',mimeType,data}…, {type:'text'}]} → {stopReason, usage?} (images as
 //     blocks only when promptCapabilities.image; otherwise saved as files whose paths go in the text) · session/cancel
 //   → session/set_config_option {sessionId, configId, value}: the model's reasoning (option of category thought_level,
-//     e.g. reasoning_effort) and fast, from the user's settings (Chat aperte dalla Regia). Offered because initialize
+//     e.g. reasoning_effort) and fast, from the user's settings (Chat aperte dall'Orchestrator). Offered because initialize
 //     sends clientCapabilities._meta.parameterizedModelPicker (CLI 2026.07.23 acp/cursor-acp-agent): session/new|load
 //     then answer configOptions with each model parameter; without it the CLI keeps its own variant (high, fast) whatever
 //     --model or cli-config.json say (seen 2026-10-12 with grok-4.7). It writes only the app's own CURSOR_CONFIG_DIR.
@@ -78,7 +78,7 @@ export interface AcpOptions extends SessionOptions {
   pathOverride?: string;
   /** the chat's own browser MCP endpoint (passed when the agent supports http MCP) */
   mcpUrl?: string | null;
-  /** the Regia only: the app-control MCP endpoint (/mcp/app: app_create_chat, app_state…), passed as second-brain-app */
+  /** the Orchestrator only: the app-control MCP endpoint (/mcp/app: app_create_chat, app_state…), passed as second-brain-app */
   appMcpUrl?: string | null;
   /** app version for clientInfo */
   appVersion?: string;
@@ -947,7 +947,7 @@ export class AcpSession implements HarnessSession {
         questions.push({ question: text, ...(s(p.title) ? { header: cut(s(p.title), 30) } : {}), options: labels.map(label => ({ label })), multiSelect: q.allowMultiple === true });
       });
       this.asks.set(rid, { rpcId: id, method, questions: acp });
-      // the text streamed before the question is finished now (no tool call closes it): the Regia's card reads its
+      // the text streamed before the question is finished now (no tool call closes it): the Orchestrator's card reads its
       // commands from finished messages only (lib/regia-route.ts commandsOfTurn)
       this.flushAll(true);
       this.pending({ id: rid, type: 'question', tool: 'AskQuestion', title: cut(s(p.title) || questions[0]?.question || 'Domanda', 140), detail: questions.map(q => q.question).join('\n'), input: trimInput(p), questions, at });
@@ -1155,13 +1155,14 @@ export class AcpSession implements HarnessSession {
       : st === 'completed' ? 'completed' : st === 'failed' ? 'failed' : st === 'cancelled' ? 'stopped'
         : st === 'in_progress' ? 'running' : st === 'pending' ? 'waiting' : 'unknown';
     const task = s(raw.description) || s(raw.prompt) || (extension ? s(u.description) || s(u.prompt) : '') || prev?.task || null;
+    const agentType = typeof raw.subagentType === 'string' ? raw.subagentType : s(o(raw.subagentType).custom) || null;
     // Descriptive metadata alone does not make a replayed running state current again after a resume.
     const source = this.loading ? 'replay' : !st && prev ? prev.source : 'live';
     if (source === 'replay' && prev && (prev.source === 'live' || ['completed', 'failed', 'stopped'].includes(prev.state))) state = prev.state;
     this.childTasks.set(id, { task, state, source: prev?.source === 'live' ? 'live' : source });
     this.childTelemetry.observe({
       key: `acp:tool:${id}`, nativeId: null, toolCallId: id, parentNativeId: null, kind: 'agent', state, task,
-      observedAt: Date.now(), source,
+      agentType: agentType || null, observedAt: Date.now(), source,
     });
   }
 

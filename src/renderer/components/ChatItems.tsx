@@ -7,7 +7,7 @@
 // with show_ui (GenUi.tsx ArtifactCard; one waiting for its question is hidden). Code blocks of assistant messages get their own toolbar (Copia; Esegui on shell blocks of an app
 // chat: CodeBlock.tsx; the chat id comes from ItemList's chatId); a click on copyable inline code copies it, on a file path or a link it opens a preview (LinkPeek.tsx). Each row is memoized by its item, so a streaming
 // message re-renders only itself (at most once a frame, re-parsing only its last markdown block); tool rows show live
-// elapsed time; in a Regia, an "Apri" chip under the chats she opened, wrote to or named (ChatRefChips.tsx, ADR 0034)
+// elapsed time; in an Orchestrator, an "Apri" chip under the chats she opened, wrote to or named (ChatRefChips.tsx, ADR 0034)
 // and a "Nuova chat" badge on a message sent with that toggle (shared/newchat.ts); a "sta scrivendo… / sta pensando…" line follows the turn; the list follows the bottom ONLY when the
 // user is already there (scrolled up to read, it never jumps: a "nuove righe" pill appears instead). Used by ChatTile
 // and RegiaTile.
@@ -125,7 +125,7 @@ function Elapsed({ since }: { since: number }) {
   return <span className="tool-meta">{duration(now - since)}</span>;
 }
 
-/** A message from another chat or the Regia: its "[Messaggio … non scritto dall'utente …]" line is for the model; the
+/** A message from another chat or the Orchestrator: its "[Messaggio … non scritto dall'utente …]" line is for the model; the
  *  bubble's "Da «…»" header already says it to the user */
 export const withoutLabel = (text: string): string => text.replace(/^\[Messaggio [^\n]*\]\s*\n+/, '');
 
@@ -228,7 +228,7 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks }: { item:
     case 'user': {
       const f = foreignOf(item);
       if (f && !item.thumbs?.length && !item.images) return <ForeignMsg item={item} f={f} />;
-      // "Nuova chat": the line for the Regia is hidden, a badge says it
+      // "Nuova chat": the line for the Orchestrator is hidden, a badge says it
       const nc = item.from ? null : splitNewChat(item.text);
       // notes riding on the user's message (Mandato / Copiato / Non serve): a muted line under the bubble
       const own = item.from ? { text: withoutLabel(item.text), notes: [] } : splitNotes(nc?.text ?? item.text);
@@ -315,8 +315,8 @@ function ItemListFor({ items, empty, footer, chatId = null }: ItemListProps) {
   const shown = cut > 0 && !pastOpen ? items.slice(cut) : items;
   const asking = useApp(s => !!chatId && s.pending.some(p => p.chatId === chatId && p.type === 'question'));
   const open = useMemo(() => thinkingBeforeAsk(items, asking), [items, asking]);
-  // a Regia's messages get "Apri" chips for the work chats they name (one key of the titles: rebuilt only when they change)
-  const tkey = useApp(s => { const c = chatId ? s.chats[chatId] : undefined; return c?.isRegia || c?.appRegia ? titlesKey(s.chats) : ''; });
+  // an Orchestrator's messages get "Apri" chips for the work chats they name (one key of the titles: rebuilt only when they change)
+  const tkey = useApp(s => { const c = chatId ? s.chats[chatId] : undefined; return c?.isRegia ? titlesKey(s.chats) : ''; });
   const refs = useMemo(() => chatRefsOf(items, tkey), [items, tkey]);
   const fixed = useMemo(() => correctedThoughts(items), [items]);
   const last = items[items.length - 1];

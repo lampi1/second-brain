@@ -18,8 +18,8 @@ const manifest = (): AgentPackManifest => ({
   createdAt: '2026-10-18T00:00:00Z', exportedAt: '2026-10-18T00:00:00Z', appVersion: '0.1.0',
 });
 const skills = () => new Map([
-  ['skills/reviewer/SKILL.md', Buffer.from('---\nname: reviewer\ndescription: Review changes\n---\nRead learned-rules.md and references/checklist.md.\n')],
-  ['skills/reviewer/learned-rules.md', Buffer.from('# Learned rules\n\n- Cite evidence.\n')],
+  ['skills/reviewer/SKILL.md', Buffer.from('---\nname: reviewer\ndescription: Review changes\n---\nRead references/checklist.md.\n')],
+  ['skills/reviewer/references/notes.md', Buffer.from('# Notes\n\n- Cite evidence.\n')],
   ['skills/reviewer/references/checklist.md', Buffer.from('Check boundary conditions.\n')],
 ]);
 
@@ -53,7 +53,7 @@ describe('portable agent packs', () => {
     }
   });
   it('detects tampering, unsupported versions, missing own skills and unsafe identities', () => {
-    const files = emitPack(manifest(), 'Review.', skills()); files.set('skills/reviewer/learned-rules.md', Buffer.from('Changed'));
+    const files = emitPack(manifest(), 'Review.', skills()); files.set('skills/reviewer/references/notes.md', Buffer.from('Changed'));
     expect(() => inspectPack(files)).toThrow('hash');
     expect(() => checkedPack({ ...manifest(), format: 2 })).toThrow('update');
     expect(() => checkedPack({ ...manifest(), skills: [] })).toThrow();

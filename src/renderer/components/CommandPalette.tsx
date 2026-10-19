@@ -1,6 +1,6 @@
 // Ctrl+K: go anywhere and one search over everything (recent places, chats by title, folder and last line; open
 // requests; the closed chats (a pick reopens it); browser tabs; every brain section and the map; feed events) and every app action with its shortcut (the
-// engine of each chat in its line; "Credenziali" opens the credentials panel; the Regia: ricomincia da capo, passa all'altro motore, Domande alla Regia). A
+// engine of each chat in its line; "Credenziali" opens the credentials panel; the Orchestrator: ricomincia da capo, passa all'altro motore, Domande all'Orchestrator). A
 // pasted internal link (sb://<page>/<element>) is the first result. Fuzzy filter (lib/fuzzy.ts), ↑↓ + Enter, Esc
 // closes. While it is open the browser views are hidden (a modal blocks them all). From two letters on, a full-text
 // search in main ('search:query', ADR 0023) adds the messages of the chats of the last 30 days (closed ones too: Enter
@@ -26,9 +26,9 @@ import {
 } from '../actions';
 import { questionsModalOn } from '../lib/questions';
 import {
-  HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconBook, IconBranch, IconFile, IconBrain, IconChart, IconCoins, IconCompass, IconFocus, IconGlobe,
+  HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconBook, IconBranch, IconFile, IconBrain, IconChart, IconCoins, IconShield, IconFocus, IconGlobe,
   IconHistory, IconKeyboard, IconLayers, IconLightbulb, IconLink, IconList, IconLogin, IconMap, IconMaximize, IconPlus, IconQuestion, IconSearch, IconSettings, IconStop,
-  IconSparkle, IconTarget, IconTerminal, IconTicket,
+  IconSparkle, IconTerminal, IconTicket,
 } from './Icons';
 import { Keys, Modal } from './ui';
 import { ContextPulse } from './ContextPulse';
@@ -43,8 +43,9 @@ const PAGE_ICON: Record<BrainPageId, ReactNode> = {
   home: <IconBrain />,
   agenti: <IconLayers />,
   fatto: <IconBook />, idee: <IconLightbulb />,
-  costi: <IconCoins />, qualita: <IconChart />, procedure: <IconCompass />, script: <IconTerminal />, changelog: <IconHistory />, confronto: <IconLayers />, miglioramento: <IconTarget />, file: <IconBrain />, devops: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />, migliora: <IconSparkle />,
+  costi: <IconCoins />, qualita: <IconChart />, script: <IconTerminal />, changelog: <IconHistory />, confronto: <IconLayers />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
   dashboard: <IconChart />, guida: <IconQuestion />,
+  regole: <IconShield />, memoria: <IconHistory />, classificatori: <IconBranch />, collegamenti: <IconMap />,
 };
 
 function buildCommands(): Cmd[] {
@@ -78,7 +79,7 @@ function buildCommands(): Cmd[] {
       run: () => setMaximized(`browser:${t.id}`),
     });
   }
-  // the Regia of the tab shown in the overlay (ADR 0021)
+  // the Orchestrator of the tab shown in the overlay (ADR 0021)
   const rid = regiaId();
   const regia = rid ? s.chats[rid] : undefined;
   const to = regia && otherEngine(regia.harness);

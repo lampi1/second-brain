@@ -82,7 +82,7 @@ test('the questions window: waits while the user types, never takes the field, C
   await expandChats(page, 'qa', 'fix'); // requests, transcripts and inputs are on open strips
   await page.getByTestId('topbar-qwin').click();
   await expect(page.getByTestId('qwin')).toBeVisible();
-  // the open requests of the demo (Regia, QA, Feedback) are in the window now; the tiles keep one line
+  // the open requests of the demo (Orchestrator, QA, Feedback) are in the window now; the tiles keep one line
   await expect(page.getByTestId('qwin')).toBeVisible();
   await expect(page.getByTestId('chat-in-window-qa')).toBeVisible();
   await expect(page.getByTestId('qwin-card')).toBeFocused(); // nobody was typing: it takes the keyboard
@@ -250,7 +250,7 @@ test('the questions window answers in any order: a waiting request is one click 
   await expect(picks.nth(1)).toContainText('App · Feedback');
   await page.mouse.move(2, 2);
   await shot(page, 'questions-any-order');
-  // a free answer half written on the Regia's, then QA now: its card, with the keyboard; the Regia's waits among the others
+  // a free answer half written on the Orchestrator's, then QA now: its card, with the keyboard; the Orchestrator's waits among the others
   await page.keyboard.press('3');
   await page.getByTestId('qwin-card-other-input').fill('ci penso');
   await picks.nth(0).click();
@@ -260,7 +260,7 @@ test('the questions window answers in any order: a waiting request is one click 
   await expect(picks.nth(0)).toContainText('Orchestrator');
   await page.keyboard.press('1');
   await expect.poll(() => app.evaluate(() => (globalThis as unknown as Demo).__sbDemo.answers().map(a => a.chatId))).toEqual(['qa']);
-  // answered: back to the oldest still waiting, the Regia's, with the half-written answer; Feedback can still go first
+  // answered: back to the oldest still waiting, the Orchestrator's, with the half-written answer; Feedback can still go first
   await expect(page.getByTestId('qwin-chat')).toHaveText('Orchestrator');
   await expect(page.getByTestId('qwin-card-other-input')).toHaveValue('ci penso');
   await expect(picks).toHaveCount(1);

@@ -115,3 +115,15 @@ it('remaps old composition deltas and primary agent once, preserving unrelated p
   expect(migrateExplorerRole(migrated)).toEqual(migrated);
   expect(selection.overrides.addAgentIds).toEqual(['default-writing', 'agent-mine']);
 });
+it('a saved role that names the old DevOps page follows its rename to Task (ADR 0079)', () => {
+  const selection = { schemaVersion: 1, presetId: 'po', presetRevision: 3, overrides: { addPageIds: ['devops', 'costi', 'task'], removePageIds: ['devops'], defaults: { homePageId: 'devops' } } };
+  const migrated = migrateExplorerRole(selection);
+  expect(migrated).toMatchObject({ overrides: { addPageIds: ['task', 'costi'], removePageIds: ['task'], defaults: { homePageId: 'task' } } });
+  expect(migrateExplorerRole(migrated)).toEqual(migrated);
+});
+it('a saved role that names the old Regole imparate page lands on Regole, where those rules live now (ADR 0082)', () => {
+  const selection = { schemaVersion: 1, presetId: 'cto', presetRevision: 2, overrides: { addPageIds: ['miglioramento', 'regole'], defaults: { homePageId: 'miglioramento' } } };
+  const migrated = migrateExplorerRole(selection);
+  expect(migrated).toMatchObject({ overrides: { addPageIds: ['regole'], defaults: { homePageId: 'regole' } } });
+  expect(migrateExplorerRole(migrated)).toEqual(migrated);
+});

@@ -155,7 +155,7 @@ async function prompt(id, p) {
     update(sid, { sessionUpdate: 'tool_call_update', toolCallId: tcId, status: allowed ? 'completed' : 'failed' });
     final = allowed ? (kind === 'read' ? 'Letto a.txt' : 'Scritto a.txt') : `${kind} rifiutato`;
   }
-  // "ask cmd": a command for the user, then the question with no tool call in between (the Regia's card shows the command)
+  // "ask cmd": a command for the user, then the question with no tool call in between (the Orchestrator's card shows the command)
   if (/ask cmd/.test(text)) await say(sid, 'agent_message_chunk', ['Lancia:\n```powershell\n', 'Get-Date\n```\n']);
   if (/ask/.test(text) && !turn.cancelled) {
     const r = await ask('cursor/ask_question', { toolCallId: 'tc_ask', title: 'Due domande', questions: [

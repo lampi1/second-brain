@@ -1,7 +1,7 @@
 // Engine-agnostic binding for the fixed right column. Reading never starts a model; ensure is single-flight.
 // ChatManager owns migration/singleton enforcement, including legacy create and replacement entry points.
-// ensure routes like every Regia (chats/routed.ts, kind 'regia'): the engine the user picked beats the row; the model
-// and effort come from the table's row on that engine, else the user's "Chat aperte dalla Regia" defaults.
+// ensure routes like every Orchestrator (chats/routed.ts, kind 'regia'): the engine the user picked beats the row; the model
+// and effort come from the table's row on that engine, else the user's "Chat aperte dall'Orchestrator" defaults.
 import type { ChatSummary, Harness, Settings } from '../../shared/contract';
 import type { ChatService } from '../services';
 import { createRoutedChat, type RoutedChatDeps } from './routed';

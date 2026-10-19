@@ -1,11 +1,9 @@
 // "Discutine" / "Apri una chat" on the ideas and the AI's suggestions (Idee), on the recurring AI errors and on every
-// number of Qualità and Costi (ADR 0037), and on the procedures (Procedure, ADR 0041): the ready texts (a draft for the
-// Regia that quotes the topic with its source file, its numbers or its line, the first message of a dedicated work chat;
-// for a procedure, a chat that follows it), the line of an idea in its file, and the "discussa" record (which chat,
-// when) kept per topic in the app's own storage. The idea's state in ideas.md is never changed here: only the Regia
+// number of Qualità and Costi (ADR 0037): the ready texts (a draft for the Orchestrator that quotes the topic with its source
+// file, its numbers or its line, the first message of a dedicated work chat), the line of an idea in its file, and the "discussa" record (which chat,
+// when) kept per topic in the app's own storage. The idea's state in ideas.md is never changed here: only the Orchestrator
 // changes it, when the owner asks. DOM-free and unit-tested (test/unit/brain-ui/discuss.test.ts); the buttons are
 // components/Discuss.tsx.
-import type { ProcedureSummary } from '@shared/contract';
 import type { Idea, Reflection } from '../types';
 import { t as i18nT } from '../../i18n';
 import { short } from './text';
@@ -27,33 +25,31 @@ export interface Quote {
 }
 
 /** What can be discussed: an idea of ideas.md (the owner's or the AI's), a reflection of ai-reflections.md, a quoted
- *  error pattern or number, or a procedure of the brain (its file and heading line come with it). */
+ *  error pattern or number. */
 export type Topic =
   | { kind: 'idea'; idea: Idea }
   | { kind: 'reflection'; reflection: Reflection }
-  | { kind: 'quote'; quote: Quote }
-  | { kind: 'procedure'; procedure: Pick<ProcedureSummary, 'title' | 'file' | 'line' | 'area' | 'changedAt'> };
+  | { kind: 'quote'; quote: Quote };
 
 export const IDEAS_FILE = 'ideas.md';
 export const REFLECTIONS_FILE = 'ai-reflections.md';
 /** The brain file that holds the topic; null for a quote (its source may be several files or the app's logs). */
 export const fileOf = (t: Topic): string | null =>
-  (t.kind === 'idea' ? IDEAS_FILE : t.kind === 'reflection' ? REFLECTIONS_FILE : t.kind === 'procedure' ? t.procedure.file : null);
+  (t.kind === 'idea' ? IDEAS_FILE : t.kind === 'reflection' ? REFLECTIONS_FILE : null);
 export const titleOf = (t: Topic): string =>
-  (t.kind === 'idea' ? t.idea.titolo : t.kind === 'reflection' ? t.reflection.titolo : t.kind === 'procedure' ? t.procedure.title : t.quote.title);
+  (t.kind === 'idea' ? t.idea.titolo : t.kind === 'reflection' ? t.reflection.titolo : t.quote.title);
 export const dateOf = (t: Topic): string =>
-  (t.kind === 'idea' ? t.idea.data : t.kind === 'reflection' ? t.reflection.data : t.kind === 'procedure' ? (t.procedure.changedAt ?? '').slice(0, 10) : '');
+  (t.kind === 'idea' ? t.idea.data : t.kind === 'reflection' ? t.reflection.data : '');
 
-/** Stable key of a topic (date + title, as the brain's live feed keys ideas; a quote by its id; a procedure: file + title). */
+/** Stable key of a topic (date + title, as the brain's live feed keys ideas; a quote by its id). */
 export const topicKey = (t: Topic): string =>
   t.kind === 'idea' ? `idea|${t.idea.data}|${t.idea.titolo}`
     : t.kind === 'reflection' ? `refl|${t.reflection.data}|${t.reflection.chat}|${t.reflection.titolo}`
-      : t.kind === 'procedure' ? `proc|${t.procedure.file}|${t.procedure.title}` : `quote|${t.quote.id}`;
+      : `quote|${t.quote.id}`;
 
 /** 1-based line of the topic's heading in its file: the "## …" line with its date and title, else any line with the
  *  title; null when the file does not have it (the message then names only the file). */
 export function lineOf(fileText: string, t: Topic): number | null {
-  if (t.kind === 'procedure') return t.procedure.line || null;
   const title = titleOf(t).trim();
   if (!fileText || !title) return null;
   const lines = fileText.split(/\r?\n/);
@@ -78,7 +74,6 @@ export const ERROR_QUESTION = 'Why does it happen and how do we prevent it? Prop
 export const NUMBER_QUESTION = 'What does this number tell us? If there is something to change, give me the first small step.';
 /** The first question that opens the discussion, by kind and state (a quote: its own, else by error or number). */
 export function openingQuestion(t: Topic): string {
-  if (t.kind === 'procedure') return 'Is it still right as it is? What is missing, what has changed, what step can be simplified?';
   if (t.kind === 'quote') return t.quote.question ?? (t.quote.what === 'errore' ? ERROR_QUESTION : NUMBER_QUESTION);
   if (t.kind === 'reflection') return 'Do you still agree with yourself? What would you change, concretely, in how we work?';
   const i = t.idea;
@@ -89,11 +84,8 @@ export function openingQuestion(t: Topic): string {
   return 'Does it still make sense? Give me pros, cons and the first small step to try it.';
 }
 
-/** The draft for the Regia ("Discutine"): quotes the topic with file and line, ends with the opening question. */
+/** The draft for the Orchestrator ("Discutine"): quotes the topic with file and line, ends with the opening question. */
 export function discussText(t: Topic, line: number | null): string {
-  if (t.kind === 'procedure') {
-    return blocks([`Let's talk about the procedure «${t.procedure.title}» (${where(t, line)}, area ${t.procedure.area}).`], [`${openingQuestion(t)} Do not change the file: let's talk about it first.`]);
-  }
   if (t.kind === 'quote') {
     const q = t.quote;
     return blocks(
@@ -125,17 +117,10 @@ const blocks = (...ps: string[][]): string => ps.map(p => p.filter(Boolean).join
 
 /** Title of the dedicated work chat ("Idea · <titolo>", short enough for a tile). */
 export const chatTitle = (t: Topic): string =>
-  `${t.kind === 'idea' ? i18nT('brainLib.discuss.kindIdea') : t.kind === 'reflection' ? i18nT('brainLib.discuss.kindReflection') : t.kind === 'procedure' ? i18nT('brainLib.discuss.kindProcedure') : t.quote.what === 'errore' ? i18nT('brainLib.discuss.kindError') : i18nT('brainLib.discuss.kindNumber')} · ${short(titleOf(t), 44)}`;
+  `${t.kind === 'idea' ? i18nT('brainLib.discuss.kindIdea') : t.kind === 'reflection' ? i18nT('brainLib.discuss.kindReflection') : t.quote.what === 'errore' ? i18nT('brainLib.discuss.kindError') : i18nT('brainLib.discuss.kindNumber')} · ${short(titleOf(t), 44)}`;
 
 /** First message of the dedicated work chat ("Apri una chat"): read the topic, propose before touching anything. */
 export function chatPrompt(t: Topic, line: number | null): string {
-  if (t.kind === 'procedure') {
-    return [
-      `Let's follow the procedure «${t.procedure.title}» (${where(t, line)} in the brain folder).`,
-      `Read it completely${line ? ` from line ${line}` : ''}, then tell me in 5 lines what you need from me (data, environment, go-ahead) before the first step.`,
-      'Propose any production command or query to me and I will run it; never write secrets in the chat.',
-    ].join('\n');
-  }
   if (t.kind === 'quote') {
     const q = t.quote;
     return [
@@ -153,7 +138,7 @@ export function chatPrompt(t: Topic, line: number | null): string {
 }
 
 // ── the "discussa" record ───────────────────────────────────────────────────────────────────────────────────────────
-/** One discussion: with the Regia (the draft was sent) or in a dedicated work chat. */
+/** One discussion: with the Orchestrator (the draft was sent) or in a dedicated work chat. */
 export interface Discussed { via: 'regia' | 'chat'; chatId: string; chatTitle: string; at: number }
 export type DiscussedMap = Record<string, Discussed[]>;
 export interface KV { getItem(k: string): string | null; setItem(k: string, v: string): void }

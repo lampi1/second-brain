@@ -20,7 +20,7 @@ test('a message from another chat reaches a working chat at once, its sender sho
   const chat: ChatSummary = await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'claude', cwd: dir, prompt: 'slow', title: 'Pers · App' }), tmp('sb-e2e-cwd-'));
   await expect(page.getByTestId(`chat-state-${chat.id}`)).toHaveAttribute('data-state', 'running', { timeout: 15000 });
 
-  // what `inbox.mjs send --to "Pers · App" --from "Esegui nella Regia"` writes
+  // what `inbox.mjs send --to "Pers · App" --from "Esegui nell'Orchestrator"` writes
   const msg = { id: '20261012120000000-abc123', thread: '20261012120000000-abc123', hop: 1, replyTo: null, from: 'Esegui nella Regia', to: 'Pers · App', at: new Date().toISOString(), text: 'Il build di oggi è pronto: prova la posta.' };
   fs.writeFileSync(path.join(box, `${msg.id}.json`), JSON.stringify(msg));
 

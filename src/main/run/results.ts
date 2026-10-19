@@ -1,10 +1,10 @@
 // "Esito alla chat": when a run of Esegui ends, the chat that proposed the block gets a message with the command, the
 // exit code and the output's tail, so it knows by itself how it went. Why: the user had to write "fatto" or paste the
-// output, and the Regia once proposed again a command that had already worked (the user, 2026-10-12: "vorrei che ti
+// output, and the Orchestrator once proposed again a command that had already worked (the user, 2026-10-12: "vorrei che ti
 // accorgessi da sola quando eseguo un comando dal play senza che ti scriva fatto o copiarti la risposta").
 // Rules: the message is labelled as the app's (RUN_RESULT_LABEL: never worth as the user's ok); a chat that works,
 // waits for the user or writes a hand-off gets it as soon as it is free (idle or closed: a message resumes it); runs
-// that end close together go in one message; Claude and Cursor chats alike, the Regia too. Off with the setting
+// that end close together go in one message; Claude and Cursor chats alike, the Orchestrator too. Off with the setting
 // runResults. It watches the events main sends to the page (run:updated, chat:updated, chat:removed), like asks.ts.
 // Used by wiring.ts / demo-wiring.ts (attachRunResults); pinned by test/unit/run-results.test.ts.
 import type { ChatSummary, EventMap, RunInfo } from '../../shared/contract';

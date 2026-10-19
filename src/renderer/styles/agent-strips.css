@@ -36,7 +36,6 @@
 .regia-resize:focus-visible { outline:2px solid var(--focus); }
 .regia-tile .tile-head { padding:8px 10px; }
 .regia-tile .th-row { flex-wrap:wrap; gap:6px; }
-.regia-tile .regia-feed { max-height:120px; }
 .agent-overview { padding:6px 10px; border-bottom:1px solid var(--line,#6664); font-size:12px; display:grid; gap:4px; }
 .agent-overview p { margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .agent-overview .agent-task { white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
@@ -114,3 +113,6 @@
 .th-estimate.over { border-color:var(--amber-line); color:var(--amber); }
 .th-estimate.over .th-estimate-left { color:var(--amber); }
 .strip-facts .run-chips { flex:none; flex-wrap:nowrap; }
+/* The app agent a sub-agent runs as (ChildStrips.tsx, #69): its face and name, or a quiet "nessun agente". */
+.child-strip-agent { flex:none; display:inline-flex; align-items:center; gap:5px; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; color:var(--text); }
+.child-strip-agent.is-none { font-weight:500; font-style:italic; color:var(--text-3); }

@@ -100,7 +100,7 @@ export function Popover({ anchor, open, onClose, children, align = 'end', testid
         }
         return;
       }
-      // a slider in the menu (the Regia's opacity) keeps its own arrow keys
+      // a slider in the menu (the Orchestrator's opacity) keeps its own arrow keys
       if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !(document.activeElement instanceof HTMLInputElement && document.activeElement.type === 'range')) {
         const items = [...(ref.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]:not([disabled])') ?? [])];
         if (!items.length) return;

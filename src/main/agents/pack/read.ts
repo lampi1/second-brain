@@ -1,9 +1,11 @@
 // Inspect foreign packs without executing content or writing to the brain. Apply flows consume only reviewed files.
+// A pack's rules (rules/<name>.md) and TOOLS.md are kept as reviewed text (ADR 0077); TOOLS.md never grants anything.
 import fs from 'node:fs';
 import path from 'node:path';
 import { checkedPack, packName, type AgentPackManifest } from '../../../shared/agent-pack';
 import { checkMd, field, parseMd, setFields } from '../../../shared/skillmd';
 import { hashFiles, skillFiles, validateSkill } from './emit';
+import { RULE_FILE, TOOLS_FILE } from './rules';
 import { emitAgentToml, readAgentToml } from './toml';
 import { checkPackPath, readZip, ZIP_LIMITS, type PackFiles } from './zip';
 
@@ -13,6 +15,8 @@ export interface PackInspection {
   files: PackFiles;
   agents: { name: string; description: string; instructions: string; file: string }[];
   skills: string[];
+  /** the brain rules it carries (rules/<name>.md) */
+  rules: string[];
   scripts: { file: string; text: string; kind: 'file' | 'dynamic' | 'hooks' }[];
   ignored: string[];
   warnings: string[];
@@ -76,7 +80,7 @@ export function inspectPack(input: PackFiles): PackInspection {
   else if (input.has('SKILL.md')) kind = 'skill';
   else if (input.size === 1 && /\.(md|toml)$/.test([...input.keys()][0]!)) kind = 'agent';
   else throw new Error('Unsupported agent pack layout');
-  const result: PackInspection = { kind, ...(manifest ? { manifest } : {}), files: new Map(), agents: [], skills: [], scripts: [], ignored: [], warnings: [] };
+  const result: PackInspection = { kind, ...(manifest ? { manifest } : {}), files: new Map(), agents: [], skills: [], rules: [], scripts: [], ignored: [], warnings: [] };
   let plainSkill: string | undefined;
   if (kind === 'skill') { plainSkill = field(parseMd(textOf(input.get('SKILL.md')!)), 'name'); if (!packName(plainSkill)) throw new Error('Invalid skill name'); }
   for (const [original, data] of input) {
@@ -97,6 +101,12 @@ export function inspectPack(input: PackFiles): PackInspection {
         if (/!`[^`]*`/.test(content)) result.scripts.push({ file: name, text: content, kind: 'dynamic' });
       }
       if (script(name)) result.scripts.push({ file: name, text: content, kind: 'file' });
+      result.files.set(name, Buffer.from(data)); continue;
+    }
+    if (!plainSkill && (RULE_FILE.test(name) || name === TOOLS_FILE)) {
+      textOf(data);
+      if (data.length > 256 * 1024) throw new Error('Pack file too large');
+      if (name !== TOOLS_FILE) result.rules.push(name);
       result.files.set(name, Buffer.from(data)); continue;
     }
     if (/^(?:(?:\.claude|\.cursor)\/)?agents\/[^/]+\.md$/.test(name) || kind === 'agent' && name.endsWith('.md')) {

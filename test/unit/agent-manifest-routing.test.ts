@@ -1,4 +1,4 @@
-// Catalog delegation keeps engine policy and profile identity; a fake session proves Regia context reaches the engine.
+// Catalog delegation keeps engine policy and profile identity; a fake session proves Orchestrator context reaches the engine.
 import { afterEach, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -42,15 +42,16 @@ it('selects the profile without interpreting declared access as permission and r
   await expect(tool.run({ ...args, harness: 'claude' })).rejects.toThrow(/non corrisponde/);
   await expect(tool.run({ ...args, agentId: 'missing' })).rejects.toThrow(/non trovato/);
   table = { version: 1, appliedAt: null, by: null, exploration: 0, costWeight: 7, routes: [{ kind: '*', harness: 'codex', model: 'inherited-model', effort: 'high', why: 'Table choice', since: '', evidence: '' }] };
-  await expect(tool.run(args)).rejects.toThrow(/override senza motivo/);
-  await tool.run({ ...args, reason: 'Use the chosen profile defaults' });
-  expect(create.mock.calls[1]?.[0]).not.toHaveProperty('model');
-  expect(create.mock.calls[1]?.[0]).not.toHaveProperty('effort');
-  expect(create.mock.calls[1]?.[0].route).toMatchObject({ source: 'override', reason: 'Use the chosen profile defaults' });
+  // Agent first (ADR 0078): a different table row never refuses an agent's chat; a profile without a model takes the
+  // row's model (and its effort, the profile naming none) as a default, recorded as the agent's route.
+  await tool.run(args);
+  expect(create.mock.calls[1]?.[0]).toMatchObject({ agentId: profile.id, harness: 'codex', model: 'inherited-model', effort: 'high' });
+  expect(create.mock.calls[1]?.[0].route).toMatchObject({ source: 'agent', agent: { id: profile.id, chosenBy: 'orchestrator', modelFrom: 'table' } });
+  expect(create.mock.calls[1]?.[0].route?.reason).toMatch(/modello dalla tabella/);
   const max = service.save({ ...profile, effort: 'max' });
-  await expect(tool.run({ ...args, agentId: max.id })).rejects.toThrow(/max solo quando/);
-  await tool.run({ ...args, agentId: max.id, reason: 'User requested max for this task' });
-  expect(create.mock.calls[2]?.[0]).toMatchObject({ effort: 'max', route: { reason: 'User requested max for this task' } });
+  // the profile's own effort is the user's choice: no reason is asked
+  await tool.run({ ...args, agentId: max.id });
+  expect(create.mock.calls[2]?.[0]).toMatchObject({ effort: 'max', route: { source: 'agent' } });
   // The table's API preference cannot replace an explicitly selected profile's engine.
   table.routes[0] = { ...table.routes[0]!, kind: 'writing', model: 'synthetic-model', effort: null, onApi: true };
   const explicit = service.save({ ...profile, model: 'synthetic-model' });

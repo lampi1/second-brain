@@ -11,7 +11,7 @@ export function workspaceTiles(order: readonly string[], chats: Readonly<Record<
   const tiles: TileRef[] = [];
   const placed = new Set<string>();
   const regiaIds = new Set(order.filter(id => chats[id]?.isRegia));
-  // the Regia's own tabs come first, so they sit right next to the Regia column
+  // the Orchestrator's own tabs come first, so they sit right next to the Orchestrator column
   for (const t of tabs) if (t.ownerChatId && regiaIds.has(t.ownerChatId)) { tiles.push({ kind: 'browser', id: t.id }); placed.add(t.id); }
   for (const id of order) {
     const c = chats[id];

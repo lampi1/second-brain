@@ -1,9 +1,9 @@
 // The ⋯ menu of a chat tile, the everyday actions first (2026-10-15): rename, copy link, focus mode; then model, effort
 // and permissions (engines that take them); "Passaggio di consegne" with the context size, the note and "Riprendi in chat
-// nuova" (not on the Regia: it renews instead); close last. The same menu serves a Regia, which adds, after the
+// nuova" (not on the Orchestrator: it renews instead); close last. The same menu serves an Orchestrator, which adds, after the
 // everyday actions, "Pulisci" (a confirm, then the same engine started empty), "Ricomincia da capo" and
-// "Cambia motore" (to the first other engine): both open the "Nuova Regia" confirm (RegiaRenewDialog); the old Regia goes on as
-// a normal chat, history kept; the overlay's opacity (setting regiaOpacity, ADR 0021). "Chiudi la Regia" only while another Regia stays.
+// "Cambia motore" (to the first other engine): both open the "Nuovo Orchestrator" confirm (RegiaRenewDialog); the old Orchestrator goes on as
+// a normal chat, history kept; the overlay's opacity (setting regiaOpacity, ADR 0021). "Chiudi l'Orchestrator" only while another Orchestrator stays.
 // TitleInput is the inline rename field the menu's "Rinomina…" opens. Used by ChatTile and RegiaTile.
 import type { RefObject } from 'react';
 import type { AppInfo, ChatSummary, Harness, Settings } from '@shared/contract';
@@ -20,8 +20,8 @@ import { openNextLabel, resumeLabel, useContinuedBy } from './ContextBar';
 import { MenuItem, MenuLabel, MenuSep, Popover } from './ui';
 import { t } from '../i18n';
 
-/** Why the Regia cannot move to an engine now (null = it can): switched off in the settings, the Regie may not use it
- *  (a Regia is an agent itself), or its CLI missing. */
+/** Why the Orchestrator cannot move to an engine now (null = it can): switched off in the settings, the Orchestrators may not use it
+ *  (an Orchestrator is an agent itself), or its CLI missing. */
 function engineBlock(h: Harness, s: Pick<Settings, 'engineOn' | 'engines'> | undefined, cli: AppInfo['cli'] | undefined): string | null {
   if (s && s.engineOn[h] !== true) return t('chat.menu.engineBlockOff', { engine: engineName(h) });
   if (s && s.engines[h] !== true) return t('chat.menu.engineBlockRegiaOff', { engine: engineName(h) });
@@ -59,17 +59,13 @@ export function ChatMenu({ chat, anchor, open, onClose, onRename, regia }: {
         <>
           <MenuLabel>{t('chat.menu.regiaLabel')}</MenuLabel>
           <MenuItem onSelect={pick(() => askClearRegia(id))} testid={`chat-clear-${id}`}>{t('chat.menu.clear')}</MenuItem>
-          {!chat.appRegia && (
+          <MenuItem onSelect={pick(() => askRenewRegia(chat.harness))} shortcut="Ctrl+Shift+R" testid={`chat-renew-${id}`}>{t('chat.menu.renew')}</MenuItem>
+          {to && (
             <>
-              <MenuItem onSelect={pick(() => askRenewRegia(chat.harness))} shortcut="Ctrl+Shift+R" testid={`chat-renew-${id}`}>{t('chat.menu.renew')}</MenuItem>
-              {to && (
-                <>
-                  <MenuItem onSelect={pick(() => askRenewRegia(to))} disabled={!!block} testid={`chat-engine-${id}`}>
-                    {t('chat.menu.switchEngine', { engine: engineName(to) })}
-                  </MenuItem>
-                  {block && <p className="menu-note" data-testid={`chat-engine-block-${id}`}>{block}</p>}
-                </>
-              )}
+              <MenuItem onSelect={pick(() => askRenewRegia(to))} disabled={!!block} testid={`chat-engine-${id}`}>
+                {t('chat.menu.switchEngine', { engine: engineName(to) })}
+              </MenuItem>
+              {block && <p className="menu-note" data-testid={`chat-engine-block-${id}`}>{block}</p>}
             </>
           )}
           <label className="menu-range" data-testid="regia-opacity">
@@ -81,6 +77,8 @@ export function ChatMenu({ chat, anchor, open, onClose, onRename, regia }: {
         </>
       )}
       <MenuLabel>{t('chat.menu.modelLabel')}</MenuLabel>
+      {/* an agent's lasting model and effort live in its profile (ADR 0078): the menu only changes this chat */}
+      {chat.agent?.source === 'catalog' && !regia && <p className="menu-note" data-testid={`chat-profile-note-${id}`}>{t('chat.menu.profileNote', { name: chat.agent.name })}</p>}
       {modelOptions(chat.harness, seen, chat.model ?? '').map(m => (
         <MenuItem key={m.id || 'default'} checked={(chat.model ?? '') === m.id} onSelect={pick(() => void setChat(id, { model: m.id }))} testid={`chat-model-${id}-${m.id || 'default'}`}>{m.label}</MenuItem>
       ))}
@@ -105,7 +103,7 @@ export function ChatMenu({ chat, anchor, open, onClose, onRename, regia }: {
       <MenuSep />
       <MenuLabel>{t('chat.menu.handoffLabel', { tokens: chat.contextTokens ? t('chat.menu.handoffTokens', { amount: `${chat.contextEstimated ? '~' : ''}${tokensShort(chat.contextTokens)}` }) : undefined })}</MenuLabel>
       <MenuItem onSelect={pick(() => openHandoff(id))} testid={`chat-handoff-${id}`}>{t('chat.menu.handoffRead')}</MenuItem>
-      {!chat.isRegia && !chat.appRegia && (
+      {!chat.isRegia && (
         <MenuItem onSelect={pick(() => void resumeChat(id))} disabled={!next && (isBusy(chat) || chat.pending > 0 || !!chat.handoffBusy)} testid={`chat-resume-${id}`}>
           {next ? openNextLabel() : resumeLabel()}
         </MenuItem>

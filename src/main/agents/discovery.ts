@@ -1,4 +1,4 @@
-// Read-only, paginated catalog discovery for Regie and work agents. Excludes private instructions and avatars.
+// Read-only, paginated catalog discovery for Orchestrators and work agents. Excludes private instructions and avatars.
 import type { AgentCatalog, AgentProfile } from '../../shared/agents';
 import type { McpTool } from '../mcp/server';
 import type { AgentClassification } from '../../shared/agent-classifier';

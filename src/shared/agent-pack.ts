@@ -8,11 +8,17 @@ export interface PackFinding { file: string; line: number | null; rule: string }
 export interface PackExportPlan { token: string; items: { id: string; label: string; included: boolean; required: boolean; ownership?: 'owned' | 'shared' }[]; findings: PackFinding[]; warnings: string[] }
 export interface PackImportReview {
   token: string; kind: string; agents: { name: string; description: string }[]; skills: string[];
+  /** the brain rules the pack carries (rules/<name>.md), written to the brain when absent (ADR 0077) */
+  rules: string[];
   scripts: { file: string; text: string; kind: 'file' | 'dynamic' | 'hooks' }[]; ignored: string[]; findings: PackFinding[]; clamps: string[];
   collision: { kind: 'none' | 'update' | 'present' | 'rename'; agentId?: string }; warnings: string[];
 }
-export interface LearnedRuleProposal { id: string; agentId: string; rule: string; evidence: string; createdAt: number; status: 'pending' | 'approved' | 'discarded' }
-export interface LearnedRules { text: string; proposals: LearnedRuleProposal[] }
+/** Where a lesson goes (ADR 0077): the agent's role, a skill, or the brain's rules. */
+export type LessonTarget = 'role' | 'skill' | 'rule';
+/** A lesson from the user's corrections. approved = applied by the maintenance job (note says where), never by a click.
+ *  fromChat = proposed by a work chat on its own endpoint: it waits (the job skips it) until the authenticated
+ *  Orchestrator, with the user, accepts it (agent_lessons_waiting), so a work chat never writes instructions on its own. */
+export interface LearnedRuleProposal { id: string; agentId: string; rule: string; evidence: string; createdAt: number; status: 'pending' | 'approved' | 'discarded'; target?: LessonTarget; skill?: string; note?: string; fromChat?: string }
 export interface AgentKnowhow { folder: string; linked: string[]; hash: string }
 export interface AgentPackIdentity { id: string; revision: number; importedFrom?: string }
 export interface PackStats { runs: number; successHuman: number; failHuman: number; versions: number; monthsUsed: number }

@@ -58,6 +58,6 @@ export async function startUpdateCheckpoint():Promise<void>{
   }catch(error){
     const reason=error instanceof Error?error.message.slice(0,300):'La copia non è leggibile in questa versione.';
     updateRecovery.set({problem:reason,copy:retained});
-    toast('Ripristino sospeso. Apri Migliora l’app per rivedere il motivo e le bozze conservate.','err');
+    toast('Ripristino sospeso. Apri Impostazioni → Aggiornamenti per rivedere il motivo e le bozze conservate.','err');
   }
 }

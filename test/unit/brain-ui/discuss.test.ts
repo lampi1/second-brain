@@ -1,5 +1,5 @@
 // Unit tests of the "Discutine" / "Apri una chat" texts and records (src/renderer/brain/lib/discuss.ts): the idea's
-// line in ideas.md, the Regia draft (file + line, fields, opening question by state, the state rule), the work chat's
+// line in ideas.md, the Orchestrator draft (file + line, fields, opening question by state, the state rule), the work chat's
 // title and first message, and the "discussa" store (bad storage, dedup, caps).
 import { describe, expect, it } from 'vitest';
 import type { Idea, Reflection } from '../../../src/renderer/brain/types';
@@ -124,19 +124,3 @@ describe('discussed records', () => {
   });
 });
 
-describe('procedure topic', () => {
-  const P: Topic = { kind: 'procedure', procedure: { title: 'Cercare un cliente con lookup', file: 'runbook/database.md', line: 3, area: 'Runbook', changedAt: '2026-10-07T09:00:00.000Z' } };
-  it('the Regia draft quotes file, line and area and keeps the file unchanged', () => {
-    const t = discussText(P, lineOf('', P));
-    expect(t.split('\n')[0]).toBe('Let\'s talk about the procedure «Cercare un cliente con lookup» (runbook/database.md, line 3, area Runbook).');
-    expect(t).toContain(openingQuestion(P));
-    expect(t).toContain('Do not change the file');
-  });
-  it('the work chat follows it and leaves production commands to the user', () => {
-    expect(chatTitle(P)).toBe('Procedura · Cercare un cliente con lookup');
-    const m = chatPrompt(P, 3);
-    expect(m).toContain('from line 3');
-    expect(m).toContain('I will run it');
-  });
-  it('its key is the file and the title', () => expect(topicKey(P)).not.toBe(topicKey({ ...P, procedure: { ...P.procedure, file: 'runbook/altro.md' } } as Topic)));
-});

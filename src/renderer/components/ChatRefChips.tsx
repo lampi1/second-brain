@@ -1,4 +1,4 @@
-// "Apri" chips for the chats a Regia opened, wrote to or named (lib/chatrefs.ts, ADR 0034): under an app_create_chat
+// "Apri" chips for the chats an Orchestrator opened, wrote to or named (lib/chatrefs.ts, ADR 0034): under an app_create_chat
 // row "Chat aperta «titolo» · Apri", under an app_send_to_chat row "Scritto a «titolo» · Apri", under an assistant
 // message one chip per chat it names. A click brings that chat on screen from wherever the user is (actions.ts
 // openChatRef: page, map, focus mode; a closed chat is reopened first); nothing moves by itself. Used by ChatItems.tsx.
@@ -25,7 +25,7 @@ const ChatRefChip = memo(function ChatRefChip({ chatId, title }: { chatId: strin
   );
 });
 
-/** A tool row's line: what the Regia did with which chat. */
+/** A tool row's line: what the Orchestrator did with which chat. */
 export const ToolChatRef = memo(function ToolChatRef({ chatId, title, how }: { chatId: string; title?: string; how: 'created' | 'sent' }) {
   return (
     <div className={`chatref chatref-${how}`} data-testid={`chatref-${how}`}>

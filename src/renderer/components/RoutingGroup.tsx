@@ -1,10 +1,10 @@
 // Impostazioni → «Instradamento modelli» (ADR 0032): the table that decides harness, model and effort of the chats the
-// Regia opens, by kind of task and area (the user, 2026-10-13: "la Regia sceglie modello e sforzo per tipo di lavoro,
+// Orchestrator opens, by kind of task and area (the user, 2026-10-13: "l'Orchestrator sceglie modello e sforzo per tipo di lavoro,
 // configurabile"). Read with 'routing:get', saved with 'routing:save': main checks the hard rules (Claude models only on
 // Claude, app chats never on Cursor, max effort only on request, a "perché" per row) and writes a new version of the
 // table into the brain, with an audit line; old versions stay. The Esplorazione field (0-50%) is saved the same way:
 // the share of chats that try a little-sampled model on their own engine, so the table has data to improve on (the
-// user, 2026-10-14). The Regia writes the same table by itself (app_routing_save, with its reason and data): the
+// user, 2026-10-14). The Orchestrator writes the same table by itself (app_routing_save, with its reason and data): the
 // Cronologia lists every change, who made it and why, and «Ripristina» brings an older version back as a new one
 // ('routing:restore'). The user has the same powers here as the agent, plus two of their own (2026-10-14): the switch
 // «L'AI può cambiarla» per row (off = no agent changes or removes that row, and exploration leaves its chats alone) and

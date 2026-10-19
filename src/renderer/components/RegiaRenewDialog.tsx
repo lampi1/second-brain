@@ -1,7 +1,7 @@
-// "Nuova Regia" confirm (Ctrl+Shift+R, the palette, the Regia's ⋯ menu): pick the engine among the registry's (the
-// same one = "Ricomincia da capo", another = "Cambia motore"), choose whether the new Regia starts from a summary of
+// "Nuovo Orchestrator" confirm (Ctrl+Shift+R, the palette, the Orchestrator's ⋯ menu): pick the engine among the registry's (the
+// same one = "Ricomincia da capo", another = "Cambia motore"), choose whether the new Orchestrator starts from a summary of
 // the old one, confirm.
-// The old Regia stays among the chats, closed, with its history (renewRegia in actions.ts does the work). Why one
+// The old Orchestrator stays among the chats, closed, with its history (renewRegia in actions.ts does the work). Why one
 // dialog for both: same mechanism, one place to learn. Used by App.tsx (modal 'regiaRenew').
 import { useState } from 'react';
 import type { Harness } from '@shared/contract';
@@ -22,7 +22,7 @@ export function RegiaRenewDialog() {
   const [busy, setBusy] = useState(false);
   const engines = useEngines();
   const blockOf = useEngineBlocks();
-  // a Cursor Regia restored after a restart has no exchanges until it is reopened: the summary would carry only now.md
+  // a Cursor Orchestrator restored after a restart has no exchanges until it is reopened: the summary would carry only now.md
   const loaded = useApp(s => !!spec && (s.items[spec.chatId] ?? []).some(i => i.kind === 'user' || i.kind === 'assistant'));
   if (!spec || !chat) return null;
   const same = to === chat.harness;

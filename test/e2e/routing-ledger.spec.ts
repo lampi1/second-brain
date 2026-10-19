@@ -1,4 +1,4 @@
-// The routing ledger end to end (ADR 0032): a chat a Regia opens with app_create_chat naming no model is routed by the
+// The routing ledger end to end (ADR 0032): a chat an Orchestrator opens with app_create_chat naming no model is routed by the
 // brain's table and, at its first turn end, writes its prediction and then its measured actuals to the shared ledger
 // (<brain>/ops/state/improve/outcomes.jsonl) that the improvement loop learns from (the user, 2026-10-14: "inizi a
 // raccogliere dati dalle sue prime scelte"). The real app with the fake Claude CLI and a fixture brain (registry +
@@ -47,8 +47,10 @@ test('a chat opened without a model writes its routing prediction, then its meas
   try {
     const agent = new McpClient(`http://127.0.0.1:${port}/mcp/app`);
     await agent.init();
+    // agent first (ADR 0078): no agentId, so the classifier picks the agent imported from the «Prova» row (its profile
+    // carries the row's model and effort); its route still writes the ledger like a table route
     const made = JSON.parse(await agent.ok('app_create_chat', { title: 'Prova · Leggi i log', prompt: 'ciao' })) as { chatId: string; model: string; effort: string; route: { source: string; tableVersion: number } };
-    expect(made).toMatchObject({ model: 'claude-haiku-5-5', effort: 'low', route: { source: 'table', tableVersion: 1 } });
+    expect(made).toMatchObject({ model: 'claude-haiku-5-5', effort: 'low', route: { source: 'agent', agent: { chosenBy: 'classifier' } } });
 
     const ledger = path.join(brain, 'ops', 'state', 'improve', 'outcomes.jsonl');
     const lines = async (): Promise<Record<string, unknown>[]> => {
@@ -59,7 +61,8 @@ test('a chat opened without a model writes its routing prediction, then its meas
     expect((await page.evaluate(() => window.sb.invoke('chat:list', undefined))).find(c => c.id === made.chatId)?.state).toBe('idle');
     const [pred, actual] = await lines();
     expect(pred).toMatchObject({ domain: 'routing', item: { harness: 'claude', model: 'claude-haiku-5-5', effort: 'low', area: 'Prova' },
-      predicted: { policy: 'routing', version: 1, value: { model: 'claude-haiku-5-5', effort: 'low', source: 'table', reason: 'prova: il più economico' } } });
+      predicted: { policy: 'routing', version: null, value: { model: 'claude-haiku-5-5', effort: 'low', source: 'agent' } } });
+    expect(String((pred!.predicted as { value: { reason: string } }).value.reason)).toContain('scelto dal classificatore');
     expect(actual).toMatchObject({ domain: 'routing', outcome: { known: false, source: 'measured' }, actual: { turns: 1, handoffs: 0 } });
     expect(typeof (actual!.actual as { usd: unknown }).usd).toBe('number');
   } finally {

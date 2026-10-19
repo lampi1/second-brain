@@ -1,6 +1,6 @@
-// The unified Orchestrator (SPEC point 16): one coordinator for work and app improvements. Pinned here: the migration of
-// persisted Regie (choice, idempotency, histories and children kept, mail aliases), the singleton in ChatManager and in
-// OrchestratorService (concurrent ensure), the tool scope only for the authenticated canonical caller, app-space news
+// The unified Orchestrator (SPEC point 16): one coordinator for work and for the app's own code. Pinned here: the migration of
+// persisted Orchestrators (choice, idempotency, histories and children kept, mail aliases), the singleton in ChatManager and in
+// OrchestratorService (concurrent ensure), the tool scope only for the authenticated canonical caller, news of every chat (the app's code too)
 // and mail reaching it, and the updater's apply staying hard off.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
@@ -57,7 +57,7 @@ describe('migrateOrchestrator', () => {
       expect(by[id]).not.toHaveProperty('orchestrator');
       expect(by[id]).not.toHaveProperty('regiaName');
     }
-    // history kept: the demoted app Regia keeps its session and title; app workers keep their scope
+    // history kept: the demoted app Orchestrator keeps its session and title; app workers keep their scope
     expect(by.appR).toMatchObject({ sessionId: '11111111-1111-4111-8111-111111111111', title: "Regia dell'app" });
     expect(by.appWorker).toMatchObject({ cwd: 'C:/repo', regiaOf: 'w1' });
     expect(by.child2!.regiaOf).toBe('w1');
@@ -119,7 +119,7 @@ describe('ChatManager with the unified Orchestrator', () => {
 
   it('is a singleton: a second request returns it, an agent cannot create it, concurrent creations share one', async () => {
     const f = fixture(), cwd = tmp();
-    const [a, b] = await Promise.all([f.m.create({ harness: 'anthropic', cwd, regia: true }), f.m.create({ harness: 'anthropic', cwd, space: 'app', appRegia: true })]);
+    const [a, b] = await Promise.all([f.m.create({ harness: 'anthropic', cwd, regia: true }), f.m.create({ harness: 'anthropic', cwd, regia: true })]);
     expect(b.id).toBe(a.id);
     expect(a).toMatchObject({ orchestrator: true, isRegia: true, title: 'Orchestrator' });
     expect(a).not.toHaveProperty('space');
@@ -224,36 +224,30 @@ describe('app control scope', () => {
     const chats = { list: () => list, create: async (req: Record<string, unknown>) => { made.push(req); return summary({ id: `n${made.length}`, title: String(req.title) }); } } as unknown as ChatService;
     const regiaChats = { harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '', cursorReasoning: 'medium', cursorFast: false };
     const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: true }, regiaChats }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
-    const improve = { repo: () => 'C:/repo', state: async () => ({}) as never, inRepo: async (d: string) => d.replace(/\\/g, '/').startsWith('C:/repo') };
-    const all = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', unified, improve }, caller);
+    const code = { repo: () => 'C:/repo', inRepo: async (d: string) => d.replace(/\\/g, '/').startsWith('C:/repo') };
+    const all = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', unified, code }, caller);
     return { made, create: all.find(t => t.name === 'app_create_chat')!, all };
   }
   const orch = summary({ id: 'o', isRegia: true, orchestrator: true, title: 'Orchestrator' });
   const work = summary({ id: 'w', regiaOf: 'o' });
 
-  it('the authenticated Orchestrator creates work and app chats; app chats keep the source-folder gate', async () => {
+  it('the authenticated Orchestrator creates work chats in the brain folder or the folder it names, never a Regia', async () => {
     const t = tools([orch, work], true, 'o');
     expect(await t.create.run({ title: 'A', prompt: 'p' })).toMatchObject({ cwd: 'C:/brain' });
-    expect(await t.create.run({ title: 'B', prompt: 'p', space: 'app' })).toMatchObject({ cwd: 'C:/repo' });
+    expect(await t.create.run({ title: 'B', prompt: 'p', cwd: 'C:/repo' })).toMatchObject({ cwd: 'C:/repo' });
     expect(t.made[1]).toMatchObject({ regiaOf: 'o', regia: false });
-    expect(t.made[0]).not.toHaveProperty('space');
-    expect(t.made[1]).not.toHaveProperty('space');
-    await expect(Promise.resolve(t.create.run({ title: 'C', prompt: 'p', space: 'app', cwd: 'C:/elsewhere' }))).rejects.toThrow(/cartella non ammessa/);
-    await expect(Promise.resolve(t.create.run({ title: 'D', prompt: 'p', space: 'root' }))).rejects.toThrow(/Invalid chat space/);
     await expect(Promise.resolve(t.create.run({ title: 'E', prompt: 'p', regia: true }))).rejects.toThrow(/Orchestrator/);
     expect(t.made).toHaveLength(2);
   });
 
-  it('derives app-code routing from cwd even with a legacy work flag', async () => {
+  it('derives app-code routing from cwd (ADR 0079: no app space any more)', async () => {
     const t = tools([orch, work], true, 'o');
-    for (const space of [undefined, 'work']) {
-      await t.create.run({ title: 'Neutral title', prompt: 'p', cwd: 'C:/repo', ...(space ? { space } : {}) });
-    }
-    expect(t.made).toHaveLength(2);
-    for (const created of t.made) {
-      expect(created).toMatchObject({ cwd: 'C:/repo', route: { area: 'App' } });
-      expect(created).not.toHaveProperty('space');
-    }
+    await t.create.run({ title: 'Neutral title', prompt: 'p', cwd: 'C:/repo' });
+    await t.create.run({ title: 'Other', prompt: 'p', cwd: 'C:/elsewhere' });
+    expect(t.made[0]).toMatchObject({ cwd: 'C:/repo', route: { area: 'App' } });
+    expect(t.made[1]).toMatchObject({ cwd: 'C:/elsewhere' });
+    expect((t.made[1] as { route?: { area?: string } }).route?.area).not.toBe('App');
+    for (const created of t.made) expect(created).not.toHaveProperty('space');
     expect(JSON.stringify(t.create.inputSchema)).not.toContain('"space"');
   });
 
@@ -262,7 +256,6 @@ describe('app control scope', () => {
     expect(await t.create.run({ title: 'B', prompt: 'p', cwd: 'C:/repo' })).toMatchObject({ cwd: 'C:/repo' });
     expect(t.made).toHaveLength(1);
     expect(t.made[0]).not.toHaveProperty('space');
-    expect(t.all.some(x => x.name === 'app_improve_state')).toBe(false);
   });
 
   it('a new chat may not take a former Regia\'s title (the Orchestrator\'s mail box)', async () => {
@@ -278,15 +271,15 @@ describe('app control scope', () => {
 });
 
 describe('news and mail reach the Orchestrator', () => {
-  it('app-space turns wake the Orchestrator, not a legacy work Regia', async () => {
+  it('a work chat\'s finished turn wakes its Regia, Orchestrator or not', async () => {
     vi.useFakeTimers();
     try {
       for (const orchestrator of [true, false]) {
         const sent: string[] = [];
         const regia = summary({ id: 'r', isRegia: true, title: 'Orchestrator', ...(orchestrator ? { orchestrator: true as const } : {}) });
         const w = new RegiaWake({ send: async (_id, text) => { sent.push(text); }, enabled: () => true, list: () => [regia], groupMs: 10, perChatMs: 0, now: () => Date.now() });
-        w.observe('chat:updated', summary({ id: 'fix', space: 'app', state: 'running' }));
-        w.observe('chat:updated', summary({ id: 'fix', space: 'app', state: 'idle', lastText: 'PR pronta' }));
+        w.observe('chat:updated', summary({ id: 'fix', regiaOf: 'r', state: 'running' }));
+        w.observe('chat:updated', summary({ id: 'fix', regiaOf: 'r', state: 'idle', lastText: 'PR pronta' }));
         await vi.advanceTimersByTimeAsync(20);
         expect(sent.some(t => t.includes('«fix»'))).toBe(true);
         w.stop();

@@ -1,6 +1,6 @@
 // Auto-close of finished work chats (the user, 2026-10-11: "vorrei che le chat si chiudessero da sole liberando spazio
 // nella dashboard quando non lavorano e hanno finito. poi le riapri te in caso"). Pure rule: a chat closes when it is a
-// work chat (never the Regia), idle after a clean result (not one the user interrupted) or with its session ended (a
+// work chat (never the Orchestrator), idle after a clean result (not one the user interrupted) or with its session ended (a
 // chat restored at start-up carries no result: it counts from its last update), with no open question/permission/command, nothing queued (nor waiting in the CPU queue), no
 // background task or "Esegui" run still running, no final answer that says it waits for its work ("Aspetto la QA…":
 // the engine's count missed a resumed agent on 2026-10-16, waitsOnWork, shared/waiting.ts) (and the delay counts from the end of its last background task: the CLI
@@ -23,8 +23,7 @@ export interface Hold {
 
 /** When the chat may close (epoch ms), or null when it is not a candidate at all. */
 export function closeAt(c: ChatSummary, h: Hold, delayMs: number): number | null {
-  // the chats of "Migliora l'app" stay open: the section lists only open ones (UI review 2026-10-12)
-  if (!(delayMs > 0) || c.isRegia || c.appRegia || c.closedAt) return null;
+  if (!(delayMs > 0) || c.isRegia || c.closedAt) return null;
   if (c.pending > 0 || (c.background ?? 0) > 0 || c.waitsOnWork || c.lastError || c.queued) return null;
   const r = c.lastResult;
   if (r && (r.isError || r.interrupted)) return null; // stopped by the user: he is on it

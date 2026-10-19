@@ -49,7 +49,10 @@ import { markRunOutcome } from './run/outcome';
 import { canonicalRepoRoot } from './brain/adapters/codex-policy';
 import { classifierRequest, classifyByWords } from './agents/classifier';
 import { ClassifierTuning } from './agents/classifier-calibration';
+import type { CloudService } from './cloud/service';
 
+/** The cloud agents' service (ADR 0080), or a clear error where a wiring has none. */
+const cloudOf = (w: { cloud?: CloudService }): CloudService => { if (!w.cloud) throw new Error('Agenti cloud non disponibili.'); return w.cloud; };
 const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 if (process.platform === 'win32') app.setAppUserModelId(APP_ID); // Windows toasts and taskbar grouping only
 // userData (ADR 0007): a stable release (started by the launcher, SB_RELEASE set) uses %APPDATA%/second-brain; a build run
@@ -144,7 +147,7 @@ app.whenReady().then(async () => {
   });
   const pulse = createPulse(s, { emitter, window: () => win, userData: app.getPath('userData') }, () => headline.get());
   const unsubscribePulse = s.brain.onSettingChange(change => { if (change.key.startsWith('pulse.') || change.key === 'jobs.fallback') pulse?.start(); });
-    const connectors = createAppConnectors(app.getPath('userData'), () => s.devops.refreshFresh());
+    const connectors = createAppConnectors(app.getPath('userData'), () => s.tasks.refreshFresh());
     await connectors.ready;
     const handlers: Handlers = {
       'connectors:list': () => connectors.service.list(),
@@ -161,12 +164,6 @@ app.whenReady().then(async () => {
     'app:brainCreation': () => brainCreation.capability(),
     'app:brainCandidates': () => findBrainCandidates(process.env.SB_HOME),
     'app:createBrain': a => a?.automatic === true ? defaultBrain.ensure(a.language, a.harness) : brainCreation.create(a),
-    'improve:proposals': () => s.proposals.list(),
-    'improve:proposalAvailability': () => s.proposals.availability(),
-    'improve:proposalCreate': () => s.proposals.create(),
-    'improve:proposalRefresh': a => s.proposals.refresh(a?.id),
-    'improve:proposalResume': a => s.proposals.resume(a?.id),
-    'improve:proposalPublish': a => s.proposals.publish(a),
     'progress:get': () => s.progress.get(),
     'progress:setHidden': a => s.progress.setHidden(a?.hidden),
     'progress:confirmResult': a => s.progress.confirmResult(a?.chatId, a?.resultAt),
@@ -189,8 +186,12 @@ app.whenReady().then(async () => {
     'agents:importInspect': a => s.agentPacks.packs.importInspect(a),
     'agents:importApply': a => s.agentPacks.packs.importApply(a.token, a.approveScripts, a.collision, a.approvePersonalData),
     'agents:importCancel': a => s.agentPacks.packs.cancel(a.token),
-    'agents:learnList': a => s.agentPacks.learning.list(a.id),
-    'agents:learnDecide': a => s.agentPacks.learning.decide(a.id, a.proposalId, a.decision, a.text),
+    // the Brain pages (ADR 0077): read, the maintenance button, an undo, a skill toggle; Classificatori read-only
+    'brainmodel:state': () => s.brainModel.state(),
+    'brainmodel:maintain': a => s.brainModel.maintain(a?.job),
+    'brainmodel:rollback': a => s.brainModel.rollback(String(a?.id ?? '')),
+    'brainmodel:link': a => { if (typeof a?.skill !== 'string' || typeof a?.agentId !== 'string' || typeof a?.on !== 'boolean') throw new Error('Invalid skill link'); return s.brainModel.link(a.skill, a.agentId, a.on); },
+    'classifiers:state': () => s.brainModel.classifiers(),
     'agents:trialDecide': a => s.agents.resolveTrial(a.id, a.decision),
     // the user's click on a "Da approvare" entry: the only way a lifecycle proposal is applied (agents/lifecycle-api.ts)
     'agents:lifecycleDecide': a => { if (!s.agentLifecycle) throw new Error('Coda «Da approvare» non disponibile.'); return s.agentLifecycle.decide(a); },
@@ -261,7 +262,12 @@ app.whenReady().then(async () => {
     'chat:createRouted': a => createRoutedChat({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h), create: r => s.chats.create(r) }, a, { byUser: true }),
     'routing:preview': a => previewRoute({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h) }, a),
     'chat:send': async a => { const before = s.chats.items(a.chatId).map(i => i.id); await s.chats.send(a.chatId, a.text, a.images); s.agentAuthoring?.rememberHumanMessage(a.chatId, a.text, before); s.chats.resumedByUser?.(a.chatId, a.text); },
-    'chat:answer': a => s.chats.answer(a.chatId, a.requestId, a.answer),
+    'chat:answer': a => {
+      // the user's own answer in a question panel may approve one agent creation (agent_create, issue #73)
+      const q = a.answer?.kind === 'question' ? s.chats.pending().find(r => r.chatId === a.chatId && r.id === a.requestId && r.type === 'question') : undefined;
+      if (q && a.answer.kind === 'question') s.agentAuthoring?.rememberHumanAnswer(a.chatId, a.requestId, q.questions?.map(x => x.question).join(' / ') || q.title, a.answer.answers);
+      return s.chats.answer(a.chatId, a.requestId, a.answer);
+    },
     'chat:stop': a => s.chats.stop(a.chatId, a.keepQueued === true),
     'chat:stopAll': () => s.chats.stopAll(),
     'chat:close': a => s.chats.close(a.chatId),
@@ -293,6 +299,15 @@ app.whenReady().then(async () => {
     'secrets:delete': a => s.engines.deleteSecret(a.engine),
     'engines:trust': a => s.engines.trust(a.engine),
     'engines:spend': () => s.engines.apiSpend(),
+    // cloud agents (ADR 0080, main/cloud/): the user's clicks; agents reach them only through app_create_chat / app_chats
+    'cloud:list': a => cloudOf(s).list(a?.refresh === true),
+    'cloud:start': a => cloudOf(s).start(a, 'user'),
+    'cloud:followUp': a => cloudOf(s).followUp(String(a?.id ?? ''), String(a?.text ?? '')),
+    'cloud:stop': a => cloudOf(s).stop(String(a?.id ?? '')),
+    'cloud:apply': a => cloudOf(s).apply(String(a?.id ?? '')),
+    'cloud:watch': a => cloudOf(s).watch(typeof a?.id === 'string' ? a.id : null),
+    'cloud:readiness': a => cloudOf(s).readiness(String(a?.cwd ?? '')),
+    'cloud:dismiss': a => cloudOf(s).dismiss(String(a?.id ?? '')),
     'settings:set': a => s.brain.setSettings(a),
     'settings:schema': () => s.brain.settingsSchema(),
     'settings:history': a => s.brain.settingsHistory(a?.limit),
@@ -313,15 +328,15 @@ app.whenReady().then(async () => {
       { ...(a?.exploration !== undefined ? { exploration: Number(a.exploration) } : {}), ...(a?.costWeight !== undefined ? { costWeight: Number(a.costWeight) } : {}),
         ...(Number.isInteger(a?.baseVersion) ? { base: a.baseVersion } : {}) }),
     'routing:restore': a => s.brain.restoreRouting(Number(a?.version)),
-    'devops:get': () => s.devops.get(),
-    'devops:refresh': () => s.devops.refresh(),
+    'tasks:get': () => s.tasks.get(),
+    'tasks:refresh': () => s.tasks.refresh(),
     // only the folders of the app's own chats, never a network path (a stat on \\host\share would reach out)
     'chat:branches': a => {
       const known = new Set(s.chats.list().map(c => c.cwd));
       const cwds = Array.isArray(a?.cwds) ? a.cwds.filter(c => typeof c === 'string' && known.has(c) && !/^[\\/]{2}/.test(c)) : [];
       return (s.branches ?? gitBranches)(cwds);
     },
-    'devops:markRead': a => s.devops.markRead(Array.isArray(a?.keys) ? a.keys.filter((k): k is string => typeof k === 'string').slice(0, 2000) : undefined),
+    'tasks:markRead': a => s.tasks.markRead(Array.isArray(a?.keys) ? a.keys.filter((k): k is string => typeof k === 'string').slice(0, 2000) : undefined),
     'overlay:model': a => overlay.setModel(a),
     'overlay:size': a => overlay.setSize(a.width, a.height),
     'app:inputLag': a => logInputLag(a),
@@ -341,15 +356,13 @@ app.whenReady().then(async () => {
       const c = s.chats.list().find(x => x.id === a?.chatId);
       return c ? s.chats.commands(c.id) ?? s.skills.commandsFor(c.harness, c.cwd) : [];
     },
-    // "Migliora l'app" (ADR 0020): promote and restart only on the user's click, never from an agent's tool
-    'improve:get': a => (a?.refresh || !s.improve.state().at ? s.improve.refresh() : s.improve.state()),
-    'improve:promote': () => s.improve.promote(),
-    'improve:regia': a => orchestrator.ensure(a),
+    // "Aggiorna" (Settings → Aggiornamenti, ADR 0075): update and restart only on the user's click, never from an agent's tool
+    'source:get': a => (a?.refresh || !s.source.state().at ? s.source.refresh() : s.source.state()),
     'orchestrator:get': () => orchestrator.get(),
     'orchestrator:ensure': a => orchestrator.ensure(a),
-    'improve:dismissLaunch': () => s.improve.dismissLaunch(),
-    'improve:sourceCheck': () => s.improve.sourceCheck(),
-    'improve:updateNow': () => s.improve.updateNow(),
+    'source:dismissLaunch': () => s.source.dismissLaunch(),
+    'source:check': () => s.source.sourceCheck(),
+    'source:updateNow': () => s.source.updateNow(),
     'clipboard:image': a => readClipboardImage(clip, Array.isArray(a?.seen) ? a.seen.filter((t): t is string => typeof t === 'string').slice(0, 20) : []),
     'search:query': a => search.query(String(a?.q ?? '')),
     'search:status': async () => s.hybrid?.status() ?? { model: { state: 'missing' }, docs: 0, chunks: 0, vectors: 0, vec: false },
@@ -360,6 +373,7 @@ app.whenReady().then(async () => {
     'sync:now': a => s.brain.syncNow(a?.domain),
     'sync:resolve': a => s.brain.syncResolve(a?.domain, a?.choice),
     'headline:get': () => pulse?.headline() ?? headline.get(),
+    'regia:held': () => s.heldNews?.get() ?? { items: [] },
     ...(pulse?.handlers() ?? (demo ? pulseDemoHandlers(process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now(), {
       settings: () => s.brain.settings().pulse, changed: () => emitter.emit('pulse:changed', undefined), approvalsChanged: () => emitter.emit('approvals:changed', undefined),
     }) : pulseStubHandlers())),
@@ -402,7 +416,7 @@ app.whenReady().then(async () => {
       .catch(err => log.warn('app', 'shutdown failed', { data: String(err) }))
       .finally(async () => {
         s.killNow();
-        // app.exit skips Chromium's own shutdown: the app page's localStorage (layout, Regia widget state) written in
+        // app.exit skips Chromium's own shutdown: the app page's localStorage (layout, Orchestrator widget state) written in
         // the last seconds would be lost without this
         session.defaultSession.flushStorageData();
         // the process ends only once each of its threads and its Chromium children ran: on a busy CPU that took 20-130 s;

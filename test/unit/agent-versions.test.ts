@@ -158,8 +158,8 @@ describe('Agent definitions v2', () => {
     const c = service(tmp());
     expect(() => c.save(draft({ tools: { allow: ['read', 'deploy' as never] } }))).toThrow(/Strumenti/);
     expect(() => c.save(draft({ tools: { allow: ['read', 'read'] } }))).toThrow(/Strumenti/);
-    expect(() => c.save(draft({ tools: { allow: ['read'], mcp: ['devops'] } }))).toThrow(/MCP/);
-    expect(c.save(draft({ tools: { allow: ['read', 'mcp'], mcp: ['devops'] } })).tools).toEqual({ allow: ['read', 'mcp'], mcp: ['devops'] });
+    expect(() => c.save(draft({ tools: { allow: ['read'], mcp: ['task'] } }))).toThrow(/MCP/);
+    expect(c.save(draft({ tools: { allow: ['read', 'mcp'], mcp: ['task'] } })).tools).toEqual({ allow: ['read', 'mcp'], mcp: ['task'] });
     expect(() => c.save(draft({ permissionCeiling: 'bypassPermissions' as never }))).toThrow(/permessi/);
     expect(() => c.save(draft({ category: 'finance' as never }))).toThrow(/Categoria/);
     expect(() => c.save(draft({ avatar: { kind: 'symbol', value: 'bug', tone: 'gold' as never } }))).toThrow(/Colore/);

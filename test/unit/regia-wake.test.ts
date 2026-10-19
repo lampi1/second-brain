@@ -1,7 +1,7 @@
-// Unit tests of main/chats/regia-wake.ts ("Eventi alla Regia"): a work chat that finishes, fails, waits for an answer
-// or leaves a command is told to the Regia in one grouped message labelled as the app's; a chat at most once every
-// perChatMs; into the Regia's running turn, never while it waits for the user (a failure only); off with the setting;
-// the Regia's own turns never.
+// Unit tests of main/chats/regia-wake.ts ("Eventi all'Orchestrator"): a work chat that finishes, fails, waits for an answer
+// or leaves a command is told to the Orchestrator in one grouped message labelled as the app's; a chat at most once every
+// perChatMs; into the Orchestrator's running turn, never while it waits for the user (a failure only); off with the setting;
+// the Orchestrator's own turns never.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatSummary, PendingRequest } from '../../src/shared/contract';
 import { APP_EVENT_LABEL, RegiaWake, wakeLine } from '../../src/main/chats/regia-wake';
@@ -64,7 +64,7 @@ describe('RegiaWake', () => {
     w.observe('pending:added', { id: 'q1', chatId: 'qa', type: 'question', tool: 'AskUserQuestion', title: 'Domanda', detail: '', input: {}, at: 1, questions: [{ question: 'Apro il bug?', options: [], multiSelect: false }] } satisfies PendingRequest);
     up({ id: 'fb', state: 'running' });
     w.observe('pending:added', { id: 'p1', chatId: 'fb', type: 'permission', tool: 'Bash', title: 'Bash · npm test', detail: 'npm test', input: {}, at: 1 } satisfies PendingRequest);
-    // the Regia going idle again does not send quiet news either
+    // the Orchestrator going idle again does not send quiet news either
     up({ id: 'regia', isRegia: true, state: 'running' });
     up({ id: 'regia', isRegia: true, state: 'idle' });
     await vi.advanceTimersByTimeAsync(60_000);
@@ -98,11 +98,10 @@ describe('RegiaWake', () => {
     expect(sent[1]!.text).toContain('«qa» (Claude): ha finito il turno. Ultima riga: «Bug aperto.»');
   });
 
-  it('legacy app workers report to the shared coordinator', async () => {
+  it('a chat on the app\'s code reports to the shared coordinator like any other', async () => {
     const { w, sent, up, finish } = make();
-    finish('fix', 'Ramo pronto.', { space: 'app' });
-    finish('app-regia', 'Fatto.', { space: 'app', appRegia: true });
-    up({ id: 'fix', space: 'app', state: 'running' });
+    finish('fix', 'Ramo pronto.', { cwd: 'C:/repo' });
+    up({ id: 'fix', cwd: 'C:/repo', state: 'running' });
     w.observe('pending:added', { id: 'q1', chatId: 'fix', type: 'question', tool: 'AskUserQuestion', title: 'Domanda', detail: '', input: {}, at: 1, questions: [{ question: 'Unisco?', options: [], multiSelect: false }] } satisfies PendingRequest);
     await vi.advanceTimersByTimeAsync(5000);
     expect(sent).toHaveLength(1);
@@ -265,7 +264,7 @@ describe('RegiaWake', () => {
 
   it('several Regie (ADR 0021): the news go to the first one in tab order, also after it was replaced (Pulisci)', async () => {
     const sent: string[] = [];
-    // "nuova" replaced the first Regia: it came later (after "ricerca") but keeps the first tab's regiaSince
+    // "nuova" replaced the first Orchestrator: it came later (after "ricerca") but keeps the first tab's regiaSince
     const list = [chat({ id: 'ricerca', isRegia: true, regiaSince: 2, state: 'idle' }), chat({ id: 'nuova', isRegia: true, regiaSince: 1, state: 'idle' })];
     const w = new RegiaWake({ send: async id => { sent.push(id); }, enabled: () => true, groupMs: 10, list: () => list });
     w.observe('chat:updated', list[0]!);

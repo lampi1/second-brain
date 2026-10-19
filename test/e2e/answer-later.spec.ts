@@ -28,11 +28,11 @@ test('Rispondi dopo: the queue fills silently, rings, survives a restart, Ctrl+J
   await expect(page.getByTestId('topbar-next-count')).toHaveText('3');
   await expect.poll(async () => (await layerState(app)).cards).toBe(0);
 
-  // on a page (DevOps): nothing floats; a new question opens nothing, the counter grows and it rings
+  // on a page (Task): nothing floats; a new question opens nothing, the counter grows and it rings
   await page.keyboard.press('Control+K');
-  await page.getByTestId('palette-input').fill('devops');
+  await page.getByTestId('palette-input').fill('task');
   await page.keyboard.press('Enter');
-  await expect(page.getByTestId('brain-page-devops')).toBeVisible();
+  await expect(page.getByTestId('brain-page-task')).toBeVisible();
   const rang = await chimes(page);
   await ask(app, 'fix', 'Procedo con il commit?');
   await expect(page.getByTestId('topbar-next-count')).toHaveText('4');
@@ -59,7 +59,7 @@ test('Rispondi dopo: the queue fills silently, rings, survives a restart, Ctrl+J
   await expect(page.getByTestId('qwin-count')).toHaveText('3');
   await expect(page.getByTestId('qwin-off')).toHaveCount(0); // "Domande in finestra" is off: this is only the queue
   await expect(page.getByTestId('topbar-next')).not.toContainText('Da rispondere');
-  // any of them first: Feedback now, the Regia's stays
+  // any of them first: Feedback now, the Orchestrator's stays
   await page.getByTestId('qwin-pick').filter({ hasText: 'App · Feedback' }).click();
   await expect(page.getByTestId('qwin-chat')).toHaveText('App · Feedback');
   await expect(page.getByTestId('qwin-pick').filter({ hasText: 'Orchestrator' })).toBeVisible();

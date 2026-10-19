@@ -2,7 +2,7 @@
 // "voglio solo configurare se si possono aprire chat cross cli/api": one module holds the rule instead of per-engine
 // checks in every tool. Three switches, all protected (only the user changes them):
 // - `engineOn.<id>` «X acceso»: off = nothing starts on that engine, whoever asks (the user's own chats too);
-// - `engines.<id>` «Le Regie possono usare X»: off = no agent opens or resumes a chat there (the user still can);
+// - `engines.<id>` «Gli Orchestrator possono usare X»: off = no agent opens or resumes a chat there (the user still can);
 // Cross-engine messaging is always available. The retired messaging.crossHarness value is compatibility data only.
 // Engine availability, trust and agent launch permissions still apply; an unknown engine never starts by itself.
 // Used by the app-control tools (appctl/tools.ts), the chats' mail (chats/mail.ts), the routed chats (chats/routed.ts)
@@ -17,10 +17,10 @@ export type EngineSwitches = Pick<Settings, 'engineOn' | 'engines' | 'messaging'
 /** Is the engine switched on (may anything start on it)? On, and its definition the one the user turned on (trust.ts). */
 export const engineOn = (s: Pick<Settings, 'engineOn'>, h: Harness): boolean => s.engineOn[h] === true && engineOf(h)?.trusted === true && cliAvailable(engineReadiness()[h]);
 
-/** May an agent open or resume a chat on this engine at all (on, and «Le Regie possono usare X» on)? */
+/** May an agent open or resume a chat on this engine at all (on, and «Gli Orchestrator possono usare X» on)? */
 export const agentsMayOpen = (s: Pick<Settings, 'engineOn' | 'engines'>, h: Harness): boolean => engineOn(s, h) && s.engines[h] === true;
 
-/** An agent's message to a stopped chat on an engine the Regie may not use (chats/manager.ts): the chat stays stopped
+/** An agent's message to a stopped chat on an engine the Orchestrators may not use (chats/manager.ts): the chat stays stopped
  *  and the mail waits for the user to resume it (chats/mail.ts holds it without a warning). */
 export class AgentMayNotWake extends Error {
   constructor(h: Harness) {

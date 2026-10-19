@@ -1,6 +1,6 @@
 // A chat the user starts from a DevOps record (src/main/chats/routed.ts, chat:createRouted): the routing table's row
 // picks engine, model and effort; no row = the user's last "Nuova chat" choice; the record's kind and area beat the
-// words; an engine that is off is never picked, nor one the Regie may not use unless the user names it for a work chat; the chat carries its route (so the ledger gets it); bad input throws.
+// words; an engine that is off is never picked, nor one the Orchestrators may not use unless the user names it for a work chat; the chat carries its route (so the ledger gets it); bad input throws.
 import { describe, expect, it } from 'vitest';
 import { createRoutedChat, previewRoute } from '../../src/main/chats/routed';
 import { routeChat, type RouteRequest } from '../../src/main/brain/routing';
@@ -101,7 +101,7 @@ describe('createRoutedChat', () => {
     await createRoutedChat(d, { title: 'Regia · lavoro', cwd: 'C:/brain', regia: true, prompt: 'fix del bug: handoff', defaults: { harness: 'cursor' }, ask: { harness: 'cursor', reason: 'Cambia motore' } });
     expect(made[1]).toMatchObject({ harness: 'cursor', regia: true, route: { kind: 'regia', source: 'override', reason: 'Cambia motore' } });
     expect(made[1]).not.toHaveProperty('effort');
-    // a long title (renamed by the user) is the Regia's address: kept whole
+    // a long title (renamed by the user) is the Orchestrator's address: kept whole
     const long = `Regia · ${'x'.repeat(120)}`;
     await createRoutedChat(d, { title: long, cwd: 'C:/brain', regia: true, defaults: { harness: 'claude' } });
     expect(made[2]!.title).toBe(long);

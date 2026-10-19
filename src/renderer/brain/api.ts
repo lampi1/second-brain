@@ -5,7 +5,7 @@
 // are unwrapped here, and while the server says "refreshing" the client asks again a few times so the new value shows
 // up by itself. A brain file change (feed:events) marks /api/tables stale. BrainClient is DOM-free and unit-tested
 // (test/unit/brain-ui/api.test.ts); useBrain is the React hook the pages use.
-import { useEffect, useMemo, useReducer, useState } from 'react';
+import { useEffect, useMemo, useReducer } from 'react';
 import type { BrainApiResult } from '@shared/contract';
 
 export type Invoke = (path: string) => Promise<BrainApiResult>;
@@ -103,8 +103,6 @@ export function brainClient(): BrainClient {
   client = new BrainClient(path => window.sb.invoke('brain:api', { path }));
   // a brain file changed (idea, error, diary, now.md…): the tables are stale
   try { window.sb.on('feed:events', () => client?.invalidate('/api/tables')); } catch { /* no bridge (tests) */ }
-  // a procedure file changed (main's brain watcher): the Procedure page's list and the open procedure
-  try { window.sb.on('procedures:changed', () => client?.invalidate('/api/procedure')); } catch { /* no bridge (tests) */ }
   // a script of the brain or its changelog changed (main's brain watcher): the Script and Changelog pages
   try { window.sb.on('scripts:changed', () => { client?.invalidate('/api/script'); client?.invalidate('/api/changelog'); }); } catch { /* no bridge (tests) */ }
   return client;
@@ -138,21 +136,6 @@ export function useBrain<T>(path: string | null, norm: (v: unknown) => T, { poll
     data, at: e?.at ?? null, error: e?.error ?? null, loading: !!path && (!e || e.loading), refreshing: !!e?.refreshing,
     reload: (fresh = false) => { if (path) void c.get(path, { fresh }); },
   };
-}
-
-/** The configured app checkout (setting appRepo), read through window.sb like the reads above: the app's store is not
- *  imported here, so the brain pages load without the bridge (unit tests). */
-export function useAppRepo(): string | null {
-  const [repo, setRepo] = useState<string | null>(null);
-  useEffect(() => {
-    let alive = true;
-    try {
-      window.sb.invoke('settings:get', undefined).then(s => { if (alive) setRepo(s.appRepo ?? null); }, () => { /* no setting: title rules only */ });
-      const off = window.sb.on('settings:changed', c => setRepo(c.settings.appRepo ?? null));
-      return () => { alive = false; off(); };
-    } catch { return () => { alive = false; }; } // no bridge (tests)
-  }, []);
-  return repo;
 }
 
 /** Several reads at once: loading while any loads, the first error. */

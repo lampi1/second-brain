@@ -23,16 +23,15 @@ test('menus: gear, "…", a chat\'s ⋯ and the sidebar groups', async () => {
     await shot(page, 'menus-gear');
     await page.keyboard.press('Escape');
 
-    // "…" is on the bar at any width with browsers, Credenziali and Migliora; those left the bar (the popups switch is on it)
+    // "…" is on the bar at any width with Credenziali; it left the bar (the popups switch is on it).
+    // The hide-browsers switch is gone (#82); "Migliora l'app" is gone (ADR 0079): no entry anywhere.
     for (const off of ['topbar-browsers', 'topbar-credentials', 'topbar-improve']) await expect(page.getByTestId(off)).toHaveCount(0);
     await page.getByTestId('topbar-more').click();
-    for (const id of ['more-browsers', 'more-credentials', 'more-improve']) await expect(page.getByTestId(id)).toBeVisible();
+    await expect(page.getByTestId('more-credentials')).toBeVisible();
+    for (const id of ['more-browsers', 'more-improve']) await expect(page.getByTestId(id)).toHaveCount(0);
+    await expect(page.getByTestId('topbar-more-pop')).not.toContainText('Migliora');
     await shot(page, 'menus-more');
-    // hiding the browsers leaves a count on "…"
-    await page.getByTestId('more-browsers').click();
-    await expect(page.getByTestId('topbar-browsers-count')).toBeVisible();
-    await page.keyboard.press('Control+Shift+B');
-    await expect(page.getByTestId('topbar-browsers-count')).toHaveCount(0);
+    await page.keyboard.press('Escape');
 
     // a chat's ⋯: the everyday actions first, then the engine's choices, the continuation group, close last
     await page.getByTestId('chat-menu-qa').click();
@@ -50,25 +49,25 @@ test('menus: gear, "…", a chat\'s ⋯ and the sidebar groups', async () => {
     await shot(page, 'menus-chat');
     await page.keyboard.press('Escape');
 
-    // the sidebar: three groups, "Regole imparate" in Brain (no more "Miglioramento" next to "Migliora l'app")
+    // the sidebar: three groups, Regole in Brain (its learned rules inside, ADR 0082), Task (once DevOps, ADR 0079) in Lavoro
     const nav = page.getByTestId('sidebar');
     await expect(page.getByTestId('nav-collapse')).toHaveCount(0); // always expanded: no toggle
     await expect(nav.locator('.nav-title')).toHaveCount(3);
-    await expect(page.getByTestId('nav-miglioramento')).toHaveAttribute('aria-label', 'Regole imparate');
+    await expect(page.getByTestId('nav-miglioramento')).toHaveCount(0);
     const navOrder = await nav.locator('.nav-title, .nav-item').evaluateAll(els => els.map(e => e.getAttribute('data-testid')));
     const ix = (id: string) => navOrder.indexOf(id);
     expect(ix('nav-home')).toBeLessThan(ix('nav-group-work'));
     expect(ix('nav-workspace')).toBe(-1); // SPEC 19: the agents live in the Grindhouse, no separate entry
-    expect(ix('nav-group-brain')).toBeLessThan(ix('nav-miglioramento'));
-    expect(ix('nav-miglioramento')).toBeLessThan(ix('nav-group-app'));
+    expect(ix('nav-group-brain')).toBeLessThan(ix('nav-regole'));
+    expect(ix('nav-regole')).toBeLessThan(ix('nav-group-app'));
     expect(ix('nav-dashboard')).toBeGreaterThan(ix('nav-group-app'));
-    expect(ix('nav-dashboard')).toBeLessThan(ix('nav-skill'));
+    expect(ix('nav-skill')).toBeGreaterThan(ix('nav-group-brain')); // Skill is in the Brain section (ADR 0077)
+    expect(ix('nav-skill')).toBeLessThan(ix('nav-group-app'));
+    expect(ix('nav-dashboard')).toBeLessThan(ix('nav-guida'));
     await expect(page.getByTestId('nav-migliora')).toHaveCount(0);
+    await expect(page.getByTestId('nav-devops')).toHaveCount(0);
+    await expect(nav).not.toContainText('DevOps');
     await shot(page, 'menus-sidebar');
-    // App improvement remains reachable from the top-bar menu, outside the rail.
-    await page.getByTestId('topbar-more').click();
-    await page.getByTestId('more-improve').click();
-    await expect(page.getByTestId('improve')).toBeVisible();
   } finally {
     await app.close();
   }

@@ -1,5 +1,6 @@
 // Dedicated agent overview. "Crea agente" opens the questionnaire (AgentCreateDialog) that sends the user's request to
-// the Orchestrator; an existing profile opens on its own page (AgentStudio), with its lifecycle panel and pulse. Rendered by App.tsx for page 'agenti'.
+// the Orchestrator; a card flips to its details and skills (#81) and "Apri profilo" opens the agent on its own page
+// (AgentStudio), with its lifecycle panel, pulse and the start composer. Rendered by App.tsx for page 'agenti'.
 import { useEffect, useState } from 'react';
 import { inProbation, type AgentMetrics } from '@shared/agents';
 import type { AgentLifecycleClient } from '@shared/agent-lifecycle';
@@ -19,14 +20,14 @@ import { AgentCreateDialog } from './AgentCreateDialog';
 import { AgentStudio } from './AgentStudio';
 import { Select } from './Select';
 import { ContextPulse } from './ContextPulse';
-import { CatalogRun } from './CatalogRun';
-import { profileCanStart } from '../lib/role-consumers';
+import { useBrainModel } from '../store/brain-model';
 import '../styles/agent-catalog.css';
 
 export function AgentCatalogPage({ lifecycleApi = lifecycleClient }: { lifecycleApi?: AgentLifecycleClient } = {}) {
   const { catalog, error } = useAgents();
   const arg = ui.use(s => s.pageArg);
   const chats = useApp(s => s.chats);
+  const { state: model } = useBrainModel();
   const [role, setRole] = useState(''), [engine, setEngine] = useState(''), [sort, setSort] = useState<CatalogSort>('name');
   const [metrics, setMetrics] = useState<AgentMetrics[] | null>(null), [metricsError, setMetricsError] = useState(false);
   const [refresh, setRefresh] = useState(0), [creating, setCreating] = useState(false);
@@ -79,8 +80,9 @@ export function AgentCatalogPage({ lifecycleApi = lifecycleClient }: { lifecycle
     })()}
     <div className="catalog-grid">{selectCatalog(profiles, role, engine, sort).map((p, index) => {
       const starts = Object.values(chats).filter(c => c.run?.agentId === p.id).map(c => c.run!.startedAt);
-      return <AgentCatalogCard key={p.id} profile={p} updateAvailable={catalog?.presetUpdates?.some(update => update.agentId === p.id)} index={index} run={<CatalogRun profile={p} available={!catalog?.problem && profileCanStart(p, catalog?.models.find(m => m.engine === p.engine))} />} engine={catalog?.models.find(m => m.engine === p.engine)?.label ?? p.engine}
-        metrics={metrics?.find(m => m.agentId === p.id)} loaded={metrics !== null} lastStart={starts.length ? Math.max(...starts) : null} onOpen={() => go({ page: 'agenti', arg: p.id })} />;
+      return <AgentCatalogCard key={p.id} profile={p} updateAvailable={catalog?.presetUpdates?.some(update => update.agentId === p.id)} index={index} engine={catalog?.models.find(m => m.engine === p.engine)?.label ?? p.engine}
+        metrics={metrics?.find(m => m.agentId === p.id)} loaded={metrics !== null} lastStart={starts.length ? Math.max(...starts) : null} onOpen={() => go({ page: 'agenti', arg: p.id })}
+        skills={model?.agents.find(a => a.id === p.id)?.skills ?? []} memory={model?.memory.find(m => m.kind === 'agent' && m.agentId === p.id) ?? null} onSkill={name => go({ page: 'skill', arg: name })} />;
     })}</div>
     {catalog && !selectCatalog(profiles, role, engine, sort).length && <p role="status">{t('catalog.empty')}</p>}
   </section>;

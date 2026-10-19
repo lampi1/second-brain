@@ -3,7 +3,7 @@
 // chat goes on in one of three ways, all keeping what the work needs (state, files, decisions, what runs in the
 // background, the next step):
 // - compact: the same session summarises itself. Every Claude chat at its window (compactWindowTokens, ADR 0031/0051:
-//   the CLI does it); a Regia also once on a new day (regiaDayDue, ADR 0051), so its mail queue and work chats stay put;
+//   the CLI does it); an Orchestrator also once on a new day (regiaDayDue, ADR 0051), so its mail queue and work chats stay put;
 // - fresh session: a long idle Claude work chat writes a note while its cache is warm (coldAsk), and a message after
 //   the cache expired goes on in a new session of the same chat from that note (coldRoute, coldPrompt; ADR 0031);
 // - new chat: the user's "Riprendi" asks a hand-off note and opens a new chat from it (handoff.ts; ADR 0014).
@@ -17,31 +17,31 @@ export const CACHE_TTL_MS = 55 * 60_000;
 export const COLD_MIN_TOKENS = 100_000;
 /** calls counted as "after" a continuation or a compaction (ADR 0031 counters) */
 export const AFTER_CALLS = 5;
-/** below this context a Regia's day compaction saves too little for the detail it loses */
+/** below this context an Orchestrator's day compaction saves too little for the detail it loses */
 export const REGIA_DAY_MIN = 50_000;
-/** idle this long first: never between two messages of a conversation the user is having with the Regia */
+/** idle this long first: never between two messages of a conversation the user is having with the Orchestrator */
 export const REGIA_DAY_IDLE_MS = 3 * 60_000;
 
-/** What a Regia's day summary keeps (Claude Code's `/compact <instructions>`). Injected prompts use English. */
+/** What an Orchestrator's day summary keeps (Claude Code's `/compact <instructions>`). Injected prompts use English. */
 export const REGIA_COMPACT = '/compact New day: keep only what is needed to continue. Keep the chats you coordinate (title, progress, what you await from each), outstanding messages and questions for the user, their decisions and preferences from today and yesterday that still apply, background work and how to resume it. Remove the rest. Continue answering in the user\'s language.';
 
 /** What the continuity rules look at in a chat. noteAt = its cold note (0 = none); lastCallAt = its last API call. */
 export interface ColdView {
-  harness: string; isRegia: boolean; appRegia?: boolean; continuedBy?: unknown;
+  harness: string; isRegia: boolean; continuedBy?: unknown;
   state: string; pending: number; background: number; busy: boolean; alive: boolean; handoffTurn: boolean;
   contextTokens: number; lastTurnAt: number; noteAt: number; lastCallAt: number;
   /** the lastTurnAt the note was already asked for (once per idle stretch, even if it failed) */
   askedFor?: number | undefined;
 }
 
-/** A Regia's view: when its context in force began and the Rome day it was last asked to compact. */
+/** An Orchestrator's view: when its context in force began and the Rome day it was last asked to compact. */
 export interface RegiaDayView {
-  harness: string; isRegia: boolean; appRegia?: boolean; state: string;
+  harness: string; isRegia: boolean; state: string;
   pending: number; busy: boolean; alive: boolean; handoffTurn: boolean;
   contextTokens: number; lastTurnAt: number;
   /** when the context in force began: the first turn since the session started or the last compaction */
   ctxSince: number | undefined;
-  /** the Rome day this Regia was last asked to compact (once a day, even when it failed) */
+  /** the Rome day this Orchestrator was last asked to compact (once a day, even when it failed) */
   askedOn: string | undefined;
 }
 
@@ -50,8 +50,8 @@ export interface RegiaDayView {
 export const quietChat = (v: Pick<ColdView, 'state' | 'pending' | 'busy' | 'alive' | 'handoffTurn'>): boolean =>
   v.state === 'idle' && v.pending === 0 && !v.busy && v.alive && !v.handoffTurn;
 
-const isRegia = (v: { isRegia: boolean; appRegia?: boolean }): boolean => v.isRegia || !!v.appRegia;
-const coldChat = (v: Pick<ColdView, 'harness' | 'isRegia' | 'appRegia' | 'continuedBy'>): boolean => v.harness === 'claude' && !isRegia(v) && !v.continuedBy;
+const isRegia = (v: { isRegia: boolean }): boolean => v.isRegia;
+const coldChat = (v: Pick<ColdView, 'harness' | 'isRegia' | 'continuedBy'>): boolean => v.harness === 'claude' && !isRegia(v) && !v.continuedBy;
 
 /** Ask for the note now: quiet, a long context, no fresh note, and the cache still warm but about to expire (idleMs
  *  after the last call, before CACHE_TTL_MS). */
@@ -79,7 +79,7 @@ const DAY = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome', year: 'n
 /** the Rome day of a time, "2026-10-14" */
 export const romeDay = (t: number): string => DAY.format(new Date(t));
 
-/** Is it time for this Regia's day compaction? Quiet a few minutes, a context from an earlier day, once a day. */
+/** Is it time for this Orchestrator's day compaction? Quiet a few minutes, a context from an earlier day, once a day. */
 export function regiaDayDue(v: RegiaDayView, now: number): boolean {
   if (!isRegia(v) || v.harness !== 'claude' || !quietChat(v)) return false;
   const today = romeDay(now);
@@ -87,7 +87,7 @@ export function regiaDayDue(v: RegiaDayView, now: number): boolean {
   return v.contextTokens >= REGIA_DAY_MIN && now - v.lastTurnAt >= REGIA_DAY_IDLE_MS;
 }
 
-/** The automatic continuity step due now for a chat ('note': write the cold note; 'compact': the Regia's day
+/** The automatic continuity step due now for a chat ('note': write the cold note; 'compact': the Orchestrator's day
  *  compaction), null for none. cold / day = the settings contextHandoff / regiaDayCompact. */
 export function continuityStep(v: ColdView & Pick<RegiaDayView, 'ctxSince' | 'askedOn'>, now: number, o: { cold: boolean; day: boolean; idleMs: number; ttlMs?: number }): 'note' | 'compact' | null {
   if (o.cold && coldAsk(v, now, o.idleMs, o.ttlMs)) return 'note';

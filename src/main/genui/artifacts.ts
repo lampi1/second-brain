@@ -1,7 +1,7 @@
 // Generative UI, the main half (ADR 0033): the show_ui tool on every chat's own MCP endpoint and the store of the
 // visuals it makes ("artifacts", ChatItem kind 'artifact'). A chat passes a catalog component name + props
 // (shared/genui.ts checks them: a wrong call gets a clear error back as the tool result, so the model retries); the
-// visual becomes an item of the calling chat (target chat), of its Regia (target regia: the Regia's panel shows it with
+// visual becomes an item of the calling chat (target chat), of its Orchestrator (target regia: the Orchestrator's panel shows it with
 // the sender's name) or waits for the chat's next AskUserQuestion (target next-ask: attached to it when the question
 // arrives, a plain card after ASK_WAIT_MS). Visuals live in <userData>/artifacts/<chatId>.json (at most
 // ARTIFACT_MAX_PER_CHAT per chat), so they survive a transcript reload and a restart; chat:items merges them in by time.
@@ -14,6 +14,7 @@ import { ARTIFACT_MAX_PER_CHAT, ARTIFACT_TARGETS, SUMMARY_MAX, TITLE_MAX, UI_COM
 import { regiaOfChat } from '../../shared/regia';
 import type { McpTool } from '../mcp/server';
 import { log, errText } from '../log';
+import { SCREENSHOT_HINT } from '../ask-image';
 
 export type Artifact = Extract<ChatItem, { kind: 'artifact' }>;
 /** how long a next-ask visual waits for the chat's question before it shows as a card in the chat */
@@ -59,12 +60,12 @@ export class Artifacts {
 
     let owner = caller.id, where = 'in questa chat';
     if (target === 'regia') {
-      const regia = caller.appRegia || caller.isRegia ? caller.id
+      const regia = caller.isRegia ? caller.id
         : regiaOfChat(caller, all.filter(c => !c.closedAt));
       if (regia) { owner = regia; where = regia === caller.id ? 'nel pannello dell’Orchestrator' : `nell’Orchestrator «${all.find(c => c.id === regia)?.title ?? 'Orchestrator'}»`; }
       else where = 'in questa chat (nessun Orchestrator aperto)';
     }
-    // in another chat's list (its Regia) the id carries the sender: two chats with the same key never replace each
+    // in another chat's list (its Orchestrator) the id carries the sender: two chats with the same key never replace each
     // other; the sender's folder goes along, so its relative file paths open there (review 2026-10-13)
     const away = owner !== caller.id;
     const item: Artifact = {
@@ -232,6 +233,7 @@ export function showUiTool(store: Artifacts): McpTool {
       'barChart {unit?, bars: [{label, value, note?}]}',
       'status: ok|fail|blocked|running|todo|info|warn. href: an http(s) URL or an absolute local path.',
       'Inside an AskUserQuestion option\'s preview the same JSON {"component", "props", "title"?} goes in a ```sb-ui fence.',
+      SCREENSHOT_HINT,
     ].join('\n'),
     inputSchema: {
       type: 'object',

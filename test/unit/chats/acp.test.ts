@@ -362,7 +362,7 @@ describe('AcpSession as Cursor', () => {
     expect(sink.last('assistant')?.text).toBe('Ripreso dopo la rete');
     const sys = [...sink.items.values()].filter(i => i.kind === 'system').map(i => i.code);
     expect(sys).toEqual(['netRetried']);
-    // no idle between the cut turn and its retry: the Regia does not see the chat as done
+    // no idle between the cut turn and its retry: the Orchestrator does not see the chat as done
     const first = sink.trace.indexOf('result'), second = sink.trace.lastIndexOf('result');
     expect(sink.trace.slice(first, second)).not.toContain('state:idle');
   });

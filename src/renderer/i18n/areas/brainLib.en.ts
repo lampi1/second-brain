@@ -15,16 +15,13 @@ export const brainLibEn: typeof brainLibIt = {
   'brainLib.charts.nPointsMax': (p: { n: number; max: string }) => `${p.n} points; maximum ${p.max}.`,
   'brainLib.charts.firstLabel': (p: { n: number; first: string; value: string }) => `${p.n} items; first: ${p.first}, ${p.value}.`,
 
-  // appwork.ts
-  'brainLib.appwork.untitled': '(untitled)',
 
-  // devops-chat.ts
-  'brainLib.devopsChat.untitled': 'untitled',
+  // task-chat.ts
+  'brainLib.taskChat.untitled': 'untitled',
 
   // discuss.ts
   'brainLib.discuss.kindIdea': 'Idea',
   'brainLib.discuss.kindReflection': 'Reflection',
-  'brainLib.discuss.kindProcedure': 'Procedure',
   'brainLib.discuss.kindError': 'Error',
   'brainLib.discuss.kindNumber': 'Number',
 

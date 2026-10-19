@@ -14,7 +14,7 @@ import { makeLink } from './lib/notify';
 import { liveSource } from './lib/liveSource';
 import { sameList } from './store/state';
 import { useApp } from './store/store';
-import { openModal, closeModal, pageLabel, setMap, setPrefs, toast, toggleBrowsers, ui } from './store/ui';
+import { openModal, closeModal, pageLabel, setMap, setPrefs, toast, ui } from './store/ui';
 import {
   back, brainBridge, copyLink, escapeOne, focusChat, focusTile, forward, go, goTarget, nextThing, openLink, stopAllAsk, stopFocused, closeFocused, toggleCenter, toggleFocusMode, toggleMaximize, toggleRegia, askRenewRegia,
 } from './actions';
@@ -44,9 +44,12 @@ import { Keys, TooltipLayer } from './components/ui';
 import { SettingsPage } from './components/SettingsPage';
 import { SkillsPage } from './components/SkillsPage';
 import { QuestionsWindow } from './components/QuestionsWindow';
-import { ImprovePage } from './components/ImprovePage';
 import { LaunchBanner } from './components/LaunchBanner';
 import { Dashboard } from './dashboard/Dashboard';
+import { RulesPage } from './components/brain-model/RulesPage';
+import { MemoryPage } from './components/brain-model/MemoryPage';
+import { ClassifiersPage } from './components/brain-model/ClassifiersPage';
+import { MapPage } from './components/brain-model/MapPage';
 import { Script } from './brain/pages/Script';
 import { Changelog } from './brain/pages/Changelog';
 import { GuidePage } from './components/GuidePage';
@@ -86,7 +89,6 @@ function onKey(e: KeyboardEvent): void {
     case 'stopFocused': stopFocused(); break;
     case 'closeFocused': if (!e.repeat) closeFocused(); break; // a held Ctrl+W closes one chat, not a burst
     case 'stopAll': stopAllAsk(); break;
-    case 'toggleBrowsers': toggleBrowsers(); break;
     case 'maximize': toggleMaximize(); break;
     case 'focusMode': toggleFocusMode(); break;
     case 'focusTile': focusTile(cmd.index); break;
@@ -151,7 +153,7 @@ function useHighlight(): void {
   }, [h]);
 }
 
-/** A brain page (built in src/renderer/brain) with a thin frame: back to the chats, its title, "Copia link" (the Regia
+/** A brain page (built in src/renderer/brain) with a thin frame: back to the chats, its title, "Copia link" (the Orchestrator
  *  widget sits in the bottom-right corner, over the page too). */
 function PageFrame({ id }: { id: (typeof BRAIN_PAGES)[number]['id'] }) {
   const arg = ui.use(s => s.pageArg);
@@ -167,11 +169,14 @@ function PageFrame({ id }: { id: (typeof BRAIN_PAGES)[number]['id'] }) {
       </div>
       {/* keyed by the page: every page change replays the entry (linear.css panel-enter), no hard cut */}
       <div className="page-body" key={id}>
-        {id === 'dashboard' ? <Dashboard /> : id === 'script' ? <Script arg={arg ?? undefined} /> : id === 'changelog' ? <Changelog /> : id === 'guida' ? <GuidePage /> : id === 'agenti' ? <AgentCatalogPage /> : id === 'migliora' ? <ImprovePage /> : id === 'impostazioni'
+        {id === 'dashboard' ? <Dashboard /> : id === 'script' ? <Script arg={arg ?? undefined} /> : id === 'changelog' ? <Changelog /> : id === 'guida' ? <GuidePage /> : id === 'agenti' ? <AgentCatalogPage /> : id === 'impostazioni'
           ? <div className="bx bx-page bx-scroll" role="region" aria-label={t('cmp.app.settings')}><div className="bx-inner"><SettingsPage /></div></div>
           : id === 'skill'
             ? <div className="bx bx-page bx-scroll" role="region" aria-label={t('cmp.app.skills')}><div className="bx-inner"><SkillsPage /></div></div>
-            : <BrainPage id={id} arg={arg ?? undefined} onNavigate={goTarget} bridge={brainBridge} />}
+            : id === 'regole' || id === 'memoria'
+              ? <div className="bx bx-page bx-scroll" role="region" aria-label={pageLabel(id)}><div className="bx-inner">{id === 'regole' ? <RulesPage /> : <MemoryPage />}</div></div>
+              : id === 'classificatori' ? <ClassifiersPage /> : id === 'collegamenti' ? <MapPage />
+              : <BrainPage id={id} arg={arg ?? undefined} onNavigate={goTarget} bridge={brainBridge} />}
       </div>
     </div>
   );
@@ -216,7 +221,7 @@ export function App() {
 
   const inFocus = !!focusMode && page === 'home';
   // the Grindhouse has no "Ti aspettano" strip any more (the user, 2026-10-12: "togli le domande che compaiono in alto ti
-  // aspettano, adesso me le fa la regia"): each request is in its tile, the Regia or the global layer; focus mode keeps
+  // aspettano, adesso me le fa la regia"): each request is in its tile, the Orchestrator or the global layer; focus mode keeps
   // its Ctrl+J peek
   const showLane = inFocus && lanePeek;
   return (

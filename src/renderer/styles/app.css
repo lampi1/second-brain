@@ -1,4 +1,4 @@
-/* Component styles of the cockpit, built only on styles/tokens.css: shell, top bar, needs lane, tiles (chat, Regia,
+/* Component styles of the cockpit, built only on styles/tokens.css: shell, top bar, needs lane, tiles (chat, Orchestrator,
    browser), transcript rows, request panels, views (agents workspace, focus, brain pages), menus, dialogs, palette,
    toasts, tooltips. Motion is 120-180 ms ease-out for enter/expand only (never for streaming updates); everything
    turns off with prefers-reduced-motion. Imported once by main.tsx. */
@@ -107,7 +107,6 @@ html[data-blink="1"] .pill-dot { opacity: 0.35; } /* lib/beat.ts */
 .topbar-end { flex: none; display: flex; align-items: center; gap: 10px; }
 .topbar-more { position: relative; display: inline-flex; }
 .topbar-more .icon-btn.on { color: var(--blue); }
-.topbar-more .more-badge { position: absolute; top: -2px; right: -4px; pointer-events: none; background: var(--blue); color: #fff; }
 .topbar[data-fit~="1"] .segmented button span, .topbar[data-fit~="1"] .btn-danger > span:not(.count-badge) { display: none; }
 .topbar[data-fit~="2"] .ub-reset, .topbar[data-fit~="2"] .ub-today .ub-k, .topbar[data-fit~="2"] .ub-win-week .ub-meter { display: none; }
 .topbar[data-fit~="3"] .search-text, .topbar[data-fit~="3"] .next-label,
@@ -509,9 +508,9 @@ html[data-blink="1"] .md.streaming > .md-b:last-child > :last-child::after { opa
 .ask-chip.soft { font-weight: 500; color: var(--text-3); background: transparent; }
 .ask .step { margin-left: 0; }
 .ask-age { font-size: 11px; color: var(--text-3); flex: none; }
-.ask-q { font: 600 14px/1.45 var(--font-display); color: var(--text); letter-spacing: -0.003em; }
+.ask-q { font: 600 var(--fs-l)/1.45 var(--font-display); color: var(--text); letter-spacing: -0.003em; }
 /* the agent's context sentence in front of its question (lib/askSplit.ts): muted, the question stays the eye's first stop */
-.ask-lead { margin-bottom: -6px; font-size: 12.5px; line-height: 1.45; color: var(--text-3); overflow-wrap: anywhere; }
+.ask-lead { margin-bottom: -6px; font-size: var(--fs-m); line-height: 1.45; color: var(--text-3); overflow-wrap: anywhere; }
 .ask-opts { display: flex; flex-direction: column; gap: 6px; }
 .ask-opt {
   position: relative; display: flex; align-items: flex-start; gap: 10px; width: 100%; min-height: 38px; padding: 8px 10px; text-align: left; border-radius: var(--r-s);
@@ -528,7 +527,7 @@ html[data-blink="1"] .md.streaming > .md-b:last-child > :last-child::after { opa
 .ask-opt-text { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ask-opt-label { font-weight: 600; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; line-height: 1.35; }
 .rec-tag { font-size: 10.5px; font-weight: 600; color: var(--blue); background: var(--blue-bg); border: 1px solid var(--blue-line); padding: 0 7px; border-radius: 99px; line-height: 16px; }
-.ask-opt-desc { font-size: 12px; color: var(--text-3); line-height: 1.4; }
+.ask-opt-desc { font-size: var(--fs-s); color: var(--text-3); line-height: 1.4; }
 .ask-opt-num { flex: none; opacity: 0.75; }
 .ask-check {
   flex: none; width: 18px; height: 18px; margin-top: 1px; border-radius: 5px; border: 1.5px solid var(--border-3); background: var(--surface);
@@ -634,10 +633,10 @@ html[data-blink="1"] .md.streaming > .md-b:last-child > :last-child::after { opa
 .regia-tile .queued-chip .queued-now { background: var(--violet-bg); }
 .regia-tile .queued-chip .queued-now:hover { border-color: var(--regia-line-2); }
 
-/* Regia */
+/* Orchestrator */
 .regia-tile { background: var(--regia-bg); border-color: var(--regia-line); }
 .regia-tile.focused { border-color: var(--regia-line-2); }
-.regia-tile.paired:not(.pair-hot):not(.focused) { border-color: var(--regia-line); }   /* the Regia keeps its violet edge; the pair shows in the stripe */
+.regia-tile.paired:not(.pair-hot):not(.focused) { border-color: var(--regia-line); }   /* the Orchestrator keeps its violet edge; the pair shows in the stripe */
 .regia-tile .tile-head { border-color: var(--regia-line); }
 .regia-name { color: var(--violet); font-size: 13.5px; }
 .regia-tile .md strong { color: var(--violet); }
@@ -652,7 +651,7 @@ html[data-blink="1"] .md.streaming > .md-b:last-child > :last-child::after { opa
 }
 .decision:focus-visible, .decision:focus { outline: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--violet) 80%, transparent); }
 .decision-k { font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--violet); display: flex; align-items: center; }
-.decision-q { font-size: 13px; font-weight: 500; }
+.decision-q { font-size: var(--fs-m); font-weight: 500; }
 .cmd-lead { margin: 2px 0 6px; font-size: 13px; color: var(--text); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; } /* the chat's explanation before the block, in sight */
 .cmd-lead.small { font-size: 12px; -webkit-line-clamp: 2; }
 .decision-cmds { display: flex; flex-direction: column; gap: 6px; min-width: 0; } /* the commands of a question's turn (the questions window), each with Esegui */
@@ -660,30 +659,36 @@ html[data-blink="1"] .md.streaming > .md-b:last-child > :last-child::after { opa
 .decision .chip-opt { background: color-mix(in srgb, var(--violet) 6%, var(--surface-2)); }
 .decision .chip-opt.rec { border-color: color-mix(in srgb, var(--violet) 55%, transparent); }
 .decision .chip-opt.rec .kbd { color: var(--on-accent); background: var(--violet); border-color: var(--violet); }
-.feed { flex: none; display: flex; flex-direction: column; min-height: 0; max-height: 40%; border-top: 1px solid var(--regia-line); margin-top: auto; }
-.feed + .composer { margin-top: 0; }
-.feed-head {
-  flex: none; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px 0 var(--pad); background: none; border: 0; color: var(--text-3);
-  font-size: 10.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; cursor: pointer;
+/* "N novità in attesa" (HeldNews.tsx, #88): what the app holds back for the Orchestrator, above its input */
+.held { flex: none; display: flex; flex-direction: column; min-height: 0; max-height: 40%; border-top: 1px solid var(--regia-line); margin-top: auto; }
+.held + .composer { margin-top: 0; }
+.held-head {
+  flex: none; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px 0 var(--pad); background: none; border: 0;
+  color: var(--amber); font-size: 12px; font-weight: 600; cursor: pointer; text-align: left;
 }
-.feed-head:hover { color: var(--text-2); }
-.feed-chev { transition: transform var(--dur) var(--ease); }
-.feed:not(.open) .feed-chev { transform: rotate(-90deg); }
-.feed-body { overflow-y: auto; padding: 0 6px 6px; min-height: 0; }
-.feed-group { font-size: 10px; color: var(--text-4); text-transform: uppercase; letter-spacing: 0.09em; padding: 6px 6px 2px; font-weight: 600; }
-.feed-list { list-style: none; margin: 0; padding: 0; }
-.feed-row { width: 100%; display: flex; align-items: baseline; gap: 8px; padding: 4px 6px; border: 0; background: none; border-radius: 6px; font-size: 12px; text-align: left; cursor: pointer; color: var(--text-2); }
-.feed-row:hover { background: color-mix(in srgb, var(--violet) 7%, transparent); }
-.feed-k { flex: none; font-weight: 500; }
-.feed-t { flex: 1; min-width: 0; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-.feed-age { flex: none; color: var(--text-4); font-size: 11px; font-variant-numeric: tabular-nums; }
-.feed-empty { margin: 0; padding: 0 var(--pad) 10px; color: var(--text-3); font-size: 12px; }
-.tone-blue .feed-k { color: var(--blue); }
-.tone-red .feed-k { color: var(--red); }
-.tone-green .feed-k { color: var(--green); }
-.tone-amber .feed-k { color: var(--amber); }
-.tone-violet .feed-k { color: var(--violet); }
-.tone-dim .feed-k { color: var(--text-3); }
+.held-head:hover { background: color-mix(in srgb, var(--amber) 7%, transparent); }
+.held-head:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.held-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); flex: none; animation: heldPulse 2.4s var(--ease) infinite; }
+@keyframes heldPulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .held-dot { animation: none; } }
+.held-count { font-variant-numeric: tabular-nums; }
+.held-chev { color: var(--text-3); transition: transform var(--dur) var(--ease); }
+.held:not(.open) .held-chev { transform: rotate(-90deg); }
+.held-list { list-style: none; margin: 0; padding: 0 6px 6px; overflow-y: auto; min-height: 0; }
+.held-row {
+  width: 100%; display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; column-gap: 8px; row-gap: 1px; align-items: baseline;
+  padding: 5px 6px; border: 0; background: none; border-radius: 6px; font-size: 12px; text-align: left; cursor: pointer; color: var(--text-2);
+}
+.held-row:hover:not(:disabled) { background: color-mix(in srgb, var(--violet) 7%, transparent); }
+.held-row:disabled { cursor: default; }
+.held-k { font-weight: 600; font-size: 11px; }
+.held-t { min-width: 0; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.held-age { color: var(--text-4); font-size: 11px; font-variant-numeric: tabular-nums; }
+.held-why { grid-column: 2 / -1; color: var(--text-3); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tone-green .held-k { color: var(--green); }
+.tone-red .held-k { color: var(--red); }
+.tone-amber .held-k { color: var(--amber); }
+.tone-violet .held-k { color: var(--violet); }
 .empty-state { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 8px; padding: 20px 16px; }
 .empty-title { margin: 0; font: 600 15px var(--font-display); color: var(--text); }
 .empty-text { margin: 0 0 6px; color: var(--text-3); line-height: 1.5; max-width: 440px; }
@@ -1033,7 +1038,7 @@ html.overlay, html.overlay body, html.overlay #root { background: transparent; h
 .layer-who span { font-size: 11.5px; color: var(--text-3); }
 .layer-badge { flex: none; display: inline-grid; place-items: center; min-width: 22px; height: 20px; padding: 0 7px; border-radius: 99px; background: var(--amber); color: #1b1304; font-size: 11.5px; font-weight: 700; }
 .layer-card .ask { animation: none; }
-.layer-card .ask-q { font-size: 13px; }
+.layer-card .ask-q { font-size: var(--fs-m); }
 .layer-foot { display: flex; align-items: center; gap: 8px; padding: 0 2px; font-size: 11.5px; color: var(--text-3); min-width: 0; }
 .layer-queue { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .layer-keys { flex: none; display: inline-flex; gap: 5px; align-items: center; }
@@ -1075,14 +1080,14 @@ html.overlay body:focus-within .layer-hint { display: none; }
 .slash-foot { padding: 4px 8px 2px; color: var(--text-4); font-size: var(--fs-xs); }
 /* the context of a question (AskContext.tsx): links always in sight, the turn's prose under a toggle */
 .ask-ctx { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.ctx-toggle { display: flex; align-items: center; gap: 6px; min-width: 0; width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-s); padding: 5px 8px; color: var(--text-2); font-size: 12px; cursor: pointer; text-align: left; }
+.ctx-toggle { display: flex; align-items: center; gap: 6px; min-width: 0; width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-s); padding: 5px 8px; color: var(--text-2); font-size: var(--fs-s); cursor: pointer; text-align: left; }
 .ctx-toggle:hover { color: var(--text); border-color: var(--border-2); }
 .ctx-toggle:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus); }
 .ctx-toggle b { flex: none; font-weight: 600; color: var(--text); }
 .ctx-summary { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-3); }
 .ctx-toggle .tool-chev { flex: none; margin-left: auto; }
 .ask-ctx.open .ctx-toggle .tool-chev { transform: rotate(90deg); }
-.ctx-body { max-height: 320px; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r-s); background: var(--surface); font-size: 13px; user-select: text; scrollbar-width: thin; }
+.ctx-body { max-height: 320px; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r-s); background: var(--surface); font-size: var(--fs-m); user-select: text; scrollbar-width: thin; }
 .ctx-piece.thinking { border-left: 2px solid var(--amber-line); padding-left: 8px; }
 .ctx-piece.preview { border-left: 2px solid var(--blue-line); padding-left: 8px; }
 .ctx-from { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); margin-bottom: 2px; }
@@ -1094,7 +1099,7 @@ html.overlay body:focus-within .layer-hint { display: none; }
 .ctx-link:hover { text-decoration: underline; }
 .ctx-link:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus); }
 .ctx-link.file { font: inherit; font-size: 12px; }
-/* the Regia card's "Poi:" row (RegiaTile.tsx): its other requests as pills */
+/* the Orchestrator card's "Poi:" row (RegiaTile.tsx): its other requests as pills */
 .qwin-queue { flex: none; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 14px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-3); }
 .qwin-queue-k { font-weight: 600; }
 .qwin-queue-item { padding: 1px 8px; border-radius: 99px; background: var(--surface-3); color: var(--text-2); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1126,7 +1131,7 @@ html.overlay body:focus-within .layer-hint { display: none; }
 .msg-notes { max-width: 88%; margin: 2px 4px 0; display: block; font-size: 11px; color: var(--text-4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .msg-notes > svg { vertical-align: -1px; }
 
-/* "Nuova chat" in a Regia's input and its badge on the message; "Apri" chips for the chats she opened, wrote to or
+/* "Nuova chat" in an Orchestrator's input and its badge on the message; "Apri" chips for the chats she opened, wrote to or
    named (ChatInput.tsx, ChatRefChips.tsx; ADR 0034) */
 .newchat-toggle { flex: none; display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 99px; border: 1px dashed var(--regia-line-2);
   background: transparent; color: var(--text-3); font: 500 11px var(--font); white-space: nowrap; cursor: pointer; }

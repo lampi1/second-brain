@@ -1,5 +1,5 @@
 // E2E test of the folded messages the user did not type (renderer lib/foreign.ts) on the demo (SB_DEMO=1, frozen): in
-// the Regia, mail from a work chat and an Esegui result show as one muted line each (sender + first words), the
+// the Orchestrator, mail from a work chat and an Esegui result show as one muted line each (sender + first words), the
 // user's own message stays a bubble, a click opens the whole text and a second click folds it again; the input never
 // gets their text. Screenshots in test-results/shots/.
 import { expect, test } from '@playwright/test';

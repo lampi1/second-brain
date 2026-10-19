@@ -143,7 +143,7 @@ export function Qualita({ nav }: { arg?: string; nav: Navigate }) {
                   question: 'Da quale parto e qual è il primo passo per sbloccarla?' } : undefined}
                 find={app.prs.blocked.length ? <><b>{app.prs.blocked.length} PR</b> aspettano te prima del lavoro nuovo.</> : app.prs.total ? <>Nessuna PR ferma: nessuna build fallita, nessun test case fallito o voto negativo.</> : <>Nessuna PR attiva all'ultima lettura.</>}
                 next={app.prs.blocked.length ? <>sistema queste prima di tutto il resto: la QA è ferma su di te</> : undefined}
-                source={<>lettura DevOps delle tue PR attive (pagina DevOps, sola lettura){app.prs.at ? <>, {fmt.when(app.prs.at)}</> : <>: mai letta</>}. Ferma = build fallita, test case collegato Failed o Blocked, voto «rifiutata» o «in attesa dell'autore».</>}>
+                source={<>lettura DevOps delle tue PR attive (pagina Task, sola lettura){app.prs.at ? <>, {fmt.when(app.prs.at)}</> : <>: mai letta</>}. Ferma = build fallita, test case collegato Failed o Blocked, voto «rifiutata» o «in attesa dell'autore».</>}>
                 {app.prs.error && <p className="bx-warnline" role="note">{app.prs.error}</p>}
                 {app.prs.blocked.length > 0 && (
                   <ul className="bx-list" data-testid="bx-q-pr-list">

@@ -1,5 +1,5 @@
 // Auto-close in the chat manager against the fake CLI: the last result and the background tasks on the summary, archive
-// (process ends, record kept, persisted), reopen, a message reopens it by itself, the Regia never closes, the auto
+// (process ends, record kept, persisted), reopen, a message reopens it by itself, the Orchestrator never closes, the auto
 // archive is refused while the chat works, runs background tasks (a resumed agent too) or its last answer waits for them.
 import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';

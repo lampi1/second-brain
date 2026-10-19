@@ -89,6 +89,7 @@ function PackReview({ request, close }: { request: PackRequest; close: () => voi
       {review && <>
         <p>{review.kind}</p><ul>{review.agents.map(agent => <li key={agent.name}><strong>{agent.name}</strong> · {agent.description}</li>)}</ul>
         <h3>{t('pack.include')}</h3><ul>{review.skills.map(skill => <li key={skill}>{skill}</li>)}</ul>
+        {!!review.rules?.length && <><h3>{t('pack.rules')}</h3><ul>{review.rules.map(rule => <li key={rule}>{rule}</li>)}</ul><p>{t('pack.rulesHint')}</p></>}
         {!!review.scripts.length && <><h3>{t('pack.scripts')}</h3>{review.scripts.map((script, index) => <details key={index}><summary>{script.file} · {script.kind}</summary><pre>{script.text}</pre></details>)}<label className="pack-check"><input type="checkbox" checked={scripts} onChange={e => setScripts(e.target.checked)} />{t('pack.approveScripts')}</label><p>{t('pack.scriptHint')}</p></>}
         {!!review.ignored.length && <details><summary>{t('pack.ignored')}</summary><ul>{review.ignored.map(file => <li key={file}>{file}</li>)}</ul></details>}
         <h3>{t('pack.permissions')}</h3><ul>{review.clamps.map(value => <li key={value}>{value}</li>)}</ul>

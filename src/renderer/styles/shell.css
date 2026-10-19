@@ -1,5 +1,5 @@
 /* Styles of the navigation shell, built on styles/tokens.css: the left navigation with badges, back/forward and the
-   bell in the top bar, the frame of brain pages, the docked Regia, the full-screen map layer, the highlight of an
+   bell in the top bar, the frame of brain pages, the docked Orchestrator, the full-screen map layer, the highlight of an
    element reached through a link, the notification center, and the event toasts of the global layer.
    Imported once by main.tsx (after app.css). */
 
@@ -34,7 +34,7 @@
 .bell-n { position: absolute; top: 2px; right: 1px; min-width: 16px; height: 15px; padding: 0 4px; border-radius: 99px; background: var(--blue); color: var(--on-accent); font-size: 10px; font-weight: 700; display: grid; place-items: center; }
 .bell-dnd { position: absolute; bottom: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--violet); box-shadow: 0 0 0 2px var(--bg-2); }
 .workspace.no-regia { grid-template-columns: minmax(0, 1fr); }
-/* ------------------------------------------------- the Regia widget, docked bottom-right (RegiaOverlay.tsx, ADR 0028) */
+/* ------------------------------------------------- the Orchestrator widget, docked bottom-right (RegiaOverlay.tsx, ADR 0028) */
 /* its room (--regia-r expanded, --regia-b collapsed; App.tsx) is left free by the workspace, the map and the questions window */
 .workspace { padding-right: calc(var(--gap) + var(--regia-r, 0px)); padding-bottom: calc(var(--gap) + var(--regia-b, 0px)); }
 .map-layer { padding-right: var(--regia-r, 0px); padding-bottom: var(--regia-b, 0px); }

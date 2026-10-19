@@ -1,4 +1,4 @@
-// The one rule for engines (src/main/engines/policy.ts, ADR 0046): an engine off refuses everyone; «Le Regie possono
+// The one rule for engines (src/main/engines/policy.ts, ADR 0046): an engine off refuses everyone; «Gli Orchestrator possono
 // usare X» off refuses every agent's open or resume there, its own engine's too; cross-engine messaging is always on.
 import { describe, expect, it } from 'vitest';
 import { agentsMayOpen, crossRefusal, engineOn, openRefusal, type EngineSwitches } from '../../../src/main/engines/policy';

@@ -119,7 +119,7 @@ async function promote(staging = false, quick = false) {
     say('npm run test:stable …');
     execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'test:stable'], { cwd: repo, stdio: 'inherit', shell: process.platform === 'win32' });
   }
-  // the check took minutes and agents work in this folder ("Migliora l'app", ADR 0020): build only what was checked
+  // the check took minutes and agents may work in this folder: build only what was checked
   const shaNow = execFileSync('git', ['-C', repo, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
   const dirtyNow = execFileSync('git', ['-C', repo, 'status', '--porcelain'], { encoding: 'utf8' }).trim();
   if (shaNow !== sha || (!staging && dirtyNow)) throw new Error(`the repo changed during the check (${sha} -> ${shaNow}${dirtyNow ? ', uncommitted changes' : ''}): nothing promoted, run it again`);
@@ -161,7 +161,7 @@ async function promote(staging = false, quick = false) {
   // loaded here, not at the top: the launcher copy of this script (next to launch.cmd) runs without fuses.mjs
   const { ensureCookieEncryption } = await import('./fuses.mjs');
   say(`cookie encryption: ${ensureCookieEncryption(electronFor(ev))}`);
-  // repo: where it was built from, the default code folder of "Migliora l'app" (ADR 0020)
+  // repo: where it was built from, the default code folder that "Aggiorna" updates (ADR 0075)
   // Ship the empty public template, never the builder's brain or machine configuration.
   fs.cpSync(path.join(repo, 'brain-template'), path.join(dest, 'brain-template'), { recursive: true });
   const { templateManifest } = await import('./template-manifest.mjs');
@@ -319,7 +319,7 @@ function startSelected(id, rel, ready, snapshot) {
   }).pending;
 }
 
-// <base>/launch-result.json: how the last start went, read by the app after it starts (the "Migliora l'app" banner:
+// <base>/launch-result.json: how the last start went, read by the app after it starts (the restart banner:
 // the new release started, or the previous one and why). Atomic, never an error if it cannot be written.
 function writeResult(result) {
   const f = path.join(base, 'launch-result.json');

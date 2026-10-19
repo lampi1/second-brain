@@ -1,12 +1,12 @@
-// Fake ops/tools/devops-me.mjs for the e2e tests (test/e2e/devops.spec.ts): prints what the brain's real script prints
-// with --json and --prs --json (with --full: the work items' details and the PRs' last comment), with neutral sample data and example URLs, and no network. When a file "devops-fail"
+// Fake ops/tools/devops-me.mjs for the e2e tests (test/e2e/task.spec.ts): prints what the brain's real script prints
+// with --json and --prs --json (with --full: the work items' details and the PRs' last comment), with neutral sample data and example URLs, and no network. When a file "task-fail"
 // sits in the brain folder (two levels up) it exits 2 with the real script's "az login" message, like an expired login.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const brain = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-if (fs.existsSync(path.join(brain, 'devops-fail'))) {
+if (fs.existsSync(path.join(brain, 'task-fail'))) {
   console.error('DevOps: login di Azure mancante o scaduto. Lancia: az login');
   process.exit(2);
 }

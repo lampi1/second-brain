@@ -83,7 +83,7 @@ describe('reduce', () => {
     expect(reduce(s, { type: 'chat:updated', chat: chat('a') })).toBe(s);
   });
 
-  // several Regie (ADR 0021): main moves a role and sends both updates; the store shows what main says
+  // several Orchestrators (ADR 0021): main moves a role and sends both updates; the store shows what main says
   it('a second Regia sits next to the first; a role moves only with main\'s update of the old one', () => {
     let s = reduce(init(), { type: 'chat:updated', chat: chat('a', { isRegia: true }) });
     const bRef = s.chats.b;
