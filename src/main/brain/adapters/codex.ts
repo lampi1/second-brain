@@ -16,7 +16,7 @@ import { instructionsOf, launchRules, skillDirs, type BrainDomain } from './doma
 import type { CodexApproval, CodexSandbox } from '../../chats/codex';
 import { codexPolicyFor } from './codex-policy';
 import type { AgentPolicy } from '../../agents/tool-policy';
-import { APP_MAIL_TOOLS, appEndpoint } from '../../chats/app-tool-approval';
+import { APP_CHAT_TOOLS, appEndpoint } from '../../chats/app-tool-approval';
 
 export interface CodexLaunch {
   configArgs: string[];
@@ -43,13 +43,13 @@ export interface CodexLaunchInput {
 /** A value safe on a cmd.exe command line and in a -c override (chats/cli.ts cliArgv's plain-argument rule). */
 const PLAIN = /^[\w.:@/=[\],-]+$/;
 
-// Match Claude: every app-control tool, but only mail/list on the browser server.
+// Match Claude: every app-control tool, but only mail/list and delegation on the browser server.
 function attachMcp(config: string[], server: 'second-brain' | 'second-brain-app', raw: string | null): void {
   if (!raw || !PLAIN.test(raw)) return;
   config.push(`mcp_servers.${server}.url=${raw}`);
   if (!appEndpoint(raw)) return;
   config.push(`mcp_servers.${server}.default_tools_approval_mode=${server === 'second-brain-app' ? 'approve' : 'prompt'}`);
-  if (server === 'second-brain') for (const tool of APP_MAIL_TOOLS) config.push(`mcp_servers.${server}.tools.${tool}.approval_mode=approve`);
+  if (server === 'second-brain') for (const tool of APP_CHAT_TOOLS) config.push(`mcp_servers.${server}.tools.${tool}.approval_mode=approve`);
 }
 
 /** Without a product brain (ADR 0062) the joined AGENTS.md of every domain, exactly as before (`{domain:x}` resolves

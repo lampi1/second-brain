@@ -49,12 +49,14 @@ import { sessionFor } from '../engines/sessions';
 import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
 import { waitsForPeople, waitsForWork } from '../../shared/waiting';
 import { claudeHome, findTranscript, readHistory } from './transcript';
-import type { AgentCatalogService } from '../agents/catalog';
 import { orchestratorOwner, plainOwner, type ResolvedRole } from '../agents/catalog';
-import { aboveCeiling, browserAccess, claudeDefaultMode, commandsReadOnly, narrowest, readOnlyCommand, type AgentPolicy, type BrowserAccess } from '../agents/tool-policy';
+import { aboveCeiling, belowParent, browserAccess, claudeDefaultMode, commandsReadOnly, narrowest, readOnlyCommand, within, type AgentPolicy, type BrowserAccess } from '../agents/tool-policy';
 import { type AgentOwnerSnapshot, type AgentRun, type AgentRunEnd, type AgentRunOutcome, type AgentRunTags } from '../../shared/agents';
 import { AgentRunStore, addSkill, addTurn, APP_MAX, endRun, REPO_MAX, reopenRun, SKILL_ID, SKILLS_MAX, staleDue, tagName, type RunLinks } from '../agents/runs';
 import { reportOf } from '../agents/run-report';
+import { gateRequest } from '../agents/role-gate';
+import { APP_CHAT_TOOLS } from './app-tool-approval';
+import { resultMessage, type DelegationLimitHit, type DelegationResult } from '../../shared/delegation';
 import { aiErrorRuns, runMetrics } from '../agents/run-metrics';
 import { isCorrection } from '../../shared/correction';
 import { AgentChildrenReducer } from './agent-children';
@@ -70,7 +72,8 @@ import { recallWarning, type Recall } from '../search/hybrid/recall';
 export interface ChatManagerOptions {
   /** the roles in a few lines, for the Orchestrator's first message of a session (agents/discovery.ts roleCatalogBrief) */
   roleCatalogBrief?: () => string;
-  resolveAgent?: AgentCatalogService['resolve'];
+  /** the role a new chat runs (catalog.resolve), with the plugin of its launch (only the skills it was given) */
+  resolveAgent?: (req: NewChat) => ResolvedRole & { assets?: { pluginDir: string; skillRoot: string } };
   onAutoCloseActivity?: (chatId: string) => void;
   emitter: Pick<Emitter, 'emit'>;
   userData: string;
@@ -215,6 +218,8 @@ interface Rec {
   autoCompleted?: boolean;
   agentInstructions?: string;
   agentAssets?: { pluginDir: string; skillRoot: string };
+  /** the skills its launch gave it (role defaults, linked and the launch's own): the role gate allows only these */
+  skills?: string[];
   /** the agent's tool policy and permission ceiling, frozen at start like its instructions (A2) */
   policy?: AgentPolicy | null;
   /** the agent's "Contesto massimo" (tokens): the compaction window of its engine instead of the user's setting (#80) */
@@ -453,13 +458,18 @@ export class ChatManager implements ChatService {
       if (current && req.replaces !== current.id) return current;
       req = { ...req, orchestrator: true, title: ORCHESTRATOR_TITLE };
     }
-    const agent: Pick<ResolvedRole, 'request' | 'owner' | 'instructions' | 'policy' | 'maxContext' | 'tier'> & { assets?: { pluginDir: string; skillRoot: string } } = inherited ? { ...inherited, policy: inherited.policy ?? null, request: req }
+    const agent: Pick<ResolvedRole, 'request' | 'owner' | 'instructions' | 'policy' | 'maxContext' | 'tier'> & { skills?: string[]; assets?: { pluginDir: string; skillRoot: string } } = inherited ? { ...inherited, policy: inherited.policy ?? null, request: req }
       : this.opts.resolveAgent?.(req) ?? { request: req, owner: plainOwner(req.harness, req.model ?? null), instructions: '', policy: null };
     req = agent.request;
+    // a delegated chat (agent_delegate): only an agent's, under a live parent, in the parent's folder, linked to its run
+    const delegator = req.parentId !== undefined ? this.delegator(req, by) : undefined;
+    if (delegator?.s.run) links = { ...links, parentRunId: delegator.s.run.runId };
     // never wider than the chat it comes from: a fork of its session, the Orchestrator it renews, the chat that opens it
     const forkSrc = req.resumeSessionId?.trim() ? [...this.chats.values()].find(r => r.s.sessionId === req.resumeSessionId?.trim()) : undefined;
-    const parent = forkSrc ?? (req.replaces ? this.chats.get(req.replaces) : undefined) ?? (by === 'agent' ? [...this.chats.values()].find(r => r.s.isOrchestrator && !r.s.closedAt) : undefined);
-    const policy = narrowest(agent.policy, parent?.policy);
+    const parent = delegator ?? forkSrc ?? (req.replaces ? this.chats.get(req.replaces) : undefined) ?? (by === 'agent' ? [...this.chats.values()].find(r => r.s.isOrchestrator && !r.s.closedAt) : undefined);
+    // a delegated chat: its role's policy, below its parent's, narrowed again by the contract's tool classes
+    const policy = delegator ? narrowest(belowParent(agent.policy, delegator.policy, this.modeFor(delegator)), req.delegation?.tools ? { tools: { allow: req.delegation.tools }, ceiling: null } : null)
+      : narrowest(agent.policy, parent?.policy);
     // an explicit mode above the agent's ceiling runs at the ceiling (the chat shows the mode it really has)
     if (policy && req.permissionMode && aboveCeiling(req.permissionMode, policy.ceiling)) req = { ...req, permissionMode: policy.ceiling! };
     const engine = engineOrThrow(req.harness);
@@ -507,10 +517,12 @@ export class ChatManager implements ChatService {
         state: viaQueue && !warm ? 'idle' : 'starting', costUsd: 0, pending: 0, isOrchestrator: !!req.orchestrator, lastText: '', updatedAt: now, browserTabIds: [],
         ...(caps.cost ? {} : { costKnown: false as const }),
         ...(req.route ? { route: req.route } : {}),
+        ...(delegator ? { parentId: delegator.s.id, ...(req.delegation ? { delegation: req.delegation } : {}) } : {}),
       },
       createdAt: now,
       agentInstructions: agent.instructions,
       ...(agent.assets ? { agentAssets: agent.assets } : {}),
+      ...(agent.assets && agent.skills ? { skills: agent.skills } : {}),
       ...(policy ? { policy } : {}),
       ...(agent.maxContext ? { maxContext: agent.maxContext } : {}),
       choice: { model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null },
@@ -521,7 +533,7 @@ export class ChatManager implements ChatService {
       items: [], pending: new Map(), session: null, historyLoaded: false,
       jobNew: true, firstPrompt: null, turnSinceDone: false, lastTurnAt: 0,
     };
-    if (agent.owner.source === 'catalog' && !req.orchestrator) this.startRun(r, { agentId: agent.owner.id, version: agent.owner.version ?? 1, goal: req.goal ?? prompt ?? title, startedBy: by === 'agent' ? 'orchestrator' : 'user', costKnown: caps.cost, ...links,
+    if (agent.owner.source === 'catalog' && !req.orchestrator) this.startRun(r, { agentId: agent.owner.id, version: agent.owner.version ?? 1, goal: req.goal ?? prompt ?? title, startedBy: delegator ? 'parent' : by === 'agent' ? 'orchestrator' : 'user', costKnown: caps.cost, ...links,
       tags: { ...asked, repo: repoOf(cwd) }, ...(agent.tier ? { tier: agent.tier } : {}), model: req.model ?? null });
     this.chats.set(id, r);
     if (old) {
@@ -543,6 +555,15 @@ export class ChatManager implements ChatService {
       }
     }
     return { ...r.s };
+  }
+
+  /** The live chat a delegated chat starts under (agent_delegate): it exists, is open and is not the Orchestrator (the
+   *  Orchestrator opens root chats with app_create_chat), and the child's folder lies inside the parent's. */
+  private delegator(req: NewChat, by: 'user' | 'agent'): Rec {
+    const parent = req.parentId ? this.chats.get(req.parentId) : undefined;
+    if (by !== 'agent' || !parent || parent.s.closedAt || parent.s.isOrchestrator) throw new Error('Delega rifiutata: la chat che delega non è una chat di lavoro aperta.');
+    if (!within(parent.s.cwd, typeof req.cwd === 'string' ? req.cwd.trim() : '')) throw new Error(`Delega rifiutata: la cartella deve stare dentro quella del genitore (${parent.s.cwd}).`);
+    return parent;
   }
 
   /** A message, optionally with images (pasted screenshots; checked here: images.ts). Text may be empty with images.
@@ -1361,7 +1382,53 @@ export class ChatManager implements ChatService {
     return !children || children.coverage !== 'complete' || children.active === null || children.active > 0 || this.observedChildrenBusy(r);
   }
   private observedChildrenBusy(r: Rec): boolean {
-    return r.s.agentChildren?.children.some(child => ['running', 'waiting', 'unknown'].includes(child.state)) ?? false;
+    return (r.s.agentChildren?.children.some(child => ['running', 'waiting', 'unknown'].includes(child.state)) ?? false) || this.delegatedBusy(r.s.id);
+  }
+  /** A delegated child still owes this chat its result (open, no agent_report yet): the parent waits for it. */
+  private delegatedBusy(parentId: string): boolean {
+    for (const c of this.chats.values()) if (c.s.parentId === parentId && !c.s.closedAt && c.s.delegation && !c.s.delegation.result) return true;
+    return false;
+  }
+
+  /** The chats this one delegated (agent_delegate), oldest first. */
+  delegatedBy(parentId: string): ChatSummary[] {
+    return this.list().filter(c => c.parentId === parentId);
+  }
+
+  /** A delegated chat's agent_report (agents/delegation.ts checked it): the result is kept on the chat and its run, its
+   *  assignment completes at the end of this turn, and the parent gets it as a message at once (it reopens a closed
+   *  parent). At most one per delegation. */
+  reportDelegation(chatId: string, result: DelegationResult): { parentId: string; delivered: boolean } {
+    const r = this.need(chatId), d = r.s.delegation, parentId = r.s.parentId;
+    if (!d || !parentId) throw new Error('agent_report: only a delegated chat reports (agent_delegate started it); report to the Orchestrator with send_to_chat.');
+    if (d.result) throw new Error('agent_report: this delegation already has its result.');
+    const at = Date.now(), met = result.doneWhen.filter(x => x.met).length;
+    r.s.delegation = { ...d, result: { outcome: result.outcome, summary: result.summary, at } };
+    const run = r.s.run;
+    if (run && run.endedAt === undefined) {
+      run.report = { at, outcome: result.outcome, verified: met === result.doneWhen.length ? 'yes' : met ? 'partial' : 'no', summary: cut(result.summary, 140) };
+      this.runSave();
+    }
+    r.report = { text: result.summary, at, ...(result.outcome === 'blocked' ? { blocked: true } : {}) };
+    this.persist();
+    this.updated(r);
+    const parent = this.chats.get(parentId);
+    if (parent) {
+      this.updated(parent); // its waiting on this child may be over
+      this.send(parentId, resultMessage(d.role, r.s.title, result), undefined, false, r.s.title)
+        .catch(e => log.warn('chats', 'delegation result not delivered', { chat: parentId, cause: errText(e), hint: 'the result stays on the child chat; agent_children lists it' }));
+    }
+    log.info('chats', 'delegation reported', { chat: chatId, data: { parent: parentId, outcome: result.outcome, met, criteria: result.doneWhen.length } });
+    return { parentId, delivered: !!parent };
+  }
+
+  /** agent_delegate refused by a delegation limit: the parent's transcript says so and the chat carries the mark. */
+  limitNotice(chatId: string, kind: DelegationLimitHit['kind'], limit: number): void {
+    const r = this.chats.get(chatId);
+    if (!r) return;
+    r.s.limitHit = { kind, limit, at: Date.now() };
+    this.addItem(r, sysItem(kind === 'depth' ? 'delegationDepth' : 'delegationParallel', { limit }, 'warn'), false);
+    this.updated(r);
   }
 
   /** Synchronous last resort (before app.exit, will-quit, process exit): a detached taskkill /T for every CLI process
@@ -1669,6 +1736,26 @@ export class ChatManager implements ChatService {
     try { this.runs.save(); } catch (e) { log.warn('chats', 'agent runs not saved', { cause: errText(e), hint: 'the next run change writes them again' }); }
   }
 
+  /** The role gate (agents/role-gate.ts) on a request before it reaches the user: an assigned skill is allowed at once,
+   *  an unassigned one, an engine sub-agent other than a search and a request beyond the delegating chat's permissions
+   *  are refused, visibly. True = answered here. */
+  private gated(r: Rec, req: Omit<PendingRequest, 'chatId'>): boolean {
+    const owner = r.s.agent, parent = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
+    if (owner?.source !== 'catalog' || r.s.isOrchestrator) return false;
+    const verdict = gateRequest(req, { role: { id: owner.id, name: owner.name }, skills: r.skills ?? [],
+      ...(r.s.parentId ? { parent: { policy: parent ? parent.policy ?? null : r.policy ?? null, title: parent?.s.title ?? r.s.parentId } } : {}) });
+    if (verdict.kind === 'pass') return false;
+    if (verdict.kind === 'allow') {
+      r.session?.answer(req.id, { kind: 'permission', allow: true });
+      log.info('chats', 'role gate allowed', { chat: r.s.id, data: { tool: req.tool } });
+      return true;
+    }
+    this.addItem(r, sysItem(verdict.code, verdict.params, 'warn'), false);
+    r.session?.answer(req.id, { kind: 'permission', allow: false, message: verdict.message });
+    log.info('chats', 'role gate refused', { chat: r.s.id, data: { tool: req.tool, code: verdict.code } });
+    return true;
+  }
+
   /** A role that may only read commands (shell-read): a command it asks to run that does not only read is refused at
    *  once, visibly, and never reaches the user; one that reads reaches the user without "always" (a rule would let
    *  later commands through unchecked). */
@@ -1726,10 +1813,13 @@ export class ChatManager implements ChatService {
         ...(c.continuedFrom ? { continuedFrom: c.continuedFrom } : {}), ...(c.continuedBy ? { continuedBy: c.continuedBy } : {}),
         ...(c.closedAt ? { closedAt: c.closedAt, closedBy: c.closedBy ?? 'auto' } : {}),
         ...(c.route ? { route: c.route } : {}),
+        ...(c.parentId ? { parentId: c.parentId } : {}),
+        ...(c.delegation ? { delegation: c.delegation } : {}),
       },
       createdAt: c.createdAt,
       agentInstructions: c.agentInstructions ?? '',
       ...(c.agentAssets ? { agentAssets: c.agentAssets } : {}),
+      ...(c.agentSkills ? { skills: c.agentSkills } : {}),
       ...(c.agentPolicy ? { policy: c.agentPolicy } : {}),
       ...(c.agentMaxContext ? { maxContext: c.agentMaxContext } : {}),
       children,
@@ -1755,6 +1845,7 @@ export class ChatManager implements ChatService {
       id: r.s.id, harness: r.s.harness, cwd: r.s.cwd, sessionId: r.s.sessionId, ...(r.forkFrom ? { forkFrom: r.forkFrom } : {}),
       ...(r.s.agent ? { agent: r.s.agent, agentInstructions: r.agentInstructions ?? '' } : {}),
       ...(r.agentAssets ? { agentAssets: r.agentAssets } : {}),
+      ...(r.skills ? { agentSkills: r.skills } : {}),
       ...(r.policy ? { agentPolicy: r.policy } : {}),
       ...(r.maxContext ? { agentMaxContext: r.maxContext } : {}),
       ...(r.s.run ? { run: r.s.run, ...(r.idleSince ? { runIdleSince: r.idleSince } : {}) } : r.runPruned ? { runPruned: r.runPruned } : {}),
@@ -1772,6 +1863,8 @@ export class ChatManager implements ChatService {
       ...(r.s.closedAt ? { closedAt: r.s.closedAt, closedBy: r.s.closedBy ?? 'auto' } : {}),
       ...(r.working ? { working: true as const } : {}),
       ...(r.s.route ? { route: r.s.route } : {}),
+      ...(r.s.parentId ? { parentId: r.s.parentId } : {}),
+      ...(r.s.delegation ? { delegation: r.s.delegation } : {}),
     }));
     if (strict) this.store.checkpoint(rows); else this.store.save(rows);
   }
@@ -1962,13 +2055,13 @@ export class ChatManager implements ChatService {
     sess.start();
   }
 
-  /** pre-allowed on Claude: the Orchestrator's app-control tools (/mcp/app), and every chat's mail to other
-   *  chats (text only, labelled as not the user's; the auto-mode classifier sometimes refused the same message sent
+  /** pre-allowed on Claude: the Orchestrator's app-control tools (/mcp/app), and every chat's mail to other chats and
+   *  delegation tools (app-tool-approval.ts; mail is text only, labelled as not the user's; the auto-mode classifier sometimes refused the same message sent
    *  with Bash, 12/10). r = undefined: a warm engine (warm.ts), never an Orchestrator. */
   private extraArgsFor(harness: Harness, chatId: string, r: Rec | undefined): string[] | null {
     const allowed = !engineOf(harness)?.caps.preAllow ? [] : [
       ...(this.appMcpFor(r) ? ['mcp__second-brain-app'] : []),
-      ...(this.opts.mcpUrlFor?.(chatId) ? ['mcp__second-brain__send_to_chat', 'mcp__second-brain__list_chats'] : []),
+      ...(this.opts.mcpUrlFor?.(chatId) ? APP_CHAT_TOOLS.map(t => `mcp__second-brain__${t}`) : []),
     ];
     return this.opts.extraArgs || allowed.length ? [...(this.opts.extraArgs ?? []), ...(allowed.length ? ['--allowedTools', allowed.join(',')] : [])] : null;
   }
@@ -2076,7 +2169,7 @@ export class ChatManager implements ChatService {
       },
       pending: req => {
         if (!live()) return;
-        if (this.refusedCommand(r, req)) return;
+        if (this.gated(r, req) || this.refusedCommand(r, req)) return;
         this.hook('analytics', () => this.analytics.pending(r.s, req));
         this.autoActivity(r);
         const full: PendingRequest = { ...req, chatId };

@@ -24,10 +24,12 @@ import { ProgressService } from './agents/progress';
 import { mountLifecycleApi, type LifecycleApi } from './agents/lifecycle-api';
 import { createAgentLoop } from './agents/loop';
 import { childFeedbackTools } from './agents/child-feedback';
+import { delegationTools } from './agents/delegation';
 import type { AgentRun } from '../shared/agents';
 import type { SkillSuggestions } from '../shared/skill-suggest';
 import { mountTextTool, TEXT_ENV } from './engines/text-mcp';
-import { agentsMayOpen, crossRefusal, engineOn } from './engines/policy';
+import { agentsMayOpen, crossRefusal, engineOn, openRefusal } from './engines/policy';
+import { checkedDelegation } from '../shared/roles';
 import { createEngines, type EnginesApi } from './engines/service';
 import { safeStorageCipher } from './engines/secrets';
 import { CloudService, cloudFile } from './cloud/service';
@@ -49,7 +51,7 @@ import { runMetrics } from './agents/run-metrics';
 import { listPrice, setPriceTable } from './chats/live-cost';
 import type { McpServer, McpTool, ToolOutput } from './mcp/server';
 import { createBrowserModule, mcpPortFromEnv } from './browser/service';
-import { appControlTools, orchestratorEndpointAuth, type ToolDef, type ToolOut } from './appctl/tools';
+import { AGENT_LABEL, appControlTools, orchestratorEndpointAuth, type ToolDef, type ToolOut } from './appctl/tools';
 import { ChatMail, mailTools } from './chats/mail';
 import { brainClassifier } from './chats/orchestrator-delivery';
 import { readOrchestratorMail } from './brain/brain-settings';
@@ -416,9 +418,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     resolveAgent: req => {
       const resolved = agents.resolve(req);
       if (req.roleId === undefined || req.orchestrator) return resolved;
-      const runtime = agentPacks.packs.runtime(req.roleId);
+      // only the skills this launch gives exist in its plugin (the role gate refuses the others)
+      const runtime = agentPacks.packs.runtime(req.roleId, req.skills ?? []);
       const resolvedHarness = resolved.request.harness;
-      return { ...resolved, assets: { pluginDir: runtime.pluginDir, skillRoot: runtime.skillRoot },
+      return { ...resolved, skills: runtime.skills, assets: { pluginDir: runtime.pluginDir, skillRoot: runtime.skillRoot },
         instructions: resolvedHarness === 'cursor' ? `${resolved.instructions}\n\n${runtime.instructions}` : resolved.instructions };
     },
     onRunEnded: run => loopRef.current?.ended(run),
@@ -606,7 +609,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const lifecycleApi = loop.api;
   mountLifecycleApi(brain, lifecycleApi);
   // a parent's own child runs: listed and judged on its chat's token endpoint (agents/child-feedback.ts)
-  addChatTools(childFeedbackTools(lifecycleApi, () => manager.runs.list()));
+  addChatTools(childFeedbackTools(lifecycleApi));
+  // parent-to-child delegation between role chats (ADR 0083): every chat's own endpoint, the caller is its token's chat
+  addChatTools(delegationTools({ chats: manager, roles: () => agents.list(), settings: () => checkedDelegation(brain.settings().delegation),
+    engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), label: AGENT_LABEL, runs: () => manager.runs.list() }));
   loopRef.current = { ended: run => loop.hooks.ended(run), outcome: run => loop.hooks.outcome(run) };
   const lifecycleTimer = process.env.SB_TEST ? null : setInterval(() => loop.tick(), 10_000);
   lifecycleTimer?.unref();

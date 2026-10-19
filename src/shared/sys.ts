@@ -39,6 +39,11 @@ export const SYS_IT = {
   'sys.apiRetry': (p: { attempt: string | number; max: string | number; error: string }) => `Nuovo tentativo API ${p.attempt}/${p.max} (${p.error || 'errore'}).`,
   'sys.permissionDenied': (p: { tool: string; message: string }) => `Permesso negato: ${p.tool}${p.message ? ` · ${p.message}` : ''}`,
   'sys.commandReadOnly': (p: { command: string }) => `Comando rifiutato: questo ruolo può solo leggere (${p.command}).`,
+  'sys.delegationDepth': (p: { limit: number }) => `Delega rifiutata: limite di profondità ${p.limit} raggiunto (Impostazioni → Ruoli e deleghe). Fai tu questa parte o riportala al genitore.`,
+  'sys.delegationParallel': (p: { limit: number }) => `Delega rifiutata: già ${p.limit} figli in corso (Impostazioni → Ruoli e deleghe). Aspetta che uno finisca.`,
+  'sys.aboveParent': (p: { tool: string; parent: string }) => `Permesso rifiutato: ${p.tool} va oltre i permessi di «${p.parent}», la chat che ha delegato questa.`,
+  'sys.subagentRefused': (p: { type: string }) => `Sotto-agente «${p.type}» rifiutato: il lavoro delegato va in una chat visibile (agent_delegate). Qui solo ricerche veloci (Explore).`,
+  'sys.skillRefused': (p: { skill: string; role: string }) => `Skill «${p.skill}» non assegnata al ruolo ${p.role}: rifiutata.`,
   'sys.modelRefusal': 'Il modello ha rifiutato la richiesta.',
 
   // ---- transcript.ts ----
@@ -168,6 +173,11 @@ export const SYS_EN: typeof SYS_IT = {
   'sys.apiRetry': (p: { attempt: string | number; max: string | number; error: string }) => `New API attempt ${p.attempt}/${p.max} (${p.error || 'error'}).`,
   'sys.permissionDenied': (p: { tool: string; message: string }) => `Permission denied: ${p.tool}${p.message ? ` · ${p.message}` : ''}`,
   'sys.commandReadOnly': (p: { command: string }) => `Command refused: this role may only read (${p.command}).`,
+  'sys.delegationDepth': (p: { limit: number }) => `Delegation refused: depth limit ${p.limit} reached (Settings → Roles and delegation). Do this part yourself or report it to your parent.`,
+  'sys.delegationParallel': (p: { limit: number }) => `Delegation refused: already ${p.limit} children running (Settings → Roles and delegation). Wait for one to finish.`,
+  'sys.aboveParent': (p: { tool: string; parent: string }) => `Permission refused: ${p.tool} goes beyond the permissions of «${p.parent}», the chat that delegated this one.`,
+  'sys.subagentRefused': (p: { type: string }) => `Sub-agent «${p.type}» refused: delegated work goes to a visible chat (agent_delegate). Only quick searches here (Explore).`,
+  'sys.skillRefused': (p: { skill: string; role: string }) => `Skill «${p.skill}» is not assigned to the ${p.role} role: refused.`,
   'sys.modelRefusal': 'The model refused the request.',
 
   'sys.compactedPlain': 'Context compacted.',

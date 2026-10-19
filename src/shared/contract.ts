@@ -12,6 +12,7 @@ import type { FileViewResult } from './file-view';
 import type { DiffAgainst, FileDiffResult } from './file-diff';
 import type { AgentCatalog, AgentMetrics, AgentMetricsFilter, AgentDraft, AgentOwnerSnapshot, AgentProfile, AgentRun, AgentUndo, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
 import type { DelegationSettings, ModelTier, WorkRoleId } from './roles';
+import type { ChatDelegation, DelegationLimitHit } from './delegation';
 import type { SkillSuggestions } from './skill-suggest';
 import type { AutoClosePresence, AutoCloseStatus } from './auto-close';
 import type { ChatEffortStatus } from './effort';
@@ -138,6 +139,13 @@ export interface ChatSummary {
   pending: number;            // open questions/permissions
   /** the one coordinator of all work (it plans, starts root chats, reads their status); set only by main */
   isOrchestrator: boolean;
+  /** the chat that delegated this one (agent_delegate): it shows under that chat in the tree, reports to it and never has
+   *  more permissions than it; absent = a root chat */
+  parentId?: string;
+  /** the contract it was delegated (role, goal, criteria) and, once given, its agent_report */
+  delegation?: ChatDelegation;
+  /** its last agent_delegate was refused by a delegation limit (Impostazioni → Ruoli e deleghe) */
+  limitHit?: DelegationLimitHit;
   lastText: string;           // last assistant line, for collapsed tiles and the needs-you lane
   lastError?: string;
   updatedAt: number;
@@ -330,6 +338,9 @@ export interface NewChat {
   goal?: string;
   /** The role the chat runs (shared/roles.ts). Main resolves its frozen configuration; never changes an existing session. */
   roleId?: string;
+  /** set only by agent_delegate (main): the delegating chat and the contract; the child is bounded by that chat */
+  parentId?: string;
+  delegation?: ChatDelegation;
   /** the model tier a delegation asks for (at most the role's tierMax); absent = the role's own */
   tier?: ModelTier;
   /** an independent role picks a model other than this one (its parent's) */

@@ -57,14 +57,24 @@ export class AgentPackFlows {
   private now(): number { return this.deps.now?.() ?? Date.now(); }
   root(): string { const root = this.deps.brainRoot(); if (!root || !fs.statSync(root).isDirectory()) throw new Error('Choose a brain folder first'); return fs.realpathSync(root); }
   profile(id: string): AgentProfile { const p = this.deps.catalog.list().profiles.find(p => p.id === id); if (!p) throw new Error('Role not found'); return p; }
-  runtime(id: string): { pluginDir: string; skillRoot: string; instructions: string } {
-    const profile = this.profile(id), files = this.ownSkills(profile);
-    for (const name of profile.knowhow?.linked ?? []) {
-      const shared = this.deps.sharedSkills?.().find(s => s.name === name);
-      // a declared skill that is gone (undone, merged, deleted by hand) never blocks the agent's start
+  /** The plugin a launch runs with: the role's own know-how, its default and linked skills and the skills this launch
+   *  asks for (`launch`, a delegation's or app_create_chat's), and nothing else: a skill outside it is not there to load
+   *  (and the role gate refuses a call to it). A launch skill that does not exist refuses the start, by name. */
+  runtime(id: string, launch: readonly string[] = []): { pluginDir: string; skillRoot: string; instructions: string; skills: string[] } {
+    const profile = this.profile(id), files = this.ownSkills(profile), all = this.deps.sharedSkills?.() ?? [];
+    const missing = launch.filter(name => !all.some(s => s.name === name));
+    if (missing.length) throw new Error(`Skill non trovata: ${missing.join(', ')} (pagina Skill).`);
+    const declared = [...profile.skills, ...(profile.knowhow?.linked ?? [])];
+    const skills = [...new Set([...declared, ...launch])];
+    const loaded: string[] = [portableId(id)];
+    for (const name of skills) {
+      const shared = all.find(s => s.name === name);
+      // a declared skill that is gone (undone, merged, deleted by hand) never blocks the role's start
       if (!shared) { log.warn('agents', 'Declared skill missing at start', { data: { agent: id, skill: name }, cause: 'The skill folder is gone', hint: 'Run the maintenance on the Skill page: it relinks or drops missing skills' }); continue; }
       for (const [file, data] of readPackSource(shared.folder)) files.set(`skills/${name}/${file}`, data);
+      loaded.push(name);
     }
+    for (const key of files.keys()) { const name = key.split('/')[1]; if (name && !loaded.includes(name)) loaded.push(name); }
     const hash = hashFiles(files), base = this.deps.runtimeRoot ?? path.join(this.deps.tempRoot ?? os.tmpdir(), 'sb-agent-runtime');
     fs.mkdirSync(base, { recursive: true });
     const pluginDir = path.join(base, hash);
@@ -85,8 +95,8 @@ export class AgentPackFlows {
     // what several agents knew (moved there once by the maintenance, memory/shared.md) reaches each of them
     let shared = '';
     try { const file = brainPath(this.root(), 'memory/shared.md'); if (fs.existsSync(file) && fs.statSync(file).size <= 256 * 1024) shared = fs.readFileSync(file, 'utf8').trim().slice(-2000); } catch { /* none */ }
-    const linked = profile.knowhow?.linked ?? [];
-    return { pluginDir, skillRoot: path.join(pluginDir, 'skills'), instructions: [instructions, linked.length ? `Your skills (load the one that fits the job): ${linked.join(', ')}.` : '',
+    const linked = loaded.filter(n => n !== own);
+    return { pluginDir, skills: loaded, skillRoot: path.join(pluginDir, 'skills'), instructions: [instructions, linked.length ? `Your skills (load the one that fits the job): ${linked.join(', ')}.` : '',
       shared ? `Shared memory (memory/shared.md):\n${shared}` : '',
       `Your memory (agents/${own}/memory.md; add a line with the product memory writer: agent "<brain>" "${own}" "…")${memory ? `:\n${memory}` : ': empty so far.'}`, `Skill files: ${path.join(pluginDir, 'skills')}`].filter(Boolean).join('\n\n') };
   }

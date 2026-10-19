@@ -16,6 +16,7 @@ import { RUN_ID, readRun } from '../agents/runs';
 import { readOwner } from '../agents/catalog';
 import { readPolicy, type AgentPolicy } from '../agents/tool-policy';
 import { sanitizeAgentChildren } from './agent-children';
+import { readDelegation, type ChatDelegation } from '../../shared/delegation';
 
 function validAssets(value: unknown): value is NonNullable<StoredChat['agentAssets']> {
   if (!value || typeof value !== 'object') return false;
@@ -31,6 +32,8 @@ export interface StoredChat {
   work?: NonNullable<ChatSummary['work']>;
   agentInstructions?: string;
   agentAssets?: { pluginDir: string; skillRoot: string };
+  /** the skills its launch gave it (frozen at start): the role gate allows only these */
+  agentSkills?: string[];
   agentChildren?: AgentChildren;
   /** the agent's tool policy and ceiling (A2); unreadable → the narrowest policy, never none */
   agentPolicy?: AgentPolicy;
@@ -83,6 +86,9 @@ export interface StoredChat {
   working?: true;
   /** how an agent's app_create_chat chose its engine (the routing table, ADR 0032) */
   route?: RouteDecision;
+  /** the chat that delegated this one (agent_delegate) and the contract it got (shared/delegation.ts) */
+  parentId?: string;
+  delegation?: ChatDelegation;
 }
 
 export interface PastSession { sessionId: string; at: number; notePath: string }
@@ -106,6 +112,7 @@ function extras(c: Record<string, unknown>): Partial<StoredChat> {
     // Cursor carries two bounded skill documents in addition to the 8000-character profile.
     ...(typeof c.agentInstructions === 'string' && c.agentInstructions.length <= (c.harness === 'cursor' && validAssets(c.agentAssets) ? 4 * 1024 * 1024 + 16384 : 8000) ? { agentInstructions: c.agentInstructions } : {}),
     ...(validAssets(c.agentAssets) ? { agentAssets: c.agentAssets } : {}),
+    ...(Array.isArray(c.agentSkills) && c.agentSkills.length <= 64 && c.agentSkills.every(x => typeof x === 'string' && /^[a-z0-9][a-z0-9_-]{0,79}$/.test(x)) ? { agentSkills: c.agentSkills as string[] } : {}),
     ...(c.agentChildren ? { agentChildren: sanitizeAgentChildren(c.agentChildren) } : {}),
     ...(readPolicy(c.agentPolicy) ? { agentPolicy: readPolicy(c.agentPolicy)! } : {}),
     ...(Number.isSafeInteger(c.agentMaxContext) && (c.agentMaxContext as number) >= 100_000 && (c.agentMaxContext as number) <= 1_000_000 ? { agentMaxContext: c.agentMaxContext as number } : {}),
@@ -121,6 +128,8 @@ function extras(c: Record<string, unknown>): Partial<StoredChat> {
     ...(num(c.handoffAt) ? { handoffAt: c.handoffAt, handoffSource: c.handoffSource === 'auto' ? 'auto' as const : 'chat' as const } : {}),
     ...(from ? { continuedFrom: from } : {}), ...(by ? { continuedBy: by } : {}),
     ...(c.inWorktree === true ? { inWorktree: true } : {}),
+    ...(typeof c.parentId === 'string' && /^[\w-]{1,80}$/.test(c.parentId) && c.parentId !== c.id ? { parentId: c.parentId } : {}),
+    ...(readDelegation(c.delegation) ? { delegation: readDelegation(c.delegation)! } : {}),
   };
 }
 

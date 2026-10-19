@@ -57,6 +57,45 @@ export function narrowest(a: AgentPolicy | null | undefined, b: AgentPolicy | nu
   if (mcp && !mcp.length) return { tools: { allow: allow.filter(c => c !== 'mcp') }, ceiling };
   return { tools: { allow, ...(mcp ? { mcp } : {}) }, ceiling };
 }
+/** A delegated chat's policy (agent_delegate): its role's, narrowed by its parent's tools and ceiling and by the mode the
+ *  parent runs in now (a parent in plan mode delegates in plan mode). Permissions only go down the tree. */
+export function belowParent(role: AgentPolicy | null | undefined, parent: AgentPolicy | null | undefined, parentMode: PermissionMode | null): AgentPolicy | null {
+  const p = narrowest(role, parent);
+  if (!parentMode || !(PERMISSION_CEILINGS as readonly string[]).includes(parentMode)) return p;
+  const mode = parentMode as PermissionCeiling;
+  if (!p) return { tools: null, ceiling: mode };
+  return p.ceiling === null || RANK[mode] < RANK[p.ceiling] ? { ...p, ceiling: mode } : p;
+}
+/** The tool class a permission request belongs to, from the tool's name as the engines report it (Claude's tools, Cursor's
+ *  ACP kinds, Codex's command and file-change approvals, other MCP servers); null = not a class the policy names. */
+export function toolClassOf(tool: string): ToolClass | null {
+  // the app's own servers already serve each chat only what its policy allows (browser/service.ts, appctl)
+  if (/^mcp__second-brain(?:-app)?__/.test(tool)) return null;
+  if (/^mcp__/.test(tool)) return 'mcp';
+  if (['Read', 'Grep', 'Glob', 'Search', 'LS'].includes(tool)) return 'read';
+  if (['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Delete', 'Move', 'FileChange', 'ApplyPatch'].includes(tool)) return 'edit';
+  if (['Bash', 'PowerShell', 'BashOutput', 'KillShell', 'Shell', 'Command', 'TaskOutput', 'TaskStop', 'Monitor'].includes(tool)) return 'shell';
+  if (['WebFetch', 'WebSearch', 'Fetch'].includes(tool)) return 'web';
+  return null;
+}
+/** True when the policy allows that class (shell-read stands for shell here: its commands are checked one by one). */
+export function allowsClass(p: AgentPolicy | null | undefined, c: ToolClass): boolean {
+  if (!p?.tools) return true;
+  const allow = p.tools.allow;
+  if (allow.includes(c)) return true;
+  if (c === 'shell') return allow.includes('shell-read');
+  if (c === 'browser') return allow.includes('browser-read');
+  return false;
+}
+/** True when `child` is `parent` or a folder inside it, links resolved (a delegated chat never leaves its parent's folder). */
+export function within(parent: string, child: string): boolean {
+  if (!child || !path.isAbsolute(child) || !path.isAbsolute(parent)) return false;
+  // a link inside the parent's folder that points outside it is outside
+  const real = (p: string): string => { try { return fs.realpathSync.native(p); } catch { return path.resolve(p); } };
+  const rel = path.relative(real(parent), real(child));
+  return rel === '' || (!!rel && !rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
 /** min(ceiling, Brother's mode). `brother` = the chat's explicit choice, else his settings' default (never a guess). */
 export function clampMode(brother: PermissionMode, ceiling: PermissionCeiling | null): PermissionMode {
   return aboveCeiling(brother, ceiling) ? ceiling! : brother;

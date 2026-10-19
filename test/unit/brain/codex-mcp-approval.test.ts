@@ -1,4 +1,4 @@
-// Native MCP approval policy: Claude's app-control and exact mail grants on attached loopback servers.
+// Native MCP approval policy: Claude's app-control, mail and delegation grants on attached loopback servers.
 // Asserts the Codex configuration contract, not a live model or installed CLI run.
 import { describe, expect, it } from 'vitest';
 import { codexLaunch } from '../../../src/main/brain/adapters/codex';
@@ -8,11 +8,14 @@ const overrides = (input = {}) => codexLaunch({ ...urls, ...input }).configArgs.
 const approved = (values: string[]) => values.filter(value => value.endsWith('approval_mode=approve'));
 
 describe('native Codex app tool approval', () => {
-  it('matches Claude: all app-control tools and only two browser-server mail tools', () => {
+  it('matches Claude: all app-control tools and only the mail and delegation tools of the chat\'s own server', () => {
     const values = overrides();
     expect(approved(values)).toEqual([
       'mcp_servers.second-brain.tools.send_to_chat.approval_mode=approve',
       'mcp_servers.second-brain.tools.list_chats.approval_mode=approve',
+      'mcp_servers.second-brain.tools.agent_delegate.approval_mode=approve',
+      'mcp_servers.second-brain.tools.agent_report.approval_mode=approve',
+      'mcp_servers.second-brain.tools.agent_children.approval_mode=approve',
       'mcp_servers.second-brain-app.default_tools_approval_mode=approve',
     ]);
     expect(values).toContain('mcp_servers.second-brain.default_tools_approval_mode=prompt');
