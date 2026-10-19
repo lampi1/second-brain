@@ -9,6 +9,8 @@ export interface DefaultBrainHost {
   userData: string; templateRoot: string; current: () => string | null; revision: () => number;
   connect: (root: string) => Promise<void>; now?: () => Date;
   usable?: () => boolean;
+  /** the owner's projects folder (setting projectsRoot): the new memory's REPOS; absent = an empty projects/ inside it */
+  projects?: () => string | null;
 }
 const forward = (value: string) => value.split(path.sep).join('/');
 async function directory(file: string): Promise<void> {
@@ -30,15 +32,16 @@ export class DefaultBrain {
     await directory(h.userData); await directory(h.templateRoot);
     // An exclusively reserved fresh directory needs no replace/rename operation on any OS.
     const root = await fs.mkdtemp(path.join(h.userData, 'memory-'));
+    const projects = h.projects?.() ?? null;
     try {
       writeFreshBrain(root, {
         OWNER: language === 'it' ? 'Tu' : 'You', ROLE: language === 'it' ? 'Da conoscere insieme' : 'To discover together', LANG: language === 'it' ? 'italiano' : 'English',
-        TODAY: (h.now?.() ?? new Date()).toISOString().slice(0, 10), REPOS: forward(path.join(root, 'projects')),
+        TODAY: (h.now?.() ?? new Date()).toISOString().slice(0, 10), REPOS: forward(projects ?? path.join(root, 'projects')),
         HARNESSES: harness === 'none' ? (language === 'it' ? 'Da collegare' : 'Not connected yet') : ({ claude: 'Claude Code', codex: 'Codex', cursor: 'Cursor' } as Record<string, string>)[harness]!,
       });
     } catch { throw new Error('AI_SETUP_TEMPLATE_INCOMPLETE'); } // the empty reservation is kept: never delete user data
-    // the default folder for the owner's repositories (REPOS): an empty folder, nothing in it
-    await fs.mkdir(path.join(root, 'projects'), { mode: 0o700 });
+    // without a projects folder of the owner's, the default one for their repositories (REPOS): empty, nothing in it
+    if (!projects) await fs.mkdir(path.join(root, 'projects'), { mode: 0o700 });
     // Concurrent explicit folder selection always wins. Keep the prepared data; never delete user content.
     if (h.revision() !== revision || h.current() !== previous) return { root, connected: false };
     await h.connect(root);

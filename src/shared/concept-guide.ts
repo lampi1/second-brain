@@ -647,10 +647,46 @@ export const CONCEPTS: readonly ConceptCard[] = [
     sources: ['src/renderer/brain/pages/Task.tsx', 'src/main/tasks/service.ts', 'src/renderer/brain/pages/Fatto.tsx', 'src/renderer/brain/lib/done-log.ts', 'brain-template/ops/tools/day.mjs'],
   },
   {
+    id: 'setup',
+    title: b('La prima configurazione', 'The first setup'),
+    summary: b('Una sola finestra, sette passi: cartelle, la tua IA, gli strumenti, chi sei, il tuo lavoro, la squadra e il riepilogo. Riprendi quando vuoi.',
+      'One window, seven steps: folders, your AI, tools, who you are, your work, the team and the summary. Resume whenever you like.'),
+    points: [
+      // src/renderer/components/SetupFolders.tsx; src/modules/ai-first/default-brain.ts
+      b('Cartelle: nessuna scelta tra opzioni. La memoria è nuova e vuota (creata alla conferma nella cartella dati dell’app) oppure un brain che hai già, indicato con «Usa un brain esistente…».',
+        'Folders: no options to pick. The memory is a new, empty one (created on confirmation in the app’s data folder) or a brain you already have, pointed to with "Use an existing brain…".'),
+      // src/main/brain/projects-folder.ts
+      b('La cartella dei progetti la cerca l’app da sola: i repository in cui Claude Code e Cursor hanno già lavorato e i posti abituali (source/repos, Projects, dev…). Te la chiede solo se non la trova.',
+        'The app looks for the projects folder by itself: the repositories Claude Code and Cursor already worked in and the usual places (source/repos, Projects, dev…). It asks only when it finds none.'),
+      // src/renderer/components/SetupEngines.tsx; src/renderer/lib/setup-wizard.ts
+      b('La tua IA: «Collega» apre l’accesso ufficiale in una finestra a parte; la configurazione resta aperta e ricontrolla da sola ogni pochi secondi, finché la scheda dice «Collegata» con l’account e l’ora della verifica.',
+        'Your AI: "Collega" opens the official sign-in in a separate window; the setup stays open and checks again by itself every few seconds, until the card says "Collegata" with the account and the time of the check.'),
+      // src/renderer/components/SetupConnectors.tsx; src/renderer/lib/setup-connectors.ts
+      b('Strumenti (GitHub, Azure DevOps, Jira): ogni accesso finisce con una verifica vera in sola lettura. «Connesso come …» dice l’account e quanti progetti ha letto; «Non connesso» dice il motivo e cosa fare.',
+        'Tools (GitHub, Azure DevOps, Jira): every sign-in ends in a real read-only check. "Connected as …" names the account and how many projects it read; "Not connected" says why and what to do.'),
+      // src/renderer/components/FirstInterview.tsx; src/main/brain/profile.ts
+      b('Nome, ruolo, lingua, aree e stile delle risposte finiscono in me.md alla conferma; ogni risposta è salvata come bozza mezzo secondo dopo, così «Più tardi» o Esc riprendono dallo stesso passo.',
+        'Name, role, language, areas and reply style go into me.md on confirmation; every answer is saved as a draft half a second later, so "Più tardi" or Esc resume on the same step.'),
+      // src/renderer/components/ui.tsx Modal
+      b('Niente dentro la finestra la chiude da solo: un clic fuori non fa nulla, e la si riapre da Impostazioni → «Configura il mio lavoro».',
+        'Nothing inside the window closes it by itself: a click outside does nothing, and you reopen it from Settings → "Configura il mio lavoro".'),
+    ],
+    analogy: b('Come il primo giorno in un ufficio nuovo: ti mostrano la scrivania, ti danno i badge e controllano che aprano davvero le porte.',
+      'Like the first day at a new office: they show you your desk, hand you the badges and check they really open the doors.'),
+    diagram: { kind: 'flow', steps: [b('Cartelle', 'Folders'), b('La tua IA', 'Your AI'), b('Strumenti', 'Tools'), b('Chi sei e lavoro', 'You and your work'), b('Conferma', 'Confirm')] },
+    tech: [
+      tech(WHERE, 'Le scelte stanno in config.json (brainRoot, projectsRoot); la bozza in setup.json; il brain nuovo usa projectsRoot come cartella dei repository (REPOS).',
+        'The choices live in config.json (brainRoot, projectsRoot); the draft in setup.json; a new brain uses projectsRoot as its repositories folder (REPOS).'),
+      tech(LIMITS, 'Ricerca dei progetti: solo nomi di cartelle e presenza di .git, al massimo 300 cartelle note alle CLI; nessun file aperto. Ricontrollo degli accessi: ogni 4 secondi per 3 minuti.',
+        'Projects search: folder names and .git presence only, at most 300 folders known to the CLIs; no file opened. Sign-in re-checks: every 4 seconds for 3 minutes.'),
+    ],
+    sources: ['src/renderer/components/FirstInterview.tsx', 'src/renderer/components/SetupFolders.tsx', 'src/renderer/components/SetupEngines.tsx', 'src/renderer/components/SetupConnectors.tsx', 'src/renderer/lib/setup-wizard.ts', 'src/renderer/lib/setup-connectors.ts', 'src/main/brain/projects-folder.ts', 'src/modules/ai-first/default-brain.ts', 'src/renderer/components/ui.tsx'],
+  },
+  {
     id: 'brain',
     title: b('Il brain: le note e la memoria', 'The brain: notes and memory'),
-    summary: b('Una cartella di note scelta all’installazione: parte vuota, gli agenti la leggono e la scrivono, l’app la mostra dal vivo.',
-      'A folder of notes chosen at setup: it starts empty, agents read and write it, the app shows it live.'),
+    summary: b('Una cartella di note, nuova e vuota alla prima configurazione (o un brain che hai già): gli agenti la leggono e la scrivono, l’app la mostra dal vivo.',
+      'A folder of notes, new and empty at the first setup (or a brain you already have): agents read and write it, the app shows it live.'),
     points: [
       // src/main/brain/detect.ts isBrainFolder
       b('Si riconosce da brain.json (un brain nuovo) oppure da AGENTS.md più ops/tools/brain-site.mjs (un brain di prima); il percorso è salvato in config.json (brainRoot).',

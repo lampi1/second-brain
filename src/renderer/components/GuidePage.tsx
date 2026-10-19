@@ -37,6 +37,7 @@ const GLYPHS: Record<string, ReactNode> = {
   questions: <><path d="M5 4.5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-4 3.5v-3.5H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z" /><path d="M10 9a2 2 0 1 1 2.8 1.8c-.5.3-.8.7-.8 1.2M12 14v.2" /></>,
   grindhouse: <><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /><rect x="13" y="13" width="7" height="7" rx="1.5" /></>,
   dashboard: <><path d="M3.5 17a8.5 8.5 0 0 1 17 0" /><path d="M12 17l4.5-5.5" /><circle cx="12" cy="17" r="1.3" /></>,
+  setup: <><rect x="4" y="4" width="16" height="16" rx="3" /><path d="M8 12l3 3 5-6" /></>,
   brain: <><path d="M12 5.5a3 3 0 0 0-5.5-1.2A3 3 0 0 0 4 8.5a3.2 3.2 0 0 0 0 5.5A3 3 0 0 0 7 19a3 3 0 0 0 5 .5z" /><path d="M12 5.5a3 3 0 0 1 5.5-1.2A3 3 0 0 1 20 8.5a3.2 3.2 0 0 1 0 5.5A3 3 0 0 1 17 19a3 3 0 0 1-5 .5" /><path d="M12 5.5v14" /></>,
   search: <><circle cx="11" cy="11" r="6.5" /><path d="M20 20l-4.3-4.3" /></>,
   'file-viewer': <><path d="M7 3h7l5 5v13H7z" /><path d="M14 3v5h5M10 13h6M10 17h4" /></>,

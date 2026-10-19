@@ -1,8 +1,8 @@
 // The first-run setup wizard's flow, kept pure so it is unit-tested (test/unit/setup-wizard.test.ts) without a DOM:
 // the steps in order (memory, AI, tools, about you, your work, agents, summary), which step may be left or reached,
 // how a saved run resumes, and the AI sign-in states. Why: the owner wants ONE modal from start to finish (2026-10-18):
-// "Collega" opens the engine's official sign-in in its own window and the wizard waits on the same step with a
-// "Verifica" check; nothing here closes the modal, only an explicit exit does. Used by components/FirstInterview.tsx
+// "Collega" opens the engine's official sign-in in its own window and the wizard waits on the same step, checking by
+// itself every few seconds (and with a "Verifica"); nothing here closes the modal, only an explicit exit does. Used by components/FirstInterview.tsx
 // and components/SetupEngines.tsx.
 import type { SetupDraft, SetupState } from '@shared/agents';
 import type { CliStatus } from '@shared/contract';
@@ -60,7 +60,9 @@ export function withEngine(engines: readonly string[] | undefined, id: string, o
 // ---------------------------------------------------------------- AI sign-in, in place
 
 export type LinkPhase = 'checking' | 'missing' | 'signedOut' | 'unknown' | 'opening' | 'waiting' | 'verifying' | 'connected' | 'error';
-export interface EngineLink { phase: LinkPhase; account?: string | null; note?: 'notYet' | 'unverifiable' | null; error?: string | null }
+export interface EngineLink { phase: LinkPhase; account?: string | null; note?: 'notYet' | 'unverifiable' | null; error?: string | null; /** when a check found it signed in (ms) */ checkedAt?: number }
+/** a sign-in in its own window is checked again by itself every ENGINE_POLL_MS, ENGINE_POLL_TRIES times (3 minutes) */
+export const ENGINE_POLL_MS = 4000, ENGINE_POLL_TRIES = 45;
 /** what the wizard asks of main for one engine: all typed IPC (cli:status, engines:trust, cli:login) */
 export interface EngineLinkPort {
   status(engine: SetupEngineId): Promise<CliStatus>;
@@ -72,7 +74,7 @@ export interface EngineLinkPort {
 export function linkFromStatus(status: CliStatus | null): EngineLink {
   if (!status) return { phase: 'unknown' };
   if (!status.found) return { phase: 'missing' };
-  if (status.loggedIn === true) return { phase: 'connected', account: status.account ?? null };
+  if (status.loggedIn === true) return { phase: 'connected', account: status.account ?? null, checkedAt: Date.now() };
   return { phase: status.loggedIn === false ? 'signedOut' : 'unknown' };
 }
 
@@ -98,7 +100,7 @@ export async function verifySignIn(port: EngineLinkPort, engine: SetupEngineId):
   try {
     const status = await port.status(engine);
     if (!status.found) return { phase: 'missing' };
-    if (status.loggedIn === true) return { phase: 'connected', account: status.account ?? null };
+    if (status.loggedIn === true) return { phase: 'connected', account: status.account ?? null, checkedAt: Date.now() };
     if (status.loggedIn === false) return { phase: 'waiting', note: 'notYet' };
     return { phase: 'unknown', note: 'unverifiable' };
   } catch (error) { return { phase: 'waiting', error: plainError(error) }; }

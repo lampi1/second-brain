@@ -131,6 +131,9 @@ const BASE: readonly SettingDef[] = [
   // the app's own code: "Aggiorna" (Settings → Aggiornamenti, ADR 0075) updates and builds it; a chat working there is app work
   { key: 'appRepo', type: 'path', nullable: true, default: null, protected: true, label: "Cartella del codice dell'app",
     description: "Da dove «Aggiorna» prende la nuova versione (una cartella git); le chat che lavorano lì lavorano sull'app. Vuoto = quella da cui è stata fatta la versione in uso." },
+  // the owner's projects folder (first-run setup, main/brain/projects-folder.ts): where their git repos live
+  { key: 'projectsRoot', type: 'path', nullable: true, default: null, protected: true, label: 'Cartella dei progetti',
+    description: 'Dove tieni i tuoi progetti (i repository git). La configurazione iniziale la trova da sola se può, altrimenti te la chiede. Vuoto = non ancora indicata.' },
   // delegation between role chats (ADR 0083). Protected: an agent raising its own limits would launch more than the user allowed
   { key: 'delegation.maxDepth', type: 'int', ...DELEGATION_RANGE.maxDepth, default: DELEGATION_DEFAULTS.maxDepth, protected: true, label: 'Deleghe: profondità massima',
     description: 'Quanti livelli sotto una chat principale: con 2 una chat figlia può delegare, una nipote no.' },
@@ -250,6 +253,7 @@ export function defaults(): Settings {
     runResults: true,
     questionsModal: false,
     appRepo: null,
+    projectsRoot: null,
     loadQueue: true, loadQueueCpu: 75, loadQueueRam: 15,
     headlineOn: true, headlineModel: '', headlineEffort: '',
     delegation: { ...DELEGATION_DEFAULTS }, modelTiers: {},

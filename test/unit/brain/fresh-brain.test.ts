@@ -86,6 +86,14 @@ describe('a fresh brain is empty of app content', () => {
     expect(parseProfile(fs.readFileSync(path.join(created.root, 'me.md'), 'utf8'))).toMatchObject({ name: 'Tu', language: 'italiano', rules: [] });
   });
 
+  it('the automatic memory points REPOS at the owner\'s projects folder when the setup knows it', async () => {
+    const userData = path.join(base, 'app2'), projects = path.join(base, 'my-projects'); fs.mkdirSync(userData); fs.mkdirSync(projects);
+    let current: string | null = null;
+    const created = await new DefaultBrain({ userData, templateRoot: TEMPLATE, current: () => current, revision: () => 0, connect: async r => { current = r; }, projects: () => projects }).ensure('it', 'none');
+    expect(fs.existsSync(path.join(created.root, 'projects'))).toBe(false);
+    expect(JSON.parse(fs.readFileSync(path.join(created.root, 'brain.json'), 'utf8')).template.REPOS).toBe(projects.split(path.sep).join('/'));
+  });
+
   it('BrainCreator\'s staged installer output becomes the same empty brain (the template copy is removed whole)', () => {
     const stage = path.join(base, 'stage'); fs.mkdirSync(stage);
     const destination = path.join(base, 'Personal brain');

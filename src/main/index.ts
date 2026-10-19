@@ -2,6 +2,7 @@
 import { app, dialog, session, shell, type BrowserWindow } from 'electron';
 import { DefaultBrain } from '../modules/ai-first/default-brain';
 import { findBrainCandidates } from './brain/detect';
+import { detectProjectsFolder } from './brain/projects-folder';
 import { createAppConnectors } from '../modules/onboarding/app-host';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -116,7 +117,7 @@ app.whenReady().then(async () => {
     connect: async root => { await s.brain.setSettings({ brainRoot: root }); },
   });
   const profile = new ProfileService({ root: () => s.brain.settings().brainRoot, template: (() => { try { return fs.readFileSync(path.join(app.getAppPath(), 'brain-template', 'me.template.md'), 'utf8'); } catch { return ''; } })() });
-  const defaultBrain = new DefaultBrain({ userData: app.getPath('userData'), templateRoot: path.join(app.getAppPath(), 'brain-template'), current: () => s.brain.settings().brainRoot, usable: () => !s.brain.info().brainProblem, revision: () => brainChoiceRevision, connect: async root => { await s.brain.setSettings({ brainRoot: root }); } });
+  const defaultBrain = new DefaultBrain({ userData: app.getPath('userData'), templateRoot: path.join(app.getAppPath(), 'brain-template'), current: () => s.brain.settings().brainRoot, usable: () => !s.brain.info().brainProblem, revision: () => brainChoiceRevision, connect: async root => { await s.brain.setSettings({ brainRoot: root }); }, projects: () => s.brain.settings().projectsRoot ?? null });
     const updates = createAppUpdates({ appPath: app.getAppPath(), userData: app.getPath('userData'), running: stable.release, version: app.getVersion(), disabled: demo || !!process.env.SB_TEST,
       emitter, problem: () => s.updateChats?.problem() ?? null, saveChats: () => { if (!s.updateChats) throw new Error('Salvataggio chat non disponibile.'); s.updateChats.checkpoint(); },
       flush: () => win?.webContents.session.flushStorageData(), quit: () => app.quit(),
@@ -162,6 +163,14 @@ app.whenReady().then(async () => {
       'update:recoveryAck': a => updates.acknowledge(a?.id),
     'app:brainCreation': () => brainCreation.capability(),
     'app:brainCandidates': () => findBrainCandidates(process.env.SB_HOME),
+    // read only: folder names and .git presence (projects-folder.ts); SB_HOME isolates it in trials, like the candidates
+    'app:projectsFolder': () => ({ saved: s.brain.settings().projectsRoot ?? null, detected: detectProjectsFolder({ home: process.env.SB_HOME, exclude: [s.brain.settings().brainRoot, app.getPath('userData')] }), newMemoryIn: app.getPath('userData') }),
+    'app:pickProjects': async () => {
+      const r = win ? await dialog.showOpenDialog(win, { title: 'Scegli la cartella dei tuoi progetti', properties: ['openDirectory'] }) : null;
+      const dir = r && !r.canceled ? r.filePaths[0] ?? null : null;
+      if (dir) await s.brain.setSettings({ projectsRoot: dir });
+      return dir;
+    },
     'app:createBrain': a => a?.automatic === true ? defaultBrain.ensure(a.language, a.harness) : brainCreation.create(a),
     'progress:get': () => s.progress.get(),
     'progress:setHidden': a => s.progress.setHidden(a?.hidden),

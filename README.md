@@ -74,13 +74,27 @@ From the clone above, three commands take you from the code to your own running 
 ```powershell
 npm run setup      # once (and again only if package-lock.json changes: `npm run pull` does that for you)
 npm run build      # main + preload with esbuild, the React interface with Vite → out/
-npm start          # opens the app; on first start a short setup window creates or links your brain
+npm start          # opens the app; on first start one setup window walks you through seven short steps
 ```
 
 To use real agents, install and log in to at least one CLI yourself:
 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (`claude`), Codex (`codex`) and/or the Cursor CLI
 (`agent`). The app never asks for your passwords. `npm run doctor` tells you what is still missing (Electron, build,
 CLIs, logins, brain, MCP port).
+
+**The first setup** is one window that never closes by itself (a click outside does nothing; "Più tardi" or Esc saves
+it as a draft and it reopens on the same step, also from Settings → "Configura il mio lavoro"):
+
+1. **Folders**: no options to pick. Your memory is a new, empty one, created on confirmation in the app's data folder,
+   or a brain you already have ("Use an existing brain…", the system folder picker). Below it, your **projects
+   folder**: the app finds it by itself from the repositories Claude Code and Cursor already worked in and the usual
+   places (`source/repos`, `Projects`, `dev`, …), reading only folder names and `.git`; it asks you only when it finds
+   none. It is saved in the setting `projectsRoot`, and a new memory points its repositories there.
+2. **Your AI**: "Collega" opens the CLI's official sign-in in its own window; the card checks again by itself every
+   few seconds (no tokens) until it says "Collegata" with the account and the time of the check.
+3. **Tools** (GitHub, Azure DevOps, Jira Cloud): every sign-in ends in a real read-only check. The row says
+   "Connesso come …" with the account and how many projects were read, or "Non connesso" with the reason and what to do.
+4. **Who you are, your work, the team, the summary**: written into your `me.md` when you confirm.
 
 ### Change it
 

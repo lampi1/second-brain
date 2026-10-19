@@ -1,11 +1,13 @@
 // First-run setup: ONE modal wizard from start to finish (owner, 2026-10-18: "si rimanga sempre sulla stessa modale").
-// Seven steps, each with its own title: memory folder, your AI (sign-in in place: SetupEngines.tsx), tools (connectors),
-// about you, your work, starting agents, summary. Nothing inside it closes it or navigates away: a sign-in opens in its
+// Seven steps, each with its own title: folders (the memory, new by default, and the projects folder, asked only when
+// the app cannot find it: SetupFolders.tsx), your AI (sign-in in place: SetupEngines.tsx), tools (connectors, each
+// ending in a real check: SetupConnectors.tsx), about you, your work, starting agents, summary. Nothing inside it closes it or navigates away: a sign-in opens in its
 // own window and the step waits with a "Verifica"; the folder picker is the native dialog. It ends only through an
 // explicit button: "Più tardi" (or Esc: answers saved as a draft, it reopens on the same step), "Salta per ora", or the
 // confirmation; a click on the backdrop does nothing. Offline, resumable, optional and private: only preference fields are
 // saved (setup:save), the me.md answers through 'profile:save' on confirm (lib/agent-setup.ts wizardProfile decides
-// what), the brain is created on confirm only when none is connected (unchanged). Step flow: lib/setup-wizard.ts.
+// what), a projects folder the app found by itself is saved (projectsRoot) on confirm, and the brain is created on
+// confirm only when none is connected. Step flow: lib/setup-wizard.ts.
 // Mounted by App.tsx (FirstInterviewGate, modal 'setup'); opened by itself on a new or unfinished run, and from
 // Settings, the agent studio and the new-chat dialog.
 import { t } from '../i18n';
@@ -14,6 +16,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import type { AgentCatalog, SetupDraft, SetupProfile, SetupState } from '@shared/agents';
 import type { OwnerProfile } from '@shared/profile';
+import type { ProjectsFolderInfo } from '@shared/contract';
 import { PROFILE_LIMITS } from '@shared/profile';
 import { answerPatch, answerProblems, customReplyStyle, knownName, profileDraft, wizardLocked, wizardProfile } from '../lib/agent-setup';
 import { LAST_STEP, SETUP_STEPS, canAdvance, canJump, clampStep, exitStatus, openingDraft, stepId, stepProblems, withEngine } from '../lib/setup-wizard';
@@ -24,11 +27,11 @@ import { closeModal, openModal, toast, ui } from '../store/ui';
 import { refreshInfo, useApp } from '../store/store';
 import { sb } from '../sb';
 import { AgentAvatar } from './AgentAvatar';
-import { CreateMemory } from './CreateMemory';
 import { SetupEngines } from './SetupEngines';
-import { IconArrowLeft, IconArrowRight, IconCheck, IconFolder, IconInfo, IconShield } from './Icons';
+import { SetupFolders } from './SetupFolders';
+import { SetupConnectors } from './SetupConnectors';
+import { IconArrowLeft, IconArrowRight, IconCheck, IconInfo, IconShield } from './Icons';
 import { Modal } from './ui';
-import { AppConnectorScreen } from '../../modules/onboarding/AppScreen';
 import '../styles/setup-wizard.css';
 
 const ENGINE_NAMES: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', cursor: 'Cursor' };
@@ -67,8 +70,9 @@ function SetupWizard({ initial, catalog }: { initial: SetupState; catalog: Agent
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null), [saved, setSaved] = useState(false);
   const saving = useRef(false), terminal = useRef(false);
   const info = useApp(s => s.info);
-  const [candidates, setCandidates] = useState<string[]>([]);
-  useEffect(() => { void sb.invoke('app:brainCandidates', undefined).then(setCandidates, () => setCandidates([])); }, []);
+  // the projects folder, saved or found by main by itself (undefined = still looking, null = the look failed: it asks)
+  const [projects, setProjects] = useState<ProjectsFolderInfo | null | undefined>(undefined);
+  useEffect(() => { void sb.invoke('app:projectsFolder', undefined).then(setProjects, () => setProjects(null)); }, [info?.brainRoot]);
   const change = (patch: Partial<SetupDraft>) => { setDraft(d => ({ ...d, ...patch })); setSaved(false); };
   // what me.md says now (re-read when the memory folder changes): shown where the owner gave no answer in this run
   const [current, setCurrent] = useState<OwnerProfile | null>(null);
@@ -100,6 +104,8 @@ function SetupWizard({ initial, catalog }: { initial: SetupState; catalog: Agent
     try {
       if (how === 'finish') {
         const latest = await sb.invoke('app:info', undefined);
+        // the folder found by itself becomes the owner's (before a new memory is created: it points there)
+        if (projects && !projects.saved && projects.detected) await sb.invoke('settings:set', { projectsRoot: projects.detected.path });
         if (!latest.brainRoot) {
           const created = await sb.invoke('app:createBrain', { automatic: true, name: answers.name, role: answers.role, language: /^en/i.test(answers.language) ? 'en' : 'it', harness: draft.engines?.[0] ?? 'none', folderName: 'memory' });
           if (!created?.connected) throw new Error('memory not connected');
@@ -129,10 +135,10 @@ function SetupWizard({ initial, catalog }: { initial: SetupState; catalog: Agent
     catch { setError(t('cmp.interview.pickFailed')); }
     finally { setBusy(false); }
   };
-  const useCandidate = async (root: string) => {
+  const pickProjects = async () => {
     setBusy(true); setError(null);
-    try { await sb.invoke('settings:set', { brainRoot: root }); await refreshInfo(); }
-    catch { setError(t('cmp.interview.folderNotLinked')); }
+    try { const dir = await sb.invoke('app:pickProjects', undefined); if (dir) setProjects(p => ({ newMemoryIn: p?.newMemoryIn ?? '', detected: p?.detected ?? null, saved: dir })); }
+    catch { setError(t('cmp.interview.pickFailed')); }
     finally { setBusy(false); }
   };
   const team = catalog?.profiles.filter(p => p.scope === 'role') ?? [];
@@ -163,17 +169,11 @@ function SetupWizard({ initial, catalog }: { initial: SetupState; catalog: Agent
         </header>
         <form className="sw-body" onSubmit={submit} aria-labelledby="sw-title" noValidate>
           <fieldset disabled={busy} className="sw-fields">
-            {id === 'memory' && <div className="sw-stack" data-testid="setup-memory">
-              {brainReady
-                ? <div className="sw-card sw-card-ok"><span className="sw-card-icon"><IconCheck size={16}/></span><div className="sw-card-text"><b>{t('setup.memory.connected')}</b><code>{info!.brainRoot}</code></div><button type="button" className="btn btn-m btn-ghost" onClick={() => void pickBrain()}>{t('setup.memory.change')}</button></div>
-                : <div className="sw-card"><span className="sw-card-icon"><IconFolder size={16}/></span><div className="sw-card-text"><b>{t('setup.memory.none')}</b><p>{info?.brainProblem ? t('setup.memory.problem', { problem: info.brainProblem }) : t('setup.memory.noneHint')}</p></div><button type="button" className="btn btn-m btn-ghost" onClick={() => void pickBrain()}>{t('setup.memory.pick')}</button></div>}
-              {!brainReady && candidates.length > 0 && <div className="sw-group"><h3>{t('setup.memory.found')}</h3>{candidates.map(root => <div key={root} className="sw-row"><code>{root}</code><button type="button" className="btn btn-m btn-ghost" aria-label={`${t('audit.FirstInterview.useTheOneFoundAt')} ${root}`} onClick={() => void useCandidate(root)}>{t('setup.memory.use')}</button></div>)}</div>}
-              <CreateMemory onBusy={setBusy} initial={answers}/>
-            </div>}
+            {id === 'memory' && <SetupFolders info={info} projects={projects} onPickBrain={() => void pickBrain()} onPickProjects={() => void pickProjects()}/>}
             {id === 'ai' && <SetupEngines engines={draft.engines ?? []} onUse={(engine, on) => { setDraft(d => ({ ...d, engines: withEngine(d.engines, engine, on) })); setSaved(false); }}/>}
             {id === 'tools' && <div className="sw-stack">
+              <SetupConnectors/>
               <label className="field"><span>{t('audit.FirstInterview.whichToolsAndMaterialsDoYou')}</span><textarea rows={3} maxLength={2000} value={draft.tools} onChange={e => change({ tools: e.target.value })} placeholder={t('audit.FirstInterview.documentsSpreadsheetsAppsSitesOrFolders')} data-testid="setup-tools"/><small>{t('audit.FirstInterview.optionalNoAccountsAreConnectedAnd')}</small></label>
-              <div className="sw-connectors"><AppConnectorScreen/></div>
             </div>}
             {id === 'you' && <div className="sw-stack">
               {knownName(current)
@@ -199,7 +199,8 @@ function SetupWizard({ initial, catalog }: { initial: SetupState; catalog: Agent
             </div>}
             {id === 'done' && <div className="sw-stack">
               <dl className="sw-summary">
-                {row(t('setup.step.memory'), brainReady ? <code>{info!.brainRoot}</code> : t('setup.done.memoryNew'), 'memory')}
+                {row(t('setup.memory.kicker'), brainReady ? <code>{info!.brainRoot}</code> : t('setup.done.memoryNew'), 'memory')}
+                {row(t('setup.done.projects'), projects?.saved || projects?.detected?.path ? <code>{projects.saved ?? projects.detected!.path}</code> : t('setup.done.projectsNone'), 'memory')}
                 {row(t('setup.done.engines'), (draft.engines ?? []).map(e => ENGINE_NAMES[e] ?? e).join(', ') || t('setup.done.noEngines'), 'ai')}
                 {row(t('audit.FirstInterview.toolsAndMaterials'), draft.tools || t('cmp.interview.chooseWhenNeeded'), 'tools')}
                 {row(t('audit.FirstInterview.name'), knownName(current) ? current!.name : answers.name.trim() || t('cmp.interview.toBeGiven'), 'you')}
