@@ -493,7 +493,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/dashboard/Dashboard.tsx, src/renderer/dashboard/data.ts
       b('«Mappa agenti»: le chat aperte e chi parla con chi (proprietà dell’Orchestrator, messaggi tra chat).',
         '"Agents map": open chats and who talks to whom (Orchestrator ownership, messages between chats).'),
-      b('«Mappa brain»: le note del brain e i loro collegamenti, letti ogni 30 secondi.', '"Brain map": the brain’s notes and their links, read every 30 seconds.'),
+      b('«Mappa brain»: le note del brain e i loro collegamenti, letti ogni 30 secondi. La mappa riempie il pannello, centrata; i nomi minori che non trovano spazio si nascondono (clicca un nodo per vederli); «Adatta» la rimette tutta in vista.',
+        '"Brain map": the brain’s notes and their links, read every 30 seconds. The map fills its panel, centred; minor names that find no room are hidden (click a node to see them); "Fit" brings the whole map back into view.'),
       b('«Costi» per giorno, modello, motore e agente; «Token e contesto» avvisa all’80% della finestra di compattazione Claude, se riportata con il contesto misurato; altrimenti usa contextWarnTokens (default 200 000).',
         '"Costs" by day, model, engine and agent; "Tokens & context" warns at 80% of the Claude compaction window when reported with measured context; otherwise it uses contextWarnTokens (default 200,000).'),
       b('«Errori» da ai-errors.md e dagli eventi; «Spunti» deriva segnali come contesti lunghi e costi alti.',

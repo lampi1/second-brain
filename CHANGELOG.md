@@ -5,6 +5,12 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 
 ## [Unreleased]
 
+### Fixed
+- Brain map (2D, Dashboard → Mappa brain): the nodes no longer clump off centre. The layout spreads with the node
+  count and is fitted to the panel's own size and aspect (centred, filling it, re-fitted on resize); labels are placed
+  at their real size and a minor label with no free spot is hidden instead of overlapping; "Adatta" re-fits the whole
+  map (issue #77).
+
 ### Changed
 - Classifiers: a bilingual (IT/EN) work lexicon for agent matching and the routing kind (a fresh brain no longer
   routes everything as "altro"); per-channel agent thresholds; a threshold calibrated on confirmed runs is proposed

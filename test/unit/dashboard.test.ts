@@ -1,7 +1,7 @@
 // Dashboard truthfulness and graph behaviour: unknowns, real message activity and bounded navigation.
 import { describe, expect, it } from 'vitest';
 import type { ChatSummary, ChatItem } from '../../src/shared/contract';
-import { brainChecks, chatName, connections, contextLevel, contextRatio, cursorCoverage, layout, neighbourhood, observedErrors, placeLabels } from '../../src/renderer/dashboard/data';
+import { brainChecks, chatName, connections, contextLevel, contextRatio, cursorCoverage, fitLayout, layout, neighbourhood, observedErrors, placeLabels } from '../../src/renderer/dashboard/data';
 import { columnSize } from '../../src/renderer/lib/regia-dock';
 
 it.each([900, 1280, 1920])('reserves a visible coordinator and usable Dashboard at %i pixels', W => {
@@ -89,10 +89,52 @@ describe('dashboard graph', () => {
       for (const dot of items) expect(a.x1 <= dot.x - 6 || dot.x + 6 <= a.x0 || a.y1 <= dot.y - 6 || dot.y + 6 <= a.y0).toBe(true);
     }
   });
-  it('returns a deterministic bounded layout, including disconnected notes', () => {
+  it('returns a deterministic layout pinned on its centre, including disconnected notes', () => {
     const result = layout(nodes.slice(0, 30), edges, '0');
     expect(result).toEqual(layout(nodes.slice(0, 30), edges, '0'));
-    expect(result.get('0')).toEqual({ x: 400, y: 260 });
-    for (const point of result.values()) { expect(point.x).toBeGreaterThanOrEqual(65); expect(point.x).toBeLessThanOrEqual(735); }
+    expect(result.get('0')).toEqual({ x: 0, y: 0 });
+    expect(result.size).toBe(30);
+    for (const point of result.values()) { expect(Number.isFinite(point.x)).toBe(true); expect(Number.isFinite(point.y)).toBe(true); }
+  });
+  // issue #77: the map used to clump in a fixed 800x520 box, off centre, whatever the panel looked like
+  const box = (points: Map<string, { x: number; y: number }>) => {
+    const p = [...points.values()];
+    return { x0: Math.min(...p.map(q => q.x)), x1: Math.max(...p.map(q => q.x)), y0: Math.min(...p.map(q => q.y)), y1: Math.max(...p.map(q => q.y)) };
+  };
+  const nearest = (points: Map<string, { x: number; y: number }>) => { const p = [...points.values()]; return Math.min(...p.map((a, i) => Math.min(...p.filter((_, j) => j !== i).map(b => Math.hypot(a.x - b.x, a.y - b.y))))); };
+  it('fits a large map to the whole panel, centred, at any aspect, with no two dots touching', () => {
+    const big = nodes.slice(0, 120), links = big.slice(1).map((n, i) => ({ from: String(i % 9 === 0 ? 0 : i - (i % 9)), to: n.id }));
+    const raw = layout(big, links, '0');
+    for (const [w, h] of [[900, 470], [430, 600], [1400, 400]] as const) {
+      const fitted = fitLayout(raw, w, h, { x: 40, y: 30 }, 22), b = box(fitted);
+      expect((b.x1 - b.x0) / w, `${w}x${h}`).toBeGreaterThan(.8);
+      expect((b.y1 - b.y0) / h, `${w}x${h}`).toBeGreaterThan(.75);
+      expect(Math.abs((b.x0 + b.x1) / 2 - w / 2)).toBeLessThan(w * .03);
+      expect(Math.abs((b.y0 + b.y1) / 2 - h / 2)).toBeLessThan(h * .03);
+      expect(b.x0).toBeGreaterThanOrEqual(20); expect(b.x1).toBeLessThanOrEqual(w - 20);
+      expect(nearest(fitted)).toBeGreaterThan(21);
+    }
+  });
+  it('spreads disconnected notes instead of piling them on the walls', () => {
+    const fitted = fitLayout(layout(nodes.slice(0, 100), [], undefined), 900, 470, { x: 40, y: 30 });
+    expect(nearest(fitted)).toBeGreaterThan(20);
+  });
+  it('centres a single node or a line instead of dividing by zero', () => {
+    expect([...fitLayout(new Map([['a', { x: 3, y: 4 }]]), 800, 400, { x: 40, y: 30 }).values()]).toEqual([{ x: 400, y: 200 }]);
+    const line = fitLayout(new Map([['a', { x: 0, y: 0 }], ['b', { x: 2, y: 0 }]]), 800, 400, { x: 40, y: 30 });
+    expect(line.get('a')).toEqual({ x: 40, y: 200 });
+    expect(line.get('b')).toEqual({ x: 760, y: 200 });
+    expect(fitLayout(new Map(), 800, 400, { x: 0, y: 0 }).size).toBe(0);
+  });
+  it('hides a minor label that has no free spot, keeps a required one, and keeps labels inside the bounds', () => {
+    const items = [{ id: 'a', x: 50, y: 50, r: 6, text: 'Selezionato' }, { id: 'b', x: 50, y: 50, r: 6, text: 'Minore' }];
+    const crowd = Array.from({ length: 400 }, (_, i) => ({ x: (i % 20) * 6, y: Math.floor(i / 20) * 6, r: 4 }));
+    const bounds = { x0: 0, y0: 0, x1: 120, y1: 120 };
+    const spots = placeLabels(items, crowd, 14, undefined, { bounds, required: new Set(['a']) });
+    expect([...spots.keys()]).toEqual(['a']);
+    const edge = placeLabels([{ id: 'e', x: 795, y: 200, r: 6, text: 'Un nome lungo sul bordo' }], [], 14, { x: 400, y: 200 }, { bounds: { x0: 0, y0: 0, x1: 800, y1: 400 }, required: new Set() });
+    const s = edge.get('e')!;
+    const left = s.anchor === 'start' ? s.x : s.anchor === 'end' ? s.x - s.w : s.x - s.w / 2;
+    expect(left + s.w).toBeLessThanOrEqual(800);
   });
 });
