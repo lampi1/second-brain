@@ -70,4 +70,19 @@ describe('import', () => {
     expect(svc.importApply([keys[0]]).errors[0]!.message).toMatch(/Esiste già/);
     svc.stop();
   });
+
+  it('drops a token inside an argument or a value with spaces (mcp-remote --header, "Bearer <tok>" in env), with its flag', () => {
+    const tok = 'sk_live_9f8e7d6c5b4a39281706aBcD';
+    const out = convert('linear', { command: 'npx', args: ['-y', 'mcp-remote', 'https://mcp.linear.app/sse', '--header', `Authorization: Bearer ${tok}`, '--header=X-Api-Key: abc', '--transport', 'http-only'],
+      env: { GH_HEADER: `Bearer ${tok}`, MODE: 'fast lane' } }, 'cursor')!;
+    const text = JSON.stringify(out.def);
+    expect(text).not.toContain(tok);
+    expect(text).not.toContain('Authorization');
+    expect(text).not.toContain('abc');
+    expect(out.def.args).toEqual(['-y', 'mcp-remote', 'https://mcp.linear.app/sse', '--transport', 'http-only']);
+    expect(out.def.env).toEqual({ MODE: 'fast lane' });
+    expect(out.def.secrets).toEqual([{ where: 'env', name: 'GH_HEADER' }]);
+    expect(out.dropped).toEqual(expect.arrayContaining(['variabile GH_HEADER', 'argomento --header con il suo valore', 'un argomento che sembra un token']));
+  });
 });
+
