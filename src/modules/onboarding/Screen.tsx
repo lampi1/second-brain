@@ -1,4 +1,4 @@
-// Discovery-first setup and Regia action. One typed port owns preview, confirmation, verification and undo.
+// Discovery-first setup and Orchestrator action. One typed port owns preview, confirmation, verification and undo.
 import { useEffect, useId, useRef, useState } from 'react';
 import type { Applied, Discovery, Harness, OnboardingPort, Plan, Provider } from './contract';
 import { HarnessMark, IconCheck, IconSearch, IconSend, IconShield } from '../../renderer/components/Icons';

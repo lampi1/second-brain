@@ -82,6 +82,7 @@ export const chatEn: typeof chatIt = {
   'chat.menu.switchEngine': (p: { engine: string }) => `Switch engine → ${p.engine}…`,
   'chat.menu.opacityWord': 'Opacity',
   'chat.menu.opacityLabel': 'Orchestrator opacity',
+  'chat.menu.profileNote': (p: { name: string }) => `The lasting model and effort are in ${p.name}’s profile: here you change them for this chat only.`,
   'chat.menu.modelLabel': 'Model',
   'chat.menu.effortLabel': 'Reasoning',
   'chat.menu.permissionLabel': 'Permission prompts',

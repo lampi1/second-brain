@@ -1,7 +1,7 @@
 // The live brain map: which "neurons" are working right now. From what the app sees (its chats with their engine, the
 // tools they run with their input, the browser tabs they drive) it computes, for the map's current view: the nodes to
 // light (a chat at work, a brain file being read or written, a tool or agent in use, a browser environment), the links
-// that pulse while in progress and fade out after (chat → file, Regia → chat for app_send_to_chat or inbox.mjs, chat →
+// that pulse while in progress and fade out after (chat → file, Orchestrator → chat for app_send_to_chat or inbox.mjs, chat →
 // browser or environment, chat → its engine), the extra nodes the view lacks (each live chat, a brain file not drawn,
 // a browser environment) and which chat a lit node opens. Only files inside the brain folder count (a chat reading a
 // code repo lights itself, not the map). Pure, DOM-free; unit-tested in test/unit/brain-ui/live.test.ts; fed by the app
@@ -30,7 +30,7 @@ export interface LiveGraph {
   edges: MapEdge[];
   glow: Map<string, Glow>;
   links: Map<string, LinkGlow>;
-  /** node id → the chat a click opens (a live chat, the Regia) */
+  /** node id → the chat a click opens (a live chat, the Orchestrator) */
   chatOf: Map<string, string>;
   /** the chats at work, newest activity first (the legend) */
   working: { id: string; title: string; harness: string; engine: string; doing: string; level: number; running: boolean; isRegia: boolean }[];
@@ -64,7 +64,7 @@ export function fileOfTool(t: Pick<LiveTool, 'name' | 'input'>, cwd: string): { 
 
 /** The MCP server of a tool name ("mcp__my-devops__wit_get" → "my-devops"), or null. */
 export const mcpServer = (name: string): string | null => /^mcp__([^_]+(?:[-_][^_]+)*?)__/.exec(name)?.[1] ?? null;
-/** the app's own control tools (app_state, app_chats…) only the Regia has: never a browser or a service */
+/** the app's own control tools (app_state, app_chats…) only the Orchestrator has: never a browser or a service */
 const isAppTool = (name: string) => /^mcp__second-brain-app__/i.test(name);
 const isBrowserTool = (name: string) => !isAppTool(name) && /^mcp__(second-brain|sb-browser|claude_browser|claude-browser|playwright)[^_]*__/i.test(name) || /^mcp__.*__browser_/i.test(name);
 const isSendTool = (name: string) => /app_send_to_chat$/.test(name);
@@ -126,7 +126,7 @@ export function liveGraph(s: LiveSnapshot, viewNodes: MapNode[], allNodes: MapNo
   const toolsOf = new Map<string, LiveTool[]>();
   for (const t of s.tools) if (levelOf(t, now) > 0) (toolsOf.get(t.chatId) ?? toolsOf.set(t.chatId, []).get(t.chatId)!).push(t);
 
-  // a chat node: the Regia is the map's own Regia; any other chat at work gets its own neuron in the chat layer
+  // a chat node: the Orchestrator is the map's own Orchestrator; any other chat at work gets its own neuron in the chat layer
   const chatNode = (c: LiveChat): string => {
     if (c.isRegia && regiaNode) { chatOf.set(regiaNode, c.id); return regiaNode; }
     const id = extra({ id: `live:chat:${c.id}`, layer: 'chat', kind: 'chat-viva', label: c.title, short: `chat su ${c.engine}`, degree: 2, members: [] });

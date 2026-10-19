@@ -1,7 +1,7 @@
 // End to end: screenshots pasted (Ctrl+V → a paste event carrying image files, like Windows' Win+Shift+S) or dropped on
 // a chat input, with the real UI and the fake engines (Claude stream-json, Cursor ACP): previews above the input, click
 // to enlarge, ✕ to remove, sent with the message (also when queued) as image blocks; the history shows them. Also the
-// Regia overlay (Ctrl+R) (demo). A fresh Win+Shift+S screenshot the paste event does not carry is read by main (its
+// Orchestrator overlay (Ctrl+R) (demo). A fresh Win+Shift+S screenshot the paste event does not carry is read by main (its
 // clipboard here the in-memory one of SB_TEST). The system clipboard is never touched (synthetic paste events only).
 // Screenshots: test-results/shots/paste-images-<engine>-*.png, paste-images-regia.png, paste-images-fresh-screenshot*.png.
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
@@ -134,7 +134,7 @@ test('Ctrl+V of a fresh Windows screenshot the paste event does not carry: main 
   await pasteFreshScreenshot(app, page, 'chat-input-qa', false);
   await expect(page.getByText('Negli appunti non c’è un’immagine né del testo.')).toBeVisible();
   await expect(page.getByTestId('chat-input-qa-images').locator('.img-thumb')).toHaveCount(1);
-  // the Regia overlay uses the same input
+  // the Orchestrator overlay uses the same input
   await page.keyboard.press('Control+R');
   await expect(page.getByTestId('regia-overlay')).toBeVisible();
   await pasteFreshScreenshot(app, page, 'regia-input', true);

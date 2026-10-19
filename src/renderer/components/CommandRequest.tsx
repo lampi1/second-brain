@@ -1,5 +1,5 @@
 // "Comando da eseguire": a shell block a chat left for the user (main/run/asks.ts), as a request card in the same four
-// sizes as questions and permissions (lane card, chat tile, questions window and global layer, the Regia's decision,
+// sizes as questions and permissions (lane card, chat tile, questions window and global layer, the Orchestrator's decision,
 // compact). It shows
 // who proposed it, the chat's explanation right before the block (`command.lead`, in sight; the turn's prose under
 // "Contesto", one click away, AskContext.tsx) and the command (first lines, the rest one click away), with Esegui /

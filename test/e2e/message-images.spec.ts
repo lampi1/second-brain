@@ -1,4 +1,4 @@
-// Main-only E2E: actual transcript/Regia previews use authorized IPC and data URLs, never local DOM src.
+// Main-only E2E: actual transcript/Orchestrator previews use authorized IPC and data URLs, never local DOM src.
 import {expect,test} from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';

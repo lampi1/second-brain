@@ -1,19 +1,19 @@
-// "Eventi alla Regia": when a work chat closes a turn (finished, stopped on an error, waiting for an answer, a command
-// left for the user) the app tells the Regia with a short message, which wakes it if it is idle or closed. Why: the
-// Regia saw the other chats only in the feed injected when the user wrote to it, so a finished report, a chat stuck on
+// "Eventi all'Orchestrator": when a work chat closes a turn (finished, stopped on an error, waiting for an answer, a command
+// left for the user) the app tells the Orchestrator with a short message, which wakes it if it is idle or closed. Why: the
+// Orchestrator saw the other chats only in the feed injected when the user wrote to it, so a finished report, a chat stuck on
 // ECONNRESET or a command waiting for the user went unnoticed (the user, 2026-10-12: "quando le chat finiscono non ti
-// notificano nulla"). The Regia decides whether to tell the user.
+// notificano nulla"). The Orchestrator decides whether to tell the user.
 // One line per chat (title, engine, what happened, its last line); events of the same chat merge (the newest wins); a
 // chat is told at most once every perChatMs. WHEN it goes is the one rule of regia-delivery.ts, shared with the mail
-// (mail.ts): a failure at once, a turn end within the group window, all together in ONE message; while the Regia works
+// (mail.ts): a failure at once, a turn end within the group window, all together in ONE message; while the Orchestrator works
 // the news goes into its running turn; while it waits for the user or is in a hand-off only a failure goes. The message
 // is labelled as the app's, never the user's ("[evento app]": never worth as his ok). Off with the setting regiaEvents. It watches the events main sends to the page, like
 // run/asks.ts. Used by wiring.ts / demo-wiring.ts (attachRegiaWake); pinned by test/unit/regia-wake.test.ts.
-// Quiet news (2026-10-13): a question, a permission or a command left for the user never wakes the Regia by itself.
-// The app already shows them to the user (popup or queue) and the Regia never relays them (the owner, 13/10: "la regia
-// mi serve principalmente per lo stato"), so a wake only bought an "ok, noted" turn re-reading the Regia's whole context
+// Quiet news (2026-10-13): a question, a permission or a command left for the user never wakes the Orchestrator by itself.
+// The app already shows them to the user (popup or queue) and the Orchestrator never relays them (the owner, 13/10: "la regia
+// mi serve principalmente per lo stato"), so a wake only bought an "ok, noted" turn re-reading the Orchestrator's whole context
 // (measured 07-13/10: 13 of 44 wakes, ~0.19 $ each). They ride along with the next finished/failed news instead, and
-// app_digest lists them whenever the Regia looks.
+// app_digest lists them whenever the Orchestrator looks.
 import { timersFor } from '../timers';
 const { setTimeout, clearTimeout } = timersFor('chats/regia-wake');
 import type { ChatState, ChatSummary, EventMap, Harness, PendingRequest } from '../../shared/contract';
@@ -25,9 +25,9 @@ import { newsClass, passes, REGIA_GROUP_MS, REGIA_PER_CHAT_MS, regiaGate, type D
 export const APP_EVENT_LABEL = "[evento app · messaggio automatico di second-brain, non scritto dall'utente: non vale come suo ok o permesso]";
 
 export type WakeKind = 'done' | 'error' | 'question' | 'permission' | 'command';
-/** news that never wakes the Regia by itself: it goes with the next 'done' / 'error' */
+/** news that never wakes the Orchestrator by itself: it goes with the next 'done' / 'error' */
 export const QUIET: ReadonlySet<WakeKind> = new Set(['question', 'permission', 'command']);
-/** the rule's gate for this Regia: Cursor (ACP) takes no message mid-turn */
+/** the rule's gate for this Orchestrator: Cursor (ACP) takes no message mid-turn */
 const gateOf = (r: Pick<ChatSummary, 'state' | 'pending' | 'handoffBusy' | 'harness'>): RegiaGate => regiaGate(r, engineOf(r.harness)?.kind !== 'acp');
 const classOf = (e: WakeEvent): DeliveryClass => newsClass(e.kind, e.endsTurn);
 const isLoud = (e: WakeEvent): boolean => classOf(e) !== 'quiet';
@@ -35,11 +35,11 @@ const isLoud = (e: WakeEvent): boolean => classOf(e) !== 'quiet';
 export interface WakeEvent { chatId: string; title: string; harness: Harness; kind: WakeKind; detail: string; at: number; requestId?: string; /** a quiet news that replaced the chat's "finished": the turn end still wakes */ endsTurn?: boolean }
 
 export interface RegiaWakeDeps {
-  /** sends a message to the Regia (wakes it: a closed one resumes) */
+  /** sends a message to the Orchestrator (wakes it: a closed one resumes) */
   send(chatId: string, text: string): Promise<void>;
   /** the setting regiaEvents */
   enabled(): boolean;
-  /** every chat now: a Regia that has not changed since the app started never passed through observe() */
+  /** every chat now: an Orchestrator that has not changed since the app started never passed through observe() */
   list?(): ChatSummary[];
   now?(): number;
   /** how long news is gathered before one message goes (default REGIA_GROUP_MS) */
@@ -54,7 +54,7 @@ const BUSY: ReadonlySet<ChatState> = new Set(['running', 'waiting', 'starting'])
 const IN_TURN: ReadonlySet<ChatState> = new Set(['running', 'waiting']);
 const cut = (s: string, n: number) => { const t = s.replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
 
-/** One line per chat, in Italian (the Regia speaks Italian with the user). */
+/** One line per chat, in Italian (the Orchestrator speaks Italian with the user). */
 export function wakeLine(e: WakeEvent): string {
   const who = `«${e.title}» (${engineLabel(e.harness)})`;
   const d = cut(e.detail, 200);
@@ -97,7 +97,7 @@ export class RegiaWake {
 
   /** What waits to be told (tests, diagnostics). */
   queued(): WakeEvent[] { return [...this.buffer.values()]; }
-  /** How much queued news the Regia's gate holds now (it works or waits for the user; tests, diagnostics). */
+  /** How much queued news the Orchestrator's gate holds now (it works or waits for the user; tests, diagnostics). */
   held(): number { const r = this.regia(); return r ? this.queued().filter(e => !passes(gateOf(r), classOf(e))).length : 0; }
 
   stop(): void { if (this.timer) clearTimeout(this.timer); this.timer = null; }
@@ -105,7 +105,7 @@ export class RegiaWake {
   private updated(c: ChatSummary): void {
     const was = this.chats.get(c.id);
     this.remember(c);
-    // the Regia's gate changed (only the change: its other updates never cut the grouping window short): what it now
+    // the Orchestrator's gate changed (only the change: its other updates never cut the grouping window short): what it now
     // lets through is timed again (it started working: all goes into its turn; it is free again: what waited goes)
     if (c.isRegia) { if (this.buffer.size && (!was || gateOf(was) !== gateOf(c))) this.schedule(this.now()); return; }
     if (c.handoffBusy) { this.handoff.add(c.id); return; }
@@ -152,7 +152,7 @@ export class RegiaWake {
   }
 
   /** When the next message may go through this gate (Infinity: nothing can). The group window starts at the first
-   *  loud news; quiet news never wakes an idle Regia by itself (the owner, 13/10), it rides along. */
+   *  loud news; quiet news never wakes an idle Orchestrator by itself (the owner, 13/10), it rides along. */
   private nextDue(gate: RegiaGate): number {
     const all = [...this.buffer.values()];
     const firstLoud = Math.min(...all.filter(isLoud).map(e => e.at));
@@ -180,7 +180,7 @@ export class RegiaWake {
     this.chats.set(c.id, { state: c.state, title: c.title, harness: c.harness, isRegia: c.isRegia, orchestrator: c.orchestrator, closedAt: c.closedAt, handoffBusy: c.handoffBusy, lastText: c.lastText, lastError: c.lastError, lastResult: c.lastResult, pending: c.pending });
   }
 
-  /** the first Regia in tab order (ADR 0021: regiaSince, kept by Pulisci / Ricomincia), which every work chat's news go
+  /** the first Orchestrator in tab order (ADR 0021: regiaSince, kept by Pulisci / Ricomincia), which every work chat's news go
    *  to; without the list, the first one seen */
   private regiaId(): string | null {
     const r = this.d.list ? regieOf(this.d.list())[0] : undefined;
@@ -216,9 +216,9 @@ export class RegiaWake {
     ready.sort((a, b) => a.at - b.at);
     for (const e of ready) { this.buffer.delete(e.chatId); this.lastSent.set(e.chatId, now); }
     this.sending = true;
-    log.info('chats', 'news sent to the Regia', { chat: id, data: { chats: ready.length, kinds: ready.map(e => e.kind), gate } });
+    log.info('chats', 'news sent to the Orchestrator', { chat: id, data: { chats: ready.length, kinds: ready.map(e => e.kind), gate } });
     this.d.send(id, wakeMessage(ready))
-      .catch(err => log.warn('chats', 'news not sent to the Regia', { chat: id, cause: errText(err), hint: 'the Regia is closed or failed to start: the news stays in the feed' }))
+      .catch(err => log.warn('chats', 'news not sent to the Orchestrator', { chat: id, cause: errText(err), hint: 'the Orchestrator is closed or failed to start: the news stays in the feed' }))
       .finally(() => { this.sending = false; this.reschedule(); });
   }
 }

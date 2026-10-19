@@ -1,5 +1,5 @@
 // The unified Orchestrator (SPEC point 16): one coordinator for work and for the app's own code. Pinned here: the migration of
-// persisted Regie (choice, idempotency, histories and children kept, mail aliases), the singleton in ChatManager and in
+// persisted Orchestrators (choice, idempotency, histories and children kept, mail aliases), the singleton in ChatManager and in
 // OrchestratorService (concurrent ensure), the tool scope only for the authenticated canonical caller, news of every chat (the app's code too)
 // and mail reaching it, and the updater's apply staying hard off.
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -57,7 +57,7 @@ describe('migrateOrchestrator', () => {
       expect(by[id]).not.toHaveProperty('orchestrator');
       expect(by[id]).not.toHaveProperty('regiaName');
     }
-    // history kept: the demoted app Regia keeps its session and title; app workers keep their scope
+    // history kept: the demoted app Orchestrator keeps its session and title; app workers keep their scope
     expect(by.appR).toMatchObject({ sessionId: '11111111-1111-4111-8111-111111111111', title: "Regia dell'app" });
     expect(by.appWorker).toMatchObject({ cwd: 'C:/repo', regiaOf: 'w1' });
     expect(by.child2!.regiaOf).toBe('w1');

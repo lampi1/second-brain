@@ -415,7 +415,7 @@ app.whenReady().then(async () => {
       .catch(err => log.warn('app', 'shutdown failed', { data: String(err) }))
       .finally(async () => {
         s.killNow();
-        // app.exit skips Chromium's own shutdown: the app page's localStorage (layout, Regia widget state) written in
+        // app.exit skips Chromium's own shutdown: the app page's localStorage (layout, Orchestrator widget state) written in
         // the last seconds would be lost without this
         session.defaultSession.flushStorageData();
         // the process ends only once each of its threads and its Chromium children ran: on a busy CPU that took 20-130 s;

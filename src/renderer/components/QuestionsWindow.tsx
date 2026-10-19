@@ -1,11 +1,11 @@
 // The questions window ("Domande in finestra", settings questionsModal; the user, 2026-10-12): with the switch on,
-// every open question, permission and command shows here, in front of everything (the Regia overlay too, under the
+// every open question, permission and command shows here, in front of everything (the Orchestrator overlay too, under the
 // dialogs), one at a time as a page read top to bottom (ADR 0049, the user 2026-10-14: "non lo trovo molto leggibile"):
 // who asks, a muted lead (context), the question large, a text to approve as a document, the options as large cards
 // (RequestPanel.tsx size `window`), a question with the shell blocks its chat gave in the same turn (each with "Esegui",
 // run as that chat's block: lib/regia-route.ts commandsOfTurn), and the keys in the footer. With more than one request a
 // rail on the left lists them all in the order they came; a click answers that one now and the rest stay (any order,
-// ADR 0044). The chats' tiles and the Regia keep one line each. It never takes the user's text (lib/questions.ts): while
+// ADR 0044). The chats' tiles and the Orchestrator keep one line each. It never takes the user's text (lib/questions.ts): while
 // they type a request waits as a pill, and when it shows it takes the keyboard only if no other field has it (a note
 // says so; Ctrl+J or a click anywhere on it, backdrop too, moves it here). Esc or "Rispondi dopo" turns "Rispondi dopo"
 // on (lib/later.ts): the window closes and stays closed, new requests wait silently in "Da rispondere". The same window
@@ -230,7 +230,7 @@ function Window({ cur, all, boxRef, hidden, setting, openedAt }: { cur: PendingR
   );
 }
 
-/** What a tile (or the Regia) keeps of its requests while the window answers them, or while they wait in "Da
+/** What a tile (or the Orchestrator) keeps of its requests while the window answers them, or while they wait in "Da
  *  rispondere" (`queued`, the chat stays blocked): one line, its button opens the window on the first of them. */
 export function InWindowLine({ reqs, testid, queued }: { reqs: readonly PendingRequest[]; testid: string; queued?: boolean }) {
   const n = reqs.length === 1 ? t('chat.questions.one') : t('chat.questions.many', { n: reqs.length });

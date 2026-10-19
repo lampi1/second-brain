@@ -1,4 +1,4 @@
-// Several Regie (ADR 0021): which Regia a chat answers to (src/shared/regia.ts), tab labels and names, the opacity
+// Several Orchestrators (ADR 0021): which Orchestrator a chat answers to (src/shared/regia.ts), tab labels and names, the opacity
 // setting's schema. The widget's size and room: regia-dock.test.ts.
 import { describe, expect, it } from 'vitest';
 import { chatName, cleanRegiaName, regiaLabel, regiaOfChat, regieOf } from '../../src/shared/regia';

@@ -1,8 +1,8 @@
-// E2E of "Esegui" on commands (the user, 2026-10-12: "eseguire i comandi della Regia con un click"): a shell block in
-// the Regia's own message runs and its outcome goes to the Regia; a work chat's question in the questions window
+// E2E of "Esegui" on commands (the user, 2026-10-12: "eseguire i comandi dell'Orchestrator con un click"): a shell block in
+// the Orchestrator's own message runs and its outcome goes to the Orchestrator; a work chat's question in the questions window
 // brings the commands that chat gave in the same turn, each run as that chat's block (the outcome goes back to it; keys
 // inside a block never answer the card), production blocks still asking a second click; a permission never gets them.
-// A work chat's request never shows in the Regia (2026-10-13). Screenshots: test-results/shots/regia-esegui-*.png.
+// A work chat's request never shows in the Orchestrator (2026-10-13). Screenshots: test-results/shots/regia-esegui-*.png.
 import { expect, test, type ElectronApplication } from '@playwright/test';
 import { expandChats, launchDemo, shot } from './helpers';
 

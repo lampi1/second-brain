@@ -32,7 +32,7 @@ export const KINDS: Record<string, { label: string; priority: Priority }> = {
   question: { label: 'Domanda per te', priority: 'urgent' },
   'chat-done': { label: 'Chat finita', priority: 'quiet' },     // pull-only (the user, 2026-10-13: 627 toasts a day)
   'chat-failed': { label: 'Chat finita con errore', priority: 'urgent' }, // an app chat's turn ended with an error
-  'chat-closed': { label: 'Chat chiusa', priority: 'quiet' },  // the Regia closed a chat (app_close_chat)
+  'chat-closed': { label: 'Chat chiusa', priority: 'quiet' },  // the Orchestrator closed a chat (app_close_chat)
   error: { label: 'Errore registrato', priority: 'normal' },
   idea: { label: 'Idea aggiunta', priority: 'normal' },
   reflection: { label: "Riflessione dell'IA", priority: 'normal' },
@@ -161,7 +161,7 @@ export function diffChats(before: Map<string, ChatRow> | null, now: ChatRow[]): 
   return out;
 }
 
-/** The end of an app chat's turn (or its CLI dying mid-turn: `crash` = the error) → its feed event. A Regia's own turns are no event (it reports in its own tile);
+/** The end of an app chat's turn (or its CLI dying mid-turn: `crash` = the error) → its feed event. An Orchestrator's own turns are no event (it reports in its own tile);
  *  a turn that ended with an error is "chat-failed" (a toast: the user is needed), any other "chat-done" (center only). */
 export function doneEvent(c: Pick<ChatSummary, 'id' | 'title' | 'isRegia' | 'lastResult'> | undefined, crash?: string): RawEvent | null {
   if (!c || c.isRegia) return null;

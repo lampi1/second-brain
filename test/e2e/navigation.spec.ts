@@ -162,13 +162,13 @@ test('back/forward, recents, Ctrl+1, G-letter keys, the persistent Orchestrator 
   await page.keyboard.press('g');
   await page.keyboard.press('q');
   await expect(page.getByTestId('page-qualita')).toBeVisible();
-  // the Regia without leaving the page
+  // the Orchestrator without leaving the page
   await page.keyboard.press('Control+R');
   await expect(page.getByTestId('regia-overlay')).toBeVisible();
   await expect(page.getByTestId('regia-input')).toBeFocused();
   await page.getByTestId('regia-input').fill('che si fa adesso?');
   await page.getByTestId('regia-input').press('Enter');
-  // the Regia waits on its decision: the message is queued (sent when it is free), the decision answerable right here
+  // the Orchestrator waits on its decision: the message is queued (sent when it is free), the decision answerable right here
   await expect(page.getByTestId('regia-input-queued-0')).toContainText('che si fa adesso?');
   await page.locator('[data-testid="regia-overlay"] [data-request-key="regia/regia-q1"]').focus();
   await page.keyboard.press('1');

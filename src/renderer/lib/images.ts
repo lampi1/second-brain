@@ -2,7 +2,7 @@
 // GIF, WebP up to IMAGE_MAX_BYTES and MAX_EDGE px, the type read from the bytes, not the file name; anything else is
 // re-encoded, scaled down to MAX_EDGE: the API refuses > 8000 px, and > 2000 px once a chat holds 20 images) plus a small WebP
 // preview for the composer, the queue and the history. Canvas work runs in the renderer (no Node, no main round trip).
-// Used by ChatInput (Ctrl+V, drag and drop: every chat tile and the Regia) and pinned by test/unit/images.test.ts (the
+// Used by ChatInput (Ctrl+V, drag and drop: every chat tile and the Orchestrator) and pinned by test/unit/images.test.ts (the
 // pure parts).
 import { IMAGE_MAX_BYTES, IMAGE_MAX_COUNT, type ImageAttachment } from '@shared/contract';
 

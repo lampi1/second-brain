@@ -1,7 +1,7 @@
 // The models each engine's CLI itself offered, kept in userData by engine id (cursor-models.json: the name is the one
 // of when only Cursor reported, so the list it already holds stays): an ACP answer to session/new and session/load
 // carries models.availableModels ({modelId, name}), the exact ids `--model` accepts. The Settings
-// page offers these for "Chat aperte dalla Regia" instead of a list typed by hand (the Regia, 2026-10-11: "l'elenco
+// page offers these for "Chat aperte dall'Orchestrator" instead of a list typed by hand (the Orchestrator, 2026-10-11: "l'elenco
 // vero dei modelli della CLI ... mai inventato"). The app never starts a CLI only to ask: the list is the one of the
 // engine's last chat that opened. Written by wiring.ts (ChatManager onModels), read by 'models:seen'.
 import fs from 'node:fs';

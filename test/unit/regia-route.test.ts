@@ -1,5 +1,5 @@
-// The Regia helpers (src/renderer/lib/regia-route.ts): which chat is the Regia, one Grindhouse for every chat, and the
-// commands of the turn that ends with a question (shown with "Esegui" on its popup). "Domande alla Regia" is gone
+// The Orchestrator helpers (src/renderer/lib/regia-route.ts): which chat is the Orchestrator, one Grindhouse for every chat, and the
+// commands of the turn that ends with a question (shown with "Esegui" on its popup). "Domande all'Orchestrator" is gone
 // (the user, 2026-10-13): no routing left to test.
 import { describe, expect, it } from 'vitest';
 import type { ChatItem } from '../../src/shared/contract';

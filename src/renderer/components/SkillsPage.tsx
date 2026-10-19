@@ -5,8 +5,8 @@
 // approval, logged and undoable. "Modifica" and "Nuova skill" open the editor: a form (name, description, instructions)
 // and the whole markdown with its frontmatter, the two always showing the same text, checked live (shared/skillmd.ts).
 // Save goes through main, which checks again and runs the user's PreToolUse hooks for Write: a refusal is shown with
-// the hook's own message. "Elimina" moves the file to the Recycle Bin after a confirmation; "Prova nella Regia" writes
-// "/<name> " in the Regia's input. Below: the one-time migration's report (runbooks and routines turned into skills)
+// the hook's own message. "Elimina" moves the file to the Recycle Bin after a confirmation; "Prova nell'Orchestrator" writes
+// "/<name> " in the Orchestrator's input. Below: the one-time migration's report (runbooks and routines turned into skills)
 // and the maintenance panel. Rendered by App.tsx PageFrame for the 'skill' place (styles/skills.css, brain-model.css).
 import { Select } from './Select';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';

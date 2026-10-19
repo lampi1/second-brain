@@ -1,4 +1,4 @@
-// A Regia on Cursor really drives the app (the user, 2026-10-11: "regia con cursor che apre chat cursor o claude"):
+// An Orchestrator on Cursor really drives the app (the user, 2026-10-11: "regia con cursor che apre chat cursor o claude"):
 // the real ChatManager, the real MCP server with the app-control tools on /mcp/app, the fake Cursor CLI that calls
 // app_create_chat over HTTP like the real agent does with the server it gets in session/new. No real CLI, no tokens.
 import { afterEach, describe, expect, it } from 'vitest';
@@ -43,12 +43,12 @@ describe('a Regia on Cursor', () => {
     const made = m.list().filter(c => c.id !== regia.id);
     expect(made.map(c => [c.title, c.harness, c.isRegia])).toEqual([['Prova · Claude', 'claude', false], ['Prova · Cursor', 'cursor', false]]);
     expect(m.list().filter(c => c.isRegia).map(c => c.id)).toEqual([regia.id]); // still one Regia
-    // the Regia's two tool calls succeeded (shown in its transcript)
+    // the Orchestrator's two tool calls succeeded (shown in its transcript)
     expect(m.items(regia.id).filter(i => i.kind === 'tool').map(i => (i.kind === 'tool' ? i.status : ''))).toEqual(['ok', 'ok']);
     // both chats really started, each on its own engine
     await waitFor(() => fakeLog(claudeLog).some(l => l.argv), 'claude chat started');
     await waitFor(() => cursorLog(curLog).filter(l => l.method === 'session/new').length === 2, 'cursor chat started');
-    // only the Regia's Cursor session got the app server
+    // only the Orchestrator's Cursor session got the app server
     const news = cursorLog(curLog).filter(l => l.method === 'session/new').map(l => (l.params?.mcpServers as { name: string }[]).map(s => s.name));
     expect(news).toEqual([['second-brain-app'], []]);
   }, 40000);

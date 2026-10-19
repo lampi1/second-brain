@@ -59,7 +59,7 @@ test('Rispondi dopo: the queue fills silently, rings, survives a restart, Ctrl+J
   await expect(page.getByTestId('qwin-count')).toHaveText('3');
   await expect(page.getByTestId('qwin-off')).toHaveCount(0); // "Domande in finestra" is off: this is only the queue
   await expect(page.getByTestId('topbar-next')).not.toContainText('Da rispondere');
-  // any of them first: Feedback now, the Regia's stays
+  // any of them first: Feedback now, the Orchestrator's stays
   await page.getByTestId('qwin-pick').filter({ hasText: 'App · Feedback' }).click();
   await expect(page.getByTestId('qwin-chat')).toHaveText('App · Feedback');
   await expect(page.getByTestId('qwin-pick').filter({ hasText: 'Orchestrator' })).toBeVisible();

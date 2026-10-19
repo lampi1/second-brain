@@ -1,7 +1,7 @@
 // End-to-end: errors and numbers that are useful (ADR 0037), in the frozen demo (SB_DEMO=1 SB_DEMO_FREEZE=1) pointed
 // at the synthetic brain of test/fixtures/brain-ui (SB_BRAIN). Qualità: the AI errors grouped by pattern (count, last
 // seen, this week against the one before, areas, chats with "Apri", the rule), the patterns seen once in one line, a
-// reading on the caught-per-100 metric; "Discutine" on a pattern docks the Regia with a draft that quotes ai-errors.md
+// reading on the caught-per-100 metric; "Discutine" on a pattern docks the Orchestrator with a draft that quotes ai-errors.md
 // and its numbers and ends with the question, not sent. Costi: the period against the one before, Discutine on the
 // total and on every chart. Screenshots: test-results/shots/stats-*.png.
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test';

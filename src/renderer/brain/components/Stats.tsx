@@ -36,7 +36,7 @@ export function Help({ label, children, testId }: { label: string; children: Rea
 }
 
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
-/** The app chat a row's "chat/agente" names, by title (the Regia by name or as "Regia"); null when not in the app. */
+/** The app chat a row's "chat/agente" names, by title (the Orchestrator by name or as "Orchestrator"); null when not in the app. */
 export function chatFor(name: string, chats: ChatSummary[] | null): ChatSummary | null {
   const n = norm(name);
   if (!n || !chats) return null;
@@ -130,7 +130,7 @@ export function PatternsHelp() {
       <p><b>Regola.</b> La regola nata dall'errore (campo «regola:» o il conteggio del cervello): «la regola non è bastata»
         = lo stesso tipo è tornato entro 14 giorni.</p>
       <p><b>Cosa farne.</b> Un tipo che si ripete chiede una cosa sola: una regola più chiara o un controllo automatico.
-        «Discutine» manda alla Regia una bozza con questi numeri; «Apri una chat» ne apre una dedicata.</p>
+        «Discutine» manda all’Orchestrator una bozza con questi numeri; «Apri una chat» ne apre una dedicata.</p>
     </Help>
   );
 }

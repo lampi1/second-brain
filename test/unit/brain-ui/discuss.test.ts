@@ -1,5 +1,5 @@
 // Unit tests of the "Discutine" / "Apri una chat" texts and records (src/renderer/brain/lib/discuss.ts): the idea's
-// line in ideas.md, the Regia draft (file + line, fields, opening question by state, the state rule), the work chat's
+// line in ideas.md, the Orchestrator draft (file + line, fields, opening question by state, the state rule), the work chat's
 // title and first message, and the "discussa" store (bad storage, dedup, caps).
 import { describe, expect, it } from 'vitest';
 import type { Idea, Reflection } from '../../../src/renderer/brain/types';

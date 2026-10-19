@@ -2,7 +2,7 @@
 // then every open chat (state, name, folder and git branch, last line, what it waits for from the user) and the user's
 // open PRs from the last DevOps read (who each waits for, build, votes, QA-blocked). A chat row brings that chat on
 // screen, a waiting question opens that card; the button opens the Task page. Only data the app already holds (lib/stato.ts) plus
-// the folders' branches read from disk ('chat:branches'): no model, no new network call. Opened from the Regia's head
+// the folders' branches read from disk ('chat:branches'): no model, no new network call. Opened from the Orchestrator's head
 // (RegiaTile.tsx), the command palette and Ctrl+Shift+S. Used by App.tsx (modal 'stato').
 import { t as auditText } from '../i18n';
 import { useEffect, useMemo, useState } from 'react';

@@ -1,5 +1,5 @@
 // E2E of the quick close (demo): the ✕ in a chat tile's header and Ctrl+W on the selected chat close it at once with
-// the usual "Chiusa «…» · Annulla" (6 s); Annulla brings it back. The Regia has no ✕ and Ctrl+W never closes it;
+// the usual "Chiusa «…» · Annulla" (6 s); Annulla brings it back. The Orchestrator has no ✕ and Ctrl+W never closes it;
 // a double click or a held Ctrl+W closes one chat; a maximized chat leaves that view and comes back maximized with Annulla; Ctrl+W under a dialog or in the requests
 // layer never closes the app window (Electron's default menu would).
 // Screenshots in test-results/shots/close-fast-*.
@@ -66,7 +66,7 @@ test('the ✕ and Ctrl+W close a chat with Annulla; never the Regia, never the w
   await expect(page.getByTestId('tile-chat-fix')).toBeVisible();
   await expect(page.getByTestId('toast').filter({ hasText: 'Chiusa «Fix totale ordine»' })).toHaveCount(0);
 
-  // the Regia: Ctrl+W only explains
+  // the Orchestrator: Ctrl+W only explains
   await page.getByTestId('tile-regia').locator('h3').first().click();
   await page.keyboard.press('Control+W');
   await expect(page.getByTestId('toast').filter({ hasText: 'L’Orchestrator non si chiude con Ctrl+W' })).toBeVisible();

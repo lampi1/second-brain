@@ -151,7 +151,7 @@ function useHighlight(): void {
   }, [h]);
 }
 
-/** A brain page (built in src/renderer/brain) with a thin frame: back to the chats, its title, "Copia link" (the Regia
+/** A brain page (built in src/renderer/brain) with a thin frame: back to the chats, its title, "Copia link" (the Orchestrator
  *  widget sits in the bottom-right corner, over the page too). */
 function PageFrame({ id }: { id: (typeof BRAIN_PAGES)[number]['id'] }) {
   const arg = ui.use(s => s.pageArg);
@@ -219,7 +219,7 @@ export function App() {
 
   const inFocus = !!focusMode && page === 'home';
   // the Grindhouse has no "Ti aspettano" strip any more (the user, 2026-10-12: "togli le domande che compaiono in alto ti
-  // aspettano, adesso me le fa la regia"): each request is in its tile, the Regia or the global layer; focus mode keeps
+  // aspettano, adesso me le fa la regia"): each request is in its tile, the Orchestrator or the global layer; focus mode keeps
   // its Ctrl+J peek
   const showLane = inFocus && lanePeek;
   return (

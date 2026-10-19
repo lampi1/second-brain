@@ -70,7 +70,7 @@ test('README screenshots', async () => {
   // 1. The agents column: chats as strips, their questions as panels, each browser tab under the chat that drives it
   await expect(page.getByTestId('view-agents')).toBeVisible();
   await waitThumbs(page);
-  await save('mosaic');
+  await save('grindhouse');
 
   // 1b. Agenti: the agent catalog as cards, with the changes waiting for the user's approval
   await page.getByTestId('nav-agenti').click();
@@ -83,7 +83,7 @@ test('README screenshots', async () => {
   // 2. The Orchestrator: the coordinating chat, in its column on the right, with its decision waiting
   await openRegia(page);
   await waitThumbs(page);
-  await save('regia');
+  await save('orchestrator');
 
   // 3. A browser driven by an agent, big next to its chat (focus mode on the chat)
   await page.getByTestId('tile-chat-qa').locator('.tile-head').click();

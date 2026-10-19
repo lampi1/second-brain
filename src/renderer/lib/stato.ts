@@ -52,7 +52,7 @@ export function askText(r: PendingRequest): string {
   return oneLine(q || r.title || r.tool);
 }
 
-// waiting first (the user unblocks them), then failed, working, starting, finished; the Regie last among equals
+// waiting first (the user unblocks them), then failed, working, starting, finished; the Orchestrators last among equals
 const RANK: Record<string, number> = { wait: 0, err: 1, run: 2, off: 3, done: 4, regia: 5 };
 
 /** The open chats (not closed, not being closed), the ones that wait for the user first, then newest. */

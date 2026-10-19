@@ -24,7 +24,7 @@ export interface EngineContext {
   userData: string;
   /** the engine's command override (tests: a .mjs fake); absent = the installed CLI */
   path?: string;
-  /** the chat's browser MCP endpoint and, for a Regia, the app-control one (ACP passes them in session/new) */
+  /** the chat's browser MCP endpoint and, for an Orchestrator, the app-control one (ACP passes them in session/new) */
   mcpUrl: string | null;
   appMcpUrl: string | null;
   /** show the past an ACP engine replays when a session is loaded (a chat restored after a restart has no items) */

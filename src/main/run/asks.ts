@@ -1,5 +1,5 @@
 // "Comando da eseguire": a shell block a chat left for the user becomes an open request, like a question or a
-// permission, so it shows in the chat's tile, in the request layer and in the questions window (never in the Regia), and
+// permission, so it shows in the chat's tile, in the request layer and in the questions window (never in the Orchestrator), and
 // notifies. Why: a block with Esegui stood unnoticed in a chat and the work stood still (the user, 2026-10-12: "non mi
 // appare come notifica quando devo premere Esegui").
 // How: it watches the events main sends to the page (chat:item, chat:updated, chat:removed), so it works the same for
@@ -7,7 +7,7 @@
 // the turn's last assistant message is read with the rule in shared/command-ask.ts; each block it picks, not run yet,
 // becomes a PendingRequest of type 'command' (pending:added + the onAsk notification). It leaves (pending:resolved)
 // when the block runs (ran(), from run:start: Esegui in the chat or on the card), when the user says "Non serve"
-// (dismiss), or when the chat goes on (a new message, a new turn, archived or removed; the app's own news to the Regia,
+// (dismiss), or when the chat goes on (a new message, a new turn, archived or removed; the app's own news to the Orchestrator,
 // chats/regia-wake.ts, and a run's result, run/results.ts, are not the chat going on). It never blocks the chat:
 // ChatSummary.pending does not count it, so messages are never queued behind it. Nothing is persisted: after a
 // restart the chats are closed and their blocks keep their Esegui in the chat.
@@ -41,7 +41,7 @@ export class CommandAsks {
   private turns = new Map<string, Turn>();
   private chats = new Map<string, Pick<ChatSummary, 'state' | 'title' | 'closedAt' | 'handoffBusy'>>();
   private timers = new Map<string, NodeJS.Timeout>();
-  /** chats whose current turn the app started with its news ("Eventi alla Regia"): the user did not move on */
+  /** chats whose current turn the app started with its news ("Eventi all'Orchestrator"): the user did not move on */
   private appTurn = new Set<string>();
   /** chats in a hand-off turn (manager askHandoff): its items are the note, not a message for the user */
   private handoff = new Set<string>();
@@ -81,7 +81,7 @@ export class CommandAsks {
 
   private item(chatId: string, item: ChatItem): void {
     if (item.kind === 'user') {
-      // the app's own messages (news to the Regia, a run's result) and the notes of the user's clicks (Mandato, Non
+      // the app's own messages (news to the Orchestrator, a run's result) and the notes of the user's clicks (Mandato, Non
       // serve: ADR 0038) are no answer to the other commands it left: they stay
       if (item.text.startsWith(APP_EVENT_LABEL) || item.text.startsWith(RUN_RESULT_LABEL) || isNotesOnly(item.text)) this.appTurn.add(chatId);
       else { this.appTurn.delete(chatId); this.clear(chatId, 'new message'); }

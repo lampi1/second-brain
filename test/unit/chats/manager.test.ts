@@ -321,7 +321,7 @@ describe('ChatManager', () => {
     }
   }, 240000);
 
-  // the chat goes on in a new process (here: the Regia moves): the old engine's tools stay for now, and go at the real close
+  // the chat goes on in a new process (here: the Orchestrator moves): the old engine's tools stay for now, and go at the real close
   it('a chat that goes on keeps its tools until it really closes, then they are reaped', async () => {
     const e = env();
     const was = process.env.SB_REAP;
@@ -521,7 +521,7 @@ describe('ChatManager', () => {
     await waitFor(() => results(m, c.id).length === 1, 'resumed turn');
   });
 
-  // several Regie (ADR 0021): a chats.json keeps every Regia with its tab name, and each work chat its Regia
+  // several Orchestrators (ADR 0021): a chats.json keeps every Orchestrator with its tab name, and each work chat its Orchestrator
   it('a chats.json with two Regie restores both, with their names and the work chats\' Regia', () => {
     const e = env();
     const c = (id: string, createdAt: number, more: object = {}) => ({ id, harness: 'claude', cwd: e.cwd, sessionId: null, title: 'Regia', model: null, effort: null, permissionMode: null, isRegia: true, createdAt, costTotalUsd: 0, ...more });
@@ -540,15 +540,15 @@ describe('ChatManager', () => {
     expect(m.list().filter(c => c.isRegia).map(c => c.id)).toEqual([first.id, app.id]);
     const work = await m.create({ harness: 'claude', cwd: e.cwd, title: 'Fix', regiaOf: app.id });
     expect(work.regiaOf).toBe(app.id);
-    // a regiaOf that is not a Regia is dropped (the first Regia answers then)
+    // a regiaOf that is not an Orchestrator is dropped (the first Orchestrator answers then)
     expect((await m.create({ harness: 'claude', cwd: e.cwd, title: 'Altro', regiaOf: work.id })).regiaOf).toBeUndefined();
-    // the auto-close never takes a Regia; the user's close does while another stays, and her chats move
+    // the auto-close never takes an Orchestrator; the user's close does while another stays, and her chats move
     await expect(m.archive(app.id, { auto: true })).rejects.toThrow(/unico|non si chiude/);
     await m.archive(app.id);
     expect(m.list().find(c => c.id === app.id)).toMatchObject({ isRegia: false });
     expect(m.list().find(c => c.id === work.id)?.regiaOf).toBe(first.id);
     await expect(m.archive(first.id)).rejects.toThrow(/unico/);
-    // the first Regia never closes (its "Regia" title is the mail address); replacing it keeps its place among the
+    // the first Orchestrator never closes (its "Orchestrator" title is the mail address); replacing it keeps its place among the
     // tabs, so the chats without a regiaOf keep answering to it, not to the next tab
     const ricerca = await m.create({ harness: 'claude', cwd: e.cwd, regia: true, regiaName: 'Ricerca' });
     await expect(m.archive(first.id)).rejects.toThrow(/primo Orchestrator/);
@@ -558,9 +558,9 @@ describe('ChatManager', () => {
     expect(regieOf(restarted.list()).map(c => c.id)).toEqual([neu.id, ricerca.id]);
   });
 
-  // `replaces` (Ricomincia da capo, Cambia motore, Pulisci): the new Regia takes the role, name and work chats; the
+  // `replaces` (Ricomincia da capo, Cambia motore, Pulisci): the new Orchestrator takes the role, name and work chats; the
   // old one stays as a normal chat and its process (started with the app-control tools) is closed, so its next
-  // message resumes it without them. Each Regia gets its own app-control endpoint; the Cursor Regia gets it too.
+  // message resumes it without them. Each Orchestrator gets its own app-control endpoint; the Cursor Orchestrator gets it too.
   it('moves the Regia role to a new chat (persisted, both updated) and gives a Cursor Regia the app MCP server', async () => {
     const e = env();
     const curLog = path.join(e.userData, 'cursor.jsonl');
@@ -585,18 +585,18 @@ describe('ChatManager', () => {
     expect(updates.some(u => u.id === neu.id && u.isRegia)).toBe(true);
     const stored = JSON.parse(fs.readFileSync(path.join(e.userData, 'chats.json'), 'utf8')) as { chats: { id: string; isRegia: boolean }[] };
     expect(stored.chats.map(c => [c.id, c.isRegia])).toEqual([[old.id, false], [work.id, false], [neu.id, true]]);
-    // the old Regia is not deleted: its idle process ends, its history stays
+    // the old Orchestrator is not deleted: its idle process ends, its history stays
     await waitFor(() => m.list().find(c => c.id === old.id)?.state === 'closed', 'old regia process closed');
     expect(m.items(old.id).some(i => i.kind === 'user' && i.text === 'hello')).toBe(true);
 
-    // the Cursor Regia receives the app-control server (app_create_chat) next to its browser endpoint
+    // the Cursor Orchestrator receives the app-control server (app_create_chat) next to its browser endpoint
     await waitFor(() => cursorLog(curLog).some(l => l.method === 'session/new'), 'cursor session/new');
     expect(cursorLog(curLog).find(l => l.method === 'session/new')?.params?.mcpServers).toEqual([
       { type: 'http', name: 'second-brain', url: browserUrl(neu.id), headers: [] },
       { type: 'http', name: 'second-brain-app', url: appUrl(neu.id), headers: [] },
     ]);
 
-    // a normal Cursor chat never gets it; the former Regia resumes without --allowedTools for the app
+    // a normal Cursor chat never gets it; the former Orchestrator resumes without --allowedTools for the app
     await m.create({ harness: 'cursor', cwd: e.cwd, title: 'Lavoro' });
     await waitFor(() => cursorLog(curLog).filter(l => l.method === 'session/new').length === 2, 'second cursor session');
     expect(cursorLog(curLog).filter(l => l.method === 'session/new')[1]?.params?.mcpServers).toEqual([{ type: 'http', name: 'second-brain', url: expect.stringContaining('/mcp/chat/'), headers: [] }]);

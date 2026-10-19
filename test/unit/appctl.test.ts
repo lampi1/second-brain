@@ -7,7 +7,7 @@ import { routeChat, type RouteRequest } from '../../src/main/brain/routing';
 import { DEMO_REGISTRY, DemoRouting } from '../../src/main/brain/routing-demo';
 import type { RoutingRow, RoutingTable } from '../../src/shared/contract';
 
-/** a brain with no routing table and no registry: every chat gets the user's "Chat aperte dalla Regia" */
+/** a brain with no routing table and no registry: every chat gets the user's "Chat aperte dall'Orchestrator" */
 const ROUTED = { routingInfo: () => ({ registry: null }), route: (req: RouteRequest) => routeChat(req, null, null, null, 7) };
 
 function deps() {
@@ -161,7 +161,7 @@ describe('app control tools', () => {
     expect(String(made[0]!.prompt).startsWith(AGENT_LABEL)).toBe(true);
     expect(made[0]).not.toHaveProperty('model');
     expect(made[0]).not.toHaveProperty('effort');
-    // never a second Regia, not even silently: the role is the user's choice
+    // never a second Orchestrator, not even silently: the role is the user's choice
     expect(made[0]!.regia).toBe(false);
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', regia: true }))).rejects.toThrow(/Orchestrator/);
     expect(made).toHaveLength(1);
@@ -174,7 +174,7 @@ describe('app control tools', () => {
     cross = true;
     expect(await t.run({ title: 'Claude · Prova', prompt: 'y', harness: 'claude' })).toMatchObject({ harness: 'claude' });
     expect(made.map(m => [m.harness, m.regia])).toEqual([['claude', false], ['cursor', false], ['cursor', false], ['claude', false], ['claude', false]]);
-    // «Le Regie possono usare Cursor» off: refused to every Regia, a Cursor one too (review 2026-10-14)
+    // «Gli Orchestrator possono usare Cursor» off: refused to every Orchestrator, a Cursor one too (review 2026-10-14)
     cursorOn = false;
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', harness: 'cursor' }))).rejects.toThrow(/Gli Orchestrator possono usare Cursor/);
   });
@@ -209,7 +209,7 @@ describe('app control tools', () => {
     await t('app_continue_chat').run({ chatId: 'cu' });
     await t('app_handoff_chat').run({ chatId: 'cu' });
     await expect(Promise.resolve(t('app_handoff_chat').run({ chatId: 'nope' }))).rejects.toThrow(/sconosciuta/);
-    // A Cursor Regia can reach Claude too; the stopped-chat wake rules still apply.
+    // A Cursor Orchestrator can reach Claude too; the stopped-chat wake rules still apply.
     list.push({ id: 'r', harness: 'cursor', state: 'idle', title: 'Regia', pending: 0, model: null, costUsd: 0, isRegia: true, lastText: '' });
     await t('app_handoff_chat').run({ chatId: 'cx' });
     expect(calls.at(-1)![2].allowStart).toBe(true);
@@ -408,7 +408,7 @@ describe('app control tools', () => {
     await run('r2', 'app_create_chat', { title: 'Sms · Fix', prompt: 'x', harness: 'cursor' });
     expect(made[0]).toMatchObject({ regiaOf: 'r2', harness: 'cursor' });
     expect(String(made[0]!.prompt)).toContain('Il tuo Orchestrator è «Regia · App»: scrivigli con send_to_chat.');
-    // no caller or a stale one = the first Regia (test agents on /mcp/app)
+    // no caller or a stale one = the first Orchestrator (test agents on /mcp/app)
     await run(undefined, 'app_create_chat', { title: 'Lavoro · Fix', prompt: 'x', harness: 'claude' });
     await run('gone', 'app_create_chat', { title: 'Lavoro · Fix 2', prompt: 'x', harness: 'claude' });
     expect(made.slice(1).map(m => m.regiaOf)).toEqual(['r1', 'r1']);

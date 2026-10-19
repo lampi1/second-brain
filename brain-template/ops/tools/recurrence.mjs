@@ -53,7 +53,7 @@ export function parse(text) {
     const m = line.match(/^- (\d{4}-\d{2}-\d{2})(?: [\d:-]{5})? · (.*)$/);
     if (!m) continue;
     const f = m[2].split(' · ').map(x => x.trim());
-    // the colon: "fatto-non-verificato" is a type; "detto alla Regia: …" is a claim
+    // the colon: "fatto-non-verificato" is a type; "detto all’Orchestrator: …" is a claim
     let i = f.findIndex(x => /^(detto|fatto)[^:·]{0,20}:/i.test(x));
     if (i < 0) i = f.findIndex(x => /^vero\s*:/i.test(x));
     if (i < 3) continue; // not the standard format: no who/area/type before the claim

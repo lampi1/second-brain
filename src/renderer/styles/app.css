@@ -1,4 +1,4 @@
-/* Component styles of the cockpit, built only on styles/tokens.css: shell, top bar, needs lane, tiles (chat, Regia,
+/* Component styles of the cockpit, built only on styles/tokens.css: shell, top bar, needs lane, tiles (chat, Orchestrator,
    browser), transcript rows, request panels, views (agents workspace, focus, brain pages), menus, dialogs, palette,
    toasts, tooltips. Motion is 120-180 ms ease-out for enter/expand only (never for streaming updates); everything
    turns off with prefers-reduced-motion. Imported once by main.tsx. */
@@ -633,10 +633,10 @@ html[data-blink="1"] .md.streaming > .md-b:last-child > :last-child::after { opa
 .regia-tile .queued-chip .queued-now { background: var(--violet-bg); }
 .regia-tile .queued-chip .queued-now:hover { border-color: var(--regia-line-2); }
 
-/* Regia */
+/* Orchestrator */
 .regia-tile { background: var(--regia-bg); border-color: var(--regia-line); }
 .regia-tile.focused { border-color: var(--regia-line-2); }
-.regia-tile.paired:not(.pair-hot):not(.focused) { border-color: var(--regia-line); }   /* the Regia keeps its violet edge; the pair shows in the stripe */
+.regia-tile.paired:not(.pair-hot):not(.focused) { border-color: var(--regia-line); }   /* the Orchestrator keeps its violet edge; the pair shows in the stripe */
 .regia-tile .tile-head { border-color: var(--regia-line); }
 .regia-name { color: var(--violet); font-size: 13.5px; }
 .regia-tile .md strong { color: var(--violet); }
@@ -1093,7 +1093,7 @@ html.overlay body:focus-within .layer-hint { display: none; }
 .ctx-link:hover { text-decoration: underline; }
 .ctx-link:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus); }
 .ctx-link.file { font: inherit; font-size: 12px; }
-/* the Regia card's "Poi:" row (RegiaTile.tsx): its other requests as pills */
+/* the Orchestrator card's "Poi:" row (RegiaTile.tsx): its other requests as pills */
 .qwin-queue { flex: none; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 14px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-3); }
 .qwin-queue-k { font-weight: 600; }
 .qwin-queue-item { padding: 1px 8px; border-radius: 99px; background: var(--surface-3); color: var(--text-2); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1125,7 +1125,7 @@ html.overlay body:focus-within .layer-hint { display: none; }
 .msg-notes { max-width: 88%; margin: 2px 4px 0; display: block; font-size: 11px; color: var(--text-4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .msg-notes > svg { vertical-align: -1px; }
 
-/* "Nuova chat" in a Regia's input and its badge on the message; "Apri" chips for the chats she opened, wrote to or
+/* "Nuova chat" in an Orchestrator's input and its badge on the message; "Apri" chips for the chats she opened, wrote to or
    named (ChatInput.tsx, ChatRefChips.tsx; ADR 0034) */
 .newchat-toggle { flex: none; display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 99px; border: 1px dashed var(--regia-line-2);
   background: transparent; color: var(--text-3); font: 500 11px var(--font); white-space: nowrap; cursor: pointer; }

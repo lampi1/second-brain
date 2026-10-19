@@ -3,7 +3,7 @@
 // settings for them live and visibly (settings-schema.ts): every change is one dot key, logged with who made it
 // ('user' | 'agent', chat id), applied at once (listeners), undoable ("Annulla"). An agent may change only the
 // non-protected keys; a protected key becomes a proposal that waits for the user's click (confirm). An engine switched
-// off closes «Le Regie possono usare» for it too (ADR 0046: the key an older release reads). Env overrides for
+// off closes «Gli Orchestrator possono usare» for it too (ADR 0046: the key an older release reads). Env overrides for
 // tests and agents: SB_BRAIN, SB_MCP_PORT are effective and locked, never written back. Never secrets. Used by
 // brain/index.ts for the settings:* channels and by the parts that read settings live (notify, budget, feed restart);
 // scripts/doctor.mjs reads config.json too (same nested shape). config.json may also list the brain's other domain
@@ -54,7 +54,7 @@ export function fromSaved(raw: unknown): Settings {
   const mute = (raw as { mute?: unknown }).mute;
   if (mute && typeof mute === 'object') for (const [k0, v] of Object.entries(mute)) { const k = LEGACY_MUTE[k0] ?? k0; const c = validate(`mute.${k}`, v); if (c.ok) s = setAt(s, c.key, c.value); }
   // every engine the file names, also one the brain defines later (its registry entry comes after the settings load);
-  // an engine the app removed (Gemini, ADR 0046) is dropped: its keys and the Regia's choice of it go, Claude takes over
+  // an engine the app removed (Gemini, ADR 0046) is dropped: its keys and the Orchestrator's choice of it go, Claude takes over
   for (const group of ['engineOn', 'engines'] as const) {
     const o = (raw as Record<string, unknown>)[group];
     if (o && typeof o === 'object' && !Array.isArray(o)) for (const [id, v] of Object.entries(o)) {
@@ -63,7 +63,7 @@ export function fromSaved(raw: unknown): Settings {
       if (c.ok) s = setAt(s, c.key, c.value);
     }
   }
-  // the Regia's engine, also one the brain defines later (an unknown one is refused when a chat starts on it)
+  // the Orchestrator's engine, also one the brain defines later (an unknown one is refused when a chat starts on it)
   const regiaEngine = (raw as { regiaChats?: { harness?: unknown } }).regiaChats?.harness;
   if (typeof regiaEngine === 'string' && ENGINE_ID.test(regiaEngine) && !REMOVED_ENGINES.has(regiaEngine)) s = { ...s, regiaChats: { ...s.regiaChats, harness: regiaEngine } };
   return s;
@@ -302,7 +302,7 @@ export class ConfigStore {
     this.appendChange(ch);
     const now = this.get();
     for (const fn of this.listeners) fn({ ...ch }, now, before);
-    // an engine switched off also closes «Le Regie possono usare X» (ADR 0046): an older release (rollback) reads only that key
+    // an engine switched off also closes «Gli Orchestrator possono usare X» (ADR 0046): an older release (rollback) reads only that key
     const off = /^engineOn\.(.+)$/.exec(key)?.[1];
     if (off && value === false && now.engines[off] === true) this.apply(`engines.${off}` as SettingKey, false, origin);
     return ch;

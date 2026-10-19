@@ -69,7 +69,7 @@ test('Task page: read on demand, unread news with links, badge and feed, mark re
     await item.locator('summary').click();
     await dv.getByTestId('task-tile-news').click();
     await expect(page.getByTestId('nav-badge-task')).toHaveText('2');
-    // the feed (the Regia's Novità and the notification center) got the news, once
+    // the feed (the Orchestrator's Novità and the notification center) got the news, once
     await page.keyboard.press('Control+Shift+N');
     await expect(page.getByTestId('center')).toContainText('2 novità su DevOps'); // a first read: one summary line
     await page.keyboard.press('Escape');

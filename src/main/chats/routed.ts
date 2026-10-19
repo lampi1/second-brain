@@ -1,8 +1,8 @@
 // A chat the user starts without choosing everything (chat:createRouted): the Task page's "Apri chat", a brain page's
-// "Apri una chat", "Nuova chat" (its one-line preview too: previewRoute) and a new Regia (Ricomincia da capo, Cambia
+// "Apri una chat", "Nuova chat" (its one-line preview too: previewRoute) and a new Orchestrator (Ricomincia da capo, Cambia
 // motore, Pulisci).
 // Harness, model and effort come from the routing table (brain/routing.ts, ADR 0032), the same decision app_create_chat
-// makes for a Regia, and the chat carries its route, so its prediction and actuals reach the improvement loop's ledger
+// makes for an Orchestrator, and the chat carries its route, so its prediction and actuals reach the improvement loop's ledger
 // (wiring.ts). What the user named (the engine of Cambia motore) beats the row, as an override with its reason; no row →
 // the user's defaults, as before. Why: the user, 2026-10-14, "quando dalla sezione devops premo fai partire chat mi
 // aspetto che comunque passi dalle configurazioni di scelta del modello", then the same for the other paths
@@ -16,7 +16,7 @@ export interface RoutedChatDeps {
   route(req: RouteRequest): RouteResult;
   /** may a chat start on this engine now (settings engineOn.*, engines/policy.ts engineOn) */
   engineOn(h: Harness): boolean;
-  /** may the routing table, the defaults or a Regia use this engine («Le Regie possono usare X», policy.ts agentsMayOpen) */
+  /** may the routing table, the defaults or an Orchestrator use this engine («Gli Orchestrator possono usare X», policy.ts agentsMayOpen) */
   agentsMayOpen(h: Harness): boolean;
   create(req: NewChat): Promise<ChatSummary>;
 }
@@ -33,15 +33,15 @@ const harnessOf = (v: unknown): Harness | undefined => (typeof v === 'string' &&
 type Decided = { error: string } | { routed: Exclude<RouteResult, { error: string }>; title: string; prompt: string; cwd: string; harness: Harness };
 function decide(d: Pick<RoutedChatDeps, 'route' | 'engineOn' | 'agentsMayOpen'>, req: RoutedNewChat, own: RoutedSpace, preview: boolean): Decided {
   const regia = req?.regia === true;
-  // a Regia's title is its mail address and a rename has no limit: kept whole, a work chat's capped
+  // an Orchestrator's title is its mail address and a rename has no limit: kept whole, a work chat's capped
   const title = text(req?.title, regia ? 1000 : 80), prompt = typeof req?.prompt === 'string' ? req.prompt.trim() : '', cwd = text(req?.cwd, 1000);
   if (!preview) {
-    // an empty title is made from the prompt (or "Regia · <name>") by the chat manager, as for chat:create
+    // an empty title is made from the prompt (or "Orchestrator · <name>") by the chat manager, as for chat:create
     if (!prompt && !regia) throw new Error('il primo messaggio serve');
     if (!own.byUser && prompt.length > (regia ? 40_000 : 8000)) throw new Error(`primo messaggio troppo lungo (≤ ${regia ? 40_000 : 8000} caratteri)`);
     if (!cwd) throw new Error('nessuna cartella per la chat');
   }
-  // a Regia's work is always 'regia', whatever its title or handoff says
+  // an Orchestrator's work is always 'regia', whatever its title or handoff says
   const kind: TaskKind | undefined = regia ? 'regia' : req.kind && (TASK_KINDS as readonly string[]).includes(req.kind) ? req.kind as TaskKind : undefined;
   const def = req.defaults ?? { harness: 'claude' };
   const harness: Harness = engineOf(def.harness) ? def.harness : 'claude';
@@ -50,7 +50,7 @@ function decide(d: Pick<RoutedChatDeps, 'route' | 'engineOn' | 'agentsMayOpen'>,
   const said = { harness: harnessOf(req.ask?.harness), model: text(req.ask?.model, 200) || undefined, effort: askEffort };
   const named = !!(said.harness || said.model || said.effort);
   // the engine the user names for a work chat needs only to be on; a row of the table (the AI writes it), the defaults
-  // and a Regia (an agent itself) need «Le Regie possono usare X» too
+  // and an Orchestrator (an agent itself) need «Gli Orchestrator possono usare X» too
   const userPick = (h: Harness) => !regia && h === said.harness;
   const refusal = (h: Harness): string | null => !d.engineOn(h) ? `${engineLabel(h)} è spento nelle impostazioni`
     : !userPick(h) && !d.agentsMayOpen(h) ? `gli Orchestrator non possono usare ${engineLabel(h)} (impostazione «Gli Orchestrator possono usare ${engineLabel(h)}»)` : null;

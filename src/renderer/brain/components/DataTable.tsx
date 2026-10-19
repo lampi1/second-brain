@@ -30,7 +30,7 @@ export interface DataTableProps<R> {
   filters?: string[];
   sort?: { key: string; dir: 1 | -1 };
   search?: boolean;
-  /** the peek's content; `close` hides the peek (an action that takes the user elsewhere, e.g. the docked Regia) */
+  /** the peek's content; `close` hides the peek (an action that takes the user elsewhere, e.g. the docked Orchestrator) */
   detail?: (r: R, close: () => void) => ReactNode;
   detailTitle?: (r: R) => string;
   empty?: string;

@@ -1,6 +1,6 @@
 // Writing to a chat from a brain page, through the app's own chats only ('chat:list' + 'chat:send'): to a chat of the
 // app directly, or to a chat the app only reads (Claude desktop, Cursor IDE: it has a mailbox in the brain) through the
-// Regia, which forwards it with the brain's mail between chats. Always two steps (Invia… → Sì, invia) because a
+// Orchestrator, which forwards it with the brain's mail between chats. Always two steps (Invia… → Sì, invia) because a
 // message makes a model work. Used by Adesso.
 import { Select } from '../../components/Select';
 import { useEffect, useRef, useState } from 'react';
@@ -120,7 +120,7 @@ export function Composer({ mailboxes, target, onTarget, focusKey }: {
   );
 }
 
-/** "Discutiamone": a ready message to the Regia, confirmed inline. Hidden reasonably when no Regia is open. */
+/** "Discutiamone": a ready message to the Orchestrator, confirmed inline. Hidden reasonably when no Orchestrator is open. */
 export function DiscussButton({ title, text, regia }: { title: string; text: string; regia: ChatSummary | null }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);

@@ -1,6 +1,6 @@
 // Live cost of a Claude turn while it runs. Why: the CLI reports the real cost only in the `result` at the end of a
 // turn, and a work chat can stay in one turn for hours (messages sent meanwhile join the same turn), so its tile read
-// 0 $ all along while the Regia, with short turns, went up (the user, 2026-10-11). Every stream-json `assistant`
+// 0 $ all along while the Orchestrator, with short turns, went up (the user, 2026-10-11). Every stream-json `assistant`
 // message carries its API `usage`; this module prices it with the brain's price table (harness/models.json, the same
 // one ops/tools/prices.mjs and cost.mjs use for the top bar's "Oggi": real per-model list prices, ADR 0032), so the
 // live figure and the day total agree; without a brain the Opus 5.5 list price stands in. The CLI repeats a message

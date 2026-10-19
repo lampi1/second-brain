@@ -129,7 +129,7 @@ function main() {
   const why = check(command, harness);
   if (!why) process.exit(0);
   const msg = `BLOCKED ({{BRAIN_NAME}} vendor-guard): ${why}. Each harness spends only its own tokens; only the comparison `
-    + '(harness/compare, when {{OWNER}} asks) uses both. Do it in this harness, or tell {{OWNER}}/the Regia.';
+    + '(harness/compare, when {{OWNER}} asks) uses both. Do it in this harness, or tell {{OWNER}}/the Orchestrator.';
   if (cursorShell) {
     process.stdout.write(JSON.stringify({ permission: 'deny', user_message: `vendor-guard: ${why}.`, agent_message: msg }));
     process.exit(0);

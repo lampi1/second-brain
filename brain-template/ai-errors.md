@@ -8,7 +8,7 @@ corregge, non si toglie.
 - **Write when:** {{OWNER}} corregge un agente, un reviewer dimostra falsa un'affermazione, o l'agente scopre di aver
   sbagliato. Scrive **subito la chat che lo riceve**, con
   `node {{BRAIN}}/ops/tools/mem.mjs error --text "<riga>"`. Mai segreti o dati di terzi.
-- **Seconda volta = proposta di regola**: stesso tipo e stessa area già nel registro → proposta alla Regia
+- **Seconda volta = proposta di regola**: stesso tipo e stessa area già nel registro → proposta all'Orchestrator
   (`brain-rules.md`). La regola è servita? `node ops/tools/recurrence.mjs`.
 
 Vuoto il primo giorno. La pagina Qualità dell'app legge da qui quante volte hai dovuto correggere l'IA e se le

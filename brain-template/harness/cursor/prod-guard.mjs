@@ -19,13 +19,13 @@ const WHY = 'Production rule (me.md "Safety"): the agent proposes, {{OWNER}} run
 const EXTRA_DENY = [
   // anchored at the start of a simple command (after wrappers/paths are stripped), like the Claude rules
   [/^(?:(?:bash|sh|zsh|pwsh|powershell)(?:\.exe)?\s+(?:-\w+\s+)*)?["']?[^\s"']*ops[\\/]+runner[\\/]/i, 'ops/runner scripts are production: {{OWNER}} runs them'],
-  [/^sqlcmd\b(?![\s\S]*-S\s*["']?(localhost|127\.0\.0\.1|\.|\(local\))\b)/i, 'sqlcmd only towards the local dev DB (-S localhost); production queries only via ro-query.sh from the Regia'],
-  [/^Invoke-Sqlcmd\b/i, 'Invoke-Sqlcmd: production queries only via ro-query.sh from the Regia'],
+  [/^sqlcmd\b(?![\s\S]*-S\s*["']?(localhost|127\.0\.0\.1|\.|\(local\))\b)/i, 'sqlcmd only towards the local dev DB (-S localhost); production queries only via ro-query.sh from the Orchestrator'],
+  [/^Invoke-Sqlcmd\b/i, 'Invoke-Sqlcmd: production queries only via ro-query.sh from the Orchestrator'],
   [/^kubectl\b(?=[\s\S]*\b(prd|prod|production)\b)(?=[\s\S]*\b(delete|apply|patch|scale|rollout|edit|replace|set|exec|cordon|drain|annotate|label|create|run|cp|taint)\b)/i, 'kubectl write on a production namespace'],
   [/^git(?:\s+-[Cc]\s+(?:"[^"]*"|'[^']*'|\S+))*\s+push\b[\s\S]*[\s:/+](master|release)(?![\w-])/i, 'push to master/release'],
 ];
 const EXTRA_ASK = [
-  [/ro-query\.sh/i, 'production DB query: only from the Regia, after {{OWNER}} saw the full query text'],
+  [/ro-query\.sh/i, 'production DB query: only from the Orchestrator, after {{OWNER}} saw the full query text'],
   [/ops[\\/]+runner[\\/]/i, 'mentions an ops/runner production script'],
 ];
 

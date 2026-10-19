@@ -1,4 +1,4 @@
-// Catalog delegation keeps engine policy and profile identity; a fake session proves Regia context reaches the engine.
+// Catalog delegation keeps engine policy and profile identity; a fake session proves Orchestrator context reaches the engine.
 import { afterEach, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';

@@ -197,7 +197,7 @@ export function effortFor(engine: Pick<EngineDef, 'caps'>, effort: string | null
 }
 
 /** Why a run may not start now (null = it may): an unknown engine, one the user did not turn on (or whose definition
- *  changed since), one the agents may not use («Le Regie possono usare X» off: the run is asked by the brain's files,
+ *  changed since), one the agents may not use («Gli Orchestrator possono usare X» off: the run is asked by the brain's files,
  *  which agents write), and under tests anything but a fake (a .mjs override; an HTTP engine only on this machine). */
 export function refusal(id: Harness, settings: Pick<Settings, 'engineOn' | 'engines'>, override: string | undefined, env: NodeJS.ProcessEnv): string | null {
   const engine = engineOf(id);

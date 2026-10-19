@@ -8,7 +8,7 @@
 // Cursor session/load). A finished chat can be archived (closedAt: its process ends, the record and transcript stay,
 // the palette lists it under "Chiuse", Ctrl+K) and reopened; a message to an archived chat reopens it. A turn cut by a quit or
 // crash (persisted "working") resumes by itself on the next start (resumeInterrupted). An app Claude chat can be forked (a copy, never two writers on one transcript). There may be
-// several Regie (ADR 0021), each with its tab name; a work chat answers to one (regiaOf); a Regia created with
+// several Orchestrators (ADR 0021), each with its tab name; a work chat answers to one (regiaOf); an Orchestrator created with
 // `replaces` takes that one's role and work chats (the old one goes on as a normal chat). Long chats:
 // each chat carries its context size (Claude: get_context_usage; Cursor: an estimate); every Claude engine gets the
 // compaction window (option compactWindowTokens, ADR 0031); continueChat ("Riprendi") opens a NEW chat from a hand-off
@@ -81,7 +81,7 @@ export interface ChatManagerOptions {
   enginePaths?: Partial<Record<Harness, string>>;
   /** may a chat start on this engine now (the user's engineOn.* switches); absent = every engine may */
   engineOn?: (h: Harness) => boolean;
-  /** may an agent's message wake a stopped chat on this engine («Le Regie possono usare X», engines/policy.ts) */
+  /** may an agent's message wake a stopped chat on this engine («Gli Orchestrator possono usare X», engines/policy.ts) */
   agentsMayOpen?: (h: Harness) => boolean;
   /** the user's API key for this engine (engines/service.ts keyFor), read only when its process or request starts */
   keyFor?: (h: Harness) => string | null;
@@ -89,7 +89,7 @@ export interface ChatManagerOptions {
   appVersion?: string;
   /** per-chat MCP endpoint of the app (browser tools); null/undefined = none passed */
   mcpUrlFor?: ((chatId: string) => string | null) | null;
-  /** the app-control MCP for the Regie only: each work Regia its own /mcp/app/r/<id>/<token> (ADR 0021) */
+  /** the app-control MCP for the Orchestrators only: each work Orchestrator its own /mcp/app/r/<id>/<token> (ADR 0021) */
   appMcpUrl?: ((regiaId: string) => string | null) | null;
   /** where Claude Code keeps transcripts (default ~/.claude or CLAUDE_CONFIG_DIR) */
   claudeHome?: string;
@@ -136,7 +136,7 @@ export interface ChatManagerOptions {
   compactWindowTokens?: () => number;
   /** the invisible continuation of cold chats (ADR 0031; default off here, wiring reads the setting) */
   coldHandoff?: () => boolean;
-  /** «Regie corte» (ADR 0051): a Regia with a context from an earlier day compacts it once on a new day (default off
+  /** «Orchestrators corte» (ADR 0051): an Orchestrator with a context from an earlier day compacts it once on a new day (default off
    *  here, wiring reads the setting regiaDayCompact) */
   regiaDayCompact?: () => boolean;
   /** ms after the last call before an idle long chat writes its cold note (default 50 min) */
@@ -253,7 +253,7 @@ interface Rec {
   session: HarnessSession | null;
   /** the "/" commands its engine reported (in memory: a new engine reports them again) */
   commands?: ChatCommand[];
-  /** engines ended while the chat went on (model or Regia change, continued): their tools are reaped at the real close */
+  /** engines ended while the chat went on (model or Orchestrator change, continued): their tools are reaped at the real close */
   kept?: HarnessSession[];
   historyLoaded: boolean;
   /** a job not started yet (a chat created in this run): its first send gets the first prompt */
@@ -268,7 +268,7 @@ interface Rec {
   /** a turn is running (persisted): set when the CLI reports running/waiting, cleared by its result, a CLI exit
    *  while the app runs, or an archive; still set after a quit or crash = resume it on the next start */
   working?: boolean;
-  /** close the session when this turn ends, so the next message reopens it (Cursor: the new --model; a former Regia:
+  /** close the session when this turn ends, so the next message reopens it (Cursor: the new --model; a former Orchestrator:
    *  without the app-control tools) */
   reopen?: boolean;
   /** the end of the last real turn (not a hand-off turn): a hand-off older than this is stale */
@@ -283,7 +283,7 @@ interface Rec {
   coldAskedFor?: number | undefined;
   /** when the context in force began: the first real turn since the session start or the last compaction (persisted) */
   ctxSince?: number | undefined;
-  /** the Rome day a Regia was last asked for its day compaction (once a day, even when it failed) */
+  /** the Rome day an Orchestrator was last asked for its day compaction (once a day, even when it failed) */
   dayCompactOn?: string | undefined;
   /** the sessions before its cold continuations, oldest first (persisted; their transcripts show folded above) */
   pastSessions?: PastSession[];
@@ -303,7 +303,7 @@ interface Rec {
   commandsOpen?: Set<string>;
   /** since when the chat runs a turn of its open agent run (its execution time; not persisted: a quit cuts the turn) */
   runningSince?: number;
-  /** when the current turn started running: a run ended during it (completed by its Regia) still takes its report */
+  /** when the current turn started running: a run ended during it (completed by its Orchestrator) still takes its report */
   turnAt?: number;
   /** its run (this id) was pruned into the rollups: counted there only, never backfilled again (kept in chats.json) */
   runPruned?: string;
@@ -329,7 +329,7 @@ function sysItem<C extends SysCode>(code: C, params: SysParams | undefined, leve
 const MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions'];
 /** archived chats kept (the oldest beyond this leave the app; their transcripts stay where the CLI keeps them) */
 const MAX_ARCHIVED = 60;
-/** A saved chat's owner; a Regia saved with the generic "Assistente" face gets the Orchestrator's back (issue #61). */
+/** A saved chat's owner; an Orchestrator saved with the generic "Assistente" face gets the Orchestrator's back (issue #61). */
 export function restoredOwner(c: Pick<StoredChat, 'agent' | 'harness' | 'model' | 'isRegia'>): AgentOwnerSnapshot {
   const owner = c.agent ?? compatibleOwner(c.harness, c.model, true);
   return c.isRegia && owner.source !== 'catalog' && owner.name === 'Assistente' ? orchestratorOwner(owner) : owner;
@@ -414,7 +414,7 @@ export class ChatManager implements ChatService {
     const loaded = this.store.load();
     const stored = opts.unifiedOrchestrator ? migrateOrchestrator(loaded) : loaded;
     for (const c of stored) this.chats.set(c.id, this.restore(c));
-    // Regie saved before regiaSince keep their list order (ADR 0021)
+    // Orchestrators saved before regiaSince keep their list order (ADR 0021)
     let seat = 0;
     for (const r of this.chats.values()) if (r.s.isRegia && r.s.regiaSince === undefined) r.s.regiaSince = seat++;
     const backfilled = this.backfillRuns();
@@ -506,7 +506,7 @@ export class ChatManager implements ChatService {
       ? this.warm.take(cwd) : null;
     const id = warm?.chatId ?? `c_${crypto.randomBytes(5).toString('hex')}`;
     const now = Date.now();
-    // several Regie (ADR 0021): a new one sits next to the others; with `replaces` it takes that one's role, name and
+    // several Orchestrators (ADR 0021): a new one sits next to the others; with `replaces` it takes that one's role, name and
     // work chats, and the old one goes on as a normal chat (history kept, never deleted)
     const old = req.regia && req.replaces ? this.chats.get(req.replaces) : undefined;
     if (req.regia && req.replaces && !old?.s.isRegia) throw new Error('L’Orchestrator da sostituire non c’è più.');
@@ -526,7 +526,7 @@ export class ChatManager implements ChatService {
         id, harness: req.harness, origin: 'app', title, cwd, sessionId: forkOf || !caps.transcript ? null : warm?.sessionId ?? crypto.randomUUID(),
         model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null,
         // a chat that goes through the queue has started nothing yet: 'starting' only with an engine on its way (a queued
-        // chat that went starting → idle read as a finished turn: the Regia was told "ha finito il turno", 2026-10-14)
+        // chat that went starting → idle read as a finished turn: the Orchestrator was told "ha finito il turno", 2026-10-14)
         state: viaQueue && !warm ? 'idle' : 'starting', costUsd: 0, pending: 0, isRegia: !!req.regia, lastText: '', updatedAt: now, browserTabIds: [],
         ...(regiaName ? { regiaName } : {}), ...(regiaOf ? { regiaOf } : {}),
         ...(req.regia ? { regiaSince: old?.s.regiaSince ?? now } : {}),
@@ -573,7 +573,7 @@ export class ChatManager implements ChatService {
 
   /** A message, optionally with images (pasted screenshots; checked here: images.ts). Text may be empty with images.
    *  resumed = the app's own "riprendi" after a restart (keeps the tile's mark; any other message clears it);
-   *  from = not the user's: the sender shown above the bubble (another chat's title, the Regia);
+   *  from = not the user's: the sender shown above the bubble (another chat's title, the Orchestrator);
    *  liveOnly = mail (chats/mail.ts): never into a chat that has no engine or is closing, never reopens one */
   async send(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false): Promise<void> {
     updateActivity.assertOpen();
@@ -587,7 +587,7 @@ export class ChatManager implements ChatService {
       this.admission.admitNow(chatId);
       return this.deliver(chatId, text, images, resumed, from, liveOnly);
     }
-    // an agent's message (another chat, the Regia, the app's own resume): checked now
+    // an agent's message (another chat, the Orchestrator, the app's own resume): checked now
     if (liveOnly && ((!r.session && r.s.state !== 'idle') || r.archiving || r.s.closedAt)) throw new Error('La chat non è attiva: la posta resta da leggere.');
     if (!(typeof text === 'string' && text.trim()) && !checkImages(images).length) throw new Error('Messaggio vuoto.');
     // a message between chats (mail, app_send_to_chat) to a chat still open never waits for the load either (the owner,
@@ -868,8 +868,8 @@ export class ChatManager implements ChatService {
   async archive(chatId: string, opts: { auto?: boolean } = {}): Promise<ChatSummary> {
     const r = this.need(chatId);
     if (r.s.isRegia) {
-      // a Regia closes only by the user's hand, never the first one (its title "Regia" is the mail address the brain's
-      // rules and its chats write to; /mcp/app acts as it): its work chats go to the first Regia
+      // an Orchestrator closes only by the user's hand, never the first one (its title "Orchestrator" is the mail address the brain's
+      // rules and its chats write to; /mcp/app acts as it): its work chats go to the first Orchestrator
       const regie = regieOf([...this.chats.values()].map(x => x.s));
       if (opts.auto || regie.length < 2) throw new Error('L’Orchestrator non si chiude: è l’unico.');
       if (regie[0]!.id === r.s.id) throw new Error('Il primo Orchestrator non si chiude: per ripartire usa Pulisci.');
@@ -1231,20 +1231,20 @@ export class ChatManager implements ChatService {
     if (r.closeAfterCold) await this.endKept(r);
   }
 
-  /** A Regia's day compaction (continuity.ts regiaDayDue): one quiet `/compact` turn with what to keep; the engine's compact_boundary
+  /** An Orchestrator's day compaction (continuity.ts regiaDayDue): one quiet `/compact` turn with what to keep; the engine's compact_boundary
    *  shows in the tile («Contesto compattato») and starts its context's day again. Same chat, same session. */
   private async regiaCompact(r: Rec, now: number): Promise<void> {
     r.dayCompactOn = romeDay(now);
     const sess = r.session;
     if (!sess) return;
-    log.info('chats', 'Regia: compacting a context from an earlier day', { chat: r.s.id, data: { contextTokens: r.s.contextTokens ?? null, since: r.ctxSince ?? null } });
+    log.info('chats', 'Orchestrator: compacting a context from an earlier day', { chat: r.s.id, data: { contextTokens: r.s.contextTokens ?? null, since: r.ctxSince ?? null } });
     this.addItem(r, sysItem('dayCompactStart', undefined, 'info'), false);
     const out = await this.quietTurn(r, sess, REGIA_COMPACT, true).catch((e: unknown) => {
-      log.warn('chats', 'Regia day compaction not sent', { chat: r.s.id, cause: errText(e), hint: 'it still compacts by itself at its window (compactWindowTokens); tomorrow it tries again' });
+      log.warn('chats', 'Orchestrator day compaction not sent', { chat: r.s.id, cause: errText(e), hint: 'it still compacts by itself at its window (compactWindowTokens); tomorrow it tries again' });
       return null;
     });
     if (out !== null) return;
-    log.info('chats', 'Regia day compaction did not finish', { chat: r.s.id, data: { contextTokens: r.s.contextTokens ?? null } });
+    log.info('chats', 'Orchestrator day compaction did not finish', { chat: r.s.id, data: { contextTokens: r.s.contextTokens ?? null } });
     this.addItem(r, sysItem('dayCompactFailed', undefined, 'warn'), false);
   }
 
@@ -1370,7 +1370,7 @@ export class ChatManager implements ChatService {
   }
 
   /** Ends the engines of chats idle for `idleMs` (setting engineIdleMin): no turn, question, queue, background task or
-   *  hand-off, never a Regia; idle counts from the last send, turn or end of a background task (activeAt). The chat stays on the grid as idle; its next message resumes it (ensureSession). Each
+   *  hand-off, never an Orchestrator; idle counts from the last send, turn or end of a background task (activeAt). The chat stays on the grid as idle; its next message resumes it (ensureSession). Each
    *  engine ends like a ✕ (its tools reaped, its job released). Returns how many were released. */
   releaseIdle(idleMs: number, now = Date.now()): number {
     if (idleMs <= 0 || this.quitting || updateActivity.frozen) return 0;
@@ -1497,7 +1497,7 @@ export class ChatManager implements ChatService {
     return out === null ? null : extractHandoff(out);
   }
 
-  /** One turn of the app's own (a hand-off, a Regia's day compaction), not of the job: its assistant texts come back
+  /** One turn of the app's own (a hand-off, an Orchestrator's day compaction), not of the job: its assistant texts come back
    *  joined, null when it was stopped, failed or timed out (then interrupted, its late items still swallowed); `quiet` =
    *  its items stay out of the tile but the system lines. `before` runs once the turn is armed, before the text goes. */
   private quietTurn(r: Rec, sess: HarnessSession, text: string, quiet: boolean, before?: () => void): Promise<string | null> {
@@ -1588,7 +1588,7 @@ export class ChatManager implements ChatService {
     // "Aspetto la QA…": its work still runs, whatever the engine counts (shared/waiting.ts, the chats of 2026-10-16)
     if (waitsForWork(lastAnswer(r.items))) r.s.waitsOnWork = true; else delete r.s.waitsOnWork;
     // the agent's run-report, if this turn ends with one (the latest wins; a turn without one keeps the last); a run
-    // ended during this turn (its Regia marked it completed) still takes it
+    // ended during this turn (its Orchestrator marked it completed) still takes it
     const run = r.s.run, turnAt = r.turnAt;
     // still running after the result: a queued turn follows at once (no state change starts it), and it starts now
     if (r.s.state === 'running') r.turnAt = item.at; else delete r.turnAt;
@@ -1631,7 +1631,7 @@ export class ChatManager implements ChatService {
       .catch(e => log.debug('chats', 'get_usage not answered', { chat: r.s.id, data: errText(e) }));
   }
 
-  /** The Regia role moves elsewhere: the chat stays as a normal one. Its live process keeps the app-control tools it
+  /** The Orchestrator role moves elsewhere: the chat stays as a normal one. Its live process keeps the app-control tools it
    *  was started with, so it is closed now (idle) or after this turn: the next message resumes it without them. */
   private demoteRegia(r: Rec, to: string, endSession = true): void {
     r.s.isRegia = false;
@@ -1639,7 +1639,7 @@ export class ChatManager implements ChatService {
     delete r.s.regiaSince;
     delete r.s.orchestrator;
     delete r.s.mailAliases;
-    // its work chats answer to the Regia that takes over
+    // its work chats answer to the Orchestrator that takes over
     for (const c of this.chats.values()) if (c.s.regiaOf === r.s.id) { c.s.regiaOf = to; this.updated(c); }
     this.persist();
     const sess = endSession ? r.session : null;
@@ -2005,7 +2005,7 @@ export class ChatManager implements ChatService {
     return Object.keys(servers).length ? JSON.stringify({ mcpServers: servers }) : null;
   }
 
-  /** the app-control endpoint of a Regia, null for any other chat */
+  /** the app-control endpoint of an Orchestrator, null for any other chat */
   private appMcpFor(r: Rec | undefined): string | null {
     if (!r) return null;
     if (r.s.isRegia) return this.opts.appMcpUrl?.(r.s.id) ?? null;
@@ -2051,7 +2051,7 @@ export class ChatManager implements ChatService {
 
   /** pre-allowed on Claude: the Regias' app-control tools (/mcp/app), and every chat's mail to other
    *  chats (text only, labelled as not the user's; the auto-mode classifier sometimes refused the same message sent
-   *  with Bash, 12/10). r = undefined: a warm engine (warm.ts), never a Regia. */
+   *  with Bash, 12/10). r = undefined: a warm engine (warm.ts), never an Orchestrator. */
   private extraArgsFor(harness: Harness, chatId: string, r: Rec | undefined): string[] | null {
     const allowed = !engineOf(harness)?.caps.preAllow ? [] : [
       ...(this.appMcpFor(r) ? ['mcp__second-brain-app'] : []),
@@ -2061,7 +2061,7 @@ export class ChatManager implements ChatService {
   }
 
   /** An agent's message (from = its sender) never wakes a stopped chat (closed, or its engine released for idleness) on
-   *  an engine the Regie may not use: it would resume that engine for an agent. A running chat gets it as before. */
+   *  an engine the Orchestrators may not use: it would resume that engine for an agent. A running chat gets it as before. */
   private needAgentMay(r: Rec, from: string | undefined): void {
     if (from === undefined || r.session || this.opts.agentsMayOpen?.(r.s.harness) !== false) return;
     throw new AgentMayNotWake(r.s.harness);
@@ -2072,8 +2072,8 @@ export class ChatManager implements ChatService {
     if (this.opts.engineOn?.(h) === false) throw new Error(`${engineOrThrow(h).label} è spento nelle impostazioni: riaccendilo in Impostazioni → Motori.`);
   }
 
-  /** A session on an engine: the test factory if given, else the engine's own adapter (engines/sessions.ts). The Regia
-   *  on any engine gets the app-control tools (app_create_chat…); r = undefined: a warm engine, never a Regia. */
+  /** A session on an engine: the test factory if given, else the engine's own adapter (engines/sessions.ts). The Orchestrator
+   *  on any engine gets the app-control tools (app_create_chat…); r = undefined: a warm engine, never an Orchestrator. */
   private newSession(harness: Harness, opts: SessionOptions, sink: SessionSink, r: Rec | undefined): HarnessSession {
     if (this.opts.sessionFactory) return this.opts.sessionFactory(harness, opts, sink);
     const override = this.opts.enginePaths?.[harness];
@@ -2248,7 +2248,7 @@ export class ChatManager implements ChatService {
         const on = this.opts.onDone;
         if (on) this.hook('onDone', () => on(r.s.id));
       }
-      // a Cursor model change or a Regia role change asked mid-turn: reopen now that the turn is over
+      // a Cursor model change or an Orchestrator role change asked mid-turn: reopen now that the turn is over
       if (p.state === 'idle' && r.reopen && r.session && !r.session.busy) {
         r.reopen = false;
         void this.closeKeeping(r, r.session);
@@ -2313,7 +2313,7 @@ export class ChatManager implements ChatService {
     if (p.compacted) {
       this.counters.compaction(r.s.id, p.compacted.pre, p.compacted.post);
       r.after = { kind: 'compaction', left: AFTER_CALLS };
-      // the context starts again from its summary: a Regia's next day compaction counts from now
+      // the context starts again from its summary: an Orchestrator's next day compaction counts from now
       r.ctxSince = Date.now(); save = true;
     }
     if (p.contextTokens !== undefined && p.contextTokens > 0) save = true; // the meter of a closed chat survives a restart

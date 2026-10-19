@@ -1,6 +1,6 @@
 // End-to-end: "Discutine" and "Apri una chat" on the ideas, yours and the AI's (Idee, filter "Dall'IA"), in the
-// frozen demo (chats, the Regia) pointed at the synthetic brain of test/fixtures/brain-ui (SB_BRAIN: the demo then
-// answers the brain pages from it). Discutine docks the Regia next to the page with a ready draft (file and line of
+// frozen demo (chats, the Orchestrator) pointed at the synthetic brain of test/fixtures/brain-ui (SB_BRAIN: the demo then
+// answers the brain pages from it). Discutine docks the Orchestrator next to the page with a ready draft (file and line of
 // ideas.md; in English, ADR 0057) that is NOT sent until Enter; sent, the idea says "Discussa"; Apri una chat creates
 // "Idea · <titolo>" from an editable first message (Ctrl+Invio) and the page stays; the Idee table marks the discussed
 // idea; the peek has the same bar. Screenshots: test-results/shots/discuss-*.png (dark, plus one light).

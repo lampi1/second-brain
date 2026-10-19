@@ -1,6 +1,6 @@
-// "Nuova chat" from the Regia and "Apri" from anywhere (ADR 0034), on the demo: the toggle in the Regia's input sends
+// "Nuova chat" from the Orchestrator and "Apri" from anywhere (ADR 0034), on the demo: the toggle in the Orchestrator's input sends
 // the message with the line that asks her for a new chat (hidden, shown as a "Nuova chat" badge) and resets; the demo
-// Regia opens the chat (an app_create_chat row) and the row's "Apri" brings that chat on screen from the Task page;
+// Orchestrator opens the chat (an app_create_chat row) and the row's "Apri" brings that chat on screen from the Task page;
 // Ctrl+Shift+Invio sends as a new chat at once. Screenshots in test-results/shots/regia-newchat-*.png.
 import { expect, test } from '@playwright/test';
 import type { ChatItem } from '../../src/shared/contract';
@@ -30,7 +30,7 @@ test('Nuova chat: the toggle marks the message, the Regia opens the chat, Apri f
     await page.keyboard.press('Enter');
     await expect(toggle).toHaveAttribute('aria-pressed', 'false'); // reset after the send
 
-    // the Regia got the line; the user sees only their words and the badge
+    // the Orchestrator got the line; the user sees only their words and the badge
     const tile = page.getByTestId('tile-regia');
     const userItem = tile.locator('.msg-user[data-new-chat]').last();
     await expect(userItem.locator('.msg-newchat')).toHaveText('Nuova chat');

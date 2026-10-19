@@ -9,9 +9,9 @@
 // remounts (kept per chat in memory); setDraft puts a ready text in a chat's input from elsewhere (a brain page's
 // "Discutine"), with a callback when the user sends it. "/" at the start opens the chat's commands and skills (ADR 0018:
 // ↑↓ choose, Tab or Invio completes "/<name> ", Esc closes; lib/slash.ts), read from main ('chat:commands') when the
-// list opens. A Regia's input also has "Nuova chat" (ADR 0034): on, the message goes with the line that asks her to
+// list opens. An Orchestrator's input also has "Nuova chat" (ADR 0034): on, the message goes with the line that asks her to
 // open a new work chat for it (shared/newchat.ts); Ctrl+Shift+Invio sends that way at once; it resets after a send.
-// Used by ChatTile and RegiaTile (also the Regia docked with Ctrl+R).
+// Used by ChatTile and RegiaTile (also the Orchestrator docked with Ctrl+R).
 import { t as auditText } from '../i18n';
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ClipboardEvent, type DragEvent } from 'react';
 import { splitNewChat, withNewChat } from '@shared/newchat';
@@ -31,7 +31,7 @@ import { reviewedContextDraft, withReviewedContext } from '../lib/reviewed-conte
 import { ReviewedContextPreview } from './ReviewedContextPreview';
 
 // per chat, outside the component: a draft, its images and the screenshots still being read outlive a remount (the
-// Regia moving to the dock) and never follow the input to another chat
+// Orchestrator moving to the dock) and never follow the input to another chat
 // After restart recovery, keep its private durable draft copy current to prevent replaying sent text.
 class CheckpointMap<K,V> extends Map<K,V>{override set(key:K,value:V){super.set(key,value);persistChatRecovery();return this;}override delete(key:K){const result=super.delete(key);persistChatRecovery();return result;}override clear(){super.clear();persistChatRecovery();}}
 class CheckpointSet<T> extends Set<T>{override add(value:T){super.add(value);persistChatRecovery();return this;}override delete(value:T){const result=super.delete(value);persistChatRecovery();return result;}override clear(){super.clear();persistChatRecovery();}}
@@ -41,7 +41,7 @@ const drafts = new CheckpointMap<string, string>();
 const onSentHooks = new Map<string, { fn: () => void; sig: string }>();
 const draftSubs = new Set<(chatId: string) => void>();
 const freshDrafts = new Set<string>(); // set from elsewhere, not yet shown: the input takes the focus with the caret at the end
-const newChatOn = new CheckpointSet<string>(); // the Regie whose "Nuova chat" is ticked (kept across a remount, like the draft)
+const newChatOn = new CheckpointSet<string>(); // the Orchestrators whose "Nuova chat" is ticked (kept across a remount, like the draft)
 
 /** Put `text` in the chat's input, not sent; what the user was already writing there stays above it. `onSent` runs
  *  once when a message that still contains the text's first line is sent or queued (an emptied input forgets it). */
@@ -158,7 +158,7 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
       requestAnimationFrame(() => { const el = ta.current; if (el) { el.focus(); el.setSelectionRange(t.length, t.length); el.scrollTop = el.scrollHeight; } });
     };
     draftSubs.add(fn);
-    if (freshDrafts.has(chat.id)) fn(chat.id); // mounted by the same action (the Regia docked to show the draft)
+    if (freshDrafts.has(chat.id)) fn(chat.id); // mounted by the same action (the Orchestrator docked to show the draft)
     return () => { draftSubs.delete(fn); };
   }, [chat.id]);
   useLayoutEffect(() => {

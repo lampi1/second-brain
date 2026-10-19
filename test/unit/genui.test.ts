@@ -1,7 +1,7 @@
 // Unit tests of generative UI (ADR 0033): the catalog's schemas and caps (shared/genui.ts checkUi: clean copies, one
 // clear error a model can act on, links limited to http(s) and local absolute paths), the ```sb-ui fences of question
 // previews (splitUiFences), and the store behind show_ui (main/genui/artifacts.ts): where a visual goes (chat, its
-// Regia, its next question with the 60 s fallback), replace by id, at most 20 per chat, persistence across a restart,
+// Orchestrator, its next question with the 60 s fallback), replace by id, at most 20 per chat, persistence across a restart,
 // merge into the chat's items by time, removal with the chat.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -139,7 +139,7 @@ describe('Artifacts: the store behind show_ui', () => {
     expect(sent.at(-1)).toMatchObject({ chatId: 'r2', item: { from: 'QA · Rimborsi', target: 'regia' } });
     store.show('aw', args({ target: 'regia' }));
     expect(sent.at(-1)?.chatId).toBe('r1');
-    // two chats of the same Regia with the same id never replace each other; the sender's folder goes along
+    // two chats of the same Orchestrator with the same id never replace each other; the sender's folder goes along
     const w2 = chat('w2', { regiaOf: 'r2', cwd: 'C:\\repo2' });
     all.push(w2);
     store.show('w', args({ id: 'status', target: 'regia' }));

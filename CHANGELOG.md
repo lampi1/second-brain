@@ -21,6 +21,18 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   GitHub repos only; the app never pushes.
 
 ### Changed
+- **The Orchestrator changes agents by itself** (ADR 0082, #84 point 6): `agent_update`, `agent_propose`,
+  `agent_rollback`, `agent_archive`, `agent_restore` and a "Contesto massimo" from `agent_learn_propose` apply at once
+  (a behavioural change as a trial version), each logged on the Skill page with "Annulla" and in the feed with "Annulla
+  modifica". Only an agent's tools, permissions, engine, or a name/look-only change, and new agents, still wait in
+  Agenti → Da approvare; a lifecycle suggestion needs one yes instead of two.
+- **Regole imparate** is no longer a page of its own: it is the last section of **Regole**, shown only when the brain
+  has learned policies; old `miglioramento` links and G R open Regole (ADR 0082, #84).
+- Texts describe today's model everywhere (#76): "Regia" is the Orchestrator in the UI, tool descriptions, chat
+  instructions, the brain template (the Claude output style is named Orchestrator; the hooks recognise both titles)
+  and the docs; routing texts say the table is the default for chats without an agent; the chat menu says an agent's
+  lasting model and effort live in its profile; README screenshots renamed `grindhouse.webp` and `orchestrator.webp`;
+  the guide's search card describes the hybrid brain search, the runs card the run links.
 - **Agents and skills only** (ADR 0077, #84): procedures are gone (page, IPC, API, MCP, docs); every former runbook and
   routine becomes a skill once, linked to the right agents, with a report. A new **Brain** menu section: Agenti,
   Skill (cards with who uses each skill, link toggles), Regole, Memoria (knowledge, what happened, one memory per

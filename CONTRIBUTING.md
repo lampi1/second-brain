@@ -120,7 +120,7 @@ Good places to start are marked ★: self-contained, well tested, easy to verify
 | Search ★ | `src/main/search/` | the Ctrl+K full-text index |
 | Skills ★ | `src/main/skills/` | the skills and agents page |
 | Update | `src/main/update/` | Settings → Aggiornamenti: main's tip, pull, promote-now and restart, the start notice |
-| Renderer shell | `src/renderer/components/`, `store/`, `lib/` | tiles, views, Regia widget, panels, palette; one external store; pure helpers (★ `lib/` is all unit-tested) |
+| Renderer shell | `src/renderer/components/`, `store/`, `lib/` | strips, the Orchestrator column, panels, palette; one external store; pure helpers (★ `lib/` is all unit-tested) |
 | Brain pages | `src/renderer/brain/` | today, to-do, ideas, explore, 3D map (`map/`), Qualità, Costi |
 | Demo | `src/main/demo*.ts` | fake chats, browser pages and brain for `npm run demo`, tests and screenshots |
 | Scripts | `scripts/` | build, light check, doctor, logs, release (promote/rollback), demo, screenshots |

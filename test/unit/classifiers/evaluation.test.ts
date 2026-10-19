@@ -3,7 +3,7 @@
 // no brain rules, i.e. the built-in work words of shared/work-concepts.ts) and the agent classifier's words channel
 // over the packaged role agents (agents/classifier.ts, model unavailable). The floors are the values measured when the
 // rules were last changed (2026-10-18; before → after: DEV job 45→47, task 9→47, agent 10→36 of 50; HOLDOUT job 26→28,
-// task 6→28, agent 7→18 of 30), so a rule change that makes any of them worse fails here. Also pins the Regia mail
+// task 6→28, agent 7→18 of 30), so a rule change that makes any of them worse fails here. Also pins the Orchestrator mail
 // classifier (chats/regia-delivery.ts) on typical agent mail: it holds back only clear progress notes.
 import { describe, expect, it } from 'vitest';
 import { DEV, HOLDOUT, type Labelled } from '../../fixtures/classifiers/requests';

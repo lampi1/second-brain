@@ -34,7 +34,7 @@ git locale della cartella: niente si perde, niente esce dal PC.
 | Idee | Le tue idee e quelle dell'IA | Vuota | Dici "segnatelo", o una chat propone una sua idea |
 | Qualità | Quante volte hai dovuto correggere l'IA, se le regole funzionano | Trattini | Una correzione finisce in `ai-errors.md`, una proposta in `proposals.md` |
 | Costi | Quanto costano le chat a prezzo di listino, dove risparmiare | Quasi vuota | Usi le chat: legge le trascrizioni sul PC, zero token |
-| Comunicazione | I messaggi tra le chat e la Regia | Vuota | Una chat scrive a un'altra (`ops/tools/inbox.mjs`) |
+| Comunicazione | I messaggi tra le chat e l'Orchestrator | Vuota | Una chat scrive a un'altra (`ops/tools/inbox.mjs`) |
 | DevOps | PR e work item da Azure DevOps | Da leggere | Hai un progetto Azure DevOps e fai `az login` |
 | Confronto modelli | Lo stesso lavoro fatto da due modelli, giudicato alla cieca | Vuota | Fai un confronto tra modelli |
 | Esplora | Tutti i file del cervello, con la ricerca | Piena | Sempre: è il modo più rapido per capire cosa c'è |
@@ -59,7 +59,7 @@ Una pagina vuota non è un errore: vuol dire che quella memoria non ha ancora ri
 ## Come cresce
 
 - **Le regole nascono dalle correzioni.** Ogni volta che correggi un agente, l'errore va in `ai-errors.md`; la seconda
-  volta che succede la stessa cosa, la Regia ti propone una regola. Non scrivere regole in anticipo.
+  volta che succede la stessa cosa, l'Orchestrator ti propone una regola. Non scrivere regole in anticipo.
 - **Le procedure nascono dal lavoro.** Quando risolvi un problema che tornerà, chiedi "salvalo nel runbook": nasce un
   file in `ops/runbook/` (c'è già `ops/runbook/brain.md`, sul cervello stesso, come esempio).
 - **I taccuini degli specialisti** (`playbooks/`) nascono dagli errori e dalle lodi: un punto entra solo dopo il tuo sì.

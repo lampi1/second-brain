@@ -1,7 +1,7 @@
-// End-to-end: a work chat's question answered by the user in the Regia (app_resolve_question, main/appctl/tools.ts,
-// ADR 0017). The Regia calls the tool over the app's MCP: blocked while the user has said nothing in the Regia since
+// End-to-end: a work chat's question answered by the user in the Orchestrator (app_resolve_question, main/appctl/tools.ts,
+// ADR 0017). The Orchestrator calls the tool over the app's MCP: blocked while the user has said nothing in the Orchestrator since
 // the question opened; after he writes there, the work chat's panel closes, the chat gets the answer marked "Risposto
-// in Regia dall'utente" and the question leaves the work chat's tile (where it waits: the agents workspace has no "Ti
+// nell'Orchestrator dall'utente" and the question leaves the work chat's tile (where it waits: the agents workspace has no "Ti
 // aspettano" strip, ADR 0019) and the open requests. Screenshot: test-results/shots/resolve-question.png.
 import { expect, test } from '@playwright/test';
 import { McpClient } from './fixture-server';
@@ -19,13 +19,13 @@ test('the Regia closes a work chat\'s question with the user\'s answer, only aft
   const card = page.getByTestId('tile-chat-qa').locator(`[data-request-key="qa/${q.id}"]`);
   await expect(card).toBeVisible();
 
-  // the user has not spoken in the Regia since the question opened: the Regia may not answer for him
+  // the user has not spoken in the Orchestrator since the question opened: the Orchestrator may not answer for him
   const blocked = await regia.call('app_resolve_question', { chatId: 'qa', requestId: q.id, answers: { [question]: 'Apro un bug e taggo la QA' } });
   expect(blocked.isError).toBe(true);
   expect(blocked.text).toContain('L\'utente non ha scritto');
   await expect(card).toBeVisible();
 
-  // he answers the Regia's own question, then tells it what to do with the QA's
+  // he answers the Orchestrator's own question, then tells it what to do with the QA's
   const rq = pending.find(p => p.chatId === 'regia')!;
   await page.evaluate(([rid, text]) => window.sb.invoke('chat:answer', { chatId: 'regia', requestId: rid, answer: { kind: 'question', answers: { [text]: 'QA rimborsi' } } }), [rq.id, rq.questions?.[0]?.question ?? rq.title] as const);
   await page.evaluate(() => window.sb.invoke('chat:send', { chatId: 'regia', text: 'Per la QA dei rimborsi: apri il bug e tagga la QA.' }));

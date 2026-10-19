@@ -1,7 +1,7 @@
-// E2E of the "one question popup at a time" rule (the user, 2026-10-13: two popups at once, one "appeso" on the Regia,
-// letters typed only to get rid of it). The Regia widget shows ONE card of its own requests (the oldest; "Poi:" names
+// E2E of the "one question popup at a time" rule (the user, 2026-10-13: two popups at once, one "appeso" on the Orchestrator,
+// letters typed only to get rid of it). The Orchestrator widget shows ONE card of its own requests (the oldest; "Poi:" names
 // the next) and never a work chat's; the global layer shows none beside it; Ctrl+J moves the popup instead of adding
-// one (to the Regia's next question it stays in the Regia; to a work chat's it goes to the layer, the Regia's card
+// one (to the Orchestrator's next question it stays in the Orchestrator; to a work chat's it goes to the layer, the Orchestrator's card
 // waits); Esc / "Rispondi dopo" closes it without answering ("Rispondi dopo" on: every popup goes, "Da rispondere" lines
 // stay); the queue window is then the one popup; a card goes the moment its request leaves (the chat stopped).
 // Screenshot: test-results/shots/one-popup-regia.png.
@@ -26,19 +26,19 @@ test('one popup at a time: the Regia shows one card of her own, Esc puts it in t
   await page.keyboard.press('Control+R'); // the Regia overlay
   const regia = page.getByTestId('tile-regia');
   const cards = page.locator('[data-request-key]');
-  // a second question of the Regia's own: still one card, the next named on "Poi:"
+  // a second question of the Orchestrator's own: still one card, the next named on "Poi:"
   await askRegia(app, 'Quale tema?', 'Scuro', 'Chiaro');
   await expect(regia.getByTestId('request-regia-regia-q1')).toBeVisible();
   await expect(cards).toHaveCount(1);
   await expect(regia.getByTestId('regia-next')).toContainText('Quale tema?');
-  // a work chat's request never in the Regia; nothing floats in the layer beside her card
+  // a work chat's request never in the Orchestrator; nothing floats in the layer beside her card
   await expect(regia.locator('[data-request-key^="qa/"], [data-request-key^="feedback/"]')).toHaveCount(0);
   await expect.poll(async () => (await layerState(app)).cards).toBe(0);
   await page.mouse.move(2, 2);
   await shot(page, 'one-popup-regia');
 
-  // Ctrl+J: the oldest is the Regia's card; asking for her next question (Ctrl+K "Rispondi: …") it takes the card, in
-  // the Regia, with the keyboard
+  // Ctrl+J: the oldest is the Orchestrator's card; asking for her next question (Ctrl+K "Rispondi: …") it takes the card, in
+  // the Orchestrator, with the keyboard
   await page.keyboard.press('Control+J');
   await expect(regia.getByTestId('request-regia-regia-q1')).toBeFocused();
   await page.keyboard.press('Control+K');
@@ -48,7 +48,7 @@ test('one popup at a time: the Regia shows one card of her own, Esc puts it in t
   await expect(cards).toHaveCount(1);
   await expect.poll(async () => (await layerState(app)).cards).toBe(0);
 
-  // Esc on the Regia's popup: "Rispondi dopo", it goes away unanswered and nothing else pops up (all in the queue)
+  // Esc on the Orchestrator's popup: "Rispondi dopo", it goes away unanswered and nothing else pops up (all in the queue)
   await page.keyboard.press('Escape');
   await expect(cards).toHaveCount(0);
   await expect(regia.getByTestId('regia-queued')).toContainText('2 richieste');
@@ -57,7 +57,7 @@ test('one popup at a time: the Regia shows one card of her own, Esc puts it in t
   await expect(page.getByTestId('topbar-next')).toContainText('Da rispondere');
   expect(await answers(app)).toBe(0);
 
-  // the queue (Ctrl+J): the questions window is the one popup, the Regia shows no card beside it
+  // the queue (Ctrl+J): the questions window is the one popup, the Orchestrator shows no card beside it
   await page.keyboard.press('Control+J');
   await expect(page.getByTestId('qwin')).toBeVisible();
   await expect(page.getByTestId('qwin-chat')).toHaveText('Orchestrator');
@@ -69,7 +69,7 @@ test('one popup at a time: the Regia shows one card of her own, Esc puts it in t
   await expect(page.getByTestId('qwin')).toHaveCount(0);
   await expect(regia.getByTestId('regia-queued')).toBeVisible();
 
-  // the request leaves elsewhere (the Regia stops): her line goes at once, nothing stays on screen
+  // the request leaves elsewhere (the Orchestrator stops): her line goes at once, nothing stays on screen
   await app.evaluate(() => (globalThis as unknown as Demo).__sbDemo.stop('regia'));
   await expect(regia.getByTestId('regia-queued')).toHaveCount(0);
   await expect(cards).toHaveCount(0);
@@ -90,7 +90,7 @@ test('Ctrl+J to a work chat\'s request moves the popup to the layer; the Regia a
   await page.keyboard.press('Control+J'); // QA: it floats, the Regia's card steps aside
   await expect.poll(async () => (await focusOf(app)).layer).toBe(true);
   await expect(cards).toHaveCount(0);
-  // the Regia asks again while the user answers in the layer: the layer card stays, hers wait on "Poi:"
+  // the Orchestrator asks again while the user answers in the layer: the layer card stays, hers wait on "Poi:"
   await askRegia(app, 'Apro la PR?', 'Sì', 'No');
   await expect(regia.getByTestId('regia-next')).toContainText('Apro la PR?');
   await expect(cards).toHaveCount(0);

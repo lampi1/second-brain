@@ -1,5 +1,5 @@
 // End-to-end: the live brain map in the real app (frozen demo + the synthetic brain of test/fixtures/brain-ui). The
-// demo's chats work (two running, the Regia waiting); a test hook (__sbDemo.tool) makes them read a brain file and
+// demo's chats work (two running, the Orchestrator waiting); a test hook (__sbDemo.tool) makes them read a brain file and
 // send a message: the legend lists the chats at work and opens one, the lit pieces carry "Adesso" with the chats to
 // open, a live chat's neuron opens its chat, the switch turns the live map off. Also measures what the live map costs
 // (engine.ts, ADR 0039): with chats at work it animates on requestAnimationFrame (about 30 frames a second while the
@@ -80,7 +80,7 @@ test.beforeAll(async () => {
       return ctx;
     } as typeof orig;
   });
-  // what the chats do now: Fix reads the brain's now.md and calls the reviewer, the Regia writes to App · Feedback
+  // what the chats do now: Fix reads the brain's now.md and calls the reviewer, the Orchestrator writes to App · Feedback
   await tool('fix', { id: 'live-read', name: 'Read', input: { file_path: 'C:\\brains\\demo\\now.md' }, summary: 'now.md' });
   await tool('fix', { id: 'live-agent', name: 'Agent', input: { subagent_type: 'reviewer' }, summary: 'reviewer' });
   await tool('regia', { id: 'live-send', name: 'mcp__second-brain-app__app_send_to_chat', input: { chatId: 'feedback', text: 'vai' }, summary: 'a App · Feedback' });

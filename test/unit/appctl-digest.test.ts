@@ -1,4 +1,4 @@
-// Unit tests of main/appctl/digest.ts and the tool app_digest (appctl/tools.ts): the Regia's whole status in one call,
+// Unit tests of main/appctl/digest.ts and the tool app_digest (appctl/tools.ts): the Orchestrator's whole status in one call,
 // zero tokens. Waiting and failed chats always listed with what they ask; `since` keeps only what changed; closed chats,
 // the user's command runs, PRs with QA failures first and unread Task news; the caller left out.
 import { describe, expect, it } from 'vitest';
@@ -69,7 +69,7 @@ describe('app_digest', () => {
     expect(t).toContain('- «Web · done» chiusa 20 min fa (da sola, finita) · ultima riga «Merge fatto.»');
     expect(t).not.toContain('ancient');
     expect(t).toContain('- «Web · done»: `npm run check` ok, uscita 0');
-    // a secret in the command line never reaches the Regia's context
+    // a secret in the command line never reaches the Orchestrator's context
     const s = digest({ ...base, chats: [chat('done')], runs: [{ id: 'r', chatId: 'done', itemId: 'i', code: 'curl -H "Authorization: Bearer abcdefghijklmnop" https://x', cwd: 'C:/x', state: 'ok', exitCode: 0, output: '', startedAt: NOW - 5 * MIN, endedAt: NOW - 4 * MIN }] });
     expect(s).not.toContain('abcdefghijklmnop');
     expect(s).toContain('[redacted]');

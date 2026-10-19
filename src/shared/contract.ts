@@ -139,15 +139,15 @@ export interface ChatSummary {
   isRegia: boolean;
   /** The single coordinator of all work, the app's code included. Set only by main. */
   orchestrator?: true;
-  /** The Orchestrator's former titles (migrated Regie): their mailboxes still reach it. Set only by main. */
+  /** The Orchestrator's former titles (migrated Orchestrators): their mailboxes still reach it. Set only by main. */
   mailAliases?: string[];
-  /** a Regia's tab label (ADR 0021); absent on a Regia from before several Regie existed: shown "Lavoro" */
+  /** an Orchestrator's tab label (ADR 0021); absent on an Orchestrator from before several Orchestrators existed: shown "Lavoro" */
   regiaName?: string;
-  /** a work chat: the Regia it answers to (the one that opened it, or the tab open when the user created it);
-   *  resolved by regiaOfChat (shared/regia.ts): missing or stale = the first Regia */
+  /** a work chat: the Orchestrator it answers to (the one that opened it, or the tab open when the user created it);
+   *  resolved by regiaOfChat (shared/regia.ts): missing or stale = the first Orchestrator */
   regiaOf?: string;
-  /** a Regia's place among the tabs (ADR 0021): kept by the Regia that replaces it, so "Pulisci" or "Cambia motore"
-   *  never moves a tab nor changes which Regia is the first */
+  /** an Orchestrator's place among the tabs (ADR 0021): kept by the Orchestrator that replaces it, so "Pulisci" or "Cambia motore"
+   *  never moves a tab nor changes which Orchestrator is the first */
   regiaSince?: number;
   lastText: string;           // last assistant line, for collapsed tiles and the needs-you lane
   lastError?: string;
@@ -228,7 +228,7 @@ export const THUMB_MAX_CHARS = 120_000;
 
 export type ChatItem =
   /** images = how many were attached; thumbs = their previews (live messages; a transcript gives only the count);
-   *  from = not the user's: who sent it (another chat's title, "Regia"), shown above the bubble */
+   *  from = not the user's: who sent it (another chat's title, "Orchestrator"), shown above the bubble */
   | { kind: 'user'; id: string; at: number; text: string; images?: number; thumbs?: string[]; from?: string }
   | { kind: 'assistant'; id: string; at: number; text: string; streaming?: boolean }
   | { kind: 'thinking'; id: string; at: number; text: string }
@@ -242,7 +242,7 @@ export type ChatItem =
   | { kind: 'result'; id: string; at: number; costUsd: number; durationMs: number; turns: number; isError: boolean; interrupted?: boolean }
   /** a visual a chat showed with show_ui (ADR 0033): a trusted catalog component, never HTML. id = `art-<key>`, key =
    *  the chat's own id for it (the same key again replaces it); from = the chat that sent it, when shown elsewhere (in its
-   *  Regia) and cwd = its folder (relative file paths open there); target next-ask: askId = the question it is attached
+   *  Orchestrator) and cwd = its folder (relative file paths open there); target next-ask: askId = the question it is attached
    *  to, waiting = no question yet (not in the list) */
   | { kind: 'artifact'; id: string; at: number; key: string; title: string; summary: string; ui: UiSpec; target: ArtifactTarget; from?: string; cwd?: string; askId?: string; waiting?: boolean };
 
@@ -266,7 +266,7 @@ export type UiSpec =
   | { component: 'diffList'; props: UiDiffList }
   | { component: 'barChart'; props: UiBarChart };
 export type UiComponent = UiSpec['component'];
-/** chat = a card in the calling chat · regia = in its Regia's panel · next-ask = on its next question (else a card) */
+/** chat = a card in the calling chat · regia = in its Orchestrator's panel · next-ask = on its next question (else a card) */
 export type ArtifactTarget = 'chat' | 'regia' | 'next-ask';
 
 export interface FileDiff { path: string; added: number; removed: number; patch?: string }
@@ -351,12 +351,12 @@ export interface NewChat {
   resumeSessionId?: string;   // resume (or fork, see fork) an existing CLI session
   fork?: boolean;             // resume as a copy: never two writers on one session
   regia?: boolean;
-  /** with regia: the tab label ("App"); the title defaults to "Regia · <name>" */
+  /** with regia: the tab label ("App"); the title defaults to "Orchestrator · <name>" */
   regiaName?: string;
-  /** with regia: the Regia whose role this one takes (Ricomincia da capo, Cambia motore, Pulisci): it becomes a
-   *  normal chat and its work chats follow the new one. Without it a new Regia is added next to the others. */
+  /** with regia: the Orchestrator whose role this one takes (Ricomincia da capo, Cambia motore, Pulisci): it becomes a
+   *  normal chat and its work chats follow the new one. Without it a new Orchestrator is added next to the others. */
   replaces?: string;
-  /** a work chat: the Regia it answers to */
+  /** a work chat: the Orchestrator it answers to */
   regiaOf?: string;
   worktree?: boolean;         // claude --worktree
   route?: RouteDecision;      // set by app_create_chat: how the routing table (or an override) chose the engine
@@ -366,13 +366,13 @@ export interface NewChat {
   app?: string;
 }
 
-/** A chat the user starts without choosing everything (DevOps "Apri chat", a brain page's "Apri una chat", a new Regia
+/** A chat the user starts without choosing everything (DevOps "Apri chat", a brain page's "Apri una chat", a new Orchestrator
  *  from Ricomincia / Cambia motore / Pulisci): main picks harness, model and effort through the routing table (ADR 0032)
  *  as app_create_chat does, and the choice goes to the improvement loop's ledger (chat.route). "Nuova chat" too. */
 export interface RoutedNewChat {
-  /** empty = from the prompt (a Regia: "Regia · <regiaName>"), as chat:create */
+  /** empty = from the prompt (an Orchestrator: "Orchestrator · <regiaName>"), as chat:create */
   title: string;
-  /** required, except for a Regia (it may start empty and read its memory by itself) */
+  /** required, except for an Orchestrator (it may start empty and read its memory by itself) */
   prompt?: string;
   cwd: string;
   regiaOf?: string;
@@ -381,7 +381,7 @@ export interface RoutedNewChat {
   ask?: { harness?: Harness; model?: string; effort?: Effort; reason?: string };
   /** "Nuova chat"'s «Worktree separato» (only on an engine that has it) */
   worktree?: boolean;
-  /** a Regia: its role (`replaces` the one it takes over, `regiaName` its tab label); its kind of work is `regia` */
+  /** an Orchestrator: its role (`replaces` the one it takes over, `regiaName` its tab label); its kind of work is `regia` */
   regia?: boolean;
   regiaName?: string;
   replaces?: string;
@@ -699,7 +699,7 @@ export interface Settings {
   dndUntil: number | null;         // timed do not disturb (epoch ms): no toasts until then
   /** engines anything may start on (ADR 0046; absent = off): the user's own chats too */
   engineOn: Partial<Record<Harness, boolean>>;
-  /** engines the Regie may open or resume chats on (absent = off); the user's own chats are free */
+  /** engines the Orchestrators may open or resume chats on (absent = off); the user's own chats are free */
   engines: Partial<Record<Harness, boolean>>;
   /** Retired transport switch: always true after loading. Kept as compatibility data for older clients. */
   messaging: { crossHarness: boolean };
@@ -713,7 +713,7 @@ export interface Settings {
   /** the auto-compact window of every Claude chat the app starts (passed per process, it beats a folder's own
    *  settings); 0 = whatever the user's Claude settings say (ADR 0031) */
   compactWindowTokens?: number;
-  /** «Regie corte» (ADR 0051): a Regia whose context began on an earlier day compacts it once, the first time it is idle
+  /** «Orchestrators corte» (ADR 0051): an Orchestrator whose context began on an earlier day compacts it once, the first time it is idle
    *  on a new day (same chat: its queue and the chats it follows stay); its window is compactWindowTokens as for every chat */
   regiaDayCompact?: boolean;
   /** ADR 0060: the brain's rules given to each Claude chat at launch (a plugin folder: skills, agents, output styles,
@@ -727,27 +727,27 @@ export interface Settings {
   /** minutes an idle long Claude chat waits before writing its hand-off for the invisible continuation (the cache lasts
    *  ~60 min since the last call) */
   coldHandoffMin?: number;
-  /** the chats the Regia opens (app_create_chat without harness/model) and where the "Nuova chat" dialog starts:
+  /** the chats the Orchestrator opens (app_create_chat without harness/model) and where the "Nuova chat" dialog starts:
    *  engine, model per engine ('' = the CLI default), Claude effort ('' = the CLI default); Cursor reasoning and fast
    *  apply to every Cursor chat */
   regiaChats: RegiaChatDefaults;
   /** minutes a finished work chat stays on the grid before it closes by itself (archived, reopenable); 0 = never */
   autoCloseMin: number;
   /** minutes an idle chat keeps its engine process (with its MCP servers and shells); then the process ends and the
-   *  chat stays on the grid, resumed by itself on the next message (ADR 0026); 0 = never. Regie are never released. */
+   *  chat stays on the grid, resumed by itself on the next message (ADR 0026); 0 = never. Orchestrators are never released. */
   engineIdleMin?: number;
   /** Task page: read by the brain's devops-me.mjs (no AI, no tokens), on a timer only when the user turns it on */
   tasks: { enabled: boolean; everyMin: number; /** a short sound with a DevOps alert (a mention, a change on my items) */ sound: boolean };
-  /** the Regia overlay's opacity in %, 40-100 (fully opaque while hovered or focused; ADR 0021) */
+  /** the Orchestrator overlay's opacity in %, 40-100 (fully opaque while hovered or focused; ADR 0021) */
   regiaOpacity: number;
-  /** "Eventi alla Regia": a work chat that finishes, fails, waits for the user or leaves a command wakes the Regia with a
+  /** "Eventi all'Orchestrator": a work chat that finishes, fails, waits for the user or leaves a command wakes the Orchestrator with a
    *  short app message (main/chats/regia-wake.ts) */
   regiaEvents: boolean;
   /** "Esito alla chat": when a run of Esegui ends, the chat that proposed the block gets the exit code and the output's
    *  tail as an app message (main/run/results.ts) */
   runResults: boolean;
   /** "Domande in finestra": every open question and permission shows in one modal window in front, one at a time in
-   *  a queue (instead of the chats' tiles and the Regia); it never takes the keyboard while the user types */
+   *  a queue (instead of the chats' tiles and the Orchestrator); it never takes the keyboard while the user types */
   questionsModal: boolean;
   /** the folder of the app's own code (a git repo) that "Aggiorna" updates; null = the one the running release was built from */
   appRepo: string | null;
@@ -907,7 +907,7 @@ export interface RoutingInfo { table: RoutingTable | null; registry: ModelRegist
   kindStats?: Partial<Record<TaskKind, { chats: number; known: number; ok: number }>> }
 /** How a chat's engine was chosen: agent = the catalog agent's profile (engine, model, effort; a profile with no model
  *  takes the table row's as a default, never an override: ADR 0078); table = its row; default = no row, the user's
- *  "Chat aperte dalla Regia"; override = the agent named something else, with a reason. */
+ *  "Chat aperte dall'Orchestrator"; override = the agent named something else, with a reason. */
 export interface RouteDecision {
   policy: 'routing'; version: number | null; source: 'table' | 'default' | 'override' | 'explore' | 'agent';
   reason: string | null; kind: TaskKind; area: string; at: number;
@@ -998,7 +998,7 @@ export interface OverlayModel {
   now?: number;               // the app page's clock (frozen in the demo), for "4 min" labels
   /** important events (chat waiting/done, errors, sync, budget, login…) as short toasts above everything, max 2 */
   toasts?: OverlayToast[];
-  /** the Regia widget's bottom-right room (ADR 0028): the layer sits left of it (expanded) or above it (collapsed) */
+  /** the Orchestrator widget's bottom-right room (ADR 0028): the layer sits left of it (expanded) or above it (collapsed) */
   /** top is the absolute occupied bottom in content coordinates; right/bottom are edge reservations. */
   avoid?: { right: number; bottom: number; top?:number };
 }

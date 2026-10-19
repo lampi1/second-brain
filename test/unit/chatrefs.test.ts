@@ -1,5 +1,5 @@
 // Unit tests of shared/newchat.ts (the "Nuova chat" line: added, recognized, removed) and lib/chatrefs.ts (the chats
-// a Regia's app_create_chat / app_send_to_chat rows and messages point to; ADR 0034).
+// an Orchestrator's app_create_chat / app_send_to_chat rows and messages point to; ADR 0034).
 import { describe, expect, it } from 'vitest';
 import type { ChatItem, ChatSummary } from '../../src/shared/contract';
 import { NEW_CHAT_LINE, NEW_CHAT_TAG, splitNewChat, withNewChat } from '../../src/shared/newchat';

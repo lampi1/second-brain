@@ -12,7 +12,7 @@ export interface AutoCloseCandidate {
   stamp: string;
   /** Main clock only. A restored old result never skips the warning. */
   activityAt: number;
-  /** False for Regia/app/coordinating agents, active delivery/mail/tools/children/pending/errors or uncertain telemetry. */
+  /** False for Orchestrator/app/coordinating agents, active delivery/mail/tools/children/pending/errors or uncertain telemetry. */
   eligible: boolean;
   reason?: string;
   /** what a held chat waits for (ADR 0076): shown as "In attesa di…" on its tile */

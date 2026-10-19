@@ -1,7 +1,7 @@
-// day: the raw material of the Regia's brief and day report in one call, split Alfa / Beta / Produzione /
-// Personale (routines.md "Report della giornata", P-092; journal/brief/). READ-ONLY. The Regia still adds mail, Teams
+// day: the raw material of the Orchestrator's brief and day report in one call, split Alfa / Beta / Produzione /
+// Personale (routines.md "Report della giornata", P-092; journal/brief/). READ-ONLY. The Orchestrator still adds mail, Teams
 // and calendar ("Posta e chat"), picks the top 3 and writes the text for {{OWNER}}; never the reviews of others' PRs
-// (P-091). Area by heuristics (chat label, target branch release, area words): a draft, the Regia corrects it.
+// (P-091). Area by heuristics (chat label, target branch release, area words): a draft, the Orchestrator corrects it.
 // Usage (--json on both: structured rows with title, link, state, area, time (HH:MM, Rome) and a chat's project folder (cwd), for the brain site's Fatto/Da fare/stand-up):
 //        node "{{BRAIN}}/ops/tools/day.mjs" brief                    (live PRs, work items, now.md)
 //        node "{{BRAIN}}/ops/tools/day.mjs" report [--date AAAA-MM-GG] (journal, DevOps of the
@@ -30,7 +30,7 @@ export function areaOf(text, { branch } = {}) {
   if (branch) return /release/.test(branch) ? 'Beta' : 'Alfa';
   const label = t.replace(/^- /, '').replace(/^\*\*/, '').match(/^(A|B|Prod|OS|Pers|Regia)\b/)?.[1];
   if (label) return { A: 'Alfa', B: 'Beta', Prod: 'Produzione', OS: 'Personale e OS', Pers: 'Personale e OS', Regia: 'Personale e OS' }[label];
-  if (/\[personale\]|^\s*-?\s*\*?\*?Pers\b|{{BRAIN_NAME}}|cervello|Regia\b/i.test(t)) return 'Personale e OS';
+  if (/\[personale\]|^\s*-?\s*\*?\*?Pers\b|{{BRAIN_NAME}}|cervello|Regia\b|Orchestrator\b/i.test(t)) return 'Personale e OS';
   if (AT_WORDS.test(t)) return 'Beta';
   if (/\bprod\b|produzione|ring-?\d|rilascio|incident|urgenza|nodi? /i.test(t)) return 'Produzione';
   return 'Alfa';
@@ -117,7 +117,7 @@ const node = (script, args) => spawnSync(process.execPath, [path.join(OPS, scrip
 const group = (rows) => Object.fromEntries(AREAS.map(a => [a, rows.filter(r => r.area === a)]));
 
 export function renderReport({ day, journal, chats, cursor, dv, commits, brief }) {
-  const L = [`# Giornata ${day}: materiale per il report (day.mjs)`, '', 'Esiti prima: PR, QA, deploy, messaggi; poi le chat. La Regia scrive il report in parole semplici per gruppi.'];
+  const L = [`# Giornata ${day}: materiale per il report (day.mjs)`, '', 'Esiti prima: PR, QA, deploy, messaggi; poi le chat. L’Orchestrator scrive il report in parole semplici per gruppi.'];
   const rows = [
     ...(dv?.merged ?? []), ...(dv?.opened ?? []),
     ...journal.map(l => ({ text: `diario: ${l.replace(/^- /, '')}`, area: areaOf(l) })),
@@ -175,7 +175,7 @@ export function briefData({ day, prsText, items, threads }) {
 }
 
 export function renderBrief({ day, prsText, items, threads }) {
-  const L = [`# Brief ${day}: materiale (day.mjs)`, '', 'La Regia aggiunge mail, Teams e calendario ("Posta e chat"), sceglie i primi 3 attorno alle call; le review delle PR degli altri non entrano (P-091).'];
+  const L = [`# Brief ${day}: materiale (day.mjs)`, '', 'L’Orchestrator aggiunge mail, Teams e calendario ("Posta e chat"), sceglie i primi 3 attorno alle call; le review delle PR degli altri non entrano (P-091).'];
   L.push('', '## Le tue PR, dal vivo', prsText?.trim() ? prsText.trim().split('\n').filter(l => !l.startsWith('# ')).join('\n') : 'DevOps non letto.');
   const rows = [
     ...items.filter(f => f['System.TeamProject'] !== 'Project Triage').map(f => ({ area: areaOf(f['System.Title']), text: `${f['System.State']} · ${f['System.WorkItemType']} "${clip(f['System.Title'], 90)}" ${ORG}/${encodeURIComponent(f['System.TeamProject'])}/_workitems/edit/${f['System.Id']}` })),

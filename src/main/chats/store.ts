@@ -54,9 +54,9 @@ export interface StoredChat {
   permissionMode: PermissionMode | null;
   isRegia: boolean;
   orchestrator?: true;
-  /** the Orchestrator's former titles (migrated Regie): mail sent to those boxes still reaches it (mail.ts) */
+  /** the Orchestrator's former titles (migrated Orchestrators): mail sent to those boxes still reaches it (mail.ts) */
   mailAliases?: string[];
-  /** a Regia's tab name; a work chat's Regia (ADR 0021) */
+  /** an Orchestrator's tab name; a work chat's Orchestrator (ADR 0021) */
   regiaName?: string;
   regiaOf?: string;
   regiaSince?: number;
@@ -73,7 +73,7 @@ export interface StoredChat {
   /** its saved hand-off is a cold note (ADR 0031) written at this time: a message after the cache expired continues
    *  the chat in a fresh session from it */
   coldNoteAt?: number;
-  /** when the context in force began (first turn since the session start or the last compaction): a Regia's day
+  /** when the context in force began (first turn since the session start or the last compaction): an Orchestrator's day
    *  compaction (continuity.ts regiaDayDue) */
   ctxSince?: number;
   /** the sessions this chat had before its cold continuations, oldest first (their transcripts show folded above) */
@@ -167,7 +167,7 @@ function valid(x: unknown, version: number): StoredChat | null {
     createdAt: typeof c.createdAt === 'number' ? c.createdAt : Date.now(),
     ...(typeof c.costTotalUsd === 'number' && Number.isFinite(c.costTotalUsd) ? { costTotalUsd: c.costTotalUsd } : {}),
     ...extras(c),
-    // the Regia (and the app's Regia) is never archived, whatever the file says
+    // the Orchestrator (and the app's Orchestrator) is never archived, whatever the file says
     ...(typeof c.closedAt === 'number' && Number.isFinite(c.closedAt) && c.isRegia !== true && c.appRegia !== true ? { closedAt: c.closedAt, closedBy: c.closedBy === 'user' ? 'user' as const : 'auto' as const } : {}),
     ...(c.working === true && typeof c.closedAt !== 'number' ? { working: true as const } : {}),
   };

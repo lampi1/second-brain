@@ -2,7 +2,7 @@
 // the theme applies at once (light and dark screenshots); cross-engine messaging is always available;
 // the model comparison shows what it compares and its cost so far, and its experiment and agent switches go through
 // 'compare:set' (the demo keeps them in memory; the real app runs the brain's switch.mjs, unit-tested in
-// test/unit/brain/compare.test.ts); "Chat aperte dalla Regia" saves engine, models and effort and "Nuova chat" starts
+// test/unit/brain/compare.test.ts); "Chat aperte dall'Orchestrator" saves engine, models and effort and "Nuova chat" starts
 // from them; «Motori» turns a new engine on by the user's click and keeps its API key encrypted, shown only as a mask
 // (ADR 0046). Screenshots: test-results/shots/settings-*.png.
 import fs from 'node:fs';
@@ -112,14 +112,14 @@ test('spending limits, Windows notifications, the engines the Regia may use, the
   await s.getByTestId('st-toasts-choice-off').click();
   await expect.poll(async () => (await get()).osToasts).toBe('off');
 
-  // each engine on or off, and whether the Regie may use it (ADR 0046)
+  // each engine on or off, and whether the Orchestrators may use it (ADR 0046)
   const eng = s.getByTestId('st-group-engines');
   await eng.scrollIntoViewIfNeeded();
   const cur = eng.getByTestId('st-engine-claude-switch');
   await cur.click();
   await expect(cur).toHaveAttribute('aria-checked', 'false');
   await expect.poll(async () => (await get()).engines.claude).toBe(false);
-  // an engine off closes «Le Regie possono usare» too (the only key an older release reads) and dims it
+  // an engine off closes «Gli Orchestrator possono usare» too (the only key an older release reads) and dims it
   const off = eng.getByTestId('st-engine-on-cursor-switch');
   await off.click();
   await expect.poll(async () => (await get()).engineOn.cursor).toBe(false);

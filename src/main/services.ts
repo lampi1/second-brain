@@ -17,7 +17,7 @@ export interface ChatService {
   /** by agent = an agent's chat (app_create_chat): its first turn may wait in the CPU queue (ADR 0036) */
   create(req: NewChat, by?: 'user' | 'agent'): Promise<ChatSummary>;
   /** images: the chat:send attachments, checked by the service (main/chats/images.ts) */
-  /** from = not the user's message: who sent it (another chat, the Regia), shown above the bubble */
+  /** from = not the user's message: who sent it (another chat, the Orchestrator), shown above the bubble */
   /** liveOnly = mail: fails instead of starting or reopening the chat (main/chats/mail.ts) */
   send(chatId: string, text: string, images?: ImageAttachment[], resumed?: boolean, from?: string, liveOnly?: boolean): Promise<void>;
   answer(chatId: string, requestId: string, answer: Answer): Promise<void>;

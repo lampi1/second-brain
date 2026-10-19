@@ -1,11 +1,11 @@
-// Performance bench: the built app (out/) with the fake Claude CLI, a Regia and N chats streaming at once; measures
+// Performance bench: the built app (out/) with the fake Claude CLI, an Orchestrator and N chats streaming at once; measures
 // what the user feels. Why: "lentino, input lag, le risposte arrivano dopo" (owner, 2026-10-11) needs numbers before
 // and after each fix. Who: agents working on rendering/streaming performance (`npm run build` first, then
 // `node scripts/bench-perf.mjs [--chats 10] [--secs 10] [--json]`). Runs hidden (SB_HIDDEN), isolated profile, no tokens.
 // A benchmark under load (with --burn, a load generator): run it only at night, outside the owner's working hours,
 // never during the day on their work PC (owner, 2026-10-15; AGENTS.md rule 7).
 // Measures, during the window:
-//   input lag   keydown (event.timeStamp) → the frame after the input event, typing in the Regia and in a chat
+//   input lag   keydown (event.timeStamp) → the frame after the input event, typing in the Orchestrator and in a chat
 //   cli→screen  the fake stamps each word with Date.now(); the first frame that shows it gives the delay
 //   cpu         app.getAppMetrics() cumulative CPU of main (Browser), renderers (Tab), GPU over the window (100 = one core)
 //   --profile   prints the renderer's top self-time functions (CDP sampling profiler) over the window

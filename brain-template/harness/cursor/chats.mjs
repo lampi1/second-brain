@@ -1,4 +1,4 @@
-// Chat reader for the Regia (skill `stato`, in Claude Code and in Cursor alike, 2026-10-10 "un solo modo"): which
+// Chat reader for the Orchestrator (skill `stato`, in Claude Code and in Cursor alike, 2026-10-10 "un solo modo"): which
 // Claude and Cursor chats are open, where, and whether they wait for {{OWNER}}. Read-only.
 //   node chats.mjs list [--days N] [--all] [--ws <folder words>]   chats updated in the last N days (default 3), newest first
 //   node chats.mjs read <chat> [--n N]                             last N messages (default 12); <chat> = id start or title words
@@ -64,7 +64,7 @@ async function headers() {
   } catch { return null; }
 }
 
-// State for the Regia: "in corso" / "aspetta te" / "finito" (+ why).
+// State for the Orchestrator: "in corso" / "aspetta te" / "finito" (+ why).
 function state(h, rows) {
   if (h?.blocking) return 'aspetta te (approvazione)';
   const lastRow = rows.at(-1);
@@ -184,7 +184,7 @@ function claudeState(rows) {
 function claudeMessages(rows) {
   const msgs = [];
   for (const r of rows) {
-    // a message typed while the chat was busy is queued as an attachment (review 10/10: 17 in one Regia)
+    // a message typed while the chat was busy is queued as an attachment (review 10/10: 17 in one Orchestrator)
     const queued = r.type === 'attachment' && r.attachment?.type === 'queued_command' ? String(r.attachment.prompt ?? '') : null;
     if (queued === null && ((r.type !== 'user' && r.type !== 'assistant') || r.isSidechain || r.isMeta)) continue;
     const content = queued ?? r.message?.content;
@@ -239,7 +239,7 @@ async function read(which) {
     cursorHit = hits.find(h => !h.archived && !h.subagent) || hits[0]; // the chats `list` shows come first
   }
   // Claude chat by id start, or by title in the last 30 days; a title in both tools → the live, newest one (review 10/10:
-  // "regia" matched an older Cursor chat while the Claude Regia was active)
+  // "regia" matched an older Cursor chat while the Claude Orchestrator was active)
   const cl = id ? undefined : claudeChats(isId ? { idPrefix: q } : { since: Date.now() - 30 * 864e5, titleQ: q }).sort((a, b) => b.at - a.at)[0];
   if (cursorHit && !(cl && (cursorHit.archived || cursorHit.subagent || cl.at > cursorHit.at))) id = cursorHit.id;
   if (!id) {
@@ -251,7 +251,7 @@ async function read(which) {
     }
   }
   if (!id) {
-    // `list` reads the headers, `read` the transcript: Cursor writes a chat's transcript later (seen 10/10: the Regia
+    // `list` reads the headers, `read` the transcript: Cursor writes a chat's transcript later (seen 10/10: the Orchestrator
     // was listed at 15:21, its transcript appeared at 15:35), so say which one is missing instead of "not found".
     const listed = db?.hs.filter(h => (q.length >= 8 && h.id.startsWith(q)) || h.name.toLowerCase().includes(q)).sort((a, b) => b.at - a.at)[0];
     console.log(listed

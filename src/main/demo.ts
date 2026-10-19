@@ -1,5 +1,5 @@
 // Demo data source (SB_DEMO=1): fake ChatService and BrainService that produce realistic, time-evolving data with no
-// CLI and no tokens: a Regia with a decision, a QA chat waiting on a question, a fix streaming text and running tools
+// CLI and no tokens: an Orchestrator with a decision, a QA chat waiting on a question, a fix streaming text and running tools
 // (then asking a permission), a Cursor chat driving a browser, a chat waiting on a permission, finished chats, a
 // ticking cost and a live feed. Answering a request resolves it and continues that chat's script.
 // Why: the UI (and the e2e tests, screenshots and visual baselines) can be built and verified while the real services
@@ -342,7 +342,7 @@ function demoHandoff(c: ChatSummary): string {
   return [
     '## Stato', `${c.lastText || 'Lavoro in corso.'}`,
     '## File e worktree', `- cartella: \`${c.cwd}\``, '- branch `feat/mappa-v2`, worktree `../alfa-wt/mappa`',
-    '## Decisioni prese', '- la mappa usa lo stesso layout delle corsie', '- i test e2e girano con la finestra nascosta',
+    '## Decisioni prese', '- la mappa usa lo stesso layout delle strisce del Grindhouse', '- i test e2e girano con la finestra nascosta',
     '## Provato e scartato', '- il rendering in WebGL puro: troppo lento sui portatili',
     '## Prossimo passo', 'Verificare gli screenshot della v2 e chiedere la revisione.',
   ].join('\n');
@@ -450,7 +450,7 @@ export class DemoChats implements ChatService {
       req = { ...req, regia: true };
     }
     const id = `c${++this.counter}`;
-    // several Regie, like the real manager: `replaces` moves that one's role, name and work chats to the new one
+    // several Orchestrators, like the real manager: `replaces` moves that one's role, name and work chats to the new one
     const old = req.regia && req.replaces ? this.chats.get(req.replaces) : undefined;
     if (req.regia && req.replaces && !old?.isRegia) throw new Error('L’Orchestrator da sostituire non c’è più.');
     if (req.regia && req.regiaName !== undefined && !cleanRegiaName(req.regiaName)) throw new Error('Nome dell’Orchestrator non valido: da 1 a 30 caratteri.');

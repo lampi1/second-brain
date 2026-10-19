@@ -1,5 +1,5 @@
-// CPU-aware admission of chats and turns (ADR 0036; the user, 2026-10-13: CPU at 100% with many chats, "la Regia decide
-// in base alla CPU, a costo zero, con una coda"). Before an agent (the Regia's new chat, a closed chat reopened by an
+// CPU-aware admission of chats and turns (ADR 0036; the user, 2026-10-13: CPU at 100% with many chats, "l'Orchestrator decide
+// in base alla CPU, a costo zero, con una coda"). Before an agent (the Orchestrator's new chat, a closed chat reopened by an
 // agent, the app's own resume after a restart) starts a chat's engine or wakes a chat with a new turn, ChatManager asks
 // this queue (a message between chats to an open chat never does, ADR 0064): with the
 // machine under the thresholds (CPU averaged over a few seconds, free RAM) and nobody waiting, it goes at once; else it

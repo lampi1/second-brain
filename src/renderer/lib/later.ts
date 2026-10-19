@@ -1,6 +1,6 @@
 // "Rispondi dopo" and the "Da rispondere" queue on the app page (ADR 0035; the user, 2026-10-13). One flag, kept by
 // main (main/later.ts) so it survives a restart and holds back the Windows notifications: on = no request popup
-// anywhere (questions window, Regia card, global layer card), the tiles show "Da rispondere" ("In coda" is only the CPU queue, ADR 0036), new requests join the queue
+// anywhere (questions window, Orchestrator card, global layer card), the tiles show "Da rispondere" ("In coda" is only the CPU queue, ADR 0036), new requests join the queue
 // without a popup (the top bar's "Da rispondere" counter grows, a chime rings: lib/layer.ts); off again when the user opens the queue (Ctrl+J, the counter,
 // "Rispondi" on a tile), which is the questions window called with every open request, one at a time. The asking
 // chats are never answered: they stay blocked. Started by main.tsx; used by actions.ts, layer.ts and the request hosts.

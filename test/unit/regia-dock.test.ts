@@ -1,4 +1,4 @@
-// The Regia widget docked bottom-right (ADR 0028): its default and clamped size, the room it takes from the workspace
+// The Orchestrator widget docked bottom-right (ADR 0028): its default and clamped size, the room it takes from the workspace
 // (src/renderer/lib/regia-dock.ts), the unread count, and how its state survives a restart (store/ui.ts loadPrefs).
 import { describe, expect, it } from 'vitest';
 import type { ChatItem } from '@shared/contract';

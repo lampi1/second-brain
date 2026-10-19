@@ -63,8 +63,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Un agente al lavoro può avviare un altro agente del catalogo come suo sotto-agente: è collegato alla sua run, risponde allo stesso Orchestrator e gli manda il risultato.',
         'A working agent can start another catalog agent as its own sub-agent: it is linked to its run, answers to the same Orchestrator and sends it the result.'),
       // src/main/chats/manager.ts startRun only when owner.source === 'catalog'
-      b('Le chat del catalogo, incluso Generale, hanno una «run» con contatori e costo. La Regia e il ripiego compatibile quando Generale manca non hanno una run di catalogo.',
-        'Catalog chats, including Generale, have a "run" with counters and cost. Regia and the compatible fallback when Generale is missing have no catalog run.'),
+      b('Le chat del catalogo, incluso Generale, hanno una «run» con contatori e costo. L’Orchestrator e il ripiego compatibile quando Generale manca non hanno una run di catalogo.',
+        'Catalog chats, including Generale, have a "run" with counters and cost. The Orchestrator and the compatible fallback when Generale is missing have no catalog run.'),
       // src/renderer/components/AgentCreateDialog.tsx; src/main/agents/authoring.ts agent_create, author-policy.ts checkCreationRequest
       b('Un agente nuovo nasce da «Crea agente» in Agenti: un breve questionario diventa un tuo messaggio all’Orchestrator, che lo crea con agent_create.',
         'A new agent starts from "Create agent" in Agents: a short questionnaire becomes your message to the Orchestrator, which creates it with agent_create.'),
@@ -135,7 +135,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/agents/catalog.ts text limits
       tech(LIMITS, 'Nome ≤ 80 caratteri, scopo ≤ 400, istruzioni ≤ 8000; manifesto: liste di al massimo 12 voci.',
         'Name ≤ 80 chars, purpose ≤ 400, instructions ≤ 8000; manifest: lists of at most 12 items.'),
-      tech(WHERE, 'Pagina «Gestisci agenti» (AgentStudio); catalogo nel processo main (AgentCatalogService).', '"Manage agents" page (AgentStudio); catalog in the main process (AgentCatalogService).'),
+      tech(WHERE, 'Pagina Agenti (AgentCatalogPage, l’editor è AgentStudio); catalogo nel processo main (AgentCatalogService).', 'Agenti page (AgentCatalogPage, the editor is AgentStudio); catalog in the main process (AgentCatalogService).'),
     ],
     sources: ['src/shared/agents.ts', 'src/shared/agent-manifest.ts', 'src/main/agents/catalog.ts', 'src/shared/role-presets.ts', 'src/shared/role-preset-catalog.ts', 'src/renderer/lib/role-consumers.ts', 'src/renderer/components/AgentStudio.tsx'],
   },
@@ -155,8 +155,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('La manutenzione gira da sola ogni 6 ore (o con «Esegui ora»): una skill nuova da un lavoro ripetuto, skill doppie unite, le tue correzioni applicate al ruolo, alla skill o a una regola.',
         'Maintenance runs by itself every 6 hours (or with "Run now"): a new skill from a repeated task, duplicate skills merged, your corrections applied to the role, the skill or a rule.'),
       // src/main/brainmodel/changes.ts
-      b('Ogni modifica è registrata con cosa, perché e le prove, e «Annulla» la riporta com’era. L’approvazione resta solo per produzione, permessi e impostazioni, e testi per altri.',
-        'Every change is logged with what, why and the evidence, and "Undo" puts it back. Approval stays only for production, permissions and settings, and texts for others.'),
+      // src/main/agents/authoring.ts applyNow, USER_ONLY_FIELDS (ADR 0082)
+      b('Ogni modifica è registrata con cosa, perché e le prove, e «Annulla» la riporta com’era; anche quelle dell’Orchestrator a un agente (modello, sforzo, istruzioni: una versione in prova). Il tuo sì resta solo per produzione, permessi (strumenti e tetto di un agente), impostazioni (anche il suo motore), agenti nuovi e testi per altri.',
+        'Every change is logged with what, why and the evidence, and "Undo" puts it back; the Orchestrator’s changes to an agent too (model, effort, instructions: a trial version). Your yes is needed only for production, permissions (an agent’s tools and ceiling), settings (its engine too), new agents and texts for others.'),
       // src/main/brainmodel/legacy-sources.ts
       b('Una volta sola, i runbook e le routine di prima diventano skill collegate agli agenti giusti, senza perdere testo: il resoconto è sulla pagina Skill.',
         'Once, the former runbooks and routines become skills linked to the right agents, losing no text: the report is on the Skill page.'),
@@ -240,8 +241,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Se scrivi di nuovo o riapri manualmente una chat finita, la run si riapre e «reopened» sale; i messaggi degli agenti non la riaprono.',
         'Writing again or manually reopening an ended chat reopens its run and increases "reopened"; agent messages do not reopen it.'),
       // src/main/chats/manager.ts continuation; src/main/agents/run-metrics.ts indexRuns
-      b('Una continuazione registra continuedFrom; le metriche lo considerano per i rifacimenti entro sette giorni dalla fine della run precedente.',
-        'A continuation records continuedFrom; metrics use it for rework within seven days of the previous run ending.'),
+      // src/main/appctl/tools.ts app_create_chat (parentRunId, reviewOf, reworkOf); src/main/agents/subagent-tool.ts
+      b('Una run si collega alle altre: continuedFrom (una continuazione), parentRunId (un sotto-agente, anche da agent_start_subagent), reviewOf e reworkOf (una revisione, un rifacimento); le metriche contano i rifacimenti entro sette giorni.',
+        'A run links to others: continuedFrom (a continuation), parentRunId (a sub-agent, from agent_start_subagent too), reviewOf and reworkOf (a review, a rework); metrics count rework within seven days.'),
       // src/main/run/outcome.ts (run:outcome IPC) → src/main/chats/manager.ts markRun; src/renderer/components/RunSurface.tsx
       b('Quando la run ha finito, nella striscia espansa dici tu com’è andata (riuscita, in parte, non riuscita): l’esito viene salvato con base «human».',
         'Once the run has finished, in the expanded strip you say how it went (success, partial, failed): the outcome is saved with basis "human".'),
@@ -259,11 +261,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/agents/runs.ts RUNS_MAX, RUNS_BYTES, STALE_MS
       tech(LIMITS, 'RUNS_MAX = 5000, RUNS_BYTES = 7 000 000, STALE_MS = 72 h.', 'RUNS_MAX = 5000, RUNS_BYTES = 7,000,000, STALE_MS = 72 h.'),
     ],
-    target: [
-      b('I legami di sotto-incarico e review sono supportati dall’archivio, ma manca ancora un percorso MCP per crearli.',
-        'Sub-assignment and review links are supported by the store, but an MCP path to create them is still missing.'),
-    ],
-    sources: ['src/shared/agents.ts', 'src/main/agents/runs.ts', 'src/main/chats/manager.ts', 'src/main/index.ts', 'src/main/run/outcome.ts'],
+    sources: ['src/shared/agents.ts', 'src/main/agents/runs.ts', 'src/main/chats/manager.ts', 'src/main/index.ts', 'src/main/run/outcome.ts', 'src/main/appctl/tools.ts', 'src/main/agents/subagent-tool.ts'],
   },
   {
     id: 'metrics',
@@ -311,9 +309,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/lib/correction.ts, src/renderer/components/CorrectThought.tsx (ADR 0058)
       b('«Correggi» su un pezzo di ragionamento manda all’agente la citazione e la tua correzione; è bloccato se c’è una domanda aperta.',
         '"Correct" on a piece of reasoning sends the agent the quote and your fix; it is blocked while a question is open.'),
-      // src/renderer/brain/pages/Miglioramento.tsx, src/renderer/brain/lib/learn.ts
-      b('«Regole imparate» mostra le politiche di auto-miglioramento del brain (stime, scelta del modello, soglie) con Applica, No, Ripristina.',
-        '"Learned rules" shows the brain’s self-improvement policies (estimates, model choice, thresholds) with Apply, No, Restore.'),
+      // src/renderer/brain/pages/LearnedRules.tsx, src/renderer/components/brain-model/RulesPage.tsx, src/renderer/brain/lib/learn.ts (ADR 0082)
+      b('«Regole imparate», in fondo alla pagina Regole, mostra le politiche di auto-miglioramento del brain (stime, scelta del modello, soglie) con Applica, No, Ripristina; compare solo quando il brain ne ha.',
+        '"Learned rules", at the bottom of the Rules page, shows the brain’s self-improvement policies (estimates, model choice, thresholds) with Apply, No, Restore; it appears only when the brain has some.'),
       // src/renderer/i18n/areas/home.it.ts home.rulesReading
       b('Una regola conta come «tenuta» se il suo errore non ricompare nei giorni osservati: non è una prova di causa.',
         'A rule counts as "holding" if its error does not reappear in the observed days: it is not proof of cause.'),
@@ -331,7 +329,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(DATA, 'Messaggio: [Reasoning correction] / In your reasoning you wrote: «…» / Not like that: … ; «Al prossimo passo» solo con Claude.',
         'Message: [Reasoning correction] / In your reasoning you wrote: «…» / Not like that: … ; "At the next step" on Claude only.'),
     ],
-    sources: ['src/main/chats/manager.ts', 'src/main/agents/run-metrics.ts', 'src/renderer/brain/lib/stats.ts', 'src/renderer/lib/correction.ts', 'src/renderer/components/CorrectThought.tsx', 'src/renderer/brain/pages/Miglioramento.tsx', 'src/renderer/brain/lib/learn.ts', 'docs/adr/0037-useful-errors-and-stats.md', 'docs/adr/0058-correct-the-thought.md'],
+    sources: ['src/main/chats/manager.ts', 'src/main/agents/run-metrics.ts', 'src/renderer/brain/lib/stats.ts', 'src/renderer/lib/correction.ts', 'src/renderer/components/CorrectThought.tsx', 'src/renderer/brain/pages/LearnedRules.tsx', 'src/renderer/components/brain-model/RulesPage.tsx', 'src/renderer/brain/lib/learn.ts', 'docs/adr/0037-useful-errors-and-stats.md', 'docs/adr/0058-correct-the-thought.md'],
   },
   {
     id: 'milestones',
@@ -348,8 +346,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Personalizzare un agente e completare la configurazione assegnano i primi due; il primo risultato richiede una tua conferma su un risultato idoneo.',
         'Customizing an agent and completing setup award the first two; the first result requires your confirmation of an eligible result.'),
       // src/renderer/components/ProgressPanel.tsx
-      b('Il pannello in «Gestisci agenti» mostra i traguardi e si può nascondere; in demo o con errori di salvataggio spiega il problema.',
-        'The panel in "Manage agents" shows milestones and can be hidden; in demo or with storage errors it explains the problem.'),
+      b('Il pannello nell’editor degli agenti (pagina Agenti) mostra i traguardi e si può nascondere; in demo o con errori di salvataggio spiega il problema.',
+        'The panel in the agent editor (Agenti page) shows milestones and can be hidden; in demo or with storage errors it explains the problem.'),
     ],
     analogy: b('Come tre caselle da spuntare quando prepari il tuo spazio e confermi il primo lavoro riuscito.',
       'Like three boxes to tick as you prepare your workspace and confirm the first successful job.'),
@@ -638,8 +636,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'search',
     title: b('La ricerca (Ctrl+K)', 'Search (Ctrl+K)'),
-    summary: b('Cerca per parole in chat, messaggi, branch e note del brain. Oggi è solo testuale: niente embeddings, niente modello.',
-      'Searches by words in chats, messages, branches and brain notes. Today it is text only: no embeddings, no model.'),
+    summary: b('Cerca in chat, messaggi, branch e note del brain; nelle note del brain anche per significato, con un modello locale e offline.',
+      'Searches chats, messages, branches and brain notes; in the brain notes by meaning too, with a local, offline model.'),
     points: [
       // src/main/search/service.ts
       b('Indicizza le chat degli ultimi 30 giorni (sempre quelle aperte), i branch git delle cartelle delle chat e i file .md del brain.',
@@ -648,24 +646,22 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Ogni parola della ricerca deve comparire; maiuscole e accenti non contano.', 'Every word of the query must appear; case and accents do not matter.'),
       b('Punteggio: corrispondenza nel titolo, poi frase intera, poi parole sparse, più un premio per le cose recenti.',
         'Score: a match in the title, then the whole phrase, then loose words, plus a bonus for recent things.'),
-      b('L’indice si aggiorna solo quando cerchi (al massimo ogni 2 secondi), senza timer né osservatori.', 'The index refreshes only when you search (at most every 2 seconds), with no timer or watcher.'),
+      b('L’indice di chat e branch si aggiorna solo quando cerchi (al massimo ogni 2 secondi), senza timer né osservatori.', 'The chats and branches index refreshes only when you search (at most every 2 seconds), with no timer or watcher.'),
+      // src/main/search/hybrid/service.ts, engine.ts (ADR 0068 hybrid brain search)
+      b('Il gruppo «Nel brain» usa la ricerca ibrida: parole (BM25, anche con un errore di battitura) e significato (multilingual-e5, scaricato una volta e poi offline), così una frase in inglese trova una nota in italiano. Finché il modello non è pronto cerca solo per parole.',
+        'The "In the brain" group uses the hybrid search: words (BM25, a typo allowed too) and meaning (multilingual-e5, downloaded once then offline), so an English phrase finds an Italian note. Until the model is ready it searches by words only.'),
       // src/renderer/components/CommandPalette.tsx
       b('Risultati in gruppi: «Chat trovate», «Nei messaggi», «Branch», «Nel brain»; al massimo 6 per gruppo.',
         'Results in groups: "Chats found", "In messages", "Branches", "In the brain"; at most 6 per group.'),
     ],
-    analogy: b('Come l’indice analitico di un libro: trova le parole esatte, non i concetti simili.',
-      'Like a book’s index: it finds the exact words, not similar ideas.'),
+    analogy: b('Come l’indice analitico di un libro, con un bibliotecario che per le note del brain capisce anche cosa intendi.',
+      'Like a book’s index, with a librarian who, for the brain notes, also understands what you mean.'),
     tech: [
       tech(LIMITS, 'Ricerca da 2 a 200 caratteri; 2 000 000 caratteri per chat; 4000 file del brain, 1 MB l’uno.', 'Query from 2 to 200 chars; 2,000,000 chars per chat; 4000 brain files, 1 MB each.'),
       tech(DATA, 'Titolo 600 + testo + recenza (fino a 150, lineare su 30 giorni); frase 200; parole 100.', 'Title 600 + text + recency (up to 150, linear over 30 days); phrase 200; words 100.'),
-      tech(WHERE, 'Indice in memoria nel processo main (src/main/search), canale search:query.', 'In-memory index in the main process (src/main/search), channel search:query.'),
+      tech(WHERE, 'Chat e branch: indice in memoria nel processo main (src/main/search), canale search:query. Brain: indice ibrido in userData/search/index.db, in un worker, lo stesso usato da /api/search e dallo strumento brain_search delle chat.', 'Chats and branches: in-memory index in the main process (src/main/search), channel search:query. Brain: hybrid index in userData/search/index.db, in a worker, the same one /api/search and the chats’ brain_search tool use.'),
     ],
-    // TODO(after PR #12 feat/hybrid-search merges): describe the hybrid search in `points` and `tech` from its code, drop `coming`
-    coming: [
-      { pr: 12, text: b('Ricerca ibrida (parole + significato): è nella PR #12, non ancora su main. Oggi la ricerca è solo testuale.',
-        'Hybrid search (words + meaning): it is in PR #12, not on main yet. Today search is text only.') },
-    ],
-    sources: ['src/main/search/service.ts', 'src/main/search/text-index.ts', 'src/main/search/sources.ts', 'src/renderer/components/CommandPalette.tsx', 'docs/adr/0023-full-text-search.md'],
+    sources: ['src/main/search/service.ts', 'src/main/search/text-index.ts', 'src/main/search/sources.ts', 'src/main/search/hybrid/service.ts', 'src/main/search/hybrid/engine.ts', 'src/renderer/components/CommandPalette.tsx', 'docs/adr/0023-full-text-search.md', 'docs/adr/0068-hybrid-brain-search.md'],
   },
   {
     id: 'file-viewer',
@@ -705,8 +701,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'A table gives engine, model and effort to chats without a specific agent (Generale), and the model to agents that name none.'),
     points: [
       // src/main/brain/routing.ts taskOf, areaOf
-      b('Il tipo di lavoro viene dal titolo e dal primo prompt, salvo un tipo esplicito; l’area dal chiamante o dal titolo, con App forzata nello spazio dell’app.',
-        'Kind comes from the title and first prompt unless supplied explicitly; area comes from the caller or title, with App forced in the app workspace.'),
+      b('Il tipo di lavoro viene dal titolo e dal primo prompt, salvo un tipo esplicito; l’area dal chiamante o dal titolo, con App per le chat nella cartella del codice dell’app.',
+        'Kind comes from the title and first prompt unless supplied explicitly; area comes from the caller or title, with App for chats in the app’s code folder.'),
       // src/main/brain/routing.ts match
       b('Vince la riga più specifica: tipo + area, poi area, poi tipo, poi «qualsiasi»; a pari merito la prima.',
         'The most specific row wins: kind + area, then area, then kind, then "any"; on a tie the first one.'),
@@ -851,12 +847,12 @@ export function discussText(card: ConceptCard, lang: GuideLang): string {
   return `${cardText(card, lang)}\n\n${ask}`;
 }
 
-/** What goes to the Orchestrator when no explainer agent exists: reuse one from the catalog, else propose one (it
- *  cannot write the catalog: src/main/appctl/tools.ts has no catalog-writing tool), and the card as context. */
+/** What goes to the Orchestrator when no explainer agent exists: reuse one from the catalog, else propose one in a
+ *  panel and create it only after the user's yes (agent_create, ADR 0078), and the card as context. */
 export function regiaText(card: ConceptCard, lang: GuideLang): string {
   const ask = lang === 'en'
-    ? `I want to discuss the concept «${card.title.en}» from the app's guide. Look in agent_catalog for an explainer agent ("${EXPLAINER_NAME}"): if there is one, open a chat with it through app_create_chat with its agentId and pass it the context below. If there is none, you cannot create it yourself: propose its definition (name "${EXPLAINER_NAME}", purpose, instructions, when to use it) so I can save it in "Manage agents", and meanwhile explain the concept to me yourself.`
-    : `Voglio discutere il concetto «${card.title.it}» della guida dell'app. Cerca in agent_catalog un agente che spiega ("${EXPLAINER_NAME}"): se c'è, apri una chat con lui con app_create_chat e il suo agentId e passagli il contesto qui sotto. Se non c'è, non puoi crearlo tu: proponimi la sua definizione (nome "${EXPLAINER_NAME}", scopo, istruzioni, quando usarlo) da salvare in «Gestisci agenti», e intanto spiegami tu il concetto.`;
+    ? `I want to discuss the concept «${card.title.en}» from the app's guide. Look in agent_catalog for an explainer agent ("${EXPLAINER_NAME}"): if there is one, open a chat with it through app_create_chat with its agentId and pass it the context below. If there is none, propose it to me in a panel (name "${EXPLAINER_NAME}", what it does, engine) and create it with agent_create only after my yes; meanwhile explain the concept to me yourself.`
+    : `Voglio discutere il concetto «${card.title.it}» della guida dell'app. Cerca in agent_catalog un agente che spiega ("${EXPLAINER_NAME}"): se c'è, apri una chat con lui con app_create_chat e il suo agentId e passagli il contesto qui sotto. Se non c'è, proponimelo in un pannello (nome "${EXPLAINER_NAME}", cosa fa, motore) e crealo con agent_create solo dopo il mio sì; intanto spiegami tu il concetto.`;
   return `${ask}\n\n---\n${discussText(card, lang)}`;
 }
 

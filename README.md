@@ -26,7 +26,7 @@
   <img alt="Electron 44" src="https://img.shields.io/badge/electron-44-47848F.svg">
 </p>
 
-![The Grindhouse: every agent as a strip, its questions as panels, the browser it drives right under it](docs/screenshots/mosaic.webp)
+![The Grindhouse: every agent as a strip, its questions as panels, the browser it drives right under it](docs/screenshots/grindhouse.webp)
 
 When you work with five agents at once, the bottleneck is no longer the model: it is you. Which agent is waiting on
 you? Which one is burning tokens in a loop? What did the QA agent see in its browser? second-brain puts every agent,
@@ -35,8 +35,8 @@ question, browser and ticket on one screen, so you spend your attention where it
 It does not replace the agents: it starts the **official** CLIs (`claude`, `codex`, Cursor's `agent`) with **your own**
 login, and it never touches their settings. Keep Claude desktop and Cursor open next to it, or close them.
 
-> The interface is in Italian today (it started as one developer's daily tool). Code, comments, docs and commits are in
-> English, and an English interface is on the roadmap.
+> The interface speaks Italian and English (Settings → Lingua; by default it follows Windows). Code, comments, docs
+> and commits are in English.
 
 ## Download
 
@@ -100,7 +100,7 @@ Where things are:
 | `test/unit`, `test/e2e` | Vitest for every module, Playwright driving the real app for every visible feature. |
 | `docs/adr/` | Every decision, numbered, with its reason. |
 
-Or let the app change itself: ask the Orchestrator for the change and give it the app's code folder; it opens a chat
+Or let the app change itself: ask the Orchestrator for the change and give it the app's code folder; it starts an agent
 there that works on a branch and runs the checks before anything is merged.
 
 Start with [CONTRIBUTING.md](CONTRIBUTING.md) (workflow, tests, ADRs, a map of the modules). AI agents working on the
@@ -154,18 +154,23 @@ only its own `cursor/…`, `codex/…` or `claude/…` branch; the app never pus
 
 ### The Orchestrator: one chat that coordinates the others
 
-![The Orchestrator, in its column on the right, with a decision waiting](docs/screenshots/regia.webp)
+![The Orchestrator, in its column on the right, with a decision waiting](docs/screenshots/orchestrator.webp)
 
-The Orchestrator is the chat you talk to first. It knows every agent, starts new ones from your agent catalog, routes
-mail between them and tells you what needs you.
+The Orchestrator is the chat you talk to first, always in its column on the right. It knows every agent, picks the
+right one from your catalog for each job (or proposes a new one, created only after your yes), routes mail between them
+and tells you what needs you. Model, effort and context size come from each agent's profile, never from a per-chat
+switch.
 
-### Agents that improve, under your approval
+### Agents that improve by themselves, reversibly
 
 ![The Agenti page: the catalog of agents as cards, with runs, success and cost](docs/screenshots/agents.webp)
 
-Each agent is a card with its role, engine, model and observed results (runs, success, cost); its details show the
-whole prompt that makes it that agent. Agents learn from cost, time and outcome, and every proposed change to an agent
-waits in **Agenti** until you approve it.
+Each agent is a card with its role, engine, model and observed results (runs, success, cost); a click flips it to its
+details and the skills it uses. Agents learn from cost, time, outcome and your corrections: the Orchestrator and the
+maintenance jobs change an agent's model, effort or instructions by themselves, as a trial version measured against
+the previous one, and every change is in the log with "Annulla". Only what reaches further waits for your yes in
+**Agenti → Da approvare**: an agent's tools, permissions and engine, and new agents. An agent exports to a colleague
+with its profile, its skills, the tools they call and the brain's rules, never your memory.
 
 ### Browsers your agents drive
 
@@ -183,7 +188,8 @@ passwords.
 Your brain is a folder of Markdown notes the agents read and write: open threads, journal, ideas, the errors they made
 and the rules learned from them. A fresh brain starts empty: the app's own rules and tools stay inside the app
 (ADR 0072). The Brain section of the menu shows it as two concepts only, agents and skills (ADR 0077): Agenti, Skill
-(who uses each skill, linked with one click), Regole, Memoria (knowledge, what happened, one memory per agent),
+(who uses each skill, linked with one click), Regole (the brain's rules and, once the brain has some, the rules it
+learned for its estimates, model choice and alerts), Memoria (knowledge, what happened, one memory per agent),
 Classificatori (how the app picks model and agent, and how it is going) and Mappa (agent → skills → rules → memory, the
 notes map that fills the panel at any size, and a 3D map that lights up the files, tools and agents at work).
 Maintenance jobs keep skills, agents, rules and memory tidy by themselves; every change is logged with "Annulla".
@@ -274,7 +280,6 @@ Review the draft on GitHub, publish it, and add its row to the [Download](#downl
 
 ## Roadmap
 
-- English interface (the strings are Italian today).
 - Linux and macOS proved on real machines; installers (.dmg, .AppImage) with signing.
 - More connectors behind the same interface (issue trackers beyond Azure DevOps).
 - Team features: handing a to-do to a colleague, a shared team layer next to each person's brain.

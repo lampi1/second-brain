@@ -3,7 +3,7 @@
 // admission per sample, "Avvia ora", the switch; then ChatManager against the fake CLI: an agent's new chat and an
 // agent reopening a closed chat wait while the load is high, the user's own message and a message between chats never
 // wait (and take the chat's queued work with them, in order; ADR 0064: mail to an idle chat starved for hours), a queued chat closed by hand drops its work, no warm engine starts while busy; a queued chat
-// never looks busy, so the Regia is never told it "finished" a turn it did not run (2026-10-14).
+// never looks busy, so the Orchestrator is never told it "finished" a turn it did not run (2026-10-14).
 import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';

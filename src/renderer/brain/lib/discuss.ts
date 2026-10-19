@@ -1,7 +1,7 @@
 // "Discutine" / "Apri una chat" on the ideas and the AI's suggestions (Idee), on the recurring AI errors and on every
-// number of Qualità and Costi (ADR 0037): the ready texts (a draft for the Regia that quotes the topic with its source
+// number of Qualità and Costi (ADR 0037): the ready texts (a draft for the Orchestrator that quotes the topic with its source
 // file, its numbers or its line, the first message of a dedicated work chat), the line of an idea in its file, and the "discussa" record (which chat,
-// when) kept per topic in the app's own storage. The idea's state in ideas.md is never changed here: only the Regia
+// when) kept per topic in the app's own storage. The idea's state in ideas.md is never changed here: only the Orchestrator
 // changes it, when the owner asks. DOM-free and unit-tested (test/unit/brain-ui/discuss.test.ts); the buttons are
 // components/Discuss.tsx.
 import type { Idea, Reflection } from '../types';
@@ -84,7 +84,7 @@ export function openingQuestion(t: Topic): string {
   return 'Does it still make sense? Give me pros, cons and the first small step to try it.';
 }
 
-/** The draft for the Regia ("Discutine"): quotes the topic with file and line, ends with the opening question. */
+/** The draft for the Orchestrator ("Discutine"): quotes the topic with file and line, ends with the opening question. */
 export function discussText(t: Topic, line: number | null): string {
   if (t.kind === 'quote') {
     const q = t.quote;
@@ -138,7 +138,7 @@ export function chatPrompt(t: Topic, line: number | null): string {
 }
 
 // ── the "discussa" record ───────────────────────────────────────────────────────────────────────────────────────────
-/** One discussion: with the Regia (the draft was sent) or in a dedicated work chat. */
+/** One discussion: with the Orchestrator (the draft was sent) or in a dedicated work chat. */
 export interface Discussed { via: 'regia' | 'chat'; chatId: string; chatTitle: string; at: number }
 export type DiscussedMap = Record<string, Discussed[]>;
 export interface KV { getItem(k: string): string | null; setItem(k: string, v: string): void }

@@ -174,7 +174,7 @@ export interface HarnessSession {
   /** The CLI's own usage report (Claude: get_usage, plan windows included), raw; null when not supported. */
   usage(): Promise<unknown>;
   /** Graceful end: stdin closed, killed after graceMs. Resolves when the process is gone. The tools it left running
-   *  are reaped after the exit (proctree.ts), unless `keepChildren`: the chat goes on in a new process (model or Regia
+   *  are reaped after the exit (proctree.ts), unless `keepChildren`: the chat goes on in a new process (model or Orchestrator
    *  change, continued elsewhere) and a dev server it started stays for the next turn. */
   close(graceMs?: number, keepChildren?: boolean): Promise<void>;
   /** Kill the process tree now, without blocking (the exit is reported through the sink). */

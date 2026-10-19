@@ -1,9 +1,9 @@
 // The discussion bar of an idea or an AI suggestion (Idee), of a recurring AI error and of a number (Qualità, Costi,
-// Confronto; ADR 0037): "Discutine" opens the Regia next to the page with a
+// Confronto; ADR 0037): "Discutine" opens the Orchestrator next to the page with a
 // ready draft in its input (quotes the topic with its source and numbers, or its file and line; ends with an opening
 // question; the user edits it and sends it with Enter); "Apri una chat" opens an inline box with the first message of a
 // dedicated work chat ("Idea · <titolo>", "Errore · <tipo>"), editable, created with Ctrl+Invio. After either, the topic shows "Discussa" with a link to the chat.
-// The app passes the Regia and chat actions through DiscussBridge (BrainPage prop → context); without it (the
+// The app passes the Orchestrator and chat actions through DiscussBridge (BrainPage prop → context); without it (the
 // standalone test route) the draft is sent from an inline box and the chat is created through 'chat:createRouted'.
 // The idea's state in ideas.md is never changed here. Used by pages/Idee.tsx, Qualita.tsx, Costi.tsx, Confronto.tsx,
 // and components/Charts.tsx.
@@ -25,13 +25,13 @@ export type ChatRoute = Pick<RoutedNewChat, 'kind' | 'area' | 'routeText'>;
 
 /** What the app does for the brain pages (actions.ts builds it). */
 export interface DiscussBridge {
-  /** Open the Regia next to the page with `text` as a draft in its input, not sent. `onSent` runs when the user sends
-   *  it. False when no Regia is open. */
+  /** Open the Orchestrator next to the page with `text` as a draft in its input, not sent. `onSent` runs when the user sends
+   *  it. False when no Orchestrator is open. */
   draftToRegia(text: string, onSent: (chat: { id: string; title: string }) => void): boolean;
   /** Create a work chat that starts with `prompt` (in `opts.cwd`, else the brain folder) and say so with a toast; null
    *  when it was not created. The routing table picks its engine, model and effort (ADR 0032), with what `opts.route` says. */
   newChat(title: string, prompt: string, opts?: { cwd?: string; route?: ChatRoute }): Promise<{ id: string; title: string } | null>;
-  /** Bring a chat on screen (the Regia docks next to the page). */
+  /** Bring a chat on screen (the Orchestrator docks next to the page). */
   showChat(chatId: string): void;
 }
 export const DiscussContext = createContext<DiscussBridge | null>(null);
@@ -81,12 +81,12 @@ type Box = null | { kind: 'regia' | 'chat'; text: string };
 export function DiscussBar({ topic, testId = 'bx-discuss', onRegia }: {
   topic: Topic;
   testId?: string;
-  /** after the draft went to the Regia (the Idee peek steps aside so the docked Regia shows) */
+  /** after the draft went to the Orchestrator (the Idee peek steps aside so the docked Orchestrator shows) */
   onRegia?: () => void;
 }) {
   const bridge = useContext(DiscussContext);
   const chats = useAppChats();
-  // the Regia even when closed: after a restart every chat is 'closed' until its first message, and it resumes on send
+  // the Orchestrator even when closed: after a restart every chat is 'closed' until its first message, and it resumes on send
   const regia = chats?.find(c => c.isRegia) ?? null;
   const done = useDiscussed()[topicKey(topic)] ?? [];
   const [box, setBox] = useState<Box>(null);
@@ -94,7 +94,7 @@ export function DiscussBar({ topic, testId = 'bx-discuss', onRegia }: {
   const [err, setErr] = useState<string | null>(null);
   const ta = useRef<HTMLTextAreaElement>(null);
   const chatBtn = useRef<HTMLButtonElement>(null);
-  /** close the box; the keyboard goes back to "Apri una chat" unless it moves elsewhere (the Regia) */
+  /** close the box; the keyboard goes back to "Apri una chat" unless it moves elsewhere (the Orchestrator) */
   const closeBox = (refocus = true) => { setBox(null); if (refocus) requestAnimationFrame(() => chatBtn.current?.focus()); };
   useEsc(!!box, () => closeBox()); // above the Idee peek's own Esc: closes only the box
   useEffect(() => { if (box) { const el = ta.current; el?.focus(); el?.setSelectionRange(el.value.length, el.value.length); } }, [box?.kind]);
@@ -102,7 +102,7 @@ export function DiscussBar({ topic, testId = 'bx-discuss', onRegia }: {
   const key = topicKey(topic);
   const discuss = async () => {
     setErr(null);
-    if (bridge) setBox(null); // the keyboard goes to the Regia: no hidden box left to catch Esc
+    if (bridge) setBox(null); // the keyboard goes to the Orchestrator: no hidden box left to catch Esc
     const text = discussText(topic, await topicLine(topic));
     if (bridge) {
       const ok = bridge.draftToRegia(text, chat => markDiscussed(key, { via: 'regia', chatId: chat.id, chatTitle: chat.title, at: Date.now() }));

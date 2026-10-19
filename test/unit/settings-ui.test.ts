@@ -1,5 +1,5 @@
 // The Settings page's pure parts: the model comparison words (lib/compare.ts: each side by engine, model and effort, the
-// "cost so far" line), the model choices of "Chat aperte dalla Regia" (lib/models.ts), the spending limit amounts and
+// "cost so far" line), the model choices of "Chat aperte dall'Orchestrator" (lib/models.ts), the spending limit amounts and
 // the MCP port (lib/settings-page.ts) and the Ctrl+, shortcut that opens the page (lib/keys.ts).
 import { describe, expect, it } from 'vitest';
 import type { CompareExperiment } from '@shared/contract';

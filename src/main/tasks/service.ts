@@ -4,7 +4,7 @@
 // each work item, i.e. description, last comments and test cases, so the page shows them without opening DevOps) as a Node child with Electron's
 // binary, never an AI chat, so a read costs no tokens. On its own timer only when the user turns it on (setting
 // tasks.enabled, off by default: his rule is "nothing on fixed intervals unless he wants it"; tasks.everyMin), else
-// only on "Aggiorna ora". New unread news go to the feed (the Regia's "Novità") once; the ones about the user's own
+// only on "Aggiorna ora". New unread news go to the feed (the Orchestrator's "Novità") once; the ones about the user's own
 // things (a mention, his items and PRs, a state/assignee change on a followed ticket) also as a task-alert, which the
 // renderer shows as a toast with a short sound: never twice for the same change (keys kept in tasks.json), nothing on
 // the very first read (baseline), zero tokens (ADR 0029). The repos of the PRs on the page are matched to local clones

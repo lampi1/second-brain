@@ -1,7 +1,7 @@
 // E2E of the question and permission panels (frozen demo, dark and light): the recommended option highlighted with its
 // badge, descriptions under the labels, "Altro…" always last with its own digit (a box: Enter sends, Esc goes back),
 // multi-select as checkboxes with a counted "Conferma", several questions as "1 di 2", the same panel in the lane and
-// in the Regia; Cursor questions get "Altro…" too, with a note on how Cursor receives it. Screenshots in test-results/shots/panels-*.png (looked at for every change of RequestPanel.tsx).
+// in the Orchestrator; Cursor questions get "Altro…" too, with a note on how Cursor receives it. Screenshots in test-results/shots/panels-*.png (looked at for every change of RequestPanel.tsx).
 import { expect, test, type ElectronApplication } from '@playwright/test';
 import { launchDemo, openRegia, shot } from './helpers';
 
@@ -65,7 +65,7 @@ for (const scheme of ['dark', 'light'] as const) {
     await expect(panel).toBeFocused();
     await page.getByTestId('chat-max-fix').click();
 
-    // a tile and the Regia: chips with the recommended one marked and "Altro…" last
+    // a tile and the Orchestrator: chips with the recommended one marked and "Altro…" last
     await expect(page.getByTestId('request-qa-qa-q1-other')).toBeVisible();
     await openRegia(page);
     await expect(page.getByTestId('request-regia-regia-q1-other')).toBeVisible();

@@ -161,7 +161,7 @@ export class CompareQueue {
     if (this.refusedSeen.has(k)) return;
     if (this.refusedSeen.size > 200) this.refusedSeen.clear();
     this.refusedSeen.add(k);
-    log.warn('compare', 'queue run skipped: not allowed here', { data: { engine: run.engine, round: run.round, why }, cause: why, hint: 'the run stays queued in the brain; turn the engine on (and «Le Regie possono usare» it) in Settings → Motori, or change side b of the experiment' });
+    log.warn('compare', 'queue run skipped: not allowed here', { data: { engine: run.engine, round: run.round, why }, cause: why, hint: 'the run stays queued in the brain; turn the engine on (and «Gli Orchestrator possono usare» it) in Settings → Motori, or change side b of the experiment' });
   }
 
   /** start: the brain marks the run as taken, or says why not. */

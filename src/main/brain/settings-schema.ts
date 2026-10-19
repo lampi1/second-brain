@@ -101,7 +101,7 @@ const BASE: readonly SettingDef[] = [
     description: "Interruttore generale degli avvisi di spesa (all'80% e al 100%)." },
   ...budgetDefs('claude'),
   ...budgetDefs('cursor'),
-  // the chats the Regia opens (and where "Nuova chat" starts). Protected: an agent choosing the engine or the model
+  // the chats the Orchestrator opens (and where "Nuova chat" starts). Protected: an agent choosing the engine or the model
   // chooses whose credits and how many are spent
   { key: 'regiaChats.claudeModel', type: 'model', default: '', protected: true, label: 'Modello per le chat Claude',
     description: 'Il modello delle chat Claude aperte dall’Orchestrator. Vuoto = il predefinito di Claude Code.' },
@@ -114,10 +114,10 @@ const BASE: readonly SettingDef[] = [
     description: 'Quanto ragiona il modello di ogni chat Cursor. Vuoto = il predefinito del modello. Se il modello non lo offre, la chat lo dice.' },
   { key: 'regiaChats.cursorFast', type: 'boolean', default: false, protected: true, label: 'Fast per le chat Cursor',
     description: 'Acceso: ogni chat Cursor usa la variante fast del modello, se c’è (più veloce, consuma di più).' },
-  // the floating Regia (ADR 0021; the user, 2026-10-12: "voglio poter scegliere l'opacità della regia")
+  // the floating Orchestrator (ADR 0021; the user, 2026-10-12: "voglio poter scegliere l'opacità della regia")
   { key: 'regiaOpacity', type: 'int', min: 40, max: 100, default: 100, protected: false, label: 'Opacità dell’Orchestrator (%)',
     description: 'Quanto si vede il riquadro dell’Orchestrator sopra le chat. Con il mouse sopra o mentre scrivi torna pieno.' },
-  // the Regia hears about the other chats by itself (the user, 2026-10-12: "quando le chat finiscono non ti notificano nulla")
+  // the Orchestrator hears about the other chats by itself (the user, 2026-10-12: "quando le chat finiscono non ti notificano nulla")
   { key: 'regiaEvents', type: 'boolean', default: true, protected: true, label: 'Eventi all’Orchestrator',
     description: "Quando una chat di lavoro finisce, si ferma su un errore, aspetta una tua risposta o ti lascia un comando, l'app lo scrive all’Orchestrator (una riga per chat, al massimo una volta ogni 2 minuti per chat) e lo sveglia se è fermo: decide lui se dirtelo. Ogni risveglio è un turno dell’Orchestrator." },
   // the chat learns how its command went (the user, 2026-10-12: "vorrei che ti accorgessi da sola quando eseguo un
@@ -137,7 +137,7 @@ export const MODEL_ID = /^[\w.:@/=[\],-]{0,120}$/;
 const MUTE_KEY = /^mute\.([a-z][a-z-]{0,40})$/;
 const ENGINE_KEY = /^(engineOn|engines)\.(.+)$/;
 
-// the engines (ADR 0046, engines/policy.ts): each on or off, and whether the Regie may use it; engines.* keeps the key
+// the engines (ADR 0046, engines/policy.ts): each on or off, and whether the Orchestrators may use it; engines.* keeps the key
 // older releases read, with the same meaning (safe rollback). Default: on only for the built-ins (registry defaultOn)
 function engineDef(group: 'engineOn' | 'engines', id: string): SettingDef {
   const label = engineLabel(id), on = engineOf(id)?.defaultOn ?? false;
@@ -148,7 +148,7 @@ function engineDef(group: 'engineOn' | 'engines', id: string): SettingDef {
       description: `Spento: nessun Orchestrator apre o riprende chat su ${label}; tu sì, da Nuova chat.` };
 }
 
-/** The engine a Regia's work chats start on: one that works with tools (an API model cannot, ADR 0046). */
+/** The engine an Orchestrator's work chats start on: one that works with tools (an API model cannot, ADR 0046). */
 function regiaEngineDef(): SettingDef {
   return { key: 'regiaChats.harness', type: 'enum', values: engines().filter(e => e.caps.tools).map(e => e.id), default: 'claude', protected: true, label: 'Chat aperte dall’Orchestrator: motore',
     description: 'Con cosa l’Orchestrator apre le chat di lavoro quando non lo dice lui. Anche il punto di partenza di "Nuova chat".' };

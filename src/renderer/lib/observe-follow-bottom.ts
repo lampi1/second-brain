@@ -1,4 +1,4 @@
-// Native DOM observation and user-intent scope, shared by chat/Regia through the hook.
+// Native DOM observation and user-intent scope, shared by chat/Orchestrator through the hook.
 import {createFollowBottom,rememberFollowState,savedFollowState,type FollowState} from './follow-bottom';
 export function observeFollowBottom(el:HTMLDivElement,body:HTMLDivElement,chatId:string|null,signature:string,onChange:(state:FollowState)=>void){
     const follower=createFollowBottom({read:()=>({top:el.scrollTop,height:el.scrollHeight,viewport:el.clientHeight}),write:top=>{el.scrollTop=top;},frame:run=>window.requestAnimationFrame(run),cancel:id=>window.cancelAnimationFrame(id),changed:onChange},signature,savedFollowState(chatId));

@@ -1,7 +1,7 @@
-// Which Regia is which (ADR 0021): the first Regia, the Orchestrator (the right column), every work Regia's id, the
-// Regia a chat answers to. Also the commands a chat
+// Which Orchestrator is which (ADR 0021): the first Orchestrator, the Orchestrator (the right column), every work Orchestrator's id, the
+// Orchestrator a chat answers to. Also the commands a chat
 // gave in the turn that ends with its question (commandsOfTurn: shown with "Esegui" on the question's popup, the
-// questions window). "Domande alla Regia" is gone: a work chat's request never shows in the Regia (the user,
+// questions window). "Domande all'Orchestrator" is gone: a work chat's request never shows in the Orchestrator (the user,
 // 2026-10-13: "la regia mi serve principalmente per lo stato… e per spostarmi da una chat all'altra"). Pure (no store
 // import). Used by RegiaOverlay.tsx, RegiaTile.tsx, QuestionsWindow.tsx, ChatMenu.tsx, Home.tsx and actions.ts.
 import type { ChatItem } from '@shared/contract';
@@ -10,18 +10,18 @@ import type { AppState } from '../store/state';
 import { codeBlocks } from './markdown';
 import { regiaOfChat, regieOf } from '@shared/regia';
 
-/** The Regia's chat id, if there is one. */
+/** The Orchestrator's chat id, if there is one. */
 export const regiaIdOf = (s: Pick<AppState, 'order' | 'chats'>): string | null => s.order.find(x => s.chats[x]?.isRegia) ?? null;
 
 /** The Orchestrator's id: the one coordinator of all work (main marks it `orchestrator`, migrating
- *  the older Regie into it), null while there is none. The right column and every "the Regia" lookup. */
+ *  the older Orchestrators into it), null while there is none. The right column and every "the Orchestrator" lookup. */
 export const orchestratorIdOf = (s: Pick<AppState, 'order' | 'chats'>): string | null =>
   s.order.find(x => { const c = s.chats[x]; return !!c?.orchestrator && c.isRegia && !c.closedAt; }) ?? null;
 
-/** Every work Regia's id, in tab order (regiaSince). */
+/** Every work Orchestrator's id, in tab order (regiaSince). */
 export const regieIdsOf = (s: Pick<AppState, 'order' | 'chats'>): string[] => regieOf(s.order.flatMap(x => (s.chats[x] ? [s.chats[x]!] : []))).map(c => c.id);
 
-/** The Regia a chat answers to (itself for a Regia; null with none). */
+/** The Orchestrator a chat answers to (itself for an Orchestrator; null with none). */
 export function regiaOfIn(s: Pick<AppState, 'order' | 'chats'>, chatId: string): string | null {
   return regiaOfChat(s.chats[chatId], s.order.map(x => s.chats[x]).filter(c => !!c));
 }

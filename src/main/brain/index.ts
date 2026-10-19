@@ -81,7 +81,7 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
   };
   const showToast = (t: Toast) => {
     try {
-      // never sounds (Regia 2026-10-11: "mai suoni di default"); urgency only changes how Windows ranks it
+      // never sounds (Orchestrator 2026-10-11: "mai suoni di default"); urgency only changes how Windows ranks it
       const n = new Notification({ title: t.title, body: t.body, silent: true, urgency: t.urgent ? 'critical' : 'normal' });
       n.on('click', focusWindow);
       n.on('failed', (_e, error) => {

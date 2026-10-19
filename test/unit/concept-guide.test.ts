@@ -55,13 +55,15 @@ describe('concept guide content', () => {
 });
 
 describe('card text for a chat', () => {
-  it('marks what is still in a pull request (hybrid search, PR #12) apart from today\'s behaviour', () => {
+  it('marks what is still in a pull request apart from today\'s behaviour', () => {
     const search = CONCEPTS.find(c => c.id === 'search')!;
-    expect(search.coming?.map(x => x.pr)).toContain(12);
-    expect(search.summary.it).toContain('solo testuale');
-    expect(cardText(search, 'it')).toContain('- PR #12: ');
+    // the hybrid search is on main (ADR 0068): the card describes it as today's behaviour
+    expect(search.coming).toBeUndefined();
+    expect(search.summary.it).toContain('significato');
+    const pending = { ...search, coming: [{ pr: 99, text: { it: 'In arrivo', en: 'Coming' } }] };
+    expect(cardText(pending, 'it')).toContain('- PR #99: In arrivo');
   });
-  const card = CONCEPTS.find(c => c.id === 'runs')!;
+  const card = CONCEPTS.find(c => c.id === 'every-task-agent')!;
   it('carries title, numbered points, analogy, technical details, target and sources', () => {
     const txt = cardText(card, 'it');
     expect(txt).toContain(`# ${card.title.it}`);

@@ -63,7 +63,7 @@ describe('flattenPatch', () => {
 
 describe('"Domande alla Regia" removed (the user, 2026-10-13)', () => {
   it('a config from before the engine switches keeps its keys and meaning; every engine starts on', () => {
-    // the user's real file: the Regie may not use Cursor, chats across engines on (older releases read the same keys)
+    // the user's real file: the Orchestrators may not use Cursor, chats across engines on (older releases read the same keys)
     expect(fromSaved({ messaging: { crossHarness: true }, engines: { claude: true, cursor: false } })).toMatchObject({
       engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: false }, messaging: { crossHarness: true } });
   });
@@ -99,10 +99,10 @@ describe('engine switches (ADR 0046)', () => {
     // an engine the brain defines after the settings were loaded: its saved switch is kept
     expect(fromSaved({ engineOn: { qwen: true, 'Bad id': true }, engines: { qwen: false } })).toMatchObject({ engineOn: { qwen: true }, engines: { qwen: false } });
     expect(fromSaved({ engineOn: { 'Bad id': true } }).engineOn).not.toHaveProperty('Bad id');
-    // the Regia's engine too: Settings and "Nuova chat" do not fall back to Claude on a restart
+    // the Orchestrator's engine too: Settings and "Nuova chat" do not fall back to Claude on a restart
     expect(fromSaved({ regiaChats: { harness: 'qwen' } }).regiaChats.harness).toBe('qwen');
     expect(fromSaved({ regiaChats: { harness: '../x' } }).regiaChats.harness).toBe('claude');
-    // Gemini, removed from the app (ADR 0046): a config saved by an older release loads without it, the Regia back on Claude
+    // Gemini, removed from the app (ADR 0046): a config saved by an older release loads without it, the Orchestrator back on Claude
     const old = fromSaved({ engineOn: { gemini: true, kimi: true }, engines: { gemini: true }, regiaChats: { harness: 'gemini' } });
     expect(old.engineOn).not.toHaveProperty('gemini');
     expect(old.engines).not.toHaveProperty('gemini');

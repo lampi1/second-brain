@@ -16,7 +16,7 @@ export const componentsIt = {
   "cmp.palette.onEngine": (p: { engine: string }) => `su ${p.engine}`,
   "cmp.palette.regiaClear": (p: { title: string }) => `Orchestrator: pulisci «${p.title}»`,
   "cmp.palette.regiaClearSub": "riparte vuoto dalla memoria, la conversazione resta tra le chat chiuse",
-  "cmp.palette.newRegia": "Nuova Regia",
+  "cmp.palette.newRegia": "Nuovo Orchestrator",
   "cmp.palette.newRegiaSub": "una tab in più, es. «App»",
   "cmp.palette.regiaRenew": "Orchestrator: ricomincia da capo",
   "cmp.palette.regiaRenewSub": (p: { engine: string }) => `nuovo Orchestrator su ${p.engine}, il vecchio resta tra le chat`,

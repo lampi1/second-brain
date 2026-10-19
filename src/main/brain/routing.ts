@@ -1,4 +1,4 @@
-// Model routing: which harness, model and effort a chat opened by an agent gets (the user, 2026-10-13: "la Regia sceglie
+// Model routing: which harness, model and effort a chat opened by an agent gets (the user, 2026-10-13: "l'Orchestrator sceglie
 // modello e sforzo per tipo di lavoro, tracciato e migliorato nel tempo, configurabile"; any engine of the registry,
 // engines/registry.ts, asked by its caps: ADR 0046). The brain owns the data: the model registry and price table (harness/models.json)
 // and the versioned routing table (ops/state/improve/routing/v<N>.json + current.json, every change a new version +
@@ -77,7 +77,7 @@ const TOPIC_KINDS: readonly string[] = ['ops-read', 'research-web'];
 const BUILD = /\b(implement\w*|pull request|(apri|aprire|apra|crea|creare|open) (la |una |a )?pr|refactor\w*)\b/i;
 const FIX = /\b(fix\w*|hotfix|correggi\w*|corregger\w*|sistema (il|la|i|le) (bug|errore|crash))\b/i;
 /** Task kind of a chat with the brain's rules (estimates.json `tasks`, from estimates.mjs TASKS): the title first, then
- *  the first prompt (which wins over a topic-only title when it builds or fixes); a Regia is its own kind; no rules or no
+ *  the first prompt (which wins over a topic-only title when it builds or fixes); an Orchestrator is its own kind; no rules or no
  *  match = 'altro'. */
 export function taskOf(title: string, prompt: string, rules: [string, string, string][] | undefined): TaskKind {
   const t = String(title ?? '').trim();
@@ -193,7 +193,7 @@ export function match(routes: RoutingRow[] | undefined, item: { kind: TaskKind; 
 
 /** Explicit null selects the engine default; omission inherits routing policy. Neither grants permission. */
 export interface RouteAsk { harness?: Harness; model?: string | null; effort?: Effort | null; reason?: string }
-/** The user's "Chat aperte dalla Regia": the engine, each engine's model ('' / null = the CLI's) and the Claude effort. */
+/** The user's "Chat aperte dall'Orchestrator": the engine, each engine's model ('' / null = the CLI's) and the Claude effort. */
 export interface RouteDefaults { harness: Harness; models: Record<Harness, string | null>; effort: Effort | null }
 export type Resolved = { harness: Harness; model: string | null; effort: Effort | null; source: RouteDecision['source']; reason: string | null } | { error: string };
 
@@ -204,7 +204,7 @@ export function resolve(table: Pick<RoutingTable, 'routes'> | null, item: { kind
   canRun: (h: Harness) => boolean = () => true): Resolved {
   const row = match(table?.routes, item);
   // a row on a harness the app cannot start (api) or may not start now (engine off, Claude <-> Cursor off for this
-  // Regia) is not usable: the defaults decide, as before the table
+  // Orchestrator) is not usable: the defaults decide, as before the table
   const readiness = engineReadiness();
   const fallback = availableEngine(engines().map(e => e.id).filter(canRun), defaults.harness, readiness);
   const readyAlternative = fallback && readiness[fallback]?.loggedIn === true;
@@ -251,7 +251,7 @@ export const armKey = (a: Arm, reg: ModelRegistry | null): string => `${a.harnes
  *  fewest samples for its kind among those under EXPLORE_MIN: so the loop gets data on arms the table never picks. Only
  *  auto models on the engine the chat gets anyway (an app chat stays on Claude, a work chat on Cursor stays on Cursor:
  *  exploring never spends the other engine's tokens; the user, 2026-10-14), if the caller may start it; never max, never
- *  a Regia (the user's own work), never the arm it would get anyway. null = no exploration this time. */
+ *  an Orchestrator (the user's own work), never the arm it would get anyway. null = no exploration this time. */
 export function explore(table: Pick<RoutingTable, 'exploration'> | null, item: { kind: TaskKind; area: string }, base: Arm, reg: ModelRegistry | null,
   canRun: (h: Harness) => boolean, counts: (kind: TaskKind) => Map<string, number>, rnd: () => number = Math.random): (Arm & { samples: number }) | null {
   const rate = Math.min(Math.max(Number(table?.exploration) || 0, 0), 0.5);

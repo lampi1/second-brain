@@ -1,4 +1,4 @@
-// The Regia widget's geometry and counts (ADR 0028): docked bottom-right, collapsed to a bar or expanded to a panel the
+// The Orchestrator widget's geometry and counts (ADR 0028): docked bottom-right, collapsed to a bar or expanded to a panel the
 // user resizes from its top-left corner. Pure, so unit tests check it without React; used by
 // components/RegiaOverlay.tsx (place, size, unread), App.tsx (the room the workspace leaves it) and lib/layer.ts (the
 // global layer's cards and toasts sit beside it, never on it).
@@ -67,7 +67,7 @@ export function seenAtCollapse(lists: readonly (readonly ChatItem[] | undefined)
   return seen;
 }
 
-/** Replies of a Regia the user has not seen: finished assistant messages after `seenAt` (the last time the panel was
+/** Replies of an Orchestrator the user has not seen: finished assistant messages after `seenAt` (the last time the panel was
  *  open). */
 export function unreadOf(items: readonly ChatItem[] | undefined, seenAt: number): number {
   let n = 0;

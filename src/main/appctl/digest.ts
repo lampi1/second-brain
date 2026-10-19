@@ -1,9 +1,9 @@
-// app_digest: the whole status the Regia needs in ONE tool call, built from what the app already holds (zero tokens, no
+// app_digest: the whole status the Orchestrator needs in ONE tool call, built from what the app already holds (zero tokens, no
 // network): every open chat with its state, what it waits for (question text, permission, command's first line), its
 // last line, git branch, long context; the chats closed and the commands the user ran; the user's PRs and unread Task
 // news from the Task page's last read. `since` keeps only what changed (the waiting and failed chats always stay).
 // Why: the owner, 2026-10-13, "tante piccole ottimizzazioni che non fanno perdere qualità ma non usano LLM quando
-// possibile". Measured on the transcripts of 07-13/10: the Regia read chats one by one 157 times a week (app_chat_items,
+// possibile". Measured on the transcripts of 07-13/10: the Orchestrator read chats one by one 157 times a week (app_chat_items,
 // ~470k tokens of context re-read per call) and a "stato" took ~11 tool calls (~1 $); this answers it in one call.
 // Used by appctl/tools.ts (tool app_digest); pinned by test/unit/appctl-digest.test.ts.
 import type { ChatSummary, TasksState, PendingRequest, RunInfo } from '../../shared/contract';
@@ -20,7 +20,7 @@ export interface DigestInput {
   now: number;
   /** only what changed since this time (ms); null = everything */
   since: number | null;
-  /** the caller (a Regia): left out of the list */
+  /** the caller (an Orchestrator): left out of the list */
   selfId?: string;
   warnTokens: number;
   branch?: (cwd: string) => string | null;

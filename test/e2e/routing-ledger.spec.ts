@@ -1,4 +1,4 @@
-// The routing ledger end to end (ADR 0032): a chat a Regia opens with app_create_chat naming no model is routed by the
+// The routing ledger end to end (ADR 0032): a chat an Orchestrator opens with app_create_chat naming no model is routed by the
 // brain's table and, at its first turn end, writes its prediction and then its measured actuals to the shared ledger
 // (<brain>/ops/state/improve/outcomes.jsonl) that the improvement loop learns from (the user, 2026-10-14: "inizi a
 // raccogliere dati dalle sue prime scelte"). The real app with the fake Claude CLI and a fixture brain (registry +

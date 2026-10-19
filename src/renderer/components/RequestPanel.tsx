@@ -1,6 +1,6 @@
 // A question (AskUserQuestion) or a permission as a panel with numbered choices, in three sizes: a needs-lane card,
-// the inline panel of a chat tile (also the questions window's and the global layer's card), and the Regia's violet
-// "decisione" (the Regia's own requests only: a work chat's never show in the Regia, the user 2026-10-13). The focused panel
+// the inline panel of a chat tile (also the questions window's and the global layer's card), and the Orchestrator's violet
+// "decisione" (the Orchestrator's own requests only: a work chat's never show in the Orchestrator, the user 2026-10-13). The focused panel
 // answers with 1-9 / Enter / Esc / arrows (lib/keys.ts); clicks do the same. Every question also takes a free-text
 // "Altro…" answer (the digit after the last option, or a click): a short box where Enter sends and Esc goes back.
 // A permission says on top, in plain Italian, what the command does (shared/explain.ts: Bash's description, a sentence
@@ -10,8 +10,8 @@
 // The option the agent marked "(consigliato)" is the highlighted one; multi-select options are checkboxes with a
 // "Conferma" that counts the picks. Answering from the lane never opens the chat: focus moves to the next card.
 // A "Comando da eseguire" (type 'command') is handed to CommandRequest.tsx, in the same sizes.
-// The tile, compact and Regia sizes carry the request's context (AskContext.tsx: the turn's prose, its links and files), folded
-// in the chat's own tile, open in a work chat's Regia card and in the questions window (`ctxOpen`).
+// The tile, compact and Orchestrator sizes carry the request's context (AskContext.tsx: the turn's prose, its links and files), folded
+// in the chat's own tile, open in a work chat's Orchestrator card and in the questions window (`ctxOpen`).
 // With `onLater` a "Rispondi dopo" button leaves it unanswered (every host passes lib/later.ts answerLater: it waits in
 // "Da rispondere"; Esc does the same when the host gives `onEscape`; then a permission is rejected with 3, never Esc).
 // The questions window has its own size (`window`, ADR 0049): a muted lead on top (the agent's context sentence split
@@ -79,7 +79,7 @@ type PanelProps = {
  *  rejecting a permission / leaving a question (the popups: "Rispondi dopo", lib/later.ts). */
 export function RequestPanel(p: PanelProps) {
   if (p.req.type !== 'command') return <AskPanel {...p} />;
-  // "Apri chat" where the chat is not already on screen around the card: the lane, the Regia, the layer
+  // "Apri chat" where the chat is not already on screen around the card: the lane, the Orchestrator, the layer
   const open = p.command?.onOpen ?? (p.variant === 'lane' || p.variant === 'regia' ? () => focusChat(p.req.chatId) : undefined);
   // the turn's prose one click away, except in the global layer (p.command: its page can not read the chat)
   return <CommandRequest req={p.req} variant={p.variant} chatTitle={p.chatTitle} harness={p.harness} testid={p.testid} onEscape={p.onEscape} onLater={p.onLater} withContext={!p.command} {...p.command} onOpen={open} />;
@@ -146,7 +146,7 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
     if (sent) return;
     const tag = (e.target as HTMLElement).tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return; // typing the "Altro…" answer
-    // a command's code block on the Regia card (its buttons, its output read with the arrows): its keys stay its own
+    // a command's code block on the Orchestrator card (its buttons, its output read with the arrows): its keys stay its own
     if ((e.target as HTMLElement).closest('.codeblock, [data-option-preview]')) return;
     // Enter / Space on a focused button (Tab to "Rifiuta", "Invia", an option) is that button's own click
     if ((tag === 'BUTTON' || tag === 'A') && e.target !== e.currentTarget && (e.key === 'Enter' || e.key === ' ')) return;

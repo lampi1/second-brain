@@ -1,5 +1,5 @@
 // Which user-role chat items the user did NOT type: mail from another chat, a prompt or message an agent wrote
-// (app_create_chat / app_send_to_chat), the app's news to the Regia ("[evento app]"), an Esegui result, the app's own
+// (app_create_chat / app_send_to_chat), the app's news to the Orchestrator ("[evento app]"), an Esegui result, the app's own
 // "riprendi" after a restart, a hook's note. The chat view folds them to one muted line (sender + first words) so they
 // never read like the user's own messages (the user, 2026-10-13: "quando delle chat ti scrivono lo vedo proprio
 // nell'editor e mi fa confusione, vorrei fosse collassata quella parte"). The structured origin wins (item.from, set
@@ -13,7 +13,7 @@ import { t } from '../i18n';
 
 export type ForeignKind = 'mail' | 'agent' | 'event' | 'run' | 'resume' | 'hook' | 'done';
 
-/** kind; who sent it (a chat's title, "Regia", "App"); one line of what it says; the text to show when opened */
+/** kind; who sent it (a chat's title, "Orchestrator", "App"); one line of what it says; the text to show when opened */
 export interface Foreign { kind: ForeignKind; sender: string; summary: string; body: string }
 
 type UserItem = Extract<ChatItem, { kind: 'user' }>;

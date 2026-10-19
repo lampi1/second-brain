@@ -1,5 +1,5 @@
 // E2E of the "Stato" dialog (components/StatoDialog.tsx) on the demo data: one click from the top bar (next to the
-// Regia), from the Regia's head, Ctrl+Shift+S and the palette; the headline, every open chat with its state, folder and
+// Orchestrator), from the Orchestrator's head, Ctrl+Shift+S and the palette; the headline, every open chat with its state, folder and
 // git branch, last line and the requests waiting for the user; the PRs of the last DevOps read named after their bug,
 // QA-blocked first; a chat row brings that chat on screen. Zero tokens: only data the app holds. Screenshot.
 import { expect, test } from '@playwright/test';
@@ -42,7 +42,7 @@ test('Stato: chats, waiting requests, branches and PRs in one click; a row opens
     await expect(st).toBeHidden();
     await expect(page.getByTestId('tile-chat-fix')).toBeVisible();
 
-    // from the Regia's head and from the palette
+    // from the Orchestrator's head and from the palette
     await openRegia(page);
     await page.getByTestId('regia-stato').click();
     await expect(st).toBeVisible();

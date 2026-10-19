@@ -56,3 +56,6 @@ docs/screenshots/quality.webp binary-media sha256:b2825f78505187746926e722bc0e6c
 docs/screenshots/task.webp binary-media sha256:856458e036b9e613d52738bca0fd66532377e544c0d2657fc409f9a7271a7c61
 test/fixtures/cloud/remotes.txt email sha256:af86953a27a80122223b02780563b5e78f933a6358b561cc11aad083fec41721
 test/fixtures/cloud/remotes.txt internal-host sha256:af86953a27a80122223b02780563b5e78f933a6358b561cc11aad083fec41721
+# README screenshots renamed to today's words (ADR 0082): the Grindhouse and the Orchestrator, same bytes as mosaic/regia.webp
+docs/screenshots/grindhouse.webp binary-media sha256:64488cc4a941c5203a4285044ebf7769934ddb848c5a79e1a7b572ac667e3058
+docs/screenshots/orchestrator.webp binary-media sha256:466bdd32763b936b6c86a52e9104529c8e82b6ee7074c301b126ca2515db364e

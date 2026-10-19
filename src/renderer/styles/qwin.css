@@ -4,7 +4,7 @@
    waiting requests in a rail on the left. Anchored near the top like a command palette, so content that loads late
    grows downward and nothing already on screen moves. Lines stay under ~72 characters. Tokens: styles/tokens.css. */
 
-/* above the Regia overlay (35), under the dialogs (40) */
+/* above the Orchestrator overlay (35), under the dialogs (40) */
 .qwin-backdrop {
   position: fixed; inset: 0; z-index: 38; display: flex; justify-content: center; align-items: flex-start;
   padding: clamp(20px, 7vh, 88px) 24px 24px; background: var(--backdrop); animation: fadeIn var(--dur-fast) var(--ease);

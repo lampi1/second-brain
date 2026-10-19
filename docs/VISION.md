@@ -23,8 +23,9 @@ What this means for every change:
   agent and the **model that produced them**; history without that data shows "not available", never a guess.
 - **Changeable by anyone.** The code is modular enough that a cheap model, guided by a non-developer, can change it
   safely; instructions for agents are short and fast to verify.
-- **Self-improving, reversibly.** The app learns from feedback and outcomes, but never rewrites its own rules or
-  permissions without the user.
+- **Self-improving, reversibly.** The app learns from feedback and outcomes: agents, skills, rules and memory change by
+  themselves through logged maintenance the user can undo with one click, while permissions, settings, hooks,
+  production actions and texts for other people never change without the user (ADR 0077, 0082).
 
 ## North star (2026-10-13)
 
@@ -52,8 +53,8 @@ attention management and the memory.
   each with the user's own login. The desktop apps can stay closed, or keep working side by side: the app never changes
   their settings and resumes an external session only as a fork.
 - **Attention is the scarce resource.** Agents wait on people far more than people wait on agents. Questions and
-  permissions surface as panels wherever the user is looking, a Regia (a coordinating chat, always at the top, full
-  width) decides what comes next, and notifications fire only when there is something to do.
+  permissions surface as panels wherever the user is looking, the Orchestrator (the coordinating chat, in a full-height
+  column on the right) decides what comes next, and notifications fire only when there is something to do.
 - **Chat management is a core strength, not a thin layer.** Chats are compact strips, collapsed by default, with
   reliable estimates, expanding on one click, every time. Stop, costs, estimates, the choice of agent and the link with the brain get the
   same care as the brain itself. View state, tile behaviours and key bindings are data, so the user and the AI can
@@ -93,12 +94,13 @@ Open ideas (not decided):
 
 ## Built today
 
-Chats as tiles with streaming, tools and diffs; questions and permissions as panels with their context; one or more
-Regie; mail between chats; finished workers that close by themselves once they reported (and say what they wait for
+Agents as strips in the Grindhouse, with streaming, tools and diffs; questions and permissions as panels with their
+context; one or more Orchestrators; mail between chats; finished workers that close by themselves once they reported (and say what they wait for
 when they cannot); long chats handed off before the context fills; code blocks run with one click and their
 result sent back; internal browser tabs driven by agents over MCP, with sign-in hand-offs to the user; the brain's
 pages (to-do, ideas, explore, a live map), costs, budgets and estimates; a Task page (pull requests, work items, QA
-status, alerts); quality metrics; full-text search; agent-first delegation (the Orchestrator or the local classifier picks a catalog
+status, alerts); quality metrics; full-text search; the Brain section (Agenti, Skill, Regole, Memoria, Classificatori, Mappa) with
+self-maintaining skills and agents and a change log with undo; agents exported with their skills; agent-first delegation (the Orchestrator or the local classifier picks a catalog
 agent, whose profile sets engine, model, effort and maximum context; workers start catalog sub-agents; the routing
 table only fills a model a profile leaves open, ADR 0078); Fatto, the log of what was done; and one-click updates
 from Settings → Aggiornamenti, where the user moves the app to main's tip.

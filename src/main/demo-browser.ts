@@ -1,6 +1,6 @@
 // Demo BrowserService (SB_DEMO=1): two tabs owned by demo chats, each a real WebContentsView (own in-memory partition,
 // sandboxed) showing a local fictional page (demo-pages.ts), placed exactly where the renderer's browser tiles report
-// (views:layout; rect null = hidden), with a live JPEG thumbnail in BrowserTab.thumb for the Corsie strip and for the
+// (views:layout; rect null = hidden), with a live JPEG thumbnail in BrowserTab.thumb for the Grindhouse strip and for the
 // frozen frame shown under overlays. Why: the browser tiles and the layout protocol can be built and tested before
 // the real browser module lands. Used by wiring.ts; e2e tests read globalThis.__sbDemo.layout() to check what the UI
 // reported (e.g. every rect null while the palette is open).

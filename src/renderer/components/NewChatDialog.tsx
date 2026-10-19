@@ -1,7 +1,7 @@
 // "Nuova chat" (Ctrl+N): engine (every engine of the registry, lib/engines.ts, with its CLI's status), folder (recent
 // folders suggested), model, effort, permission mode and separate worktree (each only on an engine that has it), title,
-// the first message, "È l’Orchestrator" (several Regie, ADR 0021: with a Regia already there the new one needs a tab name and
-// sits next to the others; the overlay's + opens this dialog as "Nuova Regia"). A work chat answers to the Regia of the
+// the first message, "È l’Orchestrator" (several Orchestrators, ADR 0021: with an Orchestrator already there the new one needs a tab name and
+// sits next to the others; the overlay's + opens this dialog as "Nuovo Orchestrator"). A work chat answers to the Orchestrator of the
 // tab open now (regiaOf). Engine, model and effort come from the routing table (chat:createRouted, ADR 0032: the
 // user, 2026-10-14, the app spent twice what it did before, «Nuova chat passa dalla tabella dei modelli»): the kind
 // read from title and prompt, shown in one line under the engines (routing:preview) and in the fields; what the user

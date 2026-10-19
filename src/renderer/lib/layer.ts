@@ -1,11 +1,11 @@
 // App-page side of the global layer (main/overlay.ts shows it above everything, browser tiles included). The app page
 // is the one source of truth. Tier a: the open questions/permissions NOT already visible somewhere on screen (needs
-// lane, the chat's own tile, the Regia's decision), oldest first; none at all while "Rispondi dopo" is on (Esc or the
-// button on a card, lib/later.ts: they wait in "Da rispondere") or while another request popup is on screen (the Regia widget's card, the questions window): at most one popup at a
-// time (the user, 2026-10-13: two popups of questions at once, one of them "appeso" on the Regia). Tier b: important events
+// lane, the chat's own tile, the Orchestrator's decision), oldest first; none at all while "Rispondi dopo" is on (Esc or the
+// button on a card, lib/later.ts: they wait in "Da rispondere") or while another request popup is on screen (the Orchestrator widget's card, the questions window): at most one popup at a
+// time (the user, 2026-10-13: two popups of questions at once, one of them "appeso" on the Orchestrator). Tier b: important events
 // (lib/notify.ts TOAST_KINDS) as at most two grouped toasts with one action, unless muted or do-not-disturb; they
 // leave after 8 s. No waiting strip: what waits is counted by the top bar's "Da rispondere" (the user, 2026-10-14:
-// "c'è già in alto il «da rispondere» che va benissimo quello"). All stay off the Regia widget's corner (`avoid`, ADR 0028). A DevOps alert plays a short chime as it arrives (feed:events,
+// "c'è già in alto il «da rispondere» che va benissimo quello"). All stay off the Orchestrator widget's corner (`avoid`, ADR 0028). A DevOps alert plays a short chime as it arrives (feed:events,
 // lib/chime.ts, setting tasks.sound), and so does every new request, "Rispondi dopo" or not (ADR 0035). The model is pushed to main only when it changes. What the user does in the layer comes back here
 // as overlay:action and goes through the same actions as everywhere else. Started by main.tsx; Ctrl+J uses focusLayer().
 import type { OverlayAction, OverlayCard, OverlayModel, OverlayToast } from '@shared/contract';
@@ -59,14 +59,14 @@ export function visibleRequestKeys(): Set<string> {
   return out;
 }
 
-/** The key of the request card the Regia widget shows on screen (it floats like the layer), if any. */
+/** The key of the request card the Orchestrator widget shows on screen (it floats like the layer), if any. */
 export function regiaCardOnScreen(): string | null {
   if (ui.get().modal || !app.get().pending.length) return null;
   const el = [...document.querySelectorAll<HTMLElement>('[data-regia-overlay] [data-request-key]')].find(onScreen);
   return el?.dataset.requestKey ?? null;
 }
 
-/** A request popup is on screen in the app page: the Regia widget's card or the questions window. Then the layer shows
+/** A request popup is on screen in the app page: the Orchestrator widget's card or the questions window. Then the layer shows
  *  no card: never two popups at once. */
 export const popupOnScreen = (): boolean => ui.get().qwin.shown || regiaCardOnScreen() !== null;
 
@@ -79,8 +79,8 @@ export function computeModel(ignorePopup = false): OverlayModel {
   const visible = visibleRequestKeys();
   const cards: OverlayCard[] = [];
   // "Domande in finestra": the questions window shows them all (QuestionsWindow.tsx), the layer keeps only the toasts;
-  // the same while the Regia widget shows a request card (one popup at a time), unless the user is answering here
-  // (the layer has the keyboard on a card still open: the Regia's card waits instead, RegiaTile.tsx)
+  // the same while the Orchestrator widget shows a request card (one popup at a time), unless the user is answering here
+  // (the layer has the keyboard on a card still open: the Orchestrator's card waits instead, RegiaTile.tsx)
   const held = !!u.layerHeld && s.pending.some(p => keyOf(p) === u.layerHeld);
   for (const req of u.later || questionsModalOn(s) || (!ignorePopup && !held && popupOnScreen()) ? [] : s.pending) {
     const key = keyOf(req);
@@ -124,7 +124,7 @@ export function scheduleLayer(): void {
   timer = setTimeout(() => requestAnimationFrame(push), 30);
 }
 
-/** Is this request floating in the layer right now? Computed afresh (a push may still be scheduled: the Regia's card
+/** Is this request floating in the layer right now? Computed afresh (a push may still be scheduled: the Orchestrator's card
  *  that just came on screen must count). */
 export const inLayer = (key: string): boolean => { push(); return current.cards.some(c => c.key === key); };
 

@@ -1,11 +1,11 @@
-// UserPromptSubmit + Stop + Notification hook (proposal, 2026-10-09 "flusso" #5): the Regia knows what happens in every chat without
+// UserPromptSubmit + Stop + Notification hook (proposal, 2026-10-09 "flusso" #5): the Orchestrator knows what happens in every chat without
 // relying on the chats' discipline, and {{OWNER}} can work directly in one chat ("focus") without losing the hub.
 // - {{OWNER}} types in a work chat  → feed line "{{OWNER}} → <chat>: <text>", focus = that chat; the chat is told he is there.
 // - A work chat ends a turn       → feed line "<chat> → Owner: <first line>" (+ "comando"/"domanda" when it gave one).
 // - A work chat waits on a permission prompt → feed line "<chat> → {{OWNER}} (permesso): <message>".
-// - {{OWNER}} types in the Regia     → focus = Regia; the Regia receives everything new in the feed since its last turn.
-// The Regia = the session whose cwd is the main {{BRAIN_NAME}} checkout. State in <root>/ops/state/ (gitignored):
-// chat-feed.jsonl (append-only, trimmed to the last 400 lines), feed-cursor.json (Regia's read position), focus.json.
+// - {{OWNER}} types in the Orchestrator     → focus = Orchestrator; the Orchestrator receives everything new in the feed since its last turn.
+// The Orchestrator = the session whose cwd is the main {{BRAIN_NAME}} checkout. State in <root>/ops/state/ (gitignored):
+// chat-feed.jsonl (append-only, trimmed to the last 400 lines), feed-cursor.json (Orchestrator's read position), focus.json.
 // Wiring ({{OWNER}}, ~/.claude/settings.json): the same command under "UserPromptSubmit", "Stop" and "Notification".
 // Test: echo '<hook json>' | node chat-feed.mjs --root <dir>
 import fs from 'node:fs';
@@ -75,11 +75,12 @@ const hhmm = iso => new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', 
 let raw = '';
 process.stdin.on('data', d => (raw += d)).on('end', () => {
   let input; try { input = parseHookJson(raw); } catch { return; } // BOM from Cursor: parsed, then skipped below
-  // Cursor imports Claude hooks with a different input: skip it, or every Cursor chat in {{BRAIN_NAME}} looks like the Regia ({{OWNER}}, 2026-10-09).
+  // Cursor imports Claude hooks with a different input: skip it, or every Cursor chat in {{BRAIN_NAME}} looks like the Orchestrator ({{OWNER}}, 2026-10-09).
   if ('cursor_version' in input || 'conversation_id' in input) return;
   const event = input.hook_event_name;
-  // The Regia by title (a chat's cwd changes when it cd's elsewhere); without a title, by the main checkout cwd.
-  const isRegia = input.session_title ? input.session_title === 'Regia' : path.resolve(input.cwd || '').toLowerCase() === MAIN;
+  // The Orchestrator by title ("Orchestrator", or the older "Regia"; a chat's cwd changes when it cd's elsewhere); without a
+  // title, by the main checkout cwd. Its focus key stays 'Regia' (focus.json of existing brains).
+  const isRegia = input.session_title ? /^(regia|orchestrator)$/i.test(input.session_title.trim()) : path.resolve(input.cwd || '').toLowerCase() === MAIN;
   const fromOwner = p => p && !p.trimStart().startsWith('<') &&
     !/<agent-message|<task-notification|<cross-session-message|Another Claude session sent a message/.test(p);
   // What started this turn (read again at Stop): owner | peer (another chat) | notifica (own background work).
@@ -97,7 +98,7 @@ process.stdin.on('data', d => (raw += d)).on('end', () => {
       fs.writeFileSync(ORIGINS, JSON.stringify(origins));
     }
     if (!fromOwner(input.prompt)) {
-      // A worker message reaches the Regia while {{OWNER}} works in another chat: queue, don't interrupt.
+      // A worker message reaches the Orchestrator while {{OWNER}} works in another chat: queue, don't interrupt.
       const focus = isRegia ? readJson(FOCUS, null) : null;
       if (!isRegia) { // a worker woken by the hub, a peer or a notification: it is working
         append({ kind: 'state', state: 'in-lavorazione', chat: titleOf(input.transcript_path, input.cwd, input.session_title), cwd: input.cwd });

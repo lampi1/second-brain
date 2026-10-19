@@ -1,15 +1,15 @@
-// "Posta alla Regia": THE one rule for when something reaches a Regia, for both of its sources: the app's news
+// "Posta all'Orchestrator": THE one rule for when something reaches an Orchestrator, for both of its sources: the app's news
 // (regia-wake.ts: a work chat finished, failed, waits for the user) and the mail between chats (mail.ts: send_to_chat,
 // inbox.mjs). Why one rule: two hold systems with their own windows (20 s / 2 min and 60 s / 30 min) and their own idea
-// of "the Regia is free" could cost two turns for the same "ha finito" and let mail reach a Regia waiting for the user
-// (audit 2026-10-15 #6; the owner chose the rule below on 15/10). Each delivery to an idle Regia is a new turn
+// of "the Orchestrator is free" could cost two turns for the same "ha finito" and let mail reach an Orchestrator waiting for the user
+// (audit 2026-10-15 #6; the owner chose the rule below on 15/10). Each delivery to an idle Orchestrator is a new turn
 // re-reading its whole context (measured 07-13/10: median ~0.18 $), so news arriving together goes in one turn.
 //
 // The rule:
 // - three classes: 'now' (urgent mail, a work chat stopped on an error), 'group' (a turn finished, a request: within
 //   REGIA_GROUP_MS, all together), 'quiet' (a question/permission/command left to the user, a progress note: they ride
 //   along with the next delivery; progress mail at the latest after REGIA_HOLD_MS, the quiet news never wake alone);
-// - the Regia's state decides (regiaGate): it works → everything goes into its running turn (no new turn); it waits
+// - the Orchestrator's state decides (regiaGate): it works → everything goes into its running turn (no new turn); it waits
 //   for the user, is in a hand-off or failed → only 'now'; it is idle or closed → by class. An engine that cannot take
 //   a message mid-turn (Cursor over ACP: Stop drops its queue) gets nothing until its turn ends.
 // A mail's class: its sender's `kind` (send_to_chat), else the words of the user's brain (<brain>/brain-settings.json
@@ -50,7 +50,7 @@ export const waitOf = (cls: DeliveryClass, group = REGIA_GROUP_MS, hold = REGIA_
 export interface RegiaWords { urgent: string[]; progress: string[]; action: string[] }
 
 /** Used when the brain says nothing. A progress note held by mistake costs a wait, a request held by mistake the
- *  Regia's reaction: holding needs a progress word and no action word (a "?" or a commit sha count as action too). */
+ *  Orchestrator's reaction: holding needs a progress word and no action word (a "?" or a commit sha count as action too). */
 export const DEFAULT_WORDS: RegiaWords = {
   urgent: ['urgente', 'urgenti', 'urgent', 'subito', 'asap'],
   progress: ['rilasciat*', 'released', 'in corso', 'sto lavorando', 'sto ancora lavorando', 'sto facendo', 'sto ancora facendo',

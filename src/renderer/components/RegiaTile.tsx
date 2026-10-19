@@ -1,13 +1,13 @@
-// A Regia: one of the user's always-on coordinating chats, shown in the floating overlay (RegiaOverlay.tsx, one tab
-// per Regia; ADR 0021), violet, with its own name. Its input has
-// the default focus; its own open questions show as a "decisione" card (a work chat's never show here: the Regia is
+// An Orchestrator: one of the user's always-on coordinating chats, shown in the floating overlay (RegiaOverlay.tsx, one tab
+// per Orchestrator; ADR 0021), violet, with its own name. Its input has
+// the default focus; its own open questions show as a "decisione" card (a work chat's never show here: the Orchestrator is
 // for the state and for moving between chats, the user 2026-10-13), one card at a time, the oldest, the others named
 // on a "Poi:" line (the widget is a popup and at most one request popup is on screen; none while the questions window
 // or the layer's card is the one); Esc or "Rispondi dopo" turns "Rispondi dopo" on (lib/later.ts): the card goes
 // unanswered, a "Da rispondere" line stays; its own messages' shell blocks have
-// "Esegui" too (the run and "Manda l'esito alla chat" belong to the Regia); below, a digest of the live brain feed ("Novità",
+// "Esegui" too (the run and "Manda l'esito alla chat" belong to the Orchestrator); below, a digest of the live brain feed ("Novità",
 // with "mentre eri via" first; collapsible, remembered). Its ⋯ menu is the chat menu (ChatMenu) plus "Ricomincia da
-// capo", "Cambia motore" (both open the Nuova Regia confirm) and "Pulisci". With no Regia yet it offers to create
+// capo", "Cambia motore" (both open the Nuovo Orchestrator confirm) and "Pulisci". With no Orchestrator yet it offers to create
 // one. When it drives a browser, it wears that pair's accent like any chat (lib/pairs.ts). Used by RegiaOverlay.tsx.
 import { memo, useEffect, useRef, useState } from 'react';
 import type { FeedEvent } from '@shared/contract';
@@ -83,7 +83,7 @@ function FeedRow({ e, now }: { e: FeedEvent; now: number }) {
 
 const EMPTY: readonly FeedEvent[] = [];
 
-/** chatId = the Regia shown (the overlay's tab); null = none yet */
+/** chatId = the Orchestrator shown (the overlay's tab); null = none yet */
 export const RegiaTile = memo(function RegiaTile({ chatId: id }: { chatId: string | null }) {
   const chat = useApp(s => (id ? s.chats[id] : undefined));
   const items = useApp(s => (id ? s.items[id] : undefined));
@@ -92,7 +92,7 @@ export const RegiaTile = memo(function RegiaTile({ chatId: id }: { chatId: strin
   // one card at a time (the oldest, or the one Ctrl+J asked for); the rest named below it
   const wanted = ui.use(s => s.regiaFirst);
   // the user is answering in the global layer or the questions window (the queue): that is the one popup, the
-  // Regia's card waits (named on "Poi:")
+  // Orchestrator's card waits (named on "Poi:")
   const held = ui.use(s => !!s.layerHeld || s.qwin.shown);
   const queued = ui.use(s => s.later);
   const open = [...reqs].sort((a, b) => a.at - b.at);
@@ -111,7 +111,7 @@ export const RegiaTile = memo(function RegiaTile({ chatId: id }: { chatId: strin
   const [menu, setMenu] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const now = useNow(15_000);
-  // the Regia's input has the default focus (once the chat exists)
+  // the Orchestrator's input has the default focus (once the chat exists)
   const focusedOnce = useRef(false);
   useEffect(() => {
     if (!chat || focusedOnce.current) return;

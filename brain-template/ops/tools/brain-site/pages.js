@@ -282,7 +282,7 @@
       node,
       setTargets(boxes) {
         const cur = sel.value;
-        sel.replaceChildren(...boxes.slice().sort((a, b) => (a.box === 'regia' ? -1 : b.box === 'regia' ? 1 : a.box.localeCompare(b.box))).map(b => el('option', { value: b.box }, `${b.box === 'regia' ? 'Regia' : b.box}${b.listening ? ' · in ascolto' : ''}`)));
+        sel.replaceChildren(...boxes.slice().sort((a, b) => (a.box === 'regia' ? -1 : b.box === 'regia' ? 1 : a.box.localeCompare(b.box))).map(b => el('option', { value: b.box }, `${b.box === 'regia' ? 'Orchestrator' : b.box}${b.listening ? ' · in ascolto' : ''}`)));
         if (cur) sel.value = cur;
       },
       open(box, name) { sel.value = box; ta.focus(); node.scrollIntoView({ behavior: 'smooth', block: 'center' }); App.toast(`Scrivi a ${name}`); },
@@ -341,8 +341,8 @@
 
   // ---------- Spunti dell'IA ({{OWNER}} 2026-10-11: "spunti e idee dell'IA per migliorare il second brain, migliorare
   // {{OWNER}} e migliorare sè stessa"; "se l'IA può avere qualcosa di simile a ragionamento proprio si vedesse in quel
-  // posto"): each item shows the reasoning (noticed, thinks, how sure, what it does not know) and can be sent to the Regia.
-  const PER = [['second-brain', 'Per second-brain', 'il cervello: regole, tool, agenti'], ['owner', 'Per {{OWNER}}', 'il tuo modo di lavorare, abitudini, tempo'], ['ia', "Per l'IA", 'come lavorano Regia, chat e agenti']];
+  // posto"): each item shows the reasoning (noticed, thinks, how sure, what it does not know) and can be sent to the Orchestrator.
+  const PER = [['second-brain', 'Per second-brain', 'il cervello: regole, tool, agenti'], ['owner', 'Per {{OWNER}}', 'il tuo modo di lavorare, abitudini, tempo'], ['ia', "Per l'IA", 'come lavorano Orchestrator, chat e agenti']];
   const sureP = s => { const v = String(s ?? '').toLowerCase().match(/alta|media|bassa/)?.[0]; return v ? pill(`sicurezza ${v}`, v === 'alta' ? 'good' : v === 'media' ? 'warn' : 'bad') : null; };
   function reasoning(x) {
     return el('dl.kv.small',
@@ -355,9 +355,9 @@
     const box = el('div.confirm', { hidden: true });
     const btn = el('button.btn', { type: 'button', onclick: () => {
       box.hidden = false;
-      box.replaceChildren(el('p.small', el('b', 'Mando alla Regia?'), ` «Discutiamone: ${short(title, 80)}»`),
+      box.replaceChildren(el('p.small', el('b', 'Mando all’Orchestrator?'), ` «Discutiamone: ${short(title, 80)}»`),
         el('div.btn-row', el('button.btn.primary', { type: 'button', onclick: async () => {
-          try { await App.post('/api/send', { to: 'regia', text }); App.toast('Mandato alla Regia'); box.hidden = true; } catch (e) { box.replaceChildren(errorBox(e)); }
+          try { await App.post('/api/send', { to: 'regia', text }); App.toast('Mandato all’Orchestrator'); box.hidden = true; } catch (e) { box.replaceChildren(errorBox(e)); }
         } }, 'Sì, manda'), el('button.btn', { type: 'button', onclick: () => { box.hidden = true; } }, 'Annulla')));
     } }, 'Discutiamone');
     return el('div.composer', el('div.btn-row', btn), box);
@@ -453,7 +453,7 @@
       const rows = rules.map(r => ({ data: r.date, tipo: r.type, area: r.area, regola: r.rule, tornato: r.again }));
       const worstRule = [...back].sort((a, b) => b.again - a.again)[0];
       body.append(table({ name: 'regole-servite', rows, filters: ['tipo'], sort: { key: 'tornato', dir: -1 },
-        explain: { find: `<b>${rules.length - back.length} regole su ${rules.length} hanno funzionato</b>: il loro errore non è più tornato.${worstRule ? ` La meno efficace: <b>${E(short(worstRule.rule, 60))}</b>, errore tornato ${worstRule.again} volte.` : ''}`, next: worstRule ? 'quella regola va riscritta: chiedilo alla Regia con le parole dell\'errore' : '', says: 'per ogni regola nata da un errore, se l\'errore è tornato dopo.', why: 'una regola che non ferma l\'errore è solo testo in più.' },
+        explain: { find: `<b>${rules.length - back.length} regole su ${rules.length} hanno funzionato</b>: il loro errore non è più tornato.${worstRule ? ` La meno efficace: <b>${E(short(worstRule.rule, 60))}</b>, errore tornato ${worstRule.again} volte.` : ''}`, next: worstRule ? 'quella regola va riscritta: chiedilo all’Orchestrator con le parole dell\'errore' : '', says: 'per ogni regola nata da un errore, se l\'errore è tornato dopo.', why: 'una regola che non ferma l\'errore è solo testo in più.' },
         cols: [
           { key: 'data', label: 'Data', nowrap: true }, { key: 'tipo', label: 'Tipo' }, { key: 'area', label: 'Area', clip: true }, { key: 'regola', label: 'Regola', clip: true },
           { key: 'tornato', label: 'Errore tornato', type: 'num', help: 'Quante volte lo stesso tipo di errore, in un\'area simile, è tornato dopo la regola (recurrence.mjs)', render: r => pill(r.tornato ? `${r.tornato} volte` : 'no', r.tornato ? 'bad' : 'good') }] }));
@@ -468,7 +468,7 @@
       const pb = t.playbooks ?? [];
       const totalPts = sum(pb.map(p => p.punti)), proposed = sum(pb.map(p => p.proposti.length));
       body.append(table({ name: 'taccuini', rows: pb.map(p => ({ agente: p.agent, punti: p.punti, proposti: p.proposti.length, caratteri: p.size, da_rivedere: p.review.join(', ') })), search: false,
-        explain: { find: `<b>${totalPts} punti</b> imparati in tutto, <b>${proposed} in attesa</b> del tuo sì.`, next: proposed ? 'la Regia ti porta i punti proposti: un sì e lo specialista li usa' : '', says: 'il taccuino di ogni specialista: cosa ha imparato dai suoi errori e dalle tue lodi.', why: 'ogni punto rende lo specialista più bravo senza appesantire le altre chat.' },
+        explain: { find: `<b>${totalPts} punti</b> imparati in tutto, <b>${proposed} in attesa</b> del tuo sì.`, next: proposed ? 'l’Orchestrator ti porta i punti proposti: un sì e lo specialista li usa' : '', says: 'il taccuino di ogni specialista: cosa ha imparato dai suoi errori e dalle tue lodi.', why: 'ogni punto rende lo specialista più bravo senza appesantire le altre chat.' },
         cols: [
           { key: 'agente', label: 'Specialista', render: r => fileLink(`playbooks/${r.agente}.md`, r.agente) }, { key: 'punti', label: 'Punti', type: 'num', help: 'Punti approvati da te, che lo specialista legge all\'avvio' }, { key: 'proposti', label: 'In attesa', type: 'num', help: 'Punti proposti dalle chat, non ancora approvati' },
           { key: 'caratteri', label: 'Caratteri (max 2500)', type: 'num', help: 'Il taccuino ha un tetto: quando è pieno si accorpa' }, { key: 'da_rivedere', label: 'Da rivedere', help: 'Punti con più voti "dannoso" che "utile"' }] }));
@@ -532,7 +532,7 @@
     put(main, 
       head('Collaborazione', `<b>${sum(pairs.map(([, s]) => s.sent))} messaggi</b> tra chat, <b>${boxes.filter(b => b.listening).length} chat in ascolto</b> adesso.`),
       section('Caselle di posta', '', table({ name: 'caselle', rows: boxes.map(b => ({ chat: b.box, ascolta: b.listening ? 'sì' : 'no', da_leggere: b.unread, dal: b.since ? fmt.when(b.since) : '' })), search: false,
-        explain: { find: stuck.length ? `<b>${stuck.length} chat hanno posta non letta e non ascoltano</b>: ${E(stuck.map(b => b.box).join(', '))}.` : 'Nessun messaggio fermo: <b>la posta arriva</b>.', next: stuck.length ? 'riapri quelle chat o chiedi alla Regia di girare il messaggio' : '', says: 'ogni chat che usa la posta tra chat: se sta ascoltando e cosa la aspetta.', why: 'un messaggio non letto è un lavoro fermo.' },
+        explain: { find: stuck.length ? `<b>${stuck.length} chat hanno posta non letta e non ascoltano</b>: ${E(stuck.map(b => b.box).join(', '))}.` : 'Nessun messaggio fermo: <b>la posta arriva</b>.', next: stuck.length ? 'riapri quelle chat o chiedi all’Orchestrator di girare il messaggio' : '', says: 'ogni chat che usa la posta tra chat: se sta ascoltando e cosa la aspetta.', why: 'un messaggio non letto è un lavoro fermo.' },
         cols: [{ key: 'chat', label: 'Chat', render: r => el('b', r.chat) }, { key: 'ascolta', label: 'In ascolto', help: 'sì = la chat si sveglia appena arriva un messaggio', render: r => pill(r.ascolta, r.ascolta === 'sì' ? 'good' : '') }, { key: 'da_leggere', label: 'Da leggere', type: 'num' }, { key: 'dal', label: 'In ascolto dal' }] })),
       el('div.grid-2',
         pairs.length ? chart({ title: 'Chi scrive a chi', labels: pairs.map(([k]) => k.replace(' -> ', ' → ')), datasets: [{ label: 'inviati', data: pairs.map(([, s]) => s.sent) }, { label: 'consegnati', data: pairs.map(([, s]) => s.delivered) }], horizontal: true, name: 'posta-coppie',
