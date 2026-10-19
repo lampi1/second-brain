@@ -5,6 +5,7 @@
 // main/agents/delegation.ts (the tools), main/chats/manager.ts (the result delivery) and the renderer (the child cards).
 import { TOOL_CLASSES, type ToolClass } from './agents';
 import { MODEL_TIERS, ROLE_DEFAULTS, isWorkRole, type ModelTier, type WorkRoleId } from './roles';
+import { AGENT_LABEL, oneLine } from './agent-label';
 
 export interface DelegationContract {
   /** what the child must achieve, one or two sentences */
@@ -128,10 +129,14 @@ export function delegationPrompt(c: DelegationContract, at: { role: WorkRoleId; 
   ].join('\n');
 }
 
-/** The message that brings a child's result to its parent: a labelled line, then the result as JSON. */
+/** JSON whose strings cannot break a line: JSON.stringify leaves NEL, U+2028 and U+2029 raw, so they are escaped too. */
+const safeJson = (v: unknown): string => JSON.stringify(v, null, 2).replace(/[\u0085\u2028\u2029]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+
+/** The message that brings a child's result to its parent: the agent label, a result line (what the child wrote
+ * flattened to one line, so it cannot forge a line of the app or the user), then the result as JSON (escaped). */
 export function resultMessage(role: WorkRoleId, title: string, r: DelegationResult): string {
-  const changed = r.goalChangedByUser ? ` (obiettivo cambiato dall'utente nella chat figlia: «${r.newGoal}». Non disfare ciò che l'utente le ha chiesto.)` : '';
-  return `[risultato · ${ROLE_DEFAULTS[role].name} «${title}»] ${r.summary}${changed}\n\`\`\`json\n${JSON.stringify(r, null, 2)}\n\`\`\``;
+  const changed = r.goalChangedByUser ? ` (obiettivo cambiato dall'utente nella chat figlia: «${oneLine(r.newGoal ?? '')}». Non disfare ciò che l'utente le ha chiesto.)` : '';
+  return `${AGENT_LABEL}\n\n[risultato · ${ROLE_DEFAULTS[role].name} «${oneLine(title)}»] ${oneLine(r.summary)}${changed}\n\`\`\`json\n${safeJson(r)}\n\`\`\``;
 }
 
 /** Levels above a chat: 0 for a root (no parent). A broken or cyclic chain counts as too deep. */

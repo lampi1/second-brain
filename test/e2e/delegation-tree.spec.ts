@@ -67,7 +67,7 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     expect(sentinel.title).toBe('Controllo test');
 
     // both results come back to the parent as messages, and each child carries its own
-    await expect.poll(async () => (await items(page, parent.id)).filter(i => i.kind === 'user' && textOf(i).startsWith('[risultato · ')).length, { timeout: 20000 }).toBe(2);
+    await expect.poll(async () => (await items(page, parent.id)).filter(i => i.kind === 'user' && textOf(i).includes('[risultato · ')).length, { timeout: 20000 }).toBe(2);
     const back = (await items(page, parent.id)).filter(i => i.kind === 'user').map(textOf).join('\n');
     expect(back).toContain('[risultato · Scout «Log errori»] Trovati 3 errori nel servizio ordini');
     expect(back).toContain('[risultato · Sentinel «Controllo test»] La suite passa: 42 su 42');
@@ -179,7 +179,7 @@ test('a child\'s question waits in the parent\'s open chat; a permission above t
     await page.getByTestId(`${base}-opt-1`).click();
     await expect(ask).toHaveCount(0);
     // it goes on after the answer and reports to its parent
-    await expect.poll(async () => (await items(page, parent.id)).some(i => i.kind === 'user' && textOf(i).startsWith('[risultato · Sentinel «Scelta ambiente»] Ambiente scelto e verificato')), { timeout: 20000 }).toBe(true);
+    await expect.poll(async () => (await items(page, parent.id)).some(i => i.kind === 'user' && textOf(i).includes('[risultato · Sentinel «Scelta ambiente»] Ambiente scelto e verificato')), { timeout: 20000 }).toBe(true);
     expect(JSON.stringify((await items(page, asker.id)).filter(i => i.kind === 'tool'))).toContain('Blu');
     // the refusal is in the Scout's own chat, in words
     await page.getByTestId(`delegation-card-${shell.id}`).locator('.dc-title').click();
