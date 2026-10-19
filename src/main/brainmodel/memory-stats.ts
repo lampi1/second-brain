@@ -16,6 +16,7 @@ import { agentMemoryFile, rawEntries, readSmall } from './model';
 const DAY = 24 * 3600e3;
 export const STALE_DAYS = 30;
 const WEEKS = 12;
+const JOURNAL_READ = 120;
 /** a skill younger than this with no run yet is "new", not "never used" */
 const NEW_SKILL_DAYS = 14;
 const DATE = /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}))?\s*(?:[·|:–-]\s*)?/;
@@ -140,10 +141,12 @@ export function memoryStats(i: MemoryStatsInput): MemoryStats {
     if (m.kind === 'journal') {
       let files: string[] = [];
       try { files = fs.readdirSync(path.join(i.root, 'journal')).filter(f => /^\d{4}-\d{2}-\d{2}\.md$/i.test(f)); } catch { /* none */ }
-      for (const f of files) {
-        const n = rawEntries(readSmall(path.join(i.root, 'journal', f)) ?? '').length || 1;
+      // bounded: the newest JOURNAL_READ days are read line by line, an older day counts as one line
+      files.sort().reverse();
+      for (const [k, f] of files.entries()) {
+        const n = k < JOURNAL_READ ? rawEntries(readSmall(path.join(i.root, 'journal', f)) ?? '').length || 1 : 1;
         entries += n;
-        for (let k = 0; k < n; k++) count('journal', f.slice(0, 10));
+        for (let j = 0; j < n; j++) count('journal', f.slice(0, 10));
       }
       continue;
     }
