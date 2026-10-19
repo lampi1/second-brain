@@ -507,6 +507,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       const tool = root ? path.join(root, 'ops', 'tools', 'mem.mjs') : null;
       return tool && fs.existsSync(tool) ? tool : null;
     },
+    brainRoot: () => brain.info().brainRoot,
   });
   const jobs = new Map<string, { usd: number; turns: number; prompt: string | undefined }>();
   // a routed chat's totals already in the ledger when this run first saw it (after a restart, or its predecessor's)

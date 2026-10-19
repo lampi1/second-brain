@@ -59,6 +59,14 @@ describe('agent tool policy', () => {
     expect(claudeTools({ allow: ['read', 'edit', 'shell', 'web'] })).toEqual(expect.arrayContaining(['Edit', 'Write', 'Bash', 'PowerShell', 'WebFetch', 'WebSearch']));
   });
 
+  it('brain-write gives Claude only Edit and Write (the role gate keeps them inside the brain)', () => {
+    const t = claudeTools({ allow: ['read', 'brain-write'] });
+    expect(t).toEqual(expect.arrayContaining(['Read', 'Edit', 'Write']));
+    expect(t.some(n => ['MultiEdit', 'NotebookEdit', 'Bash', 'PowerShell'].includes(n))).toBe(false);
+    // the user's own Claude allow rules could approve an Edit outside the brain without asking: reported
+    expect(unenforced('claude', policy(['read', 'brain-write']))).toEqual(['edit']);
+  });
+
   it('narrows Claude MCP: without the mcp class only the app servers and no connectors, unless mail or calendar need them', () => {
     expect(claudeMcp({ allow: ['read'] })).toEqual({ strict: true, connectors: false });
     expect(claudeMcp({ allow: ['read', 'calendar-read'] })).toEqual({ strict: true, connectors: true });
