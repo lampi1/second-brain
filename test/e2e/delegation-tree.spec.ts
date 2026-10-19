@@ -47,7 +47,9 @@ const strategist = (page: Page, cwd: string, prompt: string, title = 'Piano rila
 
 test('a Strategist launches a Scout and a Sentinel: indented children, results back, the fold survives a restart', async () => {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cwd-'));
-  let { app, page, userData, home } = await start();
+  const first = await start();
+  const userData = first.userData;
+  let { app, page, home } = first;
   const homes = [home];
   try {
     await closeSetup(page);
