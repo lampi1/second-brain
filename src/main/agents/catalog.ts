@@ -23,7 +23,7 @@ import { PROBATION_CAP } from './probation';
 const MODEL = /^[\w.:@/[\]][\w.:@/=[\],-]{0,119}$/;
 const ID = /^[a-z][a-z0-9_-]{0,79}$/;
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
-const AUTHORS: readonly AgentAuthor[] = ['user', 'orchestrator', 'preset', 'migration'];
+const AUTHORS: readonly AgentAuthor[] = ['user', 'orchestrator', 'preset', 'migration', 'maintenance'];
 const EVIDENCE: readonly AgentEvidenceRef['kind'][] = ['journal', 'chat', 'ai-error', 'cost', 'run', 'feedback'];
 /** Launchable definitions; archived ones only count toward the file bound. */
 export const MAX_ACTIVE_AGENTS = 64;
@@ -717,6 +717,43 @@ export class AgentCatalogService {
     this.commit(this.profiles.map(x => x.id === id ? profile : x), [], [{ agentId: id, version: p.activeVersion, state: 'rejected' }, { agentId: id, version: baseline, state: 'active' }]);
     this.knowhowChanged(p, profile);
     this.d.onCustomized?.();
+    return structuredClone(profile);
+  }
+  /** A maintenance job's change (ADR 0077: no approval for agent changes, every change logged with a rollback by
+   *  brainmodel/changes.ts): only the role text (a lesson from the user's corrections) or the declared skills
+   *  (know-how). Tools, permissions, engine and model are never changed here: those stay under the user's approval.
+   *  A new active version authored "maintenance"; null when nothing changes. Refused during an open trial. */
+  maintain(id: string, patch: { instructions?: string; knowhow?: AgentProfile['knowhow'] }, reason: string): { profile: AgentProfile; before: number } | null {
+    this.writable();
+    const old = this.find(id);
+    if (old.status !== 'active') throw new Error('Archived agent');
+    if (old.trial) throw new Error('Open trial: maintenance waits');
+    if (Object.keys(patch).some(k => k !== 'instructions' && k !== 'knowhow')) throw new Error('Maintenance changes only the role and the skills');
+    const { manifest: _m, effort: _e, ...rest } = old; void _m; void _e;
+    const draft = this.validate({ ...old, ...(patch.instructions !== undefined ? { instructions: patch.instructions } : {}), ...(patch.knowhow !== undefined ? { knowhow: patch.knowhow } : {}) }, true);
+    if (sameBehaviour(old, draft)) return null;
+    const at = Math.max(this.now(), old.updatedAt + 1), version = old.version + 1;
+    const profile: AgentProfile = { ...rest, ...draft, updatedAt: at, lastEditedBy: 'maintenance', version, activeVersion: version };
+    if (profile.knowhow === undefined) delete profile.knowhow;
+    this.commit(this.profiles.map(x => x.id === id ? profile : x), [{ agentId: id, version, parentVersion: old.activeVersion, behaviour: behaviourOf(draft), author: 'maintenance', reason: text(reason, 600, 'Reason'), at, state: 'active' }],
+      [{ agentId: id, version: old.activeVersion, state: 'superseded' }]);
+    this.knowhowChanged(old, profile);
+    return { profile: structuredClone(profile), before: old.activeVersion };
+  }
+  /** Undo of a maintenance change: the version before it is active again (the user's click in a change log). */
+  maintainRestore(id: string, version: number, expected: number): AgentProfile {
+    this.writable();
+    const p = this.find(id);
+    if (p.activeVersion !== expected) throw new Error('The agent changed since: undo the newer change first');
+    if (p.trial || p.status !== 'active') throw new Error('Open trial or archived agent');
+    const entry = this.store.get(id, version);
+    if (!entry) throw new Error('Version no longer in the history');
+    const { manifest: _m, effort: _e, knowhow: _k, ...rest } = p; void _m; void _e; void _k;
+    const draft = this.validate({ ...rest, ...entry.behaviour }, true);
+    const at = Math.max(this.now(), p.updatedAt + 1);
+    const profile: AgentProfile = { ...rest, ...draft, activeVersion: version, updatedAt: at, lastEditedBy: 'maintenance' };
+    this.commit(this.profiles.map(x => x.id === id ? profile : x), [], [{ agentId: id, version: p.activeVersion, state: 'rejected' }, { agentId: id, version, state: 'active' }]);
+    this.knowhowChanged(p, profile);
     return structuredClone(profile);
   }
   /** Makes an older version the one new runs use. The next edit records it as the parent. */

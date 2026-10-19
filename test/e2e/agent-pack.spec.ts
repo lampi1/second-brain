@@ -53,7 +53,7 @@ test('a dropped pack shows complete scripts with approval off by default', async
   const { app, page, userData } = await launchDemo();
   try {
     const file = path.join(userData, 'dropped.sbagent'), hash = 'a'.repeat(64);
-    const files = new Map([['skills/reviewer/SKILL.md', Buffer.from('---\nname: reviewer\ndescription: Review changes\n---\nReview carefully.\n')], ['skills/reviewer/learned-rules.md', Buffer.from('# Learned rules\n')], ['skills/reviewer/scripts/check.py', Buffer.from('print("review-only")')]]);
+    const files = new Map([['skills/reviewer/SKILL.md', Buffer.from('---\nname: reviewer\ndescription: Review changes\n---\nReview carefully.\n')], ['skills/reviewer/scripts/check.py', Buffer.from('print("review-only")')]]);
     fs.writeFileSync(file, writeZip(emitPack({ format: 1, packId: 'reviewer-0123456789abcdef', revision: 1, contentHash: hash,
       agent: { id: 'reviewer', name: 'Review fixture', role: 'Review changes', category: 'development', instructionsFile: 'agents/reviewer.md', manifest: {}, engine: 'claude', model: null, tools: { allow: ['read'] }, permissionCeiling: 'default' },
       icon: { symbol: 'eye', tone: 'blue' }, skills: [{ name: 'reviewer', ownership: 'owned', hash }], createdAt: '2026-10-18T00:00:00Z', exportedAt: '2026-10-18T00:00:00Z', appVersion: '0.1.0' }, 'Review changes.', files)));

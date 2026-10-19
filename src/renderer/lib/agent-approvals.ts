@@ -9,7 +9,6 @@ import { inProbation } from '@shared/agents';
 import type { AgentProposal } from '@shared/agent-authoring';
 import type { ClassifierCalibration } from '@shared/agent-classifier';
 import type { AgentLifecycleClient, AgentLifecycleProposal } from '@shared/agent-lifecycle';
-import type { LearnedRuleProposal } from '@shared/agent-pack';
 import type { Bridge } from '@shared/contract';
 
 export interface ApprovalsClient { invoke: Bridge['invoke']; lifecycle: AgentLifecycleClient }
@@ -22,9 +21,7 @@ export type DefinitionField = typeof DEFINITION_FIELDS[number];
 export type ApprovalItem =
   /** An Orchestrator proposal (a new agent or a changed definition): agents:proposalDecide. stale = the agent changed since. */
   | { type: 'definition'; key: string; at: number; proposal: AgentProposal; agent: AgentProfile | null; stale: boolean; changes: FieldChange[] }
-  /** A learned rule an agent proposed for itself: agents:learnDecide. */
-  | { type: 'rule'; key: string; at: number; rule: LearnedRuleProposal; agent: AgentProfile }
-  /** An open version trial (pack update, approved rule): agents:trialDecide. advice = the lifecycle's keep/revert, when it has one. */
+  /** An open version trial (pack update): agents:trialDecide. advice = the lifecycle's keep/revert, when it has one. */
   | { type: 'trial'; key: string; at: number; agent: AgentProfile; advice: AgentLifecycleProposal | null; reason: string | null; before: VersionMetrics | null; after: VersionMetrics | null }
   /** A new agent (imported or made for a task) still being judged: agents:keep / agents:retire. */
   | { type: 'probation'; key: string; at: number; agent: AgentProfile; advice: AgentLifecycleProposal | null; metrics: VersionMetrics | null }
@@ -33,10 +30,10 @@ export type ApprovalItem =
   | { type: 'lifecycle'; key: string; at: number; proposal: AgentLifecycleProposal; agents: AgentProfile[] }
   /** A threshold for the agent classifier calibrated on the user's confirmed runs: agents:classifierDecide. */
   | { type: 'classifier'; key: string; at: number; calibration: ClassifierCalibration & { suggested: number } };
-export type ApprovalSource = 'definitions' | 'lifecycle' | 'rules' | 'metrics' | 'classifier';
+export type ApprovalSource = 'definitions' | 'lifecycle' | 'metrics' | 'classifier';
 export interface ApprovalsState { items: ApprovalItem[]; problems: ApprovalSource[]; lifecycleProblem: string | null }
 
-const ORDER: Record<ApprovalItem['type'], number> = { definition: 0, rule: 1, trial: 2, probation: 3, lifecycle: 4, classifier: 5 };
+const ORDER: Record<ApprovalItem['type'], number> = { definition: 0, trial: 2, probation: 3, lifecycle: 4, classifier: 5 };
 
 function show(field: DefinitionField, d: AgentDraft): string | null {
   const v = d[field];
@@ -100,14 +97,6 @@ export async function gatherApprovals(c: ApprovalsClient): Promise<ApprovalsStat
     const op = p.op ?? 'update';
     items.push({ type: 'definition', key: `def:${p.id}`, at: p.at, proposal: p, agent, stale, changes: op === 'update' ? diffDefinition(p.before ?? agent, p.draft) : [] });
   }
-  const rule = (r: LearnedRuleProposal, agent: AgentProfile | undefined) => { if (agent && r.status === 'pending') items.push({ type: 'rule', key: `rule:${r.id}`, at: r.createdAt, rule: r, agent }); };
-  if (snapshot?.learned) for (const r of snapshot.learned) rule(r, active.find(a => a.id === r.agentId));
-  else {
-    // older main: one read per agent; an agent without its own know-how has no list, so only a total failure is shown
-    const rules = await Promise.allSettled(active.map(p => c.invoke('agents:learnList', { id: p.id })));
-    if (active.length && rules.every(r => r.status === 'rejected')) problems.push('rules');
-    rules.forEach((r, index) => { if (r.status === 'fulfilled') for (const x of r.value.proposals) rule(x, active[index]); });
-  }
   const stats = metrics.status === 'fulfilled' ? metrics.value : [];
   for (const agent of active) {
     const m = stats.find(x => x.agentId === agent.id);
@@ -134,14 +123,13 @@ export async function gatherApprovals(c: ApprovalsClient): Promise<ApprovalsStat
 
 export type ApprovalDecision =
   | { type: 'definition'; accept: boolean }
-  | { type: 'rule'; decision: 'approve' | 'discard' } | { type: 'rule'; decision: 'edit'; text: string }
   | { type: 'trial'; decision: 'keep' | 'rollback' }
   | { type: 'probation'; decision: 'keep' } | { type: 'probation'; decision: 'retire'; reason: string }
   /** the lifecycle queue's own entry: a lifecycle suggestion, or the advice on a trial/probation card */
   | { type: 'queue'; decision: 'approve' | 'dismiss' }
   | { type: 'classifier'; decision: 'apply' | 'dismiss' };
 /** What a just-made decision can be taken back with, when its backend supports it. */
-export interface ApprovalUndo { kind: 'definition-version' | 'definition-new' | 'definition-archive' | 'definition-restore' | 'rule-trial' | 'retire' | 'classifier'; agentId: string; run(): Promise<unknown> }
+export interface ApprovalUndo { kind: 'definition-version' | 'definition-new' | 'definition-archive' | 'definition-restore' | 'retire' | 'classifier'; agentId: string; run(): Promise<unknown> }
 /** The queue entry a card carries, if any (decided with agents:lifecycleDecide). */
 export const queueEntry = (item: ApprovalItem): AgentLifecycleProposal | null =>
   item.type === 'lifecycle' ? item.proposal : item.type === 'trial' || item.type === 'probation' ? item.advice : null;
@@ -168,14 +156,6 @@ export async function decideApproval(c: ApprovalsClient, item: ApprovalItem, d: 
     }
     const undo = { agentId: profile.id, expectedRevision: profile.updatedAt, operation: 'archive' as const };
     return { kind: 'definition-new', agentId: profile.id, run: () => c.invoke('agents:undo', undo) };
-  }
-  if (item.type === 'rule' && d.type === 'rule') {
-    const id = item.agent.id;
-    await c.invoke('agents:learnDecide', { id, proposalId: item.rule.id, decision: d.decision, ...(d.decision === 'edit' ? { text: d.text } : {}) });
-    if (d.decision === 'discard') return null;
-    // an approved rule opens a trial: rolling that trial back is the undo
-    const after = (await c.invoke('agents:list', undefined)).profiles.find(p => p.id === id);
-    return after?.trial ? { kind: 'rule-trial', agentId: id, run: () => c.invoke('agents:trialDecide', { id, decision: 'rollback' }) } : null;
   }
   if (item.type === 'trial' && d.type === 'trial') { await c.invoke('agents:trialDecide', { id: item.agent.id, decision: d.decision }); return null; }
   if (item.type === 'probation' && d.type === 'probation') {

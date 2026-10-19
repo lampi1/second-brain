@@ -8,7 +8,7 @@ export const HISTORY_PER_AGENT = 50;
 /** Below the local store's 8 MB cap, with headroom for the entry being added. */
 export const HISTORY_BYTES = 7_000_000;
 const STATES: readonly AgentVersionState[] = ['active', 'trial', 'kept', 'rejected', 'superseded'];
-const AUTHORS: readonly AgentAuthor[] = ['user', 'orchestrator', 'preset', 'migration'];
+const AUTHORS: readonly AgentAuthor[] = ['user', 'orchestrator', 'preset', 'migration', 'maintenance'];
 const ID = /^[a-z][a-z0-9_-]{0,79}$/;
 const count = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) >= 1;
 

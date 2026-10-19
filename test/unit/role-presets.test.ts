@@ -6,7 +6,7 @@ import { previewRoleChange, resolveRole, restoreRole, RoleValidationError, selec
 
 const refs = {
   agentIds: ['general', 'researcher', 'writer', 'reviewer', 'day-planner', 'implementer'].map(id => `default-${id}`),
-  pageIds: ['agenti', 'devops', 'fatto', 'idee', 'costi', 'qualita', 'procedure', 'confronto', 'miglioramento', 'skill', 'impostazioni', 'migliora'],
+  pageIds: ['agenti', 'devops', 'fatto', 'idee', 'costi', 'qualita', 'confronto', 'miglioramento', 'skill', 'impostazioni', 'migliora'],
 };
 const dev = () => initialRolePreset('dev', refs);
 const selection = () => selectRole(dev(), {}, refs);
@@ -60,7 +60,7 @@ describe('personal overrides and preferences', () => {
     const original = structuredClone({ p, o });
     const result = resolveRole(p, selectRole(p, o, refs), refs);
     expect(result.agentIds).toEqual(['default-implementer', 'default-day-planner', 'default-writer']);
-    expect(result.pageIds).toEqual(['agenti', 'procedure', 'fatto', 'idee']);
+    expect(result.pageIds).toEqual(['agenti', 'skill', 'fatto', 'idee']);
     expect(result.defaults).toEqual({ homePageId: 'idee', primaryAgentId: 'default-implementer' });
     expect({ p, o }).toEqual(original);
   });
@@ -111,7 +111,7 @@ describe('preview, upgrade, reset and restore', () => {
     const preview = previewRoleChange(p, s, updated, s.overrides, refs);
     expect(preview.next.presetRevision).toBe(p.revision+1);
     expect(preview.next.overrides).toEqual(s.overrides);
-    expect(preview.after.pageIds).toEqual(['agenti', 'procedure', 'fatto', 'costi', 'idee']);
+    expect(preview.after.pageIds).toEqual(['agenti', 'skill', 'fatto', 'costi', 'idee']);
     expect(restoreRole(preview.previous, p, refs)).toEqual(s);
     expect(() => restoreRole(preview.previous, updated, refs)).toThrow('exact retained preset revision');
   });

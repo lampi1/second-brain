@@ -1,9 +1,9 @@
 // Shapes of the brain's data API (the brain's own server, proxied by main as 'brain:api'): /api/tables (every parsed
 // table), /api/cost, /api/day (report or brief), /api/map, /api/files, /api/file, /api/search, /api/version; plus
-// /api/quality and /api/procedures, /api/procedure, answered by main itself (AppQuality, Procedure). The server is another program that may be older
+// /api/quality, answered by main itself (AppQuality). The server is another program that may be older
 // or newer than the app, so every read goes through a normalizer that fills what is missing (lists → [], text → '')
 // instead of trusting the shape. Used by the pages.
-import type { AppQuality, Procedure, ProcedureSummary } from '@shared/contract';
+import type { AppQuality } from '@shared/contract';
 
 export interface ErrorRow { data: string; ora: string; chi: string; area: string; tipo: string; detto: string; vero: string; visto: string; regola: string; riga?: string; responsibleEpisode?: unknown; reporterOrigin?: unknown }
 export interface WinRow { data: string; ora: string; harness: string; chat: string; area: string; esito: string; parole: string; consegnato: string; origin?: unknown }
@@ -159,20 +159,6 @@ export function normAppQuality(v: unknown): AppQuality {
   };
 }
 
-/** /api/procedures: the procedures found in the brain; a row without id or file is dropped. */
-export function normProcedures(v: unknown): { root: string | null; procedures: ProcedureSummary[] } {
-  const o = obj(v);
-  return { root: str(o.root) || null, procedures: arr(o.procedures).filter(isObj).map(procedureOf).filter(p => p.id && p.file) };
-}
-const procedureOf = (p: Obj): ProcedureSummary => ({
-  id: str(p.id), title: str(p.title), purpose: str(p.purpose), area: str(p.area), group: p.group ? str(p.group) : null, file: str(p.file),
-  line: num(p.line), source: str(p.source), tags: arr(p.tags).filter((t): t is string => typeof t === 'string'), changedAt: p.changedAt ? str(p.changedAt) : null,
-});
-/** /api/procedure?id=…: one procedure with its text (credentials already masked by main). */
-export function normProcedure(v: unknown): Procedure {
-  const o = obj(v);
-  return { ...procedureOf(o), path: str(o.path), markdown: str(o.markdown), masked: num(o.masked) };
-}
 
 export function normCost(v: unknown): CostData {
   const o = obj(v), cur = isObj(o.cursor) ? o.cursor : null, fixed = isObj(o.fixed) ? o.fixed : null;

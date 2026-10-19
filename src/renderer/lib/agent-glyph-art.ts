@@ -37,7 +37,7 @@ export const GLYPH_METRICS: Record<GlyphSize, { stroke: number; detail: boolean 
 export function glyphSize(size: number): GlyphSize { return size <= 16 ? 16 : size <= 20 ? 20 : size <= 28 ? 28 : 40; }
 export const GLYPH_LABELS_IT: Record<RoleGlyph, string> = {
   'role-implementer': 'Implementatore', 'role-reviewer': 'Revisore', 'role-bug': 'Investigatore bug', 'role-browser': 'Tester browser',
-  'role-ops': 'Investigatore operativo', 'role-runbook': 'Custode procedure', 'role-research': 'Ricercatore', 'role-writer': 'Scrittore',
+  'role-ops': 'Investigatore operativo', 'role-runbook': 'Custode skill', 'role-research': 'Ricercatore', 'role-writer': 'Scrittore',
   'role-mail': 'Posta e diario', 'role-planner': 'Pianificatore', 'role-data': 'Dati', 'role-security': 'Sicurezza',
   'role-deploy': 'Rilascio', 'role-chat': 'Conversazione', 'role-wrench': 'Manutenzione', 'role-list': 'Lista di controllo',
   'role-map': 'Mappatura', 'role-flask': 'Esperimenti', 'role-palette': 'Design', 'role-lightning': 'Automazione',

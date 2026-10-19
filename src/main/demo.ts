@@ -885,7 +885,7 @@ export class DemoBrain implements BrainService {
   // SB_BRAIN set (e2e: a fixture brain): its data server answers, so the brain pages work with the demo's chats
   private localApi: LocalApi = new Map();
   private realApi: BrainApi | null = process.env.SB_BRAIN ? new BrainApi(process.env.SB_BRAIN, electronNode(), undefined, this.localApi) : null;
-  // without a fixture brain only the paths the demo answers itself (/api/quality, /api/procedures, /api/procedure)
+  // without a fixture brain only the paths the demo answers itself (/api/quality)
   private ownApi = new BrainApi(null, electronNode(), undefined, this.localApi);
   async api(p?: string): Promise<BrainApiResult> {
     if (this.realApi) return this.realApi.get(p);

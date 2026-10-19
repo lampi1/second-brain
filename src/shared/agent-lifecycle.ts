@@ -1,7 +1,6 @@
 // Feedback and approval-only lifecycle records, shared by agent services and their UI/API adapters.
 import type { AgentEvidenceRef, AgentRunOutcome, VersionMetrics } from './agents';
 import type { AgentProposal } from './agent-authoring';
-import type { LearnedRuleProposal } from './agent-pack';
 
 export const DEFINITION_GAPS = ['instructions', 'tools', 'model-effort', 'unclear-goal', 'none'] as const;
 export type DefinitionGap = typeof DEFINITION_GAPS[number];
@@ -105,8 +104,6 @@ export interface AgentLifecycleSnapshot {
   evaluations: { agentId: string; version: number; result: TrialEvaluation }[];
   feedback: AgentFeedback[];
   problem: string | null;
-  /** pending learned rules of every agent (decided with agents:learnDecide); always set by main (optional for older fixtures) */
-  learned?: LearnedRuleProposal[];
   /** pending Orchestrator drafts (agents:proposals, decided with agents:proposalDecide) */
   drafts?: AgentProposal[];
 }

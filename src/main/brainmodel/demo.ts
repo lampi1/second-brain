@@ -1,8 +1,9 @@
-// Demo procedures (SB_DEMO=1): a small made-up brain folder written into the demo's userData, read by the real
-// Procedures scanner (procedures.ts), so the Procedure page, its masking and its e2e screenshots work without the
-// user's brain. Generic content only (no real customers, hosts or products). One line holds a fake connection string
-// with a password, to show (and test) that it is masked; one file named like credentials, to show it is never read.
-// File dates are set relative to `now` (frozen demo: the same dates every run). Used by demo-wiring.ts.
+// The demo brain (SB_DEMO=1): a small made-up brain folder in the demo's userData (the same folder the demo's agent
+// packs use), so the Brain pages (Skill, Regole, Memoria, Mappa) and the one-time migration of the former runbook and
+// routines sections into skills (ADR 0077) run for real without the user's brain. Generic content only (no real
+// customers, hosts or products). One line holds a fake connection string with a password, to show (and test) that it is
+// masked in the skill made from it; one file named like credentials, to show it is never read. File dates are relative
+// to `now` (frozen demo: the same dates every run). Used by demo-wiring.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -14,7 +15,7 @@ const FAKE_CONN = `Server=tcp:db.example.test;Database=Demo;User ID=lettore;${'P
 const FILES: Record<string, [string, number]> = {
   'runbook/index.md': [`# Runbook (indice)
 
-Procedure imparate sul campo, un file per argomento.
+Come si fanno le cose, imparate sul campo: un file per argomento.
 
 | File | Argomento |
 |------|-----------|
@@ -126,13 +127,66 @@ Commenti brevi e gentili, in inglese semplice.
 `, 4],
   'runbook/credenziali-test.md': [`# Credenziali di test
 
-Questo file non viene mai letto dalla pagina Procedure.
+Questo file non viene mai letto dalla migrazione.
 `, 1],
+  'clienti/alfa-shop.md': [`# Alfa Shop (cliente demo)
+
+- Referente: ufficio acquisti, risponde entro il giorno dopo
+- Ambiente di test: anello 2, aggiornato il lunedì
+- Preferisce le note di rilascio in italiano semplice
+`, 5],
+  'ambienti/test.md': [`# Ambiente di test
+
+- Un solo ambiente libero alla volta: prenotalo nel canale QA
+- I dati si azzerano ogni notte alle 2
+`, 8],
+  'persone/team.md': [`# Team
+
+- Giulia (QA): vuole i passi esatti per riprodurre
+- Marco (sviluppo): preferisce una PR piccola per volta
+`, 10],
+  'now.md': [`# Fili aperti
+
+- **Rimborsi parziali** · test e2e in corso, manca il caso di rimborso doppio
+- **Totale ordine** · fix pronto, aspetta la revisione
+`, 0],
+  'journal/2026-10-08.md': [`# 2026-10-08
+
+- Rilascio 1.4.1 in test, verificato il carrello
+`, 1],
+  'journal/2026-10-09.md': [`# 2026-10-09
+
+- Corretto il totale dell'ordine con lo sconto
+`, 0],
+  'ai-errors.md': [`# AI errors
+
+Date | agent | correction and prevention
+
+- 2026-10-07 | Correzione bug | Ha letto l'avviso generico invece del log del nodo: leggere sempre il log del cliente
+`, 2],
+  'agents/default-bug-investigator/memory.md': [`# Memoria: Indagine
+
+- Il nodo del cliente Alfa Shop scrive i log in UTC
+- L'ambiente di test si azzera ogni notte alle 2
+`, 3],
+  'agents/default-reviewer/memory.md': [`# Memoria: Revisione
+
+- Marco preferisce una PR piccola per volta
+- L'ambiente di test si azzera ogni notte alle 2
+`, 3],
+  'rules/stile.md': [`---
+when: {"prompt":["scrivi","bozza","mail"],"tools":[],"paths":[]}
+---
+# Stile dei testi
+
+Frasi brevi, italiano semplice, niente gergo.
+`, 6],
 };
 
-/** Writes the demo brain into `dir` (replacing an older copy) and returns it. */
-export function writeDemoProcedures(dir: string, now: number): string {
-  fs.rmSync(dir, { recursive: true, force: true });
+/** Writes the demo brain into `dir` (its own files written again, the rest of the folder kept) and returns it. */
+export function writeDemoBrain(dir: string, now: number): string {
+  fs.mkdirSync(dir, { recursive: true });
+  if (!fs.existsSync(path.join(dir, 'brain.json'))) fs.writeFileSync(path.join(dir, 'brain.json'), `${JSON.stringify({ machinery: 'product-v1', template: {}, rules: { topicFiles: ['rules/stile.md'], appRules: true } }, null, 2)}\n`);
   for (const [rel, [text, days]] of Object.entries(FILES)) {
     const f = path.join(dir, rel);
     fs.mkdirSync(path.dirname(f), { recursive: true });

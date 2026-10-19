@@ -1,13 +1,12 @@
 // The discussion bar of an idea or an AI suggestion (Idee), of a recurring AI error and of a number (Qualità, Costi,
-// Confronto; ADR 0037), and of a procedure (Procedure, ADR 0041): "Discutine" opens the Regia next to the page with a
+// Confronto; ADR 0037): "Discutine" opens the Regia next to the page with a
 // ready draft in its input (quotes the topic with its source and numbers, or its file and line; ends with an opening
 // question; the user edits it and sends it with Enter); "Apri una chat" opens an inline box with the first message of a
-// dedicated work chat ("Idea · <titolo>", "Errore · <tipo>", "Procedura · <titolo>": a chat that follows the
-// procedure), editable, created with Ctrl+Invio. After either, the topic shows "Discussa" with a link to the chat.
+// dedicated work chat ("Idea · <titolo>", "Errore · <tipo>"), editable, created with Ctrl+Invio. After either, the topic shows "Discussa" with a link to the chat.
 // The app passes the Regia and chat actions through DiscussBridge (BrainPage prop → context); without it (the
 // standalone test route) the draft is sent from an inline box and the chat is created through 'chat:createRouted'.
 // The idea's state in ideas.md is never changed here. Used by pages/Idee.tsx, Qualita.tsx, Costi.tsx, Confronto.tsx,
-// Procedure.tsx and components/Charts.tsx.
+// and components/Charts.tsx.
 import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { RoutedNewChat } from '@shared/contract';
 import { brainClient } from '../api';
@@ -54,7 +53,6 @@ export function useDiscussed(): DiscussedMap {
 
 /** The topic's line in its file (from the brain's cache, fetched when missing); null when unknown. */
 async function topicLine(t: Topic): Promise<number | null> {
-  if (t.kind === 'procedure') return t.procedure.line || null; // main already knows it
   const file = fileOf(t);
   if (!file) return null; // a quote names its source, not a line
   try {
@@ -79,7 +77,7 @@ const IconCheck = () => (
 
 type Box = null | { kind: 'regia' | 'chat'; text: string };
 
-/** "Discutine" + "Apri una chat" + the "Discussa" mark, for one idea, reflection, error pattern, number or procedure. */
+/** "Discutine" + "Apri una chat" + the "Discussa" mark, for one idea, reflection, error pattern or number. */
 export function DiscussBar({ topic, testId = 'bx-discuss', onRegia }: {
   topic: Topic;
   testId?: string;
@@ -151,11 +149,10 @@ export function DiscussBar({ topic, testId = 'bx-discuss', onRegia }: {
           title={regia ? t('brainPages.discuss.discussButtonTitle') : t('brainPages.discuss.discussButtonTitleDisabled')} disabled={!!chats && !regia && !!bridge}>
           <IconChat /> {t('brainPages.discuss.discussBtn')}
         </button>
-        <button ref={chatBtn} type="button" className="bx-btn ghost" onClick={() => void openChat()} data-testid={`${testId}-chat`} aria-label={topic.kind === 'procedure' ? t('brainPages.discuss.prepareProcedureLabel', { topic: titleOf(topic) }) : t('brainPages.discuss.openChatLabel', { topic: titleOf(topic) })} aria-expanded={box?.kind === 'chat'}
-          title={topic.kind === 'procedure' ? t('brainPages.discuss.openChatTitleProcedure')
-            : topic.kind === 'idea' ? t('brainPages.discuss.openChatTitleIdea') : topic.kind === 'reflection' ? t('brainPages.discuss.openChatTitleReflection')
+        <button ref={chatBtn} type="button" className="bx-btn ghost" onClick={() => void openChat()} data-testid={`${testId}-chat`} aria-label={t('brainPages.discuss.openChatLabel', { topic: titleOf(topic) })} aria-expanded={box?.kind === 'chat'}
+          title={topic.kind === 'idea' ? t('brainPages.discuss.openChatTitleIdea') : topic.kind === 'reflection' ? t('brainPages.discuss.openChatTitleReflection')
               : topic.quote.what === 'errore' ? t('brainPages.discuss.openChatTitleError') : t('brainPages.discuss.openChatTitleNumber')}>
-          <IconNew /> {topic.kind === 'procedure' ? t('brainPages.discuss.prepareProcedure') : t('brainPages.discuss.openChatBtn')}
+          <IconNew /> {t('brainPages.discuss.openChatBtn')}
         </button>
         <span className="sp" />
         {last && (

@@ -189,8 +189,12 @@ app.whenReady().then(async () => {
     'agents:importInspect': a => s.agentPacks.packs.importInspect(a),
     'agents:importApply': a => s.agentPacks.packs.importApply(a.token, a.approveScripts, a.collision, a.approvePersonalData),
     'agents:importCancel': a => s.agentPacks.packs.cancel(a.token),
-    'agents:learnList': a => s.agentPacks.learning.list(a.id),
-    'agents:learnDecide': a => s.agentPacks.learning.decide(a.id, a.proposalId, a.decision, a.text),
+    // the Brain pages (ADR 0077): read, the maintenance button, an undo, a skill toggle; Classificatori read-only
+    'brainmodel:state': () => s.brainModel.state(),
+    'brainmodel:maintain': a => s.brainModel.maintain(a?.job),
+    'brainmodel:rollback': a => s.brainModel.rollback(String(a?.id ?? '')),
+    'brainmodel:link': a => { if (typeof a?.skill !== 'string' || typeof a?.agentId !== 'string' || typeof a?.on !== 'boolean') throw new Error('Invalid skill link'); return s.brainModel.link(a.skill, a.agentId, a.on); },
+    'classifiers:state': () => s.brainModel.classifiers(),
     'agents:trialDecide': a => s.agents.resolveTrial(a.id, a.decision),
     // the user's click on a "Da approvare" entry: the only way a lifecycle proposal is applied (agents/lifecycle-api.ts)
     'agents:lifecycleDecide': a => { if (!s.agentLifecycle) throw new Error('Coda «Da approvare» non disponibile.'); return s.agentLifecycle.decide(a); },

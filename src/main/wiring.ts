@@ -36,6 +36,8 @@ import { ChatManager, workBehind } from './chats/manager';
 import type { Emitter } from './ipc';
 import type { BrainService, BrowserService, ChatService, DevopsApi, SkillsApi } from './services';
 import { SkillsService } from './skills/service';
+import { BrainModelService } from './brainmodel/service';
+import { classifyByWords } from './agents/classifier';
 import { createBrain } from './brain';
 import { setLaunchRules } from './brain/adapters/domains';
 import { setCodexAutonomyRoots } from './brain/adapters/codex-policy';
@@ -104,6 +106,8 @@ export interface Wired {
   autoClose: AutoCloseService;
   agents: AgentCatalogService;
   agentPacks: ReturnType<typeof createAgentPacks>;
+  /** the Brain pages and their maintenance jobs (ADR 0077) */
+  brainModel: BrainModelService;
   setup: SetupService;
   chats: ChatService; browser: BrowserService; brain: BrainService; devops: DevopsApi;
   /** the engines of the brain, which definitions the user turned on, the API keys (ADR 0046) */
@@ -569,7 +573,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // nothing waiting for the user; off with the setting regiaEvents and in the test suites unless SB_FEEDBACK_WAKE=1).
   const lifecycleIdle = () => !manager.pending().length && !asks.pending().length && !runner.list().some(r => r.state === 'running')
     && manager.list().every(c => c.state !== 'starting' && c.state !== 'running' && c.state !== 'waiting' && !c.queued && !workBehind(c));
-  const loop = createAgentLoop({ userData: ctx.userData, catalog: agents, runs: manager.runs, authoring: agentAuthoring, learning: agentPacks.learning,
+  const loop = createAgentLoop({ userData: ctx.userData, catalog: agents, runs: manager.runs, authoring: agentAuthoring,
     classify: (q, profiles, runs) => classifier.classify(q, profiles, runs), chats,
     engineOn: h => engineOn(brain.settings(), h), userWaiting: () => manager.pending().length > 0 || asks.pending().length > 0,
     wakeEnabled: () => brain.settings().regiaEvents !== false && (!process.env.SB_TEST || process.env.SB_FEEDBACK_WAKE === '1'),
@@ -636,7 +640,15 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     sync.start();
   }
 
+  // the Brain pages (ADR 0077): skills and their agents, rules, memory; maintenance jobs with a change log and undo
+  const brainModel = new BrainModelService({ userData: ctx.userData, root: () => brain.info().brainRoot, home: process.env.SB_SKILLS_HOME || os.homedir(),
+    catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning, runs: () => manager.runs.list(), routing: () => brain.routingInfo(),
+    top: async (text, profiles) => { const c = await classifyByWords(text, profiles); const best = c.candidates[0]; return best && !c.noneCloseEnough && best.score >= c.threshold ? { id: best.id, score: best.score } : null; },
+    emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: !process.env.SB_TEST || process.env.SB_BRAIN_JOBS === '1' });
+  brainModel.start();
+
   return {
+    brainModel,
     chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, later, engines, agents, agentAuthoring, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, classifyAgents, classifierTuning,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
@@ -646,7 +658,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot, Date.now, () => progressService.award('setup-complete')),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); devops.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { brainModel.stop(); clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); devops.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
     killNow: () => { compareRuns.killNow(); manager.killAll(); runner.shutdown(); },
   };
 }

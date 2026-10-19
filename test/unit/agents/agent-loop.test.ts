@@ -294,15 +294,14 @@ describe('sub-agent runs', () => {
 });
 
 describe('approval surfaces', () => {
-  it('the learned rules and the Orchestrator drafts are in the same read, and reading applies nothing', async () => {
+  it('the Orchestrator drafts are in the read, and reading applies nothing', async () => {
     const w = world();
     const a = w.catalog.save(draft());
     const loop = createAgentLoop({ userData: w.userData, catalog: w.catalog, runs: w.runs, authoring: w.authoring, classify: async () => { throw new Error('none'); },
-      learning: { pending: () => [{ id: 'l1', agentId: a.id, rule: 'Always cite files', evidence: 'r_000000000001', createdAt: 1, status: 'pending' }] },
       chats: { list: () => [], send: vi.fn() }, engineOn: () => true, userWaiting: () => false, wakeEnabled: () => false, idle: () => false });
     await w.authoring.call('agent_archive', { agentId: a.id, reason: 'Unused' }, 'orch');
     const snap = loop.api.read({ agentId: a.id });
-    expect(snap.learned!.map(l => l.id)).toEqual(['l1']);
+    expect('learned' in snap).toBe(false);
     expect(snap.drafts!.map(d => d.op)).toEqual(['archive']);
     expect(w.agent(a.id).status).toBe('active');
   });

@@ -2,10 +2,10 @@
 import{createElement}from'react';import{renderToStaticMarkup}from'react-dom/server';import{beforeEach,expect,it,vi}from'vitest';
 import type{AgentCatalog,AgentProfile}from'../../src/shared/agents';
 const mock=vi.hoisted(()=>({role:undefined as unknown,catalog:null as AgentCatalog|null}));
-const pages=['agenti','devops','procedure','esplora','fatto','qualita','idee','costi','confronto'].map(id=>({id,label:id}));
+const pages=['agenti','devops','skill','esplora','fatto','qualita','idee','costi','confronto'].map(id=>({id,label:id}));
 vi.mock('../../src/renderer/store/store',()=>({app:{get:()=>({info:{engines:[]}})},createChat:vi.fn(),cliLogin:vi.fn(),useApp:(select:(s:unknown)=>unknown)=>select({info:{brainRoot:'C:/work'},order:['regia'],chats:{regia:{isRegia:true}}})}));
 vi.mock('../../src/renderer/store/agents',()=>({useAgents:()=>({catalog:mock.catalog,setup:null,error:null})}));
-vi.mock('../../src/renderer/store/ui',()=>({BRAIN_PAGES:['agenti','devops','procedure','esplora','fatto','qualita','idee','costi','confronto'].map(id=>({id,label:id})),ui:{use:(select:(s:unknown)=>unknown)=>select({prefs:{newChat:{cwd:'C:/work',permissionMode:''},role:mock.role},newChatRegia:false})},closeModal:vi.fn(),openModal:vi.fn(),setPrefs:vi.fn(),setRegiaTab:vi.fn()}));
+vi.mock('../../src/renderer/store/ui',()=>({BRAIN_PAGES:['agenti','devops','skill','esplora','fatto','qualita','idee','costi','confronto'].map(id=>({id,label:id})),ui:{use:(select:(s:unknown)=>unknown)=>select({prefs:{newChat:{cwd:'C:/work',permissionMode:''},role:mock.role},newChatRegia:false})},closeModal:vi.fn(),openModal:vi.fn(),setPrefs:vi.fn(),setRegiaTab:vi.fn()}));
 vi.mock('../../src/renderer/actions',()=>({focusChat:vi.fn(),go:vi.fn(),regiaId:()=> 'regia'}));
 vi.mock('../../src/renderer/components/ui',()=>({Modal:({children}:{children:React.ReactNode})=>children,Keys:()=>null}));
 vi.mock('../../src/renderer/components/AgentAvatar',()=>({AgentAvatar:()=>null}));

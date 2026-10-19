@@ -35,7 +35,7 @@ export type AgentOrigin =
   | { kind: 'preset'; presetId: string; presetRevision: number }
   | { kind: 'user' }
   | { kind: 'orchestrator'; reason: string; evidence: AgentEvidenceRef[] };
-export type AgentAuthor = 'user' | 'orchestrator' | 'preset' | 'migration';
+export type AgentAuthor = 'user' | 'orchestrator' | 'preset' | 'migration' | 'maintenance';
 
 export interface AgentDraft {
   knowhow?: AgentKnowhow;

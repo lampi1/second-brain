@@ -22,7 +22,6 @@ export const brainLibIt = {
   // discuss.ts
   'brainLib.discuss.kindIdea': 'Idea',
   'brainLib.discuss.kindReflection': 'Riflessione',
-  'brainLib.discuss.kindProcedure': 'Procedura',
   'brainLib.discuss.kindError': 'Errore',
   'brainLib.discuss.kindNumber': 'Numero',
 

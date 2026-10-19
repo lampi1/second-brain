@@ -1,7 +1,7 @@
 // A fresh brain starts empty (the owner, 2026-10-18: "a installazione pulita ... mi aspetto pulito ... tutto quello che
 // riguarda l'app deve essere invisibile nel brain dell'utente"; ADR 0072). Both creators (BrainCreator, the automatic
 // memory of modules/ai-first) end here: the brain gets only the owner's profile (me.md, their own data), brain.json (the
-// machinery marker, the values the owner typed, the rules settings) and a credentials .gitignore. Rules, procedures,
+// machinery marker, the values the owner typed, the rules settings) and a credentials .gitignore. Rules,
 // skills, agents, tools, hooks and the model table come from the app's own copy (rules/tools.ts, rules.appRules) at
 // each launch; files like now.md or ideas.md appear only when the owner or an agent first writes them. Never run on an
 // existing brain: a legacy brain keeps all its files (migration.ts is its separate, reviewed path).
@@ -72,6 +72,7 @@ export function memoryInstructions(runtime: string, root: string, tools?: string
   const brain = root.replace(/\\/g, '/');
   return `Product memory writer (paths are literal arguments): node "${cli}" now "${brain}" "chat label" "where · state · next".\n` +
     `Error: node "${cli}" error "${brain}" "agent" "verified error and prevention".\n` +
+    `Agent memory (one per agent, when your instructions name your id): node "${cli}" agent "${brain}" "<id>" "one fact worth remembering".\n` +
     `Diagnostics: node "${cli}" lint "${brain}". Shell tools must preserve argument boundaries; never interpolate untrusted text.` +
     (tools ? `\nBrain utilities: {tools} = ${tools.replace(/\\/g, '/')} (app-owned, rendered for this brain); e.g. node "${tools.replace(/\\/g, '/')}/ops/tools/mem.mjs" idea "…".` : '');
 }

@@ -1,7 +1,9 @@
 // Deterministic portable pack emission and tool-directory projections. The flow must guard staging before saving.
+// Beside the agent and its skills a pack may carry the brain's rules (rules/<name>.md) and TOOLS.md (pack/rules.ts, ADR 0077).
 import { createHash } from 'node:crypto';
 import { checkedPack, claudePackTools, SKILL_SPEC_KEYS, type AgentPackManifest, type PackTarget } from '../../../shared/agent-pack';
 import { checkMd, field, parseMd, setFields } from '../../../shared/skillmd';
+import { RULE_FILE, TOOLS_FILE } from './rules';
 import { emitAgentToml } from './toml';
 import { checkPackPath, writeZip, type PackFiles } from './zip';
 
@@ -23,7 +25,7 @@ export function agentBody(manifest: AgentPackManifest, instructions: string): st
   return `${instructions.trim()}\n\n## Contratto\n\n${[
     m.whenNotToUse && `Non usare: ${m.whenNotToUse}`, m.input && `Input: ${m.input}`, m.output && `Output: ${m.output}`,
     ...(m.successCriteria ?? []).map(s => `- ${s}`),
-  ].filter(Boolean).join('\n')}\n\nUsa la skill \`${manifest.agent.id}\`: regole imparate e file di riferimento.\n`;
+  ].filter(Boolean).join('\n')}\n\nUsa la skill \`${manifest.agent.id}\` e le altre skill del pacchetto: come si fa il lavoro, con i file di riferimento.\n`;
 }
 
 function agentMd(manifest: AgentPackManifest, body: string, cursor: boolean): string {
@@ -37,8 +39,9 @@ function agentMd(manifest: AgentPackManifest, body: string, cursor: boolean): st
   return [...lines, '---', '', body].join('\n');
 }
 
-/** Input is only skills; callers cannot accidentally include hooks, MCP, run records or raster avatars. */
-export function emitPack(input: AgentPackManifest, instructions: string, skills: PackFiles, allowExtraKeys = false): PackFiles {
+/** Input is only skills, plus `extras` (rules/<name>.md and TOOLS.md, plain text); callers cannot accidentally include
+ *  hooks, MCP, run records, memory or raster avatars. */
+export function emitPack(input: AgentPackManifest, instructions: string, skills: PackFiles, allowExtraKeys = false, extras: PackFiles = new Map()): PackFiles {
   const manifest = checkedPack(input), files: PackFiles = new Map();
   for (const [name, data] of skills) {
     checkPackPath(name);
@@ -53,6 +56,13 @@ export function emitPack(input: AgentPackManifest, instructions: string, skills:
     if (!md) throw new Error('Missing SKILL.md');
     validateSkill(s.name, md.toString('utf8'), allowExtraKeys);
     s.hash = hashFiles(skillFiles(files, s.name));
+  }
+  for (const [name, data] of extras) {
+    checkPackPath(name);
+    if (!(RULE_FILE.test(name) || name === TOOLS_FILE) || data.length > 256 * 1024) throw new Error('Unsupported pack file');
+    new TextDecoder('utf-8', { fatal: true }).decode(data);
+    if (data.includes(0)) throw new Error('Binary pack file');
+    files.set(name, Buffer.from(data));
   }
   const a = manifest.agent, body = agentBody(manifest, instructions);
   const plugin = { name: a.id, version: `1.0.${manifest.revision}`, description: a.role };
@@ -76,8 +86,10 @@ export function emitTarget(files: PackFiles, target: PackTarget): PackFiles {
   if (target === 'sbagent') return new Map(files);
   const manifest = checkedPack(JSON.parse(files.get('sbagent.json')!.toString('utf8'))), result: PackFiles = new Map();
   const prefix = target === 'codex' ? '.agents' : `.${target}`;
-  for (const [name, data] of files) if (name.startsWith('skills/')) result.set(`${prefix}/${name}`, Buffer.from(data));
   const a = manifest.agent;
+  for (const [name, data] of files) if (name.startsWith('skills/')) result.set(`${prefix}/${name}`, Buffer.from(data));
+  // the tools' folders have no place for rules or a tools list: they travel inside the agent's own skill
+  for (const [name, data] of files) if (RULE_FILE.test(name) || name === TOOLS_FILE) result.set(`${prefix}/skills/${a.id}/${name}`, Buffer.from(data));
   if (target === 'codex') result.set(`.codex/agents/${a.id}.toml`, Buffer.from(files.get(`codex/agents/${a.id}.toml`)!));
   else result.set(`.${target}/agents/${a.id}.md`, target === 'cursor'
     ? Buffer.from(agentMd(manifest, parseMd(files.get(a.instructionsFile)!.toString('utf8')).body, true)) : Buffer.from(files.get(a.instructionsFile)!));

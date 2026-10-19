@@ -24,7 +24,6 @@ export const brainLibEn: typeof brainLibIt = {
   // discuss.ts
   'brainLib.discuss.kindIdea': 'Idea',
   'brainLib.discuss.kindReflection': 'Reflection',
-  'brainLib.discuss.kindProcedure': 'Procedure',
   'brainLib.discuss.kindError': 'Error',
   'brainLib.discuss.kindNumber': 'Number',
 

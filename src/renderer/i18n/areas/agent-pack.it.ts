@@ -9,6 +9,7 @@ export const agentPackIt = {
   'pack.exclude': 'Escludi', 'pack.open': 'Apri', 'pack.rescan': 'Controlla di nuovo', 'pack.allow': 'È un falso positivo',
   'pack.review': 'Controlla importazione', 'pack.scripts': 'Script da approvare', 'pack.approveScripts': 'Approvo questi script',
   'pack.scriptHint': 'Senza approvazione saranno rimossi. L’app non li esegue.', 'pack.ignored': 'Ignorati',
+  'pack.rules': 'Regole', 'pack.rulesHint': 'Vanno nella cartella rules/ del brain; un file con lo stesso nome già presente resta il tuo.',
   'pack.permissions': 'Permessi', 'pack.personal': 'Ho controllato i dati personali e approvo l’importazione',
   'pack.apply': 'Importa in prova', 'pack.collision': 'Come importare', 'pack.update': 'Aggiorna con una versione in prova',
   'pack.copy': 'Importa come copia', 'pack.rename': 'Importa con un nome disponibile', 'pack.present': 'Pacchetto già presente',

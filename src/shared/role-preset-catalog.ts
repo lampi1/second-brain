@@ -7,8 +7,8 @@ const preset = (id: string, title: string, agentIds: string[], pageIds: string[]
   defaults: { homePageId, primaryAgentId: agentIds[0]! },
 });
 const LEGACY_PRESETS: RolePreset[] = [
-  {...preset('dev', 'Dev', ['default-development', 'default-research', 'default-planning'], ['agenti', 'devops', 'procedure', 'fatto'], 'agenti'),revision:2},
-  preset('qa', 'QA', ['default-analysis', 'default-development', 'default-research'], ['qualita', 'agenti', 'devops', 'procedure', 'fatto'], 'qualita'),
+  {...preset('dev', 'Dev', ['default-development', 'default-research', 'default-planning'], ['agenti', 'devops', 'skill', 'fatto'], 'agenti'),revision:2},
+  preset('qa', 'QA', ['default-analysis', 'default-development', 'default-research'], ['qualita', 'agenti', 'devops', 'skill', 'fatto'], 'qualita'),
   {...preset('po', 'PO', ['default-planning', 'default-writing', 'default-research'], ['idee', 'agenti', 'devops', 'fatto'], 'idee'),revision:2},
   preset('cto', 'CTO', ['default-analysis', 'default-planning', 'default-development'], ['costi', 'agenti', 'qualita', 'confronto', 'devops', 'fatto'], 'costi'),
 ];

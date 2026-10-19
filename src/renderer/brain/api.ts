@@ -103,8 +103,6 @@ export function brainClient(): BrainClient {
   client = new BrainClient(path => window.sb.invoke('brain:api', { path }));
   // a brain file changed (idea, error, diary, now.md…): the tables are stale
   try { window.sb.on('feed:events', () => client?.invalidate('/api/tables')); } catch { /* no bridge (tests) */ }
-  // a procedure file changed (main's brain watcher): the Procedure page's list and the open procedure
-  try { window.sb.on('procedures:changed', () => client?.invalidate('/api/procedure')); } catch { /* no bridge (tests) */ }
   return client;
 }
 

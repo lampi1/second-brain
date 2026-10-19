@@ -10,6 +10,7 @@ export const agentPackEn: typeof agentPackIt = {
   'pack.exclude': 'Exclude', 'pack.open': 'Open', 'pack.rescan': 'Scan again', 'pack.allow': 'False positive',
   'pack.review': 'Review import', 'pack.scripts': 'Scripts for approval', 'pack.approveScripts': 'I approve these scripts',
   'pack.scriptHint': 'Without approval they will be removed. The app does not execute them.', 'pack.ignored': 'Ignored',
+  'pack.rules': 'Rules', 'pack.rulesHint': 'They go to the brain\'s rules/ folder; a file of the same name already there stays yours.',
   'pack.permissions': 'Permissions', 'pack.personal': 'I reviewed the personal data and approve importing it',
   'pack.apply': 'Import on probation', 'pack.collision': 'Import choice', 'pack.update': 'Update with a trial version',
   'pack.copy': 'Import a copy', 'pack.rename': 'Import with an available name', 'pack.present': 'Package already present',

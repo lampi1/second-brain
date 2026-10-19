@@ -196,7 +196,7 @@ export interface LiveOptions {
   debounceMs?: number;        // default 400 ms
   /** chats to leave out of the poll (the app's own chats: their events come from the chat manager) */
   skipChat?: (id: string) => boolean;
-  /** every changed path (relative, forward slashes), before any parsing: e.g. the Procedure page's list */
+  /** every changed path (relative, forward slashes), before any parsing: e.g. the Brain pages' refresh (brainmodel) */
   onFile?: (f: string) => void;
 }
 

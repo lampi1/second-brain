@@ -10,7 +10,7 @@ const catalog={profiles,archived:[]}as unknown as AgentCatalog;
 it('Dev suggests its primary agent first and changes navigation references, with common Home kept separate',()=>{
  const raw=rolePreview(undefined,'dev',{pageIds:pages,agentIds:profiles.map(profile=>profile.id)}).next;
  expect(roleAgents(raw,catalog,pages).map(profile=>profile.id)).toEqual(['default-implementer','default-researcher','default-day-planner']);
- expect(activeRole(raw,catalog,pages)?.pageIds).toContain('procedure');expect(activeRole(raw,catalog,pages)?.pageIds).not.toContain('costi');
+ expect(activeRole(raw,catalog,pages)?.pageIds).toContain('skill');expect(activeRole(raw,catalog,pages)?.pageIds).not.toContain('costi');
  expect(profiles[1]?.model).toBeNull();
 });
 it('preserves customized membership and never invents a missing catalog profile',()=>{

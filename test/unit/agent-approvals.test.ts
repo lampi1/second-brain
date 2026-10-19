@@ -6,7 +6,6 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AgentCatalog, AgentProfile, VersionMetrics } from '../../src/shared/agents';
 import type { AgentProposal } from '../../src/shared/agent-authoring';
 import type { AgentLifecycleSnapshot } from '../../src/shared/agent-lifecycle';
-import type { LearnedRules } from '../../src/shared/agent-pack';
 import type { ClassifierCalibration } from '../../src/shared/agent-classifier';
 import { decideApproval, diffDefinition, gatherApprovals, lineDiff, lifecycleTarget, type ApprovalItem, type ApprovalsClient } from '../../src/renderer/lib/agent-approvals';
 import { AgentApprovalsView } from '../../src/renderer/components/AgentApprovalCards';
@@ -24,7 +23,7 @@ const vm = (agentId: string, version: number, success: number): VersionMetrics =
   timeToDone: { elapsed: metric(180_000), execution: metric(null, 0) }, questionsPerRun: metric(2), permissionsPerRun: metric(0), commandsPerRun: metric(0), reviews: [],
 });
 
-function fixture(over: { proposals?: AgentProposal[]; lifecycle?: Partial<AgentLifecycleSnapshot>; rules?: Record<string, LearnedRules>; failLifecycle?: boolean; failProposals?: boolean; profiles?: AgentProfile[]; calibration?: ClassifierCalibration[] } = {}) {
+function fixture(over: { proposals?: AgentProposal[]; lifecycle?: Partial<AgentLifecycleSnapshot>; failLifecycle?: boolean; failProposals?: boolean; profiles?: AgentProfile[]; calibration?: ClassifierCalibration[] } = {}) {
   const profiles = over.profiles ?? [
     agent('writer'),
     agent('tester', { trial: { version: 3, baseline: 2, startedAt: 50 }, activeVersion: 3, version: 3 }),
@@ -34,24 +33,19 @@ function fixture(over: { proposals?: AgentProposal[]; lifecycle?: Partial<AgentL
   const calls: [string, unknown][] = [];
   const answers: Record<string, unknown> = {
     'agents:list': catalog, 'agents:proposals': over.proposals ?? [], 'agents:metrics': [{ agentId: 'tester', versions: [vm('tester', 2, 0.5), vm('tester', 3, 0.8)], all: null, open: 0 }],
-    'agents:proposalDecide': agent('writer', { updatedAt: 200, activeVersion: 3 }), 'agents:undo': agent('writer'), 'agents:learnDecide': { text: '', proposals: [] },
+    'agents:proposalDecide': agent('writer', { updatedAt: 200, activeVersion: 3 }), 'agents:undo': agent('writer'),
     'agents:trialDecide': agent('tester'), 'agents:lifecycleDecide': { proposals: [], evaluations: [], feedback: [], problem: null }, 'agents:keep': agent('imported'), 'agents:retire': agent('imported'), 'agents:restore': agent('imported'),
     'agents:classifierCalibration': over.calibration ?? [], 'agents:classifierDecide': [],
   };
   const client: ApprovalsClient = {
     invoke: (async (channel: string, arg: unknown) => {
       calls.push([channel, arg]);
-      if (channel === 'agents:learnList') {
-        const r = over.rules?.[(arg as { id: string }).id];
-        if (!r) throw new Error('no know-how');
-        return r;
-      }
       if (channel === 'agents:proposals' && over.failProposals) throw new Error('store unreadable');
       return answers[channel];
     }) as ApprovalsClient['invoke'],
     lifecycle: { read: async () => { if (over.failLifecycle) throw new Error('down'); return { proposals: [], evaluations: [], feedback: [], problem: null, ...over.lifecycle }; } },
   };
-  return { client, calls, reads: (channel: string) => calls.filter(([c]) => c === channel).length, writes: () => calls.filter(([c]) => !['agents:list', 'agents:proposals', 'agents:metrics', 'agents:learnList', 'agents:classifierCalibration'].includes(c)), profiles };
+  return { client, calls, reads: (channel: string) => calls.filter(([c]) => c === channel).length, writes: () => calls.filter(([c]) => !['agents:list', 'agents:proposals', 'agents:metrics', 'agents:classifierCalibration'].includes(c)), profiles };
 }
 const proposal = (extra: Partial<AgentProposal> = {}): AgentProposal => ({
   id: 'p1', at: 10, kind: 'proposal', agentId: 'writer', baseRevision: 100, state: 'pending', reason: 'Troppe domande', expectedEffect: 'Meno domande',
@@ -59,10 +53,9 @@ const proposal = (extra: Partial<AgentProposal> = {}): AgentProposal => ({
 });
 
 describe('gatherApprovals', () => {
-  it('collects definitions, learned rules, open trials, probations and lifecycle suggestions in decision order', async () => {
+  it('collects definitions, open trials, probations and lifecycle suggestions in decision order', async () => {
     const f = fixture({
       proposals: [proposal(), proposal({ id: 'done', state: 'accepted' })],
-      rules: { writer: { text: '', proposals: [{ id: 'r1', agentId: 'writer', rule: 'Cita le fonti', evidence: 'Due correzioni', createdAt: 20, status: 'pending' }] } },
       lifecycle: { proposals: [
         { key: 'trial:tester:3', kind: 'keep', agentIds: ['tester'], reason: 'Migliora', evidence: [], at: 60, state: 'pending' },
         { key: 'trial:gone:1', kind: 'revert', agentIds: ['gone'], reason: 'Vecchia', evidence: [], at: 61, state: 'pending' },
@@ -70,7 +63,7 @@ describe('gatherApprovals', () => {
       ] },
     });
     const s = await gatherApprovals(f.client);
-    expect(s.items.map(i => i.type)).toEqual(['definition', 'rule', 'trial', 'probation', 'lifecycle']);
+    expect(s.items.map(i => i.type)).toEqual(['definition', 'trial', 'probation', 'lifecycle']);
     const trial = s.items.find(i => i.type === 'trial') as Extract<ApprovalItem, { type: 'trial' }>;
     expect(trial.advice?.kind).toBe('keep');
     expect(trial.before?.version).toBe(2); expect(trial.after?.version).toBe(3); // from agents:metrics when the advice has none
@@ -82,19 +75,17 @@ describe('gatherApprovals', () => {
     const f = fixture({ proposals: [proposal({ baseRevision: 99 })], failLifecycle: true });
     const s = await gatherApprovals(f.client);
     expect(s.items[0]).toMatchObject({ type: 'definition', stale: true });
-    expect(s.problems).toEqual(['lifecycle', 'rules']);
+    expect(s.problems).toEqual(['lifecycle']);
   });
 });
 
-describe('gatherApprovals with the lifecycle queue (learned, drafts, advice)', () => {
-  it('reads learned rules from the queue in one call and falls back to its drafts when agents:proposals fails', async () => {
+describe('gatherApprovals with the lifecycle queue (drafts, advice)', () => {
+  it('falls back to the queue drafts when agents:proposals fails; lessons are never approval cards (ADR 0077)', async () => {
     const f = fixture({ failProposals: true, lifecycle: {
-      learned: [{ id: 'r9', agentId: 'writer', rule: 'Cita', evidence: 'x', createdAt: 5, status: 'pending' }, { id: 'r0', agentId: 'unknown', rule: 'x', evidence: 'x', createdAt: 5, status: 'pending' }],
       drafts: [proposal({ id: 'd1' })],
     } });
     const s = await gatherApprovals(f.client);
-    expect(f.reads('agents:learnList')).toBe(0);
-    expect(s.items.filter(i => i.type === 'rule').map(i => i.key)).toEqual(['rule:r9']);
+    expect(s.items.map(i => i.type)).not.toContain('rule');
     expect(s.items.find(i => i.type === 'definition')?.key).toBe('def:d1');
     expect(s.problems).toEqual([]);
   });
@@ -120,12 +111,11 @@ describe('decideApproval', () => {
     const f = fixture({ lifecycle: { proposals: [
       { key: 'trial:tester:3', kind: 'revert', agentIds: ['tester'], reason: 'Peggiora', evidence: [], at: 60, state: 'pending' },
       { key: 'work:x', kind: 'update', agentIds: ['writer'], reason: 'Lacuna ripetuta', evidence: [], at: 30, state: 'pending' },
-    ] }, rules: { writer: { text: '', proposals: [{ id: 'r1', agentId: 'writer', rule: 'Cita', evidence: 'x', createdAt: 1, status: 'pending' }] } } });
+    ] } });
     const items = (await gatherApprovals(f.client)).items, by = (t: string) => items.find(i => i.type === t)!;
     expect(await decideApproval(f.client, by('lifecycle'), { type: 'queue', decision: 'approve' })).toBeNull();
     await decideApproval(f.client, by('trial'), { type: 'queue', decision: 'dismiss' });
     expect(f.writes()).toEqual([['agents:lifecycleDecide', { key: 'work:x', decision: 'approve' }], ['agents:lifecycleDecide', { key: 'trial:tester:3', decision: 'dismiss' }]]);
-    await expect(decideApproval(f.client, by('rule'), { type: 'queue', decision: 'approve' })).rejects.toThrow();
     await expect(decideApproval(f.client, by('probation'), { type: 'queue', decision: 'dismiss' })).rejects.toThrow(); // no advice on it
   });
   it('undoes an accepted archive request by restoring the agent', async () => {
@@ -152,16 +142,14 @@ describe('decideApproval', () => {
     expect(f.writes()[1]![1]).toMatchObject({ operation: 'archive' });
     expect(await decideApproval(f.client, item, { type: 'definition', accept: false })).toBeNull();
   });
-  it('maps rules, trials and probations to their channels', async () => {
-    const f = fixture({ rules: { writer: { text: '', proposals: [{ id: 'r1', agentId: 'writer', rule: 'Cita', evidence: 'x', createdAt: 1, status: 'pending' }] } } });
+  it('maps trials and probations to their channels', async () => {
+    const f = fixture();
     const items = (await gatherApprovals(f.client)).items, by = (t: string) => items.find(i => i.type === t)!;
-    await decideApproval(f.client, by('rule'), { type: 'rule', decision: 'edit', text: 'Cita sempre' });
     await decideApproval(f.client, by('trial'), { type: 'trial', decision: 'rollback' });
     await decideApproval(f.client, by('probation'), { type: 'probation', decision: 'keep' });
     const retire = await decideApproval(f.client, by('probation'), { type: 'probation', decision: 'retire', reason: 'no' });
     await retire!.run();
     expect(f.writes()).toEqual([
-      ['agents:learnDecide', { id: 'writer', proposalId: 'r1', decision: 'edit', text: 'Cita sempre' }],
       ['agents:trialDecide', { id: 'tester', decision: 'rollback' }],
       ['agents:keep', { id: 'imported' }],
       ['agents:retire', { id: 'imported', reason: 'no' }],

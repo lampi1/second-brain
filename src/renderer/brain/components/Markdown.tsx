@@ -1,10 +1,10 @@
 // Markdown viewer of the brain pages: marked (GFM) → DOMPurify (its own instance, so hooks never touch other modules)
 // → HTML. After sanitizing: http(s) links open outside the app (target=_blank, main opens the system browser); every
 // other link is neutralized (a relative href would navigate the app window) and, when it names a brain file, opens it
-// in Esplora; `code` that names a brain file becomes a link too; each table gets a "CSV" button. With `copy` (Procedure)
+// in Esplora; `code` that names a brain file becomes a link too; each table gets a "CSV" button. With `copy`
 // every code block gets a "Copia" button and a click on inline code copies it; with `copyBlocks` (the file viewer) only
 // the blocks get it: copy only, nothing here ever runs. Code blocks wrap their long lines (brain.css .bx-md pre), so
-// nothing is cut off on the right. Used by Fatto, Idee, Confronto, Esplora, Procedure, FileViewer.
+// nothing is cut off on the right. Used by Fatto, Idee, Confronto, Esplora, FileViewer.
 import { useMemo, type MouseEvent } from 'react';
 import { Marked } from 'marked';
 import DOMPurify from 'dompurify';

@@ -6,7 +6,8 @@ import type { SysCode, SysParams } from './sys';
 import type { AgentClassification, ClassifierCalibration, ClassifierDecision } from './agent-classifier';
 import type { AgentProposal, AgentUndo } from './agent-authoring';
 import type { AgentLifecycleDecide, AgentLifecycleSnapshot } from './agent-lifecycle';
-import type { PackTarget, PackExportPlan, PackFinding, PackImportReview, LearnedRules } from './agent-pack';
+import type { PackTarget, PackExportPlan, PackFinding, PackImportReview } from './agent-pack';
+import type { BrainModelState, ClassifiersState, MaintenanceJobId } from './brain-model';
 import type { ApprovalDecision, ApprovalItem, PulseActResult, PulseDismissReason, PulseList, PulsePlace, PulseResult, PulseStatus, PulseSettings, PulseType } from './pulse';
 import type { ConnectorId, ConnectorState } from './connectors';
 import type { FileViewResult } from './file-view';
@@ -983,16 +984,6 @@ export type CompareState = { ok: true; experiments: CompareExperiment[] } | { ok
 export type LearnAction = { action: 'apply' | 'reject'; id: string } | { action: 'rollback'; domain: string };
 export type LearnResult = { ok: true; message: string } | { ok: false; error: string };
 
-/** One procedure of the brain on the Procedure page (main brain/procedures.ts, /api/procedures): a leaf section of a
- *  runbook-like file. `line` 1-based (its heading), `changedAt` = the file's last change (ISO), tags in Italian
- *  (passi, query, comandi, produzione), `source` = the kind of file (Runbook, Routine, Regole…). */
-export interface ProcedureSummary {
-  id: string; title: string; purpose: string; area: string; group: string | null;
-  file: string; line: number; source: string; tags: string[]; changedAt: string | null;
-}
-/** /api/procedure?id=…: the procedure's markdown with every line that may hold a credential replaced (`masked` lines),
- *  `path` = the file's full path. Read-only: the page only renders and copies it. */
-export interface Procedure extends ProcedureSummary { path: string; markdown: string; masked: number }
 /** Per engine, the models its CLI offered at its last session (ACP's availableModels), kept in userData; absent = none
  *  seen yet (the UI falls back to its own list). The app never starts a CLI just to ask. */
 export type ModelsSeen = Partial<Record<Harness, { ids: { id: string; name: string }[]; at: number }>>;
@@ -1177,9 +1168,7 @@ export interface InvokeMap {
   'agents:importInspect': [{ pick: true } | { dropped: string }, PackImportReview | null];
   'agents:importApply': [{ token: string; approveScripts: boolean; approvePersonalData?: boolean; collision: 'update' | 'copy' | 'rename' }, AgentProfile[]];
   'agents:importCancel': [{ token: string }, void];
-  'agents:learnList': [{ id: string }, LearnedRules];
-  'agents:learnDecide': [{ id: string; proposalId: string; decision: 'approve' | 'edit' | 'discard'; text?: string }, LearnedRules];
-  /** ends the open trial of a pack update or an approved learned rule; a new agent's probation uses agents:keep/agents:retire */
+  /** ends the open trial of a pack update; a new agent's probation uses agents:keep/agents:retire */
   'agents:trialDecide': [{ id: string; decision: 'keep' | 'rollback' }, AgentProfile];
   /** the user's decision on one "Da approvare" entry (AgentLifecycleProposal, read at /api/agents/lifecycle): approve does
    *  what its kind says (agent-lifecycle.ts), dismiss drops it for a while; returns the queue after the decision */
@@ -1198,6 +1187,15 @@ export interface InvokeMap {
   /** Brother's verdict on a settled agent run (Home strip); renderer only, never an agent tool. */
   'run:outcome': [{ chatId: string; verdict: 'success' | 'partial' | 'fail' }, ChatSummary];
   'agents:restoreVersion': [{ id: string; version: number }, AgentProfile];
+  /** the Brain pages (ADR 0077, src/main/brainmodel): agents, skills and their links, rules, memory, the change log */
+  'brainmodel:state': [void, BrainModelState];
+  /** the maintenance button: run every job now (or one); every change is logged and can be undone */
+  'brainmodel:maintain': [{ job?: MaintenanceJobId } | undefined, BrainModelState];
+  'brainmodel:rollback': [{ id: string }, BrainModelState];
+  /** the user declares (on) or drops (off) a skill for an agent */
+  'brainmodel:link': [{ skill: string; agentId: string; on: boolean }, BrainModelState];
+  /** Classificatori (read-only): the routing table with history and measured results, recent agent choices */
+  'classifiers:state': [void, ClassifiersState];
   'setup:get': [void, SetupState];
   'setup:save': [{ preferences: SetupDraft; status: 'draft' | 'completed' | 'skipped' }, SetupState];
   /** the owner's profile in the brain's me.md (src/main/brain/profile.ts) */
@@ -1443,8 +1441,8 @@ export interface EventMap {
   'improve:state': ImproveState;
   'later:changed': AnswerLater;
   'search:status': SearchIndexStatus;
-  /** a procedure file of the brain changed on disk (brain watcher): the Procedure page reloads its list */
-  'procedures:changed': void;
+  /** a skill, rule, memory file or agent link changed (a maintenance job, a rollback, the brain on disk) */
+  'brainmodel:changed': void;
   /** a domain's sync status changed (ADR 0059) */
   'sync:state': SyncState;
   /** a new headline (or the same after a failed refresh, source previous) */
@@ -1469,7 +1467,7 @@ export const INVOKE_CHANNELS = [
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
   'agents:classify', 'agents:classifierCalibration', 'agents:classifierDecide', 'agents:list', 'agents:proposals', 'agents:proposalDecide', 'agents:undo', 'agents:save', 'agents:duplicate', 'agents:archive', 'agents:restore', 'agents:history', 'agents:metrics', 'agents:keep', 'agents:retire', 'run:outcome', 'agents:restoreVersion', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
-  'agents:exportPlan', 'agents:exportFix', 'agents:export', 'agents:importInspect', 'agents:importApply', 'agents:importCancel', 'agents:learnList', 'agents:learnDecide', 'agents:trialDecide', 'agents:lifecycleDecide',
+  'agents:exportPlan', 'agents:exportFix', 'agents:export', 'agents:importInspect', 'agents:importApply', 'agents:importCancel', 'brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'brainmodel:link', 'classifiers:state', 'agents:trialDecide', 'agents:lifecycleDecide',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
   'settings:undo', 'settings:propose', 'settings:pending', 'settings:confirm', 'estimate:record', 'brain:api',
@@ -1490,7 +1488,7 @@ export const EVENT_CHANNELS = [
   'chat:autoCloseStatus',
   'agents:changed', 'agents:lifecycleChanged',
   'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'cli:ready', 'focus:next', 'ui:command',
-  'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'devops:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'improve:state', 'later:changed', 'search:status', 'procedures:changed', 'sync:state', 'headline:changed',
+  'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'devops:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'improve:state', 'later:changed', 'search:status', 'brainmodel:changed', 'sync:state', 'headline:changed',
 ] as const satisfies readonly EventChannel[];
 
 type Missing<All, Listed> = Exclude<All, Listed>;

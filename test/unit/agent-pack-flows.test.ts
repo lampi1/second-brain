@@ -1,4 +1,4 @@
-// Real catalog + isolated brain integration tests for pack review, probation, learned rules and preset forks.
+// Real catalog + isolated brain integration tests for pack review, probation, the lessons queue and preset forks.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,7 +9,7 @@ import { AgentPackLearning, agentLearnTool } from '../../src/main/agents/pack/le
 import { emitPack } from '../../src/main/agents/pack/emit';
 import { readPackSource } from '../../src/main/agents/pack/read';
 import { readZip, writeZip } from '../../src/main/agents/pack/zip';
-import { ORCHESTRATOR_AGENT_ID, type AgentDraft, type AgentModelChoice } from '../../src/shared/agents';
+import { type AgentDraft, type AgentModelChoice } from '../../src/shared/agents';
 import type { GuardResult } from '../../src/main/brain/guard';
 
 const roots: string[] = [];
@@ -27,7 +27,7 @@ function setup() {
   return { root, brain, data, catalog, flows, destination, advance: () => { clock += 600001; }, scan: (r: GuardResult) => { result = r; } };
 }
 function packFile(root: string, revision = 1, tools = ['read'], script = false): string {
-  const hash = 'a'.repeat(64), files = new Map([['skills/reviewer/SKILL.md', Buffer.from('---\nname: reviewer\ndescription: Review changes\n---\nRead learned-rules.md.\n')], ['skills/reviewer/learned-rules.md', Buffer.from('# Learned rules\n')]]);
+  const hash = 'a'.repeat(64), files = new Map([['skills/reviewer/SKILL.md', Buffer.from('---\nname: reviewer\ndescription: Review changes\n---\nRead references/notes.md.\n')], ['skills/reviewer/references/notes.md', Buffer.from('# Notes\n')]]);
   if (script) files.set('skills/reviewer/scripts/check.py', Buffer.from('print("review")'));
   const pack = emitPack({ format: 1, packId: 'reviewer-0123456789abcdef', revision, contentHash: hash,
     agent: { id: 'reviewer', name: 'Reviewer', role: 'Review changes', category: 'development', instructionsFile: 'agents/reviewer.md', manifest: {}, engine: 'claude', model: 'known-model', tools: { allow: tools as ['read'], mcp: ['foreign'] }, permissionCeiling: 'acceptEdits' },
@@ -132,35 +132,12 @@ describe('pack review transactions', () => {
     expect(fs.existsSync(path.join(runtime.pluginDir, '.claude-plugin/plugin.json'))).toBe(true);
     expect(fs.existsSync(path.join(runtime.skillRoot, 'reviewer/SKILL.md'))).toBe(true);
     expect(fs.existsSync(path.join(runtime.pluginDir, 'hooks'))).toBe(false);
-    expect(runtime.instructions).toContain('learned-rules.md');
+    expect(runtime.instructions).toContain('references/notes.md');
+    expect(runtime.instructions).not.toContain('learned-rules');
   });
 });
 
-describe('async learning and brain forks', () => {
-  it('does not resurrect later rules after restoring a pre-knowhow version and saving twice', () => {
-    const f = setup(), learning = new AgentPackLearning(f.flows, f.data), preset = f.catalog.list().profiles[0]!;
-    const proposal = learning.propose(preset.id, 'Later lesson.', 'run:example'); learning.decide(preset.id, proposal.id, 'approve');
-    const before = f.flows.profile(preset.id), restored = f.catalog.resolveTrial(preset.id, 'rollback');
-    f.flows.publishCurrent(restored, before.knowhow?.hash);
-    const first = learning.save({ ...restored, name: 'First' }, restored.id);
-    learning.save({ ...first, name: 'Second' }, first.id);
-    expect(learning.list(first.id).text).not.toContain('Later lesson.');
-  });
-  it('drops and republishes later know-how when a trial is rejected or the Orchestrator rolls back', () => {
-    const f = setup(), learning = new AgentPackLearning(f.flows, f.data), preset = f.catalog.list().profiles[0]!;
-    f.catalog.onKnowhowChange((p, previous) => f.flows.publishCurrent(p, previous));
-    learning.decide(preset.id, learning.propose(preset.id, 'Rejected lesson.', 'run:example').id, 'approve');
-    const rejected = f.catalog.rejectTrial(preset.id, 1);
-    expect(rejected.knowhow).toBeUndefined();
-    expect(learning.list(preset.id).text).not.toContain('Rejected lesson.');
-    expect(learning.list(learning.save({ ...rejected, name: 'After reject' }, rejected.id).id).text).not.toContain('Rejected lesson.');
-    const owned = f.catalog.author({ ...draft(), name: 'Owned', tools: { allow: ['read'] }, permissionCeiling: 'default' }, { reason: 'Needed', evidence: [{ kind: 'run', ref: 'run:example', at: 1 }], presetId: preset.id, requestItemId: 'item-1' });
-    learning.decide(owned.id, learning.propose(owned.id, 'Rolled back lesson.', 'run:example').id, 'approve');
-    expect(f.flows.profile(owned.id).knowhow).toBeDefined();
-    const rolled = f.catalog.authorRollback(owned.id, 1);
-    expect(rolled.knowhow).toBeUndefined();
-    expect(learning.list(owned.id).text).not.toContain('Rolled back lesson.');
-  });
+describe('lessons queue and brain forks', () => {
   it('ignores know-how and pack identity sent by an automatic author', () => {
     const f = setup(), preset = f.catalog.list().profiles[0]!, forged = { knowhow: { folder: 'agents/other/versions/x', linked: [], hash: 'b'.repeat(64) }, pack: { id: 'forged-0123456789abcdef', revision: 9 } };
     const base = { ...draft(), name: 'Owned', tools: { allow: ['read'] as const }, permissionCeiling: 'default' as const };
@@ -169,17 +146,13 @@ describe('async learning and brain forks', () => {
     const updated = f.catalog.author(forged, { id: owned.id, reason: 'Again', evidence: [{ kind: 'run', ref: 'run:example', at: 1 }], baseline: 5 });
     expect(updated.knowhow).toBeUndefined(); expect(updated.pack).toBeUndefined();
   });
-  it('preserves direct brain edits on save and learned-rule approval', () => {
+  it('preserves direct brain edits on save and never seeds learned-rules.md (ADR 0077)', () => {
     const f = setup(), learning = new AgentPackLearning(f.flows, f.data);
-    const agent = learning.save(draft()), file = path.join(f.brain, 'agents', agent.id, 'skills', agent.id, 'learned-rules.md');
-    fs.appendFileSync(file, 'Manual lesson.\n');
+    const agent = learning.save(draft()), dir = path.join(f.brain, 'agents', agent.id, 'skills', agent.id), file = path.join(dir, 'notes.md');
+    expect(fs.existsSync(path.join(dir, 'learned-rules.md'))).toBe(false);
+    fs.writeFileSync(file, 'Manual note.\n');
     learning.save({ ...agent, name: 'Renamed' }, agent.id);
-    expect(fs.readFileSync(file, 'utf8')).toContain('Manual lesson.');
-    fs.appendFileSync(file, 'Another manual lesson.\n');
-    const proposal = learning.propose(agent.id, 'Approved lesson.', 'run:example');
-    learning.decide(agent.id, proposal.id, 'approve');
-    expect(fs.readFileSync(file, 'utf8')).toContain('Another manual lesson.');
-    expect(learning.list(agent.id).text).toContain('Approved lesson.');
+    expect(fs.readFileSync(file, 'utf8')).toContain('Manual note.');
   });
   it('removes deleted owned files from an export on rescan', async () => {
     const f = setup(), learning = new AgentPackLearning(f.flows, f.data);
@@ -193,41 +166,24 @@ describe('async learning and brain forks', () => {
     await f.flows.export(plan.token, false);
     expect(readZip(fs.readFileSync(f.destination)).has(`skills/${agent.id}/reference.md`)).toBe(false);
   });
-  it('queues without editing, forks on approval into brain storage and starts a trial', () => {
+  it('queues a lesson without editing anything and wakes the corrections job', () => {
     const f = setup(), preset = f.catalog.list().profiles[0]!;
     const learning = new AgentPackLearning(f.flows, f.data);
-    const proposal = learning.propose(preset.id, 'Cite evidence.', 'run:example');
-    expect(fs.readdirSync(f.brain)).toEqual([]); expect(learning.list(preset.id).proposals).toHaveLength(1);
-    learning.decide(preset.id, proposal.id, 'approve');
-    const fork = f.flows.profile(preset.id); expect(fork.origin).toEqual(preset.origin); expect(fork.knowhow).toBeDefined(); expect(fork.trial).toMatchObject({ baseline: 1, version: 2 }); expect(fork.probation).toBeUndefined();
-    expect(learning.list(preset.id).text).toContain('Cite evidence.'); expect(learning.list(preset.id).proposals).toEqual([]);
+    let woke = 0; learning.onProposed = () => { woke++; };
+    const proposal = learning.propose(preset.id, 'Cite evidence.', 'run:example', 'skill', 'review-notes');
+    expect(fs.readdirSync(f.brain)).toEqual([]); expect(woke).toBe(1);
+    expect(learning.pending()).toMatchObject([{ id: proposal.id, target: 'skill', skill: 'review-notes' }]);
+    expect(() => learning.propose(preset.id, 'x', 'y', 'everything' as never)).toThrow();
+    learning.settle(proposal.id, 'approved', 'skill review-notes');
+    expect(learning.pending()).toEqual([]);
+    expect(new AgentPackLearning(f.flows, f.data).pending()).toEqual([]); // persisted
     expect(agentLearnTool(learning).name).toBe('agent_learn_propose');
-  });
-  it('keeps the Orchestrator out of routing when a learned rule starts its trial', () => {
-    const f = setup(), coordinator = f.catalog.list().profiles.find(p => p.id === ORCHESTRATOR_AGENT_ID)!;
-    expect(coordinator.routable).toBe(false);
-    const learning = new AgentPackLearning(f.flows, f.data);
-    learning.decide(coordinator.id, learning.propose(coordinator.id, 'Cite evidence.', 'run:example').id, 'approve');
-    expect(f.catalog.list().profiles.find(p => p.id === ORCHESTRATOR_AGENT_ID)).toMatchObject({ routable: false, trial: { version: 2 } });
+    expect(f.flows.profile(preset.id).trial).toBeUndefined(); // no approval, no trial
   });
   it('does not save a catalog edit if the brain is unavailable', () => {
     const f = setup(), before = f.catalog.list().profiles;
     const learning = new AgentPackLearning(f.flows, f.data);
     fs.rmdirSync(f.brain);
     expect(() => learning.save(draft())).toThrow(); expect(f.catalog.list().profiles).toEqual(before);
-  });
-  it('adds learned rules only to the agent own skill when another skill sorts first', async () => {
-    const f = setup(), review = (await f.flows.importInspect({ dropped: packFile(f.root) }))!;
-    const [imported] = await f.flows.importApply(review.token, false, 'rename'); f.catalog.keep(imported!.id);
-    const agent = f.flows.profile(imported!.id), files = f.flows.ownSkills(agent);
-    files.set('skills/aaa/SKILL.md', Buffer.from('---\nname: aaa\ndescription: Another skill\n---\nRead rules.'));
-    files.set('skills/aaa/learned-rules.md', Buffer.from('Untouched.'));
-    const knowhow = f.flows.persistSkills(agent.id, files); const saved = f.catalog.save({ ...agent, knowhow }, agent.id);
-    f.flows.publishCurrent(saved, agent.knowhow?.hash);
-    const learning = new AgentPackLearning(f.flows, f.data), p = learning.propose(agent.id, 'Own rule.', 'run:example');
-    learning.decide(agent.id, p.id, 'approve');
-    const updated = f.flows.ownSkills(f.flows.profile(agent.id));
-    expect(updated.get('skills/aaa/learned-rules.md')!.toString()).toBe('Untouched.');
-    expect(updated.get('skills/reviewer/learned-rules.md')!.toString()).toContain('Own rule.');
   });
 });

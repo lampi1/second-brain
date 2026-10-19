@@ -1,0 +1,314 @@
+// The brain model's maintenance jobs (ADR 0077): the app keeps its agents, skills, rules and memory up to date by itself,
+// with no user step and zero tokens (local text work only). Every change is one ChangeLog entry (what, why, evidence,
+// undo); a change the user undid is never made again by the same job. The user's approval stays only for production
+// actions, permissions / settings / hooks and texts for colleagues or external systems: no job touches an agent's tools,
+// permissions, engine or model (catalog.maintain refuses them), the CLIs' settings or hooks, or anything outside the brain.
+//   migration      one time (re-runnable, idempotent): every former runbook / routines section becomes a skill in
+//                  <brain>/.claude/skills, declared by the agent the classifier ranks first for it (else Generale); the
+//                  learned rules kept in an agent's own skill (learned-rules.md) move to its role. Writes a report.
+//   corrections    the lessons queue (agent_learn_propose): each lesson goes to the agent's role (default), to a skill,
+//                  or to the brain's rules (rules/lessons.md, a topic file listed in brain.json).
+//   repeated-task  three or more ended runs with the same kind of goal and no skill covering it → a new skill with the
+//                  requests seen and what the runs reported, declared by the agent that did most of them.
+//   merge-skills   two brain skills with (nearly) the same text → one, the agents relinked to it.
+//   merge-memory   the same line in two or more agents' memories → memory/shared.md, once.
+// Used by brainmodel/service.ts; unit tests: test/unit/brainmodel/jobs.test.ts.
+import fs from 'node:fs';
+import path from 'node:path';
+import type { AgentProfile, AgentRun } from '../../shared/agents';
+import { GENERAL_AGENT_ID, ORCHESTRATOR_AGENT_ID } from '../../shared/agents';
+import type { LearnedRuleProposal } from '../../shared/agent-pack';
+import type { BrainSkill, MaintenanceJobId, MigrationItem, MigrationReport } from '../../shared/brain-model';
+import { conceptOf } from '../../shared/work-concepts';
+import { NAME_RE, parseMd, setBody, yamlValue } from '../../shared/skillmd';
+import type { AgentSnapshot, ChangeLog } from './changes';
+import { legacySections, sectionText } from './legacy-sources';
+import { agentMemoryFile, readSmall } from './model';
+
+/** The agent side of a job: only the role text and the declared skills (and the own skill's learned-rules.md, dropped). */
+export interface AgentWriter {
+  update(id: string, patch: { instructions?: string; linked?: string[]; dropOwn?: string[] }, reason: string): AgentSnapshot | null;
+  /** the text of a file of the agent's own skill (e.g. learned-rules.md), or null */
+  ownFile(id: string, name: string): string | null;
+}
+export interface JobContext {
+  root: string;
+  /** where new skills go: <brain>/.claude/skills */
+  skillDir: string;
+  skills(): BrainSkill[];
+  profiles(): AgentProfile[];
+  runs(): AgentRun[];
+  lessons: { pending(): LearnedRuleProposal[]; settle(id: string, status: 'approved' | 'discarded', note: string): void };
+  agents: AgentWriter;
+  log: ChangeLog;
+  /** the agent the local classifier ranks first for a text, or null when none passes its threshold */
+  classify(text: string): Promise<string | null>;
+  now(): number;
+}
+export interface JobResult { job: MaintenanceJobId; changes: number; note?: string; report?: MigrationReport }
+
+// ── text helpers ────────────────────────────────────────────────────────────────────────────────────────────────────
+const STOP = new Set(['della', 'delle', 'dello', 'degli', 'dalla', 'dalle', 'nella', 'nelle', 'sulla', 'sulle', 'questo', 'questa', 'quello', 'quella',
+  'come', 'cosa', 'dove', 'quando', 'perche', 'anche', 'sono', 'essere', 'fare', 'fammi', 'puoi', 'please', 'with', 'from', 'that', 'this', 'what',
+  'when', 'where', 'into', 'about', 'your', 'their', 'have', 'there', 'oggi', 'adesso', 'subito', 'tutti', 'tutte', 'ogni', 'altro', 'altra',
+  'dopo', 'prima', 'poi', 'molto', 'solo', 'just', 'some', 'more', 'than', 'then', 'them', 'they', 'will', 'would', 'could', 'should', 'grazie']);
+export const fold = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+/** Content tokens: words of four letters or more (no stopwords), plus the work concept each one names. */
+export function tokens(text: string): Set<string> {
+  const out = new Set<string>();
+  for (const w of fold(text).match(/[a-z0-9]{4,}/g) ?? []) {
+    if (STOP.has(w) || /^\d+$/.test(w)) continue;
+    out.add(w);
+    const c = conceptOf(w);
+    if (c) out.add(`~${c}`);
+  }
+  return out;
+}
+export function jaccard(a: Set<string>, b: Set<string>): number {
+  if (!a.size || !b.size) return 0;
+  let both = 0;
+  for (const x of a) if (b.has(x)) both++;
+  return both / (a.size + b.size - both);
+}
+/** A skill name from a title: lower case, digits and single hyphens, at most 48 characters, never empty. */
+export function skillName(title: string, taken: Set<string>): string {
+  const base = fold(title).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48).replace(/-+$/g, '') || 'skill';
+  let name = base;
+  for (let n = 2; taken.has(name); n++) name = `${base.slice(0, 44)}-${n}`;
+  if (!NAME_RE.test(name)) throw new Error('Invalid generated skill name');
+  return name;
+}
+const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+const oneLine = (s: string, n = 200) => { const t = s.replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
+export function skillText(name: string, description: string, body: string): string {
+  return `---\nname: ${name}\ndescription: ${yamlValue(oneLine(description, 1000))}\n---\n\n${body.trim()}\n`;
+}
+/** Appends `line` under the `## heading` of a markdown text (the section is added at the end when missing). */
+export function appendUnder(text: string, heading: string, line: string): string {
+  const lines = text.replace(/\s+$/, '').split('\n');
+  const at = lines.findIndex(l => l.trim() === `## ${heading}`);
+  if (at < 0) return `${lines.join('\n')}\n\n## ${heading}\n\n${line}\n`;
+  let end = at + 1;
+  while (end < lines.length && !/^#{1,2}\s/.test(lines[end]!)) end++;
+  while (end > at + 1 && !lines[end - 1]!.trim()) end--;
+  lines.splice(end, 0, line);
+  return `${lines.join('\n')}\n`;
+}
+/** Changes this job already made to a target that the user undid: never made again (their undo is the decision). */
+const undone = (log: ChangeLog, job: MaintenanceJobId, target: string): boolean => log.all().some(c => c.job === job && c.target === target && !!c.rolledBackAt);
+const brainRel = (root: string, file: string) => path.relative(root, file).split(path.sep).join('/');
+
+// ── migration ───────────────────────────────────────────────────────────────────────────────────────────────────────
+export async function migrate(ctx: JobContext): Promise<JobResult> {
+  const sections = legacySections(ctx.root);
+  const existing = ctx.skills();
+  const taken = new Set(existing.map(s => s.name));
+  const items: MigrationItem[] = [];
+  const links = new Map<string, Set<string>>();
+  const active = ctx.profiles().filter(p => p.status === 'active');
+  const general = active.find(p => p.id === GENERAL_AGENT_ID);
+  let changes = 0;
+  for (const s of sections) {
+    const source = `${s.file}#${s.line}`;
+    const marker = `Spostata qui da \`${s.file}\` (sezione «${s.title}», riga ${s.line})`;
+    const already = existing.find(k => (readSmall(k.file) ?? '').includes(marker));
+    if (already) { items.push({ source, title: s.title, skill: already.name, agents: already.usedBy, status: 'existing' }); continue; }
+    const body = sectionText(ctx.root, s);
+    if (!body || !body.text.trim()) { items.push({ source, title: s.title, skill: null, agents: [], status: 'skipped', note: 'sezione vuota o file non leggibile' }); continue; }
+    const name = skillName(s.title, taken);
+    if (undone(ctx.log, 'migration', name)) { items.push({ source, title: s.title, skill: null, agents: [], status: 'skipped', note: 'annullata da te: non la rifaccio' }); continue; }
+    taken.add(name);
+    const description = `${s.purpose || s.title}${s.area && s.area !== s.title ? ` (${s.area})` : ''}`;
+    const text = skillText(name, description, [`# ${s.title}`, '', body.text, '',
+      `${marker} il ${day(ctx.now())}.${body.masked ? ` ${body.masked} righe con possibili credenziali sono nascoste qui: il testo intero resta nel file originale.` : ''}`].join('\n'));
+    const file = path.join(ctx.skillDir, name, 'SKILL.md');
+    const agentId = await ctx.classify(`${s.title} ${s.purpose} ${s.area} ${s.tags.join(' ')}`).catch(() => null) ?? general?.id ?? null;
+    const agents = agentId && agentId !== ORCHESTRATOR_AGENT_ID ? [agentId] : general ? [general.id] : [];
+    const c = ctx.log.apply({ job: 'migration', kind: 'skill', action: 'create', target: name, summary: `Nuova skill «${name}» da ${s.file} (${s.title})`, reason: 'Le procedure diventano skill: il contenuto è lo stesso, ora l’agente lo carica quando serve.', evidence: [source] }, [{ file, text }]);
+    if (c) changes++;
+    for (const a of agents) { if (!links.has(a)) links.set(a, new Set()); links.get(a)!.add(name); }
+    items.push({ source, title: s.title, skill: name, agents, status: 'moved', ...(body.masked ? { note: `${body.masked} righe nascoste (credenziali)` } : {}) });
+  }
+  // one new version per agent: its new skills, plus the learned rules that lived in its own skill, moved to its role
+  const lessons: MigrationReport['lessons'] = [];
+  for (const p of active) {
+    const add = [...(links.get(p.id) ?? [])];
+    const learned = p.knowhow ? ctx.agents.ownFile(p.id, 'learned-rules.md') : null;
+    const rules = (learned ?? '').split(/\r?\n/).filter(l => /^\s*[-*]\s+\S/.test(l)).map(l => l.trim());
+    if (!add.length && learned === null) continue;
+    const linked = [...new Set([...(p.knowhow?.linked ?? []), ...add])];
+    let instructions: string | undefined;
+    if (rules.length) { instructions = p.instructions; for (const r of rules) instructions = appendUnder(instructions, 'Lezioni dalle correzioni', r); }
+    try {
+      const snap = ctx.agents.update(p.id, { linked, ...(instructions && instructions.length <= 8000 ? { instructions } : {}), ...(learned !== null ? { dropOwn: ['learned-rules.md'] } : {}) },
+        `Manutenzione: ${add.length ? `skill ${add.join(', ')}` : ''}${add.length && rules.length ? '; ' : ''}${rules.length ? `${rules.length} regole imparate spostate nel ruolo` : ''}`.slice(0, 600));
+      if (snap) {
+        changes++;
+        ctx.log.record({ job: 'migration', kind: 'agent', action: 'link', target: p.id, summary: `${p.name}: ${add.length ? `usa ${add.join(', ')}` : 'regole imparate nel ruolo'}`, reason: 'Ogni procedura spostata va all’agente che fa quel lavoro.', evidence: add }, [], snap);
+      }
+      if (learned !== null) lessons.push({ agentId: p.id, lines: rules.length });
+    } catch (e) { for (const it of items) if (it.agents.includes(p.id)) it.note = `${it.note ? `${it.note}; ` : ''}collegamento a ${p.name} rimandato: ${(e as Error).message}`; }
+  }
+  return { job: 'migration', changes, report: { at: ctx.now(), items, lessons } };
+}
+
+// ── corrections ─────────────────────────────────────────────────────────────────────────────────────────────────────
+const LESSONS_RULE = 'rules/lessons.md';
+const LESSONS_WHEN = '---\nwhen: {"prompt":[],"tools":["Edit","Write","MultiEdit","Bash","PowerShell"],"paths":[]}\n---\n# Lezioni dalle correzioni\n\nRegole emerse dalle correzioni dell’utente, per ogni agente.\n';
+export function corrections(ctx: JobContext): JobResult {
+  let changes = 0;
+  for (const l of ctx.lessons.pending()) {
+    const p = ctx.profiles().find(x => x.id === l.agentId && x.status === 'active');
+    if (!p) { ctx.lessons.settle(l.id, 'discarded', 'agente non più attivo'); continue; }
+    const line = `- ${l.rule} (${day(l.createdAt)}; ${l.evidence})`;
+    const skill = l.target === 'skill' ? ctx.skills().find(s => s.name === l.skill && s.home === 'brain') : undefined;
+    try {
+      if (l.target === 'skill' && skill) {
+        const text = readSmall(skill.file);
+        if (text === null) throw new Error('skill non leggibile');
+        const p2 = parseMd(text);
+        const next = setBody(text, appendUnder(p2.body, 'Lezioni', line));
+        if (ctx.log.apply({ job: 'corrections', kind: 'skill', action: 'update', target: skill.name, summary: `Lezione aggiunta alla skill «${skill.name}»: ${oneLine(l.rule, 120)}`, reason: `Correzione dell’utente (${p.name}).`, evidence: [l.evidence] }, [{ file: skill.file, text: next }])) changes++;
+        ctx.lessons.settle(l.id, 'approved', `skill ${skill.name}`);
+      } else if (l.target === 'rule') {
+        const file = path.join(ctx.root, LESSONS_RULE);
+        const current = readSmall(file) ?? LESSONS_WHEN;
+        const writes = [{ file, text: appendUnder(current, p.name, line) }];
+        const cfg = brainJsonWithTopic(ctx.root, LESSONS_RULE);
+        if (cfg) writes.push(cfg);
+        if (ctx.log.apply({ job: 'corrections', kind: 'rule', action: 'update', target: LESSONS_RULE, summary: `Nuova regola: ${oneLine(l.rule, 120)}`, reason: `Correzione dell’utente (${p.name}); vale per ogni agente.`, evidence: [l.evidence] }, writes)) changes++;
+        ctx.lessons.settle(l.id, 'approved', `regola in ${LESSONS_RULE}`);
+      } else {
+        const instructions = appendUnder(p.instructions, 'Lezioni dalle correzioni', line);
+        if (instructions.length > 8000) { ctx.lessons.settle(l.id, 'discarded', 'il ruolo è al limite di 8000 caratteri: unisci le lezioni'); continue; }
+        const snap = ctx.agents.update(p.id, { instructions }, `Manutenzione: lezione dalle correzioni (${oneLine(l.evidence, 100)})`);
+        if (snap) { changes++; ctx.log.record({ job: 'corrections', kind: 'agent', action: 'update', target: p.id, summary: `${p.name}: ${oneLine(l.rule, 140)}`, reason: 'Correzione dell’utente: la lezione va nel ruolo dell’agente.', evidence: [l.evidence] }, [], snap); }
+        ctx.lessons.settle(l.id, 'approved', l.target === 'skill' ? 'skill non trovata: nel ruolo' : 'ruolo');
+      }
+    } catch (e) { if (!/trial|prova/i.test((e as Error).message)) ctx.lessons.settle(l.id, 'discarded', oneLine((e as Error).message, 200)); }
+  }
+  return { job: 'corrections', changes };
+}
+/** brain.json with `rel` added to rules.topicFiles (null when it is there already or brain.json is not readable). */
+function brainJsonWithTopic(root: string, rel: string): { file: string; text: string } | null {
+  const file = path.join(root, 'brain.json');
+  try {
+    const raw = readSmall(file);
+    const cfg = raw ? JSON.parse(raw) as { rules?: { topicFiles?: string[] } } : {};
+    const rules = cfg.rules ?? {}, list = Array.isArray(rules.topicFiles) ? rules.topicFiles : [];
+    if (list.includes(rel)) return null;
+    return { file, text: `${JSON.stringify({ ...cfg, rules: { ...rules, topicFiles: [...list, rel] } }, null, 2)}\n` };
+  } catch { return null; }
+}
+
+// ── repeated task → new skill ───────────────────────────────────────────────────────────────────────────────────────
+const REPEAT_MIN = 3, REPEAT_SIM = 0.4, REPEAT_DAYS = 60;
+export function repeatedTask(ctx: JobContext): JobResult {
+  const since = ctx.now() - REPEAT_DAYS * 86400e3;
+  const runs = ctx.runs().filter(r => r.endedAt && r.startedAt >= since && r.goal.trim().length >= 12 && r.agentId !== ORCHESTRATOR_AGENT_ID);
+  const groups: { toks: Set<string>; runs: AgentRun[] }[] = [];
+  for (const r of runs) {
+    const t = tokens(r.goal);
+    if (t.size < 2) continue;
+    const g = groups.find(x => jaccard(x.toks, t) >= REPEAT_SIM);
+    if (g) { g.runs.push(r); for (const x of t) g.toks.add(x); } else groups.push({ toks: t, runs: [r] });
+  }
+  const skills = ctx.skills(), taken = new Set(skills.map(s => s.name));
+  let changes = 0;
+  for (const g of groups) {
+    const chats = new Set(g.runs.map(r => r.chatId));
+    if (chats.size < REPEAT_MIN) continue;
+    // the words most runs share: the job's name and its "when to use"
+    const counts = new Map<string, number>();
+    for (const r of g.runs) for (const t of tokens(r.goal)) if (!t.startsWith('~')) counts.set(t, (counts.get(t) ?? 0) + 1);
+    const common = [...counts].filter(([, n]) => n >= Math.ceil(g.runs.length / 2)).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([w]) => w);
+    if (common.length < 1) continue;
+    const key = tokens(common.join(' '));
+    if (skills.some(s => jaccard(tokens(`${s.name.replace(/-/g, ' ')} ${s.description}`), key) >= 0.5)) continue;
+    const name = skillName(common.slice(0, 3).join(' '), taken);
+    if (undone(ctx.log, 'repeated-task', name) || ctx.log.all().some(c => c.job === 'repeated-task' && c.target === name)) continue;
+    taken.add(name);
+    const byAgent = new Map<string, number>();
+    for (const r of g.runs) byAgent.set(r.agentId, (byAgent.get(r.agentId) ?? 0) + 1);
+    const owner = [...byAgent].sort((a, b) => b[1] - a[1])[0]?.[0];
+    const first = g.runs.reduce((a, b) => (a.startedAt <= b.startedAt ? a : b)), last = g.runs.reduce((a, b) => (a.startedAt >= b.startedAt ? a : b));
+    const good = g.runs.filter(r => r.report?.ok && r.report.outcome === 'done' && (r.outcome?.verdict ?? 'success') !== 'fail');
+    const body = [`# ${oneLine(last.goal, 90)}`, '',
+      `Quando usarla: richieste come queste, viste ${g.runs.length} volte dal ${day(first.startedAt)} al ${day(last.startedAt)}.`, '',
+      ...g.runs.slice(-6).map(r => `- ${oneLine(r.goal, 160)}`), '',
+      '## Come è andata', '',
+      ...(good.length ? good.slice(-5).map(r => `- ${day(r.startedAt)}: ${oneLine(r.report && r.report.ok ? r.report.summary : '', 220)}`) : ['- Nessun resoconto riuscito ancora: aggiungi qui i passi che funzionano.']), '',
+      '## Passi', '', '1. Rileggi le richieste qui sopra e il resoconto più recente.', '2. Segui gli stessi passi; annota qui ogni differenza utile.', ''].join('\n');
+    const file = path.join(ctx.skillDir, name, 'SKILL.md');
+    const c = ctx.log.apply({ job: 'repeated-task', kind: 'skill', action: 'create', target: name, summary: `Nuova skill «${name}» da un lavoro ripetuto ${g.runs.length} volte`, reason: `Lo stesso tipo di richiesta in ${chats.size} chat: ora c’è un modo scritto di farlo.`, evidence: g.runs.slice(-6).map(r => r.runId) },
+      [{ file, text: skillText(name, `Come fare: ${oneLine(last.goal, 160)}`, body) }]);
+    if (!c) continue;
+    changes++;
+    const p = owner ? ctx.profiles().find(x => x.id === owner && x.status === 'active') : undefined;
+    if (p) linkTo(ctx, p, name, 'repeated-task', `Fa questo lavoro più spesso (${byAgent.get(p.id)} volte su ${g.runs.length}).`);
+  }
+  return { job: 'repeated-task', changes };
+}
+function linkTo(ctx: JobContext, p: AgentProfile, name: string, job: MaintenanceJobId, reason: string, drop?: string): boolean {
+  const linked = [...new Set([...(p.knowhow?.linked ?? []).filter(n => n !== drop), name])];
+  try {
+    const snap = ctx.agents.update(p.id, { linked }, `Manutenzione: usa la skill ${name}`);
+    if (!snap) return false;
+    ctx.log.record({ job, kind: 'agent', action: 'link', target: p.id, summary: `${p.name} usa «${name}»${drop ? ` al posto di «${drop}»` : ''}`, reason, evidence: [name] }, [], snap);
+    return true;
+  } catch { return false; }
+}
+
+// ── merge duplicate skills ──────────────────────────────────────────────────────────────────────────────────────────
+const MERGE_SIM = 0.8;
+export function mergeSkills(ctx: JobContext): JobResult {
+  const skills = ctx.skills().filter(s => s.home === 'brain');
+  const text = new Map(skills.map(s => [s.name, readSmall(s.file) ?? '']));
+  const gone = new Set<string>();
+  let changes = 0;
+  for (const a of skills) for (const b of skills) {
+    if (a.name >= b.name || gone.has(a.name) || gone.has(b.name)) continue;
+    const ta = text.get(a.name)!, tb = text.get(b.name)!;
+    if (!ta || !tb || jaccard(tokens(parseMd(ta).body), tokens(parseMd(tb).body)) < MERGE_SIM) continue;
+    // keep the one more agents use (then the older one); merge only a lone SKILL.md (other files: left to the user)
+    const [keep, drop] = b.usedBy.length > a.usedBy.length || (b.usedBy.length === a.usedBy.length && (b.changedAt ?? 0) < (a.changedAt ?? 0)) ? [b, a] : [a, b];
+    try { if (fs.readdirSync(path.dirname(drop.file)).length > 1) continue; } catch { continue; }
+    if (undone(ctx.log, 'merge-skills', `${drop.name}>${keep.name}`)) continue;
+    const kt = text.get(keep.name)!, kp = parseMd(kt), have = new Set(kp.body.split(/\r?\n/).map(l => l.trim()).filter(Boolean));
+    const extra = parseMd(text.get(drop.name)!).body.split(/\r?\n/).filter(l => l.trim() && !have.has(l.trim()) && !/^#\s/.test(l));
+    const merged = extra.length ? setBody(kt, `${kp.body.replace(/\s+$/, '')}\n\n## Da «${drop.name}»\n\n${extra.join('\n')}\n`) : kt;
+    const c = ctx.log.apply({ job: 'merge-skills', kind: 'skill', action: 'merge', target: `${drop.name}>${keep.name}`, summary: `«${drop.name}» unita in «${keep.name}»`, reason: `Le due skill dicevano quasi le stesse cose (somiglianza ≥ ${Math.round(MERGE_SIM * 100)}%).`, evidence: [brainRel(ctx.root, drop.file), brainRel(ctx.root, keep.file)] },
+      [{ file: keep.file, text: merged }, { file: drop.file, text: null }]);
+    if (!c) continue;
+    changes++; gone.add(drop.name);
+    for (const p of ctx.profiles().filter(x => x.status === 'active' && x.knowhow?.linked.includes(drop.name))) linkTo(ctx, p, keep.name, 'merge-skills', `«${drop.name}» non c’è più: è dentro «${keep.name}».`, drop.name);
+  }
+  return { job: 'merge-skills', changes };
+}
+
+// ── merge duplicate memories across agents ──────────────────────────────────────────────────────────────────────────
+/** A memory line without its list marker and date ("- 2026-10-19 · …", the writer's format), folded. */
+const norm = (l: string) => fold(l.replace(/^\s*[-*]\s+/, '').replace(/^\d{4}-\d{2}-\d{2}\s*[·|:-]\s*/, '')).replace(/[^a-z0-9]+/g, ' ').trim();
+export function mergeMemory(ctx: JobContext): JobResult {
+  const files = ctx.profiles().map(p => ({ p, file: path.join(ctx.root, agentMemoryFile(p.id)) })).map(x => ({ ...x, text: readSmall(x.file) })).filter(x => x.text !== null) as { p: AgentProfile; file: string; text: string }[];
+  const seen = new Map<string, { line: string; owners: Set<string> }>();
+  for (const f of files) for (const l of f.text.split(/\r?\n/)) {
+    if (!/^\s*[-*]\s+\S/.test(l)) continue;
+    const k = norm(l);
+    if (k.length < 12) continue;
+    const e = seen.get(k) ?? { line: l.trim(), owners: new Set<string>() };
+    e.owners.add(f.p.id); seen.set(k, e);
+  }
+  const dup = [...seen].filter(([, e]) => e.owners.size >= 2);
+  if (!dup.length) return { job: 'merge-memory', changes: 0 };
+  const keys = new Set(dup.map(([k]) => k));
+  const sharedFile = path.join(ctx.root, 'memory', 'shared.md');
+  const shared = readSmall(sharedFile) ?? '# Memoria condivisa\n\nQuello che più agenti sapevano: tenuto qui una volta sola.\n';
+  const have = new Set(shared.split(/\r?\n/).map(norm));
+  let next = shared;
+  for (const [k, e] of dup) if (!have.has(k)) next = appendUnder(next, 'Dagli agenti', e.line.startsWith('-') ? e.line : `- ${e.line}`);
+  const writes = [{ file: sharedFile, text: next }, ...files.filter(f => [...f.text.split(/\r?\n/)].some(l => keys.has(norm(l)))).map(f => ({ file: f.file, text: `${f.text.split(/\r?\n/).filter(l => !keys.has(norm(l))).join('\n').replace(/\s+$/, '')}\n` }))];
+  const owners = [...new Set(dup.flatMap(([, e]) => [...e.owners]))];
+  const c = ctx.log.apply({ job: 'merge-memory', kind: 'memory', action: 'merge', target: 'memory/shared.md', summary: `${dup.length} ricordi uguali in più agenti spostati nella memoria condivisa`, reason: `Gli stessi ricordi erano in ${owners.length} memorie di agenti.`, evidence: owners }, writes);
+  return { job: 'merge-memory', changes: c ? 1 : 0 };
+}

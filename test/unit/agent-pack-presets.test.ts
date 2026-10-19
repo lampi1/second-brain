@@ -21,7 +21,7 @@ describe('shipped preset skill folders', () => {
       const skill = files!.get(`skills/${id}/SKILL.md`);
       expect(skill, id).toBeDefined();
       expect(field(parseMd(skill!.toString()), 'name')).toBe(id);
-      expect(files!.has(`skills/${id}/learned-rules.md`)).toBe(true);
+      expect(files!.has(`skills/${id}/learned-rules.md`)).toBe(false); // lessons live in the role, a skill or a rule (ADR 0077)
     }
   });
   it('refuses ids that are not preset ids', () => {

@@ -88,10 +88,6 @@ function choices(item: ApprovalItem): Choice[] {
         { label: t(item.stale ? 'approvals.close' : 'approvals.reject'), decision: { type: 'definition', accept: false }, confirm: t('approvals.confirm.reject'), tone: 'ghost' },
       ];
     }
-    case 'rule': return [
-      { label: t('approvals.approve'), decision: { type: 'rule', decision: 'approve' }, confirm: t('approvals.confirm.rule'), tone: 'primary' },
-      { label: t('approvals.discard'), decision: { type: 'rule', decision: 'discard' }, confirm: t('approvals.confirm.discard'), tone: 'ghost' },
-    ];
     case 'trial': {
       const keepFirst = item.advice?.kind !== 'revert';
       const keep: Choice = { label: t('approvals.keep'), decision: { type: 'trial', decision: 'keep' }, confirm: t('approvals.confirm.keepTrial', { v: item.agent.trial!.version }), tone: keepFirst ? 'primary' : 'ghost' };
@@ -136,7 +132,7 @@ const subject = (item: ApprovalItem): { name: string; agent: AgentProfile | null
       : item.type === 'classifier' ? { name: t('approvals.cls.name', { mode: item.calibration.mode }), agent: null }
         : { name: item.agent.name, agent: item.agent };
 
-function Body({ item, editing, text, setText }: { item: ApprovalItem; editing: boolean; text: string; setText(v: string): void }) {
+function Body({ item }: { item: ApprovalItem }) {
   switch (item.type) {
     case 'definition': return <>
       <Section label={t('approvals.why')}><p>{item.proposal.reason}</p></Section>
@@ -144,13 +140,6 @@ function Body({ item, editing, text, setText }: { item: ApprovalItem; editing: b
       {item.stale && <p className="apv-warn" role="note">{t('approvals.stale')}</p>}
       <Section label={t('approvals.what')}><OpChange item={item} /></Section>
       <Evidence refs={item.proposal.evidence} />
-    </>;
-    case 'rule': return <>
-      <Section label={t('approvals.what')}>{editing
-        ? <label className="apv-edit"><span>{t('approvals.ruleText')}</span><textarea value={text} maxLength={2000} rows={3} onChange={e => setText(e.target.value.replace(/[\r\n]+/g, ' '))} autoFocus /></label>
-        : <p className="apv-rule"><span aria-hidden="true">+ </span>{item.rule.rule}</p>}
-        <p className="apv-muted">{t('approvals.ruleWhere', { name: item.agent.name })}</p></Section>
-      <Evidence text={item.rule.evidence} />
     </>;
     case 'trial': return <>
       <Section label={t('approvals.what')}><p>{t('approvals.trialWhat', { v: item.agent.trial!.version, base: item.agent.trial!.baseline, since: when(item.agent.trial!.startedAt) })}</p></Section>
@@ -196,13 +185,11 @@ function Section({ label, children }: { label: string; children: ReactNode }) {
 }
 
 export function ApprovalCard({ item, busy, locked, onDecide, onEdit }: { item: ApprovalItem; busy: boolean; locked: boolean; onDecide: AgentApprovalsViewProps['onDecide']; onEdit: AgentApprovalsViewProps['onEdit'] }) {
-  const [asking, setAsking] = useState<Choice | null>(null), [editing, setEditing] = useState(false), [text, setText] = useState('');
+  const [asking, setAsking] = useState<Choice | null>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   useEffect(() => { if (asking) confirmRef.current?.focus(); }, [asking]);
   const { name, agent } = subject(item);
-  const list = editing && item.type === 'rule'
-    ? [{ label: t('approvals.approveEdited'), decision: { type: 'rule', decision: 'edit', text: text.trim() }, confirm: t('approvals.confirm.rule'), tone: 'primary' } as Choice]
-    : choices(item);
+  const list = choices(item);
   const disabled = busy || locked;
   const headId = `apv-${item.key.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
   return <article className="apv-card" data-type={item.type} aria-labelledby={headId} aria-busy={busy || undefined} data-testid="approval-card"
@@ -212,20 +199,18 @@ export function ApprovalCard({ item, busy, locked, onDecide, onEdit }: { item: A
       <div><span className="apv-kind">{title(item)}</span><h4 id={headId}>{name}</h4></div>
       <small className="apv-when">{when(item.at)}</small>
     </header>
-    <Body item={item} editing={editing} text={text} setText={setText} />
+    <Body item={item} />
     {asking
       ? <div className="apv-confirm" role="group" aria-label={t('approvals.confirmLabel')}>
         <p>{asking.confirm}</p>
         <div className="apv-actions">
-          <button ref={confirmRef} type="button" className={`btn btn-m ${asking.tone === 'primary' ? 'btn-primary' : 'btn-ghost'}`} disabled={disabled} onClick={() => { onDecide(item, asking.decision); setAsking(null); setEditing(false); }}>{t('approvals.confirmDo', { action: asking.label })}</button>
+          <button ref={confirmRef} type="button" className={`btn btn-m ${asking.tone === 'primary' ? 'btn-primary' : 'btn-ghost'}`} disabled={disabled} onClick={() => { onDecide(item, asking.decision); setAsking(null); }}>{t('approvals.confirmDo', { action: asking.label })}</button>
           <button type="button" className="btn btn-m btn-ghost" onClick={() => setAsking(null)}>{t('approvals.back')}</button>
         </div></div>
       : <div className="apv-actions">
-        {list.map(c => <button key={c.label} type="button" className={`btn btn-m ${c.tone === 'primary' ? 'btn-primary' : 'btn-ghost'}`} disabled={disabled || (c.decision.type === 'rule' && c.decision.decision === 'edit' && !text.trim())} onClick={() => setAsking(c)}>{c.label}</button>)}
-        {item.type === 'rule' && !editing && <button type="button" className="btn btn-m btn-ghost" disabled={disabled} onClick={() => { setText(item.rule.rule); setEditing(true); }}>{t('approvals.editRule')}</button>}
+        {list.map(c => <button key={c.label} type="button" className={`btn btn-m ${c.tone === 'primary' ? 'btn-primary' : 'btn-ghost'}`} disabled={disabled} onClick={() => setAsking(c)}>{c.label}</button>)}
         {item.type === 'definition' && (item.proposal.op ?? 'update') === 'update' && <button type="button" className="btn btn-m btn-ghost" disabled={disabled} onClick={() => onEdit(item)}>{t(item.stale ? 'approvals.openEditor' : 'approvals.editFirst')}</button>}
         {item.type === 'lifecycle' && item.proposal.kind !== 'model-trial' && <button type="button" className="btn btn-m btn-ghost" disabled={disabled} onClick={() => onEdit(item)}>{t('approvals.prepare')}</button>}
-        {editing && <button type="button" className="btn btn-m btn-ghost" onClick={() => setEditing(false)}>{t('approvals.back')}</button>}
       </div>}
   </article>;
 }
@@ -234,7 +219,7 @@ export function AgentApprovalsView(p: AgentApprovalsViewProps) {
   const doneRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (p.done) doneRef.current?.focus(); }, [p.done]);
   const items = p.state?.items ?? [];
-  // a missing rule list or missing numbers alone never opens the panel; a source that may hide pending changes does
+  // missing numbers alone never open the panel; a source that may hide pending changes does
   const problems = (p.state?.problems ?? []).filter(s => items.length || s === 'definitions' || s === 'lifecycle');
   if (!items.length && !problems.length && !p.state?.lifecycleProblem && !p.done && !p.failure && !p.error) return null;
   return <section className="apv" aria-labelledby="apv-title" data-testid="agent-approvals">

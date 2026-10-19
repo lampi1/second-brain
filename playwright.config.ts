@@ -20,7 +20,6 @@ export const EXCLUSIVE: Record<string, string> = {
   'genui.spec.ts': 'system clipboard',
   'navigation.spec.ts': 'system clipboard',
   'link-peek.spec.ts': 'system clipboard',
-  'procedure.spec.ts': 'system clipboard',
   'codeblocks.spec.ts': 'system clipboard',
 };
 const exclusive = Object.keys(EXCLUSIVE).map(f => `**/${f}`);

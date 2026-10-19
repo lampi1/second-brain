@@ -2,7 +2,7 @@
 import type { AgentOwnerSnapshot } from '../../shared/agents';
 import type { LedgerRow } from '../brain/cursor-ledger';
 import { listUsd } from '../brain/cursor-ledger';
-import { maskSecrets } from '../brain/procedures';
+import { maskSecrets } from '../brain/mask';
 
 export type TimingKind = 'execution' | 'user-wait' | 'permission-wait' | 'queue' | 'unknown';
 export interface TimingSpan { kind: TimingKind; start: number; end: number }

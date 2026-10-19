@@ -10,8 +10,9 @@ import type { BrowserHandoff, CliStatus, PendingRequest } from '../shared/contra
 import { ConfigStore } from './brain/config';
 import { DemoBrain, DemoChats, FROZEN_EPOCH, seed, type Emit, demoQuality } from './demo';
 import { DemoBrowser } from './demo-browser';
-import { Procedures } from './brain/procedures';
-import { writeDemoProcedures } from './brain/procedures-demo';
+import { writeDemoBrain } from './brainmodel/demo';
+import { BrainModelService } from './brainmodel/service';
+import { classifyByWords } from './agents/classifier';
 import { demoDevopsRun } from './devops/demo';
 import { DevopsService } from './devops/service';
 import { gitBranches } from './chats/branch';
@@ -75,18 +76,21 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const everyAgent = () => { const all = agents.list(); return [...all.profiles, ...all.archived]; };
   const agentLifecycle = createLifecycleApi(new AgentLifecycle({ userData: ctx.userData, wake: () => false, changed: () => ctx.emitter.emit('agents:lifecycleChanged', null),
     feedback: { list: id => agentAuthoring.feedbackOf(id), get problem() { return agentAuthoring.storeProblem; } } }), () => undefined, undefined, undefined, {
-    agents: everyAgent, learned: () => agentPacks.learning.pending(), drafts: () => { try { return agentAuthoring.proposals(); } catch { return []; } },
+    agents: everyAgent, drafts: () => { try { return agentAuthoring.proposals(); } catch { return []; } },
     actions: {
       resolveTrial: (id, decision) => agents.resolveTrial(id, decision), keep: id => agents.keep(id, 'brother'), retire: (id, reason) => agents.retire(id, reason.slice(0, 600), 'brother'),
       modelTrial: (id, model, reason) => { const p = agents.list().profiles.find(x => x.id === id); if (!p) throw new Error('Agente non trovato.'); return agents.approveTrial(id, { ...p, model }, reason); },
       requestDraft: async () => { throw new Error('Nessun Orchestrator nella demo.'); },
     } });
   mountLifecycleApi(brain, agentLifecycle);
-  // the Procedure page: made-up procedure files read by the real scanner (masking included)
-  const procDir = writeDemoProcedures(path.join(ctx.userData, 'demo-procedures'), now());
-  const procedures = new Procedures(() => procDir);
-  brain.serveApi('/api/procedures', () => procedures.list());
-  brain.serveApi('/api/procedure', q => procedures.get(q.get('id') ?? ''));
+  // the Brain pages (ADR 0077): a made-up brain in the demo agent packs' folder, its former runbook sections moved into
+  // skills by the real migration at start (masking included); the other jobs run on the Manutenzione button
+  const demoBrainRoot = writeDemoBrain(path.join(ctx.userData, 'demo-agent-brain'), now());
+  const brainModel = new BrainModelService({ userData: ctx.userData, root: () => demoBrainRoot, home: null, catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning,
+    runs: () => [], routing: () => brain.routingInfo(), now,
+    top: async (text, profiles) => { const c = await classifyByWords(text, profiles); const best = c.candidates[0]; return best && !c.noneCloseEnough && best.score >= c.threshold ? { id: best.id, score: best.score } : null; },
+    emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: false });
+  if (!brainModel.report()) await brainModel.maintain('migration').catch(e => log.warn('demo', 'demo migration failed', { cause: errText(e), hint: 'the Skill page shows the demo brain without the migrated skills' }));
   brain.serveApi('/api/improve', () => brain.learnApi());
 
   const mcp = new McpServer({ name: 'second-brain-demo', version: app.getVersion() });
@@ -162,7 +166,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
 
   return {
     chats, browser, brain, mcp, runner, asks, wake, devops, skills, improve, engines, later: createLater(ctx),
-    agents, agentAuthoring, agentLifecycle, agentPacks,
+    agents, agentAuthoring, agentLifecycle, agentPacks, brainModel,
     proposals: new ProposalBridge({ userData: ctx.userData, repo: () => null, brain, chats, emit: () => {}, focus: () => {}, disabled: true }),
     setup: new SetupService(ctx.userData, true, now),
     autoClose: new AutoCloseService({ now: autoCloseNow, delayMs: () => 0, candidates: () => [], archive: async () => false, emit: states => ctx.emitter.emit('chat:autoCloseStatus', states) }),

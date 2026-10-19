@@ -1,4 +1,4 @@
-// Brain area of the app: the pages of the brain (DevOps, Fatto e standup, Idee, Costi, Qualità, Procedure,
+// Brain area of the app: the pages of the brain (DevOps, Fatto e standup, Idee, Costi, Qualità,
 // Confronto modelli, Miglioramento (ADR 0030), Esplora; DevOps took the place of Oggi and Adesso on 2026-10-12, their old links open it) and the full-screen 3D map, in the app's own style, fed by the
 // brain's data API (invoke 'brain:api'). This file is the ONE mount point the workspace UI imports:
 //   <BrainPage id="costi" arg="30" onNavigate={t => …} />  renders a page (it fills and scrolls its container);
@@ -14,7 +14,6 @@ import { Fatto } from './pages/Fatto';
 import { Idee } from './pages/Idee';
 import { Costi } from './pages/Costi';
 import { Qualita } from './pages/Qualita';
-import { Procedure } from './pages/Procedure';
 import { Confronto } from './pages/Confronto';
 import { FileViewer } from './pages/FileViewer';
 import {normalizeFileArg} from '@shared/file-view';
@@ -31,7 +30,7 @@ export type { DiscussBridge };
 export type { LiveSnapshot, LiveSource, LiveTool } from './lib/live';
 export { FADE_MS } from './lib/live';
 
-export type BrainPageId = 'dashboard' | 'home' | 'devops' | 'fatto' | 'idee' | 'costi' | 'qualita' | 'procedure' | 'confronto' | 'miglioramento' | 'file' | 'skill' | 'impostazioni' | 'migliora' | 'agenti' | 'guida';
+export type BrainPageId = 'dashboard' | 'home' | 'devops' | 'fatto' | 'idee' | 'costi' | 'qualita' | 'confronto' | 'miglioramento' | 'file' | 'skill' | 'impostazioni' | 'migliora' | 'agenti' | 'guida' | 'regole' | 'memoria' | 'classificatori' | 'collegamenti';
 
 /** label is a getter (ADR 0057): read at use time, so it follows the current language */
 const page = (id: BrainPageId, key: string): { id: BrainPageId; readonly label: string; key: string } => ({ id, key, get label() { return id==='file'?t('viewer.title'):t(`brainPages.nav.${id}`); } });
@@ -44,7 +43,6 @@ export const BRAIN_PAGES: { id: BrainPageId; readonly label: string; key: string
   page('idee', 'G I'),
   page('costi', 'G C'),
   page('qualita', 'G Q'),
-  page('procedure', 'G L'),
   page('confronto', 'G M'),
   page('miglioramento', 'G R'),
   // not a brain page: the skills and agents of the CLIs (components/SkillsPage.tsx, rendered by App.tsx; ADR 0018)
@@ -53,6 +51,12 @@ export const BRAIN_PAGES: { id: BrainPageId; readonly label: string; key: string
   page('impostazioni', 'G P'),
   // not a brain page either: "Migliora l'app" (components/ImprovePage.tsx, ADR 0020), the app improving itself
   page('migliora', 'G U'),
+  // the Brain section's own pages (ADR 0077: agents, skills, rules, memory, classifiers, the map of their links), rendered
+  // by App.tsx PageFrame (components/brain-model/)
+  page('regole', 'G L'),
+  page('memoria', 'G Y'),
+  page('classificatori', 'G K'),
+  page('collegamenti', 'G B'),
   // not a brain page either: the guide to the app's concepts (components/GuidePage.tsx, content in shared/concept-guide.ts)
   page('guida', 'G E'),
 ];
@@ -98,17 +102,16 @@ export function BrainPage({ id, arg, onNavigate, bridge }: { id: BrainPageId; ar
     case 'idee': page = <Idee arg={cur.arg} nav={nav} />; break;
     case 'costi': page = <Costi arg={cur.arg} nav={nav} />; break;
     case 'qualita': page = <Qualita arg={cur.arg} nav={nav} />; break;
-    case 'procedure': page = <Procedure arg={cur.arg} nav={nav} />; break;
     case 'confronto': page = <Confronto nav={nav} />; break;
     case 'miglioramento': page = <Miglioramento nav={nav} />; break;
     case 'file': page = <FileViewer arg={cur.arg}/>; break;
-    case 'impostazioni': case 'skill': case 'guida': page = null; break; // rendered by the app (App.tsx PageFrame)
+    case 'impostazioni': case 'skill': case 'guida': case 'regole': case 'memoria': case 'classificatori': case 'collegamenti': page = null; break; // rendered by the app (App.tsx PageFrame)
     case 'devops': page = <Devops nav={nav} />; break;
   }
   return (
     <div ref={scroller} className="bx bx-page bx-scroll" data-testid={`brain-page-${cur.id}`} role="region" aria-label={label}>
       <DiscussContext.Provider value={bridge ?? null}>
-        <div className="bx-inner" key={`${cur.id}/${cur.id === 'file' || cur.id === 'procedure' ? '' : cur.arg ?? ''}`}>{page}</div>
+        <div className="bx-inner" key={`${cur.id}/${cur.id === 'file' ? '' : cur.arg ?? ''}`}>{page}</div>
       </DiscussContext.Provider>
       <Toaster />
       {map && <BrainMapView full={map.full} focus={map.focus} onClose={() => setMap(null)} onNavigate={t => { const p = parseTarget(t); if (p && !p.map) setLocal({ id: p.id, arg: p.arg }); }} />}

@@ -26,7 +26,7 @@ import {
 } from '../actions';
 import { questionsModalOn } from '../lib/questions';
 import {
-  HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconBook, IconBranch, IconFile, IconBrain, IconChart, IconCoins, IconCompass, IconFocus, IconGlobe,
+  HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconBook, IconBranch, IconFile, IconBrain, IconChart, IconCoins, IconShield, IconFocus, IconGlobe,
   IconHistory, IconKeyboard, IconLayers, IconLightbulb, IconLink, IconList, IconLogin, IconMap, IconMaximize, IconPlus, IconQuestion, IconSearch, IconSettings, IconStop,
   IconSparkle, IconTarget, IconTicket,
 } from './Icons';
@@ -43,8 +43,9 @@ const PAGE_ICON: Record<BrainPageId, ReactNode> = {
   home: <IconBrain />,
   agenti: <IconLayers />,
   fatto: <IconBook />, idee: <IconLightbulb />,
-  costi: <IconCoins />, qualita: <IconChart />, procedure: <IconCompass />, confronto: <IconLayers />, miglioramento: <IconTarget />, file: <IconBrain />, devops: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />, migliora: <IconSparkle />,
+  costi: <IconCoins />, qualita: <IconChart />, confronto: <IconLayers />, miglioramento: <IconTarget />, file: <IconBrain />, devops: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />, migliora: <IconSparkle />,
   dashboard: <IconChart />, guida: <IconQuestion />,
+  regole: <IconShield />, memoria: <IconHistory />, classificatori: <IconBranch />, collegamenti: <IconMap />,
 };
 
 function buildCommands(): Cmd[] {

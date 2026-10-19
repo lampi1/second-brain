@@ -9,7 +9,6 @@ import type { ChatSummary, Harness } from '../../shared/contract';
 import type { AgentCatalogService } from './catalog';
 import type { AgentRunStore } from './runs';
 import type { AgentAuthoring } from './authoring';
-import type { AgentPackLearning } from './pack/learning';
 import type { ProbationJudgement } from './probation';
 import { AgentLifecycle, type WakePolicy } from './lifecycle';
 import { createLifecycleApi } from './lifecycle-api';
@@ -24,7 +23,6 @@ export interface AgentLoopDeps {
   catalog: Pick<AgentCatalogService, 'list' | 'history' | 'resolveTrial' | 'keep' | 'retire' | 'approveTrial'>;
   runs: AgentRunStore;
   authoring: Pick<AgentAuthoring, 'feedbackOf' | 'storeProblem' | 'recordFeedback' | 'proposals'>;
-  learning?: Pick<AgentPackLearning, 'pending'>;
   classify: Classify;
   chats: { list(): ChatSummary[]; send(chatId: string, text: string, images?: undefined, resumed?: boolean, from?: string, liveOnly?: boolean): Promise<void> };
   engineOn(h: Harness): boolean;
@@ -81,7 +79,6 @@ export function createAgentLoop(d: AgentLoopDeps) {
   const api = createLifecycleApi(lifecycle, id => d.runs.get(id), (args, caller) => d.authoring.recordFeedback(args, caller),
     id => unknownRunError(id, d.runs.list(), cid => d.chats.list().find(c => c.id === cid)), {
       agents: everyAgent,
-      learned: () => d.learning?.pending() ?? [],
       drafts: () => { try { return d.authoring.proposals(); } catch { return []; } },
       afterFeedback: record => evaluate(record.agentId),
       actions: {

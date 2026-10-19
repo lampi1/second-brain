@@ -41,7 +41,7 @@ it('prepares discussion beside Dashboard without navigating or sending', () => {
   expect(onSent).not.toHaveBeenCalled();
 });
 it('keeps detail pages where the coordinator is already visible', () => {
-  go({ page: 'procedure' });
+  go({ page: 'regole' });
   focusChat('r');
-  expect(ui.get().page).toBe('procedure');
+  expect(ui.get().page).toBe('regole');
 });
