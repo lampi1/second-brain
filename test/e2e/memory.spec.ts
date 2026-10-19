@@ -38,7 +38,7 @@ test('Memoria: statistics with explanations, rendered memories that open, Manute
     await expect(ins.getByTestId('mm-error-groups')).toContainText("Ha letto l'avviso generico");
     await expect(ins.getByTestId('mm-skill-pulizia-ambiente')).toHaveAttribute('data-verdict', 'unused');
     await expect(ins.getByTestId('mm-skill-note-di-rilascio')).toContainText(/\d/);
-    await expect(ins.getByTestId('mm-recalled').locator('li').first()).toContainText('UTC');
+    await expect(ins.getByTestId('mm-recalled').locator('li').first()).toContainText(/\d+\s*run/); // the top line depends on every demo source's runs (Classificatori adds some)
     await expect(ins.getByTestId('mm-stale')).toContainText('Vecchio server di prova');
     await shot(page, 'memory-stats-dark');
 

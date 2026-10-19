@@ -100,11 +100,12 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   mountLifecycleApi(brain, agentLifecycle);
   // the Brain pages (ADR 0077): a made-up brain in the demo agent packs' folder, its former runbook sections moved into
   // skills by the real migration at start (masking included); the other jobs run on the Manutenzione button
-  // the Classificatori grid's eight weeks of made-up history (demo-classifiers.ts), written on the first read
+  // the Classificatori grid's eight weeks of made-up history (demo-classifiers.ts), written on the first read; it never
+  // loads pulizia-ambiente, the demo brain's never-used skill on the Memoria page
   let demoCls: DemoClassifierData | undefined;
   const demoBrainRoot = writeDemoBrain(path.join(ctx.userData, 'demo-agent-brain'), now());
   const brainModel: BrainModelService = new BrainModelService({ userData: ctx.userData, root: () => demoBrainRoot, home: null, catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning,
-    runs: (): AgentRun[] => [...demoBrainRuns(now(), brainModel.skillList().map(s => s.name)), ...(demoCls ??= writeDemoClassifiers(demoBrainRoot, ctx.userData, now(), brainModel.skillList().map((x: { name: string }) => x.name))).runs], routing: () => brain.routingInfo(), now,
+    runs: (): AgentRun[] => [...demoBrainRuns(now(), brainModel.skillList().map(s => s.name)), ...(demoCls ??= writeDemoClassifiers(demoBrainRoot, ctx.userData, now(), brainModel.skillList().map((x: { name: string }) => x.name).filter(n => n !== 'pulizia-ambiente'))).runs], routing: () => brain.routingInfo(), now,
     suggestSkills: async text => (await suggestSkills(text)).candidates.map(c => c.name),
     emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: false });
   if (!brainModel.report()) await brainModel.maintain('migration').catch(e => log.warn('demo', 'demo migration failed', { cause: errText(e), hint: 'the Skill page shows the demo brain without the migrated skills' }));
