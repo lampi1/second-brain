@@ -148,6 +148,13 @@ describe('agent_delegate', () => {
     await expect(f.call('agent_delegate', scout, { tasks: [f.task('artisan', 'X')] })).rejects.toThrow(/may not launch Artisan/);
   });
 
+  it('a Scout delegated by an Artisan keeps its read-only commands and browser (the Artisan\'s shell and browser include them)', async () => {
+    const f = fixture();
+    const parent = await f.root('artisan');
+    const kid = (await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Cerca')] })).children[0].chatId;
+    expect([...(f.starts.get(kid)?.toolPolicy?.allow ?? [])].sort()).toEqual(['browser-read', 'read', 'shell-read', 'web']);
+  });
+
   it('no default role launches a Scribe without brain-write; one the user allowed is refused at launch, visibly', async () => {
     for (const id of ROLE_IDS) if (id !== 'orchestrator' && ROLE_DEFAULTS[id].launches.includes('scribe')) expect(ROLE_DEFAULTS[id].tools).toContain('brain-write');
     const f = fixture({}, undefined, () => { const c = catalog(); c.profiles.find(p => p.id === 'strategist')!.launches.push('scribe'); return c; });

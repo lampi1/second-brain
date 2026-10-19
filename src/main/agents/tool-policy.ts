@@ -43,15 +43,21 @@ export const aboveCeiling = (mode: PermissionMode, ceiling: PermissionCeiling | 
 /** A mode the CLI suggests ("Sempre" → setMode): unknown modes count as above any ceiling. */
 export const suggestedAbove = (mode: unknown, ceiling: PermissionCeiling | null): boolean => ceiling !== null && (typeof mode !== 'string' || !(mode in RANK) || aboveCeiling(mode as PermissionMode, ceiling));
 
-/** The narrower of two policies (a chat never runs wider than the chat it comes from): classes and MCP names in both,
- *  the lower ceiling; a missing side leaves the other as it is. */
+/** The wider class that includes a narrower one: a parent with `shell` may give `shell-read`, `browser` gives
+ *  `browser-read`, `edit` (anywhere) gives `brain-write`. */
+const INCLUDED_BY: Partial<Record<ToolClass, ToolClass>> = { 'shell-read': 'shell', 'browser-read': 'browser', 'brain-write': 'edit' };
+const covers = (allow: readonly ToolClass[], c: ToolClass): boolean => allow.includes(c) || (INCLUDED_BY[c] !== undefined && allow.includes(INCLUDED_BY[c]!));
+
+/** The narrower of two policies (a chat never runs wider than the chat it comes from): the classes both sides allow (a
+ *  narrower class kept when the other side has its wider one: Scout's shell-read under an Artisan's shell), the MCP
+ *  names in both, the lower ceiling; a missing side leaves the other as it is. */
 export function narrowest(a: AgentPolicy | null | undefined, b: AgentPolicy | null | undefined): AgentPolicy | null {
   if (!hasPolicy(a)) return hasPolicy(b) ? b : null;
   if (!hasPolicy(b)) return a;
   const ceiling = a.ceiling === null ? b.ceiling : b.ceiling === null ? a.ceiling : RANK[a.ceiling] <= RANK[b.ceiling] ? a.ceiling : b.ceiling;
   if (!a.tools || !b.tools) return { tools: a.tools ?? b.tools, ceiling };
   const bt = b.tools;
-  const allow = a.tools.allow.filter(c => bt.allow.includes(c));
+  const allow = [...new Set([...a.tools.allow.filter(c => covers(bt.allow, c)), ...bt.allow.filter(c => covers(a.tools!.allow, c))])];
   const mcp = !allow.includes('mcp') ? undefined : a.tools.mcp && bt.mcp ? a.tools.mcp.filter(n => bt.mcp!.includes(n)) : a.tools.mcp ?? bt.mcp;
   // two named lists with no server in common leave none, not every one
   if (mcp && !mcp.length) return { tools: { allow: allow.filter(c => c !== 'mcp') }, ceiling };

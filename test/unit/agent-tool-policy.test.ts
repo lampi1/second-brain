@@ -102,6 +102,18 @@ describe('agent tool policy', () => {
     expect(narrowest(policy(['read', 'mcp'], null, ['jira']), policy(['read', 'mcp'], null, ['github']))).toEqual(policy(['read']));
   });
 
+  it('a wider class keeps the narrower one it includes, from either side, and never widens it', () => {
+    const scout = policy(['read', 'web', 'browser-read', 'shell-read']), artisan = policy(['read', 'edit', 'shell', 'web', 'browser']);
+    // a Scout under an Artisan keeps its read-only commands and browser
+    expect(narrowest(scout, artisan)?.tools?.allow.sort()).toEqual(['browser-read', 'read', 'shell-read', 'web']);
+    expect(narrowest(artisan, scout)?.tools?.allow.sort()).toEqual(['browser-read', 'read', 'shell-read', 'web']);
+    // a Scribe under a parent that edits anywhere keeps brain-write; under a read-only one it does not
+    expect(narrowest(policy(['read', 'brain-write']), artisan)?.tools?.allow.sort()).toEqual(['brain-write', 'read']);
+    expect(narrowest(policy(['read', 'brain-write']), policy(['read', 'web']))?.tools?.allow).toEqual(['read']);
+    // the narrow class never stands for the wide one
+    expect(narrowest(policy(['shell', 'edit', 'browser']), policy(['shell-read', 'brain-write', 'browser-read']))?.tools?.allow.sort()).toEqual(['brain-write', 'browser-read', 'shell-read']);
+  });
+
   it('a suggested mode above the ceiling, or an unknown one, is refused', () => {
     expect(suggestedAbove('acceptEdits', 'default')).toBe(true);
     expect(suggestedAbove('plan', 'default')).toBe(false);
