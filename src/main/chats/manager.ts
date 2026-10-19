@@ -239,6 +239,8 @@ interface Rec {
   autoEnding?: boolean;
   /** last start or message: an idle engine is released this long after it (releaseIdle) */
   activeAt?: number;
+  /** last transcript item: a delegated child's stall check (agents/delegation.ts stalledMin) */
+  eventAt?: number;
   /** its engine is ending because it sat idle: the chat stays 'idle', the next message waits for it, then resumes */
   releasing?: Promise<void> | undefined;
   /** permissionMode null = no choice: the CLI follows the user's settings.json (ADR 0002) */
@@ -1975,6 +1977,12 @@ export class ChatManager implements ChatService {
     this.opts.emitter.emit('chat:updated', { ...r.s });
   }
 
+  /** When the chat last produced anything: a transcript item, a state change or a send (agents/delegation.ts stalledMin). */
+  lastEventAt(chatId: string): number | undefined {
+    const r = this.chats.get(chatId);
+    return r ? Math.max(r.eventAt ?? 0, r.activeAt ?? 0, r.s.updatedAt) : undefined;
+  }
+
   /** Work time so far (the span in progress included). */
   workMs(chatId: string): number {
     const s = this.chats.get(chatId)?.s;
@@ -1982,6 +1990,7 @@ export class ChatManager implements ChatService {
   }
 
   private addItem(r: Rec, item: ChatItem, replace: boolean): void {
+    r.eventAt = Date.now();
     let rep = false;
     if (replace) {
       for (let i = r.items.length - 1; i >= 0; i--) if (r.items[i]?.id === item.id) { r.items[i] = item; rep = true; break; }

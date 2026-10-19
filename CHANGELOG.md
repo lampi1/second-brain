@@ -15,6 +15,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - **"?" explanations across the app**: the Orchestrator's head (what it is, its states, its collaborators), every
   strip's facts (cost, work time, context meter, version), the run verdict (how it feeds the performance), the Agenti
   summary, Settings (system notifications, Judge reviews, model tiers) and the Skill page.
+- **"Ferma dopo" works**: `delegation.stallMin` was declared but never read; now `agent_children` reports a working
+  child silent for that many minutes as `stalled` (with `quietMin`), so its parent can nudge or close it; with a "?" in
+  Impostazioni → Ruoli e deleghe.
 
 ### Changed
 - **Nine fixed roles and direct delegation** (ADR 0083, #89): Orchestrator, Strategist, Scout, Artisan, Sentinel,

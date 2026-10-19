@@ -105,6 +105,7 @@ test('"?" explanations across the app: Orchestrator, strips, Agenti summary, Set
     await goPage(page, 'impostazioni');
     await expect(page.getByTestId('settings-page')).toBeVisible();
     await open('st-toasts-help', 'Urgenti', 'explain-settings-toasts-dark');
+    await open('st-stall-help', 'agent_children', 'explain-settings-stall-dark');
     await open('st-judge-help', 'peso pieno', 'explain-settings-judge-dark');
     await open('st-tiers-help', 'leggero', 'explain-settings-tiers-dark');
     await theme(page, 'light');

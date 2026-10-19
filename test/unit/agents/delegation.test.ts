@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { ChatManager } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionOptions, SessionSink } from '../../../src/main/chats/session';
-import { delegationTools } from '../../../src/main/agents/delegation';
+import { delegationTools, stalledMin } from '../../../src/main/agents/delegation';
 import { gateRequest } from '../../../src/main/agents/role-gate';
 import { ROLE_DEFAULTS, ROLE_IDS, WORK_ROLE_IDS, DELEGATION_DEFAULTS, isWorkRole, launchGap, type DelegationSettings, type RoleId } from '../../../src/shared/roles';
 import { checkContract, checkResult, delegationPrompt, depthOf, resultMessage } from '../../../src/shared/delegation';
@@ -20,7 +20,9 @@ import type { NewChat } from '../../../src/shared/contract';
 import type { McpTool } from '../../../src/main/mcp/server';
 
 const roots: string[] = [], managers: ChatManager[] = [];
-afterEach(async () => { for (const m of managers.splice(0)) await m.shutdown(); for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
+/** the delegation tools' clock (the stall check); undefined = Date.now */
+let clock: (() => number) | undefined;
+afterEach(async () => { clock = undefined; for (const m of managers.splice(0)) await m.shutdown(); for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 
 const catalog = (): AgentCatalog => ({ problem: null, archived: [], models: [], profiles: ROLE_IDS.map(id => {
   const r = ROLE_DEFAULTS[id];
@@ -50,7 +52,7 @@ function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: str
       } as unknown as HarnessSession;
     } });
   managers.push(m);
-  const tools = delegationTools({ chats: m, roles, settings: () => ({ ...DELEGATION_DEFAULTS, ...limits }), engineRefusal: () => null, label: '[agente]', runs: () => m.runs.list(), ...(worktrees ? { worktrees } : {}) });
+  const tools = delegationTools({ chats: m, roles, settings: () => ({ ...DELEGATION_DEFAULTS, ...limits }), engineRefusal: () => null, label: '[agente]', runs: () => m.runs.list(), ...(worktrees ? { worktrees } : {}), now: () => (clock ?? Date.now)() });
   const tool = (name: string): McpTool => tools.find(t => t.name === name)!;
   const call = async (name: string, chatId: string, args: Record<string, unknown>) => JSON.parse(await tool(name).run(args, { mount: 'chat', params: { chatId }, sessionId: '', signal: new AbortController().signal } as never) as string);
   const root = (role: RoleId, cwd = dir) => m.create({ harness: 'claude', cwd, roleId: role, title: `${ROLE_DEFAULTS[role].name} root`, prompt: 'PARENT SECRET HISTORY' }, 'user');
@@ -430,5 +432,34 @@ describe('the pure parts', () => {
   });
   it('a broken parent chain counts as too deep', () => {
     expect(depthOf('a', id => (id === 'a' ? 'b' : id === 'b' ? 'a' : undefined))).toBe(Number.MAX_SAFE_INTEGER);
+  });
+});
+
+describe('stalled children ("Ferma dopo", delegation.stallMin)', () => {
+  const kid = { closedAt: undefined, delegation: { result: undefined }, state: 'running', pending: 0 } as never;
+  it('a working child silent for stallMin minutes is stalled; one waiting on the user, idle, reported or closed is not', () => {
+    const now = 100 * 60_000;
+    expect(stalledMin(kid, now - 9 * 60_000, now, 10)).toBeNull();
+    expect(stalledMin(kid, now - 12 * 60_000, now, 10)).toBe(12);
+    expect(stalledMin({ ...(kid as object), pending: 1 } as never, 0, now, 10)).toBeNull();
+    expect(stalledMin({ ...(kid as object), state: 'idle' } as never, 0, now, 10)).toBeNull();
+    expect(stalledMin({ ...(kid as object), delegation: { result: { outcome: 'done' } } } as never, 0, now, 10)).toBeNull();
+    expect(stalledMin({ ...(kid as object), closedAt: 1 } as never, 0, now, 10)).toBeNull();
+  });
+  it('agent_children reports a silent working child as stalled after the user\'s limit, and only then', async () => {
+    const f = fixture({ stallMin: 5 });
+    const parent = await f.root('strategist');
+    const out = await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Lento')] });
+    const id: string = out.children[0].chatId;
+    f.sinks.get(id)!.changed({ state: 'running' });
+    const at = Date.now();
+    clock = () => at + 4 * 60_000;
+    expect((await f.call('agent_children', parent.id, {})).children[0].stalled).toBeUndefined();
+    clock = () => at + 6 * 60_000;
+    expect((await f.call('agent_children', parent.id, {})).children[0]).toMatchObject({ stalled: true, quietMin: 6 });
+    // it speaks again: no longer stalled
+    f.sinks.get(id)!.item({ kind: 'assistant', id: 'a1', at: at + 6 * 60_000, text: 'eccomi' } as never, false);
+    clock = () => Date.now() + 60_000;
+    expect((await f.call('agent_children', parent.id, {})).children[0].stalled).toBeUndefined();
   });
 });

@@ -31,6 +31,8 @@ export interface DelegationChats {
   limitNotice(chatId: string, kind: DelegationLimitHit['kind'], limit: number): void;
   /** a message from another chat (from = its title): agent_ask_parent, agent_answer_child */
   send(chatId: string, text: string, images?: unknown, resumed?: boolean, from?: string): Promise<void>;
+  /** when the chat last produced anything (a transcript item, a state change, a send): the stall check (stalledMin) */
+  lastEventAt?(chatId: string): number | undefined;
 }
 export interface DelegationDeps {
   chats: DelegationChats;
@@ -43,6 +45,8 @@ export interface DelegationDeps {
   /** the git worktrees of the repository at a folder (agents/worktrees.ts); a child may work in one of its parent's */
   worktrees?: (cwd: string) => Promise<string[]>;
   runs: () => readonly AgentRun[];
+  /** the clock (tests) */
+  now?: () => number;
 }
 
 export const TASKS_MAX = 10;
@@ -57,6 +61,15 @@ const callerOf = (params: Record<string, string>): string => {
 
 /** A delegated child counts against its parent's parallel limit until it reports or closes. */
 export const busyChild = (c: ChatSummary): boolean => !c.closedAt && !c.delegation?.result;
+
+/** Minutes a delegated child has been stalled, or null: it is still busy (not reported, not closed), working (starting or
+ *  running, nothing waiting on the user) and produced no event for `stallMin` minutes (Impostazioni → Ruoli e deleghe →
+ *  "Ferma dopo"). agent_children reports it to the parent as `stalled`. */
+export function stalledMin(c: ChatSummary, lastEventAt: number, now: number, stallMin: number): number | null {
+  if (!busyChild(c) || (c.state !== 'running' && c.state !== 'starting') || c.pending > 0) return null;
+  const quiet = now - lastEventAt;
+  return quiet >= stallMin * 60_000 ? Math.floor(quiet / 60_000) : null;
+}
 
 export function delegationTools(d: DelegationDeps): McpTool[] {
   // slots taken by agent_delegate calls still creating their chats, per parent (checked and taken synchronously)
@@ -147,12 +160,14 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
   }
 
   function children(callerId: string): unknown {
-    const runs = d.runs();
+    const runs = d.runs(), now = d.now?.() ?? Date.now(), stallMin = d.settings().stallMin;
+    const quiet = (c: ChatSummary) => stalledMin(c, Math.max(d.chats.lastEventAt?.(c.id) ?? 0, c.updatedAt), now, stallMin);
     return { children: d.chats.list().filter(c => c.parentId === callerId).map(c => ({
       chatId: c.id, title: c.title, role: c.delegation?.role ?? c.agent?.id ?? null, state: c.closedAt ? 'closed' : c.state,
       ...(c.run ? { runId: c.run.runId } : {}),
       goal: c.delegation?.goal ?? null, result: c.delegation?.result ?? null, pending: c.pending,
       ...(c.run ? { costUsd: runs.find(r => r.runId === c.run!.runId)?.costUsd ?? null } : {}),
+      ...((m => m === null ? {} : { stalled: true, quietMin: m })(quiet(c))),
     })) };
   }
 
@@ -242,7 +257,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     run: async (a, ctx) => JSON.stringify(await answerChild(a, callerOf(ctx.params))),
   }, {
     name: 'agent_children',
-    description: 'The chats you delegated (agent_delegate): role, title, state, goal, their result once reported, open requests and cost; runId is what agent_child_feedback takes.',
+    description: 'The chats you delegated (agent_delegate): role, title, state, goal, their result once reported, open requests and cost; runId is what agent_child_feedback takes. stalled: true (with quietMin) = a working child silent for longer than the user\'s "Ferma dopo" limit: nudge it with a message or close it.',
     inputSchema: { type: 'object', additionalProperties: false, properties: {} },
     annotations: { readOnlyHint: true, openWorldHint: false },
     run: (_a, ctx) => JSON.stringify(children(callerOf(ctx.params))),
