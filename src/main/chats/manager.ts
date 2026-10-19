@@ -476,9 +476,11 @@ export class ChatManager implements ChatService {
     // a delegated chat (agent_delegate): only an agent's, under a live parent, in the parent's folder, linked to its run
     const delegator = req.parentId !== undefined ? this.delegator(req, by) : undefined;
     if (delegator?.s.run) links = { ...links, parentRunId: delegator.s.run.runId };
-    // never wider than the chat it comes from: a fork of its session, the Orchestrator it renews, the chat that opens it
+    // never wider than the chat it comes from: a fork of its session, the Orchestrator it renews. A root chat the
+    // Orchestrator opens is bound by its own role (and the user's defaults), not by the Orchestrator's read-only policy:
+    // the Orchestrator plans, the Artisan it starts writes (ADR 0083)
     const forkSrc = req.resumeSessionId?.trim() ? [...this.chats.values()].find(r => r.s.sessionId === req.resumeSessionId?.trim()) : undefined;
-    const parent = delegator ?? forkSrc ?? (req.replaces ? this.chats.get(req.replaces) : undefined) ?? (by === 'agent' ? [...this.chats.values()].find(r => r.s.isOrchestrator && !r.s.closedAt) : undefined);
+    const parent = delegator ?? forkSrc ?? (req.replaces ? this.chats.get(req.replaces) : undefined);
     // a delegated chat: its role's policy, below its parent's, narrowed again by the contract's tool classes
     const policy = delegator ? narrowest(belowParent(agent.policy, delegator.policy, this.modeFor(delegator)), req.delegation?.tools ? { tools: { allow: req.delegation.tools }, ceiling: null } : null)
       : narrowest(agent.policy, parent?.policy);

@@ -98,17 +98,18 @@ describe('agent policy on chats', () => {
     expect(f.m.browserAccess(b.id)).toBe('all');
   });
 
-  it('a renewed Orchestrator and the chats an agent opens never run wider than their origin', async () => {
+  it('a renewed Orchestrator never runs wider than the old one; a root chat the Orchestrator opens runs its own role, not the Orchestrator\'s read-only policy', async () => {
     const f = fixture();
-    const orchestrator = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user', agent(reviewer));
+    const orchestrator = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user', agent({ tools: { allow: ['read'] }, ceiling: 'plan' }));
     await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true, replaces: orchestrator.id });
-    expect(f.starts.at(-1)).toMatchObject({ toolPolicy: { allow: ['read'] }, ceiling: 'default' });
-    const work = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'modifica X', permissionMode: 'acceptEdits' }, 'agent');
+    expect(f.starts.at(-1)).toMatchObject({ toolPolicy: { allow: ['read'] }, ceiling: 'plan' });
+    // an Artisan the Orchestrator starts writes within its own ceiling (finding: it used to start read-only in plan mode)
+    const artisan = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'modifica X', permissionMode: 'acceptEdits' }, 'agent', agent({ tools: { allow: ['read', 'edit', 'shell', 'browser'] }, ceiling: 'acceptEdits' }));
+    expect(f.starts.at(-1)).toMatchObject({ toolPolicy: { allow: ['read', 'edit', 'shell', 'browser'] }, ceiling: 'acceptEdits', permissionMode: 'acceptEdits' });
+    expect(f.m.browserAccess(artisan.id)).not.toBe('none');
+    // a role's ceiling still holds: a mode above it runs at the ceiling
+    await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'y', permissionMode: 'bypassPermissions' }, 'agent', agent(reviewer));
     expect(f.starts.at(-1)).toMatchObject({ toolPolicy: { allow: ['read'] }, ceiling: 'default', permissionMode: 'default' });
-    expect(f.m.browserAccess(work.id)).toBe('none');
-    // an agent chosen for the work is narrowed by its opener too
-    await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'y' }, 'agent', agent({ tools: { allow: ['read', 'edit', 'browser'] }, ceiling: 'acceptEdits' }));
-    expect(f.starts.at(-1)).toMatchObject({ toolPolicy: { allow: ['read'] }, ceiling: 'default' });
     // a chat Brother opens himself is his own
     await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'z' });
     expect(f.starts.at(-1)?.toolPolicy).toBeUndefined();
