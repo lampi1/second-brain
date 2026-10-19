@@ -1,4 +1,5 @@
 import { agentPackEn } from './areas/agent-pack.en';
+import { brainModelEn } from './areas/brain-model.en';
 import { costsEn } from './areas/costs.en';
 import { auditEn } from './areas/audit.en';
 import { auditExpressionsEn } from './areas/audit-expressions.en';
@@ -59,6 +60,7 @@ export const en: Dict = {
   'genui.permission.session': "Allow for this session",
   'genui.permission.deny': "Do not authorize this operation.",
   ...studioEn,
+  ...brainModelEn,
   ...productEn,
   ...lifecycleEn,
   ...agentsGridEn,
