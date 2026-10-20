@@ -1,7 +1,8 @@
 // E2E of the agent cards' front (owner, 2026-10-19): on the frozen demo (made-up runs, main/demo-agent-runs.ts) every
-// card shows the character large and centred, a level with its way to the next one and a performance % — or "In
-// rodaggio" below 5 judged runs — each with a "?" whose bubble gives the formula; a role with no runs is a Lv 1 with the
-// empty-state line. The flip to the back still works. Screenshots dark and light: test-results/shots/agent-cards-*.png.
+// card shows the character large and centred, a level with its verified successes beside it («Lv 4 Esperto · 38
+// riusciti verificati», ADR 0100) and its way to the next one, and a performance % — or "In rodaggio" below 5 judged
+// runs — each with a "?" whose bubble gives the formula; a role with no runs is a Lv 1 with the empty-state line; the
+// model tier chip reads «Modello: …», never «Livello». The flip to the back still works. Screenshots dark and light: test-results/shots/agent-cards-*.png.
 import { expect, test, type Page } from '@playwright/test';
 import { goPage, launchDemo, shot } from './helpers';
 
@@ -24,20 +25,23 @@ test('agent cards: big centred character, level and performance with their "?" f
     await expect(artisan.getByTestId('catalog-level-artisan')).toContainText(/Lv \d+/);
     expect(Number(await artisan.getByTestId('catalog-level-artisan').getAttribute('data-level'))).toBeGreaterThan(1);
     await expect(artisan.getByTestId('catalog-perf-artisan')).toContainText('%');
+    await expect(artisan.getByTestId('catalog-level-wins-artisan')).toContainText(/\d+ riusciti verificati/);
+    await expect(artisan.locator('.catalog-chip[data-kind="model"]')).toContainText('Modello:');
     const big = await artisan.locator('.catalog-hero .agent-avatar').boundingBox();
     expect(big!.width).toBeGreaterThanOrEqual(96);
     // a new role: still warming up; a role with no runs: Lv 1 and the empty-state line
     await expect(overview.getByTestId('catalog-perf-herald')).toContainText('In rodaggio');
     await expect(overview.getByTestId('catalog-perf-herald')).toHaveAttribute('data-band', 'warmup');
     await expect(overview.getByTestId('catalog-level-pulse')).toContainText('Lv 1');
-    await expect(overview.getByTestId('catalog-level-pulse')).toContainText('Nessun lavoro ancora');
+    await expect(overview.getByTestId('catalog-level-pulse')).toContainText('Nessun lavoro riuscito verificato ancora');
 
     // the "?" give the formulas, with the agent's own numbers
     await artisan.getByTestId('catalog-level-help-artisan').click();
     const lv = page.getByTestId('catalog-level-help-artisan-bubble');
     await expect(lv).toBeVisible();
     await expect(lv).toContainText('5 × N × (N − 1) ÷ 2');
-    await expect(lv).toContainText('lavori conclusi');
+    await expect(lv).toContainText('riusciti verificati su');
+    await expect(lv).toContainText('solo con i lavori riusciti e verificati');
     await expect(artisan).toHaveAttribute('data-flipped', 'false'); // the "?" does not flip the card
     await shot(page, 'agent-cards-level-help-dark');
     await page.keyboard.press('Escape');

@@ -1,6 +1,8 @@
 // Demo agent runs (SB_DEMO=1): a made-up, deterministic history of ended runs per role, so the Agenti cards show a level,
 // a performance % and their run metrics without any engine. Some roles are veterans, some are still "in rodaggio"
-// (too few judged runs) and Pulse has none (the card's empty state). Used by DemoChats.runMetrics (demo.ts) only.
+// (too few judged runs) and Pulse has none (the card's empty state). The runs the user did not judge closed with an
+// agent_report and no correction, so the facts settle them after 7 days (ADR 0100): the level counts verified successes.
+// Used by DemoChats.runMetrics (demo.ts) only.
 import type { AgentMetrics, AgentRun, AgentRunOutcome } from '../shared/agents';
 import { runMetrics } from './agents/run-metrics';
 import { standings, withStandings } from './agents/standing';
@@ -33,7 +35,8 @@ export function demoAgentRuns(now: number): AgentRun[] {
         : by < judged + 0.25 ? { verdict, basis: 'orchestrator-opinion', at: endedAt, by: 'orchestrator' } : undefined;
       out.push({ runId: `r_${(++id).toString(16).padStart(12, '0')}`, chatId: `demo-run-${id}`, agentId, version: 1, goal: 'Demo', startedBy: 'orchestrator',
         startedAt: endedAt - dur, endedAt, endReason: 'completed', ...(outcome ? { outcome } : {}),
-        ...(outcome ? {} : { report: { at: endedAt, outcome: verdict === 'success' ? 'done' : verdict === 'partial' ? 'partial' : 'blocked', verified: 'yes', summary: 'Demo' } as const }),
+        ...(outcome ? {} : { report: { at: endedAt, outcome: verdict === 'success' ? 'done' : verdict === 'partial' ? 'partial' : 'blocked', verified: 'yes', summary: 'Demo', via: 'agent_report' } as const }),
+        corrections: { tagged: 0, afterReport: 0 },
         counters: { questions: Math.floor(rand() * 2), permissions: Math.floor(rand() * 3), commands: Math.floor(rand() * 8), reopened: 0, contextPeak: null },
         costUsd: Math.round(cost * (0.5 + rand()) * 1000) / 1000, tokens: null, executionMs: Math.round(dur * 0.7) });
     }
@@ -44,5 +47,5 @@ export function demoAgentRuns(now: number): AgentRun[] {
 /** The agents:metrics answer of the demo: the §5 metrics plus each card's standing. */
 export function demoAgentMetrics(now: number): AgentMetrics[] {
   const runs = demoAgentRuns(now), standing = standings(runs, [], now);
-  return withStandings(runMetrics(runs), standing);
+  return withStandings(runMetrics(runs, { now }), standing);
 }

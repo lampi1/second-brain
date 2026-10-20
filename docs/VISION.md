@@ -17,7 +17,8 @@ What this means for every change:
   (accounts and tools, workspace, appearance and language, notifications); technical detail appears in context, only
   when it is needed. Minimal, professional, well-proportioned UI; smooth, short animations.
 - **Trustworthy.** Safe by default, permissions never widened silently, every number with its source
-  (real, estimate or quota), no gamification: only useful, truthful statistics. Errors, ideas and feedback show the
+  (real, estimate or quota); light game elements only on top of verified data (levels from verified successes, ADR 0100),
+  never on volume or self-assessment: only useful, truthful statistics. Errors, ideas and feedback show the
   agent and the **model that produced them**; history without that data shows "not available", never a guess.
 - **Changeable by anyone.** The code is modular enough that a cheap model, guided by a non-developer, can change it
   safely; instructions for agents are short and fast to verify.

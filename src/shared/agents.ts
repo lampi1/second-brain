@@ -130,21 +130,25 @@ export interface VersionMetrics {
 export interface AgentMetrics { agentId: string; versions: VersionMetrics[]; all: VersionMetrics | null; open: number;
   /** level and performance on the agent card (agents/standing.ts), over all its runs whatever the filter */
   standing?: AgentStanding }
-/** The agent card's level (from its ended runs) and performance % (verdicts weighted by trust and recency): agents/standing.ts. */
+/** The agent card's level (from its verified successful runs, ADR 0100) and performance % (verdicts weighted by trust
+ *  and recency): agents/standing.ts. */
 export interface AgentStanding {
-  /** ended runs counted for the level (kept + rolled up) */
+  /** ended runs (kept + rolled up) */
   runs: number;
+  /** verified successful runs (the user's verdict, a verified review's, or the facts' once settled): the level's XP */
+  wins: number;
   level: number;
-  /** runs where this level starts, and where the next one does (null at the top level) */
+  /** verified successes where this level starts, and where the next one does (null at the top level) */
   levelAt: number; nextAt: number | null;
   /** 0..1 of the way to the next level (1 at the top) */
   progress: number;
-  /** 0..1, null while fewer than `minRuns` runs have a verdict ("in rodaggio") */
+  /** 0..1, null while fewer than `minRuns` runs have a weighted verdict ("in rodaggio") */
   performance: number | null;
-  /** runs with a verdict, and the minimum before the performance is shown */
+  /** runs with a weighted verdict (never the agent's own word), and the minimum before the performance is shown */
   evaluated: number; minRuns: number;
-  /** where the verdicts came from: the user (or reviewed evidence), an independent review, the Orchestrator, the agent itself */
-  sources: { human: number; judge: number; orchestrator: number; self: number };
+  /** where the verdicts came from: the user, an independent review, the facts, the Orchestrator, the agent itself (the
+   *  last one is counted here but weighs nothing) */
+  sources: { human: number; review: number; facts: number; orchestrator: number; self: number };
 }
 /** One run = a chat started from a role (agent-runs.json is the source of truth; the chat keeps a mirror). */
 export interface AgentRun {

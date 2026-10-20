@@ -12,7 +12,7 @@ export const explainIt = {
   'explain.strip.p3': 'Il contatore a destra: quanto testo ha in memoria la chat (in migliaia di token, «~» se stimato); la barra è la parte della finestra del modello già usata. Vicino al pieno, Claude riassume da sé la conversazione.',
   'explain.strip.p4': '«v2» è la versione del ruolo con cui lavora, «auto» vuol dire che l’ha avviata l’Orchestratore.',
   'explain.outcome.title': 'A cosa serve il tuo voto',
-  'explain.outcome.p1': 'Dice se il lavoro è riuscito, riuscito in parte o fallito. È il voto che conta di più: entra nella performance dell’agente con peso pieno (× 1), come quello di una revisione indipendente; l’Orchestratore pesa × 0,6 e il resoconto dell’agente × 0,3.',
+  'explain.outcome.p1': 'Dice se il lavoro è riuscito, riuscito in parte o fallito. È il voto che conta di più: entra nella performance dell’agente con peso pieno (× 1), come quello di una revisione indipendente e dei fatti; l’Orchestratore pesa × 0,6; il resoconto dell’agente su sé stesso non conta. Un «riuscito» tuo conta anche per il suo livello.',
   'explain.outcome.p2': 'Un voto perde metà del peso ogni 30 giorni, così la performance segue com’è l’agente oggi. Puoi cambiarlo quando vuoi.',
   'explain.outcome.p3': 'Se non voti, decidono i fatti, senza spendere token: riuscito quando l’agente ha chiuso con tutti i criteri soddisfatti, tu non l’hai corretto e non l’hai rifatto nei 7 giorni dopo (fino ad allora è provvisorio e non conta); non riuscito quando si è bloccato o l’hai rifatto entro 7 giorni. Il tuo voto vince sempre.',
   'explain.toasts.title': 'Urgenti o normali',
@@ -31,5 +31,5 @@ export const explainIt = {
   'explain.skills.p2': '«Usata da» elenca gli agenti che la caricano a ogni avvio; «Non usata» vuol dire che nessun agente la carica, ma resta disponibile con «/nome» in ogni chat. La manutenzione propone di unire o togliere quelle doppie o inutili.',
   'explain.team.title': 'Cosa dicono questi numeri',
   'explain.team.p1': '«Al lavoro»: ruoli con almeno una chat aperta adesso. «In prova»: ruoli con una nuova versione in prova, confrontata con la precedente prima di tenerla.',
-  'explain.team.p2': 'Su ogni carta: il livello cresce con i lavori conclusi, la performance è la media pesata dei voti; il «?» accanto a ciascuno dà la formula esatta.',
+  'explain.team.p2': 'Su ogni carta: il livello cresce solo con i lavori riusciti e verificati (da te, da una revisione verificata o dai fatti), scritti accanto; la performance è la media pesata dei voti, con su quanti lavori si basa; il «?» accanto a ciascuno dà la formula esatta.',
 };

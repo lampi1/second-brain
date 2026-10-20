@@ -37,8 +37,10 @@ export interface RunTally {
   reviews: Record<string, ReviewTally>;
   /** the same counts per run tag (AGENTS-DESIGN §4.8), for filtered metrics over pruned runs; untagged runs are in none */
   tags?: TagTallies;
-  /** of these runs, the Orchestrator's decisions (standing.ts orchestratorDecision): kept so its level survives a prune */
+  /** of these runs, the Orchestrator's decisions (standing.ts orchestratorDecision): kept so its record survives a prune */
   decisions?: number;
+  /** of those decisions, the verified successes at prune time: the Orchestrator's level (its XP, ADR 0100) */
+  decisionWins?: number;
   /** fitRollups dropped `tags` to stay in budget: later prunes do not rebuild a partial set, and filters leave this rollup out */
   tagsLost?: true;
 }
@@ -134,6 +136,7 @@ export function mergeTallies(a: RunTally, b: RunTally, agentId = a.agentId, vers
     cost: mergeSample(a.cost, b.cost), tokens: Object.fromEntries(TOKEN_KINDS.map(k => [k, mergeSample(a.tokens[k], b.tokens[k])])) as Record<TokenKind, Sample>,
     contextPeak: mergeSample(a.contextPeak, b.contextPeak), elapsed: mergeSample(a.elapsed, b.elapsed), execution: mergeSample(a.execution, b.execution), reviews,
     ...(a.decisions || b.decisions ? { decisions: (a.decisions ?? 0) + (b.decisions ?? 0) } : {}),
+    ...(a.decisionWins || b.decisionWins ? { decisionWins: (a.decisionWins ?? 0) + (b.decisionWins ?? 0) } : {}),
     ...(a.tagsLost || b.tagsLost ? { tagsLost: true as const } : (() => { const tags = mergeTags(a.tags, b.tags); return tags ? { tags } : {}; })()),
   };
 }
@@ -173,7 +176,10 @@ export function rollUp(rollups: readonly RunTally[], pruned: readonly AgentRun[]
     if (!out.has(k)) out.set(k, emptyTally(run.agentId, run.version));
     const t = out.get(k)!;
     foldRun(t, run, index);
-    if (countedDecision(run)) t.decisions = (t.decisions ?? 0) + 1;
+    if (countedDecision(run)) {
+      t.decisions = (t.decisions ?? 0) + 1;
+      if (verifiedVerdict(run, index.reworkStarts.get(run.runId), index.now)?.verdict === 'success') t.decisionWins = (t.decisionWins ?? 0) + 1;
+    }
     if (!run.tags || run.endedAt === undefined || t.tagsLost) continue;
     const one = emptyTally(run.agentId, run.version);
     foldRun(one, run, index);

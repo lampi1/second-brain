@@ -82,6 +82,9 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 .agent-overview .catalog-standing p{margin:3px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .catalog-standing b{font-size:var(--fs-xl);font-weight:650;letter-spacing:-.3px;font-variant-numeric:tabular-nums;color:var(--text)}
 .catalog-standing p span{font-size:var(--fs-s);color:var(--text-2)}
+/* «Lv 6 Maestro · 38 riusciti verificati»: the real count beside the level wraps under it in a narrow card (ADR 0100) */
+.agent-overview .catalog-standing p.catalog-level-value{white-space:normal}
+.catalog-standing .catalog-level-wins{white-space:nowrap;font-variant-numeric:tabular-nums}
 .catalog-standing small{display:block;margin-top:5px;font-size:var(--fs-xs);color:var(--text-3);line-height:1.35}
 .catalog-level-bar{height:6px;margin-top:7px;border-radius:3px;background:var(--surface-3);overflow:hidden}
 .catalog-level-bar>i{display:block;height:100%;min-width:3px;border-radius:inherit;background:linear-gradient(90deg,color-mix(in srgb,var(--tone) 65%,var(--surface)),var(--tone));transition:width 600ms var(--ease)}
