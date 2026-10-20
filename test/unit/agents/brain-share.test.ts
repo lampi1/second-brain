@@ -22,11 +22,11 @@ const models = (): AgentModelChoice[] => [{ engine: 'claude', label: 'Claude', e
 function brain() {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-brain-share-')); roots.push(base);
   const root = path.join(base, 'brain'), data = path.join(base, 'data'); fs.mkdirSync(root); fs.mkdirSync(data);
-  put(root, 'brain.json', JSON.stringify({ machinery: 'product-v1', rules: { topicFiles: ['code.md', 'now.md'], appRules: true } }));
+  put(root, 'brain.json', JSON.stringify({ machinery: 'product-v1', rules: { topicFiles: ['code.md', 'now.md', 'Memory/notes.md', 'Agents/scout/memory.md'], appRules: true } }));
   put(root, 'code.md', '---\nwhen: {"prompt":["codice"],"tools":[],"paths":[]}\n---\n# Code\nSmall commits.\n');
   put(root, 'rules/qa.md', '# QA\nTest first.\n');
   put(root, 'me.md', '# Me\nPRIVATE-ME\n'); put(root, 'now.md', 'PRIVATE-NOW\n'); put(root, 'journal/2026-10-20.md', 'PRIVATE-JOURNAL\n');
-  put(root, 'agents/scout/memory.md', 'PRIVATE-AGENT-MEMORY\n'); put(root, 'memory/shared.md', 'PRIVATE-SHARED\n');
+  put(root, 'agents/scout/memory.md', 'PRIVATE-AGENT-MEMORY\n'); put(root, 'memory/shared.md', 'PRIVATE-SHARED\n'); put(root, 'Memory/notes.md', 'PRIVATE-CASED\n'); put(root, 'Agents/scout/memory.md', 'PRIVATE-CASED\n');
   put(root, '.agents/skills/deploy-check/SKILL.md', '---\nname: deploy-check\ndescription: "Check a deploy"\nhooks: {"Stop":[]}\n---\nRun the checks.\n');
   put(root, '.agents/skills/deploy-check/references/steps.md', '1. look\n');
   put(root, '.agents/skills/deploy-check/logo.png', Buffer.from([0x89, 0x50, 0, 1]));
@@ -44,7 +44,7 @@ describe('buildBrainShare', () => {
     const { files, summary } = buildBrainShare({ root, name: 'brain', date: '2026-10-20', roles });
     const names = [...files.keys()];
     const all = [...files.values()].map(b => b.toString('utf8')).join('\n');
-    for (const secret of ['PRIVATE-ME', 'PRIVATE-NOW', 'PRIVATE-JOURNAL', 'PRIVATE-AGENT-MEMORY', 'PRIVATE-SHARED']) expect(all).not.toContain(secret);
+    for (const secret of ['PRIVATE-ME', 'PRIVATE-NOW', 'PRIVATE-JOURNAL', 'PRIVATE-AGENT-MEMORY', 'PRIVATE-SHARED', 'PRIVATE-CASED']) expect(all).not.toContain(secret);
     expect(names.some(n => /(^|\/)(me|now)\.md$|journal|memory/.test(n))).toBe(false);
     expect(summary.rules.sort()).toEqual(['rules/code.md', 'rules/qa.md']);
     expect(summary.skills.sort()).toEqual(['deploy-check', 'review-pr']);

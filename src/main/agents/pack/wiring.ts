@@ -18,6 +18,7 @@ import { isWorkRole } from '../../../shared/roles';
 import { buildBrainShare } from './brain-share';
 import { portableId, writePackFiles } from './flows';
 import { BRAIN_ZIP_LIMITS, writeZip } from './zip';
+import { log } from '../../log';
 
 export function createAgentPacks(userData: string, brain: BrainService, catalog: AgentCatalogService, demo = false) {
   const demoRoot = path.join(userData, 'demo-agent-brain');
@@ -75,8 +76,13 @@ export function createAgentPacks(userData: string, brain: BrainService, catalog:
       return { profile, skillName: portableId(profile.id), own };
     });
     const name = path.basename(brainRoot), date = new Date().toISOString().slice(0, 10);
-    const { files, summary } = buildBrainShare({ root: brainRoot, name, date, roles });
-    const zip = writeZip(files, BRAIN_ZIP_LIMITS);
+    let built: ReturnType<typeof buildBrainShare>, zip: Buffer;
+    try { built = buildBrainShare({ root: brainRoot, name, date, roles }); zip = writeZip(built.files, BRAIN_ZIP_LIMITS); }
+    catch (e) {
+      log.warn('brain', 'Shareable brain not built', { cause: e instanceof Error ? e.message : String(e), hint: 'Too many files, or a file name the zip refuses: check the brain skills and scripts' });
+      return { ok: false, error: 'Lo zip non si può creare: il brain ha troppi file o un nome di file non valido. Dettagli nei log.' };
+    }
+    const { files, summary } = built;
     const staging = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-brain-share-'));
     try {
       writePackFiles(staging, files);

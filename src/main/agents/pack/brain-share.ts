@@ -179,8 +179,9 @@ export function buildBrainShare(input: BrainShareInput): { files: PackFiles; sum
   // a role's own know-how (agents/<id>/skills) travels as a skill named after the role
   for (const r of roles) if (r.own.size && !skills.has(r.skillName)) {
     const own: PackFiles = new Map([...r.own].filter(([f]) => f.startsWith(`skills/${r.skillName}/`)).map(([f, d]) => [f.slice(`skills/${r.skillName}/`.length), d]));
+    for (const [f, d] of own) { let ok = d.length <= MAX_FILE && text(d); try { checkPackPath(`.claude/skills/x/${f}`); } catch { ok = false; } if (!ok) { own.delete(f); skipped.push(`agents/${r.skillName}/skills/${r.skillName}/${f}`); } }
     const md = own.get('SKILL.md');
-    if (md && [...own.values()].every(text)) { own.set('SKILL.md', Buffer.from(setFields(md.toString('utf8'), {}, ['hooks']))); skills.set(r.skillName, own); }
+    if (md && [...own.values()].reduce((n, d) => n + d.length, 0) <= MAX_SKILL) { own.set('SKILL.md', Buffer.from(setFields(md.toString('utf8'), {}, ['hooks']))); skills.set(r.skillName, own); }
   }
   const rules = packRules(input.root), scripts = brainScripts(input.root, skipped), files: PackFiles = new Map();
   for (const [name, own] of skills) for (const dir of SKILL_DIRS) for (const [rel, data] of own) files.set(`${dir}/${name}/${rel}`, Buffer.from(data));
