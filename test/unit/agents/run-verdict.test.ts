@@ -66,7 +66,7 @@ describe('the facts as verified evidence', () => {
     const role = { id: 'artisan', name: 'Artisan', scope: 'role', tier: 'mid', trial: undefined } as unknown as AgentProfile;
     const tagged = (tier: 'mid' | 'top', ok: boolean): AgentRun => run({ tier, tags: { skills: [], app: null, repo: null }, endedAt: LATER - 9 * DAY, startedAt: LATER - 9 * DAY - 1000,
       ...(ok ? {} : { report: { at: END, outcome: 'blocked', verified: 'no', summary: 's' } }) });
-    const runs = [...Array.from({ length: 5 }, (_, i) => tagged('mid', i < 2)), ...Array.from({ length: 5 }, () => tagged('top', true))];
+    const runs = [...Array.from({ length: 20 }, (_, i) => tagged('mid', i < 8)), ...Array.from({ length: 20 }, () => tagged('top', true))];
     expect(suggestTiers({ roles: [role], runs }, LATER)).toMatchObject([{ kind: 'tier', tier: 'top', agentIds: ['artisan'] }]);
   });
 });

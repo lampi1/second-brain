@@ -5,26 +5,51 @@
 import type { AgentProfile, AgentRun, VersionMetrics } from '../../shared/agents';
 import type { TrialEvaluation } from '../../shared/agent-lifecycle';
 import { rollUp, runMetrics } from './run-metrics';
+import { reworkStartsOf, verifiedVerdict } from '../../shared/run-verdict';
+import { bootstrapDiff, CHECKPOINTS, newcombe, verdictOf } from '../../shared/evidence-stats';
 
-export const TRIAL_DAYS = 21 * 86_400_000;
+/** an inconclusive trial waits for data up to this long, then its unproven change is proposed to go back */
+export const TRIAL_MAX_DAYS = 60 * 86_400_000;
+/** the baseline's most recent runs compared */
+export const BASELINE_MAX = 40;
 /** Include related reviews/rework in the index without counting them in this agent's selected cohort. */
 export function cohortMetrics(selected: readonly AgentRun[], all: readonly AgentRun[], now = Date.now()): VersionMetrics | null {
   if (!selected.length) return null;
   return runMetrics([], { rollups: rollUp([], [...selected], [...all], now) }).find(a => a.agentId === selected[0]!.agentId)?.all ?? null;
 }
-const lower = (before: number | null, after: number | null, factor: number): boolean => before !== null && before > 0 && after !== null && after <= before * factor;
 const guard = (before: number | null, after: number | null): boolean => before !== null && after !== null && after <= before * 1.25;
-
 /** The run's skill set as a key; null = a run recorded without tags (unknown, never a match). */
 export const skillSet = (run: AgentRun): string | null => run.tags ? JSON.stringify([...run.tags.skills].sort()) : null;
 
+/** The verified verdicts of some runs: successes out of the runs that have one. */
+function verified(runs: readonly AgentRun[], all: readonly AgentRun[], now: number): { k: number; n: number } {
+  const rework = reworkStartsOf(all);
+  let k = 0, n = 0;
+  for (const r of runs) {
+    const v = verifiedVerdict(r, rework.get(r.runId), now);
+    if (!v) continue;
+    n++;
+    if (v.verdict === 'success') k++;
+  }
+  return { k, n };
+}
+/** The user's corrections of each run that counted them. */
+const corrections = (runs: readonly AgentRun[]): number[] => runs.flatMap(r => (r.corrections ? [r.corrections.tagged + r.corrections.afterReport] : []));
+const pct = (x: number): string => `${x >= 0 ? '+' : ''}${Math.round(x * 100)}`;
+
+/** One trial against its frozen baseline (2026-10-20, replacing four metrics in OR with fixed thresholds on 5-10 runs,
+ *  which proposed "keep" for two identical versions 20-30% of the time): the primary metric is the verified success rate
+ *  (the user's, a verified review's or the facts' verdict, ADR 0100), compared with Newcombe's 90% interval; the user's
+ *  corrections per run are the second signal (a seeded bootstrap interval); cost, time and questions are guardrails, never
+ *  a reason to keep. A verdict only when both sides reach the first checkpoint (shared/evidence-stats.ts CHECKPOINTS);
+ *  while the data are fewer the trial waits, up to TRIAL_MAX_DAYS, then an unproven change is proposed to go back. */
 export function evaluateTrial(agent: AgentProfile, runs: readonly AgentRun[], now: number): TrialEvaluation {
   const trial = agent.trial;
   const empty: TrialEvaluation = { decision: 'wait', reason: 'Nessuna prova aperta', at: now, before: null, after: null, other: null, comparable: 0, otherRuns: 0, untagged: 0 };
   if (!trial || trial.baseline < 1 || trial.version < 1) return empty;
   const own = runs.filter(r => r.agentId === agent.id && r.endedAt !== undefined && r.source !== 'oneshot');
   const baseline = own.filter(r => r.version === trial.baseline && r.endedAt! <= trial.startedAt)
-    .sort((a, b) => b.endedAt! - a.endedAt!).slice(0, 10);
+    .sort((a, b) => b.endedAt! - a.endedAt!).slice(0, BASELINE_MAX);
   const candidates = own.filter(r => r.version === trial.version && r.startedAt >= trial.startedAt);
   // comparable = a trial run whose skill set the baseline also ran; other = a skill set the baseline never had
   const sets = new Set(baseline.map(skillSet).filter((k): k is string => k !== null));
@@ -34,24 +59,24 @@ export function evaluateTrial(agent: AgentProfile, runs: readonly AgentRun[], no
   const before = cohortMetrics(baseline, runs, now), after = cohortMetrics(matched, runs, now);
   const result = { ...empty, before, after, other: cohortMetrics(other, runs, now), comparable: matched.length,
     otherRuns: other.length, untagged: classified.filter(r => r.match === null).length };
-  // Inside the trial window missing evidence means "wait": verdicts arrive after a run ends (the user rates it later) and
-  // comparable work accumulates; only at the end of the window does an inconclusive trial propose going back.
-  const open = now - trial.startedAt < TRIAL_DAYS;
-  if (candidates.length < 5 && open) return { ...result, reason: 'Campione ancora insufficiente' };
+  const age = now - trial.startedAt;
   const revert = (reason: string): TrialEvaluation => ({ ...result, decision: 'revert', reason });
-  const short = (reason: string): TrialEvaluation => open ? { ...result, reason: `${reason}: in attesa` } : revert(reason);
-  if (baseline.length < 5 || matched.length < 5 || !before || !after) return short('Campione comparabile insufficiente');
-  if ((before.successRate.coverage ?? 0) < 0.6 || (after.successRate.coverage ?? 0) < 0.6) return short('Copertura degli esiti inferiore al 60%');
-  const b = before.successRate.value!, a = after.successRate.value!;
-  const findings = before.reviews.some(old => after.reviews.some(next => old.reviewer.agentId === next.reviewer.agentId
-    && old.reviewer.version === next.reviewer.version && lower(old.findingsPerRun, next.findingsPerRun, 0.8)));
-  const improved = a >= b + 0.05 - 1e-9 || lower(before.correctionsPerRun.value, after.correctionsPerRun.value, 0.8)
-    || findings || before.reworkRate.value !== null && after.reworkRate.value !== null && after.reworkRate.value <= before.reworkRate.value - 0.05 + 1e-9;
-  const safe = guard(before.costPerRun.median.value, after.costPerRun.median.value)
+  const wait = (reason: string): TrialEvaluation => age < TRIAL_MAX_DAYS ? { ...result, reason } : revert(`${reason}: la prova è finita senza un effetto provato`);
+  const vb = verified(baseline, runs, now), va = verified(matched, runs, now);
+  const need = CHECKPOINTS[0]!;
+  if (vb.n < need || va.n < need) return wait(`Dati insufficienti: esiti verificati ${va.n}/${need} nella prova, ${vb.n}/${need} prima`);
+  const success = newcombe(va.k, va.n, vb.k, vb.n);
+  const fixes = bootstrapDiff(corrections(baseline), corrections(matched), { seed: trial.startedAt % 2 ** 31 });
+  const worse = verdictOf(success, { before: vb.n, after: va.n }, 'higher') === 'peggiora';
+  const improved = verdictOf(success, { before: vb.n, after: va.n }, 'higher') === 'aiuta'
+    || verdictOf(fixes, { before: corrections(baseline).length, after: corrections(matched).length }, 'lower') === 'aiuta';
+  const safe = !!before && !!after && guard(before.costPerRun.median.value, after.costPerRun.median.value)
     && guard(before.timeToDone.elapsed.value, after.timeToDone.elapsed.value)
     && before.questionsPerRun.value !== null && after.questionsPerRun.value !== null && after.questionsPerRun.value <= before.questionsPerRun.value + 0.5;
-  if (a < b - 0.05 - 1e-9) return revert('Successo peggiorato oltre 5 punti percentuali');
-  if (!improved) return revert('Nessuna metrica primaria migliorata');
-  if (!safe) return revert('Limiti di costo, tempo o domande non rispettati o dati mancanti');
-  return { ...result, decision: 'keep', reason: 'Miglioramento misurato entro i limiti' };
+  const shown = `successo ${Math.round(va.k / va.n * 100)}% (${va.k}/${va.n}) contro ${Math.round(vb.k / vb.n * 100)}% (${vb.k}/${vb.n}), IC 90% ${pct(success!.low)}…${pct(success!.high)} punti`;
+  if (worse) return revert(`Successo peggiorato: ${shown}`);
+  if (improved && safe) return { ...result, decision: 'keep', reason: `Miglioramento provato: ${shown}` };
+  if (improved) return revert(`Migliora, ma oltre i limiti di costo, tempo o domande: ${shown}`);
+  // at the next checkpoint the interval is narrower: wait for it (never a decision at every run, against peeking)
+  return wait(`Nessun effetto provato finora: ${shown}`);
 }

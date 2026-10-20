@@ -8,17 +8,21 @@ import type { AgentLifecycleProposal } from '../../shared/agent-lifecycle';
 import { tierRank, type ModelTier } from '../../shared/roles';
 import { skillSet } from './trials';
 import { reworkStartsOf, verifiedVerdict, type VerifiedVerdict } from '../../shared/run-verdict';
+import { CHECKPOINTS, newcombe } from '../../shared/evidence-stats';
 
 export interface SuggestionInput { roles: readonly AgentProfile[]; runs: readonly AgentRun[] }
-/** Fewest known outcomes on each side before a tier is compared. */
-export const TIER_MIN_KNOWN = 5;
+/** Fewest known outcomes on each side before a tier is compared: the first checkpoint (2026-10-20: at 5 vs 5 a +25 point
+ *  rule proposed a false move up 14-16% of the time with two identical tiers, in simulation) */
+export const TIER_MIN_KNOWN = CHECKPOINTS[0]!;
+/** a cheaper tier may do this much worse (the lower end of the 90% interval of the difference) and still be proposed */
+const DOWN_MARGIN = 0.1;
 const WINDOW_MS = 30 * 86_400_000;
 
-interface Tally { known: number; success: number; cost: number | null; runs: AgentRun[] }
+interface Tally { known: number; success: number; wins: number; cost: number | null; runs: AgentRun[] }
 function tally(runs: AgentRun[], verdictOf: (r: AgentRun) => VerifiedVerdict | null): Tally {
   const known = runs.flatMap(r => { const v = verdictOf(r); return v ? [v] : []; });
   const wins = known.reduce((n, v) => n + (v.verdict === 'success' ? 1 : v.verdict === 'partial' ? 0.5 : 0), 0);
-  return { known: known.length, success: known.length ? wins / known.length : 0, runs,
+  return { known: known.length, success: known.length ? wins / known.length : 0, wins: known.filter(v => v.verdict === 'success').length, runs,
     cost: wins > 0 && runs.every(r => r.costUsd !== null) ? runs.reduce((n, r) => n + r.costUsd!, 0) / wins : null };
 }
 const pct = (v: number) => `${Math.round(v * 100)}%`;
@@ -45,8 +49,10 @@ export function suggestTiers(input: SuggestionInput, now: number): AgentLifecycl
         if (tier === role.tier) continue;
         const t = tally(runs, verdictOf);
         if (t.known < TIER_MIN_KNOWN) continue;
-        const up = tierRank(tier) > tierRank(role.tier) && t.success >= current.success + 0.25 - 1e-9;
-        const down = tierRank(tier) < tierRank(role.tier) && t.success >= current.success - 0.05 - 1e-9 && t.cost !== null && current.cost !== null && t.cost <= current.cost * 0.7;
+        // the 90% interval of the difference in successes (Newcombe), never the bare difference of two small rates
+        const diff = newcombe(t.wins, t.known, current.wins, current.known);
+        const up = tierRank(tier) > tierRank(role.tier) && !!diff && diff.low > 0;
+        const down = tierRank(tier) < tierRank(role.tier) && !!diff && diff.low > -DOWN_MARGIN && t.cost !== null && current.cost !== null && t.cost <= current.cost * 0.7;
         if (!up && !down) continue;
         const reason = up ? `${label}: ${role.tier} ${pct(current.success)} di successo, ${tier} ${pct(t.success)}`
           : `${label}: ${tier} riesce come ${role.tier} (${pct(t.success)} contro ${pct(current.success)}) a ${(t.cost! / current.cost!).toFixed(2)}× il costo per successo`;
