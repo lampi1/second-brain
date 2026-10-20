@@ -72,6 +72,9 @@ export interface StoredChat {
   /** when the context in force began (first turn since the session start or the last compaction): an Orchestrator's day
    *  compaction (continuity.ts orchestratorDayDue) */
   ctxSince?: number;
+  /** the session whose context already holds the role text, and a hash of that text: a resume of that same session
+   *  does not send it again (it is in the history; the token plan, proposal 1) */
+  rolePrimed?: { session: string; sig: string };
   /** the sessions this chat had before its cold continuations, oldest first (their transcripts show folded above) */
   pastSessions?: PastSession[];
   /** "Riprendi" links: this chat continues another one / is continued by another one */
@@ -96,6 +99,11 @@ export interface StoredChat {
 export interface PastSession { sessionId: string; at: number; notePath: string }
 
 const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0;
+const isRolePrimed = (v: unknown): v is { session: string; sig: string } => {
+  const x = v as Record<string, unknown> | null;
+  return !!x && typeof x === 'object' && typeof x.session === 'string' && x.session.length > 0 && x.session.length <= 200
+    && typeof x.sig === 'string' && /^[0-9a-f]{16}$/.test(x.sig);
+};
 const link = (v: unknown): ChatLink | null => {
   const l = v as Record<string, unknown> | null;
   return l && typeof l === 'object' && typeof l.id === 'string' && l.id && typeof l.title === 'string' ? { id: l.id, title: l.title } : null;
@@ -126,6 +134,7 @@ function extras(c: Record<string, unknown>): Partial<StoredChat> {
     ...(ctx && typeof ctx === 'object' && num(ctx.tokens) ? { context: { tokens: ctx.tokens, ...(num(ctx.max) ? { max: ctx.max } : {}), ...(ctx.estimated === true ? { estimated: true } : {}) } } : {}),
     ...(num(c.coldNoteAt) ? { coldNoteAt: c.coldNoteAt } : {}),
     ...(num(c.ctxSince) ? { ctxSince: c.ctxSince } : {}),
+    ...(isRolePrimed(c.rolePrimed) ? { rolePrimed: { session: c.rolePrimed.session, sig: c.rolePrimed.sig } } : {}),
     ...(Array.isArray(c.pastSessions) ? { pastSessions: c.pastSessions.flatMap(p => { const x = p as Record<string, unknown>; return isUuid(x?.sessionId) && num(x.at) && typeof x.notePath === 'string' ? [{ sessionId: x.sessionId, at: x.at, notePath: x.notePath }] : []; }).slice(-20) } : {}),
     ...(num(c.handoffAt) ? { handoffAt: c.handoffAt, handoffSource: c.handoffSource === 'auto' ? 'auto' as const : 'chat' as const } : {}),
     ...(from ? { continuedFrom: from } : {}), ...(by ? { continuedBy: by } : {}),

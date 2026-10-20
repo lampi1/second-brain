@@ -241,7 +241,11 @@ interface Rec {
   mcpAncestors?: (string | null)[];
   /** the agent's "Contesto massimo" (tokens): the compaction window of its engine instead of the user's setting (#80) */
   maxContext?: number;
-  agentPrimed?: boolean;
+  /** the session whose context holds the role text and that text's hash (persisted): sent once per context, again only
+   *  in a new session, after a compaction or when the role text changed */
+  rolePrimed?: { session: string; sig: string } | undefined;
+  /** the role text was compared with rolePrimed since the engine started */
+  roleChecked?: boolean;
   children?: AgentChildrenReducer;
   deliveryHolds?: number;
   activityRevision?: number;
@@ -768,11 +772,17 @@ export class ChatManager implements ChatService {
     const notes = this.notesFor.get(chatId);
     if (notes?.length) this.notesFor.delete(chatId);
     const body = notes?.length ? `${USER_NOTES_LABEL}\n${notes.join('\n')}\n\n${text0}` : text0;
-    // the role once per session: the Orchestrator's with the role catalog, a role chat's composed instructions
-    const role = r.agentPrimed ? '' : r.s.isOrchestrator ? `${orchestratorRole(r.agentInstructions || undefined, this.opts.roleCatalogBrief?.())}\n\n`
+    // the role once per context: the Orchestrator's with the role catalog, a role chat's composed instructions; a
+    // resumed session already holds it in its history, so it goes again only when the text changed or was compacted away
+    const roleText = r.s.isOrchestrator ? `${orchestratorRole(r.agentInstructions || undefined, this.opts.roleCatalogBrief?.())}\n\n`
       : r.agentInstructions ? `${roleFrame(r.s.agent?.name ?? 'Chat', r.agentInstructions)}\n\n` : '';
+    const roleSig = roleText ? crypto.createHash('sha256').update(roleText).digest('hex').slice(0, 16) : '';
+    // a changed text is checked once per engine start (as before this, never mid-session: a catalog edit would resend it)
+    const role = roleText && (!r.rolePrimed || (!r.roleChecked && r.rolePrimed.sig !== roleSig)) ? roleText : '';
+    r.roleChecked = true;
     try {
-      r.session.send(`${role}${warning}${body}`, imgs); r.agentPrimed = true;
+      r.session.send(`${role}${warning}${body}`, imgs);
+      if (role) { r.rolePrimed = { session: r.s.sessionId ?? '', sig: roleSig }; this.persist(); }
     } catch (e) {
       throw new Error(`Messaggio non inviato: ${errText(e)}`);
     }
@@ -1971,6 +1981,7 @@ export class ChatManager implements ChatService {
       ...(c.coldNoteAt ? { coldNoteAt: c.coldNoteAt } : {}),
       // saved before ctxSince existed: its last turn is the latest its context can have begun
       ...(c.ctxSince || c.lastTurnAt ? { ctxSince: c.ctxSince ?? c.lastTurnAt } : {}),
+      ...(c.rolePrimed ? { rolePrimed: c.rolePrimed } : {}),
       ...(c.pastSessions?.length ? { pastSessions: c.pastSessions } : {}),
       ...(c.mcpAncestors ? { mcpAncestors: c.mcpAncestors } : {}),
     };
@@ -1992,6 +2003,7 @@ export class ChatManager implements ChatService {
       ...(r.lastTurnAt ? { lastTurnAt: r.lastTurnAt } : {}),
       ...(r.coldNoteAt ? { coldNoteAt: r.coldNoteAt } : {}),
       ...(r.ctxSince ? { ctxSince: r.ctxSince } : {}),
+      ...(r.rolePrimed?.session ? { rolePrimed: r.rolePrimed } : {}),
       ...(r.pastSessions?.length ? { pastSessions: r.pastSessions } : {}),
       ...(r.s.contextTokens ? { context: { tokens: r.s.contextTokens, ...(r.s.contextMaxTokens ? { max: r.s.contextMaxTokens } : {}), ...(r.s.contextEstimated ? { estimated: true } : {}) } } : {}),
       ...(r.s.handoffAt ? { handoffAt: r.s.handoffAt, handoffSource: r.s.handoffSource ?? 'chat' } : {}),
@@ -2183,7 +2195,6 @@ export class ChatManager implements ChatService {
   }
 
   private startSession(r: Rec): void {
-    r.agentPrimed = false;
     r.s.effortStatus = initialEffort(!!engineOf(r.s.harness)?.caps.effort, r.choice.effort);
     const chatId = r.s.id;
     let sessionId = r.s.sessionId;
@@ -2193,6 +2204,9 @@ export class ChatManager implements ChatService {
     else if (!sessionId && r.forkFrom) { sessionId = r.forkFrom; resume = true; fork = true; }
     else if (isUuid(sessionId) && findTranscript(sessionId, r.s.cwd, this.home)) resume = true;
     else if (!isUuid(sessionId)) { sessionId = crypto.randomUUID(); r.s.sessionId = sessionId; this.persist(); }
+    // the role text is in the context only when this very session resumes (a fork of an external one never had it)
+    if (!resume || fork || !r.rolePrimed || r.rolePrimed.session !== sessionId) r.rolePrimed = undefined;
+    r.roleChecked = false;
     const past = resume ? r.children?.snapshot() : undefined;
     r.children = new AgentChildrenReducer(past);
     r.children.coverage(engine.kind === 'api' ? 'complete' : 'unknown');
@@ -2438,7 +2452,10 @@ export class ChatManager implements ChatService {
         void this.closeKeeping(r, r.session);
       }
     }
-    if (p.sessionId && p.sessionId !== r.s.sessionId) { r.s.sessionId = p.sessionId; delete r.forkFrom; save = true; }
+    if (p.sessionId && p.sessionId !== r.s.sessionId) {
+      r.s.sessionId = p.sessionId; delete r.forkFrom; save = true;
+      if (r.rolePrimed) r.rolePrimed = { ...r.rolePrimed, session: p.sessionId }; // same engine, same context: a new id only
+    }
     if (p.model) r.s.model = p.model;
     // shown, never persisted: only the user's own choice (create / chat:set) is saved and used on the next start,
     // so a mode the CLI took from a suggestion or ExitPlanMode does not outlive this process
@@ -2499,6 +2516,7 @@ export class ChatManager implements ChatService {
       r.after = { kind: 'compaction', left: AFTER_CALLS };
       // the context starts again from its summary: an Orchestrator's next day compaction counts from now
       r.ctxSince = Date.now(); save = true;
+      r.rolePrimed = undefined; // the summary may have dropped the role text: the next message carries it again
     }
     if (p.contextTokens !== undefined && p.contextTokens > 0) save = true; // the meter of a closed chat survives a restart
     if (save) this.persist();

@@ -6,9 +6,9 @@
 // `.claude-plugin/plugin.json` {name}, `skills/<n>/SKILL.md`, `agents/*.md`, `output-styles/*.md`, `hooks/hooks.json`
 // ({"hooks": …}); components show namespaced `second-brain:<name>`. UNVERIFIED on a real run: both flags with this
 // Claude Code version, hooks.json's `${CLAUDE_PLUGIN_ROOT}`, output styles from a plugin. The folder is rebuilt only
-// when the brain's files changed (a signature of paths, sizes and times), into a fresh copy swapped in at once, so a
-// chat starting meanwhile never sees half a folder. A fresh brain (rules.appRules, ADR 0072) holds no agents or skills
-// of the product: the plugin takes them from the app-owned copy (rules/tools.ts APP_PLUGIN_PARTS) after the brain's own,
+// when the brain's files changed (a signature of paths and contents: a same-bytes rewrite keeps the name, so the prompt
+// cache survives), into a fresh copy swapped in at once, so a chat starting meanwhile never sees half a folder. A fresh
+// brain (rules.appRules, ADR 0072) holds no agents or skills of the product: the plugin takes them from the app-owned copy (rules/tools.ts APP_PLUGIN_PARTS) after the brain's own,
 // so a file the owner wrote with the same name wins. Used by engines/sessions.ts.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -108,9 +108,16 @@ function walk(dir: string, fn: (abs: string, rel: string) => void, rel = '', dep
   }
 }
 
+/** From the files' content, not their times: the folder's name is in every chat's system prompt (memoryInstructions), so
+ * a rewrite with the same bytes (the tools copy re-rendered, a checkout, a maintenance job) must not change it and throw
+ * away every chat's prompt cache. A file that cannot be read falls back to its size and time. */
 function signature(files: readonly Src[], instructions: string | null): string {
   const h = crypto.createHash('sha256');
-  for (const f of files) h.update(`${f.rel}|${f.size}|${f.mtime}|${f.domain}\n`);
+  for (const f of files) {
+    h.update(`${f.rel}|${f.domain}|`);
+    try { h.update(fs.readFileSync(f.abs)); } catch { h.update(`${f.size}|${f.mtime}`); }
+    h.update('\n');
+  }
   h.update(instructions ?? '');
   return h.digest('hex').slice(0, 24);
 }

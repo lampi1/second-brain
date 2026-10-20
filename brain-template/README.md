@@ -7,5 +7,5 @@ Layout after install: `START-HERE.md` (first-day guide: open it first), `AGENTS.
 `map.md` (where everything lives), `me.md` (you), `hub.md`, `code.md`, `routines.md`, `brain-rules.md`, memory files
 (`now.md`, `journal/`, `ideas.md`, `ai-errors.md`, `ai-wins.md`, `ai-reflections.md`, `proposals.md`,
 `tests/behavior.md`), `ops/` (your production runbooks, with one about the brain itself as the format
-example, and the generic tools in `ops/tools/`), `.claude/` (hooks), `harness/` (Claude and Cursor adapters,
-skills, output style, hook wiring).
+example, and the generic tools in `ops/tools/`), `.claude/` (hooks; the skills in `.claude/skills/`), `.agents/skills/` (the same skills for Codex and Cursor),
+`harness/` (Claude and Cursor adapters, skills, output style, hook wiring). Without the app: README "Only the brain, without the app".

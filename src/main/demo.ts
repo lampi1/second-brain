@@ -25,7 +25,7 @@ import { electronNode } from './brain/node';
 import { log } from './log';
 import { CURSOR_PLAN_NOTE } from './brain/usage';
 import { runResultMessage } from './run/results';
-import { splitNewChat } from '../shared/newchat';
+import { splitMode } from '../shared/newchat';
 import type { AgentMetrics, AgentRunOutcome } from '../shared/agents';
 import { demoAgentMetrics } from './demo-agent-runs';
 
@@ -113,7 +113,7 @@ export function seed(E: number): Seed {
     chat({ id: 'orchestrator', title: 'Orchestrator', isOrchestrator: true, state: 'waiting', pending: 1, costUsd: 4.12, contextTokens: 64_000, contextMaxTokens: 1_000_000, updatedAt: E - 8 * MIN, lastText: 'Prima la QA bloccata: la QA dei rimborsi aspetta te.',
       agentChildren: children(
         child({ key: 'claude:task:a1', task: 'Rileggi la PR del fix totale ordine', agentType: 'general-purpose', state: 'running', startedAt: E - 6 * MIN }),
-        child({ key: 'claude:task:a2', task: 'Cerca nel journal i bug simili ai rimborsi', state: 'running', startedAt: E - 3 * MIN }),
+        child({ key: 'claude:task:a2', task: 'Cerca nel journal i bug simili ai rimborsi', agentType: 'scout', state: 'running', startedAt: E - 3 * MIN }),
         child({ key: 'claude:task:a0', task: 'Riassumi lo stato delle chat aperte', state: 'completed', startedAt: E - 12 * MIN, observedAt: E - 9 * MIN })) }),
     chat({ id: 'qa', title: 'QA · Rimborsi', state: 'waiting', pending: 1, costUsd: 1.84, contextTokens: 118_000, contextMaxTokens: 1_000_000, cwd: 'C:\\progetti\\alfa-e2e', updatedAt: E - 4 * MIN, browserTabIds: ['tab-qa'],
       lastText: 'Ho rieseguito il test case 7 su master: stesso errore.' }),
@@ -125,7 +125,7 @@ export function seed(E: number): Seed {
         child({ key: 'claude:task:f0', task: 'Leggi le regole di sconto', state: 'completed', startedAt: E - 4 * MIN, observedAt: E - 3 * MIN })) }),
     chat({ id: 'sms', title: 'Bug notifiche SMS', harness: 'cursor', model: 'grok-4.7', effort: null, permissionMode: null, state: 'running', contextTokens: 31_000, contextEstimated: true, cwd: 'C:\\progetti\\alfa-e2e',
       updatedAt: E - 20_000, browserTabIds: ['tab-sms'], lastText: 'Riproduco il bug con il cliente di prova…',
-      agentChildren: children(child({ key: 'acp:tool:s1', nativeId: null, toolCallId: 's1', task: 'Riproduci il bug con il cliente di prova', state: 'running', startedAt: E - 50_000 })) }),
+      agentChildren: children(child({ key: 'acp:tool:s1', nativeId: null, toolCallId: 's1', task: 'Riproduci il bug con il cliente di prova', agentType: 'sentinel', state: 'running', startedAt: E - 50_000 })) }),
     chat({ id: 'feedback', title: 'App · Feedback', model: 'claude-sonnet-4-5', effort: 'medium', state: 'waiting', pending: 1, costUsd: 0.35, updatedAt: E - 2 * MIN,
       lastText: 'Lancio la suite e2e completa.' }),
     chat({ id: 'mappa', title: 'App · Mappa 3D', costUsd: 3.1, contextTokens: 172_000, contextMaxTokens: 200_000, updatedAt: E - 25 * MIN, lastText: 'v2 in main (48e6086). 14 test verdi, screenshot nel report.' }),
@@ -778,9 +778,10 @@ async function genericReply(run: Run, text: string): Promise<void> {
 
 async function orchestratorReply(run: Run, text: string, d: DemoChats): Promise<void> {
   await run.sleep(400);
-  // "Nuova chat" ticked (ADR 0034): she opens a work chat for the request, like app_create_chat, and says so in a line
-  const nc = splitNewChat(text);
-  if (nc.newChat) {
+  // "Veloce" / "Stratega" ticked (ADR 0034, 2026-10-20): she opens a work chat for the request, like app_create_chat
+  // (a Strategist one for "Stratega"), and says so in a line
+  const nc = splitMode(text);
+  if (nc.mode) {
     const ask = nc.text.trim();
     const title = `Demo · ${titleFrom(ask) || 'nuova richiesta'}`.slice(0, 80);
     const c = await d.create({ harness: 'claude', cwd: d.list().find(x => x.id === run.chatId)?.cwd ?? '', title, prompt: ask });
@@ -788,6 +789,8 @@ async function orchestratorReply(run: Run, text: string, d: DemoChats): Promise<
     await run.say(`Aperta «${c.title}»: ci lavora lei, ti scrive quando ha finito.`);
     return;
   }
+  // a thanks or an ok needs no answer: one emoji, shown as a reaction (shared/reaction.ts)
+  if (/^(grazie|ok|perfetto|ottimo|thanks)\b[\s!.]*$/i.test(text.trim())) { await run.say('👍'); return; }
   const all = d.list().filter(c => !c.isOrchestrator);
   const waiting = all.filter(c => c.state === 'waiting' || c.pending > 0).map(c => c.title);
   const working = all.filter(c => c.state === 'running' || c.state === 'starting').map(c => c.title);

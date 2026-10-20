@@ -186,6 +186,7 @@ app.whenReady().then(async () => {
     'agents:exportPlan': a => s.agentPacks.packs.exportPlan(a.id, a.target),
     'agents:exportFix': a => s.agentPacks.packs.exportFix(a.token, a.item, a.action),
     'agents:export': a => s.agentPacks.packs.export(a.token, a.includeStats),
+    'brain:share': () => s.agentPacks.share(),
     'agents:importInspect': a => s.agentPacks.packs.importInspect(a),
     'agents:importApply': a => s.agentPacks.packs.importApply(a.token, a.approveScripts, a.roleId, a.approvePersonalData),
     'agents:importCancel': a => s.agentPacks.packs.cancel(a.token),
