@@ -104,6 +104,14 @@ function copy(from, to) {
 }
 copy(HERE, output);
 writeFileSync(join(output, 'me.md'), render(readFileSync(join(HERE, 'me.template.md'), 'utf8')));
+// The skills also sit inside the brain, where each tool looks when the folder is opened: .claude/skills (Claude Code)
+// and .agents/skills (Codex, Cursor). The brain then works without the app and without touching the user's home.
+const skillSrc = join(output, 'harness', 'claude', 'skills');
+for (const s of existsSync(skillSrc) ? readdirSync(skillSrc) : []) for (const d of ['.claude', '.agents']) copyTree(join(skillSrc, s), join(output, d, 'skills', s));
+function copyTree(from, to) {
+  mkdirSync(to, { recursive: true });
+  for (const n of readdirSync(from)) { const a = join(from, n), b = join(to, n); if (statSync(a).isDirectory()) copyTree(a, b); else copyFileSync(a, b); }
+}
 for (const d of ['journal/brief', 'reviews']) mkdirSync(join(output, d), { recursive: true });
 
 try {

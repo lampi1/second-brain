@@ -6,6 +6,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- **The brain without the app** (owner, 2026-10-20; ADR 0088): Settings → Il mio spazio → "Condividi il brain" saves a
+  zip colleagues open in Claude Code, Cursor or Codex (AGENTS.md, rules, skills, roles as subagents, scripts; never
+  memory; guard-scanned). `node brain-template/install.mjs` now gives a brain that works in those tools on its own.
 - **Agent cards with a level and a performance %** (owner, 2026-10-19): the front shows the character large and centred,
   a level from the runs it ended (Lv 2 at 5, Lv 3 at 15, Lv 4 at 30: each level asks 5 more; titles from Recluta to
   Leggenda) with the way to the next one, and a performance gauge (verdicts weighted by who gave them, you or the
