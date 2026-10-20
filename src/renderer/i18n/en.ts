@@ -25,6 +25,7 @@ import {productEn}from'./areas/product.en';
 import { agentsGridEn } from './areas/agents-grid.en';
 import { explainEn } from './areas/explain.en';
 import { agentDetailEn } from './areas/agent-detail.en';
+import { agentImageEn } from './areas/agent-image.en';
 import { approvalsEn } from './areas/approvals.en';
 import {settingsEn}from'./areas/settings.en';
 import { profileEn } from './areas/profile.en';
@@ -75,6 +76,7 @@ export const en: Dict = {
   ...agentsGridEn,
   ...explainEn,
   ...agentDetailEn,
+  ...agentImageEn,
   ...approvalsEn,
   ...settingsEn,
   ...profileEn,

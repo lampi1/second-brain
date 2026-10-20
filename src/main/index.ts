@@ -1,5 +1,5 @@
 // second-brain main process: one window, the services (chats, browser + MCP, brain + feed) and the typed IPC.
-import { app, dialog, session, shell, type BrowserWindow } from 'electron';
+import { app, dialog, nativeImage, session, shell, type BrowserWindow } from 'electron';
 import { DefaultBrain } from '../modules/ai-first/default-brain';
 import { detectProjectsFolder } from './brain/projects-folder';
 import { createAppConnectors } from '../modules/onboarding/app-host';
@@ -37,6 +37,7 @@ import { FROZEN_EPOCH } from './demo';
 import { checkRunIds, demoEstimateRuns, estimatesState, mergeRuns } from './agents/run-estimates';
 import { systemLang } from './lang';
 import { ProfileService } from './brain/profile';
+import { AgentImageStore, nativeReencode } from './agents/agent-images';
 import { createAppUpdates } from './update/wiring';
 import { OrchestratorService } from './chats/orchestrator-service';
 import { Headline } from './headline';
@@ -105,6 +106,7 @@ app.whenReady().then(async () => {
     if (channel === 'settings:changed' && payload && typeof payload === 'object' && 'key' in payload && payload.key === 'brainRoot') brainChoiceRevision++;
     emitBeforeBrainChoice(channel, payload);
   };
+  const agentImages = new AgentImageStore(path.join(app.getPath('userData'), 'agent-images'), nativeReencode(nativeImage), images => emitter.emit('avatars:changed', images));
   const profile = new ProfileService({ root: () => s.brain.settings().brainRoot, template: (() => { try { return fs.readFileSync(path.join(app.getAppPath(), 'brain-template', 'me.template.md'), 'utf8'); } catch { return ''; } })() });
   const defaultBrain = new DefaultBrain({ userData: app.getPath('userData'), templateRoot: path.join(app.getAppPath(), 'brain-template'), current: () => s.brain.settings().brainRoot, usable: () => !s.brain.info().brainProblem, revision: () => brainChoiceRevision, connect: async root => { await s.brain.setSettings({ brainRoot: root }); }, projects: () => s.brain.settings().projectsRoot ?? null });
     const updates = createAppUpdates({ appPath: app.getAppPath(), userData: app.getPath('userData'), running: stable.release, version: app.getVersion(), disabled: demo || !!process.env.SB_TEST,
@@ -221,6 +223,10 @@ app.whenReady().then(async () => {
     'setup:save': a => s.setup.save(a.preferences, a.status),
     'profile:get': () => profile.get(),
     'profile:save': a => profile.save(a),
+    // the user's own picture for a role (the role's page): a PNG checked and re-encoded by main, never sent to an engine
+    'avatars:get': () => agentImages.get(),
+    'avatars:set': a => agentImages.set(a?.id, a?.bytes),
+    'avatars:reset': a => agentImages.reset(a?.id),
     'app:info': () => ({ version: app.getVersion(), ...s.brain.info(), mcpUrl: s.browser.mcpUrlFor(null), cli: s.cli(), engines: engineInfos(), health: healthSnapshot(), systemLang: systemLang() }),
     'app:pickRepo': async () => {
       const result = win ? await dialog.showOpenDialog(win, { title: 'Scegli un repository per Codex', properties: ['openDirectory'] }) : null;
