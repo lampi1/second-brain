@@ -24,11 +24,12 @@
 .morning-row[data-tone="warn"] .morning-mark { background:var(--amber); }
 .morning-row[data-tone="bad"] .morning-mark { background:var(--red, #e5484d); }
 .morning-row[data-tone="good"] .morning-mark { background:var(--green, #30a46c); }
-.morning-text { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.morning-sub { color:var(--text-3); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.morning-text { flex:0 1 auto; max-width:62%; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.morning-sub { flex:1 1 0; min-width:0; color:var(--text-3); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .morning-actions { display:flex; gap:8px; justify-content:flex-end; }
 .morning-note { font-size:12px; color:var(--text-3); margin:0; }
 .morning-line { display:flex; align-items:center; gap:8px; margin:6px 10px 2px; padding:6px 10px; border:1px solid var(--border); border-radius:10px; background:var(--surface); font-size:12px; color:var(--text-2); }
 .morning-line .morning-line-text { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .morning-line-open .morning { margin:6px 10px; max-width:none; padding:12px; }
 .pulse-board { max-width:720px; }
+.st-input.st-pulse-slots { width:180px; text-align:left; }

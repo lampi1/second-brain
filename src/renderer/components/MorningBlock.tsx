@@ -6,11 +6,11 @@
 // for the day. In the empty Grindhouse it is the block (GrindhouseEmpty, mounted by AgentStrips.tsx); with strips open
 // (or on another page) one compact line atop the Orchestrator column (MorningLine, OrchestratorTile.tsx) that unfolds
 // into the same rows. Without any history the Grindhouse keeps its first-run text.
-import { useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { MorningBrief, MorningRun } from '@shared/contract';
 import { briefEmpty } from '@shared/morning';
 import { brainBridge, focusChat, go, nextThing, openMorningNext } from '../actions';
-import { dismissMorning, useMorning } from '../store/morning';
+import { dismissMorning, morning, useMorning } from '../store/morning';
 import { useApp } from '../store/store';
 import { useCloudIds } from '../store/cloud';
 import { ui } from '../store/ui';
@@ -95,6 +95,8 @@ export function MorningBlock({ brief, compact }: { brief: MorningBrief; compact?
 /** The empty Grindhouse: the morning block (and the Battito's board) for a user with history, the first-run text otherwise. */
 export function GrindhouseEmpty() {
   const st = useMorning();
+  const block = !!st?.show && !!st.brief;
+  useEffect(() => { morning.set(s => ({ ...s, block })); return () => morning.set(s => ({ ...s, block: false })); }, [block]);
   if (!st) return null;
   if (!st.history) return <p className="home-calm" data-testid="agents-empty">{t('home.emptyAgents')}</p>;
   return <div className="grindhouse-empty" data-testid="agents-idle">
@@ -110,7 +112,8 @@ export function MorningLine() {
   const strips = useApp(s => Object.values(s.chats).some(c => !!c && !c.isOrchestrator && !c.closedAt && !c.parentId));
   const clouds = useCloudIds().length;
   const page = ui.use(s => (s.map ? 'mappa' : s.page));
-  if (!st?.show || !st.brief || (page === 'home' && !strips && !clouds)) return null;
+  const block = morning.use(s => !!s.block);
+  if (!st?.show || !st.brief || (page === 'home' && (block || (!strips && !clouds)))) return null;
   const b = st.brief;
   const bits = [b.runs.length ? t('alive.m.runs', { n: b.runs.length }) : '', b.pending ? t('alive.m.pending', { n: b.pending }) : '', b.approvals ? t('alive.m.approvals', { n: b.approvals }) : '',
     b.prs.some(p => p.why === 'build') ? t('alive.m.prBuild', { title: b.prs.find(p => p.why === 'build')!.title }) : ''].filter(Boolean);

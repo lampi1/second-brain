@@ -7,6 +7,7 @@ import type { PulseStatus } from '@shared/pulse';
 import { setSetting, useApp } from '../store/store';
 import { locale, t } from '../i18n';
 import { parseSlots } from '../lib/pulse-context';
+import '../styles/alive.css';
 
 const usd = (v: number) => new Intl.NumberFormat(locale(), { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(v);
 
@@ -47,7 +48,7 @@ export function PulseSettings() {
     </div>
     <div className="st-row">
       <div className="st-text"><label className="st-title" htmlFor="st-pulse-slots">{t('alive.pulse.slots')}</label><p className="st-desc">{bad === 'slots' ? t('alive.pulse.slotsBad') : t('alive.pulse.slotsHint')}</p></div>
-      <div className="st-ctl"><input id="st-pulse-slots" className="st-input" value={slots} disabled={!pulse.on} spellCheck={false} aria-invalid={bad === 'slots' || undefined} data-testid="st-pulse-slots"
+      <div className="st-ctl"><input id="st-pulse-slots" className="st-input st-pulse-slots" value={slots} disabled={!pulse.on} spellCheck={false} aria-invalid={bad === 'slots' || undefined} data-testid="st-pulse-slots"
         onChange={e => setSlots(e.target.value)} onBlur={saveSlots} onKeyDown={e => { if (e.key === 'Enter') saveSlots(); }} /></div>
     </div>
     <div className="st-row">
