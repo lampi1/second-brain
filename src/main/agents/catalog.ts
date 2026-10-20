@@ -1,20 +1,21 @@
-// The role catalog: the Orchestrator and the eight work roles (shared/roles.ts), plus Pulse in the background, kept in
+// The role catalog: the Orchestrator and the five work roles (shared/roles.ts), plus Pulse in the background, kept in
 // <userData>/roles.json with every behaviour change as a version (role-history.json). The user edits a role's tools,
 // ceiling, engine, model tier, launches, skills and instructions (Brain → Agenti); "Ripristina predefinito" goes back to
-// the shipped role. No role is ever created or removed. resolve() turns a role id into what a chat starts with: engine,
+// the shipped role. No role is ever created or removed by the user; a retired role's stored entry (Router, Judge, Scribe,
+// ADR 0100) is left out on load and a launches list naming one drops it, so an older roles.json still loads. resolve() turns a role id into what a chat starts with: engine,
 // model (the role's tier on that engine), the composed instructions, the tool policy. Used by ChatManager, the IPC
 // handlers (index.ts), the packs (pack/flows.ts) and the maintenance jobs (brainmodel/).
 import path from 'node:path';
 import { checkedKnowhow, checkedPackIdentity, packName } from '../../shared/agent-pack';
 import type { Effort, Harness, NewChat } from '../../shared/contract';
 import { MAX_CONTEXT_RANGE, PERMISSION_CEILINGS, type AgentAuthor, type AgentCatalog, type AgentDraft, type AgentModelChoice, type AgentOwnerSnapshot, type AgentProfile, type AgentVersion, type PermissionCeiling } from '../../shared/agents';
-import { MODEL_TIERS, PULSE_ID, ROLE_DEFAULTS, ROLE_IDS, ROLE_PREAMBLE, isRoleId, isWorkRole, tierRank, type ModelTier, type RoleId } from '../../shared/roles';
+import { MODEL_TIERS, PULSE_ID, ROLE_DEFAULTS, ROLE_IDS, ROLE_PREAMBLE, currentLaunches, currentRoleId, isRetiredRoleId, isRoleId, isWorkRole, roleName, tierRank, type ModelTier, type RoleId } from '../../shared/roles';
 import { characterOf, isCharacterId } from '../../shared/characters';
 import { readLocal, writeLocal } from './local-store';
 import { AgentHistory, behaviourOf, firstVersion, sameBehaviour } from './versions';
 import { checkedTools, type AgentPolicy } from './tool-policy';
 import { cappedTier } from './model-tier';
-import { fullDefaultsFor } from './role-migrate';
+import { fiveRolesTextFor, fullDefaultsFor } from './role-migrate';
 import { engineOf } from '../engines/registry';
 import { log, errText } from '../log';
 
@@ -78,14 +79,20 @@ export function orchestratorOwner(engine: string, model: string | null, p?: Pick
 }
 
 /** Bounded validation for snapshots read from chats.json; model/engine never replace the effective session facts. An
- *  owner of a role this build does not know is dropped (the chat shows without a face). */
+ *  owner of a role this build does not know is dropped (the chat shows without a face); a retired role's owner shows as
+ *  its successor (ADR 0100: an old Judge chat reads Sentinel). */
 export function readOwner(v: unknown): AgentOwnerSnapshot | null {
   const a = obj(v), avatar = obj(a.avatar);
   if (typeof a.id !== 'string' || !ID.test(a.id) || typeof a.name !== 'string' || !a.name.trim() || a.name.length > 80 || typeof a.purpose !== 'string' || a.purpose.length > 400
     || typeof a.engine !== 'string' || !/^[a-z][a-z0-9_-]{0,59}$/.test(a.engine) || !(a.model === null || typeof a.model === 'string' && MODEL.test(a.model))
     || typeof a.revision !== 'number' || !Number.isFinite(a.revision) || !(a.version === undefined || count(a.version))) return null;
   if (a.source === 'plain') return { id: 'plain', name: a.name, purpose: a.purpose, engine: a.engine, model: a.model as string | null, revision: a.revision, source: 'plain' };
-  if (a.source !== 'catalog' || !CATALOG_IDS.includes(a.id)) return null;
+  if (a.source !== 'catalog') return null;
+  if (isRetiredRoleId(a.id)) {
+    const id = currentRoleId(a.id) as RoleId, r = ROLE_DEFAULTS[id];
+    return { id, name: r.name, purpose: r.summary, engine: a.engine, model: a.model as string | null, revision: a.revision, source: 'catalog', avatar: { kind: 'character', value: id }, ...(a.version !== undefined ? { version: a.version as number } : {}) };
+  }
+  if (!CATALOG_IDS.includes(a.id)) return null;
   const value = isCharacterId(avatar.value) ? avatar.value : characterOf(a.id);
   return { id: a.id, name: a.name, purpose: a.purpose, engine: a.engine, model: a.model as string | null, revision: a.revision, source: 'catalog', avatar: { kind: 'character', value }, ...(a.version !== undefined ? { version: a.version as number } : {}) };
 }
@@ -121,7 +128,8 @@ export class AgentCatalogService {
   }
 
   private now(): number { return this.d.now?.() ?? Date.now(); }
-  /** Entries this build knows, each valid on its own; an unknown id is left out (a newer build wrote it). */
+  /** Entries this build knows, each valid on its own; an unknown id is left out (a newer build wrote it, or it is a role
+   *  ADR 0100 retired: its successor is a role of its own). */
   private read(rows: unknown[]): AgentProfile[] {
     const out: AgentProfile[] = [];
     for (const value of rows) {
@@ -183,6 +191,13 @@ export class AgentCatalogService {
       if (!fields) continue;
       try { this.version(old, this.behaviour({ ...fields }, old.id, false, old), 'default', 'Permessi completi predefiniti (ADR 0085)'); }
       catch (e) { log.warn('agents', 'role not moved to full permissions', { cause: errText(e), hint: 'check that roles.json and role-history.json in the app data folder are writable', data: { role: old.id } }); }
+    }
+    // ADR 0100: a role the user never edited whose text still names Router, Judge or Scribe gets today's text
+    for (const old of [...this.profiles]) {
+      const fields = fiveRolesTextFor(old);
+      if (!fields) continue;
+      try { this.version(old, this.behaviour({ ...fields }, old.id, false, old), 'default', 'Cinque ruoli di lavoro (ADR 0100)'); }
+      catch (e) { log.warn('agents', 'role text not moved to the five work roles', { cause: errText(e), hint: 'check that roles.json and role-history.json in the app data folder are writable', data: { role: old.id } }); }
     }
   }
   private ordered(list: AgentProfile[]): AgentProfile[] { return [...list].sort((a, b) => CATALOG_IDS.indexOf(a.id) - CATALOG_IDS.indexOf(b.id)); }
@@ -251,9 +266,11 @@ export class AgentCatalogService {
     if (!(p.maxContext === undefined || p.maxContext === null || Number.isSafeInteger(p.maxContext) && (p.maxContext as number) >= MAX_CONTEXT_RANGE.min && (p.maxContext as number) <= MAX_CONTEXT_RANGE.max))
       throw new Error(`Contesto massimo: un numero intero di token da ${MAX_CONTEXT_RANGE.min} a ${MAX_CONTEXT_RANGE.max}, oppure vuoto (l’impostazione dell’app).`);
     if (!has(MODEL_TIERS, p.tier) || !has(MODEL_TIERS, p.tierMax) || tierRank(p.tier) > tierRank(p.tierMax)) throw new Error('Livello del modello non valido: il livello non supera il massimo.');
+    // a role ADR 0100 retired, named by a stored profile or version, is dropped from the list (never an error on load)
+    if (Array.isArray(p.launches)) p.launches = currentLaunches(p.launches as string[]);
     if (!Array.isArray(p.launches) || !p.launches.every(isWorkRole) || new Set(p.launches).size !== p.launches.length || (p.launches as string[]).includes(id)) throw new Error('Ruoli avviabili non validi: solo ruoli di lavoro, mai sé stesso.');
     if (id === PULSE_ID && (p.launches as unknown[]).length) throw new Error('Pulse non avvia ruoli.');
-    if (!Array.isArray(p.skills) || p.skills.length > 40 || !p.skills.every(packName) || new Set(p.skills).size !== p.skills.length) throw new Error('Abilità non valide: nomi di abilità del cervello, al massimo 40.');
+    if (!Array.isArray(p.skills) || p.skills.length > 40 || !p.skills.every(packName) || new Set(p.skills).size !== p.skills.length) throw new Error('Abilità non valide: nomi di abilità del brain, al massimo 40.');
     return { instructions: text(p.instructions, 8000, 'Istruzioni', true), engine, model,
       ...(p.effort ? { effort: p.effort as Effort } : {}),
       tools: checkedTools(p.tools), permissionCeiling: (p.permissionCeiling ?? null) as PermissionCeiling | null,
@@ -350,7 +367,7 @@ export class AgentCatalogService {
     return this.resolveTrial(id, 'rollback');
   }
   /** A maintenance job's change (ADR 0083: applied at once, logged with an Undo by brainmodel/changes.ts): only the role
-   *  text (a lesson from the user's corrections or a Judge's finding) or its skills. Tools, permissions, engine, model
+   *  text (a lesson from the user's corrections or a review's finding) or its skills. Tools, permissions, engine, model
    *  tier and limits change only with the user's approval. Null when nothing changes; refused during an open trial. */
   maintain(id: string, patch: { instructions?: string; knowhow?: AgentProfile['knowhow'] }, reason: string): { profile: AgentProfile; before: number } | null {
     this.writable();
@@ -396,6 +413,7 @@ export class AgentCatalogService {
     }
     if (req.roleId === undefined) return { request: req, owner: plainOwner(req.harness, req.model ?? null), instructions: '', policy: null, skills: [], launches: [] };
     if (req.roleId === 'orchestrator') throw new Error('L’Orchestrator è il coordinatore: apri la sua chat, non una chat di lavoro.');
+    if (isRetiredRoleId(req.roleId)) throw new Error(`Il ruolo ${String(req.roleId)} non c’è più (ADR 0100): il suo lavoro lo fa ${roleName(req.roleId)}. I ruoli: ${ROLE_IDS.filter(r => r !== 'orchestrator').join(', ')}.`);
     if (!isWorkRole(req.roleId)) throw new Error(`Ruolo sconosciuto: ${String(req.roleId)}. I ruoli: ${ROLE_IDS.filter(r => r !== 'orchestrator').join(', ')}.`);
     const p = this.find(req.roleId);
     if (req.roleVersion !== undefined && req.roleVersion !== p.activeVersion) throw new Error('Il ruolo è cambiato: rileggilo prima di avviarlo.');

@@ -44,7 +44,7 @@ export const connectorsIt = {
  'hub.kind.stdio':'Locale (comando)','hub.kind.http':'Remoto (indirizzo)','hub.importedFrom':({from}:{from:string})=>`importato da ${from}`,
  'hub.noPurpose':'A cosa serve? Scrivilo in Modifica: lo vedrai qui.',
  'hub.tools':'Strumenti','hub.toolsTip':'Gli strumenti che il server ha elencato all’ultima prova. Lettura = il server li dichiara di sola lettura (readOnlyHint); gli altri contano come scrittura.','hub.toolsSplit':({r,w}:{r:number;w:number})=>`${r} lettura · ${w} scrittura`,
- 'hub.agents':'Ruoli','hub.agentsTip':'Quanti dei nove ruoli possono usare almeno uno strumento di questo server, secondo la loro scheda. Una chat delegata non ne ha mai più del ruolo che l’ha avviata.','hub.agentsValue':({n,total}:{n:number;total:number})=>`${n} su ${total}`,
+ 'hub.agents':'Ruoli','hub.agentsTip':'Quanti dei sei ruoli possono usare almeno uno strumento di questo server, secondo la loro scheda. Una chat delegata non ne ha mai più del ruolo che l’ha avviata.','hub.agentsValue':({n,total}:{n:number;total:number})=>`${n} su ${total}`,
  'hub.lastTest':'Ultima prova','hub.ms':({ms}:{ms:number})=>`${ms} ms`,
  'hub.fix':'Come sistemare:','hub.untestedHint':'Premi «Prova»: l’app lo avvia come farebbe una chat ed elenca i suoi strumenti.',
  'hub.toolList':({n}:{n:number})=>`Vedi i ${n} strumenti`,'hub.read':'lettura','hub.write':'scrittura',

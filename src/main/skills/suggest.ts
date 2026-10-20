@@ -4,6 +4,7 @@
 // endpoint (wiring.ts), the role start dialog (skills:suggest IPC) and the Classificatori page (suggested vs used).
 import { createHash } from 'node:crypto';
 import type { AgentRun } from '../../shared/agents';
+import { reworkStartsOf, verifiedVerdict } from '../../shared/run-verdict';
 import { SKILL_SUGGESTIONS_MAX, type SkillCandidate, type SkillSuggestions } from '../../shared/skill-suggest';
 import { cosine, type HybridSearch } from '../search/hybrid/service';
 import { conceptOf } from '../../shared/work-concepts';
@@ -119,15 +120,17 @@ export class SkillSuggester {
     } finally { clearTimeout(timer); }
   }
 
-  /** The skills that fit `request`, best first. A past run that used a skill and ended well (the user's or a Judge's
-   *  verdict) adds its goal as one more text of that skill. */
+  /** The skills that fit `request`, best first. A past run that used a skill and ended well (a verified verdict: the
+   *  user's, a verified independent review's, or the facts', shared/run-verdict.ts) adds its goal as one more text of
+   *  that skill. */
   async suggest(request: string, skills: readonly SuggestibleSkill[], runs: readonly AgentRun[] = []): Promise<SkillSuggestions> {
     request = suggestRequest(request);
-    const rows: Row[] = [];
+    const rows: Row[] = [], now = Date.now(), starts = reworkStartsOf(runs);
+    const won = (r: AgentRun) => verifiedVerdict(r, starts.get(r.runId), now)?.verdict === 'success';
     for (const k of skills) {
       rows.push({ id: k.name, text: k.name.replace(/-/g, ' '), why: { field: 'name' } });
       if (k.description.trim()) rows.push({ id: k.name, text: k.description.slice(0, 2000), why: { field: 'description' } });
-      const past = runs.filter(r => r.endedAt !== undefined && r.tags?.skills.includes(k.name) && r.outcome?.verdict === 'success' && ['human', 'reviewed-evidence'].includes(r.outcome.basis))
+      const past = runs.filter(r => r.endedAt !== undefined && r.tags?.skills.includes(k.name) && won(r))
         .sort((a, b) => b.endedAt! - a.endedAt!).slice(0, 10);
       for (const r of past) if (r.goal.trim()) rows.push({ id: k.name, text: r.goal, why: { field: 'pastRun', runId: r.runId } });
     }

@@ -1,11 +1,13 @@
-// The role catalog (main/agents/catalog.ts): exactly the Orchestrator, the eight work roles and Pulse; every shipped
+// The role catalog (main/agents/catalog.ts): exactly the Orchestrator, the five work roles and Pulse; every shipped
 // role survives a restart; edits are versions; "Ripristina predefinito"; a tolerant read of roles.json (an id this
-// build does not know is left out, a broken file is kept and blocks writes); resolve() for role, Orchestrator and plain chats.
+// build does not know is left out, a broken file is kept and blocks writes); a roles.json of the nine-role catalog still
+// loads (ADR 0100); resolve() for role, Orchestrator and plain chats.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { AgentCatalogService } from '../../../src/main/agents/catalog';
+import { AgentCatalogService, readOwner } from '../../../src/main/agents/catalog';
+import { PRE_ADR0100_INSTRUCTIONS } from '../../../src/main/agents/role-migrate';
 import type { AgentModelChoice, AgentProfile } from '../../../src/shared/agents';
 import { ROLE_DEFAULTS, ROLE_IDS, WORK_ROLE_IDS } from '../../../src/shared/roles';
 
@@ -21,11 +23,11 @@ const edit = (p: AgentProfile, patch: Partial<AgentProfile>) => ({ instructions:
   tier: p.tier, tierMax: p.tierMax, launches: p.launches, skills: p.skills, ...patch });
 
 describe('role catalog', () => {
-  it('holds exactly the Orchestrator, the eight roles and Pulse, with English names', () => {
+  it('holds exactly the Orchestrator, the five work roles and Pulse, with English names', () => {
     const { catalog } = setup(), list = catalog.list();
     expect(list.problem).toBeNull();
     expect(list.profiles.map(p => p.id)).toEqual([...ROLE_IDS, 'pulse']);
-    expect(list.profiles.filter(p => p.scope === 'role').map(p => p.name)).toEqual(['Orchestrator', 'Strategist', 'Scout', 'Artisan', 'Sentinel', 'Herald', 'Router', 'Judge', 'Scribe']);
+    expect(list.profiles.filter(p => p.scope === 'role').map(p => p.name)).toEqual(['Orchestrator', 'Strategist', 'Scout', 'Artisan', 'Sentinel', 'Herald']);
     expect(list.profiles.every(p => p.avatar.kind === 'character')).toBe(true);
   });
   it('every shipped role is valid on its own and survives a restart', () => {
@@ -64,6 +66,33 @@ describe('role catalog', () => {
     expect(() => broken.reset('scout')).toThrow(/non è leggibile/);
     expect(fs.readFileSync(file, 'utf8')).toBe('{"format":1,"roles":"x"}');
   });
+  it('loads a nine-role roles.json (ADR 0100): retired profiles left out, their launches dropped, an untouched text moved', () => {
+    const { dir, make, catalog } = setup(), file = path.join(dir, 'roles.json');
+    const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as { roles: Record<string, unknown>[] };
+    const base = raw.roles.find(r => r.id === 'scout')!;
+    for (const id of ['router', 'judge', 'scribe']) raw.roles.push({ ...base, id, launches: ['scout'] });
+    const strategist = raw.roles.find(r => r.id === 'strategist')!;
+    Object.assign(strategist, { launches: ['scout', 'artisan', 'sentinel', 'herald', 'judge', 'scribe'], instructions: PRE_ADR0100_INSTRUCTIONS.strategist });
+    const artisan = raw.roles.find(r => r.id === 'artisan')!;
+    Object.assign(artisan, { launches: ['scout', 'sentinel', 'judge'], instructions: 'My own Artisan text.', userLocked: true, lastEditedBy: 'user' });
+    fs.writeFileSync(file, JSON.stringify(raw));
+    const again = make(), list = again.list();
+    expect(list.problem).toBeNull();
+    expect(list.profiles.map(p => p.id)).toEqual(catalog.list().profiles.map(p => p.id));
+    const get = (id: string) => list.profiles.find(p => p.id === id)!;
+    expect(get('strategist')).toMatchObject({ launches: ['scout', 'artisan', 'sentinel', 'herald'], instructions: ROLE_DEFAULTS.strategist.instructions, lastEditedBy: 'default' });
+    expect(again.history('strategist').map(v => v.reason)).toContain('Cinque ruoli di lavoro (ADR 0100)');
+    expect(get('artisan')).toMatchObject({ launches: ['scout', 'sentinel'], instructions: 'My own Artisan text.' });
+    // a stored version naming a retired launch restores without an error
+    expect(again.restoreVersion('artisan', 1).launches).not.toContain('judge');
+    expect(() => again.resolve({ harness: 'claude', roleId: 'judge' } as never)).toThrow(/Sentinel/);
+  });
+  it('an old chat of a retired role shows as its successor (ADR 0100)', () => {
+    const owner = { id: 'judge', name: 'Judge', purpose: 'old', avatar: { kind: 'character', value: 'judge' }, engine: 'claude', model: null, revision: 1, source: 'catalog', version: 3 };
+    expect(readOwner(owner)).toMatchObject({ id: 'sentinel', name: 'Sentinel', avatar: { kind: 'character', value: 'sentinel' }, version: 3 });
+    expect(readOwner({ ...owner, id: 'router', name: 'Router' })).toMatchObject({ id: 'orchestrator', name: 'Orchestrator' });
+    expect(readOwner({ ...owner, id: 'scribe', name: 'Scribe' })).toMatchObject({ id: 'artisan', name: 'Artisan' });
+  });
   it('resolves a role chat on its tier, the Orchestrator on the session, a chat without role as plain', () => {
     const { catalog } = setup();
     const scout = catalog.resolve({ harness: 'claude', roleId: 'scout' } as never);
@@ -78,9 +107,9 @@ describe('role catalog', () => {
     expect(catalog.resolve({ harness: 'claude' } as never).owner.source).toBe('plain');
     for (const id of WORK_ROLE_IDS) expect(catalog.resolve({ harness: 'claude', roleId: id } as never).launches).not.toContain(id);
   });
-  it('Sentinel and Judge resolve like any role: no `independent` field, no model switch away from the parent (issue #99)', () => {
+  it('Sentinel resolves like any role: no `independent` field, no model switch away from the parent (issue #99)', () => {
     const { catalog } = setup();
-    for (const id of ['sentinel', 'judge'] as const) {
+    for (const id of ['sentinel'] as const) {
       expect(catalog.list().profiles.find(p => p.id === id)).not.toHaveProperty('independent');
       const r = catalog.resolve({ harness: 'claude', roleId: id, model: 'm-top' } as never);
       expect(r.request.model).toBe('m-top'); // the top tier's model, the same one the parent runs

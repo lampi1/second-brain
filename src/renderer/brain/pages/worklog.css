@@ -6,6 +6,10 @@
 .wl-page, .tk-page { display: block; min-width: 0; padding-top: 6px; color: var(--text); font-size: var(--fs-m); }
 .wl-page .catalog-head, .tk-page .catalog-head { margin-bottom: 22px; }
 .wl-page .catalog-filters input[type=date] { height: 32px; }
+/* the day in the app's language over the native field (its own text follows the OS locale) */
+.wl-datefield { position: relative; display: inline-flex; align-items: center; min-width: 150px; height: 32px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--r-s); background: var(--surface); font-variant-numeric: tabular-nums; }
+.wl-datefield:focus-within { outline: 2px solid var(--blue); outline-offset: 1px; }
+.wl-datefield input[type=date] { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
 .wl-page .bx-standup { margin: 0 0 4px; }
 
 /* Fatto: one card per day, newest first */

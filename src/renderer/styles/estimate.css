@@ -12,8 +12,6 @@
 .est-acc { display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 11.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .est-acc.compact { margin-top: 0; }
 .est-acc-k { font-weight: 600; color: var(--text-2); }
-.est-acc-trend.up { color: var(--green); }
-.est-acc-trend.down { color: var(--amber); }
 .est-acc-none { margin: 4px 0 0; color: var(--text-3); font-size: 11.5px; }
 .est-bars { flex: none; overflow: visible; }
 .est-bars .est-bar { fill: color-mix(in srgb, var(--blue) 45%, transparent); }
@@ -23,7 +21,10 @@
 .help-bubble .est-tip-specific { color: var(--text-3); font-size: 11.5px; }
 
 .est-plan { margin: 0 10px 8px; padding: 8px 10px 9px; border: 1px solid var(--orchestrator-line, var(--border-2)); border-radius: var(--r-m);
-  background: color-mix(in srgb, var(--orchestrator-surface, var(--surface-2)) 70%, transparent); display: grid; gap: 6px; }
+  background: var(--orchestrator-surface, var(--surface-2)); display: grid; gap: 6px;
+  /* a flex child of the Orchestrator column: never shrunk below its content (it spilled over the first messages, C-ux
+     audit) and never taller than a third of the column (its rows scroll) (ADR 0101) */
+  flex: none; max-height: 34%; overflow: auto; min-height: 0; }
 .est-plan-head { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12px; }
 .est-plan-title { font-weight: 650; color: var(--text); }
 .est-plan-count { color: var(--text-3); }

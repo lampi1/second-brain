@@ -57,7 +57,7 @@ describe('buildBrainShare', () => {
     }
     expect(summary.skipped).toContain('.agents/skills/deploy-check/logo.png');
     expect(summary.scripts).toEqual(['scripts/backup.mjs']);
-    expect(summary.roles).toHaveLength(8);
+    expect(summary.roles).toHaveLength(5);
     for (const id of summary.roles) {
       expect(files.get(`.claude/agents/${id}.md`)!.toString('utf8')).toMatch(/^---\nname: /);
       expect(files.get(`.cursor/agents/${id}.md`)!.toString('utf8')).not.toContain('tools:');

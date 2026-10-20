@@ -32,15 +32,12 @@ export function AccuracyBars({ summary, testid }: { summary: AccuracySummary; te
   </svg>;
 }
 
-const trendText = (s: AccuracySummary) => s.trendPts === null ? null : s.trendPts > 0 ? t('estimate.trendUp', { pts: s.trendPts, weeks: s.weeks }) : s.trendPts < 0 ? t('estimate.trendDown', { pts: -s.trendPts, weeks: s.weeks }) : t('estimate.trendFlat');
-
-/** «precisione 68% · +14 pt in 8 settimane ▂▃▅▆» and, below, the share now on the most specific match. */
+/** «entro ×2: 34/50 ▂▃▅▆»: how many estimates held, out of how many, and one bar per week. No "precisione" (it is the
+ *  share inside a ×0.5-×2 band, not a precision) and no "+N pt in K settimane" trend (ADR 0101). */
 export function AccuracyNote({ summary, compact }: { summary: AccuracySummary | null; compact?: boolean }) {
   if (!summary) return compact ? null : <p className="est-acc-none">{t('estimate.noAccuracy')}</p>;
-  const trend = trendText(summary);
   return <div className={`est-acc${compact ? ' compact' : ''}`} data-testid="estimate-accuracy" data-pct={summary.pct}>
-    <span className="est-acc-k">{t('estimate.accuracy', { pct: summary.pct })}</span>
-    {trend && <span className={`est-acc-trend${summary.trendPts! > 0 ? ' up' : summary.trendPts! < 0 ? ' down' : ''}`}>{trend}</span>}
+    <span className="est-acc-k">{t('estimate.accuracy', { k: summary.k, n: summary.n })}</span>
     <AccuracyBars summary={summary} />
   </div>;
 }
@@ -51,13 +48,13 @@ function EstimateHelp({ view, agent, summary }: { view: RunEstimateView; agent: 
   const kind = t(`estimate.kind.${e.kind}` as 'estimate.kind.fix');
   const basis = t(`estimate.basis.${e.basis!}` as 'estimate.basis.kind', { agent });
   const est = estimateText(e);
-  return <HelpTip title={t('estimate.tipTitle')} label={t('estimate.tipTitle')} wide testid={`estimate-help-${view.runId}`} example={t('estimate.example')}>
+  return <HelpTip title={t('estimate.tipTitle')} label={t('estimate.tipTitle')} wide guide="classifiers" testid={`estimate-help-${view.runId}`} example={t('estimate.example')}>
     <p>{t('estimate.tipBody', { n: e.n, basis, kind })}</p>
     <p>{t('estimate.tipFigures')}</p>
     {e.timeLowMs !== null && e.timeHighMs !== null && <p>{t('estimate.tipRange', { low: minutes(e.timeLowMs), high: minutes(e.timeHighMs) })}</p>}
     {e.confidence && <p>{t('estimate.tipConfidence', { c: t(`estimate.conf.${e.confidence}` as 'estimate.conf.low') })}</p>}
     {view.actual?.timeMs != null && est.time && view.hit !== null && <p>{t('estimate.tipActual', { est: est.time, act: minutes(view.actual.timeMs), ok: view.hit })}</p>}
-    <p className="est-tip-acc"><b>{t('estimate.accuracyTitle')}.</b> {summary ? t('estimate.accuracyLong', { pct: summary.pct, n: summary.n }) : t('estimate.noAccuracy')} {t('estimate.accuracyTip')}</p>
+    <p className="est-tip-acc"><b>{t('estimate.accuracyTitle')}.</b> {summary ? t('estimate.accuracyLong', { pct: summary.pct, k: summary.k, n: summary.n }) : t('estimate.noAccuracy')} {t('estimate.accuracyTip')}</p>
     {summary && <AccuracyNote summary={summary} />}
     {summary?.specificPct != null && <p className="est-tip-specific">{t('estimate.specific', { pct: summary.specificPct })}</p>}
   </HelpTip>;
@@ -108,9 +105,9 @@ export function OrchestratorPlan() {
       <span className="est-plan-title">{t('estimate.plan.title')}</span>
       <span className="est-plan-count">{t('estimate.plan.count', { n: plan.rows.length })}</span>
       {total && <span className="est-plan-total" data-testid="orchestrator-plan-total"><span className="th-estimate-label">{t('estimate.plan.total')}</span>{total}</span>}
-      <HelpTip title={t('estimate.plan.title')} label={t('estimate.plan.title')} wide testid="orchestrator-plan-help">
+      <HelpTip title={t('estimate.plan.title')} label={t('estimate.plan.title')} wide guide="orchestrator" testid="orchestrator-plan-help">
         <p>{t('estimate.plan.tip')}</p>
-        <p className="est-tip-acc"><b>{t('estimate.accuracyTitle')}.</b> {summary ? t('estimate.accuracyLong', { pct: summary.pct, n: summary.n }) : t('estimate.noAccuracy')} {t('estimate.accuracyTip')}</p>
+        <p className="est-tip-acc"><b>{t('estimate.accuracyTitle')}.</b> {summary ? t('estimate.accuracyLong', { pct: summary.pct, k: summary.k, n: summary.n }) : t('estimate.noAccuracy')} {t('estimate.accuracyTip')}</p>
         {summary?.specificPct != null && <p className="est-tip-specific">{t('estimate.specific', { pct: summary.specificPct })}</p>}
       </HelpTip>
     </header>

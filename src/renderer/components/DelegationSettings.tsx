@@ -1,6 +1,6 @@
 // Impostazioni → Ruoli e deleghe (ADR 0083): the limits of delegation between role chats (how deep a chain of children
 // may go, how many children of one parent work at once, after how many quiet minutes a child counts as stalled, how
-// many finished runs the Judge reviews a day; stallMin is read by agents/delegation.ts stalledMin) and the model each tier (leggero / medio / alto) runs on per engine.
+// many finished runs a Sentinel reviews a day; stallMin is read by agents/delegation.ts stalledMin) and the model each tier (leggero / medio / alto) runs on per engine.
 // Each change saves at once through settings:set (the main side checks the range; agents cannot change these keys).
 // Mounted by SettingsPage.tsx.
 import { useEffect, useState } from 'react';
@@ -27,7 +27,7 @@ export function DelegationSettings() {
       </Select></div>
     </div>)}
     <div className="st-row st-row-block">
-      <div className="st-text"><b className="st-title">{t('delegation.tiers')}<HelpTip title={t('explain.tiers.title')} testid="st-tiers-help"><p>{t('explain.tiers.p1')}</p><p>{t('explain.tiers.p2')}</p></HelpTip></b><p className="st-desc">{t('delegation.tiers.hint')}</p></div>
+      <div className="st-text"><b className="st-title">{t('delegation.tiers')}<HelpTip title={t('explain.tiers.title')} guide="agents" testid="st-tiers-help"><p>{t('explain.tiers.p1')}</p><p>{t('explain.tiers.p2')}</p></HelpTip></b><p className="st-desc">{t('delegation.tiers.hint')}</p></div>
       <div className="st-tiers" role="table" aria-label={t('delegation.tiers')}>
         <div className="st-tiers-row st-tiers-head" role="row"><span role="columnheader" />{MODEL_TIERS.map(tier => <span role="columnheader" key={tier}>{t(`delegation.tier.${tier}`)}</span>)}</div>
         {engines.map(e => <div className="st-tiers-row" role="row" key={e.id}><span role="rowheader" className="st-tiers-engine">{e.name}</span>

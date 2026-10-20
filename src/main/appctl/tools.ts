@@ -61,6 +61,9 @@ export interface AppCtlDeps {
   resolveRole?: (req: NewChat) => ResolvedRole;
   /** agent_metrics for the Orchestrator's own endpoint */
   runFeedback?: RunFeedback;
+  /** when a chat's context last began again (a new session or a compaction): app_digest since "last" answers in full
+   *  after it, because the summary may have dropped what the earlier digests said */
+  contextSince?: (chatId: string) => number | undefined;
   chats: ChatService; browser: BrowserService; brain: BrainService;
   window: () => BrowserWindow | null;
   emitUi: (cmd: EventMap['ui:command']) => void;
@@ -144,7 +147,8 @@ export function orchestratorEndpointAuth(tokens: { check(key: string, token: str
 export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   /** true when this endpoint is the Orchestrator's own (/mcp/app/o/<id>/<token>, checked by orchestratorEndpointAuth) */
   const authed = () => !!callerId && d.chats.list().some(c => c.id === callerId && c.isOrchestrator && !c.closedAt);
-  const mine = (_c: ChatSummary) => true;
+  // Lampo (ADR 0105) is the user's own quick lane: never in the Orchestrator's picture
+  const mine = (c: ChatSummary) => !c.quick;
   /** the Orchestrator this endpoint acts for */
   const caller = (): ChatSummary | undefined => {
     return d.chats.list().find(c => c.isOrchestrator && !c.closedAt);
@@ -222,7 +226,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const key = `app:${callerId ?? ''}`;
         const now = Date.now();
         const raw = typeof a.since === 'string' ? a.since.trim() : '';
-        const since = raw === 'last' ? lastDigest.get(key) ?? null : raw ? Date.parse(raw) : null;
+        const prev = lastDigest.get(key), restarted = callerId ? d.contextSince?.(callerId) : undefined;
+        const since = raw === 'last' ? (prev !== undefined && !(restarted !== undefined && restarted > prev) ? prev : null) : raw ? Date.parse(raw) : null;
         if (since !== null && Number.isNaN(since)) throw new Error('since: "last" oppure un orario ISO (es. 2026-10-13T18:00:00Z)');
         lastDigest.set(key, now);
         return digest({
@@ -393,7 +398,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
           links.roleVersion = Number(a.roleVersion);
         }
         const cwd = typeof a.cwd === 'string' && a.cwd.trim() ? a.cwd.trim() : d.brain.info().brainRoot;
-        if (!cwd) throw new Error('nessuna cartella: il cervello non è collegato');
+        if (!cwd) throw new Error('nessuna cartella: il brain non è collegato');
         // a chat in the app's code folder or one of its worktrees works on the app (routing area App)
         const app = await d.code?.inRepo?.(cwd) ?? false;
         if (a.orchestrator !== undefined && a.orchestrator !== false) throw new Error('app_create_chat crea solo chat di lavoro: l’Orchestrator lo sceglie l’utente (Nuova chat → «È l’Orchestrator» o «Cambia motore»)');

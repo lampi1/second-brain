@@ -44,17 +44,17 @@ export function planOf(chats: readonly (ChatSummary | undefined)[], views: RunEs
   return { rows, timeMs, costUsd, estimated, quick };
 }
 
-export interface AccuracySummary { pct: number; n: number; trendPts: number | null; weeks: number; specificPct: number | null; bars: { weekStart: number; pct: number | null; n: number }[] }
+export interface AccuracySummary { pct: number; k: number; n: number; weeks: number; specificPct: number | null; bars: { weekStart: number; pct: number | null; n: number }[] }
 
-/** The accuracy as the UI says it: the share that held, the change in points over the weeks with data, the last week's
- *  share on the most specific match, one bar per week. Null before any estimate could be checked. */
+/** The accuracy as the UI says it: k of n estimates within ×2 (and the share), the last week's share on the most
+ *  specific match, one bar per week (each with its n). No trend in points (ADR 0101). Null before any estimate could
+ *  be checked. */
 export function accuracySummary(a: EstimateAccuracy | undefined | null): AccuracySummary | null {
   if (!a || a.hitRate === null || !a.n) return null;
   const withData = a.points.filter(p => p.hitRate !== null);
   const last = withData[withData.length - 1];
   return {
-    pct: Math.round(a.hitRate * 100), n: a.n,
-    trendPts: a.trend === null ? null : Math.round(a.trend * 100),
+    pct: Math.round(a.hitRate * 100), k: a.hits ?? Math.round(a.hitRate * a.n), n: a.n,
     weeks: withData.length,
     specificPct: last?.specificShare == null ? null : Math.round(last.specificShare * 100),
     bars: a.points.map(p => ({ weekStart: p.weekStart, pct: p.hitRate === null ? null : Math.round(p.hitRate * 100), n: p.n })),

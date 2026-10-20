@@ -99,7 +99,11 @@ export function Fatto({ arg, nav }: { arg?: string; nav: Navigate }) {
       </header>
       <div className="catalog-filters">
         <label className="field"><span>{tr('brainPages.fatto.from')}</span>
-          <input type="date" value={from} max={today || undefined} onChange={e => { if (isDay(e.target.value)) go(e.target.value); }} data-testid="fatto-from" /></label>
+          {/* the native field shows the OS locale's format ("10/20/2026" on an English Windows): the day is written in the
+              app's language over it, a click opens the native picker (ADR 0101) */}
+          <span className="wl-datefield"><span className="wl-datefield-text" aria-hidden="true">{from ? fmt.dayFull(from) : '—'}</span>
+            <input type="date" value={from} max={today || undefined} onChange={e => { if (isDay(e.target.value)) go(e.target.value); }}
+              onClick={e => { try { e.currentTarget.showPicker(); } catch { /* not allowed: the field still edits */ } }} data-testid="fatto-from" /></span></label>
         <label className="field"><span>{tr('brainPages.fatto.range')}</span>
           <Select value={String(count)} onChange={e => setCount(Number(e.target.value))} data-testid="fatto-range">
             {[...new Set([...RANGES, count])].sort((a, b) => a - b).map(n => <option key={n} value={String(n)}>{n}</option>)}

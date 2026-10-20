@@ -1,5 +1,5 @@
 // The "Da approvare" inbox's presentation (no IPC, no window): one card per pending role change (an open trial, a tier
-// suggestion) with what changes, why, the numbers before and after (n and coverage), the evidence and the decision
+// suggestion, a Battito proposal, ADR 0102) with what changes, why, the numbers before and after (n and coverage), the evidence and the decision
 // buttons. Every write asks for an inline confirmation first.
 // Used by components/AgentApprovals.tsx (which wires the decisions) and by its unit test (static render).
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -7,6 +7,7 @@ import type { AgentEvidenceRef, AgentProfile, Metric, VersionMetrics } from '@sh
 import type { AgentLifecycleProposal } from '@shared/agent-lifecycle';
 import type { ApprovalDecision, ApprovalItem, ApprovalsState } from '../lib/agent-approvals';
 import { locale, t } from '../i18n';
+import { formatCost } from '../lib/format';
 import { AgentAvatar } from './AgentAvatar';
 import '../styles/agent-approvals.css';
 
@@ -23,7 +24,7 @@ function value(m: Metric | undefined, unit: 'pct' | 'usd' | 'dur' | 'num'): stri
   if (!m || m.value === null) return '—';
   const v = m.value;
   if (unit === 'pct') return `${Math.round(v * 100)}%`;
-  if (unit === 'usd') return `$${v.toLocaleString(locale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (unit === 'usd') return formatCost(v);
   if (unit === 'dur') return v >= 60_000 ? t('approvals.minutes', { n: Math.round(v / 60_000) }) : t('approvals.seconds', { n: Math.max(1, Math.round(v / 1000)) });
   return v.toLocaleString(locale(), { maximumFractionDigits: 1 });
 }
@@ -65,6 +66,10 @@ function Evidence({ refs, text }: { refs?: AgentEvidenceRef[]; text?: string }) 
 
 interface Choice { label: string; decision: ApprovalDecision; confirm: string; tone: 'primary' | 'ghost' | 'danger' }
 function choices(item: ApprovalItem): Choice[] {
+  if (item.type === 'pulse') return [
+    { label: t('alive.approval.apply'), decision: { type: 'pulse', decision: 'approve' }, confirm: t('alive.approval.confirmApply'), tone: 'primary' },
+    { label: t('alive.approval.discard'), decision: { type: 'pulse', decision: 'discard' }, confirm: t('alive.approval.confirmDiscard'), tone: 'ghost' },
+  ];
   if (item.type === 'trial') {
     const keepFirst = item.advice?.kind !== 'revert';
     const keep: Choice = { label: t('approvals.keep'), decision: { type: 'trial', decision: 'keep' }, confirm: t('approvals.confirm.keepTrial', { v: item.agent.trial!.version }), tone: keepFirst ? 'primary' : 'ghost' };
@@ -78,11 +83,16 @@ function choices(item: ApprovalItem): Choice[] {
 function ignore(entry: AgentLifecycleProposal | null, confirm: 'approvals.confirm.ignoreTrial' | 'approvals.confirm.ignoreSuggestion'): Choice[] {
   return entry ? [{ label: t('approvals.ignore'), decision: { type: 'queue', decision: 'dismiss' }, confirm: t(confirm), tone: 'ghost' }] : [];
 }
-const title = (item: ApprovalItem): string => (item.type === 'lifecycle' ? t('approvals.kind.tier') : t('approvals.kind.trial'));
+const title = (item: ApprovalItem): string => (item.type === 'lifecycle' ? t('approvals.kind.tier') : item.type === 'pulse' ? t('alive.approval.kind') : t('approvals.kind.trial'));
 const subject = (item: ApprovalItem): { name: string; agent: AgentProfile | null } =>
-  item.type === 'lifecycle' ? { name: item.agents.map(a => a.name).join(', '), agent: item.agents[0] ?? null } : { name: item.agent.name, agent: item.agent };
+  item.type === 'lifecycle' ? { name: item.agents.map(a => a.name).join(', '), agent: item.agents[0] ?? null }
+    : item.type === 'pulse' ? { name: item.agent?.name ?? item.proposal.title, agent: item.agent } : { name: item.agent.name, agent: item.agent };
 
 function Body({ item }: { item: ApprovalItem }) {
+  if (item.type === 'pulse') return <>
+    <Section label={t('approvals.what')}><p><b>{item.proposal.title}</b></p><p>{item.proposal.text}</p></Section>
+    <details className="apv-evidence"><summary>{t('alive.approval.evidence', { n: item.proposal.evidence.length })}</summary><ul>{item.proposal.evidence.map(e => <li key={e}><code>{e}</code></li>)}</ul></details>
+  </>;
   if (item.type === 'trial') return <>
     <Section label={t('approvals.what')}><p>{t('approvals.trialWhat', { v: item.agent.trial!.version, base: item.agent.trial!.baseline, since: when(item.agent.trial!.startedAt) })}</p></Section>
     <Section label={t('approvals.why')}>{item.advice ? <p><span className="apv-tag" data-advice={item.advice.kind === 'keep' ? 'keep' : 'revert'}>{t(item.advice.kind === 'keep' ? 'approvals.adviceKeep' : 'approvals.adviceRevert')}</span> {item.reason}</p> : <p className="apv-muted">{item.reason ?? t('approvals.trialWait')}</p>}</Section>

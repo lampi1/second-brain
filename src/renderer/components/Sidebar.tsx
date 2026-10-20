@@ -1,5 +1,6 @@
 // The app rail groups work, the Brain (ADR 0077: Agenti, Skill, Regole, Memoria, Classificatori and the Mappa of their
-// links, each thing shown and edited in one place) and app tools (Dashboard = statistics only, Guida). Role-specific
+// links, each thing shown and edited in one place), Andamento (Costi and Qualità, reachable before only with G C / G Q,
+// ADR 0101) and app tools (Dashboard = statistics only, Guida). Role-specific
 // pages exclude destinations already supplied by the shell. Under the Grindhouse entry, the open agents as a delegation
 // tree (SidebarTree.tsx). Used by App.tsx.
 import type { ReactNode } from 'react';
@@ -31,6 +32,8 @@ const BRAIN_GROUP: BrainPageId[] = [];
 /** The Brain section: always shown, whatever the role (ADR 0077; the owner, 2026-10-19: the brain must be visible, so its
  *  scripts and its changelog are always there too, ADR 0076). */
 const BRAIN_CORE: BrainPageId[] = ['agenti', 'skill', 'regole', 'memoria', 'classificatori', 'collegamenti', 'script', 'changelog'];
+/** Andamento: how the work goes, in money and in quality; always shown (ADR 0101). */
+const TRENDS: BrainPageId[] = ['costi', 'qualita'];
 
 function Badge({ n, warn }: { n: number; warn?: boolean }) {
   if (!n) return null;
@@ -41,7 +44,7 @@ export function Sidebar() {
   const saved=ui.use(s=>s.prefs.workProfile);
   const composition=workProfile(saved,BRAIN_PAGES.map(page=>page.id));
   const show=(id:BrainPageId)=>!composition||composition.pageIds.includes(id);
-  const brainPages=composition?composition.pageIds.filter((id):id is BrainPageId=>BRAIN_PAGES.some(page=>page.id===id)&&!['home','dashboard','guida','task','fatto','impostazioni',...BRAIN_CORE].includes(id)):BRAIN_GROUP;
+  const brainPages=composition?composition.pageIds.filter((id):id is BrainPageId=>BRAIN_PAGES.some(page=>page.id===id)&&!['home','dashboard','guida','task','fatto','impostazioni',...BRAIN_CORE,...TRENDS].includes(id)):BRAIN_GROUP;
   const page = ui.use(s => s.page);
   const map = ui.use(s => s.map);
   const read = ui.use(s => s.read);
@@ -81,6 +84,8 @@ export function Sidebar() {
         {title(t('dialogs.sidebar.brain'), 'brain')}
         {BRAIN_CORE.map(page1)}
         {brainPages.map(page1)}
+        {title(t('dialogs.sidebar.trends'), 'trends')}
+        {TRENDS.map(page1)}
         {title(t('dialogs.sidebar.app'), 'app')}
         {page1('dashboard')}
         {page1('guida')}

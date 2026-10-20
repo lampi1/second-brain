@@ -5,9 +5,11 @@
 // (3) its recent tool calls grouped into readable lines: consecutive reads and searches under one folder ("Letti 42 file
 // in src/payments/"), edits with their diff counts ("Modificati 4 file · +182 −64"), a command ("Lancia `dotnet test`"),
 // web and browser actions (shared/explain.ts lines). A sentence like "Trovate 17 chiamate" appears only when the agent
-// wrote it as a plan item. Pure: pinned by test/unit/run-steps.test.ts with one fixture per engine.
+// wrote it as a plan item. The lines' words are i18n keys (alive.act.*, both locales). Pure: pinned by
+// test/unit/run-steps.test.ts with one fixture per engine.
 import type { ChatItem } from '@shared/contract';
 import { baseName, explainTool } from '@shared/explain';
+import { t as tr } from '../i18n';
 
 export type StepMark = 'done' | 'cur' | 'todo' | 'bad';
 export interface RunStep { mark: StepMark; text: string; at?: number; code?: string }
@@ -102,18 +104,18 @@ export function actionSteps(items: readonly ChatItem[], live: boolean): RunStep[
       const files = [...new Set(group.filter(g => g.name === 'Read').map(pathOf).filter(Boolean))];
       // a read names a file (its folder counts), a search names a folder
       const folder = folderOf(group.flatMap(g => { const p = pathOf(g); return !p ? [] : g.name === 'Read' ? [p.replace(/\\/g, '/').split('/').slice(0, -1).join('/')] : [p]; }));
-      const text = files.length > 1 ? `Letti ${files.length} file${folder ? ` in ${folder}` : ''}` : files.length === 1 ? `Letto ${baseName(files[0]!)}${group.length > 1 ? ` e ${group.length - 1} ricerche` : ''}` : `${group.length} ricerche${folder ? ` in ${folder}` : ''}`;
+      const text = files.length > 1 ? tr('alive.act.readFiles', { n: files.length, folder }) : files.length === 1 ? tr('alive.act.readFile', { name: baseName(files[0]!), searches: group.length - 1 }) : tr('alive.act.searches', { n: group.length, folder });
       out.push({ mark, text, at: last.at });
     } else if (kind === 'edit') {
       const files = [...new Set(group.map(g => (g.diff?.[0]?.path) || pathOf(g)).filter(Boolean))];
       const added = group.reduce((n, g) => n + (g.diff ?? []).reduce((m, d) => m + d.added, 0), 0);
       const removed = group.reduce((n, g) => n + (g.diff ?? []).reduce((m, d) => m + d.removed, 0), 0);
       const counts = added || removed ? ` · +${added} −${removed}` : '';
-      const text = files.length > 1 ? `Modificati ${files.length} file${counts}` : `${mark === 'cur' ? 'Modifica' : 'Modificato'} ${baseName(files[0] ?? '') || 'un file'}${counts}`;
+      const text = files.length > 1 ? tr('alive.act.editedFiles', { n: files.length, counts }) : tr(mark === 'cur' ? 'alive.act.editing' : 'alive.act.edited', { name: baseName(files[0] ?? '') || tr('alive.act.aFile'), counts });
       out.push({ mark, text, at: last.at });
     } else if (SHELLS.has(t.name)) {
       const cmd = s(o(t.input).command) || s(o(t.input).cmd) || t.summary.replace(/^[^:]+:\s*/, '');
-      out.push({ mark, text: mark === 'cur' ? 'Lancia' : 'Lanciato', code: cut(cmd.split('\n')[0]!.trim(), 60), at: t.at });
+      out.push({ mark, text: tr(mark === 'cur' ? 'alive.act.running' : 'alive.act.ran'), code: cut(cmd.split('\n')[0]!.trim(), 60), at: t.at });
     } else {
       out.push({ mark, text: explainTool(t.name, t.input, t.summary.replace(/^[^:]+:\s*/, '')).line, at: t.at });
     }

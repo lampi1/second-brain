@@ -12,9 +12,13 @@
 //            {"type":"control_response","response":{"subtype":"success",request_id,response:{behavior,…}}}.
 //            With opts.preToolUse, initialize registers one PreToolUse hook callback and the CLI asks it with
 //            hook_callback before each tool call (answered with the hook's JSON output: {} or a deny with its reason).
+//            With opts.productHooks (a product brain), the brain's rules hooks for UserPromptSubmit, PreToolUse and
+//            PostToolUse are answered the same way, in process (rules/runtime.ts runHook), not by a node process each.
 // Messages become contract ChatItems (streamed text as replace events, tool rows with a one-line summary, diff counts,
 // results with cost). Robust by design: a bad line is logged and skipped, a dead process becomes state closed/error
 // with the reason, and nothing here can throw into the app. Used by manager.ts through the HarnessSession interface.
+import { runHook } from '../rules/runtime';
+import type { HookInput } from '../rules/types';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -125,6 +129,9 @@ const num = (v: unknown): number | undefined => (typeof v === 'number' && Number
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 /** The callback id of the app's in-process PreToolUse hook (opts.preToolUse), registered at initialize. */
 const PRE_TOOL_HOOK = 'sb_pre_tool_use';
+/** The callback ids of a product brain's hooks answered in process (opts.productHooks), per event. */
+const PRODUCT_HOOKS: Readonly<Record<string, string>> = { UserPromptSubmit: 'sb_product_prompt', PreToolUse: 'sb_product_pre', PostToolUse: 'sb_product_post' };
+const PRODUCT_IDS: ReadonlySet<string> = new Set(Object.values(PRODUCT_HOOKS));
 
 const PERMISSION_MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions'];
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -329,7 +336,7 @@ export class ClaudeSession implements HarnessSession {
       this.job = job;
       if (this.exitedRoot) { this.exitedRoot.job = job; if (!this.keepChildren) void jobGuard.release(job); } // exited first: the walk reaped it
     });
-    this.controlRaw({ subtype: 'initialize', hooks: this.opts.preToolUse ? { PreToolUse: [{ matcher: '*', hookCallbackIds: [PRE_TOOL_HOOK] }] } : null }, 60000).then(env => {
+    this.controlRaw({ subtype: 'initialize', hooks: this.initHooks() }, 60000).then(env => {
       const r = o(env.response);
       this.readyAt = Date.now();
       this.readyDone();
@@ -691,6 +698,7 @@ export class ClaudeSession implements HarnessSession {
     const id = s(m.request_id);
     const r = o(m.request);
     if (r.subtype === 'hook_callback' && s(r.callback_id) === PRE_TOOL_HOOK && this.opts.preToolUse) return this.onPreToolUse(id, o(r.input));
+    if (r.subtype === 'hook_callback' && PRODUCT_IDS.has(s(r.callback_id)) && this.opts.productHooks) return this.onProductHook(id, o(r.input));
     if (r.subtype !== 'can_use_tool') {
       this.drift('control request', s(r.subtype), m);
       log.warn('chats', 'unsupported control request from CLI', { chat: this.opts.chatId, data: { subtype: r.subtype } });
@@ -721,6 +729,35 @@ export class ClaudeSession implements HarnessSession {
     log.info('chats', 'can_use_tool', { chat: this.opts.chatId, data: { requestId: id, tool, type: req.type, toolUseId: call.toolUseId || null } });
     this.setState('waiting');
     this.sink.pending(req);
+  }
+
+  /** The hooks registered at initialize: the Orchestrator's turn budget, a product brain's rules (in process). */
+  private initHooks(): Record<string, { matcher?: string; hookCallbackIds: string[] }[]> | null {
+    const pre = [...(this.opts.preToolUse ? [PRE_TOOL_HOOK] : []), ...(this.opts.productHooks ? [PRODUCT_HOOKS.PreToolUse!] : [])];
+    const hooks: Record<string, { matcher?: string; hookCallbackIds: string[] }[]> = {};
+    if (pre.length) hooks.PreToolUse = [{ matcher: '*', hookCallbackIds: pre }];
+    if (this.opts.productHooks) {
+      hooks.UserPromptSubmit = [{ hookCallbackIds: [PRODUCT_HOOKS.UserPromptSubmit!] }];
+      hooks.PostToolUse = [{ matcher: '*', hookCallbackIds: [PRODUCT_HOOKS.PostToolUse!] }];
+    }
+    return Object.keys(hooks).length ? hooks : null;
+  }
+
+  /** A product brain's hook answered in process (rules/runtime.ts runHook, the code its node runner runs): a refusal
+   *  is a PreToolUse deny with the reason the model reads, context is additionalContext; a failing guard fails closed
+   *  as the runner did, anything else never blocks the call. */
+  private onProductHook(id: string, input: Obj): void {
+    let response: Obj = {};
+    const event = s(input.hook_event_name);
+    try {
+      const p = this.opts.productHooks!;
+      const result = runHook(p.root, p.state, input as unknown as HookInput, p.launch);
+      if (result.deny) response = event === 'PreToolUse'
+        ? { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: result.deny } }
+        : { decision: 'block', reason: result.deny };
+      else if (result.context && (event === 'UserPromptSubmit' || event === 'PreToolUse' || event === 'PostToolUse')) response = { hookSpecificOutput: { hookEventName: event, additionalContext: result.context } };
+    } catch (e) { log.warn('chats', 'product hook failed in process: the call goes on', { chat: this.opts.chatId, cause: errText(e), hint: 'see rules/runtime.ts' }); }
+    try { this.write({ type: 'control_response', response: { subtype: 'success', request_id: id, response } }); } catch { /* gone */ }
   }
 
   /** The app's in-process PreToolUse hook (opts.preToolUse): no say = an empty output (the engine goes on as without
@@ -823,8 +860,9 @@ export class ClaudeSession implements HarnessSession {
     if (this.counted.size > 5000) this.counted.clear();
     this.counted.add(id);
     const write = num(u.cache_creation_input_tokens) ?? 0;
-    const context = (num(u.input_tokens) ?? 0) + (num(u.cache_read_input_tokens) ?? 0) + write;
-    this.sink.changed({ call: { context, cacheWrite: write, usd: priceUsage(s(msg.model), u) } });
+    const read = num(u.cache_read_input_tokens) ?? 0, input = num(u.input_tokens) ?? 0;
+    const context = input + read + write;
+    this.sink.changed({ call: { context, cacheWrite: write, cacheRead: read, input, usd: priceUsage(s(msg.model), u) } });
   }
 
   private onAssistant(m: Obj): void {

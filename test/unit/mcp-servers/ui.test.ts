@@ -25,7 +25,7 @@ describe('readings', () => {
     expect(serverStatus({ ...broken, secretMasks: { 'header:Authorization': null } })).toBe('missing');
     expect(serverStatus({ ...ok, lastTest: null })).toBe('untested');
     expect(serverStatus({ ...ok, enabled: false })).toBe('off');
-    expect(rolesWith(state, 'ado')).toHaveLength(8);
+    expect(rolesWith(state, 'ado')).toHaveLength(5);
     expect(hubTotals(state.servers, [{ status: 'verified' }, { status: 'pending' }])).toEqual({ working: 2, toFix: 1, total: 4, tools: 2, reading: 1 });
     expect(runsAs(broken)).toBe('api.githubcopilot.com/mcp');
     expect(monogram('Azure DevOps')).toBe('AD');
@@ -49,7 +49,7 @@ describe('cards', () => {
     expect(html).toContain('ghp_…9f2c');
     expect(html).not.toContain('type="password"');
     expect(html).toContain('aria-label="Prova GitHub"');
-    expect(html).toContain('9 su 9');
+    expect(html).toContain('6 su 6');
   });
   it('a working server splits its tools; the totals explain themselves; English too', () => {
     expect(card(ok)).toContain('1 lettura · 1 scrittura');

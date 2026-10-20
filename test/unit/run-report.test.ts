@@ -44,7 +44,7 @@ it('marks garbage: bad JSON, wrong values, missing summary, bad counts, too long
   expect(reportOf(block('{not json'), 7)).toBeNull();
 });
 
-it('keeps a Judge review\'s verdict when it is one of success, partial, fail; drops anything else', () => {
+it('keeps an independent review\'s verdict when it is one of success, partial, fail; drops anything else', () => {
   const base = { outcome: 'done', verified: 'yes', summary: 's' };
   expect(parseRunReport(block(JSON.stringify({ ...base, verdict: 'fail' })), 1)).toMatchObject({ status: 'ok', report: { verdict: 'fail' } });
   const odd = parseRunReport(block(JSON.stringify({ ...base, verdict: 'great' })), 1);

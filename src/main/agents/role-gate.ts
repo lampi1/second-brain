@@ -8,7 +8,7 @@
 // delegated chat whose tool class goes beyond its parent's permissions is refused (under a parent that may only read
 // commands, a command that does not only read goes beyond it too). Everything else passes to the user
 // as before (a request beyond the role but within the parent is the user's call). A role that may write only in the
-// brain (brain-write without edit, e.g. the Scribe) gets Claude's Edit/Write (tool-policy.ts CLAUDE_TOOLS), and every
+// brain (brain-write without edit, as the user may narrow one) gets Claude's Edit/Write (tool-policy.ts CLAUDE_TOOLS), and every
 // edit it asks is refused unless its file's real path is inside the brain folder (no "..", no link out, no hard link,
 // a normalized path short enough that trimInput never cut it). The brain's list of read-only tools
 // (read-only-tools.md, agents/read-tools.ts) is the user's: an edit of it by any role is refused. Under a parent that
@@ -18,6 +18,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { SysCode, SysParams } from '../../shared/sys';
+import type { PreToolCall, PreToolHook } from '../chats/session';
 import { allowsClass, shellWithin, toolClassOf, type AgentPolicy, type ReadScripts } from './tool-policy';
 import { READ_TOOLS_FILE } from './read-tools';
 
@@ -52,6 +53,24 @@ const SUBAGENT_TOOLS = new Set(['Agent', 'Task']);
 const SKILL_KEYS = ['skill', 'command', 'name'];
 /** The one engine sub-agent a role may use: a read-only search inside its own chat. */
 export const SEARCH_SUBAGENT = 'Explore';
+
+/** The verdict on an engine sub-agent call (Agent/Task): null for the read-only Explore search, else the refusal. */
+export function subagentRefusal(input: unknown): { type: string; message: string } | null {
+  const type = field(input, 'subagent_type', 'agent_type', 'type') || 'general-purpose';
+  if (type === SEARCH_SUBAGENT) return null;
+  return { type, message: `Sub-agent «${type}» refused: hand delegated work to another role with agent_delegate (a visible chat). Engine sub-agents are only for a quick read-only search (${SEARCH_SUBAGENT}).` };
+}
+
+/** The same rule as a PreToolUse hook (chats/claude.ts): Claude starts a sub-agent without a permission request, so
+ *  gateRequest never sees it; a role chat whose launch has the sub-agent tool (tool-policy.ts claudeTools) gets this. */
+export class SubagentGate implements PreToolHook {
+  decide(call: PreToolCall): { deny: string } | null {
+    if (!SUBAGENT_TOOLS.has(call.tool)) return null;
+    const refused = subagentRefusal(call.input);
+    return refused ? { deny: refused.message } : null;
+  }
+  turnEnded(): void { /* no state */ }
+}
 
 /** The name of a launch's runtime plugin, from its folder (named by the content hash, agents/pack/flows.ts runtime()). */
 export const runtimePluginName = (pluginDirOrHash: string): string => `agent-${path.basename(pluginDirOrHash).slice(0, 16)}`;
@@ -128,10 +147,9 @@ export function gateRequest(req: GateRequest, chat: GateChat): GateVerdict {
       message: `The skill «${raw || '?'}» is not assigned to your role (${chat.role.name}): use only the skills you were given, or tell your parent which one you need.${hint}` };
   }
   if (SUBAGENT_TOOLS.has(req.tool)) {
-    const type = field(req.input, 'subagent_type', 'agent_type', 'type') || 'general-purpose';
-    if (type === SEARCH_SUBAGENT) return { kind: 'pass' };
-    return { kind: 'deny', code: 'subagentRefused', params: { type },
-      message: `Sub-agent «${type}» refused: hand delegated work to another role with agent_delegate (a visible chat). Engine sub-agents are only for a quick read-only search (${SEARCH_SUBAGENT}).` };
+    const refused = subagentRefusal(req.input);
+    if (!refused) return { kind: 'pass' };
+    return { kind: 'deny', code: 'subagentRefused', params: { type: refused.type }, message: refused.message };
   }
   const tool = toolClassOf(req.tool);
   // an edit of a file inside the brain folder is a brain-write

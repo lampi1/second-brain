@@ -29,7 +29,7 @@ export function AgentMcpSection({ roleId, roleName, mcpClass = true, embedded = 
   };
   const servers = state?.servers ?? [];
   return <section className="agent-mcp" aria-label={t('agentMcp.title')} data-testid={`agent-mcp-${roleId}`}>
-    {!embedded && <h4>{t('agentMcp.title')}<HelpTip title={t('agentMcp.title')} label={`${t('agentMcp.title')} ${roleName}`}>{t('agentMcp.tip')}</HelpTip></h4>}
+    {!embedded && <h4>{t('agentMcp.title')}<HelpTip title={t('agentMcp.title')} label={`${t('agentMcp.title')} ${roleName}`} guide="mcp-servers">{t('agentMcp.tip')}</HelpTip></h4>}
     {!mcpClass && <p className="hub-muted">{t('agentMcp.noClass')}</p>}
     {state && !servers.length && <p className="hub-muted">{t('agentMcp.none')} <button type="button" className="btn btn-subtle btn-s" onClick={() => openPage('impostazioni', 'connectors')}>{t('agentMcp.goSettings')}</button></p>}
     {servers.length > 0 && <ul>{servers.map(s => {

@@ -1,4 +1,4 @@
-// The Agenti page: the nine roles (the Orchestrator first, then the eight work roles) and Pulse, each a card that flips
+// The Agenti page: the six roles (the Orchestrator first, then the five work roles) and Pulse, each a card that flips
 // to its instructions and skills (#81) and opens the role's own page (AgentStudio: the editor, its versions, its pulse).
 // "Da approvare" on top holds the decisions that change a role's reach or cost (ADR 0083). No role is created here: the
 // catalog is fixed, a missing know-how becomes a skill. Rendered by App.tsx for page 'agenti'.
@@ -57,7 +57,7 @@ export function AgentCatalogPage() {
       <p className="catalog-count"><strong>{t('agentsGrid.count', { n: profiles.filter(p => p.scope === 'role').length })}</strong>
         {working > 0 && <span data-state="working"><i aria-hidden="true" />{t('agentsGrid.workingCount', { n: working })}</span>}
         {trial > 0 && <span data-state="trial"><i aria-hidden="true" />{t('agentsGrid.trialCount', { n: trial })}</span>}
-        <HelpTip title={t('explain.team.title')} testid="catalog-summary-help"><p>{t('explain.team.p1')}</p><p>{t('explain.team.p2')}</p></HelpTip></p>
+        <HelpTip title={t('explain.team.title')} guide="agents" testid="catalog-summary-help"><p>{t('explain.team.p1')}</p><p>{t('explain.team.p2')}</p></HelpTip></p>
       <p className="catalog-note">{t('catalog.note')}</p>
     </div>
     <div className="catalog-grid">{profiles.map((p, index) => {

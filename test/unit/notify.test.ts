@@ -30,6 +30,16 @@ describe('notify', () => {
     expect(bellCount(q, emptyRead, new Set())).toBe(0);
   });
 
+  it('bell: what changed while the app was closed (away) counts until read, and never toasts (ADR 0102)', () => {
+    const feed = [ev('a1', 'idea', 5, { away: true }), ev('a2', 'error', 4, { away: true }), ev('i', 'idea', 3), ev('w', 'chat-failed', 2, { away: true })];
+    expect(feed.filter(e => isUnread(e, emptyRead)).map(e => e.id)).toEqual(['a1', 'a2', 'i', 'w']);
+    expect(bellCount(feed, emptyRead)).toBe(3);
+    expect(bellCount(feed, markRead(emptyRead, ['a1']))).toBe(2);
+    expect(bellCount(feed, markAllRead(emptyRead, 100))).toBe(0);
+    expect(toastGroups(feed, { since: 0, dismissed: new Set(), muted: {}, dnd: false })).toEqual([]);
+    expect(badges(feed, emptyRead)).toEqual({});
+  });
+
   it('badges: silent kinds and error/win/idea/chat-done never badge', () => {
     const feed = ['error', 'win', 'idea', 'reflection', 'chat-done', 'proposal', 'now', 'done', 'decision', 'mail', 'sync-ok'].map((k, i) => ev(`x${i}`, k, i + 1));
     expect(badges(feed, emptyRead)).toEqual({});

@@ -26,7 +26,7 @@
   <img alt="Electron 44" src="https://img.shields.io/badge/electron-44-47848F.svg">
 </p>
 
-![The Grindhouse: a Strategist's work as a tree of thread cards (Scout done, Artisan with its own Judge, Herald writing the notes), the Orchestrator's column on the right](docs/screenshots/grindhouse.webp)
+![The Grindhouse: a Strategist's work as a tree of thread cards (Scout done, Artisan with its own Sentinel, Herald writing the notes), the Orchestrator's column on the right](docs/screenshots/grindhouse.webp)
 
 Five agents at once and the bottleneck is no longer the model: it is you. Who is waiting on you? Who is burning tokens
 in a loop? What did the QA agent see in its browser? **second-brain** puts the whole crew on one screen, so your
@@ -41,19 +41,35 @@ settings. The interface speaks Italian and English.
 splits it into child chats, and the Grindhouse shows the whole family as thread cards: who is on it, what they found,
 what they still owe. A child's question goes to its parent first; only what truly needs you reaches you, once.
 
-**🎭 A crew with characters.** Nine fixed roles, each with its own face, job, skills and model tier:
+**🎭 A crew with characters.** The Orchestrator and five work roles, each with its own face, job, skills and model
+tier (ADR 0100):
 
-<p align="center"><img src="docs/screenshots/crew.webp" alt="The nine roles: Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald, Router, Judge, Scribe" width="820"></p>
+<p align="center"><img src="docs/screenshots/crew.webp" alt="The six roles: Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald" width="820"></p>
 
-<p align="center"><sub><b>Orchestrator</b> conducts · <b>Strategist</b> plans · <b>Scout</b> explores · <b>Artisan</b> builds · <b>Sentinel</b> tests · <b>Herald</b> announces · <b>Router</b> triages · <b>Judge</b> reviews · <b>Scribe</b> writes</sub></p>
+<p align="center"><sub><b>Orchestrator</b> conducts · <b>Strategist</b> plans · <b>Scout</b> explores · <b>Artisan</b> builds and writes · <b>Sentinel</b> tests and reviews · <b>Herald</b> announces</sub></p>
 
-**⚡ Answer with one key.** Questions and permissions pop up as panels right in the agent's strip, with the context the
+**⌨️ Answer with one key.** Questions and permissions pop up as panels right in the agent's strip, with the context the
 agent had when it asked. Every job gets an estimate up front ("~4 min · ~0,12 $ · from 12 similar tasks") and a
 verdict at the end ("~4 min → 6 min ✓").
 
-**📈 Agents that level up.** Every role earns levels and a performance score from real outcomes, cost and your
-corrections. The app tunes models, instructions and skills by itself, as a trial measured against the old version,
-and every change has an "Annulla".
+**⚡ Lampo, for quick questions.** A second tab beside the Orchestrator answers in seconds with read-only tools: it
+explains, reads and searches, and changes nothing. When the answer turns into work, **Fanne un lavoro** hands it to
+the Orchestrator (ADR 0105).
+
+**✅ Judged by facts, not by you.** A run counts as a success when its report met every done criterion, you corrected
+nothing and nobody had to redo it within 7 days. No form to fill in, no tokens spent (ADR 0100).
+
+**📈 Agents that level up, honestly.** A role's level is the number of its verified successes: «Lv 6 Maestro · 38
+riusciti verificati». The app tunes models, instructions and skills by itself, as a trial against the old version,
+and keeps a change only when a confidence interval says it is better (Wilson, Newcombe; ADR 0104). Every change has
+an "Annulla".
+
+**☀️ An app that tells you what happened.** Each strip says what its agent is doing right now. When you come back, a
+morning block lists what finished, what waits for you, red builds and yesterday's spend, built from what the app
+already knows, at zero tokens (ADR 0102).
+
+**↩️ Undo a turn.** Before each turn the app records the folder's files in a hidden git ref; «Annulla l'ultimo turno»
+puts them back, without touching your index or branches (ADR 0103).
 
 **🧠 A brain that lights up.** Your notes, rules, memory and scripts live in a plain Markdown folder that the agents
 read and write. Watch it live on a 3D map, lit where the crew is working right now.
@@ -63,7 +79,7 @@ read and write. Watch it live on a 3D map, lit where the crew is working right n
 <table>
 <tr>
 <td width="50%"><img src="docs/screenshots/orchestrator.webp" alt="The Orchestrator's column: its plan with each chat's estimate and state, the mail between chats and a decision waiting for you"><br><b>The Orchestrator.</b> One chat that plans, delegates, routes mail between agents and tells you what needs you.</td>
-<td width="50%"><img src="docs/screenshots/agents.webp" alt="The Agenti page: the nine roles as cards with character, level, performance, runs and cost"><br><b>Agenti.</b> Every role as a card: level, performance, runs, cost, and a "?" with the formula behind each number.</td>
+<td width="50%"><img src="docs/screenshots/agents.webp" alt="The Agenti page: the six roles as cards with character, level, performance, runs and cost"><br><b>Agenti.</b> Every role as a card: level, performance, runs, cost, and a "?" with the formula behind each number.</td>
 </tr>
 <tr>
 <td><img src="docs/screenshots/browser.webp" alt="A QA chat in focus mode with the browser tab it drives"><br><b>Browsers they drive.</b> Real tabs inside the app over MCP: click, type, read, screenshot. Passwords and MFA are always yours.</td>
@@ -78,6 +94,9 @@ read and write. Watch it live on a 3D map, lit where the crew is working right n
 <td><img src="docs/screenshots/quality.webp" alt="The Qualità page: measured metrics with their source"><br><b>Qualità.</b> Errors you had to catch, rules that did not stick, PRs held back, each measured from real logs.</td>
 </tr>
 </table>
+
+Faster and cheaper by design (ADR 0099): engines prewarmed for the next chat, rules hooks answered in process, clean
+results batched into one Orchestrator turn, and browser reads that return only what changed.
 
 Also on board: cloud agents (Cursor, Codex, Claude Code) next to the local ones, one-click **Esegui** for shell blocks,
 long chats handed off before the context fills, Ctrl+K search across everything, an in-app **Guida**, and an

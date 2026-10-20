@@ -19,6 +19,8 @@ const WEEKS = 12;
 const JOURNAL_READ = 120;
 /** a skill younger than this with no run yet is "new", not "never used" */
 const NEW_SKILL_DAYS = 14;
+/** known outcomes a skill needs before it is called useful / weak / mixed: on 2 the verdict was noise (ADR 0101) */
+export const MIN_VERDICT = 10;
 const DATE = /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}))?\s*(?:[·|:–-]\s*)?/;
 
 const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
@@ -104,7 +106,7 @@ export function skillUses(skills: BrainSkill[], runs: AgentRun[], now: number): 
     const ok = known.filter(r => r.outcome!.verdict === 'success').length;
     const success = known.length ? ok / known.length : null;
     const verdict: SkillVerdict = !mine.length ? (s.changedAt && now - s.changedAt < NEW_SKILL_DAYS * DAY ? 'new' : 'unused')
-      : known.length < 2 ? 'few' : success! >= 0.7 ? 'useful' : success! < 0.5 ? 'weak' : 'mixed';
+      : known.length < MIN_VERDICT ? 'few' : success! >= 0.7 ? 'useful' : success! < 0.5 ? 'weak' : 'mixed';
     return { name: s.name, rel: s.rel, uses: mine.length, known: known.length, ok, success, lastUse: mine.length ? Math.max(...mine.map(r => r.startedAt)) : null, usedBy: s.usedBy.length, verdict };
   }).sort((a, b) => b.uses - a.uses || a.name.localeCompare(b.name));
 }

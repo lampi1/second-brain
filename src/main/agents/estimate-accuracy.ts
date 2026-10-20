@@ -1,4 +1,4 @@
-// How good the task estimate is, and how it improves (ADR 0087; owner, 2026-10-19: «il progresso dei classificatori nelle
+// How good the task estimate is (ADR 0087; owner, 2026-10-19: «il progresso dei classificatori nelle
 // stime»): a backtest of the same estimator (task-estimate.ts) on every ended run of the last weeks, each one estimated
 // only from the runs that had ended before it started, as it would have been shown then. Per week: how many runs had an
 // estimate, the share whose real work time fell between half and double it, the median relative error, and the share
@@ -45,9 +45,7 @@ export function estimateAccuracy(runs: readonly AgentRun[], now: number, weeks =
   }));
   const withData = points.filter(p => p.hitRate !== null);
   const n = withData.reduce((s, p) => s + p.n, 0);
-  const hits = points.reduce((s, p) => s + (p.hitRate ?? 0) * p.n, 0);
-  return {
-    points, n, hitRate: n ? hits / n : null,
-    trend: withData.length >= 2 ? withData[withData.length - 1]!.hitRate! - withData[0]!.hitRate! : null,
-  };
+  const hits = Math.round(points.reduce((s, p) => s + (p.hitRate ?? 0) * p.n, 0));
+  // the count within ×2 out of n, no trend (ADR 0101: last week − first week, whatever their n, read as progress)
+  return { points, n, hits, hitRate: n ? hits / n : null };
 }

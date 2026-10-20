@@ -29,7 +29,7 @@ describe('memoryFacts', () => {
     s.skills = [{ name: 'a', rel: null, uses: 0, known: 0, ok: 0, success: null, lastUse: null, usedBy: 0, verdict: 'unused' }];
     const f = memoryFacts(s, 20);
     expect(f[0]).toMatchObject({ id: 'repeat', params: { n: 3, label: 'Avviso generico' }, file: 'ai-errors.md' });
-    expect(f.map(x => x.id)).toEqual(['repeat', 'mostRecalled', 'longest', 'unusedSkills', 'weekday', 'topWord', 'errorsTrend', 'silent']);
+    expect(f.map(x => x.id)).toEqual(['repeat', 'longest', 'unusedSkills', 'weekday', 'topWord', 'errorsTrend', 'silent']);
     expect(f.find(x => x.id === 'weekday')!.params.day).toBe(0);
     expect(memoryFacts(s).length).toBe(6);
   });

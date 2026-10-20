@@ -1,6 +1,7 @@
-// The Judge's sampled reviews (src/main/agents/judge-sample.ts, ADR 0083): which finished runs are picked (reported,
-// recent, unjudged, not a Judge's own, not reviewed yet), the daily cap and its reset, the self-contained contract the
-// Judge gets, and the review's verdict turned into the run's feedback (none without a verdict).
+// The app's sampled independent reviews (src/main/agents/judge-sample.ts, ADR 0083; a Sentinel runs them since ADR
+// 0100): which finished runs are picked (reported, recent, unjudged, not a review itself, not reviewed yet), the daily
+// cap and its reset, the self-contained contract the reviewer gets, and the review's verdict turned into the run's
+// feedback (none without a verdict; a Judge review started before ADR 0100 still counts).
 import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -21,13 +22,14 @@ const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 
 describe('pickSamples', () => {
-  it('takes reported, recent, unjudged runs that no Judge reviewed, at most n', () => {
+  it('takes reported, recent, unjudged runs that no review covered, at most n', () => {
     const runs = [
       run('1'), run('2'),
       run('3', { endedAt: undefined }),                                                      // still running
       run('4', { endReason: 'stale' }),                                                      // no result
       run('5', { endedAt: NOW - 8 * 86_400_000 }),                                           // too old
-      run('6', { agentId: 'judge' }),                                                        // a Judge's own
+      run('6', { agentId: 'judge' }),                                                        // a retired Judge's own
+      run('14', { agentId: 'sentinel', reviewOf: 'r_000000000099' }),                        // a review itself
       run('7', { outcome: { verdict: 'success', basis: 'human', by: 'user', at: 1 } }),      // the user judged it
       run('8', { outcome: { verdict: 'success', basis: 'orchestrator-opinion', by: 'p', at: 1 } }), // its parent did
       run('9', { report: undefined }),
@@ -39,7 +41,7 @@ describe('pickSamples', () => {
     expect(pickSamples(runs, new Set(), NOW, 0)).toEqual([]);
     expect(pickSamples([run('1'), run('2'), run('12')], new Set(), NOW, 2)).toHaveLength(2);
   });
-  it('gives the Judge a self-contained contract with the goal, the report, the answer and how to answer', () => {
+  it('gives the reviewer a self-contained contract with the goal, the report, the answer and how to answer', () => {
     const p = reviewPrompt(run('1'), chat('c_1'));
     expect(p).toContain('finished run of Scout «Chat c_1»');
     expect(p).toContain('Goal of that run: Trova gli errori');
@@ -59,10 +61,10 @@ describe('JudgeSampler', () => {
       refusal: () => refusal, feedback: async (a, by) => { fed.push([a, by]); }, now: () => now });
     return { s, created, fed, later: (ms: number) => { now += ms; } };
   };
-  it('starts at most judgeDaily a day, as Judge chats linked to the run on another model, then again the next day', async () => {
+  it('starts at most judgeDaily a day, as Sentinel chats linked to the run, then again the next day', async () => {
     const { s, created, later } = make([run('1'), run('2'), run('3')], 2);
     expect(await s.tick()).toBe(2);
-    expect(created[0]).toMatchObject({ harness: 'codex', roleId: 'judge', cwd: '/w' });
+    expect(created[0]).toMatchObject({ harness: 'codex', roleId: 'sentinel', cwd: '/w' });
     expect(created[0]).not.toHaveProperty('independentOf'); // a new session is the review's independence (ADR 0091)
     expect(created.map(c => c.reviewOf).every(id => id?.startsWith('r_'))).toBe(true);
     expect(await s.tick()).toBe(0);                 // the day's cap
@@ -70,7 +72,7 @@ describe('JudgeSampler', () => {
     expect(await s.tick()).toBe(1);                 // the one left, never one reviewed already
     expect(new Set(created.map(c => c.reviewOf)).size).toBe(3);
   });
-  it('never puts a delegated child\'s answer in a root Judge chat (the Orchestrator would read it)', async () => {
+  it('never puts a delegated child\'s answer in a root review chat (the Orchestrator would read it)', async () => {
     const { s, created } = make([run('1')], 2, null, id => ({ ...chat(id), parentId: 'c_parent' }));
     expect(await s.tick()).toBe(0);
     expect(created).toEqual([]);
@@ -85,15 +87,22 @@ describe('JudgeSampler', () => {
     const { s, fed } = make([run('1'), run('2')], 2);
     await s.tick();
     const [a, b] = s.list();
-    const judge = (target: string, chatId: string, verdict?: 'fail'): AgentRun => run('99', { agentId: 'judge', chatId, reviewOf: target,
+    const judge = (target: string, chatId: string, verdict?: 'fail', agentId = 'sentinel'): AgentRun => run('99', { agentId, chatId, reviewOf: target,
       report: { at: NOW, outcome: 'done', verified: 'yes', summary: 'Manca il terzo errore', ...(verdict ? { verdict } : {}) } });
     await s.ended(judge(a!.runId, a!.chatId, 'fail'));
-    expect(fed).toEqual([[{ runId: a!.runId, verdict: 'fail', notes: 'Judge: Manca il terzo errore', evidence: [{ kind: 'run', ref: 'r_000000000099', at: NOW - 3600_000 }] }, 'judge-sample']]);
+    expect(fed).toEqual([[{ runId: a!.runId, verdict: 'fail', notes: 'Sentinel: Manca il terzo errore', evidence: [{ kind: 'run', ref: 'r_000000000099', at: NOW - 3600_000 }] }, 'judge-sample']]);
     await s.ended(judge(b!.runId, b!.chatId));
     expect(fed).toHaveLength(1);
     expect(s.list().map(r => r.state)).toEqual(['recorded', 'no-verdict']);
     await s.ended(judge(a!.runId, 'c_other', 'fail'));  // not the chat we started: ignored
     expect(fed).toHaveLength(1);
+  });
+  it('still records a Judge review started before ADR 0100 when it ends, under its successor\'s name', async () => {
+    const { s, fed } = make([run('1')], 2);
+    await s.tick();
+    const [a] = s.list();
+    await s.ended(run('98', { agentId: 'judge', chatId: a!.chatId, reviewOf: a!.runId, report: { at: NOW, outcome: 'done', verified: 'yes', summary: 'Ok', verdict: 'success' } }));
+    expect(fed).toMatchObject([[{ runId: a!.runId, verdict: 'success', notes: 'Sentinel: Ok' }, 'judge-sample']]);
   });
   it('passes over a run whose chat is gone or is a delegated child\'s and still fills the day (issue #112)', async () => {
     const { s, created } = make([run('1'), run('2'), run('3')], 2, null, id => id === 'c_1' ? undefined as unknown as ChatSummary : id === 'c_2' ? { ...chat(id), parentId: 'p' } : chat(id));

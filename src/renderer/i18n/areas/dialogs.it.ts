@@ -151,6 +151,7 @@ export const dialogsIt = {
   'dialogs.sidebar.label': 'Sezioni',
   'dialogs.sidebar.work': 'Lavoro',
   'dialogs.sidebar.brain': 'Brain',
+  'dialogs.sidebar.trends': 'Andamento',
   'dialogs.sidebar.app': 'App',
   'dialogs.sidebar.map': 'Mappa 3D',
   'dialogs.sidebar.mapShortcut': 'Ctrl+Shift+M',
@@ -173,8 +174,8 @@ export const dialogsIt = {
   'dialogs.launch.dismissTip': 'Chiudi',
 
   // BrainSetupBanner
-  'dialogs.brainSetup.notConnected': 'Il cervello non è collegato.',
-  'dialogs.brainSetup.pickButton': 'Scegli la cartella del cervello',
+  'dialogs.brainSetup.notConnected': 'Il brain non è collegato.',
+  'dialogs.brainSetup.pickButton': 'Scegli la cartella del brain',
   'dialogs.brainSetup.picking': 'Apro…',
 
   // LinkPeek

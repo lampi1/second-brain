@@ -1,6 +1,6 @@
 // The cartoon characters the roles are drawn as (shared/characters.ts): a round badge in the role's own colour with a
 // friendly face, the hair or headwear that makes the silhouette (the conductor's swept hair, the scout's wide hat, the
-// judge's curled wig…) and one prop. Trusted code, never user or model content: AgentAvatar renders these shapes, and
+// sentinel's visored helmet…) and one prop. Trusted code, never user or model content: AgentAvatar renders these shapes, and
 // scripts/agent-avatar-sheets.mjs draws the approval sheets and checks the colours from the same data. Two variants:
 // the full one (24 px and up: face details and the prop) and a small one (16–20 px) that frames the head closer and
 // keeps only the badge colour, the silhouette, plain eyes and glasses. Coordinates in a 64 × 64 box, absolute path
@@ -123,39 +123,6 @@ export const CHARACTERS: Record<CharacterId, Character> = {
     prop: [P('M5.6 34.4L14 40L14 43.2L5.6 48.6Z', '#f2c14e'), E(5.6, 41.5, 1.8, 7, '#d9a52e'), S('M14 41.6L21.4 43.6', '#f2c14e', 2.4),
       P('M10.6 43.2L19 45.4L18.4 52.4L14.6 50.4L10.8 51.6Z', '#e2483d'), C(22.4, 44, 2.5, '#f7d6ba')],
     face: { eyes: 'open', mouth: 'open', brows: 'raised', brow: '#6e3a1c' },
-  },
-  router: {
-    bg: ['#ffd84a', '#ef9f00'], skin: '#8d5636',
-    back: [C(32, 23.6, 15.6, '#2a1a14'), C(19.6, 30, 6.6, '#2a1a14'), C(44.4, 30, 6.6, '#2a1a14')],
-    body: [BODY('#227c74'), P('M25.6 47.6L32 52.2L38.4 47.6L40 50.2L32 55.6L24 50.2Z', '#f5f5f5')],
-    head: [P('M20.4 29.4C20.4 22.4 25 19.6 32 19.6C39 19.6 43.6 22.4 43.6 29.4C40 26.2 36 25.2 32 25.2C28 25.2 24 26.2 20.4 29.4Z', '#2a1a14'),
-      S('M17.4 31C17 13.6 47 13.6 46.6 31', '#5d6371', 2.8), S('M20.6 20.6C24.6 16.6 30 15.6 34.6 16', '#8a91a0', 0.9), E(18.2, 33, 3.2, 4.4, '#454a55'), E(45.8, 33, 3.2, 4.4, '#454a55'),
-      E(18.2, 33, 1.5, 2.6, '#ff7a45'), E(45.8, 33, 1.5, 2.6, '#ff7a45'),
-      S('M18.2 37.2C19 42 23 43.6 27 42.8', '#454a55', 1.6), C(27.6, 42.6, 1.6, '#ff7a45')],
-    prop: [S('M50.6 40V55.4', '#6b4423', 2.2), P('M43.6 36.6H54.2L57 39.4L54.2 42.2H43.6Z', '#ffffff'), P('M57 44.4H47L44.2 47.2L47 50H57Z', '#2f6fde')],
-    face: { eyes: 'open', mouth: 'smile', brows: 'soft', brow: '#1a100c' },
-  },
-  judge: {
-    bg: ['#8e98ae', '#4b556c'], skin: '#efc19c',
-    back: [P('M18 30C18 20 24 14.4 32 14.4C40 14.4 46 20 46 30Z', '#e9e9ef'),
-      C(17.4, 30.4, 4.3, '#f4f4f7'), C(17, 37, 4.3, '#f4f4f7'), C(17.6, 43.6, 4.3, '#e2e2ea'),
-      C(46.6, 30.4, 4.3, '#f4f4f7'), C(47, 37, 4.3, '#f4f4f7'), C(46.4, 43.6, 4.3, '#e2e2ea')],
-    body: [BODY('#1b1b24'), P('M29.4 48L34.6 48L34 53L35.6 57.4L32 56.4L28.4 57.4L30 53Z', '#f6f6f8')],
-    head: [P('M19.4 29C19 20.4 24.4 15.4 32 15.4C39.6 15.4 45 20.4 44.6 29C43 25.4 40 23 36 23C34.6 24.2 33 24.6 32 24.6C31 24.6 29.4 24.2 28 23C24 23 21 25.4 19.4 29Z', '#fafafc'),
-      S('M23 21.2C25 19.2 27.4 19.2 29 21.2M29 18.6C31 16.8 33.4 16.8 35 18.6M35 21.2C36.6 19.2 39 19.2 41 21.2', '#c9cad6', 1.1)],
-    prop: [S('M49.4 41.4L55.2 50', '#8a5530', 2.4), P('M43.6 40.2L52 35L54.4 38.8L46 44Z', '#a8693a'), S('M45.4 39.2L47.8 43M50.4 36L52.8 39.8', '#e0b067', 1)],
-    face: { eyes: 'open', mouth: 'flat', brows: 'stern', brow: '#8b8f9c' },
-  },
-  scribe: {
-    bg: ['#f062aa', '#a92c72'], skin: '#c88a5c',
-    back: [S('M25.6 9.6L38.6 15.6', '#f2c14e', 1.6), C(32, 13.6, 6, '#7b3f20'),
-      P('M18.4 40C16.4 26 22 17 32 17C42 17 47.6 26 45.6 40C44 41.6 42 41.6 41 40L23 40C22 41.6 20 41.6 18.4 40Z', '#86441f')],
-    body: [BODY('#2f8f8a'), P('M25.6 47.6L32 51.6L30 54.6L24.4 50ZM38.4 47.6L32 51.6L34 54.6L39.6 50Z', '#ffffff'), C(32, 57, 1, '#1f6964'), C(32, 61, 1, '#1f6964')],
-    head: [P('M20.4 31C20 22.4 25 18 32 18C39 18 44 22.4 43.6 31C42 27 39.6 24 35 23.4C31 25.6 25.6 27.8 20.4 31Z', '#9a5229')],
-    wear: [R(27.3, 32.4, 3.4, '#3a2626', 1.3), R(36.7, 32.4, 3.4, '#3a2626', 1.3), S('M30.7 32.2H33.3', '#3a2626', 1.3)],
-    prop: [P('M57 30C50.6 31 45.6 37.8 44.6 47C47.6 41.8 51 39 55.6 37.8C53.4 37.4 51.6 37.6 50.2 38.2C52 35.6 54.4 33.4 57 30Z', '#ffffff'),
-      S('M56 31.2C51 35.6 47 41 44.8 48.6', '#e3cfe0', 0.9), S('M44.8 48.6L43.6 52.2', INK, 1.6)],
-    face: { eyes: 'calm', mouth: 'smile', brows: 'soft', brow: '#5e2f17' },
   },
   pulse: {
     bg: ['#43c4f2', '#1477b6'], skin: '#9a6040',

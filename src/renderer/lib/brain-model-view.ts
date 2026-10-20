@@ -5,6 +5,7 @@
 // test/unit/brain-ui/brain-model-view.test.ts.
 import type { BrainChange, BrainModelState, BrainSkill, ClassifierChoice, MemoryFile } from '@shared/brain-model';
 import type { SkillCatalog, SkillEntry } from '@shared/contract';
+import { formatCost } from './format';
 
 export type SkillRowHome = BrainSkill['home'] | 'cursor';
 export interface SkillRow {
@@ -82,6 +83,7 @@ export const choiceMatch = (c: ClassifierChoice): 'same' | 'differ' | 'none' => 
 
 /** 0.5 → "50%"; null stays null (the page says "no data yet"). */
 export const pct = (v: number | null, locale = 'it-IT'): string | null => (v === null ? null : new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 }).format(v));
-export const usd = (v: number | null, locale = 'it-IT'): string | null => (v === null ? null : new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD', maximumFractionDigits: v < 1 ? 3 : 2 }).format(v));
+/** the app's one money format (lib/format.ts formatCost, ADR 0101); the locale is the UI's */
+export const usd = (v: number | null, _locale?: string): string | null => (v === null ? null : formatCost(v));
 /** A route or week without data: every value null and no run. */
 export const noData = (weeks: { runs: number; success: number | null; avgCostUsd: number | null }[]): boolean => weeks.every(w => !w.runs && w.success === null && w.avgCostUsd === null);

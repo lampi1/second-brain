@@ -25,9 +25,9 @@ const pick = <T,>(r: () => number, xs: readonly [T, number][]): T => {
 const KINDS: [string, number, [string, number][], string, number][] = [
   ['bug-fix', 30, [['artisan', 7], ['scout', 3]], 'claude-opus-5-5', 1.9],
   ['investigation', 20, [['scout', 9], ['strategist', 1]], 'claude-sonnet-5-5', 1.1],
-  ['review', 14, [['judge', 6], ['sentinel', 4]], 'claude-sonnet-5-5', 0.7],
+  ['review', 14, [['sentinel', 10]], 'claude-sonnet-5-5', 0.7],
   ['qa-run', 10, [['sentinel', 1]], 'claude-sonnet-5-5', 0.9],
-  ['writing', 9, [['scribe', 8], ['herald', 2]], 'claude-haiku-5-5', 0.3],
+  ['writing', 9, [['artisan', 8], ['herald', 2]], 'claude-haiku-5-5', 0.3],
   ['app-feature', 8, [['artisan', 1]], 'claude-opus-5-5', 3.4],
   ['ops-read', 4, [['scout', 1]], 'claude-haiku-5-5', 0.2],
 ];

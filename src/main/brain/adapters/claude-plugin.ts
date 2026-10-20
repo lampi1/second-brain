@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { errText, log } from '../../log';
 import { enabled, installHooks, productSignature } from '../../rules/delivery';
+import type { LaunchFacts } from '../../rules/types';
 import { productInstructions } from '../../rules/instructions';
 import { configOf } from '../../rules/storage';
 import { APP_PLUGIN_PARTS, ensureTools, isProduct, templateHooks } from '../../rules/tools';
@@ -22,6 +23,8 @@ import { memoryInstructions } from '../../rules/new-brain';
 import { isDir, launchRules, readText, resolvePlaceholders, instructionsOf, type BrainDomain } from './domains';
 
 export const PLUGIN_NAME = 'second-brain';
+/** how the product hooks are delivered (in process but Stop, ADR 0103): part of the plugin's signature */
+const HOOKS_LAYOUT = 'hooks:in-process-v1';
 /** what is copied from each domain's .claude folder into the plugin, and as which plugin folder */
 const PARTS: readonly { from: string; to: string }[] = [
   { from: '.claude/skills', to: 'skills' },
@@ -32,7 +35,10 @@ const PARTS: readonly { from: string; to: string }[] = [
 const TEXT = /\.(md|json|txt|ya?ml|toml)$/i;
 const MAX_FILE = 2_000_000;
 
-export interface ClaudeLaunch { args: string[]; pluginDir: string | null; rulesFile: string | null }
+export interface ClaudeLaunch { args: string[]; pluginDir: string | null; rulesFile: string | null;
+  /** a product brain: the session answers the product hooks but Stop in process (rules/delivery.ts IN_PROCESS_EVENTS) */
+  productHooks?: ProductHooks }
+export interface ProductHooks { root: string; state: string; launch: LaunchFacts }
 
 /** Legacy brains fail open with a warning. Migrated brains fail closed if product hooks cannot be delivered. */
 /** `skills: false` = a role chat: the brain's skills stay out (its launch's own plugin carries the ones it was given). */
@@ -53,7 +59,8 @@ export function claudeLaunch(userData: string, input?: { domains: BrainDomain[];
     const files = collect(domains, tools && configOf(root).appRules ? tools : null).filter(f => !noSkills || !f.rel.split(/[\\/]/)[0]!.startsWith('skills'));
     const productText = productInstructions(root, false, tools ? tools.replace(/\\/g, '/') : undefined);
     let instructions = productText === null ? instructionsOf(domains) : [productText, instructionsOf(domains.slice(1))].filter(Boolean).join('\n\n');
-    const sig = signature(files, (instructions ?? '') + productSignature(root));
+    // HOOKS_LAYOUT: a plugin built before the in-process hooks still runs every event as a process: rebuilt once
+    const sig = signature(files, (instructions ?? '') + productSignature(root) + HOOKS_LAYOUT);
     // A running chat keeps its exact product/root binding when another brain is selected or a release changes.
     const dir = path.join(base, product ? `${PLUGIN_NAME}-${sig}` : `${PLUGIN_NAME}${noSkills ? '-roles' : ''}`);
     const rulesFile = product ? path.join(dir, 'rules.md') : path.join(base, 'rules.md');
@@ -62,9 +69,11 @@ export function claudeLaunch(userData: string, input?: { domains: BrainDomain[];
     if (instructions) { if (readText(rulesFile) !== instructions) fs.writeFileSync(rulesFile, instructions); }
     else fs.rmSync(rulesFile, { force: true });
     const hasParts = files.length > 0 || product;
+    const fwd = tools?.replace(/\\/g, '/');
     return {
       args: [...(hasParts ? ['--plugin-dir', dir] : []), ...(instructions ? ['--append-system-prompt-file', rulesFile] : [])],
       pluginDir: hasParts ? dir : null, rulesFile: instructions ? rulesFile : null,
+      ...(product && enabled(root) ? { productHooks: { root, state: path.join(base, 'rule-state'), launch: fwd ? { tools: fwd, correctionHook: true } : {} } } : {}),
     };
   } catch (e) {
     if (product) throw e; // a migrated brain must never silently lose its safety hooks
@@ -127,7 +136,7 @@ function build(base: string, dir: string, files: readonly Src[], domains: readon
   fs.mkdirSync(base, { recursive: true });
   const tmp = path.join(base, `.${PLUGIN_NAME}-${process.pid}-${Date.now()}`);
   fs.mkdirSync(path.join(tmp, '.claude-plugin'), { recursive: true });
-  fs.writeFileSync(path.join(tmp, '.claude-plugin', 'plugin.json'), `${JSON.stringify({ name: PLUGIN_NAME, description: 'Le regole del cervello (generato da second-brain: non modificare qui)', version: '0.0.0' }, null, 2)}\n`);
+  fs.writeFileSync(path.join(tmp, '.claude-plugin', 'plugin.json'), `${JSON.stringify({ name: PLUGIN_NAME, description: 'Le regole del brain (generato da second-brain: non modificare qui)', version: '0.0.0' }, null, 2)}\n`);
   for (const f of files) {
     const to = path.join(tmp, f.rel);
     fs.mkdirSync(path.dirname(to), { recursive: true });
@@ -136,7 +145,8 @@ function build(base: string, dir: string, files: readonly Src[], domains: readon
   }
   const root = domains[0]!.root;
   const fwdTools = tools?.replace(/\\/g, '/');
-  installHooks(tmp, root, path.join(base, 'rule-state'), undefined, fwdTools ? { tools: fwdTools, correctionHook: true } : {});
+  // the runner in hooks.json serves only Stop: the session answers the others in process (claudeLaunch productHooks)
+  installHooks(tmp, root, path.join(base, 'rule-state'), undefined, fwdTools ? { tools: fwdTools, correctionHook: true } : {}, ['Stop']);
   if (fwdTools && enabled(root)) addHooks(tmp, templateHooks(root, fwdTools));
   fs.writeFileSync(path.join(tmp, '.signature'), sig);
   const old = `${dir}.old-${Date.now()}`;

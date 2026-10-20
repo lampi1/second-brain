@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ChatManager, type ChatManagerOptions } from '../../../src/main/chats/manager';
-import { ORCHESTRATOR_COMPACT, ORCHESTRATOR_DAY_IDLE_MS, ORCHESTRATOR_DAY_MIN, orchestratorDayDue, romeDay, type OrchestratorDayView } from '../../../src/main/chats/continuity';
+import { CACHE_TTL_MS, continuityStep, ORCHESTRATOR_COMPACT, ORCHESTRATOR_DAY_IDLE_MS, ORCHESTRATOR_DAY_MIN, ORCHESTRATOR_PAUSE_COMPACT, ORCHESTRATOR_WARM_MIN, orchestratorDayDue, orchestratorWarmDue, romeDay, type ColdView, type OrchestratorDayView } from '../../../src/main/chats/continuity';
 import { FAKE, recEmitter, tmp, waitFor } from './helpers';
 
 const DAY = 86_400_000;
@@ -32,6 +32,22 @@ describe('orchestrator day rule', () => {
   it('the summary keeps what the Orchestrator needs to go on', () => {
     expect(ORCHESTRATOR_COMPACT.startsWith('/compact ')).toBe(true);
     for (const w of ['chats you coordinate', 'questions for the user', 'decisions', 'background', "user's language"]) expect(ORCHESTRATOR_COMPACT).toContain(w);
+  });
+});
+
+describe('orchestrator pause rule (compact before the cache expires)', () => {
+  const IDLE = 50 * 60_000;
+  const c: ColdView = { harness: 'claude', isOrchestrator: true, state: 'idle', pending: 0, background: 0, busy: false, alive: true, handoffTurn: false,
+    contextTokens: 120_000, lastTurnAt: NOW - IDLE, noteAt: 0, lastCallAt: NOW - IDLE };
+  it('a long, quiet Orchestrator compacts once per pause, while its cache is warm', () => {
+    expect(orchestratorWarmDue(c, NOW, IDLE)).toBe(true);
+    for (const x of [
+      { isOrchestrator: false }, { harness: 'cursor' }, { state: 'running' }, { pending: 1 }, { busy: true }, { alive: false },
+      { contextTokens: ORCHESTRATOR_WARM_MIN - 1 }, { lastCallAt: NOW - IDLE + 1 }, { lastCallAt: NOW - CACHE_TTL_MS - 1 }, { askedFor: NOW - IDLE },
+    ] satisfies Partial<ColdView>[]) expect(orchestratorWarmDue({ ...c, ...x }, NOW, IDLE), JSON.stringify(x)).toBe(false);
+    expect(continuityStep({ ...c, ctxSince: NOW - IDLE, askedOn: undefined }, NOW, { cold: true, day: true, idleMs: IDLE })).toBe('pause');
+    expect(continuityStep({ ...c, ctxSince: NOW - IDLE, askedOn: undefined }, NOW, { cold: true, day: false, idleMs: IDLE })).toBeNull();
+    expect(ORCHESTRATOR_PAUSE_COMPACT.startsWith('/compact ')).toBe(true);
   });
 });
 

@@ -30,7 +30,7 @@ test('setup wizard: one modal, sign-in waits in place, resumable', async () => {
 
     // 1 memory
     await expect(setup.getByText('Passo 1 di 7')).toBeVisible();
-    await expect(title).toHaveText('La tua memoria e i tuoi progetti');
+    await expect(title).toHaveText('Il tuo brain e i tuoi progetti');
     await expect(setup.getByTestId('setup-memory')).toBeVisible();
     await shot(page, 'setup-modal-1-memory');
 

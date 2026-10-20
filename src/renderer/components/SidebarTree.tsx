@@ -35,7 +35,7 @@ function rowState(c: ChatSummary): ChildState {
 }
 
 export function SidebarTree() {
-  const tree = useApp(s => chatTree(s.order.filter(id => !s.chats[id]?.isOrchestrator), s.chats), sameTree);
+  const tree = useApp(s => chatTree(s.order.filter(id => !s.chats[id]?.isOrchestrator && !s.chats[id]?.quick), s.chats), sameTree);
   const orch = useApp(s => Object.values(s.chats).find(c => c?.isOrchestrator && !c.closedAt)?.id ?? null);
   const started = useApp(s => tree.filter(n => n.depth === 0 && s.chats[n.id]?.run?.startedBy === 'orchestrator').length);
   const collapsed = ui.use(s => s.prefs.treeCollapsed);

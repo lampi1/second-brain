@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { REACTION_RULE, isReaction } from '../../src/shared/reaction';
 import { ORCHESTRATOR_ROLE, RETIRED_LINES, WAKE_RULE, orchestratorRole, roleFrame } from '../../src/main/agents/orchestrator-role';
+import { PRE_ADR0100_INSTRUCTIONS } from '../../src/main/agents/role-migrate';
 import { ROLE_DEFAULTS } from '../../src/shared/roles';
 import { wakeMessage } from '../../src/main/chats/orchestrator-wake';
 
@@ -48,5 +49,12 @@ describe('the Orchestrator frame says each thing once (owner, 2026-10-20)', () =
     expect(orchestratorRole().match(/task_estimate/g)).toHaveLength(1);
     // a line the user edited is kept as written
     expect(orchestratorRole(`${oldRoles} (mia nota)`)).toContain('(mia nota)');
+  });
+  it('the pre-ADR 0100 line that named the Router gets today\'s, also in a text the user edited elsewhere', () => {
+    const lines = (PRE_ADR0100_INSTRUCTIONS.orchestrator ?? '').split('\n');
+    expect(lines[1]).toMatch(/Router/);
+    const stored = [`${lines[0]} (mia nota)`, ...lines.slice(1)].join('\n');
+    expect(orchestratorRole(stored)).toContain('(mia nota)');
+    expect(orchestratorRole(stored)).not.toMatch(/Router/);
   });
 });

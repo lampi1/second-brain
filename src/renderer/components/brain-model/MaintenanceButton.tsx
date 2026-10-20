@@ -35,7 +35,7 @@ export function MaintenanceButton({ testId = 'bm-maint-now' }: { testId?: string
       <IconSparkle /> {busy ? t('mm.maint.running') : t('mm.maint.button')}
     </button>
     <span className="mm-maint-last">{state?.lastRun ? t('bm.maint.last', { at: when(state.lastRun.at) }) : t('bm.maint.never')}</span>
-    <HelpTip title={t('mm.maint.helpTitle')} label={t('mm.maint.button')} wide>
+    <HelpTip title={t('mm.maint.helpTitle')} label={t('mm.maint.button')} wide guide="maintenance">
       <p>{t('mm.maint.help1')}</p><p>{t('mm.maint.help2')}</p>
     </HelpTip>
     {open && <Modal onClose={() => setOpen(false)} label={t('mm.maint.dialog')} testid={`${testId}-dialog`} className="mm-maint-modal">

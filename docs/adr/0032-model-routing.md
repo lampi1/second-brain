@@ -23,8 +23,8 @@ one cache-read factor) did not match the real per-model prices.
   The area is the title's label (`areaOf`, the same as the estimates). The estimates keep their own kinds.
 - **The table** lives in the brain: `ops/state/improve/routing/v<N>.json` + `current.json` `{version, appliedAt, by}`;
   every save is a new version plus one line in `ops/state/improve/audit.jsonl`; old versions stay. A row is
-  `{kind | '*', area?, harness, model, effort, why, since, evidence}`; the most specific row wins (kind and area > area
-  > kind > any; an area row beats a kind-only row since 2026-10-14, so "App · any" keeps every app chat on its model: an area row carries a rule of the user's ("i lavori sull'app sempre
+  `{kind | '*', area?, harness, model, effort, why, since, evidence}`; the most specific row wins (kind and area > area >
+  kind > any; an area row beats a kind-only row since 2026-10-14, so "App · any" keeps every app chat on its model: an area row carries a rule of the user's ("i lavori sull'app sempre
   in opus medio"), a kind-only row is a guess on the kind read from the title and the one the brain's loop changes, so
   a kind row never takes an area's chats; the stable build before that ranked kind first and sent an "App · …" chat
   read as qa-run to Sonnet). The brain's `ops/tools/routing.mjs` and the app's `brain/routing.ts` apply the same rules.
@@ -109,4 +109,4 @@ one cache-read factor) did not match the real per-model prices.
 - A Cursor chat titled "App · …" is now refused; an agent must use another title or Claude.
 - No new dependency.
 
-> Chat-space behavior below is historical: [ADR 0071](0071-all-workers-in-grindhouse.md) removes the app partition. All workers live in the Grindhouse; source-code launch checks remain.
+> Chat-space behavior above is historical: [ADR 0071](0071-all-workers-in-grindhouse.md) removes the app partition. All workers live in the Grindhouse; source-code launch checks remain.

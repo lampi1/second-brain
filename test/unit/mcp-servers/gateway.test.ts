@@ -74,14 +74,14 @@ describe('MCP gateway', () => {
 
   it('a role without the server, a policy without mcp, a wrong token and an unknown chat get nothing', async () => {
     const { svc, base } = await setup({
-      judge: { roles: ['judge'], policy: null },
+      sentinel: { roles: ['sentinel'], policy: null },
       noMcp: { roles: ['scout'], policy: { tools: { allow: ['read'] }, ceiling: null } },
       named: { roles: ['scout'], policy: { tools: { allow: ['read', 'mcp'], mcp: ['docs'] }, ceiling: null } },
     });
     svc.save({ def: ado }); svc.save({ def: docs });
-    svc.setAccess({ role: 'judge', server: 'ado', access: 'none' });
-    expect(svc.launch('judge', base)).toEqual({ servers: [expect.objectContaining({ name: 'docs' })], denied: ['ado'] });
-    const docsUrl = svc.launch('judge', base).servers[0]!.url;
+    svc.setAccess({ role: 'sentinel', server: 'ado', access: 'none' });
+    expect(svc.launch('sentinel', base)).toEqual({ servers: [expect.objectContaining({ name: 'docs' })], denied: ['ado'] });
+    const docsUrl = svc.launch('sentinel', base).servers[0]!.url;
     expect((await rpc(docsUrl.replace('/docs/', '/ado/'), 'tools/list')).status).toBe(404);
     expect((await rpc(docsUrl.replace(/[^/]+$/, 'wrong-token'), 'tools/list')).status).toBe(404);
     expect(svc.launch('noMcp', base)).toEqual({ servers: [], denied: ['ado', 'docs'] });

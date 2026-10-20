@@ -115,7 +115,7 @@ describe('agent tool policy', () => {
     // a Scout under an Artisan keeps its read-only commands and browser
     expect(narrowest(scout, artisan)?.tools?.allow.sort()).toEqual(['browser-read', 'read', 'shell-read', 'web']);
     expect(narrowest(artisan, scout)?.tools?.allow.sort()).toEqual(['browser-read', 'read', 'shell-read', 'web']);
-    // a Scribe under a parent that edits anywhere keeps brain-write; under a read-only one it does not
+    // a brain-only role under a parent that edits anywhere keeps brain-write; under a read-only one it does not
     expect(narrowest(policy(['read', 'brain-write']), artisan)?.tools?.allow.sort()).toEqual(['brain-write', 'read']);
     expect(narrowest(policy(['read', 'brain-write']), policy(['read', 'web']))?.tools?.allow).toEqual(['read']);
     // the narrow class never stands for the wide one
@@ -236,5 +236,14 @@ describe('read-only commands (shell-read)', () => {
     expect(shellWithin({ tools: { allow: ['read'] }, ceiling: null }, 'Bash', { command: 'ls' })).toBe(false);
     expect(shellWithin({ tools: { allow: ['shell'] }, ceiling: null }, 'Bash', { command: 'rm x' })).toBe(true);
     expect(shellWithin(null, 'Bash', { command: 'rm x' })).toBe(true);
+  });
+});
+
+describe('the sub-agent tool (Explore searches, token plan 2026-10-20)', () => {
+  it('only a policy with every tool class gets Agent/Task; a narrowed one never does', async () => {
+    const { claudeTools } = await import('../../src/main/agents/tool-policy');
+    const { TOOL_CLASSES } = await import('../../src/shared/agents');
+    expect(claudeTools({ allow: [...TOOL_CLASSES] })).toEqual(expect.arrayContaining(['Agent', 'Task']));
+    expect(claudeTools({ allow: ['read', 'shell-read'] })).not.toContain('Agent');
   });
 });

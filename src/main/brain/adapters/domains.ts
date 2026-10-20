@@ -52,7 +52,7 @@ export function instructionsOf(domains: readonly BrainDomain[], maxChars = 60_00
   }
   if (!parts.length) return null;
   const all = parts.join('\n\n');
-  return all.length > maxChars ? `${all.slice(0, maxChars)}\n\n[… troncato: le regole del cervello superano ${maxChars} caratteri]` : all;
+  return all.length > maxChars ? `${all.slice(0, maxChars)}\n\n[… troncato: le regole del brain superano ${maxChars} caratteri]` : all;
 }
 
 /** The existing skill folders of the domains (each holds <name>/SKILL.md), in the given sub-paths. */

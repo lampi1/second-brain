@@ -5,7 +5,8 @@
 // request beyond its parent's permissions and a hidden sub-agent are refused visibly; a skill works only when its
 // launch gave it; with the full default permissions (ADR 0085) a planner launches the writing roles again, and the
 // narrowing is pinned with roles a user narrowed back to ADR 0083's restrictive policies (`narrowed`); a root chat the
-// Orchestrator opened reports to it with agent_report (issue #93). Pins agents/delegation.ts, agents/role-gate.ts and
+// Orchestrator opened reports to it with agent_report (issue #93), quietly when the result is clean; a child's result
+// waits for its siblings' so the parent reads them in one turn. Pins agents/delegation.ts, agents/role-gate.ts and
 // the delegation part of chats/manager.ts.
 import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
@@ -16,7 +17,7 @@ import type { HarnessSession, SessionOptions, SessionSink } from '../../../src/m
 import { delegationTools, stalledMin } from '../../../src/main/agents/delegation';
 import { gateRequest } from '../../../src/main/agents/role-gate';
 import { ROLE_DEFAULTS, ROLE_IDS, WORK_ROLE_IDS, DELEGATION_DEFAULTS, isWorkRole, launchGap, type DelegationSettings, type RoleId } from '../../../src/shared/roles';
-import { checkContract, checkResult, delegationPrompt, depthOf, resultMessage } from '../../../src/shared/delegation';
+import { checkContract, checkResult, delegationPrompt, depthOf, readDelegation, resultMessage } from '../../../src/shared/delegation';
 import { AGENT_LABEL, oneLine } from '../../../src/shared/agent-label';
 import type { AgentCatalog } from '../../../src/shared/agents';
 import type { NewChat } from '../../../src/shared/contract';
@@ -74,13 +75,13 @@ function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: str
 }
 
 describe('agent_delegate', () => {
-  it('a Strategist launches a Scout and a Judge at once: two children under it, each with its contract only, and their results come back', async () => {
+  it('a Strategist launches a Scout and a Sentinel at once: two children under it, each with its contract only, and their results come back', async () => {
     const f = fixture();
     const parent = await f.root('strategist');
-    const out = await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Log'), f.task('judge', 'Ordini · Verdetto')] });
-    expect(out.children.map((c: { role: string }) => c.role)).toEqual(['scout', 'judge']);
+    const out = await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Log'), f.task('sentinel', 'Ordini · Verdetto')] });
+    expect(out.children.map((c: { role: string }) => c.role)).toEqual(['scout', 'sentinel']);
     const kids = f.m.list().filter(c => c.parentId === parent.id);
-    expect(kids.map(k => k.delegation?.role)).toEqual(['scout', 'judge']);
+    expect(kids.map(k => k.delegation?.role)).toEqual(['scout', 'sentinel']);
     for (const k of kids) {
       const first = f.sent.get(k.id)?.[0] ?? '';
       expect(first).toContain(`Goal of ${k.title}`);
@@ -95,8 +96,13 @@ describe('agent_delegate', () => {
     const r = await f.call('agent_report', scout.id, { outcome: 'done', summary: 'Trovati 3 errori', output: 'log…', doneWhen: [{ criterion: 'criterion A', met: true, evidence: 'logs/x' }] });
     expect(r).toMatchObject({ reported: true, parentId: parent.id, delivered: true });
     await new Promise(res => setTimeout(res, 20));
+    // its sibling still owes its result: the parent gets both in one message (one turn), not one turn per child
+    expect(f.sent.get(parent.id)!.some(t => t.includes('[risultato · Scout'))).toBe(false);
+    await f.call('agent_report', kids[1]!.id, { outcome: 'partial', summary: 'Da rivedere', output: 'v', doneWhen: [{ criterion: 'criterion A', met: false }] });
+    await new Promise(res => setTimeout(res, 20));
     const back = f.sent.get(parent.id)!.at(-1)!;
     expect(back).toContain('[risultato · Scout «Ordini · Log»] Trovati 3 errori');
+    expect(back).toContain('[risultato · Sentinel «Ordini · Verdetto»] Da rivedere');
     expect(back).toContain('"criterion":"criterion A"');
     expect(f.m.list().find(c => c.id === scout.id)?.delegation?.result).toMatchObject({ outcome: 'done', summary: 'Trovati 3 errori' });
     expect(f.m.runs.get(scout.run!.runId)?.report).toMatchObject({ outcome: 'done', verified: 'yes' });
@@ -104,6 +110,17 @@ describe('agent_delegate', () => {
     const listed = await f.call('agent_children', parent.id, {});
     expect(listed.children).toHaveLength(2);
     expect(listed.children[0]).toMatchObject({ role: 'scout', result: { outcome: 'done' } });
+  });
+
+  it('a child\'s result waits for its siblings at most childResultsMs, then goes alone', async () => {
+    const f = fixture();
+    (f.m as unknown as { opts: { childResultsMs: number } }).opts.childResultsMs = 30;
+    const parent = await f.root('strategist');
+    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'A · uno'), f.task('scout', 'A · due')] });
+    const kids = f.m.list().filter(c => c.parentId === parent.id);
+    await f.call('agent_report', kids[0]!.id, { outcome: 'done', summary: 'Uno fatto', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }] });
+    await new Promise(res => setTimeout(res, 80));
+    expect(f.sent.get(parent.id)!.at(-1)).toContain('Uno fatto');
   });
 
   it('agent_report remember writes to the reporting role\'s memory, only once the report is accepted', async () => {
@@ -189,8 +206,10 @@ describe('agent_delegate', () => {
 
   it('every default launch fits (every role has every permission); under a planner the user narrowed, a role that needs more is refused, visibly', async () => {
     for (const id of WORK_ROLE_IDS) for (const kid of ROLE_DEFAULTS[id].launches) expect([id, kid, launchGap(ROLE_DEFAULTS[kid].tools, ROLE_DEFAULTS[id].tools)]).toEqual([id, kid, []]);
-    expect(ROLE_DEFAULTS.strategist.launches).toEqual(['scout', 'artisan', 'sentinel', 'herald', 'judge', 'scribe']);
-    expect(ROLE_DEFAULTS.router.launches).toEqual(['scout', 'artisan', 'sentinel', 'herald', 'judge', 'scribe', 'strategist']);
+    expect(ROLE_DEFAULTS.strategist.launches).toEqual(['scout', 'artisan', 'sentinel', 'herald']);
+    expect(ROLE_DEFAULTS.artisan.launches).toEqual(['scout', 'sentinel']);
+    expect(ROLE_DEFAULTS.sentinel.launches).toEqual(['scout']);
+    expect(ROLE_DEFAULTS.herald.launches).toEqual(['scout']);
     // read-only classes are narrowed away, never a reason to refuse; a writing class is
     expect(launchGap(['read', 'web', 'shell-read', 'browser-read'], ['read'])).toEqual([]);
     expect(launchGap(['read', 'edit', 'shell'], ['read', 'web'])).toEqual(['edit', 'shell']);
@@ -200,9 +219,9 @@ describe('agent_delegate', () => {
     const planner = await edited.root('strategist');
     await expect(edited.call('agent_delegate', planner.id, { tasks: [edited.task('artisan', 'Fix')] })).rejects.toThrow(/Artisan needs edit, shell, browser.*the Orchestrator starts it/);
     expect(edited.m.list().filter(c => c.parentId === planner.id)).toEqual([]);
-    const f = fixture({}, undefined, () => { const c = catalog(NARROW); c.profiles.find(p => p.id === 'strategist')!.launches.push('scribe'); return c; }, undefined, NARROW);
+    const f = fixture({}, undefined, () => { const c = catalog(NARROW); c.profiles.find(p => p.id === 'strategist')!.launches.push('herald'); return c; }, undefined, NARROW);
     const parent = await f.root('strategist');
-    await expect(f.call('agent_delegate', parent.id, { tasks: [f.task('scribe', 'Brain · Nota')] })).rejects.toThrow(/brain-write/);
+    await expect(f.call('agent_delegate', parent.id, { tasks: [f.task('herald', 'Clienti · Avviso')] })).rejects.toThrow(/mail-draft, mcp/);
     expect(f.m.list().filter(c => c.parentId === parent.id)).toEqual([]);
   });
 
@@ -317,7 +336,12 @@ describe('agent_delegate', () => {
     const herald = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'herald', title: 'Issue · Bozza', prompt: 'prepara la issue' }, 'agent');
     // only the Orchestrator's Claude session gets the per-turn workspace budget (ADR 0090, issue #98)
     expect(f.starts.get(orchestrator.id)?.preToolUse).toBeTruthy();
-    expect(f.starts.get(herald.id)?.preToolUse).toBeUndefined();
+    // a role chat with the sub-agent tool gets only the sub-agent rule (role-gate.ts SubagentGate), never the budget
+    const gate = f.starts.get(herald.id)?.preToolUse;
+    expect(gate?.constructor.name).toBe('SubagentGate');
+    expect(gate?.decide({ tool: 'Agent', input: { subagent_type: 'general-purpose' } })?.deny).toMatch(/agent_delegate/);
+    expect(gate?.decide({ tool: 'Agent', input: { subagent_type: 'Explore' } })).toBeNull();
+    expect(gate?.decide({ tool: 'Read', input: {} })).toBeNull();
     expect(herald.run?.startedBy).toBe('orchestrator');
     const r = await f.call('agent_report', herald.id, { outcome: 'done', summary: 'Bozza pronta', output: 'issue.md', doneWhen: [{ criterion: 'bozza scritta', met: true, evidence: 'issue.md' }] });
     expect(r).toMatchObject({ reported: true, to: 'orchestrator', delivered: true });
@@ -332,11 +356,28 @@ describe('agent_delegate', () => {
     await expect(f.call('agent_report', mine.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [] })).rejects.toThrow(/only a chat the Orchestrator or a parent started/);
   });
 
+  it('a root chat\'s clean result goes to the quiet news when they take it; a partial one stays a message', async () => {
+    const f = fixture();
+    const quiet: string[] = [];
+    f.m.onCleanReport(n => { quiet.push(`${n.role}: ${n.summary}`); return true; });
+    const orchestrator = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    const before = f.sent.get(orchestrator.id)?.length ?? 0;
+    const a = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'artisan', title: 'App · fix', prompt: 'x' }, 'agent');
+    await f.call('agent_report', a.id, { outcome: 'done', summary: 'Fix su main', output: 'o', doneWhen: [{ criterion: 'test verdi', met: true }] });
+    const b = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', title: 'Fatti', prompt: 'x' }, 'agent');
+    await f.call('agent_report', b.id, { outcome: 'partial', summary: 'Metà', output: 'o', doneWhen: [{ criterion: 'c', met: false }] });
+    await new Promise(res => setTimeout(res, 20));
+    expect(quiet).toEqual(['Artisan: Fix su main']);
+    const after = f.sent.get(orchestrator.id)!.slice(before);
+    expect(after).toHaveLength(1);
+    expect(after[0]).toContain('[risultato · Scout «Fatti»] Metà');
+  });
+
   it('with the default (full) permissions a Strategist launches an Artisan, which runs with every tool and no ceiling', async () => {
     const f = fixture();
     const parent = await f.root('strategist');
-    const out = await f.call('agent_delegate', parent.id, { tasks: [f.task('artisan', 'Ordini · Fix'), f.task('herald', 'Ordini · Avviso'), f.task('scribe', 'Ordini · Nota')] });
-    expect(out.children.map((c: { role: string; chatId?: string }) => [c.role, !!c.chatId])).toEqual([['artisan', true], ['herald', true], ['scribe', true]]);
+    const out = await f.call('agent_delegate', parent.id, { tasks: [f.task('artisan', 'Ordini · Fix'), f.task('herald', 'Ordini · Avviso'), f.task('sentinel', 'Ordini · Verifica')] });
+    expect(out.children.map((c: { role: string; chatId?: string }) => [c.role, !!c.chatId])).toEqual([['artisan', true], ['herald', true], ['sentinel', true]]);
     const start = f.starts.get(out.children[0].chatId)!;
     expect([...(start.toolPolicy?.allow ?? [])].sort()).toEqual([...ROLE_DEFAULTS.artisan.tools].sort());
     expect(start.ceiling ?? null).toBeNull();
@@ -483,6 +524,13 @@ describe('messages between parent and child cannot forge the app or the user', (
 });
 
 describe('the pure parts', () => {
+  it('a stored delegation of a retired role reads as its successor; one with no work role to go to is dropped (ADR 0100)', () => {
+    const d = { goal: 'G', doneWhen: ['D'], at: 1 };
+    expect(readDelegation({ ...d, role: 'judge' })?.role).toBe('sentinel');
+    expect(readDelegation({ ...d, role: 'scribe' })?.role).toBe('artisan');
+    expect(readDelegation({ ...d, role: 'router' })).toBeNull();
+    expect(readDelegation({ ...d, role: 'scout' })?.role).toBe('scout');
+  });
   it('checks a contract strictly and keeps the role output as default', () => {
     expect(checkContract({ goal: 'g', doneWhen: ['a'] }, 'scout').output).toBe(ROLE_DEFAULTS.scout.output);
     expect(() => checkContract({ goal: 'g', doneWhen: [] }, 'scout')).toThrow(/doneWhen/);
@@ -494,8 +542,8 @@ describe('the pure parts', () => {
     expect(checkResult({ outcome: 'partial', summary: 's', output: 'o', doneWhen: [{ criterion: 'a', met: false }] }, ['a']).outcome).toBe('partial');
   });
   it('the first message carries the contract and never more', () => {
-    const text = delegationPrompt({ goal: 'G', output: 'O', doneWhen: ['D'], context: 'C' }, { role: 'judge', parentTitle: 'P', title: 'T', skills: ['s1'] });
-    for (const part of ['«P»', 'Judge', 'Goal: G', 'Context: C', 'Output: O', '- D', 'Your skills: s1', 'agent_report']) expect(text).toContain(part);
+    const text = delegationPrompt({ goal: 'G', output: 'O', doneWhen: ['D'], context: 'C' }, { role: 'sentinel', parentTitle: 'P', title: 'T', skills: ['s1'] });
+    for (const part of ['«P»', 'Sentinel', 'Goal: G', 'Context: C', 'Output: O', '- D', 'Your skills: s1', 'agent_report']) expect(text).toContain(part);
     // engine-neutral: a Cursor child has no Skill tool, so the prompt never tells it to call one
     expect(text).not.toContain('Skill tool');
   });

@@ -4,7 +4,7 @@
 // parent's history), the message that brings a result back, and the depth of a chat in the tree. Pure: used by
 // main/agents/delegation.ts (the tools), main/chats/manager.ts (the result delivery) and the renderer (the child cards).
 import { TOOL_CLASSES, type ToolClass } from './agents';
-import { MODEL_TIERS, ROLE_DEFAULTS, isWorkRole, type ModelTier, type WorkRoleId } from './roles';
+import { MODEL_TIERS, ROLE_DEFAULTS, currentRoleId, isWorkRole, type ModelTier, type WorkRoleId } from './roles';
 import { AGENT_LABEL, oneLine } from './agent-label';
 
 export interface DelegationContract {
@@ -161,10 +161,12 @@ export function depthOf(id: string, parentOf: (id: string) => string | undefined
   return depth;
 }
 
-/** A persisted trace, read tolerantly: anything out of shape is dropped (the chat stays a plain chat). */
+/** A persisted trace, read tolerantly: anything out of shape is dropped (the chat stays a plain chat). A role ADR 0100
+ *  retired reads as its successor (a Judge child is a Sentinel child). */
 export function readDelegation(v: unknown): ChatDelegation | null {
   const d = v as Record<string, unknown> | null;
-  if (!d || typeof d !== 'object' || !isWorkRole(d.role) || typeof d.goal !== 'string' || !Array.isArray(d.doneWhen) || !d.doneWhen.every(x => typeof x === 'string')
+  const role = d && typeof d === 'object' && typeof d.role === 'string' ? currentRoleId(d.role) : null;
+  if (!d || typeof d !== 'object' || !isWorkRole(role) || typeof d.goal !== 'string' || !Array.isArray(d.doneWhen) || !d.doneWhen.every(x => typeof x === 'string')
     || typeof d.at !== 'number' || !Number.isFinite(d.at)) return null;
   const r = d.result as Record<string, unknown> | undefined;
   const crit = Array.isArray(r?.doneWhen) ? (r!.doneWhen as unknown[]).filter((x): x is { criterion: string; met: boolean } => !!x && typeof (x as { criterion?: unknown }).criterion === 'string' && typeof (x as { met?: unknown }).met === 'boolean')
@@ -172,5 +174,5 @@ export function readDelegation(v: unknown): ChatDelegation | null {
   const result = r && (RESULT_OUTCOMES as readonly unknown[]).includes(r.outcome) && typeof r.summary === 'string' && typeof r.at === 'number'
     ? { outcome: r.outcome as DelegationOutcome, summary: r.summary, at: r.at, ...(crit.length ? { doneWhen: crit } : {}) } : undefined;
   const tools = Array.isArray(d.tools) && d.tools.every(c => (TOOL_CLASSES as readonly unknown[]).includes(c)) ? d.tools as ToolClass[] : undefined;
-  return { role: d.role, goal: d.goal.slice(0, GOAL_MAX), doneWhen: (d.doneWhen as string[]).slice(0, CRITERIA_MAX), at: d.at, ...(tools ? { tools } : {}), ...(result ? { result } : {}), ...(typeof d.originalGoal === 'string' ? { originalGoal: d.originalGoal.slice(0, GOAL_MAX) } : {}) };
+  return { role, goal: d.goal.slice(0, GOAL_MAX), doneWhen: (d.doneWhen as string[]).slice(0, CRITERIA_MAX), at: d.at, ...(tools ? { tools } : {}), ...(result ? { result } : {}), ...(typeof d.originalGoal === 'string' ? { originalGoal: d.originalGoal.slice(0, GOAL_MAX) } : {}) };
 }

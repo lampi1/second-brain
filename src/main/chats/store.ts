@@ -56,6 +56,10 @@ export interface StoredChat {
   /** null = never chosen by the user: the CLI follows settings.json (ADR 0002) */
   permissionMode: PermissionMode | null;
   isOrchestrator: boolean;
+  /** «Lampo», the quick lane (ADR 0105) */
+  quick?: true;
+  /** child results a quit held back from this parent, sent after the next start */
+  heldResults?: { title: string; message: string }[];
   createdAt: number;
   /** the CLI's running cost total last seen, for per-turn deltas after a resume */
   costTotalUsd?: number;
@@ -150,6 +154,14 @@ function extras(c: Record<string, unknown>): Partial<StoredChat> {
 const MODES: readonly string[] = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions'];
 const EFFORTS: readonly string[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
+/** held child results: at most 32, each a title and a message of bounded size, else none */
+function heldResults(x: unknown): { title: string; message: string }[] | null {
+  if (!Array.isArray(x) || !x.length || x.length > 32) return null;
+  const ok = x.every(i => !!i && typeof i === 'object' && typeof (i as { title?: unknown }).title === 'string' && typeof (i as { message?: unknown }).message === 'string'
+    && (i as { message: string }).message.length <= 64 * 1024 && (i as { title: string }).title.length <= 500);
+  return ok ? (x as { title: string; message: string }[]).map(i => ({ title: i.title, message: i.message })) : null;
+}
+
 function valid(x: unknown): StoredChat | null {
   if (!x || typeof x !== 'object') return null;
   const c = x as Record<string, unknown>;
@@ -167,12 +179,14 @@ function valid(x: unknown): StoredChat | null {
     effort: EFFORTS.includes(String(c.effort)) ? (c.effort as Effort) : null,
     permissionMode: MODES.includes(String(c.permissionMode)) ? (c.permissionMode as PermissionMode) : null,
     isOrchestrator: orchestrator,
+    ...(c.quick === true && !orchestrator ? { quick: true as const } : {}),
     createdAt: typeof c.createdAt === 'number' ? c.createdAt : Date.now(),
     ...(typeof c.costTotalUsd === 'number' && Number.isFinite(c.costTotalUsd) ? { costTotalUsd: c.costTotalUsd } : {}),
     ...extras(c),
     // the Orchestrator is never archived, whatever the file says
     ...(typeof c.closedAt === 'number' && Number.isFinite(c.closedAt) && !orchestrator ? { closedAt: c.closedAt, closedBy: c.closedBy === 'user' ? 'user' as const : 'auto' as const } : {}),
     ...(c.working === true && typeof c.closedAt !== 'number' ? { working: true as const } : {}),
+    ...(heldResults(c.heldResults) ? { heldResults: heldResults(c.heldResults)! } : {}),
   };
 }
 

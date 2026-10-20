@@ -25,6 +25,8 @@
 // time and the user's own words (cut to ~300 characters; his words are not the child's content), so the Orchestrator
 // never plans against what he told a chat. It rides along with the next delivery, is counted in the held news, and is
 // kept beside the chat's status news (its own slot: a "finished" never replaces it).
+// A root chat's clean agent_report (done, every criterion met, no question) is quiet news too (cleanReport, 2026-10-20):
+// the user reads the result in the chat; the Orchestrator gets the summary with its next turn instead of a turn of its own.
 // Held news on the tile (#88): what waits in the buffer is listed for the user (heldNews(), held-news.ts sends it to the
 // page as "N novità in attesa"); reading it never sends anything to the Orchestrator and changes no rule above.
 import { timersFor } from '../timers';
@@ -40,14 +42,14 @@ export type WakeKind = 'done' | 'error' | 'question' | 'permission' | 'command' 
 /** news that never wakes the Orchestrator by itself: it goes with the next 'done' / 'error' */
 export const QUIET: ReadonlySet<WakeKind> = new Set(['question', 'permission', 'command', 'started', 'user-message']);
 /** the buffer's slot of an event: the user's messages beside the chat's status */
-const slotOf = (e: Pick<WakeEvent, 'chatId' | 'kind'>): string => e.kind === 'user-message' ? `${e.chatId}#user` : e.chatId;
+const slotOf = (e: Pick<WakeEvent, 'chatId' | 'kind' | 'report'>): string => e.kind === 'user-message' ? `${e.chatId}#user` : e.report ? `${e.chatId}#report` : e.chatId;
 const USER_TEXT_MAX = 300;
 /** the rule's gate for this Orchestrator: Cursor (ACP) takes no message mid-turn */
 const gateOf = (r: Pick<ChatSummary, 'state' | 'pending' | 'handoffBusy' | 'harness'>): OrchestratorGate => orchestratorGate(r, engineOf(r.harness)?.kind !== 'acp');
 const classOf = (e: WakeEvent): DeliveryClass => e.kind === 'user-message' || e.silent ? 'quiet' : newsClass(e.kind, e.endsTurn);
 const isLoud = (e: WakeEvent): boolean => classOf(e) !== 'quiet';
 /** requestId: the open request it tells about (question, permission, command): answered before it goes, it is dropped */
-export interface WakeEvent { chatId: string; title: string; harness: Harness; kind: WakeKind; detail: string; at: number; /** a delegated chat: its role and its parent's title (status only, never its text) */ child?: { role: string; parent: string }; requestId?: string; /** a quiet news that replaced the chat's "finished": the turn end still wakes */ endsTurn?: boolean; /** a delegated chat's "finished" with nothing of the user's beside it: no text (ADR 0083) and its result goes to its parent, so it rides along and never wakes */ silent?: boolean }
+export interface WakeEvent { chatId: string; title: string; harness: Harness; kind: WakeKind; detail: string; at: number; /** a root chat's clean agent_report (cleanReport): its role and summary, quiet */ report?: { role: string }; /** a delegated chat: its role and its parent's title (status only, never its text) */ child?: { role: string; parent: string }; requestId?: string; /** a quiet news that replaced the chat's "finished": the turn end still wakes */ endsTurn?: boolean; /** a delegated chat's "finished" with nothing of the user's beside it: no text (ADR 0083) and its result goes to its parent, so it rides along and never wakes */ silent?: boolean }
 
 export interface OrchestratorWakeDeps {
   /** sends a message to the Orchestrator (wakes it: a closed one resumes) */
@@ -74,7 +76,7 @@ export function wakeLine(e: WakeEvent): string {
   const who = e.child ? `«${e.title}» (${e.child.role}, delegata da «${e.child.parent}»)` : `«${e.title}» (${engineLabel(e.harness)})`;
   const d = e.child || e.kind === 'user-message' ? '' : cut(e.detail, 200);
   switch (e.kind) {
-    case 'done': return `- ${who}: ha finito il turno.${d ? ` Ultima riga: «${d}»` : ''}`;
+    case 'done': return e.report ? `- «${e.title}» (${e.report.role}): ha consegnato, tutti i criteri soddisfatti: «${cut(e.detail, 200)}»` : `- ${who}: ha finito il turno.${d ? ` Ultima riga: «${d}»` : ''}`;
     case 'error': return `- ${who}: si è fermata su un errore${d ? `: ${d}` : '.'}`;
     case 'question': return `- ${who}: aspetta una risposta dell'utente${d ? `: ${d}` : '.'}`;
     case 'permission': return `- ${who}: aspetta un permesso dell'utente${d ? `: ${d}` : '.'}`;
@@ -102,6 +104,8 @@ export class OrchestratorWake {
   /** held-news.ts: told when what waits may have changed (#88) */
   private listener: (() => void) | null = null;
   private toldEmpty = true;
+  /** Lampo chats (ADR 0105): their requests are the user's own, never news */
+  private quick = new Set<string>();
 
   constructor(private readonly d: OrchestratorWakeDeps) {}
 
@@ -114,7 +118,7 @@ export class OrchestratorWake {
     if (channel === 'chat:updated') this.updated(payload as ChatSummary);
     else if (channel === 'pending:added') this.pending(payload as PendingRequest);
     else if (channel === 'pending:resolved') this.resolved(payload as EventMap['pending:resolved']);
-    else if (channel === 'chat:removed') { const { chatId } = payload as EventMap['chat:removed']; this.chats.delete(chatId); this.buffer.delete(chatId); this.buffer.delete(`${chatId}#user`); }
+    else if (channel === 'chat:removed') { const { chatId } = payload as EventMap['chat:removed']; this.chats.delete(chatId); this.buffer.delete(chatId); this.buffer.delete(`${chatId}#user`); this.buffer.delete(`${chatId}#report`); }
     else return;
     this.changed();
   }
@@ -153,6 +157,8 @@ export class OrchestratorWake {
     // the Orchestrator's gate changed (only the change: its other updates never cut the grouping window short): what it now
     // lets through is timed again (it started working: all goes into its turn; it is free again: what waited goes)
     if (c.isOrchestrator) { if (this.buffer.size && (!was || gateOf(was) !== gateOf(c))) this.schedule(this.now()); return; }
+    // Lampo (ADR 0105) is the user's quick lane, never work the Orchestrator follows
+    if (c.quick) return;
     if (c.handoffBusy) { this.handoff.add(c.id); return; }
     // the hand-off turn ends (handoffBusy goes before idle): not a turn of the chat
     if (this.handoff.has(c.id)) { if (!BUSY.has(c.state)) this.handoff.delete(c.id); return; }
@@ -166,6 +172,8 @@ export class OrchestratorWake {
       // it gave its result with agent_report in this turn: that already reached its parent or the Orchestrator (the
       // owner, 2026-10-20: the same news twice was a second Orchestrator turn for nothing)
       if (!failed && c.run?.report?.via === 'agent_report' && c.run.report.at > (was.lastResult?.at ?? 0)) return;
+      // a chat the app itself started (a sampled independent review): the app reads its verdict, the Orchestrator never asked for it
+      if (!failed && c.run?.startedBy === 'app') return;
       this.add(c, failed ? 'error' : 'done', c.lastText);
     }
   }
@@ -177,7 +185,7 @@ export class OrchestratorWake {
     const listed = known ? undefined : this.d.list?.().find(x => x.id === p.chatId);
     if (listed) this.remember(listed);
     const c = known ?? listed;
-    if (!c || c.isOrchestrator || c.closedAt) return;
+    if (!c || c.isOrchestrator || c.closedAt || this.quick.has(p.chatId)) return;
     const detail = p.type === 'command' ? (p.command?.code ?? p.detail).split('\n')[0] ?? '' : p.type === 'question' ? (p.questions?.[0]?.question ?? p.title) : p.title;
     this.add({ id: p.chatId, title: c.title, harness: c.harness, parentId: c.parentId, agent: c.agent }, p.type, detail, p.id);
   }
@@ -196,6 +204,24 @@ export class OrchestratorWake {
     this.changed();
   }
 
+  /** A root chat's clean result (ChatManager.onCleanReport): quiet news with its summary, never a turn of its own; it rides
+   *  along with the next delivery (the user's next message injects it into that turn). False = not taken (off, no
+   *  Orchestrator): the caller sends the result as a message. */
+  cleanReport(n: { chatId: string; title: string; role: string; summary: string; at?: number }): boolean {
+    if (!this.d.enabled() || !this.orchestratorId()) return false;
+    const known = this.chats.get(n.chatId), listed = known ? undefined : this.d.list?.().find(x => x.id === n.chatId);
+    if (listed) this.remember(listed);
+    const c = known ?? listed;
+    if (!c || c.isOrchestrator) return false;
+    const e: WakeEvent = { chatId: n.chatId, title: n.title, harness: c.harness, kind: 'done', detail: cut(n.summary, 300), at: n.at ?? this.now(), report: { role: n.role }, silent: true };
+    this.buffer.set(slotOf(e), e);
+    // the chat's plain "finished" of the same turn says less than the report
+    if (this.buffer.get(n.chatId)?.kind === 'done') this.buffer.delete(n.chatId);
+    this.reschedule();
+    this.changed();
+    return true;
+  }
+
   /** answered before the news went: "waits for the user" would be false; what the chat did next is told instead */
   private resolved(r: EventMap['pending:resolved']): void {
     const e = this.buffer.get(r.chatId);
@@ -212,6 +238,8 @@ export class OrchestratorWake {
     const at = this.now();
     // the newest news of a chat wins, except that "finished" never hides what it left for the user in the same turn
     const old = this.buffer.get(c.id);
+    // a clean report has its own slot (cleanReport): a later error or request never hides it, its turn end adds nothing
+    if (kind === 'done' && this.buffer.has(`${c.id}#report`)) return;
     if (old && kind === 'done' && old.kind !== 'done' && old.kind !== 'error' && old.kind !== 'started') return;
     // a command left right after the turn ended (asks.ts settles after it) keeps the turn end's wake
     const endsTurn = QUIET.has(kind) && !!old && (!QUIET.has(old.kind) || !!old.endsTurn);
@@ -248,6 +276,7 @@ export class OrchestratorWake {
   private readyAt(slot: string): number { return (this.lastSent.get(slot) ?? -Infinity) + this.perChatMs; }
 
   private remember(c: ChatSummary): void {
+    if (c.quick) this.quick.add(c.id);
     this.chats.set(c.id, { state: c.state, title: c.title, harness: c.harness, isOrchestrator: c.isOrchestrator, closedAt: c.closedAt, handoffBusy: c.handoffBusy, lastText: c.lastText, lastError: c.lastError, lastResult: c.lastResult, pending: c.pending, parentId: c.parentId, agent: c.agent });
   }
 

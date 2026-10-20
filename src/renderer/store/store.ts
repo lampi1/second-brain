@@ -11,6 +11,7 @@ let localActions=0;
 const sb=trackBridge(rawSb,delta=>{localActions+=delta;});
 import {updateIsFrozen} from '../lib/update-barrier';
 import { createStore } from './createStore';
+import { t } from '../i18n';
 import { connectAutoClose } from './auto-close';
 import { initialState, isBusy, reduce, toFlush, type Action, type AppState, type QueuedMsg } from './state';
 import { announce, hideChat, hideTab, setPrefs, toast,toastKey, ui } from './ui';
@@ -465,6 +466,14 @@ const continuing = new Set<string>();
 
 /** "Riprendi": opens the new chat (main writes the hand-off first when needed) and returns it. The old chat shows
  *  handoffBusy meanwhile (its buttons off); a second click while the first runs does nothing. */
+/** «Annulla l'ultimo turno» (ADR 0103): the chat's files back as they were before its last turn. */
+export async function undoTurn(chatId: string): Promise<void> {
+  try {
+    const r = await sb.invoke('chat:undoTurn', { chatId });
+    toast(t('chat.menu.undoTurnDone', { restored: r.restored, removed: r.removed }), 'ok');
+  } catch (e) { fail(t('chat.menu.undoTurn'))(e); }
+}
+
 export async function continueChat(chatId: string): Promise<ChatSummary | null> {
   if (continuing.has(chatId)) return null;
   continuing.add(chatId);

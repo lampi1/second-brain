@@ -95,7 +95,7 @@ export const DEMO_DIFF: FileDiff[] = [
 
 /** A delegation tree (ADR 0083) for the README shots (test/shots/readme.spec.ts adds it through __sbDemo.tree, so the
  *  seed every other test reads stays as it is): a Strategist the Orchestrator started, its Scout (done, result sent
- *  back), its Artisan with a Judge of its own, and a Herald waiting for its turn. */
+ *  back), its Artisan with a Sentinel of its own, and a Herald waiting for its turn. */
 export function demoTree(E: number): { chats: ChatSummary[]; items: Record<string, ChatItem[]> } {
   const cwd = 'C:\\progetti\\alfa-shop';
   const role = (id: WorkRoleId, name: string): ChatSummary['agent'] => ({ id, name, purpose: ROLE_DEFAULTS[id].summary, avatar: { kind: 'character', value: id }, engine: 'claude', model: 'claude-opus-5-5', revision: 1, version: 1, source: 'catalog' });
@@ -115,11 +115,11 @@ export function demoTree(E: number): { chats: ChatSummary[]; items: Record<strin
     result: { outcome: 'done', summary: 'Trovati 3 punti: carrello, ordine, reso. Il reso arrotonda due volte.', at: E - 11 * MIN } };
   const artisan = node('tree-artisan', 'artisan', 'Artisan', 'Sconto sul lordo', 'Applica lo sconto al lordo con un solo arrotondamento, nei 3 punti.', 10,
     { costUsd: 0.74, contextTokens: 88_000, contextMaxTokens: 1_000_000, lastText: 'Fatti carrello e ordine, ora il reso.' }, lead.id, ['I test ordini passano']);
-  const judge = node('tree-judge', 'judge', 'Judge', 'La suite ordini passa?', 'Esegui la suite ordini e giudica il fix.', 3,
+  const sentinel = node('tree-sentinel', 'sentinel', 'Sentinel', 'La suite ordini passa?', 'Esegui la suite ordini e giudica il fix.', 3,
     { costUsd: 0.09, lastText: 'Lancio dotnet test: 41 su 42 finora.' }, artisan.id, ['Esito della suite']);
   const herald = node('tree-herald', 'herald', 'Herald', 'Note di rilascio', 'Scrivi le note di rilascio quando il fix è in main.', 1,
     { costUsd: 0.02, lastText: 'Preparo la bozza, la chiudo quando Artisan finisce.' }, lead.id, ['Bozza delle note']);
-  const chats = [lead, scout, artisan, judge, herald];
+  const chats = [lead, scout, artisan, sentinel, herald];
   const items: Record<string, ChatItem[]> = Object.fromEntries(chats.map(c => [c.id, [
     { kind: 'user', id: `${c.id}-u1`, at: c.run!.startedAt, text: c.run!.goal } as ChatItem,
     { kind: 'assistant', id: `${c.id}-a1`, at: c.updatedAt, text: c.lastText } as ChatItem,
@@ -503,6 +503,12 @@ export class DemoChats implements ChatService {
       if (current && req.replaces !== current.id) return current;
       req = { ...req, orchestrator: true };
     }
+    // Lampo, like the real manager: one at a time, plan mode (ADR 0105)
+    if (req.quick) {
+      const current = [...this.chats.values()].find(c => c.quick && !c.closedAt);
+      if (current) return current;
+      req = { ...req, title: 'Lampo', permissionMode: 'plan' };
+    }
     const id = `c${++this.counter}`;
     // like the real manager: `replaces` moves the Orchestrator's role to the new chat
     const old = req.orchestrator && req.replaces ? this.chats.get(req.replaces) : undefined;
@@ -512,7 +518,7 @@ export class DemoChats implements ChatService {
       id, harness: req.harness, origin: 'app', title: req.orchestrator ? 'Orchestrator' : req.title?.trim() || titleFrom(req.prompt) || 'Nuova chat', cwd: req.cwd, sessionId: null,
       model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null, state: req.prompt ? 'starting' : 'idle', costUsd: 0,
       pending: 0, isOrchestrator: !!req.orchestrator, lastText: '', updatedAt: this.now(), browserTabIds: [],
-      ...(req.route ? { route: req.route } : {}),
+      ...(req.route ? { route: req.route } : {}), ...(req.quick ? { quick: true as const } : {}),
     };
     this.chats.set(id, c);
     this.itemsOf.set(id, []);
@@ -644,6 +650,8 @@ export class DemoChats implements ChatService {
   }
 
   async ensureHandoff(chatId: string): Promise<HandoffInfo> { return this.readHandoff(chatId) ?? this.handoff(chatId); }
+
+  async undoTurn(): Promise<{ restored: number; removed: number }> { return { restored: 0, removed: 0 }; }
 
   async continueChat(chatId: string): Promise<ChatSummary> {
     const c = this.chats.get(chatId);
@@ -930,7 +938,7 @@ export class DemoBrain implements BrainService {
   async api(p?: string): Promise<BrainApiResult> {
     if (this.realApi) return this.realApi.get(p);
     const c = checkApiPath(p);
-    return c.ok && this.localApi.has(new URL(c.path, 'http://localhost').pathname) ? this.ownApi.get(c.path) : { ok: false, error: 'demo: nessun server del cervello' };
+    return c.ok && this.localApi.has(new URL(c.path, 'http://localhost').pathname) ? this.ownApi.get(c.path) : { ok: false, error: 'demo: nessun server del brain' };
   }
   serveApi(p: string, fn: (query: URLSearchParams) => unknown): void { this.localApi.set(p, fn); }
   // one experiment like the real brain's, switched in memory
@@ -938,10 +946,10 @@ export class DemoBrain implements BrainService {
     name: 'cursor-vs-claude', title: 'Review roles: Cursor vs Claude Code',
     description: 'Every run of the listed roles on Cursor is captured; Claude repeats the same task inside the app, read-only; a judge rates both blind.',
     on: true, changedAt: '2026-10-10 08:09:21',
-    a: { engine: 'cursor', label: 'Cursor', agents: ['sentinel', 'scout', 'judge'] },
+    a: { engine: 'cursor', label: 'Cursor', agents: ['sentinel', 'scout', 'artisan'] },
     b: { engine: 'claude', label: 'Claude', model: 'opus', effort: 'medium' },
     judge: { engine: 'claude', label: 'Claude', model: 'sonnet' },
-    agents: [{ name: 'sentinel', on: true }, { name: 'scout', on: false }, { name: 'judge', on: false }],
+    agents: [{ name: 'sentinel', on: true }, { name: 'scout', on: false }, { name: 'artisan', on: false }],
     rounds: 4, cost: { a: { usd: 1.84, missing: 1 }, b: { usd: 6.12, missing: 0 } },
   }];
   async compareList(): Promise<CompareState> { return { ok: true, experiments: structuredClone(this.compare) }; }
@@ -1002,20 +1010,27 @@ export class DemoBrain implements BrainService {
   }
 }
 
-/** The loop's policies in the demo (the shape of the brain's improve.mjs status --json): fixed numbers, dates relative to now. */
+/** The loop's policies in the demo (the shape of the brain's improve.mjs status --json): fixed numbers, dates relative to now.
+ *  The estimates policy stays in the data (a real brain sends it) but Regole hides it (ADR 0053, 0101); the proposal,
+ *  the after-check and the rollback are on the model choice (routing), the notifications policy has too few cases. */
 export function demoLearn(now = Date.now()): Record<string, unknown>[] {
   const iso = (days: number) => new Date(now - days * 864e5).toISOString();
   const spark = [1.4, 2.1, 1.2, 3.8, 1.6, 1.1, 2.4, 1.9, 1.3, 5.2, 1.7, 1.2, 2.2, 1.5, 1.8, 2.9, 1.1, 1.6, 2.3, 1.4, 1.9, 1.2, 3.1, 1.5, 1.7, 2.0, 1.3, 1.6, 2.6, 1.4];
   return [
     {
-      domain: 'estimates', version: 2, appliedAt: iso(9), by: 'app (clic)', name: 'per tipo', previous: 1,
-      pending: { id: 'estimates-3', at: iso(1), domain: 'estimates', kind: 'cambio', from: 2, name: 'stessa area e tipo', status: 'proposta',
-        evidence: { shared: 42, primary: 'min', diff: { mean: 0.14, lo: 0.05, hi: 0.22 } } },
-      lastCheck: { domain: 'estimates', version: 2, from: 1, n: 24, need: 20, state: 'migliorata', at: iso(2) },
+      domain: 'estimates', version: 2, appliedAt: iso(9), by: 'app (clic)', name: 'per tipo', previous: 1, pending: null, lastCheck: null,
       recorded: { predictions: 31, known: 27, unknown: 2 }, primary: 'min', n: 243, noData: false, unknownItems: 3, noPrediction: 6,
       typical: 1.7, spark, coverage: { rate: 0.84, n: 30 }, drift: { recent: 0.5, before: 0.6, ratio: 0.83, changed: false },
     },
-    { domain: 'routing', version: 1, appliedAt: iso(0.2), by: 'routing.mjs init', name: null, previous: null, pending: null, lastCheck: null, recorded: { predictions: 12, known: 12, unknown: 0 }, n: 12, noData: true },
+    {
+      domain: 'routing', version: 2, appliedAt: iso(9), by: 'app (clic)', name: 'per tipo', previous: 1,
+      pending: { id: 'routing-3', at: iso(1), domain: 'routing', kind: 'cambio', from: 2, name: 'stessa area e tipo', status: 'proposta',
+        evidence: { shared: 42, primary: 'min', diff: { mean: 0.14, lo: 0.05, hi: 0.22 } } },
+      lastCheck: { domain: 'routing', version: 2, from: 1, n: 24, need: 20, state: 'migliorata', at: iso(2) },
+      recorded: { predictions: 31, known: 27, unknown: 2 }, primary: 'min', n: 243, noData: false, unknownItems: 3, noPrediction: 6,
+      typical: 1.7, spark, coverage: { rate: 0.84, n: 30 }, drift: { recent: 0.5, before: 0.6, ratio: 0.83, changed: false },
+    },
+    { domain: 'notifications', version: 1, appliedAt: iso(0.2), by: 'notify.mjs init', name: null, previous: null, pending: null, lastCheck: null, recorded: { predictions: 12, known: 12, unknown: 0 }, n: 12, noData: true },
   ];
 }
 

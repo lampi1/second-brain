@@ -59,7 +59,7 @@ export function demoMcpServers(o: { userData: string; mcp: McpServer; emit: (st:
     service.store.recordTest('jira', { ok: false, at: o.now() - 1_200_000, ms: 0, tools: [], error: { code: 'secret', message: 'Manca il token «Authorization».', fix: 'Inseriscilo nel campo Token della scheda del server: viene cifrato sul computer.' } });
     service.store.setAccess('herald', 'azure-devops', 'read');
     service.store.setAccess('scout', 'github', 'read');
-    service.store.setAccess('judge', 'jira', 'none');
+    service.store.setAccess('sentinel', 'jira', 'none');
   }
   return service;
 }

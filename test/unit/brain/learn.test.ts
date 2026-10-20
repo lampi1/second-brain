@@ -54,7 +54,7 @@ describe('learn clicks', () => {
   }, 60e3); // three node children in a row: slow under a full parallel run
 
   it('says when there is no brain or no loop in it', async () => {
-    expect(await new Learn(() => null, plainNode).act({ action: 'apply', id: 'estimates-1' })).toEqual({ ok: false, error: 'nessuna cartella del cervello scelta' });
+    expect(await new Learn(() => null, plainNode).act({ action: 'apply', id: 'estimates-1' })).toEqual({ ok: false, error: 'nessuna cartella del brain scelta' });
     expect((await new Learn(() => tmpDir(), plainNode).act({ action: 'apply', id: 'estimates-1' })).ok).toBe(false);
   });
 

@@ -119,8 +119,8 @@ describe('model comparisons', { timeout: 120e3 }, () => {
   });
 
   it('fails soft without a brain or without the harness', async () => {
-    expect(await new Compare(() => null, plainNode).list()).toEqual({ ok: false, error: 'nessuna cartella del cervello scelta' });
-    expect(await new Compare(() => tmpDir(), plainNode).list()).toEqual({ ok: false, error: 'questo cervello non ha il confronto tra modelli (harness/compare)' });
+    expect(await new Compare(() => null, plainNode).list()).toEqual({ ok: false, error: 'nessuna cartella del brain scelta' });
+    expect(await new Compare(() => tmpDir(), plainNode).list()).toEqual({ ok: false, error: 'questo brain non ha il confronto tra modelli (harness/compare)' });
   });
 
   it('normalize drops bad names and keeps only string agents', () => {

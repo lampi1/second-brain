@@ -35,6 +35,7 @@ describe('role characters', () => {
     expect(Object.keys(CHARACTERS).sort()).toEqual([...CHARACTER_IDS].sort());
     for (const id of CHARACTER_IDS) expect(CHARACTER_LOOKS[id].length).toBeGreaterThan(10);
     expect(characterOf('not-a-role')).toBe('scout');
+    expect([characterOf('judge'), characterOf('scribe'), characterOf('router')]).toEqual(['sentinel', 'artisan', 'orchestrator']); // retired roles (ADR 0100)
   });
 
   it('gives each character its own badge colour, silhouette and prop', () => {

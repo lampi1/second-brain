@@ -1,5 +1,5 @@
 // UI acceptance for a role's permissions (ADR 0085, RolePermissions.tsx), demo services only, no provider requests:
-// every role starts with every permission («Tutto consentito»), the demo's Judge is narrowed; the card back shows it and
+// every role starts with every permission («Tutto consentito»), the demo's Herald is narrowed; the card back shows it and
 // "Modifica permessi" lands on the card; turning a tool class off and choosing a ceiling saves a new version that
 // survives a restart; each toggle and ceiling has its "?"; "Ripristina predefiniti" brings everything back. Screenshots
 // of the permissions editor dark and light.
@@ -8,17 +8,17 @@ import { launchDemo, openAgentOverview, openAgents, shot } from './helpers';
 
 const card = (page: { getByTestId: (id: string) => Locator }) => page.getByTestId('role-permissions');
 
-test('every role may do everything by default; the card back shows a narrowed Judge and opens its permissions', async () => {
+test('every role may do everything by default; the card back shows a narrowed Herald and opens its permissions', async () => {
   const { app, page } = await launchDemo();
   try {
     await openAgentOverview(page);
     await page.getByTestId('catalog-flip-scout').click();
     await expect(page.getByTestId('catalog-perms-scout')).toContainText(/Tutto consentito|Everything allowed/);
     await page.getByTestId('catalog-unflip-scout').click();
-    await page.getByTestId('catalog-flip-judge').click();
-    await expect(page.getByTestId('catalog-perms-judge')).toContainText(/Ristretto|Narrowed/);
+    await page.getByTestId('catalog-flip-herald').click();
+    await expect(page.getByTestId('catalog-perms-herald')).toContainText(/Ristretto|Narrowed/);
     await shot(page, 'role-permissions-back-dark');
-    await page.getByTestId('catalog-perms-edit-judge').click();
+    await page.getByTestId('catalog-perms-edit-herald').click();
     await expect(page.getByTestId('agent-studio')).toBeVisible();
     await expect(card(page)).toBeVisible();
     await expect(card(page).getByTestId('perm-status')).toContainText(/Ristretto · 2 di 11|Narrowed · 2 of 11/);

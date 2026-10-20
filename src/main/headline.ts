@@ -5,15 +5,15 @@
 // states and last lines, now.md's lines, today's journal tail, the latest ai-errors lines, today's chat cost; never a
 // file beyond those lines, and every line scrubbed of anything that looks like a credential. It writes 5 candidates
 // and picks the funniest (one request, hard cap 1500 tokens); the last 30 lines are sent back so it never repeats.
-// The model and effort are the user's settings (headlineModel/headlineEffort, default claude-opus-5-5 at low; off with
-// headlineOn). A failure, a timeout or no API key keeps the previous line (source previous), else a line of the
+// Today only its saved line and month spend are read (the Battito writes the Dashboard line once a day, pulse/service.ts,
+// ADR 0102); start() is not called. Off with pulse.headline.on. A failure, a timeout or no API key keeps the previous line (source previous), else a line of the
 // built-in list (source builtin): get() never waits for a model, so the Home renders at once. State in
 // <userData>/headline.json; what it spent this month is shown in Costi. Unit-tested in test/unit/headline.test.ts.
 import { timersFor } from './timers';
 const { setInterval, clearInterval } = timersFor('headline');
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Effort, HeadlineState, Lang, Settings } from '../shared/contract';
+import type { Effort, HeadlineState, Lang } from '../shared/contract';
 import type { TextRequest, TextResult } from './engines/text';
 import { errText, log } from './log';
 
@@ -150,7 +150,9 @@ interface Store {
 export interface HeadlineDeps {
   file: string;
   complete: (req: TextRequest, signal?: AbortSignal) => Promise<TextResult>;
-  settings: () => Pick<Settings, 'headlineOn' | 'headlineModel' | 'headlineEffort'>;
+  /** on = the Battito's headline setting (pulse.headline.on; the legacy headlineOn/headlineModel/headlineEffort were
+   *  removed, ADR 0102: their opt-out migrates there in brain/config.ts); model and effort only for a direct refresh */
+  settings: () => { on?: boolean; model?: string; effort?: Effort | '' };
   lang: () => Lang;
   /** the digest's raw material (main: chats, the brain's files); any part may be empty */
   material: () => Omit<DigestInput, 'now' | 'lang' | 'recent'>;
@@ -186,8 +188,8 @@ export class Headline {
   }
 
   private now(): number { return (this.d.now ?? Date.now)(); }
-  private on(): boolean { return this.d.calls !== false && this.d.settings().headlineOn !== false; }
-  private model(): string { return this.d.settings().headlineModel || HEADLINE_MODEL; }
+  private on(): boolean { return this.d.calls !== false && this.d.settings().on !== false; }
+  private model(): string { return this.d.settings().model || HEADLINE_MODEL; }
 
   /** The line on screen now: never waits for a model. */
   get(): HeadlineState {
@@ -221,7 +223,7 @@ export class Headline {
     this.s.triedAt = now;
     this.save();
     const set = this.d.settings();
-    const req: TextRequest = { purpose: 'headline', model: this.model(), effort: set.headlineEffort || HEADLINE_EFFORT, maxTokens: HEADLINE_MAX_TOKENS, prompt: '' };
+    const req: TextRequest = { purpose: 'headline', model: this.model(), effort: set.effort || HEADLINE_EFFORT, maxTokens: HEADLINE_MAX_TOKENS, prompt: '' };
     try {
       const { system, prompt } = buildPrompt({ ...this.d.material(), now, lang: this.d.lang(), recent: this.s.recent });
       const r = await this.d.complete({ ...req, system, prompt }, AbortSignal.timeout(this.d.timeoutMs ?? TIMEOUT_MS));

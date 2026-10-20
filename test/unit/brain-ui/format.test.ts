@@ -10,6 +10,10 @@ describe('fmt', () => {
     expect(fmt.usd(null)).toBe('');
     expect(fmt.usd(Number.NaN)).toBe('');
   });
+  it('a day with its year in the UI locale, never the OS one (the Fatto date field, ADR 0101)', () => {
+    expect(fmt.dayFull('2026-10-20')).toBe('mar 20/10/2026');
+    expect(fmt.dayFull('nope')).toBe('nope');
+  });
   it('thousands and millions', () => {
     expect(fmt.k(704202)).toBe('704k');
     expect(fmt.k(1_250_000)).toBe('1,3M');

@@ -79,7 +79,7 @@ export interface SessionPatch {
   version?: string;            // CLI version
   /** one API call of the main thread, once per response id (ADR 0031 counters): its context (input + cache read +
    *  cache write), the cache it re-wrote, its list-price cost */
-  call?: { context: number; cacheWrite: number; usd: number };
+  call?: { context: number; cacheWrite: number; usd: number; /** read from the prompt cache, and sent uncached */ cacheRead?: number; input?: number };
   /** the tokens of the turn that just ended, when the engine reports them (Claude's result usage, ACP's prompt usage,
    *  an HTTP model's usage); absent = unknown. Read by compare/headless.ts for a run's total. */
   turnTokens?: TokenUsage;
@@ -141,6 +141,9 @@ export interface SessionOptions {
   /** Claude only: a PreToolUse hook the app answers in-process (registered at initialize, asked with hook_callback;
    *  session-only, no settings file). The Orchestrator's turn budget (agents/orchestrator-budget.ts, ADR 0090). */
   preToolUse?: PreToolHook | null;
+  /** Claude only: a product brain's hooks the session answers in process (rules/runtime.ts runHook) instead of a node
+   *  process per call: UserPromptSubmit, PreToolUse, PostToolUse (Stop stays in the plugin's hooks.json, ADR 0103) */
+  productHooks?: { root: string; state: string; launch: { tools?: string; correctionHook?: boolean } } | null;
 }
 
 /** Main-only, never from the renderer: string fields set on the asked call's own input when it is allowed (the role

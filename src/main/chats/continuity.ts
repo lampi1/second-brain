@@ -3,7 +3,8 @@
 // chat goes on in one of three ways, all keeping what the work needs (state, files, decisions, what runs in the
 // background, the next step):
 // - compact: the same session summarises itself. Every Claude chat at its window (compactWindowTokens, ADR 0031/0051:
-//   the CLI does it); an Orchestrator also once on a new day (orchestratorDayDue, ADR 0051), so its mail queue and work chats stay put;
+//   the CLI does it); an Orchestrator also once on a new day (orchestratorDayDue, ADR 0051), so its mail queue and work chats stay put,
+//   and after a long pause while its cache is still warm (orchestratorWarmDue), so the next message re-reads a summary;
 // - fresh session: a long idle Claude work chat writes a note while its cache is warm (coldAsk), and a message after
 //   the cache expired goes on in a new session of the same chat from that note (coldRoute, coldPrompt; ADR 0031);
 // - new chat: the user's "Riprendi" asks a hand-off note and opens a new chat from it (handoff.ts; ADR 0014).
@@ -21,6 +22,11 @@ export const AFTER_CALLS = 5;
 export const ORCHESTRATOR_DAY_MIN = 50_000;
 /** idle this long first: never between two messages of a conversation the user is having with the Orchestrator */
 export const ORCHESTRATOR_DAY_IDLE_MS = 3 * 60_000;
+
+/** below this context an Orchestrator's compaction before its cache expires saves less than the summary costs */
+export const ORCHESTRATOR_WARM_MIN = 60_000;
+/** The same summary when the Orchestrator has been quiet for most of an hour (orchestratorWarmDue). */
+export const ORCHESTRATOR_PAUSE_COMPACT = '/compact Pause: keep only what is needed to continue. Keep the chats you coordinate (title, progress, what you await from each), outstanding messages and questions for the user, their decisions and preferences that still apply, background work and how to resume it. Remove the rest. Continue answering in the user\'s language.';
 
 /** What an Orchestrator's day summary keeps (Claude Code's `/compact <instructions>`). Injected prompts use English. */
 export const ORCHESTRATOR_COMPACT = '/compact New day: keep only what is needed to continue. Keep the chats you coordinate (title, progress, what you await from each), outstanding messages and questions for the user, their decisions and preferences from today and yesterday that still apply, background work and how to resume it. Remove the rest. Continue answering in the user\'s language.';
@@ -87,10 +93,22 @@ export function orchestratorDayDue(v: OrchestratorDayView, now: number): boolean
   return v.contextTokens >= ORCHESTRATOR_DAY_MIN && now - v.lastTurnAt >= ORCHESTRATOR_DAY_IDLE_MS;
 }
 
+/** Compact an idle Orchestrator while its cache is still warm (2026-10-20, token plan F1): its next message after a
+ *  pause of over an hour would re-write its whole context in the cache (ADR 0031 measured ~2.10 $ for a cold resume past
+ *  100k against ~0.08 $ for a turn on a warm cache), and the day compaction itself ran on an expired cache. Quiet, a long
+ *  context, idle idleMs after its last call and still before the cache expires, once per idle stretch. */
+export function orchestratorWarmDue(v: ColdView, now: number, idleMs: number, ttlMs = CACHE_TTL_MS): boolean {
+  if (!isOrchestrator(v) || v.harness !== 'claude' || !quietChat(v)) return false;
+  if (v.contextTokens < ORCHESTRATOR_WARM_MIN || !v.lastTurnAt || v.askedFor === v.lastTurnAt) return false;
+  const idle = now - v.lastCallAt;
+  return idle >= idleMs && idle < ttlMs;
+}
+
 /** The automatic continuity step due now for a chat ('note': write the cold note; 'compact': the Orchestrator's day
- *  compaction), null for none. cold / day = the settings contextHandoff / orchestratorDayCompact. */
-export function continuityStep(v: ColdView & Pick<OrchestratorDayView, 'ctxSince' | 'askedOn'>, now: number, o: { cold: boolean; day: boolean; idleMs: number; ttlMs?: number }): 'note' | 'compact' | null {
+ *  compaction; 'pause': its compaction before the cache expires), null for none. cold / day = the settings contextHandoff / orchestratorDayCompact. */
+export function continuityStep(v: ColdView & Pick<OrchestratorDayView, 'ctxSince' | 'askedOn'>, now: number, o: { cold: boolean; day: boolean; idleMs: number; ttlMs?: number }): 'note' | 'compact' | 'pause' | null {
   if (o.cold && coldAsk(v, now, o.idleMs, o.ttlMs)) return 'note';
   if (o.day && orchestratorDayDue(v, now)) return 'compact';
+  if (o.day && orchestratorWarmDue(v, now, o.idleMs, o.ttlMs)) return 'pause';
   return null;
 }

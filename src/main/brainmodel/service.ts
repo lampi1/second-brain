@@ -3,12 +3,13 @@
 // (memory-stats.ts) and serves the read-only Classificatori view (classifiers.ts). Jobs run by themselves: the one-time migration shortly after start on a brain that has former
 // runbook sections and no report yet, the corrections job right after a lesson is queued, every job every six hours,
 // and all of them on the maintenance button. No job asks for approval (owner, 2026-10-19); each change is logged with
-// an undo. Off in the test suites unless SB_BRAIN_JOBS=1 (the buttons and the IPC still work). Wired by wiring.ts and
+// an undo; a pass the app ran by itself that changed something is announced in the feed (`applied`: a quiet "Ruolo
+// aggiornato" with Annulla, ADR 0102). Off in the test suites unless SB_BRAIN_JOBS=1 (the buttons and the IPC still work). Wired by wiring.ts and
 // demo-wiring.ts; IPC 'brainmodel:*' and 'classifiers:state' (index.ts). Tests: test/unit/brainmodel/service.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
-import type { BrainModelState, ClassifiersState, MaintenanceJobId, MaintenanceRun, MigrationReport } from '../../shared/brain-model';
+import type { BrainChange, BrainModelState, ClassifiersState, MaintenanceJobId, MaintenanceRun, MigrationReport } from '../../shared/brain-model';
 import { MAINTENANCE_JOBS } from '../../shared/brain-model';
 import type { RoutingInfo } from '../../shared/contract';
 import type { AgentCatalogService } from '../agents/catalog';
@@ -37,6 +38,9 @@ export interface BrainModelDeps {
   /** the skill names skills_suggest ranks for a request (skills/suggest.ts), best first */
   suggestSkills: (request: string) => Promise<string[]>;
   emit: () => void;
+  /** a pass the app ran by itself (the timers, a new lesson) changed something: the feed's quiet "Ruolo aggiornato" event
+   *  with its Annulla (wiring.ts → brain.publish, ADR 0102); never called for a pass the user started with the button */
+  applied?: (changes: BrainChange[]) => void;
   /** run the jobs by themselves (timers); false in the test suites */
   auto: boolean;
   now?: () => number;
@@ -54,7 +58,7 @@ export class BrainModelService {
     this.log = new ChangeLog(d.userData, d.now);
     this.reportFile = path.join(d.userData, 'brain-migration.json');
     this.runFile = path.join(d.userData, 'brain-maintenance.json');
-    d.learning.onProposed = () => { void this.maintain('corrections').catch(() => { /* logged inside */ }); };
+    d.learning.onProposed = () => { void this.maintain('corrections', { auto: true }).catch(() => { /* logged inside */ }); };
   }
   private now(): number { return this.d.now?.() ?? Date.now(); }
   private root(): string | null { const r = this.d.root(); try { return r && fs.statSync(r).isDirectory() ? fs.realpathSync(r) : null; } catch { return null; } }
@@ -121,14 +125,19 @@ export class BrainModelService {
     };
   }
 
-  /** Runs every job (or one) once; a second call while one runs waits for it. */
-  maintain(job?: MaintenanceJobId): Promise<BrainModelState> {
+  /** The change log alone, newest first, with what can still be undone (the morning block, ADR 0102): no skill or memory read. */
+  changes(): BrainChange[] { return this.log.list(this.restorer()); }
+
+  /** Runs every job (or one) once; a second call while one runs waits for it. `auto`: the app started it by itself (its
+   *  changes are announced in the feed, `applied`). */
+  maintain(job?: MaintenanceJobId, opts: { auto?: boolean } = {}): Promise<BrainModelState> {
     if (job !== undefined && !MAINTENANCE_JOBS.includes(job)) return Promise.reject(new Error('Unknown maintenance job'));
-    if (this.running) return this.running.then(() => this.maintain(job));
+    if (this.running) return this.running.then(() => this.maintain(job, opts));
     const run = (async () => {
       const root = this.root();
       if (!root) throw new Error('Scegli prima la cartella del brain.');
       const ctx = this.context(root), done: JobResult[] = [];
+      const before = new Set(this.log.all().map(c => c.id));
       for (const id of job ? [job] : MAINTENANCE_JOBS) {
         try {
           const r = id === 'migration' ? await migrate(ctx) : id === 'corrections' ? corrections(ctx) : id === 'repeated-task' ? repeatedTask(ctx) : id === 'merge-skills' ? mergeSkills(ctx) : mergeMemory(ctx);
@@ -142,7 +151,12 @@ export class BrainModelService {
       writeLocal(this.runFile, { at: this.now(), jobs: done.map(({ report: _r, ...x }) => { void _r; return x; }) } satisfies MaintenanceRun);
       if (done.some(r => r.changes)) log.info('brain', 'maintenance applied', { data: Object.fromEntries(done.map(r => [r.job, r.changes])) });
       this.d.emit();
-      return this.state();
+      const state = this.state();
+      const fresh = state.changes.filter(c => !before.has(c.id) && c.job !== 'user');
+      if (opts.auto && fresh.length && this.d.applied) {
+        try { this.d.applied(fresh); } catch (e) { log.warn('brain', 'maintenance changes not announced', { cause: errText(e), hint: 'the Skill, Regole and Memoria pages still list them with their Annulla' }); }
+      }
+      return state;
     })();
     this.running = run.finally(() => { this.running = null; });
     return this.running;
@@ -185,9 +199,9 @@ export class BrainModelService {
     if (!this.d.auto) return;
     const first = setTimeout(() => {
       const root = this.root();
-      try { if (root && !this.report() && procedureSections(root).length) void this.maintain('migration').catch(() => { /* logged */ }); } catch { /* unreadable brain */ }
+      try { if (root && !this.report() && procedureSections(root).length) void this.maintain('migration', { auto: true }).catch(() => { /* logged */ }); } catch { /* unreadable brain */ }
     }, 60_000);
-    const every = setInterval(() => { void this.maintain().catch(() => { /* logged */ }); }, SIX_HOURS);
+    const every = setInterval(() => { void this.maintain(undefined, { auto: true }).catch(() => { /* logged */ }); }, SIX_HOURS);
     first.unref?.(); every.unref?.();
     this.timers.push(first, every);
   }

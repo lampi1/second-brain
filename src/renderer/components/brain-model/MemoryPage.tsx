@@ -2,20 +2,19 @@
 // (owner, 2026-10-19: contents formatted well, files you can really open, curious facts, statistics and charts,
 // maintenance as a visible button). Top: the "Manutenzione" button (every job now, what each did, "Annulla"), then the
 // statistics (MemoryInsights.tsx: key numbers, "Lo sapevi?", growth, lines per agent, recurring errors, skills used or
-// never used, most recalled lines, stale files), then three sections of cards whose latest lines are rendered Markdown
+// never used, stale files; no "richiami" since ADR 0101), then three sections of cards whose latest lines are rendered Markdown
 // and open the real file in the file viewer: knowledge (customers, environments, people, references), what happened
 // (open threads, journal, errors, with the error log) and the agents' memories with the shared one. A clean install
 // shows what will appear instead of empty charts. "Unisci i doppioni" (bottom panel) runs the merge-memory job alone.
 // Memory never travels with an exported agent. Rendered by App.tsx PageFrame for 'memoria'.
 import { useContext, useState, type CSSProperties, type ReactNode } from 'react';
-import type { AgentMemoryStat, ErrorEntry, MemoryFile, MemoryStats } from '@shared/brain-model';
+import type { ErrorEntry, MemoryFile, MemoryStats } from '@shared/brain-model';
 import { openFileViewer } from '../../actions';
 import { locale, t } from '../../i18n';
 import { useBrainModel } from '../../store/brain-model';
 import { PageHead } from '../../brain/components/States';
 import { memorySections } from '../../lib/brain-model-view';
 import { brainFile, lineParts, memoryEmpty, shortDay } from '../../lib/memory-view';
-import { HelpTip } from '../HelpTip';
 import { IconFile } from '../Icons';
 import { MaintenancePanel, when } from './MaintenancePanel';
 import { MaintenanceButton } from './MaintenanceButton';
@@ -28,7 +27,7 @@ const GROUPS = ['Clienti', 'Ambienti', 'Persone', 'Riferimenti'] as const;
 const groupLabel = (g: string) => ((GROUPS as readonly string[]).includes(g) ? t(`bm.mem.group.${g as (typeof GROUPS)[number]}`) : g);
 const kindLabel = (m: MemoryFile) => (m.kind === 'knowledge' ? groupLabel(m.group) : m.kind === 'agent' ? m.group : t(`bm.mem.kind.${m.kind}`));
 
-function MemoryCard({ m, index, agent }: { m: MemoryFile; index: number; agent?: AgentMemoryStat }) {
+function MemoryCard({ m, index }: { m: MemoryFile; index: number }) {
   const open = useContext(OpenFile);
   const lines = m.previewMd ?? m.preview;
   return <article className="catalog-card mm-card" data-kind={m.kind === 'agent' ? 'agent' : 'memory'} data-mkind={m.kind} data-testid={`bm-mem-${m.file}`} style={{ '--row-index': Math.min(index, 8) } as CSSProperties}>
@@ -42,17 +41,16 @@ function MemoryCard({ m, index, agent }: { m: MemoryFile; index: number; agent?:
     })}</ul>}
     <footer className="bm-card-foot">
       <span>{t('bm.mem.entries', { n: m.entries })}{m.changedAt ? ` · ${t('bm.changed', { at: when(m.changedAt) })}` : ''}</span>
-      {agent && <span className="mm-recall-chip" data-testid="mm-card-recalls">{t('mm.loadedIn', { n: agent.recalls })} <HelpTip label={t('mm.loadedHelpLabel')}>{t('mm.loadedHelp')}</HelpTip></span>}
       <span className="sp" />
       <button type="button" className="btn btn-ghost btn-s mm-open" onClick={() => open(m.file)} data-testid="mm-open"><IconFile /> {t('mm.openFile')}</button>
     </footer>
   </article>;
 }
 
-function Section({ id, title, lead, files, empty, stats, children }: { id: 'knowledge' | 'happened' | 'agents'; title: string; lead: string; files: MemoryFile[]; empty: string; stats?: MemoryStats; children?: ReactNode }) {
+function Section({ id, title, lead, files, empty, children }: { id: 'knowledge' | 'happened' | 'agents'; title: string; lead: string; files: MemoryFile[]; empty: string; children?: ReactNode }) {
   return <section className="bm-section" aria-labelledby={`bm-mem-${id}`} data-testid={`bm-mem-section-${id}`}>
     <header><div><h3 id={`bm-mem-${id}`}>{title}</h3><p>{lead}</p></div></header>
-    {files.length ? <div className="catalog-grid">{files.map((m, i) => <MemoryCard key={m.file} m={m} index={i} agent={m.kind === 'agent' ? stats?.perAgent.find(a => a.agentId === m.agentId) : undefined} />)}</div> : <p className="bm-empty">{empty}</p>}
+    {files.length ? <div className="catalog-grid">{files.map((m, i) => <MemoryCard key={m.file} m={m} index={i} />)}</div> : <p className="bm-empty">{empty}</p>}
     {children}
   </section>;
 }
@@ -106,7 +104,7 @@ export function MemoryPage() {
       {stats && (memoryEmpty(stats) ? <CleanStart /> : <MemoryInsights s={stats} />)}
       <Section id="knowledge" title={t('bm.mem.knowledge')} lead={t('bm.mem.knowledgeLead')} files={knowledge} empty={t('bm.mem.empty.knowledge')} />
       <Section id="happened" title={t('bm.mem.happened')} lead={t('bm.mem.happenedLead')} files={s.happened} empty={t('bm.mem.empty.happened')}><ErrorLog items={stats?.errors.items ?? []} groups={stats?.errors.groups ?? []} /></Section>
-      <Section id="agents" title={t('bm.mem.agents')} lead={t('bm.mem.agentsLead')} files={s.agents} empty={t('bm.mem.empty.agents')} stats={stats} />
+      <Section id="agents" title={t('bm.mem.agents')} lead={t('bm.mem.agentsLead')} files={s.agents} empty={t('bm.mem.empty.agents')} />
     </>}
     <MaintenancePanel kinds={['memory']} job="merge-memory" runLabel={t('bm.mem.mergeDup')} testId="bm-maint-memory" />
   </div></OpenFile.Provider>;

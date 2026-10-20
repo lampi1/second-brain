@@ -31,7 +31,7 @@ import type { ChatService } from '../services';
 import { cliVersion, killTrees, killTreesWithin, resolveClaude } from './cli';
 import { reapAfterQuit, reapEnabled, reapEngine, snapshotTrees } from './proctree';
 import { jobGuard } from './jobguard';
-import { AFTER_CALLS, CACHE_TTL_MS, coldArmed, coldRoute, continuityStep, type ColdView, ORCHESTRATOR_COMPACT, romeDay } from './continuity';
+import { AFTER_CALLS, CACHE_TTL_MS, coldArmed, coldRoute, continuityStep, type ColdView, ORCHESTRATOR_COMPACT, ORCHESTRATOR_PAUSE_COMPACT, romeDay } from './continuity';
 import { autoHandoff, coldPrompt, continuePrompt, extractHandoff, HANDOFF_END, HANDOFF_START, handoffRequest, HandoffStore, nextTitle } from './handoff';
 import { ContextCounters } from './context-stats';
 
@@ -40,24 +40,25 @@ export const RESUME_TEXT = "[second-brain] L'app è stata riavviata mentre lavor
 import { cut, isUuid, nextId, type HarnessSession, type SessionOptions, type SessionPatch, type SessionSink } from './session';
 import { ChatStore, type PastSession, type StoredChat } from './store';
 import { updateActivity } from '../update/activity';
-import { BufferedSink, WarmPool, type WarmEngine } from './warm';
+import { BufferedSink, PLAIN_LAUNCH, WarmPool, type WarmEngine, type WarmLaunch } from './warm';
 import { AdmissionQueue, type AdmissionLimits, type LoadSampler } from './admission';
 import { AgentMayNotWake } from '../engines/policy';
 import { isAppChat } from '../brain/routing';
 import { engineOf, engineOrThrow } from '../engines/registry';
 import { sessionFor } from '../engines/sessions';
 import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
-import { isWorkRole } from '../../shared/roles';
+import { isWorkRole, ROLE_DEFAULTS } from '../../shared/roles';
 import { waitsForPeople, waitsForWork } from '../../shared/waiting';
 import { claudeHome, findTranscript, readHistory } from './transcript';
 import { orchestratorOwner, plainOwner, type ResolvedRole } from '../agents/catalog';
 import { withinParent } from '../agents/worktrees';
-import { FAIL_CLOSED, aboveCeiling, allowsClass, belowParent, browserAccess, claudeDefaultMode, COMMAND_TOOLS, commandsReadOnly, narrowest, readOnlyCommand, within, type AgentPolicy, type BrowserAccess, type ReadScripts } from '../agents/tool-policy';
+import { FAIL_CLOSED, aboveCeiling, allowsClass, belowParent, browserAccess, claudeDefaultMode, claudeTools, COMMAND_TOOLS, commandsReadOnly, narrowest, readOnlyCommand, within, type AgentPolicy, type BrowserAccess, type ReadScripts } from '../agents/tool-policy';
 import { readOnlyTools } from '../agents/read-tools';
 import { type AgentOwnerSnapshot, type AgentRun, type AgentRunEnd, type AgentRunOutcome, type AgentRunTags } from '../../shared/agents';
 import { AgentRunStore, addSkill, addTurn, APP_MAX, endRun, REPO_MAX, reopenRun, SKILL_ID, SKILLS_MAX, staleDue, tagName, type RunLinks } from '../agents/runs';
 import { reportOf } from '../agents/run-report';
-import { gateRequest, runtimePluginName } from '../agents/role-gate';
+import { gateRequest, runtimePluginName, SubagentGate } from '../agents/role-gate';
+import { afterTree, KEEP as CHECKPOINTS_KEPT, prune as pruneCheckpoints, restore as restoreCheckpoint, snapshot as takeCheckpoint, type Checkpoint } from './checkpoints';
 import { TurnToolBudget } from '../agents/orchestrator-budget';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
 import { resultMessage, type DelegationLimitHit, type DelegationResult } from '../../shared/delegation';
@@ -77,6 +78,15 @@ import { recallWarning, type Recall } from '../search/hybrid/recall';
 export interface ChatManagerOptions {
   /** the roles in a few lines, for the Orchestrator's first message of a session (agents/discovery.ts roleCatalogBrief) */
   roleCatalogBrief?: () => string;
+  /** the review pack under a Sentinel's first message (agents/review-pack.ts): the change it checks, gathered with git */
+  reviewPack?: (cwd: string) => Promise<string>;
+  /** ADR 0103: record the files before each turn of a work chat in a git repository (checkpoints.ts); absent = off */
+  checkpoints?: () => boolean;
+  /** how long a child's result waits for its siblings' (default CHILD_RESULTS_MS) */
+  childResultsMs?: number;
+  /** the estimate line under a user's message to the Orchestrator (shared/task-estimate.ts estimateLine): its first model
+   *  call acts on it instead of calling task_estimate; null = no line */
+  requestEstimate?: (text: string) => string | null;
   /** the role a new chat runs (catalog.resolve), with the plugin of its launch (only the skills it was given) */
   resolveAgent?: (req: NewChat) => ResolvedRole & { assets?: { pluginDir: string; skillRoot: string } };
   /** the git worktrees of the repository at a folder (agents/worktrees.ts): a delegated chat may work in its parent's */
@@ -232,6 +242,19 @@ interface Rec {
   autoCompleted?: boolean;
   agentInstructions?: string;
   agentAssets?: { pluginDir: string; skillRoot: string };
+  /** ADR 0103: the files before each recent turn (checkpoints.ts), newest last; its repository's top folder (null = not
+   *  a git work tree: no checkpoints); a note for the next message after the user undid a turn */
+  checkpoints?: Checkpoint[];
+  /** the session whose first API call was counted already (context-stats.ts cache) */
+  cacheSession?: string;
+  gitRoot?: string | null;
+  /** child results a quit held back (shutdown), sent after the next start (resumeInterrupted) */
+  heldResults?: { title: string; message: string }[];
+  /** the end-of-turn record of the last checkpoint, while git writes it (recordTurnEnd) */
+  afterPending?: Promise<void> | undefined;
+  undoNote?: string;
+  /** the roles this chat's role may launch (resolved at creation; absent = unknown, e.g. a chat saved before) */
+  launches?: string[];
   /** the skills its launch gave it (role defaults, linked and the launch's own): the role gate allows only these */
   skills?: string[];
   /** the agent's tool policy and permission ceiling, frozen at start like its instructions (A2) */
@@ -347,10 +370,29 @@ const MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'pla
 /** chat-endpoint tools the Orchestrator can never use (chatToolShown): it does not delegate, report, ask a parent or
  *  rate a child (its chats are roots: agent_child_feedback takes only a child's run), and
  *  agent_catalog / agent_learn_propose are on its own endpoint already */
-const ORCHESTRATOR_HIDDEN: ReadonlySet<string> = new Set(['agent_delegate', 'agent_report', 'agent_ask_parent', 'agent_answer_child', 'agent_children', 'agent_child_feedback', 'agent_catalog', 'agent_learn_propose']);
+const ORCHESTRATOR_HIDDEN: ReadonlySet<string> = new Set(['agent_delegate', 'agent_report', 'agent_ask_parent', 'agent_answer_child', 'agent_children', 'agent_child_feedback', 'agent_catalog', 'agent_learn_propose',
+  // it saves scripts with brain_script_save on its own endpoint
+  'brain_script_add']);
+/** the tools only a chat that may delegate can use (chatToolShown): a role that launches no role (Scout, Judge) never
+ *  sees them (~1 500 tokens of schemas in every call, each call refused) */
+const DELEGATING_ONLY: ReadonlySet<string> = new Set(['agent_delegate', 'agent_children', 'agent_answer_child', 'agent_child_feedback', 'agent_catalog', 'skills_suggest']);
 /** a root chat's deliverable longer than this reaches the Orchestrator as where to read it, not whole (it is the chat's answer
  *  there; the Orchestrator re-reads every message in each later turn) */
 const ORCHESTRATOR_OUTPUT_MAX = 800;
+/** «Lampo», the quick lane (ADR 0105): its title, tools and frame */
+export const LAMPO_TITLE = 'Lampo';
+const LAMPO_POLICY: AgentPolicy = { tools: { allow: ['read', 'web'] }, ceiling: 'plan' };
+/** the chat-endpoint tools Lampo never sees (chatToolShown), beside every agent_* tool */
+const LAMPO_HIDDEN: ReadonlySet<string> = new Set([...APP_CHAT_TOOLS, 'brain_script_add', 'skills_suggest']);
+const LAMPO_FRAME = 'You are Lampo, the quick lane of the user\'s second-brain app. Answer fast and briefly, in the user\'s language, from what you know and quick reads (Read, Grep, Glob, the web). You change nothing and start no work: no edits, no commands, no plans. When a request needs changes, many steps or other chats, say so in one line: the user hands it to the Orchestrator with «Fanne un lavoro».';
+/** A role launch with Claude's sub-agent tool (tool-policy.ts claudeTools) gets the role gate's sub-agent rule as a
+ *  PreToolUse hook: Claude starts a sub-agent without a permission request (role-gate.ts SubagentGate). */
+const subagentGateFor = (tools: AgentPolicy['tools'] | null | undefined): Pick<SessionOptions, 'preToolUse'> =>
+  tools && claudeTools(tools).includes('Agent') ? { preToolUse: new SubagentGate() } : {};
+/** how long a child's result waits for its siblings' before it goes to the parent alone */
+const CHILD_RESULTS_MS = 60_000;
+/** what a root chat's clean result tells the Orchestrator (onCleanReport) */
+export interface CleanReportNote { chatId: string; title: string; role: string; summary: string; at: number }
 /** archived chats kept (the oldest beyond this leave the app; their transcripts stay where the CLI keeps them) */
 const MAX_ARCHIVED = 60;
 /** the user's words carried in a note (ADR 0083: the user's own message, never the child's) */
@@ -407,6 +449,9 @@ export class ChatManager implements ChatService {
   /** notes for a chat's next message (the user wrote in one of its delegated children): they ride along, no turn of their own */
   private notesFor = new Map<string, string[]>();
   private userWroteListeners: ((n: UserWroteNote) => void)[] = [];
+  private cleanReportListeners: ((n: CleanReportNote) => boolean)[] = [];
+  /** children's results waiting for their siblings', per parent (queueChildResult) */
+  private childResults = new Map<string, { items: { title: string; message: string }[]; timer: NodeJS.Timeout | null }>();
   /** "Riprendi" in flight per old chat: a double click or two agents get the same new chat, never two. */
   private continuing = new Map<string, Promise<ChatSummary>>();
   private store: ChatStore;
@@ -429,7 +474,9 @@ export class ChatManager implements ChatService {
   // no engine is started ahead while the machine is busy or chats wait in the CPU queue (ADR 0036)
   /** the chat id of the warm engine being spawned now (spawnWarm), before the pool holds it */
   private warmChat: string | null = null;
-  private readonly warm = new WarmPool({ spawn: cwd => this.spawnWarm(cwd), enabled: () => !!this.opts.prewarm && !this.quitting && !updateActivity.frozen && !this.admission?.busy() && this.opts.engineOn?.('claude') !== false });
+  /** the launch of each waiting engine by its chat id, until a chat adopts it */
+  private readonly warmViews = new Map<string, WarmLaunch>();
+  private readonly warm = new WarmPool({ spawn: (cwd, launch) => this.spawnWarm(cwd, launch), enabled: () => !!this.opts.prewarm && !this.quitting && !updateActivity.frozen && !this.admission?.busy() && this.opts.engineOn?.('claude') !== false });
 
   constructor(private readonly opts: ChatManagerOptions) {
     this.analytics = new AgentAnalyticsCollector(opts.userData);
@@ -458,6 +505,10 @@ export class ChatManager implements ChatService {
     if (opts.prewarm) {
       const last = [...this.chats.values()].filter(r => !!engineOf(r.s.harness)?.caps.warm && r.s.origin === 'app' && !r.s.isOrchestrator).sort((a, b) => b.createdAt - a.createdAt)[0];
       if (last && fs.existsSync(last.s.cwd)) this.warm.schedule(last.s.cwd, opts.prewarmDelayMs ?? 20000);
+      // the Orchestrator's engine resumes ahead of the user's first message of the day: no 10-17 s start then, and an idle
+      // engine makes no model call
+      const t = setTimeout(() => this.prewarmOrchestrator(), opts.prewarmDelayMs ?? 20000);
+      t.unref?.();
     }
     const claude = resolveClaude(opts.enginePaths?.claude ?? null);
     log.info('chats', 'manager ready', { data: { restored: this.chats.size, claude: claude ? `${claude.source}: ${claude.path}` : 'not found', overrides: opts.enginePaths ?? null } });
@@ -495,6 +546,12 @@ export class ChatManager implements ChatService {
     if (req.goal !== undefined && (typeof req.goal !== 'string' || !req.goal.trim() || req.goal.length > 2000)) throw new Error('Run goal must contain 1 to 2000 characters.');
     if (Object.values(links).some(v => v !== undefined)) this.runs.checkLinks(links);
     const asked = startTags(req);
+    if (req.quick) {
+      if (by !== 'user' || req.orchestrator || req.parentId || req.roleId) throw new Error('Lampo: only the user opens it, as a plain chat.');
+      const current = this.list().find(c => c.quick && !c.closedAt);
+      if (current) return current;
+      req = { ...req, title: LAMPO_TITLE, permissionMode: 'plan' };
+    }
     if (req.orchestrator) {
       if (by !== 'user') throw new Error('Only the user can create the Orchestrator.');
       const current = this.list().find(c => c.isOrchestrator && !c.closedAt);
@@ -502,7 +559,9 @@ export class ChatManager implements ChatService {
       if (current && req.replaces !== current.id) return current;
       req = { ...req, orchestrator: true, title: ORCHESTRATOR_TITLE };
     }
-    const agent: Pick<ResolvedRole, 'request' | 'owner' | 'instructions' | 'policy' | 'maxContext' | 'tier'> & { skills?: string[]; assets?: { pluginDir: string; skillRoot: string } } = inherited ? { ...inherited, policy: inherited.policy ?? null, request: req }
+    const agent: Pick<ResolvedRole, 'request' | 'owner' | 'instructions' | 'policy' | 'maxContext' | 'tier'> & { skills?: string[]; launches?: string[]; assets?: { pluginDir: string; skillRoot: string } } = inherited ? { ...inherited, policy: inherited.policy ?? null, request: req }
+      // Lampo reads and answers: read and web tools only, plan mode (no edit, no command, no popup), its own short frame
+      : req.quick ? { request: req, owner: plainOwner(req.harness, req.model ?? null), instructions: LAMPO_FRAME, policy: LAMPO_POLICY }
       : this.opts.resolveAgent?.(req) ?? { request: req, owner: plainOwner(req.harness, req.model ?? null), instructions: '', policy: null };
     req = agent.request;
     // a delegated chat (agent_delegate): only an agent's, under a live parent, in the parent's folder, linked to its run
@@ -542,13 +601,13 @@ export class ChatManager implements ChatService {
       if (!req.fork || !caps.fork || !isUuid(forkOf) || !src || src.s.harness !== req.harness) throw new Error('Si può solo duplicare (fork) una chat dell’app, sullo stesso motore, se il motore lo permette.');
     }
 
-    // a plain new Claude chat adopts the engine already waiting in its folder (warm.ts): no 10-25 s start-up
-    const warm = caps.warm && !forkOf && !req.worktree && !req.orchestrator && req.permissionMode !== 'bypassPermissions'
-      // warm engines are spawned with no tool limits: an agent with a policy always gets its own process
-      && !policy
-      // nor one with its own "Contesto massimo": the window is fixed when the engine starts (#80)
-      && !agent.maxContext
-      ? this.warm.take(cwd) : null;
+    // a new Claude chat adopts an engine already waiting in its folder and launched like it (warm.ts): no 10-25 s
+    // start-up. A role's tools, ceiling, skills plugin and "Contesto massimo" are fixed when the engine starts (#80), so
+    // only an engine launched with the same ones fits (launchSig)
+    // a delegated chat starts cold: its endpoint answers from its ancestors, which a waiting engine cannot know
+    const warmable = caps.warm && !forkOf && !req.worktree && !req.orchestrator && !delegator && req.permissionMode !== 'bypassPermissions';
+    const launch = this.warmLaunch(policy, agent.assets, agent.maxContext, policy ? { role: agent.owner?.source === 'catalog' ? agent.owner.id : null, launches: agent.launches ?? null } : undefined);
+    const warm = warmable ? this.warm.take(cwd, launch.sig) : null;
     const id = warm?.chatId ?? `c_${crypto.randomBytes(5).toString('hex')}`;
     const now = Date.now();
     // `replaces`: the new Orchestrator takes the role, the old one goes on as a normal chat (history kept, never deleted)
@@ -557,7 +616,11 @@ export class ChatManager implements ChatService {
     const title = req.title?.trim() || (req.prompt?.trim() ? cut(req.prompt, 50) : forkOf ? 'Fork' : 'Nuova chat');
     // an agent's chat with a prompt starts with its first message, through the CPU queue (ADR 0036); a warm engine is
     // already running: adopting it is no new start (its first turn still asks the queue)
-    const prompt = req.prompt?.trim() ? req.prompt : null;
+    const given = req.prompt?.trim() ? req.prompt : null;
+    // a Sentinel checks a change: the app gathers it (branch, base, commits, files, diff) instead of 5-15 git calls
+    const pack = given && agent.owner.source === 'catalog' && agent.owner.id === 'sentinel' && this.opts.reviewPack
+      ? await this.opts.reviewPack(cwd).catch(e => { log.warn('chats', 'review pack not gathered', { cause: errText(e), hint: 'the Sentinel reads the change itself' }); return ''; }) : '';
+    const prompt = given && pack ? `${given}\n\n${pack}` : given;
     const viaQueue = by !== 'user' && !!prompt && !!this.admission;
     const r: Rec = {
       s: {
@@ -569,6 +632,7 @@ export class ChatManager implements ChatService {
         // a chat that goes through the queue has started nothing yet: 'starting' only with an engine on its way (a queued
         // chat that went starting → idle read as a finished turn: the Orchestrator was told "ha finito il turno", 2026-10-14)
         state: viaQueue && !warm ? 'idle' : 'starting', costUsd: 0, pending: 0, isOrchestrator: !!req.orchestrator, lastText: '', updatedAt: now, browserTabIds: [],
+        ...(req.quick ? { quick: true as const } : {}),
         ...(caps.cost ? {} : { costKnown: false as const }),
         ...(req.route ? { route: req.route } : {}),
         ...(delegator ? { parentId: delegator.s.id, ...(req.delegation ? { delegation: req.delegation } : {}) } : {}),
@@ -577,6 +641,7 @@ export class ChatManager implements ChatService {
       agentInstructions: agent.instructions,
       ...(agent.assets ? { agentAssets: agent.assets } : {}),
       ...(agent.assets && agent.skills ? { skills: agent.skills } : {}),
+      ...(agent.launches && agent.owner.source === 'catalog' ? { launches: [...agent.launches] } : {}),
       ...(policy ? { policy } : {}),
       // a delegated chat freezes its parent's role chain now (a parent with no chain: the child has none either and,
       // once the parent is gone, no managed MCP server at all)
@@ -603,7 +668,8 @@ export class ChatManager implements ChatService {
     log.info('chats', 'chat created', { chat: id, data: { harness: req.harness, cwd, fork: !!forkOf, model: r.choice.model, permissionMode: r.choice.permissionMode, orchestrator: r.s.isOrchestrator, warm: !!warm } });
     this.updated(r);
     if (warm) this.adoptWarm(r, warm); else if (!viaQueue) this.startSession(r);
-    if (caps.warm) this.warm.schedule(cwd, this.opts.prewarmDelayMs ?? 5000);
+    // the next chat like this one finds an engine waiting (a role's own launch; an Orchestrator, fork or bypass chat: a plain one)
+    if (caps.warm) this.warm.schedule(cwd, this.opts.prewarmDelayMs ?? 5000, warmable ? launch : PLAIN_LAUNCH);
     // the chat exists from here on: a failed first send shows as state 'error' + lastError, not as a lost chat
     if (prompt) {
       // a delegated chat's contract says who sent it (the parent's title), like mail between chats
@@ -778,7 +844,13 @@ export class ChatManager implements ChatService {
     // what the user wrote in its children since its last message rides along (shown in its transcript already)
     const notes = this.notesFor.get(chatId);
     if (notes?.length) this.notesFor.delete(chatId);
-    const body = notes?.length ? `${USER_NOTES_LABEL}\n${notes.join('\n')}\n\n${text0}` : text0;
+    const noted0 = notes?.length ? `${USER_NOTES_LABEL}\n${notes.join('\n')}\n\n${text0}` : text0;
+    // the user put the files back before the last turn: the chat learns it with its next message
+    const noted = r.undoNote ? `${r.undoNote}\n\n${noted0}` : noted0;
+    r.undoNote = undefined;
+    // the user's own request to the Orchestrator carries the app's estimate (zero tokens), never the app's news or mail
+    const estimate = r.s.isOrchestrator && !from && !resumed && t && !t.startsWith('[') ? this.requestEstimate(t) : null;
+    const body = estimate ? `${noted}\n\n${estimate}` : noted;
     // the role once per context: the Orchestrator's with the role catalog, a role chat's composed instructions; a
     // resumed session already holds it in its history, so it goes again only when the text changed or was compacted away
     const roleText = r.s.isOrchestrator ? `${orchestratorRole(r.agentInstructions || undefined, this.opts.roleCatalogBrief?.())}\n\n`
@@ -787,6 +859,8 @@ export class ChatManager implements ChatService {
     // a changed text is checked once per engine start (as before this, never mid-session: a catalog edit would resend it)
     const role = roleText && (!r.rolePrimed || (!r.roleChecked && r.rolePrimed.sig !== roleSig)) ? roleText : '';
     r.roleChecked = true;
+    // the files as they are before this turn (ADR 0103): what the user can put back with «Annulla l'ultimo turno»
+    if (this.opts.checkpoints?.() && !r.s.isOrchestrator && !r.s.quick && !this.midTurn(r)) await this.checkpoint(r);
     try {
       r.session.send(`${role}${warning}${body}`, imgs);
       if (role) { r.rolePrimed = { session: r.s.sessionId ?? '', sig: roleSig }; this.persist(); }
@@ -821,12 +895,12 @@ export class ChatManager implements ChatService {
       const c = r.s, child = c.agentChildren;
       let held: boolean | AutoCloseWaiting = true;
       try { held = externalHold(c.id); } catch { /* fail closed */ }
-      const eligible = !this.quitting && !updateActivity.frozen && !c.isOrchestrator && !held &&
+      const eligible = !this.quitting && !updateActivity.frozen && !c.isOrchestrator && !c.quick && !held &&
         (c.state === 'idle' || r.autoClosing && c.state === 'closed') && !!c.lastResult && !c.lastResult.isError && !c.lastResult.interrupted && !c.lastError &&
         !r.working && !r.session?.busy && r.pending.size === 0 && !workBehind(c) && !c.waitsOn && !c.queued && !r.deliveryHolds &&
         !r.opening && !r.releasing && !r.switching && !r.handoffTurn && (!r.archiving || r.autoClosing) &&
         child?.coverage === 'complete' && child.active === 0 && !child.children.some(x => x.state === 'running' || x.state === 'waiting' || x.state === 'unknown');
-      const waitingFor = eligible || c.isOrchestrator ? undefined : this.waitingOf(r, held);
+      const waitingFor = eligible || c.isOrchestrator || c.quick ? undefined : this.waitingOf(r, held);
       return { id: c.id, eligible: !!eligible, stamp: `${r.activityRevision ?? 0}:${r.lastTurnAt}:${c.lastResult?.at ?? 0}:${c.pending}:${c.model ?? ''}:${c.work?.status ?? ''}:${c.waitsOn ?? ''}`,
         activityAt: r.autoActivityAt ??= autoCloseNow(), ...(waitingFor ? { waitingFor } : {}),
         reason: waitingFor ? WAITING_REASON[waitingFor] : child?.coverage !== 'complete' ? 'Sottoagenti non completamente osservabili: chiusura sospesa' : 'Attività o stato da verificare' };
@@ -1004,6 +1078,9 @@ export class ChatManager implements ChatService {
   }
   /** orchestrator-wake.ts: told of every message the user typed in a work chat */
   onUserWrote(fn: (n: UserWroteNote) => void): void { this.userWroteListeners.push(fn); }
+  /** A root chat's clean result (done, every criterion met, no question): a listener that returns true took it as quiet
+   *  news for the Orchestrator (orchestrator-wake.ts cleanReport); else it goes as a message, as any other result. */
+  onCleanReport(fn: (n: CleanReportNote) => boolean): void { this.cleanReportListeners.push(fn); }
   /** the notes waiting for this chat's next message (tests, diagnostics) */
   notesWaiting(chatId: string): readonly string[] { return this.notesFor.get(chatId) ?? []; }
 
@@ -1088,6 +1165,14 @@ export class ChatManager implements ChatService {
   /** After a start: every chat whose turn the last quit or crash cut (working still set) resumes by itself with
    *  RESUME_TEXT and the "ripresa dopo il riavvio" mark (resumedAt). Chats that had finished stay closed. */
   resumeInterrupted(): number {
+    // child results the last quit held back reach their parent now, as one batch
+    for (const r of this.chats.values()) {
+      const held = r.heldResults;
+      if (!held?.length) continue;
+      delete r.heldResults;
+      this.childResults.set(r.s.id, { items: held, timer: null });
+      this.flushChildResults(r.s.id);
+    }
     const cut = [...this.chats.values()].filter(r => r.working && !r.s.closedAt);
     for (const r of cut) {
       r.s.resumedAt = Date.now();
@@ -1303,6 +1388,7 @@ export class ChatManager implements ChatService {
       const step = continuityStep({ ...v, ctxSince: r.ctxSince, askedOn: r.dayCompactOn }, now, { cold: on, day, idleMs: idle, ttlMs: this.ttl() });
       if (step === 'note') { n++; void this.coldNote(r); continue; }
       if (step === 'compact') { n++; void this.orchestratorCompact(r, now); continue; }
+      if (step === 'pause') { n++; r.coldAskedFor = r.lastTurnAt; void this.orchestratorCompact(r, now, ORCHESTRATOR_PAUSE_COMPACT); continue; }
       if (r.closeAfterCold && !r.handoffTurn && (!on || !coldArmed(v, now, this.ttl()))) void this.endKept(r);
     }
     return n;
@@ -1333,13 +1419,13 @@ export class ChatManager implements ChatService {
 
   /** An Orchestrator's day compaction (continuity.ts orchestratorDayDue): one quiet `/compact` turn with what to keep; the engine's compact_boundary
    *  shows in the tile («Contesto compattato») and starts its context's day again. Same chat, same session. */
-  private async orchestratorCompact(r: Rec, now: number): Promise<void> {
+  private async orchestratorCompact(r: Rec, now: number, prompt = ORCHESTRATOR_COMPACT): Promise<void> {
     r.dayCompactOn = romeDay(now);
     const sess = r.session;
     if (!sess) return;
     log.info('chats', 'Orchestrator: compacting a context from an earlier day', { chat: r.s.id, data: { contextTokens: r.s.contextTokens ?? null, since: r.ctxSince ?? null } });
     this.addItem(r, sysItem('dayCompactStart', undefined, 'info'), false);
-    const out = await this.quietTurn(r, sess, ORCHESTRATOR_COMPACT, true).catch((e: unknown) => {
+    const out = await this.quietTurn(r, sess, prompt, true).catch((e: unknown) => {
       log.warn('chats', 'Orchestrator day compaction not sent', { chat: r.s.id, cause: errText(e), hint: 'it still compacts by itself at its window (compactWindowTokens); tomorrow it tries again' });
       return null;
     });
@@ -1431,10 +1517,15 @@ export class ChatManager implements ChatService {
   async shutdown(graceMs = 800, capMs = 5500): Promise<void> {
     const end = Date.now() + capMs;
     this.quitting = true;
+    // child results still waiting for their siblings: kept on the parent, sent after the next start (resumeInterrupted)
+    for (const [parentId, q] of this.childResults) {
+      const parent = this.chats.get(parentId);
+      if (parent && q.items.length) parent.heldResults = [...(parent.heldResults ?? []), ...q.items];
+    }
     this.persist();
     this.warm.stop();
     this.admission?.stop(); // what still waits is lost with the run; a cut turn (working) resumes on the next start anyway
-    const live = [...this.chats.values()].map(r => r.session).concat(this.warm.current?.session ?? null).filter((x): x is HarnessSession => !!x && x.alive);
+    const live = [...this.chats.values()].map(r => r.session).concat(this.warm.engines.map(w => w.session)).filter((x): x is HarnessSession => !!x && x.alive);
     // the engines outside a Job Object: what they started, pictured now (WMI is slow) for the kill at the cap
     // each of these spawns a process (WMI's PowerShell, a taskkill per engine): the slowest says what one costs now
     let spawnMs = 0;
@@ -1450,6 +1541,7 @@ export class ChatManager implements ChatService {
     if (this.usageTimer) clearInterval(this.usageTimer);
     if (this.coldTimer) clearInterval(this.coldTimer);
     if (this.runTimer) clearInterval(this.runTimer);
+    for (const q of this.childResults.values()) if (q.timer) clearTimeout(q.timer); // the results stay on the children (agent_children)
     this.counters.flush();
     if (!this.runs.problem) try { this.runs.flush(); } catch (e) { log.warn('chats', 'agent runs not saved at quit', { cause: errText(e) }); }
     process.off('exit', this.onExit);
@@ -1460,10 +1552,9 @@ export class ChatManager implements ChatService {
    *  the chats still open (the orphan sweep's owners, sweep.ts). */
   engines(): { live: { chatId: string; pid: number }[]; open: string[] } {
     const all = [...this.chats.values()];
-    const w = this.warm.current;
     return {
       live: all.flatMap(r => (r.session?.alive && r.session.pid ? [{ chatId: r.s.id, pid: r.session.pid }] : []))
-        .concat(w?.session.alive && w.session.pid ? [{ chatId: w.chatId, pid: w.session.pid }] : []),
+        .concat(this.warm.engines.flatMap(w => (w.session.alive && w.session.pid ? [{ chatId: w.chatId, pid: w.session.pid }] : []))),
       open: all.filter(r => !r.s.closedAt).map(r => r.s.id),
     };
   }
@@ -1476,7 +1567,7 @@ export class ChatManager implements ChatService {
     let n = 0;
     for (const r of this.chats.values()) {
       const sess = r.session;
-      if (!sess?.alive || sess.busy || r.releasing || r.archiving || r.opening || r.switching || r.autoClosing || (r.deliveryHolds ?? 0) > 0 || this.unsettledChildren(r) || r.handoffTurn || r.s.closedAt || r.s.isOrchestrator) continue;
+      if (!sess?.alive || sess.busy || r.releasing || r.archiving || r.opening || r.switching || r.autoClosing || (r.deliveryHolds ?? 0) > 0 || this.unsettledChildren(r) || r.handoffTurn || r.s.closedAt || r.s.isOrchestrator || r.s.quick) continue;
       if (r.s.state !== 'idle' || r.pending.size > 0 || workBehind(r.s)) continue;
       if (now - Math.max(r.activeAt ?? 0, r.lastTurnAt) < idleMs) continue;
       // a long chat waiting for its cold note keeps its engine: a resumed one would miss the cache (ADR 0031)
@@ -1532,11 +1623,31 @@ export class ChatManager implements ChatService {
     const parent = this.chats.get(parentId);
     if (parent) {
       this.updated(parent); // its waiting on this child may be over
-      this.send(parentId, resultMessage(d.role, r.s.title, result), undefined, false, r.s.title)
-        .catch(e => log.warn('chats', 'delegation result not delivered', { chat: parentId, cause: errText(e), hint: 'the result stays on the child chat; agent_children lists it' }));
+      this.queueChildResult(parentId, r.s.title, resultMessage(d.role, r.s.title, result));
     }
     log.info('chats', 'delegation reported', { chat: chatId, data: { parent: parentId, outcome: result.outcome, met, criteria: result.doneWhen.length } });
     return { parentId, delivered: !!parent };
+  }
+
+  /** A child's result for its parent: while siblings still owe theirs, it waits (at most CHILD_RESULTS_MS) so the parent
+   *  reads the batch in one turn instead of one turn per child, each re-reading its whole context. */
+  private queueChildResult(parentId: string, title: string, message: string): void {
+    const q = this.childResults.get(parentId) ?? { items: [], timer: null };
+    q.items.push({ title, message });
+    this.childResults.set(parentId, q);
+    if (!this.delegatedBusy(parentId)) { this.flushChildResults(parentId); return; }
+    if (!q.timer) { q.timer = setTimeout(() => this.flushChildResults(parentId), this.opts.childResultsMs ?? CHILD_RESULTS_MS); q.timer.unref?.(); }
+  }
+
+  private flushChildResults(parentId: string): void {
+    const q = this.childResults.get(parentId);
+    if (!q) return;
+    this.childResults.delete(parentId);
+    if (q.timer) clearTimeout(q.timer);
+    if (!this.chats.has(parentId) || !q.items.length) return;
+    const from = [...new Set(q.items.map(x => x.title))].join(', ');
+    this.send(parentId, q.items.map(x => x.message).join('\n\n'), undefined, false, from)
+      .catch(e => log.warn('chats', 'delegation result not delivered', { chat: parentId, cause: errText(e), hint: 'the result stays on the child chat; agent_children lists it' }));
   }
 
   /** agent_report from a root role chat the Orchestrator opened (app_create_chat, issue #93): its result is kept on its run
@@ -1559,7 +1670,11 @@ export class ChatManager implements ChatService {
     this.updated(r);
     const orchestrator = [...this.chats.values()].find(c => c.s.isOrchestrator && !c.s.closedAt);
     const role = r.s.agent?.id;
-    if (orchestrator && isWorkRole(role)) {
+    // a clean result (done, every criterion met, no question) is quiet news: the user reads it in the chat, the
+    // Orchestrator gets it with its next turn instead of a turn of its own (median ~0.18 $ each, zero-token-audit round 3)
+    const clean = result.outcome === 'done' && result.doneWhen.length > 0 && met === result.doneWhen.length && !result.questions?.length && !result.goalChangedByUser;
+    const quiet = orchestrator && isWorkRole(role) && clean && this.cleanReportListeners.some(fn => { try { return fn({ chatId, title: r.s.title, role: ROLE_DEFAULTS[role].name, summary: result.summary, at }); } catch (e) { log.warn('chats', 'quiet report listener failed', { chat: chatId, cause: errText(e), hint: 'the result goes to the Orchestrator as a message' }); return false; } });
+    if (orchestrator && isWorkRole(role) && !quiet) {
       this.send(orchestrator.s.id, resultMessage(role, r.s.title, result, { outputMax: ORCHESTRATOR_OUTPUT_MAX }), undefined, false, r.s.title)
         .catch(e => log.warn('chats', 'root result not delivered', { chat: orchestrator.s.id, cause: errText(e), hint: 'the result stays on the chat and its run; app_chats shows it' }));
     }
@@ -1601,7 +1716,7 @@ export class ChatManager implements ChatService {
    *  booster (jobguard.ts quit). */
   private takeLeft(sync: boolean): HarnessSession[] {
     // a killed pid stays "alive" until the loop runs 'close' again: never taskkill it twice (1-40 s each)
-    const left = [...this.chats.values()].map(r => r.session).concat(this.warm.current?.session ?? null).filter((x): x is HarnessSession => !!x && x.alive && !x.gone && !!x.pid && !this.killedPids.has(x.pid));
+    const left = [...this.chats.values()].map(r => r.session).concat(this.warm.engines.map(w => w.session)).filter((x): x is HarnessSession => !!x && x.alive && !x.gone && !!x.pid && !this.killedPids.has(x.pid));
     if (!left.length) return [];
     log.warn('chats', 'killing CLI processes still alive at quit', { data: { pids: left.map(x => x.pid) } });
     for (const x of left) if (x.pid) this.killedPids.add(x.pid);
@@ -1756,6 +1871,7 @@ export class ChatManager implements ChatService {
     }
     r.turnSinceDone = true; r.lastTurnAt = item.at;
     r.ctxSince ??= item.at;
+    this.recordTurnEnd(r);
     r.s.lastResult = { at: item.at, isError: item.isError, ...(item.interrupted ? { interrupted: true } : {}) };
     // "Aspetto la QA…": its work still runs, whatever the engine counts (shared/waiting.ts, the chats of 2026-10-16)
     if (waitsForWork(lastAnswer(r.items))) r.s.waitsOnWork = true; else delete r.s.waitsOnWork;
@@ -1921,6 +2037,55 @@ export class ChatManager implements ChatService {
     return true;
   }
 
+  /** Records the chat's files before a turn (checkpoints.ts); a folder outside git is asked once, a failure never holds
+   *  the message. */
+  private async checkpoint(r: Rec): Promise<void> {
+    if (r.gitRoot === null) return;
+    try {
+      const cp = await takeCheckpoint(r.s.cwd, `refs/sb/checkpoints/${r.s.id}/${Date.now()}`);
+      if (!cp) { r.gitRoot = null; return; }
+      r.gitRoot = cp.root;
+      const list = r.checkpoints ??= [];
+      list.push(cp);
+      if (list.length > CHECKPOINTS_KEPT) list.shift();
+      r.s.checkpointAt = cp.at;
+      this.updated(r);
+      void pruneCheckpoints(cp.root, `refs/sb/checkpoints/${r.s.id}/`).catch(() => {});
+    } catch (e) {
+      log.warn('chats', 'checkpoint before the turn not taken', { chat: r.s.id, cause: errText(e), hint: 'this turn cannot be undone from the app; git itself still has the committed work' });
+    }
+  }
+
+  /** «Annulla l'ultimo turno» (ADR 0103): the files back as they were before the chat's last turn. Never while it works. */
+  /** The files when the turn ended (Checkpoint.after): the undo puts back only what this turn changed. */
+  private recordTurnEnd(r: Rec): void {
+    const cp = r.checkpoints?.at(-1);
+    if (!cp || cp.after || r.afterPending) return;
+    r.afterPending = afterTree(cp.root).then(tree => { if (tree) cp.after = tree; }).finally(() => { r.afterPending = undefined; });
+  }
+
+  async undoTurn(chatId: string): Promise<{ restored: number; removed: number }> {
+    const r = this.need(chatId);
+    if (this.midTurn(r) || r.pending.size > 0) throw new Error('La chat sta lavorando: fermala prima di annullare il suo ultimo turno.');
+    if (this.unsettledChildren(r)) throw new Error('Le chat che questa ha avviato lavorano ancora: aspetta che finiscano prima di annullare il turno.');
+    const cp = r.checkpoints?.at(-1);
+    if (!cp) throw new Error('Niente da annullare: questa chat non lavora in un repository git, o non ha ancora fatto un turno da quando l’app è aperta.');
+    // another chat working in the same repository now: its files would move under it
+    for (const o of this.chats.values()) if (o !== r && o.gitRoot === cp.root && this.midTurn(o)) throw new Error(`«${o.s.title}» sta lavorando nella stessa cartella: aspetta che finisca prima di annullare il turno.`);
+    await r.afterPending;
+    const out = await restoreCheckpoint(cp, `refs/sb/undo/${r.s.id}/${Date.now()}`);
+    void pruneCheckpoints(cp.root, `refs/sb/undo/${r.s.id}/`, 10).catch(() => {});
+    r.checkpoints!.pop();
+    const prev = r.checkpoints!.at(-1)?.at;
+    if (prev === undefined) delete r.s.checkpointAt; else r.s.checkpointAt = prev;
+    const kept = out.skipped.length ? ` ${out.skipped.length} file cambiati di nuovo dopo il turno sono rimasti come sono.` : '';
+    r.undoNote = `[nota dell'app · l'utente ha annullato il tuo ultimo turno: i file che avevi cambiato sono tornati com'erano prima (${out.restored.length} ripristinati, ${out.removed.length} rimossi).${kept} Le modifiche di quel turno non ci sono più.]`;
+    this.addItem(r, sysItem('turnUndone', { restored: out.restored.length, removed: out.removed.length, skipped: out.skipped.length }, 'info'), false);
+    this.updated(r);
+    log.info('chats', 'turn undone: files restored from the checkpoint', { chat: r.s.id, data: { restored: out.restored.length, removed: out.removed.length, skipped: out.skipped.length } });
+    return { restored: out.restored.length, removed: out.removed.length };
+  }
+
   /** The brain's declared read-only tools (read-only-tools.md), resolved from the chat's folder (issue #93). */
   private readScripts(r: Rec): ReadScripts {
     return { cwd: r.s.cwd, paths: readOnlyTools(this.opts.brainRoot?.() ?? null) };
@@ -1936,6 +2101,28 @@ export class ChatManager implements ChatService {
     if (seen.size > 1000) seen.delete(seen.values().next().value!);
     run.counters[req.type === 'question' ? 'questions' : req.type === 'permission' ? 'permissions' : 'commands']++;
     this.runSave();
+  }
+
+  /** When this chat's context last began again (a new session or a compaction); undefined = unknown. */
+  contextSince(chatId: string): number | undefined { return this.chats.get(chatId)?.ctxSince; }
+
+  /** Starts the open Orchestrator's engine (a resume, no message) when it has none: what the user writes first finds it up. */
+  private prewarmOrchestrator(): void {
+    const lampo = [...this.chats.values()].find(x => x.s.quick && !x.s.closedAt);
+    if (lampo && !lampo.session && !this.quitting && engineOf(lampo.s.harness)?.caps.warm && this.opts.engineOn?.(lampo.s.harness) !== false && fs.existsSync(lampo.s.cwd))
+      this.ensureSession(lampo).catch(e => log.warn('chats', 'Lampo engine not started ahead', { chat: lampo.s.id, cause: errText(e), hint: 'it starts with the first message' }));
+    const r = [...this.chats.values()].find(x => x.s.isOrchestrator && !x.s.closedAt);
+    if (!r || r.session || this.quitting || updateActivity.frozen || !engineOf(r.s.harness)?.caps.warm || this.opts.engineOn?.(r.s.harness) === false || !fs.existsSync(r.s.cwd)) return;
+    log.info('chats', 'Orchestrator engine started ahead of the first message', { chat: r.s.id });
+    this.ensureSession(r).catch(e => log.warn('chats', 'Orchestrator engine not started ahead', { chat: r.s.id, cause: errText(e), hint: 'it starts with the first message as before' }));
+  }
+
+  /** The app's estimate line for a request, or null: an estimate that fails never holds the message. */
+  private requestEstimate(text: string): string | null {
+    try { return this.opts.requestEstimate?.(text) ?? null; } catch (e) {
+      log.warn('chats', 'request estimate failed', { cause: errText(e), hint: 'the Orchestrator gets the message without it and may call task_estimate' });
+      return null;
+    }
   }
 
   private need(chatId: string): Rec {
@@ -1962,7 +2149,7 @@ export class ChatManager implements ChatService {
         effortStatus: initialEffort(!!engineOf(c.harness)?.caps.effort, c.effort),
         agentChildren: children.snapshot(),
         id: c.id, harness: c.harness, origin: 'app', title: c.title, cwd: c.cwd, sessionId: c.sessionId, model: c.model, effort: c.effort,
-        permissionMode: c.permissionMode, state: 'closed', costUsd: 0, pending: 0, isOrchestrator: c.isOrchestrator, lastText: '', updatedAt: c.closedAt ?? c.createdAt, browserTabIds: [],
+        permissionMode: c.permissionMode, state: 'closed', costUsd: 0, pending: 0, isOrchestrator: c.isOrchestrator, ...(c.quick ? { quick: true } : {}), lastText: '', updatedAt: c.closedAt ?? c.createdAt, browserTabIds: [],
         ...(engineOf(c.harness)?.caps.cost ? {} : { costKnown: false as const }),
         ...(c.context ? { contextTokens: c.context.tokens, ...(c.context.max ? { contextMaxTokens: c.context.max } : {}), ...(c.context.estimated ? { contextEstimated: true } : {}) } : {}),
         ...(c.handoffAt ? { handoffAt: c.handoffAt, handoffSource: c.handoffSource ?? 'chat' } : {}),
@@ -1984,7 +2171,7 @@ export class ChatManager implements ChatService {
       worktree: false,
       ...(c.inWorktree ? { inWorktree: true } : {}),
       costTotalUsd: c.costTotalUsd ?? 0,
-      working: c.working === true,
+      working: c.working === true, ...(c.heldResults?.length ? { heldResults: c.heldResults } : {}),
       items: [], pending: new Map(), session: null, historyLoaded: false,
       jobNew: false, firstPrompt: null, turnSinceDone: false, // a restored chat continues a job begun in an earlier run
       lastTurnAt: c.lastTurnAt ?? 0,
@@ -2010,6 +2197,7 @@ export class ChatManager implements ChatService {
       ...(r.s.agentChildren ? { agentChildren: r.s.agentChildren } : {}),
       ...(r.s.work ? {work:r.s.work} : {}),
       title: r.s.title, model: r.choice.model, effort: r.choice.effort, permissionMode: r.choice.permissionMode, isOrchestrator: r.s.isOrchestrator,
+      ...(r.s.quick ? { quick: true as const } : {}),
       createdAt: r.createdAt, costTotalUsd: r.costTotalUsd, ...(r.inWorktree ? { inWorktree: true } : {}),
       ...(r.lastTurnAt ? { lastTurnAt: r.lastTurnAt } : {}),
       ...(r.coldNoteAt ? { coldNoteAt: r.coldNoteAt } : {}),
@@ -2021,6 +2209,7 @@ export class ChatManager implements ChatService {
       ...(r.s.continuedFrom ? { continuedFrom: r.s.continuedFrom } : {}), ...(r.s.continuedBy ? { continuedBy: r.s.continuedBy } : {}),
       ...(r.s.closedAt ? { closedAt: r.s.closedAt, closedBy: r.s.closedBy ?? 'auto' } : {}),
       ...(r.working ? { working: true as const } : {}),
+      ...(r.heldResults?.length ? { heldResults: r.heldResults } : {}),
       ...(r.s.route ? { route: r.s.route } : {}),
       ...(r.s.parentId ? { parentId: r.s.parentId } : {}),
       ...(r.s.delegation ? { delegation: r.s.delegation } : {}),
@@ -2166,7 +2355,13 @@ export class ChatManager implements ChatService {
   /** Which of the app's browser tools the chat's role may use (tool-policy.ts browserAccess): the per-chat MCP serves
    *  all of them, only the reading ones, or none. */
   browserAccess(chatId: string): BrowserAccess {
-    return browserAccess(this.chats.get(chatId)?.policy);
+    const r = this.chats.get(chatId);
+    // the Orchestrator delegates browsing like any other work (ADR 0090): its 24 browser tools (~4 200 tokens of schemas)
+    // were in every one of its calls
+    if (r?.s.isOrchestrator) return 'none';
+    const warm = r ? undefined : this.warmViews.get(chatId);
+    if (warm?.view) return browserAccess({ tools: warm.toolPolicy ?? null, ceiling: warm.ceiling ?? null });
+    return browserAccess(r?.policy);
   }
 
   /** Whether a chat sees one of the tools added to its own endpoint: only those its kind could never use are left out
@@ -2174,10 +2369,20 @@ export class ChatManager implements ChatService {
    *  Orchestrator opens root chats with app_create_chat, reports to no one and has catalog and lessons on its own
    *  endpoint (second-brain-app); a chat with no parent has no one to ask. */
   chatToolShown(chatId: string, tool: string): boolean {
-    const s = this.chats.get(chatId)?.s;
-    if (!s) return true;
+    const r = this.chats.get(chatId), s = r?.s;
+    // a waiting engine launched for a role: what that role's root chat would see (it lists tools once, at start)
+    const warm = r ? undefined : this.warmViews.get(chatId)?.view;
+    if (warm) return !(DELEGATING_ONLY.has(tool) && warm.launches?.length === 0) && tool !== 'agent_ask_parent';
+    if (!r || !s) return true;
     if (s.isOrchestrator) return !ORCHESTRATOR_HIDDEN.has(tool);
-    return !(tool === 'agent_ask_parent' && !s.parentId);
+    // Lampo starts no work (ADR 0105): no mail to other chats, no delegation, no report, no saved script
+    if (s.quick) return !LAMPO_HIDDEN.has(tool) && !tool.startsWith('agent_');
+    if (tool === 'agent_ask_parent' && !s.parentId) return false;
+    // a role that launches nobody; launches unknown (a chat saved before they were kept) = shown, as before
+    if (DELEGATING_ONLY.has(tool) && r.launches?.length === 0) return false;
+    // a root chat nobody asked to report (the user's, the app's own sampled review): agent_report would be refused
+    if (tool === 'agent_report' && !s.parentId && s.run && s.run.startedBy !== 'orchestrator') return false;
+    return true;
   }
 
   private mcpConfig(chatId: string): string | null {
@@ -2195,9 +2400,13 @@ export class ChatManager implements ChatService {
    *  start by that parent, still holds). */
   mcpContext(chatId: string, seen = new Set<string>()): { roles: (string | null)[]; policy: AgentPolicy | null } | null {
     const r = this.chats.get(chatId);
-    // the warm engine's chat does not exist yet: it is a plain chat (no role, no policy, no parent: warm.ts never serves
-    // an agent with a policy); once adopted, its real role is read at every gateway call
-    if (!r) return this.warmChat === chatId || this.warm.current?.chatId === chatId ? { roles: [null], policy: null } : null;
+    // a warm engine's chat does not exist yet: no role and no parent until a chat adopts it (a role's launch only fixes
+    // its tool list, which the engine enforces itself); once adopted, its real role is read at every gateway call
+    if (!r) {
+      const warm = this.warmViews.get(chatId);
+      if (warm?.view && (this.warmChat === chatId || this.warm.has(chatId))) return { roles: [warm.view.role], policy: { tools: warm.toolPolicy ?? null, ceiling: warm.ceiling ?? null } };
+      return this.warmChat === chatId || this.warm.has(chatId) ? { roles: [null], policy: null } : null;
+    }
     const policy = r.policy ?? null, own = r.s.agent?.source === 'catalog' ? r.s.agent.id : null;
     if (!r.s.parentId) return { roles: [own], policy };
     // a child is bounded by its ancestors' roles: the chain frozen at its creation, else (saved before it existed) the
@@ -2239,7 +2448,9 @@ export class ChatManager implements ChatService {
       ...(r.policy ? { toolPolicy: r.policy.tools, ceiling: r.policy.ceiling } : {}),
       ...(r.agentAssets ? { agentAssets: r.agentAssets } : {}),
       // the Orchestrator's turn stays short: a few workspace calls, then it delegates (ADR 0090, issue #98)
-      ...(r.s.isOrchestrator && engine.kind === 'claude' ? { preToolUse: new TurnToolBudget() } : {}),
+      // a role chat with the sub-agent tool: only the Explore search, since Claude asks no permission to start one
+      ...(engine.kind !== 'claude' ? {} : r.s.isOrchestrator ? { preToolUse: new TurnToolBudget() }
+        : subagentGateFor(r.policy?.tools)),
       sessionId, resume, fork, worktree: r.worktree && !resume, mcpConfig: this.mcpConfig(chatId), costBaseUsd: r.costTotalUsd,
       compactWindowTokens: r.maxContext ?? this.compactWindow(),
       // Native subagents inherit this environment: a per-chat model cannot prove a memory event's producer.
@@ -2263,7 +2474,7 @@ export class ChatManager implements ChatService {
   private extraArgsFor(harness: Harness, chatId: string, r: Rec | undefined): string[] | null {
     const allowed = !engineOf(harness)?.caps.preAllow ? [] : [
       ...(this.appMcpFor(r) ? ['mcp__second-brain-app'] : []),
-      ...(this.opts.mcpUrlFor?.(chatId) ? APP_CHAT_TOOLS.map(t => `mcp__second-brain__${t}`) : []),
+      ...(this.opts.mcpUrlFor?.(chatId) && !r?.s.quick ? APP_CHAT_TOOLS.map(t => `mcp__second-brain__${t}`) : []),
     ];
     // the managed MCP servers this chat may not use: refused by name, also when the user's own Claude config has one so named
     const denied = engineOf(harness)?.kind === 'claude' ? (this.opts.extMcp?.(chatId).denied ?? []).map(id => `mcp__${id}`) : [];
@@ -2298,20 +2509,25 @@ export class ChatManager implements ChatService {
 
   /** A Claude engine for the next new chat in cwd: its chat id, session id and MCP endpoint are chosen now; no model,
    *  effort, mode or title (the user's defaults until the chat sends its own as control requests). */
-  private spawnWarm(cwd: string): WarmEngine | null {
+  private spawnWarm(cwd: string, launch: WarmLaunch): WarmEngine | null {
     if (updateActivity.frozen) return null;
     const chatId = `c_${crypto.randomBytes(5).toString('hex')}`;
     const sessionId = crypto.randomUUID();
     // its launch asks mcpContext before the pool holds it: the id is known as the warm engine's meanwhile
     this.warmChat = chatId;
-    try { return this.spawnWarmAs(chatId, sessionId, cwd); } finally { this.warmChat = null; }
+    // its endpoint lists tools for the launch's role until a chat adopts it (chatToolShown, browserAccess, mcpContext)
+    this.warmViews.set(chatId, launch);
+    for (const k of [...this.warmViews.keys()].slice(0, Math.max(0, this.warmViews.size - 8))) this.warmViews.delete(k);
+    try { return this.spawnWarmAs(chatId, sessionId, cwd, launch); } finally { this.warmChat = null; }
   }
 
-  private spawnWarmAs(chatId: string, sessionId: string, cwd: string): WarmEngine {
+  private spawnWarmAs(chatId: string, sessionId: string, cwd: string, launch: WarmLaunch): WarmEngine {
     const extraArgs = this.extraArgsFor('claude', chatId, undefined);
     const opts: SessionOptions = {
       chatId, cwd, model: null, effort: null, permissionMode: null, title: null, sessionId, resume: false, fork: false, worktree: false,
-      mcpConfig: this.mcpConfig(chatId), costBaseUsd: 0, compactWindowTokens: this.compactWindow(),
+      ...(launch.toolPolicy !== undefined || launch.ceiling !== undefined ? { toolPolicy: launch.toolPolicy ?? null, ceiling: launch.ceiling ?? null } : {}),
+      ...(launch.agentAssets ? { agentAssets: launch.agentAssets } : {}), ...subagentGateFor(launch.toolPolicy),
+      mcpConfig: this.mcpConfig(chatId), costBaseUsd: 0, compactWindowTokens: launch.compactWindowTokens ?? this.compactWindow(),
       env: { ...this.opts.env, SB_EVENT_CONTEXT: '' }, ...(extraArgs ? { extraArgs } : {}),
     };
     const sink = new BufferedSink();
@@ -2320,10 +2536,19 @@ export class ChatManager implements ChatService {
     return { chatId, sessionId, cwd, session, sink, at: Date.now() };
   }
 
+  /** How a chat's engine is launched, as far as a waiting engine must match it: its role's tools and ceiling, its skills
+   *  plugin and its own context window; nothing of these = a plain launch (sig ''). */
+  private warmLaunch(policy: AgentPolicy | null | undefined, assets: { pluginDir: string; skillRoot: string } | undefined, maxContext: number | undefined, view?: WarmLaunch['view']): WarmLaunch {
+    if (!policy && !assets && !maxContext && !view) return PLAIN_LAUNCH;
+    const fields = { toolPolicy: policy?.tools ?? null, ceiling: policy?.ceiling ?? null, ...(assets ? { agentAssets: assets } : {}), ...(maxContext ? { compactWindowTokens: maxContext } : {}), ...(view ? { view } : {}) };
+    return { sig: crypto.createHash('sha256').update(JSON.stringify(fields)).digest('hex').slice(0, 16), ...fields };
+  }
+
   /** The new chat r takes the waiting engine: what it reported so far is replayed into the chat, then the chat's own
    *  choices go as control requests; a send waits for them (r.opening). A refused choice → a fresh engine with flags. */
   private adoptWarm(r: Rec, w: WarmEngine): void {
     const sess = w.session;
+    this.warmViews.delete(w.chatId);
     r.session = sess;
     r.s.state = 'starting';
     r.activeAt = Date.now();
@@ -2531,7 +2756,10 @@ export class ChatManager implements ChatService {
     if (p.call) {
       const a = r.after;
       if (a) { a.left--; if (a.left <= 0) r.after = undefined; }
-      this.counters.call(r.s.id, p.call, a ? a.kind : null);
+      // the prompt cache per kind of chat, and whether a new session found its prefix cached (ContextStats.cache)
+      const first = r.cacheSession !== r.s.sessionId;
+      r.cacheSession = r.s.sessionId ?? undefined;
+      this.counters.call(r.s.id, p.call, a ? a.kind : null, { kind: r.s.isOrchestrator ? 'orchestrator' : r.s.parentId ? 'child' : 'root', first });
     }
     if (p.compacted) {
       this.counters.compaction(r.s.id, p.compacted.pre, p.compacted.post);

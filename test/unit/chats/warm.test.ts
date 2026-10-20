@@ -1,6 +1,7 @@
-// The Claude engine started ahead for the next new chat (warm.ts + ChatManager.create), against the fake CLI: the next
-// plain chat in the same folder adopts it (its id and session id, choices sent as control requests, no new spawn),
-// other folders and special chats start cold, the waiting engine dies with the app (a live engine for the orphan sweep), BufferedSink replays in order.
+// The Claude engines started ahead (warm.ts + ChatManager.create), against the fake CLI: the next chat in the same folder
+// launched the same way (plain, or a role's tools) adopts one (its id and session id, choices sent as control requests,
+// no new spawn), other folders and special chats start cold, the open Orchestrator resumes ahead after a restart, the
+// waiting engines die with the app (live engines for the orphan sweep), BufferedSink replays in order.
 import { afterEach, describe, expect, it } from 'vitest';
 import path from 'node:path';
 import { ChatManager, type ChatManagerOptions } from '../../../src/main/chats/manager';
@@ -91,6 +92,42 @@ describe('warm Claude engine', () => {
     const cold = await waitFor(() => starts(e).find(l => l.argv?.join(' ').includes(`--session-id=${c2.sessionId}`) && l.pid !== warmPid), 'the cold start');
     expect(cold.argv?.some(x => x.startsWith('--tools='))).toBe(true);
     expect(alive(warmPid)).toBe(true);
+  });
+
+  it('a role chat leaves an engine launched like it, and the next chat of that role adopts it', async () => {
+    const e = env();
+    const m = manager(e);
+    const role = { owner: plainOwner('claude', null), instructions: '', launches: [], policy: { tools: { allow: ['read' as const] }, ceiling: 'default' as const } };
+    const c1 = await m.create({ harness: 'claude', cwd: e.cwd }, 'user', role);
+    await waitFor(() => starts(e).length === 2, 'the role\'s waiting engine');
+    const warm = warmStart(e, c1.sessionId);
+    // before a chat owns it, its endpoint lists what that role's root chat would see (the tool list is read once)
+    const waiting = [...(m as unknown as { warmViews: Map<string, unknown> }).warmViews.keys()].at(-1)!;
+    expect(m.chatToolShown(waiting, 'agent_delegate')).toBe(false);
+    expect(m.chatToolShown(waiting, 'agent_ask_parent')).toBe(false);
+    expect(m.chatToolShown(waiting, 'send_to_chat')).toBe(true);
+    expect(m.browserAccess(waiting)).toBe('none');
+    // launched with the role's tool list, like the role's own chats
+    expect(warm.argv?.some(x => x.startsWith('--tools='))).toBe(true);
+    const c2 = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'leggi' }, 'user', role);
+    expect(warm.argv?.join(' ')).toContain(`--session-id=${c2.sessionId}`);
+    await waitFor(() => results(m, c2.id).length === 1, 'the adopted engine answers');
+    // a plain chat does not take a role's engine
+    const plain = await m.create({ harness: 'claude', cwd: e.cwd });
+    expect(warm.argv?.join(' ')).not.toContain(`--session-id=${plain.sessionId}`);
+  });
+
+  it('the open Orchestrator\'s engine starts ahead of the first message after a restart, with no message', async () => {
+    const e = env();
+    const m = manager(e, { prewarm: false });
+    const orch = await m.create({ harness: 'claude', cwd: e.cwd, orchestrator: true, prompt: 'Ciao' });
+    await waitFor(() => results(m, orch.id).length === 1, 'the first turn');
+    await m.shutdown(); managers.splice(managers.indexOf(m), 1);
+    const before = starts(e).length;
+    const again = manager(e);
+    await waitFor(() => starts(e).some((l, i) => i >= before && l.argv?.join(' ').includes(`${orch.sessionId}`)), 'the Orchestrator resumed ahead');
+    expect(again.list().find(c => c.id === orch.id)?.state).not.toBe('running');
+    expect(fakeLog(e.argLog).filter(l => l.user === orch.sessionId)).toHaveLength(1);
   });
 
   it('the waiting engine dies with the app; prewarm off starts none', async () => {

@@ -37,11 +37,11 @@ const BASE: readonly SettingDef[] = [
   { key: 'pulse.on', type: 'boolean', default: true, protected: true, label: 'Battito', description: 'Carte e frase della Dashboard, soltanto mentre la finestra è aperta.' },
   { key: 'pulse.dailyUsd', type: 'usd', min: 0.01, max: 2, default: 0.25, protected: true, label: 'Battito: budget giornaliero ($)', description: 'Stima di ammissione condivisa tra carte e frase. I costi non riportati restano sconosciuti.' },
   { key: 'pulse.slots', type: 'slots', default: ['08:30', '13:00', '18:30'], protected: true, label: 'Battito: orari', description: 'Da uno a tre orari locali; nessun recupero dei giorni precedenti.' },
-  { key: 'pulse.headline.on', type: 'boolean', default: true, protected: true, label: 'Battito: frase Dashboard', description: 'Una frase al massimo ogni ora, nello stesso budget.' },
+  { key: 'pulse.headline.on', type: 'boolean', default: true, protected: true, label: 'Battito: frase Dashboard', description: 'Una frase al giorno, scritta nella prima chiamata del Battito della giornata, nello stesso budget.' },
   { key: 'jobs.fallback', type: 'enum', values: ['auto', 'off'], default: 'auto', protected: true, label: 'Battito: motore alternativo', description: 'Automatico: API, poi Claude Code senza strumenti.' },
   ...PULSE_TYPES.map((t): SettingDef => ({ key: `pulse.types.${t}`, type: 'boolean', default: true, protected: false, label: `Battito: ${t}`, description: 'Mostra questo tipo di carta.' })),
   ...(['board', 'agent', 'search', 'file'] as const).map((p): SettingDef => ({ key: `pulse.places.${p}`, type: 'boolean', default: true, protected: false, label: `Battito: ${p}`, description: 'Mostra le carte in questa posizione.' })),
-  { key: 'brainRoot', type: 'path', nullable: true, default: null, protected: true, label: 'Cartella del cervello',
+  { key: 'brainRoot', type: 'path', nullable: true, default: null, protected: true, label: 'Cartella del brain',
     description: "La cartella dei tuoi file (idee, errori, diario). L'app ne esegue gli strumenti: per questo la cambi solo tu." },
   { key: 'mcpPort', type: 'int', min: 0, max: 65535, default: 4319, protected: true, label: 'Porta MCP del browser',
     description: 'Porta locale (solo 127.0.0.1) dove gli agenti guidano il browser interno. 0 = una porta libera a caso.' },
@@ -53,10 +53,10 @@ const BASE: readonly SettingDef[] = [
     description: 'Ogni chat Claude dell’app, Orchestrator compreso, compatta da sola il suo contesto in un riassunto poco prima di questa finestra, anche con i modelli da 1M e nelle cartelle che ne chiedono un’altra. Da 100000 a 1000000; 0 = come dicono le impostazioni di Claude.' },
   { key: 'orchestratorDayCompact', type: 'boolean', default: true, protected: false, label: 'Orchestrator corti: compatta a inizio giornata',
     description: 'Un Orchestrator con un contesto di ieri (50k o più) lo compatta in un riassunto la prima volta che è fermo da 3 minuti in un giorno nuovo. Resta la stessa chat: la coda e le chat che segue non cambiano.' },
-  { key: 'launchRulesClaude', type: 'boolean', default: false, protected: true, label: 'Regole del cervello alle chat Claude',
-    description: 'A ogni avvio di una chat Claude l’app le passa le regole del cervello (AGENTS.md, skill, agenti, stili e hook) come plugin. Spento: Claude legge solo le sue impostazioni.' },
-  { key: 'launchRulesCodex', type: 'boolean', default: true, protected: true, label: 'Regole del cervello alle chat Codex',
-    description: 'A ogni avvio di una chat Codex l’app le passa le regole del cervello (AGENTS.md come istruzioni e le cartelle delle skill). Spento: Codex legge solo le sue impostazioni.' },
+  { key: 'launchRulesClaude', type: 'boolean', default: false, protected: true, label: 'Regole del brain alle chat Claude',
+    description: 'A ogni avvio di una chat Claude l’app le passa le regole del brain (AGENTS.md, skill, agenti, stili e hook) come plugin. Spento: Claude legge solo le sue impostazioni.' },
+  { key: 'launchRulesCodex', type: 'boolean', default: true, protected: true, label: 'Regole del brain alle chat Codex',
+    description: 'A ogni avvio di una chat Codex l’app le passa le regole del brain (AGENTS.md come istruzioni e le cartelle delle skill). Spento: Codex legge solo le sue impostazioni.' },
   { key: 'codexAutonomyRoots', type: 'repo-paths', default: [], protected: true, label: 'Autonomia Codex nei repository',
     description: 'Solo in queste cartelle repository o worktree: Codex lavora senza richieste di escalation, dentro la sandbox di scrittura. Fuori scope le azioni restano bloccate. Vale dal prossimo turno; vuoto = chiedi quando serve.' },
   { key: 'contextWarnTokens', type: 'int', min: 10_000, max: 2_000_000, default: 200_000, protected: false, label: 'Soglia del contesto lungo per Cursor (token)',
@@ -76,13 +76,6 @@ const BASE: readonly SettingDef[] = [
     description: 'Sopra questa CPU (media degli ultimi secondi) le chat e i messaggi degli agenti aspettano.' },
   { key: 'loadQueueRam', type: 'int', min: 0, max: 90, default: 15, protected: true, label: 'Coda per carico: RAM libera sotto (%)',
     description: 'Sotto questa memoria libera le chat e i messaggi degli agenti aspettano. 0 = non guardare la RAM.' },
-  // the Grindhouse's headline (SPEC 18, main/headline.ts). Protected: it spends the API credits about once an hour
-  { key: 'headlineOn', type: 'boolean', default: true, protected: true, label: 'Battuta del Grindhouse',
-    description: 'Circa una volta l’ora un modello scrive una battuta sui fatti veri della giornata (crediti API, al massimo 1500 token). Spento: una battuta della lista dell’app, zero token.' },
-  { key: 'headlineModel', type: 'model', default: '', protected: true, label: 'Battuta: modello',
-    description: 'Il modello Claude che scrive la battuta, sul motore Anthropic API. Vuoto = claude-opus-5-5.' },
-  { key: 'headlineEffort', type: 'enum', values: ['', 'low', 'medium', 'high'], default: '', protected: true, label: 'Battuta: effort',
-    description: 'Quanto ragiona il modello della battuta. Vuoto = low.' },
   { key: 'osToasts', type: 'enum', values: ['urgent', 'normal', 'off'], default: 'urgent', protected: true, label: 'Notifiche di sistema',
     description: 'Solo le urgenti (una chat ti aspetta), anche le normali, o nessuna (resta tutto nel feed).' },
   { key: 'dndUntil', type: 'int', min: 0, max: 8.64e15, nullable: true, default: null, protected: true, label: 'Non disturbare fino a',
@@ -93,7 +86,7 @@ const BASE: readonly SettingDef[] = [
     description: 'Nessuna notifica per questo tipo (idea, errore, chat finita…); resta nel feed.' },
   // the engines' own keys (engineOn.<id>, engines.<id>, orchestratorChats.harness) come from engineDefs below
   { key: 'tasks.enabled', type: 'boolean', default: false, protected: true, label: 'Task: importazione automatica',
-    description: 'Rilegge da sola i tuoi task dagli strumenti collegati (oggi Azure DevOps: work item, PR e novità sui ticket che segui), con gli script del cervello (niente IA, zero token). Spento: solo con «Aggiorna ora».' },
+    description: 'Rilegge da sola i tuoi task dagli strumenti collegati (oggi Azure DevOps: work item, PR e novità sui ticket che segui), con gli script del brain (niente IA, zero token). Spento: solo con «Aggiorna ora».' },
   { key: 'tasks.everyMin', type: 'int', min: 5, max: 720, default: 30, protected: false, label: 'Task: ogni quanti minuti',
     description: 'Ogni quanto rileggere i task quando l’aggiornamento automatico è acceso (da 5 a 720 minuti).' },
   { key: 'tasks.sound', type: 'boolean', default: true, protected: true, label: 'Task: suono degli avvisi',
@@ -141,8 +134,8 @@ const BASE: readonly SettingDef[] = [
     description: 'Quante chat figlie di uno stesso genitore lavorano insieme. Oltre, la delega è rifiutata e il genitore lo vede.' },
   { key: 'delegation.stallMin', type: 'int', ...DELEGATION_RANGE.stallMin, default: DELEGATION_DEFAULTS.stallMin, protected: true, label: 'Deleghe: ferma dopo (minuti)',
     description: 'Una chat figlia senza alcun evento per tanti minuti risulta ferma: l’Orchestrator e il genitore lo sanno.' },
-  { key: 'delegation.judgeDaily', type: 'int', ...DELEGATION_RANGE.judgeDaily, default: DELEGATION_DEFAULTS.judgeDaily, protected: true, label: 'Revisioni del Judge al giorno',
-    description: 'Quante esecuzioni finite il Judge rivede ogni giorno, su un modello diverso, per misurare i ruoli. 0 = nessuna.' },
+  { key: 'delegation.judgeDaily', type: 'int', ...DELEGATION_RANGE.judgeDaily, default: DELEGATION_DEFAULTS.judgeDaily, protected: true, label: 'Revisioni indipendenti al giorno',
+    description: 'Quante esecuzioni finite un Sentinel rivede ogni giorno, in una sessione nuova, per misurare i ruoli. 0 = nessuna.' },
 ];
 /** a CLI model id as the CLIs accept it ("claude-opus-5-5", "grok-4.7", "gpt-5.6-sol[effort=high]"), '' = the default */
 export const MODEL_ID = /^[\w.:@/=[\],-]{0,120}$/;
@@ -155,7 +148,7 @@ const TIER_LABEL: Record<ModelTier, string> = { light: 'leggero', mid: 'medio', 
 // the model a role's tier means on an engine (agents/model-tier.ts). Protected: the model decides whose credits and how many
 function tierDef(id: string, tier: ModelTier): SettingDef {
   return { key: `modelTiers.${id}.${tier}`, type: 'model', default: '', protected: true, label: `${engineLabel(id)}: modello di livello ${TIER_LABEL[tier]}`,
-    description: 'Il modello che i ruoli di questo livello usano su questo motore. Vuoto = quello del registro dei modelli del cervello.' };
+    description: 'Il modello che i ruoli di questo livello usano su questo motore. Vuoto = quello del registro dei modelli del brain.' };
 }
 
 // the engines (ADR 0046, engines/policy.ts): each on or off, and whether the Orchestrators may use it; engines.* keeps the key
@@ -255,7 +248,6 @@ export function defaults(): Settings {
     appRepo: null,
     projectsRoot: null,
     loadQueue: true, loadQueueCpu: 75, loadQueueRam: 15,
-    headlineOn: true, headlineModel: '', headlineEffort: '',
     delegation: { ...DELEGATION_DEFAULTS }, modelTiers: {},
   };
 }

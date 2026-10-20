@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatItem } from '../../src/shared/contract';
 import { actionSteps, contractSteps, enginePlan, runSteps } from '../../src/renderer/lib/run-steps';
+import { setLang } from '../../src/renderer/i18n';
 
 let n = 0;
 const tool = (name: string, input: unknown, extra: Partial<Extract<ChatItem, { kind: 'tool' }>> = {}): ChatItem =>
@@ -54,6 +55,18 @@ describe('actionSteps', () => {
       ['bad', 'Cerca sul web «stripe api 2025»', null],
     ]);
     expect(actionSteps(items, false)[2]).toMatchObject({ mark: 'done', text: 'Lanciato' });
+  });
+  it('speaks the UI language: the same lines in English', () => {
+    const items = [
+      tool('Read', { file_path: '/w/src/a.ts' }), tool('Read', { file_path: '/w/src/b.ts' }),
+      tool('Edit', { file_path: '/w/src/a.ts' }, { diff: [{ path: '/w/src/a.ts', added: 3, removed: 1 }] }),
+      tool('Bash', { command: 'npm test' }, { status: 'running' }),
+    ];
+    setLang('en');
+    try {
+      expect(actionSteps(items, true).map(s => s.text)).toEqual(['Read 2 files in w/src/', 'Edited a.ts · +3 −1', 'Running']);
+      expect(actionSteps([tool('Read', { file_path: '/w/a.ts' }), tool('Grep', { pattern: 'x', path: '/w' })], false)[0]!.text).toBe('Read a.ts and 1 search');
+    } finally { setLang('it'); }
   });
 });
 

@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { initRelease } from './release';
 import { createWindow, hiddenOpened, hiddenRun } from './window';
+import { startTaskbar } from './taskbar';
 import { Emitter, registerHandlers, type Handlers } from './ipc';
 import { createServices } from './wiring';
 import { log } from './log';
@@ -125,7 +126,7 @@ app.whenReady().then(async () => {
   const headline = new Headline({
     file: path.join(app.getPath('userData'), 'headline.json'),
     complete: (req, signal) => s.engines.text.complete(req, signal),
-    settings: () => s.brain.settings(),
+    settings: () => ({ on: s.brain.settings().pulse?.headline.on !== false }),
     lang: () => { const l = s.brain.settings().language; return l === 'it' || l === 'en' ? l : systemLang(); },
     material: () => {
       const d = new Date(), day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -137,6 +138,8 @@ app.whenReady().then(async () => {
     ...(demo && process.env.SB_DEMO_FREEZE === '1' ? { now: () => FROZEN_EPOCH } : {}),
   });
   const pulse = createPulse(s, { emitter, window: () => win, userData: app.getPath('userData') }, () => headline.get());
+  // the Battito's proposals count in the morning block's "Da approvare" (ADR 0102)
+  if (s.morning && pulse) s.morning.extraApprovals = () => pulse.pendingApprovals();
   const unsubscribePulse = s.brain.onSettingChange(change => { if (change.key.startsWith('pulse.') || change.key === 'jobs.fallback') pulse?.start(); });
     const mcpServers = () => { if (!s.mcpServers) throw new Error('Server MCP non disponibili.'); return s.mcpServers; };
     const connectors = createAppConnectors(app.getPath('userData'), () => s.tasks.refreshFresh(), l => s.tasks.onRead(l));
@@ -198,6 +201,8 @@ app.whenReady().then(async () => {
     'brainmodel:rollback': a => s.brainModel.rollback(String(a?.id ?? '')),
     'brainmodel:link': a => { if (typeof a?.skill !== 'string' || typeof a?.agentId !== 'string' || typeof a?.on !== 'boolean') throw new Error('Invalid skill link'); return s.brainModel.link(a.skill, a.agentId, a.on); },
     'classifiers:state': () => s.brainModel.classifiers(),
+    // the morning block (ADR 0102): the renderer's presence, Ctrl+J's fallback, the user's Esc / Ok
+    'morning:brief': a => s.morning ? s.morning.handle(a) : { history: false, show: false, brief: null },
     'agents:trialDecide': a => s.agents.resolveTrial(a.id, a.decision),
     // the user's click on a "Da approvare" entry: the only way a lifecycle proposal is applied (agents/lifecycle-api.ts)
     'agents:lifecycleDecide': a => { if (!s.agentLifecycle) throw new Error('Coda «Da approvare» non disponibile.'); return s.agentLifecycle.decide(a); },
@@ -284,6 +289,7 @@ app.whenReady().then(async () => {
     'chat:handoff': a => s.chats.handoff(a.chatId, { reason: 'manual' }),
     'chat:handoffRead': a => s.chats.readHandoff(a.chatId, typeof a.session === 'string' ? a.session : undefined),
     'chat:continue': a => s.chats.continueChat(a.chatId),
+    'chat:undoTurn': a => s.chats.undoTurn(a.chatId),
     'browser:list': () => s.browser.list(),
     'browser:open': a => s.browser.open(a.url, a.ownerChatId ?? null, a.env),
     'browser:navigate': a => s.browser.navigate(a.tabId, a.url),
@@ -392,6 +398,9 @@ app.whenReady().then(async () => {
   const startSearch = setTimeout(() => s.hybrid?.start(), 5_000); startSearch.unref();
   // the headline's first refresh waits for the window and the start's own work (it is never on the start's path)
   void windowReady.then(() => { if (pulse) pulse.start(); });
+  // the taskbar button: what waits for the user and whether an agent works (ADR 0102; Windows only, never under SB_HIDDEN)
+  let stopTaskbar = () => {};
+  void windowReady.then(() => { stopTaskbar = startTaskbar({ window: () => win, chats: () => s.chats.list(), waiting: () => s.chats.pending().length + s.asks.pending().length }); });
   // chats whose turn the last quit or crash cut go on by themselves ("ripresa dopo il riavvio"); not on ready-to-show,
   // which may have fired while the services were starting
   const resumed = s.chats.resumeInterrupted();
@@ -413,7 +422,7 @@ app.whenReady().then(async () => {
     quitting = true;
     void connectors.service.cancelLogin();
     headline.stop();
-    pulse?.stop(); unsubscribePulse();
+    pulse?.stop(); unsubscribePulse(); stopTaskbar();
     log.info('app', 'quit started');
     // the stable launcher (scripts/release.mjs) waits for a quitting app to go before starting again; an open one it leaves be
     try { fs.writeFileSync(path.join(app.getPath('userData'), 'quitting.json'), JSON.stringify({ pid: process.pid, at: new Date().toISOString() })); } catch { /* best effort */ }

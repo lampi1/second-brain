@@ -162,7 +162,7 @@ export class Ledger {
   async backfill(root: string | null, node: NodeRunner, now = Date.now()): Promise<{ added: number; skipped: string | null }> {
     if (this.backfilling) return { added: 0, skipped: 'già in corso' };
     const script = root ? brainScript(root, 'ops/tools/cost.mjs') : null;
-    if (!script || !fs.existsSync(script)) return { added: 0, skipped: 'il cervello non ha ops/tools/cost.mjs' };
+    if (!script || !fs.existsSync(script)) return { added: 0, skipped: 'il brain non ha ops/tools/cost.mjs' };
     let meta: { backfillAt?: number } = {};
     if (this.metaFile) try { meta = JSON.parse(fs.readFileSync(this.metaFile, 'utf8')) as typeof meta; } catch { /* first time */ }
     if (meta.backfillAt && now - meta.backfillAt < 20 * 3600e3) return { added: 0, skipped: 'fatto da meno di 20 ore' };

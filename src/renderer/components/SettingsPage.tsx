@@ -23,6 +23,8 @@ import { ConnectorsHub } from './ConnectorsHub';
 import { CodexAutonomy } from './CodexAutonomy';
 import { AppUpdateSettings } from './AppUpdateSettings';
 import { CloudKeySetting } from './CloudKeySetting';
+import { PulseSettings } from './PulseSettings';
+import { TaskReadSettings } from './TaskReadSettings';
 import'../styles/settings.css';
 export function Switch({on,onChange,label,busy,testid}:{on:boolean;onChange:(on:boolean)=>void;label:string;busy?:boolean;testid?:string}){
  return <button type="button" role="switch" aria-checked={on} aria-label={label} disabled={busy} className={`st-switch ${on?'on':''}`} onClick={()=>onChange(!on)} data-testid={testid}><span className="st-knob" aria-hidden="true"/></button>;
@@ -52,14 +54,16 @@ export function SettingsPage(){
  const prefs=ui.use(s=>s.prefs),settings=useApp(s=>s.settings),engines=useEngines(),[query,setQuery]=useState('');
  // a link to one card ("impostazioni/update": the restart notice's «Aggiornamenti») scrolls to it once the page is drawn
  const arg=ui.use(s=>s.page==='impostazioni'?s.pageArg:null);
- useEffect(()=>{if(!arg||!settings)return;const id=requestAnimationFrame(()=>document.getElementById(`st-section-${arg}`)?.scrollIntoView({block:'start'}));return()=>cancelAnimationFrame(id);},[arg,!!settings]);
+ // a deep link (Task's «Impostazioni di lettura» → notifications, ADR 0101) scrolls to its section, and once more when the
+ // sections above it have loaded (the connectors and the update panel grow after the first paint)
+ useEffect(()=>{if(!arg||!settings)return;const go=()=>document.getElementById(`st-section-${arg}`)?.scrollIntoView({block:'start'});const id=requestAnimationFrame(go);const again=setTimeout(go,700);return()=>{cancelAnimationFrame(id);clearTimeout(again);};},[arg,!!settings]);
  if(!settings)return null;
  const groups=[
   {id:'profile',icon:<IconUser size={18}/>,description:t('essential.desc.profile'),title:t('profile.group'),search:[t('profile.name'),t('profile.role'),t('profile.mainWork'),t('profile.replyStyle'),'me.md profilo profile'].join(' '),body:<ProfileSettings/>},
   {id:'update',icon:<IconRefresh size={18}/>,description:t('essential.desc.update'),title:t('update.group'),search:'aggiorna update versione version GitHub',body:<AppUpdateSettings/>},
   {id:'connectors',icon:<IconLink size={18}/>,description:t('essential.desc.connectors'),title:t('connector.group'),search:'GitHub Jira Azure DevOps collegamenti connectors projects MCP server strumenti tools token importa import Claude Cursor Codex',body:<ConnectorsHub/>},
   {id:'accounts',icon:<IconTerminal size={18}/>,description:t('essential.desc.accounts'),title:t('essential.accounts'),search:engines.map(engine=>engine.name).join(' ')+' '+t('autonomy.title'),body:<>{engines.map(engine=><ToolConnection key={engine.id} engine={engine}/>)}</>},
-  {id:'roles',icon:<IconBranch size={18}/>,description:t('delegation.desc'),title:t('delegation.group'),search:'ruoli roles deleghe delegation profondità depth parallelo parallel Judge modelli models livelli tiers',body:<DelegationSettings/>},
+  {id:'roles',icon:<IconBranch size={18}/>,description:t('delegation.desc'),title:t('delegation.group'),search:'ruoli roles deleghe delegation profondità depth parallelo parallel revisioni reviews Sentinel modelli models livelli tiers',body:<DelegationSettings/>},
   {id:'space',icon:<IconFolder size={18}/>,description:t('essential.desc.space'),title:t('essential.space'),search:[t('essential.memory'),t('share.title'),'zip esporta export colleghi condividi share',t('essential.archive'),t('setup.settings.projects'),'ruolo role Dev QA PO CTO progetti projects repository'].join(' '),body:<>
    <WorkProfilePreferences/>
    <Row title={t('essential.memory')}><span className="st-value" title={settings.brainRoot??undefined}>{settings.brainRoot||t('essential.memoryEmpty')}</span><button type="button" className="btn btn-ghost btn-m" onClick={()=>void window.sb.invoke('app:pickBrain',undefined).catch(()=>toast(t('essential.error'),'err'))}>{t('essential.pickMemory')}</button></Row>
@@ -74,7 +78,7 @@ export function SettingsPage(){
    <Row title={t('essential.density')}><Select aria-label={t('essential.density')} value={prefs.density} onChange={event=>{const density=event.target.value;if(density==='compact'||density==='comfortable')setPrefs({density});}}>{(['comfortable','compact']as const).map(value=><option key={value} value={value}>{t(`essential.${value}`)}</option>)}</Select></Row>
    <div className="st-row st-row-block"><AppearancePreview/></div>
   </>},
-  {id:'notifications',icon:<IconBell size={18}/>,description:t('essential.desc.notifications'),title:t('essential.notifications'),search:t('essential.toasts'),body:<Row title={t('essential.toasts')} description={t('essential.notificationsHint')} help={<HelpTip title={t('explain.toasts.title')} testid="st-toasts-help"><p>{t('explain.toasts.p1')}</p></HelpTip>}><Select aria-label={t('essential.toasts')} value={settings.osToasts} onChange={event=>{const osToasts=event.target.value;if(osToasts==='urgent'||osToasts==='normal'||osToasts==='off')void setSetting({osToasts});}}>{(['urgent','normal','off']as const).map(value=><option key={value} value={value}>{t(value==='off'?'essential.none':`essential.${value}`)}</option>)}</Select></Row>},
+  {id:'notifications',icon:<IconBell size={18}/>,description:t('essential.desc.notifications'),title:t('essential.notifications'),search:`${t('essential.toasts')} ${t('alive.pulse.title')} battito pulse budget ${t('brainPages.task.autoLabel')} ${t('brainPages.task.sound')} Task`,body:<><Row title={t('essential.toasts')} description={t('essential.notificationsHint')} help={<HelpTip title={t('explain.toasts.title')} testid="st-toasts-help"><p>{t('explain.toasts.p1')}</p></HelpTip>}><Select aria-label={t('essential.toasts')} value={settings.osToasts} onChange={event=>{const osToasts=event.target.value;if(osToasts==='urgent'||osToasts==='normal'||osToasts==='off')void setSetting({osToasts});}}>{(['urgent','normal','off']as const).map(value=><option key={value} value={value}>{t(value==='off'?'essential.none':`essential.${value}`)}</option>)}</Select></Row><PulseSettings/><TaskReadSettings/></>},
  ];
  const matched=groups.filter(group=>matchesSettingsSearch(query,group.title+' '+group.search));
  const jump=(id:string)=>{const target=document.getElementById(`st-section-${id}`);target?.scrollIntoView({block:'start',behavior:'smooth'});target?.focus({preventScroll:true});};

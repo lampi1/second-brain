@@ -1,12 +1,14 @@
 // App-level actions that combine the data store, the UI store and DOM focus: going places (chat grid, brain pages, the
 // map) with back/forward history and internal links (sb://<page>/<element>, highlighted on arrival), jump to a chat,
-// the next thing that needs the user (Ctrl+J), stop (one / all with a confirm only when more than one is running),
+// the next thing that needs the user (Ctrl+J; with nothing pending, the morning block's first priority, ADR 0102), stop (one / all with a confirm only when more than one is running),
 // maximize, focus mode, Esc backing out one level, the floating Orchestrator and its tabs (ADR 0021), a new Orchestrator in place of
 // one ("Ricomincia da capo" on the same engine, "Cambia motore" on the other, optionally starting from a handoff of the
 // old one; "Pulisci" = the same engine, started empty), "Riprendi" of a long chat
 // in a new one, the brain pages' bridge ("Discuti") and the ui:command event from main.
 // Used by App.tsx (keyboard), the command palette, the sidebar, the notification center, the top bar and the tiles.
-import type { EventMap, Harness, PendingRequest } from '@shared/contract';
+import type { EventMap, Harness, MorningNext, PendingRequest } from '@shared/contract';
+import { nextPriority } from '@shared/morning';
+import { morningBriefNow } from './store/morning';
 import type { DiscussBridge } from './brain';
 import { setDraft } from './components/ChatInput';
 import { sb } from './sb';
@@ -38,7 +40,7 @@ const HANDOFF_CHARS = 6000;
 export function orchestratorHandoff(chatId: string): string {
   const s = app.get();
   const old = s.chats[chatId];
-  const nowMd = s.info?.brainRoot ? `${s.info.brainRoot.replace(/[\\/]+$/, '')}/now.md` : 'now.md del cervello';
+  const nowMd = s.info?.brainRoot ? `${s.info.brainRoot.replace(/[\\/]+$/, '')}/now.md` : 'now.md del brain';
   const lines: string[] = [];
   let used = 0;
   for (const i of [...(s.items[chatId] ?? [])].reverse()) {
@@ -444,12 +446,30 @@ export function focusRequest(req: PendingRequest): void {
 export function nextThing(from?: string): void {
   const hidden = new Set(ui.get().hidden);
   const list = app.get().pending.filter(p => !hidden.has(p.chatId));
-  if (!list.length) { toast('Niente ti aspetta adesso', 'ok'); return; }
+  if (!list.length) { void nextAfterPending(); return; }
   // Reopening a paused queue starts at its oldest request; stale card focus is only a cursor once it is open.
   if (ui.get().later) { openQueue(null); return; }
   const active = from ?? (document.activeElement as HTMLElement | null)?.closest?.('[data-request-key]')?.getAttribute('data-request-key');
   const i = list.findIndex(p => reqKey(p) === active);
   focusRequest(list[(i + 1) % list.length]!);
+}
+
+/** Ctrl+J with nothing pending (ADR 0102): the first thing of the morning block's priority (a red build on a PR → an
+ *  approval → a stalled chat → an idea due), else "Niente ti aspetta adesso". */
+async function nextAfterPending(): Promise<void> {
+  const next = nextPriority(await morningBriefNow());
+  if (!next) { toast('Niente ti aspetta adesso', 'ok'); return; }
+  openMorningNext(next);
+  toast(next.kind === 'pr' ? t('alive.next.pr', { title: next.pr.title }) : next.kind === 'approvals' ? t('alive.next.approvals', { n: next.n })
+    : next.kind === 'stalled' ? t('alive.next.stalled', { title: next.chat.title, min: next.chat.quietMin }) : t('alive.next.idea', { title: next.idea.title }), 'info');
+}
+
+/** Where a morning row leads: the Task page for a PR, Da approvare, the stalled chat, the ideas. */
+export function openMorningNext(next: MorningNext): void {
+  if (next.kind === 'pr') go({ page: 'task' });
+  else if (next.kind === 'approvals') go({ page: 'agenti', arg: 'studio' });
+  else if (next.kind === 'stalled') focusChat(next.chat.chatId);
+  else go({ page: 'idee', arg: 'mie' });
 }
 
 const chatOfTile = (key: string | null): string | null => {

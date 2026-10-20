@@ -19,7 +19,7 @@ describe('product sync', () => {
     expect(outcomeEvent({ release: '0.1.0-abc', startedAt: 'x', endedAt: 'y', exitCode: 0, ok: true, summary: 'pushed 1 commit' })?.kind).toBe('sync-ok');
     const b = outcomeEvent({ release: 'brain-2026', startedAt: 'x', endedAt: 'y', exitCode: 2, ok: false, blocked: true, summary: 'src/a.ts:3 rule secret' });
     expect(b).toMatchObject({ kind: 'sync-blocked', detail: 'src/a.ts:3 rule secret' });
-    expect(b?.title).toContain('prodotto nel cervello');
+    expect(b?.title).toContain('prodotto nel brain');
     expect(outcomeEvent({ release: '0.1.0-abc', startedAt: 'x', endedAt: 'y', exitCode: 1, ok: false })?.kind).toBe('sync-error');
   });
 
@@ -31,15 +31,17 @@ describe('product sync', () => {
     const brain = { publish: (e: { kind: string }[]) => got.push(...e) } as unknown as BrainService;
     const s = new ProductSync({ base, brainRoot: () => null, brain, nodeExe: process.execPath, firstScanMs: 0 });
     s.start();
+    // macOS's FSEvents may miss a write right after the watch starts and reports late: write once it is up, wait longer
+    await new Promise(r => setTimeout(r, 300));
     fs.writeFileSync(path.join(base, 'sync', '0.1.0-abc.json'), JSON.stringify({ release: '0.1.0-abc', startedAt: 'x', endedAt: 'y', exitCode: 2, ok: false, blocked: true, summary: 'x' }));
-    for (let i = 0; i < 40 && !got.length; i++) await new Promise(r => setTimeout(r, 50));
+    for (let i = 0; i < 100 && !got.length; i++) await new Promise(r => setTimeout(r, 50));
     s.stop();
     expect(got.map(e => e.kind)).toEqual(['sync-blocked']);
   });
 
   it('a failure says since when GitHub is behind, its count line first; a crash keeps its cause', () => {
     const b = outcomeEvent({ release: 'brain-1', startedAt: 'x', endedAt: 'y', exitCode: 2, ok: false, blocked: true, summary: 'src/a.ts:3  deny-list\nguard: BLOCKED, 1 findings (deny-list 1)' }, '2026-10-11T18:22:06.041Z');
-    expect(b?.title).toBe('GitHub fermo: pubblicazione bloccata dal controllo (prodotto nel cervello)');
+    expect(b?.title).toBe('GitHub fermo: pubblicazione bloccata dal controllo (prodotto nel brain)');
     expect(b?.detail.split('\n')).toEqual([`Ultimo aggiornamento riuscito di GitHub: ${new Date('2026-10-11T18:22:06.041Z').toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', '')}`, 'guard: BLOCKED, 1 findings (deny-list 1)', 'src/a.ts:3  deny-list']);
     expect(outcomeEvent({ release: '0.1.0-abc', startedAt: 'x', endedAt: 'y', exitCode: 1, ok: false, summary: 'boom' }, null)?.detail).toBe('Ultimo aggiornamento riuscito di GitHub: mai\nboom');
     const crash = ['product-sync: start', 'Error: Command failed: git cat-file blob 1234', '    at x (a.mjs:1)', '    at y (a.mjs:2)', '  pid: 1,', '  stdout: Buffer(0) [],', '  stderr: Buffer(0) []', '}', '', 'Node.js v22.21.1'].join('\n');

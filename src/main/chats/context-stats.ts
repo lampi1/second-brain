@@ -1,20 +1,27 @@
 // Counters of how the app's Claude chats use their context (ADR 0031), from the API usage every engine reports (zero
 // tokens): calls, calls over 200k, cold cache re-writes over 100k, compactions, cold hand-off notes written and used,
-// and the list-price $ of the first calls after a cold continuation vs after an auto-compaction. Why: the owner decided
+// the list-price $ of the first calls after a cold continuation vs after an auto-compaction, and the prompt cache per
+// kind of chat (read, written, uncached; and on each session's first call, whether it found its prefix cached). Why: the owner decided
 // (13/10) on measured numbers and wants to see whether the fix holds. Kept in <userData>/context-stats.json (saved a
 // few seconds after a change), notable events logged on scope chats; app_state shows the snapshot. Used by manager.ts.
 import fs from 'node:fs';
 import path from 'node:path';
-import type { ContextStats } from '../../shared/contract';
+import type { CacheKind, CacheTotals, ContextStats } from '../../shared/contract';
 import { errText, log } from '../log';
 
 const OVER = 200_000;
 const COLD = 100_000;
 
+const zeroCache = (): CacheTotals => ({ calls: 0, read: 0, write: 0, input: 0, firstCalls: 0, firstRead: 0, firstWrite: 0 });
+const emptyCache = (): Record<CacheKind, CacheTotals> => ({ orchestrator: zeroCache(), root: zeroCache(), child: zeroCache() });
 const empty = (now: number): ContextStats => ({
   since: now, calls: 0, over200k: 0, coldRewrites: 0, compactions: 0, notesWritten: 0, notesUsed: 0,
-  afterContinuation: { calls: 0, usd: 0 }, afterCompaction: { calls: 0, usd: 0 },
+  afterContinuation: { calls: 0, usd: 0 }, afterCompaction: { calls: 0, usd: 0 }, cache: emptyCache(),
 });
+const totals = (v: unknown): CacheTotals => {
+  const o = (v ?? {}) as Record<string, unknown>;
+  return { calls: n(o.calls), read: n(o.read), write: n(o.write), input: n(o.input), firstCalls: n(o.firstCalls), firstRead: n(o.firstRead), firstWrite: n(o.firstWrite) };
+};
 
 const n = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0);
 const pair = (v: unknown): { calls: number; usd: number } => { const o = (v ?? {}) as Record<string, unknown>; return { calls: n(o.calls), usd: n(o.usd) }; };
@@ -30,8 +37,16 @@ export class ContextCounters {
   }
 
   /** One API call; after = it is one of the first calls after a continuation or a compaction. */
-  call(chatId: string, c: { context: number; cacheWrite: number; usd: number }, after: 'continuation' | 'compaction' | null): void {
+  call(chatId: string, c: { context: number; cacheWrite: number; usd: number; cacheRead?: number; input?: number }, after: 'continuation' | 'compaction' | null, cache?: { kind: CacheKind; first: boolean }): void {
     this.s.calls++;
+    if (cache) {
+      const t = (this.s.cache ??= emptyCache())[cache.kind];
+      t.calls++; t.read += c.cacheRead ?? 0; t.write += c.cacheWrite; t.input += c.input ?? 0;
+      if (cache.first) {
+        t.firstCalls++; t.firstRead += c.cacheRead ?? 0; t.firstWrite += c.cacheWrite;
+        log.info('chats', 'context: first call of a session', { chat: chatId, data: { kind: cache.kind, cacheRead: c.cacheRead ?? 0, cacheWrite: c.cacheWrite, input: c.input ?? 0 } });
+      }
+    }
     if (c.context > OVER) this.s.over200k++;
     if (c.cacheWrite > COLD) {
       this.s.coldRewrites++;
@@ -55,7 +70,7 @@ export class ContextCounters {
 
   snapshot(): ContextStats {
     const s = this.s;
-    return { ...s, afterContinuation: { ...s.afterContinuation }, afterCompaction: { ...s.afterCompaction } };
+    return { ...s, afterContinuation: { ...s.afterContinuation }, afterCompaction: { ...s.afterCompaction }, cache: structuredClone(s.cache ?? emptyCache()) };
   }
 
   /** Writes now (the app quits). */
@@ -83,6 +98,7 @@ export class ContextCounters {
       return {
         since: n(o.since), calls: n(o.calls), over200k: n(o.over200k), coldRewrites: n(o.coldRewrites), compactions: n(o.compactions),
         notesWritten: n(o.notesWritten), notesUsed: n(o.notesUsed), afterContinuation: pair(o.afterContinuation), afterCompaction: pair(o.afterCompaction),
+        cache: { orchestrator: totals((o.cache as Record<string, unknown> | undefined)?.orchestrator), root: totals((o.cache as Record<string, unknown> | undefined)?.root), child: totals((o.cache as Record<string, unknown> | undefined)?.child) },
       };
     } catch { return null; }
   }

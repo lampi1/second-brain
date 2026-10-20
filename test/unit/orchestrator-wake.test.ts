@@ -344,3 +344,56 @@ describe('the user writes in a work chat (ADR 0083)', () => {
     expect(w.queued()).toEqual([]);
   });
 });
+
+describe('OrchestratorWake: quiet results and app-started chats (token plan 2026-10-20)', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('a root chat\'s clean result is quiet: no turn of its own, it rides into the next one with its summary', async () => {
+    const { w, sent, up, finish } = make();
+    up({ id: 'fix', title: 'App · fix', state: 'running' });
+    expect(w.cleanReport({ chatId: 'fix', title: 'App · fix', role: 'Artisan', summary: 'Fix su main, 14 test verdi' })).toBe(true);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(sent).toEqual([]);
+    expect(w.heldNews()).toHaveLength(1);
+    // the user writes: the Orchestrator works, the result goes into its turn
+    up({ id: 'orchestrator', isOrchestrator: true, title: 'Orchestrator', state: 'running' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.text).toContain('- «App · fix» (Artisan): ha consegnato, tutti i criteri soddisfatti: «Fix su main, 14 test verdi»');
+    // its own turn end adds nothing (the report was its result)
+    finish('other', 'x');
+    expect(w.queued().some(e => e.chatId === 'fix')).toBe(false);
+  });
+
+  it('a clean report keeps its own slot: a later error of the same chat never hides it', async () => {
+    const { w, up, sent } = make();
+    up({ id: 'fix', title: 'App · fix', state: 'running' });
+    w.cleanReport({ chatId: 'fix', title: 'App · fix', role: 'Artisan', summary: 'Fix su main' });
+    up({ id: 'fix', title: 'App · fix', state: 'error', lastError: 'boom' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.text).toContain('ha consegnato, tutti i criteri soddisfatti: «Fix su main»');
+    expect(sent[0]!.text).toContain('si è fermata su un errore: boom');
+    expect(w.queued()).toEqual([]);
+  });
+
+  it('off or without an Orchestrator it is not taken: the caller sends the result as before', () => {
+    const { w, setOn } = make();
+    setOn(false);
+    expect(w.cleanReport({ chatId: 'fix', title: 'fix', role: 'Artisan', summary: 's' })).toBe(false);
+  });
+
+  it('a chat the app started (a sampled review) never wakes it when it finishes; a failure still does', async () => {
+    const { sent, up } = make();
+    const run = { runId: 'r', agentId: 'sentinel', version: 1, startedAt: 0, startedBy: 'app' } as unknown as ChatSummary['run'];
+    up({ id: 'rev', state: 'running', run });
+    up({ id: 'rev', state: 'idle', lastText: 'verdetto', run });
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(sent).toEqual([]);
+    up({ id: 'rev', state: 'running', run });
+    up({ id: 'rev', state: 'error', lastError: 'boom', run });
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(sent).toHaveLength(1);
+  });
+});

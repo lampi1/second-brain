@@ -162,7 +162,7 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode, l
   ) : null;
 
   return (
-    <div ref={root} className={`bx bx-map${embedded ? ' bx-map-embedded' : ''}`} role={embedded ? 'region' : 'dialog'} aria-label="Mappa del cervello" tabIndex={-1} data-testid="brain-map">
+    <div ref={root} className={`bx bx-map${embedded ? ' bx-map-embedded' : ''}`} role={embedded ? 'region' : 'dialog'} aria-label="Mappa del brain" tabIndex={-1} data-testid="brain-map">
       <div className="bx-map-bar">
         <h2>Mappa del brain</h2>
         <form className="bx-search" onSubmit={e => { e.preventDefault(); search(); }} role="search">
@@ -179,7 +179,7 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode, l
       </div>
       <div className="bx-map-body">
         {!data ? (
-          <div className="bx-map-msg"><div>{m.error ? <><b style={{ color: '#ff9a8a' }}>La mappa non si carica</b><span>{m.error}</span><button type="button" className="bx-btn" onClick={() => m.reload()}>Riprova</button></> : <><b>Disegno la mappa…</b><span>La prima volta il cervello la calcola dai file (fino a 20 secondi).</span></>}</div></div>
+          <div className="bx-map-msg"><div>{m.error ? <><b style={{ color: '#ff9a8a' }}>La mappa non si carica</b><span>{m.error}</span><button type="button" className="bx-btn" onClick={() => m.reload()}>Riprova</button></> : <><b>Disegno la mappa…</b><span>La prima volta il brain la calcola dai file (fino a 20 secondi).</span></>}</div></div>
         ) : showFlat ? (
           <div className="bx-map-flat bx-scroll" data-testid="bx-map-flat" style={{ padding: '80px 18px 18px' }}>
             {gl === 'fail' && !flat && mode !== 'flat' && <p className="bx-warnline" style={{ marginBottom: 12, background: 'rgba(242,182,76,0.08)' }}>La grafica 3D non parte su questo PC{glError ? ` (${glError})` : ' (WebGL non disponibile)'}: ecco la stessa mappa come elenco, per strato.</p>}

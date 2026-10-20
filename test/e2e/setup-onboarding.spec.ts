@@ -73,7 +73,7 @@ test('setup: fields take typing, connectors end in a real check, folders without
     const next = () => setup.getByRole('button', { name: 'Continua', exact: true }).click();
 
     // 1 folders: no options, a new memory by default, the projects folder found by itself
-    await expect(title).toHaveText('La tua memoria e i tuoi progetti');
+    await expect(title).toHaveText('Il tuo brain e i tuoi progetti');
     await expect(setup.getByTestId('setup-memory-card')).toHaveAttribute('data-state', 'new');
     await expect(setup.getByTestId('setup-memory-card')).toContainText(userData);
     await expect(setup.getByTestId('setup-memory').locator('input, textarea, details')).toHaveCount(0);
@@ -174,7 +174,7 @@ test('setup: fields take typing, connectors end in a real check, folders without
     await page.evaluate(() => window.sb.invoke('settings:set', { projectsRoot: null }));
     for (const repo of ['shop', 'api']) fs.rmSync(path.join(found, repo, '.git'), { recursive: true });
     await page.getByRole('button', { name: 'Configura il mio lavoro', exact: true }).click();
-    await expect(title).toHaveText('La tua memoria e i tuoi progetti');
+    await expect(title).toHaveText('Il tuo brain e i tuoi progetti');
     await expect(setup.getByTestId('setup-memory-card')).toHaveAttribute('data-state', 'connected');
     await expect(projects).toHaveAttribute('data-state', 'ask');
     await expect(projects).toContainText('Dove tieni i tuoi progetti?');

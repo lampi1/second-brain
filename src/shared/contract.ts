@@ -24,6 +24,8 @@ import type { CreateBrainRequest, CreatedBrain } from './brain-create';
 import type { OwnerProfile, ProfileResult, ProfileSave } from './profile';
 import type { AppUpdateState, UpdateCheckpointAnswer, UpdateCheckpointRequest, UpdateRecovery } from './app-update';
 import type { CloudAgent, CloudApplyResult, CloudCaps, CloudStartRequest, CloudState } from './cloud';
+import type { MorningOp, MorningState } from './morning';
+export type { MorningBrief, MorningChange, MorningCloud, MorningIdea, MorningNext, MorningOp, MorningOutcome, MorningPr, MorningRun, MorningStalled, MorningState } from './morning';
 import type { RunEstimates } from './task-estimate';
 import type { AgentImages } from './agent-images';
 export type { CloudAgent, CloudApplyResult, CloudCaps, CloudEngine, CloudMessage, CloudReady, CloudStartRequest, CloudState, CloudStatus } from './cloud';
@@ -183,6 +185,11 @@ export interface ChatSummary {
   queued?: QueuedInfo;
   /** how its harness, model and effort were chosen when an agent opened it (app_create_chat, the routing table) */
   route?: RouteDecision;
+  /** ADR 0103: when the checkpoint before its last turn was taken (its files can go back to it); absent = none */
+  checkpointAt?: number;
+  /** «Lampo» (ADR 0105): the always-on quick lane beside the Orchestrator: reads and answers, changes nothing, starts no
+   *  work; never a strip, never news for the Orchestrator, never closed by itself */
+  quick?: true;
 }
 
 export interface ChatLink { id: string; title: string }
@@ -214,7 +221,13 @@ export interface ContextStats {
   notesUsed: number;
   afterContinuation: { calls: number; usd: number };
   afterCompaction: { calls: number; usd: number };
+  /** the prompt cache per kind of chat (token plan 2026-10-20: measure before trusting the estimates): tokens read from
+   *  the cache, written to it and sent uncached, over every call and over the first call of each session (whether a new
+   *  session finds its prefix already cached by another one) */
+  cache?: Record<CacheKind, CacheTotals>;
 }
+export type CacheKind = 'orchestrator' | 'root' | 'child';
+export interface CacheTotals { calls: number; read: number; write: number; input: number; firstCalls: number; firstRead: number; firstWrite: number }
 
 export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 export type PermissionMode = 'default' | 'acceptEdits' | 'auto' | 'plan' | 'bypassPermissions';
@@ -359,6 +372,8 @@ export interface NewChat {
   fork?: boolean;             // resume as a copy: never two writers on one session
   /** the Orchestrator (created only by the user: OrchestratorService.ensure, Ricomincia da capo, Cambia motore, Pulisci) */
   orchestrator?: boolean;
+  /** «Lampo», the quick lane (ADR 0105): only the user; one at a time (the open one is returned) */
+  quick?: boolean;
   /** with orchestrator: the Orchestrator this one replaces; the old one goes on as a normal chat, its history kept */
   replaces?: string;
   worktree?: boolean;         // claude --worktree
@@ -493,7 +508,8 @@ export interface FeedEvent {
   /** the card's one action (agent-retired: Ripristina) */
   action?: FeedAction;
 }
-export type FeedAction = { kind: 'agent-undo'; undo: AgentUndo } | { kind: 'agent-proposals' };
+/** brain-undo: the changes a maintenance pass the app ran by itself made (brainmodel:rollback each, newest first; ADR 0102) */
+export type FeedAction = { kind: 'agent-undo'; undo: AgentUndo } | { kind: 'agent-proposals' } | { kind: 'brain-undo'; ids: string[] };
 
 // ---- DevOps (src/main/tasks): the user's Azure DevOps, read by the brain's read-only scripts, never written
 
@@ -763,11 +779,6 @@ export interface Settings {
   loadQueue: boolean;
   loadQueueCpu: number;
   loadQueueRam: number;
-  /** the Grindhouse's headline (SPEC 18, main/headline.ts): on/off, and the model and effort that write it (Anthropic
-   *  API engine; '' = the default, claude-opus-5-5 at low). Absent = the defaults. */
-  headlineOn?: boolean;
-  headlineModel?: string;
-  headlineEffort?: Effort | '';
   /** fields forced by the environment (SB_BRAIN, SB_MCP_PORT): shown read-only, never saved */
   locked?: ('brainRoot' | 'mcpPort')[];
 }
@@ -798,7 +809,7 @@ export type SettingKey =
   | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'orchestratorDayCompact' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'tasks.enabled' | 'tasks.everyMin' | 'tasks.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
   | `orchestratorChats.${keyof OrchestratorChatDefaults}` | 'orchestratorOpacity' | 'orchestratorEvents' | 'runResults' | 'questionsModal' | 'appRepo' | 'projectsRoot' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'codexAutonomyRoots'
-  | 'headlineOn' | 'headlineModel' | 'headlineEffort' | `delegation.${keyof DelegationSettings}` | `modelTiers.${Harness}.${ModelTier}`;
+  | `delegation.${keyof DelegationSettings}` | `modelTiers.${Harness}.${ModelTier}`;
 export interface SettingDef {
   key: SettingKey;            // 'mute.*' stands for every feed kind
   type: 'path' | 'int' | 'boolean' | 'enum' | 'usd' | 'model' | 'repo-paths' | 'slots'; // slots: 1-3 local HH:MM times
@@ -1226,6 +1237,9 @@ export interface InvokeMap {
   'brainmodel:link': [{ skill: string; agentId: string; on: boolean }, BrainModelState];
   /** Classificatori (read-only): the routing table with history and measured results, recent agent choices */
   'classifiers:state': [void, ClassifiersState];
+  /** the morning block (ADR 0102, main/morning/): presence = the user is here (the block opens on the first presence of
+   *  the day or after 4 h away), get = the brief now (Ctrl+J's fallback), dismiss = Esc / Ok (not again that day) */
+  'morning:brief': [{ op: MorningOp } | undefined, MorningState];
   'setup:get': [void, SetupState];
   'setup:save': [{ preferences: SetupDraft; status: 'draft' | 'completed' | 'skipped' }, SetupState];
   /** the owner's profile in the brain's me.md (src/main/brain/profile.ts) */
@@ -1281,6 +1295,8 @@ export interface InvokeMap {
   /** "Riprendi": a NEW chat, same engine, folder and choices, that starts from the hand-off (written first if missing or
    *  older than the last turn); the old chat's process ends, it stays readable and linked (continuedBy) */
   'chat:continue': [{ chatId: string }, ChatSummary];
+  /** ADR 0103: the files back as they were before the chat's last turn (its checkpoint); counts of restored and removed files */
+  'chat:undoTurn': [{ chatId: string }, { restored: number; removed: number }];
   'browser:list': [void, BrowserTab[]];
   'browser:open': [{ url?: string; ownerChatId?: string | null; env?: string }, BrowserTab];
   'browser:navigate': [{ tabId: string; url: string }, void];
@@ -1516,8 +1532,8 @@ export const INVOKE_CHANNELS = [
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
   'agents:list', 'skills:suggest', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'agents:estimates', 'run:outcome', 'agents:restoreVersion', 'avatars:get', 'avatars:set', 'avatars:reset', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
-  'agents:exportPlan', 'agents:exportFix', 'agents:export', 'brain:share', 'agents:importInspect', 'agents:importApply', 'agents:importCancel', 'brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'brainmodel:link', 'classifiers:state', 'agents:trialDecide', 'agents:lifecycleDecide',
-  'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
+  'agents:exportPlan', 'agents:exportFix', 'agents:export', 'brain:share', 'agents:importInspect', 'agents:importApply', 'agents:importCancel', 'brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'brainmodel:link', 'classifiers:state', 'morning:brief', 'agents:trialDecide', 'agents:lifecycleDecide',
+  'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'chat:undoTurn', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
   'settings:undo', 'settings:propose', 'settings:pending', 'settings:confirm', 'estimate:record', 'brain:api',
   'tasks:get', 'tasks:refresh', 'tasks:markRead', 'chat:branches',

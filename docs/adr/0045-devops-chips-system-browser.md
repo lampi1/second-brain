@@ -8,7 +8,7 @@ A chat tile's header shows the DevOps objects the chat talked about as chips (`r
 cockpit on 2026-10-14 four clicks in 13 s opened four tabs that the user did not see (behind a maximized chat) and that
 landed on the Microsoft sign-in: the internal browser has no DevOps session, the system browser has it. A first fix
 (brought the tab on screen and reused it) did not solve the sign-in. The user, 2026-10-14 (through the Regia): the chips
-open the system browser, like the question's context links since 2026-10-12 (AskContext.tsx, ADR 0033).
+open the system browser, like the question's context links since 2026-10-12 (AskContext.tsx, ADR 0019).
 
 ## Decision
 - **Chips and their "+N" menu** call `window.open(url, '_blank', 'noopener')`: main's window-open handler

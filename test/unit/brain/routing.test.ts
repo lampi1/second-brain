@@ -406,8 +406,8 @@ describe('routing: the brain files', () => {
   });
 
   it('no brain or no registry: says why, saves nothing', () => {
-    expect(new Routing(() => null).info().error).toMatch(/nessun cervello/);
-    expect(() => new Routing(() => null).save(ROUTES, 'u', null)).toThrow(/nessun cervello/);
+    expect(new Routing(() => null).info().error).toMatch(/nessun brain/);
+    expect(() => new Routing(() => null).save(ROUTES, 'u', null)).toThrow(/nessun brain/);
     const empty = tmp();
     expect(new Routing(() => empty).info().error).toMatch(/models\.json/);
     expect(() => new Routing(() => empty).save(ROUTES, 'u', null)).toThrow(/models\.json/);

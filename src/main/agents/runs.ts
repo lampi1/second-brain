@@ -156,7 +156,7 @@ export function addTurn(run: AgentRun, usd: number | null, tokens: AgentRunToken
   for (const k of ['input', 'cacheRead', 'cacheWrite', 'output'] as const) run.tokens[k] += tokens[k];
 }
 
-/** Links a new run may carry: the delegating chat's run (agent_delegate), the run a Judge reviews, the run it reworks;
+/** Links a new run may carry: the delegating chat's run (agent_delegate), the run an independent review (a Sentinel) reviews, the run it reworks;
  *  each must name a run the store knows. */
 export interface RunLinks { parentRunId?: string; reviewOf?: string; reworkOf?: string }
 export interface RunStart extends RunLinks { chatId: string; agentId: string; version: number; goal: string; startedBy: AgentRun['startedBy']; startedAt: number; costKnown: boolean; tags?: AgentRunTags; tier?: ModelTier; model?: string | null }
@@ -193,6 +193,7 @@ export function readTally(v: unknown): RunTally | null {
   const reviews = t.reviews as Record<string, Record<string, unknown>> | null;
   if (!reviews || typeof reviews !== 'object' || Array.isArray(reviews) || !Object.entries(reviews).every(([key, r]) => /^[a-z][a-z0-9_-]{0,79}\/\d+$/.test(key) && r && count(r.runs) && r.runs > 0 && count(r.findings) && count(r.blockingRuns) && count(r.blocking))) return null;
   if (t.decisions !== undefined && !count(t.decisions)) return null;
+  if (t.decisionWins !== undefined && (!count(t.decisionWins) || t.decisionWins > ((t.decisions as number | undefined) ?? 0))) return null;
   if ((t.tags !== undefined && !tagTallies(t.tags)) || (t.tagsLost !== undefined && t.tagsLost !== true) || (t.tags !== undefined && t.tagsLost !== undefined)) return null;
   return structuredClone(t) as unknown as RunTally;
 }

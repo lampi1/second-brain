@@ -1,7 +1,8 @@
-// The cartoon characters the roles are drawn as: one per role plus Pulse's, fixed in code (the art is in
+// The cartoon characters the roles are drawn as: one per role plus Pulse's (a role ADR 0100 retired is drawn as its
+// successor), fixed in code (the art is in
 // renderer/lib/character-art.ts, trusted, never user or model content). Pure ids and labels, shared by main (owner
 // snapshots, agents/catalog.ts) and the renderer (AgentAvatar, the tree, the role editor).
-import { ROLE_IDS, PULSE_ID, type RoleId } from './roles';
+import { ROLE_IDS, PULSE_ID, currentRoleId, type RoleId } from './roles';
 
 export const CHARACTER_IDS = [...ROLE_IDS, PULSE_ID] as const;
 export type CharacterId = RoleId | typeof PULSE_ID;
@@ -15,10 +16,8 @@ export const CHARACTER_LOOKS: Record<CharacterId, string> = {
   artisan: 'maker in a bandana and apron with a wrench',
   sentinel: 'guard in a visored helmet with a shield',
   herald: 'town crier in a feathered tricorn with a horn',
-  router: 'switchboard operator with an afro puff and a headset, holding a signpost',
-  judge: 'judge in a white curled wig with a gavel',
-  scribe: 'writer with a hair bun and round glasses, holding a quill',
   pulse: 'bearded lighthouse keeper in a knit cap and a raincoat, holding a lantern',
 };
-/** The character of a catalog entry: its own id when it has one, else the Scout's (never empty). */
-export const characterOf = (id: string): CharacterId => (isCharacterId(id) ? id : 'scout');
+/** The character of a catalog entry: its own id when it has one (a retired role: its successor's), else the Scout's
+ *  (never empty). */
+export const characterOf = (id: string): CharacterId => { const c = currentRoleId(id); return isCharacterId(c) ? c : 'scout'; };

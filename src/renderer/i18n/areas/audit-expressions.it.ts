@@ -51,7 +51,7 @@ export const auditExpressionsIt = {
   "auditExpression.RoutingGroup.text139": "Leggo la tabella…",
   "auditExpression.RoutingGroup.text140": (p: { v0: string | number }) => `Versione ${p.v0}`,
   "auditExpression.RoutingGroup.text141": "Nessuna tabella ancora",
-  "auditExpression.RoutingGroup.text142": (p: { v0: string | number; v1: string | number }) => `Salvata il ${p.v0}${p.v1}. Ogni salvataggio è una versione nuova: le vecchie restano nel cervello.`,
+  "auditExpression.RoutingGroup.text142": (p: { v0: string | number; v1: string | number }) => `Salvata il ${p.v0}${p.v1}. Ogni salvataggio è una versione nuova: le vecchie restano nel brain.`,
   "auditExpression.RoutingGroup.text143": (p: { v0: string | number }) => ` da ${p.v0}`,
   "auditExpression.RoutingGroup.text144": "Al primo salvataggio nasce la versione 1.",
   "auditExpression.RoutingGroup.text145": (p: { v0: string | number }) => `Riga ${p.v0}: tipo di lavoro`,

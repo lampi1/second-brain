@@ -45,6 +45,8 @@ import { AutoCloseService, autoCloseNow } from './chats/auto-close';
 import { ProgressService } from './agents/progress';
 import { AgentLifecycle } from './agents/lifecycle';
 import { createLifecycleApi, mountLifecycleApi } from './agents/lifecycle-api';
+import { MorningService } from './morning/service';
+import { demoAgentRuns } from './demo-agent-runs';
 
 const demoCli = (version: string, account: string): CliStatus => ({ found: true, path: '(demo)', version, loggedIn: true, account });
 
@@ -66,10 +68,10 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   // the demo brain is no folder: the app's engines only; keys and trust as in the real app (its own userData)
   const engines = createEngines({ userData: ctx.userData, emitter: ctx.emitter, cipher: safeStorageCipher(safeStorage), brainRoot: () => null, settings: brain });
   const agents = createAgentCatalog(ctx, brain, engines, () => null);
-  // one role the user narrowed (the Judge reads only, in plan mode): the permissions card and the card back show both
+  // one role the user narrowed (the Herald reads only, in plan mode): the permissions card and the card back show both
   // states (ADR 0085); every other role keeps every permission
-  try { const judge = agents.list().profiles.find(p => p.id === 'judge'); if (judge && !judge.userLocked) agents.save({ ...judge, tools: { allow: ['read', 'web'] }, permissionCeiling: 'plan' }, 'judge'); }
-  catch (e) { log.warn('demo', 'demo Judge not narrowed', { cause: errText(e), hint: 'demo only: the permissions card shows every role at its defaults' }); }
+  try { const herald = agents.list().profiles.find(p => p.id === 'herald'); if (herald && !herald.userLocked) agents.save({ ...herald, tools: { allow: ['read', 'web'] }, permissionCeiling: 'plan' }, 'herald'); }
+  catch (e) { log.warn('demo', 'demo Herald not narrowed', { cause: errText(e), hint: 'demo only: the permissions card shows every role at its defaults' }); }
   // fake cloud agents in the demo's areas (ADR 0080): no CLI, no network
   const cloud = demoCloud({ emit: st => ctx.emitter.emit('cloud:changed', st), now });
   const runFeedback = new RunFeedback({ userData: ctx.userData, catalog: agents, runs: new AgentRunStore(ctx.userData), publish: events => brain.publish(events),
@@ -195,7 +197,15 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   // "Skill e agenti" on a fictional home under userData (never the user's ~/.claude); deletes for real there
   const skills = new SkillsService({ home: demoSkillsHome(ctx.userData), roots: () => [], trash: p => fs.promises.rm(p, { recursive: true, force: true }) });
 
+  // the morning block (ADR 0102) over the demo's made-up history
+  const morning = new MorningService({ file: path.join(ctx.userData, 'morning.json'), now, chats: () => chats.list(), runs: () => demoAgentRuns(now()),
+    pending: () => chats.pending().length + asks.pending().length,
+    approvals: () => roles().filter(p => p.trial).length + agentLifecycle.read({}).proposals.filter(p => p.kind === 'tier').length,
+    tasks: () => tasks.get(), cloud: () => cloud.state().agents, changes: () => brainModel.changes(), api: p => brain.api(p),
+    stallMin: () => brain.settings().delegation?.stallMin ?? 10 });
+
   return {
+    morning,
     cloud, chats, browser, brain, mcp, mcpServers, runner, asks, wake, heldNews, tasks, skills, source, engines, later: createLater(ctx),
     agents, runFeedback, agentLifecycle, agentPacks, brainModel, suggestSkills,
     setup: new SetupService(ctx.userData, true, now),

@@ -6,9 +6,10 @@ import { fmt } from '../lib/format';
 import { shortError } from '../lib/error-text';
 import { IconRefresh } from './ui';
 import { HelpTip } from '../../components/HelpTip';
+import { GuideLink } from '../../components/GuideLink';
 import { t } from '../../i18n';
 
-export function Loading({ label = 'Leggo il cervello…', lines = 3, block = false }: { label?: string; lines?: number; block?: boolean }) {
+export function Loading({ label = 'Leggo il brain…', lines = 3, block = false }: { label?: string; lines?: number; block?: boolean }) {
   const [slow, setSlow] = useState(false);
   useEffect(() => { const t = setTimeout(() => setSlow(true), 300); return () => clearTimeout(t); }, []);
   return (
@@ -52,9 +53,10 @@ export function Async({ loading, error, onRetry, label, children, lines, block }
   return <>{children()}</>;
 }
 
-/** Page head: title, the key fact in one line (bold), what the page is in small, last update and refresh. */
-export function PageHead({ title, lead, what, at, refreshing, onRefresh, actions, live }: {
-  title: string; lead?: ReactNode; what?: ReactNode; at?: number | null; refreshing?: boolean; onRefresh?: () => void; actions?: ReactNode; live?: boolean;
+/** Page head: title, the key fact in one line (bold), what the page is in small (with «Come funziona →» to its Guida
+ *  card when `guide` names one, ADR 0101), last update and refresh. */
+export function PageHead({ title, lead, what, at, refreshing, onRefresh, actions, live, guide }: {
+  title: string; lead?: ReactNode; what?: ReactNode; at?: number | null; refreshing?: boolean; onRefresh?: () => void; actions?: ReactNode; live?: boolean; guide?: string;
 }) {
   return (
     <header className="bx-head">
@@ -69,7 +71,7 @@ export function PageHead({ title, lead, what, at, refreshing, onRefresh, actions
         </div>
       </div>
       {lead && <p className="bx-lead" data-testid="bx-lead">{lead}</p>}
-      {what && <p className="bx-what">{what}</p>}
+      {(what || guide) && <p className="bx-what">{what}{guide && <> <GuideLink concept={guide} /></>}</p>}
     </header>
   );
 }

@@ -22,12 +22,12 @@ export const brainLibEn: typeof brainLibIt = {
 
   // learn.ts
   'brainLib.learn.waiting': (p: { n: number }) => `waiting for the first ${p.n} cases after the change`,
-  'brainLib.learn.helpIntro': 'Here the brain checks how far off its time and cost estimates are (and, when it has the data, model choice). Every now and then it re-runs estimates on past chats with different methods: if one is clearly less wrong, a proposal is born. Nothing changes until you hit Apply; every change is undone with Revert and after 20 chats it is checked automatically.',
+  'brainLib.learn.helpIntro': 'Here the brain checks how far off its learned rules are (the model choice, the notification thresholds). Now and then it redoes them on past chats with other methods: when one is clearly less wrong, a proposal is born. Nothing changes until you press Apply; every change is undone with Restore and checked by itself after 20 chats.',
   'brainLib.learn.helpTypical': 'By how much the estimate is off from the truth, in the middle of chats: ×1.7 means that half the time the truth is between the estimate divided by 1.7 and the estimate times 1.7. Closer to ×1 is better.',
   'brainLib.learn.helpCover': 'The range «from … to …» of the estimate is built to contain the real value 8 out of 10 times. Here you see how many times it actually did on the last chats.',
   'brainLib.learn.helpOut': 'Chats you do not know how they ended, or too old to have an estimate made before: they do not enter the numbers, but remain counted here.',
   'brainLib.learn.helpNoData': (p: { min: number }) => `To say anything, we need at least ${p.min} chats with the result known: with less, the numbers would be noise.`,
-  'brainLib.learn.helpProposal': 'The brain re-ran the estimates on the same past chats (at least 30) with the current method and the new one. It only proposes the new if it is clearly less wrong, not by chance: even in the worst case of the range («from … to …») it stays better, and does not worsen anything else.',
+  'brainLib.learn.helpProposal': 'The brain redid the computation on the same past chats (at least 30) with the method in use and the new one. It proposes the new one only when it is clearly less wrong, not by chance: even at the worst end of the margin ("between … and …") it stays better, and nothing else gets worse.',
   'brainLib.learn.helpCheck': 'After a change, on the 20 chats that follow it compares the new method with the one before. If the new is worse, it proposes to revert: it never does it by itself.',
   'brainLib.learn.helpRollback': 'Return to the previous version with one click. No data is lost and you can re-apply the proposal whenever you like.',
   'brainLib.learn.helpDrift': 'The last 20 chats are 1.5× more wrong than the 60 before: the kind of work has changed and estimates need to be recalibrated.',

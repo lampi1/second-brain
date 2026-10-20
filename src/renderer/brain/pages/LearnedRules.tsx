@@ -6,7 +6,9 @@
 // (or a policy whitelisted in the brain). Reads /api/improve (the brain's improve.mjs status, through the proxy; a
 // brain without that CLI gets main's "loop missing" answer and the section stays hidden, as it does with no policy yet); a
 // click goes to main ('learn:act'), which runs the brain's own improve.mjs. Words and numbers: lib/learn.ts. A short
-// intro and a "?" beside every term that is not obvious (HELP), shown on hover or focus.
+// intro and a "?" beside every term that is not obvious (HELP), shown on hover or focus. The brain's own cost/time
+// estimates policy is not shown (HIDDEN): ADR 0053 retired that estimator from the UI, ADR 0101 hid its last card; the
+// task estimate (ADR 0087) is the only estimate the app shows.
 import { useState } from 'react';
 import { useBrain } from '../api';
 import { fmt } from '../lib/format';
@@ -71,12 +73,15 @@ function Policy({ p, busy, act }: { p: LearnPolicy; busy: boolean; act: (a: Lear
   );
 }
 
+/** policies the section never shows: the brain's retired estimator (ADR 0053, 0101) */
+export const HIDDEN_POLICIES: readonly string[] = ['estimates'];
+
 /** The learned rules section of the Regole page (components/brain-model/RulesPage.tsx). Hidden while the brain has no
  *  loop or no policy yet: a fresh brain shows no machinery (the owner's clean-install rule). */
 export function LearnedRules() {
   const d = useBrain('/api/improve', normLearnData);
   const [busy, setBusy] = useState(false);
-  const list = d.data?.policies ?? [];
+  const list = (d.data?.policies ?? []).filter(p => !HIDDEN_POLICIES.includes(p.domain));
   const missing = d.data?.loop === 'missing';
   const pending = list.filter(p => p.pending).length;
   const act = (a: LearnAction) => {

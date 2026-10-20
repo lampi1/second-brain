@@ -49,10 +49,10 @@ test('menus: gear, "…", a chat\'s ⋯ and the sidebar groups', async () => {
     await shot(page, 'menus-chat');
     await page.keyboard.press('Escape');
 
-    // the sidebar: three groups, Regole in Brain (its learned rules inside, ADR 0082), Task (once DevOps, ADR 0079) in Lavoro
+    // the sidebar: four groups (Andamento holds Costi and Qualità, ADR 0101), Regole in Brain (its learned rules inside, ADR 0082), Task (once DevOps, ADR 0079) in Lavoro
     const nav = page.getByTestId('sidebar');
     await expect(page.getByTestId('nav-collapse')).toHaveCount(0); // always expanded: no toggle
-    await expect(nav.locator('.nav-title')).toHaveCount(3);
+    await expect(nav.locator('.nav-title')).toHaveCount(4);
     await expect(page.getByTestId('nav-miglioramento')).toHaveCount(0);
     const navOrder = await nav.locator('.nav-title, .nav-item').evaluateAll(els => els.map(e => e.getAttribute('data-testid')));
     const ix = (id: string) => navOrder.indexOf(id);
@@ -64,6 +64,10 @@ test('menus: gear, "…", a chat\'s ⋯ and the sidebar groups', async () => {
     expect(ix('nav-skill')).toBeGreaterThan(ix('nav-group-brain')); // Skill is in the Brain section (ADR 0077)
     expect(ix('nav-skill')).toBeLessThan(ix('nav-group-app'));
     expect(ix('nav-dashboard')).toBeLessThan(ix('nav-guida'));
+    expect(ix('nav-group-trends')).toBeGreaterThan(ix('nav-regole'));
+    expect(ix('nav-costi')).toBeGreaterThan(ix('nav-group-trends'));
+    expect(ix('nav-qualita')).toBeGreaterThan(ix('nav-costi'));
+    expect(ix('nav-qualita')).toBeLessThan(ix('nav-group-app'));
     await expect(page.getByTestId('nav-migliora')).toHaveCount(0);
     await expect(page.getByTestId('nav-devops')).toHaveCount(0);
     await expect(nav).not.toContainText('DevOps');

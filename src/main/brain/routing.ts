@@ -101,7 +101,7 @@ export function taskOf(title: string, prompt: string, rules: [string, string, st
 /** Hard-rule errors of a table (Italian, one per broken rule); [] = valid. Same rules as routing.mjs check(). */
 export function checkTable(routes: unknown, reg: ModelRegistry | null): string[] {
   if (!Array.isArray(routes)) return ['manca l’elenco delle righe'];
-  if (!reg) return ['il cervello non ha harness/models.json: nessun modello da scegliere'];
+  if (!reg) return ['il brain non ha harness/models.json: nessun modello da scegliere'];
   const errs: string[] = [];
   routes.forEach((x: unknown, i) => {
     const r = (x ?? {}) as Partial<RoutingRow>;
@@ -228,7 +228,7 @@ export function resolve(table: Pick<RoutingTable, 'routes'> | null, item: { kind
   if (!ask.effort && effort && m && !(m.efforts ?? []).includes(effort)) effort = null;
   if (model && m && m.harness !== harness) return { error: `${m.id} gira solo su ${m.harness}, non su ${harness}` };
   if (harness !== 'claude' && looksClaude(model)) return { error: 'un modello Claude gira solo sull’harness claude' };
-  if (ask.model && harness === 'claude' && reg && !m) return { error: `modello «${ask.model}» non è in harness/models.json del cervello` };
+  if (ask.model && harness === 'claude' && reg && !m) return { error: `modello «${ask.model}» non è in harness/models.json del brain` };
   if (ask.effort && !takesEffort(harness)) return { error: `lo sforzo non vale per ${engineLabel(harness)}: scegli il modello` };
   if (effort && !EFFORTS.includes(effort)) return { error: `sforzo «${String(effort)}»: ${EFFORTS.join(' | ')}` };
   if (effort && m && !(m.efforts ?? []).includes(effort)) return { error: `${m.id} non ha lo sforzo «${effort}»` };
@@ -426,7 +426,7 @@ export function knownOutcome(run: { runId: string; outcome?: { verdict: string; 
 }
 
 /** The known-outcome sources that count as verified (ADR 0095): the user's verdict (the brain's 'human', the app's
- *  'agent-user'), a reviewed one (the Judge role's 'agent-review', the brain's sample judge 'judge', ADR 0047). The rest
+ *  'agent-user'), a reviewed one (an independent review's 'agent-review', the brain's sample judge 'judge', ADR 0047). The rest
  *  (the brain's 'proxy' = closed without an error line, the Orchestrator's opinion, a source not named) is known but
  *  unverified: shown apart, never in "verificati". */
 export const VERIFIED_OUTCOME_SOURCES: readonly string[] = ['human', 'agent-user', 'agent-review', 'judge'];
@@ -541,7 +541,7 @@ export class Routing {
     const reg = this.registry();
     const t = this.stored();
     const broken = t ? checkTable(t.routes, reg) : [];
-    return { table: t, registry: reg, kinds: TASK_KINDS, error: !this.root() ? 'nessun cervello collegato' : !reg ? 'il cervello non ha harness/models.json'
+    return { table: t, registry: reg, kinds: TASK_KINDS, error: !this.root() ? 'nessun brain collegato' : !reg ? 'il brain non ha harness/models.json'
       : broken.length ? `tabella ignorata (decidono i default), infrange una regola: ${broken.join('; ')}` : null, history: this.history(), kindStats: this.allKindStats() };
   }
 
@@ -573,7 +573,7 @@ export class Routing {
    *  refused); history stays linear. */
   restore(version: number, by: string, now = Date.now()): RoutingInfo {
     const d = this.dir();
-    if (!d) throw new Error('nessun cervello collegato');
+    if (!d) throw new Error('nessun brain collegato');
     const t = Number.isInteger(version) && version > 0 ? readJson(path.join(d, 'routing', `v${version}.json`)) as { routes?: unknown; exploration?: unknown; costWeight?: unknown } | null : null;
     if (!t || !Array.isArray(t.routes)) throw new Error(`versione ${version} non trovata`);
     const cw = !isAgent(by) ? (typeof t.costWeight === 'number' ? t.costWeight : COST_WEIGHT) : undefined;
@@ -595,7 +595,7 @@ export class Routing {
   save(routes: RoutingRow[], by: string, reason: string | null, now = Date.now(), o: SaveOptions = {}): RoutingInfo {
     const { exploration, costWeight, evidence, base } = o;
     const d = this.dir();
-    if (!d) throw new Error('nessun cervello collegato');
+    if (!d) throw new Error('nessun brain collegato');
     // two writers (the user's page, agents) send the whole table: one built on an older version would undo the other's change
     const inForce = this.stored()?.version ?? 0;
     if (base !== undefined && base !== inForce) throw new Error(`tabella non salvata: è cambiata (ora versione ${inForce}, la tua modifica parte dalla ${base}): ricarica e rifai la modifica`);

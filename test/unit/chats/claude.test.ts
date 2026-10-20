@@ -189,6 +189,18 @@ describe('ClaudeSession', () => {
     expect(seen).toEqual(['Read', 'Grep', 'Grep@a_sub']);
   });
 
+  it('answers a product brain\'s hooks in process: no node process per tool call (ADR 0103)', async () => {
+    const root = tmp('brain'), state = tmp('state');
+    fs.writeFileSync(path.join(root, 'brain.json'), JSON.stringify({ machinery: 'product-v1' }));
+    const { s, sink } = start({ productHooks: { root, state, launch: {} } });
+    s.send('pretool Read Edit');
+    await resultOf(sink);
+    // a read passes; an edit with no file path is refused by the product guard, as its runner did
+    expect(sink.last('assistant')?.text).toMatch(/^Hook: Read=ok; Edit=deny:Product /);
+    // the runtime ran here: its per-session feed file is in the state folder
+    expect(fs.readdirSync(state).some(f => f.endsWith('.feed.json'))).toBe(true);
+  });
+
   it('registers no hook when the chat has none', async () => {
     const { s, sink } = start();
     s.send('pretool Read');

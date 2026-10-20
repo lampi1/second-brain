@@ -11,7 +11,7 @@ const available = spawnSync('claude', ['--version'], { windowsHide: true, timeou
 if (available) it('loads an unzipped pack through claude plugin validate --strict', () => {
   const hash = 'a'.repeat(64);
   const files = emitPack({ format: 1, packId: 'reviewer-0123456789abcdef', revision: 1, contentHash: hash,
-    agent: { id: 'reviewer', name: 'Judge', role: 'judge', summary: 'Review changes', instructionsFile: 'agents/reviewer.md',
+    agent: { id: 'reviewer', name: 'Judge', role: 'sentinel', summary: 'Review changes', instructionsFile: 'agents/reviewer.md',
       engine: 'claude', model: null, effort: 'high', tools: { allow: ['read'] }, permissionCeiling: 'default' },
     skills: [{ name: 'reviewer', ownership: 'owned', hash }],
     createdAt: '2026-10-18T00:00:00Z', exportedAt: '2026-10-18T00:00:00Z', appVersion: '0.1.0' }, 'Review changes.',

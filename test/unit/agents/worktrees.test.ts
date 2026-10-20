@@ -14,7 +14,7 @@ const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-C', cwd, 
 
 describe('worktrees', () => {
   it('lists the repository\'s worktrees and lets a child work in one of them, never elsewhere', async () => {
-    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-wt-'))); roots.push(root);
+    const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-wt-'))); roots.push(root);
     const repo = path.join(root, 'repo'), wt = path.join(root, 'wt', 'feat'), other = path.join(root, 'other');
     fs.mkdirSync(repo); fs.mkdirSync(other);
     git(repo, 'init', '-q');
@@ -32,7 +32,7 @@ describe('worktrees', () => {
     expect(await gitWorktrees(other)).toEqual([]);
   });
   it('ignores forged worktree entries: empty, prunable, missing, or of another repository', async () => {
-    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-wt-'))); roots.push(root);
+    const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-wt-'))); roots.push(root);
     const repo = path.join(root, 'repo'), foreign = path.join(root, 'foreign'), plain = path.join(root, 'plain');
     fs.mkdirSync(repo); fs.mkdirSync(foreign); fs.mkdirSync(plain);
     for (const r of [repo, foreign]) {

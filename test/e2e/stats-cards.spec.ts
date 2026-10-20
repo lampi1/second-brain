@@ -24,9 +24,11 @@ async function classifiers(page: Page, scheme: string): Promise<void> {
   await goPage(page, 'classificatori');
   const cls = page.getByTestId('bm-classifiers-page');
   await expect(cls.getByTestId('cls-grid')).toBeVisible();
-  for (const id of ['kind', 'model', 'skills', 'tasks', 'estimates', 'jobkind', 'mail', 'cmd']) await expect(cls.getByTestId(`cls-card-${id}`)).toBeVisible();
+  for (const id of ['kind', 'model', 'skills', 'tasks', 'jobkind', 'mail', 'cmd']) await expect(cls.getByTestId(`cls-card-${id}`)).toBeVisible();
+  await expect(cls.getByTestId('cls-card-estimates')).toHaveCount(0); // the brain's retired estimator (ADR 0053, 0101)
+  await expect(cls.getByTestId('cls-summary')).not.toContainText('Token spesi');
   await expect(cls.getByTestId('cls-kind-decisions')).not.toContainText('nessun dato');
-  await expect(cls.getByTestId('cls-fact-kind')).toBeVisible();
+  await expect(cls.getByTestId('cls-kind-hit')).toContainText(/\d+\/\d+/); // k/n beside the share
   await expect(cls.locator('input, textarea, select')).toHaveCount(0);
   await shot(page, `stats-classifiers-${scheme}`);
   await cls.getByTestId('cls-card-jobkind').scrollIntoViewIfNeeded();
@@ -49,7 +51,7 @@ async function classifiers(page: Page, scheme: string): Promise<void> {
   await cls.getByTestId('cls-back').click();
   // the task estimator's weekly backtest (ADR 0087): its card and its learning curve
   await expect(cls.getByTestId('cls-tasks-decisions')).not.toContainText('nessun dato');
-  await cls.getByTestId('cls-card-tasks').getByRole('button', { name: /Stima dai task simili/ }).click();
+  await cls.getByTestId('cls-card-tasks').getByRole('button', { name: /Stima dai lavori simili/ }).click();
   await expect(cls.getByTestId('cls-learning').locator('svg')).toBeVisible();
   await shot(page, `stats-classifier-tasks-${scheme}`);
   await cls.getByTestId('cls-back').click();
@@ -99,7 +101,7 @@ test('a clean install shows friendly empty classifier cards and errors', async (
     await expect(cls.getByTestId('cls-clean')).toBeVisible();
     await expect(cls.getByTestId('cls-card-kind')).toContainText('Nessuna chat registrata ancora');
     await expect(cls.getByTestId('cls-card-kind').getByTestId('cls-fact-kind')).toHaveCount(0);
-    await expect(cls.getByTestId('cls-card-tasks')).toContainText('Nessun task stimato ancora');
+    await expect(cls.getByTestId('cls-card-tasks')).toContainText('Nessun lavoro stimato ancora');
     await shot(page, 'stats-classifiers-empty');
     await page.getByTestId('nav-dashboard').click();
     await page.getByRole('tab', { name: 'Errori' }).click();

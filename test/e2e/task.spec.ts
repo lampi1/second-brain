@@ -32,12 +32,12 @@ test('Task page: read on demand, unread news with links, badge and feed, mark re
     const dv = page.getByTestId('brain-page-task');
     await expect(dv.getByRole('heading', { level: 2, name: 'Task' })).toBeVisible();
     await expect(dv.locator('.catalog-head')).toBeVisible();     // the head of Agenti
-    await expect(dv.getByTestId('task-auto')).toHaveClass(/catalog-filters/); // the toolbar of Agenti
+    await expect(dv.getByTestId('task-auto')).toHaveCount(0); // the reading settings live in Settings → Notifiche (ADR 0101)
+    await expect(dv.getByTestId('task-auto-state')).toContainText('Lettura automatica spenta');
     await expect(dv.getByTestId('bx-lead')).toContainText('Task non ancora letti');
     await expect(dv.getByTestId('task-never')).toBeVisible();
     await shot(page, 'task-empty');
     await expect(dv.getByTestId('task-prs')).toHaveCount(0); // no empty sections claiming "nothing" before a read
-    await expect(dv.getByTestId('task-auto').getByRole('group', { name: 'Aggiornamento automatico' }).getByRole('button', { name: 'Spento' })).toHaveAttribute('aria-pressed', 'true');
 
     // Aggiorna ora: the script runs, news with title + link, unread highlighted
     await dv.getByTestId('task-refresh').click();
@@ -105,8 +105,11 @@ test('Task page: read on demand, unread news with links, badge and feed, mark re
     await expect(dv.getByTestId('task-pr-812')).toBeVisible();
     await shot(page, 'task-login-expired');
 
-    // the page itself turns the automatic read on and sets the interval (the gear menu no longer does: one place, 2026-10-15)
-    const auto = dv.getByTestId('task-auto');
+    // the page's link opens Settings → Notifiche, where the automatic read is turned on and its interval set (one place)
+    await dv.getByTestId('task-settings-link').click();
+    const auto = page.getByTestId('task-auto');
+    await expect(auto).toBeVisible();
+    await expect(auto.getByRole('group', { name: 'Aggiornamento automatico' }).getByRole('button', { name: 'Spento' })).toHaveAttribute('aria-pressed', 'true');
     await auto.getByRole('group', { name: 'Aggiornamento automatico' }).getByRole('button', { name: 'Acceso' }).click();
     await expect(auto.getByRole('group', { name: 'Aggiornamento automatico' }).getByRole('button', { name: 'Acceso' })).toHaveAttribute('aria-pressed', 'true');
     await auto.getByRole('button', { name: '1 h' }).click();

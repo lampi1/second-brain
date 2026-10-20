@@ -127,7 +127,7 @@ export function PatternsHelp() {
       <p><b>Trovati da te.</b> Quante volte te ne sei accorto tu (campo «visto da»), invece di un reviewer, della QA, di un
         hook o dell'agente stesso: sono quelli che ti costano tempo.</p>
       <p><b>Confronto.</b> Gli ultimi 7 giorni (oggi compreso) contro i 7 prima: «in calo» è buono.</p>
-      <p><b>Regola.</b> La regola nata dall'errore (campo «regola:» o il conteggio del cervello): «la regola non è bastata»
+      <p><b>Regola.</b> La regola nata dall'errore (campo «regola:» o il conteggio del brain): «la regola non è bastata»
         = lo stesso tipo è tornato entro 14 giorni.</p>
       <p><b>Cosa farne.</b> Un tipo che si ripete chiede una cosa sola: una regola più chiara o un controllo automatico.
         «Discuti» mette all’Orchestrator una bozza con questi numeri: se serve lavoro, è lui ad aprire la chat giusta.</p>

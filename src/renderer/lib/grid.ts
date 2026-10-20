@@ -15,7 +15,7 @@ export function workspaceTiles(order: readonly string[], chats: Readonly<Record<
   for (const t of tabs) if (t.ownerChatId && orchestratorIds.has(t.ownerChatId)) { tiles.push({ kind: 'browser', id: t.id }); placed.add(t.id); }
   for (const id of order) {
     const c = chats[id];
-    if (!c || c.isOrchestrator || c.closedAt) continue; // closed chats: the palette (Ctrl+K)
+    if (!c || c.isOrchestrator || c.quick || c.closedAt) continue; // Lampo lives in the Orchestrator's column // closed chats: the palette (Ctrl+K)
     tiles.push({ kind: 'chat', id });
     for (const t of tabs) if (t.ownerChatId === id && !placed.has(t.id)) { tiles.push({ kind: 'browser', id: t.id }); placed.add(t.id); }
   }

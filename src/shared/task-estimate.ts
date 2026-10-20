@@ -59,10 +59,9 @@ export interface AccuracyPoint {
 
 export interface EstimateAccuracy {
   points: AccuracyPoint[];
-  /** all the weeks together */
-  n: number; hitRate: number | null;
-  /** last week with data minus the first one, in points of hitRate (0..1); null with fewer than two weeks */
-  trend: number | null;
+  /** all the weeks together: n estimated runs, `hits` of them within ×2 (real time between half and double) */
+  n: number; hits: number; hitRate: number | null;
+  // no trend: "last week minus the first", whatever the n of each week, was noise shown as progress (ADR 0101)
 }
 
 export interface RunEstimates {
@@ -75,3 +74,11 @@ export const MIN_SIMILAR = 3;
 export const MAX_SIMILAR = 30;
 export const QUICK_MS = 10 * 60_000;
 export const QUICK_USD = 0.5;
+
+/** The line the app adds under a user's message to the Orchestrator (ChatManager deliverNow): the estimate it would
+ *  get from task_estimate, so its first model call can act on it instead of calling the tool (one model round trip
+ *  less per request). The chat view never shows it: the item keeps the user's text, a transcript re-read drops it. */
+export const ESTIMATE_LINE_TAG = '[app estimate';
+export const estimateLine = (e: Pick<TaskEstimate, 'path' | 'why'>): string => `${ESTIMATE_LINE_TAG} · path "${e.path}"] ${e.why}`;
+/** The user's text without the app's estimate line. */
+export const withoutEstimateLine = (text: string): string => text.replace(/\n*\[app estimate · path "[a-z-]+"\][^\n]*$/, '');

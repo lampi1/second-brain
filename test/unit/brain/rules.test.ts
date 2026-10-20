@@ -18,7 +18,9 @@ import write from '../../fixtures/hooks/claude-write.json';
 
 const roots: string[] = [];
 function setup() {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-rules-')); roots.push(base);
+  // the real path: macOS's temp folder is behind a link (/var → /private/var), Windows' can be an 8.3 short name, and
+  // the brain's git checks compare with git's own long path
+  const base = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-rules-'))); roots.push(base);
   const root = path.join(base, 'brain'), state = path.join(base, 'state');
   fs.mkdirSync(root); fs.mkdirSync(state);
   fs.writeFileSync(path.join(root, 'brain.json'), JSON.stringify({ rules: { topicFiles: [] } }));
