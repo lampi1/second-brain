@@ -11,7 +11,7 @@
 // one. Under its head, its plan (RunEstimate.tsx OrchestratorPlan, ADR 0087): the agents it started today with their
 // estimates and the estimator's accuracy. When it drives a browser, it wears that pair's accent like any chat (lib/pairs.ts). Used by OrchestratorOverlay.tsx.
 import { memo, useEffect, useRef, useState } from 'react';
-import { chatCost, prettyModel } from '../lib/format';
+import { chatCost, modelWithEffort } from '../lib/format';
 import { engineName } from '../lib/engines';
 import { isBusy, sameList } from '../store/state';
 import { ensureOrchestrator, stop, useApp } from '../store/store';
@@ -140,7 +140,7 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
         <div className="chat-topic-row"><span className="chat-topic">{chat.title}</span><AgentIdentity chat={chat}/></div>
         <div className="th-sub sr-only" data-testid="orchestrator-sub">
           <span className="th-engine" data-tip={t('dialogs.orchestrator.engineTip', { name: engineName(chat.harness) })} aria-label={t('dialogs.orchestrator.engineTip', { name: engineName(chat.harness) })} role="img" data-engine={chat.harness} data-testid="orchestrator-engine"><HarnessMark harness={chat.harness} size={14} /></span>
-          <span className="th-sub-text">{[!['Orchestrator', 'Orchestrator'].includes(chat.title.trim()) ? chat.title : '', prettyModel(chat.model, chat.harness), chatCost(chat)].filter(Boolean).join(' · ')}</span>
+          <span className="th-sub-text">{[!['Orchestrator', 'Orchestrator'].includes(chat.title.trim()) ? chat.title : '', modelWithEffort(chat), chatCost(chat)].filter(Boolean).join(' · ')}</span>
         </div>
       </header>
       {/* the Orchestrator's own sub-agents (its background Agent tools): visible here, it sits outside the strips */}
