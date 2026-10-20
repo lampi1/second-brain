@@ -1,7 +1,8 @@
 // Pins agents/role-gate.ts: a role chat's Skill call is allowed only as "<its launch plugin>:<an assigned skill>"; a
-// bare name, another plugin's prefix or an unassigned skill is refused (a user or project skill could share the name).
+// bare name, another plugin's prefix or an unassigned skill is refused (a user or project skill could share the name);
+// on an engine that runs a changed input a granted bare name is allowed as the qualified one (issue #101).
 import { describe, expect, it } from 'vitest';
-import { gateRequest, runtimePluginName } from '../../../src/main/agents/role-gate';
+import { gateRequest, qualifiedSkillsLine, runtimePluginName } from '../../../src/main/agents/role-gate';
 
 const hash = 'a'.repeat(16) + 'b'.repeat(48);
 const plugin = runtimePluginName(`/u/agent-pack-runtime/${hash}`);
@@ -21,6 +22,20 @@ describe('role gate: skills', () => {
     const v = skill('brain-edit');
     expect(v.kind).toBe('deny');
     if (v.kind === 'deny') { expect(v.code).toBe('skillRefused'); expect(v.message).toContain(`${plugin}:brain-edit`); }
+  });
+  it('rewrites a granted bare name to the launch plugin when the engine runs a changed input (issue #101)', () => {
+    const re = { ...chat, rewrite: true };
+    expect(gateRequest({ type: 'permission', tool: 'Skill', input: { skill: 'brain-edit', args: 'x' } }, re)).toEqual({ kind: 'allow', patch: { skill: `${plugin}:brain-edit` } });
+    expect(gateRequest({ type: 'permission', tool: 'Skill', input: { command: 'brain-edit' } }, re)).toEqual({ kind: 'allow', patch: { command: `${plugin}:brain-edit` } });
+    // the qualified name needs no patch; a bare name not granted, another prefix or no plugin stays refused
+    expect(gateRequest({ type: 'permission', tool: 'Skill', input: { skill: `${plugin}:brain-edit` } }, re)).toEqual({ kind: 'allow' });
+    for (const raw of ['deploy-prod', 'plug:brain-edit', ''])
+      expect(gateRequest({ type: 'permission', tool: 'Skill', input: { skill: raw } }, re).kind, raw).toBe('deny');
+    expect(gateRequest({ type: 'permission', tool: 'Skill', input: { skill: 'brain-edit' } }, { role: chat.role, skills: chat.skills, rewrite: true }).kind).toBe('deny');
+  });
+  it('names the launch skills by their qualified names for the role instructions', () => {
+    expect(qualifiedSkillsLine(plugin, ['air-qa', 'brain-edit'])).toContain(`${plugin}:air-qa, ${plugin}:brain-edit`);
+    expect(qualifiedSkillsLine(plugin, [])).toBe('');
   });
   it('refuses another prefix, a nested one and an unassigned skill', () => {
     for (const raw of ['plug:brain-edit', `x:${plugin}:brain-edit`, `${plugin}:brain-edit:x`, `${plugin}:deploy-prod`, `${plugin}:`, ':brain-edit', ''])

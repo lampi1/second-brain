@@ -1,7 +1,9 @@
 // The gate every permission request of a role chat passes before it reaches the user (ChatManager's sink.pending):
 // a Skill call is allowed at once when the launch gave that skill (the user's standing grant through the role) and
 // it is named through the launch's own runtime plugin (`agent-<hash16>:<name>`, agents/pack/flows.ts runtime()), and
-// refused otherwise: a bare name or another prefix could be a user, project or plugin skill of the same name; an engine sub-agent (Claude's Agent/Task) is allowed only for a quick read-only search (Explore),
+// refused otherwise: another prefix could be a user, project or plugin skill of the same name. A bare name of a skill the
+// launch gave is allowed with its input rewritten to the qualified name (rewrite: an engine that runs a changed input,
+// Claude; issue #101), so it always loads the launch's own copy; any other bare name is refused. An engine sub-agent (Claude's Agent/Task) is allowed only for a quick read-only search (Explore),
 // any other type is refused because delegated work runs in a visible chat (agent_delegate); and a request of a
 // delegated chat whose tool class goes beyond its parent's permissions is refused (under a parent that may only read
 // commands, a command that does not only read goes beyond it too). Everything else passes to the user
@@ -27,6 +29,9 @@ export interface GateChat {
   skills: readonly string[];
   /** the launch's runtime plugin name (runtimePluginName); absent = no plugin: every skill is refused */
   plugin?: string;
+  /** its engine runs an allowed call with a changed input (Claude's updatedInput): a granted bare skill name is
+   *  allowed as "<plugin>:<name>" instead of refused */
+  rewrite?: boolean;
   /** the delegating chat's policy and title (absent = a root chat) */
   parent?: { policy: AgentPolicy | null; title: string };
   /** its own tool policy (absent/null = none): brain-write without edit limits its edits to the brain folder */
@@ -38,15 +43,23 @@ export interface GateChat {
 }
 export type GateVerdict =
   | { kind: 'pass' }
-  | { kind: 'allow' }
+  /** patch = input fields the call runs with instead of its own (the qualified skill name) */
+  | { kind: 'allow'; patch?: Readonly<Record<string, string>> }
   | { kind: 'deny'; code: SysCode; params: SysParams; message: string };
 
 const SUBAGENT_TOOLS = new Set(['Agent', 'Task']);
+/** The Skill tool's input fields that may name the skill, in the order they are read. */
+const SKILL_KEYS = ['skill', 'command', 'name'];
 /** The one engine sub-agent a role may use: a read-only search inside its own chat. */
 export const SEARCH_SUBAGENT = 'Explore';
 
 /** The name of a launch's runtime plugin, from its folder (named by the content hash, agents/pack/flows.ts runtime()). */
 export const runtimePluginName = (pluginDirOrHash: string): string => `agent-${path.basename(pluginDirOrHash).slice(0, 16)}`;
+
+/** The launch's skills by the names the Skill tool takes (issue #101), one line for the role's instructions; '' when none. */
+export function qualifiedSkillsLine(plugin: string, skills: readonly string[]): string {
+  return skills.length ? `Your skills: call them with the Skill tool by their qualified name: ${skills.map(n => `${plugin}:${n}`).join(', ')}.` : '';
+}
 
 const field = (input: unknown, ...keys: string[]): string => {
   const o = input && typeof input === 'object' ? input as Record<string, unknown> : {};
@@ -104,9 +117,12 @@ export function gateRequest(req: GateRequest, chat: GateChat): GateVerdict {
   if (req.tool === 'Skill') {
     // only "<launch plugin>:<name>" is the skill the launch gave: a bare name or another prefix may resolve to a user,
     // project or other plugin skill that merely shares the name
-    const raw = field(req.input, 'skill', 'command', 'name'), cut = raw.indexOf(':');
+    const key = SKILL_KEYS.find(k => field(req.input, k)) ?? 'skill';
+    const raw = field(req.input, ...SKILL_KEYS), cut = raw.indexOf(':');
     const prefix = cut < 0 ? '' : raw.slice(0, cut), name = cut < 0 ? raw : raw.slice(cut + 1);
     if (chat.plugin && prefix === chat.plugin && name && chat.skills.includes(name)) return { kind: 'allow' };
+    // a granted skill by its bare name: run as the launch's own copy, never a user or project skill of that name
+    if (chat.plugin && chat.rewrite && cut < 0 && name && chat.skills.includes(name)) return { kind: 'allow', patch: { [key]: `${chat.plugin}:${name}` } };
     const hint = chat.plugin && name && chat.skills.includes(name) ? ` Call it as «${chat.plugin}:${name}».` : '';
     return { kind: 'deny', code: 'skillRefused', params: { skill: raw || '?', role: chat.role.name },
       message: `The skill «${raw || '?'}» is not assigned to your role (${chat.role.name}): use only the skills you were given, or tell your parent which one you need.${hint}` };

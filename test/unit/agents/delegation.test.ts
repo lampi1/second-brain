@@ -45,7 +45,7 @@ function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: str
   roles ??= () => catalog(narrowed);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-delegation-'));
   roots.push(dir);
-  const starts = new Map<string, SessionOptions>(), sinks = new Map<string, SessionSink>(), sent = new Map<string, string[]>(), answers: { chat: string; id: string; answer: { allow?: boolean; message?: string } }[] = [];
+  const starts = new Map<string, SessionOptions>(), sinks = new Map<string, SessionSink>(), sent = new Map<string, string[]>(), answers: { chat: string; id: string; answer: { allow?: boolean; message?: string }; patch?: Record<string, string> }[] = [];
   const m = new ChatManager({ userData: dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0, ...(worktrees ? { worktrees } : {}),
     resolveAgent: (req: NewChat) => {
       const id = req.roleId as RoleId | undefined;
@@ -59,7 +59,7 @@ function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: str
       return { harness: 'claude', sessionId: null, pid: null, root: null, alive: true, busy: false,
         start() { s.changed({ state: 'idle' }); }, send(text: string) { sent.set(o.chatId, [...(sent.get(o.chatId) ?? []), text]); onSend?.(o.chatId); },
         close: async () => { s.changed({ state: 'closed' }); s.exit({ code: 0, error: null }); }, killNow() {}, interrupt: async () => {},
-        answer: (id: string, answer: { allow?: boolean; message?: string }) => { answers.push({ chat: o.chatId, id, answer }); return true; },
+        answer: (id: string, answer: { allow?: boolean; message?: string }, patch?: Record<string, string>) => { answers.push({ chat: o.chatId, id, answer, ...(patch ? { patch } : {}) }); return true; },
         rename: async () => {}, setModel: async () => {}, setEffort: async () => {}, setPermissionMode: async () => {}, contextUsage: async () => null, usage: async () => null,
       } as unknown as HarnessSession;
     } });
@@ -255,6 +255,9 @@ describe('agent_delegate', () => {
     f.sinks.get(child)!.pending({ id: 's2', type: 'permission', tool: 'Skill', title: 'Skill', detail: '', input: { skill: 'deploy-prod' }, at: 2 });
     expect(f.answers.find(a => a.id === 's2')?.answer).toMatchObject({ allow: false });
     expect(f.m.items(child).some(i => i.kind === 'system' && i.code === 'skillRefused')).toBe(true);
+    // a granted skill by its bare name runs as the launch plugin's copy, never refused first (issue #101)
+    f.sinks.get(child)!.pending({ id: 's1b', type: 'permission', tool: 'Skill', title: 'Skill', detail: '', input: { skill: 'log-search' }, at: 2 });
+    expect(f.answers.find(a => a.id === 's1b')).toMatchObject({ answer: { allow: true }, patch: { skill: 'agent-p:log-search' } });
     const other = (await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Senza skill')] })).children[0].chatId;
     f.sinks.get(other)!.pending({ id: 's3', type: 'permission', tool: 'Skill', title: 'Skill', detail: '', input: { skill: 'agent-p:log-search' }, at: 3 });
     expect(f.answers.find(a => a.id === 's3')?.answer).toMatchObject({ allow: false });
@@ -297,6 +300,9 @@ describe('agent_delegate', () => {
     const f = fixture();
     const orchestrator = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
     const herald = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'herald', title: 'Issue · Bozza', prompt: 'prepara la issue' }, 'agent');
+    // only the Orchestrator's Claude session gets the per-turn workspace budget (ADR 0090, issue #98)
+    expect(f.starts.get(orchestrator.id)?.preToolUse).toBeTruthy();
+    expect(f.starts.get(herald.id)?.preToolUse).toBeUndefined();
     expect(herald.run?.startedBy).toBe('orchestrator');
     const r = await f.call('agent_report', herald.id, { outcome: 'done', summary: 'Bozza pronta', output: 'issue.md', doneWhen: [{ criterion: 'bozza scritta', met: true, evidence: 'issue.md' }] });
     expect(r).toMatchObject({ reported: true, to: 'orchestrator', delivered: true });

@@ -130,6 +130,8 @@ describe('pack review transactions', () => {
     expect(fs.existsSync(path.join(runtime.skillRoot, 'reviewer/SKILL.md'))).toBe(true);
     expect(fs.existsSync(path.join(runtime.pluginDir, 'hooks'))).toBe(false);
     expect(runtime.instructions).toContain(runtime.skillRoot);
+    // the skills by the qualified name the role gate takes (issue #101)
+    expect(runtime.instructions).toContain(`agent-${path.basename(runtime.pluginDir).slice(0, 16)}:reviewer`);
     expect(runtime.instructions).not.toContain('learned-rules');
   });
 });

@@ -137,6 +137,22 @@ export interface SessionOptions {
   /** an agent's permission ceiling: Codex asks for every action at or below 'default'; ACP runs 'plan' in its
    *  read-only mode or not at all. Claude gets it through permissionMode (manager modeFor). */
   ceiling?: PermissionCeiling | null;
+  /** Claude only: a PreToolUse hook the app answers in-process (registered at initialize, asked with hook_callback;
+   *  session-only, no settings file). The Orchestrator's turn budget (agents/orchestrator-budget.ts, ADR 0090). */
+  preToolUse?: PreToolHook | null;
+}
+
+/** Main-only, never from the renderer: string fields set on the asked call's own input when it is allowed (the role
+ *  gate's qualified skill name, issue #101). Only an engine that can run a changed input takes it (Claude). */
+export type AnswerPatch = Readonly<Record<string, string>>;
+
+/** A tool call the engine is about to run, as its PreToolUse hook sees it (agentId: a sub-agent's call). */
+export interface PreToolCall { tool: string; input: unknown; agentId?: string }
+/** An in-process PreToolUse hook: decide() refuses a call with a message for the model (null = no say); turnEnded()
+ *  runs when a turn's result arrives. */
+export interface PreToolHook {
+  decide(call: PreToolCall): { deny: string } | null;
+  turnEnded(): void;
 }
 
 export interface HarnessSession {
@@ -160,7 +176,7 @@ export interface HarnessSession {
   /** text may be empty when images are attached (already checked by the manager: images.ts checkImages) */
   send(text: string, images?: readonly ImageAttachment[]): void;
   /** false when the request is unknown (already answered or withdrawn). Throws on an answer of the wrong kind. */
-  answer(requestId: string, answer: Answer): boolean;
+  answer(requestId: string, answer: Answer, patch?: AnswerPatch): boolean;
   /** keepQueued: only the running turn stops; messages the session already queued still go after it; byUser: the
    *  user's Stop / "Invia subito" (the turn ends as "Interrotto da te", not an error), never the app's own interrupt */
   interrupt(opts?: { keepQueued?: boolean; byUser?: boolean }): Promise<void>;
