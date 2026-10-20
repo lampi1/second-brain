@@ -1,15 +1,24 @@
 // Italian formatting helpers for the UI (costs, models, efforts, states, relative times, folders). Pure functions:
 // every tile, the top bar and the palette use them, and the unit tests pin their output (test/unit/format.test.ts).
 import type { ChatState, ChatSummary, Effort, Harness, PermissionMode } from '@shared/contract';
-import{t}from'../i18n';
+import { locale, t } from '../i18n';
 import { waitsOnChildren } from './agent-children';
 
-const money = new Intl.NumberFormat('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-/** 1.84 → "1,84 $" (the mockups' style: Italian decimals, dollar after). */
-export function formatCost(usd: number): string {
-  return `${money.format(Number.isFinite(usd) ? usd : 0)} $`;
+/** THE money format of the app (ADR 0101): the number in the UI's locale, then " $" — 1.84 → "1,84 $" (it),
+ *  "1.84 $" (en). Every page uses it (directly, or through brain/lib/format.ts fmt.usd); no Intl currency formatter,
+ *  no "$x.xx" template, no "USD" suffix. Two decimals; three for a non-zero amount under 0,10 $ (a run's cost would
+ *  otherwise read "0,00 $"); `round` drops the decimals from 10 $ up, for totals over days where cents stop mattering. */
+export function formatCost(usd: number, opts: { round?: boolean } = {}): string {
+  const v = Number.isFinite(usd) ? usd : 0;
+  const a = Math.abs(v);
+  const digits = opts.round && a >= 10 ? 0 : 2;
+  const max = a > 0 && a < 0.1 && !opts.round ? 3 : digits;
+  return `${v.toLocaleString(locale(), { minimumFractionDigits: digits, maximumFractionDigits: max })} $`;
 }
+
+/** formatCost for a value that may be missing: null when it is (the caller shows its own "—" / "n/d"). */
+export const costOrNull = (usd: number | null | undefined, opts?: { round?: boolean }): string | null =>
+  usd == null || !Number.isFinite(usd) ? null : formatCost(usd, opts);
 
 /** The cost shown on a chat: Cursor does not report a per-chat cost yet, so 0 there reads "costo n/d"; "≈" while part
  *  of it is the running turn's estimate (the real figure replaces it at the end of the turn). */

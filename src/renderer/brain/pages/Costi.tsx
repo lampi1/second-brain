@@ -26,7 +26,6 @@ import { useAppChats } from '../components/Composer';
 import { LiveCostList } from '../../components/LiveCosts';
 import { costRows } from '../../lib/live-costs';
 import { t } from '../../i18n';
-import { HeadlineCost } from './HomeHeadline';
 
 const PERIODS = [1, 7, 30, 90] as const;
 /** the brain's cost API reads at most 90 days: the period before is known up to 45 */
@@ -117,7 +116,6 @@ export function Costi({ arg, nav }: { arg?: string; nav: (t: string) => void }) 
         actions={<Seg label={t('costs.period')} value={days} onChange={d => nav(d === 7 ? 'costi' : `costi/${d}`)} items={PERIODS.map(d => ({ id: d, label: d === 1 ? t('costs.today') : t('costs.days',{days:d}) }))} />} />
       <LiveNow />
       <AgentAnalytics />
-      <HeadlineCost />
       <Async loading={r.loading && !c} error={c ? null : r.error} onRetry={() => r.reload()} label={t('costs.loading')} lines={5} block>
         {() => c && (
           <>

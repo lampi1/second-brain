@@ -7,6 +7,7 @@ import type { AgentEvidenceRef, AgentProfile, Metric, VersionMetrics } from '@sh
 import type { AgentLifecycleProposal } from '@shared/agent-lifecycle';
 import type { ApprovalDecision, ApprovalItem, ApprovalsState } from '../lib/agent-approvals';
 import { locale, t } from '../i18n';
+import { formatCost } from '../lib/format';
 import { AgentAvatar } from './AgentAvatar';
 import '../styles/agent-approvals.css';
 
@@ -23,7 +24,7 @@ function value(m: Metric | undefined, unit: 'pct' | 'usd' | 'dur' | 'num'): stri
   if (!m || m.value === null) return '—';
   const v = m.value;
   if (unit === 'pct') return `${Math.round(v * 100)}%`;
-  if (unit === 'usd') return `$${v.toLocaleString(locale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (unit === 'usd') return formatCost(v);
   if (unit === 'dur') return v >= 60_000 ? t('approvals.minutes', { n: Math.round(v / 60_000) }) : t('approvals.seconds', { n: Math.max(1, Math.round(v / 1000)) });
   return v.toLocaleString(locale(), { maximumFractionDigits: 1 });
 }

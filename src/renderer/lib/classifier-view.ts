@@ -13,7 +13,7 @@ import type { EstimateAccuracy } from '@shared/task-estimate';
 import type { LearnPolicy } from '../brain/lib/learn';
 import { t, locale } from '../i18n';
 import { getKindIt } from './routing';
-import { prettyModel } from './format';
+import { formatCost, prettyModel } from './format';
 
 export type CardId = ClassifierCardId | 'estimates' | 'tasks';
 export const CARD_ORDER: CardId[] = ['kind', 'model', 'skills', 'tasks', 'estimates', 'jobkind'];
@@ -47,7 +47,7 @@ const MIN_FACT = 5; // no fact rests on fewer cases
 const pctFmt = (v: number) => new Intl.NumberFormat(locale(), { style: 'percent', maximumFractionDigits: 0 }).format(v);
 export const pctOf = (s: ClassifierStat): string | null => (s.value === null ? null : pctFmt(s.value));
 const num = (v: number, d = 1) => new Intl.NumberFormat(locale(), { maximumFractionDigits: d }).format(v);
-const money = (v: number) => new Intl.NumberFormat(locale(), { style: 'currency', currency: 'USD', maximumFractionDigits: v < 1 ? 2 : 2 }).format(v);
+const money = (v: number) => formatCost(v);
 export const usdOf = (v: number | null): string | null => (v === null ? null : money(v));
 
 /** The value a slice key stands for, in words. */
