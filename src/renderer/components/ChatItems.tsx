@@ -8,7 +8,7 @@
 // chat: CodeBlock.tsx; the chat id comes from ItemList's chatId); a click on copyable inline code copies it, on a file path or a link it opens a preview (LinkPeek.tsx). Each row is memoized by its item, so a streaming
 // message re-renders only itself (at most once a frame, re-parsing only its last markdown block); tool rows show live
 // elapsed time; in an Orchestrator, an "Apri" chip under the chats she opened, wrote to or named (ChatRefChips.tsx, ADR 0034)
-// and a "Nuova chat" badge on a message sent with that toggle (shared/newchat.ts); a "sta scrivendo… / sta pensando…" line follows the turn; the list follows the bottom ONLY when the
+// and a "Veloce" / "Stratega" badge on a message sent with that mode (shared/newchat.ts); a "sta scrivendo… / sta pensando…" line follows the turn; the list follows the bottom ONLY when the
 // user is already there (scrolled up to read, it never jumps: a "nuove righe" pill appears instead). Used by ChatTile
 // and OrchestratorTile.
 import { t as auditText } from '../i18n';
@@ -21,7 +21,7 @@ import { markdownParts, renderMarkdown, splitBlocks, type MdPart } from '../lib/
 import { CodeBlock } from './CodeBlock';
 import { explainTool } from '@shared/explain';
 import { useNow } from '../lib/clock';
-import { IconAlert, IconArrowDown, IconBell, IconCheck, IconChevronRight, IconInfo, IconLink, IconPlus, IconRefresh, IconSend, IconSparkle, IconSpinner, IconTerminal, IconX } from './Icons';
+import { IconAlert, IconArrowDown, IconBell, IconBolt, IconBranch, IconCheck, IconChevronRight, IconInfo, IconLink, IconPlus, IconRefresh, IconSend, IconSparkle, IconSpinner, IconTerminal, IconX } from './Icons';
 import { splitNotes } from '../lib/sendable';
 import { getForeignLabel, foreignOf, showsSender, type Foreign, type ForeignKind } from '../lib/foreign';
 import { ImageStrip } from './ImageStrip';
@@ -29,7 +29,8 @@ import {MessageImages} from './MessageImages';
 import { thinkingBeforeAsk } from '../lib/askContext';
 import { useApp } from '../store/store';
 import { chatRefsOf, titlesKey, toolChatRef } from '../lib/chatrefs';
-import { splitNewChat } from '@shared/newchat';
+import { splitMode } from '@shared/newchat';
+import { isReaction } from '@shared/reaction';
 import { NamedChatRefs, ToolChatRef } from './ChatRefChips';
 import { openHandoff } from '../store/ui';
 import { ArtifactCard } from './GenUi';
@@ -228,23 +229,25 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks }: { item:
     case 'user': {
       const f = foreignOf(item);
       if (f && !item.thumbs?.length && !item.images) return <ForeignMsg item={item} f={f} />;
-      // "Nuova chat": the line for the Orchestrator is hidden, a badge says it
-      const nc = item.from ? null : splitNewChat(item.text);
+      // "Veloce" / "Stratega" (or an older "Nuova chat"): the line for the Orchestrator is hidden, a badge says it
+      const nc = item.from ? null : splitMode(item.text);
       // notes riding on the user's message (Mandato / Copiato / Non serve): a muted line under the bubble
       const own = item.from ? { text: withoutLabel(item.text), notes: [] } : splitNotes(nc?.text ?? item.text);
       const text = own.text;
       const fix = item.from ? null : parseCorrection(text);
       return (
-      <div className={`msg-user ${item.id.startsWith('local:') ? 'optimistic' : ''}`} data-testid={`item-${item.id}`} data-new-chat={nc?.newChat ? '' : undefined}>
+      <div className={`msg-user ${item.id.startsWith('local:') ? 'optimistic' : ''}`} data-testid={`item-${item.id}`} data-mode={nc?.mode ?? undefined}>
         {item.thumbs?.length ? <ImageStrip images={item.thumbs.map(thumb => ({ thumb }))} testid={`item-${item.id}-images`} /> : item.images ? <span className="msg-images-count">{t('chat.items.userImages', { n: item.images })}</span> : null}
         {item.from && <div className="msg-from" data-testid={`item-${item.id}-from`}>{t('chat.items.from', { source: item.from })}</div>}
-        {nc?.newChat && <div className="msg-newchat" data-testid={`item-${item.id}-newchat`} data-tip={t('chat.items.newChatTip')}><IconPlus size={11} />{t('chat.items.newChat')}</div>}
+        {nc?.mode && <div className="msg-newchat" data-testid={`item-${item.id}-mode`} data-tip={t(`chat.items.modeTip.${nc.mode}`)}>{nc.mode === 'quick' ? <IconBolt size={11} /> : nc.mode === 'plan' ? <IconBranch size={11} /> : <IconPlus size={11} />}{t(`chat.mode.${nc.mode}`)}</div>}
         {fix ? <CorrectionBubble quote={fix.quote} fix={fix.fix} /> : text && <div className="bubble">{text}</div>}
         {own.notes.length > 0 && <div className="msg-notes" data-testid={`item-${item.id}-notes`} title={own.notes.join('\n')}><IconCheck size={11} /> {own.notes.join(' · ')}</div>}
       </div>
       );
     }
-    case 'assistant': return <div className="msg-assistant" data-testid={`item-${item.id}`}><Message id={item.id} text={item.text} streaming={item.streaming} />{refs?.length ? <NamedChatRefs ids={refs} /> : null}</div>;
+    // a reply of one or two emoji only (shared/reaction.ts): a reaction under the user's message, not a bubble
+    case 'assistant': return !item.streaming && isReaction(item.text) ? <div className="msg-reaction" data-testid={`item-${item.id}`} data-reaction="">{item.text.trim()}</div>
+      : <div className="msg-assistant" data-testid={`item-${item.id}`}><Message id={item.id} text={item.text} streaming={item.streaming} />{refs?.length ? <NamedChatRefs ids={refs} /> : null}</div>;
     case 'thinking': return <Thinking text={item.text} beforeAsk={beforeAsk} marks={marks} />;
     case 'tool': return <ToolItem item={item} />;
     case 'system': {

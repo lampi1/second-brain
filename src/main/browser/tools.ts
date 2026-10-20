@@ -25,6 +25,9 @@ const str = (v: unknown, name: string): string => {
   return v;
 };
 const bool = (v: unknown): boolean => v === true || v === 'true';
+/** what read_page and get_page_text return when the agent names no max_chars: enough for a form or an article; a bigger
+ * page ends with a note and the agent asks again with a larger max_chars (it stays in every later turn's context) */
+const PAGE_CHARS = 20000;
 
 const tabId = { tabId: { type: 'string', description: 'Tab id from tabs_list; omit for your active tab.' } };
 const target = {
@@ -170,9 +173,9 @@ PNG ${shot.width}x${shot.height}` : ''}${dialog}`, images: [{ data: img.data, mi
     },
     {
       name: 'read_page', annotations: RO,
-      description: 'The page as an indented tree: role "name" state [ref], text lines, and every iframe (same- or cross-origin) nested under its iframe line with refs like f1e7. filter "interactive" lists only controls (smaller). Refs stay valid while the element exists; after big changes call it again.',
+      description: 'The page as an indented tree: role "name" state [ref], text lines, and every iframe (same- or cross-origin) nested under its iframe line with refs like f1e7. filter "interactive" lists only controls (smaller). Up to 20000 chars unless max_chars says more (a cut ends with a note). Refs stay valid while the element exists; after big changes call it again.',
       inputSchema: schema({ filter: { type: 'string', enum: ['all', 'interactive'] }, max_chars: { type: 'number' } }),
-      run: (a, ctx) => actions.snapshot(tabOf(ctx, a), a.filter === 'interactive' ? 'interactive' : 'all', '', Number(a.max_chars ?? 40000)),
+      run: (a, ctx) => actions.snapshot(tabOf(ctx, a), a.filter === 'interactive' ? 'interactive' : 'all', '', Number(a.max_chars ?? PAGE_CHARS)),
     },
     {
       name: 'find', annotations: RO,
@@ -182,9 +185,9 @@ PNG ${shot.width}x${shot.height}` : ''}${dialog}`, images: [{ data: img.data, mi
     },
     {
       name: 'get_page_text', annotations: RO,
-      description: 'Visible text of the page (main/article content first; full: true for everything), then the text of each iframe.',
+      description: 'Visible text of the page (main/article content first; full: true for everything), then the text of each iframe. Up to 20000 chars unless max_chars says more (a cut ends with a note).',
       inputSchema: schema({ max_chars: { type: 'number' }, full: { type: 'boolean' } }),
-      run: (a, ctx) => actions.text(tabOf(ctx, a), Number(a.max_chars ?? 30000), bool(a.full)),
+      run: (a, ctx) => actions.text(tabOf(ctx, a), Number(a.max_chars ?? PAGE_CHARS), bool(a.full)),
     },
     {
       name: 'click', annotations: WRITE,

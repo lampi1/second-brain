@@ -25,7 +25,7 @@ import { electronNode } from './brain/node';
 import { log } from './log';
 import { CURSOR_PLAN_NOTE } from './brain/usage';
 import { runResultMessage } from './run/results';
-import { splitNewChat } from '../shared/newchat';
+import { splitMode } from '../shared/newchat';
 import type { AgentMetrics, AgentRunOutcome } from '../shared/agents';
 import { demoAgentMetrics } from './demo-agent-runs';
 
@@ -778,9 +778,10 @@ async function genericReply(run: Run, text: string): Promise<void> {
 
 async function orchestratorReply(run: Run, text: string, d: DemoChats): Promise<void> {
   await run.sleep(400);
-  // "Nuova chat" ticked (ADR 0034): she opens a work chat for the request, like app_create_chat, and says so in a line
-  const nc = splitNewChat(text);
-  if (nc.newChat) {
+  // "Veloce" / "Stratega" ticked (ADR 0034, 2026-10-20): she opens a work chat for the request, like app_create_chat
+  // (a Strategist one for "Stratega"), and says so in a line
+  const nc = splitMode(text);
+  if (nc.mode) {
     const ask = nc.text.trim();
     const title = `Demo · ${titleFrom(ask) || 'nuova richiesta'}`.slice(0, 80);
     const c = await d.create({ harness: 'claude', cwd: d.list().find(x => x.id === run.chatId)?.cwd ?? '', title, prompt: ask });
@@ -788,6 +789,8 @@ async function orchestratorReply(run: Run, text: string, d: DemoChats): Promise<
     await run.say(`Aperta «${c.title}»: ci lavora lei, ti scrive quando ha finito.`);
     return;
   }
+  // a thanks or an ok needs no answer: one emoji, shown as a reaction (shared/reaction.ts)
+  if (/^(grazie|ok|perfetto|ottimo|thanks)\b[\s!.]*$/i.test(text.trim())) { await run.say('👍'); return; }
   const all = d.list().filter(c => !c.isOrchestrator);
   const waiting = all.filter(c => c.state === 'waiting' || c.pending > 0).map(c => c.title);
   const working = all.filter(c => c.state === 'running' || c.state === 'starting').map(c => c.title);

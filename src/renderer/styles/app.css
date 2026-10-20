@@ -375,6 +375,9 @@ button.lc-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 }
 
 .msg-user { display: flex; flex-direction: column; align-items: flex-end; }
+/* a reply of one or two emoji (shared/reaction.ts): a small pill tucked under the user's bubble, not a message */
+.msg-reaction { align-self: flex-end; margin: -6px 10px 0 auto; padding: 1px 8px; border: 1px solid var(--border); border-radius: 99px;
+  background: var(--surface-2); font-size: 14px; line-height: 20px; width: fit-content; }
 .bubble {
   max-width: 88%; padding: 6px 11px; border-radius: 12px 12px 4px 12px; background: var(--surface-3); border: 1px solid var(--border-2);
   color: var(--text); white-space: pre-wrap; word-break: break-word; line-height: 1.45;

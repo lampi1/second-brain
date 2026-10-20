@@ -304,7 +304,7 @@ export class BrowserActions {
         left -= r.text.length;
       } catch (e) { parts.push(`--- iframe f${no}: not readable (${errText(e)}) ---`); }
     }
-    return parts.join('\n') + (left <= 0 ? `\n…(truncated at ${max} chars)` : '');
+    return parts.join('\n') + (left <= 0 ? `\n…(truncated at ${max} chars: find, or a larger max_chars for the rest)` : '');
   }
 
   // ---------- locating ----------
