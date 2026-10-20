@@ -12,7 +12,8 @@ import { anthropicApi, engineInfos, engineOf, enginePathsFromEnv, priceEnginesOf
 import { withApiModels } from './engines/sessions';
 import { AgentCatalogService } from './agents/catalog';
 import { RunFeedback } from './agents/run-feedback';
-import { independentModel } from './agents/model-tier';
+import { tierModel } from './agents/model-tier';
+import { roleTableModel } from './agents/role-table';
 import { qualifiedSkillsLine, runtimePluginName } from './agents/role-gate';
 import { createAgentPacks } from './agents/pack/wiring';
 import { chatLearnTool } from './agents/pack/learning';
@@ -49,7 +50,7 @@ import { doneEvent } from './brain/live';
 import { syncBeforeCreate } from './brain/sync';
 import { agentStatsLine, knownOutcome, predictionLine } from './brain/routing';
 import { runMetrics } from './agents/run-metrics';
-import { listPrice, setPriceTable } from './chats/live-cost';
+import { listPrice, priceTableSource, setPriceTable } from './chats/live-cost';
 import type { McpServer, McpTool, ToolOutput } from './mcp/server';
 import { createBrowserModule, mcpPortFromEnv } from './browser/service';
 import { AGENT_LABEL, appControlTools, orchestratorEndpointAuth, type ToolDef, type ToolOut } from './appctl/tools';
@@ -76,6 +77,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { electronNode, runNode } from './brain/node';
 import path from 'node:path';
+import { templateRoot } from './rules/tools';
 import { log, errText } from './log';
 import { AnswerLaterStore, REQUEST_KINDS } from './later';
 import { Artifacts, showUiTool } from './genui/artifacts';
@@ -298,7 +300,8 @@ export function createAppSource(ctx: Pick<Ctx, 'emitter' | 'userData'>, appRepo:
 /** Shared by real and demo wiring. */
 export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: EnginesApi, cli: () => Record<Harness, CliStatus> | null, onCustomized?: () => void): AgentCatalogService {
   return new AgentCatalogService({ userData: ctx.userData, ...(onCustomized ? { onCustomized } : {}),
-    tierModel: (engine, tier, avoid, max) => independentModel(engine, tier, avoid, brain.routingInfo().registry, brain.settings().modelTiers, max),
+    tierModel: (engine, tier) => tierModel(engine, tier, brain.routingInfo().registry, brain.settings().modelTiers),
+    tableModel: (engine, req) => roleTableModel(brain, engine, req),
     pulsePreset: () => {
       const choices = engineInfos();
       let e = choices.find(e => e.kind === 'api' && agentsMayOpen(brain.settings(), e.id) && engines.hasKey(e.id))
@@ -317,6 +320,7 @@ export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: Engin
         defaultModel: e.kind !== 'api', modelSelectable: e.kind !== 'acp' || !!engineOf(e.id)?.modelFlag,
         modelReason: e.kind === 'acp' && !engineOf(e.id)?.modelFlag ? 'Questo adattatore non può applicare una scelta di modello. È disponibile il default CLI.' : null }));
     },
+    preferredEngine: () => brain.settings().orchestratorChats.harness ?? null,
     emit: catalog => ctx.emitter.emit('agents:changed', catalog),
   });
 }
@@ -390,10 +394,14 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // personal milestones (Brother, 18/10: they must be earnable): on in the real profile; the demo keeps them read-only.
   // Created before the catalog so a customized Agent earns 'first-agent'; the chats are read only on a confirmation.
   const progressService = new ProgressService(ctx.userData, { enabled: true, chats: () => chats.list(), emit: state => ctx.emitter.emit('progress:changed', state) });
+  // live turn costs and the Claude model list at the brain's per-model list prices (harness/models.json, else the
+  // release template's), re-read at most every 30 s; set before the catalog reads its models (issue #96)
+  setPriceTable(priceTableSource(() => brain.routingInfo().registry, () => { try { return path.join(templateRoot(), 'harness', 'models.json'); } catch { return null; } }));
   const agents = createAgentCatalog(ctx, brain, engines, () => ({ ...cliCache, ...engineReadiness() }), () => progressService.award('first-agent'));
-  // Probe only after registry/trust initialization; reconcile untouched seeds when readiness arrives.
-  // Tests never run installed vendors; their fake status is requested explicitly.
-  if (!process.env.SB_TEST) void engineStatuses().then(all => { cliCache = all; agents.list(); ctx.emitter.emit('cli:ready', all); });
+  // Probe only after registry/trust initialization; reconcile untouched seeds when readiness arrives and tell the
+  // renderer (issue #96: the role editor showed the startup snapshot). Tests never run installed vendors.
+  if (!process.env.SB_TEST) void engineStatuses().then(all => { cliCache = all; agents.refresh(); ctx.emitter.emit('cli:ready', all); });
+  brain.onSettingChange(c => { if (c.key === 'brainRoot' || c.key.startsWith('engineOn.') || c.key === 'orchestratorChats.harness' || c.key.startsWith('modelTiers.')) agents.refresh(); });
   // skills_suggest: the brain's skills that fit a request, on the search's own HybridSearch (one worker and one model for
   // search, recall, corrections and skill suggestions); the skills are read when asked (the Brain pages' reader)
   const brainModelRef: { current?: BrainModelService } = {};
@@ -405,9 +413,6 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   addChatTools([agentCatalogTool(() => agents.list(), skillTools), skillsSuggestTool(suggestSkills), chatLearnTool(agentPacks.learning, () => manager.runs.list()), brainSearchTool((q, o) => hybrid.query(q, o)), brainScriptsTool(brainScripts)]);
   scriptEnv = () => ({ [TEXT_ENV]: textTool.url() });
   apiRoute = () => { const e = anthropicApi(); return e && engineOn(brain.settings(), e.id) && engines.hasKey(e.id) ? e.id : null; };
-  // live turn costs at the brain's per-model list prices (harness/models.json), re-read at most every 30 s
-  let prices: { at: number; reg: ReturnType<BrainService['routingInfo']>['registry'] } = { at: 0, reg: null };
-  setPriceTable(() => { if (Date.now() - prices.at > 30_000) prices = { at: Date.now(), reg: brain.routingInfo().registry }; return prices.reg; });
 
   // Claude chats through the user's own `claude` CLI (SB_CLAUDE_PATH: a fake CLI for e2e tests); each chat gets its own
   // browser endpoint, so it sees and drives only its tabs.
@@ -466,7 +471,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     appMcpUrl: orchestratorId => browser.mcpUrlFor(null).replace(/\/mcp$/, `/mcp/app/o/${orchestratorId}/${orchestratorTokens.tokenFor(orchestratorId)}`),
     // brain hooks: plan limits, the job ledger (real cost and time), the live feed and notifications
     onRateLimit: msg => brain.ingestRateLimits(msg),
-    onModels: (h, list) => brain.recordModels(h, list),
+    onModels: (h, list) => { brain.recordModels(h, list); agents.refresh(); },
     acpModelConfig: () => { const r = brain.settings().orchestratorChats; return { reasoning: r.cursorReasoning, fast: r.cursorFast }; },
     onTurnEnd: info => {
       replyRules.turnEnded(info.chatId, info.reply, info.isError);

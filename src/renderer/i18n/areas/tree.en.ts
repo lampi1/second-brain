@@ -71,7 +71,7 @@ export const treeEn: typeof treeIt = {
   'delegation.stallMin': 'Stalled after (minutes)',
   'delegation.stallMin.hint': 'A child without any event for this many minutes counts as stalled.',
   'delegation.judgeDaily': 'Judge reviews per day',
-  'delegation.judgeDaily.hint': 'How many finished runs the Judge reviews each day, on another model, to measure the roles.',
+  'delegation.judgeDaily.hint': 'How many finished runs the Judge reviews each day, each in a new session that never saw the run, to measure the roles.',
   'delegation.off': 'None',
   'delegation.tiers': 'Models per tier',
   'delegation.tiers.hint': 'The model each tier uses on each engine. Empty = the one in the brain\'s model registry.',

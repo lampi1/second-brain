@@ -345,8 +345,6 @@ export interface NewChat {
   delegation?: ChatDelegation;
   /** the model tier a delegation asks for (at most the role's tierMax); absent = the role's own */
   tier?: ModelTier;
-  /** an independent role picks a model other than this one (its parent's) */
-  independentOf?: { engine: string; model: string | null };
   harness: Harness;
   cwd: string;
   prompt?: string;
@@ -926,7 +924,7 @@ export interface RouteDecision {
 }
 /** The role a routed chat runs: who launched it, its model tier, and where its model came from (the role's own model,
  *  its tier on the engine, or the engine's default). */
-export interface RouteAgent { id: string; version: number; chosenBy: 'orchestrator' | 'parent' | 'app'; tier?: ModelTier; modelFrom?: 'role' | 'tier' | 'engine' }
+export interface RouteAgent { id: string; version: number; chosenBy: 'orchestrator' | 'parent' | 'app'; tier?: ModelTier; modelFrom?: 'role' | 'tier' | 'table' | 'engine' }
 /** routing:preview → the engine, model and effort the table (or the user's pick, or the defaults) gives a new chat, and
  *  why; error = what chat:createRouted would refuse (Italian). */
 export type RoutePreview = { harness: Harness; model: string | null; effort: Effort | null; route: RouteDecision } | { error: string };

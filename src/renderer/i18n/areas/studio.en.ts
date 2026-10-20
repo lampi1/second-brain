@@ -22,8 +22,6 @@ export const studioEn: typeof studioIt = {
   'studio.tierMax': 'Highest tier when delegated',
   'studio.tierMaxHint': 'Whoever delegates may ask for a higher tier, up to this one.',
   'studio.tierInvalid': 'The tier cannot be above the highest tier.',
-  'studio.independent': 'On a model other than its launcher’s',
-  'studio.independentHint': 'A check is worth more when another model makes it.',
   'studio.tools': 'Tools',
   'studio.tool.read': 'Read', 'studio.tool.edit': 'Edit files', 'studio.tool.shell': 'Commands', 'studio.tool.shell-read': 'Read-only commands',
   'studio.tool.web': 'Web', 'studio.tool.browser': 'Browser', 'studio.tool.browser-read': 'Browser, read only', 'studio.tool.mail-draft': 'Mail drafts',

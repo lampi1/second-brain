@@ -44,7 +44,6 @@ export interface AgentDraft {
   maxContext?: number | null;
   tier: ModelTier;
   tierMax: ModelTier;
-  independent: boolean;
   /** the roles it may launch with agent_delegate */
   launches: string[];
   /** the brain's skills it loads at every launch (and may use; any other is refused, agents/role-gate.ts) */
@@ -53,7 +52,7 @@ export interface AgentDraft {
 /** The bounds of a role's "Contesto massimo" (the Claude engine accepts 100k..1M as its compaction window). */
 export const MAX_CONTEXT_RANGE = { min: 100_000, max: 1_000_000 } as const;
 /** Fields that change what a run does. Saving a change to any of them creates a new version. */
-export const BEHAVIOUR_FIELDS = ['instructions', 'engine', 'model', 'effort', 'tools', 'permissionCeiling', 'knowhow', 'maxContext', 'tier', 'tierMax', 'independent', 'launches', 'skills'] as const;
+export const BEHAVIOUR_FIELDS = ['instructions', 'engine', 'model', 'effort', 'tools', 'permissionCeiling', 'knowhow', 'maxContext', 'tier', 'tierMax', 'launches', 'skills'] as const;
 export type AgentBehaviour = Pick<AgentDraft, (typeof BEHAVIOUR_FIELDS)[number]>;
 export interface AgentProfile extends AgentDraft {
   id: string; createdAt: number; updatedAt: number;

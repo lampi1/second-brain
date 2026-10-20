@@ -30,8 +30,8 @@ describe('skill needs', () => {
   });
   it('agent_catalog names, per role, the asked skills it lacks tools for', () => {
     const catalog = { problem: null, models: [], profiles: [
-      { id: 'herald', name: 'Herald', purpose: '', scope: 'role', engine: 'claude', model: null, tier: 'light', tierMax: 'mid', independent: false, launches: [], skills: [], tools: { allow: ['read', 'web'] }, permissionCeiling: null, activeVersion: 1 },
-      { id: 'artisan', name: 'Artisan', purpose: '', scope: 'role', engine: 'claude', model: null, tier: 'mid', tierMax: 'top', independent: false, launches: [], skills: [], tools: { allow: [...TOOL_CLASSES] }, permissionCeiling: null, activeVersion: 1 },
+      { id: 'herald', name: 'Herald', purpose: '', scope: 'role', engine: 'claude', model: null, tier: 'light', tierMax: 'mid', launches: [], skills: [], tools: { allow: ['read', 'web'] }, permissionCeiling: null, activeVersion: 1 },
+      { id: 'artisan', name: 'Artisan', purpose: '', scope: 'role', engine: 'claude', model: null, tier: 'mid', tierMax: 'top', launches: [], skills: [], tools: { allow: [...TOOL_CLASSES] }, permissionCeiling: null, activeVersion: 1 },
     ] } as unknown as AgentCatalog;
     const out = discoverRoles(() => catalog, { skills: ['issue-open'] }, () => Object.entries(tools).map(([name, t]) => ({ name, tools: t })));
     expect(out.roles.find(r => r.id === 'herald')?.skillWarnings?.[0]).toMatch(/issue-open/);
