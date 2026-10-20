@@ -37,12 +37,12 @@ describe('maintenanceEvent', () => {
 
 describe('proposalEvent', () => {
   const p = (key: string, agentIds: string[], reason: string): AgentLifecycleProposal => ({ key, kind: 'tier', agentIds, reason, evidence: [], at: 1, state: 'pending' });
-  const names: Record<string, string> = { artisan: 'Artigiano', scout: 'Esploratore' };
+  const names: Record<string, string> = { artisan: 'Artisan', scout: 'Scout' };
   const name = (id: string) => names[id] ?? id;
   it('none without new entries; one entry names its role; more are counted; it leads to Da approvare', () => {
     expect(proposalEvent([], name)).toBeNull();
-    expect(proposalEvent([p('k1', ['artisan'], 'costa meno')], name)).toEqual({ kind: 'agent-proposal', title: 'Da approvare: Artigiano', detail: 'costa meno', action: { kind: 'agent-proposals' } });
-    expect(proposalEvent([p('k1', ['artisan'], 'a'), p('k2', ['scout'], 'b')], name)?.title).toBe('2 proposte da approvare · Artigiano, Esploratore');
+    expect(proposalEvent([p('k1', ['artisan'], 'costa meno')], name)).toEqual({ kind: 'agent-proposal', title: 'Da approvare: Artisan', detail: 'costa meno', action: { kind: 'agent-proposals' } });
+    expect(proposalEvent([p('k1', ['artisan'], 'a'), p('k2', ['scout'], 'b')], name)?.title).toBe('2 proposte da approvare · Artisan, Scout');
     const one = proposalEvent([p('k1', ['artisan'], 'a')], name);
     expect(one && stamp({ ...one, title: one.title }).priority).toBe('normal');
   });
