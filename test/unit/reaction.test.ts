@@ -30,6 +30,6 @@ describe('the Orchestrator speaks only when it is useful (owner, 2026-10-20)', (
   });
   it('the app\'s news asks for a line only when the user needs it, else one emoji', () => {
     expect(WAKE_ASK).toContain('solo se gli serve saperlo');
-    expect(WAKE_ASK).toContain('una sola emoji');
+    expect(WAKE_ASK).toContain('rispondi solo 👍');
   });
 });

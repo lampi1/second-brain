@@ -376,8 +376,8 @@ button.lc-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 
 .msg-user { display: flex; flex-direction: column; align-items: flex-end; }
 /* a reply of one or two emoji (shared/reaction.ts, lib/chat-view.ts), WhatsApp style (the owner, 2026-10-20): stuck to
-   the user's bubble it is a small pill on its corner; on its own (after app news, mail) it is a big emoji, no bubble,
-   with a small pop when it lands */
+   the user's bubble it is a small pill on its corner, with a small pop when it lands; anywhere else the chat list does
+   not draw it (lib/chat-view.ts), .msg-reaction is only for a lone Item drawn outside a list */
 .msg-react { align-self: flex-end; margin: -8px 10px 0 auto; padding: 1px 7px; border: 1px solid var(--border); border-radius: 99px;
   background: var(--surface-2); font-size: 14px; line-height: 20px; width: fit-content; position: relative; z-index: 1;
   transform-origin: 70% 0; animation: reaction-pop 420ms cubic-bezier(.2, 1.6, .4, 1) both; }

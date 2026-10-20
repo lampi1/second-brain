@@ -29,3 +29,8 @@ characters by default that stay in every later turn's context.
 - Same information reaches the model; the cost is one extra call when a page is larger than 20 000 characters.
 - Not done here, owned by the issue sweep: the independent reviewer's model (#99), the Orchestrator's own tools (#98),
   the qualified skill name (#101).
+
+## Revision (owner, 2026-10-20, after #114)
+An emoji-only reply is drawn only as a reaction on the user's own message. Anywhere else it means "noted, nothing for
+you" and the chat list (`lib/chat-view.ts`) draws nothing: the app news or mail it answered, that turn's folded work
+(unless it opened or wrote to a chat) and its "Turno finito" line go too. Written replies carry no emoji.
