@@ -31,8 +31,10 @@ describe('product sync', () => {
     const brain = { publish: (e: { kind: string }[]) => got.push(...e) } as unknown as BrainService;
     const s = new ProductSync({ base, brainRoot: () => null, brain, nodeExe: process.execPath, firstScanMs: 0 });
     s.start();
+    // macOS's FSEvents may miss a write right after the watch starts and reports late: write once it is up, wait longer
+    await new Promise(r => setTimeout(r, 300));
     fs.writeFileSync(path.join(base, 'sync', '0.1.0-abc.json'), JSON.stringify({ release: '0.1.0-abc', startedAt: 'x', endedAt: 'y', exitCode: 2, ok: false, blocked: true, summary: 'x' }));
-    for (let i = 0; i < 40 && !got.length; i++) await new Promise(r => setTimeout(r, 50));
+    for (let i = 0; i < 100 && !got.length; i++) await new Promise(r => setTimeout(r, 50));
     s.stop();
     expect(got.map(e => e.kind)).toEqual(['sync-blocked']);
   });
