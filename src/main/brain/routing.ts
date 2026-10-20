@@ -425,6 +425,38 @@ export function knownOutcome(run: { runId: string; outcome?: { verdict: string; 
   return { known: true, success: o.verdict === 'success', ...(o.verdict === 'partial' ? { partial: true as const } : {}), source, runId: run.runId, at: o.at };
 }
 
+/** The known-outcome sources that count as verified (ADR 0095): the user's verdict (the brain's 'human', the app's
+ *  'agent-user'), a reviewed one (the Judge role's 'agent-review', the brain's sample judge 'judge', ADR 0047). The rest
+ *  (the brain's 'proxy' = closed without an error line, the Orchestrator's opinion, a source not named) is known but
+ *  unverified: shown apart, never in "verificati". */
+export const VERIFIED_OUTCOME_SOURCES: readonly string[] = ['human', 'agent-user', 'agent-review', 'judge'];
+/** A ledger line's known outcome, as the readers fold it. */
+export interface LedgerOutcome { success: boolean; verified: boolean; source: string }
+/** What one ledger line says about its id's outcome: a known outcome; 'clear' (an explicit `known: false` that is not a
+ *  measured line: a retraction); or null (nothing: no outcome, or a measured line, which never undoes a known outcome,
+ *  ADR 0078). Tolerant of the brain's lines: `known` may be left out when `success` is a boolean, `basis` may name the
+ *  source. */
+export function lineOutcome(o: unknown): LedgerOutcome | 'clear' | null {
+  if (!o || typeof o !== 'object') return null;
+  const x = o as { known?: unknown; success?: unknown; source?: unknown; basis?: unknown };
+  const source = typeof x.source === 'string' ? x.source : typeof x.basis === 'string' ? x.basis : '';
+  if (x.known === false) return source === 'measured' || source === '' ? null : 'clear';
+  if ((x.known === true || x.known === undefined) && typeof x.success === 'boolean') return { success: x.success, verified: VERIFIED_OUTCOME_SOURCES.includes(source), source };
+  return null;
+}
+/** Later line wins, except that an unverified outcome never replaces a verified one (ADR 0047: an explicit verdict
+ *  beats the judge, the judge beats the proxy) and a measured line changes nothing. */
+export function foldOutcome(map: Map<string, LedgerOutcome>, id: string, o: unknown): void {
+  const next = lineOutcome(o);
+  if (next === 'clear') { map.delete(id); return; }
+  if (!next) return;
+  const prev = map.get(id);
+  if (prev?.verified && !next.verified) return;
+  map.set(id, next);
+}
+
+const verifiedOutcome = (o: { source?: string } | undefined): boolean => !!o && VERIFIED_OUTCOME_SOURCES.includes(String(o.source ?? (o as { basis?: string }).basis ?? ''));
+
 /** The prediction line of a routed chat (written once, at its first turn end, with `at` = when it was routed). */
 export function predictionLine(route: RouteDecision, chat: { id: string; harness: Harness; model: string | null; effort: Effort | null; promptChars: number | null }): RoutingPrediction {
   return {
@@ -643,7 +675,10 @@ export class Routing {
       if (rec.outcome.known) known.set(rec.id, rec.outcome);
       else if (known.has(rec.id)) line = { ...rec, outcome: known.get(rec.id)! };
     }
-    fs.appendFileSync(path.join(d, 'outcomes.jsonl'), `${JSON.stringify({ ...line, ts: Date.now() })}\n`);
+    const f = path.join(d, 'outcomes.jsonl');
+    fs.appendFileSync(f, `${JSON.stringify({ ...line, ts: Date.now() })}\n`);
+    // our own line is not news: only another writer's (the brain's settlement) makes knownOutcomes read the file again
+    if (this.known?.dir === d) try { this.known.size = fs.statSync(f).size; } catch { /* re-read next time */ }
     return true;
   }
 
@@ -652,18 +687,29 @@ export class Routing {
     return this.observe({ id, domain: 'routing', outcome, actual: this.lastActual(id) ?? { usd: 0, minutes: null, turns: 0, ctxPeak: null, handoffs: 0 } });
   }
 
-  private known: { dir: string; map: Map<string, KnownOutcome> } | null = null;
-  /** The known outcomes of the ledger by id (read once per brain folder, then kept up to date by observe). */
+  private known: { dir: string; size: number; map: Map<string, KnownOutcome> } | null = null;
+  /** The known outcomes of the ledger by id, carried by the next measured line. Read again whenever the file grew by
+   *  someone else's lines (the brain's loop settles outcomes into the same file, ADR 0047): with a stale copy the next
+   *  turn's measured line would say `known: false` after the brain's verdict (issue #110). */
   private knownOutcomes(d: string): Map<string, KnownOutcome> {
-    if (this.known?.dir === d) return this.known.map;
+    const f = path.join(d, 'outcomes.jsonl');
+    let size = 0;
+    try { size = fs.statSync(f).size; } catch { /* none yet */ }
+    if (this.known?.dir === d && this.known.size === size) return this.known.map;
     const map = new Map<string, KnownOutcome>();
     let text = '';
-    try { text = fs.readFileSync(path.join(d, 'outcomes.jsonl'), 'utf8'); } catch { /* none yet */ }
+    try { text = fs.readFileSync(f, 'utf8'); } catch { /* none yet */ }
     for (const line of text.split('\n')) {
-      if (!/"known"\s*:\s*true/.test(line)) continue;
-      try { const j = JSON.parse(line) as Partial<RoutingActual>; if (j.domain === 'routing' && typeof j.id === 'string' && j.outcome?.known === true && typeof j.outcome.success === 'boolean') map.set(j.id, j.outcome); } catch { /* a torn line */ }
+      if (!line.includes('"known"') && !line.includes('"success"')) continue;
+      try {
+        const j = JSON.parse(line) as Partial<RoutingActual> & { domain?: unknown; outcome?: Record<string, unknown> };
+        if ((j.domain !== 'routing' && j.domain !== undefined) || typeof j.id !== 'string' || !j.outcome) continue;
+        const o = lineOutcome(j.outcome);
+        if (o === 'clear') map.delete(j.id);
+        else if (o && !(o.verified === false && verifiedOutcome(map.get(j.id)))) map.set(j.id, { ...(j.outcome as unknown as KnownOutcome), known: true });
+      } catch { /* a torn line */ }
     }
-    this.known = { dir: d, map };
+    this.known = { dir: d, size, map };
     return map;
   }
 
@@ -677,21 +723,23 @@ export class Routing {
     if (!d) return {};
     let text: string;
     try { text = fs.readFileSync(path.join(d, 'outcomes.jsonl'), 'utf8'); } catch { return {}; }
-    const kindOf = new Map<string, TaskKind>(), result = new Map<string, boolean>();
+    const kindOf = new Map<string, TaskKind>(), result = new Map<string, LedgerOutcome>();
     for (const line of text.split('\n')) {
-      if (!line.includes('"routing"')) continue;
+      if (!line.includes('"app:')) continue;
       try {
-        const j = JSON.parse(line) as Partial<RoutingPrediction> & Partial<RoutingActual> & { outcome?: { known?: unknown; success?: unknown } };
-        if (j.domain !== 'routing' || typeof j.id !== 'string' || !j.id.startsWith('app:')) continue;
+        const j = JSON.parse(line) as Partial<RoutingPrediction> & Partial<RoutingActual> & { domain?: unknown; outcome?: unknown };
+        // an app: id is a routing line; the brain's settlement may leave the domain out
+        if ((j.domain !== 'routing' && j.domain !== undefined) || typeof j.id !== 'string' || !j.id.startsWith('app:')) continue;
         if (j.predicted && j.item && (TASK_KINDS as readonly string[]).includes(j.item.kind)) kindOf.set(j.id, j.item.kind);
-        if (j.outcome) { if (j.outcome.known === true && typeof j.outcome.success === 'boolean') result.set(j.id, j.outcome.success); else if (j.outcome.known === false) result.delete(j.id); }
+        if (j.outcome) foldOutcome(result, j.id, j.outcome);
       } catch { /* a torn line */ }
     }
     const out: Partial<Record<TaskKind, KindStats>> = {};
     for (const [id, kind] of kindOf) {
       const s = out[kind] ??= { chats: 0, known: 0, ok: 0 };
       s.chats++;
-      if (result.has(id)) { s.known++; if (result.get(id)) s.ok++; }
+      const o = result.get(id);
+      if (o) { s.known++; if (o.success) s.ok++; }
     }
     return out;
   }

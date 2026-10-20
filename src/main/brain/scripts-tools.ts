@@ -5,7 +5,10 @@
 // - brain_script_save, brain_script_delete, brain_changelog_add, on the Orchestrator's app endpoint only (appctl/tools.ts):
 //   the owner gave it full freedom over the scripts (2026-10-19), so they write directly, no approval card; every change
 //   lands in the brain's changelog, a delete keeps a copy, and a script holding a credential is refused.
-// Used by wiring.ts (brain_scripts) and appctl/tools.ts (the write tools).
+// - brain_script_add, on every chat's own endpoint (issue #111, ADR 0096): a work chat adds a new script it ran with
+//   success itself (add only; fixes and deletes stay the Orchestrator's). The app also saves reusable "Esegui" runs by
+//   itself (auto-scripts.ts).
+// Used by wiring.ts (brain_scripts, brain_script_add) and appctl/tools.ts (the write tools).
 import type { McpTool } from '../mcp/server';
 import type { ChangelogAction, ChangelogKind } from '../../shared/contract';
 import { CHANGELOG_ACTIONS, CHANGELOG_KINDS, type BrainChangelog } from './changelog';
@@ -22,7 +25,7 @@ const text = (v: unknown, key: string, required = true): string => {
 export function brainScriptsTool(scripts: BrainScripts): McpTool {
   return {
     name: 'brain_scripts',
-    description: `The brain's reusable scripts (its scripts/ folder): tested scripts the user's agents wrote, each with what it does, how to run it (usage) and its last test. Call it BEFORE writing a new script for a task: reuse or adapt a fitting one instead of starting over. q: what you need, in plain words (all words must match title, description, usage or tags); empty = all. Read the file at its path for the code. Only the Orchestrator adds, fixes or deletes scripts (brain_script_save): if you improved or wrote a reusable script, give it to the Orchestrator in your report.`,
+    description: `The brain's reusable scripts (its scripts/ folder): tested scripts the user's agents wrote, each with what it does, how to run it (usage) and its last test. Call it BEFORE writing a new script for a task: reuse or adapt a fitting one instead of starting over. q: what you need, in plain words (all words must match title, description, usage or tags); empty = all. Read the file at its path for the code. Once a reusable script or command you wrote or ran WORKED, save it yourself with brain_script_add (a new script only); to fix or replace an existing one, tell the Orchestrator in your report.`,
     inputSchema: { type: 'object', properties: { q: { type: 'string', description: 'What the script should do (e.g. "backup note zip"). Optional.' } }, additionalProperties: false },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     run: args => {
@@ -32,6 +35,46 @@ export function brainScriptsTool(scripts: BrainScripts): McpTool {
         folder: all.root ? `${all.root}/${all.dir}` : null, total: all.scripts.length,
         scripts: list.map(s => ({ path: all.root ? `${all.root}/${s.file}` : s.file, title: s.title, description: s.description, usage: s.usage, language: s.language, tags: s.tags, tested: s.tested })),
       });
+    },
+  };
+}
+
+/** brain_script_add on every chat's own endpoint (issue #111, ADR 0096): a work chat saves a reusable script it ran
+ *  with success itself, instead of hoping the Orchestrator (which never sees its content) does it. Add only: an existing
+ *  name is refused (fixes and deletes stay the Orchestrator's), the same credential refusal and changelog line as
+ *  brain_script_save, `by` = the chat's title. */
+export function chatScriptAddTool(scripts: BrainScripts, titleOf: (chatId: string) => string | null): McpTool {
+  return {
+    name: 'brain_script_add',
+    description: `Save a NEW reusable script in the user's brain (scripts/<name>, the Script page) right after you ran it and it worked: a deploy, a migration, a local server start, an export, any command or script the user or an agent will run again. Not for one-off look-arounds (ls, git status). Call brain_scripts first: if a fitting script exists, do not add a near-duplicate (report the fix to the Orchestrator). No secrets: read them from an environment variable or the user's credentials file at run time (a line that looks like a credential is refused). The app writes the header; pass the code without it. Logged in the brain's changelog. Languages by extension: ${SCRIPT_EXTS.join(' ')}.`,
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'New file name with extension, e.g. "deploy-air-test.ps1" (letters, digits, . _ -).' },
+        title: { type: 'string', description: 'Short human title, in the user’s language.' },
+        description: { type: 'string', description: 'What it does and when to reuse it, one or two sentences, in the user’s language.' },
+        usage: { type: 'string', description: 'How to run it: the command line(s) with placeholders, one per line.' },
+        tags: { type: 'array', items: { type: 'string' }, description: 'A few words to find it (area, tool, system).' },
+        code: { type: 'string', description: 'The whole script, without the app header.' },
+        note: { type: 'string', description: 'What you ran and what came out, one line (the script is saved as tested ok).' },
+      },
+      required: ['name', 'title', 'description', 'code', 'note'], additionalProperties: false,
+    },
+    run: (a, ctx) => {
+      const name = text(a.name, 'name');
+      const want = name.trim().replace(/^scripts[\\/]/, '').toLowerCase();
+      if (scripts.list().scripts.some(s => s.id.toLowerCase() === want)) {
+        throw new Error(`${name} exists already: to fix or replace it, tell the Orchestrator in your report (brain_script_save)`);
+      }
+      const by = (ctx.params.chatId ? titleOf(ctx.params.chatId) : null)?.trim() || 'chat';
+      const r = scripts.save({
+        name, code: text(a.code, 'code'), by, create: true,
+        meta: { title: text(a.title, 'title'), description: text(a.description, 'description'), usage: text(a.usage, 'usage', false),
+          tags: Array.isArray(a.tags) ? a.tags.filter((t): t is string => typeof t === 'string').slice(0, 12) : [],
+          tested: { ok: true, note: text(a.note, 'note').slice(0, 300) } },
+      });
+      return JSON.stringify({ ok: true, ...r, changelog: 'logged' });
     },
   };
 }

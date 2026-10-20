@@ -2,7 +2,7 @@
 // con card e statistiche per ciascuno, con spiegazione", "il progresso dei classificatori nelle stime"). Read only. A
 // summary strip (decisions, this week, verified outcomes, tokens spent: always zero), then one card per classifier in
 // a grid: what it decides in plain Italian, its numbers (decisions, its own hit measure, verified success, cost or
-// threshold), an 8-week trend, its learning progress toward the 20 verified cases the loop needs, and one curious
+// threshold; the unverified outcomes, the brain's proxy, on a line apart, ADR 0095), an 8-week trend, its learning progress toward the 20 verified cases the loop needs, and one curious
 // fact built from the data. A click opens its detail (ClassifierDetail.tsx) with the history, the slices and the
 // tables of before (routing table, outcomes per kind, skill choices, quality by week). Two classifiers that keep no
 // record (the Orchestrator's mail, sensitive commands) get a small explained card. Every number has a "?" saying how
@@ -46,6 +46,7 @@ function Card({ c, sources, onOpen }: { c: CardView; sources: ClassifiersState['
         ? <Num label={k3.label} value={k3.value} help={k3.help} />
         : <Num label={t('stats.cls.success')} value={pctOf(c.success)} sub={t('stats.cls.n', { n: c.success.n })} help={t('stats.cls.successHelp')} />}
     </div>
+    {!!c.unverified?.n && <p className="cls-unverified" data-testid={`cls-${c.id}-unverified`} title={t('stats.cls.unverifiedHelp')}>{t('stats.cls.unverified', { n: c.unverified.n, pct: pctOf(c.unverified) ?? '—' })}</p>}
     {empty ? <p className="cls-empty">{ct(c.id, 'empty')}</p> : <>
       {c.weeks && c.weeks.some(w => w.decisions) && <div className="cls-card-trend">
         <span className="cls-cap">{t('stats.cls.weeks')} · {ct(c.id, 'hit')}</span>
@@ -85,7 +86,7 @@ export function ClassifiersPage() {
   const cards = useMemo(() => cardViews(state, estimates, taskEst?.accuracy), [state, estimates, taskEst]);
   const total = cards.reduce((s, c) => s + c.decisions, 0);
   const week = cards.reduce((s, c) => s + (c.weeks?.[c.weeks.length - 1]?.decisions ?? 0), 0);
-  const verified = cards.find(c => c.id === 'kind')?.success.n ?? 0;
+  const verified = cards.find(c => c.id === 'kind')?.success.n ?? 0, unverified = cards.find(c => c.id === 'kind')?.unverified?.n ?? 0;
   const active = open ? cards.find(c => c.id === open) : null;
   // Esc goes back from a detail to the grid
   useEffect(() => {
@@ -106,7 +107,7 @@ export function ClassifiersPage() {
       <div className="cls-summary" data-testid="cls-summary">
         <Num label={t('stats.cls.summary.decisions')} value={intFmt(total)} help={t('stats.cls.summary.decisionsHelp')} />
         <Num label={t('stats.cls.summary.week')} value={intFmt(week)} help={t('stats.cls.summary.weekHelp')} />
-        <Num label={t('stats.cls.summary.verified')} value={intFmt(verified)} help={t('stats.cls.summary.verifiedHelp')} />
+        <Num label={t('stats.cls.summary.verified')} value={intFmt(verified)} sub={unverified ? t('stats.cls.summary.unverified', { n: unverified }) : undefined} help={t('stats.cls.summary.verifiedHelp')} testId="cls-summary-verified" />
         <Num label={t('stats.cls.summary.tokens')} value="0" help={t('stats.cls.summary.tokensHelp')} />
       </div>
       {total === 0 && <p className="cls-clean" role="status" data-testid="cls-clean">{t('stats.cls.empty')}</p>}

@@ -91,8 +91,9 @@ export function withHeader(file: string, body: string, meta: ScriptMeta): string
 /** A value read at run time is not a secret: an environment variable, a credentials-file read or any call. Replaced by a
  *  placeholder before the check, so a key assigned from an environment variable or a helper call can be saved. */
 const RUNTIME_READ = [
-  /\bos\.environ(?:\.get\([^)]*\)|\[[^\]]*\])/g, /\bprocess\.env(?:\.\w+|\[[^\]]*\])/g, /\$env:\w+/gi, /\$ENV\{[^}]*\}/g,
-  /\bENV\[[^\]]*\]/g, /\b(?:await\s+)?[A-Za-z_][\w.]*\([^()]*\)/g,
+  // (a read, not an assignment: `$env:ADO_PAT = "…"` keeps its name, so the credential check still sees it)
+  /\bos\.environ(?:\.get\([^)]*\)|\[[^\]]*\](?!\s*=(?!=)))/g, /\bprocess\.env(?:\.\w+\b|\[[^\]]*\])(?!\s*=(?!=))/g, /\$env:\w+\b(?!\s*=(?!=))/gi, /\$ENV\{[^}]*\}(?!\s*=(?!=))/g,
+  /\bENV\[[^\]]*\](?!\s*=(?!=))/g, /\b(?:await\s+)?[A-Za-z_][\w.]*\([^()]*\)/g,
 ];
 const runtimeFree = (line: string): string => RUNTIME_READ.reduce((l, re) => l.replace(re, '<runtime>'), line);
 
@@ -172,8 +173,10 @@ export class BrainScripts {
   }
 
   /** Add or replace a script (the Orchestrator's brain_script_save). The body is written under a fresh header; a body
-   *  with something that looks like a credential is refused. `fix` = the change repairs a script that failed. */
-  save(input: { name: string; code: string; meta: ScriptMeta; by: string; summary?: string; fix?: boolean }): { file: string; path: string; action: 'added' | 'edited' | 'fixed' } {
+   *  with something that looks like a credential is refused. `fix` = the change repairs a script that failed.
+   *  `create` = add only (brain_script_add, the auto-save): a file with the same name in any case, listed or not (an
+   *  oversized one is not), is refused, and the write itself fails if the file appeared meanwhile. */
+  save(input: { name: string; code: string; meta: ScriptMeta; by: string; summary?: string; fix?: boolean; create?: boolean }): { file: string; path: string; action: 'added' | 'edited' | 'fixed' } {
     const dir = this.dir();
     if (!dir) throw new Error('nessuna cartella brain configurata');
     const name = this.checkName(input.name);
@@ -186,12 +189,19 @@ export class BrainScripts {
     if (bad) throw new Error(`refused: line ${bad} looks like a credential. Read secrets from an environment variable or the user's credentials file at run time, never write them in a script`);
     const full = path.join(dir, name);
     const existed = fs.existsSync(full);
+    if (input.create && (existed || this.taken(dir, name))) throw new Error(`${name} exists already: add only creates a new script`);
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(full, text, 'utf8');
+    fs.writeFileSync(full, text, { encoding: 'utf8', flag: input.create ? 'wx' : 'w' });
     this.invalidate();
     const action = !existed ? 'added' : input.fix ? 'fixed' : 'edited';
     this.changelog?.add({ kind: 'script', action, target: `${SCRIPTS_DIR}/${name}`, by: input.by, summary: input.summary?.trim() || input.meta.title });
     return { file: `${SCRIPTS_DIR}/${name}`, path: full, action };
+  }
+
+  /** A file in the scripts folder with this name in another case (a case-insensitive file system would overwrite it). */
+  private taken(dir: string, name: string): boolean {
+    const want = name.toLowerCase();
+    try { return fs.readdirSync(dir).some(f => f.toLowerCase() === want); } catch { return false; }
   }
 
   /** Remove a script (the Orchestrator's brain_script_delete): moved to scripts/.deleted/, never destroyed. */

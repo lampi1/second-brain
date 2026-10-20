@@ -26,9 +26,19 @@ const SECRET_LINE: RegExp[] = [
   /\bAKIA[0-9A-Z]{16}\b/,                                             // cloud access key ids
   /[?&]sig=[A-Za-z0-9%+/=]{16,}/,                                     // a signed URL
   /[a-z][a-z0-9+.-]*:\/\/[^\s/:@]+:[^\s/@<$%{]+@/i,                   // a URL with user:password@
-  // password flags: sqlcmd -P …, --password …, --client-secret=…, az login … -p …
-  new RegExp(String.raw`(?:^|\s)(?:-P|--password|--client-secret|--secret|--account-key|--sas-token|--connection-string)(?:\s+|=)${VALUE}`),
-  new RegExp(String.raw`\baz\s+login\b.*\s-p\s+${VALUE}`, 'i'),
+  // password flags: sqlcmd -P …, --password …, --client-secret=…, --token …, --api-key …
+  new RegExp(String.raw`(?:^|\s)(?:-P|--password|--client-secret|--secret|--account-key|--sas-token|--connection-string|--token|--access-token|--auth-token|--api-key|--apikey|--pat|--personal-access-token)(?:\s+|=)${VALUE}`),
+  // PowerShell parameters (any case): Invoke-Sqlcmd -Password …, -Token …, -ApiKey …
+  new RegExp(String.raw`(?:^|\s)-(?:Password|Passwd|Pwd|ClientSecret|Secret|Token|AccessToken|ApiKey|Pat|PersonalAccessToken)(?:\s+|:)${VALUE}`, 'i'),
+  // a login with -p: az login … -p …, docker login -u x -p …
+  new RegExp(String.raw`\blogin\b.*\s-p\s+${VALUE}`, 'i'),
+  // mysql -pSECRET (the password glued to the flag)
+  new RegExp(String.raw`\bmysql\w*(?:\.exe)?\b.*\s-p(?![\s=])${VALUE}`, 'i'),
+  // curl -u user:password, --user user:password
+  new RegExp(String.raw`(?:^|\s)(?:-u|--user)(?:\s+|=)["']?[^\s:"']+:${VALUE}`),
+  // an environment variable or shell variable named like a credential, assigned a value: export GITHUB_TOKEN=…,
+  // $env:ADO_PAT = "…", set DB_PASSWORD=…, $apiKey = '…' (PAT only as a whole _-separated part: PATH is not one)
+  new RegExp(String.raw`(?:(?<![\w.-])|(?<=\benv\.))(?:\w*(?:pass|token|secret|key)\w*|(?:\w+_)?pat(?:_\w*)?)\s*=(?!=)${VALUE}`, 'i'),
   new RegExp(String.raw`\bConvertTo-SecureString\s+(?:-String\s+)?["']${VALUE}`, 'i'),
 ];
 // a table column whose header names a credential: its cells are masked (the row, as a whole)

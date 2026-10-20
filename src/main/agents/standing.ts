@@ -3,8 +3,11 @@
 // curve (each level asks 5 runs more than the one before); the performance is the success of the runs that have a
 // verdict, each weighted by how much the verdict is trusted (the user or a Judge > the Orchestrator > the agent's own
 // word) and by how recent it is (half weight every 30 days). Below MIN_RUNS judged runs it stays null: "in rodaggio".
+// The Orchestrator has no run of its own (its chat is permanent, ADR 0083): each ended root run it opened (startedBy
+// "orchestrator", not a one-shot) counts as one of its decisions, rated with that run's verdict (ADR 0097, issue #112); its own verdict on such a run weighs as its own word (self) on
+// its own standing, and the decisions among pruned runs live on in the rollups (RunTally.decisions).
 // Used by ChatManager.runMetrics (agents:metrics) and the demo; the card's "?" tips repeat these rules in Italian.
-import type { AgentRun, AgentStanding } from '../../shared/agents';
+import type { AgentMetrics, AgentRun, AgentStanding } from '../../shared/agents';
 import type { RunTally } from './run-metrics';
 
 /** runs each level asks more than the one before: Lv 2 at 5, Lv 3 at 15, Lv 4 at 30, Lv 5 at 50… */
@@ -36,6 +39,13 @@ export function levelOf(runs: number): Pick<AgentStanding, 'level' | 'levelAt' |
 /** Same exclusions as the §5 metrics (run-metrics.ts foldRun): headline and fallback one-shots are not the agent's work. */
 const counts = (r: AgentRun): boolean => r.endedAt !== undefined && !r.oneshot?.fallback && r.oneshot?.job !== 'headline';
 
+/** A root run the Orchestrator opened: one of its decisions (ADR 0097). */
+export const orchestratorDecision = (r: AgentRun): boolean => r.startedBy === 'orchestrator' && r.source !== 'oneshot' && !r.oneshot
+  && !r.parentRunId && r.agentId !== 'orchestrator';
+
+/** An ended, counted run that is one of the Orchestrator's decisions (what rollUp keeps in RunTally.decisions). */
+export const countedDecision = (r: AgentRun): boolean => counts(r) && orchestratorDecision(r);
+
 /** The most trusted verdict a run has, or null. A verdict "unknown" is no verdict. */
 export function verdictOf(run: AgentRun, reviews: readonly AgentRun[] = []): { source: Source; verdict: Verdict } | null {
   const o = run.outcome, known = o && o.verdict !== 'unknown' ? o.verdict : null;
@@ -58,16 +68,24 @@ export function standings(runs: readonly AgentRun[], rollups: readonly RunTally[
     if (!a) acc.set(id, a = { runs: 0, num: 0, den: 0, evaluated: 0, sources: { human: 0, judge: 0, orchestrator: 0, self: 0 } });
     return a;
   };
-  for (const t of rollups) of(t.agentId).runs += t.ended;
+  for (const t of rollups) {
+    of(t.agentId).runs += t.ended;
+    // the Orchestrator's decisions among the pruned runs (rollUp keeps their count, ADR 0097)
+    if (t.decisions) of('orchestrator').runs += t.decisions;
+  }
   for (const r of runs) {
     if (!counts(r)) continue;
-    const a = of(r.agentId);
-    a.runs++;
     const v = verdictOf(r, reviews.get(r.runId));
-    if (!v) continue;
-    const age = Math.max(0, now - r.endedAt!), w = TRUST[v.source] * 0.5 ** (age / HALF_LIFE_MS);
-    a.evaluated++; a.sources[v.source]++;
-    a.num += w * SCORE[v.verdict]; a.den += w;
+    const decision = orchestratorDecision(r);
+    for (const a of decision ? [of(r.agentId), of('orchestrator')] : [of(r.agentId)]) {
+      a.runs++;
+      if (!v) continue;
+      // the Orchestrator's own verdict on a run it opened is its own word when it is the one rated: self weight
+      const source: Source = decision && a === acc.get('orchestrator') && v.source === 'orchestrator' ? 'self' : v.source;
+      const age = Math.max(0, now - r.endedAt!), w = TRUST[source] * 0.5 ** (age / HALF_LIFE_MS);
+      a.evaluated++; a.sources[source]++;
+      a.num += w * SCORE[v.verdict]; a.den += w;
+    }
   }
   const out = new Map<string, AgentStanding>();
   for (const [id, a] of acc) {
@@ -76,4 +94,12 @@ export function standings(runs: readonly AgentRun[], rollups: readonly RunTally[
       evaluated: a.evaluated, minRuns: MIN_RUNS, sources: a.sources });
   }
   return out;
+}
+
+/** The metrics with each agent's standing; an agent with a standing but no run of its own (the Orchestrator, rated by
+ *  its decisions) gets an entry without metrics, so its card shows its level too. */
+export function withStandings(metrics: readonly AgentMetrics[], standing: ReadonlyMap<string, AgentStanding>): AgentMetrics[] {
+  const out = metrics.map(m => { const s = standing.get(m.agentId); return s ? { ...m, standing: s } : m; });
+  for (const [agentId, s] of standing) if (!metrics.some(m => m.agentId === agentId)) out.push({ agentId, versions: [], all: null, open: 0, standing: s });
+  return out.sort((a, b) => a.agentId.localeCompare(b.agentId, 'en'));
 }

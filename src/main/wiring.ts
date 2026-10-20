@@ -4,7 +4,7 @@
 import type { BrowserWindow } from 'electron';
 import { app, safeStorage, shell } from 'electron';
 import os from 'node:os';
-import type { CliStatus, Harness } from '../shared/contract';
+import type { CliStatus, Harness, RunInfo } from '../shared/contract';
 import { SEND_MODE_RULE } from '../shared/newchat';
 import { engineStatuses } from './cli';
 import { engineReadiness } from './engines/readiness';
@@ -88,14 +88,15 @@ import { OneShotService } from './agents/oneshot';
 import type { AgentRunStore } from './agents/runs';
 import { CompareQueue, queueAllowed } from './compare/queue';
 import { gitWorktrees } from './agents/worktrees';
-import { JudgeSampler } from './agents/judge-sample';
+import { JudgeSampler, judgeSamplingOn } from './agents/judge-sample';
 import { COMPACT_WINDOW } from './brain/settings-schema';
 import { setRecorder } from './chats/drift';
 import { HybridSearch, workerFileNextTo } from './search/hybrid/service';
 import { apiSearch, brainSearchTool } from './search/hybrid/tool';
 import { BrainScripts, touchesScripts } from './brain/scripts';
 import { BrainChangelog } from './brain/changelog';
-import { brainScriptsTool } from './brain/scripts-tools';
+import { brainScriptsTool, chatScriptAddTool } from './brain/scripts-tools';
+import { AutoScripts } from './brain/auto-scripts';
 import { mountRecallTool, RECALL_ENV } from './search/hybrid/recall';
 import { timersFor } from './timers';
 const { setInterval, clearInterval } = timersFor('wiring/auto-close');
@@ -185,11 +186,11 @@ export const createLater = (ctx: Pick<Ctx, 'emitter' | 'userData'>): AnswerLater
   new AnswerLaterStore(path.join(ctx.userData, 'answer-later.json'), st => ctx.emitter.emit('later:changed', st));
 
 /** The runner of "Esegui": blocks are checked against the chat's own assistant messages, run in the chat's folder. */
-export function commandRunner(ctx: Pick<Ctx, 'emitter'>, chats: ChatService): CommandRunner {
+export function commandRunner(ctx: Pick<Ctx, 'emitter'>, chats: ChatService, onRun?: (run: RunInfo) => void): CommandRunner {
   return new CommandRunner({
     itemText: (chatId, itemId) => { const it = chats.items(chatId).find(i => i.id === itemId); return it?.kind === 'assistant' ? it.text : null; },
     cwdOf: chatId => chats.list().find(c => c.id === chatId)?.cwd ?? null,
-    emit: run => ctx.emitter.emit('run:updated', run),
+    emit: run => { ctx.emitter.emit('run:updated', run); onRun?.(run); },
   });
 }
 
@@ -571,7 +572,11 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const artifacts = attachArtifacts(ctx, chats);
   addChatTools([showUiTool(artifacts)]);
 
-  const runner = commandRunner(ctx, chats);
+  // a reusable command that ran fine with "Esegui" becomes a brain script by itself (issue #111, ADR 0096)
+  const autoScripts = new AutoScripts({ scripts: brainScripts, root: () => brain.info().brainRoot, chatTitle: id => chats.list().find(c => c.id === id)?.title ?? null });
+  const runner = commandRunner(ctx, chats, run => { autoScripts.onRun(run); });
+  // brain_script_add on every chat's own endpoint: a work chat saves the script it ran with success itself
+  addChatTools([chatScriptAddTool(brainScripts, id => chats.list().find(c => c.id === id)?.title ?? null)]);
   const asks = attachCommandAsks(ctx, runner, brain, undefined, chats);
   const keptFile = path.join(ctx.userData, 'auto-close-kept.json');
   let kept: string[] = [], keptProblem = false;
@@ -635,7 +640,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   addChatTools(delegationTools({ chats: manager, roles: () => agents.list(), settings: () => checkedDelegation(brain.settings().delegation),
     engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), label: AGENT_LABEL, runs: () => manager.runs.list(), worktrees: gitWorktrees, skillTools }));
   // the Judge's sampled reviews of finished runs (agents/judge-sample.ts): they spend tokens, so they run only in the
-  // user's stable app outside tests (or with SB_JUDGE_SAMPLE=1), at most delegation.judgeDaily a day
+  // user's own app, never in tests or an agent's hidden run (judgeSamplingOn, issue #112), at most delegation.judgeDaily a day
   const judgeSampler = new JudgeSampler({ file: path.join(ctx.userData, 'judge-samples.json'), runs: () => manager.runs.list(),
     chat: id => manager.list().find(c => c.id === id), create: req => manager.create(req, 'app'),
     daily: () => checkedDelegation(brain.settings().delegation).judgeDaily,
@@ -643,8 +648,13 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     refusal: h => !engineOn(brain.settings(), h) ? 'engine switched off' : !agentsMayOpen(brain.settings(), h) ? 'agents may not use this engine' : null,
     feedback: (a, by) => runFeedback.recordFeedback(a, by) });
   loopRef.current = { ended: run => { loop.hooks.ended(run); void judgeSampler.ended(run); }, outcome: run => loop.hooks.outcome(run) };
-  const judgeTimer = (releaseId() && !process.env.SB_TEST) || process.env.SB_JUDGE_SAMPLE === '1'
-    ? setInterval(() => { void judgeSampler.tick().catch(e => log.warn('agents', 'judge sample tick failed', { cause: errText(e), hint: 'tried again in 30 minutes' })); }, 30 * 60_000) : null;
+  // first a few minutes after the start (a restart within 30 minutes used to postpone it again), then every 30 minutes
+  const judging = judgeSamplingOn(process.env);
+  log.info('agents', judging.on ? 'judge samples scheduled' : 'judge samples off', { data: { why: judging.why } });
+  const judgeTick = () => { void judgeSampler.tick().catch(e => log.warn('agents', 'judge sample tick failed', { cause: errText(e), hint: 'tried again in 30 minutes' })); };
+  const judgeFirst = judging.on ? setTimeout(judgeTick, 3 * 60_000) : null;
+  judgeFirst?.unref();
+  const judgeTimer = judging.on ? setInterval(judgeTick, 30 * 60_000) : null;
   judgeTimer?.unref();
   const lifecycleTimer = process.env.SB_TEST ? null : setInterval(() => loop.tick(), 10_000);
   lifecycleTimer?.unref();

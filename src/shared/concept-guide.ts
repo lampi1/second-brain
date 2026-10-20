@@ -386,9 +386,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/brain/scripts-tools.ts brain_scripts
       b('Ogni chat può cercarli con brain_scripts prima di scrivere uno script nuovo, per riusarne uno che funziona.',
         'Every chat can look them up with brain_scripts before writing a new script, to reuse one that works.'),
-      // src/main/brain/scripts-tools.ts brain_script_save, brain_script_delete
-      b('Solo l’Orchestrator li aggiunge, corregge o elimina, senza chiederti l’ok: salva solo dopo un test, rifiuta le credenziali, un eliminato va in scripts/.deleted/.',
-        'Only the Orchestrator adds, fixes or deletes them, without asking you: it saves only after a test, credentials are refused, a deleted one goes to scripts/.deleted/.'),
+      // src/main/brain/scripts-tools.ts brain_script_save, brain_script_delete, brain_script_add; src/main/brain/auto-scripts.ts
+      b('Senza chiederti l’ok: una chat aggiunge lo script che ha provato (brain_script_add), l’app salva da sola un comando riutilizzabile riuscito con Esegui, l’Orchestrator corregge o elimina. Le credenziali sono rifiutate, un eliminato va in scripts/.deleted/ e non torna.',
+        'Without asking you: a chat adds the script it ran (brain_script_add), the app saves a reusable command that worked with Esegui by itself, the Orchestrator fixes or deletes. Credentials are refused, a deleted one goes to scripts/.deleted/ and does not come back.'),
       // src/main/brain/changelog.ts
       b('Ogni cambiamento è una riga in changelog.md: quando, cosa, quale file, chi e perché. L’Orchestrator vi annota anche regole, skill e note che cambia.',
         'Every change is a line in changelog.md: when, what, which file, who and why. The Orchestrator also logs the rules, skills and notes it changes.'),
@@ -464,7 +464,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Altri: messaggi non scritti da te (mostrati attenuati), «Aspetta un lavoro» sul testo, la coda per carico (CPU > 75% o RAM libera < 15%). Permessi e domande non sono indovinati: arrivano strutturati dalla CLI. Smistare un lotto di lavoro (una inbox, una lista di ticket) è invece il compito del ruolo Router, quando glielo affidi.',
         'Others: messages you did not type (shown muted), "Waits for work" on the text, the load queue (CPU > 75% or free RAM < 15%). Permissions and questions are not guessed: they arrive structured from the CLI. Triaging a batch of work (an inbox, a list of tickets) is instead the Router role’s job, when you hand it one.'),
       // src/renderer/components/brain-model/ClassifiersPage.tsx, src/main/brainmodel/classifier-cards.ts
-      b('Brain → Classificatori ne mostra sei come schede: decisioni, quanto spesso «prendono» (tipo riconosciuto, skill azzeccate, costo dentro la forchetta, tempo del task fra metà e doppio della stima), quante chat decise sono riuscite (verificate da te o da una revisione, mai l’autovalutazione), il costo medio, 8 settimane di andamento e i casi verificati raccolti sui 20 che servono per calibrarsi. Ogni numero ha un «?».',
+      b('Brain → Classificatori ne mostra sei come schede: decisioni, quanto spesso «prendono» (tipo riconosciuto, skill azzeccate, costo dentro la forchetta, tempo del task fra metà e doppio della stima), quante chat decise sono riuscite (verificate da te o da una revisione, dai run o dal registro del brain, mai l’autovalutazione; gli esiti automatici del brain, come «chiusa senza errori», sono contati a parte come non verificati), il costo medio, 8 settimane di andamento e i casi verificati raccolti sui 20 che servono per calibrarsi. Ogni numero ha un «?».',
         'Brain → Classifiers shows five of them as cards: decisions, how often they "get it" (kind recognised, skills spot on, cost inside the range), how many decided chats succeeded (verified by you or a review, never a self-report), the average cost, 8 weeks of trend and the verified cases collected of the 20 needed to calibrate. Every number has a "?".'),
     ],
     analogy: b('Come lo smistamento della posta in portineria: regole scritte, una casella «varie» quando non si capisce, e per un sacco intero di posta si chiama chi smista di mestiere.',

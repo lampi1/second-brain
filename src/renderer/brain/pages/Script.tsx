@@ -2,8 +2,9 @@
 // gli script creati e riutilizzabili provati che funzionano"). Dashboard look: header, three numbers, search and filters,
 // then one card per script in a grid (title, what it does, language, last test, tags); a card opens in place, full width,
 // with how to run it, the code (credentials already masked by main), "Copia", "Apri il file" and "Discuti" (a draft for
-// the Orchestrator, never sent by itself). Read-only and zero tokens: nothing here runs a script; the Orchestrator adds,
-// fixes and deletes them (brain_script_save / brain_script_delete) and every change shows on the Changelog page.
+// the Orchestrator, never sent by itself). Read-only and zero tokens: nothing here runs a script; work chats add them
+// (brain_script_add), the app adds reusable "Esegui" commands that worked (ADR 0096), the Orchestrator fixes and deletes
+// them (brain_script_save / brain_script_delete) and every change shows on the Changelog page.
 // Mounted by App.tsx's PageFrame. Data: /api/scripts, /api/script?id=… (main brain/scripts.ts).
 import { useMemo, useState } from 'react';
 import type { BrainScriptSummary } from '@shared/contract';
@@ -85,7 +86,7 @@ export function Script({ arg }: { arg?: string }) {
   return (
     <div className="dashboard bs-page" data-testid="brain-scripts">
       <header className="dash-header bs-header"><div><span className="dash-eyebrow">{copy('IL TUO BRAIN', 'YOUR BRAIN')}</span><h1>Script</h1>
-        <p>{copy('Gli script provati e riutilizzabili dei tuoi agenti. L’Orchestrator li aggiunge, corregge ed elimina; ogni cambiamento finisce nel Changelog.', 'Your agents’ tested, reusable scripts. The Orchestrator adds, fixes and deletes them; every change lands in the Changelog.')}</p></div>
+        <p>{copy('Gli script provati e riutilizzabili dei tuoi agenti. Li aggiungono le chat che li hanno provati e l’app, per i comandi riusciti con Esegui; l’Orchestrator li corregge ed elimina. Ogni cambiamento finisce nel Changelog.', 'Your agents’ tested, reusable scripts. The chats that ran them add them, and the app adds commands that worked with Esegui; the Orchestrator fixes and deletes them. Every change lands in the Changelog.')}</p></div>
         <button type="button" className="btn btn-ghost btn-s" onClick={() => go({ page: 'changelog' })} data-testid="bs-to-changelog"><span aria-hidden="true">↗</span> Changelog</button></header>
       <div className="dash-stats">
         <div className="dash-stat"><span>{copy('Script nel brain', 'Scripts in the brain')}</span><strong data-testid="bs-count">{list.data ? all.length : '—'}</strong><small>{copy('Cartella scripts/ del brain', 'The brain’s scripts/ folder')}</small></div>
@@ -99,7 +100,7 @@ export function Script({ arg }: { arg?: string }) {
       {list.error && !list.data ? <div className="dash-empty">{copy('Non riesco a leggere gli script', 'Cannot read the scripts')}: {list.error} <button type="button" className="btn btn-subtle btn-s" onClick={() => list.reload()}>{copy('Riprova', 'Retry')}</button></div>
         : !list.data ? <div className="bs-grid">{[0, 1, 2].map(i => <div key={i} className="bs-card bs-skeleton" />)}</div>
         : !all.length ? <div className="bs-empty" data-testid="bs-empty"><span className="dash-orbit-icon" aria-hidden="true">{'</>'}</span><h2>{copy('Ancora nessuno script', 'No scripts yet')}</h2>
-          <p>{copy('Quando un agente scrive uno script che funziona, l’Orchestrator lo salva qui, con come si usa e quando è stato provato. Così la prossima volta si riusa invece di riscriverlo.', 'When an agent writes a script that works, the Orchestrator saves it here, with how to run it and when it was tested. Next time it is reused instead of rewritten.')}</p></div>
+          <p>{copy('Quando un agente prova uno script che funziona lo salva qui, con come si usa e quando è stato provato; un comando riutilizzabile riuscito con Esegui l’app lo salva da sola. Così la prossima volta si riusa invece di riscriverlo.', 'When an agent runs a script that works it saves it here, with how to run it and when it was tested; a reusable command that worked with Esegui is saved by the app itself. Next time it is reused instead of rewritten.')}</p></div>
         : !shown.length ? <div className="dash-empty" data-testid="bs-none">{copy('Nessuno script corrisponde alla ricerca.', 'No script matches the search.')}</div>
         : <div className="bs-grid" data-testid="bs-grid">{shown.map(s => <Card key={s.id} s={s} open={open === s.id} onToggle={() => setOpen(o => o === s.id ? null : s.id)} />)}</div>}
     </div>

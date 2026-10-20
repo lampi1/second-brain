@@ -69,7 +69,7 @@ text. Permissions of a sub-agent were narrowed against the Orchestrator, not aga
    plan/todos), else the contract's criteria, plus the recent tool calls folded into readable lines. The parent's
    KidsBar and the sidebar tree fold the same `prefs.treeCollapsed`, kept across restarts.
 9. **Improvement loop owned by the app**: the Judge reviews a few finished runs a day on another model (superseded by ADR 0091: in a new session, on any model)
-   (`agents/judge-sample.ts`, Settings `delegation.judgeDaily`, only in the stable app); its verdict is the run's
+   (`agents/judge-sample.ts`, Settings `delegation.judgeDaily`, only in the stable app; ADR 0097: in the user's own app); its verdict is the run's
    reviewed evidence. The brain's playbooks, `sync-agents.mjs`, agent pointers and specialist notebooks are retired.
 
 ## Consequences
