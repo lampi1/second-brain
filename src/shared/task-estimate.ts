@@ -75,3 +75,11 @@ export const MIN_SIMILAR = 3;
 export const MAX_SIMILAR = 30;
 export const QUICK_MS = 10 * 60_000;
 export const QUICK_USD = 0.5;
+
+/** The line the app adds under a user's message to the Orchestrator (ChatManager deliverNow): the estimate it would
+ *  get from task_estimate, so its first model call can act on it instead of calling the tool (one model round trip
+ *  less per request). The chat view never shows it: the item keeps the user's text, a transcript re-read drops it. */
+export const ESTIMATE_LINE_TAG = '[app estimate';
+export const estimateLine = (e: Pick<TaskEstimate, 'path' | 'why'>): string => `${ESTIMATE_LINE_TAG} · path "${e.path}"] ${e.why}`;
+/** The user's text without the app's estimate line. */
+export const withoutEstimateLine = (text: string): string => text.replace(/\n*\[app estimate · path "[a-z-]+"\][^\n]*$/, '');

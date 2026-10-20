@@ -77,6 +77,9 @@ import { recallWarning, type Recall } from '../search/hybrid/recall';
 export interface ChatManagerOptions {
   /** the roles in a few lines, for the Orchestrator's first message of a session (agents/discovery.ts roleCatalogBrief) */
   roleCatalogBrief?: () => string;
+  /** the estimate line under a user's message to the Orchestrator (shared/task-estimate.ts estimateLine): its first model
+   *  call acts on it instead of calling task_estimate; null = no line */
+  requestEstimate?: (text: string) => string | null;
   /** the role a new chat runs (catalog.resolve), with the plugin of its launch (only the skills it was given) */
   resolveAgent?: (req: NewChat) => ResolvedRole & { assets?: { pluginDir: string; skillRoot: string } };
   /** the git worktrees of the repository at a folder (agents/worktrees.ts): a delegated chat may work in its parent's */
@@ -778,7 +781,10 @@ export class ChatManager implements ChatService {
     // what the user wrote in its children since its last message rides along (shown in its transcript already)
     const notes = this.notesFor.get(chatId);
     if (notes?.length) this.notesFor.delete(chatId);
-    const body = notes?.length ? `${USER_NOTES_LABEL}\n${notes.join('\n')}\n\n${text0}` : text0;
+    const noted = notes?.length ? `${USER_NOTES_LABEL}\n${notes.join('\n')}\n\n${text0}` : text0;
+    // the user's own request to the Orchestrator carries the app's estimate (zero tokens), never the app's news or mail
+    const estimate = r.s.isOrchestrator && !from && !resumed && t && !t.startsWith('[') ? this.requestEstimate(t) : null;
+    const body = estimate ? `${noted}\n\n${estimate}` : noted;
     // the role once per context: the Orchestrator's with the role catalog, a role chat's composed instructions; a
     // resumed session already holds it in its history, so it goes again only when the text changed or was compacted away
     const roleText = r.s.isOrchestrator ? `${orchestratorRole(r.agentInstructions || undefined, this.opts.roleCatalogBrief?.())}\n\n`
@@ -1936,6 +1942,14 @@ export class ChatManager implements ChatService {
     if (seen.size > 1000) seen.delete(seen.values().next().value!);
     run.counters[req.type === 'question' ? 'questions' : req.type === 'permission' ? 'permissions' : 'commands']++;
     this.runSave();
+  }
+
+  /** The app's estimate line for a request, or null: an estimate that fails never holds the message. */
+  private requestEstimate(text: string): string | null {
+    try { return this.opts.requestEstimate?.(text) ?? null; } catch (e) {
+      log.warn('chats', 'request estimate failed', { cause: errText(e), hint: 'the Orchestrator gets the message without it and may call task_estimate' });
+      return null;
+    }
   }
 
   private need(chatId: string): Rec {

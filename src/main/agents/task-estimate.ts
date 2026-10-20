@@ -160,7 +160,7 @@ export function runEstimates(runs: readonly AgentRun[], runIds: readonly string[
 export function estimateTool(runs: () => readonly AgentRun[]): ToolDef {
   return {
     name: 'task_estimate',
-    description: 'Before you start work, estimate a request from similar past tasks (same agent and kind first): median work time, cost, the middle-half range, how many similar tasks it rests on (n), confidence, the independent parts it has, and the path: "self" = a short question you answer yourself; "one-agent" = start ONE chat with app_create_chat that does it alone (no agent_delegate children); "tree" = several parts, plan them. Numbers only, never a run\'s content.',
+    description: 'Estimate a request (a user\'s message already ends with this estimate as "[app estimate · …]": call it only for another wording or a given role) from similar past tasks (same agent and kind first): median work time, cost, the middle-half range, how many similar tasks it rests on (n), confidence, the independent parts it has, and the path: "self" = a short question you answer yourself; "one-agent" = start ONE chat with app_create_chat that does it alone (no agent_delegate children); "tree" = several parts, plan them. Numbers only, never a run\'s content.',
     inputSchema: { type: 'object', required: ['request'], additionalProperties: false, properties: {
       request: { type: 'string', description: 'the user\'s request, as you would give it to the agent' },
       agentId: { type: 'string', description: 'optional: the role that would run it (agent_catalog); omitted = any agent' },
