@@ -1,4 +1,4 @@
-// Persistent coordinator column. The shell and native overlays share its exact width;
+// Persistent coordinator column, with the Orchestrator or «Lampo», the quick lane (ADR 0105), in two tabs. The shell and native overlays share its exact width;
 // pointer and keyboard resizing preserve a usable workspace without covering inputs.
 import { t as auditText } from '../i18n';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -8,6 +8,7 @@ import { registerOverlay, schedule } from '../lib/viewports';
 import { scheduleLayer } from '../lib/layer';
 import { columnSize, viewport, type Reserve } from '../lib/orchestrator-dock';
 import { OrchestratorTile } from './OrchestratorTile';
+import { LampoTile } from './LampoTile';
 import { IconList } from './Icons';
 import { IconButton } from './ui';
 import { t } from '../i18n';
@@ -42,6 +43,10 @@ export function useDockReserve(): Reserve {
 
 export function OrchestratorOverlay() {
   const active = useApp(orchestratorIdOf);
+  // the column holds the Orchestrator or Lampo (ADR 0105); a request to focus the Orchestrator brings it back
+  const [lane, setLane] = useState<'orchestrator' | 'lampo'>('orchestrator');
+  const focusReq = ui.use(s => (active && s.focusReq?.chatId === active ? s.focusReq.n : 0));
+  useEffect(() => { if (focusReq) setLane('orchestrator'); }, [focusReq]);
   const size = useColumnSize();
   const ref = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; w: number } | null>(null);
@@ -54,8 +59,14 @@ export function OrchestratorOverlay() {
   };
   return <aside ref={ref} className="orchestrator-dock orchestrator-ov orchestrator-column" data-placement="right" data-orchestrator-overlay data-testid="orchestrator-overlay"
     aria-label="Orchestrator" style={{ width: size.w, height: size.h, top: size.top, right: 0, bottom: 0 }}>
-    <div className="orchestrator-bar"><span className="orchestrator-column-mark" aria-hidden="true">✦</span><strong>Orchestrator</strong><span className="sp" /><span className="orchestrator-column-hint">{t('home.startHere')}</span></div>
-    <div className="orchestrator-body" id="orchestrator-panel"><OrchestratorTile key={active ?? 'none'} chatId={active} /></div>
+    <div className="orchestrator-bar">
+      <div className="lane-tabs" role="tablist" aria-label={t('lampo.tabsLabel')}>
+        <button type="button" role="tab" aria-selected={lane === 'orchestrator'} className={`lane-tab ${lane === 'orchestrator' ? 'on' : ''}`} onClick={() => setLane('orchestrator')} data-testid="lane-orchestrator"><span className="orchestrator-column-mark" aria-hidden="true">✦</span>{t('lampo.tabOrchestrator')}</button>
+        <button type="button" role="tab" aria-selected={lane === 'lampo'} className={`lane-tab ${lane === 'lampo' ? 'on' : ''}`} onClick={() => setLane('lampo')} data-testid="lane-lampo"><span aria-hidden="true">⚡</span>{t('lampo.tab')}</button>
+      </div>
+      <span className="sp" /><span className="orchestrator-column-hint">{lane === 'lampo' ? t('lampo.hint') : t('home.startHere')}</span>
+    </div>
+    <div className="orchestrator-body" id="orchestrator-panel">{lane === 'lampo' ? <LampoTile onWork={() => setLane('orchestrator')} /> : <OrchestratorTile key={active ?? 'none'} chatId={active} />}</div>
     <div className="orchestrator-column-resize" role="separator" tabIndex={0} aria-label={t('home.orchestratorWidth')} aria-orientation="vertical"
       aria-valuemin={280} aria-valuemax={Math.max(280, viewport().W - viewport().left - 360)} aria-valuenow={size.w} data-testid="orchestrator-resize"
       onPointerDown={event => { if (event.button !== 0) return; drag.current = { x: event.clientX, w: size.w }; event.currentTarget.setPointerCapture(event.pointerId); event.preventDefault(); }}

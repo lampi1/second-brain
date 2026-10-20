@@ -147,7 +147,8 @@ export function orchestratorEndpointAuth(tokens: { check(key: string, token: str
 export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   /** true when this endpoint is the Orchestrator's own (/mcp/app/o/<id>/<token>, checked by orchestratorEndpointAuth) */
   const authed = () => !!callerId && d.chats.list().some(c => c.id === callerId && c.isOrchestrator && !c.closedAt);
-  const mine = (_c: ChatSummary) => true;
+  // Lampo (ADR 0105) is the user's own quick lane: never in the Orchestrator's picture
+  const mine = (c: ChatSummary) => !c.quick;
   /** the Orchestrator this endpoint acts for */
   const caller = (): ChatSummary | undefined => {
     return d.chats.list().find(c => c.isOrchestrator && !c.closedAt);

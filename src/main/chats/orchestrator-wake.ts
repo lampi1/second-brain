@@ -104,6 +104,8 @@ export class OrchestratorWake {
   /** held-news.ts: told when what waits may have changed (#88) */
   private listener: (() => void) | null = null;
   private toldEmpty = true;
+  /** Lampo chats (ADR 0105): their requests are the user's own, never news */
+  private quick = new Set<string>();
 
   constructor(private readonly d: OrchestratorWakeDeps) {}
 
@@ -155,6 +157,8 @@ export class OrchestratorWake {
     // the Orchestrator's gate changed (only the change: its other updates never cut the grouping window short): what it now
     // lets through is timed again (it started working: all goes into its turn; it is free again: what waited goes)
     if (c.isOrchestrator) { if (this.buffer.size && (!was || gateOf(was) !== gateOf(c))) this.schedule(this.now()); return; }
+    // Lampo (ADR 0105) is the user's quick lane, never work the Orchestrator follows
+    if (c.quick) return;
     if (c.handoffBusy) { this.handoff.add(c.id); return; }
     // the hand-off turn ends (handoffBusy goes before idle): not a turn of the chat
     if (this.handoff.has(c.id)) { if (!BUSY.has(c.state)) this.handoff.delete(c.id); return; }
@@ -181,7 +185,7 @@ export class OrchestratorWake {
     const listed = known ? undefined : this.d.list?.().find(x => x.id === p.chatId);
     if (listed) this.remember(listed);
     const c = known ?? listed;
-    if (!c || c.isOrchestrator || c.closedAt) return;
+    if (!c || c.isOrchestrator || c.closedAt || this.quick.has(p.chatId)) return;
     const detail = p.type === 'command' ? (p.command?.code ?? p.detail).split('\n')[0] ?? '' : p.type === 'question' ? (p.questions?.[0]?.question ?? p.title) : p.title;
     this.add({ id: p.chatId, title: c.title, harness: c.harness, parentId: c.parentId, agent: c.agent }, p.type, detail, p.id);
   }
@@ -267,6 +271,7 @@ export class OrchestratorWake {
   private readyAt(slot: string): number { return (this.lastSent.get(slot) ?? -Infinity) + this.perChatMs; }
 
   private remember(c: ChatSummary): void {
+    if (c.quick) this.quick.add(c.id);
     this.chats.set(c.id, { state: c.state, title: c.title, harness: c.harness, isOrchestrator: c.isOrchestrator, closedAt: c.closedAt, handoffBusy: c.handoffBusy, lastText: c.lastText, lastError: c.lastError, lastResult: c.lastResult, pending: c.pending, parentId: c.parentId, agent: c.agent });
   }
 

@@ -503,6 +503,12 @@ export class DemoChats implements ChatService {
       if (current && req.replaces !== current.id) return current;
       req = { ...req, orchestrator: true };
     }
+    // Lampo, like the real manager: one at a time, plan mode (ADR 0105)
+    if (req.quick) {
+      const current = [...this.chats.values()].find(c => c.quick && !c.closedAt);
+      if (current) return current;
+      req = { ...req, title: 'Lampo', permissionMode: 'plan' };
+    }
     const id = `c${++this.counter}`;
     // like the real manager: `replaces` moves the Orchestrator's role to the new chat
     const old = req.orchestrator && req.replaces ? this.chats.get(req.replaces) : undefined;
@@ -512,7 +518,7 @@ export class DemoChats implements ChatService {
       id, harness: req.harness, origin: 'app', title: req.orchestrator ? 'Orchestrator' : req.title?.trim() || titleFrom(req.prompt) || 'Nuova chat', cwd: req.cwd, sessionId: null,
       model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null, state: req.prompt ? 'starting' : 'idle', costUsd: 0,
       pending: 0, isOrchestrator: !!req.orchestrator, lastText: '', updatedAt: this.now(), browserTabIds: [],
-      ...(req.route ? { route: req.route } : {}),
+      ...(req.route ? { route: req.route } : {}), ...(req.quick ? { quick: true as const } : {}),
     };
     this.chats.set(id, c);
     this.itemsOf.set(id, []);

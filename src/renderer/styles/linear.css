@@ -50,3 +50,10 @@
   .btn, .bx-btn, .icon-btn, .ui-select, .ui-select-chevron, .orchestrator-column-resize, .th-ctx-bar b, .ub-meter b { transition: none; }
   .btn:hover:not(:disabled), .bx-btn:hover:not(:disabled) { transform: none; }
 }
+
+/* «Lampo» beside the Orchestrator (ADR 0105): two tabs in the column's bar */
+.orchestrator-column .lane-tabs { display: flex; gap: 4px; }
+.orchestrator-column .lane-tab { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--text-3); font: inherit; font-weight: 600; cursor: pointer; }
+.orchestrator-column .lane-tab:hover { color: var(--text); background: var(--surface-3); }
+.orchestrator-column .lane-tab.on { color: var(--text); border-color: var(--border); background: var(--surface-2); }
+.orchestrator-column .lane-tab:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

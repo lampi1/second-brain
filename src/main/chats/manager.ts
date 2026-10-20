@@ -375,6 +375,10 @@ const DELEGATING_ONLY: ReadonlySet<string> = new Set(['agent_delegate', 'agent_c
 /** a root chat's deliverable longer than this reaches the Orchestrator as where to read it, not whole (it is the chat's answer
  *  there; the Orchestrator re-reads every message in each later turn) */
 const ORCHESTRATOR_OUTPUT_MAX = 800;
+/** «Lampo», the quick lane (ADR 0105): its title, tools and frame */
+export const LAMPO_TITLE = 'Lampo';
+const LAMPO_POLICY: AgentPolicy = { tools: { allow: ['read', 'web'] }, ceiling: 'plan' };
+const LAMPO_FRAME = 'You are Lampo, the quick lane of the user\'s second-brain app. Answer fast and briefly, in the user\'s language, from what you know and quick reads (Read, Grep, Glob, the web). You change nothing and start no work: no edits, no commands, no plans. When a request needs changes, many steps or other chats, say so in one line: the user hands it to the Orchestrator with «Fanne un lavoro».';
 /** how long a child's result waits for its siblings' before it goes to the parent alone */
 const CHILD_RESULTS_MS = 60_000;
 /** what a root chat's clean result tells the Orchestrator (onCleanReport) */
@@ -530,6 +534,12 @@ export class ChatManager implements ChatService {
     if (req.goal !== undefined && (typeof req.goal !== 'string' || !req.goal.trim() || req.goal.length > 2000)) throw new Error('Run goal must contain 1 to 2000 characters.');
     if (Object.values(links).some(v => v !== undefined)) this.runs.checkLinks(links);
     const asked = startTags(req);
+    if (req.quick) {
+      if (by !== 'user' || req.orchestrator || req.parentId || req.roleId) throw new Error('Lampo: only the user opens it, as a plain chat.');
+      const current = this.list().find(c => c.quick && !c.closedAt);
+      if (current) return current;
+      req = { ...req, title: LAMPO_TITLE, permissionMode: 'plan' };
+    }
     if (req.orchestrator) {
       if (by !== 'user') throw new Error('Only the user can create the Orchestrator.');
       const current = this.list().find(c => c.isOrchestrator && !c.closedAt);
@@ -538,6 +548,8 @@ export class ChatManager implements ChatService {
       req = { ...req, orchestrator: true, title: ORCHESTRATOR_TITLE };
     }
     const agent: Pick<ResolvedRole, 'request' | 'owner' | 'instructions' | 'policy' | 'maxContext' | 'tier'> & { skills?: string[]; launches?: string[]; assets?: { pluginDir: string; skillRoot: string } } = inherited ? { ...inherited, policy: inherited.policy ?? null, request: req }
+      // Lampo reads and answers: read and web tools only, plan mode (no edit, no command, no popup), its own short frame
+      : req.quick ? { request: req, owner: plainOwner(req.harness, req.model ?? null), instructions: LAMPO_FRAME, policy: LAMPO_POLICY }
       : this.opts.resolveAgent?.(req) ?? { request: req, owner: plainOwner(req.harness, req.model ?? null), instructions: '', policy: null };
     req = agent.request;
     // a delegated chat (agent_delegate): only an agent's, under a live parent, in the parent's folder, linked to its run
@@ -607,6 +619,7 @@ export class ChatManager implements ChatService {
         // a chat that goes through the queue has started nothing yet: 'starting' only with an engine on its way (a queued
         // chat that went starting → idle read as a finished turn: the Orchestrator was told "ha finito il turno", 2026-10-14)
         state: viaQueue && !warm ? 'idle' : 'starting', costUsd: 0, pending: 0, isOrchestrator: !!req.orchestrator, lastText: '', updatedAt: now, browserTabIds: [],
+        ...(req.quick ? { quick: true as const } : {}),
         ...(caps.cost ? {} : { costKnown: false as const }),
         ...(req.route ? { route: req.route } : {}),
         ...(delegator ? { parentId: delegator.s.id, ...(req.delegation ? { delegation: req.delegation } : {}) } : {}),
@@ -834,7 +847,7 @@ export class ChatManager implements ChatService {
     const role = roleText && (!r.rolePrimed || (!r.roleChecked && r.rolePrimed.sig !== roleSig)) ? roleText : '';
     r.roleChecked = true;
     // the files as they are before this turn (ADR 0103): what the user can put back with «Annulla l'ultimo turno»
-    if (this.opts.checkpoints?.() && !r.s.isOrchestrator && !this.midTurn(r)) await this.checkpoint(r);
+    if (this.opts.checkpoints?.() && !r.s.isOrchestrator && !r.s.quick && !this.midTurn(r)) await this.checkpoint(r);
     try {
       r.session.send(`${role}${warning}${body}`, imgs);
       if (role) { r.rolePrimed = { session: r.s.sessionId ?? '', sig: roleSig }; this.persist(); }
@@ -869,12 +882,12 @@ export class ChatManager implements ChatService {
       const c = r.s, child = c.agentChildren;
       let held: boolean | AutoCloseWaiting = true;
       try { held = externalHold(c.id); } catch { /* fail closed */ }
-      const eligible = !this.quitting && !updateActivity.frozen && !c.isOrchestrator && !held &&
+      const eligible = !this.quitting && !updateActivity.frozen && !c.isOrchestrator && !c.quick && !held &&
         (c.state === 'idle' || r.autoClosing && c.state === 'closed') && !!c.lastResult && !c.lastResult.isError && !c.lastResult.interrupted && !c.lastError &&
         !r.working && !r.session?.busy && r.pending.size === 0 && !workBehind(c) && !c.waitsOn && !c.queued && !r.deliveryHolds &&
         !r.opening && !r.releasing && !r.switching && !r.handoffTurn && (!r.archiving || r.autoClosing) &&
         child?.coverage === 'complete' && child.active === 0 && !child.children.some(x => x.state === 'running' || x.state === 'waiting' || x.state === 'unknown');
-      const waitingFor = eligible || c.isOrchestrator ? undefined : this.waitingOf(r, held);
+      const waitingFor = eligible || c.isOrchestrator || c.quick ? undefined : this.waitingOf(r, held);
       return { id: c.id, eligible: !!eligible, stamp: `${r.activityRevision ?? 0}:${r.lastTurnAt}:${c.lastResult?.at ?? 0}:${c.pending}:${c.model ?? ''}:${c.work?.status ?? ''}:${c.waitsOn ?? ''}`,
         activityAt: r.autoActivityAt ??= autoCloseNow(), ...(waitingFor ? { waitingFor } : {}),
         reason: waitingFor ? WAITING_REASON[waitingFor] : child?.coverage !== 'complete' ? 'Sottoagenti non completamente osservabili: chiusura sospesa' : 'Attività o stato da verificare' };
@@ -1528,7 +1541,7 @@ export class ChatManager implements ChatService {
     let n = 0;
     for (const r of this.chats.values()) {
       const sess = r.session;
-      if (!sess?.alive || sess.busy || r.releasing || r.archiving || r.opening || r.switching || r.autoClosing || (r.deliveryHolds ?? 0) > 0 || this.unsettledChildren(r) || r.handoffTurn || r.s.closedAt || r.s.isOrchestrator) continue;
+      if (!sess?.alive || sess.busy || r.releasing || r.archiving || r.opening || r.switching || r.autoClosing || (r.deliveryHolds ?? 0) > 0 || this.unsettledChildren(r) || r.handoffTurn || r.s.closedAt || r.s.isOrchestrator || r.s.quick) continue;
       if (r.s.state !== 'idle' || r.pending.size > 0 || workBehind(r.s)) continue;
       if (now - Math.max(r.activeAt ?? 0, r.lastTurnAt) < idleMs) continue;
       // a long chat waiting for its cold note keeps its engine: a resumed one would miss the cache (ADR 0031)
@@ -2055,6 +2068,9 @@ export class ChatManager implements ChatService {
 
   /** Starts the open Orchestrator's engine (a resume, no message) when it has none: what the user writes first finds it up. */
   private prewarmOrchestrator(): void {
+    const lampo = [...this.chats.values()].find(x => x.s.quick && !x.s.closedAt);
+    if (lampo && !lampo.session && !this.quitting && engineOf(lampo.s.harness)?.caps.warm && this.opts.engineOn?.(lampo.s.harness) !== false && fs.existsSync(lampo.s.cwd))
+      this.ensureSession(lampo).catch(e => log.warn('chats', 'Lampo engine not started ahead', { chat: lampo.s.id, cause: errText(e), hint: 'it starts with the first message' }));
     const r = [...this.chats.values()].find(x => x.s.isOrchestrator && !x.s.closedAt);
     if (!r || r.session || this.quitting || updateActivity.frozen || !engineOf(r.s.harness)?.caps.warm || this.opts.engineOn?.(r.s.harness) === false || !fs.existsSync(r.s.cwd)) return;
     log.info('chats', 'Orchestrator engine started ahead of the first message', { chat: r.s.id });
