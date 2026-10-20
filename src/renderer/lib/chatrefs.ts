@@ -110,3 +110,11 @@ export function chatRefsOf(items: readonly ChatItem[], key: string): ReadonlyMap
   }
   return out;
 }
+
+/** The deliverable of a finished agent_report: the chat shows it as its answer, so the agent writes it only once
+ *  (the owner, 2026-10-20: the same answer in the chat and in the report wasted tokens). null for any other tool. */
+export function reportOutput(item: Tool): string | null {
+  if (item.status !== 'ok' || !isTool(item, 'agent_report')) return null;
+  const input = item.input && typeof item.input === 'object' ? (item.input as Record<string, unknown>) : {};
+  return str(input.output).trim() || null;
+}
