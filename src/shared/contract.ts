@@ -216,7 +216,13 @@ export interface ContextStats {
   notesUsed: number;
   afterContinuation: { calls: number; usd: number };
   afterCompaction: { calls: number; usd: number };
+  /** the prompt cache per kind of chat (token plan 2026-10-20: measure before trusting the estimates): tokens read from
+   *  the cache, written to it and sent uncached, over every call and over the first call of each session (whether a new
+   *  session finds its prefix already cached by another one) */
+  cache?: Record<CacheKind, CacheTotals>;
 }
+export type CacheKind = 'orchestrator' | 'root' | 'child';
+export interface CacheTotals { calls: number; read: number; write: number; input: number; firstCalls: number; firstRead: number; firstWrite: number }
 
 export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 export type PermissionMode = 'default' | 'acceptEdits' | 'auto' | 'plan' | 'bypassPermissions';

@@ -860,8 +860,9 @@ export class ClaudeSession implements HarnessSession {
     if (this.counted.size > 5000) this.counted.clear();
     this.counted.add(id);
     const write = num(u.cache_creation_input_tokens) ?? 0;
-    const context = (num(u.input_tokens) ?? 0) + (num(u.cache_read_input_tokens) ?? 0) + write;
-    this.sink.changed({ call: { context, cacheWrite: write, usd: priceUsage(s(msg.model), u) } });
+    const read = num(u.cache_read_input_tokens) ?? 0, input = num(u.input_tokens) ?? 0;
+    const context = input + read + write;
+    this.sink.changed({ call: { context, cacheWrite: write, cacheRead: read, input, usd: priceUsage(s(msg.model), u) } });
   }
 
   private onAssistant(m: Obj): void {

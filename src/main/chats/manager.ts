@@ -245,6 +245,8 @@ interface Rec {
   /** ADR 0103: the files before each recent turn (checkpoints.ts), newest last; its repository's top folder (null = not
    *  a git work tree: no checkpoints); a note for the next message after the user undid a turn */
   checkpoints?: Checkpoint[];
+  /** the session whose first API call was counted already (context-stats.ts cache) */
+  cacheSession?: string;
   gitRoot?: string | null;
   undoNote?: string;
   /** the roles this chat's role may launch (resolved at creation; absent = unknown, e.g. a chat saved before) */
@@ -2679,7 +2681,10 @@ export class ChatManager implements ChatService {
     if (p.call) {
       const a = r.after;
       if (a) { a.left--; if (a.left <= 0) r.after = undefined; }
-      this.counters.call(r.s.id, p.call, a ? a.kind : null);
+      // the prompt cache per kind of chat, and whether a new session found its prefix cached (ContextStats.cache)
+      const first = r.cacheSession !== r.s.sessionId;
+      r.cacheSession = r.s.sessionId ?? undefined;
+      this.counters.call(r.s.id, p.call, a ? a.kind : null, { kind: r.s.isOrchestrator ? 'orchestrator' : r.s.parentId ? 'child' : 'root', first });
     }
     if (p.compacted) {
       this.counters.compaction(r.s.id, p.compacted.pre, p.compacted.post);

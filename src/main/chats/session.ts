@@ -79,7 +79,7 @@ export interface SessionPatch {
   version?: string;            // CLI version
   /** one API call of the main thread, once per response id (ADR 0031 counters): its context (input + cache read +
    *  cache write), the cache it re-wrote, its list-price cost */
-  call?: { context: number; cacheWrite: number; usd: number };
+  call?: { context: number; cacheWrite: number; usd: number; /** read from the prompt cache, and sent uncached */ cacheRead?: number; input?: number };
   /** the tokens of the turn that just ended, when the engine reports them (Claude's result usage, ACP's prompt usage,
    *  an HTTP model's usage); absent = unknown. Read by compare/headless.ts for a run's total. */
   turnTokens?: TokenUsage;
