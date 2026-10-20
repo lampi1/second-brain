@@ -12,6 +12,20 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const git = (...a) => execFileSync('git', a, { encoding: 'utf8' }).trim();
 
+/** characters of file names per eslint call: well below cmd.exe's 8191 with the command and the separators */
+const LINT_CHARS = 6000;
+/** The list split so each part's names, joined by spaces, stay within max characters (a longer name goes alone). */
+export function chunks(list, max) {
+  const out = [];
+  let part = [], size = 0;
+  for (const f of list) {
+    if (part.length && size + f.length + 1 > max) { out.push(part); part = []; size = 0; }
+    part.push(f); size += f.length + 1;
+  }
+  if (part.length) out.push(part);
+  return out;
+}
+
 function run(label, cmd, args) {
   console.log(`\n> ${label}: ${[cmd, ...args].join(' ')}`);
   const r = spawnSync(cmd, args, { stdio: 'inherit', shell: process.platform === 'win32' });
@@ -37,7 +51,8 @@ function main() {
   const lintAll = changed.some(f => /^(eslint\.config\.|package(-lock)?\.json$|tsconfig\.json$)/.test(f));
   const lintable = changed.filter(f => /\.(ts|tsx|mjs|js|cjs)$/.test(f) && fs.existsSync(f));
   if (lintAll) run('lint', 'npx', ['eslint', '.']);
-  else if (lintable.length) run('lint', 'npx', ['eslint', '--no-warn-ignored', ...lintable]);
+  // in chunks: cmd.exe takes at most 8191 characters per command line (a large branch exceeded it on Windows, 2026-10-20)
+  else for (const files of chunks(lintable, LINT_CHARS)) run('lint', 'npx', ['eslint', '--no-warn-ignored', ...files]);
   run('unit', 'npx', ['vitest', 'run', '--changed', base, '--passWithNoTests']);
   // the repo is public product (ADR 0061): the guard on the changed files (seconds, same scanner and deny list as the
   // hooks), so a private name blocks the branch, not main after the merge (2026-10-14); the full scan is in `npm run check`
