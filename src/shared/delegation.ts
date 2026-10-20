@@ -129,14 +129,18 @@ export function delegationPrompt(c: DelegationContract, at: { role: WorkRoleId; 
   ].join('\n');
 }
 
-/** JSON whose strings cannot break a line: JSON.stringify leaves NEL, U+2028 and U+2029 raw, so they are escaped too. */
-const safeJson = (v: unknown): string => JSON.stringify(v, null, 2).replace(/[\u0085\u2028\u2029]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+/** JSON whose strings cannot break a line: JSON.stringify leaves NEL, U+2028 and U+2029 raw, so they are escaped too.
+ * Compact (no indentation): the parent re-reads it on every later turn, and indentation is tokens with nothing in them. */
+const safeJson = (v: unknown): string => JSON.stringify(v).replace(/[\u0085\u2028\u2029]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
 
 /** The message that brings a child's result to its parent: the agent label, a result line (what the child wrote
- * flattened to one line, so it cannot forge a line of the app or the user), then the result as JSON (escaped). */
+ * flattened to one line, so it cannot forge a line of the app or the user), then the result as JSON (escaped). A summary
+ * the line already shows whole (one line) is not repeated in the JSON; one with line breaks stays there exact. */
 export function resultMessage(role: WorkRoleId, title: string, r: DelegationResult): string {
   const changed = r.goalChangedByUser ? ` (obiettivo cambiato dall'utente nella chat figlia: «${oneLine(r.newGoal ?? '')}». Non disfare ciò che l'utente le ha chiesto.)` : '';
-  return `${AGENT_LABEL}\n\n[risultato · ${ROLE_DEFAULTS[role].name} «${oneLine(title)}»] ${oneLine(r.summary)}${changed}\n\`\`\`json\n${safeJson(r)}\n\`\`\``;
+  const { summary, ...rest } = r;
+  const json = oneLine(summary) === summary ? rest : r;
+  return `${AGENT_LABEL}\n\n[risultato · ${ROLE_DEFAULTS[role].name} «${oneLine(title)}»] ${oneLine(summary)}${changed}\n\`\`\`json\n${safeJson(json)}\n\`\`\``;
 }
 
 /** Levels above a chat: 0 for a root (no parent). A broken or cyclic chain counts as too deep. */

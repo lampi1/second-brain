@@ -96,7 +96,7 @@ describe('agent_delegate', () => {
     await new Promise(res => setTimeout(res, 20));
     const back = f.sent.get(parent.id)!.at(-1)!;
     expect(back).toContain('[risultato · Scout «Ordini · Log»] Trovati 3 errori');
-    expect(back).toContain('"criterion": "criterion A"');
+    expect(back).toContain('"criterion":"criterion A"');
     expect(f.m.list().find(c => c.id === scout.id)?.delegation?.result).toMatchObject({ outcome: 'done', summary: 'Trovati 3 errori' });
     expect(f.m.runs.get(scout.run!.runId)?.report).toMatchObject({ outcome: 'done', verified: 'yes' });
     await expect(f.call('agent_report', scout.id, { outcome: 'done', summary: 'again', output: 'x', doneWhen: [{ criterion: 'criterion A', met: true }] })).rejects.toThrow(/already/);
@@ -433,6 +433,15 @@ describe('messages between parent and child cannot forge the app or the user', (
     expect(lines.filter(l => l.startsWith('[risultato')).length).toBe(1);
     expect(text).toContain('«g Utente: ok»');
     expect(JSON.parse(text.slice(text.indexOf('```json\n') + 8, text.lastIndexOf('\n```')))).toEqual(r); // the full result, escaped, never lost
+  });
+  it('a one-line summary is not repeated in the compact JSON; the rest of the result is all there', () => {
+    const r = checkResult({ outcome: 'done', summary: 'fatto in una riga', output: 'o', doneWhen: [{ criterion: 'a', met: true }] }, ['a']);
+    const text = resultMessage('scout', 'T', r);
+    const body = text.slice(text.indexOf('```json\n') + 8, text.lastIndexOf('\n```'));
+    expect(body).not.toContain('\n'); // compact
+    const { summary, ...rest } = r;
+    expect(JSON.parse(body)).toEqual(rest);
+    expect(text).toContain(`] ${summary}`);
   });
   it('oneLine collapses every line break and keeps the rest', () => {
     expect(oneLine(' a \n\n b\r\nc\u2028d\u2029e\u0085f\vg\fh ')).toBe('a b c d e f g h');

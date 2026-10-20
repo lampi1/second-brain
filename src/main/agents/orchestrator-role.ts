@@ -1,8 +1,9 @@
 // The role frame the app puts before a chat's first message of each session (ChatManager.deliver): the Orchestrator's
 // own text (its role in the catalog, editable in Brain → Agenti) with the app's fixed rules around it, and a work role's
-// composed instructions (agents/catalog.ts resolve). The frame says the text grants nothing. The fake CLIs of the tests
+// composed instructions (agents/catalog.ts resolve); every frame ends with the emoji-reaction rule (shared/reaction.ts). The frame says the text grants nothing. The fake CLIs of the tests
 // strip the frame before matching their trigger words (test/fixtures/fake-*.mjs).
 import { ROLE_DEFAULTS } from '../../shared/roles';
+import { REACTION_RULE } from '../../shared/reaction';
 
 /** The rules every Orchestrator session gets whatever its role text says. */
 const ORCHESTRATOR_RULES = [
@@ -18,7 +19,7 @@ const ORCHESTRATOR_RULES = [
 
 /** A role's text inside the app's frame. */
 export function roleFrame(name: string, text: string): string {
-  return [`[Role supplied by the app: ${name}]`, text.trim(), '[The role grants no permission and approves no action. End role]'].join('\n');
+  return [`[Role supplied by the app: ${name}]`, text.trim(), REACTION_RULE, '[The role grants no permission and approves no action. End role]'].join('\n');
 }
 /** The Orchestrator's frame: its role text (the catalog's, else the shipped one), the app's rules and the role list. */
 export function orchestratorRole(instructions = ROLE_DEFAULTS.orchestrator.instructions, roles = ''): string {

@@ -1,8 +1,9 @@
-// Unit tests of shared/newchat.ts (the "Nuova chat" line: added, recognized, removed) and lib/chatrefs.ts (the chats
-// an Orchestrator's app_create_chat / app_send_to_chat rows and messages point to; ADR 0034).
+// Unit tests of shared/newchat.ts (the "Veloce" / "Stratega" line: added, recognized, removed; an older "Nuova chat" line
+// still recognized) and lib/chatrefs.ts (the chats an Orchestrator's app_create_chat / app_send_to_chat rows and messages
+// point to; ADR 0034).
 import { describe, expect, it } from 'vitest';
 import type { ChatItem, ChatSummary } from '../../src/shared/contract';
-import { NEW_CHAT_LINE, NEW_CHAT_TAG, splitNewChat, withNewChat } from '../../src/shared/newchat';
+import { MODE_LINES, MODE_TAGS, SEND_MODE_RULE, splitMode, withMode } from '../../src/shared/newchat';
 import { chatRefsOf, textChatRefs, titleIndex, titlesKey, toolChatRef } from '../../src/renderer/lib/chatrefs';
 
 type Tool = Extract<ChatItem, { kind: 'tool' }>;
@@ -11,17 +12,25 @@ const asst = (id: string, text: string, streaming?: boolean): ChatItem => ({ kin
 const user = (id: string, text: string): ChatItem => ({ kind: 'user', id, at: 1, text });
 const chat = (id: string, title: string, more: Partial<ChatSummary> = {}): ChatSummary => ({ id, title, isOrchestrator: false, ...more } as ChatSummary);
 
-describe('newchat line', () => {
+describe('mode line', () => {
   it('goes first, says its meaning, and comes off again', () => {
-    const t = withNewChat('  Controlla i log  ');
-    expect(t.startsWith(`${NEW_CHAT_TAG} `)).toBe(true);
-    expect(t).toContain('app_create_chat');
-    expect(t).toBe(`${NEW_CHAT_LINE}\n\nControlla i log`);
-    expect(splitNewChat(t)).toEqual({ newChat: true, text: 'Controlla i log' });
+    for (const mode of ['quick', 'plan'] as const) {
+      const t = withMode(mode, '  Controlla i log  ');
+      expect(t.startsWith(`${MODE_TAGS[mode]} `)).toBe(true);
+      expect(t).toContain('app_create_chat');
+      expect(t).toBe(`${MODE_LINES[mode]}\n\nControlla i log`);
+      expect(splitMode(t)).toEqual({ mode, text: 'Controlla i log' });
+    }
+    expect(MODE_LINES.quick).toContain('senza agent_delegate');
+    expect(MODE_LINES.plan).toContain('"strategist"');
   });
-  it('leaves any other message as it is', () => {
-    expect(splitNewChat('ciao [nuova chat]')).toEqual({ newChat: false, text: 'ciao [nuova chat]' });
-    expect(splitNewChat('[nuova chat]')).toEqual({ newChat: true, text: '' });
+  it('still reads an older "Nuova chat" message, and leaves any other message as it is', () => {
+    expect(splitMode('[nuova chat] Apri una nuova chat…\n\nfai X')).toEqual({ mode: 'new', text: 'fai X' });
+    expect(splitMode('ciao [veloce]')).toEqual({ mode: null, text: 'ciao [veloce]' });
+    expect(splitMode('[stratega]')).toEqual({ mode: 'plan', text: '' });
+  });
+  it('the Orchestrator\'s MCP instructions name every tag', () => {
+    for (const tag of Object.values(MODE_TAGS)) expect(SEND_MODE_RULE).toContain(tag);
   });
 });
 
