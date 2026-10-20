@@ -8,7 +8,7 @@ import path from 'node:path';
 import type { AgentRun } from '../../../src/shared/agents';
 import type { AgentFeedbackArgs } from '../../../src/shared/agent-lifecycle';
 import type { ChatSummary, NewChat } from '../../../src/shared/contract';
-import { JudgeSampler, pickSamples, reviewPrompt } from '../../../src/main/agents/judge-sample';
+import { JudgeSampler, judgeSamplingOn, pickSamples, reviewPrompt } from '../../../src/main/agents/judge-sample';
 
 const NOW = Date.UTC(2026, 9, 19, 12);
 const run = (id: string, over: Partial<AgentRun> = {}): AgentRun => ({ runId: `r_${id.padStart(12, '0')}`, chatId: `c_${id}`, agentId: 'scout', version: 1, goal: 'Trova gli errori',
@@ -94,5 +94,26 @@ describe('JudgeSampler', () => {
     expect(s.list().map(r => r.state)).toEqual(['recorded', 'no-verdict']);
     await s.ended(judge(a!.runId, 'c_other', 'fail'));  // not the chat we started: ignored
     expect(fed).toHaveLength(1);
+  });
+  it('passes over a run whose chat is gone or is a delegated child\'s and still fills the day (issue #112)', async () => {
+    const { s, created } = make([run('1'), run('2'), run('3')], 2, null, id => id === 'c_1' ? undefined as unknown as ChatSummary : id === 'c_2' ? { ...chat(id), parentId: 'p' } : chat(id));
+    expect(await s.tick()).toBe(1);
+    expect(created.map(c => c.reviewOf)).toEqual(['r_000000000003']);
+  });
+});
+
+describe('judgeSamplingOn (issue #112)', () => {
+  it('a root chat the Orchestrator opened (app_create_chat: no parent run, agent_report, ended completed) is a candidate', () => {
+    const opened = run('1', { startedBy: 'orchestrator', source: 'chat', report: { at: NOW - 3600_000, outcome: 'done', verified: 'partial', summary: 'Fatto' } });
+    expect(pickSamples([opened], new Set(), NOW, 3)).toEqual([opened]);
+  });
+
+  it('runs in the user\'s own app, stable or built from a clone, never in tests or an agent\'s hidden run', () => {
+    expect(judgeSamplingOn({})).toEqual({ on: true, why: "the user's app" });
+    expect(judgeSamplingOn({ SB_RELEASE: '2026.10.19' }).on).toBe(true);
+    expect(judgeSamplingOn({ SB_TEST: '1' }).on).toBe(false);
+    expect(judgeSamplingOn({ SB_HIDDEN: '1' }).on).toBe(false);
+    expect(judgeSamplingOn({ SB_TEST: '1', SB_JUDGE_SAMPLE: '1' }).on).toBe(true);
+    expect(judgeSamplingOn({ SB_JUDGE_SAMPLE: '0' }).on).toBe(false);
   });
 });

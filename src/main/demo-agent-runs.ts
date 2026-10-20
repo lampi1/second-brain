@@ -3,11 +3,10 @@
 // (too few judged runs) and Pulse has none (the card's empty state). Used by DemoChats.runMetrics (demo.ts) only.
 import type { AgentMetrics, AgentRun, AgentRunOutcome } from '../shared/agents';
 import { runMetrics } from './agents/run-metrics';
-import { standings } from './agents/standing';
+import { standings, withStandings } from './agents/standing';
 
 /** role → ended runs, share judged by the user, success odds, median minutes, median cost */
 const PLAN: [string, number, number, number, number, number][] = [
-  ['orchestrator', 82, 0.5, 0.78, 6, 0.42],
   ['artisan', 61, 0.7, 0.86, 24, 1.35],
   ['strategist', 34, 0.6, 0.8, 12, 0.6],
   ['scout', 19, 0.55, 0.72, 9, 0.28],
@@ -47,5 +46,5 @@ export function demoAgentRuns(now: number): AgentRun[] {
 /** The agents:metrics answer of the demo: the §5 metrics plus each card's standing. */
 export function demoAgentMetrics(now: number): AgentMetrics[] {
   const runs = demoAgentRuns(now), standing = standings(runs, [], now);
-  return runMetrics(runs).map(m => { const s = standing.get(m.agentId); return s ? { ...m, standing: s } : m; });
+  return withStandings(runMetrics(runs), standing);
 }
