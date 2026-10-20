@@ -34,6 +34,7 @@
 .cls-num-value{font-size:21px;font-weight:600;letter-spacing:-.5px;font-variant-numeric:tabular-nums;color:var(--text)}
 .cls-num-value.none{font-size:var(--fs-s);font-weight:400;font-style:italic;letter-spacing:0;color:var(--text-4);padding-top:6px}
 .cls-num small{font-size:10px;color:var(--text-4)}
+.cls-unverified{margin:6px 0 0;font-size:var(--fs-xs);color:var(--text-3)}
 .cls-empty{margin:0;font-size:var(--fs-s);color:var(--text-3);line-height:1.55;padding:10px 12px;border:1px dashed var(--border-2);border-radius:var(--r-m)}
 .cls-card-trend{display:flex;flex-direction:column;gap:4px}
 .cls-cap{font-size:10px;letter-spacing:.08em;text-transform:uppercase;font-weight:650;color:var(--text-3)}

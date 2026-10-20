@@ -109,4 +109,27 @@ describe('verdicts in the ledger (#72)', () => {
     expect(again.kindStats('writing')).toEqual({ chats: 1, known: 0, ok: 0 });
     expect(again.info().kindStats).toEqual({ 'bug-fix': { chats: 1, known: 1, ok: 1 }, writing: { chats: 1, known: 0, ok: 0 } });
   });
+
+  it('carries an outcome the brain settled after the app read the ledger, and folds proxy and human lines (issue #110)', () => {
+    const root = tmp(), r = new Routing(() => root);
+    const route = { policy: 'routing' as const, version: 1, source: 'agent' as const, reason: null, kind: 'bug-fix' as const, area: 'Ordini', at: 1 };
+    const measured = (id: string, usd: number) => ({ id, domain: 'routing' as const, outcome: { known: false as const, source: 'measured' as const }, actual: { usd, minutes: 1, turns: 1, ctxPeak: null, handoffs: 0 } });
+    const file = path.join(root, 'ops', 'state', 'improve', 'outcomes.jsonl');
+    r.observe(predictionLine(route, { id: 'app:c1', harness: 'claude', model: null, effort: null, promptChars: 10 }));
+    r.observe(predictionLine(route, { id: 'app:c2', harness: 'claude', model: null, effort: null, promptChars: 10 }));
+    r.observe(measured('app:c1', 0.5)); // the app has read the ledger now
+    // the brain's loop settles both chats in the same file (ADR 0047)
+    fs.appendFileSync(file, `${JSON.stringify({ id: 'app:c1', domain: 'routing', outcome: { known: true, success: true, source: 'proxy' } })}\n`);
+    fs.appendFileSync(file, `${JSON.stringify({ id: 'app:c2', domain: 'routing', outcome: { known: true, success: false, source: 'human' } })}\n`);
+    fs.appendFileSync(file, `${JSON.stringify({ id: 'app:c2', domain: 'routing', outcome: { known: true, success: true, source: 'proxy' } })}\n`);
+    r.observe(measured('app:c1', 0.9)); // the chat goes on: its next measured line must carry the brain's outcome
+    const last = JSON.parse(fs.readFileSync(file, 'utf8').trim().split('\n').at(-1)!) as { outcome: { known: boolean; source: string } };
+    expect(last.outcome).toMatchObject({ known: true, success: true, source: 'proxy' });
+    // any known outcome counts in the kind's stats; a proxy line never replaces the human verdict before it
+    expect(r.kindStats('bug-fix')).toEqual({ chats: 2, known: 2, ok: 1 });
+    // a stale measured line (written by an older build) never undoes a known outcome either
+    fs.appendFileSync(file, `${JSON.stringify(measured('app:c2', 1))}\n`);
+    expect(r.kindStats('bug-fix')).toEqual({ chats: 2, known: 2, ok: 1 });
+  });
+
 });

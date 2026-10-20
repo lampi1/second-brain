@@ -245,6 +245,9 @@ export interface ClassifierCard {
   hit: ClassifierStat;
   /** verified success of the chats it decided (the user's or a review's verdict; never a self-report) */
   success: ClassifierStat;
+  /** the cases whose only known outcome is unverified (the brain's proxy "closed without an error line", the
+   *  Orchestrator's opinion): their success share, shown apart and never counted in `success` (ADR 0095) */
+  unverified?: ClassifierStat;
   avgCostUsd: number | null;
   /** the score cut in force, when the classifier has one (0-100) */
   threshold: number | null;

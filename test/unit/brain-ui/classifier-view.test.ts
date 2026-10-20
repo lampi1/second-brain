@@ -58,6 +58,14 @@ describe('classifier view', () => {
     expect(hitTrend([wk('2026-W42', 2, 1), wk('2026-W43', 2, 2)])).toBeNull(); // under 5 cases a side
   });
 
+  it('carries the unverified outcomes apart from the verified success (ADR 0095)', () => {
+    const v = fromMain(card({ success: { value: 0.5, n: 4 }, unverified: { value: 1, n: 34 } }));
+    expect(v.success).toEqual({ value: 0.5, n: 4 });
+    expect(v.unverified).toEqual({ value: 1, n: 34 });
+    expect(v.progress.n).toBe(4); // the proxy never fills the learning meter
+    expect(fromMain(card({})).unverified).toBeUndefined();
+  });
+
   it('tells curious facts only from enough cases', () => {
     const kind = fromMain(card({
       decisions: 20, hit: { value: 0.9, n: 20 }, success: { value: 0.7, n: 10 },

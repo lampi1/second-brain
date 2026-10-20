@@ -4,10 +4,14 @@
 // (skills_suggest against the skills the launch gave) and Tipo nel registro dei costi (estimates.ts classify, from
 // userData/jobs.jsonl). Per card: decisions, its own hit measure, the verified success of what it decided, the
 // average cost, the last 8 ISO weeks, the slices (per kind / model / skill, with the role that ran it most) and the
-// success when it hit versus when it missed. A missing value is null, never zero. Pure: no IO. Used by classifiers.ts;
+// success when it hit versus when it missed. Verified success = the user's or a reviewed verdict, from the agent run
+// (agent-runs.json) or from the ledger (outcomes.jsonl, which outlives a reinstall); a chat in both counts once, the
+// run's verdict first. A chat whose only outcome is unverified (the brain's proxy, the Orchestrator's opinion) counts
+// in `unverified`, never in success (ADR 0095, issue #110). A missing value is null, never zero. Pure: no IO. Used by classifiers.ts;
 // unit tests in test/unit/brainmodel/classifier-cards.test.ts.
 import type { AgentRun } from '../../shared/agents';
 import type { ClassifierCard, ClassifierSlice, ClassifierStat, ClassifierWeek } from '../../shared/brain-model';
+import type { LedgerOutcome } from '../brain/routing';
 
 export interface LedgerPrediction { id: string; at: number; kind: string; model: string | null; source: string }
 export interface Launch { at: number; chatId: string; agentId: string; suggested: string[]; used: string[] }
@@ -16,8 +20,8 @@ export interface CardInputs {
   now: number;
   predictions: LedgerPrediction[];
   actuals: Map<string, { usd: number }>;
-  /** known outcomes written on the ledger (ADR 0078), by ledger id */
-  outcomes: Map<string, boolean>;
+  /** known outcomes written on the ledger (ADR 0078, 0095), by ledger id */
+  outcomes: Map<string, LedgerOutcome>;
   runs: AgentRun[];
   launches: Launch[];
   jobs: JobRow[];
@@ -41,9 +45,25 @@ const verified = (r: AgentRun | undefined): boolean | null => {
   if (!o || o.verdict === 'unknown' || (o.basis !== 'human' && o.basis !== 'reviewed-evidence')) return null;
   return o.verdict === 'success';
 };
+const chatOf = (ledgerId: string) => ledgerId.replace(/^app:/, '');
+/** A ledger id's verified outcome: its agent run's verdict (the user's or a reviewed one), else the ledger's verified
+ *  outcome; one value per id, so a chat in both sources counts once. null = none verified. */
+export function verifiedOf(ledgerId: string, runByChat: Map<string, AgentRun>, outcomes: Map<string, LedgerOutcome>): boolean | null {
+  const v = verified(runByChat.get(chatOf(ledgerId)));
+  if (v !== null) return v;
+  const o = outcomes.get(ledgerId);
+  return o?.verified ? o.success : null;
+}
+/** A ledger id's unverified outcome (the brain's proxy, the Orchestrator's opinion), only when none is verified. */
+function unverifiedOf(ledgerId: string, runByChat: Map<string, AgentRun>, outcomes: Map<string, LedgerOutcome>): boolean | null {
+  if (verifiedOf(ledgerId, runByChat, outcomes) !== null) return null;
+  const o = outcomes.get(ledgerId);
+  return o && !o.verified ? o.success : null;
+}
 
-/** One decided case, normalised: when, its slice key, whether it hit, its verified outcome, its cost, who ran it. */
-interface Case { at: number; key: string; hit: boolean; ok: boolean | null; usd: number | null; role: string | null }
+/** One decided case, normalised: when, its slice key, whether it hit, its verified outcome, its unverified one (only
+ *  without a verified one), its cost, who ran it. */
+interface Case { at: number; key: string; hit: boolean; ok: boolean | null; proxy?: boolean | null; usd: number | null; role: string | null }
 
 function card(id: ClassifierCard['id'], cases: Case[], now: number, threshold: number | null): ClassifierCard {
   const weeks = lastIsoWeeks(now);
@@ -59,11 +79,12 @@ function card(id: ClassifierCard['id'], cases: Case[], now: number, threshold: n
     const top = [...roles].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
     return { key, count: c.length, known: known.length, ok: known.filter(x => x.ok).length, avgCostUsd: avg(c.flatMap(x => (x.usd === null ? [] : [x.usd]))), ...(top ? { top: { key: top[0], count: top[1] } } : {}) };
   }).sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
-  const known = cases.filter(x => x.ok !== null);
+  const known = cases.filter(x => x.ok !== null), proxied = cases.filter(x => x.proxy === true || x.proxy === false);
   const side = (hit: boolean) => { const k = known.filter(x => x.hit === hit); return share(k.filter(x => x.ok).length, k.length); };
   const hitSide = side(true), missSide = side(false);
   return {
     id, decisions: cases.length, hit: share(cases.filter(x => x.hit).length, cases.length), success: share(known.filter(x => x.ok).length, known.length),
+    unverified: share(proxied.filter(x => x.proxy).length, proxied.length),
     avgCostUsd: avg(cases.flatMap(x => (x.usd === null ? [] : [x.usd]))), threshold, weeks: wk, slices,
     compare: hitSide.n || missSide.n ? { hit: hitSide, miss: missSide } : null,
     lastAt: cases.length ? Math.max(...cases.map(x => x.at)) : null,
@@ -73,18 +94,14 @@ function card(id: ClassifierCard['id'], cases: Case[], now: number, threshold: n
 /** The four record-keeping classifiers' cards. */
 export function classifierCards(i: CardInputs): ClassifierCard[] {
   const runByChat = new Map(i.runs.map(r => [r.chatId, r]));
-  const outcomeOf = (ledgerId: string): boolean | null => {
-    const v = verified(runByChat.get(ledgerId.replace(/^app:/, '')));
-    return v ?? (i.outcomes.has(ledgerId) ? i.outcomes.get(ledgerId)! : null);
-  };
-  const routed = i.predictions.map(p => ({ p, ok: outcomeOf(p.id), usd: i.actuals.get(p.id)?.usd ?? null, role: runByChat.get(p.id.replace(/^app:/, ''))?.agentId ?? null }));
-  const kind = card('kind', routed.map(({ p, ok, usd, role }) => ({ at: p.at, key: p.kind || 'altro', hit: !!p.kind && p.kind !== 'altro', ok, usd, role })), i.now, null);
-  const model = card('model', routed.map(({ p, ok, usd, role }) => ({ at: p.at, key: p.model ?? '—', hit: p.source === 'table', ok, usd, role })), i.now, null);
+  const routed = i.predictions.map(p => ({ p, ok: verifiedOf(p.id, runByChat, i.outcomes), proxy: unverifiedOf(p.id, runByChat, i.outcomes), usd: i.actuals.get(p.id)?.usd ?? null, role: runByChat.get(chatOf(p.id))?.agentId ?? null }));
+  const kind = card('kind', routed.map(({ p, ok, proxy, usd, role }) => ({ at: p.at, key: p.kind || 'altro', hit: !!p.kind && p.kind !== 'altro', ok, proxy, usd, role })), i.now, null);
+  const model = card('model', routed.map(({ p, ok, proxy, usd, role }) => ({ at: p.at, key: p.model ?? '—', hit: p.source === 'table', ok, proxy, usd, role })), i.now, null);
   const skills = card('skills', i.launches.flatMap(l => {
-    const ok = verified(runByChat.get(l.chatId)), usd = runByChat.get(l.chatId)?.costUsd ?? null;
+    const id = `app:${l.chatId}`, ok = verifiedOf(id, runByChat, i.outcomes), proxy = unverifiedOf(id, runByChat, i.outcomes), usd = runByChat.get(l.chatId)?.costUsd ?? null;
     const hit = l.suggested.length > 0 && l.used.every(s => l.suggested.includes(s));
     // one case per launch, sliced by its first used skill (or "nessuna")
-    return [{ at: l.at, key: l.used[0] ?? '', hit, ok, usd, role: l.agentId }];
+    return [{ at: l.at, key: l.used[0] ?? '', hit, ok, proxy, usd, role: l.agentId }];
   }), i.now, i.skillThreshold);
   const jobkind = card('jobkind', i.jobs.map(j => ({ at: j.at, key: j.kind, hit: j.kind !== 'other', ok: null, usd: j.usd, role: null })), i.now, null);
   return [kind, model, skills, jobkind];

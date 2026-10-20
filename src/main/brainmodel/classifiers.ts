@@ -5,7 +5,9 @@
 // the same chats). Skill choice: for recent role runs, the skills skills_suggest ranks for the goal now against the
 // skills the launch actually gave (AgentRun.tags.skills). Per kind of work: the known outcomes (routing:get's
 // kindStats); per source: how many chats the table, the role (ADR 0083) or a default chose the model of. Quality over
-// time: success and cost per route, by week; a row without runs says so (null values), never zero. Nothing here writes: changes go
+// time: success and cost per route, by week; a row without runs says so (null values), never zero. "Verified" = the
+// user's or a reviewed verdict, from the agent run or from the ledger (a run in both counts once; ADR 0095); the
+// brain's proxy outcomes are known but unverified and never enter it. Nothing here writes: changes go
 // through the routing save and the maintenance jobs, logged with their rollback. Used by brainmodel/service.ts;
 // unit tests: test/unit/brainmodel/classifiers.test.ts. The grid's cards (classifier-cards.ts) also read the ledger's
 // known outcomes and the job ledger (userData/jobs.jsonl, the cost ledger's kinds).
@@ -14,7 +16,8 @@ import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
 import type { ClassifierChoice, ClassifierRoute, ClassifiersState, RouteResult } from '../../shared/brain-model';
 import type { RoutingInfo, RoutingRow } from '../../shared/contract';
-import { classifierCards, type JobRow, type Launch } from './classifier-cards';
+import { foldOutcome, type LedgerOutcome } from '../brain/routing';
+import { classifierCards, verifiedOf, type JobRow, type Launch } from './classifier-cards';
 
 interface Prediction { id: string; at: number; kind: string; area: string; harness: string; model: string | null; source: string }
 interface Actual { usd: number }
@@ -44,20 +47,22 @@ export function readJobs(file: string): JobRow[] {
   return [...byId.values()];
 }
 
-/** The ledger's routing predictions of the app's chats (one per chat) and their latest actuals. */
-export function readLedger(root: string | null): { predictions: Prediction[]; actuals: Map<string, Actual>; outcomes: Map<string, boolean> } {
-  const predictions = new Map<string, Prediction>(), actuals = new Map<string, Actual>(), outcomes = new Map<string, boolean>();
+/** The ledger's routing predictions of the app's chats (one per chat), their latest actuals and their known outcomes
+ *  (later line wins, a measured line never undoes one, an unverified one never replaces a verified one: foldOutcome). */
+export function readLedger(root: string | null): { predictions: Prediction[]; actuals: Map<string, Actual>; outcomes: Map<string, LedgerOutcome> } {
+  const predictions = new Map<string, Prediction>(), actuals = new Map<string, Actual>(), outcomes = new Map<string, LedgerOutcome>();
   if (!root) return { predictions: [], actuals, outcomes };
   let text = '';
   try { const f = path.join(root, 'ops', 'state', 'improve', 'outcomes.jsonl'); if (fs.statSync(f).size <= 32 * 1024 * 1024) text = fs.readFileSync(f, 'utf8'); } catch { /* no ledger yet */ }
   for (const line of text.split('\n')) {
-    if (!line.includes('"routing"')) continue;
+    if (!line.includes('"app:')) continue;
     try {
-      const j = JSON.parse(line) as { id?: unknown; at?: unknown; domain?: unknown; item?: { kind?: string; area?: string; harness?: string; model?: string | null }; predicted?: { value?: { source?: string } }; actual?: { usd?: number }; outcome?: { known?: unknown; success?: unknown } };
-      if (j.domain !== 'routing' || typeof j.id !== 'string' || !j.id.startsWith('app:')) continue;
+      const j = JSON.parse(line) as { id?: unknown; at?: unknown; domain?: unknown; item?: { kind?: string; area?: string; harness?: string; model?: string | null }; predicted?: { value?: { source?: string } }; actual?: { usd?: number }; outcome?: unknown };
+      // an app: id is a routing line; the brain's settlement may leave the domain out
+      if ((j.domain !== 'routing' && j.domain !== undefined) || typeof j.id !== 'string' || !j.id.startsWith('app:')) continue;
       if (j.predicted && j.item && !predictions.has(j.id)) predictions.set(j.id, { id: j.id, at: Number(j.at) || 0, kind: String(j.item.kind ?? 'altro'), area: String(j.item.area ?? ''), harness: String(j.item.harness ?? ''), model: j.item.model ?? null, source: String(j.predicted.value?.source ?? 'table') });
       if (j.actual && Number.isFinite(j.actual.usd)) actuals.set(j.id, { usd: Number(j.actual.usd) });
-      if (j.outcome) { if (j.outcome.known === true && typeof j.outcome.success === 'boolean') outcomes.set(j.id, j.outcome.success); else if (j.outcome.known === false) outcomes.delete(j.id); }
+      if (j.outcome) foldOutcome(outcomes, j.id, j.outcome);
     } catch { /* a torn line */ }
   }
   return { predictions: [...predictions.values()], actuals, outcomes };
@@ -69,11 +74,10 @@ export function rowOf(routes: RoutingRow[], p: Pick<Prediction, 'kind' | 'area'>
   const exact = routes.findIndex(r => r.kind === p.kind && (!areas(r).length || areas(r).includes(p.area)));
   return exact >= 0 ? exact : routes.findIndex(r => r.kind === '*' && (!areas(r).length || areas(r).includes(p.area)));
 }
-const verified = (r: AgentRun | undefined) => !!r?.outcome && (r.outcome.basis === 'human' || r.outcome.basis === 'reviewed-evidence') && r.outcome.verdict !== 'unknown';
-function result(ids: string[], actuals: Map<string, Actual>, runByChat: Map<string, AgentRun>): RouteResult {
-  const runs = ids.map(id => runByChat.get(id.slice(4))).filter(verified) as AgentRun[];
+function result(ids: string[], actuals: Map<string, Actual>, runByChat: Map<string, AgentRun>, outcomes: Map<string, LedgerOutcome>): RouteResult {
+  const known = ids.map(id => verifiedOf(id, runByChat, outcomes)).filter((x): x is boolean => x !== null);
   const costs = ids.map(id => actuals.get(id)?.usd).filter((x): x is number => typeof x === 'number');
-  return { runs: ids.length, success: { value: runs.length ? runs.filter(r => r.outcome!.verdict === 'success').length / runs.length : null, n: runs.length },
+  return { runs: ids.length, success: { value: known.length ? known.filter(Boolean).length / known.length : null, n: known.length },
     avgCostUsd: costs.length ? costs.reduce((a, b) => a + b, 0) / costs.length : null };
 }
 /** ISO week label "2026-W42" of a time. */
@@ -92,7 +96,7 @@ export async function classifiersState(i: ClassifierInputs, now = Date.now()): P
   const runByChat = new Map(i.runs.map(r => [r.chatId, r]));
   const perRow = routes.map(() => [] as string[]);
   for (const p of predictions) { if (p.source !== 'table') continue; const k = rowOf(routes, p); if (k >= 0) perRow[k]!.push(p.id); }
-  const rows: ClassifierRoute[] = routes.map((r, k) => ({ kind: r.kind, area: areas(r).join(', ') || null, harness: r.harness, model: r.model, effort: r.effort, why: r.why, result: result(perRow[k]!, actuals, runByChat) }));
+  const rows: ClassifierRoute[] = routes.map((r, k) => ({ kind: r.kind, area: areas(r).join(', ') || null, harness: r.harness, model: r.model, effort: r.effort, why: r.why, result: result(perRow[k]!, actuals, runByChat, outcomes) }));
   // skill choice: the latest role runs with their launch's skills
   const name = (id: string) => i.profiles.find(p => p.id === id)?.name ?? id;
   // the latest 40 role launches feed the skills card; the page's list shows the 15 newest
@@ -106,7 +110,7 @@ export async function classifiersState(i: ClassifierInputs, now = Date.now()): P
   // quality by week: per route (its predictions)
   const weeks = lastWeeks(now, 6);
   const quality: ClassifiersState['quality'] = rows.map((row, k) => ({ key: `route:${k}`, label: `${row.kind}${row.area ? ` · ${row.area}` : ''} → ${row.model}`,
-    weeks: weeks.map(w => { const ids = perRow[k]!.filter(id => weekOf(predictions.find(p => p.id === id)!.at) === w), res = result(ids, actuals, runByChat); return { week: w, runs: res.runs, success: res.success.value, avgCostUsd: res.avgCostUsd }; }) }));
+    weeks: weeks.map(w => { const ids = perRow[k]!.filter(id => weekOf(predictions.find(p => p.id === id)!.at) === w), res = result(ids, actuals, runByChat, outcomes); return { week: w, runs: res.runs, success: res.success.value, avgCostUsd: res.avgCostUsd }; }) }));
   return {
     routing: { version: table?.version ?? null, appliedAt: table?.appliedAt ?? null, by: table?.by ?? null, routes: rows, error: i.routing.error },
     history: i.routing.history.map(h => ({ at: h.at, from: h.from, to: h.to, by: h.by, reason: h.reason, evidence: h.evidence })),
