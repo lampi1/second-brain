@@ -63,12 +63,13 @@ export function chatScriptAddTool(scripts: BrainScripts, titleOf: (chatId: strin
     },
     run: (a, ctx) => {
       const name = text(a.name, 'name');
-      if (scripts.list().scripts.some(s => s.id === name.trim().replace(/^scripts[\\/]/, ''))) {
+      const want = name.trim().replace(/^scripts[\\/]/, '').toLowerCase();
+      if (scripts.list().scripts.some(s => s.id.toLowerCase() === want)) {
         throw new Error(`${name} exists already: to fix or replace it, tell the Orchestrator in your report (brain_script_save)`);
       }
       const by = (ctx.params.chatId ? titleOf(ctx.params.chatId) : null)?.trim() || 'chat';
       const r = scripts.save({
-        name, code: text(a.code, 'code'), by,
+        name, code: text(a.code, 'code'), by, create: true,
         meta: { title: text(a.title, 'title'), description: text(a.description, 'description'), usage: text(a.usage, 'usage', false),
           tags: Array.isArray(a.tags) ? a.tags.filter((t): t is string => typeof t === 'string').slice(0, 12) : [],
           tested: { ok: true, note: text(a.note, 'note').slice(0, 300) } },

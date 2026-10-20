@@ -5,9 +5,10 @@
 // a log line and a way back, no approval.
 // How: when a run ends with exit code 0, a deterministic heuristic (no model call, zero tokens) decides whether the
 // command is worth keeping: not a one-word look-around (ls, git status, cd…), at least a command with arguments or a
-// few steps. A command that may hold a credential is skipped, never stored or redacted into a broken script. Dedupe by
-// the command itself (the file name carries its hash; an existing script with the same body counts too), and a script
-// the user deleted (scripts/.deleted/) is not added again. Every save is a changelog line ("app"), undone by deleting
+// few steps. A command that may hold a credential (or any credential flag or variable) is skipped, never stored or
+// redacted into a broken script, and so is a production command (the user's alone). The file name carries only the
+// command's name and a hash, never an argument. Dedupe by the command itself (the file name carries its hash; an
+// existing script with the same body counts too), and a script the user deleted (scripts/.deleted/) is not added again. Every save is a changelog line ("app"), undone by deleting
 // the script (a copy stays in scripts/.deleted/).
 // Used by wiring.ts and demo-wiring.ts (the "Esegui" runner's end of run). Unit tests: test/unit/brain/auto-scripts.test.ts.
 import crypto from 'node:crypto';
@@ -50,14 +51,27 @@ export function skipReason(code: string): string | null {
     const words = real[0]!.split(/\s+/).length;
     if (words < MIN_WORDS || real[0]!.length < MIN_CHARS) return 'short';
   }
-  if (secretLine(code) || maskSecrets(code).masked) return 'secret';
+  if (secretLine(code) || maskSecrets(code).masked || CREDENTIAL_ARG.some(re => re.test(code))) return 'secret';
   return null;
 }
 
-const slugOf = (line: string): string => line.replace(/^[&.]\s*/, '').split(/\s+/).slice(0, 3).join('-').toLowerCase()
-  .replace(/[^a-z0-9-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 36) || 'comando';
+/** Stricter than maskSecrets, for the auto-save only (nobody looks at the command before it is kept): any credential
+ *  flag or credential-named variable assignment skips the command, whatever its value looks like. */
+const CREDENTIAL_ARG: RegExp[] = [
+  // -p / -P with a value that is not a port (npm run dev -- -p 3000, docker run -p 8080:80 stay)
+  /(?:^|\s)-[pP](?:\s+|=)(?!\d+(?::\d+)?(?:\s|$))\S/m,
+  /(?:^|\s)-p(?![a-z]+(?:\s|$))[^\s=-]\S{2,}/m,                    // mysql -pSECRET (glued; not -path, -pthread)
+  /(?:^|\s)--?(?:password|passwd|pwd|pass|secret|client-?secret|token|access-?token|auth-?token|api-?key|key|pat|personal-?access-?token|sas-?token|account-?key|connection-?string)(?:\s|=|:|$)/im,
+  /(?:^|\s)(?:-u|--user)(?:\s+|=)["']?[^\s:"']+:\S/m,                               // curl -u user:password
+  // $env:ADO_PAT = …, export GITHUB_TOKEN=…, set DB_PASSWORD=…, $apiKey = … (PAT only as a whole _-separated part)
+  /(?:(?<![\w.-])|(?<=\benv\.))(?:\w*(?:pass|token|secret|key)\w*|(?:\w+_)?pat(?:_\w*)?)\s*=(?!=)/i,
+];
 
-/** The script file a command becomes: cmd-<first words>-<hash of the command>.<ps1 on Windows, sh elsewhere>. */
+/** The command's name only (never an argument: an argument may be a credential the checks missed). */
+const slugOf = (line: string): string => firstWord(line).split(/[\\/]/).pop()!.replace(/\.(?:exe|cmd|bat|ps1|sh)$/, '')
+  .replace(/[^a-z0-9-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'comando';
+
+/** The script file a command becomes: cmd-<command name>-<hash of the command>.<ps1 on Windows, sh elsewhere>. */
 export function scriptNameOf(code: string, platform: NodeJS.Platform = process.platform): string {
   const flat = flatCommand(code);
   const first = steps(code).find(l => !trivial(l)) ?? flat;
@@ -90,7 +104,8 @@ export class AutoScripts {
   }
 
   private save(run: RunInfo): string | null {
-    const why = skipReason(run.code);
+    // a production command is the user's alone (runnable.ts): never kept as a script others may rerun
+    const why = skipReason(run.code) ?? (run.prod ?? prodRisk(run.code) ? 'prod' : null);
     if (why) { log.debug('brain', 'auto script skipped', { chat: run.chatId, data: { id: run.id, why } }); return null; }
     const root = this.d.root();
     if (!root) return null;
@@ -100,18 +115,17 @@ export class AutoScripts {
     if (fs.existsSync(path.join(dir, name)) || this.deletedByUser(dir, name) || this.sameBody(run.code)) return null;
     const chat = this.d.chatTitle?.(run.chatId)?.trim() || 'una chat';
     const first = steps(run.code).find(l => !trivial(l)) ?? '';
-    const prod = run.prod ?? prodRisk(run.code);
     const at = new Date(run.endedAt ?? Date.now()).toISOString().slice(0, 10);
     const ms = run.endedAt ? run.endedAt - run.startedAt : null;
     const meta: ScriptMeta = {
       title: first.length > 70 ? `${first.slice(0, 69)}…` : first,
-      description: `Comando eseguito con successo con Esegui in «${chat}» (cartella ${run.cwd}), salvato in automatico dall'app. Controlla percorsi e parametri prima di riusarlo.${prod ? ` Attenzione: ${prod}, lo lancia solo l'utente.` : ''}`,
+      description: `Comando eseguito con successo con Esegui in «${chat}» (cartella ${run.cwd}), salvato in automatico dall'app. Controlla percorsi e parametri prima di riusarlo.`,
       usage: platform === 'win32' ? `powershell -NoProfile -File ${SCRIPTS_DIR}/${name}` : `sh ${SCRIPTS_DIR}/${name}`,
-      tags: ['auto', 'esegui', ...(prod ? ['produzione'] : [])],
+      tags: ['auto', 'esegui'],
       tested: { ok: true, at, note: `exit 0${ms !== null ? ` in ${Math.max(1, Math.round(ms / 1000))} s` : ''}` },
     };
     const r = this.d.scripts.save({
-      name, code: `${run.code.replace(/\r\n/g, '\n').trimEnd()}\n`, meta, by: 'app',
+      name, code: `${run.code.replace(/\r\n/g, '\n').trimEnd()}\n`, meta, by: 'app', create: true,
       summary: `Salvato in automatico dopo un Esegui riuscito in «${chat}». Per annullare elimina lo script (ne resta una copia in ${SCRIPTS_DIR}/.deleted/).`,
     });
     log.info('brain', 'auto script saved', { chat: run.chatId, data: { file: r.file } });

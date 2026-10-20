@@ -17,7 +17,20 @@ let root: string;
 beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-auto-scripts-')); });
 afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
 
-const DEPLOY = 'az webapp deploy --resource-group rg-test --name air-test --src-path .\\air.zip --type zip';
+const DEPLOY = 'npm run deploy:test -- --target air-test --src-path .\\air.zip --type zip --slot staging-two';
+const PROD = 'az webapp deploy --resource-group rg-test --name air-test --src-path .\\air.zip --type zip';
+// credentials split in pieces so the repo guard does not read them as real ones
+const PW = ['Hunt', 'er2Secret'].join(''), TOK = ['abcdefgh', '12345678'].join('');
+const CREDENTIAL_COMMANDS = [
+  `docker login -u admin -p ${PW} x`,
+  `Invoke-Sqlcmd -ServerInstance s -Username sa -Password ${PW} -Query q`,
+  `curl -u admin:${PW} https://h/x`,
+  `mysql -uroot -p${PW} db`,
+  `$env:ADO_PAT = "abcd1234abcd"; az devops project list`,
+  `az devops login --org o --token ${TOK}`,
+  `npx x deploy --api-key ${TOK} now`,
+  `export GITHUB_TOKEN=${TOK} && gh repo list`,
+];
 let seq = 0;
 const run = (code: string, over: Partial<RunInfo> = {}): RunInfo => ({
   id: `run-${++seq}`, chatId: 'c1', itemId: 'i1', code, cwd: 'C:\\repo', state: 'ok', exitCode: 0, output: 'done',
@@ -47,6 +60,16 @@ describe('skipReason (reusable command heuristic)', () => {
     const secret = `sqlcmd -S db.local -U sa -P ${'Sup3r'}${'Secret!42'} -Q "select 1"`;
     expect(skipReason(secret)).toBe('secret');
     expect(skipReason(`curl -H "Authorization: Bearer ${'abcdef0123456789'}${'abcdef0123456789'}" https://x.test/api`)).toBe('secret');
+    for (const code of CREDENTIAL_COMMANDS) expect(skipReason(code), code).toBe('secret');
+    // stricter than the save check: a credential flag or variable is skipped even with a value read at run time
+    expect(skipReason('az devops login --org myorg --token $env:ADO_PAT')).toBe('secret');
+    expect(skipReason('$env:ADO_PAT = (Get-Content C:\\keys\\ado.txt); az devops project list')).toBe('secret');
+  });
+  it('keeps ports and plain flags that only look like credential flags', () => {
+    expect(skipReason('npm run dev -- -p 3000 --host 0.0.0.0')).toBeNull();
+    expect(skipReason('docker run -d -p 8080:80 --name web nginx:latest')).toBeNull();
+    expect(skipReason('Copy-Item -path C:\\a\\b.txt -Destination C:\\c -PassThru')).toBeNull();
+    expect(skipReason('$env:PATH = "C:\\tools;" + $env:PATH; dotnet tool run migrate')).toBeNull();
   });
 });
 
@@ -55,9 +78,9 @@ describe('AutoScripts', () => {
     const { auto, scripts, changelog } = setup();
     const file = auto.onRun(run(DEPLOY));
     expect(file).toBe(`scripts/${scriptNameOf(DEPLOY, 'win32')}`);
-    expect(file).toMatch(/^scripts\/cmd-az-webapp-deploy-[0-9a-f]{8}\.ps1$/);
+    expect(file).toMatch(/^scripts\/cmd-npm-[0-9a-f]{8}\.ps1$/);
     const [s] = scripts.list().scripts;
-    expect(s).toMatchObject({ title: DEPLOY.slice(0, 69) + '…', tags: ['auto', 'esegui', 'produzione'], tested: { state: 'ok' } });
+    expect(s).toMatchObject({ title: DEPLOY.slice(0, 69) + '…', tags: ['auto', 'esegui'], tested: { state: 'ok' } });
     expect(s!.description).toContain('Deploy Air');
     const text = fs.readFileSync(path.join(root, file!), 'utf8');
     expect(text).toContain(DEPLOY);
@@ -104,8 +127,19 @@ describe('AutoScripts', () => {
     expect(none.onRun(run(DEPLOY))).toBeNull();
   });
 
-  it('writes a shell script off Windows', () => {
-    expect(scriptNameOf('npm run build\nnpm run migrate', 'linux')).toMatch(/^cmd-npm-run-build-[0-9a-f]{8}\.sh$/);
+  it('never saves a production command (the user\'s alone)', () => {
+    const { auto } = setup();
+    expect(auto.onRun(run(PROD))).toBeNull();
+    expect(auto.onRun(run('npm run release -- --env staging --verbose', { prod: 'lancia uno script di produzione' }))).toBeNull();
+    expect(fs.existsSync(path.join(root, 'scripts'))).toBe(false);
+  });
+
+  it('writes a shell script off Windows, named after the command only (never its arguments)', () => {
+    expect(scriptNameOf('npm run build\nnpm run migrate', 'linux')).toMatch(/^cmd-npm-[0-9a-f]{8}\.sh$/);
+    expect(scriptNameOf('cd C:\\repo\n& "C:\\tools\\Populator.exe" --seed all --tenant air', 'win32')).toMatch(/^cmd-populator-[0-9a-f]{8}\.ps1$/);
+    const name = scriptNameOf(`dotnet run -- --conn Server=x;User=sa;Pwd=${PW}`, 'win32');
+    expect(name).toMatch(/^cmd-dotnet-[0-9a-f]{8}\.ps1$/);
+    expect(name.toLowerCase()).not.toContain('hunter');
   });
 });
 
@@ -122,10 +156,24 @@ describe('brain_script_add (work chats)', () => {
     expect(scripts.list().scripts[0]!.tested.state).toBe('ok');
     expect(changelog.list().entries[0]).toMatchObject({ by: 'Lavoro Air', action: 'added' });
     await expect(async () => tool.run({ ...args, code: 'echo 2' }, ctx)).rejects.toThrow(/exists already/);
+    // another case of the same name (a case-insensitive file system would overwrite it)
+    await expect(async () => tool.run({ ...args, name: 'Deploy-AIR.ps1', code: 'echo 2' }, ctx)).rejects.toThrow(/exists already/);
+  });
+
+  it('never overwrites a file the list leaves out (an oversized script)', async () => {
+    fs.mkdirSync(path.join(root, 'scripts'));
+    const big = path.join(root, 'scripts', 'big.ps1');
+    fs.writeFileSync(big, `# ${'x'.repeat(300_000)}\n`);
+    const scripts = new BrainScripts(() => root);
+    const tool = chatScriptAddTool(scripts, () => 'x');
+    await expect(async () => tool.run({ ...args, name: 'big.ps1' }, ctx)).rejects.toThrow(/exists already/);
+    await expect(async () => tool.run({ ...args, name: 'BIG.ps1' }, ctx)).rejects.toThrow(/exists already/);
+    expect(fs.statSync(big).size).toBeGreaterThan(300_000);
   });
 
   it('refuses a credential', async () => {
     const tool = chatScriptAddTool(new BrainScripts(() => root), () => 'x');
     await expect(async () => tool.run({ ...args, name: 'b.ps1', code: `$${'pass'}${'word'} = "${'demo-non-reale-42'}"` }, ctx)).rejects.toThrow(/credential/);
+    for (const code of CREDENTIAL_COMMANDS) await expect(async () => tool.run({ ...args, name: 'c.ps1', code }, ctx), code).rejects.toThrow(/credential/);
   });
 });
