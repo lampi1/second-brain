@@ -2,12 +2,12 @@
 // scripts/demo-brain.mjs) so they always show the current UI with fictional data only: dark theme, 1600x1000, saved as
 // WebP (< 300 KB each) in docs/screenshots/. Not part of `npm run check`: run by `npm run shots`
 // (its own Playwright config, playwright.shots.config.ts). The app runs hidden (SB_HIDDEN, set by launch()).
-import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
+import { expect, test, type ElectronApplication, type Locator, type Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { launch, openOrchestrator, setSize, waitThumbs, goPage } from '../e2e/helpers';
+import { launch, openOrchestrator, openNotesMap, setSize, waitThumbs, goPage } from '../e2e/helpers';
 // @ts-expect-error plain ESM helper without types
 import { demoBrain } from '../../scripts/demo-brain.mjs';
 
@@ -29,14 +29,15 @@ test.beforeAll(async () => {
 });
 test.afterAll(async () => { await app?.close(); });
 
-/** Screenshot → WebP in the page (Chromium's encoder: no image dependency), lowering the quality until < 300 KB. */
-async function save(name: string): Promise<void> {
+/** Screenshot (of the whole window, or of one part of it) → WebP in the page (Chromium's encoder: no image dependency),
+ *  lowering the quality until < 300 KB. */
+async function save(name: string, part?: Locator): Promise<void> {
   // transient toasts ("Task aggiornati") would cover the page
   for (const x of await page.getByTestId('toast-close').all()) await x.click();
   await expect(page.getByTestId('toast')).toHaveCount(0);
   await page.mouse.move(2, 2);
   await page.waitForTimeout(300);
-  const png = await page.screenshot({ animations: 'disabled', caret: 'hide' });
+  const png = await (part ?? page).screenshot({ animations: 'disabled', caret: 'hide' });
   for (const q of [0.9, 0.82, 0.74, 0.66]) {
     const b64 = await page.evaluate(async ([data, quality]) => {
       const bytes = Uint8Array.from(atob(data as string), c => c.charCodeAt(0));
@@ -80,10 +81,11 @@ test('README screenshots', async () => {
   await goPage(page, 'home');
   await expect(page.getByTestId('view-agents')).toBeVisible();
 
-  // 2. The Orchestrator: the coordinating chat, in its column on the right, with its decision waiting
+  // 2. The Orchestrator: the coordinating chat in its column, cut out of the page: its sub-agents, its plan with the
+  // estimates, the mail between chats and the decision waiting for the user
   await openOrchestrator(page);
   await waitThumbs(page);
-  await save('orchestrator');
+  await save('orchestrator', page.getByTestId('orchestrator-overlay'));
 
   // 3. A browser driven by an agent, big next to its chat (focus mode on the chat)
   await page.getByTestId('tile-chat-qa').locator('.tile-head').click();
@@ -97,9 +99,8 @@ test('README screenshots', async () => {
   await tool('fix', { id: 'shot-read', name: 'Read', input: { file_path: 'C:\\brains\\demo\\now.md' }, summary: 'now.md' });
   await tool('fix', { id: 'shot-agent', name: 'Agent', input: { subagent_type: 'reviewer' }, summary: 'reviewer' });
   await tool('orchestrator', { id: 'shot-send', name: 'mcp__second-brain-app__app_send_to_chat', input: { chatId: 'feedback', text: 'go' }, summary: 'App · Feedback' });
-  await page.getByTestId('nav-dashboard').click();
-    await page.getByRole('tab', { name: 'Mappa brain' }).click();
-    await page.getByRole('button', { name: 'Esplora in 3D' }).click();
+  await openNotesMap(page);
+  await page.getByRole('button', { name: 'Esplora in 3D' }).click();
   await expect(page.getByTestId('brain-map').getByTestId('bx-map-canvas').locator('canvas')).toHaveCount(1, { timeout: 30_000 });
   await page.waitForTimeout(5000); // the layout settles
   await save('brain-map');
