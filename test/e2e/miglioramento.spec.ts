@@ -1,7 +1,8 @@
 // End-to-end: the "Regole imparate" section of the Regole page (ADR 0030, folded into Regole by ADR 0082; the old
 // page id and its G R shortcut open Regole) in the frozen demo (SB_DEMO=1 SB_DEMO_FREEZE=1) with the demo's
-// /api/improve and 'learn:act' (demo.ts demoLearn): estimates with its typical error, coverage and n, results out of
-// the count, a proposal with its gain and [Applica] / [No], the after-check, [Ripristina]; routing "senza dati". The
+// /api/improve and 'learn:act' (demo.ts demoLearn): the model choice with its typical error, coverage and n, results
+// out of the count, a proposal with its gain and [Applica] / [No], the after-check, [Ripristina]; notifications "senza
+// dati"; the brain's retired cost/time estimator is not shown (ADR 0053, 0101). The
 // clicks go through main and change the page. Screenshots: test-results/shots/miglioramento-*.png.
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
 import fs from 'node:fs';
@@ -31,11 +32,12 @@ test('Regole imparate: one card per policy with its numbers and n; Applica, Ripr
   await expect(page.getByTestId('nav-miglioramento')).toHaveCount(0); // no page of its own any more
   await goPage(page, 'regole');
   const p = page.getByTestId('page-miglioramento');
-  const est = p.getByTestId('bx-learn-estimates');
+  await expect(p.getByTestId('bx-learn-estimates')).toHaveCount(0);
+  const est = p.getByTestId('bx-learn-routing');
   await expect(est).toBeVisible({ timeout: 30000 });
   await expect(p.getByTestId('bx-learned-lead')).toContainText('1 proposta da decidere');
 
-  await expect(est).toContainText('Stime di tempo e costo');
+  await expect(est).toContainText('Scelta del modello');
   await expect(est).toContainText('v2');
   await expect(est.getByTestId('bx-learn-error')).toContainText('×1,7');
   await expect(est.getByTestId('bx-learn-error')).toContainText('sulle ultime 30');
@@ -45,16 +47,15 @@ test('Regole imparate: one card per policy with its numbers and n; Applica, Ripr
   await expect(est.getByTestId('bx-learn-proposal')).toContainText('su 42 casi in comune');
   await expect(est.getByTestId('bx-learn-check')).toContainText('migliorata');
   await expect(est.getByTestId('bx-learn-rollback')).toHaveText('Ripristina v1');
-  const routing = p.getByTestId('bx-learn-routing');
-  await expect(routing).toContainText('Scelta del modello');
-  await expect(routing.getByTestId('bx-learn-error')).toContainText('senza dati: 12 misurati, ne servono 20');
+  const notify = p.getByTestId('bx-learn-notifications');
+  await expect(notify.getByTestId('bx-learn-error')).toContainText('senza dati: 12 misurati, ne servono 20');
   await shot(page, 'miglioramento');
   // the intro and a "?" beside the terms that are not obvious: its explanation on focus
   await expect(p.getByText('Niente cambia finché non premi Applica')).toBeVisible();
-  await est.getByTestId('bx-help-h-prop-estimates').focus();
+  await est.getByTestId('bx-help-h-prop-routing').focus();
   await expect(est.getByRole('tooltip').filter({ hasText: 'almeno 30' })).toBeVisible();
   await shot(page, 'miglioramento-aiuto');
-  await est.getByTestId('bx-help-h-prop-estimates').blur();
+  await est.getByTestId('bx-help-h-prop-routing').blur();
 
   // [Applica]: v3, the proposal gone, the after-check waiting
   await est.getByTestId('bx-learn-apply').click();

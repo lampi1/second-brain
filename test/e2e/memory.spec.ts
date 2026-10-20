@@ -1,6 +1,6 @@
 // E2E of the Memoria page's statistics and the "Manutenzione" button (owner, 2026-10-19) on the frozen demo brain: the
 // key numbers with their "?" explanations, "Lo sapevi?", the growth and per-agent charts, the recurring errors (a group
-// of 3), the skills table (a skill never used), the most recalled lines and the stale files; a memory card's lines are
+// of 3), the skills table (a skill never used), and the stale files (no "richiami" since ADR 0101); a memory card's lines are
 // rendered Markdown and "Apri il file" opens the real file in the viewer; "Manutenzione" runs every job, says what each
 // did and lists the change it made (the duplicate memory moved to the shared one) with "Annulla", which takes it back.
 // Screenshots dark and light in test-results/shots/memory-*.png.
@@ -38,7 +38,7 @@ test('Memoria: statistics with explanations, rendered memories that open, Manute
     await expect(ins.getByTestId('mm-error-groups')).toContainText("Ha letto l'avviso generico");
     await expect(ins.getByTestId('mm-skill-pulizia-ambiente')).toHaveAttribute('data-verdict', 'unused');
     await expect(ins.getByTestId('mm-skill-note-di-rilascio')).toContainText(/\d/);
-    await expect(ins.getByTestId('mm-recalled').locator('li').first()).toContainText(/\d+\s*run/); // the top line depends on every demo source's runs (Classificatori adds some)
+    await expect(ins.getByTestId('mm-recalled')).toHaveCount(0); // no "richiami" (ADR 0101)
     await expect(ins.getByTestId('mm-stale')).toContainText('Vecchio server di prova');
     await shot(page, 'memory-stats-dark');
 
@@ -46,7 +46,7 @@ test('Memoria: statistics with explanations, rendered memories that open, Manute
     const scout = mem.getByTestId('bm-mem-agents/scout/memory.md');
     await expect(scout.locator('.mm-lines time').first()).toBeVisible();
     await expect(mem.getByTestId('bm-mem-agents/artisan/memory.md').locator('.mm-lines code').first()).toHaveText('release/*'); // inline code rendered
-    await expect(scout.getByTestId('mm-card-recalls')).toContainText('run');
+    await expect(scout.getByTestId('mm-card-recalls')).toHaveCount(0);
     await scout.scrollIntoViewIfNeeded();
     await shot(page, 'memory-cards-dark');
     await scout.getByTestId('mm-open').click();

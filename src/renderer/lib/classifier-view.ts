@@ -2,13 +2,13 @@
 // "cose curiose che catturano l'attenzione e ti facciano capire a cosa servono"). One CardView per classifier: the
 // four record-keeping ones from main (ClassifiersState.cards), the estimates one from the brain's loop
 // (/api/improve, LearnPolicy 'estimates') and the task estimator's weekly backtest (IPC agents:estimates → accuracy,
-// ADR 0087); the weekly hit series, the learning progress toward the 20 verified cases
-// and the "curious facts", each built only from data and only above a minimum count (no fact from 2 cases). A value
-// without data stays null ("nessun dato ancora"), never zero. No React, no IPC: unit-tested in
+// ADR 0087); the weekly hit series and the advice, built only from data, only from MIN_FACT cases up and only when it
+// ends with something the user can do (ADR 0101: the "Lo sapevi?" curiosities on 5 cases, the "sta imparando" trends
+// and the "pronto a calibrarsi" meter of a calibration removed in bb953da are gone). The brain's own estimates loop is
+// no card any more (ADR 0053 retired that estimator from the UI; ADR 0101 hid its last card). A value without data
+// stays null ("nessun dato ancora"), never zero. No React, no IPC: unit-tested in
 // test/unit/brain-ui/classifier-view.test.ts; used by components/brain-model/ClassifiersPage.tsx and ClassifierDetail.tsx.
 import type { ClassifierCard, ClassifierCardId, ClassifierStat, ClassifierWeek, ClassifiersState } from '@shared/brain-model';
-import { CLASSIFIER_NEED } from '@shared/brain-model';
-import { roleName } from '@shared/roles';
 import type { EstimateAccuracy } from '@shared/task-estimate';
 import type { LearnPolicy } from '../brain/lib/learn';
 import { t, locale } from '../i18n';
@@ -16,7 +16,7 @@ import { getKindIt } from './routing';
 import { formatCost, prettyModel } from './format';
 
 export type CardId = ClassifierCardId | 'estimates' | 'tasks';
-export const CARD_ORDER: CardId[] = ['kind', 'model', 'skills', 'tasks', 'estimates', 'jobkind'];
+export const CARD_ORDER: CardId[] = ['kind', 'model', 'skills', 'tasks', 'jobkind'];
 
 export interface CardView {
   id: CardId;
@@ -34,18 +34,18 @@ export interface CardView {
   slices: ClassifierCard['slices'];
   compare: ClassifierCard['compare'];
   lastAt: number | null;
-  /** verified cases toward the calibration need */
-  progress: { n: number; need: number };
   /** the estimates loop's own figures */
-  estimates?: { typical: number | null; version: number | null; check: string | null; pending: boolean };
-  /** the task estimator's own figures: per week the share resting on the same role and kind, the last median gap,
-   *  the change in hit share between the first and the last week with data (0..1 points) */
-  tasks?: { specific: (number | null)[]; medianErr: number | null; trend: number | null; lastSpecific: number | null };
+  estimates?: { typical: number | null; version: number | null; check: string | null; pending: boolean; n: number };
+  /** the task estimator's own figures: per week the share resting on the same role and kind, the last median gap */
+  tasks?: { specific: (number | null)[]; medianErr: number | null; lastSpecific: number | null };
 }
 
-const MIN_FACT = 5; // no fact rests on fewer cases
+/** no advice rests on fewer cases (5 was noise, E-apprendimento §5; ADR 0101) */
+export const MIN_FACT = 20;
 const pctFmt = (v: number) => new Intl.NumberFormat(locale(), { style: 'percent', maximumFractionDigits: 0 }).format(v);
 export const pctOf = (s: ClassifierStat): string | null => (s.value === null ? null : pctFmt(s.value));
+/** "34/46": the count behind a share, shown beside every percentage that stays (ADR 0101) */
+export const kOfN = (s: ClassifierStat): string => `${s.value === null ? 0 : Math.round(s.value * s.n)}/${s.n}`;
 const num = (v: number, d = 1) => new Intl.NumberFormat(locale(), { maximumFractionDigits: d }).format(v);
 const money = (v: number) => formatCost(v);
 export const usdOf = (v: number | null): string | null => (v === null ? null : money(v));
@@ -63,12 +63,11 @@ type JobKindKey = (typeof JOB_KINDS)[number];
 
 /** Main's card as the page draws it. */
 export function fromMain(c: ClassifierCard): CardView {
-  const known = c.id === 'jobkind' ? c.hit.n : c.success.n;
-  return { id: c.id, decisions: c.decisions, hit: c.hit, success: c.success, ...(c.unverified ? { unverified: c.unverified } : {}), avgCostUsd: c.avgCostUsd, threshold: c.threshold, weeks: c.weeks, spark: [], slices: c.slices, compare: c.compare, lastAt: c.lastAt, progress: { n: known, need: CLASSIFIER_NEED } };
+  return { id: c.id, decisions: c.decisions, hit: c.hit, success: c.success, ...(c.unverified ? { unverified: c.unverified } : {}), avgCostUsd: c.avgCostUsd, threshold: c.threshold, weeks: c.weeks, spark: [], slices: c.slices, compare: c.compare, lastAt: c.lastAt };
 }
 
 /** The estimates loop's policy as a card: decisions = estimates recorded, hit = how often the real value fell inside
- *  the estimated range (coverage), progress = measured items toward the loop's minimum. */
+ *  the estimated range (coverage). Not in CARD_ORDER (ADR 0053/0101): kept for the brain's loop data shape. */
 export function fromEstimates(p: LearnPolicy | undefined): CardView {
   const appliedAt = p?.appliedAt ? Date.parse(p.appliedAt) : NaN;
   return {
@@ -76,8 +75,7 @@ export function fromEstimates(p: LearnPolicy | undefined): CardView {
     hit: p?.coverage ? { value: p.coverage.rate, n: p.coverage.n } : { value: null, n: 0 },
     success: { value: null, n: 0 }, avgCostUsd: null, threshold: null, weeks: null, spark: p?.spark ?? [], slices: [], compare: null,
     lastAt: Number.isFinite(appliedAt) ? appliedAt : null,
-    progress: { n: p?.n ?? 0, need: CLASSIFIER_NEED },
-    estimates: { typical: p?.typical ?? null, version: p?.version ?? null, check: p?.lastCheck?.state ?? null, pending: !!p?.pending },
+    estimates: { typical: p?.typical ?? null, version: p?.version ?? null, check: p?.lastCheck?.state ?? null, pending: !!p?.pending, n: p?.n ?? 0 },
   };
 }
 
@@ -90,7 +88,7 @@ export function isoWeekOf(weekStart: number): string {
 }
 
 /** The task estimator's backtest as a card: decisions = ended tasks that had an estimate, hit = the share that held
- *  (real time between half and double), weeks = its 8 weeks, progress = estimated tasks toward the need. */
+ *  (real time between half and double), weeks = its 8 weeks. */
 export function fromTaskAccuracy(a: EstimateAccuracy | null | undefined): CardView {
   const points = a?.points ?? [];
   const withData = points.filter(p => p.n > 0);
@@ -99,8 +97,7 @@ export function fromTaskAccuracy(a: EstimateAccuracy | null | undefined): CardVi
     id: 'tasks', decisions: a?.n ?? 0, hit: { value: a?.hitRate ?? null, n: a?.n ?? 0 }, success: { value: null, n: 0 },
     avgCostUsd: null, threshold: null, spark: [], slices: [], compare: null, lastAt: null,
     weeks: points.map(p => ({ week: isoWeekOf(p.weekStart), decisions: p.n, hits: p.hitRate === null ? 0 : Math.round(p.hitRate * p.n), known: 0, ok: 0, avgCostUsd: null })),
-    progress: { n: a?.n ?? 0, need: CLASSIFIER_NEED },
-    tasks: { specific: points.map(p => (p.n ? p.specificShare : null)), medianErr: last?.medianErr ?? null, trend: a?.trend ?? null, lastSpecific: last?.specificShare ?? null },
+    tasks: { specific: points.map(p => (p.n ? p.specificShare : null)), medianErr: last?.medianErr ?? null, lastSpecific: last?.specificShare ?? null },
   };
 }
 
@@ -129,59 +126,23 @@ export function hitTrend(weeks: ClassifierWeek[]): { before: number; after: numb
   return { before: sum(a, 'hits') / sum(a, 'decisions'), after: sum(b, 'hits') / sum(b, 'decisions') };
 }
 
-/** The curious facts a card can tell, most telling first; each needs at least MIN_FACT cases. */
-export function facts(c: CardView, sources: ClassifiersState['sources'] = []): string[] {
+/** The advice a card can give, most useful first: each rests on at least MIN_FACT cases (or 10 per side of a
+ *  comparison) and ends with what to do; a figure that leads to no action is not told (ADR 0101). */
+export function facts(c: CardView, _sources: ClassifiersState['sources'] = []): string[] {
   const out: string[] = [];
   const total = c.slices.reduce((s, x) => s + x.count, 0);
-  const top = c.slices[0];
-  const week = c.weeks?.[c.weeks.length - 1], prev = c.weeks?.[c.weeks.length - 2];
-  if (c.id === 'kind') {
-    const big = c.slices.find(s => s.key !== 'altro' && s.top && s.count >= MIN_FACT && s.top.count / s.count >= 0.5);
-    if (big?.top) out.push(t('stats.fact.kindRole', { pct: pctFmt(big.top.count / big.count), kind: sliceLabel('kind', big.key), role: roleName(big.top.key) }));
-    if (top && total >= MIN_FACT) out.push(t('stats.fact.kindTop', { pct: pctFmt(top.count / total), kind: sliceLabel('kind', top.key) }));
-    const tr = c.weeks ? hitTrend(c.weeks) : null;
-    if (tr && tr.after > tr.before + 0.02) out.push(t('stats.fact.kindLearns', { from: pctFmt(1 - tr.before), to: pctFmt(1 - tr.after) }));
-    if (c.compare && c.compare.hit.n >= MIN_FACT && c.compare.miss.n >= 3) out.push(t('stats.fact.kindCompare', { hit: pctFmt(c.compare.hit.value!), miss: pctFmt(c.compare.miss.value!) }));
+  const priced = (other: string) => c.slices.filter(s => s.key !== other && s.avgCostUsd !== null && s.count >= 10).sort((a, b) => b.avgCostUsd! - a.avgCostUsd!);
+  if (c.id === 'kind' && total >= MIN_FACT) {
+    const other = c.slices.find(s => s.key === 'altro')?.count ?? 0;
+    if (other / total >= 0.25) out.push(t('stats.fact.kindOther', { k: other, n: total }));
   }
-  if (c.id === 'model') {
-    const all = sources.reduce((s, x) => s + x.chats, 0), agent = sources.find(s => s.source === 'agent')?.chats ?? 0;
-    if (all >= MIN_FACT && agent) out.push(t('stats.fact.modelAgent', { k: Math.round((agent / all) * 10), n: 10 }));
-    const priced = c.slices.filter(s => s.avgCostUsd !== null && s.count >= 3).sort((a, b) => b.avgCostUsd! - a.avgCostUsd!);
-    const hi = priced[0], lo = priced[priced.length - 1];
-    if (hi && lo && hi !== lo && lo.avgCostUsd! > 0 && hi.avgCostUsd! / lo.avgCostUsd! >= 1.5) out.push(t('stats.fact.modelCost', { hi: sliceLabel('model', hi.key), lo: sliceLabel('model', lo.key), x: num(hi.avgCostUsd! / lo.avgCostUsd!) }));
-    if (top && total >= MIN_FACT) out.push(t('stats.fact.modelTop', { pct: pctFmt(top.count / total), model: sliceLabel('model', top.key) }));
+  if (c.id === 'model' || c.id === 'jobkind') {
+    const list = priced(c.id === 'model' ? '' : 'other'), hi = list[0], lo = list[list.length - 1];
+    if (hi && lo && hi !== lo && lo.avgCostUsd! > 0 && hi.avgCostUsd! / lo.avgCostUsd! >= 1.5) {
+      const p = { hi: sliceLabel(c.id, hi.key), lo: sliceLabel(c.id, lo.key), x: num(hi.avgCostUsd! / lo.avgCostUsd!), nHi: hi.count, nLo: lo.count };
+      out.push(c.id === 'model' ? t('stats.fact.modelCost', p) : t('stats.fact.jobCost', p));
+    }
   }
-  if (c.id === 'skills') {
-    if (c.hit.n >= MIN_FACT && c.hit.value !== null) out.push(t('stats.fact.skillsHit', { k: Math.round(c.hit.value * 10), n: 10 }));
-    if (week && week.decisions >= MIN_FACT) out.push(t('stats.fact.skillsWeek', { miss: week.decisions - week.hits, n: week.decisions }));
-    if (c.compare && c.compare.hit.n >= MIN_FACT && c.compare.miss.n >= 3) out.push(t('stats.fact.skillsCompare', { hit: pctFmt(c.compare.hit.value!), miss: pctFmt(c.compare.miss.value!) }));
-  }
-  if (c.id === 'jobkind') {
-    const priced = c.slices.filter(s => s.key !== 'other' && s.avgCostUsd !== null && s.count >= 3).sort((a, b) => b.avgCostUsd! - a.avgCostUsd!);
-    const hi = priced[0], lo = priced[priced.length - 1];
-    if (hi && lo && hi !== lo && lo.avgCostUsd! > 0) out.push(t('stats.fact.jobCost', { hi: sliceLabel('jobkind', hi.key), lo: sliceLabel('jobkind', lo.key), x: num(hi.avgCostUsd! / lo.avgCostUsd!) }));
-    if (top && total >= MIN_FACT) out.push(t('stats.fact.jobTop', { pct: pctFmt(top.count / total), kind: sliceLabel('jobkind', top.key) }));
-  }
-  if (c.id === 'estimates') {
-    if (c.hit.value !== null && c.hit.n >= MIN_FACT) out.push(t('stats.fact.estCover', { k: Math.round(c.hit.value * 10), n: 10 }));
-    if (c.estimates?.typical != null && c.progress.n >= MIN_FACT) out.push(t('stats.fact.estTypical', { x: num(c.estimates.typical) }));
-    if (c.estimates?.check === 'migliorata' && c.estimates.version !== null) out.push(t('stats.fact.estBetter', { v: c.estimates.version }));
-  }
-  if (c.id === 'tasks' && c.tasks) {
-    const weeksWith = (c.weeks ?? []).filter(w => w.decisions > 0).length;
-    if (c.hit.value !== null && c.hit.n >= MIN_FACT) out.push(t('stats.fact.taskHeld', { k: Math.round(c.hit.value * 10), n: 10 }));
-    if (c.tasks.trend !== null && c.tasks.trend >= 0.02 && c.hit.n >= MIN_FACT && weeksWith >= 2) out.push(t('stats.fact.taskLearns', { d: Math.round(c.tasks.trend * 100), w: weeksWith }));
-    if (c.tasks.lastSpecific !== null && c.hit.n >= MIN_FACT) out.push(t('stats.fact.taskSpecific', { pct: pctFmt(c.tasks.lastSpecific) }));
-    if (c.tasks.medianErr !== null && c.hit.n >= MIN_FACT) out.push(t('stats.fact.taskErr', { pct: pctFmt(c.tasks.medianErr) }));
-  }
-  if (week && prev && week.decisions + prev.decisions >= MIN_FACT && c.id !== 'skills') {
-    const d = week.decisions - prev.decisions;
-    out.push(d === 0 ? t('stats.fact.weekSame', { n: week.decisions }) : t('stats.fact.weekDelta', { n: week.decisions, d: Math.abs(d), more: d > 0 }));
-  }
+  if (c.id === 'tasks' && c.hit.value !== null && c.hit.n >= MIN_FACT && c.hit.value < 0.5) out.push(t('stats.fact.taskLoose', { k: Math.round(c.hit.value * c.hit.n), n: c.hit.n }));
   return out;
-}
-
-/** The progress meter's state: learning (under the need), ready (enough to calibrate), or idle (no case at all). */
-export function progressState(c: CardView): 'idle' | 'learning' | 'ready' {
-  return c.progress.n === 0 ? 'idle' : c.progress.n >= c.progress.need ? 'ready' : 'learning';
 }

@@ -114,21 +114,23 @@ describe('accuracy over the weeks', () => {
     expect(acc.points.every((p, i, all) => i === 0 || p.weekStart > all[i - 1]!.weekStart)).toBe(true);
     expect(acc.n).toBe(3);
     expect(acc.hitRate).toBeCloseTo(2 / 3);
-    expect(acc.trend).toBe(1); // first week with data 0%, last one 100%
+    expect(acc.hits).toBe(2); // k of n within ×2; no trend (ADR 0101)
+    expect(acc).not.toHaveProperty('trend');
     const last = acc.points.filter(p => p.n).at(-1)!;
     expect(last).toMatchObject({ n: 2, hitRate: 1, specificShare: 1 });
-    expect(estimateAccuracy([], now)).toMatchObject({ n: 0, hitRate: null, trend: null });
+    expect(estimateAccuracy([], now)).toMatchObject({ n: 0, hits: 0, hitRate: null });
   });
   it('weeks start on Monday, local time', () => {
     const w = new Date(weekStart(new Date(2026, 9, 22, 15).getTime()));
     expect([w.getDay(), w.getDate(), w.getHours()]).toEqual([1, 19, 0]);
   });
-  it('the demo history is deterministic and its accuracy improves', () => {
+  it('the demo history is deterministic and has checked estimates', () => {
     const now = Date.UTC(2026, 9, 11, 8, 30);
     expect(demoEstimateRuns(now)).toEqual(demoEstimateRuns(now));
     const s = estimatesState(demoEstimateRuns(now), [], now);
     expect(s.accuracy.n).toBeGreaterThan(40);
-    expect(s.accuracy.trend).toBeGreaterThan(0);
+    expect(s.accuracy.hits).toBeGreaterThan(0);
+    expect(s.accuracy.hits).toBeLessThanOrEqual(s.accuracy.n);
   });
 });
 

@@ -2,7 +2,7 @@
 // decides, why it exists, how it works and what its numbers tell you; the key numbers with their "?"; how it is
 // learning week by week (its hit measure and the verified success, one percent axis, gaps for empty weeks) and its
 // decisions per week; what it decided (slices with count, success, cost and the role that ran it most); success when
-// it hit versus when it missed; every curious fact; and the tables of before, each under its classifier: the routing
+// the advice that ends with an action (ADR 0101); and the tables of before, each under its classifier: the routing
 // table with its history, who chose the model and the quality by week (Scelta del modello), the outcomes per kind
 // (Tipo di lavoro), the skill choices (Skill per un compito). Read only. Used by ClassifiersPage.tsx.
 import type { ReactNode } from 'react';
@@ -10,12 +10,12 @@ import type { ClassifiersState, RouteResult } from '@shared/brain-model';
 import { roleName } from '@shared/roles';
 import { locale, t } from '../../i18n';
 import { choiceMatch, noData, pct, usd } from '../../lib/brain-model-view';
-import { facts, hitSeries, pctOf, sliceLabel, successSeries, usdOf, weekLabel, type CardView } from '../../lib/classifier-view';
+import { facts, hitSeries, kOfN, pctOf, sliceLabel, successSeries, usdOf, weekLabel, type CardView } from '../../lib/classifier-view';
 import { BarChart, HBarChart } from '../../brain/components/Charts';
 import { HelpTip } from '../HelpTip';
 import { when } from './MaintenancePanel';
 import { TrendChart } from './TrendChart';
-import { ClsIcon, Num, Progress, ct, pctFmt, third } from './ClassifierParts';
+import { ClsIcon, Num, ct, pctFmt, third } from './ClassifierParts';
 
 const SOURCES = ['table', 'agent', 'default', 'override', 'explore'] as const;
 const sourceLabel = (s: string) => ((SOURCES as readonly string[]).includes(s) ? t(`bm.cls.source.${s as (typeof SOURCES)[number]}`) : s);
@@ -93,14 +93,13 @@ export function ClassifierDetail({ c, state, onBack }: { c: CardView; state: Cla
     </div>
     <div className="cls-summary">
       <Num label={t('stats.cls.decisions')} value={c.decisions ? c.decisions.toLocaleString(locale()) : null} help={ct(c.id, 'decisionsHelp')} />
-      <Num label={ct(c.id, 'hit')} value={pctOf(c.hit)} sub={t('stats.cls.n', { n: c.hit.n })} help={ct(c.id, 'hitHelp')} />
-      {c.id !== 'estimates' && c.id !== 'jobkind' && c.id !== 'tasks' && <Num label={t('stats.cls.success')} value={pctOf(c.success)} sub={t('stats.cls.n', { n: c.success.n })} help={t('stats.cls.successHelp')} />}
+      <Num label={ct(c.id, 'hit')} value={pctOf(c.hit)} sub={kOfN(c.hit)} help={ct(c.id, 'hitHelp')} />
+      {c.id !== 'estimates' && c.id !== 'jobkind' && c.id !== 'tasks' && <Num label={t('stats.cls.success')} value={pctOf(c.success)} sub={kOfN(c.success)} help={t('stats.cls.successHelp')} />}
       <Num label={k3.label} value={k3.value} help={k3.help} />
       {c.id === 'skills' && <Num label={t('stats.cls.threshold')} value={c.threshold === null ? null : String(c.threshold)} help={t('stats.cls.thresholdHelp')} />}
     </div>
     <section className="dash-panel cls-facts" data-testid="cls-facts"><header><div><h3>{t('stats.cls.facts')}</h3></div></header>
       {all.length ? <ul>{all.map((f, i) => <li key={i}><span aria-hidden="true">✦</span>{f}</li>)}</ul> : <p className="bm-empty">{t('stats.cls.factsNone')}</p>}
-      <div className="cls-facts-progress"><Progress c={c} /></div>
     </section>
     {c.weeks && <div className="cls-detail-charts">
       <Panel testId="cls-learning" title={t('stats.cls.learning')} lead={t('stats.cls.learningLead')}>
@@ -119,21 +118,12 @@ export function ClassifierDetail({ c, state, onBack }: { c: CardView; state: Cla
         <div className="bm-table-wrap"><table className="bm-table">
           <thead><tr><th>{t('stats.cls.col.value')}</th><th className="num">{t('stats.cls.col.count')}</th>{c.id !== 'jobkind' && <th className="num">{t('stats.cls.col.success')}</th>}<th className="num">{t('stats.cls.col.cost')}</th>{c.id !== 'jobkind' && <th>{t('stats.cls.col.top')}</th>}</tr></thead>
           <tbody>{slices.map(s => <tr key={s.key}><td>{sliceLabel(c.id, s.key)}</td><td className="num">{s.count}</td>
-            {c.id !== 'jobkind' && <td className="num">{s.known ? `${pct(s.ok / s.known, locale())} (${s.known})` : <NoData />}</td>}
+            {c.id !== 'jobkind' && <td className="num">{s.known ? `${pct(s.ok / s.known, locale())} (${s.ok}/${s.known})` : <NoData />}</td>}
             <td className="num"><Val v={usdOf(s.avgCostUsd)} /></td>
             {c.id !== 'jobkind' && <td>{s.top ? `${roleName(s.top.key)} · ${s.top.count}` : '—'}</td>}</tr>)}</tbody>
         </table></div>
       </Panel>
     </div>}
-    {c.compare && <Panel testId="cls-compare" title={t('stats.cls.compare')} help={t('stats.cls.compareHelp')}>
-      <div className="cls-compare">
-        {([['hit', c.compare.hit], ['miss', c.compare.miss]] as const).map(([k, s]) => <div key={k} data-side={k}>
-          <span>{k === 'hit' ? t('stats.cls.compareHit') : t('stats.cls.compareMiss')}</span>
-          <strong>{pctOf(s) ?? t('stats.cls.noData')}</strong><small>{t('stats.cls.n', { n: s.n })}</small>
-          <div className="cls-meter"><i style={{ width: `${Math.round((s.value ?? 0) * 100)}%` }} /></div>
-        </div>)}
-      </div>
-    </Panel>}
     {c.id === 'model' && <ModelTables state={state} />}
     {c.id === 'kind' && <KindTable state={state} />}
     {c.id === 'skills' && <SkillChoices state={state} />}

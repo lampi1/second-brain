@@ -8,7 +8,8 @@ vi.mock('../../src/renderer/store/store', () => ({ useApp: vi.fn(), app: { get: 
 vi.mock('../../src/renderer/store/agents', () => ({ useAgents: () => ({ catalog: { profiles: [] } }) }));
 import type { ChatSummary } from '../../src/shared/contract';
 import type { RunEstimateView } from '../../src/shared/task-estimate';
-import { EstimateChip } from '../../src/renderer/components/RunEstimate';
+import { AccuracyNote, EstimateChip } from '../../src/renderer/components/RunEstimate';
+import { it as itDict } from '../../src/renderer/i18n/it';
 import { setLang } from '../../src/renderer/i18n';
 
 afterEach(() => setLang('it'));
@@ -18,7 +19,7 @@ const run = { runId: 'r_000000000001', chatId: 'c', agentId: 'artisan', version:
 const chat = (endedAt?: number) => ({ id: 'c', title: 'Fix', agent: { name: 'Artisan' }, run: { ...run, ...(endedAt ? { endedAt } : {}) } }) as unknown as ChatSummary;
 const view = (p: Partial<RunEstimateView> = {}): RunEstimateView => ({ runId: run.runId, actual: null, hit: null, estimate: { kind: 'fix', basis: 'agent-kind', n: 12, timeMs: 4 * MIN, timeLowMs: 3 * MIN, timeHighMs: 6 * MIN,
   costUsd: 0.12, costLowUsd: null, costHighUsd: null, confidence: 'high', parts: 1, quick: true, path: 'one-agent', why: '' }, ...p });
-const summary = { pct: 68, n: 40, trendPts: 25, weeks: 6, specificPct: 80, bars: [{ weekStart: 1, pct: 40, n: 5 }, { weekStart: 2, pct: 68, n: 9 }] };
+const summary = { pct: 68, k: 27, n: 40, weeks: 6, specificPct: 80, bars: [{ weekStart: 1, pct: 40, n: 5 }, { weekStart: 2, pct: 68, n: 9 }] };
 const render = (c: ChatSummary, v: RunEstimateView | undefined, busy = true) => renderToStaticMarkup(createElement(EstimateChip, { chat: c, view: v, summary, busy, workMs: MIN }));
 
 describe('estimate chip', () => {
@@ -29,6 +30,7 @@ describe('estimate chip', () => {
     expect(html).toContain('ne restano ~3 min');
     expect(html).toContain('data-testid="estimate-help-r_000000000001"');
     expect(html).toContain('Come si calcola la stima');
+    expect(html).not.toContain('precisione');
   });
   it('shows estimate → actual with a mark once ended', () => {
     const html = render(chat(7 * MIN), view({ actual: { timeMs: 6 * MIN, costUsd: 0.1 }, hit: true }), false);
@@ -37,6 +39,13 @@ describe('estimate chip', () => {
     expect(html).toContain('th-estimate est-held');
     expect(html).not.toContain('ne restano');
     expect(render(chat(7 * MIN), view({ actual: { timeMs: 30 * MIN, costUsd: 0.1 }, hit: false }), false)).toContain('✗');
+  });
+  it('says how many estimates held as k/n within ×2, without "precisione" or a trend (ADR 0101)', () => {
+    const html = renderToStaticMarkup(createElement(AccuracyNote, { summary }));
+    expect(html).toContain('entro ×2: 27/40');
+    expect(html).not.toMatch(/precisione|pt in/);
+    // the "?" adds «Esempio:» itself: the example text does not repeat it
+    expect(itDict['estimate.example']).not.toMatch(/^Esempio/);
   });
   it('says nothing without an estimate, and speaks English', () => {
     expect(render(chat(), view({ estimate: null }))).toBe('');

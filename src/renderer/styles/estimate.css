@@ -12,8 +12,6 @@
 .est-acc { display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 11.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .est-acc.compact { margin-top: 0; }
 .est-acc-k { font-weight: 600; color: var(--text-2); }
-.est-acc-trend.up { color: var(--green); }
-.est-acc-trend.down { color: var(--amber); }
 .est-acc-none { margin: 4px 0 0; color: var(--text-3); font-size: 11.5px; }
 .est-bars { flex: none; overflow: visible; }
 .est-bars .est-bar { fill: color-mix(in srgb, var(--blue) 45%, transparent); }

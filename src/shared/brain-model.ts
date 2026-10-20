@@ -258,5 +258,3 @@ export interface ClassifierCard {
   compare: { hit: ClassifierStat; miss: ClassifierStat } | null;
   lastAt: number | null;
 }
-/** Verified outcomes a classifier needs before its numbers can calibrate anything (the loop's MIN_CAL). */
-export const CLASSIFIER_NEED = 20;

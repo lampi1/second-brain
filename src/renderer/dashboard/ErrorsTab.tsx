@@ -14,7 +14,7 @@ import { BarChart } from '../brain/components/Charts';
 import { HelpTip } from '../components/HelpTip';
 import { locale, t } from '../i18n';
 import type { ObservedError } from './data';
-import { daysSince, groupAiErrors, groupErrors, trendOf, type Cause } from './errors';
+import { groupAiErrors, groupErrors, trendOf, type Cause } from './errors';
 import '../styles/classifiers.css';
 
 export interface ErrorsUi {
@@ -45,7 +45,6 @@ export function ErrorsTab({ ui, tables, errors, now }: { ui: ErrorsUi; tables: L
   const groups = groupErrors(errors, now);
   const recurring = groups.filter(g => g.count > 1);
   const ai = tables.data ? groupAiErrors(tables.data.errors, tables.data.today, tables.data.quality, 14, t('stats.err.untyped')) : [];
-  const quiet = daysSince(errors.length ? Math.max(...errors.map(e => e.at)) : null, now);
   // AI errors per day, the last 14 days (a day without errors is a real zero: the file is complete)
   const today = tables.data?.today ?? '';
   const axis = Array.from({ length: 14 }, (_, i) => { const d = new Date(`${today}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - (13 - i)); return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10); });
@@ -53,7 +52,6 @@ export function ErrorsTab({ ui, tables, errors, now }: { ui: ErrorsUi; tables: L
   const facts: string[] = [];
   const top = groups[0];
   if (top && errors.length >= 3 && top.count / errors.length >= 0.4) facts.push(t('stats.err.factWorst', { pct: pctFmt(top.count / errors.length), what: cause(top.cause, 't').toLowerCase() }));
-  if (quiet !== null && quiet >= 1) facts.push(t('stats.err.factQuiet', { n: quiet }));
   if (ai[0] && ai[0].count >= 2) facts.push(t('stats.err.factAiTop', { type: ai[0].type, n: ai[0].count }));
   const back = ai.filter(g => g.status === 'tornato').length, held = ai.filter(g => g.status === 'non-tornato').length;
   if (back) facts.push(t('stats.err.factBack', { n: back }));
@@ -61,11 +59,11 @@ export function ErrorsTab({ ui, tables, errors, now }: { ui: ErrorsUi; tables: L
 
   return <>
     <Source data={tables} />
-    <div className="dash-stats dash-stats-4">
+    {/* no "Giorni senza errori": a streak, not a measure that leads to an action (ADR 0101) */}
+    <div className="dash-stats">
       <Stat label={t('stats.err.recurring')} value={num(recurring.length)} n={recurring.length} format={num} note={t('stats.err.recurringNote')} help={t('stats.err.recurringHelp')} />
       <Stat label={t('stats.err.events')} value={num(errors.length)} n={errors.length} format={num} note={t('stats.err.eventsNote')} help={t('stats.err.eventsHelp')} />
       <Stat label={t('stats.err.ai')} value={tables.data ? num(tables.data.errors.length) : '—'} n={tables.data?.errors.length} format={num} note="ai-errors.md" help={t('stats.err.aiHelp')} />
-      <Stat label={t('stats.err.quiet')} value={quiet === null ? '—' : num(quiet)} note={quiet === null ? t('stats.err.quietNone') : t('stats.err.quietNote')} help={t('stats.err.quietHelp')} />
     </div>
     {facts.length > 0 && <div className="err-facts" data-testid="err-facts">{facts.map((f, i) => <p className="err-fact" key={i}><span aria-hidden="true">✦</span><span>{f}</span></p>)}</div>}
     <Panel title={t('stats.err.groups')} note={t('stats.err.groupsLead')} facts={groups.map(g => `${cause(g.cause, 't')}: ${g.count}× (${g.sample})`).join('\n')} source="feed · chat:items">
