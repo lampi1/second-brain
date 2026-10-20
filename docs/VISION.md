@@ -2,11 +2,9 @@
 
 ## North star (2026-10-17)
 
-second-brain must become **the new enterprise standard for agentic software development**: **simple and accessible
-to non-technical people**, yet **highly performant and customizable for every company role** (developer, QA, product
-owner, CTO, and the others). The owner's words: "a me interessa soprattutto la visione agentica di quest'app, deve
-essere il nuovo standard enterprise per lo sviluppo agentico, semplice accessibile anche a non tecnici ma molto
-performante e customizzabile per ogni ruolo aziendale dev QA po cto ecc ecc".
+second-brain is a small, open project that tries to make **agentic software development simple and accessible to
+non-technical people**, while staying **fast and adaptable to different roles** (developer, QA, product owner, CTO,
+and others). It is one person's tool first; if it helps others too, all the better.
 
 What this means for every change:
 
@@ -18,7 +16,7 @@ What this means for every change:
 - **Simple by default, deep on demand.** A non-technical person sees only essential controls. Settings are a few groups
   (accounts and tools, workspace, appearance and language, notifications); technical detail appears in context, only
   when it is needed. Minimal, professional, well-proportioned UI; smooth, short animations.
-- **Enterprise-grade.** Safe by default, permissions never widened silently, every number with its source
+- **Trustworthy.** Safe by default, permissions never widened silently, every number with its source
   (real, estimate or quota), no gamification: only useful, truthful statistics. Errors, ideas and feedback show the
   agent and the **model that produced them**; history without that data shows "not available", never a guess.
 - **Changeable by anyone.** The code is modular enough that a cheap model, guided by a non-developer, can change it
