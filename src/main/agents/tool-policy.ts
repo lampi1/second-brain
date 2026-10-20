@@ -123,8 +123,8 @@ export function claudeDefaultMode(cwd: string, env: NodeJS.ProcessEnv = process.
   return mode;
 }
 
-/** Claude built-in tools per class. Always kept: planning and asking Brother. Subagents (Task) are left out: their tools
- *  are not bounded by `--tools`. Names checked against the embedded CLI (2026-10-17). */
+/** Claude built-in tools per class. Always kept: planning and asking Brother. Subagents (Agent/Task) only with every
+ *  class (claudeTools): their tools are not bounded by `--tools`. Names checked against the embedded CLI (2026-10-17). */
 const CLAUDE_BASE = ['TodoWrite', 'AskUserQuestion', 'ExitPlanMode', 'EnterPlanMode', 'ToolSearch'];
 const CLAUDE_TOOLS: Partial<Record<ToolClass, readonly string[]>> = {
   read: ['Read', 'Grep', 'Glob'],
@@ -137,8 +137,14 @@ const CLAUDE_TOOLS: Partial<Record<ToolClass, readonly string[]>> = {
   // (agents/role-gate.ts insideBrain: real path inside the brain, no "..", no link out)
   'brain-write': ['Edit', 'Write'],
 };
+/** The engine's sub-agent tool, given only to a policy with every tool class (the default since ADR 0085): its tools are
+ *  not bounded by `--tools`, but such a policy has nothing to escape, and the role gate still refuses every sub-agent
+ *  but the read-only Explore search (role-gate.ts). Before, no role ever had it, so the Explore searches ADR 0083/0090
+ *  allow put whole search results into the role's own context instead of a summary. */
+const SUBAGENT_TOOLS = ['Agent', 'Task'];
 export function claudeTools(tools: AgentToolPolicy): string[] {
-  return [...new Set([...CLAUDE_BASE, ...tools.allow.flatMap(c => CLAUDE_TOOLS[c] ?? [])])];
+  const every = TOOL_CLASSES.every(c => tools.allow.includes(c));
+  return [...new Set([...CLAUDE_BASE, ...tools.allow.flatMap(c => CLAUDE_TOOLS[c] ?? []), ...(every ? SUBAGENT_TOOLS : [])])];
 }
 
 /** Commands only (shell-read without shell): a command request is shown to the user only when it reads, else it is

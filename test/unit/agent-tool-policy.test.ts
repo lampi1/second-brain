@@ -238,3 +238,12 @@ describe('read-only commands (shell-read)', () => {
     expect(shellWithin(null, 'Bash', { command: 'rm x' })).toBe(true);
   });
 });
+
+describe('the sub-agent tool (Explore searches, token plan 2026-10-20)', () => {
+  it('only a policy with every tool class gets Agent/Task; a narrowed one never does', async () => {
+    const { claudeTools } = await import('../../src/main/agents/tool-policy');
+    const { TOOL_CLASSES } = await import('../../src/shared/agents');
+    expect(claudeTools({ allow: [...TOOL_CLASSES] })).toEqual(expect.arrayContaining(['Agent', 'Task']));
+    expect(claudeTools({ allow: ['read', 'shell-read'] })).not.toContain('Agent');
+  });
+});

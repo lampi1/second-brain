@@ -38,6 +38,9 @@ compacted only on the next day, on an expired cache (ADR 0031: ~2.10 $ for a col
 - A Sentinel's first message carries a review pack gathered with git (`agents/review-pack.ts`: branch, base, commits,
   changed and untracked files, the diff up to 12 000 characters, else how to read it per file) instead of the 5-15 git
   calls each reviewer made to rediscover it. Only the repository's facts: the review stays independent (ADR 0091).
+- A role with every tool class (the default) gets Claude's sub-agent tool, so the read-only Explore searches ADR
+  0083/0090 allow exist at last and return a summary instead of whole search results in the role's own context; the
+  role gate still refuses every other sub-agent, and a narrowed role never gets it (its tools are not bound by --tools).
 - `app_digest since:"last"` answers in full after the Orchestrator's context began again.
 - An Orchestrator quiet for most of an hour with 60k+ of context compacts while its cache is warm
   (`continuity.ts orchestratorWarmDue`, setting `orchestratorDayCompact`).
