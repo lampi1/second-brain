@@ -1,4 +1,4 @@
-// The routing table's row for a role chat whose role names no model (ADR 0078, 0090): the row that matches the chat's
+// The routing table's row for a role chat whose role names no model (ADR 0078, 0091): the row that matches the chat's
 // kind and area (from its title and prompt) on the role's own engine gives the model, and the effort when the role
 // names none, so the user can set e.g. Sentinel's reviews to claude-opus-5-5 with low effort from the table. Never
 // exploration, never the API switch, never another engine: a row on another engine is ignored and the tier decides.

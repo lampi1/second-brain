@@ -63,7 +63,7 @@ describe('JudgeSampler', () => {
     const { s, created, later } = make([run('1'), run('2'), run('3')], 2);
     expect(await s.tick()).toBe(2);
     expect(created[0]).toMatchObject({ harness: 'codex', roleId: 'judge', cwd: '/w' });
-    expect(created[0]).not.toHaveProperty('independentOf'); // a new session is the review's independence (ADR 0090)
+    expect(created[0]).not.toHaveProperty('independentOf'); // a new session is the review's independence (ADR 0091)
     expect(created.map(c => c.reviewOf).every(id => id?.startsWith('r_'))).toBe(true);
     expect(await s.tick()).toBe(0);                 // the day's cap
     later(86_400_000);

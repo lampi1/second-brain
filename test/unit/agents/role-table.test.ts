@@ -1,4 +1,4 @@
-// agents/role-table.ts (issue #99, ADR 0090): a role with no model of its own takes the routing table's row on its own
+// agents/role-table.ts (issue #99, ADR 0091): a role with no model of its own takes the routing table's row on its own
 // engine (model and effort), so e.g. Sentinel's reviews can run claude-opus-5-5 at low effort; a row on another engine,
 // no row, or the defaults never count; exploration and the API switch never apply.
 import { describe, expect, it } from 'vitest';

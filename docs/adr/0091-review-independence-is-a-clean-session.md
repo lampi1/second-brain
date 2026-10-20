@@ -1,4 +1,4 @@
-# ADR 0090 · A review's independence is its clean session; roles without a model follow the table; untouched roles follow the chosen engine
+# ADR 0091 · A review's independence is its clean session; roles without a model follow the table; untouched roles follow the chosen engine
 
 Date: 2026-10-20 · Status: accepted (owner, issues #99 and #96) · Supersedes: the "independent role" model switch of
 ADR 0083 (§1's `independent` field, §9's "on another model") · Restores: ADR 0078's "a profile with no model takes the

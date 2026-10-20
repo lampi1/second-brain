@@ -4,7 +4,7 @@ Date: 2026-10-19 · Status: accepted (owner, issue #89: «un lavoro divino»; th
 the questions rule and "the Orchestrator column is the only way to start work" confirmed by the owner on 2026-10-19)
 · Amended by ADR 0085 (2026-10-19 evening: every role has every permission by default and the user narrows it from
 its card; the planners launch the writing roles again; §1's default tools and ceilings and §3's "planners launch only
-Scout and Judge" no longer hold, the narrowing rules do) · Amended by ADR 0090 (2026-10-20, issue #99: no `independent` field and no model switch; a
+Scout and Judge" no longer hold, the narrowing rules do) · Amended by ADR 0091 (2026-10-20, issue #99: no `independent` field and no model switch; a
 review's independence is its clean new session, §9's Judge reviews on any model) · Replaces: the editable agent catalog with Italian presets and routed `legacy-*` profiles (ADR 0077, 0078), the
 Orchestrator-only sub-agent launch (`agent_start_subagent`), the brain's agent pointers, playbooks and specialist
 notebooks · Builds on: ADR 0006 (app MCP), 0021 (per-chat endpoints), 0068 (Grindhouse), 0082 (agent changes)
@@ -68,7 +68,7 @@ text. Permissions of a sub-agent were narrowed against the Orchestrator, not aga
    real and cost no token (`renderer/lib/run-steps.ts`): the engine's plan (Claude TodoWrite, Codex plan, Cursor ACP
    plan/todos), else the contract's criteria, plus the recent tool calls folded into readable lines. The parent's
    KidsBar and the sidebar tree fold the same `prefs.treeCollapsed`, kept across restarts.
-9. **Improvement loop owned by the app**: the Judge reviews a few finished runs a day on another model (superseded by ADR 0090: in a new session, on any model)
+9. **Improvement loop owned by the app**: the Judge reviews a few finished runs a day on another model (superseded by ADR 0091: in a new session, on any model)
    (`agents/judge-sample.ts`, Settings `delegation.judgeDaily`, only in the stable app); its verdict is the run's
    reviewed evidence. The brain's playbooks, `sync-agents.mjs`, agent pointers and specialist notebooks are retired.
 

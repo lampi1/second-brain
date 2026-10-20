@@ -111,7 +111,7 @@ describe('the queue: nothing is applied without the user', () => {
 });
 
 describe('run feedback and Annulla', () => {
-  it('a Judge review counts as reviewed evidence only when it ended verified, on any model (ADR 0090)', async () => {
+  it('a Judge review counts as reviewed evidence only when it ended verified, on any model (ADR 0091)', async () => {
     const w = world();
     const work = w.runs.start({ agentId: 'artisan', chatId: 'c_work', version: 1, goal: 'g', startedBy: 'orchestrator', startedAt: T0, costKnown: true });
     work.model = 'model-a';

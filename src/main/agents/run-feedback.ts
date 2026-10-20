@@ -3,7 +3,7 @@
 // <userData>/run-feedback.json; the run's outcome takes the verdict unless the user already gave one, and an opinion
 // never overwrites a reviewed verdict. It counts as reviewed evidence only when it cites an ended Judge run of that run
 // whose own report says verified, in its own session (ADR 0083; on any model: the review's independence is its clean
-// context, ADR 0090). Also the user's Annulla on a change the
+// context, ADR 0091). Also the user's Annulla on a change the
 // app applied (agents:undo) and agent_metrics, the numbers-only tool of the Orchestrator. Used by wiring.ts, loop.ts,
 // index.ts.
 import path from 'node:path';

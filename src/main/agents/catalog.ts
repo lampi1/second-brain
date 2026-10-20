@@ -45,7 +45,7 @@ export interface AgentCatalogDeps {
    *  engine's own default */
   tierModel?: (engine: Harness, tier: ModelTier) => string | null;
   /** the routing table's row for this chat (kind and area from its title and prompt), when it is on `engine` and names a
-   *  model: a role with no model of its own takes it, and its effort when the role names none (ADR 0078, 0090) */
+   *  model: a role with no model of its own takes it, and its effort when the role names none (ADR 0078, 0091) */
   tableModel?: (engine: Harness, req: NewChat) => { model: string; effort: Effort | null } | null;
   emit?: (catalog: AgentCatalog) => void;
   now?: () => number;
@@ -407,7 +407,7 @@ export class AgentCatalogService {
     const tier = cappedTier(req.tier ?? p.tier, p.tierMax);
     // the role's own model; else the routing table's row on its engine (unless the launch asked a tier); else its tier's
     // model. A review's independence is its clean session (it never sees its parent's reasoning), never another model
-    // (ADR 0090)
+    // (ADR 0091)
     const row = p.model === null && req.tier === undefined ? this.d.tableModel?.(p.engine, req) ?? null : null;
     const picked = { model: p.model ?? row?.model ?? this.d.tierModel?.(p.engine, tier) ?? null };
     const effort = p.effort ?? row?.effort ?? req.effort;

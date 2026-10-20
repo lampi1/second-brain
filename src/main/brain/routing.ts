@@ -305,7 +305,7 @@ export interface RouteRequest {
 export interface AgentChoice {
   id: string; name: string; version: number; harness: Harness; model: string | null; effort: Effort | null;
   chosenBy: RouteAgent['chosenBy']; tier?: RouteAgent['tier']; stats?: string | null;
-  /** 'table' = the catalog took the model from the table's row (a role with no model of its own; ADR 0090) */
+  /** 'table' = the catalog took the model from the table's row (a role with no model of its own; ADR 0091) */
   modelFrom?: 'table';
 }
 /** One task kind in the ledger: app chats predicted, how many have a known outcome, how many of those succeeded. */

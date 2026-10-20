@@ -1,5 +1,5 @@
 // Pins agents/model-tier.ts: a tier's candidates (the user's pick first, then the registry's auto and manual models)
-// and the cap at tierMax. No role switches model to be independent (ADR 0090).
+// and the cap at tierMax. No role switches model to be independent (ADR 0091).
 import { describe, expect, it } from 'vitest';
 import type { ModelRegistry, RegistryModel } from '../../../src/shared/contract';
 import { cappedTier, tierCandidates, tierModel } from '../../../src/main/agents/model-tier';
@@ -14,7 +14,7 @@ describe('model tiers', () => {
     expect(tierCandidates('claude', 'mid', registry, { claude: { mid: 'own' } })).toEqual(['own', 'm-mid', 'm-mid-manual']);
     expect(tierModel('cursor', 'mid', registry, undefined)).toBeNull();
   });
-  it('gives Sentinel and Judge the same tier model as any role: no model switching for independence (ADR 0090)', () => {
+  it('gives Sentinel and Judge the same tier model as any role: no model switching for independence (ADR 0091)', () => {
     expect(tierModel('claude', 'top', registry, undefined)).toBe('h-top');
     expect(tierModel('claude', 'top', registry, { claude: { top: 'own-top' } })).toBe('own-top');
   });

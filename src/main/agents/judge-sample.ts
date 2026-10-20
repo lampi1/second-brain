@@ -2,7 +2,7 @@
 // root role runs nobody judged yet (no verdict of the user or of a Judge; a delegated child's run is never sampled:
 // its content belongs to its parent, which judged the result when it read it), starts a
 // Judge chat on each (a root chat linked to the run with reviewOf: a new session that never saw the run's reasoning, on
-// the Judge's own model, ADR 0090), and when that review ends turns its verdict into the run's feedback (run-feedback.ts
+// the Judge's own model, ADR 0091), and when that review ends turns its verdict into the run's feedback (run-feedback.ts
 // recordFeedback: it counts as reviewed evidence only when the Judge verified it). At most
 // Settings.delegation.judgeDaily a day (0 = off). It spends tokens, so wiring.ts starts it only in the user's stable
 // app outside tests (or with SB_JUDGE_SAMPLE=1). Pure picking (pickSamples, reviewPrompt) is unit-tested in
