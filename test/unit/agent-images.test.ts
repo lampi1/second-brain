@@ -43,12 +43,13 @@ describe('AgentImageStore', () => {
     const store = new AgentImageStore(tmp(), ok);
     expect(() => store.set('../../evil', PNG)).toThrow('AGENT_IMAGE_ROLE');
     expect(() => store.set('pulse', PNG)).toThrow('AGENT_IMAGE_ROLE');
+    expect(() => store.set('judge', PNG)).toThrow('AGENT_IMAGE_ROLE'); // retired (ADR 0100)
     expect(() => store.reset('nope')).toThrow('AGENT_IMAGE_ROLE');
-    expect(() => store.set('judge', new Uint8Array([0xff, 0xd8, 0xff, 0, 0, 0, 0, 0, 0]))).toThrow('AGENT_IMAGE_INVALID');
-    expect(() => store.set('judge', 'data:image/png;base64,AAAA')).toThrow('AGENT_IMAGE_INVALID');
+    expect(() => store.set('sentinel', new Uint8Array([0xff, 0xd8, 0xff, 0, 0, 0, 0, 0, 0]))).toThrow('AGENT_IMAGE_INVALID');
+    expect(() => store.set('sentinel', 'data:image/png;base64,AAAA')).toThrow('AGENT_IMAGE_INVALID');
     const big = new Uint8Array(AGENT_IMAGE_BYTES + 1); big.set(PNG);
-    expect(() => store.set('judge', big)).toThrow('AGENT_IMAGE_INVALID');
-    expect(() => new AgentImageStore(tmp(), () => null).set('judge', PNG)).toThrow('AGENT_IMAGE_INVALID');
+    expect(() => store.set('sentinel', big)).toThrow('AGENT_IMAGE_INVALID');
+    expect(() => new AgentImageStore(tmp(), () => null).set('sentinel', PNG)).toThrow('AGENT_IMAGE_INVALID');
     expect(store.get()).toEqual({});
   });
 });

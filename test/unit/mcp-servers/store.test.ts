@@ -113,6 +113,14 @@ describe('McpServerStore', () => {
     fs.writeFileSync(path.join(dir, 'mcp-servers.json'), '{not json');
     expect(new McpServerStore(dir, cipher).servers()).toEqual([]);
   });
+
+  it('a retired role\'s entry (ADR 0100) is dropped, never merged into its successor', () => {
+    const dir = tmp('mcp-store');
+    fs.writeFileSync(path.join(dir, 'mcp-servers.json'), JSON.stringify({ version: 1, servers: [stdio], access: { scribe: { servers: { 'azure-devops': 'none' } }, judge: { servers: { 'azure-devops': 'read' } }, artisan: { servers: { 'azure-devops': 'read' } } }, tests: {} }));
+    const s = new McpServerStore(dir, cipher);
+    expect(s.access()).toEqual({ artisan: { servers: { 'azure-devops': 'read' } } });
+    expect(s.roleAccess('sentinel')).toBeUndefined();
+  });
 });
 
 describe('access rules', () => {

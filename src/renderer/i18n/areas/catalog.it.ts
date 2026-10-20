@@ -4,6 +4,11 @@ export const catalogIt = {
   'runs.auto': 'Avviata dall’Orchestrator', 'runs.outcome': 'Com’è andata?',
   'runs.success': 'Riuscita', 'runs.partial': 'In parte', 'runs.fail': 'Non riuscita',
   'runs.saved': 'Il tuo esito è salvato', 'runs.error': 'Esito non salvato. Riprova.',
+  // the facts' verdict without the user's (shared/run-verdict.ts, ADR 0100)
+  'runs.facts.success': 'Verificato dai fatti: criteri soddisfatti, nessuna tua correzione, non rifatto in 7 giorni.',
+  'runs.facts.provisional': ({ until }: { until: Date }) => `Provvisorio: criteri soddisfatti e nessuna tua correzione; conta come riuscito se non lo rifai entro il ${until.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })}.`,
+  'runs.facts.reworked': 'Non riuscito secondo i fatti: l’hai ripreso o rifatto entro 7 giorni.',
+  'runs.facts.blocked': 'Non riuscito secondo i fatti: il suo resoconto dice che si è bloccato.',
   'runs.run': 'Avvia', 'runs.started': 'Avviata, la trovi nella Home', 'runs.startedShort': 'Avviata', 'runs.open': 'Apri',
   'runs.goal': 'Obiettivo', 'runs.folder': 'Cartella', 'runs.startError': 'Avvio non riuscito. Riprova.',
   'contextPulse.title': 'Dal Battito', 'contextPulse.error': 'Schede non disponibili.', 'contextPulse.actionError': 'Azione non riuscita. Riprova.',

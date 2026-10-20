@@ -15,7 +15,7 @@ export const setupEn = {
   'setup.step.work': 'Your work',
   'setup.step.agents': 'Team',
   'setup.team.title': 'Your team',
-  'setup.team.lead': 'The Orchestrator coordinates; the other eight roles do the work it delegates. You can change each one’s instructions, permissions and model in Brain → Agents.',
+  'setup.team.lead': 'The Orchestrator coordinates; the five work roles do the work it delegates. You can change each one’s instructions, permissions and model in Brain → Agents.',
   'setup.step.done': 'Summary',
   'setup.head.memory': 'Your memory and your projects',
   'setup.lead.memory': 'Agents keep notes and rules in a memory on this computer and work in your projects. Here is where they are: usually there is nothing to do.',

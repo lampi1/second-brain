@@ -4,7 +4,7 @@
 // never applied on import.
 import { TOOL_CLASSES, PERMISSION_CEILINGS, type AgentToolPolicy, type PermissionCeiling } from './agents';
 import type { Effort } from './contract';
-import { isWorkRole, type WorkRoleId } from './roles';
+import { currentRoleId, isWorkRole, type WorkRoleId } from './roles';
 import { NAME_RE } from './skillmd';
 
 export type PackTarget = 'sbagent' | 'claude' | 'cursor' | 'codex';
@@ -64,11 +64,14 @@ export function checkedKnowhow(v: unknown): AgentKnowhow {
   return { folder: k.folder, linked: [...k.linked], hash: k.hash };
 }
 
-/** Whitelist every persisted/exported field; untrusted manifests cannot smuggle run data or executable config. */
+/** Whitelist every persisted/exported field; untrusted manifests cannot smuggle run data or executable config. A pack
+ *  exported for a role ADR 0100 retired targets its successor (a Judge pack goes to Sentinel, a Scribe pack to Artisan;
+ *  a Router pack has no work role to go to and is refused). */
 export function checkedPack(v: unknown): AgentPackManifest {
   const p = record(v), a = record(p.agent), policy = record(a.tools);
   if (p.format !== 1) throw new Error('Unsupported agent pack format; update the app');
-  if (!packName(a.id) || a.id.startsWith('claude-') || !text(a.name, 80) || !isWorkRole(a.role) || !text(a.summary, 400)
+  const role = typeof a.role === 'string' ? currentRoleId(a.role) : a.role;
+  if (!packName(a.id) || a.id.startsWith('claude-') || !text(a.name, 80) || !isWorkRole(role) || !text(a.summary, 400)
     || a.instructionsFile !== `agents/${a.id}.md` || !text(a.engine, 60) || !/^[a-z][a-z0-9_-]*$/.test(a.engine)
     || !(a.model === null || text(a.model, 200)) || !(a.effort === undefined || oneOf(['low', 'medium', 'high', 'xhigh', 'max'] as const, a.effort))
     || !oneOf(PERMISSION_CEILINGS, a.permissionCeiling) || !Array.isArray(policy.allow) || !policy.allow.every(x => oneOf(TOOL_CLASSES, x))
@@ -91,7 +94,7 @@ export function checkedPack(v: unknown): AgentPackManifest {
     if (stats.successHuman + stats.failHuman > stats.runs) throw new Error('Invalid anonymous summary');
   }
   return { format: 1, packId: p.packId, revision: p.revision, contentHash: p.contentHash,
-    agent: { id: a.id, name: a.name, role: a.role as WorkRoleId, summary: a.summary as string, instructionsFile: a.instructionsFile as string,
+    agent: { id: a.id, name: a.name, role: role as WorkRoleId, summary: a.summary as string, instructionsFile: a.instructionsFile as string,
       engine: a.engine, model: a.model as string | null, ...(a.effort === undefined ? {} : { effort: a.effort }),
       tools: { allow: [...policy.allow], ...(policy.mcp ? { mcp: [...policy.mcp as string[]] } : {}) }, permissionCeiling: a.permissionCeiling },
     skills, createdAt: p.createdAt, exportedAt: p.exportedAt, appVersion: p.appVersion, ...(stats ? { stats } : {}) };

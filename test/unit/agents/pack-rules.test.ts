@@ -41,7 +41,7 @@ describe('packRules and packTools', () => {
     expect([...packRules(w.brain).keys()]).toEqual(['rules/stile.md', 'rules/code.md', 'rules/altro.md']);
   });
   it('lists tool classes, MCP servers and what each skill calls', () => {
-    const text = packTools({ id: 'r', name: 'Judge', role: 'judge', summary: 'x', instructionsFile: 'agents/r.md', engine: 'claude', model: null, tools: { allow: ['read', 'mcp'], mcp: ['jira'] }, permissionCeiling: 'plan' },
+    const text = packTools({ id: 'r', name: 'Judge', role: 'sentinel', summary: 'x', instructionsFile: 'agents/r.md', engine: 'claude', model: null, tools: { allow: ['read', 'mcp'], mcp: ['jira'] }, permissionCeiling: 'plan' },
       new Map([['skills/r/SKILL.md', Buffer.from('---\nname: r\ndescription: d\nallowed-tools: Read Grep\n---\nx')], ['skills/r/scripts/check.py', Buffer.from('print(1)')]]));
     expect(text).toContain('Classi di strumenti: read, mcp');
     expect(text).toContain('Server MCP: jira');

@@ -1,15 +1,16 @@
 // Approval-only version evaluation: compare the trial version's runs with the frozen pre-trial baseline over the same
-// role × skill set (ADR 0083: the unit of comparison). Lifecycle adapters persist the result as a proposal; this module
-// never changes a catalog version. Used by lifecycle.ts.
+// role × skill set (ADR 0083: the unit of comparison). The success rate counts verified verdicts: the user's, a verified
+// review's and the facts' once settled (ADR 0100, shared/run-verdict.ts). Lifecycle adapters persist the result as a
+// proposal; this module never changes a catalog version. Used by lifecycle.ts.
 import type { AgentProfile, AgentRun, VersionMetrics } from '../../shared/agents';
 import type { TrialEvaluation } from '../../shared/agent-lifecycle';
 import { rollUp, runMetrics } from './run-metrics';
 
 export const TRIAL_DAYS = 21 * 86_400_000;
 /** Include related reviews/rework in the index without counting them in this agent's selected cohort. */
-export function cohortMetrics(selected: readonly AgentRun[], all: readonly AgentRun[]): VersionMetrics | null {
+export function cohortMetrics(selected: readonly AgentRun[], all: readonly AgentRun[], now = Date.now()): VersionMetrics | null {
   if (!selected.length) return null;
-  return runMetrics([], { rollups: rollUp([], [...selected], [...all]) }).find(a => a.agentId === selected[0]!.agentId)?.all ?? null;
+  return runMetrics([], { rollups: rollUp([], [...selected], [...all], now) }).find(a => a.agentId === selected[0]!.agentId)?.all ?? null;
 }
 const lower = (before: number | null, after: number | null, factor: number): boolean => before !== null && before > 0 && after !== null && after <= before * factor;
 const guard = (before: number | null, after: number | null): boolean => before !== null && after !== null && after <= before * 1.25;
@@ -30,8 +31,8 @@ export function evaluateTrial(agent: AgentProfile, runs: readonly AgentRun[], no
   const classified = candidates.map(run => { const k = skillSet(run); return { run, match: k === null ? null : sets.has(k) }; });
   const matched = classified.filter(r => r.match === true).map(r => r.run);
   const other = classified.filter(r => r.match === false).map(r => r.run);
-  const before = cohortMetrics(baseline, runs), after = cohortMetrics(matched, runs);
-  const result = { ...empty, before, after, other: cohortMetrics(other, runs), comparable: matched.length,
+  const before = cohortMetrics(baseline, runs, now), after = cohortMetrics(matched, runs, now);
+  const result = { ...empty, before, after, other: cohortMetrics(other, runs, now), comparable: matched.length,
     otherRuns: other.length, untagged: classified.filter(r => r.match === null).length };
   // Inside the trial window missing evidence means "wait": verdicts arrive after a run ends (the user rates it later) and
   // comparable work accumulates; only at the end of the window does an inconclusive trial propose going back.

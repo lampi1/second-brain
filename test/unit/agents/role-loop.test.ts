@@ -111,11 +111,11 @@ describe('the queue: nothing is applied without the user', () => {
 });
 
 describe('run feedback and Annulla', () => {
-  it('a Judge review counts as reviewed evidence only when it ended verified, on any model (ADR 0091)', async () => {
+  it('an independent review (a Sentinel, or a Judge before ADR 0100) counts as reviewed evidence only when it ended verified, on any model (ADR 0091)', async () => {
     const w = world();
     const work = w.runs.start({ agentId: 'artisan', chatId: 'c_work', version: 1, goal: 'g', startedBy: 'orchestrator', startedAt: T0, costKnown: true });
     work.model = 'model-a';
-    const judge = w.runs.start({ agentId: 'judge', chatId: 'c_judge', version: 1, goal: 'review', startedBy: 'app', startedAt: T0, costKnown: true, reviewOf: work.runId });
+    const judge = w.runs.start({ agentId: 'sentinel', chatId: 'c_judge', version: 1, goal: 'review', startedBy: 'app', startedAt: T0, costKnown: true, reviewOf: work.runId });
     judge.model = 'model-b'; judge.endedAt = T0 + 1; judge.endReason = 'completed';
     judge.report = { at: T0 + 1, outcome: 'done', verified: 'yes', summary: 'ok' };
     const opinion = await w.feedback.recordFeedback({ runId: work.runId, verdict: 'success', notes: 'fine', evidence: [] }, 'app:judge');
@@ -124,17 +124,21 @@ describe('run feedback and Annulla', () => {
     expect(reviewed.outcome.basis).toBe('reviewed-evidence');
     judge.model = 'model-a';
     const same = await w.feedback.recordFeedback({ runId: work.runId, verdict: 'success', notes: 'same model', evidence: [{ kind: 'run', ref: judge.runId, at: T0 }] }, 'app:judge');
-    expect(same.outcome.basis).toBe('reviewed-evidence'); // independence is the Judge's clean session, not another model
+    expect(same.outcome.basis).toBe('reviewed-evidence'); // independence is the review's clean session, not another model
     judge.report = { at: T0 + 1, outcome: 'done', verified: 'no', summary: 'not checked' };
     const unverified = await w.feedback.recordFeedback({ runId: work.runId, verdict: 'fail', notes: 'unverified', evidence: [{ kind: 'run', ref: judge.runId, at: T0 }] }, 'app:judge');
     expect(unverified.outcome.basis).toBe('orchestrator-opinion');
     expect(w.runs.get(work.runId)!.outcome).toMatchObject({ verdict: 'success', basis: 'reviewed-evidence' }); // an opinion never overwrites it
+    // a review a Judge ran before ADR 0100 still counts
+    const old = w.runs.start({ agentId: 'judge', chatId: 'c_old_judge', version: 1, goal: 'review', startedBy: 'app', startedAt: T0, costKnown: true, reviewOf: work.runId });
+    old.endedAt = T0 + 2; old.endReason = 'completed'; old.report = { at: T0 + 2, outcome: 'done', verified: 'yes', summary: 'ok' };
+    expect((await w.feedback.recordFeedback({ runId: work.runId, verdict: 'success', notes: 'old', evidence: [{ kind: 'run', ref: old.runId, at: T0 }] }, 'app:judge')).outcome.basis).toBe('reviewed-evidence');
   });
   it('Annulla restores the version before an applied change, and a stale button is refused', () => {
     const w = world();
-    const r = w.catalog.maintain('scribe', { instructions: 'Write clearly. Cite the note.' }, 'lesson')!;
-    expect(() => w.feedback.undo({ agentId: 'scribe', expectedRevision: r.profile.updatedAt - 1, version: r.before })).toThrow(/cambiato/);
-    const back = w.feedback.undo({ agentId: 'scribe', expectedRevision: r.profile.updatedAt, version: r.before });
+    const r = w.catalog.maintain('herald', { instructions: 'Write clearly. Cite the note.' }, 'lesson')!;
+    expect(() => w.feedback.undo({ agentId: 'herald', expectedRevision: r.profile.updatedAt - 1, version: r.before })).toThrow(/cambiato/);
+    const back = w.feedback.undo({ agentId: 'herald', expectedRevision: r.profile.updatedAt, version: r.before });
     expect(back.activeVersion).toBe(r.before);
   });
 });

@@ -66,7 +66,7 @@ test('a role takes the user\'s own picture, keeps it across a restart, and "Imma
 test('a file that is not a picture is refused with a readable line', async () => {
   const { app, page } = await launchDemo();
   try {
-    await openAgents(page, 'judge');
+    await openAgents(page, 'herald');
     await page.getByTestId('agent-picture-input').setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('ciao') });
     await expect(page.getByTestId('agent-picture').getByRole('alert')).toContainText('PNG, JPG o WebP');
     await expect(page.locator('.ad-hero svg.agent-avatar.character')).toBeVisible();

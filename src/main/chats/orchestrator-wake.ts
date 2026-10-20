@@ -168,7 +168,7 @@ export class OrchestratorWake {
       // it gave its result with agent_report in this turn: that already reached its parent or the Orchestrator (the
       // owner, 2026-10-20: the same news twice was a second Orchestrator turn for nothing)
       if (!failed && c.run?.report?.via === 'agent_report' && c.run.report.at > (was.lastResult?.at ?? 0)) return;
-      // a chat the app itself started (a sampled Judge review): the app reads its verdict, the Orchestrator never asked for it
+      // a chat the app itself started (a sampled independent review): the app reads its verdict, the Orchestrator never asked for it
       if (!failed && c.run?.startedBy === 'app') return;
       this.add(c, failed ? 'error' : 'done', c.lastText);
     }

@@ -1,7 +1,11 @@
-// Home run provenance and explicit human verdicts; main remains authoritative for the run lifecycle.
+// Home run provenance and explicit human verdicts; main remains authoritative for the run lifecycle. Without the user's
+// verdict the outcome line says what the facts say (shared/run-verdict.ts, ADR 0100): verified, provisional until 7
+// days after the run's end, or failed (its report was blocked, or the user reworked it). Used by ChatTile.tsx.
 import { useRef, useState } from 'react';
 import type { AgentRun } from '@shared/agents';
+import { FACTS_SETTLE_MS, factsVerdict, reworkedWithin } from '@shared/run-verdict';
 import { useAgents } from '../store/agents';
+import { useApp } from '../store/store';
 import { sb } from '../sb';
 import { t } from '../i18n';
 import { HelpTip } from './HelpTip';
@@ -22,6 +26,14 @@ export function RunOutcomeControl({ run, disabled }: { run: AgentRun; disabled: 
   const [saved, setSaved] = useState<AgentRun['outcome']>();
   const working = useRef(false);
   const outcome = saved ?? run.outcome;
+  // the earliest run (among the chats the app still has) that reworks or continues this one: enough for the 7-day check
+  const rework = useApp(s => {
+    let first: number | null = null;
+    for (const c of Object.values(s.chats)) if (c.run && (c.run.reworkOf === run.runId || c.run.continuedFrom === run.runId)) first = Math.min(first ?? c.run.startedAt, c.run.startedAt);
+    return first;
+  });
+  const starts = rework === null ? [] : [rework];
+  const facts = outcome?.basis === 'human' && outcome.verdict !== 'unknown' ? null : factsVerdict(run, starts, Date.now());
   const mark = async (verdict: 'success' | 'partial' | 'fail') => {
     if (working.current || disabled) return;
     working.current = true; setBusy(true); setError(false);
@@ -30,12 +42,15 @@ export function RunOutcomeControl({ run, disabled }: { run: AgentRun; disabled: 
     finally { working.current = false; setBusy(false); }
   };
   return <footer className="run-outcome" data-testid="run-outcome">
-    <span>{t('runs.outcome')}<HelpTip title={t('explain.outcome.title')} testid="run-outcome-help"><p>{t('explain.outcome.p1')}</p><p>{t('explain.outcome.p2')}</p></HelpTip></span>
+    <span>{t('runs.outcome')}<HelpTip title={t('explain.outcome.title')} testid="run-outcome-help"><p>{t('explain.outcome.p1')}</p><p>{t('explain.outcome.p2')}</p><p>{t('explain.outcome.p3')}</p></HelpTip></span>
     {(['success', 'partial', 'fail'] as const).map(verdict => <button type="button" className="btn btn-ghost btn-s" key={verdict}
       disabled={disabled || busy} aria-pressed={outcome?.basis === 'human' && outcome.verdict === verdict}
       onClick={() => void mark(verdict)} data-testid={`run-outcome-${verdict}`}>
       <span aria-hidden="true">{verdict === 'success' ? '👍 ' : verdict === 'fail' ? '👎 ' : ''}</span>{t(`runs.${verdict}`)}</button>)}
     {outcome?.basis === 'human' && <span role="status">{t('runs.saved')}</span>}
+    {facts === 'success' && <span className="run-facts" data-testid="run-facts" data-facts="success">{t('runs.facts.success')}</span>}
+    {facts === 'provisional' && <span className="run-facts" data-testid="run-facts" data-facts="provisional">{t('runs.facts.provisional', { until: new Date(run.endedAt! + FACTS_SETTLE_MS) })}</span>}
+    {facts === 'fail' && <span className="run-facts" data-testid="run-facts" data-facts="fail">{t(reworkedWithin(run, starts) ? 'runs.facts.reworked' : 'runs.facts.blocked')}</span>}
     {error && <span role="alert">{t('runs.error')}</span>}
   </footer>;
 }

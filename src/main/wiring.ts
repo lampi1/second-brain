@@ -659,7 +659,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const judgeSampler = new JudgeSampler({ file: path.join(ctx.userData, 'judge-samples.json'), runs: () => manager.runs.list(),
     chat: id => manager.list().find(c => c.id === id), create: req => manager.create(req, 'app'),
     daily: () => checkedDelegation(brain.settings().delegation).judgeDaily,
-    judgeEngine: () => agents.list().profiles.find(p => p.id === 'judge')?.engine ?? 'claude',
+    judgeEngine: () => agents.list().profiles.find(p => p.id === 'sentinel')?.engine ?? 'claude',
     refusal: h => !engineOn(brain.settings(), h) ? 'engine switched off' : !agentsMayOpen(brain.settings(), h) ? 'agents may not use this engine' : null,
     feedback: (a, by) => runFeedback.recordFeedback(a, by) });
   loopRef.current = { ended: run => { loop.hooks.ended(run); void judgeSampler.ended(run); }, outcome: run => loop.hooks.outcome(run) };

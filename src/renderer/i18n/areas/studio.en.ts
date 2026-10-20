@@ -60,7 +60,7 @@ export const studioEn: typeof studioIt = {
   'studio.customized': 'Customized',
   'studio.builtIn': 'Default',
   'studio.trial': 'On trial',
-  'studio.tierChip': ({ tier }: { tier: string }) => `Tier ${tier}`,
+  'studio.tierChip': ({ tier }: { tier: string }) => `Model: ${tier}`,
   'studio.versions': 'Versions',
   'studio.versionsHint': 'Every change to the behaviour is a version; open chats keep theirs.',
   'studio.versionBy.default': 'default', 'studio.versionBy.user': 'yours', 'studio.versionBy.maintenance': 'maintenance',

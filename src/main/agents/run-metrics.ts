@@ -1,13 +1,16 @@
 // Role metrics per role and version (AGENTS-DESIGN §5), read from agent-runs.json: the ended runs still kept plus the
-// rollups of the ones pruned. Pure. Every metric is `value · n · coverage`: n = the runs it was computed on, coverage =
-// n / ended runs. Used by run-feedback.ts (agent_metrics), trials.ts and the Agenti page.
+// rollups of the ones pruned. Pure but for the clock (the facts' verdict settles 7 days after a run's end: `now`, by
+// default the current time). Every metric is `value · n · coverage`: n = the runs it was computed on, coverage = n /
+// ended runs. The success rate rests on verified verdicts only: the user's, a verified review's, or the facts'
+// (shared/run-verdict.ts, ADR 0100). Used by run-feedback.ts (agent_metrics), trials.ts and the Agenti page.
 import type { AgentMetrics, AgentRun, AgentRunTokens, AgentRunOutcome, Metric, VersionMetrics } from '../../shared/agents';
 import { countedDecision } from './standing';
+import { FACTS_SETTLE_MS, reworkStartsOf, reworkedWithin, verifiedVerdict } from '../../shared/run-verdict';
 
 /** the newest values kept per sample for medians (n counts them all) */
 export const SAMPLE_MAX = 200;
 /** a new run continuing or reworking an ended one within this time makes the ended one reworked */
-export const REWORK_MS = 7 * 86_400_000;
+export const REWORK_MS = FACTS_SETTLE_MS;
 const TOKEN_KINDS = ['input', 'output', 'cacheRead', 'cacheWrite'] as const;
 type TokenKind = keyof AgentRunTokens;
 
@@ -18,7 +21,8 @@ export interface ReviewTally { runs: number; findings: number; blockingRuns: num
 export interface RunTally {
   agentId: string; version: number;
   ended: number;
-  /** basis human or reviewed-evidence only */
+  /** verified only: basis human or reviewed-evidence, else the facts' settled verdict (shared/run-verdict.ts); a run
+   *  pruned while its facts were still provisional is folded without one */
   verdicts: Verdicts;
   /** never in the rate: the Orchestrator's opinion, and the agent's own word (outcome self-report or its run-report) */
   opinion: Verdicts; selfReport: Verdicts;
@@ -33,8 +37,10 @@ export interface RunTally {
   reviews: Record<string, ReviewTally>;
   /** the same counts per run tag (AGENTS-DESIGN §4.8), for filtered metrics over pruned runs; untagged runs are in none */
   tags?: TagTallies;
-  /** of these runs, the Orchestrator's decisions (standing.ts orchestratorDecision): kept so its level survives a prune */
+  /** of these runs, the Orchestrator's decisions (standing.ts orchestratorDecision): kept so its record survives a prune */
   decisions?: number;
+  /** of those decisions, the verified successes at prune time: the Orchestrator's level (its XP, ADR 0100) */
+  decisionWins?: number;
   /** fitRollups dropped `tags` to stay in budget: later prunes do not rebuild a partial set, and filters leave this rollup out */
   tagsLost?: true;
 }
@@ -51,6 +57,8 @@ export interface MetricsInput {
   aiErrors?: ReadonlyMap<string, number>;
   /** only runs ended from then on; the rollups (older by construction) are then left out */
   since?: number;
+  /** the clock for the facts' verdict (default: now) */
+  now?: number;
   /** the model window of an agent version, for context peak ÷ window */
   windowOf?: (agentId: string, version: number) => number | null;
   /** Only runs whose tags match; untagged runs never match. Rollups retain counts for combined filters too. */
@@ -69,15 +77,12 @@ const addVerdict = (v: Verdicts, verdict: AgentRunOutcome['verdict']): void => {
 const REPORTED = { done: 'success', partial: 'partial', blocked: 'fail' } as const;
 const keyOf = (agentId: string, version: number): string => `${agentId}/${version}`;
 
-/** Lookups over every run known at fold time: reworks and reviews point at runs by id. */
-export interface RunIndex { reworkStarts: Map<string, number[]>; reviews: Map<string, AgentRun[]> }
-export function indexRuns(all: readonly AgentRun[]): RunIndex {
-  const reworkStarts = new Map<string, number[]>(), reviews = new Map<string, AgentRun[]>();
-  for (const r of all) {
-    for (const target of new Set([r.reworkOf, r.continuedFrom])) if (target) reworkStarts.set(target, [...(reworkStarts.get(target) ?? []), r.startedAt]);
-    if (r.reviewOf) reviews.set(r.reviewOf, [...(reviews.get(r.reviewOf) ?? []), r]);
-  }
-  return { reworkStarts, reviews };
+/** Lookups over every run known at fold time: reworks and reviews point at runs by id; `now` settles the facts. */
+export interface RunIndex { reworkStarts: Map<string, number[]>; reviews: Map<string, AgentRun[]>; now: number }
+export function indexRuns(all: readonly AgentRun[], now = Date.now()): RunIndex {
+  const reviews = new Map<string, AgentRun[]>();
+  for (const r of all) if (r.reviewOf) reviews.set(r.reviewOf, [...(reviews.get(r.reviewOf) ?? []), r]);
+  return { reworkStarts: reworkStartsOf(all), reviews, now };
 }
 
 /** Adds one ended run (an open one is ignored: the unit is the ended run). */
@@ -87,15 +92,16 @@ export function foldRun(t: RunTally, run: AgentRun, index: RunIndex, aiErrors?: 
   // Their complete cost ledger remains available under Battito's job budgets.
   if (run.oneshot?.fallback || run.oneshot?.job === 'headline') return;
   t.ended++;
-  const o = run.outcome;
-  if (o && (o.basis === 'human' || o.basis === 'reviewed-evidence')) addVerdict(t.verdicts, o.verdict);
+  const o = run.outcome, starts = index.reworkStarts.get(run.runId);
+  const verified = verifiedVerdict(run, starts, index.now);
+  if (verified) addVerdict(t.verdicts, verified.verdict);
   if (o?.basis === 'orchestrator-opinion') addVerdict(t.opinion, o.verdict);
   if (o?.basis === 'self-report') addVerdict(t.selfReport, o.verdict);
   else if (run.report) addVerdict(t.selfReport, REPORTED[run.report.outcome]);
   if (run.corrections) { t.corrections.runs++; t.corrections.tagged += run.corrections.tagged; t.corrections.afterReport += run.corrections.afterReport; }
   if (aiErrors) { t.aiErrors.runs++; t.aiErrors.lines += aiErrors.get(run.runId) ?? 0; }
   const end = run.endedAt;
-  if (run.counters.reopened > 0 || (index.reworkStarts.get(run.runId) ?? []).some(at => at <= end + REWORK_MS)) t.reworked++;
+  if (reworkedWithin(run, starts)) t.reworked++;
   t.questions += run.counters.questions; t.permissions += run.counters.permissions; t.commands += run.counters.commands;
   if (run.costUsd !== null) push(t.cost, run.costUsd);
   if (run.tokens) for (const k of TOKEN_KINDS) push(t.tokens[k], run.tokens[k]);
@@ -130,6 +136,7 @@ export function mergeTallies(a: RunTally, b: RunTally, agentId = a.agentId, vers
     cost: mergeSample(a.cost, b.cost), tokens: Object.fromEntries(TOKEN_KINDS.map(k => [k, mergeSample(a.tokens[k], b.tokens[k])])) as Record<TokenKind, Sample>,
     contextPeak: mergeSample(a.contextPeak, b.contextPeak), elapsed: mergeSample(a.elapsed, b.elapsed), execution: mergeSample(a.execution, b.execution), reviews,
     ...(a.decisions || b.decisions ? { decisions: (a.decisions ?? 0) + (b.decisions ?? 0) } : {}),
+    ...(a.decisionWins || b.decisionWins ? { decisionWins: (a.decisionWins ?? 0) + (b.decisionWins ?? 0) } : {}),
     ...(a.tagsLost || b.tagsLost ? { tagsLost: true as const } : (() => { const tags = mergeTags(a.tags, b.tags); return tags ? { tags } : {}; })()),
   };
 }
@@ -162,14 +169,17 @@ function mergeTags(a: TagTallies | undefined, b: TagTallies | undefined): TagTal
 
 /** Pruned runs into the rollups: `all` = every run known before the prune (their reworks and reviews). Each pruned run is
  *  folded once, into its tally and into one bucket per tag it carries. */
-export function rollUp(rollups: readonly RunTally[], pruned: readonly AgentRun[], all: readonly AgentRun[]): RunTally[] {
-  const index = indexRuns(all), out = new Map(rollups.map(t => [keyOf(t.agentId, t.version), structuredClone(t)]));
+export function rollUp(rollups: readonly RunTally[], pruned: readonly AgentRun[], all: readonly AgentRun[], now = Date.now()): RunTally[] {
+  const index = indexRuns(all, now), out = new Map(rollups.map(t => [keyOf(t.agentId, t.version), structuredClone(t)]));
   for (const run of [...pruned].sort((a, b) => (a.endedAt ?? 0) - (b.endedAt ?? 0))) {
     const k = keyOf(run.agentId, run.version);
     if (!out.has(k)) out.set(k, emptyTally(run.agentId, run.version));
     const t = out.get(k)!;
     foldRun(t, run, index);
-    if (countedDecision(run)) t.decisions = (t.decisions ?? 0) + 1;
+    if (countedDecision(run)) {
+      t.decisions = (t.decisions ?? 0) + 1;
+      if (verifiedVerdict(run, index.reworkStarts.get(run.runId), index.now)?.verdict === 'success') t.decisionWins = (t.decisionWins ?? 0) + 1;
+    }
     if (!run.tags || run.endedAt === undefined || t.tagsLost) continue;
     const one = emptyTally(run.agentId, run.version);
     foldRun(one, run, index);
@@ -245,7 +255,7 @@ export function finalize(t: RunTally, version: number | null, window: number | n
 
 /** The §5 read model: per role, one row per version and an all-versions row. */
 export function runMetrics(runs: readonly AgentRun[], input: MetricsInput = {}): AgentMetrics[] {
-  const index = indexRuns(runs), tallies = new Map<string, RunTally>(), open = new Map<string, number>();
+  const index = indexRuns(runs, input.now), tallies = new Map<string, RunTally>(), open = new Map<string, number>();
   const rollupsIn = input.since === undefined, filter = input.filter ?? {};
   if (rollupsIn) for (const t of input.rollups ?? []) {
     const own = filteredRollup(t, filter);

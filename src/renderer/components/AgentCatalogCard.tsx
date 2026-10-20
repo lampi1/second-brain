@@ -1,6 +1,7 @@
 // Role card of the Agenti catalogue (AgentCatalogPage): on the front the character large and centred, its name and what
-// it is for, engine and model tier, a live status, its level (from ended runs) and performance % (verdicts weighted by
-// trust and recency, main/agents/standing.ts), each with a "?" giving the formula, and three compact run metrics; a click anywhere on the card flips it in 3D (#81)
+// it is for, engine and model tier («Modello: alto»), a live status, its level (from its verified successful runs, shown
+// beside it: «Lv 6 Maestro · 38 riusciti verificati», ADR 0100) and performance % (verdicts weighted by trust and
+// recency, the agent's own word excluded, with the runs it rests on; main/agents/standing.ts), each with a "?" giving the formula, and three compact run metrics; a click anywhere on the card flips it in 3D (#81)
 // to the back: the role's instructions, the skills it loads at every launch, its memory, its permissions («Tutto consentito» or how
 // far the user narrowed it, with "Modifica permessi" to its permissions card, where its MCP servers are too, ADR 0085,
 // 0086), the run facts and "Apri". A second click, or Esc, flips it back; the hidden face is inert, so
@@ -33,11 +34,12 @@ function Metric({ label, full, value, unknown, help }: { label: string; full: st
 const band = (v: number) => v >= 0.85 ? 'top' : v >= 0.7 ? 'good' : v >= 0.5 ? 'fair' : 'low';
 const pct = (v: number) => new Intl.NumberFormat(locale(), { style: 'percent', maximumFractionDigits: 0 }).format(v);
 
-/** The level (with the way to the next one) and the performance gauge, each with its "?" formula. An agent with no
- *  ended run is a Lv 1 "Recluta" at 0 of 5; before agents:metrics answers both read as unknown. */
-const NONE: AgentStanding = { runs: 0, level: 1, levelAt: 0, nextAt: 5, progress: 0, performance: null, evaluated: 0, minRuns: 5, sources: { human: 0, judge: 0, orchestrator: 0, self: 0 } };
+/** The level (with its verified successes and the way to the next one) and the performance gauge, each with its "?"
+ *  formula. An agent with no verified success is a Lv 1 "Recluta" at 0 of 5; before agents:metrics answers both read as
+ *  unknown. */
+const NONE: AgentStanding = { runs: 0, wins: 0, level: 1, levelAt: 0, nextAt: 5, progress: 0, performance: null, evaluated: 0, minRuns: 5, sources: { human: 0, review: 0, facts: 0, orchestrator: 0, self: 0 } };
 function Standing({ id, standing: s }: { id: string; standing: AgentStanding | null }) {
-  const left = s && s.nextAt !== null ? s.nextAt - s.runs : 0;
+  const left = s && s.nextAt !== null ? s.nextAt - s.wins : 0;
   const perf = s?.performance ?? null;
   const R = 22, C = 2 * Math.PI * R;
   const arc = perf !== null ? perf : s ? Math.min(1, s.evaluated / s.minRuns) : 0;
@@ -46,13 +48,14 @@ function Standing({ id, standing: s }: { id: string; standing: AgentStanding | n
       <h4>{t('agentsGrid.level')}
         <HelpTip title={t('agentsGrid.levelHelpTitle')} wide testid={`catalog-level-help-${id}`}>
           <p>{t('agentsGrid.levelHelp1')}</p><p>{t('agentsGrid.levelHelp2')}</p><p>{t('agentsGrid.levelHelp3')}</p>
-          {s && <p className="catalog-help-now">{t('agentsGrid.levelHelpEx', { runs: s.runs, level: s.level, next: s.nextAt === null ? null : s.level + 1, left })}</p>}
+          {s && <p className="catalog-help-now">{t('agentsGrid.levelHelpEx', { wins: s.wins, runs: s.runs, level: s.level, next: s.nextAt === null ? null : s.level + 1, left })}</p>}
         </HelpTip></h4>
-      <p className="catalog-level-value">{s ? <><b>{t('agentsGrid.levelShort', { n: s.level })}</b> <span>{t('agentsGrid.levelTitle', { n: s.level })}</span></> : <span aria-hidden="true">—</span>}</p>
+      <p className="catalog-level-value">{s ? <><b>{t('agentsGrid.levelShort', { n: s.level })}</b> <span>{t('agentsGrid.levelTitle', { n: s.level })}</span>
+        <span className="catalog-level-wins" data-testid={`catalog-level-wins-${id}`}> · {t('agentsGrid.levelWins', { n: s.wins })}</span></> : <span aria-hidden="true">—</span>}</p>
       <div className="catalog-level-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={s ? Math.round(s.progress * 100) : undefined}
         aria-label={s && s.nextAt !== null ? t('agentsGrid.levelNext', { left, next: s.level + 1 }) : t('agentsGrid.levelTop')}>
         <i style={{ width: `${s ? Math.round(s.progress * 100) : 0}%` }} /></div>
-      <small>{!s ? t('catalog.unknown') : s.runs === 0 ? t('agentsGrid.noRuns') : s.nextAt === null ? t('agentsGrid.levelTop') : t('agentsGrid.levelNext', { left, next: s.level + 1 })}</small>
+      <small>{!s ? t('catalog.unknown') : s.wins === 0 ? t('agentsGrid.noRuns') : s.nextAt === null ? t('agentsGrid.levelTop') : t('agentsGrid.levelNext', { left, next: s.level + 1 })}</small>
     </section>
     <section className="catalog-perf" aria-label={t('agentsGrid.perf')} data-testid={`catalog-perf-${id}`} data-band={perf !== null ? band(perf) : 'warmup'}>
       <svg className="catalog-gauge" viewBox="0 0 56 56" aria-hidden="true">
@@ -63,7 +66,7 @@ function Standing({ id, standing: s }: { id: string; standing: AgentStanding | n
         <h4>{t('agentsGrid.perf')}
           <HelpTip title={t('agentsGrid.perfHelpTitle')} wide testid={`catalog-perf-help-${id}`}>
             <p>{t('agentsGrid.perfHelp1')}</p><p>{t('agentsGrid.perfHelp2')}</p><p>{t('agentsGrid.perfHelp3', { min: s?.minRuns ?? 5 })}</p>
-            {s && s.evaluated > 0 && <p className="catalog-help-now">{t('agentsGrid.perfSources', s.sources)}</p>}
+            {s && (s.evaluated > 0 || s.sources.self > 0) && <p className="catalog-help-now">{t('agentsGrid.perfSources', s.sources)}</p>}
           </HelpTip></h4>
         <p className="catalog-perf-value">{perf !== null ? <><b>{pct(perf)}</b> <span>{t('agentsGrid.perfBand', { v: perf })}</span></>
           : s ? <span className="warmup">{t('agentsGrid.perfWarmup')}</span> : <span aria-hidden="true">—</span>}</p>

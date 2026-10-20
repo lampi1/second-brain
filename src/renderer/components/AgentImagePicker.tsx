@@ -1,6 +1,6 @@
 // "Cambia immagine" / "Immagine predefinita" under a role's badge on its page (AgentStudio.tsx): the user picks a
 // PNG, JPG or WebP, the centre square becomes the role's picture everywhere (lib/agent-images.ts, main keeps it in
-// userData); "Immagine predefinita" brings the role's character back. Only for the nine roles. Styles:
+// userData); "Immagine predefinita" brings the role's character back. Only for the six roles. Styles:
 // styles/agent-studio.css (.ad-picture).
 import { useRef, useState } from 'react';
 import type { RoleId } from '@shared/roles';

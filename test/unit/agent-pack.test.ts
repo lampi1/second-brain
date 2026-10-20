@@ -12,7 +12,7 @@ import type { AgentBehaviour } from '../../src/shared/agents';
 const hash = 'a'.repeat(64);
 const manifest = (): AgentPackManifest => ({
   format: 1, packId: 'reviewer-0123456789abcdef', revision: 1, contentHash: hash,
-  agent: { id: 'reviewer', name: 'Judge', role: 'judge', summary: 'Review changes', instructionsFile: 'agents/reviewer.md',
+  agent: { id: 'reviewer', name: 'Judge', role: 'sentinel', summary: 'Review changes', instructionsFile: 'agents/reviewer.md',
     engine: 'claude', model: null, effort: 'high', tools: { allow: ['read'] }, permissionCeiling: 'default' },
   skills: [{ name: 'reviewer', ownership: 'owned', hash }],
   createdAt: '2026-10-18T00:00:00Z', exportedAt: '2026-10-18T00:00:00Z', appVersion: '0.1.0',
@@ -34,6 +34,12 @@ describe('portable agent packs', () => {
     }
     expect(inspectPack(restored)).toMatchObject({ kind: 'sbagent', skills: ['reviewer'], agents: [{ name: 'reviewer' }] });
     expect(JSON.parse(restored.get('sbagent.json')!.toString())).not.toHaveProperty('stats');
+  });
+  it('a pack exported for a retired role targets its successor; a Router pack has no work role to go to (ADR 0100)', () => {
+    const of = (role: string) => checkedPack({ ...manifest(), agent: { ...manifest().agent, role } });
+    expect(of('judge').agent.role).toBe('sentinel');
+    expect(of('scribe').agent.role).toBe('artisan');
+    expect(() => of('router')).toThrow('Invalid packed agent');
   });
   it('projects portable skills and engine-specific agent fields', () => {
     const files = emitPack(manifest(), 'Review the diff.', skills());

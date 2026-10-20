@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AgentCatalogService } from '../../../src/main/agents/catalog';
-import { ADR0083_DEFAULTS, fullDefaultsFor } from '../../../src/main/agents/role-migrate';
+import { ADR0083_DEFAULTS, PRE_ADR0100_INSTRUCTIONS, fiveRolesTextFor, fullDefaultsFor } from '../../../src/main/agents/role-migrate';
 import { TOOL_CLASSES, type AgentModelChoice, type AgentProfile } from '../../../src/shared/agents';
 import { ROLE_DEFAULTS, ROLE_IDS, defaultPermissions, launchGap, isRoleId } from '../../../src/shared/roles';
 
@@ -37,7 +37,7 @@ describe('full default permissions (ADR 0085)', () => {
       expect(defaultPermissions(p.id as never, p.tools, p.permissionCeiling)).toBe(true);
       for (const kid of p.launches) expect(launchGap(ROLE_DEFAULTS[kid as never as 'scout'].tools, p.tools!.allow)).toEqual([]);
     }
-    expect(list.find(p => p.id === 'strategist')!.launches).toEqual(expect.arrayContaining(['artisan', 'sentinel', 'herald', 'scribe']));
+    expect(list.find(p => p.id === 'strategist')!.launches).toEqual(expect.arrayContaining(['artisan', 'sentinel', 'herald']));
     expect(defaultPermissions('scout', { allow: ['read'] }, null)).toBe(false);
     expect(defaultPermissions('scout', { allow: [...TOOL_CLASSES] }, 'plan')).toBe(false);
   });
@@ -47,7 +47,7 @@ describe('full default permissions (ADR 0085)', () => {
     make();
     asBefore(dir, p => {
       if (p.id === 'scout') Object.assign(p, { userLocked: true, lastEditedBy: 'user', tools: { allow: ['read', 'web'] } });
-      if (p.id === 'judge') Object.assign(p, { lastEditedBy: 'maintenance', instructions: 'Judge with a learned lesson.' });
+      if (p.id === 'sentinel') Object.assign(p, { lastEditedBy: 'maintenance', instructions: 'Sentinel with a learned lesson.' });
     });
     const after = make().list().profiles;
     const get = (id: string) => after.find(p => p.id === id)!;
@@ -56,9 +56,8 @@ describe('full default permissions (ADR 0085)', () => {
       expect(get(id)).toMatchObject({ version: 2, activeVersion: 2, lastEditedBy: 'default', userLocked: false, launches: ROLE_DEFAULTS[id].launches });
     }
     expect(get('strategist').instructions).toBe(ROLE_DEFAULTS.strategist.instructions);
-    expect(get('router').instructions).toBe(ROLE_DEFAULTS.router.instructions);
     expect(get('orchestrator').instructions).toBe(ROLE_DEFAULTS.orchestrator.instructions);
-    expect(get('judge').instructions).toBe('Judge with a learned lesson.');
+    expect(get('sentinel').instructions).toBe('Sentinel with a learned lesson.');
     expect(get('scout')).toMatchObject({ version: 1, tools: { allow: ['read', 'web'] }, permissionCeiling: 'default', userLocked: true });
     const history = make().history('artisan');
     expect(history.find(v => v.version === 2)).toMatchObject({ version: 2, author: 'default', reason: 'Permessi completi predefiniti (ADR 0085)' });
@@ -75,5 +74,18 @@ describe('full default permissions (ADR 0085)', () => {
     expect(fullDefaultsFor({ ...base, trial: { version: 2, baseline: 1, startedAt: 1 } })).toBeNull();
     expect(fullDefaultsFor({ ...base, lastEditedBy: 'user' })).toBeNull();
     expect(fullDefaultsFor({ ...base, id: 'pulse' })).toBeNull();
+  });
+
+  it('ADR 0100: an untouched pre-0100 role text (it named Router or Judge, or lacked the merged jobs) moves to today\'s; an edited one stays', () => {
+    const base = { id: 'strategist', userLocked: false, lastEditedBy: 'default' as const, instructions: PRE_ADR0100_INSTRUCTIONS.strategist! };
+    expect(fiveRolesTextFor(base)).toEqual({ instructions: ROLE_DEFAULTS.strategist.instructions });
+    expect(fiveRolesTextFor({ ...base, id: 'sentinel', instructions: PRE_ADR0100_INSTRUCTIONS.sentinel! })).toEqual({ instructions: ROLE_DEFAULTS.sentinel.instructions });
+    expect(fiveRolesTextFor({ ...base, instructions: 'My plan text.' })).toBeNull();
+    expect(fiveRolesTextFor({ ...base, lastEditedBy: 'user' })).toBeNull();
+    expect(fiveRolesTextFor({ ...base, userLocked: true })).toBeNull();
+    expect(fiveRolesTextFor({ ...base, id: 'judge' })).toBeNull();
+    for (const [id, text] of Object.entries(PRE_ADR0100_INSTRUCTIONS)) expect(text).not.toBe(ROLE_DEFAULTS[id as 'scout'].instructions);
+    expect(PRE_ADR0100_INSTRUCTIONS.strategist).toMatch(/Judge/); expect(PRE_ADR0100_INSTRUCTIONS.orchestrator).toMatch(/Router/);
+    for (const id of ['orchestrator', 'strategist', 'artisan', 'sentinel'] as const) expect(ROLE_DEFAULTS[id].instructions).not.toMatch(/Router|Judge|Scribe/);
   });
 });

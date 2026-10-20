@@ -26,7 +26,7 @@
   <img alt="Electron 44" src="https://img.shields.io/badge/electron-44-47848F.svg">
 </p>
 
-![The Grindhouse: a Strategist's work as a tree of thread cards (Scout done, Artisan with its own Judge, Herald writing the notes), the Orchestrator's column on the right](docs/screenshots/grindhouse.webp)
+![The Grindhouse: a Strategist's work as a tree of thread cards (Scout done, Artisan with its own Sentinel, Herald writing the notes), the Orchestrator's column on the right](docs/screenshots/grindhouse.webp)
 
 Five agents at once and the bottleneck is no longer the model: it is you. Who is waiting on you? Who is burning tokens
 in a loop? What did the QA agent see in its browser? **second-brain** puts the whole crew on one screen, so your
@@ -41,11 +41,11 @@ settings. The interface speaks Italian and English.
 splits it into child chats, and the Grindhouse shows the whole family as thread cards: who is on it, what they found,
 what they still owe. A child's question goes to its parent first; only what truly needs you reaches you, once.
 
-**🎭 A crew with characters.** Nine fixed roles, each with its own face, job, skills and model tier:
+**🎭 A crew with characters.** Six fixed roles, each with its own face, job, skills and model tier:
 
-<p align="center"><img src="docs/screenshots/crew.webp" alt="The nine roles: Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald, Router, Judge, Scribe" width="820"></p>
+<p align="center"><img src="docs/screenshots/crew.webp" alt="The six roles: Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald" width="820"></p>
 
-<p align="center"><sub><b>Orchestrator</b> conducts · <b>Strategist</b> plans · <b>Scout</b> explores · <b>Artisan</b> builds · <b>Sentinel</b> tests · <b>Herald</b> announces · <b>Router</b> triages · <b>Judge</b> reviews · <b>Scribe</b> writes</sub></p>
+<p align="center"><sub><b>Orchestrator</b> conducts · <b>Strategist</b> plans · <b>Scout</b> explores · <b>Artisan</b> builds and writes · <b>Sentinel</b> tests and reviews · <b>Herald</b> announces</sub></p>
 
 **⚡ Answer with one key.** Questions and permissions pop up as panels right in the agent's strip, with the context the
 agent had when it asked. Every job gets an estimate up front ("~4 min · ~0,12 $ · from 12 similar tasks") and a
@@ -63,7 +63,7 @@ read and write. Watch it live on a 3D map, lit where the crew is working right n
 <table>
 <tr>
 <td width="50%"><img src="docs/screenshots/orchestrator.webp" alt="The Orchestrator's column: its plan with each chat's estimate and state, the mail between chats and a decision waiting for you"><br><b>The Orchestrator.</b> One chat that plans, delegates, routes mail between agents and tells you what needs you.</td>
-<td width="50%"><img src="docs/screenshots/agents.webp" alt="The Agenti page: the nine roles as cards with character, level, performance, runs and cost"><br><b>Agenti.</b> Every role as a card: level, performance, runs, cost, and a "?" with the formula behind each number.</td>
+<td width="50%"><img src="docs/screenshots/agents.webp" alt="The Agenti page: the six roles as cards with character, level, performance, runs and cost"><br><b>Agenti.</b> Every role as a card: level, performance, runs, cost, and a "?" with the formula behind each number.</td>
 </tr>
 <tr>
 <td><img src="docs/screenshots/browser.webp" alt="A QA chat in focus mode with the browser tab it drives"><br><b>Browsers they drive.</b> Real tabs inside the app over MCP: click, type, read, screenshot. Passwords and MFA are always yours.</td>

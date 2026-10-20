@@ -1,4 +1,4 @@
-// Read-only role discovery for every chat: agent_catalog lists the nine roles (what each is for, its engine and model
+// Read-only role discovery for every chat: agent_catalog lists the roles (what each is for, its engine and model
 // tier, which roles it may launch, its default skills and whether its engine is ready, and a warning for each skill —
 // its own or the ones the caller names in `skills` — that needs a tool class the role lacks, agents/skill-needs.ts),
 // never their instructions; and
@@ -38,7 +38,7 @@ export function discoverRoles(source: CatalogSource, args: Record<string, unknow
 export function agentCatalogTool(source: CatalogSource, skillTools?: SkillToolsSource): McpTool {
   return {
     name: 'agent_catalog', description: `${CATALOG_GUIDANCE} skillWarnings names a skill (the role's own, or one you pass in skills) that needs a tool the role lacks.`,
-    inputSchema: { type: 'object', properties: { id: { type: 'string', description: 'One role id for its detail; omit for all nine.' },
+    inputSchema: { type: 'object', properties: { id: { type: 'string', description: 'One role id for its detail; omit for all.' },
       skills: { type: 'array', items: { type: 'string' }, maxItems: 16, description: 'optional: skills you plan to pass; each role says which of them need tools it lacks' } }, additionalProperties: false },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     run: async args => JSON.stringify(discoverRoles(source, args, skillTools)),

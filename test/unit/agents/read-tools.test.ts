@@ -64,7 +64,7 @@ describe('declared read-only tools', () => {
     const root = brain(), file = path.join(root, READ_TOOLS_FILE);
     expect(isReadToolsList(root, file)).toBe(true);
     expect(isReadToolsList(root, path.join(root, 'tools', 'my-tasks.mjs'))).toBe(false);
-    const chat = { role: { id: 'scribe', name: 'Scribe' }, skills: [], brainRoot: root, policy: null };
+    const chat = { role: { id: 'artisan', name: 'Artisan' }, skills: [], brainRoot: root, policy: null };
     const v = gateRequest({ type: 'permission', tool: 'Write', input: { file_path: file } }, chat);
     expect(v).toMatchObject({ kind: 'deny', code: 'readToolsList' });
     expect(gateRequest({ type: 'permission', tool: 'Edit', input: { file_path: path.join(root, 'now.md') } }, chat).kind).toBe('pass');

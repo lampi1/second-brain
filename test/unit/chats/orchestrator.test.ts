@@ -90,8 +90,11 @@ describe('ChatManager with the Orchestrator', () => {
     expect(f.sent[0]!.startsWith('[Role supplied by the app: Orchestrator]')).toBe(true);
     expect(ORCHESTRATOR_ROLE.startsWith('[Role supplied by the app: Orchestrator]')).toBe(true);
     expect(ORCHESTRATOR_ROLE).toMatch(/Updater apply is disabled/);
-    expect(ORCHESTRATOR_ROLE).toMatch(/ONE router chat/); // issue #112: router for a batch, judge for a verdict
-    expect(ORCHESTRATOR_ROLE).toMatch(/goes to a judge chat/);
+    // ADR 0100: one chat per independent request, opened by the Orchestrator itself; a sentinel chat for a verdict only
+    // when the report is not verified, the change is large or touches security, contracts or IPC
+    expect(ORCHESTRATOR_ROLE).toMatch(/open one chat per request yourself, all in the same turn \(parallel app_create_chat calls\)/);
+    expect(ORCHESTRATOR_ROLE).toMatch(/sentinel chat.*not verified.*more than about 100 lines.*security, contracts or IPC/);
+    expect(ORCHESTRATOR_ROLE).not.toMatch(/router|judge|scribe/i);
   });
   it('starts from the edited Orchestrator role and composes its instructions once', async () => {
     const f = fixture(), seed = f.agents.list().profiles.find(p => p.id === ORCHESTRATOR_AGENT_ID)!;

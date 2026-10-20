@@ -66,6 +66,13 @@
   passed skill's tools into launch warnings. The role gate runs a granted bare skill name as `<launch plugin>:<name>`
   (an `answer` patch → Claude's `updatedInput`); the Orchestrator's Claude session has a per-turn workspace budget, an
   in-process PreToolUse hook (`agents/orchestrator-budget.ts`, `hook_callback`, ADR 0090).
+- **Five work roles, verdicts from facts, honest levels** (ADR 0100): `shared/roles.ts` holds the Orchestrator and the
+  five work roles (Strategist, Scout, Artisan, Sentinel, Herald); `RETIRED_ROLE_IDS` maps Router, Judge, Scribe to their
+  successor wherever stored data names them (catalog load, launches, chat owners, delegations, packs; their MCP access
+  entries are dropped). `shared/run-verdict.ts` computes a run's verdict from facts on read (agent_report done with every
+  criterion met, no correction, no rework within 7 days; provisional until then): verified evidence for
+  `run-metrics.ts`, `trials.ts`, `suggestions.ts`, `skills/suggest.ts` and `agents/standing.ts`, whose level counts
+  only verified successes (`AgentStanding.wins`) and whose performance gives the agent's own word no weight.
 - **The task estimate** (ADR 0087): `agents/task-estimate.ts` groups the ended agent runs by agent × kind (the keyword
   classifier of `brain/estimates.ts` on the run's goal), kind, agent; a request takes the median of the first group with
   3 or more (the 30 most recent), its middle half, a confidence and its parts, and a path (self / one-agent / tree). The

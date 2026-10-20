@@ -1,7 +1,7 @@
 // Validated lifecycle API facade. Renderer reads go through the existing sender-checked brain:api IPC (GET only); the
 // user's decisions on the "Da approvare" queue come only from the sender-checked agents:lifecycleDecide IPC (index.ts);
 // feedback writes come only from a parent on its own children's runs (agent_child_feedback on the chat's own token
-// endpoint) and from the app's Judge reviews (brainmodel/jobs.ts judge-sample), never renderer-supplied run records.
+// endpoint) and from the app's independent reviews (agents/judge-sample.ts, a Sentinel since ADR 0100), never renderer-supplied run records.
 import type { AgentFeedback, AgentFeedbackArgs, AgentLifecycleDecide, AgentLifecycleQuery, AgentLifecycleSnapshot } from '../../shared/agent-lifecycle';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
 import type { ModelTier } from '../../shared/roles';
@@ -71,7 +71,7 @@ export function createLifecycleApi(service: AgentLifecycle, runById: (id: string
         problem: service.problem ?? service.feedback.problem,
       };
     },
-    /** The app's own feedback entry point (a Judge's review, brainmodel/jobs.ts): the shared parser refuses any argument
+    /** The app's own feedback entry point (an independent review, agents/judge-sample.ts): the shared parser refuses any argument
      *  outside AgentFeedbackArgs (role, version, basis…). */
     async feedback(value: unknown, callerId: string): Promise<AgentFeedback> {
       const args = parseAgentFeedbackArgs(value);
@@ -80,7 +80,7 @@ export function createLifecycleApi(service: AgentLifecycle, runById: (id: string
     },
     /** A parent's opinion of a run it delegated: only a run whose parentRunId is a run of the caller's own chat, never its
      *  own run nor a sibling's. callerChatId comes from the chat's token endpoint. The record is an opinion (basis
-     *  orchestrator-opinion unless a verified Judge review backs it). */
+     *  orchestrator-opinion unless a verified independent review backs it). */
     async childFeedback(value: unknown, callerChatId: string): Promise<AgentFeedback> {
       const args = parseAgentFeedbackArgs(value);
       if (args.sendToRun) throw Error('sendToRun is not available here: write to the child with send_to_chat.');

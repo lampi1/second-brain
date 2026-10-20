@@ -60,7 +60,8 @@ export const studioIt = {
   'studio.customized': 'Personalizzato',
   'studio.builtIn': 'Predefinito',
   'studio.trial': 'In prova',
-  'studio.tierChip': ({ tier }: { tier: string }) => `Livello ${tier}`,
+  // «Modello», not «Livello»: on the card «Livello» is only the agent's level (ADR 0100)
+  'studio.tierChip': ({ tier }: { tier: string }) => `Modello: ${tier}`,
   'studio.versions': 'Versioni',
   'studio.versionsHint': 'Ogni modifica che cambia il comportamento è una versione; le chat aperte restano sulla loro.',
   'studio.versionBy.default': 'predefinita', 'studio.versionBy.user': 'tua', 'studio.versionBy.maintenance': 'manutenzione',
