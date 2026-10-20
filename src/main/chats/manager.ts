@@ -40,7 +40,7 @@ export const RESUME_TEXT = "[second-brain] L'app è stata riavviata mentre lavor
 import { cut, isUuid, nextId, type HarnessSession, type SessionOptions, type SessionPatch, type SessionSink } from './session';
 import { ChatStore, type PastSession, type StoredChat } from './store';
 import { updateActivity } from '../update/activity';
-import { BufferedSink, WarmPool, type WarmEngine } from './warm';
+import { BufferedSink, PLAIN_LAUNCH, WarmPool, type WarmEngine, type WarmLaunch } from './warm';
 import { AdmissionQueue, type AdmissionLimits, type LoadSampler } from './admission';
 import { AgentMayNotWake } from '../engines/policy';
 import { isAppChat } from '../brain/routing';
@@ -432,7 +432,7 @@ export class ChatManager implements ChatService {
   // no engine is started ahead while the machine is busy or chats wait in the CPU queue (ADR 0036)
   /** the chat id of the warm engine being spawned now (spawnWarm), before the pool holds it */
   private warmChat: string | null = null;
-  private readonly warm = new WarmPool({ spawn: cwd => this.spawnWarm(cwd), enabled: () => !!this.opts.prewarm && !this.quitting && !updateActivity.frozen && !this.admission?.busy() && this.opts.engineOn?.('claude') !== false });
+  private readonly warm = new WarmPool({ spawn: (cwd, launch) => this.spawnWarm(cwd, launch), enabled: () => !!this.opts.prewarm && !this.quitting && !updateActivity.frozen && !this.admission?.busy() && this.opts.engineOn?.('claude') !== false });
 
   constructor(private readonly opts: ChatManagerOptions) {
     this.analytics = new AgentAnalyticsCollector(opts.userData);
@@ -461,6 +461,10 @@ export class ChatManager implements ChatService {
     if (opts.prewarm) {
       const last = [...this.chats.values()].filter(r => !!engineOf(r.s.harness)?.caps.warm && r.s.origin === 'app' && !r.s.isOrchestrator).sort((a, b) => b.createdAt - a.createdAt)[0];
       if (last && fs.existsSync(last.s.cwd)) this.warm.schedule(last.s.cwd, opts.prewarmDelayMs ?? 20000);
+      // the Orchestrator's engine resumes ahead of the user's first message of the day: no 10-17 s start then, and an idle
+      // engine makes no model call
+      const t = setTimeout(() => this.prewarmOrchestrator(), opts.prewarmDelayMs ?? 20000);
+      t.unref?.();
     }
     const claude = resolveClaude(opts.enginePaths?.claude ?? null);
     log.info('chats', 'manager ready', { data: { restored: this.chats.size, claude: claude ? `${claude.source}: ${claude.path}` : 'not found', overrides: opts.enginePaths ?? null } });
@@ -545,13 +549,12 @@ export class ChatManager implements ChatService {
       if (!req.fork || !caps.fork || !isUuid(forkOf) || !src || src.s.harness !== req.harness) throw new Error('Si può solo duplicare (fork) una chat dell’app, sullo stesso motore, se il motore lo permette.');
     }
 
-    // a plain new Claude chat adopts the engine already waiting in its folder (warm.ts): no 10-25 s start-up
-    const warm = caps.warm && !forkOf && !req.worktree && !req.orchestrator && req.permissionMode !== 'bypassPermissions'
-      // warm engines are spawned with no tool limits: an agent with a policy always gets its own process
-      && !policy
-      // nor one with its own "Contesto massimo": the window is fixed when the engine starts (#80)
-      && !agent.maxContext
-      ? this.warm.take(cwd) : null;
+    // a new Claude chat adopts an engine already waiting in its folder and launched like it (warm.ts): no 10-25 s
+    // start-up. A role's tools, ceiling, skills plugin and "Contesto massimo" are fixed when the engine starts (#80), so
+    // only an engine launched with the same ones fits (launchSig)
+    const warmable = caps.warm && !forkOf && !req.worktree && !req.orchestrator && req.permissionMode !== 'bypassPermissions';
+    const launch = this.warmLaunch(policy, agent.assets, agent.maxContext);
+    const warm = warmable ? this.warm.take(cwd, launch.sig) : null;
     const id = warm?.chatId ?? `c_${crypto.randomBytes(5).toString('hex')}`;
     const now = Date.now();
     // `replaces`: the new Orchestrator takes the role, the old one goes on as a normal chat (history kept, never deleted)
@@ -606,7 +609,8 @@ export class ChatManager implements ChatService {
     log.info('chats', 'chat created', { chat: id, data: { harness: req.harness, cwd, fork: !!forkOf, model: r.choice.model, permissionMode: r.choice.permissionMode, orchestrator: r.s.isOrchestrator, warm: !!warm } });
     this.updated(r);
     if (warm) this.adoptWarm(r, warm); else if (!viaQueue) this.startSession(r);
-    if (caps.warm) this.warm.schedule(cwd, this.opts.prewarmDelayMs ?? 5000);
+    // the next chat like this one finds an engine waiting (a role's own launch; an Orchestrator, fork or bypass chat: a plain one)
+    if (caps.warm) this.warm.schedule(cwd, this.opts.prewarmDelayMs ?? 5000, warmable ? launch : PLAIN_LAUNCH);
     // the chat exists from here on: a failed first send shows as state 'error' + lastError, not as a lost chat
     if (prompt) {
       // a delegated chat's contract says who sent it (the parent's title), like mail between chats
@@ -1440,7 +1444,7 @@ export class ChatManager implements ChatService {
     this.persist();
     this.warm.stop();
     this.admission?.stop(); // what still waits is lost with the run; a cut turn (working) resumes on the next start anyway
-    const live = [...this.chats.values()].map(r => r.session).concat(this.warm.current?.session ?? null).filter((x): x is HarnessSession => !!x && x.alive);
+    const live = [...this.chats.values()].map(r => r.session).concat(this.warm.engines.map(w => w.session)).filter((x): x is HarnessSession => !!x && x.alive);
     // the engines outside a Job Object: what they started, pictured now (WMI is slow) for the kill at the cap
     // each of these spawns a process (WMI's PowerShell, a taskkill per engine): the slowest says what one costs now
     let spawnMs = 0;
@@ -1466,10 +1470,9 @@ export class ChatManager implements ChatService {
    *  the chats still open (the orphan sweep's owners, sweep.ts). */
   engines(): { live: { chatId: string; pid: number }[]; open: string[] } {
     const all = [...this.chats.values()];
-    const w = this.warm.current;
     return {
       live: all.flatMap(r => (r.session?.alive && r.session.pid ? [{ chatId: r.s.id, pid: r.session.pid }] : []))
-        .concat(w?.session.alive && w.session.pid ? [{ chatId: w.chatId, pid: w.session.pid }] : []),
+        .concat(this.warm.engines.flatMap(w => (w.session.alive && w.session.pid ? [{ chatId: w.chatId, pid: w.session.pid }] : []))),
       open: all.filter(r => !r.s.closedAt).map(r => r.s.id),
     };
   }
@@ -1607,7 +1610,7 @@ export class ChatManager implements ChatService {
    *  booster (jobguard.ts quit). */
   private takeLeft(sync: boolean): HarnessSession[] {
     // a killed pid stays "alive" until the loop runs 'close' again: never taskkill it twice (1-40 s each)
-    const left = [...this.chats.values()].map(r => r.session).concat(this.warm.current?.session ?? null).filter((x): x is HarnessSession => !!x && x.alive && !x.gone && !!x.pid && !this.killedPids.has(x.pid));
+    const left = [...this.chats.values()].map(r => r.session).concat(this.warm.engines.map(w => w.session)).filter((x): x is HarnessSession => !!x && x.alive && !x.gone && !!x.pid && !this.killedPids.has(x.pid));
     if (!left.length) return [];
     log.warn('chats', 'killing CLI processes still alive at quit', { data: { pids: left.map(x => x.pid) } });
     for (const x of left) if (x.pid) this.killedPids.add(x.pid);
@@ -1944,6 +1947,14 @@ export class ChatManager implements ChatService {
     this.runSave();
   }
 
+  /** Starts the open Orchestrator's engine (a resume, no message) when it has none: what the user writes first finds it up. */
+  private prewarmOrchestrator(): void {
+    const r = [...this.chats.values()].find(x => x.s.isOrchestrator && !x.s.closedAt);
+    if (!r || r.session || this.quitting || updateActivity.frozen || !engineOf(r.s.harness)?.caps.warm || this.opts.engineOn?.(r.s.harness) === false || !fs.existsSync(r.s.cwd)) return;
+    log.info('chats', 'Orchestrator engine started ahead of the first message', { chat: r.s.id });
+    this.ensureSession(r).catch(e => log.warn('chats', 'Orchestrator engine not started ahead', { chat: r.s.id, cause: errText(e), hint: 'it starts with the first message as before' }));
+  }
+
   /** The app's estimate line for a request, or null: an estimate that fails never holds the message. */
   private requestEstimate(text: string): string | null {
     try { return this.opts.requestEstimate?.(text) ?? null; } catch (e) {
@@ -2209,9 +2220,9 @@ export class ChatManager implements ChatService {
    *  start by that parent, still holds). */
   mcpContext(chatId: string, seen = new Set<string>()): { roles: (string | null)[]; policy: AgentPolicy | null } | null {
     const r = this.chats.get(chatId);
-    // the warm engine's chat does not exist yet: it is a plain chat (no role, no policy, no parent: warm.ts never serves
-    // an agent with a policy); once adopted, its real role is read at every gateway call
-    if (!r) return this.warmChat === chatId || this.warm.current?.chatId === chatId ? { roles: [null], policy: null } : null;
+    // a warm engine's chat does not exist yet: no role and no parent until a chat adopts it (a role's launch only fixes
+    // its tool list, which the engine enforces itself); once adopted, its real role is read at every gateway call
+    if (!r) return this.warmChat === chatId || this.warm.has(chatId) ? { roles: [null], policy: null } : null;
     const policy = r.policy ?? null, own = r.s.agent?.source === 'catalog' ? r.s.agent.id : null;
     if (!r.s.parentId) return { roles: [own], policy };
     // a child is bounded by its ancestors' roles: the chain frozen at its creation, else (saved before it existed) the
@@ -2312,26 +2323,36 @@ export class ChatManager implements ChatService {
 
   /** A Claude engine for the next new chat in cwd: its chat id, session id and MCP endpoint are chosen now; no model,
    *  effort, mode or title (the user's defaults until the chat sends its own as control requests). */
-  private spawnWarm(cwd: string): WarmEngine | null {
+  private spawnWarm(cwd: string, launch: WarmLaunch): WarmEngine | null {
     if (updateActivity.frozen) return null;
     const chatId = `c_${crypto.randomBytes(5).toString('hex')}`;
     const sessionId = crypto.randomUUID();
     // its launch asks mcpContext before the pool holds it: the id is known as the warm engine's meanwhile
     this.warmChat = chatId;
-    try { return this.spawnWarmAs(chatId, sessionId, cwd); } finally { this.warmChat = null; }
+    try { return this.spawnWarmAs(chatId, sessionId, cwd, launch); } finally { this.warmChat = null; }
   }
 
-  private spawnWarmAs(chatId: string, sessionId: string, cwd: string): WarmEngine {
+  private spawnWarmAs(chatId: string, sessionId: string, cwd: string, launch: WarmLaunch): WarmEngine {
     const extraArgs = this.extraArgsFor('claude', chatId, undefined);
     const opts: SessionOptions = {
       chatId, cwd, model: null, effort: null, permissionMode: null, title: null, sessionId, resume: false, fork: false, worktree: false,
-      mcpConfig: this.mcpConfig(chatId), costBaseUsd: 0, compactWindowTokens: this.compactWindow(),
+      ...(launch.toolPolicy !== undefined || launch.ceiling !== undefined ? { toolPolicy: launch.toolPolicy ?? null, ceiling: launch.ceiling ?? null } : {}),
+      ...(launch.agentAssets ? { agentAssets: launch.agentAssets } : {}),
+      mcpConfig: this.mcpConfig(chatId), costBaseUsd: 0, compactWindowTokens: launch.compactWindowTokens ?? this.compactWindow(),
       env: { ...this.opts.env, SB_EVENT_CONTEXT: '' }, ...(extraArgs ? { extraArgs } : {}),
     };
     const sink = new BufferedSink();
     const session = this.newSession('claude', opts, sink, undefined);
     session.start();
     return { chatId, sessionId, cwd, session, sink, at: Date.now() };
+  }
+
+  /** How a chat's engine is launched, as far as a waiting engine must match it: its role's tools and ceiling, its skills
+   *  plugin and its own context window; nothing of these = a plain launch (sig ''). */
+  private warmLaunch(policy: AgentPolicy | null | undefined, assets: { pluginDir: string; skillRoot: string } | undefined, maxContext: number | undefined): WarmLaunch {
+    if (!policy && !assets && !maxContext) return PLAIN_LAUNCH;
+    const fields = { toolPolicy: policy?.tools ?? null, ceiling: policy?.ceiling ?? null, ...(assets ? { agentAssets: assets } : {}), ...(maxContext ? { compactWindowTokens: maxContext } : {}) };
+    return { sig: crypto.createHash('sha256').update(JSON.stringify(fields)).digest('hex').slice(0, 16), ...fields };
   }
 
   /** The new chat r takes the waiting engine: what it reported so far is replayed into the chat, then the chat's own
