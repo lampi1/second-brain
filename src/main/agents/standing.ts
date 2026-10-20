@@ -4,7 +4,8 @@
 // verdict, each weighted by how much the verdict is trusted (the user or a Judge > the Orchestrator > the agent's own
 // word) and by how recent it is (half weight every 30 days). Below MIN_RUNS judged runs it stays null: "in rodaggio".
 // The Orchestrator has no run of its own (its chat is permanent, ADR 0083): each ended root run it opened (startedBy
-// "orchestrator", not a one-shot) counts as one of its decisions, rated with that run's verdict (ADR 0097, issue #112).
+// "orchestrator", not a one-shot) counts as one of its decisions, rated with that run's verdict (ADR 0097, issue #112); its own verdict on such a run weighs as its own word (self) on
+// its own standing, and the decisions among pruned runs live on in the rollups (RunTally.decisions).
 // Used by ChatManager.runMetrics (agents:metrics) and the demo; the card's "?" tips repeat these rules in Italian.
 import type { AgentMetrics, AgentRun, AgentStanding } from '../../shared/agents';
 import type { RunTally } from './run-metrics';
@@ -42,6 +43,9 @@ const counts = (r: AgentRun): boolean => r.endedAt !== undefined && !r.oneshot?.
 export const orchestratorDecision = (r: AgentRun): boolean => r.startedBy === 'orchestrator' && r.source !== 'oneshot' && !r.oneshot
   && !r.parentRunId && r.agentId !== 'orchestrator';
 
+/** An ended, counted run that is one of the Orchestrator's decisions (what rollUp keeps in RunTally.decisions). */
+export const countedDecision = (r: AgentRun): boolean => counts(r) && orchestratorDecision(r);
+
 /** The most trusted verdict a run has, or null. A verdict "unknown" is no verdict. */
 export function verdictOf(run: AgentRun, reviews: readonly AgentRun[] = []): { source: Source; verdict: Verdict } | null {
   const o = run.outcome, known = o && o.verdict !== 'unknown' ? o.verdict : null;
@@ -64,15 +68,22 @@ export function standings(runs: readonly AgentRun[], rollups: readonly RunTally[
     if (!a) acc.set(id, a = { runs: 0, num: 0, den: 0, evaluated: 0, sources: { human: 0, judge: 0, orchestrator: 0, self: 0 } });
     return a;
   };
-  for (const t of rollups) of(t.agentId).runs += t.ended;
+  for (const t of rollups) {
+    of(t.agentId).runs += t.ended;
+    // the Orchestrator's decisions among the pruned runs (rollUp keeps their count, ADR 0097)
+    if (t.decisions) of('orchestrator').runs += t.decisions;
+  }
   for (const r of runs) {
     if (!counts(r)) continue;
     const v = verdictOf(r, reviews.get(r.runId));
-    for (const a of orchestratorDecision(r) ? [of(r.agentId), of('orchestrator')] : [of(r.agentId)]) {
+    const decision = orchestratorDecision(r);
+    for (const a of decision ? [of(r.agentId), of('orchestrator')] : [of(r.agentId)]) {
       a.runs++;
       if (!v) continue;
-      const age = Math.max(0, now - r.endedAt!), w = TRUST[v.source] * 0.5 ** (age / HALF_LIFE_MS);
-      a.evaluated++; a.sources[v.source]++;
+      // the Orchestrator's own verdict on a run it opened is its own word when it is the one rated: self weight
+      const source: Source = decision && a === acc.get('orchestrator') && v.source === 'orchestrator' ? 'self' : v.source;
+      const age = Math.max(0, now - r.endedAt!), w = TRUST[source] * 0.5 ** (age / HALF_LIFE_MS);
+      a.evaluated++; a.sources[source]++;
       a.num += w * SCORE[v.verdict]; a.den += w;
     }
   }

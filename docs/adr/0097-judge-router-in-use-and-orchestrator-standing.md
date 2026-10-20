@@ -28,8 +28,10 @@ had never fired, and the Orchestrator stayed Lv 1.
    Router chat; finished work that needs an independent verdict goes to a Judge chat.
 3. **The Orchestrator's decisions are its runs** (`standing.ts orchestratorDecision`): every ended root run it opened
    (`startedBy: 'orchestrator'`, not a one-shot, no parent run) counts once for the Orchestrator's level and is rated
-   with that run's own verdict (same trust and recency weights). The run still counts for its own role. Nothing new is
-   stored: it is derived from `agent-runs.json`. `withStandings` adds an entry without metrics for an agent that has a
+   with that run's own verdict (same trust and recency weights), except its own verdict (`orchestrator-opinion`) on a
+   run it opened, which weighs as its own word (`self`) on its own standing: it does not grade itself at Orchestrator
+   trust. The run still counts for its own role. It is derived from `agent-runs.json`; the one thing stored is the count
+   of these decisions among pruned runs (`RunTally.decisions` in the rollups). `withStandings` adds an entry without metrics for an agent that has a
    standing but no run of its own, so the Orchestrator's card shows its level; the "?" on the level says so.
 
 ## Consequences
@@ -37,6 +39,6 @@ had never fired, and the Orchestrator stayed Lv 1.
   does not want them sets the limit to 0 or `SB_JUDGE_SAMPLE=0`.
 - The Orchestrator's level is the number of jobs it started; its performance is how those jobs went. A bad plan shows
   as failed jobs; a good split of a request into several chats earns several decisions.
-- Rolled-up runs (pruned past `RUNS_MAX` = 5000) carry no `startedBy`, so they leave the Orchestrator's count; the
-  agent's own count keeps them. Accepted: the store keeps thousands of runs before it prunes.
+- Rolled-up runs (pruned past `RUNS_MAX` = 5000) keep the Orchestrator's decisions as a count (`decisions` in each
+  rollup), so its level never drops; their verdicts leave its performance, like any pruned run's.
 - The demo has no Orchestrator runs any more: its level comes from the other roles' demo runs.

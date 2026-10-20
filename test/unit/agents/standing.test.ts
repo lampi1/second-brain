@@ -3,7 +3,8 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentRun } from '../../../src/shared/agents';
 import { HALF_LIFE_MS, MIN_RUNS, levelOf, levelStart, orchestratorDecision, standings, verdictOf, withStandings } from '../../../src/main/agents/standing';
-import { emptyTally } from '../../../src/main/agents/run-metrics';
+import { emptyTally, mergeTallies, rollUp } from '../../../src/main/agents/run-metrics';
+import { readTally } from '../../../src/main/agents/runs';
 
 const NOW = Date.UTC(2026, 9, 19, 12);
 let seq = 0;
@@ -82,6 +83,29 @@ describe('the Orchestrator\'s standing (issue #112, ADR 0097)', () => {
     // the run still counts for its own role too
     expect(standings(mine, [], NOW).get('scout')!.runs).toBe(3);
     expect(orchestratorDecision(others[2]!)).toBe(false);
+  });
+  it('weighs its own verdicts on runs it opened as its own word (self) on its standing, not as Orchestrator trust', () => {
+    const opinion = (verdict: 'success' | 'fail') => ({ verdict, basis: 'orchestrator-opinion' as const, at: NOW, by: 'o' });
+    const mine = [...Array(5)].map(() => run({ startedBy: 'orchestrator', outcome: opinion('success') }));
+    const judged = [...Array(5)].map(() => run({ startedBy: 'orchestrator', outcome: human('fail') }));
+    const s = standings([...mine, ...judged], [], NOW).get('orchestrator')!;
+    expect(s.sources).toEqual({ human: 5, judge: 0, orchestrator: 0, self: 5 });
+    expect(s.performance).toBeCloseTo(0.3 * 5 / (0.3 * 5 + 5));
+    // the role it rated keeps the Orchestrator's trust for that verdict
+    expect(standings(mine, [], NOW).get('scout')!.sources.orchestrator).toBe(5);
+  });
+  it('keeps its decisions when the runs are pruned into the rollups', () => {
+    const mine = [...Array(4)].map(() => run({ startedBy: 'orchestrator' }));
+    const own = run({ startedBy: 'user' });
+    const rolled = rollUp([], [...mine, own], [...mine, own]);
+    expect(rolled).toHaveLength(1);
+    expect(rolled[0]).toMatchObject({ ended: 5, decisions: 4 });
+    expect(readTally(JSON.parse(JSON.stringify(rolled[0])))).toMatchObject({ decisions: 4 });
+    expect(readTally({ ...rolled[0], decisions: -1 })).toBeNull();
+    expect(mergeTallies(rolled[0]!, rolled[0]!).decisions).toBe(8);
+    const kept = run({ startedBy: 'orchestrator' });
+    expect(standings([kept], rolled, NOW).get('orchestrator')!.runs).toBe(5);
+    expect(standings([kept], rolled, NOW).get('scout')!.runs).toBe(6);
   });
   it('gives the Orchestrator a card entry even without metrics of its own', () => {
     const list = withStandings([], standings([run({ startedBy: 'orchestrator' })], [], NOW));
