@@ -436,7 +436,7 @@ export function mailTools(d: MailToolDeps): ChatTool[] {
       run: (a, ctx) => {
         const from = me(ctx);
         const root = d.root();
-        if (!root) throw new MailError('nessuna cartella del cervello collegata: la posta tra chat non è disponibile');
+        if (!root) throw new MailError('nessuna cartella del brain collegata: la posta tra chat non è disponibile');
         const text = String(a.text ?? '').trim();
         if (!text || text.length > 4000) throw new MailError('text vuoto o più lungo di 4000 caratteri');
         const now = Date.now();

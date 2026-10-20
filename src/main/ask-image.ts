@@ -50,7 +50,7 @@ export function readAskImage(raw: string, roots: readonly string[]): AskImageRes
   let st: fs.Stats;
   try { real = fs.realpathSync.native(p); st = fs.statSync(real); } catch { return { kind: 'missing', reason: `L'immagine non c'è: ${p}`, path: p }; }
   if (/^[\\/]{2}/.test(real)) return { kind: 'refused', reason: 'Il percorso porta a una cartella di rete.' };
-  if (!roots.some(r => isInside(real, realOr(r)))) return { kind: 'refused', reason: 'Fuori dalle cartelle ammesse (evidence, cervello, codice dell’app).', path: real };
+  if (!roots.some(r => isInside(real, realOr(r)))) return { kind: 'refused', reason: 'Fuori dalle cartelle ammesse (evidence, brain, codice dell’app).', path: real };
   if (!st.isFile()) return { kind: 'refused', reason: 'Non è un file.', path: real };
   if (st.size > MAX_ASK_IMAGE) return { kind: 'refused', reason: 'Immagine troppo grande per l’anteprima (oltre 4 MB).', path: real };
   let buf: Buffer;

@@ -43,7 +43,7 @@ export const KINDS: Record<string, { label: string; priority: Priority }> = {
   'sync-ok': { label: 'GitHub aggiornato', priority: 'quiet' },
   'sync-blocked': { label: 'Pubblicazione bloccata dal controllo', priority: 'normal' },
   'sync-error': { label: 'Pubblicazione non riuscita', priority: 'normal' },
-  'brain-sync': { label: 'Sincronizzazione del cervello ferma', priority: 'urgent' }, // brain/sync.ts: a domain stopped (ADR 0059)
+  'brain-sync': { label: 'Sincronizzazione del brain ferma', priority: 'urgent' }, // brain/sync.ts: a domain stopped (ADR 0059)
   task: { label: 'Task', priority: 'normal' },   // tasks/service.ts: news on my work items, PRs and the tickets I follow
   'task-alert': { label: 'Task per te', priority: 'normal' },  // tasks/service.ts: a mention or a change on my things (toast + sound, ADR 0029)
 };

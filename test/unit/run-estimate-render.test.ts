@@ -26,7 +26,7 @@ describe('estimate chip', () => {
   it('shows the estimate of an open run with the similar tasks, the time left and the explanation', () => {
     const html = render(chat(), view());
     expect(html).toContain('stima');
-    expect(html).toMatch(/~4 min · ~0,12\s\$ · su 12 task simili/);
+    expect(html).toMatch(/~4 min · ~0,12\s\$ · su 12 lavori simili/);
     expect(html).toContain('ne restano ~3 min');
     expect(html).toContain('data-testid="estimate-help-r_000000000001"');
     expect(html).toContain('Come si calcola la stima');

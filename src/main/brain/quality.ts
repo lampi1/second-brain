@@ -134,7 +134,7 @@ export class Quality {
     if (!fresh && (age < REOPEN_TTL_MS || this.now() - this.failedAt < REOPEN_RETRY_MS)) return;
     const root = this.d.brainRoot();
     const script = root ? path.join(root, REOPEN_SCRIPT) : null;
-    if (!root || !script || !fs.existsSync(script)) { this.lastError = `nel cervello manca ${REOPEN_SCRIPT}`; return; }
+    if (!root || !script || !fs.existsSync(script)) { this.lastError = `nel brain manca ${REOPEN_SCRIPT}`; return; }
     this.running = this.d.run(script, ['--json', '--days', String(REOPEN_DAYS)], root, 300e3).then(r => {
       if (r.code !== 0) { this.lastError = reopenError(r); this.failedAt = this.now(); log.warn('quality', 'bug-reopen read failed', { cause: this.lastError, hint: 'az login, then Aggiorna on the Qualità page' }); return; }
       parseReopen(r.stdout); // only valid JSON reaches the cache

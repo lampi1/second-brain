@@ -30,7 +30,7 @@ describe('error text', () => {
   });
 
   it('a plain one-line error is shown as it is, with no details', () => {
-    expect(shortError('questo cervello non ha un server dati (ops/tools/brain-site.mjs)')).toEqual({ short: 'questo cervello non ha un server dati (ops/tools/brain-site.mjs)', details: null });
+    expect(shortError('questo brain non ha un server dati (ops/tools/brain-site.mjs)')).toEqual({ short: 'questo brain non ha un server dati (ops/tools/brain-site.mjs)', details: null });
     expect(shortError('  errore simulato su /api/tables \n')).toEqual({ short: 'errore simulato su /api/tables', details: null });
     expect(shortError('')).toEqual({ short: '', details: null });
     expect(shortError(null)).toEqual({ short: '', details: null });
@@ -39,8 +39,8 @@ describe('error text', () => {
   it('strips the error class, keeps a multi-line message folded', () => {
     expect(shortError('TypeError: x is not a function').short).toBe('x is not a function');
     expect(shortError('Error [ERR_MODULE_NOT_FOUND]: Cannot find package').short).toBe('Cannot find package');
-    const e = shortError('server dati del cervello uscito (1): \n  at foo\nrotto');
-    expect(e.short).toBe('server dati del cervello uscito (1):');
+    const e = shortError('server dati del brain uscito (1): \n  at foo\nrotto');
+    expect(e.short).toBe('server dati del brain uscito (1):');
     expect(e.details).toContain('rotto');
   });
 

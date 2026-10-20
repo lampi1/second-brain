@@ -114,7 +114,7 @@ export class ConfigStore {
       try { raw = JSON.parse(fs.readFileSync(this.file, 'utf8').replace(/^﻿/, '')); } catch (e) {
         this.loadError = `config.json non valido: ${e instanceof Error ? e.message : String(e)}`;
         try { fs.copyFileSync(this.file, `${this.file}.bad-${Date.now()}`); } catch { /* best effort */ }
-        log.error('settings', 'config.json could not be read: starting with defaults', { cause: this.loadError, hint: 'choose the brain folder again from the app (Scegli la cartella del cervello); the bad file was kept as config.json.bad-<time>' });
+        log.error('settings', 'config.json could not be read: starting with defaults', { cause: this.loadError, hint: 'choose the brain folder again from the app (Scegli la cartella del brain); the bad file was kept as config.json.bad-<time>' });
       }
     }
     this.saved = fromSaved(raw);

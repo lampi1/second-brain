@@ -56,13 +56,13 @@ export class BrainApi {
     if (this.port) return this.port;
     this.port = new Promise<number>((resolve, reject) => {
       const script = this.script;
-      if (!script || !fs.existsSync(script)) { reject(new Error('questo cervello non ha un server dati (ops/tools/brain-site.mjs)')); return; }
+      if (!script || !fs.existsSync(script)) { reject(new Error('questo brain non ha un server dati (ops/tools/brain-site.mjs)')); return; }
       const child = spawn(this.node.exe, ['--input-type=module', '-e', CHILD], {
         cwd: this.root!, env: { ...this.node.env, SB_BRAIN_ROOT: this.root!, SB_BRAIN_SITE: script }, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
       });
       this.child = child;
       let out = '', err = '';
-      const timer = setTimeout(() => { reject(new Error('il server dati del cervello non è partito in 20 s')); child.kill(); }, 20e3);
+      const timer = setTimeout(() => { reject(new Error('il server dati del brain non è partito in 20 s')); child.kill(); }, 20e3);
       child.stdout!.on('data', d => {
         out += String(d);
         const m = out.match(/\{"port":(\d+)\}/);
@@ -72,7 +72,7 @@ export class BrainApi {
       child.on('exit', code => {
         clearTimeout(timer);
         if (this.child === child) { this.child = null; this.port = null; }
-        reject(new Error(`server dati del cervello uscito (${code}): ${err.trim().slice(0, 300)}`));
+        reject(new Error(`server dati del brain uscito (${code}): ${err.trim().slice(0, 300)}`));
         if (code) log.warn('brain', 'brain data server exited', { data: { code, stderr: err.slice(0, 500) } });
       });
       child.on('error', e => { clearTimeout(timer); reject(e); });
@@ -111,7 +111,7 @@ export class BrainApi {
           else resolve({ ok: false, error: String((data as { error?: unknown })?.error ?? `errore ${res.statusCode}`) });
         });
       });
-      req.on('timeout', () => { req.destroy(); resolve({ ok: false, error: 'il server dati del cervello non ha risposto in tempo' }); });
+      req.on('timeout', () => { req.destroy(); resolve({ ok: false, error: 'il server dati del brain non ha risposto in tempo' }); });
       req.on('error', e => resolve({ ok: false, error: errText(e) }));
     });
   }

@@ -173,8 +173,8 @@ export const dialogsIt = {
   'dialogs.launch.dismissTip': 'Chiudi',
 
   // BrainSetupBanner
-  'dialogs.brainSetup.notConnected': 'Il cervello non è collegato.',
-  'dialogs.brainSetup.pickButton': 'Scegli la cartella del cervello',
+  'dialogs.brainSetup.notConnected': 'Il brain non è collegato.',
+  'dialogs.brainSetup.pickButton': 'Scegli la cartella del brain',
   'dialogs.brainSetup.picking': 'Apro…',
 
   // LinkPeek

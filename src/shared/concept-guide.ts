@@ -645,7 +645,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'Tasks shows what waits for you on Azure DevOps; Done is the log of what was done, newest first.'),
     points: [
       // src/renderer/brain/pages/Task.tsx, src/main/tasks/service.ts
-      b('«Task» legge con il lettore devops-me.mjs le tue PR, le review, i work item e le menzioni: quello incluso nell’app, o quello del cervello se c’è; sola lettura, zero token.',
+      b('«Task» legge con il lettore devops-me.mjs le tue PR, le review, i work item e le menzioni: quello incluso nell’app, o quello del brain se c’è; sola lettura, zero token.',
         '"Tasks" reads your PRs, reviews, work items and mentions with the devops-me.mjs reader: the one shipped with the app, or the brain’s own when it has one; read-only, zero tokens.'),
       b('La lettura parte con «Aggiorna ora» o da sola, ogni 15 minuti fino a 2 ore, se accendi la lettura automatica; una menzione ti avvisa con un suono che puoi spegnere.',
         'The read starts with "Refresh now" or by itself, every 15 minutes up to 2 hours, when the automatic read is on; a mention alerts you with a sound you can turn off.'),
@@ -662,7 +662,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
     analogy: b('Task è la posta in arrivo del lavoro; Fatto è il diario di bordo.',
       'Tasks is the work’s inbox; Done is the logbook.'),
     tech: [
-      tech(DATA, 'Task: la cache tasks.json nella cartella dati dell’app; Fatto: /api/day?kind=report del cervello più l’elenco delle chat dell’app.',
+      tech(DATA, 'Task: la cache tasks.json nella cartella dati dell’app; Fatto: /api/day?kind=report del brain più l’elenco delle chat dell’app.',
         'Tasks: the tasks.json cache in the app’s data folder; Done: the brain’s /api/day?kind=report plus the app’s chat list.'),
       tech(WHERE, 'Lettura e avvisi in src/main/tasks/, le pagine in brain/pages/Task.tsx e Fatto.tsx. Fino al 19/10/2026 Task si chiamava DevOps: impostazioni e link vecchi passano da soli al nome nuovo (ADR 0079).',
         'Reads and alerts in src/main/tasks/, the pages in brain/pages/Task.tsx and Fatto.tsx. Until 19/10/2026 Tasks was called DevOps: old settings and links move to the new name by themselves (ADR 0079).'),

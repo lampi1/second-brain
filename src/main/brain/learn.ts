@@ -66,9 +66,9 @@ export class Learn {
     const v = learnArgs(a);
     if (!v.ok) return v;
     const root = this.root();
-    if (!root) return { ok: false, error: 'nessuna cartella del cervello scelta' };
+    if (!root) return { ok: false, error: 'nessuna cartella del brain scelta' };
     const script = improveScript(root);
-    if (!fs.existsSync(script)) return { ok: false, error: 'questo cervello non ha il ciclo di miglioramento (ops/improve)' };
+    if (!fs.existsSync(script)) return { ok: false, error: 'questo brain non ha il ciclo di miglioramento (ops/improve)' };
     const r = await runNode(this.node, script, v.args, root, this.timeoutMs);
     let out: Record<string, unknown> | null = null;
     try { out = JSON.parse(r.stdout.trim().split('\n').at(-1) ?? '') as Record<string, unknown>; } catch { /* below */ }

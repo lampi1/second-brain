@@ -107,7 +107,7 @@ test('section badges count new events and clear when the section is visited', as
 test('a blocked GitHub sync toasts, with since when GitHub is behind and what blocks it', async () => {
   const { app } = await launchDemo();
   const detail = 'Ultimo aggiornamento riuscito di GitHub: 11/10 20:22\nguard: BLOCKED, 2 findings (deny-list 2)\ntest/unit/a.test.ts:3  deny-list';
-  await event(app, { kind: 'sync-blocked', title: 'GitHub fermo: pubblicazione bloccata dal controllo (prodotto nel cervello)', detail });
+  await event(app, { kind: 'sync-blocked', title: 'GitHub fermo: pubblicazione bloccata dal controllo (prodotto nel brain)', detail });
   const layer = await layerPage(app);
   const toast = layer.getByTestId('ev-toast-sync-blocked');
   await expect(toast).toContainText('GitHub fermo: pubblicazione bloccata dal controllo');
@@ -130,7 +130,7 @@ test('the bell counts only what needs the user; the center keeps everything else
   ]) await event(app, e);
   // what needs him: counted (sent after the noise: once both are in the list, the noise was handled too)
   await event(app, { kind: 'chat-failed', title: 'Mappa', detail: 'il turno è finito con un errore', chatId: 'mappa' });
-  await event(app, { kind: 'sync-blocked', title: 'Pubblicazione bloccata (prodotto nel cervello)', detail: 'src/a.ts:3 rule secret' });
+  await event(app, { kind: 'sync-blocked', title: 'Pubblicazione bloccata (prodotto nel brain)', detail: 'src/a.ts:3 rule secret' });
   await page.keyboard.press('Control+Shift+N');
   await expect(page.locator('[data-testid="nc-list"] [data-kind="sync-blocked"]').first()).toBeVisible();
   await expect(page.locator('[data-testid="nc-list"] [data-kind="chat-failed"]').first()).toBeVisible();

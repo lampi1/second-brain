@@ -46,7 +46,7 @@ export const SYS_IT = {
   'sys.aboveParent': (p: { tool: string; parent: string }) => `Permesso rifiutato: ${p.tool} va oltre i permessi di «${p.parent}», la chat che ha delegato questa.`,
   'sys.subagentRefused': (p: { type: string }) => `Sotto-agente «${p.type}» rifiutato: il lavoro delegato va in una chat visibile (agent_delegate). Qui solo ricerche veloci (Explore).`,
   'sys.skillRefused': (p: { skill: string; role: string }) => `Skill «${p.skill}» non assegnata al ruolo ${p.role}: rifiutata.`,
-  'sys.brainOnly': (p: { tool: string; path: string; role: string }) => `Scrittura rifiutata: il ruolo ${p.role} può scrivere solo nella cartella del cervello (${p.tool} su «${p.path}»).`,
+  'sys.brainOnly': (p: { tool: string; path: string; role: string }) => `Scrittura rifiutata: il ruolo ${p.role} può scrivere solo nella cartella del brain (${p.tool} su «${p.path}»).`,
   'sys.readToolsList': (p: { tool: string; role: string }) => `Scrittura rifiutata: l’elenco degli strumenti di sola lettura (read-only-tools.md) lo cambi solo tu (${p.tool}, ruolo ${p.role}).`,
   'sys.modelRefusal': 'Il modello ha rifiutato la richiesta.',
 

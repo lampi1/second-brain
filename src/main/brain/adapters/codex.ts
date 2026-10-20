@@ -88,7 +88,7 @@ export function codexLaunch(i: CodexLaunchInput): CodexLaunch {
     attachMcp(c, 'second-brain-app', i.appMcpUrl);
     for (const ext of i.extMcp ?? []) attachExt(c, ext.name, ext.url);
   }
-  if (brain && !domains.length) log.info('brain', 'codex chat starts without the brain\'s rules: no brain domain', { ...(i.chatId ? { chat: i.chatId } : {}), hint: 'choose the brain folder in Settings (or switch off «Regole del cervello alle chat Codex»)' });
+  if (brain && !domains.length) log.info('brain', 'codex chat starts without the brain\'s rules: no brain domain', { ...(i.chatId ? { chat: i.chatId } : {}), hint: 'choose the brain folder in Settings (or switch off «Regole del brain alle chat Codex»)' });
   return {
     configArgs: c.flatMap(v => ['-c', v]),
     approvalPolicy: approval, sandbox,

@@ -136,7 +136,7 @@ function build(base: string, dir: string, files: readonly Src[], domains: readon
   fs.mkdirSync(base, { recursive: true });
   const tmp = path.join(base, `.${PLUGIN_NAME}-${process.pid}-${Date.now()}`);
   fs.mkdirSync(path.join(tmp, '.claude-plugin'), { recursive: true });
-  fs.writeFileSync(path.join(tmp, '.claude-plugin', 'plugin.json'), `${JSON.stringify({ name: PLUGIN_NAME, description: 'Le regole del cervello (generato da second-brain: non modificare qui)', version: '0.0.0' }, null, 2)}\n`);
+  fs.writeFileSync(path.join(tmp, '.claude-plugin', 'plugin.json'), `${JSON.stringify({ name: PLUGIN_NAME, description: 'Le regole del brain (generato da second-brain: non modificare qui)', version: '0.0.0' }, null, 2)}\n`);
   for (const f of files) {
     const to = path.join(tmp, f.rel);
     fs.mkdirSync(path.dirname(to), { recursive: true });

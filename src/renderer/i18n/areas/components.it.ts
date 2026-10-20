@@ -133,7 +133,7 @@ export const componentsIt = {
   "cmp.interview.step.I tuoi agenti": 'I tuoi agenti',
   "cmp.interview.step.Riepilogo": 'Riepilogo',
   "cmp.work.title": "Il mio profilo di lavoro",
-  "cmp.work.lead": "Dev, QA, PO o CTO: quali pagine del cervello vedi nella barra e quale è quella di riferimento. Ruoli, chat e permessi restano come sono.",
+  "cmp.work.lead": "Dev, QA, PO o CTO: quali pagine del brain vedi nella barra e quale è quella di riferimento. Ruoli, chat e permessi restano come sono.",
   "cmp.work.choose": "Profilo",
   "cmp.work.none": "Nessuno: tutte le pagine",
   "cmp.work.all": "Vedi tutte le pagine.",

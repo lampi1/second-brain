@@ -25,8 +25,8 @@ export function BrainTestRoute() {
   const nav = (target: string) => { location.hash = `${BRAIN_TEST_PREFIX}/${encodeURI(target)}`; };
   return (
     <div className="bx bx-shell" data-testid="brain-test">
-      <nav className="bx-rail" aria-label="Pagine del cervello">
-        <div className="brand"><i>◆</i> Cervello</div>
+      <nav className="bx-rail" aria-label="Pagine del brain">
+        <div className="brand"><i>◆</i> Brain</div>
         {BRAIN_PAGES.map(p => (
           <button key={p.id} type="button" aria-current={p.id === page.id ? 'page' : undefined} onClick={() => nav(p.id)} data-testid={`brain-nav-${p.id}`} title={`${p.label} (${p.key})`}>{p.label}</button>
         ))}

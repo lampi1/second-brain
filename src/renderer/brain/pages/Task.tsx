@@ -112,7 +112,7 @@ function DetailView({ w, d }: { w: DevopsItem; d: DevopsDetail | undefined }) {
         <span className="sp" />
         <ExtLink href={w.url} className="dv-open">Apri in DevOps <IconExternal /></ExtLink>
       </div>
-      {!d ? <p className="small muted">Descrizione e commenti di questo work item non sono stati letti (lo script del cervello li legge con --full, per i primi 60): aprilo in DevOps.</p> : (
+      {!d ? <p className="small muted">Descrizione e commenti di questo work item non sono stati letti (lo script del brain li legge con --full, per i primi 60): aprilo in DevOps.</p> : (
         <>
           <div className="dv-block"><span className="bx-eyebrow">Descrizione</span>{d.description ? <Text text={d.description} lines={8} testId={`task-desc-${w.id}`} /> : <p className="small muted">Nessuna descrizione.</p>}</div>
           {d.tests.length > 0 && <div className="dv-block"><span className="bx-eyebrow">Test case</span><TestChips tests={d.tests} /></div>}

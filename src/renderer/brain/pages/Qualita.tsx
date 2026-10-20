@@ -75,7 +75,7 @@ export function Qualita({ nav }: { arg?: string; nav: Navigate }) {
       <Async loading={t.loading && !d} error={d ? null : t.error} onRetry={reload} lines={6} block>
         {() => d && (
           <div className="bx-section" data-testid="bx-quality">
-            {!q && <p className="bx-warnline" role="note">Il cervello non calcola ancora la qualità degli errori (manca quality() in ops/tools/recurrence.mjs): aggiorna il brain.</p>}
+            {!q && <p className="bx-warnline" role="note">Il brain non calcola ancora la qualità degli errori (manca quality() in ops/tools/recurrence.mjs): aggiorna il brain.</p>}
             <div className="bx-grid-2">
               {q && <Metric id="trovati" title="Errori che hai dovuto trovare tu"
                 help="Errori degli agenti che hai scoperto tu, non un reviewer, la QA o un controllo automatico. Più il numero è basso, meno tempo perdi a ricontrollare il loro lavoro."

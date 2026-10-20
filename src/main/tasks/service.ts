@@ -180,7 +180,7 @@ export class TaskService {
     const root = this.d.brainRoot();
     const script = root ? (this.d.locate ?? defaultLocate)(root) : null;
     if (!root || !script) {
-      this.error = { kind: 'script', message: root ? `Manca lo script di lettura ${SCRIPT}: non è nella cartella del cervello e nemmeno nell'app (reinstalla l'app).` : 'Scegli prima la cartella del cervello: la pagina Task usa il suo script devops-me.mjs.' };
+      this.error = { kind: 'script', message: root ? `Manca lo script di lettura ${SCRIPT}: non è nella cartella del brain e nemmeno nell'app (reinstalla l'app).` : 'Scegli prima la cartella del brain: la pagina Task usa il suo script devops-me.mjs.' };
       return this.get();
     }
     const now = this.now();

@@ -9,7 +9,7 @@ import { HelpTip } from '../../components/HelpTip';
 import { GuideLink } from '../../components/GuideLink';
 import { t } from '../../i18n';
 
-export function Loading({ label = 'Leggo il cervello…', lines = 3, block = false }: { label?: string; lines?: number; block?: boolean }) {
+export function Loading({ label = 'Leggo il brain…', lines = 3, block = false }: { label?: string; lines?: number; block?: boolean }) {
   const [slow, setSlow] = useState(false);
   useEffect(() => { const t = setTimeout(() => setSlow(true), 300); return () => clearTimeout(t); }, []);
   return (

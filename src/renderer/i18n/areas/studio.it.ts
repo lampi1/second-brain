@@ -25,7 +25,7 @@ export const studioIt = {
   'studio.tools': 'Strumenti',
   'studio.tool.read': 'Lettura', 'studio.tool.edit': 'Modifica file', 'studio.tool.shell': 'Comandi', 'studio.tool.shell-read': 'Comandi di sola lettura',
   'studio.tool.web': 'Web', 'studio.tool.browser': 'Browser', 'studio.tool.browser-read': 'Browser in lettura', 'studio.tool.mail-draft': 'Bozze di posta',
-  'studio.tool.calendar-read': 'Calendario in lettura', 'studio.tool.brain-write': 'Scrittura nel cervello', 'studio.tool.mcp': 'Server MCP',
+  'studio.tool.calendar-read': 'Calendario in lettura', 'studio.tool.brain-write': 'Scrittura nel brain', 'studio.tool.mcp': 'Server MCP',
   'studio.ceiling': 'Permessi massimi',
   'studio.ceiling.plan': 'Solo piano', 'studio.ceiling.default': 'Chiede conferma', 'studio.ceiling.acceptEdits': 'Accetta modifiche',
   'studio.ceilingNone': 'Le tue impostazioni',

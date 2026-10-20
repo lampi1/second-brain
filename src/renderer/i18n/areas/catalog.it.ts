@@ -19,7 +19,7 @@ export const catalogIt = {
   'catalog.subtitle': 'I ruoli della tua squadra, cosa fanno e i risultati osservati.',
   'catalog.engine': 'Motore',
   'catalog.active': 'Attivo', 
-  'catalog.runs': 'Esecuzioni concluse', 'catalog.open': 'In corso', 'catalog.success': 'Successi verificati',
+  'catalog.runs': 'Lavori conclusi', 'catalog.open': 'In corso', 'catalog.success': 'Successi verificati',
   'catalog.cost': 'Costo mediano / esecuzione', 'catalog.last': 'Ultimo avvio osservato', 'catalog.unknown': 'Non disponibile',
   'catalog.samples': ({ n, total }: { n: number; total: number }) => `${n} su ${total} esecuzioni`,
   'catalog.note': 'Statistiche sulle versioni note. I successi contano solo esiti verificati; l’ultimo avvio riguarda le chat disponibili. Dati mancanti non significano zero.',
