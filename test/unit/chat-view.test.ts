@@ -15,17 +15,29 @@ describe('chatView', () => {
     expect(v).toEqual([{ kind: 'item', item: user('u1', 'grazie'), reaction: '👍' }]);
   });
 
-  it('keeps a reply with words, a streaming emoji and a second emoji as rows', () => {
+  it('keeps a reply with words and a streaming emoji as rows; a second emoji is not drawn', () => {
     expect(chatView([user('u1', 'x'), said('a1', 'Fatto.')], { foldProcess: false })).toHaveLength(2);
     expect(chatView([user('u1', 'x'), said('a1', '👍', true)], { foldProcess: false })).toHaveLength(2);
     const v = chatView([user('u1', 'x'), said('a1', '👍'), said('a2', '🎉')], { foldProcess: false });
-    expect(v.map(r => r.kind === 'item' && r.item.id)).toEqual(['u1', 'a2']);
+    expect(v.map(r => r.kind === 'item' && r.item.id)).toEqual(['u1']);
   });
 
-  it('leaves an emoji after app news or another chat\'s message standalone', () => {
-    const news = user('u1', 'ciao', { from: 'Scout' });
-    expect(chatView([news, said('a1', '👀')], { foldProcess: false })).toHaveLength(2);
-    expect(chatView([said('a0', 'ok'), said('a1', '👀')], { foldProcess: false })).toHaveLength(2);
+  it('draws no emoji that is not a reaction to the user', () => {
+    const v = chatView([user('u0', 'ciao'), said('a0', 'Ciao.'), said('a1', '👀')], { foldProcess: false });
+    expect(v.map(r => r.kind === 'item' && r.item.id)).toEqual(['u0', 'a0']);
+  });
+
+  it('drops a turn on app news that had nothing for the user: the news, its work and its result line', () => {
+    const news = user('n1', '[evento app] Novità dalle chat di lavoro: ha finito il turno.');
+    const done = { kind: 'result', id: 'r1', isError: false, costUsd: 0.01, durationMs: 3000, turns: 1 } as unknown as ChatItem;
+    const v = chatView([user('u0', 'ciao'), said('a0', 'Ciao.'), news, think('t1'), tool('k1'), said('a1', '👍'), done], { foldProcess: true });
+    expect(v.map(r => r.kind === 'item' && r.item.id)).toEqual(['u0', 'a0']);
+  });
+
+  it('keeps app news the Orchestrator answered in words', () => {
+    const news = user('n1', '[evento app] Novità dalle chat di lavoro: ha finito il turno.');
+    const v = chatView([news, said('a1', 'Export pronto.')], { foldProcess: true });
+    expect(v).toHaveLength(2);
   });
 
   it('folds an Orchestrator\'s thinking and tool runs into one group and still attaches across it', () => {
