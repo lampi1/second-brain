@@ -4,7 +4,7 @@ Date: 2026-10-14 · Status: accepted · Amends: ADR 0044 (placement, the "Altre 
 
 ## Context
 The user, 14/10: "voglio che fai partire un agente per ottimizzare la UI delle domande non mi piace in generale non lo
-trovo molto leggibile anche quando mi dai i commenti e le cose, cristo abbiamo piena liberta di UI e tu mi fai
+trovo molto leggibile anche quando mi dai i commenti e le cose, cristo abbiamo piena libertà di UI e tu mi fai
 schifezze, impegnati sulla ui performante e stabile". The window reused the chat tile's panel: three frames one inside
 the other (window, amber card, focus ring), the chat's name larger than the question (14 px, like the options), the
 context open by default above the options (at 1366×768 the options and the commands with Esegui fell below the fold),

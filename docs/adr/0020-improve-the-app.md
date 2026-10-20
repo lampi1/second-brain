@@ -47,4 +47,4 @@ Update 2026-10-13: the button "Promuovi" is now "Aggiorna" (the user: "il tasto 
 aggiorna"), with "Aggiornamento in corso…", "Aggiorna e riavvia" and the stage "In uso" (was "Promossa"). Only the
 words the user sees changed: the code, `npm run promote`, the stage ids and this ADR's history keep "promote".
 
-> Chat-space behavior below is historical: [ADR 0071](0071-all-workers-in-grindhouse.md) removes the app partition. All workers live in the Grindhouse; source-code launch checks remain.
+> Chat-space behavior above is historical: [ADR 0071](0071-all-workers-in-grindhouse.md) removes the app partition. All workers live in the Grindhouse; source-code launch checks remain.

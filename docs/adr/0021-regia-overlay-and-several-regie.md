@@ -52,7 +52,7 @@ the second-brain-app folder.
   motore never move a tab nor change which Regia is the first (the one chats without `regiaOf` answer to).
 - **Closing.** A Regia closes only by the user's hand, never the first one (its title "Regia" is the address the
   brain's rules write to, and `/mcp/app` acts as it): to start it over, Pulisci. Its work chats go to the first Regia.
-- **"Eventi alla Regia" (ADR 0017).** The news of every work chat go to the first Regia in tab order (`regieOf`), so
+- **"Eventi alla Regia" (ADR 0017).** The news of every work chat goes to the first Regia in tab order (`regieOf`), so
   Pulisci on "Lavoro" never sends them to another tab; per-Regia news (each chat to its `regiaOf`) is a follow-up.
 - **Choices made without asking** (the user asleep, 12-13/10 night: "basta domande, finisci tutto"): closed by
   default with the button in the top bar (his panel answer), the App tab = the ADR 0020 Regia (the integrator's rule),
@@ -63,4 +63,4 @@ the second-brain-app folder.
 - e2e testids: the overlay keeps `tile-regia` / `regia-input`; `regia-dock*` and `splitter-regia` are gone.
 - Several Regie spend tokens each only when the user writes to them; none starts by itself.
 
-> Chat-space behavior below is historical: [ADR 0071](0071-all-workers-in-grindhouse.md) removes the app partition. All workers live in the Grindhouse; source-code launch checks remain.
+> Chat-space behavior above is historical: [ADR 0071](0071-all-workers-in-grindhouse.md) removes the app partition. All workers live in the Grindhouse; source-code launch checks remain.

@@ -37,7 +37,7 @@ clean. A change made on another PC would never come back: the export only goes o
   `tools/guard/scan.mjs`, `.guardallow`. From now on the template is edited here, in the repo; the export's rename
   tables stop being needed because these files are written generic from the start.
 - **The guard replaces the export**: git hooks installed by `npm run setup`
-  (`core.hooksPath`, repo-local config) runs `tools/guard/scan.mjs` on the pushed commits (tree, messages, author,
+  (`core.hooksPath`, repo-local config) run `tools/guard/scan.mjs` on the pushed commits (tree, messages, author,
   committer). Its built-in rules (secrets, private hosts, e-mails, home paths) always run; a private deny list named by
   the repo-local `git config guard.denyList` is added on top. `npm run setup` only prints that command: each PC's
   owner sets it once. On this PC it is the full list (`%LOCALAPPDATA%/second-brain/publish/deny.txt`: work terms and

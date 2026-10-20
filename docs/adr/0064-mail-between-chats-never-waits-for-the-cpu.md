@@ -16,7 +16,7 @@ lasted.
 ## Decision
 - A message from another chat (`send` with `from` set, not the app's own resume) to a chat that is not closed goes at
   once, like the user's own: what that chat already had queued runs first (`admitNow`), then this one. The Regia
-  rule (ADR 0053: classes, grouping, a Regia waiting for the user) still decides *when* mail is due; the CPU no longer
+  rule (ADR 0056: classes, grouping, a Regia waiting for the user) still decides *when* mail is due; the CPU no longer
   does.
 - Still through the queue: a new chat's engine (`app_create_chat`), an agent reopening a **closed** chat
   (`app_send_to_chat`: a new engine), the app's own resume after a restart. These are the engine starts the queue

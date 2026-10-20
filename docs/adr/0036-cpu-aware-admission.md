@@ -49,4 +49,4 @@ or killed, and the user must never wait for their own messages.
   "queued" already.
 - The sampler costs one `os.cpus()` every 2 s; the admission timer runs only while something waits.
 
-> Chat-space behavior below is historical: [ADR 0071](0071-all-workers-in-grindhouse.md) removes the app partition. All workers live in the Grindhouse; source-code launch checks remain.
+> Chat-space behavior above is historical: [ADR 0071](0071-all-workers-in-grindhouse.md) removes the app partition. All workers live in the Grindhouse; source-code launch checks remain.
