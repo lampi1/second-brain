@@ -141,6 +141,9 @@ export interface SessionOptions {
   /** Claude only: a PreToolUse hook the app answers in-process (registered at initialize, asked with hook_callback;
    *  session-only, no settings file). The Orchestrator's turn budget (agents/orchestrator-budget.ts, ADR 0090). */
   preToolUse?: PreToolHook | null;
+  /** Claude only: a product brain's hooks the session answers in process (rules/runtime.ts runHook) instead of a node
+   *  process per call: UserPromptSubmit, PreToolUse, PostToolUse (Stop stays in the plugin's hooks.json, ADR 0103) */
+  productHooks?: { root: string; state: string; launch: { tools?: string; correctionHook?: boolean } } | null;
 }
 
 /** Main-only, never from the renderer: string fields set on the asked call's own input when it is allowed (the role

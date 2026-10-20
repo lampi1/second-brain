@@ -28,6 +28,10 @@ compacted only on the next day, on an expired cache (ADR 0031: ~2.10 $ for a col
 - Lighter prefix: no browser tools and no `brain_script_add` on the Orchestrator; no delegation tools for a role that
   launches nobody; no `agent_report` for a root chat nobody asked to report; compact JSON in app-tool results; the
   screenshot hint once per chat; the roles' preamble no longer makes Claude re-read AGENTS.md / CLAUDE.md.
+- A product brain's rules hooks for UserPromptSubmit, PreToolUse and PostToolUse are answered by the Claude session in
+  process (`hook_callback`, `rules/runtime.ts runHook`, the code the node runner ran): two node processes per tool call
+  (0.2-2 s each on Windows, never measured by the start-up bench, which turned hooks off) are gone. Stop stays a
+  process in the plugin's hooks.json: its local brain commit runs synchronous git, which must not block the app.
 - `app_digest since:"last"` answers in full after the Orchestrator's context began again.
 - An Orchestrator quiet for most of an hour with 60k+ of context compacts while its cache is warm
   (`continuity.ts orchestratorWarmDue`, setting `orchestratorDayCompact`).

@@ -54,8 +54,9 @@ export function sessionFor(engine: EngineDef, opts: SessionOptions, sink: Sessio
     case 'claude': {
       // the brain as a plugin (off by default); a read-only run (comparison side b) takes nothing that could act; a role
       // chat takes the brain without its skills and its launch's own plugin (only the skills it was given)
-      const brain = opts.readOnly ? [] : [...claudeLaunch(ctx.userData, undefined, { skills: !opts.agentAssets }).args, ...(opts.agentAssets ? ['--plugin-dir', opts.agentAssets.pluginDir] : [])];
-      return new ClaudeSession({ ...opts, ...(brain.length ? { extraArgs: [...brain, ...(opts.extraArgs ?? [])] } : {}), ...(ctx.path ? { claudePath: ctx.path } : {}) }, sink);
+      const launch = opts.readOnly ? null : claudeLaunch(ctx.userData, undefined, { skills: !opts.agentAssets });
+      const brain = launch ? [...launch.args, ...(opts.agentAssets ? ['--plugin-dir', opts.agentAssets.pluginDir] : [])] : [];
+      return new ClaudeSession({ ...opts, ...(brain.length ? { extraArgs: [...brain, ...(opts.extraArgs ?? [])] } : {}), ...(launch?.productHooks ? { productHooks: launch.productHooks } : {}), ...(ctx.path ? { claudePath: ctx.path } : {}) }, sink);
     }
     case 'codex': {
       const command = engine.command ?? engine.id;

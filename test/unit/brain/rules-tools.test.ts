@@ -134,7 +134,11 @@ describe('product brain activation for Claude', () => {
     const launch = claudeLaunch(userData, { domains: [{ name: 'brain', root }] });
     expect(launch.args).toContain('--plugin-dir');
     const hooks = JSON.parse(fs.readFileSync(path.join(launch.pluginDir!, 'hooks/hooks.json'), 'utf8')).hooks;
-    expect(hooks.UserPromptSubmit[0].hooks[0].command).toContain('product-rules/hooks/runner.mjs');
+    // the product runner serves only Stop as a process: the session answers the other events in process (ADR 0103)
+    expect(hooks.Stop[0].hooks[0].command).toContain('product-rules/hooks/runner.mjs');
+    expect(JSON.stringify(hooks.UserPromptSubmit)).not.toContain('product-rules/hooks/runner.mjs');
+    expect(JSON.stringify(hooks.PreToolUse ?? [])).not.toContain('product-rules/hooks/runner.mjs');
+    expect(launch.productHooks).toMatchObject({ root, launch: { tools: fwd(toolsDir(root)), correctionHook: true } });
     expect(JSON.stringify(hooks.UserPromptSubmit)).toContain('correction-catch.mjs');
     expect(JSON.stringify(hooks)).not.toContain('brain-limits.mjs');
     const facts = JSON.parse(fs.readFileSync(path.join(launch.pluginDir!, 'product-rules/launch.json'), 'utf8'));

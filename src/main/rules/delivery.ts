@@ -27,7 +27,12 @@ export function productSignature(root: string): string {
     .update(fs.readFileSync(path.join(source, 'runtime.mjs'))).update(fs.readFileSync(path.join(source, 'cli.mjs')))
     .update(fs.readFileSync(path.join(source, 'hooks/runner.mjs'))).update(fs.readFileSync(path.join(source, 'hooks/cli.mjs'))).digest('hex');
 }
-export function installHooks(plugin: string, root: string, state: string, source?: string, launch: LaunchFacts = {}): void {
+/** The events the runner serves from hooks.json. The app's own Claude chats answer the others in process (ClaudeSession
+ *  productHooks, hook_callback): two node processes per tool call were 0.2-2 s each on Windows (ADR 0103). Stop stays a
+ *  process: its local brain commit runs synchronous git, which must never block the app's main process. */
+export const ALL_EVENTS = ['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop'] as const;
+export const IN_PROCESS_EVENTS = ['UserPromptSubmit', 'PreToolUse', 'PostToolUse'] as const;
+export function installHooks(plugin: string, root: string, state: string, source?: string, launch: LaunchFacts = {}, events: readonly string[] = ALL_EVENTS): void {
   if (!enabled(root)) return;
   const target = path.join(plugin, 'product-rules');
   fs.cpSync(source ?? assets(), target, { recursive: true });
@@ -35,7 +40,7 @@ export function installHooks(plugin: string, root: string, state: string, source
   const hookFile = path.join(plugin, 'hooks/hooks.json');
   const previous = fs.existsSync(hookFile) ? JSON.parse(fs.readFileSync(hookFile, 'utf8')) as { hooks?: Record<string, unknown[]> } : {};
   const hooks = previous.hooks ?? {};
-  for (const event of ['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop']) {
+  for (const event of events) {
     const product = { ...(event.endsWith('ToolUse') ? { matcher: '*' } : {}), hooks: [{ type: 'command', command: 'node "${CLAUDE_PLUGIN_ROOT}/product-rules/hooks/runner.mjs"', timeout: 10 }] };
     hooks[event] = [product, ...(hooks[event] ?? [])];
   }
