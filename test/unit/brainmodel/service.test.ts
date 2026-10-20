@@ -14,6 +14,8 @@ import { BrainModelService } from '../../../src/main/brainmodel/service';
 import { writeDemoBrain } from '../../../src/main/brainmodel/demo';
 import type { AgentModelChoice, AgentRun } from '../../../src/shared/agents';
 import type { RoutingInfo } from '../../../src/shared/contract';
+import type { BrainChange } from '../../../src/shared/brain-model';
+import { maintenanceEvent } from '../../../src/main/brain/announce';
 
 const roots: string[] = [];
 afterEach(() => { for (const r of roots.splice(0)) fs.rmSync(r, { recursive: true, force: true }); });
@@ -24,7 +26,7 @@ const DEV = 'artisan';
 const OTHER = 'scout';
 const routing: RoutingInfo = { table: null, registry: null, kinds: [], error: null, history: [] };
 
-function world(opts: { demo?: boolean; runs?: AgentRun[] } = {}) {
+function world(opts: { demo?: boolean; runs?: AgentRun[]; applied?: (c: BrainChange[]) => void } = {}) {
   const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-brainmodel-'))); roots.push(base);
   const data = path.join(base, 'data'); fs.mkdirSync(data);
   const brain = opts.demo ? writeDemoBrain(path.join(base, 'brain'), NOW) : path.join(base, 'brain');
@@ -37,7 +39,7 @@ function world(opts: { demo?: boolean; runs?: AgentRun[] } = {}) {
   let emitted = 0;
   const service = new BrainModelService({ userData: data, root: () => brain, home: null, catalog, packs: flows, learning, runs: () => opts.runs ?? [], routing: () => routing,
     suggestSkills: async () => [],
-    emit: () => { emitted++; }, auto: false, now: () => NOW });
+    emit: () => { emitted++; }, auto: false, now: () => NOW, ...(opts.applied ? { applied: opts.applied } : {}) });
   const agent = (id: string) => catalog.list().profiles.find(p => p.id === id)!;
   return { base, brain, data, catalog, flows, learning, service, agent, emitted: () => emitted };
 }
@@ -189,5 +191,27 @@ describe('repeated tasks, duplicates and the user toggle', () => {
     const none = new BrainModelService({ userData: w.data, root: () => null, home: null, catalog: w.catalog, packs: w.flows, learning: w.learning, runs: () => [], routing: () => routing, suggestSkills: async () => [], emit: () => {}, auto: false });
     await expect(none.maintain()).rejects.toThrow(/cartella del brain/);
     expect(none.state()).toMatchObject({ root: null, skills: [], rules: [], memory: [] });
+  });
+});
+
+describe('announcing the passes the app ran by itself (ADR 0102)', () => {
+  it('an automatic pass that changed something calls applied with its new changes; a pass from the button does not', async () => {
+    const seen: BrainChange[][] = [];
+    const auto = world({ demo: true, applied: c => seen.push(c) });
+    await auto.service.maintain('migration', { auto: true });
+    expect(seen).toHaveLength(1);
+    const pass = seen[0] ?? [];
+    expect(pass.length).toBeGreaterThan(0);
+    expect(pass.every(c => c.job === 'migration')).toBe(true);
+    // the feed event of that pass: one quiet entry; its Annulla names the pass's changes, newest first, when few enough
+    const e = maintenanceEvent(pass);
+    expect(e?.kind).toBe('agent-updated');
+    if (pass.length <= 20) expect(e?.action).toEqual({ kind: 'brain-undo', ids: [...pass].sort((a, b) => b.at - a.at).filter(c => c.canRollback).map(c => c.id) });
+    // nothing new the second time: no announcement
+    await auto.service.maintain('migration', { auto: true });
+    expect(seen).toHaveLength(1);
+    const user = world({ demo: true, applied: c => seen.push(c) });
+    await user.service.maintain('migration');
+    expect(seen).toHaveLength(1);
   });
 });

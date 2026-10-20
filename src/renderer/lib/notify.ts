@@ -4,7 +4,7 @@
 // internal link of an event. Policy (the user, 2026-10-13: "le notifiche sono troppe e non le guardo mai"): only what
 // needs his action now interrupts him; the rest is a pull-only list. Task: a mention or a change on his own things
 // (task-alert, main/tasks/model.ts isAlert) interrupts with a toast and a short sound; other DevOps news stay quiet
-// (ADR 0029).
+// (ADR 0029). What changed while the app was closed (away events) counts in the bell until read, never as a toast (ADR 0102).
 // Used by lib/layer.ts (toasts), Sidebar.tsx (badges), NotificationCenter.tsx; pinned by test/unit/notify.test.ts.
 import type { FeedEvent } from '@shared/contract';
 
@@ -62,16 +62,22 @@ export const WARN_SECTIONS = new Set(['costi']);
 export interface ReadState { readAllAt: number; readIds: string[]; seen: Record<string, number> }
 export const emptyRead: ReadState = { readAllAt: 0, readIds: [], seen: {} };
 
-export const isUnread = (e: FeedEvent, r: ReadState): boolean => !e.away && e.at > r.readAllAt && !r.readIds.includes(e.id);
+/** Not read yet: after the last "segna tutto letto" and not opened in the center. An away event ("mentre eri via": what
+ *  changed in the brain while the app was closed, main/brain/live.ts) is unread like any other until read (ADR 0102);
+ *  it still never becomes a toast (toastGroups). */
+export const isUnread = (e: FeedEvent, r: ReadState): boolean => e.at > r.readAllAt && !r.readIds.includes(e.id);
+
+/** Unread events the bell counts: actionable ones, and the away ones (what changed while the app was closed: the
+ *  morning's "mentre eri via", ADR 0102), until read. */
+export const bellCount = (feed: readonly FeedEvent[], r: ReadState, open?: ReadonlySet<string>): number => feed.filter(e => (isActionable(e, open) || !!e.away) && isUnread(e, r)).length;
 
 /** Unread per section: events after the last visit of that section, not read in the center. */
-/** Unread events the bell counts: actionable ones only. */
-export const bellCount = (feed: readonly FeedEvent[], r: ReadState, open?: ReadonlySet<string>): number => feed.filter(e => isActionable(e, open) && isUnread(e, r)).length;
 
 export function badges(feed: readonly FeedEvent[], r: ReadState): Record<string, number> {
   const out: Record<string, number> = {};
   for (const e of feed) {
-    if (SILENT_KINDS.has(e.kind) || NO_BADGE.has(e.kind)) continue;
+    // away events count in the bell only: the sections' badges stay for what happened while the app was open
+    if (SILENT_KINDS.has(e.kind) || NO_BADGE.has(e.kind) || e.away) continue;
     const sec = sectionOf(e.kind);
     if (!sec || !isUnread(e, r) || e.at <= (r.seen[sec] ?? 0)) continue;
     out[sec] = (out[sec] ?? 0) + 1;

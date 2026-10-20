@@ -24,6 +24,7 @@ function start(): void {
   if (started) return; started = true;
   sb.on('agents:changed', refreshSoon);
   sb.on('agents:lifecycleChanged', refreshSoon);
+  sb.on('approvals:changed', refreshSoon); // the Battito's proposals (ADR 0102)
   // safety net only: metrics and learned rules written outside the queue send no event
   setInterval(() => void refreshApprovals(), 5 * 60_000);
   void refreshApprovals();

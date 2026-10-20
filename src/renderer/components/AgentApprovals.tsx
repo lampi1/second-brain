@@ -10,7 +10,8 @@ import { approvalsClient, refreshApprovals, useApprovals } from '../store/agent-
 import { AgentApprovalsView, type ApprovalDone } from './AgentApprovalCards';
 
 function doneText(item: ApprovalItem, d: ApprovalDecision): string {
-  const name = item.type === 'lifecycle' ? item.agents.map(a => a.name).join(', ') : item.agent.name;
+  const name = item.type === 'lifecycle' ? item.agents.map(a => a.name).join(', ') : item.type === 'pulse' ? item.agent?.name ?? item.proposal.title : item.agent.name;
+  if (d.type === 'pulse') return t('alive.approval.done', { name });
   if (d.type === 'queue') return t(d.decision === 'dismiss' ? 'approvals.done.dismissed' : 'approvals.done.trialStarted', { name });
   return t(d.decision === 'keep' ? 'approvals.done.kept' : 'approvals.done.rolledBack', { name });
 }

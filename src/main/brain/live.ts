@@ -19,8 +19,8 @@ import { brainScript } from '../rules/tools';
 
 /** urgent = the user is needed now (toast by default) · normal = worth a look · quiet = feed only. Labels are Italian UI. */
 export const KINDS: Record<string, { label: string; priority: Priority }> = {
-  'agent-proposal': { label: 'Proposta su un ruolo', priority: 'normal' },  // Agenti → Da approvare (agents/lifecycle.ts)
-  'agent-updated': { label: 'Ruolo aggiornato', priority: 'quiet' },          // a maintenance change, with Annulla
+  'agent-proposal': { label: 'Proposta su un ruolo', priority: 'normal' },  // Agenti → Da approvare (agents/loop.ts → brain/announce.ts)
+  'agent-updated': { label: 'Ruolo aggiornato', priority: 'quiet' },          // a maintenance pass's changes, with Annulla (brain/announce.ts)
   'agent-rolledback': { label: 'Versione ripristinata', priority: 'quiet' },
   'agent-feedback': { label: 'Giudizio su un ruolo', priority: 'quiet' },
   'chat-waiting': { label: 'Chat che ti aspetta', priority: 'urgent' },
@@ -54,6 +54,10 @@ export interface RawEvent { kind: string; title: string; detail?: string; who?: 
 export function feedAction(v: unknown): FeedAction | undefined {
   const a = v as Partial<FeedAction> | null;
   if (a?.kind === 'agent-proposals') return { kind: 'agent-proposals' };
+  if (a?.kind === 'brain-undo') {
+    const ids = (a as { ids?: unknown }).ids;
+    if (Array.isArray(ids) && ids.length > 0 && ids.length <= 20 && ids.every(id => typeof id === 'string' && /^[0-9a-f]{8,32}$/.test(id))) return { kind: 'brain-undo', ids: [...ids] as string[] };
+  }
   if (a?.kind === 'agent-undo') {
     const u = a.undo;
     if (u && typeof u.agentId === 'string' && /^[a-z][a-z0-9_-]{0,79}$/.test(u.agentId) && Number.isFinite(u.expectedRevision) && Number.isSafeInteger(u.version) && u.version > 0) return { kind: 'agent-undo', undo: { agentId: u.agentId, expectedRevision: u.expectedRevision, version: u.version } };

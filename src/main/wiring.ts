@@ -27,6 +27,8 @@ import { AutoCloseService, autoCloseNow } from './chats/auto-close';
 import { readLocal, writeLocal } from './agents/local-store';
 import { ProgressService } from './agents/progress';
 import { mountLifecycleApi, type LifecycleApi } from './agents/lifecycle-api';
+import { maintenanceEvent, proposalEvent } from './brain/announce';
+import { MorningService } from './morning/service';
 import { createAgentLoop } from './agents/loop';
 import { childFeedbackTools } from './agents/child-feedback';
 import { delegationTools } from './agents/delegation';
@@ -127,6 +129,8 @@ export interface Wired {
   agentPacks: ReturnType<typeof createAgentPacks>;
   /** the Brain pages and their maintenance jobs (ADR 0077) */
   brainModel: BrainModelService;
+  /** the morning block ("Mentre eri via", ADR 0102); absent = the channel answers "nothing to show" */
+  morning?: MorningService;
   setup: SetupService;
   chats: ChatService; browser: BrowserService; brain: BrainService; tasks: TasksApi;
   /** the engines of the brain, which definitions the user turned on, the API keys (ADR 0046) */
@@ -311,13 +315,10 @@ export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: Engin
     tableModel: (engine, req) => roleTableModel(brain, engine, req),
     pulsePreset: () => {
       const choices = engineInfos();
-      let e = choices.find(e => e.kind === 'api' && agentsMayOpen(brain.settings(), e.id) && engines.hasKey(e.id))
+      const e = choices.find(e => e.kind === 'api' && agentsMayOpen(brain.settings(), e.id) && engines.hasKey(e.id))
         ?? choices.find(e => e.kind === 'claude');
-      const s = brain.settings();
-      if (s.headlineModel && e?.kind !== 'claude' && engineOf(e?.id ?? '')?.protocol !== 'anthropic') e = choices.find(e => e.kind === 'claude');
       const model = e ? brain.routingInfo().registry?.models.find(m => priceEnginesOf(e).includes(m.harness) && m.tier === 'mid')?.id ?? (e.kind === 'claude' ? 'sonnet' : null) : null;
-      return { engine: e?.id ?? 'claude', model: s.headlineModel || model,
-        ...(e?.caps.effort ? { effort: s.headlineEffort || 'low' as const } : {}) };
+      return { engine: e?.id ?? 'claude', model, ...(e?.caps.effort ? { effort: 'low' as const } : {}) };
     },
     models: () => {
       const seen = withApiModels(brain.modelsSeen());
@@ -645,7 +646,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const lifecycleIdle = () => !manager.pending().length && !asks.pending().length && !runner.list().some(r => r.state === 'running')
     && manager.list().every(c => c.state !== 'starting' && c.state !== 'running' && c.state !== 'waiting' && !c.queued && !workBehind(c));
   const loop = createAgentLoop({ userData: ctx.userData, catalog: agents, runs: manager.runs, feedback: runFeedback, chats,
-    idle: lifecycleIdle, emitChanged: () => ctx.emitter.emit('agents:lifecycleChanged', null) });
+    idle: lifecycleIdle, emitChanged: () => ctx.emitter.emit('agents:lifecycleChanged', null),
+    // the daily pass's new "Da approvare" entries: one normal feed event (ADR 0102)
+    proposed: added => { const e = proposalEvent(added, id => agents.list().profiles.find(p => p.id === id)?.name ?? id); if (e) brain.publish([e]); } });
   const lifecycleApi = loop.api;
   mountLifecycleApi(brain, lifecycleApi);
   // a parent's own child runs: listed and judged on its chat's token endpoint (agents/child-feedback.ts)
@@ -735,12 +738,21 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const brainModel = new BrainModelService({ userData: ctx.userData, root: () => brain.info().brainRoot, home: process.env.SB_SKILLS_HOME || os.homedir(),
     catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning, runs: () => manager.runs.list(), routing: () => brain.routingInfo(),
     suggestSkills: async text => (await suggestSkills(text)).candidates.map(c => c.name),
-    emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: !process.env.SB_TEST || process.env.SB_BRAIN_JOBS === '1' });
+    emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: !process.env.SB_TEST || process.env.SB_BRAIN_JOBS === '1',
+    // a pass the app ran by itself: a quiet feed event with Annulla (ADR 0102)
+    applied: changes => { const e = maintenanceEvent(changes); if (e) brain.publish([e]); } });
   brainModelRef.current = brainModel;
   brainModel.start();
+  // the morning block ("Mentre eri via", ADR 0102): zero tokens, from what the app holds
+  const morning = new MorningService({ file: path.join(ctx.userData, 'morning.json'), chats: () => manager.list(), runs: () => manager.runs.list(),
+    pending: () => manager.pending().length + asks.pending().length,
+    approvals: () => agents.list().profiles.filter(p => p.scope === 'role' && p.trial).length + lifecycleApi.read({}).proposals.filter(p => p.kind === 'tier').length,
+    tasks: () => tasks.get(), cloud: () => cloud.state().agents, changes: () => brainModel.changes(), api: p => brain.api(p),
+    stallMin: () => checkedDelegation(brain.settings().delegation).stallMin, lastEventAt: id => manager.lastEventAt(id) });
 
   return {
     brainModel,
+    morning,
     mcpServers,
     cloud, chats, browser, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, suggestSkills,
     updateChats: {

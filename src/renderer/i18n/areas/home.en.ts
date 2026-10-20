@@ -12,7 +12,7 @@ export const homeEn: typeof homeIt = {
   'home.orchestratorWidth': 'Coordinator width', 'home.orchestratorStart': 'Where shall we start?',
   'home.orchestratorIntro': 'One place for your ideas, agents and next step. Your coordinator stays here while you work.',
   'home.greeting': (p: { name: string }) => `Hey ${p.name}, what shall we do today?`,
-  'home.headlineBy': (p: { model: string }) => `Joke written by ${p.model} on today's events; renewed about every hour.`,
+  'home.headlineBy': (p: { model: string }) => `Joke written by ${p.model} on today's events; one a day, in the Pulse's first call.`,
   'home.headlineBuiltin': 'A joke from the app’s own list: the model’s one arrives with the next refresh.',
   'home.orchestrator': 'Orchestrator',
   'home.agents': 'Agents', 'home.manageAgents': 'Manage agents', 'home.back': 'Back to the Grindhouse', 'home.workspace': 'Your agents at work and the Orchestrator',
