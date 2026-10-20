@@ -375,9 +375,16 @@ button.lc-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 }
 
 .msg-user { display: flex; flex-direction: column; align-items: flex-end; }
-/* a reply of one or two emoji (shared/reaction.ts): a small pill tucked under the user's bubble, not a message */
-.msg-reaction { align-self: flex-end; margin: -6px 10px 0 auto; padding: 1px 8px; border: 1px solid var(--border); border-radius: 99px;
-  background: var(--surface-2); font-size: 14px; line-height: 20px; width: fit-content; }
+/* a reply of one or two emoji (shared/reaction.ts, lib/chat-view.ts), WhatsApp style (the owner, 2026-10-20): stuck to
+   the user's bubble it is a small pill on its corner; on its own (after app news, mail) it is a big emoji, no bubble,
+   with a small pop when it lands */
+.msg-react { align-self: flex-end; margin: -8px 10px 0 auto; padding: 1px 7px; border: 1px solid var(--border); border-radius: 99px;
+  background: var(--surface-2); font-size: 14px; line-height: 20px; width: fit-content; position: relative; z-index: 1;
+  transform-origin: 70% 0; animation: reaction-pop 420ms cubic-bezier(.2, 1.6, .4, 1) both; }
+.msg-reaction { align-self: flex-start; margin: 0 auto 0 4px; font-size: 44px; line-height: 52px; width: fit-content;
+  transform-origin: 30% 100%; animation: reaction-pop 420ms cubic-bezier(.2, 1.6, .4, 1) both; }
+@keyframes reaction-pop { 0% { transform: scale(.2); opacity: 0; } 60% { transform: scale(1.18); opacity: 1; } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .msg-react, .msg-reaction { animation: none; } }
 .bubble {
   max-width: 88%; padding: 6px 11px; border-radius: 12px 12px 4px 12px; background: var(--surface-3); border: 1px solid var(--border-2);
   color: var(--text); white-space: pre-wrap; word-break: break-word; line-height: 1.45;
@@ -459,6 +466,7 @@ html[data-blink="1"] .md.streaming > .md-b:last-child > :last-child::after { opa
 .thinking { flex: none; }
 .thinking-row { display: inline-flex; align-items: center; gap: 6px; height: 22px; background: none; border: 0; padding: 0 4px 0 0; color: var(--text-3); font-size: 12px; cursor: pointer; border-radius: 6px; }
 .thinking-row:hover { color: var(--text-2); }
+.process-body { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 2px 6px; padding-left: 10px; border-left: 2px solid var(--border-2); animation: expand var(--dur) var(--ease); }
 .thinking-text { font-size: 12px; color: var(--text-3); border-left: 2px solid var(--border-2); padding: 2px 0 2px 10px; margin: 4px 0 2px 6px; white-space: pre-wrap; animation: expand var(--dur) var(--ease); }
 .thinking.before-ask .thinking-row { color: var(--text-2); }
 .thinking.before-ask .thinking-text { font-size: 13px; color: var(--text); border-left-color: var(--amber-line); }

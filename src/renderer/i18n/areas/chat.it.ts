@@ -70,6 +70,7 @@ export const chatIt = {
   'chat.items.resultSteps': (p: { n: number }) => ` · ${p.n} passi`,
   'chat.items.unseenButton': 'nuove righe',
   'chat.items.thinkingLabel': 'Ragionamento',
+  'chat.items.processSteps': (p: { n: number }) => p.n === 1 ? ' · 1 passo' : ` · ${p.n} passi`,
   'chat.items.thinkingBeforeAskLabel': 'Ragionamento · prima della domanda',
   'chat.items.foreignOpen': 'Apri il messaggio intero',
   'chat.items.foreignDoneNote': 'Segnato da te con un clic: la chat ha solo queste righe.',

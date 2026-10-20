@@ -72,6 +72,7 @@ export const chatEn: typeof chatIt = {
   'chat.items.resultSteps': (p: { n: number }) => ` · ${p.n} steps`,
   'chat.items.unseenButton': 'new lines',
   'chat.items.thinkingLabel': 'Reasoning',
+  'chat.items.processSteps': (p: { n: number }) => p.n === 1 ? ' · 1 step' : ` · ${p.n} steps`,
   'chat.items.thinkingBeforeAskLabel': 'Reasoning · before the question',
   'chat.items.foreignOpen': 'Open the whole message',
   'chat.items.foreignDoneNote': 'Marked by you with a click: the chat only has these lines.',
