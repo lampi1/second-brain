@@ -134,6 +134,8 @@ export function DataTable<R>({ name, label, rows, cols, filters = [], sort, sear
         <span className="count" aria-live="polite">{visible.length === rows.length ? tr('costs.tableRows',{count:fmt.int(rows.length)}) : tr('costs.tableFilteredRows',{count:fmt.int(visible.length),total:fmt.int(rows.length)})}</span>
         {filtered && <button type="button" className="bx-btn ghost s" onClick={() => { setQ(''); setFacet({}); }}>{tr('costs.tableReset')}</button>}
         <span className="sp" />
+        {/* the three actions wrap together, never one alone on its line (ADR 0101) */}
+        <span className="bx-tbar-actions">
         <div className="bx-rel" ref={menuRef}>
           <button type="button" className="bx-btn s" aria-expanded={menu} aria-haspopup="true" onClick={() => setMenu(m => !m)} title={tr('costs.tableChooseColumns')}><IconColumns /> {tr('costs.tableColumns')}</button>
           {menu && (
@@ -150,6 +152,7 @@ export function DataTable<R>({ name, label, rows, cols, filters = [], sort, sear
         </div>
         <button type="button" className="bx-btn s" onClick={() => download(`${exportName}.csv`, toCsv(shown, visible), 'text/csv')} title={tr('costs.tableCsv')}><IconDownload /> CSV</button>
         <button type="button" className="bx-btn s" onClick={() => download(`${exportName}.json`, toJson(shown, visible), 'application/json')} title={tr('costs.tableJson')}><IconDownload /> JSON</button>
+        </span>
       </div>
       <div ref={box} className={`bx-tbox bx-scroll ${virt ? 'virt' : ''}`} style={height ? { maxHeight: height } : undefined} tabIndex={0} role="grid" aria-label={label ?? name}
         aria-rowcount={visible.length + 1} aria-activedescendant={active >= 0 ? `${uid}-r${active}` : undefined} onKeyDown={onKey}

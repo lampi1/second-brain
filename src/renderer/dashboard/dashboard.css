@@ -1,6 +1,6 @@
 /* Dashboard visuals layered on the shared Linear tokens and button primitives; isolated from other pages.
    Motion explains live state and tab changes, and is completely disabled for reduced-motion users. */
-.dashboard{height:100%;overflow:auto;scrollbar-gutter:stable;background:var(--bg);color:var(--text);padding:30px 32px 56px;container-type:inline-size}
+.dashboard{height:100%;overflow:auto;scrollbar-gutter:stable;background:var(--bg);color:var(--text);padding:var(--page-top) var(--page-gutter) 56px;container-type:inline-size}
 /* the header has one fixed height on every tab (the map's too): switching tabs never moves the content (owner, 18/10) */
 .dash-header{display:flex;align-items:center;justify-content:space-between;gap:20px;margin:0 0 22px;height:150px;overflow:hidden}
 .dash-header>div{min-width:0}
