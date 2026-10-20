@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { initRelease } from './release';
 import { createWindow, hiddenOpened, hiddenRun } from './window';
+import { startTaskbar } from './taskbar';
 import { Emitter, registerHandlers, type Handlers } from './ipc';
 import { createServices } from './wiring';
 import { log } from './log';
@@ -397,6 +398,9 @@ app.whenReady().then(async () => {
   const startSearch = setTimeout(() => s.hybrid?.start(), 5_000); startSearch.unref();
   // the headline's first refresh waits for the window and the start's own work (it is never on the start's path)
   void windowReady.then(() => { if (pulse) pulse.start(); });
+  // the taskbar button: what waits for the user and whether an agent works (ADR 0102; Windows only, never under SB_HIDDEN)
+  let stopTaskbar = () => {};
+  void windowReady.then(() => { stopTaskbar = startTaskbar({ window: () => win, chats: () => s.chats.list(), waiting: () => s.chats.pending().length + s.asks.pending().length }); });
   // chats whose turn the last quit or crash cut go on by themselves ("ripresa dopo il riavvio"); not on ready-to-show,
   // which may have fired while the services were starting
   const resumed = s.chats.resumeInterrupted();
@@ -418,7 +422,7 @@ app.whenReady().then(async () => {
     quitting = true;
     void connectors.service.cancelLogin();
     headline.stop();
-    pulse?.stop(); unsubscribePulse();
+    pulse?.stop(); unsubscribePulse(); stopTaskbar();
     log.info('app', 'quit started');
     // the stable launcher (scripts/release.mjs) waits for a quitting app to go before starting again; an open one it leaves be
     try { fs.writeFileSync(path.join(app.getPath('userData'), 'quitting.json'), JSON.stringify({ pid: process.pid, at: new Date().toISOString() })); } catch { /* best effort */ }
