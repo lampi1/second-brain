@@ -94,7 +94,10 @@
 .bx-page { height: 100%; overflow: auto; background: var(--bx-bg); scrollbar-gutter: stable; }
 .bx-page::-webkit-scrollbar, .bx-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
 .bx-page::-webkit-scrollbar-thumb, .bx-scroll::-webkit-scrollbar-thumb { background: var(--bx-scroll); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
-.bx-inner { max-width: 1240px; margin: 0 auto; padding: 22px 28px 64px; display: grid; gap: 20px; align-content: start; }
+.bx-inner { max-width: 1240px; margin: 0 auto; padding: var(--page-top) var(--page-gutter) 64px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-content: start; }
+/* a Brain page that brings its own padding (Skill, Regole, Memoria, Agenti) adds none inside the page frame's gutter */
+.bx-inner > .agent-overview, .bx-inner > div.bm-page.agent-overview { padding: 0 0 48px; margin: 0; max-width: none; min-width: 0; }
+.bm-page > .bx-head { margin-bottom: 16px; }
 .bx-head { display: grid; gap: 6px; }
 .bx-head-row { display: flex; align-items: center; gap: 12px; min-height: 32px; flex-wrap: wrap; }
 .bx-head h1 { font-size: var(--bx-fs-2xl); font-weight: 650; letter-spacing: -0.01em; }
@@ -162,8 +165,13 @@ html[data-blink="1"] .bx-live { box-shadow: 0 0 0 6px transparent; } /* lib/beat
 .bx-tabs button[aria-selected="true"]::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--bx-blue); }
 .bx-tabs .n { color: var(--bx-text-4); font-weight: 500; margin-left: 4px; font-variant-numeric: tabular-nums; }
 
-.bx-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.bx-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); gap: 10px; } /* 140: five tiles fit one row of a page beside the Orchestrator column (no orphan, ADR 0101) */
 .bx-kpi { background: var(--bx-surface); border: 1px solid var(--bx-border); border-radius: var(--bx-r-l); padding: 12px 14px; display: grid; gap: 2px; min-width: 0; }
+/* label, value and note sit on shared rows across a row of tiles: a label on two lines no longer pushes its value below
+   the others' (subgrid; ADR 0101) */
+.bx-kpis > .bx-kpi:has(> .v) { grid-row: span 3; grid-template-rows: subgrid; row-gap: 2px; align-content: start; }
+.bx-kpis > .bx-kpi .k { align-self: end; }
+.bx-kpis > .bx-kpi .v { align-self: start; }
 .bx-kpi .k { font-size: var(--bx-fs-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--bx-text-3); font-weight: 600; }
 .bx-kpi .v { font: 650 24px/1.2 var(--bx-display); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 .bx-kpi .s { font-size: var(--bx-fs-s); color: var(--bx-text-3); overflow: hidden; text-overflow: ellipsis; }
@@ -175,9 +183,12 @@ html[data-blink="1"] .bx-live { box-shadow: 0 0 0 6px transparent; } /* lib/beat
 .bx-go:hover { text-decoration: underline; text-underline-offset: 2px; }
 
 .bx-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-.bx-list > li { display: flex; align-items: baseline; gap: 8px; padding: 6px 0; border-top: 1px solid var(--bx-border); min-width: 0; }
+.bx-list > li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; padding: 6px 0; border-top: 1px solid var(--bx-border); min-width: 0; }
 .bx-list > li:first-child { border-top: 0; }
-.bx-list > li .t { min-width: 0; flex: 1; }
+/* the text keeps at least ~16em; a long meta goes to its own line instead of squeezing it one word per line (ADR 0101) */
+.bx-list > li .t { min-width: 0; flex: 1 1 16em; overflow-wrap: anywhere; }
+.bx-list > li > .meta { min-width: 0; max-width: 100%; }
+.bx-list > li > .meta, .bx-list .t .meta { white-space: normal; overflow-wrap: anywhere; }
 .bx-list > li .t b { font-weight: 600; }
 .bx-list.compact > li { padding: 4px 0; border: 0; }
 .bx-list .meta { color: var(--bx-text-3); font-size: var(--bx-fs-s); white-space: nowrap; }
@@ -237,7 +248,8 @@ html[data-blink="1"] .bx-live { box-shadow: 0 0 0 6px transparent; } /* lib/beat
 /* ── data table ───────────────────────────────────────────────────────────────────────────────────────────────── */
 .bx-table { display: grid; gap: 8px; min-width: 0; }
 .bx-tbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.bx-tbar .bx-search { width: 220px; }
+.bx-tbar .bx-search { width: 220px; flex: 0 1 220px; min-width: 140px; }
+.bx-tbar-actions { display: flex; align-items: center; gap: 6px; flex: none; margin-left: auto; }
 .bx-tbar .count { color: var(--bx-text-3); font-size: var(--bx-fs-s); margin-left: 4px; font-variant-numeric: tabular-nums; }
 .bx-tbar .sp { flex: 1; }
 .bx-tbar .bx-select { height: 28px; font-size: var(--bx-fs-s); max-width: 220px; }
@@ -828,6 +840,10 @@ html[data-blink="1"] .bx-live-dot.run { box-shadow: 0 0 0 4px rgba(255, 209, 102
 .bx-map-colors{position:absolute;top:74px;left:20px;z-index:2;display:flex;flex-wrap:wrap;gap:12px;max-width:calc(100% - 40px);padding:6px 10px;background:rgba(9,11,17,.85);border-radius:8px;color:var(--bx-text-2);font-size:11px;pointer-events:none}
 .bx-map-colors span{display:flex;align-items:center;gap:5px}.bx-map-colors i{width:8px;height:8px;border-radius:50%}
 @media(max-width:720px){.bx-map-colors{top:112px}}
+/* the 3D view starts under the floating bar and its legend: «Reset vista» fits the nodes in what is visible, none under
+   the legend (ADR 0101; C-ux audit: «App · Feedback» sat under the legend) */
+.bx-map-body > .bx-map-canvas{top:108px}
+@media(max-width:720px){.bx-map-body > .bx-map-canvas{top:146px}}
 
 /* ── Copy on code (Markdown copyBlocks: the file viewer) ──────────────────────────────────────────────────────────── */
 .bx-pre { position: relative; }

@@ -270,7 +270,7 @@ export class AgentCatalogService {
     if (Array.isArray(p.launches)) p.launches = currentLaunches(p.launches as string[]);
     if (!Array.isArray(p.launches) || !p.launches.every(isWorkRole) || new Set(p.launches).size !== p.launches.length || (p.launches as string[]).includes(id)) throw new Error('Ruoli avviabili non validi: solo ruoli di lavoro, mai sé stesso.');
     if (id === PULSE_ID && (p.launches as unknown[]).length) throw new Error('Pulse non avvia ruoli.');
-    if (!Array.isArray(p.skills) || p.skills.length > 40 || !p.skills.every(packName) || new Set(p.skills).size !== p.skills.length) throw new Error('Abilità non valide: nomi di abilità del cervello, al massimo 40.');
+    if (!Array.isArray(p.skills) || p.skills.length > 40 || !p.skills.every(packName) || new Set(p.skills).size !== p.skills.length) throw new Error('Abilità non valide: nomi di abilità del brain, al massimo 40.');
     return { instructions: text(p.instructions, 8000, 'Istruzioni', true), engine, model,
       ...(p.effort ? { effort: p.effort as Effort } : {}),
       tools: checkedTools(p.tools), permissionCeiling: (p.permissionCeiling ?? null) as PermissionCeiling | null,

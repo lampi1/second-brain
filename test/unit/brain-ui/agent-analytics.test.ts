@@ -25,14 +25,14 @@ describe('agent analytics evidence presentation', () => {
     // Structural assignment proves the renderer's shared projection accepts the actual main read model.
     const data: AgentAnalyticsData = aggregateAgentUsage([observation('one'), observation('two', true)]);
     const html = render(data);
-    expect(html).toContain('Reported cost (USD)');
-    expect(html).toContain('List-price equivalent (USD)');
-    expect(html).toContain('Calibrated estimate (USD)');
+    expect(html).toContain('Reported cost ($)');
+    expect(html).toContain('List-price equivalent ($)');
+    expect(html).toContain('Calibrated estimate ($)');
     expect(html).toContain('<b>unavailable</b>');
-    expect(html).toContain('known subtotal: US$0.00');
+    expect(html).toContain('known subtotal: 0.00 $');
     expect(html).toContain('1 known / 1 unavailable');
     expect(html).toContain('0 known / 2 unavailable');
-    expect(html).toContain('<b>US$4.00</b>');
+    expect(html).toContain('<b>4.00 $</b>');
     expect(html).toContain('reviewer');
     expect(html).toContain('revisions: 2 · 2 sessions');
   });

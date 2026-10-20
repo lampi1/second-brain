@@ -28,11 +28,13 @@ test('Task: a new mention alerts with a chime (never on the first read); Discuti
     await page.waitForTimeout(1500);
     expect(await page.evaluate(() => document.documentElement.dataset.chimes)).toBe('1'); // once, not at every repaint
 
-    // the sound can be turned off from the page's head
-    const sound = dv.getByTestId('task-auto').getByRole('group', { name: 'Suono degli avvisi' });
+    // the sound can be turned off in Settings → Notifiche, reached from the page's link (ADR 0101)
+    await dv.getByTestId('task-settings-link').click();
+    const sound = page.getByTestId('task-auto').getByRole('group', { name: 'Suono degli avvisi' });
     await expect(sound.getByRole('button', { name: 'Acceso' })).toHaveAttribute('aria-pressed', 'true');
     await sound.getByRole('button', { name: 'Spento' }).click();
     await expect(sound.getByRole('button', { name: 'Spento' })).toHaveAttribute('aria-pressed', 'true');
+    await page.getByTestId('nav-task').click();
 
     // "Discuti": every kind of record has it; one click on a work item row drafts to the Orchestrator, the row stays closed
     await expect(dv.getByTestId('task-discuss-pr-812').first()).toBeVisible();

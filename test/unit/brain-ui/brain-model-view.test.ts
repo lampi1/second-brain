@@ -118,7 +118,9 @@ describe('pages', () => {
     brainModel.set(() => ({ state: { ...state, memoryStats: stats }, error: null, busy: false }));
     setLang('it');
     const it = renderToStaticMarkup(createElement(MemoryPage));
-    for (const s of ['Manutenzione', 'Lo sapevi?', 'Errore ricorrente', 'Diff troppo grande', 'Come cresce la memoria', 'Skill utili e inutili', 'Mai usata', 'I ricordi più richiamati', 'File fermi', 'ricorrente ×2', 'in 3 run']) expect(it).toContain(s);
+    for (const s of ['Manutenzione', 'Lo sapevi?', 'Errore ricorrente', 'Diff troppo grande', 'Come cresce la memoria', 'Skill utili e inutili', 'Mai usata', 'File fermi', 'ricorrente ×2']) expect(it).toContain(s);
+    // no "richiami" (ADR 0101): a line counted once per run started after it is not a use
+    for (const s of ['I ricordi più richiamati', 'Memoria richiamata', 'mm-card-recalls']) expect(it).not.toContain(s);
     expect(it.match(/class="help-tip/g)!.length).toBeGreaterThan(15); // a "?" on every number
     setLang('en');
     const en = renderToStaticMarkup(createElement(MemoryPage));

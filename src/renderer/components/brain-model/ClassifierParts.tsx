@@ -1,9 +1,10 @@
 // The Classificatori page's small shared pieces (ClassifiersPage.tsx grid, ClassifierDetail.tsx detail): the
 // per-classifier text lookup, the icon of each classifier, a number with its "?" HelpTip (null = "nessun dato
-// ancora", never zero), the learning meter toward the 20 verified cases and the third number of a card.
+// ancora", never zero) and the third number of a card. The "pronto a calibrarsi" meter is gone with the calibration
+// it measured (bb953da; ADR 0101).
 import type { ReactNode } from 'react';
 import { locale, t } from '../../i18n';
-import { progressState, usdOf, type CardId, type CardView } from '../../lib/classifier-view';
+import { usdOf, type CardId, type CardView } from '../../lib/classifier-view';
 import { HelpTip } from '../HelpTip';
 
 /** A per-classifier text (stats.c.<id>.<what>). */
@@ -31,16 +32,6 @@ export function Num({ label, value, sub, help, testId }: { label: string; value:
     <span className="cls-num-label">{label}<HelpTip title={label} label={label}>{help}</HelpTip></span>
     {value === null ? <span className="cls-num-value none">{t('stats.cls.noData')}</span> : <strong className="cls-num-value">{value}</strong>}
     {sub && value !== null && <small>{sub}</small>}
-  </div>;
-}
-
-/** The learning meter: verified cases toward the need. */
-export function Progress({ c }: { c: CardView }) {
-  const state = progressState(c), pct = Math.min(100, Math.round((c.progress.n / c.progress.need) * 100));
-  const label = c.id === 'jobkind' ? ct('jobkind', 'progress') : state === 'ready' ? t('stats.cls.progressReady') : state === 'idle' ? t('stats.cls.progressIdle') : t('stats.cls.progress');
-  return <div className="cls-progress" data-state={state}>
-    <div className="cls-progress-head"><span>{label}<HelpTip title={t('stats.cls.progress')} label={t('stats.cls.progress')}>{t('stats.cls.progressHelp', { need: c.progress.need })}</HelpTip></span><b>{t('stats.cls.progressOf', { n: c.progress.n, need: c.progress.need })}</b></div>
-    <div className="cls-meter" role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={c.progress.need} aria-valuenow={Math.min(c.progress.n, c.progress.need)}><i style={{ width: `${pct}%` }} /></div>
   </div>;
 }
 

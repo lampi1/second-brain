@@ -12,8 +12,8 @@ export function syncSummary(st: SyncState | null): { show: boolean; tone: SyncTo
   if (!synced.length) return { show: false, tone: 'ok', label: '' };
   const blocked = synced.filter(d => d.state === 'blocked');
   if (blocked.length) return { show: true, tone: 'bad', label: blocked.length === 1 ? `Sincronizzazione ferma: ${blocked[0]!.name}` : `Sincronizzazione ferma: ${blocked.length} domini` };
-  if (synced.some(d => d.state === 'syncing')) return { show: true, tone: 'busy', label: 'Sincronizzo il cervello…' };
-  return { show: true, tone: 'ok', label: 'Cervello sincronizzato' };
+  if (synced.some(d => d.state === 'syncing')) return { show: true, tone: 'busy', label: 'Sincronizzo il brain…' };
+  return { show: true, tone: 'ok', label: 'Brain sincronizzato' };
 }
 
 export const scopeLabel = (d: Pick<DomainSyncStatus, 'scope'>): string => (d.scope === 'everywhere' ? 'su tutti i tuoi PC' : 'solo su questo PC');

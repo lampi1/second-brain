@@ -59,10 +59,9 @@ export interface AccuracyPoint {
 
 export interface EstimateAccuracy {
   points: AccuracyPoint[];
-  /** all the weeks together */
-  n: number; hitRate: number | null;
-  /** last week with data minus the first one, in points of hitRate (0..1); null with fewer than two weeks */
-  trend: number | null;
+  /** all the weeks together: n estimated runs, `hits` of them within ×2 (real time between half and double) */
+  n: number; hits: number; hitRate: number | null;
+  // no trend: "last week minus the first", whatever the n of each week, was noise shown as progress (ADR 0101)
 }
 
 export interface RunEstimates {

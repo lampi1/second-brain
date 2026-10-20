@@ -398,7 +398,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
           links.roleVersion = Number(a.roleVersion);
         }
         const cwd = typeof a.cwd === 'string' && a.cwd.trim() ? a.cwd.trim() : d.brain.info().brainRoot;
-        if (!cwd) throw new Error('nessuna cartella: il cervello non è collegato');
+        if (!cwd) throw new Error('nessuna cartella: il brain non è collegato');
         // a chat in the app's code folder or one of its worktrees works on the app (routing area App)
         const app = await d.code?.inRepo?.(cwd) ?? false;
         if (a.orchestrator !== undefined && a.orchestrator !== false) throw new Error('app_create_chat crea solo chat di lavoro: l’Orchestrator lo sceglie l’utente (Nuova chat → «È l’Orchestrator» o «Cambia motore»)');

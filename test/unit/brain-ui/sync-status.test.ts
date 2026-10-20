@@ -15,7 +15,7 @@ describe('sync status words', () => {
   it('blocked wins over syncing, syncing over ok', () => {
     expect(syncSummary({ at: NOW, domains: [dom({}), dom({ name: 'B', state: 'syncing' })] })).toMatchObject({ show: true, tone: 'busy' });
     expect(syncSummary({ at: NOW, domains: [dom({ state: 'syncing' }), dom({ name: 'B', state: 'blocked', blocked: { kind: 'no-guard', hint: 'h' } })] })).toEqual({ show: true, tone: 'bad', label: 'Sincronizzazione ferma: B' });
-    expect(syncSummary({ at: NOW, domains: [dom({})] })).toEqual({ show: true, tone: 'ok', label: 'Cervello sincronizzato' });
+    expect(syncSummary({ at: NOW, domains: [dom({})] })).toEqual({ show: true, tone: 'ok', label: 'Brain sincronizzato' });
   });
   it('a domain line: last sync, to send, to receive', () => {
     expect(domainLine(dom({ ahead: 2, behind: 1 }), NOW)).toBe('sincronizzato 4 min fa · 2 da inviare · 1 da ricevere');

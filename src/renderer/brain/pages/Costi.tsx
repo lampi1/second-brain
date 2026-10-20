@@ -26,7 +26,6 @@ import { useAppChats } from '../components/Composer';
 import { LiveCostList } from '../../components/LiveCosts';
 import { costRows } from '../../lib/live-costs';
 import { t } from '../../i18n';
-import { HeadlineCost } from './HomeHeadline';
 
 const PERIODS = [1, 7, 30, 90] as const;
 /** the brain's cost API reads at most 90 days: the period before is known up to 45 */
@@ -113,11 +112,10 @@ export function Costi({ arg, nav }: { arg?: string; nav: (t: string) => void }) 
     <>
       <PageHead title={t('costs.title')} at={r.at} refreshing={r.refreshing} onRefresh={() => r.reload(true)}
         lead={c ? <><b>{fmt.usd(c.total)} in {days === 1 ? t('costs.oneDay') : t('costs.days',{days})}</b>, {fmt.usd(c.total / nDays)} {t('costs.perDay')}.{advice[0] ? <> {t('costs.biggestSaving')}: <b>{advice[0].text.split(':')[0]?.toLowerCase()}, {fmt.usd(advice[0].usd)}</b>.</> : null}</> : undefined}
-        what={t('costs.what')}
+        what={t('costs.what')} guide="costs"
         actions={<Seg label={t('costs.period')} value={days} onChange={d => nav(d === 7 ? 'costi' : `costi/${d}`)} items={PERIODS.map(d => ({ id: d, label: d === 1 ? t('costs.today') : t('costs.days',{days:d}) }))} />} />
       <LiveNow />
       <AgentAnalytics />
-      <HeadlineCost />
       <Async loading={r.loading && !c} error={c ? null : r.error} onRetry={() => r.reload()} label={t('costs.loading')} lines={5} block>
         {() => c && (
           <>

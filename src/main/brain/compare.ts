@@ -102,9 +102,9 @@ export class Compare {
 
   private dir(): string | { error: string } {
     const root = this.root();
-    if (!root) return { error: 'nessuna cartella del cervello scelta' };
+    if (!root) return { error: 'nessuna cartella del brain scelta' };
     const d = compareDir(root);
-    if (!fs.existsSync(path.join(d, 'config.mjs')) || !fs.existsSync(path.join(d, 'switch.mjs'))) return { error: 'questo cervello non ha il confronto tra modelli (harness/compare)' };
+    if (!fs.existsSync(path.join(d, 'config.mjs')) || !fs.existsSync(path.join(d, 'switch.mjs'))) return { error: 'questo brain non ha il confronto tra modelli (harness/compare)' };
     return d;
   }
 
@@ -112,7 +112,7 @@ export class Compare {
     const root = this.root();
     const d = this.dir();
     if (typeof d !== 'string') return Promise.resolve({ ok: false, error: d.error });
-    if (!root) return Promise.resolve({ ok: false, error: 'nessuna cartella del cervello scelta' });
+    if (!root) return Promise.resolve({ ok: false, error: 'nessuna cartella del brain scelta' });
     return new Promise(resolve => {
       execFile(this.node.exe, ['--input-type=module', '-e', LIST], { cwd: root, env: { ...this.node.env, SB_COMPARE_DIR: d }, timeout: this.timeoutMs, maxBuffer: 8e6, windowsHide: true },
         (err, stdout, stderr) => {

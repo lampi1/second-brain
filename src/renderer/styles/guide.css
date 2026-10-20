@@ -5,7 +5,7 @@
    Orchestrator); on a narrow page it takes the whole width. Diagrams are plain CSS boxes and arrows (no package):
    horizontal in the hero, a vertical timeline in the panel. Motion is off for reduced-motion users. */
 .guide{position:relative;height:100%;overflow:hidden;background:var(--bg);color:var(--text);container-type:inline-size}
-.guide-scroll{height:100%;overflow:auto;padding:30px 32px 56px}
+.guide-scroll{height:100%;overflow:auto;padding:var(--page-top) var(--page-gutter) 56px}
 .guide-header{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin:0 0 26px;flex-wrap:wrap}
 .guide-eyebrow{font-size:10px;letter-spacing:.16em;font-weight:650;color:var(--text-3)}
 .guide-header h1{font-size:30px;letter-spacing:-1.2px;font-weight:600;margin:7px 0 8px}

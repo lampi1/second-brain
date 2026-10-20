@@ -2,7 +2,7 @@
 // calcolato tutto"): the Orchestrator's head, a strip's facts, the run verdict, Settings, the Skill page and the Agenti
 // summary. Italian source; English counterpart in explain.en.ts (parity checked, ADR 0057). Used with HelpTip.
 export const explainIt = {
-  'explain.orch.title': 'Cos’è l’Orchestratore',
+  'explain.orch.title': 'Cos’è l’Orchestrator',
   'explain.orch.p1': 'È la chat che coordina il lavoro: capisce cosa chiedi, lo divide in compiti, avvia gli agenti giusti del catalogo e risponde alla loro posta. Puoi averne più di uno.',
   'explain.orch.p2': 'Lo stato accanto al nome: «ti ascolta» è pronto per te, «al lavoro» sta rispondendo o coordinando, «ti aspetta» ha una domanda per te, «in coda» il tuo messaggio parte appena finisce il turno.',
   'explain.orch.p3': '«Dettagli e collaboratori» mostra il suo profilo e chi lavora per lui: il numero conta i collaboratori (chat figlie e sottoagenti) al lavoro per lui adesso.',
@@ -10,16 +10,16 @@ export const explainIt = {
   'explain.strip.p1': 'Modello e costo: il modello della chat e quanto ha speso finora, somma dei suoi turni. «≈» vuol dire stima (un turno ancora in corso, o il registro dei costi di Cursor); «costo n/d» che il motore non lo riporta.',
   'explain.strip.p2': '«lavoro N min»: il tempo in cui l’agente ha lavorato davvero, senza le attese di te, dei permessi o della coda. Poi la cartella in cui lavora.',
   'explain.strip.p3': 'Il contatore a destra: quanto testo ha in memoria la chat (in migliaia di token, «~» se stimato); la barra è la parte della finestra del modello già usata. Vicino al pieno, Claude riassume da sé la conversazione.',
-  'explain.strip.p4': '«v2» è la versione del ruolo con cui lavora, «auto» vuol dire che l’ha avviata l’Orchestratore.',
+  'explain.strip.p4': '«v2» è la versione del ruolo con cui lavora, «auto» vuol dire che l’ha avviata l’Orchestrator.',
   'explain.outcome.title': 'A cosa serve il tuo voto',
-  'explain.outcome.p1': 'Dice se il lavoro è riuscito, riuscito in parte o fallito. È il voto che conta di più: entra nella performance dell’agente con peso pieno (× 1), come quello di una revisione indipendente e dei fatti; l’Orchestratore pesa × 0,6; il resoconto dell’agente su sé stesso non conta. Un «riuscito» tuo conta anche per il suo livello.',
+  'explain.outcome.p1': 'Dice se il lavoro è riuscito, riuscito in parte o fallito. È il voto che conta di più: entra nella performance dell’agente con peso pieno (× 1), come quello di una revisione indipendente e dei fatti; l’Orchestrator pesa × 0,6; il resoconto dell’agente su sé stesso non conta. Un «riuscito» tuo conta anche per il suo livello.',
   'explain.outcome.p2': 'Un voto perde metà del peso ogni 30 giorni, così la performance segue com’è l’agente oggi. Puoi cambiarlo quando vuoi.',
   'explain.outcome.p3': 'Se non voti, decidono i fatti, senza spendere token: riuscito quando l’agente ha chiuso con tutti i criteri soddisfatti, tu non l’hai corretto e non l’hai rifatto nei 7 giorni dopo (fino ad allora è provvisorio e non conta); non riuscito quando si è bloccato o l’hai rifatto entro 7 giorni. Il tuo voto vince sempre.',
   'explain.toasts.title': 'Urgenti o normali',
   'explain.toasts.p1': 'Urgenti: una chat che ti aspetta, una domanda per te, un accesso da rifare, una chat finita con errore, il budget esaurito. Normali: anche le altre novità, come un lavoro finito. Le notifiche di Windows compaiono solo quando l’app non è in primo piano, e più novità insieme diventano una notifica sola.',
   'explain.judge.title': 'Cosa fanno le revisioni indipendenti',
   'explain.judge.p1': 'Ogni giorno l’app prende fino a questo numero di lavori finiti che nessuno ha ancora votato e li fa rivedere da un Sentinel, ognuno in una sessione nuova che non ha visto come sono stati fatti. Il suo voto entra nella performance dell’agente con peso pieno (× 1).',
-  'explain.judge.p2': 'Ogni revisione è una chat vera: costa come un lavoro breve del Sentinel. Con 0 non rivede nulla e la performance si basa sui voti tuoi, dell’Orchestratore e degli agenti.',
+  'explain.judge.p2': 'Ogni revisione è una chat vera: costa come un lavoro breve del Sentinel. Con 0 non rivede nulla e la performance si basa sui voti tuoi, dell’Orchestrator e degli agenti.',
   'explain.tiers.title': 'Leggero, medio, alto',
   'explain.tiers.p1': 'Ogni ruolo dichiara un livello di modello invece di un modello preciso: leggero per lavori semplici e veloci, medio per la maggior parte, alto per pianificare e ragionare a lungo. Più alto = più capace, più lento e più caro.',
   'explain.tiers.p2': 'Qui scegli quale modello usa ogni livello su ciascun motore; vuoto = quello consigliato dal registro dei modelli del brain.',

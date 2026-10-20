@@ -48,14 +48,14 @@ describe('the Orchestrator plan', () => {
 });
 
 describe('accuracy summary', () => {
-  it('says the share, the trend in points, the weekly bars and the specific share', () => {
-    const a: EstimateAccuracy = { n: 20, hitRate: 0.684, trend: 0.25, points: [
+  it('says k of n within ×2, the weekly bars and the specific share (no trend, ADR 0101)', () => {
+    const a: EstimateAccuracy = { n: 20, hits: 14, hitRate: 0.684, points: [
       { weekStart: 1, n: 0, hitRate: null, medianErr: null, specificShare: null },
       { weekStart: 2, n: 8, hitRate: 0.5, medianErr: 0.6, specificShare: 0.25 },
       { weekStart: 3, n: 12, hitRate: 0.75, medianErr: 0.3, specificShare: 0.8 },
     ] };
-    expect(accuracySummary(a)).toEqual({ pct: 68, n: 20, trendPts: 25, weeks: 2, specificPct: 80, bars: [{ weekStart: 1, pct: null, n: 0 }, { weekStart: 2, pct: 50, n: 8 }, { weekStart: 3, pct: 75, n: 12 }] });
-    expect(accuracySummary({ n: 0, hitRate: null, trend: null, points: [] })).toBeNull();
+    expect(accuracySummary(a)).toEqual({ pct: 68, k: 14, n: 20, weeks: 2, specificPct: 80, bars: [{ weekStart: 1, pct: null, n: 0 }, { weekStart: 2, pct: 50, n: 8 }, { weekStart: 3, pct: 75, n: 12 }] });
+    expect(accuracySummary({ n: 0, hits: 0, hitRate: null, points: [] })).toBeNull();
     expect(accuracySummary(null)).toBeNull();
   });
 });

@@ -31,6 +31,9 @@
 .help-bubble .help-body b { color: var(--text); font-weight: 600; }
 .help-bubble .help-ex { margin: 7px 0 0; padding-top: 6px; border-top: 1px solid var(--border-2); color: var(--text-3); }
 .help-bubble .help-ex span { color: var(--text-2); font-weight: 600; }
+.help-bubble .help-guide { margin: 8px 0 0; }
+.help-bubble .help-guide .guide-link { font-size: inherit; font-weight: 600; }
+.guide-link { white-space: nowrap; }
 /* the arrow: a rotated square on the side of the mark, its two outer edges bordered */
 .help-bubble::before {
   content: ""; position: absolute; left: var(--arrow); width: 9px; height: 9px; background: var(--surface-2);

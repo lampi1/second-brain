@@ -17,7 +17,7 @@ import { agentHistory, refreshAgents, resetAgent, restoreAgentVersion, saveAgent
 import { toast } from '../store/ui';
 import { sb } from '../sb';
 import { useApp } from '../store/store';
-import { EFFORTS, effortLabel } from '../lib/format';
+import { EFFORTS, effortLabel, formatCost } from '../lib/format';
 import { characterTone } from '../lib/character-art';
 import { agentDraftOf, forgetAgentEditor, readAgentEditor, rememberAgentEditor } from '../lib/agent-drafts';
 import { RolePermissions, permissionSummary } from './RolePermissions';
@@ -34,7 +34,7 @@ import '../styles/agent-studio.css';
 import '../styles/brain-model.css';
 
 const percent = (v: number) => new Intl.NumberFormat(locale(), { style: 'percent', maximumFractionDigits: 0 }).format(v);
-const usd = (v: number) => new Intl.NumberFormat(locale(), { style: 'currency', currency: 'USD', maximumFractionDigits: 3 }).format(v);
+const usd = (v: number) => formatCost(v);
 const tierLabel = (tier: ModelTier) => t(`roles.tier.${tier}`);
 const reason = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
 const SKILL = /^[a-z0-9][a-z0-9._-]{0,79}$/i;

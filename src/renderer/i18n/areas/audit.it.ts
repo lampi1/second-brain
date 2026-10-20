@@ -163,7 +163,7 @@ export const auditIt = {
   "audit.StatoDialog.myPrs": "Le mie PR",
   "audit.StatoDialog.forEachPrWhoNeedsTo": "Per ogni PR: chi deve muoversi adesso (tu o i revisori), la build e il voto di ogni revisore. «Bloccata dalla QA» = un test collegato è fallito o bloccato: tocca a te.",
   "audit.StatoDialog.openTasks": "Apri Task",
-  "audit.SyncStatus.brainDomains": "Domini del cervello",
+  "audit.SyncStatus.brainDomains": "Domini del brain",
   "audit.SyncStatus.keepMine": "Tieni la mia",
   "audit.SyncStatus.keepTheirs": "Tieni la loro",
   "audit.SyncStatus.openBoth": "Apri entrambe",

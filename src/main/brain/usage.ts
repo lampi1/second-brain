@@ -228,7 +228,7 @@ export class UsageMonitor {
       if (!script || !fs.existsSync(script)) {
         if (!this.warned) log.warn('brain', 'no cost.mjs in this brain: usage without $', { data: { script } });
         this.warned = true;
-        this.cost = { todayUsd: 0, chats: [], cursorTodayUsd: null, cursorNote: 'Cursor: costo sconosciuto', costKnown: false, costNote: 'costi non disponibili: il cervello non ha ops/tools/cost.mjs' };
+        this.cost = { todayUsd: 0, chats: [], cursorTodayUsd: null, cursorNote: 'Cursor: costo sconosciuto', costKnown: false, costNote: 'costi non disponibili: il brain non ha ops/tools/cost.mjs' };
       } else {
         const at = Date.now(); // before the run: what a chat spends while cost.mjs reads may count twice until the next run, never lost
         const r = await runNode(this.o.node, script, ['--days', '1', '--json'], this.o.root!, 120e3);

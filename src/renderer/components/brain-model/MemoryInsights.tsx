@@ -1,6 +1,6 @@
 // The statistics of the Memoria page (owner, 2026-10-19: "estremamente interessante e ricca di statistiche e grafici,
 // tipo errore ricorrente, skill utile inutile", "cose curiose"): the key numbers, "Lo sapevi?" (curious facts picked
-// from the data), how the memory grew week by week, lines per agent, the lines recalled most, the recurring errors
+// from the data), how the memory grew week by week, lines per agent, the recurring errors
 // (count, trend, agents, the rule each produced), the skills the runs used or never used (uses, success, last use) and
 // the files gone stale. Every number carries a "?" that says how it is computed. Data: BrainModelState.memoryStats
 // (main, brainmodel/memory-stats.ts). Each file opens in the app's file viewer. Charts: brain/components/Charts.tsx
@@ -45,7 +45,7 @@ function Head({ id, title, lead, help, testId }: { id?: string; title: string; l
 
 const FACT_KIND: Record<Fact['id'], 'error' | 'memory' | 'skill' | 'agent'> = {
   repeat: 'error', topWord: 'error', weekday: 'error', errorsTrend: 'error',
-  mostRecalled: 'memory', oldest: 'memory', busiestDay: 'memory', duplicates: 'memory',
+  oldest: 'memory', busiestDay: 'memory', duplicates: 'memory',
   longest: 'agent', silent: 'agent', unusedSkills: 'skill', bestSkill: 'skill',
 };
 function FactCard({ f, i }: { f: Fact; i: number }) {
@@ -87,25 +87,6 @@ function PerAgent({ s }: { s: MemoryStats }) {
     explain={{ find: t('mm.perAgentFind', { name: rows[0]!.name, n: rows[0]!.entries, silent: s.perAgent.length - rows.length }) }} />;
 }
 
-function Recalled({ s }: { s: MemoryStats }) {
-  const open = useContext(OpenFile);
-  return <section className="bx-card mm-list-card" data-testid="mm-recalled">
-    <Head title={t('mm.recalled')} lead={t('mm.recalledLead')} help={t('mm.recalledHelp')} />
-    {s.topRecalled.length ? <ol className="mm-rank">{s.topRecalled.map((l, i) => {
-      const max = s.topRecalled[0]!.recalls || 1;
-      return <li key={`${l.file}-${i}`}>
-        <span className="mm-rank-n" aria-hidden="true">{i + 1}</span>
-        <span className="mm-rank-main">
-          <InlineMd text={l.text} />
-          <small>{l.owner}{l.date ? ` · ${day(l.date)}` : ''}</small>
-          <span className="mm-meter" aria-hidden="true"><i style={{ width: `${(l.recalls / max) * 100}%` }} /></span>
-        </span>
-        <span className="mm-rank-v" title={t('mm.recallsTitle', { n: l.recalls })}><b>{num(l.recalls)}</b><small>{t('mm.runs')}</small></span>
-        <button type="button" className="btn btn-ghost btn-s" onClick={() => open(l.file)} aria-label={t('mm.openNamed', { name: l.owner })}>{t('bm.open')}</button>
-      </li>;
-    })}</ol> : <p className="bm-empty">{t('mm.recalledEmpty')}</p>}
-  </section>;
-}
 
 function Errors({ s }: { s: MemoryStats }) {
   const e = s.errors;
@@ -177,13 +158,11 @@ function Stale({ s }: { s: MemoryStats }) {
 
 /** The statistics block; `s` from BrainModelState.memoryStats. */
 export function MemoryInsights({ s }: { s: MemoryStats }) {
-  const recalls = s.perAgent.reduce((a, x) => a + x.recalls, 0);
   const unused = s.skills.filter(k => k.verdict === 'unused').length;
   return <div className="mm-insights" data-testid="mm-insights">
     <div className="bx-kpis mm-kpis" data-testid="mm-kpis">
       <Kpi k={t('mm.k.lines')} v={num(s.totals.entries)} s={t('mm.k.linesS', { n: s.totals.files })} help={t('mm.k.linesHelp')} testId="mm-k-lines" />
       <Kpi k={t('mm.k.agents')} v={`${s.totals.agentsWithMemory}/${s.totals.agents}`} s={t('mm.k.agentsS', { n: s.totals.agents - s.totals.agentsWithMemory })} help={t('mm.k.agentsHelp')} testId="mm-k-agents" />
-      <Kpi k={t('mm.k.recalls')} v={num(recalls)} s={t('mm.k.recallsS', { n: s.totals.runs })} help={t('mm.k.recallsHelp')} testId="mm-k-recalls" />
       <Kpi k={t('mm.k.errors')} v={num(s.errors.total)} s={t('mm.k.errorsS', { n: s.errors.last30 })} tone={s.errors.last30 > s.errors.prev30 ? 'warn' : undefined} help={t('mm.k.errorsHelp')} testId="mm-k-errors" />
       <Kpi k={t('mm.k.unused')} v={`${unused}/${s.skills.length}`} s={t('mm.k.unusedS')} tone={unused ? 'warn' : undefined} help={t('mm.k.unusedHelp')} testId="mm-k-unused" />
     </div>
@@ -191,6 +170,8 @@ export function MemoryInsights({ s }: { s: MemoryStats }) {
     <div className="mm-grid-2"><Growth s={s} /><PerAgent s={s} /></div>
     <Errors s={s} />
     <Skills s={s} />
-    <div className="mm-grid-2"><Recalled s={s} /><Stale s={s} /></div>
+    {/* no "richiami": a line counted once per run started after it, even past the ~4000 characters a run really gets;
+        loaded is not used (ADR 0101, E-apprendimento §5) */}
+    <Stale s={s} />
   </div>;
 }

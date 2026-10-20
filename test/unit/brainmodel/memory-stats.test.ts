@@ -73,12 +73,13 @@ describe('ai-errors.md', () => {
 describe('skills from the runs', () => {
   const skill = (name: string, ageDays: number | null): BrainSkill => ({ name, description: '', file: `/x/${name}/SKILL.md`, rel: `.claude/skills/${name}/SKILL.md`, home: 'brain', usedBy: ['a'], tools: [], lines: 3, changedAt: ageDays === null ? null : NOW - ageDays * DAY, madeBy: null });
   it('says useful, weak, few, never used or new, with uses, success and last use', () => {
-    const runs = [run('a', 1, ['buona'], 'success'), run('a', 2, ['buona'], 'success'), run('a', 3, ['buona'], 'partial'), run('a', 4, ['buona'], 'success'),
-      run('a', 1, ['debole'], 'fail'), run('a', 2, ['debole'], 'fail'), run('a', 3, ['debole'], 'success'), run('a', 5, ['rara'], 'unknown')];
-    const u = skillUses([skill('buona', 90), skill('debole', 90), skill('rara', 90), skill('ferma', 90), skill('nuova', 2)], runs, NOW);
-    expect(u.map(s => [s.name, s.uses, s.known, s.verdict])).toEqual([['buona', 4, 4, 'useful'], ['debole', 3, 3, 'weak'], ['rara', 1, 0, 'few'], ['ferma', 0, 0, 'unused'], ['nuova', 0, 0, 'new']]);
-    expect(u[0]).toMatchObject({ success: 0.75, lastUse: NOW - DAY, usedBy: 1 });
-    expect(u[2]!.success).toBeNull();
+    // a verdict from 10 known outcomes up (ADR 0101): on 3 or 4 it stays "few"
+    const many = (name: string, ok: number, fail: number) => [...Array.from({ length: ok }, (_, i) => run('a', 1 + i, [name], 'success')), ...Array.from({ length: fail }, (_, i) => run('a', 1 + ok + i, [name], 'fail'))];
+    const runs = [...many('buona', 8, 2), ...many('debole', 3, 7), run('a', 1, ['poche'], 'success'), run('a', 2, ['poche'], 'success'), run('a', 3, ['poche'], 'fail'), run('a', 5, ['rara'], 'unknown')];
+    const u = skillUses([skill('buona', 90), skill('debole', 90), skill('poche', 90), skill('rara', 90), skill('ferma', 90), skill('nuova', 2)], runs, NOW);
+    expect(u.map(s => [s.name, s.uses, s.known, s.verdict])).toEqual([['buona', 10, 10, 'useful'], ['debole', 10, 10, 'weak'], ['poche', 3, 3, 'few'], ['rara', 1, 0, 'few'], ['ferma', 0, 0, 'unused'], ['nuova', 0, 0, 'new']]);
+    expect(u[0]).toMatchObject({ success: 0.8, lastUse: NOW - DAY, usedBy: 1 });
+    expect(u[3]!.success).toBeNull();
   });
 });
 

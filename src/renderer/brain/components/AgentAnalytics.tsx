@@ -2,6 +2,7 @@
 // history, blending charge/list-price/estimate measures, or ranking agents across incomparable work samples.
 import type { AgentAnalyticsData, AgentMeasure, AgentTimingKind } from '@shared/agent-analytics';
 import { lang, locale } from '../../i18n';
+import { formatCost } from '../../lib/format';
 import { useBrain } from '../api';
 import { Loading } from './States';
 import { Section } from './ui';
@@ -12,7 +13,7 @@ const words = {
     scope: 'Storico osservato, indipendente dal periodo sopra. Lo storico mancante non è disponibile.',
     empty: 'Nessuna sessione attribuita a un agente. I dati compariranno dalle nuove chat con agente assegnato.',
     unavailable: 'non disponibile', sessions: 'sessioni', revisions: 'revisioni',
-    actualUsd: 'Costo rilevato (USD)', listPriceUsd: 'Equivalente di listino (USD)', estimatedUsd: 'Stima calibrata (USD)',
+    actualUsd: 'Costo rilevato ($)', listPriceUsd: 'Equivalente di listino ($)', estimatedUsd: 'Stima calibrata ($)',
     costsNote: 'Misure separate: non si sommano. Il listino non è una fattura. I subtotali coprono solo le sessioni note; i costi inclusi nei totali di un antenato sono esclusi dai discendenti.',
     total: 'totale', subtotal: 'subtotale noto', known: 'note', missing: 'non disponibili',
     timing: 'Tempi osservati', complete: 'sessioni con tempi completi', incomplete: 'sessioni con tempi incompleti',
@@ -28,7 +29,7 @@ const words = {
     scope: 'Observed history, independent of the period above. Missing history is unavailable.',
     empty: 'No sessions attributed to an agent. Data will appear from new chats with an assigned agent.',
     unavailable: 'unavailable', sessions: 'sessions', revisions: 'revisions',
-    actualUsd: 'Reported cost (USD)', listPriceUsd: 'List-price equivalent (USD)', estimatedUsd: 'Calibrated estimate (USD)',
+    actualUsd: 'Reported cost ($)', listPriceUsd: 'List-price equivalent ($)', estimatedUsd: 'Calibrated estimate ($)',
     costsNote: 'Separate measures: do not add them together. List price is not an invoice. Subtotals cover known sessions only; costs included in ancestor totals are withheld from descendants.',
     total: 'total', subtotal: 'known subtotal', known: 'known', missing: 'unavailable',
     timing: 'Observed timing', complete: 'sessions with complete timing', incomplete: 'sessions with incomplete timing',
@@ -44,7 +45,7 @@ const timingKinds: AgentTimingKind[] = ['execution', 'user-wait', 'permission-wa
 const costKinds = ['actualUsd', 'listPriceUsd', 'estimatedUsd'] as const;
 const normalize = (value: unknown) => value as AgentAnalyticsData;
 const number = (value: number) => value.toLocaleString(locale(), { maximumFractionDigits: 3 });
-const usd = (value: number | null) => value === null ? words[lang()].unavailable : new Intl.NumberFormat(locale(), { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(value);
+const usd = (value: number | null) => value === null ? words[lang()].unavailable : formatCost(value);
 const duration = (ms: number | null) => ms === null ? words[lang()].unavailable : `${number(ms / 1000)} s`;
 
 function CostMeasure({ measure }: { measure: AgentMeasure }) {

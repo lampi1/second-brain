@@ -4,7 +4,7 @@
 // IPC, no texts (the page turns each fact id into Italian with i18n): unit-tested in test/unit/brain-ui/memory-view.test.ts.
 import type { MemoryStats, SkillVerdict } from '@shared/brain-model';
 
-export type FactId = 'repeat' | 'mostRecalled' | 'longest' | 'oldest' | 'unusedSkills' | 'bestSkill' | 'topWord' | 'weekday' | 'busiestDay' | 'silent' | 'duplicates' | 'errorsTrend';
+export type FactId = 'repeat' | 'longest' | 'oldest' | 'unusedSkills' | 'bestSkill' | 'topWord' | 'weekday' | 'busiestDay' | 'silent' | 'duplicates' | 'errorsTrend';
 export interface Fact { id: FactId; params: Record<string, string | number>; file?: string }
 
 /** The facts worth a card, most telling first, at most `max`. Each one only when its numbers say something. */
@@ -12,8 +12,6 @@ export function memoryFacts(s: MemoryStats, max = 6): Fact[] {
   const out: Fact[] = [];
   const g = s.errors.groups[0];
   if (g && g.count >= 2) out.push({ id: 'repeat', params: { label: g.label, n: g.count, agents: g.agents.join(', ') }, file: 'ai-errors.md' });
-  const r = s.topRecalled[0];
-  if (r && r.recalls >= 2) out.push({ id: 'mostRecalled', params: { text: r.text, owner: r.owner, n: r.recalls }, file: r.file });
   const long = s.perAgent.find(a => a.exists);
   if (long && long.entries >= 2) out.push({ id: 'longest', params: { name: long.name, n: long.entries }, file: long.file });
   const unused = s.skills.filter(k => k.verdict === 'unused');

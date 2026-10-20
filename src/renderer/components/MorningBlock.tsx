@@ -15,11 +15,12 @@ import { useApp } from '../store/store';
 import { useCloudIds } from '../store/cloud';
 import { ui } from '../store/ui';
 import { locale, t } from '../i18n';
+import { formatCost } from '../lib/format';
 import { undoChanges } from './AgentFeedAction';
 import { PulseBoard } from './ContextPulse';
 import '../styles/alive.css';
 
-const usd = (v: number) => new Intl.NumberFormat(locale(), { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(v);
+const usd = (v: number) => formatCost(v);
 const hhmm = (at: number) => new Date(at).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
 /** "08:12", "ieri 18:40", "18/10 09:00" */
 export function whenText(at: number, now: number): string {

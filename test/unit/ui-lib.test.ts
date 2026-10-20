@@ -57,6 +57,10 @@ describe('format', () => {
   it('costs, models, folders', () => {
     expect(formatCost(1.84)).toBe('1,84 $');
     expect(formatCost(38.2)).toBe('38,20 $');
+    // one money format (ADR 0101): a small run cost keeps its third decimal, a total can drop the cents
+    expect(formatCost(0.054)).toBe('0,054 $');
+    expect(formatCost(0)).toBe('0,00 $');
+    expect(formatCost(1234.5, { round: true })).toMatch(/^1\.?235 \$$/);
     expect(chatCost({ harness: 'cursor', costUsd: 0 })).toBe('costo n/d');
     expect(chatCost({ harness: 'cursor', costUsd: 0, costKnown: false, costLedgerUsd: 1.5 })).toBe('≈ 1,50 $');
     // work time, shown beside the cost

@@ -5,11 +5,12 @@
 import { useEffect, useState } from 'react';
 import type { PulseStatus } from '@shared/pulse';
 import { setSetting, useApp } from '../store/store';
-import { locale, t } from '../i18n';
+import { t } from '../i18n';
+import { formatCost } from '../lib/format';
 import { parseSlots } from '../lib/pulse-context';
 import '../styles/alive.css';
 
-const usd = (v: number) => new Intl.NumberFormat(locale(), { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(v);
+const usd = (v: number) => formatCost(v);
 
 function usePulseStatus(): PulseStatus | null {
   const [st, setSt] = useState<PulseStatus | null>(null);

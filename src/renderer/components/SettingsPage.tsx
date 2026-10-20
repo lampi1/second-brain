@@ -24,6 +24,7 @@ import { CodexAutonomy } from './CodexAutonomy';
 import { AppUpdateSettings } from './AppUpdateSettings';
 import { CloudKeySetting } from './CloudKeySetting';
 import { PulseSettings } from './PulseSettings';
+import { TaskReadSettings } from './TaskReadSettings';
 import'../styles/settings.css';
 export function Switch({on,onChange,label,busy,testid}:{on:boolean;onChange:(on:boolean)=>void;label:string;busy?:boolean;testid?:string}){
  return <button type="button" role="switch" aria-checked={on} aria-label={label} disabled={busy} className={`st-switch ${on?'on':''}`} onClick={()=>onChange(!on)} data-testid={testid}><span className="st-knob" aria-hidden="true"/></button>;
@@ -53,7 +54,9 @@ export function SettingsPage(){
  const prefs=ui.use(s=>s.prefs),settings=useApp(s=>s.settings),engines=useEngines(),[query,setQuery]=useState('');
  // a link to one card ("impostazioni/update": the restart notice's «Aggiornamenti») scrolls to it once the page is drawn
  const arg=ui.use(s=>s.page==='impostazioni'?s.pageArg:null);
- useEffect(()=>{if(!arg||!settings)return;const id=requestAnimationFrame(()=>document.getElementById(`st-section-${arg}`)?.scrollIntoView({block:'start'}));return()=>cancelAnimationFrame(id);},[arg,!!settings]);
+ // a deep link (Task's «Impostazioni di lettura» → notifications, ADR 0101) scrolls to its section, and once more when the
+ // sections above it have loaded (the connectors and the update panel grow after the first paint)
+ useEffect(()=>{if(!arg||!settings)return;const go=()=>document.getElementById(`st-section-${arg}`)?.scrollIntoView({block:'start'});const id=requestAnimationFrame(go);const again=setTimeout(go,700);return()=>{cancelAnimationFrame(id);clearTimeout(again);};},[arg,!!settings]);
  if(!settings)return null;
  const groups=[
   {id:'profile',icon:<IconUser size={18}/>,description:t('essential.desc.profile'),title:t('profile.group'),search:[t('profile.name'),t('profile.role'),t('profile.mainWork'),t('profile.replyStyle'),'me.md profilo profile'].join(' '),body:<ProfileSettings/>},
@@ -75,7 +78,7 @@ export function SettingsPage(){
    <Row title={t('essential.density')}><Select aria-label={t('essential.density')} value={prefs.density} onChange={event=>{const density=event.target.value;if(density==='compact'||density==='comfortable')setPrefs({density});}}>{(['comfortable','compact']as const).map(value=><option key={value} value={value}>{t(`essential.${value}`)}</option>)}</Select></Row>
    <div className="st-row st-row-block"><AppearancePreview/></div>
   </>},
-  {id:'notifications',icon:<IconBell size={18}/>,description:t('essential.desc.notifications'),title:t('essential.notifications'),search:`${t('essential.toasts')} ${t('alive.pulse.title')} battito pulse budget`,body:<><Row title={t('essential.toasts')} description={t('essential.notificationsHint')} help={<HelpTip title={t('explain.toasts.title')} testid="st-toasts-help"><p>{t('explain.toasts.p1')}</p></HelpTip>}><Select aria-label={t('essential.toasts')} value={settings.osToasts} onChange={event=>{const osToasts=event.target.value;if(osToasts==='urgent'||osToasts==='normal'||osToasts==='off')void setSetting({osToasts});}}>{(['urgent','normal','off']as const).map(value=><option key={value} value={value}>{t(value==='off'?'essential.none':`essential.${value}`)}</option>)}</Select></Row><PulseSettings/></>},
+  {id:'notifications',icon:<IconBell size={18}/>,description:t('essential.desc.notifications'),title:t('essential.notifications'),search:`${t('essential.toasts')} ${t('alive.pulse.title')} battito pulse budget ${t('brainPages.task.autoLabel')} ${t('brainPages.task.sound')} Task`,body:<><Row title={t('essential.toasts')} description={t('essential.notificationsHint')} help={<HelpTip title={t('explain.toasts.title')} testid="st-toasts-help"><p>{t('explain.toasts.p1')}</p></HelpTip>}><Select aria-label={t('essential.toasts')} value={settings.osToasts} onChange={event=>{const osToasts=event.target.value;if(osToasts==='urgent'||osToasts==='normal'||osToasts==='off')void setSetting({osToasts});}}>{(['urgent','normal','off']as const).map(value=><option key={value} value={value}>{t(value==='off'?'essential.none':`essential.${value}`)}</option>)}</Select></Row><PulseSettings/><TaskReadSettings/></>},
  ];
  const matched=groups.filter(group=>matchesSettingsSearch(query,group.title+' '+group.search));
  const jump=(id:string)=>{const target=document.getElementById(`st-section-${id}`);target?.scrollIntoView({block:'start',behavior:'smooth'});target?.focus({preventScroll:true});};

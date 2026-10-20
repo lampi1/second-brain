@@ -44,7 +44,7 @@ const when = (iso: string): string => {
 /** An outcome → its feed event. lastOkAt: when GitHub was last updated (null = never; undefined = not known, no line). */
 export function outcomeEvent(o: SyncOutcome, lastOkAt?: string | null): { kind: string; title: string; detail: string } | null {
   if (o.running || !o.endedAt) return null;
-  const what = o.release.startsWith('brain-') ? 'prodotto nel cervello' : `versione ${o.release}`;
+  const what = o.release.startsWith('brain-') ? 'prodotto nel brain' : `versione ${o.release}`;
   if (o.ok) return { kind: 'sync-ok', title: `GitHub aggiornato (${what})`, detail: o.summary?.split('\n').at(-1) ?? '' };
   const since = lastOkAt === undefined ? '' : `Ultimo aggiornamento riuscito di GitHub: ${lastOkAt ? when(lastOkAt) : 'mai'}\n`;
   if (o.blocked) {

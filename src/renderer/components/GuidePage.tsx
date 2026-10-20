@@ -6,7 +6,8 @@
 // «Discuti» puts the card, as a ready message, in the Orchestrator's input: it never opens a work chat. The prominent
 // card («Ogni compito passa da un ruolo») sits on top as a wide hero with its
 // diagram always visible. A filter narrows the cards by any text of theirs. Mounted by App.tsx PageFrame for the page
-// 'guida' (left rail, Ctrl+K, G E). Hooks in GuidePage and Card stay useId/useMemo/useState: the unit test
+// 'guida' (left rail, Ctrl+K, G E); its arg is a card id (go({ page: 'guida', arg }), the «Come funziona →» of a "?",
+// components/GuideLink.tsx, ADR 0101): the page opens with that card's panel. Hooks in GuidePage and Card stay useId/useMemo/useState: the unit test
 // test/unit/concept-discuss-click.test.ts renders them without a DOM.
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { CONCEPTS, orchestratorText, textOf, type ConceptCard, type ConceptDiagram, type GuideLang } from '@shared/concept-guide';
@@ -196,11 +197,18 @@ function refocus(id: string): void {
   requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-testid="guide-toggle-${CSS.escape(id)}"]`)?.focus({ preventScroll: true }));
 }
 
-export function GuidePage() {
+/** a deep link's card id, when it names a card */
+const known = (id: string | undefined): string | null => (id && CONCEPTS.some(c => c.id === id) ? id : null);
+
+export function GuidePage({ arg }: { arg?: string } = {}) {
   const l: GuideLang = lang();
   const panel = useId();
   const [q, setQ] = useState('');
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(() => known(arg));
+  // a new deep link while the page is already open (another «Come funziona →») opens that card; set during render
+  // (React's "adjust state on a prop change"), so the page keeps to useState and stays renderable without a DOM
+  const [seen, setSeen] = useState(arg);
+  if (arg !== seen) { setSeen(arg); const id = known(arg); if (id) setOpen(id); }
   const shown = useMemo(() => {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
     return words.length ? CONCEPTS.filter(c => { const h = haystack(c, l); return words.every(w => h.includes(w)); }) : CONCEPTS;

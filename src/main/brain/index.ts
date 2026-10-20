@@ -241,7 +241,7 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
     usage: () => lastUsage ?? usage?.get() ?? { todayUsd: 0, fiveHourPct: null, fiveHourResetsAt: null, weekPct: null },
     info: () => {
       const root = cfg.get().brainRoot;
-      const problem = cfg.loadError ?? (!root ? 'nessuna cartella del cervello scelta' : !fs.existsSync(path.join(root, 'ops', 'tools', 'brain-site.mjs')) && !isProduct(root) ? `la cartella ${root} non ha il server dati del cervello (ops/tools/brain-site.mjs)` : null);
+      const problem = cfg.loadError ?? (!root ? 'nessuna cartella del brain scelta' : !fs.existsSync(path.join(root, 'ops', 'tools', 'brain-site.mjs')) && !isProduct(root) ? `la cartella ${root} non ha il server dati del brain (ops/tools/brain-site.mjs)` : null);
       return { brainRoot: root, brainProblem: problem };
     },
     settings: () => cfg.get(),
@@ -277,7 +277,7 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
     observeRoutingOutcome: (id, outcome) => {
       try { routing.observeOutcome(id, outcome); } catch (e) { log.warn('brain', 'routing verdict not written', { cause: errText(e), hint: 'check <brain>/ops/state/improve is writable' }); }
     },
-    api: p => api ? api.get(p) : Promise.resolve({ ok: false as const, error: 'nessun cervello configurato' }),
+    api: p => api ? api.get(p) : Promise.resolve({ ok: false as const, error: 'nessun brain configurato' }),
     serveApi: (p, fn) => { localApi.set(p, fn); },
     compareList: () => compare.list(),
     compareSet: (experiment, on, agent) => compare.set(experiment, on, agent),

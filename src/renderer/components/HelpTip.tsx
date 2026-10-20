@@ -4,7 +4,8 @@
 // The bubble lives in a portal on <body> (never clipped by a scrolling card), is placed below or above the mark inside
 // the window, follows the light/dark tokens, hides the browser views it covers (native views draw above the page) and
 // stays open while the pointer is on it. Esc closes it before any dialog sees the key; a click pins it; one at a time.
-// Accessible: a real button, aria-describedby points at the bubble (in the DOM, hidden while closed).
+// Accessible: a real button, aria-describedby points at the bubble (in the DOM, hidden while closed). A "?" that explains
+// a concept names its Guida card (`guide`): the bubble ends with «Come funziona →», which opens that card (ADR 0101).
 // Used by Settings, Costi, Qualità, Task, Stato, the long-chat notice, the agent cards, the Orchestrator head, the strips,
 // the run verdict and the Skill page; other branches import it as
 // `import { HelpTip } from '../components/HelpTip'` (from src/renderer/components: './HelpTip').
@@ -13,6 +14,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } f
 import { registerOverlay, report } from '../lib/viewports';
 import { t } from '../i18n';
 import { placeBubble, type Pos } from '../lib/tips';
+import { GuideLink } from './GuideLink';
 import '../styles/helptip.css';
 
 export interface HelpTipProps {
@@ -30,6 +32,8 @@ export interface HelpTipProps {
   className?: string;
   /** A wider bubble (~480 px) for a long explanation of several paragraphs. */
   wide?: boolean;
+  /** The Guida card that explains this concept (src/shared/concept-guide.ts id): adds «Come funziona →». */
+  guide?: string;
 }
 
 const OPEN_DELAY = 250; // hover: a short delay, so crossing the mark does not flash a bubble
@@ -58,7 +62,7 @@ export function closeHelpTip(): boolean {
   return true;
 }
 
-export function HelpTip({ children, title, example, label, text, testid, className = '', wide }: HelpTipProps) {
+export function HelpTip({ children, title, example, label, text, testid, className = '', wide, guide }: HelpTipProps) {
   const id = useId();
   const tipId = `help-${id.replace(/:/g, '')}`;
   const btn = useRef<HTMLButtonElement>(null);
@@ -140,6 +144,7 @@ export function HelpTip({ children, title, example, label, text, testid, classNa
           {title && <b className="help-title">{title}</b>}
           <div className="help-body">{children}</div>
           {example && <p className="help-ex"><span>{t('costs.helpExample')}</span> {example}</p>}
+          {guide && <p className="help-guide"><GuideLink concept={guide} /></p>}
         </div>,
         document.body,
       )}

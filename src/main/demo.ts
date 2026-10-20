@@ -938,7 +938,7 @@ export class DemoBrain implements BrainService {
   async api(p?: string): Promise<BrainApiResult> {
     if (this.realApi) return this.realApi.get(p);
     const c = checkApiPath(p);
-    return c.ok && this.localApi.has(new URL(c.path, 'http://localhost').pathname) ? this.ownApi.get(c.path) : { ok: false, error: 'demo: nessun server del cervello' };
+    return c.ok && this.localApi.has(new URL(c.path, 'http://localhost').pathname) ? this.ownApi.get(c.path) : { ok: false, error: 'demo: nessun server del brain' };
   }
   serveApi(p: string, fn: (query: URLSearchParams) => unknown): void { this.localApi.set(p, fn); }
   // one experiment like the real brain's, switched in memory
@@ -1010,20 +1010,27 @@ export class DemoBrain implements BrainService {
   }
 }
 
-/** The loop's policies in the demo (the shape of the brain's improve.mjs status --json): fixed numbers, dates relative to now. */
+/** The loop's policies in the demo (the shape of the brain's improve.mjs status --json): fixed numbers, dates relative to now.
+ *  The estimates policy stays in the data (a real brain sends it) but Regole hides it (ADR 0053, 0101); the proposal,
+ *  the after-check and the rollback are on the model choice (routing), the notifications policy has too few cases. */
 export function demoLearn(now = Date.now()): Record<string, unknown>[] {
   const iso = (days: number) => new Date(now - days * 864e5).toISOString();
   const spark = [1.4, 2.1, 1.2, 3.8, 1.6, 1.1, 2.4, 1.9, 1.3, 5.2, 1.7, 1.2, 2.2, 1.5, 1.8, 2.9, 1.1, 1.6, 2.3, 1.4, 1.9, 1.2, 3.1, 1.5, 1.7, 2.0, 1.3, 1.6, 2.6, 1.4];
   return [
     {
-      domain: 'estimates', version: 2, appliedAt: iso(9), by: 'app (clic)', name: 'per tipo', previous: 1,
-      pending: { id: 'estimates-3', at: iso(1), domain: 'estimates', kind: 'cambio', from: 2, name: 'stessa area e tipo', status: 'proposta',
-        evidence: { shared: 42, primary: 'min', diff: { mean: 0.14, lo: 0.05, hi: 0.22 } } },
-      lastCheck: { domain: 'estimates', version: 2, from: 1, n: 24, need: 20, state: 'migliorata', at: iso(2) },
+      domain: 'estimates', version: 2, appliedAt: iso(9), by: 'app (clic)', name: 'per tipo', previous: 1, pending: null, lastCheck: null,
       recorded: { predictions: 31, known: 27, unknown: 2 }, primary: 'min', n: 243, noData: false, unknownItems: 3, noPrediction: 6,
       typical: 1.7, spark, coverage: { rate: 0.84, n: 30 }, drift: { recent: 0.5, before: 0.6, ratio: 0.83, changed: false },
     },
-    { domain: 'routing', version: 1, appliedAt: iso(0.2), by: 'routing.mjs init', name: null, previous: null, pending: null, lastCheck: null, recorded: { predictions: 12, known: 12, unknown: 0 }, n: 12, noData: true },
+    {
+      domain: 'routing', version: 2, appliedAt: iso(9), by: 'app (clic)', name: 'per tipo', previous: 1,
+      pending: { id: 'routing-3', at: iso(1), domain: 'routing', kind: 'cambio', from: 2, name: 'stessa area e tipo', status: 'proposta',
+        evidence: { shared: 42, primary: 'min', diff: { mean: 0.14, lo: 0.05, hi: 0.22 } } },
+      lastCheck: { domain: 'routing', version: 2, from: 1, n: 24, need: 20, state: 'migliorata', at: iso(2) },
+      recorded: { predictions: 31, known: 27, unknown: 2 }, primary: 'min', n: 243, noData: false, unknownItems: 3, noPrediction: 6,
+      typical: 1.7, spark, coverage: { rate: 0.84, n: 30 }, drift: { recent: 0.5, before: 0.6, ratio: 0.83, changed: false },
+    },
+    { domain: 'notifications', version: 1, appliedAt: iso(0.2), by: 'notify.mjs init', name: null, previous: null, pending: null, lastCheck: null, recorded: { predictions: 12, known: 12, unknown: 0 }, n: 12, noData: true },
   ];
 }
 

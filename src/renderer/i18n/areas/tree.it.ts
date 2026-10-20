@@ -74,7 +74,7 @@ export const treeIt = {
   'delegation.judgeDaily.hint': 'Quante esecuzioni finite un Sentinel rivede ogni giorno, ognuna in una sessione nuova che non ha visto il lavoro, per misurare i ruoli.',
   'delegation.off': 'Nessuna',
   'delegation.tiers': 'Modelli per livello',
-  'delegation.tiers.hint': 'Il modello che ogni livello usa su ciascun motore. Vuoto = quello del registro dei modelli del cervello.',
+  'delegation.tiers.hint': 'Il modello che ogni livello usa su ciascun motore. Vuoto = quello del registro dei modelli del brain.',
   'delegation.tier.light': 'Leggero',
   'delegation.tier.mid': 'Medio',
   'delegation.tier.top': 'Alto',

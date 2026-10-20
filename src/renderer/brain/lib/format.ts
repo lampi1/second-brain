@@ -3,14 +3,14 @@
 // "AAAA-MM-GG"; day arithmetic is done at noon so a DST change never shifts a day.
 
 import { locale, t } from '../../i18n';
-
-const it = (v: number, digits: number) => v.toLocaleString(locale(), { minimumFractionDigits: digits, maximumFractionDigits: digits });
+import { formatCost } from '../../lib/format';
 
 export const fmt = {
-  /** 1,84 $ under 10 $, 38 $ above (list-price estimates: the decimals stop mattering) */
+  /** 1,84 $ under 10 $, 38 $ above (list-price estimates: the decimals stop mattering); the app's one money format
+   *  (lib/format.ts formatCost, ADR 0101) */
   usd(v: number | null | undefined): string {
     if (v == null || !Number.isFinite(v)) return '';
-    return `${it(v, Math.abs(v) < 10 ? 2 : 0)} $`;
+    return formatCost(v, { round: true });
   },
   int(v: number | null | undefined): string { return v == null || !Number.isFinite(v) ? '' : Math.round(v).toLocaleString(locale()); },
   /** 704k, 1,2M */
@@ -25,6 +25,11 @@ export const fmt = {
   day(s: string | null | undefined): string {
     const d = dayDate(s);
     return d ? d.toLocaleDateString(locale(), { weekday: 'short', day: '2-digit', month: '2-digit' }) : String(s ?? '');
+  },
+  /** "sab 11/10/2026": a day with its year, in the UI's locale (the Fatto date field) */
+  dayFull(s: string | null | undefined): string {
+    const d = dayDate(s);
+    return d ? d.toLocaleDateString(locale(), { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' }) : String(s ?? '');
   },
   /** "sabato 11 ottobre" */
   dayLong(s: string | null | undefined): string {

@@ -40,7 +40,7 @@ const HANDOFF_CHARS = 6000;
 export function orchestratorHandoff(chatId: string): string {
   const s = app.get();
   const old = s.chats[chatId];
-  const nowMd = s.info?.brainRoot ? `${s.info.brainRoot.replace(/[\\/]+$/, '')}/now.md` : 'now.md del cervello';
+  const nowMd = s.info?.brainRoot ? `${s.info.brainRoot.replace(/[\\/]+$/, '')}/now.md` : 'now.md del brain';
   const lines: string[] = [];
   let used = 0;
   for (const i of [...(s.items[chatId] ?? [])].reverse()) {

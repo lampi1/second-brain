@@ -59,6 +59,9 @@ export const brainPagesIt = {
   'brainPages.task.reading': 'Leggo…',
   'brainPages.task.updated': (p: { ago: string }) => `aggiornato ${p.ago}`,
   'brainPages.task.auto': 'Lettura automatica',
+  'brainPages.task.readHint': 'La pagina Task rilegge da sola PR, work item e menzioni di Azure DevOps (sola lettura, zero token).',
+  'brainPages.task.settingsLink': 'Impostazioni di lettura',
+  'brainPages.task.readState': (p: { on: boolean; every: string }) => (p.on ? `Lettura automatica ogni ${p.every}` : 'Lettura automatica spenta'),
   'brainPages.task.autoLabel': 'Aggiornamento automatico',
   'brainPages.task.every': 'Ogni',
   'brainPages.task.everyLabel': 'Ogni quanti minuti',
@@ -126,7 +129,7 @@ export const brainPagesIt = {
   'brainPages.idee.discussedTimes': (p: { n: number }) => ` ${p.n} volte`,
   'brainPages.idee.who': 'Tu',
   'brainPages.idee.whoAI': 'IA',
-  'brainPages.idee.perBrain': 'il cervello',
+  'brainPages.idee.perBrain': 'il brain',
   'brainPages.idee.perAI': "l'IA",
   'brainPages.idee.perYou': 'te',
   'brainPages.idee.sureLabel': (p: { v: string }) => `sicurezza ${p.v}`,
@@ -150,7 +153,7 @@ export const brainPagesIt = {
   'brainPages.idee.aiReflectionsNote': (p: { n: number }) => ` E ${p.n} ${p.n === 1 ? 'riflessione' : 'riflessioni'} dell'IA su di sé.`,
   'brainPages.idee.noIdeaNoneAI': "Nessuno spunto dell'IA",
   'brainPages.idee.reflectionCountSuffix': (p: { n: number }) => `, ${p.n} ${p.n === 1 ? 'riflessione' : 'riflessioni'}.`,
-  'brainPages.idee.whatAI': "Gli spunti dell'IA per migliorare il cervello, il tuo modo di lavorare e se stessa, ognuno con il suo ragionamento. Clic su una riga per leggerlo e discuterne con l’Orchestrator.",
+  'brainPages.idee.whatAI': "Gli spunti dell'IA per migliorare il brain, il tuo modo di lavorare e se stessa, ognuno con il suo ragionamento. Clic su una riga per leggerlo e discuterne con l’Orchestrator.",
   'brainPages.idee.whatDefault': "Le idee tue e dell'IA, da ideas.md. Filtra per stato, area e chi l'ha avuta; clic su una riga per leggerla tutta e discuterne con l’Orchestrator.",
 
   // Miglioramento.tsx
