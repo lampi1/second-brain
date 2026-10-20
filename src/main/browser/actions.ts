@@ -10,7 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { NativeImage, WebFrameMain } from 'electron';
-import { errText, redact } from '../log';
+import { log, errText, redact } from '../log';
 import type { BrowserTabs, Tab } from './tabs';
 import { pageCall, walkPage, locateRef, frameBox, inputInfo, focusSelect, selectOptions, pageText, probe, angularStable, fieldFacts, hasPasswordField,
   type WalkMode, type WalkResult, type PointResult, type InputInfo, type FrameMarker } from './page';
@@ -526,7 +526,7 @@ export class BrowserActions {
 
   async navigate(tab: Tab, url: string, force: boolean): Promise<string> {
     const wc = tab.wc;
-    if (tab.dialog && force) await this.cdp(tab).send('Page.handleJavaScriptDialog', { accept: false }).catch(() => {});
+    if (tab.dialog && force) await this.answerDialog(tab, false).catch(() => {});
     tab.forceUnload = force;
     try {
       const where = String(url).trim().toLowerCase();
@@ -699,11 +699,33 @@ export class BrowserActions {
     }
     const b = this.begin(tab, `dialog ${accept ? 'OK' : 'Cancel'}`);
     b.dialogs = tab.dialogSeq;
-    await this.cdp(tab).send('Page.handleJavaScriptDialog', { accept, ...(promptText !== undefined ? { promptText } : {}) });
+    const how = await this.answerDialog(tab, accept, promptText);
     for (let i = 0; i < 40 && tab.dialog === d; i++) await sleep(50);
     await this.settle(tab);
-    const head = `${accept ? 'Accepted' : 'Dismissed'} the ${d.type} "${d.message}"${d.type === 'prompt' && promptText !== undefined ? ` with "${promptText}"` : ''}`;
+    const head = `${accept ? 'Accepted' : 'Dismissed'} the ${d.type} "${d.message}"${d.type === 'prompt' && promptText !== undefined ? ` with "${promptText}"` : ''}${how === 'native' ? ' (answered directly: the automation session could not reach the page)' : ''}`;
+    if (how === 'gone') return this.summary(tab, b, `The ${d.type} "${d.message}" was no longer showing (closed by the page or a navigation); nothing to answer.`);
     return this.summary(tab, b, head);
+  }
+
+  /** Answers the open dialog through CDP; when CDP is not attached or refuses (Chromium's "Not attached to an active
+   *  page" while the session's frame is not the active one, issue #102), through the native callback the tab kept.
+   *  Throws an actionable error only when neither can answer. */
+  private async answerDialog(tab: Tab, accept: boolean, promptText?: string): Promise<'cdp' | 'native' | 'gone'> {
+    let cause = 'the tab is not under automation (CDP detached)';
+    if (tab.cdp?.isAttached) {
+      const cb = tab.pendingDialogCb;
+      try {
+        await tab.cdp.send('Page.handleJavaScriptDialog', { accept, ...(promptText !== undefined ? { promptText } : {}) });
+        if (tab.pendingDialogCb === cb) tab.pendingDialogCb = null;   // Chromium answered this dialog: its callback is spent
+        return 'cdp';
+      } catch (e) { cause = errText(e); }
+    }
+    if (this.tabs.answerNativeDialog(tab, accept, promptText ?? '')) {
+      log.warn('browser', 'handle_dialog answered without CDP', { cause, data: { tab: tab.id }, hint: 'the page navigated or the debugger detached while the dialog was open; answered through the native dialog callback' });
+      return 'native';
+    }
+    if (/No dialog is showing/i.test(cause)) { this.tabs.forgetDialog(tab); return 'gone'; }   // stale: the page is not blocked
+    throw new Error(`Could not answer the dialog (${cause}). Reload the page with navigate "reload" and force: true, or close the tab and open a new one.`);
   }
 
   network(tab: Tab, o: { urlPattern?: unknown; method?: unknown; type?: unknown; status?: unknown; limit?: unknown; requestId?: unknown; clear?: unknown }): Promise<string> | string {
