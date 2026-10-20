@@ -8,7 +8,7 @@
 import { app, safeStorage } from 'electron';
 import type { BrowserHandoff, CliStatus, PendingRequest } from '../shared/contract';
 import { ConfigStore } from './brain/config';
-import { DemoBrain, DemoChats, FROZEN_EPOCH, seed, type Emit, demoQuality } from './demo';
+import { DemoBrain, DemoChats, FROZEN_EPOCH, seed, demoTree, type Emit, demoQuality } from './demo';
 import { DemoBrowser } from './demo-browser';
 import { demoBrainRuns, writeDemoBrain } from './brainmodel/demo';
 import type { AgentRun } from '../shared/agents';
@@ -175,6 +175,8 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     /** a chat the app resumed by itself after a restart (e2e: the "ripresa dopo il riavvio" mark) */
     resumed: (chatId: string) => chats.patch(chatId, { resumedAt: now() }),
     clearThumbs: () => browser.clearThumbs(),
+    /** a delegation tree under a Strategist (README shots: the Grindhouse's thread cards) */
+    tree: () => { const t = demoTree(now()); chats.add(t.chats, t.items); },
     /** a feed event, as the brain would publish it (e2e: toasts, notification center, badges) */
     event: (e: { kind: string; title: string; detail?: string; chatId?: string }) => brain.publish([e]),
     /** show_ui as the chat would call it (e2e: a visual in the chat, in its Orchestrator, on its next question); the error text on a wrong call */

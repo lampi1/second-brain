@@ -14,7 +14,7 @@ import type {
 } from '../shared/contract';
 import type { AgentChildren, ChildObservation } from '../shared/agents';
 import { sysEn } from '../shared/sys';
-import { ROLE_DEFAULTS } from '../shared/roles';
+import { ROLE_DEFAULTS, type WorkRoleId } from '../shared/roles';
 import type { BrainService, ChatService, FeedInput } from './services';
 import type { ConfigStore } from './brain/config';
 import { BrainApi, checkApiPath, type LocalApi } from './brain/api';
@@ -92,6 +92,40 @@ export const DEMO_DIFF: FileDiff[] = [
   { path: 'src/Shop/Orders/DiscountCalculator.cs', added: 9, removed: 1, patch: patchDiscount },
   { path: 'test/Shop.Tests/Orders/OrderTotalsTests.cs', added: 15, removed: 0, patch: patchTest },
 ];
+
+/** A delegation tree (ADR 0083) for the README shots (test/shots/readme.spec.ts adds it through __sbDemo.tree, so the
+ *  seed every other test reads stays as it is): a Strategist the Orchestrator started, its Scout (done, result sent
+ *  back), its Artisan with a Judge of its own, and a Herald waiting for its turn. */
+export function demoTree(E: number): { chats: ChatSummary[]; items: Record<string, ChatItem[]> } {
+  const cwd = 'C:\\progetti\\alfa-shop';
+  const role = (id: WorkRoleId, name: string): ChatSummary['agent'] => ({ id, name, purpose: ROLE_DEFAULTS[id].summary, avatar: { kind: 'character', value: id }, engine: 'claude', model: 'claude-opus-5-5', revision: 1, version: 1, source: 'catalog' });
+  const node = (id: string, r: WorkRoleId, name: string, title: string, goal: string, ago: number, extra: Partial<ChatSummary>, parentId?: string, doneWhen: string[] = []): ChatSummary => ({
+    id, title, harness: 'claude', origin: 'app', cwd, sessionId: `demo-${id}`, model: 'claude-opus-5-5', effort: 'high', permissionMode: 'default', state: 'running',
+    costUsd: 0, pending: 0, isOrchestrator: false, lastText: '', updatedAt: E - 30_000, browserTabIds: [], agent: role(r, name),
+    run: { runId: `r_tree_${id}`, chatId: id, agentId: r, version: 1, goal, startedBy: parentId ? 'parent' : 'orchestrator', startedAt: E - ago * MIN, costUsd: extra.costUsd ?? null, tokens: null,
+      counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null } },
+    ...(parentId ? { parentId, delegation: { role: r, goal, doneWhen, at: E - ago * MIN } } : {}),
+    ...extra,
+  });
+  const lead = node('tree-plan', 'strategist', 'Strategist', 'Sconti in percentuale', 'Porta gli sconti in percentuale su carrello, ordine e reso, con test e note di rilascio.', 18,
+    { costUsd: 0.62, contextTokens: 54_000, contextMaxTokens: 1_000_000, lastText: 'Piano in 3 parti: dove, come, cosa dire. Scout ha finito, Artisan al lavoro.' });
+  const scout = node('tree-scout', 'scout', 'Scout', 'Dove si calcola lo sconto', 'Trova ogni punto che applica uno sconto.', 16,
+    { state: 'idle', costUsd: 0.18, lastText: 'Trovati 3 punti: carrello, ordine, reso.' }, lead.id);
+  scout.delegation = { role: 'scout', goal: 'Trova ogni punto che applica uno sconto.', doneWhen: ['Elenco dei file con la riga'], at: E - 16 * MIN,
+    result: { outcome: 'done', summary: 'Trovati 3 punti: carrello, ordine, reso. Il reso arrotonda due volte.', at: E - 11 * MIN } };
+  const artisan = node('tree-artisan', 'artisan', 'Artisan', 'Sconto sul lordo', 'Applica lo sconto al lordo con un solo arrotondamento, nei 3 punti.', 10,
+    { costUsd: 0.74, contextTokens: 88_000, contextMaxTokens: 1_000_000, lastText: 'Fatti carrello e ordine, ora il reso.' }, lead.id, ['I test ordini passano']);
+  const judge = node('tree-judge', 'judge', 'Judge', 'La suite ordini passa?', 'Esegui la suite ordini e giudica il fix.', 3,
+    { costUsd: 0.09, lastText: 'Lancio dotnet test: 41 su 42 finora.' }, artisan.id, ['Esito della suite']);
+  const herald = node('tree-herald', 'herald', 'Herald', 'Note di rilascio', 'Scrivi le note di rilascio quando il fix è in main.', 1,
+    { costUsd: 0.02, lastText: 'Preparo la bozza, la chiudo quando Artisan finisce.' }, lead.id, ['Bozza delle note']);
+  const chats = [lead, scout, artisan, judge, herald];
+  const items: Record<string, ChatItem[]> = Object.fromEntries(chats.map(c => [c.id, [
+    { kind: 'user', id: `${c.id}-u1`, at: c.run!.startedAt, text: c.run!.goal } as ChatItem,
+    { kind: 'assistant', id: `${c.id}-a1`, at: c.updatedAt, text: c.lastText } as ChatItem,
+  ]]));
+  return { chats, items };
+}
 
 export interface Seed { chats: ChatSummary[]; items: Record<string, ChatItem[]>; pending: PendingRequest[]; tabs: BrowserTab[]; feed: FeedEvent[]; usage: Usage }
 
@@ -404,6 +438,11 @@ export class DemoChats implements ChatService {
     this.startRun('fix', resumeFix, { keepState: true });
     this.startRun('sms', resumeSms, { keepState: true });
     this.timers.push(setInterval(() => this.tickCosts(), 1000));
+  }
+
+  /** Adds chats with their history after the start (e2e and README shots: __sbDemo.tree). */
+  add(chats: ChatSummary[], items: Record<string, ChatItem[]>): void {
+    for (const c of chats) { this.chats.set(c.id, c); this.itemsOf.set(c.id, [...(items[c.id] ?? [])]); this.emit('chat:updated', c); }
   }
 
   nextId(): string { return `d${++this.counter}`; }
