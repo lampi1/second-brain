@@ -237,8 +237,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Apre una chat di lavoro nominando sempre il ruolo, con un titolo «Area · cosa», il contratto come primo messaggio e le skill suggerite per la richiesta. Il ruolo decide motore e modello; l’Orchestrator può chiedere un livello più alto, fino al massimo del ruolo.',
         'It opens a work chat always naming the role, with an "Area · what" title, the contract as the first message and the skills suggested for the request. The role decides engine and model; the Orchestrator may ask for a higher tier, up to the role’s maximum.'),
       // src/main/agents/task-estimate.ts estimateTool; src/main/agents/orchestrator-role.ts (ADR 0087)
-      b('Prima di partire stima la richiesta sui task simili già finiti (task_estimate: tempo, costo, su quanti task, affidabilità, quante parti) e prende la via rapida: una domanda breve la risponde lui, un lavoro veloce in una parte va a un solo agente senza sotto-chat; un albero di deleghe solo per il lavoro in più parti, che costa più token. Sotto la sua testata, il piano: gli agenti avviati oggi con la stima, il segno «via rapida» e la precisione delle stime settimana per settimana.',
-        'Before starting it estimates the request on similar finished tasks (task_estimate: time, cost, how many tasks, confidence, how many parts) and takes the fast path: a short question it answers itself, a quick one-part job goes to a single agent with no sub-chats; a delegation tree only for work in several parts, which costs more tokens. Under its head, the plan: the agents started today with their estimate, the "fast path" mark and the estimates’ accuracy week by week.'),
+      b('Prima di partire stima la richiesta sui lavori simili già finiti (tempo, costo, su quanti lavori, affidabilità, quante parti) e prende la via rapida: una domanda breve la risponde lui, un lavoro veloce in una parte va a un solo agente senza sotto-chat; un albero di deleghe solo per il lavoro in più parti, che costa più token. Sotto la sua testata, il piano: gli agenti avviati oggi con la stima, il segno «via rapida» e quante stime restano entro ×2, settimana per settimana.',
+        'Before starting it estimates the request on similar finished jobs (time, cost, how many jobs, confidence, how many parts) and takes the fast path: a short question it answers itself, a quick one-part job goes to a single agent with no sub-chats; a delegation tree only for work in several parts, which costs more tokens. Under its head, the plan: the agents started today with their estimate, the "fast path" mark and how many estimates stay within ×2, week by week.'),
       // src/main/agents/run-feedback.ts metricsTool; src/main/agents/discovery.ts
       b('Dei figli vede solo lo stato e i numeri: mai il loro testo. Il risultato gli arriva quando il figlio chiude con il suo rapporto.',
         'Of its children it sees only state and numbers: never their text. The result reaches it when the child closes with its report.'),
@@ -259,8 +259,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(DATA, 'Risposta di app_create_chat: { chatId, title, harness, cwd, model, effort, route { source: agent, kind, area, reason, agent { id, version, chosenBy, tier?, modelFrom: role | tier | table | engine } } }.',
         'app_create_chat result: { chatId, title, harness, cwd, model, effort, route { source: agent, kind, area, reason, agent { id, version, chosenBy, tier?, modelFrom: role | tier | table | engine } } }.'),
       tech(LIMITS, 'Fino a 16 skill per chat delegata; un figlio non ha mai strumenti o tetto sopra quelli di chi lo avvia.', 'Up to 16 skills per delegated chat; a child never has tools or a ceiling above its launcher’s.'),
-      tech(TOOLS, 'agent_catalog (i ruoli), app_create_chat con roleId e tier (apre il lavoro), skills_suggest (le skill), agent_metrics (stato e numeri dei figli), agent_report (il rapporto del figlio).',
-        'agent_catalog (the roles), app_create_chat with roleId and tier (opens the work), skills_suggest (the skills), agent_metrics (the children’s state and numbers), agent_report (the child’s report).'),
+      tech(TOOLS, 'agent_catalog (i ruoli), app_create_chat con roleId e tier (apre il lavoro), skills_suggest (le skill), task_estimate (la stima), agent_metrics (stato e numeri dei figli), agent_report (il rapporto del figlio).',
+        'agent_catalog (the roles), app_create_chat with roleId and tier (opens the work), skills_suggest (the skills), task_estimate (the estimate), agent_metrics (the children’s state and numbers), agent_report (the child’s report).'),
       tech(WHERE, 'MCP dell’app su 127.0.0.1 (tool app_*, agent_catalog, skills_suggest, agent_metrics), ognuno con il suo endpoint e token.',
         'The app’s MCP on 127.0.0.1 (app_*, agent_catalog, skills_suggest, agent_metrics tools), each with its own endpoint and token.'),
     ],
@@ -392,11 +392,11 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Gli script stanno nella cartella scripts/ del brain; l’intestazione dice titolo, cosa fa, come si usa, tag e l’ultimo test.',
         'Scripts live in the brain’s scripts/ folder; their header says title, what it does, how to run it, tags and the last test.'),
       // src/main/brain/scripts-tools.ts brain_scripts
-      b('Ogni chat può cercarli con brain_scripts prima di scrivere uno script nuovo, per riusarne uno che funziona.',
-        'Every chat can look them up with brain_scripts before writing a new script, to reuse one that works.'),
+      b('Ogni chat può cercarli prima di scrivere uno script nuovo, per riusarne uno che funziona.',
+        'Every chat can look them up before writing a new script, to reuse one that works.'),
       // src/main/brain/scripts-tools.ts brain_script_save, brain_script_delete, brain_script_add; src/main/brain/auto-scripts.ts
-      b('Senza chiederti l’ok: una chat aggiunge lo script che ha provato (brain_script_add), l’app salva da sola un comando riutilizzabile riuscito con Esegui, l’Orchestrator corregge o elimina. Le credenziali sono rifiutate, un eliminato va in scripts/.deleted/ e non torna.',
-        'Without asking you: a chat adds the script it ran (brain_script_add), the app saves a reusable command that worked with Esegui by itself, the Orchestrator fixes or deletes. Credentials are refused, a deleted one goes to scripts/.deleted/ and does not come back.'),
+      b('Senza chiederti l’ok: una chat aggiunge lo script che ha provato, l’app salva da sola un comando riutilizzabile riuscito con Esegui, l’Orchestrator corregge o elimina. Le credenziali sono rifiutate, un eliminato va in scripts/.deleted/ e non torna.',
+        'Without asking you: a chat adds the script it ran, the app saves a reusable command that worked with Esegui by itself, the Orchestrator fixes or deletes. Credentials are refused, a deleted one goes to scripts/.deleted/ and does not come back.'),
       // src/main/brain/changelog.ts
       b('Ogni cambiamento è una riga in changelog.md: quando, cosa, quale file, chi e perché. L’Orchestrator vi annota anche regole, skill e note che cambia.',
         'Every change is a line in changelog.md: when, what, which file, who and why. The Orchestrator also logs the rules, skills and notes it changes.'),
@@ -411,6 +411,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'Like a workshop toolbox with a logbook beside it: every tool is labelled, and whoever changes one writes it down.'),
     diagram: { kind: 'flow', steps: [b('Script provato', 'Tested script'), b('Orchestrator salva', 'Orchestrator saves'), b('scripts/', 'scripts/'), b('changelog.md', 'changelog.md'), b('Riuso', 'Reuse')] },
     tech: [
+      tech(TOOLS, 'brain_scripts (cerca), brain_script_add (aggiunge), brain_script_save e brain_script_delete (l’Orchestrator).', 'brain_scripts (search), brain_script_add (add), brain_script_save and brain_script_delete (the Orchestrator).'),
       tech(FILES, 'Nel brain: scripts/<nome>, scripts/.deleted/, changelog.md; creati al primo salvataggio.', 'In the brain: scripts/<name>, scripts/.deleted/, changelog.md; created on the first save.'),
       tech(WHERE, 'Pagine: /api/scripts, /api/script?id=…, /api/changelog; evento scripts:changed.', 'Pages: /api/scripts, /api/script?id=…, /api/changelog; event scripts:changed.'),
       tech(LIMITS, 'Uno script ≤ 200 KB; la pagina legge le ultime 500 righe del changelog.', 'A script ≤ 200 KB; the page reads the latest 500 changelog lines.'),
@@ -498,8 +499,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'When a role wants to do something sensitive, the CLI asks: the app shows you the panel and enforces the role’s ceiling.'),
     points: [
       // src/main/chats/claude.ts onControlRequest; src/main/chats/acp.ts
-      b('La richiesta arriva dalla CLI (Claude can_use_tool, Cursor session/request_permission, Codex approvazioni di comandi e modifiche) e diventa un pannello con le risposte disponibili.',
-        'The request comes from the CLI (Claude can_use_tool, Cursor session/request_permission, Codex command and file-change approvals) and becomes a panel with the available responses.'),
+      b('La richiesta arriva dal motore (Claude, Cursor, o Codex per comandi e modifiche) e diventa un pannello con le risposte disponibili.',
+        'The request comes from the engine (Claude, Cursor, or Codex for commands and file changes) and becomes a panel with the available responses.'),
       b('«Consenti sempre» vale solo per questa sessione: l’app non scrive mai i file di impostazioni di Claude o Cursor.',
         '"Allow always" lasts for this session only: the app never writes Claude’s or Cursor’s settings files.'),
       // src/shared/contract.ts PermissionMode; src/renderer/lib/format.ts labels
@@ -518,6 +519,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'Like a company card with a limit: you can ask for approval, but above the limit it does not go through.'),
     diagram: { kind: 'flow', steps: [b('Il ruolo vuole agire', 'Role wants to act'), b('Richiesta della CLI', 'CLI request'), b('Pannello', 'Panel'), b('Tua risposta', 'Your answer')] },
     tech: [
+      tech(TOOLS, 'Claude: can_use_tool; Cursor: session/request_permission; Codex: le approvazioni di comandi e modifiche.', 'Claude: can_use_tool; Cursor: session/request_permission; Codex: command and file-change approvals.'),
       tech(DATA, "PendingRequest { id, chatId, type: 'permission' | 'question' | 'command', tool, title, detail, input, noAlways?, alwaysRules? }.",
         "PendingRequest { id, chatId, type: 'permission' | 'question' | 'command', tool, title, detail, input, noAlways?, alwaysRules? }."),
       tech(LIMITS, 'Ordine: plan 0 < default 1 < acceptEdits 2 < auto 3 < bypassPermissions 4; auto e bypass non possono essere un tetto.',

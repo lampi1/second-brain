@@ -37,7 +37,7 @@ describe('guide links', () => {
   });
 
   it('keeps tool names out of the main text of every card (they live in the technical details)', () => {
-    const TOOL = /\b(agent_[a-z_]+|app_[a-z_]+|skills_suggest|roleId)\b/;
+    const TOOL = /\b([a-z]+_[a-z_]+|roleId)\b/;
     for (const c of CONCEPTS) {
       for (const x of [c.summary, c.analogy, ...c.points, ...(c.target ?? []), ...(c.diagram?.steps ?? [])]) {
         expect(TOOL.test(x.it), `${c.id}: ${x.it}`).toBe(false);
