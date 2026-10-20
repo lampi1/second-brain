@@ -41,19 +41,35 @@ settings. The interface speaks Italian and English.
 splits it into child chats, and the Grindhouse shows the whole family as thread cards: who is on it, what they found,
 what they still owe. A child's question goes to its parent first; only what truly needs you reaches you, once.
 
-**🎭 A crew with characters.** Six fixed roles, each with its own face, job, skills and model tier:
+**🎭 A crew with characters.** The Orchestrator and five work roles, each with its own face, job, skills and model
+tier (ADR 0100):
 
 <p align="center"><img src="docs/screenshots/crew.webp" alt="The six roles: Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald" width="820"></p>
 
 <p align="center"><sub><b>Orchestrator</b> conducts · <b>Strategist</b> plans · <b>Scout</b> explores · <b>Artisan</b> builds and writes · <b>Sentinel</b> tests and reviews · <b>Herald</b> announces</sub></p>
 
-**⚡ Answer with one key.** Questions and permissions pop up as panels right in the agent's strip, with the context the
+**⌨️ Answer with one key.** Questions and permissions pop up as panels right in the agent's strip, with the context the
 agent had when it asked. Every job gets an estimate up front ("~4 min · ~0,12 $ · from 12 similar tasks") and a
 verdict at the end ("~4 min → 6 min ✓").
 
-**📈 Agents that level up.** Every role earns levels and a performance score from real outcomes, cost and your
-corrections. The app tunes models, instructions and skills by itself, as a trial measured against the old version,
-and every change has an "Annulla".
+**⚡ Lampo, for quick questions.** A second tab beside the Orchestrator answers in seconds with read-only tools: it
+explains, reads and searches, and changes nothing. When the answer turns into work, **Fanne un lavoro** hands it to
+the Orchestrator (ADR 0105).
+
+**✅ Judged by facts, not by you.** A run counts as a success when its report met every done criterion, you corrected
+nothing and nobody had to redo it within 7 days. No form to fill in, no tokens spent (ADR 0100).
+
+**📈 Agents that level up, honestly.** A role's level is the number of its verified successes: «Lv 6 Maestro · 38
+riusciti verificati». The app tunes models, instructions and skills by itself, as a trial against the old version,
+and keeps a change only when a confidence interval says it is better (Wilson, Newcombe; ADR 0104). Every change has
+an "Annulla".
+
+**☀️ An app that tells you what happened.** Each strip says what its agent is doing right now. When you come back, a
+morning block lists what finished, what waits for you, red builds and yesterday's spend, built from what the app
+already knows, at zero tokens (ADR 0102).
+
+**↩️ Undo a turn.** Before each turn the app records the folder's files in a hidden git ref; «Annulla l'ultimo turno»
+puts them back, without touching your index or branches (ADR 0103).
 
 **🧠 A brain that lights up.** Your notes, rules, memory and scripts live in a plain Markdown folder that the agents
 read and write. Watch it live on a 3D map, lit where the crew is working right now.
@@ -78,6 +94,9 @@ read and write. Watch it live on a 3D map, lit where the crew is working right n
 <td><img src="docs/screenshots/quality.webp" alt="The Qualità page: measured metrics with their source"><br><b>Qualità.</b> Errors you had to catch, rules that did not stick, PRs held back, each measured from real logs.</td>
 </tr>
 </table>
+
+Faster and cheaper by design (ADR 0099): engines prewarmed for the next chat, rules hooks answered in process, clean
+results batched into one Orchestrator turn, and browser reads that return only what changed.
 
 Also on board: cloud agents (Cursor, Codex, Claude Code) next to the local ones, one-click **Esegui** for shell blocks,
 long chats handed off before the context fills, Ctrl+K search across everything, an in-app **Guida**, and an
