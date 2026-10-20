@@ -56,14 +56,15 @@ const mi = argv.indexOf('--model');
 let model = mi >= 0 ? argv[mi + 1] : 'auto';
 let mode = 'agent';
 // model parameters like CLI 2026.07.23 offers them to a client with _meta.parameterizedModelPicker (grok-4.7's set);
-// FAKE_CURSOR_NO_MEDIUM=1: a model without a medium reasoning (the app must warn)
+// FAKE_CURSOR_NO_MEDIUM=1: a model without a medium reasoning (the app must warn); FAKE_CURSOR_NO_THOUGHT=1: a model
+// with no reasoning parameter at all (an effort is refused in words)
 let picker = false;
 const params = { context: '256k', reasoning_effort: 'high', fast: 'true' };
 const paramDefs = () => [
   { id: 'context', name: 'Context', category: 'model_config', values: ['256k', '500k'] },
   { id: 'reasoning_effort', name: 'Effort', category: 'thought_level', values: process.env.FAKE_CURSOR_NO_MEDIUM === '1' ? ['low', 'high'] : ['low', 'medium', 'high', 'xhigh'] },
   { id: 'fast', name: 'Fast', category: 'model_config', values: ['false', 'true'] },
-];
+].filter(d => process.env.FAKE_CURSOR_NO_THOUGHT !== '1' || d.category !== 'thought_level');
 const configOptions = () => picker ? paramDefs().map(d => ({ id: d.id, name: d.name, category: d.category, type: 'select', currentValue: params[d.id], options: d.values.map(value => ({ value, name: value })) })) : undefined;
 
 process.stdout.on('error', () => {});

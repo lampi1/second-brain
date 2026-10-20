@@ -8,7 +8,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { cliArgv, engineAllowed, newestCursorVersion, resolveAcp, resolveCursor } from '../../../src/main/chats/cli';
-import { AcpSession, authHelp, cursorConfigDir, isNetError, modelRestart, netRetryPrompt, type AcpOptions } from '../../../src/main/chats/acp';
+import { AcpSession, acpEffortValue, authHelp, cursorConfigDir, isNetError, modelRestart, netRetryPrompt, type AcpOptions } from '../../../src/main/chats/acp';
 import { costOf, priceOf } from '../../../src/main/chats/cursor-prices';
 import { engineStatus, openLogin } from '../../../src/main/cli';
 import { FAKE_CURSOR, PNG_1PX, cursorLog, recSink, tmp, waitFor, type RecSink } from './helpers';
@@ -476,7 +476,30 @@ describe('AcpSession as Cursor', () => {
     await waitFor(() => sink.patch.permissionMode === 'plan', 'plan mode');
     expect(cursorLog(logFile).find(l => l.method === 'session/set_mode')?.params).toMatchObject({ modeId: 'plan' });
     await expect(s.setModel('claude-sonnet-5.5')).rejects.toThrow(modelRestart('Cursor')); // the manager reopens the session instead
-    await expect(s.setEffort('high')).rejects.toThrow(/effort/i);
+  });
+
+  it('the chat\'s effort wins over the settings\' reasoning, and changes live on the thought_level option (issue #97)', async () => {
+    const { s, sink, logFile } = start({ model: 'gpt-5.6-sol', effort: 'low', modelConfig: { reasoning: 'medium', fast: false } });
+    await waitFor(() => s.state === 'idle', 'ready');
+    const sets = () => cursorLog(logFile).filter(l => l.method === 'session/set_config_option').map(l => [l.params?.configId, l.params?.value]);
+    expect(sets()).toEqual([['reasoning_effort', 'low'], ['fast', 'false']]);
+    expect(sink.patch.effortObserved).toBe('low');
+    // max is not offered: the nearest value the model has
+    await s.setEffort('max');
+    expect(sets().at(-1)).toEqual(['reasoning_effort', 'xhigh']);
+    expect(sink.patch).toMatchObject({ model: 'gpt-5.6-sol[context=256k,reasoning_effort=xhigh,fast=false]', effort: 'max', effortObserved: 'xhigh' });
+    expect([...sink.items.values()].some(i => i.kind === 'system' && i.level === 'warn')).toBe(false);
+  });
+
+  it('maps an effort onto the values the model offers, and refuses in words on a model with none', async () => {
+    expect(acpEffortValue('medium', ['low', 'high'])).toBe('low');
+    expect(acpEffortValue('max', ['Low', 'High'])).toBe('High');
+    expect(acpEffortValue('high', ['HIGH'])).toBe('HIGH');
+    expect(acpEffortValue('low', ['fast', 'slow'])).toBeNull();
+    const { s, logFile } = start({ model: 'gpt-5.6-sol', env: { FAKE_CURSOR_NO_THOUGHT: '1' } });
+    await waitFor(() => s.state === 'idle', 'ready');
+    await expect(s.setEffort('high')).rejects.toThrow('non offre una scelta dell’effort');
+    expect(cursorLog(logFile).some(l => l.method === 'session/set_config_option')).toBe(false);
   });
 
   it('an agent capped at plan takes the read-only mode whatever the chosen mode (A2)', async () => {
@@ -681,7 +704,8 @@ describe('AcpSession as another ACP engine (Kimi)', () => {
     await waitFor(() => results(sink).length === 1, 'subagent turn');
     expect(s.hookRuns).toHaveLength(0);
     await expect(s.setModel('x')).rejects.toThrow(modelRestart('Kimi'));
-    await expect(s.setEffort('high')).rejects.toThrow('L’effort non si imposta con Kimi');
+    await s.setEffort('xhigh'); // any ACP engine: its model's thought_level option
+    expect(cursorLog(logFile).filter(l => l.method === 'session/set_config_option').map(l => [l.params?.configId, l.params?.value])).toEqual([['reasoning_effort', 'xhigh']]);
   });
 
   it('usage tokens are priced with Cursor\'s list only with priceFallback', async () => {
