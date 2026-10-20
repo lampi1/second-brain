@@ -6,6 +6,20 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- **Five work roles, judged by facts, levelled honestly** (owner, 2026-10-20; ADR 0100): Strategist, Scout, Artisan,
+  Sentinel, Herald beside the Orchestrator (Router, Judge and Scribe retired, their data mapped to a successor). A run
+  is a verified success from the facts (every done criterion met, no correction, not redone in 7 days); a level counts
+  only verified successes («Lv 6 Maestro · 38 riusciti verificati»).
+- **«Lampo», the quick lane** (owner, 2026-10-20; ADR 0105): a tab beside the Orchestrator that answers in seconds with
+  read-only tools; «Fanne un lavoro» hands the last exchange to the Orchestrator.
+- **The app says what it does** (ADR 0102): strips show the current step, a morning block lists what happened while
+  you were away (zero tokens), maintenance changes have Annulla in the feed, a taskbar badge counts requests.
+- **«Annulla l'ultimo turno»** (ADR 0103): git checkpoints before each turn of a work chat; the undo puts back only that
+  turn's changes, with a backup ref.
+- **Faster and cheaper orchestration** (ADR 0099): estimates computed by the app, warm engines per role, clean results
+  batched, a lighter tool prefix, rules hooks in process, browser reads as deltas, a review pack for the Sentinel.
+- **Evidence before a change is kept** (ADR 0104): trials and tier proposals on Wilson / Newcombe intervals at fixed
+  checkpoints; honest statistics, one money format, Guide links on every "?" (ADR 0101).
 - **Your own picture for a role** (owner, 2026-10-20; ADR 0090): "Cambia immagine" under the badge on a role's page
   takes a PNG, JPG or WebP; its centre square replaces the character everywhere. "Immagine predefinita" brings the
   character back.
