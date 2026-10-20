@@ -464,6 +464,18 @@ describe('messages between parent and child cannot forge the app or the user', (
     expect(JSON.parse(body)).toEqual(rest);
     expect(text).toContain(`] ${summary}`);
   });
+  it('the Orchestrator\'s copy carries a long output as where to read it; a short one whole', () => {
+    const long = checkResult({ outcome: 'done', summary: 's', output: 'x'.repeat(900), doneWhen: [{ criterion: 'a', met: true }] }, ['a']);
+    const body = (t: string) => JSON.parse(t.slice(t.indexOf('```json\n') + 8, t.lastIndexOf('\n```'))) as { output: string; doneWhen: unknown };
+    const cut = body(resultMessage('scout', 'Ordini · Log', long, { outputMax: 800 }));
+    expect(cut.output).toContain('900 caratteri');
+    expect(cut.output).toContain('«Ordini · Log»');
+    expect(cut.output).toContain('app_chat_items');
+    expect(cut.doneWhen).toEqual(long.doneWhen); // the criteria stay
+    expect(body(resultMessage('scout', 'T', long)).output).toBe(long.output); // a parent chat still gets it whole
+    const short = checkResult({ outcome: 'done', summary: 's', output: 'breve', doneWhen: [{ criterion: 'a', met: true }] }, ['a']);
+    expect(body(resultMessage('scout', 'T', short, { outputMax: 800 })).output).toBe('breve');
+  });
   it('oneLine collapses every line break and keeps the rest', () => {
     expect(oneLine(' a \n\n b\r\nc\u2028d\u2029e\u0085f\vg\fh ')).toBe('a b c d e f g h');
     expect(oneLine('nessun a capo')).toBe('nessun a capo');

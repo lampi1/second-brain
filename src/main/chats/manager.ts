@@ -344,6 +344,9 @@ function sysItem<C extends SysCode>(code: C, params: SysParams | undefined, leve
 }
 
 const MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions'];
+/** a root chat's deliverable longer than this reaches the Orchestrator as where to read it, not whole (it is the chat's answer
+ *  there; the Orchestrator re-reads every message in each later turn) */
+const ORCHESTRATOR_OUTPUT_MAX = 800;
 /** archived chats kept (the oldest beyond this leave the app; their transcripts stay where the CLI keeps them) */
 const MAX_ARCHIVED = 60;
 /** the user's words carried in a note (ADR 0083: the user's own message, never the child's) */
@@ -1549,7 +1552,7 @@ export class ChatManager implements ChatService {
     const orchestrator = [...this.chats.values()].find(c => c.s.isOrchestrator && !c.s.closedAt);
     const role = r.s.agent?.id;
     if (orchestrator && isWorkRole(role)) {
-      this.send(orchestrator.s.id, resultMessage(role, r.s.title, result), undefined, false, r.s.title)
+      this.send(orchestrator.s.id, resultMessage(role, r.s.title, result, { outputMax: ORCHESTRATOR_OUTPUT_MAX }), undefined, false, r.s.title)
         .catch(e => log.warn('chats', 'root result not delivered', { chat: orchestrator.s.id, cause: errText(e), hint: 'the result stays on the chat and its run; app_chats shows it' }));
     }
     log.info('chats', 'root chat reported', { chat: chatId, data: { orchestrator: orchestrator?.s.id ?? null, outcome: result.outcome, met, criteria: result.doneWhen.length } });

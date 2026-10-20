@@ -48,7 +48,7 @@ describe('app_digest', () => {
     expect(t).not.toContain('turno');
   });
 
-  it('since: unchanged chats in one line, waiting and failed ones always listed', () => {
+  it('since: unchanged chats in one line; waiting and failed ones always named, their text only when new', () => {
     const t = digest({ ...base, since: NOW - 3 * MIN,
       chats: [chat('old', { updatedAt: NOW - 60 * MIN }), chat('new', { updatedAt: NOW - MIN, lastText: 'Fatto.' }), chat('err', { state: 'error', updatedAt: NOW - 60 * MIN, lastError: 'x' }), chat('wait', { updatedAt: NOW - 60 * MIN })],
       pending: [q('wait', 'Unisco?', NOW - 60 * MIN)],
@@ -57,8 +57,17 @@ describe('app_digest', () => {
     expect(t).toContain('Hanno finito il turno da allora:');
     expect(t).toContain('«Web · new»');
     expect(t).toContain('Invariate: «Web · old».');
-    expect(t).toContain('«Web · err» (Claude, err): ferma su un errore');
-    expect(t).toContain('domanda «Unisco?»');
+    // already told before since: named, without their text again (app_digest without since has it)
+    expect(t).toContain('Ancora come prima (dettagli in app_digest senza since): «Web · err» (errore), «Web · wait» (aspetta l\'utente).');
+    expect(t).toContain('1 richieste per l\'utente, 1 in errore');
+    expect(t).not.toContain('Unisco?');
+    const fresh = digest({ ...base, since: NOW - 3 * MIN,
+      chats: [chat('err', { state: 'error', updatedAt: NOW - MIN, lastError: 'x' }), chat('wait', { updatedAt: NOW - MIN })],
+      pending: [q('wait', 'Unisco?', NOW - MIN)],
+    });
+    expect(fresh).toContain('«Web · err» (Claude, err): ferma su un errore');
+    expect(fresh).toContain('domanda «Unisco?»');
+    expect(fresh).not.toContain('Task (Azure DevOps)'); // the "not read" hint only without since
   });
 
   it('closed chats and the commands the user ran', () => {

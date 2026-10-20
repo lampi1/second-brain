@@ -43,10 +43,10 @@ const slotOf = (e: Pick<WakeEvent, 'chatId' | 'kind'>): string => e.kind === 'us
 const USER_TEXT_MAX = 300;
 /** the rule's gate for this Orchestrator: Cursor (ACP) takes no message mid-turn */
 const gateOf = (r: Pick<ChatSummary, 'state' | 'pending' | 'handoffBusy' | 'harness'>): OrchestratorGate => orchestratorGate(r, engineOf(r.harness)?.kind !== 'acp');
-const classOf = (e: WakeEvent): DeliveryClass => e.kind === 'user-message' ? 'quiet' : newsClass(e.kind, e.endsTurn);
+const classOf = (e: WakeEvent): DeliveryClass => e.kind === 'user-message' || e.silent ? 'quiet' : newsClass(e.kind, e.endsTurn);
 const isLoud = (e: WakeEvent): boolean => classOf(e) !== 'quiet';
 /** requestId: the open request it tells about (question, permission, command): answered before it goes, it is dropped */
-export interface WakeEvent { chatId: string; title: string; harness: Harness; kind: WakeKind; detail: string; at: number; /** a delegated chat: its role and its parent's title (status only, never its text) */ child?: { role: string; parent: string }; requestId?: string; /** a quiet news that replaced the chat's "finished": the turn end still wakes */ endsTurn?: boolean }
+export interface WakeEvent { chatId: string; title: string; harness: Harness; kind: WakeKind; detail: string; at: number; /** a delegated chat: its role and its parent's title (status only, never its text) */ child?: { role: string; parent: string }; requestId?: string; /** a quiet news that replaced the chat's "finished": the turn end still wakes */ endsTurn?: boolean; /** a delegated chat's "finished" with nothing of the user's beside it: no text (ADR 0083) and its result goes to its parent, so it rides along and never wakes */ silent?: boolean }
 
 export interface OrchestratorWakeDeps {
   /** sends a message to the Orchestrator (wakes it: a closed one resumes) */
@@ -160,6 +160,9 @@ export class OrchestratorWake {
       // the user stopped it himself (Stop, "Invia subito"): he is on it, nothing to tell
       if (c.lastResult?.interrupted && c.lastResult.at !== was.lastResult?.at) return;
       const failed = !!c.lastResult?.isError && c.lastResult.at !== was.lastResult?.at;
+      // it gave its result with agent_report in this turn: that already reached its parent or the Orchestrator (the
+      // owner, 2026-10-20: the same news twice was a second Orchestrator turn for nothing)
+      if (!failed && c.run?.report && c.run.report.at > (was.lastResult?.at ?? 0)) return;
       this.add(c, failed ? 'error' : 'done', c.lastText);
     }
   }
@@ -197,7 +200,7 @@ export class OrchestratorWake {
     this.buffer.delete(r.chatId);
     const c = this.chats.get(r.chatId);
     if (!c || c.state !== 'idle' || c.pending || c.handoffBusy) return;
-    this.buffer.set(r.chatId, { ...e, kind: 'done', detail: e.child ? '' : c.lastText, at: this.now(), requestId: undefined, endsTurn: undefined });
+    this.buffer.set(r.chatId, { ...e, kind: 'done', detail: e.child ? '' : c.lastText, at: this.now(), requestId: undefined, endsTurn: undefined, silent: (!!e.child && !this.buffer.has(`${r.chatId}#user`)) || undefined });
     this.reschedule();
   }
 
@@ -211,7 +214,8 @@ export class OrchestratorWake {
     const endsTurn = QUIET.has(kind) && !!old && (!QUIET.has(old.kind) || !!old.endsTurn);
     const parent = c.parentId ? this.chats.get(c.parentId)?.title ?? this.d.list?.().find(x => x.id === c.parentId)?.title ?? '?' : null;
     const child = parent !== null ? { role: c.agent?.name ?? 'ruolo', parent } : undefined;
-    this.buffer.set(c.id, { chatId: c.id, title: c.title, harness: c.harness, kind, detail: child ? '' : detail, at, ...(child ? { child } : {}), ...(requestId ? { requestId } : {}), ...(endsTurn ? { endsTurn } : {}) });
+    const silent = !!child && kind === 'done' && !this.buffer.has(`${c.id}#user`);
+    this.buffer.set(c.id, { chatId: c.id, title: c.title, harness: c.harness, kind, detail: child ? '' : detail, at, ...(child ? { child } : {}), ...(requestId ? { requestId } : {}), ...(endsTurn ? { endsTurn } : {}), ...(silent ? { silent } : {}) });
     this.reschedule();
   }
 

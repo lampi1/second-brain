@@ -304,6 +304,32 @@ describe('the user writes in a work chat (ADR 0083)', () => {
     expect(w.queued()).toEqual([]);
   });
 
+  it('a delegated chat that just finished never wakes the Orchestrator by itself (its result goes to its parent)', async () => {
+    const { w, sent, up } = make();
+    up({ id: 'strat', title: 'Piano', state: 'idle' });
+    const kidRow = { title: 'Log', parentId: 'strat', agent: { id: 'scout', name: 'Scout' } as ChatSummary['agent'] };
+    up({ id: 'kid', state: 'idle', ...kidRow });
+    await vi.advanceTimersByTimeAsync(5000);
+    sent.length = 0;
+    up({ id: 'kid', state: 'running', ...kidRow });
+    up({ id: 'kid', state: 'idle', lastText: 'fatto', ...kidRow });
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(sent).toEqual([]);
+    expect(w.queued().map(e => e.kind)).toEqual(['done']); // it rides along with the next news
+  });
+
+  it('a chat that gave its result with agent_report in the turn adds no "finished" (the result already went)', async () => {
+    const { w, sent, up } = make();
+    up({ id: 'a', title: 'Ordini', state: 'idle' });
+    await vi.advanceTimersByTimeAsync(5000);
+    sent.length = 0;
+    up({ id: 'a', state: 'running' });
+    up({ id: 'a', state: 'idle', lastText: 'ecco il risultato', run: { report: { at: Date.now(), outcome: 'done', verified: 'yes', summary: 's' } } as unknown as ChatSummary['run'] });
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(sent).toEqual([]);
+    expect(w.queued()).toEqual([]);
+  });
+
   it('nothing for the Orchestrator\'s own chat, nor with the events off', async () => {
     const { w, setOn } = make();
     w.userMessage({ chatId: 'orchestrator', title: 'Orchestrator', role: null, parentTitle: null, text: 'ciao' });

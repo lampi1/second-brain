@@ -2,6 +2,7 @@
 // Why: the manager must not know which engine a chat runs on (Claude Code: claude.ts, stream-json control protocol; an
 // ACP engine: acp.ts, JSON-RPC); each adapter implements HarnessSession and reports through a SessionSink. Used by manager.ts (creates sessions, owns items/pending/persistence) and by every harness module.
 import type { Root } from './proctree';
+import { RESULT_OUTPUT_MAX } from '../../shared/delegation';
 import type { AgentChildren, AgentToolPolicy, ChildObservation, PermissionCeiling } from '../../shared/agents';
 import type { Answer, ChatCommand, ChatItem, ChatState, Effort, Harness, ImageAttachment, PendingRequest, PermissionMode } from '../../shared/contract';
 
@@ -211,8 +212,17 @@ export function nextId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${seq.toString(36)}`;
 }
 
-/** Shortens long strings inside a tool input before it crosses IPC (the full input stays in the session). */
+/** Shortens long strings inside a tool input before it crosses IPC (the full input stays in the session). An
+ *  agent_report's output (any engine: known by its outcome/doneWhen/output fields) stays whole up to its own limit: the
+ *  chat shows it as the agent's answer, written only there. */
 export function trimInput(input: unknown, max = 4000): unknown {
+  if (input && typeof input === 'object' && !Array.isArray(input)) {
+    const o = input as Record<string, unknown>;
+    if (typeof o.output === 'string' && typeof o.outcome === 'string' && Array.isArray(o.doneWhen) && max < RESULT_OUTPUT_MAX) {
+      const { output, ...rest } = o;
+      return { ...(trimInput(rest, max) as Record<string, unknown>), output: trimInput(output, RESULT_OUTPUT_MAX) };
+    }
+  }
   if (typeof input === 'string') return input.length > max ? `${input.slice(0, max)}… (+${input.length - max})` : input;
   if (Array.isArray(input)) return input.slice(0, 200).map(v => trimInput(v, max));
   if (input && typeof input === 'object') {

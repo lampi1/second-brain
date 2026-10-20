@@ -87,11 +87,18 @@ export function digest(inp: DigestInput): string {
   };
 
   const wait: string[] = [], err: string[] = [], run: string[] = [], done: string[] = [], same: string[] = [], orchestrators: string[] = [];
+  // with since: a request or an error already told in an earlier digest is named only (the caller has its text; the
+  // owner, 2026-10-20: the same text again in every wake was tokens for nothing); a call without since has it all
+  const told: string[] = [];
+  let toldWait = 0, toldErr = 0;
   for (const c of open) {
     const rs = asks.get(c.id) ?? [];
     if (c.isOrchestrator) { orchestrators.push(`${name(c)}: ${c.state}${rs.length ? `, ${rs.length} richieste aperte` : ''}`); continue; }
-    if (rs.length) { for (const r of rs) wait.push(line(c, `aspetta l'utente da ${ago(now - r.at)}: ${askLine(r)}`, false)); continue; }
-    if (c.state === 'error') { err.push(line(c, `ferma su un errore: ${one(c.lastError ?? c.lastText, 240)}`, false)); continue; }
+    if (rs.length) {
+      for (const r of rs) if (since !== null && r.at < since) { told.push(`«${c.title}» (aspetta l'utente)`); toldWait++; } else wait.push(line(c, `aspetta l'utente da ${ago(now - r.at)}: ${askLine(r)}`, false));
+      continue;
+    }
+    if (c.state === 'error') { if (since !== null && !changed(c)) { told.push(`«${c.title}» (errore)`); toldErr++; } else err.push(line(c, `ferma su un errore: ${one(c.lastError ?? c.lastText, 240)}`, false)); continue; }
     if (!changed(c)) { same.push(`«${c.title}»`); continue; }
     // waiting in the CPU queue (ADR 0036): no turn ran yet, so never "turno finito"
     if (c.queued) run.push(line(c, `in coda per il carico della macchina (posizione ${c.queued.position}, da ${ago(now - c.queued.since)})`, false));
@@ -110,20 +117,22 @@ export function digest(inp: DigestInput): string {
   const runs = inp.runs.filter(r => (r.endedAt ?? r.startedAt) >= (since ?? now - 2 * 3600_000))
     .map(r => `- «${titleOf(r.chatId)}»: \`${one(redact(r.code.split('\n')[0] ?? ''), 120)}\` ${r.state === 'running' ? 'in corso' : `${r.state}, uscita ${r.exitCode ?? '-'}`}`);
 
-  const counts = [`${open.filter(c => !c.isOrchestrator).length} chat aperte`, wait.length && `${wait.length} richieste per l'utente`, err.length && `${err.length} in errore`, run.length && `${run.length} al lavoro`].filter(Boolean).join(', ');
+  const counts = [`${open.filter(c => !c.isOrchestrator).length} chat aperte`, wait.length + toldWait && `${wait.length + toldWait} richieste per l'utente`, err.length + toldErr && `${err.length + toldErr} in errore`, run.length && `${run.length} al lavoro`].filter(Boolean).join(', ');
   const out = [`Stato alle ${hhmm(now)}${since !== null ? ` (novità dalle ${hhmm(since)})` : ''}: ${counts}.`];
   const section = (title: string, rows: string[]) => { if (rows.length) out.push('', `${title}:`, ...rows); };
   section('Aspettano l\'utente (l\'app glielo mostra già: nello stato basta dire quale chat e su cosa)', wait);
   section('In errore', err);
   section('Al lavoro', run);
   section(since !== null ? 'Hanno finito il turno da allora' : 'Ferme a fine turno', done);
+  if (told.length) out.push('', `Ancora come prima (dettagli in app_digest senza since): ${[...new Set(told)].join(', ')}.`);
   if (same.length) out.push('', `Invariate: ${same.join(', ')}.`);
   section(since !== null ? 'Chiuse da allora' : 'Chiuse nelle ultime 24 h', closed);
   section('Comandi eseguiti dall\'utente con Esegui', runs);
   if (orchestrators.length) section('Orchestrator', orchestrators);
 
   const d = inp.tasks;
-  if (!d || !d.at) out.push('', `Task (Azure DevOps): non letti dall'app${d?.error ? ` (${one(d.error.message, 120)})` : ''}: usa devops-me.mjs.`);
+  if (!d || !d.at) { if (since === null || d?.error) out.push('', `Task (Azure DevOps): non letti dall'app${d?.error ? ` (${one(d.error.message, 120)})` : ''}: usa devops-me.mjs.`); }
+  else if (since !== null && d.at < since) out.push('', `PR dell'utente: invariate dall'ultima lettura (${d.prs.length}, Task letti alle ${hhmm(d.at)}).`);
   else {
     out.push('', `PR dell'utente (Task letti alle ${hhmm(d.at)}${now - d.at > 3600_000 ? `, ${ago(now - d.at)} fa` : ''}):`, ...(d.prs.length ? prLines(d) : ['- nessuna PR attiva']));
     const news = d.news.filter(n => n.unread && (since === null || Date.parse(n.at) >= since));

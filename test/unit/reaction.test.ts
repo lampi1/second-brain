@@ -24,6 +24,7 @@ describe('the rule in every frame', () => {
 describe('the Orchestrator speaks only when it is useful (owner, 2026-10-20)', () => {
   it('its rules ask for short replies and reactions, never at the cost of a due result', () => {
     expect(ORCHESTRATOR_ROLE).toContain('Be brief and quick');
+    expect(ORCHESTRATOR_ROLE).toContain('never restate or paraphrase it'); // a chat\'s result is read in that chat
     expect(ORCHESTRATOR_ROLE).not.toMatch(/Tell the user the estimate/); // #113: the agents view shows it
     expect(ORCHESTRATOR_ROLE).toContain('Do not write the estimate in your reply');
     expect(ORCHESTRATOR_ROLE).toContain('Brevity never drops a result, a blocker or a question that is due.');
