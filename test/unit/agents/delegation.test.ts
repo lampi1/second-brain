@@ -41,7 +41,7 @@ const catalog = (n: Narrowed = {}): AgentCatalog => ({ problem: null, archived: 
     launches: [...x.launches], skills: r.skills, tools: { allow: [...x.tools] }, permissionCeiling: x.ceiling, activeVersion: 1, updatedAt: 1, instructions: r.instructions };
 }) } as unknown as AgentCatalog);
 
-function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: string) => Promise<string[]>, roles?: () => AgentCatalog, onSend?: (chatId: string) => void, narrowed: Narrowed = {}) {
+function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: string) => Promise<string[]>, roles?: () => AgentCatalog, onSend?: (chatId: string) => void, narrowed: Narrowed = {}, remembered: [string, string][] = []) {
   roles ??= () => catalog(narrowed);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-delegation-'));
   roots.push(dir);
@@ -64,7 +64,8 @@ function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: str
       } as unknown as HarnessSession;
     } });
   managers.push(m);
-  const tools = delegationTools({ chats: m, roles, settings: () => ({ ...DELEGATION_DEFAULTS, ...limits }), engineRefusal: () => null, label: '[agente]', runs: () => m.runs.list(), ...(worktrees ? { worktrees } : {}), now: () => (clock ?? Date.now)() });
+  const tools = delegationTools({ chats: m, roles, settings: () => ({ ...DELEGATION_DEFAULTS, ...limits }), engineRefusal: () => null, label: '[agente]', runs: () => m.runs.list(), ...(worktrees ? { worktrees } : {}), now: () => (clock ?? Date.now)(),
+    remember: (role, line) => { remembered.push([role, line]); } });
   const tool = (name: string): McpTool => tools.find(t => t.name === name)!;
   const call = async (name: string, chatId: string, args: Record<string, unknown>) => JSON.parse(await tool(name).run(args, { mount: 'chat', params: { chatId }, sessionId: '', signal: new AbortController().signal } as never) as string);
   const root = (role: RoleId, cwd = dir) => m.create({ harness: 'claude', cwd, roleId: role, title: `${ROLE_DEFAULTS[role].name} root`, prompt: 'PARENT SECRET HISTORY' }, 'user');
@@ -103,6 +104,20 @@ describe('agent_delegate', () => {
     const listed = await f.call('agent_children', parent.id, {});
     expect(listed.children).toHaveLength(2);
     expect(listed.children[0]).toMatchObject({ role: 'scout', result: { outcome: 'done' } });
+  });
+
+  it('agent_report remember writes to the reporting role\'s memory, only once the report is accepted', async () => {
+    const remembered: [string, string][] = [];
+    const f = fixture({}, undefined, undefined, undefined, {}, remembered);
+    const parent = await f.root('strategist');
+    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Log')] });
+    const scout = f.m.list().find(c => c.parentId === parent.id)!;
+    await expect(f.call('agent_report', scout.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [], remember: ['Logs are in D:/logs'] })).rejects.toThrow(/criterion A/);
+    await expect(f.call('agent_report', scout.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }], remember: ['a\nb'] })).rejects.toThrow(/remember/);
+    expect(remembered).toEqual([]);
+    const r = await f.call('agent_report', scout.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }], remember: ['Logs are in D:/logs'] });
+    expect(r).toMatchObject({ reported: true, remembered: 1 });
+    expect(remembered).toEqual([['scout', 'Logs are in D:/logs']]);
   });
 
   it('three Scouts run in parallel, each a writable chat of its own', async () => {

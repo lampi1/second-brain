@@ -137,6 +137,16 @@ describe('pack review transactions', () => {
     expect(runtime.instructions).not.toContain(`agent-${path.basename(runtime.pluginDir).slice(0, 16)}:reviewer`);
     expect(runtime.instructions).not.toContain('learned-rules');
   });
+  it('gives every engine the role memory and how to add to it (Claude used to get neither, so nothing was written)', async () => {
+    const f = setup();
+    expect(f.flows.runtime('judge').memory).toContain('Your memory (agents/judge/memory.md): empty so far.');
+    fs.mkdirSync(path.join(f.brain, 'agents/judge'), { recursive: true });
+    fs.writeFileSync(path.join(f.brain, 'agents/judge/memory.md'), '# Memoria\n\n- 2026-10-20 · Test logs live in out/test\n');
+    const runtime = f.flows.runtime('judge');
+    expect(runtime.memory).toContain('- 2026-10-20 · Test logs live in out/test');
+    expect(runtime.memory).toContain('`remember` field of agent_report');
+    expect(runtime.instructions).toContain(runtime.memory);
+  });
 });
 
 describe('lessons queue and role edits', () => {

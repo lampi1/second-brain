@@ -12,11 +12,15 @@ it('retains augmented Cursor context across restart without widening plain profi
     const agentAssets = { pluginDir, skillRoot: path.join(pluginDir, 'skills') };
     const base: StoredChat = { id: 'c_pack', harness: 'cursor', cwd: root, sessionId: null, title: 'Review', model: null, effort: null, permissionMode: null, isOrchestrator: false, createdAt: 1 };
     const instructions = 'x'.repeat(8000) + '\n\n# Learned rules\nCite evidence.';
-    store.save([{ ...base, agentInstructions: instructions, agentAssets }, { ...base, id: 'c_plain', agentInstructions: instructions }]);
+    // a Claude role keeps its role text plus its memory block (up to ~6.5k more), past the old 8000 cap
+    const withMemory = instructions + '\n\nYour memory (agents/judge/memory.md):\n' + 'm'.repeat(6500);
+    store.save([{ ...base, agentInstructions: instructions, agentAssets }, { ...base, id: 'c_plain', agentInstructions: 'x'.repeat(16385) },
+      { ...base, id: 'c_claude', harness: 'claude', agentInstructions: withMemory }]);
     const restored = new ChatStore(root).load();
     expect(restored[0]?.agentInstructions).toBe(instructions);
     expect(restored[0]?.agentAssets).toEqual(agentAssets);
     expect(restored[1]).not.toHaveProperty('agentInstructions');
+    expect(restored[2]?.agentInstructions).toBe(withMemory);
     store.save([{ ...base, agentInstructions: 'x'.repeat(5 * 1024 * 1024), agentAssets }]);
     expect(store.load()[0]).not.toHaveProperty('agentInstructions');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }

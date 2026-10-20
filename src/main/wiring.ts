@@ -27,6 +27,8 @@ import { mountLifecycleApi, type LifecycleApi } from './agents/lifecycle-api';
 import { createAgentLoop } from './agents/loop';
 import { childFeedbackTools } from './agents/child-feedback';
 import { delegationTools } from './agents/delegation';
+import { portableId } from './agents/pack/flows';
+import { writeAgentMemory } from './rules/memory';
 import type { AgentRun } from '../shared/agents';
 import type { SkillSuggestions } from '../shared/skill-suggest';
 import { mountTextTool, TEXT_ENV } from './engines/text-mcp';
@@ -441,7 +443,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       return { ...resolved, skills: runtime.skills, assets: { pluginDir: runtime.pluginDir, skillRoot: runtime.skillRoot },
         // Claude loads the plugin itself: its instructions only need the skills' qualified names (issue #101)
         instructions: resolvedHarness === 'cursor' ? `${resolved.instructions}\n\n${runtime.instructions}`
-          : [resolved.instructions, qualifiedSkillsLine(runtimePluginName(runtime.pluginDir), runtime.skills)].filter(Boolean).join('\n\n') };
+          // and its memory: the plugin carries the skills, not the memory (before, a Claude role never saw it nor its id)
+          : [resolved.instructions, qualifiedSkillsLine(runtimePluginName(runtime.pluginDir), runtime.skills), runtime.memory].filter(Boolean).join('\n\n') };
     },
     onRunEnded: run => loopRef.current?.ended(run),
     onRunOutcome: run => { routingVerdict(run); loopRef.current?.outcome(run); },
@@ -638,7 +641,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   addChatTools(childFeedbackTools(lifecycleApi));
   // parent-to-child delegation between role chats (ADR 0083): every chat's own endpoint, the caller is its token's chat
   addChatTools(delegationTools({ chats: manager, roles: () => agents.list(), settings: () => checkedDelegation(brain.settings().delegation),
-    engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), label: AGENT_LABEL, runs: () => manager.runs.list(), worktrees: gitWorktrees, skillTools }));
+    engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), label: AGENT_LABEL, runs: () => manager.runs.list(), worktrees: gitWorktrees, skillTools,
+    remember: (roleId, line) => writeAgentMemory(agentPacks.packs.root(), portableId(roleId), line) }));
   // the Judge's sampled reviews of finished runs (agents/judge-sample.ts): they spend tokens, so they run only in the
   // user's own app, never in tests or an agent's hidden run (judgeSamplingOn, issue #112), at most delegation.judgeDaily a day
   const judgeSampler = new JudgeSampler({ file: path.join(ctx.userData, 'judge-samples.json'), runs: () => manager.runs.list(),

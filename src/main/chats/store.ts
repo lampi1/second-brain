@@ -119,8 +119,9 @@ function extras(c: Record<string, unknown>): Partial<StoredChat> {
   const from = link(c.continuedFrom), by = link(c.continuedBy), route = validRoute(c.route), run = readRun(c.run);
   return {
     ...(readOwner(c.agent) ? { agent: readOwner(c.agent)! } : {}),
-    // Cursor carries two bounded skill documents in addition to the 8000-character profile.
-    ...(typeof c.agentInstructions === 'string' && c.agentInstructions.length <= (c.harness === 'cursor' && validAssets(c.agentAssets) ? 4 * 1024 * 1024 + 16384 : 8000) ? { agentInstructions: c.agentInstructions } : {}),
+    // Cursor carries two bounded skill documents in addition to the 8000-character profile; every role also carries its
+    // memory block (up to 4000 + 2000 characters with its hint, agents/pack/flows.ts) beside the role text and skills line
+    ...(typeof c.agentInstructions === 'string' && c.agentInstructions.length <= (c.harness === 'cursor' && validAssets(c.agentAssets) ? 4 * 1024 * 1024 + 16384 : 16384) ? { agentInstructions: c.agentInstructions } : {}),
     ...(validAssets(c.agentAssets) ? { agentAssets: c.agentAssets } : {}),
     ...(Array.isArray(c.agentSkills) && c.agentSkills.length <= 64 && c.agentSkills.every(x => typeof x === 'string' && /^[a-z0-9][a-z0-9_-]{0,79}$/.test(x)) ? { agentSkills: c.agentSkills as string[] } : {}),
     ...(c.agentChildren ? { agentChildren: sanitizeAgentChildren(c.agentChildren) } : {}),
