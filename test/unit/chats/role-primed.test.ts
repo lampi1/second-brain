@@ -1,5 +1,6 @@
 // The role text once per context (ADR 0089): a chat's first message carries its role frame; later messages, and the
-// first one after a restart that resumes the same session, do not; a compaction or a new session brings it back.
+// first one after a restart that resumes the same session, do not; a compaction or a new session brings it back. Also
+// which of its endpoint's tools a chat sees (ChatManager.chatToolShown), with the same manager.
 import { afterEach, describe, expect, it } from 'vitest';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -57,5 +58,20 @@ describe('role text once per context', () => {
     await m.send(chat.id, 'dopo la compattazione');
     expect(sent.at(-1)!.startsWith(ROLE)).toBe(true);
     expect(sent.at(-1)!.endsWith('dopo la compattazione')).toBe(true);
+  });
+});
+
+describe('the tools a chat sees on its own endpoint', () => {
+  it('the Orchestrator never sees delegation tools it cannot use; a root chat has no parent to ask; a child keeps them all', async () => {
+    const dir = tmp(), sent: string[] = [], sinks: SessionSink[] = [];
+    const m = manager(dir, sent, sinks);
+    const orch = await m.create({ harness: 'anthropic', cwd: tmp(), orchestrator: true, prompt: 'Ciao' });
+    for (const t of ['agent_delegate', 'agent_report', 'agent_ask_parent', 'agent_answer_child', 'agent_children', 'agent_child_feedback', 'agent_catalog', 'agent_learn_propose']) expect(m.chatToolShown(orch.id, t)).toBe(false);
+    expect(m.chatToolShown(orch.id, 'send_to_chat')).toBe(true);
+    const root = await m.create({ harness: 'anthropic', cwd: tmp(), prompt: 'Lavoro' });
+    expect(m.chatToolShown(root.id, 'agent_ask_parent')).toBe(false);
+    expect(m.chatToolShown(root.id, 'agent_report')).toBe(true);
+    expect(m.chatToolShown(root.id, 'agent_delegate')).toBe(true);
+    expect(m.chatToolShown('unknown', 'agent_ask_parent')).toBe(true);
   });
 });

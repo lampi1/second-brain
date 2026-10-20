@@ -147,6 +147,15 @@ describe('McpServer', () => {
     expect(init.json().result.instructions).toBe('chat instructions');
   });
 
+  it('a mount\'s instructions may depend on the route (a chat\'s endpoint says only what applies to it)', async () => {
+    const s = new McpServer({ name: 't', version: '0' });
+    s.mount('/mcp/chat/:chatId/:token', { name: 'c', instructions: p => `for ${p.chatId}`, tools: [] });
+    const port2 = await s.listen(0);
+    try {
+      expect((await request(port2, '/mcp/chat/x1/tok', rpc(1, 'initialize', {}))).json().result.instructions).toBe('for x1');
+    } finally { await s.close(); }
+  });
+
   it('gives each generic MCP session its own id (the browser uses it as the tab group)', async () => {
     const s1 = (await request(port, '/mcp', rpc(1, 'initialize', {}))).headers['mcp-session-id'] as string;
     const s2 = (await request(port, '/mcp', rpc(1, 'initialize', {}))).headers['mcp-session-id'] as string;

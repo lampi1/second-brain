@@ -46,3 +46,16 @@ you" and the chat list (`lib/chat-view.ts`) draws nothing: the app news or mail 
   sent with it; the role's default output is not written twice.
 - app_digest with since names waiting or failed chats already told (their text only when new) and says "PR invariate"
   when Task was not read again.
+
+## Revision (owner, 2026-10-20: «sistemare anche altre inefficienze di questo genere»)
+- The Orchestrator's frame says each thing once: its shipped text no longer lists the roles (`roleCatalogBrief` does)
+  nor the fast path (its rules do); a catalog still holding the old shipped lines word for word gets the current ones
+  (`RETIRED_LINES`), a line the user edited is kept.
+- What to do with app news (`WAKE_RULE`) is in the Orchestrator's rules, sent once per session; a wake carries the
+  label and the news only.
+- A chat's endpoint (`/mcp/chat/:chatId`) lists only the tools its kind can use (`ChatManager.chatToolShown`: the
+  Orchestrator does not delegate, report, ask a parent or rate a child, and has catalog and lessons on its own
+  endpoint; a root chat has no parent to ask). Nothing that works is hidden: each of them is refused for that chat.
+  Its instructions carry the browser's only when the chat has browser tools. No permission changes, no new prompts.
+- A turn whose result went with agent_report (`run.report.via`) adds no "finished" wake; a run-report block in a reply
+  still does. The report's summary becomes the chat's last line.
