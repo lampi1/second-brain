@@ -253,9 +253,10 @@ and Memoria runs them now and says what each did; every change is logged with "A
 ![The Script page: the brain's tested, reusable scripts as cards, with their language, last test and file](docs/screenshots/brain-scripts.webp)
 
 The scripts your agents wrote and tested live in the brain's `scripts/` folder, each with what it does, how to run it
-and its last test. Every chat can look them up before writing a new one; the Orchestrator adds, fixes and deletes them
-on its own, and every change to the brain (scripts, rules, skills, notes) lands in `changelog.md`. Both have their own
-page in the Brain section (ADR 0076). Nothing in the app runs a script.
+and its last test. Every chat can look them up before writing a new one and adds the ones it ran with success; a
+reusable command that worked with "Esegui" is saved by the app itself (no secrets, one script per command, ADR 0096);
+the Orchestrator fixes and deletes them on its own, and every change to the brain (scripts, rules, skills, notes) lands
+in `changelog.md`. Both have their own page in the Brain section (ADR 0076). Nothing in the app runs a script.
 
 ### Task in one page
 

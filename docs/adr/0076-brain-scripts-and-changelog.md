@@ -18,6 +18,8 @@ visibile in assoluto all'utente") · Builds on: ADR 0072 (a fresh brain starts e
    a changelog line the user sees. Nothing in the app runs a script: the workers run them with their own permissions.
 3. **Every chat can read them**: `brain_scripts` on each chat's own endpoint lists or finds scripts by words, so a worker
    reuses one before writing a new one. Workers do not write scripts into the brain; they hand them to the Orchestrator.
+   (Superseded by ADR 0096: workers add new scripts themselves with `brain_script_add`, and the app saves reusable
+   "Esegui" commands that worked.)
 4. **The changelog is a Markdown file in the brain**, `changelog.md`, newest first, one line per change:
    `- 2026-10-19 10:52 · script · added · scripts/x.mjs · Orchestrator · why` (`src/main/brain/changelog.ts`). Plain
    text the user can read and edit; the app writes it only through the tools above.
