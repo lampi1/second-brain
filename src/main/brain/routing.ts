@@ -65,6 +65,9 @@ const harnessAuto = (h: string, reg: ModelRegistry): boolean => reg.harnesses?.[
 export const isFable = (m: Pick<RegistryModel, 'id'> | null | undefined): boolean => !!m && /fable/i.test(m.id);
 /** does the engine take an effort (Claude's thinking budget)? */
 const takesEffort = (h: Harness): boolean => !!engineOf(h)?.caps.effort;
+/** The user's default effort is the Claude one (orchestratorChats.claudeEffort): another engine that takes an effort
+ *  (Cursor, through its thought_level) keeps its own setting (cursorReasoning) unless a row or the chat names one. */
+const defaultEffort = (h: Harness, defaults: { effort: Effort | null }): Effort | null => h === 'claude' ? defaults.effort : null;
 const looksClaude = (m: string | null): boolean => /\b(claude|opus|sonnet|haiku|fable|mythos)\b/i.test(String(m ?? '').replace(/[-_.]/g, ' '));
 
 // ── task kind ───────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -214,13 +217,13 @@ export function resolve(table: Pick<RoutingTable, 'routes'> | null, item: { kind
   const defaultHarness = fallback ?? defaults.harness;
   const base = usable
     ? { harness: usable.harness as Harness, model: usable.model as string | null, effort: usable.effort ?? null }
-    : { harness: defaultHarness, model: defaults.models[defaultHarness] || null, effort: takesEffort(defaultHarness) ? defaults.effort : null };
+    : { harness: defaultHarness, model: defaults.models[defaultHarness] || null, effort: defaultEffort(defaultHarness, defaults) };
   const harness = ask.harness ?? base.harness;
   // a model belongs to its harness: switching harness takes that harness's default model, never the other one's
   const sameEngine = harness === base.harness;
   const model = ask.model !== undefined ? ask.model : (sameEngine ? base.model : defaults.models[harness] || null);
   const m = modelRow(model, reg);
-  let effort = ask.effort !== undefined ? ask.effort : (!takesEffort(harness) ? null : sameEngine ? base.effort : defaults.effort);
+  let effort = ask.effort !== undefined ? ask.effort : (!takesEffort(harness) ? null : sameEngine ? base.effort : defaultEffort(harness, defaults));
   // an effort nobody named that the chosen model lacks is dropped (the CLI's default), never an error
   if (!ask.effort && effort && m && !(m.efforts ?? []).includes(effort)) effort = null;
   if (model && m && m.harness !== harness) return { error: `${m.id} gira solo su ${m.harness}, non su ${harness}` };

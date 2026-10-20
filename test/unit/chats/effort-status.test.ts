@@ -22,6 +22,14 @@ describe('Effort request and observed state', () => {
     expect(submitEffort(initialEffort(true, 'max'), 'xhigh')).toMatchObject({ submitted: 'xhigh', effective: null, pending: false });
     expect(submitEffort(initialEffort(true, 'high'), 'medium').pending).toBe(true);
   });
+  it('keeps the reported effort on a later turn sent without one, and drops it only for a different value (turn 2)', () => {
+    const reported = observeEffort(initialEffort(true, 'low'), 'low');
+    const turn2 = submitEffort(reported, null);
+    expect(turn2).toMatchObject({ effective: 'low', effectiveSource: 'provider', submitted: null, pending: false });
+    expect(submitEffort(turn2, 'low')).toMatchObject({ effective: 'low', effectiveSource: 'provider', submitted: 'low', pending: false });
+    const changed = submitEffort(selectEffort(turn2, 'high'), 'high');
+    expect(changed).toMatchObject({ requested: 'high', submitted: 'high', effective: null, effectiveSource: 'unknown', pending: false });
+  });
   it('takes the engine\'s own report as the effective effort, and an unreadable one as unknown (issue #100)', () => {
     const asked = initialEffort(true, 'low');
     expect(observeEffort(asked, 'low')).toMatchObject({ effective: 'low', effectiveSource: 'provider', pending: false });
