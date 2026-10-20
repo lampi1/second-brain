@@ -51,13 +51,16 @@ export interface DelegationDeps {
   runs: () => readonly AgentRun[];
   /** the brain's skills with their tools: a part whose skill needs tools its role lacks is said in the answer (#93) */
   skillTools?: SkillToolsSource;
+  /** adds one line to a role's own memory (agents/<id>/memory.md, rules/memory.ts writeAgentMemory): agent_report's
+   *  `remember`; absent = the field is refused */
+  remember?: (roleId: string, line: string) => void;
   /** the clock (tests) */
   now?: () => number;
 }
 
 export const TASKS_MAX = 10;
 const TITLE_MAX = 80;
-const QUESTION_MAX = 1000, OPTIONS_MAX = 6, ANSWER_MAX = 4000;
+const QUESTION_MAX = 1000, OPTIONS_MAX = 6, ANSWER_MAX = 4000, REMEMBER_MAX = 3, REMEMBER_LINE = 300;
 
 const callerOf = (params: Record<string, string>): string => {
   const id = params.chatId;
@@ -162,18 +165,40 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     }
   }
 
-  function report(a: Record<string, unknown>, callerId: string): unknown {
+  /** agent_report's `remember`: up to 3 short lines for the reporting chat's role memory, checked before the report and
+   *  written once it is accepted (a refused report writes nothing, so a retry does not count twice) */
+  function rememberLines(a: Record<string, unknown>, self: ChatSummary | undefined): (() => number) {
+    if (a.remember === undefined) return () => 0;
+    const lines = Array.isArray(a.remember) && a.remember.length <= REMEMBER_MAX && a.remember.every(l => typeof l === 'string' && l.trim() && l.length <= REMEMBER_LINE && !/[\x00-\x1f\x7f]/.test(l))
+      ? (a.remember as string[]).map(l => l.trim()) : null;
+    if (!lines) throw new Error(`agent_report: remember = up to ${REMEMBER_MAX} single lines of at most ${REMEMBER_LINE} characters.`);
+    if (!lines.length) return () => 0;
+    const roleId = self?.agent?.source === 'catalog' ? self.agent.id : null;
+    if (!roleId || !d.remember) throw new Error('agent_report: remember works only in a role chat with a brain; leave it out.');
+    // the report is already delivered when this runs: a failed write is logged, never turned into a refused report
+    return () => {
+      let written = 0;
+      try { for (const line of lines) { d.remember!(roleId, line); written++; } }
+      catch (e) { log.warn('agents', 'role memory not written', { chat: self!.id, data: { role: roleId, written }, cause: e instanceof Error ? e.message : String(e), hint: 'Check that a brain folder is chosen and writable' }); return written; }
+      log.info('agents', 'role memory written', { chat: self!.id, data: { role: roleId, lines: written } });
+      return written;
+    };
+  }
+
+  function report(all: Record<string, unknown>, callerId: string): unknown {
     const self = chat(callerId);
+    // `remember` is the role memory's, not the result's: the result keeps its exact shape (shared/delegation.ts checkResult)
+    const { remember: _remember, ...a } = all, write = rememberLines(all, self);
     // a root chat the Orchestrator opened (app_create_chat) reports to the Orchestrator: its contract's criteria are prose,
     // so every criterion it answers is checked for shape only (issue #93)
     if (self && !self.delegation && !self.parentId && !self.isOrchestrator && self.run?.startedBy === 'orchestrator' && d.chats.reportRoot) {
-      const done = d.chats.reportRoot(callerId, checkResult(a, []));
-      return { reported: true, to: 'orchestrator', delivered: done.delivered, ...(done.delivered ? {} : { note: 'No Orchestrator is open: the result stays on your chat and its run.' }) };
+      const done = d.chats.reportRoot(callerId, checkResult(a, [])), remembered = write();
+      return { reported: true, to: 'orchestrator', delivered: done.delivered, ...(remembered ? { remembered } : {}), ...(done.delivered ? {} : { note: 'No Orchestrator is open: the result stays on your chat and its run.' }) };
     }
     if (!self?.delegation || !self.parentId) throw new Error('agent_report: only a chat the Orchestrator or a parent started reports with it (agent_delegate or app_create_chat). Answer in this chat instead.');
     const result = checkResult(a, self.delegation.doneWhen);
-    const done = d.chats.reportDelegation(callerId, result);
-    return { reported: true, parentId: done.parentId, delivered: done.delivered };
+    const done = d.chats.reportDelegation(callerId, result), remembered = write();
+    return { reported: true, parentId: done.parentId, delivered: done.delivered, ...(remembered ? { remembered } : {}) };
   }
 
   function children(callerId: string): unknown {
@@ -248,13 +273,14 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     run: async (a, ctx) => JSON.stringify(await delegate(a, callerOf(ctx.params))),
   }, {
     name: 'agent_report',
-    description: 'Your one result for the chat that started you (your parent, or the Orchestrator for a chat it opened): outcome (done | partial | blocked), summary (one or two sentences), output (the deliverable), doneWhen (every criterion of your contract, exactly as written, with met and evidence), optional questions. It reaches your parent at once; call it once, at the end. The app shows output in your chat as your answer: do not write it in the chat too.',
+    description: 'Your one result for the chat that started you (your parent, or the Orchestrator for a chat it opened): outcome (done | partial | blocked), summary (one or two sentences), output (the deliverable), doneWhen (every criterion of your contract, exactly as written, with met and evidence), optional questions, optional remember (lines for your role\'s memory). It reaches your parent at once; call it once, at the end. The app shows output in your chat as your answer: do not write it in the chat too.',
     inputSchema: { type: 'object', required: ['outcome', 'summary', 'output', 'doneWhen'], additionalProperties: false, properties: {
       outcome: { type: 'string', enum: ['done', 'partial', 'blocked'] }, summary: str, output: str,
       doneWhen: { type: 'array', items: { type: 'object', required: ['criterion', 'met'], additionalProperties: false, properties: { criterion: str, met: { type: 'boolean' }, evidence: str } } },
       questions: { type: 'array', items: str, maxItems: 8 },
       goalChangedByUser: { type: 'boolean', description: 'true when the user wrote to you directly and changed your goal (you followed the user)' },
       newGoal: { ...str, description: 'with goalChangedByUser: the goal the user gave you' },
+      remember: { type: 'array', items: str, maxItems: REMEMBER_MAX, description: 'optional, up to 3 short lines for YOUR role\'s memory (read at every launch of your role): facts about this user\'s setup a future run would otherwise rediscover or ask again; never the task result or a general rule' },
     } },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: (a, ctx) => JSON.stringify(report(a, callerOf(ctx.params))),

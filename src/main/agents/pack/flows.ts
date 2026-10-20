@@ -36,6 +36,8 @@ interface BaseToken { root: string; staging: string; expires: number; busy: bool
 interface ExportToken extends BaseToken { kind: 'export'; profile: AgentProfile; target: PackTarget; manifest: AgentPackManifest; instructions: string; skills: PackFiles; rules: PackFiles; excluded: Set<string>; extraAllowed: Set<string>; files: PackFiles; findings: PackFinding[]; warnings: string[] }
 interface ImportToken extends BaseToken { kind: 'import'; inspection: PackInspection; findings: PackFinding[]; collision: PackImportReview['collision'] }
 const tokenId = (): string => randomBytes(16).toString('hex');
+/** When and what a role chat writes to its own memory: the `remember` field of agent_report, at the end of a job. */
+export const REMEMBER_HINT = 'To add to it: the `remember` field of agent_report, at the end (up to 3 short lines). Only facts about this user\'s setup that a future run of your role would otherwise have to rediscover or ask again (where things are, conventions, who decides what, a dead end to skip); never this task\'s result, never a general rule. Leave it out when there is no such fact.';
 export const portableId = (id: string): string => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id) && id.length <= 64 && !/[a-f0-9]{8}-[a-f0-9]{4}-/.test(id) ? id : `agent-${createHash('sha256').update(id).digest('hex').slice(0, 16)}`;
 const secretFinding = (f: PackFinding): boolean => !['user-path', 'short-user-name', 'home-path', 'email', 'guid', 'ipv4-private', 'internal-host', 'deny'].includes(f.rule);
 
@@ -61,7 +63,7 @@ export class AgentPackFlows {
   /** The plugin a launch runs with: the role's own know-how, its default and linked skills and the skills this launch
    *  asks for (`launch`, a delegation's or app_create_chat's), and nothing else: a skill outside it is not there to load
    *  (and the role gate refuses a call to it). A launch skill that does not exist refuses the start, by name. */
-  runtime(id: string, launch: readonly string[] = []): { pluginDir: string; skillRoot: string; instructions: string; skills: string[] } {
+  runtime(id: string, launch: readonly string[] = []): { pluginDir: string; skillRoot: string; instructions: string; memory: string; skills: string[] } {
     const profile = this.profile(id), files = this.ownSkills(profile), all = this.deps.sharedSkills?.() ?? [];
     const missing = launch.filter(name => !all.some(s => s.name === name));
     if (missing.length) throw new Error(`Skill non trovata: ${missing.join(', ')} (pagina Skill).`);
@@ -97,11 +99,14 @@ export class AgentPackFlows {
     let shared = '';
     try { const file = brainPath(this.root(), 'memory/shared.md'); if (fs.existsSync(file) && fs.statSync(file).size <= 256 * 1024) shared = fs.readFileSync(file, 'utf8').trim().slice(-2000); } catch { /* none */ }
     const linked = loaded.filter(n => n !== own);
-    return { pluginDir, skills: loaded, skillRoot: path.join(pluginDir, 'skills'), instructions: [instructions, // these lines reach only an engine without the plugin loader (Cursor: no Skill tool), so they name the files to read;
+    // every engine gets the memory block (Claude too: wiring.ts adds it beside the qualified skill names); it is written
+    // through agent_report's `remember` (delegation.ts), no shell call and no permission prompt
+    const memoryText = [shared ? `Shared memory (memory/shared.md):\n${shared}` : '',
+      `Your memory (agents/${own}/memory.md)${memory ? `:\n${memory}` : ': empty so far.'}\n${REMEMBER_HINT}`].filter(Boolean).join('\n\n');
+    return { pluginDir, skills: loaded, skillRoot: path.join(pluginDir, 'skills'), memory: memoryText, instructions: [instructions, // these lines reach only an engine without the plugin loader (Cursor: no Skill tool), so they name the files to read;
       // Claude gets the qualified names instead (wiring.ts qualifiedSkillsLine)
       linked.length ? `Your skills (load the one that fits the job: read ${path.join(pluginDir, 'skills')}/<name>/SKILL.md): ${linked.join(', ')}.` : '',
-      shared ? `Shared memory (memory/shared.md):\n${shared}` : '',
-      `Your memory (agents/${own}/memory.md; add a line with the product memory writer: agent "<brain>" "${own}" "…")${memory ? `:\n${memory}` : ': empty so far.'}`, `Skill files: ${path.join(pluginDir, 'skills')}`].filter(Boolean).join('\n\n') };
+      memoryText, `Skill files: ${path.join(pluginDir, 'skills')}`].filter(Boolean).join('\n\n') };
   }
   private sweep(): void { for (const [key, item] of this.tokens) if (!item.busy && item.expires <= this.now()) this.cancel(key); }
   private base(): BaseToken {
