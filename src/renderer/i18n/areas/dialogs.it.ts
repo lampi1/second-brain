@@ -151,6 +151,7 @@ export const dialogsIt = {
   'dialogs.sidebar.label': 'Sezioni',
   'dialogs.sidebar.work': 'Lavoro',
   'dialogs.sidebar.brain': 'Brain',
+  'dialogs.sidebar.trends': 'Andamento',
   'dialogs.sidebar.app': 'App',
   'dialogs.sidebar.map': 'Mappa 3D',
   'dialogs.sidebar.mapShortcut': 'Ctrl+Shift+M',

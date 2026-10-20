@@ -153,6 +153,7 @@ export const dialogsEn: typeof dialogsIt = {
   'dialogs.sidebar.label': 'Sections',
   'dialogs.sidebar.work': 'Work',
   'dialogs.sidebar.brain': 'Brain',
+  'dialogs.sidebar.trends': 'Trends',
   'dialogs.sidebar.app': 'App',
   'dialogs.sidebar.map': '3D Map',
   'dialogs.sidebar.mapShortcut': 'Ctrl+Shift+M',

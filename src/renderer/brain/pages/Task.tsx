@@ -15,18 +15,19 @@
 // Used by brain/index.tsx (page 'task').
 import type { DevopsComment, DevopsDetail, DevopsItem, DevopsNews, DevopsPr, DevopsPrRef, TasksState, DevopsTest } from '@shared/contract';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { EVERY_CHOICES, markTasksRead, refreshTasks, setTasks, useTasks } from '../../store/tasks';
+import { markTasksRead, refreshTasks, useTasks } from '../../store/tasks';
 import { fmt } from '../lib/format';
 import { BUILD_WORDS, byState, daysSince, firstName, hue, initials, lastComment, outcomeLabel, prWait, sinceLabel, stateTone, stuckDays, testSummary } from '../lib/tasks';
 import { normTables } from '../types';
 import { useBrain } from '../api';
 import { ownerOf } from '../lib/text';
 import { Empty, Loading } from '../components/States';
-import { copyText, ExtLink, IconCopy, IconExternal, Pill, Section, Seg, toast, type Navigate, type Tone } from '../components/ui';
+import { copyText, ExtLink, IconCopy, IconExternal, Pill, Section, toast, type Navigate, type Tone } from '../components/ui';
 import { Standup } from './day';
 import { QaSection } from './TaskQa';
 import { RecordDiscussButton } from '../components/RecordDiscussButton';
 import { HelpTip } from '../../components/HelpTip';
+import { IconSettings } from '../../components/Icons';
 import { t as tr } from '../../i18n';
 import '../../styles/agent-catalog.css';
 import './worklog.css';
@@ -313,23 +314,16 @@ function ErrorBanner({ e }: { e: NonNullable<TasksState['error']> }) {
   );
 }
 
-/** The automatic read, its interval and the alerts' sound: the page's toolbar, as Agenti's filters. */
-function AutoControls({ s }: { s: TasksState }) {
-  const sound = s.sound;
-  const every = (EVERY_CHOICES as readonly number[]).includes(s.everyMin) ? s.everyMin : null;
-  const onOff = [{ id: 'off', label: tr('brainPages.task.off') }, { id: 'on', label: tr('brainPages.task.on') }];
+/** The automatic read in one line, with a link to its settings (Settings → Notifiche, components/TaskReadSettings.tsx):
+ *  the controls left the top of this work page (ADR 0101). */
+function AutoState({ s }: { s: TasksState }) {
+  const every = s.everyMin < 60 ? `${s.everyMin} min` : `${s.everyMin / 60} h`;
   return (
-    <div className="catalog-filters" data-testid="task-auto">
-      <div className="tk-field"><span>{tr('brainPages.task.auto')}</span>
-        <Seg label={tr('brainPages.task.autoLabel')} value={s.enabled ? 'on' : 'off'} onChange={v => { setTasks({ enabled: v === 'on' }); }} items={onOff} /></div>
-      <div className="tk-field"><span>{tr('brainPages.task.every')}</span>
-        <Seg label={tr('brainPages.task.everyLabel')} value={every ?? -1} onChange={v => { setTasks({ everyMin: v }); }}
-          items={EVERY_CHOICES.map(m => ({ id: m as number, label: m < 60 ? `${m} min` : `${m / 60} h` }))} /></div>
-      {every === null && <span className="tk-next">({s.everyMin} min)</span>}
-      <div className="tk-field"><span data-tip={tr('brainPages.task.soundTip')}>{tr('brainPages.task.sound')}</span>
-        <Seg label={tr('brainPages.task.sound')} value={sound ? 'on' : 'off'} onChange={v => { setTasks({ sound: v === 'on' }); }} items={onOff} /></div>
-      {s.enabled && s.nextAt && <span className="tk-next">{tr('brainPages.task.next', { when: fmt.when(s.nextAt) })}</span>}
-    </div>
+    <p className="tk-auto-state small muted" data-testid="task-auto-state">
+      <span>{tr('brainPages.task.readState', { on: s.enabled, every })}{s.enabled && s.nextAt ? ` · ${tr('brainPages.task.next', { when: fmt.when(s.nextAt) })}` : ''}</span>
+      {' · '}<button type="button" className="link-btn" data-testid="task-settings-link" onClick={() => { void import('../../actions').then(a => a.go({ page: 'impostazioni', arg: 'notifications' })); }}>
+        <IconSettings /> {tr('brainPages.task.settingsLink')}</button>
+    </p>
   );
 }
 
@@ -438,7 +432,7 @@ export function TaskPage({ nav }: { nav?: Navigate }) {
     <section className="tk-page" aria-label={tr('brainPages.task.title')} data-testid="task-page">
       <Head s={s} lead={lead} />
       {s.error && <ErrorBanner e={s.error} />}
-      <AutoControls s={s} />
+      <AutoState s={s} />
 
       {never ? (s.running ? <Loading label={tr('brainPages.task.firstRead')} lines={4} /> : <p className="tk-empty" data-testid="task-never"><b>{tr('brainPages.task.neverTitle')}</b> {tr('brainPages.task.neverBody')}</p>) : (
         <>
