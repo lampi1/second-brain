@@ -35,6 +35,9 @@ compacted only on the next day, on an expired cache (ADR 0031: ~2.10 $ for a col
 - `read_page` of a page the chat read before (same URL and filter) returns only the new or changed lines with their
   parents and the counts of the rest (`browser/delta.ts`); `full: true` returns the whole tree. Refs of elements that
   still exist are stable, so an unchanged element prints the same line.
+- A Sentinel's first message carries a review pack gathered with git (`agents/review-pack.ts`: branch, base, commits,
+  changed and untracked files, the diff up to 12 000 characters, else how to read it per file) instead of the 5-15 git
+  calls each reviewer made to rediscover it. Only the repository's facts: the review stays independent (ADR 0091).
 - `app_digest since:"last"` answers in full after the Orchestrator's context began again.
 - An Orchestrator quiet for most of an hour with 60k+ of context compacts while its cache is warm
   (`continuity.ts orchestratorWarmDue`, setting `orchestratorDayCompact`).
@@ -43,4 +46,4 @@ compacted only on the next day, on an expired cache (ADR 0031: ~2.10 $ for a col
 - Estimated (not measured: no transcripts were available to the audit) 175-370 $/week less on the owner's measured week;
   the next step is to measure: cache read vs creation on the first call of a new session, per chat kind.
 - A clean result no longer interrupts the Orchestrator: it learns it at its next turn, and "N novità in attesa" shows it.
-- Not done here: Claude Code's MCP tool search (its setting name was not verified on the bundled engine), a deterministic review pack for reviewers, `now.md` written by the app.
+- Not done here: Claude Code's MCP tool search (its setting name was not verified on the bundled engine), `now.md` written by the app.

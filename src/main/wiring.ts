@@ -18,6 +18,7 @@ import { qualifiedSkillsLine, runtimePluginName } from './agents/role-gate';
 import { createAgentPacks } from './agents/pack/wiring';
 import { chatLearnTool } from './agents/pack/learning';
 import { estimateTask, SimilarIndex } from './agents/task-estimate';
+import { reviewPack } from './agents/review-pack';
 import { estimateLine } from '../shared/task-estimate';
 import { agentCatalogTool, CATALOG_GUIDANCE, roleCatalogBrief, skillsSuggestTool } from './agents/discovery';
 import { SkillSuggester } from './skills/suggest';
@@ -529,6 +530,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     coldHandoff: () => brain.settings().contextHandoff,
     orchestratorDayCompact: () => brain.settings().orchestratorDayCompact !== false,
     checkpoints: () => !process.env.SB_TEST,
+    reviewPack: cwd => reviewPack(cwd),
     coldIdleMs: () => coldTest?.[0] ?? (brain.settings().coldHandoffMin ?? 50) * 60_000,
     ...(coldTest ? { cacheTtlMs: coldTest[1], coldEveryMs: coldTest[2] } : {}),
     memTool: () => {

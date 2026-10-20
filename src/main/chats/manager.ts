@@ -78,6 +78,8 @@ import { recallWarning, type Recall } from '../search/hybrid/recall';
 export interface ChatManagerOptions {
   /** the roles in a few lines, for the Orchestrator's first message of a session (agents/discovery.ts roleCatalogBrief) */
   roleCatalogBrief?: () => string;
+  /** the review pack under a Sentinel's first message (agents/review-pack.ts): the change it checks, gathered with git */
+  reviewPack?: (cwd: string) => Promise<string>;
   /** ADR 0103: record the files before each turn of a work chat in a git repository (checkpoints.ts); absent = off */
   checkpoints?: () => boolean;
   /** how long a child's result waits for its siblings' (default CHILD_RESULTS_MS) */
@@ -587,7 +589,11 @@ export class ChatManager implements ChatService {
     const title = req.title?.trim() || (req.prompt?.trim() ? cut(req.prompt, 50) : forkOf ? 'Fork' : 'Nuova chat');
     // an agent's chat with a prompt starts with its first message, through the CPU queue (ADR 0036); a warm engine is
     // already running: adopting it is no new start (its first turn still asks the queue)
-    const prompt = req.prompt?.trim() ? req.prompt : null;
+    const given = req.prompt?.trim() ? req.prompt : null;
+    // a Sentinel checks a change: the app gathers it (branch, base, commits, files, diff) instead of 5-15 git calls
+    const pack = given && agent.owner.source === 'catalog' && agent.owner.id === 'sentinel' && this.opts.reviewPack
+      ? await this.opts.reviewPack(cwd).catch(e => { log.warn('chats', 'review pack not gathered', { cause: errText(e), hint: 'the Sentinel reads the change itself' }); return ''; }) : '';
+    const prompt = given && pack ? `${given}\n\n${pack}` : given;
     const viaQueue = by !== 'user' && !!prompt && !!this.admission;
     const r: Rec = {
       s: {
