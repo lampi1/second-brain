@@ -19,15 +19,16 @@ it('resolves a Claude slug back to the real folder, longest name first', () => {
   const home = temp();
   fs.mkdirSync(path.join(home, 'work', 'my'), { recursive: true });
   fs.mkdirSync(path.join(home, 'work', 'my-app'), { recursive: true });
-  expect(resolveSlug(slugOf(path.join(home, 'work', 'my-app')), 'linux')).toBe(path.join(home, 'work', 'my-app'));
-  expect(resolveSlug(slugOf(path.join(home, 'work', 'missing')), 'linux')).toBeNull();
+  // this machine's platform: the temp folder is a real path of it (a drive letter on Windows)
+  expect(resolveSlug(slugOf(path.join(home, 'work', 'my-app')), process.platform)).toBe(path.join(home, 'work', 'my-app'));
+  expect(resolveSlug(slugOf(path.join(home, 'work', 'missing')), process.platform)).toBeNull();
 });
 
 it('prefers the parent of the repos the CLIs already worked in', () => {
   const home = temp(), code = path.join(home, 'clienti', 'acme');
   for (const name of ['shop', 'api']) { repo(path.join(code, name)); fs.mkdirSync(path.join(home, '.claude', 'projects', slugOf(path.join(code, name))), { recursive: true }); }
   repo(path.join(home, 'Projects', 'toy'));
-  expect(detectProjectsFolder({ home, platform: 'linux' })).toEqual({ path: code, repos: 2, source: 'cli' });
+  expect(detectProjectsFolder({ home, platform: process.platform })).toEqual({ path: code, repos: 2, source: 'cli' });
 });
 
 it('finds a usual place with git repos and never proposes home or the brain', () => {

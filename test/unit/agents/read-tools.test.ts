@@ -39,7 +39,9 @@ describe('declared read-only tools', () => {
     expect(ok('node ./tools/azure-status.mjs --json')).toBe(true);
     expect(ok('node.exe tools/my-tasks.mjs 24')).toBe(true);
     expect(ok('node tools/my-tasks.mjs | head -5')).toBe(true);
-    expect(ok(`node ${path.join(root, 'tools', 'my-tasks.mjs')}`, { ...scripts, cwd: os.tmpdir() })).toBe(true);
+    // an absolute path with forward slashes (the parser drops backslashes, so a Windows path written with them stays
+    // refused: fail closed)
+    expect(ok(`node ${path.join(root, 'tools', 'my-tasks.mjs').replace(/\\/g, '/')}`, { ...scripts, cwd: os.tmpdir() })).toBe(true);
     expect(ok('node tools/air-health.mjs 24')).toBe(false); // declared, missing
     expect(ok('node tools/evil.mjs')).toBe(false); // not declared
     expect(ok('node tools/my-tasks.mjs', { ...scripts, cwd: os.tmpdir() })).toBe(false); // another file from another folder
