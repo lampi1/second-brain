@@ -125,6 +125,9 @@ export class BrainModelService {
     };
   }
 
+  /** The change log alone, newest first, with what can still be undone (the morning block, ADR 0102): no skill or memory read. */
+  changes(): BrainChange[] { return this.log.list(this.restorer()); }
+
   /** Runs every job (or one) once; a second call while one runs waits for it. `auto`: the app started it by itself (its
    *  changes are announced in the feed, `applied`). */
   maintain(job?: MaintenanceJobId, opts: { auto?: boolean } = {}): Promise<BrainModelState> {

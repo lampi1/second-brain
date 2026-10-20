@@ -24,6 +24,8 @@ import type { CreateBrainRequest, CreatedBrain } from './brain-create';
 import type { OwnerProfile, ProfileResult, ProfileSave } from './profile';
 import type { AppUpdateState, UpdateCheckpointAnswer, UpdateCheckpointRequest, UpdateRecovery } from './app-update';
 import type { CloudAgent, CloudApplyResult, CloudCaps, CloudStartRequest, CloudState } from './cloud';
+import type { MorningOp, MorningState } from './morning';
+export type { MorningBrief, MorningChange, MorningCloud, MorningIdea, MorningNext, MorningOp, MorningOutcome, MorningPr, MorningRun, MorningStalled, MorningState } from './morning';
 import type { RunEstimates } from './task-estimate';
 import type { AgentImages } from './agent-images';
 export type { CloudAgent, CloudApplyResult, CloudCaps, CloudEngine, CloudMessage, CloudReady, CloudStartRequest, CloudState, CloudStatus } from './cloud';
@@ -1229,6 +1231,9 @@ export interface InvokeMap {
   'brainmodel:link': [{ skill: string; agentId: string; on: boolean }, BrainModelState];
   /** Classificatori (read-only): the routing table with history and measured results, recent agent choices */
   'classifiers:state': [void, ClassifiersState];
+  /** the morning block (ADR 0102, main/morning/): presence = the user is here (the block opens on the first presence of
+   *  the day or after 4 h away), get = the brief now (Ctrl+J's fallback), dismiss = Esc / Ok (not again that day) */
+  'morning:brief': [{ op: MorningOp } | undefined, MorningState];
   'setup:get': [void, SetupState];
   'setup:save': [{ preferences: SetupDraft; status: 'draft' | 'completed' | 'skipped' }, SetupState];
   /** the owner's profile in the brain's me.md (src/main/brain/profile.ts) */
@@ -1521,7 +1526,7 @@ export const INVOKE_CHANNELS = [
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
   'agents:list', 'skills:suggest', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'agents:estimates', 'run:outcome', 'agents:restoreVersion', 'avatars:get', 'avatars:set', 'avatars:reset', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
-  'agents:exportPlan', 'agents:exportFix', 'agents:export', 'brain:share', 'agents:importInspect', 'agents:importApply', 'agents:importCancel', 'brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'brainmodel:link', 'classifiers:state', 'agents:trialDecide', 'agents:lifecycleDecide',
+  'agents:exportPlan', 'agents:exportFix', 'agents:export', 'brain:share', 'agents:importInspect', 'agents:importApply', 'agents:importCancel', 'brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'brainmodel:link', 'classifiers:state', 'morning:brief', 'agents:trialDecide', 'agents:lifecycleDecide',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'chat:undoTurn', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
   'settings:undo', 'settings:propose', 'settings:pending', 'settings:confirm', 'estimate:record', 'brain:api',

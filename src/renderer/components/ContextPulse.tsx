@@ -1,4 +1,5 @@
-// Quiet Battito cards for agent, search and file contexts. All mutations are explicit clicks through typed IPC.
+// Quiet Battito cards for agent, search and file contexts, and its board (at most 3 cards: the empty Grindhouse under the
+// morning block and Dashboard → Spunti, ADR 0102). All mutations are explicit clicks through typed IPC.
 import { useEffect, useRef, useState } from 'react';
 import type { PulseCard, PulseList, PulsePlace } from '@shared/pulse';
 import { sb } from '../sb';
@@ -15,7 +16,10 @@ export function FilePulse({ path }: { path: string }) {
   const place = filePulsePlace(path, brainRoot);
   return place ? <ContextPulse key={place} place={place} /> : null;
 }
-export function ContextPulse({ place }: { place: PulsePlace }) {
+/** The Battito's board: at most three of its 'board' cards (the empty Grindhouse, Dashboard → Spunti). */
+export function PulseBoard() { return <ContextPulse place="board" max={3} title={t('alive.pulse.board')} />; }
+
+export function ContextPulse({ place, max = 2, title }: { place: PulsePlace; max?: number; title?: string }) {
   const [data, setData] = useState<{ place: PulsePlace; value: PulseList } | null>(null);
   const [failed, setFailed] = useState(false), [revision, refresh] = useState(0);
   useEffect(() => {
@@ -31,11 +35,11 @@ export function ContextPulse({ place }: { place: PulsePlace }) {
     return () => { live = false; off(); clearInterval(timer); };
   }, [place, revision]);
   const value = data?.place === place ? data.value : null;
-  const cards = value?.status.on ? contextCards(value.cards, place) : [];
+  const cards = value?.status.on ? contextCards(value.cards, place, max) : [];
   if (failed) return <p role="status">{t('contextPulse.error')} <button type="button" className="link-btn" onClick={() => refresh(n => n + 1)}>{t('studio.retry')}</button></p>;
   if (!cards.length) return null;
-  return <aside className="context-pulse" aria-label={t('contextPulse.title')} data-testid="context-pulse" data-place={place}>
-    <h3>{t('contextPulse.title')}</h3>
+  return <aside className={`context-pulse${place === 'board' ? ' pulse-board' : ''}`} aria-label={title ?? t('contextPulse.title')} data-testid="context-pulse" data-place={place}>
+    <h3>{title ?? t('contextPulse.title')}</h3>
     {cards.map(card => <ContextCard key={card.id} card={card} canSave={value!.status.canSave} saveReason={value!.status.saveReason} changed={() => refresh(n => n + 1)} />)}
   </aside>;
 }

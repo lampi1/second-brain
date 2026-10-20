@@ -51,4 +51,8 @@ export const aliveIt = {
   'alive.approval.confirmDiscard': 'La proposta esce dalla lista; il Battito non cambia. Scarto?',
   'alive.approval.evidence': (p: { n: number }) => `${p.n} carte come prova`,
   'alive.approval.done': (p: { name: string }) => `Proposta di ${p.name} decisa.`,
+  'alive.next.pr': (p: { title: string }) => `Niente ti aspetta: la build di «${p.title}» è rossa`,
+  'alive.next.approvals': (p: { n: number }) => `Niente ti aspetta: ${p.n === 1 ? '1 proposta' : `${p.n} proposte`} da approvare`,
+  'alive.next.stalled': (p: { title: string; min: number }) => `Niente ti aspetta: «${p.title}» è ferma da ${p.min} min`,
+  'alive.next.idea': (p: { title: string }) => `Niente ti aspetta: «${p.title}» è da riprendere`,
 };

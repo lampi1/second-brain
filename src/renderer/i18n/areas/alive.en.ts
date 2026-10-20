@@ -50,4 +50,8 @@ export const aliveEn: typeof aliveIt = {
   'alive.approval.confirmDiscard': 'The proposal leaves the list; the Pulse does not change. Discard it?',
   'alive.approval.evidence': (p: { n: number }) => `${p.n} cards as evidence`,
   'alive.approval.done': (p: { name: string }) => `${p.name}’s proposal decided.`,
+  'alive.next.pr': (p: { title: string }) => `Nothing waits for you: the build of “${p.title}” is red`,
+  'alive.next.approvals': (p: { n: number }) => `Nothing waits for you: ${p.n === 1 ? '1 proposal' : `${p.n} proposals`} to approve`,
+  'alive.next.stalled': (p: { title: string; min: number }) => `Nothing waits for you: “${p.title}” stalled for ${p.min} min`,
+  'alive.next.idea': (p: { title: string }) => `Nothing waits for you: “${p.title}” is due`,
 };

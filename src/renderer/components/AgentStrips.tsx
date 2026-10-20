@@ -23,6 +23,7 @@ import { DelegationCard, KidsBar, TreeRails } from './DelegationCard';
 import { AgentAvatar } from './AgentAvatar';
 import { go, toggleMaximize } from '../actions';
 import { originOf } from '../lib/chat-origin';
+import { GrindhouseEmpty } from './MorningBlock';
 import '../styles/alive.css';
 import { pairOf, pairStyle } from '../lib/pairs';
 import { useCloudIds } from '../store/cloud';
@@ -92,7 +93,8 @@ export function AgentStrips() {
       <div className="agent-pane-content">{tile.kind === 'chat' ? <ChatTile chatId={tile.id} index={chatIndices.get(key)} maximized={!!max} /> : <BrowserTile tabId={tile.id} maximized={!!max} />}</div>
     </div>;
   };
-  if (!shown.length) return clouds ? null : <p className="home-calm" data-testid="agents-empty">{tr('home.emptyAgents')}</p>;
+  // no strip: the morning block and the Battito's board for a user with history, the first-run text otherwise (ADR 0102)
+  if (!shown.length) return clouds ? null : <GrindhouseEmpty />;
   return <div className={`agent-strips${narrow ? ' is-narrow' : ''}`} data-testid="view-agents" ref={setColumn}>
     <div className={`workspace-column${max ? ' workspace-max' : ''}`} {...(max ? { 'data-testid': 'maximized', 'data-key': tileKey(max) } : {})}>
       {rows.map(({ lead, side }, i) => {

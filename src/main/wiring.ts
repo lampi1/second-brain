@@ -28,6 +28,7 @@ import { readLocal, writeLocal } from './agents/local-store';
 import { ProgressService } from './agents/progress';
 import { mountLifecycleApi, type LifecycleApi } from './agents/lifecycle-api';
 import { maintenanceEvent, proposalEvent } from './brain/announce';
+import { MorningService } from './morning/service';
 import { createAgentLoop } from './agents/loop';
 import { childFeedbackTools } from './agents/child-feedback';
 import { delegationTools } from './agents/delegation';
@@ -128,6 +129,8 @@ export interface Wired {
   agentPacks: ReturnType<typeof createAgentPacks>;
   /** the Brain pages and their maintenance jobs (ADR 0077) */
   brainModel: BrainModelService;
+  /** the morning block ("Mentre eri via", ADR 0102); absent = the channel answers "nothing to show" */
+  morning?: MorningService;
   setup: SetupService;
   chats: ChatService; browser: BrowserService; brain: BrainService; tasks: TasksApi;
   /** the engines of the brain, which definitions the user turned on, the API keys (ADR 0046) */
@@ -743,9 +746,16 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     applied: changes => { const e = maintenanceEvent(changes); if (e) brain.publish([e]); } });
   brainModelRef.current = brainModel;
   brainModel.start();
+  // the morning block ("Mentre eri via", ADR 0102): zero tokens, from what the app holds
+  const morning = new MorningService({ file: path.join(ctx.userData, 'morning.json'), chats: () => manager.list(), runs: () => manager.runs.list(),
+    pending: () => manager.pending().length + asks.pending().length,
+    approvals: () => agents.list().profiles.filter(p => p.scope === 'role' && p.trial).length + lifecycleApi.read({}).proposals.filter(p => p.kind === 'tier').length,
+    tasks: () => tasks.get(), cloud: () => cloud.state().agents, changes: () => brainModel.changes(), api: p => brain.api(p),
+    stallMin: () => checkedDelegation(brain.settings().delegation).stallMin, lastEventAt: id => manager.lastEventAt(id) });
 
   return {
     brainModel,
+    morning,
     mcpServers,
     cloud, chats, browser, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, suggestSkills,
     updateChats: {

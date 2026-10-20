@@ -1,9 +1,10 @@
 // Contextual Battito selectors: keep search quiet and never send an absolute file path as a place.
 import type { PulseCard, PulsePlace } from '@shared/pulse';
 
-export function contextCards(cards: PulseCard[], place: PulsePlace): PulseCard[] {
+/** The live cards of a place, at most `max` (2 in a context, 3 on the board). */
+export function contextCards(cards: PulseCard[], place: PulsePlace, max = 2): PulseCard[] {
   return cards.filter(c => c.places.includes(place) && (c.state === 'new' || c.state === 'seen') &&
-    (place !== 'search' || c.type === 'collegamento' || c.type === 'curiosita')).slice(0, 2);
+    (place !== 'search' || c.type === 'collegamento' || c.type === 'curiosita')).slice(0, max);
 }
 
 export function filePulsePlace(path: string, root: string | null | undefined): PulsePlace | null {
