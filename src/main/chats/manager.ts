@@ -31,7 +31,7 @@ import type { ChatService } from '../services';
 import { cliVersion, killTrees, killTreesWithin, resolveClaude } from './cli';
 import { reapAfterQuit, reapEnabled, reapEngine, snapshotTrees } from './proctree';
 import { jobGuard } from './jobguard';
-import { AFTER_CALLS, CACHE_TTL_MS, coldArmed, coldRoute, continuityStep, type ColdView, ORCHESTRATOR_COMPACT, romeDay } from './continuity';
+import { AFTER_CALLS, CACHE_TTL_MS, coldArmed, coldRoute, continuityStep, type ColdView, ORCHESTRATOR_COMPACT, ORCHESTRATOR_PAUSE_COMPACT, romeDay } from './continuity';
 import { autoHandoff, coldPrompt, continuePrompt, extractHandoff, HANDOFF_END, HANDOFF_START, handoffRequest, HandoffStore, nextTitle } from './handoff';
 import { ContextCounters } from './context-stats';
 
@@ -237,6 +237,8 @@ interface Rec {
   autoCompleted?: boolean;
   agentInstructions?: string;
   agentAssets?: { pluginDir: string; skillRoot: string };
+  /** the roles this chat's role may launch (resolved at creation; absent = unknown, e.g. a chat saved before) */
+  launches?: string[];
   /** the skills its launch gave it (role defaults, linked and the launch's own): the role gate allows only these */
   skills?: string[];
   /** the agent's tool policy and permission ceiling, frozen at start like its instructions (A2) */
@@ -352,7 +354,12 @@ const MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'pla
 /** chat-endpoint tools the Orchestrator can never use (chatToolShown): it does not delegate, report, ask a parent or
  *  rate a child (its chats are roots: agent_child_feedback takes only a child's run), and
  *  agent_catalog / agent_learn_propose are on its own endpoint already */
-const ORCHESTRATOR_HIDDEN: ReadonlySet<string> = new Set(['agent_delegate', 'agent_report', 'agent_ask_parent', 'agent_answer_child', 'agent_children', 'agent_child_feedback', 'agent_catalog', 'agent_learn_propose']);
+const ORCHESTRATOR_HIDDEN: ReadonlySet<string> = new Set(['agent_delegate', 'agent_report', 'agent_ask_parent', 'agent_answer_child', 'agent_children', 'agent_child_feedback', 'agent_catalog', 'agent_learn_propose',
+  // it saves scripts with brain_script_save on its own endpoint
+  'brain_script_add']);
+/** the tools only a chat that may delegate can use (chatToolShown): a role that launches no role (Scout, Judge) never
+ *  sees them (~1 500 tokens of schemas in every call, each call refused) */
+const DELEGATING_ONLY: ReadonlySet<string> = new Set(['agent_delegate', 'agent_children', 'agent_answer_child', 'agent_child_feedback', 'agent_catalog', 'skills_suggest']);
 /** a root chat's deliverable longer than this reaches the Orchestrator as where to read it, not whole (it is the chat's answer
  *  there; the Orchestrator re-reads every message in each later turn) */
 const ORCHESTRATOR_OUTPUT_MAX = 800;
@@ -518,7 +525,7 @@ export class ChatManager implements ChatService {
       if (current && req.replaces !== current.id) return current;
       req = { ...req, orchestrator: true, title: ORCHESTRATOR_TITLE };
     }
-    const agent: Pick<ResolvedRole, 'request' | 'owner' | 'instructions' | 'policy' | 'maxContext' | 'tier'> & { skills?: string[]; assets?: { pluginDir: string; skillRoot: string } } = inherited ? { ...inherited, policy: inherited.policy ?? null, request: req }
+    const agent: Pick<ResolvedRole, 'request' | 'owner' | 'instructions' | 'policy' | 'maxContext' | 'tier'> & { skills?: string[]; launches?: string[]; assets?: { pluginDir: string; skillRoot: string } } = inherited ? { ...inherited, policy: inherited.policy ?? null, request: req }
       : this.opts.resolveAgent?.(req) ?? { request: req, owner: plainOwner(req.harness, req.model ?? null), instructions: '', policy: null };
     req = agent.request;
     // a delegated chat (agent_delegate): only an agent's, under a live parent, in the parent's folder, linked to its run
@@ -592,6 +599,7 @@ export class ChatManager implements ChatService {
       agentInstructions: agent.instructions,
       ...(agent.assets ? { agentAssets: agent.assets } : {}),
       ...(agent.assets && agent.skills ? { skills: agent.skills } : {}),
+      ...(agent.launches && agent.owner.source === 'catalog' ? { launches: [...agent.launches] } : {}),
       ...(policy ? { policy } : {}),
       // a delegated chat freezes its parent's role chain now (a parent with no chain: the child has none either and,
       // once the parent is gone, no managed MCP server at all)
@@ -1325,6 +1333,7 @@ export class ChatManager implements ChatService {
       const step = continuityStep({ ...v, ctxSince: r.ctxSince, askedOn: r.dayCompactOn }, now, { cold: on, day, idleMs: idle, ttlMs: this.ttl() });
       if (step === 'note') { n++; void this.coldNote(r); continue; }
       if (step === 'compact') { n++; void this.orchestratorCompact(r, now); continue; }
+      if (step === 'pause') { n++; r.coldAskedFor = r.lastTurnAt; void this.orchestratorCompact(r, now, ORCHESTRATOR_PAUSE_COMPACT); continue; }
       if (r.closeAfterCold && !r.handoffTurn && (!on || !coldArmed(v, now, this.ttl()))) void this.endKept(r);
     }
     return n;
@@ -1355,13 +1364,13 @@ export class ChatManager implements ChatService {
 
   /** An Orchestrator's day compaction (continuity.ts orchestratorDayDue): one quiet `/compact` turn with what to keep; the engine's compact_boundary
    *  shows in the tile («Contesto compattato») and starts its context's day again. Same chat, same session. */
-  private async orchestratorCompact(r: Rec, now: number): Promise<void> {
+  private async orchestratorCompact(r: Rec, now: number, prompt = ORCHESTRATOR_COMPACT): Promise<void> {
     r.dayCompactOn = romeDay(now);
     const sess = r.session;
     if (!sess) return;
     log.info('chats', 'Orchestrator: compacting a context from an earlier day', { chat: r.s.id, data: { contextTokens: r.s.contextTokens ?? null, since: r.ctxSince ?? null } });
     this.addItem(r, sysItem('dayCompactStart', undefined, 'info'), false);
-    const out = await this.quietTurn(r, sess, ORCHESTRATOR_COMPACT, true).catch((e: unknown) => {
+    const out = await this.quietTurn(r, sess, prompt, true).catch((e: unknown) => {
       log.warn('chats', 'Orchestrator day compaction not sent', { chat: r.s.id, cause: errText(e), hint: 'it still compacts by itself at its window (compactWindowTokens); tomorrow it tries again' });
       return null;
     });
@@ -1984,6 +1993,9 @@ export class ChatManager implements ChatService {
     this.runSave();
   }
 
+  /** When this chat's context last began again (a new session or a compaction); undefined = unknown. */
+  contextSince(chatId: string): number | undefined { return this.chats.get(chatId)?.ctxSince; }
+
   /** Starts the open Orchestrator's engine (a resume, no message) when it has none: what the user writes first finds it up. */
   private prewarmOrchestrator(): void {
     const r = [...this.chats.values()].find(x => x.s.isOrchestrator && !x.s.closedAt);
@@ -2228,7 +2240,11 @@ export class ChatManager implements ChatService {
   /** Which of the app's browser tools the chat's role may use (tool-policy.ts browserAccess): the per-chat MCP serves
    *  all of them, only the reading ones, or none. */
   browserAccess(chatId: string): BrowserAccess {
-    return browserAccess(this.chats.get(chatId)?.policy);
+    const r = this.chats.get(chatId);
+    // the Orchestrator delegates browsing like any other work (ADR 0090): its 24 browser tools (~4 200 tokens of schemas)
+    // were in every one of its calls
+    if (r?.s.isOrchestrator) return 'none';
+    return browserAccess(r?.policy);
   }
 
   /** Whether a chat sees one of the tools added to its own endpoint: only those its kind could never use are left out
@@ -2236,10 +2252,15 @@ export class ChatManager implements ChatService {
    *  Orchestrator opens root chats with app_create_chat, reports to no one and has catalog and lessons on its own
    *  endpoint (second-brain-app); a chat with no parent has no one to ask. */
   chatToolShown(chatId: string, tool: string): boolean {
-    const s = this.chats.get(chatId)?.s;
-    if (!s) return true;
+    const r = this.chats.get(chatId), s = r?.s;
+    if (!r || !s) return true;
     if (s.isOrchestrator) return !ORCHESTRATOR_HIDDEN.has(tool);
-    return !(tool === 'agent_ask_parent' && !s.parentId);
+    if (tool === 'agent_ask_parent' && !s.parentId) return false;
+    // a role that launches nobody; launches unknown (a chat saved before they were kept) = shown, as before
+    if (DELEGATING_ONLY.has(tool) && r.launches?.length === 0) return false;
+    // a root chat nobody asked to report (the user's, the app's own sampled review): agent_report would be refused
+    if (tool === 'agent_report' && !s.parentId && s.run && s.run.startedBy !== 'orchestrator') return false;
+    return true;
   }
 
   private mcpConfig(chatId: string): string | null {

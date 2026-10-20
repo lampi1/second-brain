@@ -1,6 +1,6 @@
 // The role text once per context (ADR 0089): a chat's first message carries its role frame; later messages, and the
 // first one after a restart that resumes the same session, do not; a compaction or a new session brings it back. Also
-// which of its endpoint's tools a chat sees (ChatManager.chatToolShown), with the same manager.
+// which of its endpoint's tools a chat sees (ChatManager.chatToolShown, browserAccess), with the same manager.
 import { afterEach, describe, expect, it } from 'vitest';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -73,5 +73,20 @@ describe('the tools a chat sees on its own endpoint', () => {
     expect(m.chatToolShown(root.id, 'agent_report')).toBe(true);
     expect(m.chatToolShown(root.id, 'agent_delegate')).toBe(true);
     expect(m.chatToolShown('unknown', 'agent_ask_parent')).toBe(true);
+    // the Orchestrator delegates browsing: no browser tools in its list
+    expect(m.browserAccess(orch.id)).toBe('none');
+    expect(m.chatToolShown(orch.id, 'brain_script_add')).toBe(false);
+  });
+
+  it('a role that launches nobody never sees the delegation tools; a root chat nobody asked to report has no agent_report', async () => {
+    const dir = tmp(), sent: string[] = [], sinks: SessionSink[] = [];
+    const m = manager(dir, sent, sinks);
+    const scout = await m.create({ harness: 'anthropic', cwd: tmp(), roleId: 'scout', prompt: 'cerca' }, 'agent');
+    for (const t of ['agent_delegate', 'agent_children', 'agent_answer_child', 'agent_child_feedback', 'agent_catalog', 'skills_suggest']) expect(m.chatToolShown(scout.id, t), t).toBe(false);
+    expect(m.chatToolShown(scout.id, 'agent_report')).toBe(true);
+    const strategist = await m.create({ harness: 'anthropic', cwd: tmp(), roleId: 'strategist', prompt: 'piano' }, 'agent');
+    expect(m.chatToolShown(strategist.id, 'agent_delegate')).toBe(true);
+    const mine = await m.create({ harness: 'anthropic', cwd: tmp(), roleId: 'scout', prompt: 'mia' }, 'user');
+    expect(m.chatToolShown(mine.id, 'agent_report')).toBe(false);
   });
 });

@@ -224,7 +224,8 @@ describe('Artifacts: the store behind show_ui', () => {
 
   it('show_ui says how to attach a screenshot: a local path, never a remote URL (issue #83)', () => {
     const tool = showUiTool(setup([chat('w')]).store);
-    expect(tool.description).toContain(SCREENSHOT_HINT);
+    // once per chat: in the endpoint's instructions, not again in this tool's description
+    expect(tool.description).not.toContain(SCREENSHOT_HINT);
     expect(SCREENSHOT_HINT).toMatch(/absolute path/);expect(SCREENSHOT_HINT).toMatch(/AskUserQuestion/);expect(SCREENSHOT_HINT).toMatch(/data: PNG/);expect(SCREENSHOT_HINT).toMatch(/Never an http URL/);
   });
 });
