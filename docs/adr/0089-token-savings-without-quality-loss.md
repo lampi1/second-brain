@@ -34,3 +34,15 @@ characters by default that stay in every later turn's context.
 An emoji-only reply is drawn only as a reaction on the user's own message. Anywhere else it means "noted, nothing for
 you" and the chat list (`lib/chat-view.ts`) draws nothing: the app news or mail it answered, that turn's folded work
 (unless it opened or wrote to a chat) and its "Turno finito" line go too. Written replies carry no emoji.
+
+## Revision (owner, 2026-10-20: «le chat dicono una cosa e poi mandano lo stesso messaggio all'Orchestrator»)
+- An agent_report's output is the chat's answer: the chat view shows it under the report row (ChatItems ToolItem,
+  `reportOutput`), the item keeps it whole (`trimInput`), and the role rules say to write the deliverable only there.
+- The Orchestrator's copy of a root chat's result carries an output over 800 characters as where to read it
+  (`resultMessage` outputMax); a parent chat still gets it whole. Its rules say never to restate a chat's result.
+- No second wake for the same news: a turn that gave its agent_report adds no "finished", and a delegated chat's
+  "finished" (no text, its result goes to its parent) rides along instead of waking the Orchestrator.
+- A delegated child's first message carries the contract only: reporting and asking rules are in its role frame,
+  sent with it; the role's default output is not written twice.
+- app_digest with since names waiting or failed chats already told (their text only when new) and says "PR invariate"
+  when Task was not read again.

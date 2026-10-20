@@ -29,7 +29,7 @@ import { ImageStrip } from './ImageStrip';
 import {MessageImages} from './MessageImages';
 import { thinkingBeforeAsk } from '../lib/askContext';
 import { useApp } from '../store/store';
-import { chatRefsOf, titlesKey, toolChatRef } from '../lib/chatrefs';
+import { chatRefsOf, reportOutput, titlesKey, toolChatRef } from '../lib/chatrefs';
 import { splitMode } from '@shared/newchat';
 import { isReaction } from '@shared/reaction';
 import { chatView } from '../lib/chat-view';
@@ -203,6 +203,9 @@ const ForeignMsg = memo(function ForeignMsg({ item, f }: { item: Extract<ChatIte
 
 /** A tool row and, for app_create_chat / app_send_to_chat, the chat it is about with "Apri". */
 const ToolItem = memo(function ToolItem({ item }: { item: Tool }) {
+  // an agent_report's deliverable is the chat's answer, shown once here (the agent does not write it again)
+  const report = reportOutput(item);
+  if (report) return <><ToolRow item={item} /><div className="msg-assistant msg-report" data-testid={`report-${item.id}`}><Markdown text={report} /></div></>;
   const ref = toolChatRef(item);
   if (!ref) return <ToolRow item={item} />;
   return <div className="tool-with-ref"><ToolRow item={item} /><ToolChatRef chatId={ref.chatId} title={ref.title} how={ref.how} /></div>;

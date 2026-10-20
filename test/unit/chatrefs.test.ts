@@ -4,7 +4,8 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatItem, ChatSummary } from '../../src/shared/contract';
 import { MODE_LINES, MODE_TAGS, SEND_MODE_RULE, splitMode, withMode } from '../../src/shared/newchat';
-import { chatRefsOf, textChatRefs, titleIndex, titlesKey, toolChatRef } from '../../src/renderer/lib/chatrefs';
+import { chatRefsOf, reportOutput, textChatRefs, titleIndex, titlesKey, toolChatRef } from '../../src/renderer/lib/chatrefs';
+import { trimInput } from '../../src/main/chats/session';
 
 type Tool = Extract<ChatItem, { kind: 'tool' }>;
 const tool = (id: string, name: string, input: unknown, output?: string, status: Tool['status'] = 'ok', summary = ''): Tool => ({ kind: 'tool', id, at: 1, name, summary, input, status, output });
@@ -89,5 +90,23 @@ describe('chatRefsOf', () => {
   });
   it('is empty outside a Orchestrator (no key)', () => {
     expect(chatRefsOf([asst('a1', '«QA · Report»')], '').size).toBe(0);
+  });
+});
+
+describe('reportOutput: an agent_report\'s deliverable is the chat\'s answer, written once', () => {
+  const input = { outcome: 'done', summary: 's', output: 'Il risultato **intero**', doneWhen: [] };
+  it('reads the output of a finished report, on any engine\'s name', () => {
+    expect(reportOutput(tool('t1', 'mcp__second-brain__agent_report', input))).toBe('Il risultato **intero**');
+    expect(reportOutput(tool('t2', 'Tool', input, undefined, 'ok', 'agent_report'))).toBe('Il risultato **intero**');
+  });
+  it('nothing for a running or failed report, or another tool', () => {
+    expect(reportOutput(tool('t1', 'mcp__x__agent_report', input, undefined, 'running'))).toBeNull();
+    expect(reportOutput(tool('t1', 'mcp__x__agent_report', input, undefined, 'error'))).toBeNull();
+    expect(reportOutput(tool('t1', 'Read', input))).toBeNull();
+  });
+  it('the item keeps a long report output whole, other long inputs are cut', () => {
+    const big = 'x'.repeat(9000);
+    expect((trimInput({ ...input, output: big }) as { output: string }).output).toBe(big);
+    expect((trimInput({ output: big }) as { output: string }).output.length).toBeLessThan(5000);
   });
 });

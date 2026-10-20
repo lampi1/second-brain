@@ -114,17 +114,19 @@ export function checkResult(v: unknown, doneWhen: readonly string[]): Delegation
   return { outcome: o.outcome as DelegationOutcome, summary: text(o.summary, SUMMARY_MAX, 'summary'), output: text(o.output, RESULT_OUTPUT_MAX, 'output'), doneWhen: answers, ...(questions?.length ? { questions } : {}), ...(newGoal ? { goalChangedByUser: true as const, newGoal } : {}) };
 }
 
-/** The child's first message: who delegates, the contract, how to report. Never the parent's conversation. */
+/** The child's first message: who delegates and the contract (the rules on reporting and asking are its role frame's,
+ *  ROLE_PREAMBLE, which goes with it). Never the parent's conversation. */
 export function delegationPrompt(c: DelegationContract, at: { role: WorkRoleId; parentTitle: string; title: string; skills: readonly string[] }): string {
   return [
     `Delegated by «${at.parentTitle}» to you as ${ROLE_DEFAULTS[at.role].name}: «${at.title}».`,
     `Goal: ${c.goal}`,
     ...(c.context ? [`Context: ${c.context}`] : []),
-    `Output: ${c.output}`,
+    // the role's own default output is already in its frame (catalog.ts resolve): only a contract's own is written
+    ...(c.output !== ROLE_DEFAULTS[at.role].output ? [`Output: ${c.output}`] : []),
     'Done when:', ...c.doneWhen.map(d => `- ${d}`),
     ...(at.skills.length ? [`Your skills: ${at.skills.join(', ')} (load the one that fits the job the way your role's skill list says).`] : []),
-    'When the output is ready, or something blocks you, call agent_report once (outcome, summary, output, each done-criterion above with met and evidence). Your parent receives it; it does not read this chat.',
-    'An ambiguity in this contract goes to your parent first: agent_ask_parent (it answers from what it knows). Ask the user only for a permission, an irreversible or external action, a choice that changes the goal, or what your parent could not answer.',
+    // how to report and whom to ask are in the role's frame (ROLE_PREAMBLE), sent with this message: not repeated here
+    'When the output is ready, or something blocks you: agent_report as your rules say, answering each done-criterion above. Your parent does not read this chat.',
     'If the user writes to you here, follow the user; when that changes your goal, say so in agent_report with goalChangedByUser: true and newGoal.',
   ].join('\n');
 }
@@ -135,11 +137,16 @@ const safeJson = (v: unknown): string => JSON.stringify(v).replace(/[\u0085\u202
 
 /** The message that brings a child's result to its parent: the agent label, a result line (what the child wrote
  * flattened to one line, so it cannot forge a line of the app or the user), then the result as JSON (escaped). A summary
- * the line already shows whole (one line) is not repeated in the JSON; one with line breaks stays there exact. */
-export function resultMessage(role: WorkRoleId, title: string, r: DelegationResult): string {
+ * the line already shows whole (one line) is not repeated in the JSON; one with line breaks stays there exact. With
+ * outputMax (the Orchestrator's copy), a longer output is replaced by where to read it. */
+export function resultMessage(role: WorkRoleId, title: string, r: DelegationResult, opts: { outputMax?: number } = {}): string {
   const changed = r.goalChangedByUser ? ` (obiettivo cambiato dall'utente nella chat figlia: «${oneLine(r.newGoal ?? '')}». Non disfare ciò che l'utente le ha chiesto.)` : '';
-  const { summary, ...rest } = r;
-  const json = oneLine(summary) === summary ? rest : r;
+  // a long deliverable stays in the chat that wrote it (shown there as its answer): the Orchestrator gets where it is,
+  // and reads it with app_chat_items only when it needs it, instead of carrying it in every later turn
+  const long = opts.outputMax !== undefined && r.output.length > opts.outputMax;
+  const full = long ? { ...r, output: `(${r.output.length} caratteri, nella chat «${oneLine(title)}» come sua risposta: leggilo con app_chat_items solo se ti serve)` } : r;
+  const { summary, ...rest } = full;
+  const json = oneLine(summary) === summary ? rest : full;
   return `${AGENT_LABEL}\n\n[risultato · ${ROLE_DEFAULTS[role].name} «${oneLine(title)}»] ${oneLine(summary)}${changed}\n\`\`\`json\n${safeJson(json)}\n\`\`\``;
 }
 

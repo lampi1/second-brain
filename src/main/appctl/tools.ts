@@ -216,7 +216,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     },
     {
       name: 'app_digest',
-      description: `The status in ONE call, zero tokens: every open chat with its state, what it waits for from the user (question text, permission, command), errors, last line, git branch, long context; chats closed and commands the user ran; the user's PRs (build, votes, QA failures) and unread Task news from the app's last Task read (Azure DevOps). Use it for "stato" and when woken, instead of app_chats + app_chat_items per chat + app_pending; read a chat's items only when its line is not enough. since: "last" (what changed since your previous app_digest), an ISO time, or omit for everything; chats waiting or failed are always listed.`,
+      description: `The status in ONE call, zero tokens: every open chat with its state, what it waits for from the user (question text, permission, command), errors, last line, git branch, long context; chats closed and commands the user ran; the user's PRs (build, votes, QA failures) and unread Task news from the app's last Task read (Azure DevOps). Use it for "stato" and when woken, instead of app_chats + app_chat_items per chat + app_pending; read a chat's items only when its line is not enough. since: "last" (what changed since your previous app_digest), an ISO time, or omit for everything; chats waiting or failed are always named, with their text when it is new since then (call without since for all of it).`,
       inputSchema: obj({ since: str('"last", an ISO time, or omit') }),
       run: a => {
         const key = `app:${callerId ?? ''}`;
