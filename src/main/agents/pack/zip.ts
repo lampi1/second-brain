@@ -1,7 +1,10 @@
 // Bounded ZIP codec for agent packs. Importers inspect bytes before any filesystem write; no external zip tools.
 import { deflateRawSync, inflateRawSync } from 'node:zlib';
 
+export interface ZipLimits { packed: number; unpacked: number; entries: number; file: number; ratio: number; depth: number }
 export const ZIP_LIMITS = { packed: 20 * 1024 ** 2, unpacked: 50 * 1024 ** 2, entries: 500, file: 2 * 1024 ** 2, ratio: 100, depth: 8 } as const;
+/** A whole shared brain (brain/share.ts): more files than one role's pack, each skill in two tool folders. */
+export const BRAIN_ZIP_LIMITS: ZipLimits = { ...ZIP_LIMITS, packed: 60 * 1024 ** 2, unpacked: 150 * 1024 ** 2, entries: 4000 };
 export type PackFiles = Map<string, Buffer>;
 const fail = (): never => { throw new Error('Invalid or unsafe agent pack archive'); };
 const decoder = new TextDecoder('utf-8', { fatal: true });
@@ -35,14 +38,14 @@ function extra(bytes: Buffer): void {
 }
 
 /** Supports stored/deflate and data descriptors; central and local metadata must agree. */
-export function readZip(bytes: Buffer): PackFiles {
-  if (bytes.length < 22 || bytes.length > ZIP_LIMITS.packed) fail();
+export function readZip(bytes: Buffer, limits: ZipLimits = ZIP_LIMITS): PackFiles {
+  if (bytes.length < 22 || bytes.length > limits.packed) fail();
   let end = bytes.length - 22;
   while (end >= Math.max(0, bytes.length - 65557) && bytes.readUInt32LE(end) !== 0x06054b50) end--;
   if (end < 0 || bytes.readUInt32LE(end) !== 0x06054b50 || end + 22 + bytes.readUInt16LE(end + 20) !== bytes.length) fail();
   const count = bytes.readUInt16LE(end + 10), centralSize = bytes.readUInt32LE(end + 12), central = bytes.readUInt32LE(end + 16);
   if (bytes.readUInt16LE(end + 4) || bytes.readUInt16LE(end + 6) || bytes.readUInt16LE(end + 8) !== count
-    || count > ZIP_LIMITS.entries || central + centralSize !== end) fail();
+    || count > limits.entries || central + centralSize !== end) fail();
   const files: PackFiles = new Map(), names = new Set<string>(), regions: [number, number][] = [];
   let at = central, total = 0;
   for (let i = 0; i < count; i++) {
@@ -52,7 +55,7 @@ export function readZip(bytes: Buffer): PackFiles {
     const nl = bytes.readUInt16LE(at + 28), el = bytes.readUInt16LE(at + 30), cl = bytes.readUInt16LE(at + 32);
     const local = bytes.readUInt32LE(at + 42), attrs = bytes.readUInt32LE(at + 38), mode = (attrs >>> 16) & 0xf000;
     if (flags & ~0x080e || ![0, 8].includes(method) || bytes.readUInt16LE(at + 34) || (mode && mode !== 0x8000 && mode !== 0x4000)
-      || size > ZIP_LIMITS.file || size > Math.max(1, packed) * ZIP_LIMITS.ratio || at + 46 + nl + el + cl > end) fail();
+      || size > limits.file || size > Math.max(1, packed) * limits.ratio || at + 46 + nl + el + cl > end) fail();
     const rawName = bytes.subarray(at + 46, at + 46 + nl), name = decoder.decode(rawName), directory = name.endsWith('/');
     const normalized = directory ? name.slice(0, -1) : name;
     checkPackPath(normalized);
@@ -60,7 +63,7 @@ export function readZip(bytes: Buffer): PackFiles {
     names.add(normalized.toLowerCase());
     extra(bytes.subarray(at + 46 + nl, at + 46 + nl + el));
     total += size;
-    if (total > ZIP_LIMITS.unpacked || local + 30 > central || bytes.readUInt32LE(local) !== 0x04034b50) fail();
+    if (total > limits.unpacked || local + 30 > central || bytes.readUInt32LE(local) !== 0x04034b50) fail();
     const lnl = bytes.readUInt16LE(local + 26), lel = bytes.readUInt16LE(local + 28), start = local + 30 + lnl + lel;
     if (start + packed > central || flags !== bytes.readUInt16LE(local + 6) || method !== bytes.readUInt16LE(local + 8)
       || !rawName.equals(bytes.subarray(local + 30, local + 30 + lnl))) fail();
@@ -82,24 +85,25 @@ export function readZip(bytes: Buffer): PackFiles {
     at += 46 + nl + el + cl;
   }
   if (at !== end) fail();
+  const lower = new Set([...files.keys()].map(k => k.toLowerCase()));
   for (const name of files.keys()) {
     const parts = name.toLowerCase().split('/');
     parts.pop();
-    while (parts.length) { if ([...files.keys()].some(k => k.toLowerCase() === parts.join('/'))) fail(); parts.pop(); }
+    while (parts.length) { if (lower.has(parts.join('/'))) fail(); parts.pop(); }
   }
   return files;
 }
 
 /** Stable timestamps/order make repeated exports byte-identical. Highly compressible text is stored to respect ratio limits. */
-export function writeZip(files: PackFiles): Buffer {
-  if (files.size > ZIP_LIMITS.entries) fail();
+export function writeZip(files: PackFiles, limits: ZipLimits = ZIP_LIMITS): Buffer {
+  if (files.size > limits.entries) fail();
   const locals: Buffer[] = [], centrals: Buffer[] = [];
   let offset = 0;
   for (const [name, body] of [...files].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) {
     checkPackPath(name);
-    if (body.length > ZIP_LIMITS.file) fail();
+    if (body.length > limits.file) fail();
     const encoded = Buffer.from(name), compressed = deflateRawSync(body);
-    const method = compressed.length < body.length && body.length <= compressed.length * ZIP_LIMITS.ratio ? 8 : 0;
+    const method = compressed.length < body.length && body.length <= compressed.length * limits.ratio ? 8 : 0;
     const data = method ? compressed : body, crc = crc32(body);
     const local = Buffer.alloc(30), central = Buffer.alloc(46);
     local.writeUInt32LE(0x04034b50); local.writeUInt16LE(20, 4); local.writeUInt16LE(0x800, 6);
@@ -113,6 +117,6 @@ export function writeZip(files: PackFiles): Buffer {
   end.writeUInt32LE(0x06054b50); end.writeUInt16LE(files.size, 8); end.writeUInt16LE(files.size, 10);
   end.writeUInt32LE(directory.length, 12); end.writeUInt32LE(offset, 16);
   const result = Buffer.concat([...locals, directory, end]);
-  readZip(result);
+  readZip(result, limits);
   return result;
 }

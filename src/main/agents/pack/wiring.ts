@@ -13,6 +13,12 @@ import { appScanner, findGuard, scanTree } from '../../brain/guard';
 import { electronNode } from '../../brain/node';
 import { readLocal } from '../local-store';
 import type { AgentRun } from '../../../shared/agents';
+import type { BrainShareResult } from '../../../shared/contract';
+import { isWorkRole } from '../../../shared/roles';
+import { buildBrainShare } from './brain-share';
+import { portableId, writePackFiles } from './flows';
+import { BRAIN_ZIP_LIMITS, writeZip } from './zip';
+import { log } from '../../log';
 
 export function createAgentPacks(userData: string, brain: BrainService, catalog: AgentCatalogService, demo = false) {
   const demoRoot = path.join(userData, 'demo-agent-brain');
@@ -60,5 +66,33 @@ export function createAgentPacks(userData: string, brain: BrainService, catalog:
   // Every version change that swaps the know-how (a restore, a trial decision, an Annulla) republishes it.
   catalog.onKnowhowChange((profile, previousHash) => packs.publishCurrent(profile, previousHash));
   const learning = new AgentPackLearning(packs, userData);
-  return { packs, learning };
+  /** The shareable brain zip (brain-share.ts, ADR 0088): built, guard-scanned, then saved where the user picks. */
+  const share = async (): Promise<BrainShareResult | null> => {
+    let brainRoot: string;
+    try { brainRoot = packs.root(); } catch { return { ok: false, error: 'Collega prima la cartella del brain.' }; }
+    const roles = catalog.list().profiles.filter(p => isWorkRole(p.id)).map(profile => {
+      let own = new Map<string, Buffer>();
+      try { if (profile.knowhow) own = packs.ownSkills(profile, true); } catch { /* unreadable know-how: the role goes without it */ }
+      return { profile, skillName: portableId(profile.id), own };
+    });
+    const name = path.basename(brainRoot), date = new Date().toISOString().slice(0, 10);
+    let built: ReturnType<typeof buildBrainShare>, zip: Buffer;
+    try { built = buildBrainShare({ root: brainRoot, name, date, roles }); zip = writeZip(built.files, BRAIN_ZIP_LIMITS); }
+    catch (e) {
+      log.warn('brain', 'Shareable brain not built', { cause: e instanceof Error ? e.message : String(e), hint: 'Too many files, or a file name the zip refuses: check the brain skills and scripts' });
+      return { ok: false, error: 'Lo zip non si può creare: il brain ha troppi file o un nome di file non valido. Dettagli nei log.' };
+    }
+    const { files, summary } = built;
+    const staging = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-brain-share-'));
+    try {
+      writePackFiles(staging, files);
+      const result = await scanTree(staging, guards(), electronNode());
+      if (!result.ok) return 'findings' in result ? { ok: false, findings: result.findings } : { ok: false, error: 'missing' in result ? result.missing : result.error };
+    } finally { fs.rmSync(staging, { recursive: true, force: true }); }
+    const picked = await dialog.showSaveDialog({ defaultPath: `${name}-condiviso-${date}.zip`, filters: [{ name: 'Zip', extensions: ['zip'] }] });
+    if (picked.canceled || !picked.filePath) return null;
+    fs.writeFileSync(picked.filePath, zip);
+    return { ok: true, path: picked.filePath, skills: summary.skills.length, rules: summary.rules.length, roles: summary.roles.length, scripts: summary.scripts.length, skipped: summary.skipped.length };
+  };
+  return { packs, learning, share };
 }
