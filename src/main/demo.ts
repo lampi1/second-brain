@@ -95,7 +95,7 @@ export const DEMO_DIFF: FileDiff[] = [
 
 /** A delegation tree (ADR 0083) for the README shots (test/shots/readme.spec.ts adds it through __sbDemo.tree, so the
  *  seed every other test reads stays as it is): a Strategist the Orchestrator started, its Scout (done, result sent
- *  back), its Artisan with a Judge of its own, and a Herald waiting for its turn. */
+ *  back), its Artisan with a Sentinel of its own, and a Herald waiting for its turn. */
 export function demoTree(E: number): { chats: ChatSummary[]; items: Record<string, ChatItem[]> } {
   const cwd = 'C:\\progetti\\alfa-shop';
   const role = (id: WorkRoleId, name: string): ChatSummary['agent'] => ({ id, name, purpose: ROLE_DEFAULTS[id].summary, avatar: { kind: 'character', value: id }, engine: 'claude', model: 'claude-opus-5-5', revision: 1, version: 1, source: 'catalog' });
@@ -115,11 +115,11 @@ export function demoTree(E: number): { chats: ChatSummary[]; items: Record<strin
     result: { outcome: 'done', summary: 'Trovati 3 punti: carrello, ordine, reso. Il reso arrotonda due volte.', at: E - 11 * MIN } };
   const artisan = node('tree-artisan', 'artisan', 'Artisan', 'Sconto sul lordo', 'Applica lo sconto al lordo con un solo arrotondamento, nei 3 punti.', 10,
     { costUsd: 0.74, contextTokens: 88_000, contextMaxTokens: 1_000_000, lastText: 'Fatti carrello e ordine, ora il reso.' }, lead.id, ['I test ordini passano']);
-  const judge = node('tree-judge', 'judge', 'Judge', 'La suite ordini passa?', 'Esegui la suite ordini e giudica il fix.', 3,
+  const sentinel = node('tree-sentinel', 'sentinel', 'Sentinel', 'La suite ordini passa?', 'Esegui la suite ordini e giudica il fix.', 3,
     { costUsd: 0.09, lastText: 'Lancio dotnet test: 41 su 42 finora.' }, artisan.id, ['Esito della suite']);
   const herald = node('tree-herald', 'herald', 'Herald', 'Note di rilascio', 'Scrivi le note di rilascio quando il fix è in main.', 1,
     { costUsd: 0.02, lastText: 'Preparo la bozza, la chiudo quando Artisan finisce.' }, lead.id, ['Bozza delle note']);
-  const chats = [lead, scout, artisan, judge, herald];
+  const chats = [lead, scout, artisan, sentinel, herald];
   const items: Record<string, ChatItem[]> = Object.fromEntries(chats.map(c => [c.id, [
     { kind: 'user', id: `${c.id}-u1`, at: c.run!.startedAt, text: c.run!.goal } as ChatItem,
     { kind: 'assistant', id: `${c.id}-a1`, at: c.updatedAt, text: c.lastText } as ChatItem,
@@ -938,10 +938,10 @@ export class DemoBrain implements BrainService {
     name: 'cursor-vs-claude', title: 'Review roles: Cursor vs Claude Code',
     description: 'Every run of the listed roles on Cursor is captured; Claude repeats the same task inside the app, read-only; a judge rates both blind.',
     on: true, changedAt: '2026-10-10 08:09:21',
-    a: { engine: 'cursor', label: 'Cursor', agents: ['sentinel', 'scout', 'judge'] },
+    a: { engine: 'cursor', label: 'Cursor', agents: ['sentinel', 'scout', 'artisan'] },
     b: { engine: 'claude', label: 'Claude', model: 'opus', effort: 'medium' },
     judge: { engine: 'claude', label: 'Claude', model: 'sonnet' },
-    agents: [{ name: 'sentinel', on: true }, { name: 'scout', on: false }, { name: 'judge', on: false }],
+    agents: [{ name: 'sentinel', on: true }, { name: 'scout', on: false }, { name: 'artisan', on: false }],
     rounds: 4, cost: { a: { usd: 1.84, missing: 1 }, b: { usd: 6.12, missing: 0 } },
   }];
   async compareList(): Promise<CompareState> { return { ok: true, experiments: structuredClone(this.compare) }; }

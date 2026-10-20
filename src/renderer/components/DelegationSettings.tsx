@@ -1,6 +1,6 @@
 // Impostazioni → Ruoli e deleghe (ADR 0083): the limits of delegation between role chats (how deep a chain of children
 // may go, how many children of one parent work at once, after how many quiet minutes a child counts as stalled, how
-// many finished runs the Judge reviews a day; stallMin is read by agents/delegation.ts stalledMin) and the model each tier (leggero / medio / alto) runs on per engine.
+// many finished runs a Sentinel reviews a day; stallMin is read by agents/delegation.ts stalledMin) and the model each tier (leggero / medio / alto) runs on per engine.
 // Each change saves at once through settings:set (the main side checks the range; agents cannot change these keys).
 // Mounted by SettingsPage.tsx.
 import { useEffect, useState } from 'react';

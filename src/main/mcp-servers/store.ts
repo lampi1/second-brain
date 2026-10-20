@@ -11,6 +11,7 @@ import crypto from 'node:crypto';
 import { addRedaction, log } from '../log';
 import type { SecretCipher } from '../engines/secrets';
 import { maskOf } from '../engines/secrets';
+import { isRetiredRoleId } from '../../shared/roles';
 import { MCP_ID, RESERVED_IDS, SECRET_NAME, checkAccess, secretLooking, slotKey, type McpSecretSlot, type McpServerDef, type McpTestResult, type RoleMcpAccess } from '../../shared/mcp-servers';
 
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
@@ -135,6 +136,10 @@ export class McpServerStore {
       const access: Record<string, RoleMcpAccess> = {};
       for (const [role, a] of Object.entries(raw.access ?? {})) {
         if (!/^[a-z][a-z0-9-]{0,40}$/.test(role)) continue;
+        // a role ADR 0100 retired (Router, Judge, Scribe) runs no chat any more: its entry is dropped, never merged into
+        // its successor, whose own narrowing is the user's for its own job (a Scribe narrowed off a server must not take
+        // that server away from every Artisan)
+        if (isRetiredRoleId(role)) continue;
         const out: RoleMcpAccess = { servers: {} };
         // an unreadable access entry narrows to none: a damaged file never widens a role
         for (const [server, v] of Object.entries((a as RoleMcpAccess | undefined)?.servers ?? {})) { if (MCP_ID.test(server)) { try { out.servers[server] = checkAccess(v); } catch { out.servers[server] = 'none'; } } }

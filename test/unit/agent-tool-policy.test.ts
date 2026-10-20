@@ -115,7 +115,7 @@ describe('agent tool policy', () => {
     // a Scout under an Artisan keeps its read-only commands and browser
     expect(narrowest(scout, artisan)?.tools?.allow.sort()).toEqual(['browser-read', 'read', 'shell-read', 'web']);
     expect(narrowest(artisan, scout)?.tools?.allow.sort()).toEqual(['browser-read', 'read', 'shell-read', 'web']);
-    // a Scribe under a parent that edits anywhere keeps brain-write; under a read-only one it does not
+    // a brain-only role under a parent that edits anywhere keeps brain-write; under a read-only one it does not
     expect(narrowest(policy(['read', 'brain-write']), artisan)?.tools?.allow.sort()).toEqual(['brain-write', 'read']);
     expect(narrowest(policy(['read', 'brain-write']), policy(['read', 'web']))?.tools?.allow).toEqual(['read']);
     // the narrow class never stands for the wide one

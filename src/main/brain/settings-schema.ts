@@ -141,8 +141,8 @@ const BASE: readonly SettingDef[] = [
     description: 'Quante chat figlie di uno stesso genitore lavorano insieme. Oltre, la delega è rifiutata e il genitore lo vede.' },
   { key: 'delegation.stallMin', type: 'int', ...DELEGATION_RANGE.stallMin, default: DELEGATION_DEFAULTS.stallMin, protected: true, label: 'Deleghe: ferma dopo (minuti)',
     description: 'Una chat figlia senza alcun evento per tanti minuti risulta ferma: l’Orchestrator e il genitore lo sanno.' },
-  { key: 'delegation.judgeDaily', type: 'int', ...DELEGATION_RANGE.judgeDaily, default: DELEGATION_DEFAULTS.judgeDaily, protected: true, label: 'Revisioni del Judge al giorno',
-    description: 'Quante esecuzioni finite il Judge rivede ogni giorno, su un modello diverso, per misurare i ruoli. 0 = nessuna.' },
+  { key: 'delegation.judgeDaily', type: 'int', ...DELEGATION_RANGE.judgeDaily, default: DELEGATION_DEFAULTS.judgeDaily, protected: true, label: 'Revisioni indipendenti al giorno',
+    description: 'Quante esecuzioni finite un Sentinel rivede ogni giorno, in una sessione nuova, per misurare i ruoli. 0 = nessuna.' },
 ];
 /** a CLI model id as the CLIs accept it ("claude-opus-5-5", "grok-4.7", "gpt-5.6-sol[effort=high]"), '' = the default */
 export const MODEL_ID = /^[\w.:@/=[\],-]{0,120}$/;

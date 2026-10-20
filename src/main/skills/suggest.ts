@@ -119,7 +119,7 @@ export class SkillSuggester {
     } finally { clearTimeout(timer); }
   }
 
-  /** The skills that fit `request`, best first. A past run that used a skill and ended well (the user's or a Judge's
+  /** The skills that fit `request`, best first. A past run that used a skill and ended well (the user's or an independent review's
    *  verdict) adds its goal as one more text of that skill. */
   async suggest(request: string, skills: readonly SuggestibleSkill[], runs: readonly AgentRun[] = []): Promise<SkillSuggestions> {
     request = suggestRequest(request);

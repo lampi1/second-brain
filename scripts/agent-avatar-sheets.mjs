@@ -14,7 +14,7 @@ import ts from 'typescript';
 
 const load = async path => import(`data:text/javascript;base64,${Buffer.from(ts.transpileModule(await readFile(new URL(path, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText).toString('base64')}`);
 const { CHARACTERS, characterSvg } = await load('../src/renderer/lib/character-art.ts');
-const NAMES = { orchestrator: 'Orchestrator', strategist: 'Strategist', scout: 'Scout', artisan: 'Artisan', sentinel: 'Sentinel', herald: 'Herald', router: 'Router', judge: 'Judge', scribe: 'Scribe', pulse: 'Pulse' };
+const NAMES = { orchestrator: 'Orchestrator', strategist: 'Strategist', scout: 'Scout', artisan: 'Artisan', sentinel: 'Sentinel', herald: 'Herald', pulse: 'Pulse' };
 const SIZES = [16, 20, 28, 40, 96];
 const THEMES = { dark: { bg: '#191a1f', card: '#22242b', text: '#eceef3', muted: '#9aa0ad', ring: '#ffffff59' }, light: { bg: '#f3f4f7', card: '#ffffff', text: '#13161d', muted: '#5b6170', ring: '#0000002e' } };
 const dir = fileURLToPath(new URL('../docs/screenshots/agent-avatars/', import.meta.url));
@@ -57,7 +57,7 @@ function sheet(theme) {
     const x = 40 + (i > 1 ? 24 : i * 24), y = ty + 36 + i * 26;
     return `<g transform="translate(${x} ${y - 12})">${characterSvg(id, 16, `${theme}${uid++}`)}</g><text x="${x + 24}" y="${y + 1}" font-size="13" fill="${t.text}">${NAMES[id]}</text>`;
   }).join('');
-  const tiles = ['artisan', 'herald', 'router', 'judge', 'scribe', 'pulse'].map((id, i) => {
+  const tiles = ['artisan', 'herald', 'pulse'].map((id, i) => {
     const x = 330 + i * 115, y = ty + 40;
     return `<g transform="translate(${x} ${y})">${characterSvg(id, 20, `${theme}${uid++}`)}</g><text x="${x + 26}" y="${y + 15}" font-size="13" fill="${t.text}">${NAMES[id]}</text>`
       + `<g transform="translate(${x} ${y + 40})">${characterSvg(id, 28, `${theme}${uid++}`)}</g><text x="${x + 34}" y="${y + 59}" font-size="13" fill="${t.text}">${NAMES[id]}</text>`;

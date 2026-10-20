@@ -1,4 +1,4 @@
-// The user's own pictures for the roles (Orchestrator + the eight work roles): one square PNG per role, chosen from
+// The user's own pictures for the roles (Orchestrator + the five work roles): one square PNG per role, chosen from
 // the role's page (components/AgentImagePicker.tsx), kept by main in userData (main/agents/agent-images.ts) and drawn
 // by AgentAvatar in place of the role's cartoon character. A role without one keeps its character; "Predefinita"
 // removes the picture. UI only: never sent to an engine, never in the brain or in an agent pack.

@@ -374,7 +374,7 @@ describe('OrchestratorWake: quiet results and app-started chats (token plan 2026
 
   it('a chat the app started (a sampled review) never wakes it when it finishes; a failure still does', async () => {
     const { sent, up } = make();
-    const run = { runId: 'r', agentId: 'judge', version: 1, startedAt: 0, startedBy: 'app' } as unknown as ChatSummary['run'];
+    const run = { runId: 'r', agentId: 'sentinel', version: 1, startedAt: 0, startedBy: 'app' } as unknown as ChatSummary['run'];
     up({ id: 'rev', state: 'running', run });
     up({ id: 'rev', state: 'idle', lastText: 'verdetto', run });
     await vi.advanceTimersByTimeAsync(5000);

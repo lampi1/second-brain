@@ -45,7 +45,7 @@ export const connectorsEn: typeof connectorsIt = {
  'hub.kind.stdio':'Local (command)','hub.kind.http':'Remote (address)','hub.importedFrom':({from}:{from:string})=>`imported from ${from}`,
  'hub.noPurpose':'What is it for? Write it in Edit: you will see it here.',
  'hub.tools':'Tools','hub.toolsTip':'The tools the server listed at its last test. Read = the server marks them read-only (readOnlyHint); the others count as write.','hub.toolsSplit':({r,w}:{r:number;w:number})=>`${r} read · ${w} write`,
- 'hub.agents':'Roles','hub.agentsTip':'How many of the nine roles may use at least one tool of this server, by their card. A delegated chat never has more than the role that started it.','hub.agentsValue':({n,total}:{n:number;total:number})=>`${n} of ${total}`,
+ 'hub.agents':'Roles','hub.agentsTip':'How many of the six roles may use at least one tool of this server, by their card. A delegated chat never has more than the role that started it.','hub.agentsValue':({n,total}:{n:number;total:number})=>`${n} of ${total}`,
  'hub.lastTest':'Last test','hub.ms':({ms}:{ms:number})=>`${ms} ms`,
  'hub.fix':'How to fix:','hub.untestedHint':'Press “Test”: the app starts it as a chat would and lists its tools.',
  'hub.toolList':({n}:{n:number})=>`See the ${n} tools`,'hub.read':'read','hub.write':'write',

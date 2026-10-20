@@ -9,9 +9,9 @@ const draft: AgentDraft = { name: 'Scout', purpose: 'Cerca fatti', instructions:
 
 it('retains separate unsaved edits per role', () => {
   rememberAgentEditor({ id: 'scout', draft });
-  rememberAgentEditor({ id: 'judge', draft: { ...draft, name: 'Judge', avatar: { kind: 'character', value: 'judge' } } });
+  rememberAgentEditor({ id: 'sentinel', draft: { ...draft, name: 'Sentinel', avatar: { kind: 'character', value: 'sentinel' } } });
   expect(readAgentEditor('scout')?.draft.name).toBe('Scout');
-  expect(readAgentEditor('judge')?.draft.name).toBe('Judge');
+  expect(readAgentEditor('sentinel')?.draft.name).toBe('Sentinel');
   const copy = readAgentEditor('scout')!; copy.draft.instructions = 'Changed';
   expect(readAgentEditor('scout')?.draft.instructions).toBe('Cite sources');
 });
@@ -24,16 +24,16 @@ it('retains the edited catalog revision across navigation without adopting a new
 });
 it('keeps an 8000-character role text and the captured copy current before a restart', () => {
   const values = new Map<string, string>(); vi.stubGlobal('localStorage', { setItem: (key: string, value: string) => values.set(key, value) });
-  rememberAgentEditor({ id: 'scribe', draft: { ...draft, instructions: 'x'.repeat(8000) } });
+  rememberAgentEditor({ id: 'herald', draft: { ...draft, instructions: 'x'.repeat(8000) } });
   expect(() => validateAgentDraftCopy(agentDraftCheckpoint())).not.toThrow();
-  enableAgentDraftRecovery(); rememberAgentEditor({ id: 'scribe', draft: { ...draft, instructions: 'Updated work' } });
+  enableAgentDraftRecovery(); rememberAgentEditor({ id: 'herald', draft: { ...draft, instructions: 'Updated work' } });
   expect(values.get('sb.update.agent-drafts.v1')).toContain('Updated work');
   vi.unstubAllGlobals();
 });
 it('refuses a copy whose draft is out of shape', () => {
   const copy = (d: unknown) => ({ version: 1, active: 'scout', entries: [['scout', { id: 'scout', draft: d }]] });
   expect(() => validateAgentDraftCopy(copy(draft))).not.toThrow();
-  for (const bad of [{ avatar: { kind: 'image', dataUrl: 'data:image/png;base64,AA==' } }, { avatar: { kind: 'character', value: 'pirate' } }, { tier: 'huge' },
+  for (const bad of [{ avatar: { kind: 'image', dataUrl: 'data:image/png;base64,AA==' } }, { avatar: { kind: 'character', value: 'pirate' } }, { avatar: { kind: 'character', value: 'judge' } }, { tier: 'huge' },
     { launches: ['orchestrator'] }, { tools: { allow: ['root'] } }, { permissionCeiling: 'bypassPermissions' }, { skills: ['../x'] }, { instructions: 'x'.repeat(8001) }])
     expect(() => validateAgentDraftCopy(copy({ ...draft, ...bad }))).toThrow();
   expect(() => validateAgentDraftCopy({ version: 1, active: 'other', entries: [['scout', { id: 'scout', draft }]] })).toThrow();

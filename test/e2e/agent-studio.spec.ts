@@ -31,7 +31,7 @@ test('a role edit is a version that survives a restart; Ripristina predefinito b
     await first.page.getByTestId('agent-skill-input').fill('brain-edit');
     await first.page.getByTestId('agent-skill-add').click();
     await first.page.getByTestId('agent-tier').selectOption('top');
-    await first.page.getByTestId('agent-launches').getByRole('checkbox', { name: 'Scribe' }).check();
+    await first.page.getByTestId('agent-launches').getByRole('checkbox', { name: 'Herald' }).check();
     await shot(first.page, 'role-editor-light');
     await first.page.getByTestId('agent-save').click();
     await expect(first.page.getByTestId('agent-editor')).toHaveCount(0);
@@ -44,7 +44,7 @@ test('a role edit is a version that survives a restart; Ripristina predefinito b
     await openAgents(second.page, 'artisan');
     const studio = second.page.getByTestId('agent-studio');
     await expect(studio.getByTestId('agent-skills')).toContainText('brain-edit');
-    await expect(studio).toContainText('Scribe');
+    await expect(studio).toContainText('Herald');
     await studio.getByTestId('agent-reset').click();
     await second.page.getByTestId('agent-reset-confirm').getByRole('button', { name: /^(Conferma il ripristino|Confirm the restore)$/ }).click();
     await expect(studio.getByTestId('agent-skills')).not.toContainText('brain-edit');

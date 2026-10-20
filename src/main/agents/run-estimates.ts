@@ -38,7 +38,7 @@ const TEMPLATES: { agentId: string; goal: string; min: number; usd: number }[] =
   { agentId: 'scout', goal: 'Cerca nei log gli errori 500 del checkout di ieri', min: 6, usd: 0.18 },
   { agentId: 'scout', goal: 'Quanti ordini sono rimasti in sospeso ieri?', min: 3, usd: 0.08 },
   { agentId: 'sentinel', goal: 'Esegui i test case dei rimborsi in ambiente di test', min: 18, usd: 0.6 },
-  { agentId: 'judge', goal: 'Review della PR del fix totale ordine', min: 8, usd: 0.3 },
+  { agentId: 'sentinel', goal: 'Review della PR del fix totale ordine', min: 8, usd: 0.3 },
 ];
 
 /** A small seeded generator (mulberry32): the same history on every start. */

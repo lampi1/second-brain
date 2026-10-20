@@ -6,7 +6,7 @@ import { gateRequest, qualifiedSkillsLine, runtimePluginName } from '../../../sr
 
 const hash = 'a'.repeat(16) + 'b'.repeat(48);
 const plugin = runtimePluginName(`/u/agent-pack-runtime/${hash}`);
-const chat = { role: { id: 'scribe', name: 'Scribe' }, skills: ['brain-edit'], plugin };
+const chat = { role: { id: 'artisan', name: 'Artisan' }, skills: ['brain-edit'], plugin };
 const skill = (name: string, key = 'skill') => gateRequest({ type: 'permission', tool: 'Skill', input: { [key]: name } }, chat);
 
 describe('role gate: skills', () => {

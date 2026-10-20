@@ -56,7 +56,7 @@ export const BEHAVIOUR_FIELDS = ['instructions', 'engine', 'model', 'effort', 't
 export type AgentBehaviour = Pick<AgentDraft, (typeof BEHAVIOUR_FIELDS)[number]>;
 export interface AgentProfile extends AgentDraft {
   id: string; createdAt: number; updatedAt: number;
-  /** role = one of the nine roles; background = Pulse, a catalog entry that is never offered as a delegate */
+  /** role = one of the six roles (the Orchestrator and the five work roles); background = Pulse, a catalog entry that is never offered as a delegate */
   scope: 'role' | 'background';
   /** Highest version ever created. */
   version: number;
@@ -99,7 +99,7 @@ export interface AgentRunCounters { questions: number; permissions: number; comm
 export interface AgentRunTokens { input: number; cacheRead: number; cacheWrite: number; output: number }
 /** The run's agent_report (agents/delegation.ts): the child's self-report of its delegation contract. */
 export interface AgentRunReport { at: number; outcome: 'done' | 'partial' | 'blocked'; verified: 'yes' | 'partial' | 'no'; summary: string; findings?: number; blocking?: number;
-  /** a Judge review's verdict on the run it reviews (agents/judge-sample.ts) */
+  /** an independent review's verdict on the run it reviews (agents/judge-sample.ts: a Sentinel's, a Judge's before ADR 0100) */
   verdict?: 'success' | 'partial' | 'fail';
   /** given with agent_report (its result was delivered to the parent or the Orchestrator as a message), not a
    *  run-report block in a reply */
@@ -143,7 +143,7 @@ export interface AgentStanding {
   performance: number | null;
   /** runs with a verdict, and the minimum before the performance is shown */
   evaluated: number; minRuns: number;
-  /** where the verdicts came from: the user (or reviewed evidence), a Judge review, the Orchestrator, the agent itself */
+  /** where the verdicts came from: the user (or reviewed evidence), an independent review, the Orchestrator, the agent itself */
   sources: { human: number; judge: number; orchestrator: number; self: number };
 }
 /** One run = a chat started from a role (agent-runs.json is the source of truth; the chat keeps a mirror). */
@@ -155,7 +155,7 @@ export interface AgentRun {
   goal: string; startedBy: 'user' | 'orchestrator' | 'parent' | 'app'; startedAt: number;
   /** the model tier and the model the run started on (role × skills × tier is the loop's unit of comparison) */
   tier?: ModelTier; model?: string | null;
-  /** the run of the chat that delegated this one (agent_delegate), or of the run a Judge review is about */
+  /** the run of the chat that delegated this one (agent_delegate), or of the run an independent review (a Sentinel's) is about */
   parentRunId?: string;
   reviewOf?: string; reworkOf?: string;
   /** the run of the chat this one continues (the hand-off "Continua in una nuova chat"): counts as rework of it */
@@ -195,7 +195,7 @@ export interface AgentModelChoice {
   modelReason: string | null;
 }
 export interface AgentCatalog {
-  /** The nine roles in their fixed order, then the background entries (Pulse). */
+  /** The six roles in their fixed order, then the background entries (Pulse). */
   profiles: AgentProfile[];
   models: AgentModelChoice[];
   problem: string | null;

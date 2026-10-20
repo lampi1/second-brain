@@ -1,4 +1,4 @@
-// The role gate's brain-only edits (security review of #89): a role with brain-write and no edit (the Scribe) may
+// The role gate's brain-only edits (security review of #89): a role with brain-write and no edit (an Artisan the user narrowed to the brain) may
 // Edit/Write only a file whose real path is inside the brain folder; "..", a relative path, a link out of the brain
 // (file or folder), a hard link, another edit tool, no brain set, and a sibling folder sharing the brain's prefix are
 // refused visibly; a role with edit is not limited; a parent without edit still lets a brain edit through when it
@@ -28,7 +28,7 @@ function setup() {
 }
 const policy = (allow: ToolClass[]) => ({ tools: { allow }, ceiling: 'default' as const });
 const scribe = (brainRoot: string | null, extra: Partial<GateChat> = {}): GateChat =>
-  ({ role: { id: 'scribe', name: 'Scribe' }, skills: [], policy: policy(['read', 'brain-write']), brainRoot, ...extra });
+  ({ role: { id: 'artisan', name: 'Artisan' }, skills: [], policy: policy(['read', 'brain-write']), brainRoot, ...extra });
 const edit = (tool: string, file_path: string) => ({ type: 'permission', tool, input: { file_path, content: 'x' } });
 
 describe('brain-only edits (brain-write without edit)', () => {
@@ -85,7 +85,7 @@ describe('brain-only edits (brain-write without edit)', () => {
     expect(gateRequest({ type: 'permission', tool: 'Read', input: { file_path: path.join(outside, 'secret.txt') } }, scribe(brain)).kind).toBe('pass');
   });
 
-  it('a delegated Scribe: a parent with brain-write lets a brain edit through; one with neither edit nor brain-write refuses it', () => {
+  it('a delegated brain-only Artisan: a parent with brain-write lets a brain edit through; one with neither edit nor brain-write refuses it', () => {
     const { brain } = setup();
     const file = path.join(brain, 'notes', 'a.md');
     expect(gateRequest(edit('Edit', file), scribe(brain, { parent: { policy: policy(['read', 'brain-write']), title: 'P' } })).kind).toBe('pass');

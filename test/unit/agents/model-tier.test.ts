@@ -14,7 +14,7 @@ describe('model tiers', () => {
     expect(tierCandidates('claude', 'mid', registry, { claude: { mid: 'own' } })).toEqual(['own', 'm-mid', 'm-mid-manual']);
     expect(tierModel('cursor', 'mid', registry, undefined)).toBeNull();
   });
-  it('gives Sentinel and Judge the same tier model as any role: no model switching for independence (ADR 0091)', () => {
+  it('gives Sentinel the same tier model as any role: no model switching for independence (ADR 0091)', () => {
     expect(tierModel('claude', 'top', registry, undefined)).toBe('h-top');
     expect(tierModel('claude', 'top', registry, { claude: { top: 'own-top' } })).toBe('own-top');
   });

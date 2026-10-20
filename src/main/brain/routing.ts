@@ -426,7 +426,7 @@ export function knownOutcome(run: { runId: string; outcome?: { verdict: string; 
 }
 
 /** The known-outcome sources that count as verified (ADR 0095): the user's verdict (the brain's 'human', the app's
- *  'agent-user'), a reviewed one (the Judge role's 'agent-review', the brain's sample judge 'judge', ADR 0047). The rest
+ *  'agent-user'), a reviewed one (an independent review's 'agent-review', the brain's sample judge 'judge', ADR 0047). The rest
  *  (the brain's 'proxy' = closed without an error line, the Orchestrator's opinion, a source not named) is known but
  *  unverified: shown apart, never in "verificati". */
 export const VERIFIED_OUTCOME_SOURCES: readonly string[] = ['human', 'agent-user', 'agent-review', 'judge'];

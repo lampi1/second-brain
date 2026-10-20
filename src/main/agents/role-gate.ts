@@ -8,7 +8,7 @@
 // delegated chat whose tool class goes beyond its parent's permissions is refused (under a parent that may only read
 // commands, a command that does not only read goes beyond it too). Everything else passes to the user
 // as before (a request beyond the role but within the parent is the user's call). A role that may write only in the
-// brain (brain-write without edit, e.g. the Scribe) gets Claude's Edit/Write (tool-policy.ts CLAUDE_TOOLS), and every
+// brain (brain-write without edit, as the user may narrow one) gets Claude's Edit/Write (tool-policy.ts CLAUDE_TOOLS), and every
 // edit it asks is refused unless its file's real path is inside the brain folder (no "..", no link out, no hard link,
 // a normalized path short enough that trimInput never cut it). The brain's list of read-only tools
 // (read-only-tools.md, agents/read-tools.ts) is the user's: an edit of it by any role is refused. Under a parent that

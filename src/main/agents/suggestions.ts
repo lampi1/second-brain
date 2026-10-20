@@ -1,6 +1,6 @@
 // The daily local rule of the "Da approvare" queue (ADR 0083): a role whose runs do clearly better, or as well for less,
 // on another model tier within the same skill set gets a tier proposal (Artisan + air-test: mid 45% vs top 85% → top).
-// Only known outcomes count (the user's verdict, a Judge's independent review); nothing is applied here and no model is
+// Only known outcomes count (the user's verdict, an independent review); nothing is applied here and no model is
 // called. Pure: used by lifecycle.ts daily(), pinned by test/unit/agents/role-loop.test.ts.
 import type { AgentProfile, AgentRun } from '../../shared/agents';
 import type { AgentLifecycleProposal } from '../../shared/agent-lifecycle';

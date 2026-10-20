@@ -47,12 +47,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
     prominent: true,
     title: b('Ogni compito passa da un ruolo', 'Every task goes through a role'),
     summary: b(
-      'Il lavoro lo fanno nove ruoli fissi: l’Orchestrator coordina, otto ruoli di lavoro eseguono, ognuno in una chat che vedi.',
-      'Nine fixed roles do the work: the Orchestrator coordinates, eight work roles carry it out, each in a chat you can see.'),
+      'Il lavoro lo fanno sei ruoli fissi: l’Orchestrator coordina, cinque ruoli di lavoro eseguono, ognuno in una chat che vedi.',
+      'Six fixed roles do the work: the Orchestrator coordinates, five work roles carry it out, each in a chat you can see.'),
     points: [
       // src/shared/roles.ts ROLE_IDS, ROLE_DEFAULTS
-      b('I ruoli sono sempre gli stessi: Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald, Router, Judge, Scribe. Nessuno se ne crea uno nuovo: un saper fare che manca diventa una skill.',
-        'The roles are always the same: Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald, Router, Judge, Scribe. Nobody creates a new one: missing know-how becomes a skill.'),
+      b('I ruoli sono sempre gli stessi: Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald. Nessuno se ne crea uno nuovo: un saper fare che manca diventa una skill. Router, Judge e Scribe non ci sono più: le richieste indipendenti le smista l’Orchestrator, il giudizio indipendente lo dà Sentinel, documenti e note del brain li scrive Artisan con una skill.',
+        'The roles are always the same: Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald. Nobody creates a new one: missing know-how becomes a skill. Router, Judge and Scribe are gone: the Orchestrator splits independent requests, Sentinel gives the independent verdict, Artisan writes documents and brain notes with a skill.'),
       // src/renderer/actions.ts newRequest (Ctrl+N); src/main/agents/catalog.ts resolve()
       b('Il lavoro parte solo dall’Orchestrator: Ctrl+N porta il cursore nella sua colonna («Cosa vuoi fare?»), lui sceglie il ruolo e le skill; la chat nasce con motore, modello del suo livello e istruzioni del ruolo.',
         'Work starts only from the Orchestrator: Ctrl+N puts the cursor in its column ("What do you want to do?"), it picks the role and the skills; the chat is born with the role’s engine, its tier’s model and the role’s instructions.'),
@@ -81,16 +81,16 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(DATA, 'AgentProfile { id, name, purpose, instructions, engine, model | null, effort?, tools, permissionCeiling, tier, tierMax, launches, skills, version, activeVersion, trial?, userLocked }.',
         'AgentProfile { id, name, purpose, instructions, engine, model | null, effort?, tools, permissionCeiling, tier, tierMax, launches, skills, version, activeVersion, trial?, userLocked }.'),
       // src/main/agents/catalog.ts (roles.json), src/main/agents/versions.ts (role-history.json)
-      tech(FILES, 'userData/roles.json (i nove ruoli e Pulse) e role-history.json (le versioni di ogni ruolo).',
-        'userData/roles.json (the nine roles and Pulse) and role-history.json (each role’s versions).'),
+      tech(FILES, 'userData/roles.json (i sei ruoli e Pulse) e role-history.json (le versioni di ogni ruolo).',
+        'userData/roles.json (the six roles and Pulse) and role-history.json (each role’s versions).'),
       // src/shared/roles.ts DELEGATION_DEFAULTS
       tech(LIMITS, 'Deleghe: profondità 2 e 5 figli in corso per genitore, di serie (Impostazioni → Ruoli e deleghe).', 'Delegation: depth 2 and 5 running children per parent by default (Settings → Roles and delegation).'),
     ],
     target: [
       b('Su Codex e Cursor il divieto dei sotto-agenti interni del motore è scritto nelle istruzioni, non applicato dall’app.',
         'On Codex and Cursor the ban on the engine’s internal sub-agents is written in the instructions, not enforced by the app.'),
-      b('Router smista solo i lotti che gli dai tu: l’app non gli manda da sola il lavoro in arrivo.',
-        'Router triages only the batches you give it: the app does not send it incoming work by itself.'),
+      b('Più richieste indipendenti in un messaggio: l’Orchestrator apre da sé una chat per richiesta, tutte insieme; l’app non gli manda da sola il lavoro in arrivo.',
+        'Several independent requests in one message: the Orchestrator opens one chat per request itself, all at once; the app does not send it incoming work by itself.'),
     ],
     sources: ['src/shared/roles.ts', 'src/shared/agents.ts', 'src/main/agents/catalog.ts', 'src/main/agents/discovery.ts', 'src/main/appctl/tools.ts', 'src/main/chats/manager.ts', 'src/renderer/actions.ts', 'src/main/agents/run-report.ts', 'src/main/agents/loop.ts'],
   },
@@ -104,8 +104,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('agent_delegate avvia da 1 a 10 chat figlie insieme, ognuna con un contratto che basta a sé: obiettivo, risultato atteso, criteri di fatto, contesto. Il figlio non legge mai la conversazione del genitore.',
         'agent_delegate starts 1 to 10 child chats at once, each with a self-contained contract: goal, expected output, done-when criteria, context. The child never reads the parent’s conversation.'),
       // src/main/agents/delegation.ts allowsClass, launchGap; src/main/agents/worktrees.ts; src/main/agents/role-gate.ts aboveParent
-      b('I permessi scendono soltanto: un figlio non ha mai più strumenti o permessi del genitore e lavora nella sua cartella (o in un worktree dello stesso repository); una richiesta oltre i permessi del genitore è rifiutata e lo dice nella chat. Di base ogni ruolo può tutto, quindi chi pianifica (Strategist, Router) avvia anche chi cambia qualcosa (Artisan, Sentinel, Herald, Scribe); se hai ristretto il genitore, un figlio che ha bisogno di più non parte: il genitore lo scrive nel suo risultato e lo avvia l’Orchestrator.',
-        'Permissions only go down: a child never gets more tools or permissions than its parent and works in its folder (or a worktree of the same repository); a request beyond the parent’s permissions is refused and says so in the chat. By default every role may do everything, so a planner (Strategist, Router) also launches the roles that change something (Artisan, Sentinel, Herald, Scribe); if you narrowed the parent, a child that needs more does not start: the parent writes it in its result and the Orchestrator starts it.'),
+      b('I permessi scendono soltanto: un figlio non ha mai più strumenti o permessi del genitore e lavora nella sua cartella (o in un worktree dello stesso repository); una richiesta oltre i permessi del genitore è rifiutata e lo dice nella chat. Di base ogni ruolo può tutto, quindi chi pianifica (Strategist) avvia anche chi cambia qualcosa (Artisan, Sentinel, Herald); se hai ristretto il genitore, un figlio che ha bisogno di più non parte: il genitore lo scrive nel suo risultato e lo avvia l’Orchestrator.',
+        'Permissions only go down: a child never gets more tools or permissions than its parent and works in its folder (or a worktree of the same repository); a request beyond the parent’s permissions is refused and says so in the chat. By default every role may do everything, so a planner (Strategist) also launches the roles that change something (Artisan, Sentinel, Herald); if you narrowed the parent, a child that needs more does not start: the parent writes it in its result and the Orchestrator starts it.'),
       // src/shared/roles.ts DELEGATION_DEFAULTS; src/main/chats/manager.ts limitNotice
       b('Profondità e figli in corso sono limiti tuoi (Impostazioni → Ruoli e deleghe); una delega oltre il limite è rifiutata e il genitore mostra «Limite».',
         'Depth and running children are your limits (Settings → Roles and delegation); a delegation over the limit is refused and the parent shows "Limit".'),
@@ -139,8 +139,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'A role is a fixed profile with instructions, engine, model tier, the roles it may launch and its default skills; by default it may do everything, and you narrow its permissions from its card.'),
     points: [
       // src/shared/roles.ts ROLE_DEFAULTS
-      b('Strategist pianifica, Scout cerca e legge, Artisan costruisce, Sentinel verifica, Herald comunica, Router smista lotti, Judge valuta in modo indipendente, Scribe scrive nel brain.',
-        'Strategist plans, Scout searches and reads, Artisan builds, Sentinel verifies, Herald communicates, Router triages batches, Judge evaluates independently, Scribe writes to the brain.'),
+      b('Strategist pianifica, Scout cerca e legge, Artisan costruisce e scrive documenti e note del brain, Sentinel verifica e, quando non c’è nulla da eseguire, giudica dalle prove, Herald comunica.',
+        'Strategist plans, Scout searches and reads, Artisan builds and writes documents and brain notes, Sentinel verifies and, when nothing can be run, judges from the evidence, Herald communicates.'),
       // src/renderer/components/AgentStudio.tsx RoleEditor
       b('In Agenti ogni ruolo ha la sua pagina: «Modifica» cambia istruzioni, skill, motore, modello, livello, ruoli avviabili e contesto massimo; nome, scopo e personaggio restano del ruolo.',
         'In Agents each role has its page: "Edit" changes instructions, skills, engine, model, tier, launchable roles and maximum context; name, purpose and character stay the role’s.'),
@@ -154,8 +154,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Ogni cambio di comportamento è una versione nuova: la pagina ne mostra le ultime e ne riattiva una vecchia con un clic.',
         'Every behaviour change is a new version: the page shows the latest ones and brings an older one back with a click.'),
       // src/main/agents/model-tier.ts tierModel; src/main/agents/role-table.ts; src/main/agents/catalog.ts resolve()
-      b('Un ruolo senza un modello suo prende quello della riga di Instradamento modelli che corrisponde al lavoro sul suo motore (e il suo sforzo, se il ruolo non ne indica uno); altrimenti il livello (leggero, medio, top) diventa un modello per ogni motore: la tua scelta in Impostazioni, altrimenti il registro dei modelli del brain. Sentinel e Judge sono indipendenti perché partono in una sessione nuova, senza il ragionamento del genitore, non perché cambiano modello.',
-        'A role without its own model takes the model of the Model routing row that matches the work on its engine (and its effort, when the role names none); else the tier (light, mid, top) becomes a model per engine: your choice in Settings, else the brain’s model registry. Sentinel and Judge are independent because they start in a new session without the parent’s reasoning, not because they switch model.'),
+      b('Un ruolo senza un modello suo prende quello della riga di Instradamento modelli che corrisponde al lavoro sul suo motore (e il suo sforzo, se il ruolo non ne indica uno); altrimenti il livello (leggero, medio, top) diventa un modello per ogni motore: la tua scelta in Impostazioni, altrimenti il registro dei modelli del brain. Sentinel è indipendente perché parte in una sessione nuova, senza il ragionamento del genitore, non perché cambiano modello.',
+        'A role without its own model takes the model of the Model routing row that matches the work on its engine (and its effort, when the role names none); else the tier (light, mid, top) becomes a model per engine: your choice in Settings, else the brain’s model registry. Sentinel is independent because it starts in a new session without the parent’s reasoning, not because they switch model.'),
       // src/main/agents/tool-policy.ts browserAccess, readOnlyCommand; src/main/chats/manager.ts refusedCommand; src/main/agents/skill-needs.ts
       b('Strumenti a classi: un ruolo limitato ai comandi di sola lettura vede rifiutato in chat un comando che scrive (se l’ha delegato una chat che può eseguirlo, decidi tu); uno che legge, o uno script node elencato in read-only-tools.md nel cervello, ti arriva come permesso senza «sempre». Se una skill passata a un ruolo usa strumenti che il ruolo non ha, l’Orchestrator lo sa subito (app_create_chat, agent_delegate, agent_catalog).',
         'Tools come in classes: a role limited to read-only commands has a writing command refused in the chat (when a chat that may run it delegated it, you decide); one that reads, or a node script listed in read-only-tools.md in the brain, reaches you as a permission without "always". When a skill passed to a role uses tools the role lacks, the Orchestrator knows at once (app_create_chat, agent_delegate, agent_catalog).'),
@@ -284,8 +284,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Finisce come completed, closed (chat chiusa o archiviata) o stale (72 ore senza turni); scrivere di nuovo a mano la riapre.',
         'It ends as completed, closed (chat closed or archived) or stale (72 hours without turns); writing to it again by hand reopens it.'),
       // src/main/agents/run-feedback.ts recordFeedback
-      b('Un giudizio vale come prova solo se viene da una revisione di Judge finita e verificata, nella sua sessione (su qualunque modello: conta che non abbia visto il ragionamento della run); il parere di un genitore resta un parere.',
-        'A verdict counts as evidence only if it comes from an ended, verified Judge review in its own session (on any model: what counts is that it never saw the run’s reasoning); a parent’s opinion stays an opinion.'),
+      b('Un giudizio vale come prova solo se viene da una revisione indipendente (di Sentinel) finita e verificata, nella sua sessione (su qualunque modello: conta che non abbia visto il ragionamento della run); il parere di un genitore resta un parere.',
+        'A verdict counts as evidence only if it comes from an ended, verified independent review (a Sentinel’s) in its own session (on any model: what counts is that it never saw the run’s reasoning); a parent’s opinion stays an opinion.'),
       // src/main/run/outcome.ts (run:outcome IPC); src/renderer/components/RunSurface.tsx
       b('Quando la run ha finito, nella striscia espansa dici tu com’è andata (riuscita, in parte, non riuscita): il tuo esito vince sempre.',
         'Once the run has finished, in the expanded strip you say how it went (success, partial, failed): your verdict always wins.'),
@@ -461,8 +461,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'Commands: production ones (az, sqlcmd, ops scripts) ask for a second click and main checks again; for a read-only role a command counts as reading only if it is a known reader, with no chaining, redirection, subexpression or option that writes or runs (sort and uniq only after a pipe).'),
       // src/renderer/lib/foreign.ts; src/main/chats/admission.ts; src/shared/waiting.ts
       // src/shared/roles.ts ROLE_DEFAULTS.router
-      b('Altri: messaggi non scritti da te (mostrati attenuati), «Aspetta un lavoro» sul testo, la coda per carico (CPU > 75% o RAM libera < 15%). Permessi e domande non sono indovinati: arrivano strutturati dalla CLI. Smistare un lotto di lavoro (una inbox, una lista di ticket) è invece il compito del ruolo Router, quando glielo affidi.',
-        'Others: messages you did not type (shown muted), "Waits for work" on the text, the load queue (CPU > 75% or free RAM < 15%). Permissions and questions are not guessed: they arrive structured from the CLI. Triaging a batch of work (an inbox, a list of tickets) is instead the Router role’s job, when you hand it one.'),
+      b('Altri: messaggi non scritti da te (mostrati attenuati), «Aspetta un lavoro» sul testo, la coda per carico (CPU > 75% o RAM libera < 15%). Permessi e domande non sono indovinati: arrivano strutturati dalla CLI. Smistare un lotto di lavoro (una inbox, una lista di ticket) lo fa invece l’Orchestrator, una chat per richiesta, quando glielo affidi.',
+        'Others: messages you did not type (shown muted), "Waits for work" on the text, the load queue (CPU > 75% or free RAM < 15%). Permissions and questions are not guessed: they arrive structured from the CLI. Triaging a batch of work (an inbox, a list of tickets) is instead the Orchestrator’s, one chat per request, when you hand it one.'),
       // src/renderer/components/brain-model/ClassifiersPage.tsx, src/main/brainmodel/classifier-cards.ts
       b('Brain → Classificatori ne mostra sei come schede: decisioni, quanto spesso «prendono» (tipo riconosciuto, skill azzeccate, costo dentro la forchetta, tempo del task fra metà e doppio della stima), quante chat decise sono riuscite (verificate da te o da una revisione, dai run o dal registro del brain, mai l’autovalutazione; gli esiti automatici del brain, come «chiusa senza errori», sono contati a parte come non verificati), il costo medio, 8 settimane di andamento e i casi verificati raccolti sui 20 che servono per calibrarsi. Ogni numero ha un «?».',
         'Brain → Classifiers shows five of them as cards: decisions, how often they "get it" (kind recognised, skills spot on, cost inside the range), how many decided chats succeeded (verified by you or a review, never a self-report), the average cost, 8 weeks of trend and the verified cases collected of the 20 needed to calibrate. Every number has a "?".'),
@@ -814,8 +814,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Un ruolo non viene mai scavalcato: la sua chat ha il suo modello; se il ruolo non ne ha uno, quello della riga della tabella sul suo motore (e il suo sforzo, se il ruolo non ne indica uno), altrimenti il modello del suo livello. La rotta lo registra come «agent». Senza ruolo, un modello diverso dalla tabella richiede un motivo; lo sforzo max mai dalla tabella.',
         'A role is never overridden: its chat has its own model; when the role has none, the table row’s model on its engine (and its effort, when the role names none), else its tier’s model. The route records it as "agent". Without a role, a model other than the table’s needs a reason; max effort never from the table.'),
       // src/main/brain/routing.ts knownOutcome, kindStats, freshReason; src/main/wiring.ts routingVerdict
-      b('Il tuo esito su una run di un ruolo (o quello di una revisione di Judge) entra nel registro come esito noto; il motivo della riga mostra i conteggi di oggi, per esempio «16 chat, 10 con esito, 70% riuscite».',
-        'Your verdict on a role run (or a Judge review’s) enters the ledger as a known outcome; the row’s reason shows today’s counts, for example "16 chats, 10 with an outcome, 70% successful".'),
+      b('Il tuo esito su una run di un ruolo (o quello di una revisione indipendente) entra nel registro come esito noto; il motivo della riga mostra i conteggi di oggi, per esempio «16 chat, 10 con esito, 70% riuscite».',
+        'Your verdict on a role run (or an independent review’s) enters the ledger as a known outcome; the row’s reason shows today’s counts, for example "16 chats, 10 with an outcome, 70% successful".'),
       // src/main/brain/routing.ts explore
       b('«Esplorazione» (0–50%) prova ogni tanto il modello con meno esempi, mai per l’Orchestrator e mai per le chat che avvii tu.',
         '"Exploration" (0–50%) sometimes tries the model with the fewest samples, never for the Orchestrator and never for chats you start.'),

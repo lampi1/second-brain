@@ -11,9 +11,7 @@ const PLAN: [string, number, number, number, number, number][] = [
   ['strategist', 34, 0.6, 0.8, 12, 0.6],
   ['scout', 19, 0.55, 0.72, 9, 0.28],
   ['sentinel', 11, 0.7, 0.75, 7, 0.22],
-  ['judge', 8, 0.4, 0.8, 4, 0.12],
   ['herald', 3, 1, 1, 3, 0.05],
-  ['router', 2, 0, 1, 1, 0.01],
 ];
 
 /** A small linear congruential generator: the same history at every start. */

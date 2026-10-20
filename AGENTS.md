@@ -7,8 +7,8 @@ Grindhouse, coordinated by the Orchestrator), answers their questions and permis
 
 Words used everywhere: **Orchestrator** = the coordinating chat and the one place where work starts (it plans, opens
 role chats, answers their mail; a full-height column on the right; it sees the work chats' state and the user's own
-messages to them, never their content, ADR 0083); **role** = one of nine fixed roles (Orchestrator, Strategist,
-Scout, Artisan, Sentinel, Herald, Router, Judge, Scribe) a chat runs; **delegation** = a role chat starting visible
+messages to them, never their content, ADR 0083); **role** = one of the five fixed work roles (Strategist, Scout,
+Artisan, Sentinel, Herald) or the Orchestrator, that a chat runs (Router, Judge and Scribe are retired, ADR 0100); **delegation** = a role chat starting visible
 child chats with `agent_delegate` (permissions only go down, questions go to the parent first, one `agent_report`
 back, ADR 0083); **Grindhouse** = the home page, the one place for the
 agents (a strip each, the browsers they drive under them; the old Mosaico / Corsie views are retired, ADR 0068);

@@ -1,9 +1,11 @@
-// The Judge's sampled reviews (ADR 0083, the app owns the improvement loop): a few times a day the app picks finished
-// root role runs nobody judged yet (no verdict of the user or of a Judge; a delegated child's run is never sampled:
-// its content belongs to its parent, which judged the result when it read it), starts a
-// Judge chat on each (a root chat linked to the run with reviewOf: a new session that never saw the run's reasoning, on
-// the Judge's own model, ADR 0091), and when that review ends turns its verdict into the run's feedback (run-feedback.ts
-// recordFeedback: it counts as reviewed evidence only when the Judge verified it). At most
+// The app's sampled independent reviews (ADR 0083, the app owns the improvement loop): a few times a day the app picks
+// finished root role runs nobody judged yet (no verdict of the user or of a review; a delegated child's run is never
+// sampled: its content belongs to its parent, which judged the result when it read it), starts a Sentinel chat on each
+// (ADR 0100: the Judge's job is Sentinel's; a root chat linked to the run with reviewOf: a new session that never saw the
+// run's reasoning, on the Sentinel's own model, ADR 0091), and when that review ends turns its verdict into the run's
+// feedback (run-feedback.ts recordFeedback: it counts as reviewed evidence only when the reviewer verified it). A review
+// a Judge started before ADR 0100 is still recorded when it ends. The file, the setting and the feedback caller keep
+// their "judge" names (judge-samples.json, delegation.judgeDaily, 'judge-sample'): they are stored data. At most
 // Settings.delegation.judgeDaily a day (0 = off). It spends tokens, so wiring.ts starts it only in the user's own app
 // (judgeSamplingOn: never in tests or an agent's hidden run; SB_JUDGE_SAMPLE=1/0 forces it), first a few minutes after
 // the start, then every 30 minutes; each tick that starts or skips logs why (issue #112, ADR 0097). Pure picking
@@ -13,10 +15,13 @@ import path from 'node:path';
 import type { AgentRun } from '../../shared/agents';
 import type { AgentFeedbackArgs } from '../../shared/agent-lifecycle';
 import type { ChatSummary, Harness, NewChat } from '../../shared/contract';
-import { ROLE_DEFAULTS, isWorkRole } from '../../shared/roles';
+import { isWorkRole, roleName } from '../../shared/roles';
 import { readLocal, writeLocal } from './local-store';
 import { log, errText } from '../log';
 
+/** the role that runs the sampled reviews (ADR 0100); 'judge' = a review started before it */
+export const REVIEWER_ROLE = 'sentinel';
+const REVIEWERS: ReadonlySet<string> = new Set([REVIEWER_ROLE, 'judge']);
 /** a run older than this is not sampled any more */
 export const SAMPLE_WINDOW_MS = 7 * 86_400_000;
 const OUTPUT_MAX = 6000;
@@ -28,7 +33,7 @@ export interface JudgeSampleDeps {
   chat: (id: string) => ChatSummary | undefined;
   create: (req: NewChat) => Promise<ChatSummary>;
   daily: () => number;
-  /** the engine the Judge role runs on */
+  /** the engine the reviewer role (Sentinel) runs on */
   judgeEngine: () => Harness;
   /** why a chat may not start on that engine now (switched off, agents may not use it); null = it may */
   refusal: (engine: Harness) => string | null;
@@ -41,23 +46,23 @@ interface State { version: 1; day: string; started: number; reviews: Review[] }
 const dayOf = (t: number): string => new Date(t).toISOString().slice(0, 10);
 const UNJUDGED = new Set(['self-report', 'unknown']);
 
-/** The runs to review now: finished with a report in the last week, not a Judge's own, not judged by anyone, not
- *  reviewed already, not a delegated child's (its content is its parent's: a root Judge chat would show it to the
+/** The runs to review now: finished with a report in the last week, not a review itself, not judged by anyone, not
+ *  reviewed already, not a delegated child's (its content is its parent's: a root review chat would show it to the
  *  Orchestrator, ADR 0083; the parent judged its result when it read it); a stable pseudo-random order per day, so the sample is spread over roles and not just the newest. */
 export function pickSamples(runs: readonly AgentRun[], reviewed: ReadonlySet<string>, now: number, n: number): AgentRun[] {
   if (n <= 0) return [];
   const day = dayOf(now);
   const hasReview = new Set(runs.flatMap(r => r.reviewOf ? [r.reviewOf] : []));
   return runs.filter(r => r.endedAt !== undefined && r.endReason === 'completed' && now - r.endedAt <= SAMPLE_WINDOW_MS
-      && r.source !== 'oneshot' && !r.parentRunId && r.agentId !== 'judge' && isWorkRole(r.agentId) && !!r.report
+      && r.source !== 'oneshot' && !r.parentRunId && !r.reviewOf && isWorkRole(r.agentId) && !!r.report
       && (!r.outcome || UNJUDGED.has(r.outcome.basis)) && !hasReview.has(r.runId) && !reviewed.has(r.runId))
     .map(r => ({ r, k: createHash('sha256').update(`${day}:${r.runId}`).digest('hex') }))
     .sort((a, b) => a.k.localeCompare(b.k)).slice(0, n).map(x => x.r);
 }
 
-/** The Judge's self-contained contract: what the run had to do, what it said and gave, how to answer. */
+/** The reviewer's self-contained contract: what the run had to do, what it said and gave, how to answer. */
 export function reviewPrompt(run: AgentRun, chat: Pick<ChatSummary, 'title' | 'cwd' | 'lastText'>): string {
-  const role = isWorkRole(run.agentId) ? ROLE_DEFAULTS[run.agentId].name : run.agentId;
+  const role = roleName(run.agentId);
   const output = (chat.lastText ?? '').trim();
   return [
     `Sampled review by the app: an independent verdict on a finished run of ${role} «${chat.title}».`,
@@ -133,7 +138,7 @@ export class JudgeSampler {
         if (!chat) { gone++; continue; }
         if (chat.parentId) { child++; continue; }
         try {
-          const judge = await this.d.create({ harness: engine, cwd: chat.cwd, title: `Revisione · ${chat.title}`.slice(0, 80), roleId: 'judge', reviewOf: run.runId,
+          const judge = await this.d.create({ harness: engine, cwd: chat.cwd, title: `Revisione · ${chat.title}`.slice(0, 80), roleId: REVIEWER_ROLE, reviewOf: run.runId,
             goal: `Independent verdict on «${chat.title}»`, prompt: reviewPrompt(run, chat) });
           this.state.reviews.push({ runId: run.runId, chatId: judge.id, at: now, state: 'running' });
           this.state.started++; started++;
@@ -153,13 +158,13 @@ export class JudgeSampler {
 
   /** A run ended: when it is one of our reviews, its verdict becomes the reviewed run's feedback. */
   async ended(run: AgentRun): Promise<void> {
-    if (run.agentId !== 'judge' || !run.reviewOf) return;
+    if (!REVIEWERS.has(run.agentId) || !run.reviewOf) return;
     const entry = this.state.reviews.find(r => r.runId === run.reviewOf && r.chatId === run.chatId && r.state === 'running');
     if (!entry) return;
     const verdict = run.report?.verdict;
     if (!verdict || !run.report) { entry.state = 'no-verdict'; this.save(); log.info('agents', 'judge sample without a verdict', { data: { runId: run.reviewOf } }); return; }
     try {
-      await this.d.feedback({ runId: run.reviewOf, verdict, notes: `Judge: ${run.report.summary}`, evidence: [{ kind: 'run', ref: run.runId, at: run.endedAt ?? this.now() }] }, 'judge-sample');
+      await this.d.feedback({ runId: run.reviewOf, verdict, notes: `${roleName(run.agentId)}: ${run.report.summary}`, evidence: [{ kind: 'run', ref: run.runId, at: run.endedAt ?? this.now() }] }, 'judge-sample');
       entry.state = 'recorded';
     } catch (e) {
       entry.state = 'no-verdict';

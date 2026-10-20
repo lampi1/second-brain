@@ -156,7 +156,7 @@ export function addTurn(run: AgentRun, usd: number | null, tokens: AgentRunToken
   for (const k of ['input', 'cacheRead', 'cacheWrite', 'output'] as const) run.tokens[k] += tokens[k];
 }
 
-/** Links a new run may carry: the delegating chat's run (agent_delegate), the run a Judge reviews, the run it reworks;
+/** Links a new run may carry: the delegating chat's run (agent_delegate), the run an independent review (a Sentinel) reviews, the run it reworks;
  *  each must name a run the store knows. */
 export interface RunLinks { parentRunId?: string; reviewOf?: string; reworkOf?: string }
 export interface RunStart extends RunLinks { chatId: string; agentId: string; version: number; goal: string; startedBy: AgentRun['startedBy']; startedAt: number; costKnown: boolean; tags?: AgentRunTags; tier?: ModelTier; model?: string | null }

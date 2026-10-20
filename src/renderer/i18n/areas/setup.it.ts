@@ -15,7 +15,7 @@ export const setupIt = {
   'setup.step.work': 'Il tuo lavoro',
   'setup.step.agents': 'Squadra',
   'setup.team.title': 'La tua squadra',
-  'setup.team.lead': 'L’Orchestrator coordina; gli altri otto ruoli fanno il lavoro che delega. Puoi cambiare istruzioni, permessi e modello di ognuno in Cervello → Agenti.',
+  'setup.team.lead': 'L’Orchestrator coordina; i cinque ruoli di lavoro fanno il lavoro che delega. Puoi cambiare istruzioni, permessi e modello di ognuno in Cervello → Agenti.',
   'setup.step.done': 'Riepilogo',
   'setup.head.memory': 'La tua memoria e i tuoi progetti',
   'setup.lead.memory': 'Gli agenti tengono note e regole in una memoria su questo computer e lavorano nei tuoi progetti. Ecco dove stanno: di solito non devi fare nulla.',

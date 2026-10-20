@@ -7,7 +7,7 @@ export type DefinitionGap = typeof DEFINITION_GAPS[number];
 const VERDICTS = ['success', 'partial', 'fail', 'unknown'] as const;
 const EVIDENCE_KINDS = ['journal', 'chat', 'ai-error', 'cost', 'run', 'feedback'] as const;
 
-/** The arguments of `agent_child_feedback` (a parent's opinion of its child's run) and of a Judge's review: the ONE shape
+/** The arguments of `agent_child_feedback` (a parent's opinion of its child's run) and of an independent review (a Sentinel's): the ONE shape
  *  the tool's schema, its validation and the lifecycle facade share. `notes` is the free-text opinion (it becomes the
  *  outcome note); worked/failed/gap/gapKey are optional detail the maintenance reads. The role, its version and the
  *  outcome's basis are never arguments: main reads them from the authoritative run and its own evidence checks. */

@@ -180,11 +180,11 @@ Ogni errore di un agente o di una chat, una riga.
 - {d:54} | Sentinel | Test dato per passato senza eseguirlo: la suite non era partita
 - {d:47} | Scout | Di nuovo l'avviso generico al posto del log del nodo del cliente Alfa Shop
 - {d:40} 15:05 · Artisan · rilasci · verifica mancata · detto: pronto per il test · vero: la build della pull request era rossa · visto da: revisione
-- {d:33} | Scribe | Nota di rilascio in inglese tecnico: il cliente la vuole in italiano semplice
+- {d:33} | Artisan | Nota di rilascio in inglese tecnico: il cliente la vuole in italiano semplice
 - {d:26} | Sentinel | Test dato per passato senza eseguirlo: mancava l'ambiente di test libero
 - {d:19} | Scout | Log del nodo letto in ora locale: il nodo scrive in UTC, l'orario era sbagliato di due ore
 - {d:12} 11:20 · Artisan · rilasci · verifica mancata · detto: fatto · vero: la pagina dava errore 500 · visto da: tu, dallo screenshot · regola: niente «fatto» senza screenshot
-- {d:9} | Judge | Giudizio dato senza leggere i criteri del contratto
+- {d:9} | Sentinel | Giudizio dato senza leggere i criteri del contratto
 - {d:5} | Sentinel | Test dato per passato senza eseguirlo: suite filtrata su un solo file
 - {d:2} | Scout | Ha letto l'avviso generico invece del log del nodo: il problema era nel nodo 3
 `, 2],
@@ -201,6 +201,7 @@ Ogni errore di un agente o di una chat, una riga.
 - {d:64} · Marco preferisce una PR piccola per volta
 - {d:44} · Il carrello ha due calcoli del totale: \`cart.ts\` e \`checkout.ts\`, vanno cambiati insieme
 - {d:23} · Screenshot della pagina cambiata **prima** di dire fatto
+- {d:35} · Le note di rilascio per Alfa Shop vanno in *italiano semplice*
 - {d:11} · Le pull request verso \`release/*\` vogliono il numero del work item nel titolo
 `, 11],
   'agents/sentinel/memory.md': [`# Memoria: Sentinel
@@ -209,10 +210,6 @@ Ogni errore di un agente o di una chat, una riga.
 - {d:27} · Un solo ambiente libero alla volta: prenotalo nel canale QA
 - {d:6} · Controlla che la suite sia partita davvero: guarda il numero di test eseguiti
 `, 6],
-  'agents/scribe/memory.md': [`# Memoria: Scribe
-
-- {d:35} · Le note di rilascio per Alfa Shop vanno in *italiano semplice*
-`, 35],
   'ambienti/vecchio-server.md': [`# Vecchio server di prova
 
 - Spento a fine estate: i dati sono nell'ambiente di test
@@ -286,9 +283,10 @@ export function demoBrainRuns(now: number, skills: string[]): AgentRun[] {
   const plan: [string, number, number | string, AgentRunOutcome['verdict'] | null][] = [];
   const verdicts: AgentRunOutcome['verdict'][] = ['success', 'success', 'partial', 'success', 'fail', 'success', 'success', 'unknown'];
   for (let i = 0; i < 34; i++) {
-    const role = ['scout', 'artisan', 'sentinel', 'scout', 'artisan', 'scribe', 'judge'][i % 7]!;
-    const skill: number | string = role === 'scribe' ? 'note-di-rilascio' : role === 'sentinel' ? 2 : role === 'artisan' ? (i % 3 === 0 ? 1 : 0) : i % 5 === 0 ? 1 : 0;
-    plan.push([role, 2 + Math.floor((i * 67) / 34), skill, role === 'sentinel' ? (i % 2 ? 'fail' : 'partial') : verdicts[i % verdicts.length]!]);
+    // slot 5 is the release notes (an Artisan with the brain skill, ADR 0100), slot 6 an independent review (a Sentinel)
+    const slot = i % 7, role = ['scout', 'artisan', 'sentinel', 'scout', 'artisan', 'artisan', 'sentinel'][slot]!;
+    const skill: number | string = slot === 5 ? 'note-di-rilascio' : slot === 2 ? 2 : slot === 1 || slot === 4 ? (i % 3 === 0 ? 1 : 0) : i % 5 === 0 ? 1 : 0;
+    plan.push([role, 2 + Math.floor((i * 67) / 34), skill, slot === 2 ? (i % 2 ? 'fail' : 'partial') : verdicts[i % verdicts.length]!]);
   }
   return plan.map(([role, days, skill, verdict], i): AgentRun => {
     const name = typeof skill === 'number' ? migrated[skill] : skill;
