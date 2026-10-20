@@ -7,7 +7,7 @@ import { afterEach, expect, it } from 'vitest';
 import { detectProjectsFolder, resolveSlug, slugOf } from '../../../src/main/brain/projects-folder';
 
 const roots: string[] = [];
-const temp = () => { const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-projects-'))); roots.push(root); return root; };
+const temp = () => { const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-projects-'))); roots.push(root); return root; };
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
 const repo = (dir: string) => fs.mkdirSync(path.join(dir, '.git'), { recursive: true });
 

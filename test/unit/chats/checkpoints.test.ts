@@ -12,7 +12,7 @@ import { afterTree, prune, repoRoot, restore, snapshot } from '../../../src/main
 
 const roots: string[] = [];
 afterEach(() => { for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
-const tmp = (): string => { const d = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-cp-'))); roots.push(d); return d; };
+const tmp = (): string => { const d = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-cp-'))); roots.push(d); return d; };
 const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@localhost', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@localhost' } });
 const write = (dir: string, f: string, s: string) => { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), s); };
 
@@ -35,7 +35,7 @@ describe('checkpoints', () => {
     git(d, 'add', 'a.txt');
     const head = git(d, 'rev-parse', 'HEAD'), staged = git(d, 'diff', '--cached', '--name-only');
     const cp = await snapshot(path.join(d), 'refs/sb/checkpoints/c_x/1');
-    expect(cp?.root).toBe(d);
+    expect(path.resolve(cp!.root)).toBe(d);
     expect(git(d, 'rev-parse', 'HEAD')).toBe(head);
     expect(git(d, 'diff', '--cached', '--name-only')).toBe(staged);
     expect(git(d, 'branch', '--list')).toContain('main');
@@ -58,11 +58,13 @@ describe('checkpoints', () => {
 
   it('after the turn ended, only its own changes go back: a later edit, a nested repository and odd names', async () => {
     const d = repo();
+    // a name git would read as a pattern ([ab] matches a.md), legal on Windows too
+    write(d, 'a.md', 'kept');
     const cp = await snapshot(d, 'refs/sb/checkpoints/c_z/1');
     // the turn
     write(d, 'a.txt', 'by the turn');
     write(d, 'b.txt', 'by the turn, then the user');
-    write(d, '[x]*.md', 'literal name');
+    write(d, '[ab].md', 'literal name');
     const nested = path.join(d, 'vendor/lib');
     fs.mkdirSync(nested, { recursive: true });
     git(nested, 'init', '-q'); write(nested, 'f.txt', 'f'); git(nested, 'add', '-A'); git(nested, 'commit', '-q', '-m', 'n');
@@ -73,11 +75,12 @@ describe('checkpoints', () => {
     const out = await restore(cp!, 'refs/sb/undo/c_z/1');
     expect(fs.readFileSync(path.join(d, 'a.txt'), 'utf8')).toBe('a1');
     expect(fs.readFileSync(path.join(d, 'b.txt'), 'utf8')).toBe('the user\'s edit');
-    expect(fs.existsSync(path.join(d, '[x]*.md'))).toBe(false);
+    expect(fs.existsSync(path.join(d, '[ab].md'))).toBe(false);
+    expect(fs.readFileSync(path.join(d, 'a.md'), 'utf8')).toBe('kept');
     expect(fs.existsSync(path.join(d, 'mine.txt'))).toBe(true);
     expect(fs.existsSync(path.join(nested, 'f.txt'))).toBe(true);
     expect(out.skipped.sort()).toEqual(['b.txt', 'vendor/lib']);
-    expect(out.removed).toEqual(['[x]*.md']);
+    expect(out.removed).toEqual(['[ab].md']);
   });
 
   it('a folder outside git has none; old refs are pruned', async () => {

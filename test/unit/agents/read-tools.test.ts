@@ -12,7 +12,7 @@ import { gateRequest, isReadToolsList } from '../../../src/main/agents/role-gate
 const roots: string[] = [];
 afterEach(() => { for (const r of roots.splice(0)) fs.rmSync(r, { recursive: true, force: true }); });
 function brain() {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-readtools-'))); roots.push(root);
+  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-readtools-'))); roots.push(root);
   fs.mkdirSync(path.join(root, 'tools'));
   for (const f of ['my-tasks.mjs', 'azure-status.mjs', 'evil.mjs']) fs.writeFileSync(path.join(root, 'tools', f), 'console.log(1)\n');
   fs.writeFileSync(path.join(root, READ_TOOLS_FILE), ['# Strumenti di sola lettura', '', '- `tools/my-tasks.mjs`: i miei work item', '- tools/azure-status.mjs — stato di Azure',
