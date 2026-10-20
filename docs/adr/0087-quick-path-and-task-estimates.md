@@ -56,3 +56,9 @@ lesson kept here is that an estimate must say what it rests on and show how ofte
 - The heuristics (parts, 10 min, 0,50 $, 400 characters) are constants in `shared/task-estimate.ts` and
   `agents/task-estimate.ts`, pinned by `test/unit/agents/task-estimate.test.ts`; a later ADR may learn them from the
   ledger instead.
+
+## Revision (owner, 2026-10-20, #113)
+
+The Orchestrator no longer writes the estimate in its replies: the agents view (strip chip, plan under its head)
+already shows it. Its rules now say to keep its own turn short, hand runs of tool calls to a work chat, and acknowledge
+a delegation with one emoji (ADR 0089, shared/reaction.ts).

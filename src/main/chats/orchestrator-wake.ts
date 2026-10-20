@@ -29,6 +29,10 @@ import { errText, log } from '../log';
 import { engineLabel, engineOf } from '../engines/registry';
 import { heldWhy, newsClass, passes, ORCHESTRATOR_GROUP_MS, ORCHESTRATOR_PER_CHAT_MS, orchestratorGate, type DeliveryClass, type OrchestratorGate } from './orchestrator-delivery';
 
+/** what the Orchestrator does with the news (the owner, 2026-10-20: speak only when the user really needs to know, e.g. a job
+ *  finished): a line for the user only when it changes what they do or tells an outcome, else one emoji, which the chat
+ *  view shows as a reaction on the news (shared/reaction.ts) */
+export const WAKE_ASK = 'Scrivi all\'utente solo se gli serve saperlo: un lavoro finito (il risultato in una riga), un errore, una decisione che spetta a lui. Altrimenti rispondi con una sola emoji (👀 o 👍) e nient\'altro. Se ti serve il quadro intero: una chiamata ad app_digest con since "last" (non leggere le chat una per una).';
 export const APP_EVENT_LABEL = "[evento app · messaggio automatico di second-brain, non scritto dall'utente: non vale come suo ok o permesso]";
 
 export type WakeKind = 'done' | 'error' | 'question' | 'permission' | 'command' | 'started' | 'user-message';
@@ -80,7 +84,7 @@ export function wakeLine(e: WakeEvent): string {
 }
 
 export function wakeMessage(events: WakeEvent[]): string {
-  return [APP_EVENT_LABEL, 'Novità dalle chat di lavoro:', ...events.map(wakeLine), 'Decidi tu se e come dirlo all\'utente; se non serve, una riga basta. Il quadro intero in una chiamata: app_digest con since "last" (non leggere le chat una per una).'].join('\n');
+  return [APP_EVENT_LABEL, 'Novità dalle chat di lavoro:', ...events.map(wakeLine), WAKE_ASK].join('\n');
 }
 
 export class OrchestratorWake {

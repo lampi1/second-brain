@@ -8,7 +8,8 @@
 // chat: CodeBlock.tsx; the chat id comes from ItemList's chatId); a click on copyable inline code copies it, on a file path or a link it opens a preview (LinkPeek.tsx). Each row is memoized by its item, so a streaming
 // message re-renders only itself (at most once a frame, re-parsing only its last markdown block); tool rows show live
 // elapsed time; in an Orchestrator, an "Apri" chip under the chats she opened, wrote to or named (ChatRefChips.tsx, ADR 0034)
-// and a "Veloce" / "Strategist" badge on a message sent with that mode (shared/newchat.ts); a "sta scrivendo… / sta pensando…" line follows the turn; the list follows the bottom ONLY when the
+// and a "Veloce" / "Strategist" badge on a message sent with that mode (shared/newchat.ts); its thinking and tool rows fold
+// behind one "Ragionamento" row, and an emoji-only reply sticks to the user's bubble as a reaction (lib/chat-view.ts); a "sta scrivendo… / sta pensando…" line follows the turn; the list follows the bottom ONLY when the
 // user is already there (scrolled up to read, it never jumps: a "nuove righe" pill appears instead). Used by ChatTile
 // and OrchestratorTile.
 import { t as auditText } from '../i18n';
@@ -31,6 +32,7 @@ import { useApp } from '../store/store';
 import { chatRefsOf, titlesKey, toolChatRef } from '../lib/chatrefs';
 import { splitMode } from '@shared/newchat';
 import { isReaction } from '@shared/reaction';
+import { chatView } from '../lib/chat-view';
 import { NamedChatRefs, ToolChatRef } from './ChatRefChips';
 import { openHandoff } from '../store/ui';
 import { ArtifactCard } from './GenUi';
@@ -206,6 +208,27 @@ const ToolItem = memo(function ToolItem({ item }: { item: Tool }) {
   return <div className="tool-with-ref"><ToolRow item={item} /><ToolChatRef chatId={ref.chatId} title={ref.title} how={ref.how} /></div>;
 });
 
+/** An Orchestrator's reasoning and tool rows, folded behind one "Ragionamento" row (the owner, 2026-10-20: seen only
+ *  when opened); open by itself when it holds the thinking right before a question. The "Apri" chips of the chats it
+ *  opened or wrote to stay visible while it is closed. */
+const ProcessGroup = memo(function ProcessGroup({ id, items, open: openIds, marks }: { id: string; items: readonly ChatItem[]; open: ReadonlySet<string>; marks: ReadonlyMap<string, readonly string[]> }) {
+  const beforeAsk = items.some(i => openIds.has(i.id));
+  const [open, setOpen] = useState(beforeAsk);
+  useEffect(() => { if (beforeAsk) setOpen(true); }, [beforeAsk]);
+  const running = items.some(i => i.kind === 'tool' && i.status === 'running');
+  const steps = items.filter(i => i.kind === 'tool').length;
+  const chips = open ? [] : items.flatMap(i => { const r = i.kind === 'tool' ? toolChatRef(i) : null; return r ? [{ id: i.id, ...r }] : []; });
+  return (
+    <div className={`thinking process ${open ? 'open' : ''}`} data-testid={id}>
+      <button type="button" className="thinking-row" onClick={() => setOpen(o => !o)} aria-expanded={open} data-testid="process-toggle">
+        {running ? <IconSpinner size={13} /> : <IconSparkle size={13} />}<span>{t('chat.items.thinkingLabel')}{steps ? t('chat.items.processSteps', { n: steps }) : ''}</span><IconChevronRight size={12} className="tool-chev" />
+      </button>
+      {open && <div className="process-body">{items.map(i => <Item key={i.id} item={i} beforeAsk={openIds.has(i.id)} marks={marks.get(i.id)} />)}</div>}
+      {chips.map(c => <ToolChatRef key={c.id} chatId={c.chatId} title={c.title} how={c.how} />)}
+    </div>
+  );
+});
+
 /** A visual in the chat's list: its relative file paths open inside the chat's folder. */
 function ChatArtifact({ item }: { item: Extract<ChatItem, { kind: 'artifact' }> }) {
   const chatId = useContext(ChatIdCtx);
@@ -224,7 +247,7 @@ function CorrectionBubble({ quote, fix }: { quote: string; fix: string }) {
   );
 }
 
-export const Item = memo(function Item({ item, beforeAsk, refs, marks }: { item: ChatItem; beforeAsk?: boolean; refs?: readonly string[]; marks?: readonly string[] }) {
+export const Item = memo(function Item({ item, beforeAsk, refs, marks, reaction }: { item: ChatItem; beforeAsk?: boolean; refs?: readonly string[]; marks?: readonly string[]; reaction?: string }) {
   switch (item.kind) {
     case 'user': {
       const f = foreignOf(item);
@@ -241,11 +264,12 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks }: { item:
         {item.from && <div className="msg-from" data-testid={`item-${item.id}-from`}>{t('chat.items.from', { source: item.from })}</div>}
         {nc?.mode && <div className="msg-newchat" data-testid={`item-${item.id}-mode`} data-tip={t(`chat.items.modeTip.${nc.mode}`)}>{nc.mode === 'quick' ? <IconBolt size={11} /> : nc.mode === 'plan' ? <IconBranch size={11} /> : <IconPlus size={11} />}{t(`chat.mode.${nc.mode}`)}</div>}
         {fix ? <CorrectionBubble quote={fix.quote} fix={fix.fix} /> : text && <div className="bubble">{text}</div>}
+        {reaction && <div className="msg-react" data-testid={`item-${item.id}-reaction`} data-reaction="">{reaction}</div>}
         {own.notes.length > 0 && <div className="msg-notes" data-testid={`item-${item.id}-notes`} title={own.notes.join('\n')}><IconCheck size={11} /> {own.notes.join(' · ')}</div>}
       </div>
       );
     }
-    // a reply of one or two emoji only (shared/reaction.ts): a reaction under the user's message, not a bubble
+    // a reply of one or two emoji only that chatView did not stick to the user's message: a big emoji, no bubble
     case 'assistant': return !item.streaming && isReaction(item.text) ? <div className="msg-reaction" data-testid={`item-${item.id}`} data-reaction="">{item.text.trim()}</div>
       : <div className="msg-assistant" data-testid={`item-${item.id}`}><Message id={item.id} text={item.text} streaming={item.streaming} />{refs?.length ? <NamedChatRefs ids={refs} /> : null}</div>;
     case 'thinking': return <Thinking text={item.text} beforeAsk={beforeAsk} marks={marks} />;
@@ -320,6 +344,8 @@ function ItemListFor({ items, empty, footer, chatId = null }: ItemListProps) {
   const open = useMemo(() => thinkingBeforeAsk(items, asking), [items, asking]);
   // an Orchestrator's messages get "Apri" chips for the work chats they name (one key of the titles: rebuilt only when they change)
   const tkey = useApp(s => { const c = chatId ? s.chats[chatId] : undefined; return c?.isOrchestrator ? titlesKey(s.chats) : ''; });
+  const orch = useApp(s => !!chatId && !!s.chats[chatId]?.isOrchestrator);
+  const view = useMemo(() => chatView(shown, { foldProcess: orch }), [shown, orch]);
   const refs = useMemo(() => chatRefsOf(items, tkey), [items, tkey]);
   const fixed = useMemo(() => correctedThoughts(items), [items]);
   const last = items[items.length - 1];
@@ -331,7 +357,9 @@ function ItemListFor({ items, empty, footer, chatId = null }: ItemListProps) {
       <div className="items" ref={ref} data-chat-log={chatId??undefined} tabIndex={0} aria-label={auditText('audit.ChatItems.messages')} onClick={peek.onClick} onWheel={peek.onWheel} role="log" aria-live="off">
         <div ref={content} className="items-content">
         {cut > 0 && !pastOpen && <FoldedPast count={cut} onOpen={() => setPastOpen(true)} />}
-        {items.length === 0 && empty && !footer ? <div className="items-empty">{empty}</div> : shown.map(i => <Item key={i.id} item={i} beforeAsk={open.has(i.id)} refs={refs.get(i.id)} marks={fixed.get(i.id)} />)}
+        {items.length === 0 && empty && !footer ? <div className="items-empty">{empty}</div> : view.map(v => v.kind === 'process'
+          ? <ProcessGroup key={v.id} id={v.id} items={v.items} open={open} marks={fixed} />
+          : <Item key={v.item.id} item={v.item} beforeAsk={open.has(v.item.id)} refs={refs.get(v.item.id)} marks={fixed.get(v.item.id)} reaction={v.reaction} />)}
         {footer}
         </div>
       </div>

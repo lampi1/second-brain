@@ -78,11 +78,18 @@ test('Veloce / Strategist: a toggle marks the message, the Orchestrator opens th
     await expect(page.getByTestId('tile-orchestrator').locator('.msg-user[data-mode="quick"] .bubble').last()).toHaveText('Prepara il report QA');
     await expect(page.getByTestId('tile-orchestrator').getByTestId('chatref-created').last()).toContainText('Demo · Prepara il report QA');
 
-    // a thanks needs no answer: her one-emoji reply shows as a reaction under the message, not as a bubble
+    // her tool rows fold behind one "Ragionamento" row; the "Apri" chips stay out
+    const orch = page.getByTestId('tile-orchestrator');
+    await expect(orch.locator('.process .tool')).toHaveCount(0);
+    await orch.getByTestId('process-toggle').last().click();
+    await expect(orch.locator('.process .tool').first()).toBeVisible();
+    await orch.getByTestId('process-toggle').last().click();
+
+    // a thanks needs no answer: her one-emoji reply sticks to the message as a reaction (WhatsApp style), not a bubble
     await page.getByTestId('orchestrator-input').click();
     await page.keyboard.type('grazie');
     await page.keyboard.press('Enter');
-    await expect(page.getByTestId('tile-orchestrator').locator('.msg-reaction').last()).toHaveText('👍');
+    await expect(page.getByTestId('tile-orchestrator').locator('.msg-user .msg-react').last()).toHaveText('👍');
     await page.mouse.move(2, 2);
     await shot(page, 'orchestrator-newchat-reaction');
   } finally {
