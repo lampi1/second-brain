@@ -97,7 +97,9 @@ export class AgentPackFlows {
     let shared = '';
     try { const file = brainPath(this.root(), 'memory/shared.md'); if (fs.existsSync(file) && fs.statSync(file).size <= 256 * 1024) shared = fs.readFileSync(file, 'utf8').trim().slice(-2000); } catch { /* none */ }
     const linked = loaded.filter(n => n !== own);
-    return { pluginDir, skills: loaded, skillRoot: path.join(pluginDir, 'skills'), instructions: [instructions, linked.length ? `Your skills (load the one that fits the job; call the Skill tool with the qualified name, e.g. ${runtimePluginName(hash)}:${linked[0]}): ${linked.map(n => `${runtimePluginName(hash)}:${n}`).join(', ')}.` : '',
+    return { pluginDir, skills: loaded, skillRoot: path.join(pluginDir, 'skills'), instructions: [instructions, // these lines reach only an engine without the plugin loader (Cursor: no Skill tool), so they name the files to read;
+      // Claude gets the qualified names instead (wiring.ts qualifiedSkillsLine)
+      linked.length ? `Your skills (load the one that fits the job: read ${path.join(pluginDir, 'skills')}/<name>/SKILL.md): ${linked.join(', ')}.` : '',
       shared ? `Shared memory (memory/shared.md):\n${shared}` : '',
       `Your memory (agents/${own}/memory.md; add a line with the product memory writer: agent "<brain>" "${own}" "…")${memory ? `:\n${memory}` : ': empty so far.'}`, `Skill files: ${path.join(pluginDir, 'skills')}`].filter(Boolean).join('\n\n') };
   }

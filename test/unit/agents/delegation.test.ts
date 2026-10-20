@@ -460,6 +460,8 @@ describe('the pure parts', () => {
   it('the first message carries the contract and never more', () => {
     const text = delegationPrompt({ goal: 'G', output: 'O', doneWhen: ['D'], context: 'C' }, { role: 'judge', parentTitle: 'P', title: 'T', skills: ['s1'] });
     for (const part of ['«P»', 'Judge', 'Goal: G', 'Context: C', 'Output: O', '- D', 'Your skills: s1', 'agent_report']) expect(text).toContain(part);
+    // engine-neutral: a Cursor child has no Skill tool, so the prompt never tells it to call one
+    expect(text).not.toContain('Skill tool');
   });
   it('the gate passes plain chats and non-permission requests', () => {
     expect(gateRequest({ type: 'permission', tool: 'Skill', input: { skill: 'x' } }, { skills: [] }).kind).toBe('pass');

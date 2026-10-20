@@ -130,8 +130,11 @@ describe('pack review transactions', () => {
     expect(fs.existsSync(path.join(runtime.skillRoot, 'reviewer/SKILL.md'))).toBe(true);
     expect(fs.existsSync(path.join(runtime.pluginDir, 'hooks'))).toBe(false);
     expect(runtime.instructions).toContain(runtime.skillRoot);
-    // the skills by the qualified name the role gate takes (issue #101)
-    expect(runtime.instructions).toContain(`agent-${path.basename(runtime.pluginDir).slice(0, 16)}:reviewer`);
+    // these lines go only to Cursor, which has no Skill tool: the files to read, never a qualified Skill name (issue #101;
+    // Claude gets qualifiedSkillsLine instead)
+    expect(runtime.instructions).toContain(`read ${runtime.skillRoot}/<name>/SKILL.md): reviewer`);
+    expect(runtime.instructions).not.toContain('Skill tool');
+    expect(runtime.instructions).not.toContain(`agent-${path.basename(runtime.pluginDir).slice(0, 16)}:reviewer`);
     expect(runtime.instructions).not.toContain('learned-rules');
   });
 });

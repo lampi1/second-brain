@@ -22,10 +22,11 @@ refused call and its retry, because nothing told the child the plugin name, whic
    callback `sb_pre_tool_use`); the CLI asks it with `hook_callback` before every tool call (`chats/claude.ts`). The
    app answers `{}` (no say) or `hookSpecificOutput.permissionDecision: "deny"` with a reason the model reads. Budgeted:
    Bash/PowerShell, Read, Grep, Glob, LS, edits, WebFetch/WebSearch and any MCP server but the app's own
-   (`mcp__second-brain-app__*`, `mcp__second-brain__*`). `ORCHESTRATOR_TOOL_BUDGET` = 3 per turn: a quick read or check
+   (`mcp__second-brain-app__*`, `mcp__second-brain__*`), and starting a sub-agent (`Task` / `Agent`) whose
+   `subagent_type` is not `Explore` (a general-purpose one would do the work outside the budget). `ORCHESTRATOR_TOOL_BUDGET` = 3 per turn: a quick read or check
    still runs; the fourth and later calls are refused with "delegate with app_create_chat (scout / herald / artisan /
-   sentinel), tell the user in one line, end your turn". The count restarts at each turn's result. A sub-agent's calls
-   (the Explore search, `agent_id` set) do not count. A failing hook never blocks a call.
+   sentinel), tell the user in one line, end your turn". The count restarts at each turn's result. A sub-agent's own calls
+   (`agent_id` set) do not count. A failing hook never blocks a call.
 2. **It is a speed guard, not a permission.** The role keeps every tool class (ADR 0085); nothing is narrowed for work
    roles; the user's permission prompts and modes are unchanged; no settings or hook file is written (the hook lives
    only in the session's control protocol, AGENTS.md rule 6). Cursor, Codex and API Orchestrators have no such hook:
@@ -34,8 +35,10 @@ refused call and its retry, because nothing told the child the plugin name, whic
    inspection beyond one quick Read, searches, shell commands and scripts, DevOps or CI checks, GitHub issue or PR
    creation and writes through an external MCP server are delegated at once with `app_create_chat`.
 4. **Granted skills by their qualified name.** A Claude role launch's instructions carry one line with the qualified
-   names (`role-gate.ts qualifiedSkillsLine`: `agent-<hash16>:<name>` for each launch skill, `wiring.ts`); Cursor's
-   runtime instructions list them the same way (`pack/flows.ts`); the delegation prompt points to that list. And the
+   names (`role-gate.ts qualifiedSkillsLine`: `agent-<hash16>:<name>` for each launch skill, `wiring.ts`); Cursor has
+   no Skill tool, so its runtime instructions keep the plain names and the files to read
+   (`<skillRoot>/<name>/SKILL.md`, `pack/flows.ts`); the delegation prompt stays engine-neutral and points to the
+   role's own list. And the
    role gate rewrites instead of refusing: a bare `Skill("<name>")` of a skill the launch granted is allowed with its
    input field set to `<launch plugin>:<name>` (`GateVerdict.allow.patch` → `HarnessSession.answer(…, patch)` →
    Claude's `updatedInput`), so it always loads the launch's own copy. Only on an engine that runs a changed input

@@ -3,8 +3,9 @@
 // servers other than the app's own) count per turn; within the budget they run as before (a quick single Read is
 // fine), beyond it each one is refused with a message telling it to delegate with app_create_chat. A speed guard, not a
 // permission: the role keeps every tool class (ADR 0085), the app's own tools (app_*, task_estimate, the chat mail)
-// and questions to the user never count, and a sub-agent's calls (the Explore search) are its own. Claude only (an
-// in-process PreToolUse hook, chats/claude.ts); other engines get the role instructions alone. Used by
+// and questions to the user never count, and a sub-agent's calls are its own; starting a sub-agent counts, except the
+// read-only Explore search (a general-purpose Task/Agent would bypass the budget). Claude only (an in-process
+// PreToolUse hook, chats/claude.ts); other engines get the role instructions alone. Used by
 // chats/manager.ts startSession; pinned by test/unit/agents/orchestrator-budget.test.ts.
 import type { PreToolCall, PreToolHook } from '../chats/session';
 
@@ -19,9 +20,20 @@ const WORKSPACE_TOOLS: ReadonlySet<string> = new Set([
 /** The app's own MCP servers (/mcp/app, /mcp chat tools): coordination, never workspace work. */
 const APP_MCP = ['mcp__second-brain-app__', 'mcp__second-brain__'];
 
-/** True when a call of `tool` counts against the budget: a workspace tool or an MCP server that is not the app's. */
-export function budgetedTool(tool: string): boolean {
+/** Claude Code's sub-agent tool (Task, renamed Agent): input.subagent_type picks the sub-agent, absent = general-purpose. */
+const SUBAGENT_TOOLS: ReadonlySet<string> = new Set(['Task', 'Agent']);
+/** The one sub-agent that runs outside the budget: the read-only Explore search. Any other (general-purpose included)
+ *  does the workspace work the Orchestrator must delegate, so it counts like a workspace call. */
+const FREE_SUBAGENTS: ReadonlySet<string> = new Set(['explore']);
+
+/** True when a call of `tool` counts against the budget: a workspace tool, a sub-agent other than Explore, or an MCP
+ *  server that is not the app's. */
+export function budgetedTool(tool: string, input?: unknown): boolean {
   if (WORKSPACE_TOOLS.has(tool)) return true;
+  if (SUBAGENT_TOOLS.has(tool)) {
+    const type = input && typeof input === 'object' ? (input as Record<string, unknown>).subagent_type : undefined;
+    return !(typeof type === 'string' && FREE_SUBAGENTS.has(type.trim().toLowerCase()));
+  }
   return tool.startsWith('mcp__') && !APP_MCP.some(p => tool.startsWith(p));
 }
 
@@ -37,7 +49,7 @@ export class TurnToolBudget implements PreToolHook {
   private used = 0;
   constructor(readonly limit = ORCHESTRATOR_TOOL_BUDGET) {}
   decide(call: PreToolCall): { deny: string } | null {
-    if (call.agentId || !budgetedTool(call.tool)) return null;
+    if (call.agentId || !budgetedTool(call.tool, call.input)) return null;
     if (this.used >= this.limit) return { deny: budgetMessage(call.tool, this.limit) };
     this.used++;
     return null;

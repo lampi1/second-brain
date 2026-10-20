@@ -7,8 +7,19 @@ describe('orchestrator turn budget', () => {
   it('counts workspace tools and external MCP servers, not the app\'s own tools', () => {
     for (const t of ['Bash', 'PowerShell', 'Read', 'Grep', 'Glob', 'Edit', 'Write', 'WebFetch', 'mcp__oris-devops__wit_create', 'mcp__github__issue_write'])
       expect(budgetedTool(t), t).toBe(true);
-    for (const t of ['mcp__second-brain-app__app_create_chat', 'mcp__second-brain-app__task_estimate', 'mcp__second-brain__agent_delegate', 'AskUserQuestion', 'TodoWrite', 'Agent', 'Skill'])
+    for (const t of ['mcp__second-brain-app__app_create_chat', 'mcp__second-brain-app__task_estimate', 'mcp__second-brain__agent_delegate', 'AskUserQuestion', 'TodoWrite', 'Skill'])
       expect(budgetedTool(t), t).toBe(false);
+  });
+  it('counts a general-purpose sub-agent (Task or Agent), never the Explore search', () => {
+    for (const t of ['Agent', 'Task']) {
+      expect(budgetedTool(t, { subagent_type: 'Explore', prompt: 'find x' }), t).toBe(false);
+      expect(budgetedTool(t, { subagent_type: 'general-purpose', prompt: 'do x' }), t).toBe(true);
+      expect(budgetedTool(t, { prompt: 'do x' }), t).toBe(true);
+    }
+    const b = new TurnToolBudget(1);
+    expect(b.decide({ tool: 'Agent', input: { subagent_type: 'Explore' } })).toBeNull();
+    expect(b.decide({ tool: 'Agent', input: { description: 'fix', prompt: 'p' } })).toBeNull();
+    expect(b.decide({ tool: 'Task', input: { subagent_type: 'general-purpose' } })?.deny).toBe(budgetMessage('Task', 1));
   });
   it('lets a small budget through, then refuses with a message to delegate', () => {
     expect(ORCHESTRATOR_TOOL_BUDGET).toBeGreaterThan(0);
