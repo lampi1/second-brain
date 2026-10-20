@@ -4,13 +4,14 @@
 // with, its configuration (tools, permission ceiling, the roles it may launch), the skills it loads at every launch, its
 // versions, its pack actions and the user's milestones (ProgressPanel). "Modifica" opens the editor in place: only the
 // behaviour is editable (instructions, engine, model, tier, launches, skills, context; the permissions on their own
-// card); name, summary and character belong to the role. "Ripristina predefinito" goes back to the shipped role
+// card); name and summary belong to the role; the character can be swapped for the user's own picture
+// (AgentImagePicker, under the badge). "Ripristina predefinito" goes back to the shipped role
 // after an inline confirmation. Editing never changes running chats. Rendered by AgentCatalogPage.tsx. Styles:
 // styles/agent-studio.css.
 import { Select } from './Select';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { MAX_CONTEXT_RANGE, type AgentDraft, type AgentMetrics, type AgentProfile, type AgentVersion } from '@shared/agents';
-import { MODEL_TIERS, WORK_ROLE_IDS, PULSE_ID, roleName, tierRank, type ModelTier } from '@shared/roles';
+import { MODEL_TIERS, WORK_ROLE_IDS, PULSE_ID, isRoleId, roleName, tierRank, type ModelTier } from '@shared/roles';
 import { characterOf } from '@shared/characters';
 import { agentHistory, refreshAgents, resetAgent, restoreAgentVersion, saveAgent, useAgents } from '../store/agents';
 import { toast } from '../store/ui';
@@ -24,6 +25,7 @@ import { holdUpdate } from '../lib/update-barrier';
 import { go, goTarget } from '../actions';
 import { locale, t } from '../i18n';
 import { AgentAvatar } from './AgentAvatar';
+import { AgentImagePicker } from './AgentImagePicker';
 import { AgentReadiness } from './AgentReadiness';
 import { AgentPackDetails } from './AgentPackDetails';
 import { ProgressPanel } from './ProgressPanel';
@@ -144,7 +146,6 @@ function RoleEditor({ profile, draft, busy, canSave, tierOk, change, firstField,
           </div>
           {tierOk ? <small className="agent-editor-note">{t('studio.tierMaxHint')}</small> : <p role="alert">{t('studio.tierInvalid')}</p>}
           {choice?.effort && <label className="field"><span>{t('studio.effort')}</span><Select value={draft.effort ?? ''} onChange={e => change({ effort: EFFORTS.find(effort => effort === e.target.value) })}><option value="">{t('studio.defaultModel')}</option>{EFFORTS.map(e => <option key={e} value={e}>{effortLabel(e)}</option>)}</Select></label>}
-          <label className="field-check"><input type="checkbox" checked={draft.independent} onChange={e => change({ independent: e.target.checked })} data-testid="agent-independent" /><span>{t('studio.independent')} <small>{t('studio.independentHint')}</small></span></label>
           <p className="agent-editor-note" data-testid="agent-editor-perms-note">{t('perm.editorNote')}</p>
           {profile.id !== PULSE_ID && <fieldset className="agent-editor-checks" data-testid="agent-launches"><legend>{t('studio.launches')}</legend><p className="agent-editor-note">{t('studio.launchesHint')}</p>
             <div className="agent-editor-checkgrid">{WORK_ROLE_IDS.filter(id => id !== profile.id).map(id => <label key={id} className="field-check"><input type="checkbox" checked={draft.launches.includes(id)} onChange={() => toggleLaunch(id)} /><AgentAvatar avatar={{ kind: 'character', value: id }} name={roleName(id)} size={20} /><span>{roleName(id)}</span></label>)}</div></fieldset>}
@@ -224,7 +225,6 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
     [t('studio.tools'), profile.tools && !profile.tools.allow.length ? t('agentDetail.toolsNone') : permissionSummary(profile).text],
     [t('studio.ceiling'), profile.permissionCeiling ? t(`studio.ceiling.${profile.permissionCeiling}`) : t('studio.ceilingNone')],
     ...(background ? [] : [[t('studio.launches'), profile.launches.map(roleName).join(', ') || t('studio.launchesNone')] as [string, string]]),
-    [t('studio.independent'), profile.independent ? '✓' : '—'],
     [t('agentDetail.version'), profile.activeVersion === profile.version ? `v${profile.activeVersion}` : `v${profile.activeVersion} / v${profile.version}`],
     [t('agentDetail.updated'), new Date(profile.updatedAt).toLocaleString(locale(), { dateStyle: 'medium', timeStyle: 'short' })],
   ];
@@ -232,7 +232,7 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
     <button type="button" className="ad-back" onClick={() => go({ page: 'agenti' })}><span aria-hidden="true">←</span> {t('agentDetail.back')}</button>
     <article className="ad-body" data-testid={`agent-detail-${profile.id}`}>
       <header className="ad-hero" style={{ '--row-index': 0 } as CSSProperties}>
-        <span className="ad-avatar"><AgentAvatar avatar={profile.avatar} name={profile.name} size={96} /></span>
+        <div className="ad-avatar-col"><span className="ad-avatar"><AgentAvatar avatar={profile.avatar} name={profile.name} size={96} /></span>{isRoleId(profile.id) && <AgentImagePicker id={profile.id} />}</div>
         <div className="ad-id">
           <p className="ad-eyebrow">{t(profile.userLocked ? 'studio.customized' : 'studio.builtIn')}</p>
           <h2>{profile.name}</h2>

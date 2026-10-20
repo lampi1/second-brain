@@ -26,6 +26,7 @@ import {productIt}from'./areas/product.it';
 import { agentsGridIt } from './areas/agents-grid.it';
 import { explainIt } from './areas/explain.it';
 import { agentDetailIt } from './areas/agent-detail.it';
+import { agentImageIt } from './areas/agent-image.it';
 import { approvalsIt } from './areas/approvals.it';
 import {settingsIt}from'./areas/settings.it';
 import { profileIt } from './areas/profile.it';
@@ -76,6 +77,7 @@ export const it = {
   ...agentsGridIt,
   ...explainIt,
   ...agentDetailIt,
+  ...agentImageIt,
   ...approvalsIt,
   ...settingsIt,
   ...profileIt,

@@ -142,7 +142,6 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       const settled = await Promise.allSettled(plans.map(p => d.chats.create({
         harness: p.profile.engine, cwd: p.cwd, title: p.title, roleId: p.role, parentId: parent.id, goal: p.contract.goal,
         ...(p.contract.tier ? { tier: p.contract.tier } : {}), ...(p.contract.skills ? { skills: p.contract.skills } : {}),
-        ...(p.profile.independent ? { independentOf: { engine: parent.harness, model: parent.model } } : {}),
         delegation: { role: p.role, goal: p.contract.goal, doneWhen: p.contract.doneWhen, at, ...(p.contract.tools ? { tools: p.contract.tools } : {}) },
         prompt: `${d.label}\n\n${delegationPrompt(p.contract, { role: p.role, parentTitle: parent.title, title: p.title, skills: p.contract.skills ?? [] })}`,
       }, 'agent')));

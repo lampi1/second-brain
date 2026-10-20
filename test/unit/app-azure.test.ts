@@ -30,3 +30,11 @@ it('Azure login, verify and disconnect do not read or write Jira credentials', a
   await service.disconnect('azure');
   expect(vault.get).not.toHaveBeenCalled(); expect(vault.set).not.toHaveBeenCalled(); expect(vault.available).not.toHaveBeenCalled();
 });
+it('a good Task page read is proof by itself (account read after it); a failed read never is', async () => {
+  const { azureReadProof } = await import('../../src/modules/onboarding/app-azure');
+  const item = { url: 'https://dev.azure.com/o/Shop/_workitems/edit/1', project: 'Shop' };
+  expect(await azureReadProof(account, state({ assigned: [item] as TasksState['assigned'] }))).toEqual({ identity: 'tenant-a/user@example.com', account: 'user@example.com', projects: [{ id: 'o/Shop', name: 'o/Shop' }] });
+  const read = vi.fn(account);
+  await expect(azureReadProof(read, state({ error: { kind: 'login', message: 'x' } }))).rejects.toThrow(); expect(read).not.toHaveBeenCalled();
+  await expect(azureReadProof(async () => '{}', state())).rejects.toThrow();
+});

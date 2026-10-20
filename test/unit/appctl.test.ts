@@ -22,7 +22,7 @@ function roleCatalog(): AgentCatalogService {
   const models = (): AgentModelChoice[] => [
     { engine: 'claude', label: 'Claude', enabled: true, trusted: true, effort: true, defaultModel: true, modelSelectable: true, modelReason: null, source: 'observed', models: [], installed: true, authenticated: true },
     { engine: 'cursor', label: 'Cursor', enabled: true, trusted: true, effort: false, defaultModel: true, modelSelectable: true, modelReason: null, source: 'observed', models: [], installed: false, authenticated: null }];
-  return new AgentCatalogService({ userData: fs.mkdtempSync(path.join(os.tmpdir(), 'sb-appctl-roles-')), models, tierModel: (_e, tier) => ({ model: `m-${tier}`, independent: true }) });
+  return new AgentCatalogService({ userData: fs.mkdtempSync(path.join(os.tmpdir(), 'sb-appctl-roles-')), models, tierModel: (_e, tier) => `m-${tier}` });
 }
 
 function deps() {
@@ -42,7 +42,7 @@ function deps() {
 describe('app control tools', () => {
   it('sets only a validated next-turn effort within the caller space and preserves the current report', async () => {
     const current = { supported: true, requested: 'xhigh', submitted: 'xhigh', effective: null, pending: false, effectiveSource: 'unknown', sessionDefault: 'high' };
-    const rows = [{ id: 'work', harness: 'claude', model: 'chosen-model', effort: 'xhigh', effortStatus: current }, { id: 'app', harness: 'claude', cwd: 'C:/repo' }, { id: 'cursor', harness: 'cursor' }];
+    const rows = [{ id: 'work', harness: 'claude', model: 'chosen-model', effort: 'xhigh', effortStatus: current }, { id: 'app', harness: 'claude', cwd: 'C:/repo' }, { id: 'cursor', harness: 'cursor' }, { id: 'api', harness: 'anthropic' }];
     const set = vi.fn(async (id: string, patch: object) => ({ ...rows.find(c => c.id === id), id, effortStatus: { ...current, requested: 'medium', pending: true }, ...patch }));
     const chats = { list: () => rows, set } as unknown as ChatService;
     const tool = appControlTools({ chats, browser: {} as BrowserService, brain: {} as BrainService, window: () => null, emitUi: () => {}, version: '0' }).find(t => t.name === 'app_set_chat_effort')!;
@@ -50,8 +50,10 @@ describe('app control tools', () => {
     expect(set.mock.calls).toEqual([['work', { effort: 'medium' }]]);
     for (const effort of [null, 1, 'bogus', { toString: () => 'medium' }]) await expect(Promise.resolve().then(() => tool.run({ chatId: 'work', effort }))).rejects.toThrow(/validi/);
     expect(await tool.run({ chatId: 'app', effort: 'medium' })).toMatchObject({ chatId: 'app' });
-    await expect(Promise.resolve().then(() => tool.run({ chatId: 'cursor', effort: 'medium' }))).rejects.toThrow(/non supporta/);
-    expect(set).toHaveBeenCalledTimes(2);
+    // Cursor takes it as its model's thought_level option (issue #97); an API engine has none
+    expect(await tool.run({ chatId: 'cursor', effort: 'low' })).toMatchObject({ chatId: 'cursor' });
+    await expect(Promise.resolve().then(() => tool.run({ chatId: 'api', effort: 'medium' }))).rejects.toThrow(/non supporta/);
+    expect(set).toHaveBeenCalledTimes(3);
     expect(rows[0]).toMatchObject({ model: 'chosen-model', effort: 'xhigh', effortStatus: current });
   });
   it('can never answer permissions; questions only through app_resolve_question', () => {
@@ -159,7 +161,8 @@ describe('app control tools', () => {
     const t = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', agents: () => catalog.list(), resolveRole: req => catalog.resolve(req) }, 'r').find(x => x.name === 'app_create_chat')!;
     expect(await t.run({ title: 'Ordini · Fix', prompt: 'correggi il totale', roleId: 'artisan' })).toMatchObject({ chatId: 'n1', harness: 'claude', cwd: 'C:/brain', model: 'm-mid', route: { source: 'agent', agent: { id: 'artisan', chosenBy: 'orchestrator' } } });
     expect(String(made[0]!.prompt).startsWith(AGENT_LABEL)).toBe(true);
-    expect(made[0]).toMatchObject({ roleId: 'artisan', orchestrator: false, independentOf: { engine: 'claude', model: 'claude-opus-5-5' } });
+    expect(made[0]).toMatchObject({ roleId: 'artisan', orchestrator: false });
+    expect(made[0]).not.toHaveProperty('independentOf');
     // the role decides: no engine, model or effort from the caller; never a second Orchestrator; a role is required
     for (const extra of [{ harness: 'cursor' }, { model: 'opus' }, { effort: 'high' }]) await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'scout', ...extra }))).rejects.toThrow(/the role decides it/);
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'scout', orchestrator: true }))).rejects.toThrow(/Orchestrator/);
@@ -174,6 +177,19 @@ describe('app control tools', () => {
     cursorOn = false;
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'scout' }))).rejects.toThrow(/Gli Orchestrator possono usare Cursor/);
     expect(made).toHaveLength(2);
+  });
+
+  it('app_create_chat gives the explicit kind to the role resolution and the chat, so a model-less role meets its table row', async () => {
+    const made: Record<string, unknown>[] = [], asked: NewChat[] = [];
+    const chats = { list: () => [{ id: 'r', harness: 'claude', model: 'claude-opus-5-5', isOrchestrator: true, title: 'Orchestrator' }], create: async (req: Record<string, unknown>) => { made.push(req); return { id: 'n1', title: req.title }; } } as unknown as ChatService;
+    const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true }, engines: { claude: true }, orchestratorChats: { harness: 'claude' } }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
+    const catalog = roleCatalog();
+    const t = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', agents: () => catalog.list(), resolveRole: req => { asked.push(req); return catalog.resolve(req); } }, 'r').find(x => x.name === 'app_create_chat')!;
+    await t.run({ title: 'Ordini · Controllo', prompt: 'guarda il ramo', roleId: 'sentinel', kind: 'review' });
+    expect(asked[0]).toMatchObject({ routeHint: { kind: 'review' } });
+    expect(made[0]).toMatchObject({ routeHint: { kind: 'review' } });
+    await t.run({ title: 'Ordini · Controllo 2', prompt: 'guarda il ramo', roleId: 'sentinel' });
+    expect(asked[1]).not.toHaveProperty('routeHint');
   });
 
   it('app_create_chat warns when a passed skill needs tools the role lacks (#93); with full permissions it does not', async () => {

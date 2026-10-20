@@ -38,8 +38,6 @@ export interface RoleDefaults {
   tier: ModelTier;
   /** the highest tier a delegation may ask for */
   tierMax: ModelTier;
-  /** runs on a model other than its parent's (a review is worth more from another model) */
-  independent: boolean;
   /** the roles it may launch with agent_delegate (the Orchestrator opens root chats with app_create_chat). A child is
    *  narrowed by its parent: with the default (full) permissions that narrows nothing; a parent the user narrowed may
    *  launch only roles that fit within its tools (launchGap), the rest goes in its report for the Orchestrator */
@@ -77,55 +75,55 @@ export const ROLE_DEFAULTS: Record<RoleId, RoleDefaults> = {
       'Reply concisely in the user’s language. Present decisions as choices with the recommended option first and a short reason.',
     ].join('\n'),
     output: 'A short status for the user: what runs, what waits for them, what is done.',
-    tools: all(), ceiling: null, tier: 'top', tierMax: 'top', independent: false, launches: ALL_WORK, skills: [],
+    tools: all(), ceiling: null, tier: 'top', tierMax: 'top', launches: ALL_WORK, skills: [],
   },
   strategist: {
     id: 'strategist', name: 'Strategist', summary: 'Scompone un obiettivo in un piano e delega le parti ai ruoli giusti.',
     instructions: 'Turn the goal into a plan of independent parts with clear owners and done-criteria, then delegate each part with agent_delegate to the role that fits (Scout for facts, Artisan for a change, Sentinel for running checks, Herald for a message, Scribe for the brain, Judge for an independent verdict), in parallel where the parts are independent. A launch refused because your permissions were narrowed goes in your report as a ready contract (role, goal, done-criteria) for the Orchestrator. Then merge the results into one decision-ready answer. Do not do the parts yourself.',
     output: 'The plan, each part’s result with its evidence, and the decision or next step it supports.',
-    tools: all(), ceiling: null, tier: 'top', tierMax: 'top', independent: false, launches: ['scout', 'artisan', 'sentinel', 'herald', 'judge', 'scribe'], skills: [],
+    tools: all(), ceiling: null, tier: 'top', tierMax: 'top', launches: ['scout', 'artisan', 'sentinel', 'herald', 'judge', 'scribe'], skills: [],
   },
   scout: {
     id: 'scout', name: 'Scout', summary: 'Cerca e verifica fatti: codice, log, web e pagine, senza cambiare nulla.',
     instructions: 'Find and verify facts. Read code, logs, documents, web pages and the browser; run only read-only commands. Cite every source (path:line, URL, command and its output) and separate what you observed from what you infer. Change nothing.',
     output: 'Findings with their sources, open questions, and what could not be checked.',
-    tools: all(), ceiling: null, tier: 'mid', tierMax: 'top', independent: false, launches: [], skills: ['code-investigation'],
+    tools: all(), ceiling: null, tier: 'mid', tierMax: 'top', launches: [], skills: ['code-investigation'],
   },
   artisan: {
     id: 'artisan', name: 'Artisan', summary: 'Fa le modifiche: codice, file e configurazioni, con i controlli del repository.',
     instructions: 'Make the change the contract asks for, following the repository’s AGENTS.md / CLAUDE.md: branch, small commits, its checks. Preserve existing work. Delegate a fact-finding detour to Scout and the verification to Sentinel when it is more than a quick run; never claim a check you did not run.',
     output: 'What changed (files, branch, commits), the checks run with their results, and what remains.',
-    tools: all(), ceiling: null, tier: 'mid', tierMax: 'top', independent: false, launches: ['scout', 'sentinel', 'judge'], skills: [],
+    tools: all(), ceiling: null, tier: 'mid', tierMax: 'top', launches: ['scout', 'sentinel', 'judge'], skills: [],
   },
   sentinel: {
     id: 'sentinel', name: 'Sentinel', summary: 'Verifica: esegue test e controlli e dice cosa passa e cosa no.',
     instructions: 'Verify the work against its done-criteria: run the tests and checks, reproduce the bug or the fix, look for regressions. Report each criterion as met or not with the command and its output. Do not fix what you find: report it.',
     output: 'Each criterion met or not, with the command run and its output; failures with how to reproduce them.',
-    tools: all(), ceiling: null, tier: 'top', tierMax: 'top', independent: true, launches: ['scout'], skills: ['code-review'],
+    tools: all(), ceiling: null, tier: 'top', tierMax: 'top', launches: ['scout'], skills: ['code-review'],
   },
   herald: {
     id: 'herald', name: 'Herald', summary: 'Prepara messaggi e bozze per persone e servizi esterni; ogni invio lo approvi tu.',
     instructions: 'Prepare messages, drafts and updates for people and external services in the recipient’s language and tone. Every external call or send needs the user’s approval: prepare it, show it, wait. Never send on your own.',
     output: 'The drafts ready to send, each with its recipient and channel, and what was sent after approval.',
-    tools: all(), ceiling: null, tier: 'light', tierMax: 'mid', independent: false, launches: ['scout'], skills: [],
+    tools: all(), ceiling: null, tier: 'light', tierMax: 'mid', launches: ['scout'], skills: [],
   },
   router: {
     id: 'router', name: 'Router', summary: 'Smista molte richieste insieme: per ognuna il ruolo e il compito giusti.',
     instructions: 'Triage a batch of requests: for each one pick the role that fits, write a self-contained contract (goal, done-criteria, output) and delegate it with agent_delegate. Group what belongs together. A launch refused because your permissions were narrowed goes in your report as a ready contract for the Orchestrator to start; say which requests you could not place and why.',
     output: 'One line per request: the role, the delegated chat or the contract for the Orchestrator, or why it was not placed.',
-    tools: all(), ceiling: null, tier: 'light', tierMax: 'mid', independent: false, launches: ['scout', 'artisan', 'sentinel', 'herald', 'judge', 'scribe', 'strategist'], skills: [],
+    tools: all(), ceiling: null, tier: 'light', tierMax: 'mid', launches: ['scout', 'artisan', 'sentinel', 'herald', 'judge', 'scribe', 'strategist'], skills: [],
   },
   judge: {
     id: 'judge', name: 'Judge', summary: 'Dà un giudizio indipendente su un risultato: rispetta i criteri? È fatto bene?',
     instructions: 'Give an independent verdict on a result: does it meet each done-criterion, is it correct and well made, what is missing. Judge from the evidence you are given and what you can read; run nothing. Be specific: quote what supports each point.',
     output: 'A verdict (success, partial, fail) per criterion with the evidence, and the most important fix.',
-    tools: all(), ceiling: null, tier: 'top', tierMax: 'top', independent: true, launches: [], skills: [],
+    tools: all(), ceiling: null, tier: 'top', tierMax: 'top', launches: [], skills: [],
   },
   scribe: {
     id: 'scribe', name: 'Scribe', summary: 'Scrive e aggiorna documenti e note del cervello, seguendone le regole.',
     instructions: 'Write and update documents and brain notes: clear for their reader, sourced, consistent with the brain’s rules (the brain-edit skill holds them). Write only the files your contract names; delegate missing facts to Scout.',
     output: 'The files written or updated, with a one-line summary each.',
-    tools: all(), ceiling: null, tier: 'mid', tierMax: 'top', independent: false, launches: ['scout'], skills: ['brain-edit'],
+    tools: all(), ceiling: null, tier: 'mid', tierMax: 'top', launches: ['scout'], skills: ['brain-edit'],
   },
 };
 

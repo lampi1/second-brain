@@ -92,6 +92,14 @@ describe('routing: resolve', () => {
       .toEqual({ harness: 'claude', model: 'claude-opus-5-5', effort: 'medium', source: 'override', reason: 'difficile' });
   });
 
+  it('the default effort is Claude\'s: a Cursor chat keeps its own reasoning unless a row names an effort (issue #97)', () => {
+    const reg = { ...REG, models: [...REG.models.filter(m => m.id !== 'grok-4.7'), { ...REG.models.find(m => m.id === 'grok-4.7')!, efforts: ['low', 'medium', 'high'] as const, defaultEffort: 'medium' as const }] } as typeof REG;
+    expect(resolve(T, { kind: 'bug-fix', area: 'Ordini' }, {}, { ...DEF, harness: 'cursor' }, reg)).toMatchObject({ harness: 'cursor', effort: null, source: 'default' });
+    expect(resolve(T, { kind: 'bug-fix', area: 'Ordini' }, { harness: 'cursor' }, DEF, reg)).toMatchObject({ harness: 'cursor', effort: null });
+    const cursorRow = { routes: [{ kind: '*' as const, harness: 'cursor', model: 'grok-4.7', effort: 'low' as const, why: 'w', since: '2026-10-13', evidence: 'e' }] };
+    expect(resolve(cursorRow, { kind: 'bug-fix', area: 'Ordini' }, {}, { ...DEF, harness: 'cursor' }, reg, h => h === 'cursor')).toMatchObject({ harness: 'cursor', effort: 'low', source: 'table' });
+    expect(resolve(T, { kind: 'bug-fix', area: 'Ordini' }, {}, DEF, reg)).toMatchObject({ harness: 'claude', effort: 'high' });
+  });
   it('no row: the user defaults for the engine named, free to name as before', () => {
     expect(resolve(T, { kind: 'bug-fix', area: 'Ordini' }, {}, DEF, REG)).toEqual({ harness: 'claude', model: null, effort: 'high', source: 'default', reason: null });
     expect(resolve(T, { kind: 'bug-fix', area: 'Ordini' }, { harness: 'cursor' }, DEF, REG)).toEqual({ harness: 'cursor', model: 'grok-4.7', effort: null, source: 'override', reason: null });
@@ -108,7 +116,10 @@ describe('routing: resolve', () => {
     expect(resolve(T, it0, { harness: 'cursor', model: 'opus-x' }, DEF, REG)).toEqual({ error: expect.stringMatching(/Claude gira solo/) });
     expect(resolve(T, { kind: 'bug-fix', area: 'Pers · App' }, { harness: 'cursor', reason: 'r' }, DEF, REG)).toMatchObject({ harness: 'cursor', source: 'override' });
     expect(resolve(T, it0, { harness: 'claude', model: 'claude-mistero' }, DEF, REG)).toEqual({ error: expect.stringMatching(/models\.json/) });
-    expect(resolve(T, it0, { harness: 'cursor', effort: 'low' }, DEF, REG)).toEqual({ error: expect.stringMatching(/non vale per Cursor/) });
+    // Cursor takes an effort too (its model's thought_level option, issue #97) where models.json lists it for the model;
+    // an API engine takes none
+    expect(resolve(T, it0, { harness: 'cursor', effort: 'low', reason: 'r' }, DEF, REG)).toEqual({ error: expect.stringMatching(/grok-4\.7 non ha lo sforzo/) });
+    expect(resolve(T, it0, { harness: 'anthropic', effort: 'low' }, DEF, REG)).toEqual({ error: expect.stringMatching(/non vale per Anthropic API/) });
     expect(resolve(T, it0, { effort: 'max' }, DEF, REG)).toEqual({ error: expect.stringMatching(/max/) });
     expect(resolve(T, it0, { effort: 'max', reason: 'l’utente lo chiede' }, DEF, REG)).toMatchObject({ effort: 'max', source: 'override' });
     // the user's own default of max is the user's choice

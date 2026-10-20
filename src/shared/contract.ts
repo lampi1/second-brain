@@ -14,7 +14,7 @@ import type { McpImportCandidate, McpServerDef, McpServersState, McpToolAccess }
 import type { FileViewResult } from './file-view';
 import type { DiffAgainst, FileDiffResult } from './file-diff';
 import type { AgentCatalog, AgentMetrics, AgentMetricsFilter, AgentDraft, AgentOwnerSnapshot, AgentProfile, AgentRun, AgentUndo, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
-import type { DelegationSettings, ModelTier, WorkRoleId } from './roles';
+import type { DelegationSettings, ModelTier, RoleId, WorkRoleId } from './roles';
 import type { ChatDelegation, DelegationLimitHit } from './delegation';
 import type { SkillSuggestions } from './skill-suggest';
 import type { AutoClosePresence, AutoCloseStatus } from './auto-close';
@@ -25,6 +25,7 @@ import type { OwnerProfile, ProfileResult, ProfileSave } from './profile';
 import type { AppUpdateState, UpdateCheckpointAnswer, UpdateCheckpointRequest, UpdateRecovery } from './app-update';
 import type { CloudAgent, CloudApplyResult, CloudCaps, CloudStartRequest, CloudState } from './cloud';
 import type { RunEstimates } from './task-estimate';
+import type { AgentImages } from './agent-images';
 export type { CloudAgent, CloudApplyResult, CloudCaps, CloudEngine, CloudMessage, CloudReady, CloudStartRequest, CloudState, CloudStatus } from './cloud';
 
 /** An engine id from the engine registry (src/main/engines/registry.ts, ADR 0046): 'claude', 'cursor', … */
@@ -347,8 +348,6 @@ export interface NewChat {
   delegation?: ChatDelegation;
   /** the model tier a delegation asks for (at most the role's tierMax); absent = the role's own */
   tier?: ModelTier;
-  /** an independent role picks a model other than this one (its parent's) */
-  independentOf?: { engine: string; model: string | null };
   harness: Harness;
   cwd: string;
   prompt?: string;
@@ -368,6 +367,9 @@ export interface NewChat {
   skills?: string[];
   /** run tags: the product the work is about, up to 40 characters */
   app?: string;
+  /** set by app_create_chat (main): what the routing table matches a model-less role's row on (its explicit kind, app
+   *  code, the caller's area) besides title and prompt, so the row picked is the one the route records (ADR 0091) */
+  routeHint?: { kind?: TaskKind; appCode?: boolean; area?: string };
 }
 
 /** A chat the user starts without choosing everything ("Nuova chat", a new Orchestrator from Ricomincia / Cambia motore /
@@ -928,7 +930,7 @@ export interface RouteDecision {
 }
 /** The role a routed chat runs: who launched it, its model tier, and where its model came from (the role's own model,
  *  its tier on the engine, or the engine's default). */
-export interface RouteAgent { id: string; version: number; chosenBy: 'orchestrator' | 'parent' | 'app'; tier?: ModelTier; modelFrom?: 'role' | 'tier' | 'engine' }
+export interface RouteAgent { id: string; version: number; chosenBy: 'orchestrator' | 'parent' | 'app'; tier?: ModelTier; modelFrom?: 'role' | 'tier' | 'table' | 'engine' }
 /** routing:preview → the engine, model and effort the table (or the user's pick, or the defaults) gives a new chat, and
  *  why; error = what chat:createRouted would refuse (Italian). */
 export type RoutePreview = { harness: Harness; model: string | null; effort: Effort | null; route: RouteDecision } | { error: string };
@@ -1210,6 +1212,11 @@ export interface InvokeMap {
   /** Brother's verdict on a settled agent run (Home strip); renderer only, never an agent tool. */
   'run:outcome': [{ chatId: string; verdict: 'success' | 'partial' | 'fail' }, ChatSummary];
   'agents:restoreVersion': [{ id: string; version: number }, AgentProfile];
+  /** the user's own pictures for the roles (shared/agent-images.ts): the role's page sets one (a square PNG the
+   *  renderer cropped) or removes it to bring the character back. Main renderer only. */
+  'avatars:get': [void, AgentImages];
+  'avatars:set': [{ id: RoleId; bytes: Uint8Array }, AgentImages];
+  'avatars:reset': [{ id: RoleId }, AgentImages];
   /** the Brain pages (ADR 0077, src/main/brainmodel): agents, skills and their links, rules, memory, the change log */
   'brainmodel:state': [void, BrainModelState];
   /** the maintenance button: run every job now (or one); every change is logged and can be undone */
@@ -1442,6 +1449,8 @@ export interface EventMap {
   'agents:changed': AgentCatalog;
   /** the "Da approvare" queue changed (a proposal, an evaluation, a decision): read /api/agents/lifecycle again */
   'agents:lifecycleChanged': null;
+  /** a role's picture was set or removed: every badge on screen redraws */
+  'avatars:changed': AgentImages;
   'chat:updated': ChatSummary;
   'chat:removed': { chatId: string };
   'chat:item': { chatId: string; item: ChatItem; replace?: boolean };
@@ -1505,7 +1514,7 @@ export const INVOKE_CHANNELS = [
   'app:createBrain', 'app:projectsFolder', 'app:pickProjects',
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
-  'agents:list', 'skills:suggest', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'agents:estimates', 'run:outcome', 'agents:restoreVersion', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
+  'agents:list', 'skills:suggest', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'agents:estimates', 'run:outcome', 'agents:restoreVersion', 'avatars:get', 'avatars:set', 'avatars:reset', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
   'agents:exportPlan', 'agents:exportFix', 'agents:export', 'brain:share', 'agents:importInspect', 'agents:importApply', 'agents:importCancel', 'brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'brainmodel:link', 'classifiers:state', 'agents:trialDecide', 'agents:lifecycleDecide',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
@@ -1527,7 +1536,7 @@ export const EVENT_CHANNELS = [
   'update:state', 'update:checkpointRequest', 'update:checkpointRelease',
   'progress:changed',
   'chat:autoCloseStatus',
-  'agents:changed', 'agents:lifecycleChanged',
+  'agents:changed', 'agents:lifecycleChanged', 'avatars:changed',
   'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'cli:ready', 'focus:next', 'ui:command',
   'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'tasks:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'source:state', 'later:changed', 'search:status', 'brainmodel:changed', 'sync:state', 'headline:changed',
   'cloud:changed',

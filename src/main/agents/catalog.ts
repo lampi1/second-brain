@@ -37,11 +37,16 @@ function text(v: unknown, max: number, label: string, empty = false): string {
 export interface AgentCatalogDeps {
   userData: string;
   models: () => AgentModelChoice[];
+  /** the engine the user chose at setup (Settings.orchestratorChats.harness): untouched roles follow it while it is usable */
+  preferredEngine?: () => string | null;
   /** Pulse's engine, model and effort (Impostazioni → Pulse) */
   pulsePreset?: () => { engine: string; model: string | null; effort?: Effort };
-  /** the model a tier means on an engine (agents/model-tier.ts with the registry and Settings.modelTiers); `avoid` = the
-   *  parent's model for an independent role; `max` = the role's tierMax, the highest tier it may move up to */
-  tierModel?: (engine: Harness, tier: ModelTier, avoid: string | null, max: ModelTier) => { model: string | null; independent: boolean };
+  /** the model a tier means on an engine (agents/model-tier.ts with the registry and Settings.modelTiers); null = the
+   *  engine's own default */
+  tierModel?: (engine: Harness, tier: ModelTier) => string | null;
+  /** the routing table's row for this chat (kind and area from its title and prompt), when it is on `engine` and names a
+   *  model: a role with no model of its own takes it, and its effort when the role names none (ADR 0078, 0091) */
+  tableModel?: (engine: Harness, req: NewChat) => { model: string; effort: Effort | null } | null;
   emit?: (catalog: AgentCatalog) => void;
   now?: () => number;
   onCustomized?: () => void;
@@ -53,10 +58,10 @@ export interface PackInstall { id: string; knowhow: NonNullable<AgentDraft['know
 export interface ResolvedRole {
   request: NewChat; owner: AgentOwnerSnapshot; instructions: string; policy: AgentPolicy | null;
   maxContext?: number; skills: string[]; launches: string[];
-  /** an independent role whose model differs from its parent's (false = it had to share it) */
-  independent?: boolean;
   /** the model tier a role chat runs on */
   tier?: ModelTier;
+  /** 'table' = the model (and effort, if the role names none) came from the routing table's row */
+  modelFrom?: 'table';
 }
 
 export function ownerOf(p: AgentProfile): AgentOwnerSnapshot {
@@ -86,7 +91,7 @@ export function readOwner(v: unknown): AgentOwnerSnapshot | null {
 }
 
 /** The editable fields, validated. Name, purpose and character always come from the role. */
-type Behaviour = Pick<AgentProfile, 'instructions' | 'engine' | 'model' | 'effort' | 'tools' | 'permissionCeiling' | 'knowhow' | 'pack' | 'maxContext' | 'tier' | 'tierMax' | 'independent' | 'launches' | 'skills'>;
+type Behaviour = Pick<AgentProfile, 'instructions' | 'engine' | 'model' | 'effort' | 'tools' | 'permissionCeiling' | 'knowhow' | 'pack' | 'maxContext' | 'tier' | 'tierMax' | 'launches' | 'skills'>;
 
 export class AgentCatalogService {
   private readonly file: string;
@@ -138,20 +143,25 @@ export class AgentCatalogService {
     if (isRoleId(id)) { const r = ROLE_DEFAULTS[id]; return { name: r.name, purpose: r.summary, avatar: { kind: 'character', value: id } }; }
     return { name: PULSE.name, purpose: PULSE.purpose, avatar: { kind: 'character', value: 'pulse' } };
   }
-  /** The engine a new or reset role starts on: a ready one first, else any enabled and trusted one, else Claude. */
+  /** The engine a new or reset role starts on: the user's chosen engine (onboarding, Settings.orchestratorChats.harness)
+   *  while it is usable, else a ready one, else any enabled and trusted one, else Claude (issue #96). */
   private defaultEngine(): Harness {
     const usable = this.d.models().filter(x => x.enabled && x.trusted && x.defaultModel && x.installed !== false && x.authenticated !== false);
-    return (usable.find(x => x.installed === true && x.authenticated === true) ?? usable[0])?.engine ?? 'claude';
+    return (this.preferredUsable(usable) ?? usable.find(x => x.installed === true && x.authenticated === true) ?? usable[0])?.engine ?? 'claude';
+  }
+  private preferredUsable(usable = this.d.models().filter(x => x.enabled && x.trusted && x.defaultModel && x.installed !== false && x.authenticated !== false)): AgentModelChoice | undefined {
+    const preferred = this.d.preferredEngine?.() ?? null;
+    return preferred ? usable.find(x => x.engine === preferred) : undefined;
   }
   private defaults(id: string): Behaviour {
     if (id === PULSE_ID) {
       const p = this.d.pulsePreset?.() ?? { engine: this.defaultEngine(), model: null };
       return { instructions: PULSE.instructions, engine: p.engine, model: p.model, ...(p.effort ? { effort: p.effort } : {}), tools: { allow: [] }, permissionCeiling: 'plan',
-        tier: 'light', tierMax: 'light', independent: false, launches: [], skills: [] };
+        tier: 'light', tierMax: 'light', launches: [], skills: [] };
     }
     const r = ROLE_DEFAULTS[id as RoleId], engine = this.defaultEngine();
     return { instructions: r.instructions, engine, model: null, tools: { allow: engineOf(engine)?.kind === 'api' ? ['read'] : [...r.tools] }, permissionCeiling: r.ceiling,
-      tier: r.tier, tierMax: r.tierMax, independent: r.independent, launches: [...r.launches], skills: [...r.skills] };
+      tier: r.tier, tierMax: r.tierMax, launches: [...r.launches], skills: [...r.skills] };
   }
   /** Every role and Pulse are always there: a missing entry is added with its defaults (never overwriting one). */
   private seed(): void {
@@ -194,16 +204,19 @@ export class AgentCatalogService {
     this.rebind();
     return structuredClone({ profiles: this.profiles, models: this.d.models(), problem: this.problem ?? this.store.problem });
   }
-  /** A role still at its defaults whose engine became unusable moves to a ready one (login discovery is asynchronous);
-   *  a role the user changed keeps its engine. */
+  /** Engines, logins or models changed outside the catalog (cli:ready, a setting, an engine listing its models): the
+   *  renderer gets the fresh catalog even when no role changed (issue #96). */
+  refresh(): void { this.d.emit?.(this.list()); }
+  /** A role still at its defaults moves to the default engine when its own became unusable (login discovery is
+   *  asynchronous) or when the default is the user's chosen engine (issue #96); a role the user changed keeps its engine. */
   private rebind(): void {
     if (this.problem || this.store.problem) return;
-    const models = this.d.models(), engine = this.defaultEngine();
+    const models = this.d.models(), engine = this.defaultEngine(), preferred = this.preferredUsable()?.engine ?? null;
     const changed: AgentProfile[] = [];
     const next = this.profiles.map(p => {
       if (p.userLocked || p.lastEditedBy !== 'default' || p.trial || p.id === PULSE_ID || p.engine === engine) return p;
       const current = models.find(e => e.engine === p.engine);
-      if (current?.enabled && current.trusted && current.installed !== false && current.authenticated !== false) return p;
+      if (engine !== preferred && current?.enabled && current.trusted && current.installed !== false && current.authenticated !== false) return p;
       // still at its defaults: its tools follow the engine (the API engine reads only, the others get the role's defaults)
       const tools = isRoleId(p.id) ? { allow: engineOf(engine)?.kind === 'api' ? ['read' as const] : [...ROLE_DEFAULTS[p.id].tools] } : p.tools;
       const updated: AgentProfile = { ...p, engine, tools, version: p.version + 1, activeVersion: p.version + 1, updatedAt: Math.max(this.now(), p.updatedAt + 1) };
@@ -238,7 +251,6 @@ export class AgentCatalogService {
     if (!(p.maxContext === undefined || p.maxContext === null || Number.isSafeInteger(p.maxContext) && (p.maxContext as number) >= MAX_CONTEXT_RANGE.min && (p.maxContext as number) <= MAX_CONTEXT_RANGE.max))
       throw new Error(`Contesto massimo: un numero intero di token da ${MAX_CONTEXT_RANGE.min} a ${MAX_CONTEXT_RANGE.max}, oppure vuoto (l’impostazione dell’app).`);
     if (!has(MODEL_TIERS, p.tier) || !has(MODEL_TIERS, p.tierMax) || tierRank(p.tier) > tierRank(p.tierMax)) throw new Error('Livello del modello non valido: il livello non supera il massimo.');
-    if (typeof p.independent !== 'boolean') throw new Error('Indipendenza non valida.');
     if (!Array.isArray(p.launches) || !p.launches.every(isWorkRole) || new Set(p.launches).size !== p.launches.length || (p.launches as string[]).includes(id)) throw new Error('Ruoli avviabili non validi: solo ruoli di lavoro, mai sé stesso.');
     if (id === PULSE_ID && (p.launches as unknown[]).length) throw new Error('Pulse non avvia ruoli.');
     if (!Array.isArray(p.skills) || p.skills.length > 40 || !p.skills.every(packName) || new Set(p.skills).size !== p.skills.length) throw new Error('Abilità non valide: nomi di abilità del cervello, al massimo 40.');
@@ -248,7 +260,7 @@ export class AgentCatalogService {
       ...(p.knowhow !== undefined && p.knowhow !== null ? { knowhow: checkedKnowhow(p.knowhow) } : {}),
       ...(p.pack !== undefined && p.pack !== null ? { pack: checkedPackIdentity(p.pack) } : {}),
       ...(typeof p.maxContext === 'number' ? { maxContext: p.maxContext } : {}),
-      tier: p.tier as ModelTier, tierMax: p.tierMax as ModelTier, independent: p.independent as boolean, launches: [...p.launches as string[]], skills: [...p.skills as string[]] };
+      tier: p.tier as ModelTier, tierMax: p.tierMax as ModelTier, launches: [...p.launches as string[]], skills: [...p.skills as string[]] };
   }
   /** The renderer's draft checked like a save, without saving (the editor's live check). */
   validateDraft(value: unknown, id: string): AgentDraft {
@@ -393,14 +405,18 @@ export class AgentCatalogService {
     if (!e.enabled || !e.trusted) throw new Error(`Il motore di ${p.name} è spento o va riconfermato nelle Impostazioni.`);
     if (req.tier !== undefined && (!has(MODEL_TIERS, req.tier) || tierRank(req.tier) > tierRank(p.tierMax))) throw new Error(`${p.name} arriva al massimo al livello ${p.tierMax}.`);
     const tier = cappedTier(req.tier ?? p.tier, p.tierMax);
-    const picked = p.model !== null ? { model: p.model, independent: req.independentOf?.model !== p.model } : this.d.tierModel?.(p.engine, tier, p.independent ? req.independentOf?.model ?? null : null, p.tierMax) ?? { model: null, independent: false };
-    const effort = p.effort ?? req.effort;
+    // the role's own model; else the routing table's row on its engine (unless the launch asked a tier); else its tier's
+    // model. A review's independence is its clean session (it never sees its parent's reasoning), never another model
+    // (ADR 0091)
+    const row = p.model === null && req.tier === undefined ? this.d.tableModel?.(p.engine, req) ?? null : null;
+    const picked = { model: p.model ?? row?.model ?? this.d.tierModel?.(p.engine, tier) ?? null };
+    const effort = p.effort ?? row?.effort ?? req.effort;
     const { model: _m, effort: _e, ...rest } = req; void _m; void _e;
     const r = ROLE_DEFAULTS[p.id as RoleId];
     const instructions = `${ROLE_PREAMBLE}\n\nRole: ${p.name}.\n${p.instructions}\nOutput: ${r.output}`;
     return { request: { ...rest, harness: p.engine, ...(picked.model ? { model: picked.model } : {}), ...(effort ? { effort } : {}) }, owner: { ...ownerOf(p), model: picked.model },
       instructions, policy: p.tools || p.permissionCeiling ? { tools: p.tools ? structuredClone(p.tools) : null, ceiling: p.permissionCeiling } : null,
       ...(typeof p.maxContext === 'number' ? { maxContext: p.maxContext } : {}), skills: [...p.skills, ...(p.knowhow?.linked ?? [])].filter((s, i, a) => a.indexOf(s) === i), launches: [...p.launches],
-      ...(p.independent ? { independent: picked.independent } : {}), tier };
+      ...(row ? { modelFrom: 'table' as const } : {}), tier };
   }
 }

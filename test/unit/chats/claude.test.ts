@@ -164,6 +164,38 @@ describe('ClaudeSession', () => {
     expect(tool?.output).toContain('"toolUseID":"toolu_bash"');
   });
 
+  it('runs an allowed call with the input fields the app patched (the role gate\'s qualified skill, issue #101)', async () => {
+    const { s, sink } = start();
+    s.send('skillgate air-qa');
+    const p = await waitFor(() => sink.pendings[0], 'permission');
+    expect(p.tool).toBe('Skill');
+    s.answer(p.id, { kind: 'permission', allow: true }, { skill: 'agent-0123456789abcdef:air-qa' });
+    await resultOf(sink);
+    const out = sink.last('tool')?.output ?? '';
+    expect(out).toContain('"updatedInput":{"skill":"agent-0123456789abcdef:air-qa","args":"x"}');
+  });
+
+  it('answers the CLI\'s PreToolUse hook callback in-process: a refusal reaches the model, turns reset it (ADR 0090)', async () => {
+    const seen: string[] = []; let ended = 0;
+    const hook = { decide: (c: { tool: string; agentId?: string }) => { seen.push(c.agentId ? `${c.tool}@${c.agentId}` : c.tool); return c.tool === 'Grep' && !c.agentId ? { deny: 'delegate with app_create_chat' } : null; }, turnEnded: () => { ended++; } };
+    const { s, sink } = start({ preToolUse: hook });
+    s.send('pretool Read Grep');
+    await resultOf(sink);
+    expect(sink.last('assistant')?.text).toBe('Hook: Read=ok; Grep=deny:delegate with app_create_chat');
+    expect(ended).toBe(1);
+    s.send('pretool Grep @agent');
+    await waitFor(() => sink.trace.filter(t => t === 'result').length === 2, 'second result');
+    expect(sink.last('assistant')?.text).toBe('Hook: Grep=ok');
+    expect(seen).toEqual(['Read', 'Grep', 'Grep@a_sub']);
+  });
+
+  it('registers no hook when the chat has none', async () => {
+    const { s, sink } = start();
+    s.send('pretool Read');
+    await resultOf(sink);
+    expect(sink.last('assistant')?.text).toBe('Ciao dal motore');
+  });
+
   it('denies a permission with the user\'s message', async () => {
     const { s, sink } = start();
     s.send('bash please');

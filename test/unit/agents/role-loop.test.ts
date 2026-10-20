@@ -111,7 +111,7 @@ describe('the queue: nothing is applied without the user', () => {
 });
 
 describe('run feedback and Annulla', () => {
-  it('a Judge review counts as reviewed evidence only when it ended, verified, on another model', async () => {
+  it('a Judge review counts as reviewed evidence only when it ended verified, on any model (ADR 0091)', async () => {
     const w = world();
     const work = w.runs.start({ agentId: 'artisan', chatId: 'c_work', version: 1, goal: 'g', startedBy: 'orchestrator', startedAt: T0, costKnown: true });
     work.model = 'model-a';
@@ -123,8 +123,11 @@ describe('run feedback and Annulla', () => {
     const reviewed = await w.feedback.recordFeedback({ runId: work.runId, verdict: 'success', notes: 'verified', evidence: [{ kind: 'run', ref: judge.runId, at: T0 }] }, 'app:judge');
     expect(reviewed.outcome.basis).toBe('reviewed-evidence');
     judge.model = 'model-a';
-    const same = await w.feedback.recordFeedback({ runId: work.runId, verdict: 'fail', notes: 'same model', evidence: [{ kind: 'run', ref: judge.runId, at: T0 }] }, 'app:judge');
-    expect(same.outcome.basis).toBe('orchestrator-opinion');
+    const same = await w.feedback.recordFeedback({ runId: work.runId, verdict: 'success', notes: 'same model', evidence: [{ kind: 'run', ref: judge.runId, at: T0 }] }, 'app:judge');
+    expect(same.outcome.basis).toBe('reviewed-evidence'); // independence is the Judge's clean session, not another model
+    judge.report = { at: T0 + 1, outcome: 'done', verified: 'no', summary: 'not checked' };
+    const unverified = await w.feedback.recordFeedback({ runId: work.runId, verdict: 'fail', notes: 'unverified', evidence: [{ kind: 'run', ref: judge.runId, at: T0 }] }, 'app:judge');
+    expect(unverified.outcome.basis).toBe('orchestrator-opinion');
     expect(w.runs.get(work.runId)!.outcome).toMatchObject({ verdict: 'success', basis: 'reviewed-evidence' }); // an opinion never overwrites it
   });
   it('Annulla restores the version before an applied change, and a stale button is refused', () => {

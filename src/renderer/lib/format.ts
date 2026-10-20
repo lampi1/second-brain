@@ -43,6 +43,20 @@ export function effortLabel(e: Effort | null | undefined): string | null {
   return e ? EFFORT_IT[e] : null;
 }
 
+/** The effort a chat runs with, as its engine reports it (effortStatus.effective), else the value the app last sent with
+ *  a turn (submitted: what that turn runs with); null when neither is known, never the one only asked for (issue #100). */
+export function chatEffort(c: Pick<ChatSummary, 'effortStatus'>): string | null {
+  return c.effortStatus?.effective ?? c.effortStatus?.submitted ?? null;
+}
+
+/** The model of a chat with the effort it runs with: "Opus 5.5 · low"; just the model when the effort is unknown. A
+ *  Cursor variant drops its bracketed parameters then ("gpt-5.6-sol[reasoning_effort=low]" → "GPT-5.6-SOL · low"). */
+export function modelWithEffort(c: Pick<ChatSummary, 'model' | 'harness' | 'effortStatus'>): string {
+  const effort = chatEffort(c);
+  const model = prettyModel(effort ? c.model?.replace(/\[.*\]$/, '') : c.model, c.harness);
+  return effort ? `${model} · ${effort}` : model;
+}
+
 export const PERMISSION_MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions'];
 const PERM_IT: Record<PermissionMode, string> = {
   default: 'Chiedi ogni volta', acceptEdits: 'Accetta le modifiche', auto: 'Automatico', plan: 'Solo piano', bypassPermissions: 'Senza permessi',

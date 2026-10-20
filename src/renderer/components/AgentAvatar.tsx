@@ -1,10 +1,13 @@
 // A role's cartoon character as a round badge (lib/character-art.ts: trusted shapes in code, never user or model
 // content), from 16 px in the sidebar tree to 96 px in the role editor: below 24 px the small variant (closer frame,
-// no prop), from 24 px the full one. A chat without a role gets a neutral badge with its initial. Used by the
+// no prop), from 24 px the full one. A role the user gave a picture of their own (lib/agent-images.ts, chosen on the
+// role's page) shows that picture instead. A chat without a role gets a neutral badge with its initial. Used by the
 // Grindhouse strips, the sidebar tree, the child cards, the catalog and the role editor.
 import { useId, type ReactElement } from 'react';
 import type { AgentAvatar as Avatar } from '@shared/agents';
 import { isCharacterId } from '@shared/characters';
+import { isRoleId } from '@shared/roles';
+import { useAgentImages } from '../lib/agent-images';
 import { CHARACTERS, FULL_MIN, characterShapes, frameOf, type Shape } from '../lib/character-art';
 import { t } from '../i18n';
 import '../styles/agent-avatar.css';
@@ -21,6 +24,12 @@ function shape(s: Shape, key: number): ReactElement {
 export function AgentAvatar({ avatar, name, size = 28 }: { avatar: Avatar | undefined; name: string; size?: number }) {
   const id = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const label = t('product.avatar', { name });
+  const images = useAgentImages();
+  const role = avatar?.kind === 'character' && isRoleId(avatar.value) ? avatar.value : null;
+  const picture = role ? images[role] : undefined;
+  if (role && picture) {
+    return <img className="agent-avatar picture" data-character={role} data-variant="picture" src={picture} width={size} height={size} alt={label} draggable={false} />;
+  }
   if (avatar?.kind !== 'character' || !isCharacterId(avatar.value)) {
     return <span className="agent-avatar plain" role="img" aria-label={label} style={{ width: size, height: size, fontSize: Math.max(8, Math.round(size * 0.45)) }}>{(name.trim()[0] ?? '?').toUpperCase()}</span>;
   }

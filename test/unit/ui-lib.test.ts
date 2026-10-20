@@ -2,7 +2,7 @@
 // workspace tiles (lib/grid.ts) and the remembered preferences parser (store/ui.ts loadPrefs).
 import { describe, expect, it } from 'vitest';
 import type { BrowserTab, ChatSummary } from '@shared/contract';
-import { ago, chatCost, diffTotals, duration, folderName, formatCost, minutes, prettyModel, stateInfo, toolLabel, until, workTime } from '../../src/renderer/lib/format';
+import { ago, chatCost, diffTotals, duration, folderName, formatCost, minutes, modelWithEffort, prettyModel, stateInfo, toolLabel, until, workTime } from '../../src/renderer/lib/format';
 import { fuzzyFilter, fuzzyScore } from '../../src/renderer/lib/fuzzy';
 import { pairIndex, pairSlots, PAIR_COLORS, tileKey, workspaceTiles } from '../../src/renderer/lib/grid';
 import { defaultPrefs, loadPrefs } from '../../src/renderer/store/ui';
@@ -67,6 +67,13 @@ describe('format', () => {
     expect(minutes(12 * 60_000)).toBe('12 min');
     expect(minutes(65 * 60_000)).toBe('1 h 05');
     expect(prettyModel('claude-opus-5-5')).toBe('Opus 5.5');
+    // issue #100: the effort the engine reports (or the app sent with the turn) beside the model; never the one only asked
+    const st = (p: object) => ({ supported: true, requested: 'high' as const, submitted: null, effective: null, pending: true, effectiveSource: 'unknown' as const, sessionDefault: 'medium', ...p });
+    expect(modelWithEffort({ model: 'claude-opus-5-5', harness: 'claude', effortStatus: st({ effective: 'low', effectiveSource: 'provider' }) })).toBe('Opus 5.5 · low');
+    expect(modelWithEffort({ model: 'claude-opus-5-5', harness: 'claude', effortStatus: st({ submitted: 'xhigh' }) })).toBe('Opus 5.5 · xhigh');
+    expect(modelWithEffort({ model: 'claude-opus-5-5', harness: 'claude', effortStatus: st({}) })).toBe('Opus 5.5');
+    expect(modelWithEffort({ model: 'claude-opus-5-5', harness: 'claude' })).toBe('Opus 5.5');
+    expect(modelWithEffort({ model: 'grok-4.7[context=256k,reasoning_effort=low]', harness: 'cursor', effortStatus: st({ effective: 'low' }) })).toBe('Grok 4.7 · low');
     expect(prettyModel('claude-haiku-4-5-20251001')).toBe('Haiku 4.5');
     expect(prettyModel('claude-sonnet-4-5[1m]')).toBe('Sonnet 4.5 1M');
     expect(prettyModel('grok-4.7', 'cursor')).toBe('Grok 4.7');

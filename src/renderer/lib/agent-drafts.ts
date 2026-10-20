@@ -14,7 +14,7 @@ export const agentDraftOf = (p: AgentProfile): AgentDraft => ({
   name: p.name, purpose: p.purpose, avatar: p.avatar, instructions: p.instructions, engine: p.engine, model: p.model,
   ...(p.effort ? { effort: p.effort } : {}), tools: p.tools, permissionCeiling: p.permissionCeiling,
   ...(p.knowhow ? { knowhow: p.knowhow } : {}), ...(p.pack ? { pack: p.pack } : {}),
-  maxContext: p.maxContext ?? null, tier: p.tier, tierMax: p.tierMax, independent: p.independent, launches: [...p.launches], skills: [...p.skills],
+  maxContext: p.maxContext ?? null, tier: p.tier, tierMax: p.tierMax, launches: [...p.launches], skills: [...p.skills],
 });
 const drafts = new Map<string, AgentEditorDraft>();
 let active: string | null = null;
@@ -44,7 +44,7 @@ function validDraft(value: unknown): value is AgentDraft {
   if (d.tools !== null && (!d.tools || !list(d.tools.allow, c => TOOL_CLASSES.includes(c as never), TOOL_CLASSES.length))) return false;
   if (d.permissionCeiling !== null && !PERMISSION_CEILINGS.includes(d.permissionCeiling)) return false;
   if (d.maxContext !== undefined && d.maxContext !== null && !Number.isSafeInteger(d.maxContext)) return false;
-  return MODEL_TIERS.includes(d.tier) && MODEL_TIERS.includes(d.tierMax) && typeof d.independent === 'boolean'
+  return MODEL_TIERS.includes(d.tier) && MODEL_TIERS.includes(d.tierMax)
     && list(d.launches, isWorkRole, 8) && list(d.skills, s => typeof s === 'string' && SKILL.test(s), 40);
 }
 export function validateAgentDraftCopy(value: unknown): ReturnType<typeof agentDraftCheckpoint> {

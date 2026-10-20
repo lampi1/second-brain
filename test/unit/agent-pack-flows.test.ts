@@ -17,7 +17,7 @@ const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
 const models = (): AgentModelChoice[] => [{ engine: 'claude', label: 'Claude', enabled: true, trusted: true, effort: true, defaultModel: true, modelSelectable: true, modelReason: null, source: 'observed', models: [{ id: 'known-model', name: 'Known model' }], installed: null, authenticated: null }];
 const draftOf = (p: AgentProfile): AgentDraft => ({ name: p.name, purpose: p.purpose, instructions: p.instructions, engine: p.engine, model: p.model, avatar: p.avatar,
-  tools: p.tools, permissionCeiling: p.permissionCeiling, tier: p.tier, tierMax: p.tierMax, independent: p.independent, launches: p.launches, skills: p.skills });
+  tools: p.tools, permissionCeiling: p.permissionCeiling, tier: p.tier, tierMax: p.tierMax, launches: p.launches, skills: p.skills });
 function setup() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-pack-flow-')); roots.push(root);
   const brain = path.join(root, 'brain'), data = path.join(root, 'data'); fs.mkdirSync(brain); fs.mkdirSync(data);
@@ -130,6 +130,11 @@ describe('pack review transactions', () => {
     expect(fs.existsSync(path.join(runtime.skillRoot, 'reviewer/SKILL.md'))).toBe(true);
     expect(fs.existsSync(path.join(runtime.pluginDir, 'hooks'))).toBe(false);
     expect(runtime.instructions).toContain(runtime.skillRoot);
+    // these lines go only to Cursor, which has no Skill tool: the files to read, never a qualified Skill name (issue #101;
+    // Claude gets qualifiedSkillsLine instead)
+    expect(runtime.instructions).toContain(`read ${runtime.skillRoot}/<name>/SKILL.md): reviewer`);
+    expect(runtime.instructions).not.toContain('Skill tool');
+    expect(runtime.instructions).not.toContain(`agent-${path.basename(runtime.pluginDir).slice(0, 16)}:reviewer`);
     expect(runtime.instructions).not.toContain('learned-rules');
   });
 });

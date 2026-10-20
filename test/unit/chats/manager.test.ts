@@ -143,7 +143,7 @@ describe('ChatManager', () => {
     await expect(m.create({ harness: 'claude', cwd: e.cwd, model: 'x" & calc' })).rejects.toThrow(/Modello non valido/);
     // a model an ACP CLI would read as one of its flags (qwen -m --yolo)
     await expect(m.create({ harness: 'cursor', cwd: e.cwd, model: '--yolo' })).rejects.toThrow(/Modello non valido/);
-    await expect(m.create({ harness: 'cursor', cwd: e.cwd, effort: 'high' })).rejects.toThrow(/effort/i);
+    await expect(m.create({ harness: 'anthropic', cwd: e.cwd, effort: 'high' })).rejects.toThrow(/effort/i);
     await expect(m.send('nope', 'x')).rejects.toThrow(/non trovata/);
     expect(m.items('nope')).toEqual([]);
   });
@@ -421,7 +421,8 @@ describe('ChatManager', () => {
     const s = first.m.list()[0];
     expect(s).toMatchObject({ costUsd: 0, costKnown: false, model: 'auto[context=256k,reasoning_effort=high,fast=true]', lastText: 'Test verdi.' });
     expect(s?.sessionId).toMatch(/^[0-9a-f-]{36}$/);
-    await expect(first.m.set(c.id, { effort: 'high' })).rejects.toThrow(/effort/i);
+    // the effort goes live on the model's thought_level option (issue #97) and the tile reads it back (#100)
+    expect(await first.m.set(c.id, { effort: 'low' })).toMatchObject({ effort: 'low', model: 'auto[context=256k,reasoning_effort=low,fast=true]', effortStatus: { effective: 'low' } });
     await first.m.shutdown();
 
     const { m } = manager(e, opts);

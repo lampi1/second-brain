@@ -1,7 +1,10 @@
 /* The role characters (components/AgentAvatar.tsx): a round badge with a thin ring that keeps its edge on dark and
-   light surfaces; a chat without a role shows its initial on a neutral badge. */
+   light surfaces, or the user's own picture in the same frame; a chat without a role shows its initial on a neutral badge. */
 .agent-avatar { display: inline-flex; flex: none; align-items: center; justify-content: center; border-radius: 50%; vertical-align: middle; }
 .agent-avatar.character { display: block; }
+/* the user's own picture (a square PNG): the same round badge and ring */
+.agent-avatar.picture { display: block; object-fit: cover; outline: 1px solid #ffffff59; outline-offset: -1px; }
+:root[data-theme=light] .agent-avatar.picture { outline-color: #0000002e; }
 .agent-avatar-ring { stroke: #ffffff59; }
 :root[data-theme=light] .agent-avatar-ring { stroke: #0000002e; }
 .agent-avatar.plain { background: var(--surface-2); color: var(--text-2); font-weight: 600; box-shadow: inset 0 0 0 1px var(--border); line-height: 1; }

@@ -23,6 +23,7 @@ import type { Emitter } from '../ipc';
 import type { FeedInput } from '../services';
 import { log, errText, redact } from '../log';
 import { TabCdp } from './cdp';
+import { onceDialogCallback, settleDialog } from './dialogs';
 import { NetLog } from './netlog';
 import { Handoffs } from './handoffs';
 import { Credentials } from './logins';
@@ -326,6 +327,7 @@ export class BrowserTabs {
     const prevActive = this.groups.get(old.group)?.active ?? null;
     this.tabs.delete(old.id);
     this.byWc.delete(old.wcId);
+    this.dropDialog(old, 'dismissed (tab replaced)');   // before dispose and close: never a page left blocked
     old.cdp?.dispose();
     this.unplace(old);
     for (const w of old.dialogWaiters) w();
@@ -363,6 +365,7 @@ export class BrowserTabs {
     const t = this.tabs.get(tabId);
     if (!t) return;
     if (by === 'user' && t.agent) t.closedByUser = { url: t.wc.isDestroyed() ? '' : redact(t.wc.getURL()) };   // before wc.close: its 'destroyed' may run remove() first
+    this.dropDialog(t, 'dismissed (tab closed)');      // answered while the page is still alive
     if (!t.wc.isDestroyed()) t.wc.close({ waitForBeforeUnload: false });
     this.remove(t);
   }
@@ -373,6 +376,7 @@ export class BrowserTabs {
     this.tabs.delete(t.id);
     this.byWc.delete(t.wcId);
     this.visible.delete(t.id);
+    this.dropDialog(t, 'dismissed (tab closed)');      // a destroyed page's callback is only dropped, never called
     t.cdp?.dispose();
     this.unplace(t);
     for (const w of t.dialogWaiters) w();
@@ -393,19 +397,39 @@ export class BrowserTabs {
   private onDetached(tab: Tab): void {
     tab.emu = null;                                    // cdp.ts re-attaches by itself: set the desktop size again then
     setTimeout(() => this.emulate(tab), 1000);
-    if (tab.pendingDialogCb) { tab.pendingDialogCb(false, ''); tab.pendingDialogCb = null; }
-    if (tab.dialog) {                                  // no Page.javascriptDialogClosed will come once detached
-      tab.lastDialog = { ...tab.dialog, result: 'dismissed (automation detached)' };
-      tab.dialog = null;
-      this.emitTabs();
-    }
+    // no Page.javascriptDialogClosed will come once detached, and nobody could answer: Cancel it (once)
+    if (this.dropDialog(tab, 'dismissed (automation detached)')) this.emitTabs();
+  }
+
+  /** Settles a pending dialog of the tab (issue #102): its native callback answered Cancel once while the page is
+   *  alive (dropped otherwise), the dialog cleared. True when there was something to settle. */
+  private dropDialog(tab: Tab, result: string): boolean {
+    if (!tab.dialog && !tab.pendingDialogCb) return false;
+    const r = settleDialog(tab, result, { alive: !tab.wc.isDestroyed() });
+    log.info('browser', 'dialog settled', { chat: tab.owner ?? undefined, data: { tab: tab.id, result, answered: r.answered } });
+    return true;
+  }
+
+  /** Clears a dialog Chromium says is no longer showing (handle_dialog got "No dialog is showing"). */
+  forgetDialog(tab: Tab): void {
+    if (this.dropDialog(tab, 'closed (no longer showing)')) this.emitTabs();
+  }
+
+  /** handle_dialog's fallback when CDP cannot answer (detached, or "Not attached to an active page"): answers the
+   *  dialog through the native callback kept by suppressNativeDialogs. False when there is no callback to answer. */
+  answerNativeDialog(tab: Tab, accept: boolean, text = ''): boolean {
+    if (!tab.pendingDialogCb || tab.wc.isDestroyed()) return false;
+    settleDialog(tab, accept ? 'accepted' : 'dismissed', { accept, text });
+    log.info('browser', 'dialog answered natively', { chat: tab.owner ?? undefined, data: { tab: tab.id, accept } });
+    this.emitTabs();
+    return true;
   }
 
   private wire(tab: Tab): void {
     const wc = tab.wc;
     const changed = () => this.emitTabs();
     for (const ev of ['did-start-loading', 'did-stop-loading', 'did-navigate-in-page', 'page-title-updated'] as const) wc.on(ev as 'did-stop-loading', changed);
-    wc.on('did-navigate', (_e, url) => { if (url && url !== 'about:blank') tab.fresh = false; tab.committed = true; tab.emu = null; this.emulate(tab); this.emitTabs(); });
+    wc.on('did-navigate', (_e, url) => { this.dropDialog(tab, 'dismissed (page navigated)'); if (url && url !== 'about:blank') tab.fresh = false; tab.committed = true; tab.emu = null; this.emulate(tab); this.emitTabs(); });
     wc.on('did-stop-loading', () => { void this.onPageLoaded(tab); });
     wc.on('did-navigate-in-page', (_e, _url, isMain) => { if (isMain) void this.onPageLoaded(tab); });
     wc.on('destroyed', () => this.remove(tab));
@@ -457,7 +481,10 @@ export class BrowserTabs {
     em.removeAllListeners('-run-dialog');
     em.on('-run-dialog', (info: unknown, cb: (ok: boolean, text: string) => void) => {
       log.debug('browser', 'native dialog intercepted', { data: { tab: tab.id, cdp: !!tab.cdp?.isAttached } });
-      if (tab.cdp?.isAttached) { tab.pendingDialogCb = cb; return; }
+      if (tab.cdp?.isAttached) {                       // kept for handle_dialog's fallback and for teardown: called at most once
+        tab.pendingDialogCb = onceDialogCallback(cb, e => log.debug('browser', 'native dialog callback failed', { data: { tab: tab.id, cause: errText(e) } }));
+        return;
+      }
       for (const l of original) l.call(tab.wc, info, cb);
     });
   }

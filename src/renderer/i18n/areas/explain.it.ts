@@ -17,7 +17,7 @@ export const explainIt = {
   'explain.toasts.title': 'Urgenti o normali',
   'explain.toasts.p1': 'Urgenti: una chat che ti aspetta, una domanda per te, un accesso da rifare, una chat finita con errore, il budget esaurito. Normali: anche le altre novità, come un lavoro finito. Le notifiche di Windows compaiono solo quando l’app non è in primo piano, e più novità insieme diventano una notifica sola.',
   'explain.judge.title': 'Cosa fa il Giudice',
-  'explain.judge.p1': 'Ogni giorno prende fino a questo numero di lavori finiti che nessuno ha ancora votato e li rivede, su un modello diverso da quello che li ha fatti quando ce n’è uno. Il suo voto entra nella performance dell’agente con peso pieno (× 1).',
+  'explain.judge.p1': 'Ogni giorno prende fino a questo numero di lavori finiti che nessuno ha ancora votato e li rivede, ognuno in una sessione nuova che non ha visto come sono stati fatti. Il suo voto entra nella performance dell’agente con peso pieno (× 1).',
   'explain.judge.p2': 'Ogni revisione è una chat vera: costa come un lavoro breve del Giudice. Con 0 non rivede nulla e la performance si basa sui voti tuoi, dell’Orchestratore e degli agenti.',
   'explain.tiers.title': 'Leggero, medio, alto',
   'explain.tiers.p1': 'Ogni ruolo dichiara un livello di modello invece di un modello preciso: leggero per lavori semplici e veloci, medio per la maggior parte, alto per pianificare e ragionare a lungo. Più alto = più capace, più lento e più caro.',
