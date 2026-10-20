@@ -4,9 +4,10 @@
 // Judge chat on each (a root chat linked to the run with reviewOf: a new session that never saw the run's reasoning, on
 // the Judge's own model, ADR 0091), and when that review ends turns its verdict into the run's feedback (run-feedback.ts
 // recordFeedback: it counts as reviewed evidence only when the Judge verified it). At most
-// Settings.delegation.judgeDaily a day (0 = off). It spends tokens, so wiring.ts starts it only in the user's stable
-// app outside tests (or with SB_JUDGE_SAMPLE=1). Pure picking (pickSamples, reviewPrompt) is unit-tested in
-// test/unit/agents/judge-sample.test.ts.
+// Settings.delegation.judgeDaily a day (0 = off). It spends tokens, so wiring.ts starts it only in the user's own app
+// (judgeSamplingOn: never in tests or an agent's hidden run; SB_JUDGE_SAMPLE=1/0 forces it), first a few minutes after
+// the start, then every 30 minutes; each tick that starts or skips logs why (issue #112, ADR 0097). Pure picking
+// (pickSamples, reviewPrompt, judgeSamplingOn) is unit-tested in test/unit/agents/judge-sample.test.ts.
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import type { AgentRun } from '../../shared/agents';
@@ -69,9 +70,23 @@ export function reviewPrompt(run: AgentRun, chat: Pick<ChatSummary, 'title' | 'c
   ].join('\n');
 }
 
+/** Whether this process runs the sampled reviews, and why. Before issue #112 only a stable release (SB_RELEASE) ran
+ *  them, so the user's own app built from a clone (`npm start`, «Aggiorna» on a dev build) or installed with the
+ *  installer never did. Now: on in any real profile; off in the test suites (SB_TEST) and in an agent's own run of the
+ *  app (SB_HIDDEN, AGENTS.md), which must never spend the user's tokens on its own; SB_JUDGE_SAMPLE=1 / 0 forces it. */
+export function judgeSamplingOn(env: Readonly<Record<string, string | undefined>>): { on: boolean; why: string } {
+  if (env.SB_JUDGE_SAMPLE === '1') return { on: true, why: 'SB_JUDGE_SAMPLE=1' };
+  if (env.SB_JUDGE_SAMPLE === '0') return { on: false, why: 'SB_JUDGE_SAMPLE=0' };
+  if (env.SB_TEST) return { on: false, why: 'test run' };
+  if (env.SB_HIDDEN === '1') return { on: false, why: "an agent's hidden run" };
+  return { on: true, why: "the user's app" };
+}
+
 export class JudgeSampler {
   private state: State;
   private ticking = false;
+  /** the last skip reason logged: a skip is logged again only when its reason changes (a tick runs every 30 minutes) */
+  private lastSkip = '';
   private readonly now: () => number;
   constructor(private readonly d: JudgeSampleDeps) {
     this.now = d.now ?? Date.now;
@@ -91,21 +106,32 @@ export class JudgeSampler {
     try { writeLocal(this.d.file, this.state); } catch (e) { log.warn('agents', 'judge samples not saved', { cause: errText(e), hint: 'the next start may sample a run again' }); }
   }
 
-  /** Starts today's remaining reviews (one call at a time). */
+  private skipped(why: string, data: Record<string, unknown> = {}): 0 {
+    if (why !== this.lastSkip) log.info('agents', 'judge sample skipped', { data: { why, ...data } });
+    this.lastSkip = why;
+    return 0;
+  }
+
+  /** Starts today's remaining reviews (one call at a time). Every candidate is tried in the day's order until the
+   *  day's cap is met: a run whose chat is gone or is a delegated child's is passed over, not counted. */
   async tick(): Promise<number> {
     if (this.ticking) return 0;
     this.ticking = true;
     try {
-      const now = this.now(), day = dayOf(now);
+      const now = this.now(), day = dayOf(now), daily = this.d.daily();
       if (this.state.day !== day) { this.state.day = day; this.state.started = 0; }
-      const left = Math.max(0, this.d.daily() - this.state.started);
-      if (!left) return 0;
+      if (daily <= 0) return this.skipped('off (delegation.judgeDaily = 0)');
+      const left = Math.max(0, daily - this.state.started);
+      if (!left) return this.skipped('daily cap reached', { daily });
       const engine = this.d.judgeEngine(), refused = this.d.refusal(engine);
-      if (refused) { log.info('agents', 'judge sample skipped', { data: { why: refused } }); return 0; }
-      let started = 0;
-      for (const run of pickSamples(this.d.runs(), new Set(this.state.reviews.map(r => r.runId)), now, left)) {
+      if (refused) return this.skipped(refused, { engine });
+      const candidates = pickSamples(this.d.runs(), new Set(this.state.reviews.map(r => r.runId)), now, Number.MAX_SAFE_INTEGER);
+      let started = 0, gone = 0, child = 0, failed = false;
+      for (const run of candidates) {
+        if (started >= left) break;
         const chat = this.d.chat(run.chatId);
-        if (!chat || chat.parentId) continue;
+        if (!chat) { gone++; continue; }
+        if (chat.parentId) { child++; continue; }
         try {
           const judge = await this.d.create({ harness: engine, cwd: chat.cwd, title: `Revisione · ${chat.title}`.slice(0, 80), roleId: 'judge', reviewOf: run.runId,
             goal: `Independent verdict on «${chat.title}»`, prompt: reviewPrompt(run, chat) });
@@ -113,10 +139,14 @@ export class JudgeSampler {
           this.state.started++; started++;
         } catch (e) {
           log.warn('agents', 'judge sample not started', { data: { runId: run.runId }, cause: errText(e), hint: 'tried again at the next tick' });
+          failed = true;
           break;
         }
       }
-      if (started) this.save();
+      if (!started) return failed ? 0 : this.skipped('no finished run to review', { candidates: candidates.length, chatGone: gone, delegated: child });
+      this.lastSkip = '';
+      this.save();
+      log.info('agents', 'judge samples started', { data: { started, today: this.state.started, daily, engine } });
       return started;
     } finally { this.ticking = false; }
   }

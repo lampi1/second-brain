@@ -90,6 +90,8 @@ describe('ChatManager with the Orchestrator', () => {
     expect(f.sent[0]!.startsWith('[Role supplied by the app: Orchestrator]')).toBe(true);
     expect(ORCHESTRATOR_ROLE.startsWith('[Role supplied by the app: Orchestrator]')).toBe(true);
     expect(ORCHESTRATOR_ROLE).toMatch(/Updater apply is disabled/);
+    expect(ORCHESTRATOR_ROLE).toMatch(/ONE router chat/); // issue #112: router for a batch, judge for a verdict
+    expect(ORCHESTRATOR_ROLE).toMatch(/goes to a judge chat/);
   });
   it('starts from the edited Orchestrator role and composes its instructions once', async () => {
     const f = fixture(), seed = f.agents.list().profiles.find(p => p.id === ORCHESTRATOR_AGENT_ID)!;

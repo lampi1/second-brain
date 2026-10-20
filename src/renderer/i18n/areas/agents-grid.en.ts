@@ -10,7 +10,7 @@ export const agentsGridEn: typeof agentsGridIt = {
   'agentsGrid.levelNext': ({ left, next }) => left === 1 ? `1 run to Lv ${next}` : `${left} runs to Lv ${next}`,
   'agentsGrid.levelTop': 'Top level',
   'agentsGrid.levelHelpTitle': 'How the level is computed',
-  'agentsGrid.levelHelp1': 'The level grows with the runs this agent ended: every chat started from it and then completed or closed counts one, whether it went well or not.',
+  'agentsGrid.levelHelp1': 'The level grows with the runs this agent ended: every chat started from it and then completed or closed counts one, whether it went well or not. The Orchestrator has no runs of its own: each run it started counts for it, with that run\'s verdict.',
   'agentsGrid.levelHelp2': 'Each level asks 5 runs more than the one before: Lv 2 at 5 runs, Lv 3 at 15, Lv 4 at 30, Lv 5 at 50, Lv 6 at 75 (Lv N needs 5 × N × (N − 1) ÷ 2 runs). Top: Lv 50.',
   'agentsGrid.levelHelp3': 'Titles: Recruit (Lv 1), Apprentice, Practitioner, Expert, Veteran (Lv 5), Master (Lv 6–9), Legend (Lv 10 and up). It says how much experience it has, not how well it works: that is the performance.',
   'agentsGrid.levelHelpEx': ({ runs, level, next, left }) =>

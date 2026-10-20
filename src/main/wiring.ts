@@ -88,7 +88,7 @@ import { OneShotService } from './agents/oneshot';
 import type { AgentRunStore } from './agents/runs';
 import { CompareQueue, queueAllowed } from './compare/queue';
 import { gitWorktrees } from './agents/worktrees';
-import { JudgeSampler } from './agents/judge-sample';
+import { JudgeSampler, judgeSamplingOn } from './agents/judge-sample';
 import { COMPACT_WINDOW } from './brain/settings-schema';
 import { setRecorder } from './chats/drift';
 import { HybridSearch, workerFileNextTo } from './search/hybrid/service';
@@ -635,7 +635,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   addChatTools(delegationTools({ chats: manager, roles: () => agents.list(), settings: () => checkedDelegation(brain.settings().delegation),
     engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), label: AGENT_LABEL, runs: () => manager.runs.list(), worktrees: gitWorktrees, skillTools }));
   // the Judge's sampled reviews of finished runs (agents/judge-sample.ts): they spend tokens, so they run only in the
-  // user's stable app outside tests (or with SB_JUDGE_SAMPLE=1), at most delegation.judgeDaily a day
+  // user's own app, never in tests or an agent's hidden run (judgeSamplingOn, issue #112), at most delegation.judgeDaily a day
   const judgeSampler = new JudgeSampler({ file: path.join(ctx.userData, 'judge-samples.json'), runs: () => manager.runs.list(),
     chat: id => manager.list().find(c => c.id === id), create: req => manager.create(req, 'app'),
     daily: () => checkedDelegation(brain.settings().delegation).judgeDaily,
@@ -643,8 +643,13 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     refusal: h => !engineOn(brain.settings(), h) ? 'engine switched off' : !agentsMayOpen(brain.settings(), h) ? 'agents may not use this engine' : null,
     feedback: (a, by) => runFeedback.recordFeedback(a, by) });
   loopRef.current = { ended: run => { loop.hooks.ended(run); void judgeSampler.ended(run); }, outcome: run => loop.hooks.outcome(run) };
-  const judgeTimer = (releaseId() && !process.env.SB_TEST) || process.env.SB_JUDGE_SAMPLE === '1'
-    ? setInterval(() => { void judgeSampler.tick().catch(e => log.warn('agents', 'judge sample tick failed', { cause: errText(e), hint: 'tried again in 30 minutes' })); }, 30 * 60_000) : null;
+  // first a few minutes after the start (a restart within 30 minutes used to postpone it again), then every 30 minutes
+  const judging = judgeSamplingOn(process.env);
+  log.info('agents', judging.on ? 'judge samples scheduled' : 'judge samples off', { data: { why: judging.why } });
+  const judgeTick = () => { void judgeSampler.tick().catch(e => log.warn('agents', 'judge sample tick failed', { cause: errText(e), hint: 'tried again in 30 minutes' })); };
+  const judgeFirst = judging.on ? setTimeout(judgeTick, 3 * 60_000) : null;
+  judgeFirst?.unref();
+  const judgeTimer = judging.on ? setInterval(judgeTick, 30 * 60_000) : null;
   judgeTimer?.unref();
   const lifecycleTimer = process.env.SB_TEST ? null : setInterval(() => loop.tick(), 10_000);
   lifecycleTimer?.unref();

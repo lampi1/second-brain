@@ -62,7 +62,7 @@ import { TurnToolBudget } from '../agents/orchestrator-budget';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
 import { resultMessage, type DelegationLimitHit, type DelegationResult } from '../../shared/delegation';
 import { aiErrorRuns, runMetrics } from '../agents/run-metrics';
-import { standings } from '../agents/standing';
+import { standings, withStandings } from '../agents/standing';
 import { isCorrection } from '../../shared/correction';
 import { AgentChildrenReducer } from './agent-children';
 import { autoCloseNow, type AutoCloseCandidate } from './auto-close';
@@ -1032,7 +1032,7 @@ export class ChatManager implements ChatService {
       filter: { ...(opts.skill !== undefined ? { skill: opts.skill } : {}), ...(opts.app !== undefined ? { app: opts.app } : {}), ...(opts.repo !== undefined ? { repo: opts.repo } : {}) } });
     // the card's level and performance are the agent's whole record, whatever the filter
     const standing = standings(runs, rollups, Date.now());
-    return metrics.map(m => { const s = standing.get(m.agentId); return s ? { ...m, standing: s } : m; });
+    return withStandings(metrics, standing);
   }
 
   /** The user's verdict on an agent run (thumbs up / down / partly; the UI's only, never an agent tool): basis human;

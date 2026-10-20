@@ -2,7 +2,7 @@
 // kind of verdict, recency weighting, the "in rodaggio" threshold and the exclusions shared with the §5 metrics.
 import { describe, expect, it } from 'vitest';
 import type { AgentRun } from '../../../src/shared/agents';
-import { HALF_LIFE_MS, MIN_RUNS, levelOf, levelStart, standings, verdictOf } from '../../../src/main/agents/standing';
+import { HALF_LIFE_MS, MIN_RUNS, levelOf, levelStart, orchestratorDecision, standings, verdictOf, withStandings } from '../../../src/main/agents/standing';
 import { emptyTally } from '../../../src/main/agents/run-metrics';
 
 const NOW = Date.UTC(2026, 9, 19, 12);
@@ -64,5 +64,28 @@ describe('standings', () => {
     const s = standings([run({ endedAt: undefined }), run({ oneshot: { engine: 'claude', job: 'headline', fallback: false, costBasis: 'reported' } }), run()], [t], NOW).get('scout')!;
     expect(s).toMatchObject({ runs: 13, level: 2 });
     expect(standings([run({ endedAt: undefined })], [], NOW).has('scout')).toBe(false);
+  });
+});
+
+describe('the Orchestrator\'s standing (issue #112, ADR 0097)', () => {
+  it('counts each ended root run it opened as one of its decisions, rated with that run\'s verdict', () => {
+    const mine = [...Array(5)].map((_, i) => run({ agentId: i % 2 ? 'artisan' : 'scout', startedBy: 'orchestrator', outcome: human(i < 4 ? 'success' : 'fail') }));
+    const others = [
+      run({ startedBy: 'user', outcome: human('fail') }),                               // the user's own chat
+      run({ startedBy: 'parent', parentRunId: 'r_999999999999', agentId: 'scout' }),     // a delegated child
+      run({ startedBy: 'orchestrator', source: 'oneshot', agentId: 'pulse' }),           // a one-shot job
+      run({ startedBy: 'orchestrator', endedAt: undefined }),                            // still open
+    ];
+    const s = standings([...mine, ...others], [], NOW).get('orchestrator')!;
+    expect(s).toMatchObject({ runs: 5, level: 2, evaluated: 5, sources: { human: 5, judge: 0, orchestrator: 0, self: 0 } });
+    expect(s.performance).toBeCloseTo(0.8);
+    // the run still counts for its own role too
+    expect(standings(mine, [], NOW).get('scout')!.runs).toBe(3);
+    expect(orchestratorDecision(others[2]!)).toBe(false);
+  });
+  it('gives the Orchestrator a card entry even without metrics of its own', () => {
+    const list = withStandings([], standings([run({ startedBy: 'orchestrator' })], [], NOW));
+    expect(list.map(m => m.agentId)).toEqual(['orchestrator', 'scout']);
+    expect(list[0]).toMatchObject({ versions: [], all: null, open: 0, standing: { runs: 1, level: 1 } });
   });
 });

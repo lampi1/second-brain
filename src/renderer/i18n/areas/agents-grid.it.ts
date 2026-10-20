@@ -11,7 +11,7 @@ export const agentsGridIt = {
   'agentsGrid.levelNext': ({ left, next }: { left: number; next: number }) => left === 1 ? `1 lavoro al Lv ${next}` : `${left} lavori al Lv ${next}`,
   'agentsGrid.levelTop': 'Livello massimo',
   'agentsGrid.levelHelpTitle': 'Come si calcola il livello',
-  'agentsGrid.levelHelp1': 'Il livello cresce con i lavori conclusi da questo agente: ogni chat avviata da lui e poi completata o chiusa conta uno, che sia andata bene o male.',
+  'agentsGrid.levelHelp1': 'Il livello cresce con i lavori conclusi da questo agente: ogni chat avviata da lui e poi completata o chiusa conta uno, che sia andata bene o male. L\'Orchestratore non ha lavori suoi: per lui conta ogni lavoro che ha avviato, con il voto di quel lavoro.',
   'agentsGrid.levelHelp2': 'Ogni livello chiede 5 lavori in più del precedente: Lv 2 a 5 lavori, Lv 3 a 15, Lv 4 a 30, Lv 5 a 50, Lv 6 a 75 (per il Lv N servono 5 × N × (N − 1) ÷ 2 lavori). Massimo Lv 50.',
   'agentsGrid.levelHelp3': 'Titoli: Recluta (Lv 1), Apprendista, Praticante, Esperto, Veterano (Lv 5), Maestro (Lv 6–9), Leggenda (Lv 10 e oltre). Dice quanta esperienza ha, non quanto lavora bene: per quello c\'è la performance.',
   'agentsGrid.levelHelpEx': ({ runs, level, next, left }: { runs: number; level: number; next: number | null; left: number }) =>
