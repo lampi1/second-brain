@@ -1,4 +1,4 @@
-// Unit tests of shared/newchat.ts (the "Veloce" / "Stratega" line: added, recognized, removed; an older "Nuova chat" line
+// Unit tests of shared/newchat.ts (the "Veloce" / "Strategist" line: added, recognized, removed; an older "Nuova chat" line
 // still recognized) and lib/chatrefs.ts (the chats an Orchestrator's app_create_chat / app_send_to_chat rows and messages
 // point to; ADR 0034).
 import { describe, expect, it } from 'vitest';
@@ -27,7 +27,7 @@ describe('mode line', () => {
   it('still reads an older "Nuova chat" message, and leaves any other message as it is', () => {
     expect(splitMode('[nuova chat] Apri una nuova chat…\n\nfai X')).toEqual({ mode: 'new', text: 'fai X' });
     expect(splitMode('ciao [veloce]')).toEqual({ mode: null, text: 'ciao [veloce]' });
-    expect(splitMode('[stratega]')).toEqual({ mode: 'plan', text: '' });
+    expect(splitMode('[strategist]')).toEqual({ mode: 'plan', text: '' });
   });
   it('the Orchestrator\'s MCP instructions name every tag', () => {
     for (const tag of Object.values(MODE_TAGS)) expect(SEND_MODE_RULE).toContain(tag);

@@ -1,4 +1,4 @@
-// "Veloce" / "Stratega" from the Orchestrator and "Apri" from anywhere (ADR 0034, modes 2026-10-20), on the demo: one of
+// "Veloce" / "Strategist" from the Orchestrator and "Apri" from anywhere (ADR 0034, modes 2026-10-20), on the demo: one of
 // the two toggles in the Orchestrator's input (never both) sends the message with the line that asks her for the quick
 // path or a Strategist (hidden, shown as a badge) and resets; the demo Orchestrator opens the chat (an app_create_chat
 // row) and the row's "Apri" brings that chat on screen from the Task page; Ctrl+Shift+Invio sends as "Veloce" at once.
@@ -8,7 +8,7 @@ import type { ChatItem } from '../../src/shared/contract';
 import { MODE_TAGS } from '../../src/shared/newchat';
 import { launchDemo, openOrchestrator, shot } from './helpers';
 
-test('Veloce / Stratega: a toggle marks the message, the Orchestrator opens the chat, Apri focuses it from the Task page', async () => {
+test('Veloce / Strategist: a toggle marks the message, the Orchestrator opens the chat, Apri focuses it from the Task page', async () => {
   const { app, page } = await launchDemo();
   try {
     await openOrchestrator(page);
@@ -23,10 +23,10 @@ test('Veloce / Stratega: a toggle marks the message, the Orchestrator opens the 
     const plan = page.getByTestId('orchestrator-input-mode-plan');
     await expect(toggle).toHaveAttribute('aria-pressed', 'false');
     await expect(plan).toHaveAttribute('aria-pressed', 'false');
-    // one at a time: Stratega, then Veloce takes its place
+    // one at a time: Strategist, then Veloce takes its place
     await plan.click();
     await expect(plan).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByTestId('orchestrator-input')).toHaveAttribute('placeholder', 'Cosa deve pianificare lo Stratega…');
+    await expect(page.getByTestId('orchestrator-input')).toHaveAttribute('placeholder', 'Cosa deve pianificare lo Strategist…');
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
     await expect(plan).toHaveAttribute('aria-pressed', 'false');

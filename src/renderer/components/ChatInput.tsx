@@ -9,7 +9,7 @@
 // remounts (kept per chat in memory); setDraft puts a ready text in a chat's input from elsewhere (a brain page's
 // "Discuti"), with a callback when the user sends it. "/" at the start opens the chat's commands and skills (ADR 0018:
 // ↑↓ choose, Tab or Invio completes "/<name> ", Esc closes; lib/slash.ts), read from main ('chat:commands') when the
-// list opens. An Orchestrator's input also has "Veloce" and "Stratega" (ADR 0034, 2026-10-20): one ticked, the message
+// list opens. An Orchestrator's input also has "Veloce" and "Strategist" (ADR 0034, 2026-10-20): one ticked, the message
 // goes with the line that asks her for the quick path or for a Strategist's plan (shared/newchat.ts); Ctrl+Shift+Invio
 // sends as "Veloce" at once; it resets after a send.
 // Used by ChatTile and OrchestratorTile (also the Orchestrator docked with Ctrl+R).
@@ -41,7 +41,7 @@ const drafts = new CheckpointMap<string, string>();
 const onSentHooks = new Map<string, { fn: () => void; sig: string }>();
 const draftSubs = new Set<(chatId: string) => void>();
 const freshDrafts = new Set<string>(); // set from elsewhere, not yet shown: the input takes the focus with the caret at the end
-const modeOn = new CheckpointMap<string, SendMode>(); // the Orchestrators with "Veloce" or "Stratega" ticked (kept across a remount, like the draft)
+const modeOn = new CheckpointMap<string, SendMode>(); // the Orchestrators with "Veloce" or "Strategist" ticked (kept across a remount, like the draft)
 
 /** Put `text` in the chat's input, not sent; what the user was already writing there stays above it. `onSent` runs
  *  once when a message that still contains the text's first line is sent or queued (an emptied input forgets it). */
