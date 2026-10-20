@@ -103,6 +103,22 @@ describe('the queue: nothing is applied without the user', () => {
     expect(w.loop.api.read({}).proposals).toEqual([]); // the role is already on mid
     await expect(w.loop.api.decide({ key: stale.key, decision: 'approve' })).rejects.toThrow(/non vale più/);
   });
+  it('the daily pass hands its new entries to `proposed` once (the feed\'s "Proposta su un ruolo", ADR 0102)', () => {
+    const userData = tmp(), at = new Date(2026, 9, 2, 19).getTime();
+    const catalog = new AgentCatalogService({ userData, models, now: () => at });
+    const runs = new AgentRunStore(userData);
+    const mid = Array.from({ length: TIER_MIN_KNOWN }, (_, i) => run({ outcome: { verdict: i < 1 ? 'success' : 'fail', basis: 'human', by: 'user', at: 1 } }));
+    const top = Array.from({ length: TIER_MIN_KNOWN }, () => run({ tier: 'top' }));
+    for (const r of [...mid, ...top]) runs.adopt(r);
+    const feedback = new RunFeedback({ userData, catalog, runs, publish: () => {}, send: async () => undefined, now: () => at });
+    const added: string[][] = [];
+    const loop = createAgentLoop({ userData, catalog, runs, feedback, chats: { list: () => [] }, idle: () => true, now: () => at, proposed: a => added.push(a.map(p => p.key)) });
+    loop.tick();
+    expect(added).toHaveLength(1);
+    expect(added[0]).toEqual(loop.lifecycle.proposals().map(p => p.key));
+    loop.tick(); // same day: no second pass, nothing announced
+    expect(added).toHaveLength(1);
+  });
   it('refuses a decision that is not approve or dismiss, and an unknown key', async () => {
     const w = world();
     await expect(w.loop.api.decide({ key: 'x', decision: 'apply' })).rejects.toThrow();

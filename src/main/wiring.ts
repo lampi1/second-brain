@@ -27,6 +27,7 @@ import { AutoCloseService, autoCloseNow } from './chats/auto-close';
 import { readLocal, writeLocal } from './agents/local-store';
 import { ProgressService } from './agents/progress';
 import { mountLifecycleApi, type LifecycleApi } from './agents/lifecycle-api';
+import { maintenanceEvent, proposalEvent } from './brain/announce';
 import { createAgentLoop } from './agents/loop';
 import { childFeedbackTools } from './agents/child-feedback';
 import { delegationTools } from './agents/delegation';
@@ -645,7 +646,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const lifecycleIdle = () => !manager.pending().length && !asks.pending().length && !runner.list().some(r => r.state === 'running')
     && manager.list().every(c => c.state !== 'starting' && c.state !== 'running' && c.state !== 'waiting' && !c.queued && !workBehind(c));
   const loop = createAgentLoop({ userData: ctx.userData, catalog: agents, runs: manager.runs, feedback: runFeedback, chats,
-    idle: lifecycleIdle, emitChanged: () => ctx.emitter.emit('agents:lifecycleChanged', null) });
+    idle: lifecycleIdle, emitChanged: () => ctx.emitter.emit('agents:lifecycleChanged', null),
+    // the daily pass's new "Da approvare" entries: one normal feed event (ADR 0102)
+    proposed: added => { const e = proposalEvent(added, id => agents.list().profiles.find(p => p.id === id)?.name ?? id); if (e) brain.publish([e]); } });
   const lifecycleApi = loop.api;
   mountLifecycleApi(brain, lifecycleApi);
   // a parent's own child runs: listed and judged on its chat's token endpoint (agents/child-feedback.ts)
@@ -735,7 +738,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const brainModel = new BrainModelService({ userData: ctx.userData, root: () => brain.info().brainRoot, home: process.env.SB_SKILLS_HOME || os.homedir(),
     catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning, runs: () => manager.runs.list(), routing: () => brain.routingInfo(),
     suggestSkills: async text => (await suggestSkills(text)).candidates.map(c => c.name),
-    emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: !process.env.SB_TEST || process.env.SB_BRAIN_JOBS === '1' });
+    emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: !process.env.SB_TEST || process.env.SB_BRAIN_JOBS === '1',
+    // a pass the app ran by itself: a quiet feed event with Annulla (ADR 0102)
+    applied: changes => { const e = maintenanceEvent(changes); if (e) brain.publish([e]); } });
   brainModelRef.current = brainModel;
   brainModel.start();
 

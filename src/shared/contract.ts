@@ -495,7 +495,8 @@ export interface FeedEvent {
   /** the card's one action (agent-retired: Ripristina) */
   action?: FeedAction;
 }
-export type FeedAction = { kind: 'agent-undo'; undo: AgentUndo } | { kind: 'agent-proposals' };
+/** brain-undo: the changes a maintenance pass the app ran by itself made (brainmodel:rollback each, newest first; ADR 0102) */
+export type FeedAction = { kind: 'agent-undo'; undo: AgentUndo } | { kind: 'agent-proposals' } | { kind: 'brain-undo'; ids: string[] };
 
 // ---- DevOps (src/main/tasks): the user's Azure DevOps, read by the brain's read-only scripts, never written
 
