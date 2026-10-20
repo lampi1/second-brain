@@ -1,12 +1,14 @@
 // Per-turn checkpoints (chats/checkpoints.ts, ADR 0103) on a real git repository: a snapshot records tracked and
 // untracked files without touching the user's index, HEAD or branches; restore puts changed and deleted files back,
-// removes the files created since, and leaves ignored files alone; a folder outside git gives no checkpoint.
+// removes the files created since, and leaves ignored files alone; with the turn's end recorded, a file changed again
+// since is left as it is; a nested repository is skipped; names are literal; a backup ref holds the state before the
+// undo; a folder outside git gives no checkpoint.
 import { afterEach, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { prune, repoRoot, restore, snapshot } from '../../../src/main/chats/checkpoints';
+import { afterTree, prune, repoRoot, restore, snapshot } from '../../../src/main/chats/checkpoints';
 
 const roots: string[] = [];
 afterEach(() => { for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
@@ -42,8 +44,9 @@ describe('checkpoints', () => {
     fs.rmSync(path.join(d, 'b.txt'));
     write(d, 'src/new.ts', 'created by the agent');
     write(d, 'dist/out.js', 'ignored build');
-    const out = await restore(cp!);
+    const out = await restore(cp!, 'refs/sb/undo/c_x/1');
     expect(out.removed).toEqual(['src/new.ts']);
+    expect(git(d, 'show', 'refs/sb/undo/c_x/1:src/new.ts')).toBe('created by the agent');
     expect(out.restored.sort()).toEqual(['a.txt', 'b.txt']);
     expect(fs.readFileSync(path.join(d, 'a.txt'), 'utf8')).toBe('a2 (uncommitted, before the turn)');
     expect(fs.readFileSync(path.join(d, 'b.txt'), 'utf8')).toBe('b1');
@@ -51,6 +54,30 @@ describe('checkpoints', () => {
     expect(fs.existsSync(path.join(d, 'src/new.ts'))).toBe(false);
     expect(fs.existsSync(path.join(d, 'dist/out.js'))).toBe(true);
     expect(git(d, 'rev-parse', 'HEAD')).toBe(head);
+  });
+
+  it('after the turn ended, only its own changes go back: a later edit, a nested repository and odd names', async () => {
+    const d = repo();
+    const cp = await snapshot(d, 'refs/sb/checkpoints/c_z/1');
+    // the turn
+    write(d, 'a.txt', 'by the turn');
+    write(d, 'b.txt', 'by the turn, then the user');
+    write(d, '[x]*.md', 'literal name');
+    const nested = path.join(d, 'vendor/lib');
+    fs.mkdirSync(nested, { recursive: true });
+    git(nested, 'init', '-q'); write(nested, 'f.txt', 'f'); git(nested, 'add', '-A'); git(nested, 'commit', '-q', '-m', 'n');
+    cp!.after = (await afterTree(d))!;
+    // after the turn: the user edits b.txt and writes a file of their own
+    write(d, 'b.txt', 'the user\'s edit');
+    write(d, 'mine.txt', 'the user\'s file');
+    const out = await restore(cp!, 'refs/sb/undo/c_z/1');
+    expect(fs.readFileSync(path.join(d, 'a.txt'), 'utf8')).toBe('a1');
+    expect(fs.readFileSync(path.join(d, 'b.txt'), 'utf8')).toBe('the user\'s edit');
+    expect(fs.existsSync(path.join(d, '[x]*.md'))).toBe(false);
+    expect(fs.existsSync(path.join(d, 'mine.txt'))).toBe(true);
+    expect(fs.existsSync(path.join(nested, 'f.txt'))).toBe(true);
+    expect(out.skipped.sort()).toEqual(['b.txt', 'vendor/lib']);
+    expect(out.removed).toEqual(['[x]*.md']);
   });
 
   it('a folder outside git has none; old refs are pruned', async () => {
@@ -78,6 +105,7 @@ describe('ChatManager: a checkpoint before each turn, Â«Annulla l\'ultimo turnoÂ
       const c = await m.create({ harness: 'anthropic', cwd: d, prompt: 'fai X' });
       expect(m.list().find(x => x.id === c.id)?.checkpointAt).toBeTypeOf('number');
       expect(fs.readFileSync(path.join(d, 'a.txt'), 'utf8')).toBe('changed by turn 1');
+      await new Promise(r => setTimeout(r, 0));
       expect(await m.undoTurn(c.id)).toEqual({ restored: 1, removed: 0 });
       expect(fs.readFileSync(path.join(d, 'a.txt'), 'utf8')).toBe('a1');
       expect(m.items(c.id).some(i => i.kind === 'system' && /annullato|undone/i.test(i.text))).toBe(true);

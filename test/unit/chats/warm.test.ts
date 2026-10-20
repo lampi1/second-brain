@@ -97,10 +97,16 @@ describe('warm Claude engine', () => {
   it('a role chat leaves an engine launched like it, and the next chat of that role adopts it', async () => {
     const e = env();
     const m = manager(e);
-    const role = { owner: plainOwner('claude', null), instructions: '', policy: { tools: { allow: ['read' as const] }, ceiling: 'default' as const } };
+    const role = { owner: plainOwner('claude', null), instructions: '', launches: [], policy: { tools: { allow: ['read' as const] }, ceiling: 'default' as const } };
     const c1 = await m.create({ harness: 'claude', cwd: e.cwd }, 'user', role);
     await waitFor(() => starts(e).length === 2, 'the role\'s waiting engine');
     const warm = warmStart(e, c1.sessionId);
+    // before a chat owns it, its endpoint lists what that role's root chat would see (the tool list is read once)
+    const waiting = [...(m as unknown as { warmViews: Map<string, unknown> }).warmViews.keys()].at(-1)!;
+    expect(m.chatToolShown(waiting, 'agent_delegate')).toBe(false);
+    expect(m.chatToolShown(waiting, 'agent_ask_parent')).toBe(false);
+    expect(m.chatToolShown(waiting, 'send_to_chat')).toBe(true);
+    expect(m.browserAccess(waiting)).toBe('none');
     // launched with the role's tool list, like the role's own chats
     expect(warm.argv?.some(x => x.startsWith('--tools='))).toBe(true);
     const c2 = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'leggi' }, 'user', role);

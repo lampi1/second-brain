@@ -11,6 +11,14 @@ export const Z90 = 1.6448536269514722;
 /** the n at which a verdict may be given (between them: «in raccolta»), per side */
 export const CHECKPOINTS: readonly number[] = [20, 40, 80, 160];
 
+/** The largest checkpoint at or below n (0 below the first): a side is judged on that many cases, so the verdict changes
+ *  only when a side reaches the next checkpoint, never at every new case. */
+export function atCheckpoint(n: number): number {
+  let at = 0;
+  for (const c of CHECKPOINTS) if (n >= c) at = c;
+  return at;
+}
+
 export interface Interval { low: number; high: number }
 
 /** Wilson score interval of k successes out of n; null for n = 0. */

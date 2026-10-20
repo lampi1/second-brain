@@ -25,3 +25,8 @@ a second place where work starts.
   the work.
 - Lampo cannot be asked to "just fix it": by design the answer is the hand-off button. If that proves too strict, a
   later ADR can widen its tools; not now.
+
+## After the review (2026-10-20)
+- Lampo sees none of the chat endpoint's mail, delegation, report or script tools, and they are not pre-allowed: it
+  cannot start work through another chat either.
+- It stays Lampo after a restart (`quick` is kept in chats.json); Ctrl+K does not list it.

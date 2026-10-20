@@ -366,6 +366,18 @@ describe('OrchestratorWake: quiet results and app-started chats (token plan 2026
     expect(w.queued().some(e => e.chatId === 'fix')).toBe(false);
   });
 
+  it('a clean report keeps its own slot: a later error of the same chat never hides it', async () => {
+    const { w, up, sent } = make();
+    up({ id: 'fix', title: 'App · fix', state: 'running' });
+    w.cleanReport({ chatId: 'fix', title: 'App · fix', role: 'Artisan', summary: 'Fix su main' });
+    up({ id: 'fix', title: 'App · fix', state: 'error', lastError: 'boom' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.text).toContain('ha consegnato, tutti i criteri soddisfatti: «Fix su main»');
+    expect(sent[0]!.text).toContain('si è fermata su un errore: boom');
+    expect(w.queued()).toEqual([]);
+  });
+
   it('off or without an Orchestrator it is not taken: the caller sends the result as before', () => {
     const { w, setOn } = make();
     setOn(false);

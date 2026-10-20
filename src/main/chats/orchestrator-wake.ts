@@ -42,7 +42,7 @@ export type WakeKind = 'done' | 'error' | 'question' | 'permission' | 'command' 
 /** news that never wakes the Orchestrator by itself: it goes with the next 'done' / 'error' */
 export const QUIET: ReadonlySet<WakeKind> = new Set(['question', 'permission', 'command', 'started', 'user-message']);
 /** the buffer's slot of an event: the user's messages beside the chat's status */
-const slotOf = (e: Pick<WakeEvent, 'chatId' | 'kind'>): string => e.kind === 'user-message' ? `${e.chatId}#user` : e.chatId;
+const slotOf = (e: Pick<WakeEvent, 'chatId' | 'kind' | 'report'>): string => e.kind === 'user-message' ? `${e.chatId}#user` : e.report ? `${e.chatId}#report` : e.chatId;
 const USER_TEXT_MAX = 300;
 /** the rule's gate for this Orchestrator: Cursor (ACP) takes no message mid-turn */
 const gateOf = (r: Pick<ChatSummary, 'state' | 'pending' | 'handoffBusy' | 'harness'>): OrchestratorGate => orchestratorGate(r, engineOf(r.harness)?.kind !== 'acp');
@@ -118,7 +118,7 @@ export class OrchestratorWake {
     if (channel === 'chat:updated') this.updated(payload as ChatSummary);
     else if (channel === 'pending:added') this.pending(payload as PendingRequest);
     else if (channel === 'pending:resolved') this.resolved(payload as EventMap['pending:resolved']);
-    else if (channel === 'chat:removed') { const { chatId } = payload as EventMap['chat:removed']; this.chats.delete(chatId); this.buffer.delete(chatId); this.buffer.delete(`${chatId}#user`); }
+    else if (channel === 'chat:removed') { const { chatId } = payload as EventMap['chat:removed']; this.chats.delete(chatId); this.buffer.delete(chatId); this.buffer.delete(`${chatId}#user`); this.buffer.delete(`${chatId}#report`); }
     else return;
     this.changed();
   }
@@ -213,7 +213,10 @@ export class OrchestratorWake {
     if (listed) this.remember(listed);
     const c = known ?? listed;
     if (!c || c.isOrchestrator) return false;
-    this.buffer.set(n.chatId, { chatId: n.chatId, title: n.title, harness: c.harness, kind: 'done', detail: cut(n.summary, 300), at: n.at ?? this.now(), report: { role: n.role }, silent: true });
+    const e: WakeEvent = { chatId: n.chatId, title: n.title, harness: c.harness, kind: 'done', detail: cut(n.summary, 300), at: n.at ?? this.now(), report: { role: n.role }, silent: true };
+    this.buffer.set(slotOf(e), e);
+    // the chat's plain "finished" of the same turn says less than the report
+    if (this.buffer.get(n.chatId)?.kind === 'done') this.buffer.delete(n.chatId);
     this.reschedule();
     this.changed();
     return true;
@@ -235,6 +238,8 @@ export class OrchestratorWake {
     const at = this.now();
     // the newest news of a chat wins, except that "finished" never hides what it left for the user in the same turn
     const old = this.buffer.get(c.id);
+    // a clean report has its own slot (cleanReport): a later error or request never hides it, its turn end adds nothing
+    if (kind === 'done' && this.buffer.has(`${c.id}#report`)) return;
     if (old && kind === 'done' && old.kind !== 'done' && old.kind !== 'error' && old.kind !== 'started') return;
     // a command left right after the turn ended (asks.ts settles after it) keeps the turn end's wake
     const endsTurn = QUIET.has(kind) && !!old && (!QUIET.has(old.kind) || !!old.endsTurn);

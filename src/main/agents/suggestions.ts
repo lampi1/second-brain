@@ -8,7 +8,7 @@ import type { AgentLifecycleProposal } from '../../shared/agent-lifecycle';
 import { tierRank, type ModelTier } from '../../shared/roles';
 import { skillSet } from './trials';
 import { reworkStartsOf, verifiedVerdict, type VerifiedVerdict } from '../../shared/run-verdict';
-import { CHECKPOINTS, newcombe } from '../../shared/evidence-stats';
+import { atCheckpoint, CHECKPOINTS, newcombe } from '../../shared/evidence-stats';
 
 export interface SuggestionInput { roles: readonly AgentProfile[]; runs: readonly AgentRun[] }
 /** Fewest known outcomes on each side before a tier is compared: the first checkpoint (2026-10-20: at 5 vs 5 a +25 point
@@ -20,7 +20,9 @@ const WINDOW_MS = 30 * 86_400_000;
 
 interface Tally { known: number; success: number; wins: number; cost: number | null; runs: AgentRun[] }
 function tally(runs: AgentRun[], verdictOf: (r: AgentRun) => VerifiedVerdict | null): Tally {
-  const known = runs.flatMap(r => { const v = verdictOf(r); return v ? [v] : []; });
+  // judged at a checkpoint (20, 40, 80, 160 known outcomes, the newest), never at every new run: against peeking
+  const all = runs.flatMap(r => { const v = verdictOf(r); return v ? [{ r, v }] : []; }).sort((a, b) => (a.r.endedAt ?? 0) - (b.r.endedAt ?? 0));
+  const known = all.slice(all.length - atCheckpoint(all.length)).map(x => x.v);
   const wins = known.reduce((n, v) => n + (v.verdict === 'success' ? 1 : v.verdict === 'partial' ? 0.5 : 0), 0);
   return { known: known.length, success: known.length ? wins / known.length : 0, wins: known.filter(v => v.verdict === 'success').length, runs,
     cost: wins > 0 && runs.every(r => r.costUsd !== null) ? runs.reduce((n, r) => n + r.costUsd!, 0) / wins : null };

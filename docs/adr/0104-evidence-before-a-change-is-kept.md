@@ -27,3 +27,7 @@ For one person's volume a real +15-point improvement needs ~150 judged runs a si
   honest state of one person's data; the evidence per mechanism (all lessons together) is the next step.
 - Not done here: an evidence claim on every brain maintenance change (skills, rules, memory), a calibration of the
   sampled reviewer against the facts, a held-out replay bench run at night.
+
+## After the review (2026-10-20)
+- A side is judged on the cases up to its last checkpoint (`atCheckpoint`: 20, 40, 80, 160), so a verdict changes only
+  when a side reaches the next checkpoint, never at every new run.

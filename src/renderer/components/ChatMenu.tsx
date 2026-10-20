@@ -13,7 +13,7 @@ import { modelOptions, useModelsSeen } from '../lib/models';
 import { makeLink } from '../lib/notify';
 import { isBusy } from '../store/state';
 import { closeChat, setChat, setSetting, undoTurn, useApp } from '../store/store';
-import { openHandoff, setFocused } from '../store/ui';
+import { askConfirm, openHandoff, setFocused } from '../store/ui';
 import { askClearOrchestrator, askRenewOrchestrator, copyLink, resumeChat, toggleFocusMode } from '../actions';
 import { openNextLabel, resumeLabel, useContinuedBy } from './ContextBar';
 import { MenuItem, MenuLabel, MenuSep, Popover } from './ui';
@@ -107,7 +107,7 @@ export function ChatMenu({ chat, anchor, open, onClose, onRename, orchestrator }
         </MenuItem>
       )}
       {!!chat.checkpointAt && !chat.isOrchestrator && (
-        <MenuItem onSelect={pick(() => void undoTurn(id))} disabled={isBusy(chat) || chat.pending > 0} testid={`chat-undo-turn-${id}`}>{t('chat.menu.undoTurn')}</MenuItem>
+        <MenuItem onSelect={pick(() => askConfirm({ title: t('chat.menu.undoTurnTitle'), body: t('chat.menu.undoTurnBody'), confirmLabel: t('chat.menu.undoTurnConfirm'), danger: true, onConfirm: () => void undoTurn(id) }))} disabled={isBusy(chat) || chat.pending > 0} testid={`chat-undo-turn-${id}`}>{t('chat.menu.undoTurn')}</MenuItem>
       )}
       <MenuSep />
       {!orchestrator && <MenuItem onSelect={pick(() => closeChat(id))} danger testid={`chat-close-${id}`}>{t('chat.menu.closeChat')}</MenuItem>}

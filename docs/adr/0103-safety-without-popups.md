@@ -24,3 +24,10 @@ what the owner refused; the safety net has to work after the fact.
 - Proposed and held for the owner's explicit confirmation: the app answering permission requests itself (allow normal
   work, refuse destructive commands with their reason, ask only for what leaves the machine). The session's own safety
   review stopped it as an agent that approves agents' actions; the code waits in a stash.
+
+## After the review (2026-10-20)
+- When a turn ends its files are recorded again; the undo puts back only the paths that turn changed, and leaves a path
+  changed again since (the user's or another chat's edit) as it is. Nested repositories are skipped; names are literal.
+- Before it touches a file, the undo records the files as they are under `refs/sb/undo/<chat>/<time>` (the last 10).
+- It asks for confirmation, and is refused while chats this one started still work or another chat works in the same
+  repository.

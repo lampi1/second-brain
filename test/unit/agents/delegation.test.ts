@@ -336,7 +336,12 @@ describe('agent_delegate', () => {
     const herald = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'herald', title: 'Issue · Bozza', prompt: 'prepara la issue' }, 'agent');
     // only the Orchestrator's Claude session gets the per-turn workspace budget (ADR 0090, issue #98)
     expect(f.starts.get(orchestrator.id)?.preToolUse).toBeTruthy();
-    expect(f.starts.get(herald.id)?.preToolUse).toBeUndefined();
+    // a role chat with the sub-agent tool gets only the sub-agent rule (role-gate.ts SubagentGate), never the budget
+    const gate = f.starts.get(herald.id)?.preToolUse;
+    expect(gate?.constructor.name).toBe('SubagentGate');
+    expect(gate?.decide({ tool: 'Agent', input: { subagent_type: 'general-purpose' } })?.deny).toMatch(/agent_delegate/);
+    expect(gate?.decide({ tool: 'Agent', input: { subagent_type: 'Explore' } })).toBeNull();
+    expect(gate?.decide({ tool: 'Read', input: {} })).toBeNull();
     expect(herald.run?.startedBy).toBe('orchestrator');
     const r = await f.call('agent_report', herald.id, { outcome: 'done', summary: 'Bozza pronta', output: 'issue.md', doneWhen: [{ criterion: 'bozza scritta', met: true, evidence: 'issue.md' }] });
     expect(r).toMatchObject({ reported: true, to: 'orchestrator', delivered: true });

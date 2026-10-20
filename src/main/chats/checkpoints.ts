@@ -1,9 +1,11 @@
 // Per-turn file checkpoints (ADR 0103): before a chat's turn in a git repository the app records the working tree as it
 // is (tracked and untracked files, .gitignore respected) in a commit object kept under refs/sb/checkpoints/<chat>/<n>,
 // never on a branch: the user's index, HEAD and branches are untouched (a temporary index file, git commit-tree,
-// git update-ref). "Annulla l'ultimo turno" puts the files back as they were before that turn: changed or deleted files
-// are restored from the checkpoint, files the turn created are removed; ignored files (builds, node_modules) stay as
-// they are. Why: agents run with the full default permissions (ADR 0085), and an undo is the safety net that needs no
+// git update-ref). When the turn ends its files are recorded again (afterTree). "Annulla l'ultimo turno" puts back only
+// what that turn changed: a path the turn changed, deleted or created goes back to the checkpoint, unless it changed
+// again since the turn ended (the user's or another chat's later edit is never reverted); ignored files (builds,
+// node_modules) and nested repositories stay as they are. Before it touches a file, the undo records the tree as it is
+// under refs/sb/undo/<chat>/<time>, so an undo itself can be reverted with git. Why: agents run with the full default permissions (ADR 0085), and an undo is the safety net that needs no
 // popup. Used by ChatManager (deliverNow before a turn, undoTurn); pinned by test/unit/chats/checkpoints.test.ts.
 import { execFile } from 'node:child_process';
 import crypto from 'node:crypto';
@@ -17,6 +19,11 @@ export const KEEP = 30;
 /** the identity of a checkpoint commit: never pushed (it lives only under refs/sb/), so no real identity is needed */
 const IDENTITY = { GIT_AUTHOR_NAME: 'second-brain', GIT_AUTHOR_EMAIL: 'checkpoint@localhost', GIT_COMMITTER_NAME: 'second-brain', GIT_COMMITTER_EMAIL: 'checkpoint@localhost' };
 
+/** pathspecs read as literal file names: a name with * [ or :( is never a pattern */
+const LITERAL = { GIT_LITERAL_PATHSPECS: '1' };
+/** a nested repository in the tree (git add -A records it as one entry) */
+const GITLINK = '160000';
+
 function git(cwd: string, args: string[], env: NodeJS.ProcessEnv = {}): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile('git', ['-C', cwd, ...args], { timeout: TIMEOUT_MS, windowsHide: true, maxBuffer: 32 * 1024 * 1024, env: { ...process.env, ...env } }, (error, stdout, stderr) => {
@@ -25,7 +32,9 @@ function git(cwd: string, args: string[], env: NodeJS.ProcessEnv = {}): Promise<
   });
 }
 
-export interface Checkpoint { commit: string; at: number; root: string }
+/** commit: the files before the turn; after: the tree when the turn ended (afterTree), absent while it runs or when
+ *  that record failed */
+export interface Checkpoint { commit: string; at: number; root: string; after?: string }
 
 /** The repository's top folder for cwd, or null (not a git work tree). */
 export async function repoRoot(cwd: string): Promise<string | null> {
@@ -56,31 +65,60 @@ export async function snapshot(cwd: string, ref: string): Promise<Checkpoint | n
   return { commit, at: Date.now(), root };
 }
 
+/** The working tree's tree object when a turn ends (Checkpoint.after); null when git fails. */
+export async function afterTree(root: string): Promise<string | null> {
+  try { return await worktreeTree(root); } catch { return null; }
+}
+
 /** Deletes refs of this chat's checkpoints beyond the newest `keep`. */
 export async function prune(root: string, prefix: string, keep = KEEP): Promise<void> {
   const refs = (await git(root, ['for-each-ref', '--sort=-creatordate', '--format=%(refname)', prefix])).split('\n').filter(Boolean);
   for (const ref of refs.slice(keep)) await git(root, ['update-ref', '-d', ref]).catch(() => {});
 }
 
-export interface UndoResult { restored: string[]; removed: string[] }
+/** skipped: paths the turn changed that changed again since it ended, or nested repositories, left as they are */
+export interface UndoResult { restored: string[]; removed: string[]; skipped: string[] }
 
-/** Puts the files back as the checkpoint recorded them: what changed or was deleted since is restored, what was created
- *  since is removed; ignored files stay. */
-export async function restore(cp: Checkpoint): Promise<UndoResult> {
-  const now = await worktreeTree(cp.root);
-  const out = await git(cp.root, ['diff', '--name-status', '--no-renames', '-z', `${cp.commit}^{tree}`, now]);
-  const parts = out.split('\0').filter(Boolean);
-  const restored: string[] = [], removed: string[] = [];
+/** The paths that differ between two trees, with what the second has: 'A' = only in the second; gitlink = a nested
+ *  repository on either side. */
+async function changes(root: string, from: string, to: string): Promise<{ file: string; status: string; gitlink: boolean }[]> {
+  const out = await git(root, ['diff', '--raw', '--no-renames', '-z', from, to]);
+  const parts = out.split('\0');
+  const list: { file: string; status: string; gitlink: boolean }[] = [];
+  // -z --raw: ":<old mode> <new mode> <old sha> <new sha> <status>" NUL "<path>" NUL
   for (let i = 0; i + 1 < parts.length; i += 2) {
-    const status = parts[i]!, file = parts[i + 1]!;
-    if (status === 'A') removed.push(file); else restored.push(file);
+    const meta = parts[i]!, file = parts[i + 1]!;
+    if (!meta.startsWith(':') || !file) continue;
+    const [oldMode, newMode, , , status] = meta.slice(1).split(' ');
+    list.push({ file, status: (status ?? '').slice(0, 1), gitlink: oldMode === GITLINK || newMode === GITLINK });
   }
-  for (const file of removed) {
-    const abs = path.resolve(cp.root, file);
-    if (!abs.startsWith(path.resolve(cp.root) + path.sep)) continue;
-    fs.rmSync(abs, { force: true });
+  return list;
+}
+
+/** Puts back what the checkpoint's turn changed (see the header): a file the turn created is removed, one it changed or
+ *  deleted comes back; a path changed again since the turn ended is skipped. Without cp.after (the turn's end was not
+ *  recorded) every change since the checkpoint counts. backupRef records the files as they are first. */
+export async function restore(cp: Checkpoint, backupRef: string): Promise<UndoResult> {
+  const now = await worktreeTree(cp.root);
+  const backup = (await git(cp.root, ['commit-tree', now, '-p', cp.commit, '-m', 'second-brain undo backup'], IDENTITY)).trim();
+  await git(cp.root, ['update-ref', backupRef, backup]);
+  const before = `${cp.commit}^{tree}`;
+  const turn = await changes(cp.root, before, cp.after ?? now);
+  const since = cp.after ? new Set((await changes(cp.root, cp.after, now)).map(c => c.file)) : new Set<string>();
+  const restored: string[] = [], removed: string[] = [], skipped: string[] = [];
+  const top = path.resolve(cp.root) + path.sep;
+  for (const c of turn) {
+    if (c.gitlink || since.has(c.file)) { skipped.push(c.file); continue; }
+    if (c.status !== 'A') { restored.push(c.file); continue; }
+    const abs = path.resolve(cp.root, c.file);
+    if (!abs.startsWith(top)) { skipped.push(c.file); continue; }
+    let st: fs.Stats | null = null;
+    try { st = fs.lstatSync(abs); } catch { /* already gone */ }
+    if (st?.isDirectory()) { skipped.push(c.file); continue; }
+    if (st) fs.rmSync(abs, { force: true });
+    removed.push(c.file);
   }
   // chunks: a long list must not exceed the command line
-  for (let i = 0; i < restored.length; i += 200) await git(cp.root, ['restore', `--source=${cp.commit}`, '--worktree', '--', ...restored.slice(i, i + 200)]);
-  return { restored, removed };
+  for (let i = 0; i < restored.length; i += 200) await git(cp.root, ['restore', `--source=${cp.commit}`, '--worktree', '--', ...restored.slice(i, i + 200)], LITERAL);
+  return { restored, removed, skipped };
 }

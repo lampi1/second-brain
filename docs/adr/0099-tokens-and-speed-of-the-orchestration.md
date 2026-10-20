@@ -50,3 +50,11 @@ compacted only on the next day, on an expired cache (ADR 0031: ~2.10 $ for a col
   the next step is to measure: cache read vs creation on the first call of a new session, per chat kind.
 - A clean result no longer interrupts the Orchestrator: it learns it at its next turn, and "N novità in attesa" shows it.
 - Not done here: Claude Code's MCP tool search (its setting name was not verified on the bundled engine), `now.md` written by the app.
+
+## After the review (2026-10-20)
+- Claude starts a sub-agent without a permission request, so the role gate never saw it: a role chat with the sub-agent
+  tool gets the gate's rule as an in-process PreToolUse hook (`role-gate.ts SubagentGate`, Explore only).
+- A waiting engine launched for a role lists tools as that role's root chat would (no delegation tools for a role that
+  launches nobody, no `agent_ask_parent`, its browser access and managed servers); a delegated chat starts cold.
+- Child results still waiting for their siblings when the app quits are kept on the parent and sent after the start.
+- A clean report keeps its own slot in the Orchestrator's news: a later error of the same chat never hides it.

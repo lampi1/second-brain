@@ -1,7 +1,7 @@
 // The app's small-sample statistics (shared/evidence-stats.ts): Wilson and Newcombe intervals against published values,
 // a seeded bootstrap that repeats itself, verdicts only at a checkpoint, and the «k/n (IC)» text.
 import { describe, expect, it } from 'vitest';
-import { bootstrapDiff, newcombe, shareText, verdictOf, wilson } from '../../src/shared/evidence-stats';
+import { atCheckpoint, bootstrapDiff, newcombe, shareText, verdictOf, wilson } from '../../src/shared/evidence-stats';
 
 describe('evidence stats', () => {
   it('Wilson matches the textbook values (95%: 2/2 = 34–100%, 7/10 = 40–89%)', () => {
@@ -37,5 +37,9 @@ describe('evidence stats', () => {
     expect(verdictOf({ low: 0.1, high: 0.3 }, { before: 40, after: 40 }, 'lower')).toBe('peggiora');
     expect(shareText(3, 5)).toBe('dati insufficienti (5/10)');
     expect(shareText(24, 30)).toMatch(/^80% · 24\/30 \(IC 90% \d+–\d+%\)$/);
+  });
+
+  it('a side is judged at its checkpoint, not at every new case', () => {
+    expect([0, 19, 20, 23, 39, 40, 79, 80, 200].map(atCheckpoint)).toEqual([0, 0, 20, 20, 20, 40, 40, 80, 160]);
   });
 });

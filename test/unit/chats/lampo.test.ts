@@ -1,6 +1,6 @@
 // «Lampo», the quick lane (ADR 0105): one at a time, only the user's; read and web tools in plan mode (no edit, no
 // command, no popup); its own short frame; never auto-closed, never in the Orchestrator's picture; «Fanne un lavoro»
-// takes the last question and answer.
+// takes the last question and answer; it sees no mail or delegation tool and stays Lampo after a restart.
 import { afterEach, describe, expect, it } from 'vitest';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -40,6 +40,22 @@ describe('Lampo', () => {
     await expect(m.create({ harness: 'claude', cwd: tmp(), quick: true }, 'agent')).rejects.toThrow(/only the user/);
     expect(m.autoCloseCandidates(() => false).find(c => c.id === l.id)?.eligible).toBe(false);
     expect(m.releaseIdle(0, Date.now() + 3_600_000)).toBe(0);
+    for (const tool of ['send_to_chat', 'list_chats', 'agent_delegate', 'agent_report', 'agent_ask_parent', 'brain_script_add']) expect(m.chatToolShown(l.id, tool)).toBe(false);
+  });
+
+  it('stays Lampo after a restart: one chat, never a second', async () => {
+    const userData = tmp(), cwd = tmp();
+    const make = () => { const m = new ChatManager({ userData, emitter: { emit() {} }, coldEveryMs: 0, sessionFactory: (_h, o: SessionOptions, s: SessionSink) => ({
+      harness: 'claude', sessionId: null, pid: null, root: null, alive: true, busy: false,
+      start() { if (!o.sessionId) s.changed({ sessionId: crypto.randomUUID() }); s.changed({ state: 'idle' }); },
+      send() {}, close: async () => { s.exit({ code: 0, error: null }); }, killNow() {}, interrupt: async () => {}, answer: () => false, rename: async () => {}, setModel: async () => {}, setEffort: async () => {}, setPermissionMode: async () => {}, contextUsage: async () => null, usage: async () => null,
+    }) as unknown as HarnessSession }); managers.push(m); return m; };
+    const a = make();
+    const l = await a.create({ harness: 'claude', cwd, quick: true });
+    await a.shutdown();
+    const b = make();
+    expect(b.list().find(c => c.id === l.id)?.quick).toBe(true);
+    expect((await b.create({ harness: 'claude', cwd, quick: true })).id).toBe(l.id);
   });
 
   it('«Fanne un lavoro» takes the last question and its answer', () => {

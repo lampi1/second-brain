@@ -6,7 +6,7 @@ import type { AgentProfile, AgentRun, VersionMetrics } from '../../shared/agents
 import type { TrialEvaluation } from '../../shared/agent-lifecycle';
 import { rollUp, runMetrics } from './run-metrics';
 import { reworkStartsOf, verifiedVerdict } from '../../shared/run-verdict';
-import { bootstrapDiff, CHECKPOINTS, newcombe, verdictOf } from '../../shared/evidence-stats';
+import { atCheckpoint, bootstrapDiff, CHECKPOINTS, newcombe, verdictOf } from '../../shared/evidence-stats';
 
 /** an inconclusive trial waits for data up to this long, then its unproven change is proposed to go back */
 export const TRIAL_MAX_DAYS = 60 * 86_400_000;
@@ -34,6 +34,21 @@ function verified(runs: readonly AgentRun[], all: readonly AgentRun[], now: numb
   return { k, n };
 }
 /** The user's corrections of each run that counted them. */
+/** The runs in this order up to the one that makes the verified count reach its checkpoint (atCheckpoint), with that
+ *  count: a side is judged at 20, 40, 80, 160 verified outcomes, not at every new run (against peeking). */
+function upToCheckpoint(runs: readonly AgentRun[], all: readonly AgentRun[], now: number): { runs: AgentRun[]; k: number; n: number } {
+  const cap = atCheckpoint(verified(runs, all, now).n), rework = reworkStartsOf(all), kept: AgentRun[] = [];
+  let k = 0, n = 0;
+  for (const r of runs) {
+    if (n >= cap) break;
+    kept.push(r);
+    const v = verifiedVerdict(r, rework.get(r.runId), now);
+    if (!v) continue;
+    n++;
+    if (v.verdict === 'success') k++;
+  }
+  return { runs: kept, k, n };
+}
 const corrections = (runs: readonly AgentRun[]): number[] => runs.flatMap(r => (r.corrections ? [r.corrections.tagged + r.corrections.afterReport] : []));
 const pct = (x: number): string => `${x >= 0 ? '+' : ''}${Math.round(x * 100)}`;
 
@@ -62,14 +77,16 @@ export function evaluateTrial(agent: AgentProfile, runs: readonly AgentRun[], no
   const age = now - trial.startedAt;
   const revert = (reason: string): TrialEvaluation => ({ ...result, decision: 'revert', reason });
   const wait = (reason: string): TrialEvaluation => age < TRIAL_MAX_DAYS ? { ...result, reason } : revert(`${reason}: la prova è finita senza un effetto provato`);
-  const vb = verified(baseline, runs, now), va = verified(matched, runs, now);
   const need = CHECKPOINTS[0]!;
-  if (vb.n < need || va.n < need) return wait(`Dati insufficienti: esiti verificati ${va.n}/${need} nella prova, ${vb.n}/${need} prima`);
+  const all = { b: verified(baseline, runs, now), a: verified(matched, runs, now) };
+  if (all.b.n < need || all.a.n < need) return wait(`Dati insufficienti: esiti verificati ${all.a.n}/${need} nella prova, ${all.b.n}/${need} prima`);
+  // each side at its checkpoint: the baseline's newest runs, the trial's first ones
+  const vb = upToCheckpoint(baseline, runs, now), va = upToCheckpoint([...matched].sort((x, y) => x.endedAt! - y.endedAt!), runs, now);
   const success = newcombe(va.k, va.n, vb.k, vb.n);
-  const fixes = bootstrapDiff(corrections(baseline), corrections(matched), { seed: trial.startedAt % 2 ** 31 });
+  const fixes = bootstrapDiff(corrections(vb.runs), corrections(va.runs), { seed: trial.startedAt % 2 ** 31 });
   const worse = verdictOf(success, { before: vb.n, after: va.n }, 'higher') === 'peggiora';
   const improved = verdictOf(success, { before: vb.n, after: va.n }, 'higher') === 'aiuta'
-    || verdictOf(fixes, { before: corrections(baseline).length, after: corrections(matched).length }, 'lower') === 'aiuta';
+    || verdictOf(fixes, { before: corrections(vb.runs).length, after: corrections(va.runs).length }, 'lower') === 'aiuta';
   const safe = !!before && !!after && guard(before.costPerRun.median.value, after.costPerRun.median.value)
     && guard(before.timeToDone.elapsed.value, after.timeToDone.elapsed.value)
     && before.questionsPerRun.value !== null && after.questionsPerRun.value !== null && after.questionsPerRun.value <= before.questionsPerRun.value + 0.5;

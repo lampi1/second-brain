@@ -56,6 +56,9 @@ export interface WarmLaunch {
   ceiling?: AgentPolicy['ceiling'];
   agentAssets?: { pluginDir: string; skillRoot: string };
   compactWindowTokens?: number;
+  /** what the chat endpoint answers for the engine before a chat owns it (its tool list is read once, at start): the
+   *  role's catalog id and the roles it may launch (null = unknown) */
+  view?: { role: string | null; launches: string[] | null };
 }
 export const PLAIN_LAUNCH: WarmLaunch = { sig: '' };
 
