@@ -173,7 +173,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
           {chat.run && <StripEstimate chat={chat} busy={busy || chat.state === 'waiting'} workMs={work} />}
           {perm && <span className="th-badge">{perm}</span>}
           <ContextMeter chat={chat} warn={warn} />
-          <HelpTip title={t('explain.strip.title')} className="strip-help" testid={`chat-help-${chatId}`}><p>{t('explain.strip.p1')}</p><p>{t('explain.strip.p2')}</p><p>{t('explain.strip.p3')}</p><p>{t('explain.strip.p4')}</p></HelpTip>
+          <HelpTip title={t('explain.strip.title')} className="strip-help" guide="grindhouse" testid={`chat-help-${chatId}`}><p>{t('explain.strip.p1')}</p><p>{t('explain.strip.p2')}</p><p>{t('explain.strip.p3')}</p><p>{t('explain.strip.p4')}</p></HelpTip>
         </div>
         {!compact && <ChatLinkChips chatId={chatId} />}
       </header>}

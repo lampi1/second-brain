@@ -9,6 +9,7 @@ export const guideEn: typeof guideIt = {
   'guide.none': 'No concept matches the filter.',
   'guide.count': (p: { count: number }) => `${p.count} concepts`,
   'guide.howItWorks': 'How it works',
+  'guide.link': 'How it works',
   'guide.hide': 'Hide',
   'guide.analogy': 'In practice it is like…',
   'guide.technical': 'Technical details',

@@ -9,6 +9,7 @@ export const guideIt = {
   'guide.none': 'Nessun concetto corrisponde al filtro.',
   'guide.count': (p: { count: number }) => `${p.count} concetti`,
   'guide.howItWorks': 'Come funziona',
+  'guide.link': 'Come funziona',
   'guide.hide': 'Nascondi',
   'guide.analogy': 'In pratica è come…',
   'guide.technical': 'Dettagli tecnici',

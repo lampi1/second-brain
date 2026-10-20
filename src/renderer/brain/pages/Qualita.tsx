@@ -35,7 +35,7 @@ function Metric({ id, title, help, value, unit, tone, reading, find, next, sourc
 }) {
   return (
     <section className={`bx-card bx-q ${tone ?? ''}`} data-testid={`bx-q-${id}`} aria-labelledby={`bx-q-${id}-h`}>
-      <h2 className="bx-eyebrow"><span id={`bx-q-${id}-h`}>{title}</span>{help && <HelpTip label={title} testid={`bx-q-${id}-help`}>{help}</HelpTip>}</h2>
+      <h2 className="bx-eyebrow"><span id={`bx-q-${id}-h`}>{title}</span>{help && <HelpTip label={title} guide="quality" testid={`bx-q-${id}-help`}>{help}</HelpTip>}</h2>
       <p className="bx-q-v"><span className="bx-big">{value}</span>{unit && <span className="u"> {unit}</span>}</p>
       {reading && <Reading t={reading} testId={`bx-q-${id}-reading`} />}
       <Explain find={find} next={next} />
@@ -71,7 +71,7 @@ export function Qualita({ nav }: { arg?: string; nav: Navigate }) {
           {caught.per100 !== null ? <><b>{caught.per100.toLocaleString('it-IT')} errori ogni 100 turni</b> li hai dovuti trovare tu</> : <>Turni non ancora misurati</>};{' '}
           <b>{rules.tornato} regole su {rules.judged}</b> non hanno fermato il loro errore; {app.prs.at ? <><b>{app.prs.blocked.length} PR ferme</b></> : <>PR non lette</>}; {app.reopen.at ? <><b>{app.reopen.bugs.length} bug</b> tornati attivi in {app.reopen.days} giorni</> : <>bug riaperti non ancora letti</>}.
         </> : undefined}
-        what="Quattro misure dai registri veri: ognuna dice da dove viene e che giorni copre." />
+        what="Quattro misure dai registri veri: ognuna dice da dove viene e che giorni copre." guide="quality" />
       <Async loading={t.loading && !d} error={d ? null : t.error} onRetry={reload} lines={6} block>
         {() => d && (
           <div className="bx-section" data-testid="bx-quality">

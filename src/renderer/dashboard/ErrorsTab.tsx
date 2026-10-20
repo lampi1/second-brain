@@ -37,7 +37,7 @@ function Days({ days, label }: { days: number[]; label: string }) {
 }
 function Trend({ days }: { days: number[] }) {
   const tr = trendOf(days);
-  return <span className="bm-badge err-trend" data-trend={tr}>{t(`stats.err.trend.${tr}`)}<HelpTip title={t(`stats.err.trend.${tr}`)} label={t(`stats.err.trend.${tr}`)}>{t('stats.err.trendHelp')}</HelpTip></span>;
+  return <span className="bm-badge err-trend" data-trend={tr}>{t(`stats.err.trend.${tr}`)}<HelpTip title={t(`stats.err.trend.${tr}`)} label={t(`stats.err.trend.${tr}`)} guide="errors-rules">{t('stats.err.trendHelp')}</HelpTip></span>;
 }
 
 export function ErrorsTab({ ui, tables, errors, now }: { ui: ErrorsUi; tables: Loaded<Tables>; errors: ObservedError[]; now: number }) {

@@ -143,7 +143,7 @@ export function RolePermissions({ profile }: { profile: AgentProfile }) {
     <header className="rp-head">
       <div className="rp-title">
         <h3 id={`rp-${profile.id}`} ref={heading} tabIndex={-1}>{t('perm.title')}</h3>
-        <HelpTip title={t('perm.help.title')} example={t('perm.help.example')} label={t('perm.title')} wide testid="perm-help">{t('perm.help')}</HelpTip>
+        <HelpTip title={t('perm.help.title')} example={t('perm.help.example')} label={t('perm.title')} wide guide="permissions" testid="perm-help">{t('perm.help')}</HelpTip>
         <span className="rp-status" data-full={summary.full} data-testid="perm-status"><i aria-hidden="true" />{summary.text}</span>
         {dirty && <span className="rp-dirty">{t('perm.dirty')}</span>}
       </div>

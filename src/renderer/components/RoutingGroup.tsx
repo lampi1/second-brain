@@ -74,7 +74,7 @@ export function RoutingGroup() {
     <section className="st-group" aria-label={auditText('audit.RoutingGroup.modelRouting')} data-testid="st-group-routing">
       <header>
         <div className="st-group-h"><h2>{auditText('audit.RoutingGroup.modelRouting')}</h2>
-          <HelpTip label={auditText('audit.RoutingGroup.modelRouting')} title={auditText('audit.RoutingGroup.aTableOfRules')} testid="st-help-routing"
+          <HelpTip label={auditText('audit.RoutingGroup.modelRouting')} title={auditText('audit.RoutingGroup.aTableOfRules')} guide="routing" testid="st-help-routing"
             example={auditText('cmp.routing.exampleRules')}>{auditText('audit.RoutingGroup.forEachKindOfWorkOptionally')}</HelpTip>
         </div>
         <p>{auditText('audit.RoutingGroup.theModelAndEffortTheOrchestrator')}</p>

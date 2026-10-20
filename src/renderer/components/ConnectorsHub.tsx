@@ -166,7 +166,7 @@ export function ConnectorsHub() {
   const servers = state?.servers ?? [];
   const testAll = () => { for (const s of servers) if (s.enabled) void test(s.id); };
   return <div className="hub" data-testid="connectors-hub">
-    <p className="hub-lead">{t('hub.lead')}<HelpTip title={t('hub.whatTitle')} label={t('hub.whatTitle')} wide>{t('hub.whatTip')}</HelpTip></p>
+    <p className="hub-lead">{t('hub.lead')}<HelpTip title={t('hub.whatTitle')} label={t('hub.whatTitle')} wide guide="mcp-servers">{t('hub.whatTip')}</HelpTip></p>
     <HubTotalsRow servers={servers} connectors={connectors} />
     <section className="hub-section" aria-labelledby="hub-accounts">
       <header className="hub-section-head"><h3 id="hub-accounts">{t('hub.accounts')}<HelpTip title={t('hub.accounts')} label={t('hub.accounts')}>{t('hub.accountsTip')}</HelpTip></h3><p>{t('hub.accountsLead')}</p></header>

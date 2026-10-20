@@ -274,7 +274,7 @@ export function SkillsPage() {
       <div className="bm-toolbar" data-testid="sk-list">
         <input className="sk-input sk-search" type="search" placeholder={t('bm.skills.search')} value={q} onChange={e => setQ(e.target.value)} data-testid="sk-search" aria-label={t('bm.skills.searchLabel')} />
         <Seg items={[{ id: 'all', label: t('bm.skills.filter.all') }, { id: 'used', label: t('bm.skills.filter.used') }, { id: 'unused', label: t('bm.skills.filter.unused') }]} value={filter} onChange={setFilter} label={t('bm.skills.filterLabel')} />
-        <HelpTip title={t('explain.skills.title')} wide testid="sk-help"><p>{t('explain.skills.p1')}</p><p>{t('explain.skills.p2')}</p></HelpTip>
+        <HelpTip title={t('explain.skills.title')} wide guide="skills" testid="sk-help"><p>{t('explain.skills.p1')}</p><p>{t('explain.skills.p2')}</p></HelpTip>
       </div>
       {!rows.length && (cat || state) ? <p className="bm-empty" data-testid="sk-empty">{t('bm.skills.empty')}</p>
         : !shown.length && rows.length ? <p className="bm-empty" data-testid="sk-empty">{t('bm.skills.emptySearch')}</p>
