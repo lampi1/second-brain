@@ -95,6 +95,8 @@ export const chatEn: typeof chatIt = {
   'chat.menu.handoffLabel': (p: { tokens?: string }) => `Handoff${p.tokens ? ` · ${p.tokens}` : ''}`,
   'chat.menu.handoffTokens': (p: { amount: string }) => `${p.amount} tokens used`,
   'chat.menu.handoffRead': 'Read or write a note for whoever continues…',
+  'chat.menu.undoTurn': 'Undo the last turn (files as before)',
+  'chat.menu.undoTurnDone': ({ restored, removed }: { restored: number; removed: number }) => `Files as before the last turn: ${restored} restored, ${removed} removed`,
   'chat.menu.closeChat': 'Close chat',
   'chat.menu.engineBlockOff': (p: { engine: string }) => `${p.engine} is off in Settings.`,
   'chat.menu.engineBlockOrchestratorOff': (p: { engine: string }) => `"Orchestrators can use ${p.engine}" is off in Settings.`,

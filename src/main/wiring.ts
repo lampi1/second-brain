@@ -528,6 +528,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     compactWindowTokens: () => brain.settings().compactWindowTokens ?? COMPACT_WINDOW,
     coldHandoff: () => brain.settings().contextHandoff,
     orchestratorDayCompact: () => brain.settings().orchestratorDayCompact !== false,
+    checkpoints: () => !process.env.SB_TEST,
     coldIdleMs: () => coldTest?.[0] ?? (brain.settings().coldHandoffMin ?? 50) * 60_000,
     ...(coldTest ? { cacheTtlMs: coldTest[1], coldEveryMs: coldTest[2] } : {}),
     memTool: () => {

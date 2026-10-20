@@ -645,6 +645,8 @@ export class DemoChats implements ChatService {
 
   async ensureHandoff(chatId: string): Promise<HandoffInfo> { return this.readHandoff(chatId) ?? this.handoff(chatId); }
 
+  async undoTurn(): Promise<{ restored: number; removed: number }> { return { restored: 0, removed: 0 }; }
+
   async continueChat(chatId: string): Promise<ChatSummary> {
     const c = this.chats.get(chatId);
     if (!c) throw new Error(`demo: no chat ${chatId}`);

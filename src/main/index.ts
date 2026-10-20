@@ -284,6 +284,7 @@ app.whenReady().then(async () => {
     'chat:handoff': a => s.chats.handoff(a.chatId, { reason: 'manual' }),
     'chat:handoffRead': a => s.chats.readHandoff(a.chatId, typeof a.session === 'string' ? a.session : undefined),
     'chat:continue': a => s.chats.continueChat(a.chatId),
+    'chat:undoTurn': a => s.chats.undoTurn(a.chatId),
     'browser:list': () => s.browser.list(),
     'browser:open': a => s.browser.open(a.url, a.ownerChatId ?? null, a.env),
     'browser:navigate': a => s.browser.navigate(a.tabId, a.url),

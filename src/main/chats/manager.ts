@@ -58,6 +58,7 @@ import { type AgentOwnerSnapshot, type AgentRun, type AgentRunEnd, type AgentRun
 import { AgentRunStore, addSkill, addTurn, APP_MAX, endRun, REPO_MAX, reopenRun, SKILL_ID, SKILLS_MAX, staleDue, tagName, type RunLinks } from '../agents/runs';
 import { reportOf } from '../agents/run-report';
 import { gateRequest, runtimePluginName } from '../agents/role-gate';
+import { KEEP as CHECKPOINTS_KEPT, prune as pruneCheckpoints, restore as restoreCheckpoint, snapshot as takeCheckpoint, type Checkpoint } from './checkpoints';
 import { TurnToolBudget } from '../agents/orchestrator-budget';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
 import { resultMessage, type DelegationLimitHit, type DelegationResult } from '../../shared/delegation';
@@ -77,6 +78,8 @@ import { recallWarning, type Recall } from '../search/hybrid/recall';
 export interface ChatManagerOptions {
   /** the roles in a few lines, for the Orchestrator's first message of a session (agents/discovery.ts roleCatalogBrief) */
   roleCatalogBrief?: () => string;
+  /** ADR 0103: record the files before each turn of a work chat in a git repository (checkpoints.ts); absent = off */
+  checkpoints?: () => boolean;
   /** how long a child's result waits for its siblings' (default CHILD_RESULTS_MS) */
   childResultsMs?: number;
   /** the estimate line under a user's message to the Orchestrator (shared/task-estimate.ts estimateLine): its first model
@@ -237,6 +240,11 @@ interface Rec {
   autoCompleted?: boolean;
   agentInstructions?: string;
   agentAssets?: { pluginDir: string; skillRoot: string };
+  /** ADR 0103: the files before each recent turn (checkpoints.ts), newest last; its repository's top folder (null = not
+   *  a git work tree: no checkpoints); a note for the next message after the user undid a turn */
+  checkpoints?: Checkpoint[];
+  gitRoot?: string | null;
+  undoNote?: string;
   /** the roles this chat's role may launch (resolved at creation; absent = unknown, e.g. a chat saved before) */
   launches?: string[];
   /** the skills its launch gave it (role defaults, linked and the launch's own): the role gate allows only these */
@@ -802,7 +810,10 @@ export class ChatManager implements ChatService {
     // what the user wrote in its children since its last message rides along (shown in its transcript already)
     const notes = this.notesFor.get(chatId);
     if (notes?.length) this.notesFor.delete(chatId);
-    const noted = notes?.length ? `${USER_NOTES_LABEL}\n${notes.join('\n')}\n\n${text0}` : text0;
+    const noted0 = notes?.length ? `${USER_NOTES_LABEL}\n${notes.join('\n')}\n\n${text0}` : text0;
+    // the user put the files back before the last turn: the chat learns it with its next message
+    const noted = r.undoNote ? `${r.undoNote}\n\n${noted0}` : noted0;
+    r.undoNote = undefined;
     // the user's own request to the Orchestrator carries the app's estimate (zero tokens), never the app's news or mail
     const estimate = r.s.isOrchestrator && !from && !resumed && t && !t.startsWith('[') ? this.requestEstimate(t) : null;
     const body = estimate ? `${noted}\n\n${estimate}` : noted;
@@ -814,6 +825,8 @@ export class ChatManager implements ChatService {
     // a changed text is checked once per engine start (as before this, never mid-session: a catalog edit would resend it)
     const role = roleText && (!r.rolePrimed || (!r.roleChecked && r.rolePrimed.sig !== roleSig)) ? roleText : '';
     r.roleChecked = true;
+    // the files as they are before this turn (ADR 0103): what the user can put back with «Annulla l'ultimo turno»
+    if (this.opts.checkpoints?.() && !r.s.isOrchestrator && !this.midTurn(r)) await this.checkpoint(r);
     try {
       r.session.send(`${role}${warning}${body}`, imgs);
       if (role) { r.rolePrimed = { session: r.s.sessionId ?? '', sig: roleSig }; this.persist(); }
@@ -1974,6 +1987,42 @@ export class ChatManager implements ChatService {
     this.addItem(r, sysItem('commandReadOnly', { command: shown }, 'warn'), false);
     r.session?.answer(req.id, { kind: 'permission', allow: false, message: `This role may only run commands that read (shell-read): ${shown} was refused. Use a reading command, or report what you need to your parent.` });
     return true;
+  }
+
+  /** Records the chat's files before a turn (checkpoints.ts); a folder outside git is asked once, a failure never holds
+   *  the message. */
+  private async checkpoint(r: Rec): Promise<void> {
+    if (r.gitRoot === null) return;
+    try {
+      const cp = await takeCheckpoint(r.s.cwd, `refs/sb/checkpoints/${r.s.id}/${Date.now()}`);
+      if (!cp) { r.gitRoot = null; return; }
+      r.gitRoot = cp.root;
+      const list = r.checkpoints ??= [];
+      list.push(cp);
+      if (list.length > CHECKPOINTS_KEPT) list.shift();
+      r.s.checkpointAt = cp.at;
+      this.updated(r);
+      void pruneCheckpoints(cp.root, `refs/sb/checkpoints/${r.s.id}/`).catch(() => {});
+    } catch (e) {
+      log.warn('chats', 'checkpoint before the turn not taken', { chat: r.s.id, cause: errText(e), hint: 'this turn cannot be undone from the app; git itself still has the committed work' });
+    }
+  }
+
+  /** «Annulla l'ultimo turno» (ADR 0103): the files back as they were before the chat's last turn. Never while it works. */
+  async undoTurn(chatId: string): Promise<{ restored: number; removed: number }> {
+    const r = this.need(chatId);
+    if (this.midTurn(r) || r.pending.size > 0) throw new Error('La chat sta lavorando: fermala prima di annullare il suo ultimo turno.');
+    const cp = r.checkpoints?.at(-1);
+    if (!cp) throw new Error('Niente da annullare: questa chat non lavora in un repository git, o non ha ancora fatto un turno da quando l’app è aperta.');
+    const out = await restoreCheckpoint(cp);
+    r.checkpoints!.pop();
+    const prev = r.checkpoints!.at(-1)?.at;
+    if (prev === undefined) delete r.s.checkpointAt; else r.s.checkpointAt = prev;
+    r.undoNote = `[nota dell'app · l'utente ha annullato il tuo ultimo turno: i file sono tornati com'erano prima (${out.restored.length} ripristinati, ${out.removed.length} rimossi). Le modifiche di quel turno non ci sono più.]`;
+    this.addItem(r, sysItem('turnUndone', { restored: out.restored.length, removed: out.removed.length }, 'info'), false);
+    this.updated(r);
+    log.info('chats', 'turn undone: files restored from the checkpoint', { chat: r.s.id, data: { restored: out.restored.length, removed: out.removed.length } });
+    return { restored: out.restored.length, removed: out.removed.length };
   }
 
   /** The brain's declared read-only tools (read-only-tools.md), resolved from the chat's folder (issue #93). */

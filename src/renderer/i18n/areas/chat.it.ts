@@ -93,6 +93,8 @@ export const chatIt = {
   'chat.menu.handoffLabel': (p: { tokens?: string }) => `Passaggio di consegne${p.tokens ? ` · ${p.tokens}` : ''}`,
   'chat.menu.handoffTokens': (p: { amount: string }) => `${p.amount} token usati`,
   'chat.menu.handoffRead': 'Leggi o scrivi la nota per chi continua…',
+  'chat.menu.undoTurn': 'Annulla l’ultimo turno (file come prima)',
+  'chat.menu.undoTurnDone': ({ restored, removed }: { restored: number; removed: number }) => `File come prima dell’ultimo turno: ${restored} ripristinati, ${removed} rimossi`,
   'chat.menu.closeChat': 'Chiudi chat',
   'chat.menu.engineBlockOff': (p: { engine: string }) => `${p.engine} è spento nelle impostazioni.`,
   'chat.menu.engineBlockOrchestratorOff': (p: { engine: string }) => `«Gli Orchestrator possono usare ${p.engine}» è spento nelle impostazioni.`,

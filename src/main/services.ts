@@ -55,6 +55,8 @@ export interface ChatService {
   /** ask false: never a turn of the chat, only the token-free note (the automatic closing uses it) */
   ensureHandoff(chatId: string, opts?: { allowStart?: boolean; ask?: boolean }): Promise<HandoffInfo>;
   continueChat(chatId: string, opts?: { allowStart?: boolean; promptPrefix?: string }): Promise<ChatSummary>;
+  /** ADR 0103: the files back as they were before the chat's last turn */
+  undoTurn(chatId: string): Promise<{ restored: number; removed: number }>;
   /** how the Claude chats used their context since the counters started (ADR 0031); absent in the demo */
   contextStats?(): ContextStats;
   shutdown(): Promise<void>;

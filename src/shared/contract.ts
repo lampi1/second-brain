@@ -183,6 +183,8 @@ export interface ChatSummary {
   queued?: QueuedInfo;
   /** how its harness, model and effort were chosen when an agent opened it (app_create_chat, the routing table) */
   route?: RouteDecision;
+  /** ADR 0103: when the checkpoint before its last turn was taken (its files can go back to it); absent = none */
+  checkpointAt?: number;
 }
 
 export interface ChatLink { id: string; title: string }
@@ -1281,6 +1283,8 @@ export interface InvokeMap {
   /** "Riprendi": a NEW chat, same engine, folder and choices, that starts from the hand-off (written first if missing or
    *  older than the last turn); the old chat's process ends, it stays readable and linked (continuedBy) */
   'chat:continue': [{ chatId: string }, ChatSummary];
+  /** ADR 0103: the files back as they were before the chat's last turn (its checkpoint); counts of restored and removed files */
+  'chat:undoTurn': [{ chatId: string }, { restored: number; removed: number }];
   'browser:list': [void, BrowserTab[]];
   'browser:open': [{ url?: string; ownerChatId?: string | null; env?: string }, BrowserTab];
   'browser:navigate': [{ tabId: string; url: string }, void];
@@ -1517,7 +1521,7 @@ export const INVOKE_CHANNELS = [
   'agents:list', 'skills:suggest', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'agents:estimates', 'run:outcome', 'agents:restoreVersion', 'avatars:get', 'avatars:set', 'avatars:reset', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
   'agents:exportPlan', 'agents:exportFix', 'agents:export', 'brain:share', 'agents:importInspect', 'agents:importApply', 'agents:importCancel', 'brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'brainmodel:link', 'classifiers:state', 'agents:trialDecide', 'agents:lifecycleDecide',
-  'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
+  'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'chat:undoTurn', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
   'settings:undo', 'settings:propose', 'settings:pending', 'settings:confirm', 'estimate:record', 'brain:api',
   'tasks:get', 'tasks:refresh', 'tasks:markRead', 'chat:branches',
