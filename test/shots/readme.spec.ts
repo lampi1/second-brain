@@ -68,8 +68,17 @@ const tool = (chatId: string, t: { id: string; name: string; input: unknown; sum
 test('README screenshots', async () => {
   test.setTimeout(180_000);
 
-  // 1. The agents column: chats as strips, their questions as panels, each browser tab under the chat that drives it
+  // 1. The Grindhouse: the work chats as strips, a Strategist's delegation tree as thread cards under it
+  await app.evaluate(() => (globalThis as unknown as { __sbDemo: { tree(): void } }).__sbDemo.tree());
   await expect(page.getByTestId('view-agents')).toBeVisible();
+  const lead = page.getByTestId('tile-chat-tree-plan');
+  await expect(lead).toBeVisible({ timeout: 15_000 });
+  await lead.evaluate(el => {
+    el.scrollIntoView({ block: 'start' });
+    let box = el.parentElement; // its scrolling column: a little room above the Strategist's strip
+    while (box && box.scrollHeight <= box.clientHeight) box = box.parentElement;
+    box?.scrollBy(0, -44);
+  });
   await waitThumbs(page);
   await save('grindhouse');
 

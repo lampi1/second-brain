@@ -5,15 +5,15 @@
 <h1 align="center">second-brain</h1>
 
 <p align="center">
-  <b>One desktop cockpit for all your AI coding agents.</b><br>
-  Run Claude Code, Codex and Cursor agents side by side, answer every question they ask from one place,<br>
-  watch the browsers they drive, and keep a second brain that makes them better every week.
+  <b>Your AI coding agents, as a crew. You, as the boss.</b><br>
+  Claude Code, Codex and Cursor agents that plan, delegate, drive browsers and report back,<br>
+  all on one screen, with a second brain that makes them better every week.
 </p>
 
 <p align="center">
-  <a href="#download"><b>Download</b></a> ·
   <a href="#try-it-in-2-minutes"><b>Try the demo</b></a> ·
-  <a href="#build-it-yourself"><b>Build from source</b></a> ·
+  <a href="#run-it-for-real"><b>Run it for real</b></a> ·
+  <a href="#download"><b>Download</b></a> ·
   <a href="#update"><b>Update</b></a> ·
   <a href="CONTRIBUTING.md"><b>Contribute</b></a>
 </p>
@@ -26,32 +26,62 @@
   <img alt="Electron 44" src="https://img.shields.io/badge/electron-44-47848F.svg">
 </p>
 
-![The Grindhouse: the work chats as strips grouped by project, each with who started it, its estimate and the sub-agents working for it; the Orchestrator in its column on the right](docs/screenshots/grindhouse.webp)
+![The Grindhouse: a Strategist's work as a tree of thread cards (Scout done, Artisan with its own Judge, Herald writing the notes), the Orchestrator's column on the right](docs/screenshots/grindhouse.webp)
 
-When you work with five agents at once, the bottleneck is no longer the model: it is you. Which agent is waiting on
-you? Which one is burning tokens in a loop? What did the QA agent see in its browser? second-brain puts every agent,
-question, browser and ticket on one screen, so you spend your attention where it is needed and nowhere else.
+Five agents at once and the bottleneck is no longer the model: it is you. Who is waiting on you? Who is burning tokens
+in a loop? What did the QA agent see in its browser? **second-brain** puts the whole crew on one screen, so your
+attention goes where it is needed and nowhere else.
 
-It does not replace the agents: it starts the **official** CLIs (`claude`, `codex`, Cursor's `agent`) with **your own**
-login, and it never touches their settings. Keep Claude desktop and Cursor open next to it, or close them.
+It drives the **official** CLIs (`claude`, `codex`, Cursor's `agent`) with **your own** login and never touches their
+settings. The interface speaks Italian and English.
 
-> The interface speaks Italian and English (Settings → Lingua; by default it follows Windows). Code, comments, docs
-> and commits are in English.
+## Why you'll like it
 
-## Download
+**🌳 Work as a tree, not a pile of tabs.** You tell the Orchestrator what you want. It hands the job to a role, the role
+splits it into child chats, and the Grindhouse shows the whole family as thread cards: who is on it, what they found,
+what they still owe. A child's question goes to its parent first; only what truly needs you reaches you, once.
 
-| Version | Date | Windows installer | Source code |
-| --- | --- | --- | --- |
-| **0.1.0** (latest) | 2026-10-13 | coming with the published release | [zip](https://github.com/lampi1/second-brain/archive/refs/tags/v0.1.0.zip) · [tar.gz](https://github.com/lampi1/second-brain/archive/refs/tags/v0.1.0.tar.gz) |
+**🎭 A crew with characters.** Nine fixed roles, each with its own face, job, skills and model tier:
 
-Every version, with its notes and checksums: **[all releases](https://github.com/lampi1/second-brain/releases)** ·
-what changed: [CHANGELOG.md](CHANGELOG.md).
+<p align="center"><img src="docs/screenshots/crew.webp" alt="The nine roles: Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald, Router, Judge, Scribe" width="820"></p>
 
-- **Windows installer**: one offline, per-user `second-brain-<version>-windows-x64-setup.exe`. No Node.js, Git or
-  admin rights needed; it includes Electron and the app. Check the file against the `.sha256` next to it in the release.
-  Not code-signed yet, so Windows SmartScreen may ask you to confirm the first time ("More info" → "Run anyway").
-- **Source code**: the exact code of that version, to [build it yourself](#build-it-yourself).
-- The repository is private today, so these links work for people with access to it; it is meant to be open source.
+<p align="center"><sub><b>Orchestrator</b> conducts · <b>Strategist</b> plans · <b>Scout</b> explores · <b>Artisan</b> builds · <b>Sentinel</b> tests · <b>Herald</b> announces · <b>Router</b> triages · <b>Judge</b> reviews · <b>Scribe</b> writes</sub></p>
+
+**⚡ Answer with one key.** Questions and permissions pop up as panels right in the agent's strip, with the context the
+agent had when it asked. Every job gets an estimate up front ("~4 min · ~0,12 $ · from 12 similar tasks") and a
+verdict at the end ("~4 min → 6 min ✓").
+
+**📈 Agents that level up.** Every role earns levels and a performance score from real outcomes, cost and your
+corrections. The app tunes models, instructions and skills by itself, as a trial measured against the old version,
+and every change has an "Annulla".
+
+**🧠 A brain that lights up.** Your notes, rules, memory and scripts live in a plain Markdown folder that the agents
+read and write. Watch it live on a 3D map, lit where the crew is working right now.
+
+## A quick tour
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/orchestrator.webp" alt="The Orchestrator's column: its plan with each chat's estimate and state, the mail between chats and a decision waiting for you"><br><b>The Orchestrator.</b> One chat that plans, delegates, routes mail between agents and tells you what needs you.</td>
+<td width="50%"><img src="docs/screenshots/agents.webp" alt="The Agenti page: the nine roles as cards with character, level, performance, runs and cost"><br><b>Agenti.</b> Every role as a card: level, performance, runs, cost, and a "?" with the formula behind each number.</td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/browser.webp" alt="A QA chat in focus mode with the browser tab it drives"><br><b>Browsers they drive.</b> Real tabs inside the app over MCP: click, type, read, screenshot. Passwords and MFA are always yours.</td>
+<td><img src="docs/screenshots/brain-map.webp" alt="Brain → Mappa, the 3D map of notes, agents and tools"><br><b>The brain map.</b> Notes, agents and tools in 3D, glowing where the work happens.</td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/task.webp" alt="The Task page: what to read, pull requests, reviews and work items"><br><b>Task.</b> Mentions, PRs, reviews and work items from Azure DevOps, read only and at zero tokens. <b>Discuti</b> hands any of them to the Orchestrator.</td>
+<td><img src="docs/screenshots/connectors.webp" alt="Settings → Connettori: MCP servers as cards with state, tools and roles"><br><b>Connettori.</b> Add an MCP server once and every engine gets it. Tokens stay encrypted and you choose which roles may use it.</td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/brain-scripts.webp" alt="The Script page: tested, reusable scripts as cards"><br><b>Scripts.</b> The tools your agents wrote and tested, reusable by every chat, with every change in the changelog.</td>
+<td><img src="docs/screenshots/quality.webp" alt="The Qualità page: measured metrics with their source"><br><b>Qualità.</b> Errors you had to catch, rules that did not stick, PRs held back, each measured from real logs.</td>
+</tr>
+</table>
+
+Also on board: cloud agents (Cursor, Codex, Claude Code) next to the local ones, one-click **Esegui** for shell blocks,
+long chats handed off before the context fills, Ctrl+K search across everything, an in-app **Guida**, and an
+app-control MCP server so agents can see and drive the app itself.
 
 ## Try it in 2 minutes
 
@@ -61,319 +91,68 @@ No CLI, no login, no tokens: the demo runs the whole interface on fictional data
 git clone https://github.com/lampi1/second-brain.git
 cd second-brain
 npm run setup      # pinned dependencies (install scripts off) + the Electron binary + the git hooks
-npm run demo       # builds and opens the app with demo agents, browser tabs and a sample brain
+npm run demo       # builds and opens the app with a demo crew, browser tabs and a sample brain
 ```
 
 You need [Node.js](https://nodejs.org) 22+ and [Git](https://git-scm.com). Windows 10/11 is the tested platform;
 Linux and macOS are built for but not yet tried on a real machine (ADR 0054).
 
-## Build it yourself
-
-From the clone above, three commands take you from the code to your own running copy:
+## Run it for real
 
 ```powershell
-npm run setup      # once (and again only if package-lock.json changes: `npm run pull` does that for you)
-npm run build      # main + preload with esbuild, the React interface with Vite → out/
-npm start          # opens the app; on first start one setup window walks you through seven short steps
+npm run build      # main + preload with esbuild, the interface with Vite → out/
+npm start          # first start: one setup window, seven short steps
 ```
 
-To use real agents, install and log in to at least one CLI yourself:
-[Claude Code](https://docs.anthropic.com/en/docs/claude-code) (`claude`), Codex (`codex`) and/or the Cursor CLI
-(`agent`). The app never asks for your passwords. `npm run doctor` tells you what is still missing (Electron, build,
-CLIs, logins, brain, MCP port).
+Install and log in to at least one CLI yourself: [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
+(`claude`), Codex (`codex`) or the Cursor CLI (`agent`). The app never asks for your passwords. The setup finds your
+projects folder, connects your AI and tools (GitHub, Azure DevOps, Jira) with a real read-only check, and starts an
+empty brain or opens yours. `npm run doctor` tells you what is still missing.
 
-**The first setup** is one window that never closes by itself (a click outside does nothing; "Più tardi" or Esc saves
-it as a draft and it reopens on the same step, also from Settings → "Configura il mio lavoro"):
+Want to change the app? `npm run dev`, then `npm run check:branch` before you commit. Start with
+[CONTRIBUTING.md](CONTRIBUTING.md); AI agents read [AGENTS.md](AGENTS.md).
 
-1. **Folders**: no options to pick. Your memory is a new, empty one, created on confirmation in the app's data folder,
-   or a brain you already have ("Use an existing brain…", the system folder picker). Below it, your **projects
-   folder**: the app finds it by itself from the repositories Claude Code and Cursor already worked in and the usual
-   places (`source/repos`, `Projects`, `dev`, …), reading only folder names and `.git`; it asks you only when it finds
-   none. It is saved in the setting `projectsRoot` (Settings → Il mio spazio → Cartella dei progetti: change it or detect it again), and a new memory points its repositories there.
-2. **Your AI**: "Collega" opens the CLI's official sign-in in its own window; the card checks again by itself every
-   few seconds (no tokens) until it says "Collegata" with the account and the time of the check.
-3. **Tools** (GitHub, Azure DevOps, Jira Cloud): every sign-in ends in a real read-only check. The row says
-   "Connesso come …" with the account and how many projects were read, or "Non connesso" with the reason and what to do.
-4. **Who you are, your work, the team, the summary**: written into your `me.md` when you confirm.
+## Download
 
-### Change it
+| Version | Date | Windows installer | Source code |
+| --- | --- | --- | --- |
+| **0.1.0** (latest) | 2026-10-13 | coming with the published release | [zip](https://github.com/lampi1/second-brain/archive/refs/tags/v0.1.0.zip) · [tar.gz](https://github.com/lampi1/second-brain/archive/refs/tags/v0.1.0.tar.gz) |
 
-```powershell
-npm run dev            # dev build + run: edit, run again, see it
-npm run check:branch   # before you commit: typecheck, lint, the related unit tests, the secrets guard
-```
-
-Where things are:
-
-| Folder | What lives there |
-| --- | --- |
-| `src/shared/contract.ts` | The one contract: every data shape and IPC channel. Change it first, then both sides. |
-| `src/main/` | Electron main process: agent harnesses (`chats/`), browser tabs (`browser/`), local MCP server (`mcp/`), brain and costs (`brain/`). |
-| `src/preload/` | The small allow-listed bridge `window.sb`. Nothing else crosses. |
-| `src/renderer/` | The React interface (pages, components, Italian and English strings in `i18n/`). |
-| `test/unit`, `test/e2e` | Vitest for every module, Playwright driving the real app for every visible feature. |
-| `docs/adr/` | Every decision, numbered, with its reason. |
-
-Or let the app change itself: ask the Orchestrator for the change and give it the app's code folder; it starts an agent
-there that works on a branch and runs the checks before anything is merged.
-
-Start with [CONTRIBUTING.md](CONTRIBUTING.md) (workflow, tests, ADRs, a map of the modules). AI agents working on the
-repo read [AGENTS.md](AGENTS.md).
+The Windows installer is one offline, per-user `.exe` (no Node.js, Git or admin rights), with a `.sha256` next to it.
+It is not code-signed yet, so SmartScreen may ask once ("More info" → "Run anyway"). Every version:
+[releases](https://github.com/lampi1/second-brain/releases) · [CHANGELOG.md](CHANGELOG.md).
 
 ## Only the brain, without the app
 
 The brain is a folder of Markdown files with an `AGENTS.md` index, so Claude Code, Cursor and Codex can use it on their
-own. Two ways to get one (ADR 0088):
-
-- **From zero, from GitHub.** Download this repository (Code → Download ZIP, or `git clone --depth 1`), then with
-  Node.js 22 or later run `node brain-template/install.mjs`. It asks your name and a folder and writes an empty brain
-  there, with its skills in `.claude/skills/` (Claude Code) and `.agents/skills/` (Codex, Cursor). Open that folder in
-  your tool and ask "da dove comincio?". `--user-config` also wires it into `~/.claude` and `~/.cursor` (with backups);
-  without it the installer only prints those steps. The app is not needed, and the rest of the repository can be
-  deleted afterwards.
-- **A colleague's brain.** In the app, Settings → Il mio spazio → "Condividi il brain" saves a zip with the brain's
-  rules, skills, roles (as subagents for each tool) and scripts, never your memory (`me.md`, `now.md`, journal, agent
-  memory); the secrets check scans every file first. Whoever receives it unzips it and opens the folder in Claude Code,
-  Cursor or Codex, or copies it into the root of their repository; its `README.md` says how.
+own (ADR 0088). From GitHub: download this repository and run `node brain-template/install.mjs` (Node.js 22+); it asks
+your name and a folder and writes an empty brain with its skills. From a colleague: in the app, Settings → Il mio
+spazio → "Condividi il brain" zips the rules, skills, roles and scripts, never your memory.
 
 ## Update
 
-**From a clone (developers): one click.** Open **Impostazioni → Aggiornamenti**: it shows what is new on GitHub's
-`main`, and **Aggiorna** downloads it, rebuilds and restarts the app on it, with no test suite. It only fast-forwards:
-your local commits and uncommitted work are never merged, moved or dropped (it stops and tells you), and the
-dependencies are reinstalled only when they changed. You can also write "aggiornati" to the Orchestrator, or from a
-terminal:
+From a clone: **Impostazioni → Aggiornamenti → Aggiorna** pulls `main`, rebuilds and restarts in one click. It only
+fast-forwards, so your local work is never touched. From a terminal: `npm run pull`. With the installer: download the
+newer one from [Releases](https://github.com/lampi1/second-brain/releases); your brain, chats and settings stay where
+they are. Your stable copy (ADR 0007) goes back by itself if a new version does not open; `npm run rollback` by hand.
 
-```powershell
-npm run pull       # fetch main, fast-forward, `npm ci` only when the lockfile changed, build
-```
+## Safe by design
 
-**Installed with the Windows installer:** download the newer installer from [Releases](https://github.com/lampi1/second-brain/releases).
-Your brain, chats and settings live outside the install folder and are never removed by the installer. An in-app
-updater that prepares the package in the background and asks you once is built, and is switched on after its Windows
-restart test passes ([update integration](docs/update-integration-evidence.md)).
+- Electron locked down: `contextIsolation`, `sandbox`, no `nodeIntegration`, strict CSP, every IPC call checked.
+- The MCP server listens on 127.0.0.1 only; browser tabs live in their own partition.
+- Each CLI owns its login. Keys and MCP tokens are encrypted with the OS secret store and reach only their own engine or
+  server, never a chat, a file or a log (ADR 0046, 0086).
+- No production access is wired in. Dependencies are pinned, well known and at least 14 days old; a git hook scans
+  every commit for secrets before it leaves your PC.
 
-**Your stable copy from a clone** (ADR 0007): the same **Aggiorna** switches it to the new version at once; if the new
-version does not open, the launcher goes back to the previous one. `npm run promote` does it with the full checks
-first, `npm run rollback` goes back by hand.
-
-## Features
-
-### Agents as strips, questions as panels
-
-Every Claude Code, Codex or Cursor agent is a strip in the **Grindhouse** with its streaming text, tool calls, diffs,
-cost and context size. When an agent asks a question or a permission, it shows up as a panel right in its strip (or in
-a floating layer, wherever you are in the app): answer with one key, with the context the agent had when it asked.
-Strips are grouped by area and ordered by the Orchestrator; a click anywhere on one expands it inline, and it
-maximizes or opens in focus mode. The globe on a strip shows the browser its agent drives beside it (expanding the
-strip if needed). Work starts only from the Orchestrator's column (Ctrl+N: "Cosa vuoi fare?"); the chats a role
-delegates hang under it as thread cards on a curved line (task, character, skills, model, live steps from the
-engine's own plan and its tool calls, state, what it needs), expand in place into the whole chat, and fold per parent
-(kept across restarts), the same tree as in the sidebar. A child's question goes to its parent first; what needs you
-shows once, in the chat you look at. Model and effort come from the agent's profile. A worker that sent
-its final report to the Orchestrator and went idle closes by itself after a short delay (Settings → Archivia lavori
-conclusi dopo; transcript kept, Ctrl+K reopens it); one that waits for you, a permission, colleagues or background
-work stays open with an "In attesa di…" label.
-
-**Quick chats and readable estimates** (ADR 0087): before it starts work the Orchestrator estimates the request from
-similar past tasks (same agent and same kind first; time, cost, how many tasks it rests on, its confidence, the parts
-of the request). A short question it answers itself; a quick single-part job goes to one agent with no sub-chats;
-only work in several parts becomes a delegation tree, which costs more tokens. Every strip reads "stima ~4 min ·
-~0,12 $ · su 12 task simili" and, once done, "~4 min → 6 min ✓"; its "?" explains how the figure is computed. The
-Orchestrator's plan lists the agents it started today with their estimates, a "via rapida" mark on quick jobs, the
-sum, and how accurate the estimates have been week by week (each finished task re-estimated from the ones before it).
-
-### Cloud agents next to the local ones
-
-Agents that run in the vendor's cloud (Cursor Cloud Agents, Codex cloud tasks, Claude Code cloud sessions) keep going
-with the PC asleep and cost no local CPU. Ask the Orchestrator for one (it starts it with `app_create_chat`, where "cloud")
-on a GitHub repository whose branch is already pushed: it gets its own strip in the Grindhouse, grouped by repository,
-with a "cloud" badge. Cursor streams its messages, takes follow-ups and stops from the app (its cloud runs at API
-prices, counted in the Cursor spending limit; the key goes in Settings → Motori → Cursor); Codex and Claude open their
-own page for what their CLIs do not offer. "Porta in locale" brings the result into a new worktree. The agent pushes
-only its own `cursor/…`, `codex/…` or `claude/…` branch; the app never pushes (ADR 0080).
-
-### The Orchestrator: one chat that coordinates the others
-
-![The Orchestrator's column: its sub-agents, its plan with each chat's estimate and state, the mail between chats and a decision waiting for you](docs/screenshots/orchestrator.webp)
-
-The Orchestrator is the chat you talk to first, always in its column on the right. It knows every agent, hands each job
-to the right one of the nine roles (missing know-how becomes a new skill, never a new agent), routes mail between them
-and tells you what needs you. Model, effort and context size come from each agent's profile, never from a per-chat
-switch. News it has not received yet (a chat that finished while it waits for your answer, a quiet permission request,
-mail held for later) shows above its input as **"N novità in attesa"**; a click lists each one with its chat, kind,
-since when and why it waits, at no token cost.
-
-### Agents that improve by themselves, reversibly
-
-![The Agenti page: the nine roles as cards, each with its character, level, performance, runs and cost](docs/screenshots/agents.webp)
-
-Each agent is a card with its character large in the middle, its role, engine, model, a **level** (it grows with the
-runs it ended: Lv 2 at 5, Lv 3 at 15, Lv 4 at 30…) and a **performance %** (the average of the verdicts on its runs,
-weighted by who gave them, you or the Judge more than the Orchestrator or the agent itself, and by how recent they are;
-"in rodaggio" until 5 runs are judged), plus runs and median cost; a click flips it to its details and the skills it
-uses. A "?" next to every number gives its exact formula, here and across the app (the Orchestrator, a strip's facts,
-Settings, the Skill page). Every role has its own cartoon character (a conductor for the Orchestrator, an explorer
-for the Scout, a judge in a wig…), recognisable from the 16 px tree to the 96 px role page. Agents learn from cost, time, outcome and your corrections: the Orchestrator and the
-maintenance jobs change an agent's model, effort or instructions by themselves, as a trial version measured against
-the previous one, and every change is in the log with "Annulla". Only what reaches further waits for your yes in
-**Agenti → Da approvare**: an agent's tools, permissions and engine. An agent exports to a colleague
-with its profile, its skills, the tools they call and the brain's rules, never your memory.
-
-### Browsers your agents drive
-
-![A QA chat in focus mode: its question as a panel, the browser tab it drives big next to it](docs/screenshots/browser.webp)
-
-Agents get real browser tabs inside the app through a local MCP server: navigate, click, type, read the page, take
-screenshots, with trusted input like a real user. Each tab sits next to the agent that owns it. Logins persist per
-environment, and when a page needs a password, MFA or a CAPTCHA the agent hands it to you: the app never types your
-passwords.
-
-### A live map of your brain
-
-![Brain → Mappa, the 3D map: notes, agents and tools, lit where the agents are working right now](docs/screenshots/brain-map.webp)
-
-Your brain is a folder of Markdown notes the agents read and write: open threads, journal, ideas, the errors they made
-and the rules learned from them. A fresh brain starts empty: the app's own rules and tools stay inside the app
-(ADR 0072). The Brain section of the menu shows it as two concepts only, agents and skills (ADR 0077): Agenti, Skill
-(who uses each skill, linked with one click), Regole (the brain's rules and, once the brain has some, the rules it
-learned for its estimates, model choice and alerts), Memoria (knowledge, what happened, one memory per agent, each
-file rendered and opening in the viewer, plus its numbers: lines per agent, weekly growth, the most recalled memories,
-stale files, recurring errors with their trend, skills useful or never used, and curious facts, each with a "?" that
-says how it is computed),
-Classificatori (one card per classifier: what it decides and why, its runs, verified success, cost and weekly trend,
-how far it has learned, a curious fact from the data, and a detail view with its history; the task estimator's card
-shows week by week how often its estimate held) and Mappa (agent → skills → rules → memory, the
-notes map that fills the panel at any size, and a 3D map that lights up the files, tools and agents at work).
-Maintenance jobs keep skills, agents, rules and memory tidy by themselves; the "Manutenzione" button atop Skill, Regole
-and Memoria runs them now and says what each did; every change is logged with "Annulla".
-
-### Scripts and a changelog for your brain
-
-![The Script page: the brain's tested, reusable scripts as cards, with their language, last test and file](docs/screenshots/brain-scripts.webp)
-
-The scripts your agents wrote and tested live in the brain's `scripts/` folder, each with what it does, how to run it
-and its last test. Every chat can look them up before writing a new one; the Orchestrator adds, fixes and deletes them
-on its own, and every change to the brain (scripts, rules, skills, notes) lands in `changelog.md`. Both have their own
-page in the Brain section (ADR 0076). Nothing in the app runs a script.
-
-### Task in one page
-
-![The Task page: what to read, your pull requests, reviews and work items, each with Discuti](docs/screenshots/task.webp)
-
-Mentions, comments and votes on your pull requests, reviews waiting for you, stuck work items, failed builds and the QA
-status of each pull request, imported from Azure DevOps on demand or automatically (zero tokens, read only). Every item
-has **Discuti**: one click puts a ready message about it (title, link, state, folder) in the Orchestrator's input, and the
-Orchestrator decides and opens the work chat. Every page works the same way: no page opens a work chat by itself. **Fatto** is the log of what was done: newest first, grouped by day, each entry with
-what, who (you, or the agent or engine of a chat), when and its link.
-
-### MCP servers in one place, for every engine
-
-![Settings → Connettori: the MCP servers your agents use, as cards with state, tools, roles and the fix when one fails](docs/screenshots/connectors.webp)
-
-Settings → **Connettori** is one section for everything the app connects to: the app's own accounts (Azure DevOps for
-the Task page, GitHub, Jira) and the **MCP servers your agents use** (ADR 0086). Add a server once (a local command such
-as `npx -y @azure-devops/mcp contoso`, or an https address), press **Prova** to see whether it works and which tools it
-has (reading and writing), or import the ones you already have in Claude Code, Claude desktop, Cursor and Codex (their
-files are only read, never changed, and no token is copied). Every Claude, Codex and Cursor chat then gets the servers
-its role may use, through the app's local MCP gateway: the gateway adds the server's token (encrypted with the OS
-keyring, typed once, shown only as a mask) and checks the role's access at every call. By default every role has every
-server; on an agent's card (Brain → Agenti, the back) you narrow each server to its reading tools, a chosen few or
-none, and a delegated chat never gets more than its parent. The engines' own config files are never written.
-
-### Quality you can measure
-
-![The Qualità page: measured metrics, each with its source, the days it covers and the rows behind it](docs/screenshots/quality.webp)
-
-Four metrics computed from real logs, each with its source and the days it covers: errors you had to catch yourself
-per 100 turns, rules that did not stop their error, pull requests held by QA or builds, bugs reopened after a fix.
-Costs, budgets and estimates per agent and per day sit next to them, with charts per day and per model and a few
-facts drawn from the numbers. The Errori tab groups recurring errors by cause, with how often, the trend, when last
-seen, which chats, roles and skills, what it means and what to do. Every number has a "?" that says how it is computed.
-
-### And more
-
-- **Esegui**: shell blocks in a chat run with one click, and the output goes back to the chat.
-- **Long chats** are handed off before the context fills: a note, then "Riprendi" in a fresh chat.
-- **Nine fixed roles** (ADR 0083): Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald, Router, Judge, Scribe,
-  each with its instructions, model tier, the roles it may launch and its skills, editable in Brain → Agenti. **By
-  default every role may do everything** (ADR 0085: every tool class, no permission limit below your own mode), so a
-  fresh install has no refused calls and no flood of permission popups; a role's job comes from its instructions and
-  skills. You narrow any role from its card: the **Permessi** card (or "Modifica permessi" on the card's back) has a
-  switch per tool class and four limits, each with a "?" saying what it allows; every save is a version, "Ripristina
-  predefiniti" brings everything back. A role delegates parts of its task to the roles it may launch
-  (`agent_delegate`) as visible child chats with a self-contained contract; a child never gets more permissions than
-  its parent, works in its folder, and reports once (`agent_report`, also from a chat the Orchestrator opened). A
-  role limited to read-only commands still runs the node tools you list in `read-only-tools.md` in the brain, and the
-  Orchestrator is told when a skill it passes needs tools the role lacks. The
-  depth and the children at once are your limits (Impostazioni → Ruoli e deleghe). The Orchestrator sees only their
-  state, plus what you write to any of them, so nothing conflicts; a Judge reviews a few finished runs a day, each in
-  a new session that never saw the run's reasoning.
-- **Search** (Ctrl+K) across chats, browser tabs, pages and commands; an in-app **Guida** explains every concept.
-- **Agent-friendly by design**: an app-control MCP server lets agents read the app state, screenshot it and drive it.
-- **Screenshots everywhere**: an agent writes the path of a PNG, JPG or WebP (under the brain, the repo, a worktree or
-  its evidence folder) and the app shows it as a thumbnail in the chat and in the question; Markdown and HTML reports
-  open in the file viewer with their images (files beside the report or base64), never loaded from the internet. A
-  click opens any of them large.
-
-## Architecture
-
-```mermaid
-flowchart LR
-  subgraph Renderer["Renderer (React, sandboxed)"]
-    UI["Grindhouse · Orchestrator column<br/>Agenti · dashboard · 3D map"]
-  end
-  subgraph Main["Electron main (Node)"]
-    CM["ChatManager"] --> CS["Claude / Codex<br/>sessions"]
-    CM --> CU["CursorSession<br/>ACP"]
-    BR["BrowserService<br/>tabs = WebContentsViews"]
-    MCP["MCP server<br/>127.0.0.1 only"]
-    BS["BrainService<br/>live feed · costs · estimates"]
-  end
-  UI <-- "typed IPC (contract.ts)<br/>via preload allow-list" --> Main
-  CS --> C1(["claude / codex CLI<br/>your login"])
-  CU --> C2(["agent CLI<br/>your login"])
-  C1 & C2 -- "MCP tools" --> MCP --> BR
-  BS <--> Brain[("your brain folder<br/>Markdown")]
-```
-
-Details: [docs/architecture.md](docs/architecture.md); every decision: [docs/adr/](docs/adr/).
-
-## Security model
-
-- Electron baseline, never relaxed: `contextIsolation`, `sandbox`, no `nodeIntegration`, a strict CSP, every IPC call
-  checked against its sender, preload exposes only an allow-listed `window.sb`.
-- The MCP server listens on 127.0.0.1 only, with Host/Origin checks. Per-chat browser endpoints scope browser tools to
-  that chat's tabs; tokenized Orchestrator endpoints identify their caller. Generic local endpoints are also reachable
-  by local processes: this is not a boundary between programs on the same computer.
-- Browser tabs live in their own partition, apart from the app.
-- Each CLI owns its login. API keys you type in Settings are encrypted with the OS secret store and decrypted only in
-  main. MCP server tokens (Settings → Connettori) too: the app's MCP gateway adds them to that server's own process or
-  request only, so no token reaches an engine's command line, a chat, a file or a log (ADR 0086). App-owned conversation history is stored as plain text in your local profile: treat profile backups as private.
-- No production access is wired in: no database, deploy or write-cloud commands.
-- Dependencies: exact versions, well-known packages, published at least 14 days before they are installed; npm install
-  scripts are off (`.npmrc`). A git hook scans every commit for secrets and personal data before it leaves your PC.
-
-## Releasing (maintainers)
-
-GitHub Actions are off for this repository, so a release is built on a Windows PC:
-
-```powershell
-npm run check                      # on a clean main: everything, e2e included
-git tag v0.2.0                     # the version in package.json; push the tag
-npm run package:windows            # Setup + update payload + checksums in test-results/installer/dist
-npm run test:installer             # installs those exact bytes in a temp profile and launches them
-npm run release:draft -- v0.2.0    # verifies tag, source and hashes, then creates a DRAFT release with gh
-```
-
-Review the draft on GitHub, publish it, and add its row to the [Download](#download) table. Details:
-[Windows installer and updates](docs/windows-installer.md).
+Under the hood: [docs/architecture.md](docs/architecture.md) · every decision in [docs/adr/](docs/adr/) · releasing:
+[docs/windows-installer.md](docs/windows-installer.md).
 
 ## Roadmap
 
-- Linux and macOS proved on real machines; installers (.dmg, .AppImage) with signing.
-- More connectors behind the same interface (issue trackers beyond Azure DevOps); MCP servers that sign in with OAuth.
-- Team features: handing a to-do to a colleague, a shared team layer next to each person's brain.
+- Linux and macOS proved on real machines; signed installers.
+- More connectors (issue trackers beyond Azure DevOps); MCP servers that sign in with OAuth.
+- Team features: hand a to-do to a colleague, a shared team layer next to each person's brain.
 
 ## Limits
 
