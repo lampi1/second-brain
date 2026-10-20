@@ -635,8 +635,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'Tasks shows what waits for you on Azure DevOps; Done is the log of what was done, newest first.'),
     points: [
       // src/renderer/brain/pages/Task.tsx, src/main/tasks/service.ts
-      b('«Task» legge con lo script del cervello devops-me.mjs le tue PR, le review, i work item e le menzioni: sola lettura, zero token.',
-        '"Tasks" reads your PRs, reviews, work items and mentions with the brain’s script devops-me.mjs: read-only, zero tokens.'),
+      b('«Task» legge con il lettore devops-me.mjs le tue PR, le review, i work item e le menzioni: quello incluso nell’app, o quello del cervello se c’è; sola lettura, zero token.',
+        '"Tasks" reads your PRs, reviews, work items and mentions with the devops-me.mjs reader: the one shipped with the app, or the brain’s own when it has one; read-only, zero tokens.'),
       b('La lettura parte con «Aggiorna ora» o da sola, ogni 15 minuti fino a 2 ore, se accendi la lettura automatica; una menzione ti avvisa con un suono che puoi spegnere.',
         'The read starts with "Refresh now" or by itself, every 15 minutes up to 2 hours, when the automatic read is on; a mention alerts you with a sound you can turn off.'),
       b('Ogni record ha «Discuti»: l’Orchestrator riceve una bozza con titolo, link, stato e cartella; se serve lavoro, è lui ad aprire e istruire la chat.',
