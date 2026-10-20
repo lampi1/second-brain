@@ -33,10 +33,10 @@ found on the grid by hand.
 - The demo Regia answers a marked message by opening a "Demo · …" chat with an `app_create_chat` row (no CLI).
 - A Regia that ignores the line still answers the request as usual: the badge only says what was asked.
 
-## Revision 2026-10-20: "Veloce" and "Stratega" replace "Nuova chat"
+## Revision 2026-10-20: "Veloce" and "Strategist" replace "Nuova chat"
 The owner (2026-10-20): «il pulsante nuova chat oggi è inutile»; since ADR 0087 the Orchestrator opens a chat by itself
 when a job needs one. The input now offers two exclusive modes instead (`shared/newchat.ts`): **Veloce** (`[veloce]`:
 the quick path, she answers or opens ONE chat that works alone, never `agent_delegate`, the cheapest way through) and
-**Stratega** (`[stratega]`: a Strategist chat plans the request and delegates the parts). Neither ticked = she decides
+**Strategist** (`[strategist]`: a Strategist chat plans the request and delegates the parts). Neither ticked = she decides
 with `task_estimate` as before. Ctrl+Shift+Invio sends as Veloce. Older `[nuova chat]` messages keep their badge.
 Testids: `orchestrator-input-mode-quick|plan` (aria-pressed), `item-<id>-mode`, `.msg-user[data-mode]`.
