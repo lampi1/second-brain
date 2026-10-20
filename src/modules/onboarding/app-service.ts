@@ -2,13 +2,16 @@
 // Does not edit harness settings or infer that a CLI has loaded an MCP connection. A verified state (account, last
 // check, the projects it saw; never a credential) is saved beside the project selections, so it survives a restart
 // until a failed probe, a new sign-in or a disconnect clears it (issue #95); a good read of the app's own Task page is
-// the same proof for Azure DevOps and marks it verified too (observe).
+// the same proof for Azure DevOps and marks it verified too (observe), unless the user disconnected it (saved too, until
+// a probe or a sign-in).
 import type { ConnectorId, ConnectorPort, ConnectorProject, ConnectorState } from '../../shared/connectors';
 export interface JiraCredential { site: string; email: string; token: string }
 export interface ConnectorVault { get(): Promise<JiraCredential | null>; set(value: JiraCredential | null): Promise<void>; available(): boolean }
 /** The last good verification of a connector as saved on disk: what Settings shows, never a secret. */
 export interface ConnectorVerified { account: string; checkedAt: string; projects: ConnectorProject[] }
-export type ConnectorSelections = Partial<Record<ConnectorId, { identity: string; projects: string[]; verified?: ConnectorVerified }>>;
+/** disconnected: the user disconnected it (identity and projects empty); kept across restarts so a Task read does not
+ *  verify it again until they sign in or probe it (issue #95). */
+export type ConnectorSelections = Partial<Record<ConnectorId, { identity: string; projects: string[]; verified?: ConnectorVerified; disconnected?: true }>>;
 export interface ConnectorProof { identity: string; account: string; projects: ConnectorProject[] }
 export interface ConnectorAdapters {
   azureLogin?(): Promise<void>;
@@ -46,7 +49,8 @@ export function verifiedOf(v: unknown): ConnectorVerified | null {
 export class AppConnectorService implements ConnectorPort {
   private states = { github: initial('github'), jira: initial('jira'), azure: initial('azure') };
   private busy = false;
-  /** Disconnected by the user in this run: a Task read does not verify it again until they probe it (Prova). */
+  /** Disconnected by the user (in this run or saved by an earlier one): a Task read does not verify it again until they
+   *  sign in or probe it (Prova). */
   private disconnected = new Set<ConnectorId>();
   private loginAbort: AbortController | null = null;
   private loginDone: Promise<void> | null = null;
@@ -58,6 +62,7 @@ export class AppConnectorService implements ConnectorPort {
   restore(): void {
     for (const provider of ['github', 'jira', 'azure'] as const) {
       const entry = this.selections[provider];
+      if (entry?.disconnected === true && this.states[provider].status === 'pending') { this.disconnected.add(provider); continue; }
       const verified = entry ? verifiedOf(entry.verified) : null;
       if (!entry || !verified || this.states[provider].status !== 'pending' || !short(entry.identity, 600)) continue;
       this.identities[provider] = entry.identity;
@@ -74,6 +79,13 @@ export class AppConnectorService implements ConnectorPort {
     if (verified && identity) next[provider] = { identity, projects: old?.identity === identity ? old.projects : [], verified };
     else if (old) { const { verified: _gone, ...rest } = old; next[provider] = rest; }
     try { await this.adapters.saveSelections(next); this.selections = next; } catch { /* kept for this run only */ }
+  }
+  /** The user signs in or probes again: the disconnection no longer holds, here and in the saved file. */
+  private async reconnect(provider: ConnectorId): Promise<void> {
+    this.disconnected.delete(provider);
+    if (this.selections[provider]?.disconnected !== true) return;
+    const next = { ...this.selections }; delete next[provider];
+    try { await this.adapters.saveSelections(next); this.selections = next; } catch { /* cleared for this run only */ }
   }
   private verified(provider: ConnectorId, result: ConnectorProof): ConnectorState {
     this.identities[provider] = result.identity;
@@ -103,8 +115,8 @@ export class AppConnectorService implements ConnectorPort {
   }
   async login(raw: ConnectorId) {
     const provider = connectorId(raw);
-    this.disconnected.delete(provider);
     const abort = new AbortController();
+    this.disconnected.delete(provider);
     const task = this.exclusive(provider, async () => {
       this.signingIn = provider;
       try {
@@ -121,7 +133,9 @@ export class AppConnectorService implements ConnectorPort {
         }
       } finally { this.signingIn = null; }
       this.states[provider] = initial(provider);
-      // a new sign-in may be another account: the old verification is not proof of it
+      // signed in again: the saved disconnection no longer holds; a new sign-in may be another account, so the old
+      // verification is not proof of it
+      await this.reconnect(provider);
       await this.remember(provider, null, null);
     });
     if (this.loginAbort === abort) this.loginDone = task.catch(() => {});
@@ -130,8 +144,8 @@ export class AppConnectorService implements ConnectorPort {
   async cancelLogin() { this.loginAbort?.abort(); await this.loginDone; }
   async probe(raw: ConnectorId): Promise<ConnectorState> {
     const provider = connectorId(raw);
-    this.disconnected.delete(provider);
     return this.exclusive(provider, async () => {
+      await this.reconnect(provider);
       try {
         const value = provider === 'jira' ? await this.adapters.vault.get() : null;
         if (provider === 'jira' && !value) throw new Error('missing');
@@ -167,7 +181,8 @@ export class AppConnectorService implements ConnectorPort {
     const provider = connectorId(raw);
     await this.exclusive(provider, async () => {
       if (provider === 'jira') await this.adapters.vault.set(null);
-      const next = { ...this.selections }; delete next[provider];
+      // remembered across restarts: a Task read after a restart must not verify it again by itself
+      const next: ConnectorSelections = { ...this.selections, [provider]: { identity: '', projects: [], disconnected: true } };
       await this.adapters.saveSelections(next); this.selections = next; this.states[provider] = initial(provider);
       this.disconnected.add(provider);
     });

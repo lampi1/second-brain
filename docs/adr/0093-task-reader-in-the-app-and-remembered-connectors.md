@@ -23,7 +23,9 @@ verified connector to "Accesso da completare".
   as "Prova" would. Skipped while a probe runs (the probe started that read and sets the state itself).
 - **Verified states survive a restart.** The last good verification (account, time of the check, the projects seen;
   never a credential) is saved beside the project selections in `userData/connector-projects.json` and shown again at
-  start. A failed probe, a new sign-in and a disconnect clear it.
+  start. A failed probe, a new sign-in and a disconnect clear it. A disconnect is saved there too (`disconnected:
+  true`, nothing else), so after a restart a Task read still does not verify that connector by itself; "Prova" or a
+  new sign-in clears the flag.
 
 ## Consequences
 - A fresh brain gets a working Task page and a verifiable Azure DevOps connector once `az login` is done.

@@ -105,7 +105,21 @@ describe('verified state across restarts (issue #95)', () => {
     await a.service.probe('azure'); await a.service.login('azure');
     expect(a.box.saved.azure?.verified).toBeUndefined(); expect((await azureOf(a.service)).status).toBe('pending');
     await a.service.probe('azure'); await a.service.disconnect('azure');
-    expect(a.box.saved.azure).toBeUndefined();
+    expect(a.box.saved.azure).toEqual({ identity: '', projects: [], disconnected: true });
+  });
+  it('a disconnection survives a restart: a Task read does not verify it again until a probe or a sign-in clears it', async () => {
+    const a = azure(); await a.service.probe('azure'); await a.service.disconnect('azure');
+    const b = azure(a.box.saved);
+    const seen = vi.fn(async () => proof);
+    await b.service.observe('azure', seen);
+    expect(seen).not.toHaveBeenCalled(); expect((await azureOf(b.service)).status).toBe('pending');
+    expect((await b.service.probe('azure')).status).toBe('verified');
+    expect(b.box.saved.azure?.disconnected).toBeUndefined();
+    await b.service.disconnect('azure');
+    const c = azure(b.box.saved);
+    await c.service.login('azure');
+    expect(c.box.saved.azure).toBeUndefined();
+    await c.service.observe('azure', seen); expect(seen).toHaveBeenCalled();
   });
   it('restore runs again once the saved file is loaded, and ignores a malformed saved verification', async () => {
     const saved: ConnectorSelections = {};

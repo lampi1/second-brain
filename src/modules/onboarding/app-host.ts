@@ -64,6 +64,8 @@ export function createAppConnectors(userData: string, refreshTasks: () => Promis
       const data = JSON.parse(await fs.readFile(file, 'utf8')) as ConnectorSelections;
       for (const id of ['github', 'jira', 'azure'] as const) {
         const entry = data[id];
+        // the user's disconnection (only the flag is read): a Task read never verifies it again by itself
+        if (entry && entry.disconnected === true) { selections[id] = { identity: '', projects: [], disconnected: true }; continue; }
         if (entry && typeof entry.identity === 'string' && entry.identity.length <= 600 && Array.isArray(entry.projects) && entry.projects.length <= 100 && entry.projects.every(s => typeof s === 'string' && s.length <= 200)) {
           const verified = verifiedOf(entry.verified);
           selections[id] = { identity: entry.identity, projects: entry.projects, ...(verified ? { verified } : {}) };
