@@ -3,7 +3,7 @@
 // size), the DevOps link chips (ChatLinkChips.tsx), the "Riprendi" links and the long-chat notice (ContextBar.tsx), the transcript, the inline
 // question/permission/command panel (with "Domande in finestra" on, one line: the questions window shows it; while
 // "Rispondi dopo" is on, one "Da rispondere" line: the chat waits, lib/later.ts), an error bar with one action, and the always-visible input (the menu is ChatMenu). Small tiles render compact
-// (last line, "sta pensando…" while the turn runs, the open request). Selectors read only this chat, so other chats streaming never re-render it.
+// (last line; while the turn runs, its current step, plan position and silence: StripActivity.tsx, ADR 0102; the open request). Selectors read only this chat, so other chats streaming never re-render it.
 // A chat that drives browser tabs shares their accent color and hover (lib/pairs.ts). Used by the agents' strips in the
 // Grindhouse (AgentStrips.tsx) and the focus view. A strip (Brother, 18/10): a click anywhere on it expands it, a click on
 // the head of an expanded one collapses it; the key facts (model, cost, work time, context, the task estimate from similar
@@ -36,7 +36,7 @@ import { RunChips, RunOutcomeControl } from './RunSurface';
 import { AutoCloseNotice } from './AutoCloseNotice';
 import { ChatLinks, ContextMeter, ContextNotice, useWarnTokens } from './ContextBar';
 import { HelpTip } from './HelpTip';
-import { turnActivity, Typing } from './ChatItems';
+import { StripActivity } from './StripActivity';
 import { ChatTranscript } from './ChatTranscript';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ChatMenu, TitleInput } from './ChatMenu';
@@ -76,7 +76,6 @@ export function useFlash(key: string): boolean {
 
 export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus, embedded }: { chatId: string; index?: number; maximized?: boolean; focus?: boolean; embedded?: boolean }) {
   const chat = useApp(s => s.chats[chatId]);
-  const activity = useApp(s => turnActivity(s.items[chatId]));
   const reqs = useApp(s => pendingOf(s.pending, chatId), sameList);
   // each request shows once (lib/child-requests.ts requestHost): here only when this view is the one that holds it
   const expandedAll = ui.use(s => s.prefs.chatExpanded), focusModeId = ui.use(s => s.focusMode), maxKey = ui.use(s => s.maximized);
@@ -179,7 +178,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
         {!compact && <ChatLinkChips chatId={chatId} />}
       </header>}
       <AutoCloseNotice chatId={chatId} />
-      {!expanded&&<div className="chat-strip-line">{busy?<Typing what={activity} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.lastText.slice(0,140)}</div>}
+      {!expanded&&<div className="chat-strip-line">{busy?<StripActivity chatId={chatId} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.lastText.slice(0,140)}</div>}
       <div className={`chat-work${expanded?' expanded':''}`} id={`chat-work-${chatId}`} inert={!expanded} aria-hidden={!expanded}><div className="chat-work-inner">
       {!compact && <ChatLinks chat={chat} />}
       {!compact && chat.handoffBusy && <ContextNotice chat={chat} />}

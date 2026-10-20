@@ -1,0 +1,34 @@
+/* ADR 0102, the app shows what it does by itself: the collapsed strips' step line, the origin line of the chats the
+   app started or resumed, the morning block ("Mentre eri via") and its line atop the Orchestrator, the Battito board.
+   Used by StripActivity.tsx, AgentStrips.tsx (Origin), MorningBlock.tsx, PulseBoard (ContextPulse.tsx). */
+.chat-strip-line .typing { max-width:100%; min-width:0; }
+.strip-step { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.strip-step-text { color:var(--text-2); }
+.strip-step code { font-family:var(--mono, ui-monospace, monospace); font-size:11px; padding:0 4px; border-radius:4px; background:var(--surface-2); color:var(--text-2); }
+.strip-step-plan { color:var(--text-3); }
+.strip-step-quiet { color:var(--text-3); }
+.strip-step-quiet.is-stalled { color:var(--amber); font-weight:600; }
+.tree-origin.is-app b { color:var(--text-2); }
+.tree-origin .link-btn { font-size:12px; }
+
+.morning { display:flex; flex-direction:column; gap:10px; max-width:720px; margin:8px 0 16px; padding:16px 18px; border:1px solid var(--border); border-radius:12px; background:var(--surface); }
+.morning-head { display:flex; align-items:baseline; gap:10px; }
+.morning-head h2 { margin:0; font-size:15px; font-weight:650; color:var(--text); }
+.morning-head .morning-since { font-size:12px; color:var(--text-3); }
+.morning-rows { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px; }
+.morning-row { display:flex; align-items:center; gap:8px; min-height:30px; }
+.morning-row > button.morning-open { all:unset; box-sizing:border-box; flex:1 1 auto; min-width:0; display:flex; align-items:center; gap:8px; padding:4px 8px; border-radius:8px; cursor:pointer; color:var(--text-2); font-size:13px; }
+.morning-row > button.morning-open:hover, .morning-row > button.morning-open:focus-visible { background:var(--surface-2); color:var(--text); }
+.morning-row > button.morning-open:focus-visible { outline:2px solid var(--accent, var(--violet)); outline-offset:1px; }
+.morning-mark { flex:none; width:8px; height:8px; border-radius:99px; background:var(--text-3); }
+.morning-row[data-tone="warn"] .morning-mark { background:var(--amber); }
+.morning-row[data-tone="bad"] .morning-mark { background:var(--red, #e5484d); }
+.morning-row[data-tone="good"] .morning-mark { background:var(--green, #30a46c); }
+.morning-text { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.morning-sub { color:var(--text-3); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.morning-actions { display:flex; gap:8px; justify-content:flex-end; }
+.morning-note { font-size:12px; color:var(--text-3); margin:0; }
+.morning-line { display:flex; align-items:center; gap:8px; margin:6px 10px 2px; padding:6px 10px; border:1px solid var(--border); border-radius:10px; background:var(--surface); font-size:12px; color:var(--text-2); }
+.morning-line .morning-line-text { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.morning-line-open .morning { margin:6px 10px; max-width:none; padding:12px; }
+.pulse-board { max-width:720px; }

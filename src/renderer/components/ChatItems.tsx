@@ -101,9 +101,11 @@ const Message = memo(function Message({ id, text, streaming }: { id: string; tex
 });
 
 /** The live line of a running turn. */
-export function Typing({ what, testid }: { what: 'scrive' | 'pensa' | 'lavora'; testid?: string }) {
+/** The running turn's line; `children` replaces the generic word with what the chat does (a collapsed strip's step,
+ *  StripActivity.tsx), the dots and the data-what hook stay. */
+export function Typing({ what, testid, children }: { what: 'scrive' | 'pensa' | 'lavora'; testid?: string; children?: ReactNode }) {
   const text = what === 'scrive' ? t('chat.items.typing.writing') : what === 'pensa' ? t('chat.items.typing.thinking') : t('chat.items.typing.working');
-  return <div className="typing" role="status" aria-live="off" data-testid={testid} data-what={what}><span className="typing-dots" aria-hidden="true"><i /><i /><i /></span>{text}</div>;
+  return <div className="typing" role="status" aria-live="off" data-testid={testid} data-what={what}><span className="typing-dots" aria-hidden="true"><i /><i /><i /></span>{children ?? text}</div>;
 }
 
 function DiffView({ diff }: { diff: FileDiff[] }) {
