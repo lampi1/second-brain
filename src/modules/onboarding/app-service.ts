@@ -46,6 +46,8 @@ export function verifiedOf(v: unknown): ConnectorVerified | null {
 export class AppConnectorService implements ConnectorPort {
   private states = { github: initial('github'), jira: initial('jira'), azure: initial('azure') };
   private busy = false;
+  /** Disconnected by the user in this run: a Task read does not verify it again until they probe it (Prova). */
+  private disconnected = new Set<ConnectorId>();
   private loginAbort: AbortController | null = null;
   private loginDone: Promise<void> | null = null;
   private identities: Partial<Record<ConnectorId, string>> = {};
@@ -82,7 +84,7 @@ export class AppConnectorService implements ConnectorPort {
    *  would; skipped while another connector action runs (a probe started the read and sets the state itself). */
   async observe(raw: ConnectorId, proof: () => Promise<ConnectorProof>): Promise<void> {
     const provider = connectorId(raw);
-    if (this.busy) return;
+    if (this.busy || this.disconnected.has(provider)) return;
     try {
       await this.exclusive(provider, async () => {
         const result = await proof();
@@ -101,6 +103,7 @@ export class AppConnectorService implements ConnectorPort {
   }
   async login(raw: ConnectorId) {
     const provider = connectorId(raw);
+    this.disconnected.delete(provider);
     const abort = new AbortController();
     const task = this.exclusive(provider, async () => {
       this.signingIn = provider;
@@ -127,6 +130,7 @@ export class AppConnectorService implements ConnectorPort {
   async cancelLogin() { this.loginAbort?.abort(); await this.loginDone; }
   async probe(raw: ConnectorId): Promise<ConnectorState> {
     const provider = connectorId(raw);
+    this.disconnected.delete(provider);
     return this.exclusive(provider, async () => {
       try {
         const value = provider === 'jira' ? await this.adapters.vault.get() : null;
@@ -165,6 +169,7 @@ export class AppConnectorService implements ConnectorPort {
       if (provider === 'jira') await this.adapters.vault.set(null);
       const next = { ...this.selections }; delete next[provider];
       await this.adapters.saveSelections(next); this.selections = next; this.states[provider] = initial(provider);
+      this.disconnected.add(provider);
     });
   }
 }

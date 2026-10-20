@@ -132,6 +132,16 @@ describe('verified state across restarts (issue #95)', () => {
     await b.service.observe('azure', seen); expect(seen).not.toHaveBeenCalled();
     release(); expect((await probing).status).toBe('verified');
   });
+  it('observe: a connector the user disconnected stays disconnected until they probe it again', async () => {
+    const a = azure();
+    await a.service.observe('azure', async () => proof);
+    await a.service.disconnect('azure');
+    const seen = vi.fn(async () => proof);
+    await a.service.observe('azure', seen);
+    expect(seen).not.toHaveBeenCalled(); expect((await azureOf(a.service)).status).toBe('pending');
+    expect((await a.service.probe('azure')).status).toBe('verified');
+    await a.service.observe('azure', seen); expect(seen).toHaveBeenCalled();
+  });
 });
 describe('official provider adapters', () => {
   it('uses fixed gh API GET commands, handles raw jq login and caps repository listing', async () => {
