@@ -120,6 +120,22 @@ there that works on a branch and runs the checks before anything is merged.
 Start with [CONTRIBUTING.md](CONTRIBUTING.md) (workflow, tests, ADRs, a map of the modules). AI agents working on the
 repo read [AGENTS.md](AGENTS.md).
 
+## Only the brain, without the app
+
+The brain is a folder of Markdown files with an `AGENTS.md` index, so Claude Code, Cursor and Codex can use it on their
+own. Two ways to get one (ADR 0088):
+
+- **From zero, from GitHub.** Download this repository (Code → Download ZIP, or `git clone --depth 1`), then with
+  Node.js 22 or later run `node brain-template/install.mjs`. It asks your name and a folder and writes an empty brain
+  there, with its skills in `.claude/skills/` (Claude Code) and `.agents/skills/` (Codex, Cursor). Open that folder in
+  your tool and ask "da dove comincio?". `--user-config` also wires it into `~/.claude` and `~/.cursor` (with backups);
+  without it the installer only prints those steps. The app is not needed, and the rest of the repository can be
+  deleted afterwards.
+- **A colleague's brain.** In the app, Settings → Il mio spazio → "Condividi il brain" saves a zip with the brain's
+  rules, skills, roles (as subagents for each tool) and scripts, never your memory (`me.md`, `now.md`, journal, agent
+  memory); the secrets check scans every file first. Whoever receives it unzips it and opens the folder in Claude Code,
+  Cursor or Codex, or copies it into the root of their repository; its `README.md` says how.
+
 ## Update
 
 **From a clone (developers): one click.** Open **Impostazioni → Aggiornamenti**: it shows what is new on GitHub's
