@@ -14,6 +14,7 @@ export const explainIt = {
   'explain.outcome.title': 'A cosa serve il tuo voto',
   'explain.outcome.p1': 'Dice se il lavoro è riuscito, riuscito in parte o fallito. È il voto che conta di più: entra nella performance dell’agente con peso pieno (× 1), come quello di una revisione indipendente; l’Orchestratore pesa × 0,6 e il resoconto dell’agente × 0,3.',
   'explain.outcome.p2': 'Un voto perde metà del peso ogni 30 giorni, così la performance segue com’è l’agente oggi. Puoi cambiarlo quando vuoi.',
+  'explain.outcome.p3': 'Se non voti, decidono i fatti, senza spendere token: riuscito quando l’agente ha chiuso con tutti i criteri soddisfatti, tu non l’hai corretto e non l’hai rifatto nei 7 giorni dopo (fino ad allora è provvisorio e non conta); non riuscito quando si è bloccato o l’hai rifatto entro 7 giorni. Il tuo voto vince sempre.',
   'explain.toasts.title': 'Urgenti o normali',
   'explain.toasts.p1': 'Urgenti: una chat che ti aspetta, una domanda per te, un accesso da rifare, una chat finita con errore, il budget esaurito. Normali: anche le altre novità, come un lavoro finito. Le notifiche di Windows compaiono solo quando l’app non è in primo piano, e più novità insieme diventano una notifica sola.',
   'explain.judge.title': 'Cosa fanno le revisioni indipendenti',
