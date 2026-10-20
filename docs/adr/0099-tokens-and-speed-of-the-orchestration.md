@@ -32,6 +32,9 @@ compacted only on the next day, on an expired cache (ADR 0031: ~2.10 $ for a col
   process (`hook_callback`, `rules/runtime.ts runHook`, the code the node runner ran): two node processes per tool call
   (0.2-2 s each on Windows, never measured by the start-up bench, which turned hooks off) are gone. Stop stays a
   process in the plugin's hooks.json: its local brain commit runs synchronous git, which must not block the app.
+- `read_page` of a page the chat read before (same URL and filter) returns only the new or changed lines with their
+  parents and the counts of the rest (`browser/delta.ts`); `full: true` returns the whole tree. Refs of elements that
+  still exist are stable, so an unchanged element prints the same line.
 - `app_digest since:"last"` answers in full after the Orchestrator's context began again.
 - An Orchestrator quiet for most of an hour with 60k+ of context compacts while its cache is warm
   (`continuity.ts orchestratorWarmDue`, setting `orchestratorDayCompact`).
@@ -40,5 +43,4 @@ compacted only on the next day, on an expired cache (ADR 0031: ~2.10 $ for a col
 - Estimated (not measured: no transcripts were available to the audit) 175-370 $/week less on the owner's measured week;
   the next step is to measure: cache read vs creation on the first call of a new session, per chat kind.
 - A clean result no longer interrupts the Orchestrator: it learns it at its next turn, and "N novità in attesa" shows it.
-- Not done here: Claude Code's MCP tool search (its setting name was not verified on the bundled engine), incremental
-  page reads, a deterministic review pack for reviewers, `now.md` written by the app.
+- Not done here: Claude Code's MCP tool search (its setting name was not verified on the bundled engine), a deterministic review pack for reviewers, `now.md` written by the app.

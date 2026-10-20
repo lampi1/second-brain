@@ -11,6 +11,7 @@ import { envForUrl, envSlug } from './envs';
 import { envRefusal, loginRefusal } from './rules';
 import { containsPaste } from './keys';
 import { fmtFactor } from './preview';
+import { snapshotDelta } from './delta';
 
 export interface Scope { group: string; owner: string | null; chatId: string | null }
 
@@ -58,6 +59,8 @@ export function browserTools(tabs: BrowserTabs, actions: BrowserActions, scopeOf
     return run;
   };
   const tabOf = (ctx: CallCtx, a: Args): Tab => tabs.tabFor(scopeOf(ctx).group, a.tabId);
+  /** each tab's last read_page as served (browser/delta.ts): the next read of the same page sends only what changed */
+  const lastRead = new WeakMap<Tab, { url: string; mode: string; text: string }>();
   const write = (label: (a: Args) => string, fn: (tab: Tab, a: Args) => Promise<string>, opts: { allowDialog?: boolean } = {}) =>
     (a: Args, ctx: CallCtx) => serial(scopeOf(ctx).group, async () => { const tab = tabOf(ctx, a); return actions.act(tab, label(a), () => fn(tab, a), opts); });
   const line = (t: Tab) => {
@@ -173,9 +176,16 @@ PNG ${shot.width}x${shot.height}` : ''}${dialog}`, images: [{ data: img.data, mi
     },
     {
       name: 'read_page', annotations: RO,
-      description: 'The page as an indented tree: role "name" state [ref], text lines, and every iframe (same- or cross-origin) nested under its iframe line with refs like f1e7. filter "interactive" lists only controls (smaller). Up to 20000 chars unless max_chars says more (a cut ends with a note). Refs stay valid while the element exists; after big changes call it again.',
-      inputSchema: schema({ filter: { type: 'string', enum: ['all', 'interactive'] }, max_chars: { type: 'number' } }),
-      run: (a, ctx) => actions.snapshot(tabOf(ctx, a), a.filter === 'interactive' ? 'interactive' : 'all', '', Number(a.max_chars ?? PAGE_CHARS)),
+      description: 'The page as an indented tree: role "name" state [ref], text lines, and every iframe (same- or cross-origin) nested under its iframe line with refs like f1e7. filter "interactive" lists only controls (smaller). Up to 20000 chars unless max_chars says more (a cut ends with a note). Refs stay valid while the element exists; after big changes call it again: a read of the same page you read before returns only what changed (full: true for the whole tree).',
+      inputSchema: schema({ filter: { type: 'string', enum: ['all', 'interactive'] }, max_chars: { type: 'number' }, full: { type: 'boolean', description: 'the whole tree even when you read this page before' } }),
+      run: async (a, ctx) => {
+        const tab = tabOf(ctx, a), mode = a.filter === 'interactive' ? 'interactive' : 'all';
+        const text = await actions.snapshot(tab, mode, '', Number(a.max_chars ?? PAGE_CHARS));
+        const url = tab.wc.isDestroyed() ? '' : tab.wc.getURL(), prev = lastRead.get(tab);
+        lastRead.set(tab, { url, mode, text });
+        const delta = !bool(a.full) && prev && prev.url === url && prev.mode === mode ? snapshotDelta(prev.text, text) : null;
+        return delta ?? text;
+      },
     },
     {
       name: 'find', annotations: RO,
