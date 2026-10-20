@@ -137,7 +137,7 @@ app.whenReady().then(async () => {
   const pulse = createPulse(s, { emitter, window: () => win, userData: app.getPath('userData') }, () => headline.get());
   const unsubscribePulse = s.brain.onSettingChange(change => { if (change.key.startsWith('pulse.') || change.key === 'jobs.fallback') pulse?.start(); });
     const mcpServers = () => { if (!s.mcpServers) throw new Error('Server MCP non disponibili.'); return s.mcpServers; };
-    const connectors = createAppConnectors(app.getPath('userData'), () => s.tasks.refreshFresh());
+    const connectors = createAppConnectors(app.getPath('userData'), () => s.tasks.refreshFresh(), l => s.tasks.onRead(l));
     await connectors.ready;
     const handlers: Handlers = {
       'connectors:list': () => connectors.service.list(),

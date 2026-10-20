@@ -7,12 +7,12 @@ import { safeStorage, shell } from 'electron';
 import { findCli } from '../../main/chats/cli';
 import { safeStorageCipher } from '../../main/engines/secrets';
 import { launchPosixLogin } from '../ai-first/login-terminal';
-import { AppConnectorService } from './app-service';
+import { AppConnectorService, verifiedOf } from './app-service';
 import type { ConnectorSelections } from './app-service';
 import { githubProbe, jiraProbe } from './app-providers';
 import { JiraVault } from './app-vault';
 import { credentialEntry } from './credential-entry';
-import { azureAccount, azureLogin, azureProof } from './app-azure';
+import { azureAccount, azureLogin, azureProof, azureReadProof } from './app-azure';
 import type { TasksState } from '../../shared/contract';
 function gh(): string {
   const exe = findCli('gh');
@@ -31,7 +31,8 @@ async function githubLogin() {
     child.once('error', () => reject(new Error('Accesso GitHub non avviato'))); child.once('spawn', () => { child.unref(); resolve(); });
   });
 }
-export function createAppConnectors(userData: string, refreshTasks: () => Promise<TasksState>) {
+/** onTasksRead: subscribes to the Task page's good reads (TaskService.onRead), each one proof of the Azure DevOps access. */
+export function createAppConnectors(userData: string, refreshTasks: () => Promise<TasksState>, onTasksRead?: (listener: (state: TasksState) => void) => void) {
   const file = path.join(userData, 'connector-projects.json');
   let selections: ConnectorSelections = {};
   const enabled = () => {
@@ -63,9 +64,16 @@ export function createAppConnectors(userData: string, refreshTasks: () => Promis
       const data = JSON.parse(await fs.readFile(file, 'utf8')) as ConnectorSelections;
       for (const id of ['github', 'jira', 'azure'] as const) {
         const entry = data[id];
-        if (entry && typeof entry.identity === 'string' && entry.identity.length <= 600 && Array.isArray(entry.projects) && entry.projects.length <= 100 && entry.projects.every(s => typeof s === 'string' && s.length <= 200)) selections[id] = entry;
+        if (entry && typeof entry.identity === 'string' && entry.identity.length <= 600 && Array.isArray(entry.projects) && entry.projects.length <= 100 && entry.projects.every(s => typeof s === 'string' && s.length <= 200)) {
+          const verified = verifiedOf(entry.verified);
+          selections[id] = { identity: entry.identity, projects: entry.projects, ...(verified ? { verified } : {}) };
+        }
       }
     } catch { /* Missing/invalid selections never authorize connections or network calls. */ }
+    // the verification saved by the last run is shown again (a failed probe later clears it)
+    service.restore();
   })();
+  // a good Task page read is the same proof a probe asks for: the connector shows verified without a click
+  onTasksRead?.(state => { void service.observe('azure', async () => { enabled(); return azureReadProof(azureAccount, state); }); });
   return { service, ready };
 }
