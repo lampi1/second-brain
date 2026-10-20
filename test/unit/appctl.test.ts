@@ -179,6 +179,19 @@ describe('app control tools', () => {
     expect(made).toHaveLength(2);
   });
 
+  it('app_create_chat gives the explicit kind to the role resolution and the chat, so a model-less role meets its table row', async () => {
+    const made: Record<string, unknown>[] = [], asked: NewChat[] = [];
+    const chats = { list: () => [{ id: 'r', harness: 'claude', model: 'claude-opus-5-5', isOrchestrator: true, title: 'Orchestrator' }], create: async (req: Record<string, unknown>) => { made.push(req); return { id: 'n1', title: req.title }; } } as unknown as ChatService;
+    const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true }, engines: { claude: true }, orchestratorChats: { harness: 'claude' } }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
+    const catalog = roleCatalog();
+    const t = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', agents: () => catalog.list(), resolveRole: req => { asked.push(req); return catalog.resolve(req); } }, 'r').find(x => x.name === 'app_create_chat')!;
+    await t.run({ title: 'Ordini · Controllo', prompt: 'guarda il ramo', roleId: 'sentinel', kind: 'review' });
+    expect(asked[0]).toMatchObject({ routeHint: { kind: 'review' } });
+    expect(made[0]).toMatchObject({ routeHint: { kind: 'review' } });
+    await t.run({ title: 'Ordini · Controllo 2', prompt: 'guarda il ramo', roleId: 'sentinel' });
+    expect(asked[1]).not.toHaveProperty('routeHint');
+  });
+
   it('app_create_chat warns when a passed skill needs tools the role lacks (#93); with full permissions it does not', async () => {
     const chats = { list: () => [{ id: 'r', harness: 'claude', model: 'claude-opus-5-5', isOrchestrator: true, title: 'Orchestrator' }], create: async (req: Record<string, unknown>) => ({ id: 'n1', title: req.title }) } as unknown as ChatService;
     const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true }, engines: { claude: true }, orchestratorChats: { harness: 'claude' } }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;

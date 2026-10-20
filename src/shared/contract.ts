@@ -364,6 +364,9 @@ export interface NewChat {
   skills?: string[];
   /** run tags: the product the work is about, up to 40 characters */
   app?: string;
+  /** set by app_create_chat (main): what the routing table matches a model-less role's row on (its explicit kind, app
+   *  code, the caller's area) besides title and prompt, so the row picked is the one the route records (ADR 0091) */
+  routeHint?: { kind?: TaskKind; appCode?: boolean; area?: string };
 }
 
 /** A chat the user starts without choosing everything ("Nuova chat", a new Orchestrator from Ricomincia / Cambia motore /

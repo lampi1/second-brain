@@ -23,7 +23,8 @@ default engine ignored the engine chosen at onboarding (`orchestratorChats.harne
   is always a new session with only its contract. A Judge review is reviewed evidence when it ended verified in its
   own session, on any model. Old `roles.json` / history entries with `independent` are read without it.
 - **Model of a role**: its own model; else, unless the launch asked a tier, the routing table's row that matches the
-  chat (kind and area from its title and prompt) on the role's engine, with that row's effort when the role names none
+  chat (kind and area: the launch's explicit `kind` and app code when `app_create_chat` has them, `NewChat.routeHint`,
+  else from its title and prompt, so the row matches the route the chat records) on the role's engine, with that row's effort when the role names none
   (`agents/role-table.ts`; never exploration, never the API switch; `route.agent.modelFrom: table`); else its tier's
   model; else the engine's default. So a "review" row on `claude-opus-5-5` + `low` sets Sentinel's reviews, and the
   role editor can set model and effort per role.

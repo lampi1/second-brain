@@ -21,6 +21,17 @@ describe('role table model', () => {
     const t = table([row({ kind: 'review', model: 'claude-opus-5-5', effort: 'low' })]);
     expect(roleTableModel(brain(t), 'claude', { title: 'Ordini · Code review', prompt: 'review the diff' })).toEqual({ model: 'claude-opus-5-5', effort: 'low' });
   });
+  it('matches on the launch\'s explicit kind and app code, as the route the chat records does', () => {
+    const t = table([row({ kind: 'review', model: 'claude-opus-5-5', effort: 'low' })]);
+    const req = { title: 'Ordini · Controllo', prompt: 'look at the branch' };
+    expect(roleTableModel(brain(t), 'claude', req)).toBeNull();
+    expect(roleTableModel(brain(t), 'claude', { ...req, routeHint: { kind: 'review' } })).toEqual({ model: 'claude-opus-5-5', effort: 'low' });
+    const seen: RouteRequest[] = [];
+    const app = table([row({ kind: '*', area: 'App', model: 'claude-opus-5-5', effort: 'high' })]);
+    expect(roleTableModel(brain(app, seen), 'claude', req)).toBeNull();
+    expect(roleTableModel(brain(app, seen), 'claude', { ...req, routeHint: { appCode: true } })).toEqual({ model: 'claude-opus-5-5', effort: 'high' });
+    expect(seen.at(-1)).toMatchObject({ appCode: true });
+  });
   it('never explores and never moves to the API engine', () => {
     const seen: RouteRequest[] = [];
     const t = table([row({ kind: '*', effort: 'low', onApi: true })]);
