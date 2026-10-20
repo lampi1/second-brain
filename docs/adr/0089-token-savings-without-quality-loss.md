@@ -1,4 +1,4 @@
-# ADR 0088 · Token savings that keep the same content
+# ADR 0089 · Token savings that keep the same content
 
 Date: 2026-10-20 · Status: accepted (owner, 2026-10-20: proposals 1, 2, 4, 5 of the token plan, «ottimizza
 l'ottimizzabile senza perdere qualità», no new permission prompts) · Builds on: ADR 0031, 0083, 0087

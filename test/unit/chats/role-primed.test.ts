@@ -1,4 +1,4 @@
-// The role text once per context (ADR 0088): a chat's first message carries its role frame; later messages, and the
+// The role text once per context (ADR 0089): a chat's first message carries its role frame; later messages, and the
 // first one after a restart that resumes the same session, do not; a compaction or a new session brings it back.
 import { afterEach, describe, expect, it } from 'vitest';
 import crypto from 'node:crypto';
