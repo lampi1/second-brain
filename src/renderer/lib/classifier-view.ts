@@ -23,6 +23,8 @@ export interface CardView {
   decisions: number;
   hit: ClassifierStat;
   success: ClassifierStat;
+  /** cases with only an unverified outcome (the brain's proxy), shown apart from success (ADR 0095) */
+  unverified?: ClassifierStat;
   avgCostUsd: number | null;
   threshold: number | null;
   /** weekly series (null: the classifier reports none, e.g. the estimates loop) */
@@ -62,7 +64,7 @@ type JobKindKey = (typeof JOB_KINDS)[number];
 /** Main's card as the page draws it. */
 export function fromMain(c: ClassifierCard): CardView {
   const known = c.id === 'jobkind' ? c.hit.n : c.success.n;
-  return { id: c.id, decisions: c.decisions, hit: c.hit, success: c.success, avgCostUsd: c.avgCostUsd, threshold: c.threshold, weeks: c.weeks, spark: [], slices: c.slices, compare: c.compare, lastAt: c.lastAt, progress: { n: known, need: CLASSIFIER_NEED } };
+  return { id: c.id, decisions: c.decisions, hit: c.hit, success: c.success, ...(c.unverified ? { unverified: c.unverified } : {}), avgCostUsd: c.avgCostUsd, threshold: c.threshold, weeks: c.weeks, spark: [], slices: c.slices, compare: c.compare, lastAt: c.lastAt, progress: { n: known, need: CLASSIFIER_NEED } };
 }
 
 /** The estimates loop's policy as a card: decisions = estimates recorded, hit = how often the real value fell inside

@@ -241,7 +241,8 @@ learned for its estimates, model choice and alerts), Memoria (knowledge, what ha
 file rendered and opening in the viewer, plus its numbers: lines per agent, weekly growth, the most recalled memories,
 stale files, recurring errors with their trend, skills useful or never used, and curious facts, each with a "?" that
 says how it is computed),
-Classificatori (one card per classifier: what it decides and why, its runs, verified success, cost and weekly trend,
+Classificatori (one card per classifier: what it decides and why, its runs, verified success (the brain ledger's automatic
+"proxy" outcomes counted apart as unverified), cost and weekly trend,
 how far it has learned, a curious fact from the data, and a detail view with its history; the task estimator's card
 shows week by week how often its estimate held) and Mappa (agent → skills → rules → memory, the
 notes map that fills the panel at any size, and a 3D map that lights up the files, tools and agents at work).
