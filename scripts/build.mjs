@@ -15,6 +15,9 @@ const common = { bundle: true, platform: 'node', target: 'node22', sourcemap: de
 await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/rules/runtime.ts')], outfile: path.join(root, 'out/rules/runtime.mjs'), format: 'esm' });
 await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/rules/cli.ts')], outfile: path.join(root, 'out/rules/cli.mjs'), format: 'esm' });
 fs.cpSync(path.join(root, 'src/main/rules/hooks'), path.join(root, 'out/rules/hooks'), { recursive: true });
+// the Task page's own DevOps reader for brains without ops/tools/devops-me.mjs (tasks/service.ts appScript, issue #95)
+fs.mkdirSync(path.join(root, 'out/tasks'), { recursive: true });
+fs.copyFileSync(path.join(root, 'src/main/tasks/devops-me.mjs'), path.join(root, 'out/tasks/devops-me.mjs'));
 await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/index.ts')], outfile: path.join(root, 'out/main/index.js'), format: 'esm', external: ['electron'],
   banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" } });
 // the hybrid search's worker thread (src/main/search/hybrid/worker.ts), next to the main bundle

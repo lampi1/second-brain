@@ -78,8 +78,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
     diagram: { kind: 'cycle', steps: [b('Compito', 'Task'), b('Orchestrator', 'Orchestrator'), b('Ruolo e skill', 'Role and skills'), b('Risultato', 'Result'), b('Miglioramento', 'Improvement')] },
     tech: [
       // src/shared/agents.ts AgentProfile
-      tech(DATA, 'AgentProfile { id, name, purpose, instructions, engine, model | null, effort?, tools, permissionCeiling, tier, tierMax, independent, launches, skills, version, activeVersion, trial?, userLocked }.',
-        'AgentProfile { id, name, purpose, instructions, engine, model | null, effort?, tools, permissionCeiling, tier, tierMax, independent, launches, skills, version, activeVersion, trial?, userLocked }.'),
+      tech(DATA, 'AgentProfile { id, name, purpose, instructions, engine, model | null, effort?, tools, permissionCeiling, tier, tierMax, launches, skills, version, activeVersion, trial?, userLocked }.',
+        'AgentProfile { id, name, purpose, instructions, engine, model | null, effort?, tools, permissionCeiling, tier, tierMax, launches, skills, version, activeVersion, trial?, userLocked }.'),
       // src/main/agents/catalog.ts (roles.json), src/main/agents/versions.ts (role-history.json)
       tech(FILES, 'userData/roles.json (i nove ruoli e Pulse) e role-history.json (le versioni di ogni ruolo).',
         'userData/roles.json (the nine roles and Pulse) and role-history.json (each role’s versions).'),
@@ -153,9 +153,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/shared/agents.ts BEHAVIOUR_FIELDS; src/main/agents/versions.ts
       b('Ogni cambio di comportamento è una versione nuova: la pagina ne mostra le ultime e ne riattiva una vecchia con un clic.',
         'Every behaviour change is a new version: the page shows the latest ones and brings an older one back with a click.'),
-      // src/main/agents/model-tier.ts tierModel, independentModel
-      b('Il livello (leggero, medio, top) diventa un modello per ogni motore: la tua scelta in Impostazioni, altrimenti il registro dei modelli del brain. Sentinel e Judge prendono un modello diverso da quello del genitore quando c’è.',
-        'The tier (light, mid, top) becomes a model per engine: your choice in Settings, else the brain’s model registry. Sentinel and Judge take a model other than their parent’s when there is one.'),
+      // src/main/agents/model-tier.ts tierModel; src/main/agents/role-table.ts; src/main/agents/catalog.ts resolve()
+      b('Un ruolo senza un modello suo prende quello della riga di Instradamento modelli che corrisponde al lavoro sul suo motore (e il suo sforzo, se il ruolo non ne indica uno); altrimenti il livello (leggero, medio, top) diventa un modello per ogni motore: la tua scelta in Impostazioni, altrimenti il registro dei modelli del brain. Sentinel e Judge sono indipendenti perché partono in una sessione nuova, senza il ragionamento del genitore, non perché cambiano modello.',
+        'A role without its own model takes the model of the Model routing row that matches the work on its engine (and its effort, when the role names none); else the tier (light, mid, top) becomes a model per engine: your choice in Settings, else the brain’s model registry. Sentinel and Judge are independent because they start in a new session without the parent’s reasoning, not because they switch model.'),
       // src/main/agents/tool-policy.ts browserAccess, readOnlyCommand; src/main/chats/manager.ts refusedCommand; src/main/agents/skill-needs.ts
       b('Strumenti a classi: un ruolo limitato ai comandi di sola lettura vede rifiutato in chat un comando che scrive (se l’ha delegato una chat che può eseguirlo, decidi tu); uno che legge, o uno script node elencato in read-only-tools.md nel cervello, ti arriva come permesso senza «sempre». Se una skill passata a un ruolo usa strumenti che il ruolo non ha, l’Orchestrator lo sa subito (app_create_chat, agent_delegate, agent_catalog).',
         'Tools come in classes: a role limited to read-only commands has a writing command refused in the chat (when a chat that may run it delegated it, you decide); one that reads, or a node script listed in read-only-tools.md in the brain, reaches you as a permission without "always". When a skill passed to a role uses tools the role lacks, the Orchestrator knows at once (app_create_chat, agent_delegate, agent_catalog).'),
@@ -173,7 +173,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'Instructions ≤ 8000 chars; at most 40 default skills; a role never launches itself or the Orchestrator.'),
       tech(WHERE, 'Pagina Agenti (AgentCatalogPage, la pagina del ruolo è AgentStudio); catalogo nel processo main (AgentCatalogService).', 'Agents page (AgentCatalogPage, the role page is AgentStudio); catalog in the main process (AgentCatalogService).'),
     ],
-    sources: ['src/shared/roles.ts', 'src/shared/agents.ts', 'src/main/agents/catalog.ts', 'src/main/agents/versions.ts', 'src/main/agents/model-tier.ts', 'src/main/agents/tool-policy.ts', 'src/main/agents/read-tools.ts', 'src/main/agents/skill-needs.ts', 'src/renderer/components/AgentStudio.tsx', 'src/renderer/components/RolePermissions.tsx', 'src/renderer/components/AgentAvatar.tsx', 'src/renderer/lib/character-art.ts'],
+    sources: ['src/shared/roles.ts', 'src/shared/agents.ts', 'src/main/agents/catalog.ts', 'src/main/agents/versions.ts', 'src/main/agents/model-tier.ts', 'src/main/agents/role-table.ts', 'src/main/agents/tool-policy.ts', 'src/main/agents/read-tools.ts', 'src/main/agents/skill-needs.ts', 'src/renderer/components/AgentStudio.tsx', 'src/renderer/components/RolePermissions.tsx', 'src/renderer/components/AgentAvatar.tsx', 'src/renderer/lib/character-art.ts'],
   },
   {
     id: 'skills',
@@ -251,8 +251,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'Like an editor-in-chief: does not write every piece, picks who writes it, knows where each one stands and reads the finished piece.'),
     diagram: { kind: 'flow', steps: [b('Tua richiesta', 'Your request'), b('Orchestrator', 'Orchestrator'), b('Ruolo e skill', 'Role and skills'), b('Chat di lavoro', 'Work chat'), b('agent_report', 'agent_report')] },
     tech: [
-      tech(DATA, 'Risposta di app_create_chat: { chatId, title, harness, cwd, model, effort, route { source: agent, kind, area, reason, agent { id, version, chosenBy, tier?, modelFrom } } }.',
-        'app_create_chat result: { chatId, title, harness, cwd, model, effort, route { source: agent, kind, area, reason, agent { id, version, chosenBy, tier?, modelFrom } } }.'),
+      tech(DATA, 'Risposta di app_create_chat: { chatId, title, harness, cwd, model, effort, route { source: agent, kind, area, reason, agent { id, version, chosenBy, tier?, modelFrom: role | tier | table | engine } } }.',
+        'app_create_chat result: { chatId, title, harness, cwd, model, effort, route { source: agent, kind, area, reason, agent { id, version, chosenBy, tier?, modelFrom: role | tier | table | engine } } }.'),
       tech(LIMITS, 'Fino a 16 skill per chat delegata; un figlio non ha mai strumenti o tetto sopra quelli di chi lo avvia.', 'Up to 16 skills per delegated chat; a child never has tools or a ceiling above its launcher’s.'),
       tech(WHERE, 'MCP dell’app su 127.0.0.1 (tool app_*, agent_catalog, skills_suggest, agent_metrics), ognuno con il suo endpoint e token.',
         'The app’s MCP on 127.0.0.1 (app_*, agent_catalog, skills_suggest, agent_metrics tools), each with its own endpoint and token.'),
@@ -284,8 +284,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Finisce come completed, closed (chat chiusa o archiviata) o stale (72 ore senza turni); scrivere di nuovo a mano la riapre.',
         'It ends as completed, closed (chat closed or archived) or stale (72 hours without turns); writing to it again by hand reopens it.'),
       // src/main/agents/run-feedback.ts recordFeedback
-      b('Un giudizio vale come prova solo se viene da una revisione di Judge finita, verificata, su un modello diverso da quello della run; il parere di un genitore resta un parere.',
-        'A verdict counts as evidence only if it comes from an ended Judge review, verified, on a model other than the run’s; a parent’s opinion stays an opinion.'),
+      b('Un giudizio vale come prova solo se viene da una revisione di Judge finita e verificata, nella sua sessione (su qualunque modello: conta che non abbia visto il ragionamento della run); il parere di un genitore resta un parere.',
+        'A verdict counts as evidence only if it comes from an ended, verified Judge review in its own session (on any model: what counts is that it never saw the run’s reasoning); a parent’s opinion stays an opinion.'),
       // src/main/run/outcome.ts (run:outcome IPC); src/renderer/components/RunSurface.tsx
       b('Quando la run ha finito, nella striscia espansa dici tu com’è andata (riuscita, in parte, non riuscita): il tuo esito vince sempre.',
         'Once the run has finished, in the expanded strip you say how it went (success, partial, failed): your verdict always wins.'),
@@ -635,8 +635,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'Tasks shows what waits for you on Azure DevOps; Done is the log of what was done, newest first.'),
     points: [
       // src/renderer/brain/pages/Task.tsx, src/main/tasks/service.ts
-      b('«Task» legge con lo script del cervello devops-me.mjs le tue PR, le review, i work item e le menzioni: sola lettura, zero token.',
-        '"Tasks" reads your PRs, reviews, work items and mentions with the brain’s script devops-me.mjs: read-only, zero tokens.'),
+      b('«Task» legge con il lettore devops-me.mjs le tue PR, le review, i work item e le menzioni: quello incluso nell’app, o quello del cervello se c’è; sola lettura, zero token.',
+        '"Tasks" reads your PRs, reviews, work items and mentions with the devops-me.mjs reader: the one shipped with the app, or the brain’s own when it has one; read-only, zero tokens.'),
       b('La lettura parte con «Aggiorna ora» o da sola, ogni 15 minuti fino a 2 ore, se accendi la lettura automatica; una menzione ti avvisa con un suono che puoi spegnere.',
         'The read starts with "Refresh now" or by itself, every 15 minutes up to 2 hours, when the automatic read is on; a mention alerts you with a sound you can turn off.'),
       b('Ogni record ha «Discuti»: l’Orchestrator riceve una bozza con titolo, link, stato e cartella; se serve lavoro, è lui ad aprire e istruire la chat.',
@@ -811,8 +811,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Se la riga indica un motore che non si può avviare, valgono i tuoi predefiniti «Chat aperte dall’Orchestrator».',
         'If the row names an engine that cannot start, your "Chats opened by the Orchestrator" defaults apply.'),
       // src/main/brain/routing.ts routeAgent (ADR 0083)
-      b('Un ruolo non viene mai scavalcato: la sua chat ha il modello del suo livello e la rotta lo registra come «agent». Senza ruolo, un modello diverso dalla tabella richiede un motivo; lo sforzo max mai dalla tabella.',
-        'A role is never overridden: its chat has its tier’s model and the route records it as "agent". Without a role, a model other than the table’s needs a reason; max effort never from the table.'),
+      b('Un ruolo non viene mai scavalcato: la sua chat ha il suo modello; se il ruolo non ne ha uno, quello della riga della tabella sul suo motore (e il suo sforzo, se il ruolo non ne indica uno), altrimenti il modello del suo livello. La rotta lo registra come «agent». Senza ruolo, un modello diverso dalla tabella richiede un motivo; lo sforzo max mai dalla tabella.',
+        'A role is never overridden: its chat has its own model; when the role has none, the table row’s model on its engine (and its effort, when the role names none), else its tier’s model. The route records it as "agent". Without a role, a model other than the table’s needs a reason; max effort never from the table.'),
       // src/main/brain/routing.ts knownOutcome, kindStats, freshReason; src/main/wiring.ts routingVerdict
       b('Il tuo esito su una run di un ruolo (o quello di una revisione di Judge) entra nel registro come esito noto; il motivo della riga mostra i conteggi di oggi, per esempio «16 chat, 10 con esito, 70% riuscite».',
         'Your verdict on a role run (or a Judge review’s) enters the ledger as a known outcome; the row’s reason shows today’s counts, for example "16 chats, 10 with an outcome, 70% successful".'),

@@ -63,6 +63,9 @@ docs/screenshots/brain-scripts.webp binary-media sha256:58b9acb3edf67057daed5066
 docs/screenshots/agent-avatars/dark.png binary-media sha256:179f08ef10ed1ef6940e5b4b4c73d55177f7f73e72362ab75f7d65fa769872f6
 docs/screenshots/agent-avatars/light.png binary-media sha256:a9d836f58877f6e6017a4f61b1ee8ab1ddd4fd0b40648338b06ea12174537386
 docs/screenshots/connectors.webp binary-media sha256:188b7f60e0cbb7d2b4d28dafb7b8ddaf74670d615d7e8bcb6ca459034317021b
+# The Task page's own DevOps reader (ADR 0093): the public Azure DevOps profile/accounts API host (app.vssps), the
+# documented endpoint that lists the signed-in user's organizations; no customer host (checked 2026-10-20).
+src/main/tasks/devops-me.mjs internal-host sha256:74cb144e6b9dc8708dd89647abd97bd9ec0f4957c059a5b42ade88902395fcec
 # README screenshots regenerated 2026-10-20 (npm run shots on main c4ce2b0 + the Mappa path fix), looked at before pinning
 docs/screenshots/grindhouse.webp binary-media sha256:8b242945b3310102a98654a44c69acea20d030925dae9091376eb4cefb001611
 docs/screenshots/agents.webp binary-media sha256:0faebb8e780b19e5fc49a3976bc5578c9aaaf701467a7acaff1a541799bd992a

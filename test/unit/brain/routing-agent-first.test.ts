@@ -38,6 +38,13 @@ describe('role first', () => {
     expect(r.route.reason).toMatch(/avviato dal suo genitore · livello top/);
     expect(routeChat({ ...base, agent: agent({ model: null, effort: null }) }, t, REG, null)).toMatchObject({ harness: 'claude', model: null, route: { agent: { modelFrom: 'engine' } } });
   });
+  it('records a model the catalog took from the table row (issue #99)', () => {
+    const r = routeChat({ ...base, agent: agent({ model: 'claude-opus-5-5', effort: 'low', tier: 'top', modelFrom: 'table' }) }, t, REG, null);
+    expect(r).toMatchObject({ model: 'claude-opus-5-5', effort: 'low', route: { source: 'agent', agent: { modelFrom: 'table' } } });
+    if ('error' in r) throw new Error(r.error);
+    expect(r.route.reason).toContain('modello dalla tabella');
+    expect(validRoute(r.route)?.agent?.modelFrom).toBe('table');
+  });
 
   it('refuses a role whose model belongs to another engine', () => {
     expect(routeChat({ ...base, agent: agent({ harness: 'cursor', model: 'claude-opus-5-5', effort: null }) }, t, REG, null)).toHaveProperty('error');

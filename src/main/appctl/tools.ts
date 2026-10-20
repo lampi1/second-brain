@@ -427,11 +427,13 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const orchestrator = caller();
         const from = orchestrator?.harness ?? 'claude';
         const roleId = a.roleId, tier = a.tier as ModelTier | undefined;
-        const resolved = d.resolveRole({ harness: from, cwd, roleId, ...(tier ? { tier } : {}), ...(links.roleVersion ? { roleVersion: links.roleVersion } : {}),
-          ...(orchestrator ? { independentOf: { engine: orchestrator.harness, model: orchestrator.model ?? null } } : {}) });
+        // the explicit kind and the app code choose the table's row for a model-less role, as they choose the route below
+        const routeHint = { ...(kind ? { kind: kind as TaskKind } : {}), ...(app ? { appCode: true } : {}) };
+        const hint = Object.keys(routeHint).length ? { routeHint } : {};
+        const resolved = d.resolveRole({ harness: from, cwd, roleId, title, prompt, ...hint, ...(tier ? { tier } : {}), ...(links.roleVersion ? { roleVersion: links.roleVersion } : {}) });
         const profile = d.agents().profiles.find(p => p.id === roleId)!;
         const agent = { id: roleId, name: profile.name, version: profile.activeVersion, harness: resolved.request.harness, model: resolved.request.model ?? null, effort: resolved.request.effort ?? null,
-          chosenBy: 'orchestrator' as const, ...(resolved.tier ? { tier: resolved.tier } : {}), stats: d.agentStats?.(roleId, profile.activeVersion) ?? null };
+          chosenBy: 'orchestrator' as const, ...(resolved.tier ? { tier: resolved.tier } : {}), ...(resolved.modelFrom ? { modelFrom: resolved.modelFrom } : {}), stats: d.agentStats?.(roleId, profile.activeVersion) ?? null };
         const routed = d.brain.route({
           api: null, agent, canRun: h => !openRefusal(s, from, h),
           title, prompt, ...(kind ? { kind: kind as TaskKind } : {}), appCode: app, ask: {},
@@ -441,8 +443,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const { harness, model, effort, route } = routed;
         const refused = openRefusal(s, from, harness);
         if (refused) throw new Error(`bloccato: ${refused}`);
-        const chat = await d.chats.create({ harness, cwd, title, prompt: `${AGENT_LABEL}\n\n${prompt}`, ...links, orchestrator: false, roleId, ...(tier ? { tier } : {}), ...(skills.length ? { skills } : {}),
-          ...(orchestrator ? { independentOf: { engine: orchestrator.harness, model: orchestrator.model ?? null } } : {}), ...(model ? { model } : {}), ...(effort ? { effort } : {}), route }, 'agent', undefined, undefined,
+        const chat = await d.chats.create({ harness, cwd, title, prompt: `${AGENT_LABEL}\n\n${prompt}`, ...links, orchestrator: false, roleId, ...(tier ? { tier } : {}), ...(skills.length ? { skills } : {}), ...hint,
+          ...(model ? { model } : {}), ...(effort ? { effort } : {}), route }, 'agent', undefined, undefined,
           // the plain /mcp/app mount is open to any local process: its chats run no wider than the Orchestrator
           { boundByOrchestrator: !authed() });
         log.info('appctl', 'agent created a chat', { chat: chat.id, data: { harness, title, model: model || null, effort, route: route.source, kind: route.kind, area: route.area, version: route.version, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}) } });

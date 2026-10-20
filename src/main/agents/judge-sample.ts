@@ -1,9 +1,9 @@
 // The Judge's sampled reviews (ADR 0083, the app owns the improvement loop): a few times a day the app picks finished
 // root role runs nobody judged yet (no verdict of the user or of a Judge; a delegated child's run is never sampled:
 // its content belongs to its parent, which judged the result when it read it), starts a
-// Judge chat on each (a root chat linked to the run with reviewOf, on another model when the catalog has one), and
-// when that review ends turns its verdict into the run's feedback (run-feedback.ts recordFeedback: it counts as
-// reviewed evidence only when the Judge verified it on a model other than the run's). At most
+// Judge chat on each (a root chat linked to the run with reviewOf: a new session that never saw the run's reasoning, on
+// the Judge's own model, ADR 0091), and when that review ends turns its verdict into the run's feedback (run-feedback.ts
+// recordFeedback: it counts as reviewed evidence only when the Judge verified it). At most
 // Settings.delegation.judgeDaily a day (0 = off). It spends tokens, so wiring.ts starts it only in the user's stable
 // app outside tests (or with SB_JUDGE_SAMPLE=1). Pure picking (pickSamples, reviewPrompt) is unit-tested in
 // test/unit/agents/judge-sample.test.ts.
@@ -108,7 +108,7 @@ export class JudgeSampler {
         if (!chat || chat.parentId) continue;
         try {
           const judge = await this.d.create({ harness: engine, cwd: chat.cwd, title: `Revisione · ${chat.title}`.slice(0, 80), roleId: 'judge', reviewOf: run.runId,
-            goal: `Independent verdict on «${chat.title}»`, independentOf: { engine: chat.harness, model: run.model ?? null }, prompt: reviewPrompt(run, chat) });
+            goal: `Independent verdict on «${chat.title}»`, prompt: reviewPrompt(run, chat) });
           this.state.reviews.push({ runId: run.runId, chatId: judge.id, at: now, state: 'running' });
           this.state.started++; started++;
         } catch (e) {

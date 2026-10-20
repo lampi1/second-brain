@@ -1,7 +1,7 @@
 // App-owned connector UI: account evidence is distinct from agent permissions and native harness setup.
 export const connectorsIt = {
  'connector.azureHint':'Usa il tuo accesso Azure CLI e la lettura DevOps del brain.',
- 'connector.azureDetails':'Serve Azure CLI (az) e lo script ops/tools/devops-me.mjs nel brain. La verifica mostra i progetti dei tuoi work item e pull request, non tutti i progetti dell’organizzazione. Le credenziali restano in Azure CLI.',
+ 'connector.azureDetails':'Serve Azure CLI (az); il lettore è incluso nell’app (uno script ops/tools/devops-me.mjs nel brain, se c’è, ha la precedenza). Ogni lettura riuscita della pagina Task conta come verifica. La verifica mostra i progetti dei tuoi work item e pull request, non tutti i progetti dell’organizzazione. Le credenziali restano in Azure CLI.',
  'connector.group':'Connettori',
  'connector.title':'Collega i tuoi strumenti','connector.intro':'Account, repository e progetti in un unico posto. Scegli uno strumento, accedi e verifica il collegamento.',
  'connector.scope':'Il collegamento vale per questa app. Gli accessi dei singoli agenti restano separati.',

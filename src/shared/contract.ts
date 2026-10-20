@@ -347,8 +347,6 @@ export interface NewChat {
   delegation?: ChatDelegation;
   /** the model tier a delegation asks for (at most the role's tierMax); absent = the role's own */
   tier?: ModelTier;
-  /** an independent role picks a model other than this one (its parent's) */
-  independentOf?: { engine: string; model: string | null };
   harness: Harness;
   cwd: string;
   prompt?: string;
@@ -368,6 +366,9 @@ export interface NewChat {
   skills?: string[];
   /** run tags: the product the work is about, up to 40 characters */
   app?: string;
+  /** set by app_create_chat (main): what the routing table matches a model-less role's row on (its explicit kind, app
+   *  code, the caller's area) besides title and prompt, so the row picked is the one the route records (ADR 0091) */
+  routeHint?: { kind?: TaskKind; appCode?: boolean; area?: string };
 }
 
 /** A chat the user starts without choosing everything ("Nuova chat", a new Orchestrator from Ricomincia / Cambia motore /
@@ -928,7 +929,7 @@ export interface RouteDecision {
 }
 /** The role a routed chat runs: who launched it, its model tier, and where its model came from (the role's own model,
  *  its tier on the engine, or the engine's default). */
-export interface RouteAgent { id: string; version: number; chosenBy: 'orchestrator' | 'parent' | 'app'; tier?: ModelTier; modelFrom?: 'role' | 'tier' | 'engine' }
+export interface RouteAgent { id: string; version: number; chosenBy: 'orchestrator' | 'parent' | 'app'; tier?: ModelTier; modelFrom?: 'role' | 'tier' | 'table' | 'engine' }
 /** routing:preview → the engine, model and effort the table (or the user's pick, or the defaults) gives a new chat, and
  *  why; error = what chat:createRouted would refuse (Italian). */
 export type RoutePreview = { harness: Harness; model: string | null; effort: Effort | null; route: RouteDecision } | { error: string };

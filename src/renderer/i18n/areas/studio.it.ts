@@ -22,8 +22,6 @@ export const studioIt = {
   'studio.tierMax': 'Livello massimo in delega',
   'studio.tierMaxHint': 'Chi delega può chiedere un livello più alto, fino a questo.',
   'studio.tierInvalid': 'Il livello non può superare il livello massimo.',
-  'studio.independent': 'Su un modello diverso da chi lo avvia',
-  'studio.independentHint': 'Una verifica vale di più se la fa un altro modello.',
   'studio.tools': 'Strumenti',
   'studio.tool.read': 'Lettura', 'studio.tool.edit': 'Modifica file', 'studio.tool.shell': 'Comandi', 'studio.tool.shell-read': 'Comandi di sola lettura',
   'studio.tool.web': 'Web', 'studio.tool.browser': 'Browser', 'studio.tool.browser-read': 'Browser in lettura', 'studio.tool.mail-draft': 'Bozze di posta',

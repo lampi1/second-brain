@@ -2,7 +2,7 @@
 import type { connectorsIt } from './connectors.it';
 export const connectorsEn: typeof connectorsIt = {
  'connector.azureHint':'Use your Azure CLI sign-in and the brain’s DevOps reader.',
- 'connector.azureDetails':'Requires Azure CLI (az) and ops/tools/devops-me.mjs in the brain. Verification shows projects from your work items and pull requests, not every organization project. Credentials stay in Azure CLI.',
+ 'connector.azureDetails':'Requires Azure CLI (az); the reader ships with the app (an ops/tools/devops-me.mjs in the brain, if present, takes precedence). Every successful Task page read counts as a verification. Verification shows projects from your work items and pull requests, not every organization project. Credentials stay in Azure CLI.',
  'connector.group':'Connectors',
  'connector.title':'Connect your tools','connector.intro':'Accounts, repositories and projects in one place. Choose a tool, sign in and verify the connection.',
  'connector.scope':'This connection belongs to this app. Individual agents keep separate access.',

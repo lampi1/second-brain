@@ -65,6 +65,9 @@ const harnessAuto = (h: string, reg: ModelRegistry): boolean => reg.harnesses?.[
 export const isFable = (m: Pick<RegistryModel, 'id'> | null | undefined): boolean => !!m && /fable/i.test(m.id);
 /** does the engine take an effort (Claude's thinking budget)? */
 const takesEffort = (h: Harness): boolean => !!engineOf(h)?.caps.effort;
+/** The user's default effort is the Claude one (orchestratorChats.claudeEffort): another engine that takes an effort
+ *  (Cursor, through its thought_level) keeps its own setting (cursorReasoning) unless a row or the chat names one. */
+const defaultEffort = (h: Harness, defaults: { effort: Effort | null }): Effort | null => h === 'claude' ? defaults.effort : null;
 const looksClaude = (m: string | null): boolean => /\b(claude|opus|sonnet|haiku|fable|mythos)\b/i.test(String(m ?? '').replace(/[-_.]/g, ' '));
 
 // ── task kind ───────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -214,13 +217,13 @@ export function resolve(table: Pick<RoutingTable, 'routes'> | null, item: { kind
   const defaultHarness = fallback ?? defaults.harness;
   const base = usable
     ? { harness: usable.harness as Harness, model: usable.model as string | null, effort: usable.effort ?? null }
-    : { harness: defaultHarness, model: defaults.models[defaultHarness] || null, effort: takesEffort(defaultHarness) ? defaults.effort : null };
+    : { harness: defaultHarness, model: defaults.models[defaultHarness] || null, effort: defaultEffort(defaultHarness, defaults) };
   const harness = ask.harness ?? base.harness;
   // a model belongs to its harness: switching harness takes that harness's default model, never the other one's
   const sameEngine = harness === base.harness;
   const model = ask.model !== undefined ? ask.model : (sameEngine ? base.model : defaults.models[harness] || null);
   const m = modelRow(model, reg);
-  let effort = ask.effort !== undefined ? ask.effort : (!takesEffort(harness) ? null : sameEngine ? base.effort : defaults.effort);
+  let effort = ask.effort !== undefined ? ask.effort : (!takesEffort(harness) ? null : sameEngine ? base.effort : defaultEffort(harness, defaults));
   // an effort nobody named that the chosen model lacks is dropped (the CLI's default), never an error
   if (!ask.effort && effort && m && !(m.efforts ?? []).includes(effort)) effort = null;
   if (model && m && m.harness !== harness) return { error: `${m.id} gira solo su ${m.harness}, non su ${harness}` };
@@ -305,6 +308,8 @@ export interface RouteRequest {
 export interface AgentChoice {
   id: string; name: string; version: number; harness: Harness; model: string | null; effort: Effort | null;
   chosenBy: RouteAgent['chosenBy']; tier?: RouteAgent['tier']; stats?: string | null;
+  /** 'table' = the catalog took the model from the table's row (a role with no model of its own; ADR 0091) */
+  modelFrom?: 'table';
 }
 /** One task kind in the ledger: app chats predicted, how many have a known outcome, how many of those succeeded. */
 export interface KindStats { chats: number; known: number; ok: number }
@@ -340,12 +345,12 @@ export function routeAgent(req: RouteRequest & { agent: AgentChoice }, reg: Mode
   const area = req.appCode ? 'App' : req.area?.trim().slice(0, 40) || areaOf(req.title, rules?.kinds);
   const model = a.model;
   let effort = a.effort;
-  const from: RouteAgent['modelFrom'] = !model ? 'engine' : a.tier ? 'tier' : 'role';
+  const from: RouteAgent['modelFrom'] = !model ? 'engine' : a.modelFrom === 'table' ? 'table' : a.tier ? 'tier' : 'role';
   const m = modelRow(model, reg);
   if (model && m && m.harness !== a.harness) return { error: `${m.id} gira solo su ${m.harness}, non su ${a.harness}` };
   if (a.harness !== 'claude' && looksClaude(model)) return { error: 'un modello Claude gira solo sull’harness claude' };
   if (effort && !takesEffort(a.harness)) effort = null;
-  const reason = [`ruolo ${a.name} v${a.version}`, CHOSEN_BY[a.chosenBy], a.tier ? `livello ${a.tier}` : null, a.stats ?? null].filter(Boolean).join(' · ').slice(0, 300);
+  const reason = [`ruolo ${a.name} v${a.version}`, CHOSEN_BY[a.chosenBy], from === 'table' ? 'modello dalla tabella' : a.tier ? `livello ${a.tier}` : null, a.stats ?? null].filter(Boolean).join(' · ').slice(0, 300);
   return { harness: a.harness, model, effort, route: { policy: 'routing', version: null, source: 'agent', reason, kind, area, at: now,
     agent: { id: a.id, version: a.version, chosenBy: a.chosenBy, modelFrom: from, ...(a.tier ? { tier: a.tier } : {}) } } };
 }
@@ -392,7 +397,7 @@ function validAgent(v: unknown): RouteAgent | null {
   if (!a || typeof a !== 'object' || typeof a.id !== 'string' || !/^[a-z][a-z0-9_-]{0,79}$/.test(a.id) || !Number.isSafeInteger(a.version) || (a.version as number) < 0
     || !['orchestrator', 'parent', 'app'].includes(String(a.chosenBy))) return null;
   return { id: a.id, version: a.version as number, chosenBy: a.chosenBy as RouteAgent['chosenBy'], ...((MODEL_TIERS as readonly unknown[]).includes(a.tier) ? { tier: a.tier } : {}),
-    ...(a.modelFrom === 'role' || a.modelFrom === 'tier' || a.modelFrom === 'engine' ? { modelFrom: a.modelFrom } : {}) };
+    ...(a.modelFrom === 'role' || a.modelFrom === 'tier' || a.modelFrom === 'table' || a.modelFrom === 'engine' ? { modelFrom: a.modelFrom } : {}) };
 }
 
 // ── the shared ledger (ops/state/improve/outcomes.jsonl) ────────────────────────────────────────────────────────────

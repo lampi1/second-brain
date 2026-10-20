@@ -11,7 +11,7 @@ import { AgentApprovalsView } from '../../src/renderer/components/AgentApprovalC
 
 const role = (id: string, extra: Partial<AgentProfile> = {}): AgentProfile => ({
   id, name: id[0]!.toUpperCase() + id.slice(1), purpose: 'Scopo', instructions: 'i', engine: 'claude', model: null, avatar: { kind: 'character', value: 'artisan' },
-  tools: { allow: ['read'] }, permissionCeiling: 'default', tier: 'mid', tierMax: 'top', independent: false, launches: [], skills: [], scope: 'role',
+  tools: { allow: ['read'] }, permissionCeiling: 'default', tier: 'mid', tierMax: 'top', launches: [], skills: [], scope: 'role',
   version: 2, activeVersion: 2, createdAt: 1, updatedAt: 100, lastEditedBy: 'default', userLocked: false, ...extra,
 } as AgentProfile);
 const metric = (value: number | null, n = 3) => ({ value, n, coverage: n ? 0.75 : null });

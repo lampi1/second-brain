@@ -11,10 +11,14 @@
 // (repoDirs: "Discuti" tells the Orchestrator the folder of a PR's work). State and read marks are kept in
 // userData/tasks.json so the page opens with the last read. Then, when the brain has it, ops/tools/qa-status.mjs
 // --mine --json: the "Test e QA" section (my PRs' test plans); a failure there keeps the last QA and never fails the read. Read-only by construction: the app never writes to DevOps.
+// A brain without its own devops-me.mjs (every fresh brain, ADR 0072) is read by the app's copy, out/tasks/devops-me.mjs
+// (source: devops-me.mjs beside this file), so the page works without any file in the brain (issue #95); onRead tells
+// the Azure DevOps connector each good read (index.ts), so Settings shows it verified without a manual check.
 // Used by wiring.ts (tasks:* channels); logic in model.ts.
 import { timersFor } from '../timers';
 const { setTimeout, clearTimeout } = timersFor('tasks/service');
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import path from 'node:path';
 import type { DevopsDetail, DevopsItem, DevopsPr, DevopsPrRef, TasksState, QaReport, Settings } from '../../shared/contract';
@@ -47,7 +51,13 @@ interface Saved {
 }
 const some = <T>(v: unknown, f: (x: unknown) => T | null): T[] => (Array.isArray(v) ? v.map(f).filter((x): x is T => x !== null) : []);
 const found = (root: string, rel: string): string | null => { const p = path.join(root, rel); return fs.existsSync(p) ? p : null; };
-const defaultLocate = (root: string): string | null => found(root, SCRIPT);
+/** The reader the app ships (scripts/build.mjs copies it to out/tasks/ beside out/main/; in the sources it sits beside
+ *  this file): used when the brain has no script of its own. Null when the file is not there. */
+export function appScript(bundleUrl: string = import.meta.url): string | null {
+  try { const p = path.join(path.dirname(fileURLToPath(bundleUrl)), '..', 'tasks', 'devops-me.mjs'); return fs.existsSync(p) ? p : null; } catch { return null; }
+}
+/** The brain's own script first (the owner's personal one wins), else the app's. */
+const defaultLocate = (root: string): string | null => found(root, SCRIPT) ?? appScript();
 const defaultLocateQa = (root: string): string | null => found(root, QA_SCRIPT);
 const EMPTY: Saved = { lastOk: null, news: [], read: [], assigned: [], urgent: [], oldReviews: [], reviews: [], prs: [], details: {}, qa: [], notified: [] };
 /** A repo name usable as a folder name (no path separators, not only dots). */
@@ -62,7 +72,7 @@ export interface TaskDeps {
   emit: (s: TasksState) => void;
   feed: (events: FeedInput[]) => void;
   now?: () => number;
-  /** where the script is in the brain (null = missing); default <brainRoot>/ops/tools/devops-me.mjs if it exists */
+  /** where the script is (null = missing); default <brainRoot>/ops/tools/devops-me.mjs if it exists, else the app's own */
   locate?: (root: string) => string | null;
   /** where qa-status.mjs is (null = missing: no "Test e QA"); default <brainRoot>/ops/tools/qa-status.mjs if it exists */
   locateQa?: (root: string) => string | null;
@@ -80,6 +90,7 @@ export class TaskService {
   private stopped = false;
   private readonly now: () => number;
   private readonly dirs = new Map<string, string | null>();
+  private readonly readListeners = new Set<(s: TasksState) => void>();
 
   constructor(private readonly d: TaskDeps) {
     this.now = d.now ?? Date.now;
@@ -108,6 +119,12 @@ export class TaskService {
       if (dir) out[r] = dir;
     }
     return out;
+  }
+
+  /** Called after each good read (no error) with the new state; returns the unsubscribe. */
+  onRead(listener: (s: TasksState) => void): () => void {
+    this.readListeners.add(listener);
+    return () => { this.readListeners.delete(listener); };
   }
 
   /** Connector account verification starts its own read after any older read finishes. */
@@ -163,7 +180,7 @@ export class TaskService {
     const root = this.d.brainRoot();
     const script = root ? (this.d.locate ?? defaultLocate)(root) : null;
     if (!root || !script) {
-      this.error = { kind: 'script', message: root ? `Nella cartella del cervello manca ${SCRIPT}: la pagina Task legge da lì.` : 'Scegli prima la cartella del cervello: la pagina Task usa il suo script devops-me.mjs.' };
+      this.error = { kind: 'script', message: root ? `Manca lo script di lettura ${SCRIPT}: non è nella cartella del cervello e nemmeno nell'app (reinstalla l'app).` : 'Scegli prima la cartella del cervello: la pagina Task usa il suo script devops-me.mjs.' };
       return this.get();
     }
     const now = this.now();
@@ -194,6 +211,7 @@ export class TaskService {
     if (events.length) this.d.feed(firstRead && events.length > 1 ? feedFor(quiet, new Set(this.saved.read), 1) : events);
     if (alerts.length) this.d.feed(alertEvents(alerts));
     this.d.emit(this.get());   // the page shows news and PRs now, not after the (slower) QA read
+    for (const l of this.readListeners) { try { l(this.get()); } catch (e) { log.warn('task', 'read listener failed', { cause: errText(e), hint: 'the Task page is fine; only the connector status may lag' }); } }
     await this.readQa(root);
     log.info('task', 'read', { data: { days, news: parsed.news.length, added: added.length, assigned: parsed.assigned.length, prs: prList.prs.length, ms: Date.now() - t0 } });
     return this.get();

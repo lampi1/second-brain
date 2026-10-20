@@ -164,6 +164,8 @@ export interface TasksApi {
   refresh(): Promise<TasksState>;
   refreshFresh(): Promise<TasksState>;
   markRead(keys?: string[]): TasksState;
+  /** Each good read (no error), e.g. for the Azure DevOps connector's status (issue #95); returns the unsubscribe. */
+  onRead(listener: (s: TasksState) => void): () => void;
   shutdown(): void;
 }
 
