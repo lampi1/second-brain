@@ -14,6 +14,8 @@ vi.mock('../../src/renderer/store/agents',()=>({useAgents:()=>({catalog:null,err
 // Aggiornamenti (ADR 0075): no state yet and no GitHub check on render
 vi.mock('../../src/renderer/store/source',()=>({useSource:(select:(state:null)=>unknown)=>select(null),checkSource:vi.fn(),askUpdateNow:vi.fn(),dismissLaunch:vi.fn()}));
 vi.mock('../../src/renderer/components/UpdatePanel',()=>({UpdatePanel:()=>null}));
+// Task's reading settings (Settings → Notifiche, ADR 0101): no first read yet, no reader started on render
+vi.mock('../../src/renderer/store/tasks',()=>({useTasks:(select:(state:null)=>unknown)=>select(null),setTasks:vi.fn(),EVERY_CHOICES:[5,15,30,60]}));
 vi.mock('../../src/renderer/components/UpdateRecoveryPanel',()=>({UpdateRecoveryPanel:()=>null}));
 import{SettingsPage}from'../../src/renderer/components/SettingsPage';
 beforeEach(()=>{mock.setSetting.mockClear();mock.state={settings:{...defaults(),engineOn:{claude:false},engines:{claude:false}},info:{engines:[{id:'claude',name:'Claude Code',kind:'claude',trusted:true,key:'none'}]}};setLang('it');});
