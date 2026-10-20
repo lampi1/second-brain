@@ -5,7 +5,8 @@
 // request beyond its parent's permissions and a hidden sub-agent are refused visibly; a skill works only when its
 // launch gave it; with the full default permissions (ADR 0085) a planner launches the writing roles again, and the
 // narrowing is pinned with roles a user narrowed back to ADR 0083's restrictive policies (`narrowed`); a root chat the
-// Orchestrator opened reports to it with agent_report (issue #93). Pins agents/delegation.ts, agents/role-gate.ts and
+// Orchestrator opened reports to it with agent_report (issue #93), quietly when the result is clean; a child's result
+// waits for its siblings' so the parent reads them in one turn. Pins agents/delegation.ts, agents/role-gate.ts and
 // the delegation part of chats/manager.ts.
 import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
@@ -95,8 +96,13 @@ describe('agent_delegate', () => {
     const r = await f.call('agent_report', scout.id, { outcome: 'done', summary: 'Trovati 3 errori', output: 'log…', doneWhen: [{ criterion: 'criterion A', met: true, evidence: 'logs/x' }] });
     expect(r).toMatchObject({ reported: true, parentId: parent.id, delivered: true });
     await new Promise(res => setTimeout(res, 20));
+    // its sibling still owes its result: the parent gets both in one message (one turn), not one turn per child
+    expect(f.sent.get(parent.id)!.some(t => t.includes('[risultato · Scout'))).toBe(false);
+    await f.call('agent_report', kids[1]!.id, { outcome: 'partial', summary: 'Da rivedere', output: 'v', doneWhen: [{ criterion: 'criterion A', met: false }] });
+    await new Promise(res => setTimeout(res, 20));
     const back = f.sent.get(parent.id)!.at(-1)!;
     expect(back).toContain('[risultato · Scout «Ordini · Log»] Trovati 3 errori');
+    expect(back).toContain('[risultato · Judge «Ordini · Verdetto»] Da rivedere');
     expect(back).toContain('"criterion":"criterion A"');
     expect(f.m.list().find(c => c.id === scout.id)?.delegation?.result).toMatchObject({ outcome: 'done', summary: 'Trovati 3 errori' });
     expect(f.m.runs.get(scout.run!.runId)?.report).toMatchObject({ outcome: 'done', verified: 'yes' });
@@ -104,6 +110,17 @@ describe('agent_delegate', () => {
     const listed = await f.call('agent_children', parent.id, {});
     expect(listed.children).toHaveLength(2);
     expect(listed.children[0]).toMatchObject({ role: 'scout', result: { outcome: 'done' } });
+  });
+
+  it('a child\'s result waits for its siblings at most childResultsMs, then goes alone', async () => {
+    const f = fixture();
+    (f.m as unknown as { opts: { childResultsMs: number } }).opts.childResultsMs = 30;
+    const parent = await f.root('strategist');
+    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'A · uno'), f.task('scout', 'A · due')] });
+    const kids = f.m.list().filter(c => c.parentId === parent.id);
+    await f.call('agent_report', kids[0]!.id, { outcome: 'done', summary: 'Uno fatto', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }] });
+    await new Promise(res => setTimeout(res, 80));
+    expect(f.sent.get(parent.id)!.at(-1)).toContain('Uno fatto');
   });
 
   it('agent_report remember writes to the reporting role\'s memory, only once the report is accepted', async () => {
@@ -330,6 +347,23 @@ describe('agent_delegate', () => {
     await expect(f.call('agent_report', scout.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [{ criterion: 'c', met: false }] })).rejects.toThrow(/partial/);
     const mine = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', title: 'Mia', prompt: 'x' }, 'user');
     await expect(f.call('agent_report', mine.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [] })).rejects.toThrow(/only a chat the Orchestrator or a parent started/);
+  });
+
+  it('a root chat\'s clean result goes to the quiet news when they take it; a partial one stays a message', async () => {
+    const f = fixture();
+    const quiet: string[] = [];
+    f.m.onCleanReport(n => { quiet.push(`${n.role}: ${n.summary}`); return true; });
+    const orchestrator = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    const before = f.sent.get(orchestrator.id)?.length ?? 0;
+    const a = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'artisan', title: 'App · fix', prompt: 'x' }, 'agent');
+    await f.call('agent_report', a.id, { outcome: 'done', summary: 'Fix su main', output: 'o', doneWhen: [{ criterion: 'test verdi', met: true }] });
+    const b = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', title: 'Fatti', prompt: 'x' }, 'agent');
+    await f.call('agent_report', b.id, { outcome: 'partial', summary: 'Metà', output: 'o', doneWhen: [{ criterion: 'c', met: false }] });
+    await new Promise(res => setTimeout(res, 20));
+    expect(quiet).toEqual(['Artisan: Fix su main']);
+    const after = f.sent.get(orchestrator.id)!.slice(before);
+    expect(after).toHaveLength(1);
+    expect(after[0]).toContain('[risultato · Scout «Fatti»] Metà');
   });
 
   it('with the default (full) permissions a Strategist launches an Artisan, which runs with every tool and no ceiling', async () => {

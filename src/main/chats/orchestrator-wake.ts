@@ -25,6 +25,8 @@
 // time and the user's own words (cut to ~300 characters; his words are not the child's content), so the Orchestrator
 // never plans against what he told a chat. It rides along with the next delivery, is counted in the held news, and is
 // kept beside the chat's status news (its own slot: a "finished" never replaces it).
+// A root chat's clean agent_report (done, every criterion met, no question) is quiet news too (cleanReport, 2026-10-20):
+// the user reads the result in the chat; the Orchestrator gets the summary with its next turn instead of a turn of its own.
 // Held news on the tile (#88): what waits in the buffer is listed for the user (heldNews(), held-news.ts sends it to the
 // page as "N novità in attesa"); reading it never sends anything to the Orchestrator and changes no rule above.
 import { timersFor } from '../timers';
@@ -47,7 +49,7 @@ const gateOf = (r: Pick<ChatSummary, 'state' | 'pending' | 'handoffBusy' | 'harn
 const classOf = (e: WakeEvent): DeliveryClass => e.kind === 'user-message' || e.silent ? 'quiet' : newsClass(e.kind, e.endsTurn);
 const isLoud = (e: WakeEvent): boolean => classOf(e) !== 'quiet';
 /** requestId: the open request it tells about (question, permission, command): answered before it goes, it is dropped */
-export interface WakeEvent { chatId: string; title: string; harness: Harness; kind: WakeKind; detail: string; at: number; /** a delegated chat: its role and its parent's title (status only, never its text) */ child?: { role: string; parent: string }; requestId?: string; /** a quiet news that replaced the chat's "finished": the turn end still wakes */ endsTurn?: boolean; /** a delegated chat's "finished" with nothing of the user's beside it: no text (ADR 0083) and its result goes to its parent, so it rides along and never wakes */ silent?: boolean }
+export interface WakeEvent { chatId: string; title: string; harness: Harness; kind: WakeKind; detail: string; at: number; /** a root chat's clean agent_report (cleanReport): its role and summary, quiet */ report?: { role: string }; /** a delegated chat: its role and its parent's title (status only, never its text) */ child?: { role: string; parent: string }; requestId?: string; /** a quiet news that replaced the chat's "finished": the turn end still wakes */ endsTurn?: boolean; /** a delegated chat's "finished" with nothing of the user's beside it: no text (ADR 0083) and its result goes to its parent, so it rides along and never wakes */ silent?: boolean }
 
 export interface OrchestratorWakeDeps {
   /** sends a message to the Orchestrator (wakes it: a closed one resumes) */
@@ -74,7 +76,7 @@ export function wakeLine(e: WakeEvent): string {
   const who = e.child ? `«${e.title}» (${e.child.role}, delegata da «${e.child.parent}»)` : `«${e.title}» (${engineLabel(e.harness)})`;
   const d = e.child || e.kind === 'user-message' ? '' : cut(e.detail, 200);
   switch (e.kind) {
-    case 'done': return `- ${who}: ha finito il turno.${d ? ` Ultima riga: «${d}»` : ''}`;
+    case 'done': return e.report ? `- «${e.title}» (${e.report.role}): ha consegnato, tutti i criteri soddisfatti: «${cut(e.detail, 200)}»` : `- ${who}: ha finito il turno.${d ? ` Ultima riga: «${d}»` : ''}`;
     case 'error': return `- ${who}: si è fermata su un errore${d ? `: ${d}` : '.'}`;
     case 'question': return `- ${who}: aspetta una risposta dell'utente${d ? `: ${d}` : '.'}`;
     case 'permission': return `- ${who}: aspetta un permesso dell'utente${d ? `: ${d}` : '.'}`;
@@ -166,6 +168,8 @@ export class OrchestratorWake {
       // it gave its result with agent_report in this turn: that already reached its parent or the Orchestrator (the
       // owner, 2026-10-20: the same news twice was a second Orchestrator turn for nothing)
       if (!failed && c.run?.report?.via === 'agent_report' && c.run.report.at > (was.lastResult?.at ?? 0)) return;
+      // a chat the app itself started (a sampled Judge review): the app reads its verdict, the Orchestrator never asked for it
+      if (!failed && c.run?.startedBy === 'app') return;
       this.add(c, failed ? 'error' : 'done', c.lastText);
     }
   }
@@ -194,6 +198,21 @@ export class OrchestratorWake {
     this.buffer.set(slotOf(e), e);
     this.reschedule();
     this.changed();
+  }
+
+  /** A root chat's clean result (ChatManager.onCleanReport): quiet news with its summary, never a turn of its own; it rides
+   *  along with the next delivery (the user's next message injects it into that turn). False = not taken (off, no
+   *  Orchestrator): the caller sends the result as a message. */
+  cleanReport(n: { chatId: string; title: string; role: string; summary: string; at?: number }): boolean {
+    if (!this.d.enabled() || !this.orchestratorId()) return false;
+    const known = this.chats.get(n.chatId), listed = known ? undefined : this.d.list?.().find(x => x.id === n.chatId);
+    if (listed) this.remember(listed);
+    const c = known ?? listed;
+    if (!c || c.isOrchestrator) return false;
+    this.buffer.set(n.chatId, { chatId: n.chatId, title: n.title, harness: c.harness, kind: 'done', detail: cut(n.summary, 300), at: n.at ?? this.now(), report: { role: n.role }, silent: true });
+    this.reschedule();
+    this.changed();
+    return true;
   }
 
   /** answered before the news went: "waits for the user" would be false; what the chat did next is told instead */

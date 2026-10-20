@@ -47,7 +47,7 @@ import { isAppChat } from '../brain/routing';
 import { engineOf, engineOrThrow } from '../engines/registry';
 import { sessionFor } from '../engines/sessions';
 import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
-import { isWorkRole } from '../../shared/roles';
+import { isWorkRole, ROLE_DEFAULTS } from '../../shared/roles';
 import { waitsForPeople, waitsForWork } from '../../shared/waiting';
 import { claudeHome, findTranscript, readHistory } from './transcript';
 import { orchestratorOwner, plainOwner, type ResolvedRole } from '../agents/catalog';
@@ -77,6 +77,8 @@ import { recallWarning, type Recall } from '../search/hybrid/recall';
 export interface ChatManagerOptions {
   /** the roles in a few lines, for the Orchestrator's first message of a session (agents/discovery.ts roleCatalogBrief) */
   roleCatalogBrief?: () => string;
+  /** how long a child's result waits for its siblings' (default CHILD_RESULTS_MS) */
+  childResultsMs?: number;
   /** the estimate line under a user's message to the Orchestrator (shared/task-estimate.ts estimateLine): its first model
    *  call acts on it instead of calling task_estimate; null = no line */
   requestEstimate?: (text: string) => string | null;
@@ -354,6 +356,10 @@ const ORCHESTRATOR_HIDDEN: ReadonlySet<string> = new Set(['agent_delegate', 'age
 /** a root chat's deliverable longer than this reaches the Orchestrator as where to read it, not whole (it is the chat's answer
  *  there; the Orchestrator re-reads every message in each later turn) */
 const ORCHESTRATOR_OUTPUT_MAX = 800;
+/** how long a child's result waits for its siblings' before it goes to the parent alone */
+const CHILD_RESULTS_MS = 60_000;
+/** what a root chat's clean result tells the Orchestrator (onCleanReport) */
+export interface CleanReportNote { chatId: string; title: string; role: string; summary: string; at: number }
 /** archived chats kept (the oldest beyond this leave the app; their transcripts stay where the CLI keeps them) */
 const MAX_ARCHIVED = 60;
 /** the user's words carried in a note (ADR 0083: the user's own message, never the child's) */
@@ -410,6 +416,9 @@ export class ChatManager implements ChatService {
   /** notes for a chat's next message (the user wrote in one of its delegated children): they ride along, no turn of their own */
   private notesFor = new Map<string, string[]>();
   private userWroteListeners: ((n: UserWroteNote) => void)[] = [];
+  private cleanReportListeners: ((n: CleanReportNote) => boolean)[] = [];
+  /** children's results waiting for their siblings', per parent (queueChildResult) */
+  private childResults = new Map<string, { items: { title: string; message: string }[]; timer: NodeJS.Timeout | null }>();
   /** "Riprendi" in flight per old chat: a double click or two agents get the same new chat, never two. */
   private continuing = new Map<string, Promise<ChatSummary>>();
   private store: ChatStore;
@@ -1014,6 +1023,9 @@ export class ChatManager implements ChatService {
   }
   /** orchestrator-wake.ts: told of every message the user typed in a work chat */
   onUserWrote(fn: (n: UserWroteNote) => void): void { this.userWroteListeners.push(fn); }
+  /** A root chat's clean result (done, every criterion met, no question): a listener that returns true took it as quiet
+   *  news for the Orchestrator (orchestrator-wake.ts cleanReport); else it goes as a message, as any other result. */
+  onCleanReport(fn: (n: CleanReportNote) => boolean): void { this.cleanReportListeners.push(fn); }
   /** the notes waiting for this chat's next message (tests, diagnostics) */
   notesWaiting(chatId: string): readonly string[] { return this.notesFor.get(chatId) ?? []; }
 
@@ -1460,6 +1472,7 @@ export class ChatManager implements ChatService {
     if (this.usageTimer) clearInterval(this.usageTimer);
     if (this.coldTimer) clearInterval(this.coldTimer);
     if (this.runTimer) clearInterval(this.runTimer);
+    for (const q of this.childResults.values()) if (q.timer) clearTimeout(q.timer); // the results stay on the children (agent_children)
     this.counters.flush();
     if (!this.runs.problem) try { this.runs.flush(); } catch (e) { log.warn('chats', 'agent runs not saved at quit', { cause: errText(e) }); }
     process.off('exit', this.onExit);
@@ -1541,11 +1554,31 @@ export class ChatManager implements ChatService {
     const parent = this.chats.get(parentId);
     if (parent) {
       this.updated(parent); // its waiting on this child may be over
-      this.send(parentId, resultMessage(d.role, r.s.title, result), undefined, false, r.s.title)
-        .catch(e => log.warn('chats', 'delegation result not delivered', { chat: parentId, cause: errText(e), hint: 'the result stays on the child chat; agent_children lists it' }));
+      this.queueChildResult(parentId, r.s.title, resultMessage(d.role, r.s.title, result));
     }
     log.info('chats', 'delegation reported', { chat: chatId, data: { parent: parentId, outcome: result.outcome, met, criteria: result.doneWhen.length } });
     return { parentId, delivered: !!parent };
+  }
+
+  /** A child's result for its parent: while siblings still owe theirs, it waits (at most CHILD_RESULTS_MS) so the parent
+   *  reads the batch in one turn instead of one turn per child, each re-reading its whole context. */
+  private queueChildResult(parentId: string, title: string, message: string): void {
+    const q = this.childResults.get(parentId) ?? { items: [], timer: null };
+    q.items.push({ title, message });
+    this.childResults.set(parentId, q);
+    if (!this.delegatedBusy(parentId)) { this.flushChildResults(parentId); return; }
+    if (!q.timer) { q.timer = setTimeout(() => this.flushChildResults(parentId), this.opts.childResultsMs ?? CHILD_RESULTS_MS); q.timer.unref?.(); }
+  }
+
+  private flushChildResults(parentId: string): void {
+    const q = this.childResults.get(parentId);
+    if (!q) return;
+    this.childResults.delete(parentId);
+    if (q.timer) clearTimeout(q.timer);
+    if (!this.chats.has(parentId) || !q.items.length) return;
+    const from = [...new Set(q.items.map(x => x.title))].join(', ');
+    this.send(parentId, q.items.map(x => x.message).join('\n\n'), undefined, false, from)
+      .catch(e => log.warn('chats', 'delegation result not delivered', { chat: parentId, cause: errText(e), hint: 'the result stays on the child chat; agent_children lists it' }));
   }
 
   /** agent_report from a root role chat the Orchestrator opened (app_create_chat, issue #93): its result is kept on its run
@@ -1568,7 +1601,11 @@ export class ChatManager implements ChatService {
     this.updated(r);
     const orchestrator = [...this.chats.values()].find(c => c.s.isOrchestrator && !c.s.closedAt);
     const role = r.s.agent?.id;
-    if (orchestrator && isWorkRole(role)) {
+    // a clean result (done, every criterion met, no question) is quiet news: the user reads it in the chat, the
+    // Orchestrator gets it with its next turn instead of a turn of its own (median ~0.18 $ each, zero-token-audit round 3)
+    const clean = result.outcome === 'done' && result.doneWhen.length > 0 && met === result.doneWhen.length && !result.questions?.length && !result.goalChangedByUser;
+    const quiet = orchestrator && isWorkRole(role) && clean && this.cleanReportListeners.some(fn => { try { return fn({ chatId, title: r.s.title, role: ROLE_DEFAULTS[role].name, summary: result.summary, at }); } catch (e) { log.warn('chats', 'quiet report listener failed', { chat: chatId, cause: errText(e), hint: 'the result goes to the Orchestrator as a message' }); return false; } });
+    if (orchestrator && isWorkRole(role) && !quiet) {
       this.send(orchestrator.s.id, resultMessage(role, r.s.title, result, { outputMax: ORCHESTRATOR_OUTPUT_MAX }), undefined, false, r.s.title)
         .catch(e => log.warn('chats', 'root result not delivered', { chat: orchestrator.s.id, cause: errText(e), hint: 'the result stays on the chat and its run; app_chats shows it' }));
     }
