@@ -386,9 +386,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/brain/scripts-tools.ts brain_scripts
       b('Ogni chat può cercarli con brain_scripts prima di scrivere uno script nuovo, per riusarne uno che funziona.',
         'Every chat can look them up with brain_scripts before writing a new script, to reuse one that works.'),
-      // src/main/brain/scripts-tools.ts brain_script_save, brain_script_delete
-      b('Solo l’Orchestrator li aggiunge, corregge o elimina, senza chiederti l’ok: salva solo dopo un test, rifiuta le credenziali, un eliminato va in scripts/.deleted/.',
-        'Only the Orchestrator adds, fixes or deletes them, without asking you: it saves only after a test, credentials are refused, a deleted one goes to scripts/.deleted/.'),
+      // src/main/brain/scripts-tools.ts brain_script_save, brain_script_delete, brain_script_add; src/main/brain/auto-scripts.ts
+      b('Senza chiederti l’ok: una chat aggiunge lo script che ha provato (brain_script_add), l’app salva da sola un comando riutilizzabile riuscito con Esegui, l’Orchestrator corregge o elimina. Le credenziali sono rifiutate, un eliminato va in scripts/.deleted/ e non torna.',
+        'Without asking you: a chat adds the script it ran (brain_script_add), the app saves a reusable command that worked with Esegui by itself, the Orchestrator fixes or deletes. Credentials are refused, a deleted one goes to scripts/.deleted/ and does not come back.'),
       // src/main/brain/changelog.ts
       b('Ogni cambiamento è una riga in changelog.md: quando, cosa, quale file, chi e perché. L’Orchestrator vi annota anche regole, skill e note che cambia.',
         'Every change is a line in changelog.md: when, what, which file, who and why. The Orchestrator also logs the rules, skills and notes it changes.'),

@@ -4,7 +4,7 @@
 import type { BrowserWindow } from 'electron';
 import { app, safeStorage, shell } from 'electron';
 import os from 'node:os';
-import type { CliStatus, Harness } from '../shared/contract';
+import type { CliStatus, Harness, RunInfo } from '../shared/contract';
 import { SEND_MODE_RULE } from '../shared/newchat';
 import { engineStatuses } from './cli';
 import { engineReadiness } from './engines/readiness';
@@ -95,7 +95,8 @@ import { HybridSearch, workerFileNextTo } from './search/hybrid/service';
 import { apiSearch, brainSearchTool } from './search/hybrid/tool';
 import { BrainScripts, touchesScripts } from './brain/scripts';
 import { BrainChangelog } from './brain/changelog';
-import { brainScriptsTool } from './brain/scripts-tools';
+import { brainScriptsTool, chatScriptAddTool } from './brain/scripts-tools';
+import { AutoScripts } from './brain/auto-scripts';
 import { mountRecallTool, RECALL_ENV } from './search/hybrid/recall';
 import { timersFor } from './timers';
 const { setInterval, clearInterval } = timersFor('wiring/auto-close');
@@ -185,11 +186,11 @@ export const createLater = (ctx: Pick<Ctx, 'emitter' | 'userData'>): AnswerLater
   new AnswerLaterStore(path.join(ctx.userData, 'answer-later.json'), st => ctx.emitter.emit('later:changed', st));
 
 /** The runner of "Esegui": blocks are checked against the chat's own assistant messages, run in the chat's folder. */
-export function commandRunner(ctx: Pick<Ctx, 'emitter'>, chats: ChatService): CommandRunner {
+export function commandRunner(ctx: Pick<Ctx, 'emitter'>, chats: ChatService, onRun?: (run: RunInfo) => void): CommandRunner {
   return new CommandRunner({
     itemText: (chatId, itemId) => { const it = chats.items(chatId).find(i => i.id === itemId); return it?.kind === 'assistant' ? it.text : null; },
     cwdOf: chatId => chats.list().find(c => c.id === chatId)?.cwd ?? null,
-    emit: run => ctx.emitter.emit('run:updated', run),
+    emit: run => { ctx.emitter.emit('run:updated', run); onRun?.(run); },
   });
 }
 
@@ -571,7 +572,11 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const artifacts = attachArtifacts(ctx, chats);
   addChatTools([showUiTool(artifacts)]);
 
-  const runner = commandRunner(ctx, chats);
+  // a reusable command that ran fine with "Esegui" becomes a brain script by itself (issue #111, ADR 0096)
+  const autoScripts = new AutoScripts({ scripts: brainScripts, root: () => brain.info().brainRoot, chatTitle: id => chats.list().find(c => c.id === id)?.title ?? null });
+  const runner = commandRunner(ctx, chats, run => { autoScripts.onRun(run); });
+  // brain_script_add on every chat's own endpoint: a work chat saves the script it ran with success itself
+  addChatTools([chatScriptAddTool(brainScripts, id => chats.list().find(c => c.id === id)?.title ?? null)]);
   const asks = attachCommandAsks(ctx, runner, brain, undefined, chats);
   const keptFile = path.join(ctx.userData, 'auto-close-kept.json');
   let kept: string[] = [], keptProblem = false;
