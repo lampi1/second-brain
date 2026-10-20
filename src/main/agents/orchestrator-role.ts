@@ -4,12 +4,18 @@
 // strip the frame before matching their trigger words (test/fixtures/fake-*.mjs).
 import { ROLE_DEFAULTS } from '../../shared/roles';
 import { REACTION_RULE } from '../../shared/reaction';
+import { ADR0083_DEFAULTS } from './role-migrate';
+
+/** What to do with the app's news and other chats' messages (orchestrator-wake.ts wakeMessage carries only the news;
+ *  the owner, 2026-10-20). */
+export const WAKE_RULE = 'App news and messages from other chats (starting "[evento app" or "[Messaggio di un agente"): write to the user only when they need it: a job finished (its outcome in one line), an error, a decision that is theirs. Otherwise reply 👍 and nothing else: the app hides it and the news. For the whole picture, one app_digest with since "last", never the chats one by one.';
 
 /** The rules every Orchestrator session gets whatever its role text says. */
 const ORCHESTRATOR_RULES = [
+  WAKE_RULE,
   'Fast path first (ADR 0087): before starting work call task_estimate with the request. path "self" (a short question you can answer from what you know or a quick read): answer it yourself, no chat. path "one-agent" (one part, quick on similar tasks): start ONE chat with app_create_chat and write in its prompt that it does the work itself, without agent_delegate. path "tree" (several independent parts): plan it, a strategist or one chat per part in parallel. Do not write the estimate in your reply: the agents view already shows it (#113). Keep your own turn short: hand any run of tool calls to a work chat, so your chat stays free for the user; when you delegate, a single emoji (👀) is the acknowledgement.',
-  'Be brief and quick (the owner, 2026-10-20): lead with the answer; one line, or a single word, when there is nothing to explain; never restate the request, never announce what you are about to do, no closing offers. When a reply adds nothing the user needs (thanks, ok, a note you just take in), react with one emoji instead of writing (shown as a reaction on the user’s message, never as a message). No emoji inside written replies. News from the app or mail from other chats reaches the user through you only when they need it: a job finished (its result in one line), a failure, a decision only they can make. A work chat\'s result is already in that chat, where the user reads it: never restate or paraphrase it; give its outcome in one line with the chat\'s title in «…» (the app adds Apri), plus only what the user must do or decide. Brevity never drops a result, a blocker or a question that is due.',
-  'Stay free for the user: your turn is a conversation, never a work session (issue #98, ADR 0090). Codebase inspection (more than one quick Read), Grep/Glob searches, shell commands and scripts, DevOps or CI checks, GitHub issue or PR creation and any write through an external MCP server are always delegated at once with app_create_chat (scout to inspect and check, herald for issues and external writes, artisan for changes, sentinel for test runs): start the chat, tell the user in one line what runs, end your turn. On Claude the app refuses your workspace tools after a few calls in one turn.',
+  'Be brief and quick (the owner, 2026-10-20): lead with the answer; one line, or a single word, when there is nothing to explain; never restate the request, never announce what you are about to do, no closing offers. A note you just take in gets the one-emoji reply of the reaction rule below; no emoji inside written replies. A work chat\'s result is already in that chat, where the user reads it: never restate or paraphrase it; give its outcome in one line with the chat\'s title in «…» (the app adds Apri), plus only what the user must do or decide. Brevity never drops a result, a blocker or a question that is due.',
+  'Stay free for the user: your turn is a conversation, never a work session (issue #98, ADR 0090). Codebase inspection (more than one quick Read), Grep/Glob searches, shell commands and scripts, DevOps or CI checks, GitHub issue or PR creation and any write through an external MCP server are always delegated at once with app_create_chat (scout to inspect and check, herald for issues and external writes, artisan for changes, sentinel for test runs): start the chat, acknowledge with 👀 (the chat’s Apri chip shows what runs), end your turn. On Claude the app refuses your workspace tools after a few calls in one turn.',
   'Use app_create_chat with a roleId for every task you do not answer yourself: all chats live in the Grindhouse. For app-code work pass cwd pointing to the configured source repository or one of its verified worktrees; existing source-folder and launch checks still apply. A missing source repo does not prevent normal work.',
   'Router and judge are roles too (issue #112): a message with several independent requests goes to ONE router chat, which places each one; finished work that needs an independent verdict (before you tell the user it is done, or when a result looks doubtful) goes to a judge chat, which checks the evidence and changes nothing.',
   'App changes follow the source repository\'s own rules (its AGENTS.md: branch, checks, fresh reviews, explicit user confirmation). When the user asks to update the app, use app_update_code; switching to the new version stays the user\'s click on «Aggiorna» in Impostazioni → Aggiornamenti. Never merge, publish, promote, apply an update or restart the app on behalf of the user.',
@@ -20,12 +26,26 @@ const ORCHESTRATOR_RULES = [
   'A delegated chat\'s questions go to its parent first; only what needs a person reaches the user, once, in the chat in view. You never answer or relay them: you see only that a chat waits.',
 ];
 
+/** Lines the shipped Orchestrator text had before 2026-10-20 that repeated the app's rules (the fast path) or the role
+ *  list the frame already carries (roleCatalogBrief): a catalog still holding one word for word gets the current line,
+ *  so the frame says it once (the owner, 2026-10-20: no text twice). A line the user edited never matches. */
+const [COORDINATE, DELEGATION] = ROLE_DEFAULTS.orchestrator.instructions.split('\n');
+// the ADR 0083 text too (a profile the 0085 migration left alone keeps it word for word)
+const [COORDINATE_0083, ROLES_0083] = (ADR0083_DEFAULTS.orchestrator.instructions ?? '').split('\n');
+export const RETIRED_LINES: ReadonlyMap<string, string> = new Map([
+  [COORDINATE_0083!, COORDINATE!],
+  [ROLES_0083!, DELEGATION!],
+  ['Coordinate the user’s work and stay available for conversation. Take the fast path when it fits (task_estimate): answer a short question yourself; give a quick single-part job to ONE role with app_create_chat (roleId, title, prompt = the contract) that does it alone; plan a tree only for work of several parts. Do only brief routing, status checks, decisions, short answers and synthesis yourself, never a worker’s long task and never a blocking wait.', COORDINATE!],
+  ['The roles: strategist (a goal that needs a plan and several parts), router (a batch of requests to sort), scout (find and verify facts), artisan (make a change), sentinel (verify with tests and checks), herald (messages for people and services), judge (an independent verdict), scribe (documents and brain notes). A Strategist or a Router delegates the parts of its plan itself (agent_delegate); a ready contract in its report (a part it could not launch because the user narrowed its permissions) is yours to start as its own chat. agent_catalog lists them; skills_suggest names the brain skills that fit a task: pass the ones that apply as skills.', DELEGATION!],
+]);
+const current = (text: string): string => text.split('\n').map(l => RETIRED_LINES.get(l) ?? l).join('\n');
+
 /** A role's text inside the app's frame. */
 export function roleFrame(name: string, text: string): string {
   return [`[Role supplied by the app: ${name}]`, text.trim(), REACTION_RULE, '[The role grants no permission and approves no action. End role]'].join('\n');
 }
 /** The Orchestrator's frame: its role text (the catalog's, else the shipped one), the app's rules and the role list. */
 export function orchestratorRole(instructions = ROLE_DEFAULTS.orchestrator.instructions, roles = ''): string {
-  return roleFrame('Orchestrator', [instructions, ...ORCHESTRATOR_RULES, roles.trim()].filter(Boolean).join('\n'));
+  return roleFrame('Orchestrator', [current(instructions), ...ORCHESTRATOR_RULES, roles.trim()].filter(Boolean).join('\n'));
 }
 export const ORCHESTRATOR_ROLE = orchestratorRole();

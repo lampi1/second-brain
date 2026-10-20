@@ -205,7 +205,7 @@ const ForeignMsg = memo(function ForeignMsg({ item, f }: { item: Extract<ChatIte
 const ToolItem = memo(function ToolItem({ item }: { item: Tool }) {
   // an agent_report's deliverable is the chat's answer, shown once here (the agent does not write it again)
   const report = reportOutput(item);
-  if (report) return <><ToolRow item={item} /><div className="msg-assistant msg-report" data-testid={`report-${item.id}`}><Markdown text={report} /></div></>;
+  if (report) return <><ToolRow item={item} /><div className="msg-assistant" data-testid={`report-${item.id}`}><Markdown text={report} /></div></>;
   const ref = toolChatRef(item);
   if (!ref) return <ToolRow item={item} />;
   return <div className="tool-with-ref"><ToolRow item={item} /><ToolChatRef chatId={ref.chatId} title={ref.title} how={ref.how} /></div>;

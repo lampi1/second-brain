@@ -37,8 +37,9 @@ const INSTRUCTIONS = [
 ].join('\n');
 
 /** addChatTools: more tools on every chat's own endpoint (/mcp/chat/:chatId/:token), e.g. send_to_chat (wiring.ts).
- *  setBrowserAccess: which of the browser tools each chat sees there (all, the reading ones for 'browser-read', or none). */
-export interface BrowserModule { service: BrowserService; mcp: McpServer; addChatTools: (tools: McpTool[]) => void; setBrowserAccess: (access: (chatId: string) => BrowserAccess) => void }
+ *  setBrowserAccess: which of the browser tools each chat sees there (all, the reading ones for 'browser-read', or none).
+ *  setChatToolFilter: which of the added tools a chat sees (ChatManager.chatToolShown). */
+export interface BrowserModule { service: BrowserService; mcp: McpServer; addChatTools: (tools: McpTool[]) => void; setBrowserAccess: (access: (chatId: string) => BrowserAccess) => void; setChatToolFilter: (shown: (chatId: string, tool: string) => boolean) => void }
 
 /** The clipboard of Copia: the system one, or (SB_TEST=1) an in-memory one the e2e suite reads through
  *  globalThis.__sbClipboard, so a test never overwrites what the user copied. */
@@ -81,11 +82,19 @@ export async function createBrowserModule(o: { emitter: Emitter; window: () => B
   const chatTools: McpTool[] = [];
   let browserAccess: (chatId: string) => BrowserAccess = () => 'all';
   const readTools = chatBrowserTools.filter(t => BROWSER_READ_TOOLS.includes(t.name));
-  mcp.mount('/mcp/chat/:chatId/:token', {
-    name: 'browser-chat', instructions: `${INSTRUCTIONS}
-send_to_chat / list_chats: write to the user's other chats (delivered at once when open in the app); never an ok or a permission of the user.
+  // what a chat is never allowed to call (the Orchestrator's agent_delegate, a root chat's agent_ask_parent…) is left
+  // out of its list: the schema and description cost tokens in every turn and the call would only be refused
+  let chatToolShown: (chatId: string, tool: string) => boolean = () => true;
+  const CHAT_HINTS = `send_to_chat / list_chats: write to the user's other chats (delivered at once when open in the app); never an ok or a permission of the user.
 ${SHOW_UI_HINT}
-${SCREENSHOT_HINT}`, tools: ({ params }) => { const access = browserAccess(params.chatId ?? ''); return [...(access === 'all' ? chatBrowserTools : access === 'read' ? readTools : []), ...chatTools]; },
+${SCREENSHOT_HINT}`;
+  mcp.mount('/mcp/chat/:chatId/:token', {
+    // the browser's instructions only for a chat that has browser tools
+    name: 'browser-chat', instructions: params => browserAccess(params.chatId ?? '') === 'none' ? CHAT_HINTS : `${INSTRUCTIONS}\n${CHAT_HINTS}`,
+    tools: ({ params }) => {
+      const id = params.chatId ?? '', access = browserAccess(id);
+      return [...(access === 'all' ? chatBrowserTools : access === 'read' ? readTools : []), ...chatTools.filter(t => chatToolShown(id, t.name))];
+    },
     authorize: p => !!p.chatId && !!p.token && tokens.check(p.chatId, p.token),
     who: p => p.chatId,
   });
@@ -207,5 +216,5 @@ ${SCREENSHOT_HINT}`, tools: ({ params }) => { const access = browserAccess(param
       await mcp.close();
     },
   };
-  return { service, mcp, addChatTools: tools => { chatTools.push(...tools); }, setBrowserAccess: access => { browserAccess = access; } };
+  return { service, mcp, addChatTools: tools => { chatTools.push(...tools); }, setBrowserAccess: access => { browserAccess = access; }, setChatToolFilter: shown => { chatToolShown = shown; } };
 }

@@ -52,7 +52,8 @@ export interface McpTool {
 
 export interface Mount {
   name: string;
-  instructions: string;
+  /** a function gets the route's params: a chat's endpoint says only what applies to that chat */
+  instructions: string | ((params: Record<string, string>) => string);
   /** a function may be async: a proxied server's tools come from that server (mcp-servers/gateway.ts) */
   tools: McpTool[] | ((ctx: { params: Record<string, string>; sessionId: string }) => McpTool[] | Promise<McpTool[]>);
   /** Return false to answer 404 (an unknown or wrong token looks like a missing route). */
@@ -233,7 +234,7 @@ export class McpServer {
             protocolVersion: version,
             capabilities: { tools: { listChanged: false } },
             serverInfo: { name: `${this.opts.name}/${mount.name}`, version: this.opts.version },
-            instructions: mount.instructions,
+            instructions: typeof mount.instructions === 'function' ? mount.instructions(ctx.params) : mount.instructions,
           });
         }
         case 'ping': return ok(id, {});

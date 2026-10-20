@@ -84,7 +84,7 @@ function readReport(v: unknown): AgentRunReport | null {
     || (r.findings !== undefined && !count(r.findings)) || (r.blocking !== undefined && !count(r.blocking)) || (count(r.findings) && count(r.blocking) && r.blocking > r.findings)) return null;
   return { at: r.at, outcome: r.outcome as 'done', verified: r.verified as 'yes', summary: r.summary,
     ...(r.findings !== undefined ? { findings: r.findings as number } : {}), ...(r.blocking !== undefined ? { blocking: r.blocking as number } : {}),
-    ...(['success', 'partial', 'fail'].includes(r.verdict as string) ? { verdict: r.verdict as 'success' } : {}) };
+    ...(['success', 'partial', 'fail'].includes(r.verdict as string) ? { verdict: r.verdict as 'success' } : {}), ...(r.via === 'agent_report' ? { via: 'agent_report' as const } : {}) };
 }
 function readCorrections(v: unknown): AgentRunCorrections | null {
   const c = v as Partial<AgentRunCorrections> | null;

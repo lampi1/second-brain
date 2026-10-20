@@ -76,7 +76,7 @@ describe('OrchestratorWake', () => {
     expect(sent[0]!.text).toContain('«map» (Claude): ha finito il turno');
     expect(sent[0]!.text).toContain('«qa» (Claude): aspetta una risposta dell\'utente: Apro il bug?');
     expect(sent[0]!.text).toContain('«fb» (Claude): aspetta un permesso');
-    expect(sent[0]!.text).toContain('app_digest');
+    expect(sent[0]!.text).not.toContain('app_digest'); // what to do with the news is in its rules (WAKE_RULE), once per session
   });
 
   it('a turn that ends leaving a command still wakes the Orchestrator; a quiet news answered at idle becomes a wake', async () => {
@@ -297,7 +297,7 @@ describe('the user writes in a work chat (ADR 0083)', () => {
     const t = sent[0]!.text;
     expect(t).toContain("«Log» (Scout, delegata da «Piano»): l'utente ci ha scritto direttamente");
     expect(t).toContain('«Solo marzo, per favore.');
-    expect(t).toContain("non disfare ciò che l'utente le ha chiesto");
+    expect(t).not.toContain('non disfare'); // the rule is in the Orchestrator's frame, not in every note
     expect(t).toContain('«Log» (Scout, delegata da «Piano»): ha finito il turno.');
     expect(t).not.toContain('testo del figlio');
     expect(t.length).toBeLessThan(1200);
@@ -324,10 +324,15 @@ describe('the user writes in a work chat (ADR 0083)', () => {
     await vi.advanceTimersByTimeAsync(5000);
     sent.length = 0;
     up({ id: 'a', state: 'running' });
-    up({ id: 'a', state: 'idle', lastText: 'ecco il risultato', run: { report: { at: Date.now(), outcome: 'done', verified: 'yes', summary: 's' } } as unknown as ChatSummary['run'] });
+    up({ id: 'a', state: 'idle', lastText: 'ecco il risultato', run: { report: { at: Date.now(), outcome: 'done', verified: 'yes', summary: 's', via: 'agent_report' } } as unknown as ChatSummary['run'] });
     await vi.advanceTimersByTimeAsync(5000);
     expect(sent).toEqual([]);
     expect(w.queued()).toEqual([]);
+    // a run-report block in the reply reached no one: its "finished" still goes
+    up({ id: 'a', state: 'running' });
+    up({ id: 'a', state: 'idle', lastText: 'run-report', lastResult: { at: Date.now() } as ChatSummary['lastResult'], run: { report: { at: Date.now() + 1, outcome: 'done', verified: 'yes', summary: 's' } } as unknown as ChatSummary['run'] });
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(sent).toHaveLength(1);
   });
 
   it('nothing for the Orchestrator\'s own chat, nor with the events off', async () => {

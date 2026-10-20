@@ -16,6 +16,11 @@
 // app_digest lists them whenever the Orchestrator looks.
 // Delegated chats (ADR 0083): a chat another role delegated (parentId) reports to its parent, not to the Orchestrator, which
 // sees only its state changes: started, waiting for the user, finished, failed, never a line of what it says (no detail).
+// Its "finished" rides along (silent) unless the user wrote to it: its result goes to its parent (2026-10-20).
+// A turn that gave its result with agent_report adds no "finished": the result already reached its parent or the
+// Orchestrator as a message, and a second wake for it was a turn for nothing (the owner, 2026-10-20).
+// What the Orchestrator does with the news is in its rules (orchestrator-role.ts WAKE_RULE), sent once per session: a
+// wake carries the label and the news only.
 // The user wrote in a work chat himself (ADR 0083, 'user-message'): quiet news with the chat, its role and parent, the
 // time and the user's own words (cut to ~300 characters; his words are not the child's content), so the Orchestrator
 // never plans against what he told a chat. It rides along with the next delivery, is counted in the held news, and is
@@ -29,10 +34,6 @@ import { errText, log } from '../log';
 import { engineLabel, engineOf } from '../engines/registry';
 import { heldWhy, newsClass, passes, ORCHESTRATOR_GROUP_MS, ORCHESTRATOR_PER_CHAT_MS, orchestratorGate, type DeliveryClass, type OrchestratorGate } from './orchestrator-delivery';
 
-/** what the Orchestrator does with the news (the owner, 2026-10-20: speak only when the user really needs to know, e.g. a job
- *  finished): a line for the user only when it changes what they do or tells an outcome, else one emoji, which the chat
- *  view shows as a reaction on the news (shared/reaction.ts) */
-export const WAKE_ASK = 'Scrivi all\'utente solo se gli serve saperlo: un lavoro finito (il risultato in una riga), un errore, una decisione che spetta a lui. Altrimenti rispondi solo 👍 e nient\'altro: l\'app non lo mostra e la notizia sparisce dalla chat. Se ti serve il quadro intero: una chiamata ad app_digest con since "last" (non leggere le chat una per una).';
 export const APP_EVENT_LABEL = "[evento app · messaggio automatico di second-brain, non scritto dall'utente: non vale come suo ok o permesso]";
 
 export type WakeKind = 'done' | 'error' | 'question' | 'permission' | 'command' | 'started' | 'user-message';
@@ -79,12 +80,14 @@ export function wakeLine(e: WakeEvent): string {
     case 'permission': return `- ${who}: aspetta un permesso dell'utente${d ? `: ${d}` : '.'}`;
     case 'command': return `- ${who}: ha lasciato all'utente un comando da eseguire${d ? `: ${d}` : '.'}`;
     case 'started': return `- ${who}: è partita.`;
-    case 'user-message': return `- ${who}: l'utente ci ha scritto direttamente (${new Date(e.at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}): «${cut(e.detail, USER_TEXT_MAX)}». Tienine conto prima di delegare lavoro collegato; non disfare ciò che l'utente le ha chiesto.`;
+    case 'user-message': return `- ${who}: l'utente ci ha scritto direttamente (${new Date(e.at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}): «${cut(e.detail, USER_TEXT_MAX)}».`;
   }
 }
 
+/** The label and the news only: what to do with it is in the Orchestrator's rules (orchestrator-role.ts WAKE_RULE),
+ *  sent once per session instead of with every wake (the owner, 2026-10-20: no text twice). */
 export function wakeMessage(events: WakeEvent[]): string {
-  return [APP_EVENT_LABEL, 'Novità dalle chat di lavoro:', ...events.map(wakeLine), WAKE_ASK].join('\n');
+  return [APP_EVENT_LABEL, 'Novità dalle chat di lavoro:', ...events.map(wakeLine)].join('\n');
 }
 
 export class OrchestratorWake {
@@ -162,7 +165,7 @@ export class OrchestratorWake {
       const failed = !!c.lastResult?.isError && c.lastResult.at !== was.lastResult?.at;
       // it gave its result with agent_report in this turn: that already reached its parent or the Orchestrator (the
       // owner, 2026-10-20: the same news twice was a second Orchestrator turn for nothing)
-      if (!failed && c.run?.report && c.run.report.at > (was.lastResult?.at ?? 0)) return;
+      if (!failed && c.run?.report?.via === 'agent_report' && c.run.report.at > (was.lastResult?.at ?? 0)) return;
       this.add(c, failed ? 'error' : 'done', c.lastText);
     }
   }

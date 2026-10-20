@@ -100,7 +100,10 @@ export interface AgentRunTokens { input: number; cacheRead: number; cacheWrite: 
 /** The run's agent_report (agents/delegation.ts): the child's self-report of its delegation contract. */
 export interface AgentRunReport { at: number; outcome: 'done' | 'partial' | 'blocked'; verified: 'yes' | 'partial' | 'no'; summary: string; findings?: number; blocking?: number;
   /** a Judge review's verdict on the run it reviews (agents/judge-sample.ts) */
-  verdict?: 'success' | 'partial' | 'fail' }
+  verdict?: 'success' | 'partial' | 'fail';
+  /** given with agent_report (its result was delivered to the parent or the Orchestrator as a message), not a
+   *  run-report block in a reply */
+  via?: 'agent_report' }
 /** The user's corrections in the run (§5): (a) "[Reasoning correction]" messages, (b) a reopen of a run whose agent had
  *  reported. Missing on runs recorded before they were counted: unknown, never zero. */
 export interface AgentRunCorrections { tagged: number; afterReport: number }

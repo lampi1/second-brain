@@ -344,6 +344,10 @@ function sysItem<C extends SysCode>(code: C, params: SysParams | undefined, leve
 }
 
 const MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions'];
+/** chat-endpoint tools the Orchestrator can never use (chatToolShown): it does not delegate, report, ask a parent or
+ *  rate a child (its chats are roots: agent_child_feedback takes only a child's run), and
+ *  agent_catalog / agent_learn_propose are on its own endpoint already */
+const ORCHESTRATOR_HIDDEN: ReadonlySet<string> = new Set(['agent_delegate', 'agent_report', 'agent_ask_parent', 'agent_answer_child', 'agent_children', 'agent_child_feedback', 'agent_catalog', 'agent_learn_propose']);
 /** a root chat's deliverable longer than this reaches the Orchestrator as where to read it, not whole (it is the chat's answer
  *  there; the Orchestrator re-reads every message in each later turn) */
 const ORCHESTRATOR_OUTPUT_MAX = 800;
@@ -1517,10 +1521,12 @@ export class ChatManager implements ChatService {
     r.s.delegation = { ...d, ...goal, result: { outcome: result.outcome, summary: result.summary, at, doneWhen: result.doneWhen.map(x => ({ criterion: x.criterion, met: x.met })) } };
     const run = r.s.run;
     if (run && run.endedAt === undefined) {
-      run.report = { at, outcome: result.outcome, verified: met === result.doneWhen.length ? 'yes' : met ? 'partial' : 'no', summary: cut(result.summary, 140) };
+      run.report = { at, outcome: result.outcome, verified: met === result.doneWhen.length ? 'yes' : met ? 'partial' : 'no', summary: cut(result.summary, 140), via: 'agent_report' };
       this.runSave();
     }
     r.report = { text: result.summary, at, ...(result.outcome === 'blocked' ? { blocked: true } : {}) };
+    // the deliverable is written only in the report now: its summary is the chat's last line (strip, digest, notices)
+    r.s.lastText = cut(result.summary, 300);
     this.persist();
     this.updated(r);
     const parent = this.chats.get(parentId);
@@ -1542,10 +1548,12 @@ export class ChatManager implements ChatService {
     if (r.rootReportAt !== undefined && r.rootReportAt >= (r.s.work?.updatedAt ?? 0)) throw new Error('agent_report: this assignment already has its result.');
     const at = Date.now(), met = result.doneWhen.filter(x => x.met).length;
     if (run.endedAt === undefined) {
-      run.report = { at, outcome: result.outcome, verified: !result.doneWhen.length ? 'no' : met === result.doneWhen.length ? 'yes' : met ? 'partial' : 'no', summary: cut(result.summary, 140) };
+      run.report = { at, outcome: result.outcome, verified: !result.doneWhen.length ? 'no' : met === result.doneWhen.length ? 'yes' : met ? 'partial' : 'no', summary: cut(result.summary, 140), via: 'agent_report' };
       this.runSave();
     }
     r.report = { text: result.summary, at, ...(result.outcome === 'blocked' ? { blocked: true } : {}) };
+    // the deliverable is written only in the report now: its summary is the chat's last line (strip, digest, notices)
+    r.s.lastText = cut(result.summary, 300);
     r.rootReportAt = at;
     this.persist();
     this.updated(r);
@@ -2159,6 +2167,17 @@ export class ChatManager implements ChatService {
    *  all of them, only the reading ones, or none. */
   browserAccess(chatId: string): BrowserAccess {
     return browserAccess(this.chats.get(chatId)?.policy);
+  }
+
+  /** Whether a chat sees one of the tools added to its own endpoint: only those its kind could never use are left out
+   *  (refused for that kind of chat, or already on its own endpoint), so nothing that works today is lost. The
+   *  Orchestrator opens root chats with app_create_chat, reports to no one and has catalog and lessons on its own
+   *  endpoint (second-brain-app); a chat with no parent has no one to ask. */
+  chatToolShown(chatId: string, tool: string): boolean {
+    const s = this.chats.get(chatId)?.s;
+    if (!s) return true;
+    if (s.isOrchestrator) return !ORCHESTRATOR_HIDDEN.has(tool);
+    return !(tool === 'agent_ask_parent' && !s.parentId);
   }
 
   private mcpConfig(chatId: string): string | null {
