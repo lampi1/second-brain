@@ -54,7 +54,9 @@ export function SettingsPage(){
  const prefs=ui.use(s=>s.prefs),settings=useApp(s=>s.settings),engines=useEngines(),[query,setQuery]=useState('');
  // a link to one card ("impostazioni/update": the restart notice's «Aggiornamenti») scrolls to it once the page is drawn
  const arg=ui.use(s=>s.page==='impostazioni'?s.pageArg:null);
- useEffect(()=>{if(!arg||!settings)return;const id=requestAnimationFrame(()=>document.getElementById(`st-section-${arg}`)?.scrollIntoView({block:'start'}));return()=>cancelAnimationFrame(id);},[arg,!!settings]);
+ // a deep link (Task's «Impostazioni di lettura» → notifications, ADR 0101) scrolls to its section, and once more when the
+ // sections above it have loaded (the connectors and the update panel grow after the first paint)
+ useEffect(()=>{if(!arg||!settings)return;const go=()=>document.getElementById(`st-section-${arg}`)?.scrollIntoView({block:'start'});const id=requestAnimationFrame(go);const again=setTimeout(go,700);return()=>{cancelAnimationFrame(id);clearTimeout(again);};},[arg,!!settings]);
  if(!settings)return null;
  const groups=[
   {id:'profile',icon:<IconUser size={18}/>,description:t('essential.desc.profile'),title:t('profile.group'),search:[t('profile.name'),t('profile.role'),t('profile.mainWork'),t('profile.replyStyle'),'me.md profilo profile'].join(' '),body:<ProfileSettings/>},
