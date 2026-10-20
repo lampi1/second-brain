@@ -4,13 +4,14 @@
 // with, its configuration (tools, permission ceiling, the roles it may launch), the skills it loads at every launch, its
 // versions, its pack actions and the user's milestones (ProgressPanel). "Modifica" opens the editor in place: only the
 // behaviour is editable (instructions, engine, model, tier, launches, skills, context; the permissions on their own
-// card); name, summary and character belong to the role. "Ripristina predefinito" goes back to the shipped role
+// card); name and summary belong to the role; the character can be swapped for the user's own picture
+// (AgentImagePicker, under the badge). "Ripristina predefinito" goes back to the shipped role
 // after an inline confirmation. Editing never changes running chats. Rendered by AgentCatalogPage.tsx. Styles:
 // styles/agent-studio.css.
 import { Select } from './Select';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { MAX_CONTEXT_RANGE, type AgentDraft, type AgentMetrics, type AgentProfile, type AgentVersion } from '@shared/agents';
-import { MODEL_TIERS, WORK_ROLE_IDS, PULSE_ID, roleName, tierRank, type ModelTier } from '@shared/roles';
+import { MODEL_TIERS, WORK_ROLE_IDS, PULSE_ID, isRoleId, roleName, tierRank, type ModelTier } from '@shared/roles';
 import { characterOf } from '@shared/characters';
 import { agentHistory, refreshAgents, resetAgent, restoreAgentVersion, saveAgent, useAgents } from '../store/agents';
 import { toast } from '../store/ui';
@@ -24,6 +25,7 @@ import { holdUpdate } from '../lib/update-barrier';
 import { go, goTarget } from '../actions';
 import { locale, t } from '../i18n';
 import { AgentAvatar } from './AgentAvatar';
+import { AgentImagePicker } from './AgentImagePicker';
 import { AgentReadiness } from './AgentReadiness';
 import { AgentPackDetails } from './AgentPackDetails';
 import { ProgressPanel } from './ProgressPanel';
@@ -230,7 +232,7 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
     <button type="button" className="ad-back" onClick={() => go({ page: 'agenti' })}><span aria-hidden="true">←</span> {t('agentDetail.back')}</button>
     <article className="ad-body" data-testid={`agent-detail-${profile.id}`}>
       <header className="ad-hero" style={{ '--row-index': 0 } as CSSProperties}>
-        <span className="ad-avatar"><AgentAvatar avatar={profile.avatar} name={profile.name} size={96} /></span>
+        <div className="ad-avatar-col"><span className="ad-avatar"><AgentAvatar avatar={profile.avatar} name={profile.name} size={96} /></span>{isRoleId(profile.id) && <AgentImagePicker id={profile.id} />}</div>
         <div className="ad-id">
           <p className="ad-eyebrow">{t(profile.userLocked ? 'studio.customized' : 'studio.builtIn')}</p>
           <h2>{profile.name}</h2>

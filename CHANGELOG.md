@@ -6,6 +6,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- **Your own picture for a role** (owner, 2026-10-20; ADR 0090): "Cambia immagine" under the badge on a role's page
+  takes a PNG, JPG or WebP; its centre square replaces the character everywhere. "Immagine predefinita" brings the
+  character back.
 - **The brain without the app** (owner, 2026-10-20; ADR 0088): Settings → Il mio spazio → "Condividi il brain" saves a
   zip colleagues open in Claude Code, Cursor or Codex (AGENTS.md, rules, skills, roles as subagents, scripts; never
   memory; guard-scanned). `node brain-template/install.mjs` now gives a brain that works in those tools on its own.
