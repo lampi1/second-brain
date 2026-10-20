@@ -75,6 +75,29 @@ describe('decideApproval', () => {
   });
 });
 
+describe('the Battito\'s proposals (ADR 0102)', () => {
+  const proposal = { id: 'pa_1', kind: 'learned-rule' as const, agentId: 'pulse', title: 'Adatta Battito', text: 'Riduci le carte idea: non utili.', evidence: ['pc_1', 'pc_2'], engine: 'claude', createdAt: 400, state: 'pending' as const };
+  it('join the inbox after the roles\' entries, decided through approvals:decide, rendered with their text', async () => {
+    const f = fixture();
+    const invoke = f.client.invoke;
+    f.client.invoke = (async (channel: string, payload: unknown) => {
+      if (channel === 'approvals:list') return [proposal, { ...proposal, id: 'pa_2', state: 'approved' }];
+      if (channel === 'approvals:decide') { f.calls.push([channel, payload]); return { ok: true }; }
+      return (invoke as (c: string, p: unknown) => Promise<unknown>)(channel, payload);
+    }) as unknown as ApprovalsClient['invoke'];
+    const s = await gatherApprovals(f.client);
+    expect(s.items.map(i => i.type)).toEqual(['trial', 'lifecycle', 'pulse']);
+    const item = s.items[2]!;
+    expect(item).toMatchObject({ key: 'pulse:pa_1', agent: { id: 'pulse' } });
+    await decideApproval(f.client, item, { type: 'pulse', decision: 'discard' });
+    expect(f.calls.filter(([c]) => c === 'approvals:decide')).toEqual([['approvals:decide', { id: 'pa_1', decision: 'discard' }]]);
+    await expect(decideApproval(f.client, s.items[0]!, { type: 'pulse', decision: 'approve' })).rejects.toThrow(/does not match/);
+    const html = renderToStaticMarkup(createElement(AgentApprovalsView, { state: s, error: false, busy: null, done: null, failure: null, onDecide: () => {}, onDismiss: () => {}, onRefresh: () => {} }));
+    expect(html).toContain('Riduci le carte idea: non utili.');
+    expect(html).toContain('Proposta del Battito');
+  });
+});
+
 describe('cards', () => {
   it('render what changes, why and the numbers, with no decision taken on render', async () => {
     const f = fixture(), state = await gatherApprovals(f.client);

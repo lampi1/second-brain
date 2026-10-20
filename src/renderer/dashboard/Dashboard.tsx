@@ -19,6 +19,7 @@ import { Graph } from './Graph';
 import { ThemesTab } from './Themes';
 import { HeadlineLine, useHeadline } from '../brain/pages/HomeHeadline';
 import { HelpTip } from '../components/HelpTip';
+import { PulseBoard } from '../components/ContextPulse';
 import { BarChart, HBarChart } from '../brain/components/Charts';
 import { ErrorsTab } from './ErrorsTab';
 import { now as clockNow } from '../lib/clock';
@@ -165,6 +166,8 @@ export function Dashboard() {
           {(costs.data?.advice ?? []).map((a, i) => <Panel key={i} title={a.text} note={copy('Suggerimento dalla fonte costi', 'Suggestion from cost source')} source="/api/cost?days=7" facts={`${a.text}: ${money(a.usd)} estimated saving`}><p>{copy('Risparmio stimato', 'Estimated saving')}: {money(a.usd)}</p></Panel>)}
           {(tables.data?.recurrence.totals ?? []).filter(([, n]) => n > 1).map(([type, n]) => <Panel key={type} title={type} note={copy('Errore ricorrente', 'Recurring error')} source="ai-errors.md · recurrence" facts={`${type}: ${n} recorded occurrences`}><p>{number(n)} {copy('occorrenze registrate. Esamina la regola con l’Orchestrator.', 'recorded occurrences. Review the rule with the Orchestrator.')}</p></Panel>)}
         </div>
+        {/* the Battito's board (at most 3 cards, ADR 0102) under the app's own signals */}
+        <PulseBoard />
         {!long.length && !rows.length && !costs.data?.advice.length && !(tables.data?.recurrence.totals ?? []).some(([, n]) => n > 1) && <Empty>{copy('Nessun segnale azionabile nei dati disponibili. Gli spunti compariranno qui.', 'No actionable signals in available data. Insights will appear here.')}</Empty>}
       </>}
     </div>

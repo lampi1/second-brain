@@ -54,6 +54,23 @@ it('filters search card types before applying the two-card cap', async () => {
   expect(await f.service.run('pulse')).toEqual({ ok: true });
   expect(f.service.list('search').cards.map(c => c.type)).toEqual(['collegamento', 'curiosita']);
 });
+it('writes the Dashboard line in the day\'s first cards call only, and asks for card actions (ADR 0102)', async () => {
+  const f = fixture();
+  f.runOnce.mockResolvedValue({ ok: true, engine: 'claude', model: 'sonnet', costUsd: 0.01, costBasis: 'reported', tokens: null, durationMs: 1,
+    text: JSON.stringify({ headline: 'Gli agenti lavorano, il caffè no.', cards: [{ type: 'promemoria', title: 'Rivedi la PR', body: 'La build è rossa.', why: 'Dal filo.', refs: ['d1'], places: ['board'], action: { kind: 'chat', prompt: 'Guarda la build rossa' } }] }) });
+  expect(await f.service.run('pulse')).toEqual({ ok: true });
+  const first = (f.runOnce.mock.calls[0] as unknown as [{ system: string; maxOutputTokens: number }])[0];
+  expect(first.system).toContain('"headline"');
+  expect(first.system).toContain('"action"');
+  expect(f.service.headline()).toMatchObject({ text: 'Gli agenti lavorano, il caffè no.', source: 'model' });
+  expect(f.service.list('board').cards[0]?.action).toEqual({ kind: 'chat', prompt: 'Guarda la build rossa' });
+  f.material.now += '\n- a new thread'; // the digest changes: a second call that day
+  await f.service.run('pulse', 'slot2');
+  const second = (f.runOnce.mock.calls[1] as unknown as [{ system: string }])[0];
+  expect(second.system).not.toContain('"headline"');
+  // no headline job of its own any more: the scheduler has the cards only
+  expect(f.service.pendingApprovals()).toBe(0);
+});
 it('keeps legacy headline opt-out unless new preference explicitly overrides it', () => {
   expect(fromSaved({ headlineOn: false }).pulse!.headline.on).toBe(false);
   expect(fromSaved({ headlineOn: false, pulse: { headline: { on: true } } }).pulse!.headline.on).toBe(true);

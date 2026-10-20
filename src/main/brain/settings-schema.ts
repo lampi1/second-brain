@@ -37,7 +37,7 @@ const BASE: readonly SettingDef[] = [
   { key: 'pulse.on', type: 'boolean', default: true, protected: true, label: 'Battito', description: 'Carte e frase della Dashboard, soltanto mentre la finestra è aperta.' },
   { key: 'pulse.dailyUsd', type: 'usd', min: 0.01, max: 2, default: 0.25, protected: true, label: 'Battito: budget giornaliero ($)', description: 'Stima di ammissione condivisa tra carte e frase. I costi non riportati restano sconosciuti.' },
   { key: 'pulse.slots', type: 'slots', default: ['08:30', '13:00', '18:30'], protected: true, label: 'Battito: orari', description: 'Da uno a tre orari locali; nessun recupero dei giorni precedenti.' },
-  { key: 'pulse.headline.on', type: 'boolean', default: true, protected: true, label: 'Battito: frase Dashboard', description: 'Una frase al massimo ogni ora, nello stesso budget.' },
+  { key: 'pulse.headline.on', type: 'boolean', default: true, protected: true, label: 'Battito: frase Dashboard', description: 'Una frase al giorno, scritta nella prima chiamata del Battito della giornata, nello stesso budget.' },
   { key: 'jobs.fallback', type: 'enum', values: ['auto', 'off'], default: 'auto', protected: true, label: 'Battito: motore alternativo', description: 'Automatico: API, poi Claude Code senza strumenti.' },
   ...PULSE_TYPES.map((t): SettingDef => ({ key: `pulse.types.${t}`, type: 'boolean', default: true, protected: false, label: `Battito: ${t}`, description: 'Mostra questo tipo di carta.' })),
   ...(['board', 'agent', 'search', 'file'] as const).map((p): SettingDef => ({ key: `pulse.places.${p}`, type: 'boolean', default: true, protected: false, label: `Battito: ${p}`, description: 'Mostra le carte in questa posizione.' })),
@@ -76,13 +76,6 @@ const BASE: readonly SettingDef[] = [
     description: 'Sopra questa CPU (media degli ultimi secondi) le chat e i messaggi degli agenti aspettano.' },
   { key: 'loadQueueRam', type: 'int', min: 0, max: 90, default: 15, protected: true, label: 'Coda per carico: RAM libera sotto (%)',
     description: 'Sotto questa memoria libera le chat e i messaggi degli agenti aspettano. 0 = non guardare la RAM.' },
-  // the Grindhouse's headline (SPEC 18, main/headline.ts). Protected: it spends the API credits about once an hour
-  { key: 'headlineOn', type: 'boolean', default: true, protected: true, label: 'Battuta del Grindhouse',
-    description: 'Circa una volta l’ora un modello scrive una battuta sui fatti veri della giornata (crediti API, al massimo 1500 token). Spento: una battuta della lista dell’app, zero token.' },
-  { key: 'headlineModel', type: 'model', default: '', protected: true, label: 'Battuta: modello',
-    description: 'Il modello Claude che scrive la battuta, sul motore Anthropic API. Vuoto = claude-opus-5-5.' },
-  { key: 'headlineEffort', type: 'enum', values: ['', 'low', 'medium', 'high'], default: '', protected: true, label: 'Battuta: effort',
-    description: 'Quanto ragiona il modello della battuta. Vuoto = low.' },
   { key: 'osToasts', type: 'enum', values: ['urgent', 'normal', 'off'], default: 'urgent', protected: true, label: 'Notifiche di sistema',
     description: 'Solo le urgenti (una chat ti aspetta), anche le normali, o nessuna (resta tutto nel feed).' },
   { key: 'dndUntil', type: 'int', min: 0, max: 8.64e15, nullable: true, default: null, protected: true, label: 'Non disturbare fino a',
@@ -255,7 +248,6 @@ export function defaults(): Settings {
     appRepo: null,
     projectsRoot: null,
     loadQueue: true, loadQueueCpu: 75, loadQueueRam: 15,
-    headlineOn: true, headlineModel: '', headlineEffort: '',
     delegation: { ...DELEGATION_DEFAULTS }, modelTiers: {},
   };
 }

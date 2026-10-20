@@ -125,7 +125,7 @@ app.whenReady().then(async () => {
   const headline = new Headline({
     file: path.join(app.getPath('userData'), 'headline.json'),
     complete: (req, signal) => s.engines.text.complete(req, signal),
-    settings: () => s.brain.settings(),
+    settings: () => ({ on: s.brain.settings().pulse?.headline.on !== false }),
     lang: () => { const l = s.brain.settings().language; return l === 'it' || l === 'en' ? l : systemLang(); },
     material: () => {
       const d = new Date(), day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -137,6 +137,8 @@ app.whenReady().then(async () => {
     ...(demo && process.env.SB_DEMO_FREEZE === '1' ? { now: () => FROZEN_EPOCH } : {}),
   });
   const pulse = createPulse(s, { emitter, window: () => win, userData: app.getPath('userData') }, () => headline.get());
+  // the Battito's proposals count in the morning block's "Da approvare" (ADR 0102)
+  if (s.morning && pulse) s.morning.extraApprovals = () => pulse.pendingApprovals();
   const unsubscribePulse = s.brain.onSettingChange(change => { if (change.key.startsWith('pulse.') || change.key === 'jobs.fallback') pulse?.start(); });
     const mcpServers = () => { if (!s.mcpServers) throw new Error('Server MCP non disponibili.'); return s.mcpServers; };
     const connectors = createAppConnectors(app.getPath('userData'), () => s.tasks.refreshFresh(), l => s.tasks.onRead(l));

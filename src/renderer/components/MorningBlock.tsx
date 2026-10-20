@@ -29,7 +29,6 @@ export function whenText(at: number, now: number): string {
   return `${a.toLocaleDateString(locale(), { day: '2-digit', month: '2-digit' })} ${hhmm(at)}`;
 }
 const outcome = (r: MorningRun) => t(`alive.m.outcome.${r.outcome}`);
-const toneOf = (r: MorningRun) => (r.outcome === 'done' ? 'good' : r.outcome === 'blocked' ? 'bad' : r.outcome === 'partial' ? 'warn' : '');
 
 interface Row { key: string; tone?: string; text: string; sub?: string; open: () => void; extra?: ReactNode }
 

@@ -16,3 +16,10 @@ export function filePulsePlace(path: string, root: string | null | undefined): P
   if (!relative || relative.split('/').some(s => !s || s === '.' || s === '..') || relative.includes(':')) return null;
   return `file:${relative}`;
 }
+
+/** "08:30, 13:00" (Settings → Notifiche, PulseSettings.tsx) → the sorted slots, or null when it is not one to three
+ *  HH:MM times. */
+export function parseSlots(text: string): string[] | null {
+  const list = [...new Set(text.split(/[,;\s]+/).map(s => s.trim()).filter(Boolean).map(s => (/^\d:\d\d$/.test(s) ? `0${s}` : s)))];
+  return list.length >= 1 && list.length <= 3 && list.every(s => /^([01]\d|2[0-3]):[0-5]\d$/.test(s)) ? list.sort() : null;
+}

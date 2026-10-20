@@ -315,13 +315,10 @@ export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: Engin
     tableModel: (engine, req) => roleTableModel(brain, engine, req),
     pulsePreset: () => {
       const choices = engineInfos();
-      let e = choices.find(e => e.kind === 'api' && agentsMayOpen(brain.settings(), e.id) && engines.hasKey(e.id))
+      const e = choices.find(e => e.kind === 'api' && agentsMayOpen(brain.settings(), e.id) && engines.hasKey(e.id))
         ?? choices.find(e => e.kind === 'claude');
-      const s = brain.settings();
-      if (s.headlineModel && e?.kind !== 'claude' && engineOf(e?.id ?? '')?.protocol !== 'anthropic') e = choices.find(e => e.kind === 'claude');
       const model = e ? brain.routingInfo().registry?.models.find(m => priceEnginesOf(e).includes(m.harness) && m.tier === 'mid')?.id ?? (e.kind === 'claude' ? 'sonnet' : null) : null;
-      return { engine: e?.id ?? 'claude', model: s.headlineModel || model,
-        ...(e?.caps.effort ? { effort: s.headlineEffort || 'low' as const } : {}) };
+      return { engine: e?.id ?? 'claude', model, ...(e?.caps.effort ? { effort: 'low' as const } : {}) };
     },
     models: () => {
       const seen = withApiModels(brain.modelsSeen());

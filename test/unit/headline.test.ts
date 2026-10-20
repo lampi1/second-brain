@@ -8,7 +8,7 @@ import path from 'node:path';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { HeadlineState, Settings } from '../../src/shared/contract';
+import type { HeadlineState } from '../../src/shared/contract';
 import type { TextRequest, TextResult } from '../../src/main/engines/text';
 import { BUILTIN, Headline, buildPrompt, builtinLine, pickLine, scrub, type HeadlineDeps } from '../../src/main/headline';
 import { HeadlineLine } from '../../src/renderer/brain/pages/HomeHeadline';
@@ -20,14 +20,14 @@ const okResult = (text: string, usd = 0.02): TextResult => ({ ok: true, text, us
 
 let dir: string;
 let now: number;
-let settings: Pick<Settings, 'headlineOn' | 'headlineModel' | 'headlineEffort'>;
+let settings: ReturnType<HeadlineDeps['settings']>;
 let visible: boolean;
 let emitted: HeadlineState[];
 let calls: TextRequest[];
 
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-headline-'));
-  now = T0; settings = { headlineOn: true, headlineModel: '', headlineEffort: '' }; visible = true; emitted = []; calls = [];
+  now = T0; settings = { on: true, model: '', effort: '' }; visible = true; emitted = []; calls = [];
 });
 afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
 
@@ -99,14 +99,14 @@ describe('Headline', () => {
     expect(h.due()).toBe(false);
     now += HOUR - 1; expect(h.due()).toBe(false);
     now += 1; expect(h.due()).toBe(true);
-    settings = { ...settings, headlineOn: false };
+    settings = { ...settings, on: false };
     expect(h.due()).toBe(false);
     expect(h.get().source).toBe('builtin'); // off: the app's own list, zero tokens
     expect(make(async () => okResult(''), { calls: false }).due()).toBe(false); // demo and tests
   });
 
   it('uses the model and effort of the settings', async () => {
-    settings = { headlineOn: true, headlineModel: 'claude-sonnet-5', headlineEffort: 'medium' };
+    settings = { on: true, model: 'claude-sonnet-5', effort: 'medium' };
     await make(async () => okResult(answer(['Una battuta di Sonnet']))).refresh();
     expect(calls[0]).toMatchObject({ model: 'claude-sonnet-5', effort: 'medium' });
   });
