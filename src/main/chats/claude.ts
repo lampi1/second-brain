@@ -10,6 +10,8 @@
 //   stdout → SDK messages (system/init, stream_event deltas, assistant, user tool results, result with cost) and the
 //            CLI's own control requests: can_use_tool (permissions and AskUserQuestion), answered with
 //            {"type":"control_response","response":{"subtype":"success",request_id,response:{behavior,…}}}.
+//            With opts.preToolUse, initialize registers one PreToolUse hook callback and the CLI asks it with
+//            hook_callback before each tool call (answered with the hook's JSON output: {} or a deny with its reason).
 // Messages become contract ChatItems (streamed text as replace events, tool rows with a one-line summary, diff counts,
 // results with cost). Robust by design: a bad line is logged and skipped, a dead process becomes state closed/error
 // with the reason, and nothing here can throw into the app. Used by manager.ts through the HarnessSession interface.
@@ -25,7 +27,7 @@ import { closePipes, engineKills, jobGuard, killEngineTree } from './jobguard';
 import { reapEnabled, reapEngine, type Root } from './proctree';
 import { LiveCost, priceUsage } from './live-cost';
 import { describeSuggestions, diffFor, diffFromResult, flattenAnswers, permissionText, questionsFrom, resultText, resumedAgent, toolSummary } from './claude-map';
-import { cut, lastLine, nextId, stripAnsi, tokenUsage, toCommands, trimInput, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
+import { cut, lastLine, nextId, stripAnsi, tokenUsage, toCommands, trimInput, type AnswerPatch, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
 import { releaseId } from '../release';
 import { drift, record } from './drift';
 import { ownProcessGroup, sharedDir } from '../platform';
@@ -121,6 +123,8 @@ const o = (v: unknown): Obj => (v && typeof v === 'object' && !Array.isArray(v) 
 const s = (v: unknown): string => (typeof v === 'string' ? v : '');
 const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+/** The callback id of the app's in-process PreToolUse hook (opts.preToolUse), registered at initialize. */
+const PRE_TOOL_HOOK = 'sb_pre_tool_use';
 
 const PERMISSION_MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions'];
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -325,7 +329,7 @@ export class ClaudeSession implements HarnessSession {
       this.job = job;
       if (this.exitedRoot) { this.exitedRoot.job = job; if (!this.keepChildren) void jobGuard.release(job); } // exited first: the walk reaped it
     });
-    this.controlRaw({ subtype: 'initialize', hooks: null }, 60000).then(env => {
+    this.controlRaw({ subtype: 'initialize', hooks: this.opts.preToolUse ? { PreToolUse: [{ matcher: '*', hookCallbackIds: [PRE_TOOL_HOOK] }] } : null }, 60000).then(env => {
       const r = o(env.response);
       this.readyAt = Date.now();
       this.readyDone();
@@ -357,7 +361,7 @@ export class ClaudeSession implements HarnessSession {
     if (this.state !== 'waiting') this.setState('running');
   }
 
-  answer(requestId: string, answer: Answer): boolean {
+  answer(requestId: string, answer: Answer, patch?: AnswerPatch): boolean {
     const call = this.calls.get(requestId);
     if (!call) return false;
     let response: Obj;
@@ -372,7 +376,7 @@ export class ClaudeSession implements HarnessSession {
         // never when the CLI forbids a persistent rule for this ask (suppress_always_allow_rule)
         if (answer.always && call.noAlways) log.warn('chats', '"always" ignored: the CLI forbids a rule for this ask', { chat: this.opts.chatId, data: { requestId, tool: call.tool } });
         const rules = answer.always && !call.noAlways ? call.suggestions.map(x => ({ ...o(x), destination: 'session' })) : [];
-        response = { behavior: 'allow', updatedInput: call.input, toolUseID: call.toolUseId, ...(rules.length ? { updatedPermissions: rules } : {}) };
+        response = { behavior: 'allow', updatedInput: patch ? { ...call.input, ...patch } : call.input, toolUseID: call.toolUseId, ...(rules.length ? { updatedPermissions: rules } : {}) };
       } else {
         response = { behavior: 'deny', message: answer.message?.trim() || 'Rifiutato dall’utente.', toolUseID: call.toolUseId };
       }
@@ -686,6 +690,7 @@ export class ClaudeSession implements HarnessSession {
   private onControlRequest(m: Obj): void {
     const id = s(m.request_id);
     const r = o(m.request);
+    if (r.subtype === 'hook_callback' && s(r.callback_id) === PRE_TOOL_HOOK && this.opts.preToolUse) return this.onPreToolUse(id, o(r.input));
     if (r.subtype !== 'can_use_tool') {
       this.drift('control request', s(r.subtype), m);
       log.warn('chats', 'unsupported control request from CLI', { chat: this.opts.chatId, data: { subtype: r.subtype } });
@@ -716,6 +721,21 @@ export class ClaudeSession implements HarnessSession {
     log.info('chats', 'can_use_tool', { chat: this.opts.chatId, data: { requestId: id, tool, type: req.type, toolUseId: call.toolUseId || null } });
     this.setState('waiting');
     this.sink.pending(req);
+  }
+
+  /** The app's in-process PreToolUse hook (opts.preToolUse): no say = an empty output (the engine goes on as without
+   *  it); a refusal = permissionDecision deny with the reason the model reads. A failing hook never blocks a call. */
+  private onPreToolUse(id: string, input: Obj): void {
+    let response: Obj = {};
+    try {
+      const tool = s(input.tool_name);
+      const v = input.hook_event_name === 'PreToolUse' && tool ? this.opts.preToolUse!.decide({ tool, input: input.tool_input, ...(s(input.agent_id) ? { agentId: s(input.agent_id) } : {}) }) : null;
+      if (v) {
+        response = { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: v.deny } };
+        log.info('chats', 'pre-tool hook refused', { chat: this.opts.chatId, data: { tool } });
+      }
+    } catch (e) { log.warn('chats', 'pre-tool hook failed: the call goes on', { chat: this.opts.chatId, cause: errText(e), hint: 'see agents/orchestrator-budget.ts' }); }
+    try { this.write({ type: 'control_response', response: { subtype: 'success', request_id: id, response } }); } catch { /* gone */ }
   }
 
   private onControlResponse(r: Obj): void {
@@ -868,6 +888,7 @@ export class ClaudeSession implements HarnessSession {
 
   private onResult(m: Obj): void {
     this.flushStreams(true);
+    this.opts.preToolUse?.turnEnded();
     const failed = m.is_error === true || (s(m.subtype) !== '' && s(m.subtype) !== 'success');
     // the turn the user stopped ends as error_during_execution: an interruption he asked for, not an error (12/10:
     // "quando faccio Invia subito vedo sempre un errore")

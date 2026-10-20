@@ -97,7 +97,7 @@ export class AgentPackFlows {
     let shared = '';
     try { const file = brainPath(this.root(), 'memory/shared.md'); if (fs.existsSync(file) && fs.statSync(file).size <= 256 * 1024) shared = fs.readFileSync(file, 'utf8').trim().slice(-2000); } catch { /* none */ }
     const linked = loaded.filter(n => n !== own);
-    return { pluginDir, skills: loaded, skillRoot: path.join(pluginDir, 'skills'), instructions: [instructions, linked.length ? `Your skills (load the one that fits the job): ${linked.join(', ')}.` : '',
+    return { pluginDir, skills: loaded, skillRoot: path.join(pluginDir, 'skills'), instructions: [instructions, linked.length ? `Your skills (load the one that fits the job; call the Skill tool with the qualified name, e.g. ${runtimePluginName(hash)}:${linked[0]}): ${linked.map(n => `${runtimePluginName(hash)}:${n}`).join(', ')}.` : '',
       shared ? `Shared memory (memory/shared.md):\n${shared}` : '',
       `Your memory (agents/${own}/memory.md; add a line with the product memory writer: agent "<brain>" "${own}" "…")${memory ? `:\n${memory}` : ': empty so far.'}`, `Skill files: ${path.join(pluginDir, 'skills')}`].filter(Boolean).join('\n\n') };
   }

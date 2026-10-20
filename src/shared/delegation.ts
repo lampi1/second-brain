@@ -122,7 +122,7 @@ export function delegationPrompt(c: DelegationContract, at: { role: WorkRoleId; 
     ...(c.context ? [`Context: ${c.context}`] : []),
     `Output: ${c.output}`,
     'Done when:', ...c.doneWhen.map(d => `- ${d}`),
-    ...(at.skills.length ? [`Your skills: ${at.skills.join(', ')}.`] : []),
+    ...(at.skills.length ? [`Your skills: ${at.skills.join(', ')} (call each with the Skill tool by the qualified name your role's skill list gives, «agent-…:<name>»).`] : []),
     'When the output is ready, or something blocks you, call agent_report once (outcome, summary, output, each done-criterion above with met and evidence). Your parent receives it; it does not read this chat.',
     'An ambiguity in this contract goes to your parent first: agent_ask_parent (it answers from what it knows). Ask the user only for a permission, an irreversible or external action, a choice that changes the goal, or what your parent could not answer.',
     'If the user writes to you here, follow the user; when that changes your goal, say so in agent_report with goalChangedByUser: true and newGoal.',

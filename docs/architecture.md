@@ -63,7 +63,9 @@
   role page's Permessi card (`RolePermissions.tsx`) narrows a role through `agents:save` (a version). At launch the
   catalog's policy goes to the chat, narrowed by its parent's; under shell-read `refusedCommand` and the role gate pass
   `node` of a script listed in the brain's `read-only-tools.md` (`agents/read-tools.ts`); `agents/skill-needs.ts` turns a
-  passed skill's tools into launch warnings.
+  passed skill's tools into launch warnings. The role gate runs a granted bare skill name as `<launch plugin>:<name>`
+  (an `answer` patch → Claude's `updatedInput`); the Orchestrator's Claude session has a per-turn workspace budget, an
+  in-process PreToolUse hook (`agents/orchestrator-budget.ts`, `hook_callback`, ADR 0090).
 - **The task estimate** (ADR 0087): `agents/task-estimate.ts` groups the ended agent runs by agent × kind (the keyword
   classifier of `brain/estimates.ts` on the run's goal), kind, agent; a request takes the median of the first group with
   3 or more (the 30 most recent), its middle half, a confidence and its parts, and a path (self / one-agent / tree). The

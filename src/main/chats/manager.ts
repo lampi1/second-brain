@@ -58,6 +58,7 @@ import { type AgentOwnerSnapshot, type AgentRun, type AgentRunEnd, type AgentRun
 import { AgentRunStore, addSkill, addTurn, APP_MAX, endRun, REPO_MAX, reopenRun, SKILL_ID, SKILLS_MAX, staleDue, tagName, type RunLinks } from '../agents/runs';
 import { reportOf } from '../agents/run-report';
 import { gateRequest, runtimePluginName } from '../agents/role-gate';
+import { TurnToolBudget } from '../agents/orchestrator-budget';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
 import { resultMessage, type DelegationLimitHit, type DelegationResult } from '../../shared/delegation';
 import { aiErrorRuns, runMetrics } from '../agents/run-metrics';
@@ -1860,13 +1861,14 @@ export class ChatManager implements ChatService {
     const owner = r.s.agent, parent = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
     if (owner?.source !== 'catalog' || r.s.isOrchestrator) return false;
     const verdict = gateRequest(req, { role: { id: owner.id, name: owner.name }, skills: r.skills ?? [],
+      rewrite: engineOf(r.s.harness)?.kind === 'claude',
       policy: r.policy ?? null, brainRoot: this.opts.brainRoot?.() ?? null, readScripts: this.readScripts(r),
       ...(r.agentAssets ? { plugin: runtimePluginName(r.agentAssets.pluginDir) } : {}),
       ...(r.s.parentId ? { parent: { policy: parent ? parent.policy ?? null : r.policy ?? null, title: parent?.s.title ?? r.s.parentId } } : {}) });
     if (verdict.kind === 'pass') return false;
     if (verdict.kind === 'allow') {
-      r.session?.answer(req.id, { kind: 'permission', allow: true });
-      log.info('chats', 'role gate allowed', { chat: r.s.id, data: { tool: req.tool } });
+      r.session?.answer(req.id, { kind: 'permission', allow: true }, verdict.patch);
+      log.info('chats', 'role gate allowed', { chat: r.s.id, data: { tool: req.tool, qualified: !!verdict.patch } });
       return true;
     }
     this.addItem(r, sysItem(verdict.code, verdict.params, 'warn'), false);
@@ -2194,6 +2196,8 @@ export class ChatManager implements ChatService {
       chatId, cwd: r.s.cwd, model: r.choice.model, effort: r.choice.effort, permissionMode: this.modeFor(r), title: r.s.title,
       ...(r.policy ? { toolPolicy: r.policy.tools, ceiling: r.policy.ceiling } : {}),
       ...(r.agentAssets ? { agentAssets: r.agentAssets } : {}),
+      // the Orchestrator's turn stays short: a few workspace calls, then it delegates (ADR 0090, issue #98)
+      ...(r.s.isOrchestrator && engine.kind === 'claude' ? { preToolUse: new TurnToolBudget() } : {}),
       sessionId, resume, fork, worktree: r.worktree && !resume, mcpConfig: this.mcpConfig(chatId), costBaseUsd: r.costTotalUsd,
       compactWindowTokens: r.maxContext ?? this.compactWindow(),
       // Native subagents inherit this environment: a per-chat model cannot prove a memory event's producer.

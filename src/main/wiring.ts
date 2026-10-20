@@ -13,6 +13,7 @@ import { withApiModels } from './engines/sessions';
 import { AgentCatalogService } from './agents/catalog';
 import { RunFeedback } from './agents/run-feedback';
 import { independentModel } from './agents/model-tier';
+import { qualifiedSkillsLine, runtimePluginName } from './agents/role-gate';
 import { createAgentPacks } from './agents/pack/wiring';
 import { chatLearnTool } from './agents/pack/learning';
 import { agentCatalogTool, CATALOG_GUIDANCE, roleCatalogBrief, skillsSuggestTool } from './agents/discovery';
@@ -432,7 +433,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       const runtime = agentPacks.packs.runtime(req.roleId, req.skills ?? []);
       const resolvedHarness = resolved.request.harness;
       return { ...resolved, skills: runtime.skills, assets: { pluginDir: runtime.pluginDir, skillRoot: runtime.skillRoot },
-        instructions: resolvedHarness === 'cursor' ? `${resolved.instructions}\n\n${runtime.instructions}` : resolved.instructions };
+        // Claude loads the plugin itself: its instructions only need the skills' qualified names (issue #101)
+        instructions: resolvedHarness === 'cursor' ? `${resolved.instructions}\n\n${runtime.instructions}`
+          : [resolved.instructions, qualifiedSkillsLine(runtimePluginName(runtime.pluginDir), runtime.skills)].filter(Boolean).join('\n\n') };
     },
     onRunEnded: run => loopRef.current?.ended(run),
     onRunOutcome: run => { routingVerdict(run); loopRef.current?.outcome(run); },
