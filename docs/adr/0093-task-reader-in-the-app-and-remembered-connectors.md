@@ -1,4 +1,4 @@
-# ADR 0092 · The Task page's DevOps reader ships with the app; connector verification is remembered
+# ADR 0093 · The Task page's DevOps reader ships with the app; connector verification is remembered
 
 Date: 2026-10-20 · Status: accepted (issue #95) · Builds on: ADR 0072 (a fresh brain starts empty), ADR 0079 (Task
 page), ADR 0016 (one DevOps page, read by a brain script)
