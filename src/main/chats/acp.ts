@@ -11,7 +11,8 @@
 //   → session/prompt {sessionId, prompt:[{type:'image',mimeType,data}…, {type:'text'}]} → {stopReason, usage?} (images as
 //     blocks only when promptCapabilities.image; otherwise saved as files whose paths go in the text) · session/cancel
 //   → session/set_config_option {sessionId, configId, value}: the model's reasoning (option of category thought_level,
-//     e.g. reasoning_effort) and fast, from the user's settings (Chat aperte dall'Orchestrator). Offered because initialize
+//     e.g. reasoning_effort: the chat's effort, else the user's settings, Chat aperte dall'Orchestrator; mid-chat by
+//     setEffort, mapped onto the values the parameter offers) and fast, from the user's settings. Offered because initialize
 //     sends clientCapabilities._meta.parameterizedModelPicker (CLI 2026.07.23 acp/cursor-acp-agent): session/new|load
 //     then answer configOptions with each model parameter; without it the CLI keeps its own variant (high, fast) whatever
 //     --model or cli-config.json say (seen 2026-10-12 with grok-4.7). It writes only the app's own CURSOR_CONFIG_DIR.
@@ -130,6 +131,24 @@ export function modelParams(list: unknown): ModelParam[] {
 /** The variant as Cursor writes it: "grok-4.7[context=256k,reasoning_effort=medium,fast=false]". */
 export function variantOf(model: string, params: readonly ModelParam[]): string {
   return params.length ? `${model}[${params.map(p => `${p.id}=${p.value}`).join(',')}]` : model;
+}
+
+const EFFORT_LADDER = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
+/** The app's effort as one of the values a thought_level parameter offers: the same value (any case), else the nearest
+ *  offered step of the ladder (below first: max → xhigh on a model that stops there); null when it offers none of them. */
+export function acpEffortValue(effort: Effort, values: readonly string[]): string | null {
+  const exact = values.find(v => v.toLowerCase() === effort);
+  if (exact) return exact;
+  const at = EFFORT_LADDER.indexOf(effort);
+  const ranked = values.map(v => ({ v, i: EFFORT_LADDER.indexOf(v.toLowerCase()) })).filter(x => x.i >= 0)
+    .sort((a, b) => Math.abs(a.i - at) - Math.abs(b.i - at) || a.i - b.i);
+  return ranked[0]?.v ?? null;
+}
+
+/** The effort a thought_level value is, as the engine reports it (lower case), or null when it is not a plain level. */
+export function acpEffortObserved(params: readonly ModelParam[]): string | null {
+  const v = params.find(p => p.category === 'thought_level')?.value.toLowerCase() ?? '';
+  return /^[a-z][a-z0-9_-]{0,39}$/.test(v) ? v : null;
 }
 
 /** The parameter ids a model id pins in brackets: "gpt-5.6-sol[reasoning=high,fast=false]" → reasoning, fast. */
@@ -299,6 +318,8 @@ export class AcpSession implements HarnessSession {
   private caps: Obj = {};
   private models: { current: string | null; available: string[] } | null = null;
   private params: ModelParam[] = [];
+  /** the chat's effort (start option, then setEffort): wins over the settings' reasoning */
+  private effort: Effort | null;
   private modes: string[] = [];
   private msg: Stream | null = null;
   private lastAnswer = '';       // the turn's last assistant message (a network error shows up there)
@@ -347,6 +368,14 @@ export class AcpSession implements HarnessSession {
     this.childTelemetry = new AgentChildrenReporter(sink);
     this.harness = opts.engineId;
     this.sessionId = opts.resume ? opts.sessionId ?? null : null;
+    this.effort = opts.effort ?? null;
+  }
+
+  /** The variant running and the effort its thought_level parameter reports go to the chat's info. */
+  private variantChanged(current: string): string {
+    const variant = variantOf(current, this.params);
+    this.sink.changed({ model: variant, effortObserved: acpEffortObserved(this.params) });
+    return variant;
   }
 
   private get label(): string { return this.opts.label; }
@@ -498,7 +527,7 @@ export class AcpSession implements HarnessSession {
       const list = arr(m.availableModels).map(x => ({ id: s(o(x).modelId), name: s(o(x).name) })).filter(x => x.id);
       this.models = { current: s(m.currentModelId) || null, available: list.map(x => x.id) };
       this.params = modelParams(r.configOptions);
-      if (this.models.current) this.sink.changed({ model: variantOf(this.models.current, this.params) });
+      if (this.models.current) this.variantChanged(this.models.current);
       if (list.length) this.sink.models?.(list);
     }
     const md = o(r.modes);
@@ -542,7 +571,10 @@ export class AcpSession implements HarnessSession {
     const mc = this.opts.modelConfig, pinned = pinnedParams(this.opts.model);
     const want: [ModelParam, string][] = [];
     const thought = this.params.find(p => p.category === 'thought_level'), fast = this.params.find(p => p.id === 'fast');
-    if (mc?.reasoning && thought && !pinned.has(thought.id)) want.push([thought, mc.reasoning]);
+    // the chat's (or its role's) effort first, mapped onto what the model offers; else the settings' reasoning
+    const reasoning = this.effort && thought ? acpEffortValue(this.effort, thought.values) ?? this.effort : mc?.reasoning;
+    if (reasoning && thought && !pinned.has(thought.id)) want.push([thought, reasoning]);
+    else if (this.effort && !thought) log.info('chats', 'acp effort not applied: the model has no reasoning option', { chat, data: { engine: this.engine, model: current, effort: this.effort } });
     if (mc && fast && !pinned.has('fast')) want.push([fast, String(mc.fast)]);
     for (const [p, value] of want) {
       if (p.value === value) continue;
@@ -557,9 +589,8 @@ export class AcpSession implements HarnessSession {
         log.warn('chats', 'acp model option refused', { chat, data: { engine: this.engine, option: p.id, value, error: errText(e) } });
       }
     }
-    const variant = variantOf(current, this.params);
-    this.sink.changed({ model: variant });
-    log.info('chats', 'acp model variant', { chat, data: { engine: this.engine, asked: this.opts.model ?? null, config: mc ?? null, running: variant } });
+    const variant = this.variantChanged(current);
+    log.info('chats', 'acp model variant', { chat, data: { engine: this.engine, asked: this.opts.model ?? null, effort: this.effort, config: mc ?? null, running: variant } });
     if (misses.length) {
       log.warn('chats', 'acp runs another model than asked', { chat, data: { engine: this.engine, asked: this.opts.model ?? null, config: mc ?? null, running: variant, misses } });
       this.sysCode('runningOther', { label: this.label, variant, misses: misses.join(';;') }, 'warn');
@@ -774,8 +805,24 @@ export class AcpSession implements HarnessSession {
     this.sink.changed({ permissionMode: mode });
   }
 
-  async setEffort(_effort: Effort | null): Promise<void> {
-    throw new Error(`L’effort non si imposta con ${this.label}: scegli un modello (es. con [effort=high]).`);
+  /** The model's reasoning (session/set_config_option on its thought_level parameter), mapped onto the values it
+   *  offers. Before the session is open it is only kept: applyModelConfig sends it. null = keep what runs now. */
+  async setEffort(effort: Effort | null): Promise<void> {
+    this.effort = effort;
+    const current = this.models?.current;
+    if (!effort || !this.open || !current) { this.sink.changed({ effort }); return; }
+    const thought = this.params.find(p => p.category === 'thought_level');
+    if (!thought) throw new Error(`Il modello ${current} di ${this.label} non offre una scelta dell’effort.`);
+    const value = acpEffortValue(effort, thought.values);
+    if (!value) throw new Error(`Il modello ${current} di ${this.label} non offre l’effort ${effort} (offre: ${thought.values.join(', ') || 'nessun valore'}).`);
+    if (thought.value !== value) {
+      const r = await this.request('session/set_config_option', { sessionId: this.sessionId, configId: thought.id, value });
+      const next = modelParams(r.configOptions);
+      if (next.length) this.params = next; else thought.value = value;
+    }
+    const variant = this.variantChanged(current);
+    this.sink.changed({ effort });
+    log.info('chats', 'acp effort', { chat: this.opts.chatId, data: { engine: this.engine, effort, value, running: variant } });
   }
 
   async rename(_title: string): Promise<void> { /* the title lives in the app */ }
@@ -1059,7 +1106,7 @@ export class AcpSession implements HarnessSession {
       case 'current_mode_update': this.sink.changed({ permissionMode: s(u.currentModeId) === 'plan' || (s(u.currentModeId) === 'ask' && (this.opts.readOnly || this.opts.ceiling === 'plan')) ? 'plan' : 'default' }); return;
       case 'config_option_update': { // the CLI changed a model parameter by itself: the chat's info follows it
         const next = modelParams(u.configOptions);
-        if (next.length && this.models?.current) { this.params = next; this.sink.changed({ model: variantOf(this.models.current, next) }); }
+        if (next.length && this.models?.current) { this.params = next; this.variantChanged(this.models.current); }
         return;
       }
       case 'usage_update': {

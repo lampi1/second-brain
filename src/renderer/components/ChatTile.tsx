@@ -16,7 +16,7 @@
 import { t as auditText } from '../i18n';
 import { memo, useEffect, useRef, useState } from 'react';
 import type { PendingRequest } from '@shared/contract';
-import { chatCost, queueReason, folderName, minutes, permissionBadge, prettyModel, stateInfo, workTime } from '../lib/format';
+import { chatCost, queueReason, folderName, minutes, permissionBadge, modelWithEffort, stateInfo, workTime } from '../lib/format';
 import { useNow } from '../lib/clock';
 import { COMPACT_TILE_H } from '../lib/grid';
 import { isBusy, sameList } from '../store/state';
@@ -121,8 +121,8 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
   const busy = isBusy(chat);
   const st = stateInfo(chat);
   const queueLimits = { cpu: lqCpu, ram: lqRam };
-  // no per-chat effort here (#75): the agent's profile decides it and shows it, read only
-  const sub = [prettyModel(chat.model, chat.harness), chatCost(chat)].filter(Boolean).join(' · ');
+  // no per-chat effort control here (#75): the agent's profile decides it; the effort in use is shown read only (#100)
+  const sub = [modelWithEffort(chat), chatCost(chat)].filter(Boolean).join(' · ');
   const folder = folderName(chat.cwd);
   const perm = permissionBadge(chat.permissionMode);
   const work = workTime(chat, now);

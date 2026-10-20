@@ -60,7 +60,8 @@ describe('read-only answers (pure)', () => {
     for (const bad of ['--dangerously-skip-permissions', '-x', 'a b', 'a;b', 'x"y']) expect(checkModel(bad)).toHaveProperty('error');
     expect(effortFor(engineOrThrow('claude'), 'medium')).toBe('medium');
     expect(effortFor(engineOrThrow('claude'), 'huge')).toBeNull();
-    expect(effortFor(engineOrThrow('cursor'), 'medium')).toBeNull();
+    expect(effortFor(engineOrThrow('cursor'), 'medium')).toBe('medium'); // its model's thought_level option (#97)
+    expect(effortFor(engineOrThrow('anthropic'), 'medium')).toBeNull();
   });
 
   it('refuses an engine that is off, untrusted, unknown or not for agents, and anything but a fake under tests', () => {

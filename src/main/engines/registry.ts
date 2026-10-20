@@ -47,13 +47,15 @@ const CLAUDE_CAPS: EngineCaps = {
   effort: true, liveModel: true, fork: true, warm: true, worktree: true, permissionMode: true,
   transcript: true, cost: true, usage: true, preAllow: true, tools: true,
 };
+/** ACP: the effort is the model's thought_level option (session/set_config_option, chats/acp.ts setEffort); a model
+ *  without one refuses it in words (issue #97) */
 const ACP_CAPS: EngineCaps = {
-  effort: false, liveModel: false, fork: false, warm: false, worktree: false, permissionMode: false,
+  effort: true, liveModel: false, fork: false, warm: false, worktree: false, permissionMode: false,
   transcript: false, cost: false, usage: false, preAllow: false, tools: true,
 };
 /** an HTTP model: text only (the owner, 14/10: "solo testo per ora"), the model changes between turns, its cost from the
  *  usage it returns */
-const API_CAPS: EngineCaps = { ...ACP_CAPS, liveModel: true, cost: true, tools: false };
+const API_CAPS: EngineCaps = { ...ACP_CAPS, effort: false, liveModel: true, cost: true, tools: false };
 /** Codex app-server (ADR 0060): effort and model per turn, a message steers the running turn; no transcript the app
  *  reads, no cost (tokens only), no permission modes (it asks for each command outside its sandbox) */
 const CODEX_CAPS: EngineCaps = { ...ACP_CAPS, effort: true, liveModel: true };

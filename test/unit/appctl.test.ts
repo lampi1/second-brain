@@ -42,7 +42,7 @@ function deps() {
 describe('app control tools', () => {
   it('sets only a validated next-turn effort within the caller space and preserves the current report', async () => {
     const current = { supported: true, requested: 'xhigh', submitted: 'xhigh', effective: null, pending: false, effectiveSource: 'unknown', sessionDefault: 'high' };
-    const rows = [{ id: 'work', harness: 'claude', model: 'chosen-model', effort: 'xhigh', effortStatus: current }, { id: 'app', harness: 'claude', cwd: 'C:/repo' }, { id: 'cursor', harness: 'cursor' }];
+    const rows = [{ id: 'work', harness: 'claude', model: 'chosen-model', effort: 'xhigh', effortStatus: current }, { id: 'app', harness: 'claude', cwd: 'C:/repo' }, { id: 'cursor', harness: 'cursor' }, { id: 'api', harness: 'anthropic' }];
     const set = vi.fn(async (id: string, patch: object) => ({ ...rows.find(c => c.id === id), id, effortStatus: { ...current, requested: 'medium', pending: true }, ...patch }));
     const chats = { list: () => rows, set } as unknown as ChatService;
     const tool = appControlTools({ chats, browser: {} as BrowserService, brain: {} as BrainService, window: () => null, emitUi: () => {}, version: '0' }).find(t => t.name === 'app_set_chat_effort')!;
@@ -50,8 +50,10 @@ describe('app control tools', () => {
     expect(set.mock.calls).toEqual([['work', { effort: 'medium' }]]);
     for (const effort of [null, 1, 'bogus', { toString: () => 'medium' }]) await expect(Promise.resolve().then(() => tool.run({ chatId: 'work', effort }))).rejects.toThrow(/validi/);
     expect(await tool.run({ chatId: 'app', effort: 'medium' })).toMatchObject({ chatId: 'app' });
-    await expect(Promise.resolve().then(() => tool.run({ chatId: 'cursor', effort: 'medium' }))).rejects.toThrow(/non supporta/);
-    expect(set).toHaveBeenCalledTimes(2);
+    // Cursor takes it as its model's thought_level option (issue #97); an API engine has none
+    expect(await tool.run({ chatId: 'cursor', effort: 'low' })).toMatchObject({ chatId: 'cursor' });
+    await expect(Promise.resolve().then(() => tool.run({ chatId: 'api', effort: 'medium' }))).rejects.toThrow(/non supporta/);
+    expect(set).toHaveBeenCalledTimes(3);
     expect(rows[0]).toMatchObject({ model: 'chosen-model', effort: 'xhigh', effortStatus: current });
   });
   it('can never answer permissions; questions only through app_resolve_question', () => {

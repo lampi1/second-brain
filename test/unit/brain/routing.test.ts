@@ -108,7 +108,10 @@ describe('routing: resolve', () => {
     expect(resolve(T, it0, { harness: 'cursor', model: 'opus-x' }, DEF, REG)).toEqual({ error: expect.stringMatching(/Claude gira solo/) });
     expect(resolve(T, { kind: 'bug-fix', area: 'Pers · App' }, { harness: 'cursor', reason: 'r' }, DEF, REG)).toMatchObject({ harness: 'cursor', source: 'override' });
     expect(resolve(T, it0, { harness: 'claude', model: 'claude-mistero' }, DEF, REG)).toEqual({ error: expect.stringMatching(/models\.json/) });
-    expect(resolve(T, it0, { harness: 'cursor', effort: 'low' }, DEF, REG)).toEqual({ error: expect.stringMatching(/non vale per Cursor/) });
+    // Cursor takes an effort too (its model's thought_level option, issue #97) where models.json lists it for the model;
+    // an API engine takes none
+    expect(resolve(T, it0, { harness: 'cursor', effort: 'low', reason: 'r' }, DEF, REG)).toEqual({ error: expect.stringMatching(/grok-4\.7 non ha lo sforzo/) });
+    expect(resolve(T, it0, { harness: 'anthropic', effort: 'low' }, DEF, REG)).toEqual({ error: expect.stringMatching(/non vale per Anthropic API/) });
     expect(resolve(T, it0, { effort: 'max' }, DEF, REG)).toEqual({ error: expect.stringMatching(/max/) });
     expect(resolve(T, it0, { effort: 'max', reason: 'l’utente lo chiede' }, DEF, REG)).toMatchObject({ effort: 'max', source: 'override' });
     // the user's own default of max is the user's choice

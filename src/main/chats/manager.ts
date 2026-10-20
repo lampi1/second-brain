@@ -67,7 +67,7 @@ import { isCorrection } from '../../shared/correction';
 import { AgentChildrenReducer } from './agent-children';
 import { autoCloseNow, type AutoCloseCandidate } from './auto-close';
 import type { AutoCloseWaiting } from '../../shared/auto-close';
-import { effortValue, initialEffort, selectEffort, submitEffort } from './effort';
+import { effortValue, initialEffort, observeEffort, selectEffort, submitEffort } from './effort';
 import { AgentAnalyticsCollector } from '../agents/collector';
 
 import { orchestratorRole, roleFrame } from '../agents/orchestrator-role';
@@ -1124,10 +1124,16 @@ export class ChatManager implements ChatService {
       if (!EFFORTS.includes(patch.effort)) throw new Error(`Effort non valido: ${patch.effort}`);
       const engine = engineOrThrow(r.s.harness);
       if (!engine.caps.effort) throw new Error(`L’effort non si imposta con ${engine.label}: scegli il modello.`);
-      const e = patch.effort;
+      const e = patch.effort, before = { choice: r.choice.effort, effort: r.s.effort, status: r.s.effortStatus };
       r.choice.effort = e; r.s.effort = e;
       r.s.effortStatus = selectEffort(r.s.effortStatus ?? initialEffort(engine.caps.effort, null), e);
-      await apply('effort', sess ? () => sess.setEffort(e) : undefined);
+      // an ACP model that offers no such effort refuses now, in words, and the chat keeps what it had (nothing to retry)
+      if (sess && engine.kind === 'acp') {
+        try { await sess.setEffort(e); } catch (err) {
+          r.choice.effort = before.choice; r.s.effort = before.effort; r.s.effortStatus = before.status;
+          throw err;
+        }
+      } else await apply('effort', sess ? () => sess.setEffort(e) : undefined);
     }
     if (patch.permissionMode !== undefined) {
       if (!MODES.includes(patch.permissionMode)) throw new Error(`Modalità permessi non valida: ${patch.permissionMode}`);
@@ -2410,6 +2416,7 @@ export class ChatManager implements ChatService {
     if (!(r.autoClosing || r.autoEnding) || p.state !== 'closed') this.autoActivity(r);
     let save = false;
     if ('effortSubmitted' in p) r.s.effortStatus = submitEffort(r.s.effortStatus ?? initialEffort(!!engineOf(r.s.harness)?.caps.effort, r.choice.effort), p.effortSubmitted);
+    if ('effortObserved' in p) r.s.effortStatus = observeEffort(r.s.effortStatus ?? initialEffort(!!engineOf(r.s.harness)?.caps.effort, r.choice.effort), p.effortObserved);
     if ('effortSessionDefault' in p) r.s.effortStatus = { ...(r.s.effortStatus ?? initialEffort(!!engineOf(r.s.harness)?.caps.effort, r.choice.effort)), sessionDefault: effortValue(p.effortSessionDefault) };
     if (p.state) {
       const was = r.s.state;

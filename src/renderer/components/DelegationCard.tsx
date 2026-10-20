@@ -18,7 +18,7 @@ import { runSteps, type RunStep, type StepMark } from '../lib/run-steps';
 import { requestHost } from '../lib/child-requests';
 import { reqKey } from '../actions';
 import { useNow } from '../lib/clock';
-import { formatCost, prettyModel } from '../lib/format';
+import { formatCost, modelWithEffort } from '../lib/format';
 import { selectedHere } from '../lib/strip-click';
 import { t } from '../i18n';
 import { AgentAvatar } from './AgentAvatar';
@@ -75,7 +75,7 @@ function Who({ chat }: { chat: ChatSummary }) {
   const role = chat.agent?.name ?? chat.delegation?.role ?? '';
   const skills = chat.run?.tags?.skills ?? [];
   const from = chat.delegation?.at ?? chat.run?.startedAt ?? now, until = chat.delegation?.result?.at ?? chat.closedAt ?? now;
-  const model = prettyModel(chat.model, chat.harness);
+  const model = modelWithEffort(chat);
   return <div className="dc-who">
     <AgentAvatar avatar={chat.agent?.avatar} name={role} size={20} />
     <span className="dc-role">{role}</span>
