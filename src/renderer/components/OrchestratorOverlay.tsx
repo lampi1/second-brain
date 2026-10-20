@@ -41,10 +41,12 @@ export function useDockReserve(): Reserve {
   return { right: size.w, bottom: 0, top: 0 };
 }
 
+const LANES = ['orchestrator', 'lampo'] as const;
+
 export function OrchestratorOverlay() {
   const active = useApp(orchestratorIdOf);
   // the column holds the Orchestrator or Lampo (ADR 0105); a request to focus the Orchestrator brings it back
-  const [lane, setLane] = useState<'orchestrator' | 'lampo'>('orchestrator');
+  const [lane, setLane] = useState<typeof LANES[number]>('orchestrator');
   const focusReq = ui.use(s => (active && s.focusReq?.chatId === active ? s.focusReq.n : 0));
   useEffect(() => { if (focusReq) setLane('orchestrator'); }, [focusReq]);
   const size = useColumnSize();
@@ -61,12 +63,16 @@ export function OrchestratorOverlay() {
     aria-label="Orchestrator" style={{ width: size.w, height: size.h, top: size.top, right: 0, bottom: 0 }}>
     <div className="orchestrator-bar">
       <div className="lane-tabs" role="tablist" aria-label={t('lampo.tabsLabel')}>
-        <button type="button" role="tab" aria-selected={lane === 'orchestrator'} className={`lane-tab ${lane === 'orchestrator' ? 'on' : ''}`} onClick={() => setLane('orchestrator')} data-testid="lane-orchestrator"><span className="orchestrator-column-mark" aria-hidden="true">✦</span>{t('lampo.tabOrchestrator')}</button>
-        <button type="button" role="tab" aria-selected={lane === 'lampo'} className={`lane-tab ${lane === 'lampo' ? 'on' : ''}`} onClick={() => setLane('lampo')} data-testid="lane-lampo"><span aria-hidden="true">⚡</span>{t('lampo.tab')}</button>
+        {LANES.map((id, i) => <button key={id} type="button" role="tab" id={`lane-tab-${id}`} aria-controls="orchestrator-panel" aria-selected={lane === id} tabIndex={lane === id ? 0 : -1}
+          className={`lane-tab ${lane === id ? 'on' : ''}`} onClick={() => setLane(id)} data-testid={`lane-${id}`} onKeyDown={event => {
+            const next = event.key === 'ArrowRight' ? (i + 1) % LANES.length : event.key === 'ArrowLeft' ? (i + LANES.length - 1) % LANES.length : event.key === 'Home' ? 0 : event.key === 'End' ? LANES.length - 1 : null;
+            if (next !== null) { event.preventDefault(); setLane(LANES[next]!); document.getElementById(`lane-tab-${LANES[next]}`)?.focus(); }
+          }}>{id === 'orchestrator' ? <><span className="orchestrator-column-mark" aria-hidden="true">✦</span>{t('lampo.tabOrchestrator')}</> : <><span aria-hidden="true">⚡</span>{t('lampo.tab')}</>}</button>)}
       </div>
-      <span className="sp" /><span className="orchestrator-column-hint">{lane === 'lampo' ? t('lampo.hint') : t('home.startHere')}</span>
+      {/* Lampo's hint lives in its tile header only */}
+      <span className="sp" />{lane === 'orchestrator' && <span className="orchestrator-column-hint">{t('home.startHere')}</span>}
     </div>
-    <div className="orchestrator-body" id="orchestrator-panel">{lane === 'lampo' ? <LampoTile onWork={() => setLane('orchestrator')} /> : <OrchestratorTile key={active ?? 'none'} chatId={active} />}</div>
+    <div className="orchestrator-body" id="orchestrator-panel" role="tabpanel" aria-labelledby={`lane-tab-${lane}`}>{lane === 'lampo' ? <LampoTile onWork={() => setLane('orchestrator')} /> : <OrchestratorTile key={active ?? 'none'} chatId={active} />}</div>
     <div className="orchestrator-column-resize" role="separator" tabIndex={0} aria-label={t('home.orchestratorWidth')} aria-orientation="vertical"
       aria-valuemin={280} aria-valuemax={Math.max(280, viewport().W - viewport().left - 360)} aria-valuenow={size.w} data-testid="orchestrator-resize"
       onPointerDown={event => { if (event.button !== 0) return; drag.current = { x: event.clientX, w: size.w }; event.currentTarget.setPointerCapture(event.pointerId); event.preventDefault(); }}

@@ -58,14 +58,14 @@ function buildCommands(): Cmd[] {
   }
   for (const id of s.order) {
     const c = s.chats[id];
-    if (!c || u.hidden.includes(id) || c.closedAt) continue;
+    if (!c || c.quick || u.hidden.includes(id) || c.closedAt) continue; // Lampo lives in its own tab, never in the list
     const st = stateInfo(c);
     out.push({
       id: `chat:${id}`, group: 'Chat', title: chatName(c), sub: `${engineName(c.harness)} · ${st.label} · ${folderName(c.cwd)}${c.lastText ? ` · ${c.lastText}` : ''}`,
       icon: <HarnessMark harness={c.harness} orchestrator={c.isOrchestrator} size={18} />, run: () => focusChat(id), text: `${c.title} ${engineName(c.harness)} ${c.cwd} ${c.lastText}`,
     });
   }
-  for (const c of closedChats(s.chats)) {
+  for (const c of closedChats(s.chats).filter(c => !c.quick)) {
     out.push({
       id: `closed:${c.id}`, group: 'Chiuse', title: c.title, sub: `${auditText('cmp.palette.closedAt', { when: closedTime(c.closedAt!, now()) })}${c.lastText ? ` · ${c.lastText}` : ''}`,
       icon: <HarnessMark harness={c.harness} size={18} />, run: () => { void reopenChat(c.id); }, text: `${c.title} ${c.cwd} ${c.lastText} chiusa riapri`,

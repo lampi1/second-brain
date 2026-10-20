@@ -41,7 +41,7 @@ export const statsEn: typeof statsIt = {
   'stats.cls.success': 'Succeeded',
   'stats.cls.successHelp': 'Of the chats this classifier decided that have a verified outcome (confirmed by you or by an independent review), the share that succeeded. The agent’s self-report never counts. In brackets, how many chats have an outcome.',
   'stats.cls.unverified': (p: { n: number; pct: string }) => `Unverified: ${p.n} automatic outcomes, ${p.pct} succeeded. Not counted in success.`,
-  'stats.cls.unverifiedHelp': 'Outcomes the brain’s loop wrote without a confirmation: the chat closed without an error line (proxy) or the Orchestrator’s opinion. A hint, not a check: they stay out of success until you or the Judge confirm them.',
+  'stats.cls.unverifiedHelp': 'Outcomes the brain’s loop wrote without a confirmation: the chat closed without an error line (proxy) or the Orchestrator’s opinion. A hint, not a check: they stay out of success until you, an independent review or the facts confirm them.',
   'stats.cls.learning': 'Week by week',
   'stats.cls.learningLead': 'Week by week: the card’s measure (coverage or agreement, see its “?”) and how many of the chats it decided succeeded. A week without decisions stays empty, never zero.',
   'stats.cls.series.hit': 'Card measure',

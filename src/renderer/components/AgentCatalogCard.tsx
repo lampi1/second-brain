@@ -19,6 +19,7 @@ import { AgentAvatar } from './AgentAvatar';
 import { PERMISSIONS_ELEMENT, permissionSummary } from './RolePermissions';
 import { go } from '../actions';
 import { HelpTip } from './HelpTip';
+import { formatCost } from '../lib/format';
 
 type Value = { text: string | null; samples?: string };
 
@@ -104,8 +105,8 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
   const values: Record<'runs' | 'open' | 'success' | 'cost', Value> = {
     runs: { text: ended?.toLocaleString(locale()) ?? null },
     open: { text: open?.toLocaleString(locale()) ?? null },
-    success: { text: rate?.value != null ? new Intl.NumberFormat(locale(), { style: 'percent', maximumFractionDigits: 0 }).format(rate.value) : null, samples: sample(rate?.n ?? 0) },
-    cost: { text: cost?.value != null ? new Intl.NumberFormat(locale(), { style: 'currency', currency: 'USD', currencyDisplay: 'narrowSymbol', maximumFractionDigits: cost.value < 0.1 ? 3 : 2 }).format(cost.value) : null, samples: sample(cost?.n ?? 0) },
+    success: { text: rate?.value != null ? pct(rate.value) : null, samples: sample(rate?.n ?? 0) },
+    cost: { text: cost?.value != null ? formatCost(cost.value) : null, samples: sample(cost?.n ?? 0) },
   };
   const trial = !!profile.trial;
   const working = !trial && (open ?? 0) > 0;

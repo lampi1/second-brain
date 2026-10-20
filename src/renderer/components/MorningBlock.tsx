@@ -27,7 +27,15 @@ export function whenText(at: number, now: number): string {
   const a = new Date(at), b = new Date(now), y = new Date(now - 86_400_000);
   if (a.toDateString() === b.toDateString()) return hhmm(at);
   if (a.toDateString() === y.toDateString()) return t('alive.m.yesterday', { time: hhmm(at) });
-  return `${a.toLocaleDateString(locale(), { day: '2-digit', month: '2-digit' })} ${hhmm(at)}`;
+  return `${dayMonth(a)} ${hhmm(at)}`;
+}
+const dayMonth = (d: Date) => d.toLocaleDateString(locale(), { day: '2-digit', month: '2-digit' });
+/** The block's start as a phrase: "dalle 08:12", "da ieri alle 18:40", "dal 18/10 alle 09:00" */
+export function sinceText(at: number, now: number): string {
+  const a = new Date(at), y = new Date(now - 86_400_000);
+  if (a.toDateString() === new Date(now).toDateString()) return t('alive.m.since', { when: hhmm(at) });
+  if (a.toDateString() === y.toDateString()) return t('alive.m.sinceYesterday', { time: hhmm(at) });
+  return t('alive.m.sinceDay', { day: dayMonth(a), time: hhmm(at) });
 }
 const outcome = (r: MorningRun) => t(`alive.m.outcome.${r.outcome}`);
 
@@ -51,7 +59,7 @@ function rows(b: MorningBrief, undo: { done: boolean; busy: boolean; run: () => 
   for (const c of b.cloud.slice(0, 2)) out.push({ key: `cloud-${c.id}`, tone: c.status === 'done' ? 'good' : c.status === 'failed' ? 'bad' : '', text: t('alive.m.cloud', { title: c.title, status: t(`alive.m.cloud.${c.status}`) }), open: () => go({ page: 'home' }) });
   if (b.changes.length) {
     const can = b.changes.some(c => c.canRollback);
-    out.push({ key: 'changes', text: t('alive.m.maintenance', { n: b.changes.length }), sub: b.changes.slice(0, 2).map(c => c.summary).join(' · '), open: () => go({ page: 'skill' }),
+    out.push({ key: 'changes', text: t('alive.m.maintenance', { n: b.changes.length }), sub: b.changes.slice(0, 2).map(c => c.summary).join(' · '), open: () => go({ page: 'changelog' }),
       extra: can || undo.done ? <button type="button" className="btn btn-ghost btn-s" disabled={undo.busy || undo.done} onClick={undo.run} data-testid="morning-undo">{t(undo.done ? 'alive.m.undone' : 'alive.m.undo')}</button> : null });
   }
   if (b.spendYesterdayUsd !== null && b.spendYesterdayUsd > 0) out.push({ key: 'spend', text: t('alive.m.spend', { usd: usd(b.spendYesterdayUsd) }), open: () => go({ page: 'costi' }) });
@@ -61,7 +69,7 @@ function rows(b: MorningBrief, undo: { done: boolean; busy: boolean; run: () => 
 /** The brief as plain lines, for the Orchestrator's draft ("Parliamone"). */
 export function draftOf(b: MorningBrief): string {
   const lines = rows(b, { done: false, busy: false, run: () => {} }).map(r => `- ${r.text}${r.sub ? ` (${r.sub})` : ''}`);
-  return t('alive.m.draft', { since: whenText(b.since, b.at), lines: lines.join('\n') || `- ${t('alive.m.nothing')}` });
+  return t('alive.m.draft', { since: sinceText(b.since, b.at), lines: lines.join('\n') || `- ${t('alive.m.nothing')}` });
 }
 
 export function MorningBlock({ brief, compact }: { brief: MorningBrief; compact?: boolean }) {
@@ -76,7 +84,7 @@ export function MorningBlock({ brief, compact }: { brief: MorningBrief; compact?
   return <section className={`morning${compact ? ' is-compact' : ''}`} aria-labelledby="morning-title" data-testid="morning-block" onKeyDown={onKey}>
     <header className="morning-head">
       <h2 id="morning-title">{t('alive.m.title')}</h2>
-      <span className="morning-since">{t('alive.m.since', { when: whenText(brief.since, brief.at) })}</span>
+      <span className="morning-since">{sinceText(brief.since, brief.at)}</span>
     </header>
     {briefEmpty(brief) && !(brief.spendYesterdayUsd && brief.spendYesterdayUsd > 0)
       ? <p className="morning-note" data-testid="morning-nothing">{t('alive.m.nothing')}</p>

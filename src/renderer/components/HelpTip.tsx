@@ -6,6 +6,9 @@
 // stays open while the pointer is on it. Esc closes it before any dialog sees the key; a click pins it; one at a time.
 // Accessible: a real button, aria-describedby points at the bubble (in the DOM, hidden while closed). A "?" that explains
 // a concept names its Guida card (`guide`): the bubble ends with «Come funziona →», which opens that card (ADR 0101).
+// A tooltip holds no focusable content, so a pinned bubble with that link (opened by a click or Enter) becomes a
+// non-modal dialog: Enter moves focus into it, Tab from the "?" reaches the link, Tab/Shift+Tab out of it goes back to
+// the "?" (and on), focus leaving it or Esc closes it (focus back on the "?"). Hover keeps the plain tooltip.
 // Used by Settings, Costi, Qualità, Task, Stato, the long-chat notice, the agent cards, the Orchestrator head, the strips,
 // the run verdict and the Skill page; other branches import it as
 // `import { HelpTip } from '../components/HelpTip'` (from src/renderer/components: './HelpTip').
@@ -76,7 +79,7 @@ export function HelpTip({ children, title, example, label, text, testid, classNa
   const self = useRef({ close: () => {} });
 
   const clear = () => { if (timer.current) { clearTimeout(timer.current); timer.current = null; } };
-  const close = () => { clear(); byKeyboard.current = false; setOpen(false); setPinned(false); setPos(null); if (current === self.current) current = null; };
+  const close = () => { clear(); byKeyboard.current = false; if (bubble.current?.contains(document.activeElement)) btn.current?.focus(); setOpen(false); setPinned(false); setPos(null); if (current === self.current) current = null; };
   self.current.close = close;
   const show = () => {
     clear();
@@ -123,6 +126,12 @@ export function HelpTip({ children, title, example, label, text, testid, classNa
   }, [open]);
   useEffect(() => () => { clear(); if (current === self.current) current = null; }, []);
 
+  // pinned with the Guida link: a non-modal dialog the keyboard can enter (a tooltip holds nothing focusable)
+  const dialog = open && pinned && !!guide;
+  const toBubble = () => (bubble.current?.querySelector<HTMLElement>('button, a[href]') ?? bubble.current)?.focus({ preventScroll: true });
+  const enterBubble = useRef(false);
+  useEffect(() => { if (dialog && pos && enterBubble.current) { enterBubble.current = false; toBubble(); } }, [dialog, pos]);
+
   const name = t('costs.helpName',{label:label ?? (typeof title === 'string' ? title : text ?? t('costs.helpFallback'))});
   return (
     <>
@@ -131,16 +140,19 @@ export function HelpTip({ children, title, example, label, text, testid, classNa
         onPointerEnter={e => { if (e.pointerType === 'mouse') enter(); }}
         onPointerLeave={e => { if (e.pointerType === 'mouse') leave(); }}
         onFocus={() => { if (tabbed && btn.current?.matches(':focus-visible')) { byKeyboard.current = true; show(); } }}
-        onBlur={() => { if (!hover.current) close(); }}
-        onClick={e => { e.preventDefault(); e.stopPropagation(); if (pinned) close(); else { show(); setPinned(true); } }}>
+        onBlur={e => { if (!hover.current && !bubble.current?.contains(e.relatedTarget as Node | null)) close(); }}
+        onKeyDown={e => { if (e.key === 'Tab' && !e.shiftKey && dialog) { e.preventDefault(); toBubble(); } }}
+        onClick={e => { e.preventDefault(); e.stopPropagation(); if (pinned) close(); else { enterBubble.current = e.detail === 0; show(); setPinned(true); } }}>
         <span className="help-tip-mark" aria-hidden="true" />
         {text && <span className="help-tip-text">{text}</span>}
       </button>
       {/* Server rendering has no tooltip host. The closed button remains readable; browser behavior is unchanged. */}
       {typeof document !== 'undefined' && createPortal(
-        <div ref={bubble} id={tipId} role="tooltip" className={`help-bubble ${pos?.side ?? 'below'} ${wide ? 'wide' : ''}`} hidden={!open}
+        <div ref={bubble} id={tipId} role={dialog ? 'dialog' : 'tooltip'} aria-label={dialog ? name : undefined} tabIndex={dialog ? -1 : undefined} className={`help-bubble ${pos?.side ?? 'below'} ${wide ? 'wide' : ''}`} hidden={!open}
           style={{ left: pos?.x ?? -9999, top: pos?.y ?? -9999, visibility: pos ? 'visible' : 'hidden', ['--arrow' as string]: `${pos?.arrow ?? 0}px` }}
-          onPointerEnter={() => { hover.current = true; clear(); }} onPointerLeave={leave} data-testid={testid ? `${testid}-bubble` : undefined}>
+          onPointerEnter={() => { hover.current = true; clear(); }} onPointerLeave={leave}
+          onKeyDown={e => { if (e.key !== 'Tab') return; if (e.shiftKey) e.preventDefault(); btn.current?.focus(); /* Tab: the browser goes on from the "?" */ }}
+          onBlur={e => { const to = e.relatedTarget as Node | null; if (!bubble.current?.contains(to) && !btn.current?.contains(to)) close(); }} data-testid={testid ? `${testid}-bubble` : undefined}>
           {title && <b className="help-title">{title}</b>}
           <div className="help-body">{children}</div>
           {example && <p className="help-ex"><span>{t('costs.helpExample')}</span> {example}</p>}
