@@ -16,7 +16,7 @@ export const explainEn: typeof explainIt = {
   'explain.toasts.title': 'Urgent or normal',
   'explain.toasts.p1': 'Urgent: a chat waiting for you, a question for you, a sign-in to redo, a chat that ended with an error, the budget used up. Normal: other news too, such as a finished run. Windows notifications show only while the app is not in front, and news arriving together becomes one notification.',
   'explain.judge.title': 'What the Judge does',
-  'explain.judge.p1': 'Each day it takes up to this many finished runs nobody judged yet and reviews them, on a model other than the one that did them when there is one. Its verdict enters the agent\'s performance at full weight (× 1).',
+  'explain.judge.p1': 'Each day it takes up to this many finished runs nobody judged yet and reviews them, each in a new session that never saw how they were done. Its verdict enters the agent\'s performance at full weight (× 1).',
   'explain.judge.p2': 'Each review is a real chat: it costs like a short Judge run. With 0 it reviews nothing and the performance rests on your verdicts, the Orchestrator\'s and the agents\'.',
   'explain.tiers.title': 'Light, medium, high',
   'explain.tiers.p1': 'Each role asks for a model tier instead of a precise model: light for simple, quick jobs, medium for most, high for planning and long reasoning. Higher = more capable, slower and more expensive.',

@@ -2,7 +2,8 @@
 // agents/child-feedback.ts) and a Judge's review (the judge-sample job, brainmodel/jobs.ts). One store,
 // <userData>/run-feedback.json; the run's outcome takes the verdict unless the user already gave one, and an opinion
 // never overwrites a reviewed verdict. It counts as reviewed evidence only when it cites an ended Judge run of that run
-// whose own report says verified, on a model other than the run's (ADR 0083). Also the user's Annulla on a change the
+// whose own report says verified, in its own session (ADR 0083; on any model: the review's independence is its clean
+// context, ADR 0090). Also the user's Annulla on a change the
 // app applied (agents:undo) and agent_metrics, the numbers-only tool of the Orchestrator. Used by wiring.ts, loop.ts,
 // index.ts.
 import path from 'node:path';
@@ -107,7 +108,7 @@ export class RunFeedback {
       if (e.kind !== 'run') return false;
       const review = this.d.runs.get(e.ref);
       return !!review && review.endedAt !== undefined && review.reviewOf === run.runId && review.agentId === 'judge' && review.version > 0
-        && review.report?.verified === 'yes' && !!review.model && review.model !== run.model;
+        && review.report?.verified === 'yes' && review.chatId !== run.chatId;
     });
     const outcome: AgentRunOutcome = { verdict: a.verdict as AgentRunOutcome['verdict'], basis: verified ? 'reviewed-evidence' : 'orchestrator-opinion', by: callerId, at: this.now(), note: notes };
     const f: AgentFeedback = { id: randomUUID(), at: this.now(), agentId: run.agentId, runId: run.runId, version: run.version, outcome, evidence: refs,

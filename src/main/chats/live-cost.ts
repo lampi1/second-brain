@@ -7,6 +7,7 @@
 // once per content block with the same id: the highest count per field wins. Subagent messages count too (they are
 // billed). The estimate is corrected with the real running cost whenever a get_usage answer comes (settle()) and
 // replaced by the real figure when the result arrives (reset()). Used by claude.ts; wiring.ts sets the table.
+import fs from 'node:fs';
 import type { ModelRegistry, RegistryModel } from '../../shared/contract';
 
 export interface ApiUsage {
@@ -23,6 +24,32 @@ const FALLBACK: RegistryModel = {
 let table: () => ModelRegistry | null = () => null;
 /** wiring.ts: where the price table comes from (the brain's harness/models.json, re-read when it changes). */
 export function setPriceTable(fn: () => ModelRegistry | null): void { table = fn; }
+
+/** The table wiring.ts sets: the brain's registry, re-read at most every `ttlMs`; when the brain has none (no brain yet,
+ *  a fresh one without harness/models.json) the release template's own harness/models.json (`templateFile`), so the
+ *  Claude model list and prices are there from the first start (issue #96). */
+export function priceTableSource(brainRegistry: () => ModelRegistry | null, templateFile: () => string | null, ttlMs = 30_000, now: () => number = Date.now): () => ModelRegistry | null {
+  let cached: { at: number; reg: ModelRegistry | null } = { at: -Infinity, reg: null };
+  let template: { file: string; reg: ModelRegistry | null } | null = null;
+  const fromTemplate = (): ModelRegistry | null => {
+    const file = templateFile();
+    if (!file) return null;
+    if (template?.file !== file) {
+      let reg: ModelRegistry | null = null;
+      try { const j = JSON.parse(fs.readFileSync(file, 'utf8')) as ModelRegistry; reg = j && Array.isArray(j.models) ? j : null; } catch { reg = null; }
+      template = { file, reg };
+    }
+    return template.reg;
+  };
+  return () => {
+    if (now() - cached.at > ttlMs) {
+      let reg: ModelRegistry | null = null;
+      try { reg = brainRegistry(); } catch { reg = null; }
+      cached = { at: now(), reg: reg ?? fromTemplate() };
+    }
+    return cached.reg;
+  };
+}
 
 const n = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0);
 const bare = (m: string): string => m.toLowerCase().trim().replace(/\[.*\]$/, '').replace(/-\d{8}$/, '');

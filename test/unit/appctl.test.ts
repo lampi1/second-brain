@@ -22,7 +22,7 @@ function roleCatalog(): AgentCatalogService {
   const models = (): AgentModelChoice[] => [
     { engine: 'claude', label: 'Claude', enabled: true, trusted: true, effort: true, defaultModel: true, modelSelectable: true, modelReason: null, source: 'observed', models: [], installed: true, authenticated: true },
     { engine: 'cursor', label: 'Cursor', enabled: true, trusted: true, effort: false, defaultModel: true, modelSelectable: true, modelReason: null, source: 'observed', models: [], installed: false, authenticated: null }];
-  return new AgentCatalogService({ userData: fs.mkdtempSync(path.join(os.tmpdir(), 'sb-appctl-roles-')), models, tierModel: (_e, tier) => ({ model: `m-${tier}`, independent: true }) });
+  return new AgentCatalogService({ userData: fs.mkdtempSync(path.join(os.tmpdir(), 'sb-appctl-roles-')), models, tierModel: (_e, tier) => `m-${tier}` });
 }
 
 function deps() {
@@ -159,7 +159,8 @@ describe('app control tools', () => {
     const t = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', agents: () => catalog.list(), resolveRole: req => catalog.resolve(req) }, 'r').find(x => x.name === 'app_create_chat')!;
     expect(await t.run({ title: 'Ordini · Fix', prompt: 'correggi il totale', roleId: 'artisan' })).toMatchObject({ chatId: 'n1', harness: 'claude', cwd: 'C:/brain', model: 'm-mid', route: { source: 'agent', agent: { id: 'artisan', chosenBy: 'orchestrator' } } });
     expect(String(made[0]!.prompt).startsWith(AGENT_LABEL)).toBe(true);
-    expect(made[0]).toMatchObject({ roleId: 'artisan', orchestrator: false, independentOf: { engine: 'claude', model: 'claude-opus-5-5' } });
+    expect(made[0]).toMatchObject({ roleId: 'artisan', orchestrator: false });
+    expect(made[0]).not.toHaveProperty('independentOf');
     // the role decides: no engine, model or effort from the caller; never a second Orchestrator; a role is required
     for (const extra of [{ harness: 'cursor' }, { model: 'opus' }, { effort: 'high' }]) await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'scout', ...extra }))).rejects.toThrow(/the role decides it/);
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'scout', orchestrator: true }))).rejects.toThrow(/Orchestrator/);

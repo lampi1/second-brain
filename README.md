@@ -291,8 +291,8 @@ seen, which chats, roles and skills, what it means and what to do. Every number 
   role limited to read-only commands still runs the node tools you list in `read-only-tools.md` in the brain, and the
   Orchestrator is told when a skill it passes needs tools the role lacks. The
   depth and the children at once are your limits (Impostazioni → Ruoli e deleghe). The Orchestrator sees only their
-  state, plus what you write to any of them, so nothing conflicts; a Judge reviews a few finished runs a day on
-  another model.
+  state, plus what you write to any of them, so nothing conflicts; a Judge reviews a few finished runs a day, each in
+  a new session that never saw the run's reasoning.
 - **Search** (Ctrl+K) across chats, browser tabs, pages and commands; an in-app **Guida** explains every concept.
 - **Agent-friendly by design**: an app-control MCP server lets agents read the app state, screenshot it and drive it.
 - **Screenshots everywhere**: an agent writes the path of a PNG, JPG or WebP (under the brain, the repo, a worktree or

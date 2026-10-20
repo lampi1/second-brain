@@ -14,11 +14,11 @@ afterEach(() => { for (const r of roots.splice(0)) fs.rmSync(r, { recursive: tru
 const models = (): AgentModelChoice[] => [{ engine: 'claude', label: 'Claude', enabled: true, trusted: true, effort: true, defaultModel: true, modelSelectable: true, modelReason: null, source: 'observed', models: [{ id: 'm-top', name: 'Top' }, { id: 'm-mid', name: 'Mid' }], installed: true, authenticated: true }];
 function setup() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-catalog-')); roots.push(dir);
-  const make = () => new AgentCatalogService({ userData: dir, models, tierModel: (_e, tier) => ({ model: tier === 'top' ? 'm-top' : 'm-mid', independent: true }) });
+  const make = () => new AgentCatalogService({ userData: dir, models, tierModel: (_e, tier) => (tier === 'top' ? 'm-top' : 'm-mid') });
   return { dir, make, catalog: make() };
 }
 const edit = (p: AgentProfile, patch: Partial<AgentProfile>) => ({ instructions: p.instructions, engine: p.engine, model: p.model, tools: p.tools, permissionCeiling: p.permissionCeiling,
-  tier: p.tier, tierMax: p.tierMax, independent: p.independent, launches: p.launches, skills: p.skills, ...patch });
+  tier: p.tier, tierMax: p.tierMax, launches: p.launches, skills: p.skills, ...patch });
 
 describe('role catalog', () => {
   it('holds exactly the Orchestrator, the eight roles and Pulse, with English names', () => {
@@ -77,5 +77,74 @@ describe('role catalog', () => {
     expect(catalog.resolve({ harness: 'claude', orchestrator: true, model: 'session' } as never).owner).toMatchObject({ id: 'orchestrator', model: 'session' });
     expect(catalog.resolve({ harness: 'claude' } as never).owner.source).toBe('plain');
     for (const id of WORK_ROLE_IDS) expect(catalog.resolve({ harness: 'claude', roleId: id } as never).launches).not.toContain(id);
+  });
+  it('Sentinel and Judge resolve like any role: no `independent` field, no model switch away from the parent (issue #99)', () => {
+    const { catalog } = setup();
+    for (const id of ['sentinel', 'judge'] as const) {
+      expect(catalog.list().profiles.find(p => p.id === id)).not.toHaveProperty('independent');
+      const r = catalog.resolve({ harness: 'claude', roleId: id, model: 'm-top' } as never);
+      expect(r.request.model).toBe('m-top'); // the top tier's model, the same one the parent runs
+      expect(r).not.toHaveProperty('independent');
+    }
+  });
+  it('a role with no model takes the routing row on its engine, and its effort unless the role names one (issue #99)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-catalog-')); roots.push(dir);
+    const seen: unknown[] = [];
+    const catalog = new AgentCatalogService({ userData: dir, models, tierModel: () => 'm-mid',
+      tableModel: (engine, req) => { seen.push([engine, req.title]); return req.title?.startsWith('Verifica') ? { model: 'm-top', effort: 'low' } : null; } });
+    const sentinel = catalog.resolve({ harness: 'claude', roleId: 'sentinel', title: 'Verifica · test', prompt: 'p' } as never);
+    expect(sentinel.request).toMatchObject({ model: 'm-top', effort: 'low' });
+    expect(sentinel.modelFrom).toBe('table');
+    expect(seen).toContainEqual(['claude', 'Verifica · test']);
+    // no row: the tier decides
+    const other = catalog.resolve({ harness: 'claude', roleId: 'sentinel', title: 'Altro', prompt: 'p' } as never);
+    expect(other.request.model).toBe('m-mid'); expect(other.modelFrom).toBeUndefined();
+    // a launch that asks a tier keeps the tier
+    expect(catalog.resolve({ harness: 'claude', roleId: 'sentinel', title: 'Verifica · x', tier: 'top' } as never).request.model).toBe('m-mid');
+    // the role's own effort wins over the row's; the role's own model is never replaced
+    const p = catalog.list().profiles.find(x => x.id === 'sentinel')!;
+    catalog.save(edit(p, { effort: 'high' }), 'sentinel');
+    expect(catalog.resolve({ harness: 'claude', roleId: 'sentinel', title: 'Verifica · y' } as never).request).toMatchObject({ model: 'm-top', effort: 'high' });
+    const q = catalog.list().profiles.find(x => x.id === 'sentinel')!;
+    catalog.save(edit(q, { model: 'm-mid', effort: 'medium' }), 'sentinel');
+    expect(catalog.resolve({ harness: 'claude', roleId: 'sentinel', title: 'Verifica · z' } as never).request).toMatchObject({ model: 'm-mid', effort: 'medium' });
+  });
+});
+
+describe('default engine (issue #96)', () => {
+  const choice = (engine: string, p: Partial<AgentModelChoice> = {}): AgentModelChoice => ({ engine, label: engine, enabled: true, trusted: true, effort: engine === 'claude', defaultModel: true, modelSelectable: true, modelReason: null, source: 'registry', models: [], installed: null, authenticated: null, ...p });
+  function world(initial: { preferred: string | null; models: AgentModelChoice[] }) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-catalog-')); roots.push(dir);
+    const state = { ...initial }, emitted: number[] = [];
+    const catalog = new AgentCatalogService({ userData: dir, models: () => state.models, preferredEngine: () => state.preferred, emit: c => emitted.push(c.profiles.length) });
+    const engineOf = (id: string) => catalog.list().profiles.find(p => p.id === id)!.engine;
+    return { state, emitted, catalog, engineOf };
+  }
+  it('seeds untouched roles on the engine chosen at onboarding while logins are still unknown', () => {
+    const w = world({ preferred: 'cursor', models: [choice('claude'), choice('cursor')] });
+    expect(w.engineOf('artisan')).toBe('cursor');
+    expect(w.engineOf('sentinel')).toBe('cursor');
+  });
+  it('moves untouched roles to the chosen engine when it changes, never a role the user edited', () => {
+    const w = world({ preferred: 'claude', models: [choice('claude', { installed: true, authenticated: true }), choice('cursor', { installed: true, authenticated: true })] });
+    expect(w.engineOf('scout')).toBe('claude');
+    const scout = w.catalog.list().profiles.find(p => p.id === 'scout')!;
+    w.catalog.save(edit(scout, { instructions: 'mine' }), 'scout');
+    w.state.preferred = 'cursor';
+    expect(w.engineOf('artisan')).toBe('cursor');
+    expect(w.engineOf('scout')).toBe('claude');
+  });
+  it('ignores a chosen engine that is not usable', () => {
+    const w = world({ preferred: 'cursor', models: [choice('claude', { installed: true, authenticated: true }), choice('cursor', { authenticated: false })] });
+    expect(w.engineOf('artisan')).toBe('claude');
+    w.state.models = [choice('claude', { installed: true, authenticated: true }), choice('cursor', { enabled: false })];
+    expect(w.engineOf('artisan')).toBe('claude');
+  });
+  it('refresh() sends the catalog to the renderer even when no role changed', () => {
+    const w = world({ preferred: 'claude', models: [choice('claude')] });
+    const before = w.emitted.length;
+    w.state.models = [choice('claude', { installed: true, authenticated: true, models: [{ id: 'm', name: 'm' }] })];
+    w.catalog.refresh();
+    expect(w.emitted.length).toBe(before + 1);
   });
 });

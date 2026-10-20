@@ -104,7 +104,7 @@ describe('portable agent packs', () => {
   });
   it('makes know-how content changes behavioral while preserving location-only moves', () => {
     const knowhow = { folder: 'agents/reviewer', linked: [], hash };
-    const original: AgentBehaviour = { instructions: 'Review.', engine: 'claude', model: null, tools: { allow: ['read'] }, permissionCeiling: 'plan', tier: 'top', tierMax: 'top', independent: true, launches: [], skills: [], knowhow };
+    const original: AgentBehaviour = { instructions: 'Review.', engine: 'claude', model: null, tools: { allow: ['read'] }, permissionCeiling: 'plan', tier: 'top', tierMax: 'top', launches: [], skills: [], knowhow };
     expect(sameBehaviour(original, { ...original, knowhow: { ...knowhow, hash: 'b'.repeat(64) } })).toBe(false);
     expect(sameBehaviour(original, { ...original, knowhow: { ...knowhow, folder: 'other/reviewer' } })).toBe(true);
   });

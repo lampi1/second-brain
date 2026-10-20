@@ -71,7 +71,7 @@ export const treeIt = {
   'delegation.stallMin': 'Ferma dopo (minuti)',
   'delegation.stallMin.hint': 'Una chat figlia senza alcun evento per tanti minuti risulta ferma.',
   'delegation.judgeDaily': 'Revisioni del Judge al giorno',
-  'delegation.judgeDaily.hint': 'Quante esecuzioni finite il Judge rivede ogni giorno, su un modello diverso, per misurare i ruoli.',
+  'delegation.judgeDaily.hint': 'Quante esecuzioni finite il Judge rivede ogni giorno, ognuna in una sessione nuova che non ha visto il lavoro, per misurare i ruoli.',
   'delegation.off': 'Nessuna',
   'delegation.tiers': 'Modelli per livello',
   'delegation.tiers.hint': 'Il modello che ogni livello usa su ciascun motore. Vuoto = quello del registro dei modelli del cervello.',

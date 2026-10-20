@@ -5,7 +5,7 @@ import type { AgentDraft } from '@shared/agents';
 import { agentDraftCheckpoint, enableAgentDraftRecovery, readAgentEditor, rememberAgentEditor, validateAgentDraftCopy } from '../../src/renderer/lib/agent-drafts';
 
 const draft: AgentDraft = { name: 'Scout', purpose: 'Cerca fatti', instructions: 'Cite sources', engine: 'claude', model: null, avatar: { kind: 'character', value: 'scout' },
-  tools: { allow: ['read', 'web'] }, permissionCeiling: 'default', tier: 'mid', tierMax: 'top', independent: false, launches: [], skills: ['brain-edit'] };
+  tools: { allow: ['read', 'web'] }, permissionCeiling: 'default', tier: 'mid', tierMax: 'top', launches: [], skills: ['brain-edit'] };
 
 it('retains separate unsaved edits per role', () => {
   rememberAgentEditor({ id: 'scout', draft });

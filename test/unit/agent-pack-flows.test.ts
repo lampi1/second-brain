@@ -17,7 +17,7 @@ const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
 const models = (): AgentModelChoice[] => [{ engine: 'claude', label: 'Claude', enabled: true, trusted: true, effort: true, defaultModel: true, modelSelectable: true, modelReason: null, source: 'observed', models: [{ id: 'known-model', name: 'Known model' }], installed: null, authenticated: null }];
 const draftOf = (p: AgentProfile): AgentDraft => ({ name: p.name, purpose: p.purpose, instructions: p.instructions, engine: p.engine, model: p.model, avatar: p.avatar,
-  tools: p.tools, permissionCeiling: p.permissionCeiling, tier: p.tier, tierMax: p.tierMax, independent: p.independent, launches: p.launches, skills: p.skills });
+  tools: p.tools, permissionCeiling: p.permissionCeiling, tier: p.tier, tierMax: p.tierMax, launches: p.launches, skills: p.skills });
 function setup() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-pack-flow-')); roots.push(root);
   const brain = path.join(root, 'brain'), data = path.join(root, 'data'); fs.mkdirSync(brain); fs.mkdirSync(data);

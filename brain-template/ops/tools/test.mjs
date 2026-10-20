@@ -81,7 +81,9 @@ T('prices', () => {
   ok(near(usdOf({ cache_creation_input_tokens: M }, 'claude-opus-5-5'), 5), 'prices: write without split = 5m');
   ok(near(usdOf({ input_tokens: M, output_tokens: M, cache_read_input_tokens: M }, 'claude-fable-5-1'), 10 + 50 + 0.25), 'prices: Fable 5.1');
   ok(near(usdOf({ cache_read_input_tokens: M }, 'claude-sonnet-5-5'), 0.1) && near(usdOf({ cache_read_input_tokens: M }, 'claude-sonnet-5'), 0.2), 'prices: Sonnet 5.5 vs 5 cache read');
-  ok(near(usdOf({ input_tokens: M, output_tokens: M }, 'claude-opus-5'), 30), 'prices: Opus 5 (still in the transcripts)');
+  // a retired model (Opus 5, removed from the registry, issue #99) still in old transcripts: the default model's price, flagged
+  const retired = priceUsage({ input_tokens: M, output_tokens: M }, 'claude-opus-5');
+  ok(!retired.priced && near(retired.usd, 24), 'prices: retired Opus 5 = defaultModel, flagged unpriced');
   // Haiku 5.5: up to 100k prompt tokens the low tier, over it the high tier (cache reads count in the prompt)
   ok(near(usdOf({ input_tokens: 50000, output_tokens: 1000 }, 'claude-haiku-5-5'), (50000 * 0.1 + 1000 * 0.5) / M), 'prices: Haiku 5.5 ≤100k');
   ok(near(usdOf({ input_tokens: 10, cache_read_input_tokens: 150000, output_tokens: 1000 }, 'claude-haiku-5-5'), (10 * 0.5 + 150000 * 0.05 + 1000 * 2.5) / M), 'prices: Haiku 5.5 >100k');
