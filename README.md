@@ -26,7 +26,7 @@
   <img alt="Electron 44" src="https://img.shields.io/badge/electron-44-47848F.svg">
 </p>
 
-![The Grindhouse: every agent as a strip, its questions as panels, the browser it drives right under it](docs/screenshots/grindhouse.webp)
+![The Grindhouse: the work chats as strips grouped by project, each with who started it, its estimate and the sub-agents working for it; the Orchestrator in its column on the right](docs/screenshots/grindhouse.webp)
 
 When you work with five agents at once, the bottleneck is no longer the model: it is you. Which agent is waiting on
 you? Which one is burning tokens in a loop? What did the QA agent see in its browser? second-brain puts every agent,
@@ -179,10 +179,10 @@ only its own `cursor/…`, `codex/…` or `claude/…` branch; the app never pus
 
 ### The Orchestrator: one chat that coordinates the others
 
-![The Orchestrator, in its column on the right, with a decision waiting](docs/screenshots/orchestrator.webp)
+![The Orchestrator's column: its sub-agents, its plan with each chat's estimate and state, the mail between chats and a decision waiting for you](docs/screenshots/orchestrator.webp)
 
-The Orchestrator is the chat you talk to first, always in its column on the right. It knows every agent, picks the
-right one from your catalog for each job (or proposes a new one, created only after your yes), routes mail between them
+The Orchestrator is the chat you talk to first, always in its column on the right. It knows every agent, hands each job
+to the right one of the nine roles (missing know-how becomes a new skill, never a new agent), routes mail between them
 and tells you what needs you. Model, effort and context size come from each agent's profile, never from a per-chat
 switch. News it has not received yet (a chat that finished while it waits for your answer, a quiet permission request,
 mail held for later) shows above its input as **"N novità in attesa"**; a click lists each one with its chat, kind,
@@ -190,7 +190,7 @@ since when and why it waits, at no token cost.
 
 ### Agents that improve by themselves, reversibly
 
-![The Agenti page: the catalog of agents as cards, each with its character, level, performance, runs and cost](docs/screenshots/agents.webp)
+![The Agenti page: the nine roles as cards, each with its character, level, performance, runs and cost](docs/screenshots/agents.webp)
 
 Each agent is a card with its character large in the middle, its role, engine, model, a **level** (it grows with the
 runs it ended: Lv 2 at 5, Lv 3 at 15, Lv 4 at 30…) and a **performance %** (the average of the verdicts on its runs,
@@ -201,12 +201,12 @@ Settings, the Skill page). Every role has its own cartoon character (a conductor
 for the Scout, a judge in a wig…), recognisable from the 16 px tree to the 96 px role page. Agents learn from cost, time, outcome and your corrections: the Orchestrator and the
 maintenance jobs change an agent's model, effort or instructions by themselves, as a trial version measured against
 the previous one, and every change is in the log with "Annulla". Only what reaches further waits for your yes in
-**Agenti → Da approvare**: an agent's tools, permissions and engine, and new agents. An agent exports to a colleague
+**Agenti → Da approvare**: an agent's tools, permissions and engine. An agent exports to a colleague
 with its profile, its skills, the tools they call and the brain's rules, never your memory.
 
 ### Browsers your agents drive
 
-![A QA agent's browser tab, big next to its chat](docs/screenshots/browser.webp)
+![A QA chat in focus mode: its question as a panel, the browser tab it drives big next to it](docs/screenshots/browser.webp)
 
 Agents get real browser tabs inside the app through a local MCP server: navigate, click, type, read the page, take
 screenshots, with trusted input like a real user. Each tab sits next to the agent that owns it. Logins persist per
@@ -215,7 +215,7 @@ passwords.
 
 ### A live map of your brain
 
-![The 3D brain map, lit where the agents are working right now](docs/screenshots/brain-map.webp)
+![Brain → Mappa, the 3D map: notes, agents and tools, lit where the agents are working right now](docs/screenshots/brain-map.webp)
 
 Your brain is a folder of Markdown notes the agents read and write: open threads, journal, ideas, the errors they made
 and the rules learned from them. A fresh brain starts empty: the app's own rules and tools stay inside the app
@@ -234,7 +234,7 @@ and Memoria runs them now and says what each did; every change is logged with "A
 
 ### Scripts and a changelog for your brain
 
-![The Script page: tested, reusable scripts as cards](docs/screenshots/brain-scripts.webp)
+![The Script page: the brain's tested, reusable scripts as cards, with their language, last test and file](docs/screenshots/brain-scripts.webp)
 
 The scripts your agents wrote and tested live in the brain's `scripts/` folder, each with what it does, how to run it
 and its last test. Every chat can look them up before writing a new one; the Orchestrator adds, fixes and deletes them
@@ -243,7 +243,7 @@ page in the Brain section (ADR 0076). Nothing in the app runs a script.
 
 ### Task in one page
 
-![The Task page: mentions, pull requests, reviews and work items](docs/screenshots/task.webp)
+![The Task page: what to read, your pull requests, reviews and work items, each with Discuti](docs/screenshots/task.webp)
 
 Mentions, comments and votes on your pull requests, reviews waiting for you, stuck work items, failed builds and the QA
 status of each pull request, imported from Azure DevOps on demand or automatically (zero tokens, read only). Every item
@@ -253,7 +253,7 @@ what, who (you, or the agent or engine of a chat), when and its link.
 
 ### MCP servers in one place, for every engine
 
-![Settings → Connettori: accounts and MCP servers as cards](docs/screenshots/connectors.webp)
+![Settings → Connettori: the MCP servers your agents use, as cards with state, tools, roles and the fix when one fails](docs/screenshots/connectors.webp)
 
 Settings → **Connettori** is one section for everything the app connects to: the app's own accounts (Azure DevOps for
 the Task page, GitHub, Jira) and the **MCP servers your agents use** (ADR 0086). Add a server once (a local command such
@@ -267,7 +267,7 @@ none, and a delegated chat never gets more than its parent. The engines' own con
 
 ### Quality you can measure
 
-![The Qualità page: four metrics with their source and dates](docs/screenshots/quality.webp)
+![The Qualità page: measured metrics, each with its source, the days it covers and the rows behind it](docs/screenshots/quality.webp)
 
 Four metrics computed from real logs, each with its source and the days it covers: errors you had to catch yourself
 per 100 turns, rules that did not stop their error, pull requests held by QA or builds, bugs reopened after a fix.

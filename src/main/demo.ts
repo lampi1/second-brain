@@ -113,7 +113,7 @@ export function seed(E: number): Seed {
     chat({ id: 'orchestrator', title: 'Orchestrator', isOrchestrator: true, state: 'waiting', pending: 1, costUsd: 4.12, contextTokens: 64_000, contextMaxTokens: 1_000_000, updatedAt: E - 8 * MIN, lastText: 'Prima la QA bloccata: la QA dei rimborsi aspetta te.',
       agentChildren: children(
         child({ key: 'claude:task:a1', task: 'Rileggi la PR del fix totale ordine', agentType: 'general-purpose', state: 'running', startedAt: E - 6 * MIN }),
-        child({ key: 'claude:task:a2', task: 'Cerca nel journal i bug simili ai rimborsi', state: 'running', startedAt: E - 3 * MIN }),
+        child({ key: 'claude:task:a2', task: 'Cerca nel journal i bug simili ai rimborsi', agentType: 'scout', state: 'running', startedAt: E - 3 * MIN }),
         child({ key: 'claude:task:a0', task: 'Riassumi lo stato delle chat aperte', state: 'completed', startedAt: E - 12 * MIN, observedAt: E - 9 * MIN })) }),
     chat({ id: 'qa', title: 'QA · Rimborsi', state: 'waiting', pending: 1, costUsd: 1.84, contextTokens: 118_000, contextMaxTokens: 1_000_000, cwd: 'C:\\progetti\\alfa-e2e', updatedAt: E - 4 * MIN, browserTabIds: ['tab-qa'],
       lastText: 'Ho rieseguito il test case 7 su master: stesso errore.' }),
@@ -125,7 +125,7 @@ export function seed(E: number): Seed {
         child({ key: 'claude:task:f0', task: 'Leggi le regole di sconto', state: 'completed', startedAt: E - 4 * MIN, observedAt: E - 3 * MIN })) }),
     chat({ id: 'sms', title: 'Bug notifiche SMS', harness: 'cursor', model: 'grok-4.7', effort: null, permissionMode: null, state: 'running', contextTokens: 31_000, contextEstimated: true, cwd: 'C:\\progetti\\alfa-e2e',
       updatedAt: E - 20_000, browserTabIds: ['tab-sms'], lastText: 'Riproduco il bug con il cliente di prova…',
-      agentChildren: children(child({ key: 'acp:tool:s1', nativeId: null, toolCallId: 's1', task: 'Riproduci il bug con il cliente di prova', state: 'running', startedAt: E - 50_000 })) }),
+      agentChildren: children(child({ key: 'acp:tool:s1', nativeId: null, toolCallId: 's1', task: 'Riproduci il bug con il cliente di prova', agentType: 'sentinel', state: 'running', startedAt: E - 50_000 })) }),
     chat({ id: 'feedback', title: 'App · Feedback', model: 'claude-sonnet-4-5', effort: 'medium', state: 'waiting', pending: 1, costUsd: 0.35, updatedAt: E - 2 * MIN,
       lastText: 'Lancio la suite e2e completa.' }),
     chat({ id: 'mappa', title: 'App · Mappa 3D', costUsd: 3.1, contextTokens: 172_000, contextMaxTokens: 200_000, updatedAt: E - 25 * MIN, lastText: 'v2 in main (48e6086). 14 test verdi, screenshot nel report.' }),
