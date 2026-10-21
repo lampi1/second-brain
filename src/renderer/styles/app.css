@@ -493,10 +493,10 @@ html[data-blink="1"] .md.streaming > .md-b:last-child > :last-child::after { opa
 .notice-warn { color: var(--amber); }
 /* the answer the user waited for is ready in a work chat (#123): the summary and its Apri, no Orchestrator turn */
 .notice.result-ready { background: var(--surface-2); border: 1px solid var(--border); border-left: 3px solid var(--green); border-radius: var(--r-s);
-  padding: 8px 10px; color: var(--text); flex-wrap: wrap; align-items: center; }
+  padding: 8px 10px; color: var(--text); display: grid; grid-template-columns: 24px minmax(0, 1fr); align-items: start; }
 .notice.result-ready svg { color: var(--green); }
 .notice.result-ready > span { flex: 1 1 220px; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-.notice.result-ready .chatref-named { margin-top: 0; }
+.notice.result-ready .chatref-named { grid-column: 2; margin-top: 0; min-width: 0; }
 .notice-error { color: var(--red); background: var(--red-bg); padding: 6px 10px; border-radius: var(--r-s); }
 .cold-divider { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--text-3); flex: none; padding: 4px 0; white-space: nowrap; }
 .cold-divider .link-btn { font-size: 11px; }
@@ -1189,8 +1189,7 @@ html.overlay body:focus-within .layer-hint { display: none; }
 .topbar[data-fit~="3"] .topbar-queue .queue-label { display: none; }
 
 /* Canonical output opens locally: no extra model turn to read the full deliverable. */
-.notice.result-ready { flex-wrap: wrap; }
-.result-ready-full { flex-basis: 100%; min-width: 0; }
+.result-ready-full { grid-column: 1 / -1; min-width: 0; }
 .result-ready-full summary { cursor: pointer; font-weight: 600; }
 .result-ready-full .md { margin-top: 8px; color: var(--text); overflow-wrap: anywhere; }
 .result-ready-full small { opacity: .6; overflow-wrap: anywhere; }

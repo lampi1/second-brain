@@ -26,6 +26,53 @@ describe('OrchestratorWake', () => {
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
 
+  it('uses the turn-start receipt when a report and engine result arrive before idle', async () => {
+    const { w, up, sent } = make();
+    const run: NonNullable<ChatSummary['run']> = { runId: 'current', chatId: 'worker', agentId: 'scout', version: 1, goal: 'Read', startedAt: 10, startedBy: 'orchestrator', costUsd: null, tokens: null,
+      counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null },
+      report: { at: 20, via: 'agent_report', outcome: 'done', verified: 'yes', summary: 'Ready', canonical: {
+        runId: 'current', taskId: 'task', taskVersion: 1, at: 20, outcome: 'done', summary: 'Ready', output: 'Full result', doneWhen: [],
+      } } };
+    const receipt = { at: 30, isError: false };
+    up({ id: 'worker', state: 'running' });
+    up({ id: 'worker', state: 'running', run, lastResult: receipt });
+    up({ id: 'worker', state: 'idle', run, lastResult: receipt });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(sent).toEqual([]);
+    // A later turn in the same run did not report: its completion is still news.
+    up({ id: 'worker', state: 'running', run, lastResult: receipt });
+    up({ id: 'worker', state: 'idle', run, lastResult: { ...receipt, at: 40 } });
+    expect(w.queued().some(e => e.kind === 'done')).toBe(true);
+    w.stop();
+  });
+
+  it('does not let an old quiet report hide a queued turn that never left running', () => {
+    const { w, up } = make();
+    const run: NonNullable<ChatSummary['run']> = { runId: 'current', chatId: 'worker', agentId: 'scout', version: 1, goal: 'Read', startedAt: 10, startedBy: 'orchestrator', costUsd: null, tokens: null,
+      counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null },
+      report: { at: 20, via: 'agent_report', outcome: 'done', verified: 'yes', summary: 'Ready' } };
+    up({ id: 'worker', state: 'running' });
+    up({ id: 'worker', state: 'running', run, lastResult: { at: 30, isError: false } });
+    w.cleanReport({ chatId: 'worker', title: 'Worker', role: 'Scout', summary: 'Ready', at: 20 });
+    up({ id: 'worker', state: 'running', run, lastResult: { at: 40, isError: false } });
+    up({ id: 'worker', state: 'idle', run, lastResult: { at: 40, isError: false } });
+    expect(w.queued().some(e => e.kind === 'done' && !e.report)).toBe(true);
+    w.stop();
+  });
+
+  it('keeps a post-report engine failure even when its receipt precedes idle', () => {
+    const { w, up } = make();
+    const run: NonNullable<ChatSummary['run']> = { runId: 'current', chatId: 'worker', agentId: 'scout', version: 1, goal: 'Read', startedAt: 10, startedBy: 'orchestrator', costUsd: null, tokens: null,
+      counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null },
+      report: { at: 20, via: 'agent_report', outcome: 'done', verified: 'yes', summary: 'Ready' } };
+    const lastResult = { at: 30, costUsd: 0, durationMs: 1, turns: 1, isError: true };
+    up({ id: 'worker', state: 'running' });
+    up({ id: 'worker', state: 'running', run, lastResult });
+    up({ id: 'worker', state: 'idle', run, lastResult });
+    expect(w.queued().some(e => e.kind === 'error')).toBe(true);
+    w.stop();
+  });
+
   it('keeps two user messages with distinct event IDs and retries a failed delivery', async () => {
     let attempts = 0;
     const w = new OrchestratorWake({ enabled: () => true, groupMs: 10, perChatMs: 20,

@@ -73,7 +73,7 @@ export interface OrchestratorWakeDeps {
   perChatMs?: number;
 }
 
-type Seen = Pick<ChatSummary, 'state' | 'title' | 'harness' | 'isOrchestrator' | 'closedAt' | 'handoffBusy' | 'lastText' | 'lastError' | 'lastResult' | 'pending' | 'parentId' | 'agent'>;
+type Seen = Pick<ChatSummary, 'state' | 'title' | 'harness' | 'isOrchestrator' | 'closedAt' | 'handoffBusy' | 'lastText' | 'lastError' | 'lastResult' | 'pending' | 'parentId' | 'agent'> & { turnResultAt: number; reportedTurn: boolean };
 const BUSY: ReadonlySet<ChatState> = new Set(['running', 'waiting', 'starting']);
 /** a turn ran: 'starting' alone is an engine booting (a new chat with no prompt, a reopen), and its idle is no turn end */
 const IN_TURN: ReadonlySet<ChatState> = new Set(['running', 'waiting']);
@@ -192,11 +192,11 @@ export class OrchestratorWake {
     if (c.state === 'error' && was.state !== 'error') this.add(c, 'error', c.lastError ?? c.lastText);
     else if (c.state === 'idle' && IN_TURN.has(was.state) && c.pending === 0) {
       // the user stopped it himself (Stop, "Invia subito"): he is on it, nothing to tell
-      if (c.lastResult?.interrupted && c.lastResult.at !== was.lastResult?.at) return;
-      const failed = !!c.lastResult?.isError && c.lastResult.at !== was.lastResult?.at;
+      if (c.lastResult?.interrupted && c.lastResult.at > was.turnResultAt) return;
+      const failed = !!c.lastResult?.isError && c.lastResult.at > was.turnResultAt;
       // it gave its result with agent_report in this turn: that already reached its parent or the Orchestrator (the
       // owner, 2026-10-20: the same news twice was a second Orchestrator turn for nothing)
-      if (!failed && c.run?.report?.via === 'agent_report' && c.run.report.at > (was.lastResult?.at ?? 0)) return;
+      if (!failed && this.chats.get(c.id)?.reportedTurn) return;
       // a chat the app itself started (a sampled independent review): the app reads its verdict, the Orchestrator never asked for it
       if (!failed && c.run?.startedBy === 'app') return;
       this.add(c, failed ? 'error' : 'done', c.lastText);
@@ -262,7 +262,7 @@ export class OrchestratorWake {
     if (!e || e.requestId !== r.requestId) return;
     this.buffer.delete(r.chatId);
     const c = this.chats.get(r.chatId);
-    if (!c || c.state !== 'idle' || c.pending || c.handoffBusy) return;
+    if (!c || c.state !== 'idle' || c.pending || c.handoffBusy || c.reportedTurn) return;
     this.buffer.set(r.chatId, { ...e, kind: 'done', detail: e.child ? '' : c.lastText, at: this.now(), requestId: undefined, endsTurn: undefined, silent: (!!e.child && !this.queued().some(event => event.chatId === r.chatId && event.kind === 'user-message')) || undefined });
     this.reschedule();
   }
@@ -273,7 +273,8 @@ export class OrchestratorWake {
     // the newest news of a chat wins, except that "finished" never hides what it left for the user in the same turn
     const old = this.buffer.get(c.id);
     // a clean report has its own slot (cleanReport): a later error or request never hides it, its turn end adds nothing
-    if (kind === 'done' && this.buffer.has(`${c.id}#report`)) return;
+    const quietReport = this.buffer.get(`${c.id}#report`);
+    if (kind === 'done' && quietReport && quietReport.at > (this.chats.get(c.id)?.turnResultAt ?? 0)) return;
     if (old && kind === 'done' && old.kind !== 'done' && old.kind !== 'error' && old.kind !== 'started') return;
     // a command left right after the turn ended (asks.ts settles after it) keeps the turn end's wake
     const endsTurn = QUIET.has(kind) && !!old && (!QUIET.has(old.kind) || !!old.endsTurn);
@@ -311,7 +312,18 @@ export class OrchestratorWake {
 
   private remember(c: ChatSummary): void {
     if (c.quick) this.quick.add(c.id);
-    this.chats.set(c.id, { state: c.state, title: c.title, harness: c.harness, isOrchestrator: c.isOrchestrator, closedAt: c.closedAt, handoffBusy: c.handoffBusy, lastText: c.lastText, lastError: c.lastError, lastResult: c.lastResult, pending: c.pending, parentId: c.parentId, agent: c.agent });
+    const was = this.chats.get(c.id);
+    // Keep the previous turn's receipt fixed: the current receipt arrives while still running, before idle.
+    const nextReceipt = was?.lastResult && c.lastResult && c.lastResult.at !== was.lastResult.at && was.lastResult.at > was.turnResultAt;
+    const turnResultAt = !was || nextReceipt || (IN_TURN.has(c.state) && !IN_TURN.has(was.state))
+      ? (was?.lastResult?.at ?? c.lastResult?.at ?? 0) : was.turnResultAt;
+    const report = c.run?.report;
+    const reportedTurn = report?.via === 'agent_report' && report.at > turnResultAt
+      && (!report.canonical || report.canonical.runId === c.run?.runId);
+    // A delayed report supersedes only this turn's generic completion, never errors, requests or user decisions.
+    const queued = this.buffer.get(c.id);
+    if (reportedTurn && queued?.kind === 'done' && !queued.report && queued.at >= report.at) this.buffer.delete(c.id);
+    this.chats.set(c.id, { state: c.state, title: c.title, harness: c.harness, isOrchestrator: c.isOrchestrator, closedAt: c.closedAt, handoffBusy: c.handoffBusy, lastText: c.lastText, lastError: c.lastError, lastResult: c.lastResult, pending: c.pending, parentId: c.parentId, agent: c.agent, turnResultAt, reportedTurn });
   }
 
   /** the Orchestrator, which every work chat's news go to; without the list, the one seen */
