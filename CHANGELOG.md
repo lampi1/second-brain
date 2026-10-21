@@ -11,7 +11,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   is a verified success from the facts (every done criterion met, no correction, not redone in 7 days); a level counts
   only verified successes («Lv 6 Maestro · 38 riusciti verificati»).
 - **«Lampo», the quick lane** (owner, 2026-10-20; ADR 0105): a tab beside the Orchestrator that answers in seconds with
-  read-only tools; «Fanne un lavoro» hands the last exchange to the Orchestrator.
+  read-only tools; «Fanne un lavoro» hands the last exchange to the Orchestrator. Like a "btw" (owner, 2026-10-21;
+  ADR 0106) it sees the Orchestrator's conversation, so it answers about the work in progress too.
 - **The app says what it does** (ADR 0102): strips show the current step, a morning block lists what happened while
   you were away (zero tokens), maintenance changes have Annulla in the feed, a taskbar badge counts requests.
 - **«Annulla l'ultimo turno»** (ADR 0103): git checkpoints before each turn of a work chat; the undo puts back only that
