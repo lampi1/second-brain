@@ -54,11 +54,12 @@ function obj<R extends Record<string, V<unknown>>, O extends Record<string, V<un
 }
 function kindOf(v: unknown): string { return v === null ? 'null' : Array.isArray(v) ? 'an array' : typeof v === 'object' ? 'an object' : typeof v; }
 
-/** An http(s) URL or a local absolute path (C:\…, file:///C:/…); never javascript:, data:, a UNC share or a relative
- *  path (main/open-path.ts refuses those too). */
+/** An http(s) URL or a local absolute path (C:\…, file:///C:/…; on macOS and Linux /…, file:///…, ADR 0054); never
+ *  javascript:, data:, a UNC share, a protocol-relative //host or a relative path (main/open-path.ts refuses those too). */
 export function safeHref(h: string): 'web' | 'file' | null {
   if (/^https?:\/\/[^\s]+$/i.test(h)) return 'web';
   if (/^file:\/\/\/?[a-z]:[\\/]/i.test(h) || /^[a-z]:[\\/]/i.test(h)) return 'file';
+  if (/^(?:file:\/\/)?\/(?![\\/])\S/i.test(h)) return 'file';
   return null;
 }
 const href: V<string> = (v, at) => { const s = str(1000)(v, at); return safeHref(s) ? s : fail(at, 'expected an http(s) URL or an absolute local path'); };

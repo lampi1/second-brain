@@ -22,7 +22,7 @@ test('Memoria: statistics with explanations, rendered memories that open, Manute
     const ins = mem.getByTestId('mm-insights');
     await expect(ins).toBeVisible();
     await expect(ins.getByTestId('mm-k-errors')).toContainText('12');
-    await expect(ins.getByTestId('mm-k-agents')).toContainText('4/');
+    await expect(ins.getByTestId('mm-k-agents')).toContainText('3/'); // Scout, Artisan, Sentinel (Scribe retired, ADR 0100)
     await expect(ins.getByTestId('mm-k-unused')).toContainText('1/');
     // a "?" says how the number is computed
     await ins.getByTestId('mm-k-lines').getByRole('button').click();

@@ -205,8 +205,8 @@ async function runTurn(text) {
     out({ type: 'system', subtype: 'init', session_id: sessionId, model, permissionMode, cwd: process.cwd(), tools: ['Bash', 'Edit', 'AskUserQuestion'], mcp_servers: [{ name: 'broken', status: 'failed' }], claude_code_version: '0.0.0-fake', effort: opt('--effort') ?? null });
   }
   record({ type: 'user', message: { role: 'user', content: text } });
-  // the role text the app puts before an Orchestrator's first message is not the user's: its words trigger nothing
-  text = text.replace(/\[Role supplied by the app: [^\]\n]*\][\s\S]*?End role\]\n*/, '');
+  // the role text the app puts before an Orchestrator's first message and its "[app estimate · …]" line are not the user's: their words trigger nothing
+  text = text.replace(/\[Role supplied by the app: [^\]\n]*\][\s\S]*?End role\]\n*/, '').replace(/\n*\[app estimate · [^\]\n]*\][^\n]*$/, '');
   // the fixed rules of a delegation contract (shared/delegation.ts delegationPrompt) are the app's: their words ("ask") trigger nothing
   text = text.replace(/^(When the output is ready|An ambiguity in this contract|If the user writes to you here)[^\n]*$/gm, '');
   // the MCP calls are taken out first: their JSON's words ("tasks", "summary") trigger nothing

@@ -50,6 +50,7 @@ test('brain pages: arguments through links and history, page-to-page links, map 
   await page.getByTestId('bx-map-flat').getByRole('button', { name: /reviewer/ }).first().click();
   const piece = page.getByTestId('bx-map-piece');
   await expect(piece).toBeVisible();
+  await piece.getByText('Fonti e dettagli').click(); // the piece's file sits in its folded sources (BrainMap.tsx)
   const file = piece.locator('.bx-go').first();
   const name = (await file.textContent())?.trim() ?? '';
   expect(name).not.toBe('');

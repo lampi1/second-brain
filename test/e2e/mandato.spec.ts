@@ -7,6 +7,9 @@ import { expect, test, type ElectronApplication } from '@playwright/test';
 import { launchDemo, shot } from './helpers';
 
 type Demo = { say(c: string, t: string): void };
+/** Esegui runs a block in PowerShell 5.1 on Windows and in the user's login shell ($SHELL -lc) on macOS and Linux
+ *  (ADR 0054, main/platform.ts userShell): a command is written for the shell that runs it on this machine. */
+const echo = (text: string) => (process.platform === 'win32' ? `Write-Output '${text}'` : `echo '${text}'`);
 const say = (app: ElectronApplication, chatId: string, text: string) =>
   app.evaluate((_e, [c, t]) => { (globalThis as unknown as { __sbDemo: Demo }).__sbDemo.say(c, t); }, [chatId, text] as const);
 
@@ -19,7 +22,7 @@ const MAIL = [
   '```',
   'E per controllare:',
   '```powershell',
-  "Write-Output 'controllo mandato'",
+  echo('controllo mandato'),
   '```',
 ].join('\n');
 

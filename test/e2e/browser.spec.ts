@@ -4,7 +4,7 @@
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { launch } from './helpers';
+import { closeSetup, launch } from './helpers';
 import { startSites, McpClient, refOf, pngSize, imageSize, type Sites } from './fixture-server';
 
 let app: ElectronApplication;
@@ -17,6 +17,7 @@ test.describe.serial('internal browser over MCP', () => {
   test.beforeAll(async () => {
     sites = await startSites();
     ({ app, page, userData } = await launch());
+    await closeSetup(page); // a fresh profile opens the first-run setup: its modal would cover the toasts' Annulla
     // Playwright attaches its own CDP session to every page of the app (our tabs too) and auto-dismisses JavaScript
     // dialogs unless someone listens: listen and do nothing, so the dialogs stay for the app's agent to answer.
     app.context().on('dialog', () => {});
@@ -92,7 +93,8 @@ test.describe.serial('internal browser over MCP', () => {
   });
 
   test('fills a form in one call and submits it with a trusted click', async () => {
-    const tree = await agent.ok('read_page', { filter: 'interactive' });
+    // full: the whole tree (a page read before returns only what changed since; each test takes its refs from it)
+    const tree = await agent.ok('read_page', { filter: 'interactive', full: true });
     const filled = await agent.ok('fill_form', { fields: [
       { ref: refOf(tree, /textbox "Nome"/), value: 'Mario' },
       { ref: refOf(tree, /textbox "Email"/), value: 'mario@example.com' },
@@ -112,23 +114,27 @@ test.describe.serial('internal browser over MCP', () => {
   });
 
   test('clicks and types inside the same-origin and the cross-origin iframe', async () => {
-    let tree = await agent.ok('read_page');
+    let tree = await agent.ok('read_page', { full: true });
     const inner = refOf(tree, /button "Bottone interno"/);
     await agent.ok('click', { ref: inner });
     await agent.ok('click', { ref: inner });
     expect(await agent.ok('get_page_text')).toMatch(/Clic interni: 2/);
-    tree = await agent.ok('read_page');
+    tree = await agent.ok('read_page', { full: true });
     await agent.ok('type', { ref: refOf(tree, /textbox "Codice"/), text: '42' });
     const res = await agent.ok('click', { ref: refOf(tree, /button "Conferma codice"/) });
     expect(res).not.toContain('Failed requests');
     expect(await agent.ok('wait_for', { text: 'Codice: 42', timeout_ms: 5000 })).toContain('Done');
     const net = await agent.ok('network_requests', { urlPattern: '/api/cross' });
     expect(net).toMatch(/r\d+ 200 GET Fetch \[iframe\] http:\/\/localhost:\d+\/api\/cross\?c=42/);
-    expect(await agent.ok('javascript', { code: 'document.getElementById("out").textContent', frame: refOf(tree, /button "Conferma codice"/).replace(/e\d+$/, '') })).toBe('Codice: 42');
+    // the frame's result is read frame-aware; caller JavaScript runs only on the verified local top page, never in a frame
+    expect(await agent.ok('get_page_text')).toContain('Codice: 42');
+    const inFrame = await agent.call('javascript', { code: 'document.getElementById("out").textContent', frame: refOf(tree, /button "Conferma codice"/).replace(/e\d+$/, '') });
+    expect(inFrame.isError).toBe(true);
+    expect(inFrame.text).toContain('only the verified local top page');
   });
 
   test('dialogs never freeze the agent', async () => {
-    const tree = await agent.ok('read_page', { filter: 'interactive' });
+    const tree = await agent.ok('read_page', { filter: 'interactive', full: true });
     const shown = await agent.ok('click', { ref: refOf(tree, /button "Mostra alert"/) });
     expect(shown).toContain('Dialog open: alert "Ciao agente"');
     const blocked = await agent.call('read_page');
@@ -151,7 +157,7 @@ test.describe.serial('internal browser over MCP', () => {
   });
 
   test('reports network, failed requests and console errors, and saves a response body', async () => {
-    const tree = await agent.ok('read_page', { filter: 'interactive' });
+    const tree = await agent.ok('read_page', { filter: 'interactive', full: true });
     await agent.ok('click', { ref: refOf(tree, /button "Carica dati"/) });
     expect(await agent.ok('wait_for', { text: 'Dati: uno, due, tre' })).toContain('Done');
     const list = await agent.ok('network_requests', { urlPattern: '/api/data' });
@@ -168,7 +174,7 @@ test.describe.serial('internal browser over MCP', () => {
   });
 
   test('popups and target=_blank links open as tabs of the same agent', async () => {
-    const tree = await agent.ok('read_page', { filter: 'interactive' });
+    const tree = await agent.ok('read_page', { filter: 'interactive', full: true });
     const first = /Tab (t\d+)/.exec(tree)![1]!;
     const blank = await agent.ok('click', { ref: refOf(tree, /link "Apri in nuova scheda"/) });
     expect(blank).toMatch(/New tab t\d+ opened by t\d+: "Popup"/);

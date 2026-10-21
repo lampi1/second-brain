@@ -77,10 +77,11 @@ test('notification center: filter by kind, mark all read (remembered after a rel
 test('section badges count new events and clear when the section is visited', async () => {
   // a live clock: frozen, the visit and the event share one instant and the event is never newer than the visit
   const { app, page } = await launchDemo({ freeze: false });
-  // Badges are still available when a saved role explicitly includes these secondary pages.
+  // Badges are still available when a saved work profile includes these secondary pages (Idee: the PO's,
+  // shared/work-profiles.ts; the old saved "role" is dropped on read)
   await page.evaluate(() => {
     const prefs = JSON.parse(localStorage.getItem('sb.prefs.v1') ?? '{}');
-    prefs.role = { schemaVersion: 1, presetId: 'cto', presetRevision: 1, overrides: { addPageIds: ['idee'] } };
+    prefs.workProfile = 'po';
     localStorage.setItem('sb.prefs.v1', JSON.stringify(prefs));
   });
   await page.reload();

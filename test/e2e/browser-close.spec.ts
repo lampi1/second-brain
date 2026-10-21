@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { BrowserTab, ChatSummary } from '../../src/shared/contract';
-import { demoLayout, launch, launchDemo, shot, showBrowsers, waitThumbs } from './helpers';
+import { closeSetup, demoLayout, launch, launchDemo, shot, showBrowsers, waitThumbs } from './helpers';
 import { startSites, McpClient, type Sites } from './fixture-server';
 
 const FAKE = path.resolve(import.meta.dirname, '..', 'fixtures', 'fake-claude.mjs');
@@ -29,6 +29,7 @@ test.describe.serial('closing a browser tile', () => {
     const logFile = path.join(home, 'fake.jsonl');
     ({ app, page } = await launch({ SB_CLAUDE_PATH: FAKE, CLAUDE_CONFIG_DIR: home, FAKE_CLAUDE_LOG: logFile }));
     await page.emulateMedia({ reducedMotion: 'reduce' });
+    await closeSetup(page); // a fresh profile opens the first-run setup: its modal covers the strips
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cwd-'));
     chat = await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'claude', cwd: dir, prompt: 'ciao', title: 'Prova · Chiudi browser' }), cwd);
     await expect.poll(async () => (await page.evaluate(() => window.sb.invoke('chat:list', undefined)))[0]?.state, { timeout: 20_000 }).toBe('idle');
@@ -135,8 +136,10 @@ test.describe.serial('closing a browser tile', () => {
 test('demo: the ✕ closes a browser tile and its native view leaves the layout', async () => {
   const { app: demo, page: p } = await launchDemo();
   try {
-    await waitThumbs(p);
+    await showBrowsers(p, 'qa'); // a strip's browsers are folded until its globe is pressed
     const tile = p.locator('[data-testid^="tile-browser-"]').first();
+    await tile.scrollIntoViewIfNeeded(); // under its strip: a native view is placed while its tile is in the window
+    await waitThumbs(p);
     const tabId = (await tile.getAttribute('data-tab-id'))!;
     await expect.poll(async () => (await demoLayout(demo)).find(v => v.tabId === tabId)?.rect ?? null).not.toBeNull();
     await shot(p, 'browser-close-demo-before');

@@ -1,7 +1,8 @@
 // Settings → Connettori (issue #91, ADR 0086) on the demo's made-up MCP servers (no process, no network, no real
 // token): the totals and the cards say what each server is, whether it works, its tools and roles; "Prova" turns an
 // untried server into a working one; the missing token is said with its fix and typed write-only (only its mask comes
-// back); a server is added from the form; the herald card's MCP section narrows a server. Dark and light screenshots of
+// back); a server is added from the form; the herald card's MCP section narrows a server once the card's «Server MCP»
+// tool class is on (the demo's Herald reads only, so its section starts disabled). Dark and light screenshots of
 // the section. Hidden window (SB_HIDDEN, set by the helpers).
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import fs from 'node:fs';
@@ -84,6 +85,10 @@ test('Connettori: accounts and MCP servers as cards, Prova, write-only token, ad
     const select = section.getByTestId('agent-mcp-herald-azure-devops');
     await expect(select).toHaveAttribute('data-value', 'read');
     await expect(section).toContainText('4 di 6 strumenti');
+    // the demo's Herald was narrowed to reading (no «Server MCP» class): no server reaches it until the class is on
+    await expect(select).toBeDisabled();
+    await page.getByTestId('role-permissions').getByTestId('perm-toggle-mcp').click();
+    await expect(select).toBeEnabled();
     await section.scrollIntoViewIfNeeded();
     await shotOf(page.getByTestId('perm-section-mcp'), 'connectors-hub-agent-card');
     await choose(select, 'none');

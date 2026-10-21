@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import os from 'node:os';
-import { launch, launchDemo, setSize, shot, goPage } from './helpers';
+import { choose, closeSetup, launch, launchDemo, setSize, shot, goPage } from './helpers';
 
 const SHOTS = path.resolve(import.meta.dirname, '..', '..', 'test-results', 'shots');
 async function clip(page: Page, name: string, testid: string): Promise<void> {
@@ -19,10 +19,12 @@ async function clip(page: Page, name: string, testid: string): Promise<void> {
 for (const scheme of ['dark', 'light'] as const) {
   test(`usage strip always shows today, Claude 5 h / week with resets and Cursor (${scheme})`, async () => {
     const { app, page } = await launchDemo({ scheme });
-    if (scheme === 'light') { // the app's own theme setting (default dark)
-      await page.getByTestId('settings').click();
-      await page.getByTestId('theme-light').click();
+    if (scheme === 'light') { // the app's own theme setting (default dark), in Settings → Aspetto e lingua
+      await page.keyboard.press('Control+Comma');
+      await choose(page.getByTestId('st-theme-select'), 'light');
       await expect(page.locator('html[data-theme="light"]')).toHaveCount(1);
+      await page.getByTestId('page-back').click();
+      await expect(page.getByTestId('settings-page')).toHaveCount(0);
     }
     const bar = page.getByTestId('usage');
     await expect(bar).toBeVisible();
@@ -72,6 +74,7 @@ test('Cursor today: estimated from the ledger (≈, margin), exact once a usage 
   fs.writeFileSync(path.join(dir, 'cursor-ledger.jsonl'), JSON.stringify({ at: t, source: 'hook', conversationId: 'c1', generationId: 'g1', model: 'grok-4.7', input: 1e6, cacheWrite: 0, cacheRead: 0, output: 0 }) + '\n');
   const env = { SB_CURSOR_LEDGER: dir, SB_DOWNLOADS: dl };
   let { app, page } = await launch(env);
+  await closeSetup(page); // a fresh profile opens the first-run setup over the app
   await expect(page.getByTestId('usage-cursor-value')).toHaveText('≈ 2,00 $');
   await page.getByTestId('usage').click();
   await expect(page.getByTestId('usage-pop')).toContainText('±20%');
@@ -90,7 +93,7 @@ test('Cursor today: estimated from the ledger (≈, margin), exact once a usage 
   fs.mkdirSync(path.join(brain, 'ops', 'tools'), { recursive: true });
   fs.copyFileSync(path.join(FIX, 'brain-site.mjs'), path.join(brain, 'ops', 'tools', 'brain-site.mjs'));
   fs.copyFileSync(path.join(FIX, 'data.mjs'), path.join(brain, 'ops', 'tools', 'brain-ui-data.mjs'));
-  ({ app, page } = await launch({ ...env, SB_BRAIN: brain }));
+  ({ app, page } = await launch({ ...env, SB_BRAIN: brain })); // a linked brain: no first-run setup
   await expect(page.getByTestId('usage-cursor-value')).toHaveText('1,70 $');
   await page.getByTestId('usage').click();
   await expect(page.getByTestId('usage-pop')).toContainText('dal CSV delle');

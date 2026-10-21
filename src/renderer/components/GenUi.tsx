@@ -119,7 +119,9 @@ function Board({ p }: { p: UiBoard }) {
 function fileHref(f: UiDiffList['groups'][number]['files'][number], cwd?: string): string | null {
   if (f.href) return f.href;
   if (safeHref(f.path) === 'file') return f.path;
-  return cwd && !/^[\\/]|\.\./.test(f.path) ? `${cwd.replace(/[\\/]+$/, '')}\\${f.path.replace(/\//g, '\\')}` : null;
+  if (!cwd || /^[\\/]|\.\./.test(f.path)) return null;
+  // the folder's own separator: a Windows folder joins with \, a macOS/Linux one with / (ADR 0054)
+  return cwd.startsWith('/') ? `${cwd.replace(/\/+$/, '')}/${f.path.replace(/\\/g, '/')}` : `${cwd.replace(/[\\/]+$/, '')}\\${f.path.replace(/\//g, '\\')}`;
 }
 
 /** Copia: the text to the clipboard, a check for a moment. */

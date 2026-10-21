@@ -22,11 +22,14 @@ const EXAMPLE = [
   '```',
   'e mostra un commit per riga. Il resto della spiegazione continua qui, con altri dettagli sul formato e sulle opzioni.',
 ].join('\n');
-const ASK = "Fatto: il fix è in main. Ora lancia il controllo:\n\n```powershell\nWrite-Output 'comando ok'\n```";
+/** Esegui runs a block in PowerShell 5.1 on Windows and in the user's login shell ($SHELL -lc) on macOS and Linux
+ *  (ADR 0054, main/platform.ts userShell): the command is written for the shell that runs it on this machine. */
+const CMD = process.platform === 'win32' ? "Write-Output 'comando ok'" : "echo 'comando ok'";
+const ASK = `Fatto: il fix è in main. Ora lancia il controllo:\n\n\`\`\`powershell\n${CMD}\n\`\`\``;
 
 test('a command left by a chat waits in its tile and runs from there; an example asks for nothing', async () => {
   const { app, page } = await launchDemo();
-  await expandChats(page, 'mappa'); // their transcripts: the strips start collapsed
+  await expandChats(page, 'mappa', 'qa', 'feedback'); // transcripts and requests: the strips start collapsed
   await expect(page.getByTestId('needs-lane')).toHaveCount(0); // the agents workspace has no "Ti aspettano" strip (ADR 0019)
   // the open requests: the demo's three (Orchestrator, QA, Feedback); the Orchestrator column (ADR 0068) shows its own, the
   // strips the other two in their tiles
@@ -53,7 +56,7 @@ test('a command left by a chat waits in its tile and runs from there; an example
   await expect(asks).toHaveCount(3);
   await expect(card).toContainText('Comando da eseguire');
   await expect(card).toHaveAttribute('aria-label', /App · Mappa 3D/);
-  await expect(card.locator('.cmd-code')).toHaveText("Write-Output 'comando ok'");
+  await expect(card.locator('.cmd-code')).toHaveText(CMD);
   await expect(card.getByRole('button', { name: 'Copia' })).toBeVisible();
   // "Vai alla chat" only where the chat is not already around the card (Orchestrator card and layer: the tests below)
   await expect(card.getByRole('button', { name: /Vai alla chat/ })).toHaveCount(0);
@@ -97,14 +100,14 @@ test('a work chat\'s command never shows in the Orchestrator: it is a card in it
   await expect(card).toHaveCount(1);
   // the chat's explanation right before the block, in sight without a click (2026-10-13)
   await expect(card.locator('.cmd-lead')).toHaveText('Fatto: il fix è in main. Ora lancia il controllo:');
-  await expect(card.locator('.cmd-code')).toHaveText("Write-Output 'comando ok'");
+  await expect(card.locator('.cmd-code')).toHaveText(CMD);
   await expect(orchestrator.locator('[data-request-key^="mappa/"]')).toHaveCount(0); // the open Orchestrator never hosts it
   await expect(page.locator('[data-kind="command"]')).toHaveCount(1);
   await page.mouse.move(2, 2);
   await shot(page, 'command-ask-not-orchestrator');
   // the open requests main serves (the app's chat:pending, the Orchestrator's app_pending) list it too
   const pending = await page.evaluate(() => window.sb.invoke('chat:pending', undefined));
-  expect(pending.filter(p => p.type === 'command')).toMatchObject([{ chatId: 'mappa', tool: 'Esegui', detail: "Write-Output 'comando ok'" }]);
+  expect(pending.filter(p => p.type === 'command')).toMatchObject([{ chatId: 'mappa', tool: 'Esegui', detail: CMD }]);
   await card.getByRole('button', { name: 'Non serve' }).click();
   await expect(card).toHaveCount(0);
   const after = await page.evaluate(() => window.sb.invoke('chat:pending', undefined));
@@ -132,7 +135,7 @@ test('on a page the command floats in the request layer and Esegui there runs it
   const card = layer.getByTestId('layer-card');
   await expect(card).toContainText('ti lascia un comando');
   await expect(card).toContainText('App · Mappa 3D');
-  await expect(card.locator('.cmd-code')).toHaveText("Write-Output 'comando ok'");
+  await expect(card.locator('.cmd-code')).toHaveText(CMD);
   await expect(card.locator('.cmd-lead')).toHaveText('Fatto: il fix è in main. Ora lancia il controllo:'); // in the layer too
   await expect(card.getByRole('button', { name: /Vai alla chat/ })).toBeVisible();
   await windowShot(app, 'command-ask-layer');

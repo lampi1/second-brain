@@ -66,8 +66,9 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     expect(scout.run?.startedBy).toBe('parent');
     expect(sentinelChat.title).toBe('Controllo test');
 
-    // both results come back to the parent as messages, and each child carries its own
-    await expect.poll(async () => (await items(page, parent.id)).filter(i => i.kind === 'user' && textOf(i).includes('[risultato · ')).length, { timeout: 20000 }).toBe(2);
+    // both results come back to the parent as messages (siblings' results ride together in one message, manager.ts
+    // queueChildResult), and each child carries its own
+    await expect.poll(async () => (await items(page, parent.id)).filter(i => i.kind === 'user').map(textOf).join('\n').split('[risultato · ').length - 1, { timeout: 20000 }).toBe(2);
     const back = (await items(page, parent.id)).filter(i => i.kind === 'user').map(textOf).join('\n');
     expect(back).toContain('[risultato · Scout «Log errori»] Trovati 3 errori nel servizio ordini');
     expect(back).toContain('[risultato · Sentinel «Controllo test»] La suite passa: 42 su 42');

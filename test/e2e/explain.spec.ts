@@ -3,7 +3,7 @@
 // (Bash: the model's description; Cursor: the ACP kind and title) with the raw command one line, unfolded on click.
 // Screenshots in test-results/shots/explain-*.png.
 import { expect, test, type ElectronApplication } from '@playwright/test';
-import { launchDemo, shot } from './helpers';
+import { expandChats, launchDemo, shot } from './helpers';
 
 type Demo = { ask(c: string, r: object): void };
 const ask = (app: ElectronApplication, chatId: string, req: object) =>
@@ -21,7 +21,9 @@ for (const scheme of ['dark', 'light'] as const) {
     await shot(page, `explain-tools-${scheme}`);
     await page.getByTestId('chat-max-fix').click();
 
-    // a Claude permission: the description on top, the command under it (in its tile too, never the description alone)
+    // a Claude permission: the description on top, the command under it (in its tile too, never the description alone;
+    // strips start folded, ChatTile.tsx: the panel shows in the opened strip)
+    await expandChats(page, 'feedback');
     await expect(page.getByTestId('request-feedback-feedback-p1')).toContainText('npm run test:e2e');
     await page.getByTestId('chat-max-feedback').click();
     const perm = page.getByTestId('request-feedback-feedback-p1');

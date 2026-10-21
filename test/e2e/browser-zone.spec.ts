@@ -10,6 +10,8 @@ import { McpClient, imageSize, startSites } from './fixture-server';
 test('each browser beside its chat, folded by its globe; a saved hide-browsers choice hides nothing', async () => {
   const { app, page } = await launchDemo();
   await showBrowsers(page, 'qa', 'sms'); // a strip's browser shows once opened beside the open strip
+  // the column scrolls: SMS's browser in view (one at the column's clipped edge has no native view, only an old snapshot)
+  await page.getByTestId('tile-browser-tab-sms').scrollIntoViewIfNeeded();
   await waitThumbs(page);
   const column = page.getByTestId('view-agents');
   await expect(column.locator('[data-testid^="tile-browser-"]')).toHaveCount(2);

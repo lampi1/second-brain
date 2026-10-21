@@ -102,7 +102,7 @@ test('the live map: legend of the chats at work, lit pieces with "Adesso", a cli
   await expect(legend).toContainText('Fix totale ordine');
   await expect(legend).toContainText('Bug notifiche SMS');
   await expect(legend).toContainText('Orchestrator');
-  await expect(legend).not.toContainText('Order.cs'); // Repo files never become brain neurons.
+  await expect(legend).toContainText('In corso · Order.cs'); // the legend says what a chat does now, a repo file included
   await expect(m.getByTestId('bx-map-canvas').locator('canvas')).toHaveCount(1, { timeout: 30_000 });
   await page.waitForTimeout(4000); // the layout settles, the live neurons find their place
   await shot(page, 'brain-map-live');
@@ -157,6 +157,7 @@ test('the live map: legend of the chats at work, lit pieces with "Adesso", a cli
   const flat = m.getByTestId('bx-map-flat');
   await expect(flat.locator('button.live').filter({ hasText: 'now.md' })).toHaveCount(1);
   await expect(flat.locator('button.live').filter({ hasText: 'reviewer' })).toHaveCount(1);
+  await expect(flat.locator('button.live').filter({ hasText: 'Order.cs' })).toHaveCount(0); // repo files never become brain neurons
   await flat.locator('button.live').filter({ hasText: 'now.md' }).click();
   const now = m.getByTestId('bx-map-now');
   await expect(now).toContainText('legge Fix totale ordine');
