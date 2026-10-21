@@ -800,7 +800,8 @@ export class ChatManager implements ChatService {
       if (source?.kind === 'chat' && (source.chatId === this.openOrchestrator()?.s.id || (r.userTaskEvents?.latestSeq ?? 0) > (r.userTaskEvents?.acknowledgedSeq ?? 0))) throw new Error('Use app_assign_task for a follow-up; it checks role, project and current task version.');
       this.beginAssignment(r, text, { mode: isCorrection(text) ? 'rework' : 'continue', source: source ?? { kind: 'user' } });
     }
-    if (from !== undefined) delete r.askedParentAt; // an agent's message (its parent's answer) reached it
+    // its parent's message (agent_answer_child, from = the parent's title) reached it: the answer it waited for
+    if (from !== undefined && r.s.parentId && from === this.chats.get(r.s.parentId)?.s.title) delete r.askedParentAt;
     if (!resumed && from === undefined && (!source || source.kind === 'user')) this.userWrote(chatId, text);
     if (!resumed && !liveOnly && (r.s.run?.taskVersion ?? 1) > 1 && source?.kind !== 'app') text += `\n\n[Task version ${r.s.run!.taskVersion}: include taskVersion: ${r.s.run!.taskVersion} in agent_report.]`;
     // a new assignment from the Orchestrator: whether the user waits for it is decided again (#123)

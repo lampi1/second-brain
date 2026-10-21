@@ -757,10 +757,12 @@ export class ClaudeSession implements HarnessSession {
       return;
     }
     const tool = `mcp__${server}`, input = trimInput({ server });
+    // the server writes the message: its name leads the headline, and no control or bidi character can reorder it
+    const plain = (x: string) => stripAnsi(x).replace(/[\u0000-\u0008\u000b-\u001f\u007f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '');
     this.calls.set(id, { requestId: id, tool, input: {}, toolUseId: '', suggestions: [], question: false, noAlways: true, elicitation: true });
     log.info('chats', 'MCP elicitation', { chat: this.opts.chatId, data: { requestId: id, server } });
     this.setState('waiting');
-    this.sink.pending({ id, type: 'permission', tool, title: cut(stripAnsi(message), 140), detail: cut(stripAnsi(`${message}\nServer: ${server}`), 8000), input, noAlways: true, at: Date.now() });
+    this.sink.pending({ id, type: 'permission', tool, title: cut(`MCP ${plain(server)}: ${plain(message)}`, 140), detail: cut(`Server: ${plain(server)}\n${plain(message)}`, 8000), input, noAlways: true, at: Date.now() });
   }
 
   /** The hooks registered at initialize: the Orchestrator's turn budget, a product brain's rules (in process). */

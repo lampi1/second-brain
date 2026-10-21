@@ -222,7 +222,7 @@ describe('ClaudeSession', () => {
     const { s, sink } = start();
     s.send('elicit');
     const p = await waitFor(() => sink.pendings[0], 'elicitation panel');
-    expect(p).toMatchObject({ type: 'permission', tool: 'mcp__wiz', title: 'Confermi la pubblicazione?', noAlways: true });
+    expect(p).toMatchObject({ type: 'permission', tool: 'mcp__wiz', title: 'MCP wiz: Confermi la pubblicazione?', noAlways: true });
     expect(s.answer(p.id, { kind: 'permission', allow: true })).toBe(true);
     await resultOf(sink);
     expect(sink.last('assistant')?.text).toBe('Elicitation {"action":"accept","content":{}}');
