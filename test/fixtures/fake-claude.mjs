@@ -278,6 +278,15 @@ async function runTurn(text) {
   if (/bash/.test(text) && !turn.aborted) {
     final = await permissionTurn('Bash', { command: 'npm test', description: 'Run the tests' }, 'toolu_bash', { permission_suggestions: rule, decision_reason: '\u001b[1mcomando non in allow list\u001b[0m' }, '3 passed') ?? final;
   }
+  // elicit / elicitform → an MCP server asks the user through the CLI (#148): "Elicitation <response JSON>"
+  if (/elicit/.test(text) && !turn.aborted) {
+    const request_id = `req_${++n}`, form = /elicitform/.test(text);
+    out({ type: 'control_request', request_id, request: { subtype: 'elicitation', mcp_server_name: 'wiz', message: 'Confermi la pubblicazione?', mode: 'form',
+      requested_schema: form ? { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } : { type: 'object', properties: {} } } });
+    turn.waitingId = request_id;
+    const r = await new Promise(resolve => waiters.set(request_id, resolve)).finally(() => { if (turn) turn.waitingId = null; });
+    final = `Elicitation ${JSON.stringify(r ?? null)}`;
+  }
   if (/readgate/.test(text) && !turn.aborted) {
     const file = path.resolve(process.cwd(), /readgate=(\S+)/.exec(text)?.[1] ?? 'a.txt');
     assistant([{ type: 'tool_use', id: 'toolu_read', name: 'Read', input: { file_path: file } }]);

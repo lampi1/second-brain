@@ -218,6 +218,23 @@ describe('ClaudeSession', () => {
     expect(sink.last('assistant')?.text).toBe('Ok, non lo eseguo.');
   });
 
+  it('an MCP confirmation from the CLI is a permission panel answered accept / decline; a form it cannot show is cancelled, never an error (#148)', async () => {
+    const { s, sink } = start();
+    s.send('elicit');
+    const p = await waitFor(() => sink.pendings[0], 'elicitation panel');
+    expect(p).toMatchObject({ type: 'permission', tool: 'mcp__wiz', title: 'Confermi la pubblicazione?', noAlways: true });
+    expect(s.answer(p.id, { kind: 'permission', allow: true })).toBe(true);
+    await resultOf(sink);
+    expect(sink.last('assistant')?.text).toBe('Elicitation {"action":"accept","content":{}}');
+    s.send('elicit again');
+    const q = await waitFor(() => sink.pendings[1], 'second panel');
+    s.answer(q.id, { kind: 'permission', allow: false });
+    await waitFor(() => sink.last('assistant')?.text === 'Elicitation {"action":"decline"}', 'declined');
+    s.send('elicitform');
+    await waitFor(() => sink.last('assistant')?.text === 'Elicitation {"action":"cancel"}', 'form cancelled');
+    expect(sink.pendings).toHaveLength(2);
+  });
+
   it('interrupts a streaming turn', async () => {
     const { s, sink } = start({ env: { FAKE_CLAUDE_DELAY: '30' } });
     s.send('slow');
