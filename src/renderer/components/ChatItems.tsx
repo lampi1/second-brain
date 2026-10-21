@@ -283,7 +283,7 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks, reaction 
       if (item.continued) return <ColdDivider session={item.continued.session} />;
       const recap = item.code === 'recap' || /^dove eravamo/i.test(item.text);
       return (
-        <div className={`notice notice-${item.level} ${recap ? 'recap' : ''} ${item.code === 'resultReady' ? 'result-ready' : ''}`} role={item.level === 'error' ? 'alert' : undefined} {...(item.code === 'resultReady' ? { 'data-testid': 'result-ready' } : {})}>
+        <div className={`notice notice-${item.level} ${recap ? 'recap' : ''} ${item.code === 'resultReady' ? 'result-ready' : ''}`} role={item.level === 'error' ? 'alert' : item.code === 'resultReady' ? 'status' : undefined} {...(item.code === 'resultReady' ? { 'data-testid': 'result-ready' } : {})}>
           {item.level === 'info' ? <IconInfo size={13} /> : <IconAlert size={13} />}<span>{sysText(item)}</span>
           {/* the answer the user waited for is ready in a work chat (#123): its Apri */}
           {item.code === 'resultReady' && typeof item.params?.chatId === 'string' && <NamedChatRefs ids={[item.params.chatId]} />}

@@ -27,6 +27,7 @@ export const catalogEn: typeof catalogIt = {
   'catalog.costsRuns': ({ n }) => n === 1 ? '1 ended run' : `${n} ended runs`,
   'catalog.costsNone': 'No ended run yet: costs show from the first.',
   'catalog.costsWhy.noWins': 'Cost per success: no verified success yet.',
+  'catalog.costsWhy.noTotal': 'Cost per success: the total of the oldest runs is missing; it shows with the next ones.',
   'catalog.costsWhy.partial': ({ n, total }) => `Cost per success: the cost is known for only ${n} of ${total} runs.`,
   'catalog.costsHelp': 'Median cost: half of the ended runs cost less, among those with a known cost. Cost per verified success: the cost of every ended run divided by the verified successful ones (those the level counts). At API list prices: with a subscription it is not what you pay.',
   'catalog.metricsError': 'Statistics unavailable. Please retry.', 'catalog.back': 'Back to catalogue',

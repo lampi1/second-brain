@@ -71,9 +71,9 @@ describe('cost facts', () => {
   const money = (v: number) => `$${v.toFixed(2)}`;
   it('names the priciest day, the top model and the priciest kind', () => {
     const f = costFacts({ total: 10, byDay: { '2026-10-17': { usd: 6, calls: 1 }, '2026-10-18': { usd: 2, calls: 1 }, '2026-10-19': { usd: 2, calls: 1 } }, byModel: { opus: { usd: 8, calls: 1 }, haiku: { usd: 2, calls: 1 } }, byKind: { fix: { usd: 7, calls: 1 }, qa: { usd: 3, calls: 1 } } }, money);
-    expect(f[0]).toMatch(/^Il giorno più caro è stato .+: \$6\.00, 1,8× la media della settimana\.$/);
-    expect(f[1]).toBe('opus vale 80% della spesa della settimana.');
-    expect(f[2]).toBe('Il lavoro che costa di più è «fix»: $7.00 in 7 giorni.');
+    expect(f[0]).toMatch(/^Il giorno più caro è stato .+: \$6\.00, 1,8× la media del periodo\.$/);
+    expect(f[1]).toBe('opus vale 80% della spesa del periodo.');
+    expect(f[2]).toBe('Il lavoro che costa di più è «fix»: $7.00 nel periodo.');
     expect(costFacts({ total: 0, byDay: {}, byModel: {}, byKind: {} }, money)).toEqual([]);
   });
 });

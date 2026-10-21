@@ -314,8 +314,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'metrics',
     title: b('Metriche e statistiche degli agenti', 'Agent metrics and statistics'),
-    summary: b('Statistiche dalle sessioni osservate e metriche dalle run: due letture distinte del lavoro degli agenti.',
-      'Statistics from observed sessions and metrics from runs: two separate views of agents’ work.'),
+    summary: b('Le metriche di ogni agente dalle sue run concluse: lavori, successi verificati, costi, livello e performance sulla sua carta.',
+      'Each agent’s metrics from its ended runs: runs, verified successes, costs, level and performance on its card.'),
     points: [
       // src/main/agents/analytics.ts, src/main/agents/collector.ts (#125: no page lists them since Costi dropped its per-agent blocks)
       b('L’app osserva le sessioni di ogni agente (costi e tempi) per il suo uso interno; non le mostra più per agente in Costi.',
@@ -335,9 +335,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
     tech: [
       tech(DATA, 'AgentMeasure { total, knownSubtotal, knownSessions, unknownSessions }; timing per categoria con medianMs.', 'AgentMeasure { total, knownSubtotal, knownSessions, unknownSessions }; timing per category with medianMs.'),
       // src/main/wiring.ts /api/agents/analytics
-      tech(WHERE, 'Statistiche delle sessioni: /api/agents/analytics; metriche delle run: IPC agents:metrics, anche filtrate per tag skill, app e repo.', 'Session statistics: /api/agents/analytics; run metrics: agents:metrics IPC, also filtered by skill, app and repo tags.'),
+      tech(WHERE, 'Metriche delle run: IPC agents:metrics, anche filtrate per tag skill, app e repo; le statistiche delle sessioni restano interne (/api/agents/analytics).', 'Run metrics: agents:metrics IPC, also filtered by skill, app and repo tags; the session statistics stay internal (/api/agents/analytics).'),
     ],
-    sources: ['src/main/agents/analytics.ts', 'src/main/agents/run-metrics.ts', 'src/main/agents/standing.ts', 'src/renderer/components/AgentCatalogCard.tsx', 'src/main/index.ts', 'src/main/agents/collector.ts', 'src/renderer/brain/pages/Costi.tsx', 'docs/agent-evidence.md'],
+    sources: ['src/main/agents/analytics.ts', 'src/main/agents/run-metrics.ts', 'src/main/agents/standing.ts', 'src/renderer/components/AgentCatalogCard.tsx', 'src/main/index.ts', 'src/main/agents/collector.ts', 'docs/agent-evidence.md'],
   },
   {
     id: 'errors-rules',
@@ -1082,9 +1082,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/components/HeldNews.tsx
       b('Sulla colonna dell’Orchestrator vedi quante sono; un clic le elenca (chat, tipo, da quando, perché aspetta) e una riga apre la sua chat.',
         'On the Orchestrator’s column you see how many there are; a click lists them (chat, kind, since when, why it waits) and a row opens its chat.'),
-      // src/main/chats/held-news.ts
-      b('Guardarle non spende nulla e non cambia la consegna: è solo una finestra sulla coda.',
-        'Looking at them spends nothing and does not change the delivery: it is only a window on the queue.'),
+      // src/main/chats/held-news.ts seen; src/main/chats/orchestrator-wake.ts seen (#123)
+      b('Una riga che apri è letta: esce dall’elenco e non sveglia più l’Orchestrator, che la riceve solo insieme alla prossima consegna. Guardare l’elenco non spende nulla.',
+        'A row you open is read: it leaves the list and no longer wakes the Orchestrator, which gets it only with the next delivery. Looking at the list spends nothing.'),
+      // src/main/chats/manager.ts releaseResult; src/shared/sys.ts resultReady (#123)
+      b('Quando un ruolo che l’Orchestrator ha aperto per la tua domanda ha la risposta, nella chat dell’Orchestrator compare un avviso verde con il riassunto e «Apri»: nessun turno in più dell’Orchestrator.',
+        'When a role the Orchestrator opened for your question has the answer, a green notice with the summary and "Open" shows in the Orchestrator’s chat: no extra Orchestrator turn.'),
     ],
     analogy: b('Come la posta che la segreteria tiene da parte mentre sei in riunione: non si perde, arriva tutta insieme quando esci.',
       'Like the mail the front desk keeps aside while you are in a meeting: nothing is lost, it all arrives together when you come out.'),
@@ -1092,7 +1095,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(LIMITS, 'Raggruppamento ORCHESTRATOR_GROUP_MS = 30 s.', 'Grouping ORCHESTRATOR_GROUP_MS = 30 s.'),
       tech(WHERE, 'Code: OrchestratorWake (notizie dei lavori) e ChatMail (posta); lette da HeldNewsHub (IPC orchestrator:held).', 'Queues: OrchestratorWake (job news) and ChatMail (mail); read by HeldNewsHub (IPC orchestrator:held).'),
     ],
-    sources: ['src/main/chats/held-news.ts', 'src/main/chats/orchestrator-delivery.ts', 'src/renderer/components/HeldNews.tsx'],
+    sources: ['src/main/chats/held-news.ts', 'src/main/chats/orchestrator-delivery.ts', 'src/main/chats/orchestrator-wake.ts', 'src/main/chats/manager.ts', 'src/shared/sys.ts', 'src/renderer/components/HeldNews.tsx'],
   },
   {
     id: 'context',

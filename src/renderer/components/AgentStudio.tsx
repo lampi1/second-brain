@@ -44,6 +44,8 @@ const draftOf = agentDraftOf;
 
 /** The place element of the card back's «Modifica il ruolo»: the role page opens with the editor (#126). */
 export const EDIT_ELEMENT = 'modifica';
+/** The last «Modifica il ruolo» acted on: the highlight stays in the store, a later visit must not reopen the editor. */
+let editHandled = 0;
 
 /** The run numbers of one role, read like the catalogue's (agents:metrics); null when unavailable. */
 function useAgentMetrics(agentId: string): AgentMetrics | null | undefined {
@@ -75,7 +77,7 @@ export function AgentStudio({ profile, children }: { profile: AgentProfile; chil
   const fromCard = useRef(false);
   const hl = ui.use(s => s.highlight);
   const focusNext = useRef(false);
-  useEffect(() => { if (hl?.id !== EDIT_ELEMENT) return; fromCard.current = true; focusNext.current = true; openEditor(); }, [hl?.n]);
+  useEffect(() => { if (hl?.id !== EDIT_ELEMENT || hl.n === editHandled) return; editHandled = hl.n; fromCard.current = true; focusNext.current = true; openEditor(); }, [hl?.n]);
   // the editor mounts after the page: give the instructions the focus once they are there
   useEffect(() => {
     if (!focusNext.current || !editing || !catalog) return;
@@ -87,7 +89,13 @@ export function AgentStudio({ profile, children }: { profile: AgentProfile; chil
   useEffect(() => {
     if (!editing || !fromCard.current) return;
     // capture, and stopped: Esc cancels the edit instead of the app's global Esc (which goes home)
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.shiftKey) { e.preventDefault(); e.stopImmediatePropagation(); cancel(); } };
+    const esc = (e: KeyboardEvent) => {
+      // an open dropdown closes first (its own Esc): only a plain Esc cancels the edit
+      const at = e.target instanceof Element ? e.target : null;
+      if (at?.closest('[role="listbox"], .ui-select[aria-expanded="true"]')) return;
+      // Esc meant for something else on the page (a "?" bubble, the permissions card) is not the editor's
+      if (at && at !== document.body && !at.closest('[data-testid="agent-editor"]')) return;
+      if (e.key === 'Escape' && !e.shiftKey) { e.preventDefault(); e.stopImmediatePropagation(); cancel(); } };
     window.addEventListener('keydown', esc, true);
     return () => window.removeEventListener('keydown', esc, true);
   }, [!!editing]);

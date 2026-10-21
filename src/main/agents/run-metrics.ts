@@ -123,7 +123,9 @@ export function foldRun(t: RunTally, run: AgentRun, index: RunIndex, aiErrors?: 
   }
 }
 
-const mergeSample = (a: Sample, b: Sample): Sample => ({ n: a.n + b.n, values: [...a.values, ...b.values].slice(-SAMPLE_MAX), ...(a.sum !== undefined && b.sum !== undefined ? { sum: a.sum + b.sum } : {}) });
+/** a sample's total: kept, or read back from its values while it still holds them all (a summary saved before `sum`) */
+const sumOf = (s: Sample): number | undefined => s.sum ?? (s.values.length === s.n ? s.values.reduce((t, v) => t + v, 0) : undefined);
+const mergeSample = (a: Sample, b: Sample): Sample => { const x = sumOf(a), y = sumOf(b); return { n: a.n + b.n, values: [...a.values, ...b.values].slice(-SAMPLE_MAX), ...(x !== undefined && y !== undefined ? { sum: x + y } : {}) }; };
 const mergeVerdicts = (a: Verdicts, b: Verdicts): Verdicts => ({ success: a.success + b.success, partial: a.partial + b.partial, fail: a.fail + b.fail });
 /** a then b (a older: its sample values go first and are the first to fall out) */
 export function mergeTallies(a: RunTally, b: RunTally, agentId = a.agentId, version = a.version): RunTally {
@@ -242,7 +244,7 @@ export function finalize(t: RunTally, version: number | null, window: number | n
     correctionsPerRun: metric(ratio(t.corrections.tagged + t.corrections.afterReport, t.corrections.runs), t.corrections.runs, e),
     aiErrorsPerRun: metric(ratio(t.aiErrors.lines, t.aiErrors.runs), t.aiErrors.runs, e),
     reworkRate: metric(ratio(t.reworked, e), e, e),
-    costPerRun: { median: metric(median(t.cost.values), t.cost.n, e), p90: p90(t.cost.values), total: t.cost.n > 0 && t.cost.sum !== undefined ? t.cost.sum : null },
+    costPerRun: { median: metric(median(t.cost.values), t.cost.n, e), p90: p90(t.cost.values), total: t.cost.n > 0 ? sumOf(t.cost) ?? null : null },
     tokensPerRun: Object.fromEntries(TOKEN_KINDS.map(k => [k, metric(median(t.tokens[k].values), t.tokens[k].n, e)])) as Record<TokenKind, Metric>,
     contextPeak: { median: metric(peak, t.contextPeak.n, e), max: t.contextPeak.values.length ? Math.max(...t.contextPeak.values) : null, ofWindow: peak !== null && window ? peak / window : null },
     timeToDone: { elapsed: metric(median(t.elapsed.values), t.elapsed.n, e), execution: metric(median(t.execution.values), t.execution.n, e) },

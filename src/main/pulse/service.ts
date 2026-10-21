@@ -246,9 +246,10 @@ export class PulseService {
       this.store.save(); this.d.emitApprovals(); return { ok: true };
     } catch (e) {
       // the real reason, in the log and on screen (#128); an empty one stays the generic line
-      const why = errText(e).trim();
+      const why = errText(e).split('\n')[0]!.trim().slice(0, 300);
       log.warn('pulse', 'proposal not applied', { data: { kind: item.kind, decision: a.decision }, cause: why || 'invalid decision' });
-      return { ok: false, error: why ? `Proposta non applicata: ${why}` : 'Proposta non applicata.' };
+      const head = this.d.lang() === 'en' ? 'Proposal not applied' : 'Proposta non applicata';
+      return { ok: false, error: why ? `${head}: ${why}` : `${head}.` };
     }
     finally { this.acting.delete(item.id); }
   }

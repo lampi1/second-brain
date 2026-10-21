@@ -37,7 +37,7 @@ function Costs({ id, metrics, wins, loaded }: { id: string; metrics: AgentMetric
   const ended = metrics?.ended ?? 0, med = metrics?.costPerRun.median, total = metrics?.costPerRun.total ?? null;
   const known = med?.n ?? 0;
   const perWin = total !== null && known === ended && ended > 0 && wins ? total / wins : null;
-  const why = !loaded || !ended ? null : !wins ? t('catalog.costsWhy.noWins') : perWin === null ? t('catalog.costsWhy.partial', { n: known, total: ended }) : null;
+  const why = !loaded || !ended ? null : !wins ? t('catalog.costsWhy.noWins') : perWin === null ? (known === ended ? t('catalog.costsWhy.noTotal') : t('catalog.costsWhy.partial', { n: known, total: ended })) : null;
   const dash = <><span aria-hidden="true">—</span><span className="sr-only">{t('catalog.unknown')}</span></>;
   return <section className="catalog-costs" aria-label={t('catalog.costs')} data-testid={`catalog-costs-${id}`}>
     <h4>{t('catalog.costs')}<HelpTip label={t('catalog.costs')} testid={`catalog-costs-help-${id}`}>{t('catalog.costsHelp')}</HelpTip>

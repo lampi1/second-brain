@@ -93,6 +93,11 @@ test('agent cards: big centred character, level and performance with their "?" f
     await overview.getByTestId('catalog-open-artisan').click();
     await expect(instructions).toHaveValue(saved); // nothing kept from the dropped edit
     await expect(page.getByTestId('agent-edit')).toBeVisible(); // the role's page stays around the editor
+    await page.getByTestId('agent-tier').click(); // Esc in an open dropdown closes the dropdown, not the editor
+    await expect(page.getByTestId('agent-tier')).toHaveAttribute('aria-expanded', 'true');
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('agent-tier')).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByTestId('agent-editor')).toBeVisible();
     await shot(page, 'agent-cards-edit-dark');
     await page.getByTestId('agent-editor').getByRole('button', { name: 'Chiudi senza salvare' }).click();
     await expect(overview.getByTestId('catalog-card-artisan')).toBeVisible();
