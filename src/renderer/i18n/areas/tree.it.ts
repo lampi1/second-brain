@@ -3,6 +3,7 @@
 export const treeIt = {
   'tree.fold': (p: { title: string }) => `Chiudi le chat delegate da ${p.title}`,
   'tree.unfold': (p: { title: string }) => `Mostra le chat delegate da ${p.title}`,
+  'tree.close': (p: { title: string }) => `Chiudi la chat ${p.title}`,
   'tree.focus': (p: { title: string }) => `Porta in vista la chat ${p.title}`,
   'tree.goTo': 'Vai alla chat',
   'tree.answerHere': 'Rispondi qui',

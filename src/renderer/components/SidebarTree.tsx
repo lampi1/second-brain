@@ -5,16 +5,17 @@
 // its children (the same prefs.treeCollapsed as the Grindhouse's KidsBar, so both views agree and the fold survives a
 // restart); a folded parent shows one line with its children's characters and "3 figli · 2 in corso". The chat in view
 // is highlighted, finished ones are muted. A click on a row brings that chat's strip or card on screen, expanded and
-// briefly highlighted (focusChat). Hidden while no agent is open. Mounted by Sidebar.tsx.
+// briefly highlighted (focusChat); the ✕ on hover closes the chat like its strip's ✕ (6 s Annulla; owner, 2026-10-21). Hidden while no agent is open. Mounted by Sidebar.tsx.
 import type { CSSProperties } from 'react';
 import type { ChatSummary } from '@shared/contract';
 import { chatTree, childState, visibleTree, type ChildState, type TreeNode } from '../lib/chat-tree';
 import { useApp } from '../store/store';
 import { setTreeCollapsed, ui } from '../store/ui';
 import { focusChat } from '../actions';
+import { closeChat } from '../store/store';
 import { t } from '../i18n';
 import { AgentAvatar } from './AgentAvatar';
-import { IconChevronDown, IconChevronRight } from './Icons';
+import { IconChevronDown, IconChevronRight, IconX } from './Icons';
 import '../styles/tree.css';
 
 const MAX_ROWS = 40;
@@ -84,6 +85,7 @@ function Row({ node, chat, chats, folded, on, offset }: { node: TreeNode; chat: 
       <span className={`tn-dot dot-${DOT[state]}`} aria-hidden="true" />
       <span className="tn-who"><AgentAvatar avatar={chat.agent?.avatar} name={chat.agent?.name || chat.title} size={16} /><span className="tn-role">{chat.agent?.name ?? ''}</span>{right}</span>
     </button>
+    <button type="button" className="tn-close" onClick={e => { if (e.detail <= 1) closeChat(node.id); }} aria-label={t('tree.close', { title: chat.title })} data-tip={t('tree.close', { title: chat.title })} data-testid={`nav-tree-close-${node.id}`}><IconX size={11} /></button>
     {folded && kids.length > 0 && <span className="tn-kids" data-testid={`nav-tree-kids-${node.id}`}>
       <span className="kids-stack" aria-hidden="true">{kids.slice(0, 4).map(k => <AgentAvatar key={k.id} avatar={k.agent?.avatar} name={k.agent?.name ?? ''} size={16} />)}</span>
       <b>{t('tree.kids', { n: kids.length })}</b>{running > 0 && <> · {t('tree.kidsRun', { n: running })}</>}

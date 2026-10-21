@@ -37,6 +37,7 @@ import { aliveEn } from './areas/alive.en';
 import { lampoEn } from './areas/lampo.en';
 import { learningEn } from './areas/learning.en';
 import { estimateEn } from './areas/estimate.en';
+import { logEn } from './areas/log.en';
 import { reviewedContextEn } from './areas/reviewed-context.en';
 import { setupEn } from './areas/setup.en';
 
@@ -59,6 +60,7 @@ export const en: Dict = {
   ...lampoEn,
   ...learningEn,
   ...estimateEn,
+  ...logEn,
   ...genuiRequestEn,
   'genui.request.question': 'Question',
   'genui.request.permission': 'Permission',

@@ -1,6 +1,6 @@
-/* The brain's Script and Changelog pages (ADR 0076), layered on the Dashboard's look (dashboard.css: header, numbers,
-   search, panels): script cards in a grid that open in place full width, and the changelog as one card per day with a
-   timeline. Used by brain/pages/Script.tsx and brain/pages/Changelog.tsx. Motion off for reduced-motion users. */
+/* The brain's Script page (ADR 0076), layered on the Dashboard's look (dashboard.css: header, numbers, search, panels):
+   script cards in a grid that open in place full width; its toolbar and chips also serve the Log page (ADR 0111).
+   Used by brain/pages/Script.tsx and components/LogPage.tsx. Motion off for reduced-motion users. */
 .bs-page{display:flex;flex-direction:column;gap:18px}
 .bs-page .bs-header{height:auto;min-height:118px;align-items:flex-end;margin:0 0 4px}
 .bs-header>div>p{white-space:normal!important;max-width:74ch}
@@ -60,41 +60,7 @@
 .bs-empty p{margin:0;max-width:56ch;color:var(--text-3);font-size:13px;line-height:1.65}
 .bs-stat-text{font-size:22px!important;letter-spacing:-.4px!important}
 
-/* changelog */
-.bc-days{display:flex;flex-direction:column;gap:14px}
-.bc-day{animation:dash-enter 420ms cubic-bezier(.2,.8,.2,1) both}
-.bc-list{list-style:none;margin:0;padding:8px 0}
-.bc-entry{position:relative;display:grid;grid-template-columns:52px 14px minmax(0,1fr) auto;gap:0 12px;align-items:start;padding:10px 20px}
-.bc-entry:hover{background:var(--surface-2)}
-.bc-entry>time{font-family:var(--mono);font-size:11px;color:var(--text-3);padding-top:3px;font-variant-numeric:tabular-nums}
-.bc-dot{position:relative;width:9px;height:9px;margin-top:5px;border-radius:50%;background:var(--text-4);box-shadow:0 0 0 3px var(--surface)}
-.bc-entry:not(:last-child) .bc-dot::after{content:"";position:absolute;left:4px;top:12px;width:1px;height:calc(100% + 34px);background:var(--border-2)}
-.bc-script .bc-dot{background:var(--blue)}
-.bc-skill .bc-dot,.bc-agent .bc-dot{background:var(--violet)}
-.bc-rule .bc-dot{background:var(--amber)}
-.bc-procedure .bc-dot{background:var(--green)}
-.bc-body{min-width:0}
-.bc-line{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
-.bc-kind{font-size:10px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:5px;background:var(--surface-3);color:var(--text-2)}
-.bc-kind-script{background:var(--blue-bg);color:var(--blue)}
-.bc-kind-skill,.bc-kind-agent{background:var(--violet-bg);color:var(--violet)}
-.bc-kind-rule{background:var(--amber-bg);color:var(--amber)}
-.bc-kind-procedure{background:var(--green-bg);color:var(--green)}
-.bc-action{font-size:12px;color:var(--text-2)}
-.bc-action-deleted{color:var(--red)}
-.bc-action-fixed{color:var(--green)}
-.bc-target{appearance:none;border:0;background:none;padding:0;font-family:var(--mono);font-size:11.5px;color:var(--blue);cursor:pointer;overflow-wrap:anywhere;text-align:left}
-.bc-target:hover{text-decoration:underline}
-.bc-target.off{color:var(--text-3);cursor:default}
-.bc-body>p{margin:4px 0 2px;font-size:13px;line-height:1.55;color:var(--text)}
-.bc-body>small{font-size:11px;color:var(--text-3)}
-.bc-discuss{opacity:0;transition:opacity 160ms}
-.bc-entry:hover .bc-discuss,.bc-entry:focus-within .bc-discuss{opacity:1}
-@container (max-width:640px){
-  .bc-entry{grid-template-columns:44px 12px minmax(0,1fr)}
-  .bc-discuss{display:none}
-}
 @media (prefers-reduced-motion:reduce){
-  .bs-card,.bc-day,.bs-skeleton{animation:none}
+  .bs-card,.bs-skeleton{animation:none}
   .bs-card,.bs-card:hover{transition:none;transform:none}
 }

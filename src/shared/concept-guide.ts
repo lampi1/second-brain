@@ -378,9 +378,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
   },
   {
     id: 'brain-scripts',
-    title: b('Script e Changelog del brain', 'Brain scripts and changelog'),
-    summary: b('Gli script provati dei tuoi agenti stanno nel brain, riutilizzabili; ogni cambiamento al brain finisce nel Changelog.',
-      'Your agents’ tested scripts live in the brain, ready to reuse; every change to the brain lands in the Changelog.'),
+    title: b('Script e changelog del brain', 'Brain scripts and changelog'),
+    summary: b('Gli script provati dei tuoi agenti stanno nel brain, riutilizzabili; ogni cambiamento al brain finisce nel changelog, che leggi nel Log.',
+      'Your agents’ tested scripts live in the brain, ready to reuse; every change to the brain lands in the changelog, which you read in the Log.'),
     points: [
       // src/main/brain/scripts.ts
       b('Gli script stanno nella cartella scripts/ del brain; l’intestazione dice titolo, cosa fa, come si usa, tag e l’ultimo test.',
@@ -394,9 +394,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/brain/changelog.ts
       b('Ogni cambiamento è una riga in changelog.md: quando, cosa, quale file, chi e perché. L’Orchestrator vi annota anche regole, skill e note che cambia.',
         'Every change is a line in changelog.md: when, what, which file, who and why. The Orchestrator also logs the rules, skills and notes it changes.'),
-      // src/renderer/brain/pages/Script.tsx, Changelog.tsx
-      b('Le pagine Script e Changelog, nella sezione Brain, mostrano tutto a schede; nessun bottone esegue uno script.',
-        'The Script and Changelog pages, in the Brain section, show it all as cards; no button runs a script.'),
+      // src/renderer/brain/pages/Script.tsx; src/renderer/components/LogPage.tsx (ADR 0111)
+      b('La pagina Script, nella sezione Brain, mostra gli script a schede; nessun bottone esegue uno script. Le righe del changelog stanno nel Log, tipo «Brain».',
+        'The Script page, in the Brain section, shows the scripts as cards; no button runs a script. The changelog lines are on the Log page, kind "Brain".'),
       // docs/adr/0076-brain-scripts-and-changelog.md
       b('Nessun classificatore sceglie gli script: con pochi script che si descrivono da soli basta la ricerca per parole.',
         'No classifier picks scripts: with a few self-describing scripts a word search is enough.'),
@@ -410,7 +410,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(WHERE, 'Pagine: /api/scripts, /api/script?id=…, /api/changelog; evento scripts:changed.', 'Pages: /api/scripts, /api/script?id=…, /api/changelog; event scripts:changed.'),
       tech(LIMITS, 'Uno script ≤ 200 KB; la pagina legge le ultime 500 righe del changelog.', 'A script ≤ 200 KB; the page reads the latest 500 changelog lines.'),
     ],
-    sources: ['src/main/brain/scripts.ts', 'src/main/brain/scripts-tools.ts', 'src/main/brain/changelog.ts', 'src/renderer/brain/pages/Script.tsx', 'src/renderer/brain/pages/Changelog.tsx', 'docs/adr/0076-brain-scripts-and-changelog.md'],
+    sources: ['src/main/brain/scripts.ts', 'src/main/brain/scripts-tools.ts', 'src/main/brain/changelog.ts', 'src/renderer/brain/pages/Script.tsx', 'src/renderer/components/LogPage.tsx', 'docs/adr/0076-brain-scripts-and-changelog.md'],
   },
   {
     id: 'milestones',
@@ -1056,6 +1056,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/components/AutoCloseNotice.tsx; the palette's "Chiuse"
       b('L’Orchestrator e le chat senza ruolo non si chiudono mai da sole; una chat chiusa resta nell’archivio e si riapre scrivendole.',
         'The Orchestrator and chats without a role never close by themselves; a closed chat stays in the archive and reopens when you write to it.'),
+      // src/main/chats/manager.ts autoCloseCandidates (ADR 0111)
+      b('Un albero di deleghe si chiude tutto insieme: le chat che hanno finito aspettano le altre, e il tempo parte quando ha finito l’ultima.',
+        'A delegation tree closes as one: the chats that finished wait for the others, and the time starts when the last one finished.'),
+      // src/renderer/components/SidebarTree.tsx
+      b('Puoi chiudere una chat anche dalla barra laterale: passa sopra la sua riga e premi ✕ (6 secondi per Annulla).',
+        'You can also close a chat from the sidebar: hover its row and press ✕ (6 seconds to undo).'),
     ],
     analogy: b('Come un collega che, consegnato il lavoro, sgombra la scrivania: ma se aspetta una tua firma resta lì, con il foglio in mano.',
       'Like a colleague who clears the desk after handing in the work: but when waiting for your signature, stays there, paper in hand.'),
@@ -1065,7 +1071,35 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(DATA, 'AutoCloseStatus { chatId, deadline, warningStartedAt, keptOpen, reason, waitingFor? }; waitingFor: answer | permission | command | user | colleagues | work | report | mail | browser.',
         'AutoCloseStatus { chatId, deadline, warningStartedAt, keptOpen, reason, waitingFor? }; waitingFor: answer | permission | command | user | colleagues | work | report | mail | browser.'),
     ],
-    sources: ['src/main/chats/auto-close.ts', 'src/shared/auto-close.ts', 'src/renderer/components/AutoCloseNotice.tsx', 'docs/adr/0084-finished-workers-close-by-themselves.md'],
+    sources: ['src/main/chats/auto-close.ts', 'src/shared/auto-close.ts', 'src/renderer/components/AutoCloseNotice.tsx', 'docs/adr/0084-finished-workers-close-by-themselves.md', 'docs/adr/0111-the-log-page.md'],
+  },
+  {
+    id: 'log',
+    title: b('Il Log', 'The Log'),
+    summary: b('Una pagina sola con tutto quello che l’app fa, in tempo reale e leggibile: ogni incarico passo per passo, i classificatori, le stime, gli errori e la memoria scritti nel brain, Battito.',
+      'One page with everything the app does, live and readable: each task step by step, the classifiers, the estimates, the errors and memory written to the brain, Battito.'),
+    points: [
+      // src/main/activity/chat-watch.ts
+      b('Ogni incarico è una catena: chi ha scelto quale agente e perché, il suo lavoro con costo, strumenti ed errori, il risultato, la verifica (o «non effettuata»).',
+        'Each task is a chain: who chose which agent and why, its work with cost, tools and errors, the result, the verification (or "not done").'),
+      // src/renderer/lib/log-view.ts flagsOf
+      b('Regole dell’app segnalano da sole le anomalie: risposta duplicata, approvazione nascosta (un permesso chiuso senza la tua risposta), revisione senza verdetto.',
+        'App rules flag anomalies by themselves: a duplicate reply, a hidden approval (a permission closed without your answer), a review without a verdict.'),
+      // src/main/activity/journal.ts
+      b('Leggerlo non consuma token: sono eventi e contatori salvati dall’app. Solo «Fai analizzare all’AI» prepara un messaggio per l’Orchestrator, che parte se lo invii tu.',
+        'Reading it spends no tokens: these are events and counters the app saved. Only "Fai analizzare all’AI" prepares a message for the Orchestrator, sent only if you send it.'),
+      // src/main/activity/journal.ts clean
+      b('Si pulisce da solo: tiene 7 giorni e al massimo 20 MB, il resto si cancella.',
+        'It cleans itself: it keeps 7 days and at most 20 MB, the rest is deleted.'),
+    ],
+    analogy: b('Come la scatola nera di un aereo, ma scritta in italiano e da leggere mentre voli.',
+      'Like a plane’s black box, but written in plain words and readable while you fly.'),
+    tech: [
+      tech(FILES, 'userData/activity/log-AAAA-MM-GG.jsonl, una riga JSON per evento, segreti oscurati.', 'userData/activity/log-YYYY-MM-DD.jsonl, one JSON line per event, secrets redacted.'),
+      tech(WHERE, 'IPC log:list (gli ultimi 3000 eventi) ed evento log:events (in diretta); pagina G N.', 'IPC log:list (the last 3000 events) and event log:events (live); page G N.'),
+      tech(LIMITS, '7 giorni, 20 MB in tutto, 2000 caratteri per campo.', '7 days, 20 MB in all, 2000 characters per field.'),
+    ],
+    sources: ['src/main/activity/journal.ts', 'src/main/activity/chat-watch.ts', 'src/main/activity/wiring.ts', 'src/renderer/components/LogPage.tsx', 'src/renderer/lib/log-view.ts', 'docs/adr/0111-the-log-page.md'],
   },
   {
     id: 'held-news',

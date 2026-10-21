@@ -1,6 +1,6 @@
 // The brain's scripts and changelog (ADR 0076): header parse and write, save / fix / delete with their changelog lines,
 // the refusal of a script holding a credential, the word search behind brain_scripts, the Orchestrator-only write tools,
-// and the renderer's filters (Script and Changelog pages). Real files in a temp folder.
+// and the renderer's filters (Script page). Real files in a temp folder.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,7 +9,7 @@ import { BrainScripts, findScripts, parseHeader, stripHeader, touchesScripts, wi
 import { BrainChangelog, formatEntry, parseChangelog } from '../../../src/main/brain/changelog';
 import { brainScriptsTool, scriptWriteTools } from '../../../src/main/brain/scripts-tools';
 import { writeDemoScripts } from '../../../src/main/brain/scripts-demo';
-import { filterScripts, groupChangelog } from '../../../src/renderer/brain/lib/brain-sections';
+import { filterScripts } from '../../../src/renderer/brain/lib/brain-sections';
 
 
 let root: string;
@@ -135,12 +135,11 @@ describe('changelog', () => {
     expect(() => log.add({ kind: 'x' as never, action: 'added', target: 't', by: 'b', summary: 's' })).toThrow(/kind/);
   });
 
-  it('groups by day, newest first, with filters', () => {
+  it('parses the demo changelog across several days', () => {
     const e = parseChangelog(fs.readFileSync(path.join(writeDemoScripts(path.join(root, 'demo'), Date.UTC(2026, 9, 19, 12)), 'changelog.md'), 'utf8'));
-    const days = groupChangelog(e, '', 'all');
-    expect(days[0]![0] > days[1]![0]).toBe(true);
-    expect(groupChangelog(e, '', 'script').flatMap(([, es]) => es).every(x => x.kind === 'script')).toBe(true);
-    expect(groupChangelog(e, 'git.md', 'all').flatMap(([, es]) => es).map(x => x.target)).toEqual(['rules/git.md']);
+    expect(e.length).toBeGreaterThan(1);
+    expect(new Set(e.map(x => x.at.slice(0, 10))).size).toBeGreaterThan(1);
+    expect(e.some(x => x.kind === 'script')).toBe(true);
   });
 });
 

@@ -17,6 +17,8 @@ import { cardKey, parseCards } from './cards';
 import { admitRun, budgetState, type PulseRunRecord } from './budget';
 import { PulseStore } from './store';
 import { errText, log } from '../log';
+import { logEvent } from '../activity/journal';
+import { pulseRecord } from '../activity/records';
 export interface PulseDeps {
   file: string; once: OneShotService; runs: AgentRunStore; settings(): Settings; material(): DigestMaterial;
   visible(): boolean; calls: boolean; lang(): 'it' | 'en'; now?: () => number;
@@ -97,7 +99,15 @@ export class PulseService {
     return this.settings().on && this.settings().headline.on ? base
       : { ...base, text: builtinLine(this.d.lang(), this.now()), source: 'builtin', at: null };
   }
+  /** One run, and its line on the Log page (ADR 0111): what it made, with which engine, what it cost. */
   async run(job: 'pulse' | 'headline', slot = 'manual'): Promise<PulseResult> {
+    const cards = this.store.data.cards.length, runs = this.store.data.runs.length, started = this.now();
+    const r = await this.runJob(job, slot);
+    const last = this.store.data.runs.length > runs ? this.store.data.runs.at(-1) : undefined;
+    logEvent(pulseRecord(job, slot, r, { cards: this.store.data.cards.length - cards, usd: last?.usd ?? null, engine: last?.engine ?? null, ms: this.now() - started }));
+    return r;
+  }
+  private async runJob(job: 'pulse' | 'headline', slot: string): Promise<PulseResult> {
     if (!this.enabled() || !this.available() || this.busy || !this.d.visible() || job === 'headline' && !this.settings().headline.on) return { ok: false, error: 'Battito non può partire adesso.' };
     this.busy = true; this.d.emit();
     try {

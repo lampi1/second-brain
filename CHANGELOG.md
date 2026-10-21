@@ -6,6 +6,16 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- **One Log page instead of the Changelog** (owner, 2026-10-21; ADR 0111): under App → Log (G N) every task reads as a
+  chain (who chose which agent and why, its work with cost, tools and errors, the result, the verification), next to a
+  live stream of everything else: classifiers, estimates, errors and memory written to the brain, Battito, the brain's
+  changes, the app's warnings. A click shows input, result and errors; automatic flags mark a duplicate reply, a
+  permission closed without your answer and a review without a verdict. Reading it costs no tokens; it keeps 7 days and
+  20 MB at most.
+- **A delegation tree closes as one** (ADR 0111): the chats that finished wait for the others and close 2 minutes after
+  the last one finished. A chat also closes from the sidebar (✕ on its row).
+- **The Orchestrator's result notice**: a tab unfolds the result in place, «Agente →» opens the chat that has it, and
+  «Sintetizza con l'Orchestrator» is a proper button.
 - **The answer you wait for shows in the Orchestrator's chat** (#123, ADR 0099): when a role chat it opened for your
   question finishes, the app's notice gives its summary with Apri, with no extra Orchestrator turn; a held news row you
   open is read and leaves «novità in attesa».

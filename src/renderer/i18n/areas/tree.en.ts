@@ -3,6 +3,7 @@ import type { treeIt } from './tree.it';
 export const treeEn: typeof treeIt = {
   'tree.fold': (p: { title: string }) => `Fold the chats delegated by ${p.title}`,
   'tree.unfold': (p: { title: string }) => `Show the chats delegated by ${p.title}`,
+  'tree.close': (p: { title: string }) => `Close the chat ${p.title}`,
   'tree.focus': (p: { title: string }) => `Bring the chat ${p.title} into view`,
   'tree.goTo': 'Go to chat',
   'tree.answerHere': 'Answer here',

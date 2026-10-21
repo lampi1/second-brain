@@ -11,6 +11,9 @@ import { createWindow, hiddenOpened, hiddenRun } from './window';
 import { startTaskbar } from './taskbar';
 import { Emitter, registerHandlers, type Handlers } from './ipc';
 import { createServices } from './wiring';
+import { attachActivity } from './activity/wiring';
+import { demoLog } from './activity/demo';
+import { journal } from './activity/journal';
 import { log } from './log';
 import { logInputLag } from './perf';
 import { APP_ID, ensureShortcuts } from './shortcuts';
@@ -81,6 +84,9 @@ app.whenReady().then(async () => {
   // engines' Job Objects (ADR 0026): the helper loads while the services start; engines started before it is ready wait
   if (process.env.SB_DEMO !== '1') jobGuard.start(path.join(app.getPath('userData'), 'jobguard'));
   const s = await createServices({ emitter, window: () => win, userData: app.getPath('userData') });
+  // the Log page (ADR 0111): the app's own events, readable and live, kept 7 days at most; zero tokens
+  const activity = attachActivity({ userData: app.getPath('userData'), emitter, chats: () => s.chats.list(), brainRoot: () => s.brain.info().brainRoot });
+  if (process.env.SB_DEMO === '1') journal.seed(demoLog(process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now()));
   const requireReviewRoot = (expected: unknown): void => {
     const actual = s.brain.info().brainRoot;
     if (!actual || typeof expected !== 'string' || path.resolve(expected) !== path.resolve(actual)) throw new Error('Brain changed: reload the review before acting.');
@@ -295,12 +301,12 @@ app.whenReady().then(async () => {
     'chat:send': async a => { await s.chats.send(a.chatId, a.text, a.images); s.chats.resumedByUser?.(a.chatId, a.text); },
     'chat:userEvents': a => { if (!s.chats.userEvents) throw new Error('Task events unavailable.'); return s.chats.userEvents(a.chatId, a.afterSeq); },
     'chat:synthesize': a => { if (!s.chats.synthesizeResult) throw new Error('Result synthesis unavailable.'); return s.chats.synthesizeResult(a.runId, { kind: 'user' }); },
-    'chat:answer': a => s.chats.answer(a.chatId, a.requestId, a.answer),
+    'chat:answer': async a => { activity.answered(a.chatId, a.requestId); try { await s.chats.answer(a.chatId, a.requestId, a.answer); } catch (e) { activity.notAnswered(a.chatId, a.requestId); throw e; } },
     'chat:plan': a => s.chats.planDecide(a.chatId, a.decision, a.at, a.text),
-    'chat:stop': a => s.chats.stop(a.chatId, a.keepQueued === true),
-    'chat:stopAll': () => s.chats.stopAll(),
-    'chat:close': a => s.chats.close(a.chatId),
-    'chat:archive': a => s.chats.archive(a.chatId, { auto: a.auto === true }),
+    'chat:stop': a => { activity.stopped(a.chatId); return s.chats.stop(a.chatId, a.keepQueued === true); },
+    'chat:stopAll': () => { activity.stopped(); return s.chats.stopAll(); },
+    'chat:close': a => { activity.stopped(a.chatId); return s.chats.close(a.chatId); },
+    'chat:archive': a => { if (a.auto !== true) activity.stopped(a.chatId); return s.chats.archive(a.chatId, { auto: a.auto === true }); },
     'chat:reopen': async a => { const c = await s.chats.reopen(a.chatId); s.chats.resumedByUser?.(a.chatId); return s.chats.list().find(x => x.id === a.chatId) ?? c; },
     'chat:admitNow': a => s.chats.admitNow(a.chatId),
     'chat:set': ({ chatId, ...patch }) => s.chats.set(chatId, patch),
@@ -403,6 +409,7 @@ app.whenReady().then(async () => {
     'sync:now': a => s.brain.syncNow(a?.domain),
     'sync:resolve': a => s.brain.syncResolve(a?.domain, a?.choice),
     'headline:get': () => pulse?.headline() ?? headline.get(),
+    'log:list': () => activity.list(),
     'orchestrator:held': () => s.heldNews?.get() ?? { items: [] },
     'orchestrator:heldSeen': a => { if (typeof a?.chatId !== 'string' || !a.chatId || a.chatId.length > 100) throw new Error('chatId required'); return s.heldNews?.seen(a.chatId) ?? { items: [] }; },
     ...(pulse?.handlers() ?? (demo ? pulseDemoHandlers(process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now(), {

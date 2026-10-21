@@ -20,6 +20,8 @@ import { qualifiedSkillsLine, runtimePluginName } from './agents/role-gate';
 import { createAgentPacks } from './agents/pack/wiring';
 import { chatLearnTool } from './agents/pack/learning';
 import { estimateTask, SimilarIndex } from './agents/task-estimate';
+import { estimateRecords } from './activity/records';
+import { logEvent } from './activity/journal';
 import { reviewPack } from './agents/review-pack';
 import { estimateLine } from '../shared/task-estimate';
 import { agentCatalogTool, CATALOG_GUIDANCE, roleCatalogBrief, skillsSuggestTool } from './agents/discovery';
@@ -474,7 +476,12 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     onRunOutcome: run => { routingVerdict(run); loopRef.current?.outcome(run); },
     roleCatalogBrief: () => roleCatalogBrief(() => agents.list()),
     // the estimate task_estimate would give, under the user's request (one model round trip less, ADR 0087)
-    requestEstimate: text => runFeedbackRef.current ? estimateLine(estimateTask(new SimilarIndex(runFeedbackRef.current.runList()), { text })) : null,
+    requestEstimate: text => {
+      if (!runFeedbackRef.current) return null;
+      const e = estimateTask(new SimilarIndex(runFeedbackRef.current.runList()), { text });
+      for (const r of estimateRecords(e, text, 'per la tua richiesta')) logEvent(r); // the Log page (ADR 0111)
+      return estimateLine(e);
+    },
     emitter: ctx.emitter,
     userData: ctx.userData,
     env: { [RECALL_ENV]: recall.url() },

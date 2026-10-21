@@ -13,7 +13,7 @@ export const brainPagesEn: typeof brainPagesIt = {
   'brainPages.nav.qualita': 'Quality',
   'brainPages.nav.apprendimento': 'Learning',
   'brainPages.nav.script': 'Scripts',
-  'brainPages.nav.changelog': 'Changelog',
+  'brainPages.nav.log': 'Log',
   'brainPages.nav.confronto': 'Model comparison',
   'brainPages.nav.agenti': 'Agents',
   'brainPages.nav.skill': 'Skills',

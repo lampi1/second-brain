@@ -1047,7 +1047,43 @@ export class ChatManager implements ChatService {
 
   /** Main guards, combined with mailbox/command/browser holds by wiring. Unknown children are never zero.
    *  externalHold: true / a waiting kind = held by wiring (a waiting kind also names the "In attesa di…" label). */
+  /** A delegation tree closes as one (owner, 2026-10-21: «in una chat ad albero dopo 2 minuti che hanno finito tutti»):
+   *  a chat of a tree is ready only when every open chat of its tree is, and its clock starts at the tree's last activity. */
   autoCloseCandidates(externalHold: (chatId: string) => boolean | AutoCloseWaiting = () => true): AutoCloseCandidate[] {
+    const own = this.ownAutoCloseCandidates(externalHold);
+    const rootOf = (id: string): string => {
+      let cur = id;
+      for (let i = 0; i < 50; i++) { const up = this.chats.get(cur)?.s.parentId; if (!up || !this.chats.has(up)) break; cur = up; }
+      return cur;
+    };
+    const trees = new Map<string, AutoCloseCandidate[]>();
+    for (const c of own) { const root = rootOf(c.id); trees.set(root, [...trees.get(root) ?? [], c]); }
+    for (const root of this.treeActivity.keys()) if (!trees.has(root)) this.treeActivity.delete(root);
+    return own.map(c => {
+      const root = rootOf(c.id), tree = trees.get(root)!;
+      // a lone chat, unless what is left of a tree whose other chats closed first
+      if (tree.length < 2 && !this.treeActivity.has(root)) return c;
+      // only a member still at work holds the tree: one that ended with an error, a Stop or no result never closes by
+      // itself and must not keep its tree open forever
+      if (c.eligible && tree.some(x => !x.eligible && this.atWork(x.id))) return { ...c, eligible: false, reason: 'Si chiude insieme al resto dell’albero, quando hanno finito tutti' };
+      // the tree's last activity only grows: a member closing first never restarts the others' clock (its own closing
+      // touches are left out, so a closing member never pushes its siblings' deadline)
+      const at = Math.max(this.treeActivity.get(root) ?? 0, ...tree.filter(x => { const r = this.chats.get(x.id); return !r?.autoClosing && !r?.autoEnding; }).map(x => x.activityAt));
+      this.treeActivity.set(root, at);
+      return { ...c, activityAt: at };
+    });
+  }
+  private readonly treeActivity = new Map<string, number>();
+  /** A chat still doing or waiting for something: running, a pending request, a turn or a delivery under way. */
+  private atWork(id: string): boolean {
+    const r = this.chats.get(id);
+    if (!r || r.s.closedAt) return false;
+    const c = r.s;
+    return c.state === 'running' || c.state === 'starting' || c.state === 'waiting' || r.pending.size > 0 || !!r.working || !!r.session?.busy ||
+      !!r.deliveryHolds || !!c.queued || !!r.opening || !!c.waitsOn || c.plan?.phase === 'proposed' || workBehind(c) || (c.agentChildren?.active ?? 0) > 0;
+  }
+
+  private ownAutoCloseCandidates(externalHold: (chatId: string) => boolean | AutoCloseWaiting): AutoCloseCandidate[] {
     return [...this.chats.values()].filter(r => !r.s.closedAt).map(r => {
       const c = r.s, child = c.agentChildren;
       let held: boolean | AutoCloseWaiting = true;

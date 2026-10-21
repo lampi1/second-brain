@@ -59,7 +59,7 @@ function rows(b: MorningBrief, undo: { done: boolean; busy: boolean; run: () => 
   for (const c of b.cloud.slice(0, 2)) out.push({ key: `cloud-${c.id}`, tone: c.status === 'done' ? 'good' : c.status === 'failed' ? 'bad' : '', text: t('alive.m.cloud', { title: c.title, status: t(`alive.m.cloud.${c.status}`) }), open: () => go({ page: 'home' }) });
   if (b.changes.length) {
     const can = b.changes.some(c => c.canRollback);
-    out.push({ key: 'changes', text: t('alive.m.maintenance', { n: b.changes.length }), sub: b.changes.slice(0, 2).map(c => c.summary).join(' · '), open: () => go({ page: 'changelog' }),
+    out.push({ key: 'changes', text: t('alive.m.maintenance', { n: b.changes.length }), sub: b.changes.slice(0, 2).map(c => c.summary).join(' · '), open: () => go({ page: 'log' }),
       extra: can || undo.done ? <button type="button" className="btn btn-ghost btn-s" disabled={undo.busy || undo.done} onClick={undo.run} data-testid="morning-undo">{t(undo.done ? 'alive.m.undone' : 'alive.m.undo')}</button> : null });
   }
   if (b.spendYesterdayUsd !== null && b.spendYesterdayUsd > 0) out.push({ key: 'spend', text: t('alive.m.spend', { usd: usd(b.spendYesterdayUsd) }), open: () => go({ page: 'costi' }) });

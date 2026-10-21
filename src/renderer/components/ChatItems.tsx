@@ -22,7 +22,7 @@ import { markdownParts, renderMarkdown, splitBlocks, type MdPart } from '../lib/
 import { CodeBlock } from './CodeBlock';
 import { explainTool } from '@shared/explain';
 import { useNow } from '../lib/clock';
-import { IconAlert, IconArrowDown, IconArrowRight, IconBell, IconBolt, IconBranch, IconCheck, IconChevronRight, IconInfo, IconLink, IconPlus, IconRefresh, IconSend, IconSparkle, IconSpinner, IconTerminal, IconX } from './Icons';
+import { IconAlert, IconArrowDown, IconArrowRight, IconBell, IconBolt, IconBranch, IconCheck, IconChevronDown, IconChevronRight, IconInfo, IconLink, IconPlus, IconRefresh, IconSend, IconSparkle, IconSpinner, IconTerminal, IconX } from './Icons';
 import { splitNotes } from '../lib/sendable';
 import { getForeignLabel, foreignOf, showsSender, type Foreign, type ForeignKind } from '../lib/foreign';
 import { ImageStrip } from './ImageStrip';
@@ -48,9 +48,9 @@ import { guideChatId, visibleGuideItems } from '../../modules/ai-first/presentat
 
 type Tool = Extract<ChatItem, { kind: 'tool' }>;
 
-/** One compact row by default. Apri opens the source and reveals this exact historical result on demand. */
+/** One compact row: who has the result, «Agente →» to its chat, and a tab under the row that unfolds the exact result
+ *  here (owner, 2026-10-21: «una linguetta per espanderla e il pulsante "Vai ad agente"»). */
 function ResultReady({ item }: { item: Extract<ChatItem, { kind: 'system' }> }) {
-  const currentId = useContext(ChatIdCtx);
   const sourceId = typeof item.params?.chatId === 'string' ? item.params.chatId : undefined;
   const source = useApp(s => sourceId ? s.chats[sourceId] : undefined);
   const [open, setOpen] = useState(false);
@@ -60,24 +60,24 @@ function ResultReady({ item }: { item: Extract<ChatItem, { kind: 'system' }> }) 
   const roleId = isRoleId(source?.agent?.id) ? source.agent.id
     : ROLE_IDS.find(id => id === recordedRole || ROLE_DEFAULTS[id].name.toLowerCase() === recordedRole);
   const avatar = source?.agent?.avatar ?? (roleId ? { kind: 'character' as const, value: roleId } : undefined);
-  const local = !source || sourceId === currentId;
   const legacyOutput = typeof item.params?.summary === 'string' && item.params.summary.trim() ? item.params.summary : sysText(item);
-  return <div className="notice result-ready" role="status" data-testid="result-ready">
+  return <div className={`notice result-ready${open ? ' is-open' : ''}`} data-testid="result-ready">
     <AgentAvatar avatar={avatar} name={role} size={24} />
-    <span className="result-ready-name" title={name}>{name}</span>
-    <button type="button" className="chatref-btn" data-testid="chatref-open" data-chat-id={sourceId}
-      aria-label={t('chat.chatref.ariaOpen', { verb: t('chat.chatref.open'), name })}
-      aria-expanded={open}
-      onClick={() => { setOpen(local ? !open : true); if (!local && sourceId) openChatRef(sourceId); }}>
-      <span className="chatref-go">{t('chat.chatref.open')}<IconArrowRight size={11} /></span>
-    </button>
+    <span className="result-ready-text" role="status"><span className="result-ready-name" title={name}>{name}</span><small>{role ? t('chat.resultFrom', { role }) : t('chat.resultReady')}</small></span>
+    {sourceId && <button type="button" className="result-ready-go" data-testid="chatref-open" data-chat-id={sourceId}
+      aria-label={t('chat.chatref.ariaOpen', { verb: t('chat.resultGoAgent'), name })} onClick={() => openChatRef(sourceId)}>
+      {t('chat.resultGoAgent')}<IconArrowRight size={12} />
+    </button>}
     {open && !item.result && <div className="result-ready-full"><Markdown text={legacyOutput} /></div>}
     {open && item.result && <div className="result-ready-full" data-testid="canonical-result">
       <Markdown text={item.result.output} />
       {!!item.result.questions?.length && <ul>{item.result.questions.map((question, i) => <li key={i}>{question}</li>)}</ul>}
-      <ul>{item.result.doneWhen.map((criterion, i) => <li key={i}>{criterion.criterion}: <span aria-hidden="true">{criterion.met ? '✓' : '—'}</span><span className="sr-only">{t(criterion.met ? 'chat.criterionMet' : 'chat.criterionNotMet')}</span> {criterion.evidence}</li>)}</ul>
+      {!!item.result.doneWhen.length && <ul className="result-criteria">{item.result.doneWhen.map((criterion, i) => <li key={i} className={criterion.met ? 'met' : ''}><span aria-hidden="true">{criterion.met ? '✓' : '—'}</span><span className="sr-only">{t(criterion.met ? 'chat.criterionMet' : 'chat.criterionNotMet')}</span> <b>{criterion.criterion}</b> {criterion.evidence}</li>)}</ul>}
       <ResultSynthesis runId={item.result.runId} />
     </div>}
+    <button type="button" className="result-ready-tab" aria-expanded={open} data-testid="result-ready-toggle" onClick={() => setOpen(!open)}>
+      <IconChevronDown size={12} />{t(open ? 'chat.resultHide' : 'chat.resultShow')}
+    </button>
   </div>;
 }
 
@@ -88,7 +88,9 @@ function ResultSynthesis({ runId }: { runId: string }) {
   const [busy, setBusy] = useState(false);
   if (!available && !pending) return null;
   return <div className="result-synthesis">
-    <button type="button" disabled={busy || pending} onClick={async () => { setBusy(true); try { await synthesizeResult(runId); } finally { setBusy(false); } }}>{t(pending || busy ? 'chat.resultDeliveryPending' : 'chat.resultSynthesize')}</button>
+    <button type="button" className="result-synth-btn" disabled={busy || pending} onClick={async () => { setBusy(true); try { await synthesizeResult(runId); } finally { setBusy(false); } }}>
+      <IconSparkle size={13} />{t(pending || busy ? 'chat.resultDeliveryPending' : 'chat.resultSynthesize')}
+    </button>
     <small>{t('chat.resultSynthesizeCost')}</small>
   </div>;
 }
