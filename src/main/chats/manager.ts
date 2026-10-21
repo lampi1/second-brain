@@ -59,6 +59,7 @@ import { AgentRunStore, addSkill, addTurn, APP_MAX, endRun, REPO_MAX, reopenRun,
 import { reportOf } from '../agents/run-report';
 import { gateRequest, runtimePluginName, SubagentGate } from '../agents/role-gate';
 import { afterTree, KEEP as CHECKPOINTS_KEPT, prune as pruneCheckpoints, restore as restoreCheckpoint, snapshot as takeCheckpoint, type Checkpoint } from './checkpoints';
+import { autoPermit } from './auto-permit';
 import { TurnToolBudget } from '../agents/orchestrator-budget';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
 import { resultMessage, type DelegationLimitHit, type DelegationResult } from '../../shared/delegation';
@@ -2185,6 +2186,22 @@ export class ChatManager implements ChatService {
     return true;
   }
 
+  /** ADR 0103: the app answers a permission request itself (chats/auto-permit.ts): normal work inside the chat's folder
+   *  passes, a destructive command is refused visibly with its reason, anything else reaches the user. True = answered. */
+  private autoPermitted(r: Rec, req: Omit<PendingRequest, 'chatId'>): boolean {
+    const v = autoPermit(req, { cwd: r.s.cwd, ceiling: r.policy?.ceiling ?? null, undoable: typeof r.gitRoot === 'string' && !!r.checkpoints?.length, readScripts: this.readScripts(r) });
+    if (v.kind === 'ask') return false;
+    if (v.kind === 'allow') {
+      r.session?.answer(req.id, { kind: 'permission', allow: true });
+      log.info('chats', 'auto-permit allowed', { chat: r.s.id, data: { tool: req.tool } });
+      return true;
+    }
+    this.addItem(r, sysItem('commandDestructive', { command: v.shown, reason: v.reason }, 'warn'), false);
+    r.session?.answer(req.id, { kind: 'permission', allow: false, message: v.message });
+    log.info('chats', 'auto-permit refused', { chat: r.s.id, data: { tool: req.tool } });
+    return true;
+  }
+
   /** Records the chat's files before a turn (checkpoints.ts); a folder outside git is asked once, a failure never holds
    *  the message. */
   private async checkpoint(r: Rec): Promise<void> {
@@ -2758,7 +2775,7 @@ export class ChatManager implements ChatService {
       },
       pending: req => {
         if (!live()) return;
-        if (this.gated(r, req) || this.refusedCommand(r, req)) return;
+        if (this.gated(r, req) || this.refusedCommand(r, req) || this.autoPermitted(r, req)) return;
         this.hook('analytics', () => this.analytics.pending(r.s, req));
         this.autoActivity(r);
         const full: PendingRequest = { ...req, chatId };

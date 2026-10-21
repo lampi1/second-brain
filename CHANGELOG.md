@@ -6,6 +6,11 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- **Fewer permission popups, destructive commands refused** (owner, 2026-10-21; ADR 0103): the app answers a chat's
+  permission requests itself. Reads inside the chat's folder pass; edits and local commands pass while the turn can be
+  undone («Annulla l'ultimo turno»); force pushes, `git reset --hard`, recursive deletes of the folder, the home or a
+  drive, piping a download into a shell and similar are refused with their reason in the chat; pushes, `gh`/`az`, SSH,
+  databases, network calls, settings and hooks still ask you. A role set to «Chiede conferma» or «Solo piano» always asks.
 - **The Strategist plans with you** (owner, 2026-10-21; ADR 0108): a message sent with «Strategist» ticked opens a
   Strategist that first asks what you really want, one question at a time, then proposes a short plan of plain steps
   to approve («Approva e parti» / «Cambia qualcosa») and only then delegates; its strip shows the steps as a Claude

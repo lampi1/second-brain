@@ -82,6 +82,22 @@ describe('agent policy on chats', () => {
     expect(f.m.pending().find(p => p.id === 'p2')?.alwaysRules).toBeUndefined();
   });
 
+  it('the app answers itself (ADR 0103): reads pass, destructive commands are refused visibly, a push reaches the user', async () => {
+    const f = fixture();
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' });
+    const ask = (id: string, command: string) => f.sink().pending({ id, type: 'permission', tool: 'Bash', title: `Bash: ${command}`, detail: command, input: { command }, at: 1 });
+    ask('a1', 'git status');
+    ask('a2', 'git push --force');
+    ask('a3', 'git push');
+    ask('a4', 'npm test'); // no checkpoint outside git: the user decides
+    expect(f.answers).toEqual([
+      { id: 'a1', answer: { kind: 'permission', allow: true } },
+      { id: 'a2', answer: expect.objectContaining({ kind: 'permission', allow: false, message: expect.stringMatching(/^Refused by the app/) }) },
+    ]);
+    expect(f.m.items(c.id).some(i => i.kind === 'system' && i.code === 'commandDestructive')).toBe(true);
+    expect(f.m.pending().filter(p => p.chatId === c.id).map(p => p.id)).toEqual(['a3', 'a4']);
+  });
+
   it('a chat without an agent policy is untouched', async () => {
     const f = fixture();
     const c = await f.m.create({ harness: 'claude', cwd: f.dir, permissionMode: 'bypassPermissions', prompt: 'x' });
