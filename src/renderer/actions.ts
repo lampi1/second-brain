@@ -23,7 +23,7 @@ import { isBusy } from './store/state';
 import { app, closeChat, closeTab, continueChat, createRoutedChat, dispatch, setChat, setSetting, stop, stopAll } from './store/store';
 import { orchestratorIdOf } from './lib/orchestrator-route';
 import { questionsModalOn } from './lib/questions';
-import { answerLater, openQueue } from './lib/later';
+import { answerLater, openQueue, resumeQuestions } from './lib/later';
 import { engineLabel } from './lib/engines';
 import {
   askConfirm, closeModal, flashTile, highlight, isBrainPage, openModal, openPage, requestFocus, setCenter, setClosing, setFocusMode, setLanePeek, setMap, setMaximized,
@@ -246,7 +246,9 @@ export const toggleCenter = () => setCenter(!ui.get().center);
 
 /** "Domande in finestra" on/off (top bar, Ctrl+K, Settings). The user's own change: applies at once. */
 export function toggleQuestionsModal(): void {
-  void setSetting({ questionsModal: !questionsModalOn(app.get()) });
+  const on = !questionsModalOn(app.get());
+  if (on) resumeQuestions();
+  void setSetting({ questionsModal: on });
 }
 
 /** What the brain pages get for "Discuti" (the Orchestrator next to the page, a ready draft in its input, not sent): every
@@ -396,6 +398,7 @@ export const awaitingCard = (): boolean => awaited !== null;
 
 /** Focus a request card: in the global layer if it floats there, else where it is on screen, else go and show it. */
 export function focusRequest(req: PendingRequest): void {
+  closeModal();
   // "Rispondi dopo" is on: asking for a request opens "Da rispondere" on it (quiet mode ends, lib/later.ts)
   if (ui.get().later) { openQueue(reqKey(req)); return; }
   // "Domande in finestra" or the queue already open: the window shows it first, at once, with the keyboard
@@ -425,7 +428,11 @@ export function focusRequest(req: PendingRequest): void {
   if (inOrchestrator) { setOrchestratorFirst(reqKey(req)); setOrchestratorOpen(true); }
   else if (u.page !== 'home' || u.map) go({ page: 'home' });
   // a collapsed Grindhouse strip shows only its pill: it opens, so its panel mounts and takes the keyboard
-  if (!inOrchestrator && c && !c.isOrchestrator) setChatExpanded(req.chatId, true);
+  if (!inOrchestrator && c && !c.isOrchestrator) {
+    for (let p = c.parentId, n = 0; p && n < 16; p = app.get().chats[p]?.parentId, n++) setTreeCollapsed(p, false);
+    if (ui.get().maximized && ui.get().maximized !== `chat:${req.chatId}`) setMaximized(null);
+    setChatExpanded(req.chatId, true);
+  }
   if (c?.isOrchestrator && !inOrchestrator) setFocusMode(c.id);
   if (u.focusMode && u.focusMode !== req.chatId && !inOrchestrator) setLanePeek(true);
   flashTile(inOrchestrator ? 'orchestrator' : `chat:${req.chatId}`);

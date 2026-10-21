@@ -3,10 +3,10 @@
 // the default focus; its own open questions show as a "decisione" card (a work chat's never show here: the Orchestrator is
 // for the state and for moving between chats, the user 2026-10-13), one card at a time, the oldest, the others named
 // on a "Poi:" line (the widget is a popup and at most one request popup is on screen; none while the questions window
-// or the layer's card is the one); Esc or "Rispondi dopo" turns "Rispondi dopo" on (lib/later.ts): the card goes
+// or the layer's card is the one); Esc or "Rispondi dopo" postpones that request in this session (lib/later.ts): the card goes
 // unanswered, a "Da rispondere" line stays; its own messages' shell blocks have
-// "Esegui" too (the run and "Manda l'esito alla chat" belong to the Orchestrator); above its input, "N novità in attesa"
-// (HeldNews.tsx, #88: what the app holds back for it; it replaced the "Novità" feed, which stays in the bell). Its ⋯ menu is the chat menu (ChatMenu) plus "Ricomincia da
+// "Esegui" too (the run and "Manda l'esito alla chat" belong to the Orchestrator). Completed results appear as compact
+// source-chat links in the transcript. Its ⋯ menu is the chat menu (ChatMenu) plus "Ricomincia da
 // capo", "Cambia motore" (both open the Nuovo Orchestrator confirm) and "Pulisci". With no Orchestrator yet it offers to create
 // one. Under its head, the morning block's line while strips are open (no plan panel: the strips carry each estimate, #124) (MorningBlock.tsx, ADR 0102). When it drives a browser, it wears that pair's accent like any chat (lib/pairs.ts). Used by OrchestratorOverlay.tsx.
 import { memo, useEffect, useRef, useState } from 'react';
@@ -16,9 +16,9 @@ import { isBusy, sameList } from '../store/state';
 import { ensureOrchestrator, stop, useApp } from '../store/store';
 import { openModal, setFocused, ui } from '../store/ui';
 import { t } from '../i18n';
-import { answerLater } from '../lib/later';
+import { answerLater, requestPostponed } from '../lib/later';
 import { pairHover, usePair } from '../lib/pairs';
-import { awaitingCard, go, openLink, reqKey } from '../actions';
+import { awaitingCard, go, reqKey } from '../actions';
 import { ItemList, turnActivity, Typing } from './ChatItems';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ChatMenu, TitleInput } from './ChatMenu';
@@ -34,7 +34,6 @@ import { RequestPanel } from './RequestPanel';
 import { InWindowLine } from './QuestionsWindow';
 import { questionsModalOn } from '../lib/questions';
 import { HarnessMark, IconList, IconMore, IconStop } from './Icons';
-import { HeldNews } from './HeldNews';
 import { IconButton, StatePill } from './ui';
 import { Select } from './Select';
 import { requestFocus } from '../store/ui';
@@ -75,8 +74,8 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
   // the user is answering in the global layer or the questions window (the queue): that is the one popup, the
   // Orchestrator's card waits (named on "Poi:")
   const held = ui.use(s => !!s.layerHeld || s.qwin.shown);
-  const queued = ui.use(s => s.later);
-  const open = [...reqs].sort((a, b) => a.at - b.at);
+  const postponed = ui.use(() => reqs.filter(r => requestPostponed(reqKey(r))), sameList);
+  const open = reqs.filter(r => !postponed.includes(r)).sort((a, b) => a.at - b.at);
   const w = open.findIndex(r => reqKey(r) === wanted);
   if (w > 0) open.unshift(...open.splice(w, 1));
   const first = held ? undefined : open[0];
@@ -102,7 +101,7 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
   // Esc / "Rispondi dopo": the card goes unanswered into "Da rispondere"; the keyboard it had goes to the input
   const later = () => {
     const had = !!(document.activeElement as HTMLElement | null)?.closest('[data-orchestrator-overlay] [data-request-key]');
-    answerLater();
+    if (first) answerLater(reqKey(first));
     if (had) requestAnimationFrame(() => input.current?.focus());
   };
 
@@ -149,9 +148,9 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
       {/* "Mentre eri via" in one line while strips (or another page) take the Grindhouse's place (ADR 0102) */}
       <MorningLine />
       <ItemList chatId={chat.id} items={items ?? []} empty={t('dialogs.orchestrator.emptyPrompt')} footer={isBusy(chat) ? <Typing what={turnActivity(items)} testid="typing-orchestrator" /> : null} />
-      {queued && reqs.length > 0 && <InWindowLine reqs={open} queued testid="orchestrator-queued" />}
-      {!queued && inWindow && reqs.length > 0 && <InWindowLine reqs={reqs} testid="orchestrator-in-window" />}
-      {!queued && !inWindow && open.length > 0 && (
+      {postponed.length > 0 && <InWindowLine reqs={postponed} queued testid="orchestrator-queued" />}
+      {inWindow && open.length > 0 && <InWindowLine reqs={open} testid="orchestrator-in-window" />}
+      {!inWindow && open.length > 0 && (
         <div className="tile-requests orchestrator-requests">
           {first && <RequestPanel key={reqKey(first)} req={first} variant="orchestrator" chatTitle={t('dialogs.orchestrator.name')} harness={chat.harness} onEscape={later} onLater={later} />}
           {open.length > (first ? 1 : 0) && (
@@ -164,7 +163,6 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
         </div>
       )}
       {/* in the place of the old "Novità" feed (#88): what the app holds back for this Orchestrator */}
-      <HeldNews orchestratorId={chat.id} onOpenChat={c => openLink(`sb://home/chat-${c}`)} />
       <ChatInput ref={input} chat={chat} orchestrator testid="orchestrator-input" />
       <ChatMenu chat={chat} anchor={menuBtn} open={menu} onClose={() => setMenu(false)} onRename={() => setRenaming(true)} orchestrator />
     </section>

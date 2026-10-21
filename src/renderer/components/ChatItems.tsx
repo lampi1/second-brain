@@ -22,7 +22,7 @@ import { markdownParts, renderMarkdown, splitBlocks, type MdPart } from '../lib/
 import { CodeBlock } from './CodeBlock';
 import { explainTool } from '@shared/explain';
 import { useNow } from '../lib/clock';
-import { IconAlert, IconArrowDown, IconBell, IconBolt, IconBranch, IconCheck, IconChevronRight, IconInfo, IconLink, IconPlus, IconRefresh, IconSend, IconSparkle, IconSpinner, IconTerminal, IconX } from './Icons';
+import { IconAlert, IconArrowDown, IconArrowRight, IconBell, IconBolt, IconBranch, IconCheck, IconChevronRight, IconInfo, IconLink, IconPlus, IconRefresh, IconSend, IconSparkle, IconSpinner, IconTerminal, IconX } from './Icons';
 import { splitNotes } from '../lib/sendable';
 import { getForeignLabel, foreignOf, showsSender, type Foreign, type ForeignKind } from '../lib/foreign';
 import { ImageStrip } from './ImageStrip';
@@ -31,11 +31,13 @@ import { thinkingBeforeAsk } from '../lib/askContext';
 import { useApp, synthesizeResult } from '../store/store';
 import { chatRefsOf, reportOutput, titlesKey, toolChatRef } from '../lib/chatrefs';
 import { splitMode } from '@shared/newchat';
+import { isRoleId, ROLE_DEFAULTS, ROLE_IDS } from '@shared/roles';
 import { isReaction } from '@shared/reaction';
 import { chatView } from '../lib/chat-view';
 import { AgentAvatar } from './AgentAvatar';
 import { NamedChatRefs, ToolChatRef } from './ChatRefChips';
 import { openHandoff } from '../store/ui';
+import { openChatRef } from '../actions';
 import { ArtifactCard } from './GenUi';
 import { useLinkPeek } from './LinkPeek';
 import { sysText, t } from '../i18n';
@@ -46,9 +48,37 @@ import { guideChatId, visibleGuideItems } from '../../modules/ai-first/presentat
 
 type Tool = Extract<ChatItem, { kind: 'tool' }>;
 
-function ResultSender({ chatId, role }: { chatId: string; role: string }) {
-  const agent = useApp(s => s.chats[chatId]?.agent);
-  return <AgentAvatar avatar={agent?.avatar} name={agent?.name ?? role} size={24} />;
+/** One compact row by default. Apri opens the source and reveals this exact historical result on demand. */
+function ResultReady({ item }: { item: Extract<ChatItem, { kind: 'system' }> }) {
+  const currentId = useContext(ChatIdCtx);
+  const sourceId = typeof item.params?.chatId === 'string' ? item.params.chatId : undefined;
+  const source = useApp(s => sourceId ? s.chats[sourceId] : undefined);
+  const [open, setOpen] = useState(false);
+  const name = source?.title ?? String(item.params?.title ?? item.params?.role ?? 'Chat');
+  const role = source?.agent?.name ?? String(item.params?.role ?? '');
+  const recordedRole = String(item.params?.role ?? '').trim().toLowerCase();
+  const roleId = isRoleId(source?.agent?.id) ? source.agent.id
+    : ROLE_IDS.find(id => id === recordedRole || ROLE_DEFAULTS[id].name.toLowerCase() === recordedRole);
+  const avatar = source?.agent?.avatar ?? (roleId ? { kind: 'character' as const, value: roleId } : undefined);
+  const local = !source || sourceId === currentId;
+  const legacyOutput = typeof item.params?.summary === 'string' && item.params.summary.trim() ? item.params.summary : sysText(item);
+  return <div className="notice result-ready" role="status" data-testid="result-ready">
+    <AgentAvatar avatar={avatar} name={role} size={24} />
+    <span className="result-ready-name" title={name}>{name}</span>
+    <button type="button" className="chatref-btn" data-testid="chatref-open" data-chat-id={sourceId}
+      aria-label={t('chat.chatref.ariaOpen', { verb: t('chat.chatref.open'), name })}
+      aria-expanded={open}
+      onClick={() => { setOpen(local ? !open : true); if (!local && sourceId) openChatRef(sourceId); }}>
+      <span className="chatref-go">{t('chat.chatref.open')}<IconArrowRight size={11} /></span>
+    </button>
+    {open && !item.result && <div className="result-ready-full"><Markdown text={legacyOutput} /></div>}
+    {open && item.result && <div className="result-ready-full" data-testid="canonical-result">
+      <Markdown text={item.result.output} />
+      {!!item.result.questions?.length && <ul>{item.result.questions.map((question, i) => <li key={i}>{question}</li>)}</ul>}
+      <ul>{item.result.doneWhen.map((criterion, i) => <li key={i}>{criterion.criterion}: <span aria-hidden="true">{criterion.met ? '✓' : '—'}</span><span className="sr-only">{t(criterion.met ? 'chat.criterionMet' : 'chat.criterionNotMet')}</span> {criterion.evidence}</li>)}</ul>
+      <ResultSynthesis runId={item.result.runId} />
+    </div>}
+  </div>;
 }
 
 function ResultSynthesis({ runId }: { runId: string }) {
@@ -299,22 +329,11 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks, reaction 
     case 'tool': return <ToolItem item={item} />;
     case 'system': {
       if (item.continued) return <ColdDivider session={item.continued.session} />;
+      if (item.code === 'resultReady') return <ResultReady item={item} />;
       const recap = item.code === 'recap' || /^dove eravamo/i.test(item.text);
       return (
-        <div className={`notice notice-${item.level} ${recap ? 'recap' : ''} ${item.code === 'resultReady' ? 'result-ready' : ''}`} role={item.level === 'error' ? 'alert' : item.code === 'resultReady' ? 'status' : undefined} {...(item.code === 'resultReady' ? { 'data-testid': 'result-ready' } : {})}>
-          {item.code === 'resultReady' && typeof item.params?.chatId === 'string'
-            ? <ResultSender chatId={item.params.chatId} role={String(item.params.role ?? '')} />
-            : item.level === 'info' ? <IconInfo size={13} /> : <IconAlert size={13} />}<span>{sysText(item)}</span>
-          {/* the answer the user waited for is ready in a work chat (#123): its Apri */}
-          {item.code === 'resultReady' && typeof item.params?.chatId === 'string' && <NamedChatRefs ids={[item.params.chatId]} />}
-          {item.code === 'resultReady' && item.result && <details className="result-ready-full" data-testid="canonical-result">
-            <summary>{t('chat.resultFull')}</summary>
-            <Markdown text={item.result.output} />
-            {!!item.result.questions?.length && <ul>{item.result.questions.map((question, i) => <li key={i}>{question}</li>)}</ul>}
-            <ul>{item.result.doneWhen.map((criterion, i) => <li key={i}>{criterion.criterion}: <span aria-hidden="true">{criterion.met ? '✓' : '—'}</span><span className="sr-only">{t(criterion.met ? 'chat.criterionMet' : 'chat.criterionNotMet')}</span> {criterion.evidence}</li>)}</ul>
-            <small>{item.result.taskId} · v{item.result.taskVersion} · {item.result.runId}</small>
-            <ResultSynthesis runId={item.result.runId} />
-          </details>}
+        <div className={`notice notice-${item.level} ${recap ? 'recap' : ''}`} role={item.level === 'error' ? 'alert' : undefined}>
+          {item.level === 'info' ? <IconInfo size={13} /> : <IconAlert size={13} />}<span>{sysText(item)}</span>
         </div>
       );
     }

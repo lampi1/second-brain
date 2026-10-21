@@ -351,8 +351,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const { service: browser, mcp, addChatTools, setBrowserAccess, setChatToolFilter } = await createBrowserModule({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, port: mcpPortFromEnv(), brainRoot: () => brainRoot() });
   // the brain's chats.mjs poll leaves out the app's own chats (bound below, once the chat manager exists)
   let isOwn: (id: string) => boolean = () => false;
-  // "Rispondi dopo": a new request's Windows notification is held while it is on (it waits in the queue)
+  // Retire the legacy global quiet flag before notifications start; postponement is request-local in the renderer.
   const later = createLater(ctx);
+  later.set(false);
   // the brain's estimates run (and the sample judge it starts) gets the app's text endpoint on the user's API credits;
   // writing rows «Sui crediti API» get the Anthropic API engine when it may run (both bound below, ADR 0052)
   let scriptEnv: () => Record<string, string> = () => ({});

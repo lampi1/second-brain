@@ -25,7 +25,7 @@ export function childRequestsFor(parentId: string, chats: Readonly<Record<string
 }
 
 /** The view's state that decides which chat is open on screen. */
-export interface OpenView { expanded: Readonly<Record<string, boolean>>; focusMode: string | null; maximized: string | null }
+export interface OpenView { expanded: Readonly<Record<string, boolean>>; focusMode: string | null; maximized: string | null; treeCollapsed?: Readonly<Record<string, boolean>> }
 /** Whether this chat's whole conversation is on screen now: in focus mode only that chat, maximized only that one. */
 export function isOpenChat(id: string, v: OpenView): boolean {
   if (v.focusMode) return v.focusMode === id;
@@ -34,11 +34,16 @@ export function isOpenChat(id: string, v: OpenView): boolean {
 }
 /** The one chat whose view shows the requests of `chatId` as panels (see the header). */
 export function requestHost(chatId: string, chats: Readonly<Record<string, Pick<ChatSummary, 'parentId' | 'isOrchestrator'> | undefined>>, v: OpenView): string {
-  if (isOpenChat(chatId, v)) return chatId;
+  const visible = (id:string):boolean => {
+    if (v.focusMode || v.maximized && v.maximized !== 'orchestrator') return isOpenChat(id,v);
+    for (let p=chats[id]?.parentId,n=0;p&&n<16;p=chats[p]?.parentId,n++) if(v.treeCollapsed?.[p]) return false;
+    return true;
+  };
+  if (visible(chatId) && isOpenChat(chatId, v)) return chatId;
   for (let p = chats[chatId]?.parentId, n = 0; p && n < 16; p = chats[p]?.parentId, n++) {
     const c = chats[p];
     if (!c || c.isOrchestrator) break;
-    if (isOpenChat(p, v)) return p;
+    if (visible(p) && isOpenChat(p, v)) return p;
   }
   return chatId;
 }

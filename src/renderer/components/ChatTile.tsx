@@ -22,10 +22,10 @@ import { useNow } from '../lib/clock';
 import { COMPACT_TILE_H } from '../lib/grid';
 import { isBusy, sameList } from '../store/state';
 import { closeChat, send, stop, useApp } from '../store/store';
-import { callQuestions, setBrowserOpen, setFocused, setFocusMode, setChatExpanded, ui } from '../store/ui';
+import { setBrowserOpen, setFocused, setFocusMode, setChatExpanded, ui } from '../store/ui';
 import {t}from'../i18n';
 import {schedule,suspendViews}from'../lib/viewports';
-import { answerLater, openQueue } from '../lib/later';
+import { answerLater, openQueue, requestPostponed } from '../lib/later';
 import { admitNow, reqKey, toggleMaximize } from '../actions';
 import { pairHover, usePair } from '../lib/pairs';
 import { selectedHere } from '../lib/strip-click';
@@ -82,11 +82,15 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
   const reqs = useApp(s => pendingOf(s.pending, chatId), sameList);
   // each request shows once (lib/child-requests.ts requestHost): here only when this view is the one that holds it
   const expandedAll = ui.use(s => s.prefs.chatExpanded), focusModeId = ui.use(s => s.focusMode), maxKey = ui.use(s => s.maximized);
-  const view = { expanded: expandedAll, focusMode: focusModeId, maximized: maxKey };
+  const treeCollapsed = ui.use(s => s.prefs.treeCollapsed);
+  const view = { expanded: expandedAll, focusMode: focusModeId, maximized: maxKey, treeCollapsed };
   const childReqs = useApp(s => childRequestsFor(chatId, s.chats, s.pending).filter(c => requestHost(c.req.chatId, s.chats, view) === chatId), sameAsks);
   const hostsOwn = useApp(s => requestHost(chatId, s.chats, view) === chatId || !!focus);
   const inWindow = useApp(questionsModalOn);
-  const queued = ui.use(s => s.later);
+  const postponedOwn = ui.use(() => reqs.filter(r => requestPostponed(reqKey(r))), sameList);
+  const postponedChildren = ui.use(() => childReqs.filter(c => requestPostponed(reqKey(c.req))), sameAsks);
+  const activeOwn = reqs.filter(r => !postponedOwn.includes(r));
+  const activeChildren = childReqs.filter(c => !requestPostponed(reqKey(c.req)));
   const key = `chat:${chatId}`;
   const isFocused = ui.use(s => s.focused === key);
   const closing = ui.use(s => s.closing.includes(chatId));
@@ -139,8 +143,8 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
   };
   const first = reqs[0] ? reqKey(reqs[0]) : null;
   // a Strategist's open question shows in its plan card, on the strip itself (ADR 0108), not again below
-  const planAsk = planQuestion(chat, reqs, !!queued);
-  const ownReqs = planAsk && !inWindow ? reqs.filter(r => r !== planAsk) : reqs;
+  const planAsk = planQuestion(chat, activeOwn, false);
+  const ownReqs = planAsk && !inWindow ? activeOwn.filter(r => r !== planAsk) : activeOwn;
   return (
     <section ref={ref} className={`tile chat-tile ${expanded?'is-expanded':'is-strip'} tone-${st.tone} ${isFocused ? 'focused' : ''} ${flash ? 'flash' : ''} ${compact ? 'compact' : ''} ${closing ? 'closing' : ''} ${pair.cls}${embedded ? ' is-embedded' : ''}`} style={pair.style} role="region"
       aria-label={auditText('auditExpression.ChatTile.text20', { v0: chat.title, v1: st.label })} data-testid={`tile-chat-${chatId}`} data-chat-id={chatId} data-sb-id={`chat-${chatId}`} data-chat-index={index} data-state={chat.state}
@@ -151,7 +155,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
           <h3 className="th-title" title={chat.agent?.purpose||chat.title}>{chat.agent?.name||chat.title}</h3>
           {/* the pill takes the state's place; the state stays in the DOM (hidden) as the strip's data-state hook */}
           {first ? <span hidden><StatePill chat={chat} testid={`chat-state-${chatId}`} /></span> : <StatePill chat={chat} testid={`chat-state-${chatId}`} />}
-          {first && <button type="button" className="strip-wait" onClick={() => (queued ? openQueue(first) : callQuestions(first))} aria-label={t('product.waitsYouOpen', { title: chat.agent?.name || chat.title })} data-testid={`chat-wait-${chatId}`} data-state={chat.state} {...(expanded ? {} : { 'data-waits-keys': reqs.map(reqKey).join(' ') })}>
+          {first && <button type="button" className="strip-wait" onClick={() => openQueue(first)} aria-label={t('product.waitsYouOpen', { title: chat.agent?.name || chat.title })} data-testid={`chat-wait-${chatId}`} data-state={chat.state} {...(expanded ? {} : { 'data-waits-keys': reqs.map(reqKey).join(' ') })}>
             <span className="strip-wait-dot" aria-hidden="true" />{t('product.waitsYou')}{reqs.length > 1 && <b>{reqs.length}</b>}
           </button>}
           {chat.resumedAt && (
@@ -194,20 +198,22 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
       <ChatInput ref={input} chat={chat} testid={`chat-input-${chatId}`} />
       {expanded && chat.run && <RunOutcomeControl key={`${chat.run.runId}:${chat.run.counters.reopened}`} run={chat.run} disabled={busy || reqs.length > 0 || chat.state === 'waiting' || !!chat.queued} />}
       </div></div>
-      {expanded && hostsOwn && ownReqs.length > 0 && (queued ? <InWindowLine reqs={ownReqs} queued testid={`chat-queued-${chatId}`} /> : inWindow ? <InWindowLine reqs={ownReqs} testid={`chat-in-window-${chatId}`} /> : (
+      {expanded && hostsOwn && postponedOwn.length > 0 && <InWindowLine reqs={postponedOwn} queued testid={`chat-queued-${chatId}`} />}
+      {expanded && hostsOwn && ownReqs.length > 0 && (inWindow ? <InWindowLine reqs={ownReqs} testid={`chat-in-window-${chatId}`} /> : (
         <div className="tile-requests">
-          {ownReqs.map(r => <RequestPanel key={r.id} req={r} variant={compact || smallPanel ? 'compact' : 'tile'} chatTitle={chat.title} harness={chat.harness} onLater={answerLater} />)}
+          {ownReqs.map(r => <RequestPanel key={r.id} req={r} variant={compact || smallPanel ? 'compact' : 'tile'} chatTitle={chat.title} harness={chat.harness} onLater={() => answerLater(reqKey(r))} />)}
         </div>
       ))}
-      {expanded && childReqs.length > 0 && (queued ? <InWindowLine reqs={childReqs.map(c => c.req)} queued testid={`chat-child-queued-${chatId}`} /> : inWindow ? <InWindowLine reqs={childReqs.map(c => c.req)} testid={`chat-child-in-window-${chatId}`} /> : (
+      {expanded && postponedChildren.length > 0 && <InWindowLine reqs={postponedChildren.map(c => c.req)} queued testid={`chat-child-queued-${chatId}`} />}
+      {expanded && activeChildren.length > 0 && (inWindow ? <InWindowLine reqs={activeChildren.map(c => c.req)} testid={`chat-child-in-window-${chatId}`} /> : (
         <div className="tile-requests child-requests">
-          {childReqs.map(({ req, chat: c }) => <div key={`${req.chatId}:${req.id}`} className="child-request pause-panel" data-testid={`child-request-${req.chatId}`}>
+          {activeChildren.map(({ req, chat: c }) => <div key={`${req.chatId}:${req.id}`} className="child-request pause-panel" data-testid={`child-request-${req.chatId}`}>
             <div className="pause-tag">
               <AgentAvatar avatar={c.agent?.avatar} name={c.agent?.name || c.title} size={28} />
               <span className="pause-who"><b>{t('tree.asks', { role: c.agent?.name || '', title: c.title })}</b> {t('tree.asksVerb')}</span>
               <span className="pause-from">{t('tree.childOfThis', { time: new Date(req.at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) })}</span>
             </div>
-            <RequestPanel req={req} variant={compact || smallPanel ? 'compact' : 'tile'} chatTitle={c.title} harness={c.harness} onLater={answerLater} />
+            <RequestPanel req={req} variant={compact || smallPanel ? 'compact' : 'tile'} chatTitle={c.title} harness={c.harness} onLater={() => answerLater(reqKey(req))} />
             <div className="pause-foot">
               <button type="button" className="btn btn-s btn-ghost" data-testid={`child-request-open-${req.chatId}`} onClick={() => setFocusMode(c.id)}><span aria-hidden="true">↗</span> {t('tree.goToOf', { role: c.agent?.name || c.title })}</button>
             </div>

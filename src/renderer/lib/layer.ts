@@ -1,7 +1,7 @@
 // App-page side of the global layer (main/overlay.ts shows it above everything, browser tiles included). The app page
 // is the one source of truth. Tier a: the open questions/permissions NOT already visible somewhere on screen (needs
-// lane, the chat's own tile, the Orchestrator's decision), oldest first; none at all while "Rispondi dopo" is on (Esc or the
-// button on a card, lib/later.ts: they wait in "Da rispondere") or while another request popup is on screen (the Orchestrator widget's card, the questions window): at most one popup at a
+// lane, the chat's own tile, the Orchestrator's decision), oldest first; requests postponed with "Rispondi dopo" stay
+// in "Da rispondere" (lib/later.ts); cards also wait while another request popup is on screen (the Orchestrator widget's card, the questions window): at most one popup at a
 // time (the user, 2026-10-13: two popups of questions at once, one of them "appeso" on the Orchestrator). Tier b: important events
 // (lib/notify.ts TOAST_KINDS) as at most two grouped toasts with one action, unless muted or do-not-disturb; they
 // leave after 8 s. No waiting strip: what waits is counted by the top bar's "Da rispondere" (the user, 2026-10-14:
@@ -13,7 +13,7 @@ import { chatName } from '@shared/orchestrator';
 import { sb } from '../sb';
 import { app, answer, attemptOf, dismissCommand, dndActive, runCommand } from '../store/store';
 import { dismissEventToasts, setLayerHeld, setRead, ui } from '../store/ui';
-import { answerLater } from './later';
+import { answerLater, openQueue, requestPostponed } from './later';
 import { now } from './clock';
 import { columnSize, viewport } from './orchestrator-dock';
 import { questionsModalOn } from './questions';
@@ -82,9 +82,9 @@ export function computeModel(ignorePopup = false): OverlayModel {
   // the same while the Orchestrator widget shows a request card (one popup at a time), unless the user is answering here
   // (the layer has the keyboard on a card still open: the Orchestrator's card waits instead, OrchestratorTile.tsx)
   const held = !!u.layerHeld && s.pending.some(p => keyOf(p) === u.layerHeld);
-  for (const req of u.later || questionsModalOn(s) || (!ignorePopup && !held && popupOnScreen()) ? [] : s.pending) {
+  for (const req of questionsModalOn(s) || (!ignorePopup && !held && popupOnScreen()) ? [] : s.pending) {
     const key = keyOf(req);
-    if (u.hidden.includes(req.chatId) || visible.has(key)) continue;
+    if (requestPostponed(key) || u.hidden.includes(req.chatId) || visible.has(key)) continue;
     const c = s.chats[req.chatId];
     cards.push({ key, req, chatTitle: c ? chatName(c) : 'Chat', harness: c?.harness ?? 'claude', engine: (c && engineOf(c.harness)) ?? null, isOrchestrator: !!c?.isOrchestrator, attempt: attemptOf(key) });
   }
@@ -140,7 +140,7 @@ export function focusLayer(key: string): void {
 function onAction(a: OverlayAction, open: (chatId: string) => void, next: (from?: string) => void, openLink: (link: string) => void): void {
   const find = (key: string) => app.get().pending.find(p => keyOf(p) === key);
   if (a.kind === 'answer') { const req = find(a.key); if (req) void answer(req, a.answer); }
-  else if (a.kind === 'postpone') { answerLater(); focusKey = undefined; void sb.invoke('overlay:focus', { target: 'app' }).catch(() => {}); }
+  else if (a.kind === 'postpone') { answerLater(a.key); focusKey = undefined; void sb.invoke('overlay:focus', { target: 'app' }).catch(() => {}); }
   else if (a.kind === 'open') { const req = find(a.key); if (req) open(req.chatId); }
   else if (a.kind === 'run') { const req = find(a.key); if (req) void runCommand(req, !!a.confirmProd); }
   else if (a.kind === 'dismiss') { const req = find(a.key); if (req) void dismissCommand(req); }
@@ -152,7 +152,7 @@ function onAction(a: OverlayAction, open: (chatId: string) => void, next: (from?
       setRead(r => markRead(r, g.ids));
       if (a.act === 'open') {
         const req = g.chatId ? app.get().pending.find(p => p.chatId === g.chatId) : undefined;
-        if (req && g.kind === 'chat-waiting') next(); else openLink(linkOfEvent(g.event));
+        if (req && g.kind === 'chat-waiting') openQueue(keyOf(req)); else openLink(linkOfEvent(g.event));
       }
     }
   }

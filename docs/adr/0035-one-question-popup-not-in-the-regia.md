@@ -58,3 +58,21 @@ presenti tipo in overlay con una notifica anche sonora" ("Suono sempre").
   `qwin-card-cmds` are new.
 - The brain's worker prompt (ask in your own chat; commands as one PowerShell block with 1-3 lines of context) is the
   Regia's side, outside this repo.
+
+
+## Amendment · 2026-10-21: postpone only the chosen request
+
+The owner's clarification supersedes the global quiet flag above. Esc and “Rispondi dopo” postpone only the
+explicit request key (`chatId/requestId`) for this renderer session. Other pending requests and new arrivals
+remain eligible for their normal popup. Postponement never resolves, denies, dismisses or deletes a request.
+Every request host passes the exact key; fallback focus lookup is reserved for the global keyboard action.
+
+Opening “Da rispondere” restores postponed requests and selects the requested key; enabling the popup setting
+also restores them. An explicit request navigation closes the covering dialog before displaying the request.
+The queue and badges continue to derive their counts from unresolved `pending` data. Hidden descendants cannot
+own a rendered request panel merely because an expansion preference was retained under a folded ancestor.
+
+The previous persisted main-process quiet flag is cleared at renderer startup and never enabled by postponement.
+Consequently this action no longer suppresses Windows notifications for future requests; their normal focus,
+mute and do-not-disturb rules still apply. Session postponements are not restored after a reload, while unresolved
+request data remains owned by the normal pending lifecycle. The popup preference itself is never changed by Esc.

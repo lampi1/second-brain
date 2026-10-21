@@ -21,6 +21,7 @@ import { useNow } from '../lib/clock';
 import { formatCost, modelWithEffort } from '../lib/format';
 import { selectedHere } from '../lib/strip-click';
 import { t } from '../i18n';
+import { openQueue } from '../lib/later';
 import { AgentAvatar } from './AgentAvatar';
 import { ChatTile, useFlash } from './ChatTile';
 import { IconChevronDown, IconChevronRight } from './Icons';
@@ -54,7 +55,7 @@ function useChild(chatId: string) {
   const refused = useApp(s => refusedIn(s.items[chatId]));
   const refusal = useApp(s => lastRefusal(s.items[chatId]));
   const loaded = useApp(s => !!s.items[chatId]);
-  const reqs = useApp(s => s.pending.filter(p => p.chatId === chatId && p.type !== 'command'), sameList);
+  const reqs = useApp(s => s.pending.filter(p => p.chatId === chatId), sameList);
   const parentTitle = useApp(s => { const p = s.chats[chatId]?.parentId; return p ? s.chats[p]?.title ?? '' : ''; });
   const parent = useApp(s => { const p = s.chats[chatId]?.parentId; const c = p ? s.chats[p] : undefined; return c ? c.agent?.name || c.title : ''; });
   useEffect(() => { if (!loaded) void loadItems(chatId); }, [chatId, loaded]);
@@ -108,7 +109,7 @@ function Steps({ chat, items, state }: { chat: ChatSummary; items: readonly Chat
 function Ask({ req, chatId }: { req: PendingRequest; chatId: string }) {
   const perm = req.type === 'permission';
   return <div className="dc-ask" data-testid={`delegation-ask-${chatId}`} data-waits-keys={reqKey(req)}>
-    <div className="dc-k">{t(perm ? 'tree.ask.permission' : 'tree.ask.question')}</div>
+    <div className="dc-k">{req.type === 'command' ? req.title : t(perm ? 'tree.ask.permission' : 'tree.ask.question')}</div>
     <div className="dc-ask-q">{req.questions?.[0]?.question ?? req.title}</div>
     {req.detail && req.detail !== req.title && <div className="dc-ask-why">{req.detail}</div>}
     <div className="dc-act">
@@ -116,7 +117,7 @@ function Ask({ req, chatId }: { req: PendingRequest; chatId: string }) {
         <button type="button" className="btn btn-s dc-btn-amber" data-testid={`delegation-allow-${chatId}`} onClick={() => void answer(req, { kind: 'permission', allow: true })}>{t('tree.allowOnce')}</button>
         <button type="button" className="btn btn-s btn-ghost" data-testid={`delegation-deny-${chatId}`} onClick={() => void answer(req, { kind: 'permission', allow: false, message: 'Negato dall’utente.' })}>{t('tree.deny')}</button>
       </>}
-      <button type="button" className="btn btn-s dc-btn-quiet" data-testid={`delegation-answer-${chatId}`} onClick={() => setChatExpanded(chatId, true)}>{t(perm ? 'tree.goTo' : 'tree.answerHere')}</button>
+      <button type="button" className="btn btn-s dc-btn-quiet" data-testid={`delegation-answer-${chatId}`} onClick={() => openQueue(reqKey(req))}>{t(perm ? 'tree.goTo' : 'tree.answerHere')}</button>
     </div>
   </div>;
 }
@@ -150,7 +151,8 @@ export function DelegationCard({ chatId }: { chatId: string }) {
   const open = ui.use(s => s.prefs.chatExpanded[chatId] === true);
   // the question shows on the card only when no open chat holds it (lib/child-requests.ts requestHost: once on screen)
   const expandedAll = ui.use(s => s.prefs.chatExpanded), focusModeId = ui.use(s => s.focusMode), maxKey = ui.use(s => s.maximized);
-  const hostsAsk = useApp(s => requestHost(chatId, s.chats, { expanded: expandedAll, focusMode: focusModeId, maximized: maxKey }) === chatId);
+  const treeCollapsed = ui.use(s => s.prefs.treeCollapsed);
+  const hostsAsk = useApp(s => requestHost(chatId, s.chats, { expanded: expandedAll, focusMode: focusModeId, maximized: maxKey, treeCollapsed }) === chatId);
   const flash = useFlash(`chat:${chatId}`);
   const ref = useRef<HTMLElement>(null);
   const down = useRef('');
@@ -186,7 +188,7 @@ export function DelegationCard({ chatId }: { chatId: string }) {
       <Who chat={chat} />
       {state !== 'queued' && <Steps chat={chat} items={c.items} state={state} />}
     </div>
-    {!open && hostsAsk && state === 'wait' && c.reqs[0] && <Ask req={c.reqs[0]} chatId={chatId} />}
+    {!open && hostsAsk && c.reqs[0] && <Ask req={c.reqs[0]} chatId={chatId} />}
     {state === 'queued' && <div className="dc-note">{t('tree.queuedNote')}</div>}
     {state === 'err' && <div className="dc-err"><span className="dc-k">{t('tree.error')}</span>{chat.lastError || t('tree.errorNone')}</div>}
     {state === 'refused' && <div className="dc-err" data-testid={`delegation-refused-${chatId}`}><span className="dc-k">{t('tree.error')}</span>{c.refusal}</div>}
