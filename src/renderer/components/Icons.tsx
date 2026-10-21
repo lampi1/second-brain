@@ -60,6 +60,7 @@ export const IconLightbulb = (p: P) => <Svg {...p}><path d="M9 17.5h6M10 20.5h4M
 export const IconUser = (p: P) => <Svg {...p}><circle cx="12" cy="8.5" r="3.5" /><path d="M5 19.5c1.2-3.3 3.8-5 7-5s5.8 1.7 7 5" /></Svg>;
 export const IconLayers = (p: P) => <Svg {...p}><path d="m12 4 8.5 4.5L12 13 3.5 8.5z" /><path d="m3.5 12.5 8.5 4.5 8.5-4.5M3.5 16.5 12 21l8.5-4.5" /></Svg>;
 export const IconFocus = (p: P) => <Svg {...p}><path d="M4 8.5V5.5a1.5 1.5 0 0 1 1.5-1.5h3M15.5 4h3A1.5 1.5 0 0 1 20 5.5v3M20 15.5v3a1.5 1.5 0 0 1-1.5 1.5h-3M8.5 20h-3A1.5 1.5 0 0 1 4 18.5v-3" /><circle cx="12" cy="12" r="2.5" /></Svg>;
+export const IconEraser = (p: P) => <Svg {...p}><path d="m8.5 19.5-4.2-4.2a1.6 1.6 0 0 1 0-2.3l8.7-8.7a1.6 1.6 0 0 1 2.3 0l4.2 4.2a1.6 1.6 0 0 1 0 2.3l-8.7 8.7M8.5 19.5H20M9 8.8l6.2 6.2" /></Svg>;
 export const IconUndo = (p: P) => <Svg {...p}><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" /></Svg>;
 export const IconLogin = (p: P) => <Svg {...p}><path d="M14 4.5h4a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-4M10 16.5 14.5 12 10 7.5M14.5 12H4" /></Svg>;
 export const IconBell = (p: P) => <Svg {...p}><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z" /><path d="M10 20.5a2 2 0 0 0 4 0" /></Svg>;
