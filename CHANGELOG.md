@@ -18,6 +18,12 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   instructions; Esc or «Chiudi senza salvare» goes back to the cards, nothing kept.
 
 ### Added
+- **Apprendimento: what the brain's changes really proved** (owner, 2026-10-21, issue #127; ADR 0109): every change
+  maintenance makes to skills, rules, memory or roles carries an evidence claim (hypothesis, the roles it is measured
+  on, the user's corrections per run before and after, a 90% interval, a verdict only at 20/40/80/160 runs). A new page
+  under Andamento (G J) counts «beneficio provato · senza effetto · in raccolta · peggiora · annullati», lists the
+  changes that made things worse with their Annulla, draws each role's corrections per run with the changes as marks,
+  and shows every claim; the Skill, Regole and Memoria panels show the claim under each change.
 - **The Strategist plans with you** (owner, 2026-10-21; ADR 0108): a message sent with «Strategist» ticked opens a
   Strategist that first asks what you really want, one question at a time, then proposes a short plan of plain steps
   to approve («Approva e parti» / «Cambia qualcosa») and only then delegates; its strip shows the steps as a Claude

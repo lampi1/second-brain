@@ -77,6 +77,55 @@ export interface BrainChange {
   evidence: string[];
   rolledBackAt?: number;
   canRollback: boolean;
+  /** its evidence claim (brainmodel/evidence.ts, ADR 0109): missing only where the runs could not be read */
+  claim?: ChangeClaim;
+}
+
+// ── The evidence layer (ADR 0109): every change is a hypothesis measured on the user's corrections per run ─────────────
+export type ClaimVerdict = 'raccolta' | 'aiuta' | 'nessun-effetto' | 'peggiora' | 'annullato';
+/** fewer = the change should lower the corrections (a new or updated skill, rule, role); not-more = it should not raise
+ *  them (a merge, a removal, an unlink: tidying, not teaching) */
+export type ClaimHypothesis = 'fewer' | 'not-more';
+export interface ClaimSide {
+  /** ended runs with corrections counted (before: the newest up to 40 that ended before the change, frozen) */
+  n: number;
+  /** the runs the verdict rests on: the side's checkpoint (20, 40, 80, 160), 0 below the first */
+  judged: number;
+  /** mean corrections per run over the judged runs (all runs while none is judged); null without runs */
+  mean: number | null;
+}
+export interface ChangeClaim {
+  hypothesis: ClaimHypothesis;
+  /** the one metric: the user's corrections per run, lower is better */
+  metric: 'corrections';
+  /** the roles (catalog ids) whose runs measure it, frozen when the change was made; empty = every role */
+  scope: string[];
+  /** a skill's change is measured on the runs that loaded it */
+  skill: string | null;
+  before: ClaimSide;
+  after: ClaimSide;
+  /** the next checkpoint of the runs after it (null: past the last); the baseline is frozen, so one under the first
+   *  checkpoint never gets a verdict (the page says so) */
+  need: number | null;
+  /** 90% bootstrap interval of mean(after) - mean(before), over the judged runs; null below the first checkpoint */
+  diff: { low: number; high: number } | null;
+  verdict: ClaimVerdict;
+}
+
+/** One week of a role's runs on the Apprendimento page: runs ended that week with corrections counted, and their sum. */
+export interface LearningWeek { start: number; runs: number; corrections: number }
+export interface LearningRole {
+  id: string; name: string;
+  weeks: LearningWeek[];
+  /** the changes measured on this role's runs inside the weeks shown, oldest first */
+  changes: { id: string; at: number; verdict: ClaimVerdict; summary: string }[];
+}
+export interface LearningState {
+  /** the changes per verdict, over the changes listed (the newest 120) */
+  counts: Record<ClaimVerdict, number>;
+  roles: LearningRole[];
+  /** start of the first week shown, and the week length */
+  from: number; week: number;
 }
 
 /** One former procedure (a runbook or routines section) and where it went. */
@@ -107,6 +156,8 @@ export interface BrainModelState {
   lastRun: MaintenanceRun | null;
   /** the Memoria page's statistics (brainmodel/memory-stats.ts); missing without a brain */
   memoryStats?: MemoryStats;
+  /** the Apprendimento page (brainmodel/evidence.ts, ADR 0109); missing where the runs could not be read */
+  learning?: LearningState;
 }
 
 // ── Memoria statistics (read-only, zero tokens): computed from the memory files, ai-errors.md and the agent runs ──────

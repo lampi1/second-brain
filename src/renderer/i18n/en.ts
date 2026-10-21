@@ -34,6 +34,7 @@ import { guideEn } from './areas/guide.en';
 import { treeEn } from './areas/tree.en';
 import { aliveEn } from './areas/alive.en';
 import { lampoEn } from './areas/lampo.en';
+import { learningEn } from './areas/learning.en';
 import { estimateEn } from './areas/estimate.en';
 import { reviewedContextEn } from './areas/reviewed-context.en';
 import { setupEn } from './areas/setup.en';
@@ -54,6 +55,7 @@ export const en: Dict = {
   ...treeEn,
   ...aliveEn,
   ...lampoEn,
+  ...learningEn,
   ...estimateEn,
   ...genuiRequestEn,
   'genui.request.question': 'Question',
