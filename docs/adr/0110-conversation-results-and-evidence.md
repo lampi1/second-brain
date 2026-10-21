@@ -75,3 +75,11 @@ Reported dollars are estimates from available engine usage, not actual subscript
 independent outcomes or historical snapshots remain unknown. Candidate creation is not automatic validation;
 promotion needs independently reviewed examples and a relevant replay. Before/after observations on different
 tasks do not establish causality, and this change makes no percentage savings claim.
+
+
+Sampled independent Sentinel reviews use an explicit app-owned report contract and `agent_report`, with paired
+`verdict` (the reviewed work's assessment) and `verified` (the evidence actually checked). Completing the review
+never implies verified evidence. Ordinary role self-reports cannot supply these fields. Legacy sessions retain the
+fenced `run-report` fallback; sampling caps and the absence of automatic retries remain unchanged. A pruned root
+chat can still be reviewed from its canonical result and absolute saved project scope; missing legacy scope is
+never replaced with a guessed working directory.

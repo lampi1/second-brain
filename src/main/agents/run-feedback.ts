@@ -106,8 +106,8 @@ export class RunFeedback {
     const verified = refs.some(e => {
       if (e.kind !== 'run') return false;
       const review = this.d.runs.get(e.ref);
-      return !!review && review.endedAt !== undefined && review.reviewOf === run.runId && (review.agentId === 'sentinel' || review.agentId === 'judge') && review.version > 0
-        && review.report?.verified === 'yes' && review.chatId !== run.chatId;
+      return !!review && review.endedAt !== undefined && review.endReason === 'completed' && review.reviewOf === run.runId && (review.agentId === 'sentinel' || review.agentId === 'judge') && review.version > 0
+        && review.report?.verified === 'yes' && review.report.verdict === a.verdict && review.chatId !== run.chatId;
     });
     const outcome: AgentRunOutcome = { verdict: a.verdict as AgentRunOutcome['verdict'], basis: verified ? 'reviewed-evidence' : 'orchestrator-opinion', by: callerId, at: this.now(), note: notes };
     const f: AgentFeedback = { id: randomUUID(), at: this.now(), agentId: run.agentId, runId: run.runId, version: run.version, outcome, evidence: refs,

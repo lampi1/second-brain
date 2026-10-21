@@ -9,7 +9,7 @@ import path from 'node:path';
 import type { AgentRun } from '../../../src/shared/agents';
 import type { AgentFeedbackArgs } from '../../../src/shared/agent-lifecycle';
 import type { ChatSummary, NewChat } from '../../../src/shared/contract';
-import { JudgeSampler, judgeSamplingOn, pickSamples, reviewPrompt } from '../../../src/main/agents/judge-sample';
+import { JudgeSampler, judgeSamplingOn, pickSamples, reviewPrompt, REVIEW_CRITERIA } from '../../../src/main/agents/judge-sample';
 
 const NOW = Date.UTC(2026, 9, 19, 12);
 const run = (id: string, over: Partial<AgentRun> = {}): AgentRun => ({ runId: `r_${id.padStart(12, '0')}`, chatId: `c_${id}`, agentId: 'scout', version: 1, goal: 'Trova gli errori',
@@ -56,6 +56,8 @@ describe('pickSamples', () => {
     expect(full).toContain('source.txt');
     expect(full).toContain('task version: 2');
     expect(p).toContain('"verdict":"success|partial|fail"');
+    expect(p).toContain('Finish with agent_report');
+    expect(p).toContain(REVIEW_CRITERIA[0]);
   });
 });
 
@@ -72,7 +74,7 @@ describe('JudgeSampler', () => {
   it('starts at most judgeDaily a day, as Sentinel chats linked to the run, then again the next day', async () => {
     const { s, created, later } = make([run('1'), run('2'), run('3')], 2);
     expect(await s.tick()).toBe(2);
-    expect(created[0]).toMatchObject({ harness: 'codex', roleId: 'sentinel', cwd: '/w' });
+    expect(created[0]).toMatchObject({ harness: 'codex', roleId: 'sentinel', cwd: '/w', doneWhen: REVIEW_CRITERIA });
     expect(created[0]).not.toHaveProperty('independentOf'); // a new session is the review's independence (ADR 0091)
     expect(created.map(c => c.reviewOf).every(id => id?.startsWith('r_'))).toBe(true);
     expect(await s.tick()).toBe(0);                 // the day's cap
@@ -84,6 +86,19 @@ describe('JudgeSampler', () => {
     const { s, created } = make([run('1')], 2, null, id => ({ ...chat(id), parentId: 'c_parent' }));
     expect(await s.tick()).toBe(0);
     expect(created).toEqual([]);
+  });
+  it('reviews a pruned root only with its canonical result and absolute saved project scope', async () => {
+    const saved = run('1');
+    saved.scope = { brainRoot: path.resolve('/brain'), projectRoot: path.resolve('/original') };
+    saved.report!.canonical = { taskId: saved.runId, taskVersion: 1, runId: saved.runId, at: NOW, outcome: 'done', summary: 'Saved', output: 'Original evidence', doneWhen: [] };
+    const missing = () => undefined as unknown as ChatSummary;
+    const good = make([saved], 1, null, missing);
+    expect(await good.s.tick()).toBe(1);
+    expect(good.created[0]).toMatchObject({ cwd: saved.scope.projectRoot, doneWhen: REVIEW_CRITERIA });
+    expect(good.created[0]!.prompt).toContain('Original evidence');
+    const unsafe = { ...saved, scope: { ...saved.scope, projectRoot: 'relative' } };
+    expect(await make([unsafe], 1, null, missing).s.tick()).toBe(0);
+    expect(await make([run('2', { scope: saved.scope })], 1, null, missing).s.tick()).toBe(0);
   });
   it('starts nothing when off or when the engine is refused', async () => {
     expect(await make([run('1')], 0).s.tick()).toBe(0);
