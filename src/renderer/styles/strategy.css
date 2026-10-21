@@ -1,0 +1,50 @@
+/* A Strategist's plan with the user on its strip (StrategyPanel.tsx, ADR 0108): its questions, the plan to approve and
+   the steps' checklist, Claude Code style. */
+.sp-card { margin: 4px 12px 10px; border: 1px solid var(--border-2); border-radius: var(--r-l); background: var(--surface-2); padding: 12px 14px; font-size: 13px; color: var(--text); cursor: default; }
+.sp-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.sp-kicker { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--violet); font-weight: 600; }
+.sp-right { margin-left: auto; color: var(--text-3); font-size: 12px; }
+.sp-note { margin: 0; color: var(--text-2); }
+.sp-card:focus { outline: none; }
+.sp-card:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ask-plain:focus { outline: none; }
+.ask-plain-q { font-size: 15px; font-weight: 600; line-height: 1.35; margin: 0 0 10px; }
+.ask-plain-opts { display: flex; flex-direction: column; gap: 6px; }
+.ask-plain-other { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px dashed var(--border-2); border-radius: var(--r-m); background: none; color: var(--text-3); font: inherit; text-align: left; cursor: pointer; }
+.ask-plain-other:hover:not(:disabled) { color: var(--text-2); border-color: var(--border-3); }
+.sp-in-window { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.sp-known { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); color: var(--text-3); font-size: 12px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.sp-known b { color: var(--text-2); font-weight: 500; margin-right: 4px; }
+.sp-check { color: var(--green); margin-right: 4px; }
+.sp-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.sp-link { background: none; border: 0; padding: 0; color: var(--text-2); font: inherit; font-size: 12px; text-decoration: underline; text-decoration-color: var(--border-3); text-underline-offset: 3px; cursor: pointer; }
+.sp-link:hover { color: var(--text); }
+.sp-btn { height: 30px; padding: 0 14px; border-radius: var(--r-m); border: 1px solid var(--border-2); background: var(--surface); color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+.sp-btn:hover:not(:disabled) { border-color: var(--border-3); }
+.sp-btn.primary { background: var(--blue); border-color: var(--blue); color: var(--on-accent); font-weight: 600; }
+.sp-btn.primary:hover:not(:disabled) { background: var(--blue-strong); }
+.sp-btn:disabled { opacity: .55; cursor: default; }
+.sp-change textarea { width: 100%; box-sizing: border-box; resize: vertical; min-height: 52px; padding: 8px 10px; border-radius: var(--r-m); border: 1px solid var(--border-2); background: var(--surface); color: var(--text); font: inherit; }
+.sp-change textarea:focus { outline: none; border-color: var(--focus); }
+.sp-list { list-style: none; margin: 0; padding: 0; }
+.sp-step { display: flex; align-items: flex-start; gap: 10px; padding: 4px 0; line-height: 1.4; font-size: 13.5px; }
+.sp-step .sp-icon { flex: none; margin-top: 2px; }
+.sp-title { min-width: 0; flex: 1 1 180px; }
+.sp-step { flex-wrap: wrap; }
+.sp-step.is-done { color: var(--text-3); }
+.sp-step.is-now { font-weight: 600; }
+.sp-step.is-todo { color: var(--text-2); }
+.sp-who { margin-left: auto; padding-left: 10px; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-3); font-weight: 400; white-space: nowrap; }
+.sp-blocked { color: var(--amber); font-weight: 600; }
+.sp-done-fill { fill: var(--text-3); }
+.sp-blocked-fill { fill: var(--amber); }
+.sp-done-mark { stroke: var(--surface-2); fill: none; }
+.sp-ring { stroke: var(--border-3); }
+.sp-arc { stroke: var(--text); }
+.sp-todo { stroke: var(--text-3); }
+.sp-spin { animation: sp-spin 1s linear infinite; transform-origin: 50% 50%; }
+@keyframes sp-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .sp-spin { animation: none; } }
+.sp-done-when { color: var(--text-3); font-size: 12px; margin-top: 6px; }
+.sp-bar { height: 3px; border-radius: 2px; background: var(--border); overflow: hidden; margin: 2px 0 8px; }
+.sp-bar b { display: block; height: 100%; background: var(--violet); transition: width var(--dur) var(--ease); }

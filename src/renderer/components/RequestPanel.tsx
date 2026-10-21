@@ -39,7 +39,8 @@ import { HarnessMark, IconQuestion, IconShield } from './Icons';
 import { Kbd } from './ui';
 import { ChoiceCard } from './genui/ChoiceCard';
 
-type Variant = 'lane' | 'tile' | 'orchestrator' | 'compact' | 'window';
+/** plain = a question alone, inside a host card that already says who asks (a Strategist's plan card, StrategyPanel.tsx) */
+type Variant = 'lane' | 'tile' | 'orchestrator' | 'compact' | 'window' | 'plain';
 
 /** The raw command of a permission: its first line, the rest unfolded with a click (never hidden: the user approves it). */
 function RawCommand({ raw, testBase, onToggle }: { raw: string; testBase: string; onToggle: () => void }) {
@@ -82,7 +83,7 @@ export function RequestPanel(p: PanelProps) {
   // "Vai alla chat" where the chat is not already on screen around the card: the lane, the Orchestrator, the layer
   const open = p.command?.onOpen ?? (p.variant === 'lane' || p.variant === 'orchestrator' ? () => focusChat(p.req.chatId) : undefined);
   // the turn's prose one click away, except in the global layer (p.command: its page can not read the chat)
-  return <CommandRequest req={p.req} variant={p.variant} chatTitle={p.chatTitle} harness={p.harness} testid={p.testid} onEscape={p.onEscape} onLater={p.onLater} withContext={!p.command} {...p.command} onOpen={open} />;
+  return <CommandRequest req={p.req} variant={p.variant === 'plain' ? 'tile' : p.variant} chatTitle={p.chatTitle} harness={p.harness} testid={p.testid} onEscape={p.onEscape} onLater={p.onLater} withContext={!p.command} {...p.command} onOpen={open} />;
 }
 
 /** A half-given answer (a step of several, a free text being written) per request: it survives the panel going away
@@ -316,6 +317,25 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
         {variant === 'compact' && <AskContext req={req} defaultOpen={false} testBase={testBase} onToggle={refocus} />}
         <div className="need-opts">{chips()}</div>
         {laterBtn && <div className="ask-later-row">{laterBtn}</div>}
+      </div>
+    );
+  }
+
+  if (variant === 'plain' && q) {
+    return (
+      <div {...common} className={`ask-plain ${sent ? 'sent' : ''}`}>
+        <div className="ask-plain-q" data-testid={`${testBase}-q`}>{title}{stepBadge}</div>
+        <div className="ask-plain-opts" role={q.multiSelect ? 'group' : undefined}>
+          {choiceCards()}
+          {canOther && (other === null ? (
+            <button type="button" className="ask-plain-other" onClick={() => setOther('')} disabled={sent} data-testid={`${testBase}-other`}>
+              {otherKey && <Kbd>{otherKey}</Kbd>}<span>{t('genui.request.ownWords')}</span>
+            </button>
+          ) : otherBox(false))}
+        </div>
+        {q.multiSelect && (
+          <button type="button" className="btn btn-primary btn-s" onClick={() => apply(confirmPicks(req, draft))} disabled={sent || draft.picks.length === 0} data-testid={`${testBase}-confirm`}>{t('genui.request.confirm')} <Kbd>{t('genui.request.enter')}</Kbd></button>
+        )}
       </div>
     );
   }

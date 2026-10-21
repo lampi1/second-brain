@@ -18,6 +18,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   instructions; Esc or «Chiudi senza salvare» goes back to the cards, nothing kept.
 
 ### Added
+- **The Strategist plans with you** (owner, 2026-10-21; ADR 0108): a message sent with «Strategist» ticked opens a
+  Strategist that first asks what you really want, one question at a time, then proposes a short plan of plain steps
+  to approve («Approva e parti» / «Cambia qualcosa») and only then delegates; its strip shows the steps as a Claude
+  Code-style checklist. With "Popup" on, its questions open in the questions window.
 - **Five work roles, judged by facts, levelled honestly** (owner, 2026-10-20; ADR 0100): Strategist, Scout, Artisan,
   Sentinel, Herald beside the Orchestrator (Router, Judge and Scribe retired, their data mapped to a successor). A run
   is a verified success from the facts (every done criterion met, no correction, not redone in 7 days); a level counts

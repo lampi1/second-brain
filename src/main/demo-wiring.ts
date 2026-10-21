@@ -6,6 +6,7 @@
 // every page load (ui:command 'clock'). The comparison queue (compare/queue.ts) is not wired here: the demo runs no
 // engine, so its side b never runs (its experiments are switched in memory, demo.ts).
 import { sysEn, type SysCode, type SysParams } from '../shared/sys';
+import type { StrategyPlan } from '../shared/strategy';
 import { app, safeStorage } from 'electron';
 import type { BrowserHandoff, CliStatus, PendingRequest } from '../shared/contract';
 import { ConfigStore } from './brain/config';
@@ -182,6 +183,8 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     clearThumbs: () => browser.clearThumbs(),
     /** a delegation tree under a Strategist (README shots: the Grindhouse's thread cards) */
     tree: () => { const t = demoTree(now()); chats.add(t.chats, t.items); },
+    /** a Strategist's plan with the user as it would be at a moment (e2e: its strip asking, proposing, under way) */
+    plan: (chatId: string, plan: StrategyPlan | null) => chats.patch(chatId, { plan: plan ?? undefined }),
     /** a feed event, as the brain would publish it (e2e: toasts, notification center, badges) */
     event: (e: { kind: string; title: string; detail?: string; chatId?: string }) => brain.publish([e]),
     /** show_ui as the chat would call it (e2e: a visual in the chat, in its Orchestrator, on its next question); the error text on a wrong call */

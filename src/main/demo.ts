@@ -15,6 +15,7 @@ import type {
 import type { AgentChildren, ChildObservation } from '../shared/agents';
 import { sysEn } from '../shared/sys';
 import { ROLE_DEFAULTS, type WorkRoleId } from '../shared/roles';
+import { PLAN_APPROVED, planChange, withClarified } from '../shared/strategy';
 import type { BrainService, ChatService, FeedInput } from './services';
 import type { ConfigStore } from './brain/config';
 import { BrainApi, checkApiPath, type LocalApi } from './brain/api';
@@ -119,6 +120,15 @@ export function demoTree(E: number): { chats: ChatSummary[]; items: Record<strin
     { costUsd: 0.09, lastText: 'Lancio dotnet test: 41 su 42 finora.' }, artisan.id, ['Esito della suite']);
   const herald = node('tree-herald', 'herald', 'Herald', 'Note di rilascio', 'Scrivi le note di rilascio quando il fix è in main.', 1,
     { costUsd: 0.02, lastText: 'Preparo la bozza, la chiudo quando Artisan finisce.' }, lead.id, ['Bozza delle note']);
+  // its plan, approved by the user: what it asked, the steps and how far they got (ADR 0108)
+  lead.plan = { phase: 'running', at: E - 15 * MIN, doneWhen: 'I test ordini passano e le note sono pronte.',
+    clarified: [{ q: 'Dove', a: 'Carrello, ordine e reso' }, { q: 'Offerte', a: 'No, solo a prezzo pieno' }],
+    steps: [
+      { title: 'Trovo dove si calcola lo sconto oggi', role: 'scout', state: 'done', chatIds: [scout.id], startedAt: E - 16 * MIN, endedAt: E - 11 * MIN },
+      { title: 'Applico lo sconto % sul prezzo pieno, un solo arrotondamento', role: 'artisan', state: 'now', chatIds: [artisan.id], startedAt: E - 10 * MIN },
+      { title: 'Verifico con la suite ordini', role: 'sentinel', state: 'todo' },
+      { title: 'Scrivo le note di rilascio', role: 'herald', state: 'now', chatIds: [herald.id], startedAt: E - 1 * MIN },
+    ] };
   const chats = [lead, scout, artisan, sentinel, herald];
   const items: Record<string, ChatItem[]> = Object.fromEntries(chats.map(c => [c.id, [
     { kind: 'user', id: `${c.id}-u1`, at: c.run!.startedAt, text: c.run!.goal } as ChatItem,
@@ -550,6 +560,9 @@ export class DemoChats implements ChatService {
     if (this.failNextAnswer) { this.failNextAnswer = false; throw new Error('Rete non disponibile (demo).'); }
     this.resolvePending(req);
     this.answered.push({ chatId, requestId, answer });
+    // a Strategist still asking: the answer joins its "already clear" lines (ADR 0108)
+    const plan = this.chats.get(chatId)?.plan;
+    if (plan && (plan.phase === 'asking' || plan.phase === 'revising') && answer.kind === 'question' && req.questions?.length) this.patch(chatId, { plan: withClarified(plan, req.questions, answer.answers) });
     const key = `${chatId}/${requestId}`;
     const w = this.waiters.get(key);
     log.info('demo', 'request answered', { chat: chatId, data: { requestId, kind: answer.kind } });
@@ -558,6 +571,16 @@ export class DemoChats implements ChatService {
     this.continuations.delete(requestId);
     if (cont) this.startRun(chatId, run => cont(run, answer));
     else this.patch(chatId, { state: 'idle' });
+  }
+
+  /** the user's click on a Strategist's proposed plan (ADR 0108): its phase moves on, the Strategist gets the message */
+  async planDecide(chatId: string, decision: 'approve' | 'change', at: number, text?: string): Promise<void> {
+    const plan = this.chats.get(chatId)?.plan;
+    if (!plan || plan.phase !== 'proposed') throw new Error('Questo piano non aspetta più una risposta.');
+    if (plan.at !== at) throw new Error('Il piano è cambiato nel frattempo: rileggilo.');
+    if (decision === 'change' && !text?.trim()) throw new Error('Scrivi cosa cambiare (al massimo 2000 caratteri).');
+    this.patch(chatId, { plan: { ...plan, phase: decision === 'approve' ? 'running' : 'revising', at: this.now() } });
+    this.push(chatId, { kind: 'user', id: this.nextId(), at: this.now(), text: decision === 'approve' ? PLAN_APPROVED : planChange(text!) });
   }
 
   async stop(chatId: string): Promise<void> {

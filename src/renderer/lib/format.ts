@@ -91,9 +91,11 @@ export function folderName(cwd: string): string {
 export type Tone = 'run' | 'wait' | 'done' | 'idle' | 'err' | 'off' | 'orchestrator';
 
 /** The state pill of a chat: Italian label + color tone. */
-export function stateInfo(c: Pick<ChatSummary, 'state' | 'isOrchestrator' | 'pending' | 'queued' | 'closedAt'> & { agentChildren?: ChatSummary['agentChildren'] }): { label: string; tone: Tone } {
+export function stateInfo(c: Pick<ChatSummary, 'state' | 'isOrchestrator' | 'pending' | 'queued' | 'closedAt'> & { agentChildren?: ChatSummary['agentChildren']; plan?: ChatSummary['plan'] }): { label: string; tone: Tone } {
   const s: ChatState = c.state;
   if (s === 'waiting' || c.pending > 0) return { label:t('ui.state.waiting'), tone: 'wait' };
+  // a Strategist's plan waiting for «Approva e parti» (ADR 0108), once its turn is over
+  if (c.plan?.phase === 'proposed' && !c.closedAt && (s === 'idle' || s === 'closed')) return { label:t('ui.state.waiting'), tone: 'wait' };
   // an agent's start or turn waiting for the machine's load (ADR 0036): not finished
   if (c.queued && !c.closedAt && s !== 'running' && s !== 'error') return { label:t('ui.state.queued'), tone: 'off' };
   if (s === 'running') return { label:t('ui.state.running'), tone: 'run' };
