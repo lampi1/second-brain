@@ -804,11 +804,11 @@ export class ChatManager implements ChatService {
     return { ...adm.load(), enabled: this.opts.admission!.limits().enabled, waiting: adm.list().map(e => ({ chatId: e.key, kind: e.kind, position: e.position, since: e.since })) };
   }
 
-  /** The delivery of a message (send() decided it goes now). */
+  /** The delivery of a message (send() decided it goes now). One at a time per chat, on every engine: a later message
+   *  whose steps end sooner (a faster recall, no checkpoint to take) never reaches the engine before an earlier one, so
+   *  the engine reads them in the transcript's order (#127: the user's message and a child's mail at once). */
   private deliver(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false): Promise<void> {
     const run = () => this.deliverNow(chatId, text, images, resumed, from, liveOnly);
-    if (!this.opts.recall || engineOf(this.need(chatId).s.harness)?.kind === 'claude') return run();
-    // A later, faster recall must never deliver its message before an earlier one in this chat.
     const previous = this.deliveries.get(chatId);
     const delivery = previous ? previous.catch(() => {}).then(run) : run();
     this.deliveries.set(chatId, delivery);

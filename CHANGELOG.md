@@ -131,6 +131,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   "Discusso", which leads back to the Orchestrator. The command card's "Apri chat" (an existing chat) is now "Vai alla
   chat".
 ### Fixed
+- **Messages reach a chat's engine in the order shown** (#127): deliveries to one chat go one at a time on every
+  engine, so the user's message and a child's mail arriving together are never swapped by a checkpoint still running.
 - **Pulse's Apply works and says why when it cannot** (#128): a role keeps the model it already runs with when only
   its text changes (Pulse's preset 'sonnet' was refused as unknown, so every learned rule failed); a refused proposal
   now shows and logs its real reason instead of «Proposta non applicata».
