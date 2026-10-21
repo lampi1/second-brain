@@ -8,8 +8,8 @@
 import path from 'node:path';
 import { checkedKnowhow, checkedPackIdentity, packName } from '../../shared/agent-pack';
 import type { Effort, Harness, NewChat } from '../../shared/contract';
-import { MAX_CONTEXT_RANGE, PERMISSION_CEILINGS, type AgentAuthor, type AgentCatalog, type AgentDraft, type AgentModelChoice, type AgentOwnerSnapshot, type AgentProfile, type AgentVersion, type PermissionCeiling } from '../../shared/agents';
-import { MODEL_TIERS, PULSE_ID, ROLE_DEFAULTS, ROLE_IDS, ROLE_PREAMBLE, currentLaunches, currentRoleId, isRetiredRoleId, isRoleId, isWorkRole, roleName, tierRank, type ModelTier, type RoleId } from '../../shared/roles';
+import { MAX_CONTEXT_RANGE, PERMISSION_CEILINGS, type AgentAuthor, type AgentCatalog, type AgentDraft, type AgentModelChoice, type AgentOwnerSnapshot, type AgentProfile, type AgentToolPolicy, type AgentVersion, type PermissionCeiling } from '../../shared/agents';
+import { FLASH_ID, MODEL_TIERS, PULSE_ID, ROLE_DEFAULTS, ROLE_IDS, ROLE_PREAMBLE, currentLaunches, currentRoleId, isRetiredRoleId, isRoleId, isWorkRole, roleName, tierRank, type ModelTier, type RoleId } from '../../shared/roles';
 import { characterOf, isCharacterId } from '../../shared/characters';
 import { readLocal, writeLocal } from './local-store';
 import { AgentHistory, behaviourOf, firstVersion, sameBehaviour } from './versions';
@@ -26,7 +26,13 @@ const AUTHORS: readonly AgentAuthor[] = ['default', 'user', 'maintenance'];
 const obj = (v: unknown): Record<string, unknown> => v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {};
 const count = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) >= 1;
 const has = <T>(list: readonly T[], v: unknown): v is T => (list as readonly unknown[]).includes(v);
-const CATALOG_IDS: readonly string[] = [...ROLE_IDS, PULSE_ID];
+const CATALOG_IDS: readonly string[] = [...ROLE_IDS, PULSE_ID, FLASH_ID];
+/** the entries that are not roles: never delegated, never in the role count */
+const isBackground = (id: string): boolean => id === PULSE_ID || id === FLASH_ID;
+/** «Flash» (ADR 0107): its face and default instructions; its read-only tools and plan ceiling are fixed (behaviour) */
+const FLASH = { name: 'Flash', purpose: 'Risposte al volo accanto all’Orchestrator: vede la sua chat, legge, non cambia nulla',
+  instructions: 'Answer fast and briefly, in the user\'s language. Lead with the answer.' };
+const FLASH_TOOLS: AgentToolPolicy = { allow: ['read', 'web'] };
 const PULSE = { name: 'Pulse', purpose: 'Idee, consigli, promemoria, collegamenti e frase della Dashboard',
   instructions: 'Use only the digest you are given. Cite the sources. Propose a few concrete cards without inventing facts. Take no action.' };
 
@@ -139,7 +145,7 @@ export class AgentCatalogService {
       if (typeof p.createdAt !== 'number' || !Number.isFinite(p.createdAt) || typeof p.updatedAt !== 'number' || !Number.isFinite(p.updatedAt)
         || !count(p.version) || !count(p.activeVersion) || p.activeVersion > p.version || !has(AUTHORS, p.lastEditedBy) || typeof p.userLocked !== 'boolean'
         || (trial && (!count(trial.version) || trial.version > p.version || !count(trial.baseline) || trial.baseline > p.version || typeof trial.startedAt !== 'number'))) throw new Error('Versione del ruolo non valida.');
-      out.push({ ...this.face(p.id), ...this.behaviour(p, p.id, false), id: p.id, scope: p.id === PULSE_ID ? 'background' : 'role',
+      out.push({ ...this.face(p.id), ...this.behaviour(p, p.id, false), id: p.id, scope: isBackground(p.id) ? 'background' : 'role',
         createdAt: p.createdAt, updatedAt: p.updatedAt, version: p.version, activeVersion: p.activeVersion,
         ...(trial ? { trial: { version: trial.version as number, baseline: trial.baseline as number, startedAt: trial.startedAt as number } } : {}),
         lastEditedBy: p.lastEditedBy, userLocked: p.userLocked });
@@ -149,6 +155,7 @@ export class AgentCatalogService {
   /** The fixed part of an entry: name, purpose and character. */
   private face(id: string): Pick<AgentProfile, 'name' | 'purpose' | 'avatar'> {
     if (isRoleId(id)) { const r = ROLE_DEFAULTS[id]; return { name: r.name, purpose: r.summary, avatar: { kind: 'character', value: id } }; }
+    if (id === FLASH_ID) return { name: FLASH.name, purpose: FLASH.purpose, avatar: { kind: 'character', value: FLASH_ID } };
     return { name: PULSE.name, purpose: PULSE.purpose, avatar: { kind: 'character', value: 'pulse' } };
   }
   /** The engine a new or reset role starts on: the user's chosen engine (onboarding, Settings.orchestratorChats.harness)
@@ -167,6 +174,9 @@ export class AgentCatalogService {
       return { instructions: PULSE.instructions, engine: p.engine, model: p.model, ...(p.effort ? { effort: p.effort } : {}), tools: { allow: [] }, permissionCeiling: 'plan',
         tier: 'light', tierMax: 'light', launches: [], skills: [] };
     }
+    // Flash starts on the user's engine with the mid tier's model (as Lampo did, ADR 0105), reading only
+    if (id === FLASH_ID) return { instructions: FLASH.instructions, engine: this.defaultEngine(), model: null, tools: structuredClone(FLASH_TOOLS), permissionCeiling: 'plan',
+      tier: 'mid', tierMax: 'mid', launches: [], skills: [] };
     const r = ROLE_DEFAULTS[id as RoleId], engine = this.defaultEngine();
     return { instructions: r.instructions, engine, model: null, tools: { allow: engineOf(engine)?.kind === 'api' ? ['read'] : [...r.tools] }, permissionCeiling: r.ceiling,
       tier: r.tier, tierMax: r.tierMax, launches: [...r.launches], skills: [...r.skills] };
@@ -176,7 +186,7 @@ export class AgentCatalogService {
     const missing = CATALOG_IDS.filter(id => !this.profiles.some(p => p.id === id));
     if (!missing.length) return;
     const at = this.now();
-    const added = missing.map(id => ({ ...this.face(id), ...this.defaults(id), id, scope: id === PULSE_ID ? 'background' as const : 'role' as const,
+    const added = missing.map(id => ({ ...this.face(id), ...this.defaults(id), id, scope: isBackground(id) ? 'background' as const : 'role' as const,
       createdAt: at, updatedAt: at, version: 1, activeVersion: 1, lastEditedBy: 'default' as const, userLocked: false }) satisfies AgentProfile);
     try { this.commit(this.ordered([...this.profiles, ...added]), added.map(p => firstVersion(p, 'default', 'Ruolo predefinito', at))); }
     catch (e) { this.problem = this.store.problem ?? `Il catalogo dei ruoli non è stato scritto: ${errText(e)}`; this.profiles = this.ordered([...this.profiles, ...added]); }
@@ -273,6 +283,9 @@ export class AgentCatalogService {
     if (Array.isArray(p.launches)) p.launches = currentLaunches(p.launches as string[]);
     if (!Array.isArray(p.launches) || !p.launches.every(isWorkRole) || new Set(p.launches).size !== p.launches.length || (p.launches as string[]).includes(id)) throw new Error('Ruoli avviabili non validi: solo ruoli di lavoro, mai sé stesso.');
     if (id === PULSE_ID && (p.launches as unknown[]).length) throw new Error('Pulse non avvia ruoli.');
+    if (id === FLASH_ID && (p.launches as unknown[]).length) throw new Error('Flash non avvia ruoli.');
+    // Flash reads and answers, whatever is stored (ADR 0105, 0107): read and web tools, plan ceiling
+    if (id === FLASH_ID) { p.tools = structuredClone(FLASH_TOOLS); p.permissionCeiling = 'plan'; }
     if (!Array.isArray(p.skills) || p.skills.length > 40 || !p.skills.every(packName) || new Set(p.skills).size !== p.skills.length) throw new Error('Abilità non valide: nomi di abilità del brain, al massimo 40.');
     return { instructions: text(p.instructions, 8000, 'Istruzioni', true), engine, model,
       ...(p.effort ? { effort: p.effort as Effort } : {}),
@@ -406,13 +419,26 @@ export class AgentCatalogService {
   }
 
   /** What a chat starts with. A role chat runs on the role's engine with its tier's model (a delegation may ask a tier up
-   *  to tierMax); the Orchestrator keeps the session's engine and model; a chat without a role is plain. */
+   *  to tierMax); the Orchestrator keeps the session's engine and its card's model (when on that engine), else the
+   *  session's; Flash runs on its card's engine and model; a chat without a role is plain. */
   resolve(req: NewChat): ResolvedRole {
     if (req.orchestrator) {
       const p = this.profiles.find(x => x.id === 'orchestrator');
+      // its card's model when the card is on this engine (ADR 0107: the Orchestrator and Flash each have their own)
+      if (p?.model && p.engine === req.harness) req = { ...req, model: p.model };
       return { request: req, owner: orchestratorOwner(req.harness, req.model ?? null, p), instructions: p?.instructions ?? ROLE_DEFAULTS.orchestrator.instructions,
         policy: p && (p.tools || p.permissionCeiling) ? { tools: p.tools ? structuredClone(p.tools) : null, ceiling: p.permissionCeiling } : null,
         skills: [], launches: p?.launches ?? [...ROLE_DEFAULTS.orchestrator.launches] };
+    }
+    // Flash (ADR 0107): its card's engine and model (else its tier's), its instructions; a plain owner (no run, no role
+    // gate); ChatManager adds the fixed read-only frame and policy
+    if (req.quick) {
+      const p = this.profiles.find(x => x.id === FLASH_ID);
+      if (!p) return { request: req, owner: plainOwner(req.harness, req.model ?? null), instructions: '', policy: null, skills: [], launches: [] };
+      const model = p.model ?? this.d.tierModel?.(p.engine, p.tier) ?? null;
+      const { model: _m, effort: _e, ...rest } = req; void _m; void _e;
+      return { request: { ...rest, harness: p.engine, ...(model ? { model } : {}), ...(p.effort ? { effort: p.effort } : {}) }, owner: { ...plainOwner(p.engine, model), name: p.name },
+        instructions: p.instructions, policy: { tools: structuredClone(FLASH_TOOLS), ceiling: 'plan' }, skills: [], launches: [] };
     }
     if (req.roleId === undefined) return { request: req, owner: plainOwner(req.harness, req.model ?? null), instructions: '', policy: null, skills: [], launches: [] };
     if (req.roleId === 'orchestrator') throw new Error('L’Orchestrator è il coordinatore: apri la sua chat, non una chat di lavoro.');

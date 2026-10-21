@@ -12,7 +12,7 @@
 import { Select } from './Select';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { MAX_CONTEXT_RANGE, type AgentDraft, type AgentMetrics, type AgentProfile, type AgentVersion } from '@shared/agents';
-import { MODEL_TIERS, WORK_ROLE_IDS, PULSE_ID, isRoleId, roleName, tierRank, type ModelTier } from '@shared/roles';
+import { MODEL_TIERS, WORK_ROLE_IDS, FLASH_ID, isRoleId, roleName, tierRank, type ModelTier } from '@shared/roles';
 import { characterOf } from '@shared/characters';
 import { agentHistory, refreshAgents, resetAgent, restoreAgentVersion, saveAgent, useAgents } from '../store/agents';
 import { toast, ui } from '../store/ui';
@@ -181,7 +181,7 @@ function RoleEditor({ profile, draft, busy, canSave, tierOk, change, firstField,
           {tierOk ? <small className="agent-editor-note">{t('studio.tierMaxHint')}</small> : <p role="alert">{t('studio.tierInvalid')}</p>}
           {choice?.effort && <label className="field"><span>{t('studio.effort')}</span><Select value={draft.effort ?? ''} onChange={e => change({ effort: EFFORTS.find(effort => effort === e.target.value) })}><option value="">{t('studio.defaultModel')}</option>{EFFORTS.map(e => <option key={e} value={e}>{effortLabel(e)}</option>)}</Select></label>}
           <p className="agent-editor-note" data-testid="agent-editor-perms-note">{t('perm.editorNote')}</p>
-          {profile.id !== PULSE_ID && <fieldset className="agent-editor-checks" data-testid="agent-launches"><legend>{t('studio.launches')}</legend><p className="agent-editor-note">{t('studio.launchesHint')}</p>
+          {profile.scope === 'role' && <fieldset className="agent-editor-checks" data-testid="agent-launches"><legend>{t('studio.launches')}</legend><p className="agent-editor-note">{t('studio.launchesHint')}</p>
             <div className="agent-editor-checkgrid">{WORK_ROLE_IDS.filter(id => id !== profile.id).map(id => <label key={id} className="field-check"><input type="checkbox" checked={draft.launches.includes(id)} onChange={() => toggleLaunch(id)} /><AgentAvatar avatar={{ kind: 'character', value: id }} name={roleName(id)} size={20} /><span>{roleName(id)}</span></label>)}</div></fieldset>}
           <label className="field"><span>{t('studio.maxContext')}</span><input type="number" inputMode="numeric" min={MAX_CONTEXT_RANGE.min / 1000} max={MAX_CONTEXT_RANGE.max / 1000} step={10}
             value={draft.maxContext ? Math.round(draft.maxContext / 1000) : ''} placeholder={t('studio.maxContextDefault')} data-testid="agent-max-context"
@@ -286,7 +286,7 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
       {resetting && <div className="ad-banner" role="group" aria-label={t('studio.reset')} data-testid="agent-reset-confirm"><span>{t('studio.resetConfirm')}</span>
         <button type="button" className="btn btn-primary btn-s" disabled={busy} onClick={onResetConfirm} autoFocus>{t('studio.resetDo')}</button>
         <button type="button" className="btn btn-ghost btn-s" onClick={onResetCancel}>{t('studio.cancel')}</button></div>}
-      {background && <p className="ad-hint">{t('studio.background')}</p>}
+      {background && <p className="ad-hint">{t(profile.id === FLASH_ID ? 'studio.flash' : 'studio.background')}</p>}
       {status}
       <dl className="ad-stats" aria-label={t('agentDetail.results')}>
         {numbers.map(n => <div key={n.label} title={[n.label, n.value ?? unknown, n.note].filter(Boolean).join(' · ')}>

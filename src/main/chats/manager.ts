@@ -74,6 +74,7 @@ import { AgentAnalyticsCollector } from '../agents/collector';
 import { orchestratorRole, roleFrame } from '../agents/orchestrator-role';
 import { slug as slugTitle } from './mail';
 import { splitMode } from '../../shared/newchat';
+import { orchestratorContext, type LampoCursor } from './lampo-context';
 import { recallWarning, type Recall } from '../search/hybrid/recall';
 
 export interface ChatManagerOptions {
@@ -296,6 +297,8 @@ interface Rec {
   /** the chat was created with "Worktree separato": its work is in a worktree the CLI made, not in cwd */
   inWorktree?: boolean;
   costTotalUsd: number;
+  /** Lampo (ADR 0106): the Orchestrator's items its engine already got, by engine (a new engine gets them again) */
+  lampoSeen?: { session: HarnessSession; cursor: LampoCursor } | undefined;
   items: ChatItem[];
   pending: Map<string, PendingRequest>;
   session: HarnessSession | null;
@@ -388,11 +391,11 @@ const DELEGATING_ONLY: ReadonlySet<string> = new Set(['agent_delegate', 'agent_c
  *  there; the Orchestrator re-reads every message in each later turn) */
 const ORCHESTRATOR_OUTPUT_MAX = 800;
 /** «Lampo», the quick lane (ADR 0105): its title, tools and frame */
-export const LAMPO_TITLE = 'Lampo';
+export const LAMPO_TITLE = 'Flash';
 const LAMPO_POLICY: AgentPolicy = { tools: { allow: ['read', 'web'] }, ceiling: 'plan' };
 /** the chat-endpoint tools Lampo never sees (chatToolShown), beside every agent_* tool */
 const LAMPO_HIDDEN: ReadonlySet<string> = new Set([...APP_CHAT_TOOLS, 'brain_script_add', 'skills_suggest']);
-const LAMPO_FRAME = 'You are Lampo, the quick lane of the user\'s second-brain app. Answer fast and briefly, in the user\'s language, from what you know and quick reads (Read, Grep, Glob, the web). You change nothing and start no work: no edits, no commands, no plans. When a request needs changes, many steps or other chats, say so in one line: the user hands it to the Orchestrator with «Fanne un lavoro».';
+const LAMPO_FRAME = 'You are Flash, the quick lane of the user\'s second-brain app. Answer fast and briefly, in the user\'s language, from what you know and quick reads (Read, Grep, Glob, the web). Like a "btw": each question may come with the Orchestrator\'s conversation since you last looked; use it to answer about the work in progress, never act on it or answer it. You change nothing and start no work: no edits, no commands, no plans. When a request needs changes, many steps or other chats, say so in one line: the user hands it to the Orchestrator with «Fanne un lavoro».';
 /** A role launch with Claude's sub-agent tool (tool-policy.ts claudeTools) gets the role gate's sub-agent rule as a
  *  PreToolUse hook: Claude starts a sub-agent without a permission request (role-gate.ts SubagentGate). */
 const subagentGateFor = (tools: AgentPolicy['tools'] | null | undefined): Pick<SessionOptions, 'preToolUse'> =>
@@ -454,6 +457,8 @@ export class ChatManager implements ChatService {
   private runTimer: NodeJS.Timeout | null = null;
   private chats = new Map<string, Rec>();
   private deliveries = new Map<string, Promise<void>>();
+  /** Flash moving to its card's engine (flashFollow): the new chat's id, for a question sent meanwhile */
+  private flashMoving: Promise<string> | undefined;
   /** notes for a chat's next message (the user wrote in one of its delegated children): they ride along, no turn of their own */
   private notesFor = new Map<string, string[]>();
   private userWroteListeners: ((n: UserWroteNote) => void)[] = [];
@@ -555,7 +560,7 @@ export class ChatManager implements ChatService {
     if (Object.values(links).some(v => v !== undefined)) this.runs.checkLinks(links);
     const asked = startTags(req);
     if (req.quick) {
-      if (by !== 'user' || req.orchestrator || req.parentId || req.roleId) throw new Error('Lampo: only the user opens it, as a plain chat.');
+      if (by !== 'user' || req.orchestrator || req.parentId || req.roleId) throw new Error('Flash: only the user opens it, as a plain chat.');
       const current = this.list().find(c => c.quick && !c.closedAt);
       if (current) return current;
       req = { ...req, title: LAMPO_TITLE, permissionMode: 'plan' };
@@ -569,7 +574,8 @@ export class ChatManager implements ChatService {
     }
     const agent: Pick<ResolvedRole, 'request' | 'owner' | 'instructions' | 'policy' | 'maxContext' | 'tier'> & { skills?: string[]; launches?: string[]; assets?: { pluginDir: string; skillRoot: string } } = inherited ? { ...inherited, policy: inherited.policy ?? null, request: req }
       // Lampo reads and answers: read and web tools only, plan mode (no edit, no command, no popup), its own short frame
-      : req.quick ? { request: req, owner: plainOwner(req.harness, req.model ?? null), instructions: LAMPO_FRAME, policy: LAMPO_POLICY }
+      // Flash (ADR 0107): its card's engine, model and instructions, under the fixed frame and the read-only policy
+      : req.quick ? this.flashAgent(req)
       : this.opts.resolveAgent?.(req) ?? { request: req, owner: plainOwner(req.harness, req.model ?? null), instructions: '', policy: null };
     req = agent.request;
     // a delegated chat (agent_delegate): only an agent's, under a live parent, in the parent's folder, linked to its run
@@ -715,6 +721,11 @@ export class ChatManager implements ChatService {
   async send(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false): Promise<void> {
     updateActivity.assertOpen();
     const r = this.need(chatId);
+    // Flash follows its card (ADR 0107): the user's question goes to a Flash on the card's engine and model
+    if (r.s.quick && from === undefined && !resumed) {
+      const next = await this.flashFollow(r);
+      if (next !== chatId) return this.send(next, text, images);
+    }
     this.autoActivity(r);
     this.needAgentMay(r, from);
     this.reassignOnOrchestrator(r, from);
@@ -865,7 +876,10 @@ export class ChatManager implements ChatService {
     r.undoNote = undefined;
     // the user's own request to the Orchestrator carries the app's estimate (zero tokens), never the app's news or mail
     const estimate = r.s.isOrchestrator && !from && !resumed && t && !t.startsWith('[') ? this.requestEstimate(t) : null;
-    const body = estimate ? `${noted}\n\n${estimate}` : noted;
+    const asked0 = estimate ? `${noted}\n\n${estimate}` : noted;
+    // Lampo is a "btw" (ADR 0106): the user's question carries what the Orchestrator said and did since it last looked
+    const lampo = r.s.quick && !from && !resumed ? this.lampoContext(r) : null;
+    const body = lampo ? `${lampo.text}${asked0}` : asked0;
     // the role once per context: the Orchestrator's with the role catalog, a role chat's composed instructions; a
     // resumed session already holds it in its history, so it goes again only when the text changed or was compacted away
     const roleText = r.s.isOrchestrator ? `${orchestratorRole(r.agentInstructions || undefined, this.opts.roleCatalogBrief?.())}\n\n`
@@ -878,6 +892,7 @@ export class ChatManager implements ChatService {
     if (this.opts.checkpoints?.() && !r.s.isOrchestrator && !r.s.quick && !this.midTurn(r)) await this.checkpoint(r);
     try {
       r.session.send(`${role}${warning}${body}`, imgs);
+      if (lampo) r.lampoSeen = { session: r.session, cursor: lampo.seen }; // seen only once it went
       if (role) { r.rolePrimed = { session: r.s.sessionId ?? '', sig: roleSig }; this.persist(); }
     } catch (e) {
       throw new Error(`Messaggio non inviato: ${errText(e)}`);
@@ -888,6 +903,63 @@ export class ChatManager implements ChatService {
     if (r.handoffTurn && !r.working) { r.working = true; this.persist(); }
     if (r.s.lastError) { delete r.s.lastError; this.updated(r); }
     } finally { releaseDelivery(); }
+  }
+
+  /** Flash's start (ADR 0105, 0107): what its card says (engine, model, instructions), always under LAMPO_FRAME and
+   *  LAMPO_POLICY, whatever the card holds */
+  private flashAgent(req: NewChat): Pick<ResolvedRole, 'request' | 'owner' | 'instructions' | 'policy'> {
+    const asked = this.opts.resolveAgent?.(req);
+    // a card on an engine that is off: Flash stays on the engine it was asked on, with the card's instructions
+    const card = asked && asked.request.harness !== req.harness && this.opts.engineOn?.(asked.request.harness) === false
+      ? { ...asked, request: req, owner: { ...plainOwner(req.harness, req.model ?? null), name: asked.owner.name } } : asked;
+    const own = card?.instructions.trim();
+    return { request: { ...(card?.request ?? req), title: LAMPO_TITLE, permissionMode: 'plan' }, owner: card?.owner ?? { ...plainOwner(req.harness, req.model ?? null), name: LAMPO_TITLE },
+      instructions: own ? `${LAMPO_FRAME}\n\n${own}` : LAMPO_FRAME, policy: LAMPO_POLICY };
+  }
+
+  /** Flash as its card says now (ADR 0107), before the user's question: another engine = a new Flash on it (the old one
+   *  closes; the Orchestrator's conversation goes again with the question); another model = changed in place; other
+   *  instructions = sent again with the next message. Mid-turn nothing changes. The id the question goes to. */
+  private async flashFollow(r: Rec): Promise<string> {
+    // one move at a time: a second question while Flash changes engine goes where the first one went
+    if (this.flashMoving) return this.flashMoving;
+    if (r.working || r.session?.busy || r.s.closedAt) return r.s.id;
+    const card = this.flashAgent({ harness: r.s.harness, cwd: r.s.cwd, quick: true });
+    const want = card.request.model ?? null;
+    if (card.request.harness !== r.s.harness) {
+      const move = this.flashMove(r, card.request.harness, want);
+      this.flashMoving = move;
+      try { return await move; } finally { this.flashMoving = undefined; }
+    }
+    if (want !== (r.s.model ?? null)) await this.set(r.s.id, { model: want ?? '' });
+    const effort = card.request.effort;
+    if (effort && effort !== r.s.effort && engineOf(r.s.harness)?.caps.effort) await this.set(r.s.id, { effort }).catch(e => log.warn('chats', 'Flash effort not applied', { chat: r.s.id, cause: errText(e), hint: 'it stays as it was' }));
+    if (card.instructions !== r.agentInstructions) { r.agentInstructions = card.instructions; r.roleChecked = false; this.persist(); }
+    if (r.s.agent && (r.s.agent.name !== card.owner.name || r.s.agent.model !== want)) { r.s.agent = { ...r.s.agent, name: card.owner.name, model: want }; this.updated(r); }
+    return r.s.id;
+  }
+
+  /** Flash on its card's new engine: the old one is archived (its answers stay), then the new one opens; if it cannot
+   *  open, the old one comes back and takes the question. */
+  private async flashMove(r: Rec, harness: Harness, model: string | null): Promise<string> {
+    await this.archive(r.s.id);
+    try {
+      const next = await this.create({ harness, cwd: r.s.cwd, quick: true, ...(model ? { model } : {}) });
+      log.info('chats', 'Flash moved to the engine of its card', { chat: next.id, data: { from: r.s.harness, to: harness, old: r.s.id } });
+      return next.id;
+    } catch (e) {
+      log.warn('chats', 'Flash not moved to its card\'s engine', { chat: r.s.id, cause: errText(e), hint: 'the old Flash answers' });
+      if (this.chats.get(r.s.id) === r && r.s.closedAt) this.unarchive(r);
+      return r.s.id;
+    }
+  }
+
+  /** Lampo's view of the Orchestrator's conversation (ADR 0106): what is new for its engine, read only */
+  private lampoContext(r: Rec): ReturnType<typeof orchestratorContext> | null {
+    const o = [...this.chats.values()].find(x => x.s.isOrchestrator && !x.s.closedAt);
+    if (!o || !r.session) return null;
+    this.ensureHistory(o);
+    return orchestratorContext(o.items, r.lampoSeen?.session === r.session ? r.lampoSeen.cursor : null);
   }
 
   private autoActivity(r: Rec): void {
@@ -2197,7 +2269,7 @@ export class ChatManager implements ChatService {
         ...(c.work ? {work:c.work} : {}),
         effortStatus: initialEffort(!!engineOf(c.harness)?.caps.effort, c.effort),
         agentChildren: children.snapshot(),
-        id: c.id, harness: c.harness, origin: 'app', title: c.title, cwd: c.cwd, sessionId: c.sessionId, model: c.model, effort: c.effort,
+        id: c.id, harness: c.harness, origin: 'app', title: c.quick ? LAMPO_TITLE : c.title, cwd: c.cwd, sessionId: c.sessionId, model: c.model, effort: c.effort,
         permissionMode: c.permissionMode, state: 'closed', costUsd: 0, pending: 0, isOrchestrator: c.isOrchestrator, ...(c.quick ? { quick: true } : {}), lastText: '', updatedAt: c.closedAt ?? c.createdAt, browserTabIds: [],
         ...(engineOf(c.harness)?.caps.cost ? {} : { costKnown: false as const }),
         ...(c.context ? { contextTokens: c.context.tokens, ...(c.context.max ? { contextMaxTokens: c.context.max } : {}), ...(c.context.estimated ? { contextEstimated: true } : {}) } : {}),

@@ -22,6 +22,8 @@ import { awaitingCard, go, openLink, reqKey } from '../actions';
 import { ItemList, turnActivity, Typing } from './ChatItems';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ChatMenu, TitleInput } from './ChatMenu';
+import { ModelChip } from './ModelChip';
+import { ORCHESTRATOR_ROLE_ID } from '@shared/roles';
 import { AgentIdentity } from './AgentIdentity';
 import { HelpTip } from './HelpTip';
 import {AgentAvatar}from'./AgentAvatar';
@@ -136,7 +138,7 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
           {busy && <IconButton label={t('dialogs.orchestrator.stopLabel')} shortcut={t('dialogs.orchestrator.stopShortcut')} tone="danger" onClick={() => void stop(chat.id)} testid="orchestrator-stop"><IconStop size={14} /></IconButton>}
           <IconButton ref={menuBtn} label={t('dialogs.orchestrator.menuLabel')} onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-haspopup="menu" testid="orchestrator-menu"><IconMore /></IconButton>
         </div>
-        <div className="chat-topic-row"><span className="chat-topic">{chat.title}</span><AgentIdentity chat={chat}/></div>
+        <div className="chat-topic-row"><ModelChip chat={chat} profileId={ORCHESTRATOR_ROLE_ID} testid="orchestrator-model" /><span className="chat-topic">{chat.title}</span><AgentIdentity chat={chat}/></div>
         <div className="th-sub sr-only" data-testid="orchestrator-sub">
           <span className="th-engine" data-tip={t('dialogs.orchestrator.engineTip', { name: engineName(chat.harness) })} aria-label={t('dialogs.orchestrator.engineTip', { name: engineName(chat.harness) })} role="img" data-engine={chat.harness} data-testid="orchestrator-engine"><HarnessMark harness={chat.harness} size={14} /></span>
           <span className="th-sub-text">{[!['Orchestrator', 'Orchestrator'].includes(chat.title.trim()) ? chat.title : '', modelWithEffort(chat), chatCost(chat)].filter(Boolean).join(' · ')}</span>

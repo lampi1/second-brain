@@ -16,6 +16,9 @@ export type WorkRoleId = (typeof WORK_ROLE_IDS)[number];
 export const ORCHESTRATOR_ROLE_ID = 'orchestrator' satisfies RoleId;
 /** The background job behind the Dashboard's ideas (Pulse): a catalog entry that is never a role nor a delegate. */
 export const PULSE_ID = 'pulse';
+/** «Flash» (ADR 0107): the quick read-only lane beside the Orchestrator (a "btw"): a catalog entry with its own card and
+ *  model, never a role nor a delegate. */
+export const FLASH_ID = 'flash';
 export const isRoleId = (v: unknown): v is RoleId => typeof v === 'string' && (ROLE_IDS as readonly string[]).includes(v);
 export const isWorkRole = (v: unknown): v is WorkRoleId => isRoleId(v) && v !== 'orchestrator';
 
