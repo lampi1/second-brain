@@ -43,30 +43,30 @@ describe('verifiedVerdict', () => {
     const blocked = { report: { at: END, outcome: 'blocked', verified: 'no', summary: 's' } } as const;
     expect(verifiedVerdict(run({ ...blocked, outcome: { verdict: 'success', basis: 'human', at: END, by: 'user' } }), [], LATER)).toEqual({ verdict: 'success', basis: 'human' });
     expect(verifiedVerdict(run({ outcome: { verdict: 'partial', basis: 'reviewed-evidence', at: END, by: 'judge-sample' } }), [], LATER)).toEqual({ verdict: 'partial', basis: 'reviewed-evidence' });
-    expect(verifiedVerdict(run({ outcome: { verdict: 'fail', basis: 'orchestrator-opinion', at: END, by: 'o' } }), [], LATER)).toEqual({ verdict: 'success', basis: 'facts' });
-    expect(verifiedVerdict(run({ outcome: { verdict: 'unknown', basis: 'human', at: END, by: 'user' } }), [], LATER)).toEqual({ verdict: 'success', basis: 'facts' });
+    expect(verifiedVerdict(run({ outcome: { verdict: 'fail', basis: 'orchestrator-opinion', at: END, by: 'o' } }), [], LATER)).toBeNull();
+    expect(verifiedVerdict(run({ outcome: { verdict: 'unknown', basis: 'human', at: END, by: 'user' } }), [], LATER)).toBeNull();
     expect(verifiedVerdict(run(), [], END + DAY)).toBeNull(); // provisional
-    expect(verifiedVerdict(run(blocked), [], END + DAY)).toEqual({ verdict: 'fail', basis: 'facts' });
+    expect(verifiedVerdict(run(blocked), [], END + DAY)).toBeNull();
   });
-  it('reworkStartsOf follows reworkOf and continuedFrom', () => {
+  it('reworkStartsOf follows explicit rework only', () => {
     const a = run(), b = run({ reworkOf: a.runId, startedAt: END + DAY }), c = run({ continuedFrom: a.runId, startedAt: END + 2 * DAY });
-    expect(reworkStartsOf([a, b, c]).get(a.runId)).toEqual([END + DAY, END + 2 * DAY]);
+    expect(reworkStartsOf([a, b, c]).get(a.runId)).toEqual([END + DAY]);
   });
 });
 
-describe('the facts as verified evidence', () => {
-  it('the success rate counts settled facts, never provisional ones', () => {
+describe('silence proxies are never verified evidence', () => {
+  it('the success rate excludes settled and fresh proxies', () => {
     const settled = [run(), run(), run({ report: { at: END, outcome: 'blocked', verified: 'no', summary: 's' } })];
     const fresh = run({ endedAt: LATER - DAY, startedAt: LATER - DAY - 1000 });
     const m = runMetrics([...settled, fresh], { now: LATER })[0]!.all!;
-    expect(m.successRate).toMatchObject({ n: 3, value: 2 / 3 });
-    expect(runMetrics(settled, { now: END + DAY })[0]!.all!.successRate.n).toBe(1); // only the blocked one is settled
+    expect(m.successRate).toMatchObject({ n: 0, value: null });
+    expect(runMetrics(settled, { now: END + DAY })[0]!.all!.successRate.n).toBe(0); // only the blocked one is settled
   });
-  it('a tier suggestion rests on facts too', () => {
+  it('tier changes cannot rest on silence proxies', () => {
     const role = { id: 'artisan', name: 'Artisan', scope: 'role', tier: 'mid', trial: undefined } as unknown as AgentProfile;
     const tagged = (tier: 'mid' | 'top', ok: boolean): AgentRun => run({ tier, tags: { skills: [], app: null, repo: null }, endedAt: LATER - 9 * DAY, startedAt: LATER - 9 * DAY - 1000,
       ...(ok ? {} : { report: { at: END, outcome: 'blocked', verified: 'no', summary: 's' } }) });
     const runs = [...Array.from({ length: 20 }, (_, i) => tagged('mid', i < 8)), ...Array.from({ length: 20 }, () => tagged('top', true))];
-    expect(suggestTiers({ roles: [role], runs }, LATER)).toMatchObject([{ kind: 'tier', tier: 'top', agentIds: ['artisan'] }]);
+    expect(suggestTiers({ roles: [role], runs }, LATER)).toEqual([]);
   });
 });

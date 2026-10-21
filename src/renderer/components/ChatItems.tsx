@@ -287,6 +287,13 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks, reaction 
           {item.level === 'info' ? <IconInfo size={13} /> : <IconAlert size={13} />}<span>{sysText(item)}</span>
           {/* the answer the user waited for is ready in a work chat (#123): its Apri */}
           {item.code === 'resultReady' && typeof item.params?.chatId === 'string' && <NamedChatRefs ids={[item.params.chatId]} />}
+          {item.code === 'resultReady' && item.result && <details className="result-ready-full" data-testid="canonical-result">
+            <summary>{t('chat.resultFull')}</summary>
+            <Markdown text={item.result.output} />
+            {!!item.result.questions?.length && <ul>{item.result.questions.map((question, i) => <li key={i}>{question}</li>)}</ul>}
+            <ul>{item.result.doneWhen.map((criterion, i) => <li key={i}>{criterion.criterion}: <span aria-hidden="true">{criterion.met ? '✓' : '—'}</span><span className="sr-only">{t(criterion.met ? 'chat.criterionMet' : 'chat.criterionNotMet')}</span> {criterion.evidence}</li>)}</ul>
+            <small>{item.result.taskId} · v{item.result.taskVersion} · {item.result.runId}</small>
+          </details>}
         </div>
       );
     }

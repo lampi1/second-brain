@@ -40,6 +40,23 @@ function deps() {
 }
 
 describe('app control tools', () => {
+  it('assigns a scoped follow-up with stable source identity and refuses changed scope or unauthenticated reuse', async () => {
+    const catalog = roleCatalog(), scout = catalog.list().profiles.find(p => p.id === 'scout')!;
+    const target = { id: 'w', harness: 'claude', cwd: '/project', state: 'idle', agent: { id: 'scout', version: scout.activeVersion }, run: { taskVersion: 2, taskId: 'task', runId: 'run' } };
+    const assignTask = vi.fn(async () => {});
+    const chats = { list: () => [{ id: 'o', isOrchestrator: true, harness: 'claude' }, target], assignTask } as unknown as ChatService;
+    const brain = { settings: () => ({ messaging: { crossHarness: false } }) } as unknown as BrainService;
+    const tools = (caller?: string) => appControlTools({ chats, browser: {} as BrowserService, brain, agents: () => catalog.list(), window: () => null, emitUi: () => {}, version: '0' }, caller);
+    const args = { chatId: 'w', prompt: 'Expand the second point', mode: 'continue', roleId: 'scout', cwd: '/project', expectedVersion: 2 };
+    const tool = tools('o').find(t => t.name === 'app_assign_task')!;
+    await tool.run(args);
+    expect(assignTask).toHaveBeenCalledWith('w', `${AGENT_LABEL}\n\nExpand the second point`, { mode: 'continue', expectedVersion: 2, source: { kind: 'chat', chatId: 'o' } });
+    await expect(Promise.resolve().then(() => tool.run({ ...args, cwd: '/different' }))).rejects.toThrow(/Project changed/);
+    await expect(Promise.resolve().then(() => tool.run({ ...args, roleId: 'sentinel' }))).rejects.toThrow(/Role mismatch/);
+    await expect(Promise.resolve().then(() => tools().find(t => t.name === 'app_assign_task')!.run(args))).rejects.toThrow(/authenticated/);
+    expect(assignTask).toHaveBeenCalledTimes(1);
+  });
+
   it('sets only a validated next-turn effort within the caller space and preserves the current report', async () => {
     const current = { supported: true, requested: 'xhigh', submitted: 'xhigh', effective: null, pending: false, effectiveSource: 'unknown', sessionDefault: 'high' };
     const rows = [{ id: 'work', harness: 'claude', model: 'chosen-model', effort: 'xhigh', effortStatus: current }, { id: 'app', harness: 'claude', cwd: 'C:/repo' }, { id: 'cursor', harness: 'cursor' }, { id: 'api', harness: 'anthropic' }];

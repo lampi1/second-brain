@@ -147,7 +147,7 @@ describe('the ledger’s outcomes reach the cards (issue #110)', () => {
   it('counts the ledger’s verified outcomes with no agent runs, keeps the proxy apart, and never counts a chat twice', async () => {
     const root = ledger();
     // the reinstall left agent-runs.json with one run, the same chat the ledger already settled
-    const runs = [run('both', 'artisan', 'success', 'human', { tags: { skills: ['fix'], app: null, repo: null } })];
+    const runs = [run('both', 'artisan', 'success', 'human', { tags: { skills: ['fix'], app: null, repo: null }, skillSuggestions: { at: NOW, suggested: ['fix'], used: ['fix'] } })];
     const s = await classifiersState({ root, routing, runs, profiles: [], suggest: async () => ['fix'] }, NOW);
     const kind = s.cards!.find(c => c.id === 'kind')!, model = s.cards!.find(c => c.id === 'model')!, skills = s.cards!.find(c => c.id === 'skills')!;
     // verified: h1 h2 h3 p3 j1 both = 6 (4 succeeded); unverified: p1 p2 o1 = 3; none has no outcome

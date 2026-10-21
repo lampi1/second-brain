@@ -26,6 +26,24 @@ describe('OrchestratorWake', () => {
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
 
+  it('keeps two user messages with distinct event IDs and retries a failed delivery', async () => {
+    let attempts = 0;
+    const w = new OrchestratorWake({ enabled: () => true, groupMs: 10, perChatMs: 20,
+      send: async () => { attempts++; if (attempts === 1) throw new Error('temporary failure'); } });
+    w.observe('chat:updated', chat({ id: 'o', isOrchestrator: true }));
+    w.observe('chat:updated', chat({ id: 'c', state: 'running' }));
+    for (const text of ['first instruction', 'second instruction']) w.userMessage({ chatId: 'c', title: 'C', role: null, parentTitle: null, text });
+    expect(new Set(w.queued().map(event => event.eventId)).size).toBe(2);
+    w.observe('chat:updated', chat({ id: 'c', state: 'idle' }));
+    await vi.advanceTimersByTimeAsync(10);
+    expect(attempts).toBe(1);
+    expect(w.queued()).toHaveLength(3);
+    await vi.advanceTimersByTimeAsync(20);
+    expect(attempts).toBe(2);
+    expect(w.queued()).toHaveLength(0);
+    w.stop();
+  });
+
   it('a finished chat wakes the Orchestrator with one labelled line, after the grouping window', async () => {
     const { sent, finish } = make();
     finish('qa', 'Report pronto: 8 test su 9.');

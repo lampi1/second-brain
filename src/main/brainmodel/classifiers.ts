@@ -93,19 +93,19 @@ const lastWeeks = (now: number, n: number) => Array.from({ length: n }, (_, i) =
 export async function classifiersState(i: ClassifierInputs, now = Date.now()): Promise<ClassifiersState> {
   const table = i.routing.table, routes = table?.routes ?? [];
   const { predictions, actuals, outcomes } = readLedger(i.root);
-  const runByChat = new Map(i.runs.map(r => [r.chatId, r]));
+  const runByChat = new Map([...i.runs].sort((a, b) => b.startedAt - a.startedAt).map(r => [r.chatId, r]));
   const perRow = routes.map(() => [] as string[]);
   for (const p of predictions) { if (p.source !== 'table') continue; const k = rowOf(routes, p); if (k >= 0) perRow[k]!.push(p.id); }
   const rows: ClassifierRoute[] = routes.map((r, k) => ({ kind: r.kind, area: areas(r).join(', ') || null, harness: r.harness, model: r.model, effort: r.effort, why: r.why, result: result(perRow[k]!, actuals, runByChat, outcomes) }));
   // skill choice: the latest role runs with their launch's skills
   const name = (id: string) => i.profiles.find(p => p.id === id)?.name ?? id;
   // the latest 40 role launches feed the skills card; the page's list shows the 15 newest
-  const recent = i.runs.filter(r => r.tags && r.goal.trim()).sort((a, b) => b.startedAt - a.startedAt).slice(0, 40);
+  const recent = i.runs.filter(r => r.skillSuggestions && r.goal.trim()).sort((a, b) => b.startedAt - a.startedAt).slice(0, 40);
   const choices: ClassifierChoice[] = [], launches: Launch[] = [];
   for (const r of recent) {
-    const suggested = await i.suggest(r.goal).catch(() => [] as string[]);
-    launches.push({ at: r.startedAt, chatId: r.chatId, agentId: r.agentId, suggested: suggested.slice(0, 5), used: [...r.tags!.skills] });
-    if (choices.length < 15) choices.push({ at: r.startedAt, chatId: r.chatId, goal: r.goal.slice(0, 240), role: { id: r.agentId, name: name(r.agentId) }, suggested: suggested.slice(0, 5), used: [...r.tags!.skills] });
+    const { suggested, used } = r.skillSuggestions!;
+    launches.push({ runId: r.runId, at: r.startedAt, chatId: r.chatId, agentId: r.agentId, suggested: suggested.slice(0, 5), used: [...used] });
+    if (choices.length < 15) choices.push({ at: r.startedAt, chatId: r.chatId, goal: r.goal.slice(0, 240), role: { id: r.agentId, name: name(r.agentId) }, suggested: suggested.slice(0, 5), used: [...used] });
   }
   // quality by week: per route (its predictions)
   const weeks = lastWeeks(now, 6);

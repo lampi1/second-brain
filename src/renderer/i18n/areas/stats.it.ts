@@ -5,6 +5,10 @@ type N = { n: number };
 
 export const statsIt = {
   // ── Classificatori: page
+  'stats.cls.coverage': ({ n, total }: { n: number; total: number }) => `${n} verifiche su ${total} decisioni. La conclusione e il silenzio dell’utente non provano la correttezza. Le review sono campionate: assenza di verifica non significa fallimento.`,
+  'stats.cls.skillsCoverage': 'Solo suggerimenti registrati al lancio: le esecuzioni precedenti senza snapshot sono escluse. L’accordo misura la scelta, non la qualità del risultato.',
+  'stats.cls.modelCoverage': 'Le righe di routing contano solo decisioni della tabella; il routing per ruolo può lasciarle vuote.',
+  'stats.cls.jobCoverage': 'Il registro dei costi non contiene una verifica del risultato: la riuscita non è misurabile qui.',
   'stats.cls.eyebrow': 'COME DECIDE L’APP, DA SOLA',
   'stats.cls.title': 'Classificatori',
   'stats.cls.lead': 'Piccoli smistatori che lavorano sul tuo PC senza spendere token: decidono il tipo di lavoro, il modello, le skill e quanto durerà. Ogni scheda dice cosa decide, quante volte e cosa puoi fare.',
@@ -43,7 +47,7 @@ export const statsIt = {
   'stats.cls.success': 'Riuscite',
   'stats.cls.successHelp': 'Delle chat decise da questo classificatore e con un esito verificato (confermato da te o da una revisione indipendente), la quota che è riuscita. Non conta mai l’autovalutazione dell’agente. Fra parentesi quante chat hanno un esito.',
   'stats.cls.unverified': (p: { n: number; pct: string }) => `Non verificati: ${p.n} esiti automatici, ${p.pct} riusciti. Non contano nelle riuscite.`,
-  'stats.cls.unverifiedHelp': 'Esiti scritti dal ciclo del brain senza conferma: la chat si è chiusa senza una riga di errore (proxy) o è il parere dell’Orchestrator. Sono un indizio, non una verifica: restano fuori dalle riuscite finché tu, una revisione indipendente o i fatti non li confermano.',
+  'stats.cls.unverifiedHelp': 'Esiti scritti dal ciclo del brain senza conferma: la chat si è chiusa senza una riga di errore (proxy) o è il parere dell’Orchestrator. Sono un indizio, non una verifica: restano fuori dalle riuscite finché tu, una revisione indipendente non li confermano.',
   'stats.cls.learning': 'Settimana per settimana',
   'stats.cls.learningLead': 'Settimana per settimana: la misura della scheda (copertura o accordo, vedi il suo «?») e quante chat decise sono riuscite. Una settimana senza decisioni resta vuota, mai zero.',
   'stats.cls.series.hit': 'Misura della scheda',

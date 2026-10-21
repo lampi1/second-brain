@@ -34,6 +34,7 @@ import { childFeedbackTools } from './agents/child-feedback';
 import { delegationTools } from './agents/delegation';
 import { strategyTools } from './agents/strategy-tools';
 import { portableId } from './agents/pack/flows';
+import { memoryTools } from './rules/memory-tool';
 import { writeAgentMemory } from './rules/memory';
 import type { AgentRun } from '../shared/agents';
 import type { SkillSuggestions } from '../shared/skill-suggest';
@@ -229,9 +230,9 @@ export function attachCommandAsks(ctx: Pick<Ctx, 'emitter'>, runner: CommandRunn
 /** "Eventi all'Orchestrator" (chats/orchestrator-wake.ts): it watches the same events (the emitter tapped once more) and writes
  *  to the Orchestrator through the chat service. on = the setting orchestratorEvents and, in tests, an explicit SB_ORCHESTRATOR_EVENTS=1
  *  (a test's Orchestrator never gets surprise messages); SB_ORCHESTRATOR_EVENTS_MS shortens the grouping window for e2e. */
-export function attachOrchestratorWake(ctx: Pick<Ctx, 'emitter'>, chats: Pick<ChatService, 'send' | 'list'>, on: () => boolean, now?: () => number): OrchestratorWake {
+export function attachOrchestratorWake(ctx: Pick<Ctx, 'emitter'> & Partial<Pick<Ctx, 'userData'>>, chats: Pick<ChatService, 'send' | 'list'>, on: () => boolean, now?: () => number): OrchestratorWake {
   const groupMs = Number(process.env.SB_ORCHESTRATOR_EVENTS_MS) || undefined;
-  const wake = new OrchestratorWake({ send: (chatId, text) => chats.send(chatId, text), enabled: on, list: () => chats.list(), ...(groupMs ? { groupMs } : {}), ...(now ? { now } : {}) });
+  const wake = new OrchestratorWake({ ...(ctx.userData ? { userData: ctx.userData } : {}), send: (chatId, text) => chats.send(chatId, text), enabled: on, list: () => chats.list(), ...(groupMs ? { groupMs } : {}), ...(now ? { now } : {}) });
   const send = ctx.emitter.emit.bind(ctx.emitter);
   ctx.emitter.emit = (ch, p) => { send(ch, p); wake.observe(ch, p); };
   return wake;
@@ -420,6 +421,11 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // agent_learn_propose on a work chat's endpoint: only its own role's lessons, queued for the Orchestrator and the user
   const skillTools = () => brainModelRef.current?.skillTools() ?? [];
   addChatTools([agentCatalogTool(() => agents.list(), skillTools), skillsSuggestTool(suggestSkills), chatLearnTool(agentPacks.learning, () => manager.runs.list()), brainSearchTool((q, o) => hybrid.query(q, o)), brainScriptsTool(brainScripts)]);
+  addChatTools(memoryTools({ root: () => agentPacks.packs.root(), context: chatId => {
+    const chat = manager.list().find(c => c.id === chatId);
+    if (!chat || chat.agent?.source !== 'catalog' || chat.isOrchestrator || !chat.run) return null;
+    return { scope: { roleId: portableId(chat.agent.id), project: chat.cwd }, sourceRunId: chat.run.runId };
+  } }));
   scriptEnv = () => ({ [TEXT_ENV]: textTool.url() });
   apiRoute = () => { const e = anthropicApi(); return e && engineOn(brain.settings(), e.id) && engines.hasKey(e.id) ? e.id : null; };
 
@@ -439,13 +445,14 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const loopRef: { current?: { ended(run: AgentRun): void; outcome(run: AgentRun): void } } = {};
   const runFeedbackRef: { current?: { runList(): readonly AgentRun[] } } = {};
   const manager = new ChatManager({
+    suggestSkills: async goal => (await suggestSkills(goal)).candidates.map(c => c.name),
     onAutoCloseActivity: id => autoCloseRef.current?.invalidate(id),
     worktrees: gitWorktrees,
     resolveAgent: req => {
       const resolved = agents.resolve(req);
       if (req.roleId === undefined || req.orchestrator) return resolved;
       // only the skills this launch gives exist in its plugin (the role gate refuses the others)
-      const runtime = agentPacks.packs.runtime(req.roleId, req.skills ?? []);
+      const runtime = agentPacks.packs.runtime(req.roleId, req.skills ?? [], { query: req.goal ?? req.prompt ?? '', project: req.cwd });
       const resolvedHarness = resolved.request.harness;
       return { ...resolved, skills: runtime.skills, assets: { pluginDir: runtime.pluginDir, skillRoot: runtime.skillRoot },
         // Claude loads the plugin itself: its instructions only need the skills' qualified names (issue #101)
@@ -657,7 +664,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // parent-to-child delegation between role chats (ADR 0083): every chat's own endpoint, the caller is its token's chat
   addChatTools(delegationTools({ chats: manager, roles: () => agents.list(), settings: () => checkedDelegation(brain.settings().delegation),
     engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), label: AGENT_LABEL, runs: () => manager.runs.list(), worktrees: gitWorktrees, skillTools,
-    remember: (roleId, line) => writeAgentMemory(agentPacks.packs.root(), portableId(roleId), line) }));
+    remember: (roleId, line, chat) => writeAgentMemory(agentPacks.packs.root(), portableId(roleId), line, { scope: { roleId: portableId(roleId), project: chat.cwd }, sourceRunId: chat.run?.runId ?? `legacy-chat:${chat.id}`, sourceEventId: `report:${chat.run?.runId ?? chat.id}` }) }));
   // a Strategist's plan with the user (ADR 0108): proposed on its strip, approved by the user's click, its steps' progress
   addChatTools(strategyTools(manager));
   // the Judge's sampled reviews of finished runs (agents/judge-sample.ts): they spend tokens, so they run only in the

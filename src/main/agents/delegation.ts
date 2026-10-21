@@ -57,7 +57,7 @@ export interface DelegationDeps {
   skillTools?: SkillToolsSource;
   /** adds one line to a role's own memory (agents/<id>/memory.md, rules/memory.ts writeAgentMemory): agent_report's
    *  `remember`; absent = the field is refused */
-  remember?: (roleId: string, line: string) => void;
+  remember?: (roleId: string, line: string, chat: ChatSummary) => void;
   /** the clock (tests) */
   now?: () => number;
 }
@@ -191,7 +191,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     // the report is already delivered when this runs: a failed write is logged, never turned into a refused report
     return () => {
       let written = 0;
-      try { for (const line of lines) { d.remember!(roleId, line); written++; } }
+      try { for (const line of lines) { d.remember!(roleId, line, self!); written++; } }
       catch (e) { log.warn('agents', 'role memory not written', { chat: self!.id, data: { role: roleId, written }, cause: e instanceof Error ? e.message : String(e), hint: 'Check that a brain folder is chosen and writable' }); return written; }
       log.info('agents', 'role memory written', { chat: self!.id, data: { role: roleId, lines: written } });
       return written;
@@ -290,6 +290,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     description: 'Your one result for the chat that started you (your parent, or the Orchestrator for a chat it opened): outcome (done | partial | blocked), summary (one or two sentences), output (the deliverable), doneWhen (every criterion of your contract, exactly as written, with met and evidence), optional questions, optional remember (lines for your role\'s memory). It reaches your parent at once; call it once, at the end. The app shows output in your chat as your answer: do not write it in the chat too.',
     inputSchema: { type: 'object', required: ['outcome', 'summary', 'output', 'doneWhen'], additionalProperties: false, properties: {
       outcome: { type: 'string', enum: ['done', 'partial', 'blocked'] }, summary: str, output: str,
+      taskVersion: { type: 'integer', minimum: 1, description: 'Current task version supplied with the assignment; required after a follow-up. Stale reports are refused.' },
       doneWhen: { type: 'array', items: { type: 'object', required: ['criterion', 'met'], additionalProperties: false, properties: { criterion: str, met: { type: 'boolean' }, evidence: str } } },
       questions: { type: 'array', items: str, maxItems: 8 },
       goalChangedByUser: { type: 'boolean', description: 'true when the user wrote to you directly and changed your goal (you followed the user)' },

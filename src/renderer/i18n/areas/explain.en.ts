@@ -11,9 +11,9 @@ export const explainEn: typeof explainIt = {
   'explain.strip.p3': 'The counter on the right: how much text the chat holds (thousands of tokens, "~" when estimated); the bar is the share of the model\'s window already used. Near full, Claude summarises the conversation by itself.',
   'explain.strip.p4': '"v2" is the role version it runs, "auto" means the Orchestrator started it.',
   'explain.outcome.title': 'What your verdict is for',
-  'explain.outcome.p1': 'It says whether the run succeeded, partly succeeded or failed. It counts the most: it enters the agent\'s performance at full weight (× 1), like an independent review\'s and the facts\'; the Orchestrator weighs × 0.6; the agent\'s own report does not count. A success you confirm also counts towards its level.',
+  'explain.outcome.p1': 'It says whether the run succeeded, partly succeeded or failed. It counts the most: it enters the agent\'s performance at full weight (× 1), like an independent review\'s; the Orchestrator weighs × 0.6; the agent\'s own report does not count. A success you confirm also counts towards its level.',
   'explain.outcome.p2': 'A verdict loses half its weight every 30 days, so the performance follows how the agent is today. You can change it any time.',
-  'explain.outcome.p3': 'If you do not vote, the facts decide, with no tokens spent: a success when the agent closed with every criterion met, you did not correct it and did not redo it in the 7 days after (until then it is provisional and does not count); a failure when it got blocked or you redid it within 7 days. Your verdict always wins.',
+  'explain.outcome.p3': 'The report is the agent’s own statement. No observed correction is only a proxy, even after 7 days; it never increases verified success or level. Your verdict or a verified independent review is required.',
   'explain.toasts.title': 'Urgent or normal',
   'explain.toasts.p1': 'Urgent: a chat waiting for you, a question for you, a sign-in to redo, a chat that ended with an error, the budget used up. Normal: other news too, such as a finished run. Windows notifications show only while the app is not in front, and news arriving together becomes one notification.',
   'explain.judge.title': 'What the independent reviews do',
@@ -30,5 +30,5 @@ export const explainEn: typeof explainIt = {
   'explain.skills.p2': '"Used by" lists the agents that load it at every start; "Unused" means no agent loads it, but it stays available as "/name" in any chat. Maintenance proposes merging or removing duplicate or useless ones.',
   'explain.team.title': 'What these numbers say',
   'explain.team.p1': '"Working": roles with at least one chat open now. "On trial": roles with a new version on trial, compared with the previous one before keeping it.',
-  'explain.team.p2': 'On each card: the level grows only with verified successes (yours, a verified review\'s or the facts\'), shown beside it; the performance is the weighted average of verdicts, with the runs it rests on; the "?" beside each gives the exact formula.',
+  'explain.team.p2': 'On each card: the level grows only with verified successes (yours, a verified review\'s), shown beside it; the performance is the weighted average of verdicts, with the runs it rests on; the "?" beside each gives the exact formula.',
 };

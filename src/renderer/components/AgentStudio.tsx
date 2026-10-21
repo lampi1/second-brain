@@ -244,6 +244,9 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
     { label: t('catalog.open'), value: loaded ? open.toLocaleString(locale()) : null },
     { label: t('catalog.success'), value: stats?.successRate.value != null ? percent(stats.successRate.value) : null, note: sample(stats?.successRate.n ?? 0) },
     { label: t('catalog.cost'), value: stats?.costPerRun.median.value != null ? usd(stats.costPerRun.median.value) : null, note: sample(stats?.costPerRun.median.n ?? 0) },
+    { label: t('catalog.tokens'), value: stats?.tokensPerRun.input.value != null && stats.tokensPerRun.output.value != null ? `${Math.round(stats.tokensPerRun.input.value)} / ${Math.round(stats.tokensPerRun.output.value)}` : null, note: sample(stats?.tokensPerRun.input.n ?? 0) },
+    { label: t('catalog.cacheTokens'), value: stats?.tokensPerRun.cacheRead.value != null && stats.tokensPerRun.cacheWrite.value != null ? `${Math.round(stats.tokensPerRun.cacheRead.value)} / ${Math.round(stats.tokensPerRun.cacheWrite.value)}` : null, note: t('catalog.cacheTokensNote') },
+    { label: t('catalog.elapsed'), value: stats?.timeToDone.elapsed.value != null ? `${Math.round(stats.timeToDone.elapsed.value / 1000)} s` : null, note: t('catalog.elapsedNote') },
     { label: t('catalog.last'), value: last },
   ];
   const instructions = profile.instructions.trim();
@@ -292,6 +295,7 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
         {numbers.map(n => <div key={n.label} title={[n.label, n.value ?? unknown, n.note].filter(Boolean).join(' · ')}>
           <dt>{n.label}</dt><dd>{n.value ?? <><span aria-hidden="true">—</span><span className="sr-only">{unknown}</span></>}</dd>{n.note && n.value && <small>{n.note}</small>}</div>)}
       </dl>
+      <p className="ad-hint">{t('catalog.measurementNote')}</p>
       {editor}
       {!background && <RolePermissions profile={profile} />}
       <div className="ad-grid">

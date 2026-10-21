@@ -27,6 +27,13 @@ function validAssets(value: unknown): value is NonNullable<StoredChat['agentAsse
     && path.resolve(a.skillRoot) === path.resolve(a.pluginDir, 'skills');
 }
 
+/** Durable root result delivery state, saved before the engine can finish its turn. */
+export interface HeldRootResult {
+  note: { chatId: string; title: string; role: string; summary: string; at: number };
+  message: string;
+  quiet: boolean;
+  userWaits: boolean;
+}
 export interface StoredChat {
   id: string;
   agent?: AgentOwnerSnapshot;
@@ -44,6 +51,11 @@ export interface StoredChat {
   run?: AgentRun;
   /** when nothing last waited on the user in this run (a reopen, an answer): the stale clock's start across restarts */
   runIdleSince?: number;
+  heldResult?: HeldRootResult;
+  rootReportAt?: number;
+  userWaits?: boolean;
+  autoCompleted?: boolean;
+
   /** its run (this id) was pruned into the rollups: it counts there only, so the chat never gets a backfilled run */
   runPruned?: string;
   harness: Harness;
@@ -166,6 +178,13 @@ function heldResults(x: unknown): { title: string; message: string }[] | null {
   return ok ? (x as { title: string; message: string }[]).map(i => ({ title: i.title, message: i.message })) : null;
 }
 
+function validHeldRoot(value: unknown): value is HeldRootResult {
+  const h = value as HeldRootResult | undefined, n = h?.note;
+  return !!h && typeof h === 'object' && typeof h.message === 'string' && h.message.length <= 65536 &&
+    typeof h.quiet === 'boolean' && typeof h.userWaits === 'boolean' && !!n && typeof n.chatId === 'string' &&
+    typeof n.title === 'string' && typeof n.role === 'string' && typeof n.summary === 'string' && n.summary.length <= 2000 && num(n.at);
+}
+
 function valid(x: unknown): StoredChat | null {
   if (!x || typeof x !== 'object') return null;
   const c = x as Record<string, unknown>;
@@ -187,6 +206,10 @@ function valid(x: unknown): StoredChat | null {
     createdAt: typeof c.createdAt === 'number' ? c.createdAt : Date.now(),
     ...(typeof c.costTotalUsd === 'number' && Number.isFinite(c.costTotalUsd) ? { costTotalUsd: c.costTotalUsd } : {}),
     ...extras(c),
+    ...(c.userWaits === true ? { userWaits: true } : {}),
+    ...(c.autoCompleted === true ? { autoCompleted: true } : {}),
+    ...(num(c.rootReportAt) ? { rootReportAt: c.rootReportAt } : {}),
+    ...(validHeldRoot(c.heldResult) ? { heldResult: c.heldResult } : {}),
     // the Orchestrator is never archived, whatever the file says
     ...(typeof c.closedAt === 'number' && Number.isFinite(c.closedAt) && !orchestrator ? { closedAt: c.closedAt, closedBy: c.closedBy === 'user' ? 'user' as const : 'auto' as const } : {}),
     ...(c.working === true && typeof c.closedAt !== 'number' ? { working: true as const } : {}),

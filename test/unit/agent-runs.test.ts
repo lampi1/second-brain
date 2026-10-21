@@ -22,6 +22,29 @@ describe('agent run store', () => {
     expect(s.start(start({ costKnown: false })).costUsd).toBeNull();
   });
 
+  it('preserves launch snapshots and canonical evidence, and refuses a result for a different run', () => {
+    const run = new AgentRunStore(tmp()).start(start());
+    run.taskId = 't1'; run.taskVersion = 1;
+    run.skillSuggestions = { at: 1, suggested: ['review'], used: ['review'] };
+    run.report = { at: 2, outcome: 'done', verified: 'yes', summary: 'short', canonical: {
+      at: 2, taskId: 't1', taskVersion: 1, runId: run.runId, outcome: 'done', summary: 'short', output: 'full answer',
+      doneWhen: [{ criterion: 'checked', met: true, evidence: 'source.txt' }],
+    } };
+    expect(readRun(run)).toEqual(run);
+    run.report.canonical!.runId = 'r_ffffffffffff';
+    expect(readRun(run)).toBeNull();
+  });
+
+  it('never labels legacy aggregate silence proxies as verified', () => {
+    const tally = emptyTally('coder', 1);
+    delete tally.verdictSchema;
+    tally.ended = 5; tally.verdicts.success = 5;
+    const restored = readTally(tally)!;
+    expect(restored.ended).toBe(5);
+    expect(restored.verdicts.success).toBe(0);
+    expect(restored.verdictSchema).toBe(2);
+  });
+
   it('refuses a malformed run field by field', () => {
     const run = new AgentRunStore(tmp()).start(start());
     expect(readRun(run)).toEqual(run);

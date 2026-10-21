@@ -86,7 +86,7 @@ export const brainModelEn: typeof brainModelIt = {
   'bm.cls.history': 'Table history', 'bm.cls.historyEmpty': 'No change recorded.',
   'bm.cls.historyRow': (p: { from: string; to: number; by: string }) => `v${p.from} → v${p.to}, by ${p.by}`,
   'bm.cls.choices': 'Skills suggested and used',
-  'bm.cls.choicesLead': 'For the latest role chats: the skills the suggester proposes today for that request and the ones the launch actually gave.',
+  'bm.cls.choicesLead': 'For the latest role chats: suggestions saved at launch and the skills chosen then; launches without snapshots are excluded.',
   'bm.cls.col.when': 'When', 'bm.cls.col.goal': 'Request', 'bm.cls.col.role': 'Role', 'bm.cls.col.suggested': 'Suggested', 'bm.cls.col.used': 'Used',
   'bm.cls.same': 'all suggested', 'bm.cls.differ': 'some not', 'bm.cls.none': 'none suggested',
   'bm.cls.choicesEmpty': 'No chat with a recorded choice yet.',

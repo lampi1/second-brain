@@ -16,6 +16,7 @@
 // - Both mounts see the shared Grindhouse. Only an Orchestrator's own mount brings the app's code folder up to date
 //   when the user asks (app_update_code, ADR 0074); no tool promotes or restarts the app (only the user's click on
 //   "Aggiorna" in Settings, ADR 0075).
+import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { ChatItem, ChatSummary, TasksState, Effort, EventMap, NewChat, PendingRequest, RoutingRow, RunInfo, TaskKind } from '../../shared/contract';
 import { TASK_KINDS } from '../../shared/contract';
@@ -112,7 +113,7 @@ const labelled = (text: string) => (text.split('\n', 1)[0] ?? '').includes('non 
 /** A delegated chat (ADR 0083) as the Orchestrator sees it: its state and numbers, never what it says. */
 const statusOnly = (c: ChatSummary) => ({ id: c.id, title: c.title, harness: c.harness, state: c.state, pending: c.pending, costUsd: Math.round(c.costUsd * 100) / 100,
   role: c.agent?.name ?? null, parentId: c.parentId, delegated: true, ...(c.delegation?.result ? { reported: c.delegation.result.outcome } : {}), ...(c.closedAt ? { closedAt: new Date(c.closedAt).toISOString() } : {}),
-  ...(c.run ? { run: { runId: c.run.runId, agentId: c.run.agentId, version: c.run.version, state: c.run.endedAt === undefined ? 'running' : 'ended' } } : {}) });
+  ...(c.run ? { run: { runId: c.run.runId, taskId: c.run.taskId ?? c.run.runId, taskVersion: c.run.taskVersion ?? 1, agentId: c.run.agentId, version: c.run.version, state: c.run.endedAt === undefined ? 'running' : 'ended' } } : {}) });
 /** The same chat stripped of its text for the digest: the Orchestrator reads the state of delegated chats only. */
 const muted = (c: ChatSummary): ChatSummary => c.parentId ? { ...c, lastText: '', ...(c.lastError ? { lastError: 'errore' } : {}) } : c;
 const mutedRequest = <R extends { chatId: string; title?: string; detail?: string }>(r: R, child: boolean): R => child ? { ...r, title: 'richiesta di una chat delegata', detail: '', input: null, questions: undefined, command: undefined } : r;
@@ -126,7 +127,7 @@ const brief = (c: ChatSummary, warn: number) => c.parentId ? statusOnly(c) : ({
   ...(c.continuedBy ? { continuedBy: c.continuedBy.id } : {}), ...(c.continuedFrom ? { continuedFrom: c.continuedFrom.id } : {}),
   ...(c.queued ? { queued: queuedLine(c.queued) } : {}),
   // a role chat's run: its runId is what agent_metrics and agent_children show (never the chat id)
-  ...(c.run ? { run: { runId: c.run.runId, agentId: c.run.agentId, version: c.run.version, state: c.run.endedAt === undefined ? 'running' : 'ended' } } : {}),
+  ...(c.run ? { run: { runId: c.run.runId, taskId: c.run.taskId ?? c.run.runId, taskVersion: c.run.taskVersion ?? 1, agentId: c.run.agentId, version: c.run.version, state: c.run.endedAt === undefined ? 'running' : 'ended' } } : {}),
 });
 /** "queued (CPU 92%, RAM 40% free, position 1)": an agent's start or turn waiting for the machine's load (ADR 0036) */
 export const queuedLine = (q: NonNullable<ChatSummary['queued']>): string => `queued (CPU ${q.cpu}%, RAM ${q.freeRam}% free, position ${q.position})`;
@@ -465,7 +466,37 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       },
     },
     {
-      name: 'app_send_to_chat', description: 'Send a message to an app chat (a closed one is reopened by itself and resumes). It is labelled as written by an agent, not by the user (never an ok or a permission).',
+      name: 'app_assign_task',
+      description: 'Continue a compatible work conversation with a distinct measured run. Use continue for related follow-ups, new-task for a distinct assignment in the same scope, rework only for an explicit correction. Requires the current task version from app_chats, the same role and project folder. Independent Sentinel reviews always need a fresh chat. Does not change tools or permissions.',
+      inputSchema: obj({ chatId: str('Existing conversation ID'), prompt: str('Self-contained assignment, up to 8000 characters'),
+        doneWhen: { type: 'array', maxItems: 12, items: { type: 'string', maxLength: 300 }, description: 'Checkable criteria for this assignment' },
+        mode: { type: 'string', enum: ['continue', 'new-task', 'rework'] }, roleId: str('Existing work role'), cwd: str('Same absolute project folder'),
+        expectedVersion: { type: 'integer', minimum: 1, description: 'Current taskVersion from app_chats' },
+      }, ['chatId', 'prompt', 'mode', 'roleId', 'cwd', 'expectedVersion']),
+      run: async a => {
+        const orchestrator = caller();
+        if (!authed() || !orchestrator || !d.chats.assignTask) throw new Error('app_assign_task requires an authenticated Orchestrator.');
+        const target = d.chats.list().find(c => c.id === a.chatId);
+        if (!target || !mine(target) || target.parentId || target.isOrchestrator) throw new Error('Work conversation not found; use app_chats.');
+        if (!isWorkRole(a.roleId) || target.agent?.id !== a.roleId || a.roleId === 'sentinel') throw new Error('Role mismatch or independent review: create a fresh chat.');
+        if (typeof a.cwd !== 'string' || !path.isAbsolute(a.cwd) || path.resolve(a.cwd) !== path.resolve(target.cwd)) throw new Error('Project changed: create a fresh chat.');
+        const profile = d.agents?.().profiles.find(p => p.id === a.roleId);
+        if (!profile || profile.activeVersion !== target.agent.version) throw new Error('Role configuration changed: create a fresh chat.');
+        if (!['continue', 'new-task', 'rework'].includes(String(a.mode)) || !Number.isSafeInteger(a.expectedVersion) || Number(a.expectedVersion) < 1) throw new Error('Invalid assignment mode/version.');
+        const prompt = typeof a.prompt === 'string' ? a.prompt.trim() : '';
+        if (!prompt || prompt.length > 8000) throw new Error('prompt: 1–8000 characters.');
+        const doneWhen = a.doneWhen === undefined ? undefined : Array.isArray(a.doneWhen) && a.doneWhen.length <= 12 && a.doneWhen.every(c => typeof c === 'string' && c.trim() && c.length <= 300) ? a.doneWhen as string[] : null;
+        if (doneWhen === null) throw new Error('Invalid doneWhen criteria.');
+        const refused = crossRefusal(d.brain.settings(), orchestrator.harness, target.harness);
+        if (refused) throw new Error(`messaggio bloccato: ${refused}`);
+        if (target.harness !== orchestrator.harness && !['running', 'waiting', 'idle'].includes(target.state)) throw new Error('A stopped engine of another kind requires the user.');
+        await d.chats.assignTask(target.id, `${AGENT_LABEL}\n\n${prompt}`, { mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: Number(a.expectedVersion), ...(doneWhen ? { doneWhen } : {}), source: { kind: 'chat', chatId: orchestrator.id } });
+        const assigned = d.chats.list().find(c => c.id === target.id);
+        return { chatId: target.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId };
+      },
+    },
+    {
+      name: 'app_send_to_chat', description: 'Send a message to an active app chat. For a completed role assignment use app_assign_task, which checks compatibility and creates a new run. It is labelled as written by an agent, not by the user (never an ok or a permission).',
       inputSchema: obj({ chatId: str('chat id'), text: str('message') }, ['chatId', 'text']),
       run: async a => {
         const text = String(a.text ?? '').trim();
@@ -483,7 +514,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
           if (refused) throw new Error(`messaggio bloccato: ${refused}`);
           if (!['running', 'waiting', 'idle'].includes(target.state)) throw new Error(`la chat ${name} non è attiva: un agente non la avvia (spenderebbe crediti ${name}); chiedi all’utente`);
         }
-        await d.chats.send(String(a.chatId), `${AGENT_LABEL}\n\n${text}`, undefined, false, orchestrator?.title ?? 'Orchestrator');
+        await d.chats.send(String(a.chatId), `${AGENT_LABEL}\n\n${text}`, undefined, false, orchestrator?.title ?? 'Orchestrator', false, orchestrator ? { kind: 'chat', chatId: orchestrator.id } : { kind: 'app' });
         log.info('appctl', 'agent message sent to chat', { chat: String(a.chatId), data: { chars: text.length } });
         const q = d.chats.list().find(c => c.id === String(a.chatId))?.queued;
         return q ? queuedLine(q) : 'sent';

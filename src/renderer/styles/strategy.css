@@ -48,3 +48,10 @@
 .sp-done-when { color: var(--text-3); font-size: 12px; margin-top: 6px; }
 .sp-bar { height: 3px; border-radius: 2px; background: var(--border); overflow: hidden; margin: 2px 0 8px; }
 .sp-bar b { display: block; height: 100%; background: var(--violet); transition: width var(--dur) var(--ease); }
+
+/* Execution stays compact until the user asks for the full checklist. */
+.sp-progress { padding: 7px 12px; }
+.sp-summary { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; padding: 2px 0 6px; background: none; color: var(--text-2); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.sp-summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sp-progress .sp-bar { margin-bottom: 0; }
+.sp-progress .sp-list { padding-top: 8px; }

@@ -33,8 +33,8 @@ describe('verdictOf', () => {
     const r = run({ outcome: { verdict: 'fail', basis: 'orchestrator-opinion', at: NOW, by: 'o' }, report: { at: NOW, outcome: 'done', verified: 'yes', summary: 's' } });
     const review = run({ agentId: 'sentinel', reviewOf: r.runId, report: { at: NOW, outcome: 'done', verified: 'yes', summary: 's', verdict: 'partial' } });
     expect(verdictOf(r, [review])).toEqual({ source: 'review', verdict: 'partial' });
-    expect(verdictOf(r, [review], { verdict: 'success', basis: 'facts' })).toEqual({ source: 'facts', verdict: 'success' });
-    expect(verdictOf({ ...r, outcome: { verdict: 'fail', basis: 'reviewed-evidence', at: NOW, by: 'judge-sample' } }, [], { verdict: 'success', basis: 'facts' })).toEqual({ source: 'review', verdict: 'fail' });
+    expect(verdictOf(r, [{ ...review, report: { ...review.report!, verified: 'no' } }])).toEqual({ source: 'orchestrator', verdict: 'fail' });
+    expect(verdictOf({ ...r, outcome: { verdict: 'fail', basis: 'reviewed-evidence', at: NOW, by: 'judge-sample' } }, [])).toEqual({ source: 'review', verdict: 'fail' });
     expect(verdictOf(r)).toEqual({ source: 'orchestrator', verdict: 'fail' });
     expect(verdictOf({ ...r, outcome: human('success') }, [review])).toEqual({ source: 'human', verdict: 'success' });
     expect(verdictOf({ ...r, outcome: undefined })).toEqual({ source: 'self', verdict: 'success' });
@@ -58,8 +58,8 @@ describe('standings', () => {
     ];
     const s = standings(runs, [], NOW + 3600_000).get('scout')!;
     // 5 × 1 + fact fail 0 + opinion 0.6 × 0.5, over 5 + 1 + 0.6 (same age for all)
-    expect(s.performance).toBeCloseTo((5 + 0.3) / 6.6);
-    expect(s).toMatchObject({ evaluated: 7, sources: { human: 5, review: 0, facts: 1, orchestrator: 1, self: 2 } });
+    expect(s.performance).toBeCloseTo((5 + 0.3) / 5.6);
+    expect(s).toMatchObject({ evaluated: 6, sources: { human: 5, review: 0, facts: 0, orchestrator: 1, self: 3 } });
   });
   it('levels up only on verified successes: never on failed, unverified, provisional or self-reported runs (ADR 0100)', () => {
     const clean = (endedAt: number) => run({ endedAt, startedAt: endedAt - 1000, corrections: { tagged: 0, afterReport: 0 }, report: { at: endedAt, outcome: 'done', verified: 'yes', summary: 's', via: 'agent_report' } });
@@ -73,7 +73,7 @@ describe('standings', () => {
       ...Array.from({ length: 20 }, () => run()),                                          // ended without a verdict
     ];
     const s = standings(runs, [], NOW).get('scout')!;
-    expect(s).toMatchObject({ runs: 30, wins: 5, level: 2, levelAt: 5, nextAt: 15 });
+    expect(s).toMatchObject({ runs: 30, wins: 3, level: 1, levelAt: 0, nextAt: 5 });
     // a rework within the 7 days turns a settled success into a failure, and it leaves the level
     const reworked = clean(NOW - 9 * 86_400_000), again = run({ reworkOf: reworked.runId, startedAt: NOW - 8 * 86_400_000 });
     expect(standings([reworked, again], [], NOW).get('scout')!.wins).toBe(0);

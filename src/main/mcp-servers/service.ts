@@ -25,6 +25,8 @@ export interface McpServersOptions {
   emit?: (state: McpServersState) => void;
   /** the folder the engines' configs are read from (tests: a temp home) */
   home?: string;
+  /** Import environment override for hermetic tests; production uses its actual engine locations. */
+  importEnv?: NodeJS.ProcessEnv;
   /** tests and the demo: a fake upstream instead of the network or a process */
   connect?: (ep: Endpoint, def: McpServerDef) => Upstream;
   testTimeoutMs?: number;
@@ -137,7 +139,7 @@ export class McpServersService {
   }
 
   importScan(): McpImportCandidate[] {
-    this.imports = scanImports(this.opts.home ?? process.env.SB_HOME ?? os.homedir(), this.store.servers().map(s => s.id));
+    this.imports = scanImports(this.opts.home ?? process.env.SB_HOME ?? os.homedir(), this.store.servers().map(s => s.id), process.platform, this.opts.importEnv);
     return structuredClone(this.imports);
   }
 

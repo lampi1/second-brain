@@ -346,7 +346,8 @@ describe('agent_delegate', () => {
     const r = await f.call('agent_report', herald.id, { outcome: 'done', summary: 'Bozza pronta', output: 'issue.md', doneWhen: [{ criterion: 'bozza scritta', met: true, evidence: 'issue.md' }] });
     expect(r).toMatchObject({ reported: true, to: 'orchestrator', delivered: true });
     await new Promise(res => setTimeout(res, 20));
-    expect(f.sent.get(orchestrator.id)?.at(-1)).toContain('[risultato · Herald «Issue · Bozza»] Bozza pronta');
+    expect(f.sent.get(orchestrator.id)?.length ?? 0).toBe(0);
+    expect(f.m.items(orchestrator.id)).toContainEqual(expect.objectContaining({ code: 'resultReady', result: expect.objectContaining({ output: 'issue.md' }) }));
     expect(f.m.runs.get(herald.run!.runId)?.report).toMatchObject({ outcome: 'done', verified: 'yes', summary: 'Bozza pronta' });
     await expect(f.call('agent_report', herald.id, { outcome: 'done', summary: 'again', output: 'x', doneWhen: [] })).rejects.toThrow(/already/);
     // outcome done with an unmet criterion is still refused, as for a delegated chat
@@ -356,7 +357,7 @@ describe('agent_delegate', () => {
     await expect(f.call('agent_report', mine.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [] })).rejects.toThrow(/only a chat the Orchestrator or a parent started/);
   });
 
-  it('a root chat\'s clean result goes to the quiet news when they take it; a partial one stays a message', async () => {
+  it('a root chat\'s clean result goes to the quiet news when they take it; a partial one is also displayed without a model call', async () => {
     const f = fixture();
     const quiet: string[] = [];
     f.m.onCleanReport(n => { quiet.push(`${n.role}: ${n.summary}`); return true; });
@@ -368,9 +369,8 @@ describe('agent_delegate', () => {
     await f.call('agent_report', b.id, { outcome: 'partial', summary: 'Metà', output: 'o', doneWhen: [{ criterion: 'c', met: false }] });
     await new Promise(res => setTimeout(res, 20));
     expect(quiet).toEqual(['Artisan: Fix su main']);
-    const after = f.sent.get(orchestrator.id)!.slice(before);
-    expect(after).toHaveLength(1);
-    expect(after[0]).toContain('[risultato · Scout «Fatti»] Metà');
+    expect(f.sent.get(orchestrator.id)?.length ?? 0).toBe(before);
+    expect(f.m.items(orchestrator.id).filter(i => i.kind === 'system' && i.code === 'resultReady')).toHaveLength(2);
   });
 
   it('a clean result the user waits for: quiet news plus the app\'s notice in the Orchestrator\'s chat, after the turn ends, no turn (#123)', async () => {
@@ -418,7 +418,7 @@ describe('agent_delegate', () => {
     expect(quiet).toEqual([]);
     f.sinks.get(artisan.id)!.changed({ state: 'idle' });
     expect(quiet).toEqual(['App · fix']);
-    expect(f.m.items(orchestrator.id).some(i => i.kind === 'system' && i.code === 'resultReady')).toBe(false); // nobody waits: no notice
+    expect(f.m.items(orchestrator.id).some(i => i.kind === 'system' && i.code === 'resultReady')).toBe(true); // nobody waits: no notice
     await new Promise(res => setTimeout(res, 20));
     expect(f.sent.get(orchestrator.id)?.length ?? 0).toBe(before);
   });
@@ -643,5 +643,92 @@ describe('stalled children ("Ferma dopo", delegation.stallMin)', () => {
     f.sinks.get(id)!.item({ kind: 'assistant', id: 'a1', at: at + 6 * 60_000, text: 'eccomi' } as never, false);
     clock = () => Date.now() + 60_000;
     expect((await f.call('agent_children', parent.id, {})).children[0].stalled).toBeUndefined();
+  });
+});
+
+
+describe('versioned task continuity and canonical results', () => {
+  const result = { outcome: 'done', summary: 'Full summary', output: 'FULL DELIVERABLE', doneWhen: [{ criterion: 'criterion A', met: true, evidence: 'artifact.txt' }] };
+  it('reuses the conversation with a new run, retaining old evidence and accounting new cost', async () => {
+    const f = fixture();
+    const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', title: 'Topic', prompt: 'one' }, 'agent');
+    const first = c.run!.runId;
+    await f.call('agent_report', c.id, result);
+    await f.m.set(c.id, { workStatus: 'completed' });
+    await expect(f.m.send(c.id, 'second question', undefined, false, o.title, false, { kind: 'chat', chatId: o.id })).rejects.toThrow(/app_assign_task/);
+    await f.m.assignTask(c.id, 'second question', { mode: 'continue', expectedVersion: 1, source: { kind: 'chat', chatId: o.id } });
+    const next = f.m.list().find(x => x.id === c.id)!.run!;
+    expect(next.runId).not.toBe(first);
+    expect(next).toMatchObject({ taskId: first, taskVersion: 2, continuedFrom: first });
+    expect(f.m.runs.get(first)?.report?.canonical).toMatchObject({ output: 'FULL DELIVERABLE', doneWhen: [{ evidence: 'artifact.txt' }] });
+    f.sinks.get(c.id)!.changed({ state: 'running', turnCostUsd: 1 });
+    expect(next.costUsd).toBe(1);
+    expect(next.corrections).toEqual({ tagged: 0, afterReport: 0 });
+  });
+  it('retains the complete report even when work was already marked completed', async () => {
+    const f = fixture();
+    await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'one' }, 'agent');
+    await f.m.set(c.id, { workStatus: 'completed' });
+    await f.call('agent_report', c.id, result);
+    expect(f.m.runs.get(c.run!.runId)?.report?.canonical?.output).toBe('FULL DELIVERABLE');
+  });
+  it('refuses a post-report follow-up before dispatch while the old turn is still finishing', async () => {
+    const f = fixture();
+    await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'one' }, 'agent');
+    f.sinks.get(c.id)!.changed({ state: 'running' });
+    await f.call('agent_report', c.id, result);
+    await expect(f.m.send(c.id, 'follow up')).rejects.toThrow(/fine del turno/);
+    f.m.resumedByUser(c.id, 'follow up');
+    expect(f.m.list().find(x => x.id === c.id)?.run?.taskVersion).toBe(1);
+  });
+  it('accepts a second child report on a new run, and rejects duplicate reports within one run', async () => {
+    const f = fixture(), p = await f.root('strategist');
+    const id = (await f.call('agent_delegate', p.id, { tasks: [f.task('scout', 'Topic')] })).children[0].chatId;
+    await f.call('agent_report', id, result);
+    await f.m.send(id, 'expand this point');
+    f.m.resumedByUser(id, 'expand this point');
+    await expect(f.call('agent_report', id, result)).rejects.toThrow(/taskVersion/);
+    await expect(f.call('agent_report', id, { ...result, taskVersion: 2 })).resolves.toMatchObject({ reported: true });
+    await expect(f.call('agent_report', id, { ...result, taskVersion: 2 })).rejects.toThrow(/already/);
+    expect(f.m.list().find(c => c.id === id)?.run?.corrections).toEqual({ tagged: 0, afterReport: 0 });
+  });
+  it('backfills legacy identity and rebuilds every historical root result once after restart', async () => {
+    const f = fixture();
+    const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', title: 'Topic', prompt: 'one' }, 'agent');
+    const legacy = f.m.runs.get(c.run!.runId)!;
+    delete legacy.taskId; delete legacy.taskVersion;
+    await f.call('agent_report', c.id, result);
+    expect(legacy).toMatchObject({ taskId: legacy.runId, taskVersion: 1 });
+    await f.m.assignTask(c.id, 'next topic', { mode: 'continue' });
+    await f.call('agent_report', c.id, { ...result, taskVersion: 2, output: 'SECOND DELIVERABLE' });
+    const p = await f.root('strategist');
+    const child = (await f.call('agent_delegate', p.id, { tasks: [f.task('scout', 'Private child')] })).children[0].chatId;
+    await f.call('agent_report', child, { ...result, output: 'PRIVATE CHILD OUTPUT' });
+    await f.m.shutdown();
+    const again = new ChatManager({ userData: f.dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0 });
+    managers.push(again);
+    again.resumeInterrupted(); again.resumeInterrupted();
+    expect(again.runs.get(legacy.runId)?.report?.canonical?.output).toBe('FULL DELIVERABLE');
+    const notices = again.items(o.id).filter(i => i.kind === 'system' && i.code === 'resultReady');
+    expect(notices).toHaveLength(2);
+    expect(notices.map(i => (i as unknown as { result: { output: string } }).result.output)).toEqual(['FULL DELIVERABLE', 'SECOND DELIVERABLE']);
+  });
+  it('rejects stale assignment versions and never authorizes an assignment by a display title', async () => {
+    const f = fixture();
+    await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'one' }, 'agent');
+    await f.call('agent_report', c.id, result);
+    await f.m.set(c.id, { workStatus: 'completed' });
+    await f.m.send(c.id, 'not an assignment', undefined, false, 'Orchestrator');
+    expect(f.m.list().find(x => x.id === c.id)?.run?.runId).toBe(c.run!.runId);
+    await expect(f.m.assignTask(c.id, 'new work', { expectedVersion: 99 })).rejects.toThrow(/version/);
+    await f.m.assignTask(c.id, 'new work', { mode: 'new-task', expectedVersion: 1 });
+    const run = f.m.list().find(x => x.id === c.id)!.run!;
+    expect(run.taskId).toBe(run.runId);
+    expect(run.continuedFrom).toBeUndefined();
   });
 });

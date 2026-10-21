@@ -16,7 +16,7 @@ import { sameList } from '../store/state';
 import { childState, type ChildState, type TreeNode } from '../lib/chat-tree';
 import { runSteps, type RunStep, type StepMark } from '../lib/run-steps';
 import { requestHost } from '../lib/child-requests';
-import { reqKey } from '../actions';
+import { focusChat, reqKey } from '../actions';
 import { useNow } from '../lib/clock';
 import { formatCost, modelWithEffort } from '../lib/format';
 import { selectedHere } from '../lib/strip-click';
@@ -55,9 +55,10 @@ function useChild(chatId: string) {
   const refusal = useApp(s => lastRefusal(s.items[chatId]));
   const loaded = useApp(s => !!s.items[chatId]);
   const reqs = useApp(s => s.pending.filter(p => p.chatId === chatId && p.type !== 'command'), sameList);
+  const parentTitle = useApp(s => { const p = s.chats[chatId]?.parentId; return p ? s.chats[p]?.title ?? '' : ''; });
   const parent = useApp(s => { const p = s.chats[chatId]?.parentId; const c = p ? s.chats[p] : undefined; return c ? c.agent?.name || c.title : ''; });
   useEffect(() => { if (!loaded) void loadItems(chatId); }, [chatId, loaded]);
-  return { items, refused, refusal, reqs, parent };
+  return { items, refused, refusal, reqs, parent, parentTitle };
 }
 
 /** The curved thread lines of a delegated card: the ancestors' lines that run on, then its own elbow, tinted by state. */
@@ -176,6 +177,7 @@ export function DelegationCard({ chatId }: { chatId: string }) {
   return <article ref={ref} className={`delegation-card s-${state}${open ? ' is-open' : ''}${flash ? ' flash' : ''}${chat.closedAt ? ' is-ended' : ''}`} data-testid={`delegation-card-${chatId}`}
     data-state={chat.state} data-child-state={state} data-open={open || undefined}
     onClick={onClick} onPointerDown={() => { down.current = window.getSelection()?.toString() ?? ''; }}>
+    {chat.parentId && <button type="button" className="dc-parent" data-testid={`delegation-parent-${chatId}`} onClick={() => focusChat(chat.parentId!)}>{t('tree.parentLink', { parent: `${c.parent} · ${c.parentTitle}` })}</button>}
     <div className="dc-summary" title={t(open ? 'tree.foldCard' : 'tree.openCard')}>
       <div className="dc-head">
         <h4 className="dc-title" title={chat.delegation?.goal ?? chat.title}>{chat.title}</h4>
@@ -212,7 +214,7 @@ export function KidsBar({ chatId }: { chatId: string }) {
   return <div className="kids-bar" data-testid={`tree-kids-${chatId}`}>
     <button type="button" className="kids-toggle" aria-expanded={!folded} data-testid={`tree-toggle-${chatId}`} aria-label={t(folded ? 'tree.unfold' : 'tree.fold', { title })} onClick={() => setTreeCollapsed(chatId, !folded)}>
       <span className="kids-chev" aria-hidden="true">{folded ? <IconChevronRight size={13} /> : <IconChevronDown size={13} />}</span>
-      <b>{t('tree.kids', { n: kids.length })}</b><span className="kids-sep">·</span>
+      <span className="kids-parent" title={title}>{title}</span><b>{t('tree.kids', { n: kids.length })}</b><span className="kids-sep">·</span>
       {run > 0 && <span className="kid-sum"><span className="kid-dot run" />{t('tree.kidsRun', { n: run })}</span>}
       {wait > 0 && <span className="kid-sum"><span className="kid-dot wait" />{t('tree.kidsWait', { n: wait })}</span>}
       {done > 0 && <span className="kid-sum"><span className="kid-dot done" />{t('tree.kidsDone', { n: done })}</span>}

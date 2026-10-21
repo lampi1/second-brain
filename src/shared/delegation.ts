@@ -7,6 +7,15 @@ import { TOOL_CLASSES, type ToolClass } from './agents';
 import { MODEL_TIERS, ROLE_DEFAULTS, currentRoleId, isWorkRole, type ModelTier, type WorkRoleId } from './roles';
 import { AGENT_LABEL, oneLine } from './agent-label';
 
+/** Stable provenance for task assignment; display titles never authorize lifecycle changes. */
+export type TaskSource = { kind: 'user' } | { kind: 'chat'; chatId: string } | { kind: 'app' };
+export interface TaskAssignmentOptions {
+  mode?: 'continue' | 'new-task' | 'rework';
+  source?: TaskSource;
+  expectedVersion?: number;
+  doneWhen?: string[];
+}
+
 export interface DelegationContract {
   /** what the child must achieve, one or two sentences */
   goal: string;
@@ -26,6 +35,7 @@ export interface DelegationContract {
 export const RESULT_OUTCOMES = ['done', 'partial', 'blocked'] as const;
 export type DelegationOutcome = (typeof RESULT_OUTCOMES)[number];
 export interface DelegationResult {
+  taskVersion?: number;
   outcome: DelegationOutcome;
   summary: string;
   output: string;
@@ -92,7 +102,8 @@ export function checkContract(v: unknown, role: WorkRoleId): DelegationContract 
 /** A child's agent_report, checked strictly: every criterion of its contract answered once, in any order. */
 export function checkResult(v: unknown, doneWhen: readonly string[]): DelegationResult {
   const o = object(v, 'result');
-  only(o, ['outcome', 'summary', 'output', 'doneWhen', 'questions', 'goalChangedByUser', 'newGoal'], 'agent_report');
+  only(o, ['outcome', 'summary', 'output', 'doneWhen', 'questions', 'goalChangedByUser', 'newGoal', 'taskVersion'], 'agent_report');
+  if (o.taskVersion !== undefined && (!Number.isSafeInteger(o.taskVersion) || (o.taskVersion as number) < 1)) throw new Error('taskVersion must be a positive integer.');
   if (o.goalChangedByUser !== undefined && typeof o.goalChangedByUser !== 'boolean') throw new Error('goalChangedByUser: true or false.');
   const changed = o.goalChangedByUser === true;
   const newGoal = changed ? text(o.newGoal, GOAL_MAX, 'newGoal (the goal the user gave you)') : undefined;
@@ -111,7 +122,7 @@ export function checkResult(v: unknown, doneWhen: readonly string[]): Delegation
   if (o.outcome === 'done' && answers.some(a => !a.met)) throw new Error('outcome "done" needs every criterion met: say "partial" or "blocked" instead.');
   const questions = o.questions === undefined ? undefined : Array.isArray(o.questions) && o.questions.length <= 8 ? o.questions.map((q, i) => text(q, 500, `questions[${i}]`)) : null;
   if (questions === null) throw new Error('questions: up to 8.');
-  return { outcome: o.outcome as DelegationOutcome, summary: text(o.summary, SUMMARY_MAX, 'summary'), output: text(o.output, RESULT_OUTPUT_MAX, 'output'), doneWhen: answers, ...(questions?.length ? { questions } : {}), ...(newGoal ? { goalChangedByUser: true as const, newGoal } : {}) };
+  return { ...(o.taskVersion !== undefined ? { taskVersion: o.taskVersion as number } : {}), outcome: o.outcome as DelegationOutcome, summary: text(o.summary, SUMMARY_MAX, 'summary'), output: text(o.output, RESULT_OUTPUT_MAX, 'output'), doneWhen: answers, ...(questions?.length ? { questions } : {}), ...(newGoal ? { goalChangedByUser: true as const, newGoal } : {}) };
 }
 
 /** The child's first message: who delegates and the contract (the rules on reporting and asking are its role frame's,

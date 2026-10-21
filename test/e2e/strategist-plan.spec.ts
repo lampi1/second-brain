@@ -35,6 +35,7 @@ test('a Strategist asks, proposes a short plan to approve and shows its steps on
     // under way: the checklist, each step with its role and state, on the collapsed strip
     const card = page.getByTestId(`plan-${LEAD}`);
     await expect(card).toHaveAttribute('data-phase', 'running');
+    await page.getByTestId(`plan-toggle-${LEAD}`).click();
     await expect(page.getByTestId(`plan-steps-${LEAD}-1`)).toHaveAttribute('data-state', 'done');
     await expect(page.getByTestId(`plan-steps-${LEAD}-2`)).toHaveAttribute('data-state', 'now');
     await expect(page.getByTestId(`plan-steps-${LEAD}-3`)).toHaveAttribute('data-state', 'todo');
@@ -115,5 +116,41 @@ test('with "Popup" on, a Strategist\'s question opens in the questions window, n
     await expect(page.getByTestId(`plan-in-window-${LEAD}`)).toBeVisible();
     await expect(page.getByTestId(`plan-enough-${LEAD}`)).toBeVisible();
     await expect(page.getByTestId('plan-known')).toContainText('Dove');
+  } finally { await app.close(); }
+});
+
+// Execution completion and result quality remain distinct in the compact summary.
+test('a finished partial plan is complete, compact and expandable, with named parent links', async () => {
+  const { app, page } = await launchDemo();
+  try {
+    await demo(app, 'tree');
+    await demo(app, 'plan', LEAD, plan({ phase: 'done', steps: STEPS.map(s => ({ ...s, state: 'done', outcome: 'partial' })) }));
+    const card = page.getByTestId(`plan-${LEAD}`);
+    await expect(card.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '3');
+    await expect(card).toContainText('risultato parziale');
+    await expect(page.getByTestId(`plan-steps-${LEAD}`)).toBeHidden();
+    await page.getByTestId(`plan-toggle-${LEAD}`).click();
+    await expect(page.getByTestId(`plan-steps-${LEAD}`)).toBeVisible();
+    await expect(page.locator('[data-testid^="delegation-parent-"]').first()).toContainText('Delegato da');
+    await top(page);
+    await shot(page, 'strategist-plan-partial-complete');
+  } finally { await app.close(); }
+});
+
+// A blocked result must not be presented as a merely partial result in the collapsed view.
+test('a compact plan distinguishes blocked execution from an unavailable final result', async () => {
+  const { app, page } = await launchDemo();
+  try {
+    await demo(app, 'tree');
+    await demo(app, 'plan', LEAD, plan({ phase: 'running', steps: STEPS.map(s => ({ ...s, state: 'blocked', outcome: 'blocked' })) }));
+    const toggle = page.getByTestId(`plan-toggle-${LEAD}`);
+    await expect(toggle).toContainText('bloccato');
+    await expect(toggle).not.toContainText('risultato parziale');
+    await expect(page.getByTestId(`plan-steps-${LEAD}`)).toBeHidden();
+    await demo(app, 'plan', LEAD, plan({ phase: 'done', steps: STEPS.map(s => ({ ...s, state: 'done', outcome: 'blocked' })) }));
+    await expect(toggle).toContainText('risultato non ottenuto');
+    await expect(toggle).not.toContainText('risultato parziale');
+    await top(page);
+    await shot(page, 'strategist-plan-blocked-complete');
   } finally { await app.close(); }
 });

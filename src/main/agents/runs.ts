@@ -4,6 +4,7 @@
 import path from 'node:path';
 import crypto from 'node:crypto';
 import type { AgentRun, AgentRunCorrections, AgentRunEnd, AgentRunOutcome, AgentRunReport, AgentRunTags, AgentRunTokens } from '../../shared/agents';
+import { checkResult } from '../../shared/delegation';
 import { MODEL_TIERS, type ModelTier } from '../../shared/roles';
 import { SUMMARY_MAX } from './run-report';
 import { rollUp, SAMPLE_MAX, type RunTally, type TagTally } from './run-metrics';
@@ -82,7 +83,14 @@ function readReport(v: unknown): AgentRunReport | null {
   if (!r || typeof r !== 'object' || !time(r.at)) return null;
   if (!['done', 'partial', 'blocked'].includes(r.outcome as string) || !['yes', 'partial', 'no'].includes(r.verified as string) || !str(r.summary, SUMMARY_MAX)
     || (r.findings !== undefined && !count(r.findings)) || (r.blocking !== undefined && !count(r.blocking)) || (count(r.findings) && count(r.blocking) && r.blocking > r.findings)) return null;
-  return { at: r.at, outcome: r.outcome as 'done', verified: r.verified as 'yes', summary: r.summary,
+  let canonical: AgentRunReport['canonical'];
+  if (r.canonical !== undefined) {
+    const c = r.canonical as NonNullable<AgentRunReport['canonical']>;
+    if (!c || !time(c.at) || !str(c.taskId, 80) || !RUN_ID.test(c.runId) || !count(c.taskVersion) || c.taskVersion < 1 || !Array.isArray(c.doneWhen)) return null;
+    const { at, taskId, runId, taskVersion, ...result } = c;
+    try { canonical = { ...checkResult(result, c.doneWhen.map(d => d.criterion)), at, taskId, runId, taskVersion }; } catch { return null; }
+  }
+  return { ...(canonical ? { canonical } : {}), at: r.at, outcome: r.outcome as 'done', verified: r.verified as 'yes', summary: r.summary,
     ...(r.findings !== undefined ? { findings: r.findings as number } : {}), ...(r.blocking !== undefined ? { blocking: r.blocking as number } : {}),
     ...(['success', 'partial', 'fail'].includes(r.verdict as string) ? { verdict: r.verdict as 'success' } : {}), ...(r.via === 'agent_report' ? { via: 'agent_report' as const } : {}) };
 }
@@ -116,7 +124,14 @@ export function readRun(v: unknown): AgentRun | null {
   const corrections = r.corrections === undefined ? undefined : readCorrections(r.corrections);
   const tags = r.tags === undefined ? undefined : readTags(r.tags);
   if (report === null || corrections === null || tags === null || (r.executionMs !== undefined && !time(r.executionMs))) return null;
+  const snapshot = r.skillSuggestions as AgentRun['skillSuggestions'];
+  if (snapshot !== undefined && (!snapshot || !time(snapshot.at) || !skillList(snapshot.suggested) || !skillList(snapshot.used))) return null;
+  if (r.taskId !== undefined && !str(r.taskId, 80) || r.taskVersion !== undefined && (!count(r.taskVersion) || r.taskVersion < 1)) return null;
+  if (report?.canonical && (report.canonical.runId !== r.runId || report.canonical.taskId !== r.taskId || report.canonical.taskVersion !== r.taskVersion)) return null;
   return {
+    ...(r.taskId ? { taskId: r.taskId as string } : {}), ...(r.taskVersion ? { taskVersion: r.taskVersion as number } : {}),
+    ...(snapshot ? { skillSuggestions: { at: snapshot.at, suggested: [...snapshot.suggested], used: [...snapshot.used] } } : {}),
+    ...(r.taskContract && typeof r.taskContract === 'object' && typeof (r.taskContract as { goal?: unknown }).goal === 'string' && Array.isArray((r.taskContract as { doneWhen?: unknown }).doneWhen) && (r.taskContract as { doneWhen: unknown[] }).doneWhen.every(x => typeof x === 'string') ? { taskContract: r.taskContract as AgentRun['taskContract'] } : {}),
     runId: r.runId, chatId: r.chatId, agentId: r.agentId, version: r.version, goal: r.goal, startedBy: r.startedBy as AgentRun['startedBy'], startedAt: r.startedAt,
     ...(r.parentRunId ? { parentRunId: r.parentRunId as string } : {}),
     ...(r.tier ? { tier: r.tier as ModelTier } : {}), ...(r.model !== undefined ? { model: r.model as string | null } : {}),
@@ -196,7 +211,15 @@ export function readTally(v: unknown): RunTally | null {
   if (t.decisions !== undefined && !count(t.decisions)) return null;
   if (t.decisionWins !== undefined && (!count(t.decisionWins) || t.decisionWins > ((t.decisions as number | undefined) ?? 0))) return null;
   if ((t.tags !== undefined && !tagTallies(t.tags)) || (t.tagsLost !== undefined && t.tagsLost !== true) || (t.tags !== undefined && t.tagsLost !== undefined)) return null;
-  return structuredClone(t) as unknown as RunTally;
+  const result = structuredClone(t) as unknown as RunTally;
+  if (result.verdictSchema !== 2) {
+    // Old rollups mix self-reported silence with independent outcomes. Counts remain, quality is unknown.
+    result.verdicts = { success: 0, partial: 0, fail: 0 };
+    result.decisionWins = 0;
+    for (const bucket of Object.values(result.tags ?? {})) for (const tag of Object.values(bucket as Record<string, TagTally>)) tag.verdicts = { success: 0, partial: 0, fail: 0 };
+    result.verdictSchema = 2;
+  }
+  return result;
 }
 
 /** agent-runs.json `{version:1, runs, rollups}`: bounded by count and bytes; only ended runs are ever pruned, oldest end

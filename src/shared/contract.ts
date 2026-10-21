@@ -13,7 +13,7 @@ import type { ConnectorId, ConnectorState } from './connectors';
 import type { McpImportCandidate, McpServerDef, McpServersState, McpToolAccess } from './mcp-servers';
 import type { FileViewResult } from './file-view';
 import type { DiffAgainst, FileDiffResult } from './file-diff';
-import type { AgentCatalog, AgentMetrics, AgentMetricsFilter, AgentDraft, AgentOwnerSnapshot, AgentProfile, AgentRun, AgentUndo, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
+import type { CanonicalResult, AgentCatalog, AgentMetrics, AgentMetricsFilter, AgentDraft, AgentOwnerSnapshot, AgentProfile, AgentRun, AgentUndo, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
 import type { DelegationSettings, ModelTier, RoleId, WorkRoleId } from './roles';
 import type { ChatDelegation, DelegationLimitHit } from './delegation';
 import type { StrategyPlan } from './strategy';
@@ -255,7 +255,7 @@ export type ChatItem =
    *  (shown folded), its note is the hand-off it starts from */
   // text: the English rendering, for agents, logs and items saved before this field existed. When code is set, the
   // UI shows t('sys.' + code, params) instead (src/shared/sys.ts, src/renderer/i18n/index.ts's sysText()).
-  | { kind: 'system'; id: string; at: number; text: string; level: 'info' | 'warn' | 'error'; code?: SysCode; params?: SysParams; continued?: { notePath: string; session?: string } }
+  | { kind: 'system'; id: string; at: number; text: string; level: 'info' | 'warn' | 'error'; code?: SysCode; params?: SysParams; result?: CanonicalResult; continued?: { notePath: string; session?: string } }
   /** interrupted = the user stopped the turn (Stop, "Invia subito"): isError stays false, the UI says "interrotto da te" */
   | { kind: 'result'; id: string; at: number; costUsd: number; durationMs: number; turns: number; isError: boolean; interrupted?: boolean }
   /** a visual a chat showed with show_ui (ADR 0033): a trusted catalog component, never HTML. id = `art-<key>`, key =

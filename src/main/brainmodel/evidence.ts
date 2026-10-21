@@ -80,17 +80,14 @@ export function claimOf(c: Pick<BrainChange, 'id' | 'at' | 'rolledBackAt'>, seed
   const jb = atCheckpoint(before.length), ja = atCheckpoint(after.length);
   const vb = before.slice(0, jb).map(value), va = after.slice(0, ja).map(value);
   const side = (all: AgentRun[], judged: number[]): ClaimSide => ({ n: all.length, judged: judged.length, mean: mean(judged.length ? judged : all.map(value)) });
-  const sum = (xs: number[]): number => xs.reduce((a, b) => a + b, 0);
-  const key = `${c.id}|${jb}|${ja}|${sum(vb)}|${sum(va)}`;
+  const key = `${c.id}|${jb}|${ja}|${vb.join(',')}|${va.join(',')}`;
   let diff = cache?.get(key);
   if (diff === undefined) {
     diff = jb && ja ? bootstrapDiff(vb, va, { seed: seedOf(c.id) }) : null;
     cache?.set(key, diff);
   }
   const margin = Math.max(0.1, 0.25 * (mean(vb) ?? 0));
-  let verdict: ClaimVerdict = c.rolledBackAt !== undefined ? 'annullato' : verdictOf(diff, { before: jb, after: ja }, 'lower', margin);
-  // still undecided once the runs after it reached the last checkpoint: no effect worth the name
-  if (verdict === 'raccolta' && diff && ja >= CHECKPOINTS[CHECKPOINTS.length - 1]!) verdict = 'nessun-effetto';
+  const verdict: ClaimVerdict = c.rolledBackAt !== undefined ? 'annullato' : verdictOf(diff, { before: jb, after: ja }, 'lower', margin);
   return {
     hypothesis: seed.hypothesis, metric: 'corrections', scope: seed.scope, skill: seed.skill,
     before: side(before, vb), after: side(after, va), need: CHECKPOINTS.find(k => k > after.length) ?? null,

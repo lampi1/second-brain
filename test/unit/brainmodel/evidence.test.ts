@@ -50,6 +50,15 @@ describe('validSeed', () => {
 
 describe('claimOf', () => {
   const seed = { hypothesis: 'fewer' as const, scope: ['artisan'], skill: null };
+  it('invalidates an interval cache when the distribution changes but the sum does not', () => {
+    const cache: IntervalCache = new Map();
+    const before = side('artisan', 20, -1, [2]);
+    claimOf(change, seed, [...before, ...side('artisan', 20, 1, [1])], cache);
+    const revised = claimOf(change, seed, [...before, ...side('artisan', 20, 1, [0, 2])], cache);
+    const fresh = claimOf(change, seed, [...before, ...side('artisan', 20, 1, [0, 2])]);
+    expect(cache.size).toBe(2);
+    expect(revised.diff).toEqual(fresh.diff);
+  });
   it('stays «in raccolta» below the first checkpoint, saying which checkpoint is next', () => {
     const c = claimOf(change, seed, [...side('artisan', 30, -1, [2]), ...side('artisan', 7, 1, [0])]);
     expect(c).toMatchObject({ verdict: 'raccolta', need: 20, diff: null, before: { n: 30, judged: 20 }, after: { n: 7, judged: 0, mean: 0 } });
@@ -86,10 +95,10 @@ describe('claimOf', () => {
   it('«nessun effetto» when the interval sits inside the margin', () => {
     const flat = [1, 1, 1, 1, 0, 2];
     expect(claimOf(change, seed, [...side('artisan', 40, -1, [1]), ...side('artisan', 40, 1, [1])]).verdict).toBe('nessun-effetto');
-    // noisy and undecided after 160 runs: no effect worth the name
+    // noisy and undecided after 160 runs remains inconclusive
     const c = claimOf(change, seed, [...side('artisan', 40, -1, [0, 3, 1, 0]), ...side('artisan', 160, 1, [0, 3, 0, 1, 0, 2, ...flat])]);
     expect(c.need).toBeNull();
-    expect(['nessun-effetto', 'aiuta']).toContain(c.verdict);
+    expect(['raccolta', 'aiuta']).toContain(c.verdict);
   });
   it('counts only its scope, chat runs that ended with corrections counted, and for a skill the runs that loaded it', () => {
     const runs = [

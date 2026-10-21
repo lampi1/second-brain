@@ -1,8 +1,5 @@
-// Role metrics per role and version (AGENTS-DESIGN §5), read from agent-runs.json: the ended runs still kept plus the
-// rollups of the ones pruned. Pure but for the clock (the facts' verdict settles 7 days after a run's end: `now`, by
-// default the current time). Every metric is `value · n · coverage`: n = the runs it was computed on, coverage = n /
-// ended runs. The success rate rests on verified verdicts only: the user's, a verified review's, or the facts'
-// (shared/run-verdict.ts, ADR 0100). Used by run-feedback.ts (agent_metrics), trials.ts and the Agenti page.
+// Role metrics and pruned-run rollups used by agent cards. Verified quality uses only human or independent evidence;
+// self-reports and observation proxies do not enter success. Costs and usage retain their own data coverage.
 import type { AgentMetrics, AgentRun, AgentRunTokens, AgentRunOutcome, Metric, VersionMetrics } from '../../shared/agents';
 import { countedDecision } from './standing';
 import { FACTS_SETTLE_MS, reworkStartsOf, reworkedWithin, verifiedVerdict } from '../../shared/run-verdict';
@@ -21,9 +18,10 @@ export interface ReviewTally { runs: number; findings: number; blockingRuns: num
 /** Additive per (agentId, version): the kept runs fold into one; the pruned ones live on as one (agent-runs.json `rollups`). */
 export interface RunTally {
   agentId: string; version: number;
+  /** v2 excludes silence proxies; older aggregate verdicts have no recoverable provenance. */
+  verdictSchema?: 2;
   ended: number;
-  /** verified only: basis human or reviewed-evidence, else the facts' settled verdict (shared/run-verdict.ts); a run
-   *  pruned while its facts were still provisional is folded without one */
+  /** Verified only: basis human or reviewed-evidence. */
   verdicts: Verdicts;
   /** never in the rate: the Orchestrator's opinion, and the agent's own word (outcome self-report or its run-report) */
   opinion: Verdicts; selfReport: Verdicts;
@@ -69,7 +67,7 @@ export interface MetricsInput {
 const emptySample = (): Sample => ({ n: 0, values: [], sum: 0 });
 const verdicts = (): Verdicts => ({ success: 0, partial: 0, fail: 0 });
 export function emptyTally(agentId: string, version: number): RunTally {
-  return { agentId, version, ended: 0, verdicts: verdicts(), opinion: verdicts(), selfReport: verdicts(), corrections: { runs: 0, tagged: 0, afterReport: 0 }, aiErrors: { runs: 0, lines: 0 },
+  return { agentId, version, verdictSchema: 2, ended: 0, verdicts: verdicts(), opinion: verdicts(), selfReport: verdicts(), corrections: { runs: 0, tagged: 0, afterReport: 0 }, aiErrors: { runs: 0, lines: 0 },
     reworked: 0, questions: 0, permissions: 0, commands: 0, cost: emptySample(), tokens: { input: emptySample(), output: emptySample(), cacheRead: emptySample(), cacheWrite: emptySample() },
     contextPeak: emptySample(), elapsed: emptySample(), execution: emptySample(), reviews: {} };
 }
@@ -132,7 +130,7 @@ export function mergeTallies(a: RunTally, b: RunTally, agentId = a.agentId, vers
   const reviews: Record<string, ReviewTally> = structuredClone(a.reviews);
   for (const [k, r] of Object.entries(b.reviews)) { const x = reviews[k] ??= { runs: 0, findings: 0, blockingRuns: 0, blocking: 0 }; x.runs += r.runs; x.findings += r.findings; x.blockingRuns += r.blockingRuns; x.blocking += r.blocking; }
   return {
-    agentId, version, ended: a.ended + b.ended, verdicts: mergeVerdicts(a.verdicts, b.verdicts), opinion: mergeVerdicts(a.opinion, b.opinion), selfReport: mergeVerdicts(a.selfReport, b.selfReport),
+    agentId, version, verdictSchema: 2, ended: a.ended + b.ended, verdicts: mergeVerdicts(a.verdicts, b.verdicts), opinion: mergeVerdicts(a.opinion, b.opinion), selfReport: mergeVerdicts(a.selfReport, b.selfReport),
     corrections: { runs: a.corrections.runs + b.corrections.runs, tagged: a.corrections.tagged + b.corrections.tagged, afterReport: a.corrections.afterReport + b.corrections.afterReport },
     aiErrors: { runs: a.aiErrors.runs + b.aiErrors.runs, lines: a.aiErrors.lines + b.aiErrors.lines },
     reworked: a.reworked + b.reworked, questions: a.questions + b.questions, permissions: a.permissions + b.permissions, commands: a.commands + b.commands,

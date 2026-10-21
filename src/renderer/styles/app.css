@@ -1187,3 +1187,10 @@ html.overlay body:focus-within .layer-hint { display: none; }
 .queued-bar .btn { flex: none; }
 .topbar-queue { flex: none; color: var(--amber); white-space: nowrap; }
 .topbar[data-fit~="3"] .topbar-queue .queue-label { display: none; }
+
+/* Canonical output opens locally: no extra model turn to read the full deliverable. */
+.notice.result-ready { flex-wrap: wrap; }
+.result-ready-full { flex-basis: 100%; min-width: 0; }
+.result-ready-full summary { cursor: pointer; font-weight: 600; }
+.result-ready-full .md { margin-top: 8px; color: var(--text); overflow-wrap: anywhere; }
+.result-ready-full small { opacity: .6; overflow-wrap: anywhere; }

@@ -58,8 +58,19 @@ ask about the work in progress (ADR 0106). It is an agent with its own card and 
 in the header and change it with a click (ADR 0107). When the answer turns into work, **Fanne un lavoro** hands it to
 the Orchestrator (ADR 0105).
 
-**✅ Judged by facts, not by you.** A run counts as a success when its report met every done criterion, you corrected
-nothing and nobody had to redo it within 7 days. No form to fill in, no tokens spent (ADR 0100).
+**✅ Outcomes with their evidence.** Completed work, the agent's own assessment, no observed corrections and an
+independent verdict are different signals. Only a human verdict or an evidence-based review counts as verified
+success. A follow-up is a new run, not a correction. Classifiers show their coverage and explain missing data;
+seven days of silence never become proof of correctness (ADR 0110).
+
+**↪️ Keep the conversation.** A related Scout follow-up can stay in the same conversation and project while opening
+a new, versioned assignment and measured run. A changed role or project, and an independent Sentinel review,
+start fresh. The Orchestrator's **Plan** button starts a Strategist, which asks material questions before planning.
+Plans collapse to a compact progress row; finished execution and partial result quality are shown separately.
+
+**📬 Read the actual result.** The complete report and its criterion evidence are saved with the exact task and run.
+Expand it directly in the Orchestrator without another AI turn. Pending delivery survives restart and retries;
+child reports still reach their parent for integration. Reading a report costs no model inference; synthesis does.
 
 **📈 Agents that level up, honestly.** A role's level is the number of its verified successes: «Lv 6 Maestro · 38
 riusciti verificati». The app tunes models, instructions and skills by itself, as a trial against the old version,
@@ -73,8 +84,15 @@ already knows, at zero tokens (ADR 0102).
 **↩️ Undo a turn.** Before each turn the app records the folder's files in a hidden git ref; «Annulla l'ultimo turno»
 puts them back, without touching your index or branches (ADR 0103).
 
-**🧠 A brain that lights up.** Your notes, rules, memory and scripts live in a plain Markdown folder that the agents
-read and write. Watch it live on a 3D map, lit where the crew is working right now.
+**🧠 A brain that remembers its sources.** Notes and scripts remain readable files. Structured memory records carry
+project scope, source run, date and status; a proposed replacement cannot silently erase a confirmed fact. Legacy
+notes stay intact and unverified. Recall selects relevant scoped facts within a budget, alongside the existing
+hybrid search. Repeated tasks produce skill candidates for review and replay, never automatically active skills.
+Watch the brain live on a 3D map, lit where the crew is working right now.
+
+Costs are API-equivalent estimates where the engine supplies usage, not subscription invoices. Token/cache counts,
+work duration, result delivery and independent outcome coverage describe different parts of the same run. Missing
+measurements remain unknown; a comparison across different tasks is not evidence that an automatic change helped.
 
 ## A quick tour
 

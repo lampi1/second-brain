@@ -1,4 +1,5 @@
 // Role catalog and session identity contracts, shared by main, renderer and read-only discovery.
+import type { DelegationResult } from './delegation';
 import type { Effort, Harness } from './contract';
 import type { AgentKnowhow, AgentPackIdentity } from './agent-pack';
 
@@ -97,8 +98,10 @@ export interface AgentRunOutcome {
 }
 export interface AgentRunCounters { questions: number; permissions: number; commands: number; reopened: number; contextPeak: number | null }
 export interface AgentRunTokens { input: number; cacheRead: number; cacheWrite: number; output: number }
+/** The immutable result attached to one task version and run. */
+export type CanonicalResult = DelegationResult & { at: number; taskId: string; runId: string; taskVersion: number };
 /** The run's agent_report (agents/delegation.ts): the child's self-report of its delegation contract. */
-export interface AgentRunReport { at: number; outcome: 'done' | 'partial' | 'blocked'; verified: 'yes' | 'partial' | 'no'; summary: string; findings?: number; blocking?: number;
+export interface AgentRunReport { canonical?: CanonicalResult; at: number; outcome: 'done' | 'partial' | 'blocked'; verified: 'yes' | 'partial' | 'no'; summary: string; findings?: number; blocking?: number;
   /** an independent review's verdict on the run it reviews (agents/judge-sample.ts: a Sentinel's, a Judge's before ADR 0100) */
   verdict?: 'success' | 'partial' | 'fail';
   /** given with agent_report (its result was delivered to the parent or the Orchestrator as a message), not a
@@ -136,7 +139,7 @@ export interface AgentMetrics { agentId: string; versions: VersionMetrics[]; all
 export interface AgentStanding {
   /** ended runs (kept + rolled up) */
   runs: number;
-  /** verified successful runs (the user's verdict, a verified review's, or the facts' once settled): the level's XP */
+  /** verified successful runs (the user's verdict, a verified review's): the level's XP */
   wins: number;
   level: number;
   /** verified successes where this level starts, and where the next one does (null at the top level) */
@@ -153,6 +156,10 @@ export interface AgentStanding {
 }
 /** One run = a chat started from a role (agent-runs.json is the source of truth; the chat keeps a mirror). */
 export interface AgentRun {
+  taskId?: string; taskVersion?: number;
+  taskContract?: { goal: string; doneWhen: string[] };
+  /** Snapshot captured before launch; missing means historical suggestions are unknown. */
+  skillSuggestions?: { at: number; suggested: string[]; used: string[] };
   source?: 'chat' | 'oneshot';
   oneshot?: { engine: string; job: 'pulse' | 'headline'; fallback: boolean; costBasis: 'reported' | 'estimated' | 'unknown' };
   runId: string; chatId: string; agentId: string;
@@ -163,7 +170,7 @@ export interface AgentRun {
   /** the run of the chat that delegated this one (agent_delegate), or of the run an independent review (a Sentinel's) is about */
   parentRunId?: string;
   reviewOf?: string; reworkOf?: string;
-  /** the run of the chat this one continues (the hand-off "Continua in una nuova chat"): counts as rework of it */
+  /** the run of the chat this one continues (the hand-off "Continua in una nuova chat"): does not imply correction or rework */
   continuedFrom?: string;
   endedAt?: number; endReason?: AgentRunEnd;
   outcome?: AgentRunOutcome;
