@@ -98,6 +98,15 @@ describe('agent policy on chats', () => {
     expect(f.m.pending().filter(p => p.chatId === c.id).map(p => p.id)).toEqual(['a3', 'a4']);
   });
 
+  it('the app never answers for a tool class the role was not given (ADR 0103)', async () => {
+    const f = fixture();
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' }, 'user', agent({ tools: { allow: ['read'] }, ceiling: null }));
+    f.sink().pending({ id: 'e1', type: 'permission', tool: 'Edit', title: 'Edit', detail: '', input: { file_path: path.join(f.dir, 'a.txt') }, at: 1 });
+    f.sink().pending({ id: 'e2', type: 'permission', tool: 'Read', title: 'Read', detail: '', input: { file_path: path.join(f.dir, 'a.txt') }, at: 1 });
+    expect(f.answers).toEqual([{ id: 'e2', answer: { kind: 'permission', allow: true } }]);
+    expect(f.m.pending().filter(p => p.chatId === c.id).map(p => p.id)).toEqual(['e1']);
+  });
+
   it('a chat without an agent policy is untouched', async () => {
     const f = fixture();
     const c = await f.m.create({ harness: 'claude', cwd: f.dir, permissionMode: 'bypassPermissions', prompt: 'x' });

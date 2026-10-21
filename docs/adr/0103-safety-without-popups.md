@@ -37,8 +37,12 @@ what the owner refused; the safety net has to work after the fact.
 `sink.pending`, after the role gate), on every engine (Claude, Cursor, Codex):
 - **Allowed without a popup**: reads inside the chat's folder (links resolved; outside it, the home or a parent: asked),
   web searches, todo lists; reading commands (`tool-policy.ts readOnlyCommand`) with no path outside the folder; while
-  the turn has a checkpoint (so «Annulla l'ultimo turno» can put the files back), edits of files inside the folder and
-  local commands (`npm test`, `git commit`, `mkdir`, `rm` of a file in the folder).
+  the turn has its own checkpoint (so «Annulla l'ultimo turno» can put the files back), edits of files inside the folder
+  and local commands from an allow list: npm/pnpm/yarn/bun scripts and installs, git's local subcommands (no `-c`,
+  `--upload-pack`, rebase `-x`, `ext::`), cargo/go/dotnet builds and tests, `node`/`tsx`/`python` of a project script,
+  `npx` of a tool already in `node_modules/.bin`, file commands (`mkdir`, `cp`, `mv`, `rm` …). Every word, joined flag
+  value (`-C/`, `--opt=/x`) and redirection target must stay inside the folder (links resolved), with no variable, URL
+  or settings file. What a project script run this way does is not inspected: that is the normal work.
 - **Refused, with the reason shown in the chat** (`sys.commandDestructive`) and told to the model: recursive deletes of
   the folder, a parent, the home, a drive or `.git`; force pushes and remote deletes; `git reset --hard`, `git clean -f`,
   `git branch -D`, `git stash drop|clear`, history pruning; disk formatting, `dd of=`, shutdown; a download piped into a
@@ -51,5 +55,9 @@ what the owner refused; the safety net has to work after the fact.
   web fetches, Codex's session-wide write grant, and anything outside the folder or not read with confidence.
 - A role the user set to «Chiede conferma» or «Solo piano» on its card is always asked (only the refusals apply);
   «Accetta modifiche» lets reads and edits through, commands only when they read.
+  A tool class the role was not given, or a writing command of a role that may only read commands, is never answered by
+  the app (Cursor and Codex do not enforce a role's tools themselves).
+- After the review (2026-10-21): commands moved from "anything not known as dangerous" to an allow list; escaped
+  quotes, git config tricks, redirections into hooks, truncated file lists (200 entries) and unknown path keys ask.
 - It only answers requests the engine asks: a chat in `auto` or `bypassPermissions` asks nothing, as before. Off in the
   test suite in practice (no checkpoints under `SB_TEST`, so only reads and refusals apply).

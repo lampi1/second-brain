@@ -39,7 +39,7 @@ const FOLDER_TOOLS = new Set(['Glob', 'Grep', 'LS', 'Search']);
 const PATHLESS = new Set(['TodoWrite', 'Think', 'WebSearch']);
 /** files that hold settings, hooks, credentials or the repository itself: a change there is the user's call */
 const PROTECTED_DIRS = new Set(['.git', '.claude', '.cursor', '.codex', '.githooks', '.husky', '.vscode', '.idea']);
-const PROTECTED_FILE = /^(\.env(\..*)?|\.npmrc|\.yarnrc(\.yml)?|\.pypirc|\.netrc|\.gitconfig|\.mcp\.json|\.guardallow)$/i;
+const PROTECTED_FILE = /^(\.env(\..*)?|\.envrc|\.npmrc|\.yarnrc(\.yml)?|\.pypirc|\.netrc|\.gitconfig|\.mcp\.json|\.guardallow|\.gitmodules)$/i;
 
 const lower = (s: string): string => s.toLowerCase();
 const looksAbsolute = (p: string): boolean => path.isAbsolute(p) || /^[A-Za-z]:([\\/]|$)/.test(p) || p.startsWith('\\\\');
@@ -77,22 +77,28 @@ const protectedRel = (rel: string): boolean => {
 };
 
 const obj = (v: unknown): Record<string, unknown> => v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {};
+const KNOWN_KEYS = new Set(['file_path', 'notebook_path', 'path', 'directory', 'source', 'destination', 'target', 'pattern', 'command', 'content', 'old_string', 'new_string', 'description', 'title']);
 /** The paths a file tool names (Claude, Cursor ACP, Codex shapes); null = one is not a plain string. */
 function pathsOf(input: unknown): string[] | null {
   const o = obj(input);
   const out: string[] = [];
-  for (const k of ['file_path', 'notebook_path', 'path', 'source', 'destination', 'target']) {
+  for (const k of ['file_path', 'notebook_path', 'path', 'directory', 'source', 'destination', 'target']) {
     if (o[k] === undefined) continue;
     if (typeof o[k] !== 'string') return null;
     out.push(o[k] as string);
   }
   // Cursor ACP: the tool call itself when it has no raw input, its places under locations
   if (o.locations !== undefined) {
-    if (!Array.isArray(o.locations) || !o.locations.every(l => typeof obj(l).path === 'string')) return null;
+    // trimInput keeps 200 entries: a longer list may hide a place outside the folder
+    if (!Array.isArray(o.locations) || o.locations.length >= 200 || !o.locations.every(l => typeof obj(l).path === 'string')) return null;
     out.push(...o.locations.map(l => obj(l).path as string));
   }
+  // any other value that names a place by itself (target_directory: /home/u) counts as a path too
+  for (const [k, v] of Object.entries(o)) {
+    if (typeof v === 'string' && !KNOWN_KEYS.has(k) && (looksAbsolute(v) || v.startsWith('~'))) out.push(v);
+  }
   if (o.files !== undefined) {
-    if (!Array.isArray(o.files) || !o.files.every(f => typeof f === 'string')) return null;
+    if (!Array.isArray(o.files) || o.files.length >= 200 || !o.files.every(f => typeof f === 'string')) return null;
     out.push(...o.files as string[]);
   }
   return out;
@@ -113,6 +119,8 @@ export function autoPermit(req: PermitRequest, ctx: PermitContext): PermitVerdic
     if (PATHLESS.has(req.tool)) return ALLOW;
     const paths = pathsOf(o);
     if (!paths) return ASK;
+    // a glob pattern can name another place by itself (/home/**/.ssh/*)
+    if (req.tool === 'Glob' && typeof o.pattern === 'string' && (looksAbsolute(o.pattern) || o.pattern.startsWith('~') || /(^|[\\/])\.\.([\\/]|$)/.test(o.pattern))) return ASK;
     if (!paths.length) return FOLDER_TOOLS.has(req.tool) ? ALLOW : ASK;
     return paths.every(p => within(ctx.cwd, p) !== null) ? ALLOW : ASK;
   }
@@ -183,6 +191,7 @@ const program = (words: Word[]): Word[] => { let i = 0; while (i < words.length 
 /** Programs that run the command after them: what that command does still counts (`sudo rm -rf /`). */
 const WRAPPERS = new Set(['sudo', 'doas', 'env', 'nohup', 'nice', 'time', 'timeout', 'xargs', 'command', 'builtin', 'exec']);
 function unwrapped(words: Word[]): Word[] {
+  if (!words[0] || !WRAPPERS.has(progName(words[0]))) return words;
   let w = words;
   for (let n = 0; n < 8 && w[0] && WRAPPERS.has(progName(w[0])); n++) {
     let i = 1;
@@ -191,25 +200,86 @@ function unwrapped(words: Word[]): Word[] {
   }
   return w;
 }
-/** Programs that run another command, code or a shell given as text: what they run cannot be read here. */
-const OPAQUE = new Set(['sh', 'bash', 'zsh', 'dash', 'fish', 'cmd', 'powershell', 'pwsh', 'eval', 'exec', 'source', '.', 'sudo', 'su', 'doas', 'runas', 'env',
-  'xargs', 'nohup', 'nice', 'time', 'timeout', 'watch', 'start', 'start-process', 'saps', 'invoke-expression', 'iex', 'invoke-command', 'icm', 'call', 'wsl', 'script']);
-/** Programs whose job is talking to another machine or service: the user decides. */
-const REMOTE = new Set(['gh', 'az', 'aws', 'gcloud', 'gsutil', 'bq', 'ssh', 'scp', 'sftp', 'rsync', 'ftp', 'telnet', 'nc', 'ncat', 'netcat', 'curl', 'wget',
-  'invoke-webrequest', 'iwr', 'invoke-restmethod', 'irm', 'psql', 'mysql', 'mariadb', 'sqlcmd', 'mongo', 'mongosh', 'redis-cli', 'pg_dump', 'pg_restore', 'bcp',
-  'kubectl', 'helm', 'terraform', 'docker', 'podman', 'twine', 'vsce', 'ovsx', 'sendmail', 'mail', 'send-mailmessage', 'heroku', 'vercel', 'netlify', 'firebase', 'fly', 'flyctl', 'ngrok']);
 /** Programs that wipe disks or stop the machine. */
 const SYSTEM_KILLERS = new Set(['mkfs', 'format', 'diskpart', 'fdisk', 'shutdown', 'reboot', 'halt', 'poweroff', 'stop-computer', 'restart-computer', 'clear-disk', 'format-volume']);
 const DELETERS = new Set(['rm', 'rmdir', 'rd', 'del', 'erase', 'remove-item', 'ri', 'rimraf', 'trash']);
 const PKG = new Set(['npm', 'pnpm', 'yarn', 'bun', 'cargo', 'dotnet', 'nuget', 'gem', 'poetry']);
-const PKG_REMOTE = new Set(['publish', 'login', 'adduser', 'logout', 'token', 'owner', 'access', 'deprecate', 'dist-tag', 'push', 'yank']);
 const GIT_OPTS_WITH_VALUE = new Set(['-c', '-C', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env']);
+
+/** Local work that passes without asking (an allow list: any other program, a shell, a network tool, a package runner
+ *  like npx, reaches the user). What a project script run this way does is not inspected: running the project's own
+ *  code, tests and builds is the normal work the owner wants without popups. */
+const LOCAL_PROGRAMS = new Set(['mkdir', 'md', 'touch', 'cp', 'copy', 'mv', 'move', 'rm', 'rmdir', 'rd', 'del', 'erase', 'rimraf', 'echo', 'printf', 'cd',
+  'pushd', 'popd', 'true', 'false', 'sleep', 'date', 'basename', 'dirname', 'tsc', 'eslint', 'prettier', 'vitest', 'jest', 'mocha', 'make',
+  'new-item', 'ni', 'copy-item', 'cpi', 'move-item', 'mi', 'remove-item', 'ri', 'rename-item', 'rni', 'set-content', 'add-content', 'out-file',
+  'write-output', 'write-host', 'set-location', 'sl', 'start-sleep']);
+const NPM_LOCAL = ['test', 't', 'run', 'run-script', 'install', 'i', 'ci', 'add', 'uninstall', 'remove', 'rm', 'un', 'ls', 'list', 'outdated', 'why',
+  'explain', 'start', 'build', 'lint', 'prune', 'dedupe', 'rebuild', 'audit'];
+const SUBCOMMANDS: Record<string, ReadonlySet<string>> = {
+  npm: new Set(NPM_LOCAL), pnpm: new Set(NPM_LOCAL), yarn: new Set(NPM_LOCAL), bun: new Set(NPM_LOCAL),
+  git: new Set(['add', 'commit', 'checkout', 'switch', 'restore', 'stash', 'merge', 'rebase', 'cherry-pick', 'revert', 'fetch', 'pull', 'tag', 'branch',
+    'mv', 'rm', 'init', 'reset', 'status', 'log', 'diff', 'show', 'rev-parse', 'ls-files', 'blame', 'describe', 'shortlog', 'grep', 'worktree', 'apply']),
+  cargo: new Set(['build', 'test', 'check', 'fmt', 'clippy', 'run', 'doc', 'clean']),
+  go: new Set(['build', 'test', 'vet', 'fmt', 'run']),
+  dotnet: new Set(['build', 'test', 'restore', 'format', 'run', 'clean']),
+};
+/** git options that run a program or change git's config for one call (`-c alias.x=!cmd`, `--upload-pack`, rebase `-x`). */
+const GIT_RUNS = /^(-c|--config-env|--exec-path|--upload-pack|--receive-pack|--exec|-x|-u|--git-dir|--work-tree)(=|$)/;
+
+function localWork(name: string, args: Word[], keys: string[], cwd: string): boolean {
+  if (LOCAL_PROGRAMS.has(name)) return true;
+  // npx of a tool the project already installed (node_modules/.bin): nothing is downloaded; any option (-p, -c, --yes) asks
+  if (name === 'npx') {
+    const bin = keys[0] ?? '';
+    if (!/^[a-z0-9][a-z0-9._-]*$/.test(bin)) return false;
+    try { return fs.existsSync(path.join(cwd, 'node_modules', '.bin', bin)) || fs.existsSync(path.join(cwd, 'node_modules', '.bin', `${bin}.cmd`)); } catch { return false; }
+  }
+  const subs = SUBCOMMANDS[name];
+  if (name === 'git') {
+    let i = 0;
+    while (i < keys.length && keys[i]!.startsWith('-')) { if (args[i]!.text !== '-C' && keys[i] !== '--no-pager') return false; i += args[i]!.text === '-C' ? 2 : 1; }
+    if (!subs!.has(keys[i] ?? '') || keys.some(k => GIT_RUNS.test(k) || k.includes('ext::'))) return false;
+    // a stash or a branch that is only listed, created or switched to; `git remote`, `git config`, `git push` are not here
+    return true;
+  }
+  if (subs) return subs.has(keys.find(k => !k.startsWith('-')) ?? '') && !keys.some(k => k === 'exec' || k === 'dlx' || k === 'x');
+  // node / tsx / python: a script file of the project, no option before it (-e, -p, --require, --import run other code)
+  if (['node', 'tsx', 'python', 'python3', 'py'].includes(name)) {
+    const first = keys[0] ?? '';
+    if (name.startsWith('py') && first === '-m') return ['pytest', 'unittest'].includes(keys[1] ?? '');
+    return !!first && !first.startsWith('-') && /\.(m?js|cjs|ts|mts|py)$/.test(first);
+  }
+  return false;
+}
+
+/** Every word and redirection target names a place inside the chat's folder (links resolved), never a variable, a URL,
+ *  a settings or hooks file (unless the command only reads): `-C/`, `-t/x` and `--opt=/x` count by their value too. */
+function plainWords(seg: Segment, cwd: string, readsOnly: boolean): boolean {
+  const ok = (v: string, writes: boolean): boolean => {
+    if (!v) return true;
+    if (/^(\/dev\/null|nul|\$null)$/i.test(v)) return true;
+    if (/^\/[A-Za-z?]{1,3}(:.*)?$/.test(v) && !fs.existsSync(v)) return true; // a Windows switch
+    if (v.includes('%') || v.includes('$') || v.includes('://') || v.includes('ext::')) return false;
+    if (outside(v, cwd)) return false;
+    let exists = false;
+    try { exists = /[\\/]/.test(v) || fs.existsSync(path.resolve(cwd, v)); } catch { /* not a path */ }
+    if (!exists) return true;
+    const rel = within(cwd, v);
+    return rel !== null && !(writes && rel !== '' && protectedRel(rel));
+  };
+  const values = (w: string): string[] => {
+    if (w.startsWith('--')) return w.includes('=') ? [w.slice(w.indexOf('=') + 1)] : [];
+    if (/^-[A-Za-z]./.test(w)) return [w.slice(2)];
+    return w.startsWith('-') ? [] : [w];
+  };
+  return seg.words.every(w => values(w.text).every(v => ok(v, !readsOnly))) && seg.redirects.every(t => t === '&' || ok(t, true));
+}
 
 const recursive = (args: Word[]): boolean => args.some(w => /^-[a-z]*r/i.test(w.key) && !w.key.startsWith('--') || w.key === '--recursive' || /^\/s$/i.test(w.key)
   || /^-rec(u(r(s(e)?)?)?)?(:\$true)?$/i.test(w.key));
 /** A deletion target that would wipe the folder, its parents, the home, a drive or the repository. */
 function wipes(target: string, cwd: string): boolean {
-  const t = target.replace(/[\\/]+$/, '') || target;
+  const t = target.replace(/^(\.[\\/])+(?=.)/, '').replace(/[\\/]+$/, '') || target;
   if (/^(\/|~|\.|\.\.|\*|\.\*|\/\*|[A-Za-z]:|[A-Za-z]:[\\/]\*?)$/.test(t) || /^~[\\/]?\*?$/.test(t)) return true;
   if (/\$(home|env:userprofile|env:homepath|userprofile|env:systemroot)/i.test(t) || /%userprofile%|%homepath%|%systemroot%/i.test(t)) return true;
   if (t.split(/[\\/]+/).some(seg => seg === '.git')) return true;
@@ -221,6 +291,7 @@ function outside(w: string, cwd: string): boolean {
   const v = w.startsWith('-') && w.includes('=') ? w.slice(w.indexOf('=') + 1) : w;
   if (!v || v.includes('://') || /^(\/dev\/null|nul|\$null)$/i.test(v)) return false;
   if (v.startsWith('~') || /(^|[\\/])\.\.([\\/]|$)/.test(v)) return within(cwd, v) === null;
+  if (/^\/[A-Za-z?]{1,3}(:.*)?$/.test(v) && !fs.existsSync(v)) return false; // a Windows switch (dir /b, robocopy /E)
   if (looksAbsolute(v) || /^\/\w/.test(v)) return within(cwd, v) === null;
   return false;
 }
@@ -231,6 +302,8 @@ function command(input: unknown, ctx: PermitContext): Cmd {
   if (typeof raw !== 'string' || !raw.trim() || raw.length > 2000 || /… \(\+\d+\)$/.test(raw)) return CMD_ASK;
   // Codex runs a command in its own folder: it must be the chat's or inside it
   const cwd = typeof o.cwd === 'string' && o.cwd ? (within(ctx.cwd, o.cwd) === null ? null : path.resolve(ctx.cwd, o.cwd)) : ctx.cwd;
+  // an escaped quote (bash \", cmd ^") is read differently by each shell: the words checked here may not be the ones run
+  if (/\\["']|\^["']/.test(raw)) return CMD_ASK;
   const segs = segments(raw);
   if (!segs || !cwd) return CMD_ASK;
   const shown = raw.trim();
@@ -241,12 +314,11 @@ function command(input: unknown, ctx: PermitContext): Cmd {
   if (/\b(drop\s+(database|schema|table)|truncate\s+table)\b/i.test(raw)) {
     return deny(shown, 'cancella dati di un database', 'Refused by the app: dropping or truncating database objects cannot be undone. Ask the user to do it.');
   }
-  let opaque = /\$\(|\$\{|`|<\(|>\(/.test(raw);
-  let remote = false, readsOnly = readOnlyCommand(raw, ctx.readScripts);
+  let unknown = /\$\(|\$\{|`|<\(|>\(/.test(raw);
+  const readsOnly = readOnlyCommand(raw, ctx.readScripts);
   for (const seg of segs) {
     const all = program(seg.words);
     if (!all[0]) continue;
-    if (OPAQUE.has(progName(all[0])) || all[0].key.includes('$') || all[0].key.includes('%')) opaque = true;
     const words = unwrapped(all);
     const first = words[0];
     if (!first) continue;
@@ -274,19 +346,14 @@ function command(input: unknown, ctx: PermitContext): Cmd {
       if ((sub === 'reflog' && has('expire', 'delete')) || sub === 'filter-branch' || sub === 'filter-repo' || (sub === 'update-ref' && has('-d')) || (sub === 'gc' && rest.some(k => k.startsWith('--prune')))) {
         return deny(shown, 'cancella la storia locale del repository', 'Refused by the app: this deletes history git keeps for recovery. Ask the user.');
       }
-      if (sub === 'push' || sub === 'send-email' || sub === 'request-pull' || sub === 'config' || sub === 'remote' && rest.length > 0 && !has('-v', '--verbose', 'show', 'get-url')) remote = true;
     }
     if (PKG.has(name) && keys.includes('unpublish')) return deny(shown, 'ritira un pacchetto pubblicato', 'Refused by the app: unpublishing a package cannot be undone. Ask the user.');
-    if (PKG.has(name) && keys.some(k => PKG_REMOTE.has(k))) remote = true;
-    if (REMOTE.has(name)) remote = true;
-    if (['node', 'python', 'python3', 'py', 'deno', 'ruby', 'perl', 'php'].includes(name) && keys.some(k => ['-e', '-c', '-p', '--eval', '--print', '-r', '--require', '--import'].includes(k))) opaque = true;
-    if (name === 'find' && keys.some(k => ['-exec', '-execdir', '-ok', '-okdir', '-delete'].includes(k))) opaque = true;
-    if (['kill', 'killall', 'pkill', 'taskkill', 'stop-process', 'spps'].includes(name)) opaque = true;
-    if (seg.words.some(w => w.text.includes('$') && !/^\$null$/i.test(w.text)) || seg.words.some(w => outside(w.text, cwd)) || seg.redirects.some(t => t !== '&' && outside(t, cwd))) opaque = true;
-    if (seg.redirects.some(t => t !== '&' && !/^(\/dev\/null|nul|\$null)$/i.test(t))) readsOnly = false;
-    if (seg.words.some(w => { const rel = within(cwd, w.text); return rel !== null && rel !== '' && protectedRel(rel) && !readsOnly; })) opaque = true;
+    // a wrapper (sudo, xargs, env …) runs what follows in a way not read here
+    if (words !== all) unknown = true;
+    if (!plainWords(seg, cwd, readsOnly)) unknown = true;
+    else if (!readsOnly && !localWork(name, args, keys, cwd) && !readOnlyCommand(words.map(w => w.text).join(' '), ctx.readScripts)) unknown = true;
   }
-  if (remote || opaque) return CMD_ASK;
+  if (unknown) return CMD_ASK;
   if (readsOnly) return { kind: 'allow', reads: true };
   return ctx.undoable ? { kind: 'allow', reads: false } : CMD_ASK;
 }
