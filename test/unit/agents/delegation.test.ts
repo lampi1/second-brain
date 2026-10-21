@@ -596,6 +596,20 @@ describe('the pure parts', () => {
     expect(ROLE_PREAMBLE).toContain('mcp__second-brain__agent_report');
     expect(ROLE_PREAMBLE).toContain('ToolSearch');
   });
+  it('agent_report shows the validator\'s limits in its schema and names doneWhen everywhere (#147)', () => {
+    const f = fixture();
+    const report = delegationTools({ chats: f.m, roles: () => catalog(), settings: () => DELEGATION_DEFAULTS, engineRefusal: () => null, label: '[agente]', runs: () => [] }).find(t => t.name === 'agent_report')!;
+    const props = (report.inputSchema as { properties: Record<string, { maxLength?: number; items?: { maxLength?: number; properties?: Record<string, { maxLength?: number }> } }> }).properties;
+    expect(props.summary!.maxLength).toBe(300);
+    expect(props.remember!.items!.maxLength).toBe(300);
+    expect(props.doneWhen!.items!.properties!.criterion!.maxLength).toBe(300);
+    expect(props.doneWhen!.items!.properties!.evidence!.maxLength).toBe(1000);
+    expect(ROLE_PREAMBLE).toContain('doneWhen');
+    expect(delegationPrompt({ goal: 'G', output: 'O', doneWhen: ['D'] }, { role: 'scout', parentTitle: 'P', title: 'T', skills: [] })).toContain('doneWhen');
+    expect(() => checkResult({ outcome: 'done', summary: 'x'.repeat(301), output: 'o', doneWhen: [{ criterion: 'a', met: true }] }, ['a'])).toThrow(/300/);
+    expect(() => checkResult({ outcome: 'done', summary: 's', output: 'o', criteria: [{ criterion: 'a', met: true }] }, ['a'])).toThrow(/use doneWhen, not criteria/);
+    expect(() => checkResult({ outcome: 'done', summary: 's', output: 'o', criteriaResults: [] }, ['a'])).toThrow(/use doneWhen, not criteriaResults/);
+  });
   it('the first message carries the contract and never more', () => {
     const text = delegationPrompt({ goal: 'G', output: 'O', doneWhen: ['D'], context: 'C' }, { role: 'sentinel', parentTitle: 'P', title: 'T', skills: ['s1'] });
     for (const part of ['«P»', 'Sentinel', 'Goal: G', 'Context: C', 'Output: O', '- D', 'Your skills: s1', 'agent_report']) expect(text).toContain(part);
