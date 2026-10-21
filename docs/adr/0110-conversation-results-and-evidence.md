@@ -16,7 +16,11 @@ Keep the visible conversation and model session when role and project remain com
 gets a distinct run and task version. `app_assign_task` names the conversation, expected version, role and project,
 and distinguishes `continue`, `new-task` and explicit `rework`. Sources carry stable chat IDs; titles are display
 labels. A role configuration change or independent Sentinel review requires a fresh conversation. Permissions
-are never widened by reassignment.
+are never widened by reassignment. Delegating roles use `agent_assign_task` for their own direct children after
+reading `agent_task_events`; sibling and foreign-parent chats are refused. Parent assignments must still be active,
+and a completed parent needs its owner to explicitly assign the next run. Late mail or query output alone does not
+authorize a new assignment. Reused children are associated with the current plan step before their prompt is sent;
+previous canonical results stay on their original runs.
 
 Persist the complete canonical result with task ID, version, run ID, timestamp, output and criterion evidence.
 Display root reports directly in the Orchestrator, with local expansion of their output. This display does not
