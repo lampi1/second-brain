@@ -200,8 +200,20 @@ export function alertEvents(alerts: readonly StoredNews[], max = 3): FeedInput[]
 }
 
 /** A failed run → what the page shows. Exit 2 (or Azure's own wording) = sign in again with `az login`. */
+/** A script's stderr without Node's own warnings (`(node:123) [DEP0190] DeprecationWarning: …` and the `(Use \`node
+ *  --trace-deprecation …\`)` hint after it): they come first and hid the real error in the log and on the page (#149). */
+export function scriptStderr(stderr: string): string {
+  return stderr.split('\n').filter(l => !/^\s*\(node:\d+\) (\[[A-Z0-9]+\] )?\w*Warning\b/.test(l) && !/^\s*\(Use `\S+ --trace-[\w-]+ /.test(l)).join('\n').trim();
+}
+
+/** What a failed run logs as its cause: the end of its stderr (the error, after any stack noise), at most 300 characters. */
+export function causeOf(r: RunResult): string {
+  return (scriptStderr(r.stderr) || r.error || `code ${r.code}`).slice(-300);
+}
+
 export function errorOf(r: RunResult, what: string): NonNullable<TasksState['error']> {
-  const text = `${r.stderr}\n${r.error ?? ''}`;
+  const stderr = scriptStderr(r.stderr);
+  const text = `${stderr}\n${r.error ?? ''}`;
   // az missing first: the script exits 2 on any token failure, also when az itself is not installed
   if (/'az' is not recognized|az: command not found|ENOENT.*\baz\b/i.test(text)) {
     return { kind: 'failed', message: 'Azure CLI (az) non trovato: installalo o mettilo nel PATH, poi «Aggiorna ora».' };
@@ -209,7 +221,7 @@ export function errorOf(r: RunResult, what: string): NonNullable<TasksState['err
   if (r.code === 2 || /az login|AADSTS|get-access-token|expired|TokenExpired|refresh token/i.test(text)) {
     return { kind: 'login', message: 'Accesso ad Azure DevOps scaduto o mancante: lancia il comando qui sotto in un terminale, poi «Aggiorna ora».', command: 'az login' };
   }
-  const first = (r.stderr.split('\n').map(l => l.trim()).find(Boolean) ?? r.error ?? `uscito con codice ${r.code ?? '?'}`).slice(0, 240);
+  const first = (stderr.split('\n').map(l => l.trim()).find(Boolean) ?? r.error ?? `uscito con codice ${r.code ?? '?'}`).slice(0, 240);
   return { kind: 'failed', message: `${what} non riuscita: ${first}` };
 }
 
