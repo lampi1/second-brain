@@ -386,6 +386,7 @@ app.whenReady().then(async () => {
     'sync:resolve': a => s.brain.syncResolve(a?.domain, a?.choice),
     'headline:get': () => pulse?.headline() ?? headline.get(),
     'orchestrator:held': () => s.heldNews?.get() ?? { items: [] },
+    'orchestrator:heldSeen': a => { if (typeof a?.chatId !== 'string' || !a.chatId || a.chatId.length > 100) throw new Error('chatId required'); return s.heldNews?.seen(a.chatId) ?? { items: [] }; },
     ...(pulse?.handlers() ?? (demo ? pulseDemoHandlers(process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now(), {
       settings: () => s.brain.settings().pulse, changed: () => emitter.emit('pulse:changed', undefined), approvalsChanged: () => emitter.emit('approvals:changed', undefined),
     }) : pulseStubHandlers())),

@@ -6,8 +6,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
-- **The Orchestrator answers when you wait for it** (#123, ADR 0099): a role chat it opened for your question wakes it
-  once, after its turn ends, and the Orchestrator gives you the answer in its own chat.
+- **The answer you wait for shows in the Orchestrator's chat** (#123, ADR 0099): when a role chat it opened for your
+  question finishes, the app's notice gives its summary with Apri, with no extra Orchestrator turn; a held news row you
+  open is read and leaves «novità in attesa».
 - **A cleaner Orchestrator column** (#124): no «Veloce» chip (quick questions go to Lampo) and no «Piano
   dell'Orchestrator» panel (the estimates are on the strips).
 

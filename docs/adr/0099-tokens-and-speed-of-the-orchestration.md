@@ -61,13 +61,17 @@ compacted only on the next day, on an expired cache (ADR 0031: ~2.10 $ for a col
 
 ## Amended (issue #123, 2026-10-21)
 - A clean result was quiet even when the user waited for it: he asked the Orchestrator «che devo fare oggi?», it opened
-  a Scout and ended its turn, and the Scout's answer reached it only when he wrote again; read while the Scout still ran,
-  it said «non ha ancora finito», and the turn end then woke it a second time.
-- A root chat the Orchestrator opens (or assigns again) during a turn the user's own message started is one the user
-  waits for (`ChatManager` `userWaits`; a turn started by the app's news or mail is not). Its result, clean or not, goes
-  to the Orchestrator as a message and wakes it, with the line «l'utente aspetta questa risposta» and the deliverable
-  itself, cut at `ORCHESTRATOR_OUTPUT_MAX` (the rest stays in the chat) instead of a pointer. The Orchestrator's rule
-  says to answer the user in its own chat with the result in full, never «è pronto nell'altra chat».
-- Every root result (quiet or not) is held until the reporting chat's turn ends, or its engine stops: the report and the
-  turn end are one news, delivered once, and the Orchestrator never reads it while the chat shows as running.
-- A clean result nobody waits for stays quiet news, as above.
+  a Scout and ended its turn, and the Scout's answer reached him only when he wrote again; read while the Scout still
+  ran, the Orchestrator said «non ha ancora finito», and the turn end then woke it a second time.
+- The owner chose (2026-10-21) a notice, not a turn: «mi basta la notifica nella chat dell'orchestrator, non aggiungere
+  un passaggio, manteniamo il risparmio». A root chat the Orchestrator opens (or assigns again) during a turn the user's
+  own message started is one the user waits for (`ChatManager` `userWaits`; a turn the app's news or mail started is
+  not). Its clean result stays quiet news, and the app adds its own notice in the Orchestrator's chat (sys
+  `resultReady`: role, title, the summary, Apri): no model turn, no token. A result that is not clean still goes as a
+  message, as before.
+- Every root result is held until the reporting chat's turn ends, or its engine stops: the report and the turn end are
+  one news, said once, and never while the chat still shows as running.
+- A row of «N novità in attesa» the user opens is read (owner: «nelle novità clicco e mi porta alla chat … poi non
+  fosse più in attesa»): its chat comes on screen, its news leaves the list (IPC `orchestrator:heldSeen`) and stays only
+  as quiet news that never wakes the Orchestrator; a later event of that chat is news again. What the user writes in
+  Lampo is never news.

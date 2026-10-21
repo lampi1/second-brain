@@ -240,9 +240,9 @@ interface Rec {
   /** a root chat's agent_report for its current assignment (reportRoot): one per assignment */
   rootReportAt?: number;
   /** a root chat's result held until its turn ends (reportRoot, #123): the report and the turn end are one news */
-  heldResult?: { note: CleanReportNote; message: string; quiet: boolean };
+  heldResult?: { note: CleanReportNote; message: string; quiet: boolean; userWaits: boolean };
   /** a root chat the Orchestrator opened or assigned in a turn the user's own message started: the user waits for its
-   *  answer, so its result wakes the Orchestrator even when clean (#123); never persisted */
+   *  answer, so its clean result shows as the app's notice in the Orchestrator's chat (#123); never persisted */
   userWaits?: boolean;
   /** the Orchestrator: its current (or last) turn was started by the user's own message, not by app news or mail */
   turnFromUser?: boolean;
@@ -1686,16 +1686,17 @@ export class ChatManager implements ChatService {
     const orchestrator = this.openOrchestrator();
     const role = r.s.agent?.id;
     // a clean result (done, every criterion met, no question) is quiet news: the user reads it in the chat, the
-    // Orchestrator gets it with its next turn instead of a turn of its own (median ~0.18 $ each, zero-token-audit round 3);
-    // unless the user waits for it (he asked the Orchestrator, which opened this chat for him): then it wakes the
-    // Orchestrator, which gives him the answer itself (#123)
+    // Orchestrator gets it with its next turn instead of a turn of its own (median ~0.18 $ each, zero-token-audit round 3).
+    // When the user waits for it (he asked the Orchestrator, which opened this chat for him), the app also says so in the
+    // Orchestrator's chat, with the summary and Apri: a notice, never a turn (#123, the owner 2026-10-21: «mi basta la
+    // notifica nella chat dell'orchestrator, non aggiungere un passaggio»)
     const clean = result.outcome === 'done' && result.doneWhen.length > 0 && met === result.doneWhen.length && !result.questions?.length && !result.goalChangedByUser;
     const waits = !!r.userWaits;
     if (orchestrator && isWorkRole(role)) {
-      // held until the chat's turn ends (#123): the report and the turn end are one news, and the Orchestrator never reads
-      // it while the chat still shows as running
-      r.heldResult = { note: { chatId, title: r.s.title, role: ROLE_DEFAULTS[role].name, summary: result.summary, at }, quiet: clean && !waits,
-        message: resultMessage(role, r.s.title, result, { outputMax: ORCHESTRATOR_OUTPUT_MAX, ...(waits ? { userWaits: true } : {}) }) };
+      // held until the chat's turn ends (#123): the report and the turn end are one news, and neither the Orchestrator nor
+      // the notice says it while the chat still shows as running
+      r.heldResult = { note: { chatId, title: r.s.title, role: ROLE_DEFAULTS[role].name, summary: result.summary, at }, quiet: clean, userWaits: waits,
+        message: resultMessage(role, r.s.title, result, { outputMax: ORCHESTRATOR_OUTPUT_MAX }) };
       if (!this.midTurn(r)) this.releaseResult(r);
     }
     log.info('chats', 'root chat reported', { chat: chatId, data: { orchestrator: orchestrator?.s.id ?? null, outcome: result.outcome, met, criteria: result.doneWhen.length, userWaits: waits } });
@@ -1709,7 +1710,8 @@ export class ChatManager implements ChatService {
   private orchestratorAnswering(): boolean { const o = this.openOrchestrator(); return !!o?.turnFromUser && this.midTurn(o); }
 
   /** A root chat's held result goes now (its turn ended, or it stopped): quiet news (orchestrator-wake.ts cleanReport) when
-   *  clean and nobody waits, else a message that wakes the Orchestrator; once. */
+   *  clean, else a message that wakes the Orchestrator; once. A clean one the user waits for also leaves the app's notice in
+   *  the Orchestrator's chat (sys resultReady: the summary and the chat to open; no turn, no token). */
   private releaseResult(r: Rec): void {
     const held = r.heldResult;
     if (!held) return;
@@ -1718,7 +1720,13 @@ export class ChatManager implements ChatService {
     const orchestrator = this.openOrchestrator();
     if (!orchestrator) return;
     const quiet = held.quiet && this.cleanReportListeners.some(fn => { try { return fn(held.note); } catch (e) { log.warn('chats', 'quiet report listener failed', { chat: r.s.id, cause: errText(e), hint: 'the result goes to the Orchestrator as a message' }); return false; } });
-    if (quiet) return;
+    if (quiet) {
+      if (held.userWaits) {
+        this.addItem(orchestrator, sysItem('resultReady', { role: held.note.role, title: held.note.title, summary: cut(held.note.summary, 600), chatId: r.s.id }, 'info'), false);
+        this.updated(orchestrator);
+      }
+      return;
+    }
     this.send(orchestrator.s.id, held.message, undefined, false, r.s.title)
       .catch(e => log.warn('chats', 'root result not delivered', { chat: orchestrator.s.id, cause: errText(e), hint: 'the result stays on the chat and its run; app_chats shows it' }));
   }

@@ -5,6 +5,7 @@
 // views' visibility, a way to open a hand-off, a new question, a tool call, a chat that finished a while ago) and, when frozen, tells the UI the fixed clock after
 // every page load (ui:command 'clock'). The comparison queue (compare/queue.ts) is not wired here: the demo runs no
 // engine, so its side b never runs (its experiments are switched in memory, demo.ts).
+import { sysEn, type SysCode, type SysParams } from '../shared/sys';
 import { app, safeStorage } from 'electron';
 import type { BrowserHandoff, CliStatus, PendingRequest } from '../shared/contract';
 import { ConfigStore } from './brain/config';
@@ -154,6 +155,8 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
       browser.openHandoff(tabId, s.tabs.find(t => t.id === tabId)?.ownerChatId ?? null, reason, instructions, now(), extra),
     /** an assistant message as a chat would stream it (e2e: markdown sanitizing) */
     say: (chatId: string, text: string) => chats.push(chatId, { kind: 'assistant', id: chats.nextId(), at: now(), text }),
+    /** the app's own notice in a chat (e2e: «ha la risposta che aspettavi», #123) */
+    notice: (chatId: string, code: SysCode, params: SysParams) => chats.push(chatId, { kind: 'system', id: chats.nextId(), at: now(), text: sysEn(code, params), level: 'info', code, params }),
     /** a reasoning block (e2e: the prose a model wrote only there before its question) */
     think: (chatId: string, text: string) => chats.push(chatId, { kind: 'thinking', id: chats.nextId(), at: now(), text }),
     /** a tool row as a live chat shows it (e2e: the report a turn wrote, offered in the question's context) */

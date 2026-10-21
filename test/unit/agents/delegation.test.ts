@@ -373,7 +373,7 @@ describe('agent_delegate', () => {
     expect(after[0]).toContain('[risultato · Scout «Fatti»] Metà');
   });
 
-  it('a clean result the user waits for wakes the Orchestrator once, after the chat\'s turn ends, with the answer itself (#123)', async () => {
+  it('a clean result the user waits for: quiet news plus the app\'s notice in the Orchestrator\'s chat, after the turn ends, no turn (#123)', async () => {
     const f = fixture();
     const quiet: string[] = [];
     f.m.onCleanReport(n => { quiet.push(n.title); return true; });
@@ -384,25 +384,22 @@ describe('agent_delegate', () => {
     const scout = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', title: 'Giornata · Cosa fare oggi', prompt: 'x' }, 'agent');
     f.sinks.get(orchestrator.id)!.changed({ state: 'idle' });
     const before = f.sent.get(orchestrator.id)?.length ?? 0;
+    const notices = () => f.m.items(orchestrator.id).filter(i => i.kind === 'system' && i.code === 'resultReady');
     f.sinks.get(scout.id)!.changed({ state: 'running' });
-    const output = `1. Rispondi a Marco\n2. Revisione PR\n3. ${'x'.repeat(900)}`;
-    await f.call('agent_report', scout.id, { outcome: 'done', summary: 'Le 3 cose di oggi', output, doneWhen: [{ criterion: 'top 3', met: true }] });
-    await new Promise(res => setTimeout(res, 20));
-    // still in its turn: nothing yet, so the Orchestrator never reads it as "not finished"
-    expect(f.sent.get(orchestrator.id)?.length ?? 0).toBe(before);
-    f.sinks.get(scout.id)!.changed({ state: 'idle' });
-    await new Promise(res => setTimeout(res, 20));
-    const after = f.sent.get(orchestrator.id)!.slice(before);
-    expect(after).toHaveLength(1);
-    expect(after[0]).toContain("[l'utente aspetta questa risposta");
-    expect(after[0]).toContain('1. Rispondi a Marco'); // the deliverable itself, cut, not a pointer
-    expect(after[0]).not.toContain('leggilo con app_chat_items');
+    await f.call('agent_report', scout.id, { outcome: 'done', summary: 'Le 3 cose di oggi: Marco, PR, report', output: 'o', doneWhen: [{ criterion: 'top 3', met: true }] });
+    // still in its turn: nothing yet, so nobody reads it as "not finished"
     expect(quiet).toEqual([]);
+    expect(notices()).toHaveLength(0);
+    f.sinks.get(scout.id)!.changed({ state: 'idle' });
+    expect(quiet).toEqual(['Giornata · Cosa fare oggi']);
+    expect(notices()).toEqual([expect.objectContaining({ params: expect.objectContaining({ chatId: scout.id, summary: 'Le 3 cose di oggi: Marco, PR, report' }) })]);
+    await new Promise(res => setTimeout(res, 20));
+    expect(f.sent.get(orchestrator.id)?.length ?? 0).toBe(before); // no Orchestrator turn
     // a second turn end of the same chat adds nothing
     f.sinks.get(scout.id)!.changed({ state: 'running' });
     f.sinks.get(scout.id)!.changed({ state: 'idle' });
-    await new Promise(res => setTimeout(res, 20));
-    expect(f.sent.get(orchestrator.id)!.slice(before)).toHaveLength(1);
+    expect(notices()).toHaveLength(1);
+    expect(quiet).toHaveLength(1);
   });
 
   it('a clean result nobody waits for stays quiet news, given after the chat\'s turn ends (#123)', async () => {
@@ -421,6 +418,7 @@ describe('agent_delegate', () => {
     expect(quiet).toEqual([]);
     f.sinks.get(artisan.id)!.changed({ state: 'idle' });
     expect(quiet).toEqual(['App · fix']);
+    expect(f.m.items(orchestrator.id).some(i => i.kind === 'system' && i.code === 'resultReady')).toBe(false); // nobody waits: no notice
     await new Promise(res => setTimeout(res, 20));
     expect(f.sent.get(orchestrator.id)?.length ?? 0).toBe(before);
   });

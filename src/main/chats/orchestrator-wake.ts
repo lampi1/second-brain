@@ -198,7 +198,8 @@ export class OrchestratorWake {
     const known = this.chats.get(n.chatId), listed = known ? undefined : this.d.list?.().find(x => x.id === n.chatId);
     if (listed) this.remember(listed);
     const c = known ?? listed;
-    if (!c || c.isOrchestrator || c.closedAt) return;
+    // Lampo (ADR 0105) is the user's own quick lane: what he writes there is never news («Hai scritto · Lampo», #123)
+    if (!c || c.isOrchestrator || c.closedAt || this.quick.has(n.chatId)) return;
     const e: WakeEvent = { chatId: n.chatId, title: n.title, harness: c.harness, kind: 'user-message', detail: cut(n.text, USER_TEXT_MAX), at: n.at ?? this.now(),
       ...(n.parentTitle !== null ? { child: { role: n.role ?? 'ruolo', parent: n.parentTitle } } : {}) };
     this.buffer.set(slotOf(e), e);
@@ -222,6 +223,14 @@ export class OrchestratorWake {
     this.reschedule();
     this.changed();
     return true;
+  }
+
+  /** The user opened this chat from "N novità in attesa" and read it (#123): its queued news only rides along, quiet, and
+   *  never wakes the Orchestrator (the owner, 2026-10-21: «per risparmiare token»). A later event of the chat is news again. */
+  seen(chatId: string): void {
+    let changed = false;
+    for (const [k, e] of this.buffer) if (e.chatId === chatId && !e.silent) { this.buffer.set(k, { ...e, silent: true, endsTurn: undefined }); changed = true; }
+    if (changed) { this.reschedule(); this.changed(); }
   }
 
   /** answered before the news went: "waits for the user" would be false; what the chat did next is told instead */

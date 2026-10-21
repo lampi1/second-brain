@@ -32,7 +32,7 @@ test('strips show readable estimates from similar tasks, with their accuracy', a
     await expect(bubble).toBeVisible();
     await expect(bubble).toContainText('Come si calcola la stima');
     await expect(bubble).toContainText('stesso agente (');
-    await expect(bubble).toContainText('Precisione delle stime');
+    await expect(bubble).toContainText('Quanto tengono le stime');
     await expect(bubble.getByTestId('estimate-accuracy')).toContainText(/entro ×2: \d+\/\d+/);
     await expect(bubble.getByTestId('estimate-accuracy')).not.toContainText(/precisione|pt in/); // ADR 0101
     await shot(page, 'task-estimate-help-dark');
