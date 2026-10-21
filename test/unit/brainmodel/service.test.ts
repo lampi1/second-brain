@@ -215,3 +215,18 @@ describe('announcing the passes the app ran by itself (ADR 0102)', () => {
     expect(seen).toHaveLength(1);
   });
 });
+
+describe('evidence claims (ADR 0109)', () => {
+  it('seals every change with what it is measured on and lists it with its claim and the Apprendimento page', async () => {
+    const w = world({ demo: true });
+    const state = await w.service.maintain('migration');
+    expect(state.changes.length).toBeGreaterThan(0);
+    for (const c of state.changes) expect(c.claim).toMatchObject({ metric: 'corrections', verdict: 'raccolta', need: 20 });
+    const stored = w.service.log.all();
+    expect(stored.every(c => c.seed && Array.isArray(c.seed.scope))).toBe(true);
+    // the seed never reaches the renderer; the page has one row per role, with its weeks
+    expect(state.changes.some(c => 'seed' in c)).toBe(false);
+    expect(state.learning!.roles.map(r => r.id)).toEqual(w.catalog.list().profiles.filter(p => p.scope === 'role').map(p => p.id));
+    expect(state.learning!.counts.raccolta).toBe(state.changes.length);
+  });
+});
