@@ -1,39 +1,56 @@
-// "Rispondi dopo" and the "Da rispondere" queue on the app page (ADR 0035; the user, 2026-10-13). One flag, kept by
-// main (main/later.ts) so it survives a restart and holds back the Windows notifications: on = no request popup
-// anywhere (questions window, Orchestrator card, global layer card), the tiles show "Da rispondere" ("In coda" is only the CPU queue, ADR 0036), new requests join the queue
-// without a popup (the top bar's "Da rispondere" counter grows, a chime rings: lib/layer.ts); off again when the user opens the queue (Ctrl+J, the counter,
-// "Rispondi" on a tile), which is the questions window called with every open request, one at a time. The asking
-// chats are never answered: they stay blocked. Started by main.tsx; used by actions.ts, layer.ts and the request hosts.
+// Request-local postponement: Esc parks only the chosen request; new requests remain eligible for popups.
+// Pending data stays in the normal store. Opening the queue or enabling popups makes postponed requests visible again.
+// Used by QuestionsWindow, the global layer, and request navigation. The former persisted global quiet flag is retired.
 import { sb } from '../sb';
-import { callQuestions, parkQuestions, setLater, setLayerHeld, ui } from '../store/ui';
+import { app } from '../store/store';
+import { callQuestions, closeModal, parkQuestions, setLater, setLayerHeld, ui } from '../store/ui';
 
-// this page's own sets still on their way: main's echo of an older one ("off" from Ctrl+J arriving after a quick
-// "Rispondi dopo") would undo the newer local value, so echoes wait until the last set has settled
-let inflight = 0;
-const send = (on: boolean): void => {
-  setLater(on);
-  inflight++;
-  void sb.invoke('later:set', { on }).then(s => { if (--inflight === 0) setLater(s.on); }, () => { inflight--; });
+const postponed = new Set<string>();
+const keyOf = (r: {chatId:string;id:string}) => `${r.chatId}/${r.id}`;
+export const requestPostponed = (key:string):boolean => postponed.has(key);
+const notify = () => {
+  setLater(postponed.size > 0);
+  // The queue subscribes to qwin; changing the set must update it even if another request was already postponed.
+  ui.set(s => ({...s,qwin:{...s.qwin}}));
 };
-
-/** Follow main's flag: the value at start and every change (another window, a restart). */
-export function startLater(): void {
-  void sb.invoke('later:get', undefined).then(s => { if (!inflight) setLater(s.on); }).catch(() => {});
-  sb.on('later:changed', s => { if (!inflight) setLater(s.on); });
+export function resumeQuestions():void {
+  postponed.clear();
+  notify();
 }
 
-/** "Rispondi dopo" (the button on any card, Esc on a popup): every open request waits in "Da rispondere". */
-export function answerLater(): void {
+/** Remove the old restart-wide silence; retain only still-open postponed request keys during this session. */
+export function startLater():void {
+  void sb.invoke('later:set',{on:false}).catch(()=>{});
+  let enabled = app.get().settings?.questionsModal === true;
+  app.subscribe(()=>{
+    const s=app.get(),next=s.settings?.questionsModal===true;
+    if(next&&!enabled){enabled=next;resumeQuestions();return;}
+    enabled=next;
+    const keys=new Set(s.pending.map(keyOf));
+    let changed=false;
+    for(const key of postponed)if(!keys.has(key)){postponed.delete(key);changed=true;}
+    if(changed)notify();
+  });
+}
+
+/** Park one unresolved request, never future requests or the other cards in the queue. */
+export function answerLater(key?:string):void {
+  const focused=typeof document==='undefined'?null:(document.activeElement as Element|null)?.closest('[data-request-key]')?.getAttribute('data-request-key');
+  const pending=app.get().pending;
+  const shown=typeof document==='undefined'||!ui.get().qwin.shown?null:document.querySelector('.qwin [data-request-key]')?.getAttribute('data-request-key');
+  const chosen=key??shown??focused;
+  const target=chosen??pending.find(r=>!postponed.has(keyOf(r)));
+  const targetKey=typeof target==='string'?target:target?keyOf(target):null;
+  if(targetKey&&pending.some(r=>keyOf(r)===targetKey))postponed.add(targetKey);
   parkQuestions();
   setLayerHeld(null);
-  if (ui.get().later) return;
-  send(true);
+  notify();
 }
 
-/** Open "Da rispondere": quiet mode ends, the questions window shows the queue, `key` first (else the oldest). */
-export function openQueue(key: string | null): void {
-  if (ui.get().later) send(false);
-  // the keyboard may be in the global layer: the queue is on the app page
-  void sb.invoke('overlay:focus', { target: 'app' }).catch(() => {});
+/** Explicit navigation opens the actual request above any other dialog, without answering it. */
+export function openQueue(key:string|null):void {
+  resumeQuestions();
+  closeModal();
+  void sb.invoke('overlay:focus',{target:'app'}).catch(()=>{});
   callQuestions(key);
 }

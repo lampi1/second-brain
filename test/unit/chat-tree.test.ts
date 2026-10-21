@@ -56,5 +56,12 @@ describe('requestHost: each request renders once', () => {
     expect(hosts(v({ s: true }, null, 'chat:r'))).toEqual(['r']);
     expect(hosts(v({ s: true }, null, 'orchestrator'))).toEqual(['s']);
   });
+  it('does not assign a hidden expanded descendant as host, but respects explicit focus', () => {
+    const folded = { ...v({ r: true, s: true, g: true }), treeCollapsed: { s: true } };
+    expect(requestHost('g', chats, folded)).toBe('s');
+    expect(requestHost('g', chats, { ...folded, treeCollapsed: { r: true } })).toBe('r');
+    expect(requestHost('g', chats, { ...folded, focusMode: 'g' })).toBe('g');
+  });
+
 });
 

@@ -8,7 +8,7 @@
 // ADR 0044). The chats' tiles and the Orchestrator keep one line each. It never takes the user's text (lib/questions.ts): while
 // they type a request waits as a pill, and when it shows it takes the keyboard only if no other field has it (a note
 // says so; Ctrl+J or a click anywhere on it, backdrop too, moves it here). Esc or "Rispondi dopo" turns "Rispondi dopo"
-// on (lib/later.ts): the window closes and stays closed, new requests wait silently in "Da rispondere". The same window
+// on that request (lib/later.ts): it stays in "Da rispondere", while other and new requests can still appear. The same window
 // is that queue's view: Ctrl+J or the top bar's counter call it with every open request, switch on or off (off: it
 // closes once the queue is empty). One modal, anchored near the top like a command palette: what loads late grows
 // downward and nothing on screen moves. It has no off switch of its own: a "Spegni" in its head, under the pointer when
@@ -25,7 +25,7 @@ import { commandsOfTurn } from '../lib/orchestrator-route';
 import { sameList } from '../store/state';
 import { useApp } from '../store/store';
 import { callQuestions, parkQuestions, setQuestionsAside, setQuestionsShown, ui } from '../store/ui';
-import { answerLater, openQueue } from '../lib/later';
+import { answerLater, openQueue, requestPostponed } from '../lib/later';
 import { HarnessMark, IconArrowRight, IconQuestion } from './Icons';
 import { ago } from '../lib/format';
 import { useNow } from '../lib/clock';
@@ -40,11 +40,11 @@ export function QuestionsWindow() {
   const setting = useApp(questionsModalOn);
   const hidden = ui.use(s => s.hidden, sameList);
   const q = ui.use(s => s.qwin);
-  const later = ui.use(s => s.later);
   const dialog = ui.use(s => s.modal !== null);
-  // "Rispondi dopo" on: closed whatever the switch; called as the queue: open whatever the switch
-  const on = !later && (setting || q.open);
-  const pending = useApp(s => (on ? s.pending.filter(p => !hidden.includes(p.chatId)) : EMPTY), sameList);
+  // Postponed requests stay in the store; only those keys are omitted until the queue is explicitly reopened.
+  const on = setting || q.open;
+  const allPending = useApp(s => s.pending, sameList);
+  const pending = on ? allPending.filter(p => !hidden.includes(p.chatId) && !requestPostponed(reqKey(p))) : EMPTY;
   const queue = [...pending];
   if (q.first) { const i = queue.findIndex(p => reqKey(p) === q.first); if (i > 0) queue.unshift(...queue.splice(i, 1)); }
   const cur = queue[0];
@@ -104,7 +104,7 @@ export function QuestionsWindow() {
   }, [shown, curKey, q.call]);
 
   // the queue called with the switch off: done once it is empty (a later request goes back to the tiles)
-  const empty = q.open && !later && !pending.length;
+  const empty = q.open && !pending.length;
   useEffect(() => { if (empty) parkQuestions(); }, [empty]);
 
   if (!on || !pending.length || !up) openedAt.current = 0;
@@ -141,7 +141,7 @@ function Window({ cur, all, boxRef, hidden, setting, openedAt }: { cur: PendingR
       {cmds.map((c, i) => <CodeBlock key={`${c.itemId}.${i}`} chatId={cur.chatId} itemId={c.itemId} lang={c.lang} code={c.code} />)}
     </div>
   ) : null;
-  const later = answerLater;
+  const later = () => answerLater(reqKey(cur));
   useEffect(() => {
     const t0 = openedAt.current;
     const f = requestAnimationFrame(() => { qwinStats.openMs = performance.now() - t0; });
@@ -240,7 +240,7 @@ export function InWindowLine({ reqs, testid, queued }: { reqs: readonly PendingR
     <div className={`sent-to-orchestrator in-window ${queued ? 'in-queue' : ''}`} role="status" data-testid={testid} data-queued={queued ? '' : undefined}>
       <IconQuestion size={13} />
       <span>{queued ? t('chat.questions.inQueue', { noun: r }) : t('chat.questions.inWindow', { noun: n })}</span>
-      <button type="button" className="btn btn-ghost btn-s" onClick={() => (queued ? openQueue(first) : callQuestions(first))} data-testid={`${testid}-open`}>{queued ? t('chat.questions.openQueue') : t('chat.questions.openWindow')}</button>
+      <button type="button" className="btn btn-ghost btn-s" onClick={() => openQueue(first)} data-testid={`${testid}-open`}>{queued ? t('chat.questions.openQueue') : t('chat.questions.openWindow')}</button>
     </div>
   );
 }
