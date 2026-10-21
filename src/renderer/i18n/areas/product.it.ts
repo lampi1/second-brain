@@ -1,5 +1,23 @@
 // Agent workspace and packaged appearance UI. Kept separate from provider output and user-authored content.
 export const productIt={
+ "viewer.reviewSelection":"Commenta selezione",
+ "viewer.reviewTitle":"Commenta questo punto",
+ "viewer.reviewRegion":"Area selezionata dell’immagine",
+ "viewer.reviewComment":"Il tuo commento",
+ "viewer.reviewPlaceholder":"Che cosa vuoi verificare o cambiare?",
+ "viewer.reviewDraftHint":"Invia il commento oppure prepara un messaggio da rivedere nell’Orchestrator.",
+ "viewer.reviewPrepare":"Prepara messaggio",
+ "viewer.reviewSend":"Invia all’Orchestrator",
+ "viewer.reviewUnavailable":"Orchestrator non disponibile. Il commento resta qui: riprova.",
+
+ "viewer.imageBefore":"Prima",
+ "viewer.imageAfter":"Dopo",
+ "report.image.select":"Seleziona area",
+ "report.image.hint":"Trascina sull’immagine per selezionare un’area.",
+ "report.image.clear":"Cancella selezione",
+ "report.image.commentRegion":"Commenta area",
+ "report.image.commentWhole":"Commenta immagine intera",
+
  'start.skillsSuggested':'Skill adatte al compito','start.skillsNone':'Nessuna skill del brain adatta a questo compito.','start.skillsWords':'Confronto per parole: modello locale non disponibile.','start.skillsHint':'Il ruolo usa solo le skill che riceve: le sue predefinite più quelle scelte qui.','start.roleSkills':(p:{list:string})=>`Già sue: ${p.list}`,
  'product.transcriptLoading':'Caricamento','product.transcriptEmpty':'Nessun messaggio ancora: scrivi qui sotto da dove partire.',
  'start.needMemory':'Collega una cartella della memoria prima di avviare il ruolo.','start.needTask':'Descrivi il compito da affidare al ruolo.','start.failed':'La chat non è partita. La richiesta rimane qui: controlla la disponibilità del motore.',

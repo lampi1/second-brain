@@ -86,6 +86,6 @@ export function ReportHtml({text,path}:{text:string;path:string}){
     root.addEventListener('click',go);root.addEventListener('keydown',go);
     return()=>{root.removeEventListener('click',go);root.removeEventListener('keydown',go);};
   },[root]);
-  const zoom=useReportImages(root,report);
+  const zoom=useReportImages(root,report,path);
   return <><div ref={setHost} className="bx-report" data-testid="viewer-report" role="document" style={HOST_STYLE}/>{zoom}</>;
 }

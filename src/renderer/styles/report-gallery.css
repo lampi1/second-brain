@@ -1,0 +1,8 @@
+/* Report Markdown evidence thumbnails, captions and keyboard focus; full images open in ImageZoom. */
+.bx-md .sb-report-gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr)); gap: 12px; margin: 16px 0; align-items: start; }
+.bx-md .sb-report-image { min-width: 0; margin: 0; overflow: hidden; border: 1px solid var(--bx-border); border-radius: 10px; background: var(--bx-surface-2); }
+.bx-md .sb-report-image img.sb-img { display: block; width: 100%; height: 190px; min-width: 0; object-fit: contain; margin: 0; border: 0; border-radius: 0; background: var(--bx-surface); }
+.bx-md .sb-report-image figcaption { padding: 9px 11px; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; color: var(--bx-text-3); }
+.bx-md .sb-report-image-side { display: block; color: var(--bx-text); margin-bottom: 3px; }
+.bx-md img.sb-img:focus-visible { outline: 3px solid var(--bx-blue); outline-offset: -3px; }
+.bx-md .sb-report-image .sb-img-note { display: block; margin: 10px; }

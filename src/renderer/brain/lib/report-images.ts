@@ -10,6 +10,7 @@
 //   expression(), behaviors), so a style can never fetch; stripHostSelectors: no :host rules, so it cannot restyle the
 //   viewer's shadow host.
 // Used by brain/components/ReportImages.tsx and brain/components/ReportHtml.tsx; pinned by test/unit/report-images.test.ts.
+import type { MarkedExtension } from 'marked';
 import {plainPath} from '../../lib/pathPatterns';
 import {avatarRasterSize} from '../../lib/avatar-raster';
 
@@ -101,4 +102,36 @@ export function embeddedRasterOk(dataUrl: string): boolean {
   try { const text = atob(m[2]!.replace(/\s+/g, '')); bytes = Uint8Array.from(text, c => c.charCodeAt(0)); } catch { return false; }
   const size = avatarRasterSize(bytes, mime, { min: 1, max: EMBEDDED_MAX_SIDE });
   return !!size && size.width * size.height <= EMBEDDED_MAX_PIXELS;
+}
+
+/** Legacy report placeholders are inline tokens, so fenced and inline code remain literal. */
+export const reportImageExtension: MarkedExtension = {
+  extensions: [{
+    name: 'reportImage', level: 'inline',
+    start(src) { return src.indexOf('{{img:'); },
+    tokenizer(src) {
+      const match = /^\{\{img:([^{}\r\n]+)\}\}/.exec(src);
+      if (!match) return;
+      return { type: 'reportImage', raw: match[0], path: match[1]!.trim() };
+    },
+    renderer(token) {
+      const path = String(token.path);
+      const escape = (value: string) => value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return `<img src="${escape(path)}" alt="${escape(path.split(/[\\/]/).pop() ?? path)}">`;
+    },
+  }],
+};
+
+/** Only an explicit before/after filename component supplies comparison semantics. */
+export function imageComparison(path: string): { key: string; side: 'before' | 'after' } | null {
+  const folderEnd = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1;
+  const match = /(^|[-_ .])(before|after)(?=[-_ .]|$)/i.exec(path.slice(folderEnd));
+  if (!match) return null;
+  const start = folderEnd + match.index + match[1]!.length;
+  return { key: path.slice(0, start).toLowerCase() + '{side}' + path.slice(start + match[2]!.length).toLowerCase(), side: match[2]!.toLowerCase() as 'before' | 'after' };
+}
+
+/** A comparison label may precede a gallery; arbitrary surrounding prose is never moved. */
+export function isImageGalleryLead(text: string): boolean {
+  return /^(?:before\s*\/\s*after|prima\s*\/\s*dopo)(?:\s*\(\d+\s*[×x]\s*\d+\))?\s*:\s*$/i.test(text.trim());
 }

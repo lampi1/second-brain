@@ -1,0 +1,16 @@
+/* File review controls: compact contextual comment form matching the existing brain viewer surfaces. */
+.report-review { min-width: 0; }
+.report-review-body { min-width: 0; }
+.report-review-pick { position: sticky; bottom: 12px; display: flex; justify-content: flex-end; margin-top: 8px; z-index: 2; pointer-events: none; }
+.report-review-pick .bx-btn { pointer-events: auto; box-shadow: 0 3px 12px #0003; background: var(--bx-surface-2); }
+.report-review-form { margin-top: 16px; padding: 14px; border: 1px solid var(--bx-border); border-radius: var(--bx-r-s); background: var(--bx-surface-2); display: grid; gap: 10px; }
+.report-review-heading,.report-review-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.report-review-form blockquote { margin: 0; padding: 8px 12px; border-left: 2px solid var(--bx-blue); color: var(--bx-text-3); max-height: 130px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+.report-review-form blockquote small { display: block; margin-top: 4px; }
+.report-review-form textarea { width: 100%; box-sizing: border-box; resize: vertical; min-height: 80px; border: 1px solid var(--bx-border); border-radius: var(--bx-r-s); padding: 9px 11px; color: var(--bx-text); background: var(--bx-surface); font: inherit; }
+.report-review-form textarea:focus-visible { outline: 2px solid var(--bx-blue); outline-offset: 2px; }
+.report-review-actions p { margin: 0; color: var(--bx-text-3); font-size: 12px; flex: 1 1 220px; }
+
+.viewer-image-open { display: block; max-width: 100%; padding: 0; border: 0; background: transparent; cursor: zoom-in; }
+.viewer-image-open img { display: block; max-width: 100%; max-height: 75vh; object-fit: contain; }
+.viewer-image-open:focus-visible { outline: 2px solid var(--bx-blue); outline-offset: 3px; }

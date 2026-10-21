@@ -119,6 +119,8 @@ available through `app_task_events`; stale assignment cursors are refused. Deliv
 `display` shows the full result, `notify` adds quiet news, and `synthesize` requests an AI integration turn.
 **Synthesize with the Orchestrator** is a separate user action; queued delivery remains visible until submission.
 
+File reports render standard Markdown images and legacy `{{img:relative.png}}` references through the same local-image safety checks. Explicit before/after filename pairs appear side by side with zoom; unavailable images show their loading error. Select report text or an image region, add a comment, and explicitly send it to the Orchestrator or prepare a draft. The message retains the file path, quoted text or normalized image coordinates, and the displayed file timestamp/size; the viewer never edits the source or invents missing screenshots.
+
 ## A quick tour
 
 <table>

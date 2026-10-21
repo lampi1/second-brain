@@ -1,0 +1,11 @@
+/* Report image selection in ImageZoom: the overlay follows the rendered image's exact bounds; regular zooms
+   retain their existing layout. FileViewer receives normalized coordinates for a review, never a fabricated crop. */
+.modal.report-image-viewer { overflow-y: auto; }
+.report-image-stage { position: relative; align-self: center; flex: none; max-width: 100%; line-height: 0; }
+.modal.report-image-viewer .report-image-stage img { max-height: max(80px, calc(100vh - 260px)); max-width: 100%; width: auto; height: auto; }
+.report-image-stage.selecting { cursor: crosshair; touch-action: none; user-select: none; }
+.report-image-region { position: absolute; pointer-events: none; border: 2px solid var(--focus); background: color-mix(in srgb, var(--focus) 18%, transparent); box-sizing: border-box; }
+.report-image-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px; max-width: min(720px, calc(100vw - 64px)); }
+.report-image-hint { flex-basis: 100%; color: var(--text-2); font-size: 12px; }
+
+.report-image-tools .btn[aria-pressed="true"] { background: var(--blue-bg); color: var(--blue); border-color: var(--blue); }
