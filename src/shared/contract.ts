@@ -1259,6 +1259,8 @@ export interface InvokeMap {
   /** the maintenance button: run every job now (or one); every change is logged and can be undone */
   'brainmodel:maintain': [{ job?: MaintenanceJobId } | undefined, BrainModelState];
   'brainmodel:rollback': [{ id: string }, BrainModelState];
+  /** the user marks a log group of the maintenance as known noise (or not any more, #150) */
+  'brainmodel:noise': [{ key: string; known: boolean }, BrainModelState];
   /** the user declares (on) or drops (off) a skill for an agent */
   'brainmodel:link': [{ skill: string; agentId: string; on: boolean }, BrainModelState];
   /** Classificatori (read-only): the routing table with history and measured results, recent agent choices */
@@ -1568,7 +1570,7 @@ export const INVOKE_CHANNELS = [
   'chat:userEvents', 'chat:synthesize', 'memory:reviewList', 'memory:confirm', 'memory:retract', 'memory:delete', 'learning:evidence', 'learning:state', 'learning:import', 'learning:replay', 'learning:saveCandidate', 'learning:promote', 'learning:compare',
   'agents:list', 'skills:suggest', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'agents:estimates', 'run:outcome', 'agents:restoreVersion', 'avatars:get', 'avatars:set', 'avatars:reset', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:plan', 'chat:stop',
-  'agents:exportPlan', 'agents:exportFix', 'agents:export', 'brain:share', 'agents:importInspect', 'agents:importApply', 'agents:importCancel', 'brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'brainmodel:link', 'classifiers:state', 'morning:brief', 'agents:trialDecide', 'agents:lifecycleDecide',
+  'agents:exportPlan', 'agents:exportFix', 'agents:export', 'brain:share', 'agents:importInspect', 'agents:importApply', 'agents:importCancel', 'brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'brainmodel:noise', 'brainmodel:link', 'classifiers:state', 'morning:brief', 'agents:trialDecide', 'agents:lifecycleDecide',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'chat:undoTurn', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
   'settings:undo', 'settings:propose', 'settings:pending', 'settings:confirm', 'estimate:record', 'brain:api',

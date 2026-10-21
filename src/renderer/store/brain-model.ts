@@ -32,5 +32,7 @@ async function act(run: () => Promise<BrainModelState>): Promise<string | null> 
 }
 /** The maintenance button: every job now (or one). Resolves to an error text, or null. */
 export const runMaintenance = (job?: MaintenanceJobId) => act(() => sb.invoke('brainmodel:maintain', job ? { job } : undefined));
+/** "Noto, ignora" on a log group of the maintenance (#150): listed apart, never handed to the Orchestrator again. */
+export const markLogGroup = (key: string, known: boolean) => act(() => sb.invoke('brainmodel:noise', { key, known }));
 export const rollbackChange = (id: string) => act(() => sb.invoke('brainmodel:rollback', { id }));
 export const linkSkill = (skill: string, agentId: string, on: boolean) => act(() => sb.invoke('brainmodel:link', { skill, agentId, on }));

@@ -24,6 +24,7 @@ import { claimOf, learningState, measurable, seal, type IntervalCache } from './
 import { corrections, mergeMemory, mergeSkills, migrate, repeatedTask, type AgentWriter, type JobContext, type JobResult } from './jobs';
 import { procedureSections } from './procedure-sources';
 import { memoryStats } from './memory-stats';
+import { handoffText, readNoise, scanLogs, writeNoise } from './log-scan';
 import { readMemory, readRules, readSkills, type SkillDir } from './model';
 
 export interface BrainModelDeps {
@@ -42,6 +43,10 @@ export interface BrainModelDeps {
   /** a pass the app ran by itself (the timers, a new lesson) changed something: the feed's quiet "Ruolo aggiornato" event
    *  with its Annulla (wiring.ts → brain.publish, ADR 0102); never called for a pass the user started with the button */
   applied?: (changes: BrainChange[]) => void;
+  /** the app's log folder (log.ts): the log step of a pass the user starts (#150); absent = no log step */
+  logDir?: () => string | null;
+  /** hands the pass's result to the open Orchestrator (#150): resolves true when delivered; absent = nobody to tell */
+  handoff?: (text: string) => Promise<boolean>;
   /** run the jobs by themselves (timers); false in the test suites */
   auto: boolean;
   now?: () => number;
@@ -53,6 +58,8 @@ export class BrainModelService {
   readonly log: ChangeLog;
   private readonly reportFile: string;
   private readonly runFile: string;
+  /** the log groups the user marked "noto, ignora" (#150) */
+  private readonly noiseFile: string;
   private running: Promise<BrainModelState> | null = null;
   private readonly intervals: IntervalCache = new Map();
   private timers: NodeJS.Timeout[] = [];
@@ -60,6 +67,7 @@ export class BrainModelService {
     this.log = new ChangeLog(d.userData, d.now, c => seal(c, this.roles()));
     this.reportFile = path.join(d.userData, 'brain-migration.json');
     this.runFile = path.join(d.userData, 'brain-maintenance.json');
+    this.noiseFile = path.join(d.userData, 'maintenance-noise.json');
     d.learning.onProposed = () => { void this.maintain('corrections', { auto: true }).catch(() => { /* logged inside */ }); };
   }
   private now(): number { return this.d.now?.() ?? Date.now(); }
@@ -169,7 +177,18 @@ export class BrainModelService {
           done.push({ job: id, changes: 0, note: errText(e).slice(0, 200) });
         }
       }
-      writeLocal(this.runFile, { at: this.now(), jobs: done.map(({ report: _r, ...x }) => { void _r; return x; }) } satisfies MaintenanceRun);
+      const previous = this.lastRun();
+      const pass: MaintenanceRun = { at: this.now(), jobs: done.map(({ report: _r, ...x }) => { void _r; return x; }) };
+      // the full pass the user started also reads the logs and ends in the Orchestrator (#150); a timer's pass does not
+      const dir = !job && !opts.auto ? this.d.logDir?.() ?? null : null;
+      if (dir) {
+        pass.logs = scanLogs(dir, previous?.logs ? previous.at : null, readNoise(this.noiseFile), this.now());
+        const fresh = pass.logs.groups.filter(g => !g.known).length;
+        try { pass.handoff = !this.d.handoff ? { sent: false, why: 'nessun Orchestrator' } : await this.d.handoff(handoffText(pass, pass.logs)) ? { sent: true } : { sent: false, why: 'nessun Orchestrator aperto' }; }
+        catch (e) { pass.handoff = { sent: false, why: errText(e).slice(0, 200) }; log.warn('brain', 'maintenance result not handed to the Orchestrator', { cause: errText(e), hint: 'open the Orchestrator and run the maintenance again' }); }
+        log.info('brain', 'maintenance log step', { data: { files: pass.logs.files.length, groups: pass.logs.groups.length, fresh, handedOff: pass.handoff.sent } });
+      }
+      writeLocal(this.runFile, pass);
       if (done.some(r => r.changes)) log.info('brain', 'maintenance applied', { data: Object.fromEntries(done.map(r => [r.job, r.changes])) });
       this.d.emit();
       const state = this.state();
@@ -181,6 +200,18 @@ export class BrainModelService {
     })();
     this.running = run.finally(() => { this.running = null; });
     return this.running;
+  }
+  /** The user marks a log group as known noise (or not any more): it is listed apart and never handed on again (#150). */
+  noise(key: string, known: boolean): BrainModelState {
+    const set = readNoise(this.noiseFile);
+    if (known) set.add(key); else set.delete(key);
+    writeNoise(this.noiseFile, set);
+    const run = this.lastRun();
+    // the last pass's list shows the new mark at once
+    if (run?.logs) writeLocal(this.runFile, { ...run, logs: { ...run.logs, groups: run.logs.groups.map(g => { const { known: _k, ...rest } = g; void _k; return g.key === key ? { ...rest, ...(known ? { known: true as const } : {}) } : g; }) } });
+    log.info('brain', 'log group marked', { data: { known } });
+    this.d.emit();
+    return this.state();
   }
   rollback(id: string): BrainModelState {
     const c = this.log.rollback(id, this.restorer());

@@ -31,6 +31,18 @@ div.bm-page.agent-overview{display:block;min-width:0;padding:28px 32px 48px;font
 .mm-job-result{flex:none;font-size:var(--fs-xs);font-weight:600;color:var(--text-3);white-space:nowrap}
 .mm-job[data-status=changed] .mm-job-result{color:var(--green)}
 @keyframes mm-pulse{50%{opacity:.35}}
+.mm-maint.compact{display:contents}
+.mm-maint-handoff{margin:10px 0 0;font-size:var(--fs-s);color:var(--green)}
+.mm-maint-handoff.warn{color:var(--amber)}
+.mm-logs{list-style:none;margin:0;padding:0;border:1px solid var(--border);border-radius:10px;overflow:hidden;max-height:280px;overflow-y:auto}
+.mm-log{display:flex;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid var(--border)}
+.mm-log:first-child{border-top:0}
+.mm-log-main{flex:1;min-width:0;display:grid;gap:2px}
+.mm-log-main b{font-size:var(--fs-s);font-weight:600;overflow-wrap:anywhere}
+.mm-log-main small{font-size:var(--fs-xs);color:var(--text-3);overflow-wrap:anywhere}
+.mm-log[data-lvl=error] .mm-log-main b{color:var(--red)}
+.mm-log.known{opacity:.6}
+.mm-log-n{flex:none;font-size:var(--fs-xs);font-weight:600;color:var(--text-3)}
 @media (prefers-reduced-motion:reduce){.mm-job[data-status=running] .mm-job-dot{animation:none}}
 
 /* ── statistics ── */

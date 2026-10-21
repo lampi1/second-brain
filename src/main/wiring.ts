@@ -93,6 +93,7 @@ import { electronNode, runNode } from './brain/node';
 import path from 'node:path';
 import { templateRoot } from './rules/tools';
 import { log, errText } from './log';
+import { APP_EVENT_LABEL } from './chats/orchestrator-wake';
 import { AnswerLaterStore, REQUEST_KINDS } from './later';
 import { Artifacts, showUiTool } from './genui/artifacts';
 import { releaseId } from './release';
@@ -766,6 +767,14 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning, runs: () => manager.runs.list(), routing: () => brain.routingInfo(),
     suggestSkills: async text => (await suggestSkills(text)).candidates.map(c => c.name),
     emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: !process.env.SB_TEST || process.env.SB_BRAIN_JOBS === '1',
+    // the pass the user starts reads the app logs and ends in the open Orchestrator, labelled as the app's (#150)
+    logDir: () => log.folder,
+    handoff: async text => {
+      const orchestrator = manager.list().find(c => c.isOrchestrator && !c.closedAt);
+      if (!orchestrator) return false;
+      await manager.send(orchestrator.id, `${APP_EVENT_LABEL}\n${text}`, undefined, false, 'Manutenzione', false, { kind: 'app' });
+      return true;
+    },
     // a pass the app ran by itself: a quiet feed event with Annulla (ADR 0102)
     applied: changes => { const e = maintenanceEvent(changes); if (e) brain.publish([e]); } });
   brainModelRef.current = brainModel;

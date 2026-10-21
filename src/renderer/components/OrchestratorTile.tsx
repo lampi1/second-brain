@@ -10,7 +10,7 @@
 // capo", "Cambia motore" (both open the Nuovo Orchestrator confirm) and "Pulisci"; the eraser on its head is "Pulisci" in
 // one click, without the confirm (clearOrchestratorNow, the quick /clear). With no Orchestrator yet it offers to create
 // one. Under its head, a line with the chats it started today by state and the cost apart, its own and theirs (#153,
-// lib/orchestrator-tally.ts); the morning block's line while strips are open (no plan panel: the strips carry each estimate, #124) (MorningBlock.tsx, ADR 0102). When it drives a browser, it wears that pair's accent like any chat (lib/pairs.ts). Used by OrchestratorOverlay.tsx.
+// lib/orchestrator-tally.ts); on its head the one «Manutenzione» for every page (#150, MaintenanceButton compact); the morning block's line while strips are open (no plan panel: the strips carry each estimate, #124) (MorningBlock.tsx, ADR 0102). When it drives a browser, it wears that pair's accent like any chat (lib/pairs.ts). Used by OrchestratorOverlay.tsx.
 import { memo, useEffect, useRef, useState } from 'react';
 import { chatCost, formatCost, modelWithEffort } from '../lib/format';
 import { orchestratorTally, type OrchestratorTally } from '../lib/orchestrator-tally';
@@ -32,6 +32,7 @@ import { HelpTip } from './HelpTip';
 import {AgentAvatar}from'./AgentAvatar';
 import { ChildStrips } from './ChildStrips';
 import { MorningLine } from './MorningBlock';
+import { MaintenanceButton } from './brain-model/MaintenanceButton';
 import { pendingOf, useFlash } from './ChatTile';
 import { RequestPanel } from './RequestPanel';
 import { InWindowLine } from './QuestionsWindow';
@@ -148,6 +149,7 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
           <StatePill chat={chat} testid="orchestrator-state" />
           <HelpTip title={t('explain.orch.title')} guide="orchestrator" testid="orchestrator-help"><p>{t('explain.orch.p1')}</p><p>{t('explain.orch.p2')}</p><p>{t('explain.orch.p3')}</p></HelpTip>
           <span className="sp" />
+          <MaintenanceButton compact testId="orchestrator-maint" />
           <IconButton label={t('dialogs.orchestrator.statusLabel')} shortcut={t('dialogs.orchestrator.statusShortcut')} onClick={() => openModal('stato')} testid="orchestrator-stato"><IconList size={14} /></IconButton>
           {busy && <IconButton label={t('dialogs.orchestrator.stopLabel')} shortcut={t('dialogs.orchestrator.stopShortcut')} tone="danger" onClick={() => void stop(chat.id)} testid="orchestrator-stop"><IconStop size={14} /></IconButton>}
           <IconButton label={t('lampo.clear')} disabled={busy} onClick={() => void clearOrchestratorNow(chat.id)} testid="orchestrator-clear"><IconEraser size={14} /></IconButton>
