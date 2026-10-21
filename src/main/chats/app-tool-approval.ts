@@ -12,7 +12,7 @@ export function appEndpoint(raw: string | null | undefined): boolean {
   } catch { return false; }
 }
 
-export const APP_CHAT_TOOLS = ['send_to_chat', 'list_chats', 'agent_delegate', 'agent_report', 'agent_children', 'agent_ask_parent', 'agent_answer_child', 'plan_propose', 'plan_update'] as const;
+export const APP_CHAT_TOOLS = ['send_to_chat', 'list_chats', 'agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_report', 'agent_children', 'agent_ask_parent', 'agent_answer_child', 'plan_propose', 'plan_update'] as const;
 
 export function cursorAppPermissions(mcpUrl?: string | null, appMcpUrl?: string | null): string[] {
   return [

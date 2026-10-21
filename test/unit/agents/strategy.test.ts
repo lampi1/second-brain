@@ -261,3 +261,20 @@ describe('shared/strategy.ts', () => {
     expect(readPlan(null)).toBeNull();
   });
 });
+
+// Reusing a conversation moves only the active plan association; previous run reports remain in the ledger.
+describe('reused child plan steps', () => {
+  it('moves a reused child to the new step and reopens finished execution', () => {
+    const plan: StrategyPlan = {phase:'done',at:1,clarified:[],steps:[
+      {title:'Original',state:'done',outcome:'done',chatIds:['child']},
+      {title:'Follow-up',state:'done',outcome:'partial',endedAt:1},
+    ]};
+    const next=withDelegated(plan,1,['child'],2);
+    expect(next.phase).toBe('running');
+    expect(next.steps[0]).toMatchObject({state:'done',outcome:'done',chatIds:[]});
+    expect(next.steps[1]).toMatchObject({state:'now',chatIds:['child']});
+    expect(next.steps[1]?.endedAt).toBeUndefined();
+    expect(next.steps[1]?.outcome).toBeUndefined();
+    expect(afterReport(next,'child',()=> 'done',3).phase).toBe('done');
+  });
+});

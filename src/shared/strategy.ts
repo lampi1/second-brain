@@ -51,7 +51,7 @@ export const STRATEGY_FLOW = [
   '[app · how you work with the user here]',
   '1. First find out what the user really wants, at a high level: ask ONE question at a time with your question tool (AskUserQuestion on Claude), in the user\'s language, with 2 to 4 short options, the recommended one first ending with " (consigliato)", and a short header naming the topic. If a missing goal, scope, constraint or success criterion would change your plan, ask the user before proposing it; never silently invent it. Skip what the request already says. Stop as soon as goal, scope, constraints and "done" are clear, after at most 5 questions, or when the user answers "Basta domande".',
   `2. Then propose the plan with plan_propose: 2 to 6 steps, each one short plain line in the user's language with the role that does it; no jargon, no sub-steps. End your turn and wait: the user approves on your strip ("${PLAN_APPROVED}") or writes what to change, and then you propose again. Delegate nothing before the approval.`,
-  '3. Once approved, delegate each step with agent_delegate, giving its number as `step` (independent steps in parallel). A step you do yourself: plan_update it to "now", then to "done". The user follows the steps on your strip. At the end, agent_report as usual.',
+  '3. Once approved, inspect agent_children and reuse a compatible child with agent_assign_task (read agent_task_events first), or delegate new work with agent_delegate, giving its number as `step` (independent steps in parallel). A step you do yourself: plan_update it to "now", then to "done". The user follows the steps on your strip. At the end, agent_report as usual.',
 ].join('\n');
 
 const line = (v: unknown, max: number, what: string): string => {
@@ -100,7 +100,9 @@ export function withStep(plan: StrategyPlan, i: number, state: StepState, now: n
 /** Step i got these delegated chats: it is under way. */
 export function withDelegated(plan: StrategyPlan, i: number, chatIds: string[], now: number): StrategyPlan {
   const s = plan.steps[i]!;
-  const next = withStep(plan, i, s.state === 'done' ? 'done' : 'now', now);
+  // A reused conversation now belongs to this step; its prior run remains in the run ledger.
+  const moved = { ...plan, steps: plan.steps.map((step, k) => k === i || !step.chatIds ? step : { ...step, chatIds: step.chatIds.filter(id => !chatIds.includes(id)) }) };
+  const next = withStep(moved, i, 'now', now);
   next.steps[i] = { ...next.steps[i]!, chatIds: [...new Set([...(s.chatIds ?? []), ...chatIds])].slice(-10) };
   return next;
 }

@@ -402,12 +402,12 @@ const MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'pla
 /** chat-endpoint tools the Orchestrator can never use (chatToolShown): it does not delegate, report, ask a parent or
  *  rate a child (its chats are roots: agent_child_feedback takes only a child's run), and
  *  agent_catalog / agent_learn_propose are on its own endpoint already */
-const ORCHESTRATOR_HIDDEN: ReadonlySet<string> = new Set(['plan_propose', 'plan_update', 'agent_delegate', 'agent_report', 'agent_ask_parent', 'agent_answer_child', 'agent_children', 'agent_child_feedback', 'agent_catalog', 'agent_learn_propose',
+const ORCHESTRATOR_HIDDEN: ReadonlySet<string> = new Set(['plan_propose', 'plan_update', 'agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_report', 'agent_ask_parent', 'agent_answer_child', 'agent_children', 'agent_child_feedback', 'agent_catalog', 'agent_learn_propose',
   // it saves scripts with brain_script_save on its own endpoint
   'brain_script_add']);
 /** the tools only a chat that may delegate can use (chatToolShown): a role that launches no role (Scout, Judge) never
  *  sees them (~1 500 tokens of schemas in every call, each call refused) */
-const DELEGATING_ONLY: ReadonlySet<string> = new Set(['agent_delegate', 'agent_children', 'agent_answer_child', 'agent_child_feedback', 'agent_catalog', 'skills_suggest']);
+const DELEGATING_ONLY: ReadonlySet<string> = new Set(['agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_children', 'agent_answer_child', 'agent_child_feedback', 'agent_catalog', 'skills_suggest']);
 /** the Strategist's plan tools (agents/strategy-tools.ts): shown only where a plan with the user exists */
 const PLAN_TOOLS: ReadonlySet<string> = new Set(['plan_propose', 'plan_update']);
 /** a root chat's deliverable longer than this reaches the Orchestrator as where to read it, not whole (it is the chat's answer
@@ -1152,7 +1152,9 @@ export class ChatManager implements ChatService {
   planDelegated(chatId: string, i: number, chatIds: string[]): void {
     const r = this.chats.get(chatId), plan = r?.s.plan;
     if (!r || !plan || !plan.steps[i] || !chatIds.length) return;
-    r.s.plan = withDelegated(plan, i, chatIds, Date.now());
+    // A new execution of this step must not wait on siblings from an older parent assignment.
+    const current = { ...plan, steps: plan.steps.map((step, k) => k !== i || !step.chatIds ? step : { ...step, chatIds: step.chatIds.filter(id => chatIds.includes(id) || this.chats.get(id)?.s.run?.parentRunId === r.s.run?.runId) }) };
+    r.s.plan = withDelegated(current, i, chatIds, Date.now());
     this.persist();
     this.updated(r);
   }
@@ -1317,11 +1319,21 @@ export class ChatManager implements ChatService {
     const source = options.source ?? { kind: 'user' as const };
     if (source.kind === 'chat') {
       if (source.chatId !== this.openOrchestrator()?.s.id && source.chatId !== r.s.parentId) throw new Error('Only the owning Orchestrator or parent can assign this chat.');
+      if (source.chatId === r.s.parentId) {
+        const parent = this.need(source.chatId);
+        if (parent.s.closedAt || !parent.s.run || parent.s.run.endedAt !== undefined || parent.s.run.report?.via === 'agent_report') throw new Error('The parent assignment is over; its owner must explicitly continue it before it can assign children.');
+      }
       const events = this.userEvents(chatId);
-      if ((events.latestSeq > events.acknowledgedSeq || options.expectedEventSeq !== undefined) && options.expectedEventSeq !== events.latestSeq) throw new Error(`Unread user instructions: read app_task_events and pass expectedEventSeq ${events.latestSeq} before assigning.`);
+      if ((events.latestSeq > events.acknowledgedSeq || options.expectedEventSeq !== undefined) && options.expectedEventSeq !== events.latestSeq) throw new Error(`Unread user instructions: read ${source.chatId === r.s.parentId ? 'agent_task_events' : 'app_task_events'} and pass expectedEventSeq ${events.latestSeq} before assigning.`);
     }
-    if (this.midTurn(r) || r.pending.size) throw new Error('The chat is busy; wait before assigning another task.');
+    if (options.planStep !== undefined) {
+      const plan = r.s.parentId ? this.chats.get(r.s.parentId)?.s.plan : undefined;
+      if (source.kind !== 'chat' || source.chatId !== r.s.parentId || !plan || !['running', 'done'].includes(plan.phase) || !Number.isSafeInteger(options.planStep) || !plan.steps[options.planStep]) throw new Error('Invalid or unapproved parent plan step.');
+    }
+    if (this.midTurn(r) || r.pending.size || r.s.queued || r.opening || r.releasing || r.switching || r.archiving || this.deliveries.has(chatId)) throw new Error('The chat is busy or has queued work; wait before assigning another task.');
     this.beginAssignment(r, prompt, options);
+    if (options.mode === 'new-task' && r.s.plan) prompt += `\n\n${STRATEGY_FLOW}`;
+    if (options.planStep !== undefined && r.s.parentId) this.planDelegated(r.s.parentId, options.planStep, [chatId]);
     if (source.kind === 'chat' && r.userTaskEvents) { r.userTaskEvents.acknowledgedSeq = r.userTaskEvents.latestSeq; this.persist(true); this.updated(r); }
     const from = source.kind === 'chat' ? this.need(source.chatId).s.title : source.kind === 'app' ? 'App' : undefined;
     await this.send(chatId, prompt, undefined, false, from, false, source);
@@ -1347,6 +1359,7 @@ export class ChatManager implements ChatService {
     next.taskContract = { ...(previous.taskContract?.reportExpected ? { reportExpected: true } : {}), deliveryPolicy: this.deliveryPolicy(options.deliveryPolicy ?? previous.taskContract?.deliveryPolicy, !!r.s.parentId), goal: prompt, doneWhen: options.doneWhen ?? (mode === 'new-task' ? [] : previous.taskContract?.doneWhen ?? r.s.delegation?.doneWhen ?? []) };
     if (mode === 'continue') next.continuedFrom = previous.runId;
     r.s.run = next;
+    if (mode === 'new-task' && r.s.plan) r.s.plan = { phase: 'asking', clarified: [], steps: [], at };
     if (this.opts.suggestSkills) void this.opts.suggestSkills(prompt).then(suggested => {
       next.skillSuggestions = { at, suggested, used: [...(next.tags?.skills ?? [])] }; this.runSave(); this.persist();
     }).catch(e => log.warn('chats', 'skill suggestion snapshot unavailable', { cause: errText(e), hint: 'the task continues without a snapshot' }));
@@ -1891,9 +1904,9 @@ export class ChatManager implements ChatService {
     this.updated(r);
     const parent = this.chats.get(parentId);
     // the parent Strategist's step for this child: done once every chat of the step reported done (ADR 0108)
-    if (parent?.s.plan) {
+    if (parent?.s.plan && (!run?.parentRunId || run.parentRunId === parent.s.run?.runId)) {
       // a sibling gone without a result (closed by the user) counts as not done: the step shows blocked, never stuck
-      const next = afterReport(parent.s.plan, chatId, id => { const c = this.chats.get(id); return c ? c.s.delegation?.result?.outcome : 'blocked'; }, at);
+      const next = afterReport(parent.s.plan, chatId, id => { const c = this.chats.get(id); return c ? (!c.s.run?.parentRunId || c.s.run.parentRunId === parent.s.run?.runId ? c.s.delegation?.result?.outcome : undefined) : 'blocked'; }, at);
       if (next !== parent.s.plan) { parent.s.plan = next; this.persist(); }
     }
     if (parent) {

@@ -16,6 +16,8 @@ export interface TaskAssignmentOptions {
   expectedEventSeq?: number;
   deliveryPolicy?: TaskDeliveryPolicy;
   doneWhen?: string[];
+  /** Parent plan step, zero-based; mapped before the reused child can produce a result. */
+  planStep?: number;
 }
 
 export interface DelegationContract {

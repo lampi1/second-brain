@@ -11,15 +11,16 @@
 // child's folder stays inside the parent's, the depth and parallel limits of Impostazioni → Ruoli e deleghe are checked
 // with the slots reserved synchronously (two calls at once cannot both pass the last slot) and a refusal shows in the
 // parent's chat. A child may run on another engine only when the user allows chats across engines. Used by wiring.ts.
+import path from 'node:path';
 import type { ChatSummary, Harness, NewChat } from '../../shared/contract';
-import type { AgentCatalog, AgentRun } from '../../shared/agents';
+import type { AgentCatalog, AgentRun, UserTaskEvents } from '../../shared/agents';
 import { canLaunch, isWorkRole, launchGap, ROLE_DEFAULTS, WORK_ROLE_IDS, type DelegationSettings } from '../../shared/roles';
 import { oneLine } from '../../shared/agent-label';
-import { checkContract, checkResult, delegationPrompt, depthOf, type DelegationLimitHit, type DelegationResult } from '../../shared/delegation';
+import { checkContract, checkResult, delegationPrompt, depthOf, type DelegationLimitHit, type DelegationResult, type TaskAssignmentOptions } from '../../shared/delegation';
 import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
 import { stepIndex, type StrategyPlan } from '../../shared/strategy';
 import type { McpTool } from '../mcp/server';
-import { allowsClass, type AgentPolicy } from './tool-policy';
+import { allowsClass, belowParent, type AgentPolicy } from './tool-policy';
 import { withinParent } from './worktrees';
 import { gapLines, skillGaps } from './skill-needs';
 import type { SkillToolsSource } from './discovery';
@@ -28,6 +29,8 @@ import { log } from '../log';
 /** What delegation needs from the chats (ChatManager). */
 export interface DelegationChats {
   list(): ChatSummary[];
+  assignTask?(chatId: string, prompt: string, options: TaskAssignmentOptions): Promise<void>;
+  userEvents?(chatId: string, afterSeq?: number): UserTaskEvents;
   create(req: NewChat, by: 'agent'): Promise<ChatSummary>;
   agentPolicy(chatId: string): AgentPolicy | null;
   reportDelegation(chatId: string, result: DelegationResult): { parentId: string; delivered: boolean };
@@ -89,9 +92,18 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
   const reserved = new Map<string, number>();
   const chat = (id: string) => d.chats.list().find(c => c.id === id);
 
-  async function delegate(a: Record<string, unknown>, callerId: string): Promise<unknown> {
+  const assigning = new Set<string>();
+  function activeParent(callerId: string, tool: string): ChatSummary {
     const parent = chat(callerId);
-    if (!parent || parent.closedAt) throw new Error('agent_delegate: your chat is not open.');
+    const resume = parent?.parentId ? 'tell the user to request continuation of this same chat from your parent, which can use agent_assign_task' : 'tell the user to request continuation of this same chat in the Orchestrator, which can use app_assign_task';
+    if (!parent || parent.closedAt || parent.state === 'closed') throw new Error(`${tool}: your chat is not open; ${resume}.`);
+    if (parent.isOrchestrator || parent.agent?.source !== 'catalog' || !isWorkRole(parent.agent.id)) throw new Error(`${tool}: only a role chat delegates or assigns children.`);
+    if (parent.run?.endedAt !== undefined || parent.run?.report?.via === 'agent_report' || parent.delegation?.result || parent.work?.status === 'completed') throw new Error(`${tool}: your assignment is over; ${resume}.`);
+    return parent;
+  }
+
+  async function delegate(a: Record<string, unknown>, callerId: string): Promise<unknown> {
+    let parent = activeParent(callerId, 'agent_delegate');
     if (parent.isOrchestrator) throw new Error('agent_delegate: the Orchestrator opens root chats with app_create_chat.');
     if (parent.agent?.source !== 'catalog' || !isWorkRole(parent.agent.id)) throw new Error('agent_delegate: only a role chat delegates (start one from Agenti).');
     if (parent.run && parent.run.endedAt !== undefined) throw new Error('agent_delegate: your assignment is over (you reported): ask your parent for a new one.');
@@ -100,7 +112,10 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     const raw = a.tasks;
     if (!Array.isArray(raw) || !raw.length || raw.length > TASKS_MAX) throw new Error(`agent_delegate: tasks = 1 to ${TASKS_MAX} parts.`);
     // read before the limits: from here to the reservation nothing waits, so two calls cannot both take the last slot
-    const trees = d.worktrees ? await d.worktrees(parent.cwd) : [];
+    const parentCwd = parent.cwd, parentRunId = parent.run?.runId;
+    const trees = d.worktrees ? await d.worktrees(parentCwd) : [];
+    parent = activeParent(callerId, 'agent_delegate');
+    if (parent.cwd !== parentCwd || parent.run?.runId !== parentRunId) throw new Error('Parent assignment or project changed; discard this stale delegation request.');
     const limits = d.settings(), all = d.chats.list();
     const parentOf = (id: string) => all.find(c => c.id === id)?.parentId;
     const depth = depthOf(parent.id, parentOf) + 1;
@@ -178,6 +193,72 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     }
   }
 
+  /** A parent reuses only its own compatible child; policy changes require a fresh session. */
+  async function assignChild(a: Record<string, unknown>, callerId: string): Promise<unknown> {
+    const initial = activeParent(callerId, 'agent_assign_task'), initialCwd = initial.cwd, initialRunId = initial.run?.runId;
+    if (!d.chats.assignTask || !d.chats.userEvents) throw new Error('agent_assign_task is unavailable.');
+    const extra = Object.keys(a).find(k => !['chatId', 'roleId', 'cwd', 'mode', 'expectedVersion', 'expectedEventSeq', 'contract', 'step'].includes(k));
+    if (extra) throw new Error(`agent_assign_task: unknown field ${extra}.`);
+    const trees = d.worktrees ? await d.worktrees(initialCwd) : [];
+    const parent = activeParent(callerId, 'agent_assign_task'), child = typeof a.chatId === 'string' ? chat(a.chatId) : undefined;
+    if (parent.cwd !== initialCwd || parent.run?.runId !== initialRunId) throw new Error('Parent assignment or project changed; discard this stale assignment request.');
+    if (!child || child.parentId !== callerId || !child.delegation || !child.run || child.isOrchestrator) throw new Error('agent_assign_task: chatId must be one of YOUR direct children (agent_children).');
+    if (assigning.has(child.id)) throw new Error('agent_assign_task: this child already has an assignment in progress.');
+    if (!isWorkRole(a.roleId) || a.roleId === 'sentinel' || child.agent?.source !== 'catalog' || child.agent.id !== a.roleId || child.delegation.role !== a.roleId) throw new Error('Role mismatch or independent Sentinel review: delegate a fresh chat.');
+    const catalog = d.roles(), own = catalog.profiles.find(p => p.id === parent.agent!.id), profile = catalog.profiles.find(p => p.id === a.roleId);
+    if (!own || !canLaunch(own.launches, a.roleId)) throw new Error('Your current role may not launch this child role.');
+    if (!profile || profile.activeVersion !== child.agent.version || profile.engine !== child.harness) throw new Error('Role configuration changed: delegate a fresh chat.');
+    if (typeof a.cwd !== 'string' || !path.isAbsolute(a.cwd) || path.resolve(a.cwd) !== path.resolve(child.cwd) || !withinParent(parent.cwd, child.cwd, trees)) throw new Error('Project mismatch: reuse only the same folder inside your scope or repository worktree.');
+    if (!['continue', 'new-task', 'rework'].includes(String(a.mode)) || !Number.isSafeInteger(a.expectedVersion) || Number(a.expectedVersion) < 1) throw new Error('Invalid assignment mode/version.');
+    if (!Number.isSafeInteger(a.expectedEventSeq) || Number(a.expectedEventSeq) < 0) throw new Error('Read agent_task_events and provide expectedEventSeq.');
+    const contractRaw = a.contract;
+    if (!contractRaw || typeof contractRaw !== 'object' || Array.isArray(contractRaw) || Object.keys(contractRaw).some(k => !['goal', 'output', 'context', 'doneWhen'].includes(k))) throw new Error('Reuse contract allows only goal, output, context and doneWhen; tools, skills and tier require a fresh chat.');
+    const contract = checkContract(contractRaw, a.roleId);
+    const parentPolicy = d.chats.agentPolicy(parent.id), childPolicy = d.chats.agentPolicy(child.id);
+    if (launchGap(profile.tools?.allow ?? [], parentPolicy?.tools?.allow ?? null).length) throw new Error('Child role needs permissions your current policy does not allow.');
+    const normalized = (policy: AgentPolicy | null) => JSON.stringify({ ceiling: policy?.ceiling ?? null, tools: policy?.tools ? { allow: [...policy.tools.allow].sort(), mcp: policy.tools.mcp ? [...policy.tools.mcp].sort() : null } : null });
+    if (normalized(childPolicy) !== normalized(belowParent(childPolicy, parentPolicy, parent.permissionMode))) throw new Error('Child permissions exceed your current policy or mode: delegate a fresh narrowed chat.');
+    const refused = d.engineRefusal(parent.harness, child.harness);
+    if (refused) throw new Error(`agent_assign_task: ${refused}`);
+    if (child.harness !== parent.harness && (child.closedAt || !['running', 'waiting', 'idle'].includes(child.state))) throw new Error('A stopped engine of another kind requires the user.');
+    const plan = d.chats.planOf?.(parent.id) ?? null;
+    if (plan && plan.phase !== 'running' && plan.phase !== 'done') throw new Error('The user has not approved your plan yet.');
+    if (a.step !== undefined && !plan) throw new Error('step requires a plan approved by the user.');
+    if (plan && a.step === undefined) throw new Error('Name the approved plan step for this reused child.');
+    const step = a.step !== undefined && plan ? stepIndex(plan, a.step, 'step') : null;
+    const limits = d.settings(), all = d.chats.list();
+    if (depthOf(parent.id, id => all.find(c => c.id === id)?.parentId) + 1 > limits.maxDepth) {
+      d.chats.limitNotice(parent.id, 'depth', limits.maxDepth); throw new Error('Delegation depth limit reached.');
+    }
+    const running = all.filter(c => c.parentId === parent.id && c.id !== child.id && busyChild(c)).length + (reserved.get(parent.id) ?? 0);
+    if (running + 1 > limits.maxParallel) {
+      d.chats.limitNotice(parent.id, 'parallel', limits.maxParallel); throw new Error('Delegation parallel limit reached; wait for a child result.');
+    }
+    // Validate cursors again in ChatManager, immediately before it mutates the task ledger.
+    const events = d.chats.userEvents(child.id);
+    if (a.expectedEventSeq !== events.latestSeq) throw new Error(`Read agent_task_events and pass expectedEventSeq ${events.latestSeq}.`);
+    if (a.expectedVersion !== (child.run.taskVersion ?? 1)) throw new Error('Task version changed; refresh agent_children.');
+    reserved.set(parent.id, (reserved.get(parent.id) ?? 0) + 1); assigning.add(child.id);
+    try {
+      const prompt = `${d.label}\n\n${delegationPrompt(contract, { role: a.roleId, parentTitle: parent.title, title: child.title, skills: [] })}`;
+      await d.chats.assignTask(child.id, prompt, { mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: Number(a.expectedVersion), expectedEventSeq: Number(a.expectedEventSeq), doneWhen: contract.doneWhen, ...(step !== null ? { planStep: step } : {}), source: { kind: 'chat', chatId: parent.id } });
+      const assigned = chat(child.id);
+      return { chatId: child.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId };
+    } finally {
+      assigning.delete(child.id);
+      const left = (reserved.get(parent.id) ?? 0) - 1;
+      if (left > 0) reserved.set(parent.id, left); else reserved.delete(parent.id);
+    }
+  }
+
+  function taskEvents(a: Record<string, unknown>, callerId: string): UserTaskEvents {
+    activeParent(callerId, 'agent_task_events');
+    const child = typeof a.chatId === 'string' ? chat(a.chatId) : undefined;
+    if (!child || child.parentId !== callerId || !d.chats.userEvents) throw new Error('agent_task_events: chatId must be one of YOUR direct children.');
+    // Always return the complete ledger: a parent must see the user's instructions before a follow-up.
+    return d.chats.userEvents(child.id, 0);
+  }
+
   /** agent_report's `remember`: up to 3 short lines for the reporting chat's role memory, checked before the report and
    *  written once it is accepted (a refused report writes nothing, so a retry does not count twice) */
   function rememberLines(a: Record<string, unknown>, self: ChatSummary | undefined): (() => number) {
@@ -218,7 +299,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     const quiet = (c: ChatSummary) => stalledMin(c, Math.max(d.chats.lastEventAt?.(c.id) ?? 0, c.updatedAt), now, stallMin);
     return { children: d.chats.list().filter(c => c.parentId === callerId).map(c => ({
       chatId: c.id, title: c.title, role: c.delegation?.role ?? c.agent?.id ?? null, state: c.closedAt ? 'closed' : c.state,
-      ...(c.run ? { runId: c.run.runId } : {}),
+      cwd: c.cwd, ...(c.userEvents ? { userEvents: c.userEvents } : {}),
+      ...(c.run ? { runId: c.run.runId, taskId: c.run.taskId ?? c.run.runId, taskVersion: c.run.taskVersion ?? 1 } : {}),
       goal: c.delegation?.goal ?? null, result: c.delegation?.result ?? null, pending: c.pending,
       ...(c.run ? { costUsd: runs.find(r => r.runId === c.run!.runId)?.costUsd ?? null } : {}),
       ...((m => m === null ? {} : { stalled: true, quietMin: m })(quiet(c))),
@@ -284,6 +366,26 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     } },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: async (a, ctx) => JSON.stringify(await delegate(a, callerOf(ctx.params))),
+  }, {
+    name: 'agent_assign_task',
+    description: 'Continue YOUR direct child in the same role and project with a separate task run. Read agent_task_events first and pass its latestSeq plus taskVersion from agent_children. Keeps the session, tools and skills; changed role settings or Sentinel reviews require a fresh child. Use rework only for explicit corrections. With an approved plan, step is required. Closed parents must first receive a new assignment from their own parent or Orchestrator.',
+    inputSchema: { type: 'object', required: ['chatId', 'roleId', 'cwd', 'mode', 'expectedVersion', 'expectedEventSeq', 'contract'], additionalProperties: false, properties: {
+      chatId: str, roleId: { type: 'string', enum: [...WORK_ROLE_IDS] }, cwd: str,
+      mode: { type: 'string', enum: ['continue', 'new-task', 'rework'] },
+      expectedVersion: { type: 'integer', minimum: 1 }, expectedEventSeq: { type: 'integer', minimum: 0 },
+      step: { type: 'integer', minimum: 1 },
+      contract: { type: 'object', required: ['goal', 'doneWhen'], additionalProperties: false, properties: {
+        goal: str, output: str, context: str, doneWhen: { type: 'array', items: str, minItems: 1, maxItems: 12 },
+      } },
+    } },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    run: async (a, ctx) => JSON.stringify(await assignChild(a, callerOf(ctx.params))),
+  }, {
+    name: 'agent_task_events',
+    description: 'Read the complete ordered user instruction ledger for YOUR direct child before reassigning it. Pass latestSeq as expectedEventSeq to agent_assign_task; no model turn is started.',
+    inputSchema: { type: 'object', required: ['chatId'], additionalProperties: false, properties: { chatId: str } },
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    run: (a, ctx) => JSON.stringify(taskEvents(a, callerOf(ctx.params))),
   }, {
     name: 'agent_report',
     description: 'Your one result for the chat that started you (your parent, or the Orchestrator for a chat it opened): outcome (done | partial | blocked), summary (one or two sentences), output (the deliverable), doneWhen (every criterion of your contract, exactly as written, with met and evidence), optional questions, optional remember (lines for your role\'s memory). It reaches your parent at once; call it once, at the end. The app shows output in your chat as your answer: do not write it in the chat too.',

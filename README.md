@@ -66,6 +66,7 @@ seven days of silence never become proof of correctness (ADR 0110).
 **↪️ Keep the conversation.** A related Scout follow-up can stay in the same conversation and project while opening
 a new, versioned assignment and measured run. A changed role or project, and an independent Sentinel review,
 start fresh. The Orchestrator's **Plan** button starts a Strategist, which asks material questions before planning.
+A Strategist can likewise reuse its own compatible children with versioned assignments. An assignment that already reported must first be explicitly continued by its owner; a late query result or mail does not reopen it. Previous results remain attached to their original runs.
 Plans collapse to a compact progress row; finished execution and partial result quality are shown separately.
 
 **📬 Read the actual result.** The complete report and its criterion evidence are saved with the exact task and run.
