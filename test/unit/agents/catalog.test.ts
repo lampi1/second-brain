@@ -22,11 +22,33 @@ function setup() {
 const edit = (p: AgentProfile, patch: Partial<AgentProfile>) => ({ instructions: p.instructions, engine: p.engine, model: p.model, tools: p.tools, permissionCeiling: p.permissionCeiling,
   tier: p.tier, tierMax: p.tierMax, launches: p.launches, skills: p.skills, ...patch });
 
+describe('Flash and the Orchestrator have their own model (ADR 0107)', () => {
+  it('Flash runs on its card: its model, else its tier\'s; read only whatever is saved; never delegated', () => {
+    const { catalog } = setup();
+    const flash = catalog.list().profiles.find(p => p.id === 'flash')!;
+    expect(catalog.resolve({ harness: 'claude', cwd: '/x', quick: true } as never)).toMatchObject({ request: { harness: 'claude', model: 'm-mid' }, owner: { source: 'plain', name: 'Flash' }, policy: { tools: { allow: ['read', 'web'] }, ceiling: 'plan' } });
+    const saved = catalog.save(edit(flash, { model: 'm-top', tools: { allow: ['read', 'edit', 'command'] } as never, permissionCeiling: null }), 'flash');
+    expect(saved).toMatchObject({ model: 'm-top', tools: { allow: ['read', 'web'] }, permissionCeiling: 'plan' });
+    expect(catalog.resolve({ harness: 'claude', cwd: '/x', quick: true } as never).request.model).toBe('m-top');
+    expect(() => catalog.save(edit(saved, { launches: ['scout'] }), 'flash')).toThrow(/Flash non avvia/);
+    expect(() => catalog.resolve({ harness: 'claude', roleId: 'flash' } as never)).toThrow(/Ruolo sconosciuto/);
+  });
+
+  it('the Orchestrator takes its card\'s model on the card\'s engine, else the session\'s', () => {
+    const { catalog } = setup();
+    expect(catalog.resolve({ harness: 'claude', orchestrator: true, model: 'm-mid' } as never).request.model).toBe('m-mid');
+    const o = catalog.list().profiles.find(p => p.id === 'orchestrator')!;
+    catalog.save(edit(o, { engine: 'claude', model: 'm-top' }), 'orchestrator');
+    expect(catalog.resolve({ harness: 'claude', orchestrator: true, model: 'm-mid' } as never).request.model).toBe('m-top');
+  });
+});
+
 describe('role catalog', () => {
-  it('holds exactly the Orchestrator, the five work roles and Pulse, with English names', () => {
+  it('holds exactly the Orchestrator, the five work roles, Pulse and Flash, with English names', () => {
     const { catalog } = setup(), list = catalog.list();
     expect(list.problem).toBeNull();
-    expect(list.profiles.map(p => p.id)).toEqual([...ROLE_IDS, 'pulse']);
+    expect(list.profiles.map(p => p.id)).toEqual([...ROLE_IDS, 'pulse', 'flash']);
+    expect(list.profiles.find(p => p.id === 'flash')).toMatchObject({ name: 'Flash', scope: 'background', tier: 'mid', launches: [], tools: { allow: ['read', 'web'] }, permissionCeiling: 'plan' });
     expect(list.profiles.filter(p => p.scope === 'role').map(p => p.name)).toEqual(['Orchestrator', 'Strategist', 'Scout', 'Artisan', 'Sentinel', 'Herald']);
     expect(list.profiles.every(p => p.avatar.kind === 'character')).toBe(true);
   });

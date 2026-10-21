@@ -503,11 +503,11 @@ export class DemoChats implements ChatService {
       if (current && req.replaces !== current.id) return current;
       req = { ...req, orchestrator: true };
     }
-    // Lampo, like the real manager: one at a time, plan mode (ADR 0105)
+    // Flash (was Lampo), like the real manager: one at a time, plan mode (ADR 0105, 0107)
     if (req.quick) {
       const current = [...this.chats.values()].find(c => c.quick && !c.closedAt);
       if (current) return current;
-      req = { ...req, title: 'Lampo', permissionMode: 'plan' };
+      req = { ...req, title: 'Flash', permissionMode: 'plan' };
     }
     const id = `c${++this.counter}`;
     // like the real manager: `replaces` moves the Orchestrator's role to the new chat

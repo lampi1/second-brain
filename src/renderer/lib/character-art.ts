@@ -135,6 +135,16 @@ export const CHARACTERS: Record<CharacterId, Character> = {
       P('M46 38.6H54.8V50H46Z', '#3a3340'), P('M47.4 40H53.4V48.6H47.4Z', '#ffd23f'), E(50.4, 44.6, 1.4, 2.4, '#ff8a2a'), P('M45 50H55.8V52H45Z', '#3a3340')],
     face: { eyes: 'calm', mouth: 'none', brows: 'soft', brow: '#c3c7d0' },
   },
+  flash: {
+    bg: ['#ffb020', '#e0560f'], skin: '#f2c8a4',
+    body: [BODY('#d93b30'), P('M33.6 50L29.6 56.4H32.4L30.8 62L35.6 54.8H32.8L34.6 50Z', '#ffd23f')],
+    head: [P('M20 29C19.6 19.6 25 15 32 15C39 15 44.4 19.6 44 29Z', '#d93b30'), P('M19.4 26.6H44.6V29.8H19.4Z', '#a82a22'),
+      P('M20 22C16 20 13 17 12.6 13.4C15 15.6 17.6 16.4 20.6 16.6C18.6 17.8 18.6 19.6 20 22Z', '#ffffff'),
+      P('M44 22C48 20 51 17 51.4 13.4C49 15.6 46.4 16.4 43.4 16.6C45.4 17.8 45.4 19.6 44 22Z', '#ffffff'),
+      S('M24.4 21.4C27 18.6 30.6 17.4 34.4 17.6', '#ef6a5e', 1.2)],
+    prop: [P('M52 30L45 42.6H50L46.6 54L56.6 39.4H51.4L55.4 30Z', '#ffd23f'), S('M52 30L45 42.6H50L46.6 54L56.6 39.4H51.4L55.4 30Z', '#b7790c', 0.9)],
+    face: { eyes: 'open', mouth: 'grin', brows: 'raised', brow: '#5a3a22' },
+  },
 };
 
 /** The face from a character's expression: eyes, brows, nose, mouth and cheeks (small: plain eyes only). */

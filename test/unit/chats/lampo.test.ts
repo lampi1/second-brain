@@ -37,7 +37,7 @@ describe('Lampo', () => {
     const l = await m.create({ harness: 'claude', cwd: tmp(), quick: true, prompt: 'che ore sono a Tokyo?' });
     expect(l).toMatchObject({ quick: true, title: LAMPO_TITLE, isOrchestrator: false });
     expect(starts[0]).toMatchObject({ permissionMode: 'plan', toolPolicy: { allow: ['read', 'web'] }, ceiling: 'plan' });
-    expect(sent[0]).toMatch(/^\[Role supplied by the app: .*\]\nYou are Lampo/);
+    expect(sent[0]).toMatch(/^\[Role supplied by the app: .*\]\nYou are Flash/);
     expect(sent[0]).toMatch(/che ore sono a Tokyo\?$/);
     expect((await m.create({ harness: 'claude', cwd: tmp(), quick: true })).id).toBe(l.id);
     await expect(m.create({ harness: 'claude', cwd: tmp(), quick: true }, 'agent')).rejects.toThrow(/only the user/);
@@ -132,5 +132,44 @@ describe('Lampo is a "btw" (ADR 0106)', () => {
     await m.send(l.id, 'e adesso?');
     expect(sent.at(-1)).toContain('User: aggiungi novembre');
     expect(sent.at(-1)).not.toContain('Prepara il report');
+  });
+});
+
+describe('Flash follows its card (ADR 0107)', () => {
+  it('starts on the card\'s model, changes it in place, moves to the card\'s engine with the next question', async () => {
+    const starts: SessionOptions[] = [], sent: string[] = [];
+    const card = { harness: 'claude' as string, model: 'm-mid', instructions: 'Lead with the answer.' };
+    const off = new Set<string>();
+    const m = new ChatManager({ userData: tmp(), emitter: { emit() {} }, coldEveryMs: 0, engineOn: h => !off.has(h),
+      resolveAgent: req => ({ request: { ...req, harness: card.harness as never, model: card.model }, owner: { id: 'plain', name: 'Flash', purpose: '', engine: card.harness, model: card.model, revision: 1, source: 'plain' }, instructions: card.instructions, policy: null, skills: [], launches: [] }),
+      sessionFactory: (h, o: SessionOptions, s: SessionSink) => {
+        starts.push(o);
+        return { harness: h, sessionId: null, pid: null, root: null, alive: true, busy: false,
+          start() { if (!o.sessionId) s.changed({ sessionId: crypto.randomUUID() }); s.changed({ state: 'idle' }); },
+          send(text: string) { sent.push(text); s.item({ kind: 'result', id: `r${sent.length}`, at: Date.now(), text: '', costUsd: 0, isError: false } as never, false); },
+          close: async () => { s.exit({ code: 0, error: null }); }, killNow() {}, interrupt: async () => {}, answer: () => false, rename: async () => {}, setModel: async () => {}, setEffort: async () => {}, setPermissionMode: async () => {}, contextUsage: async () => null, usage: async () => null,
+        } as unknown as HarnessSession;
+      } });
+    managers.push(m);
+    const l = await m.create({ harness: 'claude', cwd: tmp(), quick: true });
+    expect(l).toMatchObject({ title: 'Flash', model: 'm-mid', quick: true });
+    expect(starts[0]).toMatchObject({ permissionMode: 'plan', toolPolicy: { allow: ['read', 'web'] }, ceiling: 'plan' });
+    await m.send(l.id, 'ciao');
+    expect(sent.at(-1)).toMatch(/You are Flash[\s\S]*Lead with the answer\./);
+    card.model = 'm-top'; card.instructions = 'Be terse.';
+    await m.send(l.id, 'e ora?');
+    expect(m.list().find(c => c.id === l.id)?.model).toBe('m-top');
+    expect(sent.at(-1)).toContain('Be terse.');
+    card.harness = 'codex'; off.add('codex');
+    await m.send(l.id, 'con codex spento?');
+    expect(m.list().filter(c => c.quick && !c.closedAt).map(c => c.id)).toEqual([l.id]); // stays where it runs
+    off.clear();
+    await m.send(l.id, 'e su codex?');
+    const now = m.list().filter(c => c.quick && !c.closedAt);
+    expect(now).toHaveLength(1);
+    expect(now[0]).toMatchObject({ harness: 'codex', title: 'Flash' });
+    expect(now[0]!.id).not.toBe(l.id);
+    expect(m.list().find(c => c.id === l.id)?.closedAt).toBeDefined(); // archived: its answers stay
+    expect(sent.at(-1)).toMatch(/e su codex\?$/);
   });
 });

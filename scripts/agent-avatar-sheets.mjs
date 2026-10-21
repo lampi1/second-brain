@@ -14,7 +14,7 @@ import ts from 'typescript';
 
 const load = async path => import(`data:text/javascript;base64,${Buffer.from(ts.transpileModule(await readFile(new URL(path, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText).toString('base64')}`);
 const { CHARACTERS, characterSvg } = await load('../src/renderer/lib/character-art.ts');
-const NAMES = { orchestrator: 'Orchestrator', strategist: 'Strategist', scout: 'Scout', artisan: 'Artisan', sentinel: 'Sentinel', herald: 'Herald', pulse: 'Pulse' };
+const NAMES = { orchestrator: 'Orchestrator', strategist: 'Strategist', scout: 'Scout', artisan: 'Artisan', sentinel: 'Sentinel', herald: 'Herald', pulse: 'Pulse', flash: 'Flash' };
 const SIZES = [16, 20, 28, 40, 96];
 const THEMES = { dark: { bg: '#191a1f', card: '#22242b', text: '#eceef3', muted: '#9aa0ad', ring: '#ffffff59' }, light: { bg: '#f3f4f7', card: '#ffffff', text: '#13161d', muted: '#5b6170', ring: '#0000002e' } };
 const dir = fileURLToPath(new URL('../docs/screenshots/agent-avatars/', import.meta.url));
