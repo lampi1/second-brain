@@ -45,7 +45,7 @@ describe('the estimate line under a request to the Orchestrator', () => {
     // the app's news, an agent's mail and a mode-tagged message: no line
     await m.send(orch.id, '[evento app · messaggio automatico] Novità');
     await m.send(orch.id, 'Fatto il lavoro', undefined, false, 'Artisan · fix');
-    await m.send(orch.id, '[veloce] Via rapida\n\nfai X');
+    await m.send(orch.id, '[strategist] Affida\n\nfai X');
     expect(sent.slice(-3).every(t => !t.includes(LINE))).toBe(true);
     expect(asked).toHaveLength(2);
   });

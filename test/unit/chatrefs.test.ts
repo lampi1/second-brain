@@ -1,4 +1,4 @@
-// Unit tests of shared/newchat.ts (the "Veloce" / "Strategist" line: added, recognized, removed; an older "Nuova chat" line
+// Unit tests of shared/newchat.ts (the "Strategist" line: added, recognized, removed; an older "Veloce" or "Nuova chat" line
 // still recognized) and lib/chatrefs.ts (the chats an Orchestrator's app_create_chat / app_send_to_chat rows and messages
 // point to; ADR 0034).
 import { describe, expect, it } from 'vitest';
@@ -15,18 +15,19 @@ const chat = (id: string, title: string, more: Partial<ChatSummary> = {}): ChatS
 
 describe('mode line', () => {
   it('goes first, says its meaning, and comes off again', () => {
-    for (const mode of ['quick', 'plan'] as const) {
+    for (const mode of ['plan'] as const) {
       const t = withMode(mode, '  Controlla i log  ');
       expect(t.startsWith(`${MODE_TAGS[mode]} `)).toBe(true);
       expect(t).toContain('app_create_chat');
       expect(t).toBe(`${MODE_LINES[mode]}\n\nControlla i log`);
       expect(splitMode(t)).toEqual({ mode, text: 'Controlla i log' });
     }
-    expect(MODE_LINES.quick).toContain('senza agent_delegate');
+    expect(Object.keys(MODE_LINES)).toEqual(['plan']); // no "Veloce" any more (#124)
     expect(MODE_LINES.plan).toContain('"strategist"');
   });
   it('still reads an older "Nuova chat" message, and leaves any other message as it is', () => {
     expect(splitMode('[nuova chat] Apri una nuova chat…\n\nfai X')).toEqual({ mode: 'new', text: 'fai X' });
+    expect(splitMode('[veloce] Via rapida…\n\nfai X')).toEqual({ mode: 'quick', text: 'fai X' });
     expect(splitMode('ciao [veloce]')).toEqual({ mode: null, text: 'ciao [veloce]' });
     expect(splitMode('[strategist]')).toEqual({ mode: 'plan', text: '' });
   });

@@ -128,9 +128,9 @@ export const statsEn: typeof statsIt = {
   'stats.fact.jobCost': (p: { hi: string; lo: string; x: string; nHi: number; nLo: number }) => `A "${p.hi}" costs on average ${p.x}× a "${p.lo}" (${p.nHi} and ${p.nLo} jobs): the first place to look for a saving, a lighter model or a skill.`,
   'stats.fact.taskLoose': (p: { k: number; n: number }) => `Only ${p.k} estimates out of ${p.n} stayed within ×2: read them as an order of magnitude, not a deadline.`,
 
-  'stats.cost.factDay': (p: { day: string; usd: string; x: string }) => `The priciest day was ${p.day}: ${p.usd}, ${p.x}× the week’s average.`,
-  'stats.cost.factModel': (p: { model: string; pct: string }) => `${p.model} takes ${p.pct} of the week’s spend.`,
-  'stats.cost.factKind': (p: { kind: string; usd: string }) => `The priciest kind of work is "${p.kind}": ${p.usd} in 7 days.`,
+  'stats.cost.factDay': (p: { day: string; usd: string; x: string }) => `The priciest day was ${p.day}: ${p.usd}, ${p.x}× the period’s average.`,
+  'stats.cost.factModel': (p: { model: string; pct: string }) => `${p.model} takes ${p.pct} of the period’s spend.`,
+  'stats.cost.factKind': (p: { kind: string; usd: string }) => `The priciest kind of work is "${p.kind}": ${p.usd} in the period.`,
   'stats.jk.fix': 'fix', 'stats.jk.qa': 'QA and tests', 'stats.jk.review': 'review', 'stats.jk.feature': 'feature',
   'stats.jk.research': 'research', 'stats.jk.question': 'question', 'stats.jk.other': 'other',
 

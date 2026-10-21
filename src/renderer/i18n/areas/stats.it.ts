@@ -132,9 +132,9 @@ export const statsIt = {
   'stats.fact.jobCost': (p: { hi: string; lo: string; x: string; nHi: number; nLo: number }) => `Una «${p.hi}» costa in media ${p.x}× una «${p.lo}» (${p.nHi} e ${p.nLo} lavori): è il primo posto dove cercare un risparmio, un modello più leggero o una skill.`,
   'stats.fact.taskLoose': (p: { k: number; n: number }) => `Solo ${p.k} stime su ${p.n} sono rimaste entro ×2: leggile come ordine di grandezza, non come scadenza.`,
 
-  'stats.cost.factDay': (p: { day: string; usd: string; x: string }) => `Il giorno più caro è stato ${p.day}: ${p.usd}, ${p.x}× la media della settimana.`,
-  'stats.cost.factModel': (p: { model: string; pct: string }) => `${p.model} vale ${p.pct} della spesa della settimana.`,
-  'stats.cost.factKind': (p: { kind: string; usd: string }) => `Il lavoro che costa di più è «${p.kind}»: ${p.usd} in 7 giorni.`,
+  'stats.cost.factDay': (p: { day: string; usd: string; x: string }) => `Il giorno più caro è stato ${p.day}: ${p.usd}, ${p.x}× la media del periodo.`,
+  'stats.cost.factModel': (p: { model: string; pct: string }) => `${p.model} vale ${p.pct} della spesa del periodo.`,
+  'stats.cost.factKind': (p: { kind: string; usd: string }) => `Il lavoro che costa di più è «${p.kind}»: ${p.usd} nel periodo.`,
   // ── cost-ledger kinds
   'stats.jk.fix': 'correzione', 'stats.jk.qa': 'QA e test', 'stats.jk.review': 'revisione', 'stats.jk.feature': 'funzionalità',
   'stats.jk.research': 'indagine', 'stats.jk.question': 'domanda', 'stats.jk.other': 'altro',

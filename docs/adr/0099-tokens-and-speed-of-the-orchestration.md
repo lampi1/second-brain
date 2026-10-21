@@ -58,3 +58,20 @@ compacted only on the next day, on an expired cache (ADR 0031: ~2.10 $ for a col
   launches nobody, no `agent_ask_parent`, its browser access and managed servers); a delegated chat starts cold.
 - Child results still waiting for their siblings when the app quits are kept on the parent and sent after the start.
 - A clean report keeps its own slot in the Orchestrator's news: a later error of the same chat never hides it.
+
+## Amended (issue #123, 2026-10-21)
+- A clean result was quiet even when the user waited for it: he asked the Orchestrator «che devo fare oggi?», it opened
+  a Scout and ended its turn, and the Scout's answer reached him only when he wrote again; read while the Scout still
+  ran, the Orchestrator said «non ha ancora finito», and the turn end then woke it a second time.
+- The owner chose (2026-10-21) a notice, not a turn: «mi basta la notifica nella chat dell'orchestrator, non aggiungere
+  un passaggio, manteniamo il risparmio». A root chat the Orchestrator opens (or assigns again) during a turn the user's
+  own message started is one the user waits for (`ChatManager` `userWaits`; a turn the app's news or mail started is
+  not). Its clean result stays quiet news, and the app adds its own notice in the Orchestrator's chat (sys
+  `resultReady`: role, title, the summary, Apri): no model turn, no token. A result that is not clean still goes as a
+  message, as before.
+- Every root result is held until the reporting chat's turn ends, or its engine stops: the report and the turn end are
+  one news, said once, and never while the chat still shows as running.
+- A row of «N novità in attesa» the user opens is read (owner: «nelle novità clicco e mi porta alla chat … poi non
+  fosse più in attesa»): its chat comes on screen, its news leaves the list (IPC `orchestrator:heldSeen`) and stays only
+  as quiet news that never wakes the Orchestrator; a later event of that chat is news again. What the user writes in
+  Lampo is never news.

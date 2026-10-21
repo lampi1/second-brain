@@ -36,11 +36,4 @@ export const estimateIt = {
   'estimate.kind.research': 'indagine',
   'estimate.kind.question': 'domanda',
   'estimate.kind.other': 'altro',
-  'estimate.plan.title': 'Piano dell’Orchestrator',
-  'estimate.plan.count': (p: { n: number }) => (p.n === 1 ? '1 agente' : `${p.n} agenti`),
-  'estimate.plan.total': 'stima totale',
-  'estimate.plan.quick': 'via rapida',
-  'estimate.plan.quickTip': 'Un solo agente, senza sotto-chat: sui lavori simili è veloce e la richiesta ha una parte sola. Costa meno token di un albero di deleghe.',
-  'estimate.plan.few': 'meno di 3 lavori simili: senza stima',
-  'estimate.plan.tip': 'Gli agenti che l’Orchestrator ha avviato, oggi, con la stima che aveva prima di partire e, per quelli finiti, il tempo reale. L’Orchestrator sceglie la via rapida (risponde lui, o un solo agente) quando la richiesta ha una parte sola e i lavori simili sono veloci; un albero di deleghe solo per il lavoro in più parti.',
 };

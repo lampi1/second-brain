@@ -16,6 +16,7 @@ import { buildDigest, refExists, type DigestMaterial } from './digest';
 import { cardKey, parseCards } from './cards';
 import { admitRun, budgetState, type PulseRunRecord } from './budget';
 import { PulseStore } from './store';
+import { errText, log } from '../log';
 export interface PulseDeps {
   file: string; once: OneShotService; runs: AgentRunStore; settings(): Settings; material(): DigestMaterial;
   visible(): boolean; calls: boolean; lang(): 'it' | 'en'; now?: () => number;
@@ -243,7 +244,13 @@ export class PulseService {
       else if (a.decision === 'approve') { await this.d.approve(structuredClone(item)); item.state = 'approved'; }
       else throw Error();
       this.store.save(); this.d.emitApprovals(); return { ok: true };
-    } catch { return { ok: false, error: 'Proposta non applicata.' }; }
+    } catch (e) {
+      // the real reason, in the log and on screen (#128); an empty one stays the generic line
+      const why = errText(e).split('\n')[0]!.trim().slice(0, 300);
+      log.warn('pulse', 'proposal not applied', { data: { kind: item.kind, decision: a.decision }, cause: why || 'invalid decision' });
+      const head = this.d.lang() === 'en' ? 'Proposal not applied' : 'Proposta non applicata';
+      return { ok: false, error: why ? `${head}: ${why}` : `${head}.` };
+    }
     finally { this.acting.delete(item.id); }
   }
 }

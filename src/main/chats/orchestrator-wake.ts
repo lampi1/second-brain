@@ -27,6 +27,8 @@
 // kept beside the chat's status news (its own slot: a "finished" never replaces it).
 // A root chat's clean agent_report (done, every criterion met, no question) is quiet news too (cleanReport, 2026-10-20):
 // the user reads the result in the chat; the Orchestrator gets the summary with its next turn instead of a turn of its own.
+// It comes after the chat's turn ended (ChatManager holds it, #123); for a result the user waits for, the Orchestrator's
+// chat also shows the app's «ha la risposta che aspettavi» notice, still with no turn of the Orchestrator's own.
 // Held news on the tile (#88): what waits in the buffer is listed for the user (heldNews(), held-news.ts sends it to the
 // page as "N novità in attesa"); reading it never sends anything to the Orchestrator and changes no rule above.
 import { timersFor } from '../timers';
@@ -196,7 +198,8 @@ export class OrchestratorWake {
     const known = this.chats.get(n.chatId), listed = known ? undefined : this.d.list?.().find(x => x.id === n.chatId);
     if (listed) this.remember(listed);
     const c = known ?? listed;
-    if (!c || c.isOrchestrator || c.closedAt) return;
+    // Lampo (ADR 0105) is the user's own quick lane: what he writes there is never news («Hai scritto · Lampo», #123)
+    if (!c || c.isOrchestrator || c.closedAt || this.quick.has(n.chatId)) return;
     const e: WakeEvent = { chatId: n.chatId, title: n.title, harness: c.harness, kind: 'user-message', detail: cut(n.text, USER_TEXT_MAX), at: n.at ?? this.now(),
       ...(n.parentTitle !== null ? { child: { role: n.role ?? 'ruolo', parent: n.parentTitle } } : {}) };
     this.buffer.set(slotOf(e), e);
@@ -220,6 +223,14 @@ export class OrchestratorWake {
     this.reschedule();
     this.changed();
     return true;
+  }
+
+  /** The user opened this chat from "N novità in attesa" and read it (#123): its queued news only rides along, quiet, and
+   *  never wakes the Orchestrator (the owner, 2026-10-21: «per risparmiare token»). A later event of the chat is news again. */
+  seen(chatId: string): void {
+    let changed = false;
+    for (const [k, e] of this.buffer) if (e.chatId === chatId && !e.silent) { this.buffer.set(k, { ...e, silent: true, endsTurn: undefined }); changed = true; }
+    if (changed) { this.reschedule(); this.changed(); }
   }
 
   /** answered before the news went: "waits for the user" would be false; what the chat did next is told instead */

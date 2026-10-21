@@ -125,11 +125,6 @@
 .dash-toolbar input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-bg);outline:none}
 .dash-empty{padding:55px 24px;text-align:center;color:var(--text-3);font-size:13px;line-height:1.7}
 .dash-source{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:10px;color:var(--text-3);overflow-wrap:anywhere}
-.dash-columns{display:grid;grid-template-columns:1fr 1fr;gap:18px}
-.dash-bars{padding:8px 20px 20px;display:grid;gap:12px}
-.dash-bar-row>div:first-child{display:flex;align-items:center;gap:12px;font-size:11px;min-height:35px}
-.dash-bar-row span{flex:1;min-width:0;overflow-wrap:anywhere;color:var(--text-2)}
-.dash-bar-row b{font-weight:500;font-variant-numeric:tabular-nums}
 .dash-track{height:5px;background:var(--surface-3);border-radius:4px;overflow:hidden}
 .dash-track i{height:100%;display:block;border-radius:4px;background:linear-gradient(90deg,var(--blue),var(--violet));transition:width 500ms cubic-bezier(.2,.7,.2,1);transform-origin:left;animation:dash-grow 800ms cubic-bezier(.2,.8,.2,1) 120ms both}
 .dash-row{display:flex;gap:14px;align-items:center;padding:14px 20px;border-bottom:1px solid var(--border);font-size:12px;transition:background 180ms}
@@ -169,7 +164,7 @@
 @keyframes dash-breathe-text{50%{opacity:.6;text-shadow:0 0 18px var(--blue)}}
 @keyframes dash-flow{to{stroke-dashoffset:-32}}
 @keyframes dash-pulse{50%{stroke-opacity:.3;stroke-width:5}}
-@container(max-width:850px){.dash-network{grid-template-columns:minmax(0,1fr) 190px}.dash-columns,.dash-tip-grid{grid-template-columns:1fr}.dash-live-label{display:none}.dash-map-count{display:none}.dash-stats{gap:8px}.dash-stat{padding:15px}.dash-stat>strong{font-size:25px}}
+@container(max-width:850px){.dash-network{grid-template-columns:minmax(0,1fr) 190px}.dash-tip-grid{grid-template-columns:1fr}.dash-live-label{display:none}.dash-map-count{display:none}.dash-stats{gap:8px}.dash-stat{padding:15px}.dash-stat>strong{font-size:25px}}
 @container(max-width:560px){.dash-network{grid-template-columns:1fr}.dash-inspector{border-left:0;border-top:1px solid var(--border);padding:20px}.dash-stats{grid-template-columns:1fr}.dash-stat>small{min-height:0}.dash-row{flex-wrap:wrap}.dash-row>div:first-child{flex-basis:100%}.dash-tabs>button{padding:8px 9px}.dash-graph-canvas,.dash-graph-empty{min-height:320px}.dash-graph-foot{flex-wrap:wrap}}
 @media(prefers-reduced-motion:reduce){.dashboard *{animation:none!important;transition:none!important}.dash-stat:hover,.dash-tip-grid .dash-panel:hover{transform:none}.dash-edge.flow{stroke-dasharray:none}}
 

@@ -2,7 +2,7 @@
 // findings grouped by reviewer version, and rollups that keep the counts of pruned runs.
 import { describe, expect, it } from 'vitest';
 import type { AgentRun } from '../../src/shared/agents';
-import { REWORK_MS, SAMPLE_MAX, emptyTally, median, p90, rollUp, runMetrics } from '../../src/main/agents/run-metrics';
+import { REWORK_MS, SAMPLE_MAX, emptyTally, finalize, median, mergeTallies, p90, rollUp, runMetrics } from '../../src/main/agents/run-metrics';
 
 let seq = 0;
 const H = 3600_000;
@@ -55,7 +55,7 @@ describe('agent metrics', () => {
       run({ costUsd: null, tokens: null, startedAt: 0, endedAt: H }),
     ];
     const m = runMetrics(runs, { windowOf: () => 4000 })[0]!.versions[0]!;
-    expect(m.costPerRun).toEqual({ median: { value: 2, n: 2, coverage: 2 / 3 }, p90: 3 });
+    expect(m.costPerRun).toEqual({ median: { value: 2, n: 2, coverage: 2 / 3 }, p90: 3, total: 4 });
     expect(m.tokensPerRun.output).toEqual({ value: 40, n: 2, coverage: 2 / 3 });
     expect(m.contextPeak).toEqual({ median: { value: 2000, n: 2, coverage: 2 / 3 }, max: 3000, ofWindow: 0.5 });
     expect(m.timeToDone.elapsed).toEqual({ value: 2 * H, n: 3, coverage: 1 });
@@ -68,6 +68,14 @@ describe('agent metrics', () => {
     expect(p90([])).toBeNull();
   });
 
+  it('a summary saved before the cost total gets it back from its values while it holds them all', () => {
+    const old = emptyTally('coder', 1), next = emptyTally('coder', 1);
+    old.cost = { n: 2, values: [1, 2] }; // no sum: written before #125
+    next.cost = { n: 1, values: [4], sum: 4 };
+    expect(finalize(mergeTallies(old, next), 1).costPerRun.total).toBe(7);
+    const cut = emptyTally('coder', 1); cut.cost = { n: SAMPLE_MAX + 1, values: Array.from({ length: SAMPLE_MAX }, () => 1) };
+    expect(finalize(mergeTallies(cut, next), 1).costPerRun.total).toBeNull(); // a value already fell out: unknown, never guessed
+  });
   it('a version with no ended run has no values (unknown, never zero), open runs are counted apart', () => {
     const [m] = runMetrics([run({ endedAt: undefined, endReason: undefined })]);
     expect(m).toMatchObject({ agentId: 'coder', open: 1, versions: [], all: null });

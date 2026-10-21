@@ -1,11 +1,11 @@
-// The task estimates of the Grindhouse strips and the Orchestrator's plan (ADR 0087; owner, 2026-10-19: «stime leggibili
+// The task estimates of the Grindhouse strips (ADR 0087; owner, 2026-10-19: «stime leggibili
 // … e il progresso dei classificatori nelle stime»). One shared read of IPC agents:estimates for every run the chats in
 // the store carry: refreshed every minute while something shows it, and soon after a run starts or ends. The pure part
-// (the texts, the plan rows, the accuracy summary) is pinned by test/unit/run-estimates.test.ts; the components are in
+// (the texts, the accuracy summary) is pinned by test/unit/run-estimates.test.ts; the components are in
 // components/RunEstimate.tsx.
 import { useEffect, useState } from 'react';
 import type { ChatSummary } from '@shared/contract';
-import type { EstimateAccuracy, RunEstimates, RunEstimateView, TaskEstimate } from '@shared/task-estimate';
+import type { EstimateAccuracy, RunEstimates, TaskEstimate } from '@shared/task-estimate';
 import { formatCost, minutes } from './format';
 import { sb } from '../sb';
 import { app } from '../store/store';
@@ -21,27 +21,6 @@ export function estimateText(e: Pick<TaskEstimate, 'timeMs' | 'costUsd'>): { tim
 export function runIdsOf(chats: readonly (ChatSummary | undefined)[]): { ids: string[]; key: string } {
   const runs = chats.flatMap(c => (c?.run ? [c.run] : [])).sort((a, b) => b.startedAt - a.startedAt).slice(0, IDS_MAX);
   return { ids: runs.map(r => r.runId), key: runs.map(r => `${r.runId}:${r.endedAt ?? ''}`).join(',') };
-}
-
-export interface PlanRow { chat: ChatSummary; view: RunEstimateView | null; ended: boolean }
-export interface Plan { rows: PlanRow[]; timeMs: number; costUsd: number; estimated: number; quick: number }
-
-const sameDay = (a: number, b: number) => new Date(a).toDateString() === new Date(b).toDateString();
-
-/** The Orchestrator's plan: the agent runs it started today, newest first, with their estimates and the sum of them. */
-export function planOf(chats: readonly (ChatSummary | undefined)[], views: RunEstimates['runs'] | undefined, now: number): Plan {
-  const rows = chats.filter((c): c is ChatSummary => !!c?.run && c.run.startedBy === 'orchestrator' && sameDay(c.run.startedAt, now))
-    .sort((a, b) => b.run!.startedAt - a.run!.startedAt)
-    .map(chat => ({ chat, view: views?.[chat.run!.runId] ?? null, ended: chat.run!.endedAt !== undefined }));
-  let timeMs = 0, costUsd = 0, estimated = 0, quick = 0;
-  for (const r of rows) {
-    const e = r.view?.estimate;
-    if (!e) continue;
-    estimated++;
-    timeMs += e.timeMs ?? 0; costUsd += e.costUsd ?? 0;
-    if (e.quick && e.path !== 'tree') quick++;
-  }
-  return { rows, timeMs, costUsd, estimated, quick };
 }
 
 export interface AccuracySummary { pct: number; k: number; n: number; weeks: number; specificPct: number | null; bars: { weekStart: number; pct: number | null; n: number }[] }

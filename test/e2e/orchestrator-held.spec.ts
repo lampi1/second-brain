@@ -3,7 +3,7 @@
 // "1 novità in attesa" where the old "Novità" feed was (gone), the list names the chat, the kind and why it waits; a
 // quiet permission request of another worker is counted too; once the user answers the Orchestrator the news goes
 // (one app message, nothing else) and the counter disappears. SB_ORCHESTRATOR_EVENTS=1 turns the news on in the demo,
-// SB_ORCHESTRATOR_EVENTS_MS shortens the grouping window. Screenshots: test-results/shots/orchestrator-held.png (dark), orchestrator-held-light.png.
+// SB_ORCHESTRATOR_EVENTS_MS shortens the grouping window. A row the user opens is read (#123): out of the list, no turn. Screenshots: test-results/shots/orchestrator-held.png (dark), orchestrator-held-light.png.
 import { expect, test } from '@playwright/test';
 import { launchDemo, shot } from './helpers';
 
@@ -50,4 +50,42 @@ test('held news for the Orchestrator: counted on its tile, listed on click, clea
   expect(news.kind === 'user' && news.text).toContain('«App · Mappa 3D» (Claude): ha finito il turno');
   expect(news.kind === 'user' && news.text).toContain('«Fix totale ordine» (Claude): aspetta un permesso dell\'utente');
   await app.close();
+});
+
+test('a held row the user opens is read: its chat comes on screen, the row leaves the list, no Orchestrator turn for it (#123)', async () => {
+  const { app, page } = await launchDemo({ orchestrator: true, env: { SB_ORCHESTRATOR_EVENTS: '1', SB_ORCHESTRATOR_EVENTS_MS: '500' } });
+  const tile = page.getByTestId('tile-orchestrator');
+  const appNews = async () => (await page.evaluate(() => window.sb.invoke('chat:items', { chatId: 'orchestrator' }))).filter(i => i.kind === 'user' && i.text.startsWith('[evento app'));
+  try {
+    await expect(tile).toBeVisible();
+    await app.evaluate(() => { (globalThis as unknown as { __sbDemo: Demo }).__sbDemo.turn('mappa', 'Fatto: la mappa carica in 2 secondi.'); });
+    await expect(tile.getByTestId('orchestrator-held-count')).toHaveText('1 novità in attesa');
+    await tile.getByTestId('orchestrator-held-toggle').click();
+    await tile.getByTestId('orchestrator-held-done').click();
+    await expect(page.getByTestId('tile-chat-mappa')).toBeVisible();
+    await expect(tile.getByTestId('orchestrator-held')).toHaveCount(0);
+    await page.mouse.move(2, 2);
+    await shot(page, 'orchestrator-held-read');
+    // the user answers the Orchestrator: the read news only rides along, it starts no turn of its own
+    const pending = await page.evaluate(() => window.sb.invoke('chat:pending', undefined));
+    const q = pending.find(p => p.chatId === 'orchestrator')!;
+    await page.evaluate(([rid, question]) => window.sb.invoke('chat:answer', { chatId: 'orchestrator', requestId: rid, answer: { kind: 'question', answers: { [question]: 'QA rimborsi' } } }), [q.id, q.questions?.[0]?.question ?? q.title] as const);
+    await page.waitForTimeout(2000);
+    expect(await appNews()).toHaveLength(0);
+  } finally { await app.close(); }
+});
+
+test('the answer the user waited for: the app\'s notice in the Orchestrator\'s chat, with the summary and Apri (#123)', async () => {
+  const { app, page } = await launchDemo({ orchestrator: true });
+  const tile = page.getByTestId('tile-orchestrator');
+  try {
+    await expect(tile).toBeVisible();
+    await app.evaluate(() => { (globalThis as unknown as { __sbDemo: { notice(c: string, code: string, p: Record<string, string>): void } }).__sbDemo.notice('orchestrator', 'resultReady', { role: 'Scout', title: 'App · Mappa 3D', summary: 'La mappa carica in 2 secondi: 1) cache, 2) lazy load, 3) meno nodi.', chatId: 'mappa' }); });
+    const notice = tile.getByTestId('result-ready').last();
+    await expect(notice).toContainText('Scout «App · Mappa 3D» ha la risposta che aspettavi: La mappa carica in 2 secondi');
+    await page.mouse.move(2, 2);
+    await shot(page, 'orchestrator-result-ready');
+    await notice.getByTestId('chatref-open').click();
+    await expect(page.getByTestId('tile-chat-mappa')).toBeVisible();
+  } finally { await app.close(); }
 });
