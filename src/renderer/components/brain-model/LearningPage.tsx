@@ -24,7 +24,7 @@ function Counter({ counts, filter, onFilter }: { counts: Record<ClaimVerdict, nu
   return <div className="bx-kpis lr-kpis" role="group" aria-label={t('learn.filterLabel')} data-testid="lr-counter">
     {VERDICTS.map(v => <div key={v} className={`bx-kpi lr-kpi ${filter === v ? 'on' : ''}`} data-tone={verdictTone(v)} data-testid={`lr-k-${v}`}>
       <span className="k">{t(`learn.k.${v}`)} <HelpTip label={t(`learn.k.${v}`)}>{t(`learn.k.${v}Help`)}</HelpTip></span>
-      <button type="button" className="v" aria-pressed={filter === v} onClick={() => onFilter(filter === v ? null : v)}>{counts[v]}</button>
+      <button type="button" className="v" aria-pressed={filter === v} aria-label={t('learn.filterTile', { label: t(`learn.k.${v}`), n: counts[v] })} onClick={() => onFilter(filter === v ? null : v)}>{counts[v]}</button>
     </div>)}
   </div>;
 }
@@ -65,7 +65,7 @@ function RoleCurve({ r, from, week, max }: { r: LearningRole; from: number; week
 }
 
 function Curves({ s }: { s: LearningState }) {
-  const shown = s.roles.filter(r => r.weeks.some(w => w.runs) || r.changes.length);
+  const shown = s.roles.filter(r => r.weeks.some(w => w.runs));
   const max = Math.max(1, ...shown.flatMap(r => curve(r).map(p => p.mean)));
   const nice = Math.ceil(max * 2) / 2;
   return <section className="bm-section" aria-labelledby="lr-curves-h" data-testid="lr-curves">

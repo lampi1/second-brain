@@ -13,6 +13,7 @@ export const learningEn: typeof learningIt = {
   'learn.k.peggioraHelp': 'Changes after which the corrections went up, with the whole interval above zero. The app does not undo them by itself: you decide.',
   'learn.k.annullatoHelp': 'Changes that were undone after they were active.',
   'learn.filterAll': 'All',
+  'learn.filterTile': (p: { label: string; n: number }) => `${p.label}: ${p.n}. Show only these`,
   'learn.filterLabel': 'Filter by verdict',
   'learn.worse': 'To look at',
   'learn.worseLead': 'After these changes the corrections went up. Undo them if you think so: the app does not do it by itself.',

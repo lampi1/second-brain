@@ -13,6 +13,7 @@ export const learningIt = {
   'learn.k.peggioraHelp': 'Cambiamenti dopo i quali le correzioni sono salite, con l’intervallo tutto sopra lo zero. L’app non li annulla da sola: lo decidi tu.',
   'learn.k.annullatoHelp': 'Cambiamenti che hai annullato (o che sono stati annullati) dopo che erano attivi.',
   'learn.filterAll': 'Tutti',
+  'learn.filterTile': (p: { label: string; n: number }) => `${p.label}: ${p.n}. Mostra solo questi`,
   'learn.filterLabel': 'Filtra per verdetto',
   'learn.worse': 'Da guardare',
   'learn.worseLead': 'Dopo questi cambiamenti le correzioni sono aumentate. Annullali se ti sembra giusto: l’app non lo fa da sola.',

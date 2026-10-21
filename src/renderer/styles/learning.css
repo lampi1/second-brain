@@ -1,6 +1,7 @@
 /* The Apprendimento page (components/brain-model/LearningPage.tsx, ADR 0109): the verdict counter (tiles that filter the
    list), the panel of changes that worsened things, the small multiples of corrections per run per role with the changes
    as marks in their verdict's color, the filter chips of the change list and the note on how to read it. */
+.lr-page.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 .lr-kpis{margin:18px 0 0}
 .lr-kpi{position:relative;background:linear-gradient(160deg,var(--surface-2),var(--surface) 70%)}
 .lr-kpi .k{display:flex;align-items:center;gap:6px}
@@ -34,3 +35,4 @@
 .lr-chip[aria-pressed=true]{color:var(--text);border-color:var(--blue);background:color-mix(in srgb,var(--blue) 14%,var(--surface-2))}
 .lr-chip:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .lr-note{max-width:90ch;margin-top:22px}
+.lr-worse .bm-changes{background:var(--surface)}.lr-worse .bm-change{background:var(--surface)}
