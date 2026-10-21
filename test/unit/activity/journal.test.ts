@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Journal } from '../../../src/main/activity/journal';
+import { addRedaction } from '../../../src/main/log';
 import { LOG_FIELD_MAX, LOG_KEEP_DAYS } from '../../../src/shared/activity-log';
 
 const dirs: string[] = [];
@@ -27,6 +28,16 @@ describe('journal', () => {
     const again = new Journal(); again.init(dir); again.stop();
     expect(again.list().events.map(x => x.title)).toEqual(['Scout ha lavorato']);
     expect(again.list().bytes).toBeGreaterThan(0);
+  });
+
+  it('redacts a known key that straddles the cut', () => {
+    const dir = tmp(), j = new Journal(); j.init(dir);
+    const key = 'K3y-' + 'q'.repeat(40);
+    addRedaction(key);
+    const e = j.record({ kind: 'app', level: 'warn', title: 'x', error: 'a'.repeat(LOG_FIELD_MAX - 10) + key })!;
+    j.stop();
+    expect(e.error).not.toContain('K3y-qqqq');
+    expect(fs.readFileSync(path.join(dir, 'activity', fs.readdirSync(path.join(dir, 'activity'))[0]!), 'utf8')).not.toContain('K3y-qqqq');
   });
 
   it('pushes new events in one batch', async () => {

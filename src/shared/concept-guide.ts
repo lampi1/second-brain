@@ -410,7 +410,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(WHERE, 'Pagine: /api/scripts, /api/script?id=…, /api/changelog; evento scripts:changed.', 'Pages: /api/scripts, /api/script?id=…, /api/changelog; event scripts:changed.'),
       tech(LIMITS, 'Uno script ≤ 200 KB; la pagina legge le ultime 500 righe del changelog.', 'A script ≤ 200 KB; the page reads the latest 500 changelog lines.'),
     ],
-    sources: ['src/main/brain/scripts.ts', 'src/main/brain/scripts-tools.ts', 'src/main/brain/changelog.ts', 'src/renderer/brain/pages/Script.tsx', 'src/renderer/brain/pages/Changelog.tsx', 'docs/adr/0076-brain-scripts-and-changelog.md'],
+    sources: ['src/main/brain/scripts.ts', 'src/main/brain/scripts-tools.ts', 'src/main/brain/changelog.ts', 'src/renderer/brain/pages/Script.tsx', 'src/renderer/components/LogPage.tsx', 'docs/adr/0076-brain-scripts-and-changelog.md'],
   },
   {
     id: 'milestones',

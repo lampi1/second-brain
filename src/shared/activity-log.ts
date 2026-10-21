@@ -30,7 +30,7 @@ export interface LogEvent {
   tools?: string[]; toolErrors?: number;
   input?: string; output?: string; error?: string;
   /** a request: its id and type; resolved: who closed it (the user's answer, or anything else) */
-  reqId?: string; reqType?: 'permission' | 'question'; by?: 'user' | 'other';
+  reqId?: string; reqType?: 'permission' | 'question'; by?: 'user' | 'ended' | 'other';
   /** a review's run (step review), or the verdict's (step verdict) */
   reviewOf?: string; verdict?: 'success' | 'partial' | 'fail' | 'unknown';
 }

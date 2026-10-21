@@ -55,7 +55,7 @@ export interface ActivityDeps {
   brainRoot: () => string | null;
 }
 
-export function attachActivity(d: ActivityDeps): { list: () => ReturnType<typeof journal.list>; answered: (chatId: string, requestId: string) => void } {
+export function attachActivity(d: ActivityDeps): { list: () => ReturnType<typeof journal.list>; answered: (chatId: string, requestId: string) => void; notAnswered: (chatId: string, requestId: string) => void; stopped: (chatId?: string) => void } {
   journal.init(d.userData, events => d.emitter.emit('log:events', events));
   const watch = new ChatWatch();
   const last = new Map<string, ChatSummary>();
@@ -97,5 +97,5 @@ export function attachActivity(d: ActivityDeps): { list: () => ReturnType<typeof
   };
   readMem();
   setInterval(readMem, 10_000).unref?.();
-  return { list: () => journal.list(), answered: (chatId, requestId) => watch.answeredByUser(chatId, requestId) };
+  return { list: () => journal.list(), answered: (chatId, requestId) => watch.answeredByUser(chatId, requestId), notAnswered: (chatId, requestId) => watch.notAnswered(chatId, requestId), stopped: chatId => watch.stoppedByUser(chatId) };
 }

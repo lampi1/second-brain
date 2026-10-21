@@ -1063,14 +1063,25 @@ export class ChatManager implements ChatService {
       const root = rootOf(c.id), tree = trees.get(root)!;
       // a lone chat, unless what is left of a tree whose other chats closed first
       if (tree.length < 2 && !this.treeActivity.has(root)) return c;
-      if (c.eligible && !tree.every(x => x.eligible)) return { ...c, eligible: false, reason: 'Si chiude insieme al resto dell’albero, quando hanno finito tutti' };
-      // the tree's last activity only grows: a member closing first never restarts the others' clock
-      const at = Math.max(this.treeActivity.get(root) ?? 0, ...tree.map(x => x.activityAt));
+      // only a member still at work holds the tree: one that ended with an error, a Stop or no result never closes by
+      // itself and must not keep its tree open forever
+      if (c.eligible && tree.some(x => !x.eligible && this.atWork(x.id))) return { ...c, eligible: false, reason: 'Si chiude insieme al resto dell’albero, quando hanno finito tutti' };
+      // the tree's last activity only grows: a member closing first never restarts the others' clock (its own closing
+      // touches are left out, so a closing member never pushes its siblings' deadline)
+      const at = Math.max(this.treeActivity.get(root) ?? 0, ...tree.filter(x => { const r = this.chats.get(x.id); return !r?.autoClosing && !r?.autoEnding; }).map(x => x.activityAt));
       this.treeActivity.set(root, at);
       return { ...c, activityAt: at };
     });
   }
   private readonly treeActivity = new Map<string, number>();
+  /** A chat still doing or waiting for something: running, a pending request, a turn or a delivery under way. */
+  private atWork(id: string): boolean {
+    const r = this.chats.get(id);
+    if (!r || r.s.closedAt) return false;
+    const c = r.s;
+    return c.state === 'running' || c.state === 'starting' || c.state === 'waiting' || r.pending.size > 0 || !!r.working || !!r.session?.busy ||
+      !!r.deliveryHolds || !!c.queued || !!r.opening || !!c.waitsOn || c.plan?.phase === 'proposed' || workBehind(c) || (c.agentChildren?.active ?? 0) > 0;
+  }
 
   private ownAutoCloseCandidates(externalHold: (chatId: string) => boolean | AutoCloseWaiting): AutoCloseCandidate[] {
     return [...this.chats.values()].filter(r => !r.s.closedAt).map(r => {

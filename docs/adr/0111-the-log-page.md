@@ -38,5 +38,8 @@ tokens to read and that cleans itself.
 
 ## Consequences
 - The journal sees what the app sees: work a CLI does outside the app is not in it.
-- «Approvazione nascosta» also flags a permission dropped because its chat ended; that is wanted (nobody answered).
+- «Approvazione nascosta» flags only a permission closed while its chat went on without the user's answer: one that ended
+  with the user's Stop, close or archive, or with its chat, reads «chiuso insieme alla chat» and is not flagged.
+- A finished chat waits only for the members of its tree still at work: one that ended with an error, a Stop or no
+  result does not hold the others. One day's file stops at 10 MB (one marker line, then memory only).
 - A child that finished long ago now stays open while its parent works; it closes with the tree.

@@ -59,7 +59,7 @@ function chainOf(rootId: string, list: LogEvent[]): TaskChain {
       const s = step(e, 'request'); steps.push(s); if (e.reqId) reqStep.set(`${e.chatId}/${e.reqId}`, s);
     } else if (e.step === 'resolved') {
       const s = e.reqId ? reqStep.get(`${e.chatId}/${e.reqId}`) : undefined;
-      if (s) { s.events.push(e); s.level = e.by === 'user' ? 'ok' : e.reqType === 'permission' ? 'warn' : 'info'; s.text = e.title; }
+      if (s) { s.events.push(e); s.level = e.by === 'user' ? 'ok' : e.by === 'other' && e.reqType === 'permission' ? 'warn' : 'info'; s.text = e.title; }
       else steps.push(step(e, 'request'));
     } else if (e.step === 'open' || e.step === 'result' || e.step === 'review' || e.step === 'verdict' || e.step === 'closed') steps.push(step(e, e.step));
     else if (e.kind === 'classifier') steps.push(step(e, 'classifier'));

@@ -10,7 +10,7 @@ import type { LogInput } from '../../shared/activity-log';
 interface Turn { tools: string[]; toolErrors: number; input?: string; output?: string; error?: string }
 interface Seen { title: string; who: string; parentId?: string; reportAt: number; verdictAt: number; closedAt: number; lastError: string; runId?: string; reviewOf?: string; orchestrator: boolean }
 
-const CHOSEN_BY: Record<string, string> = { orchestrator: 'Orchestrator', user: 'Tu', app: 'L’app' };
+const CHOSEN_BY: Record<string, string> = { orchestrator: 'Orchestrator', app: 'L’app' };
 const OUTCOME: Record<string, string> = { done: 'completato', partial: 'in parte', blocked: 'bloccato' };
 const VERIFIED: Record<string, string> = { yes: 'criteri verificati', partial: 'criteri verificati in parte', no: 'criteri non verificati' };
 export const VERDICT: Record<string, string> = { success: 'riuscito', partial: 'riuscito in parte', fail: 'non riuscito', unknown: 'non chiaro' };
@@ -23,6 +23,8 @@ export class ChatWatch {
   private readonly runChat = new Map<string, string>();
   private readonly requests = new Map<string, PendingRequest>();
   private readonly userAnswered = new Set<string>();
+  /** requests open when the user stopped, closed or archived their chat: they end with it, nobody approved them */
+  private readonly endedByUser = new Set<string>();
 
   /** The chats open at start: remembered, never logged again. */
   seed(chats: readonly ChatSummary[]): void {
@@ -99,13 +101,13 @@ export class ChatWatch {
   private opened(c: ChatSummary): LogInput[] {
     const base = this.base(c), out: LogInput[] = [];
     const parent = c.parentId ? this.seen.get(c.parentId) : undefined;
-    const chooser = parent?.who ?? CHOSEN_BY[c.run?.startedBy ?? (c.route?.agent?.chosenBy ?? 'user')] ?? 'Tu';
+    const chooser = parent?.who ?? CHOSEN_BY[c.run?.startedBy ?? (c.route?.agent?.chosenBy ?? 'user')];
     const goal = c.delegation?.goal ?? c.run?.goal;
     const reason = c.route?.reason ?? (c.delegation ? `Delegato: ${firstLine(c.delegation.goal)}` : null);
     if (c.run?.reviewOf) {
       out.push({ ...base, kind: 'task', step: 'review', level: 'info', title: `${base.who} apre una revisione indipendente`, text: firstLine(goal), input: goal, reviewOf: c.run.reviewOf });
     } else {
-      out.push({ ...base, kind: 'task', step: 'open', level: 'info', title: `${chooser} sceglie ${base.who}`, text: reason ?? (goal ? firstLine(goal) : undefined), input: goal ?? undefined });
+      out.push({ ...base, kind: 'task', step: 'open', level: 'info', title: chooser ? `${chooser} sceglie ${base.who}` : `Hai scelto ${base.who}`, text: reason ?? (goal ? firstLine(goal) : undefined), input: goal ?? undefined });
     }
     const r = c.route;
     if (r) {
@@ -148,6 +150,12 @@ export class ChatWatch {
 
   /** The user answered this request (chat:answer from the window). */
   answeredByUser(chatId: string, requestId: string): void { this.userAnswered.add(`${chatId}/${requestId}`); }
+  /** The answer failed: the request was not closed by it. */
+  notAnswered(chatId: string, requestId: string): void { this.userAnswered.delete(`${chatId}/${requestId}`); }
+  /** The user stopped, closed or archived a chat (every chat when chatId is missing): its open requests end with it. */
+  stoppedByUser(chatId?: string): void {
+    for (const key of this.requests.keys()) if (!chatId || key.startsWith(`${chatId}/`)) this.endedByUser.add(key);
+  }
 
   pendingAdded(p: PendingRequest, chat: ChatSummary | undefined): LogInput[] {
     if (p.type === 'command' || !chat) return [];
@@ -162,12 +170,20 @@ export class ChatWatch {
     this.requests.delete(key);
     if (!p || !chat) return [];
     const byUser = this.userAnswered.delete(key);
+    // ended with its chat (the user's Stop, close or archive, or the chat already gone): nobody approved it
+    const ended = !byUser && (this.endedByUser.delete(key) || !!chat.closedAt || chat.state === 'closed');
+    this.endedByUser.delete(key);
     const who = this.who(chat);
     const reqType = p.type === 'permission' ? 'permission' as const : 'question' as const;
-    return [{ ...this.base(chat), kind: 'task', step: 'resolved', level: byUser ? 'ok' : p.type === 'permission' ? 'warn' : 'info',
-      title: byUser ? (p.type === 'permission' ? `Hai risposto al permesso di ${who}` : `Hai risposto a ${who}`) : `${p.type === 'permission' ? 'Permesso' : 'Domanda'} di ${who} chiuso senza la tua risposta`,
-      text: p.title, reqId: p.id, reqType, by: byUser ? 'user' : 'other' }];
+    const what = p.type === 'permission' ? `Permesso di ${who} chiuso` : `Domanda di ${who} chiusa`;
+    return [{ ...this.base(chat), kind: 'task', step: 'resolved', level: byUser ? 'ok' : ended ? 'info' : p.type === 'permission' ? 'warn' : 'info',
+      title: byUser ? (p.type === 'permission' ? `Hai risposto al permesso di ${who}` : `Hai risposto a ${who}`) : ended ? `${what} insieme alla chat` : `${what} senza la tua risposta`,
+      text: p.title, reqId: p.id, reqType, by: byUser ? 'user' : ended ? 'ended' : 'other' }];
   }
 
-  removed(chatId: string): void { this.turns.delete(chatId); }
+  removed(chatId: string): void {
+    this.turns.delete(chatId); this.seen.delete(chatId);
+    for (const [run, id] of this.runChat) if (id === chatId) this.runChat.delete(run);
+    for (const set of [this.requests, this.userAnswered, this.endedByUser]) for (const key of set.keys()) if (key.startsWith(`${chatId}/`)) set.delete(key);
+  }
 }

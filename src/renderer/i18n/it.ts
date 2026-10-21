@@ -38,6 +38,7 @@ import { aliveIt } from './areas/alive.it';
 import { lampoIt } from './areas/lampo.it';
 import { learningIt } from './areas/learning.it';
 import { estimateIt } from './areas/estimate.it';
+import { logIt } from './areas/log.it';
 import { reviewedContextIt } from './areas/reviewed-context.it';
 import { setupIt } from './areas/setup.it';
 
@@ -60,6 +61,7 @@ export const it = {
   ...lampoIt,
   ...learningIt,
   ...estimateIt,
+  ...logIt,
   ...genuiRequestIt,
   'genui.request.question': 'Domanda',
   'genui.request.permission': 'Permesso',

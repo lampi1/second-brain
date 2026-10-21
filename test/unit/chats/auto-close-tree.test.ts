@@ -56,4 +56,16 @@ describe('auto-close of a delegation tree', () => {
     internal.chats.get(child.id)!.s.closedAt = Date.now();
     expect(own(parent.id)).toMatchObject({ eligible: true, activityAt: t + 9_000 });
   });
+
+  it('does not let a member that ended with an error keep the rest of its tree open', async () => {
+    const f = fixture();
+    const parent = await f.m.create({ harness: 'anthropic', cwd: f.dir, model: 'known', prompt: 'Lavoro' });
+    const child = await f.m.create({ harness: 'anthropic', cwd: f.dir, model: 'known', prompt: 'Parte' });
+    const internal = f.m as unknown as Internal;
+    internal.chats.get(child.id)!.s.parentId = parent.id;
+    internal.chats.get(child.id)!.s.lastError = 'engine crashed';
+    const own = (id: string) => f.m.autoCloseCandidates(() => false).find(c => c.id === id)!;
+    expect(own(child.id).eligible).toBe(false);
+    expect(own(parent.id).eligible).toBe(true);
+  });
 });

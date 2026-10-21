@@ -61,9 +61,9 @@ function ResultReady({ item }: { item: Extract<ChatItem, { kind: 'system' }> }) 
     : ROLE_IDS.find(id => id === recordedRole || ROLE_DEFAULTS[id].name.toLowerCase() === recordedRole);
   const avatar = source?.agent?.avatar ?? (roleId ? { kind: 'character' as const, value: roleId } : undefined);
   const legacyOutput = typeof item.params?.summary === 'string' && item.params.summary.trim() ? item.params.summary : sysText(item);
-  return <div className={`notice result-ready${open ? ' is-open' : ''}`} role="status" data-testid="result-ready">
+  return <div className={`notice result-ready${open ? ' is-open' : ''}`} data-testid="result-ready">
     <AgentAvatar avatar={avatar} name={role} size={24} />
-    <span className="result-ready-text"><span className="result-ready-name" title={name}>{name}</span><small>{role ? t('chat.resultFrom', { role }) : t('chat.resultReady')}</small></span>
+    <span className="result-ready-text" role="status"><span className="result-ready-name" title={name}>{name}</span><small>{role ? t('chat.resultFrom', { role }) : t('chat.resultReady')}</small></span>
     {sourceId && <button type="button" className="result-ready-go" data-testid="chatref-open" data-chat-id={sourceId}
       aria-label={t('chat.chatref.ariaOpen', { verb: t('chat.resultGoAgent'), name })} onClick={() => openChatRef(sourceId)}>
       {t('chat.resultGoAgent')}<IconArrowRight size={12} />

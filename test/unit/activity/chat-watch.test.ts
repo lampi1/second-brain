@@ -52,6 +52,10 @@ describe('chat watch', () => {
     w.answeredByUser('c', 'q2');
     expect(w.pendingResolved('c', 'q2', c)[0]).toMatchObject({ by: 'user', level: 'ok' });
     expect(w.pendingAdded({ ...p, id: 'cmd', type: 'command' }, c)).toEqual([]);
+    // the user's Stop (or close) ends the request with the chat: no hidden approval
+    w.pendingAdded({ ...p, id: 'q3' }, c);
+    w.stoppedByUser('c');
+    expect(w.pendingResolved('c', 'q3', c)[0]).toMatchObject({ by: 'ended', level: 'info' });
   });
 
   it('keeps the Orchestrator out of the tasks and does not replay the chats open at start', () => {

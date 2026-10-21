@@ -11,6 +11,8 @@ import { randomBytes } from 'node:crypto';
 import { clip, LOG_FIELD_MAX, LOG_KEEP_DAYS, LOG_MAX_BYTES, LOG_RECENT, type LogEvent, type LogInput, type LogList } from '../../shared/activity-log';
 import { redact } from '../log';
 
+const DAY_MAX_BYTES = LOG_MAX_BYTES / 2;
+
 const FILE = /^log-(\d{4}-\d{2}-\d{2})\.jsonl$/;
 const TEXT_FIELDS = ['title', 'text', 'input', 'output', 'error', 'task'] as const;
 const localDay = (ms: number) => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
@@ -46,8 +48,10 @@ export class Journal {
     try {
       const e = { ...input, id: `${(this.now()).toString(36)}-${(this.seq++).toString(36)}-${randomBytes(2).toString('hex')}`, at: input.at ?? this.now() } as LogEvent;
       for (const k of TEXT_FIELDS) {
-        const v = clip(e[k], k === 'title' ? 200 : LOG_FIELD_MAX);
-        if (v === undefined) delete e[k]; else e[k] = redact(v);
+        // redacted whole, then cut: a secret cut in half by the clip would slip past the exact-match redaction
+        const raw = e[k];
+        const v = clip(typeof raw === 'string' ? redact(raw) : raw, k === 'title' ? 200 : LOG_FIELD_MAX);
+        if (v === undefined) delete e[k]; else e[k] = v;
       }
       if (!e.title) e.title = '—';
       if (e.tools) e.tools = e.tools.slice(0, 40).map(t => String(t).slice(0, 80));
@@ -76,10 +80,27 @@ export class Journal {
     try { this.emitFn?.(out); } catch { /* window gone */ }
   }
 
+  /** One day's file stops growing at half the folder's cap (a noisy loop must not fill the disk or slow the start):
+   *  past it, one marker line, then the day's events stay in memory only. */
   private write(e: LogEvent): void {
     if (!this.dir) return;
-    try { fs.appendFileSync(path.join(this.dir, `log-${localDay(e.at)}.jsonl`), `${JSON.stringify(e)}\n`); } catch { /* disk full: memory only */ }
+    try {
+      const day = localDay(e.at), file = path.join(this.dir, `log-${day}.jsonl`);
+      if (this.day?.day !== day) {
+        let n = 0; try { n = fs.statSync(file).size; } catch { /* new day */ }
+        this.day = { day, bytes: n, full: n >= DAY_MAX_BYTES };
+      }
+      if (this.day.full) return;
+      let line = `${JSON.stringify(e)}\n`;
+      if (this.day.bytes + Buffer.byteLength(line) > DAY_MAX_BYTES) {
+        this.day.full = true;
+        line = `${JSON.stringify({ id: `${e.id}-full`, at: e.at, kind: 'app', level: 'warn', title: 'Log di oggi pieno: i prossimi eventi restano solo in memoria fino a domani' })}\n`;
+      }
+      fs.appendFileSync(file, line);
+      this.day.bytes += Buffer.byteLength(line);
+    } catch { /* disk full: memory only */ }
   }
+  private day: { day: string; bytes: number; full: boolean } | null = null;
 
   private files(): { name: string; day: string; size: number }[] {
     if (!this.dir) return [];
