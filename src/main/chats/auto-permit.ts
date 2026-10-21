@@ -224,7 +224,9 @@ const SUBCOMMANDS: Record<string, ReadonlySet<string>> = {
   dotnet: new Set(['build', 'test', 'restore', 'format', 'run', 'clean']),
 };
 /** git options that run a program or change git's config for one call (`-c alias.x=!cmd`, `--upload-pack`, rebase `-x`). */
-const GIT_RUNS = /^(-c|--config-env|--exec-path|--upload-pack|--receive-pack|--exec|-x|-u|--git-dir|--work-tree)(=|$)/;
+const GIT_RUNS = /^(-c|--config-env|--exec-path|--upload-pack|--receive-pack|--exec|--git-dir|--work-tree)/;
+/** short options that take a program, also joined to it (`-xtouch x`): rebase -x, fetch/pull/clone -u */
+const GIT_RUNS_SHORT: Record<string, RegExp> = { rebase: /^-[a-z]*x/i, fetch: /^-[a-z]*u/i, pull: /^-[a-z]*u/i, clone: /^-[a-z]*u/i };
 
 function localWork(name: string, args: Word[], keys: string[], cwd: string): boolean {
   if (LOCAL_PROGRAMS.has(name)) return true;
@@ -238,11 +240,22 @@ function localWork(name: string, args: Word[], keys: string[], cwd: string): boo
   if (name === 'git') {
     let i = 0;
     while (i < keys.length && keys[i]!.startsWith('-')) { if (args[i]!.text !== '-C' && keys[i] !== '--no-pager') return false; i += args[i]!.text === '-C' ? 2 : 1; }
-    if (!subs!.has(keys[i] ?? '') || keys.some(k => GIT_RUNS.test(k) || k.includes('ext::'))) return false;
+    const sub = keys[i] ?? '', short = GIT_RUNS_SHORT[sub];
+    if (!subs!.has(sub) || keys.some(k => GIT_RUNS.test(k) || k.includes('ext::') || (short && !k.startsWith('--') && short.test(k)))) return false;
+    // fetch/pull only from a named remote: a host:path or a URL is another source
+    if ((sub === 'fetch' || sub === 'pull') && keys.slice(i + 1).some(k => !k.startsWith('-') && /[:@]/.test(k))) return false;
     // a stash or a branch that is only listed, created or switched to; `git remote`, `git config`, `git push` are not here
     return true;
   }
-  if (subs) return subs.has(keys.find(k => !k.startsWith('-')) ?? '') && !keys.some(k => k === 'exec' || k === 'dlx' || k === 'x');
+  if (subs && PKG.has(name) && ['npm', 'pnpm', 'yarn', 'bun'].includes(name)) {
+    const verb = keys.find(k => !k.startsWith('-')) ?? '';
+    if (!subs.has(verb) || keys.some(k => k === 'exec' || k === 'dlx' || k === 'x' || k === '-g' || k === '--global' || k.startsWith('--location')
+      || k.startsWith('--prefix') || k.startsWith('--script-shell') || k.startsWith('--node-options') || k.startsWith('--userconfig') || k.startsWith('--registry'))) return false;
+    // an install from the registry only: a file:, link:, git or host:path source brings code from elsewhere
+    const installs = ['install', 'i', 'add', 'ci'].includes(verb);
+    return !installs || keys.every(k => k.startsWith('-') || k === verb || !/[:/\\]|^\./.test(k.replace(/^@[a-z0-9._-]+\//, '')));
+  }
+  if (subs) return subs.has(keys.find(k => !k.startsWith('-')) ?? '');
   // node / tsx / python: a script file of the project, no option before it (-e, -p, --require, --import run other code)
   if (['node', 'tsx', 'python', 'python3', 'py'].includes(name)) {
     const first = keys[0] ?? '';
@@ -259,7 +272,12 @@ function plainWords(seg: Segment, cwd: string, readsOnly: boolean): boolean {
     if (!v) return true;
     if (/^(\/dev\/null|nul|\$null)$/i.test(v)) return true;
     if (/^\/[A-Za-z?]{1,3}(:.*)?$/.test(v) && !fs.existsSync(v)) return true; // a Windows switch
+    // a quoted value with spaces (a commit message, `--node-options='-r /x'`): every part counts on its own
+    if (/\s/.test(v)) return v.split(/\s+/).every(part => values(part).every(x => ok(x, writes)));
     if (v.includes('%') || v.includes('$') || v.includes('://') || v.includes('ext::')) return false;
+    // a glob can name a protected place by pattern (.gi?/hooks): only a reading command may use one
+    if (writes && /[*?[]/.test(v)) return false;
+    if (v.includes('..') && within(cwd, v.replace(/^[a-z+]+:/i, '')) === null) return false;
     if (outside(v, cwd)) return false;
     let exists = false;
     try { exists = /[\\/]/.test(v) || fs.existsSync(path.resolve(cwd, v)); } catch { /* not a path */ }
@@ -269,6 +287,8 @@ function plainWords(seg: Segment, cwd: string, readsOnly: boolean): boolean {
   };
   const values = (w: string): string[] => {
     if (w.startsWith('--')) return w.includes('=') ? [w.slice(w.indexOf('=') + 1)] : [];
+    // PowerShell -Param:value, then a short option joined to its value (-C/, -t/x)
+    if (/^-[A-Za-z][A-Za-z]*:/.test(w)) return [w.slice(w.indexOf(':') + 1)];
     if (/^-[A-Za-z]./.test(w)) return [w.slice(2)];
     return w.startsWith('-') ? [] : [w];
   };
@@ -301,7 +321,8 @@ function command(input: unknown, ctx: PermitContext): Cmd {
   const raw = o.command;
   if (typeof raw !== 'string' || !raw.trim() || raw.length > 2000 || /… \(\+\d+\)$/.test(raw)) return CMD_ASK;
   // Codex runs a command in its own folder: it must be the chat's or inside it
-  const cwd = typeof o.cwd === 'string' && o.cwd ? (within(ctx.cwd, o.cwd) === null ? null : path.resolve(ctx.cwd, o.cwd)) : ctx.cwd;
+  const codexRel = typeof o.cwd === 'string' && o.cwd ? within(ctx.cwd, o.cwd) : '';
+  const cwd = codexRel === null || (codexRel && protectedRel(codexRel)) ? null : codexRel ? path.resolve(ctx.cwd, o.cwd as string) : ctx.cwd;
   // an escaped quote (bash \", cmd ^") is read differently by each shell: the words checked here may not be the ones run
   if (/\\["']|\^["']/.test(raw)) return CMD_ASK;
   const segs = segments(raw);
@@ -319,6 +340,8 @@ function command(input: unknown, ctx: PermitContext): Cmd {
   for (const seg of segs) {
     const all = program(seg.words);
     if (!all[0]) continue;
+    // NAME=value before a program (LD_PRELOAD, GIT_SSH_COMMAND, NODE_OPTIONS) can make it run anything
+    if (all !== seg.words && all.length !== seg.words.length) unknown = true;
     const words = unwrapped(all);
     const first = words[0];
     if (!first) continue;
