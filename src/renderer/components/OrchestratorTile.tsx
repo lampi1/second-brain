@@ -7,7 +7,8 @@
 // unanswered, a "Da rispondere" line stays; its own messages' shell blocks have
 // "Esegui" too (the run and "Manda l'esito alla chat" belong to the Orchestrator). Completed results appear as compact
 // source-chat links in the transcript. Its ⋯ menu is the chat menu (ChatMenu) plus "Ricomincia da
-// capo", "Cambia motore" (both open the Nuovo Orchestrator confirm) and "Pulisci". With no Orchestrator yet it offers to create
+// capo", "Cambia motore" (both open the Nuovo Orchestrator confirm) and "Pulisci"; the eraser on its head is "Pulisci" in
+// one click, without the confirm (clearOrchestratorNow, the quick /clear). With no Orchestrator yet it offers to create
 // one. Under its head, the morning block's line while strips are open (no plan panel: the strips carry each estimate, #124) (MorningBlock.tsx, ADR 0102). When it drives a browser, it wears that pair's accent like any chat (lib/pairs.ts). Used by OrchestratorOverlay.tsx.
 import { memo, useEffect, useRef, useState } from 'react';
 import { chatCost, modelWithEffort } from '../lib/format';
@@ -18,7 +19,7 @@ import { openModal, setFocused, ui } from '../store/ui';
 import { t } from '../i18n';
 import { answerLater, requestPostponed } from '../lib/later';
 import { pairHover, usePair } from '../lib/pairs';
-import { awaitingCard, go, reqKey } from '../actions';
+import { awaitingCard, clearOrchestratorNow, go, reqKey } from '../actions';
 import { ItemList, turnActivity, Typing } from './ChatItems';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ChatMenu, TitleInput } from './ChatMenu';
@@ -33,7 +34,7 @@ import { pendingOf, useFlash } from './ChatTile';
 import { RequestPanel } from './RequestPanel';
 import { InWindowLine } from './QuestionsWindow';
 import { questionsModalOn } from '../lib/questions';
-import { HarnessMark, IconList, IconMore, IconStop } from './Icons';
+import { HarnessMark, IconEraser, IconList, IconMore, IconStop } from './Icons';
 import { IconButton, StatePill } from './ui';
 import { Select } from './Select';
 import { requestFocus } from '../store/ui';
@@ -135,6 +136,7 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
           <span className="sp" />
           <IconButton label={t('dialogs.orchestrator.statusLabel')} shortcut={t('dialogs.orchestrator.statusShortcut')} onClick={() => openModal('stato')} testid="orchestrator-stato"><IconList size={14} /></IconButton>
           {busy && <IconButton label={t('dialogs.orchestrator.stopLabel')} shortcut={t('dialogs.orchestrator.stopShortcut')} tone="danger" onClick={() => void stop(chat.id)} testid="orchestrator-stop"><IconStop size={14} /></IconButton>}
+          <IconButton label={t('lampo.clear')} disabled={busy} onClick={() => void clearOrchestratorNow(chat.id)} testid="orchestrator-clear"><IconEraser size={14} /></IconButton>
           <IconButton ref={menuBtn} label={t('dialogs.orchestrator.menuLabel')} onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-haspopup="menu" testid="orchestrator-menu"><IconMore /></IconButton>
         </div>
         <div className="chat-topic-row"><ModelChip chat={chat} profileId={ORCHESTRATOR_ROLE_ID} testid="orchestrator-model" /><span className="chat-topic">{chat.title}</span><AgentIdentity chat={chat}/></div>
