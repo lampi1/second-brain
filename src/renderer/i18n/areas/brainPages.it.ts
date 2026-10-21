@@ -9,6 +9,7 @@ export const brainPagesIt = {
   'brainPages.nav.idee': 'Idee',
   'brainPages.nav.costi': 'Costi',
   'brainPages.nav.qualita': 'Qualità',
+  'brainPages.nav.apprendimento': 'Apprendimento',
   'brainPages.nav.script': 'Script',
   'brainPages.nav.changelog': 'Changelog',
   'brainPages.nav.confronto': 'Confronto modelli',

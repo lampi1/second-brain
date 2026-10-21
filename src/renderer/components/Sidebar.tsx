@@ -1,5 +1,5 @@
 // The app rail groups work, the Brain (ADR 0077: Agenti, Skill, Regole, Memoria, Classificatori and the Mappa of their
-// links, each thing shown and edited in one place), Andamento (Costi and Qualità, reachable before only with G C / G Q,
+// links, each thing shown and edited in one place), Andamento (Costi, Qualità and Apprendimento, ADR 0109; Costi and Qualità reachable before only with G C / G Q,
 // ADR 0101) and app tools (Dashboard = statistics only, Guida). Role-specific
 // pages exclude destinations already supplied by the shell. Under the Grindhouse entry, the open agents as a delegation
 // tree (SidebarTree.tsx). Used by App.tsx.
@@ -11,7 +11,7 @@ import { useTasks } from '../store/tasks';
 import { ui } from '../store/ui';
 import { go } from '../actions';
 import {
-  IconBook, IconBrain, IconBranch, IconChart, IconCoins, IconGrid, IconHistory, IconLayers, IconLightbulb, IconMap, IconQuestion, IconSettings, IconShield, IconSparkle, IconTerminal, IconTicket,
+  IconBook, IconBrain, IconBranch, IconChart, IconTarget, IconCoins, IconGrid, IconHistory, IconLayers, IconLightbulb, IconMap, IconQuestion, IconSettings, IconShield, IconSparkle, IconTerminal, IconTicket,
 } from './Icons';
 import { t } from '../i18n';
 import {workProfile} from '../../shared/work-profiles';
@@ -22,7 +22,7 @@ const ICON: Record<BrainPageId, ReactNode> = {
   home: <IconGrid />,
   agenti: <IconLayers />,
   fatto: <IconBook />, idee: <IconLightbulb />,
-  costi: <IconCoins />, qualita: <IconChart />, script: <IconTerminal />, changelog: <IconHistory />, confronto: <IconLayers />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
+  costi: <IconCoins />, qualita: <IconChart />, apprendimento: <IconTarget />, script: <IconTerminal />, changelog: <IconHistory />, confronto: <IconLayers />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
   dashboard: <IconChart />, guida: <IconQuestion />,
   regole: <IconShield />, memoria: <IconHistory />, classificatori: <IconBranch />, collegamenti: <IconMap />,
 };
@@ -32,8 +32,8 @@ const BRAIN_GROUP: BrainPageId[] = [];
 /** The Brain section: always shown, whatever the role (ADR 0077; the owner, 2026-10-19: the brain must be visible, so its
  *  scripts and its changelog are always there too, ADR 0076). */
 const BRAIN_CORE: BrainPageId[] = ['agenti', 'skill', 'regole', 'memoria', 'classificatori', 'collegamenti', 'script', 'changelog'];
-/** Andamento: how the work goes, in money and in quality; always shown (ADR 0101). */
-const TRENDS: BrainPageId[] = ['costi', 'qualita'];
+/** Andamento: how the work goes, in money and in quality, and what the brain's changes proved; always shown (ADR 0101, 0109). */
+const TRENDS: BrainPageId[] = ['costi', 'qualita', 'apprendimento'];
 
 function Badge({ n, warn }: { n: number; warn?: boolean }) {
   if (!n) return null;

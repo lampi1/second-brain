@@ -167,3 +167,11 @@ button.bm-chip{cursor:pointer;font:inherit;font-size:var(--fs-xs)}button.bm-chip
 /* the agent page's "Skill e memoria" card */
 .bm-studio-skills{display:grid;gap:10px}
 .bm-studio-skills p{margin:0;font-size:var(--fs-s);color:var(--text-3);line-height:1.55}
+
+/* the evidence claim under a change (ADR 0109) */
+.bm-claim{display:grid;gap:2px;margin-top:3px;padding:6px 8px;border-left:2px solid var(--border-2);font-size:var(--fs-xs);color:var(--text-2);line-height:1.55}
+.bm-claim[data-verdict=aiuta]{border-left-color:var(--green)}
+.bm-claim[data-verdict=peggiora]{border-left-color:var(--amber)}
+.bm-claim[data-verdict=raccolta]{border-left-color:var(--blue-line)}
+.bm-claim-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.bm-claim-nums{color:var(--text-3);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}

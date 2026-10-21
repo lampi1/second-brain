@@ -1,0 +1,36 @@
+/* The Apprendimento page (components/brain-model/LearningPage.tsx, ADR 0109): the verdict counter (tiles that filter the
+   list), the panel of changes that worsened things, the small multiples of corrections per run per role with the changes
+   as marks in their verdict's color, the filter chips of the change list and the note on how to read it. */
+.lr-kpis{margin:18px 0 0}
+.lr-kpi{position:relative;background:linear-gradient(160deg,var(--surface-2),var(--surface) 70%)}
+.lr-kpi .k{display:flex;align-items:center;gap:6px}
+.lr-kpi button.v{all:unset;cursor:pointer;font:650 24px/1.2 var(--font-display);font-variant-numeric:tabular-nums;border-radius:4px}
+.lr-kpi button.v:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.lr-kpi[data-tone=green] .v{color:var(--green)}
+.lr-kpi[data-tone=amber] .v{color:var(--amber)}
+.lr-kpi[data-tone=blue] .v{color:var(--blue)}
+.lr-kpi.on{border-color:var(--border-2);box-shadow:inset 0 -2px 0 var(--blue)}
+.lr-worse{border-color:var(--amber-line);background:linear-gradient(160deg,var(--amber-bg),var(--surface) 70%)}
+
+.lr-legend{display:flex;gap:12px;flex-wrap:wrap;list-style:none;margin:0;padding:0;font-size:var(--fs-xs);color:var(--text-3)}
+.lr-legend li{display:inline-flex;align-items:center;gap:5px}
+.lr-legend li::before{content:"";width:2px;height:11px;border-radius:1px;background:var(--c)}
+.lr-grid-curves{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr));gap:12px}
+.lr-curve{border:1px solid var(--border);border-radius:var(--r-l);background:linear-gradient(160deg,var(--surface-2),var(--surface) 70%);padding:12px 14px 8px;min-width:0}
+.lr-curve header{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:0 0 4px}
+.lr-curve h4{margin:0;font-size:var(--fs-m);font-weight:600}
+.lr-curve header span{font-size:var(--fs-xs);color:var(--text-3);font-variant-numeric:tabular-nums}
+.lr-curve svg{display:block;width:100%;height:auto;overflow:visible}
+.lr-axis{stroke:var(--border-2);stroke-width:1}
+.lr-grid{stroke:var(--border);stroke-width:1;stroke-dasharray:2 3}
+.lr-tick{fill:var(--text-4);font-size:9.5px;font-variant-numeric:tabular-nums}
+.lr-line{fill:none;stroke:var(--pair-0);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.lr-dot{fill:var(--pair-0);stroke:var(--surface);stroke-width:1.5}
+.lr-mark line{stroke-width:1.5;stroke-dasharray:3 3;opacity:.85}
+.lr-mark[data-verdict=aiuta] line,.lr-mark[data-verdict=peggiora] line{stroke-dasharray:none}
+
+.lr-chips{display:flex;gap:6px;flex-wrap:wrap}
+.lr-chip{font:inherit;font-size:var(--fs-xs);color:var(--text-2);border:1px solid var(--border-2);background:var(--surface-2);border-radius:20px;padding:3px 10px;cursor:pointer;font-variant-numeric:tabular-nums}
+.lr-chip[aria-pressed=true]{color:var(--text);border-color:var(--blue);background:color-mix(in srgb,var(--blue) 14%,var(--surface-2))}
+.lr-chip:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.lr-note{max-width:90ch;margin-top:22px}
