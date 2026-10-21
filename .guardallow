@@ -87,3 +87,14 @@ docs/screenshots/quality.webp binary-media sha256:4ed97811d53aaee62bebf898792e0e
 docs/screenshots/brain-scripts.webp binary-media sha256:b765fda9f51b964dbc0143b31d8b70edcf87ab854e6dc283ee2c8b257677085f
 docs/screenshots/connectors.webp binary-media sha256:5c8019aa8343e2de77c8136910cee5ba853f18526694df361bdbdfce842db559
 docs/screenshots/crew.webp binary-media sha256:a59c51dccdd15d65a8f72a37493c625cfad3ecf8bc55e482e7867a1c63d3778f
+# README v3 (2026-10-21): npm run shots after ADR 0099-0105 (Lampo tab, Andamento, five roles); crew strip cut to the six roles; looked at before pinning
+docs/screenshots/grindhouse.webp binary-media sha256:d9e4528d40d079e7bd965c5600f3cd13c7715ca9f636e7cdca3a2859be5a50cd
+docs/screenshots/agents.webp binary-media sha256:4c812a37984708fa8997800598ab906ac0818ae060353a5c0cab3a5c7042c42f
+docs/screenshots/orchestrator.webp binary-media sha256:618e5f68a13f563f2b1e3d86eb60f7cfc02031c2bcfc087afd37494745fc92b6
+docs/screenshots/browser.webp binary-media sha256:5f5e570d3661c0bba2d222b3833894eb8fe6122e466909e24014c33e7ce7e492
+docs/screenshots/brain-map.webp binary-media sha256:82226c474aab4c7f529cd69df692a52fc22039b7fcdd73595e45ab1b3374c314
+docs/screenshots/task.webp binary-media sha256:a2107817dba0710d9a40ea86b6a51064e32cafdbeebe09de5803a7ccf6fca813
+docs/screenshots/quality.webp binary-media sha256:8050997997e728ba23e9730ba7bbfce05b412a699ff5f174060aa1d82329f6cd
+docs/screenshots/brain-scripts.webp binary-media sha256:f416e2150faee6acc1ce1e8a7900c06bc68a88ee14c6e68040be8acd809cce1b
+docs/screenshots/connectors.webp binary-media sha256:974e9f7932118bfe64dcbd18443b81db5dd5330c64655ca60d9acc6f1dbf4645
+docs/screenshots/crew.webp binary-media sha256:f6ce7ecb9397e0fb8fd85e0250c408a1331cfb161cb4efd134b1c9e415a4d32d

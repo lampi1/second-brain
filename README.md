@@ -44,7 +44,7 @@ what they still owe. A child's question goes to its parent first; only what trul
 **🎭 A crew with characters.** The Orchestrator and five work roles, each with its own face, job, skills and model
 tier (ADR 0100):
 
-<p align="center"><img src="docs/screenshots/crew.webp" alt="The six roles: Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald" width="820"></p>
+<p align="center"><img src="docs/screenshots/crew.webp" alt="The six roles: Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald" width="544"></p>
 
 <p align="center"><sub><b>Orchestrator</b> conducts · <b>Strategist</b> plans · <b>Scout</b> explores · <b>Artisan</b> builds and writes · <b>Sentinel</b> tests and reviews · <b>Herald</b> announces</sub></p>
 
