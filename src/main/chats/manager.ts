@@ -73,6 +73,7 @@ import { AgentAnalyticsCollector } from '../agents/collector';
 
 import { orchestratorRole, roleFrame } from '../agents/orchestrator-role';
 import { slug as slugTitle } from './mail';
+import { splitMode } from '../../shared/newchat';
 import { recallWarning, type Recall } from '../search/hybrid/recall';
 
 export interface ChatManagerOptions {
@@ -238,6 +239,13 @@ interface Rec {
   report?: { text: string; at: number; blocked?: boolean };
   /** a root chat's agent_report for its current assignment (reportRoot): one per assignment */
   rootReportAt?: number;
+  /** a root chat's result held until its turn ends (reportRoot, #123): the report and the turn end are one news */
+  heldResult?: { note: CleanReportNote; message: string; quiet: boolean };
+  /** a root chat the Orchestrator opened or assigned in a turn the user's own message started: the user waits for its
+   *  answer, so its result wakes the Orchestrator even when clean (#123); never persisted */
+  userWaits?: boolean;
+  /** the Orchestrator: its current (or last) turn was started by the user's own message, not by app news or mail */
+  turnFromUser?: boolean;
   /** the app completed its assignment from that report: a new message from its Orchestrator assigns it again */
   autoCompleted?: boolean;
   agentInstructions?: string;
@@ -657,6 +665,8 @@ export class ChatManager implements ChatService {
     };
     if (agent.owner.source === 'catalog' && !req.orchestrator) this.startRun(r, { agentId: agent.owner.id, version: agent.owner.version ?? 1, goal: req.goal ?? prompt ?? title, startedBy: delegator ? 'parent' : by === 'app' ? 'app' : by === 'agent' ? 'orchestrator' : 'user', costKnown: caps.cost, ...links,
       tags: { ...asked, repo: repoOf(cwd) }, ...(agent.tier ? { tier: agent.tier } : {}), model: req.model ?? null });
+    // the Orchestrator opened it while answering the user's own message: the user waits for what it finds (#123)
+    if (by === 'agent' && !delegator && r.s.run?.startedBy === 'orchestrator') r.userWaits = this.orchestratorAnswering();
     this.chats.set(id, r);
     if (old) {
       this.demoteOrchestrator(old);
@@ -708,6 +718,8 @@ export class ChatManager implements ChatService {
     this.autoActivity(r);
     this.needAgentMay(r, from);
     this.reassignOnOrchestrator(r, from);
+    // a new assignment from the Orchestrator: whether the user waits for it is decided again (#123)
+    if (from !== undefined && !r.s.parentId && !r.s.isOrchestrator && r.s.run?.startedBy === 'orchestrator' && from === this.openOrchestrator()?.s.title) r.userWaits = this.orchestratorAnswering();
     if (!this.admission) return this.deliver(chatId, text, images, resumed, from, liveOnly);
     // the user's own message never waits (ADR 0036): what waited for this chat goes first, now, then this one
     if (!resumed && from === undefined) {
@@ -837,6 +849,9 @@ export class ChatManager implements ChatService {
     // a message into the old session makes the note stale (a turn cut before its result would leave it "fresh")
     else if (r.coldNoteAt) { r.coldNoteAt = undefined; this.persist(); }
     const thumbs = imgs.flatMap(im => (im.thumb ? [im.thumb] : []));
+    // who started the Orchestrator's turn: the user's own words (never the app's news, labelled "[…"), or the app; a
+    // message into a running turn joins it, and only the user's own makes it his (#123)
+    if (r.s.isOrchestrator) { const own = !from && !resumed && !!t && (!t.startsWith('[') || splitMode(t).mode !== null); if (own) r.turnFromUser = true; else if (!this.midTurn(r)) r.turnFromUser = false; }
     this.addItem(r, { kind: 'user', id: nextId('u'), at: Date.now(), text: t, ...(imgs.length ? { images: imgs.length } : {}), ...(thumbs.length ? { thumbs } : {}), ...(from ? { from: from.slice(0, 80) } : {}) }, false);
     r.activeAt = Date.now();
     if (r.jobNew) this.startJob(r, t || `[${imgs.length} immagini]`);
@@ -1668,18 +1683,44 @@ export class ChatManager implements ChatService {
     r.rootReportAt = at;
     this.persist();
     this.updated(r);
-    const orchestrator = [...this.chats.values()].find(c => c.s.isOrchestrator && !c.s.closedAt);
+    const orchestrator = this.openOrchestrator();
     const role = r.s.agent?.id;
     // a clean result (done, every criterion met, no question) is quiet news: the user reads it in the chat, the
-    // Orchestrator gets it with its next turn instead of a turn of its own (median ~0.18 $ each, zero-token-audit round 3)
+    // Orchestrator gets it with its next turn instead of a turn of its own (median ~0.18 $ each, zero-token-audit round 3);
+    // unless the user waits for it (he asked the Orchestrator, which opened this chat for him): then it wakes the
+    // Orchestrator, which gives him the answer itself (#123)
     const clean = result.outcome === 'done' && result.doneWhen.length > 0 && met === result.doneWhen.length && !result.questions?.length && !result.goalChangedByUser;
-    const quiet = orchestrator && isWorkRole(role) && clean && this.cleanReportListeners.some(fn => { try { return fn({ chatId, title: r.s.title, role: ROLE_DEFAULTS[role].name, summary: result.summary, at }); } catch (e) { log.warn('chats', 'quiet report listener failed', { chat: chatId, cause: errText(e), hint: 'the result goes to the Orchestrator as a message' }); return false; } });
-    if (orchestrator && isWorkRole(role) && !quiet) {
-      this.send(orchestrator.s.id, resultMessage(role, r.s.title, result, { outputMax: ORCHESTRATOR_OUTPUT_MAX }), undefined, false, r.s.title)
-        .catch(e => log.warn('chats', 'root result not delivered', { chat: orchestrator.s.id, cause: errText(e), hint: 'the result stays on the chat and its run; app_chats shows it' }));
+    const waits = !!r.userWaits;
+    if (orchestrator && isWorkRole(role)) {
+      // held until the chat's turn ends (#123): the report and the turn end are one news, and the Orchestrator never reads
+      // it while the chat still shows as running
+      r.heldResult = { note: { chatId, title: r.s.title, role: ROLE_DEFAULTS[role].name, summary: result.summary, at }, quiet: clean && !waits,
+        message: resultMessage(role, r.s.title, result, { outputMax: ORCHESTRATOR_OUTPUT_MAX, ...(waits ? { userWaits: true } : {}) }) };
+      if (!this.midTurn(r)) this.releaseResult(r);
     }
-    log.info('chats', 'root chat reported', { chat: chatId, data: { orchestrator: orchestrator?.s.id ?? null, outcome: result.outcome, met, criteria: result.doneWhen.length } });
+    log.info('chats', 'root chat reported', { chat: chatId, data: { orchestrator: orchestrator?.s.id ?? null, outcome: result.outcome, met, criteria: result.doneWhen.length, userWaits: waits } });
     return { orchestratorId: orchestrator?.s.id ?? null, delivered: !!orchestrator };
+  }
+
+  /** The open Orchestrator, if any. */
+  private openOrchestrator(): Rec | undefined { return [...this.chats.values()].find(c => c.s.isOrchestrator && !c.s.closedAt); }
+
+  /** The open Orchestrator is answering the user's own message now (its turn started from it, and it is in that turn). */
+  private orchestratorAnswering(): boolean { const o = this.openOrchestrator(); return !!o?.turnFromUser && this.midTurn(o); }
+
+  /** A root chat's held result goes now (its turn ended, or it stopped): quiet news (orchestrator-wake.ts cleanReport) when
+   *  clean and nobody waits, else a message that wakes the Orchestrator; once. */
+  private releaseResult(r: Rec): void {
+    const held = r.heldResult;
+    if (!held) return;
+    r.heldResult = undefined;
+    r.userWaits = undefined; // answered: a later turn of the chat is a new assignment
+    const orchestrator = this.openOrchestrator();
+    if (!orchestrator) return;
+    const quiet = held.quiet && this.cleanReportListeners.some(fn => { try { return fn(held.note); } catch (e) { log.warn('chats', 'quiet report listener failed', { chat: r.s.id, cause: errText(e), hint: 'the result goes to the Orchestrator as a message' }); return false; } });
+    if (quiet) return;
+    this.send(orchestrator.s.id, held.message, undefined, false, r.s.title)
+      .catch(e => log.warn('chats', 'root result not delivered', { chat: orchestrator.s.id, cause: errText(e), hint: 'the result stays on the chat and its run; app_chats shows it' }));
   }
 
   /** agent_delegate refused by a delegation limit: the parent's transcript says so and the chat carries the mark. */
@@ -2657,6 +2698,7 @@ export class ChatManager implements ChatService {
         if (r.s.state !== 'error') r.s.state = error ? 'error' : r.releasing ? 'idle' : 'closed';
         this.persist();
         this.updated(r);
+        this.releaseResult(r); // its engine is gone: a held result never waits for a turn end that will not come
         const onCrash = this.opts.onCrash;
         if (crashed && error && onCrash) this.hook('onCrash', () => onCrash(chatId, error));
       },
@@ -2771,5 +2813,7 @@ export class ChatManager implements ChatService {
     if (p.contextTokens !== undefined && p.contextTokens > 0) save = true; // the meter of a closed chat survives a restart
     if (save) this.persist();
     this.updated(r);
+    // the turn that reported is over: its result goes now, after the chat shows as finished (#123)
+    if (r.heldResult && p.state && p.state !== 'running' && p.state !== 'starting' && !this.midTurn(r)) this.releaseResult(r);
   }
 }

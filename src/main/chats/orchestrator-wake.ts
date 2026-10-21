@@ -27,6 +27,8 @@
 // kept beside the chat's status news (its own slot: a "finished" never replaces it).
 // A root chat's clean agent_report (done, every criterion met, no question) is quiet news too (cleanReport, 2026-10-20):
 // the user reads the result in the chat; the Orchestrator gets the summary with its next turn instead of a turn of its own.
+// It comes after the chat's turn ended (ChatManager holds it, #123), and never for a result the user waits for: that one
+// goes to the Orchestrator as a message and wakes it.
 // Held news on the tile (#88): what waits in the buffer is listed for the user (heldNews(), held-news.ts sends it to the
 // page as "N novità in attesa"); reading it never sends anything to the Orchestrator and changes no rule above.
 import { timersFor } from '../timers';

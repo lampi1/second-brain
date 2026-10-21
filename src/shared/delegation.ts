@@ -139,15 +139,22 @@ const safeJson = (v: unknown): string => JSON.stringify(v).replace(/[\u0085\u202
  * flattened to one line, so it cannot forge a line of the app or the user), then the result as JSON (escaped). A summary
  * the line already shows whole (one line) is not repeated in the JSON; one with line breaks stays there exact. With
  * outputMax (the Orchestrator's copy), a longer output is replaced by where to read it. */
-export function resultMessage(role: WorkRoleId, title: string, r: DelegationResult, opts: { outputMax?: number } = {}): string {
+/** The line that tells the Orchestrator the user waits for this result (#123): it answers him itself. */
+export const USER_WAITS_LINE = "[l'utente aspetta questa risposta: dagliela tu, nella tua chat, per intero (riassunto e risultato), non rimandarlo all'altra chat]";
+
+/** userWaits (#123): the user asked the Orchestrator and waits for this answer: a long deliverable is cut to outputMax
+ *  (the rest stays in the chat) instead of becoming a pointer, and the message says he waits. */
+export function resultMessage(role: WorkRoleId, title: string, r: DelegationResult, opts: { outputMax?: number; userWaits?: boolean } = {}): string {
   const changed = r.goalChangedByUser ? ` (obiettivo cambiato dall'utente nella chat figlia: «${oneLine(r.newGoal ?? '')}». Non disfare ciò che l'utente le ha chiesto.)` : '';
   // a long deliverable stays in the chat that wrote it (shown there as its answer): the Orchestrator gets where it is,
   // and reads it with app_chat_items only when it needs it, instead of carrying it in every later turn
   const long = opts.outputMax !== undefined && r.output.length > opts.outputMax;
-  const full = long ? { ...r, output: `(${r.output.length} caratteri, nella chat «${oneLine(title)}» come sua risposta: leggilo con app_chat_items solo se ti serve)` } : r;
+  const output = !long ? r.output : opts.userWaits ? `${r.output.slice(0, opts.outputMax)}… (il resto nella chat «${oneLine(title)}»)`
+    : `(${r.output.length} caratteri, nella chat «${oneLine(title)}» come sua risposta: leggilo con app_chat_items solo se ti serve)`;
+  const full = long ? { ...r, output } : r;
   const { summary, ...rest } = full;
   const json = oneLine(summary) === summary ? rest : full;
-  return `${AGENT_LABEL}\n\n[risultato · ${ROLE_DEFAULTS[role].name} «${oneLine(title)}»] ${oneLine(summary)}${changed}\n\`\`\`json\n${safeJson(json)}\n\`\`\``;
+  return `${AGENT_LABEL}\n\n[risultato · ${ROLE_DEFAULTS[role].name} «${oneLine(title)}»] ${oneLine(summary)}${changed}${opts.userWaits ? `\n${USER_WAITS_LINE}` : ''}\n\`\`\`json\n${safeJson(json)}\n\`\`\``;
 }
 
 /** Levels above a chat: 0 for a root (no parent). A broken or cyclic chain counts as too deep. */

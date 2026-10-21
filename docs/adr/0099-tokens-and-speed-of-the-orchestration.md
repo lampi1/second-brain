@@ -58,3 +58,16 @@ compacted only on the next day, on an expired cache (ADR 0031: ~2.10 $ for a col
   launches nobody, no `agent_ask_parent`, its browser access and managed servers); a delegated chat starts cold.
 - Child results still waiting for their siblings when the app quits are kept on the parent and sent after the start.
 - A clean report keeps its own slot in the Orchestrator's news: a later error of the same chat never hides it.
+
+## Amended (issue #123, 2026-10-21)
+- A clean result was quiet even when the user waited for it: he asked the Orchestrator «che devo fare oggi?», it opened
+  a Scout and ended its turn, and the Scout's answer reached it only when he wrote again; read while the Scout still ran,
+  it said «non ha ancora finito», and the turn end then woke it a second time.
+- A root chat the Orchestrator opens (or assigns again) during a turn the user's own message started is one the user
+  waits for (`ChatManager` `userWaits`; a turn started by the app's news or mail is not). Its result, clean or not, goes
+  to the Orchestrator as a message and wakes it, with the line «l'utente aspetta questa risposta» and the deliverable
+  itself, cut at `ORCHESTRATOR_OUTPUT_MAX` (the rest stays in the chat) instead of a pointer. The Orchestrator's rule
+  says to answer the user in its own chat with the result in full, never «è pronto nell'altra chat».
+- Every root result (quiet or not) is held until the reporting chat's turn ends, or its engine stops: the report and the
+  turn end are one news, delivered once, and the Orchestrator never reads it while the chat shows as running.
+- A clean result nobody waits for stays quiet news, as above.
