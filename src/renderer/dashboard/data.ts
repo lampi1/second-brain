@@ -192,14 +192,6 @@ export function contextLevel(chat: ChatSummary, warnTokens: number): 'unknown' |
   return chat.contextTokens === undefined ? 'unknown' : isLongChat(chat, warnTokens) ? 'above' : 'below';
 }
 
-/** Cursor export coverage, judged like usage.ts: by the Rome day the export was downloaded (lastRow is only the last
- *  usage row, which can be old even for a fresh export). null = no export or no readable date. */
-export function cursorCoverage(cursor: { downloaded?: string }, periodEnd: string): boolean | null {
-  const at = cursor.downloaded ? Date.parse(cursor.downloaded) : NaN;
-  return Number.isFinite(at) && /^\d{4}-\d{2}-\d{2}/.test(periodEnd) ? ROME_DAY.format(new Date(at)) >= periodEnd.slice(0, 10) : null;
-}
-const ROME_DAY = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' });
-
 /** The Orchestrator's visible name, whatever its chat is titled (SPEC point 8). */
 export const chatName = (c: { isOrchestrator?: boolean; title: string }): string => c.isOrchestrator ? 'Orchestrator' : c.title;
 

@@ -73,8 +73,13 @@ async function errors(page: Page, scheme: string): Promise<void> {
   await shot(page, `stats-errors-groups-${scheme}`);
   await dash.getByTestId('err-ai-groups').scrollIntoViewIfNeeded();
   await shot(page, `stats-errors-ai-${scheme}`);
-  await page.getByRole('tab', { name: 'Costi' }).click();
-  await expect(dash.getByTestId('dash-cost-days')).toBeVisible();
+  // costs live only under Andamento → Costi (#125): no Costi tab here, and no role, current or retired, on that page
+  await expect(page.getByRole('tab', { name: 'Costi' })).toHaveCount(0);
+  await goPage(page, 'costi');
+  const costi = page.getByTestId('brain-page-costi');
+  await expect(costi.getByTestId('bx-cost-kpis')).toBeVisible();
+  await expect(costi.getByTestId('bx-agent-analytics')).toHaveCount(0);
+  await expect(costi).not.toContainText(/Router|Judge|Scribe|Equivalente di listino|Tempi osservati/);
   await shot(page, `stats-costs-${scheme}`);
 }
 

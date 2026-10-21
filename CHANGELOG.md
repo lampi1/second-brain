@@ -11,6 +11,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   open is read and leaves «novità in attesa».
 - **A cleaner Orchestrator column** (#124): no «Veloce» chip (quick questions go to Lampo) and no «Piano
   dell'Orchestrator» panel (the estimates are on the strips).
+- **One costs page** (#125): Andamento → Costi, with the curious facts and the Cursor export coverage it lacked; the
+  Dashboard's Costi tab and the per-agent blocks are gone. Each agent's costs (median per run, per verified success,
+  with their counts) are on the back of its card.
 
 ### Added
 - **Five work roles, judged by facts, levelled honestly** (owner, 2026-10-20; ADR 0100): Strategist, Scout, Artisan,

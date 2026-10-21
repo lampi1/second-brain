@@ -3,7 +3,7 @@
 // skills, the AI errors by type with the rule's status, the trend and the quiet days; cost facts only from enough data.
 import { describe, expect, it } from 'vitest';
 import { causeOf, daysSince, groupAiErrors, groupErrors, signature, trendOf, type ObservedLike } from '../../src/renderer/dashboard/errors';
-import { costFacts } from '../../src/renderer/dashboard/facts';
+import { costFacts } from '../../src/renderer/brain/lib/cost-facts';
 import type { ErrorRow, ErrQuality } from '../../src/renderer/brain/types';
 
 const NOW = new Date(2026, 9, 19, 12, 0).getTime(), DAY = 864e5;

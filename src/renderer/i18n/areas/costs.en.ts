@@ -93,6 +93,7 @@ export const costsEn: typeof costsIt = {
   'costs.range': (p) => `from ${p.from} to ${p.to}`,
   'costs.callCount': (p) => `${p.count} calls`,
   'costs.todayAmount': (p) => `today ${p.amount}`,
+  'costs.cursorPartial': 'partial: the export ends before the period',
   'costs.fromUsage': (p) => `from usage export on ${p.when}`,
   'costs.characters': (p) => `${p.count} chars`,
   'costs.periodAmount': (p) => `~${p.amount} in this period`,

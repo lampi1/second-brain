@@ -55,7 +55,7 @@ describe('agent metrics', () => {
       run({ costUsd: null, tokens: null, startedAt: 0, endedAt: H }),
     ];
     const m = runMetrics(runs, { windowOf: () => 4000 })[0]!.versions[0]!;
-    expect(m.costPerRun).toEqual({ median: { value: 2, n: 2, coverage: 2 / 3 }, p90: 3 });
+    expect(m.costPerRun).toEqual({ median: { value: 2, n: 2, coverage: 2 / 3 }, p90: 3, total: 4 });
     expect(m.tokensPerRun.output).toEqual({ value: 40, n: 2, coverage: 2 / 3 });
     expect(m.contextPeak).toEqual({ median: { value: 2000, n: 2, coverage: 2 / 3 }, max: 3000, ofWindow: 0.5 });
     expect(m.timeToDone.elapsed).toEqual({ value: 2 * H, n: 3, coverage: 1 });

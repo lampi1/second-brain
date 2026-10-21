@@ -17,7 +17,7 @@ const role = (id: string, extra: Partial<AgentProfile> = {}): AgentProfile => ({
 const metric = (value: number | null, n = 3) => ({ value, n, coverage: n ? 0.75 : null });
 const vm = (agentId: string, version: number, success: number): VersionMetrics => ({
   agentId, version, ended: 4, successRate: metric(success), opinion: { value: null, n: 0 }, selfReport: { value: null, n: 0 },
-  correctionsPerRun: metric(1), aiErrorsPerRun: metric(0), reworkRate: metric(0), costPerRun: { median: metric(0.42), p90: null },
+  correctionsPerRun: metric(1), aiErrorsPerRun: metric(0), reworkRate: metric(0), costPerRun: { median: metric(0.42), p90: null, total: null },
   tokensPerRun: {} as VersionMetrics['tokensPerRun'], contextPeak: { median: metric(null, 0), max: null, ofWindow: null },
   timeToDone: { elapsed: metric(180_000), execution: metric(null, 0) }, questionsPerRun: metric(2), permissionsPerRun: metric(0), commandsPerRun: metric(0), reviews: [],
 });

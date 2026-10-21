@@ -141,3 +141,13 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 .run-confirmed .run-mark{display:inline-block;animation:run-check 220ms ease-out}
 @keyframes run-check{from{transform:scale(.6) rotate(-20deg);opacity:.3}to{transform:scale(1) rotate(0);opacity:1}}
 @media(prefers-reduced-motion:reduce){.catalog-level-bar>i,.catalog-gauge .fill,.catalog-hero-avatar>.agent-avatar{transition:none}.catalog-card,.catalog-details,.run-confirmed .run-mark,[data-state=working]>i{animation:none}.catalog-card,.catalog-card:hover,.catalog-card:focus-within{transform:none}.catalog-more-chevron{transition:none}}
+/* the back's costs (#125): two figures, each with its sample, and one line when one is missing (beats .bm-face-back dl) */
+.catalog-costs{padding-top:10px;border-top:1px solid var(--border)}
+.catalog-costs h4{display:flex;align-items:center;gap:6px;margin:0 0 8px;font-size:var(--fs-xs);letter-spacing:.08em;text-transform:uppercase;font-weight:650;color:var(--text-3)}
+.catalog-costs h4 small{margin-left:auto;letter-spacing:0;text-transform:none;font-weight:500;color:var(--text-4);font-variant-numeric:tabular-nums}
+.bm-face-back dl.catalog-costs-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0;padding:0;border:0}
+.bm-face-back .catalog-costs-grid>div{display:flex;flex-direction:column;justify-content:flex-start;align-items:stretch;gap:3px;min-width:0;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-s);background:color-mix(in srgb,var(--bg) 55%,transparent)}
+.bm-face-back .catalog-costs-grid dt{font-size:11px;line-height:1.3;color:var(--text-3)}
+.bm-face-back .catalog-costs-grid dd{text-align:left;font-size:16px;font-weight:650;color:var(--text);white-space:nowrap;overflow-wrap:normal}
+.bm-face-back .catalog-costs-grid dd small{margin-top:2px;font-size:11px;font-weight:500;color:var(--text-4);white-space:normal}
+.catalog-costs-note{margin:6px 0 0;font-size:11.5px;color:var(--text-3)}

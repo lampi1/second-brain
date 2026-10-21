@@ -23,5 +23,11 @@ export const catalogEn: typeof catalogIt = {
   'catalog.cost': 'Median cost / run', 'catalog.last': 'Last observed start', 'catalog.unknown': 'Unavailable',
   'catalog.samples': ({ n, total }) => `${n} of ${total} runs`,
   'catalog.note': 'Statistics cover known versions. Success counts only verified outcomes; the last start covers available chats. Missing data does not mean zero.',
+  'catalog.costs': 'Costs', 'catalog.costPerWin': 'Cost / verified success',
+  'catalog.costsRuns': ({ n }) => n === 1 ? '1 ended run' : `${n} ended runs`,
+  'catalog.costsNone': 'No ended run yet: costs show from the first.',
+  'catalog.costsWhy.noWins': 'Cost per success: no verified success yet.',
+  'catalog.costsWhy.partial': ({ n, total }) => `Cost per success: the cost is known for only ${n} of ${total} runs.`,
+  'catalog.costsHelp': 'Median cost: half of the ended runs cost less, among those with a known cost. Cost per verified success: the cost of every ended run divided by the verified successful ones (those the level counts). At API list prices: with a subscription it is not what you pay.',
   'catalog.metricsError': 'Statistics unavailable. Please retry.', 'catalog.back': 'Back to catalogue',
 };

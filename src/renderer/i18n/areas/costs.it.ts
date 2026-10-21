@@ -92,6 +92,7 @@ export const costsIt = {
   'costs.range': (p:{from:string;to:string}) => `dal ${p.from} al ${p.to}`,
   'costs.callCount': (p:{count:string}) => `${p.count} chiamate`,
   'costs.todayAmount': (p:{amount:string}) => `oggi ${p.amount}`,
+  'costs.cursorPartial': 'parziale: l’export finisce prima del periodo',
   'costs.fromUsage': (p:{when:string}) => `dal file d'uso del ${p.when}`,
   'costs.characters': (p:{count:string}) => `${p.count} car.`,
   'costs.periodAmount': (p:{amount:string}) => `~${p.amount} nel periodo`,
