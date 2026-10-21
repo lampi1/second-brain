@@ -8,7 +8,7 @@
 // briefly highlighted (focusChat); the ✕ on hover closes the chat like its strip's ✕ (6 s Annulla; owner, 2026-10-21). Hidden while no agent is open. Mounted by Sidebar.tsx.
 import type { CSSProperties } from 'react';
 import type { ChatSummary } from '@shared/contract';
-import { chatTree, childState, visibleTree, type ChildState, type TreeNode } from '../lib/chat-tree';
+import { chatTree, childState, kidCounts, visibleTree, type ChildState, type TreeNode } from '../lib/chat-tree';
 import { useApp } from '../store/store';
 import { setTreeCollapsed, ui } from '../store/ui';
 import { focusChat } from '../actions';
@@ -20,8 +20,8 @@ import '../styles/tree.css';
 
 const MAX_ROWS = 40;
 /** the dot's tint by state */
-const DOT: Record<ChildState, string> = { start: 'run', run: 'run', wait: 'wait', queued: 'off', err: 'err', stall: 'stall', refused: 'err', done: 'done', partial: 'done', blocked: 'err', closed: 'off' };
-const ENDED = new Set<ChildState>(['done', 'partial', 'blocked', 'closed']);
+const DOT: Record<ChildState, string> = { start: 'run', run: 'run', wait: 'wait', queued: 'off', err: 'err', stall: 'stall', refused: 'err', done: 'done', partial: 'done', blocked: 'err', noreport: 'err', closed: 'off' };
+const ENDED = new Set<ChildState>(['done', 'partial', 'blocked', 'noreport', 'closed']);
 const sameTree = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 /** A root chat's state reads like a child's: waiting, at work, failed, idle (its turn ended: done for now). */
@@ -71,7 +71,7 @@ function Row({ node, chat, chats, folded, on, offset }: { node: TreeNode; chat: 
   const right = state === 'wait' ? <span className="tn-w">{t('tree.state.wait')}</span>
     : kids.length ? <span className="tn-x">{t('tree.kids', { n: kids.length })}</span>
     : node.depth > 0 || state !== 'done' ? <span className="tn-x">{t(`tree.state.${state}`)}</span> : null;
-  const running = kids.filter(k => !ENDED.has(childState(k))).length;
+  const running = kidCounts(kids.map(k => childState(k))).run;
   const level = node.depth + offset;
   return <li className={`tn${on ? ' on' : ''}${ENDED.has(state) ? ' ended' : ''}`} style={{ '--d': level } as CSSProperties} data-testid={`nav-tree-${node.id}`} data-depth={node.depth}>
     {Array.from({ length: level }, (_, k) => <i key={k} className="tn-guide" style={{ '--g': k } as CSSProperties} aria-hidden="true" />)}

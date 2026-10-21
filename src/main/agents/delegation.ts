@@ -44,6 +44,8 @@ export interface DelegationChats {
   /** a Strategist's plan with the user (ADR 0108): no delegation before the user's ok; a part names its step */
   planOf?(chatId: string): StrategyPlan | null;
   planDelegated?(chatId: string, i: number, chatIds: string[]): void;
+  /** the child now waits for its parent's answer, not on its own report (#152) */
+  askedParent?(chatId: string): void;
 }
 export interface DelegationDeps {
   chats: DelegationChats;
@@ -327,6 +329,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       ...(options.length ? [`Opzioni: ${options.map((o, i) => `${i + 1}) ${oneLine(o)}`).join(' · ')}`] : []), ...(why ? [`Perché: ${oneLine(why)}`] : []),
       `Rispondi con agent_answer_child (chatId "${self.id}", answer) da ciò che sai del compito. Se serve una persona (un permesso, un'azione irreversibile o esterna, una scelta che cambia l'obiettivo) o non lo sai, agent_answer_child con askUser: true: chiederà all'utente.`].join('\n');
     await d.chats.send(parent.id, text, undefined, false, self.title);
+    d.chats.askedParent?.(callerId);
     log.info('agents', 'child asked its parent', { chat: callerId, data: { parent: parent.id, options: options.length } });
     return { asked: parent.title, note: 'Your parent answers with a message (agent_answer_child). Go on with what does not depend on it; do not ask the user the same thing meanwhile.' };
   }

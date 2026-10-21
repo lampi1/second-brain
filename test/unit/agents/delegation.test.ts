@@ -442,6 +442,62 @@ describe('agent_delegate', () => {
   });
 });
 
+describe('a child that ends without agent_report (#152)', () => {
+  const turn = (f: ReturnType<typeof fixture>, id: string, text: string, n: number) => {
+    const sink = f.sinks.get(id)!;
+    sink.changed({ state: 'running' });
+    sink.item({ kind: 'assistant', id: `a${n}`, at: Date.now(), text } as never, false);
+    sink.item({ kind: 'result', id: `r${n}`, at: Date.now(), costUsd: 0, durationMs: 1, turns: 1, isError: false }, false);
+    sink.changed({ state: 'idle' });
+  };
+  it('is told once with the full tool name; a second turn without it closes the delegation and wakes the parent', async () => {
+    const f = fixture();
+    (f.m as unknown as { opts: { childResultsMs: number } }).opts.childResultsMs = 10;
+    const parent = await f.root('strategist');
+    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'WhatsApp · Cause')] });
+    const kid = f.m.list().find(c => c.parentId === parent.id)!;
+    const sentBefore = f.sent.get(kid.id)!.length;
+    turn(f, kid.id, 'Ho trovato tre cause.', 1);
+    await new Promise(res => setTimeout(res, 20));
+    const nudge = f.sent.get(kid.id)!.slice(sentBefore).join('\n');
+    expect(nudge).toContain('mcp__second-brain__agent_report');
+    expect(f.m.list().find(c => c.id === kid.id)!.delegation!.result).toBeUndefined();
+    turn(f, kid.id, 'Le cause sono A, B e C.', 2);
+    await new Promise(res => setTimeout(res, 40));
+    const after = f.m.list().find(c => c.id === kid.id)!;
+    expect(after.delegation!.result).toMatchObject({ outcome: 'blocked', noReport: true });
+    const back = f.sent.get(parent.id)!.at(-1)!;
+    expect(back).toContain('[risultato · Scout «WhatsApp · Cause»]');
+    expect(back).toContain('Le cause sono A, B e C.');
+    expect(f.m.runs.get(kid.run!.runId)?.endedAt).toBeDefined();
+  });
+  it('a child waiting for its parent\'s answer, or for the user, owes nothing yet', async () => {
+    const f = fixture();
+    const parent = await f.root('strategist');
+    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'A · uno')] });
+    const kid = f.m.list().find(c => c.parentId === parent.id)!;
+    await f.call('agent_ask_parent', kid.id, { question: 'Quale file?' });
+    const before = f.sent.get(kid.id)!.length;
+    turn(f, kid.id, 'Aspetto la risposta.', 1);
+    turn(f, kid.id, 'Ancora in attesa.', 2);
+    await new Promise(res => setTimeout(res, 20));
+    expect(f.sent.get(kid.id)!.length).toBe(before);
+    expect(f.m.list().find(c => c.id === kid.id)!.delegation!.result).toBeUndefined();
+  });
+  it('a child whose engine died with an error closes at once with its last answer', async () => {
+    const f = fixture();
+    (f.m as unknown as { opts: { childResultsMs: number } }).opts.childResultsMs = 10;
+    const parent = await f.root('strategist');
+    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'A · uno')] });
+    const kid = f.m.list().find(c => c.parentId === parent.id)!;
+    f.sinks.get(kid.id)!.changed({ state: 'running' });
+    f.sinks.get(kid.id)!.exit({ code: 1, error: 'crash' });
+    await new Promise(res => setTimeout(res, 30));
+    expect(f.m.list().find(c => c.id === kid.id)!.delegation!.result).toMatchObject({ outcome: 'blocked', noReport: true });
+    expect(f.sent.get(parent.id)!.at(-1)).toContain('errore del motore');
+  });
+});
+
 describe('questions go to the parent first; the user\'s own messages are known (ADR 0083)', () => {
   it('a child asks its parent; the parent answers it, or sends it on to the user; nobody else may answer', async () => {
     const f = fixture();

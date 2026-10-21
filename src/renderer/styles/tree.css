@@ -101,6 +101,7 @@
 .kid-dot.run { background: var(--blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 20%, transparent); }
 .kid-dot.wait { background: var(--amber); box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber) 22%, transparent); }
 .kid-dot.done { background: var(--green); }
+.kid-dot.err { background: var(--red); }
 .kids-stack { display: inline-flex; }
 .kids-stack > * { border-radius: 50%; box-shadow: 0 0 0 2px var(--surface); }
 .kids-stack > * + * { margin-left: -5px; }

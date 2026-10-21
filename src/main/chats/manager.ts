@@ -62,7 +62,7 @@ import { afterTree, KEEP as CHECKPOINTS_KEPT, prune as pruneCheckpoints, restore
 import { autoPermit } from './auto-permit';
 import { TurnToolBudget } from '../agents/orchestrator-budget';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
-import { checkResult, resultMessage, type DelegationLimitHit, type DelegationResult, type TaskSource, type TaskAssignmentOptions } from '../../shared/delegation';
+import { RESULT_OUTPUT_MAX, checkResult, resultMessage, type DelegationLimitHit, type DelegationResult, type TaskSource, type TaskAssignmentOptions } from '../../shared/delegation';
 import { finishPlan, afterReport, PLAN_APPROVED, planChange, STRATEGY_FLOW, withClarified, withDelegated, withStep, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
 import { aiErrorRuns, runMetrics } from '../agents/run-metrics';
 import { standings, withStandings } from '../agents/standing';
@@ -78,6 +78,7 @@ import { slug as slugTitle } from './mail';
 import { splitMode } from '../../shared/newchat';
 import { orchestratorContext, type LampoCursor } from './lampo-context';
 import { recallWarning, type Recall } from '../search/hybrid/recall';
+import { APP_EVENT_LABEL } from './orchestrator-wake';
 
 /** Legacy entries have no ID: match their content until the first submission assigns one. */
 function sameChildResult(a: HeldChildResult, b: HeldChildResult): boolean {
@@ -256,6 +257,11 @@ interface Rec {
   /** its latest report to its Orchestrator (send_to_chat, or a run-report block): a clean idle after it completes the
    *  assignment (#86, ADR 0084); never persisted */
   report?: { text: string; at: number; blocked?: boolean };
+  /** a delegated child asked its parent (agent_ask_parent) and no agent message reached it since: its turn ending
+   *  without agent_report waits for the answer, it does not owe the report yet (#152) */
+  askedParentAt?: number;
+  /** a delegated child was told once that its turn ended without agent_report (#152): the next such end closes it */
+  reportNudged?: boolean;
   /** a root chat's agent_report for its current assignment (reportRoot): one per assignment */
   rootReportAt?: number;
   /** a root chat's result held until its turn ends (reportRoot, #123): the report and the turn end are one news */
@@ -794,6 +800,7 @@ export class ChatManager implements ChatService {
       if (source?.kind === 'chat' && (source.chatId === this.openOrchestrator()?.s.id || (r.userTaskEvents?.latestSeq ?? 0) > (r.userTaskEvents?.acknowledgedSeq ?? 0))) throw new Error('Use app_assign_task for a follow-up; it checks role, project and current task version.');
       this.beginAssignment(r, text, { mode: isCorrection(text) ? 'rework' : 'continue', source: source ?? { kind: 'user' } });
     }
+    if (from !== undefined) delete r.askedParentAt; // an agent's message (its parent's answer) reached it
     if (!resumed && from === undefined && (!source || source.kind === 'user')) this.userWrote(chatId, text);
     if (!resumed && !liveOnly && (r.s.run?.taskVersion ?? 1) > 1 && source?.kind !== 'app') text += `\n\n[Task version ${r.s.run!.taskVersion}: include taskVersion: ${r.s.run!.taskVersion} in agent_report.]`;
     // a new assignment from the Orchestrator: whether the user waits for it is decided again (#123)
@@ -1380,6 +1387,7 @@ export class ChatManager implements ChatService {
     if (r.heldResult) { this.releaseResult(r); if (r.heldResult) throw new Error('The previous result awaits an Orchestrator; deliver it before assigning again.'); }
     const previous = r.s.run;
     if (!previous) throw new Error('Only role chats can receive tasks.');
+    delete r.reportNudged; // a new assignment owes its own report (#152)
     const mode = options.mode ?? 'continue', at = Date.now();
     this.deliveryPolicy(options.deliveryPolicy, !!r.s.parentId);
     if (options.doneWhen && (options.doneWhen.length > 12 || options.doneWhen.some(x => typeof x !== 'string' || !x.trim() || x.length > 300))) throw new Error('Invalid task criteria.');
@@ -1953,6 +1961,58 @@ export class ChatManager implements ChatService {
     }
     log.info('chats', 'delegation reported', { chat: chatId, data: { parent: parentId, outcome: result.outcome, met, criteria: result.doneWhen.length } });
     return { parentId, delivered: !!parent };
+  }
+
+  /** agent_ask_parent (agents/delegation.ts): the child waits for its parent's answer, not on its report (#152). */
+  askedParent(chatId: string): void {
+    const r = this.chats.get(chatId);
+    if (r) r.askedParentAt = Date.now();
+  }
+
+  /** A delegated child that owes its result and has nothing left that would bring it (#152): its turn ended clean and
+   *  idle, with no question, permission, own child, background task or parent's answer pending, and its last answer
+   *  does not wait for a person. The first time it is told, once, to call agent_report (with the full tool name, #144);
+   *  the second time, or when its engine died with an error, the app closes the delegation itself: a result "blocked",
+   *  noReport, its last answer as output, every criterion not met, delivered to the parent like a report, so the
+   *  parent wakes and the tree's counters agree. */
+  private owedReport(r: Rec, why: 'idle' | 'exit'): void {
+    const d = r.s.delegation;
+    if (!d || !r.s.parentId || d.result || r.s.closedAt || this.quitting || r.archiving || this.chats.get(r.s.id) !== r) return;
+    if (why === 'idle') {
+      const last = r.s.lastResult;
+      if (!last || last.isError || last.interrupted || r.session?.busy || r.working || r.pending.size > 0 || r.s.queued || r.handoffTurn || r.deliveryHolds) return;
+      if ((r.s.background ?? 0) > 0 || r.s.waitsOn || r.s.waitsOnWork || r.askedParentAt !== undefined || this.delegatedBusy(r.s.id) || (r.s.agentChildren?.active ?? 0) > 0) return;
+      if (r.s.plan?.phase === 'proposed' || r.s.plan?.phase === 'asking' || r.s.plan?.phase === 'revising') return;
+      if (!r.reportNudged) {
+        r.reportNudged = true;
+        log.info('chats', 'delegated chat ended its turn without agent_report: told once', { chat: r.s.id, data: { parent: r.s.parentId } });
+        const text = `${APP_EVENT_LABEL}\nIl tuo turno è finito senza agent_report e il tuo genitore aspetta il risultato. Chiamalo ora una volta: mcp__second-brain__agent_report (se è differito, caricalo prima con ToolSearch), con outcome done, partial o blocked e doneWhen per ogni criterio. Se stai aspettando una persona, chiedilo con il pannello delle domande.`;
+        void this.send(r.s.id, text, undefined, false, 'second-brain', false, { kind: 'app' }).catch(e => {
+          log.warn('chats', 'report reminder not delivered', { chat: r.s.id, cause: errText(e), hint: 'the delegation is closed without a report instead' });
+          this.closeWithoutReport(r, 'idle');
+        });
+        return;
+      }
+    }
+    this.closeWithoutReport(r, why);
+  }
+
+  private closeWithoutReport(r: Rec, why: 'idle' | 'exit'): void {
+    const d = r.s.delegation, run = r.s.run;
+    if (!d || !r.s.parentId || d.result || r.s.closedAt) return;
+    const criteria = run?.taskContract?.doneWhen ?? d.doneWhen, answer = lastAnswer(r.items).trim();
+    const result: DelegationResult = {
+      outcome: 'blocked', summary: why === 'exit' ? 'Finita con un errore del motore, senza agent_report.' : 'Finita senza agent_report: il risultato è il suo ultimo messaggio.',
+      output: answer ? answer.slice(0, RESULT_OUTPUT_MAX) : '(nessun testo)', doneWhen: criteria.map(criterion => ({ criterion, met: false, evidence: 'non riportato: la chat è finita senza agent_report' })),
+      ...((run?.taskVersion ?? 1) > 1 ? { taskVersion: run!.taskVersion! } : {}),
+    };
+    try { this.reportDelegation(r.s.id, result); }
+    catch (e) { log.warn('chats', 'delegation not closed without report', { chat: r.s.id, cause: errText(e), hint: 'the parent sees the child as stopped; close it by hand' }); return; }
+    r.s.delegation = { ...r.s.delegation!, result: { ...r.s.delegation!.result!, noReport: true } };
+    this.endRunOf(r, 'closed');
+    this.persist();
+    this.updated(r);
+    log.warn('chats', 'delegated chat ended without agent_report', { chat: r.s.id, cause: why === 'exit' ? 'its engine stopped with an error' : 'two turns ended without agent_report', hint: 'its last answer went to the parent as a blocked result', data: { parent: r.s.parentId } });
   }
 
   /** A child's result for its parent: while siblings still owe theirs, it waits (at most CHILD_RESULTS_MS) so the parent
@@ -3205,6 +3265,7 @@ export class ChatManager implements ChatService {
         this.persist();
         this.updated(r);
         this.releaseResult(r); // its engine is gone: a held result never waits for a turn end that will not come
+        if (error) this.owedReport(r, 'exit'); // a delegated child that died owes nothing more: its parent is told (#152)
         const onCrash = this.opts.onCrash;
         if (crashed && error && onCrash) this.hook('onCrash', () => onCrash(chatId, error));
       },
@@ -3240,6 +3301,7 @@ export class ChatManager implements ChatService {
         r.turnSinceDone = false;
         const on = this.opts.onDone;
         if (on) this.hook('onDone', () => on(r.s.id));
+        this.owedReport(r, 'idle');
       }
       // a Cursor model change or an Orchestrator role change asked mid-turn: reopen now that the turn is over
       if (p.state === 'idle' && r.reopen && r.session && !r.session.busy) {

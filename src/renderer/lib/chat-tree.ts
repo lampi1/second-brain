@@ -53,13 +53,15 @@ export function visibleTree(nodes: readonly TreeNode[], collapsed: Readonly<Reco
   return nodes.filter(n => !hidden.has(n.id));
 }
 
-export type ChildState = 'start' | 'run' | 'wait' | 'queued' | 'err' | 'stall' | 'refused' | 'done' | 'partial' | 'blocked' | 'closed';
+export type ChildState = 'start' | 'run' | 'wait' | 'queued' | 'err' | 'stall' | 'refused' | 'done' | 'partial' | 'blocked' | 'noreport' | 'closed';
 type StateRow = Pick<ChatSummary, 'state' | 'pending' | 'queued' | 'closedAt' | 'delegation'>;
 /** Where a delegated chat stands, for its card (DelegationCard.tsx, the states of the tree design): its result once it
  *  reported; otherwise asking the user, queued, failed, starting, working; a turn that ended without agent_report is
  *  "fermo" (it owes its result), or "permesso negato" when the app refused it a permission above its parent's. */
 export function childState(c: StateRow, refused = false): ChildState {
   const r = c.delegation?.result;
+  // the app closed it: it ended without agent_report (#152)
+  if (r?.noReport) return 'noreport';
   if (r) return r.outcome === 'done' ? 'done' : r.outcome;
   if (c.closedAt || c.state === 'closed') return 'closed';
   if (c.state === 'waiting' || c.pending > 0) return 'wait';
@@ -70,4 +72,10 @@ export function childState(c: StateRow, refused = false): ChildState {
   return refused ? 'refused' : 'stall';
 }
 /** Still on the delegated work (a full thread card); the others fold into a compact row. */
-export const activeState = (s: ChildState): boolean => s !== 'done' && s !== 'partial' && s !== 'blocked' && s !== 'closed';
+export const activeState = (s: ChildState): boolean => s !== 'done' && s !== 'partial' && s !== 'blocked' && s !== 'noreport' && s !== 'closed';
+/** A parent's children counted by state, one source for every counter (KidsBar, the sidebar tree, #152): working,
+ *  waiting for the user, stopped (a turn ended without a result, an error, a refused permission) and finished. */
+export function kidCounts(states: readonly ChildState[]): { run: number; wait: number; stuck: number; done: number } {
+  const n = (...of: ChildState[]) => states.filter(s => of.includes(s)).length;
+  return { run: n('run', 'start', 'queued'), wait: n('wait'), stuck: n('stall', 'err', 'refused'), done: n('done', 'partial') };
+}
