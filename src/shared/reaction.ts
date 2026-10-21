@@ -6,7 +6,7 @@
 // (roleFrame) and renderer/components/ChatItems.tsx.
 
 /** what the role frame tells every chat */
-export const REACTION_RULE = 'When the user\'s message needs no written answer (thanks, ok, a plain acknowledgement or confirmation), reply with ONE emoji only and nothing else (👍 ✅ 🙏 👌 🎉 or 👀 when you start on it): the app shows it as a reaction on their message. Never use it to skip an answer, a result, a question or a report that is due.';
+export const REACTION_RULE = 'When the user\'s message needs no written answer (thanks, ok, a plain acknowledgement or confirmation), reply with ONE emoji only and nothing else (👍, also when you start on it; ✅ 🙏 👌 🎉; never 👀): the app shows it as a reaction on their message. Never use it to skip an answer, a result, a question or a report that is due.';
 
 /** one or two emoji with optional skin tones, joiners and variation selectors, and no other text */
 const ONLY_EMOJI = /^(?:\p{Extended_Pictographic}(?:\p{Emoji_Modifier}|️|‍\p{Extended_Pictographic})*\s*){1,2}$/u;

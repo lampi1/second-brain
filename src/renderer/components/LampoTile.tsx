@@ -3,19 +3,20 @@
 // card (its engine and model, the chip above to change it) with read-only tools (main: ChatManager LAMPO_POLICY, plan
 // mode): it answers questions, explanations and quick reads in seconds, sees the Orchestrator's chat like a "btw"
 // (ADR 0106), changes nothing and starts no work. «Fanne un lavoro» drafts the last question and its answer into the Orchestrator's
-// input (never sent by itself): work still starts only from the Orchestrator (ADR 0083). Used by OrchestratorOverlay.tsx.
+// input (never sent by itself): work still starts only from the Orchestrator (ADR 0083). The eraser on its head empties its
+// context in one click, like /clear (clearFlash in actions.ts). Used by OrchestratorOverlay.tsx.
 import { useEffect, useRef, useState } from 'react';
 import { isBusy } from '../store/state';
 import { createChat, stop, useApp } from '../store/store';
 import { t } from '../i18n';
-import { brainBridge } from '../actions';
+import { brainBridge, clearFlash } from '../actions';
 import { ItemList, turnActivity, Typing } from './ChatItems';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { IconButton, StatePill } from './ui';
 import { AgentAvatar } from './AgentAvatar';
 import { ModelChip } from './ModelChip';
 import { FLASH_ID } from '@shared/roles';
-import { IconStop } from './Icons';
+import { IconEraser, IconStop } from './Icons';
 import { lastExchange } from '../lib/lampo';
 
 /** Lampo's tile, or the button that opens it (on the Orchestrator's engine, the user's fast model). */
@@ -61,6 +62,7 @@ export function LampoTile({ onWork }: { onWork: () => void }) {
         <span className="sp" />
         <button type="button" className="btn btn-ghost btn-s" disabled={!last || busy} title={t('lampo.toWorkTip')} onClick={toWork} data-testid="lampo-to-work">{t('lampo.toWork')}</button>
         {busy && <IconButton label={t('dialogs.orchestrator.stopLabel')} tone="danger" onClick={() => void stop(lampo.id)} testid="lampo-stop"><IconStop size={14} /></IconButton>}
+        <IconButton label={t('lampo.clear')} disabled={busy || !items?.length} onClick={() => void clearFlash(lampo.id)} testid="lampo-clear"><IconEraser size={14} /></IconButton>
       </div>
       <div className="chat-topic-row"><ModelChip chat={lampo} profileId={FLASH_ID} testid="lampo-model" /><span className="chat-topic">{t('lampo.hint')}</span></div>
     </header>

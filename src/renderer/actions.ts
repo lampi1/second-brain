@@ -20,7 +20,7 @@ import { floatsBehindPopup, focusLayer, inLayer, orchestratorCardOnScreen, visib
 import { makeLink, parseLink, visitSection } from './lib/notify';
 import { touch } from './lib/autoclose';
 import { isBusy } from './store/state';
-import { app, closeChat, closeTab, continueChat, createRoutedChat, dispatch, setChat, setSetting, stop, stopAll } from './store/store';
+import { app, closeChat, closeTab, continueChat, createChat, createRoutedChat, dispatch, setChat, setSetting, stop, stopAll } from './store/store';
 import { orchestratorIdOf } from './lib/orchestrator-route';
 import { questionsModalOn } from './lib/questions';
 import { answerLater, openQueue, resumeQuestions } from './lib/later';
@@ -123,6 +123,33 @@ export function askClearOrchestrator(chatId: string | null = orchestratorId()): 
     body: 'Riparte vuoto sullo stesso motore e rilegge da sola la memoria (now.md). La conversazione di adesso resta tra le chat chiuse, da consultare.',
     confirmLabel: 'Pulisci', onConfirm: () => { void renewOrchestrator(chatId, c.harness, false, true); },
   });
+}
+
+/** The quick clear, like /clear in Claude Code (the owner, 2026-10-21: «un clear rapido sia su flash che su orchestrator. Che
+ *  svuota completamente il contesto», «non occupare spazio nel prompt»): one click on the column's head, no confirm. The
+ *  Orchestrator = "Pulisci" without its dialog (a new one on the same engine, the old one closed among the Chiuse with
+ *  Riapri); Flash = a new Flash on its card, the old one closed with its answers. Not mid-turn: the head disables it. */
+let orchestratorClearing = false, flashClearing = false;
+export async function clearOrchestratorNow(chatId: string): Promise<void> {
+  const c = app.get().chats[chatId];
+  if (!c?.isOrchestrator || c.closedAt || isBusy(c) || orchestratorClearing) return;
+  orchestratorClearing = true;
+  try { await renewOrchestrator(chatId, c.harness, false, true); } finally { orchestratorClearing = false; }
+}
+
+export async function clearFlash(chatId: string): Promise<void> {
+  const c = app.get().chats[chatId];
+  if (!c?.quick || c.closedAt || isBusy(c) || flashClearing) return;
+  flashClearing = true;
+  try {
+    dispatch({ type: 'chat:updated', chat: await sb.invoke('chat:archive', { chatId, auto: false }) });
+    // engine and model come from Flash's card (main: ChatManager.flashAgent); the harness is only a fallback
+    const next = await createChat({ harness: c.harness, cwd: c.cwd, quick: true });
+    // it could not open: the old Flash comes back where it was (no reopenChat: that moves the user to the grid)
+    if (!next) { dispatch({ type: 'chat:updated', chat: await sb.invoke('chat:reopen', { chatId }) }); return; }
+    toast(t('lampo.cleared'), 'info');
+  } catch (e) { toast(t('lampo.clearFailed', { error: errText(e) }), 'err'); }
+  finally { flashClearing = false; }
 }
 
 export const reqKey = (r: Pick<PendingRequest, 'chatId' | 'id'>) => `${r.chatId}/${r.id}`;
