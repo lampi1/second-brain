@@ -131,6 +131,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   "Discusso", which leads back to the Orchestrator. The command card's "Apri chat" (an existing chat) is now "Vai alla
   chat".
 ### Fixed
+- **Pulse's Apply works and says why when it cannot** (#128): a role keeps the model it already runs with when only
+  its text changes (Pulse's preset 'sonnet' was refused as unknown, so every learned rule failed); a refused proposal
+  now shows and logs its real reason instead of «Proposta non applicata».
 - **Read-only roles and the brain's node tools** (#93): a role limited to read-only commands runs the node scripts
   listed in `read-only-tools.md` in the brain (exact path, links resolved; any other script stays refused; only you
   edit the list). `agent_report` works in a chat the Orchestrator opened with `app_create_chat` (it reports to the

@@ -54,6 +54,16 @@ describe('role catalog', () => {
     expect(() => catalog.save(edit(artisan, { tier: 'top', tierMax: 'light' }), 'artisan')).toThrow();
     expect(() => catalog.save(edit(artisan, { model: 'nope' }), 'artisan')).toThrow('modello');
   });
+  it('keeps the model a role already runs with when only its text changes: Pulse on the preset alias (#128)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-catalog-')); roots.push(dir);
+    const catalog = new AgentCatalogService({ userData: dir, models, pulsePreset: () => ({ engine: 'claude', model: 'sonnet' }) });
+    const pulse = catalog.list().profiles.find(p => p.id === 'pulse')!;
+    expect(pulse.model).toBe('sonnet'); // not among the engine's known models (m-top, m-mid)
+    const saved = catalog.save({ ...pulse, instructions: `${pulse.instructions}\nRiduci le carte idea.` }, 'pulse');
+    expect(saved).toMatchObject({ model: 'sonnet', version: 2 });
+    expect(saved.instructions.endsWith('Riduci le carte idea.')).toBe(true);
+    expect(() => catalog.save({ ...saved, model: 'haiku' }, 'pulse')).toThrow('modello'); // a new unknown choice is still refused
+  });
   it('reads roles.json tolerantly: an unknown id is left out, a broken file is kept and blocks writes', () => {
     const { dir, make, catalog } = setup(), file = path.join(dir, 'roles.json');
     const raw = JSON.parse(fs.readFileSync(file, 'utf8'));

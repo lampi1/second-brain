@@ -93,7 +93,9 @@ export function AgentStudio({ profile, children }: { profile: AgentProfile; chil
   }, [!!editing]);
   const change = (patch: Partial<AgentDraft>) => setEditing(p => (p ? { ...p, ...patch } : p));
   const choice = catalog?.models.find(e => e.engine === editing?.engine);
-  const knownModel = !!choice && (editing?.model === null || choice.modelSelectable && choice.models.some(m => m.id === editing?.model));
+  // the model the role already runs with stays allowed (main's check, #128); only a new choice must be a known one
+  const keptModel = !!editing && editing.engine === shown.engine && editing.model === shown.model;
+  const knownModel = !!choice && (editing?.model === null || keptModel || choice.modelSelectable && choice.models.some(m => m.id === editing?.model));
   const stale = !!editing && shown.updatedAt !== base;
   const tierOk = !!editing && tierRank(editing.tier) <= tierRank(editing.tierMax);
   const canSave = !!editing && !stale && !shown.trial && tierOk && !!choice?.enabled && !!choice.trusted && knownModel && !busy && !catalog?.problem;

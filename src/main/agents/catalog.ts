@@ -257,7 +257,10 @@ export class AgentCatalogService {
       const e = this.d.models().find(x => x.engine === engine);
       if (!e) throw new Error('Il motore selezionato non è disponibile.');
       if (model !== null && !e.modelSelectable) throw new Error(e.modelReason ?? 'La scelta del modello non è supportata da questo motore. Usa il modello del livello.');
-      if (model !== null && !e.models.some(m => m.id === model)) throw new Error('Il modello non è tra quelli noti del motore. Aggiorna le disponibilità o usa il modello del livello.');
+      // a model the role already runs with is kept as it is: only a new choice must be one the engine is known to have
+      // (#128: Pulse's preset alias 'sonnet' is not in the observed list, and refused every rule its proposals added)
+      const kept = !!base && base.engine === engine && (base.model ?? null) === model;
+      if (model !== null && !kept && !e.models.some(m => m.id === model)) throw new Error('Il modello non è tra quelli noti del motore. Aggiorna le disponibilità o usa il modello del livello.');
       if (p.effort && !e.effort) throw new Error('Questo motore non supporta la scelta dell’effort.');
     }
     // the API engine has no tools: a role on it reads only (every class allowed by default, ADR 0085, means nothing there)
