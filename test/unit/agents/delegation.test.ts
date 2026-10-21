@@ -925,3 +925,26 @@ describe('versioned task continuity and canonical results', () => {
     expect(run.continuedFrom).toBeUndefined();
   });
 });
+
+
+describe('explicit independent review reports', () => {
+  const report = { outcome: 'done', summary: 'Assessment finished', output: 'Evidence unavailable; limitations recorded', doneWhen: [], verdict: 'partial', verified: 'no' };
+  it('validates the review pair without deriving verification from completion', () => {
+    expect(checkResult(report, [])).toMatchObject({ verdict: 'partial', verified: 'no' });
+    expect(() => checkResult({ ...report, verified: undefined }, [])).toThrow(/together/);
+    expect(() => checkResult({ ...report, verdict: 'unknown' }, [])).toThrow(/verdict/);
+    expect(() => checkResult({ ...report, verified: ['yes'] }, [])).toThrow(/verification/);
+  });
+  it('refuses self-assessment fields from ordinary roots, including user-started Sentinel', async () => {
+    const f = fixture();
+    const c = await f.root('sentinel');
+    await expect(f.call('agent_report', c.id, report)).rejects.toThrow(/app-owned independent reviewer/);
+  });
+  it('requires explicit review fields for an app-created sampled Sentinel', async () => {
+    const f = fixture();
+    const original = await f.root('scout');
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'sentinel', reviewOf: original.run!.runId, doneWhen: [], prompt: 'Review evidence' }, 'app');
+    await expect(f.call('agent_report', c.id, { ...report, verdict: undefined, verified: undefined })).rejects.toThrow(/explicit verdict/);
+    await expect(f.call('agent_report', c.id, report)).resolves.toMatchObject({ reported: true });
+  });
+});

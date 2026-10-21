@@ -283,6 +283,9 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     const self = chat(callerId);
     // `remember` is the role memory's, not the result's: the result keeps its exact shape (shared/delegation.ts checkResult)
     const { remember: _remember, ...a } = all, write = rememberLines(all, self);
+    const review = !!self?.run?.reviewOf && self.run.startedBy === 'app' && ['sentinel', 'judge'].includes(self.run.agentId) && !self.parentId && !self.delegation && !self.isOrchestrator;
+    if ((a.verdict !== undefined || a.verified !== undefined) && (!review || self?.closedAt || self?.run?.endedAt !== undefined)) throw new Error('Review fields require an active app-owned independent reviewer run.');
+    if (review && (a.verdict === undefined || a.verified === undefined)) throw new Error('Independent reviews require explicit verdict and verified fields.');
     // Root contracts are host-owned. Direct-user and explicit app replay roots retain their results locally.
     if (self && !self.delegation && !self.parentId && !self.isOrchestrator && self.run && (self.run.startedBy === 'orchestrator' || self.run.startedBy === 'user' || self.run.taskContract?.reportExpected) && d.chats.reportRoot) {
       const done = d.chats.reportRoot(callerId, checkResult(a, self.run.taskContract?.doneWhen ?? [])), remembered = write();
@@ -391,6 +394,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     description: 'Your one result for the chat that started you (your parent, or the Orchestrator for a chat it opened): outcome (done | partial | blocked), summary (one or two sentences), output (the deliverable), doneWhen (every criterion of your contract, exactly as written, with met and evidence), optional questions, optional remember (lines for your role\'s memory). It reaches your parent at once; call it once, at the end. The app shows output in your chat as your answer: do not write it in the chat too.',
     inputSchema: { type: 'object', required: ['outcome', 'summary', 'output', 'doneWhen'], additionalProperties: false, properties: {
       outcome: { type: 'string', enum: ['done', 'partial', 'blocked'] }, summary: str, output: str,
+      verdict: { type: 'string', enum: ['success', 'partial', 'fail'], description: 'Only app-owned independent reviews: assessment of the reviewed work, separate from completion of your review.' },
+      verified: { type: 'string', enum: ['yes', 'partial', 'no'], description: 'Only with verdict: yes only when you independently checked the evidence; never inferred from completing the review.' },
       taskVersion: { type: 'integer', minimum: 1, description: 'Current task version supplied with the assignment; required after a follow-up. Stale reports are refused.' },
       doneWhen: { type: 'array', items: { type: 'object', required: ['criterion', 'met'], additionalProperties: false, properties: { criterion: str, met: { type: 'boolean' }, evidence: str } } },
       questions: { type: 'array', items: str, maxItems: 8 },

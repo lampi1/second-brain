@@ -144,11 +144,18 @@ describe('run feedback and Annulla', () => {
     work.model = 'model-a';
     const judge = w.runs.start({ agentId: 'sentinel', chatId: 'c_judge', version: 1, goal: 'review', startedBy: 'app', startedAt: T0, costKnown: true, reviewOf: work.runId });
     judge.model = 'model-b'; judge.endedAt = T0 + 1; judge.endReason = 'completed';
-    judge.report = { at: T0 + 1, outcome: 'done', verified: 'yes', summary: 'ok' };
+    judge.report = { at: T0 + 1, outcome: 'done', verified: 'yes', summary: 'ok', verdict: 'success' };
     const opinion = await w.feedback.recordFeedback({ runId: work.runId, verdict: 'success', notes: 'fine', evidence: [] }, 'app:judge');
     expect(opinion.outcome.basis).toBe('orchestrator-opinion');
     const reviewed = await w.feedback.recordFeedback({ runId: work.runId, verdict: 'success', notes: 'verified', evidence: [{ kind: 'run', ref: judge.runId, at: T0 }] }, 'app:judge');
     expect(reviewed.outcome.basis).toBe('reviewed-evidence');
+    const mismatched = await w.feedback.recordFeedback({ runId: work.runId, verdict: 'fail', notes: 'different verdict', evidence: [{ kind: 'run', ref: judge.runId, at: T0 }] }, 'app:judge');
+    expect(mismatched.outcome.basis).toBe('orchestrator-opinion');
+    judge.endReason = 'closed';
+    const closed = await w.feedback.recordFeedback({ runId: work.runId, verdict: 'success', notes: 'interrupted review', evidence: [{ kind: 'run', ref: judge.runId, at: T0 }] }, 'app:judge');
+    expect(closed.outcome.basis).toBe('orchestrator-opinion');
+    judge.endReason = 'completed';
+    judge.startedBy = 'user'; // independent manual reviews remain valid evidence
     judge.model = 'model-a';
     const same = await w.feedback.recordFeedback({ runId: work.runId, verdict: 'success', notes: 'same model', evidence: [{ kind: 'run', ref: judge.runId, at: T0 }] }, 'app:judge');
     expect(same.outcome.basis).toBe('reviewed-evidence'); // independence is the review's clean session, not another model
@@ -158,7 +165,7 @@ describe('run feedback and Annulla', () => {
     expect(w.runs.get(work.runId)!.outcome).toMatchObject({ verdict: 'success', basis: 'reviewed-evidence' }); // an opinion never overwrites it
     // a review a Judge ran before ADR 0100 still counts
     const old = w.runs.start({ agentId: 'judge', chatId: 'c_old_judge', version: 1, goal: 'review', startedBy: 'app', startedAt: T0, costKnown: true, reviewOf: work.runId });
-    old.endedAt = T0 + 2; old.endReason = 'completed'; old.report = { at: T0 + 2, outcome: 'done', verified: 'yes', summary: 'ok' };
+    old.endedAt = T0 + 2; old.endReason = 'completed'; old.report = { at: T0 + 2, outcome: 'done', verified: 'yes', summary: 'ok', verdict: 'success' };
     expect((await w.feedback.recordFeedback({ runId: work.runId, verdict: 'success', notes: 'old', evidence: [{ kind: 'run', ref: old.runId, at: T0 }] }, 'app:judge')).outcome.basis).toBe('reviewed-evidence');
   });
   it('Annulla restores the version before an applied change, and a stale button is refused', () => {
