@@ -1,0 +1,11 @@
+/* The model a column runs on (ModelChip.tsx, ADR 0107): the engine's mark, the model and effort, a menu to change it. */
+.model-chip-wrap { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+.model-chip { display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%; height: 22px; padding: 0 8px 0 6px;
+  border-radius: 99px; border: 1px solid var(--border-2); background: var(--surface-2); color: var(--text-2);
+  font-size: 11.5px; font-weight: 500; white-space: nowrap; cursor: pointer; }
+.model-chip:hover:not(:disabled) { color: var(--text); border-color: var(--border-3, var(--border-2)); background: var(--surface-3); }
+.model-chip:disabled { cursor: default; opacity: 1; }
+.model-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.model-chip-text { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.model-chip-caret { font-size: 9px; color: var(--text-3); }
+.model-chip-error { color: var(--danger, #e5484d); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -52,9 +52,10 @@ tier (ADR 0100):
 agent had when it asked. Every job gets an estimate up front ("~4 min · ~0,12 $ · from 12 similar tasks") and a
 verdict at the end ("~4 min → 6 min ✓").
 
-**⚡ Lampo, for quick questions.** A second tab beside the Orchestrator answers in seconds with read-only tools: it
+**⚡ Flash, for quick questions.** A second tab beside the Orchestrator answers in seconds with read-only tools: it
 explains, reads and searches, and changes nothing. Like a "btw" it sees the Orchestrator's conversation, so you can
-ask about the work in progress (ADR 0106). When the answer turns into work, **Fanne un lavoro** hands it to
+ask about the work in progress (ADR 0106). It is an agent with its own card and model; both columns show their model
+in the header and change it with a click (ADR 0107). When the answer turns into work, **Fanne un lavoro** hands it to
 the Orchestrator (ADR 0105).
 
 **✅ Judged by facts, not by you.** A run counts as a success when its report met every done criterion, you corrected

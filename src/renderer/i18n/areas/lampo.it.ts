@@ -1,15 +1,18 @@
-// Italian texts of «Lampo», the quick lane beside the Orchestrator (ADR 0105): the column's tabs, the empty state, the
-// lane's hint and «Fanne un lavoro».
+// Italian texts of «Flash» (was «Lampo»), the quick lane beside the Orchestrator (ADR 0105, 0107): the column's tabs, the
+// empty state, the lane's hint, «Fanne un lavoro» and the model chip of both columns (ModelChip).
 export const lampoIt = {
-  'lampo.tab': 'Lampo',
+  'lampo.tab': 'Flash',
   'lampo.tabOrchestrator': 'Orchestrator',
-  'lampo.tabsLabel': 'Orchestrator o Lampo',
-  'lampo.title': 'Lampo',
-  'lampo.hint': 'Come un «btw»: vede la chat dell’Orchestrator, risponde al volo, non cambia nulla e non avvia lavori.',
-  'lampo.intro': 'Per domande, spiegazioni e letture veloci, anche sul lavoro in corso: vede la chat dell’Orchestrator e risponde subito, con un modello rapido e solo strumenti di lettura. Quando serve un lavoro vero, «Fanne un lavoro» lo passa all’Orchestrator.',
-  'lampo.start': 'Apri Lampo',
+  'lampo.tabsLabel': 'Orchestrator o Flash',
+  'lampo.title': 'Flash',
+  'lampo.hint': 'Come un «btw»: vede la chat dell’Orchestrator, solo lettura.',
+  'lampo.intro': 'Per domande, spiegazioni e letture veloci, anche sul lavoro in corso: vede la chat dell’Orchestrator e risponde subito, con il suo modello (lo scegli qui sopra o nella sua scheda in Agenti) e solo strumenti di lettura. Quando serve un lavoro vero, «Fanne un lavoro» lo passa all’Orchestrator.',
+  'lampo.start': 'Apri Flash',
   'lampo.empty': 'Chiedi qualcosa: risponde in pochi secondi.',
   'lampo.toWork': 'Fanne un lavoro',
-  'lampo.toWorkTip': 'Prepara nell’Orchestrator una bozza con la tua ultima domanda e la risposta di Lampo: la mandi tu.',
-  'lampo.draft': (p: { question: string; answer: string }) => `Da Lampo. La mia domanda: «${p.question}»${p.answer ? `\nLa sua risposta: «${p.answer}»` : ''}\nFanne un lavoro: `,
+  'lampo.toWorkTip': 'Prepara nell’Orchestrator una bozza con la tua ultima domanda e la risposta di Flash: la mandi tu.',
+  'lampo.draft': (p: { question: string; answer: string }) => `Da Flash. La mia domanda: «${p.question}»${p.answer ? `\nLa sua risposta: «${p.answer}»` : ''}\nFanne un lavoro: `,
+  'modelChip.tip': (p: { engine: string; model: string }) => `${p.engine} · ${p.model}: clicca per cambiare modello`,
+  'modelChip.label': (p: { name: string }) => `Modello di ${p.name}`,
+  'modelChip.tier': 'Predefinito',
 };
