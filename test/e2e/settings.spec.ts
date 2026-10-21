@@ -202,6 +202,8 @@ test('Account e strumenti: an engine turns on by the user\'s click, its API key 
   await codex.getByRole('button', { name: 'Configura', exact: true }).click();
   await codex.getByRole('button', { name: 'Attiva', exact: true }).click();
   await expect.poll(async () => (await get()).engineOn.codex).toBe(true);
+  // the user's click records the engine's fingerprint (engines/trust.ts)
+  await expect.poll(() => JSON.parse(fs.readFileSync(path.join(userData, 'engine-trust.json'), 'utf8')).codex).toMatch(/^[0-9a-f]{16}$/);
   await expect(codex.locator('.st-state')).toHaveText('Disponibile');
   // Gemini CLI and Kimi were removed from the app (ADR 0046): no rows
   await expect(page.getByTestId('st-tool-gemini')).toHaveCount(0);
