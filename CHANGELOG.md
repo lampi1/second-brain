@@ -6,6 +6,16 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- **One Manutenzione for the brain and the app** (#150, ADR 0112): the button is also on the Orchestrator's head; the
+  pass you start also groups the app's log warnings and errors (each with «Noto, ignora») and sends the result to the
+  Orchestrator, which has a Herald comment on or open the issues, with your permission.
+- **A delegated chat that ends without its report no longer blocks its parent** (#152, ADR 0113): it is reminded once,
+  then closed as «finita senza report» with its last answer; the tree's counters agree and stopped children count as
+  «fermi». The Orchestrator card shows today's chats by state and its cost apart from theirs (#153).
+- **Agents**: agent_report named with its full MCP name and its limits in the schema (#144, #147); the Herald asks you
+  in its chat when a send is denied (#145); roles load the app's skills whatever appRules says (#146); the Orchestrator
+  reads a chat before saying how it stands (#151). MCP confirmations in Claude chats show as a panel (#148); the Task
+  page logs the real error of a failed news read (#149).
 - **One Log page instead of the Changelog** (owner, 2026-10-21; ADR 0111): under App → Log (G N) every task reads as a
   chain (who chose which agent and why, its work with cost, tools and errors, the result, the verification), next to a
   live stream of everything else: classifiers, estimates, errors and memory written to the brain, Battito, the brain's
