@@ -34,9 +34,10 @@ function RoleCurve({ r, from, week, max }: { r: LearningRole; from: number; week
   const id = useId();
   const W = 320, H = 116, L = 26, R = 8, T = 10, B = 20, weeks = r.weeks.length;
   const pts = curve(r), runs = r.weeks.reduce((n, w) => n + w.runs, 0);
-  const X = (i: number) => L + (weeks > 1 ? (i * (W - L - R)) / (weeks - 1) : 0);
+  // the plot spans the whole weeks (from the first week's start to now): a week's point at its middle, a change at its time
+  const X = (i: number) => L + ((i + 0.5) * (W - L - R)) / weeks;
   const Y = (v: number) => T + (H - T - B) * (1 - v / max);
-  const XT = (at: number) => L + ((at - from) / (week * (weeks - 1))) * (W - L - R);
+  const XT = (at: number) => L + ((at - from) / (week * weeks)) * (W - L - R);
   const last = pts.at(-1);
   return <article className="lr-curve" data-testid={`lr-curve-${r.id}`}>
     <header><h4>{r.name}</h4><span>{t('learn.runs', { n: runs })}{last ? ` · ${num(last.mean)}` : ''}</span></header>
@@ -59,7 +60,7 @@ function RoleCurve({ r, from, week, max }: { r: LearningRole; from: number; week
         <title>{t('learn.weekTip', { week: day(p.start), mean: num(p.mean), n: p.runs })}</title>
       </circle>)}
       <text className="lr-tick" x={L} y={H - 5}>{day(from)}</text>
-      <text className="lr-tick" x={W - R} y={H - 5} textAnchor="end">{day(from + (weeks - 1) * week)}</text>
+      <text className="lr-tick" x={W - R} y={H - 5} textAnchor="end">{t('learn.today')}</text>
     </svg>
   </article>;
 }
@@ -88,7 +89,7 @@ export function LearningPage() {
   return <div className="bm-page agent-overview lr-page" data-testid="learning-page">
     <PageHead title={t('learn.title')} lead={t('learn.lead')} />
     {error && <p role="alert">{error}</p>}
-    {state && !state.root ? <p className="bm-empty">{t('bm.noBrain')}</p> : learning && <>
+    {state && !state.root ? <p className="bm-empty">{t('bm.noBrain')}</p> : state && !learning ? <p className="bm-empty" data-testid="lr-unavailable">{t('learn.unavailable')}</p> : learning && <>
       <Counter counts={learning.counts} filter={filter} onFilter={v => { setFilter(v); setLimit(20); }} />
       {worse.length > 0 && <section className="bm-panel lr-worse" aria-labelledby="lr-worse-h" data-testid="lr-worse">
         <header className="bm-panel-head"><div><h3 id="lr-worse-h">{t('learn.worse')}</h3><p>{t('learn.worseLead')}</p></div></header>

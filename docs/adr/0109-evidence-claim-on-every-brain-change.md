@@ -46,3 +46,10 @@ checkpoints, and for one page that shows the real progress without levels.
   page says this under the list.
 - Not done here: a per-mechanism verdict (all lessons together), the reviewer's calibration against the facts, a
   held-out replay bench at night (ADR 0104, Consequences).
+
+## After the review (2026-10-21)
+- A skill merge (`target` «dropped>kept») is measured on the kept skill. A seed of an unknown shape in
+  `brain-changes.json` is dropped on load and sealed again; an entry without a seed is sealed once and kept.
+- A claim that fails is listed without it; the others keep theirs. The bootstrap intervals are cached per change and
+  checkpoint, so a page refresh does not redraw them. The curves span whole weeks up to «oggi», so a change of this
+  week sits at its time.

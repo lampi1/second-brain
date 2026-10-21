@@ -11,7 +11,7 @@ import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { MAINTENANCE_JOBS, type BrainChange } from '../../shared/brain-model';
 import { readLocal, writeLocal } from '../agents/local-store';
-import type { ClaimSeed } from './evidence';
+import { validSeed, type ClaimSeed } from './evidence';
 
 export interface FileSnapshot { file: string; before: string | null; after: string | null }
 /** A role's version before and after. */
@@ -47,6 +47,8 @@ export class ChangeLog {
     const raw = readLocal(this.file) as { changes?: StoredChange[] } | undefined;
     // entries of a kind this build does not know are skipped (they stay in the file until it rolls over)
     this.entries = Array.isArray(raw?.changes) ? raw!.changes.filter(c => c && typeof c.id === 'string' && Array.isArray(c.files) && JOBS.includes(c.job)) : [];
+    // a seed of a shape this build did not write is dropped: sealed again by sealMissing
+    for (const e of this.entries) { const s = validSeed(e.seed); if (s) e.seed = s; else delete e.seed; }
   }
   private persist(): void { writeLocal(this.file, { version: 1, changes: this.entries.slice(-MAX) }); }
 
@@ -72,6 +74,15 @@ export class ChangeLog {
     return structuredClone(entry);
   }
   all(): StoredChange[] { return structuredClone(this.entries); }
+  /** Seals the entries recorded without a seed (before ADR 0109, or a dropped one) once, and keeps it. */
+  sealMissing(sealer: Sealer): void {
+    let changed = false;
+    for (const e of this.entries) {
+      if (e.seed) continue;
+      try { const s = sealer(e); if (s) { e.seed = s; changed = true; } } catch { /* sealed at the next try */ }
+    }
+    if (changed) this.persist();
+  }
   /** The sealed seed of a change (older entries have none: sealed by the caller when shown). */
   seedOf(id: string): ClaimSeed | undefined { const s = this.entries.find(e => e.id === id)?.seed; return s ? structuredClone(s) : undefined; }
 

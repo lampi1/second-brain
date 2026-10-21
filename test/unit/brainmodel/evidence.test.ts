@@ -3,7 +3,7 @@
 // only at the checkpoints; an undone change reads «annullato»; the Apprendimento page counts verdicts and draws weekly
 // corrections per role with the changes on them.
 import { describe, expect, it } from 'vitest';
-import { BASELINE_MAX, claimOf, learningState, seal, WEEK, WEEKS } from '../../../src/main/brainmodel/evidence';
+import { BASELINE_MAX, claimOf, learningState, seal, validSeed, WEEK, WEEKS, type IntervalCache } from '../../../src/main/brainmodel/evidence';
 import type { AgentRun } from '../../../src/shared/agents';
 import type { BrainChange } from '../../../src/shared/brain-model';
 
@@ -30,11 +30,21 @@ describe('seal', () => {
     expect(seal({ kind: 'rule', action: 'create', target: 'rules/x.md' }, roles)).toEqual({ hypothesis: 'fewer', scope: [], skill: null });
     expect(seal({ kind: 'skill', action: 'create', target: 'note-di-rilascio' }, roles)).toEqual({ hypothesis: 'fewer', scope: ['artisan', 'scout'], skill: 'note-di-rilascio' });
     expect(seal({ kind: 'skill', action: 'update', target: 'note-di-rilascio' }, roles)).toMatchObject({ baselineSkill: true });
-    expect(seal({ kind: 'skill', action: 'merge', target: 'altro' }, roles)).toEqual({ hypothesis: 'not-more', scope: [], skill: 'altro', baselineSkill: true });
+    // a merge's target is «dropped>kept» (jobs.ts mergeSkills): measured on the kept skill and its users
+    expect(seal({ kind: 'skill', action: 'merge', target: 'vecchia>note-di-rilascio' }, roles)).toEqual({ hypothesis: 'not-more', scope: ['artisan', 'scout'], skill: 'note-di-rilascio', baselineSkill: true });
     expect(seal({ kind: 'skill', action: 'remove', target: 'note-di-rilascio' }, roles)).toEqual({ hypothesis: 'not-more', scope: ['artisan', 'scout'], skill: null });
     expect(seal({ kind: 'memory', action: 'merge', target: 'agents/scout/memory.md' }, roles)).toEqual({ hypothesis: 'not-more', scope: ['scout'], skill: null });
     expect(seal({ kind: 'memory', action: 'merge', target: 'memory/clienti.md' }, roles).scope).toEqual([]);
     expect(seal({ kind: 'agent', action: 'unlink', target: 'herald' }, roles).hypothesis).toBe('not-more');
+  });
+});
+
+describe('validSeed', () => {
+  it('keeps a seed this build wrote and drops any other shape', () => {
+    expect(validSeed({ hypothesis: 'fewer', scope: ['a'], skill: null })).toEqual({ hypothesis: 'fewer', scope: ['a'], skill: null });
+    expect(validSeed({ hypothesis: 'not-more', scope: [], skill: 's', baselineSkill: true })).toMatchObject({ baselineSkill: true });
+    for (const bad of ['x', null, 3, {}, { hypothesis: 'fewer', scope: 'a', skill: null }, { hypothesis: 'more', scope: [], skill: null }, { hypothesis: 'fewer', scope: [1], skill: null }, { hypothesis: 'fewer', scope: [], skill: 2 }])
+      expect(validSeed(bad)).toBeUndefined();
   });
 });
 
@@ -56,6 +66,15 @@ describe('claimOf', () => {
     // the same data, the same interval (seeded); a run past the checkpoint changes nothing
     expect(claimOf(change, seed, runs)).toEqual(c);
     expect(claimOf(change, seed, [...runs, run('artisan', AT + 400 * HOUR, 9)]).diff).toEqual(c.diff);
+  });
+  it('reuses a drawn interval until a side reaches its next checkpoint', () => {
+    const cache: IntervalCache = new Map(), runs = [...side('artisan', 50, -1, [2, 1, 3, 2]), ...side('artisan', 27, 1, [0, 1, 0, 0])];
+    const a = claimOf(change, seed, runs, cache);
+    expect(cache.size).toBe(1);
+    expect(claimOf(change, seed, [...runs, run('artisan', AT + 400 * HOUR, 0)], cache)).toMatchObject({ diff: a.diff, after: { n: 28 } });
+    expect(cache.size).toBe(1);
+    expect(claimOf(change, seed, [...runs, ...side('artisan', 13, 1, [0], {})], cache).after.judged).toBe(40);
+    expect(cache.size).toBe(2);
   });
   it('«peggiora» when the corrections went up, and «annullato» once undone (runs after the undo do not count)', () => {
     const runs = [...side('artisan', 20, -1, [0, 0, 1, 0]), ...side('artisan', 20, 1, [2, 3, 2, 2])];

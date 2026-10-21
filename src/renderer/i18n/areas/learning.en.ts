@@ -12,6 +12,8 @@ export const learningEn: typeof learningIt = {
   'learn.k.raccoltaHelp': 'Changes waiting for more runs: a verdict comes only at 20, 40, 80 and 160 runs after the change, never at every new run.',
   'learn.k.peggioraHelp': 'Changes after which the corrections went up, with the whole interval above zero. The app does not undo them by itself: you decide.',
   'learn.k.annullatoHelp': 'Changes that were undone after they were active.',
+  'learn.today': 'today',
+  'learn.unavailable': 'The learning data are not available now. Try again shortly: the logs say why.',
   'learn.filterAll': 'All',
   'learn.filterTile': (p: { label: string; n: number }) => `${p.label}: ${p.n}. Show only these`,
   'learn.filterLabel': 'Filter by verdict',

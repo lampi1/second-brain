@@ -49,4 +49,21 @@ describe('ChangeLog', () => {
     expect(a.restored).toEqual([['a1', 2, 3]]);
     expect(() => log.rollback('missing', a)).toThrow(/non trovata/);
   });
+  it('seals a change when it is recorded, drops a seed of an unknown shape on load and seals the missing ones once', () => {
+    const d = tmp(), seed = { hypothesis: 'fewer' as const, scope: ['artisan'], skill: null };
+    const log = new ChangeLog(d, () => 5, () => seed);
+    const c = log.record(base, []);
+    expect(log.seedOf(c.id)).toEqual(seed);
+    expect(log.list(agents({}))[0]).not.toHaveProperty('seed');
+    const file = path.join(d, 'brain-changes.json'), raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+    raw.changes[0].seed = 'rotto';
+    fs.writeFileSync(file, JSON.stringify(raw));
+    const again = new ChangeLog(d);
+    expect(again.seedOf(c.id)).toBeUndefined();
+    let calls = 0;
+    again.sealMissing(() => { calls++; return { ...seed, scope: [] }; });
+    again.sealMissing(() => { calls++; return seed; });
+    expect(calls).toBe(1);
+    expect(new ChangeLog(d).seedOf(c.id)).toEqual({ ...seed, scope: [] }); // kept on disk
+  });
 });

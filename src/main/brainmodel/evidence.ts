@@ -30,10 +30,12 @@ export function seal(c: ChangeHead, roles: readonly Role[]): ClaimSeed {
   const ids = new Set(roles.map(r => r.id));
   if (c.kind === 'agent') return { hypothesis, scope: ids.has(c.target) ? [c.target] : [], skill: null };
   if (c.kind === 'skill') {
-    const users = roles.filter(r => r.skills.includes(c.target) || (r.knowhow?.linked ?? []).includes(c.target)).map(r => r.id);
+    // a merge's target is «dropped>kept» (jobs.ts mergeSkills): it is measured on the kept skill
+    const name = c.action === 'merge' ? c.target.split('>').at(-1)! : c.target;
+    const users = roles.filter(r => r.skills.includes(name) || (r.knowhow?.linked ?? []).includes(name)).map(r => r.id);
     // a skill loaded on demand is measured on the runs that loaded it; a removed one on its former users' runs
     if (c.action === 'remove') return { hypothesis, scope: users, skill: null };
-    return { hypothesis, scope: users, skill: c.target, ...(c.action === 'create' ? {} : { baselineSkill: true }) };
+    return { hypothesis, scope: users, skill: name, ...(c.action === 'create' ? {} : { baselineSkill: true }) };
   }
   if (c.kind === 'memory') {
     const m = /(?:^|[\\/])agents[\\/]([^\\/]+)[\\/]memory\.md$/.exec(c.target);
@@ -51,8 +53,23 @@ const seedOf = (id: string): number => { let h = 2166136261; for (const ch of id
 /** runs that can be measured: chat runs that ended and counted the user's corrections (older ones did not: unknown) */
 export const measurable = (runs: readonly AgentRun[]): AgentRun[] => runs.filter(r => r.source !== 'oneshot' && r.endedAt !== undefined && !!r.corrections);
 
+/** A seed read back from brain-changes.json, or undefined when its shape is not one this build wrote. */
+export function validSeed(x: unknown): ClaimSeed | undefined {
+  if (!x || typeof x !== 'object') return undefined;
+  const s = x as Record<string, unknown>;
+  if (s.hypothesis !== 'fewer' && s.hypothesis !== 'not-more') return undefined;
+  if (!Array.isArray(s.scope) || !s.scope.every(v => typeof v === 'string')) return undefined;
+  if (s.skill !== null && typeof s.skill !== 'string') return undefined;
+  if (s.baselineSkill !== undefined && typeof s.baselineSkill !== 'boolean') return undefined;
+  return { hypothesis: s.hypothesis, scope: [...s.scope as string[]], skill: s.skill as string | null, ...(s.baselineSkill ? { baselineSkill: true } : {}) };
+}
+
+/** The bootstrap intervals already drawn: they change only when a side reaches a checkpoint (or its judged runs change),
+ *  so a page refresh does not redraw 2000 resamples per change (brainmodel/service.ts keeps one per service). */
+export type IntervalCache = Map<string, { low: number; high: number } | null>;
+
 /** The claim of one change from its seed and the runs. */
-export function claimOf(c: Pick<BrainChange, 'id' | 'at' | 'rolledBackAt'>, seed: ClaimSeed, runs: readonly AgentRun[]): ChangeClaim {
+export function claimOf(c: Pick<BrainChange, 'id' | 'at' | 'rolledBackAt'>, seed: ClaimSeed, runs: readonly AgentRun[], cache?: IntervalCache): ChangeClaim {
   const inScope = (r: AgentRun): boolean => !seed.scope.length || seed.scope.includes(r.agentId);
   const loaded = (r: AgentRun): boolean => !seed.skill || (r.tags?.skills ?? []).includes(seed.skill);
   const pool = measurable(runs).filter(inScope);
@@ -63,7 +80,13 @@ export function claimOf(c: Pick<BrainChange, 'id' | 'at' | 'rolledBackAt'>, seed
   const jb = atCheckpoint(before.length), ja = atCheckpoint(after.length);
   const vb = before.slice(0, jb).map(value), va = after.slice(0, ja).map(value);
   const side = (all: AgentRun[], judged: number[]): ClaimSide => ({ n: all.length, judged: judged.length, mean: mean(judged.length ? judged : all.map(value)) });
-  const diff = jb && ja ? bootstrapDiff(vb, va, { seed: seedOf(c.id) }) : null;
+  const sum = (xs: number[]): number => xs.reduce((a, b) => a + b, 0);
+  const key = `${c.id}|${jb}|${ja}|${sum(vb)}|${sum(va)}`;
+  let diff = cache?.get(key);
+  if (diff === undefined) {
+    diff = jb && ja ? bootstrapDiff(vb, va, { seed: seedOf(c.id) }) : null;
+    cache?.set(key, diff);
+  }
   const margin = Math.max(0.1, 0.25 * (mean(vb) ?? 0));
   let verdict: ClaimVerdict = c.rolledBackAt !== undefined ? 'annullato' : verdictOf(diff, { before: jb, after: ja }, 'lower', margin);
   // still undecided once the runs after it reached the last checkpoint: no effect worth the name

@@ -68,6 +68,10 @@ describe('Apprendimento page', () => {
     expect(html).toContain('misurata su tutti i ruoli');
     expect(html).toContain('Cambiamenti vicini nel tempo condividono le stesse esecuzioni');
   });
+  it('says so when the learning data could not be computed, instead of a blank page', () => {
+    state.current = { ...page(), learning: undefined };
+    expect(renderToStaticMarkup(createElement(LearningPage))).toContain('data-testid="lr-unavailable"');
+  });
   it('says what will appear on a brain with no change yet, and works in English', () => {
     state.current = { ...page(), changes: [], learning: { counts: { aiuta: 0, 'nessun-effetto': 0, raccolta: 0, peggiora: 0, annullato: 0 }, roles: [], from, week: W } };
     expect(renderToStaticMarkup(createElement(LearningPage))).toContain('Nessun cambiamento ancora');

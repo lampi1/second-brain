@@ -12,6 +12,8 @@ export const learningIt = {
   'learn.k.raccoltaHelp': 'Cambiamenti che aspettano altre esecuzioni: un verdetto arriva solo a 20, 40, 80 e 160 esecuzioni dopo il cambiamento, mai a ogni nuova esecuzione.',
   'learn.k.peggioraHelp': 'Cambiamenti dopo i quali le correzioni sono salite, con l’intervallo tutto sopra lo zero. L’app non li annulla da sola: lo decidi tu.',
   'learn.k.annullatoHelp': 'Cambiamenti che hai annullato (o che sono stati annullati) dopo che erano attivi.',
+  'learn.today': 'oggi',
+  'learn.unavailable': 'I dati dell’apprendimento non sono disponibili ora. Riprova tra poco: i log dicono il perché.',
   'learn.filterAll': 'Tutti',
   'learn.filterTile': (p: { label: string; n: number }) => `${p.label}: ${p.n}. Mostra solo questi`,
   'learn.filterLabel': 'Filtra per verdetto',

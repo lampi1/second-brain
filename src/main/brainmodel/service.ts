@@ -20,7 +20,7 @@ import { readLocal, writeLocal } from '../agents/local-store';
 import { errText, log } from '../log';
 import { ChangeLog, type AgentRestorer, type AgentSnapshot } from './changes';
 import { classifiersState, readJobs } from './classifiers';
-import { claimOf, learningState, seal } from './evidence';
+import { claimOf, learningState, measurable, seal, type IntervalCache } from './evidence';
 import { corrections, mergeMemory, mergeSkills, migrate, repeatedTask, type AgentWriter, type JobContext, type JobResult } from './jobs';
 import { procedureSections } from './procedure-sources';
 import { memoryStats } from './memory-stats';
@@ -54,6 +54,7 @@ export class BrainModelService {
   private readonly reportFile: string;
   private readonly runFile: string;
   private running: Promise<BrainModelState> | null = null;
+  private readonly intervals: IntervalCache = new Map();
   private timers: NodeJS.Timeout[] = [];
   constructor(private readonly d: BrainModelDeps) {
     this.log = new ChangeLog(d.userData, d.now, c => seal(c, this.roles()));
@@ -67,8 +68,16 @@ export class BrainModelService {
   private roles(): AgentProfile[] { return this.profiles().filter(p => p.scope === 'role'); }
   /** Each change with its evidence claim (sealed when it was made; an older entry is sealed with today's roles). */
   private withClaims(changes: BrainChange[], roles: AgentProfile[], runs: AgentRun[]): BrainChange[] {
-    try { return changes.map(c => ({ ...c, claim: claimOf(c, this.log.seedOf(c.id) ?? seal(c, roles), runs) })); }
-    catch (e) { log.warn('brain', 'evidence claims failed', { cause: errText(e), hint: 'the changes are listed without their claim; the Apprendimento page stays empty' }); return changes; }
+    try { this.log.sealMissing(c => seal(c, roles)); } catch { /* sealed below for this read only */ }
+    if (this.intervals.size > 4000) this.intervals.clear();
+    const ok = measurable(runs);
+    let failed = 0;
+    const out = changes.map(c => {
+      try { return { ...c, claim: claimOf(c, this.log.seedOf(c.id) ?? seal(c, roles), ok, this.intervals) }; }
+      catch { failed++; return c; }
+    });
+    if (failed) log.warn('brain', 'evidence claims failed', { data: { failed }, hint: 'those changes are listed without their claim; the others keep theirs' });
+    return out;
   }
   private skillDirs(root: string | null): SkillDir[] {
     const dirs: SkillDir[] = [];
