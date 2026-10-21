@@ -129,13 +129,14 @@ export function askClearOrchestrator(chatId: string | null = orchestratorId()): 
  *  svuota completamente il contesto», «non occupare spazio nel prompt»): one click on the column's head, no confirm. The
  *  Orchestrator = "Pulisci" without its dialog (a new one on the same engine, the old one closed among the Chiuse with
  *  Riapri); Flash = a new Flash on its card, the old one closed with its answers. Not mid-turn: the head disables it. */
+let orchestratorClearing = false, flashClearing = false;
 export async function clearOrchestratorNow(chatId: string): Promise<void> {
   const c = app.get().chats[chatId];
-  if (!c?.isOrchestrator || c.closedAt || isBusy(c)) return;
-  await renewOrchestrator(chatId, c.harness, false, true);
+  if (!c?.isOrchestrator || c.closedAt || isBusy(c) || orchestratorClearing) return;
+  orchestratorClearing = true;
+  try { await renewOrchestrator(chatId, c.harness, false, true); } finally { orchestratorClearing = false; }
 }
 
-let flashClearing = false;
 export async function clearFlash(chatId: string): Promise<void> {
   const c = app.get().chats[chatId];
   if (!c?.quick || c.closedAt || isBusy(c) || flashClearing) return;
@@ -144,7 +145,8 @@ export async function clearFlash(chatId: string): Promise<void> {
     dispatch({ type: 'chat:updated', chat: await sb.invoke('chat:archive', { chatId, auto: false }) });
     // engine and model come from Flash's card (main: ChatManager.flashAgent); the harness is only a fallback
     const next = await createChat({ harness: c.harness, cwd: c.cwd, quick: true });
-    if (!next) { await reopenChat(chatId); return; }
+    // it could not open: the old Flash comes back where it was (no reopenChat: that moves the user to the grid)
+    if (!next) { dispatch({ type: 'chat:updated', chat: await sb.invoke('chat:reopen', { chatId }) }); return; }
     toast(t('lampo.cleared'), 'info');
   } catch (e) { toast(t('lampo.clearFailed', { error: errText(e) }), 'err'); }
   finally { flashClearing = false; }
