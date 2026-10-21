@@ -62,3 +62,9 @@ lesson kept here is that an estimate must say what it rests on and show how ofte
 The Orchestrator no longer writes the estimate in its replies: the agents view (strip chip, plan under its head)
 already shows it. Its rules now say to keep its own turn short, hand runs of tool calls to a work chat, and acknowledge
 a delegation with one emoji (ADR 0089, shared/reaction.ts).
+
+## Revision (owner, 2026-10-21, #124)
+
+The plan panel under the Orchestrator's head («Piano dell'Orchestrator») is gone: it took the top of the chat even for
+a single one-agent job, and the same facts are on the strips in the Grindhouse and in each run's verdict. The
+Orchestrator's chat starts with its messages.

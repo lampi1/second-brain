@@ -1,10 +1,10 @@
-// Live Dashboard: statistics only (ADR 0077), six views of existing app/brain sources, each with a source-preserving
+// Live Dashboard: statistics only (ADR 0077), five views of existing app/brain sources, each with a source-preserving
 // Orchestrator draft. The brain's notes map moved to the Brain section's Mappa (BrainNotesMap.tsx) and the logged
 // errors' lessons ("Cosa abbiamo imparato") to its Memoria page. Mounted by App's PageFrame. No telemetry is fabricated and Discuss never sends a message automatically.
 // The header and the tab bar keep the same place on every tab, the map's included (owner, 18/10: no jump when switching);
 // buttons follow one hierarchy: primary = the one next step, ghost = secondary, quiet = repeated per-row actions.
-// Every tile has a "?" (HelpTip) saying exactly how its number is computed; Costi draws its days and models as charts
-// (brain/components/Charts.tsx) under a row of curious facts (facts.ts); Errori groups recurring errors into explained
+// Every tile has a "?" (HelpTip) saying exactly how its number is computed; costs live only under Andamento → Costi
+// (#125: the Costi tab is gone, its curious facts moved there); Errori groups recurring errors into explained
 // cards (ErrorsTab.tsx, errors.ts) (owner, 2026-10-19: "le statistiche non si capisce nulla").
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { isLongChat } from '@shared/context';
@@ -12,28 +12,26 @@ import { useApp } from '../store/store';
 import { brainBridge } from '../actions';
 import { useBrain, type Loaded } from '../brain/api';
 import { normCost, normTables } from '../brain/types';
-import { costRows, liveTotal } from '../lib/live-costs';
+import { costRows } from '../lib/live-costs';
 import { lang, locale } from '../i18n';
 import { formatCost } from '../lib/format';
-import { chatName, connections, contextLevel, contextRatio, cursorCoverage, observedErrors } from './data';
+import { chatName, connections, contextLevel, contextRatio, observedErrors } from './data';
 import { Graph } from './Graph';
 import { ThemesTab } from './Themes';
 import { HeadlineLine, useHeadline } from '../brain/pages/HomeHeadline';
 import { HelpTip } from '../components/HelpTip';
 import { PulseBoard } from '../components/ContextPulse';
-import { BarChart, HBarChart } from '../brain/components/Charts';
 import { ErrorsTab } from './ErrorsTab';
 import { now as clockNow } from '../lib/clock';
-import { costFacts } from './facts';
 import './dashboard.css';
 
 const copy = (it: string, en: string) => lang() === 'en' ? en : it;
 const number = (value: number) => new Intl.NumberFormat(locale(), { maximumFractionDigits: 0 }).format(value);
 const money = (value: number) => formatCost(value);
-const tabs = ['agents', 'costs', 'context', 'errors', 'themes', 'tips'] as const;
+const tabs = ['agents', 'context', 'errors', 'themes', 'tips'] as const;
 type Tab = typeof tabs[number];
-const tabName = (tab: Tab) => ({ agents: copy('Mappa agenti', 'Agents map'), costs: copy('Costi', 'Costs'), context: copy('Token e contesto', 'Tokens & context'), errors: copy('Errori', 'Errors'), themes: copy('Temi', 'Themes'), tips: copy('Spunti', 'Tips') })[tab];
-const marks: Record<Tab, string> = { agents: '◎', costs: '↗', context: '◫', errors: '△', themes: '❖', tips: '✦' };
+const tabName = (tab: Tab) => ({ agents: copy('Mappa agenti', 'Agents map'), context: copy('Token e contesto', 'Tokens & context'), errors: copy('Errori', 'Errors'), themes: copy('Temi', 'Themes'), tips: copy('Spunti', 'Tips') })[tab];
+const marks: Record<Tab, string> = { agents: '◎', context: '◫', errors: '△', themes: '❖', tips: '✦' };
 
 type Weight = 'primary' | 'ghost' | 'quiet';
 const weightClass: Record<Weight, string> = { primary: 'btn-primary', ghost: 'btn-ghost', quiet: 'btn-subtle' };
@@ -76,15 +74,6 @@ function Stat({ label, value, note, n, format, help }: { label: string; value: s
   const shown = useCountUp(n);
   return <div className="dash-stat"><span className="dash-stat-label">{label}{help && <HelpTip title={label} label={label}>{help}</HelpTip>}</span><strong>{shown !== undefined && format ? format(shown) : value}</strong><small>{note}</small><Discuss title={label} facts={`${value} · ${note}`} source="Dashboard" /></div>;
 }
-interface BarRow { label: string; value: number; approx?: boolean; unpriced?: boolean }
-function Bars({ title, rows, format = money, source }: { title: string; rows: BarRow[]; format?: (n: number) => string; source: string }) {
-  const max = Math.max(1, ...rows.map(r => r.value));
-  const shown = (r: BarRow, unpriced: string) => `${r.approx ? '≈ ' : ''}${format(r.value)}${r.unpriced ? ` + ${unpriced}` : ''}`;
-  return <Panel title={title} source={source} facts={rows.map(r => `${r.label}: ${shown(r, 'unpriced')}`).join('\n')}>
-    {rows.length ? <div className="dash-bars">{rows.map((row, i) => <div className="dash-bar-row" key={`${row.label}-${i}`}><div><span>{row.label}</span><b>{shown(row, copy('non quotato', 'unpriced'))}</b><Discuss title={row.label} facts={shown(row, 'unpriced')} source={source} /></div><div className="dash-track"><i style={{ width: `${row.value / max * 100}%` }} /></div></div>)}</div> : <Empty>{copy('Nessun dato disponibile per questa fonte.', 'No data available from this source.')}</Empty>}
-  </Panel>;
-}
-
 export function Dashboard() {
   const [tab, setTab] = useState<Tab>('agents');
   const headline = useHeadline();
@@ -98,27 +87,16 @@ export function Dashboard() {
   const chats = useMemo(() => Object.values(chatsById), [chatsById]);
   const [tick, setTick] = useState(Date.now());
   useEffect(() => { const timer = setInterval(() => { if (!document.hidden) setTick(Date.now()); }, 1500); return () => clearInterval(timer); }, []);
-  const costs = useBrain(tab === 'costs' || tab === 'tips' ? '/api/cost?days=7' : null, normCost, { pollMs: 30_000 });
+  const costs = useBrain(tab === 'tips' ? '/api/cost?days=7' : null, normCost, { pollMs: 30_000 });
   const tables = useBrain(tab === 'errors' || tab === 'tips' ? '/api/tables' : null, normTables, { pollMs: 30_000 });
   const [selected, setSelected] = useState<string | null>(null);
   const live = chats.filter(c => !c.closedAt && c.state !== 'closed');
   const links = useMemo(() => connections(chats, items), [chats, items]);
   const rows = useMemo(() => costRows(usage, chats), [usage, chats]);
-  const total = liveTotal(usage, chats);
   const errors = useMemo(() => observedErrors(chats, items, feed, copy('Turno terminato con un errore', 'Turn ended with an error')), [chats, items, feed]);
   const long = live.filter(c => isLongChat(c, warn));
   const switchTab = (value: Tab) => { setTab(value); setSelected(null); };
   const activeChat = chats.find(c => c.id === selected);
-  const groups = new Map<string, BarRow>();
-  for (const row of rows) {
-    const g = groups.get(row.harness) ?? { label: row.harness, value: 0 };
-    groups.set(row.harness, { label: g.label, value: g.value + row.usd, approx: g.approx || row.approx, unpriced: g.unpriced || !!row.unpriced });
-  }
-  const cursor = costs.data?.cursor ?? null, cover = cursor && costs.data ? cursorCoverage(cursor, costs.data.to) : null;
-  const when = (value?: string) => { const at = value ? new Date(value) : null; return !value ? copy('sconosciuto', 'unknown') : at && !Number.isNaN(at.getTime()) ? at.toLocaleString(locale(), { dateStyle: 'short', timeStyle: 'short' }) : value; };
-  const days = Object.entries(costs.data?.byDay ?? {}).sort(([a], [b]) => a.localeCompare(b));
-  const models = Object.entries(costs.data?.byModel ?? {}).sort(([, a], [, b]) => b.usd - a.usd).slice(0, 8);
-  const cf = costs.data ? costFacts(costs.data, money) : [];
 
   return <div className="dashboard bx" data-testid="dashboard">
     <header className="dash-header"><div><span className="dash-eyebrow">{copy('IL TUO SISTEMA, IN DIRETTA', 'YOUR SYSTEM, LIVE')}</span><h1>Dashboard<span className="dash-live-dot" /></h1><HeadlineLine state={headline} /><p>{copy('Ogni connessione racconta il lavoro. Ogni dato apre una conversazione.', 'Every connection tells a story. Every signal starts a conversation.')}</p></div><span className="dash-live-label">{copy('Dati reali · aggiornamento live', 'Real data · live updates')}</span></header>
@@ -132,18 +110,6 @@ export function Dashboard() {
         <Panel title={copy('Una rete, un Orchestrator', 'One network, one Orchestrator')} note={copy('Le linee pulsano per 15 secondi dopo una comunicazione osservata. Seleziona un nodo.', 'Edges pulse for 15 seconds after an observed communication. Select a node.')} facts={`${live.length} chats; ${links.filter(e => e.at && tick - e.at < 15_000).length} recent connections`} source="chat:list · chat:items">
           {live.length ? <div className="dash-network"><Graph testId="dash-agents-map" label={tabName('agents')} nodes={live.map(c => ({ id: c.id, label: chatName(c), detail: `${c.harness} · ${c.model ?? '—'} · ${c.state}`, central: c.isOrchestrator, active: c.state === 'running' || c.state === 'starting' }))} edges={links.map(e => ({ ...e, active: e.at !== null && tick >= e.at && tick - e.at < 15_000 }))} selected={selected} onSelect={setSelected} />
             <aside className="dash-inspector">{activeChat ? <><span className="dash-eyebrow">{activeChat.isOrchestrator ? 'ORCHESTRATOR' : activeChat.harness}</span><h2>{chatName(activeChat)}</h2><p>{activeChat.model ?? copy('Modello non riportato', 'Model not reported')}</p><span className={`dash-status ${activeChat.state}`}>{activeChat.state}</span><p>{activeChat.lastText || copy('Nessun messaggio recente.', 'No recent message.')}</p><div className="dash-actions"><Discuss title={chatName(activeChat)} facts={`${activeChat.harness}; ${activeChat.model}; ${activeChat.state}\n${activeChat.lastText}`} source={`chat:${activeChat.id}`} weight="primary" /></div></> : <><span className="dash-orbit-icon">◎</span><h2>{copy('Segui il flusso', 'Follow the flow')}</h2><p>{copy('Scegli un agente per vedere modello, stato e ultima attività.', 'Choose an agent to inspect its model, state and latest activity.')}</p></>}</aside></div> : <Empty>{copy('La rete apparirà quando aprirai le prime chat.', 'The network will appear when you open your first chats.')}</Empty>}
-        </Panel>
-      </>}
-      {tab === 'costs' && <>
-        <Source data={costs} /><div className="dash-stats"><Stat label={copy('Oggi · Claude + Cursor', 'Today · Claude + Cursor')} value={total ? `${total.estimated ? '≈ ' : ''}${money(total.usd)}` : '—'} note={total?.partial ? copy('Parziale: Cursor non disponibile', 'Partial: Cursor unavailable') : copy('Stima equivalente API, non fattura', 'API-equivalent estimate, not a bill')} help={copy('Il costo di oggi (giorno di Roma) delle chat Claude e Cursor: i token di ogni turno moltiplicati per il listino API del modello. Con un abbonamento non è ciò che paghi, è quanto varrebbe a consumo. ≈ = una parte è stimata.', 'Today’s cost (Rome day) of the Claude and Cursor chats: each turn’s tokens times the model’s API price. With a subscription it is not what you pay, it is what it would cost pay-as-you-go. ≈ = partly estimated.')} /><Stat label={copy('Ultimi 7 giorni · Claude', 'Last 7 days · Claude')} value={costs.data ? money(costs.data.total) : '—'} n={costs.data?.total} format={money} note={costs.data ? `${costs.data.from} → ${costs.data.to}` : copy('In attesa della fonte', 'Waiting for source')} help={copy('La somma degli ultimi 7 giorni dai transcript di Claude Code letti dal tuo brain (cost.mjs), al listino API: tutte le sessioni, anche quelle fuori dall’app.', 'The sum of the last 7 days from the Claude Code transcripts your brain reads (cost.mjs), at API prices: every session, those outside the app too.')} /><Stat label={copy('Cursor · ultimi 7 giorni', 'Cursor · last 7 days')} value={cursor?.downloaded ? money(cursor.total) : '—'} note={cursor?.downloaded ? `Export ${when(cursor.downloaded)} · ${copy('ultima riga', 'last row')} ${when(cursor.lastRow)}${cover === false ? ` · ${copy('parziale: l’export finisce prima del periodo', 'partial: the export ends before the period')}` : cover === null ? ` · ${copy('copertura sconosciuta', 'coverage unknown')}` : ''}` : copy('Export Cursor non disponibile', 'Cursor export unavailable')} help={copy('Dall’ultimo export di utilizzo scaricato da Cursor: la somma delle righe degli ultimi 7 giorni. Se l’export è vecchio, il periodo è coperto solo in parte.', 'From the latest usage export downloaded from Cursor: the sum of its rows of the last 7 days. With an old export the period is only partly covered.')} /></div>
-        {cf.length > 0 && <div className="err-facts" data-testid="cost-facts">{cf.map((f, i) => <p className="err-fact" key={i}><span aria-hidden="true">✦</span><span>{f}</span></p>)}</div>}
-        {days.length > 0 ? <div className="dash-columns"><BarChart title={copy('Per giorno · Claude, 7 giorni', 'By day · Claude, 7 days')} note={copy('Oggi in evidenza', 'Today highlighted')} name="cost-by-day" money labels={days.map(([d]) => d.slice(5))} values={days.map(([, v]) => v.usd)} highlight={days.length - 1} testId="dash-cost-days" />
-          <HBarChart title={copy('Per modello · Claude, 7 giorni', 'By model · Claude, 7 days')} name="cost-by-model" money labels={models.map(([m]) => m)} series={[{ label: '$', values: models.map(([, v]) => v.usd) }]} testId="dash-cost-models" /></div>
-          : <Empty>{copy('Nessun costo di Claude negli ultimi 7 giorni: i grafici per giorno e per modello compaiono con le prime chat.', 'No Claude cost in the last 7 days: the per-day and per-model charts appear with the first chats.')}</Empty>}
-        <Bars title={copy('Per motore · oggi, o sessione corrente se manca il giorno', 'By engine · today, or current run where no daily figure exists')} source="costRows: Claude/Cursor today where available, otherwise current run; partial/estimated" rows={[...groups.values()]} />
-        <Panel title={copy('Per agente · oggi, o sessione corrente', 'Per agent · today, or current run')} note={copy('Claude/Cursor: oggi quando disponibile. Altri motori e fallback: sessione corrente. ≈ stimato; parziale = prezzi mancanti.', 'Claude/Cursor: today where available. Other engines and fallbacks: current run. ≈ estimated; partial = missing prices.')}>
-          {rows.length ? rows.map(row => <div className="dash-row" key={row.key}><div><b>{chatName(row)}</b><small>{row.harness}{row.closed ? ` · ${copy('archiviata', 'archived')}` : ''}</small></div><strong>{row.approx ? '≈ ' : ''}{money(row.usd)}{row.unpriced ? ` + ${copy('non quotato', 'unpriced')}` : ''}</strong><Discuss title={chatName(row)} facts={`${row.harness}: ${row.approx ? '≈ ' : ''}${money(row.usd)}; ${row.unpriced ? 'partial, unpriced turns' : 'reported spend'}. Claude/Cursor today where available; otherwise current run.`} source="costRows · app:usage / chat:list" /></div>) : <Empty>{copy('Nessun costo quotato disponibile. Un dato mancante non vale zero.', 'No priced costs available. Missing data is not zero.')}</Empty>}
-          {chats.filter(c => c.costKnown === false && !rows.some(r => r.chatId === c.id)).map(c => <div className="dash-row" key={c.id}><div><b>{chatName(c)}</b><small>{c.harness}</small></div><span>{copy('Costo non disponibile', 'Cost unavailable')}</span><Discuss title={chatName(c)} facts="Cost is not reported by this engine." source="chat:list" /></div>)}
         </Panel>
       </>}
       {tab === 'context' && <>

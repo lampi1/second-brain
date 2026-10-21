@@ -5,7 +5,8 @@
 // versions, its pack actions and the user's milestones (ProgressPanel). "Modifica" opens the editor in place: only the
 // behaviour is editable (instructions, engine, model, tier, launches, skills, context; the permissions on their own
 // card); name and summary belong to the role; the character can be swapped for the user's own picture
-// (AgentImagePicker, under the badge). "Ripristina predefinito" goes back to the shipped role
+// (AgentImagePicker, under the badge). The card back's «Modifica il ruolo» lands straight in the editor (EDIT_ELEMENT, #126):
+// «Chiudi senza salvare» or Esc then goes back to the catalogue. "Ripristina predefinito" goes back to the shipped role
 // after an inline confirmation. Editing never changes running chats. Rendered by AgentCatalogPage.tsx. Styles:
 // styles/agent-studio.css.
 import { Select } from './Select';
@@ -14,7 +15,7 @@ import { MAX_CONTEXT_RANGE, type AgentDraft, type AgentMetrics, type AgentProfil
 import { MODEL_TIERS, WORK_ROLE_IDS, FLASH_ID, isRoleId, roleName, tierRank, type ModelTier } from '@shared/roles';
 import { characterOf } from '@shared/characters';
 import { agentHistory, refreshAgents, resetAgent, restoreAgentVersion, saveAgent, useAgents } from '../store/agents';
-import { toast } from '../store/ui';
+import { toast, ui } from '../store/ui';
 import { sb } from '../sb';
 import { useApp } from '../store/store';
 import { EFFORTS, effortLabel, formatCost } from '../lib/format';
@@ -22,7 +23,7 @@ import { characterTone } from '../lib/character-art';
 import { agentDraftOf, forgetAgentEditor, readAgentEditor, rememberAgentEditor } from '../lib/agent-drafts';
 import { RolePermissions, permissionSummary } from './RolePermissions';
 import { holdUpdate } from '../lib/update-barrier';
-import { go, goTarget } from '../actions';
+import { back, go, goTarget } from '../actions';
 import { locale, t } from '../i18n';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentImagePicker } from './AgentImagePicker';
@@ -40,6 +41,11 @@ const reason = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error i
 const SKILL = /^[a-z0-9][a-z0-9._-]{0,79}$/i;
 
 const draftOf = agentDraftOf;
+
+/** The place element of the card back's «Modifica il ruolo»: the role page opens with the editor (#126). */
+export const EDIT_ELEMENT = 'modifica';
+/** The last «Modifica il ruolo» acted on: the highlight stays in the store, a later visit must not reopen the editor. */
+let editHandled = 0;
 
 /** The run numbers of one role, read like the catalogue's (agents:metrics); null when unavailable. */
 function useAgentMetrics(agentId: string): AgentMetrics | null | undefined {
@@ -67,9 +73,37 @@ export function AgentStudio({ profile, children }: { profile: AgentProfile; chil
     setProblem(null); requestAnimationFrame(() => { firstField.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); firstField.current?.focus(); });
   };
   const closeEditor = () => { forgetAgentEditor(shown.id); setProblem(null); setEditing(null); };
+  // opened from the card: the editor comes up at once, and leaving it without saving goes back to the card
+  const fromCard = useRef(false);
+  const hl = ui.use(s => s.highlight);
+  const focusNext = useRef(false);
+  useEffect(() => { if (hl?.id !== EDIT_ELEMENT || hl.n === editHandled) return; editHandled = hl.n; fromCard.current = true; focusNext.current = true; openEditor(); }, [hl?.n]);
+  // the editor mounts after the page: give the instructions the focus once they are there
+  useEffect(() => {
+    if (!focusNext.current || !editing || !catalog) return;
+    focusNext.current = false;
+    const id = setTimeout(() => firstField.current?.focus({ preventScroll: true }), 50);
+    return () => clearTimeout(id);
+  }, [!!editing, !!catalog]);
+  const cancel = () => { closeEditor(); if (fromCard.current) { fromCard.current = false; back(); } };
+  useEffect(() => {
+    if (!editing || !fromCard.current) return;
+    // capture, and stopped: Esc cancels the edit instead of the app's global Esc (which goes home)
+    const esc = (e: KeyboardEvent) => {
+      // an open dropdown closes first (its own Esc): only a plain Esc cancels the edit
+      const at = e.target instanceof Element ? e.target : null;
+      if (at?.closest('[role="listbox"], .ui-select[aria-expanded="true"]')) return;
+      // Esc meant for something else on the page (a "?" bubble, the permissions card) is not the editor's
+      if (at && at !== document.body && !at.closest('[data-testid="agent-editor"]')) return;
+      if (e.key === 'Escape' && !e.shiftKey) { e.preventDefault(); e.stopImmediatePropagation(); cancel(); } };
+    window.addEventListener('keydown', esc, true);
+    return () => window.removeEventListener('keydown', esc, true);
+  }, [!!editing]);
   const change = (patch: Partial<AgentDraft>) => setEditing(p => (p ? { ...p, ...patch } : p));
   const choice = catalog?.models.find(e => e.engine === editing?.engine);
-  const knownModel = !!choice && (editing?.model === null || choice.modelSelectable && choice.models.some(m => m.id === editing?.model));
+  // the model the role already runs with stays allowed (main's check, #128); only a new choice must be a known one
+  const keptModel = !!editing && editing.engine === shown.engine && editing.model === shown.model;
+  const knownModel = !!choice && (editing?.model === null || keptModel || choice.modelSelectable && choice.models.some(m => m.id === editing?.model));
   const stale = !!editing && shown.updatedAt !== base;
   const tierOk = !!editing && tierRank(editing.tier) <= tierRank(editing.tierMax);
   const canSave = !!editing && !stale && !shown.trial && tierOk && !!choice?.enabled && !!choice.trusted && knownModel && !busy && !catalog?.problem;
@@ -78,7 +112,7 @@ export function AgentStudio({ profile, children }: { profile: AgentProfile; chil
     setBusy(true); setProblem(null);
     try {
       await saveAgent(editing, shown.id);
-      forgetAgentEditor(shown.id); setEditing(null);
+      forgetAgentEditor(shown.id); setEditing(null); fromCard.current = false;
       toast(t('studio.saved'), 'ok');
     } catch (e) { setProblem(t('studio.saveError', { detail: reason(e) })); }
     finally { setBusy(false); }
@@ -98,9 +132,9 @@ export function AgentStudio({ profile, children }: { profile: AgentProfile; chil
     {!catalog && !error && <p role="status">{t('studio.loading')}</p>}
   </>;
   const editor = editing && catalog ? <RoleEditor profile={shown} draft={editing} busy={busy} canSave={canSave} tierOk={tierOk} change={change} firstField={firstField}
-    onSave={() => void save()} onClose={closeEditor} /> : null;
+    onSave={() => void save()} onClose={cancel} /> : null;
   return <RoleDetail profile={shown} busy={busy} editorOpen={!!editing} resetting={resetting} status={status} editor={editor}
-    onEdit={openEditor} onReset={() => setResetting(true)} onResetCancel={() => setResetting(false)} onResetConfirm={() => void reset()}>{children}</RoleDetail>;
+    onEdit={() => { fromCard.current = false; openEditor(); }} onReset={() => setResetting(true)} onResetCancel={() => setResetting(false)} onResetConfirm={() => void reset()}>{children}</RoleDetail>;
 }
 
 function RoleEditor({ profile, draft, busy, canSave, tierOk, change, firstField, onSave, onClose }: {

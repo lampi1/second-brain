@@ -169,7 +169,7 @@ export async function openAgentOverview(page: Page): Promise<void> {
 }
 
 /** Opens one role's page (its editor, versions and progress) from its overview card: a click flips the card (#81),
- *  "Apri profilo" on its back opens the page. */
+ *  «Modifica il ruolo» on its back opens the page with the editor already open (#126). */
 export async function openAgents(page: Page, role = 'scout'): Promise<void> {
   await openAgentOverview(page);
   await page.getByTestId(`catalog-flip-${role}`).click();

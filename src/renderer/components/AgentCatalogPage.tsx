@@ -14,7 +14,7 @@ import { useApp } from '../store/store';
 import { ui } from '../store/ui';
 import { AgentCatalogCard } from './AgentCatalogCard';
 import { HelpTip } from './HelpTip';
-import { AgentStudio } from './AgentStudio';
+import { AgentStudio, EDIT_ELEMENT } from './AgentStudio';
 import { ContextPulse } from './ContextPulse';
 import { useBrainModel } from '../store/brain-model';
 import '../styles/agent-catalog.css';
@@ -63,7 +63,7 @@ export function AgentCatalogPage() {
     <div className="catalog-grid">{profiles.map((p, index) => {
       const starts = Object.values(chats).filter(c => c.run?.agentId === p.id).map(c => c.run!.startedAt);
       return <AgentCatalogCard key={p.id} profile={p} index={index} engine={catalog?.models.find(m => m.engine === p.engine)?.label ?? p.engine}
-        metrics={metrics?.find(m => m.agentId === p.id)} loaded={metrics !== null} lastStart={starts.length ? Math.max(...starts) : null} onOpen={() => go({ page: 'agenti', arg: p.id })}
+        metrics={metrics?.find(m => m.agentId === p.id)} loaded={metrics !== null} lastStart={starts.length ? Math.max(...starts) : null} onOpen={() => go({ page: 'agenti', arg: p.id, element: EDIT_ELEMENT })}
         memory={model?.memory.find(m => m.kind === 'agent' && m.agentId === p.id) ?? null} onSkill={name => go({ page: 'skill', arg: name })} />;
     })}</div>
   </section>;

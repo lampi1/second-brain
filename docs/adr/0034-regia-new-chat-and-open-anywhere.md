@@ -40,3 +40,9 @@ the quick path, she answers or opens ONE chat that works alone, never `agent_del
 **Strategist** (`[strategist]`: a Strategist chat plans the request and delegates the parts). Neither ticked = she decides
 with `task_estimate` as before. Ctrl+Shift+Invio sends as Veloce. Older `[nuova chat]` messages keep their badge.
 Testids: `orchestrator-input-mode-quick|plan` (aria-pressed), `item-<id>-mode`, `.msg-user[data-mode]`.
+
+## Revision (owner, 2026-10-21, #124)
+
+«Veloce» is gone: quick questions have their own lane, Lampo (ADR 0105), one tab away in the same column, and two ways
+to say "be quick" were confusing. Only **Strategist** stays; Ctrl+Shift+Invio sends nothing special. Older `[veloce]`
+messages keep their badge. Testid: `orchestrator-input-mode-plan`.

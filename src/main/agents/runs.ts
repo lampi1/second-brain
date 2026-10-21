@@ -161,7 +161,8 @@ export function addTurn(run: AgentRun, usd: number | null, tokens: AgentRunToken
 export interface RunLinks { parentRunId?: string; reviewOf?: string; reworkOf?: string }
 export interface RunStart extends RunLinks { chatId: string; agentId: string; version: number; goal: string; startedBy: AgentRun['startedBy']; startedAt: number; costKnown: boolean; tags?: AgentRunTags; tier?: ModelTier; model?: string | null }
 
-const sample = (v: unknown): boolean => { const s = v as { n?: unknown; values?: unknown } | null; return !!s && count(s.n) && Array.isArray(s.values) && s.values.length <= SAMPLE_MAX && s.values.length <= s.n && s.values.every(time); };
+const sample = (v: unknown): boolean => { const s = v as { n?: unknown; values?: unknown; sum?: unknown } | null; return !!s && count(s.n) && Array.isArray(s.values) && s.values.length <= SAMPLE_MAX && s.values.length <= s.n && s.values.every(time)
+  && (s.sum === undefined || typeof s.sum === 'number' && Number.isFinite(s.sum) && s.sum >= 0); };
 const verdicts = (v: unknown): boolean => { const x = v as Record<string, unknown> | null; return !!x && count(x.success) && count(x.partial) && count(x.fail); };
 const counts = (v: unknown): v is TagTally => {
   const t = v as Record<string, unknown> | null, c = t?.corrections as Record<string, unknown> | null, a = t?.aiErrors as Record<string, unknown> | null;

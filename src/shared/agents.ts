@@ -120,7 +120,8 @@ export interface VersionMetrics {
   correctionsPerRun: Metric;
   aiErrorsPerRun: Metric;
   reworkRate: Metric;
-  costPerRun: { median: Metric; p90: number | null };
+  /** total: the cost of every run with a known cost (its n), null when an older saved summary did not keep it (#125) */
+  costPerRun: { median: Metric; p90: number | null; total: number | null };
   tokensPerRun: Record<keyof AgentRunTokens, Metric>;
   contextPeak: { median: Metric; max: number | null; ofWindow: number | null };
   timeToDone: { elapsed: Metric; execution: Metric };

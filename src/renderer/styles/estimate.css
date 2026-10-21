@@ -10,7 +10,6 @@
 .th-estimate.est-missed .th-estimate-mark, .th-estimate-mark.est-missed { color: var(--amber); }
 
 .est-acc { display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 11.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
-.est-acc.compact { margin-top: 0; }
 .est-acc-k { font-weight: 600; color: var(--text-2); }
 .est-acc-none { margin: 4px 0 0; color: var(--text-3); font-size: 11.5px; }
 .est-bars { flex: none; overflow: visible; }
@@ -20,26 +19,6 @@
 .help-bubble .est-tip-acc { margin-top: 8px !important; padding-top: 7px; border-top: 1px solid var(--border); }
 .help-bubble .est-tip-specific { color: var(--text-3); font-size: 11.5px; }
 
-.est-plan { margin: 0 10px 8px; padding: 8px 10px 9px; border: 1px solid var(--orchestrator-line, var(--border-2)); border-radius: var(--r-m);
-  background: var(--orchestrator-surface, var(--surface-2)); display: grid; gap: 6px;
-  /* a flex child of the Orchestrator column: never shrunk below its content (it spilled over the first messages, C-ux
-     audit) and never taller than a third of the column (its rows scroll) (ADR 0101) */
-  flex: none; max-height: 34%; overflow: auto; min-height: 0; }
-.est-plan-head { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12px; }
-.est-plan-title { font-weight: 650; color: var(--text); }
-.est-plan-count { color: var(--text-3); }
-.est-plan-total { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.est-plan-total .th-estimate-label, .est-plan .th-estimate-label { font-size: 9.5px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--text-4); }
-.est-plan-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-.est-plan-row { width: 100%; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 6px; border: 0; border-radius: var(--r-s); background: none;
-  color: var(--text-2); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
-.est-plan-row:hover { background: var(--surface-3); }
-.est-plan-row:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-.est-plan-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-weight: 550; }
-.est-plan-fig { flex: none; display: inline-flex; gap: 5px; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.est-plan-few { color: var(--text-4); font-style: italic; }
-.est-plan-row .pill { flex: none; }
-.est-quick { flex: none; padding: 1px 7px; border-radius: 99px; font-size: 10.5px; font-weight: 650; color: var(--green); background: var(--green-bg); }
 /* on a narrow strip the model · cost · folder line gives way first: the estimate stays readable */
 .chat-tile .strip-facts .th-sub-text { flex-shrink: 8; }
 .chat-tile .strip-facts .th-estimate { flex-shrink: 1; }

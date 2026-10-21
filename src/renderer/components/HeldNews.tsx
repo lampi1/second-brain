@@ -3,7 +3,8 @@
 // this Orchestrator by the delivery rule (main/chats/orchestrator-delivery.ts): a work chat that finished, failed, asks a
 // question or a permission, left a command, or mail to it, not delivered yet because the Orchestrator waits for the
 // user, groups news for a few seconds, or lets quiet news ride along with the next delivery. Hidden when nothing waits;
-// hover names the first ones, a click lists them all (chat, kind, since when, why it waits) and a row opens its chat.
+// hover names the first ones, a click lists them all (chat, kind, since when, why it waits) and a row opens its chat and
+// marks its news read (#123: out of the list, and it never wakes the Orchestrator: 'orchestrator:heldSeen').
 // Reading it spends nothing: main sends the list ('orchestrator:held', 'orchestrator:heldChanged', main/chats/held-news.ts).
 // Used by OrchestratorTile.tsx.
 import { useEffect, useState } from 'react';
@@ -84,5 +85,9 @@ export function HeldNews({ orchestratorId, onOpenChat }: { orchestratorId: strin
   const [open, setOpen] = useState(false);
   const now = useNow(15_000);
   useEffect(() => { if (!items.length) setOpen(false); }, [items.length]);
-  return <HeldNewsView items={items} open={open} now={now} onToggle={() => setOpen(o => !o)} onOpenChat={onOpenChat} />;
+  const openRead = (chatId: string) => {
+    onOpenChat(chatId);
+    try { window.sb.invoke('orchestrator:heldSeen', { chatId }).catch(() => {}); } catch { /* no bridge (tests) */ }
+  };
+  return <HeldNewsView items={items} open={open} now={now} onToggle={() => setOpen(o => !o)} onOpenChat={openRead} />;
 }

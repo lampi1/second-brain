@@ -1418,6 +1418,8 @@ export interface InvokeMap {
   /** the Grindhouse's headline (SPEC 18, main/headline.ts): the line on screen now, never waiting for a model */
   'headline:get': [void, HeadlineState];
   'orchestrator:held': [void, HeldNewsState];
+  /** the user opened a held news item's chat from the list: that chat's items are read, never wake the Orchestrator (#123) */
+  'orchestrator:heldSeen': [{ chatId: string }, HeldNewsState];
   'pulse:list': [{ place: PulsePlace }, PulseList];
   'pulse:status': [void, PulseStatus];
   'pulse:seen': [{ ids: string[] }, void];
@@ -1550,7 +1552,7 @@ export const INVOKE_CHANNELS = [
   'orchestrator:get', 'orchestrator:ensure',
   'search:query', 'search:status', 'search:retryModel', 'later:get', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
   'sync:get', 'sync:now', 'sync:resolve', 'headline:get',
-  'orchestrator:held',
+  'orchestrator:held', 'orchestrator:heldSeen',
   'cloud:list', 'cloud:start', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:readiness', 'cloud:dismiss',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [

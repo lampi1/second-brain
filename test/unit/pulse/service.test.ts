@@ -95,3 +95,14 @@ it('enforces independent allocations and counts unknown-cost calls against the r
   expect(budgetState(records, f.at, 0.25).basis).toBe('unknown');
   expect(admitRun([{ ...records[0]!, job: 'headline', usd: 0.05, basis: 'reported' }], 'headline', 'claude', f.at, 0.25, false)).toBe(false);
 });
+it('an Apply that fails says why, on screen and in the log, and leaves the proposal pending (#128)', async () => {
+  const f = fixture();
+  const approve = vi.fn(async () => { throw new Error('Il modello non è tra quelli noti del motore.'); });
+  const service = new PulseService({ ...f.deps, approve });
+  const data = (service as unknown as { store: PulseStore }).store.data;
+  data.approvals.push({ id: 'pa_1', kind: 'learned-rule', agentId: 'pulse', title: 'Adatta Battito', text: 'Riduci le carte idea.', evidence: [], engine: null, createdAt: f.at, state: 'pending' });
+  const decide = service.handlers()['approvals:decide'];
+  expect(await decide({ id: 'pa_1', decision: 'approve' }, undefined as never)).toEqual({ ok: false, error: 'Proposta non applicata: Il modello non è tra quelli noti del motore.' });
+  expect(data.approvals[0]!.state).toBe('pending');
+  expect(await decide({ id: 'pa_1', decision: 'nope' as never }, undefined as never)).toEqual({ ok: false, error: 'Proposta non applicata.' });
+});

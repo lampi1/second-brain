@@ -4,7 +4,8 @@
 // recency, the agent's own word excluded, with the runs it rests on; main/agents/standing.ts), each with a "?" giving the formula, and three compact run metrics; a click anywhere on the card flips it in 3D (#81)
 // to the back: the role's instructions, the skills it loads at every launch, its memory, its permissions («Tutto consentito» or how
 // far the user narrowed it, with "Modifica permessi" to its permissions card, where its MCP servers are too, ADR 0085,
-// 0086), the run facts and "Apri". A second click, or Esc, flips it back; the hidden face is inert, so
+// 0086), the run facts, its costs (median per run, per verified success, over how many runs: the only per-agent costs in
+// the app since Costi dropped its per-agent blocks, #125) and "Apri". A second click, or Esc, flips it back; the hidden face is inert, so
 // keyboard and screen readers only reach the visible one. Under prefers-reduced-motion the faces fade instead of turning.
 // Authoritative run metrics keep their sample sizes and unknown values: a missing value is shown as a dash with "Non
 // disponibile" for screen readers and in its tooltip, never as zero. Styles: styles/agent-catalog.css (card) and
@@ -29,6 +30,28 @@ function Metric({ label, full, value, unknown, help }: { label: string; full: st
     <dt>{label}{help}</dt>
     <dd>{value.text ?? <><span aria-hidden="true">—</span><span className="sr-only">{unknown}</span></>}</dd>
   </div>;
+}
+
+/** The back's costs (#125): only numbers that exist. A missing one is a dash, and one line says why, once. */
+function Costs({ id, metrics, wins, loaded }: { id: string; metrics: AgentMetrics['all'] | undefined; wins: number | null; loaded: boolean }) {
+  const ended = metrics?.ended ?? 0, med = metrics?.costPerRun.median, total = metrics?.costPerRun.total ?? null;
+  const known = med?.n ?? 0;
+  const perWin = total !== null && known === ended && ended > 0 && wins ? total / wins : null;
+  const why = !loaded || !ended ? null : !wins ? t('catalog.costsWhy.noWins') : perWin === null ? (known === ended ? t('catalog.costsWhy.noTotal') : t('catalog.costsWhy.partial', { n: known, total: ended })) : null;
+  const dash = <><span aria-hidden="true">—</span><span className="sr-only">{t('catalog.unknown')}</span></>;
+  return <section className="catalog-costs" aria-label={t('catalog.costs')} data-testid={`catalog-costs-${id}`}>
+    <h4>{t('catalog.costs')}<HelpTip label={t('catalog.costs')} testid={`catalog-costs-help-${id}`}>{t('catalog.costsHelp')}</HelpTip>
+      {loaded && ended > 0 && <small>{t('catalog.costsRuns', { n: ended })}</small>}</h4>
+    {!loaded ? <p className="catalog-costs-note">{t('catalog.unknown')}</p> : !ended ? <p className="catalog-costs-note">{t('catalog.costsNone')}</p> : <>
+      <dl className="catalog-costs-grid">
+        <div data-testid={`catalog-cost-median-${id}`}><dt>{t('catalog.cost')}</dt><dd>{med?.value != null ? formatCost(med.value) : dash}
+          {med?.value != null && known < ended && <small>{t('catalog.samples', { n: known, total: ended })}</small>}</dd></div>
+        <div data-testid={`catalog-cost-win-${id}`}><dt>{t('catalog.costPerWin')}</dt><dd>{perWin !== null ? formatCost(perWin) : dash}
+          {perWin !== null && <small>{t('agentsGrid.levelWins', { n: wins! })}</small>}</dd></div>
+      </dl>
+      {why && <p className="catalog-costs-note" data-testid={`catalog-costs-why-${id}`}>{why}</p>}
+    </>}
+  </section>;
 }
 
 /** 0..1 → a band for the gauge's colour (the same cut-offs as agentsGrid.perfBand) */
@@ -170,9 +193,9 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
           <div><dt>{t('catalog.engine')}</dt><dd>{engine} · {profile.model ?? tier}</dd></div>
           <div><dt>{t('agentDetail.version')}</dt><dd>{origin} · v{profile.activeVersion}</dd></div>
           <div><dt>{t('catalog.success')}</dt><dd>{values.success.text ?? unknown} <small>{values.success.samples}</small></dd></div>
-          <div><dt>{t('catalog.cost')}</dt><dd>{values.cost.text ?? unknown} <small>{values.cost.samples}</small></dd></div>
           <div><dt>{t('catalog.last')}</dt><dd>{last}</dd></div>
         </dl>
+        <Costs id={profile.id} metrics={stats} wins={standing?.wins ?? null} loaded={loaded} />
         <footer className="bm-back-foot">
           <span className="bm-flip-hint" aria-hidden="true">{t('bm.card.back')}</span>
           <button type="button" className="btn btn-ghost btn-s" onClick={onOpen} data-testid={`catalog-open-${profile.id}`}>{t('agentsGrid.openProfile')}</button>

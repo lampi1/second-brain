@@ -373,6 +373,56 @@ describe('agent_delegate', () => {
     expect(after[0]).toContain('[risultato · Scout «Fatti»] Metà');
   });
 
+  it('a clean result the user waits for: quiet news plus the app\'s notice in the Orchestrator\'s chat, after the turn ends, no turn (#123)', async () => {
+    const f = fixture();
+    const quiet: string[] = [];
+    f.m.onCleanReport(n => { quiet.push(n.title); return true; });
+    const orchestrator = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    // the user asks; the Orchestrator's turn runs and opens a Scout for him
+    await f.m.send(orchestrator.id, '[strategist] Affida allo Strategist\n\nche devo fare oggi?'); // a mode line is still his own message
+    f.sinks.get(orchestrator.id)!.changed({ state: 'running' });
+    const scout = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', title: 'Giornata · Cosa fare oggi', prompt: 'x' }, 'agent');
+    f.sinks.get(orchestrator.id)!.changed({ state: 'idle' });
+    const before = f.sent.get(orchestrator.id)?.length ?? 0;
+    const notices = () => f.m.items(orchestrator.id).filter(i => i.kind === 'system' && i.code === 'resultReady');
+    f.sinks.get(scout.id)!.changed({ state: 'running' });
+    await f.call('agent_report', scout.id, { outcome: 'done', summary: 'Le 3 cose di oggi: Marco, PR, report', output: 'o', doneWhen: [{ criterion: 'top 3', met: true }] });
+    // still in its turn: nothing yet, so nobody reads it as "not finished"
+    expect(quiet).toEqual([]);
+    expect(notices()).toHaveLength(0);
+    f.sinks.get(scout.id)!.changed({ state: 'idle' });
+    expect(quiet).toEqual(['Giornata · Cosa fare oggi']);
+    expect(notices()).toEqual([expect.objectContaining({ params: expect.objectContaining({ chatId: scout.id, summary: 'Le 3 cose di oggi: Marco, PR, report' }) })]);
+    await new Promise(res => setTimeout(res, 20));
+    expect(f.sent.get(orchestrator.id)?.length ?? 0).toBe(before); // no Orchestrator turn
+    // a second turn end of the same chat adds nothing
+    f.sinks.get(scout.id)!.changed({ state: 'running' });
+    f.sinks.get(scout.id)!.changed({ state: 'idle' });
+    expect(notices()).toHaveLength(1);
+    expect(quiet).toHaveLength(1);
+  });
+
+  it('a clean result nobody waits for stays quiet news, given after the chat\'s turn ends (#123)', async () => {
+    const f = fixture();
+    const quiet: string[] = [];
+    f.m.onCleanReport(n => { quiet.push(n.title); return true; });
+    const orchestrator = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    // a turn the app's news started: the user waits for nothing
+    await f.m.send(orchestrator.id, '[evento app · messaggio automatico] Novità');
+    f.sinks.get(orchestrator.id)!.changed({ state: 'running' });
+    const artisan = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'artisan', title: 'App · fix', prompt: 'x' }, 'agent');
+    f.sinks.get(orchestrator.id)!.changed({ state: 'idle' });
+    const before = f.sent.get(orchestrator.id)?.length ?? 0;
+    f.sinks.get(artisan.id)!.changed({ state: 'running' });
+    await f.call('agent_report', artisan.id, { outcome: 'done', summary: 'Fix', output: 'o', doneWhen: [{ criterion: 'test verdi', met: true }] });
+    expect(quiet).toEqual([]);
+    f.sinks.get(artisan.id)!.changed({ state: 'idle' });
+    expect(quiet).toEqual(['App · fix']);
+    expect(f.m.items(orchestrator.id).some(i => i.kind === 'system' && i.code === 'resultReady')).toBe(false); // nobody waits: no notice
+    await new Promise(res => setTimeout(res, 20));
+    expect(f.sent.get(orchestrator.id)?.length ?? 0).toBe(before);
+  });
+
   it('with the default (full) permissions a Strategist launches an Artisan, which runs with every tool and no ceiling', async () => {
     const f = fixture();
     const parent = await f.root('strategist');

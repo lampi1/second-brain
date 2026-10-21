@@ -90,6 +90,30 @@ describe('OrchestratorWake.heldNews and the hub', () => {
     expect(emitted).toHaveLength(n + 1);
   });
 
+  it('a row the user opened is read: out of the list, and it never wakes the Orchestrator; a later event is news again (#123)', async () => {
+    const { w, sent, hub, up, finish } = make();
+    up({ id: 'orchestrator', isOrchestrator: true, title: 'Orchestrator', state: 'waiting', pending: 1 });
+    finish('App · Issue', 'Issue aperta.');
+    expect(hub.get().items).toHaveLength(1);
+    expect(hub.seen('App · Issue').items).toEqual([]);
+    up({ id: 'orchestrator', isOrchestrator: true, title: 'Orchestrator', state: 'idle', pending: 0 });
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(sent).toEqual([]); // read by the user: it only rides along with the next delivery
+    expect(w.queued()).toHaveLength(1);
+    w.observe('chat:updated', chat({ id: 'App · Issue', state: 'error', lastError: 'ECONNRESET' }));
+    expect(hub.get().items).toEqual([expect.objectContaining({ chatId: 'App · Issue', kind: 'error' })]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent).toHaveLength(1);
+  });
+
+  it('what the user writes in Lampo is never news (#123)', () => {
+    const { w, hub, up } = make();
+    up({ id: 'lampo', title: 'Lampo', quick: true, state: 'idle' });
+    w.userMessage({ chatId: 'lampo', title: 'Lampo', role: null, parentTitle: null, text: 'che ore sono?' });
+    expect(hub.get().items).toEqual([]);
+    expect(w.queued()).toEqual([]);
+  });
+
   it('a closed chat\'s news is not listed; a source that throws is skipped', () => {
     const { w, hub, up } = make();
     up({ id: 'fb', state: 'running' });
