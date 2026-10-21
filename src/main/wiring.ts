@@ -4,6 +4,8 @@
 import type { BrowserWindow } from 'electron';
 import { app, safeStorage, shell } from 'electron';
 import os from 'node:os';
+import { LearningReviewService } from './brainmodel/learning-review';
+import { replayExecutor } from './brainmodel/replay-executor';
 import type { CliStatus, Harness, RunInfo } from '../shared/contract';
 import { SEND_MODE_RULE } from '../shared/newchat';
 import { engineStatuses } from './cli';
@@ -34,6 +36,8 @@ import { childFeedbackTools } from './agents/child-feedback';
 import { delegationTools } from './agents/delegation';
 import { strategyTools } from './agents/strategy-tools';
 import { portableId } from './agents/pack/flows';
+import { memoryTools } from './rules/memory-tool';
+import { MemoryService } from './rules/memory-service';
 import { writeAgentMemory } from './rules/memory';
 import type { AgentRun } from '../shared/agents';
 import type { SkillSuggestions } from '../shared/skill-suggest';
@@ -119,6 +123,8 @@ export interface Wired {
   agentLifecycle?: LifecycleApi;
   oneShot?: OneShotService;
   agentRuns?: AgentRunStore;
+  memoryReview?: MemoryService;
+  learningReview?: LearningReviewService;
   /** the hybrid brain search (SPEC 23); absent in the demo (Ctrl+K then uses its own index) */
   hybrid?: HybridSearch;
   /** the brain skills that fit a request, best first (skills/suggest.ts) */
@@ -229,9 +235,9 @@ export function attachCommandAsks(ctx: Pick<Ctx, 'emitter'>, runner: CommandRunn
 /** "Eventi all'Orchestrator" (chats/orchestrator-wake.ts): it watches the same events (the emitter tapped once more) and writes
  *  to the Orchestrator through the chat service. on = the setting orchestratorEvents and, in tests, an explicit SB_ORCHESTRATOR_EVENTS=1
  *  (a test's Orchestrator never gets surprise messages); SB_ORCHESTRATOR_EVENTS_MS shortens the grouping window for e2e. */
-export function attachOrchestratorWake(ctx: Pick<Ctx, 'emitter'>, chats: Pick<ChatService, 'send' | 'list'>, on: () => boolean, now?: () => number): OrchestratorWake {
+export function attachOrchestratorWake(ctx: Pick<Ctx, 'emitter'> & Partial<Pick<Ctx, 'userData'>>, chats: Pick<ChatService, 'send' | 'list' | 'submissionReceipts'>, on: () => boolean, now?: () => number): OrchestratorWake {
   const groupMs = Number(process.env.SB_ORCHESTRATOR_EVENTS_MS) || undefined;
-  const wake = new OrchestratorWake({ send: (chatId, text) => chats.send(chatId, text), enabled: on, list: () => chats.list(), ...(groupMs ? { groupMs } : {}), ...(now ? { now } : {}) });
+  const wake = new OrchestratorWake({ ...(ctx.userData ? { userData: ctx.userData } : {}), receiptAcknowledgement: chats.submissionReceipts === true, send: (chatId, text, receipt) => chats.send(chatId, text, undefined, false, 'App', false, { kind: 'app' }, receipt ? { beforeSubmit() {}, ...receipt } : undefined), enabled: on, list: () => chats.list(), ...(groupMs ? { groupMs } : {}), ...(now ? { now } : {}) });
   const send = ctx.emitter.emit.bind(ctx.emitter);
   ctx.emitter.emit = (ch, p) => { send(ch, p); wake.observe(ch, p); };
   return wake;
@@ -239,9 +245,9 @@ export function attachOrchestratorWake(ctx: Pick<Ctx, 'emitter'>, chats: Pick<Ch
 
 /** "Esito alla chat" (run/results.ts): a run's end goes back to the chat that proposed the block. on = the setting
  *  runResults and, in tests, an explicit SB_RUN_RESULTS=1 (a test's chats never get surprise messages). */
-export function attachRunResults(ctx: Pick<Ctx, 'emitter'>, chats: Pick<ChatService, 'send' | 'list'>, on: () => boolean): RunResults {
+export function attachRunResults(ctx: Pick<Ctx, 'emitter'>, chats: Pick<ChatService, 'send' | 'list' | 'submissionReceipts'>, on: () => boolean): RunResults {
   const groupMs = Number(process.env.SB_RUN_RESULTS_MS) || undefined;
-  const results = new RunResults({ send: (chatId, text) => chats.send(chatId, text), enabled: on, list: () => chats.list(), ...(groupMs ? { groupMs } : {}) });
+  const results = new RunResults({ send: (chatId, text) => chats.send(chatId, text, undefined, false, 'App', false, { kind: 'app' }), enabled: on, list: () => chats.list(), ...(groupMs ? { groupMs } : {}) });
   const send = ctx.emitter.emit.bind(ctx.emitter);
   ctx.emitter.emit = (ch, p) => { send(ch, p); results.observe(ch, p); };
   return results;
@@ -375,7 +381,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   brain.serveApi('/api/script', q => brainScripts.get(q.get('id') ?? ''));
   brain.serveApi('/api/changelog', () => brainChangelog.list());
   // undefined when the hybrid search fails: the brain's own server answers (substring search)
-  brain.serveApi('/api/search', q => apiSearch((text, o) => hybrid.query(text, o), q).catch(() => undefined));
+  brain.serveApi('/api/search', async q => {
+    await memoryReview.retryInvalidations();
+    return apiSearch((text, o) => hybrid.query(text, o), q).catch(() => undefined);
+  });
   brain.serveApi('/api/themes', q => hybrid.themes(q.get('kind') === 'ideas' ? 'ideas' : 'errors'));
   // past errors similar to a prompt, for the brain's prompt hook in the chats the app starts (their env: RECALL_ENV)
   const recall = mountRecallTool(mcp, (text, k) => hybrid.recall(text, k), text => hybrid.detectCorrection(text));
@@ -417,9 +426,15 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const suggester = new SkillSuggester(hybrid);
   const suggestSkills = (request: string): Promise<SkillSuggestions> => suggester.suggest(request, brainModelRef.current?.skillList() ?? [], manager.runs.list());
   const agentPacks = createAgentPacks(ctx.userData, brain, agents);
+  const memoryReview = new MemoryService({ root: () => agentPacks.packs.root(), embed: (texts, mode) => hybrid.embed(texts, mode), invalidate: async () => { if (!await hybrid.sync()) throw new Error('Memory changed, but search invalidation is pending. Retry before continuing.'); } });
   // agent_learn_propose on a work chat's endpoint: only its own role's lessons, queued for the Orchestrator and the user
   const skillTools = () => brainModelRef.current?.skillTools() ?? [];
-  addChatTools([agentCatalogTool(() => agents.list(), skillTools), skillsSuggestTool(suggestSkills), chatLearnTool(agentPacks.learning, () => manager.runs.list()), brainSearchTool((q, o) => hybrid.query(q, o)), brainScriptsTool(brainScripts)]);
+  addChatTools([agentCatalogTool(() => agents.list(), skillTools), skillsSuggestTool(suggestSkills), chatLearnTool(agentPacks.learning, () => manager.runs.list()), brainSearchTool(async (q, o) => { await memoryReview.retryInvalidations(); return hybrid.query(q, o); }), brainScriptsTool(brainScripts)]);
+  addChatTools(memoryTools({ root: () => agentPacks.packs.root(), recall: (scope, query, options) => memoryReview.recall(scope, query, options), context: chatId => {
+    const chat = manager.list().find(c => c.id === chatId);
+    if (!chat || chat.agent?.source !== 'catalog' || chat.isOrchestrator || !chat.run) return null;
+    return { scope: { roleId: portableId(chat.agent.id), project: chat.cwd }, sourceRunId: chat.run.runId };
+  } }));
   scriptEnv = () => ({ [TEXT_ENV]: textTool.url() });
   apiRoute = () => { const e = anthropicApi(); return e && engineOn(brain.settings(), e.id) && engines.hasKey(e.id) ? e.id : null; };
 
@@ -432,20 +447,21 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const mcpServers: McpServersService = new McpServersService({ userData: ctx.userData, cipher: safeStorageCipher(safeStorage), mcp, context: (id): ChatMcpContext | null => manager.mcpContext(id), emit: st => ctx.emitter.emit('mcpservers:changed', st) });
   const coldTest = process.env.SB_TEST && process.env.SB_COLD_MS ? process.env.SB_COLD_MS.split(',').map(Number) as [number, number, number] : null;
   // rules on the chats' replies, checked at every turn end so they hold with any model (ADR 0063)
-  const replyRules = new ReplyRules({ send: (chatId, text) => manager.send(chatId, text) });
+  const replyRules = new ReplyRules({ send: (chatId, text) => manager.send(chatId, text, undefined, false, 'App', false, { kind: 'app' }) });
   const autoCloseRef: { current?: AutoCloseService } = {};
   // the roles' improvement loop (set below, once the lifecycle exists): a run's end or the user's verdict → its role's
   // trial evaluated again
   const loopRef: { current?: { ended(run: AgentRun): void; outcome(run: AgentRun): void } } = {};
   const runFeedbackRef: { current?: { runList(): readonly AgentRun[] } } = {};
   const manager = new ChatManager({
+    suggestSkills: async goal => (await suggestSkills(goal)).candidates.map(c => c.name),
     onAutoCloseActivity: id => autoCloseRef.current?.invalidate(id),
     worktrees: gitWorktrees,
     resolveAgent: req => {
       const resolved = agents.resolve(req);
       if (req.roleId === undefined || req.orchestrator) return resolved;
       // only the skills this launch gives exist in its plugin (the role gate refuses the others)
-      const runtime = agentPacks.packs.runtime(req.roleId, req.skills ?? []);
+      const runtime = agentPacks.packs.runtime(req.roleId, req.skills ?? [], { query: req.goal ?? req.prompt ?? '', project: req.cwd });
       const resolvedHarness = resolved.request.harness;
       return { ...resolved, skills: runtime.skills, assets: { pluginDir: runtime.pluginDir, skillRoot: runtime.skillRoot },
         // Claude loads the plugin itself: its instructions only need the skills' qualified names (issue #101)
@@ -569,7 +585,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   browser.setFeed(e => brain.publish([e]));
   brainRoot = () => brain.info().brainRoot;
   // the user answered a hand-off after the chat's agent stopped waiting: a message wakes the chat
-  browser.setWake((chatId, text) => { void chats.send(chatId, text).catch(e => log.warn('browser', 'could not wake the chat after a hand-off', { chat: chatId, cause: errText(e), hint: 'the chat is closed or failed to start: open it and tell it yourself' })); });
+  browser.setWake((chatId, text) => { void chats.send(chatId, text, undefined, false, 'App', false, { kind: 'app' }).catch(e => log.warn('browser', 'could not wake the chat after a hand-off', { chat: chatId, cause: errText(e), hint: 'the chat is closed or failed to start: open it and tell it yourself' })); });
 
   // mail between chats in real time: inbox.mjs mail goes to the app's live chats at once, and every chat gets
   // send_to_chat / list_chats on its own MCP endpoint (chats/mail.ts)
@@ -657,7 +673,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // parent-to-child delegation between role chats (ADR 0083): every chat's own endpoint, the caller is its token's chat
   addChatTools(delegationTools({ chats: manager, roles: () => agents.list(), settings: () => checkedDelegation(brain.settings().delegation),
     engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), label: AGENT_LABEL, runs: () => manager.runs.list(), worktrees: gitWorktrees, skillTools,
-    remember: (roleId, line) => writeAgentMemory(agentPacks.packs.root(), portableId(roleId), line) }));
+    remember: (roleId, line, chat) => writeAgentMemory(agentPacks.packs.root(), portableId(roleId), line, { scope: { roleId: portableId(roleId), project: chat.cwd }, sourceRunId: chat.run?.runId ?? `legacy-chat:${chat.id}`, sourceEventId: `report:${chat.run?.runId ?? chat.id}` }) }));
   // a Strategist's plan with the user (ADR 0108): proposed on its strip, approved by the user's click, its steps' progress
   addChatTools(strategyTools(manager));
   // the Judge's sampled reviews of finished runs (agents/judge-sample.ts): they spend tokens, so they run only in the
@@ -745,6 +761,12 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     // a pass the app ran by itself: a quiet feed event with Annulla (ADR 0102)
     applied: changes => { const e = maintenanceEvent(changes); if (e) brain.publish([e]); } });
   brainModelRef.current = brainModel;
+  const replayRoot = () => { const root = brain.info().brainRoot; return root ? fs.realpathSync(root) : null; };
+  const executeReplay = replayExecutor({ root: replayRoot, runs: () => manager.runs.list(),
+    roleEngine: role => agents.list().profiles.find(p => p.id === role)?.engine ?? 'claude',
+    create: request => manager.create(request, 'app'), feedback: args => runFeedback.recordFeedback(args, 'evaluation-replay') });
+  const learningReview = new LearningReviewService({ userData: ctx.userData, root: replayRoot, log: brainModel.log, runs: () => manager.runs.list(),
+    execute: request => { if (request.brainRoot !== replayRoot()) throw new Error('Brain changed before replay.'); return executeReplay(request); } });
   brainModel.start();
   // the morning block ("Mentre eri via", ADR 0102): zero tokens, from what the app holds
   const morning = new MorningService({ file: path.join(ctx.userData, 'morning.json'), chats: () => manager.list(), runs: () => manager.runs.list(),
@@ -754,7 +776,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     stallMin: () => checkedDelegation(brain.settings().delegation).stallMin, lastEventAt: id => manager.lastEventAt(id) });
 
   return {
-    brainModel,
+    brainModel, memoryReview, learningReview,
     morning,
     mcpServers,
     cloud, chats, browser, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, suggestSkills,

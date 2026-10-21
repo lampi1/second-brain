@@ -17,7 +17,7 @@ import type { AgentCatalog } from '../../../src/shared/agents';
 import type { NewChat } from '../../../src/shared/contract';
 import type { McpTool } from '../../../src/main/mcp/server';
 import type { PermissionCeiling, ToolClass } from '../../../src/shared/agents';
-import { afterReport, checkProposal, ENOUGH_QUESTIONS, PLAN_APPROVED, readPlan, STRATEGY_FLOW, withClarified, withDelegated, withStep, type StrategyPlan } from '../../../src/shared/strategy';
+import { finishPlan, afterReport, checkProposal, ENOUGH_QUESTIONS, PLAN_APPROVED, readPlan, STRATEGY_FLOW, withClarified, withDelegated, withStep, type StrategyPlan } from '../../../src/shared/strategy';
 
 /** Roles a user narrowed: tools, ceiling and launches per role (the rest stays the default). */
 type Narrowed = Partial<Record<RoleId, { tools: ToolClass[]; ceiling: PermissionCeiling | null; launches: string[] }>>;
@@ -224,8 +224,26 @@ describe('shared/strategy.ts', () => {
     const p = withDelegated(plan(), 1, ['a', 'b'], 5);
     expect(afterReport(p, 'zz', () => 'done', 9)).toBe(p);
     expect(afterReport(p, 'a', id => (id === 'a' ? 'done' : undefined), 9)).toBe(p);
-    expect(afterReport(p, 'a', id => (id === 'a' ? 'done' : 'partial'), 9).steps[1]!.state).toBe('blocked');
+    expect(afterReport(p, 'a', id => (id === 'a' ? 'done' : 'partial'), 9).steps[1]).toMatchObject({ state: 'done', outcome: 'partial' });
     expect(afterReport(p, 'a', () => 'done', 9).steps[1]!.state).toBe('done');
+  });
+  it('finishes execution with a partial result and preserves its quality across restart', () => {
+    const p: StrategyPlan = { phase: 'running', at: 1, clarified: [], steps: [{ title: 'Research', state: 'now', chatIds: ['a'] }] };
+    const done = afterReport(p, 'a', () => 'partial', 9);
+    expect(done.phase).toBe('done');
+    expect(done.steps[0]).toMatchObject({ state: 'done', outcome: 'partial', endedAt: 9 });
+    expect(readPlan(JSON.parse(JSON.stringify(done)))).toEqual(done);
+    expect(withStep(done, 0, 'now', 10).steps[0]?.outcome).toBeUndefined();
+    expect(readPlan({ ...done, steps: [{ ...done.steps[0], outcome: 'unknown' }] })).toBeNull();
+  });
+  it('a terminal parent report ends execution without claiming unfinished criteria were met', () => {
+    const p = plan();
+    p.steps[0] = { ...p.steps[0]!, state: 'done' };
+    p.steps[1] = { ...p.steps[1]!, state: 'blocked' };
+    const done = finishPlan(p, 20);
+    expect(done.phase).toBe('done');
+    expect(done.steps.map(s => [s.state, s.outcome])).toEqual([['done', 'done'], ['done', 'blocked'], ['done', 'partial']]);
+    expect(readPlan(done)).toEqual(done);
   });
   it('keeps the latest 8 answers, cut to 120 characters', () => {
     let p = plan();

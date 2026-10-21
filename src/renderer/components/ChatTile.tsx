@@ -43,6 +43,7 @@ import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ChatMenu, TitleInput } from './ChatMenu';
 import { RequestPanel } from './RequestPanel';
 import { StrategyPanel, planQuestion } from './StrategyPanel';
+import { TaskContext } from './TaskContext';
 import { InWindowLine } from './QuestionsWindow';
 import { questionsModalOn } from '../lib/questions';
 import { childRequestsFor, requestHost, type ChildRequest } from '../lib/child-requests';
@@ -187,6 +188,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
       {chat.plan && <StrategyPanel chat={chat} question={planAsk} inWindow={inWindow} />}
       <div className={`chat-work${expanded?' expanded':''}`} id={`chat-work-${chatId}`} inert={!expanded} aria-hidden={!expanded}><div className="chat-work-inner">
       {!compact && <ChatLinks chat={chat} />}
+      {expanded && <TaskContext chat={chat} onContinue={() => reveal(true)} />}
       {!compact && chat.handoffBusy && <ContextNotice chat={chat} />}
       <ChatTranscript key={chatId} chatId={chatId} busy={busy} expanded={expanded} />
       <ChatInput ref={input} chat={chat} testid={`chat-input-${chatId}`} />

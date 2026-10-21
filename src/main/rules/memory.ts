@@ -2,6 +2,8 @@
 // One memory per agent (ADR 0077): agents/<id>/memory.md, written only through `agent <brain> <id> <text>`.
 import fs from 'node:fs';
 import path from 'node:path';
+import { proposeMemory, type MemoryProposal } from './memory-records';
+import { randomUUID } from 'node:crypto';
 import { atomicWrite, confined, locked, read } from './storage';
 
 function line(text: string, cap: number): string {
@@ -29,16 +31,18 @@ export function writeError(root: string, text: string, agent: string): void {
     atomicWrite(root, 'ai-errors.md', before.trimEnd() + '\n' + entry + '\n');
   });
 }
-/** Adds one dated line to an agent's own memory (agents/<id>/memory.md; the last 300 lines are kept). */
-export function writeAgentMemory(root: string, agentId: string, text: string): string {
+/** Proposes one fact, retaining the legacy Markdown for CLI compatibility without pruning historical lines. */
+export function writeAgentMemory(root: string, agentId: string, text: string, provenance?: Pick<MemoryProposal, 'scope' | 'sourceEventId' | 'sourceRunId'>): string {
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(agentId) || agentId.length > 64) throw new Error('Use the agent id given at launch.');
   const rel = `agents/${agentId}/memory.md`, entry = `- ${new Date().toISOString().slice(0, 10)} · ${line(text, 1000)}`;
+  proposeMemory(root, { scope: { ...provenance?.scope, roleId: agentId }, subject: 'setup', predicate: 'note', value: line(text, 1000), sourceEventId: provenance?.sourceEventId ?? `legacy-write:${randomUUID()}`, sourceRunId: provenance?.sourceRunId ?? 'unknown' });
   fs.mkdirSync(path.dirname(confined(root, rel)), { recursive: true });
+  if (provenance) return 'memory/records.json';
   locked(root, rel, () => {
     const before = read(root, rel) || '# Memoria\n\n';
     const lines = before.trimEnd().split('\n'), head = lines.filter(l => !l.startsWith('- ')), rows = lines.filter(l => l.startsWith('- '));
     if (rows.includes(entry)) return;
-    atomicWrite(root, rel, `${head.join('\n').trim() || '# Memoria'}\n\n${[...rows, entry].slice(-300).join('\n')}\n`);
+    atomicWrite(root, rel, `${head.join('\n').trim() || '# Memoria'}\n\n${[...rows, entry].join('\n')}\n`);
   });
   return rel;
 }

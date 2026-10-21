@@ -3,6 +3,10 @@ import type { statsIt } from './stats.it';
 type N = { n: number };
 
 export const statsEn: typeof statsIt = {
+  'stats.cls.coverage': ({ n, total }) => `${n} verified outcomes across ${total} decisions. Completion and user silence do not prove correctness. Reviews are sampled: no verification does not mean failure.`,
+  'stats.cls.skillsCoverage': 'Only suggestions recorded at launch: earlier runs without a snapshot are excluded. Agreement measures the choice, not result quality.',
+  'stats.cls.modelCoverage': 'Routing rows count only table decisions; role routing may leave them empty.',
+  'stats.cls.jobCoverage': 'The cost log does not verify results: success cannot be measured here.',
   'stats.cls.eyebrow': 'HOW THE APP DECIDES, BY ITSELF',
   'stats.cls.title': 'Classifiers',
   'stats.cls.lead': 'Small sorters that run on your PC without spending tokens: they decide the kind of work, the model, the skills and how long a job will take. Each card says what it decides, how often and what you can do.',
@@ -41,7 +45,7 @@ export const statsEn: typeof statsIt = {
   'stats.cls.success': 'Succeeded',
   'stats.cls.successHelp': 'Of the chats this classifier decided that have a verified outcome (confirmed by you or by an independent review), the share that succeeded. The agent’s self-report never counts. In brackets, how many chats have an outcome.',
   'stats.cls.unverified': (p: { n: number; pct: string }) => `Unverified: ${p.n} automatic outcomes, ${p.pct} succeeded. Not counted in success.`,
-  'stats.cls.unverifiedHelp': 'Outcomes the brain’s loop wrote without a confirmation: the chat closed without an error line (proxy) or the Orchestrator’s opinion. A hint, not a check: they stay out of success until you, an independent review or the facts confirm them.',
+  'stats.cls.unverifiedHelp': 'Outcomes the brain’s loop wrote without a confirmation: the chat closed without an error line (proxy) or the Orchestrator’s opinion. A hint, not a check: they stay out of success until you, an independent review confirm them.',
   'stats.cls.learning': 'Week by week',
   'stats.cls.learningLead': 'Week by week: the card’s measure (coverage or agreement, see its “?”) and how many of the chats it decided succeeded. A week without decisions stays empty, never zero.',
   'stats.cls.series.hit': 'Card measure',

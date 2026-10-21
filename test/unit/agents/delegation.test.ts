@@ -12,7 +12,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ChatManager } from '../../../src/main/chats/manager';
+import type { AdmissionQueue } from '../../../src/main/chats/admission';
+import { ChatManager, type ChatManagerOptions } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionOptions, SessionSink } from '../../../src/main/chats/session';
 import { delegationTools, stalledMin } from '../../../src/main/agents/delegation';
 import { gateRequest } from '../../../src/main/agents/role-gate';
@@ -42,12 +43,12 @@ const catalog = (n: Narrowed = {}): AgentCatalog => ({ problem: null, archived: 
     launches: [...x.launches], skills: r.skills, tools: { allow: [...x.tools] }, permissionCeiling: x.ceiling, activeVersion: 1, updatedAt: 1, instructions: r.instructions };
 }) } as unknown as AgentCatalog);
 
-function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: string) => Promise<string[]>, roles?: () => AgentCatalog, onSend?: (chatId: string) => void, narrowed: Narrowed = {}, remembered: [string, string][] = []) {
+function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: string) => Promise<string[]>, roles?: () => AgentCatalog, onSend?: (chatId: string) => void, narrowed: Narrowed = {}, remembered: [string, string][] = [], extra: Partial<ChatManagerOptions> = {}) {
   roles ??= () => catalog(narrowed);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-delegation-'));
   roots.push(dir);
   const starts = new Map<string, SessionOptions>(), sinks = new Map<string, SessionSink>(), sent = new Map<string, string[]>(), answers: { chat: string; id: string; answer: { allow?: boolean; message?: string }; patch?: Record<string, string> }[] = [];
-  const m = new ChatManager({ userData: dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0, ...(worktrees ? { worktrees } : {}),
+  const m = new ChatManager({ ...extra, userData: dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0, ...(worktrees ? { worktrees } : {}),
     resolveAgent: (req: NewChat) => {
       const id = req.roleId as RoleId | undefined;
       if (!id || !isWorkRole(id)) return { request: req, owner: { id: 'plain', name: 'Chat', purpose: '', engine: req.harness, model: null, revision: 0, source: 'plain' as const }, instructions: '', policy: null, skills: [], launches: [] };
@@ -330,7 +331,7 @@ describe('agent_delegate', () => {
     expect(r).toMatchObject({ reported: true, parentId: parent.id });
   });
 
-  it('a root chat the Orchestrator opened reports to it with agent_report; one the user opened has nobody to report to (#93)', async () => {
+  it('root reports go to the Orchestrator for its tasks and remain local for user tasks (#93)', async () => {
     const f = fixture();
     const orchestrator = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
     const herald = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'herald', title: 'Issue · Bozza', prompt: 'prepara la issue' }, 'agent');
@@ -346,31 +347,31 @@ describe('agent_delegate', () => {
     const r = await f.call('agent_report', herald.id, { outcome: 'done', summary: 'Bozza pronta', output: 'issue.md', doneWhen: [{ criterion: 'bozza scritta', met: true, evidence: 'issue.md' }] });
     expect(r).toMatchObject({ reported: true, to: 'orchestrator', delivered: true });
     await new Promise(res => setTimeout(res, 20));
-    expect(f.sent.get(orchestrator.id)?.at(-1)).toContain('[risultato · Herald «Issue · Bozza»] Bozza pronta');
+    expect(f.sent.get(orchestrator.id)?.length ?? 0).toBe(0);
+    expect(f.m.items(orchestrator.id)).toContainEqual(expect.objectContaining({ code: 'resultReady', result: expect.objectContaining({ output: 'issue.md' }) }));
     expect(f.m.runs.get(herald.run!.runId)?.report).toMatchObject({ outcome: 'done', verified: 'yes', summary: 'Bozza pronta' });
     await expect(f.call('agent_report', herald.id, { outcome: 'done', summary: 'again', output: 'x', doneWhen: [] })).rejects.toThrow(/already/);
     // outcome done with an unmet criterion is still refused, as for a delegated chat
     const scout = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', title: 'Fatti', prompt: 'x' }, 'agent');
     await expect(f.call('agent_report', scout.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [{ criterion: 'c', met: false }] })).rejects.toThrow(/partial/);
     const mine = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', title: 'Mia', prompt: 'x' }, 'user');
-    await expect(f.call('agent_report', mine.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [] })).rejects.toThrow(/only a chat the Orchestrator or a parent started/);
+    await expect(f.call('agent_report', mine.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [] })).resolves.toMatchObject({ reported: true, to: 'this-chat' });
   });
 
-  it('a root chat\'s clean result goes to the quiet news when they take it; a partial one stays a message', async () => {
+  it('a root chat\'s clean result goes to the quiet news when they take it; a partial one is also displayed without a model call', async () => {
     const f = fixture();
     const quiet: string[] = [];
     f.m.onCleanReport(n => { quiet.push(`${n.role}: ${n.summary}`); return true; });
     const orchestrator = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
     const before = f.sent.get(orchestrator.id)?.length ?? 0;
-    const a = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'artisan', title: 'App · fix', prompt: 'x' }, 'agent');
+    const a = await f.m.create({ harness: 'claude', cwd: f.dir, deliveryPolicy: 'notify', roleId: 'artisan', title: 'App · fix', prompt: 'x' }, 'agent');
     await f.call('agent_report', a.id, { outcome: 'done', summary: 'Fix su main', output: 'o', doneWhen: [{ criterion: 'test verdi', met: true }] });
-    const b = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', title: 'Fatti', prompt: 'x' }, 'agent');
+    const b = await f.m.create({ harness: 'claude', cwd: f.dir, deliveryPolicy: 'notify', roleId: 'scout', title: 'Fatti', prompt: 'x' }, 'agent');
     await f.call('agent_report', b.id, { outcome: 'partial', summary: 'Metà', output: 'o', doneWhen: [{ criterion: 'c', met: false }] });
     await new Promise(res => setTimeout(res, 20));
-    expect(quiet).toEqual(['Artisan: Fix su main']);
-    const after = f.sent.get(orchestrator.id)!.slice(before);
-    expect(after).toHaveLength(1);
-    expect(after[0]).toContain('[risultato · Scout «Fatti»] Metà');
+    expect(quiet).toEqual(['Artisan: Fix su main', 'Scout: Metà']);
+    expect(f.sent.get(orchestrator.id)?.length ?? 0).toBe(before);
+    expect(f.m.items(orchestrator.id).filter(i => i.kind === 'system' && i.code === 'resultReady')).toHaveLength(2);
   });
 
   it('a clean result the user waits for: quiet news plus the app\'s notice in the Orchestrator\'s chat, after the turn ends, no turn (#123)', async () => {
@@ -381,7 +382,7 @@ describe('agent_delegate', () => {
     // the user asks; the Orchestrator's turn runs and opens a Scout for him
     await f.m.send(orchestrator.id, '[strategist] Affida allo Strategist\n\nche devo fare oggi?'); // a mode line is still his own message
     f.sinks.get(orchestrator.id)!.changed({ state: 'running' });
-    const scout = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', title: 'Giornata · Cosa fare oggi', prompt: 'x' }, 'agent');
+    const scout = await f.m.create({ harness: 'claude', cwd: f.dir, deliveryPolicy: 'notify', roleId: 'scout', title: 'Giornata · Cosa fare oggi', prompt: 'x' }, 'agent');
     f.sinks.get(orchestrator.id)!.changed({ state: 'idle' });
     const before = f.sent.get(orchestrator.id)?.length ?? 0;
     const notices = () => f.m.items(orchestrator.id).filter(i => i.kind === 'system' && i.code === 'resultReady');
@@ -410,7 +411,7 @@ describe('agent_delegate', () => {
     // a turn the app's news started: the user waits for nothing
     await f.m.send(orchestrator.id, '[evento app · messaggio automatico] Novità');
     f.sinks.get(orchestrator.id)!.changed({ state: 'running' });
-    const artisan = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'artisan', title: 'App · fix', prompt: 'x' }, 'agent');
+    const artisan = await f.m.create({ harness: 'claude', cwd: f.dir, deliveryPolicy: 'notify', roleId: 'artisan', title: 'App · fix', prompt: 'x' }, 'agent');
     f.sinks.get(orchestrator.id)!.changed({ state: 'idle' });
     const before = f.sent.get(orchestrator.id)?.length ?? 0;
     f.sinks.get(artisan.id)!.changed({ state: 'running' });
@@ -418,7 +419,7 @@ describe('agent_delegate', () => {
     expect(quiet).toEqual([]);
     f.sinks.get(artisan.id)!.changed({ state: 'idle' });
     expect(quiet).toEqual(['App · fix']);
-    expect(f.m.items(orchestrator.id).some(i => i.kind === 'system' && i.code === 'resultReady')).toBe(false); // nobody waits: no notice
+    expect(f.m.items(orchestrator.id).some(i => i.kind === 'system' && i.code === 'resultReady')).toBe(true); // nobody waits: no notice
     await new Promise(res => setTimeout(res, 20));
     expect(f.sent.get(orchestrator.id)?.length ?? 0).toBe(before);
   });
@@ -474,7 +475,7 @@ describe('questions go to the parent first; the user\'s own messages are known (
     f.m.userWrote(kid.id, `Guarda solo marzo. ${'x'.repeat(400)}`);
     expect(notes).toHaveLength(1);
     expect(notes[0]).toMatchObject({ parentTitle: parent.title, role: 'Scout' });
-    expect(notes[0]!.text.length).toBeLessThanOrEqual(300);
+    expect(notes[0]!.text).toBe(`Guarda solo marzo. ${'x'.repeat(400)}`);
     expect(f.m.notesWaiting(parent.id)).toHaveLength(1);
     const items = f.m.items(parent.id);
     expect(items.some(i => i.kind === 'system' && i.code === 'userWroteChild')).toBe(true);
@@ -643,5 +644,284 @@ describe('stalled children ("Ferma dopo", delegation.stallMin)', () => {
     f.sinks.get(id)!.item({ kind: 'assistant', id: 'a1', at: at + 6 * 60_000, text: 'eccomi' } as never, false);
     clock = () => Date.now() + 60_000;
     expect((await f.call('agent_children', parent.id, {})).children[0].stalled).toBeUndefined();
+  });
+});
+
+
+describe('versioned task continuity and canonical results', () => {
+  const result = { outcome: 'done', summary: 'Full summary', output: 'FULL DELIVERABLE', doneWhen: [{ criterion: 'criterion A', met: true, evidence: 'artifact.txt' }] };
+  it('user roots and explicit app replay tasks report locally; app outputs cannot be synthesized', async () => {
+    const f = fixture();
+    const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    const local = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'user task' }, 'user');
+    const replay = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'app replay', doneWhen: ['criterion A'], deliveryPolicy: 'display' }, 'app');
+    const background = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'background job' }, 'app');
+    expect(() => f.m.reportRoot(background.id, checkResult(result, []))).toThrow(/explicit report contract/);
+    f.m.reportRoot(local.id, checkResult(result, []));
+    f.m.reportRoot(replay.id, checkResult(result, []));
+    expect(f.m.items(o.id).filter(item => item.kind === 'system' && item.code === 'resultReady')).toHaveLength(0);
+    expect(f.m.items(local.id).filter(item => item.kind === 'system' && item.code === 'resultReady')).toHaveLength(1);
+    expect(f.m.items(replay.id).filter(item => item.kind === 'system' && item.code === 'resultReady')).toHaveLength(1);
+    expect(f.m.list().find(row => row.id === replay.id)?.availableResultIds).toEqual([]);
+    f.sinks.get(replay.id)!.item({ kind: 'result', id: 'finished-replay', at: Date.now(), costUsd: 0, durationMs: 1, turns: 1, isError: false }, false);
+    expect(f.m.runs.get(replay.run!.runId)?.endReason).toBe('completed');
+    await expect(f.m.synthesizeResult(replay.run!.runId, { kind: 'user' })).rejects.toThrow(/root task/);
+    await expect(f.m.synthesizeResult(local.run!.runId, { kind: 'chat', chatId: o.id })).rejects.toThrow(/root task/);
+    await f.m.synthesizeResult(local.run!.runId, { kind: 'user' });
+    expect(f.sent.get(o.id)).toHaveLength(1);
+  });
+
+  it('rebuilds local user and app replay results on restart without forwarding private output', async () => {
+    const f = fixture();
+    const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    const local = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'local' }, 'user');
+    const app = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'replay', doneWhen: ['criterion A'] }, 'app');
+    f.m.reportRoot(local.id, checkResult(result, []));
+    f.m.reportRoot(app.id, checkResult({ ...result, output: 'PRIVATE REPLAY' }, []));
+    await f.m.shutdown();
+    const again = new ChatManager({ userData: f.dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0 }); managers.push(again);
+    again.resumeInterrupted(); again.resumeInterrupted();
+    expect(again.items(o.id).filter(i => i.kind === 'system' && i.code === 'resultReady')).toHaveLength(0);
+    for (const id of [local.id, app.id]) expect(again.items(id).filter(i => i.kind === 'system' && i.code === 'resultReady')).toHaveLength(1);
+    expect(again.list().find(row => row.id === app.id)?.availableResultIds).toEqual([]);
+    expect(again.list().find(row => row.id === local.id)?.availableResultIds).toEqual([local.run!.runId]);
+  });
+
+  it('attributes delayed final accounting exactly once to the completed run after reassignment', async () => {
+    const f = fixture();
+    await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'one' }, 'agent');
+    const first = f.m.runs.get(c.run!.runId)!;
+    f.m.reportRoot(c.id, checkResult(result, []));
+    f.sinks.get(c.id)!.item({ kind: 'result', id: 'settled-one', at: Date.now(), costUsd: 0.125, durationMs: 1, turns: 1, isError: false }, false);
+    expect(first.endReason).toBe('completed');
+    await f.m.assignTask(c.id, 'two');
+    const next = f.m.list().find(row => row.id === c.id)!.run!;
+    const patch = { turnCostUsd: 0.125, turnTokens: { input: 10, output: 20, cacheRead: 0, cacheWrite: 0 } };
+    f.sinks.get(c.id)!.changed(patch);
+    f.sinks.get(c.id)!.changed(patch);
+    expect(first).toMatchObject({ turns: 1, costUsd: 0.125, tokens: patch.turnTokens });
+    expect(next).toMatchObject({ turns: 0, costUsd: 0 });
+  });
+
+  it('app messages cannot become user instructions or silently create a follow-up assignment', async () => {
+    const f = fixture();
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'initial user request' }, 'user');
+    expect(f.m.userEvents(c.id).events.map(e => e.text)).toEqual(['initial user request']);
+    f.m.reportRoot(c.id, checkResult(result, []));
+    await f.m.send(c.id, 'automated rule response', undefined, false, undefined, false, { kind: 'app' });
+    expect(f.m.userEvents(c.id).events.map(e => e.text)).toEqual(['initial user request']);
+    expect(f.m.list().find(row => row.id === c.id)?.run?.runId).toBe(c.run!.runId);
+    await f.m.send(c.id, 'actual user follow-up');
+    expect(f.m.userEvents(c.id).events.map(e => e.text)).toEqual(['initial user request', 'actual user follow-up']);
+    expect(f.m.list().find(row => row.id === c.id)?.run?.taskVersion).toBe(2);
+  });
+
+  it('captures exact brain and project scope on each task launch', async () => {
+    let brain = '/task-brain-a';
+    const f = fixture({}, undefined, undefined, undefined, {}, [], { brainRoot: () => brain });
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'one' }, 'agent');
+    expect(c.run?.scope).toEqual({ brainRoot: path.resolve(brain), projectRoot: path.resolve(f.dir) });
+    brain = '/task-brain-b';
+    await f.m.assignTask(c.id, 'two');
+    expect(f.m.list().find(row => row.id === c.id)?.run?.scope).toEqual({ brainRoot: path.resolve(brain), projectRoot: path.resolve(f.dir) });
+  });
+
+  it('persists full ordered user instructions and refuses assignment against a stale read cursor', async () => {
+    const f = fixture();
+    const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'initial task' }, 'agent');
+    const long = `First instruction\n${'x'.repeat(2000)}\nIMPORTANT final constraint`;
+    await f.m.send(c.id, long);
+    await f.m.send(c.id, 'Second instruction, preserve the first.');
+    const read = f.m.userEvents(c.id);
+    expect(read.latestSeq).toBe(2);
+    expect(read.events.map(e => e.text)).toEqual([long, 'Second instruction, preserve the first.']);
+    expect(new Set(read.events.map(e => e.id)).size).toBe(2);
+    expect(f.m.list().find(row => row.id === c.id)?.run?.taskVersion).toBe(1);
+    await f.call('agent_report', c.id, result);
+    await expect(f.m.assignTask(c.id, 'follow up', { source: { kind: 'chat', chatId: o.id } })).rejects.toThrow(/Unread user/);
+    f.m.userWrote(c.id, 'A newer constraint');
+    await expect(f.m.assignTask(c.id, 'follow up', { expectedEventSeq: read.latestSeq, source: { kind: 'chat', chatId: o.id } })).rejects.toThrow(/Unread user/);
+    await f.m.assignTask(c.id, 'follow up', { expectedEventSeq: 3, source: { kind: 'chat', chatId: o.id } });
+    expect(f.m.userEvents(c.id).acknowledgedSeq).toBe(3);
+    expect(f.m.list().find(row => row.id === c.id)?.run?.taskVersion).toBe(2);
+    await f.m.shutdown();
+    const again = new ChatManager({ userData: f.dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0 }); managers.push(again);
+    expect(again.userEvents(c.id)).toMatchObject({ latestSeq: 3, acknowledgedSeq: 3 });
+    expect(again.userEvents(c.id).events[0]?.text).toBe(long);
+    expect(again.userEvents(c.id, 2).events.map(e => e.text)).toEqual(['A newer constraint']);
+  });
+
+  it('display and notify are token-free; explicit synthesis sends full evidence once and rejects child output', async () => {
+    const f = fixture(), quiet: string[] = [];
+    f.m.onCleanReport(note => { quiet.push(note.summary); return true; });
+    const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    const display = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'display', deliveryPolicy: 'display' }, 'agent');
+    const notify = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'notify', deliveryPolicy: 'notify' }, 'agent');
+    const full = `${'e'.repeat(3000)} FULL EVIDENCE AT THE END`;
+    await f.call('agent_report', display.id, { ...result, output: full });
+    await f.call('agent_report', notify.id, { ...result, summary: 'Notify summary' });
+    expect(f.sent.get(o.id) ?? []).toHaveLength(0);
+    expect(quiet).toEqual(['Notify summary']);
+    expect(f.m.list().find(row => row.id === o.id)?.availableResultIds).toContain(display.run!.runId);
+    expect(f.m.list().find(row => row.id === o.id)?.pendingResultIds).toEqual([]);
+    await Promise.all([f.m.synthesizeResult(display.run!.runId, { kind: 'user' }), f.m.synthesizeResult(display.run!.runId, { kind: 'user' })]);
+    expect(f.sent.get(o.id)).toHaveLength(1);
+    expect(f.sent.get(o.id)![0]).toContain(full);
+    expect(f.sent.get(o.id)![0]).toContain('artifact.txt');
+    expect(f.m.runs.get(display.run!.runId)?.delivery).toMatchObject({ synthesisPending: false, synthesisSubmittedAt: expect.any(Number), attempts: 1 });
+    const p = await f.root('strategist');
+    const id = (await f.call('agent_delegate', p.id, { tasks: [f.task('scout', 'Private')] })).children[0].chatId;
+    await f.call('agent_report', id, result);
+    await expect(f.m.synthesizeResult(f.m.list().find(row => row.id === id)!.run!.runId, { kind: 'user' })).rejects.toThrow(/root task/);
+  });
+
+  it('a synthesize task policy waits for final turn end and submits once automatically', async () => {
+    const f = fixture();
+    const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'synthesize', deliveryPolicy: 'synthesize' }, 'agent');
+    f.sinks.get(c.id)!.changed({ state: 'running' });
+    await f.call('agent_report', c.id, result);
+    expect(f.sent.get(o.id) ?? []).toHaveLength(0);
+    expect(f.m.list().find(row => row.id === o.id)?.pendingResultIds).toContain(c.run!.runId);
+    f.sinks.get(c.id)!.changed({ state: 'idle' });
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(f.sent.get(o.id)).toHaveLength(1);
+    expect(f.m.list().find(row => row.id === o.id)?.pendingResultIds).toEqual([]);
+    f.m.resumeInterrupted();
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(f.sent.get(o.id)).toHaveLength(1);
+  });
+
+  it('restored in-flight batch never acknowledges a concurrent child twice', async () => {
+    const f = fixture();
+    const p = await f.root('strategist');
+    const kids = (await f.call('agent_delegate', p.id, { tasks: [f.task('scout', 'One'), f.task('sentinel', 'Two')] })).children;
+    f.sinks.get(kids[1].chatId)!.changed({ state: 'running' });
+    await f.call('agent_report', kids[0].chatId, result);
+    f.m.resumeInterrupted();
+    await f.call('agent_report', kids[1].chatId, result);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(f.m.list().find(c => c.id === kids[1].chatId)!.run!.delivery!.attempts).toBe(1);
+  });
+  it('quitting with a waiting sibling preserves each outbox id once', async () => {
+    const f = fixture();
+    const p = await f.root('strategist');
+    const kids = (await f.call('agent_delegate', p.id, { tasks: [f.task('scout', 'One'), f.task('sentinel', 'Two')] })).children;
+    f.sinks.get(kids[1].chatId)!.changed({ state: 'running' });
+    await f.call('agent_report', kids[0].chatId, result);
+    await f.m.shutdown();
+    const rows = JSON.parse(fs.readFileSync(path.join(f.dir, 'chats.json'), 'utf8')).chats;
+    expect(rows.find((c: { id: string }) => c.id === p.id).heldResults).toHaveLength(1);
+  });
+  it('reuses the conversation with a new run, retaining old evidence and accounting new cost', async () => {
+    const f = fixture();
+    const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', title: 'Topic', prompt: 'one' }, 'agent');
+    const first = c.run!.runId;
+    await f.call('agent_report', c.id, result);
+    await f.m.set(c.id, { workStatus: 'completed' });
+    await expect(f.m.send(c.id, 'second question', undefined, false, o.title, false, { kind: 'chat', chatId: o.id })).rejects.toThrow(/app_assign_task/);
+    await f.m.assignTask(c.id, 'second question', { mode: 'continue', expectedVersion: 1, source: { kind: 'chat', chatId: o.id } });
+    const next = f.m.list().find(x => x.id === c.id)!.run!;
+    expect(next.runId).not.toBe(first);
+    expect(next).toMatchObject({ taskId: first, taskVersion: 2, continuedFrom: first });
+    expect(f.m.runs.get(first)?.report?.canonical).toMatchObject({ output: 'FULL DELIVERABLE', doneWhen: [{ evidence: 'artifact.txt' }] });
+    f.sinks.get(c.id)!.changed({ state: 'running', turnCostUsd: 1 });
+    expect(next.costUsd).toBe(1);
+    expect(next.corrections).toEqual({ tagged: 0, afterReport: 0 });
+  });
+  it('retains the complete report even when work was already marked completed', async () => {
+    const f = fixture();
+    await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'one' }, 'agent');
+    await f.m.set(c.id, { workStatus: 'completed' });
+    await f.call('agent_report', c.id, result);
+    expect(f.m.runs.get(c.run!.runId)?.report?.canonical?.output).toBe('FULL DELIVERABLE');
+  });
+  it('refuses a post-report follow-up before dispatch while the old turn is still finishing', async () => {
+    const f = fixture();
+    await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'one' }, 'agent');
+    f.sinks.get(c.id)!.changed({ state: 'running' });
+    await f.call('agent_report', c.id, result);
+    await expect(f.m.send(c.id, 'follow up')).rejects.toThrow(/fine del turno/);
+    f.m.resumedByUser(c.id, 'follow up');
+    expect(f.m.list().find(x => x.id === c.id)?.run?.taskVersion).toBe(1);
+  });
+  it('accepts a second child report on a new run, and rejects duplicate reports within one run', async () => {
+    const f = fixture(), p = await f.root('strategist');
+    const id = (await f.call('agent_delegate', p.id, { tasks: [f.task('scout', 'Topic')] })).children[0].chatId;
+    await f.call('agent_report', id, result);
+    await f.m.send(id, 'expand this point');
+    f.m.resumedByUser(id, 'expand this point');
+    await expect(f.call('agent_report', id, result)).rejects.toThrow(/taskVersion/);
+    await expect(f.call('agent_report', id, { ...result, taskVersion: 2 })).resolves.toMatchObject({ reported: true });
+    await expect(f.call('agent_report', id, { ...result, taskVersion: 2 })).rejects.toThrow(/already/);
+    expect(f.m.list().find(c => c.id === id)?.run?.corrections).toEqual({ tagged: 0, afterReport: 0 });
+  });
+  it('keeps a child outbox across CPU admission and a failed engine submission, then acknowledges the retry', async () => {
+    let cpu = 0, failParent: string | undefined;
+    const f = fixture({}, undefined, undefined, id => { if (id === failParent) { failParent = undefined; throw new Error('engine submission failed'); } }, {}, [], { childResultsMs: 100, admission: { sampler: { sample: () => ({ cpu, freeRam: 90 }) }, limits: () => ({ enabled: true, cpu: 75, ram: 15 }), autoTick: false } });
+    const p = await f.root('strategist');
+    const child = (await f.call('agent_delegate', p.id, { tasks: [f.task('scout', 'Queued result')] })).children[0].chatId;
+    // Simulate the parent's persisted closed state while its independently running child completes.
+    const rec = (f.m as unknown as { chats: Map<string, { s: { closedAt?: number }; session: HarnessSession | null }> }).chats.get(p.id)!;
+    rec.s.closedAt = Date.now(); rec.session = null;
+    cpu = 95; failParent = p.id;
+    await f.call('agent_report', child, result);
+    const saved = () => JSON.parse(fs.readFileSync(path.join(f.dir, 'chats.json'), 'utf8')).chats.find((c: { id: string }) => c.id === p.id).heldResults;
+    expect(saved()).toHaveLength(1);
+    expect(saved()[0]).toMatchObject({ id: expect.any(String), runId: f.m.list().find(c => c.id === child)!.run!.runId });
+    const run = f.m.runs.get(saved()[0].runId)!;
+    expect(run.delivery).toMatchObject({ policy: 'synthesize', attempts: 0 });
+    expect(run.delivery?.synthesisSubmittedAt).toBeUndefined();
+    const q = (f.m as unknown as { admission: AdmissionQueue }).admission;
+    cpu = 0; q.tick(); q.tick();
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(saved()).toHaveLength(1);
+    expect(run.delivery).toMatchObject({ attempts: 1 });
+    expect(run.delivery?.synthesisSubmittedAt).toBeUndefined();
+    await new Promise(resolve => setTimeout(resolve, 120));
+    expect(saved() ?? []).toHaveLength(0);
+    expect(run.delivery).toMatchObject({ attempts: 2, synthesisSubmittedAt: expect.any(Number), synthesisBatchId: expect.any(String) });
+  });
+
+  it('backfills legacy identity and rebuilds every historical root result once after restart', async () => {
+    const f = fixture();
+    const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', title: 'Topic', prompt: 'one' }, 'agent');
+    const legacy = f.m.runs.get(c.run!.runId)!;
+    delete legacy.taskId; delete legacy.taskVersion;
+    await f.call('agent_report', c.id, result);
+    expect(legacy).toMatchObject({ taskId: legacy.runId, taskVersion: 1 });
+    await f.m.assignTask(c.id, 'next topic', { mode: 'continue' });
+    await f.call('agent_report', c.id, { ...result, taskVersion: 2, output: 'SECOND DELIVERABLE' });
+    const p = await f.root('strategist');
+    const child = (await f.call('agent_delegate', p.id, { tasks: [f.task('scout', 'Private child')] })).children[0].chatId;
+    await f.call('agent_report', child, { ...result, output: 'PRIVATE CHILD OUTPUT' });
+    await f.m.shutdown();
+    const again = new ChatManager({ userData: f.dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0 });
+    managers.push(again);
+    again.resumeInterrupted(); again.resumeInterrupted();
+    expect(again.runs.get(legacy.runId)?.report?.canonical?.output).toBe('FULL DELIVERABLE');
+    const notices = again.items(o.id).filter(i => i.kind === 'system' && i.code === 'resultReady');
+    expect(notices).toHaveLength(2);
+    expect(notices.map(i => (i as unknown as { result: { output: string } }).result.output)).toEqual(['FULL DELIVERABLE', 'SECOND DELIVERABLE']);
+  });
+  it('rejects stale assignment versions and never authorizes an assignment by a display title', async () => {
+    const f = fixture();
+    await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'one' }, 'agent');
+    await f.call('agent_report', c.id, result);
+    await f.m.set(c.id, { workStatus: 'completed' });
+    await f.m.send(c.id, 'not an assignment', undefined, false, 'Orchestrator');
+    expect(f.m.list().find(x => x.id === c.id)?.run?.runId).toBe(c.run!.runId);
+    await expect(f.m.assignTask(c.id, 'new work', { expectedVersion: 99 })).rejects.toThrow(/version/);
+    await f.m.assignTask(c.id, 'new work', { mode: 'new-task', expectedVersion: 1 });
+    const run = f.m.list().find(x => x.id === c.id)!.run!;
+    expect(run.taskId).toBe(run.runId);
+    expect(run.continuedFrom).toBeUndefined();
   });
 });

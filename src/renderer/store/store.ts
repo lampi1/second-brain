@@ -48,6 +48,12 @@ export function dispatch(a: Action): void {
 const errText = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
 const fail = (what: string) => (e: unknown) => { toast(`${what}: ${errText(e)}`, 'err'); };
 
+/** Explicit user request: reading the result remains free of inference. */
+export async function synthesizeResult(runId: string): Promise<boolean> {
+  try { await sb.invoke('chat:synthesize', { runId }); return true; }
+  catch (e) { fail(t('chat.resultSynthesize'))(e); return false; }
+}
+
 let started = false;
 /** Subscribe to main's events (buffered until the first load lands), then load everything once. */
 export function startStore(): void {

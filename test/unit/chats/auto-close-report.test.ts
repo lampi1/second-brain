@@ -153,7 +153,7 @@ describe('a worker that delivered its final report closes by itself (#86)', () =
     const f = fixture(), r = await f.orchestrator();
     const w = await f.worker(r.id, { mail: 'Report finale: fatto.', answer: 'Fatto.' });
     expect(f.chat(w.id).work?.status).toBe('completed');
-    await f.m.send(w.id, 'Ora una seconda ricerca.', undefined, false, r.title);
+    await f.m.assignTask(w.id, 'Ora una seconda ricerca.', { mode: 'continue', source: { kind: 'chat', chatId: r.id } });
     expect(f.chat(w.id).work?.status).toBe('assigned');
     f.m.noteMail(w.id, null, 'Report a una chat fuori dall’app');
     expect(f.chat(w.id).work?.status).toBe('assigned');

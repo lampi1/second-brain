@@ -46,7 +46,15 @@ describe('pickSamples', () => {
     expect(p).toContain('finished run of Scout «Chat c_1»');
     expect(p).toContain('Goal of that run: Trova gli errori');
     expect(p).toContain('Trovati 3 errori');
-    expect(p).toContain('Ecco i 3 errori');
+    expect(p).not.toContain('Ecco i 3 errori');
+    expect(p).toContain('unavailable: legacy run');
+    const r = run('1');
+    r.taskId = 'task-1'; r.taskVersion = 2;
+    r.report!.canonical = { taskId: 'task-1', taskVersion: 2, runId: r.runId, at: NOW, outcome: 'done', summary: 'short', output: 'long'.repeat(3000) + 'FINAL EVIDENCE', doneWhen: [{ criterion: 'check', met: true, evidence: 'source.txt' }] };
+    const full = reviewPrompt(r, chat('c_1'));
+    expect(full).toContain(r.report!.canonical.output);
+    expect(full).toContain('source.txt');
+    expect(full).toContain('task version: 2');
     expect(p).toContain('"verdict":"success|partial|fail"');
   });
 });

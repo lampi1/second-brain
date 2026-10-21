@@ -1,6 +1,6 @@
 // One memory per agent (ADR 0077): the product memory writer's `agent` command adds one dated line to
 // agents/<id>/memory.md, created on first use (never seeded), refuses ids that are not portable ids and multi-line text,
-// and keeps the last 300 lines. Temp folders only.
+// and retains legacy history. Temp folders only.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -21,13 +21,13 @@ describe('agent memory writer', () => {
     expect(text.split('\n').filter(l => l.startsWith('- '))).toHaveLength(1);
     expect(text).toMatch(/^# Memoria\n\n- \d{4}-\d{2}-\d{2} · Il cliente Rossi vuole il PDF\n$/);
   });
-  it('refuses traversal ids and multi-line text; keeps the last 300 lines', () => {
+  it('refuses traversal ids and multi-line text; retains all legacy lines', () => {
     const root = brain();
     expect(() => writeAgentMemory(root, '../x', 'a')).toThrow(/agent id/);
     expect(() => writeAgentMemory(root, 'a', 'riga\naltra')).toThrow();
     for (let i = 0; i < 305; i++) writeAgentMemory(root, 'a', `fatto ${i}`);
     const rows = fs.readFileSync(path.join(root, 'agents/a/memory.md'), 'utf8').split('\n').filter(l => l.startsWith('- '));
-    expect(rows).toHaveLength(300);
-    expect(rows[0]).toContain('fatto 5');
+    expect(rows).toHaveLength(305);
+    expect(rows[0]).toContain('fatto 0');
   });
 });

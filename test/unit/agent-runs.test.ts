@@ -22,6 +22,71 @@ describe('agent run store', () => {
     expect(s.start(start({ costKnown: false })).costUsd).toBeNull();
   });
 
+  it('preserves launch snapshots and canonical evidence, and refuses a result for a different run', () => {
+    const run = new AgentRunStore(tmp()).start(start());
+    run.taskId = 't1'; run.taskVersion = 1;
+    run.skillSuggestions = { at: 1, suggested: ['review'], used: ['review'] };
+    run.report = { at: 2, outcome: 'done', verified: 'yes', summary: 'short', canonical: {
+      at: 2, taskId: 't1', taskVersion: 1, runId: run.runId, outcome: 'done', summary: 'short', output: 'full answer',
+      doneWhen: [{ criterion: 'checked', met: true, evidence: 'source.txt' }],
+    } };
+    expect(readRun(run)).toEqual(run);
+    run.report.canonical!.runId = 'r_ffffffffffff';
+    expect(readRun(run)).toBeNull();
+  });
+
+  it('never labels legacy aggregate silence proxies as verified', () => {
+    const tally = emptyTally('coder', 1);
+    delete tally.verdictSchema;
+    tally.ended = 5; tally.verdicts.success = 5;
+    const restored = readTally(tally)!;
+    expect(restored.ended).toBe(5);
+    expect(restored.verdicts.success).toBe(0);
+    expect(restored.verdictSchema).toBe(2);
+  });
+
+  it('roundtrips delivery observations and rejects impossible or incomplete submission metadata', () => {
+    const run = new AgentRunStore(tmp()).start(start());
+    run.delivery = { policy: 'synthesize', reportedAt: 10, attempts: 2, deliveredAt: 20, synthesisBatchId: 'batch1', synthesisSubmittedAt: 20 };
+    expect(readRun(run)?.delivery).toEqual(run.delivery);
+    for (const bad of [{ attempts: -1 }, { deliveredAt: 9 }, { synthesisBatchId: undefined }, { policy: 'display' }]) {
+      expect(readRun({ ...run, delivery: { ...run.delivery, ...bad } })).toBeNull();
+    }
+    delete run.delivery;
+    expect(readRun(run)?.delivery).toBeUndefined();
+  });
+
+  it('counts actual settled turns only and preserves legacy unknown turn coverage', () => {
+    const run = new AgentRunStore(tmp()).start(start());
+    expect(run.turns).toBe(0);
+    addTurn(run, null, undefined); addTurn(run, null, undefined);
+    expect(readRun(run)?.turns).toBe(2);
+    endRun(run, 'completed', 20); addTurn(run, null, undefined);
+    expect(run.turns).toBe(2);
+    expect(readRun({ ...run, turns: -1 })).toBeNull();
+    delete run.turns;
+    expect(readRun(run)?.turns).toBeUndefined();
+  });
+
+  it('persists explicit notify and pending synthesis policy without inventing an acknowledgment', () => {
+    const run = new AgentRunStore(tmp()).start(start());
+    run.delivery = { policy: 'notify', reportedAt: 10, attempts: 0 };
+    expect(readRun(run)?.delivery).toEqual(run.delivery);
+    run.delivery = { policy: 'synthesize', reportedAt: 10, attempts: 0, synthesisRequestedAt: 12, synthesisPending: true };
+    expect(readRun(run)?.delivery).toEqual(run.delivery);
+    expect(readRun({ ...run, delivery: { ...run.delivery, synthesisRequestedAt: 9 } })).toBeNull();
+  });
+
+  it('preserves exact brain/project scope and refuses relative or malformed scope', () => {
+    const run = new AgentRunStore(tmp()).start(start());
+    run.scope = { brainRoot: tmp(), projectRoot: tmp() };
+    run.taskContract = { goal: 'Replay', doneWhen: ['Check'], reportExpected: true, deliveryPolicy: 'display' };
+    expect(readRun(run)).toEqual(run);
+    expect(readRun({ ...run, scope: { ...run.scope, projectRoot: '../outside' } })).toBeNull();
+    expect(readRun({ ...run, taskContract: { ...run.taskContract, deliveryPolicy: 'invalid' } })).toBeNull();
+    expect(readRun({ ...run, taskContract: { ...run.taskContract, reportExpected: 'true' } })).toBeNull();
+  });
+
   it('refuses a malformed run field by field', () => {
     const run = new AgentRunStore(tmp()).start(start());
     expect(readRun(run)).toEqual(run);

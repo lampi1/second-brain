@@ -28,8 +28,8 @@ describe('app_chats exposes the agent run of each agent chat', () => {
     const brain = { settings: () => ({}) } as unknown as BrainService;
     const tools = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0' });
     const out = await tools.find(t => t.name === 'app_chats')!.run({}) as { app: Record<string, unknown>[] };
-    expect(out.app[0]!.run).toEqual({ runId: 'r_0123456789ab', agentId: 'reviewer', version: 2, state: 'running' });
-    expect(out.app[1]!.run).toEqual({ runId: 'r_ba9876543210', agentId: 'reviewer', version: 2, state: 'ended' });
+    expect(out.app[0]!.run).toEqual({ runId: 'r_0123456789ab', taskId: 'r_0123456789ab', taskVersion: 1, agentId: 'reviewer', version: 2, state: 'running' });
+    expect(out.app[1]!.run).toEqual({ runId: 'r_ba9876543210', taskId: 'r_ba9876543210', taskVersion: 1, agentId: 'reviewer', version: 2, state: 'ended' });
     expect(out.app[2]!.run).toBeUndefined();
   });
   it('a feedback\'s runId says where the id comes from', () => {

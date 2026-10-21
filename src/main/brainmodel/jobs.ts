@@ -8,13 +8,14 @@
 //   corrections    the lessons queue (agent_learn_propose): each lesson goes to the role's text (default), to a skill,
 //                  or to the brain's rules (rules/lessons.md, a topic file listed in brain.json).
 //   repeated-task  three or more ended runs with the same kind of goal and no skill covering it → a new skill with the
-//                  requests seen and what the runs reported, a default skill of the role that did most of them.
+//                  requests seen and what the runs reported, stored outside loadable skills pending verification.
 //   merge-skills   two brain skills with (nearly) the same text → one, the roles relinked to it.
-//   merge-memory   the same line in two or more roles' memories → memory/shared.md, once.
+//   merge-memory   no automatic promotion: repeated claims retain their scope.
 // Used by brainmodel/service.ts; unit tests: test/unit/brainmodel/jobs.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
+import { verifiedVerdict } from '../../shared/run-verdict';
 import { ORCHESTRATOR_AGENT_ID } from '../../shared/agents';
 import type { LearnedRuleProposal } from '../../shared/agent-pack';
 import type { BrainSkill, MaintenanceJobId, MigrationItem, MigrationReport } from '../../shared/brain-model';
@@ -22,7 +23,7 @@ import { conceptOf } from '../../shared/work-concepts';
 import { NAME_RE, parseMd, setBody, yamlValue } from '../../shared/skillmd';
 import type { AgentSnapshot, ChangeLog } from './changes';
 import { procedureSections, sectionText } from './procedure-sources';
-import { agentMemoryFile, readSmall } from './model';
+import { readSmall } from './model';
 import { checkPermissionText } from '../agents/tool-policy';
 
 /** The role side of a job: only the role text and the declared skills. */
@@ -177,19 +178,26 @@ function brainJsonWithTopic(root: string, rel: string): { file: string; text: st
 const REPEAT_MIN = 3, REPEAT_SIM = 0.4, REPEAT_DAYS = 60;
 export function repeatedTask(ctx: JobContext): JobResult {
   const since = ctx.now() - REPEAT_DAYS * 86400e3;
-  const runs = ctx.runs().filter(r => r.endedAt && r.startedAt >= since && r.goal.trim().length >= 12 && r.agentId !== ORCHESTRATOR_AGENT_ID);
-  const groups: { toks: Set<string>; runs: AgentRun[] }[] = [];
+  const scopePath = (value: string): string => process.platform === 'win32' ? path.resolve(value).toLowerCase() : path.resolve(value);
+  const brainRoot = scopePath(ctx.root);
+  const runs = ctx.runs().filter(r => r.scope && scopePath(r.scope.brainRoot) === brainRoot && r.endedAt && r.startedAt >= since && r.goal.trim().length >= 12 && r.agentId !== ORCHESTRATOR_AGENT_ID);
+  const groups: { toks: Set<string>; runs: AgentRun[]; scope: string }[] = [];
   for (const r of runs) {
     const t = tokens(r.goal);
     if (t.size < 2) continue;
-    const g = groups.find(x => jaccard(x.toks, t) >= REPEAT_SIM);
-    if (g) { g.runs.push(r); for (const x of t) g.toks.add(x); } else groups.push({ toks: t, runs: [r] });
+    const scope = JSON.stringify([brainRoot, scopePath(r.scope!.projectRoot), r.tags?.app ?? null]);
+    const g = groups.find(x => x.scope === scope && jaccard(x.toks, t) >= REPEAT_SIM);
+    if (g) { g.runs.push(r); for (const x of t) g.toks.add(x); } else groups.push({ toks: t, runs: [r], scope });
   }
   const skills = ctx.skills(), taken = new Set(skills.map(s => s.name));
   let changes = 0;
   for (const g of groups) {
+    const distinctTasks = new Map<string, AgentRun>();
+    for (const r of g.runs) { const key = r.taskId ?? `legacy-chat:${r.chatId}`, prior = distinctTasks.get(key); if (!prior || r.startedAt > prior.startedAt) distinctTasks.set(key, r); }
+    if (distinctTasks.size < REPEAT_MIN) continue;
+    // Follow-ups and rework share their task identity; they never inflate repetition or word frequencies.
+    g.runs = [...distinctTasks.values()];
     const chats = new Set(g.runs.map(r => r.chatId));
-    if (chats.size < REPEAT_MIN) continue;
     // the words most runs share: the job's name and its "when to use"
     const counts = new Map<string, number>();
     for (const r of g.runs) for (const t of tokens(r.goal)) if (!t.startsWith('~')) counts.set(t, (counts.get(t) ?? 0) + 1);
@@ -200,24 +208,20 @@ export function repeatedTask(ctx: JobContext): JobResult {
     const name = skillName(common.slice(0, 3).join(' '), taken);
     if (undone(ctx.log, 'repeated-task', name) || ctx.log.all().some(c => c.job === 'repeated-task' && c.target === name)) continue;
     taken.add(name);
-    const byAgent = new Map<string, number>();
-    for (const r of g.runs) byAgent.set(r.agentId, (byAgent.get(r.agentId) ?? 0) + 1);
-    const owner = [...byAgent].sort((a, b) => b[1] - a[1])[0]?.[0];
     const first = g.runs.reduce((a, b) => (a.startedAt <= b.startedAt ? a : b)), last = g.runs.reduce((a, b) => (a.startedAt >= b.startedAt ? a : b));
-    const good = g.runs.filter(r => r.report && r.report.outcome === 'done' && (r.outcome?.verdict ?? 'success') !== 'fail');
+    const good = g.runs.filter(r => r.report?.canonical && verifiedVerdict(r, [], ctx.now())?.verdict === 'success');
     const body = [`# ${oneLine(last.goal, 90)}`, '',
       `Quando usarla: richieste come queste, viste ${g.runs.length} volte dal ${day(first.startedAt)} al ${day(last.startedAt)}.`, '',
       ...g.runs.slice(-6).map(r => `- ${oneLine(r.goal, 160)}`), '',
-      '## Come è andata', '',
-      ...(good.length ? good.slice(-5).map(r => `- ${day(r.startedAt)}: ${oneLine(r.report ? r.report.summary : '', 220)}`) : ['- Nessun resoconto riuscito ancora: aggiungi qui i passi che funzionano.']), '',
-      '## Passi', '', '1. Rileggi le richieste qui sopra e il resoconto più recente.', '2. Segui gli stessi passi; annota qui ogni differenza utile.', ''].join('\n');
-    const file = path.join(ctx.skillDir, name, 'SKILL.md');
-    const c = ctx.log.apply({ job: 'repeated-task', kind: 'skill', action: 'create', target: name, summary: `Nuova skill «${name}» da un lavoro ripetuto ${g.runs.length} volte`, reason: `Lo stesso tipo di richiesta in ${chats.size} chat: ora c’è un modo scritto di farlo.`, evidence: g.runs.slice(-6).map(r => r.runId) },
+      '## Esempi verificati indipendentemente', '',
+      ...(good.length ? good.slice(-5).map(r => `- ${day(r.startedAt)}: ${oneLine(r.report ? r.report.summary : '', 220)}`) : ['- Nessun esempio verificato indipendentemente: il solo resoconto non prova la riuscita.']), '',
+      '## Passi', '', 'Documentare qui i passi concreti: le richieste ripetute non descrivono una procedura.', '',
+      '## Candidata non verificata', '', 'Non eseguire automaticamente. Prima di promuoverla: documentare passi concreti, un esempio verificato indipendentemente e un replay riuscito con evidenze.', ''].join('\n');
+    const file = path.join(ctx.root, 'memory', 'skill-candidates', `${name}.md`);
+    const c = ctx.log.apply({ job: 'repeated-task', kind: 'skill', action: 'create', target: name, summary: `Skill candidata «${name}» da ${g.runs.length} richieste`, reason: `${distinctTasks.size} incarichi distinti in ${chats.size} chat nello stesso progetto: candidata in attesa di verifica indipendente e replay, non caricabile come skill.`, evidence: g.runs.slice(-6).map(r => r.runId) },
       [{ file, text: skillText(name, `Come fare: ${oneLine(last.goal, 160)}`, body) }]);
     if (!c) continue;
     changes++;
-    const p = owner ? ctx.profiles().find(x => x.id === owner && x.scope === 'role') : undefined;
-    if (p) linkTo(ctx, p, name, 'repeated-task', `Fa questo lavoro più spesso (${byAgent.get(p.id)} volte su ${g.runs.length}).`);
   }
   return { job: 'repeated-task', changes };
 }
@@ -259,28 +263,7 @@ export function mergeSkills(ctx: JobContext): JobResult {
 }
 
 // ── merge duplicate memories across agents ──────────────────────────────────────────────────────────────────────────
-/** A memory line without its list marker and date ("- 2026-10-19 · …", the writer's format), folded. */
-const norm = (l: string) => fold(l.replace(/^\s*[-*]\s+/, '').replace(/^\d{4}-\d{2}-\d{2}\s*[·|:-]\s*/, '')).replace(/[^a-z0-9]+/g, ' ').trim();
-export function mergeMemory(ctx: JobContext): JobResult {
-  const files = ctx.profiles().map(p => ({ p, file: path.join(ctx.root, agentMemoryFile(p.id)) })).map(x => ({ ...x, text: readSmall(x.file) })).filter(x => x.text !== null) as { p: AgentProfile; file: string; text: string }[];
-  const seen = new Map<string, { line: string; owners: Set<string> }>();
-  for (const f of files) for (const l of f.text.split(/\r?\n/)) {
-    if (!/^\s*[-*]\s+\S/.test(l)) continue;
-    const k = norm(l);
-    if (k.length < 12) continue;
-    const e = seen.get(k) ?? { line: l.trim(), owners: new Set<string>() };
-    e.owners.add(f.p.id); seen.set(k, e);
-  }
-  const dup = [...seen].filter(([, e]) => e.owners.size >= 2);
-  if (!dup.length) return { job: 'merge-memory', changes: 0 };
-  const keys = new Set(dup.map(([k]) => k));
-  const sharedFile = path.join(ctx.root, 'memory', 'shared.md');
-  const shared = readSmall(sharedFile) ?? '# Memoria condivisa\n\nQuello che più ruoli sapevano: tenuto qui una volta sola.\n';
-  const have = new Set(shared.split(/\r?\n/).map(norm));
-  let next = shared;
-  for (const [k, e] of dup) if (!have.has(k)) next = appendUnder(next, 'Dai ruoli', e.line.startsWith('-') ? e.line : `- ${e.line}`);
-  const writes = [{ file: sharedFile, text: next }, ...files.filter(f => [...f.text.split(/\r?\n/)].some(l => keys.has(norm(l)))).map(f => ({ file: f.file, text: `${f.text.split(/\r?\n/).filter(l => !keys.has(norm(l))).join('\n').replace(/\s+$/, '')}\n` }))];
-  const owners = [...new Set(dup.flatMap(([, e]) => [...e.owners]))];
-  const c = ctx.log.apply({ job: 'merge-memory', kind: 'memory', action: 'merge', target: 'memory/shared.md', summary: `${dup.length} ricordi uguali in più ruoli spostati nella memoria condivisa`, reason: `Gli stessi ricordi erano in ${owners.length} memorie di ruoli.`, evidence: owners }, writes);
-  return { job: 'merge-memory', changes: c ? 1 : 0 };
+/** Text repetition is not evidence of global validity. Preserve the original scoped files unchanged. */
+export function mergeMemory(_ctx: JobContext): JobResult {
+  return { job: 'merge-memory', changes: 0, note: 'Duplicate memories retain their original scope; sharing requires independent verification.' };
 }

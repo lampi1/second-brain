@@ -91,6 +91,10 @@ export function ClassifierDetail({ c, state, onBack }: { c: CardView; state: Cla
       <div><span className="bm-label">{t('stats.cls.how')}</span><p>{ct(c.id, 'how')}</p></div>
       <div><span className="bm-label">{t('stats.cls.use')}</span><p>{ct(c.id, 'use')}</p></div>
     </div>
+    <p data-testid="cls-coverage">{t('stats.cls.coverage', { n: c.success.n, total: c.decisions })}</p>
+    {c.id === 'skills' && <p>{t('stats.cls.skillsCoverage')}</p>}
+    {c.id === 'model' && <p>{t('stats.cls.modelCoverage')}</p>}
+    {c.id === 'jobkind' && <p>{t('stats.cls.jobCoverage')}</p>}
     <div className="cls-summary">
       <Num label={t('stats.cls.decisions')} value={c.decisions ? c.decisions.toLocaleString(locale()) : null} help={ct(c.id, 'decisionsHelp')} />
       <Num label={ct(c.id, 'hit')} value={pctOf(c.hit)} sub={kOfN(c.hit)} help={ct(c.id, 'hitHelp')} />

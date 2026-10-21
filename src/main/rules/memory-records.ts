@@ -1,0 +1,171 @@
+// Scoped durable facts for memory writers and launch recall. Model assertions stay proposed; history is retained.
+// The JSON store is canonical and is deliberately separate from the existing document/hybrid search index.
+import fs from 'node:fs';
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { atomicWrite, confined, locked, read } from './storage';
+
+export interface MemoryScope { roleId: string; userId?: string; project?: string; repository?: string; environment?: string }
+export type MemoryStatus = 'observed' | 'proposed' | 'confirmed' | 'disputed' | 'retracted';
+export interface MemoryRecord {
+  memoryId: string; scope: MemoryScope; subject: string; predicate: string; value: string;
+  sourceEventId: string; sourceRunId: string; observedAt: string; validFrom: string; validTo: string | null;
+  status: MemoryStatus; supersedes: string | null;
+  transitions?: { at: string; status: MemoryStatus; reason?: string }[];
+  derivedFiles?: string[];
+  verification?: { sourceEventId: string; sourceRunId: string; evidence: string };
+}
+export interface MemoryProposal {
+  scope: MemoryScope; subject: string; predicate: string; value: string;
+  sourceEventId: string; sourceRunId: string; supersedes?: string;
+}
+const FILE = 'memory/records.json';
+const clean = (s: string, limit = 1000): string => {
+  if (typeof s !== 'string' || !s.trim() || s.length > limit || /[\x00-\x1f\x7f]/.test(s)) throw new Error('Memory fields must be bounded, nonempty single lines.');
+  return s.trim();
+};
+function scopeOf(scope: MemoryScope): MemoryScope {
+  const roleId = clean(scope.roleId, 64);
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(roleId)) throw new Error('Invalid memory role id.');
+  return { roleId, ...(scope.userId ? { userId: clean(scope.userId) } : {}), ...(scope.project ? { project: clean(scope.project) } : {}), ...(scope.repository ? { repository: clean(scope.repository) } : {}), ...(scope.environment ? { environment: clean(scope.environment) } : {}) };
+}
+const sameScope = (a: MemoryScope, b: MemoryScope): boolean => a.roleId === b.roleId && a.userId === b.userId && a.project === b.project && a.repository === b.repository && a.environment === b.environment;
+export function readMemoryRecords(root: string): MemoryRecord[] {
+  const raw = read(root, FILE);
+  if (!raw) return [];
+  const parsed: unknown = JSON.parse(raw);
+  if (!Array.isArray(parsed) || parsed.length > 5000) throw new Error('Invalid memory store.');
+  // Reject malformed storage rather than injecting arbitrary fields from disk as trusted facts.
+  for (const r of parsed as MemoryRecord[]) {
+    if (!r || typeof r !== 'object') throw new Error('Invalid memory record.');
+    if (r.transitions && (!Array.isArray(r.transitions) || r.transitions.length > 10000 || r.transitions.some(t => !t || !Number.isFinite(Date.parse(t.at)) || !['observed', 'proposed', 'confirmed', 'disputed', 'retracted'].includes(t.status)))) throw new Error('Invalid memory transitions.');
+    if (r.derivedFiles && (!Array.isArray(r.derivedFiles) || r.derivedFiles.some(f => typeof f !== 'string' || !f.startsWith('memory/derived/')))) throw new Error('Invalid memory derivatives.');
+    scopeOf(r.scope); clean(r.memoryId); clean(r.subject); clean(r.predicate); clean(r.value); clean(r.sourceEventId); clean(r.sourceRunId);
+    if (!['observed', 'proposed', 'confirmed', 'disputed', 'retracted'].includes(r.status) || !Number.isFinite(Date.parse(r.observedAt)) || !Number.isFinite(Date.parse(r.validFrom)) || (r.validTo !== null && !Number.isFinite(Date.parse(r.validTo)))) throw new Error('Invalid memory record.');
+  }
+  return parsed as MemoryRecord[];
+}
+function mutate<T>(root: string, change: (records: MemoryRecord[]) => T): T {
+  fs.mkdirSync(path.dirname(confined(root, FILE)), { recursive: true });
+  return locked(root, FILE, () => {
+    const records = readMemoryRecords(root), result = change(records), text = JSON.stringify(records, null, 2) + '\n';
+    if (records.length > 5000 || Buffer.byteLength(text, 'utf8') > 2_000_000) throw new Error('Memory store full; archive explicitly before adding facts.');
+    atomicWrite(root, FILE, text); return result;
+  });
+}
+export function proposeMemory(root: string, input: MemoryProposal, now = new Date().toISOString()): MemoryRecord {
+  const scope = scopeOf(input.scope), subject = clean(input.subject), predicate = clean(input.predicate), value = clean(input.value);
+  const sourceEventId = clean(input.sourceEventId), sourceRunId = clean(input.sourceRunId);
+  if (!Number.isFinite(Date.parse(now))) throw new Error('Invalid observation date.');
+  return mutate(root, records => {
+    const previous = input.supersedes ? records.find(r => r.memoryId === input.supersedes) : undefined;
+    if (input.supersedes && (!previous || !sameScope(previous.scope, scope) || previous.subject !== subject || previous.predicate !== predicate)) throw new Error('Supersession must identify the same scoped fact.');
+    const duplicate = records.find(r => sameScope(r.scope, scope) && r.subject === subject && r.predicate === predicate && r.value === value && r.validTo === null && r.status !== 'retracted' && r.status !== 'disputed');
+    if (duplicate) return duplicate;
+    const record: MemoryRecord = { memoryId: randomUUID(), scope, subject, predicate, value, sourceEventId, sourceRunId, observedAt: now, validFrom: now, validTo: null, status: 'proposed', transitions: [{ at: now, status: 'proposed' }], supersedes: previous?.memoryId ?? null };
+    // A proposal never invalidates confirmed evidence. Contradictions require independent resolution.
+    records.push(record); return record;
+  });
+}
+/** Host-only transition: callers must supply an independently verified event, never model tool arguments. */
+export function confirmMemory(root: string, memoryId: string, verification: NonNullable<MemoryRecord['verification']>, now = new Date().toISOString()): MemoryRecord {
+  clean(verification.evidence); clean(verification.sourceEventId); clean(verification.sourceRunId);
+  if (!Number.isFinite(Date.parse(now))) throw new Error('Invalid verification date.');
+  return mutate(root, records => {
+    const r = records.find(x => x.memoryId === memoryId);
+    if (r?.status === 'confirmed' && r.verification?.evidence === verification.evidence) return r;
+    if (!r || r.status !== 'proposed' || verification.sourceEventId === r.sourceEventId || verification.sourceRunId === r.sourceRunId) throw new Error('Independent verification is required.');
+    if (Date.parse(now) < Date.parse(r.observedAt)) throw new Error('Verification predates observation.');
+    const conflict = records.find(x => x.memoryId !== r.memoryId && sameScope(x.scope, r.scope) && x.subject === r.subject && x.predicate === r.predicate && x.status === 'confirmed' && !x.validTo && x.value !== r.value);
+    if (conflict && conflict.memoryId !== r.supersedes) throw new Error('Conflicting confirmed fact requires explicit supersession.');
+    r.status = 'confirmed'; (r.transitions ??= [{ at: r.observedAt, status: 'proposed' }]).push({ at: now, status: 'confirmed' }); r.verification = { ...verification };
+    if (r.supersedes) { const old = records.find(x => x.memoryId === r.supersedes); if (old) { purgeCopies(root, old); delete old.derivedFiles; old.validTo = now; (old.transitions ??= [{ at: old.observedAt, status: old.status }]).push({ at: now, status: 'retracted', reason: `superseded:${r.memoryId}` }); old.status = 'retracted'; } }
+    return r;
+  });
+}
+/** Temporal visibility is evaluated before retrieval. Missing legacy transition data never invents confirmation. */
+export function memoryAt(record: MemoryRecord, asOf = new Date().toISOString()): MemoryRecord | null {
+  const at = Date.parse(asOf);
+  if (!Number.isFinite(at)) throw new Error('Invalid asOf date.');
+  if (Date.parse(record.validFrom) > at || (record.validTo && Date.parse(record.validTo) <= at)) return null;
+  const past = record.transitions?.filter(t => Date.parse(t.at) <= at).at(-1);
+  const status = past?.status ?? (record.transitions ? null : record.status === 'retracted' ? 'proposed' : record.status);
+  if (!status || status === 'retracted' || status === 'disputed') return null;
+  const snapshot = { ...record, status, ...(record.transitions ? { transitions: record.transitions.filter(t => Date.parse(t.at) <= at) } : {}) };
+  if (status !== 'confirmed') delete snapshot.verification;
+  return snapshot;
+}
+export function scopedMemory(root: string, scope: MemoryScope, asOf?: string): MemoryRecord[] {
+  scopeOf(scope);
+  return readMemoryRecords(root).filter(r => sameScope(r.scope, scope)).flatMap(r => { const visible = memoryAt(r, asOf); return visible ? [visible] : []; });
+}
+/** Removes only app-owned copies: exact legacy lines and registered summaries, never arbitrary user documents. */
+function purgeCopies(root: string, record: MemoryRecord): string[] {
+  const changed: string[] = [];
+  for (const rel of [`agents/${record.scope.roleId}/memory.md`, 'memory/shared.md']) {
+    const before = read(root, rel);
+    if (!before) continue;
+    const next = before.split('\n').filter(line => line.replace(/^[-*]\s+(?:\d{4}-\d{2}-\d{2}\s*[·|:-]\s*)?/, '').trim() !== record.value).join('\n');
+    if (next !== before) { atomicWrite(root, rel, next); changed.push(rel); }
+  }
+  for (const rel of record.derivedFiles ?? []) {
+    if (!rel.startsWith('memory/derived/')) throw new Error('Invalid derived memory path.');
+    const file = confined(root, rel); fs.rmSync(file, { force: true }); changed.push(rel);
+  }
+  return changed;
+}
+export function registerMemoryDerivative(root: string, memoryId: string, relative: string): void {
+  if (!relative.startsWith('memory/derived/')) throw new Error('Derived memory must use its managed folder.');
+  confined(root, relative);
+  mutate(root, records => { const r = records.find(x => x.memoryId === memoryId); if (!r) throw new Error('Memory not found.'); r.derivedFiles = [...new Set([...(r.derivedFiles ?? []), relative])]; });
+}
+export function retractMemory(root: string, memoryId: string, reason: string, now = new Date().toISOString()): { record: MemoryRecord; invalidated: string[] } {
+  clean(reason);
+  if (!Number.isFinite(Date.parse(now))) throw new Error('Invalid retraction date.');
+  return mutate(root, records => {
+    const r = records.find(x => x.memoryId === memoryId);
+    if (!r) throw new Error('Memory not found.');
+    if (r.status === 'retracted') {
+      if (r.transitions?.at(-1)?.reason === reason) return { record: r, invalidated: [FILE] };
+      throw new Error('Memory was already retracted with a different reason.');
+    }
+    if (Date.parse(now) < Date.parse(r.observedAt)) throw new Error('Retraction predates observation.');
+    const invalidated = purgeCopies(root, r);
+    (r.transitions ??= [{ at: r.observedAt, status: r.status }]).push({ at: now, status: 'retracted', reason });
+    r.status = 'retracted'; r.validTo = now; delete r.derivedFiles;
+    return { record: r, invalidated: [FILE, ...invalidated] };
+  });
+}
+/** Hard deletion removes the payload even from historical recall; no tombstone retains its content. */
+export function deleteMemory(root: string, memoryId: string): string[] {
+  return mutate(root, records => {
+    const index = records.findIndex(r => r.memoryId === memoryId);
+    if (index < 0) return [FILE]; // idempotent retry still invalidates an index after an earlier failure
+    const invalidated = purgeCopies(root, records[index]!); records.splice(index, 1);
+    for (const r of records) if (r.supersedes === memoryId) r.supersedes = null;
+    return [FILE, ...invalidated];
+  });
+}
+export const memoryWords = (s: string): Set<string> => new Set(s.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').match(/[\p{L}\p{N}]{3,}/gu) ?? []);
+export const quoteMemory = (r: MemoryRecord): string => JSON.stringify({ id: r.memoryId, status: r.status, scope: r.scope, subject: r.subject, predicate: r.predicate, value: r.value, sourceEventId: r.sourceEventId, sourceRunId: r.sourceRunId, observedAt: r.observedAt, validFrom: r.validFrom, validTo: r.validTo });
+export function budgetMemory(rows: string[], budgetTokens = 1200): string {
+  let left = Math.max(0, Math.min(budgetTokens, 4000)) * 3;
+  const chosen: string[] = [];
+  for (const text of rows) { if (text.length + 1 > left) continue; chosen.push(text); left -= text.length + 1; }
+  return chosen.join('\n');
+}
+/** Whole records under a conservative token estimate; scoped candidates remain quoted unverified data. */
+export function recallMemory(root: string, scope: MemoryScope, query = '', budgetTokens = 1200, asOf?: string): string {
+  const q = memoryWords(query), all = readMemoryRecords(root);
+  const rows = scopedMemory(root, scope, asOf).map(r => ({ text: quoteMemory(r), score: [...memoryWords(`${r.subject} ${r.predicate} ${r.value}`)].filter(w => q.has(w)).length, confirmed: r.status === 'confirmed', date: r.observedAt }));
+  // Unscoped legacy records cannot establish historical validity, project or user provenance.
+  if (!asOf && !scope.userId && !scope.project && !scope.repository && !scope.environment) {
+    const known = new Set(all.filter(r => r.scope.roleId === scope.roleId).map(r => r.value));
+    for (const line of read(root, `agents/${scope.roleId}/memory.md`).split('\n').filter(l => /^[-*] /.test(l))) {
+      if ([...known].some(v => line.endsWith(` · ${v}`))) continue;
+      rows.push({ text: JSON.stringify({ status: 'unverified-legacy', value: line }), score: [...memoryWords(line)].filter(w => q.has(w)).length, confirmed: false, date: '' });
+    }
+  }
+  rows.sort((a, b) => b.score - a.score || Number(b.confirmed) - Number(a.confirmed) || b.date.localeCompare(a.date));
+  return budgetMemory(rows.filter(r => !q.size || r.score > 0).map(r => r.text), budgetTokens);
+}

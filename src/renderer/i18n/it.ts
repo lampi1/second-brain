@@ -1,3 +1,4 @@
+import { learningReviewIt } from './areas/learning-review.it';
 import { cloudIt } from './areas/cloud.it';
 import { agentPackIt } from './areas/agent-pack.it';
 import { brainModelIt } from './areas/brain-model.it';
@@ -41,6 +42,7 @@ import { reviewedContextIt } from './areas/reviewed-context.it';
 import { setupIt } from './areas/setup.it';
 
 export const it = {
+  ...learningReviewIt,
   ...auditIt,
   ...auditExpressionsIt,
   ...componentsIt,

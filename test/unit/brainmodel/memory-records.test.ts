@@ -1,0 +1,148 @@
+// Durable memory regression tests: provenance, project boundaries, non-destructive legacy recall and supersession.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, expect, it } from 'vitest';
+import { confirmMemory, proposeMemory, readMemoryRecords, recallMemory } from '../../../src/main/rules/memory-records';
+import { memoryTools } from '../../../src/main/rules/memory-tool';
+const dirs: string[] = [];
+const brain = () => { const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-records-')); dirs.push(root); return root; };
+afterEach(() => { for (const root of dirs.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
+const input = { scope: { roleId: 'scout', project: '/project/a' }, subject: 'repository', predicate: 'base branch', value: 'develop', sourceEventId: 'event-1', sourceRunId: 'run-1' };
+it('leaves search available before a brain is chosen while refusing memory mutations', async () => {
+  const { MemoryService } = await import('../../../src/main/rules/memory-service');
+  const service = new MemoryService({ root: () => null });
+  expect(service.hasPendingInvalidations()).toBe(false);
+  await expect(service.retryInvalidations()).resolves.toBeUndefined();
+  await expect(service.confirm('missing', 'evidence')).rejects.toThrow('Choose a brain');
+});
+it('deduplicates across dates without turning assertions into confirmed facts', () => {
+  const root = brain(), a = proposeMemory(root, input, '2026-01-01T00:00:00Z');
+  expect(proposeMemory(root, input, '2026-02-01T00:00:00Z').memoryId).toBe(a.memoryId);
+  expect(readMemoryRecords(root)).toHaveLength(1);
+  expect(a.status).toBe('proposed');
+  expect(() => confirmMemory(root, a.memoryId, { sourceEventId: 'event-2', sourceRunId: 'run-1', evidence: 'same author assertion' })).toThrow(/Independent/);
+});
+it('isolates project and role and ranks relevant whole records within budget', () => {
+  const root = brain(); proposeMemory(root, input);
+  proposeMemory(root, { ...input, subject: 'hosting', predicate: 'hostname', value: 'irrelevant host' });
+  expect(recallMemory(root, { ...input.scope, project: '/project/b' }, 'branch')).toBe('');
+  expect(recallMemory(root, { ...input.scope, roleId: 'artisan' }, 'branch')).toBe('');
+  const result = recallMemory(root, input.scope, 'branch');
+  expect(result).toContain('develop'); expect(result).not.toContain('irrelevant');
+  expect(recallMemory(root, input.scope, 'branch', 2)).toBe('');
+  expect(() => JSON.parse(result)).not.toThrow();
+});
+it('requires independent verification to supersede a fact and retains history', () => {
+  const root = brain(), a = proposeMemory(root, input);
+  confirmMemory(root, a.memoryId, { sourceEventId: 'review-1', sourceRunId: 'review-run-1', evidence: 'checked repository' });
+  const b = proposeMemory(root, { ...input, value: 'main', supersedes: a.memoryId });
+  expect(recallMemory(root, input.scope, 'branch')).toContain('develop');
+  confirmMemory(root, b.memoryId, { sourceEventId: 'review-2', sourceRunId: 'review-run-2', evidence: 'checked changed repository' });
+  expect(recallMemory(root, input.scope, 'branch')).not.toContain('develop');
+  expect(readMemoryRecords(root).find(r => r.memoryId === a.memoryId)).toMatchObject({ status: 'retracted' });
+  expect(() => proposeMemory(root, { ...input, scope: { ...input.scope, project: '/project/b' }, supersedes: a.memoryId })).toThrow(/scoped/);
+});
+it('preserves legacy files and labels unscoped legacy data without leaking it into a project', () => {
+  const root = brain(), file = path.join(root, 'agents/scout/memory.md'); fs.mkdirSync(path.dirname(file), { recursive: true });
+  const text = '# Memory\n- 2026-01-01 · branch develop\n'; fs.writeFileSync(file, text);
+  expect(recallMemory(root, { roleId: 'scout' }, 'branch')).toContain('unverified-legacy');
+  expect(recallMemory(root, input.scope, 'branch')).toBe('');
+  expect(fs.readFileSync(file, 'utf8')).toBe(text);
+});
+it('offers proposals to direct root chats and refuses forged provenance or confirmation', async () => {
+  const root = brain(), tool = memoryTools({ root: () => root, context: id => id === 'root-chat' ? { scope: input.scope, sourceRunId: 'host-run' } : null })[0]!;
+  const ctx: Parameters<typeof tool.run>[1] = { mount: 'chat', sessionId: '', signal: new AbortController().signal, progress: () => false, params: { chatId: 'root-chat' } };
+  const args = { subject: 'repository', predicate: 'branch', value: 'main' };
+  const value = JSON.parse(await tool.run(args, ctx) as string);
+  expect(value).toMatchObject({ status: 'proposed', sourceRunId: 'host-run', scope: input.scope });
+  expect(() => tool.run({ ...args, status: 'confirmed' }, ctx)).toThrow(/Unknown/);
+  expect(() => tool.run(args, { ...ctx, params: { chatId: 'unknown' } })).toThrow(/require/);
+});
+
+it('recalls confirmed history asOf and requires explicit resolution of contradictions', async () => {
+  const { MemoryService } = await import('../../../src/main/rules/memory-service');
+  const root = brain(), a = proposeMemory(root, input, '2026-01-01T00:00:00Z');
+  confirmMemory(root, a.memoryId, { sourceEventId: 'review-a', sourceRunId: 'review-a', evidence: 'checked' }, '2026-01-02T00:00:00Z');
+  const bad = proposeMemory(root, { ...input, value: 'trunk' }, '2026-02-01T00:00:00Z');
+  expect(() => confirmMemory(root, bad.memoryId, { sourceEventId: 'review-b', sourceRunId: 'review-b', evidence: 'checked' }, '2026-02-02T00:00:00Z')).toThrow(/supersession/);
+  const b = proposeMemory(root, { ...input, value: 'main', supersedes: a.memoryId }, '2026-03-01T00:00:00Z');
+  confirmMemory(root, b.memoryId, { sourceEventId: 'review-c', sourceRunId: 'review-c', evidence: 'checked' }, '2026-03-02T00:00:00Z');
+  const service = new MemoryService({ root: () => root });
+  const past = await service.recall(input.scope, 'branch', { asOf: '2026-01-15T00:00:00Z' });
+  expect(past).toContain('develop'); expect(past).toContain('confirmed'); expect(past).not.toContain('main');
+  expect(await service.recall(input.scope, 'branch', { asOf: '2025-12-01T00:00:00Z' })).toBe('');
+  expect(await service.recall(input.scope, 'branch')).not.toContain('develop');
+});
+it('hard deletion purges historical payload, registered summaries and legacy copies, then invalidates index', async () => {
+  const { MemoryService } = await import('../../../src/main/rules/memory-service');
+  const { registerMemoryDerivative } = await import('../../../src/main/rules/memory-records');
+  const root = brain(), r = proposeMemory(root, input, '2026-01-01T00:00:00Z');
+  const legacy = path.join(root, 'agents/scout/memory.md'), derivative = path.join(root, 'memory/derived/summary.md');
+  fs.mkdirSync(path.dirname(legacy), { recursive: true }); fs.mkdirSync(path.dirname(derivative), { recursive: true });
+  fs.writeFileSync(legacy, '# Memory\n- 2026-01-01 · develop\n- keep this\n'); fs.writeFileSync(derivative, 'develop');
+  registerMemoryDerivative(root, r.memoryId, 'memory/derived/summary.md');
+  const invalidated: string[] = [], service = new MemoryService({ root: () => root, invalidate: async files => { invalidated.push(...files); } });
+  await service.delete(r.memoryId);
+  expect(fs.existsSync(derivative)).toBe(false); expect(fs.readFileSync(legacy, 'utf8')).toContain('keep this'); expect(fs.readFileSync(legacy, 'utf8')).not.toContain('develop');
+  expect(invalidated).toContain('memory/derived/summary.md');
+  expect(await service.recall(input.scope, 'branch', { asOf: '2026-01-02T00:00:00Z' })).toBe('');
+  expect(fs.readFileSync(path.join(root, 'memory/records.json'), 'utf8')).not.toContain('develop');
+});
+it('revokes current recall while retaining dated history and rejects unsafe summary paths', async () => {
+  const { retractMemory, registerMemoryDerivative } = await import('../../../src/main/rules/memory-records');
+  const root = brain(), r = proposeMemory(root, input, '2026-01-01T00:00:00Z');
+  expect(() => registerMemoryDerivative(root, r.memoryId, 'memory/derived/../../private.md')).toThrow();
+  retractMemory(root, r.memoryId, 'incorrect', '2026-02-01T00:00:00Z');
+  expect(recallMemory(root, input.scope, 'branch')).toBe('');
+  expect(recallMemory(root, input.scope, 'branch', 1200, '2026-01-15T00:00:00Z')).toContain('develop');
+});
+it('hybrid recall embeds only scoped records, supports paraphrases and cannot resurrect deleted snapshots', async () => {
+  const { MemoryService } = await import('../../../src/main/rules/memory-service');
+  const root = brain(), r = proposeMemory(root, input);
+  proposeMemory(root, { ...input, scope: { ...input.scope, userId: 'other-user' }, value: 'private-other' });
+  const seen: string[] = [];
+  const service = new MemoryService({ root: () => root, embed: async texts => { seen.push(...texts); return texts.map(() => new Float32Array([1, 0])); } });
+  expect(await service.recall(input.scope, 'default revision')).toContain('develop');
+  expect(seen.join(' ')).not.toContain('private-other');
+  const deleting = new MemoryService({ root: () => root, embed: async (texts, mode) => { if (mode === 'query') await service.delete(r.memoryId); return texts.map(() => new Float32Array([1, 0])); } });
+  expect(await deleting.recall(input.scope, 'branch')).toBe('');
+});
+it('retries failed confirm/revoke invalidations without changing original evidence or transitions', async () => {
+  const { MemoryService } = await import('../../../src/main/rules/memory-service');
+  const root = brain(), r = proposeMemory(root, input);
+  let fail = true;
+  const service = new MemoryService({ root: () => root, invalidate: async () => { if (fail) throw new Error('index unavailable'); } });
+  await expect(service.confirm(r.memoryId, 'human checked')).rejects.toThrow('index unavailable');
+  const confirmed = readMemoryRecords(root)[0]!;
+  expect(service.hasPendingInvalidations()).toBe(true);
+  fail = false;
+  const retry = await service.confirm(r.memoryId, 'human checked');
+  expect(retry.verification).toEqual(confirmed.verification);
+  expect(retry.transitions).toEqual(confirmed.transitions);
+  expect(service.hasPendingInvalidations()).toBe(false);
+  fail = true;
+  await expect(service.retract(r.memoryId, 'incorrect')).rejects.toThrow('index unavailable');
+  const revoked = readMemoryRecords(root)[0]!;
+  fail = false;
+  expect((await service.retract(r.memoryId, 'incorrect')).transitions).toEqual(revoked.transitions);
+  expect(service.hasPendingInvalidations()).toBe(false);
+});
+it('persists deleted derivative invalidations across restart and fails closed until retry succeeds', async () => {
+  const { MemoryService } = await import('../../../src/main/rules/memory-service');
+  const { registerMemoryDerivative } = await import('../../../src/main/rules/memory-records');
+  const root = brain(), r = proposeMemory(root, input);
+  fs.mkdirSync(path.join(root, 'memory/derived'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'memory/derived/cached.md'), 'develop');
+  registerMemoryDerivative(root, r.memoryId, 'memory/derived/cached.md');
+  const first = new MemoryService({ root: () => root, invalidate: async () => { throw new Error('sync failed'); } });
+  await expect(first.delete(r.memoryId)).rejects.toThrow('sync failed');
+  expect(readMemoryRecords(root)).toEqual([]);
+  expect(first.hasPendingInvalidations()).toBe(true);
+  await expect(first.retryInvalidations()).rejects.toThrow('sync failed');
+  const paths: string[] = [];
+  const restarted = new MemoryService({ root: () => root, invalidate: async p => { paths.push(...p); } });
+  await restarted.delete(r.memoryId);
+  expect(paths).toContain('memory/derived/cached.md');
+  expect(restarted.hasPendingInvalidations()).toBe(false);
+});

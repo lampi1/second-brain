@@ -107,7 +107,7 @@ export function AgentStrips() {
         const accent = side.length ? pairs[tiles.indexOf(side[0]!)] ?? null : lead.kind === 'browser' && !max && owners[lead.id] ? pairs[tiles.indexOf(lead)] ?? null : null;
         const owned = lead.kind === 'browser' && !max && !!owners[lead.id];
         // the strips enter in turn (agent-strips.css, off under reduced motion)
-        return <div className={`agent-pane-wrap${owned ? ' owned-pane' : ''}${depth ? ' tree-child' : ''}`} key={key} data-depth={depth || undefined} style={{ '--row-index': Math.min(i, 8), '--depth': depth, ...(accent !== null ? pairStyle(accent) : {}) } as CSSProperties}>
+        return <div className={`agent-pane-wrap${owned ? ' owned-pane' : ''}${depth ? ' tree-child' : ''}${!max && node?.children.length ? ' tree-parent' : ''}`} key={key} data-depth={depth || undefined} style={{ '--row-index': Math.min(i, 8), '--depth': depth, ...(accent !== null ? pairStyle(accent) : {}) } as CSSProperties}>
           {firstOfArea && <h3 className="workspace-area">{area || tr('product.noArea')}</h3>}
           {/* a chat keeps the same parent with or without its browsers beside it: expanding never remounts it */}
           {card && node && <ChildRails node={node} />}

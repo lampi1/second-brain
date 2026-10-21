@@ -2,7 +2,7 @@
 // findings grouped by reviewer version, and rollups that keep the counts of pruned runs.
 import { describe, expect, it } from 'vitest';
 import type { AgentRun } from '../../src/shared/agents';
-import { REWORK_MS, SAMPLE_MAX, emptyTally, finalize, median, mergeTallies, p90, rollUp, runMetrics } from '../../src/main/agents/run-metrics';
+import { deliveryMetrics, REWORK_MS, SAMPLE_MAX, emptyTally, finalize, median, mergeTallies, p90, rollUp, runMetrics } from '../../src/main/agents/run-metrics';
 
 let seq = 0;
 const H = 3600_000;
@@ -117,5 +117,37 @@ describe('agent metrics', () => {
     expect(t!.cost.n).toBe(SAMPLE_MAX + 5);
     expect(t!.cost.values).toHaveLength(SAMPLE_MAX);
     expect(t!.cost.values[0]).toBe(5);
+  });
+});
+
+
+describe('delivery observations', () => {
+  const reported = (delivery?: AgentRun['delivery'], version = 1): AgentRun => {
+    const r = run({ version, delivery });
+    r.report = { at: 10, outcome: 'done', verified: 'yes', summary: 's', canonical: {
+      at: 10, taskId: 'task', taskVersion: 1, runId: r.runId, outcome: 'done', summary: 's', output: 'full', doneWhen: [],
+    } };
+    return r;
+  };
+  it('does not invent zero submissions or latency for historical results', () => {
+    expect(deliveryMetrics([reported(), run()])).toEqual({ reported: 1, instrumented: 0, delivered: 0, coverage: 0, rate: null, displayLatencyMs: { median: null, n: 0 }, synthesisSubmissions: null });
+  });
+  it('display-only telemetry proves zero observed engine submissions and measures publication latency', () => {
+    const r = reported({ policy: 'display', reportedAt: 10, attempts: 1, deliveredAt: 110, displayedAt: 110 });
+    expect(deliveryMetrics([r, reported()])).toMatchObject({ reported: 2, instrumented: 1, delivered: 1, coverage: 0.5, rate: 1, displayLatencyMs: { median: 100, n: 1 }, synthesisSubmissions: 0 });
+  });
+  it('counts one shared batch across versions; queued attempts are not submitted or delivered', () => {
+    const sent = { policy: 'synthesize' as const, reportedAt: 10, attempts: 1, deliveredAt: 80, synthesisSubmittedAt: 80, synthesisBatchId: 'batch1' };
+    const rows = [reported(sent), reported(sent, 2), reported({ policy: 'synthesize', reportedAt: 10, attempts: 2, synthesisBatchId: 'pending' })];
+    const metrics = one(rows);
+    expect(metrics.all!.delivery).toMatchObject({ reported: 3, delivered: 2, rate: 2 / 3, synthesisSubmissions: 1, displayLatencyMs: { median: null, n: 0 } });
+    expect(metrics.versions.map(v => v.delivery!.synthesisSubmissions)).toEqual([1, 1]);
+  });
+  it('honors run filters and leaves pruned delivery history unknown', () => {
+    const r = reported({ policy: 'display', reportedAt: 10, attempts: 0 });
+    r.tags = { skills: ['a'], app: null, repo: null };
+    const missing = reported(); missing.tags = { skills: ['b'], app: null, repo: null };
+    expect(one([r, missing], { filter: { skill: 'a' } }).all!.delivery).toMatchObject({ reported: 1, instrumented: 1, rate: 0 });
+    expect(one([], { rollups: rollUp([], [r, missing], [r, missing]) }).all!.delivery).toMatchObject({ reported: 0, coverage: null, rate: null, synthesisSubmissions: null });
   });
 });

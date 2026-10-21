@@ -56,6 +56,12 @@ export class SearchService {
 
   constructor(private deps: SearchDeps) { this.now = deps.now ?? Date.now; this.clock = deps.clock ?? (() => performance.now()); }
 
+  /** A memory review removed/replaced files: clear fallback copies after an in-flight refresh finishes. */
+  async invalidateBrain(): Promise<void> {
+    await this.running;
+    this.files.clear(); this.filesRoot = null; this.filesAt = 0; this.refreshedAt = 0;
+  }
+
   async query(q: string): Promise<SearchResult> {
     const t0 = performance.now();
     const text = typeof q === 'string' ? q.slice(0, 200) : '';

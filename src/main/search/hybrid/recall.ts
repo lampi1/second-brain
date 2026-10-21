@@ -60,6 +60,20 @@ export function similarErrors(q: Float32Array, index: RecallIndex, k = RECALL_K,
     .map(h => ({ ...h, score: Math.round(h.score * 1000) / 1000 }));
 }
 
+/** Small corpora cannot support centred cosine. Require two specific shared words and majority query coverage. */
+export function lexicalErrors(query: string, entries: ThemeEntry[], k = RECALL_K): RecallHit[] {
+  const stop = new Set('this that with from have please error errors errore errori della delle degli nella nelle questo questa come dove quando sono fare prima dopo detto vero regola'.split(' '));
+  const words = (text: string): Set<string> => new Set((text.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').match(/[\p{L}\p{N}]{4,}/gu) ?? []).filter(w => !stop.has(w) && !/^\d+$/.test(w)));
+  const q = words(query);
+  if (q.size < 2) return [];
+  return entries.map(entry => {
+    const e = words(entry.text), shared = [...q].filter(w => e.has(w)).length;
+    return { ...entry, score: shared / (q.size + e.size - shared), shared, coverage: shared / q.size };
+  }).filter(e => e.shared >= 2 && e.coverage >= 0.6 && e.score >= 0.15)
+    .sort((a, b) => b.score - a.score || b.line - a.line).slice(0, Math.max(0, Math.min(k, RECALL_K)))
+    .map(({ shared: _shared, coverage: _coverage, ...entry }) => entry);
+}
+
 function centred(v: Float32Array, mean: Float32Array): Float32Array {
   const c = new Float32Array(v.length);
   let n = 0;

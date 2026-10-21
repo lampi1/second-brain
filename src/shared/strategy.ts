@@ -18,6 +18,8 @@ export interface PlanStep {
   /** the role that does it (absent: the Strategist itself) */
   role?: WorkRoleId;
   state: StepState;
+  /** Result quality is separate from execution progress: a partial report still finishes the work. */
+  outcome?: DelegationOutcome;
   /** the chats delegated for it (agent_delegate with this step) */
   chatIds?: string[];
   startedAt?: number;
@@ -47,7 +49,7 @@ export const ENOUGH_QUESTIONS = 'Basta domande: proponi ora il piano con quello 
  *  in the role's instructions: the user's edits to the role never drop the flow the strip depends on. */
 export const STRATEGY_FLOW = [
   '[app · how you work with the user here]',
-  '1. First find out what the user really wants, at a high level: ask ONE question at a time with your question tool (AskUserQuestion on Claude), in the user\'s language, with 2 to 4 short options, the recommended one first ending with " (consigliato)", and a short header naming the topic. Skip what the request already says. Stop as soon as goal, scope, constraints and "done" are clear, after at most 5 questions, or when the user answers "Basta domande".',
+  '1. First find out what the user really wants, at a high level: ask ONE question at a time with your question tool (AskUserQuestion on Claude), in the user\'s language, with 2 to 4 short options, the recommended one first ending with " (consigliato)", and a short header naming the topic. If a missing goal, scope, constraint or success criterion would change your plan, ask the user before proposing it; never silently invent it. Skip what the request already says. Stop as soon as goal, scope, constraints and "done" are clear, after at most 5 questions, or when the user answers "Basta domande".',
   `2. Then propose the plan with plan_propose: 2 to 6 steps, each one short plain line in the user's language with the role that does it; no jargon, no sub-steps. End your turn and wait: the user approves on your strip ("${PLAN_APPROVED}") or writes what to change, and then you propose again. Delegate nothing before the approval.`,
   '3. Once approved, delegate each step with agent_delegate, giving its number as `step` (independent steps in parallel). A step you do yourself: plan_update it to "now", then to "done". The user follows the steps on your strip. At the end, agent_report as usual.',
 ].join('\n');
@@ -88,8 +90,8 @@ export function withStep(plan: StrategyPlan, i: number, state: StepState, now: n
     if (k !== i) return s;
     const started = s.startedAt ?? (state !== 'todo' ? now : undefined);
     const ended = state === 'done' || state === 'blocked' ? s.endedAt ?? now : undefined;
-    const { startedAt: _s, endedAt: _e, ...rest } = s;
-    return { ...rest, state, ...(started !== undefined ? { startedAt: started } : {}), ...(ended !== undefined ? { endedAt: ended } : {}) };
+    const { startedAt: _s, endedAt: _e, outcome, ...rest } = s;
+    return { ...rest, state, ...(state === 'done' && outcome ? { outcome } : {}), ...(started !== undefined ? { startedAt: started } : {}), ...(ended !== undefined ? { endedAt: ended } : {}) };
   });
   const done = steps.every(s => s.state === 'done');
   return { ...plan, steps, ...(done ? { phase: 'done' as const, at: now } : plan.phase === 'done' ? { phase: 'running' as const, at: now } : {}) };
@@ -103,14 +105,24 @@ export function withDelegated(plan: StrategyPlan, i: number, chatIds: string[], 
   return next;
 }
 
-/** A delegated chat reported: its step is done when every chat of the step reported done, blocked when one did not
- *  succeed (partial or blocked), unchanged while one still works. `outcomes` = each chat's outcome, undefined while it works. */
+/** A delegated chat reported: its step is finished when every chat reported done or partial, blocked when one cannot proceed, unchanged while one still works. `outcomes` = each chat's outcome, undefined while it works. */
 export function afterReport(plan: StrategyPlan, chatId: string, outcomes: (id: string) => DelegationOutcome | undefined, now: number): StrategyPlan {
   const i = plan.steps.findIndex(s => s.chatIds?.includes(chatId));
   if (i < 0) return plan;
   const all = plan.steps[i]!.chatIds!.map(outcomes);
   if (all.some(o => o === undefined)) return plan;
-  return withStep(plan, i, all.every(o => o === 'done') ? 'done' : 'blocked', now);
+  const outcome: DelegationOutcome = all.includes('blocked') ? 'blocked' : all.includes('partial') ? 'partial' : 'done';
+  const next = withStep(plan, i, outcome === 'blocked' ? 'blocked' : 'done', now);
+  next.steps[i] = { ...next.steps[i]!, outcome };
+  return next;
+}
+
+/** A final parent report ends execution, without claiming unfinished steps met their criteria.
+ * Unfinished work is partial (or retains a blocked result); explicit successful steps retain their quality. */
+export function finishPlan(plan: StrategyPlan, now: number): StrategyPlan {
+  return { ...plan, phase: 'done', at: now, steps: plan.steps.map(s => ({ ...s, state: 'done',
+    outcome: s.outcome ?? (s.state === 'done' ? 'done' : s.state === 'blocked' ? 'blocked' : 'partial'),
+    endedAt: s.endedAt ?? now })) };
 }
 
 /** The answers to the user's questions, as "already clear" lines (the latest CLARIFIED_MAX). */
@@ -131,12 +143,12 @@ export function readPlan(v: unknown): StrategyPlan | null {
   const time = (x: unknown) => x === undefined || (typeof x === 'number' && Number.isFinite(x) && x > 0);
   if (!Array.isArray(p.clarified) || p.clarified.length > CLARIFIED_MAX || !p.clarified.every(c => c && str(c.q, CLARIFIED_TEXT_MAX) && str(c.a, CLARIFIED_TEXT_MAX))) return null;
   if (!Array.isArray(p.steps) || p.steps.length > STEPS_MAX || !p.steps.every(s => s && str(s.title, STEP_TITLE_MAX) && (s.role === undefined || isWorkRole(s.role))
-    && STEP_STATES.includes(s.state) && (s.chatIds === undefined || Array.isArray(s.chatIds) && s.chatIds.length <= 10 && s.chatIds.every((id: unknown) => typeof id === 'string' && /^[\w-]{1,80}$/.test(id)))
+    && (s.outcome === undefined || ['done', 'partial', 'blocked'].includes(s.outcome)) && STEP_STATES.includes(s.state) && (s.chatIds === undefined || Array.isArray(s.chatIds) && s.chatIds.length <= 10 && s.chatIds.every((id: unknown) => typeof id === 'string' && /^[\w-]{1,80}$/.test(id)))
     && time(s.startedAt) && time(s.endedAt))) return null;
   if (p.doneWhen !== undefined && !str(p.doneWhen, DONE_WHEN_MAX)) return null;
   return {
     phase: p.phase as PlanPhase, at: p.at as number, clarified: (p.clarified as Clarified[]).map(c => ({ q: c.q, a: c.a })),
-    steps: (p.steps as PlanStep[]).map(s => ({ title: s.title, ...(s.role ? { role: s.role } : {}), state: s.state, ...(s.chatIds ? { chatIds: [...s.chatIds] } : {}),
+    steps: (p.steps as PlanStep[]).map(s => ({ title: s.title, ...(s.role ? { role: s.role } : {}), state: s.state, ...(s.outcome ? { outcome: s.outcome } : {}), ...(s.chatIds ? { chatIds: [...s.chatIds] } : {}),
       ...(s.startedAt ? { startedAt: s.startedAt } : {}), ...(s.endedAt ? { endedAt: s.endedAt } : {}) })),
     ...(p.doneWhen ? { doneWhen: p.doneWhen as string } : {}),
   };

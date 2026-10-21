@@ -112,12 +112,12 @@ describe('agent runs on chats', () => {
     await f.m.archive(c.id);
     vi.setSystemTime(Date.now() + 4 * 24 * 3600_000); // reopened four days after its start: past 72 h from it
     await f.m.reopen(c.id);
-    f.m.resumedByUser(c.id);
+    await f.m.send(c.id, 'continue');
     const reopened = Date.now();
     await f.m.shutdown(); managers.splice(managers.indexOf(f.m), 1);
     const g = fixture({ userData: f.dir });
     vi.useRealTimers();
-    expect(g.run(c.id)).toMatchObject({ counters: { reopened: 1 } });
+    expect(g.run(c.id)).toMatchObject({ taskVersion: 2, counters: { reopened: 0 } });
     expect(g.m.staleRuns(reopened + STALE_MS - 60_000)).toBe(0);
     expect(g.m.staleRuns(reopened + STALE_MS + 60_000)).toBe(1);
   });
@@ -147,15 +147,15 @@ describe('agent runs on chats', () => {
     await f.m.set(c.id, { workStatus: 'completed' });
     f.m.markRun(c.id, 'success');
     await f.m.send(c.id, 'continua', undefined, false, 'orchestrator');
-    await f.m.send(c.id, 'notizia dell’app');
+    await f.m.send(c.id, 'notizia dell’app', undefined, true);
     expect(f.run(c.id)).toMatchObject({ endReason: 'completed', counters: { reopened: 0 } });
-    f.m.resumedByUser(c.id);
+    await f.m.send(c.id, 'continue');
     const run = f.run(c.id)!;
     expect(run.endedAt).toBeUndefined();
     expect(run.outcome).toBeUndefined();
-    expect(run.counters.reopened).toBe(1);
-    f.m.resumedByUser(c.id); // already open: nothing to count
-    expect(f.run(c.id)?.counters.reopened).toBe(1);
+    expect(run.counters.reopened).toBe(0);
+    await f.m.send(c.id, 'continue'); // already open: nothing to count
+    expect(f.run(c.id)?.counters.reopened).toBe(0);
   });
 
   it('counts each request once by id, commands included', async () => {
@@ -264,15 +264,15 @@ describe('agent run evidence (A6)', () => {
     f.m.resumedByUser(c.id, 'grazie');
     expect(f.run(c.id)?.corrections).toEqual({ tagged: 2, afterReport: 0 });
     await f.m.set(c.id, { workStatus: 'completed' });
-    f.m.resumedByUser(c.id, 'riapro'); // no report: a reopen, not a correction
-    expect(f.run(c.id)).toMatchObject({ corrections: { tagged: 2, afterReport: 0 }, counters: { reopened: 1 } });
+    await f.m.send(c.id, 'riapro'); // no report: a reopen, not a correction
+    expect(f.run(c.id)).toMatchObject({ corrections: { tagged: 0, afterReport: 0 }, taskVersion: 2, counters: { reopened: 0 } });
     reply(f, c.id, report({ outcome: 'done', verified: 'yes', summary: 'fatto' }));
     await f.m.set(c.id, { workStatus: 'completed' });
-    f.m.resumedByUser(c.id, 'non va');
+    await f.m.send(c.id, 'non va');
     const run = f.run(c.id)!;
-    expect(run).toMatchObject({ corrections: { tagged: 2, afterReport: 1 }, counters: { reopened: 2 } });
+    expect(run).toMatchObject({ corrections: { tagged: 0, afterReport: 0 }, taskVersion: 3, counters: { reopened: 0 } });
     expect(run.report).toBeUndefined();
-    expect(f.file().runs[0]).toMatchObject({ corrections: { tagged: 2, afterReport: 1 } });
+    expect(f.m.runs.list().some(r => r.corrections?.tagged === 2)).toBe(true);
   });
 
   it('a run recorded before corrections were counted stays unknown', async () => {
@@ -311,7 +311,7 @@ describe('agent run evidence (A6)', () => {
     await f.m.set(c.id, { workStatus: 'completed' });
     const t0 = Date.now();
     f.sink(c.id).changed({ state: 'running' }); // the ended run takes nothing yet
-    f.m.resumedByUser(c.id, 'correggi X');
+    await f.m.send(c.id, 'correggi X');
     vi.setSystemTime(t0 + 3000);
     f.sink(c.id).changed({ state: 'idle' });
     expect(f.run(c.id)?.executionMs).toBe(3000);

@@ -38,7 +38,7 @@ function Who({ step, now, timed }: { step: PlanStep; now: number; timed: boolean
   const when = !timed || !step.startedAt ? '' : step.endedAt ? t('tree.plan.minutes', { n: mins(step.endedAt - step.startedAt) }) : step.state === 'now' ? t('tree.plan.since', { n: mins(now - step.startedAt) }) : '';
   return <span className="sp-who">
     <AgentAvatar avatar={{ kind: 'character', value: step.role ?? 'strategist' }} name={name} size={18} />
-    {name}{when && <> · {when}</>}{step.state === 'blocked' && <> · <b className="sp-blocked">{t('tree.plan.blocked')}</b></>}
+    {name}{when && <> · {when}</>}{step.state === 'done' && step.outcome === 'blocked' && <> · <b className="sp-blocked">{t('tree.plan.resultBlocked')}</b></>}{step.outcome === 'partial' && <> · <b className="sp-blocked">{t('tree.plan.partial')}</b></>}{step.state === 'blocked' && <> · <b className="sp-blocked">{t('tree.plan.blocked')}</b></>}
   </span>;
 }
 
@@ -61,6 +61,7 @@ function Known({ plan }: { plan: StrategyPlan }) {
 /** question = the Strategist's open question; inWindow = "Popup" is on: it opens in the questions window, not here. */
 export function StrategyPanel({ chat, question, inWindow }: { chat: ChatSummary; question?: PendingRequest; inWindow: boolean }) {
   const plan = chat.plan;
+  const [details, setDetails] = useState(false);
   const [changing, setChanging] = useState(false), [text, setText] = useState(''), [busy, setBusy] = useState(false);
   const card = useRef<HTMLDivElement>(null), changeBtn = useRef<HTMLButtonElement>(null), focusNext = useRef<'card' | 'change' | null>(null);
   const phase = plan?.phase;
@@ -118,10 +119,18 @@ export function StrategyPanel({ chat, question, inWindow }: { chat: ChatSummary;
   }
 
   const { done, total } = planCount(plan);
+  const qualityLabel = plan.steps.some(s => s.state === 'blocked') ? 'tree.plan.blocked'
+    : plan.steps.some(s => s.outcome === 'blocked') ? 'tree.plan.resultBlocked'
+      : plan.steps.some(s => s.outcome === 'partial') ? 'tree.plan.partial' : null;
   return <div ref={card} tabIndex={-1} className="sp-card sp-progress" data-testid={`plan-${id}`} data-phase={plan.phase}>
+    <button type="button" className="sp-summary" aria-expanded={details} aria-controls={`plan-details-${id}`} onClick={() => setDetails(!details)} data-testid={`plan-toggle-${id}`}>
+      <span className="sp-kicker">{t('tree.plan.title')}</span><span>{t('tree.plan.progress', { done, total })}</span>
+      {qualityLabel && <span className="sp-blocked">{t(qualityLabel)}</span>}
+      <span className="sp-right" aria-hidden="true">{details ? '▴' : '▾'}</span>
+    </button>
     <div className="sp-bar" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done} aria-label={t('tree.plan.progress', { done, total })} data-tip={t('tree.plan.progress', { done, total })}>
       <b style={{ width: `${total ? Math.round(done / total * 100) : 0}%` }} />
     </div>
-    <Steps plan={plan} timed testid={`plan-steps-${id}`} />
+    <div id={`plan-details-${id}`} hidden={!details}><Steps plan={plan} timed testid={`plan-steps-${id}`} /></div>
   </div>;
 }

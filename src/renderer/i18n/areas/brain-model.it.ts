@@ -93,7 +93,7 @@ export const brainModelIt = {
   'bm.cls.history': 'Storico della tabella', 'bm.cls.historyEmpty': 'Nessuna modifica registrata.',
   'bm.cls.historyRow': (p: { from: string; to: number; by: string }) => `v${p.from} → v${p.to}, da ${p.by}`,
   'bm.cls.choices': 'Skill suggerite e usate',
-  'bm.cls.choicesLead': 'Per le ultime chat dei ruoli: le skill che il suggeritore propone oggi per quella richiesta e quelle che il lancio ha dato davvero.',
+  'bm.cls.choicesLead': 'Per le ultime chat dei ruoli: i suggerimenti salvati al lancio e le skill scelte allora; i lanci senza snapshot sono esclusi.',
   'bm.cls.col.when': 'Quando', 'bm.cls.col.goal': 'Richiesta', 'bm.cls.col.role': 'Ruolo', 'bm.cls.col.suggested': 'Suggerite', 'bm.cls.col.used': 'Usate',
   'bm.cls.same': 'tutte suggerite', 'bm.cls.differ': 'alcune no', 'bm.cls.none': 'nessuna suggerita',
   'bm.cls.choicesEmpty': 'Nessuna chat con una scelta registrata ancora.',

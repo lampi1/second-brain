@@ -11,7 +11,7 @@ import { validRoute } from '../brain/routing';
 import { errText, log } from '../log';
 import { isUuid } from './session';
 import { ENGINE_ID } from '../engines/registry';
-import type { AgentOwnerSnapshot, AgentChildren, AgentRun } from '../../shared/agents';
+import type { AgentOwnerSnapshot, AgentChildren, AgentRun, UserTaskEvents } from '../../shared/agents';
 import { RUN_ID, readRun } from '../agents/runs';
 import { readOwner } from '../agents/catalog';
 import { readPolicy, type AgentPolicy } from '../agents/tool-policy';
@@ -27,7 +27,18 @@ function validAssets(value: unknown): value is NonNullable<StoredChat['agentAsse
     && path.resolve(a.skillRoot) === path.resolve(a.pluginDir, 'skills');
 }
 
+/** Stable child result identity survives admission, retries and restarts; old records may lack IDs. */
+export interface HeldChildResult { id?: string; runId?: string; title: string; message: string }
+/** Durable root result delivery state, saved before the engine can finish its turn. */
+export interface HeldRootResult {
+  local?: boolean;
+  note: { chatId: string; title: string; role: string; summary: string; at: number };
+  message: string;
+  quiet: boolean;
+  userWaits: boolean;
+}
 export interface StoredChat {
+  userTaskEvents?: UserTaskEvents;
   id: string;
   agent?: AgentOwnerSnapshot;
   work?: NonNullable<ChatSummary['work']>;
@@ -44,6 +55,11 @@ export interface StoredChat {
   run?: AgentRun;
   /** when nothing last waited on the user in this run (a reopen, an answer): the stale clock's start across restarts */
   runIdleSince?: number;
+  heldResult?: HeldRootResult;
+  rootReportAt?: number;
+  userWaits?: boolean;
+  autoCompleted?: boolean;
+
   /** its run (this id) was pruned into the rollups: it counts there only, so the chat never gets a backfilled run */
   runPruned?: string;
   harness: Harness;
@@ -60,7 +76,7 @@ export interface StoredChat {
   /** «Lampo», the quick lane (ADR 0105) */
   quick?: true;
   /** child results a quit held back from this parent, sent after the next start */
-  heldResults?: { title: string; message: string }[];
+  heldResults?: HeldChildResult[];
   createdAt: number;
   /** the CLI's running cost total last seen, for per-turn deltas after a resume */
   costTotalUsd?: number;
@@ -159,11 +175,30 @@ const MODES: readonly string[] = ['default', 'acceptEdits', 'auto', 'plan', 'byp
 const EFFORTS: readonly string[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 /** held child results: at most 32, each a title and a message of bounded size, else none */
-function heldResults(x: unknown): { title: string; message: string }[] | null {
+function heldResults(x: unknown): HeldChildResult[] | null {
   if (!Array.isArray(x) || !x.length || x.length > 32) return null;
   const ok = x.every(i => !!i && typeof i === 'object' && typeof (i as { title?: unknown }).title === 'string' && typeof (i as { message?: unknown }).message === 'string'
     && (i as { message: string }).message.length <= 64 * 1024 && (i as { title: string }).title.length <= 500);
-  return ok ? (x as { title: string; message: string }[]).map(i => ({ title: i.title, message: i.message })) : null;
+  return ok ? (x as HeldChildResult[]).map(i => ({ title: i.title, message: i.message, ...(typeof i.id === 'string' && i.id.length <= 100 ? { id: i.id } : {}), ...(typeof i.runId === 'string' && RUN_ID.test(i.runId) ? { runId: i.runId } : {}) })) : null;
+}
+
+/** Malformed authoritative events fail closed rather than silently making a stale assignment appear safe. */
+function readTaskEvents(value: unknown): UserTaskEvents | undefined {
+  if (value === undefined) return undefined;
+  const ledger = value as UserTaskEvents;
+  if (ledger && Array.isArray(ledger.events) && Number.isSafeInteger(ledger.latestSeq) && ledger.latestSeq >= 0 &&
+      Number.isSafeInteger(ledger.acknowledgedSeq) && ledger.acknowledgedSeq >= 0 && ledger.acknowledgedSeq <= ledger.latestSeq &&
+      ledger.events.length === ledger.latestSeq && ledger.events.every((e, index) => e && e.seq === index + 1 &&
+        typeof e.id === 'string' && typeof e.at === 'number' && Number.isFinite(e.at) && typeof e.text === 'string' &&
+        (e.taskId === undefined || typeof e.taskId === 'string') && (e.taskVersion === undefined || Number.isSafeInteger(e.taskVersion)))) return structuredClone(ledger);
+  return { events: [], latestSeq: Number.MAX_SAFE_INTEGER, acknowledgedSeq: 0 };
+}
+
+function validHeldRoot(value: unknown): value is HeldRootResult {
+  const h = value as HeldRootResult | undefined, n = h?.note;
+  return !!h && typeof h === 'object' && typeof h.message === 'string' && h.message.length <= 65536 &&
+    typeof h.quiet === 'boolean' && typeof h.userWaits === 'boolean' && !!n && typeof n.chatId === 'string' &&
+    typeof n.title === 'string' && typeof n.role === 'string' && typeof n.summary === 'string' && n.summary.length <= 2000 && num(n.at);
 }
 
 function valid(x: unknown): StoredChat | null {
@@ -187,6 +222,11 @@ function valid(x: unknown): StoredChat | null {
     createdAt: typeof c.createdAt === 'number' ? c.createdAt : Date.now(),
     ...(typeof c.costTotalUsd === 'number' && Number.isFinite(c.costTotalUsd) ? { costTotalUsd: c.costTotalUsd } : {}),
     ...extras(c),
+    ...(c.userTaskEvents !== undefined ? { userTaskEvents: readTaskEvents(c.userTaskEvents) } : {}),
+    ...(c.userWaits === true ? { userWaits: true } : {}),
+    ...(c.autoCompleted === true ? { autoCompleted: true } : {}),
+    ...(num(c.rootReportAt) ? { rootReportAt: c.rootReportAt } : {}),
+    ...(validHeldRoot(c.heldResult) ? { heldResult: c.heldResult } : {}),
     // the Orchestrator is never archived, whatever the file says
     ...(typeof c.closedAt === 'number' && Number.isFinite(c.closedAt) && !orchestrator ? { closedAt: c.closedAt, closedBy: c.closedBy === 'user' ? 'user' as const : 'auto' as const } : {}),
     ...(c.working === true && typeof c.closedAt !== 'number' ? { working: true as const } : {}),

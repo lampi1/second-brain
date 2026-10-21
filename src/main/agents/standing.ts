@@ -1,10 +1,10 @@
 // Agent standing: the level and the performance % on the front of an agent card (AgentCatalogCard), computed from
 // agent-runs.json. Pure and deterministic (the caller passes `now`). Honest levels (ADR 0100, owner 2026-10-20: a bit of
 // game, but only on verified data): the XP is the count of VERIFIED successful runs (the user's verdict, one a verified
-// independent review backs, or the facts once settled: shared/run-verdict.ts), never ended, failed or unverified runs;
+// independent review backs, shared/run-verdict.ts), never ended, failed or unverified runs;
 // the level grows with it on a gentle curve (each level asks 5 successes more than the one before). The performance is
 // the success of the runs that have a verdict, each weighted by how much the verdict is trusted (the user, a review and
-// the facts × 1, the Orchestrator × 0.6, the agent's own report × 0: it never counts) and by how recent it is (half
+// the Orchestrator × 0.6, the agent's own report × 0: it never counts) and by how recent it is (half
 // weight every 30 days). Below MIN_RUNS weighted verdicts it stays null: "in rodaggio".
 // The Orchestrator has no run of its own (its chat is permanent, ADR 0083): each ended root run it opened (startedBy
 // "orchestrator", not a one-shot) counts as one of its decisions, rated with that run's verdict (ADR 0097, issue #112); its own verdict on such a run weighs as its own word (self) on
@@ -22,7 +22,7 @@ export const MIN_RUNS = 5;
 /** a verdict this old weighs half of one given today */
 export const HALF_LIFE_MS = 30 * 86_400_000;
 /** how much each kind of verdict counts; the agent's own word (self) counts nothing (ADR 0100) */
-export const TRUST = { human: 1, review: 1, facts: 1, orchestrator: 0.6, self: 0 } as const;
+export const TRUST = { human: 1, review: 1, facts: 0, orchestrator: 0.6, self: 0 } as const;
 const SCORE = { success: 1, partial: 0.5, fail: 0 } as const;
 const REPORTED = { done: 'success', partial: 'partial', blocked: 'fail' } as const;
 type Source = keyof typeof TRUST;
@@ -51,14 +51,12 @@ export const orchestratorDecision = (r: AgentRun): boolean => r.startedBy === 'o
 export const countedDecision = (r: AgentRun): boolean => counts(r) && orchestratorDecision(r);
 
 /** The most trusted verdict a run has, or null. A verdict "unknown" is no verdict. `verified` = the run's verified
- *  verdict (shared/run-verdict.ts verifiedVerdict), when the caller computed it: the user's, a verified review's, the
- *  facts'. */
-export function verdictOf(run: AgentRun, reviews: readonly AgentRun[] = [], verified: VerifiedVerdict | null = null): { source: Source; verdict: Verdict } | null {
+ *  verdict (shared/run-verdict.ts verifiedVerdict), when the caller computed it: the user's or a verified review's. */
+export function verdictOf(run: AgentRun, reviews: readonly AgentRun[] = [], _verified: VerifiedVerdict | null = null): { source: Source; verdict: Verdict } | null {
   const o = run.outcome, known = o && o.verdict !== 'unknown' ? o.verdict : null;
   if (known && o!.basis === 'human') return { source: 'human', verdict: known };
   if (known && o!.basis === 'reviewed-evidence') return { source: 'review', verdict: known };
-  if (verified?.basis === 'facts') return { source: 'facts', verdict: verified.verdict };
-  const reviewed = reviews.filter(v => v.report?.verdict).sort((a, b) => a.report!.at - b.report!.at)[0];
+  const reviewed = reviews.filter(v => v.endedAt !== undefined && v.report?.verified === 'yes' && v.report?.verdict).sort((a, b) => a.report!.at - b.report!.at)[0];
   if (reviewed) return { source: 'review', verdict: reviewed.report!.verdict! };
   if (known && o!.basis === 'orchestrator-opinion') return { source: 'orchestrator', verdict: known };
   if (known && o!.basis === 'self-report') return { source: 'self', verdict: known };

@@ -1,6 +1,4 @@
-// Home run provenance and explicit human verdicts; main remains authoritative for the run lifecycle. Without the user's
-// verdict the outcome line says what the facts say (shared/run-verdict.ts, ADR 0100): verified, provisional until 7
-// days after the run's end, or failed (its report was blocked, or the user reworked it). Used by ChatTile.tsx.
+// Run provenance and explicit human verdicts for ChatTile. Automatic observations are labeled unverified proxies.
 import { useRef, useState } from 'react';
 import type { AgentRun } from '@shared/agents';
 import { FACTS_SETTLE_MS, factsVerdict, reworkedWithin } from '@shared/run-verdict';
@@ -29,7 +27,7 @@ export function RunOutcomeControl({ run, disabled }: { run: AgentRun; disabled: 
   // the earliest run (among the chats the app still has) that reworks or continues this one: enough for the 7-day check
   const rework = useApp(s => {
     let first: number | null = null;
-    for (const c of Object.values(s.chats)) if (c.run && (c.run.reworkOf === run.runId || c.run.continuedFrom === run.runId)) first = Math.min(first ?? c.run.startedAt, c.run.startedAt);
+    for (const c of Object.values(s.chats)) if (c.run && (c.run.reworkOf === run.runId)) first = Math.min(first ?? c.run.startedAt, c.run.startedAt);
     return first;
   });
   const starts = rework === null ? [] : [rework];

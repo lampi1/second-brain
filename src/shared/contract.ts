@@ -2,6 +2,7 @@
 // result) and event channels (main → renderer). The preload exposes exactly these channels and nothing else
 // (src/preload/index.ts reads INVOKE_CHANNELS / EVENT_CHANNELS); main registers a handler for every invoke channel
 // (src/main/ipc.ts) and rejects senders that are not the app's own page. Change a shape here first, then both sides.
+import type { LearningEvidence, LearningReviewState, MemoryReviewRecord, ReplayComparison, ReplayRecord, SkillCandidateView } from './learning-review';
 import type { SysCode, SysParams } from './sys';
 import type { AgentLifecycleDecide, AgentLifecycleSnapshot } from './agent-lifecycle';
 import type { PackTarget, PackExportPlan, PackFinding, PackImportReview } from './agent-pack';
@@ -13,7 +14,7 @@ import type { ConnectorId, ConnectorState } from './connectors';
 import type { McpImportCandidate, McpServerDef, McpServersState, McpToolAccess } from './mcp-servers';
 import type { FileViewResult } from './file-view';
 import type { DiffAgainst, FileDiffResult } from './file-diff';
-import type { AgentCatalog, AgentMetrics, AgentMetricsFilter, AgentDraft, AgentOwnerSnapshot, AgentProfile, AgentRun, AgentUndo, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
+import type { UserTaskEvents, TaskDeliveryPolicy, CanonicalResult, AgentCatalog, AgentMetrics, AgentMetricsFilter, AgentDraft, AgentOwnerSnapshot, AgentProfile, AgentRun, AgentUndo, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
 import type { DelegationSettings, ModelTier, RoleId, WorkRoleId } from './roles';
 import type { ChatDelegation, DelegationLimitHit } from './delegation';
 import type { StrategyPlan } from './strategy';
@@ -106,6 +107,11 @@ export type ChatOrigin = 'app';
 export interface QueuedInfo { kind: 'start' | 'turn'; position: number; since: number; cpu: number; freeRam: number }
 
 export interface ChatSummary {
+  userEvents?: { latestSeq: number; acknowledgedSeq: number };
+  /** Root results the user can synthesize; private delegated results are excluded. */
+  availableResultIds?: string[];
+  /** Results with an outstanding app delivery or explicitly requested synthesis. */
+  pendingResultIds?: string[];
   id: string;                 // app id (stable across resumes)
   agent?: AgentOwnerSnapshot;
   /** the agent run this chat is (a chat started from a catalog agent): a mirror of its agent-runs.json record */
@@ -255,7 +261,7 @@ export type ChatItem =
    *  (shown folded), its note is the hand-off it starts from */
   // text: the English rendering, for agents, logs and items saved before this field existed. When code is set, the
   // UI shows t('sys.' + code, params) instead (src/shared/sys.ts, src/renderer/i18n/index.ts's sysText()).
-  | { kind: 'system'; id: string; at: number; text: string; level: 'info' | 'warn' | 'error'; code?: SysCode; params?: SysParams; continued?: { notePath: string; session?: string } }
+  | { kind: 'system'; id: string; at: number; text: string; level: 'info' | 'warn' | 'error'; code?: SysCode; params?: SysParams; result?: CanonicalResult; continued?: { notePath: string; session?: string } }
   /** interrupted = the user stopped the turn (Stop, "Invia subito"): isError stays false, the UI says "interrotto da te" */
   | { kind: 'result'; id: string; at: number; costUsd: number; durationMs: number; turns: number; isError: boolean; interrupted?: boolean }
   /** a visual a chat showed with show_ui (ADR 0033): a trusted catalog component, never HTML. id = `art-<key>`, key =
@@ -351,6 +357,8 @@ export interface RunInfo {
 }
 
 export interface NewChat {
+  deliveryPolicy?: TaskDeliveryPolicy;
+  doneWhen?: string[];
   /** Expected role version and run links; validated before a new engine starts. */
   roleVersion?: number;
   parentRunId?: string;
@@ -1233,6 +1241,20 @@ export interface InvokeMap {
   'avatars:reset': [{ id: RoleId }, AgentImages];
   /** the Brain pages (ADR 0077, src/main/brainmodel): agents, skills and their links, rules, memory, the change log */
   'brainmodel:state': [void, BrainModelState];
+  /** Explicit user review of provenance-bearing memory and skill candidates; never exposed as model approval. */
+  'chat:userEvents': [{ chatId: string; afterSeq?: number }, UserTaskEvents];
+  'chat:synthesize': [{ runId: string }, void];
+  'memory:reviewList': [{ asOf?: string } | undefined, MemoryReviewRecord[]];
+  'memory:confirm': [{ expectedRoot: string; id: string; evidence: string }, MemoryReviewRecord];
+  'memory:retract': [{ expectedRoot: string; id: string; reason: string }, MemoryReviewRecord];
+  'memory:delete': [{ expectedRoot: string; id: string }, void];
+  'learning:evidence': [{ runId: string; expectedRoot: string }, LearningEvidence];
+  'learning:state': [void, LearningReviewState];
+  'learning:import': [{ expectedRoot: string; dataset: unknown }, LearningReviewState];
+  'learning:replay': [{ expectedRoot: string; datasetId: string; split: 'tuning' | 'holdout'; candidateName?: string }, ReplayRecord];
+  'learning:saveCandidate': [{ expectedRoot: string; name: string; text: string; expectedDigest: string }, SkillCandidateView];
+  'learning:promote': [{ expectedRoot: string; name: string; expectedDigest: string; replayId: string; exampleRunId: string }, SkillCandidateView];
+  'learning:compare': [{ beforeId: string; afterId: string }, ReplayComparison];
   /** the maintenance button: run every job now (or one); every change is logged and can be undone */
   'brainmodel:maintain': [{ job?: MaintenanceJobId } | undefined, BrainModelState];
   'brainmodel:rollback': [{ id: string }, BrainModelState];
@@ -1538,6 +1560,7 @@ export const INVOKE_CHANNELS = [
   'app:createBrain', 'app:projectsFolder', 'app:pickProjects',
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
+  'chat:userEvents', 'chat:synthesize', 'memory:reviewList', 'memory:confirm', 'memory:retract', 'memory:delete', 'learning:evidence', 'learning:state', 'learning:import', 'learning:replay', 'learning:saveCandidate', 'learning:promote', 'learning:compare',
   'agents:list', 'skills:suggest', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'agents:estimates', 'run:outcome', 'agents:restoreVersion', 'avatars:get', 'avatars:set', 'avatars:reset', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:plan', 'chat:stop',
   'agents:exportPlan', 'agents:exportFix', 'agents:export', 'brain:share', 'agents:importInspect', 'agents:importApply', 'agents:importCancel', 'brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'brainmodel:link', 'classifiers:state', 'morning:brief', 'agents:trialDecide', 'agents:lifecycleDecide',

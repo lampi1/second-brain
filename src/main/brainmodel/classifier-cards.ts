@@ -9,12 +9,13 @@
 // run's verdict first. A chat whose only outcome is unverified (the brain's proxy, the Orchestrator's opinion) counts
 // in `unverified`, never in success (ADR 0095, issue #110). A missing value is null, never zero. Pure: no IO. Used by classifiers.ts;
 // unit tests in test/unit/brainmodel/classifier-cards.test.ts.
+import { verifiedVerdict } from '../../shared/run-verdict';
 import type { AgentRun } from '../../shared/agents';
 import type { ClassifierCard, ClassifierSlice, ClassifierStat, ClassifierWeek } from '../../shared/brain-model';
 import type { LedgerOutcome } from '../brain/routing';
 
 export interface LedgerPrediction { id: string; at: number; kind: string; model: string | null; source: string }
-export interface Launch { at: number; chatId: string; agentId: string; suggested: string[]; used: string[] }
+export interface Launch { runId?: string; at: number; chatId: string; agentId: string; suggested: string[]; used: string[] }
 export interface JobRow { at: number; kind: string; usd: number | null }
 export interface CardInputs {
   now: number;
@@ -41,9 +42,8 @@ export const lastIsoWeeks = (now: number, n = WEEKS): string[] => Array.from({ l
 const share = (k: number, n: number): ClassifierStat => ({ value: n ? k / n : null, n });
 const avg = (xs: number[]): number | null => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 const verified = (r: AgentRun | undefined): boolean | null => {
-  const o = r?.outcome;
-  if (!o || o.verdict === 'unknown' || (o.basis !== 'human' && o.basis !== 'reviewed-evidence')) return null;
-  return o.verdict === 'success';
+  const v = r ? verifiedVerdict(r, [], 0) : null;
+  return v ? v.verdict === 'success' : null;
 };
 const chatOf = (ledgerId: string) => ledgerId.replace(/^app:/, '');
 /** A ledger id's verified outcome: its agent run's verdict (the user's or a reviewed one), else the ledger's verified
@@ -93,13 +93,16 @@ function card(id: ClassifierCard['id'], cases: Case[], now: number, threshold: n
 
 /** The four record-keeping classifiers' cards. */
 export function classifierCards(i: CardInputs): ClassifierCard[] {
-  const runByChat = new Map(i.runs.map(r => [r.chatId, r]));
+  const runByChat = new Map([...i.runs].sort((a, b) => b.startedAt - a.startedAt).map(r => [r.chatId, r]));
   const routed = i.predictions.map(p => ({ p, ok: verifiedOf(p.id, runByChat, i.outcomes), proxy: unverifiedOf(p.id, runByChat, i.outcomes), usd: i.actuals.get(p.id)?.usd ?? null, role: runByChat.get(chatOf(p.id))?.agentId ?? null }));
   const kind = card('kind', routed.map(({ p, ok, proxy, usd, role }) => ({ at: p.at, key: p.kind || 'altro', hit: !!p.kind && p.kind !== 'altro', ok, proxy, usd, role })), i.now, null);
   const model = card('model', routed.map(({ p, ok, proxy, usd, role }) => ({ at: p.at, key: p.model ?? '—', hit: p.source === 'table', ok, proxy, usd, role })), i.now, null);
   const skills = card('skills', i.launches.flatMap(l => {
-    const id = `app:${l.chatId}`, ok = verifiedOf(id, runByChat, i.outcomes), proxy = unverifiedOf(id, runByChat, i.outcomes), usd = runByChat.get(l.chatId)?.costUsd ?? null;
-    const hit = l.suggested.length > 0 && l.used.every(s => l.suggested.includes(s));
+    const id = `app:${l.chatId}`, run = l.runId ? i.runs.find(r => r.runId === l.runId) : runByChat.get(l.chatId);
+    // A later assignment must not borrow the original chat-level ledger verdict.
+    const ok = l.runId ? verified(run) : verifiedOf(id, runByChat, i.outcomes);
+    const proxy = l.runId ? null : unverifiedOf(id, runByChat, i.outcomes), usd = run?.costUsd ?? null;
+    const hit = l.suggested.length > 0 && l.used.length > 0 && l.used.every(s => l.suggested.includes(s));
     // one case per launch, sliced by its first used skill (or "nessuna")
     return [{ at: l.at, key: l.used[0] ?? '', hit, ok, proxy, usd, role: l.agentId }];
   }), i.now, i.skillThreshold);

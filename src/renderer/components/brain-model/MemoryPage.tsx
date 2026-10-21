@@ -17,6 +17,9 @@ import { memorySections } from '../../lib/brain-model-view';
 import { brainFile, lineParts, memoryEmpty, shortDay } from '../../lib/memory-view';
 import { IconFile } from '../Icons';
 import { MaintenancePanel, when } from './MaintenancePanel';
+import { MemoryReview } from './MemoryReview';
+import { LearningReview } from './LearningReview';
+import '../../styles/learning-review.css';
 import { MaintenanceButton } from './MaintenanceButton';
 import { InlineMd, MemoryInsights, OpenFile } from './MemoryInsights';
 import '../../styles/agent-catalog.css';
@@ -101,6 +104,8 @@ export function MemoryPage() {
     <PageHead title={t('bm.mem.title')} lead={t('bm.mem.lead')} actions={<MaintenanceButton />} />
     {error && <p role="alert">{error}</p>}
     {state && !state.root ? <p className="bm-empty">{t('bm.noBrain')}</p> : <>
+      {root && <MemoryReview key={`memory:${root}`} root={root} />}
+      {root && <LearningReview key={`learning:${root}`} root={root} />}
       {stats && (memoryEmpty(stats) ? <CleanStart /> : <MemoryInsights s={stats} />)}
       <Section id="knowledge" title={t('bm.mem.knowledge')} lead={t('bm.mem.knowledgeLead')} files={knowledge} empty={t('bm.mem.empty.knowledge')} />
       <Section id="happened" title={t('bm.mem.happened')} lead={t('bm.mem.happenedLead')} files={s.happened} empty={t('bm.mem.empty.happened')}><ErrorLog items={stats?.errors.items ?? []} groups={stats?.errors.groups ?? []} /></Section>

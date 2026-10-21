@@ -61,7 +61,7 @@ describe('import', () => {
 
   it('applies the chosen ones to the app, their tokens still to type', () => {
     const h = home();
-    const svc = new McpServersService({ userData: tmp('import-ud'), cipher: { unavailable: () => null, encrypt: s => Buffer.from(s), decrypt: b => b.toString() }, mcp: new McpServer({ name: 't', version: '1' }), context: () => null, home: h });
+    const svc = new McpServersService({ userData: tmp('import-ud'), cipher: { unavailable: () => null, encrypt: s => Buffer.from(s), decrypt: b => b.toString() }, mcp: new McpServer({ name: 't', version: '1' }), context: () => null, home: h, importEnv: {} });
     const keys = svc.importScan().map(c => c.key);
     const r = svc.importApply(keys);
     expect(r.added).toEqual(['azure-devops', 'github', 'jira', 'sentry', 'docs']);

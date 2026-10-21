@@ -138,15 +138,43 @@ describe('corrections from a work chat', () => {
 describe('repeated tasks, duplicates and the user toggle', () => {
   const run = (n: number, goal: string, agentId = DEV): AgentRun => ({ runId: `r_00000000000${n}`, chatId: `c${n}`, agentId, version: 1, goal, startedBy: 'user', startedAt: NOW - n * 86400e3, endedAt: NOW - n * 86400e3 + 600e3,
     counters: {} as AgentRun['counters'], costUsd: 0.2, tokens: null, report: { at: NOW - n * 86400e3 + 600e3, outcome: 'done', verified: 'yes', summary: `Esportate le fatture del mese ${n}` } });
-  it('makes a skill from a task repeated in three chats, a default skill of the role that ran it', async () => {
-    const w = world({ runs: [run(1, 'Esporta le fatture di ottobre in Excel'), run(2, 'Esporta le fatture di settembre in Excel'), run(3, 'Esporta le fatture di agosto in Excel'), run(4, 'Scrivi una mail al cliente')] });
+  it('keeps repeated tasks as non-loadable candidates until independent verification and replay', async () => {
+    const runs = [run(1, 'Esporta le fatture di ottobre in Excel'), run(2, 'Esporta le fatture di settembre in Excel'), run(3, 'Esporta le fatture di agosto in Excel')];
+    const w = world({ runs });
+    for (const r of runs) r.scope = { brainRoot: w.brain, projectRoot: w.brain };
     const state = await w.service.maintain('repeated-task');
-    const made = state.skills.find(s => s.madeBy === 'repeated-task')!;
-    expect(made.name).toMatch(/fatture|esporta|excel/);
-    expect(made.usedBy).toEqual([DEV]);
-    expect(fs.readFileSync(made.file, 'utf8')).toContain('viste 3 volte');
-    const again = await w.service.maintain('repeated-task');
-    expect(again.skills.filter(s => s.madeBy === 'repeated-task')).toHaveLength(1);
+    expect(state.skills.filter(s => s.madeBy === 'repeated-task')).toHaveLength(0);
+    const candidates = path.join(w.brain, 'memory/skill-candidates');
+    expect(fs.readdirSync(candidates)).toHaveLength(1);
+    expect(fs.readFileSync(path.join(candidates, fs.readdirSync(candidates)[0]!), 'utf8')).toContain('replay');
+    expect(w.agent(DEV).knowhow?.linked ?? []).toEqual([]);
+    await w.service.maintain('repeated-task');
+    expect(fs.readdirSync(candidates)).toHaveLength(1);
+  });
+  it('counts distinct tasks in a reused conversation, never continuations or rework', async () => {
+    const runs: AgentRun[] = [1, 2, 3].map(n => ({ ...run(n, 'Esporta le fatture del mese in Excel'), chatId: 'same-chat', taskId: `task-${n}` }));
+    const w = world({ runs });
+    for (const r of runs) r.scope = { brainRoot: w.brain, projectRoot: w.brain };
+    await w.service.maintain('repeated-task');
+    expect(fs.readdirSync(path.join(w.brain, 'memory/skill-candidates'))).toHaveLength(1);
+    const continued: AgentRun[] = [1, 2, 3].map(n => ({ ...run(n, 'Esporta le fatture del mese in Excel'), taskId: 'one-task', ...(n > 1 ? { continuedFrom: 'r_000000000001' } : {}) }));
+    const other = world({ runs: continued });
+    for (const r of continued) r.scope = { brainRoot: other.brain, projectRoot: other.brain };
+    await other.service.maintain('repeated-task');
+    expect(fs.existsSync(path.join(other.brain, 'memory/skill-candidates'))).toBe(false);
+  });
+  it('does not combine projects, brains or unknown historical scope into a candidate', async () => {
+    const runs: AgentRun[] = [1, 2, 3].map(n => ({ ...run(n, 'Esporta le fatture del mese in Excel'), taskId: `task-${n}` }));
+    const w = world({ runs });
+    for (const [i, r] of runs.entries()) r.scope = { brainRoot: w.brain, projectRoot: path.join(w.brain, `project-${i}`) };
+    await w.service.maintain('repeated-task');
+    expect(fs.existsSync(path.join(w.brain, 'memory/skill-candidates'))).toBe(false);
+    for (const r of runs) r.scope = { brainRoot: path.join(w.base, 'other-brain'), projectRoot: w.brain };
+    await w.service.maintain('repeated-task');
+    expect(fs.existsSync(path.join(w.brain, 'memory/skill-candidates'))).toBe(false);
+    for (const r of runs) delete r.scope;
+    await w.service.maintain('repeated-task');
+    expect(fs.existsSync(path.join(w.brain, 'memory/skill-candidates'))).toBe(false);
   });
   it('merges two skills that say the same thing and relinks their roles', async () => {
     const w = world();
@@ -163,17 +191,15 @@ describe('repeated tasks, duplicates and the user toggle', () => {
     await w.service.maintain('merge-skills');
     expect(fs.existsSync(path.join(w.brain, '.claude/skills/export-fatture/SKILL.md'))).toBe(true); // not redone
   });
-  it('moves memories several roles share to memory/shared.md, once, and gives it to every role', async () => {
+  it('never promotes duplicate role memories to global facts', async () => {
     const w = world();
-    put(w.brain, `agents/${portableId(DEV)}/memory.md`, '# Memoria\n\n- 2026-10-01 · Il server di test si riavvia alle 6\n- 2026-10-02 · Solo mio\n');
-    put(w.brain, `agents/${portableId(OTHER)}/memory.md`, '# Memoria\n\n- 2026-10-05 · Il server di test si riavvia alle 6\n');
-    const state = await w.service.maintain('merge-memory');
-    expect(fs.readFileSync(path.join(w.brain, 'memory/shared.md'), 'utf8')).toContain('Il server di test si riavvia alle 6');
-    expect(fs.readFileSync(path.join(w.brain, `agents/${portableId(DEV)}/memory.md`), 'utf8')).not.toContain('riavvia');
-    expect(fs.readFileSync(path.join(w.brain, `agents/${portableId(DEV)}/memory.md`), 'utf8')).toContain('Solo mio');
-    expect(state.memory.map(m => m.kind)).toEqual(expect.arrayContaining(['shared', 'agent']));
-    expect(w.flows.runtime(OTHER).instructions).toContain('Il server di test si riavvia alle 6');
-    expect((await w.service.maintain('merge-memory')).changes).toHaveLength(1);
+    const text = '# Memoria\n\n- 2026-10-01 · Il server di test si riavvia alle 6\n';
+    put(w.brain, `agents/${portableId(DEV)}/memory.md`, text);
+    put(w.brain, `agents/${portableId(OTHER)}/memory.md`, text);
+    await w.service.maintain('merge-memory');
+    expect(fs.existsSync(path.join(w.brain, 'memory/shared.md'))).toBe(false);
+    expect(fs.readFileSync(path.join(w.brain, `agents/${portableId(DEV)}/memory.md`), 'utf8')).toBe(text);
+    expect((await w.service.maintain('merge-memory')).changes.filter(c => c.job === 'merge-memory')).toHaveLength(0);
   });
   it('the user declares and drops a skill for a role, logged and undoable', () => {
     const w = world();

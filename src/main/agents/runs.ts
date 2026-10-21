@@ -4,6 +4,7 @@
 import path from 'node:path';
 import crypto from 'node:crypto';
 import type { AgentRun, AgentRunCorrections, AgentRunEnd, AgentRunOutcome, AgentRunReport, AgentRunTags, AgentRunTokens } from '../../shared/agents';
+import { checkResult } from '../../shared/delegation';
 import { MODEL_TIERS, type ModelTier } from '../../shared/roles';
 import { SUMMARY_MAX } from './run-report';
 import { rollUp, SAMPLE_MAX, type RunTally, type TagTally } from './run-metrics';
@@ -82,7 +83,14 @@ function readReport(v: unknown): AgentRunReport | null {
   if (!r || typeof r !== 'object' || !time(r.at)) return null;
   if (!['done', 'partial', 'blocked'].includes(r.outcome as string) || !['yes', 'partial', 'no'].includes(r.verified as string) || !str(r.summary, SUMMARY_MAX)
     || (r.findings !== undefined && !count(r.findings)) || (r.blocking !== undefined && !count(r.blocking)) || (count(r.findings) && count(r.blocking) && r.blocking > r.findings)) return null;
-  return { at: r.at, outcome: r.outcome as 'done', verified: r.verified as 'yes', summary: r.summary,
+  let canonical: AgentRunReport['canonical'];
+  if (r.canonical !== undefined) {
+    const c = r.canonical as NonNullable<AgentRunReport['canonical']>;
+    if (!c || !time(c.at) || !str(c.taskId, 80) || !RUN_ID.test(c.runId) || !count(c.taskVersion) || c.taskVersion < 1 || !Array.isArray(c.doneWhen)) return null;
+    const { at, taskId, runId, taskVersion, ...result } = c;
+    try { canonical = { ...checkResult(result, c.doneWhen.map(d => d.criterion)), at, taskId, runId, taskVersion }; } catch { return null; }
+  }
+  return { ...(canonical ? { canonical } : {}), at: r.at, outcome: r.outcome as 'done', verified: r.verified as 'yes', summary: r.summary,
     ...(r.findings !== undefined ? { findings: r.findings as number } : {}), ...(r.blocking !== undefined ? { blocking: r.blocking as number } : {}),
     ...(['success', 'partial', 'fail'].includes(r.verdict as string) ? { verdict: r.verdict as 'success' } : {}), ...(r.via === 'agent_report' ? { via: 'agent_report' as const } : {}) };
 }
@@ -116,7 +124,32 @@ export function readRun(v: unknown): AgentRun | null {
   const corrections = r.corrections === undefined ? undefined : readCorrections(r.corrections);
   const tags = r.tags === undefined ? undefined : readTags(r.tags);
   if (report === null || corrections === null || tags === null || (r.executionMs !== undefined && !time(r.executionMs))) return null;
+  const delivery = r.delivery as AgentRun['delivery'];
+  if (delivery !== undefined) {
+    if (!delivery || !['display', 'notify', 'synthesize'].includes(delivery.policy) || !time(delivery.reportedAt) || !count(delivery.attempts)) return null;
+    for (const stamp of [delivery.deliveredAt, delivery.displayedAt, delivery.synthesisSubmittedAt, delivery.synthesisRequestedAt]) if (stamp !== undefined && (!time(stamp) || stamp < delivery.reportedAt)) return null;
+    if (delivery.synthesisPending !== undefined && typeof delivery.synthesisPending !== 'boolean') return null;
+    if (delivery.synthesisBatchId !== undefined && !str(delivery.synthesisBatchId, 160)) return null;
+    if (delivery.synthesisSubmittedAt !== undefined && !delivery.synthesisBatchId) return null;
+    if (delivery.policy !== 'synthesize' && (delivery.synthesisSubmittedAt !== undefined || delivery.synthesisBatchId !== undefined)) return null;
+  }
+  if (r.turns !== undefined && !count(r.turns)) return null;
+  const scope = r.scope as AgentRun['scope'];
+  if (scope !== undefined && (!scope || typeof scope.brainRoot !== 'string' || !path.isAbsolute(scope.brainRoot) || typeof scope.projectRoot !== 'string' || !path.isAbsolute(scope.projectRoot) || scope.brainRoot.length > 4000 || scope.projectRoot.length > 4000)) return null;
+  const contract = r.taskContract as AgentRun['taskContract'];
+  if (contract?.reportExpected !== undefined && typeof contract.reportExpected !== 'boolean') return null;
+  if (contract?.deliveryPolicy !== undefined && !['display', 'notify', 'synthesize'].includes(contract.deliveryPolicy)) return null;
+  const snapshot = r.skillSuggestions as AgentRun['skillSuggestions'];
+  if (snapshot !== undefined && (!snapshot || !time(snapshot.at) || !skillList(snapshot.suggested) || !skillList(snapshot.used))) return null;
+  if (r.taskId !== undefined && !str(r.taskId, 80) || r.taskVersion !== undefined && (!count(r.taskVersion) || r.taskVersion < 1)) return null;
+  if (report?.canonical && (report.canonical.runId !== r.runId || report.canonical.taskId !== r.taskId || report.canonical.taskVersion !== r.taskVersion)) return null;
   return {
+    ...(r.taskId ? { taskId: r.taskId as string } : {}), ...(r.taskVersion ? { taskVersion: r.taskVersion as number } : {}),
+    ...(scope ? { scope: { brainRoot: scope.brainRoot, projectRoot: scope.projectRoot } } : {}),
+    ...(r.turns !== undefined ? { turns: r.turns as number } : {}),
+    ...(delivery ? { delivery: structuredClone(delivery) } : {}),
+    ...(snapshot ? { skillSuggestions: { at: snapshot.at, suggested: [...snapshot.suggested], used: [...snapshot.used] } } : {}),
+    ...(r.taskContract && typeof r.taskContract === 'object' && typeof (r.taskContract as { goal?: unknown }).goal === 'string' && Array.isArray((r.taskContract as { doneWhen?: unknown }).doneWhen) && (r.taskContract as { doneWhen: unknown[] }).doneWhen.every(x => typeof x === 'string') ? { taskContract: r.taskContract as AgentRun['taskContract'] } : {}),
     runId: r.runId, chatId: r.chatId, agentId: r.agentId, version: r.version, goal: r.goal, startedBy: r.startedBy as AgentRun['startedBy'], startedAt: r.startedAt,
     ...(r.parentRunId ? { parentRunId: r.parentRunId as string } : {}),
     ...(r.tier ? { tier: r.tier as ModelTier } : {}), ...(r.model !== undefined ? { model: r.model as string | null } : {}),
@@ -148,9 +181,10 @@ export function reopenRun(run: AgentRun): boolean {
 }
 /** No turn and nothing waiting on Brother for STALE_MS (a pending request pauses the clock: `idleSince` restarts when it is answered). */
 export const staleDue = (run: AgentRun, idleSince: number, waiting: boolean, now: number): boolean => run.endedAt === undefined && !waiting && now - idleSince >= STALE_MS;
-/** A settled turn while the run is open: its cost (null stays null: the engine reports none) and its tokens (one turn without them = unknown). */
-export function addTurn(run: AgentRun, usd: number | null, tokens: AgentRunTokens | undefined): void {
-  if (run.endedAt !== undefined) return;
+/** A settled turn; an explicit result receipt may arrive after completion. Missing engine cost/tokens stay unknown. */
+export function addTurn(run: AgentRun, usd: number | null, tokens: AgentRunTokens | undefined, settledReceipt = false): void {
+  if (run.endedAt !== undefined && !settledReceipt) return;
+  if (run.turns !== undefined) run.turns++;
   run.costUsd = usd === null || run.costUsd === null ? null : Math.round((run.costUsd + usd) * 1e6) / 1e6;
   if (!tokens || !run.tokens) { run.tokens = null; return; }
   for (const k of ['input', 'cacheRead', 'cacheWrite', 'output'] as const) run.tokens[k] += tokens[k];
@@ -196,7 +230,15 @@ export function readTally(v: unknown): RunTally | null {
   if (t.decisions !== undefined && !count(t.decisions)) return null;
   if (t.decisionWins !== undefined && (!count(t.decisionWins) || t.decisionWins > ((t.decisions as number | undefined) ?? 0))) return null;
   if ((t.tags !== undefined && !tagTallies(t.tags)) || (t.tagsLost !== undefined && t.tagsLost !== true) || (t.tags !== undefined && t.tagsLost !== undefined)) return null;
-  return structuredClone(t) as unknown as RunTally;
+  const result = structuredClone(t) as unknown as RunTally;
+  if (result.verdictSchema !== 2) {
+    // Old rollups mix self-reported silence with independent outcomes. Counts remain, quality is unknown.
+    result.verdicts = { success: 0, partial: 0, fail: 0 };
+    result.decisionWins = 0;
+    for (const bucket of Object.values(result.tags ?? {})) for (const tag of Object.values(bucket as Record<string, TagTally>)) tag.verdicts = { success: 0, partial: 0, fail: 0 };
+    result.verdictSchema = 2;
+  }
+  return result;
 }
 
 /** agent-runs.json `{version:1, runs, rollups}`: bounded by count and bytes; only ended runs are ever pruned, oldest end
@@ -257,7 +299,7 @@ export class AgentRunStore {
       ...(s.tier ? { tier: s.tier } : {}), ...(s.model !== undefined ? { model: s.model } : {}),
       ...(s.reviewOf ? { reviewOf: s.reviewOf } : {}), ...(s.reworkOf ? { reworkOf: s.reworkOf } : {}),
       counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null },
-      costUsd: s.costKnown ? 0 : null, tokens: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 },
+      costUsd: s.costKnown ? 0 : null, turns: 0, tokens: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 },
       corrections: { tagged: 0, afterReport: 0 }, executionMs: 0,
       ...(s.tags ? { tags: readTags(s.tags)! } : {}),
     };
