@@ -247,6 +247,10 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
     { label: t('catalog.tokens'), value: stats?.tokensPerRun.input.value != null && stats.tokensPerRun.output.value != null ? `${Math.round(stats.tokensPerRun.input.value)} / ${Math.round(stats.tokensPerRun.output.value)}` : null, note: sample(stats?.tokensPerRun.input.n ?? 0) },
     { label: t('catalog.cacheTokens'), value: stats?.tokensPerRun.cacheRead.value != null && stats.tokensPerRun.cacheWrite.value != null ? `${Math.round(stats.tokensPerRun.cacheRead.value)} / ${Math.round(stats.tokensPerRun.cacheWrite.value)}` : null, note: t('catalog.cacheTokensNote') },
     { label: t('catalog.elapsed'), value: stats?.timeToDone.elapsed.value != null ? `${Math.round(stats.timeToDone.elapsed.value / 1000)} s` : null, note: t('catalog.elapsedNote') },
+    { label: t('catalog.deliveryCoverage'), value: stats?.delivery?.coverage != null ? percent(stats.delivery.coverage) : null, note: stats?.delivery ? `${stats.delivery.instrumented}/${stats.delivery.reported} · ${t('catalog.deliveryScope')}` : t('catalog.deliveryScope') },
+    { label: t('catalog.deliveryRate'), value: stats?.delivery?.rate != null ? percent(stats.delivery.rate) : null, note: stats?.delivery ? `${stats.delivery.delivered}/${stats.delivery.instrumented} · ${t('catalog.deliveryRateNote')}` : t('catalog.deliveryRateNote') },
+    { label: t('catalog.displayLatency'), value: stats?.delivery?.displayLatencyMs.median != null ? `${(stats.delivery.displayLatencyMs.median / 1000).toFixed(1)} s` : null, note: t('catalog.displayLatencyNote') },
+    { label: t('catalog.synthesisSubmissions'), value: stats?.delivery?.synthesisSubmissions != null ? String(stats.delivery.synthesisSubmissions) : null, note: t('catalog.synthesisSubmissionsNote') },
     { label: t('catalog.last'), value: last },
   ];
   const instructions = profile.instructions.trim();

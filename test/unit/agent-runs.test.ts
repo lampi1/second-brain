@@ -45,6 +45,17 @@ describe('agent run store', () => {
     expect(restored.verdictSchema).toBe(2);
   });
 
+  it('roundtrips delivery observations and rejects impossible or incomplete submission metadata', () => {
+    const run = new AgentRunStore(tmp()).start(start());
+    run.delivery = { policy: 'synthesize', reportedAt: 10, attempts: 2, deliveredAt: 20, synthesisBatchId: 'batch1', synthesisSubmittedAt: 20 };
+    expect(readRun(run)?.delivery).toEqual(run.delivery);
+    for (const bad of [{ attempts: -1 }, { deliveredAt: 9 }, { synthesisBatchId: undefined }, { policy: 'display' }]) {
+      expect(readRun({ ...run, delivery: { ...run.delivery, ...bad } })).toBeNull();
+    }
+    delete run.delivery;
+    expect(readRun(run)?.delivery).toBeUndefined();
+  });
+
   it('refuses a malformed run field by field', () => {
     const run = new AgentRunStore(tmp()).start(start());
     expect(readRun(run)).toEqual(run);

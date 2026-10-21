@@ -23,6 +23,10 @@ Display root reports directly in the Orchestrator, with local expansion of their
 require inference, including when app-news events are disabled. Child results continue to their responsible
 parent for integration. Persist pending delivery before acknowledging it and retain failed deliveries for retry.
 Delivery IDs deduplicate retries; restarting must not lose an accepted result.
+CPU admission is not delivery: a child outbox is acknowledged only after the engine accepts the submission.
+Delivery coverage, report-to-notice latency and unique synthesis batch counts use retained canonical runs.
+Historical records without these observations stay unknown. A synthesis submission is not a completed model
+turn, and display-only reports never add a synthesis batch.
 
 Count completed execution separately from reported quality. A partial result can finish a plan step; it does not
 prove every criterion met. The compact Plan view preserves the quality label and can expand its checklist.

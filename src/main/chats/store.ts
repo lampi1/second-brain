@@ -27,6 +27,8 @@ function validAssets(value: unknown): value is NonNullable<StoredChat['agentAsse
     && path.resolve(a.skillRoot) === path.resolve(a.pluginDir, 'skills');
 }
 
+/** Stable child result identity survives admission, retries and restarts; old records may lack IDs. */
+export interface HeldChildResult { id?: string; runId?: string; title: string; message: string }
 /** Durable root result delivery state, saved before the engine can finish its turn. */
 export interface HeldRootResult {
   note: { chatId: string; title: string; role: string; summary: string; at: number };
@@ -72,7 +74,7 @@ export interface StoredChat {
   /** «Lampo», the quick lane (ADR 0105) */
   quick?: true;
   /** child results a quit held back from this parent, sent after the next start */
-  heldResults?: { title: string; message: string }[];
+  heldResults?: HeldChildResult[];
   createdAt: number;
   /** the CLI's running cost total last seen, for per-turn deltas after a resume */
   costTotalUsd?: number;
@@ -171,11 +173,11 @@ const MODES: readonly string[] = ['default', 'acceptEdits', 'auto', 'plan', 'byp
 const EFFORTS: readonly string[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 /** held child results: at most 32, each a title and a message of bounded size, else none */
-function heldResults(x: unknown): { title: string; message: string }[] | null {
+function heldResults(x: unknown): HeldChildResult[] | null {
   if (!Array.isArray(x) || !x.length || x.length > 32) return null;
   const ok = x.every(i => !!i && typeof i === 'object' && typeof (i as { title?: unknown }).title === 'string' && typeof (i as { message?: unknown }).message === 'string'
     && (i as { message: string }).message.length <= 64 * 1024 && (i as { title: string }).title.length <= 500);
-  return ok ? (x as { title: string; message: string }[]).map(i => ({ title: i.title, message: i.message })) : null;
+  return ok ? (x as HeldChildResult[]).map(i => ({ title: i.title, message: i.message, ...(typeof i.id === 'string' && i.id.length <= 100 ? { id: i.id } : {}), ...(typeof i.runId === 'string' && RUN_ID.test(i.runId) ? { runId: i.runId } : {}) })) : null;
 }
 
 function validHeldRoot(value: unknown): value is HeldRootResult {

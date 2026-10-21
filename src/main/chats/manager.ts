@@ -38,7 +38,7 @@ import { ContextCounters } from './context-stats';
 /** The app's own message to a chat whose turn a restart cut (resumeInterrupted). */
 export const RESUME_TEXT = "[second-brain] L'app è stata riavviata mentre lavoravi e il tuo turno si è interrotto. Riprendi da dove eri: prima rileggi lo stato (file, worktree, comandi che avevi lanciato), poi continua.";
 import { cut, isUuid, nextId, type HarnessSession, type SessionOptions, type SessionPatch, type SessionSink } from './session';
-import { ChatStore, type PastSession, type StoredChat } from './store';
+import { ChatStore, type HeldChildResult, type PastSession, type StoredChat } from './store';
 import { updateActivity } from '../update/activity';
 import { BufferedSink, PLAIN_LAUNCH, WarmPool, type WarmEngine, type WarmLaunch } from './warm';
 import { AdmissionQueue, type AdmissionLimits, type LoadSampler } from './admission';
@@ -78,6 +78,19 @@ import { slug as slugTitle } from './mail';
 import { splitMode } from '../../shared/newchat';
 import { orchestratorContext, type LampoCursor } from './lampo-context';
 import { recallWarning, type Recall } from '../search/hybrid/recall';
+
+/** Legacy entries have no ID: match their content until the first submission assigns one. */
+function sameChildResult(a: HeldChildResult, b: HeldChildResult): boolean {
+  return a.id && b.id ? a.id === b.id : a.title === b.title && a.message === b.message;
+}
+function uniqueChildResults(items: readonly HeldChildResult[]): HeldChildResult[] {
+  const unique: HeldChildResult[] = [];
+  for (const item of items) if (!unique.some(other => sameChildResult(item, other))) unique.push(item);
+  return unique;
+}
+
+/** Internal outbox receipts are tied to engine submission, never CPU queue admission. */
+interface SubmissionReceipt { beforeSubmit(): void; submitted(): void; failed(error: unknown): void }
 
 export interface ChatManagerOptions {
   suggestSkills?: (goal: string) => Promise<string[]>;
@@ -263,7 +276,7 @@ interface Rec {
   cacheSession?: string;
   gitRoot?: string | null;
   /** child results a quit held back (shutdown), sent after the next start (resumeInterrupted) */
-  heldResults?: { title: string; message: string }[];
+  heldResults?: HeldChildResult[];
   /** the end-of-turn record of the last checkpoint, while git writes it (recordTurnEnd) */
   afterPending?: Promise<void> | undefined;
   undoNote?: string;
@@ -471,7 +484,7 @@ export class ChatManager implements ChatService {
   private userWroteListeners: ((n: UserWroteNote) => void)[] = [];
   private cleanReportListeners: ((n: CleanReportNote) => boolean)[] = [];
   /** children's results waiting for their siblings', per parent (queueChildResult) */
-  private childResults = new Map<string, { items: { title: string; message: string }[]; timer: NodeJS.Timeout | null }>();
+  private childResults = new Map<string, { items: HeldChildResult[]; timer: NodeJS.Timeout | null }>();
   /** "Riprendi" in flight per old chat: a double click or two agents get the same new chat, never two. */
   private continuing = new Map<string, Promise<ChatSummary>>();
   private store: ChatStore;
@@ -734,7 +747,7 @@ export class ChatManager implements ChatService {
    *  resumed = the app's own "riprendi" after a restart (keeps the tile's mark; any other message clears it);
    *  from = not the user's: the sender shown above the bubble (another chat's title, the Orchestrator);
    *  liveOnly = mail (chats/mail.ts): never into a chat that has no engine or is closing, never reopens one */
-  async send(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false, source?: TaskSource): Promise<void> {
+  async send(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false, source?: TaskSource, receipt?: SubmissionReceipt): Promise<void> {
     updateActivity.assertOpen();
     const r = this.need(chatId);
     // Flash follows its card (ADR 0107): the user's question goes to a Flash on the card's engine and model
@@ -754,11 +767,11 @@ export class ChatManager implements ChatService {
     }
     // a new assignment from the Orchestrator: whether the user waits for it is decided again (#123)
     if (from !== undefined && !r.s.parentId && !r.s.isOrchestrator && r.s.run?.startedBy === 'orchestrator' && source?.kind === 'chat' && source.chatId === this.openOrchestrator()?.s.id) r.userWaits = this.orchestratorAnswering();
-    if (!this.admission) return this.deliver(chatId, text, images, resumed, from, liveOnly);
+    if (!this.admission) return this.deliver(chatId, text, images, resumed, from, liveOnly, receipt);
     // the user's own message never waits (ADR 0036): what waited for this chat goes first, now, then this one
     if (!resumed && from === undefined) {
       this.admission.admitNow(chatId);
-      return this.deliver(chatId, text, images, resumed, from, liveOnly);
+      return this.deliver(chatId, text, images, resumed, from, liveOnly, receipt);
     }
     // an agent's message (another chat, the Orchestrator, the app's own resume): checked now
     if (liveOnly && ((!r.session && r.s.state !== 'idle') || r.archiving || r.s.closedAt)) throw new Error('La chat non è attiva: la posta resta da leggere.');
@@ -768,11 +781,11 @@ export class ChatManager implements ChatService {
     // hours, and reached the chat only when the user wrote): what waited for this chat goes first, then this one
     if (!resumed && !r.s.closedAt) {
       this.admission.admitNow(chatId);
-      return this.deliver(chatId, text, images, resumed, from, liveOnly);
+      return this.deliver(chatId, text, images, resumed, from, liveOnly, receipt);
     }
     // the app's own resume, or an agent reopening a closed chat (a new engine): it may wait for the load
     if (r.s.closedAt && !r.archiving) this.unarchive(r); // back on the grid now: its tile shows that it waits
-    return this.gate(r, () => this.deliver(chatId, text, images, resumed, from, liveOnly));
+    return this.gate(r, () => this.deliver(chatId, text, images, resumed, from, liveOnly, receipt));
   }
 
   /** a turn runs in a live engine: a message joins it (a chat cut by a restart has working set but no engine) */
@@ -841,8 +854,8 @@ export class ChatManager implements ChatService {
   /** The delivery of a message (send() decided it goes now). One at a time per chat, on every engine: a later message
    *  whose steps end sooner (a faster recall, no checkpoint to take) never reaches the engine before an earlier one, so
    *  the engine reads them in the transcript's order (#127: the user's message and a child's mail at once). */
-  private deliver(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false): Promise<void> {
-    const run = () => this.deliverNow(chatId, text, images, resumed, from, liveOnly);
+  private deliver(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false, receipt?: SubmissionReceipt): Promise<void> {
+    const run = () => this.deliverNow(chatId, text, images, resumed, from, liveOnly, receipt).catch(error => { receipt?.failed(error); throw error; });
     const previous = this.deliveries.get(chatId);
     const delivery = previous ? previous.catch(() => {}).then(run) : run();
     this.deliveries.set(chatId, delivery);
@@ -851,7 +864,7 @@ export class ChatManager implements ChatService {
     return delivery;
   }
 
-  private async deliverNow(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false): Promise<void> {
+  private async deliverNow(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false, receipt?: SubmissionReceipt): Promise<void> {
     updateActivity.assertOpen();
     const r = this.need(chatId);
     const releaseDelivery = this.holdActivity(chatId);
@@ -915,7 +928,9 @@ export class ChatManager implements ChatService {
     if (!this.midTurn(r)) r.turnCheckpoint = false;
     if (this.opts.checkpoints?.() && !r.s.isOrchestrator && !r.s.quick && !this.midTurn(r)) await this.checkpoint(r);
     try {
+      receipt?.beforeSubmit();
       r.session.send(`${role}${warning}${body}`, imgs);
+      receipt?.submitted();
       if (lampo) r.lampoSeen = { session: r.session, cursor: lampo.seen }; // seen only once it went
       if (role) { r.rolePrimed = { session: r.s.sessionId ?? '', sig: roleSig }; this.persist(); }
     } catch (e) {
@@ -1368,7 +1383,10 @@ export class ChatManager implements ChatService {
     for (const r of this.chats.values()) if (r.heldResult && !r.working) this.releaseResult(r);
     // child results the last quit held back reach their parent now, as one batch
     for (const r of this.chats.values()) {
-      const held = r.heldResults;
+      const held = r.heldResults?.filter(item => !item.runId || !this.runs.get(item.runId)?.delivery?.synthesisSubmittedAt);
+      const removed = (r.heldResults?.length ?? 0) !== (held?.length ?? 0);
+      r.heldResults = held;
+      if (removed) this.persist(true);
       if (!held?.length) continue;
       this.childResults.set(r.s.id, { items: held, timer: null });
       this.flushChildResults(r.s.id);
@@ -1720,7 +1738,7 @@ export class ChatManager implements ChatService {
     // child results still waiting for their siblings: kept on the parent, sent after the next start (resumeInterrupted)
     for (const [parentId, q] of this.childResults) {
       const parent = this.chats.get(parentId);
-      if (parent && q.items.length) parent.heldResults = [...(parent.heldResults ?? []), ...q.items];
+      if (parent && q.items.length) parent.heldResults = uniqueChildResults([...(parent.heldResults ?? []), ...q.items]);
     }
     this.persist();
     this.warm.stop();
@@ -1814,6 +1832,7 @@ export class ChatManager implements ChatService {
     r.s.delegation = { ...d, ...goal, result: { outcome: result.outcome, summary: result.summary, at, doneWhen: result.doneWhen.map(x => ({ criterion: x.criterion, met: x.met })) } };
     const run = r.s.run;
     if (run) {
+      run.delivery = { policy: 'synthesize', reportedAt: at, attempts: 0 };
       run.report = { at, outcome: result.outcome, verified: met === result.doneWhen.length ? 'yes' : met ? 'partial' : 'no', summary: cut(result.summary, 140), via: 'agent_report', canonical: { ...structuredClone(result), at, taskId: run.taskId ?? run.runId, runId: run.runId, taskVersion: run.taskVersion ?? 1 } };
       this.runSave();
     }
@@ -1831,7 +1850,7 @@ export class ChatManager implements ChatService {
     }
     if (parent) {
       this.updated(parent); // its waiting on this child may be over
-      this.queueChildResult(parentId, r.s.title, `[task ${run?.runId ?? chatId}]\n${resultMessage(d.role, r.s.title, result)}`);
+      this.queueChildResult(parentId, r.s.title, `[task ${run?.runId ?? chatId}]\n${resultMessage(d.role, r.s.title, result)}`, run?.runId);
     }
     log.info('chats', 'delegation reported', { chat: chatId, data: { parent: parentId, outcome: result.outcome, met, criteria: result.doneWhen.length } });
     return { parentId, delivered: !!parent };
@@ -1839,14 +1858,15 @@ export class ChatManager implements ChatService {
 
   /** A child's result for its parent: while siblings still owe theirs, it waits (at most CHILD_RESULTS_MS) so the parent
    *  reads the batch in one turn instead of one turn per child, each re-reading its whole context. */
-  private queueChildResult(parentId: string, title: string, message: string): void {
+  private queueChildResult(parentId: string, title: string, message: string, runId?: string): void {
     const q = this.childResults.get(parentId) ?? { items: [], timer: null };
     if (q.items.some(item => item.title === title && item.message === message)) return;
-    q.items.push({ title, message });
+    const item: HeldChildResult = { id: runId ? `result-${runId}` : crypto.randomUUID(), ...(runId ? { runId } : {}), title, message };
+    q.items.push(item);
     const parent = this.chats.get(parentId);
     if (parent) {
       const held = parent.heldResults ?? [];
-      if (!held.some(item => item.title === title && item.message === message)) held.push({ title, message });
+      if (!held.some(item => item.title === title && item.message === message)) held.push(item);
       parent.heldResults = held; this.persist(true);
     }
     this.childResults.set(parentId, q);
@@ -1859,22 +1879,48 @@ export class ChatManager implements ChatService {
     if (!q) return;
     this.childResults.delete(parentId);
     if (q.timer) clearTimeout(q.timer);
-    if (!this.chats.has(parentId) || !q.items.length) return;
-    const from = [...new Set(q.items.map(x => x.title))].join(', ');
-    this.send(parentId, q.items.map(x => x.message).join('\n\n'), undefined, false, from)
-      .then(() => {
+    const parent = this.chats.get(parentId);
+    if (!parent || !q.items.length) return;
+    parent.heldResults = uniqueChildResults([...(parent.heldResults ?? []), ...q.items]);
+    // A restored queue may alias heldResults. Freeze this batch before asynchronous engine startup;
+    // later reports must never join its acknowledgment without joining its submitted message body.
+    const batch: readonly HeldChildResult[] = uniqueChildResults(q.items).map(item => {
+      const held = parent.heldResults!.find(other => sameChildResult(item, other))!;
+      held.id ??= crypto.randomUUID();
+      return Object.freeze({ ...held });
+    });
+    const from = [...new Set(batch.map(x => x.title))].join(', ');
+    this.persist(true);
+    const batchId = crypto.randomUUID();
+    let acknowledged = false, retrying = false;
+    const failed = (e: unknown) => {
+      if (acknowledged || retrying) return;
+      retrying = true;
+      const parent = this.chats.get(parentId);
+      if (parent && !this.quitting) {
+        const retry = this.childResults.get(parentId) ?? { items: [], timer: null };
+        for (const item of batch) if (!retry.items.some(x => x.id === item.id)) retry.items.push(item);
+        if (!retry.timer) { retry.timer = setTimeout(() => this.flushChildResults(parentId), this.opts.childResultsMs ?? CHILD_RESULTS_MS); retry.timer.unref?.(); }
+        this.childResults.set(parentId, retry);
+      }
+      log.warn('chats', 'delegation result not delivered', { chat: parentId, cause: errText(e), hint: 'the durable outbox retries delivery' });
+    };
+    const receipt: SubmissionReceipt = {
+      beforeSubmit: () => {
+        for (const item of batch) { const run = item.runId ? this.runs.get(item.runId) : undefined; if (run?.delivery) run.delivery.attempts++; }
+        this.runSave();
+      },
+      submitted: () => {
+        acknowledged = true;
+        const at = Date.now();
+        for (const item of batch) { const run = item.runId ? this.runs.get(item.runId) : undefined; if (run?.delivery) Object.assign(run.delivery, { deliveredAt: at, synthesisSubmittedAt: at, synthesisBatchId: batchId }); }
+        this.runSave();
         const parent = this.chats.get(parentId);
-        if (parent) { parent.heldResults = parent.heldResults?.filter(item => !q.items.some(sent => sent.title === item.title && sent.message === item.message)); this.persist(true); }
-      })
-      .catch(e => {
-        const parent = this.chats.get(parentId);
-        if (parent && !this.quitting) {
-          const retry = this.childResults.get(parentId) ?? { items: parent.heldResults ?? q.items, timer: null };
-          if (!retry.timer) { retry.timer = setTimeout(() => this.flushChildResults(parentId), this.opts.childResultsMs ?? CHILD_RESULTS_MS); retry.timer.unref?.(); }
-          this.childResults.set(parentId, retry);
-        }
-        log.warn('chats', 'delegation result not delivered', { chat: parentId, cause: errText(e), hint: 'the durable outbox retries delivery' });
-      });
+        if (parent) { parent.heldResults = parent.heldResults?.filter(item => !batch.some(sent => sent.id === item.id)); this.persist(true); }
+      },
+      failed,
+    };
+    void this.send(parentId, batch.map(x => x.message).join('\n\n'), undefined, false, from, false, { kind: 'app' }, receipt).catch(failed);
   }
 
   /** agent_report from a root role chat the Orchestrator opened (app_create_chat, issue #93): its result is kept on its run
@@ -1888,6 +1934,7 @@ export class ChatManager implements ChatService {
     if (run.report?.via === 'agent_report' || r.rootReportAt !== undefined && r.rootReportAt >= (r.s.work?.updatedAt ?? 0)) throw new Error('agent_report: this assignment already has its result.');
     const at = Date.now(), met = result.doneWhen.filter(x => x.met).length;
     {
+      run.delivery = { policy: 'display', reportedAt: at, attempts: 0 };
       run.report = { at, outcome: result.outcome, verified: !result.doneWhen.length ? 'no' : met === result.doneWhen.length ? 'yes' : met ? 'partial' : 'no', summary: cut(result.summary, 140), via: 'agent_report', canonical: { ...structuredClone(result), at, taskId: run.taskId ?? run.runId, runId: run.runId, taskVersion: run.taskVersion ?? 1 } };
       this.runSave();
     }
@@ -1939,7 +1986,9 @@ export class ChatManager implements ChatService {
       const title = worker?.s.title ?? run.goal, role = worker?.s.agent?.name ?? run.agentId;
       const notice = { ...sysItem('resultReady', { role, title, summary: result.summary, chatId: run.chatId }, 'info'), id, result };
       this.addItem(orchestrator, notice, false);
+      if (run.delivery) { run.delivery.displayedAt ??= Date.now(); run.delivery.deliveredAt ??= run.delivery.displayedAt; }
     }
+    this.runSave();
     this.updated(orchestrator);
   }
 
@@ -1964,6 +2013,7 @@ export class ChatManager implements ChatService {
       this.addItem(orchestrator, notice, false);
       this.updated(orchestrator);
     }
+    if (r.s.run?.delivery) { r.s.run.delivery.displayedAt ??= Date.now(); r.s.run.delivery.deliveredAt ??= r.s.run.delivery.displayedAt; this.runSave(); }
     // Display is unconditional and token-free. Event preferences only control the optional quiet digest.
     if (held.quiet) this.cleanReportListeners.some(fn => { try { return fn(held.note); } catch { return false; } });
     delete r.heldResult; delete r.userWaits;

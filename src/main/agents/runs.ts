@@ -124,12 +124,21 @@ export function readRun(v: unknown): AgentRun | null {
   const corrections = r.corrections === undefined ? undefined : readCorrections(r.corrections);
   const tags = r.tags === undefined ? undefined : readTags(r.tags);
   if (report === null || corrections === null || tags === null || (r.executionMs !== undefined && !time(r.executionMs))) return null;
+  const delivery = r.delivery as AgentRun['delivery'];
+  if (delivery !== undefined) {
+    if (!delivery || !['display', 'synthesize'].includes(delivery.policy) || !time(delivery.reportedAt) || !count(delivery.attempts)) return null;
+    for (const stamp of [delivery.deliveredAt, delivery.displayedAt, delivery.synthesisSubmittedAt]) if (stamp !== undefined && (!time(stamp) || stamp < delivery.reportedAt)) return null;
+    if (delivery.synthesisBatchId !== undefined && !str(delivery.synthesisBatchId, 160)) return null;
+    if (delivery.synthesisSubmittedAt !== undefined && !delivery.synthesisBatchId) return null;
+    if (delivery.policy === 'display' && (delivery.synthesisSubmittedAt !== undefined || delivery.synthesisBatchId !== undefined)) return null;
+  }
   const snapshot = r.skillSuggestions as AgentRun['skillSuggestions'];
   if (snapshot !== undefined && (!snapshot || !time(snapshot.at) || !skillList(snapshot.suggested) || !skillList(snapshot.used))) return null;
   if (r.taskId !== undefined && !str(r.taskId, 80) || r.taskVersion !== undefined && (!count(r.taskVersion) || r.taskVersion < 1)) return null;
   if (report?.canonical && (report.canonical.runId !== r.runId || report.canonical.taskId !== r.taskId || report.canonical.taskVersion !== r.taskVersion)) return null;
   return {
     ...(r.taskId ? { taskId: r.taskId as string } : {}), ...(r.taskVersion ? { taskVersion: r.taskVersion as number } : {}),
+    ...(delivery ? { delivery: structuredClone(delivery) } : {}),
     ...(snapshot ? { skillSuggestions: { at: snapshot.at, suggested: [...snapshot.suggested], used: [...snapshot.used] } } : {}),
     ...(r.taskContract && typeof r.taskContract === 'object' && typeof (r.taskContract as { goal?: unknown }).goal === 'string' && Array.isArray((r.taskContract as { doneWhen?: unknown }).doneWhen) && (r.taskContract as { doneWhen: unknown[] }).doneWhen.every(x => typeof x === 'string') ? { taskContract: r.taskContract as AgentRun['taskContract'] } : {}),
     runId: r.runId, chatId: r.chatId, agentId: r.agentId, version: r.version, goal: r.goal, startedBy: r.startedBy as AgentRun['startedBy'], startedAt: r.startedAt,

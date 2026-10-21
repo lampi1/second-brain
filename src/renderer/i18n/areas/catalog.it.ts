@@ -1,5 +1,13 @@
 // Catalogue overview strings for Italian users; composed into the typed UI dictionary.
 export const catalogIt = {
+  'catalog.deliveryCoverage': "Copertura consegne",
+  'catalog.deliveryScope': "Risultati canonici conservati di esecuzioni concluse; storico aggregato escluso.",
+  'catalog.deliveryRate': "Risultati consegnati",
+  'catalog.deliveryRateNote': "Solo risultati con telemetria: notifica pubblicata o messaggio accettato dal motore. Non prova lettura o sintesi completata.",
+  'catalog.displayLatency': "Dal report alla notifica",
+  'catalog.displayLatencyNote': "Mediana tra report e pubblicazione della notifica; non misura quando hai letto il risultato.",
+  'catalog.synthesisSubmissions': "Invii di sintesi osservati",
+  'catalog.synthesisSubmissionsNote': "Batch distinti inviati al motore: più risultati insieme contano una volta. Non sono necessariamente nuovi turni AI. Storico senza telemetria sconosciuto.",
   'runs.version': 'Versione fissata all’avvio',
   'runs.auto': 'Avviata dall’Orchestrator', 'runs.outcome': 'Com’è andata?',
   'runs.success': 'Riuscita', 'runs.partial': 'In parte', 'runs.fail': 'Non riuscita',
@@ -25,7 +33,7 @@ export const catalogIt = {
   'catalog.cacheTokensNote': 'Medie per esecuzione con dati; non un risparmio monetario misurato.',
   'catalog.elapsed': 'Tempo medio alla conclusione',
   'catalog.elapsedNote': 'Comprende le attese; non misura il tempo alla consegna visibile.',
-  'catalog.measurementNote': 'Conclusioni, dichiarazioni e verifiche sono misure distinte. I costi riportati o stimati non sono una fattura; un dato mancante resta sconosciuto. La latenza di consegna e i turni di sintesi non sono misurati da questi contatori.',
+  'catalog.measurementNote': 'Conclusioni, dichiarazioni e verifiche sono misure distinte. I costi riportati o stimati non sono una fattura; un dato mancante resta sconosciuto. Le consegne mostrano solo osservazioni registrate, con copertura esplicita.',
   'catalog.cost': 'Costo mediano / lavoro', 'catalog.last': 'Ultimo avvio osservato', 'catalog.unknown': 'Non disponibile',
   'catalog.samples': ({ n, total }: { n: number; total: number }) => `${n} su ${total} lavori`,
   'catalog.note': 'Statistiche sulle versioni note. I successi contano solo esiti verificati; l’ultimo avvio riguarda le chat disponibili. Dati mancanti non significano zero.',

@@ -12,7 +12,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ChatManager } from '../../../src/main/chats/manager';
+import type { AdmissionQueue } from '../../../src/main/chats/admission';
+import { ChatManager, type ChatManagerOptions } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionOptions, SessionSink } from '../../../src/main/chats/session';
 import { delegationTools, stalledMin } from '../../../src/main/agents/delegation';
 import { gateRequest } from '../../../src/main/agents/role-gate';
@@ -42,12 +43,12 @@ const catalog = (n: Narrowed = {}): AgentCatalog => ({ problem: null, archived: 
     launches: [...x.launches], skills: r.skills, tools: { allow: [...x.tools] }, permissionCeiling: x.ceiling, activeVersion: 1, updatedAt: 1, instructions: r.instructions };
 }) } as unknown as AgentCatalog);
 
-function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: string) => Promise<string[]>, roles?: () => AgentCatalog, onSend?: (chatId: string) => void, narrowed: Narrowed = {}, remembered: [string, string][] = []) {
+function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: string) => Promise<string[]>, roles?: () => AgentCatalog, onSend?: (chatId: string) => void, narrowed: Narrowed = {}, remembered: [string, string][] = [], extra: Partial<ChatManagerOptions> = {}) {
   roles ??= () => catalog(narrowed);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-delegation-'));
   roots.push(dir);
   const starts = new Map<string, SessionOptions>(), sinks = new Map<string, SessionSink>(), sent = new Map<string, string[]>(), answers: { chat: string; id: string; answer: { allow?: boolean; message?: string }; patch?: Record<string, string> }[] = [];
-  const m = new ChatManager({ userData: dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0, ...(worktrees ? { worktrees } : {}),
+  const m = new ChatManager({ ...extra, userData: dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0, ...(worktrees ? { worktrees } : {}),
     resolveAgent: (req: NewChat) => {
       const id = req.roleId as RoleId | undefined;
       if (!id || !isWorkRole(id)) return { request: req, owner: { id: 'plain', name: 'Chat', purpose: '', engine: req.harness, model: null, revision: 0, source: 'plain' as const }, instructions: '', policy: null, skills: [], launches: [] };
@@ -649,6 +650,27 @@ describe('stalled children ("Ferma dopo", delegation.stallMin)', () => {
 
 describe('versioned task continuity and canonical results', () => {
   const result = { outcome: 'done', summary: 'Full summary', output: 'FULL DELIVERABLE', doneWhen: [{ criterion: 'criterion A', met: true, evidence: 'artifact.txt' }] };
+  it('restored in-flight batch never acknowledges a concurrent child twice', async () => {
+    const f = fixture();
+    const p = await f.root('strategist');
+    const kids = (await f.call('agent_delegate', p.id, { tasks: [f.task('scout', 'One'), f.task('sentinel', 'Two')] })).children;
+    f.sinks.get(kids[1].chatId)!.changed({ state: 'running' });
+    await f.call('agent_report', kids[0].chatId, result);
+    f.m.resumeInterrupted();
+    await f.call('agent_report', kids[1].chatId, result);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(f.m.list().find(c => c.id === kids[1].chatId)!.run!.delivery!.attempts).toBe(1);
+  });
+  it('quitting with a waiting sibling preserves each outbox id once', async () => {
+    const f = fixture();
+    const p = await f.root('strategist');
+    const kids = (await f.call('agent_delegate', p.id, { tasks: [f.task('scout', 'One'), f.task('sentinel', 'Two')] })).children;
+    f.sinks.get(kids[1].chatId)!.changed({ state: 'running' });
+    await f.call('agent_report', kids[0].chatId, result);
+    await f.m.shutdown();
+    const rows = JSON.parse(fs.readFileSync(path.join(f.dir, 'chats.json'), 'utf8')).chats;
+    expect(rows.find((c: { id: string }) => c.id === p.id).heldResults).toHaveLength(1);
+  });
   it('reuses the conversation with a new run, retaining old evidence and accounting new cost', async () => {
     const f = fixture();
     const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
@@ -695,6 +717,33 @@ describe('versioned task continuity and canonical results', () => {
     await expect(f.call('agent_report', id, { ...result, taskVersion: 2 })).rejects.toThrow(/already/);
     expect(f.m.list().find(c => c.id === id)?.run?.corrections).toEqual({ tagged: 0, afterReport: 0 });
   });
+  it('keeps a child outbox across CPU admission and a failed engine submission, then acknowledges the retry', async () => {
+    let cpu = 0, failParent: string | undefined;
+    const f = fixture({}, undefined, undefined, id => { if (id === failParent) { failParent = undefined; throw new Error('engine submission failed'); } }, {}, [], { childResultsMs: 100, admission: { sampler: { sample: () => ({ cpu, freeRam: 90 }) }, limits: () => ({ enabled: true, cpu: 75, ram: 15 }), autoTick: false } });
+    const p = await f.root('strategist');
+    const child = (await f.call('agent_delegate', p.id, { tasks: [f.task('scout', 'Queued result')] })).children[0].chatId;
+    // Simulate the parent's persisted closed state while its independently running child completes.
+    const rec = (f.m as unknown as { chats: Map<string, { s: { closedAt?: number }; session: HarnessSession | null }> }).chats.get(p.id)!;
+    rec.s.closedAt = Date.now(); rec.session = null;
+    cpu = 95; failParent = p.id;
+    await f.call('agent_report', child, result);
+    const saved = () => JSON.parse(fs.readFileSync(path.join(f.dir, 'chats.json'), 'utf8')).chats.find((c: { id: string }) => c.id === p.id).heldResults;
+    expect(saved()).toHaveLength(1);
+    expect(saved()[0]).toMatchObject({ id: expect.any(String), runId: f.m.list().find(c => c.id === child)!.run!.runId });
+    const run = f.m.runs.get(saved()[0].runId)!;
+    expect(run.delivery).toMatchObject({ policy: 'synthesize', attempts: 0 });
+    expect(run.delivery?.synthesisSubmittedAt).toBeUndefined();
+    const q = (f.m as unknown as { admission: AdmissionQueue }).admission;
+    cpu = 0; q.tick(); q.tick();
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(saved()).toHaveLength(1);
+    expect(run.delivery).toMatchObject({ attempts: 1 });
+    expect(run.delivery?.synthesisSubmittedAt).toBeUndefined();
+    await new Promise(resolve => setTimeout(resolve, 120));
+    expect(saved() ?? []).toHaveLength(0);
+    expect(run.delivery).toMatchObject({ attempts: 2, synthesisSubmittedAt: expect.any(Number), synthesisBatchId: expect.any(String) });
+  });
+
   it('backfills legacy identity and rebuilds every historical root result once after restart', async () => {
     const f = fixture();
     const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');

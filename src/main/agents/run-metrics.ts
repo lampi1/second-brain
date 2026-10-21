@@ -1,6 +1,6 @@
 // Role metrics and pruned-run rollups used by agent cards. Verified quality uses only human or independent evidence;
 // self-reports and observation proxies do not enter success. Costs and usage retain their own data coverage.
-import type { AgentMetrics, AgentRun, AgentRunTokens, AgentRunOutcome, Metric, VersionMetrics } from '../../shared/agents';
+import type { DeliveryMetrics, AgentMetrics, AgentRun, AgentRunTokens, AgentRunOutcome, Metric, VersionMetrics } from '../../shared/agents';
 import { countedDecision } from './standing';
 import { FACTS_SETTLE_MS, reworkStartsOf, reworkedWithin, verifiedVerdict } from '../../shared/run-verdict';
 
@@ -254,6 +254,19 @@ export function finalize(t: RunTally, version: number | null, window: number | n
   };
 }
 
+/** Retained reported runs only: no inferred observations from old rollups, and one engine submission per batch. */
+export function deliveryMetrics(runs: readonly AgentRun[]): DeliveryMetrics {
+  const reported = runs.filter(r => r.report?.canonical);
+  const observed = reported.filter(r => r.delivery);
+  const displayed = observed.flatMap(r => r.delivery!.displayedAt === undefined ? [] : [r.delivery!.displayedAt! - r.delivery!.reportedAt]);
+  const delivered = observed.filter(r => r.delivery!.deliveredAt !== undefined).length;
+  const batches = new Set(observed.flatMap(r => r.delivery!.synthesisSubmittedAt !== undefined && r.delivery!.synthesisBatchId ? [r.delivery!.synthesisBatchId] : []));
+  return { reported: reported.length, instrumented: observed.length, delivered,
+    coverage: ratio(observed.length, reported.length), rate: ratio(delivered, observed.length),
+    displayLatencyMs: { median: median(displayed), n: displayed.length },
+    synthesisSubmissions: observed.length ? batches.size : null };
+}
+
 /** The §5 read model: per role, one row per version and an all-versions row. */
 export function runMetrics(runs: readonly AgentRun[], input: MetricsInput = {}): AgentMetrics[] {
   const index = indexRuns(runs, input.now), tallies = new Map<string, RunTally>(), open = new Map<string, number>();
@@ -273,10 +286,11 @@ export function runMetrics(runs: readonly AgentRun[], input: MetricsInput = {}):
   const agents = new Set([...[...tallies.values()].map(t => t.agentId), ...open.keys()]);
   return [...agents].sort((a, b) => a.localeCompare(b, 'en')).map(agentId => {
     const own = [...tallies.values()].filter(t => t.agentId === agentId).sort((a, b) => a.version - b.version);
+    const retained = runs.filter(r => r.agentId === agentId && r.endedAt !== undefined && (input.since === undefined || r.endedAt >= input.since) && matchesTags(r, filter));
     return {
       agentId, open: open.get(agentId) ?? 0,
-      versions: own.map(t => finalize(t, t.version, input.windowOf?.(agentId, t.version) ?? null)),
-      all: own.length ? finalize(own.slice(1).reduce((acc, t) => mergeTallies(acc, t, agentId, 0), own[0]!), null) : null,
+      versions: own.map(t => ({ ...finalize(t, t.version, input.windowOf?.(agentId, t.version) ?? null), delivery: deliveryMetrics(retained.filter(r => r.version === t.version)) })),
+      all: own.length ? { ...finalize(own.slice(1).reduce((acc, t) => mergeTallies(acc, t, agentId, 0), own[0]!), null), delivery: deliveryMetrics(retained) } : null,
     };
   });
 }

@@ -113,7 +113,16 @@ export interface AgentRunCorrections { tagged: number; afterReport: number }
 // Role metrics (AGENTS-DESIGN §5), computed in main (agents/run-metrics.ts) from agent-runs.json.
 /** One §5 metric: n = the runs it rests on, coverage = n / ended runs (null: no ended run). */
 export interface Metric { value: number | null; n: number; coverage: number | null }
+/** Delivery observations on retained canonical results only; historical/pruned results are not inferred. */
+export interface DeliveryMetrics {
+  reported: number; instrumented: number; delivered: number;
+  coverage: number | null; rate: number | null;
+  displayLatencyMs: { median: number | null; n: number };
+  /** Unique observed batches submitted to an engine, not completed syntheses or model invocations. */
+  synthesisSubmissions: number | null;
+}
 export interface VersionMetrics {
+  delivery?: DeliveryMetrics;
   agentId: string;
   /** null = all versions */
   version: number | null;
@@ -155,7 +164,14 @@ export interface AgentStanding {
   sources: { human: number; review: number; facts: number; orchestrator: number; self: number };
 }
 /** One run = a chat started from a role (agent-runs.json is the source of truth; the chat keeps a mirror). */
+/** App delivery observations. Engine submission is recorded only after session.send succeeds. */
+export interface AgentRunDelivery {
+  policy: 'display' | 'synthesize'; reportedAt: number; attempts: number;
+  deliveredAt?: number; displayedAt?: number;
+  synthesisBatchId?: string; synthesisSubmittedAt?: number;
+}
 export interface AgentRun {
+  delivery?: AgentRunDelivery;
   taskId?: string; taskVersion?: number;
   taskContract?: { goal: string; doneWhen: string[] };
   /** Snapshot captured before launch; missing means historical suggestions are unknown. */

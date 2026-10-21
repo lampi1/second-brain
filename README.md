@@ -93,6 +93,8 @@ Watch the brain live on a 3D map, lit where the crew is working right now.
 Costs are API-equivalent estimates where the engine supplies usage, not subscription invoices. Token/cache counts,
 work duration, result delivery and independent outcome coverage describe different parts of the same run. Missing
 measurements remain unknown; a comparison across different tasks is not evidence that an automatic change helped.
+Delivery statistics show coverage and report-to-notice latency for retained results; synthesis counts observed
+engine submissions, not completed AI turns. Historical results without delivery observations remain unknown.
 
 ## A quick tour
 

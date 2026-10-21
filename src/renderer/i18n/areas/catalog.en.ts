@@ -1,6 +1,14 @@
 // Catalogue overview strings for English users; parity checked against the Italian source.
 import type { catalogIt } from './catalog.it';
 export const catalogEn: typeof catalogIt = {
+  'catalog.deliveryCoverage': "Delivery coverage",
+  'catalog.deliveryScope': "Retained canonical results from ended runs; pruned aggregates excluded.",
+  'catalog.deliveryRate': "Results delivered",
+  'catalog.deliveryRateNote': "Instrumented results only: notice posted or message accepted by the engine. Does not prove reading or completed synthesis.",
+  'catalog.displayLatency': "Report to notice",
+  'catalog.displayLatencyNote': "Median from report to notice publication; does not measure when you read the result.",
+  'catalog.synthesisSubmissions': "Observed synthesis submissions",
+  'catalog.synthesisSubmissionsNote': "Distinct batches submitted to the engine: multiple results together count once. These are not necessarily new AI turns. History without telemetry is unknown.",
   'runs.version': 'Version pinned at launch',
   'runs.auto': 'Started by the Orchestrator', 'runs.outcome': 'How did it go?',
   'runs.success': 'Success', 'runs.partial': 'Partial', 'runs.fail': 'Failed',
@@ -25,7 +33,7 @@ export const catalogEn: typeof catalogIt = {
   'catalog.cacheTokensNote': 'Averages per run with data; not measured monetary savings.',
   'catalog.elapsed': 'Average time to completion',
   'catalog.elapsedNote': 'Includes waiting; does not measure time to visible delivery.',
-  'catalog.measurementNote': 'Completion, reports and verification are distinct measures. Reported or estimated costs are not an invoice; missing data stays unknown. These counters do not measure delivery latency or synthesis turns.',
+  'catalog.measurementNote': 'Completion, reports and verification are distinct measures. Reported or estimated costs are not an invoice; missing data stays unknown. Delivery metrics show recorded observations with explicit coverage.',
   'catalog.cost': 'Median cost / run', 'catalog.last': 'Last observed start', 'catalog.unknown': 'Unavailable',
   'catalog.samples': ({ n, total }) => `${n} of ${total} runs`,
   'catalog.note': 'Statistics cover known versions. Success counts only verified outcomes; the last start covers available chats. Missing data does not mean zero.',
