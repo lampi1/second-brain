@@ -24,7 +24,7 @@ export interface ChatService {
   send(chatId: string, text: string, images?: ImageAttachment[], resumed?: boolean, from?: string, liveOnly?: boolean): Promise<void>;
   answer(chatId: string, requestId: string, answer: Answer): Promise<void>;
   /** a Strategist's proposed plan: the user's «Approva e parti» or «Cambia qualcosa» (ADR 0108) */
-  planDecide(chatId: string, decision: 'approve' | 'change', text?: string): Promise<void>;
+  planDecide(chatId: string, decision: 'approve' | 'change', at: number, text?: string): Promise<void>;
   stop(chatId: string, keepQueued?: boolean): Promise<void>;
   stopAll(): Promise<number>;
   close(chatId: string): Promise<void>;

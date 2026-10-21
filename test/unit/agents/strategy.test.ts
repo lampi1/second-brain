@@ -70,6 +70,8 @@ function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: str
 const PLAN = { steps: [{ title: 'Trovo dove si calcola lo sconto', role: 'scout' }, { title: 'Applico lo sconto', role: 'artisan' }, { title: 'Scrivo il riepilogo' }], doneWhen: 'I test passano' };
 const tick = () => new Promise(res => setTimeout(res, 20));
 const planOf = (f: ReturnType<typeof fixture>, id: string) => f.m.list().find(c => c.id === id)!.plan!;
+/** the user's click on the plan they see now */
+const decide = (f: ReturnType<typeof fixture>, id: string, d: 'approve' | 'change', text?: string) => f.m.planDecide(id, d, planOf(f, id).at, text);
 
 describe('a Strategist\'s plan with the user', () => {
   it('the Orchestrator\'s Strategist starts asking, with the app\'s flow after the request; a user\'s or a child\'s does not', async () => {
@@ -115,13 +117,17 @@ describe('a Strategist\'s plan with the user', () => {
     await expect(f.call('agent_delegate', s.id, { tasks: [f.task('scout', 'Ordini · Dove')] })).rejects.toThrow(/not approved/);
     await expect(f.call('plan_update', s.id, { step: 1, state: 'now' })).rejects.toThrow(/not approved/);
     // «Cambia qualcosa»: revising, the change as the user's message; a new proposal is up again
-    await expect(f.m.planDecide(s.id, 'change', '  ')).rejects.toThrow(/cosa cambiare/);
-    await f.m.planDecide(s.id, 'change', 'Prima i test');
+    await expect(decide(f, s.id, 'change', '  ')).rejects.toThrow(/cosa cambiare/);
+    // one proposal at a time, and only the one the user read can be approved
+    await expect(f.call('plan_propose', s.id, PLAN)).rejects.toThrow(/already waits/);
+    await expect(f.m.planDecide(s.id, 'approve', planOf(f, s.id).at - 1)).rejects.toThrow(/cambiato/);
+    expect(planOf(f, s.id).phase).toBe('proposed');
+    await decide(f, s.id, 'change', 'Prima i test');
     expect(planOf(f, s.id).phase).toBe('revising');
     expect(f.sent.get(s.id)!.at(-1)).toBe('Cambia il piano: Prima i test');
-    await expect(f.m.planDecide(s.id, 'approve')).rejects.toThrow(/non aspetta/);
+    await expect(decide(f, s.id, 'approve')).rejects.toThrow(/non aspetta/);
     await f.call('plan_propose', s.id, PLAN);
-    await f.m.planDecide(s.id, 'approve');
+    await decide(f, s.id, 'approve');
     expect(planOf(f, s.id).phase).toBe('running');
     expect(f.sent.get(s.id)!.at(-1)).toBe(PLAN_APPROVED);
     await expect(f.call('plan_propose', s.id, PLAN)).rejects.toThrow(/approved and under way/);
@@ -131,7 +137,7 @@ describe('a Strategist\'s plan with the user', () => {
     const f = fixture();
     const s = await f.root('strategist');
     await f.call('plan_propose', s.id, PLAN);
-    await f.m.planDecide(s.id, 'approve');
+    await decide(f, s.id, 'approve');
     await expect(f.call('agent_delegate', s.id, { tasks: [{ ...f.task('scout', 'Ordini · Dove'), step: 4 }] })).rejects.toThrow(/1 to 3/);
     await f.call('agent_delegate', s.id, { tasks: [{ ...f.task('scout', 'Ordini · Dove'), step: 1 }, { ...f.task('scout', 'Resi · Dove'), step: 1 }, { ...f.task('artisan', 'Ordini · Sconto'), step: 2 }] });
     const kids = f.m.list().filter(c => c.parentId === s.id);
@@ -156,13 +162,41 @@ describe('a Strategist\'s plan with the user', () => {
     await tick();
   });
 
-  it('the plan survives a restart', async () => {
+  it('a step whose sibling chat was closed without a result shows blocked, never stuck', async () => {
+    const f = fixture();
+    const s = await f.root('strategist');
+    await f.call('plan_propose', s.id, PLAN);
+    await decide(f, s.id, 'approve');
+    await f.call('agent_delegate', s.id, { tasks: [{ ...f.task('scout', 'Ordini · Dove'), step: 1 }, { ...f.task('scout', 'Resi · Dove'), step: 1 }] });
+    const kids = f.m.list().filter(c => c.parentId === s.id);
+    await f.m.close(kids[1]!.id);
+    await f.call('agent_report', kids[0]!.id, { outcome: 'done', summary: 'ok', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }] });
+    expect(planOf(f, s.id).steps[0]!.state).toBe('blocked');
+  });
+
+  it('a decision whose message does not reach the Strategist leaves the plan waiting', async () => {
+    const f = fixture();
+    const s = await f.root('strategist');
+    await f.call('plan_propose', s.id, PLAN);
+    const send = f.m.send.bind(f.m);
+    f.m.send = async () => { throw new Error('motore spento'); };
+    await expect(decide(f, s.id, 'approve')).rejects.toThrow(/motore spento/);
+    expect(planOf(f, s.id).phase).toBe('proposed');
+    f.m.send = send;
+  });
+
+  it('the plan survives a restart, and its gate with it', async () => {
     const f = fixture();
     const s = await f.root('strategist');
     await f.call('plan_propose', s.id, PLAN);
     await f.m.shutdown();
     const saved = JSON.parse(fs.readFileSync(path.join(f.dir, 'chats.json'), 'utf8')) as { chats: { id: string; plan?: unknown }[] };
     expect(readPlan(saved.chats.find(c => c.id === s.id)?.plan)).toMatchObject({ phase: 'proposed', steps: [{ state: 'todo' }, { state: 'todo' }, { state: 'todo' }] });
+    const again = new ChatManager({ userData: f.dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0 });
+    managers.push(again);
+    expect(again.planOf(s.id)).toMatchObject({ phase: 'proposed' });
+    expect(again.list().find(c => c.id === s.id)?.plan?.steps).toHaveLength(3);
+    expect(again.chatToolShown(s.id, 'plan_propose')).toBe(true);
   });
 });
 

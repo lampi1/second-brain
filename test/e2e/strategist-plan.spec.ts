@@ -2,7 +2,7 @@
 // style with the role of each; while it asks, its open question right on the collapsed strip, with what is already
 // clear and «Basta domande», the answer reaching the chat and joining the clear lines; the short plan with «Cambia
 // qualcosa» (the change reaches it) and «Approva e parti» (it starts); with "Popup" on, the question opens in the
-// questions window and the strip keeps only what is clear. Hidden window (SB_HIDDEN).
+// questions window and the strip points to it. Hidden window (SB_HIDDEN).
 // Screenshots: test-results/shots/strategist-plan-*.png.
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import type { StrategyPlan } from '../../src/shared/strategy';
@@ -72,6 +72,9 @@ test('a Strategist asks, proposes a short plan to approve and shows its steps on
     // the plan: «Cambia qualcosa» sends the change, «Approva e parti» starts it
     await demo(app, 'plan', LEAD, plan({ phase: 'proposed', steps: [...STEPS], doneWhen: 'I test ordini passano e le note sono pronte.' }));
     await expect(card).toHaveAttribute('data-phase', 'proposed');
+    // a click inside the card never folds or unfolds the strip
+    await card.locator('.sp-title').first().click();
+    await expect(page.getByTestId(`chat-expand-${LEAD}`)).toHaveAttribute('aria-expanded', 'false');
     await expect(page.getByTestId(`plan-steps-${LEAD}`).locator('li')).toHaveCount(3);
     await expect(card).toContainText('Finito quando: I test ordini passano');
     await top(page);
@@ -108,6 +111,9 @@ test('with "Popup" on, a Strategist\'s question opens in the questions window, n
     await expect(page.getByTestId('qwin-backdrop')).toBeVisible();
     await expect(page.getByTestId('qwin-backdrop')).toContainText(QUESTION);
     await expect(card).not.toContainText(QUESTION);
+    // the strip says where the question is, opens it again, and still offers «Basta domande»
+    await expect(page.getByTestId(`plan-in-window-${LEAD}`)).toBeVisible();
+    await expect(page.getByTestId(`plan-enough-${LEAD}`)).toBeVisible();
     await expect(page.getByTestId('plan-known')).toContainText('Dove');
   } finally { await app.close(); }
 });

@@ -100,4 +100,11 @@ export const treeIt = {
   'tree.plan.minutes': (p: { n: number }) => `${p.n} min`,
   'tree.plan.since': (p: { n: number }) => `da ${p.n} min`,
   'tree.plan.blocked': 'bloccato',
+  'tree.plan.inWindow': 'La domanda è aperta nella finestra delle domande.',
+  'tree.plan.openWindow': 'Aprila',
+  'tree.plan.ready': 'Piano pronto: lo approvi?',
+  'tree.plan.state.todo': 'da fare',
+  'tree.plan.state.now': 'in corso',
+  'tree.plan.state.done': 'fatto',
+  'tree.plan.state.blocked': 'bloccato',
 };

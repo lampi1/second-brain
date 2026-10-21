@@ -574,9 +574,10 @@ export class DemoChats implements ChatService {
   }
 
   /** the user's click on a Strategist's proposed plan (ADR 0108): its phase moves on, the Strategist gets the message */
-  async planDecide(chatId: string, decision: 'approve' | 'change', text?: string): Promise<void> {
+  async planDecide(chatId: string, decision: 'approve' | 'change', at: number, text?: string): Promise<void> {
     const plan = this.chats.get(chatId)?.plan;
     if (!plan || plan.phase !== 'proposed') throw new Error('Questo piano non aspetta più una risposta.');
+    if (plan.at !== at) throw new Error('Il piano è cambiato nel frattempo: rileggilo.');
     if (decision === 'change' && !text?.trim()) throw new Error('Scrivi cosa cambiare (al massimo 2000 caratteri).');
     this.patch(chatId, { plan: { ...plan, phase: decision === 'approve' ? 'running' : 'revising', at: this.now() } });
     this.push(chatId, { kind: 'user', id: this.nextId(), at: this.now(), text: decision === 'approve' ? PLAN_APPROVED : planChange(text!) });

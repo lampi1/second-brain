@@ -131,15 +131,15 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
   // a click on the strip itself (not on one of its controls, nor inside a portalled menu) expands or collapses it
   const onStripClick = (e: React.MouseEvent<HTMLElement>) => {
     const el = e.target as Element;
-    if (!strip || !e.currentTarget.contains(el) || el.closest('button, a, input, textarea, select, summary, label, [role="menu"], [contenteditable="true"], .chat-topic')) return;
+    if (!strip || !e.currentTarget.contains(el) || el.closest('button, a, input, textarea, select, summary, label, [role="menu"], [contenteditable="true"], .chat-topic, .sp-card')) return;
     if (selectedHere(window.getSelection(), e.currentTarget, downSelection.current)) return; // selecting text is not a click
     if (!expanded) setChatExpanded(chatId, true);
     else if (el.closest('.tile-head')) setChatExpanded(chatId, false);
   };
   const first = reqs[0] ? reqKey(reqs[0]) : null;
   // a Strategist's open question shows in its plan card, on the strip itself (ADR 0108), not again below
-  const planAsk = planQuestion(chat, reqs, inWindow, !!queued);
-  const ownReqs = planAsk ? reqs.filter(r => r !== planAsk) : reqs;
+  const planAsk = planQuestion(chat, reqs, !!queued);
+  const ownReqs = planAsk && !inWindow ? reqs.filter(r => r !== planAsk) : reqs;
   return (
     <section ref={ref} className={`tile chat-tile ${expanded?'is-expanded':'is-strip'} tone-${st.tone} ${isFocused ? 'focused' : ''} ${flash ? 'flash' : ''} ${compact ? 'compact' : ''} ${closing ? 'closing' : ''} ${pair.cls}${embedded ? ' is-embedded' : ''}`} style={pair.style} role="region"
       aria-label={auditText('auditExpression.ChatTile.text20', { v0: chat.title, v1: st.label })} data-testid={`tile-chat-${chatId}`} data-chat-id={chatId} data-sb-id={`chat-${chatId}`} data-chat-index={index} data-state={chat.state}
@@ -183,8 +183,8 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
         {!compact && <ChatLinkChips chatId={chatId} />}
       </header>}
       <AutoCloseNotice chatId={chatId} />
-      {!expanded&&<div className="chat-strip-line">{busy?<StripActivity chatId={chatId} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.lastText.slice(0,140)}</div>}
-      {chat.plan && <StrategyPanel chat={chat} question={planAsk} />}
+      {!expanded&&<div className="chat-strip-line">{busy?<StripActivity chatId={chatId} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.plan?.phase==='proposed'?t('tree.plan.ready'):chat.lastText.slice(0,140)}</div>}
+      {chat.plan && <StrategyPanel chat={chat} question={planAsk} inWindow={inWindow} />}
       <div className={`chat-work${expanded?' expanded':''}`} id={`chat-work-${chatId}`} inert={!expanded} aria-hidden={!expanded}><div className="chat-work-inner">
       {!compact && <ChatLinks chat={chat} />}
       {!compact && chat.handoffBusy && <ContextNotice chat={chat} />}

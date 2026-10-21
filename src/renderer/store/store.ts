@@ -355,8 +355,8 @@ export async function answer(req: PendingRequest, a: Answer): Promise<boolean> {
 }
 
 /** A Strategist's proposed plan (ADR 0108): «Approva e parti», or «Cambia qualcosa» with what to change; false = not sent. */
-export async function planDecide(chatId: string, decision: 'approve' | 'change', text?: string): Promise<boolean> {
-  try { await sb.invoke('chat:plan', { chatId, decision, ...(decision === 'change' ? { text } : {}) }); return true; }
+export async function planDecide(chatId: string, decision: 'approve' | 'change', at: number, text?: string): Promise<boolean> {
+  try { await sb.invoke('chat:plan', { chatId, decision, at, ...(decision === 'change' ? { text } : {}) }); return true; }
   catch (e) { fail('Risposta al piano non inviata')(e); return false; }
 }
 

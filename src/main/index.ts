@@ -279,7 +279,7 @@ app.whenReady().then(async () => {
     'routing:preview': a => previewRoute({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h) }, a),
     'chat:send': async a => { await s.chats.send(a.chatId, a.text, a.images); s.chats.resumedByUser?.(a.chatId, a.text); if (typeof a.text === 'string' && a.text.trim()) s.chats.userWrote?.(a.chatId, a.text); },
     'chat:answer': a => s.chats.answer(a.chatId, a.requestId, a.answer),
-    'chat:plan': a => s.chats.planDecide(a.chatId, a.decision, a.text),
+    'chat:plan': a => s.chats.planDecide(a.chatId, a.decision, a.at, a.text),
     'chat:stop': a => s.chats.stop(a.chatId, a.keepQueued === true),
     'chat:stopAll': () => s.chats.stopAll(),
     'chat:close': a => s.chats.close(a.chatId),

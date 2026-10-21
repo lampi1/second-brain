@@ -100,4 +100,11 @@ export const treeEn: typeof treeIt = {
   'tree.plan.minutes': (p: { n: number }) => `${p.n} min`,
   'tree.plan.since': (p: { n: number }) => `for ${p.n} min`,
   'tree.plan.blocked': 'blocked',
+  'tree.plan.inWindow': 'The question is open in the questions window.',
+  'tree.plan.openWindow': 'Open it',
+  'tree.plan.ready': 'Plan ready: do you approve it?',
+  'tree.plan.state.todo': 'to do',
+  'tree.plan.state.now': 'in progress',
+  'tree.plan.state.done': 'done',
+  'tree.plan.state.blocked': 'blocked',
 };

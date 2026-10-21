@@ -976,7 +976,7 @@ export class ChatManager implements ChatService {
       try { held = externalHold(c.id); } catch { /* fail closed */ }
       const eligible = !this.quitting && !updateActivity.frozen && !c.isOrchestrator && !c.quick && !held &&
         (c.state === 'idle' || r.autoClosing && c.state === 'closed') && !!c.lastResult && !c.lastResult.isError && !c.lastResult.interrupted && !c.lastError &&
-        !r.working && !r.session?.busy && r.pending.size === 0 && !workBehind(c) && !c.waitsOn && !c.queued && !r.deliveryHolds &&
+        !r.working && !r.session?.busy && r.pending.size === 0 && !workBehind(c) && !c.waitsOn && c.plan?.phase !== 'proposed' && !c.queued && !r.deliveryHolds &&
         !r.opening && !r.releasing && !r.switching && !r.handoffTurn && (!r.archiving || r.autoClosing) &&
         child?.coverage === 'complete' && child.active === 0 && !child.children.some(x => x.state === 'running' || x.state === 'waiting' || x.state === 'unknown');
       const waitingFor = eligible || c.isOrchestrator || c.quick ? undefined : this.waitingOf(r, held);
@@ -992,6 +992,7 @@ export class ChatManager implements ChatService {
     const c = r.s, pend = [...r.pending.values()];
     if (pend.some(p => p.type === 'permission')) return 'permission';
     if (pend.some(p => p.type === 'question')) return 'answer';
+    if (c.plan?.phase === 'proposed') return 'answer'; // its plan waits for «Approva e parti» (ADR 0108)
     if (external === 'command' || external === 'browser') return external;
     if (c.waitsOn) return c.waitsOn;
     if (r.session?.busy || r.working || c.state === 'running' || c.state === 'starting') return undefined;
@@ -1049,6 +1050,7 @@ export class ChatManager implements ChatService {
     const r = this.need(chatId), plan = r.s.plan;
     if (!plan) throw new Error('plan_propose: only a Strategist the Orchestrator or the user started has a plan with the user.');
     if (plan.phase === 'running' || plan.phase === 'done') throw new Error('plan_propose: the plan is approved and under way; update its steps with plan_update.');
+    if (plan.phase === 'proposed') throw new Error('plan_propose: your plan already waits for the user. End your turn: the answer arrives as a message.');
     r.s.plan = { phase: 'proposed', clarified: plan.clarified, steps, ...(doneWhen ? { doneWhen } : {}), at: Date.now() };
     this.persist();
     this.updated(r);
@@ -1080,17 +1082,22 @@ export class ChatManager implements ChatService {
 
   /** The user's click on a proposed plan (chat:plan): «Approva e parti» or «Cambia qualcosa» with what to change; the
    *  Strategist gets it as the user's message. «Basta domande» is an answer to its open question (renderer). */
-  async planDecide(chatId: string, decision: 'approve' | 'change', text?: string): Promise<void> {
+  async planDecide(chatId: string, decision: 'approve' | 'change', at: number, text?: string): Promise<void> {
     const r = this.need(chatId), plan = r.s.plan;
     if (!plan || plan.phase !== 'proposed') throw new Error('Questo piano non aspetta più una risposta.');
+    if (plan.at !== at) throw new Error('Il piano è cambiato nel frattempo: rileggilo.');
     const change = typeof text === 'string' ? text.trim() : '';
     if (decision === 'change' && (!change || change.length > 2000)) throw new Error('Scrivi cosa cambiare (al massimo 2000 caratteri).');
     if (decision !== 'approve' && decision !== 'change') throw new Error('Scelta non valida.');
+    // the phase moves first (a second click finds it decided) and comes back if the message does not reach the Strategist
     r.s.plan = { ...plan, phase: decision === 'approve' ? 'running' : 'revising', at: Date.now() };
     this.persist();
     this.updated(r);
+    try { await this.send(chatId, decision === 'approve' ? PLAN_APPROVED : planChange(change)); } catch (e) {
+      if (r.s.plan?.phase === (decision === 'approve' ? 'running' : 'revising')) { r.s.plan = plan; this.persist(); this.updated(r); }
+      throw e;
+    }
     log.info('chats', 'plan decided', { chat: chatId, data: { decision } });
-    await this.send(chatId, decision === 'approve' ? PLAN_APPROVED : planChange(change));
   }
 
   /** Interrupts whenever a process exists, whatever the shown state says (an interrupt on an idle CLI is harmless). */
@@ -1758,7 +1765,8 @@ export class ChatManager implements ChatService {
     const parent = this.chats.get(parentId);
     // the parent Strategist's step for this child: done once every chat of the step reported done (ADR 0108)
     if (parent?.s.plan) {
-      const next = afterReport(parent.s.plan, chatId, id => this.chats.get(id)?.s.delegation?.result?.outcome, at);
+      // a sibling gone without a result (closed by the user) counts as not done: the step shows blocked, never stuck
+      const next = afterReport(parent.s.plan, chatId, id => { const c = this.chats.get(id); return c ? c.s.delegation?.result?.outcome : 'blocked'; }, at);
       if (next !== parent.s.plan) { parent.s.plan = next; this.persist(); }
     }
     if (parent) {
@@ -2514,7 +2522,7 @@ export class ChatManager implements ChatService {
     const r = this.chats.get(chatId), s = r?.s;
     // a waiting engine launched for a role: what that role's root chat would see (it lists tools once, at start)
     const warm = r ? undefined : this.warmViews.get(chatId)?.view;
-    if (warm) return !(DELEGATING_ONLY.has(tool) && warm.launches?.length === 0) && tool !== 'agent_ask_parent' && (!PLAN_TOOLS.has(tool) || warm.role === 'strategist');
+    if (warm) return !(DELEGATING_ONLY.has(tool) && warm.launches?.length === 0) && tool !== 'agent_ask_parent' && !PLAN_TOOLS.has(tool);
     if (!r || !s) return true;
     if (s.isOrchestrator) return !ORCHESTRATOR_HIDDEN.has(tool);
     // Lampo starts no work (ADR 0105): no mail to other chats, no delegation, no report, no saved script
