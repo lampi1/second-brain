@@ -30,7 +30,7 @@ export type { DiscussBridge };
 export type { LiveSnapshot, LiveSource, LiveTool } from './lib/live';
 export { FADE_MS } from './lib/live';
 
-export type BrainPageId = 'dashboard' | 'home' | 'task' | 'fatto' | 'idee' | 'costi' | 'qualita' | 'apprendimento' | 'script' | 'changelog' | 'confronto' | 'file' | 'skill' | 'impostazioni' | 'agenti' | 'guida' | 'regole' | 'memoria' | 'classificatori' | 'collegamenti';
+export type BrainPageId = 'dashboard' | 'home' | 'task' | 'fatto' | 'idee' | 'costi' | 'qualita' | 'apprendimento' | 'script' | 'log' | 'confronto' | 'file' | 'skill' | 'impostazioni' | 'agenti' | 'guida' | 'regole' | 'memoria' | 'classificatori' | 'collegamenti';
 
 /** label is a getter (ADR 0057): read at use time, so it follows the current language */
 const page = (id: BrainPageId, key: string): { id: BrainPageId; readonly label: string; key: string } => ({ id, key, get label() { return id==='file'?t('viewer.title'):t(`brainPages.nav.${id}`); } });
@@ -45,9 +45,10 @@ export const BRAIN_PAGES: { id: BrainPageId; readonly label: string; key: string
   page('qualita', 'G Q'),
   // rendered by the app (App.tsx PageFrame): what the brain's changes proved (ADR 0109)
   page('apprendimento', 'G J'),
-  // rendered by the app (App.tsx PageFrame) in the Dashboard's look: the brain's scripts and its changelog (ADR 0076)
+  // rendered by the app (App.tsx PageFrame) in the Dashboard's look: the brain's scripts (ADR 0076) and the app's Log,
+  // which also holds the brain's changelog since the Changelog page left (ADR 0111)
   page('script', 'G T'),
-  page('changelog', 'G N'),
+  page('log', 'G N'),
   page('confronto', 'G M'),
   // not a brain page: the skills and agents of the CLIs (components/SkillsPage.tsx, rendered by App.tsx; ADR 0018)
   page('skill', 'G S'),
@@ -67,7 +68,7 @@ export const isBrainPage = (s: string): s is BrainPageId => IDS.has(s);
 /** Old page ids still found in links (feed, notes, the Orchestrator's habits) → today's. Oggi (home) and Adesso became DevOps
  *  (the user, 2026-10-12: "li trovo ridondanti e poco utili, mentre sezione devops super utile"), DevOps became Task
  *  (ADR 0079). */
-export const PAGE_ALIAS: Record<string, BrainPageId> = { oggi: 'task', adesso: 'task', dafare: 'task', devops: 'task', esplora: 'file', procedure: 'skill', procedura: 'skill', miglioramento: 'regole' };
+export const PAGE_ALIAS: Record<string, BrainPageId> = { oggi: 'task', adesso: 'task', dafare: 'task', devops: 'task', esplora: 'file', procedure: 'skill', procedura: 'skill', miglioramento: 'regole', changelog: 'log', diagnostica: 'log' };
 /** Their old go-to keys still work: G R (the old Regole imparate) opens Regole, where those rules live now (ADR 0082). */
 export const GO_ALIASES: { id: BrainPageId; key: string }[] = [{ id: 'regole', key: 'G R' }];
 
@@ -107,7 +108,7 @@ export function BrainPage({ id, arg, onNavigate, bridge }: { id: BrainPageId; ar
     case 'qualita': page = <Qualita arg={cur.arg} nav={nav} />; break;
     case 'confronto': page = <Confronto nav={nav} />; break;
     case 'file': page = <FileViewer arg={cur.arg}/>; break;
-    case 'impostazioni': case 'apprendimento': case 'skill': case 'guida': case 'regole': case 'memoria': case 'classificatori': case 'collegamenti': case 'script': case 'changelog': page = null; break; // rendered by the app (App.tsx PageFrame)
+    case 'impostazioni': case 'apprendimento': case 'skill': case 'guida': case 'regole': case 'memoria': case 'classificatori': case 'collegamenti': case 'script': case 'log': page = null; break; // rendered by the app (App.tsx PageFrame)
     case 'task': page = <TaskPage nav={nav} />; break;
   }
   return (

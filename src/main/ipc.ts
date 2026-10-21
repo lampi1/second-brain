@@ -50,9 +50,16 @@ export function registerHandlers(handlers: Handlers, appContents: () => WebConte
   }
 }
 
+/** A main-side listener of every event sent to a window (the Log's journal, main/activity/wiring.ts). */
+export type EmitTap = <K extends EventChannel>(channel: K, payload: EventMap[K]) => void;
+
 export class Emitter {
+  private readonly taps: EmitTap[] = [];
   constructor(private target: () => WebContents | null) {}
+  /** Sees every event, before the window; a tap that throws never stops the event. */
+  tap(fn: EmitTap): void { this.taps.push(fn); }
   emit<K extends EventChannel>(channel: K, payload: EventMap[K]): void {
+    for (const fn of this.taps) try { fn(channel, payload); } catch { /* the log never breaks the app */ }
     if (channel === 'ui:command' && updateActivity.frozen) return;
     const wc = this.target();
     if (wc && !wc.isDestroyed()) wc.send(channel, payload);

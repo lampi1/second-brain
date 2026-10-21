@@ -51,7 +51,7 @@ import { LearningPage } from './components/brain-model/LearningPage';
 import { ClassifiersPage } from './components/brain-model/ClassifiersPage';
 import { MapPage } from './components/brain-model/MapPage';
 import { Script } from './brain/pages/Script';
-import { Changelog } from './brain/pages/Changelog';
+import { LogPage } from './components/LogPage';
 import { GuidePage } from './components/GuidePage';
 
 const editable = (t: EventTarget | null) => {
@@ -169,7 +169,7 @@ function PageFrame({ id }: { id: (typeof BRAIN_PAGES)[number]['id'] }) {
       </div>
       {/* keyed by the page: every page change replays the entry (linear.css panel-enter), no hard cut */}
       <div className="page-body" key={id}>
-        {id === 'dashboard' ? <Dashboard /> : id === 'script' ? <Script arg={arg ?? undefined} /> : id === 'changelog' ? <Changelog /> : id === 'guida' ? <GuidePage arg={arg ?? undefined} /> : id === 'agenti' ? <AgentCatalogPage /> : id === 'impostazioni'
+        {id === 'dashboard' ? <Dashboard /> : id === 'script' ? <Script arg={arg ?? undefined} /> : id === 'log' ? <LogPage /> : id === 'guida' ? <GuidePage arg={arg ?? undefined} /> : id === 'agenti' ? <AgentCatalogPage /> : id === 'impostazioni'
           ? <div className="bx bx-page bx-scroll" role="region" aria-label={t('cmp.app.settings')}><div className="bx-inner"><SettingsPage /></div></div>
           : id === 'skill'
             ? <div className="bx bx-page bx-scroll" role="region" aria-label={t('cmp.app.skills')}><div className="bx-inner"><SkillsPage /></div></div>

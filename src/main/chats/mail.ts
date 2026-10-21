@@ -22,6 +22,8 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import type { ChatSummary, Harness, HeldNewsItem, HeldNewsWhy } from '../../shared/contract';
 import { log, errText } from '../log';
+import { logEvent } from '../activity/journal';
+import { mailRecord } from '../activity/records';
 import { updateActivity } from '../update/activity';
 import { AgentMayNotWake } from '../engines/policy';
 import { engineOf } from '../engines/registry';
@@ -470,6 +472,7 @@ export function mailTools(d: MailToolDeps): ChatTool[] {
           : gate === 'hold' && cls !== 'now' ? 'l’Orchestrator aspetta l’utente: lo riceve appena è libero (solo un messaggio urgente passa subito)'
           : gate === 'queue' && cls === 'quiet' ? `l’Orchestrator è fermo e il messaggio è solo un avanzamento: lo riceve con il suo prossimo turno, al più tardi fra ${Math.round(ORCHESTRATOR_HOLD_MS / 60_000)} minuti`
             : gate === 'queue' && cls === 'group' ? `l’Orchestrator è fermo: l’app glielo consegna entro ${Math.round(ORCHESTRATOR_GROUP_MS / 1000)} secondi, insieme alle altre novità` : 'l’app glielo consegna adesso';
+        if (target && isOrchestratorChat(target)) logEvent(mailRecord(from.title, msg.to, cls, text, when)); // the Log page (ADR 0111)
         return `inviato a "${msg.to}" (id ${msg.id}${msg.hop > 1 ? `, risposta ${msg.hop}/${MAX_HOPS}` : ''}): ${when}`;
       },
     },

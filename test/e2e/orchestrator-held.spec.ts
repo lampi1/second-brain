@@ -84,8 +84,8 @@ test('the answer the user waited for: the app\'s notice in the Orchestrator\'s c
     const notice = tile.getByTestId('result-ready').last();
     await expect(notice).toContainText('Scout «App · Mappa 3D» ha la risposta che aspettavi: La mappa carica in 2 secondi');
     await app.evaluate(() => { (globalThis as unknown as { __sbDemo: { notice(c: string, code: string, p: Record<string, string>, result: unknown): void } }).__sbDemo.notice('orchestrator', 'resultReady', { role: 'Scout', title: 'Risultato completo', summary: 'Sintesi breve', chatId: 'mappa' }, { taskId: 'task-demo', taskVersion: 2, runId: 'run-demo', at: Date.now(), outcome: 'done', summary: 'Sintesi breve', output: 'Questo dettaglio completo non compare nella sintesi.', doneWhen: [{ criterion: 'Misura disponibile', met: true, evidence: 'Replay locale' }] }); });
+    await tile.getByTestId('result-ready').last().getByTestId('result-ready-toggle').click();
     const full = tile.getByTestId('canonical-result').last();
-    await full.locator('summary').click();
     await expect(full).toContainText('Questo dettaglio completo non compare nella sintesi.');
     await expect(full).toContainText('Replay locale');
     await page.mouse.move(2, 2);

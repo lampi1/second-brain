@@ -11,7 +11,7 @@ export const brainPagesIt = {
   'brainPages.nav.qualita': 'Qualità',
   'brainPages.nav.apprendimento': 'Apprendimento',
   'brainPages.nav.script': 'Script',
-  'brainPages.nav.changelog': 'Changelog',
+  'brainPages.nav.log': 'Log',
   'brainPages.nav.confronto': 'Confronto modelli',
   'brainPages.nav.agenti': 'Agenti',
   'brainPages.nav.skill': 'Skill',

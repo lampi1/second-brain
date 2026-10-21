@@ -12,6 +12,8 @@ import type { JobKind } from '../../shared/contract';
 import { MAX_SIMILAR, MIN_SIMILAR, QUICK_MS, QUICK_USD, type EstimateActual, type EstimateBasis, type EstimateConfidence, type FastPath, type RunEstimateView, type TaskEstimate } from '../../shared/task-estimate';
 import { classify, normalize } from '../brain/estimates';
 import type { ToolDef } from '../appctl/tools';
+import { estimateRecords } from '../activity/records';
+import { logEvent } from '../activity/journal';
 
 /** A longer first-to-last span without a measured execution time is a run left open, not work. */
 export const MAX_ELAPSED_MS = 8 * 3600_000;
@@ -170,7 +172,9 @@ export function estimateTool(runs: () => readonly AgentRun[]): ToolDef {
       const request = typeof a.request === 'string' ? a.request.trim() : '';
       if (!request || request.length > 8000) throw new Error('task_estimate: request = 1 to 8000 characters.');
       if (a.agentId !== undefined && (typeof a.agentId !== 'string' || !/^[a-z][a-z0-9_-]{0,79}$/.test(a.agentId))) throw new Error('task_estimate: agentId = a role id from agent_catalog.');
-      return estimateTask(new SimilarIndex(runs()), { text: request, ...(a.agentId ? { agentId: a.agentId as string } : {}) });
+      const e = estimateTask(new SimilarIndex(runs()), { text: request, ...(a.agentId ? { agentId: a.agentId as string } : {}) });
+      for (const r of estimateRecords(e, request, 'chiesta dall’Orchestrator')) logEvent(r); // the Log page (ADR 0111)
+      return e;
     },
   };
 }

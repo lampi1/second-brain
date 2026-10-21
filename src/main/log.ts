@@ -47,6 +47,9 @@ class Logger {
   private fd: number | null = null;
   private min: Level = (process.env.SB_LOG_LEVEL as Level) in ORDER ? (process.env.SB_LOG_LEVEL as Level) : 'info';
   readonly recent: Entry[] = []; // last 500, for the app MCP / diagnostics
+  private readonly listeners: ((e: Entry) => void)[] = [];
+  /** Sees every written entry, already redacted (the Log page's journal takes the warnings and errors). */
+  onWrite(fn: (e: Entry) => void): void { this.listeners.push(fn); }
 
   init(userData: string): string {
     this.dir = path.join(userData, 'logs');
@@ -66,8 +69,10 @@ class Logger {
     const e: Entry = { t: new Date().toISOString(), lvl, scope, msg, ...extra };
     let line: string;
     try { line = redact(JSON.stringify(e)); } catch { line = JSON.stringify({ t: e.t, lvl, scope, msg: redact(msg), data: '[unserializable]' }); }
-    this.recent.push(JSON.parse(line) as Entry);
+    const entry = JSON.parse(line) as Entry;
+    this.recent.push(entry);
     if (this.recent.length > 500) this.recent.shift();
+    for (const fn of this.listeners) try { fn(entry); } catch { /* a listener never stops the log */ }
     if (process.env.SB_LOG_STDOUT === '1' || (lvl === 'error' && !this.dir)) console.log(line);
     if (!this.dir) return;
     const day = e.t.slice(0, 10);

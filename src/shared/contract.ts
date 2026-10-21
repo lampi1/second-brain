@@ -20,6 +20,7 @@ import type { ChatDelegation, DelegationLimitHit } from './delegation';
 import type { StrategyPlan } from './strategy';
 import type { SkillSuggestions } from './skill-suggest';
 import type { AutoClosePresence, AutoCloseStatus } from './auto-close';
+import type { LogEvent, LogList } from './activity-log';
 import type { ChatEffortStatus } from './effort';
 import type { ProgressState } from './progress';
 import type { CreateBrainRequest, CreatedBrain } from './brain-create';
@@ -1439,6 +1440,8 @@ export interface InvokeMap {
   'sync:resolve': [{ domain: string; choice: SyncChoice }, SyncState];
   /** the Grindhouse's headline (SPEC 18, main/headline.ts): the line on screen now, never waiting for a model */
   'headline:get': [void, HeadlineState];
+  /** the Log page (shared/activity-log.ts): the recent events, the folder's size and its limits; zero tokens */
+  'log:list': [void, LogList];
   'orchestrator:held': [void, HeldNewsState];
   /** the user opened a held news item's chat from the list: that chat's items are read, never wake the Orchestrator (#123) */
   'orchestrator:heldSeen': [{ chatId: string }, HeldNewsState];
@@ -1534,6 +1537,8 @@ export interface EventMap {
   'brainmodel:changed': void;
   /** a script of the brain or its changelog changed on disk (brain watcher): the Script and Changelog pages reload */
   'scripts:changed': void;
+  /** new Log events, in small batches (main/activity/journal.ts) */
+  'log:events': LogEvent[];
   /** a domain's sync status changed (ADR 0059) */
   'sync:state': SyncState;
   /** a new headline (or the same after a failed refresh, source previous) */
@@ -1574,7 +1579,7 @@ export const INVOKE_CHANNELS = [
   'clipboard:image',
   'orchestrator:get', 'orchestrator:ensure',
   'search:query', 'search:status', 'search:retryModel', 'later:get', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
-  'sync:get', 'sync:now', 'sync:resolve', 'headline:get',
+  'sync:get', 'sync:now', 'sync:resolve', 'headline:get', 'log:list',
   'orchestrator:held', 'orchestrator:heldSeen',
   'cloud:list', 'cloud:start', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:readiness', 'cloud:dismiss',
 ] as const satisfies readonly InvokeChannel[];
@@ -1590,6 +1595,7 @@ export const EVENT_CHANNELS = [
   'mcpservers:changed',
   'orchestrator:heldChanged',
   'scripts:changed',
+  'log:events',
 ] as const satisfies readonly EventChannel[];
 
 type Missing<All, Listed> = Exclude<All, Listed>;
