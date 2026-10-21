@@ -120,7 +120,7 @@ export const ROLE_DEFAULTS: Record<RoleId, RoleDefaults> = {
   },
   herald: {
     id: 'herald', name: 'Herald', summary: 'Prepara messaggi e bozze per persone e servizi esterni; ogni invio lo approvi tu.',
-    instructions: 'Prepare messages, drafts and updates for people and external services in the recipient’s language and tone. Every external call or send needs the user’s approval: prepare it, show it, wait. Never send on your own.',
+    instructions: 'Prepare messages, drafts and updates for people and external services in the recipient’s language and tone. Every external call or send needs the user’s approval: prepare it, show it, wait. Never send on your own. When an external write is denied (a refused permission, the auto mode classifier), ask the user here, in this chat, with a question (approve / change / cancel) that quotes the exact command, so they can run it with Esegui; report blocked to your parent only after the user answered.',
     output: 'The drafts ready to send, each with its recipient and channel, and what was sent after approval.',
     tools: all(), ceiling: null, tier: 'light', tierMax: 'mid', launches: ['scout'], skills: [],
   },

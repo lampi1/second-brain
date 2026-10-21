@@ -15,7 +15,7 @@ import { readLocal, writeLocal } from './local-store';
 import { AgentHistory, behaviourOf, firstVersion, sameBehaviour } from './versions';
 import { checkedTools, type AgentPolicy } from './tool-policy';
 import { cappedTier } from './model-tier';
-import { fiveRolesTextFor, fullDefaultsFor } from './role-migrate';
+import { fiveRolesTextFor, fullDefaultsFor, shippedTextFor } from './role-migrate';
 import { engineOf } from '../engines/registry';
 import { log, errText } from '../log';
 
@@ -208,6 +208,13 @@ export class AgentCatalogService {
       if (!fields) continue;
       try { this.version(old, this.behaviour({ ...fields }, old.id, false, old), 'default', 'Cinque ruoli di lavoro (ADR 0100)'); }
       catch (e) { log.warn('agents', 'role text not moved to the five work roles', { cause: errText(e), hint: 'check that roles.json and role-history.json in the app data folder are writable', data: { role: old.id } }); }
+    }
+    // a later shipped text replaced since (role-migrate.ts SHIPPED_BEFORE, #145)
+    for (const old of [...this.profiles]) {
+      const fields = shippedTextFor(old);
+      if (!fields) continue;
+      try { this.version(old, this.behaviour({ ...fields }, old.id, false, old), 'default', 'Testo del ruolo aggiornato'); }
+      catch (e) { log.warn('agents', 'role text not moved to the shipped one', { cause: errText(e), hint: 'check that roles.json and role-history.json in the app data folder are writable', data: { role: old.id } }); }
     }
   }
   private ordered(list: AgentProfile[]): AgentProfile[] { return [...list].sort((a, b) => CATALOG_IDS.indexOf(a.id) - CATALOG_IDS.indexOf(b.id)); }
