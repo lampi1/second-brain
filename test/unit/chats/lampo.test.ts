@@ -139,7 +139,8 @@ describe('Flash follows its card (ADR 0107)', () => {
   it('starts on the card\'s model, changes it in place, moves to the card\'s engine with the next question', async () => {
     const starts: SessionOptions[] = [], sent: string[] = [];
     const card = { harness: 'claude' as string, model: 'm-mid', instructions: 'Lead with the answer.' };
-    const m = new ChatManager({ userData: tmp(), emitter: { emit() {} }, coldEveryMs: 0,
+    const off = new Set<string>();
+    const m = new ChatManager({ userData: tmp(), emitter: { emit() {} }, coldEveryMs: 0, engineOn: h => !off.has(h),
       resolveAgent: req => ({ request: { ...req, harness: card.harness as never, model: card.model }, owner: { id: 'plain', name: 'Flash', purpose: '', engine: card.harness, model: card.model, revision: 1, source: 'plain' }, instructions: card.instructions, policy: null, skills: [], launches: [] }),
       sessionFactory: (h, o: SessionOptions, s: SessionSink) => {
         starts.push(o);
@@ -159,12 +160,16 @@ describe('Flash follows its card (ADR 0107)', () => {
     await m.send(l.id, 'e ora?');
     expect(m.list().find(c => c.id === l.id)?.model).toBe('m-top');
     expect(sent.at(-1)).toContain('Be terse.');
-    card.harness = 'codex';
+    card.harness = 'codex'; off.add('codex');
+    await m.send(l.id, 'con codex spento?');
+    expect(m.list().filter(c => c.quick && !c.closedAt).map(c => c.id)).toEqual([l.id]); // stays where it runs
+    off.clear();
     await m.send(l.id, 'e su codex?');
     const now = m.list().filter(c => c.quick && !c.closedAt);
     expect(now).toHaveLength(1);
     expect(now[0]).toMatchObject({ harness: 'codex', title: 'Flash' });
     expect(now[0]!.id).not.toBe(l.id);
+    expect(m.list().find(c => c.id === l.id)?.closedAt).toBeDefined(); // archived: its answers stay
     expect(sent.at(-1)).toMatch(/e su codex\?$/);
   });
 });

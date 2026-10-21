@@ -449,6 +449,8 @@ export class ChatManager implements ChatService {
   private runTimer: NodeJS.Timeout | null = null;
   private chats = new Map<string, Rec>();
   private deliveries = new Map<string, Promise<void>>();
+  /** Flash moving to its card's engine (flashFollow): the new chat's id, for a question sent meanwhile */
+  private flashMoving: Promise<string> | undefined;
   /** notes for a chat's next message (the user wrote in one of its delegated children): they ride along, no turn of their own */
   private notesFor = new Map<string, string[]>();
   private userWroteListeners: ((n: UserWroteNote) => void)[] = [];
@@ -891,7 +893,10 @@ export class ChatManager implements ChatService {
   /** Flash's start (ADR 0105, 0107): what its card says (engine, model, instructions), always under LAMPO_FRAME and
    *  LAMPO_POLICY, whatever the card holds */
   private flashAgent(req: NewChat): Pick<ResolvedRole, 'request' | 'owner' | 'instructions' | 'policy'> {
-    const card = this.opts.resolveAgent?.(req);
+    const asked = this.opts.resolveAgent?.(req);
+    // a card on an engine that is off: Flash stays on the engine it was asked on, with the card's instructions
+    const card = asked && asked.request.harness !== req.harness && this.opts.engineOn?.(asked.request.harness) === false
+      ? { ...asked, request: req, owner: { ...plainOwner(req.harness, req.model ?? null), name: asked.owner.name } } : asked;
     const own = card?.instructions.trim();
     return { request: { ...(card?.request ?? req), title: LAMPO_TITLE, permissionMode: 'plan' }, owner: card?.owner ?? { ...plainOwner(req.harness, req.model ?? null), name: LAMPO_TITLE },
       instructions: own ? `${LAMPO_FRAME}\n\n${own}` : LAMPO_FRAME, policy: LAMPO_POLICY };
@@ -901,18 +906,37 @@ export class ChatManager implements ChatService {
    *  closes; the Orchestrator's conversation goes again with the question); another model = changed in place; other
    *  instructions = sent again with the next message. Mid-turn nothing changes. The id the question goes to. */
   private async flashFollow(r: Rec): Promise<string> {
-    if (r.working || r.session?.busy) return r.s.id;
+    // one move at a time: a second question while Flash changes engine goes where the first one went
+    if (this.flashMoving) return this.flashMoving;
+    if (r.working || r.session?.busy || r.s.closedAt) return r.s.id;
     const card = this.flashAgent({ harness: r.s.harness, cwd: r.s.cwd, quick: true });
     const want = card.request.model ?? null;
-    if (card.request.harness !== r.s.harness && this.opts.engineOn?.(card.request.harness) !== false) {
-      await this.close(r.s.id);
-      log.info('chats', 'Flash moved to the engine of its card', { chat: r.s.id, data: { from: r.s.harness, to: card.request.harness } });
-      return (await this.create({ harness: card.request.harness, cwd: r.s.cwd, quick: true, ...(want ? { model: want } : {}) })).id;
+    if (card.request.harness !== r.s.harness) {
+      const move = this.flashMove(r, card.request.harness, want);
+      this.flashMoving = move;
+      try { return await move; } finally { this.flashMoving = undefined; }
     }
-    if (card.request.harness === r.s.harness && want !== (r.s.model ?? null)) await this.set(r.s.id, { model: want ?? '' });
+    if (want !== (r.s.model ?? null)) await this.set(r.s.id, { model: want ?? '' });
+    const effort = card.request.effort;
+    if (effort && effort !== r.s.effort && engineOf(r.s.harness)?.caps.effort) await this.set(r.s.id, { effort }).catch(e => log.warn('chats', 'Flash effort not applied', { chat: r.s.id, cause: errText(e), hint: 'it stays as it was' }));
     if (card.instructions !== r.agentInstructions) { r.agentInstructions = card.instructions; r.roleChecked = false; this.persist(); }
-    if (r.s.agent && r.s.agent.name !== card.owner.name) { r.s.agent = { ...r.s.agent, name: card.owner.name }; this.updated(r); }
+    if (r.s.agent && (r.s.agent.name !== card.owner.name || r.s.agent.model !== want)) { r.s.agent = { ...r.s.agent, name: card.owner.name, model: want }; this.updated(r); }
     return r.s.id;
+  }
+
+  /** Flash on its card's new engine: the old one is archived (its answers stay), then the new one opens; if it cannot
+   *  open, the old one comes back and takes the question. */
+  private async flashMove(r: Rec, harness: Harness, model: string | null): Promise<string> {
+    await this.archive(r.s.id);
+    try {
+      const next = await this.create({ harness, cwd: r.s.cwd, quick: true, ...(model ? { model } : {}) });
+      log.info('chats', 'Flash moved to the engine of its card', { chat: next.id, data: { from: r.s.harness, to: harness, old: r.s.id } });
+      return next.id;
+    } catch (e) {
+      log.warn('chats', 'Flash not moved to its card\'s engine', { chat: r.s.id, cause: errText(e), hint: 'the old Flash answers' });
+      if (this.chats.get(r.s.id) === r && r.s.closedAt) this.unarchive(r);
+      return r.s.id;
+    }
   }
 
   /** Lampo's view of the Orchestrator's conversation (ADR 0106): what is new for its engine, read only */
