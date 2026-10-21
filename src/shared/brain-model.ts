@@ -141,7 +141,35 @@ export interface MigrationReport {
   items: MigrationItem[];
 }
 
-export interface MaintenanceRun { at: number; jobs: { job: MaintenanceJobId; changes: number; note?: string }[] }
+export interface MaintenanceRun {
+  at: number; jobs: { job: MaintenanceJobId; changes: number; note?: string }[];
+  /** the log step of a full pass the user started (#150): the app's warnings and errors since the last one, grouped */
+  logs?: LogScan;
+  /** when the last log step read the logs; every later pass carries it on (#150) */
+  logsAt?: number;
+  /** the pass's result went to the Orchestrator (#150): true = delivered, else why not */
+  handoff?: { sent: true } | { sent: false; why: string };
+}
+
+/** The warn and error lines of the app logs (userData/logs/app-*.jsonl) grouped by scope | msg | cause (#150). */
+export interface LogGroup {
+  /** scope | msg | cause, numbers folded: the same problem with another id or count is one group */
+  key: string;
+  lvl: 'warn' | 'error';
+  scope: string; msg: string; cause: string;
+  count: number;
+  /** one line as written (cut) */
+  sample: string;
+  /** the user marked it "noto, ignora": listed apart, never handed to the Orchestrator */
+  known?: true;
+}
+export interface LogScan {
+  /** lines after this time were read (null = the last two days) */
+  since: number | null;
+  /** the log files read, absolute */
+  files: string[];
+  groups: LogGroup[];
+}
 
 export interface BrainModelAgent { id: string; name: string; role: string; skills: string[]; memory: string | null }
 

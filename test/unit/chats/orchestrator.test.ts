@@ -90,6 +90,7 @@ describe('ChatManager with the Orchestrator', () => {
     expect(f.sent[0]!.startsWith('[Role supplied by the app: Orchestrator]')).toBe(true);
     expect(ORCHESTRATOR_ROLE.startsWith('[Role supplied by the app: Orchestrator]')).toBe(true);
     expect(ORCHESTRATOR_ROLE).toMatch(/Updater apply is disabled/);
+    expect(ORCHESTRATOR_ROLE).toMatch(/state is never from memory.*procedi.*read it now \(app_chats/); // #151
     // ADR 0100: one chat per independent request, opened by the Orchestrator itself; a sentinel chat for a verdict only
     // when the report is not verified, the change is large or touches security, contracts or IPC
     expect(ORCHESTRATOR_ROLE).toMatch(/open one chat per request yourself, all in the same turn \(parallel app_create_chat calls\)/);

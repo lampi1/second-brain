@@ -22,7 +22,9 @@ function start(): void {
   sb.on('agents:changed', () => { void refreshBrainModel(); });
   void refreshBrainModel();
 }
-export function useBrainModel() { useEffect(start, []); return brainModel.use(s => s); }
+/** live = false: the store as it is, without reading the brain model now (the Orchestrator's maintenance icon, #150:
+ *  its pass brings the state back) */
+export function useBrainModel(live = true) { useEffect(() => { if (live) start(); }, [live]); return brainModel.use(s => s); }
 
 async function act(run: () => Promise<BrainModelState>): Promise<string | null> {
   if (brainModel.get().busy) return null;
@@ -32,5 +34,7 @@ async function act(run: () => Promise<BrainModelState>): Promise<string | null> 
 }
 /** The maintenance button: every job now (or one). Resolves to an error text, or null. */
 export const runMaintenance = (job?: MaintenanceJobId) => act(() => sb.invoke('brainmodel:maintain', job ? { job } : undefined));
+/** "Noto, ignora" on a log group of the maintenance (#150): listed apart, never handed to the Orchestrator again. */
+export const markLogGroup = (key: string, known: boolean) => act(() => sb.invoke('brainmodel:noise', { key, known }));
 export const rollbackChange = (id: string) => act(() => sb.invoke('brainmodel:rollback', { id }));
 export const linkSkill = (skill: string, agentId: string, on: boolean) => act(() => sb.invoke('brainmodel:link', { skill, agentId, on }));

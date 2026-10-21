@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AgentCatalogService } from '../../../src/main/agents/catalog';
-import { ADR0083_DEFAULTS, PRE_ADR0100_INSTRUCTIONS, fiveRolesTextFor, fullDefaultsFor } from '../../../src/main/agents/role-migrate';
+import { ADR0083_DEFAULTS, PRE_ADR0100_INSTRUCTIONS, SHIPPED_BEFORE, fiveRolesTextFor, fullDefaultsFor, shippedTextFor } from '../../../src/main/agents/role-migrate';
 import { TOOL_CLASSES, type AgentModelChoice, type AgentProfile } from '../../../src/shared/agents';
 import { ROLE_DEFAULTS, ROLE_IDS, defaultPermissions, launchGap, isRoleId } from '../../../src/shared/roles';
 
@@ -87,5 +87,16 @@ describe('full default permissions (ADR 0085)', () => {
     for (const [id, text] of Object.entries(PRE_ADR0100_INSTRUCTIONS)) expect(text).not.toBe(ROLE_DEFAULTS[id as 'scout'].instructions);
     expect(PRE_ADR0100_INSTRUCTIONS.strategist).toMatch(/Judge/); expect(PRE_ADR0100_INSTRUCTIONS.orchestrator).toMatch(/Router/);
     for (const id of ['orchestrator', 'strategist', 'artisan', 'sentinel'] as const) expect(ROLE_DEFAULTS[id].instructions).not.toMatch(/Router|Judge|Scribe/);
+  });
+
+  it('#145: an untouched Herald on the older shipped text gets the one that asks the user when a send is denied; an edited one stays', () => {
+    const base = { id: 'herald', userLocked: false, lastEditedBy: 'default' as const, instructions: SHIPPED_BEFORE.herald![0]! };
+    expect(shippedTextFor(base)).toEqual({ instructions: ROLE_DEFAULTS.herald.instructions });
+    expect(ROLE_DEFAULTS.herald.instructions).toMatch(/denied.*ask the user here, in this chat.*exact command.*Esegui/);
+    expect(shippedTextFor({ ...base, instructions: ROLE_DEFAULTS.herald.instructions })).toBeNull();
+    expect(shippedTextFor({ ...base, instructions: 'My herald.' })).toBeNull();
+    expect(shippedTextFor({ ...base, lastEditedBy: 'user' })).toBeNull();
+    expect(shippedTextFor({ ...base, userLocked: true })).toBeNull();
+    for (const [id, texts] of Object.entries(SHIPPED_BEFORE)) expect(texts).not.toContain(ROLE_DEFAULTS[id as 'herald'].instructions);
   });
 });

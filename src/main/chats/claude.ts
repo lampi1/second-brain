@@ -136,7 +136,7 @@ const PRODUCT_IDS: ReadonlySet<string> = new Set(Object.values(PRODUCT_HOOKS));
 const PERMISSION_MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions'];
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
-interface Call { requestId: string; tool: string; input: Obj; toolUseId: string; suggestions: unknown[]; question: boolean; noAlways: boolean }
+interface Call { requestId: string; tool: string; input: Obj; toolUseId: string; suggestions: unknown[]; question: boolean; noAlways: boolean; elicitation?: true }
 interface Control { resolve(v: Obj): void; reject(e: Error): void; timer: NodeJS.Timeout; subtype: string }
 interface Stream { key: string; item: Extract<ChatItem, { kind: 'assistant' | 'thinking' }>; emitted: boolean; done: boolean }
 type ToolItem = Extract<ChatItem, { kind: 'tool' }>;
@@ -186,6 +186,8 @@ export class ClaudeSession implements HarnessSession {
   private errTail = '';
   private controls = new Map<string, Control>();
   private calls = new Map<string, Call>();
+  /** an MCP form the app cannot show was logged for this chat (#148): once per chat */
+  private elicitationLogged = false;
   private tools = new Map<string, { item: ToolItem; input: unknown }>();
   private streams = new Map<string, Stream>();          // `${messageId}:${index}` → streamed block
   private order = new Map<string, Stream[]>();          // messageId → its streamed blocks, in arrival order
@@ -372,7 +374,10 @@ export class ClaudeSession implements HarnessSession {
     const call = this.calls.get(requestId);
     if (!call) return false;
     let response: Obj;
-    if (call.question) {
+    if (call.elicitation) {
+      if (answer.kind !== 'permission') throw new Error('Questa è una richiesta di conferma: rispondi consenti o rifiuta.');
+      response = answer.allow ? { action: 'accept', content: {} } : { action: 'decline' };
+    } else if (call.question) {
       if (answer.kind === 'question') response = { behavior: 'allow', updatedInput: { ...call.input, answers: flattenAnswers(answer.answers) }, toolUseID: call.toolUseId };
       else if (!answer.allow) response = { behavior: 'deny', message: answer.message?.trim() || 'Nessuna risposta dall’utente.', toolUseID: call.toolUseId };
       else throw new Error('Questa è una domanda: rispondi scegliendo le opzioni.');
@@ -390,7 +395,7 @@ export class ClaudeSession implements HarnessSession {
     }
     this.write({ type: 'control_response', response: { subtype: 'success', request_id: requestId, response } });
     this.calls.delete(requestId);
-    log.info('chats', 'permission answered', { chat: this.opts.chatId, data: { requestId, tool: call.tool, behavior: response.behavior, always: !!response.updatedPermissions } });
+    log.info('chats', 'permission answered', { chat: this.opts.chatId, data: { requestId, tool: call.tool, behavior: response.behavior ?? response.action, always: !!response.updatedPermissions } });
     this.sink.resolved(requestId);
     this.setState(this.calls.size ? 'waiting' : this.turnOpen ? 'running' : 'idle');
     return true;
@@ -699,6 +704,7 @@ export class ClaudeSession implements HarnessSession {
     const r = o(m.request);
     if (r.subtype === 'hook_callback' && s(r.callback_id) === PRE_TOOL_HOOK && this.opts.preToolUse) return this.onPreToolUse(id, o(r.input));
     if (r.subtype === 'hook_callback' && PRODUCT_IDS.has(s(r.callback_id)) && this.opts.productHooks) return this.onProductHook(id, o(r.input));
+    if (r.subtype === 'elicitation') return this.onElicitation(id, r);
     if (r.subtype !== 'can_use_tool') {
       this.drift('control request', s(r.subtype), m);
       log.warn('chats', 'unsupported control request from CLI', { chat: this.opts.chatId, data: { subtype: r.subtype } });
@@ -729,6 +735,34 @@ export class ClaudeSession implements HarnessSession {
     log.info('chats', 'can_use_tool', { chat: this.opts.chatId, data: { requestId: id, tool, type: req.type, toolUseId: call.toolUseId || null } });
     this.setState('waiting');
     this.sink.pending(req);
+  }
+
+  /** An MCP server asks the user through the CLI (#148): a form without fields (a confirmation) is a permission panel,
+   *  answered accept / decline, like the Codex chat (codex.ts elicitation). A form with fields or a URL the app cannot
+   *  render is answered cancel (never an error, which failed the server's call at once), told in the chat and logged
+   *  once per chat. Raw values never enter the logs. */
+  private onElicitation(id: string, r: Obj): void {
+    if (this.calls.has(id)) return;
+    const server = s(r.mcp_server_name) || s(r.server_name) || 'MCP', message = s(r.message);
+    const schema = o(r.requested_schema), mode = s(r.mode) || 'form';
+    const fields = Object.keys(o(schema.properties)).length;
+    if (mode !== 'form' || fields > 0 || !message.trim()) {
+      try { this.write({ type: 'control_response', response: { subtype: 'success', request_id: id, response: { action: 'cancel' } } }); } catch { /* gone */ }
+      this.sys(`MCP ${server}: ${mode === 'url' ? 'chiede di aprire un indirizzo' : 'chiede dati con un modulo'} che l'app non sa mostrare: annullato.`, 'warn');
+      if (!this.elicitationLogged) {
+        this.elicitationLogged = true;
+        log.warn('chats', 'MCP elicitation the app cannot show: cancelled', { chat: this.opts.chatId, cause: mode !== 'form' ? `mode ${mode}` : fields ? 'a form with fields' : 'no message',
+          hint: 'only a confirmation (a form without fields) is shown as a panel; logged once per chat', data: { server, mode, fields } });
+      }
+      return;
+    }
+    const tool = `mcp__${server}`, input = trimInput({ server });
+    // the server writes the message: its name leads the headline, and no control or bidi character can reorder it
+    const plain = (x: string) => stripAnsi(x).replace(/[\u0000-\u0008\u000b-\u001f\u007f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '');
+    this.calls.set(id, { requestId: id, tool, input: {}, toolUseId: '', suggestions: [], question: false, noAlways: true, elicitation: true });
+    log.info('chats', 'MCP elicitation', { chat: this.opts.chatId, data: { requestId: id, server } });
+    this.setState('waiting');
+    this.sink.pending({ id, type: 'permission', tool, title: cut(`MCP ${plain(server)}: ${plain(message)}`, 140), detail: cut(`Server: ${plain(server)}\n${plain(message)}`, 8000), input, noAlways: true, at: Date.now() });
   }
 
   /** The hooks registered at initialize: the Orchestrator's turn budget, a product brain's rules (in process). */

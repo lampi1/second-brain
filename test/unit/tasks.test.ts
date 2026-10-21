@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { errorOf, feedFor, mergeNews, newsLine, parseNewsRun, parsePrsRun, windowDays, type StoredNews } from '../../src/main/tasks/model';
+import { causeOf, errorOf, feedFor, scriptStderr, mergeNews, newsLine, parseNewsRun, parsePrsRun, windowDays, type StoredNews } from '../../src/main/tasks/model';
 import { TaskService, type TaskDeps } from '../../src/main/tasks/service';
 import { demoDevopsRun } from '../../src/main/tasks/demo';
 import type { RunResult } from '../../src/main/brain/node';
@@ -95,6 +95,16 @@ describe('task model', () => {
     expect(errorOf({ stdout: '', stderr: 'AADSTS700082: The refresh token has expired', code: 1 }, 'Lettura')).toMatchObject({ kind: 'login' });
     expect(errorOf({ stdout: '', stderr: "'az' is not recognized as an internal command", code: 2 }, 'Lettura').kind).toBe('failed'); // the script exits 2 here too
     expect(errorOf({ stdout: '', stderr: '\n  HTTP 500 on wiql\nstack', code: 1 }, 'Lettura delle PR')).toEqual({ kind: 'failed', message: 'Lettura delle PR non riuscita: HTTP 500 on wiql' });
+  });
+
+  it('Node\'s own warnings never hide the script\'s error, in the log cause nor on the page (#149)', () => {
+    const stderr = '(node:31900) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities\n(Use `electron --trace-deprecation ...` to show where the warning was created)\nnode:internal/modules/run_main:1\nError: boom\n    at main (devops-me.mjs:10:3)';
+    const r = { stdout: '', stderr, code: 1 };
+    expect(scriptStderr(stderr)).not.toContain('DEP0190');
+    expect(causeOf(r)).toContain('Error: boom');
+    expect(causeOf({ stdout: '', stderr: `${'x'.repeat(400)}\nError: boom`, code: 1 })).toMatch(/Error: boom$/);
+    expect(causeOf({ stdout: '', stderr: '', code: 3 })).toBe('code 3');
+    expect(errorOf(r, 'Lettura delle novità').message).not.toContain('DEP0190');
   });
 });
 

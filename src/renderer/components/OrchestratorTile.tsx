@@ -9,9 +9,11 @@
 // source-chat links in the transcript. Its ⋯ menu is the chat menu (ChatMenu) plus "Ricomincia da
 // capo", "Cambia motore" (both open the Nuovo Orchestrator confirm) and "Pulisci"; the eraser on its head is "Pulisci" in
 // one click, without the confirm (clearOrchestratorNow, the quick /clear). With no Orchestrator yet it offers to create
-// one. Under its head, the morning block's line while strips are open (no plan panel: the strips carry each estimate, #124) (MorningBlock.tsx, ADR 0102). When it drives a browser, it wears that pair's accent like any chat (lib/pairs.ts). Used by OrchestratorOverlay.tsx.
+// one. Under its head, a line with the chats it started today by state and the cost apart, its own and theirs (#153,
+// lib/orchestrator-tally.ts); on its head the one «Manutenzione» for every page (#150, MaintenanceButton compact); the morning block's line while strips are open (no plan panel: the strips carry each estimate, #124) (MorningBlock.tsx, ADR 0102). When it drives a browser, it wears that pair's accent like any chat (lib/pairs.ts). Used by OrchestratorOverlay.tsx.
 import { memo, useEffect, useRef, useState } from 'react';
-import { chatCost, modelWithEffort } from '../lib/format';
+import { chatCost, formatCost, modelWithEffort } from '../lib/format';
+import { orchestratorTally, type OrchestratorTally } from '../lib/orchestrator-tally';
 import { engineName } from '../lib/engines';
 import { isBusy, sameList } from '../store/state';
 import { ensureOrchestrator, stop, useApp } from '../store/store';
@@ -30,6 +32,7 @@ import { HelpTip } from './HelpTip';
 import {AgentAvatar}from'./AgentAvatar';
 import { ChildStrips } from './ChildStrips';
 import { MorningLine } from './MorningBlock';
+import { MaintenanceButton } from './brain-model/MaintenanceButton';
 import { pendingOf, useFlash } from './ChatTile';
 import { RequestPanel } from './RequestPanel';
 import { InWindowLine } from './QuestionsWindow';
@@ -65,6 +68,18 @@ function OrchestratorSetup() {
 }
 
 /** chatId = the Orchestrator shown (the overlay's tab); null = none yet */
+/** The chats it started today by state and the cost apart, its own and theirs (#153): always visible under its head. */
+function TallyLine({ chat }: { chat: Parameters<typeof chatCost>[0] }) {
+  const tally = useApp(s => orchestratorTally(Object.values(s.chats).filter((c): c is NonNullable<typeof c> => !!c)), (a: OrchestratorTally, b: OrchestratorTally) => JSON.stringify(a) === JSON.stringify(b));
+  const { started, counts: c, startedUsd } = tally;
+  const parts = started ? [c.done && t('dialogs.orchestrator.tallyDone', { n: c.done }), c.run && t('dialogs.orchestrator.tallyRun', { n: c.run }),
+    c.wait && t('dialogs.orchestrator.tallyWait', { n: c.wait }), c.stuck && t('dialogs.orchestrator.tallyStuck', { n: c.stuck })].filter((x): x is string => !!x) : [];
+  return <div className="orch-tally" data-testid="orchestrator-tally">
+    {started > 0 && <span data-testid="orchestrator-tally-chats">{t('dialogs.orchestrator.tallyStarted', { n: started })}{parts.length ? `: ${parts.join(' · ')}` : ''}</span>}
+    <span data-testid="orchestrator-tally-cost">{t('dialogs.orchestrator.tallyOwn', { cost: chatCost(chat) })}{started > 0 ? ` · ${t('dialogs.orchestrator.tallyChats', { cost: formatCost(startedUsd) })}` : ''}</span>
+  </div>;
+}
+
 export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: { chatId: string | null }) {
   const chat = useApp(s => (id ? s.chats[id] : undefined));
   const items = useApp(s => (id ? s.items[id] : undefined));
@@ -134,12 +149,14 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
           <StatePill chat={chat} testid="orchestrator-state" />
           <HelpTip title={t('explain.orch.title')} guide="orchestrator" testid="orchestrator-help"><p>{t('explain.orch.p1')}</p><p>{t('explain.orch.p2')}</p><p>{t('explain.orch.p3')}</p></HelpTip>
           <span className="sp" />
+          <MaintenanceButton compact testId="orchestrator-maint" />
           <IconButton label={t('dialogs.orchestrator.statusLabel')} shortcut={t('dialogs.orchestrator.statusShortcut')} onClick={() => openModal('stato')} testid="orchestrator-stato"><IconList size={14} /></IconButton>
           {busy && <IconButton label={t('dialogs.orchestrator.stopLabel')} shortcut={t('dialogs.orchestrator.stopShortcut')} tone="danger" onClick={() => void stop(chat.id)} testid="orchestrator-stop"><IconStop size={14} /></IconButton>}
           <IconButton label={t('lampo.clear')} disabled={busy} onClick={() => void clearOrchestratorNow(chat.id)} testid="orchestrator-clear"><IconEraser size={14} /></IconButton>
           <IconButton ref={menuBtn} label={t('dialogs.orchestrator.menuLabel')} onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-haspopup="menu" testid="orchestrator-menu"><IconMore /></IconButton>
         </div>
         <div className="chat-topic-row"><ModelChip chat={chat} profileId={ORCHESTRATOR_ROLE_ID} testid="orchestrator-model" /><span className="chat-topic">{chat.title}</span><AgentIdentity chat={chat}/></div>
+        <TallyLine chat={chat} />
         <div className="th-sub sr-only" data-testid="orchestrator-sub">
           <span className="th-engine" data-tip={t('dialogs.orchestrator.engineTip', { name: engineName(chat.harness) })} aria-label={t('dialogs.orchestrator.engineTip', { name: engineName(chat.harness) })} role="img" data-engine={chat.harness} data-testid="orchestrator-engine"><HarnessMark harness={chat.harness} size={14} /></span>
           <span className="th-sub-text">{[!['Orchestrator', 'Orchestrator'].includes(chat.title.trim()) ? chat.title : '', modelWithEffort(chat), chatCost(chat)].filter(Boolean).join(' · ')}</span>

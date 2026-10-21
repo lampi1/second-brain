@@ -13,7 +13,7 @@ import type { ChatItem, ChatSummary, PendingRequest } from '@shared/contract';
 import { useApp, loadItems, answer, send, stop } from '../store/store';
 import { setChatExpanded, setFocusMode, setTreeCollapsed, ui } from '../store/ui';
 import { sameList } from '../store/state';
-import { childState, type ChildState, type TreeNode } from '../lib/chat-tree';
+import { childState, kidCounts, type ChildState, type TreeNode } from '../lib/chat-tree';
 import { runSteps, type RunStep, type StepMark } from '../lib/run-steps';
 import { requestHost } from '../lib/child-requests';
 import { focusChat, reqKey } from '../actions';
@@ -42,9 +42,9 @@ export function span(ms: number): string {
   return m < 60 ? `${m} min` : `${Math.round(m / 60)} h`;
 }
 /** the pill tone of a child's state (app.css pills) */
-const TONE: Record<ChildState, string> = { start: 'run', run: 'run', wait: 'wait', queued: 'off', err: 'err', stall: 'wait', refused: 'err', done: 'done', partial: 'wait', blocked: 'err', closed: 'off' };
+const TONE: Record<ChildState, string> = { start: 'run', run: 'run', wait: 'wait', queued: 'off', err: 'err', stall: 'wait', refused: 'err', done: 'done', partial: 'wait', blocked: 'err', noreport: 'err', closed: 'off' };
 /** the thread line's and the bar segment's tint */
-export const LINE: Record<ChildState, string> = { start: 'run', run: 'run', wait: 'wait', queued: 'off', err: 'err', stall: 'wait', refused: 'err', done: 'done', partial: 'done', blocked: 'err', closed: 'off' };
+export const LINE: Record<ChildState, string> = { start: 'run', run: 'run', wait: 'wait', queued: 'off', err: 'err', stall: 'wait', refused: 'err', done: 'done', partial: 'done', blocked: 'err', noreport: 'err', closed: 'off' };
 
 export function ChildPill({ state, testid }: { state: ChildState; testid?: string }) {
   return <span className={`pill pill-${TONE[state]}`} data-testid={testid} data-child-state={state}>{(state === 'run' || state === 'start' || state === 'wait') && <span className="pill-dot" aria-hidden="true" />}{t(`tree.state.${state}`)}</span>;
@@ -211,14 +211,14 @@ export function KidsBar({ chatId }: { chatId: string }) {
   const limit = useApp(s => s.chats[chatId]?.limitHit);
   if (!kids.length) return null;
   const states = kids.map(k => childState(k));
-  const run = states.filter(s => s === 'run' || s === 'start' || s === 'queued' || s === 'stall').length, wait = states.filter(s => s === 'wait').length;
-  const done = states.filter(s => s === 'done' || s === 'partial').length;
+  const { run, wait, stuck, done } = kidCounts(states);
   return <div className="kids-bar" data-testid={`tree-kids-${chatId}`}>
     <button type="button" className="kids-toggle" aria-expanded={!folded} data-testid={`tree-toggle-${chatId}`} aria-label={t(folded ? 'tree.unfold' : 'tree.fold', { title })} onClick={() => setTreeCollapsed(chatId, !folded)}>
       <span className="kids-chev" aria-hidden="true">{folded ? <IconChevronRight size={13} /> : <IconChevronDown size={13} />}</span>
       <span className="kids-parent" title={title}>{title}</span><b>{t('tree.kids', { n: kids.length })}</b><span className="kids-sep">·</span>
       {run > 0 && <span className="kid-sum"><span className="kid-dot run" />{t('tree.kidsRun', { n: run })}</span>}
       {wait > 0 && <span className="kid-sum"><span className="kid-dot wait" />{t('tree.kidsWait', { n: wait })}</span>}
+      {stuck > 0 && <span className="kid-sum" data-testid={`tree-kids-stuck-${chatId}`}><span className="kid-dot err" />{t('tree.kidsStuck', { n: stuck })}</span>}
       {done > 0 && <span className="kid-sum"><span className="kid-dot done" />{t('tree.kidsDone', { n: done })}</span>}
       <span className="kids-stack" aria-hidden="true">{kids.slice(0, 5).map(k => <AgentAvatar key={k.id} avatar={k.agent?.avatar} name={k.agent?.name ?? ''} size={18} />)}</span>
       <span className="kids-segs" aria-hidden="true">{states.map((s, i) => <i key={i} className={`seg-${LINE[s]}`} />)}</span>

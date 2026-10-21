@@ -20,6 +20,7 @@
 .workspace-max .agent-pane { height:calc(100vh - 190px - var(--orchestrator-t,0px)); }
 .chat-tile .tile-head { padding:8px 10px; }
 .chat-tile .th-row { min-width:0; gap:6px; flex-wrap:wrap; }
+.orch-tally { display:flex; flex-wrap:wrap; gap:4px 12px; font-size:var(--fs-s); color:var(--text-3); min-width:0; }
 .chat-topic-row { display:flex; align-items:center; gap:8px; min-width:0; justify-content:space-between; min-height:18px; flex-wrap:wrap; row-gap:4px; }
 .chat-topic { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-2); font-size:var(--fs-s); }
 .chat-strip-line { display:flex; align-items:center; gap:12px; padding:0 10px 8px; min-width:0; font-size:var(--fs-s); color:var(--text-2); }

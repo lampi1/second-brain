@@ -16,7 +16,7 @@ import type { ChatSummary, Harness, NewChat } from '../../shared/contract';
 import type { AgentCatalog, AgentRun, UserTaskEvents } from '../../shared/agents';
 import { canLaunch, isWorkRole, launchGap, ROLE_DEFAULTS, WORK_ROLE_IDS, type DelegationSettings } from '../../shared/roles';
 import { oneLine } from '../../shared/agent-label';
-import { checkContract, checkResult, delegationPrompt, depthOf, type DelegationLimitHit, type DelegationResult, type TaskAssignmentOptions } from '../../shared/delegation';
+import { CRITERION_MAX, EVIDENCE_MAX, RESULT_OUTPUT_MAX, SUMMARY_MAX, checkContract, checkResult, delegationPrompt, depthOf, type DelegationLimitHit, type DelegationResult, type TaskAssignmentOptions } from '../../shared/delegation';
 import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
 import { stepIndex, type StrategyPlan } from '../../shared/strategy';
 import type { McpTool } from '../mcp/server';
@@ -44,6 +44,8 @@ export interface DelegationChats {
   /** a Strategist's plan with the user (ADR 0108): no delegation before the user's ok; a part names its step */
   planOf?(chatId: string): StrategyPlan | null;
   planDelegated?(chatId: string, i: number, chatIds: string[]): void;
+  /** the child now waits for its parent's answer, not on its own report (#152) */
+  askedParent?(chatId: string): void;
 }
 export interface DelegationDeps {
   chats: DelegationChats;
@@ -327,6 +329,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       ...(options.length ? [`Opzioni: ${options.map((o, i) => `${i + 1}) ${oneLine(o)}`).join(' · ')}`] : []), ...(why ? [`Perché: ${oneLine(why)}`] : []),
       `Rispondi con agent_answer_child (chatId "${self.id}", answer) da ciò che sai del compito. Se serve una persona (un permesso, un'azione irreversibile o esterna, una scelta che cambia l'obiettivo) o non lo sai, agent_answer_child con askUser: true: chiederà all'utente.`].join('\n');
     await d.chats.send(parent.id, text, undefined, false, self.title);
+    d.chats.askedParent?.(callerId);
     log.info('agents', 'child asked its parent', { chat: callerId, data: { parent: parent.id, options: options.length } });
     return { asked: parent.title, note: 'Your parent answers with a message (agent_answer_child). Go on with what does not depend on it; do not ask the user the same thing meanwhile.' };
   }
@@ -393,15 +396,15 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     name: 'agent_report',
     description: 'Your one result for the chat that started you (your parent, or the Orchestrator for a chat it opened): outcome (done | partial | blocked), summary (one or two sentences), output (the deliverable), doneWhen (every criterion of your contract, exactly as written, with met and evidence), optional questions, optional remember (lines for your role\'s memory). It reaches your parent at once; call it once, at the end. The app shows output in your chat as your answer: do not write it in the chat too.',
     inputSchema: { type: 'object', required: ['outcome', 'summary', 'output', 'doneWhen'], additionalProperties: false, properties: {
-      outcome: { type: 'string', enum: ['done', 'partial', 'blocked'] }, summary: str, output: str,
+      outcome: { type: 'string', enum: ['done', 'partial', 'blocked'] }, summary: { ...str, maxLength: SUMMARY_MAX }, output: { ...str, maxLength: RESULT_OUTPUT_MAX },
       verdict: { type: 'string', enum: ['success', 'partial', 'fail'], description: 'Only app-owned independent reviews: assessment of the reviewed work, separate from completion of your review.' },
       verified: { type: 'string', enum: ['yes', 'partial', 'no'], description: 'Only with verdict: yes only when you independently checked the evidence; never inferred from completing the review.' },
       taskVersion: { type: 'integer', minimum: 1, description: 'Current task version supplied with the assignment; required after a follow-up. Stale reports are refused.' },
-      doneWhen: { type: 'array', items: { type: 'object', required: ['criterion', 'met'], additionalProperties: false, properties: { criterion: str, met: { type: 'boolean' }, evidence: str } } },
-      questions: { type: 'array', items: str, maxItems: 8 },
+      doneWhen: { type: 'array', description: 'one entry per criterion of your contract, written exactly as in the contract (the field is doneWhen, never criteria)', items: { type: 'object', required: ['criterion', 'met'], additionalProperties: false, properties: { criterion: { ...str, maxLength: CRITERION_MAX }, met: { type: 'boolean' }, evidence: { ...str, maxLength: EVIDENCE_MAX } } } },
+      questions: { type: 'array', items: { ...str, maxLength: 500 }, maxItems: 8 },
       goalChangedByUser: { type: 'boolean', description: 'true when the user wrote to you directly and changed your goal (you followed the user)' },
       newGoal: { ...str, description: 'with goalChangedByUser: the goal the user gave you' },
-      remember: { type: 'array', items: str, maxItems: REMEMBER_MAX, description: 'optional, up to 3 short lines for YOUR role\'s memory (read at every launch of your role): facts about this user\'s setup a future run would otherwise rediscover or ask again; never the task result or a general rule' },
+      remember: { type: 'array', items: { ...str, maxLength: REMEMBER_LINE }, maxItems: REMEMBER_MAX, description: 'optional, up to 3 short lines for YOUR role\'s memory (read at every launch of your role): facts about this user\'s setup a future run would otherwise rediscover or ask again; never the task result or a general rule' },
     } },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: (a, ctx) => JSON.stringify(report(a, callerOf(ctx.params))),

@@ -62,14 +62,14 @@ export interface ChatDelegation {
   /** the tool classes the contract narrowed it to (absent = its role's, bounded by the parent's) */
   tools?: ToolClass[];
   /** its agent_report, once given */
-  result?: { outcome: DelegationOutcome; summary: string; at: number; doneWhen?: { criterion: string; met: boolean }[] };
+  result?: { outcome: DelegationOutcome; summary: string; at: number; doneWhen?: { criterion: string; met: boolean }[]; noReport?: true };
   /** the goal as the contract gave it, kept when the user changed it in the child's chat (goal is then the user's) */
   originalGoal?: string;
 }
 /** A delegation limit the chat hit, shown on it until it delegates again. */
 export interface DelegationLimitHit { kind: 'depth' | 'parallel'; limit: number; at: number }
 
-export const GOAL_MAX = 2000, OUTPUT_MAX = 2000, CONTEXT_MAX = 6000, CRITERION_MAX = 300, CRITERIA_MAX = 12, SUMMARY_MAX = 300, RESULT_OUTPUT_MAX = 12000;
+export const GOAL_MAX = 2000, OUTPUT_MAX = 2000, CONTEXT_MAX = 6000, CRITERION_MAX = 300, CRITERIA_MAX = 12, SUMMARY_MAX = 300, RESULT_OUTPUT_MAX = 12000, EVIDENCE_MAX = 1000;
 const SKILL = /^[a-z0-9][a-z0-9_-]{0,79}$/;
 const text = (v: unknown, max: number, what: string): string => {
   if (typeof v !== 'string' || !v.trim()) throw new Error(`${what}: required text.`);
@@ -109,6 +109,9 @@ export function checkContract(v: unknown, role: WorkRoleId): DelegationContract 
 /** A child's agent_report, checked strictly: every criterion of its contract answered once, in any order. */
 export function checkResult(v: unknown, doneWhen: readonly string[]): DelegationResult {
   const o = object(v, 'result');
+  // the names agents invent for doneWhen (app logs 2026-10-20/21, #147): the error says which field to use
+  const misnamed = ['criteria', 'criteriaResults'].find(k => k in o);
+  if (misnamed && !('doneWhen' in o)) throw new Error(`agent_report: use doneWhen, not ${misnamed}: one { criterion, met, evidence } per criterion of your contract.`);
   only(o, ['outcome', 'summary', 'output', 'doneWhen', 'questions', 'goalChangedByUser', 'newGoal', 'taskVersion', 'verdict', 'verified'], 'agent_report');
   if ((o.verdict !== undefined) !== (o.verified !== undefined)) throw new Error('Review verdict and verified must be supplied together.');
   if (o.verdict !== undefined && !['success', 'partial', 'fail'].includes(o.verdict as string)) throw new Error('Invalid review verdict.');
@@ -119,12 +122,12 @@ export function checkResult(v: unknown, doneWhen: readonly string[]): Delegation
   const newGoal = changed ? text(o.newGoal, GOAL_MAX, 'newGoal (the goal the user gave you)') : undefined;
   if (!changed && o.newGoal !== undefined) throw new Error('newGoal goes only with goalChangedByUser: true.');
   if (!(RESULT_OUTCOMES as readonly unknown[]).includes(o.outcome)) throw new Error(`outcome: ${RESULT_OUTCOMES.join(' | ')}.`);
-  if (!Array.isArray(o.doneWhen)) throw new Error('doneWhen: one entry per criterion of your contract.');
+  if (!Array.isArray(o.doneWhen)) throw new Error('doneWhen: one entry { criterion, met, evidence } per criterion of your contract.');
   const answers = o.doneWhen.map((x, i) => {
     const c = object(x, `doneWhen[${i}]`);
     only(c, ['criterion', 'met', 'evidence'], `doneWhen[${i}]`);
     if (typeof c.met !== 'boolean') throw new Error(`doneWhen[${i}].met: true or false.`);
-    return { criterion: text(c.criterion, CRITERION_MAX, `doneWhen[${i}].criterion`), met: c.met, ...(c.evidence !== undefined ? { evidence: text(c.evidence, 1000, `doneWhen[${i}].evidence`) } : {}) };
+    return { criterion: text(c.criterion, CRITERION_MAX, `doneWhen[${i}].criterion`), met: c.met, ...(c.evidence !== undefined ? { evidence: text(c.evidence, EVIDENCE_MAX, `doneWhen[${i}].evidence`) } : {}) };
   });
   // a goal the user changed may leave criteria of the old contract without an answer
   const missing = changed ? [] : doneWhen.filter(c => !answers.some(a => a.criterion === c));
@@ -147,7 +150,7 @@ export function delegationPrompt(c: DelegationContract, at: { role: WorkRoleId; 
     'Done when:', ...c.doneWhen.map(d => `- ${d}`),
     ...(at.skills.length ? [`Your skills: ${at.skills.join(', ')} (load the one that fits the job the way your role's skill list says).`] : []),
     // how to report and whom to ask are in the role's frame (ROLE_PREAMBLE), sent with this message: not repeated here
-    'When the output is ready, or something blocks you: agent_report as your rules say, answering each done-criterion above. Your parent does not read this chat.',
+    'When the output is ready, or something blocks you: agent_report as your rules say, with doneWhen: one { criterion, met, evidence } per done-criterion above, written exactly as above. Your parent does not read this chat.',
     'If the user writes to you here, follow the user; when that changes your goal, say so in agent_report with goalChangedByUser: true and newGoal.',
   ].join('\n');
 }
@@ -193,7 +196,7 @@ export function readDelegation(v: unknown): ChatDelegation | null {
   const crit = Array.isArray(r?.doneWhen) ? (r!.doneWhen as unknown[]).filter((x): x is { criterion: string; met: boolean } => !!x && typeof (x as { criterion?: unknown }).criterion === 'string' && typeof (x as { met?: unknown }).met === 'boolean')
     .slice(0, CRITERIA_MAX).map(x => ({ criterion: x.criterion.slice(0, CRITERION_MAX), met: x.met })) : [];
   const result = r && (RESULT_OUTCOMES as readonly unknown[]).includes(r.outcome) && typeof r.summary === 'string' && typeof r.at === 'number'
-    ? { outcome: r.outcome as DelegationOutcome, summary: r.summary, at: r.at, ...(crit.length ? { doneWhen: crit } : {}) } : undefined;
+    ? { outcome: r.outcome as DelegationOutcome, summary: r.summary, at: r.at, ...(crit.length ? { doneWhen: crit } : {}), ...(r.noReport === true ? { noReport: true as const } : {}) } : undefined;
   const tools = Array.isArray(d.tools) && d.tools.every(c => (TOOL_CLASSES as readonly unknown[]).includes(c)) ? d.tools as ToolClass[] : undefined;
   return { role, goal: d.goal.slice(0, GOAL_MAX), doneWhen: (d.doneWhen as string[]).slice(0, CRITERIA_MAX), at: d.at, ...(tools ? { tools } : {}), ...(result ? { result } : {}), ...(typeof d.originalGoal === 'string' ? { originalGoal: d.originalGoal.slice(0, GOAL_MAX) } : {}) };
 }

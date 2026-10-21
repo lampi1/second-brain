@@ -17,7 +17,7 @@ import { ChatManager, type ChatManagerOptions } from '../../../src/main/chats/ma
 import type { HarnessSession, SessionOptions, SessionSink } from '../../../src/main/chats/session';
 import { delegationTools, stalledMin } from '../../../src/main/agents/delegation';
 import { gateRequest } from '../../../src/main/agents/role-gate';
-import { ROLE_DEFAULTS, ROLE_IDS, WORK_ROLE_IDS, DELEGATION_DEFAULTS, isWorkRole, launchGap, type DelegationSettings, type RoleId } from '../../../src/shared/roles';
+import { ROLE_DEFAULTS, ROLE_PREAMBLE, ROLE_IDS, WORK_ROLE_IDS, DELEGATION_DEFAULTS, isWorkRole, launchGap, type DelegationSettings, type RoleId } from '../../../src/shared/roles';
 import { checkContract, checkResult, delegationPrompt, depthOf, readDelegation, resultMessage } from '../../../src/shared/delegation';
 import { AGENT_LABEL, oneLine } from '../../../src/shared/agent-label';
 import type { AgentCatalog } from '../../../src/shared/agents';
@@ -442,6 +442,62 @@ describe('agent_delegate', () => {
   });
 });
 
+describe('a child that ends without agent_report (#152)', () => {
+  const turn = (f: ReturnType<typeof fixture>, id: string, text: string, n: number) => {
+    const sink = f.sinks.get(id)!;
+    sink.changed({ state: 'running' });
+    sink.item({ kind: 'assistant', id: `a${n}`, at: Date.now(), text } as never, false);
+    sink.item({ kind: 'result', id: `r${n}`, at: Date.now(), costUsd: 0, durationMs: 1, turns: 1, isError: false }, false);
+    sink.changed({ state: 'idle' });
+  };
+  it('is told once with the full tool name; a second turn without it closes the delegation and wakes the parent', async () => {
+    const f = fixture();
+    (f.m as unknown as { opts: { childResultsMs: number } }).opts.childResultsMs = 10;
+    const parent = await f.root('strategist');
+    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'WhatsApp · Cause')] });
+    const kid = f.m.list().find(c => c.parentId === parent.id)!;
+    const sentBefore = f.sent.get(kid.id)!.length;
+    turn(f, kid.id, 'Ho trovato tre cause.', 1);
+    await new Promise(res => setTimeout(res, 20));
+    const nudge = f.sent.get(kid.id)!.slice(sentBefore).join('\n');
+    expect(nudge).toContain('mcp__second-brain__agent_report');
+    expect(f.m.list().find(c => c.id === kid.id)!.delegation!.result).toBeUndefined();
+    turn(f, kid.id, 'Le cause sono A, B e C.', 2);
+    await new Promise(res => setTimeout(res, 40));
+    const after = f.m.list().find(c => c.id === kid.id)!;
+    expect(after.delegation!.result).toMatchObject({ outcome: 'blocked', noReport: true });
+    const back = f.sent.get(parent.id)!.at(-1)!;
+    expect(back).toContain('[risultato · Scout «WhatsApp · Cause»]');
+    expect(back).toContain('Le cause sono A, B e C.');
+    expect(f.m.runs.get(kid.run!.runId)?.endedAt).toBeDefined();
+  });
+  it('a child waiting for its parent\'s answer, or for the user, owes nothing yet', async () => {
+    const f = fixture();
+    const parent = await f.root('strategist');
+    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'A · uno')] });
+    const kid = f.m.list().find(c => c.parentId === parent.id)!;
+    await f.call('agent_ask_parent', kid.id, { question: 'Quale file?' });
+    const before = f.sent.get(kid.id)!.length;
+    turn(f, kid.id, 'Aspetto la risposta.', 1);
+    turn(f, kid.id, 'Ancora in attesa.', 2);
+    await new Promise(res => setTimeout(res, 20));
+    expect(f.sent.get(kid.id)!.length).toBe(before);
+    expect(f.m.list().find(c => c.id === kid.id)!.delegation!.result).toBeUndefined();
+  });
+  it('a child whose engine died with an error closes at once with its last answer', async () => {
+    const f = fixture();
+    (f.m as unknown as { opts: { childResultsMs: number } }).opts.childResultsMs = 10;
+    const parent = await f.root('strategist');
+    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'A · uno')] });
+    const kid = f.m.list().find(c => c.parentId === parent.id)!;
+    f.sinks.get(kid.id)!.changed({ state: 'running' });
+    f.sinks.get(kid.id)!.exit({ code: 1, error: 'crash' });
+    await new Promise(res => setTimeout(res, 30));
+    expect(f.m.list().find(c => c.id === kid.id)!.delegation!.result).toMatchObject({ outcome: 'blocked', noReport: true });
+    expect(f.sent.get(parent.id)!.at(-1)).toContain('errore del motore');
+  });
+});
+
 describe('questions go to the parent first; the user\'s own messages are known (ADR 0083)', () => {
   it('a child asks its parent; the parent answers it, or sends it on to the user; nobody else may answer', async () => {
     const f = fixture();
@@ -591,6 +647,24 @@ describe('the pure parts', () => {
   it('a result answers every criterion; done needs them all met', () => {
     expect(() => checkResult({ outcome: 'done', summary: 's', output: 'o', doneWhen: [{ criterion: 'a', met: false }] }, ['a'])).toThrow(/partial/);
     expect(checkResult({ outcome: 'partial', summary: 's', output: 'o', doneWhen: [{ criterion: 'a', met: false }] }, ['a']).outcome).toBe('partial');
+  });
+  it('the role frame names agent_report with its full MCP name and says it may be deferred (#144)', () => {
+    expect(ROLE_PREAMBLE).toContain('mcp__second-brain__agent_report');
+    expect(ROLE_PREAMBLE).toContain('ToolSearch');
+  });
+  it('agent_report shows the validator\'s limits in its schema and names doneWhen everywhere (#147)', () => {
+    const f = fixture();
+    const report = delegationTools({ chats: f.m, roles: () => catalog(), settings: () => DELEGATION_DEFAULTS, engineRefusal: () => null, label: '[agente]', runs: () => [] }).find(t => t.name === 'agent_report')!;
+    const props = (report.inputSchema as { properties: Record<string, { maxLength?: number; items?: { maxLength?: number; properties?: Record<string, { maxLength?: number }> } }> }).properties;
+    expect(props.summary!.maxLength).toBe(300);
+    expect(props.remember!.items!.maxLength).toBe(300);
+    expect(props.doneWhen!.items!.properties!.criterion!.maxLength).toBe(300);
+    expect(props.doneWhen!.items!.properties!.evidence!.maxLength).toBe(1000);
+    expect(ROLE_PREAMBLE).toContain('doneWhen');
+    expect(delegationPrompt({ goal: 'G', output: 'O', doneWhen: ['D'] }, { role: 'scout', parentTitle: 'P', title: 'T', skills: [] })).toContain('doneWhen');
+    expect(() => checkResult({ outcome: 'done', summary: 'x'.repeat(301), output: 'o', doneWhen: [{ criterion: 'a', met: true }] }, ['a'])).toThrow(/300/);
+    expect(() => checkResult({ outcome: 'done', summary: 's', output: 'o', criteria: [{ criterion: 'a', met: true }] }, ['a'])).toThrow(/use doneWhen, not criteria/);
+    expect(() => checkResult({ outcome: 'done', summary: 's', output: 'o', criteriaResults: [] }, ['a'])).toThrow(/use doneWhen, not criteriaResults/);
   });
   it('the first message carries the contract and never more', () => {
     const text = delegationPrompt({ goal: 'G', output: 'O', doneWhen: ['D'], context: 'C' }, { role: 'sentinel', parentTitle: 'P', title: 'T', skills: ['s1'] });

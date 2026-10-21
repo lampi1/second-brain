@@ -25,7 +25,7 @@ import type { DevopsDetail, DevopsItem, DevopsPr, DevopsPrRef, TasksState, QaRep
 import type { FeedInput } from '../services';
 import type { RunResult } from '../brain/node';
 import { log, errText } from '../log';
-import { alertEvents, alertsFor, detailsOf, errorOf, feedFor, itemOf, mergeNews, newsOf, parseNewsRun, parsePrsRun, parseQaRun, prOf, qaReportOf, prRefOf, windowDays, MAX_NOTIFIED, type StoredNews } from './model';
+import { alertEvents, alertsFor, causeOf, detailsOf, errorOf, feedFor, itemOf, mergeNews, newsOf, parseNewsRun, parsePrsRun, parseQaRun, prOf, qaReportOf, prRefOf, windowDays, MAX_NOTIFIED, type StoredNews } from './model';
 
 export const SCRIPT = 'ops/tools/devops-me.mjs';
 export const QA_SCRIPT = 'ops/tools/qa-status.mjs';
@@ -227,7 +227,7 @@ export class TaskService {
     try { if (r.code === 0) qa = parseQaRun(r.stdout); } catch (e) { bad = { ...r, code: 1, stderr: errText(e) }; }
     if (!qa) {
       this.qaError = errorOf(bad, 'Lettura dei test').message;
-      log.warn('task', 'QA read failed', { cause: (bad.stderr || bad.error || `code ${bad.code}`).slice(0, 300), hint: `run node ${QA_SCRIPT} --mine in the brain folder to see the error`, data: { code: r.code } });
+      log.warn('task', 'QA read failed', { cause: causeOf(bad), hint: `run node ${QA_SCRIPT} --mine in the brain folder to see the error`, data: { code: r.code } });
       return;
     }
     this.qaError = null;
@@ -240,7 +240,7 @@ export class TaskService {
     this.error = errorOf(r, what);
     // an expired login says so in the feed once (also when the page is closed), not at every automatic read
     if (this.error.kind === 'login' && was !== 'login') this.d.feed([{ kind: 'task', title: 'DevOps: accesso scaduto', detail: 'Lancia «az login» in un terminale, poi «Aggiorna ora» nella pagina Task' }]);
-    log.warn('task', `${what} failed`, { cause: (r.stderr || r.error || `code ${r.code}`).slice(0, 300), hint: this.error.kind === 'login' ? 'run `az login` in a terminal, then Aggiorna ora' : `run node ${SCRIPT} --json in the brain folder to see the error`, data: { code: r.code } });
+    log.warn('task', `${what} failed`, { cause: causeOf(r), hint: this.error.kind === 'login' ? 'run `az login` in a terminal, then Aggiorna ora' : `run node ${SCRIPT} --json in the brain folder to see the error`, data: { code: r.code } });
     return this.get();
   }
 

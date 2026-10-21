@@ -3,7 +3,8 @@
 // or the maintenance, no open trial) whose tools, ceiling and launches are still exactly the 0083 defaults gets the new
 // tools, ceiling and launches, and the new instructions where its text is still the 0083 text (a maintenance lesson in
 // the text is kept). ADR 0100 (five work roles): such a role whose text is still the pre-0100 default (it named Router or
-// Judge, or lacked the job it took over from them) gets the current text. Anything else is left alone; the retired
+// Judge, or lacked the job it took over from them) gets the current text, and so does one whose text is a later
+// shipped text replaced since (SHIPPED_BEFORE, #145). Anything else is left alone; the retired
 // roles' own profiles are dropped by the catalog. Pure; used by agents/catalog.ts at start, pinned by test/unit/agents/role-migrate.test.ts.
 import type { AgentProfile, PermissionCeiling, ToolClass } from '../../shared/agents';
 import { ROLE_DEFAULTS, currentLaunches, isRoleId, type RetiredRoleId, type RoleId } from '../../shared/roles';
@@ -48,6 +49,17 @@ export const PRE_ADR0100_INSTRUCTIONS: Partial<Record<RoleId, string>> = {
   artisan: 'Make the change the contract asks for, following the repository’s AGENTS.md / CLAUDE.md: branch, small commits, its checks. Preserve existing work. Delegate a fact-finding detour to Scout and the verification to Sentinel when it is more than a quick run; never claim a check you did not run.',
   sentinel: 'Verify the work against its done-criteria: run the tests and checks, reproduce the bug or the fix, look for regressions. Report each criterion as met or not with the command and its output. Do not fix what you find: report it.',
 };
+
+/** Role texts shipped after ADR 0100 and replaced since, frozen, newest last: a role the user never edited still
+ *  holding one word for word gets today's text (#145: the Herald asks the user in its chat when a send is denied). */
+export const SHIPPED_BEFORE: Partial<Record<RoleId, readonly string[]>> = {
+  herald: ['Prepare messages, drafts and updates for people and external services in the recipient’s language and tone. Every external call or send needs the user’s approval: prepare it, show it, wait. Never send on your own.'],
+};
+/** Today's text for a role the user never edited whose text is an older shipped one (SHIPPED_BEFORE); null = leave it. */
+export function shippedTextFor(p: Pick<AgentProfile, 'id' | 'userLocked' | 'lastEditedBy' | 'trial' | 'instructions'>): Pick<AgentProfile, 'instructions'> | null {
+  if (!isRoleId(p.id) || p.userLocked || p.lastEditedBy === 'user' || p.trial) return null;
+  return SHIPPED_BEFORE[p.id]?.includes(p.instructions) ? { instructions: ROLE_DEFAULTS[p.id].instructions } : null;
+}
 
 const sameSet = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every(x => b.includes(x));
 

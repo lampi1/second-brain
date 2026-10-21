@@ -19,6 +19,8 @@ import { buildBrainShare } from './brain-share';
 import { portableId, writePackFiles } from './flows';
 import { BRAIN_ZIP_LIMITS, writeZip } from './zip';
 import { log } from '../../log';
+import { ensureTools, isProduct } from '../../rules/tools';
+import { skillFolders, skillsIn } from './shared-skills';
 
 export function createAgentPacks(userData: string, brain: BrainService, catalog: AgentCatalogService, demo = false) {
   const demoRoot = path.join(userData, 'demo-agent-brain');
@@ -30,6 +32,7 @@ export function createAgentPacks(userData: string, brain: BrainService, catalog:
     const guard = findGuard(domain.denyList);
     return guard ? { ...guard, allow: path.join(path.dirname(guard.deny), 'allow-agentpacks.txt') } : null;
   });
+  let toolsCache: { root: string; dir: string; at: number } | null = null;
   const packs: AgentPackFlows = new AgentPackFlows({ catalog, brainRoot: root, version: app.getVersion(), guards, runtimeRoot: path.join(userData, 'agent-pack-runtime'),
     scan: folder => scanTree(folder, guards(), electronNode()),
     openFile: file => new Promise<void>((resolve, reject) => {
@@ -47,12 +50,16 @@ export function createAgentPacks(userData: string, brain: BrainService, catalog:
       const r = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] }); return r.canceled ? null : r.filePaths[0] ?? null;
     },
     sharedSkills: () => {
-      const dirs = [root() && path.join(root()!, '.agents/skills'), root() && path.join(root()!, '.claude/skills'), !demo && path.join(os.homedir(), '.agents/skills'), !demo && path.join(os.homedir(), '.claude/skills')].filter((p): p is string => !!p);
-      const found = new Map<string, { name: string; folder: string }>();
-      for (const folder of dirs) if (fs.existsSync(folder)) for (const name of fs.readdirSync(folder)) {
-        if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name) && !found.has(name) && fs.existsSync(path.join(folder, name, 'SKILL.md'))) found.set(name, { name, folder: path.join(folder, name) });
+      const brain = root() ?? null;
+      // the app's rendered copy of its shipped skills (#146): only a brain the app made has one; a failed render is logged
+      let appTools: string | null = null;
+      if (brain && !demo && isProduct(brain)) {
+        // rendered once per brain and minute: ensureTools hashes every template file, and roles start often
+        const cached = toolsCache?.root === brain && Date.now() - toolsCache.at < 60_000 ? toolsCache.dir : null;
+        try { appTools = cached ?? ensureTools(brain); if (!cached) toolsCache = { root: brain, dir: appTools, at: Date.now() }; }
+        catch (e) { log.warn('agents', 'App skills not available', { cause: e instanceof Error ? e.message : String(e), hint: 'Reinstall the release: its brain template could not be rendered' }); }
       }
-      return [...found.values()];
+      return skillsIn(skillFolders({ root: brain, home: demo ? null : os.homedir(), appTools }));
     },
     stats: id => {
       const store = readLocal(path.join(userData, 'agent-runs.json')) as { runs?: AgentRun[]; rollups?: unknown[] } | undefined;
