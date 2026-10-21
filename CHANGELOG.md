@@ -14,6 +14,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - **One costs page** (#125): Andamento → Costi, with the curious facts and the Cursor export coverage it lacked; the
   Dashboard's Costi tab and the per-agent blocks are gone. Each agent's costs (median per run, per verified success,
   with their counts) are on the back of its card.
+- **«Modifica il ruolo» on the card back** (#126): it opens the role's page with the editor open and the focus in the
+  instructions; Esc or «Chiudi senza salvare» goes back to the cards, nothing kept.
 
 ### Added
 - **Five work roles, judged by facts, levelled honestly** (owner, 2026-10-20; ADR 0100): Strategist, Scout, Artisan,
