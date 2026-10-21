@@ -17,6 +17,7 @@ import { canLaunch, isWorkRole, launchGap, ROLE_DEFAULTS, WORK_ROLE_IDS, type De
 import { oneLine } from '../../shared/agent-label';
 import { checkContract, checkResult, delegationPrompt, depthOf, type DelegationLimitHit, type DelegationResult } from '../../shared/delegation';
 import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
+import { stepIndex, type StrategyPlan } from '../../shared/strategy';
 import type { McpTool } from '../mcp/server';
 import { allowsClass, type AgentPolicy } from './tool-policy';
 import { withinParent } from './worktrees';
@@ -37,6 +38,9 @@ export interface DelegationChats {
   send(chatId: string, text: string, images?: unknown, resumed?: boolean, from?: string): Promise<void>;
   /** when the chat last produced anything (a transcript item, a state change, a send): the stall check (stalledMin) */
   lastEventAt?(chatId: string): number | undefined;
+  /** a Strategist's plan with the user (ADR 0108): no delegation before the user's ok; a part names its step */
+  planOf?(chatId: string): StrategyPlan | null;
+  planDelegated?(chatId: string, i: number, chatIds: string[]): void;
 }
 export interface DelegationDeps {
   chats: DelegationChats;
@@ -109,12 +113,15 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       d.chats.limitNotice(parent.id, 'parallel', limits.maxParallel);
       throw new Error(`agent_delegate refused: ${running} of ${limits.maxParallel} children already running, ${raw.length} more asked (Settings → Roles and delegation). Wait for a result, then delegate again.`);
     }
+    // a Strategist that planned with the user delegates only once the user approved the plan (its strip, ADR 0108)
+    const plan = d.chats.planOf?.(parent.id) ?? null;
+    if (plan && plan.phase !== 'running' && plan.phase !== 'done') throw new Error('agent_delegate refused: the user has not approved your plan yet. Propose it with plan_propose and wait for «Piano approvato».');
     const parentPolicy = d.chats.agentPolicy(parent.id);
     // everything is checked before any chat starts: one bad part refuses the whole call
     const plans = raw.map((value, i) => {
       const t = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
       if (!t) throw new Error(`tasks[${i}]: object required.`);
-      const extra = Object.keys(t).find(k => !['role', 'title', 'contract', 'cwd'].includes(k));
+      const extra = Object.keys(t).find(k => !['role', 'title', 'contract', 'cwd', 'step'].includes(k));
       if (extra) throw new Error(`tasks[${i}]: unknown field ${extra}.`);
       const role = t.role;
       if (!isWorkRole(role)) throw new Error(`tasks[${i}].role: one of ${WORK_ROLE_IDS.join(', ')}.`);
@@ -137,7 +144,9 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       if (!withinParent(parent.cwd, cwd, trees)) throw new Error(`tasks[${i}].cwd: a folder inside yours (${parent.cwd}) or one of your repository's worktrees; a child never leaves its parent's repository.`);
       const refused = d.engineRefusal(parent.harness, profile.engine);
       if (refused) throw new Error(`tasks[${i}]: ${profile.name} runs on ${profile.engine}: ${refused}`);
-      return { role, title, contract, cwd, profile };
+      if (t.step !== undefined && !plan) throw new Error(`tasks[${i}].step: only a plan approved by the user has steps; leave it out.`);
+      const step = t.step !== undefined && plan ? stepIndex(plan, t.step, `tasks[${i}].step`) : null;
+      return { role, title, contract, cwd, profile, step };
     });
     reserved.set(parent.id, (reserved.get(parent.id) ?? 0) + plans.length);
     try {
@@ -157,6 +166,10 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       const children = settled.map((s, i) => s.status === 'fulfilled'
         ? { role: plans[i]!.role, title: s.value.title, chatId: s.value.id, harness: s.value.harness, model: s.value.model, state: s.value.queued ? 'queued' : s.value.state, ...warnings(i, s.value.id) }
         : { role: plans[i]!.role, title: plans[i]!.title, error: s.reason instanceof Error ? s.reason.message : String(s.reason) });
+      // each step of the plan with its started children: the strip shows it under way
+      const steps = new Map<number, string[]>();
+      settled.forEach((x, i) => { const st = plans[i]!.step; if (x.status === 'fulfilled' && st !== null) steps.set(st, [...steps.get(st) ?? [], x.value.id]); });
+      for (const [i, ids] of steps) d.chats.planDelegated?.(parent.id, i, ids);
       log.info('agents', 'delegated', { chat: parent.id, data: { children: children.map(c => ({ role: c.role, chatId: 'chatId' in c ? c.chatId : null })), depth } });
       return { children, note: 'Each child reports to you with agent_report (it arrives as a message); agent_children shows their state. Do not wait idle: go on with your own part.' };
     } finally {
@@ -259,6 +272,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       tasks: { type: 'array', minItems: 1, maxItems: TASKS_MAX, items: { type: 'object', required: ['role', 'title', 'contract'], additionalProperties: false, properties: {
         role: { type: 'string', enum: [...WORK_ROLE_IDS] }, title: { ...str, description: '"Area · what", e.g. "Ordini · Log degli errori"' },
         cwd: { ...str, description: 'optional absolute folder inside yours; default: your folder' },
+        step: { type: 'integer', minimum: 1, description: 'with a plan approved by the user (plan_propose): the step number this part does' },
         contract: { type: 'object', required: ['goal', 'doneWhen'], additionalProperties: false, properties: {
           goal: str, output: { ...str, description: 'what to give back; default: the role\'s output' },
           doneWhen: { type: 'array', items: str, minItems: 1, maxItems: 12, description: 'checkable criteria' },

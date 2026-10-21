@@ -354,6 +354,12 @@ export async function answer(req: PendingRequest, a: Answer): Promise<boolean> {
   }
 }
 
+/** A Strategist's proposed plan (ADR 0108): «Approva e parti», or «Cambia qualcosa» with what to change; false = not sent. */
+export async function planDecide(chatId: string, decision: 'approve' | 'change', text?: string): Promise<boolean> {
+  try { await sb.invoke('chat:plan', { chatId, decision, ...(decision === 'change' ? { text } : {}) }); return true; }
+  catch (e) { fail('Risposta al piano non inviata')(e); return false; }
+}
+
 /** "Comando da eseguire" → Esegui: the block runs in the chat that proposed it (main checks it is a block of that
  *  message; confirmProd = the second click on a production one). main resolves the request when the run starts; the
  *  output stays under the block in that chat. Resolves true when it started. */
