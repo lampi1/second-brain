@@ -33,6 +33,7 @@ import { chatRefsOf, reportOutput, titlesKey, toolChatRef } from '../lib/chatref
 import { splitMode } from '@shared/newchat';
 import { isReaction } from '@shared/reaction';
 import { chatView } from '../lib/chat-view';
+import { AgentAvatar } from './AgentAvatar';
 import { NamedChatRefs, ToolChatRef } from './ChatRefChips';
 import { openHandoff } from '../store/ui';
 import { ArtifactCard } from './GenUi';
@@ -44,6 +45,11 @@ import { agents } from '../store/agents';
 import { guideChatId, visibleGuideItems } from '../../modules/ai-first/presentation';
 
 type Tool = Extract<ChatItem, { kind: 'tool' }>;
+
+function ResultSender({ chatId, role }: { chatId: string; role: string }) {
+  const agent = useApp(s => s.chats[chatId]?.agent);
+  return <AgentAvatar avatar={agent?.avatar} name={agent?.name ?? role} size={24} />;
+}
 
 function ResultSynthesis({ runId }: { runId: string }) {
   const chatId = useContext(ChatIdCtx);
@@ -296,7 +302,9 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks, reaction 
       const recap = item.code === 'recap' || /^dove eravamo/i.test(item.text);
       return (
         <div className={`notice notice-${item.level} ${recap ? 'recap' : ''} ${item.code === 'resultReady' ? 'result-ready' : ''}`} role={item.level === 'error' ? 'alert' : item.code === 'resultReady' ? 'status' : undefined} {...(item.code === 'resultReady' ? { 'data-testid': 'result-ready' } : {})}>
-          {item.level === 'info' ? <IconInfo size={13} /> : <IconAlert size={13} />}<span>{sysText(item)}</span>
+          {item.code === 'resultReady' && typeof item.params?.chatId === 'string'
+            ? <ResultSender chatId={item.params.chatId} role={String(item.params.role ?? '')} />
+            : item.level === 'info' ? <IconInfo size={13} /> : <IconAlert size={13} />}<span>{sysText(item)}</span>
           {/* the answer the user waited for is ready in a work chat (#123): its Apri */}
           {item.code === 'resultReady' && typeof item.params?.chatId === 'string' && <NamedChatRefs ids={[item.params.chatId]} />}
           {item.code === 'resultReady' && item.result && <details className="result-ready-full" data-testid="canonical-result">
