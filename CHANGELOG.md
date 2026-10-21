@@ -5,6 +5,12 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 
 ## [Unreleased]
 
+### Changed
+- **The Orchestrator answers when you wait for it** (#123, ADR 0099): a role chat it opened for your question wakes it
+  once, after its turn ends, and the Orchestrator gives you the answer in its own chat.
+- **A cleaner Orchestrator column** (#124): no «Veloce» chip (quick questions go to Lampo) and no «Piano
+  dell'Orchestrator» panel (the estimates are on the strips).
+
 ### Added
 - **Five work roles, judged by facts, levelled honestly** (owner, 2026-10-20; ADR 0100): Strategist, Scout, Artisan,
   Sentinel, Herald beside the Orchestrator (Router, Judge and Scribe retired, their data mapped to a successor). A run

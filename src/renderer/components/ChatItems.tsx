@@ -8,7 +8,7 @@
 // chat: CodeBlock.tsx; the chat id comes from ItemList's chatId); a click on copyable inline code copies it, on a file path or a link it opens a preview (LinkPeek.tsx). Each row is memoized by its item, so a streaming
 // message re-renders only itself (at most once a frame, re-parsing only its last markdown block); tool rows show live
 // elapsed time; in an Orchestrator, an "Apri" chip under the chats she opened, wrote to or named (ChatRefChips.tsx, ADR 0034)
-// and a "Veloce" / "Strategist" badge on a message sent with that mode (shared/newchat.ts); its thinking and tool rows fold
+// and a "Strategist" badge (or an older "Veloce") on a message sent with that mode (shared/newchat.ts); its thinking and tool rows fold
 // behind one "Ragionamento" row, and an emoji-only reply sticks to the user's bubble as a reaction (lib/chat-view.ts); a "sta scrivendo… / sta pensando…" line follows the turn; the list follows the bottom ONLY when the
 // user is already there (scrolled up to read, it never jumps: a "nuove righe" pill appears instead). Used by ChatTile
 // and OrchestratorTile.
@@ -257,7 +257,7 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks, reaction 
     case 'user': {
       const f = foreignOf(item);
       if (f && !item.thumbs?.length && !item.images) return <ForeignMsg item={item} f={f} />;
-      // "Veloce" / "Strategist" (or an older "Nuova chat"): the line for the Orchestrator is hidden, a badge says it
+      // "Strategist" (or an older "Veloce" / "Nuova chat"): the line for the Orchestrator is hidden, a badge says it
       const nc = item.from ? null : splitMode(item.text);
       // notes riding on the user's message (Mandato / Copiato / Non serve): a muted line under the bubble
       const own = item.from ? { text: withoutLabel(item.text), notes: [] } : splitNotes(nc?.text ?? item.text);
