@@ -122,6 +122,7 @@ const brief = (c: ChatSummary, warn: number) => c.parentId ? statusOnly(c) : ({
   id: c.id, title: c.title, harness: c.harness, state: c.state, pending: c.pending, model: c.model, costUsd: Math.round(c.costUsd * 100) / 100, isOrchestrator: c.isOrchestrator,
   ...(c.background ? { background: c.background } : {}),
   ...(c.work ? {work:c.work} : {}), last: c.lastText.slice(0, 200),
+  ...(c.userEvents ? { userEvents: c.userEvents } : {}),
   ...(c.contextTokens ? { contextTokens: c.contextTokens, ...(c.contextEstimated ? { contextEstimated: true } : {}), long: isLongChat(c, warn) } : {}),
   ...(c.handoffAt ? { handoffAt: new Date(c.handoffAt).toISOString() } : {}),
   ...(c.continuedBy ? { continuedBy: c.continuedBy.id } : {}), ...(c.continuedFrom ? { continuedFrom: c.continuedFrom.id } : {}),
@@ -377,6 +378,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         title: str('"Area · cosa", e.g. "Ordini · Fix totale"'), prompt: str('what the chat must do: goal, inputs, constraints, the expected output'),
         roleId: { type: 'string', enum: ROLE_IDS.filter(r => r !== 'orchestrator'), description: 'the role the chat runs (agent_catalog)' },
         roleVersion: { type: 'integer', description: 'Expected active role version; refused if it changed.' },
+        doneWhen: { type: 'array', maxItems: 12, items: { type: 'string', maxLength: 300 } },
+        deliveryPolicy: { type: 'string', enum: ['display', 'notify', 'synthesize'], description: 'display expands the full result without AI; notify also adds quiet news; synthesize requests an AI integration turn' },
         tier: { type: 'string', enum: [...MODEL_TIERS], description: 'optional model tier, at most the role\'s tierMax; omitted = the role\'s own' },
         skills: { type: 'array', items: { type: 'string' }, maxItems: 16, description: 'the brain skills this chat may use (names from skills_suggest)' },
         reviewOf: str('Run being reviewed'), reworkOf: str('Run being reworked'), goal: str('Run goal, up to 2000 characters'),
@@ -389,7 +392,15 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       }, ['title', 'prompt']),
       run: async a => {
         // only the user chooses the Orchestrator (one at a time: a new one would take the role from the agent's own chat)
-        const links: { reviewOf?: string; reworkOf?: string; goal?: string; roleVersion?: number } = {};
+        const links: { reviewOf?: string; reworkOf?: string; goal?: string; roleVersion?: number; doneWhen?: string[]; deliveryPolicy?: 'display' | 'notify' | 'synthesize' } = {};
+        if (a.doneWhen !== undefined) {
+          if (!Array.isArray(a.doneWhen) || a.doneWhen.length > 12 || !a.doneWhen.every(c => typeof c === 'string' && c.trim() && c.length <= 300)) throw new Error('Invalid doneWhen criteria.');
+          links.doneWhen = a.doneWhen as string[];
+        }
+        if (a.deliveryPolicy !== undefined) {
+          if (!['display', 'notify', 'synthesize'].includes(String(a.deliveryPolicy))) throw new Error('Invalid delivery policy.');
+          links.deliveryPolicy = a.deliveryPolicy as 'display' | 'notify' | 'synthesize';
+        }
         for (const key of ['reviewOf', 'reworkOf', 'goal'] as const) if (a[key] !== undefined) {
           if (!authed() || typeof a[key] !== 'string' || !a[key].trim() || a[key].length > (key === 'goal' ? 2000 : 80)) throw new Error('Invalid or unauthorized run link/goal.');
           links[key] = a[key];
@@ -472,6 +483,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         doneWhen: { type: 'array', maxItems: 12, items: { type: 'string', maxLength: 300 }, description: 'Checkable criteria for this assignment' },
         mode: { type: 'string', enum: ['continue', 'new-task', 'rework'] }, roleId: str('Existing work role'), cwd: str('Same absolute project folder'),
         expectedVersion: { type: 'integer', minimum: 1, description: 'Current taskVersion from app_chats' },
+        expectedEventSeq: { type: 'integer', minimum: 0, description: 'latestSeq from app_task_events: read all user decisions before assigning' },
+        deliveryPolicy: { type: 'string', enum: ['display', 'notify', 'synthesize'] },
       }, ['chatId', 'prompt', 'mode', 'roleId', 'cwd', 'expectedVersion']),
       run: async a => {
         const orchestrator = caller();
@@ -490,9 +503,21 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const refused = crossRefusal(d.brain.settings(), orchestrator.harness, target.harness);
         if (refused) throw new Error(`messaggio bloccato: ${refused}`);
         if (target.harness !== orchestrator.harness && !['running', 'waiting', 'idle'].includes(target.state)) throw new Error('A stopped engine of another kind requires the user.');
-        await d.chats.assignTask(target.id, `${AGENT_LABEL}\n\n${prompt}`, { mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: Number(a.expectedVersion), ...(doneWhen ? { doneWhen } : {}), source: { kind: 'chat', chatId: orchestrator.id } });
+        if (a.expectedEventSeq !== undefined && (!Number.isSafeInteger(a.expectedEventSeq) || Number(a.expectedEventSeq) < 0)) throw new Error('Invalid user event cursor.');
+        if (a.deliveryPolicy !== undefined && !['display', 'notify', 'synthesize'].includes(String(a.deliveryPolicy))) throw new Error('Invalid delivery policy.');
+        await d.chats.assignTask(target.id, `${AGENT_LABEL}\n\n${prompt}`, { mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: Number(a.expectedVersion), ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), ...(a.deliveryPolicy ? { deliveryPolicy: a.deliveryPolicy as 'display' | 'notify' | 'synthesize' } : {}), ...(doneWhen ? { doneWhen } : {}), source: { kind: 'chat', chatId: orchestrator.id } });
         const assigned = d.chats.list().find(c => c.id === target.id);
         return { chatId: target.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId };
+      },
+    },
+    {
+      name: 'app_task_events', description: 'Read the complete ordered user decisions for a root work task. Before assigning another task, read through latestSeq and pass expectedEventSeq to app_assign_task. No model turn is started.',
+      inputSchema: obj({ chatId: str('Root work chat ID'), afterSeq: { type: 'integer', minimum: 0 } }, ['chatId']),
+      run: a => {
+        if (!authed() || !caller() || !d.chats.userEvents) throw new Error('An authenticated Orchestrator is required.');
+        const id = contentOf(String(a.chatId));
+        if (a.afterSeq !== undefined && (!Number.isSafeInteger(a.afterSeq) || Number(a.afterSeq) < 0)) throw new Error('Invalid cursor.');
+        return d.chats.userEvents(id, Number(a.afterSeq ?? 0));
       },
     },
     {

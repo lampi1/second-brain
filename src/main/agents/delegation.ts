@@ -202,11 +202,10 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     const self = chat(callerId);
     // `remember` is the role memory's, not the result's: the result keeps its exact shape (shared/delegation.ts checkResult)
     const { remember: _remember, ...a } = all, write = rememberLines(all, self);
-    // a root chat the Orchestrator opened (app_create_chat) reports to the Orchestrator: its contract's criteria are prose,
-    // so every criterion it answers is checked for shape only (issue #93)
-    if (self && !self.delegation && !self.parentId && !self.isOrchestrator && self.run?.startedBy === 'orchestrator' && d.chats.reportRoot) {
-      const done = d.chats.reportRoot(callerId, checkResult(a, [])), remembered = write();
-      return { reported: true, to: 'orchestrator', delivered: done.delivered, ...(remembered ? { remembered } : {}), ...(done.delivered ? {} : { note: 'No Orchestrator is open: the result stays on your chat and its run.' }) };
+    // Root contracts are host-owned. Direct-user and explicit app replay roots retain their results locally.
+    if (self && !self.delegation && !self.parentId && !self.isOrchestrator && self.run && (self.run.startedBy === 'orchestrator' || self.run.startedBy === 'user' || self.run.taskContract?.reportExpected) && d.chats.reportRoot) {
+      const done = d.chats.reportRoot(callerId, checkResult(a, self.run.taskContract?.doneWhen ?? [])), remembered = write();
+      return { reported: true, to: self.run.startedBy === 'orchestrator' ? 'orchestrator' : 'this-chat', delivered: done.delivered, ...(remembered ? { remembered } : {}), ...(done.delivered ? {} : { note: 'The canonical result is retained on its run; pending delivery retries.' }) };
     }
     if (!self?.delegation || !self.parentId) throw new Error('agent_report: only a chat the Orchestrator or a parent started reports with it (agent_delegate or app_create_chat). Answer in this chat instead.');
     const result = checkResult(a, self.delegation.doneWhen);

@@ -56,6 +56,37 @@ describe('agent run store', () => {
     expect(readRun(run)?.delivery).toBeUndefined();
   });
 
+  it('counts actual settled turns only and preserves legacy unknown turn coverage', () => {
+    const run = new AgentRunStore(tmp()).start(start());
+    expect(run.turns).toBe(0);
+    addTurn(run, null, undefined); addTurn(run, null, undefined);
+    expect(readRun(run)?.turns).toBe(2);
+    endRun(run, 'completed', 20); addTurn(run, null, undefined);
+    expect(run.turns).toBe(2);
+    expect(readRun({ ...run, turns: -1 })).toBeNull();
+    delete run.turns;
+    expect(readRun(run)?.turns).toBeUndefined();
+  });
+
+  it('persists explicit notify and pending synthesis policy without inventing an acknowledgment', () => {
+    const run = new AgentRunStore(tmp()).start(start());
+    run.delivery = { policy: 'notify', reportedAt: 10, attempts: 0 };
+    expect(readRun(run)?.delivery).toEqual(run.delivery);
+    run.delivery = { policy: 'synthesize', reportedAt: 10, attempts: 0, synthesisRequestedAt: 12, synthesisPending: true };
+    expect(readRun(run)?.delivery).toEqual(run.delivery);
+    expect(readRun({ ...run, delivery: { ...run.delivery, synthesisRequestedAt: 9 } })).toBeNull();
+  });
+
+  it('preserves exact brain/project scope and refuses relative or malformed scope', () => {
+    const run = new AgentRunStore(tmp()).start(start());
+    run.scope = { brainRoot: tmp(), projectRoot: tmp() };
+    run.taskContract = { goal: 'Replay', doneWhen: ['Check'], reportExpected: true, deliveryPolicy: 'display' };
+    expect(readRun(run)).toEqual(run);
+    expect(readRun({ ...run, scope: { ...run.scope, projectRoot: '../outside' } })).toBeNull();
+    expect(readRun({ ...run, taskContract: { ...run.taskContract, deliveryPolicy: 'invalid' } })).toBeNull();
+    expect(readRun({ ...run, taskContract: { ...run.taskContract, reportExpected: 'true' } })).toBeNull();
+  });
+
   it('refuses a malformed run field by field', () => {
     const run = new AgentRunStore(tmp()).start(start());
     expect(readRun(run)).toEqual(run);

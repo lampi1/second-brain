@@ -1,3 +1,4 @@
+import { learningReviewEn } from './areas/learning-review.en';
 import { cloudEn } from './areas/cloud.en';
 import { agentPackEn } from './areas/agent-pack.en';
 import { brainModelEn } from './areas/brain-model.en';
@@ -40,6 +41,7 @@ import { reviewedContextEn } from './areas/reviewed-context.en';
 import { setupEn } from './areas/setup.en';
 
 export const en: Dict = {
+  ...learningReviewEn,
   ...auditEn,
   ...auditExpressionsEn,
   ...componentsEn,

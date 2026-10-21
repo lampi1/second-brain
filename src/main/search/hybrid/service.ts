@@ -12,7 +12,8 @@ import { Worker } from 'node:worker_threads';
 import { errText, log } from '../../log';
 import { cosine, type Hit } from './engine';
 import { errorEntries, THEME_FILES, themesOf, type ThemeKind, type Themes } from './themes';
-import { RECALL_K, recallIndex, similarErrors, type Recall, type RecallIndex } from './recall';
+import { read } from '../../rules/storage';
+import { RECALL_MIN_ERRORS, lexicalErrors, RECALL_K, recallIndex, similarErrors, type Recall, type RecallIndex } from './recall';
 import { CorrectionDetector, type Correction } from './corrections';
 import type { HybridStatus, WorkerReq } from './protocol';
 
@@ -161,6 +162,14 @@ export class HybridSearch {
    *  after a change of ai-errors.md it answers from the previous vectors while the new lines are embedded. */
   async recall(text: string, k = RECALL_K): Promise<Recall> {
     const notReady: Recall = { ready: false, errors: [] };
+    const root = this.deps.brainRoot();
+    if (root) {
+      try {
+        const textFile = read(root, THEME_FILES.errors);
+        const entries = errorEntries([{ id: 0, doc: 'brain:ai-errors.md', line: 1, at: 0, text: textFile, v: new Float32Array() }]);
+        if (entries.length > 0 && entries.length < RECALL_MIN_ERRORS) return { ready: true, errors: lexicalErrors(text, entries, k) };
+      } catch { /* unreadable error file retains the normal unavailable behavior */ }
+    }
     if (this.deps.brainRoot() !== this.syncedRoot) { this.errorVecs = null; void this.sync(); return notReady; }
     if (this.last.model.state !== 'ready') return notReady;
     const rows = await this.vectors(`brain:${THEME_FILES.errors}`);

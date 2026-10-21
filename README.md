@@ -96,6 +96,29 @@ measurements remain unknown; a comparison across different tasks is not evidence
 Delivery statistics show coverage and report-to-notice latency for retained results; synthesis counts observed
 engine submissions, not completed AI turns. Historical results without delivery observations remain unknown.
 
+In **Brain → Memoria**, review each proposed fact with its source and scope, confirm it with evidence, retract it,
+or delete its stored value and app-managed derived copies. A date filter shows historical validity; historical
+views are read-only. A failed search invalidation remains pending across restart and blocks stale search results
+until it succeeds. Source conversations are separate records and are not silently erased by a memory action.
+
+The same page contains **evaluation and skill candidates**. Import explicitly anonymized cases with separate
+`tuning` and `holdout` groups. The built-in examples are synthetic workflow fixtures, not measured product
+performance. Starting a replay is an explicit action that spends the configured engines' tokens: each case gets
+a fresh measured role run and an independent Sentinel review. An interrupted replay never resumes paid work
+automatically. Compare retained paired cases by independently verified quality, turns, tokens, cache usage and
+estimated cost; unavailable measurements stay unknown and review costs are shown as excluded from task cost.
+
+A candidate remains outside active skills. Inspect and save concrete steps, verify an original example, then run
+an anonymized holdout replay of that exact draft. **Promote this version** is enabled only when those checks pass;
+synthetic examples, tuning cases and model self-reports cannot qualify. Promotion is recorded in the existing
+change log with rollback. A new brain starts without qualifying evidence; the UI explains what is missing.
+
+Task assignments retain their goal, criteria and version. **Continue here** focuses the same conversation;
+**Ask the Orchestrator** prepares a draft with stable task/run references. Complete ordered user decisions are
+available through `app_task_events`; stale assignment cursors are refused. Delivery policy is explicit:
+`display` shows the full result, `notify` adds quiet news, and `synthesize` requests an AI integration turn.
+**Synthesize with the Orchestrator** is a separate user action; queued delivery remains visible until submission.
+
 ## A quick tour
 
 <table>

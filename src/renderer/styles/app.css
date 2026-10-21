@@ -1194,3 +1194,11 @@ html.overlay body:focus-within .layer-hint { display: none; }
 .result-ready-full summary { cursor: pointer; font-weight: 600; }
 .result-ready-full .md { margin-top: 8px; color: var(--text); overflow-wrap: anywhere; }
 .result-ready-full small { opacity: .6; overflow-wrap: anywhere; }
+
+/* Task authority stays compact; explicit synthesis is a separate user action. */
+.task-context { padding: 6px 12px; font-size: 12px; border-bottom: 1px solid var(--line); }
+.task-context summary { cursor: pointer; }
+.task-context p { margin: 6px 0; overflow-wrap: anywhere; }
+.task-context-actions, .result-synthesis { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.result-synthesis { margin-top: 8px; }
+.result-delivery-pending { padding: 6px 12px; font-size: 12px; }

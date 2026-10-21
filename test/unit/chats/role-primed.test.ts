@@ -78,7 +78,7 @@ describe('the tools a chat sees on its own endpoint', () => {
     expect(m.chatToolShown(orch.id, 'brain_script_add')).toBe(false);
   });
 
-  it('a role that launches nobody never sees the delegation tools; a root chat nobody asked to report has no agent_report', async () => {
+  it('delegation follows role permissions; direct-user reports stay local and app reports require a contract', async () => {
     const dir = tmp(), sent: string[] = [], sinks: SessionSink[] = [];
     const m = manager(dir, sent, sinks);
     const scout = await m.create({ harness: 'anthropic', cwd: tmp(), roleId: 'scout', prompt: 'cerca' }, 'agent');
@@ -87,6 +87,8 @@ describe('the tools a chat sees on its own endpoint', () => {
     const strategist = await m.create({ harness: 'anthropic', cwd: tmp(), roleId: 'strategist', prompt: 'piano' }, 'agent');
     expect(m.chatToolShown(strategist.id, 'agent_delegate')).toBe(true);
     const mine = await m.create({ harness: 'anthropic', cwd: tmp(), roleId: 'scout', prompt: 'mia' }, 'user');
-    expect(m.chatToolShown(mine.id, 'agent_report')).toBe(false);
+    expect(m.chatToolShown(mine.id, 'agent_report')).toBe(true); // direct-user role reports stay local
+    const app = await m.create({ harness: 'anthropic', cwd: tmp(), roleId: 'scout', title: 'Automatic work', prompt: 'Read' }, 'app');
+    expect(m.chatToolShown(app.id, 'agent_report')).toBe(false); // app work needs an explicit report contract
   });
 });

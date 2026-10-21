@@ -81,6 +81,10 @@ app.whenReady().then(async () => {
   // engines' Job Objects (ADR 0026): the helper loads while the services start; engines started before it is ready wait
   if (process.env.SB_DEMO !== '1') jobGuard.start(path.join(app.getPath('userData'), 'jobguard'));
   const s = await createServices({ emitter, window: () => win, userData: app.getPath('userData') });
+  const requireReviewRoot = (expected: unknown): void => {
+    const actual = s.brain.info().brainRoot;
+    if (!actual || typeof expected !== 'string' || path.resolve(expected) !== path.resolve(actual)) throw new Error('Brain changed: reload the review before acting.');
+  };
   // the global request layer: a small top-most view above browser tiles and pages (main/overlay.ts)
   const overlay = new OverlayLayer(() => win, outDir);
   overlay.start();
@@ -197,6 +201,17 @@ app.whenReady().then(async () => {
     'agents:importCancel': a => s.agentPacks.packs.cancel(a.token),
     // the Brain pages (ADR 0077): read, the maintenance button, an undo, a skill toggle; Classificatori read-only
     'brainmodel:state': () => s.brainModel.state(),
+    'memory:reviewList': a => s.memoryReview?.list(undefined, a?.asOf) ?? [],
+    'memory:confirm': async a => { requireReviewRoot(a.expectedRoot); if (!s.memoryReview) throw new Error('Memory review unavailable.'); try { return await s.memoryReview.confirm(a.id, a.evidence); } finally { await search.invalidateBrain(); } },
+    'memory:retract': async a => { requireReviewRoot(a.expectedRoot); if (!s.memoryReview) throw new Error('Memory review unavailable.'); try { return await s.memoryReview.retract(a.id, a.reason); } finally { await search.invalidateBrain(); } },
+    'memory:delete': async a => { requireReviewRoot(a.expectedRoot); if (!s.memoryReview) throw new Error('Memory review unavailable.'); try { return await s.memoryReview.delete(a.id); } finally { await search.invalidateBrain(); } },
+    'learning:state': () => s.learningReview?.state() ?? { datasets: [], replays: [], candidates: [], replayAvailable: false },
+    'learning:evidence': a => { requireReviewRoot(a.expectedRoot); if (!s.learningReview) throw new Error('Learning evidence unavailable.'); return s.learningReview.evidence(a.runId); },
+    'learning:import': a => { requireReviewRoot(a.expectedRoot); if (!s.learningReview) throw new Error('Learning review unavailable.'); return s.learningReview.import(a.dataset); },
+    'learning:replay': a => { requireReviewRoot(a.expectedRoot); if (!s.learningReview) throw new Error('Replay unavailable.'); return s.learningReview.replay(a.datasetId, a.split, a.candidateName); },
+    'learning:saveCandidate': a => { requireReviewRoot(a.expectedRoot); if (!s.learningReview) throw new Error('Candidate review unavailable.'); return s.learningReview.saveCandidate(a.name, a.text, a.expectedDigest); },
+    'learning:promote': a => { requireReviewRoot(a.expectedRoot); if (!s.learningReview) throw new Error('Candidate promotion unavailable.'); const result = s.learningReview.promote(a.name, a.expectedDigest, a.replayId, a.exampleRunId); emitter.emit('brainmodel:changed', undefined); return result; },
+    'learning:compare': a => { if (!s.learningReview) throw new Error('Replay comparison unavailable.'); return s.learningReview.compare(a.beforeId, a.afterId); },
     'brainmodel:maintain': a => s.brainModel.maintain(a?.job),
     'brainmodel:rollback': a => s.brainModel.rollback(String(a?.id ?? '')),
     'brainmodel:link': a => { if (typeof a?.skill !== 'string' || typeof a?.agentId !== 'string' || typeof a?.on !== 'boolean') throw new Error('Invalid skill link'); return s.brainModel.link(a.skill, a.agentId, a.on); },
@@ -277,7 +292,9 @@ app.whenReady().then(async () => {
     // "Nuova chat" and a new Orchestrator: the routing table picks the engine, model and effort (ADR 0032)
     'chat:createRouted': a => createRoutedChat({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h), create: r => s.chats.create(r) }, a, { byUser: true }),
     'routing:preview': a => previewRoute({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h) }, a),
-    'chat:send': async a => { await s.chats.send(a.chatId, a.text, a.images); s.chats.resumedByUser?.(a.chatId, a.text); if (typeof a.text === 'string' && a.text.trim()) s.chats.userWrote?.(a.chatId, a.text); },
+    'chat:send': async a => { await s.chats.send(a.chatId, a.text, a.images); s.chats.resumedByUser?.(a.chatId, a.text); },
+    'chat:userEvents': a => { if (!s.chats.userEvents) throw new Error('Task events unavailable.'); return s.chats.userEvents(a.chatId, a.afterSeq); },
+    'chat:synthesize': a => { if (!s.chats.synthesizeResult) throw new Error('Result synthesis unavailable.'); return s.chats.synthesizeResult(a.runId, { kind: 'user' }); },
     'chat:answer': a => s.chats.answer(a.chatId, a.requestId, a.answer),
     'chat:plan': a => s.chats.planDecide(a.chatId, a.decision, a.at, a.text),
     'chat:stop': a => s.chats.stop(a.chatId, a.keepQueued === true),
@@ -377,7 +394,7 @@ app.whenReady().then(async () => {
     'source:check': () => s.source.sourceCheck(),
     'source:updateNow': () => s.source.updateNow(),
     'clipboard:image': a => readClipboardImage(clip, Array.isArray(a?.seen) ? a.seen.filter((t): t is string => typeof t === 'string').slice(0, 20) : []),
-    'search:query': a => search.query(String(a?.q ?? '')),
+    'search:query': async a => { await s.memoryReview?.retryInvalidations(); return search.query(String(a?.q ?? '')); },
     'search:status': async () => s.hybrid?.status() ?? { model: { state: 'missing' }, docs: 0, chunks: 0, vectors: 0, vec: false },
     'search:retryModel': async () => s.hybrid ? s.hybrid.retryModel() : { model: { state: 'missing' }, docs: 0, chunks: 0, vectors: 0, vec: false },
     'later:get': () => s.later.get(),

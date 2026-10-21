@@ -15,6 +15,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
+import { verifiedVerdict } from '../../shared/run-verdict';
 import { ORCHESTRATOR_AGENT_ID } from '../../shared/agents';
 import type { LearnedRuleProposal } from '../../shared/agent-pack';
 import type { BrainSkill, MaintenanceJobId, MigrationItem, MigrationReport } from '../../shared/brain-model';
@@ -177,19 +178,26 @@ function brainJsonWithTopic(root: string, rel: string): { file: string; text: st
 const REPEAT_MIN = 3, REPEAT_SIM = 0.4, REPEAT_DAYS = 60;
 export function repeatedTask(ctx: JobContext): JobResult {
   const since = ctx.now() - REPEAT_DAYS * 86400e3;
-  const runs = ctx.runs().filter(r => r.endedAt && r.startedAt >= since && r.goal.trim().length >= 12 && r.agentId !== ORCHESTRATOR_AGENT_ID);
-  const groups: { toks: Set<string>; runs: AgentRun[] }[] = [];
+  const scopePath = (value: string): string => process.platform === 'win32' ? path.resolve(value).toLowerCase() : path.resolve(value);
+  const brainRoot = scopePath(ctx.root);
+  const runs = ctx.runs().filter(r => r.scope && scopePath(r.scope.brainRoot) === brainRoot && r.endedAt && r.startedAt >= since && r.goal.trim().length >= 12 && r.agentId !== ORCHESTRATOR_AGENT_ID);
+  const groups: { toks: Set<string>; runs: AgentRun[]; scope: string }[] = [];
   for (const r of runs) {
     const t = tokens(r.goal);
     if (t.size < 2) continue;
-    const g = groups.find(x => jaccard(x.toks, t) >= REPEAT_SIM);
-    if (g) { g.runs.push(r); for (const x of t) g.toks.add(x); } else groups.push({ toks: t, runs: [r] });
+    const scope = JSON.stringify([brainRoot, scopePath(r.scope!.projectRoot), r.tags?.app ?? null]);
+    const g = groups.find(x => x.scope === scope && jaccard(x.toks, t) >= REPEAT_SIM);
+    if (g) { g.runs.push(r); for (const x of t) g.toks.add(x); } else groups.push({ toks: t, runs: [r], scope });
   }
   const skills = ctx.skills(), taken = new Set(skills.map(s => s.name));
   let changes = 0;
   for (const g of groups) {
+    const distinctTasks = new Map<string, AgentRun>();
+    for (const r of g.runs) { const key = r.taskId ?? `legacy-chat:${r.chatId}`, prior = distinctTasks.get(key); if (!prior || r.startedAt > prior.startedAt) distinctTasks.set(key, r); }
+    if (distinctTasks.size < REPEAT_MIN) continue;
+    // Follow-ups and rework share their task identity; they never inflate repetition or word frequencies.
+    g.runs = [...distinctTasks.values()];
     const chats = new Set(g.runs.map(r => r.chatId));
-    if (chats.size < REPEAT_MIN) continue;
     // the words most runs share: the job's name and its "when to use"
     const counts = new Map<string, number>();
     for (const r of g.runs) for (const t of tokens(r.goal)) if (!t.startsWith('~')) counts.set(t, (counts.get(t) ?? 0) + 1);
@@ -201,15 +209,16 @@ export function repeatedTask(ctx: JobContext): JobResult {
     if (undone(ctx.log, 'repeated-task', name) || ctx.log.all().some(c => c.job === 'repeated-task' && c.target === name)) continue;
     taken.add(name);
     const first = g.runs.reduce((a, b) => (a.startedAt <= b.startedAt ? a : b)), last = g.runs.reduce((a, b) => (a.startedAt >= b.startedAt ? a : b));
-    const good = g.runs.filter(r => r.report && r.report.outcome === 'done' && (r.outcome?.verdict ?? 'success') !== 'fail');
+    const good = g.runs.filter(r => r.report?.canonical && verifiedVerdict(r, [], ctx.now())?.verdict === 'success');
     const body = [`# ${oneLine(last.goal, 90)}`, '',
       `Quando usarla: richieste come queste, viste ${g.runs.length} volte dal ${day(first.startedAt)} al ${day(last.startedAt)}.`, '',
       ...g.runs.slice(-6).map(r => `- ${oneLine(r.goal, 160)}`), '',
-      '## Come è andata', '',
-      ...(good.length ? good.slice(-5).map(r => `- ${day(r.startedAt)}: ${oneLine(r.report ? r.report.summary : '', 220)}`) : ['- Nessun resoconto riuscito ancora: aggiungi qui i passi che funzionano.']), '',
+      '## Esempi verificati indipendentemente', '',
+      ...(good.length ? good.slice(-5).map(r => `- ${day(r.startedAt)}: ${oneLine(r.report ? r.report.summary : '', 220)}`) : ['- Nessun esempio verificato indipendentemente: il solo resoconto non prova la riuscita.']), '',
+      '## Passi', '', 'Documentare qui i passi concreti: le richieste ripetute non descrivono una procedura.', '',
       '## Candidata non verificata', '', 'Non eseguire automaticamente. Prima di promuoverla: documentare passi concreti, un esempio verificato indipendentemente e un replay riuscito con evidenze.', ''].join('\n');
     const file = path.join(ctx.root, 'memory', 'skill-candidates', `${name}.md`);
-    const c = ctx.log.apply({ job: 'repeated-task', kind: 'skill', action: 'create', target: name, summary: `Skill candidata «${name}» da ${g.runs.length} richieste`, reason: `${chats.size} chat simili: candidata in attesa di verifica indipendente e replay, non caricabile come skill.`, evidence: g.runs.slice(-6).map(r => r.runId) },
+    const c = ctx.log.apply({ job: 'repeated-task', kind: 'skill', action: 'create', target: name, summary: `Skill candidata «${name}» da ${g.runs.length} richieste`, reason: `${distinctTasks.size} incarichi distinti in ${chats.size} chat nello stesso progetto: candidata in attesa di verifica indipendente e replay, non caricabile come skill.`, evidence: g.runs.slice(-6).map(r => r.runId) },
       [{ file, text: skillText(name, `Come fare: ${oneLine(last.goal, 160)}`, body) }]);
     if (!c) continue;
     changes++;

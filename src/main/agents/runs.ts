@@ -126,18 +126,27 @@ export function readRun(v: unknown): AgentRun | null {
   if (report === null || corrections === null || tags === null || (r.executionMs !== undefined && !time(r.executionMs))) return null;
   const delivery = r.delivery as AgentRun['delivery'];
   if (delivery !== undefined) {
-    if (!delivery || !['display', 'synthesize'].includes(delivery.policy) || !time(delivery.reportedAt) || !count(delivery.attempts)) return null;
-    for (const stamp of [delivery.deliveredAt, delivery.displayedAt, delivery.synthesisSubmittedAt]) if (stamp !== undefined && (!time(stamp) || stamp < delivery.reportedAt)) return null;
+    if (!delivery || !['display', 'notify', 'synthesize'].includes(delivery.policy) || !time(delivery.reportedAt) || !count(delivery.attempts)) return null;
+    for (const stamp of [delivery.deliveredAt, delivery.displayedAt, delivery.synthesisSubmittedAt, delivery.synthesisRequestedAt]) if (stamp !== undefined && (!time(stamp) || stamp < delivery.reportedAt)) return null;
+    if (delivery.synthesisPending !== undefined && typeof delivery.synthesisPending !== 'boolean') return null;
     if (delivery.synthesisBatchId !== undefined && !str(delivery.synthesisBatchId, 160)) return null;
     if (delivery.synthesisSubmittedAt !== undefined && !delivery.synthesisBatchId) return null;
-    if (delivery.policy === 'display' && (delivery.synthesisSubmittedAt !== undefined || delivery.synthesisBatchId !== undefined)) return null;
+    if (delivery.policy !== 'synthesize' && (delivery.synthesisSubmittedAt !== undefined || delivery.synthesisBatchId !== undefined)) return null;
   }
+  if (r.turns !== undefined && !count(r.turns)) return null;
+  const scope = r.scope as AgentRun['scope'];
+  if (scope !== undefined && (!scope || typeof scope.brainRoot !== 'string' || !path.isAbsolute(scope.brainRoot) || typeof scope.projectRoot !== 'string' || !path.isAbsolute(scope.projectRoot) || scope.brainRoot.length > 4000 || scope.projectRoot.length > 4000)) return null;
+  const contract = r.taskContract as AgentRun['taskContract'];
+  if (contract?.reportExpected !== undefined && typeof contract.reportExpected !== 'boolean') return null;
+  if (contract?.deliveryPolicy !== undefined && !['display', 'notify', 'synthesize'].includes(contract.deliveryPolicy)) return null;
   const snapshot = r.skillSuggestions as AgentRun['skillSuggestions'];
   if (snapshot !== undefined && (!snapshot || !time(snapshot.at) || !skillList(snapshot.suggested) || !skillList(snapshot.used))) return null;
   if (r.taskId !== undefined && !str(r.taskId, 80) || r.taskVersion !== undefined && (!count(r.taskVersion) || r.taskVersion < 1)) return null;
   if (report?.canonical && (report.canonical.runId !== r.runId || report.canonical.taskId !== r.taskId || report.canonical.taskVersion !== r.taskVersion)) return null;
   return {
     ...(r.taskId ? { taskId: r.taskId as string } : {}), ...(r.taskVersion ? { taskVersion: r.taskVersion as number } : {}),
+    ...(scope ? { scope: { brainRoot: scope.brainRoot, projectRoot: scope.projectRoot } } : {}),
+    ...(r.turns !== undefined ? { turns: r.turns as number } : {}),
     ...(delivery ? { delivery: structuredClone(delivery) } : {}),
     ...(snapshot ? { skillSuggestions: { at: snapshot.at, suggested: [...snapshot.suggested], used: [...snapshot.used] } } : {}),
     ...(r.taskContract && typeof r.taskContract === 'object' && typeof (r.taskContract as { goal?: unknown }).goal === 'string' && Array.isArray((r.taskContract as { doneWhen?: unknown }).doneWhen) && (r.taskContract as { doneWhen: unknown[] }).doneWhen.every(x => typeof x === 'string') ? { taskContract: r.taskContract as AgentRun['taskContract'] } : {}),
@@ -172,9 +181,10 @@ export function reopenRun(run: AgentRun): boolean {
 }
 /** No turn and nothing waiting on Brother for STALE_MS (a pending request pauses the clock: `idleSince` restarts when it is answered). */
 export const staleDue = (run: AgentRun, idleSince: number, waiting: boolean, now: number): boolean => run.endedAt === undefined && !waiting && now - idleSince >= STALE_MS;
-/** A settled turn while the run is open: its cost (null stays null: the engine reports none) and its tokens (one turn without them = unknown). */
-export function addTurn(run: AgentRun, usd: number | null, tokens: AgentRunTokens | undefined): void {
-  if (run.endedAt !== undefined) return;
+/** A settled turn; an explicit result receipt may arrive after completion. Missing engine cost/tokens stay unknown. */
+export function addTurn(run: AgentRun, usd: number | null, tokens: AgentRunTokens | undefined, settledReceipt = false): void {
+  if (run.endedAt !== undefined && !settledReceipt) return;
+  if (run.turns !== undefined) run.turns++;
   run.costUsd = usd === null || run.costUsd === null ? null : Math.round((run.costUsd + usd) * 1e6) / 1e6;
   if (!tokens || !run.tokens) { run.tokens = null; return; }
   for (const k of ['input', 'cacheRead', 'cacheWrite', 'output'] as const) run.tokens[k] += tokens[k];
@@ -289,7 +299,7 @@ export class AgentRunStore {
       ...(s.tier ? { tier: s.tier } : {}), ...(s.model !== undefined ? { model: s.model } : {}),
       ...(s.reviewOf ? { reviewOf: s.reviewOf } : {}), ...(s.reworkOf ? { reworkOf: s.reworkOf } : {}),
       counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null },
-      costUsd: s.costKnown ? 0 : null, tokens: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 },
+      costUsd: s.costKnown ? 0 : null, turns: 0, tokens: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 },
       corrections: { tagged: 0, afterReport: 0 }, executionMs: 0,
       ...(s.tags ? { tags: readTags(s.tags)! } : {}),
     };

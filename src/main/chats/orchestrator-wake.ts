@@ -48,18 +48,20 @@ export type WakeKind = 'done' | 'error' | 'question' | 'permission' | 'command' 
 export const QUIET: ReadonlySet<WakeKind> = new Set(['question', 'permission', 'command', 'started', 'user-message']);
 /** the buffer's slot of an event: the user's messages beside the chat's status */
 const slotOf = (e: Pick<WakeEvent, 'chatId' | 'kind' | 'report' | 'eventId' | 'at'>): string => e.kind === 'user-message' ? `${e.chatId}#user:${e.eventId ?? e.at}` : e.report ? `${e.chatId}#report` : e.chatId;
-const USER_TEXT_MAX = 300;
 /** the rule's gate for this Orchestrator: Cursor (ACP) takes no message mid-turn */
 const gateOf = (r: Pick<ChatSummary, 'state' | 'pending' | 'handoffBusy' | 'harness'>): OrchestratorGate => orchestratorGate(r, engineOf(r.harness)?.kind !== 'acp');
 const classOf = (e: WakeEvent): DeliveryClass => e.kind === 'user-message' || e.silent ? 'quiet' : newsClass(e.kind, e.endsTurn);
 const isLoud = (e: WakeEvent): boolean => classOf(e) !== 'quiet';
 /** requestId: the open request it tells about (question, permission, command): answered before it goes, it is dropped */
-export interface WakeEvent { eventId?: string; chatId: string; title: string; harness: Harness; kind: WakeKind; detail: string; at: number; /** a root chat's clean agent_report (cleanReport): its role and summary, quiet */ report?: { role: string }; /** a delegated chat: its role and its parent's title (status only, never its text) */ child?: { role: string; parent: string }; requestId?: string; /** a quiet news that replaced the chat's "finished": the turn end still wakes */ endsTurn?: boolean; /** a delegated chat's "finished" with nothing of the user's beside it: no text (ADR 0083) and its result goes to its parent, so it rides along and never wakes */ silent?: boolean }
+export interface WakeEvent { eventId?: string; seq?: number; chatId: string; title: string; harness: Harness; kind: WakeKind; detail: string; at: number; /** a root chat's clean agent_report (cleanReport): its role and summary, quiet */ report?: { role: string }; /** a delegated chat: its role and its parent's title (status only, never its text) */ child?: { role: string; parent: string }; requestId?: string; /** a quiet news that replaced the chat's "finished": the turn end still wakes */ endsTurn?: boolean; /** a delegated chat's "finished" with nothing of the user's beside it: no text (ADR 0083) and its result goes to its parent, so it rides along and never wakes */ silent?: boolean }
 
+export interface WakeSubmissionReceipt { submitted(): void; failed(error: unknown): void }
 export interface OrchestratorWakeDeps {
+  /** True for ChatManager: queue admission is not an engine submission acknowledgment. */
+  receiptAcknowledgement?: boolean;
   userData?: string;
   /** sends a message to the Orchestrator (wakes it: a closed one resumes) */
-  send(chatId: string, text: string): Promise<void>;
+  send(chatId: string, text: string, receipt?: WakeSubmissionReceipt): Promise<void>;
   /** the setting orchestratorEvents */
   enabled(): boolean;
   /** every chat now: an Orchestrator that has not changed since the app started never passed through observe() */
@@ -82,13 +84,13 @@ export function wakeLine(e: WakeEvent): string {
   const who = e.child ? `«${e.title}» (${e.child.role}, delegata da «${e.child.parent}»)` : `«${e.title}» (${engineLabel(e.harness)})`;
   const d = e.child || e.kind === 'user-message' ? '' : cut(e.detail, 200);
   switch (e.kind) {
-    case 'done': return e.report ? `- «${e.title}» (${e.report.role}): ha consegnato, tutti i criteri soddisfatti: «${cut(e.detail, 200)}»` : `- ${who}: ha finito il turno.${d ? ` Ultima riga: «${d}»` : ''}`;
+    case 'done': return e.report ? `- «${e.title}» (${e.report.role}): ha consegnato: «${cut(e.detail, 200)}»` : `- ${who}: ha finito il turno.${d ? ` Ultima riga: «${d}»` : ''}`;
     case 'error': return `- ${who}: si è fermata su un errore${d ? `: ${d}` : '.'}`;
     case 'question': return `- ${who}: aspetta una risposta dell'utente${d ? `: ${d}` : '.'}`;
     case 'permission': return `- ${who}: aspetta un permesso dell'utente${d ? `: ${d}` : '.'}`;
     case 'command': return `- ${who}: ha lasciato all'utente un comando da eseguire${d ? `: ${d}` : '.'}`;
     case 'started': return `- ${who}: è partita.`;
-    case 'user-message': return `- ${who}: l'utente ci ha scritto direttamente (${new Date(e.at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}): «${cut(e.detail, USER_TEXT_MAX)}».`;
+    case 'user-message': return `- ${who}: l'utente ci ha scritto direttamente (${new Date(e.at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}): «${e.detail}».`;
   }
 }
 
@@ -214,14 +216,14 @@ export class OrchestratorWake {
   }
 
   /** The user typed in a work chat (ChatManager.onUserWrote): quiet news with his words; every message has a stable event ID and survives until delivered. */
-  userMessage(n: { chatId: string; title: string; role: string | null; parentTitle: string | null; text: string; at?: number }): void {
+  userMessage(n: { eventId?: string; seq?: number; chatId: string; title: string; role: string | null; parentTitle: string | null; text: string; at?: number }): void {
     if (!this.d.enabled() || !this.orchestratorId()) return;
     const known = this.chats.get(n.chatId), listed = known ? undefined : this.d.list?.().find(x => x.id === n.chatId);
     if (listed) this.remember(listed);
     const c = known ?? listed;
     // Lampo (ADR 0105) is the user's own quick lane: what he writes there is never news («Hai scritto · Lampo», #123)
     if (!c || c.isOrchestrator || c.closedAt || this.quick.has(n.chatId)) return;
-    const e: WakeEvent = { eventId: randomUUID(), chatId: n.chatId, title: n.title, harness: c.harness, kind: 'user-message', detail: cut(n.text, USER_TEXT_MAX), at: n.at ?? this.now(),
+    const e: WakeEvent = { eventId: n.eventId ?? randomUUID(), ...(n.seq !== undefined ? { seq: n.seq } : {}), chatId: n.chatId, title: n.title, harness: c.harness, kind: 'user-message', detail: n.text, at: n.at ?? this.now(),
       ...(n.parentTitle !== null ? { child: { role: n.role ?? 'ruolo', parent: n.parentTitle } } : {}) };
     this.buffer.set(slotOf(e), e);
     this.reschedule();
@@ -349,9 +351,22 @@ export class OrchestratorWake {
     this.changed();
     this.sending = true;
     log.info('chats', 'news sent to the Orchestrator', { chat: id, data: { chats: ready.length, kinds: ready.map(e => e.kind), gate } });
-    this.d.send(id, wakeMessage(ready))
-      .then(() => { for (const e of ready) if (this.buffer.get(slotOf(e)) === e) this.buffer.delete(slotOf(e)); this.changed(); })
-      .catch(err => log.warn('chats', 'news not sent to the Orchestrator', { chat: id, cause: errText(err), hint: 'the durable outbox retries after the cooldown' }))
-      .finally(() => { this.sending = false; this.reschedule(); });
+    let settled = false;
+    const receipt: WakeSubmissionReceipt = {
+      submitted: () => {
+        if (settled) return; settled = true;
+        for (const e of ready) if (this.buffer.get(slotOf(e)) === e) this.buffer.delete(slotOf(e));
+        this.changed(); this.sending = false; this.reschedule();
+      },
+      failed: error => {
+        if (settled) return; settled = true;
+        log.warn('chats', 'news not sent to the Orchestrator', { chat: id, cause: errText(error), hint: 'the durable outbox retries after the cooldown' });
+        this.sending = false; this.reschedule();
+      },
+    };
+    void this.d.send(id, wakeMessage(ready), receipt)
+      .then(() => { if (!this.d.receiptAcknowledgement) receipt.submitted(); })
+      .catch(receipt.failed);
+
   }
 }

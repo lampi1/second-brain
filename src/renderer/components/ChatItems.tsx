@@ -28,7 +28,7 @@ import { getForeignLabel, foreignOf, showsSender, type Foreign, type ForeignKind
 import { ImageStrip } from './ImageStrip';
 import {MessageImages} from './MessageImages';
 import { thinkingBeforeAsk } from '../lib/askContext';
-import { useApp } from '../store/store';
+import { useApp, synthesizeResult } from '../store/store';
 import { chatRefsOf, reportOutput, titlesKey, toolChatRef } from '../lib/chatrefs';
 import { splitMode } from '@shared/newchat';
 import { isReaction } from '@shared/reaction';
@@ -44,6 +44,18 @@ import { agents } from '../store/agents';
 import { guideChatId, visibleGuideItems } from '../../modules/ai-first/presentation';
 
 type Tool = Extract<ChatItem, { kind: 'tool' }>;
+
+function ResultSynthesis({ runId }: { runId: string }) {
+  const chatId = useContext(ChatIdCtx);
+  const available = useApp(s => !!chatId && !!s.chats[chatId]?.availableResultIds?.includes(runId));
+  const pending = useApp(s => !!chatId && !!s.chats[chatId]?.pendingResultIds?.includes(runId));
+  const [busy, setBusy] = useState(false);
+  if (!available && !pending) return null;
+  return <div className="result-synthesis">
+    <button type="button" disabled={busy || pending} onClick={async () => { setBusy(true); try { await synthesizeResult(runId); } finally { setBusy(false); } }}>{t(pending || busy ? 'chat.resultDeliveryPending' : 'chat.resultSynthesize')}</button>
+    <small>{t('chat.resultSynthesizeCost')}</small>
+  </div>;
+}
 
 /** One block of a streaming message: a finished block is parsed once and its DOM is never touched again. */
 const MdBlock = memo(function MdBlock({ text, tail }: { text: string; tail: boolean }) {
@@ -293,6 +305,7 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks, reaction 
             {!!item.result.questions?.length && <ul>{item.result.questions.map((question, i) => <li key={i}>{question}</li>)}</ul>}
             <ul>{item.result.doneWhen.map((criterion, i) => <li key={i}>{criterion.criterion}: <span aria-hidden="true">{criterion.met ? '✓' : '—'}</span><span className="sr-only">{t(criterion.met ? 'chat.criterionMet' : 'chat.criterionNotMet')}</span> {criterion.evidence}</li>)}</ul>
             <small>{item.result.taskId} · v{item.result.taskVersion} · {item.result.runId}</small>
+            <ResultSynthesis runId={item.result.runId} />
           </details>}
         </div>
       );
@@ -359,6 +372,7 @@ function ItemListFor({ items, empty, footer, chatId = null }: ItemListProps) {
   // an Orchestrator's messages get "Apri" chips for the work chats they name (one key of the titles: rebuilt only when they change)
   const tkey = useApp(s => { const c = chatId ? s.chats[chatId] : undefined; return c?.isOrchestrator ? titlesKey(s.chats) : ''; });
   const orch = useApp(s => !!chatId && !!s.chats[chatId]?.isOrchestrator);
+  const deliveryPending = useApp(s => chatId ? s.chats[chatId]?.pendingResultIds?.length ?? 0 : 0);
   const view = useMemo(() => chatView(shown, { foldProcess: orch }), [shown, orch]);
   const refs = useMemo(() => chatRefsOf(items, tkey), [items, tkey]);
   const fixed = useMemo(() => correctedThoughts(items), [items]);
@@ -368,6 +382,7 @@ function ItemListFor({ items, empty, footer, chatId = null }: ItemListProps) {
   return (
     <ChatIdCtx.Provider value={chatId}>
     <div className="items-wrap">
+      {deliveryPending > 0 && <div role="status" className="result-delivery-pending" data-testid="result-delivery-pending">{t('chat.resultDeliveryPending')} · {deliveryPending}</div>}
       <div className="items" ref={ref} data-chat-log={chatId??undefined} tabIndex={0} aria-label={auditText('audit.ChatItems.messages')} onClick={peek.onClick} onWheel={peek.onWheel} role="log" aria-live="off">
         <div ref={content} className="items-content">
         {cut > 0 && !pastOpen && <FoldedPast count={cut} onOpen={() => setPastOpen(true)} />}

@@ -3,7 +3,7 @@
 // sides need: the checks of a contract and of a result, the child's first message (the contract only, never the
 // parent's history), the message that brings a result back, and the depth of a chat in the tree. Pure: used by
 // main/agents/delegation.ts (the tools), main/chats/manager.ts (the result delivery) and the renderer (the child cards).
-import { TOOL_CLASSES, type ToolClass } from './agents';
+import { TOOL_CLASSES, type ToolClass, type TaskDeliveryPolicy } from './agents';
 import { MODEL_TIERS, ROLE_DEFAULTS, currentRoleId, isWorkRole, type ModelTier, type WorkRoleId } from './roles';
 import { AGENT_LABEL, oneLine } from './agent-label';
 
@@ -13,6 +13,8 @@ export interface TaskAssignmentOptions {
   mode?: 'continue' | 'new-task' | 'rework';
   source?: TaskSource;
   expectedVersion?: number;
+  expectedEventSeq?: number;
+  deliveryPolicy?: TaskDeliveryPolicy;
   doneWhen?: string[];
 }
 

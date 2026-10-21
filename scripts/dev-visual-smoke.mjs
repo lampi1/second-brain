@@ -10,22 +10,30 @@ const output = path.join(root, 'test-results/dev-visual-smoke');
 const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'sb-dev-visual-'));
 await fs.rm(output, { recursive: true, force: true });
 await fs.mkdir(output, { recursive: true });
-const manifest = { revision: process.env.GITHUB_SHA ?? 'local', mode: 'hidden frozen synthetic demo', captures: [], rendererErrors: [] };
+const manifest = { revision: process.env.GITHUB_SHA ?? 'local', mode: 'hidden frozen demo plus isolated synthetic review fixture', captures: [], rendererErrors: [] };
 let app;
+// Electron creates its overlay independently; firstWindow is not necessarily the app renderer.
+const mainPage = async application => {
+  for (let attempt = 0; attempt < 150; attempt++) {
+    const found = application.windows().find(w => w.url().startsWith('file:') && !w.url().includes('#overlay'));
+    if (found) { await found.waitForLoadState('domcontentloaded'); return found; }
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  throw new Error('Main app renderer not found');
+};
 const deadline = setTimeout(() => {
-  console.error('Dev visual capture exceeded 120 seconds');
+  console.error('Dev visual capture exceeded 180 seconds');
   app?.process().kill('SIGKILL');
   process.exitCode = 1;
-}, 120_000);
+}, 180_000);
 try {
   const env = { ...process.env, SB_DEMO: '1', SB_DEMO_FREEZE: '1', SB_HIDDEN: '1', SB_TEST: '1',
     SB_USER_DATA: profile, SB_MCP_PORT: '0', SB_LANG: 'it' };
   for (const key of ['ELECTRON_RUN_AS_NODE', 'SB_BRAIN', 'SB_RELEASE', 'SB_RELEASE_ID', 'SB_ENGINE_CLAUDE']) delete env[key];
   app = await electron.launch({ cwd: root, args: ['.'], env, timeout: 30_000 });
-  const page = await app.firstWindow();
+  let page = await mainPage(app);
   page.setDefaultTimeout(15_000);
   page.on('pageerror', error => manifest.rendererErrors.push(error.message));
-  await page.waitForURL(url => url.protocol === 'file:' && !url.hash.includes('overlay'));
   await page.locator('html[data-clock="frozen"]').waitFor();
   await page.getByTestId('tile-orchestrator').waitFor();
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
@@ -84,6 +92,49 @@ try {
   await page.getByTestId('bm-memory-page').waitFor();
   await page.getByTestId('mm-insights').waitFor();
   await capture('memory');
+  // The demo has no review services. A separate isolated SB_TEST instance reads a clearly synthetic memory
+  // store through the real services; no replay/run actions are clicked and all automatic work stays disabled.
+  await app.close();
+  app = undefined;
+  const brain = path.join(profile, 'synthetic-brain'), realProfile = path.join(profile, 'review-profile');
+  await fs.mkdir(path.join(brain, 'memory'), { recursive: true });
+  await fs.mkdir(realProfile, { recursive: true });
+  await fs.writeFile(path.join(realProfile, 'config.json'), JSON.stringify({ theme: 'dark' }));
+  const observedAt = '2026-10-11T08:30:00.000Z';
+  await fs.writeFile(path.join(brain, 'memory/records.json'), JSON.stringify([{
+    memoryId: 'synthetic-visual-memory', scope: { roleId: 'scout', project: 'DEMO SINTETICA', environment: 'sandbox' },
+    subject: 'Esempio sintetico', predicate: 'ramo di lavoro', value: 'main — dato dimostrativo, non una preferenza reale',
+    sourceEventId: 'synthetic-event', sourceRunId: 'synthetic-run', observedAt, validFrom: observedAt, validTo: null,
+    status: 'proposed', supersedes: null, transitions: [{ at: observedAt, status: 'proposed' }],
+  }], null, 2));
+  const reviewEnv = { ...env, SB_BRAIN: brain, SB_USER_DATA: realProfile, SB_ORCHESTRATOR_EVENTS: '0', SB_RUN_RESULTS: '0', SB_BRAIN_JOBS: '0', SB_COMPARE_QUEUE: '0' };
+  delete reviewEnv.SB_DEMO;
+  delete reviewEnv.SB_DEMO_FREEZE;
+  app = await electron.launch({ cwd: root, args: ['.'], env: reviewEnv, timeout: 30_000 });
+  page = await mainPage(app);
+  page.setDefaultTimeout(15_000);
+  page.on('pageerror', error => manifest.rendererErrors.push(error.message));
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  await app.evaluate(({ BrowserWindow }) => {
+    const win = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:') && !w.webContents.getURL().includes('#overlay'));
+    win.setContentSize(1600, 1100);
+  });
+  await page.getByTestId('nav-home').waitFor();
+  const setup = page.getByTestId('first-interview');
+  await setup.waitFor({ timeout: 3000 }).catch(() => {});
+  if (await setup.isVisible()) { await page.keyboard.press('Escape'); await setup.waitFor({ state: 'hidden' }); }
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.keyboard.press('g');
+  await page.keyboard.press('y');
+  const memory = page.getByTestId('memory-review-synthetic-visual-memory');
+  await memory.waitFor();
+  await memory.scrollIntoViewIfNeeded();
+  await capture('memory-provenance-synthetic');
+  const learning = page.getByTestId('learning-review');
+  await learning.locator('select').first().selectOption('synthetic-workflow-v1');
+  await learning.scrollIntoViewIfNeeded();
+  await capture('evaluation-cold-start-synthetic');
+  manifest.reviewFixture = 'Real services; synthetic memory proposal and built-in synthetic dataset; no replay or provider launched';
   if (manifest.rendererErrors.length) throw new Error('Renderer errors; inspect manifest.json');
   console.log(`Captured ${manifest.captures.length} dev views in ${output}`);
 } catch (error) {

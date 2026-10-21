@@ -4,7 +4,7 @@
 // the Orchestrator's own turns never.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatSummary, PendingRequest } from '../../src/shared/contract';
-import { APP_EVENT_LABEL, OrchestratorWake, wakeLine } from '../../src/main/chats/orchestrator-wake';
+import { APP_EVENT_LABEL, OrchestratorWake, wakeLine, type WakeSubmissionReceipt } from '../../src/main/chats/orchestrator-wake';
 
 const chat = (p: Partial<ChatSummary> & { id: string }): ChatSummary => ({
   harness: 'claude', origin: 'app', title: p.id, cwd: 'C:/x', sessionId: null, model: null, effort: null, permissionMode: null,
@@ -40,6 +40,28 @@ describe('OrchestratorWake', () => {
     expect(w.queued()).toHaveLength(3);
     await vi.advanceTimersByTimeAsync(20);
     expect(attempts).toBe(2);
+    expect(w.queued()).toHaveLength(0);
+    w.stop();
+  });
+
+  it('waits for an actual submission receipt after queue admission and preserves full user instructions', async () => {
+    const receipts: WakeSubmissionReceipt[] = [], sent: string[] = [];
+    const w = new OrchestratorWake({ enabled: () => true, receiptAcknowledgement: true, groupMs: 10, perChatMs: 20,
+      send: async (_id, text, receipt) => { sent.push(text); receipts.push(receipt!); } });
+    w.observe('chat:updated', chat({ id: 'o', isOrchestrator: true }));
+    w.observe('chat:updated', chat({ id: 'c', state: 'running' }));
+    const full = `${'x'.repeat(2500)} IMPORTANT FINAL CONSTRAINT`;
+    w.userMessage({ eventId: 'event-1', seq: 1, chatId: 'c', title: 'C', role: null, parentTitle: null, text: full });
+    w.observe('chat:updated', chat({ id: 'c', state: 'idle' }));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toContain(full);
+    expect(w.queued()).toHaveLength(2);
+    receipts[0]!.failed(new Error('queued engine failed'));
+    await vi.advanceTimersByTimeAsync(20);
+    expect(sent).toHaveLength(2);
+    expect(w.queued()).toHaveLength(2);
+    receipts[1]!.submitted(); receipts[1]!.submitted();
     expect(w.queued()).toHaveLength(0);
     w.stop();
   });
@@ -378,7 +400,7 @@ describe('OrchestratorWake: quiet results and app-started chats (token plan 2026
     up({ id: 'orchestrator', isOrchestrator: true, title: 'Orchestrator', state: 'running' });
     await vi.advanceTimersByTimeAsync(0);
     expect(sent).toHaveLength(1);
-    expect(sent[0]!.text).toContain('- «App · fix» (Artisan): ha consegnato, tutti i criteri soddisfatti: «Fix su main, 14 test verdi»');
+    expect(sent[0]!.text).toContain('- «App · fix» (Artisan): ha consegnato: «Fix su main, 14 test verdi»');
     // its own turn end adds nothing (the report was its result)
     finish('other', 'x');
     expect(w.queued().some(e => e.chatId === 'fix')).toBe(false);
@@ -391,7 +413,7 @@ describe('OrchestratorWake: quiet results and app-started chats (token plan 2026
     up({ id: 'fix', title: 'App · fix', state: 'error', lastError: 'boom' });
     await vi.advanceTimersByTimeAsync(0);
     expect(sent).toHaveLength(1);
-    expect(sent[0]!.text).toContain('ha consegnato, tutti i criteri soddisfatti: «Fix su main»');
+    expect(sent[0]!.text).toContain('ha consegnato: «Fix su main»');
     expect(sent[0]!.text).toContain('si è fermata su un errore: boom');
     expect(w.queued()).toEqual([]);
   });

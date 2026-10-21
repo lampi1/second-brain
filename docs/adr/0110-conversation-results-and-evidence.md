@@ -44,6 +44,22 @@ remain unverified; unknown scope is never silently treated as project scope. Rec
 records under a budget. The existing document BM25/vector/RRF search remains intact. Repeated task summaries
 produce candidates outside active skill directories; duplication alone neither confirms facts nor globalizes them.
 
+User decisions have a persisted monotonic sequence and full text. Reassignment uses both task version and the
+latest read event cursor. Root delivery policy is part of the contract; synthesis is explicit and idempotent.
+Direct-user results remain local unless the user explicitly transfers them; app replay results remain local.
+
+Desktop memory review supplies human evidence through sender-checked IPC. Temporal views preserve transitions;
+revocation and deletion invalidate exact app-owned mirrors and registered derived files. Pending invalidations
+are durable and retryable, and generic search fails closed while they remain. Original source conversations are
+not derived memory copies. On-demand memory recall uses the existing embedding service with scoped BM25/RRF;
+launch context remains bounded and deterministic. Small error collections use a conservative lexical fallback.
+
+Evaluation archives are isolated by brain. Imports cannot supply verdicts and require separate tuning/holdout
+families. Explicit replay creates fresh runs and a separate Sentinel; only the run ledger supplies quality and
+resource measurements. Synthetic fixtures exercise the workflow but never qualify promotion. Candidate drafts
+are content-addressed; promotion requires an independently verified original example and a passing anonymized
+holdout replay of that exact draft, recorded through the rollback-capable change log.
+
 ## Validation and limits
 
 Deterministic fake-harness tests cover follow-up runs, explicit correction, full reports, restart delivery and

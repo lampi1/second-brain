@@ -11,7 +11,7 @@ import { validRoute } from '../brain/routing';
 import { errText, log } from '../log';
 import { isUuid } from './session';
 import { ENGINE_ID } from '../engines/registry';
-import type { AgentOwnerSnapshot, AgentChildren, AgentRun } from '../../shared/agents';
+import type { AgentOwnerSnapshot, AgentChildren, AgentRun, UserTaskEvents } from '../../shared/agents';
 import { RUN_ID, readRun } from '../agents/runs';
 import { readOwner } from '../agents/catalog';
 import { readPolicy, type AgentPolicy } from '../agents/tool-policy';
@@ -31,12 +31,14 @@ function validAssets(value: unknown): value is NonNullable<StoredChat['agentAsse
 export interface HeldChildResult { id?: string; runId?: string; title: string; message: string }
 /** Durable root result delivery state, saved before the engine can finish its turn. */
 export interface HeldRootResult {
+  local?: boolean;
   note: { chatId: string; title: string; role: string; summary: string; at: number };
   message: string;
   quiet: boolean;
   userWaits: boolean;
 }
 export interface StoredChat {
+  userTaskEvents?: UserTaskEvents;
   id: string;
   agent?: AgentOwnerSnapshot;
   work?: NonNullable<ChatSummary['work']>;
@@ -180,6 +182,18 @@ function heldResults(x: unknown): HeldChildResult[] | null {
   return ok ? (x as HeldChildResult[]).map(i => ({ title: i.title, message: i.message, ...(typeof i.id === 'string' && i.id.length <= 100 ? { id: i.id } : {}), ...(typeof i.runId === 'string' && RUN_ID.test(i.runId) ? { runId: i.runId } : {}) })) : null;
 }
 
+/** Malformed authoritative events fail closed rather than silently making a stale assignment appear safe. */
+function readTaskEvents(value: unknown): UserTaskEvents | undefined {
+  if (value === undefined) return undefined;
+  const ledger = value as UserTaskEvents;
+  if (ledger && Array.isArray(ledger.events) && Number.isSafeInteger(ledger.latestSeq) && ledger.latestSeq >= 0 &&
+      Number.isSafeInteger(ledger.acknowledgedSeq) && ledger.acknowledgedSeq >= 0 && ledger.acknowledgedSeq <= ledger.latestSeq &&
+      ledger.events.length === ledger.latestSeq && ledger.events.every((e, index) => e && e.seq === index + 1 &&
+        typeof e.id === 'string' && typeof e.at === 'number' && Number.isFinite(e.at) && typeof e.text === 'string' &&
+        (e.taskId === undefined || typeof e.taskId === 'string') && (e.taskVersion === undefined || Number.isSafeInteger(e.taskVersion)))) return structuredClone(ledger);
+  return { events: [], latestSeq: Number.MAX_SAFE_INTEGER, acknowledgedSeq: 0 };
+}
+
 function validHeldRoot(value: unknown): value is HeldRootResult {
   const h = value as HeldRootResult | undefined, n = h?.note;
   return !!h && typeof h === 'object' && typeof h.message === 'string' && h.message.length <= 65536 &&
@@ -208,6 +222,7 @@ function valid(x: unknown): StoredChat | null {
     createdAt: typeof c.createdAt === 'number' ? c.createdAt : Date.now(),
     ...(typeof c.costTotalUsd === 'number' && Number.isFinite(c.costTotalUsd) ? { costTotalUsd: c.costTotalUsd } : {}),
     ...extras(c),
+    ...(c.userTaskEvents !== undefined ? { userTaskEvents: readTaskEvents(c.userTaskEvents) } : {}),
     ...(c.userWaits === true ? { userWaits: true } : {}),
     ...(c.autoCompleted === true ? { autoCompleted: true } : {}),
     ...(num(c.rootReportAt) ? { rootReportAt: c.rootReportAt } : {}),

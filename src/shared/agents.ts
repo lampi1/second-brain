@@ -165,15 +165,24 @@ export interface AgentStanding {
 }
 /** One run = a chat started from a role (agent-runs.json is the source of truth; the chat keeps a mirror). */
 /** App delivery observations. Engine submission is recorded only after session.send succeeds. */
+export type TaskDeliveryPolicy = 'display' | 'notify' | 'synthesize';
+/** Complete user-authored task instructions; sequence IDs are authoritative across restarts. */
+export interface UserTaskEvent { seq: number; id: string; at: number; text: string; taskId?: string; taskVersion?: number }
+export interface UserTaskEvents { events: UserTaskEvent[]; latestSeq: number; acknowledgedSeq: number }
 export interface AgentRunDelivery {
-  policy: 'display' | 'synthesize'; reportedAt: number; attempts: number;
+  policy: TaskDeliveryPolicy; reportedAt: number; attempts: number;
   deliveredAt?: number; displayedAt?: number;
   synthesisBatchId?: string; synthesisSubmittedAt?: number;
+  synthesisRequestedAt?: number; synthesisPending?: boolean;
 }
 export interface AgentRun {
+  /** Exact launch roots; absent on historical runs whose project scope cannot be recovered safely. */
+  scope?: { brainRoot: string; projectRoot: string };
+  /** Actual settled execution turns; absent for historical runs. */
+  turns?: number;
   delivery?: AgentRunDelivery;
   taskId?: string; taskVersion?: number;
-  taskContract?: { goal: string; doneWhen: string[] };
+  taskContract?: { goal: string; doneWhen: string[]; deliveryPolicy?: TaskDeliveryPolicy; reportExpected?: boolean };
   /** Snapshot captured before launch; missing means historical suggestions are unknown. */
   skillSuggestions?: { at: number; suggested: string[]; used: string[] };
   source?: 'chat' | 'oneshot';
