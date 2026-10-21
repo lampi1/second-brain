@@ -62,6 +62,7 @@ import { afterTree, KEEP as CHECKPOINTS_KEPT, prune as pruneCheckpoints, restore
 import { TurnToolBudget } from '../agents/orchestrator-budget';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
 import { resultMessage, type DelegationLimitHit, type DelegationResult } from '../../shared/delegation';
+import { afterReport, PLAN_APPROVED, planChange, STRATEGY_FLOW, withClarified, withDelegated, withStep, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
 import { aiErrorRuns, runMetrics } from '../agents/run-metrics';
 import { standings, withStandings } from '../agents/standing';
 import { isCorrection } from '../../shared/correction';
@@ -373,12 +374,14 @@ const MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'pla
 /** chat-endpoint tools the Orchestrator can never use (chatToolShown): it does not delegate, report, ask a parent or
  *  rate a child (its chats are roots: agent_child_feedback takes only a child's run), and
  *  agent_catalog / agent_learn_propose are on its own endpoint already */
-const ORCHESTRATOR_HIDDEN: ReadonlySet<string> = new Set(['agent_delegate', 'agent_report', 'agent_ask_parent', 'agent_answer_child', 'agent_children', 'agent_child_feedback', 'agent_catalog', 'agent_learn_propose',
+const ORCHESTRATOR_HIDDEN: ReadonlySet<string> = new Set(['plan_propose', 'plan_update', 'agent_delegate', 'agent_report', 'agent_ask_parent', 'agent_answer_child', 'agent_children', 'agent_child_feedback', 'agent_catalog', 'agent_learn_propose',
   // it saves scripts with brain_script_save on its own endpoint
   'brain_script_add']);
 /** the tools only a chat that may delegate can use (chatToolShown): a role that launches no role (Scout, Judge) never
  *  sees them (~1 500 tokens of schemas in every call, each call refused) */
 const DELEGATING_ONLY: ReadonlySet<string> = new Set(['agent_delegate', 'agent_children', 'agent_answer_child', 'agent_child_feedback', 'agent_catalog', 'skills_suggest']);
+/** the Strategist's plan tools (agents/strategy-tools.ts): shown only where a plan with the user exists */
+const PLAN_TOOLS: ReadonlySet<string> = new Set(['plan_propose', 'plan_update']);
 /** a root chat's deliverable longer than this reaches the Orchestrator as where to read it, not whole (it is the chat's answer
  *  there; the Orchestrator re-reads every message in each later turn) */
 const ORCHESTRATOR_OUTPUT_MAX = 800;
@@ -626,7 +629,10 @@ export class ChatManager implements ChatService {
     // a Sentinel checks a change: the app gathers it (branch, base, commits, files, diff) instead of 5-15 git calls
     const pack = given && agent.owner.source === 'catalog' && agent.owner.id === 'sentinel' && this.opts.reviewPack
       ? await this.opts.reviewPack(cwd).catch(e => { log.warn('chats', 'review pack not gathered', { cause: errText(e), hint: 'the Sentinel reads the change itself' }); return ''; }) : '';
-    const prompt = given && pack ? `${given}\n\n${pack}` : given;
+    // a Strategist the Orchestrator opens for the user (its «Strategist» send mode) asks the user, proposes a plan and
+    // shows its progress on its strip (ADR 0108): the app's fixed flow follows the request, the plan starts asking
+    const strategist = by === 'agent' && agent.owner.source === 'catalog' && agent.owner.id === 'strategist' && !delegator && !req.orchestrator;
+    const prompt = given && pack ? `${given}\n\n${pack}` : given && strategist ? `${given}\n\n${STRATEGY_FLOW}` : given;
     const viaQueue = by !== 'user' && !!prompt && !!this.admission;
     const r: Rec = {
       s: {
@@ -642,6 +648,7 @@ export class ChatManager implements ChatService {
         ...(caps.cost ? {} : { costKnown: false as const }),
         ...(req.route ? { route: req.route } : {}),
         ...(delegator ? { parentId: delegator.s.id, ...(req.delegation ? { delegation: req.delegation } : {}) } : {}),
+        ...(strategist && given ? { plan: { phase: 'asking' as const, clarified: [], steps: [], at: now } } : {}),
       },
       createdAt: now,
       agentInstructions: agent.instructions,
@@ -969,7 +976,7 @@ export class ChatManager implements ChatService {
       try { held = externalHold(c.id); } catch { /* fail closed */ }
       const eligible = !this.quitting && !updateActivity.frozen && !c.isOrchestrator && !c.quick && !held &&
         (c.state === 'idle' || r.autoClosing && c.state === 'closed') && !!c.lastResult && !c.lastResult.isError && !c.lastResult.interrupted && !c.lastError &&
-        !r.working && !r.session?.busy && r.pending.size === 0 && !workBehind(c) && !c.waitsOn && !c.queued && !r.deliveryHolds &&
+        !r.working && !r.session?.busy && r.pending.size === 0 && !workBehind(c) && !c.waitsOn && c.plan?.phase !== 'proposed' && !c.queued && !r.deliveryHolds &&
         !r.opening && !r.releasing && !r.switching && !r.handoffTurn && (!r.archiving || r.autoClosing) &&
         child?.coverage === 'complete' && child.active === 0 && !child.children.some(x => x.state === 'running' || x.state === 'waiting' || x.state === 'unknown');
       const waitingFor = eligible || c.isOrchestrator || c.quick ? undefined : this.waitingOf(r, held);
@@ -985,6 +992,7 @@ export class ChatManager implements ChatService {
     const c = r.s, pend = [...r.pending.values()];
     if (pend.some(p => p.type === 'permission')) return 'permission';
     if (pend.some(p => p.type === 'question')) return 'answer';
+    if (c.plan?.phase === 'proposed') return 'answer'; // its plan waits for «Approva e parti» (ADR 0108)
     if (external === 'command' || external === 'browser') return external;
     if (c.waitsOn) return c.waitsOn;
     if (r.session?.busy || r.working || c.state === 'running' || c.state === 'starting') return undefined;
@@ -1026,8 +1034,70 @@ export class ChatManager implements ChatService {
     const r = this.need(chatId);
     if (!r.pending.has(requestId)) throw new Error('Questa richiesta non è più aperta.');
     if (!r.session) { this.dropPending(r, requestId); throw new Error('La chat non è più attiva: la richiesta è scaduta.'); }
+    const req = r.pending.get(requestId)!;
     const ok = r.session.answer(requestId, answer);
-    if (!ok) this.dropPending(r, requestId);
+    if (!ok) { this.dropPending(r, requestId); return; }
+    // a Strategist still asking: the answer is one more thing its strip shows as already clear (ADR 0108)
+    const plan = r.s.plan;
+    if (plan && (plan.phase === 'asking' || plan.phase === 'revising') && answer.kind === 'question' && req.questions?.length) {
+      const next = withClarified(plan, req.questions, answer.answers);
+      if (next !== plan) { r.s.plan = next; this.persist(); this.updated(r); }
+    }
+  }
+
+  /** plan_propose (agents/strategy-tools.ts): the Strategist's plan waits for the user's ok on its strip. */
+  planPropose(chatId: string, steps: PlanStep[], doneWhen?: string): StrategyPlan {
+    const r = this.need(chatId), plan = r.s.plan;
+    if (!plan) throw new Error('plan_propose: only a Strategist the Orchestrator or the user started has a plan with the user.');
+    if (plan.phase === 'running' || plan.phase === 'done') throw new Error('plan_propose: the plan is approved and under way; update its steps with plan_update.');
+    if (plan.phase === 'proposed') throw new Error('plan_propose: your plan already waits for the user. End your turn: the answer arrives as a message.');
+    r.s.plan = { phase: 'proposed', clarified: plan.clarified, steps, ...(doneWhen ? { doneWhen } : {}), at: Date.now() };
+    this.persist();
+    this.updated(r);
+    log.info('chats', 'plan proposed', { chat: chatId, data: { steps: steps.length } });
+    return structuredClone(r.s.plan);
+  }
+
+  /** plan_update: a step the Strategist does itself (or corrects) moves on. */
+  planUpdate(chatId: string, i: number, state: StepState): StrategyPlan {
+    const r = this.need(chatId), plan = r.s.plan;
+    if (!plan || (plan.phase !== 'running' && plan.phase !== 'done')) throw new Error('plan_update: the user has not approved a plan yet.');
+    r.s.plan = withStep(plan, i, state, Date.now());
+    this.persist();
+    this.updated(r);
+    return structuredClone(r.s.plan);
+  }
+
+  /** The plan of a chat (agent_delegate reads it: no delegation before the user's ok, a `step` within its steps). */
+  planOf(chatId: string): StrategyPlan | null { const p = this.chats.get(chatId)?.s.plan; return p ? structuredClone(p) : null; }
+
+  /** agent_delegate with a `step`: those children work on it. */
+  planDelegated(chatId: string, i: number, chatIds: string[]): void {
+    const r = this.chats.get(chatId), plan = r?.s.plan;
+    if (!r || !plan || !plan.steps[i] || !chatIds.length) return;
+    r.s.plan = withDelegated(plan, i, chatIds, Date.now());
+    this.persist();
+    this.updated(r);
+  }
+
+  /** The user's click on a proposed plan (chat:plan): «Approva e parti» or «Cambia qualcosa» with what to change; the
+   *  Strategist gets it as the user's message. «Basta domande» is an answer to its open question (renderer). */
+  async planDecide(chatId: string, decision: 'approve' | 'change', at: number, text?: string): Promise<void> {
+    const r = this.need(chatId), plan = r.s.plan;
+    if (!plan || plan.phase !== 'proposed') throw new Error('Questo piano non aspetta più una risposta.');
+    if (plan.at !== at) throw new Error('Il piano è cambiato nel frattempo: rileggilo.');
+    const change = typeof text === 'string' ? text.trim() : '';
+    if (decision === 'change' && (!change || change.length > 2000)) throw new Error('Scrivi cosa cambiare (al massimo 2000 caratteri).');
+    if (decision !== 'approve' && decision !== 'change') throw new Error('Scelta non valida.');
+    // the phase moves first (a second click finds it decided) and comes back if the message does not reach the Strategist
+    r.s.plan = { ...plan, phase: decision === 'approve' ? 'running' : 'revising', at: Date.now() };
+    this.persist();
+    this.updated(r);
+    try { await this.send(chatId, decision === 'approve' ? PLAN_APPROVED : planChange(change)); } catch (e) {
+      if (r.s.plan?.phase === (decision === 'approve' ? 'running' : 'revising')) { r.s.plan = plan; this.persist(); this.updated(r); }
+      throw e;
+    }
+    log.info('chats', 'plan decided', { chat: chatId, data: { decision } });
   }
 
   /** Interrupts whenever a process exists, whatever the shown state says (an interrupt on an idle CLI is harmless). */
@@ -1693,6 +1763,12 @@ export class ChatManager implements ChatService {
     this.persist();
     this.updated(r);
     const parent = this.chats.get(parentId);
+    // the parent Strategist's step for this child: done once every chat of the step reported done (ADR 0108)
+    if (parent?.s.plan) {
+      // a sibling gone without a result (closed by the user) counts as not done: the step shows blocked, never stuck
+      const next = afterReport(parent.s.plan, chatId, id => { const c = this.chats.get(id); return c ? c.s.delegation?.result?.outcome : 'blocked'; }, at);
+      if (next !== parent.s.plan) { parent.s.plan = next; this.persist(); }
+    }
     if (parent) {
       this.updated(parent); // its waiting on this child may be over
       this.queueChildResult(parentId, r.s.title, resultMessage(d.role, r.s.title, result));
@@ -2230,6 +2306,7 @@ export class ChatManager implements ChatService {
         ...(c.route ? { route: c.route } : {}),
         ...(c.parentId ? { parentId: c.parentId } : {}),
         ...(c.delegation ? { delegation: c.delegation } : {}),
+        ...(c.plan ? { plan: c.plan } : {}),
       },
       createdAt: c.createdAt,
       agentInstructions: c.agentInstructions ?? '',
@@ -2285,6 +2362,7 @@ export class ChatManager implements ChatService {
       ...(r.s.route ? { route: r.s.route } : {}),
       ...(r.s.parentId ? { parentId: r.s.parentId } : {}),
       ...(r.s.delegation ? { delegation: r.s.delegation } : {}),
+      ...(r.s.plan ? { plan: r.s.plan } : {}),
       ...(r.mcpAncestors ? { mcpAncestors: r.mcpAncestors } : {}),
     }));
     if (strict) this.store.checkpoint(rows); else this.store.save(rows);
@@ -2444,12 +2522,14 @@ export class ChatManager implements ChatService {
     const r = this.chats.get(chatId), s = r?.s;
     // a waiting engine launched for a role: what that role's root chat would see (it lists tools once, at start)
     const warm = r ? undefined : this.warmViews.get(chatId)?.view;
-    if (warm) return !(DELEGATING_ONLY.has(tool) && warm.launches?.length === 0) && tool !== 'agent_ask_parent';
+    if (warm) return !(DELEGATING_ONLY.has(tool) && warm.launches?.length === 0) && tool !== 'agent_ask_parent' && !PLAN_TOOLS.has(tool);
     if (!r || !s) return true;
     if (s.isOrchestrator) return !ORCHESTRATOR_HIDDEN.has(tool);
     // Lampo starts no work (ADR 0105): no mail to other chats, no delegation, no report, no saved script
     if (s.quick) return !LAMPO_HIDDEN.has(tool) && !tool.startsWith('agent_');
     if (tool === 'agent_ask_parent' && !s.parentId) return false;
+    // the plan with the user: only a Strategist root chat has one (ADR 0108)
+    if (PLAN_TOOLS.has(tool)) return !!s.plan;
     // a role that launches nobody; launches unknown (a chat saved before they were kept) = shown, as before
     if (DELEGATING_ONLY.has(tool) && r.launches?.length === 0) return false;
     // a root chat nobody asked to report (the user's, the app's own sampled review): agent_report would be refused

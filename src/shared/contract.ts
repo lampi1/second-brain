@@ -16,6 +16,7 @@ import type { DiffAgainst, FileDiffResult } from './file-diff';
 import type { AgentCatalog, AgentMetrics, AgentMetricsFilter, AgentDraft, AgentOwnerSnapshot, AgentProfile, AgentRun, AgentUndo, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
 import type { DelegationSettings, ModelTier, RoleId, WorkRoleId } from './roles';
 import type { ChatDelegation, DelegationLimitHit } from './delegation';
+import type { StrategyPlan } from './strategy';
 import type { SkillSuggestions } from './skill-suggest';
 import type { AutoClosePresence, AutoCloseStatus } from './auto-close';
 import type { ChatEffortStatus } from './effort';
@@ -153,6 +154,8 @@ export interface ChatSummary {
   delegation?: ChatDelegation;
   /** its last agent_delegate was refused by a delegation limit (Impostazioni → Ruoli e deleghe) */
   limitHit?: DelegationLimitHit;
+  /** a Strategist root chat's plan with the user (ADR 0108): its questions' answers, the steps, their progress */
+  plan?: StrategyPlan;
   lastText: string;           // last assistant line, for collapsed tiles and the needs-you lane
   lastError?: string;
   updatedAt: number;
@@ -1278,6 +1281,9 @@ export interface InvokeMap {
   /** text may be empty when images are attached */
   'chat:send': [{ chatId: string; text: string; images?: ImageAttachment[] }, void];
   'chat:answer': [{ chatId: string; requestId: string; answer: Answer }, void];
+  /** a Strategist's proposed plan: «Approva e parti», or «Cambia qualcosa» with what to change (ADR 0108) */
+  /** at = the proposal the user read (StrategyPlan.at): a newer one is refused, never approved unseen */
+  'chat:plan': [{ chatId: string; decision: 'approve' | 'change'; at: number; text?: string }, void];
   /** keepQueued: "Invia subito" stops only the turn; messages the engine already holds still run after it */
   'chat:stop': [{ chatId: string; keepQueued?: boolean }, void];
   'chat:stopAll': [void, number];
@@ -1531,7 +1537,7 @@ export const INVOKE_CHANNELS = [
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
   'agents:list', 'skills:suggest', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'agents:estimates', 'run:outcome', 'agents:restoreVersion', 'avatars:get', 'avatars:set', 'avatars:reset', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
-  'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:stop',
+  'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:plan', 'chat:stop',
   'agents:exportPlan', 'agents:exportFix', 'agents:export', 'brain:share', 'agents:importInspect', 'agents:importApply', 'agents:importCancel', 'brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'brainmodel:link', 'classifiers:state', 'morning:brief', 'agents:trialDecide', 'agents:lifecycleDecide',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'chat:undoTurn', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',

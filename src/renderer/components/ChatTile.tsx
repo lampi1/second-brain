@@ -12,7 +12,8 @@
 // off); the inline panels show only on the expanded strip. A strip that drives browsers carries a small globe button: its
 // browsers stay folded until it is pressed, then sit beside the chat (on a collapsed strip it expands it too; AgentStrips.tsx).
 // An expanded chat also shows the open requests of the chats it delegated (lib/child-requests.ts), each tagged with the
-// role and task that asks: answering goes to that child, which then goes on (ADR 0083).
+// role and task that asks: answering goes to that child, which then goes on (ADR 0083). A Strategist's plan with the
+// user (its questions, the plan to approve, the steps' checklist) sits under the head, collapsed too (StrategyPanel.tsx, ADR 0108).
 import { t as auditText } from '../i18n';
 import { memo, useEffect, useRef, useState } from 'react';
 import type { PendingRequest } from '@shared/contract';
@@ -41,6 +42,7 @@ import { ChatTranscript } from './ChatTranscript';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ChatMenu, TitleInput } from './ChatMenu';
 import { RequestPanel } from './RequestPanel';
+import { StrategyPanel, planQuestion } from './StrategyPanel';
 import { InWindowLine } from './QuestionsWindow';
 import { questionsModalOn } from '../lib/questions';
 import { childRequestsFor, requestHost, type ChildRequest } from '../lib/child-requests';
@@ -129,12 +131,15 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
   // a click on the strip itself (not on one of its controls, nor inside a portalled menu) expands or collapses it
   const onStripClick = (e: React.MouseEvent<HTMLElement>) => {
     const el = e.target as Element;
-    if (!strip || !e.currentTarget.contains(el) || el.closest('button, a, input, textarea, select, summary, label, [role="menu"], [contenteditable="true"], .chat-topic')) return;
+    if (!strip || !e.currentTarget.contains(el) || el.closest('button, a, input, textarea, select, summary, label, [role="menu"], [contenteditable="true"], .chat-topic, .sp-card')) return;
     if (selectedHere(window.getSelection(), e.currentTarget, downSelection.current)) return; // selecting text is not a click
     if (!expanded) setChatExpanded(chatId, true);
     else if (el.closest('.tile-head')) setChatExpanded(chatId, false);
   };
   const first = reqs[0] ? reqKey(reqs[0]) : null;
+  // a Strategist's open question shows in its plan card, on the strip itself (ADR 0108), not again below
+  const planAsk = planQuestion(chat, reqs, !!queued);
+  const ownReqs = planAsk && !inWindow ? reqs.filter(r => r !== planAsk) : reqs;
   return (
     <section ref={ref} className={`tile chat-tile ${expanded?'is-expanded':'is-strip'} tone-${st.tone} ${isFocused ? 'focused' : ''} ${flash ? 'flash' : ''} ${compact ? 'compact' : ''} ${closing ? 'closing' : ''} ${pair.cls}${embedded ? ' is-embedded' : ''}`} style={pair.style} role="region"
       aria-label={auditText('auditExpression.ChatTile.text20', { v0: chat.title, v1: st.label })} data-testid={`tile-chat-${chatId}`} data-chat-id={chatId} data-sb-id={`chat-${chatId}`} data-chat-index={index} data-state={chat.state}
@@ -178,7 +183,8 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
         {!compact && <ChatLinkChips chatId={chatId} />}
       </header>}
       <AutoCloseNotice chatId={chatId} />
-      {!expanded&&<div className="chat-strip-line">{busy?<StripActivity chatId={chatId} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.lastText.slice(0,140)}</div>}
+      {!expanded&&<div className="chat-strip-line">{busy?<StripActivity chatId={chatId} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.plan?.phase==='proposed'?t('tree.plan.ready'):chat.lastText.slice(0,140)}</div>}
+      {chat.plan && <StrategyPanel chat={chat} question={planAsk} inWindow={inWindow} />}
       <div className={`chat-work${expanded?' expanded':''}`} id={`chat-work-${chatId}`} inert={!expanded} aria-hidden={!expanded}><div className="chat-work-inner">
       {!compact && <ChatLinks chat={chat} />}
       {!compact && chat.handoffBusy && <ContextNotice chat={chat} />}
@@ -186,9 +192,9 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
       <ChatInput ref={input} chat={chat} testid={`chat-input-${chatId}`} />
       {expanded && chat.run && <RunOutcomeControl key={`${chat.run.runId}:${chat.run.counters.reopened}`} run={chat.run} disabled={busy || reqs.length > 0 || chat.state === 'waiting' || !!chat.queued} />}
       </div></div>
-      {expanded && hostsOwn && reqs.length > 0 && (queued ? <InWindowLine reqs={reqs} queued testid={`chat-queued-${chatId}`} /> : inWindow ? <InWindowLine reqs={reqs} testid={`chat-in-window-${chatId}`} /> : (
+      {expanded && hostsOwn && ownReqs.length > 0 && (queued ? <InWindowLine reqs={ownReqs} queued testid={`chat-queued-${chatId}`} /> : inWindow ? <InWindowLine reqs={ownReqs} testid={`chat-in-window-${chatId}`} /> : (
         <div className="tile-requests">
-          {reqs.map(r => <RequestPanel key={r.id} req={r} variant={compact || smallPanel ? 'compact' : 'tile'} chatTitle={chat.title} harness={chat.harness} onLater={answerLater} />)}
+          {ownReqs.map(r => <RequestPanel key={r.id} req={r} variant={compact || smallPanel ? 'compact' : 'tile'} chatTitle={chat.title} harness={chat.harness} onLater={answerLater} />)}
         </div>
       ))}
       {expanded && childReqs.length > 0 && (queued ? <InWindowLine reqs={childReqs.map(c => c.req)} queued testid={`chat-child-queued-${chatId}`} /> : inWindow ? <InWindowLine reqs={childReqs.map(c => c.req)} testid={`chat-child-in-window-${chatId}`} /> : (

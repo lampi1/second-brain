@@ -32,6 +32,7 @@ import { MorningService } from './morning/service';
 import { createAgentLoop } from './agents/loop';
 import { childFeedbackTools } from './agents/child-feedback';
 import { delegationTools } from './agents/delegation';
+import { strategyTools } from './agents/strategy-tools';
 import { portableId } from './agents/pack/flows';
 import { writeAgentMemory } from './rules/memory';
 import type { AgentRun } from '../shared/agents';
@@ -657,6 +658,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   addChatTools(delegationTools({ chats: manager, roles: () => agents.list(), settings: () => checkedDelegation(brain.settings().delegation),
     engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), label: AGENT_LABEL, runs: () => manager.runs.list(), worktrees: gitWorktrees, skillTools,
     remember: (roleId, line) => writeAgentMemory(agentPacks.packs.root(), portableId(roleId), line) }));
+  // a Strategist's plan with the user (ADR 0108): proposed on its strip, approved by the user's click, its steps' progress
+  addChatTools(strategyTools(manager));
   // the Judge's sampled reviews of finished runs (agents/judge-sample.ts): they spend tokens, so they run only in the
   // user's own app, never in tests or an agent's hidden run (judgeSamplingOn, issue #112), at most delegation.judgeDaily a day
   const judgeSampler = new JudgeSampler({ file: path.join(ctx.userData, 'judge-samples.json'), runs: () => manager.runs.list(),
