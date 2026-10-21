@@ -1,6 +1,24 @@
 // English counterpart of the agent workspace and packaged appearance UI.
 import type{productIt}from'./product.it';
 export const productEn:typeof productIt={
+ "viewer.reviewSelection":"Comment on selection",
+ "viewer.reviewTitle":"Comment on this part",
+ "viewer.reviewRegion":"Selected image region",
+ "viewer.reviewComment":"Your comment",
+ "viewer.reviewPlaceholder":"What would you like checked or changed?",
+ "viewer.reviewDraftHint":"Send your comment or prepare a message to review in the Orchestrator.",
+ "viewer.reviewPrepare":"Prepare message",
+ "viewer.reviewSend":"Send to Orchestrator",
+ "viewer.reviewUnavailable":"Orchestrator unavailable. Your comment is kept here; try again.",
+
+ "viewer.imageBefore":"Before",
+ "viewer.imageAfter":"After",
+ "report.image.select":"Select area",
+ "report.image.hint":"Drag on the image to select an area.",
+ "report.image.clear":"Clear selection",
+ "report.image.commentRegion":"Comment on area",
+ "report.image.commentWhole":"Comment on whole image",
+
  'start.skillsSuggested':'Skills that fit the task','start.skillsNone':'No brain skill fits this task.','start.skillsWords':'Word matching: local model unavailable.','start.skillsHint':'The role uses only the skills it is given: its defaults plus the ones chosen here.','start.roleSkills':p=>`Already its own: ${p.list}`,
  'product.transcriptLoading':'Loading','product.transcriptEmpty':'No messages yet: describe where you would like to start below.',
  'start.needMemory':'Connect a memory folder before starting the role.','start.needTask':'Describe the task for the role.','start.failed':'The chat did not start. Your request is still here: check engine availability.',

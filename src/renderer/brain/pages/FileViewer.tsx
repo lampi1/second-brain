@@ -11,6 +11,7 @@ import DOMPurify from 'dompurify';
 import {DataTable,type Col} from '../components/DataTable';
 import {Markdown} from '../components/Markdown';
 import {ReportHtml} from '../components/ReportHtml';
+import {ReportReview} from '../components/ReportReview';
 import {Empty} from '../components/States';
 import {copyText,IconCopy,IconExternal,Seg,toast} from '../components/ui';
 import {baseName} from '../lib/text';
@@ -21,6 +22,7 @@ import {pdfPagesToDraw,samePages} from '../lib/pdf-window';
 import {t} from '../../i18n';
 // Loaded on demand: the Battito card reaches the app bridge and store, which must not load with the brain pages.
 const FilePulse=lazy(()=>import('../../components/ContextPulse').then(m=>({default:m.FilePulse})));
+const ImageZoom=lazy(()=>import('../../components/ImageZoom').then(m=>({default:m.ImageZoom})));
 import {FILE_PAGE_BYTES,lineCount,lineText,readFileViewArg,type FileReference,type FileViewResult} from '@shared/file-view';
 type TextResult=Extract<FileViewResult,{kind:'text'}>;
 const WINDOW=4000;
@@ -138,6 +140,15 @@ function Pdf({data,name}:{data:Uint8Array;name:string}){
   </div>;
 }
 
+/** A standalone raster uses the same explicit zoom/region review flow as an image inside a report. */
+function ImageBody({result}:{result:Extract<FileViewResult,{kind:'image'}>}){
+  const [open,setOpen]=useState(false),close=useCallback(()=>setOpen(false),[]);
+  const name=baseName(result.path);
+  return <><button type="button" className="viewer-image-open" onClick={()=>setOpen(true)} aria-label={t('viewer.imageZoom')}>
+    <img src={result.dataUrl} alt={name}/>
+  </button>{open&&<Suspense fallback={null}><ImageZoom images={[{src:result.dataUrl,caption:name,imagePath:result.path,reportFile:result.path}]} index={0} onMove={()=>{}} onClose={close} testBase="viewer"/></Suspense>}</>;
+}
+
 /** Where a page sits in a file that does not fit one page, with first/previous/next/last (none for a UTF-16 file). */
 function Pager({result,go}:{result:TextResult;go:(page:Request)=>void}){
   const end=result.offset+result.shown,lines=lineCount(result.text),fixed=result.paged===false;
@@ -212,10 +223,10 @@ function CitedFile({reference}:{reference:FileReference}){
       {real&&<button type="button" className="bx-btn s" onClick={()=>void showInFolder(real)} data-testid="viewer-show-in-folder"><IconExternal/>{t('viewer.showInFolder')}</button>}</div>
     {compare&&<Compare key={ref} path={reference.path} chatId={reference.chatId}/>}
     {pageError&&<p role="alert" data-testid="viewer-page-error">{t(`viewer.${pageError}`)}</p>}
-    <div className="file-context-layout"><div className="file-context-main">{!result?<p role="status">{t('viewer.loading')}</p>:reason?<Empty title={t(`viewer.${reason}`)}/>
-      :result.kind==='image'?<img src={result.dataUrl} alt={baseName(result.path)} style={{maxWidth:'100%',maxHeight:'75vh',objectFit:'contain'}}/>
+    <div className="file-context-layout"><div className="file-context-main"><ReportReview key={real??ref} file={real??reference.path} snapshot={result&&'size'in result?{size:result.size,...('mtimeMs'in result&&typeof result.mtimeMs==='number'?{mtimeMs:result.mtimeMs}:{}),...(result.kind==='text'?{offset:result.offset,shown:result.shown}:{})}:undefined}>{!result?<p role="status">{t('viewer.loading')}</p>:reason?<Empty title={t(`viewer.${reason}`)}/>
+      :result.kind==='image'?<ImageBody key={result.path} result={result}/>
       :result.kind==='pdf'?<Pdf key={ref} data={result.data} name={baseName(result.path)}/>
-      :result.kind==='text'?<TextBody key={ref} result={result} line={page.line} go={go}/>:null}</div>
+      :result.kind==='text'?<TextBody key={ref} result={result} line={page.line} go={go}/>:null}</ReportReview></div>
       {real&&<Suspense fallback={null}><FilePulse path={real}/></Suspense>}</div>
   </div>;
 }

@@ -10,12 +10,13 @@
 import { useMemo, useState, type MouseEvent } from 'react';
 import { localizeImages, useReportImages } from './ReportImages';
 import { Marked } from 'marked';
+import { reportImageExtension } from '../lib/report-images';
 import DOMPurify from 'dompurify';
 import { copyText, download, toast } from './ui';
 import { toCsv, fileSafe } from '../lib/table';
 import { t as tr } from '../../i18n';
 
-const marked = new Marked({ gfm: true, breaks: false });
+const marked = new Marked({ gfm: true, breaks: false }, reportImageExtension);
 let purify: ReturnType<typeof DOMPurify> | null = null;
 function sanitizer() {
   if (purify) return purify;
@@ -64,7 +65,7 @@ const wrapTables = (html: string) => {
 export function Markdown({ text, files, root, onOpenFile, name = 'tabella', testId, copy = false, copyBlocks = false, images = true, imageBase }: { text: string; files?: Set<string>; root?: string; onOpenFile?: (path: string) => void; name?: string; testId?: string; copy?: boolean; copyBlocks?: boolean; images?:boolean; imageBase?: string }) {
   const html = useMemo(() => { let h = renderMarkdown(text, files, root, images || imageBase !== undefined); if (imageBase !== undefined) h = localizeImages(h, imageBase); return copy || copyBlocks ? withCopy(h, copy) : h; }, [text, files, root, copy, copyBlocks, images, imageBase]);
   const [body, setBody] = useState<HTMLDivElement | null>(null);
-  const zoom = useReportImages(imageBase !== undefined ? body : null, html);
+  const zoom = useReportImages(imageBase !== undefined ? body : null, html, imageBase);
   const act = (e: MouseEvent<HTMLDivElement>) => {
     const t = e.target as HTMLElement;
     const c = copy || copyBlocks ? t.closest<HTMLElement>('[data-copy]') : null;

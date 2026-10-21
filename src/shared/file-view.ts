@@ -6,9 +6,9 @@ export interface FileReference { path:string; line?:number; column?:number; chat
 export const FILE_PAGE_BYTES=1_000_000;
 export type FileReadReason='outside'|'unsupported'|'missing'|'changed'|'binary'|'image'|'pdf';
 export type FileViewResult=
- |{kind:'text';path:string;size:number;offset:number;shown:number;text:string;more:boolean;firstLine?:number;paged?:false}
- |{kind:'pdf';path:string;size:number;data:Uint8Array}
- |{kind:'image';path:string;size:number;dataUrl:string}
+ |{kind:'text';path:string;size:number;mtimeMs?:number;offset:number;shown:number;text:string;more:boolean;firstLine?:number;paged?:false}
+ |{kind:'pdf';path:string;size:number;mtimeMs?:number;data:Uint8Array}
+ |{kind:'image';path:string;size:number;mtimeMs?:number;dataUrl:string}
  |{kind:'refused'|'missing'|'unsupported';reason:FileReadReason};
 /**
  * The one line rule of main (file-view.ts counts "\n" bytes for `firstLine` and cited lines) and the viewer (its rows

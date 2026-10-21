@@ -91,9 +91,9 @@ export async function readFileView(raw:string,options:{cwd?:string;offset?:numbe
    const cap=pdf?PDF_BYTES:IMAGE_BYTES;if(opened.size>cap)return{kind:'unsupported',reason:pdf?'pdf':'image'};
    const all=await readAt(fd,0,cap+1),final=await fd.stat();if(!same(final,opened))return{kind:'refused',reason:'changed'};
    if(all.length>cap||final.size!==all.length)return{kind:'refused',reason:'changed'};
-   if(pdf){if(!all.subarray(0,1024).includes('%PDF-'))return{kind:'unsupported',reason:'pdf'};return{kind:'pdf',path:real,size:all.length,data:new Uint8Array(all)};}
+   if(pdf){if(!all.subarray(0,1024).includes('%PDF-'))return{kind:'unsupported',reason:'pdf'};return{kind:'pdf',path:real,size:all.length,mtimeMs:final.mtimeMs,data:new Uint8Array(all)};}
    const size=rasterSize(all,mime!);if(!magicMatches(mime!,all)||!size||size.width<1||size.height<1||size.width>4096||size.height>4096||size.width*size.height>8_000_000)return{kind:'unsupported',reason:'image'};
-   return{kind:'image',path:real,size:all.length,dataUrl:`data:${mime};base64,${all.toString('base64')}`};
+   return{kind:'image',path:real,size:all.length,mtimeMs:final.mtimeMs,dataUrl:`data:${mime};base64,${all.toString('base64')}`};
   }
   // binary or not is decided once, from the head of the file (as V1 did), so every page of a text file stays readable:
   // a NUL further on (a log padded by a crash) is shown as a replacement character, never as a "binary" page
@@ -127,6 +127,6 @@ export async function readFileView(raw:string,options:{cwd?:string;offset?:numbe
   const nl=more&&end===null&&!utf16?read.lastIndexOf(NL):-1;
   const bytes=utf16?read.subarray(2,read.length-read.length%2):more&&end===null?read.subarray(0,nl>=Math.max(0,cited-start)?nl+1:utf8End(read)):read;
   const decoded=(utf16?bytes.toString('utf16le'):bytes.toString('utf8')).replace(/\0/g,'�'),text=start===0&&decoded.charCodeAt(0)===0xfeff?decoded.slice(1):decoded;
-  return{kind:'text',path:real,size:final.size,offset:start,shown:utf16?read.length:bytes.length,text,more,...(firstLine!==null?{firstLine}:{}),...(utf16?{paged:false as const}:{})};
+  return{kind:'text',path:real,size:final.size,mtimeMs:final.mtimeMs,offset:start,shown:utf16?read.length:bytes.length,text,more,...(firstLine!==null?{firstLine}:{}),...(utf16?{paged:false as const}:{})};
  }catch{return{kind:'missing',reason:'missing'};}finally{await fd?.close();}
 }
