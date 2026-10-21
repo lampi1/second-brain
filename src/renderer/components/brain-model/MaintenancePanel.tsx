@@ -2,16 +2,28 @@
 // why, the evidence and "Annulla" (or why it can no longer be undone), the "Esegui ora" button and the last pass. No
 // approval anywhere: the jobs apply their changes and the user can take any of them back. The migration report (former
 // runbook and routine sections turned into skills) is a separate block for the Skill page. Used by SkillsPage.tsx,
-// RulesPage.tsx and MemoryPage.tsx. Styles: styles/brain-model.css.
+// RulesPage.tsx and MemoryPage.tsx; Change also by LearningPage.tsx. Each change shows its evidence claim (ADR 0109): the
+// hypothesis, where it is measured and what the data say so far, with the verdict. Styles: styles/brain-model.css.
 import { useState } from 'react';
 import type { BrainChange, MaintenanceJobId, MaintenanceRun, MigrationReport } from '@shared/brain-model';
 import { locale, t } from '../../i18n';
 import { brainModel, rollbackChange, runMaintenance, useBrainModel } from '../../store/brain-model';
 import { toast } from '../../store/ui';
 import { changesOf } from '../../lib/brain-model-view';
+import { claimLine, scopeLine, verdictTone } from '../../lib/learning-view';
 
 export const when = (ms: number | null | undefined): string => (ms ? new Date(ms).toLocaleString(locale(), { dateStyle: 'short', timeStyle: 'short' }) : '—');
 const jobName = (job: BrainChange['job']) => t(`bm.job.${job}`);
+
+/** The change's claim: verdict badge, hypothesis and scope, then the numbers (the Apprendimento page's line). */
+function Claim({ c }: { c: NonNullable<BrainChange['claim']> }) {
+  const agents = brainModel.use(s => s.state?.agents);
+  const names = new Map((agents ?? []).map(a => [a.id, a.name]));
+  return <div className="bm-claim" data-verdict={c.verdict} data-testid="bm-claim">
+    <span className="bm-claim-head"><span className="bm-badge" data-tone={verdictTone(c.verdict)}>{t(`learn.v.${c.verdict}`)}</span>{t(`learn.hyp.${c.hypothesis}`)} · {scopeLine(c, names)}</span>
+    <span className="bm-claim-nums">{claimLine(c)}</span>
+  </div>;
+}
 
 export function Change({ c, busy }: { c: BrainChange; busy: boolean }) {
   const undo = async () => { const err = await rollbackChange(c.id); toast(err ?? t('bm.maint.undoneToast'), err ? 'err' : 'ok'); };
@@ -20,6 +32,7 @@ export function Change({ c, busy }: { c: BrainChange; busy: boolean }) {
       <span className="bm-change-meta"><span className="bm-tag" data-kind={c.kind}>{t(`bm.kind.${c.kind}`)}</span>{jobName(c.job)} · {when(c.at)}</span>
       <p className="bm-change-what">{c.summary}</p>
       <p className="bm-change-why"><span className="sr-only">{t('bm.maint.why')}: </span>{c.reason}</p>
+      {c.claim && <Claim c={c.claim} />}
       {c.evidence.length > 0 && <details className="bm-evidence"><summary>{t('bm.maint.evidence')} ({c.evidence.length})</summary><ul>{c.evidence.map(e => <li key={e}><code>{e}</code></li>)}</ul></details>}
     </div>
     {c.rolledBackAt ? <span className="bm-undone">{t('bm.maint.undone')}</span>

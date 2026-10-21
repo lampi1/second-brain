@@ -13,6 +13,7 @@ import { ConfigStore } from './brain/config';
 import { DemoBrain, DemoChats, FROZEN_EPOCH, seed, demoTree, type Emit, demoQuality } from './demo';
 import { DemoBrowser } from './demo-browser';
 import { demoBrainRuns, writeDemoBrain } from './brainmodel/demo';
+import { demoLearningRuns, writeDemoChanges } from './brainmodel/demo-learning';
 import type { AgentRun } from '../shared/agents';
 import { BrainModelService } from './brainmodel/service';
 import { writeDemoClassifiers, type DemoClassifierData } from './demo-classifiers';
@@ -108,8 +109,10 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   // loads pulizia-ambiente, the demo brain's never-used skill on the Memoria page
   let demoCls: DemoClassifierData | undefined;
   const demoBrainRoot = writeDemoBrain(path.join(ctx.userData, 'demo-agent-brain'), now());
+  // the Apprendimento page (ADR 0109): past changes with their claims and runs with the user's corrections
+  writeDemoChanges(ctx.userData, now());
   const brainModel: BrainModelService = new BrainModelService({ userData: ctx.userData, root: () => demoBrainRoot, home: null, catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning,
-    runs: (): AgentRun[] => [...demoBrainRuns(now(), brainModel.skillList().map(s => s.name)), ...(demoCls ??= writeDemoClassifiers(demoBrainRoot, ctx.userData, now(), brainModel.skillList().map((x: { name: string }) => x.name).filter(n => n !== 'pulizia-ambiente'))).runs], routing: () => brain.routingInfo(), now,
+    runs: (): AgentRun[] => [...demoBrainRuns(now(), brainModel.skillList().map(s => s.name)), ...demoLearningRuns(now()), ...(demoCls ??= writeDemoClassifiers(demoBrainRoot, ctx.userData, now(), brainModel.skillList().map((x: { name: string }) => x.name).filter(n => n !== 'pulizia-ambiente'))).runs], routing: () => brain.routingInfo(), now,
     suggestSkills: async text => (await suggestSkills(text)).candidates.map(c => c.name),
     emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: false });
   if (!brainModel.report()) await brainModel.maintain('migration').catch(e => log.warn('demo', 'demo migration failed', { cause: errText(e), hint: 'the Skill page shows the demo brain without the migrated skills' }));

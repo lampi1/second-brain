@@ -1,6 +1,6 @@
 // The brain model service (ADR 0077): the one entry point of the Brain pages and the maintenance jobs. It reads the
 // model (model.ts), runs the jobs (jobs.ts) with the change log (changes.ts), adds the Memoria page's statistics
-// (memory-stats.ts) and serves the read-only Classificatori view (classifiers.ts). Jobs run by themselves: the one-time migration shortly after start on a brain that has former
+// (memory-stats.ts), each change's evidence claim and the Apprendimento page (evidence.ts, ADR 0109) and serves the read-only Classificatori view (classifiers.ts). Jobs run by themselves: the one-time migration shortly after start on a brain that has former
 // runbook sections and no report yet, the corrections job right after a lesson is queued, every job every six hours,
 // and all of them on the maintenance button. No job asks for approval (owner, 2026-10-19); each change is logged with
 // an undo; a pass the app ran by itself that changed something is announced in the feed (`applied`: a quiet "Ruolo
@@ -20,6 +20,7 @@ import { readLocal, writeLocal } from '../agents/local-store';
 import { errText, log } from '../log';
 import { ChangeLog, type AgentRestorer, type AgentSnapshot } from './changes';
 import { classifiersState, readJobs } from './classifiers';
+import { claimOf, learningState, measurable, seal, type IntervalCache } from './evidence';
 import { corrections, mergeMemory, mergeSkills, migrate, repeatedTask, type AgentWriter, type JobContext, type JobResult } from './jobs';
 import { procedureSections } from './procedure-sources';
 import { memoryStats } from './memory-stats';
@@ -53,9 +54,10 @@ export class BrainModelService {
   private readonly reportFile: string;
   private readonly runFile: string;
   private running: Promise<BrainModelState> | null = null;
+  private readonly intervals: IntervalCache = new Map();
   private timers: NodeJS.Timeout[] = [];
   constructor(private readonly d: BrainModelDeps) {
-    this.log = new ChangeLog(d.userData, d.now);
+    this.log = new ChangeLog(d.userData, d.now, c => seal(c, this.roles()));
     this.reportFile = path.join(d.userData, 'brain-migration.json');
     this.runFile = path.join(d.userData, 'brain-maintenance.json');
     d.learning.onProposed = () => { void this.maintain('corrections', { auto: true }).catch(() => { /* logged inside */ }); };
@@ -63,6 +65,20 @@ export class BrainModelService {
   private now(): number { return this.d.now?.() ?? Date.now(); }
   private root(): string | null { const r = this.d.root(); try { return r && fs.statSync(r).isDirectory() ? fs.realpathSync(r) : null; } catch { return null; } }
   private profiles(): AgentProfile[] { try { return this.d.catalog.list().profiles; } catch { return []; } }
+  private roles(): AgentProfile[] { return this.profiles().filter(p => p.scope === 'role'); }
+  /** Each change with its evidence claim (sealed when it was made; an older entry is sealed with today's roles). */
+  private withClaims(changes: BrainChange[], roles: AgentProfile[], runs: AgentRun[]): BrainChange[] {
+    try { this.log.sealMissing(c => seal(c, roles)); } catch { /* sealed below for this read only */ }
+    if (this.intervals.size > 4000) this.intervals.clear();
+    const ok = measurable(runs);
+    let failed = 0;
+    const out = changes.map(c => {
+      try { return { ...c, claim: claimOf(c, this.log.seedOf(c.id) ?? seal(c, roles), ok, this.intervals) }; }
+      catch { failed++; return c; }
+    });
+    if (failed) log.warn('brain', 'evidence claims failed', { data: { failed }, hint: 'those changes are listed without their claim; the others keep theirs' });
+    return out;
+  }
   private skillDirs(root: string | null): SkillDir[] {
     const dirs: SkillDir[] = [];
     if (root) dirs.push({ dir: path.join(root, '.claude', 'skills'), home: 'brain' }, { dir: path.join(root, '.agents', 'skills'), home: 'brain' });
@@ -111,17 +127,22 @@ export class BrainModelService {
     const root = this.root(), profiles = this.profiles(), restorer = this.restorer();
     const skills = readSkills(this.skillDirs(root), root, profiles).map(s => ({ ...s, madeBy: this.log.madeBy(s.file) }));
     const roles = profiles.filter(p => p.scope === 'role'), memory = readMemory(root, roles);
+    const runs = (() => { try { return this.d.runs(); } catch { return []; } })();
     let stats: BrainModelState['memoryStats'];
     if (root) {
-      try { stats = memoryStats({ root, memory, profiles: roles, runs: (() => { try { return this.d.runs(); } catch { return []; } })(), skills, now: this.now() }); }
+      try { stats = memoryStats({ root, memory, profiles: roles, runs, skills, now: this.now() }); }
       catch (e) { log.warn('brain', 'memory statistics failed', { cause: errText(e), hint: 'the Memoria page shows the files without the charts' }); }
     }
+    const changes = this.withClaims(this.log.list(restorer), roles, runs);
+    let learning: BrainModelState['learning'];
+    try { learning = learningState(changes, roles, runs, this.now()); }
+    catch (e) { log.warn('brain', 'learning page failed', { cause: errText(e), hint: 'the Apprendimento page shows no curves' }); }
     return {
       root,
       agents: profiles.filter(p => p.scope === 'role').map(p => ({ id: p.id, name: p.name, role: p.purpose, skills: [...new Set([...p.skills, ...(p.knowhow?.linked ?? [])])], memory: root ? `agents/${portableId(p.id)}/memory.md` : null })),
       skills, rules: readRules(root), memory,
-      changes: this.log.list(restorer), migration: this.report(), lastRun: this.lastRun(),
-      ...(stats ? { memoryStats: stats } : {}),
+      changes, migration: this.report(), lastRun: this.lastRun(),
+      ...(stats ? { memoryStats: stats } : {}), ...(learning ? { learning } : {}),
     };
   }
 
