@@ -13,8 +13,11 @@ side question with the conversation's context, without touching it.
   since Lampo's engine last looked (`orchestratorContext`, src/main/chats/lampo-context.ts): the user's and the
   Orchestrator's messages, the tools it used, the cards it showed, one line each, newest kept under a cap (8000 chars).
   The first question of an engine gets the loaded conversation; later ones only the new part (no token spent twice).
+  The cursor is the newest item's time plus the items at that very millisecond; a text still streaming and a tool
+  still running come again with their end; it moves only once the message went.
 - The block is labelled context only: Lampo answers the user's question, never the Orchestrator's conversation, and
-  never acts on it (its frame says so). It stays read only, in plan mode, with read and web tools (ADR 0105).
+  never acts on it (its frame says so); square brackets inside the content become parentheses, so no line can close
+  the block or forge the user's question. It stays read only, in plan mode, with read and web tools (ADR 0105).
 - One way only: the Orchestrator still never sees Lampo, is not woken by it and gets nothing in its digest.
 
 ## Consequences

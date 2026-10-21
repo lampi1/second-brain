@@ -73,7 +73,7 @@ import { AgentAnalyticsCollector } from '../agents/collector';
 
 import { orchestratorRole, roleFrame } from '../agents/orchestrator-role';
 import { slug as slugTitle } from './mail';
-import { orchestratorContext } from './lampo-context';
+import { orchestratorContext, type LampoCursor } from './lampo-context';
 import { recallWarning, type Recall } from '../search/hybrid/recall';
 
 export interface ChatManagerOptions {
@@ -290,7 +290,7 @@ interface Rec {
   inWorktree?: boolean;
   costTotalUsd: number;
   /** Lampo (ADR 0106): the Orchestrator's items its engine already got, by engine (a new engine gets them again) */
-  lampoSeen?: { session: HarnessSession; at: number } | undefined;
+  lampoSeen?: { session: HarnessSession; cursor: LampoCursor } | undefined;
   items: ChatItem[];
   pending: Map<string, PendingRequest>;
   session: HarnessSession | null;
@@ -855,7 +855,8 @@ export class ChatManager implements ChatService {
     const estimate = r.s.isOrchestrator && !from && !resumed && t && !t.startsWith('[') ? this.requestEstimate(t) : null;
     const asked0 = estimate ? `${noted}\n\n${estimate}` : noted;
     // Lampo is a "btw" (ADR 0106): the user's question carries what the Orchestrator said and did since it last looked
-    const body = r.s.quick && !from && !resumed ? `${this.lampoContext(r)}${asked0}` : asked0;
+    const lampo = r.s.quick && !from && !resumed ? this.lampoContext(r) : null;
+    const body = lampo ? `${lampo.text}${asked0}` : asked0;
     // the role once per context: the Orchestrator's with the role catalog, a role chat's composed instructions; a
     // resumed session already holds it in its history, so it goes again only when the text changed or was compacted away
     const roleText = r.s.isOrchestrator ? `${orchestratorRole(r.agentInstructions || undefined, this.opts.roleCatalogBrief?.())}\n\n`
@@ -868,6 +869,7 @@ export class ChatManager implements ChatService {
     if (this.opts.checkpoints?.() && !r.s.isOrchestrator && !r.s.quick && !this.midTurn(r)) await this.checkpoint(r);
     try {
       r.session.send(`${role}${warning}${body}`, imgs);
+      if (lampo) r.lampoSeen = { session: r.session, cursor: lampo.seen }; // seen only once it went
       if (role) { r.rolePrimed = { session: r.s.sessionId ?? '', sig: roleSig }; this.persist(); }
     } catch (e) {
       throw new Error(`Messaggio non inviato: ${errText(e)}`);
@@ -881,14 +883,11 @@ export class ChatManager implements ChatService {
   }
 
   /** Lampo's view of the Orchestrator's conversation (ADR 0106): what is new for its engine, read only */
-  private lampoContext(r: Rec): string {
+  private lampoContext(r: Rec): ReturnType<typeof orchestratorContext> | null {
     const o = [...this.chats.values()].find(x => x.s.isOrchestrator && !x.s.closedAt);
-    if (!o || !r.session) return '';
+    if (!o || !r.session) return null;
     this.ensureHistory(o);
-    const since = r.lampoSeen?.session === r.session ? r.lampoSeen.at : 0;
-    const { text, seenAt } = orchestratorContext(o.items, since);
-    r.lampoSeen = { session: r.session, at: seenAt };
-    return text;
+    return orchestratorContext(o.items, r.lampoSeen?.session === r.session ? r.lampoSeen.cursor : null);
   }
 
   private autoActivity(r: Rec): void {
