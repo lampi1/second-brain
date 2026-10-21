@@ -17,7 +17,7 @@ import { ChatManager, type ChatManagerOptions } from '../../../src/main/chats/ma
 import type { HarnessSession, SessionOptions, SessionSink } from '../../../src/main/chats/session';
 import { delegationTools, stalledMin } from '../../../src/main/agents/delegation';
 import { gateRequest } from '../../../src/main/agents/role-gate';
-import { ROLE_DEFAULTS, ROLE_IDS, WORK_ROLE_IDS, DELEGATION_DEFAULTS, isWorkRole, launchGap, type DelegationSettings, type RoleId } from '../../../src/shared/roles';
+import { ROLE_DEFAULTS, ROLE_PREAMBLE, ROLE_IDS, WORK_ROLE_IDS, DELEGATION_DEFAULTS, isWorkRole, launchGap, type DelegationSettings, type RoleId } from '../../../src/shared/roles';
 import { checkContract, checkResult, delegationPrompt, depthOf, readDelegation, resultMessage } from '../../../src/shared/delegation';
 import { AGENT_LABEL, oneLine } from '../../../src/shared/agent-label';
 import type { AgentCatalog } from '../../../src/shared/agents';
@@ -591,6 +591,10 @@ describe('the pure parts', () => {
   it('a result answers every criterion; done needs them all met', () => {
     expect(() => checkResult({ outcome: 'done', summary: 's', output: 'o', doneWhen: [{ criterion: 'a', met: false }] }, ['a'])).toThrow(/partial/);
     expect(checkResult({ outcome: 'partial', summary: 's', output: 'o', doneWhen: [{ criterion: 'a', met: false }] }, ['a']).outcome).toBe('partial');
+  });
+  it('the role frame names agent_report with its full MCP name and says it may be deferred (#144)', () => {
+    expect(ROLE_PREAMBLE).toContain('mcp__second-brain__agent_report');
+    expect(ROLE_PREAMBLE).toContain('ToolSearch');
   });
   it('the first message carries the contract and never more', () => {
     const text = delegationPrompt({ goal: 'G', output: 'O', doneWhen: ['D'], context: 'C' }, { role: 'sentinel', parentTitle: 'P', title: 'T', skills: ['s1'] });
