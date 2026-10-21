@@ -52,13 +52,14 @@ import { waitsForPeople, waitsForWork } from '../../shared/waiting';
 import { claudeHome, findTranscript, readHistory } from './transcript';
 import { orchestratorOwner, plainOwner, type ResolvedRole } from '../agents/catalog';
 import { withinParent } from '../agents/worktrees';
-import { FAIL_CLOSED, aboveCeiling, allowsClass, belowParent, browserAccess, claudeDefaultMode, claudeTools, COMMAND_TOOLS, commandsReadOnly, narrowest, readOnlyCommand, within, type AgentPolicy, type BrowserAccess, type ReadScripts } from '../agents/tool-policy';
+import { FAIL_CLOSED, aboveCeiling, allowsClass, belowParent, browserAccess, claudeDefaultMode, claudeTools, COMMAND_TOOLS, commandsReadOnly, narrowest, readOnlyCommand, toolClassOf, within, type AgentPolicy, type BrowserAccess, type ReadScripts } from '../agents/tool-policy';
 import { readOnlyTools } from '../agents/read-tools';
 import { type AgentOwnerSnapshot, type AgentRun, type AgentRunEnd, type AgentRunOutcome, type AgentRunTags } from '../../shared/agents';
 import { AgentRunStore, addSkill, addTurn, APP_MAX, endRun, REPO_MAX, reopenRun, SKILL_ID, SKILLS_MAX, staleDue, tagName, type RunLinks } from '../agents/runs';
 import { reportOf } from '../agents/run-report';
 import { gateRequest, runtimePluginName, SubagentGate } from '../agents/role-gate';
 import { afterTree, KEEP as CHECKPOINTS_KEPT, prune as pruneCheckpoints, restore as restoreCheckpoint, snapshot as takeCheckpoint, type Checkpoint } from './checkpoints';
+import { autoPermit } from './auto-permit';
 import { TurnToolBudget } from '../agents/orchestrator-budget';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
 import { resultMessage, type DelegationLimitHit, type DelegationResult } from '../../shared/delegation';
@@ -255,6 +256,8 @@ interface Rec {
   /** ADR 0103: the files before each recent turn (checkpoints.ts), newest last; its repository's top folder (null = not
    *  a git work tree: no checkpoints); a note for the next message after the user undid a turn */
   checkpoints?: Checkpoint[];
+  /** the turn going on now has its own checkpoint (auto-permit lets edits and commands through only then) */
+  turnCheckpoint?: boolean;
   /** the session whose first API call was counted already (context-stats.ts cache) */
   cacheSession?: string;
   gitRoot?: string | null;
@@ -896,6 +899,7 @@ export class ChatManager implements ChatService {
     const role = roleText && (!r.rolePrimed || (!r.roleChecked && r.rolePrimed.sig !== roleSig)) ? roleText : '';
     r.roleChecked = true;
     // the files as they are before this turn (ADR 0103): what the user can put back with «Annulla l'ultimo turno»
+    if (!this.midTurn(r)) r.turnCheckpoint = false;
     if (this.opts.checkpoints?.() && !r.s.isOrchestrator && !r.s.quick && !this.midTurn(r)) await this.checkpoint(r);
     try {
       r.session.send(`${role}${warning}${body}`, imgs);
@@ -2234,6 +2238,28 @@ export class ChatManager implements ChatService {
     return true;
   }
 
+  /** ADR 0103: the app answers a permission request itself (chats/auto-permit.ts): normal work inside the chat's folder
+   *  passes, a destructive command is refused visibly with its reason, anything else reaches the user. True = answered. */
+  private autoPermitted(r: Rec, req: Omit<PendingRequest, 'chatId'>): boolean {
+    // a class the role was not given, or a writing command of a role that may only read commands, stays the user's call
+    // (Cursor and Codex do not enforce the role's tools themselves)
+    const c = toolClassOf(req.tool);
+    const command = (req.input as { command?: unknown } | null)?.command;
+    if (r.policy?.tools && c && !allowsClass(r.policy, c)) return false;
+    if (COMMAND_TOOLS.includes(req.tool) && commandsReadOnly(r.policy) && !readOnlyCommand(command, this.readScripts(r))) return false;
+    const v = autoPermit(req, { cwd: r.s.cwd, ceiling: r.policy?.ceiling ?? null, undoable: !!r.turnCheckpoint, readScripts: this.readScripts(r) });
+    if (v.kind === 'ask') return false;
+    if (v.kind === 'allow') {
+      r.session?.answer(req.id, { kind: 'permission', allow: true });
+      log.info('chats', 'auto-permit allowed', { chat: r.s.id, data: { tool: req.tool } });
+      return true;
+    }
+    this.addItem(r, sysItem('commandDestructive', { command: v.shown, reason: v.reason }, 'warn'), false);
+    r.session?.answer(req.id, { kind: 'permission', allow: false, message: v.message });
+    log.info('chats', 'auto-permit refused', { chat: r.s.id, data: { tool: req.tool } });
+    return true;
+  }
+
   /** Records the chat's files before a turn (checkpoints.ts); a folder outside git is asked once, a failure never holds
    *  the message. */
   private async checkpoint(r: Rec): Promise<void> {
@@ -2242,6 +2268,7 @@ export class ChatManager implements ChatService {
       const cp = await takeCheckpoint(r.s.cwd, `refs/sb/checkpoints/${r.s.id}/${Date.now()}`);
       if (!cp) { r.gitRoot = null; return; }
       r.gitRoot = cp.root;
+      r.turnCheckpoint = true;
       const list = r.checkpoints ??= [];
       list.push(cp);
       if (list.length > CHECKPOINTS_KEPT) list.shift();
@@ -2807,7 +2834,7 @@ export class ChatManager implements ChatService {
       },
       pending: req => {
         if (!live()) return;
-        if (this.gated(r, req) || this.refusedCommand(r, req)) return;
+        if (this.gated(r, req) || this.refusedCommand(r, req) || this.autoPermitted(r, req)) return;
         this.hook('analytics', () => this.analytics.pending(r.s, req));
         this.autoActivity(r);
         const full: PendingRequest = { ...req, chatId };

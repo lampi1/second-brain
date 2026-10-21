@@ -18,6 +18,11 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   instructions; Esc or «Chiudi senza salvare» goes back to the cards, nothing kept.
 
 ### Added
+- **Fewer permission popups, destructive commands refused** (owner, 2026-10-21; ADR 0103): the app answers a chat's
+  permission requests itself. Reads inside the chat's folder pass; edits and local commands pass while the turn can be
+  undone («Annulla l'ultimo turno»); force pushes, `git reset --hard`, recursive deletes of the folder, the home or a
+  drive, piping a download into a shell and similar are refused with their reason in the chat; pushes, `gh`/`az`, SSH,
+  databases, network calls, settings and hooks still ask you. A role set to «Chiede conferma» or «Solo piano» always asks.
 - **Apprendimento: what the brain's changes really proved** (owner, 2026-10-21, issue #127; ADR 0109): every change
   maintenance makes to skills, rules, memory or roles carries an evidence claim (hypothesis, the roles it is measured
   on, the user's corrections per run before and after, a 90% interval, a verdict only at 20/40/80/160 runs). A new page
