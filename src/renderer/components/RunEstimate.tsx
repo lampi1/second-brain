@@ -2,21 +2,14 @@
 // stime»). EstimateChip sits in a strip's facts: «STIMA ~4 min · ~0,12 $ · su 12 task simili ?» while the run is open
 // (with the time left once it is at work), «STIMA ~4 min → 6 min ✓» once it ended (✓ = the actual time fell between half
 // and double). Its "?" says how the figure is computed (which similar tasks, the classifier's kind, the middle-half range,
-// the confidence) and how accurate the estimates have been, week by week. OrchestratorPlan is the plan block under the
-// Orchestrator's head: the agents it started today with their estimates (a «via rapida» mark on a quick single-agent
-// job), the sum, and the accuracy line with its weekly bars. Data: lib/run-estimates.ts. Used by ChatTile.tsx and
-// OrchestratorTile.tsx.
+// the confidence) and how accurate the estimates have been, week by week. The Orchestrator's plan panel is gone (#124): the
+// same facts are on the strips and in each run's verdict. Data: lib/run-estimates.ts. Used by ChatTile.tsx.
 import type { ChatSummary } from '@shared/contract';
 import type { RunEstimateView } from '@shared/task-estimate';
-import { accuracySummary, estimateText, planOf, useRunEstimates, type AccuracySummary } from '../lib/run-estimates';
-import { formatCost, minutes } from '../lib/format';
-import { useNow } from '../lib/clock';
-import { useApp } from '../store/store';
-import { focusChat } from '../actions';
+import { accuracySummary, estimateText, useRunEstimates, type AccuracySummary } from '../lib/run-estimates';
+import { minutes } from '../lib/format';
 import { locale, t } from '../i18n';
 import { HelpTip } from './HelpTip';
-import { AgentAvatar } from './AgentAvatar';
-import { StatePill } from './ui';
 import '../styles/estimate.css';
 
 const weekLabel = (at: number) => new Intl.DateTimeFormat(locale(), { day: 'numeric', month: 'short' }).format(at);
@@ -34,9 +27,9 @@ export function AccuracyBars({ summary, testid }: { summary: AccuracySummary; te
 
 /** «entro ×2: 34/50 ▂▃▅▆»: how many estimates held, out of how many, and one bar per week. No "precisione" (it is the
  *  share inside a ×0.5-×2 band, not a precision) and no "+N pt in K settimane" trend (ADR 0101). */
-export function AccuracyNote({ summary, compact }: { summary: AccuracySummary | null; compact?: boolean }) {
-  if (!summary) return compact ? null : <p className="est-acc-none">{t('estimate.noAccuracy')}</p>;
-  return <div className={`est-acc${compact ? ' compact' : ''}`} data-testid="estimate-accuracy" data-pct={summary.pct}>
+export function AccuracyNote({ summary }: { summary: AccuracySummary | null }) {
+  if (!summary) return <p className="est-acc-none">{t('estimate.noAccuracy')}</p>;
+  return <div className="est-acc" data-testid="estimate-accuracy" data-pct={summary.pct}>
     <span className="est-acc-k">{t('estimate.accuracy', { k: summary.k, n: summary.n })}</span>
     <AccuracyBars summary={summary} />
   </div>;
@@ -89,45 +82,4 @@ export function StripEstimate({ chat, busy, workMs }: { chat: ChatSummary; busy:
   const data = useRunEstimates();
   if (!chat.run || !data) return null;
   return <EstimateChip chat={chat} view={data.runs[chat.run.runId]} summary={accuracySummary(data.accuracy)} busy={busy} workMs={workMs} />;
-}
-
-/** The Orchestrator's plan: what it started today, each with its estimate, the sum and the accuracy. Hidden when empty. */
-export function OrchestratorPlan() {
-  const data = useRunEstimates();
-  const now = useNow(60_000);
-  const chats = useApp(s => s.chats);
-  const plan = planOf(Object.values(chats), data?.runs, now);
-  if (!plan.rows.length) return null;
-  const summary = accuracySummary(data?.accuracy);
-  const total = [plan.timeMs ? `~${minutes(plan.timeMs)}` : null, plan.costUsd ? `~${formatCost(plan.costUsd)}` : null].filter(Boolean).join(' · ');
-  return <section className="est-plan" aria-label={t('estimate.plan.title')} data-testid="orchestrator-plan" data-rows={plan.rows.length} data-quick={plan.quick}>
-    <header className="est-plan-head">
-      <span className="est-plan-title">{t('estimate.plan.title')}</span>
-      <span className="est-plan-count">{t('estimate.plan.count', { n: plan.rows.length })}</span>
-      {total && <span className="est-plan-total" data-testid="orchestrator-plan-total"><span className="th-estimate-label">{t('estimate.plan.total')}</span>{total}</span>}
-      <HelpTip title={t('estimate.plan.title')} label={t('estimate.plan.title')} wide guide="orchestrator" testid="orchestrator-plan-help">
-        <p>{t('estimate.plan.tip')}</p>
-        <p className="est-tip-acc"><b>{t('estimate.accuracyTitle')}.</b> {summary ? t('estimate.accuracyLong', { pct: summary.pct, k: summary.k, n: summary.n }) : t('estimate.noAccuracy')} {t('estimate.accuracyTip')}</p>
-        {summary?.specificPct != null && <p className="est-tip-specific">{t('estimate.specific', { pct: summary.specificPct })}</p>}
-      </HelpTip>
-    </header>
-    <ul className="est-plan-rows">
-      {plan.rows.slice(0, 6).map(({ chat, view, ended }) => {
-        const e = view?.estimate, est = e ? estimateText(e) : null;
-        const actual = ended && view?.actual?.timeMs != null ? minutes(view.actual.timeMs) : null;
-        return <li key={chat.id}>
-          <button type="button" className="est-plan-row" onClick={() => focusChat(chat.id)} data-testid={`orchestrator-plan-row-${chat.id}`}>
-            <AgentAvatar avatar={chat.agent?.avatar} name={chat.agent?.name || chat.title} size={18} />
-            <span className="est-plan-name" title={chat.title}>{chat.title}</span>
-            {e?.quick && e.path !== 'tree' && <span className="est-quick" title={t('estimate.plan.quickTip')}>{t('estimate.plan.quick')}</span>}
-            <span className="est-plan-fig">{e && est ? (actual ? `${est.time ?? est.cost} → ${actual}` : [est.time, est.cost].filter(Boolean).join(' · ')) : <span className="est-plan-few">{t('estimate.plan.few')}</span>}
-              {actual && view?.hit != null && <span className={`th-estimate-mark ${view.hit ? 'est-held' : 'est-missed'}`} aria-label={t(view.hit ? 'estimate.held' : 'estimate.missed')}>{view.hit ? '✓' : '✗'}</span>}
-            </span>
-            <StatePill chat={chat} />
-          </button>
-        </li>;
-      })}
-    </ul>
-    <AccuracyNote summary={summary} compact />
-  </section>;
 }

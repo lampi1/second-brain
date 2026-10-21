@@ -27,7 +27,8 @@ test('the Dashboard header keeps its place on every tab and the notes map hosts 
     };
     const seen: Record<string, string> = {};
     await expect(page.getByRole('tab', { name: 'Mappa brain' })).toHaveCount(0);
-    for (const [name, file] of [['Mappa agenti', 'agents'], ['Costi', 'costs'], ['Errori', 'errors']] as const) {
+    await expect(page.getByRole('tab', { name: 'Costi' })).toHaveCount(0); // costs live under Andamento → Costi (#125)
+    for (const [name, file] of [['Mappa agenti', 'agents'], ['Errori', 'errors']] as const) {
       await page.getByRole('tab', { name }).click();
       await expect(page.getByRole('tab', { name })).toHaveAttribute('aria-selected', 'true');
       await shot(page, `dashboard-tab-${file}`);

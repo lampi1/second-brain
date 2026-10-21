@@ -2,7 +2,9 @@
 // card shows the character large and centred, a level with its verified successes beside it («Lv 4 Esperto · 38
 // riusciti verificati», ADR 0100) and its way to the next one, and a performance % — or "In rodaggio" below 5 judged
 // runs — each with a "?" whose bubble gives the formula; a role with no runs is a Lv 1 with the empty-state line; the
-// model tier chip reads «Modello: …», never «Livello». The flip to the back still works. Screenshots dark and light: test-results/shots/agent-cards-*.png.
+// model tier chip reads «Modello: …», never «Livello». The flip to the back still works, and the back holds the
+// agent's costs (#125): median per run and per verified success, with their counts, never a raw timestamp. «Modifica il ruolo» on the back opens the role's editor; Esc and «Chiudi senza salvare» come back (#126).
+// Screenshots dark and light: test-results/shots/agent-cards-*.png.
 import { expect, test, type Page } from '@playwright/test';
 import { goPage, launchDemo, shot } from './helpers';
 
@@ -60,11 +62,46 @@ test('agent cards: big centred character, level and performance with their "?" f
     await overview.evaluate(el => { for (let e: Element | null = el; e; e = e.parentElement) e.scrollTop = 0; });
     await page.waitForTimeout(300);
     await shot(page, 'agent-cards-dark');
-    // the flip still works from the front
+    // the flip still works from the front; the back has the agent's costs (#125)
     await artisan.getByTestId('catalog-flip-artisan').click();
     await expect(artisan).toHaveAttribute('data-flipped', 'true');
+    const costs = artisan.getByTestId('catalog-costs-artisan');
+    await expect(costs).toContainText(/\d+ lavori conclusi/);
+    await expect(artisan.getByTestId('catalog-cost-median-artisan')).toContainText(/\d+,\d\d\s\$/);
+    await expect(costs).not.toContainText(/\d{10,}/); // no timestamp read as a count
+    await expect(costs).not.toContainText('Equivalente di listino');
+    await costs.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(700);
+    await shot(page, 'agent-cards-back-costs-dark');
     await page.keyboard.press('Escape');
     await expect(artisan).toHaveAttribute('data-flipped', 'false');
+
+    // «Modifica il ruolo» on the back lands in the editor, focus in the instructions; Esc and «Chiudi senza salvare» go back (#126)
+    const studio = page.getByTestId('agent-studio');
+    const instructions = page.getByTestId('agent-instructions');
+    await artisan.getByTestId('catalog-flip-artisan').click();
+    await expect(artisan.getByTestId('catalog-open-artisan')).toHaveText('Modifica il ruolo');
+    await artisan.getByTestId('catalog-open-artisan').click();
+    await expect(page.getByTestId('agent-editor')).toBeVisible();
+    await expect(instructions).toBeFocused();
+    const saved = await instructions.inputValue();
+    await instructions.fill(`${saved} bozza da buttare`);
+    await page.keyboard.press('Escape');
+    await expect(overview.getByTestId('catalog-card-artisan')).toBeVisible();
+    await expect(studio).toHaveCount(0);
+    await overview.getByTestId('catalog-flip-artisan').click();
+    await overview.getByTestId('catalog-open-artisan').click();
+    await expect(instructions).toHaveValue(saved); // nothing kept from the dropped edit
+    await expect(page.getByTestId('agent-edit')).toBeVisible(); // the role's page stays around the editor
+    await page.getByTestId('agent-tier').click(); // Esc in an open dropdown closes the dropdown, not the editor
+    await expect(page.getByTestId('agent-tier')).toHaveAttribute('aria-expanded', 'true');
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('agent-tier')).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByTestId('agent-editor')).toBeVisible();
+    await shot(page, 'agent-cards-edit-dark');
+    await page.getByTestId('agent-editor').getByRole('button', { name: 'Chiudi senza salvare' }).click();
+    await expect(overview.getByTestId('catalog-card-artisan')).toBeVisible();
+    await expect(studio).toHaveCount(0);
 
     await theme(page, 'light');
     await goPage(page, 'agenti');

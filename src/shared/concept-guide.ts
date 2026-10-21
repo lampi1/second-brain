@@ -237,8 +237,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Apre una chat di lavoro nominando sempre il ruolo, con un titolo «Area · cosa», il contratto come primo messaggio e le skill suggerite per la richiesta. Il ruolo decide motore e modello; l’Orchestrator può chiedere un livello più alto, fino al massimo del ruolo.',
         'It opens a work chat always naming the role, with an "Area · what" title, the contract as the first message and the skills suggested for the request. The role decides engine and model; the Orchestrator may ask for a higher tier, up to the role’s maximum.'),
       // src/main/agents/task-estimate.ts estimateTool; src/main/agents/orchestrator-role.ts (ADR 0087)
-      b('Prima di partire stima la richiesta sui lavori simili già finiti (tempo, costo, su quanti lavori, affidabilità, quante parti) e prende la via rapida: una domanda breve la risponde lui, un lavoro veloce in una parte va a un solo agente senza sotto-chat; un albero di deleghe solo per il lavoro in più parti, che costa più token. Sotto la sua testata, il piano: gli agenti avviati oggi con la stima, il segno «via rapida» e quante stime restano entro ×2, settimana per settimana.',
-        'Before starting it estimates the request on similar finished jobs (time, cost, how many jobs, confidence, how many parts) and takes the fast path: a short question it answers itself, a quick one-part job goes to a single agent with no sub-chats; a delegation tree only for work in several parts, which costs more tokens. Under its head, the plan: the agents started today with their estimate, the "fast path" mark and how many estimates stay within ×2, week by week.'),
+      b('Prima di partire stima la richiesta sui lavori simili già finiti (tempo, costo, su quanti lavori, affidabilità, quante parti) e prende la via rapida: una domanda breve la risponde lui, un lavoro veloce in una parte va a un solo agente senza sotto-chat; un albero di deleghe solo per il lavoro in più parti, che costa più token. La stima di ogni agente è sulla sua striscia nella Grindhouse, e il verdetto di ogni lavoro dice se è rimasta entro ×2.',
+        'Before starting it estimates the request on similar finished jobs (time, cost, how many jobs, confidence, how many parts) and takes the fast path: a short question it answers itself, a quick one-part job goes to a single agent with no sub-chats; a delegation tree only for work in several parts, which costs more tokens. Each agent’s estimate is on its strip in the Grindhouse, and each job’s verdict says whether it stayed within ×2.'),
       // src/main/agents/run-feedback.ts metricsTool; src/main/agents/discovery.ts
       b('Dei figli vede solo lo stato e i numeri: mai il loro testo. Il risultato gli arriva quando il figlio chiude con il suo rapporto.',
         'Of its children it sees only state and numbers: never their text. The result reaches it when the child closes with its report.'),
@@ -314,24 +314,18 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'metrics',
     title: b('Metriche e statistiche degli agenti', 'Agent metrics and statistics'),
-    summary: b('Statistiche dalle sessioni osservate e metriche dalle run: due letture distinte del lavoro degli agenti.',
-      'Statistics from observed sessions and metrics from runs: two separate views of agents’ work.'),
+    summary: b('Le metriche di ogni agente dalle sue run concluse: lavori, successi verificati, costi, livello e performance sulla sua carta.',
+      'Each agent’s metrics from its ended runs: runs, verified successes, costs, level and performance on its card.'),
     points: [
-      // src/shared/agent-analytics.ts
-      b('Per ogni agente: costo reale, costo a listino e costo stimato, ciascuno con quante sessioni sono note e quante no.',
-        'For each agent: actual cost, list-price cost and estimated cost, each with how many sessions are known and how many are not.'),
-      b('I tempi sono divisi per tipo: esecuzione, attesa di te, attesa di un permesso, coda, sconosciuto (mediana).',
-        'Times are split by kind: execution, waiting for you, waiting for a permission, queue, unknown (median).'),
-      b('Le coorti raggruppano le sessioni completate per tipo di compito × motore × modello × sforzo.',
-        'Cohorts group completed sessions by task type × engine × model × effort.'),
-      // src/renderer/brain/pages/Costi.tsx
-      b('Le vedi nella pagina Costi, «Per agente · tutte le sessioni osservate», aggiornate ogni 5 secondi; nessuna classifica.',
-        'You see them on the Costs page, "By agent · all observed sessions", refreshed every 5 seconds; no ranking.'),
-      // src/main/agents/analytics.ts, src/main/agents/collector.ts
-      b('Le statistiche della pagina Costi vengono dalle sessioni e dai registri osservati.', 'The Costs page statistics come from observed sessions and ledgers.'),
+      // src/main/agents/analytics.ts, src/main/agents/collector.ts (#125: no page lists them since Costi dropped its per-agent blocks)
+      b('L’app osserva le sessioni di ogni agente (costi e tempi) per il suo uso interno; non le mostra più per agente in Costi.',
+        'The app observes each agent’s sessions (costs and times) for its own use; Costs no longer lists them per agent.'),
       // src/main/agents/run-metrics.ts; src/main/index.ts agents:metrics
       b('Il main calcola anche metriche per agente e versione dalle run concluse in agent-runs.json e dai riepiloghi delle run potate; le carte della pagina Agenti ne mostrano lavori conclusi, in corso e costo mediano.',
         'Main also computes per-agent and per-version metrics from ended runs in agent-runs.json and rollups of pruned runs; the Agenti page cards show ended runs, open runs and the median cost.'),
+      // src/renderer/components/AgentCatalogCard.tsx Costs (#125)
+      b('Sul retro della carta, i costi dell’agente: costo mediano per lavoro e costo per lavoro riuscito e verificato (il costo di tutti i lavori conclusi diviso per i riusciti verificati), con su quanti lavori. Un numero che manca è un trattino, con una riga che dice perché.',
+        'On the back of the card, the agent’s costs: median cost per run and cost per verified successful run (the cost of every ended run divided by the verified successful ones), with how many runs. A missing number is a dash, with one line saying why.'),
       // src/main/agents/standing.ts; src/renderer/components/AgentCatalogCard.tsx
       b('Ogni carta ha un livello e una performance. Livello: conta solo i lavori riusciti e verificati (dal tuo voto, da una revisione indipendente verificata o dai fatti: criteri soddisfatti, nessuna tua correzione, non rifatto in 7 giorni), mai quelli falliti o non verificati, e il numero vero è scritto accanto («Lv 6 Maestro · 38 riusciti verificati»); Lv 2 a 5, Lv 3 a 15, Lv 4 a 30 (ogni livello ne chiede 5 in più). Performance: media dei voti (riuscito 100%, in parte 50%, fallito 0%) pesata per chi ha votato (tu, una revisione o i fatti × 1, l’Orchestrator × 0,6; l’agente su sé stesso non conta) e per età (metà peso ogni 30 giorni); sotto 5 lavori valutati l’agente è «in rodaggio». Il «?» accanto a ciascuno dà la formula.',
         'Each card has a level and a performance. Level: only verified successful runs count (by your verdict, a verified independent review or the facts: criteria met, no correction from you, not redone within 7 days), never failed or unverified ones, and the real number is written beside it ("Lv 6 Master · 38 verified successes"); Lv 2 at 5, Lv 3 at 15, Lv 4 at 30 (each level asks 5 more). Performance: the average of verdicts (success 100%, partial 50%, failure 0%) weighted by who gave them (you, a review or the facts × 1, the Orchestrator × 0.6; the agent on itself does not count) and by age (half weight every 30 days); below 5 judged runs the agent is "warming up". The "?" beside each gives the formula.'),
@@ -341,9 +335,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
     tech: [
       tech(DATA, 'AgentMeasure { total, knownSubtotal, knownSessions, unknownSessions }; timing per categoria con medianMs.', 'AgentMeasure { total, knownSubtotal, knownSessions, unknownSessions }; timing per category with medianMs.'),
       // src/main/wiring.ts /api/agents/analytics
-      tech(WHERE, 'Statistiche delle sessioni: /api/agents/analytics; metriche delle run: IPC agents:metrics, anche filtrate per tag skill, app e repo.', 'Session statistics: /api/agents/analytics; run metrics: agents:metrics IPC, also filtered by skill, app and repo tags.'),
+      tech(WHERE, 'Metriche delle run: IPC agents:metrics, anche filtrate per tag skill, app e repo; le statistiche delle sessioni restano interne (/api/agents/analytics).', 'Run metrics: agents:metrics IPC, also filtered by skill, app and repo tags; the session statistics stay internal (/api/agents/analytics).'),
     ],
-    sources: ['src/shared/agent-analytics.ts', 'src/main/agents/analytics.ts', 'src/main/agents/run-metrics.ts', 'src/main/agents/standing.ts', 'src/renderer/components/AgentCatalogCard.tsx', 'src/main/index.ts', 'src/main/agents/collector.ts', 'src/renderer/brain/pages/Costi.tsx', 'docs/agent-evidence.md'],
+    sources: ['src/main/agents/analytics.ts', 'src/main/agents/run-metrics.ts', 'src/main/agents/standing.ts', 'src/renderer/components/AgentCatalogCard.tsx', 'src/main/index.ts', 'src/main/agents/collector.ts', 'docs/agent-evidence.md'],
   },
   {
     id: 'errors-rules',
@@ -613,8 +607,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'dashboard',
     title: b('La Dashboard', 'The Dashboard'),
-    summary: b('Solo statistiche, dal vivo: agenti, costi, contesto, errori, temi e spunti, tutte da dati reali. La mappa del brain è nella pagina Mappa.',
-      'Statistics only, live: agents, costs, context, errors, themes and tips, all from real data. The brain map is on the Map page.'),
+    summary: b('Solo statistiche, dal vivo: agenti, contesto, errori, temi e spunti, tutte da dati reali. I costi sono in Andamento → Costi, la mappa del brain nella pagina Mappa.',
+      'Statistics only, live: agents, context, errors, themes and tips, all from real data. Costs are in Andamento → Costi, the brain map on the Map page.'),
     points: [
       // src/renderer/dashboard/Dashboard.tsx, src/renderer/dashboard/data.ts
       b('«Mappa agenti»: le chat aperte e chi parla con chi (proprietà dell’Orchestrator, messaggi tra chat).',
@@ -622,8 +616,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/dashboard/BrainNotesMap.tsx (ADR 0077)
       b('Le note del brain e i loro collegamenti sono in Mappa → «Note del brain», letti ogni 30 secondi; «Adatta» rimette tutta la mappa in vista.',
         'The brain’s notes and their links are in Map → "Brain notes", read every 30 seconds; "Fit" brings the whole map back into view.'),
-      b('«Costi» per giorno, modello, motore e agente, in grafici con una riga di curiosità (il giorno più caro, il modello che pesa di più); «Token e contesto» avvisa all’80% della finestra di compattazione Claude, se riportata con il contesto misurato; altrimenti usa contextWarnTokens (default 200 000).',
-        '"Costs" by day, model, engine and agent, as charts under a row of curious facts (the priciest day, the model that weighs most); "Tokens & context" warns at 80% of the Claude compaction window when reported with measured context; otherwise it uses contextWarnTokens (default 200,000).'),
+      b('«Token e contesto» avvisa all’80% della finestra di compattazione Claude, se riportata con il contesto misurato; altrimenti usa contextWarnTokens (default 200 000).',
+        '"Tokens & context" warns at 80% of the Claude compaction window when reported with measured context; otherwise it uses contextWarnTokens (default 200,000).'),
       // src/renderer/dashboard/ErrorsTab.tsx, src/renderer/dashboard/errors.ts
       b('«Errori» raggruppa gli errori che si ripetono in schede: causa in parole semplici (limite d’uso, rete, accesso, contesto pieno…), quante volte, l’andamento su 14 giorni, l’ultima volta, dove (chat, ruolo, skill), cosa vuol dire e cosa fare; sotto, gli errori dell’AI che hai corretto per tipo, con la regola nata e se l’errore è tornato.',
         '"Errors" groups recurring errors into cards: the cause in plain words (usage limit, network, login, full context…), how many times, the 14-day trend, the last time, where (chat, role, skill), what it means and what to do; below, the AI errors you corrected by type, with the rule produced and whether the error came back.'),
@@ -638,7 +632,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(DATA, 'Un contesto non riportato conta come sconosciuto, mai come sotto soglia.', 'An unreported context counts as unknown, never as below the threshold.'),
       tech(WHERE, 'API del brain /api/map, /api/cost, /api/tables più lo stato delle chat dell’app.', 'Brain APIs /api/map, /api/cost, /api/tables plus the app’s chat state.'),
     ],
-    sources: ['src/renderer/dashboard/Dashboard.tsx', 'src/renderer/dashboard/ErrorsTab.tsx', 'src/renderer/dashboard/errors.ts', 'src/renderer/dashboard/facts.ts', 'src/renderer/dashboard/BrainNotesMap.tsx', 'src/renderer/dashboard/data.ts', 'src/shared/context.ts'],
+    sources: ['src/renderer/dashboard/Dashboard.tsx', 'src/renderer/dashboard/ErrorsTab.tsx', 'src/renderer/dashboard/errors.ts', 'src/renderer/dashboard/BrainNotesMap.tsx', 'src/renderer/dashboard/data.ts', 'src/shared/context.ts'],
   },
   {
     id: 'task-fatto',
@@ -859,6 +853,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/components/UsageBar.tsx
       b('In alto: spesa di oggi, finestra di 5 ore, settimana e le chat di oggi dalla più cara; verde sotto 70%, ambra da 70%, rosso da 90%.',
         'At the top: today’s spend, 5-hour window, week and today’s chats from the most expensive; green below 70%, amber from 70%, red from 90%.'),
+      // src/renderer/brain/pages/Costi.tsx (#125)
+      b('Andamento → Costi è l’unica pagina dei costi: le chat di oggi dal vivo, il periodo con il confronto, qualche curiosità (il giorno più caro, il modello che pesa di più), dove risparmiare, i grafici per giorno, tipo, modello e area e ogni chat. I costi per agente sono sul retro della sua carta in Agenti.',
+        'Andamento → Costi is the one costs page: today’s chats live, the period with its comparison, a few curious facts (the priciest day, the model that weighs most), where to save, charts by day, kind, model and area, and every chat. Per-agent costs are on the back of its card in Agenti.'),
       // src/main/chats/live-cost.ts priceUsage
       b('Il costo di un turno si calcola dai token ai prezzi di models.json, poi viene sostituito dal costo reale che la CLI riporta a fine turno.',
         'A turn’s cost is computed from tokens at models.json prices, then replaced by the real cost the CLI reports at the end of the turn.'),
@@ -1085,9 +1082,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/components/HeldNews.tsx
       b('Sulla colonna dell’Orchestrator vedi quante sono; un clic le elenca (chat, tipo, da quando, perché aspetta) e una riga apre la sua chat.',
         'On the Orchestrator’s column you see how many there are; a click lists them (chat, kind, since when, why it waits) and a row opens its chat.'),
-      // src/main/chats/held-news.ts
-      b('Guardarle non spende nulla e non cambia la consegna: è solo una finestra sulla coda.',
-        'Looking at them spends nothing and does not change the delivery: it is only a window on the queue.'),
+      // src/main/chats/held-news.ts seen; src/main/chats/orchestrator-wake.ts seen (#123)
+      b('Una riga che apri è letta: esce dall’elenco e non sveglia più l’Orchestrator, che la riceve solo insieme alla prossima consegna. Guardare l’elenco non spende nulla.',
+        'A row you open is read: it leaves the list and no longer wakes the Orchestrator, which gets it only with the next delivery. Looking at the list spends nothing.'),
+      // src/main/chats/manager.ts releaseResult; src/shared/sys.ts resultReady (#123)
+      b('Quando un ruolo che l’Orchestrator ha aperto per la tua domanda ha la risposta, nella chat dell’Orchestrator compare un avviso verde con il riassunto e «Apri»: nessun turno in più dell’Orchestrator.',
+        'When a role the Orchestrator opened for your question has the answer, a green notice with the summary and "Open" shows in the Orchestrator’s chat: no extra Orchestrator turn.'),
     ],
     analogy: b('Come la posta che la segreteria tiene da parte mentre sei in riunione: non si perde, arriva tutta insieme quando esci.',
       'Like the mail the front desk keeps aside while you are in a meeting: nothing is lost, it all arrives together when you come out.'),
@@ -1095,7 +1095,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(LIMITS, 'Raggruppamento ORCHESTRATOR_GROUP_MS = 30 s.', 'Grouping ORCHESTRATOR_GROUP_MS = 30 s.'),
       tech(WHERE, 'Code: OrchestratorWake (notizie dei lavori) e ChatMail (posta); lette da HeldNewsHub (IPC orchestrator:held).', 'Queues: OrchestratorWake (job news) and ChatMail (mail); read by HeldNewsHub (IPC orchestrator:held).'),
     ],
-    sources: ['src/main/chats/held-news.ts', 'src/main/chats/orchestrator-delivery.ts', 'src/renderer/components/HeldNews.tsx'],
+    sources: ['src/main/chats/held-news.ts', 'src/main/chats/orchestrator-delivery.ts', 'src/main/chats/orchestrator-wake.ts', 'src/main/chats/manager.ts', 'src/shared/sys.ts', 'src/renderer/components/HeldNews.tsx'],
   },
   {
     id: 'context',

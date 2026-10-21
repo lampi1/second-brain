@@ -5,6 +5,18 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 
 ## [Unreleased]
 
+### Changed
+- **The answer you wait for shows in the Orchestrator's chat** (#123, ADR 0099): when a role chat it opened for your
+  question finishes, the app's notice gives its summary with Apri, with no extra Orchestrator turn; a held news row you
+  open is read and leaves «novità in attesa».
+- **A cleaner Orchestrator column** (#124): no «Veloce» chip (quick questions go to Lampo) and no «Piano
+  dell'Orchestrator» panel (the estimates are on the strips).
+- **One costs page** (#125): Andamento → Costi, with the curious facts and the Cursor export coverage it lacked; the
+  Dashboard's Costi tab and the per-agent blocks are gone. Each agent's costs (median per run, per verified success,
+  with their counts) are on the back of its card.
+- **«Modifica il ruolo» on the card back** (#126): it opens the role's page with the editor open and the focus in the
+  instructions; Esc or «Chiudi senza salvare» goes back to the cards, nothing kept.
+
 ### Added
 - **Apprendimento: what the brain's changes really proved** (owner, 2026-10-21, issue #127; ADR 0109): every change
   maintenance makes to skills, rules, memory or roles carries an evidence claim (hypothesis, the roles it is measured
@@ -132,6 +144,11 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   "Discusso", which leads back to the Orchestrator. The command card's "Apri chat" (an existing chat) is now "Vai alla
   chat".
 ### Fixed
+- **Messages reach a chat's engine in the order shown** (#127): deliveries to one chat go one at a time on every
+  engine, so the user's message and a child's mail arriving together are never swapped by a checkpoint still running.
+- **Pulse's Apply works and says why when it cannot** (#128): a role keeps the model it already runs with when only
+  its text changes (Pulse's preset 'sonnet' was refused as unknown, so every learned rule failed); a refused proposal
+  now shows and logs its real reason instead of «Proposta non applicata».
 - **Read-only roles and the brain's node tools** (#93): a role limited to read-only commands runs the node scripts
   listed in `read-only-tools.md` in the brain (exact path, links resolved; any other script stays refused; only you
   edit the list). `agent_report` works in a chat the Orchestrator opened with `app_create_chat` (it reports to the

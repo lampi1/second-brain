@@ -255,8 +255,8 @@ export class AgentCatalogService {
   }
 
   /** The editable fields of `value` (falling back to `base` for the ones it leaves out), checked. `current` also checks
-   *  the engine and model against what is available now. */
-  private behaviour(value: Record<string, unknown>, id: string, current: boolean, base?: Behaviour): Behaviour {
+   *  the engine and model against what is available now; `keep` lets an edit keep the model the role already runs with. */
+  private behaviour(value: Record<string, unknown>, id: string, current: boolean, base?: Behaviour, keep = true): Behaviour {
     const p = { ...(base ?? {}), ...Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) } as Record<string, unknown>;
     const engine = text(p.engine, 60, 'Motore');
     if (!/^[a-z][a-z0-9_-]*$/.test(engine)) throw new Error('Motore non valido.');
@@ -267,7 +267,10 @@ export class AgentCatalogService {
       const e = this.d.models().find(x => x.engine === engine);
       if (!e) throw new Error('Il motore selezionato non è disponibile.');
       if (model !== null && !e.modelSelectable) throw new Error(e.modelReason ?? 'La scelta del modello non è supportata da questo motore. Usa il modello del livello.');
-      if (model !== null && !e.models.some(m => m.id === model)) throw new Error('Il modello non è tra quelli noti del motore. Aggiorna le disponibilità o usa il modello del livello.');
+      // a model the role already runs with is kept as it is: only a new choice must be one the engine is known to have
+      // (#128: Pulse's preset alias 'sonnet' is not in the observed list, and refused every rule its proposals added)
+      const kept = keep && !!base && base.engine === engine && (base.model ?? null) === model;
+      if (model !== null && !kept && !e.models.some(m => m.id === model)) throw new Error('Il modello non è tra quelli noti del motore. Aggiorna le disponibilità o usa il modello del livello.');
       if (p.effort && !e.effort) throw new Error('Questo motore non supporta la scelta dell’effort.');
     }
     // the API engine has no tools: a role on it reads only (every class allowed by default, ADR 0085, means nothing there)
@@ -407,7 +410,7 @@ export class AgentCatalogService {
     const entry = this.store.get(id, version);
     if (!entry) throw new Error('Questa versione non è più nella cronologia.');
     const { knowhow: _k, effort: _e, maxContext: _m, ...rest } = p; void _k; void _e; void _m;
-    const profile: AgentProfile = { ...rest, ...this.behaviour(entry.behaviour as unknown as Record<string, unknown>, id, true, rest as Behaviour), activeVersion: version,
+    const profile: AgentProfile = { ...rest, ...this.behaviour(entry.behaviour as unknown as Record<string, unknown>, id, true, rest as Behaviour, false), activeVersion: version,
       updatedAt: Math.max(this.now(), p.updatedAt + 1), lastEditedBy: by, ...(by === 'user' ? { userLocked: true } : {}) };
     this.commit(this.profiles.map(x => x.id === id ? profile : x), [], [{ agentId: id, version: p.activeVersion, state: 'superseded' }, { agentId: id, version, state: 'active' }]);
     this.knowhowChanged(p, profile);
@@ -444,7 +447,7 @@ export class AgentCatalogService {
     const p = this.find(req.roleId);
     if (req.roleVersion !== undefined && req.roleVersion !== p.activeVersion) throw new Error('Il ruolo è cambiato: rileggilo prima di avviarlo.');
     // known availability again at launch, never falling back to another engine or model
-    this.behaviour({}, p.id, true, p);
+    this.behaviour({}, p.id, true, p, false);
     const e = this.d.models().find(x => x.engine === p.engine)!;
     if (!e.enabled || !e.trusted) throw new Error(`Il motore di ${p.name} è spento o va riconfermato nelle Impostazioni.`);
     if (req.tier !== undefined && (!has(MODEL_TIERS, req.tier) || tierRank(req.tier) > tierRank(p.tierMax))) throw new Error(`${p.name} arriva al massimo al livello ${p.tierMax}.`);

@@ -1,7 +1,8 @@
 // Dashboard truthfulness and graph behaviour: unknowns, real message activity and bounded navigation.
 import { describe, expect, it } from 'vitest';
 import type { ChatSummary, ChatItem } from '../../src/shared/contract';
-import { brainChecks, chatName, connections, contextLevel, contextRatio, cursorCoverage, fitLayout, layout, neighbourhood, observedErrors, placeLabels } from '../../src/renderer/dashboard/data';
+import { cursorCoverage } from '../../src/renderer/brain/lib/cost-facts';
+import { brainChecks, chatName, connections, contextLevel, contextRatio, fitLayout, layout, neighbourhood, observedErrors, placeLabels } from '../../src/renderer/dashboard/data';
 import { columnSize } from '../../src/renderer/lib/orchestrator-dock';
 
 it.each([900, 1280, 1920])('reserves a visible coordinator and usable Dashboard at %i pixels', W => {

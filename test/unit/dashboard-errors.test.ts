@@ -3,7 +3,7 @@
 // skills, the AI errors by type with the rule's status, the trend and the quiet days; cost facts only from enough data.
 import { describe, expect, it } from 'vitest';
 import { causeOf, daysSince, groupAiErrors, groupErrors, signature, trendOf, type ObservedLike } from '../../src/renderer/dashboard/errors';
-import { costFacts } from '../../src/renderer/dashboard/facts';
+import { costFacts } from '../../src/renderer/brain/lib/cost-facts';
 import type { ErrorRow, ErrQuality } from '../../src/renderer/brain/types';
 
 const NOW = new Date(2026, 9, 19, 12, 0).getTime(), DAY = 864e5;
@@ -71,9 +71,9 @@ describe('cost facts', () => {
   const money = (v: number) => `$${v.toFixed(2)}`;
   it('names the priciest day, the top model and the priciest kind', () => {
     const f = costFacts({ total: 10, byDay: { '2026-10-17': { usd: 6, calls: 1 }, '2026-10-18': { usd: 2, calls: 1 }, '2026-10-19': { usd: 2, calls: 1 } }, byModel: { opus: { usd: 8, calls: 1 }, haiku: { usd: 2, calls: 1 } }, byKind: { fix: { usd: 7, calls: 1 }, qa: { usd: 3, calls: 1 } } }, money);
-    expect(f[0]).toMatch(/^Il giorno più caro è stato .+: \$6\.00, 1,8× la media della settimana\.$/);
-    expect(f[1]).toBe('opus vale 80% della spesa della settimana.');
-    expect(f[2]).toBe('Il lavoro che costa di più è «fix»: $7.00 in 7 giorni.');
+    expect(f[0]).toMatch(/^Il giorno più caro è stato .+: \$6\.00, 1,8× la media del periodo\.$/);
+    expect(f[1]).toBe('opus vale 80% della spesa del periodo.');
+    expect(f[2]).toBe('Il lavoro che costa di più è «fix»: $7.00 nel periodo.');
     expect(costFacts({ total: 0, byDay: {}, byModel: {}, byKind: {} }, money)).toEqual([]);
   });
 });

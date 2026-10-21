@@ -36,11 +36,4 @@ export const estimateEn: typeof estimateIt = {
   'estimate.kind.research': 'research',
   'estimate.kind.question': 'question',
   'estimate.kind.other': 'other',
-  'estimate.plan.title': 'Orchestrator’s plan',
-  'estimate.plan.count': (p: { n: number }) => (p.n === 1 ? '1 agent' : `${p.n} agents`),
-  'estimate.plan.total': 'total estimate',
-  'estimate.plan.quick': 'fast path',
-  'estimate.plan.quickTip': 'One agent, no sub-chats: similar tasks are quick and the request has one part. It costs fewer tokens than a delegation tree.',
-  'estimate.plan.few': 'fewer than 3 similar tasks: no estimate',
-  'estimate.plan.tip': 'The agents the Orchestrator started today, with the estimate it had before they started and, for the finished ones, the actual time. The Orchestrator takes the fast path (it answers, or one agent) when the request has one part and similar tasks are quick; a delegation tree only for work in several parts.',
 };
