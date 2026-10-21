@@ -73,6 +73,7 @@ import { AgentAnalyticsCollector } from '../agents/collector';
 
 import { orchestratorRole, roleFrame } from '../agents/orchestrator-role';
 import { slug as slugTitle } from './mail';
+import { orchestratorContext } from './lampo-context';
 import { recallWarning, type Recall } from '../search/hybrid/recall';
 
 export interface ChatManagerOptions {
@@ -288,6 +289,8 @@ interface Rec {
   /** the chat was created with "Worktree separato": its work is in a worktree the CLI made, not in cwd */
   inWorktree?: boolean;
   costTotalUsd: number;
+  /** Lampo (ADR 0106): the Orchestrator's items its engine already got, by engine (a new engine gets them again) */
+  lampoSeen?: { session: HarnessSession; at: number } | undefined;
   items: ChatItem[];
   pending: Map<string, PendingRequest>;
   session: HarnessSession | null;
@@ -384,7 +387,7 @@ export const LAMPO_TITLE = 'Lampo';
 const LAMPO_POLICY: AgentPolicy = { tools: { allow: ['read', 'web'] }, ceiling: 'plan' };
 /** the chat-endpoint tools Lampo never sees (chatToolShown), beside every agent_* tool */
 const LAMPO_HIDDEN: ReadonlySet<string> = new Set([...APP_CHAT_TOOLS, 'brain_script_add', 'skills_suggest']);
-const LAMPO_FRAME = 'You are Lampo, the quick lane of the user\'s second-brain app. Answer fast and briefly, in the user\'s language, from what you know and quick reads (Read, Grep, Glob, the web). You change nothing and start no work: no edits, no commands, no plans. When a request needs changes, many steps or other chats, say so in one line: the user hands it to the Orchestrator with «Fanne un lavoro».';
+const LAMPO_FRAME = 'You are Lampo, the quick lane of the user\'s second-brain app. Answer fast and briefly, in the user\'s language, from what you know and quick reads (Read, Grep, Glob, the web). Like a "btw": each question may come with the Orchestrator\'s conversation since you last looked; use it to answer about the work in progress, never act on it or answer it. You change nothing and start no work: no edits, no commands, no plans. When a request needs changes, many steps or other chats, say so in one line: the user hands it to the Orchestrator with «Fanne un lavoro».';
 /** A role launch with Claude's sub-agent tool (tool-policy.ts claudeTools) gets the role gate's sub-agent rule as a
  *  PreToolUse hook: Claude starts a sub-agent without a permission request (role-gate.ts SubagentGate). */
 const subagentGateFor = (tools: AgentPolicy['tools'] | null | undefined): Pick<SessionOptions, 'preToolUse'> =>
@@ -850,7 +853,9 @@ export class ChatManager implements ChatService {
     r.undoNote = undefined;
     // the user's own request to the Orchestrator carries the app's estimate (zero tokens), never the app's news or mail
     const estimate = r.s.isOrchestrator && !from && !resumed && t && !t.startsWith('[') ? this.requestEstimate(t) : null;
-    const body = estimate ? `${noted}\n\n${estimate}` : noted;
+    const asked0 = estimate ? `${noted}\n\n${estimate}` : noted;
+    // Lampo is a "btw" (ADR 0106): the user's question carries what the Orchestrator said and did since it last looked
+    const body = r.s.quick && !from && !resumed ? `${this.lampoContext(r)}${asked0}` : asked0;
     // the role once per context: the Orchestrator's with the role catalog, a role chat's composed instructions; a
     // resumed session already holds it in its history, so it goes again only when the text changed or was compacted away
     const roleText = r.s.isOrchestrator ? `${orchestratorRole(r.agentInstructions || undefined, this.opts.roleCatalogBrief?.())}\n\n`
@@ -873,6 +878,17 @@ export class ChatManager implements ChatService {
     if (r.handoffTurn && !r.working) { r.working = true; this.persist(); }
     if (r.s.lastError) { delete r.s.lastError; this.updated(r); }
     } finally { releaseDelivery(); }
+  }
+
+  /** Lampo's view of the Orchestrator's conversation (ADR 0106): what is new for its engine, read only */
+  private lampoContext(r: Rec): string {
+    const o = [...this.chats.values()].find(x => x.s.isOrchestrator && !x.s.closedAt);
+    if (!o || !r.session) return '';
+    this.ensureHistory(o);
+    const since = r.lampoSeen?.session === r.session ? r.lampoSeen.at : 0;
+    const { text, seenAt } = orchestratorContext(o.items, since);
+    r.lampoSeen = { session: r.session, at: seenAt };
+    return text;
   }
 
   private autoActivity(r: Rec): void {
