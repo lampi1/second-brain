@@ -145,6 +145,8 @@ export interface MaintenanceRun {
   at: number; jobs: { job: MaintenanceJobId; changes: number; note?: string }[];
   /** the log step of a full pass the user started (#150): the app's warnings and errors since the last one, grouped */
   logs?: LogScan;
+  /** when the last log step read the logs; every later pass carries it on (#150) */
+  logsAt?: number;
   /** the pass's result went to the Orchestrator (#150): true = delivered, else why not */
   handoff?: { sent: true } | { sent: false; why: string };
 }

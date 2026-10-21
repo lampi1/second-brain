@@ -32,6 +32,7 @@ export function createAgentPacks(userData: string, brain: BrainService, catalog:
     const guard = findGuard(domain.denyList);
     return guard ? { ...guard, allow: path.join(path.dirname(guard.deny), 'allow-agentpacks.txt') } : null;
   });
+  let toolsCache: { root: string; dir: string; at: number } | null = null;
   const packs: AgentPackFlows = new AgentPackFlows({ catalog, brainRoot: root, version: app.getVersion(), guards, runtimeRoot: path.join(userData, 'agent-pack-runtime'),
     scan: folder => scanTree(folder, guards(), electronNode()),
     openFile: file => new Promise<void>((resolve, reject) => {
@@ -53,7 +54,9 @@ export function createAgentPacks(userData: string, brain: BrainService, catalog:
       // the app's rendered copy of its shipped skills (#146): only a brain the app made has one; a failed render is logged
       let appTools: string | null = null;
       if (brain && !demo && isProduct(brain)) {
-        try { appTools = ensureTools(brain); }
+        // rendered once per brain and minute: ensureTools hashes every template file, and roles start often
+        const cached = toolsCache?.root === brain && Date.now() - toolsCache.at < 60_000 ? toolsCache.dir : null;
+        try { appTools = cached ?? ensureTools(brain); if (!cached) toolsCache = { root: brain, dir: appTools, at: Date.now() }; }
         catch (e) { log.warn('agents', 'App skills not available', { cause: e instanceof Error ? e.message : String(e), hint: 'Reinstall the release: its brain template could not be rendered' }); }
       }
       return skillsIn(skillFolders({ root: brain, home: demo ? null : os.homedir(), appTools }));

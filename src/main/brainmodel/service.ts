@@ -178,11 +178,13 @@ export class BrainModelService {
         }
       }
       const previous = this.lastRun();
-      const pass: MaintenanceRun = { at: this.now(), jobs: done.map(({ report: _r, ...x }) => { void _r; return x; }) };
+      // logsAt goes forward through every pass (a timer's too): the next log step reads only what came after the last one
+      const pass: MaintenanceRun = { at: this.now(), jobs: done.map(({ report: _r, ...x }) => { void _r; return x; }), ...(previous?.logsAt !== undefined ? { logsAt: previous.logsAt } : {}) };
       // the full pass the user started also reads the logs and ends in the Orchestrator (#150); a timer's pass does not
       const dir = !job && !opts.auto ? this.d.logDir?.() ?? null : null;
       if (dir) {
-        pass.logs = scanLogs(dir, previous?.logs ? previous.at : null, readNoise(this.noiseFile), this.now());
+        pass.logs = scanLogs(dir, previous?.logsAt ?? null, readNoise(this.noiseFile), this.now());
+        pass.logsAt = this.now();
         const fresh = pass.logs.groups.filter(g => !g.known).length;
         try { pass.handoff = !this.d.handoff ? { sent: false, why: 'nessun Orchestrator' } : await this.d.handoff(handoffText(pass, pass.logs)) ? { sent: true } : { sent: false, why: 'nessun Orchestrator aperto' }; }
         catch (e) { pass.handoff = { sent: false, why: errText(e).slice(0, 200) }; log.warn('brain', 'maintenance result not handed to the Orchestrator', { cause: errText(e), hint: 'open the Orchestrator and run the maintenance again' }); }

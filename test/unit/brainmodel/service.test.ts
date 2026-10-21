@@ -288,6 +288,7 @@ describe('one Manutenzione that reads the logs and hands the result to the Orche
     state = w.service.noise(drift.key, true);
     expect(state.lastRun!.logs!.groups.find(g => g.key === drift.key)!.known).toBe(true);
     // the next pass reads only what came after the previous one: nothing new here
+    await w.service.maintain('corrections'); // a one-job pass (like a timer's) keeps the log step's time
     state = await w.service.maintain();
     expect(state.lastRun!.logs!.since).toBe(NOW);
     expect(sent[1]).toContain('nessun gruppo nuovo');

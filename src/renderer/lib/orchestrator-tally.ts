@@ -12,7 +12,8 @@ export interface OrchestratorTally { started: number; counts: ReturnType<typeof 
 const dayStart = (now: number): number => { const d = new Date(now); d.setHours(0, 0, 0, 0); return d.getTime(); };
 
 function stateOf(c: ChatSummary): ChildState {
-  if (c.run?.report || c.work?.status === 'completed') return 'done';
+  if (c.run?.report) return c.run.report.outcome === 'blocked' ? 'err' : 'done'; // blocked: it stopped, it needs something
+  if (c.work?.status === 'completed') return 'done';
   if (c.closedAt || c.state === 'closed') return 'closed';
   if (c.state === 'waiting' || c.pending > 0 || c.waitsOn) return 'wait';
   if (c.state === 'error') return 'err';

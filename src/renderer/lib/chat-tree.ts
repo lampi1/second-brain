@@ -74,8 +74,8 @@ export function childState(c: StateRow, refused = false): ChildState {
 /** Still on the delegated work (a full thread card); the others fold into a compact row. */
 export const activeState = (s: ChildState): boolean => s !== 'done' && s !== 'partial' && s !== 'blocked' && s !== 'noreport' && s !== 'closed';
 /** A parent's children counted by state, one source for every counter (KidsBar, the sidebar tree, #152): working,
- *  waiting for the user, stopped (a turn ended without a result, an error, a refused permission) and finished. */
+ *  waiting for the user, stopped (a turn ended without a result or a report, an error, a refused permission), finished. */
 export function kidCounts(states: readonly ChildState[]): { run: number; wait: number; stuck: number; done: number } {
   const n = (...of: ChildState[]) => states.filter(s => of.includes(s)).length;
-  return { run: n('run', 'start', 'queued'), wait: n('wait'), stuck: n('stall', 'err', 'refused'), done: n('done', 'partial') };
+  return { run: n('run', 'start', 'queued'), wait: n('wait'), stuck: n('stall', 'err', 'refused', 'noreport'), done: n('done', 'partial') };
 }

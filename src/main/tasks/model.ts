@@ -203,7 +203,7 @@ export function alertEvents(alerts: readonly StoredNews[], max = 3): FeedInput[]
 /** A script's stderr without Node's own warnings (`(node:123) [DEP0190] DeprecationWarning: …` and the `(Use \`node
  *  --trace-deprecation …\`)` hint after it): they come first and hid the real error in the log and on the page (#149). */
 export function scriptStderr(stderr: string): string {
-  return stderr.split('\n').filter(l => !/^\s*\(node:\d+\) (\[[A-Z0-9]+\] )?\w*Warning\b/.test(l) && !/^\s*\(Use `\S+ --trace-[\w-]+ /.test(l)).join('\n').trim();
+  return stderr.split('\n').filter(l => !/^\s*\(node:\d+\) (\[[A-Z0-9_]+\] )?\w*Warning\b/.test(l) && !/^\s*\(Use `\S+ --trace-[\w-]+ /.test(l)).join('\n').trim();
 }
 
 /** What a failed run logs as its cause: the end of its stderr (the error, after any stack noise), at most 300 characters. */

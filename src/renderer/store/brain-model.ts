@@ -22,7 +22,9 @@ function start(): void {
   sb.on('agents:changed', () => { void refreshBrainModel(); });
   void refreshBrainModel();
 }
-export function useBrainModel() { useEffect(start, []); return brainModel.use(s => s); }
+/** live = false: the store as it is, without reading the brain model now (the Orchestrator's maintenance icon, #150:
+ *  its pass brings the state back) */
+export function useBrainModel(live = true) { useEffect(() => { if (live) start(); }, [live]); return brainModel.use(s => s); }
 
 async function act(run: () => Promise<BrainModelState>): Promise<string | null> {
   if (brainModel.get().busy) return null;

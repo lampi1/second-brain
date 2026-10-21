@@ -1979,6 +1979,8 @@ export class ChatManager implements ChatService {
   private owedReport(r: Rec, why: 'idle' | 'exit'): void {
     const d = r.s.delegation;
     if (!d || !r.s.parentId || d.result || r.s.closedAt || this.quitting || r.archiving || this.chats.get(r.s.id) !== r) return;
+    // whatever ended the turn, a child still waiting on its parent's answer, its own children or a request owes nothing yet
+    if (r.pending.size > 0 || r.askedParentAt !== undefined || this.delegatedBusy(r.s.id) || (r.s.agentChildren?.active ?? 0) > 0) return;
     if (why === 'idle') {
       const last = r.s.lastResult;
       if (!last || last.isError || last.interrupted || r.session?.busy || r.working || r.pending.size > 0 || r.s.queued || r.handoffTurn || r.deliveryHolds) return;
@@ -1987,7 +1989,7 @@ export class ChatManager implements ChatService {
       if (!r.reportNudged) {
         r.reportNudged = true;
         log.info('chats', 'delegated chat ended its turn without agent_report: told once', { chat: r.s.id, data: { parent: r.s.parentId } });
-        const text = `${APP_EVENT_LABEL}\nIl tuo turno è finito senza agent_report e il tuo genitore aspetta il risultato. Chiamalo ora una volta: mcp__second-brain__agent_report (se è differito, caricalo prima con ToolSearch), con outcome done, partial o blocked e doneWhen per ogni criterio. Se stai aspettando una persona, chiedilo con il pannello delle domande.`;
+        const text = `${APP_EVENT_LABEL}\nIl tuo turno è finito senza agent_report e il tuo genitore aspetta il risultato. Chiamalo ora una volta: agent_report del server MCP second-brain (in Claude Code mcp__second-brain__agent_report; se è differito, caricalo prima con ToolSearch), con outcome done, partial o blocked e doneWhen per ogni criterio. Se stai aspettando una persona, chiedilo con il pannello delle domande.`;
         void this.send(r.s.id, text, undefined, false, 'second-brain', false, { kind: 'app' }).catch(e => {
           log.warn('chats', 'report reminder not delivered', { chat: r.s.id, cause: errText(e), hint: 'the delegation is closed without a report instead' });
           this.closeWithoutReport(r, 'idle');

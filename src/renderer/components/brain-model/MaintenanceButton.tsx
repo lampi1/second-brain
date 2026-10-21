@@ -10,7 +10,7 @@
 import { useRef, useState } from 'react';
 import { MAINTENANCE_JOBS } from '@shared/brain-model';
 import { t } from '../../i18n';
-import { markLogGroup, runMaintenance, useBrainModel } from '../../store/brain-model';
+import { brainModel, markLogGroup, refreshBrainModel, runMaintenance, useBrainModel } from '../../store/brain-model';
 import { HelpTip } from '../HelpTip';
 import { IconSparkle } from '../Icons';
 import { IconButton, Modal } from '../ui';
@@ -18,7 +18,7 @@ import { Change, when } from './MaintenancePanel';
 import '../../styles/memory.css';
 
 export function MaintenanceButton({ testId = 'bm-maint-now', compact = false }: { testId?: string; compact?: boolean }) {
-  const { state, busy } = useBrainModel();
+  const { state, busy } = useBrainModel(!compact);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ran, setRan] = useState(false);
@@ -26,7 +26,9 @@ export function MaintenanceButton({ testId = 'bm-maint-now', compact = false }: 
   // stamps every change with the same time)
   const before = useRef<Set<string>>(new Set());
   const run = async () => {
-    before.current = new Set((state?.changes ?? []).map(c => c.id));
+    // the compact icon has not read the model yet: read it first, so only this pass's changes count as new
+    if (!brainModel.get().state) await refreshBrainModel();
+    before.current = new Set((brainModel.get().state?.changes ?? []).map(c => c.id));
     setError(null); setRan(false); setOpen(true);
     const err = await runMaintenance();
     setError(err); setRan(true);
@@ -37,7 +39,7 @@ export function MaintenanceButton({ testId = 'bm-maint-now', compact = false }: 
   const freshGroups = logs?.groups.filter(g => !g.known).length ?? 0;
   return <div className={`mm-maint${compact ? ' compact' : ''}`} data-testid={testId}>
     {compact
-      ? <IconButton label={busy ? t('mm.maint.running') : t('mm.maint.button')} disabled={busy || !state?.root} onClick={() => void run()} testid={`${testId}-run`}><IconSparkle size={14} /></IconButton>
+      ? <IconButton label={busy ? t('mm.maint.running') : t('mm.maint.button')} disabled={busy} onClick={() => void run()} testid={`${testId}-run`}><IconSparkle size={14} /></IconButton>
       : <>
         <button type="button" className="btn btn-primary btn-m mm-maint-btn" disabled={busy || !state?.root} onClick={() => void run()} data-testid={`${testId}-run`}>
           <IconSparkle /> {busy ? t('mm.maint.running') : t('mm.maint.button')}
