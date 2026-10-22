@@ -3,7 +3,7 @@
 // CorrectThought.tsx, ADR 0058, the correction shown as its own bubble), tool
 // rows (a plain Italian line of what the tool does, shared/explain.ts; status icon, +/− counts; the raw command, diff
 // or output folded under it), system notices (the "Dove eravamo" recap styled apart; the "continua da qui" divider of a
-// cold continuation, with the previous session folded above it: ADR 0031), turn results and the visuals a chat showed
+// cold continuation, with the previous session folded above it: ADR 0031), turn results, ```mermaid / ```chart blocks drawn (VisualBlock.tsx) and the visuals a chat showed
 // with show_ui (GenUi.tsx ArtifactCard; one waiting for its question is hidden). Code blocks of assistant messages get their own toolbar (Copia; Esegui on shell blocks of an app
 // chat: CodeBlock.tsx; the chat id comes from ItemList's chatId); a click on copyable inline code copies it, on a file path or a link it opens a preview (LinkPeek.tsx). Each row is memoized by its item, so a streaming
 // message re-renders only itself (at most once a frame, re-parsing only its last markdown block); tool rows show live
@@ -20,6 +20,7 @@ import type { ChatItem, FileDiff } from '@shared/contract';
 import { diffTotals, duration, formatCost, toolLabel } from '../lib/format';
 import { markdownParts, renderMarkdown, splitBlocks, type MdPart } from '../lib/markdown';
 import { CodeBlock } from './CodeBlock';
+import { VisualBlock, isVisualLang } from './VisualBlock';
 import { explainTool } from '@shared/explain';
 import { useNow } from '../lib/clock';
 import { IconAlert, IconArrowDown, IconArrowRight, IconBell, IconBolt, IconBranch, IconCheck, IconChevronDown, IconChevronRight, IconInfo, IconLink, IconPlus, IconRefresh, IconSend, IconSparkle, IconSpinner, IconTerminal, IconX } from './Icons';
@@ -144,6 +145,7 @@ const Message = memo(function Message({ id, text, streaming }: { id: string; tex
         const tail = !!streaming && i === groups.length - 1;
         return g.kind === 'md'
           ? <div key={i} className={`md ${tail ? 'streaming' : ''}`}>{g.parts.map(x => <div key={x.key} className="md-b" dangerouslySetInnerHTML={{ __html: x.html }} />)}</div>
+          : isVisualLang(g.part.lang) ? <VisualBlock key={i} chatId={chatId} itemId={id} lang={g.part.lang} code={g.part.code} streaming={tail} />
           : <CodeBlock key={i} chatId={chatId} itemId={id} lang={g.part.lang} code={g.part.code} streaming={tail} />;
       })}
     </div>

@@ -1,0 +1,63 @@
+/* The opening splash (components/Splash.tsx): always dark, a workshop at night, whatever the theme (the window's own
+   background is dark before the page paints, so a light theme never flashes). Phases on .splash: run (the disc
+   cuts the word; the freshly cut letters glow), hot (the word cools to steel, a glint runs over it, the sentence
+   rises), out (fades into the app). .splash-still: prefers-reduced-motion, nothing moves. */
+.splash {
+  position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; overflow: hidden; cursor: pointer;
+  background:
+    radial-gradient(ellipse 60% 45% at 50% 52%, rgba(255, 120, 40, 0.10), transparent 70%),
+    radial-gradient(ellipse at 50% 45%, #17140f 0%, #0c0d11 55%, #050608 100%);
+  color: #eceef3; font-family: var(--font-display); user-select: none;
+  transition: opacity 0.38s ease, transform 0.38s cubic-bezier(0.2, 0.7, 0.2, 1), filter 0.38s ease;
+}
+.splash-out { opacity: 0; transform: scale(1.04); filter: blur(2px); pointer-events: none; }
+.splash-still, .splash-still * { transition-duration: 0.12s !important; animation: none !important; }
+
+.splash-gears { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.9; }
+.splash-gear { fill: rgba(255, 255, 255, 0.012); stroke: rgba(255, 255, 255, 0.07); stroke-width: 2; transform-box: fill-box; transform-origin: center; }
+.splash-gear.g1 { animation: splash-spin 16s linear infinite; }
+.splash-gear.g2 { animation: splash-spin 10s linear infinite reverse; }
+.splash-hub { fill: none; stroke: rgba(255, 255, 255, 0.06); stroke-width: 2; }
+
+.splash-stage { position: relative; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 0 24px; max-width: 1100px; text-align: center; }
+.splash-word {
+  position: relative; font: 900 clamp(64px, 10.5vw, 168px)/0.95 var(--font-display); letter-spacing: 0.035em; padding: 0 0.04em;
+  color: transparent; -webkit-background-clip: text; background-clip: text;
+  /* a glint band (moved in the hot phase) over brushed steel */
+  background-image:
+    linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.95) 48%, transparent 56%),
+    linear-gradient(180deg, #ffffff 0%, #dfe3ea 34%, #8a92a3 50%, #eef0f4 66%, #a4abba 100%);
+  background-size: 260% 100%, 100% 100%; background-position: 120% 0, 0 0; background-repeat: no-repeat;
+  filter: drop-shadow(0 0 22px rgba(255, 130, 40, 0.55)) drop-shadow(0 3px 0 rgba(0, 0, 0, 0.7));
+  transition: filter 1.1s ease;
+}
+/* the freshly cut letters: white-hot to orange, cooling off in the hot phase */
+.splash-word::after {
+  content: attr(data-text); position: absolute; inset: 0; padding: inherit; color: transparent; -webkit-background-clip: text; background-clip: text;
+  background-image: linear-gradient(180deg, #fff6d5 0%, #ffc15a 42%, #ff6a1f 78%, #c2290f 100%);
+  opacity: 1; transition: opacity 1s ease 0.05s;
+}
+.splash-hot .splash-word, .splash-out .splash-word { filter: drop-shadow(0 0 10px rgba(255, 130, 40, 0.12)) drop-shadow(0 3px 0 rgba(0, 0, 0, 0.7)); animation: splash-glint 1.1s ease-out 0.25s both; }
+.splash-hot .splash-word::after, .splash-out .splash-word::after { opacity: 0; }
+.splash-still .splash-word::after { opacity: 0; }
+
+.splash-rule { width: 0; height: 2px; background: linear-gradient(90deg, transparent, #ff8a2a 30%, #ffd27a 50%, #ff8a2a 70%, transparent); transition: width 0.7s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.splash-hot .splash-rule, .splash-out .splash-rule { width: min(62%, 640px); }
+
+.splash-sub { display: flex; flex-direction: column; align-items: center; gap: 10px; opacity: 0; transform: translateY(10px); transition: opacity 0.45s ease 0.12s, transform 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) 0.12s; }
+.splash-hot .splash-sub, .splash-out .splash-sub { opacity: 1; transform: none; }
+.splash-label { font: 700 11px var(--font); letter-spacing: 0.3em; text-transform: uppercase; color: #f2b64c; }
+.splash-line { margin: 0; max-width: 46ch; font: 400 clamp(17px, 1.6vw, 23px)/1.45 var(--font-display); color: #e3e5ea; text-wrap: balance; }
+
+.splash-skip { position: absolute; bottom: 26px; left: 0; right: 0; text-align: center; font: 500 11px var(--font); letter-spacing: 0.08em; color: rgba(255, 255, 255, 0.34); animation: splash-fade 0.4s ease 0.7s both; }
+
+.splash-disc { position: fixed; left: 0; top: 0; opacity: 0; pointer-events: none; will-change: transform; filter: drop-shadow(0 0 18px rgba(255, 150, 50, 0.55)) drop-shadow(0 6px 10px rgba(0, 0, 0, 0.6)); }
+.splash-spin { animation: splash-spin 0.14s linear infinite; }
+.splash-grit { stroke: rgba(255, 255, 255, 0.16); stroke-width: 2; }
+.splash-nut { fill: #8e95a3; stroke: #e6e8ed; stroke-width: 2; }
+.splash-rim { fill: none; stroke: #ffcf7a; stroke-width: 1.5; stroke-dasharray: 5 9; opacity: 0.8; }
+.splash-sparks { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+@keyframes splash-spin { to { transform: rotate(360deg); } }
+@keyframes splash-glint { from { background-position: 120% 0, 0 0; } to { background-position: -40% 0, 0 0; } }
+@keyframes splash-fade { from { opacity: 0; } to { opacity: 1; } }

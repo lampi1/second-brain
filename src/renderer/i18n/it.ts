@@ -21,6 +21,7 @@ import {studioIt}from'./areas/studio.it';
 import { permissionsIt } from './areas/permissions.it';
 import { langSwitchIt } from './areas/lang-switch.it';
 import { chatIt } from './areas/chat.it';
+import { visualsIt } from './areas/visuals.it';
 import { dialogsIt } from './areas/dialogs.it';
 import { toolsIt } from './areas/tools.it';
 import { brainPagesIt } from './areas/brainPages.it';
@@ -102,6 +103,7 @@ export const it = {
   ...settingsIt,
   ...profileIt,
   ...chatIt,
+  ...visualsIt,
   ...dialogsIt,
   ...toolsIt,
   ...brainPagesIt,
