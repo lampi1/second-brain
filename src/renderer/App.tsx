@@ -15,7 +15,7 @@ import { sameList } from './store/state';
 import { useApp } from './store/store';
 import { openModal, closeModal, pageLabel, setMap, setPrefs, toast, ui } from './store/ui';
 import {
-  back, brainBridge, escapeOne, focusChat, focusTile, forward, go, goTarget, nextThing, openLink, stopAllAsk, stopFocused, closeFocused, toggleCenter, toggleFocusMode, toggleMaximize, toggleOrchestrator, askRenewOrchestrator, newRequest,
+  back, brainBridge, closeViewer, escapeOne, toggleViewerFull, viewerStep, focusChat, focusTile, forward, go, goTarget, nextThing, openLink, stopAllAsk, stopFocused, closeFocused, toggleCenter, toggleFocusMode, toggleMaximize, toggleOrchestrator, askRenewOrchestrator, newRequest,
 } from './actions';
 import { TopBar } from './components/TopBar';
 import { BrainSetupBanner } from './components/BrainSetupBanner';
@@ -48,6 +48,8 @@ import { MapPage } from './components/brain-model/MapPage';
 import { LogPage } from './components/LogPage';
 // the Guida (three languages of cards) loads when it opens, not with the first screen
 const GuidePage = lazy(() => import('./components/GuidePage').then(m => ({ default: m.GuidePage })));
+// the file viewer overlay loads when a file is first opened
+const ViewerOverlay = lazy(() => import('./components/viewer/ViewerOverlay').then(m => ({ default: m.ViewerOverlay })));
 
 const editable = (t: EventTarget | null) => {
   const el = t as HTMLElement | null;
@@ -59,7 +61,7 @@ function onKey(e: KeyboardEvent): void {
   if (e.defaultPrevented) return;
   const u = ui.get();
   // "G then a letter": go to a section (never while typing in a field, never under a dialog)
-  if (!u.modal && !editable(e.target)) {
+  if (!u.modal && !u.viewer.open && !editable(e.target)) {
     const r = goSequence(gPending, e, Date.now(), [...BRAIN_PAGES, ...GO_ALIASES]);
     gPending = r.pendingAt;
     if (r.target) { e.preventDefault(); go({ page: r.target as (typeof BRAIN_PAGES)[number]['id'] }); return; }
@@ -75,6 +77,22 @@ function onKey(e: KeyboardEvent): void {
   // the questions window in front: only the palette, Ctrl+J and Esc act; nothing hidden under it (Ctrl+W, Ctrl+1-9…)
   if (u.qwin.shown && cmd.type !== 'palette' && cmd.type !== 'next' && cmd.type !== 'escape') {
     if (cmd.type === 'closeFocused') e.preventDefault();
+    return;
+  }
+  // the file viewer in front (the keys inside it are its own, ViewerOverlay.tsx): Alt+←/→ move between its files, F11
+  // expands it, Esc and Ctrl+W close it; the palette and Ctrl+J still work; nothing acts on the page under it
+  if (u.viewer.open && !u.qwin.shown) {
+    switch (cmd.type) {
+      case 'back': viewerStep(-1); break;
+      case 'forward': viewerStep(1); break;
+      case 'maximize': toggleViewerFull(); break;
+      case 'escape': closeViewer(); break;
+      case 'closeFocused': if (!e.repeat) closeViewer(); break;
+      case 'palette': openModal('palette'); break;
+      case 'next': nextThing(); break;
+      default: return;
+    }
+    e.preventDefault();
     return;
   }
   switch (cmd.type) {
@@ -208,6 +226,7 @@ export function App() {
     root.dataset.appearance=appearance.preset;
   }, [theme, density,appearance]);
   const qShown = ui.use(s => s.qwin.shown);
+  const viewerOpen = ui.use(s => s.viewer.open);
   useEffect(() => { setBlocked(modal !== null || map || qShown); }, [modal, map, qShown]);
   useEffect(() => { setKnownTabs(tabIds); }, [tabIds]);
   useEffect(() => { schedule(420); }, [maximized, focusMode, page, density, lanePeek, center, dock.right, dock.bottom]);
@@ -254,6 +273,7 @@ export function App() {
       <AutoCloser />
       <FirstInterviewGate />
       <UpdateCheckpointStatus />
+      {viewerOpen && <Suspense fallback={null}><ViewerOverlay /></Suspense>}
       {modal === 'palette' && <CommandPalette />}
       {modal === 'shortcuts' && <ShortcutsDialog />}
       {modal === 'confirm' && <ConfirmDialog />}

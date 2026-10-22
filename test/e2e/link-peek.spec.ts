@@ -45,7 +45,8 @@ test('a message: copy what is copyable, preview files and links on click', async
   await msg.locator('code[data-copy="path"]', { hasText: /report-qa\.md$/ }).click(); // not the :3 one below
   await expect(page.getByTestId('cited-file-viewer')).toContainText('Report QA rimborsi');
   await shot(page, 'cited-file');
-  const returnToChat=async()=>{await page.getByTestId('nav-home').click();await page.getByTestId('chat-max-fix').click();};
+  // the viewer is an overlay above the chat: closing it is the way back, the chat as it was (still maximized, same scroll)
+  const returnToChat=async()=>{await page.getByTestId('viewer-close').click();await expect(page.getByTestId('viewer-overlay')).toHaveCount(0);await expect(msg).toBeVisible();};
   await returnToChat();
 
   // An image uses a bounded data URL, never a file URL.

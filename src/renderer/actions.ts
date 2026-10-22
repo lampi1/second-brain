@@ -26,8 +26,9 @@ import { answerLater, openQueue } from './lib/later';
 import { engineLabel } from './lib/engines';
 import {
   askConfirm, closeModal, flashTile, highlight, isBrainPage, openModal, openPage, requestFocus, setCenter, setClosing, setFocusMode, setLanePeek, setMap, setMaximized,
-  openOrchestratorRenew, setRead, setOrchestratorOpen, toast, ui, callQuestions, setQuestionsAside, setChatExpanded, setTreeCollapsed, setBrowserOpen, type Place,type BrainPageId,
+  openOrchestratorRenew, setRead, setOrchestratorOpen, toast, ui, callQuestions, setQuestionsAside, setChatExpanded, setTreeCollapsed, setBrowserOpen, setViewer, type Place,type BrainPageId,
 } from './store/ui';
+import { currentEntry, pushEntry, stepEntry, type Shot, type ViewerEntry } from './lib/viewer-stack';
 
 /** The Orchestrator's id (the right column), null while there is none. */
 export const orchestratorId = (): string | null => orchestratorIdOf(app.get());
@@ -183,6 +184,11 @@ export function go(place: Place, opts: { push?: boolean } = {}): void {
   const hub = hubRedirect(aliased, (place.page as string) === 'spunti' ? 'ia' : place.arg);
   if (hub) place = { ...place, ...hub };
   const page = (ALIAS[place.page] ?? place.page) as Place['page'];
+  // a file opens in the viewer overlay above the page, which keeps its state; the old 'file' page route (sb://file/…,
+  // sb://esplora/…, map and palette links) lands here too
+  if (page === 'file' && place.arg) { openViewer({ kind: 'file', arg: normalizeFileArg(place.arg) }); return; }
+  // going to another place (the palette, a link, the sidebar, a toast) is leaving the file: the viewer closes
+  closeViewer();
   if (page !== 'mappa' && !isBrainPage(page)) { toast(t('appText.actions.unknownPage', { page: place.page }), 'warn'); return; }
   const target: Place = { page:page==='file'&&!place.arg?'home':page, arg:page==='file'&&place.arg?normalizeFileArg(place.arg):(place.page as string) === 'spunti' ? 'ia' : place.arg ?? null, element: place.element ?? null };
   if (page === 'mappa') setMap(true, target.arg ?? null);
@@ -236,6 +242,8 @@ export function openLink(text: string): boolean {
 /** The link of where the user is now: the page, and the focused tile in the Grindhouse. */
 export function currentLink(): string {
   const u = ui.get();
+  const shown = currentEntry(u.viewer);
+  if (shown?.kind === 'file') return makeLink('file', shown.arg);
   if (u.map) return makeLink('mappa', u.mapArg);
   if (u.page !== 'home') return makeLink(u.page, u.pageArg);
   const f = u.focused;
@@ -342,15 +350,26 @@ export async function openInAppBrowser(url: string): Promise<void> {
 /** Explicit user action from the toolbar/palette: an unowned blank tab, using existing native browser isolation. */
 export function newBrowser():Promise<void>{return openInAppBrowser('about:blank');}
 
-/** Opening a file is navigation only. Main resolves its scope when Esplora requests the bounded contents. */
+/** Opening a file is navigation only. Main resolves its scope when the viewer requests the bounded contents. */
 export function openFileViewer(raw:string,chatId?:string):void{
-  // An Orchestrator artifact remains mounted across page navigation; release its focus trap before showing the file.
+  openViewer({kind:'file',arg:fileViewArg(fileReference(raw,chatId))});
+}
+
+/** The viewer overlay shows `entry` above the current page (which keeps its state), after the one on screen in its
+ *  back/forward list. */
+export function openViewer(entry:ViewerEntry):void{
+  // An Orchestrator artifact or a large image is the open dialog; release its focus trap before showing the file.
   if(ui.get().modal==='visual')closeModal();
   // a link in the questions window (the window is on screen, so the click came from it): the window steps aside, else
-  // the file page would open behind its full-screen backdrop and nothing would visibly change
+  // the viewer would open behind its full-screen backdrop and nothing would visibly change
   if(ui.get().qwin.shown)setQuestionsAside(true);
-  go({page:'file',arg:fileViewArg(fileReference(raw,chatId))});
+  setViewer(v=>pushEntry(v,entry));
 }
+/** A before/after pair of screenshots in the viewer: side by side, or one over the other with a slider. */
+export const openShots=(before:Shot,after:Shot,title?:string):void=>openViewer({kind:'shots',before,after,...(title?{title}:{})});
+export const closeViewer=():void=>setViewer(v=>v.open?{...v,open:false}:v);
+export const viewerStep=(d:-1|1):void=>setViewer(v=>stepEntry(v,d));
+export const toggleViewerFull=():void=>setViewer(v=>({...v,full:!v.full}));
 
 /** "Apri" on a chat an Orchestrator opened or wrote to (ChatRefChips, ADR 0034): that chat on screen from any place; a closed
  *  one goes back on the grid first (no message, no tokens). */
@@ -544,6 +563,7 @@ export function escapeOne(): boolean {
   const u = ui.get();
   if (u.center) { setCenter(false); return true; }
   if (u.qwin.shown) { answerLater(); return true; }
+  if (u.viewer.open) { closeViewer(); return true; }
   if (u.map) { setMap(false); return true; }
   if (u.lanePeek) { setLanePeek(false); return true; }
   if (u.maximized) { const k = u.maximized; setMaximized(null); flashTile(k); return true; }

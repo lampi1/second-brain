@@ -14,6 +14,7 @@ import { DEFAULT_V, type DockSize } from '../lib/orchestrator-dock';
 import { createStore } from './createStore';
 import { parseHubArg } from '../lib/memory-hub';
 import{t,type TextKey}from'../i18n';
+import { emptyViewer, type ViewerState } from '../lib/viewer-stack';
 
 export type Density = 'comfortable' | 'compact';
 export type Theme = 'system' | 'light' | 'dark';
@@ -89,6 +90,7 @@ export interface UiState {
   later: boolean;                // "Rispondi dopo" is on (main/later.ts, mirrored by lib/later.ts): every request waits in "Da rispondere", no popup
   announce: string;              // screen-reader live region
   qwin: QWin;                    // the questions window ("Domande in finestra", QuestionsWindow.tsx)
+  viewer: ViewerState;           // the file viewer overlay over the page (components/viewer/ViewerOverlay.tsx, lib/viewer-stack.ts)
 }
 
 /** The questions window: open = called as the "Da rispondere" queue (Ctrl+J, the counter, "Rispondi" on a tile): it
@@ -158,7 +160,7 @@ function readPrefs(): Prefs {
 
 export const ui = createStore<UiState>({
   prefs: readPrefs(), maximized: null, focusMode: null, focused: null, modal: null, confirm: null, orchestratorRenew: null, handoffChat: null, handoffSession: null, ctxHidden: {}, page: 'home',
-  lanePeek: false, toasts: [], flash: null, focusReq: null, hidden: [], hiddenTabs: [], closing: [], orchestratorFirst: null, layerHeld: null, later: false, announce: '', qwin: { open: false, first: null, call: 0, shown: false },
+  lanePeek: false, toasts: [], flash: null, focusReq: null, hidden: [], hiddenTabs: [], closing: [], orchestratorFirst: null, layerHeld: null, later: false, announce: '', qwin: { open: false, first: null, call: 0, shown: false }, viewer: emptyViewer,
   map: false, pageArg: null, mapArg: null, history: [{ page: 'home' }], hist: 0, center: false, read: readRead(), highlight: null, toastDismissed: [],
 });
 
@@ -266,8 +268,10 @@ export const setClosing = (chatId: string, on: boolean) => ui.set(s => ({ ...s, 
 export const hideChat = (chatId: string, hidden: boolean) => ui.set(s => ({ ...s, hidden: hidden ? [...s.hidden, chatId] : s.hidden.filter(id => id !== chatId) }));
 export const hideTab = (tabId: string, hidden: boolean) => ui.set(s => ({ ...s, hiddenTabs: hidden ? [...s.hiddenTabs, tabId] : s.hiddenTabs.filter(id => id !== tabId) }));
 
-/** Is something covering the whole window (browser views must hide)? A dialog or the full-screen map. */
-export const coversWorkspace = (s: UiState) => s.modal !== null || s.map;
+/** Is something covering the whole window (browser views must hide)? A dialog, the full-screen map or the file viewer. */
+export const coversWorkspace = (s: UiState) => s.modal !== null || s.map || s.viewer.open;
+/** The file viewer overlay (low level: actions.ts openViewer, closeViewer, viewerStep, toggleViewerFull). */
+export const setViewer = (fn: (v: ViewerState) => ViewerState) => ui.set(s => { const viewer = fn(s.viewer); return viewer === s.viewer ? s : { ...s, viewer }; });
 
 /** The questions window closes: "Rispondi dopo" (lib/later.ts) or the queue it was called for is empty. */
 export const parkQuestions = () => ui.set(s => (s.qwin.open || s.qwin.first ? { ...s, qwin: { ...s.qwin, open: false, first: null } } : s));

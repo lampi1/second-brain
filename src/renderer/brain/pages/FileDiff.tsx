@@ -1,12 +1,15 @@
 // The file viewer's "Compare" (SPEC 22 V3): the file now against git HEAD, a commit or branch, or another local file.
 // Main reads both sides (main/file-diff.ts, read-only git); jsdiff computes the hunks in a worker (lib/diff-worker.ts)
-// with a time limit, so a huge change never holds the page up. Nothing is written. Used by FileViewer.tsx.
+// with a time limit, so a huge change never holds the page up. Two layouts, the choice remembered on this PC: side by
+// side (old left, new right, the changed words of each paired line marked; viewer-tools.ts splitRows) or unified (one
+// column, - and + lines). Nothing is written. Used by FileViewer.tsx.
 import {Fragment,useEffect,useState,type FormEvent} from 'react';
 import type {StructuredPatch} from 'diff';
 import DiffWorker from '../lib/diff-worker?worker';
 import type {DiffJob} from '../lib/diff-worker';
 import {Empty} from '../components/States';
 import {Seg} from '../components/ui';
+import {splitRows,type Cell,type SplitRow} from '../lib/viewer-tools';
 import {t} from '../../i18n';
 import type {DiffAgainst,FileDiffReason,FileDiffResult} from '@shared/file-diff';
 type Diff=Extract<FileDiffResult,{kind:'diff'}>;
@@ -33,7 +36,26 @@ function rows(patch:StructuredPatch):{rows:Row[];added:number;removed:number}{
   return{rows:all,added,removed};
 }
 
+type Layout='split'|'unified';
+const LAYOUT_KEY='sb.viewer.diffLayout';
+const readLayout=():Layout=>{try{return localStorage.getItem(LAYOUT_KEY)==='unified'?'unified':'split';}catch{return 'split';}};
+
+function SplitCell({cell}:{cell?:Cell}){
+  if(!cell)return <><span className="bx-diff-n bx-split-n bx-split-void" data-find-skip/><span className="bx-split-text bx-split-void"/></>;
+  return <><span className={`bx-diff-n bx-split-n bx-split-${cell.kind}`} data-find-skip>{cell.n}</span>
+    <span className={`bx-split-text bx-split-${cell.kind}`} data-kind={cell.kind==='same'?undefined:cell.kind}>{cell.parts?cell.parts.map((p,i)=>p.changed?<mark key={i} className="bx-word">{p.text}</mark>:<Fragment key={i}>{p.text}</Fragment>):cell.text||' '}</span></>;
+}
+function SplitView({rows,w}:{rows:SplitRow[];w:number}){
+  return <div className="bx-split bx-code" style={{['--bx-diff-w' as string]:`${w}ch`}} data-testid="viewer-diff-split">
+    {rows.slice(0,DIFF_ROWS).map((r,i)=>r.kind==='hunk'?<div key={i} className="bx-split-hunk">{r.text}</div>
+      :<div key={i} className="bx-split-row"><SplitCell cell={r.left}/><SplitCell cell={r.right}/></div>)}
+    {rows.length>DIFF_ROWS&&<div className="bx-diff-note">{t('viewer.diffCut',{n:DIFF_ROWS})}</div>}
+  </div>;
+}
+
 function DiffView({diff}:{diff:Diff}){
+  const[layout,setLayoutState]=useState<Layout>(readLayout);
+  const setLayout=(l:Layout)=>{setLayoutState(l);try{localStorage.setItem(LAYOUT_KEY,l);}catch{/* storage off: this session only */}};
   const[state,setState]=useState<{diff:Diff;patch:StructuredPatch|'slow'}|null>(null);
   useEffect(()=>{
     const worker=new DiffWorker();
@@ -46,14 +68,17 @@ function DiffView({diff}:{diff:Diff}){
   if(!patch)return <p role="status">{t('viewer.diffWorking')}</p>;
   if(patch==='slow')return <Empty title={t('viewer.diffSlow')}/>;
   const{rows:all,added,removed}=rows(patch);
+  const split=layout==='split'?splitRows(patch):null;
   let top=1;for(const r of all)top=Math.max(top,r.old??0,r.now??0);
   const w=String(top).length+1;
-  const num=(n?:number)=><span className="bx-diff-n">{n??''}</span>;
-  return <div className="bx-diff" data-testid="viewer-diff" data-added={added} data-removed={removed}>
+  const num=(n?:number)=><span className="bx-diff-n" data-find-skip>{n??''}</span>;
+  return <div className="bx-diff" data-testid="viewer-diff" data-added={added} data-removed={removed} data-layout={layout}>
     <div className="bx-row small muted"><span className="bx-diff-label">{diff.left.label}</span><span aria-hidden>→</span><span className="bx-diff-label">{diff.right.label}</span><span className="sp"/>
-      <span className="bx-diff-add-n">{`+${added}`}</span><span className="bx-diff-del-n">{`−${removed}`}</span></div>
+      <span className="bx-diff-add-n">{`+${added}`}</span><span className="bx-diff-del-n">{`−${removed}`}</span>
+      <Seg label={t('vw.diffLayout')} value={layout} onChange={setLayout} items={[{id:'split',label:t('vw.diffSplit')},{id:'unified',label:t('vw.diffUnified')}]}/></div>
     {!all.length?<p role="status" data-testid="viewer-diff-same">{t('viewer.diffSame')}</p>
-      :<pre className="bx-code bx-scroll" style={{maxHeight:'70vh',['--bx-diff-w' as string]:`${w}ch`}} data-testid="viewer-diff-rows">
+      :split?<SplitView rows={split} w={w}/>
+      :<pre className="bx-code bx-scroll bx-diff-rows" style={{['--bx-diff-w' as string]:`${w}ch`}} data-testid="viewer-diff-rows">
         {all.slice(0,DIFF_ROWS).map((r,i)=><Fragment key={i}>{r.kind==='hunk'||r.kind==='note'
           ?<div className={`bx-diff-${r.kind}`}>{r.text}</div>
           :<div className={`bx-diff-${r.kind}`} data-kind={r.kind}>{num(r.old)}{num(r.now)}<span className="bx-diff-sign" aria-hidden>{r.kind==='add'?'+':r.kind==='del'?'−':' '}</span>{r.text||' '}</div>}</Fragment>)}
