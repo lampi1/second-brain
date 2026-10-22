@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { ChatSummary } from '../../src/shared/contract';
-import { closeSetup, expandChats, launch, setSize, shot } from './helpers';
+import { closeSetup, expandChats, goPage, launch, setSize, shot } from './helpers';
 
 const FAKE = path.resolve(import.meta.dirname, '..', 'fixtures', 'fake-claude.mjs');
 const md = (name: string, desc: string, body = 'Istruzioni.') => `---\nname: ${name}\ndescription: ${desc}\n---\n\n${body}\n`;
@@ -41,7 +41,7 @@ test('Skill: skill cards only, create from the form, live check, hook refusal, u
     await page.emulateMedia({ colorScheme: 'dark' });
     // a fresh profile may open the first interview: it waits, the Skill page does not need it
     if (await page.getByTestId('first-interview').isVisible({ timeout: 5000 }).catch(() => false)) await closeSetup(page);
-    await page.getByTestId('nav-skill').click();
+    await goPage(page, 'skill'); // Memoria → Skill (ADR 0122)
     const pg = page.getByTestId('skills-page');
     await expect(pg.getByTestId('bm-skill-spiega')).toContainText('Spiega un argomento');
     await expect(pg.getByTestId('bm-skill-spiega').getByTestId('bm-unused')).toHaveText('Non usata');
@@ -103,7 +103,7 @@ test('Skill: skill cards only, create from the form, live check, hook refusal, u
     await pg.getByTestId('sk-desc').fill('Bozza non salvata.');
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('skills-page')).toHaveCount(0);
-    await page.getByTestId('nav-skill').click();
+    await goPage(page, 'skill'); // Memoria → Skill (ADR 0122)
     await expect(pg.getByTestId('sk-desc')).toHaveValue('Bozza non salvata.');
     await pg.getByTestId('sk-revert').click();
 

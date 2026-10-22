@@ -56,6 +56,7 @@ test('Brain pages: skills with links and undo, rules, memory, classifiers, map; 
     // ── Memoria: knowledge, what happened, the agents' memories; "Unisci i doppioni"
     await goPage(page, 'memoria');
     const memory = page.getByTestId('bm-memory-page');
+    await memory.getByTestId('mh-tab-file').click(); // the files are Memoria's File tab (ADR 0122)
     for (const s of ['knowledge', 'happened', 'agents']) await expect(memory.getByTestId(`bm-mem-section-${s}`)).toBeVisible();
     await expect(memory.getByTestId('bm-mem-section-agents').locator('article.catalog-card').first()).toBeVisible();
     await expect(memory.getByTestId('bm-maint-memory').getByTestId('bm-run')).toHaveText('Unisci i doppioni');

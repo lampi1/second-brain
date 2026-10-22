@@ -20,6 +20,9 @@ import { RulesPage } from '../../../src/renderer/components/brain-model/RulesPag
 import { MemoryPage } from '../../../src/renderer/components/brain-model/MemoryPage';
 import { MaintenancePanel } from '../../../src/renderer/components/brain-model/MaintenancePanel';
 import { setLang } from '../../../src/renderer/i18n';
+import { ui } from '../../../src/renderer/store/ui';
+/** Memoria is a hub of tabs (ADR 0122): the page arg picks the tab rendered */
+const tab = (arg: string) => ui.set(s => ({ ...s, pageArg: arg }));
 
 const state: BrainModelState = {
   root: '/b',
@@ -94,6 +97,7 @@ describe('pages', () => {
     expect(rules).toContain('Quando serve');
     expect(rules).toContain('Non caricata');
     expect(rules).toContain('Vecchia');
+    tab('file');
     const mem = renderToStaticMarkup(createElement(MemoryPage));
     expect(mem).toContain('Clienti');
     expect(mem).toContain('Memoria: Revisione');
@@ -117,14 +121,20 @@ describe('pages', () => {
     };
     brainModel.set(() => ({ state: { ...state, memoryStats: stats }, error: null, busy: false }));
     setLang('it');
+    tab('statistiche');
     const it = renderToStaticMarkup(createElement(MemoryPage));
-    for (const s of ['Manutenzione', 'Lo sapevi?', 'Errore ricorrente', 'Diff troppo grande', 'Come cresce la memoria', 'Skill utili e inutili', 'Mai usata', 'File fermi', 'ricorrente ×2']) expect(it).toContain(s);
+    for (const s of ['Manutenzione', 'Lo sapevi?', 'Come cresce la memoria', 'Skill utili e inutili', 'Mai usata', 'File fermi']) expect(it).toContain(s);
+    // the duplicates left (ADR 0122): no key-number row, no recurring-errors block (Qualità and the File tab have them)
+    for (const s of ['mm-kpis', 'data-testid="mm-errors"']) expect(it).not.toContain(s);
+    tab('file');
+    expect(renderToStaticMarkup(createElement(MemoryPage))).toContain('ricorrente ×2');
+    tab('statistiche');
     // no "richiami" (ADR 0101): a line counted once per run started after it is not a use
     for (const s of ['I ricordi più richiamati', 'Memoria richiamata', 'mm-card-recalls']) expect(it).not.toContain(s);
     expect(it.match(/class="help-tip/g)!.length).toBeGreaterThan(15); // a "?" on every number
     setLang('en');
     const en = renderToStaticMarkup(createElement(MemoryPage));
-    for (const s of ['Maintenance', 'Did you know?', 'Recurring errors', 'Never used']) expect(en).toContain(s);
+    for (const s of ['Maintenance', 'Did you know?', 'Never used']) expect(en).toContain(s);
     setLang('it');
     const clean = { ...stats, totals: { ...stats.totals, entries: 0, runs: 0 }, errors: { ...stats.errors, total: 0 } };
     brainModel.set(() => ({ state: { ...state, memoryStats: clean }, error: null, busy: false }));

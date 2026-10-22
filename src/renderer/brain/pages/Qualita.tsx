@@ -7,8 +7,10 @@
 // numbers, the errors that repeat, grouped by pattern (ADR 0037: count, last seen, chats, rule, this week against the
 // one before). Every number and every pattern has its reading and the discussion bar ("Discuti", to the Orchestrator).
 // Data: /api/tables (the brain: tables.errors, tables.quality, proposals) and /api/quality (main: turns, PRs, reopened
-// bugs); computations in lib/quality.ts and lib/stats.ts.
-import type { ReactNode } from 'react';
+// bugs); computations in lib/quality.ts and lib/stats.ts. Since the Dashboard left (ADR 0122), below the patterns: the
+// app's and the tools' own errors of this session (dashboard/AppErrors.tsx) and the errors grouped by meaning
+// (dashboard/Themes.tsx), the two parts of its Errori and Temi tabs Qualità did not have.
+import { lazy, Suspense, type ReactNode } from 'react';
 import { normAppQuality, normTables } from '../types';
 import { FeedbackOrigins } from '../components/FeedbackOrigins';
 import { useBrain } from '../api';
@@ -23,6 +25,10 @@ import { DiscussBar } from '../components/Discuss';
 import { ErrorPatterns, PatternsHelp, Reading } from '../components/Stats';
 import { ExtLink, Pill, Section, type Navigate, type Tone } from '../components/ui';
 import { locale, t as tr, type TextKey } from '../../i18n';
+import '../../styles/memory-hub.css';
+// app-side parts (they read the app's live store and actions): loaded when shown, so the brain pages stay importable alone
+const AppErrors = lazy(() => import('../../dashboard/AppErrors').then(m => ({ default: m.AppErrors })));
+const ThemesPanel = lazy(() => import('../../dashboard/Themes').then(m => ({ default: m.ThemesPanel })));
 
 const STATUS: Record<string, { label: TextKey; tone: Tone }> = {
   tornato: { label: 'brainText.qualita.status.tornato', tone: 'bad' }, 'non-tornato': { label: 'brainText.qualita.status.nonTornato', tone: 'good' },
@@ -187,6 +193,8 @@ export function Qualita({ nav }: { arg?: string; nav: Navigate }) {
               </Section>
             )}
 
+            <Suspense fallback={null}><ThemesPanel kind="errors" /></Suspense>
+
             <FeedbackOrigins rows={d.wins} />
             <p className="bx-q-row" data-testid="bx-q-proposte">
               <b>{tr('brainText.qualita.proposals')}</b>{tr('brainText.qualita.proposalsRest', { n: d.proposals.length, applied, measured })}
@@ -195,6 +203,10 @@ export function Qualita({ nav }: { arg?: string; nav: Navigate }) {
           </div>
         )}
       </Async>
+      {/* the app's and the tools' own errors need no brain data: they show even when the brain's server is not there */}
+      <Suspense fallback={null}>
+        <Section title={tr('mh.q.appErrors')} note={tr('mh.q.appErrorsNote')} testId="bx-q-app-errors"><AppErrors /></Section>
+      </Suspense>
     </>
   );
 }

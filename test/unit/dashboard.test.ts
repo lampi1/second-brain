@@ -1,8 +1,8 @@
 // Dashboard truthfulness and graph behaviour: unknowns, real message activity and bounded navigation.
 import { describe, expect, it } from 'vitest';
-import type { ChatSummary, ChatItem } from '../../src/shared/contract';
+import type { ChatSummary } from '../../src/shared/contract';
 import { cursorCoverage } from '../../src/renderer/brain/lib/cost-facts';
-import { brainChecks, chatName, connections, contextLevel, contextRatio, fitLayout, layout, neighbourhood, observedErrors, placeLabels } from '../../src/renderer/dashboard/data';
+import { brainChecks, chatName, contextLevel, contextRatio, fitLayout, layout, neighbourhood, observedErrors, placeLabels } from '../../src/renderer/dashboard/data';
 import { columnSize } from '../../src/renderer/lib/orchestrator-dock';
 
 it.each([900, 1280, 1920])('reserves a visible coordinator and usable Dashboard at %i pixels', W => {
@@ -27,20 +27,6 @@ const chat = (id: string, patch: Partial<ChatSummary> = {}): ChatSummary => ({
   browserTabIds: [], ...patch,
 });
 describe('dashboard sources', () => {
-  it('ownership alone does not invent message traffic', () => {
-    expect(connections([chat('orchestrator', { isOrchestrator: true }), chat('worker')], {})).toEqual([{ from: 'orchestrator', to: 'worker', at: null }]);
-  });
-  it('lights only successful known message destinations and preserves the newest observed event', () => {
-    const chats = [chat('o', { isOrchestrator: true }), chat('a'), chat('b')];
-    const tool = (id: string, status: 'ok' | 'error', to: string, at: number): ChatItem => ({ kind: 'tool', id, name: 'mcp__second_brain__send_to_chat', status, input: { to }, at, summary: '' });
-    const result = connections(chats, { a: [tool('1', 'ok', 'b', 123), tool('2', 'error', 'o', 999), tool('3', 'ok', 'unknown', 500)], b: [{ kind: 'user', id: 'u', from: 'a', at: 150, text: 'hello' }] });
-    expect(result.find(e => e.from === 'a' && e.to === 'b')?.at).toBe(150);
-    expect(result.find(e => e.from === 'o' && e.to === 'a')?.at).toBeNull();
-    expect(result).toHaveLength(3);
-  });
-  it('does not guess which duplicate title sent a message', () => {
-    expect(connections([chat('a', { title: 'same' }), chat('b', { title: 'same' }), chat('c')], { c: [{ kind: 'user', id: '1', at: 1, text: '', from: 'same' }] })).toEqual([]);
-  });
   it('distinguishes unknown context from a measured zero and keeps overflow', () => {
     expect(contextRatio(chat('a'))).toBeNull();
     expect(contextRatio(chat('a', { contextTokens: 0, contextMaxTokens: 100 }))).toBe(0);

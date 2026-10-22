@@ -60,5 +60,6 @@ test('brain pages: arguments through links and history, page-to-page links, map 
   await expect(page.getByTestId('page-file')).toBeVisible();
   await copyPageLink(page);
   await expect.poll(async()=> (await clip(app)).startsWith('sb://file/')).toBe(true);
+  await expect(page.getByTestId('page-copy-link')).toHaveCount(0); // no «Copia link» at the top of a page (owner, 2026-10-22)
   await app.close();
 });

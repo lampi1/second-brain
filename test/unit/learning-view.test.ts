@@ -59,7 +59,8 @@ describe('Apprendimento page', () => {
   it('renders the counter, the change that made things worse with its Annulla, a curve per role with marks, and the list', () => {
     state.current = page();
     const html = renderToStaticMarkup(createElement(LearningPage));
-    expect(html).toContain('Apprendimento');
+    expect(html).toContain('data-testid="learning-page"'); // its title is the Memoria hub's tab now (ADR 0122)
+    expect(html).not.toContain('<h1');
     expect(html).toMatch(/data-testid="lr-k-aiuta"[\s\S]*?>1<\/button>/);
     expect(html).toMatch(/data-testid="lr-worse"[\s\S]*Artisan: verifica i test prima di riportare[\s\S]*data-testid="bm-undo"/);
     expect(html).toContain('data-testid="lr-curve-artisan"');

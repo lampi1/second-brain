@@ -65,8 +65,8 @@ test('with the Grindhouse off screen, an agent tab keeps working parked at the s
     // another page in front: the tab is parked, still alive
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await page.keyboard.press('g');
-    await page.keyboard.press('d');
-    await expect(page.getByTestId('dashboard')).toBeVisible();
+    await page.keyboard.press('y');
+    await expect(page.getByTestId('bm-memory-page')).toBeVisible();
     await expect.poll(async () => agent.ok('tabs_list'), { timeout: 10_000 }).not.toMatch(/\[on screen\]/);
     // parked: reads, acts and screenshots like before, at the size it had on screen
     expect(await agent.ok('get_page_text')).toContain('Pagina di prova');

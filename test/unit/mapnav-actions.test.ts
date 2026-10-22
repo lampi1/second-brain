@@ -9,39 +9,40 @@ import { ui } from '../../src/renderer/store/ui';
 beforeEach(() => {
   dispatch({ type: 'init', chats: [{ id: 'r', title: 'Orchestrator', isOrchestrator: true, orchestrator: true, state: 'idle', browserTabIds: [] } as unknown as ChatSummary], pending: [], tabs: [], feed: [], usage: null, info: null });
 });
-it('focuses the coordinator without leaving Dashboard', () => {
-  go({ page: 'dashboard' });
+it('focuses the coordinator without leaving Memoria', () => {
+  go({ page: 'memoria' });
   focusChat('r');
-  expect(ui.get().page).toBe('dashboard');
+  expect(ui.get().page).toBe('memoria');
   expect(ui.get().map).toBe(false);
   expect(ui.get().focusReq?.chatId).toBe('r');
 });
 it.each([toggleOrchestrator, () => focusChat('r')])('keeps the 3D map open when focusing the coordinator (%#)', focus => {
-  go({ page: 'dashboard' });
+  go({ page: 'memoria' });
   go({ page: 'mappa' });
   focus();
-  expect(ui.get().page).toBe('dashboard');
+  expect(ui.get().page).toBe('memoria');
   expect(ui.get().map).toBe(true);
   expect(ui.get().focusReq?.chatId).toBe('r');
 });
-it('keeps Dashboard on the coordinator shortcut', () => {
-  go({ page: 'dashboard' });
+it('keeps Memoria on the coordinator shortcut', () => {
+  go({ page: 'memoria' });
   toggleOrchestrator();
-  expect(ui.get().page).toBe('dashboard');
+  expect(ui.get().page).toBe('memoria');
   expect(ui.get().map).toBe(false);
   expect(ui.get().focusReq?.chatId).toBe('r');
 });
-it('prepares discussion beside Dashboard without navigating or sending', () => {
-  go({ page: 'dashboard' });
+it('prepares discussion beside Memoria without navigating or sending', () => {
+  go({ page: 'memoria' });
   const onSent = vi.fn();
   expect(brainBridge.draftToOrchestrator('Discuss this brain note', onSent)).toBe(true);
-  expect(ui.get().page).toBe('dashboard');
+  expect(ui.get().page).toBe('memoria');
   expect(ui.get().map).toBe(false);
   expect(ui.get().focusReq?.chatId).toBe('r');
   expect(onSent).not.toHaveBeenCalled();
 });
 it('keeps detail pages where the coordinator is already visible', () => {
-  go({ page: 'regole' });
+  go({ page: 'regole' }); // a Memoria tab since ADR 0122
   focusChat('r');
-  expect(ui.get().page).toBe('regole');
+  expect(ui.get().page).toBe('memoria');
+  expect(ui.get().pageArg).toBe('regole');
 });

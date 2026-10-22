@@ -11,7 +11,7 @@ import { t } from '../i18n';
 import { brainChecks, neighbourhood } from './data';
 import { Graph } from './Graph';
 import { nodeStyle } from './graph-style';
-import { Discuss, Empty, Panel, Source } from './Dashboard';
+import { Discuss, Empty, Panel, Source } from './parts';
 import './dashboard.css';
 
 export function BrainNotesMap() {

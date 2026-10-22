@@ -1,4 +1,4 @@
-// "Skill" (G S, ADR 0018, ADR 0077): the Brain section's skills page. Two concepts only (owner, 2026-10-19): agents and
+// "Skill" (G S, ADR 0018, ADR 0077; a tab of Memoria since ADR 0122): the Brain section's skills. Two concepts only (owner, 2026-10-19): agents and
 // skills, so this page lists skills alone (the brain's shared ones, the user's own, Cursor's) as cards in the Agenti
 // page's look: what each does, the tools it calls, which agents use it ("Usata da", or "Non usata"), who made it (the
 // migration, a maintenance job, the user). "Agenti" on a card links or unlinks the skill to an agent at once, no
@@ -7,12 +7,12 @@
 // Save goes through main, which checks again and runs the user's PreToolUse hooks for Write: a refusal is shown with
 // the hook's own message. "Elimina" moves the file to the Recycle Bin after a confirmation; "Prova nell'Orchestrator" writes
 // "/<name> " in the Orchestrator's input. Below: the one-time migration's report (runbooks and routines turned into skills)
-// and the maintenance panel. Rendered by App.tsx PageFrame for the 'skill' place (styles/skills.css, brain-model.css).
+// and the maintenance panel (its changes; the hub's «Manutenzione» runs the jobs). Rendered by brain-model/MemoryPage.tsx
+// for the «Skill» tab ('skill' links land there; styles/skills.css, brain-model.css).
 import { Select } from './Select';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import type { MdIssue, SkillCatalog, SkillEntry, SkillPlace } from '@shared/contract';
 import { checkMd, DESC_MAX, field, newMd, parseMd, setBody, setFields, template } from '@shared/skillmd';
-import { PageHead } from '../brain/components/States';
 import { HelpTip } from './HelpTip';
 import { Seg } from '../brain/components/ui';
 import { brainBridge } from '../actions';
@@ -21,7 +21,9 @@ import { t } from '../i18n';
 import { useBrainModel, linkSkill, refreshBrainModel } from '../store/brain-model';
 import { filterSkills, skillRows, type SkillFilter, type SkillRow } from '../lib/brain-model-view';
 import { MaintenancePanel, MigrationReportPanel, when } from './brain-model/MaintenancePanel';
-import { MaintenanceButton } from './brain-model/MaintenanceButton';
+import { HubIntro } from './brain-model/HubIntro';
+import { parseHubArg } from '../lib/memory-hub';
+import { IconPlus, IconRefresh } from './Icons';
 import '../styles/skills.css';
 import '../styles/agent-catalog.css';
 import '../styles/brain-model.css';
@@ -212,7 +214,8 @@ function SkillCard({ row, agents, busy, onEdit, index }: { row: SkillRow; agents
 }
 
 export function SkillsPage() {
-  const arg = ui.use(s => s.pageArg);
+  // the page lives in Memoria's Skill tab: its own arg follows the tab ("skill/<search>", ADR 0122)
+  const arg = parseHubArg(ui.use(s => s.pageArg)).rest;
   const { state, busy } = useBrainModel();
   const [cat, setCat] = useState<SkillCatalog | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -259,9 +262,8 @@ export function SkillsPage() {
 
   return (
     <div className="sk-page bm-page agent-overview" data-testid="skills-page">
-      <PageHead title={t('bm.skills.title')} onRefresh={() => void load()}
-        lead={cat || state ? t('bm.skills.lead', { n: rows.length, used }) : t('tools.skillsPage.loadingFolders')}
-        actions={<><MaintenanceButton /><button type="button" className="btn btn-primary" onClick={create} data-testid="sk-new-skill">{t('bm.skills.new')}</button></>} />
+      <HubIntro lead={cat || state ? t('bm.skills.lead', { n: rows.length, used }) : t('tools.skillsPage.loadingFolders')}
+        actions={<><button type="button" className="btn btn-ghost btn-s" onClick={() => void load()} data-testid="bx-refresh"><IconRefresh size={13} /> {t('costs.refresh')}</button><button type="button" className="btn btn-primary btn-s" onClick={create} data-testid="sk-new-skill"><IconPlus size={13} /> {t('bm.skills.new')}</button></>} />
       {err && <p className="sk-refused" role="alert">{t('tools.skillsPage.loadError')} {err}</p>}
       {draft && <div className="bm-editor" ref={editor}>
         <div className="bm-editor-bar"><button type="button" className="btn btn-ghost btn-s" onClick={close} data-testid="sk-close">{t('bm.skills.close')}</button></div>

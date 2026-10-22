@@ -4,6 +4,7 @@ import { learningReviewEn } from './areas/learning-review.en';
 import { cloudEn } from './areas/cloud.en';
 import { brainModelEn } from './areas/brain-model.en';
 import { memoryEn } from './areas/memory.en';
+import { memoryHubEn } from './areas/memory-hub.en';
 import { statsEn } from './areas/stats.en';
 import { costsEn } from './areas/costs.en';
 import { auditEn } from './areas/audit.en';
@@ -89,6 +90,7 @@ export const en: Dict = {
   ...langSwitchEn,
   ...brainModelEn,
   ...memoryEn,
+  ...memoryHubEn,
   ...statsEn,
   ...productEn,
   ...agentsGridEn,

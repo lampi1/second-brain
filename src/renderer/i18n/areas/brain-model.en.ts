@@ -13,7 +13,7 @@ export const brainModelEn: typeof brainModelIt = {
   'bm.job.upgrade': 'Brain upgrade', 'bm.job.migration': 'Migration', 'bm.job.corrections': 'Corrections', 'bm.job.repeated-task': 'Repeated task',
   'bm.job.merge-skills': 'Duplicate skills', 'bm.job.merge-memory': 'Duplicate memories', 'bm.job.user': 'You', 'bm.job.orchestrator': 'Orchestrator',
   'bm.madeBy': (p: { job: string }) => `By: ${p.job}`,
-  'bm.kind.skill': 'Skill', 'bm.kind.agent': 'Agent', 'bm.kind.rule': 'Rule', 'bm.kind.memory': 'Memory',
+  'bm.kind.skill': 'Skill', 'bm.kind.agent': 'Agent', 'bm.kind.rule': 'Rule', 'bm.kind.memory': 'Memory', 'bm.kind.script': 'Script',
 
   'bm.maint.title': 'Automatic maintenance',
   'bm.maint.lead': 'Agents, skills, rules and memory keep themselves up to date without asking you: new skills from the work you repeat, duplicates merged, your corrections applied, the Orchestrator’s changes to an agent (model, effort, instructions, as a trial version). Every change is here, with its reason and "Undo".',

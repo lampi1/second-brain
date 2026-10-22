@@ -4,6 +4,7 @@ import { learningReviewIt } from './areas/learning-review.it';
 import { cloudIt } from './areas/cloud.it';
 import { brainModelIt } from './areas/brain-model.it';
 import { memoryIt } from './areas/memory.it';
+import { memoryHubIt } from './areas/memory-hub.it';
 import { statsIt } from './areas/stats.it';
 import { costsIt } from './areas/costs.it';
 import { auditIt } from './areas/audit.it';
@@ -90,6 +91,7 @@ export const it = {
   ...langSwitchIt,
   ...brainModelIt,
   ...memoryIt,
+  ...memoryHubIt,
   ...statsIt,
   ...productIt,
   ...agentsGridIt,

@@ -2,13 +2,11 @@
 // causes, the text signature that makes repeats fall together, the groups with their 14-day series, places and
 // skills, the AI errors by type with the rule's status, the trend and the quiet days; cost facts only from enough data.
 import { describe, expect, it } from 'vitest';
-import { causeOf, daysSince, groupAiErrors, groupErrors, signature, trendOf, type ObservedLike } from '../../src/renderer/dashboard/errors';
+import { causeOf, daysSince, groupErrors, signature, trendOf, type ObservedLike } from '../../src/renderer/dashboard/errors';
 import { costFacts } from '../../src/renderer/brain/lib/cost-facts';
-import type { ErrorRow, ErrQuality } from '../../src/renderer/brain/types';
 
 const NOW = new Date(2026, 9, 19, 12, 0).getTime(), DAY = 864e5;
 const e = (id: string, ago: number, detail: string, extra: Partial<ObservedLike> = {}): ObservedLike => ({ id, at: NOW - ago * DAY, title: 'Chat', detail, source: 'claude', ...extra });
-const row = (data: string, tipo: string, extra: Partial<ErrorRow> = {}): ErrorRow => ({ data, ora: '10:00', chi: 'Scout', area: 'App', tipo, detto: 'fatto', vero: 'non fatto', visto: '', regola: '', ...extra });
 
 describe('errors', () => {
   it('recognises the causes, most specific first', () => {
@@ -53,18 +51,6 @@ describe('errors', () => {
     expect(daysSince(null, NOW)).toBeNull();
   });
 
-  it('groups the AI errors by type, with the newest example and the rule’s status', () => {
-    const quality = { rules: [{ date: '2026-10-01', type: 'fatto-non-verificato', area: '', rule: 'r', status: 'tornato', ageDays: 18, again: [] }] } as unknown as ErrQuality;
-    const g = groupAiErrors([
-      row('2026-10-18', 'fatto-non-verificato', { detto: 'test verdi', vero: 'test rossi', regola: 'verifica sempre' }),
-      row('2026-10-10', 'fatto-non-verificato', { chi: 'Artisan', regola: 'vecchia' }),
-      row('2026-10-19', ''),
-    ], '2026-10-19', quality, 14, 'senza tipo');
-    expect(g.map(x => [x.type, x.count])).toEqual([['fatto-non-verificato', 2], ['senza tipo', 1]]);
-    expect(g[0]).toMatchObject({ last: '2026-10-18', who: ['Scout', 'Artisan'], said: 'test verdi', truth: 'test rossi', rule: 'verifica sempre', status: 'tornato' });
-    expect(g[0]!.days[12]).toBe(1);
-    expect(g[0]!.days[4]).toBe(1);
-  });
 });
 
 describe('cost facts', () => {

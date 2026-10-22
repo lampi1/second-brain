@@ -68,7 +68,7 @@ export const MAINTENANCE_JOBS: readonly MaintenanceJobId[] = ['migration', 'upgr
 export interface BrainChange {
   id: string; at: number;
   job: MaintenanceJobId | 'user';
-  kind: 'skill' | 'agent' | 'rule' | 'memory';
+  kind: 'skill' | 'agent' | 'rule' | 'memory' | 'script';
   action: 'create' | 'update' | 'merge' | 'link' | 'unlink' | 'remove';
   target: string;
   /** what changed, one line (Italian, shown as is) */

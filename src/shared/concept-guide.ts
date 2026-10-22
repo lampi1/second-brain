@@ -192,8 +192,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Una skill è un file SKILL.md nel brain (.claude/skills) o nelle tue cartelle. Un ruolo usa le sue skill di serie e quelle che il suo avvio gli dà; una skill che non ha gli viene rifiutata.',
         'A skill is a SKILL.md file in the brain (.claude/skills) or in your folders. A role uses its default skills and the ones its launch gives it; a skill it does not have is refused.'),
       // src/renderer/components/SkillsPage.tsx; src/main/brainmodel/service.ts link
-      b('La pagina Skill mostra quale ruolo usa ogni skill e quali strumenti chiama; «Ruoli» su una scheda la collega o la toglie subito, senza approvazione.',
-        'The Skill page shows which role uses each skill and which tools it calls; "Roles" on a card links or drops it at once, with no approval.'),
+      b('La scheda Skill di Memoria mostra quale ruolo usa ogni skill e quali strumenti chiama; «Ruoli» su una scheda la collega o la toglie subito, senza approvazione.',
+        'The Skills tab of Memoria shows which role uses each skill and which tools it calls; "Roles" on a card links or drops it at once, with no approval.'),
       // src/main/brainmodel/jobs.ts
       b('La manutenzione gira da sola ogni 6 ore, o subito con il pulsante «Manutenzione» in cima a Skill, Regole e Memoria, che dice cosa ha fatto ogni lavoro: una skill nuova da un lavoro ripetuto, skill doppie unite, ricordi doppi nella memoria condivisa, le tue correzioni applicate al ruolo, alla skill o a una regola. Una lezione proposta da una chat di lavoro aspetta che l’Orchestrator te la chieda.',
         'Maintenance runs by itself every 6 hours, or at once with the "Manutenzione" button atop Skill, Regole and Memoria, which says what each job did: a new skill from a repeated task, duplicate skills merged, duplicate memories moved to the shared one, your corrections applied to the role, the skill or a rule. A lesson a work chat proposes waits until the Orchestrator asks you.'),
@@ -201,8 +201,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Ogni modifica è registrata con cosa, perché e le prove, e «Annulla» la riporta com’era. L’app cambia da sola solo il testo di un ruolo e le sue skill; il tuo sì resta per produzione, strumenti, tetto, motore e livello di un ruolo, impostazioni e testi per altri.',
         'Every change is logged with what, why and the evidence, and "Undo" puts it back. The app changes by itself only a role’s text and its skills; your yes stays for production, a role’s tools, ceiling, engine and tier, settings and texts for others.'),
       // src/main/brainmodel/procedure-sources.ts
-      b('Le sezioni dei runbook e delle routine del brain diventano skill, senza perdere testo e senza ripetersi: il resoconto è sulla pagina Skill.',
-        'The brain’s runbook and routines sections become skills, losing no text and never twice: the report is on the Skill page.'),
+      b('Le sezioni dei runbook e delle routine del brain diventano skill, senza perdere testo e senza ripetersi: il resoconto è nella scheda Skill di Memoria.',
+        'The brain’s runbook and routines sections become skills, losing no text and never twice: the report is in Memoria’s Skills tab.'),
       // src/renderer/components/brain-model/
       b('Regole valgono per tutti i ruoli; Memoria tiene conoscenza, quello che è successo e una memoria per ruolo, con i numeri (righe per ruolo, crescita per settimana, ricordi più richiamati, file fermi, errori ricorrenti, skill utili o mai usate, curiosità; ogni «?» dice come è calcolato) e ogni file si apre nel visore; Mappa mostra ruolo → skill → regole → memoria.',
         'Rules apply to every role; Memory holds knowledge, what happened and one memory per role, with the numbers (lines per role, weekly growth, most recalled memories, stale files, recurring errors, useful or never used skills, curious facts; each "?" says how it is computed) and every file opens in the viewer; Map shows role → skills → rules → memory.'),
@@ -357,8 +357,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('«Correggi» su un pezzo di ragionamento manda all’agente la citazione e la tua correzione; è bloccato se c’è una domanda aperta.',
         '"Correct" on a piece of reasoning sends the agent the quote and your fix; it is blocked while a question is open.'),
       // src/renderer/brain/pages/LearnedRules.tsx, src/renderer/components/brain-model/RulesPage.tsx, src/renderer/brain/lib/learn.ts (ADR 0082)
-      b('«Regole imparate», in fondo alla pagina Regole, mostra le politiche di auto-miglioramento del brain (stime, scelta del modello, soglie) con Ripristina; una proposta in attesa si decide in Memoria → Proposte. Compare solo quando il brain ne ha.',
-        '"Learned rules", at the bottom of the Rules page, shows the brain’s self-improvement policies (estimates, model choice, thresholds) with Restore; a waiting proposal is decided in Memory → Proposals. It appears only when the brain has some.'),
+      b('«Regole imparate», in fondo alla scheda Regole di Memoria, mostra le politiche di auto-miglioramento del brain (stime, scelta del modello, soglie) con Ripristina; una proposta in attesa si decide in Memoria → Proposte. Compare solo quando il brain ne ha.',
+        '"Learned rules", at the bottom of Memoria’s Rules tab, shows the brain’s self-improvement policies (estimates, model choice, thresholds) with Restore; a waiting proposal is decided in Memory → Proposals. It appears only when the brain has some.'),
       // src/renderer/i18n/areas/home.it.ts home.rulesReading
       b('Una regola conta come «tenuta» se il suo errore non ricompare nei giorni osservati: non è una prova di causa.',
         'A rule counts as "holding" if its error does not reappear in the observed days: it is not proof of cause.'),
@@ -397,8 +397,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Ogni cambiamento è una riga in changelog.md: quando, cosa, quale file, chi e perché. L’Orchestrator vi annota anche regole, skill e note che cambia.',
         'Every change is a line in changelog.md: when, what, which file, who and why. The Orchestrator also logs the rules, skills and notes it changes.'),
       // src/renderer/brain/pages/Script.tsx; src/renderer/components/LogPage.tsx (ADR 0111)
-      b('La pagina Script, nella sezione Brain, mostra gli script a schede; nessun bottone esegue uno script. Le righe del changelog stanno nel Log, tipo «Brain».',
-        'The Script page, in the Brain section, shows the scripts as cards; no button runs a script. The changelog lines are on the Log page, kind "Brain".'),
+      b('La scheda Script & Query di Memoria mostra gli script a schede; nessun bottone esegue uno script. Le righe del changelog stanno nel Log, tipo «Brain».',
+        'Memoria’s Scripts & Queries tab shows the scripts as cards; no button runs a script. The changelog lines are on the Log page, kind "Brain".'),
       // docs/adr/0076-brain-scripts-and-changelog.md
       b('Nessun classificatore sceglie gli script: con pochi script che si descrivono da soli basta la ricerca per parole.',
         'No classifier picks scripts: with a few self-describing scripts a word search is enough.'),
@@ -607,34 +607,36 @@ export const CONCEPTS: readonly ConceptCard[] = [
     sources: ['src/renderer/brain/pages/Home.tsx', 'src/renderer/components/AgentStrips.tsx', 'src/renderer/lib/agent-order.ts', 'src/renderer/lib/grid.ts', 'src/renderer/components/ChatTile.tsx', 'src/renderer/components/RunEstimate.tsx', 'src/renderer/components/BrowserTile.tsx', 'src/renderer/components/CloudStrips.tsx', 'src/main/cloud/service.ts'],
   },
   {
-    id: 'dashboard',
-    title: b('La Dashboard', 'The Dashboard'),
-    summary: b('Solo statistiche, dal vivo: agenti, contesto, errori, temi e spunti, tutte da dati reali. I costi sono in Andamento → Costi, la mappa del brain nella pagina Mappa.',
-      'Statistics only, live: agents, context, errors, themes and tips, all from real data. Costs are in Andamento → Costi, the brain map on the Map page.'),
+    id: 'memory-hub',
+    title: b('La Memoria, un posto solo', 'Memoria, one place'),
+    summary: b('Memoria è il posto unico di tutto quello che il brain contiene: in cima è viva (la frase del giorno, i contatori dal vivo, le ultime modifiche, «Manutenzione»), sotto le schede Proposte, Approvate, Skill, Regole, Script & Query, Idee, File, Apprendimento e Statistiche.',
+      'Memoria is the one place for everything the brain holds: its top is alive (the day’s sentence, live counters, the latest changes, \"Maintenance\"), below it the tabs Proposals, Approved, Skills, Rules, Scripts & Queries, Ideas, Files, Learning and Statistics.'),
     points: [
-      // src/renderer/dashboard/Dashboard.tsx, src/renderer/dashboard/data.ts
-      b('«Mappa agenti»: le chat aperte e chi parla con chi (proprietà dell’Orchestrator, messaggi tra chat).',
-        '"Agents map": open chats and who talks to whom (Orchestrator ownership, messages between chats).'),
-      // src/renderer/dashboard/BrainNotesMap.tsx (ADR 0077)
-      b('Le note del brain e i loro collegamenti sono in Mappa → «Note del brain», letti ogni 30 secondi; «Adatta» rimette tutta la mappa in vista.',
-        'The brain’s notes and their links are in Map → "Brain notes", read every 30 seconds; "Fit" brings the whole map back into view.'),
-      b('«Token e contesto» avvisa all’80% della finestra di compattazione Claude, se riportata con il contesto misurato; altrimenti usa contextWarnTokens (default 200 000).',
-        '"Tokens & context" warns at 80% of the Claude compaction window when reported with measured context; otherwise it uses contextWarnTokens (default 200,000).'),
-      // src/renderer/dashboard/ErrorsTab.tsx, src/renderer/dashboard/errors.ts
-      b('«Errori» raggruppa gli errori che si ripetono in schede: causa in parole semplici (limite d’uso, rete, accesso, contesto pieno…), quante volte, l’andamento su 14 giorni, l’ultima volta, dove (chat, ruolo, skill), cosa vuol dire e cosa fare; sotto, gli errori dell’AI che hai corretto per tipo, con la regola nata e se l’errore è tornato.',
-        '"Errors" groups recurring errors into cards: the cause in plain words (usage limit, network, login, full context…), how many times, the 14-day trend, the last time, where (chat, role, skill), what it means and what to do; below, the AI errors you corrected by type, with the rule produced and whether the error came back.'),
-      b('Ogni numero ha un «?»: dice esattamente come è calcolato. «Spunti» deriva segnali come contesti lunghi e costi alti.',
-        'Every number has a "?": it says exactly how it is computed. "Tips" derives signals such as long contexts and high costs.'),
-      b('Ogni pannello ha «Discuti»: mette una bozza all’Orchestrator, non la invia mai da solo.',
-        'Every panel has "Discuss": it puts a draft in the Orchestrator, never sends it by itself.'),
+      // src/renderer/lib/memory-hub.ts, src/renderer/actions.ts, src/renderer/components/Sidebar.tsx
+      b('Skill, Regole, Script, Idee e Apprendimento non sono più pagine a sé nella barra: sono schede di Memoria; i vecchi link, gli id e i tasti G (G S, G L, G T, G I, G J) aprono la scheda giusta, e «memoria/<scheda>» apre una scheda da un link.',
+        'Skills, Rules, Scripts, Ideas and Learning are no longer pages of their own in the rail: they are Memoria tabs; old links, ids and G keys (G S, G L, G T, G I, G J) open the right tab, and \"memoria/<tab>\" opens a tab from a link.'),
+      b('La voce Memoria nella barra porta il numero delle proposte che aspettano te; la scheda Proposte le mostra una alla volta.',
+        'The Memoria entry in the rail carries the number of proposals waiting for you; the Proposals tab shows them one at a time.'),
+      // src/renderer/components/brain-model/ApprovedTab.tsx, src/main/brainmodel/service.ts
+      b('«Approvate» elenca tutto quello che è nel brain adesso (skill, regole, fatti confermati, script): il cestino lo toglie con un clic e per qualche secondo «Annulla» lo rimette; skill, regole e script passano dal registro delle modifiche, quindi restano annullabili anche in Apprendimento.',
+        '\"Approved\" lists everything in the brain now (skills, rules, confirmed facts, scripts): the bin takes one out in a click and for a few seconds \"Undo\" puts it back; skills, rules and scripts go through the change log, so they stay undoable in Learning too.'),
+      // src/renderer/brain/pages/Idee.tsx
+      b('«Idee» divide le tue da quelle dell’AI (la colonna «Chi» di ideas.md: «IA» è l’AI) e «Rispolvera» ti ripropone a caso un’idea vecchia ancora aperta; sotto, il Battito e i temi delle idee.',
+        '\"Ideas\" splits yours from the AI’s (the \"Chi\" column of ideas.md: \"IA\" is the AI) and \"Dust one off\" brings back an old idea still open at random; below, the Pulse and the ideas’ themes.'),
+      b('La Dashboard non c’è più: la frase e i contatori sono in cima a Memoria, il contesto delle chat in Costi, gli errori dell’app e i temi degli errori in Qualità, gli spunti dell’AI in Idee; il resto erano doppioni.',
+        'The Dashboard is gone: the sentence and the counters are at the top of Memoria, the chats’ context in Costi, the app’s errors and the errors’ themes in Quality, the AI’s tips in Ideas; the rest were duplicates.'),
+      b('Ogni numero ha un «?» che dice come è calcolato; ogni pannello ha «Discuti», che prepara una bozza all’Orchestrator senza mai inviarla.',
+        'Every number has a \"?\" saying how it is computed; every panel has \"Discuss\", which drafts for the Orchestrator and never sends.'),
     ],
-    analogy: b('Come il quadro strumenti dell’auto: non guida, ma ti dice com’è la situazione adesso.',
-      'Like a car’s instrument panel: it does not drive, it tells you how things are right now.'),
+    analogy: b('Come lo studio di casa dove tieni tutto: la scrivania con la posta da aprire, gli scaffali in ordine e un cassetto da cui ogni tanto ripeschi un’idea.',
+      'Like the study at home where you keep everything: the desk with the mail to open, tidy shelves and a drawer you now and then fish an idea out of.'),
     tech: [
-      tech(DATA, 'Un contesto non riportato conta come sconosciuto, mai come sotto soglia.', 'An unreported context counts as unknown, never as below the threshold.'),
-      tech(WHERE, 'API del brain /api/map, /api/cost, /api/tables più lo stato delle chat dell’app.', 'Brain APIs /api/map, /api/cost, /api/tables plus the app’s chat state.'),
+      tech(WHERE, 'Schede in lib/memory-hub.ts (HUB_TABS, parseHubArg, hubRedirect), reindirizzamento in actions.ts go(); pagina components/brain-model/MemoryPage.tsx; ADR 0122.',
+        'Tabs in lib/memory-hub.ts (HUB_TABS, parseHubArg, hubRedirect), redirect in actions.ts go(); page components/brain-model/MemoryPage.tsx; ADR 0122.'),
+      tech(DATA, 'Il cestino chiama brainmodel:remove (skill del brain, file in rules/, script) e torna l’id della modifica; «Annulla» è brainmodel:rollback. Un fatto confermato si cancella con memory:delete solo quando il messaggio scade.',
+        'The bin calls brainmodel:remove (brain skills, rules/ files, scripts) and gets the change id back; \"Undo\" is brainmodel:rollback. A confirmed fact is erased with memory:delete only once its message expires.'),
     ],
-    sources: ['src/renderer/dashboard/Dashboard.tsx', 'src/renderer/dashboard/ErrorsTab.tsx', 'src/renderer/dashboard/errors.ts', 'src/renderer/dashboard/BrainNotesMap.tsx', 'src/renderer/dashboard/data.ts', 'src/shared/context.ts'],
+    sources: ['src/renderer/components/brain-model/MemoryPage.tsx', 'src/renderer/components/brain-model/ApprovedTab.tsx', 'src/renderer/lib/memory-hub.ts', 'src/renderer/brain/pages/Idee.tsx', 'src/renderer/components/ContextNow.tsx', 'src/renderer/dashboard/AppErrors.tsx', 'src/main/brainmodel/service.ts'],
   },
   {
     id: 'task-fatto',

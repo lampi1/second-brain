@@ -1,15 +1,15 @@
-// «Apprendimento» (Andamento, G J; ADR 0109, move 12 of the 2026-10-20 analysis): whether what the app changed by itself
+// «Apprendimento» (a tab of Memoria since ADR 0122, G J; ADR 0109, move 12 of the 2026-10-20 analysis): whether what the app changed by itself
 // in the brain really helped. Top: the counter (beneficio provato · senza effetto · in raccolta · peggiora · annullati),
 // each tile a filter of the list. Then the changes that made things worse, each with its Annulla (never undone silently).
 // Then per role the corrections per run of the last 12 weeks, with the changes measured on its runs as vertical marks in
 // their verdict's color: the real progress, without levels. Then every change with its hypothesis, scope and numbers
 // (MaintenancePanel Change), and how to read it all. Zero tokens: data from BrainModelState.changes[].claim and
-// .learning. Rendered by App.tsx PageFrame for 'apprendimento'; styles: styles/learning.css.
+// .learning. Rendered by MemoryPage.tsx for the «Apprendimento» tab; styles: styles/learning.css.
 import { useId, useState, type CSSProperties } from 'react';
 import type { BrainChange, ClaimVerdict, LearningRole, LearningState } from '@shared/brain-model';
 import { locale, t } from '../../i18n';
 import { useBrainModel } from '../../store/brain-model';
-import { PageHead } from '../../brain/components/States';
+import { HubIntro } from './HubIntro';
 import { curve, num, VERDICTS, verdictTone } from '../../lib/learning-view';
 import { HelpTip } from '../HelpTip';
 import { Change } from './MaintenancePanel';
@@ -87,7 +87,7 @@ export function LearningPage() {
   const worse = changes.filter(c => c.claim!.verdict === 'peggiora');
   const listed = filter ? changes.filter(c => c.claim!.verdict === filter) : changes;
   return <div className="bm-page agent-overview lr-page" data-testid="learning-page">
-    <PageHead title={t('learn.title')} lead={t('learn.lead')} />
+    <HubIntro lead={t('learn.lead')} />
     {error && <p role="alert">{error}</p>}
     {state && !state.root ? <p className="bm-empty">{t('bm.noBrain')}</p> : state && !learning ? <p className="bm-empty" data-testid="lr-unavailable">{t('learn.unavailable')}</p> : learning && <>
       <Counter counts={learning.counts} filter={filter} onFilter={v => { setFilter(v); setLimit(20); }} />

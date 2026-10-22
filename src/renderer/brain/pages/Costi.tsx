@@ -3,15 +3,16 @@
 // longest context and what restarting it would have saved ('chat:list').
 // The period's total is read against the period before (ADR 0037: /api/cost?days=2N, the brain caps at 90 days, so
 // "90 giorni" says it has no comparison), and the total, the advice and every chart end with the discussion bar.
-// On top, "Adesso": every chat of today by cost, live from the app's own streams (LiveCosts.tsx, zero tokens). Under the
-// KPIs, the curious facts of the period (lib/cost-facts.ts). It is the one costs page (#125): the Dashboard's Costi tab
-// is gone, and the per-agent costs are on the back of each agent card (AgentCatalogCard.tsx), never here: no role,
+// On top, "Adesso": every chat of today by cost, live from the app's own streams (LiveCosts.tsx, zero tokens), then
+// "Contesto adesso": every open chat's context against its window (once the Dashboard's context tab, ADR 0122). Under the
+// KPIs, the curious facts of the period (lib/cost-facts.ts). It is the one costs page (#125, and the Dashboard is gone,
+// ADR 0122), and the per-agent costs are on the back of each agent card (AgentCatalogCard.tsx), never here: no role,
 // current or retired, is listed on this page.
 // What the chat composer's model suggestions spent today against their daily budget sits beside them ('suggest:state',
 // ADR 0118).
 // Data: /api/cost?days=N (the brain's cost tool). The per-job cost/time estimate and its calculator were removed
 // (ADR 0053): measured on 178 past chats, the real cost fell inside the estimate's range only 47% of the time.
-import { useContext, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useContext, useEffect, useMemo, useState } from 'react';
 import type { Usage } from '@shared/contract';
 import { normCost, type CostChat } from '../types';
 import { useBrain } from '../api';
@@ -32,8 +33,11 @@ import { LiveCostList } from '../../components/LiveCosts';
 import { costRows } from '../../lib/live-costs';
 import { t } from '../../i18n';
 import '../../styles/classifiers.css'; // the facts' err-fact cards
+import '../../styles/memory-hub.css'; // «Contesto adesso» (mh-ctx)
 import { useSuggestState } from '../../lib/suggest-state';
 import { formatCost } from '../../lib/format';
+// app-side parts (they read the app's live store): loaded when shown, so the brain pages stay importable alone
+const ContextNow = lazy(() => import('../../components/ContextNow'));
 
 const PERIODS = [1, 7, 30, 90] as const;
 /** the brain's cost API reads at most 90 days: the period before is known up to 45 */
@@ -135,6 +139,7 @@ export function Costi({ arg, nav }: { arg?: string; nav: (t: string) => void }) 
         what={t('costs.what')} guide="costs"
         actions={<Seg label={t('costs.period')} value={days} onChange={d => nav(d === 7 ? 'costi' : `costi/${d}`)} items={PERIODS.map(d => ({ id: d, label: d === 1 ? t('costs.today') : t('costs.days',{days:d}) }))} />} />
       <LiveNow />
+      <Suspense fallback={null}><ContextNow /></Suspense>
       <SuggestToday />
       <Async loading={r.loading && !c} error={c ? null : r.error} onRetry={() => r.reload()} label={t('costs.loading')} lines={5} block>
         {() => c && (

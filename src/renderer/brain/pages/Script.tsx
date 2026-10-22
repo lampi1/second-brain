@@ -1,11 +1,11 @@
 // Script: the brain's reusable, tested scripts (ADR 0076; the owner, 2026-10-19: "una sezione dedicata agli script, tutti
-// gli script creati e riutilizzabili provati che funzionano"). Dashboard look: header, three numbers, search and filters,
-// then one card per script in a grid (title, what it does, language, last test, tags); a card opens in place, full width,
+// gli script creati e riutilizzabili provati che funzionano"), the first half of the Memoria hub's «Script & Query» tab
+// since ADR 0122: one line with the counts, search and filters (each with its count), then one card per script in a grid (title, what it does, language, last test, tags); a card opens in place, full width,
 // with how to run it, the code (credentials already masked by main), "Copia", "Apri il file" and "Discuti" (a draft for
 // the Orchestrator, never sent by itself). Read-only and zero tokens: nothing here runs a script; work chats add them
 // (brain_script_add), the app adds reusable "Esegui" commands that worked (ADR 0096), the Orchestrator fixes and deletes
 // them (brain_script_save / brain_script_delete) and every change shows on the Log page (ADR 0111).
-// Mounted by App.tsx's PageFrame. Data: /api/scripts, /api/script?id=… (main brain/scripts.ts).
+// Rendered by components/brain-model/MemoryPage.tsx ('script/<id>' links open that card). Data: /api/scripts, /api/script?id=… (main brain/scripts.ts).
 import { useMemo, useState } from 'react';
 import type { BrainScriptSummary } from '@shared/contract';
 import { useBrain } from '../api';
@@ -15,6 +15,7 @@ import { copyText } from '../components/ui';
 import { toast } from '../../store/ui';
 import { brainBridge, go, openFileViewer } from '../../actions';
 import { locale, t } from '../../i18n';
+import { HubIntro } from '../../components/brain-model/HubIntro';
 import '../../dashboard/dashboard.css';
 import '../../styles/brain-sections.css';
 
@@ -81,20 +82,16 @@ export function Script({ arg }: { arg?: string }) {
   const all = list.data?.scripts ?? [];
   const shown = useMemo(() => filterScripts(all, q, f), [all, q, f]);
   const ok = all.filter(s => s.tested.state === 'ok').length;
+  const count: Record<Filter, number> = { all: all.length, ok, fix: all.length - ok };
   const filters: [Filter, string][] = [['all', t('brainText.script.filter.all')], ['ok', t('brainText.script.filter.ok')], ['fix', t('brainText.script.filter.fix')]];
   return (
     <div className="dashboard bs-page" data-testid="brain-scripts">
-      <header className="dash-header bs-header"><div><span className="dash-eyebrow">{t('brainText.script.eyebrow')}</span><h1>Script</h1>
-        <p>{t('brainText.script.lead')}</p></div>
-        <button type="button" className="btn btn-ghost btn-s" onClick={() => go({ page: 'log' })} data-testid="bs-to-log"><span aria-hidden="true">↗</span> Log</button></header>
-      <div className="dash-stats">
-        <div className="dash-stat"><span>{t('brainText.script.inBrain')}</span><strong data-testid="bs-count">{list.data ? all.length : '—'}</strong><small>{t('brainText.script.folder')}</small></div>
-        <div className="dash-stat"><span>{t('brainText.script.okTitle')}</span><strong>{list.data ? ok : '—'}</strong><small>{t('brainText.script.okNote')}</small></div>
-        <div className="dash-stat"><span>{t('brainText.script.filter.fix')}</span><strong>{list.data ? all.length - ok : '—'}</strong><small>{t('brainText.script.fixNote')}</small></div>
-      </div>
+      <HubIntro lead={list.data ? t('mh.script.lead', { n: all.length, ok }) : t('brainText.script.loading')}
+        actions={<button type="button" className="btn btn-ghost btn-s" onClick={() => go({ page: 'log' })} data-testid="bs-to-log"><span aria-hidden="true">↗</span> Log</button>} />
+      <span hidden data-testid="bs-count">{list.data ? all.length : ''}</span>
       <div className="bs-toolbar" role="search">
         <label className="dash-search bs-search"><span aria-hidden="true">⌕</span><input type="search" value={q} onChange={e => setQ(e.target.value)} aria-label={t('brainText.script.searchLabel')} placeholder={t('brainText.script.searchPlaceholder')} data-testid="bs-search" /></label>
-        <div className="bs-chips" role="group" aria-label={t('brainText.script.filterLabel')}>{filters.map(([id, label]) => <button key={id} type="button" className="bs-chip" aria-pressed={f === id} onClick={() => setF(id)} data-testid={`bs-filter-${id}`}>{label}</button>)}</div>
+        <div className="bs-chips" role="group" aria-label={t('brainText.script.filterLabel')}>{filters.map(([id, label]) => <button key={id} type="button" className="bs-chip" aria-pressed={f === id} onClick={() => setF(id)} data-testid={`bs-filter-${id}`}>{label}{list.data && <b className="bs-chip-n">{count[id]}</b>}</button>)}</div>
       </div>
       {list.error && !list.data ? <div className="dash-empty">{t('brainText.script.cannotReadAll')}: {list.error} <button type="button" className="btn btn-subtle btn-s" onClick={() => list.reload()}>{t('brainText.common.retry')}</button></div>
         : !list.data ? <div className="bs-grid">{[0, 1, 2].map(i => <div key={i} className="bs-card bs-skeleton" />)}</div>

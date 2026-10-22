@@ -72,6 +72,6 @@ test('the old page id and its G R shortcut land on Regole, with the learned rule
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await page.keyboard.press('g');
   await page.keyboard.press('r');
-  await expect(page.getByTestId('nav-regole')).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByTestId('nav-memoria')).toHaveAttribute('aria-current', 'page'); // Memoria → Regole (ADR 0122)
   await expect(page.getByTestId('page-miglioramento')).toBeVisible();
 });

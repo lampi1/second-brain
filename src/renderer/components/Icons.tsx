@@ -69,6 +69,8 @@ export const IconExternal = (p: P) => <Svg {...p}><path d="M14 4h6v6M20 4l-9 9" 
 export const IconCopy = (p: P) => <Svg {...p}><rect x="8.5" y="8.5" width="11" height="11" rx="2" /><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2" /></Svg>;
 export const IconPlay = (p: P) => <Svg {...p}><path d="M8 5.5v13l10.5-6.5z" fill="currentColor" /></Svg>;
 export const IconMoon = (p: P) => <Svg {...p}><path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z" /></Svg>;
+export const IconTrash = (p: P) => <Svg {...p}><path d="M4.5 7h15M9.5 7V5.2c0-.7.5-1.2 1.2-1.2h2.6c.7 0 1.2.5 1.2 1.2V7M6.5 7l.8 11.6c.1 1 .9 1.9 2 1.9h5.4c1.1 0 1.9-.8 2-1.9L17.5 7M10.2 11v5.5M13.8 11v5.5" /></Svg>;
+export const IconDice = (p: P) => <Svg {...p}><rect x="4" y="4" width="16" height="16" rx="3.5" /><circle cx="8.8" cy="8.8" r=".9" fill="currentColor" /><circle cx="15.2" cy="15.2" r=".9" fill="currentColor" /><circle cx="15.2" cy="8.8" r=".9" fill="currentColor" /><circle cx="8.8" cy="15.2" r=".9" fill="currentColor" /><circle cx="12" cy="12" r=".9" fill="currentColor" /></Svg>;
 export const IconHistory = (p: P) => <Svg {...p}><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4.5v3.8h3.8" /><path d="M12 8v4.2l2.8 1.6" /></Svg>;
 export const IconPanel =(p: P) => <Svg {...p}><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><path d="M3.5 9h17" /></Svg>;
 export const IconSpinner = ({ size = 16, ...rest }: P) => (

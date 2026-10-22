@@ -19,6 +19,7 @@ import { setReporting } from './lib/viewports';
 import { floatsBehindPopup, focusLayer, inLayer, orchestratorCardOnScreen, visibleRequestKeys } from './lib/layer';
 import { makeLink, parseLink, visitSection } from './lib/notify';
 import { touch } from './lib/autoclose';
+import { hubRedirect } from './lib/memory-hub';
 import { isBusy } from './store/state';
 import { app, closeChat, closeTab, continueChat, createChat, createRoutedChat, dispatch, setChat, setSetting, stop, stopAll } from './store/store';
 import { orchestratorIdOf } from './lib/orchestrator-route';
@@ -175,10 +176,14 @@ export function goTarget(target: string): void {
 }
 
 /** Old page names (app-control docs, links made before; the agents' workspace page is the Grindhouse since SPEC 19) → today's ids; "spunti" (the AI's ideas) opens Idee on "Dall'IA". */
-const ALIAS: Record<string, string> = { oggi: 'task', adesso: 'task', dafare: 'task', devops: 'task', diario: 'fatto', workspace: 'home', grid: 'home', chat: 'home', chats: 'home', map: 'mappa', spunti: 'idee',esplora:'file', procedure: 'skill', procedura: 'skill', miglioramento: 'regole' };
+const ALIAS: Record<string, string> = { oggi: 'task', adesso: 'task', dafare: 'task', devops: 'task', diario: 'fatto', workspace: 'home', grid: 'home', chat: 'home', chats: 'home', map: 'mappa', spunti: 'idee',esplora:'file', procedure: 'skill', procedura: 'skill', miglioramento: 'regole', dashboard: 'memoria' };
 
 /** Go to a place: a brain page (the Grindhouse holds the agents) or the map; `element` is highlighted for 1.5 s on arrival. */
 export function go(place: Place, opts: { push?: boolean } = {}): void {
+  // Skill, Regole, Script, Idee and Apprendimento are tabs of Memoria (ADR 0122): their ids, links and G-keys land there
+  const aliased = (ALIAS[place.page] ?? place.page) as string;
+  const hub = hubRedirect(aliased, (place.page as string) === 'spunti' ? 'ia' : place.arg);
+  if (hub) place = { ...place, ...hub };
   const page = (ALIAS[place.page] ?? place.page) as Place['page'];
   if (page !== 'mappa' && !isBrainPage(page)) { toast(t('appText.actions.unknownPage', { page: place.page }), 'warn'); return; }
   const target: Place = { page:page==='file'&&!place.arg?'home':page, arg:page==='file'&&place.arg?normalizeFileArg(place.arg):(place.page as string) === 'spunti' ? 'ia' : place.arg ?? null, element: place.element ?? null };

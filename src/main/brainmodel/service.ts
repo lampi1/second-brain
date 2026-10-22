@@ -53,6 +53,9 @@ export interface BrainModelDeps {
   appVersion?: () => string;
   /** the upgrade job's one-shot question (agents/oneshot.ts, no tools); absent = candidates wait for a pass with an engine */
   upgradeAsk?: UpgradeAsk;
+  /** the brain's scripts (brain/scripts.ts): a script's file by its id, and the hook that tells the Script tab it changed;
+   *  absent = scripts cannot be removed here (ADR 0122) */
+  scripts?: { file: (id: string) => string; changed: () => void };
   /** run the jobs by themselves (timers); false in the test suites */
   auto: boolean;
   now?: () => number;
@@ -226,6 +229,7 @@ export class BrainModelService {
   rollback(id: string): BrainModelState {
     const c = this.log.rollback(id, this.restorer());
     log.info('brain', 'maintenance change undone', { data: { job: c.job, kind: c.kind, target: c.target } });
+    if (c.kind === 'script') this.d.scripts?.changed();
     this.d.emit();
     return this.state();
   }
@@ -240,6 +244,39 @@ export class BrainModelService {
     if (snap) this.log.record({ job: 'user', kind: 'agent', action: on ? 'link' : 'unlink', target: agentId, summary: `${p.name} ${on ? 'usa' : 'non usa più'} «${skill}»`, reason: 'Scelta tua sulla pagina Skill.', evidence: [skill] }, [], snap);
     this.d.emit();
     return this.state();
+  }
+  /** The Memoria hub's trash (ADR 0122): removes one brain skill (its whole folder), one rules/ file or one script
+   *  through the change log, so its «Annulla» puts every file back. Only what lives in the brain: the user's own and
+   *  Cursor's skills, the always-loaded files (CLAUDE.md and the like) and files too big to keep a copy of are refused. */
+  remove(kind: 'skill' | 'rule' | 'script', target: string): { state: BrainModelState; changeId: string } {
+    const root = this.root();
+    if (!root) throw new Error('Scegli prima la cartella del brain.');
+    let files: string[] = [], summary = '', reason = 'Eliminata da te in Memoria → Approvate.', evidence: string[] = [];
+    if (kind === 'skill') {
+      const skill = readSkills(this.skillDirs(root), root, []).find(x => x.name === target && x.home === 'brain');
+      if (!skill) throw new Error('Skill del brain non trovata.');
+      files = listFiles(path.dirname(skill.file));
+      summary = `Skill «${skill.name}» eliminata`; evidence = [skill.rel ?? skill.file];
+    } else if (kind === 'rule') {
+      const rel = target.replace(/\\/g, '/');
+      const r = readRules(root).find(x => x.file === rel);
+      if (!r) throw new Error('Regola non trovata.');
+      if (!/^rules\/[^/]+\.md$/i.test(r.file) || r.loaded === 'always') throw new Error('Questo file è sempre caricato: si modifica, non si elimina da qui.');
+      files = [path.join(root, r.file)];
+      summary = `Regola «${r.title}» eliminata`; evidence = [r.file];
+    } else {
+      if (!this.d.scripts) throw new Error('Gli script non si possono eliminare qui.');
+      files = [this.d.scripts.file(target)];
+      summary = `Script «${target}» eliminato`; reason = 'Eliminato da te in Memoria → Approvate.'; evidence = [`scripts/${target}`];
+    }
+    if (!files.length) throw new Error('Niente da eliminare.');
+    if (files.length > 64 || files.some(f => { try { return fs.statSync(f).size > 256 * 1024; } catch { return true; } })) throw new Error('Troppo grande per poterlo annullare: eliminalo dal disco.');
+    const c = this.log.apply({ job: 'user', kind, action: 'remove', target, summary, reason, evidence }, files.map(file => ({ file, text: null })));
+    if (!c) throw new Error('Niente da eliminare.');
+    log.info('brain', 'item removed by the user', { data: { kind, files: files.length } });
+    if (kind === 'script') this.d.scripts?.changed();
+    this.d.emit();
+    return { state: this.state(), changeId: c.id };
   }
   /** The brain's skills by name and description, for skills_suggest (skills/suggest.ts). */
   skillList(): { name: string; description: string }[] {
@@ -270,6 +307,20 @@ export class BrainModelService {
     this.timers.push(first, every);
   }
   stop(): void { for (const t of this.timers) { clearTimeout(t); clearInterval(t); } this.timers = []; }
+}
+
+/** Every file under a folder (a skill's SKILL.md and what sits beside it), at most 65: more is refused by the caller. */
+function listFiles(dir: string): string[] {
+  const out: string[] = [];
+  const walk = (d: string) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      if (out.length > 64) return;
+      const f = path.join(d, e.name);
+      if (e.isDirectory()) walk(f); else if (e.isFile()) out.push(f);
+    }
+  };
+  walk(dir);
+  return out;
 }
 
 /** A re-run keeps the earlier report's items and adds the new ones (one line per former section). */

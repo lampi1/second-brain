@@ -791,6 +791,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning, runs: () => manager.runs.list(), routing: () => brain.routingInfo(),
     suggestSkills: async text => (await suggestSkills(text)).candidates.map(c => c.name),
     emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: !process.env.SB_TEST || process.env.SB_BRAIN_JOBS === '1',
+    // the Memoria hub's trash (ADR 0122): a script's file, and the Script tab told at once
+    scripts: { file: id => brainScripts.get(id).path, changed: () => { brainScripts.invalidate(); ctx.emitter.emit('scripts:changed', undefined); } },
     // the brain upgrade (ADR 0116): Artisan, with no tools, says which notes' excerpts belong in a new place of the layout
     appVersion: () => app.getVersion(),
     upgradeAsk: async (system, prompt) => { const r = await oneShot.runOnce({ agentId: 'artisan', purpose: 'upgrade', system, prompt, maxOutputTokens: 1200, timeoutMs: 90_000 }); return { ok: r.ok, text: r.text, ...(r.reason ? { reason: r.reason } : {}) }; },

@@ -2,7 +2,7 @@
 // why, the evidence and "Annulla" (or why it can no longer be undone), the "Esegui ora" button and the last pass. No
 // approval anywhere: the jobs apply their changes and the user can take any of them back. The migration report (former
 // runbook and routine sections turned into skills) is a separate block for the Skill page. Used by SkillsPage.tsx,
-// RulesPage.tsx and MemoryPage.tsx; Change also by LearningPage.tsx. Each change shows its evidence claim (ADR 0109): the
+// RulesPage.tsx and MemoryPage.tsx (the Memoria hub's tabs, ADR 0122); Change also by LearningPage.tsx. Each change shows its evidence claim (ADR 0109): the
 // hypothesis, where it is measured and what the data say so far, with the verdict. Styles: styles/brain-model.css.
 import { useState } from 'react';
 import type { BrainChange, MaintenanceJobId, MaintenanceRun, MigrationReport } from '@shared/brain-model';
@@ -58,7 +58,8 @@ export function MaintenancePanel({ kinds, job, runLabel, testId = 'bm-maintenanc
       <div><h3 id={`${testId}-h`}>{t('bm.maint.title')}</h3><p>{t('bm.maint.lead')}</p></div>
       <div className="bm-panel-actions">
         <small className="bm-last">{state?.lastRun ? t('bm.maint.last', { at: when(state.lastRun.at) }) : t('bm.maint.never')}</small>
-        <button type="button" className="btn btn-primary btn-s" disabled={busy || !state?.root} onClick={() => void run()} data-testid="bm-run">{busy ? t('bm.maint.running') : runLabel ?? t('bm.maint.run')}</button>
+        {/* only a single job has its own button: running every job is the hub's one «Manutenzione» (ADR 0122) */}
+        {job && <button type="button" className="btn btn-primary btn-s" disabled={busy || !state?.root} onClick={() => void run()} data-testid="bm-run">{busy ? t('bm.maint.running') : runLabel ?? t('bm.maint.run')}</button>}
       </div>
     </header>
     <p className="bm-note">{t('bm.maint.approvalNote')}</p>

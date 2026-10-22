@@ -1,14 +1,15 @@
-// The statistics of the Memoria page (owner, 2026-10-19: "estremamente interessante e ricca di statistiche e grafici,
-// tipo errore ricorrente, skill utile inutile", "cose curiose"): the key numbers, "Lo sapevi?" (curious facts picked
-// from the data), how the memory grew week by week, lines per agent, the recurring errors
-// (count, trend, agents, the rule each produced), the skills the runs used or never used (uses, success, last use) and
-// the files gone stale. Every number carries a "?" that says how it is computed. Data: BrainModelState.memoryStats
+// The statistics of Memoria (its «Statistiche» tab, ADR 0122; owner, 2026-10-19: "estremamente interessante e ricca di
+// statistiche e grafici, tipo errore ricorrente, skill utile inutile", "cose curiose"): "Lo sapevi?" (curious facts
+// picked from the data), how the memory grew week by week, lines per agent, the skills the runs used or never used
+// (uses, success, last use) and the files gone stale. Gone as duplicates (ADR 0122): the key-number row (lines: the
+// hub's live counter; errors: Qualità; unused skills: the table) and the recurring errors block (Qualità's patterns and
+// the File tab's error log). Every number carries a "?" that says how it is computed. Data: BrainModelState.memoryStats
 // (main, brainmodel/memory-stats.ts). Each file opens in the app's file viewer. Charts: brain/components/Charts.tsx
 // (validated palette, tooltips, "Dati" table, CSV). Used by MemoryPage.tsx. Styles: styles/memory.css (mm-*).
 import { createContext, useContext, type ReactNode } from 'react';
 import type { MemoryStats, SkillUse } from '@shared/brain-model';
 import { locale, t } from '../../i18n';
-import { HBarChart, Sparkline, StackedBars } from '../../brain/components/Charts';
+import { HBarChart, StackedBars } from '../../brain/components/Charts';
 import { renderMarkdown } from '../../brain/components/Markdown';
 import { memoryFacts, shortDay, total, verdictTone, type Fact } from '../../lib/memory-view';
 import { HelpTip } from '../HelpTip';
@@ -26,14 +27,6 @@ export function InlineMd({ text, className = '' }: { text: string; className?: s
   if (typeof window === 'undefined') return <span className={`mm-md ${className}`}>{text}</span>;
   const html = renderMarkdown(text).trim().replace(/^<p>/, '').replace(/<\/p>$/, '');
   return <span className={`mm-md ${className}`} dangerouslySetInnerHTML={{ __html: html }} />;
-}
-
-function Kpi({ k, v, s, help, tone, testId }: { k: string; v: ReactNode; s?: ReactNode; help: ReactNode; tone?: 'warn' | 'good'; testId: string }) {
-  return <div className={`bx-kpi mm-kpi ${tone ?? ''}`} data-testid={testId}>
-    <span className="k">{k} <HelpTip label={k}>{help}</HelpTip></span>
-    <span className="v">{v}</span>
-    {s && <span className="s">{s}</span>}
-  </div>;
 }
 
 function Head({ id, title, lead, help, testId }: { id?: string; title: string; lead?: string; help: ReactNode; testId?: string }) {
@@ -88,39 +81,6 @@ function PerAgent({ s }: { s: MemoryStats }) {
 }
 
 
-function Errors({ s }: { s: MemoryStats }) {
-  const e = s.errors;
-  const labels = s.weeks.map(w => shortDay(w, locale()));
-  const recurring = e.groups.filter(g => g.count >= 2);
-  return <section className="mm-block" aria-labelledby="mm-errors-h" data-testid="mm-errors">
-    <Head id="mm-errors-h" title={t('mm.errors')} lead={e.total ? t('mm.errorsLead', { n: e.total, groups: recurring.length }) : t('mm.errorsEmpty')} help={t('mm.errorsHelp')} />
-    {e.total > 0 && <div className="mm-errors">
-      <div className="mm-groups" data-testid="mm-error-groups">
-        {e.groups.slice(0, 6).map((g, i) => <article key={g.key} className="mm-group" data-recurring={g.count >= 2} data-testid="mm-error-group" style={{ ['--row-index' as string]: i }}>
-          <header>
-            <span className="mm-group-count" title={t('mm.timesTitle', { n: g.count })}><b>{g.count}</b><small>{g.count === 1 ? t('mm.time') : t('mm.times')}</small></span>
-            <span className="mm-group-main">
-              <b className="mm-group-label">{g.label}</b>
-              <small>{g.agents.join(', ')} · {g.first === g.last ? day(g.last) : t('mm.fromTo', { from: day(g.first), to: day(g.last) })}</small>
-            </span>
-            <span className="mm-group-trend"><Sparkline values={g.trend} labels={labels} label={t('mm.trendLabel', { label: g.label })} highlightLast={false} /></span>
-          </header>
-          {g.count >= 2 && <p className="mm-group-sample"><span className="mm-say">{t('mm.lastTime')}</span> <InlineMd text={g.sample} /></p>}
-          {g.rule && <p className="mm-group-rule"><span className="mm-say">{t('mm.rule')}</span> <InlineMd text={g.rule} /></p>}
-        </article>)}
-      </div>
-      <div className="mm-errors-side">
-        <div className="bx-kpis mm-kpis-2">
-          <Kpi k={t('mm.k.last30')} v={num(e.last30)} s={t('mm.k.prev30', { n: e.prev30 })} tone={e.last30 > e.prev30 ? 'warn' : e.last30 < e.prev30 ? 'good' : undefined} help={t('mm.k.last30Help')} testId="mm-k-last30" />
-          <Kpi k={t('mm.k.recurring')} v={num(recurring.reduce((a, g) => a + g.count, 0))} s={t('mm.k.recurringS', { n: recurring.length })} help={t('mm.k.recurringHelp')} testId="mm-k-recurring" />
-        </div>
-        {e.byAgent.length > 0 && <HBarChart title={t('mm.byAgent')} name="errori-agenti" testId="mm-errors-by-agent" labels={e.byAgent.map(a => a.agent)} series={[{ label: t('mm.errorsN'), values: e.byAgent.map(a => a.count) }]}
-          note={<HelpTip label={t('mm.byAgent')}>{t('mm.byAgentHelp')}</HelpTip>} />}
-      </div>
-    </div>}
-  </section>;
-}
-
 function SkillRow({ k }: { k: SkillUse }) {
   const open = useContext(OpenFile);
   return <tr data-testid={`mm-skill-${k.name}`} data-verdict={k.verdict}>
@@ -156,19 +116,13 @@ function Stale({ s }: { s: MemoryStats }) {
   </section>;
 }
 
-/** The statistics block; `s` from BrainModelState.memoryStats. */
+/** The statistics block (Memoria → Statistiche); `s` from BrainModelState.memoryStats. No key-number row: the lines are
+ *  the hub's live counter, the errors live on Qualità and in File's error log, the unused skills in the table below
+ *  (ADR 0122). */
 export function MemoryInsights({ s }: { s: MemoryStats }) {
-  const unused = s.skills.filter(k => k.verdict === 'unused').length;
   return <div className="mm-insights" data-testid="mm-insights">
-    <div className="bx-kpis mm-kpis" data-testid="mm-kpis">
-      <Kpi k={t('mm.k.lines')} v={num(s.totals.entries)} s={t('mm.k.linesS', { n: s.totals.files })} help={t('mm.k.linesHelp')} testId="mm-k-lines" />
-      <Kpi k={t('mm.k.agents')} v={`${s.totals.agentsWithMemory}/${s.totals.agents}`} s={t('mm.k.agentsS', { n: s.totals.agents - s.totals.agentsWithMemory })} help={t('mm.k.agentsHelp')} testId="mm-k-agents" />
-      <Kpi k={t('mm.k.errors')} v={num(s.errors.total)} s={t('mm.k.errorsS', { n: s.errors.last30 })} tone={s.errors.last30 > s.errors.prev30 ? 'warn' : undefined} help={t('mm.k.errorsHelp')} testId="mm-k-errors" />
-      <Kpi k={t('mm.k.unused')} v={`${unused}/${s.skills.length}`} s={t('mm.k.unusedS')} tone={unused ? 'warn' : undefined} help={t('mm.k.unusedHelp')} testId="mm-k-unused" />
-    </div>
     <Facts s={s} />
     <div className="mm-grid-2"><Growth s={s} /><PerAgent s={s} /></div>
-    <Errors s={s} />
     <Skills s={s} />
     {/* no "richiami": a line counted once per run started after it, even past the ~4000 characters a run really gets;
         loaded is not used (ADR 0101, E-apprendimento §5) */}

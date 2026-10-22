@@ -10,7 +10,7 @@ for (const lang of ['it', 'en']) test(`Home is the default Grindhouse and keeps 
   try {
     await expect(page.getByTestId('home')).toBeVisible();
     await expect(page.getByTestId('home').getByRole('heading', { level: 1 })).toHaveCount(0); // no greeting
-    await expect(page.getByTestId('dash-headline')).toHaveCount(0); // the headline is the Dashboard's
+    await expect(page.getByTestId('dash-headline')).toHaveCount(0); // the headline heads Memoria (ADR 0122)
     await expect(page.getByTestId('view-agents')).toBeVisible();
     await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
     await expect(page.locator('[data-testid^="home-request-"]')).toHaveCount(0); // a decision waits as a pill on its strip

@@ -10,13 +10,12 @@ import{t}from'./i18n';
 import { BRAIN_PAGES, BrainMap, BrainPage, GO_ALIASES } from './brain';
 import { goSequence, resolveShortcut } from './lib/keys';
 import { schedule, setBlocked, setKnownTabs } from './lib/viewports';
-import { makeLink } from './lib/notify';
 import { liveSource } from './lib/liveSource';
 import { sameList } from './store/state';
 import { useApp } from './store/store';
 import { openModal, closeModal, pageLabel, setMap, setPrefs, toast, ui } from './store/ui';
 import {
-  back, brainBridge, copyLink, escapeOne, focusChat, focusTile, forward, go, goTarget, nextThing, openLink, stopAllAsk, stopFocused, closeFocused, toggleCenter, toggleFocusMode, toggleMaximize, toggleOrchestrator, askRenewOrchestrator, newRequest,
+  back, brainBridge, escapeOne, focusChat, focusTile, forward, go, goTarget, nextThing, openLink, stopAllAsk, stopFocused, closeFocused, toggleCenter, toggleFocusMode, toggleMaximize, toggleOrchestrator, askRenewOrchestrator, newRequest,
 } from './actions';
 import { TopBar } from './components/TopBar';
 import { BrainSetupBanner } from './components/BrainSetupBanner';
@@ -30,7 +29,6 @@ import { FocusView } from './components/FocusView';
 import { NotificationCenter } from './components/NotificationCenter';
 import { AutoCloser } from './components/AutoCloser';
 import { CommandPalette } from './components/CommandPalette';
-import { AgentPackHost } from './components/AgentPackHost';
 import { AgentCatalogPage } from './components/AgentCatalogPage';
 import { FirstInterviewGate } from './components/FirstInterview';
 import { OrchestratorRenewDialog } from './components/OrchestratorRenewDialog';
@@ -38,19 +36,15 @@ import { ConfirmDialog, ShortcutsDialog, Toasts } from './components/Overlays';
 import { HandoffDialog } from './components/HandoffDialog';
 import { CredentialsDialog } from './components/LoginsDialog';
 import { StatoDialog } from './components/StatoDialog';
-import { IconArrowLeft, IconLink } from './components/Icons';
+import { IconArrowLeft } from './components/Icons';
 import { Keys, TooltipLayer } from './components/ui';
 import { SettingsPage } from './components/SettingsPage';
-import { SkillsPage } from './components/SkillsPage';
 import { QuestionsWindow } from './components/QuestionsWindow';
 import { LaunchBanner } from './components/LaunchBanner';
-import { Dashboard } from './dashboard/Dashboard';
-import { RulesPage } from './components/brain-model/RulesPage';
 import { MemoryPage } from './components/brain-model/MemoryPage';
-import { LearningPage } from './components/brain-model/LearningPage';
+import { hubRedirect } from './lib/memory-hub';
 import { ClassifiersPage } from './components/brain-model/ClassifiersPage';
 import { MapPage } from './components/brain-model/MapPage';
-import { Script } from './brain/pages/Script';
 import { LogPage } from './components/LogPage';
 import { GuidePage } from './components/GuidePage';
 
@@ -153,29 +147,29 @@ function useHighlight(): void {
   }, [h]);
 }
 
-/** A brain page (built in src/renderer/brain) with a thin frame: back to the chats, its title, "Copia link" (the Orchestrator
- *  widget sits in the bottom-right corner, over the page too). */
+/** A brain page (built in src/renderer/brain) with a thin frame: back to the chats and its title (links are copied from the command palette); the Orchestrator
+ *  widget sits in the bottom-right corner, over the page too. */
 function PageFrame({ id }: { id: (typeof BRAIN_PAGES)[number]['id'] }) {
   const arg = ui.use(s => s.pageArg);
   const home = id === 'home'; // the Grindhouse is where every way back leads (Esc, Ctrl+1): no back button on it
+  // a page that became a Memoria tab (ADR 0122) reached without go() (an old saved place): moved to its tab
+  const hub = hubRedirect(id, arg);
+  useEffect(() => { if (hub) go(hub, { push: false }); }, [hub?.arg]);
   return (
     <div className="page-frame" data-testid={`page-${id}`}>
       <div className="page-bar">
         {!home && <button type="button" className="btn btn-ghost btn-s" onClick={() => go({ page: 'home' })} data-testid="page-back" data-tip={`${t('home.back')}|Ctrl+1`}><IconArrowLeft size={13} /> {pageLabel('home')}</button>}
         <h2>{id === 'agenti' ? t('catalog.title') : pageLabel(id)}</h2>
         <span className="sp" />
-        <button type="button" className="btn btn-ghost btn-s" onClick={() => void copyLink(makeLink(id, arg))} data-testid="page-copy-link"><IconLink size={13} /> {t('chat.menu.copyLink')}</button>
         {!home && <span className="page-hint"><Keys combo="Esc" /> {pageLabel('home')}</span>}
       </div>
       {/* keyed by the page: every page change replays the entry (linear.css panel-enter), no hard cut */}
       <div className="page-body" key={id}>
-        {id === 'dashboard' ? <Dashboard /> : id === 'script' ? <Script arg={arg ?? undefined} /> : id === 'log' ? <LogPage /> : id === 'guida' ? <GuidePage arg={arg ?? undefined} /> : id === 'agenti' ? <AgentCatalogPage /> : id === 'impostazioni'
+        {hub ? null : id === 'log' ? <LogPage /> : id === 'guida' ? <GuidePage arg={arg ?? undefined} /> : id === 'agenti' ? <AgentCatalogPage /> : id === 'impostazioni'
           ? <div className="bx bx-page bx-scroll" role="region" aria-label={t('cmp.app.settings')}><div className="bx-inner"><SettingsPage /></div></div>
-          : id === 'skill'
-            ? <div className="bx bx-page bx-scroll" role="region" aria-label={t('cmp.app.skills')}><div className="bx-inner"><SkillsPage /></div></div>
-            : id === 'regole' || id === 'memoria' || id === 'apprendimento'
-              ? <div className="bx bx-page bx-scroll" role="region" aria-label={pageLabel(id)}><div className="bx-inner">{id === 'regole' ? <RulesPage /> : id === 'memoria' ? <MemoryPage /> : <LearningPage />}</div></div>
-              : id === 'classificatori' ? <ClassifiersPage /> : id === 'collegamenti' ? <MapPage />
+          : id === 'memoria'
+            ? <div className="bx bx-page bx-scroll" role="region" aria-label={pageLabel(id)}><div className="bx-inner mh-inner"><MemoryPage /></div></div>
+            : id === 'classificatori' ? <ClassifiersPage /> : id === 'collegamenti' ? <MapPage />
               : <BrainPage id={id} arg={arg ?? undefined} onNavigate={goTarget} bridge={brainBridge} />}
       </div>
     </div>
@@ -229,7 +223,6 @@ export function App() {
     <div className="app" data-testid="app" style={{ '--orchestrator-r': `${dock.right}px`, '--orchestrator-b': `${dock.bottom}px`,'--orchestrator-t':`${dock.top??0}px` } as CSSProperties}>
       <TopBar />
       <Toasts />
-      <AgentPackHost />
       <BrainSetupBanner />
       <HealthBanner />
       <LaunchBanner />

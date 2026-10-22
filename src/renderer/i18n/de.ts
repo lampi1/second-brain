@@ -5,6 +5,7 @@ import { learningReviewDe } from './areas/learning-review.de';
 import { cloudDe } from './areas/cloud.de';
 import { brainModelDe } from './areas/brain-model.de';
 import { memoryDe } from './areas/memory.de';
+import { memoryHubDe } from './areas/memory-hub.de';
 import { statsDe } from './areas/stats.de';
 import { costsDe } from './areas/costs.de';
 import { auditDe } from './areas/audit.de';
@@ -88,6 +89,7 @@ export const de: Dict = {
   ...langSwitchDe,
   ...brainModelDe,
   ...memoryDe,
+  ...memoryHubDe,
   ...statsDe,
   ...productDe,
   ...agentsGridDe,

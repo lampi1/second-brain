@@ -58,13 +58,11 @@ test('menus: gear, "…", a chat\'s ⋯ and the sidebar groups', async () => {
     const ix = (id: string) => navOrder.indexOf(id);
     expect(ix('nav-home')).toBeLessThan(ix('nav-group-work'));
     expect(ix('nav-workspace')).toBe(-1); // SPEC 19: the agents live in the Grindhouse, no separate entry
-    expect(ix('nav-group-brain')).toBeLessThan(ix('nav-regole'));
-    expect(ix('nav-regole')).toBeLessThan(ix('nav-group-app'));
-    expect(ix('nav-dashboard')).toBeGreaterThan(ix('nav-group-app'));
-    expect(ix('nav-skill')).toBeGreaterThan(ix('nav-group-brain')); // Skill is in the Brain section (ADR 0077)
-    expect(ix('nav-skill')).toBeLessThan(ix('nav-group-app'));
-    expect(ix('nav-dashboard')).toBeLessThan(ix('nav-guida'));
-    expect(ix('nav-group-trends')).toBeGreaterThan(ix('nav-regole'));
+    // Memoria holds Skill, Regole, Script, Idee and Apprendimento as tabs, and the Dashboard is gone (ADR 0122)
+    expect(ix('nav-group-brain')).toBeLessThan(ix('nav-memoria'));
+    expect(ix('nav-memoria')).toBeLessThan(ix('nav-group-trends'));
+    for (const gone of ['nav-dashboard', 'nav-skill', 'nav-regole', 'nav-script', 'nav-idee', 'nav-apprendimento']) expect(ix(gone)).toBe(-1);
+    expect(ix('nav-group-trends')).toBeGreaterThan(ix('nav-memoria'));
     expect(ix('nav-costi')).toBeGreaterThan(ix('nav-group-trends'));
     expect(ix('nav-qualita')).toBeGreaterThan(ix('nav-costi'));
     expect(ix('nav-qualita')).toBeLessThan(ix('nav-group-app'));

@@ -126,6 +126,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     runs: (): AgentRun[] => [...demoBrainRuns(now(), brainModel.skillList().map(s => s.name)), ...demoLearningRuns(now()), ...(demoCls ??= writeDemoClassifiers(demoBrainRoot, ctx.userData, now(), brainModel.skillList().map((x: { name: string }) => x.name).filter(n => n !== 'pulizia-ambiente'))).runs], routing: () => brain.routingInfo(), now,
     suggestSkills: async text => (await suggestSkills(text)).candidates.map(c => c.name),
     emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: false,
+    scripts: { file: id => demoScripts.get(id).path, changed: () => { demoScripts.invalidate(); ctx.emitter.emit('scripts:changed', undefined); } },
     // the log step and the hand-off of the Manutenzione (#150): made-up logs, the demo Orchestrator gets the message
     logDir: () => demoLogs,
     handoff: async text => { const o = chats.list().find(c => c.isOrchestrator && !c.closedAt); if (!o) return false; await chats.send(o.id, `${APP_EVENT_LABEL}\n${text}`); return true; } });
