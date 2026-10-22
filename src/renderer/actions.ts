@@ -430,15 +430,14 @@ export function focusRequest(req: PendingRequest): void {
   callQuestions(reqKey(req));
 }
 
-/** Ctrl+J: the oldest request first; pressed again, the next one. `from`: the card the cycle goes on from (the layer
- *  passes the one it shows, since the app page's own focus is elsewhere then). */
-export function nextThing(from?: string): void {
+/** Ctrl+J: the oldest request first; pressed again, the next one. */
+export function nextThing(): void {
   const hidden = new Set(ui.get().hidden);
   const list = app.get().pending.filter(p => !hidden.has(p.chatId));
   if (!list.length) { void nextAfterPending(); return; }
   // Reopening a paused queue starts at its oldest request; stale card focus is only a cursor once it is open.
   if (ui.get().later) { openQueue(null); return; }
-  const active = from ?? (document.activeElement as HTMLElement | null)?.closest?.('[data-request-key]')?.getAttribute('data-request-key');
+  const active = (document.activeElement as HTMLElement | null)?.closest?.('[data-request-key]')?.getAttribute('data-request-key');
   const i = list.findIndex(p => reqKey(p) === active);
   focusRequest(list[(i + 1) % list.length]!);
 }

@@ -84,15 +84,13 @@ export interface UiState {
   hidden: string[];              // chats being closed (undo toast running)
   hiddenTabs: string[];          // browser tabs being closed (undo toast running)
   closing: string[];             // chats fading out before they are archived (auto-close)
-  orchestratorFirst: string | null;     // the request the Orchestrator widget shows first (Ctrl+J asked for it), else the oldest
-  layerHeld: string | null;      // the global layer's card that has the keyboard (Ctrl+J took it there): the one popup until answered, "Rispondi dopo" or the app is back
   later: boolean;                // "Rispondi dopo" is on (main/later.ts, mirrored by lib/later.ts): every request waits in "Da rispondere", no popup
   announce: string;              // screen-reader live region
-  qwin: QWin;                    // the questions window ("Domande in finestra", QuestionsWindow.tsx)
+  qwin: QWin;                    // the questions window (QuestionsWindow.tsx, always on)
 }
 
 /** The questions window: open = called as the "Da rispondere" queue (Ctrl+J, the counter, "Rispondi" on a tile): it
- *  shows even with "Domande in finestra" off, until the queue is empty or set aside again; first = the request shown
+ *  shows the postponed requests too, until the queue is empty or set aside again; first = the request shown
  *  first; call = a new nonce when the user asks for it (it shows at once, typing or not, and takes the keyboard);
  *  shown = on screen now (the browser views hide under it); aside = stepped aside for a file opened from it (the viewer
  *  in front, the window a pill until it is called again or the page changes; QuestionsWindow.tsx). */
@@ -158,7 +156,7 @@ function readPrefs(): Prefs {
 
 export const ui = createStore<UiState>({
   prefs: readPrefs(), maximized: null, focusMode: null, focused: null, modal: null, confirm: null, orchestratorRenew: null, handoffChat: null, handoffSession: null, ctxHidden: {}, page: 'home',
-  lanePeek: false, toasts: [], flash: null, focusReq: null, hidden: [], hiddenTabs: [], closing: [], orchestratorFirst: null, layerHeld: null, later: false, announce: '', qwin: { open: false, first: null, call: 0, shown: false },
+  lanePeek: false, toasts: [], flash: null, focusReq: null, hidden: [], hiddenTabs: [], closing: [], later: false, announce: '', qwin: { open: false, first: null, call: 0, shown: false },
   map: false, pageArg: null, mapArg: null, history: [{ page: 'home' }], hist: 0, center: false, read: readRead(), highlight: null, toastDismissed: [],
 });
 
@@ -259,8 +257,6 @@ export function dismissToast(id:number){clearToastTimer(id);ui.set(s=>s.toasts.s
 /** Real wall-clock deadlines are independent of the frozen demo clock and catch up on focus/visibility changes. */
 export function expireToasts(){for(const item of ui.get().toasts)if(item.expiresAt<=Date.now())dismissToast(item.id);}
 
-export const setOrchestratorFirst = (key: string | null) => ui.set(s => (s.orchestratorFirst === key ? s : { ...s, orchestratorFirst: key }));
-export const setLayerHeld = (key: string | null) => ui.set(s => (s.layerHeld === key ? s : { ...s, layerHeld: key }));
 export const setLater = (on: boolean) => ui.set(s => (s.later === on ? s : { ...s, later: on }));
 export const setClosing = (chatId: string, on: boolean) => ui.set(s => ({ ...s, closing: on ? [...new Set([...s.closing, chatId])] : s.closing.filter(id => id !== chatId) }));
 export const hideChat = (chatId: string, hidden: boolean) => ui.set(s => ({ ...s, hidden: hidden ? [...s.hidden, chatId] : s.hidden.filter(id => id !== chatId) }));

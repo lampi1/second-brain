@@ -1067,22 +1067,15 @@ export type HeldNewsWhy = 'user' | 'busy' | 'group' | 'quiet';
 export interface HeldNewsItem { orchestratorId: string; chatId: string | null; title: string; kind: HeldNewsKind; at: number; why: HeldNewsWhy }
 export interface HeldNewsState { items: HeldNewsItem[] }
 
-// ── Global request layer (the user: "se l'IA vuole farmi domande mi compaiano ovunque io stia navigando nell'app") ──
-// Questions and permissions not visible elsewhere on screen float in a small top-most WebContentsView (main/overlay.ts),
-// above browser tiles and pages. The app page decides what it shows (one source of truth), the layer only renders it.
-/** attempt: bumped when an answer failed and the request came back (the layer re-mounts the card, answerable again). */
-/** engine = the asking chat's engine as app:info describes it (the layer's page has no app:info of its own) */
-export interface OverlayCard { key: string; req: PendingRequest; chatTitle: string; harness: Harness; engine: EngineInfo | null; isOrchestrator: boolean; attempt?: number }
+// ── Global layer: important events as short toasts in a small top-most WebContentsView (main/overlay.ts), above
+// browser tiles and pages. Requests never float here: every question, permission and command is answered in the
+// questions window (always on since 2026-10-22). The app page decides what it shows, the layer only renders it.
 export interface OverlayModel {
-  cards: OverlayCard[];       // the queue: oldest first; the first is shown in full
-  waiting: number;            // all open requests (badge)
   theme: ThemeMode;
   /** the app page's resolved UI language (ADR 0057) */
   lang?: Lang;
   density: 'comfortable' | 'compact';
-  focusKey?: string;          // set with a new nonce when the keyboard moves to the layer (Ctrl+J)
-  nonce?: number;
-  now?: number;               // the app page's clock (frozen in the demo), for "4 min" labels
+  now?: number;              // the app page's clock (frozen in the demo), for "4 min" labels
   /** important events (chat waiting/done, errors, sync, budget, login…) as short toasts above everything, max 2 */
   toasts?: OverlayToast[];
   /** the Orchestrator widget's bottom-right room (ADR 0028): the layer sits left of it (expanded) or above it (collapsed) */
@@ -1099,16 +1092,11 @@ export interface OverlayToast {
   action: string;             // the one direct action: "Apri", "Rispondi"
   tone: 'info' | 'ok' | 'warn' | 'err';
 }
-/** The overlay page only renders the cards: the app page acts on its behalf. */
+/** The overlay page only renders the toasts: the app page acts on its behalf. */
 export type OverlayAction =
-  | { kind: 'answer'; key: string; answer: Answer }
-  | { kind: 'postpone'; key: string }       // "Rispondi dopo" (Esc): every open request goes to "Da rispondere" (AnswerLater)
-  | { kind: 'open'; key: string }           // show that chat in the app
-  | { kind: 'next'; from?: string }         // Ctrl+J inside the layer (from = the card shown, the cycle goes on from it)
+  | { kind: 'next' }                        // Ctrl+J inside the layer: the app takes the keyboard and opens what waits
   | { kind: 'leave' }                       // keyboard back to the app
-  | { kind: 'toast'; id: string; act: 'open' | 'dismiss' } // an event toast: its action, or ✕
-  | { kind: 'run'; key: string; confirmProd?: boolean }    // a command card's Esegui (the app page starts the run)
-  | { kind: 'dismiss'; key: string };                       // a command card's "Non serve"
+  | { kind: 'toast'; id: string; act: 'open' | 'dismiss' }; // an event toast: its action, or ✕
 
 // ── Skills and agents (src/main/skills, ADR 0018): the CLIs' own markdown files, listed, edited and deleted by the user ──
 export type SkillKind = 'skill' | 'agent';
@@ -1437,13 +1425,13 @@ export interface InvokeMap {
   'tasks:markRead': [{ keys?: string[] }, TasksState];
   /** the "Stato" view: the git branch checked out in each chat folder, read from disk (null = not a git folder) */
   'chat:branches': [{ cwds: string[] }, Record<string, string | null>];
-  /** the app page → main: what the global request layer shows now (main attaches/detaches it and forwards the model) */
+  /** the app page → main: what the global layer shows now (main attaches/detaches it and forwards the model) */
   'overlay:model': [OverlayModel, void];
-  /** the layer page → main: the size its cards need (main places the layer bottom-right) */
+  /** the layer page → main: the size its toasts need (main places the layer bottom-right) */
   'overlay:size': [{ width: number; height: number }, void];
   /** the app page's typing probe (renderer/lib/inputlag.ts): one summary a minute while the user types, to the log */
   'app:inputLag': [InputLagReport, void];
-  /** the layer page → main → the app page: the user answered / postponed / opened a card, or left the layer */
+  /** the layer page → main → the app page: the user used a toast, pressed Ctrl+J or left the layer */
   'overlay:action': [OverlayAction, void];
   /** move the keyboard to the layer (Ctrl+J, a click) or back to the app; never automatic */
   'overlay:focus': [{ target: 'overlay' | 'app' }, void];
@@ -1577,7 +1565,7 @@ export interface EventMap {
   'settings:proposed': SettingProposal;
   'budget:alert': BudgetAlert;
   'tasks:state': TasksState;
-  /** main → the layer page: the cards to show */
+  /** main → the layer page: the toasts to show */
   'overlay:model': OverlayModel;
   /** main → the app page: what the user did in the layer */
   'overlay:action': OverlayAction;
