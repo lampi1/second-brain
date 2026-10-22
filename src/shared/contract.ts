@@ -5,6 +5,7 @@
 import type { LearningEvidence, LearningReviewState, MemoryReviewRecord, ReplayComparison, ReplayRecord, SkillCandidateView } from './learning-review';
 import type { SysCode, SysParams } from './sys';
 import type { AgentLifecycleDecide, AgentLifecycleSnapshot } from './agent-lifecycle';
+import type { ProposalDecide, ProposalDecideResult, ProposalsState } from './proposals';
 import type { PackFinding } from './agent-pack';
 /** What the shareable brain zip holds (counts), or why it was not written: guard findings, or no brain / no guard. */
 export type BrainShareResult = { ok: true; path: string; skills: number; rules: number; roles: number; scripts: number; skipped: number } | { ok: false; findings: PackFinding[] } | { ok: false; error: string };
@@ -1287,6 +1288,12 @@ export interface InvokeMap {
   'learning:saveCandidate': [{ expectedRoot: string; name: string; text: string; expectedDigest: string }, SkillCandidateView];
   'learning:promote': [{ expectedRoot: string; name: string; expectedDigest: string; replayId: string; exampleRunId: string }, SkillCandidateView];
   'learning:compare': [{ beforeId: string; afterId: string }, ReplayComparison];
+  /** Memoria → Proposte (ADR 0123, main/proposals): every item waiting for the user's decision, newest first, with who,
+   *  where, when and the evidence; decide runs the item's own source path after main checks it is still open; count
+   *  = the sidebar badge (an event proposals:changed when it changes) */
+  'proposals:list': [void, ProposalsState];
+  'proposals:count': [void, number];
+  'proposals:decide': [ProposalDecide, ProposalDecideResult];
   /** the maintenance button: run every job now (or one); every change is logged and can be undone */
   'brainmodel:maintain': [{ job?: MaintenanceJobId } | undefined, BrainModelState];
   'brainmodel:rollback': [{ id: string }, BrainModelState];
@@ -1591,6 +1598,8 @@ export interface EventMap {
   'orchestrator:heldChanged': HeldNewsState;
   'pulse:changed': void;
   'approvals:changed': void;
+  /** the number of open proposals changed (Memoria's badge, ADR 0123) */
+  'proposals:changed': { count: number };
   'cloud:changed': CloudState;
   'mcpservers:changed': McpServersState;
 }
@@ -1609,7 +1618,7 @@ export const INVOKE_CHANNELS = [
   'app:createBrain', 'app:projectsFolder', 'app:pickProjects',
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
-  'chat:userEvents', 'chat:synthesize', 'memory:reviewList', 'memory:confirm', 'memory:retract', 'memory:delete', 'learning:evidence', 'learning:state', 'learning:import', 'learning:replay', 'learning:saveCandidate', 'learning:promote', 'learning:compare',
+  'chat:userEvents', 'chat:synthesize', 'memory:reviewList', 'memory:confirm', 'memory:retract', 'memory:delete', 'learning:evidence', 'learning:state', 'learning:import', 'learning:replay', 'learning:saveCandidate', 'learning:promote', 'learning:compare', 'proposals:list', 'proposals:count', 'proposals:decide',
   'agents:list', 'skills:suggest', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'agents:estimates', 'runs:macro', 'agents:judgingEstimate', 'run:outcome', 'agents:restoreVersion', 'avatars:get', 'avatars:set', 'avatars:reset', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:plan', 'chat:stop',
   'brain:share', 'brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'queries:list', 'queries:get', 'queries:delete', 'brainmodel:noise', 'brainmodel:link', 'classifiers:state', 'morning:brief', 'agents:trialDecide', 'agents:lifecycleDecide',
@@ -1629,7 +1638,7 @@ export const INVOKE_CHANNELS = [
   'cloud:list', 'cloud:start', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:readiness', 'cloud:dismiss',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
-  'pulse:changed', 'approvals:changed',
+  'pulse:changed', 'approvals:changed', 'proposals:changed',
   'update:state', 'update:checkpointRequest', 'update:checkpointRelease',
   'progress:changed',
   'chat:autoCloseStatus',

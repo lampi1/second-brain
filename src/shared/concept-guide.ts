@@ -73,8 +73,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Le chat dei ruoli di lavoro hanno una «run» con contatori e costo; l’Orchestrator e le chat avviate senza ruolo (con i tuoi permessi) no.',
         'Work-role chats have a "run" with counters and cost; the Orchestrator and chats started without a role (with your permissions) do not.'),
       // src/main/agents/loop.ts; src/main/agents/trials.ts; src/main/agents/suggestions.ts
-      b('L’app migliora i ruoli da sola: testi e skill subito, con «Annulla»; livello di modello, strumenti e permessi solo con il tuo sì in «Da approvare», come versione in prova.',
-        'The app improves the roles by itself: texts and skills at once, with "Undo"; model tier, tools and permissions only with your yes in "To approve", as a trial version.'),
+      b('L’app migliora i ruoli da sola: testi e skill subito, con «Annulla»; livello di modello, strumenti e permessi solo con il tuo sì in Memoria → Proposte, come versione in prova.',
+        'The app improves the roles by itself: texts and skills at once, with "Undo"; model tier, tools and permissions only with your yes in Memory → Proposals, as a trial version.'),
     ],
     analogy: b(
       'Come una squadra con ruoli fissi: il coordinatore assegna, ognuno fa il suo pezzo in vista di tutti e torna con il risultato; se manca un saper fare, si scrive il manuale, non si assume un altro.',
@@ -357,8 +357,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('«Correggi» su un pezzo di ragionamento manda all’agente la citazione e la tua correzione; è bloccato se c’è una domanda aperta.',
         '"Correct" on a piece of reasoning sends the agent the quote and your fix; it is blocked while a question is open.'),
       // src/renderer/brain/pages/LearnedRules.tsx, src/renderer/components/brain-model/RulesPage.tsx, src/renderer/brain/lib/learn.ts (ADR 0082)
-      b('«Regole imparate», in fondo alla pagina Regole, mostra le politiche di auto-miglioramento del brain (stime, scelta del modello, soglie) con Applica, No, Ripristina; compare solo quando il brain ne ha.',
-        '"Learned rules", at the bottom of the Rules page, shows the brain’s self-improvement policies (estimates, model choice, thresholds) with Apply, No, Restore; it appears only when the brain has some.'),
+      b('«Regole imparate», in fondo alla pagina Regole, mostra le politiche di auto-miglioramento del brain (stime, scelta del modello, soglie) con Ripristina; una proposta in attesa si decide in Memoria → Proposte. Compare solo quando il brain ne ha.',
+        '"Learned rules", at the bottom of the Rules page, shows the brain’s self-improvement policies (estimates, model choice, thresholds) with Restore; a waiting proposal is decided in Memory → Proposals. It appears only when the brain has some.'),
       // src/renderer/i18n/areas/home.it.ts home.rulesReading
       b('Una regola conta come «tenuta» se il suo errore non ricompare nei giorni osservati: non è una prova di causa.',
         'A rule counts as "holding" if its error does not reappear in the observed days: it is not proof of cause.'),
@@ -995,8 +995,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Ogni cambio finisce nel registro con cosa, perché e le prove; «Annulla» rimette il testo di prima, ma solo se nessuno l’ha cambiato dopo. Un cambio annullato non viene rifatto.',
         'Every change goes to the log with what, why and the evidence; "Undo" puts the earlier text back, but only if nobody changed it since. An undone change is not made again.'),
       // src/main/brainmodel/jobs.ts header: what stays with the user
-      b('Non tocca mai da sola permessi, strumenti, motore, livello di modello o limiti di un ruolo: quelli vanno in «Da approvare».',
-        'It never changes a role’s permissions, tools, engine, model tier or limits by itself: those go to "To approve".'),
+      b('Non tocca mai da sola permessi, strumenti, motore, livello di modello o limiti di un ruolo: quelli diventano una carta in Memoria → Proposte.',
+        'It never changes a role’s permissions, tools, engine, model tier or limits by itself: those become a card in Memory → Proposals.'),
     ],
     analogy: b('Come chi riordina l’archivio di notte: unisce i doppioni, scrive le schede che mancano e lascia un biglietto per ogni cosa spostata, così la rimetti a posto se non ti piace.',
       'Like someone who tidies the archive at night: merges duplicates, writes the missing cards and leaves a note for everything moved, so you can put it back if you do not like it.'),
@@ -1010,14 +1010,44 @@ export const CONCEPTS: readonly ConceptCard[] = [
     sources: ['src/main/brainmodel/jobs.ts', 'src/main/brainmodel/upgrade.ts', 'src/shared/brain-layout.ts', 'src/main/brain/queries.ts', 'src/main/brainmodel/changes.ts', 'src/main/brainmodel/service.ts', 'src/shared/brain-model.ts', 'src/renderer/components/brain-model/MaintenanceButton.tsx'],
   },
   {
+    id: 'proposals',
+    title: b('Memoria → Proposte', 'Memory → Proposals'),
+    summary: b('Tutto quello che l’app propone e aspetta il tuo sì è una carta in un solo mazzo: una alla volta, approvi o rifiuti.',
+      'Everything the app proposes and that waits for your yes is a card in a single deck: one at a time, you approve or reject.'),
+    points: [
+      // ADR 0123; src/main/proposals/sources.ts (SOURCES), src/main/proposals/service.ts, src/renderer/components/brain-model/ProposalsDeck.tsx, src/renderer/lib/proposals.ts
+      b('Il mazzo raccoglie fatti di memoria proposti, skill candidate, richieste di impostazioni degli agenti, livelli e prove dei ruoli, regole del Battito, politiche dell’auto-miglioramento e i cambi che la manutenzione ha già fatto negli ultimi 14 giorni.',
+        'The deck gathers proposed memory facts, skill candidates, the agents’ setting requests, the roles’ tiers and trials, the Battito’s rules, the self-improvement policies and the changes the maintenance already made in the last 14 days.'),
+      b('Ogni carta dice chi l’ha proposta, dove (chat e run), quando e con quali prove; la più recente sta in cima, i filtri sopra la dividono per gruppo.',
+        'Every card says who proposed it, where (chat and run), when and with what evidence; the newest is on top, the filters above split it by group.'),
+      b('Trascina a destra o premi ✓ (→) per approvare, a sinistra o ✕ (←) per rifiutare; Z o Ctrl+Z annulla l’ultima scelta finché non è partita, dopo circa 6 secondi o alla scelta seguente.',
+        'Drag right or press ✓ (→) to approve, left or ✕ (←) to reject; Z or Ctrl+Z undoes the last choice until it is sent, after about 6 seconds or at the next choice.'),
+      b('Un cambio già applicato si mostra «già applicato» con Tieni o Annulla: Annulla è il ripristino del registro dei cambi, Tieni lo toglie dal mazzo.',
+        'A change already made shows as "already applied" with Keep or Undo: Undo is the change log’s rollback, Keep takes it off the deck.'),
+      b('Ogni decisione passa dalla strada di sempre della sua fonte, e prima l’app ricontrolla che la carta sia ancora aperta; se la fonte rifiuta, la carta torna con il motivo.',
+        'Every decision goes through its source’s usual path, and first the app checks again that the card is still open; if the source refuses, the card comes back with the reason.'),
+      b('Una skill candidata si approva solo dopo aver aperto la bozza e le prove; le altre pagine non decidono più, rimandano qui. Il numero accanto a Memoria conta le carte aperte.',
+        'A skill candidate can be approved only after opening its draft and evidence; the other pages no longer decide, they point here. The number beside Memory counts the open cards.'),
+    ],
+    analogy: b('Come la pila della posta sulla scrivania: una busta alla volta, la apri, decidi, passi alla prossima, finché la pila è vuota.',
+      'Like the pile of mail on the desk: one envelope at a time, you open it, decide, move to the next, until the pile is empty.'),
+    tech: [
+      tech(DATA, 'Proposal { id `<fonte>:<id>`, source, group, applied, title, content, facts, provenance { who, chat?, runId?, files?, at, evidence }, canApprove, canReject, blocked?, readFirst? }.',
+        'Proposal { id `<source>:<id>`, source, group, applied, title, content, facts, provenance { who, chat?, runId?, files?, at, evidence }, canApprove, canReject, blocked?, readFirst? }.'),
+      tech(WHERE, 'IPC proposals:list, proposals:count, proposals:decide; evento proposals:changed { count }. I «Tieni» in userData/proposals-reviewed.json (60 giorni).',
+        'IPC proposals:list, proposals:count, proposals:decide; event proposals:changed { count }. The "Keep" marks in userData/proposals-reviewed.json (60 days).'),
+    ],
+    sources: ['src/shared/proposals.ts', 'src/main/proposals/sources.ts', 'src/main/proposals/service.ts', 'src/renderer/lib/proposals.ts', 'src/renderer/components/brain-model/ProposalsDeck.tsx'],
+  },
+  {
     id: 'trials',
-    title: b('Versioni in prova e «Da approvare»', 'Trial versions and "To approve"'),
-    summary: b('Quello che l’app non cambia da sola diventa una proposta in «Da approvare», con i numeri prima e dopo.',
-      'What the app does not change by itself becomes a proposal in "To approve", with the numbers before and after.'),
+    title: b('Versioni in prova', 'Trial versions'),
+    summary: b('Quello che l’app non cambia da sola diventa una proposta in Memoria → Proposte, con i numeri prima e dopo.',
+      'What the app does not change by itself becomes a proposal in Memory → Proposals, with the numbers before and after.'),
     points: [
       // src/main/agents/lifecycle.ts header
-      b('Testi e skill dei ruoli si aggiornano da soli; livello di modello, strumenti e permessi solo con il tuo sì, nella sezione «Da approvare» della pagina Agenti.',
-        'The roles’ texts and skills update by themselves; model tier, tools and permissions only with your yes, in the "To approve" section of the Agents page.'),
+      b('Testi e skill dei ruoli si aggiornano da soli; livello di modello, strumenti e permessi solo con il tuo sì, su una carta di Memoria → Proposte (la pagina Agenti rimanda lì).',
+        'The roles’ texts and skills update by themselves; model tier, tools and permissions only with your yes, on a card of Memory → Proposals (the Agents page points there).'),
       // src/main/agents/trials.ts evaluateTrial
       b('Una versione in prova si confronta con la versione di prima sugli stessi lavori (stesso ruolo, stesse skill): fino a 21 giorni, servono almeno 5 lavori per parte.',
         'A trial version is compared with the version before on the same jobs (same role, same skills): up to 21 days, at least 5 jobs on each side.'),
@@ -1027,7 +1057,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/agents/trials.ts: coverage < 60%
       b('Se meno del 60% dei lavori ha un esito, aspetta: senza esiti non c’è niente da confrontare. Il tuo voto sulla striscia è ciò che riempie il confronto.',
         'When fewer than 60% of the jobs have an outcome, it waits: without outcomes there is nothing to compare. Your vote on the strip is what fills the comparison.'),
-      // src/main/agents/suggestions.ts (tier rule); src/renderer/components/AgentApprovalCards.tsx
+      // src/main/agents/suggestions.ts (tier rule); src/main/proposals/sources.ts (trial, tier)
       b('Ogni proposta dice perché, cosa cambia e i numeri con quanti lavori li sostengono; la decidi tu, o la chiudi.',
         'Every proposal says why, what changes and the numbers with how many jobs back them; you decide it, or dismiss it.'),
     ],
@@ -1038,7 +1068,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'TRIAL_DAYS = 21 days; at least 5 comparable jobs per side; outcome coverage ≥ 60%; success −5 points = revert; cost and time within ×1.25.'),
       tech(FILES, 'userData/agent-lifecycle.json (le proposte); le versioni in role-history.json.', 'userData/agent-lifecycle.json (the proposals); the versions in role-history.json.'),
     ],
-    sources: ['src/main/agents/trials.ts', 'src/main/agents/lifecycle.ts', 'src/main/agents/suggestions.ts', 'src/renderer/components/AgentApprovalCards.tsx'],
+    sources: ['src/main/agents/trials.ts', 'src/main/agents/lifecycle.ts', 'src/main/agents/suggestions.ts', 'src/main/proposals/sources.ts'],
   },
   {
     id: 'auto-close',

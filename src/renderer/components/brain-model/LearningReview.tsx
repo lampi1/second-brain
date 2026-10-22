@@ -1,50 +1,42 @@
-// User-controlled dataset replay and candidate promotion. Eligibility and evidence are supplied and rechecked by main.
+// User-controlled dataset replay and the skill candidates' drafts with their evidence (read only). A candidate is promoted
+// or rejected only in Memoria → Proposte (ProposalsDeck.tsx, ADR 0123); eligibility and evidence come from main and are
+// checked again there.
 import { useEffect, useState } from 'react';
 import type { EvaluationMeasure, LearningReviewState, ReplayComparison, ReplayRecord, SkillCandidateView } from '@shared/learning-review';
 import { sb } from '../../sb';
 import { t } from '../../i18n';
 import { LearningEvidenceInspector } from './LearningEvidence';
+import { ProposalsPointer } from './ProposalsPointer';
 
 const PROBLEM_KEYS = ['missing-provenance', 'invalid-steps', 'missing-verified-example', 'missing-holdout-replay', 'already-promoted'] as const;
 export const promotionProblemText = (code: string): string => PROBLEM_KEYS.includes(code as typeof PROBLEM_KEYS[number]) ? t(`lr.problem.${code as typeof PROBLEM_KEYS[number]}`) : t('lr.problem.unknown');
 
 export const candidateCanPromote = (c: SkillCandidateView): boolean => !c.promoted && c.stepsReady && c.promotionProblems.length === 0 && c.verifiedExampleRunIds.length > 0 && c.eligibleReplayIds.length > 0;
 
+/** A candidate's draft (editable until promoted) and its evidence; the promotion itself is decided only in Memoria →
+ *  Proposte (ADR 0123), where main picks the verified example and the passed replay and checks them again. */
 export function CandidateReview({ candidate: c, refresh, replays = [], root }: { candidate: SkillCandidateView; refresh: () => Promise<void>; replays?: ReplayRecord[]; root: string }) {
-  const [text, setText] = useState(c.text), [inspected, setInspected] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
-  const [replay, setReplay] = useState(''), [example, setExample] = useState('');
-  const [readIds, setReadIds] = useState<string[]>([]);
-  const selectedReplay = replays.find(r => r.id === replay);
-  const proofIds = [example, ...(selectedReplay?.cases.map(c => c.runId ?? '') ?? [])];
-  const proofRead = !!example && !!selectedReplay?.cases.length && proofIds.every(id => !!id && readIds.includes(id));
-  const markRead = (id: string) => setReadIds(ids => ids.includes(id) ? ids : [...ids, id]);
+  const [text, setText] = useState(c.text), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const dirty = text !== c.text;
-  const act = async (promote: boolean) => {
+  const save = async () => {
     if (busy) return; setBusy(true); setError('');
-    try {
-      if (promote) await sb.invoke('learning:promote', { expectedRoot: root, name: c.name, expectedDigest: c.digest, replayId: replay, exampleRunId: example });
-      else await sb.invoke('learning:saveCandidate', { expectedRoot: root, name: c.name, text, expectedDigest: c.digest });
-      await refresh(); setInspected(false);
-    } catch (e) { setError(String(e)); } finally { setBusy(false); }
+    try { await sb.invoke('learning:saveCandidate', { expectedRoot: root, name: c.name, text, expectedDigest: c.digest }); await refresh(); }
+    catch (e) { setError(String(e)); } finally { setBusy(false); }
   };
+  const proof = replays.filter(r => c.eligibleReplayIds.includes(r.id));
   return <details className="lr-record" data-testid={`candidate-${c.name}`}>
     <summary><b>{c.name}</b> · {c.promoted ? t('lr.promoted') : candidateCanPromote(c) ? t('lr.ready') : t('lr.needsEvidence')}</summary>
     <p>{t('lr.candidateLead')}</p>
-    <label>{t('lr.draft')}<textarea className="lr-draft" rows={10} value={text} maxLength={24000} disabled={busy || c.promoted} onChange={e => { setText(e.target.value); setInspected(false); }} /></label>
+    <label>{t('lr.draft')}<textarea className="lr-draft" rows={10} value={text} maxLength={24000} disabled={busy || c.promoted} onChange={e => setText(e.target.value)} /></label>
     <p>{t('lr.draftLimit')} {text.length}/24000</p>
-    <div className="lr-buttons"><button className="btn btn-s" disabled={busy || !dirty || !text.trim() || c.promoted} onClick={() => void act(false)}>{t('lr.saveDraft')}</button>{dirty && <span>{t('lr.draftChanged')}</span>}</div>
-    <dl className="lr-evidence"><dt>{t('lr.version')}</dt><dd>{c.digest}</dd><dt>{t('lr.sourceRuns')}</dt><dd>{c.sourceRunIds.length ? c.sourceRunIds.join(', ') : t('lr.none')}</dd></dl>
-    {c.sourceRunIds.map(id => <LearningEvidenceInspector key={`source:${id}`} root={root} runId={id} onRead={markRead} />)}
+    <div className="lr-buttons"><button className="btn btn-s" disabled={busy || !dirty || !text.trim() || c.promoted} onClick={() => void save()}>{t('lr.saveDraft')}</button>{dirty && <span>{t('lr.draftChanged')}</span>}</div>
+    <dl className="lr-evidence"><dt>{t('lr.version')}</dt><dd>{c.digest}</dd><dt>{t('lr.sourceRuns')}</dt><dd>{c.sourceRunIds.length ? c.sourceRunIds.join(', ') : t('lr.none')}</dd>
+      <dt>{t('lr.verifiedExample')}</dt><dd>{c.verifiedExampleRunIds.length ? c.verifiedExampleRunIds.join(', ') : t('lr.none')}</dd>
+      <dt>{t('lr.passedReplay')}</dt><dd>{c.eligibleReplayIds.length ? c.eligibleReplayIds.join(', ') : t('lr.none')}</dd></dl>
+    {[...new Set([...c.sourceRunIds, ...c.verifiedExampleRunIds])].map(id => <LearningEvidenceInspector key={`run:${id}`} root={root} runId={id} />)}
+    {proof.flatMap(r => r.cases).map(x => x.runId ? <LearningEvidenceInspector key={`case:${x.runId}`} root={root} runId={x.runId} /> : <p key={x.caseId}>{t('lr.evidenceUnavailable')}</p>)}
     {c.promotionProblems.length > 0 && <ul className="lr-problems">{c.promotionProblems.map(p => <li key={p}>{promotionProblemText(p)}</li>)}</ul>}
-    {!c.promoted && <div className="lr-actions">
-      <label>{t('lr.verifiedExample')}<select value={example} onChange={e => { setExample(e.target.value); setInspected(false); }}><option value="">{t('lr.select')}</option>{c.verifiedExampleRunIds.map(id => <option key={id}>{id}</option>)}</select></label>
-      <label>{t('lr.passedReplay')}<select value={replay} onChange={e => { setReplay(e.target.value); setInspected(false); }}><option value="">{t('lr.select')}</option>{c.eligibleReplayIds.map(id => <option key={id}>{id}</option>)}</select></label>
-      {example && <LearningEvidenceInspector key={example} root={root} runId={example} onRead={markRead} />}
-      {selectedReplay?.cases.map(c => c.runId ? <LearningEvidenceInspector key={c.runId} root={root} runId={c.runId} onRead={markRead} /> : <p key={c.caseId}>{t('lr.evidenceUnavailable')}</p>)}
-      {!proofRead && <p>{t('lr.readEvidenceFirst')}</p>}
-      <label className="lr-check"><input type="checkbox" checked={inspected} disabled={dirty || !proofRead} onChange={e => setInspected(e.target.checked)} />{t('lr.inspected')}</label>
-      <button className="btn btn-s" disabled={busy || dirty || !proofRead || !inspected || !candidateCanPromote(c) || !c.eligibleReplayIds.includes(replay) || !c.verifiedExampleRunIds.includes(example)} onClick={() => void act(true)}>{t('lr.promote')}</button>
-    </div>}
+    {!c.promoted && <ProposalsPointer compact />}
     {error && <p role="alert">{error}</p>}
   </details>;
 }

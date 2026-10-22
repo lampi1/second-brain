@@ -32,6 +32,7 @@ import { explainIt } from './areas/explain.it';
 import { agentDetailIt } from './areas/agent-detail.it';
 import { agentImageIt } from './areas/agent-image.it';
 import { approvalsIt } from './areas/approvals.it';
+import { proposalsIt } from './areas/proposals.it';
 import {settingsIt}from'./areas/settings.it';
 import { profileIt } from './areas/profile.it';
 import { homeIt } from './areas/home.it';
@@ -97,6 +98,7 @@ export const it = {
   ...agentDetailIt,
   ...agentImageIt,
   ...approvalsIt,
+  ...proposalsIt,
   ...settingsIt,
   ...profileIt,
   ...chatIt,

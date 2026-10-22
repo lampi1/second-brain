@@ -15,6 +15,9 @@ import { DemoBrain, DemoChats, FROZEN_EPOCH, seed, demoTree, type Emit, demoQual
 import { DemoBrowser } from './demo-browser';
 import { demoBrainRuns, writeDemoBrain } from './brainmodel/demo';
 import { demoLearningRuns, writeDemoChanges } from './brainmodel/demo-learning';
+import { requestDemoSetting, writeDemoProposals } from './proposals/demo';
+import { MemoryService } from './rules/memory-service';
+import { LearningReviewService } from './brainmodel/learning-review';
 import type { AgentRun } from '../shared/agents';
 import { BrainModelService } from './brainmodel/service';
 import { writeDemoLogs } from './brainmodel/log-scan';
@@ -116,6 +119,8 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const demoBrainRoot = writeDemoBrain(path.join(ctx.userData, 'demo-agent-brain'), now());
   // the Apprendimento page (ADR 0109): past changes with their claims and runs with the user's corrections
   writeDemoChanges(ctx.userData, now());
+  // Memoria → Proposte (ADR 0123): facts to confirm, a skill candidate, a memory merge, written once through the real stores
+  writeDemoProposals(ctx.userData, demoBrainRoot, now());
   const demoLogs = writeDemoLogs(path.join(ctx.userData, 'demo-logs'), path.join(ctx.userData, 'maintenance-noise.json'), now());
   const brainModel: BrainModelService = new BrainModelService({ userData: ctx.userData, root: () => demoBrainRoot, home: null, catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning,
     runs: (): AgentRun[] => [...demoBrainRuns(now(), brainModel.skillList().map(s => s.name)), ...demoLearningRuns(now()), ...(demoCls ??= writeDemoClassifiers(demoBrainRoot, ctx.userData, now(), brainModel.skillList().map((x: { name: string }) => x.name).filter(n => n !== 'pulizia-ambiente'))).runs], routing: () => brain.routingInfo(), now,
@@ -125,6 +130,10 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     logDir: () => demoLogs,
     handoff: async text => { const o = chats.list().find(c => c.isOrchestrator && !c.closedAt); if (!o) return false; await chats.send(o.id, `${APP_EVENT_LABEL}\n${text}`); return true; } });
   if (!brainModel.report()) await brainModel.maintain('migration').catch(e => log.warn('demo', 'demo migration failed', { cause: errText(e), hint: 'the Skill page shows the demo brain without the migrated skills' }));
+  // the memory review and the skill candidates on the demo brain (their real services; no local model, no replay engine)
+  const memoryReview = new MemoryService({ root: () => demoBrainRoot });
+  const learningReview = new LearningReviewService({ userData: ctx.userData, root: () => demoBrainRoot, log: brainModel.log, runs: () => chats.list().flatMap(c => (c.run ? [c.run] : [])), now });
+  requestDemoSetting(brain);
   // the Script and Changelog pages (ADR 0076): made-up scripts and changelog read by the real readers
   const scriptsDir = writeDemoScripts(path.join(ctx.userData, 'demo-scripts'), now());
   const demoChangelog = new BrainChangelog(() => scriptsDir);
@@ -228,7 +237,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   return {
     morning,
     cloud, chats, browser, brain, mcp, mcpServers, runner, asks, wake, heldNews, tasks, skills, source, engines, later: createLater(ctx),
-    agents, runFeedback, agentLifecycle, agentPacks, brainModel, suggestSkills, queries,
+    agents, runFeedback, agentLifecycle, agentPacks, brainModel, suggestSkills, queries, memoryReview, learningReview,
     setup: new SetupService(ctx.userData, true, now),
     autoClose: new AutoCloseService({ now: autoCloseNow, delayMs: () => 0, candidates: () => [], archive: async () => false, emit: states => ctx.emitter.emit('chat:autoCloseStatus', states) }),
     progress: new ProgressService(ctx.userData, { enabled: false, chats: () => chats.list() }),

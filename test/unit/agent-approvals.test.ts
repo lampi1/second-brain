@@ -1,13 +1,10 @@
-// The "Da approvare" inbox (ADR 0083): it gathers an open trial (with the loop's advice and its numbers) and the tier
-// suggestions, maps each click to its one channel, reports a failing source without hiding the others, and renders the
-// cards as text without deciding anything on render.
-import { createElement } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
+// The "Da approvare" read model (ADR 0083; its cards moved to Memoria → Proposte, ADR 0123): it gathers an open trial
+// (with the loop's advice and its numbers) and the tier suggestions, maps each decision to its one channel and reports a
+// failing source without hiding the others.
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentCatalog, AgentProfile, VersionMetrics } from '../../src/shared/agents';
 import type { AgentLifecycleProposal, AgentLifecycleSnapshot } from '../../src/shared/agent-lifecycle';
 import { decideApproval, gatherApprovals, type ApprovalsClient } from '../../src/renderer/lib/agent-approvals';
-import { AgentApprovalsView } from '../../src/renderer/components/AgentApprovalCards';
 
 const role = (id: string, extra: Partial<AgentProfile> = {}): AgentProfile => ({
   id, name: id[0]!.toUpperCase() + id.slice(1), purpose: 'Scopo', instructions: 'i', engine: 'claude', model: null, avatar: { kind: 'character', value: 'artisan' },
@@ -77,7 +74,7 @@ describe('decideApproval', () => {
 
 describe('the Battito\'s proposals (ADR 0102)', () => {
   const proposal = { id: 'pa_1', kind: 'learned-rule' as const, agentId: 'pulse', title: 'Adatta Battito', text: 'Riduci le carte idea: non utili.', evidence: ['pc_1', 'pc_2'], engine: 'claude', createdAt: 400, state: 'pending' as const };
-  it('join the inbox after the roles\' entries, decided through approvals:decide, rendered with their text', async () => {
+  it('join the inbox after the roles\' entries, decided through approvals:decide, ', async () => {
     const f = fixture();
     const invoke = f.client.invoke;
     f.client.invoke = (async (channel: string, payload: unknown) => {
@@ -92,29 +89,5 @@ describe('the Battito\'s proposals (ADR 0102)', () => {
     await decideApproval(f.client, item, { type: 'pulse', decision: 'discard' });
     expect(f.calls.filter(([c]) => c === 'approvals:decide')).toEqual([['approvals:decide', { id: 'pa_1', decision: 'discard' }]]);
     await expect(decideApproval(f.client, s.items[0]!, { type: 'pulse', decision: 'approve' })).rejects.toThrow(/does not match/);
-    const html = renderToStaticMarkup(createElement(AgentApprovalsView, { state: s, error: false, busy: null, done: null, failure: null, onDecide: () => {}, onDismiss: () => {}, onRefresh: () => {} }));
-    expect(html).toContain('Riduci le carte idea: non utili.');
-    expect(html).toContain('Proposta del Battito');
-  });
-});
-
-describe('cards', () => {
-  it('render what changes, why and the numbers, with no decision taken on render', async () => {
-    const f = fixture(), state = await gatherApprovals(f.client);
-    const onDecide = vi.fn();
-    const html = renderToStaticMarkup(createElement(AgentApprovalsView, { state, error: false, busy: null, done: null, failure: null, onDecide, onDismiss: () => {}, onRefresh: () => {} }));
-    expect(html).toContain('Da approvare');
-    expect(html).toContain('Versione in prova');
-    expect(html).toContain('Livello di modello');
-    expect(html).toContain('air-test');
-    expect(html).toContain(tier.reason);
-    expect(html).toContain('Avvia la prova');
-    expect(html).toContain('Torna a v2');
-    expect(onDecide).not.toHaveBeenCalled();
-    expect(f.calls.some(([c]) => c.endsWith('Decide'))).toBe(false);
-  });
-  it('render nothing when there is nothing to decide', () => {
-    const html = renderToStaticMarkup(createElement(AgentApprovalsView, { state: { items: [], problems: ['metrics'], lifecycleProblem: null }, error: false, busy: null, done: null, failure: null, onDecide: () => {}, onDismiss: () => {}, onRefresh: () => {} }));
-    expect(html).toBe('');
   });
 });

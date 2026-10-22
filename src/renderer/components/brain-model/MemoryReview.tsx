@@ -1,8 +1,11 @@
-// Explicit memory review on the Memoria page: provenance and historical snapshots precede user-only decisions.
+// Memory review on the Memoria page: every fact with its provenance, history and validity, also as it was at a past
+// moment. A proposed fact is confirmed or rejected only in Memoria → Proposte (ProposalsDeck.tsx, ADR 0123): here it
+// shows its evidence and points there; a known fact is revoked or deleted here, by the user only.
 import { useEffect, useState } from 'react';
 import type { MemoryReviewRecord } from '@shared/learning-review';
 import { sb } from '../../sb';
 import { t } from '../../i18n';
+import { ProposalsPointer } from './ProposalsPointer';
 
 export function MemoryEvidence({ record: r }: { record: MemoryReviewRecord }) {
   return <dl className="lr-evidence">
@@ -17,13 +20,14 @@ export function MemoryEvidence({ record: r }: { record: MemoryReviewRecord }) {
 
 export function MemoryReviewCard({ record, historical, onRefresh, root }: { root: string; record: MemoryReviewRecord; historical: boolean; onRefresh: () => Promise<void> }) {
   const [reason, setReason] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(''), [deleting, setDeleting] = useState(false);
-  const act = async (op: 'confirm' | 'reject' | 'retract' | 'delete') => {
-    if (busy || historical) return;
+  // a proposed fact is confirmed or rejected only in Memoria → Proposte (ADR 0123); here a known fact is revoked or deleted
+  const proposed = record.status === 'proposed';
+  const act = async (op: 'retract' | 'delete') => {
+    if (busy || historical || proposed) return;
     setBusy(true); setError('');
     try {
-      if (op === 'confirm') await sb.invoke('memory:confirm', { expectedRoot: root, id: record.memoryId, evidence: reason.trim() });
-      else if (op === 'delete') await sb.invoke('memory:delete', { expectedRoot: root, id: record.memoryId });
-      else await sb.invoke('memory:retract', { expectedRoot: root, id: record.memoryId, reason: op === 'reject' ? `${t('lr.rejected')}: ${reason.trim()}` : reason.trim() });
+      if (op === 'delete') await sb.invoke('memory:delete', { expectedRoot: root, id: record.memoryId });
+      else await sb.invoke('memory:retract', { expectedRoot: root, id: record.memoryId, reason: reason.trim() });
       await onRefresh(); setReason(''); setDeleting(false);
     } catch (e) { setError(String(e)); } finally { setBusy(false); }
   };
@@ -31,11 +35,11 @@ export function MemoryReviewCard({ record, historical, onRefresh, root }: { root
     <header><h4>{record.subject} · {record.predicate}</h4><span className="bm-tag">{t(`lr.status.${record.status}`)}</span></header>
     <p>{record.value}</p><MemoryEvidence record={record} />
     {!!record.transitions?.length && <details><summary>{t('lr.history')}</summary><ul>{record.transitions.map((x, i) => <li key={i}>{x.at} · {t(`lr.status.${x.status}`)}{x.reason && ` · ${x.reason}`}</li>)}</ul></details>}
-    {!historical && <div className="lr-actions">
-      {record.status !== 'retracted' && <label>{record.status === 'proposed' ? t('lr.evidenceInput') : t('lr.reason')}<input className="sk-input" value={reason} maxLength={1000} onChange={e => setReason(e.target.value)} /></label>}
+    {!historical && proposed && <ProposalsPointer compact />}
+    {!historical && !proposed && <div className="lr-actions">
+      {record.status !== 'retracted' && <label>{t('lr.reason')}<input className="sk-input" value={reason} maxLength={1000} onChange={e => setReason(e.target.value)} /></label>}
       <div className="lr-buttons">
-        {record.status === 'proposed' && <><button className="btn btn-s" disabled={busy || !reason.trim()} onClick={() => void act('confirm')}>{t('lr.confirm')}</button><button className="btn btn-ghost btn-s" disabled={busy || !reason.trim()} onClick={() => void act('reject')}>{t('lr.reject')}</button></>}
-        {record.status !== 'retracted' && record.status !== 'proposed' && <button className="btn btn-ghost btn-s" disabled={busy || !reason.trim()} onClick={() => void act('retract')}>{t('lr.retract')}</button>}
+        {record.status !== 'retracted' && <button className="btn btn-ghost btn-s" disabled={busy || !reason.trim()} onClick={() => void act('retract')}>{t('lr.retract')}</button>}
         {!deleting ? <button className="btn btn-ghost btn-s" disabled={busy} onClick={() => setDeleting(true)}>{t('lr.delete')}</button> : <><span>{t('lr.deleteWarning')}</span><button className="btn btn-s" disabled={busy} onClick={() => void act('delete')}>{t('lr.deleteConfirm')}</button><button className="btn btn-ghost btn-s" disabled={busy} onClick={() => setDeleting(false)}>{t('lr.cancel')}</button></>}
       </div>
     </div>}

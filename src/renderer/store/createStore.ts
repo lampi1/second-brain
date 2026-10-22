@@ -44,7 +44,8 @@ export function createStore<S>(initial: S, opts: { batch?: boolean } = {}): Stor
         cache.current = { s, sel, v };
         return v;
       };
-      return useSyncExternalStore(store.subscribe, get);
+      // the same snapshot on the server (renderToStaticMarkup in the unit tests)
+      return useSyncExternalStore(store.subscribe, get, get);
     },
   };
   return store;

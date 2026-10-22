@@ -22,7 +22,7 @@ export const brainLibEn: typeof brainLibIt = {
 
   // learn.ts
   'brainLib.learn.waiting': (p: { n: number }) => `waiting for the first ${p.n} cases after the change`,
-  'brainLib.learn.helpIntro': 'Here the brain checks how far off its learned rules are (the model choice, the notification thresholds). Now and then it redoes them on past chats with other methods: when one is clearly less wrong, a proposal is born. Nothing changes until you press Apply; every change is undone with Restore and checked by itself after 20 chats.',
+  'brainLib.learn.helpIntro': 'Here the brain checks how far off its learned rules are (the model choice, the notification thresholds). Now and then it redoes them on past chats with other methods: when one is clearly less wrong, a proposal is born. Nothing changes until you approve it in Memory → Proposals; every change is undone with Restore and checked by itself after 20 chats.',
   'brainLib.learn.helpTypical': 'By how much the estimate is off from the truth, in the middle of chats: ×1.7 means that half the time the truth is between the estimate divided by 1.7 and the estimate times 1.7. Closer to ×1 is better.',
   'brainLib.learn.helpCover': 'The range «from … to …» of the estimate is built to contain the real value 8 out of 10 times. Here you see how many times it actually did on the last chats.',
   'brainLib.learn.helpOut': 'Chats you do not know how they ended, or too old to have an estimate made before: they do not enter the numbers, but remain counted here.',

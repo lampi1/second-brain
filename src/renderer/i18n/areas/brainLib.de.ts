@@ -22,7 +22,7 @@ export const brainLibDe: typeof brainLibIt = {
 
   // learn.ts
   'brainLib.learn.waiting': (p: { n: number }) => `wartet auf die ersten ${p.n} Fälle nach der Änderung`,
-  'brainLib.learn.helpIntro': 'Hier prüft das Brain, wie weit seine gelernten Regeln danebenliegen (die Modellwahl, die Schwellen für Benachrichtigungen). Ab und zu rechnet es sie mit anderen Methoden auf vergangenen Chats neu: wenn eine klar weniger falsch liegt, entsteht ein Vorschlag. Nichts ändert sich, bis du auf Anwenden drückst; jede Änderung lässt sich mit Wiederherstellen rückgängig machen und wird nach 20 Chats von selbst geprüft.',
+  'brainLib.learn.helpIntro': 'Hier prüft das Brain, wie weit seine gelernten Regeln danebenliegen (die Modellwahl, die Schwellen für Benachrichtigungen). Ab und zu rechnet es sie mit anderen Methoden auf vergangenen Chats neu: wenn eine klar weniger falsch liegt, entsteht ein Vorschlag. Nichts ändert sich, bis du ihn in Gedächtnis → Vorschläge freigibst; jede Änderung lässt sich mit Wiederherstellen rückgängig machen und wird nach 20 Chats von selbst geprüft.',
   'brainLib.learn.helpTypical': 'Wie weit die Schätzung bei der Hälfte der Chats von der Wahrheit abweicht: ×1,7 heißt, dass die Wahrheit in der Hälfte der Fälle zwischen Schätzung geteilt durch 1,7 und Schätzung mal 1,7 liegt. Je näher an ×1, desto besser.',
   'brainLib.learn.helpCover': 'Die Spanne «von … bis …» der Schätzung soll den echten Wert in 8 von 10 Fällen enthalten. Hier siehst du, wie oft sie das bei den letzten Chats wirklich getan hat.',
   'brainLib.learn.helpOut': 'Chats, bei denen unbekannt ist, wie sie ausgingen, oder die zu alt sind für eine vorher gemachte Schätzung: sie fließen nicht in die Zahlen ein, werden hier aber mitgezählt.',

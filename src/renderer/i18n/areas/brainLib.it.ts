@@ -20,7 +20,7 @@ export const brainLibIt = {
 
   // learn.ts
   'brainLib.learn.waiting': (p: { n: number }) => `in attesa dei primi ${p.n} casi dopo il cambio`,
-  'brainLib.learn.helpIntro': 'Qui il brain controlla quanto sbagliano le sue regole imparate (la scelta del modello, le soglie delle notifiche). Ogni tanto le rifà sulle chat passate con metodi diversi: se uno sbaglia chiaramente meno, nasce una proposta. Niente cambia finché non premi Applica; ogni cambio si annulla con Ripristina e dopo 20 chat viene controllato da solo.',
+  'brainLib.learn.helpIntro': 'Qui il brain controlla quanto sbagliano le sue regole imparate (la scelta del modello, le soglie delle notifiche). Ogni tanto le rifà sulle chat passate con metodi diversi: se uno sbaglia chiaramente meno, nasce una proposta. Niente cambia finché non la approvi in Memoria → Proposte; ogni cambio si annulla con Ripristina e dopo 20 chat viene controllato da solo.',
   'brainLib.learn.helpTypical': 'Di quanto la stima si allontana dal vero, a metà delle chat: ×1,7 vuol dire che una volta su due il vero sta tra la stima divisa 1,7 e la stima per 1,7. Più vicino a ×1, meglio è.',
   'brainLib.learn.helpCover': 'La forbice «da … a …» della stima è fatta per contenere il valore vero 8 volte su 10. Qui vedi quante volte ci è riuscita davvero sulle ultime chat.',
   'brainLib.learn.helpOut': 'Chat di cui non si sa come sono finite, o troppo vecchie per avere una stima fatta prima: non entrano nei numeri, ma restano contate qui.',

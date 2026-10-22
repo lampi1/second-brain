@@ -3,11 +3,18 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { expect, test } from '@playwright/test';
-import { closeSetup, goPage, launch, shot } from './helpers';
+import { expect, test, type Page } from '@playwright/test';
+import { goPage, launch, shot } from './helpers';
 import type { MemoryReviewRecord } from '../../src/shared/learning-review';
 
-test('memory provenance, explicit confirmation/retraction and synthetic evaluation import', async () => {
+/** The first interview when it shows (a brain given by SB_BRAIN may skip it): Escape closes it. */
+async function closeSetup(page: Page): Promise<void> {
+  await page.getByTestId('nav-memoria').or(page.getByTestId('first-interview')).first().waitFor({ timeout: 15000 }).catch(() => {});
+  const gate = page.getByTestId('first-interview');
+  if (await gate.isVisible()) { await page.keyboard.press('Escape'); await expect(gate).toBeHidden(); }
+}
+
+test('memory provenance, confirmation through the deck, retraction and synthetic evaluation import', async () => {
   const brain = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-learning-'));
   fs.mkdirSync(path.join(brain, 'memory', 'skill-candidates'), { recursive: true });
   const observed = '2026-01-01T10:00:00.000Z';
@@ -19,9 +26,13 @@ test('memory provenance, explicit confirmation/retraction and synthetic evaluati
     await closeSetup(page); await goPage(page, 'memoria');
     const card = page.getByTestId('memory-review-review-demo');
     await expect(card).toContainText('fixture-event'); await expect(card).toContainText('fixture-run');
-    await expect(card.getByRole('button', { name: 'Conferma il fatto' })).toBeDisabled();
-    await card.getByLabel('Prova della verifica / motivo del rifiuto').fill('Verified against the isolated fixture source.');
-    await card.getByRole('button', { name: 'Conferma il fatto' }).click();
+    // the proposed fact is decided only in Memoria → Proposte (ADR 0123): here a pointer, the decision through the deck's IPC
+    await expect(card.getByTestId('proposals-pointer')).toBeVisible();
+    await expect(card.getByRole('button', { name: 'Conferma il fatto' })).toHaveCount(0);
+    const deck = await page.evaluate(() => window.sb.invoke('proposals:list', undefined));
+    expect(deck.items.find(c => c.id === 'memory:review-demo')?.provenance).toMatchObject({ who: { kind: 'role', id: 'scout' }, runId: 'fixture-run' });
+    expect(await page.evaluate(() => window.sb.invoke('proposals:decide', { id: 'memory:review-demo', decision: 'approve', note: 'Verified against the isolated fixture source.' }))).toMatchObject({ ok: true });
+    await page.getByTestId('memory-review').getByRole('button', { name: 'Aggiorna stato', exact: true }).click();
     await expect(card).toContainText('Confermato');
     await card.getByLabel('Motivo della revoca').fill('Fixture no longer applies.');
     await card.getByRole('button', { name: 'Revoca', exact: true }).click();
@@ -37,7 +48,7 @@ test('memory provenance, explicit confirmation/retraction and synthetic evaluati
     await expect(candidate).toContainText('Origine della candidata assente');
     await expect(candidate.locator('textarea')).toHaveAttribute('maxlength', '24000');
     await expect(learning.getByTestId('learning-replay-cost')).toContainText('Entrambi consumano token');
-    await expect(candidate.getByRole('button', { name: 'Promuovi questa versione' })).toBeDisabled();
+    await expect(candidate.getByRole('button', { name: 'Promuovi questa versione' })).toHaveCount(0);
     await learning.scrollIntoViewIfNeeded(); await shot(page, 'learning-review-synthetic-gate');
     await candidate.scrollIntoViewIfNeeded(); await shot(page, 'learning-review-localized-proof-gates');
     await page.getByTestId('memory-review').scrollIntoViewIfNeeded(); await shot(page, 'memory-review-provenance');
@@ -45,8 +56,8 @@ test('memory provenance, explicit confirmation/retraction and synthetic evaluati
 });
 
 // Renderer fixture only: host evidence authorization and eligibility are tested in the evaluation unit suite.
-// No promotion or provider call is performed; the user must inspect both retained results before acknowledging.
-test('candidate proof inspection shows full deliverables and review criteria before enabling promotion', async () => {
+// No promotion or provider call is performed; the promotion's read-first gate lives on the deck card (ADR 0123).
+test('candidate proof inspection shows full deliverables and review criteria, the promotion is on the deck', async () => {
   const brain = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-proof-ui-'));
   const { app, page } = await launch({ SB_BRAIN: brain });
   try {
@@ -63,18 +74,14 @@ test('candidate proof inspection shows full deliverables and review criteria bef
     await closeSetup(page); await goPage(page, 'memoria');
     const candidate = page.getByTestId('candidate-proof-fixture');
     await candidate.locator('summary').first().click();
-    await candidate.getByLabel('Esempio verificato', { exact: true }).selectOption('example-run');
-    await candidate.getByLabel('Replay idoneo superato').selectOption('replay-fixture');
-    const inspected = candidate.getByLabel('Ho letto la bozza e le prove elencate.');
-    await expect(inspected).toBeDisabled();
     await candidate.getByTestId('learning-evidence-example-run').first().getByRole('button').click();
     await expect(candidate).toContainText('Actual retained deliverable for example-run');
-    await expect(inspected).toBeDisabled();
     await candidate.getByTestId('learning-evidence-case-run').getByRole('button').click();
     await expect(candidate).toContainText('Independent review evidence and limitations');
     await expect(candidate).toContainText('Fixture criterion checked');
-    await expect(inspected).toBeEnabled(); await inspected.check();
-    await expect(candidate.getByRole('button', { name: 'Promuovi questa versione' })).toBeEnabled();
+    // the promotion itself is the deck's card (read-first gate there, ADR 0123): here the pointer only
+    await expect(candidate.getByTestId('proposals-pointer')).toBeVisible();
+    await expect(candidate.getByRole('button', { name: 'Promuovi questa versione' })).toHaveCount(0);
     await candidate.scrollIntoViewIfNeeded(); await shot(page, 'learning-review-retained-proof');
   } finally { await app.close(); }
 });

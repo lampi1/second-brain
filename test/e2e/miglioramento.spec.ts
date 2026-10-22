@@ -1,7 +1,7 @@
 // End-to-end: the "Regole imparate" section of the Regole page (ADR 0030, folded into Regole by ADR 0082; the old
 // page id and its G R shortcut open Regole) in the frozen demo (SB_DEMO=1 SB_DEMO_FREEZE=1) with the demo's
 // /api/improve and 'learn:act' (demo.ts demoLearn): the model choice with its typical error, coverage and n, results
-// out of the count, a proposal with its gain and [Applica] / [No], the after-check, [Ripristina]; notifications "senza
+// out of the count, a proposal with its gain (decided in Memoria → Proposte, ADR 0123), the after-check, [Ripristina]; notifications "senza
 // dati"; the brain's retired cost/time estimator is not shown (ADR 0053, 0101). The
 // clicks go through main and change the page. Screenshots: test-results/shots/miglioramento-*.png.
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
@@ -28,7 +28,7 @@ test.beforeAll(async () => {
 });
 test.afterAll(async () => { await app?.close(); });
 
-test('Regole imparate: one card per policy with its numbers and n; Applica, Ripristina and No change it', async () => {
+test('Regole imparate: one card per policy with its numbers and n; its proposal points to Proposte, Ripristina changes it', async () => {
   await expect(page.getByTestId('nav-miglioramento')).toHaveCount(0); // no page of its own any more
   await goPage(page, 'regole');
   const p = page.getByTestId('page-miglioramento');
@@ -51,24 +51,20 @@ test('Regole imparate: one card per policy with its numbers and n; Applica, Ripr
   await expect(notify.getByTestId('bx-learn-error')).toContainText('senza dati: 12 misurati, ne servono 20');
   await shot(page, 'miglioramento');
   // the intro and a "?" beside the terms that are not obvious: its explanation on focus
-  await expect(p.getByText('Niente cambia finché non premi Applica')).toBeVisible();
+  await expect(p.getByText('Niente cambia finché non la approvi in Memoria → Proposte')).toBeVisible();
   await est.getByTestId('bx-help-h-prop-routing').focus();
   await expect(est.getByRole('tooltip').filter({ hasText: 'almeno 30' })).toBeVisible();
   await shot(page, 'miglioramento-aiuto');
   await est.getByTestId('bx-help-h-prop-routing').blur();
 
-  // [Applica]: v3, the proposal gone, the after-check waiting
-  await est.getByTestId('bx-learn-apply').click();
-  await expect(est).toContainText('v3');
-  await expect(est.getByTestId('bx-learn-proposal')).toHaveCount(0);
-  await expect(est.getByTestId('bx-learn-check')).toContainText('in attesa dei primi 20 casi dopo il cambio');
-  await expect(p.getByTestId('bx-learned-lead')).toContainText('nessuna proposta da decidere');
-  await shot(page, 'miglioramento-applicata');
+  // the proposal is decided in Memoria → Proposte (ADR 0123): here a line points there, no button decides it
+  await expect(est.getByTestId('bx-learn-proposal').getByTestId('proposals-pointer')).toBeVisible();
+  await expect(est.getByTestId('bx-learn-apply')).toHaveCount(0);
 
-  // [Ripristina v2]: back to v2, nothing more to go back to
+  // [Ripristina v1]: back to v1, nothing more to go back to
   await est.getByTestId('bx-learn-rollback').click();
-  await expect(est).toContainText('v2');
   await expect(est.getByTestId('bx-learn-rollback')).toHaveCount(0);
+  await expect(est).toContainText('v1');
 });
 
 test('the old page id and its G R shortcut land on Regole, with the learned rules in it', async () => {
