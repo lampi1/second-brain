@@ -13,30 +13,24 @@ export function ConfirmDialog() {
   const c = ui.use(s => s.confirm);
   if (!c) return null;
   return (
-    <Modal onClose={closeModal} label={c.title} testid="confirm" className="modal-confirm">
-      <div className="modal-head"><h2>{c.title}</h2></div>
-      <div className="modal-body">
-        <p className="confirm-body">{c.body}</p>
-        {c.items && <ul className="confirm-items">{c.items.map(i => <li key={i}>{i}</li>)}</ul>}
-      </div>
-      <div className="modal-foot">
+    <Modal onClose={closeModal} label={c.title} testid="confirm" className="modal-confirm" size="s" title={c.title}
+      footer={<>
         <button type="button" className="btn btn-ghost btn-m" onClick={closeModal} data-testid="confirm-cancel">{t('dialogs.confirm.cancelButton')} <Keys combo="Esc" /></button>
         <button type="button" className={`btn ${c.danger ? 'btn-danger-solid' : 'btn-primary'} btn-m`} autoFocus onClick={() => { closeModal(); c.onConfirm(); }} data-testid="confirm-ok">{c.confirmLabel}</button>
-      </div>
+      </>}>
+      <p className="confirm-body">{c.body}</p>
+      {c.items && <ul className="confirm-items">{c.items.map(i => <li key={i}>{i}</li>)}</ul>}
     </Modal>
   );
 }
 
 export function ShortcutsDialog() {
   return (
-    <Modal onClose={closeModal} label={t('dialogs.shortcuts.title')} testid="shortcuts" className="modal-shortcuts">
-      <div className="modal-head"><h2>{t('dialogs.shortcuts.title')}</h2><span className="sp" /><Keys combo="Esc" /></div>
-      <div className="modal-body">
-        <dl className="keymap">
-          {getKeymap().map(k => <div key={k.keys} className="keymap-row"><dt><Keys combo={k.keys.replace(/ · /g, ' ')} /></dt><dd>{k.what}</dd></div>)}
-        </dl>
-        <p className="menu-note">{t('dialogs.shortcuts.note')} <Keys combo="Ctrl+K" />.</p>
-      </div>
+    <Modal onClose={closeModal} label={t('dialogs.shortcuts.title')} testid="shortcuts" className="modal-shortcuts" size="m" title={t('dialogs.shortcuts.title')} closeButton>
+      <dl className="keymap">
+        {getKeymap().map(k => <div key={k.keys} className="keymap-row"><dt><Keys combo={k.keys.replace(/ · /g, ' ')} /></dt><dd>{k.what}</dd></div>)}
+      </dl>
+      <p className="menu-note">{t('dialogs.shortcuts.note')} <Keys combo="Ctrl+K" />.</p>
     </Modal>
   );
 }

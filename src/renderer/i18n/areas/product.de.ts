@@ -33,7 +33,7 @@ export const productDe:typeof productIt={
  'ui.newBrowser':'Neuer Browser','ui.browserMine':'Dein Tab','ui.browserAddress':'Adresse eingeben','ui.browserEditAddress':'Adresse bearbeiten','ui.browserOpenError':p=>`Browser konnte nicht geöffnet werden: ${p.error}`,
  'ui.state.waiting':'wartet auf dich','ui.state.queued':'in der Warteschlange','ui.state.running':'arbeitet','ui.state.starting':'startet…','ui.state.error':'Fehler','ui.state.closed':'geschlossen','ui.state.orchestrator':'hört zu','ui.state.done':'fertig','ui.state.children':'wartet auf Subagenten',
  
- 'ui.other':'Andere…','ui.writeAnswer':'schreib deine Antwort','ui.mapDetails':'Quellen und Details',
+ 'ui.close':'Schließen','ui.other':'Andere…','ui.writeAnswer':'schreib deine Antwort','ui.mapDetails':'Quellen und Details',
  'context.handoffBusy':"Bereite die Übergabe vor.",
  'context.native':'Codex verwaltet die native Komprimierung. Die Kontextlänge allein erfordert keinen neuen Chat.','context.passive':'Von der Engine gemeldete Kontextgröße; in einem neuen Chat fortzusetzen bleibt eine manuelle Entscheidung.',
  'origin.user':'Benutzer','origin.unavailable':'Nicht verfügbar','origin.missingHint':'Die Quelle verzeichnet das ursprüngliche Modell nicht. Das aktuelle Modell wird historischen Einträgen nie zugeordnet.',

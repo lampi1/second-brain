@@ -1,12 +1,13 @@
 // Writing to a chat from a brain page, through the app's own chats only ('chat:list' + 'chat:send'): to a chat of the
 // app directly, or to a chat the app only reads (Claude desktop, Cursor IDE: it has a mailbox in the brain) through the
-// Orchestrator, which forwards it with the brain's mail between chats. Always two steps (Invia… → Sì, invia) because a
-// message makes a model work. Used by Adesso.
+// Orchestrator, which forwards it with the brain's mail between chats. Always two steps (Invia… → Sì, invia, on the shared
+// confirmation dialog) because a message makes a model work. Used by Adesso.
 import { Select } from '../../components/Select';
 import { useEffect, useRef, useState } from 'react';
 import type { ChatSummary } from '@shared/contract';
 import { chatName } from '@shared/orchestrator';
 import { toast } from './ui';
+import { Modal } from '../../components/ui';
 import { t } from '../../i18n';
 
 /** The app's chats, live (chat:list once, then chat:updated / chat:removed). */
@@ -104,17 +105,18 @@ export function Composer({ mailboxes, target, onTarget, focusKey }: {
       <div className="chips">{PHRASES.map(p => <button key={p} type="button" className="bx-chip" onClick={() => { setText(p); ta.current?.focus(); }}>{p}</button>)}</div>
       <textarea ref={ta} className="bx-textarea" placeholder={t('brainPages.composer.placeholder')} aria-label={t('brainPages.composer.ariaLabel')} maxLength={2000} value={text} onChange={e => setText(e.target.value)}
         onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && text.trim()) { e.preventDefault(); setConfirm(true); } }} />
-      {!confirm ? (
-        <div className="bx-row"><button type="button" className="bx-btn primary" disabled={!text.trim() || !cur} onClick={() => setConfirm(true)}>{t('brainPages.composer.sendBtn')}</button><span className="small muted">{t('brainPages.composer.shortcut')}</span></div>
-      ) : (
-        <div className="bx-confirm" role="alertdialog" aria-label={t('brainPages.composer.confirmDialog')}>
-          <p><b>{t('brainPages.composer.confirmText', { name: cur?.name ?? '' })}</b> {cur?.kind === 'mailbox' ? t('brainPages.composer.confirmViaOrchestrator') : t('brainPages.composer.confirmApp')}</p>
-          {err && <p className="small" style={{ color: 'var(--bx-red)' }}>{err}</p>}
-          <div className="bx-row">
-            <button type="button" className="bx-btn primary" disabled={busy} onClick={() => void send()}>{t('brainPages.composer.confirmBtn')}</button>
-            <button type="button" className="bx-btn" onClick={() => setConfirm(false)}>{t('brainPages.composer.cancelBtn')}</button>
-          </div>
-        </div>
+      <div className="bx-row"><button type="button" className="bx-btn primary" disabled={!text.trim() || !cur} onClick={() => setConfirm(true)}>{t('brainPages.composer.sendBtn')}</button><span className="small muted">{t('brainPages.composer.shortcut')}</span></div>
+      {/* the second step on the shared confirmation dialog (ui.tsx Modal, size s): a message makes a model work */}
+      {confirm && (
+        <Modal onClose={() => setConfirm(false)} label={t('brainPages.composer.confirmDialog')} testid="bx-confirm" size="s"
+          title={t('brainPages.composer.confirmText', { name: cur?.name ?? '' })}
+          footer={<>
+            <button type="button" className="btn btn-ghost btn-m" onClick={() => setConfirm(false)}>{t('brainPages.composer.cancelBtn')}</button>
+            <button type="button" className="btn btn-primary btn-m" disabled={busy} data-autofocus onClick={() => void send()}>{t('brainPages.composer.confirmBtn')}</button>
+          </>}>
+          <p>{cur?.kind === 'mailbox' ? t('brainPages.composer.confirmViaOrchestrator') : t('brainPages.composer.confirmApp')}</p>
+          {err && <p role="alert" style={{ color: 'var(--red)' }}>{err}</p>}
+        </Modal>
       )}
     </div>
   );

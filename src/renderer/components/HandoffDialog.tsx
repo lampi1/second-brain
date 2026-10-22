@@ -13,7 +13,7 @@ import { t, locale } from '../i18n';
 import { Markdown } from './ChatItems';
 import { IconFile, IconLayers, IconSpinner } from './Icons';
 import { openNextLabel, resumeLabel, useContinuedBy } from './ContextBar';
-import { Keys, Modal } from './ui';
+import { Modal } from './ui';
 
 const when = (at: number) => new Date(at).toLocaleString(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
@@ -37,41 +37,9 @@ export function HandoffDialog() {
   const canResume = !chat.isOrchestrator && (!!next || (!busy && !working));
   const copyPath = () => { if (h) void navigator.clipboard.writeText(h.path).then(() => toast(t('dialogs.linkPeek.copyPathSuccess'), 'ok')).catch(() => {}); };
   return (
-    <Modal onClose={closeModal} label={`${t('dialogs.handoffDialog.title')} · ${chat.title}`} testid="handoff" className="modal-handoff">
-      <div className="modal-head">
-        <IconLayers size={16} />
-        <h2>{t('dialogs.handoffDialog.title')}</h2>
-        <span className="handoff-chat" title={chat.title}>{chat.title}</span>
-        <span className="sp" /><Keys combo="Esc" />
-      </div>
-      <div className="modal-body">
-        {busy ? (
-          <div className="handoff-empty" role="status" data-testid="handoff-busy">
-            <IconSpinner size={18} />
-            <p><b>{t('dialogs.handoffDialog.busy')}</b><br />{t('dialogs.handoffDialog.busyDescription')}</p>
-          </div>
-        ) : h === undefined ? (
-          <div className="handoff-empty"><IconSpinner size={18} /></div>
-        ) : h === null ? (
-          <div className="handoff-empty" data-testid="handoff-none">
-            <p><b>{t('dialogs.handoffDialog.none')}</b><br />{t('dialogs.handoffDialog.noneDescription')}</p>
-          </div>
-        ) : (
-          <>
-            <div className="handoff-meta" data-testid="handoff-meta">
-              <span className={`handoff-src ${h.source}`}>{h.source === 'chat' ? t('dialogs.handoffDialog.fromChat') : t('dialogs.handoffDialog.automatic')}</span>
-              <span>{when(h.at)}</span>
-              {h.contextTokens ? <span>{t('dialogs.handoffDialog.contextTokens', { n: tokensShort(h.contextTokens) })}</span> : null}
-              <span className="sp" />
-              <button type="button" className="handoff-path" onClick={copyPath} data-tip={`${h.path}|${t('dialogs.handoffDialog.copyPathTip')}`} data-testid="handoff-path"><IconFile size={12} />{h.path.split(/[\\/]/).pop()}</button>
-            </div>
-            <div className="handoff-text" data-testid="handoff-text"><Markdown text={h.text} /></div>
-          </>
-        )}
-        {past && <p className="menu-note" data-testid="handoff-past">{t('dialogs.handoffDialog.pastSession')}</p>}
-        {!past && next && <p className="menu-note">{t('dialogs.handoffDialog.continuesElsewhere', { title: next.title })}</p>}
-      </div>
-      <div className="modal-foot">
+    <Modal onClose={closeModal} label={`${t('dialogs.handoffDialog.title')} · ${chat.title}`} testid="handoff" className="modal-handoff" size="m"
+      icon={<IconLayers size={16} />} title={t('dialogs.handoffDialog.title')} subtitle={<span className="handoff-chat" title={chat.title}>{chat.title}</span>} closeButton
+      footer={<>
         {!past && !next && (
           <button type="button" className="btn btn-ghost btn-m" onClick={() => void writeHandoff(chatId)} disabled={busy || working}
             data-tip={working ? t('dialogs.handoffDialog.notYetDone') : t('dialogs.handoffDialog.updateTip')} data-testid="handoff-write">
@@ -85,7 +53,32 @@ export function HandoffDialog() {
             {next ? openNextLabel() : resumeLabel()}
           </button>
         )}
-      </div>
+      </>}>
+      {busy ? (
+        <div className="handoff-empty" role="status" data-testid="handoff-busy">
+          <IconSpinner size={18} />
+          <p><b>{t('dialogs.handoffDialog.busy')}</b><br />{t('dialogs.handoffDialog.busyDescription')}</p>
+        </div>
+      ) : h === undefined ? (
+        <div className="handoff-empty"><IconSpinner size={18} /></div>
+      ) : h === null ? (
+        <div className="handoff-empty" data-testid="handoff-none">
+          <p><b>{t('dialogs.handoffDialog.none')}</b><br />{t('dialogs.handoffDialog.noneDescription')}</p>
+        </div>
+      ) : (
+        <>
+          <div className="handoff-meta" data-testid="handoff-meta">
+            <span className={`handoff-src ${h.source}`}>{h.source === 'chat' ? t('dialogs.handoffDialog.fromChat') : t('dialogs.handoffDialog.automatic')}</span>
+            <span>{when(h.at)}</span>
+            {h.contextTokens ? <span>{t('dialogs.handoffDialog.contextTokens', { n: tokensShort(h.contextTokens) })}</span> : null}
+            <span className="sp" />
+            <button type="button" className="handoff-path" onClick={copyPath} data-tip={`${h.path}|${t('dialogs.handoffDialog.copyPathTip')}`} data-testid="handoff-path"><IconFile size={12} />{h.path.split(/[\\/]/).pop()}</button>
+          </div>
+          <div className="handoff-text" data-testid="handoff-text"><Markdown text={h.text} /></div>
+        </>
+      )}
+      {past && <p className="menu-note" data-testid="handoff-past">{t('dialogs.handoffDialog.pastSession')}</p>}
+      {!past && next && <p className="menu-note">{t('dialogs.handoffDialog.continuesElsewhere', { title: next.title })}</p>}
     </Modal>
   );
 }

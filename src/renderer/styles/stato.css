@@ -2,8 +2,8 @@
    requests as buttons) and the PR rows (QA-blocked line, who it waits for, build, votes). Built on tokens.css and the
    shared .pill classes of app.css. Imported by StatoDialog.tsx. */
 .modal.modal-stato { width: min(1180px, calc(100vw - 32px)); }
-.modal-stato .modal-head { flex-wrap: wrap; }
-.stato-headline { font-size: 13px; color: var(--text-2); }
+
+
 .modal-body.stato-body { padding-bottom: 16px; }
 /* wide: chats left, PRs right, both seen at once without scrolling to the PRs */
 @media (min-width: 1000px) {
