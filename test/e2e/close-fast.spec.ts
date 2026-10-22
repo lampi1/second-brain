@@ -1,5 +1,5 @@
-// E2E of the quick close (demo): the ✕ in a chat tile's header and Ctrl+W on the selected chat close it at once with
-// the usual "Chiusa «…» · Annulla" (6 s); Annulla brings it back. The Orchestrator has no ✕ and Ctrl+W never closes it;
+// E2E of the quick close (demo): the ✕ in a chat tile's header and Ctrl+W on the selected chat close it at once (main
+// archives it at once, #168) with the usual "Chiusa «…» · Annulla" (6 s); Annulla reopens it. The Orchestrator has no ✕ and Ctrl+W never closes it;
 // a double click or a held Ctrl+W closes one chat; a maximized chat leaves that view and comes back maximized with Annulla; Ctrl+W under a dialog or in the requests
 // layer never closes the app window (Electron's default menu would).
 // Screenshots in test-results/shots/close-fast-*.
@@ -18,9 +18,13 @@ test('the ✕ and Ctrl+W close a chat with Annulla; never the Orchestrator, neve
   await expect(page.getByTestId('tile-chat-fix')).toHaveCount(0);
   const toast = page.getByTestId('toast').filter({ hasText: 'Chiusa «Fix totale ordine»' });
   await expect(toast).toBeVisible();
+  // closed for real at once (#168): main has it closed within a second, not after the toast
+  const closedAt = () => page.evaluate(() => window.sb.invoke('chat:list', undefined)).then(l => l.find(c => c.id === 'fix')?.closedAt ?? null);
+  await expect.poll(closedAt, { timeout: 1000 }).not.toBeNull();
   await shot(page, 'close-fast-2-closed');
   await toast.getByTestId('toast-action').click();
   await expect(page.getByTestId('tile-chat-fix')).toBeVisible();
+  await expect.poll(closedAt).toBeNull(); // Annulla reopened it, with its history
 
   // a double click on the ✕ closes one chat: the next tile's ✕, which slides under the pointer, ignores the second click;
   // right after Annulla, so a ✕ soon after a close counts (no time window swallows it)

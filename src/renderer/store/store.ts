@@ -507,10 +507,11 @@ export async function continueChat(chatId: string): Promise<ChatSummary | null> 
   }
 }
 
-/** Close a chat with a 6-second undo: the tile disappears at once, the real close happens when the toast expires.
- *  A chat already closing (hidden, its undo still running) is left alone: a second Ctrl+W or click starts no second timer.
- *  A chat maximized or in focus mode leaves that view too (those views show it whatever the hidden list says); Annulla
- *  puts it back, unless another tile took that view in the meantime. */
+/** Close a chat at once (#168): the tile goes, main archives it now (its engine stops, its queued work is dropped, its
+ *  run ends), and «Annulla» on the 6-second toast reopens it from its transcript; when the toast expires it leaves the
+ *  app for good (chat:close). A chat already closing (hidden, its undo still running) is left alone: a second Ctrl+W or
+ *  click starts nothing. A chat maximized or in focus mode leaves that view too (those views show it whatever the
+ *  hidden list says); Annulla puts it back, unless another tile took that view in the meantime. */
 const pendingCloses=new Set<ReturnType<typeof setTimeout>>();
 export function closeChat(chatId: string): void {
   if(updateIsFrozen())return;
@@ -522,40 +523,43 @@ export function closeChat(chatId: string): void {
   if (wasMax || wasFocus) ui.set(s => ({ ...s, maximized: wasMax ? null : s.maximized, focusMode: wasFocus ? null : s.focusMode, lanePeek: wasFocus ? false : s.lanePeek }));
   hideChat(chatId, true);
   let undone = false;
+  const closing = sb.invoke('chat:archive', { chatId, auto: false }).then(chat => { if (!undone) dispatch({ type: 'chat:updated', chat }); return true; },
+    e => { hideChat(chatId, false); fail(t('chat.close.failed'))(e); return false; });
   const timer = setTimeout(() => {
     pendingCloses.delete(timer);
     if (undone) return;
-    void sb.invoke('chat:close', { chatId }).catch(e => { hideChat(chatId, false); fail('Chat non chiusa')(e); }).then(() => hideChat(chatId, false));
+    void closing.then(ok => ok ? sb.invoke('chat:close', { chatId }) : undefined).catch(fail(t('chat.close.failed'))).finally(() => hideChat(chatId, false));
   }, 6000);
   pendingCloses.add(timer);
-  toast(`Chiusa «${c.title}»`, 'info', { label: 'Annulla', run: () => {
-    undone = true; clearTimeout(timer); pendingCloses.delete(timer); hideChat(chatId, false);
+  toast(t('chat.close.done', { title: c.title }), 'info', { label: t('chat.close.undo'), run: () => {
+    undone = true; clearTimeout(timer); pendingCloses.delete(timer);
+    void closing.then(ok => ok ? sb.invoke('chat:reopen', { chatId }).then(chat => dispatch({ type: 'chat:updated', chat })) : undefined)
+      .catch(fail(t('chat.close.reopenFailed'))).finally(() => hideChat(chatId, false));
     if ((wasMax || wasFocus) && !ui.get().maximized && !ui.get().focusMode) ui.set(s => ({ ...s, maximized: wasMax, focusMode: wasFocus }));
   } }, 6000);
 }
 
-/** Close a browser tab like a chat (✕, Ctrl+W, Ctrl+W inside its page): its tile disappears at once, the tab really
- *  closes when the 6-second undo toast expires (its agent then gets "The user closed tab …" at its next call, main
- *  browser/closed.ts). A tab already closing is left alone; a maximized tab leaves that view, Annulla
- *  puts it back unless another tile took it meanwhile. */
+/** Close a browser tab like a chat (✕, Ctrl+W, Ctrl+W inside its page): it closes at once (#168; its agent then gets
+ *  "The user closed tab …" at its next call, main browser/closed.ts), and «Annulla» on the 6-second toast opens the
+ *  same page again, for the same chat and environment. A tab already closing is left alone; a maximized tab leaves
+ *  that view, Annulla puts the new one there unless another tile took it meanwhile. */
 export function closeTab(tabId: string): void {
   if(updateIsFrozen())return;
-  const t = app.get().tabs.find(x => x.id === tabId);
+  const tab = app.get().tabs.find(x => x.id === tabId);
   const u = ui.get();
-  if (!t || u.hiddenTabs.includes(tabId)) return;
+  if (!tab || u.hiddenTabs.includes(tabId)) return;
   const wasMax = u.maximized === `browser:${tabId}` ? u.maximized : null;
   if (wasMax) ui.set(s => ({ ...s, maximized: null }));
   hideTab(tabId, true);
-  let undone = false;
-  const timer = setTimeout(() => {
-    pendingCloses.delete(timer);
-    if (undone) return;
-    void sb.invoke('browser:close', { tabId }).catch(e => { hideTab(tabId, false); fail('Scheda non chiusa')(e); }).then(() => hideTab(tabId, false));
-  }, 6000);
+  const closing = sb.invoke('browser:close', { tabId }).then(() => true, e => { hideTab(tabId, false); fail(t('chat.close.tabFailed'))(e); return false; });
+  const timer = setTimeout(() => { pendingCloses.delete(timer); hideTab(tabId, false); }, 6000);
   pendingCloses.add(timer);
-  toast(`Chiusa la scheda «${t.title || t.url}»`, 'info', { label: 'Annulla', run: () => {
-    undone = true; clearTimeout(timer); pendingCloses.delete(timer); hideTab(tabId, false);
-    if (wasMax && !ui.get().maximized) ui.set(s => ({ ...s, maximized: wasMax }));
+  toast(t('chat.close.tabDone', { title: tab.title || tab.url }), 'info', { label: t('chat.close.undo'), run: () => {
+    clearTimeout(timer); pendingCloses.delete(timer);
+    const owner = tab.ownerChatId && app.get().chats[tab.ownerChatId] && !app.get().chats[tab.ownerChatId]!.closedAt ? tab.ownerChatId : null;
+    void closing.then(ok => ok ? sb.invoke('browser:open', { url: tab.url, ownerChatId: owner, ...(tab.env ? { env: tab.env } : {}) }).then(next => {
+      if (wasMax && !ui.get().maximized) ui.set(s => ({ ...s, maximized: `browser:${next.id}` }));
+    }) : undefined).catch(fail(t('chat.close.reopenFailed'))).finally(() => hideTab(tabId, false));
   } }, 6000);
 }
 

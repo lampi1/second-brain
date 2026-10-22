@@ -1317,6 +1317,8 @@ export class ChatManager implements ChatService {
             log.warn('chats', 'hand-off before the auto-close not written', { chat: chatId, cause: errText(e), hint: '"Riprendi" on this chat writes it then' });
           }
         }
+        // the user's ✕ stops a running turn at once (#168): the engine's exit may take seconds, its work must not
+        if (sess && !opts.auto && sess.busy) await sess.interrupt({ byUser: true }).catch(e => log.info('chats', 'interrupt at close failed', { chat: chatId, data: errText(e) }));
         if (sess && !keep) { await sess.close(); this.reapKept(r); }
       })();
       try { await r.archiving; } finally { r.archiving = undefined; }

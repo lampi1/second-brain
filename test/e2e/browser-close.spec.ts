@@ -1,6 +1,6 @@
 // Closing a browser tile like a chat, end to end in the real app (fake Claude CLI, local fixture site):
-// - the ✕ in the tile header hides it at once with a 6-second "Annulla" toast; Annulla brings it back; when the toast
-//   expires the tab is really closed;
+// - the ✕ in the tile header closes it at once (#168) with a 6-second "Annulla" toast; Annulla opens the same page
+//   again for the same chat (a new tab);
 // - the agent that drove it gets "The user closed tab …" at its next call (by id, or without tabId when it was its
 //   active tab), naming its open tabs, and never acts silently on another tab; after tabs_select it works again;
 // - Ctrl+W on a selected browser tile closes it, and so does Ctrl+W typed inside the page (forwarded by main).
@@ -43,7 +43,7 @@ test.describe.serial('closing a browser tile', () => {
     await sites?.close();
   });
 
-  test('✕ hides the tile with Annulla; the agent then gets a clear error on that tab, never another tab', async () => {
+  test('✕ closes the tab at once, Annulla opens the page again; the agent then gets a clear error on that tab, never another tab', async () => {
     await agent.ok('tabs_create', { url: `${sites.a}/` });
     await agent.ok('tabs_create', { url: `${sites.a}/app` });
     await expect.poll(async () => (await tabsOfChat()).length).toBe(2);
@@ -60,38 +60,47 @@ test.describe.serial('closing a browser tile', () => {
     const toast = page.getByTestId('toast').filter({ hasText: 'Chiusa la scheda' });
     await expect(toast).toBeVisible();
     await shot(page, 'browser-close-toast');
+    await expect.poll(async () => (await tabsOfChat()).map(t => t.id)).toEqual([second!.id]); // closed now, not in 6 s
     await toast.getByTestId('toast-action').click();
-    await expect(tile).toBeVisible();
-    expect((await tabsOfChat()).map(t => t.id)).toContain(first!.id);  // Annulla: the tab was never closed
+    // Annulla: the same page again, for the same chat, in a new tab
+    await expect.poll(async () => (await tabsOfChat()).length).toBe(2);
+    const again = (await tabsOfChat()).find(t => t.id !== second!.id)!;
+    expect(again.url).toBe(first!.url);
+    await expect(page.getByTestId(`tile-browser-${again.id}`)).toBeVisible();
+    const closed = again;
+    await agent.ok('tabs_select', { tabId: closed.id });
 
     await page.waitForTimeout(600);                                     // past the ✕ double-click guard
-    await page.getByTestId(`browser-x-${first!.id}`).click();
-    await expect(tile).toBeHidden();
+    await page.getByTestId(`browser-x-${closed.id}`).click();
+    await expect(page.getByTestId(`tile-browser-${closed.id}`)).toBeHidden();
     await expect.poll(async () => (await tabsOfChat()).map(t => t.id), { timeout: 10_000 }).toEqual([second!.id]);
     await shot(page, 'browser-close-after');
 
     const noId = await agent.call('get_page_text');
     expect(noId.isError).toBe(true);
-    expect(noId.text).toContain(`The user closed tab ${first!.id}`);
+    expect(noId.text).toContain(`The user closed tab ${closed.id}`);
     expect(noId.text).toContain(`Your open tabs: ${second!.id}`);
-    const byId = await agent.call('get_page_text', { tabId: first!.id });
+    const byId = await agent.call('get_page_text', { tabId: closed.id });
     expect(byId.isError).toBe(true);
-    expect(byId.text).toContain(`The user closed tab ${first!.id}`);
+    expect(byId.text).toContain(`The user closed tab ${closed.id}`);
     const nav = await agent.call('navigate', { url: `${sites.a}/` });  // never reopens the closed page by itself
     expect(nav.isError).toBe(true);
-    expect(nav.text).toContain(`The user closed tab ${first!.id}`);
+    expect(nav.text).toContain(`The user closed tab ${closed.id}`);
     expect((await tabsOfChat()).length).toBe(1);
     await agent.ok('tabs_select', { tabId: second!.id });
     expect(await agent.ok('get_page_text')).not.toContain('The user closed');
   });
 
   test('Ctrl+W on a selected browser tile closes it; Ctrl+W inside the page too', async () => {
-    const [only] = await tabsOfChat();
-    await page.getByTestId(`browser-url-${only!.id}`).locator('xpath=ancestor::header').click({ position: { x: 4, y: 4 } });
+    const [closedByKey] = await tabsOfChat();
+    await page.getByTestId(`browser-url-${closedByKey!.id}`).locator('xpath=ancestor::header').click({ position: { x: 4, y: 4 } });
     await page.keyboard.press('Control+w');
-    await expect(page.getByTestId(`tile-browser-${only!.id}`)).toBeHidden();
+    await expect(page.getByTestId(`tile-browser-${closedByKey!.id}`)).toBeHidden();
     await page.getByTestId('toast').filter({ hasText: 'Chiusa la scheda' }).getByTestId('toast-action').click();
+    await expect.poll(async () => (await tabsOfChat()).filter(t => t.id !== closedByKey!.id).length).toBe(1);
+    const [only] = await tabsOfChat();
     await expect(page.getByTestId(`tile-browser-${only!.id}`)).toBeVisible();
+    await agent.ok('tabs_select', { tabId: only!.id });
 
     // an agent's own Ctrl+W (CDP input) never closes its tab as if the user did. main decides while the key is
     // dispatched, before the tool answers: no "close this tab" ever left for the UI (counted on the way out)

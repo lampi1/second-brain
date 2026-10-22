@@ -2,6 +2,13 @@
 import type { chatIt } from './chat.it';
 
 export const chatEn: typeof chatIt = {
+  // closing a chat or a tab (store.ts closeChat, closeTab)
+  'chat.close.done': (p: { title: string }) => `Closed «${p.title}»`,
+  'chat.close.tabDone': (p: { title: string }) => `Closed the tab «${p.title}»`,
+  'chat.close.undo': 'Undo',
+  'chat.close.failed': 'Chat not closed',
+  'chat.close.tabFailed': 'Tab not closed',
+  'chat.close.reopenFailed': 'Not reopened',
   // ChatInput
   'chat.input.slashMenu': 'Commands and skills',
   'chat.input.slashHelp': '↑↓ choose · Tab complete · Esc close',
