@@ -1,10 +1,11 @@
-// Typed IPC allowlists must remain unique and include the reviewed agent-pack capabilities.
+// Typed IPC allowlists must remain unique; the agent pack import/export channels are gone (ADR 0125), the brain share stays.
 import { describe, expect, it } from 'vitest';
 import { EVENT_CHANNELS, INVOKE_CHANNELS } from '@shared/contract';
 
 describe('contract', () => {
-  it('exposes the reviewed agent-pack flows through the typed allowlist', () => {
-    for (const channel of ['agents:exportPlan', 'agents:exportFix', 'agents:export', 'agents:importInspect', 'agents:importApply', 'agents:importCancel', 'agents:trialDecide']) expect(INVOKE_CHANNELS).toContain(channel);
+  it('has no agent pack import/export any more (ADR 0125); the shareable brain and the trials stay', () => {
+    for (const gone of ['agents:exportPlan', 'agents:exportFix', 'agents:export', 'agents:importInspect', 'agents:importApply', 'agents:importCancel']) expect(INVOKE_CHANNELS as readonly string[]).not.toContain(gone);
+    for (const channel of ['brain:share', 'agents:trialDecide']) expect(INVOKE_CHANNELS).toContain(channel);
   });
   it('serves the brain model (ADR 0077) and no longer the procedures or the learned-rule approvals', () => {
     for (const channel of ['brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'brainmodel:link', 'classifiers:state']) expect(INVOKE_CHANNELS).toContain(channel);

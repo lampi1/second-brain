@@ -44,6 +44,9 @@ test('agent cards: big centred character, level and performance with their "?" f
     await expect(lv).toContainText('5 × N × (N − 1) ÷ 2');
     await expect(lv).toContainText('riusciti verificati su');
     await expect(lv).toContainText('solo con i lavori riusciti e verificati');
+    // ADR 0125: every role levels up without the user's verdicts; the Sentinel's reviews are judged by what happened
+    await expect(lv).toContainText('per un lavoro delegato, il lavoro del genitore riuscito verificato');
+    await expect(lv).toContainText('una seconda revisione indipendente (1 ogni 10)');
     await expect(artisan).toHaveAttribute('data-flipped', 'false'); // the "?" does not flip the card
     await shot(page, 'agent-cards-level-help-dark');
     await page.keyboard.press('Escape');
@@ -51,6 +54,7 @@ test('agent cards: big centred character, level and performance with their "?" f
     const pf = page.getByTestId('catalog-perf-help-artisan-bubble');
     await expect(pf).toContainText('30 giorni');
     await expect(pf).toContainText('Voti finora');
+    await expect(pf).toContainText('dal genitore verificato');
     await shot(page, 'agent-cards-perf-help-dark');
     await page.keyboard.press('Escape');
     await expect(pf).toBeHidden();
@@ -117,6 +121,10 @@ test('agent cards: big centred character, level and performance with their "?" f
     await page.getByTestId('catalog-perf-help-scout').click();
     await expect(page.getByTestId('catalog-perf-help-scout-bubble')).toBeVisible();
     await shot(page, 'agent-cards-perf-help-light');
+    await page.keyboard.press('Escape');
+    await page.getByTestId('catalog-level-help-scout').click();
+    await expect(page.getByTestId('catalog-level-help-scout-bubble')).toContainText('Verificato vuol dire');
+    await shot(page, 'agent-cards-level-help-light');
   } finally { await app.close(); }
 });
 

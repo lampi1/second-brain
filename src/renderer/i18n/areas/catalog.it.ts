@@ -4,7 +4,7 @@ export const catalogIt = {
   'catalog.judging.title': 'Abilita controllo livello e performance',
   'catalog.judging.onDesc': 'Acceso: ogni lavoro finito viene rivisto da un Sentinel in una sessione nuova. Livello e performance si basano su verdetti veri.',
   'catalog.judging.offDesc': 'Spento: nessuna revisione. Livello e performance contano solo i voti tuoi, dell’Orchestrator e i fatti.',
-  'catalog.judging.cost': (p: { cost: string; runs: string; each: string }) => `Costo stimato: circa ${p.cost} al giorno (${p.runs} lavori al giorno × ${p.each} a revisione).`,
+  'catalog.judging.cost': (p: { cost: string; runs: string; each: string; audits: string }) => `Costo stimato: circa ${p.cost} al giorno (${p.runs} lavori al giorno × ${p.each} a revisione, più ${p.audits} seconde revisioni al giorno che giudicano il giudice).`,
   'catalog.judging.costNoReview': (p: { runs: string }) => `Costo stimato: ${p.runs} revisioni al giorno; il prezzo di una revisione si vedrà dopo la prima.`,
   'catalog.judging.costNone': 'Costo stimato: ancora nessun dato (nessun lavoro finito negli ultimi 7 giorni).',
   'catalog.deliveryCoverage': "Copertura consegne",

@@ -5,7 +5,7 @@ export const catalogEn: typeof catalogIt = {
   'catalog.judging.title': 'Enable level and performance check',
   'catalog.judging.onDesc': 'On: every finished task is reviewed by a Sentinel in a new session. Level and performance rest on real verdicts.',
   'catalog.judging.offDesc': 'Off: no reviews. Level and performance count only your votes, the Orchestrator’s and the facts.',
-  'catalog.judging.cost': (p: { cost: string; runs: string; each: string }) => `Estimated cost: about ${p.cost} a day (${p.runs} tasks a day × ${p.each} per review).`,
+  'catalog.judging.cost': (p: { cost: string; runs: string; each: string; audits: string }) => `Estimated cost: about ${p.cost} a day (${p.runs} tasks a day × ${p.each} per review, plus ${p.audits} second reviews a day that judge the judge).`,
   'catalog.judging.costNoReview': (p: { runs: string }) => `Estimated cost: ${p.runs} reviews a day; the price of one review shows after the first.`,
   'catalog.judging.costNone': 'Estimated cost: no data yet (no task finished in the last 7 days).',
   'catalog.deliveryCoverage': "Delivery coverage",

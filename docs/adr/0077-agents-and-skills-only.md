@@ -37,6 +37,8 @@ cards carried "Avvia" and "Dettagli" (#81).
   were; a change that something newer touched can no longer be undone and says so.
 - **Approval stays** only for production actions, permissions / settings / hooks (an agent's `maxContext` proposal is
   a setting and stays under approval), and texts for colleagues or external systems.
+- *Superseded by ADR 0125 (2026-10-22): there is no agent export / import any more; the roles are fixed and the whole
+  brain is shared instead (ADR 0088).*
 - **Export / import.** A pack carries the profile, the declared skills, a generated `TOOLS.md` (tool classes, MCP
   servers, permission ceiling, each skill's allowed tools and scripts) and the brain's rules (topic files and
   `rules/*.md`; never AGENTS.md, CLAUDE.md, me.md, memory, journal or state). Import installs shared skills into the

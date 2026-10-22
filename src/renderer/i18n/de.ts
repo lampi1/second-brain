@@ -3,7 +3,6 @@ import { appTextDe } from './areas/app-text.de';
 import { brainTextDe } from './areas/brain-text.de';
 import { learningReviewDe } from './areas/learning-review.de';
 import { cloudDe } from './areas/cloud.de';
-import { agentPackDe } from './areas/agent-pack.de';
 import { brainModelDe } from './areas/brain-model.de';
 import { memoryDe } from './areas/memory.de';
 import { statsDe } from './areas/stats.de';
@@ -28,6 +27,7 @@ import { brainLibDe } from './areas/brainLib.de';
 import { SYS_DE } from '@shared/sys';
 import { productDe } from './areas/product.de';
 import { agentsGridDe } from './areas/agents-grid.de';
+import { levelsDe } from './areas/levels.de';
 import { explainDe } from './areas/explain.de';
 import { agentDetailDe } from './areas/agent-detail.de';
 import { agentImageDe } from './areas/agent-image.de';
@@ -51,7 +51,6 @@ export const de: Dict = {
   ...auditDe,
   ...auditExpressionsDe,
   ...componentsDe,
-  ...agentPackDe,
   ...catalogDe,
   ...costsDe,
   ...connectorsDe,
@@ -91,6 +90,7 @@ export const de: Dict = {
   ...statsDe,
   ...productDe,
   ...agentsGridDe,
+  ...levelsDe,
   ...explainDe,
   ...agentDetailDe,
   ...agentImageDe,

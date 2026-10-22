@@ -215,13 +215,7 @@ app.whenReady().then(async () => {
     'agents:undo': a => { if (!s.runFeedback) throw new Error('Annulla non disponibile.'); return s.runFeedback.undo(a); },
     'agents:save': a => s.agentPacks.learning.save(a.profile, a.id),
     'agents:reset': a => s.agents.reset(String(a?.id ?? '')),
-    'agents:exportPlan': a => s.agentPacks.packs.exportPlan(a.id, a.target),
-    'agents:exportFix': a => s.agentPacks.packs.exportFix(a.token, a.item, a.action),
-    'agents:export': a => s.agentPacks.packs.export(a.token, a.includeStats),
     'brain:share': () => s.agentPacks.share(),
-    'agents:importInspect': a => s.agentPacks.packs.importInspect(a),
-    'agents:importApply': a => s.agentPacks.packs.importApply(a.token, a.approveScripts, a.roleId, a.approvePersonalData),
-    'agents:importCancel': a => s.agentPacks.packs.cancel(a.token),
     // the Brain pages (ADR 0077): read, the maintenance button, an undo, a skill toggle; Classificatori read-only
     'brainmodel:state': () => s.brainModel.state(),
     'memory:reviewList': a => s.memoryReview?.list(undefined, a?.asOf) ?? [],

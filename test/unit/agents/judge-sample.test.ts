@@ -9,7 +9,7 @@ import path from 'node:path';
 import type { AgentRun } from '../../../src/shared/agents';
 import type { AgentFeedbackArgs } from '../../../src/shared/agent-lifecycle';
 import type { ChatSummary, NewChat } from '../../../src/shared/contract';
-import { JudgeSampler, judgeSamplingOn, judgingEstimate, MAX_RUNNING, pickSamples, reviewPrompt, REVIEW_CRITERIA } from '../../../src/main/agents/judge-sample';
+import { AUDIT_EVERY, auditPicked, JudgeSampler, judgeSamplingOn, judgingEstimate, MAX_RUNNING, pickAudits, pickSamples, reviewPrompt, REVIEW_CRITERIA } from '../../../src/main/agents/judge-sample';
 
 const NOW = Date.UTC(2026, 9, 19, 12);
 const run = (id: string, over: Partial<AgentRun> = {}): AgentRun => ({ runId: `r_${id.padStart(12, '0')}`, chatId: `c_${id}`, agentId: 'scout', version: 1, goal: 'Trova gli errori',
@@ -92,7 +92,7 @@ describe('JudgeSampler', () => {
   it('the daily cost of the switch: runs a day times what a review cost; unknown without data', () => {
     const roots = Array.from({ length: 14 }, (_, i) => run(String(i + 1)));
     const reviews = [0.2, 0.4, 0.3].map((c, i) => run(String(50 + i), { agentId: 'sentinel', reviewOf: roots[i]!.runId, costUsd: c }));
-    expect(judgingEstimate([...roots, ...reviews], NOW)).toEqual({ runsPerDay: 2, reviewUsd: 0.3, perDayUsd: 0.6, basis: 3 });
+    expect(judgingEstimate([...roots, ...reviews], NOW)).toEqual({ runsPerDay: 2, auditsPerDay: 0.2, reviewUsd: 0.3, perDayUsd: 0.66, basis: 3 });
     expect(judgingEstimate(roots, NOW)).toMatchObject({ runsPerDay: 2, reviewUsd: null, perDayUsd: null });
   });
   it('never puts a delegated child\'s answer in a root review chat (the Orchestrator would read it)', async () => {
@@ -160,5 +160,54 @@ describe('judgeSamplingOn (issue #112)', () => {
     expect(judgeSamplingOn({ SB_HIDDEN: '1' }).on).toBe(false);
     expect(judgeSamplingOn({ SB_TEST: '1', SB_JUDGE_SAMPLE: '1' }).on).toBe(true);
     expect(judgeSamplingOn({ SB_JUDGE_SAMPLE: '0' }).on).toBe(false);
+  });
+});
+
+// ADR 0125: the judge is judged. One reviewed run in AUDIT_EVERY gets a second independent review that grades the first
+// (standing.ts earnedVerdict, 'graded' by 'audit'); the audit never becomes the run's feedback.
+describe('audits of the reviews (ADR 0125)', () => {
+  const ids = Array.from({ length: 400 }, (_, i) => String(i + 1));
+  const picked = ids.find(i => auditPicked(`r_${i.padStart(12, '0')}`))!, skipped = ids.find(i => !auditPicked(`r_${i.padStart(12, '0')}`))!;
+  const reviewOf = (target: AgentRun, id: string, over: Partial<AgentRun> = {}) => run(id, { agentId: 'sentinel', startedBy: 'app', reviewOf: target.runId, endedAt: NOW - 600_000,
+    report: { at: NOW - 600_000, outcome: 'done', verified: 'yes', summary: 'Ok', verdict: 'success' }, ...over });
+  it('picks a fixed share of the runs with one verified review, never one the user judged, a child\'s or one checked already', () => {
+    const share = ids.filter(i => auditPicked(`r_${i.padStart(12, '0')}`)).length / ids.length;
+    expect(share).toBeGreaterThan(0.5 / AUDIT_EVERY);
+    expect(share).toBeLessThan(2 / AUDIT_EVERY);
+    const x = run(picked), y = run(skipped);
+    expect(pickAudits([x, reviewOf(x, '900'), y, reviewOf(y, '901')], new Set(), NOW, 5)).toEqual([x]);
+    expect(pickAudits([x], new Set(), NOW, 5)).toEqual([]);                                              // not reviewed yet
+    expect(pickAudits([x, reviewOf(x, '900'), reviewOf(x, '902')], new Set(), NOW, 5)).toEqual([]);      // two reviews already
+    expect(pickAudits([x, reviewOf(x, '900')], new Set([x.runId]), NOW, 5)).toEqual([]);                 // audited
+    expect(pickAudits([x, reviewOf(x, '900', { report: { at: NOW, outcome: 'done', verified: 'partial', summary: 'Ok', verdict: 'success' } })], new Set(), NOW, 5)).toEqual([]);
+    expect(pickAudits([{ ...x, outcome: { verdict: 'success', basis: 'human', at: NOW, by: 'user' } }, reviewOf(x, '900')], new Set(), NOW, 5)).toEqual([]);
+    expect(pickAudits([{ ...x, parentRunId: 'r_000000000777' }, reviewOf(x, '900')], new Set(), NOW, 5)).toEqual([]);
+    expect(pickAudits([x, reviewOf(x, '900', { endedAt: NOW - 8 * 86_400_000 })], new Set(), NOW, 5)).toEqual([]);
+    expect(pickAudits([x, reviewOf(x, '900')], new Set(), NOW, 0)).toEqual([]);
+  });
+  it('starts the audit after the first review was recorded, in a new Sentinel chat, and never feeds it back to the run', async () => {
+    const x = run(picked), runs: AgentRun[] = [x];
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-judge-')); dirs.push(dir);
+    const created: NewChat[] = [], fed: AgentFeedbackArgs[] = [];
+    let n = 0;
+    const s = new JudgeSampler({ file: path.join(dir, 'judge-samples.json'), runs: () => runs, chat, create: async req => { created.push(req); return { ...chat(`j${++n}`), id: `j${n}` }; },
+      judging: () => ({ on: true, since: 0 }), judgeEngine: () => 'claude', refusal: () => null, feedback: async a => { fed.push(a); }, now: () => NOW });
+    expect(await s.tick()).toBe(1);
+    const first = reviewOf(x, '900', { chatId: s.list()[0]!.chatId });
+    runs.push(first);
+    expect(await s.tick()).toBe(0);                 // the first review has not recorded its verdict yet
+    await s.ended(first);
+    expect(fed).toHaveLength(1);
+    expect(await s.tick()).toBe(1);
+    expect(created[1]).toMatchObject({ roleId: 'sentinel', reviewOf: x.runId });
+    expect(created[1]!.prompt).not.toContain('Ok');  // the audit never sees the first verdict
+    const audit = s.list()[1]!;
+    expect(audit).toMatchObject({ runId: x.runId, audit: true, state: 'running' });
+    const second = reviewOf(x, '901', { chatId: audit.chatId, report: { at: NOW, outcome: 'done', verified: 'yes', summary: 'No', verdict: 'fail' } });
+    runs.push(second);
+    await s.ended(second);
+    expect(fed).toHaveLength(1);                    // the run keeps the first verdict
+    expect(s.list()[1]!.state).toBe('recorded');
+    expect(await s.tick()).toBe(0);                 // audited once
   });
 });

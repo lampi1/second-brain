@@ -21,6 +21,8 @@ function fixtureBrain(): string {
 }
 const settled = async (page: Page) => { await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30_000 }); };
 const clip = (app: ElectronApplication) => app.evaluate(({ clipboard }) => clipboard.readText());
+/** the page's link through the palette (the page bar's «Copia link» button is gone, ADR 0125) */
+const copyPageLink = async (page: Page) => { await page.keyboard.press('Control+K'); await page.getByTestId('palette-input').fill('Copia il link'); await page.getByTestId('palette-item-copylink').click(); };
 
 test('brain pages: arguments through links and history, page-to-page links, map to a file, one toast area', async () => {
   const { app, page } = await launch({ SB_BRAIN: fixtureBrain() });
@@ -31,7 +33,7 @@ test('brain pages: arguments through links and history, page-to-page links, map 
   const fileLink=async(name:string)=>{await page.keyboard.press('Control+K');await page.getByTestId('palette-input').fill('sb://esplora/'+name);await page.keyboard.press('Enter');};
   await fileLink('AGENTS.md');const viewer=page.getByTestId('cited-file-viewer');await expect(viewer).toContainText('Produzione');
   await fileLink('map.md');await expect(viewer).toContainText('Mappa della memoria');
-  await page.getByTestId('page-copy-link').click();  await expect.poll(async()=> (await clip(app)).startsWith('sb://file/')).toBe(true);
+  await copyPageLink(page);  await expect.poll(async()=> (await clip(app)).startsWith('sb://file/')).toBe(true);
   await page.keyboard.press('Alt+ArrowLeft');await expect(viewer).toContainText('Produzione');
   await page.keyboard.press('Alt+ArrowRight');await expect(viewer).toContainText('Mappa della memoria');
   await expect(page.getByTestId('nav-esplora')).toHaveCount(0);
@@ -56,7 +58,7 @@ test('brain pages: arguments through links and history, page-to-page links, map 
   await file.click();
   await expect(page.getByTestId('brain-map')).toHaveCount(0);
   await expect(page.getByTestId('page-file')).toBeVisible();
-  await page.getByTestId('page-copy-link').click();
+  await copyPageLink(page);
   await expect.poll(async()=> (await clip(app)).startsWith('sb://file/')).toBe(true);
   await app.close();
 });

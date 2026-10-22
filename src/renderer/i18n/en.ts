@@ -2,7 +2,6 @@ import { appTextEn } from './areas/app-text.en';
 import { brainTextEn } from './areas/brain-text.en';
 import { learningReviewEn } from './areas/learning-review.en';
 import { cloudEn } from './areas/cloud.en';
-import { agentPackEn } from './areas/agent-pack.en';
 import { brainModelEn } from './areas/brain-model.en';
 import { memoryEn } from './areas/memory.en';
 import { statsEn } from './areas/stats.en';
@@ -27,6 +26,7 @@ import { brainLibEn } from './areas/brainLib.en';
 import { SYS_EN } from '@shared/sys';
 import {productEn}from'./areas/product.en';
 import { agentsGridEn } from './areas/agents-grid.en';
+import { levelsEn } from './areas/levels.en';
 import { explainEn } from './areas/explain.en';
 import { agentDetailEn } from './areas/agent-detail.en';
 import { agentImageEn } from './areas/agent-image.en';
@@ -51,7 +51,6 @@ export const en: Dict = {
   ...auditEn,
   ...auditExpressionsEn,
   ...componentsEn,
-  ...agentPackEn,
   ...catalogEn,
   ...costsEn,
   ...connectorsEn,
@@ -92,6 +91,7 @@ export const en: Dict = {
   ...statsEn,
   ...productEn,
   ...agentsGridEn,
+  ...levelsEn,
   ...explainEn,
   ...agentDetailEn,
   ...agentImageEn,

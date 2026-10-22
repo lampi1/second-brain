@@ -1,8 +1,8 @@
-// Agent pack interoperability and hostile-input regression tests: all processing stays local and executes no skill.
+// Hostile-input regression tests of the know-how sanitizer (pack/read.ts: the runtime plugin of every role launch), the
+// manifest check, the strict TOML subset and the bounded ZIP codec (the shareable brain): all local, no skill executes.
+// The agent pack emission and its projections are gone with the import/export (ADR 0125).
 import { describe, expect, it } from 'vitest';
 import { checkedPack, type AgentPackManifest } from '../../src/shared/agent-pack';
-import { parseMd } from '../../src/shared/skillmd';
-import { emitPack, emitTarget } from '../../src/main/agents/pack/emit';
 import { approvedFiles, inspectPack } from '../../src/main/agents/pack/read';
 import { emitAgentToml, readAgentToml } from '../../src/main/agents/pack/toml';
 import { checkPackPath, readZip, writeZip, ZIP_LIMITS } from '../../src/main/agents/pack/zip';
@@ -24,43 +24,13 @@ const skills = () => new Map([
 ]);
 
 describe('portable agent packs', () => {
-  it('round trips every byte and emits all three plugin manifests', () => {
-    const files = emitPack(manifest(), 'Review the diff.', skills());
-    const zip = writeZip(files), restored = readZip(zip);
-    expect(writeZip(restored)).toEqual(zip);
-    for (const [name, bytes] of files) expect(restored.get(name)).toEqual(bytes);
-    for (const name of ['.claude-plugin/plugin.json', '.cursor-plugin/plugin.json', 'plugin.json']) {
-      expect(JSON.parse(restored.get(name)!.toString())).toMatchObject({ name: 'reviewer', version: '1.0.1', description: 'Review changes' });
-    }
-    expect(inspectPack(restored)).toMatchObject({ kind: 'sbagent', skills: ['reviewer'], agents: [{ name: 'reviewer' }] });
-    expect(JSON.parse(restored.get('sbagent.json')!.toString())).not.toHaveProperty('stats');
-  });
   it('a pack exported for a retired role targets its successor; a Router pack has no work role to go to (ADR 0100)', () => {
     const of = (role: string) => checkedPack({ ...manifest(), agent: { ...manifest().agent, role } });
     expect(of('judge').agent.role).toBe('sentinel');
     expect(of('scribe').agent.role).toBe('artisan');
     expect(() => of('router')).toThrow('Invalid packed agent');
   });
-  it('projects portable skills and engine-specific agent fields', () => {
-    const files = emitPack(manifest(), 'Review the diff.', skills());
-    for (const target of ['claude', 'cursor', 'codex'] as const) {
-      const projected = emitTarget(files, target), root = target === 'codex' ? '.agents' : `.${target}`;
-      for (const [name, bytes] of skills()) expect(projected.get(`${root}/${name}`)).toEqual(bytes);
-      if (target === 'codex') {
-        const agent = readAgentToml(projected.get('.codex/agents/reviewer.toml')!.toString());
-        expect(agent).toMatchObject({ name: 'reviewer', description: 'Review changes', features: { shell_tool: false }, model_reasoning_effort: 'high' });
-        expect(agent.developer_instructions).toContain('Use the `reviewer` skill'); expect(agent).not.toHaveProperty('model');
-      } else {
-        const md = parseMd(projected.get(`.${target}/agents/reviewer.md`)!.toString());
-        const allowed = target === 'cursor' ? ['name', 'description', 'model', 'readonly'] : ['name', 'description', 'model', 'readonly', 'effort', 'tools', 'skills'];
-        expect(md.fields.every(f => allowed.includes(f.key))).toBe(true);
-        expect(md.body).toContain('Use the `reviewer` skill');
-      }
-    }
-  });
-  it('detects tampering, unsupported versions, missing own skills and unsafe identities', () => {
-    const files = emitPack(manifest(), 'Review.', skills()); files.set('skills/reviewer/references/notes.md', Buffer.from('Changed'));
-    expect(() => inspectPack(files)).toThrow('hash');
+  it('detects unsupported versions, missing own skills and unsafe identities', () => {
     expect(() => checkedPack({ ...manifest(), format: 2 })).toThrow('update');
     expect(() => checkedPack({ ...manifest(), skills: [] })).toThrow();
     expect(() => checkedPack({ ...manifest(), agent: { ...manifest().agent, id: '../escape' } })).toThrow();
@@ -88,13 +58,6 @@ describe('portable agent packs', () => {
     const multiline = approvedFiles(inspectPack(files), false).get('skills/reviewer/SKILL.md')!.toString();
     expect(multiline).not.toContain('!`'); expect(multiline).not.toContain('multiline'); expect(multiline).toContain('Review changes.');
     files.set('payload.exe', Buffer.from('MZ')); expect(() => inspectPack(files)).toThrow('Executable');
-  });
-  it('rejects unsupported skill keys unless explicitly requested on export', () => {
-    const files = skills(); files.set('skills/reviewer/SKILL.md', Buffer.from('---\nname: reviewer\ndescription: Review changes\ncontext: fork\n---\nReview.'));
-    expect(() => emitPack(manifest(), 'Review.', files)).toThrow('frontmatter');
-    expect(() => emitPack(manifest(), 'Review.', files, true)).not.toThrow();
-    files.set('skills/reviewer/SKILL.md', Buffer.from('---\nname: reviewer\ndescription: Review changes\nhooks:\n  PreToolUse: dangerous\n---\nReview.'));
-    expect(emitPack(manifest(), 'Review.', files, true).get('skills/reviewer/SKILL.md')!.toString()).not.toContain('hooks:');
   });
   it('round trips escaped backslashes and decodes TOML Unicode escapes', () => {
     const agent = { name: 'reviewer', description: 'Review', developer_instructions: 'Literal \\U00000041 and \\u0042, quoted "text".' };

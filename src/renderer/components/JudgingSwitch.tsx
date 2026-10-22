@@ -29,7 +29,7 @@ export function JudgingSwitch() {
     void setSetting(on ? { judging: false } : { judging: true, judgingSince: Date.now() }).finally(() => setBusy(false));
   };
   const cost = !estimate || estimate.runsPerDay <= 0 ? t('catalog.judging.costNone') : estimate.perDayUsd != null
-    ? t('catalog.judging.cost', { cost: formatCost(estimate.perDayUsd), runs: estimate.runsPerDay.toLocaleString(locale()), each: formatCost(estimate.reviewUsd ?? 0) })
+    ? t('catalog.judging.cost', { cost: formatCost(estimate.perDayUsd), runs: estimate.runsPerDay.toLocaleString(locale()), each: formatCost(estimate.reviewUsd ?? 0), audits: (estimate.auditsPerDay ?? 0).toLocaleString(locale()) })
     : t('catalog.judging.costNoReview', { runs: estimate.runsPerDay.toLocaleString(locale()) });
   return <section className="judging-switch" data-on={on} data-testid="judging-switch">
     <div className="judging-text">

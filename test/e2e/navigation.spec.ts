@@ -201,9 +201,11 @@ test('copy an internal link and paste it in Ctrl+K: it goes there and highlights
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('view-agents')).toBeVisible();
   await expect(page.locator('[data-sb-id="chat-qa"][data-highlighted="true"]')).toBeVisible();
-  // a page link from its frame
+  // a page link through the palette (the page bar's «Copia link» button is gone, ADR 0125)
   await openPage(page, 'idee');
-  await page.getByTestId('page-copy-link').click();
+  await page.keyboard.press('Control+K');
+  await page.getByTestId('palette-input').fill('Copia il link');
+  await page.getByTestId('palette-item-copylink').click();
   await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toBe('sb://idee');
   await app.close();
 });

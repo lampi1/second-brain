@@ -2,7 +2,7 @@
 // 96 px, English name, what it is for, engine, model tier, trial and customized chips, Avvia), its run numbers, the
 // permissions card (RolePermissions: tool classes and ceiling, each with its "?", ADR 0085), the instructions it runs
 // with, its configuration (tools, permission ceiling, the roles it may launch), the skills it loads at every launch, its
-// versions, its pack actions and the user's milestones (ProgressPanel). "Modifica" opens the editor in place: only the
+// versions, and the user's milestones (ProgressPanel). "Modifica" opens the editor in place: only the
 // behaviour is editable (instructions, engine, model, tier, launches, skills, context; the permissions on their own
 // card); name and summary belong to the role; the character can be swapped for the user's own picture
 // (AgentImagePicker, under the badge). The card back's «Modifica il ruolo» lands straight in the editor (EDIT_ELEMENT, #126):
@@ -29,7 +29,6 @@ import { AgentAvatar } from './AgentAvatar';
 import { useWorkingChats } from './AgentCatalogCard';
 import { AgentImagePicker } from './AgentImagePicker';
 import { AgentReadiness } from './AgentReadiness';
-import { AgentPackDetails } from './AgentPackDetails';
 import { ProgressPanel } from './ProgressPanel';
 import { useBrainModel } from '../store/brain-model';
 import '../styles/agent-studio.css';
@@ -321,7 +320,6 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
             {profile.skills.length ? <div className="bm-chips">{profile.skills.map(s => <button key={s} type="button" className="bm-chip" onClick={() => go({ page: 'skill', arg: s })}>{s}</button>)}</div> : <p>{t('studio.skillsNone')}</p>}
             <p>{t('bm.card.memory')}: {memory?.entries ? <button type="button" className="link-btn" onClick={() => goTarget(`file/${memory.file}`)}>{t('bm.mem.entries', { n: memory.entries })}</button> : t('bm.card.memoryNone')}</p>
             <button type="button" className="link-btn" onClick={() => go({ page: 'skill' })}>{t('bm.studio.manage')}</button>
-            <AgentPackDetails profile={profile} />
           </section>
           <Versions profile={profile} />
         </div>

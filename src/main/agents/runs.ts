@@ -229,12 +229,14 @@ export function readTally(v: unknown): RunTally | null {
   if (!reviews || typeof reviews !== 'object' || Array.isArray(reviews) || !Object.entries(reviews).every(([key, r]) => /^[a-z][a-z0-9_-]{0,79}\/\d+$/.test(key) && r && count(r.runs) && r.runs > 0 && count(r.findings) && count(r.blockingRuns) && count(r.blocking))) return null;
   if (t.decisions !== undefined && !count(t.decisions)) return null;
   if (t.decisionWins !== undefined && (!count(t.decisionWins) || t.decisionWins > ((t.decisions as number | undefined) ?? 0))) return null;
+  if (t.earnedWins !== undefined && (!count(t.earnedWins) || t.earnedWins > (t.ended as number))) return null;
   if ((t.tags !== undefined && !tagTallies(t.tags)) || (t.tagsLost !== undefined && t.tagsLost !== true) || (t.tags !== undefined && t.tagsLost !== undefined)) return null;
   const result = structuredClone(t) as unknown as RunTally;
   if (result.verdictSchema !== 2) {
     // Old rollups mix self-reported silence with independent outcomes. Counts remain, quality is unknown.
     result.verdicts = { success: 0, partial: 0, fail: 0 };
     result.decisionWins = 0;
+    result.earnedWins = 0;
     for (const bucket of Object.values(result.tags ?? {})) for (const tag of Object.values(bucket as Record<string, TagTally>)) tag.verdicts = { success: 0, partial: 0, fail: 0 };
     result.verdictSchema = 2;
   }

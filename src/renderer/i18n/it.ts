@@ -2,7 +2,6 @@ import { appTextIt } from './areas/app-text.it';
 import { brainTextIt } from './areas/brain-text.it';
 import { learningReviewIt } from './areas/learning-review.it';
 import { cloudIt } from './areas/cloud.it';
-import { agentPackIt } from './areas/agent-pack.it';
 import { brainModelIt } from './areas/brain-model.it';
 import { memoryIt } from './areas/memory.it';
 import { statsIt } from './areas/stats.it';
@@ -28,6 +27,7 @@ import { brainLibIt } from './areas/brainLib.it';
 import { SYS_IT } from '@shared/sys';
 import {productIt}from'./areas/product.it';
 import { agentsGridIt } from './areas/agents-grid.it';
+import { levelsIt } from './areas/levels.it';
 import { explainIt } from './areas/explain.it';
 import { agentDetailIt } from './areas/agent-detail.it';
 import { agentImageIt } from './areas/agent-image.it';
@@ -52,7 +52,6 @@ export const it = {
   ...auditIt,
   ...auditExpressionsIt,
   ...componentsIt,
-  ...agentPackIt,
   ...catalogIt,
   ...costsIt,
   ...connectorsIt,
@@ -93,6 +92,7 @@ export const it = {
   ...statsIt,
   ...productIt,
   ...agentsGridIt,
+  ...levelsIt,
   ...explainIt,
   ...agentDetailIt,
   ...agentImageIt,

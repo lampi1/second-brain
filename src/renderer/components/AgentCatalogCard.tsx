@@ -69,7 +69,7 @@ const pct = (v: number) => new Intl.NumberFormat(locale(), { style: 'percent', m
 /** The level (with its verified successes and the way to the next one) and the performance gauge, each with its "?"
  *  formula. An agent with no verified success is a Lv 1 "Recluta" at 0 of 5; before agents:metrics answers both read as
  *  unknown. */
-const NONE: AgentStanding = { runs: 0, wins: 0, level: 1, levelAt: 0, nextAt: 5, progress: 0, performance: null, evaluated: 0, minRuns: 5, sources: { human: 0, review: 0, facts: 0, orchestrator: 0, self: 0 } };
+const NONE: AgentStanding = { runs: 0, wins: 0, level: 1, levelAt: 0, nextAt: 5, progress: 0, performance: null, evaluated: 0, minRuns: 5, sources: { human: 0, review: 0, graded: 0, facts: 0, orchestrator: 0, chain: 0, self: 0 } };
 function Standing({ id, standing: s }: { id: string; standing: AgentStanding | null }) {
   const left = s && s.nextAt !== null ? s.nextAt - s.wins : 0;
   const perf = s?.performance ?? null;
@@ -79,7 +79,7 @@ function Standing({ id, standing: s }: { id: string; standing: AgentStanding | n
     <section className="catalog-level" aria-label={t('agentsGrid.level')} data-testid={`catalog-level-${id}`} data-level={s?.level}>
       <h4>{t('agentsGrid.level')}
         <HelpTip title={t('agentsGrid.levelHelpTitle')} wide testid={`catalog-level-help-${id}`}>
-          <p>{t('agentsGrid.levelHelp1')}</p><p>{t('agentsGrid.levelHelp2')}</p><p>{t('agentsGrid.levelHelp3')}</p>
+          <p>{t('agentsGrid.levelHelp1')}</p><p>{t('levels.verified')}</p><p>{t('agentsGrid.levelHelp2')}</p><p>{t('agentsGrid.levelHelp3')}</p>
           {s && <p className="catalog-help-now">{t('agentsGrid.levelHelpEx', { wins: s.wins, runs: s.runs, level: s.level, next: s.nextAt === null ? null : s.level + 1, left })}</p>}
         </HelpTip></h4>
       <p className="catalog-level-value">{s ? <><b>{t('agentsGrid.levelShort', { n: s.level })}</b> <span>{t('agentsGrid.levelTitle', { n: s.level })}</span>

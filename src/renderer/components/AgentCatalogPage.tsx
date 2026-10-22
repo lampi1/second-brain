@@ -7,7 +7,6 @@ import type { AgentMetrics } from '@shared/agents';
 import { AgentApprovals } from './AgentApprovals';
 import { go } from '../actions';
 import { t } from '../i18n';
-import { requestPack } from '../lib/agent-pack-ui';
 import { sb } from '../sb';
 import { refreshAgents, useAgents } from '../store/agents';
 import { useApp } from '../store/store';
@@ -49,8 +48,7 @@ export function AgentCatalogPage() {
   const working = profiles.filter(p => !p.trial && Object.values(chats).some(c => c.agent?.id === p.id && !c.closedAt && isBusy(c))).length;
   const trial = profiles.filter(p => p.trial).length;
   return <section className="agent-overview" aria-label={t('catalog.title')} data-testid="agent-overview">
-    <header className="catalog-head"><div><h2>{t('catalog.title')}</h2><p>{t('catalog.subtitle')}</p></div>
-      <button type="button" className="btn btn-ghost" onClick={() => requestPack({ kind: 'import' })} data-testid="agent-import">{t('pack.import')}</button></header>
+    <header className="catalog-head"><div><h2>{t('catalog.title')}</h2><p>{t('catalog.subtitle')}</p></div></header>
     <JudgingSwitch />
     <AgentApprovals />
     <p className="catalog-intro">{t('catalog.intro')}</p>

@@ -32,7 +32,7 @@ function world(opts: { demo?: boolean; runs?: AgentRun[]; applied?: (c: BrainCha
   const brain = opts.demo ? writeDemoBrain(path.join(base, 'brain'), NOW) : path.join(base, 'brain');
   if (!opts.demo) { fs.mkdirSync(brain); put(brain, 'brain.json', JSON.stringify({ machinery: 'product-v1', rules: { topicFiles: [], appRules: true } })); }
   const catalog = new AgentCatalogService({ userData: data, models });
-  const flows = new AgentPackFlows({ catalog, brainRoot: () => brain, version: '0.1.0', guards: () => [], scan: async () => ({ ok: true }), pickImport: async () => null, pickExport: async () => null, tempRoot: base, runtimeRoot: path.join(base, 'runtime'),
+  const flows = new AgentPackFlows({ catalog, brainRoot: () => brain, tempRoot: base, runtimeRoot: path.join(base, 'runtime'),
     sharedSkills: () => { const dir = path.join(brain, '.claude', 'skills'); try { return fs.readdirSync(dir).map(name => ({ name, folder: path.join(dir, name) })); } catch { return []; } } });
   catalog.onKnowhowChange((p, previous) => flows.publishCurrent(p, previous));
   const learning = new AgentPackLearning(flows, data);

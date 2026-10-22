@@ -1,9 +1,10 @@
-// Electron-facing pack dependencies, shared by real and isolated demo wiring. Dialogs keep output paths in main.
+// Electron-facing know-how dependencies, shared by real and isolated demo wiring: the roles' runtime skills and know-how
+// (pack/flows.ts), the lessons queue (pack/learning.ts) and the shareable brain zip (brain:share, ADR 0088). The agent
+// pack import/export is gone (ADR 0125). Dialogs keep output paths in main.
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { app, dialog, shell } from 'electron';
-import { spawn } from 'node:child_process';
+import { dialog } from 'electron';
 import type { BrainService } from '../../services';
 import type { AgentCatalogService } from '../catalog';
 import { AgentPackFlows } from './flows';
@@ -11,8 +12,6 @@ import { AgentPackLearning } from './learning';
 import { discoverDomains, domainsOfConfig } from '../../brain/domains';
 import { appScanner, findGuard, scanTree } from '../../brain/guard';
 import { electronNode } from '../../brain/node';
-import { readLocal } from '../local-store';
-import type { AgentRun } from '../../../shared/agents';
 import type { BrainShareResult } from '../../../shared/contract';
 import { isWorkRole } from '../../../shared/roles';
 import { buildBrainShare } from './brain-share';
@@ -33,22 +32,7 @@ export function createAgentPacks(userData: string, brain: BrainService, catalog:
     return guard ? { ...guard, allow: path.join(path.dirname(guard.deny), 'allow-agentpacks.txt') } : null;
   });
   let toolsCache: { root: string; dir: string; at: number } | null = null;
-  const packs: AgentPackFlows = new AgentPackFlows({ catalog, brainRoot: root, version: app.getVersion(), guards, runtimeRoot: path.join(userData, 'agent-pack-runtime'),
-    scan: folder => scanTree(folder, guards(), electronNode()),
-    openFile: file => new Promise<void>((resolve, reject) => {
-      // Never invoke a script through its shell association: this action is an editor, not an execution grant.
-      if (process.platform !== 'win32') { shell.showItemInFolder(file); resolve(); return; }
-      const child = spawn('notepad.exe', [file], { shell: false, detached: true, stdio: 'ignore' });
-      child.once('error', reject); child.once('spawn', () => { child.unref(); resolve(); });
-    }),
-    pickImport: async () => {
-      const result = await dialog.showOpenDialog({ properties: ['openFile', 'openDirectory'], filters: [{ name: 'Agent pack', extensions: ['sbagent', 'zip', 'md', 'toml'] }] });
-      return result.canceled ? null : result.filePaths[0] ?? null;
-    },
-    pickExport: async (target, name) => {
-      if (target === 'sbagent') { const r = await dialog.showSaveDialog({ defaultPath: `${name}.sbagent`, filters: [{ name: 'Agent pack', extensions: ['sbagent'] }] }); return r.canceled ? null : r.filePath ?? null; }
-      const r = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] }); return r.canceled ? null : r.filePaths[0] ?? null;
-    },
+  const packs: AgentPackFlows = new AgentPackFlows({ catalog, brainRoot: root, runtimeRoot: path.join(userData, 'agent-pack-runtime'),
     sharedSkills: () => {
       const brain = root() ?? null;
       // the app's rendered copy of its shipped skills (#146): only a brain the app made has one; a failed render is logged
@@ -60,14 +44,6 @@ export function createAgentPacks(userData: string, brain: BrainService, catalog:
         catch (e) { log.warn('agents', 'App skills not available', { cause: e instanceof Error ? e.message : String(e), hint: 'Reinstall the release: its brain template could not be rendered' }); }
       }
       return skillsIn(skillFolders({ root: brain, home: demo ? null : os.homedir(), appTools }));
-    },
-    stats: id => {
-      const store = readLocal(path.join(userData, 'agent-runs.json')) as { runs?: AgentRun[]; rollups?: unknown[] } | undefined;
-      if (store?.rollups?.length) throw new Error('Anonymous summary unavailable for compacted run history');
-      const runs = (store?.runs ?? []).filter(r => r.agentId === id), profile = packs.profile(id);
-      return { runs: runs.length, successHuman: runs.filter(r => r.outcome?.basis === 'human' && r.outcome.verdict === 'success').length,
-        failHuman: runs.filter(r => r.outcome?.basis === 'human' && r.outcome.verdict === 'fail').length, versions: profile.version,
-        monthsUsed: Math.max(0, Math.floor((Date.now() - profile.createdAt) / (30.4375 * 86400000))) };
     },
   });
   // Every version change that swaps the know-how (a restore, a trial decision, an Annulla) republishes it.
