@@ -8,8 +8,8 @@ import { closeModal } from '../../renderer/store/ui';
 import { engines, guidePrompt, replyProof } from './model';
 import type { SetupEngine } from './model';
 import type { AiSetupPort, EngineOption } from './contract';
-import type { ChatItem, CliStatus } from '../../shared/contract';
-export function createAiSetupPort(initial: SetupState, language: 'it' | 'en', onConnected?: () => void): AiSetupPort {
+import type { ChatItem, CliStatus, Lang } from '../../shared/contract';
+export function createAiSetupPort(initial: SetupState, language: Lang, onConnected?: () => void): AiSetupPort {
   let preferences = initial.preferences;
   const persist = async (guide?: SetupGuide) => { const value = await saveSetup({ ...preferences, ...(guide ? { guide } : {}) }, guide?.stage === 'guided' ? 'completed' : 'draft'); preferences = value.preferences; };
   const trust = async (engine: SetupEngine) => {
@@ -39,7 +39,7 @@ export function createAiSetupPort(initial: SetupState, language: 'it' | 'en', on
       const current = await sb.invoke('app:info', undefined);
       if (current.brainProblem || current.brainRoot !== root) throw new Error('AI_SETUP_MEMORY_CHANGED');
       await sb.invoke('cli:status', { harness: engine, checkLogin: true });
-      const chat = await createChat({ harness: engine, cwd: root, title: language === 'it' ? 'Il tuo spazio, insieme' : 'Your workspace, together', prompt: guidePrompt(language), permissionMode: 'default' });
+      const chat = await createChat({ harness: engine, cwd: root, title: { it: 'Il tuo spazio, insieme', en: 'Your workspace, together', de: 'Dein Bereich, gemeinsam' }[language], prompt: guidePrompt(language), permissionMode: 'default' });
       if (!chat) throw new Error('AI_SETUP_START');
       await sb.invoke('settings:set', { orchestratorChats: { harness: engine } });
       return chat.id;

@@ -10,6 +10,7 @@ import type { ChatSummary, TasksState, PendingRequest, RunInfo } from '../../sha
 import { chatName } from '../../shared/orchestrator';
 import { redact } from '../log';
 import { engineLabel } from '../engines/registry';
+import { uiLocale } from '../locale';
 
 export interface DigestInput {
   chats: ChatSummary[];
@@ -27,7 +28,7 @@ export interface DigestInput {
 }
 
 const one = (s: string | undefined, n: number): string => { const t = (s ?? '').replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
-const hhmm = (t: number): string => new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }).format(new Date(t));
+const hhmm = (t: number): string => new Intl.DateTimeFormat(uiLocale(), { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }).format(new Date(t));
 /** "3 min", "2 h", "ieri" */
 export function ago(ms: number): string {
   const m = Math.max(0, Math.round(ms / 60_000));

@@ -709,9 +709,13 @@ export interface Usage {
 /** Windows toasts: only urgent kinds (default), urgent + normal, or none (in-app feed only). */
 export type ToastLevel = 'urgent' | 'normal' | 'off';
 export type ThemeMode = 'dark' | 'light' | 'system';
-/** The UI language (ADR 0057): system = Windows' language (Italian when it is Italian, English otherwise) */
-export type LanguageMode = 'system' | 'it' | 'en';
-export type Lang = 'it' | 'en';
+/** The UI language (ADR 0057, German ADR 0117): system = Windows' language (Italian when it is Italian, German when it
+ *  is German, English otherwise). 'de' is German as written in Austria (dates and numbers de-AT). */
+export type LanguageMode = 'system' | 'it' | 'en' | 'de';
+export type Lang = 'it' | 'en' | 'de';
+/** every UI language, in the order the pickers show them */
+export const LANGS: readonly Lang[] = ['it', 'en', 'de'];
+export const isLang = (v: unknown): v is Lang => v === 'it' || v === 'en' || v === 'de';
 /** warn = feed + toast · ask = also a 'budget:alert' the chat manager turns into a "stop or continue?" question · off */
 export type BudgetMode = 'warn' | 'ask' | 'off';
 export interface BudgetLimits { mode: BudgetMode; dailyUsd: number | null; perChatUsd: number | null }

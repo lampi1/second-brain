@@ -1,3 +1,5 @@
+import { appTextIt } from './areas/app-text.it';
+import { brainTextIt } from './areas/brain-text.it';
 import { learningReviewIt } from './areas/learning-review.it';
 import { cloudIt } from './areas/cloud.it';
 import { agentPackIt } from './areas/agent-pack.it';
@@ -96,13 +98,16 @@ export const it = {
   ...toolsIt,
   ...brainPagesIt,
   ...brainLibIt,
+  ...brainTextIt,
+  ...appTextIt,
   ...SYS_IT,
   'common.close': 'Chiudi',
   'common.cancel': 'Annulla',
   'common.save': 'Salva',
   'settings.language': 'Lingua',
-  'settings.languageDesc': 'Lingua dell’interfaccia. Come il sistema = italiano se Windows è in italiano, altrimenti inglese.',
+  'settings.languageDesc': 'Lingua dell’interfaccia. Come il sistema = italiano o tedesco se Windows è in una delle due lingue, altrimenti inglese.',
   'settings.language.system': 'Come il sistema',
   'settings.language.it': 'Italiano',
   'settings.language.en': 'English',
+  'settings.language.de': 'Deutsch',
 };

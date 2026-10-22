@@ -4,10 +4,12 @@
 // beside each part cites the file it was read from; a statement about what the app does NOT do yet goes in `target`,
 // never in `points`. Kept as data, not JSX, so updating a card is a text edit. Also holds the pure helpers of «Discuti»:
 // the text that carries a card into a chat (discussText) and the message «Discuti» sends to the Orchestrator
-// (orchestratorText).
+// (orchestratorText). German (ADR 0117) is not written beside each pair: concept-guide.de.ts maps every English text to
+// its German one, and textOf falls back to English when an entry is missing.
+import { GUIDE_DE } from './concept-guide.de';
 
-export type GuideLang = 'it' | 'en';
-/** One text in both UI languages (ADR 0057). */
+export type GuideLang = 'it' | 'en' | 'de';
+/** One text in Italian and English (ADR 0057); German comes from GUIDE_DE. */
 export type Bi = Readonly<{ it: string; en: string }>;
 /** A "Dettagli tecnici" row: a label (data shape, files, thresholds, where it lives) and its text. */
 export interface ConceptTech { readonly label: Bi; readonly text: Bi }
@@ -1194,27 +1196,27 @@ export const CONCEPTS: readonly ConceptCard[] = [
   },
 ];
 
-export const textOf = (t: Bi, lang: GuideLang): string => t[lang];
+export const textOf = (t: Bi, lang: GuideLang): string => (lang === 'de' ? GUIDE_DE[t.en] ?? t.en : t[lang]);
 
 /** The card as plain text for a chat: title, summary, numbered points, analogy, technical part, target, sources. */
 export function cardText(card: ConceptCard, lang: GuideLang): string {
   const L = (t: Bi) => textOf(t, lang);
-  const h = (it: string, en: string) => (lang === 'en' ? en : it);
+  const h = (it: string, en: string, de: string) => (lang === 'en' ? en : lang === 'de' ? de : it);
   const lines = [
     `# ${L(card.title)}`,
     L(card.summary),
     '',
-    h('Come funziona:', 'How it works:'),
+    h('Come funziona:', 'How it works:', 'So funktioniert es:'),
     ...card.points.map((p, i) => `${i + 1}. ${L(p)}`),
     '',
-    `${h('Analogia', 'Analogy')}: ${L(card.analogy)}`,
+    `${h('Analogia', 'Analogy', 'Vergleich')}: ${L(card.analogy)}`,
     '',
-    h('Dettagli tecnici:', 'Technical details:'),
+    h('Dettagli tecnici:', 'Technical details:', 'Technische Details:'),
     ...card.tech.map(x => `- ${L(x.label)}: ${L(x.text)}`),
   ];
-  if (card.coming?.length) lines.push('', h('In arrivo (non ancora su main):', 'Coming (not on main yet):'), ...card.coming.map(x => `- PR #${x.pr}: ${L(x.text)}`));
-  if (card.target?.length) lines.push('', h('Obiettivo, non ancora così oggi:', 'Target, not today’s behaviour:'), ...card.target.map(x => `- ${L(x)}`));
-  lines.push('', `${h('Fonti nel codice', 'Sources in the code')}: ${card.sources.join(', ')}`);
+  if (card.coming?.length) lines.push('', h('In arrivo (non ancora su main):', 'Coming (not on main yet):', 'In Arbeit (noch nicht auf main):'), ...card.coming.map(x => `- PR #${x.pr}: ${L(x.text)}`));
+  if (card.target?.length) lines.push('', h('Obiettivo, non ancora così oggi:', 'Target, not today’s behaviour:', 'Ziel, heute noch nicht so:'), ...card.target.map(x => `- ${L(x)}`));
+  lines.push('', `${h('Fonti nel codice', 'Sources in the code', 'Quellen im Code')}: ${card.sources.join(', ')}`);
   return lines.join('\n');
 }
 
@@ -1222,6 +1224,8 @@ export function cardText(card: ConceptCard, lang: GuideLang): string {
 export function discussText(card: ConceptCard, lang: GuideLang): string {
   const ask = lang === 'en'
     ? 'Explain this concept of the second-brain app to me, a developer, a bit more technically. Check the source files above before answering and tell me if something here is out of date.'
+    : lang === 'de'
+    ? 'Erklär mir, einem Entwickler, dieses Konzept der App second-brain etwas technischer. Prüf vor der Antwort die Quelldateien oben und sag mir, ob hier etwas veraltet ist.'
     : 'Spiegami questo concetto dell’app second-brain, a me che sono uno sviluppatore, andando un po’ sul tecnico. Controlla i file sorgente qui sopra prima di rispondere e dimmi se qualcosa qui è superato.';
   return `${cardText(card, lang)}\n\n${ask}`;
 }
@@ -1231,6 +1235,8 @@ export function discussText(card: ConceptCard, lang: GuideLang): string {
 export function orchestratorText(card: ConceptCard, lang: GuideLang): string {
   const ask = lang === 'en'
     ? `I want to discuss the concept «${card.title.en}» from the app's guide. Explain it to me yourself; if it needs reading the code first, delegate that to a Scout and tell me what it found.`
+    : lang === 'de'
+    ? `Ich möchte das Konzept «${textOf(card.title, 'de')}» aus dem Leitfaden der App besprechen. Erklär es mir selbst; wenn dafür zuerst der Code gelesen werden muss, gib das an einen Scout ab und sag mir, was er gefunden hat.`
     : `Voglio discutere il concetto «${card.title.it}» della guida dell'app. Spiegamelo tu; se prima serve leggere il codice, delega la lettura a uno Scout e dimmi cosa ha trovato.`;
   return `${ask}\n\n---\n${discussText(card, lang)}`;
 }

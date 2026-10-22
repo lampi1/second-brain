@@ -42,6 +42,8 @@ import { checkRunIds, demoEstimateRuns, estimatesState, mergeRuns } from './agen
 import { macroTasks } from '../shared/macro-tasks';
 import { judgingEstimate } from './agents/judge-sample';
 import { systemLang } from './lang';
+import { setUiLangSource, uiLang } from './locale';
+import { isLang } from '../shared/contract';
 import { ProfileService } from './brain/profile';
 import { AgentImageStore, nativeReencode } from './agents/agent-images';
 import { createAppUpdates } from './update/wiring';
@@ -86,6 +88,7 @@ app.whenReady().then(async () => {
   // engines' Job Objects (ADR 0026): the helper loads while the services start; engines started before it is ready wait
   if (process.env.SB_DEMO !== '1') jobGuard.start(path.join(app.getPath('userData'), 'jobguard'));
   const s = await createServices({ emitter, window: () => win, userData: app.getPath('userData') });
+  setUiLangSource(() => { const l = s.brain.settings().language; return isLang(l) ? l : systemLang(); });
   // the Log page (ADR 0111): the app's own events, readable and live, kept 7 days at most; zero tokens
   const activity = attachActivity({ userData: app.getPath('userData'), emitter, chats: () => s.chats.list(), brainRoot: () => s.brain.info().brainRoot });
   if (process.env.SB_DEMO === '1') journal.seed(demoLog(process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now()));
@@ -139,7 +142,7 @@ app.whenReady().then(async () => {
     file: path.join(app.getPath('userData'), 'headline.json'),
     complete: (req, signal) => s.engines.text.complete(req, signal),
     settings: () => ({ on: s.brain.settings().pulse?.headline.on !== false }),
-    lang: () => { const l = s.brain.settings().language; return l === 'it' || l === 'en' ? l : systemLang(); },
+    lang: uiLang,
     material: () => {
       const d = new Date(), day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       return { chats: s.chats.list(), nowMd: readBrain('now.md'), journal: readBrain(path.join('journal', `${day}.md`)), aiErrors: readBrain('ai-errors.md') };

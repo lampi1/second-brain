@@ -17,6 +17,7 @@ import path from 'node:path';
 import { modelKey, priceOf, warnUnpriced } from '../chats/cursor-prices';
 import { romeDay } from './live';
 import { sharedDir } from '../platform';
+import { uiLocale } from '../locale';
 
 /** One turn: tokens as billing counts them (input = only the uncached part). */
 export interface LedgerRow {
@@ -230,8 +231,8 @@ export function cursorDay(ledger: LedgerRow[], cal: Calibration | null, csv: Csv
   return { usd: unknown ? null : Math.round((csvUsd + est) * 1e6) / 1e6, exact, margin, turns, unpriced, chats, todayChats, unpricedChats: [...unpricedChats], unpricedModels: [...unpricedModels], note };
 }
 
-const hhmm = (t: number) => new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }).format(new Date(t));
-const ddmm = (t: number) => new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit' }).format(new Date(t));
+const hhmm = (t: number) => new Intl.DateTimeFormat(uiLocale(), { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }).format(new Date(t));
+const ddmm = (t: number) => new Intl.DateTimeFormat(uiLocale(), { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit' }).format(new Date(t));
 
 /** The hook Cursor runs at every `stop` (and that an `agent -p` runner may pipe its result line into). Plain Node, no
  *  imports from the app (it runs outside it), never blocks Cursor: any problem → no line, exit 0, empty answer. */

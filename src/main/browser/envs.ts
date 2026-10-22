@@ -9,6 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserSessionStatus } from '../../shared/contract';
+import { uiLocale } from '../locale';
 
 export interface EnvRecord { id: string; createdAt: number; lastUsedAt: number; lastLoginAt: number | null; hosts: string[]; lastUrl?: string; agents?: boolean }
 
@@ -65,7 +66,7 @@ export function isLoginUrl(url: string): boolean {
 }
 
 const DAY = 24 * 3600 * 1000;
-const hhmm = (t: number) => new Date(t).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+const hhmm = (t: number) => new Date(t).toLocaleString(uiLocale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
 /** Session status from what is known: auth cookies (expiry in ms, null = until the app closes), whether an auth cookie
  *  was seen before in this environment, and whether its last page was a sign-in page. Detail in Italian (shown in the UI). */

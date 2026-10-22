@@ -57,7 +57,24 @@ export const BUILTIN: Record<Lang, readonly string[]> = {
     'The most expensive token is the one spent saying «you are right, sorry».',
     'Today we merge. Tomorrow we cry. The day after, we write the ADR.',
   ],
+  de: [
+    'Die Agenten arbeiten heute hart. Einer wollte Urlaub: Wir haben ihn neu gestartet.',
+    'Dem Budget geht es bestens. Es hebt nur nicht mehr ab.',
+    'Jeder wartende Chat ist eine Seele, die auf ein «Ja» wartet, das nie kommt.',
+    'Heute wurde kein Agent misshandelt. Zwei wurden komprimiert, aber liebevoll.',
+    'Der Test ist auch auf main rot. Wenigstens sind wir konsequent.',
+    'Der Orchestrator sagt, alles passt. Der Orchestrator sagt immer, alles passt.',
+    'Ein Agent hat die Ursache des Bugs gefunden: Es war ein anderer Agent.',
+    'Kontext bei 199.000 Token: Man spürt die dünne Luft der Komprimierung.',
+    'Wir haben die KI gebeten, keine Fehler mehr zu machen. Sie hat es in ai-errors.md notiert.',
+    'Der Friedhof der geschlossenen Chats wächst. Frische Blumen auf «endgültiger Fix v3».',
+    'Der teuerste Token ist der, mit dem man «du hast recht, sorry» sagt.',
+    'Heute wird gemergt. Morgen wird geweint. Übermorgen schreiben wir das ADR.',
+  ],
 };
+const LOCALE: Record<Lang, string> = { it: 'it-IT', en: 'en-GB', de: 'de-AT' };
+const TODAY: Record<Lang, string> = { it: 'Oggi', en: 'Today', de: 'Heute' };
+export const LANG_NAME: Record<Lang, string> = { it: 'Italian', en: 'English', de: 'German (as written in Austria)' };
 
 /** One line of the built-in list, the same for a whole hour (a frozen demo always shows the same one). */
 export const builtinLine = (lang: Lang, now: number): string => { const l = BUILTIN[lang]; return l[Math.floor(now / HOUR) % l.length]!; };
@@ -92,11 +109,11 @@ const lastLines = (text: string, n: number, keep: (l: string) => boolean = l => 
 
 /** The prompt: the day's facts, compact and scrubbed, plus the lines already used. */
 export function buildPrompt(d: DigestInput): { system: string; prompt: string } {
-  const day = new Date(d.now).toLocaleString(d.lang === 'it' ? 'it-IT' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const day = new Date(d.now).toLocaleString(LOCALE[d.lang], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   const chats = d.chats.slice(-15).map(c => `- ${scrub(one(c.title, 80))} · ${c.state} · ${scrub(one(c.lastText || '-', 120))} · $${c.costUsd.toFixed(2)}`);
   const cost = d.chats.reduce((n, c) => n + (Number.isFinite(c.costUsd) ? c.costUsd : 0), 0);
   const parts = [
-    `${d.lang === 'it' ? 'Oggi' : 'Today'}: ${day}.`,
+    `${TODAY[d.lang]}: ${day}.`,
     chats.length ? `Chats (title · state · last line · cost):\n${chats.join('\n')}` : 'Chats: none open.',
     `Cost of the chats so far: $${cost.toFixed(2)}.`,
   ];
@@ -114,7 +131,7 @@ export function buildPrompt(d: DigestInput): { system: string; prompt: string } 
     'It must make him laugh out loud: absurd, slightly macabre (agents dying, chats in the graveyard, budgets bleeding, endless loops), dry and specific.',
     'Build it on the real events below (chat titles, stuck or failing agents, AI mistakes he corrected, costs, the day and hour); a generic joke is a failure.',
     'Gentle self-irony only: never mean about real people, no slurs. Never quote paths, ids, e-mail addresses or anything that looks like a credential.',
-    `At most 140 characters, one or two sentences, no hashtags, no emoji, no surrounding quotes. Write in ${d.lang === 'it' ? 'Italian' : 'English'}.`,
+    `At most 140 characters, one or two sentences, no hashtags, no emoji, no surrounding quotes. Write in ${LANG_NAME[d.lang]}.`,
     'Write 5 different candidates, then pick the funniest. Answer with JSON only: {"candidates": ["...", "..."], "best": <index>}.',
   ].join('\n');
   return { system, prompt };

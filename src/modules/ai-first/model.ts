@@ -1,5 +1,5 @@
 // Pure AI-first setup policy: only a real completed provider reply counts, never presence/login alone.
-import type { ChatItem, CliStatus, Harness } from '../../shared/contract';
+import type { ChatItem, CliStatus, Harness, Lang } from '../../shared/contract';
 export const engines = ['claude', 'codex', 'cursor'] as const;
 export type SetupEngine = typeof engines[number];
 export const engineNames: Record<SetupEngine, string> = { claude: 'Claude Code', codex: 'Codex', cursor: 'Cursor' };
@@ -15,7 +15,8 @@ export function replyProof(items: ChatItem[]): 'pending' | 'verified' | 'failed'
   return items.slice(start + 1, end).some(item => item.kind === 'assistant' && !!item.text.trim() && !item.streaming) ? 'verified' : 'failed';
 }
 export function installation(status: CliStatus | undefined): 'found' | 'missing' | 'unknown' { return !status ? 'unknown' : status.found ? 'found' : 'missing'; }
-export function guidePrompt(language: 'it' | 'en'): string {
+export function guidePrompt(language: Lang): string {
+  if (language === 'de') return guidePrompt('en').replace('Reply warmly in simple English.', 'Reply warmly in simple German, as written in Austria, using "du".');
   return language === 'it'
     ? 'Sei la guida iniziale di second-brain. La persona ha scelto questa IA per essere aiutata a configurare il proprio spazio. Rispondi in italiano, con calore e semplicità. In questa prima risposta saluta brevemente e chiedi UNA sola cosa: come lavora la persona (in azienda, in autonomia, studio o altro). Poi accompagna la persona in chat, una domanda alla volta, per conoscere obiettivi, strumenti, cartelle e ruolo preferito. Non inferire permessi da ruolo o risposte. Non usare strumenti, leggere file o eseguire comandi durante la prima risposta. Non chiedere password, token o credenziali: i login restano negli strumenti ufficiali. Proponi preferenze e riepilogale per conferma prima di salvarle. Non cambiare permessi, impostazioni dei motori o sistemi condivisi. La memoria locale è già predisposta; non chiedere di scegliere una cartella per cominciare.'
     : 'You are the first-run guide for second-brain. The person selected this AI to help set up their workspace. Reply warmly in simple English. In this first reply greet them briefly and ask ONE question: how they work (in an organization, independently, studying, or otherwise). Then guide them in this chat, one question at a time, through goals, tools, work folders and preferred role. Never infer permissions from roles or answers. Do not use tools, read files or execute commands during the first response. Never ask for passwords, tokens or credentials; sign-in stays in official tools. Propose preferences and summarize them for confirmation before saving. Do not change permissions, engine settings or shared systems. Local memory is already prepared; do not ask them to choose a folder to begin.';

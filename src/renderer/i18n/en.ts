@@ -1,3 +1,5 @@
+import { appTextEn } from './areas/app-text.en';
+import { brainTextEn } from './areas/brain-text.en';
 import { learningReviewEn } from './areas/learning-review.en';
 import { cloudEn } from './areas/cloud.en';
 import { agentPackEn } from './areas/agent-pack.en';
@@ -95,13 +97,16 @@ export const en: Dict = {
   ...toolsEn,
   ...brainPagesEn,
   ...brainLibEn,
+  ...brainTextEn,
+  ...appTextEn,
   ...SYS_EN,
   'common.close': 'Close',
   'common.cancel': 'Cancel',
   'common.save': 'Save',
   'settings.language': 'Language',
-  'settings.languageDesc': 'The interface language. Same as the system = Italian when Windows is in Italian, English otherwise.',
+  'settings.languageDesc': 'The interface language. Same as the system = Italian or German when Windows is set to one of them, English otherwise.',
   'settings.language.system': 'Same as the system',
   'settings.language.it': 'Italiano',
   'settings.language.en': 'English',
+  'settings.language.de': 'Deutsch',
 };
