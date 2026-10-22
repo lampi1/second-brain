@@ -70,7 +70,7 @@ const pct = (v: number) => new Intl.NumberFormat(locale(), { style: 'percent', m
 /** The level (with its verified successes and the way to the next one) and the performance gauge, each with its "?"
  *  formula. An agent with no verified success is a Lv 1 "Recluta" at 0 of 5; before agents:metrics answers both read as
  *  unknown. */
-const NONE: AgentStanding = { runs: 0, wins: 0, level: 1, levelAt: 0, nextAt: 5, progress: 0, performance: null, evaluated: 0, minRuns: 5, sources: { human: 0, review: 0, graded: 0, facts: 0, orchestrator: 0, chain: 0, self: 0 } };
+const NONE: AgentStanding = { runs: 0, wins: 0, level: 1, levelAt: 0, nextAt: 5, progress: 0, performance: null, evaluated: 0, minRuns: 5, sources: { human: 0, review: 0, receipts: 0, graded: 0, facts: 0, orchestrator: 0, chain: 0, self: 0 } };
 function Standing({ id, standing: s }: { id: string; standing: AgentStanding | null }) {
   const left = s && s.nextAt !== null ? s.nextAt - s.wins : 0;
   const perf = s?.performance ?? null;

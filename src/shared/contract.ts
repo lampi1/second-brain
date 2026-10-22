@@ -261,7 +261,9 @@ export type ChatItem =
   | { kind: 'user'; id: string; at: number; text: string; images?: number; thumbs?: string[]; from?: string }
   | { kind: 'assistant'; id: string; at: number; text: string; streaming?: boolean }
   | { kind: 'thinking'; id: string; at: number; text: string }
-  | { kind: 'tool'; id: string; at: number; name: string; summary: string; input: unknown; status: 'running' | 'ok' | 'error'; output?: string; diff?: FileDiff[] }
+  /** exitCode: a shell command's exit code, only when its engine said it (Claude's Bash result, Codex's exitCode, an ACP
+   *  rawOutput that carries one); absent = unknown (the run's receipts, agents/receipts.ts, ADR 0130) */
+  | { kind: 'tool'; id: string; at: number; name: string; summary: string; input: unknown; status: 'running' | 'ok' | 'error'; output?: string; diff?: FileDiff[]; exitCode?: number }
   /** continued = the divider of an invisible continuation (ADR 0031): the items above it are the previous session
    *  (shown folded), its note is the hand-off it starts from */
   // text: the English rendering, for agents, logs and items saved before this field existed. When code is set, the

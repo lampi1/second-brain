@@ -3,7 +3,8 @@ import type { catalogIt } from './catalog.it';
 export const catalogDe: typeof catalogIt = {
   // the Agenti page's review switch (JudgingSwitch.tsx)
   'catalog.judging.title': 'Prüfung von Level und Leistung aktivieren',
-  'catalog.judging.onDesc': 'Ein: Jede erledigte Aufgabe wird von einem Sentinel in einer neuen Sitzung geprüft. Level und Leistung beruhen auf echten Urteilen.',
+  'catalog.judging.onDesc': 'Ein: Jede erledigte Aufgabe wird von einem Sentinel in einer neuen Sitzung geprüft, außer denen, die die Tests des Projekts schon entscheiden. Level und Leistung beruhen auf echten Urteilen.',
+  'catalog.judging.receipts': (p: { runs: string }) => `Weitere ${p.runs} Aufgaben pro Tag entscheiden ihre Belege (die nach der letzten Änderung ausgeführten Tests und Prüfungen): keine Prüfung, keine Kosten.`,
   'catalog.judging.offDesc': 'Aus: keine Prüfungen. Level und Leistung zählen nur deine Bewertungen, die des Orchestrators und die Fakten.',
   'catalog.judging.cost': (p: { cost: string; runs: string; each: string; audits: string }) => `Geschätzte Kosten: etwa ${p.cost} pro Tag (${p.runs} Aufgaben pro Tag × ${p.each} pro Prüfung, dazu ${p.audits} Zweitprüfungen pro Tag, die den Prüfer prüfen).`,
   'catalog.judging.costNoReview': (p: { runs: string }) => `Geschätzte Kosten: ${p.runs} Prüfungen pro Tag; der Preis einer Prüfung erscheint nach der ersten.`,

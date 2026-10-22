@@ -256,6 +256,14 @@ interface Ask {
 export const KIND_NAME: Record<string, string> = {
   execute: 'Shell', read: 'Read', edit: 'Edit', delete: 'Delete', move: 'Move', search: 'Search', fetch: 'Fetch', think: 'Think', switch_mode: 'Mode', other: 'Tool',
 };
+/** An execute call's exit code (the run's receipts, ADR 0130), only when its rawOutput carries one: ACP itself defines
+ *  no exit code (a terminal's exitStatus is only reachable through client terminals, which the app does not offer), so
+ *  a Cursor command whose rawOutput says nothing stays unknown; its completed/failed status is never read as one. */
+export function acpExitCode(rawOutput: unknown): { exitCode?: number } {
+  const out = rawOutput && typeof rawOutput === 'object' && !Array.isArray(rawOutput) ? rawOutput as Obj : {};
+  const v = out.exitCode ?? out.exit_code ?? (out.exitStatus && typeof out.exitStatus === 'object' ? (out.exitStatus as Obj).exitCode : undefined);
+  return Number.isSafeInteger(v) && (v as number) >= 0 ? { exitCode: v as number } : {};
+}
 const PLAN_Q = 'Approvi il piano?';
 // The ACP vocabulary the app knows (drift.ts reports anything else): stop reasons of session/prompt, updates it
 // knowingly ignores, the protocol version it speaks. Checked against Cursor CLI 2026.07.23 and agentclientprotocol.com.
@@ -1191,6 +1199,7 @@ export class AcpSession implements HarnessSession {
       status: status === 'completed' ? 'ok' : status === 'failed' ? 'error' : status ? 'running' : base.status,
       ...(text ? { output: cut(text, 4000) } : {}),
       ...(diffs.length ? { diff: diffs } : {}),
+      ...(name === 'Shell' ? acpExitCode(u.rawOutput) : {}),
     };
     this.tools.set(id, item);
     this.sink.item(item, !isNew || !!prev);

@@ -14,7 +14,7 @@ const CHOSEN_BY: Record<string, string> = { orchestrator: 'Orchestrator', app: '
 const OUTCOME: Record<string, string> = { done: 'completato', partial: 'in parte', blocked: 'bloccato' };
 const VERIFIED: Record<string, string> = { yes: 'criteri verificati', partial: 'criteri verificati in parte', no: 'criteri non verificati' };
 export const VERDICT: Record<string, string> = { success: 'riuscito', partial: 'riuscito in parte', fail: 'non riuscito', unknown: 'non chiaro' };
-const BASIS: Record<string, string> = { human: 'da te', 'reviewed-evidence': 'da una revisione', 'orchestrator-opinion': 'dall’Orchestrator', 'self-report': 'dall’agente stesso', unknown: '' };
+const BASIS: Record<string, string> = { human: 'da te', 'reviewed-evidence': 'da una revisione', receipts: 'dalle ricevute dei test', 'orchestrator-opinion': 'dall’Orchestrator', 'self-report': 'dall’agente stesso', unknown: '' };
 const firstLine = (s: string | undefined) => (s ?? '').split('\n').find(l => l.trim())?.trim() ?? '';
 
 export class ChatWatch {

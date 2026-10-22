@@ -1,7 +1,7 @@
 // Pure mapping of Claude tool calls to tile rows (src/main/chats/claude-map.ts): summaries, diffs, questions.
 import { describe, expect, it } from 'vitest';
 import path from 'node:path';
-import { describeSuggestions, diffFor, diffFromResult, flattenAnswers, lineDiff, permissionText, questionsFrom, resultText, resumedAgent, toolSummary } from '../../../src/main/chats/claude-map';
+import { describeSuggestions, diffFor, diffFromResult, flattenAnswers, lineDiff, permissionText, questionsFrom, resultText, resumedAgent, shellExit, toolSummary } from '../../../src/main/chats/claude-map';
 
 const cwd = path.resolve('/repo');
 
@@ -88,5 +88,18 @@ describe('claude-map', () => {
     expect(resumedAgent(stopped, JSON.stringify(stopped))).toBe('');
     expect(resumedAgent(undefined, JSON.stringify({ ...stopped, resumedAgentId: 'x' }))).toBe('');
     expect(resumedAgent(undefined, 'Message sent to the team.')).toBe('');
+  });
+});
+
+describe('shellExit (the run receipts, ADR 0130)', () => {
+  it('reads a Bash exit code: 0 when no error, N from "Exit code N"; unknown when backgrounded, interrupted or reinterpreted', () => {
+    expect(shellExit('Bash', { command: 'npm test' }, false, 'ok', { stdout: 'ok', interrupted: false })).toBe(0);
+    expect(shellExit('Bash', { command: 'npm test' }, true, [{ type: 'text', text: 'Exit code 2\nFAIL' }], {})).toBe(2);
+    expect(shellExit('PowerShell', {}, true, 'Exit code 1', {})).toBe(1);
+    expect(shellExit('Bash', {}, true, 'Permission denied', {})).toBeUndefined();
+    expect(shellExit('Bash', { run_in_background: true }, false, 'running', {})).toBeUndefined();
+    expect(shellExit('Bash', {}, false, '', { interrupted: true })).toBeUndefined();
+    expect(shellExit('Bash', {}, false, '', { returnCodeInterpretation: 'No matches found' })).toBeUndefined();
+    expect(shellExit('Read', {}, false, '', {})).toBeUndefined();
   });
 });

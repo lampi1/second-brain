@@ -3,7 +3,8 @@
 // One store, <userData>/run-feedback.json; the run's outcome takes the verdict unless the user already gave one, and an
 // opinion never overwrites a reviewed verdict. It counts as reviewed evidence only when it cites an ended review run of
 // that run (Sentinel, or a Judge before ADR 0100) whose own report says verified, in its own session (ADR 0083; on any
-// model: the review's independence is its clean context, ADR 0091). Also the user's Annulla on a change the app applied
+// model: the review's independence is its clean context, ADR 0091). A run its receipts decided with no review
+// (recordReceipts, ADR 0130) gets basis 'receipts', which only a verified review or the user replaces. Also the user's Annulla on a change the app applied
 // (agents:undo) and agent_metrics, the numbers-only tool of the Orchestrator. Used by wiring.ts, loop.ts, index.ts.
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -115,16 +116,28 @@ export class RunFeedback {
       ...(a.gap !== undefined ? { gap: a.gap } : {}), ...(a.gapKey !== undefined ? { gapKey: a.gapKey } : {}) };
     const own = this.state.feedback.filter(x => x.agentId === run.agentId).slice(-199);
     this.write({ ...this.state, feedback: [...this.state.feedback.filter(x => x.agentId !== run.agentId), ...own, f] });
-    // Human decisions always win; an opinion cannot erase a previously verified outcome.
-    if (run.outcome?.basis !== 'human' && !(run.outcome?.basis === 'reviewed-evidence' && !verified)) {
-      const previous = run.outcome;
-      run.outcome = outcome;
-      try { this.d.runs.save(); } catch (error) { run.outcome = previous; throw error; }
-      try { this.d.onOutcome?.(structuredClone(run)); } catch (error) { log.warn('agents', 'run verdict not passed to the loop', { cause: errText(error), hint: 'the verdict is saved; the next run end evaluates the role again' }); }
-    }
+    // Human decisions always win; an opinion cannot erase a previously verified outcome, nor the receipts' (ADR 0130).
+    if (run.outcome?.basis !== 'human' && !((run.outcome?.basis === 'reviewed-evidence' || run.outcome?.basis === 'receipts') && !verified)) this.setOutcome(run, outcome);
     this.d.publish([{ kind: 'agent-feedback', title: notes, detail: JSON.stringify({ agentId: run.agentId, evidence: refs }) }]);
     if (a.sendToRun === true) await this.d.send(run.chatId, notes);
     return structuredClone(f);
+  }
+  private setOutcome(run: AgentRun, outcome: AgentRunOutcome): void {
+    const previous = run.outcome;
+    run.outcome = outcome;
+    try { this.d.runs.save(); } catch (error) { run.outcome = previous; throw error; }
+    try { this.d.onOutcome?.(structuredClone(run)); } catch (error) { log.warn('agents', 'run verdict not passed to the loop', { cause: errText(error), hint: 'the verdict is saved; the next run end evaluates the role again' }); }
+  }
+  /** The receipts decided a run with no review (judge-sample.ts, ADR 0130): its outcome, basis 'receipts', unless
+   *  someone judged it already (only the agent's own word or nothing is replaced). Not a feedback record: no one gave
+   *  it; the run's receipts are its evidence. False = left as it was. */
+  recordReceipts(runId: string, verdict: 'success' | 'fail', note: string): boolean {
+    if (this.problem) throw new Error(this.problem);
+    const run = this.d.runs.get(runId);
+    if (!run) throw this.unknownRun(runId);
+    if (run.outcome && run.outcome.basis !== 'self-report' && run.outcome.basis !== 'unknown') return false;
+    this.setOutcome(run, { verdict, basis: 'receipts', by: 'receipts', at: this.now(), note: note.slice(0, 600) });
+    return true;
   }
 }
 

@@ -152,7 +152,7 @@ describe('CodexSession', () => {
     expect(readLog(logFile).find(l => l.answer)?.answer).toEqual({ decision: 'accept' });
     expect(texts(sink, 'assistant')).toContain('Comando eseguito');
     const tool = sink.last('tool');
-    expect(tool).toMatchObject({ name: 'Shell', status: 'ok' });
+    expect(tool).toMatchObject({ name: 'Shell', status: 'ok', exitCode: 0 }); // the exact exit code (receipts, ADR 0130)
     expect(tool?.output).toContain('tutti i test passano');
     expect(sink.resolvedIds).toContain(req.id);
     expect(s.answer(req.id, { kind: 'permission', allow: true })).toBe(false);

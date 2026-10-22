@@ -12,7 +12,7 @@ export const agentsGridIt = {
   'agentsGrid.levelNext': ({ left, next }: { left: number; next: number }) => left === 1 ? `1 lavoro riuscito al Lv ${next}` : `${left} lavori riusciti al Lv ${next}`,
   'agentsGrid.levelTop': 'Livello massimo',
   'agentsGrid.levelHelpTitle': 'Come si calcola il livello',
-  'agentsGrid.levelHelp1': 'Il livello cresce solo con i lavori riusciti e verificati di questo agente, mai con il suo giudizio su sé stesso né col silenzio. L\'Orchestrator non ha lavori suoi: per lui conta ogni lavoro che ha avviato ed è riuscito verificato.',
+  'agentsGrid.levelHelp1': 'Il livello cresce solo con i lavori riusciti e verificati di questo agente, mai con il suo giudizio su sé stesso né col silenzio. Contano il tuo voto, una revisione indipendente o le ricevute dell\'app (i test del progetto passati dopo l\'ultima modifica). L\'Orchestrator non ha lavori suoi: per lui conta ogni lavoro che ha avviato ed è riuscito verificato.',
   'agentsGrid.levelHelp2': 'Ogni livello chiede 5 lavori riusciti in più del precedente: Lv 2 a 5, Lv 3 a 15, Lv 4 a 30, Lv 5 a 50, Lv 6 a 75 (per il Lv N ne servono 5 × N × (N − 1) ÷ 2). Massimo Lv 50.',
   'agentsGrid.levelHelp3': 'Titoli: Recluta (Lv 1), Apprendista, Praticante, Esperto, Veterano (Lv 5), Maestro (Lv 6–9), Leggenda (Lv 10 e oltre). È un gioco, ma solo su dati verificati: dice quanti lavori ha portato a termine bene, non quanti ne ha fatti.',
   'agentsGrid.levelHelpEx': ({ wins, runs, level, next, left }: { wins: number; runs: number; level: number; next: number | null; left: number }) =>
@@ -24,10 +24,10 @@ export const agentsGridIt = {
   'agentsGrid.perfJudged': ({ n }: { n: number }) => n === 1 ? '1 lavoro valutato' : `${n} lavori valutati`,
   'agentsGrid.perfHelpTitle': 'Come si calcola la performance',
   'agentsGrid.perfHelp1': 'È la media dei voti ai suoi lavori: riuscito vale 100%, riuscito in parte 50%, fallito 0%. I lavori senza nessun voto non contano. Il numero sotto dice su quanti lavori si basa.',
-  'agentsGrid.perfHelp2': 'Ogni voto pesa per chi l\'ha dato (tu, una revisione indipendente × 1, una revisione del Sentinel giudicata dai fatti × 0,8, l\'Orchestrator × 0,6, il genitore verificato di un lavoro delegato × 0,5; il resoconto dell\'agente su sé stesso non conta) e per quanto è recente: un voto di 30 giorni fa pesa la metà di uno di oggi, uno di 60 giorni un quarto.',
+  'agentsGrid.perfHelp2': 'Ogni voto pesa per chi l\'ha dato (tu, una revisione indipendente × 1, una revisione del Sentinel giudicata dai fatti × 0,8, le ricevute dell\'app (i test e i controlli del progetto passati dopo l\'ultima modifica) × 0,7, l\'Orchestrator × 0,6, il genitore verificato di un lavoro delegato × 0,5; il resoconto dell\'agente su sé stesso non conta) e per quanto è recente: un voto di 30 giorni fa pesa la metà di uno di oggi, uno di 60 giorni un quarto.',
   'agentsGrid.perfHelp3': ({ min }: { min: number }) => `Compare dopo ${min} lavori valutati; prima l'agente è «in rodaggio». Fasce: 85% e oltre ottima, 70–84% buona, 50–69% discreta, sotto il 50% da rivedere.`,
-  'agentsGrid.perfSources': ({ human, review, graded, orchestrator, chain, self }: { human: number; review: number; graded: number; facts: number; orchestrator: number; chain: number; self: number }) =>
-    `Voti finora: ${human} tuoi, ${review} di revisioni indipendenti, ${graded} revisioni giudicate dai fatti, ${chain} dal genitore verificato, ${orchestrator} dell'Orchestrator` + (self ? `; ${self} solo dell'agente stesso, che non contano.` : '.'),
+  'agentsGrid.perfSources': ({ human, review, receipts, graded, orchestrator, chain, self }: { human: number; review: number; receipts: number; graded: number; facts: number; orchestrator: number; chain: number; self: number }) =>
+    `Voti finora: ${human} tuoi, ${review} di revisioni indipendenti, ${receipts} dalle ricevute dei test, ${graded} revisioni giudicate dai fatti, ${chain} dal genitore verificato, ${orchestrator} dell'Orchestrator` + (self ? `; ${self} solo dell'agente stesso, che non contano.` : '.'),
   'agentsGrid.costHelp': 'Il costo mediano di un lavoro concluso: metà dei lavori è costata meno, metà di più. Conta solo i lavori di cui il motore riporta il costo.',
   'agentsGrid.noRuns': 'Nessun lavoro riuscito verificato ancora: il primo lo porta verso il Lv 2.',
 };

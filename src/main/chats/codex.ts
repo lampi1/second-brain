@@ -890,6 +890,8 @@ export class CodexSession implements HarnessSession {
       case 'commandExecution': return this.tool(id, done, {
         name: 'Shell', summary: `Shell: ${cut(stripAnsi(s(it.command)), 90)}`, input: { command: s(it.command), cwd: s(it.cwd) || undefined },
         status: s(it.status), output: s(it.aggregatedOutput) || (num(it.exitCode) !== undefined && num(it.exitCode) !== 0 ? `exit ${num(it.exitCode)}` : ''),
+        // the exact exit code (the run's receipts, ADR 0130); only on the finished item
+        ...(done && Number.isSafeInteger(num(it.exitCode)) ? { exitCode: num(it.exitCode) } : {}),
       });
       case 'fileChange': {
         const changes = arr(it.changes).map(o);
@@ -910,7 +912,7 @@ export class CodexSession implements HarnessSession {
     }
   }
 
-  private tool(id: string, done: boolean, t: { name: string; summary: string; input: unknown; status: string; output?: string; diff?: FileDiff[] }): void {
+  private tool(id: string, done: boolean, t: { name: string; summary: string; input: unknown; status: string; output?: string; diff?: FileDiff[]; exitCode?: number }): void {
     this.flushAll(true);
     const prev = this.tools.get(id);
     const status: ToolItem['status'] = t.status === 'completed' ? 'ok' : t.status === 'failed' || t.status === 'declined' ? 'error' : done ? 'ok' : 'running';
@@ -920,6 +922,7 @@ export class CodexSession implements HarnessSession {
       name: t.name, summary: t.summary, input: trimInput(t.input), status,
       ...(output ? { output: cut(output, 4000) } : prev?.output ? { output: prev.output } : {}),
       ...(t.diff?.length ? { diff: t.diff } : {}),
+      ...(t.exitCode !== undefined ? { exitCode: t.exitCode } : {}),
     } as ToolItem;
     this.chars += (output?.length ?? 0) + JSON.stringify(t.input ?? {}).length;
     if (done) this.tools.delete(id); else this.tools.set(id, item);

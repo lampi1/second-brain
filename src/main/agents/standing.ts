@@ -4,6 +4,8 @@
 // runs; the level grows with it on a gentle curve (each level asks 5 successes more than the one before).
 // A run is verified (earnedVerdict, ADR 0125: every role must progress without the owner judging by hand) when:
 // - the user gave it a verdict, or a verified independent review backs one (shared/run-verdict.ts verifiedVerdict);
+// - receipts: the app's deterministic verdict decided it with no review (ADR 0130, agents/receipts.ts: the repo's own
+//   checks passed after its last change, or failed and its report agreed);
 // - chain: it is a delegated child whose agent_report met every criterion, with no correction, reopen or rework, that
 //   reached its parent before the parent ended, and the parent run is itself verified (the user or a review accepted
 //   the result built on it) and did not judge it badly (agent_child_feedback partial or fail);
@@ -11,8 +13,8 @@
 //   run, else a later independent second review of it (judge-sample.ts audits a fixed share), else a fact against it
 //   (it passed a run that was then reopened or reworked). Agreement is a success, one step off partial, opposite a fail.
 // Never the agent's own word, never silence. The performance is the success of the runs that have a verdict, each
-// weighted by how much the verdict is trusted (TRUST: the user and a review × 1, a graded review × 0.8, the
-// Orchestrator × 0.6, a chain × 0.5, the agent's own report × 0) and by how recent it is (half weight every 30 days).
+// weighted by how much the verdict is trusted (TRUST: the user and a review × 1, a graded review × 0.8, the receipts
+// × 0.7, the Orchestrator × 0.6, a chain × 0.5, the agent's own report × 0) and by how recent it is (half weight every 30 days).
 // Below MIN_RUNS weighted verdicts it stays null: "in rodaggio".
 // The Orchestrator has no run of its own (its chat is permanent, ADR 0083): each ended root run it opened (startedBy
 // "orchestrator", not a one-shot) counts as one of its decisions, rated with that run's verdict (ADR 0097, issue #112); its own verdict on such a run weighs as its own word (self) on
@@ -31,7 +33,7 @@ export const MIN_RUNS = 5;
 /** a verdict this old weighs half of one given today */
 export const HALF_LIFE_MS = 30 * 86_400_000;
 /** how much each kind of verdict counts; the agent's own word (self) counts nothing (ADR 0100) */
-export const TRUST = { human: 1, review: 1, graded: 0.8, facts: 0, orchestrator: 0.6, chain: 0.5, self: 0 } as const;
+export const TRUST = { human: 1, review: 1, graded: 0.8, receipts: 0.7, facts: 0, orchestrator: 0.6, chain: 0.5, self: 0 } as const;
 const SCORE = { success: 1, partial: 0.5, fail: 0 } as const;
 const REPORTED = { done: 'success', partial: 'partial', blocked: 'fail' } as const;
 type Source = keyof typeof TRUST;
@@ -61,7 +63,7 @@ export const countedDecision = (r: AgentRun): boolean => counts(r) && orchestrat
 
 /** How a run earned its XP verdict (ADR 0125): the user, a verified review, a verified parent, or a review graded by
  *  what happened later. `by` says what graded a review. */
-export type EarnedBasis = VerifiedBasis | 'chain' | 'graded';
+export type EarnedBasis = VerifiedBasis | 'receipts' | 'chain' | 'graded';
 export interface EarnedVerdict { verdict: Verdict; basis: EarnedBasis; by?: 'human' | 'audit' | 'facts' }
 /** Lookups over every run known now: by id, the reviews of each run, the rework starts; memoised verdicts. */
 export interface EarnIndex { byId: Map<string, AgentRun>; reviews: Map<string, AgentRun[]>; starts: Map<string, number[]>; memo: Map<string, EarnedVerdict | null> }
@@ -106,8 +108,9 @@ function earned(run: AgentRun, ix: EarnIndex, seen: Set<string>): EarnedVerdict 
   if (seen.has(run.runId) || seen.size > 16) return null; // a cycle or an absurd depth: no credit
   seen.add(run.runId);
   const v = verifiedVerdict(run, ix.starts.get(run.runId), 0);
+  const o = run.outcome;
   const out: EarnedVerdict | null = v ? { verdict: v.verdict, basis: v.basis }
-    : run.endedAt === undefined ? null : verifiedReview(run) ? graded(run, ix) : run.parentRunId ? chained(run, ix, seen) : null;
+    : run.endedAt === undefined ? null : o?.basis === 'receipts' && o.verdict !== 'unknown' ? { verdict: o.verdict, basis: 'receipts' } : verifiedReview(run) ? graded(run, ix) : run.parentRunId ? chained(run, ix, seen) : null;
   ix.memo.set(run.runId, out);
   return out;
 }
@@ -123,6 +126,7 @@ export function verdictOf(run: AgentRun, reviews: readonly AgentRun[] = [], _ver
   if (known && o!.basis === 'reviewed-evidence') return { source: 'review', verdict: known };
   const reviewed = reviews.filter(v => v.endedAt !== undefined && v.report?.verified === 'yes' && v.report?.verdict).sort((a, b) => a.report!.at - b.report!.at)[0];
   if (reviewed) return { source: 'review', verdict: reviewed.report!.verdict! };
+  if (known && o!.basis === 'receipts') return { source: 'receipts', verdict: known };
   if (known && o!.basis === 'orchestrator-opinion') return { source: 'orchestrator', verdict: known };
   if (known && o!.basis === 'self-report') return { source: 'self', verdict: known };
   if (run.report) return { source: 'self', verdict: REPORTED[run.report.outcome] };
@@ -135,7 +139,7 @@ export function standings(runs: readonly AgentRun[], rollups: readonly RunTally[
   const acc = new Map<string, { runs: number; wins: number; num: number; den: number; evaluated: number; sources: AgentStanding['sources'] }>();
   const of = (id: string) => {
     let a = acc.get(id);
-    if (!a) acc.set(id, a = { runs: 0, wins: 0, num: 0, den: 0, evaluated: 0, sources: { human: 0, review: 0, graded: 0, facts: 0, orchestrator: 0, chain: 0, self: 0 } });
+    if (!a) acc.set(id, a = { runs: 0, wins: 0, num: 0, den: 0, evaluated: 0, sources: { human: 0, review: 0, receipts: 0, graded: 0, facts: 0, orchestrator: 0, chain: 0, self: 0 } });
     return a;
   };
   for (const t of rollups) {

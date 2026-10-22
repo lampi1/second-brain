@@ -6,10 +6,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { AgentRun } from '../../../src/shared/agents';
+import type { AgentRun, AgentRunReceipts } from '../../../src/shared/agents';
 import type { AgentFeedbackArgs } from '../../../src/shared/agent-lifecycle';
 import type { ChatSummary, NewChat } from '../../../src/shared/contract';
-import { AUDIT_EVERY, auditPicked, JudgeSampler, judgeSamplingOn, judgingEstimate, MAX_RUNNING, pickAudits, pickSamples, reviewPrompt, REVIEW_CRITERIA } from '../../../src/main/agents/judge-sample';
+import { AUDIT_EVERY, auditPicked, gradeReceipt, JudgeSampler, judgeSamplingOn, judgingEstimate, MAX_RUNNING, pickAudits, pickReceiptAudits, pickSamples, RECEIPTS_WAIT_MS, reviewPrompt, REVIEW_CRITERIA } from '../../../src/main/agents/judge-sample';
+import { emptyReceipts, noteTool, noteTurnFiles, receiptVerdict } from '../../../src/main/agents/receipts';
 
 const NOW = Date.UTC(2026, 9, 19, 12);
 const run = (id: string, over: Partial<AgentRun> = {}): AgentRun => ({ runId: `r_${id.padStart(12, '0')}`, chatId: `c_${id}`, agentId: 'scout', version: 1, goal: 'Trova gli errori',
@@ -92,7 +93,7 @@ describe('JudgeSampler', () => {
   it('the daily cost of the switch: runs a day times what a review cost; unknown without data', () => {
     const roots = Array.from({ length: 14 }, (_, i) => run(String(i + 1)));
     const reviews = [0.2, 0.4, 0.3].map((c, i) => run(String(50 + i), { agentId: 'sentinel', reviewOf: roots[i]!.runId, costUsd: c }));
-    expect(judgingEstimate([...roots, ...reviews], NOW)).toEqual({ runsPerDay: 2, auditsPerDay: 0.2, reviewUsd: 0.3, perDayUsd: 0.66, basis: 3 });
+    expect(judgingEstimate([...roots, ...reviews], NOW)).toEqual({ runsPerDay: 2, receiptsPerDay: 0, auditsPerDay: 0.2, reviewUsd: 0.3, perDayUsd: 0.66, basis: 3 });
     expect(judgingEstimate(roots, NOW)).toMatchObject({ runsPerDay: 2, reviewUsd: null, perDayUsd: null });
   });
   it('never puts a delegated child\'s answer in a root review chat (the Orchestrator would read it)', async () => {
@@ -209,5 +210,86 @@ describe('audits of the reviews (ADR 0125)', () => {
     expect(fed).toHaveLength(1);                    // the run keeps the first verdict
     expect(s.list()[1]!.state).toBe('recorded');
     expect(await s.tick()).toBe(0);                 // audited once
+  });
+});
+
+// ADR 0130: the receipts first. A run whose repo checks passed after its last change (and whose report agrees) is
+// decided with no review; unknown or contradicted receipts go to the Sentinel; receipt verdicts are audited too.
+describe('receipts before reviews (ADR 0130)', () => {
+  const ids = Array.from({ length: 400 }, (_, i) => String(i + 1));
+  const picked = ids.find(i => auditPicked(`r_${i.padStart(12, '0')}`))!;
+  const receipts = (exit: number | null, settled = true): AgentRunReceipts => {
+    const rc = emptyReceipts();
+    noteTool(rc, { kind: 'tool', id: 'e', at: 100, name: 'Edit', summary: '', input: { file_path: 'src/a.ts' }, status: 'ok' });
+    noteTurnFiles(rc, ['src/a.ts'], 50, 150);
+    if (exit !== null) noteTool(rc, { kind: 'tool', id: 'b', at: 200, name: 'Bash', summary: '', input: { command: 'npm test' }, status: exit ? 'error' : 'ok', exitCode: exit });
+    if (settled) rc.verdict = { ...receiptVerdict({ receipts: rc }), at: 300 };
+    return rc;
+  };
+  const sampler = (runs: AgentRun[], withReceipts = true) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-judge-')); dirs.push(dir);
+    const created: NewChat[] = [], fed: AgentFeedbackArgs[] = [], decided: [string, string][] = [];
+    let now = NOW, n = 0;
+    const s = new JudgeSampler({ file: path.join(dir, 'judge-samples.json'), runs: () => runs, chat, create: async req => { created.push(req); return { ...chat(`j${++n}`), id: `j${n}` }; },
+      judging: () => ({ on: true, since: 0 }), judgeEngine: () => 'claude', refusal: () => null, feedback: async a => { fed.push(a); }, now: () => now,
+      ...(withReceipts ? { receipts: (runId: string, verdict: 'success' | 'fail', note: string) => {
+        decided.push([runId, verdict]);
+        const r = runs.find(x => x.runId === runId)!;
+        r.outcome = { verdict, basis: 'receipts', by: 'receipts', at: now, note };
+        return true;
+      } } : {}) });
+    return { s, created, fed, decided, later: (ms: number) => { now += ms; } };
+  };
+  it('a green receipt the report agrees with skips the review; unknown or contradicted receipts are reviewed, with the receipts in the prompt', async () => {
+    const green = run('1', { receipts: receipts(0) });
+    const unknown = run('2', { receipts: receipts(null) });
+    const contradicted = run('3', { receipts: receipts(0), report: { at: NOW, outcome: 'partial', verified: 'partial', summary: 'Manca un caso' } });
+    const { s, created, decided } = sampler([green, unknown, contradicted]);
+    expect(await s.tick()).toBe(2);
+    expect(decided).toEqual([[green.runId, 'success']]);
+    expect(green.outcome).toMatchObject({ verdict: 'success', basis: 'receipts' });
+    expect(created.map(c => c.reviewOf).sort()).toEqual([unknown.runId, contradicted.runId]);
+    for (const c of created) expect(c.prompt).toMatch(/What the app recorded while it ran.*receipts: (unknown \(no-check-after-change\)|pass \(checks-passed\))/);
+    expect(s.list().find(r => r.runId === green.runId)).toMatchObject({ state: 'receipts', receipt: 'success', chatId: green.chatId });
+    expect(await s.tick()).toBe(0);                 // decided once
+    expect(decided).toHaveLength(1);
+  });
+  it('a failed check the report admits is a fail with no review; without the receipts every run is reviewed', async () => {
+    const red = run('1', { receipts: receipts(1), report: { at: NOW, outcome: 'blocked', verified: 'no', summary: 'I test falliscono' } });
+    const a = sampler([red]);
+    expect(await a.s.tick()).toBe(0);
+    expect(a.decided).toEqual([[red.runId, 'fail']]);
+    const b = sampler([run('2', { receipts: receipts(0) })], false);
+    expect(await b.s.tick()).toBe(1);
+  });
+  it('waits for a run whose last turn\'s files are still being read, then decides it', async () => {
+    const late = run('1', { endedAt: NOW - 60_000, receipts: receipts(0, false) });
+    const { s, created, decided, later } = sampler([late]);
+    expect(await s.tick()).toBe(0);
+    expect(created).toEqual([]); expect(decided).toEqual([]);
+    later(RECEIPTS_WAIT_MS);
+    await s.tick();
+    expect(decided).toEqual([[late.runId, 'success']]);
+  });
+  it('audits a receipt verdict like a review: its verdict becomes the run\'s feedback and grades the receipt', async () => {
+    const x = run(picked, { receipts: receipts(0) });
+    const runs = [x];
+    const { s, created, fed } = sampler(runs);
+    expect(await s.tick()).toBe(1);                 // decided by the receipts, then audited in the free slot
+    expect(x.outcome?.basis).toBe('receipts');
+    expect(created).toHaveLength(1);
+    const audit = s.list().find(r => r.audit)!;
+    expect(audit).toMatchObject({ runId: x.runId, receipt: 'success', state: 'running' });
+    expect(pickReceiptAudits(runs, new Set([x.runId]), NOW, 5)).toEqual([]);
+    await s.ended(run('900', { agentId: 'sentinel', chatId: audit.chatId, reviewOf: x.runId, report: { at: NOW, outcome: 'done', verified: 'yes', summary: 'Manca un caso', verdict: 'partial' } }));
+    expect(fed).toMatchObject([{ runId: x.runId, verdict: 'partial' }]);
+    expect(s.list().find(r => r.audit)).toMatchObject({ state: 'recorded', graded: 'partial' });
+    expect(gradeReceipt('success', 'success')).toBe('agree');
+    expect(gradeReceipt('fail', 'success')).toBe('disagree');
+  });
+  it('the daily cost counts only the runs still reviewed; the receipts\' are free, the audits cover both', () => {
+    const roots = Array.from({ length: 14 }, (_, i) => run(String(i + 1), i < 7 ? { receipts: receipts(0) } : {}));
+    const reviews = [0.2, 0.4, 0.3].map((c, i) => run(String(50 + i), { agentId: 'sentinel', reviewOf: roots[13 - i]!.runId, costUsd: c }));
+    expect(judgingEstimate([...roots, ...reviews], NOW)).toEqual({ runsPerDay: 1, receiptsPerDay: 1, auditsPerDay: 0.2, reviewUsd: 0.3, perDayUsd: 0.36, basis: 3 });
   });
 });
