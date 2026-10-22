@@ -993,7 +993,12 @@ html[data-blink="1"] .md.streaming > .md-b:last-child > :last-child::after { opa
 .keymap-row dd { margin: 0; color: var(--text-2); }
 
 /* ---------------------------------------------------------------- toasts, tooltips */
-.toasts { position: relative; flex:none; display:flex;flex-direction:column;gap:4px;width:auto;padding:0 var(--pad);pointer-events:none; }
+/* floating, out of the layout flow (#169): showing or hiding a toast never moves anything; under the top bar, centred
+   on the workspace (the Orchestrator column's room left free), under modals (backdrop z 40); registered as an overlay
+   so a browser view under it steps aside while it shows (lib/viewports) */
+.toasts { position: fixed; z-index: 39; top: calc(var(--topbar-h) + 8px); left: calc((100vw - var(--orchestrator-r, 0px)) / 2); transform: translateX(-50%);
+  width: min(460px, calc(100vw - var(--orchestrator-r, 0px) - 32px)); max-height: calc(100vh - var(--topbar-h) - 120px); overflow: hidden;
+  display:flex;flex-direction:column;gap:4px;pointer-events:none; }
 .toasts:empty{display:none}
 .toast {
   pointer-events: auto; position: relative; overflow: hidden; display: flex; align-items: center; gap: 9px; padding: 9px 8px 9px 12px; border-radius: var(--r-m);
