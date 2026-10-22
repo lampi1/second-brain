@@ -3,7 +3,7 @@
 Date: 2026-10-22 · Status: accepted (owner, 2026-10-22: «voglio che le domande siano chiare, human readable, che
 capisco cosa sto approvando o no, non roba a basso livello, per tutte le cose; per script e query voglio vedere lo
 script e la query»; the same day: approving a fact failed with «Conflicting confirmed fact requires explicit
-supersession») · Builds on: ADR 0123 (the Proposte deck)
+supersession», issue #173) · Builds on: ADR 0123 (the Proposte deck)
 
 ## Context
 A deck card showed the source's raw data: a fact's `subject · predicate` as its title («setup · note»), its scope as

@@ -127,7 +127,14 @@ const memory: Source = {
     const id = native(c), text = note?.trim().replace(/[\x00-\x1f\x7f]+/g, ' ').slice(0, 900);
     const conflicts = c.ask.kind === 'remember' ? c.ask.conflicts ?? [] : [];
     if (decision === 'approve' && conflicts.length && keep !== 'new' && keep !== 'both') throw new Error('Scegli prima cosa fare con quello che ricordava già: sostituirlo o tenerli entrambi.');
-    if (decision === 'approve') await p.memory!.confirm(id, text || DECK_EVIDENCE, ...(conflicts.length && keep ? [{ keep, ids: conflicts.map(x => x.id) }] : []));
+    if (decision === 'approve') {
+      try { await p.memory!.confirm(id, text || DECK_EVIDENCE, ...(conflicts.length && keep ? [{ keep, ids: conflicts.map(x => x.id) }] : [])); }
+      catch (e) {
+        // another fact on the same topic was confirmed after the card was read: the card shows it now (#173)
+        if (e instanceof Error && /explicit supersession/.test(e.message)) throw new Error('Nel frattempo è stato confermato un altro fatto sullo stesso argomento: rileggi la carta e scegli di nuovo.');
+        throw e;
+      }
+    }
     else await p.memory!.retract(id, `Rejected in Memoria → Proposte${text ? `: ${text}` : ''}`);
   },
 };

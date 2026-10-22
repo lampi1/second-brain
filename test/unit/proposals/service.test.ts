@@ -159,6 +159,10 @@ describe('ProposalsService', () => {
     expect(await s.decide({ id: 'memory:a', decision: 'approve' })).toMatchObject({ ok: false, error: expect.stringContaining('sostituirlo o tenerli entrambi') });
     expect((await s.decide({ id: 'memory:a', decision: 'approve', keep: 'new' })).ok).toBe(true);
     expect(calls).toEqual(['confirm a {"keep":"new","ids":["old"]}']);
+    // a fact confirmed after the card was read: the store refuses, the reason comes back in words
+    rows = [fact('b', NOW - 2 * H), { ...old, subject: 'Fatto b' }];
+    const stale = ports({ memory: { list: () => rows, confirm: async () => { throw new Error('Conflicting confirmed fact requires explicit supersession.'); }, retract: async () => {} } });
+    expect(await new ProposalsService({ ports: stale.p, userData: tmp() }).decide({ id: 'memory:b', decision: 'approve', keep: 'both' })).toMatchObject({ ok: false, error: expect.stringContaining('rileggi la carta') });
   });
 
   it('a change to a script or a query shows its code and words its question from data', async () => {
