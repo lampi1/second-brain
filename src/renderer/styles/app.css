@@ -651,6 +651,14 @@ html[data-blink="1"] .md.streaming > .md-b:last-child > :last-child::after { opa
 .msg-images-count { display: block; text-align: right; font-size: 11.5px; color: var(--text-3); margin-bottom: 2px; }
 .composer textarea { flex: 1; min-width: 0; resize: none; border: 0; outline: none; background: transparent; color: var(--text); line-height: 20px; padding: 2px 0; min-height: 24px; max-height: 168px; }
 .composer textarea::placeholder { color: var(--text-3); }
+/* the inline suggestion (ADR 0118): a mirror of the text under the textarea, the typed part invisible, the rest grey */
+.composer-field { flex: 1; min-width: 0; display: flex; position: relative; }
+.composer-field textarea { position: relative; z-index: 1; }
+.composer-ghost {
+  position: absolute; inset: 0; z-index: 0; padding: 2px 0; line-height: 20px; white-space: pre-wrap; overflow-wrap: break-word;
+  overflow: hidden; pointer-events: none; color: transparent;
+}
+.composer-ghost-text { color: var(--text-4); }
 .composer-hint { flex: none; display: flex; align-items: center; gap: 6px; height: 24px; font-size: 11px; color: var(--text-4); white-space: nowrap; }
 .send { width: 26px; height: 26px; flex: none; border-radius: 7px; border: 0; background: var(--blue); color: var(--on-accent); display: grid; place-items: center; cursor: pointer; animation: popIn var(--dur-fast) var(--ease); }
 .send:hover { background: var(--blue-strong); }

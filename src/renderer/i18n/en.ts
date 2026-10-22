@@ -39,6 +39,7 @@ import { treeEn } from './areas/tree.en';
 import { aliveEn } from './areas/alive.en';
 import { lampoEn } from './areas/lampo.en';
 import { learningEn } from './areas/learning.en';
+import { suggestEn } from './areas/suggest.en';
 import { estimateEn } from './areas/estimate.en';
 import { logEn } from './areas/log.en';
 import { reviewedContextEn } from './areas/reviewed-context.en';
@@ -62,6 +63,7 @@ export const en: Dict = {
   ...aliveEn,
   ...lampoEn,
   ...learningEn,
+  ...suggestEn,
   ...estimateEn,
   ...logEn,
   ...genuiRequestEn,

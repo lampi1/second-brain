@@ -76,6 +76,14 @@ const BASE: readonly SettingDef[] = [
     description: 'Sopra questa CPU (media degli ultimi secondi) le chat e i messaggi degli agenti aspettano.' },
   { key: 'loadQueueRam', type: 'int', min: 0, max: 90, default: 15, protected: true, label: 'Coda per carico: RAM libera sotto (%)',
     description: 'Sotto questa memoria libera le chat e i messaggi degli agenti aspettano. 0 = non guardare la RAM.' },
+  // the chat composer's inline suggestion (ADR 0118): local sources cost nothing; the model part spends, so it and its
+  // budget are protected like the other spending limits
+  { key: 'suggestOn', type: 'boolean', default: true, protected: false, label: 'Suggerimenti nella chat',
+    description: 'Mentre scrivi, un testo grigio dopo il cursore: Tab lo accetta, Esc lo nasconde. Dai tuoi messaggi passati, dai comandi, dai ruoli, dalle chat e dai file, senza token.' },
+  { key: 'suggestModel', type: 'boolean', default: true, protected: true, label: 'Suggerimenti nella chat: modello',
+    description: 'Quando le fonti locali non hanno niente, dopo una pausa nella scrittura chiede al modello più piccolo sulla chiave API (ultima riga e ultimo messaggio soltanto). Spento: solo i suggerimenti locali.' },
+  { key: 'suggestDailyUsd', type: 'usd', min: 0.01, max: 1, default: 0.05, protected: true, label: 'Suggerimenti nella chat: budget giornaliero ($)',
+    description: 'Raggiunto il budget, il modello si ferma fino a domani; i suggerimenti locali restano.' },
   { key: 'osToasts', type: 'enum', values: ['urgent', 'normal', 'off'], default: 'urgent', protected: true, label: 'Notifiche di sistema',
     description: 'Solo le urgenti (una chat ti aspetta), anche le normali, o nessuna (resta tutto nel feed).' },
   { key: 'dndUntil', type: 'int', min: 0, max: 8.64e15, nullable: true, default: null, protected: true, label: 'Non disturbare fino a',
@@ -254,6 +262,7 @@ export function defaults(): Settings {
     appRepo: null,
     projectsRoot: null,
     loadQueue: true, loadQueueCpu: 75, loadQueueRam: 15,
+    suggestOn: true, suggestModel: true, suggestDailyUsd: 0.05,
     delegation: { ...DELEGATION_DEFAULTS }, modelTiers: {},
   };
 }

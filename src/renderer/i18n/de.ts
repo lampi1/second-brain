@@ -1,3 +1,4 @@
+import { suggestDe } from './areas/suggest.de';
 import { appTextDe } from './areas/app-text.de';
 import { brainTextDe } from './areas/brain-text.de';
 import { learningReviewDe } from './areas/learning-review.de';
@@ -101,6 +102,7 @@ export const de: Dict = {
   ...brainLibDe,
   ...brainTextDe,
   ...appTextDe,
+  ...suggestDe,
   ...SYS_DE,
   'common.close': 'Schließen',
   'common.cancel': 'Abbrechen',

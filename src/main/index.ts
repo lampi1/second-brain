@@ -49,6 +49,9 @@ import { AgentImageStore, nativeReencode } from './agents/agent-images';
 import { createAppUpdates } from './update/wiring';
 import { OrchestratorService } from './chats/orchestrator-service';
 import { Headline } from './headline';
+import { ComposerSuggest, SUGGEST_FALLBACK_MODEL } from './suggest/service';
+import { tierModel } from './agents/model-tier';
+import { ANTHROPIC_API } from '../shared/contract';
 import { pulseStubHandlers } from './pulse/handlers';
 import { createPulse } from './pulse/wiring';
 import { pulseDemoHandlers } from './pulse/demo';
@@ -151,6 +154,14 @@ app.whenReady().then(async () => {
     emit: st => emitter.emit('headline:changed', st),
     calls: !demo && !process.env.SB_TEST,
     ...(demo && process.env.SB_DEMO_FREEZE === '1' ? { now: () => FROZEN_EPOCH } : {}),
+  });
+  // the chat composer's model suggestion (ADR 0118): the light tier on the API engine, never a call in the demo or under test
+  const composerSuggest = new ComposerSuggest({
+    file: path.join(app.getPath('userData'), 'suggest.json'),
+    complete: (req, signal) => s.engines.text.complete(req, signal),
+    settings: () => { const c = s.brain.settings(); return { on: c.suggestOn !== false, modelOn: c.suggestModel !== false, dailyUsd: c.suggestDailyUsd ?? 0.05 }; },
+    model: () => { const c = s.brain.settings(), reg = s.brain.routingInfo().registry; return tierModel(ANTHROPIC_API, 'light', reg, c.modelTiers) ?? tierModel('claude', 'light', reg, c.modelTiers) ?? SUGGEST_FALLBACK_MODEL; },
+    calls: !demo && !process.env.SB_TEST && !process.env.VITEST,
   });
   const pulse = createPulse(s, { emitter, window: () => win, userData: app.getPath('userData') }, () => headline.get());
   // the Battito's proposals count in the morning block's "Da approvare" (ADR 0102)
@@ -430,6 +441,9 @@ app.whenReady().then(async () => {
     'sync:resolve': a => s.brain.syncResolve(a?.domain, a?.choice),
     'headline:get': () => pulse?.headline() ?? headline.get(),
     'log:list': () => activity.list(),
+    'suggest:get': a => composerSuggest.suggest(a),
+    'suggest:cancel': a => composerSuggest.cancel(String(a?.chatId ?? '')),
+    'suggest:state': () => composerSuggest.state(),
     'orchestrator:held': () => s.heldNews?.get() ?? { items: [] },
     'orchestrator:heldSeen': a => { if (typeof a?.chatId !== 'string' || !a.chatId || a.chatId.length > 100) throw new Error('chatId required'); return s.heldNews?.seen(a.chatId) ?? { items: [] }; },
     ...(pulse?.handlers() ?? (demo ? pulseDemoHandlers(process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now(), {
