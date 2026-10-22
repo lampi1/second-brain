@@ -171,3 +171,18 @@ export function thinkingBeforeAsk(items: readonly ChatItem[], asking: boolean): 
   if (asking) walkBack(items.length - 1);
   return out;
 }
+
+/** A command card's context without what the card already shows (the questions window, 2026-10-22): the fenced block
+ *  that is the command itself and the chat's sentence right before it (`lead`, its title) leave the prose; a piece left
+ *  with nothing else goes. */
+export function withoutCommand(pieces: readonly ContextPiece[], code: string, lead = ''): ContextPiece[] {
+  const flat = (s: string) => s.replace(/[`*_>#]/g, '').replace(/\s+/g, ' ').trim();
+  const cmd = code.trim();
+  const said = flat(lead);
+  return pieces.flatMap(p => {
+    if (p.kind !== 'text' || !cmd) return [p];
+    let text = p.text.replace(/^ {0,3}(`{3,}|~{3,})[^\n]*\n([\s\S]*?)\n {0,3}\1[ \t]*$/gm, (all, _f: string, body: string) => (body.trim() === cmd ? '' : all));
+    if (said) text = text.split('\n').filter(l => flat(l) !== said).join('\n');
+    return flat(text) ? [{ ...p, text: text.replace(/\n{3,}/g, '\n\n').trim() }] : [];
+  });
+}

@@ -173,3 +173,28 @@ describe('Flash follows its card (ADR 0107)', () => {
     expect(sent.at(-1)).toMatch(/e su codex\?$/);
   });
 });
+
+describe('Flash earns from its answers (ADR 0131)', () => {
+  it('records each answer\'s outcome from what the user does next, with no model call: corrected, handed to the Orchestrator', async () => {
+    const sent: string[] = [];
+    const m = new ChatManager({ userData: tmp(), emitter: { emit() {} }, coldEveryMs: 0, sessionFactory: (_h, o: SessionOptions, s: SessionSink) => ({
+      harness: 'claude', sessionId: null, pid: null, root: null, alive: true, busy: false,
+      start() { if (!o.sessionId) s.changed({ sessionId: crypto.randomUUID() }); s.changed({ state: 'idle' }); },
+      // every turn ends with a result: Flash answered
+      send(text: string) { sent.push(text); s.changed({ turnCostUsd: 0, costKnown: false }); },
+      close: async () => { s.exit({ code: 0, error: null }); }, killNow() {}, interrupt: async () => {}, answer: () => false, rename: async () => {}, setModel: async () => {}, setEffort: async () => {}, setPermissionMode: async () => {}, contextUsage: async () => null, usage: async () => null,
+    } as unknown as HarnessSession) });
+    managers.push(m);
+    const o = await m.create({ harness: 'claude', cwd: tmp(), orchestrator: true });
+    const l = await m.create({ harness: 'claude', cwd: tmp(), quick: true });
+    await m.send(l.id, 'quanto costa il piano Pro di Claude al mese?');
+    await m.send(l.id, 'no, è sbagliato');
+    expect(m.runs.flashLog().done.map(d => d.why)).toEqual(['corrected']);
+    await m.send(l.id, 'quali file cambia la migrazione del database clienti?');
+    await m.send(o.id, 'Da Flash. La mia domanda: «quali file cambia la migrazione del database clienti?»\nFanne un lavoro: falla');
+    expect(m.runs.flashLog().done.map(d => d.why)).toEqual(['corrected', 'handed']);
+    // the agent card gets a Flash standing; no run is recorded for it
+    expect(m.runs.list().some(r => r.chatId === l.id)).toBe(false);
+    expect(m.runMetrics().find(x => x.agentId === 'flash')?.standing).toMatchObject({ runs: 3, wins: 0, sources: { quick: 2 } });
+  });
+});

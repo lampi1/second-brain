@@ -3,7 +3,6 @@
 import type { learningIt } from './learning.it';
 type N = { n: number };
 export const learningEn: typeof learningIt = {
-  'learn.title': 'Learning',
   'learn.lead': 'Everything the app changes in the brain by itself is a hypothesis: here you see whether it really lowered your corrections, on how many runs and with what margin of error. No levels: only what the data say.',
   'learn.v.aiuta': 'Helps', 'learn.v.nessun-effetto': 'No effect', 'learn.v.raccolta': 'Collecting', 'learn.v.peggiora': 'Worse', 'learn.v.annullato': 'Undone',
   'learn.k.aiuta': 'Proven benefit', 'learn.k.nessun-effetto': 'No effect', 'learn.k.raccolta': 'Collecting', 'learn.k.peggiora': 'Worse', 'learn.k.annullato': 'Undone',

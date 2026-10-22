@@ -56,12 +56,7 @@ export const aliveIt = {
   'alive.pulse.budgetHint': 'Tetto di ammissione condiviso tra carte e frase, da 0,01 a 2 $. I costi che il motore non riporta restano sconosciuti.',
   'alive.pulse.today': (p: { usd: string; limit: string; runs: number }) => `Oggi ${p.usd} su ${p.limit} · ${p.runs} ${p.runs === 1 ? 'chiamata' : 'chiamate'}`,
   'alive.pulse.unknownCost': 'costo non riportato',
-  'alive.approval.kind': 'Proposta del Battito',
-  'alive.approval.apply': 'Applica', 'alive.approval.discard': 'Scarta',
-  'alive.approval.confirmApply': 'La regola si aggiunge alle istruzioni del Battito. Applico?',
-  'alive.approval.confirmDiscard': 'La proposta esce dalla lista; il Battito non cambia. Scarto?',
-  'alive.approval.evidence': (p: { n: number }) => `${p.n} carte come prova`,
-  'alive.approval.done': (p: { name: string }) => `Proposta di ${p.name} decisa.`,
+  
   'alive.next.pr': (p: { title: string }) => `Niente ti aspetta: la build di «${p.title}» è rossa`,
   'alive.next.approvals': (p: { n: number }) => `Niente ti aspetta: ${p.n === 1 ? '1 proposta' : `${p.n} proposte`} da approvare`,
   'alive.next.stalled': (p: { title: string; min: number }) => `Niente ti aspetta: «${p.title}» è ferma da ${p.min} min`,

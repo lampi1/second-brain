@@ -1,17 +1,16 @@
-// Pure helpers of the brain's Script page (ADR 0076) and the Log page (ADR 0111): the scripts' search and filters and
+// Pure helpers of the brain's Script page (ADR 0076) and the Log page (ADR 0111): the scripts' search and
 // the day labels. Kept apart from the pages (which import the app's bridge) so unit tests load them without a window.
 // Used by brain/pages/Script.tsx and components/LogPage.tsx; tests: test/unit/brain/scripts.test.ts.
 import type { BrainScriptSummary } from '@shared/contract';
 import { locale, t } from '../../i18n';
 
-export type ScriptFilter = 'all' | 'ok' | 'fix';
 const fold = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 export const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-/** Scripts matching every word (title, description, usage, tags, file, language) and the state filter. */
-export function filterScripts(list: BrainScriptSummary[], q: string, f: ScriptFilter): BrainScriptSummary[] {
+/** Working scripts (last test passed) matching every word (title, description, usage, tags, file, language). */
+export function filterScripts(list: BrainScriptSummary[], q: string): BrainScriptSummary[] {
   const words = fold(q).split(/\s+/).filter(Boolean);
-  return list.filter(s => (f === 'all' || (f === 'ok' ? s.tested.state === 'ok' : s.tested.state !== 'ok'))
+  return list.filter(s => s.tested.state === 'ok'
     && words.every(w => fold([s.title, s.description, s.usage, s.file, s.language, ...s.tags].join(' ')).includes(w)));
 }
 

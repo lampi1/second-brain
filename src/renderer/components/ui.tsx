@@ -4,11 +4,13 @@
 // native and draw above the page). Used by every component.
 import { createPortal } from 'react-dom';
 import { inSelectList } from './Select';
-import { useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ComponentProps, type ReactNode, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ComponentProps, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import type { ChatSummary } from '@shared/contract';
 import { stateInfo } from '../lib/format';
 import { registerOverlay, report, viewRects } from '../lib/viewports';
 import { splitTip } from '../lib/tips';
+import { t } from '../i18n';
+import { IconX } from './Icons';
 import './HelpTip'; // imported early on purpose: its Esc listener must run before every dialog's (components/HelpTip.tsx)
 
 export function Kbd({ children }: { children: ReactNode }) {
@@ -141,9 +143,22 @@ export const MenuSep = () => <div className="menu-sep" role="separator" />;
 
 // ---------------------------------------------------------------- Modal
 
+/** The three sizes every dialog uses: `s` a confirmation (440 px), `m` a dialog (640 px) and `side` a panel down the
+ *  right edge (560 px, full height); a dialog with a size of its own (the Stato, the palette) sets it in its class. */
+export type ModalSize = 's' | 'm' | 'side';
+
 /** A dialog: Esc and a click on the backdrop call onClose; `backdropCloses={false}` keeps it open on a stray click outside
- *  (the setup wizard: coming back from a sign-in window, the first click must not end it). */
-export function Modal({ onClose, children, label, testid, className = '', top, backdropCloses = true }: { onClose: () => void; children: ReactNode; label: string; testid?: string; className?: string; top?: boolean; backdropCloses?: boolean }) {
+ *  (the setup wizard: coming back from a sign-in window, the first click must not end it). With `title` it draws the
+ *  standard parts (one look for every dialog, the questions window's too: styles/app.css «Dialogs»): a head with the
+ *  icon, the title, a short subtitle, `aside` (a hint, a count, buttons) and a close button (`closeButton`, on by
+ *  default for a side panel); the children in the scrolling body; `footer` fixed at the bottom, the primary action last
+ *  (on the right), a `.sp` in it pushes what comes before to the left. `onSubmit` wraps the three in a form (Enter in a
+ *  field submits). Without `title` the children are the whole dialog (the palette, the image viewers, the setup wizard). */
+export function Modal({ onClose, children, label, testid, className = '', top, backdropCloses = true, size, title, subtitle, icon, aside, footer, closeButton, onSubmit, bodyClassName = '', style }: {
+  onClose: () => void; children: ReactNode; label: string; testid?: string; className?: string; top?: boolean; backdropCloses?: boolean;
+  size?: ModalSize; title?: ReactNode; subtitle?: ReactNode; icon?: ReactNode; aside?: ReactNode; footer?: ReactNode; closeButton?: boolean;
+  onSubmit?: () => void; bodyClassName?: string; style?: CSSProperties;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const backdrop = useRef<HTMLDivElement>(null);
   // the latest onClose, read at the event: callers often pass a fresh arrow each render, and the focus effect below must
@@ -158,7 +173,7 @@ export function Modal({ onClose, children, label, testid, className = '', top, b
     const t = setTimeout(() => {
       // React never writes the autofocus attribute: a control that must win marks itself data-autofocus (a dialog opened
       // while another closes gets its focus back after the old one restored the previous element); disabled controls are skipped
-      if (el && !el.contains(document.activeElement)) (el.querySelector<HTMLElement>('[data-autofocus]:not([disabled]), [autofocus]:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled])') ?? el).focus();
+      if (el && !el.contains(document.activeElement)) (el.querySelector<HTMLElement>('[data-autofocus]:not([disabled]), [autofocus]:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled]):not(.modal-close)') ?? el).focus();
     }, 0);
     const key = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { if (inSelectList(e.target)) return; e.preventDefault(); e.stopPropagation(); close.current(); return; }
@@ -174,10 +189,27 @@ export function Modal({ onClose, children, label, testid, className = '', top, b
     window.addEventListener('keydown', key, true);
     return () => { clearTimeout(t); window.removeEventListener('keydown', key, true); if (prev?.isConnected) prev.focus(); };
   }, []);
+  const parts = title === undefined ? children : (
+    <>
+      <header className="modal-head">
+        {icon && <span className="modal-icon" aria-hidden="true">{icon}</span>}
+        <div className="modal-titles">
+          <h2>{title}</h2>
+          {subtitle && <p className="modal-sub">{subtitle}</p>}
+        </div>
+        {aside && <div className="modal-aside">{aside}</div>}
+        {(closeButton ?? size === 'side') && (
+          <button type="button" className="icon-btn modal-close" onClick={() => close.current()} aria-label={t('ui.close')} data-tip={`${t('ui.close')}|Esc`} data-testid={testid ? `${testid}-close-x` : undefined}><IconX size={14} /></button>
+        )}
+      </header>
+      <div className={`modal-body ${bodyClassName}`}>{children}</div>
+      {footer && <footer className="modal-foot">{footer}</footer>}
+    </>
+  );
   return createPortal(
-    <div ref={backdrop} className={`backdrop ${top ? 'backdrop-top' : ''}`} onPointerDown={e => { if (backdropCloses && e.target === e.currentTarget) close.current(); }}>
-      <div ref={ref} className={`modal ${className}`} role="dialog" aria-modal="true" aria-label={label} data-testid={testid} tabIndex={-1}>
-        {children}
+    <div ref={backdrop} className={`backdrop ${top ? 'backdrop-top' : ''} ${size === 'side' ? 'backdrop-side' : ''}`} onPointerDown={e => { if (backdropCloses && e.target === e.currentTarget) close.current(); }}>
+      <div ref={ref} className={`modal ${size ? `modal-${size}` : ''} ${title !== undefined ? 'modal-std' : ''} ${className}`} role="dialog" aria-modal="true" aria-label={label} data-testid={testid} tabIndex={-1} style={style}>
+        {onSubmit ? <form onSubmit={e => { e.preventDefault(); onSubmit(); }}>{parts}</form> : parts}
       </div>
     </div>,
     document.body,

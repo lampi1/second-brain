@@ -255,15 +255,23 @@ export class ChatStore {
     }
   }
 
+  /** the body last written: ChatManager saves from many places, often with nothing changed (no write then) */
+  private last: string | null = null;
+
+  /** Synchronous (callers read the file right after), compact and skipped when nothing changed: it runs on the main
+   *  process for every chat change. */
   save(chats: StoredChat[]): void {
-    const body = `${JSON.stringify({ version: 2, chats }, null, 2)}\n`;
+    const body = `${JSON.stringify({ version: 2, chats })}\n`;
+    if (body === this.last) return;
     const tmp = `${this.file}.tmp`;
     try {
       fs.mkdirSync(path.dirname(this.file), { recursive: true });
       fs.writeFileSync(tmp, body, 'utf8');
       fs.renameSync(tmp, this.file);
+      this.last = body;
     } catch (e) {
-      try { fs.writeFileSync(this.file, body, 'utf8'); } catch (e2) {
+      this.last = null;
+      try { fs.writeFileSync(this.file, body, 'utf8'); this.last = body; } catch (e2) {
         log.error('chats', 'chats.json not saved', { cause: `${errText(e)} / ${errText(e2)}`, hint: 'check disk space and that userData is writable; chats will not survive a restart' });
       }
     }
@@ -271,7 +279,8 @@ export class ChatStore {
 
   /** Update boundary: throw on any failure, never fall back to a direct overwrite or claim a logged error is saved. */
   checkpoint(chats: StoredChat[]): void {
-    const body = `${JSON.stringify({ version: 2, chats }, null, 2)}\n`;
+    const body = `${JSON.stringify({ version: 2, chats })}\n`;
+    this.last = null;
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     try { const stat = fs.lstatSync(this.file); if (!stat.isFile() || stat.nlink !== 1 || stat.isSymbolicLink()) throw new Error('Archivio chat collegato: aggiornamento fermato.'); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
@@ -281,6 +290,7 @@ export class ChatStore {
       fd = fs.openSync(tmp, 'wx', 0o600); fs.writeFileSync(fd, body, 'utf8'); fs.fsyncSync(fd); fs.closeSync(fd); fd = undefined;
       fs.renameSync(tmp, this.file);
       if (fs.readFileSync(this.file, 'utf8') !== body) throw new Error('Salvataggio chat non verificato.');
+      this.last = body;
     } finally { if (fd !== undefined) fs.closeSync(fd); try { fs.unlinkSync(tmp); } catch { /* renamed or not created */ } }
   }
 }

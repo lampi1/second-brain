@@ -20,8 +20,6 @@ export const toolsEn: typeof toolsIt = {
   'tools.genui.riskHigh': 'high',
   'tools.genui.empty': 'empty',
   'tools.genui.stateHeader': 'Status',
-  'tools.genui.shownInFolder': 'Shown in its folder: not a document to open here.',
-  'tools.genui.fileNotOpened': 'File not opened:',
   'tools.genui.copyFailed': 'Copy failed',
   'tools.genui.copyDone': 'Copied',
   'tools.genui.copyPath': (p: { path: string }) => `Copy the path ${p.path}`,

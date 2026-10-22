@@ -1,8 +1,9 @@
 // Role metrics and pruned-run rollups used by agent cards. Verified quality uses only human or independent evidence;
 // self-reports and observation proxies do not enter success. Costs and usage retain their own data coverage.
 import type { DeliveryMetrics, AgentMetrics, AgentRun, AgentRunTokens, AgentRunOutcome, Metric, VersionMetrics } from '../../shared/agents';
-import { countedDecision, earnIndex, earnedVerdict } from './standing';
+import { countedDecision, decisionXp, earnIndex, earnedVerdict, runXp } from './standing';
 import { FACTS_SETTLE_MS, reworkStartsOf, reworkedWithin, verifiedVerdict } from '../../shared/run-verdict';
+import { LEGACY_XP } from './xp';
 
 /** the newest values kept per sample for medians (n counts them all) */
 export const SAMPLE_MAX = 200;
@@ -40,9 +41,14 @@ export interface RunTally {
   decisions?: number;
   /** of those decisions, the verified successes at prune time: the Orchestrator's level (its XP, ADR 0100) */
   decisionWins?: number;
-  /** successes earned at prune time by a verified parent (chain) or by a review's grade (standing.ts earnedVerdict,
-   *  ADR 0125): XP that `verdicts` (verified runs only) does not hold */
+  /** successes earned at prune time by a verified parent (chain), a review's grade or the receipts (standing.ts earnedVerdict,
+   *  ADR 0125, 0130): XP that `verdicts` (verified runs only) does not hold */
   earnedWins?: number;
+  /** the XP of this key's verified successes at prune time (verdicts.success + earnedWins, each by its job's size, ADR
+   *  0131); missing on a rollup pruned before: each of its successes counts LEGACY_XP */
+  xp?: number;
+  /** the Orchestrator's XP from these decisions at prune time (standing.ts decisionXp); missing: decisionWins × LEGACY_XP */
+  decisionXp?: number;
   /** fitRollups dropped `tags` to stay in budget: later prunes do not rebuild a partial set, and filters leave this rollup out */
   tagsLost?: true;
 }
@@ -131,6 +137,9 @@ export function foldRun(t: RunTally, run: AgentRun, index: RunIndex, aiErrors?: 
 const sumOf = (s: Sample): number | undefined => s.sum ?? (s.values.length === s.n ? s.values.reduce((t, v) => t + v, 0) : undefined);
 const mergeSample = (a: Sample, b: Sample): Sample => { const x = sumOf(a), y = sumOf(b); return { n: a.n + b.n, values: [...a.values, ...b.values].slice(-SAMPLE_MAX), ...(x !== undefined && y !== undefined ? { sum: x + y } : {}) }; };
 const mergeVerdicts = (a: Verdicts, b: Verdicts): Verdicts => ({ success: a.success + b.success, partial: a.partial + b.partial, fail: a.fail + b.fail });
+/** a tally's XP: kept, or its verified successes at their floor (a rollup pruned before ADR 0131) */
+export const tallyXp = (t: RunTally): number => t.xp ?? (t.verdicts.success + (t.earnedWins ?? 0)) * LEGACY_XP;
+const round2 = (n: number): number => Math.round(n * 100) / 100;
 /** a then b (a older: its sample values go first and are the first to fall out) */
 export function mergeTallies(a: RunTally, b: RunTally, agentId = a.agentId, version = a.version): RunTally {
   const reviews: Record<string, ReviewTally> = structuredClone(a.reviews);
@@ -145,6 +154,9 @@ export function mergeTallies(a: RunTally, b: RunTally, agentId = a.agentId, vers
     ...(a.decisions || b.decisions ? { decisions: (a.decisions ?? 0) + (b.decisions ?? 0) } : {}),
     ...(a.decisionWins || b.decisionWins ? { decisionWins: (a.decisionWins ?? 0) + (b.decisionWins ?? 0) } : {}),
     ...(a.earnedWins || b.earnedWins ? { earnedWins: (a.earnedWins ?? 0) + (b.earnedWins ?? 0) } : {}),
+    // a side without XP (pruned before ADR 0131) gets its successes' floor, so the merged XP stays a whole record
+    ...(a.xp !== undefined || b.xp !== undefined ? { xp: tallyXp(a) + tallyXp(b) } : {}),
+    ...(a.decisionXp !== undefined || b.decisionXp !== undefined ? { decisionXp: (a.decisionXp ?? (a.decisionWins ?? 0) * LEGACY_XP) + (b.decisionXp ?? (b.decisionWins ?? 0) * LEGACY_XP) } : {}),
     ...(a.tagsLost || b.tagsLost ? { tagsLost: true as const } : (() => { const tags = mergeTags(a.tags, b.tags); return tags ? { tags } : {}; })()),
   };
 }
@@ -183,12 +195,18 @@ export function rollUp(rollups: readonly RunTally[], pruned: readonly AgentRun[]
     const k = keyOf(run.agentId, run.version);
     if (!out.has(k)) out.set(k, emptyTally(run.agentId, run.version));
     const t = out.get(k)!;
+    const xp0 = tallyXp(t), dxp0 = t.decisionXp ?? (t.decisionWins ?? 0) * LEGACY_XP;
     foldRun(t, run, index);
     const e = run.endedAt !== undefined && !run.oneshot?.fallback && run.oneshot?.job !== 'headline' ? earnedVerdict(run, earn) : null;
-    if (e?.verdict === 'success' && (e.basis === 'chain' || e.basis === 'graded')) t.earnedWins = (t.earnedWins ?? 0) + 1;
+    if (e?.verdict === 'success' && (e.basis === 'chain' || e.basis === 'graded' || e.basis === 'receipts')) t.earnedWins = (t.earnedWins ?? 0) + 1;
+    // the XP (a rollup pruned before ADR 0131 starts from its successes' floor, xp0)
+    if (e) t.xp = round2(xp0 + (e.verdict === 'success' ? runXp(run, earn) : 0));
     if (countedDecision(run)) {
       t.decisions = (t.decisions ?? 0) + 1;
-      if (verifiedVerdict(run, index.reworkStarts.get(run.runId), index.now)?.verdict === 'success') t.decisionWins = (t.decisionWins ?? 0) + 1;
+      // the same verified success as the live standing (receipts and chains too: before ADR 0131 only the user's or a
+      // review's survived a prune, so the Orchestrator lost the receipts' XP of its pruned decisions)
+      if (e?.verdict === 'success') t.decisionWins = (t.decisionWins ?? 0) + 1;
+      t.decisionXp = round2(dxp0 + decisionXp(run, earn, e));
     }
     if (!run.tags || run.endedAt === undefined || t.tagsLost) continue;
     const one = emptyTally(run.agentId, run.version);

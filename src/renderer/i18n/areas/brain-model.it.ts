@@ -39,7 +39,6 @@ export const brainModelIt = {
   'bm.mig.noAgent': 'nessun agente',
 
   // Skill page
-  'bm.skills.title': 'Skill',
   'bm.skills.lead': (p: { n: number; used: number }) => `${p.n === 1 ? '1 skill' : `${p.n} skill`}, ${p.used} usate da almeno un agente. Una skill è come si fa un lavoro: l’agente che la dichiara la carica quando parte.`,
   'bm.skills.new': 'Nuova skill',
   'bm.skills.search': 'Cerca una skill…', 'bm.skills.searchLabel': 'Cerca nelle skill',
@@ -66,7 +65,6 @@ export const brainModelIt = {
 
   // Memoria page
   'bm.mem.title': 'Memoria',
-  'bm.mem.lead': 'Quello che il brain sa e quello che è successo, più una memoria per ogni agente. Non viaggia mai con un agente esportato.',
   'bm.mem.knowledge': 'Conoscenza', 'bm.mem.knowledgeLead': 'Clienti, ambienti, persone e riferimenti.',
   'bm.mem.happened': 'Cosa è successo', 'bm.mem.happenedLead': 'Fili aperti, diario ed errori registrati.',
   'bm.mem.agents': 'Memorie degli agenti', 'bm.mem.agentsLead': 'Una per agente. Quello che più agenti sapevano va nella memoria condivisa, una volta sola.',
@@ -128,7 +126,5 @@ export const brainModelIt = {
   'bm.card.skills': 'Skill', 'bm.card.noSkills': 'Nessuna skill dichiarata: lavora con il suo ruolo.',
   'bm.card.memory': 'Memoria', 'bm.card.memoryNone': 'ancora vuota',
   'bm.card.back': 'Torna',
-  'bm.studio.skills': 'Skill e memoria',
-  'bm.studio.skillsHint': 'Le skill dichiarate si caricano quando l’agente parte; la sua memoria arriva con lui. Le cambia la manutenzione, o tu dalla pagina Skill.',
   'bm.studio.manage': 'Gestisci le skill',
 };

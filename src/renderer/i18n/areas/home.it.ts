@@ -1,35 +1,23 @@
 // Home dashboard strings; no model-generated text is needed to explain its measurements.
 export const homeIt = {
-  'home.context': 'Contesto',
-  'home.activityLead': 'Il lavoro in movimento. Le decisioni che aspettano te.',
-  'home.workingCount': (p: { count: number }) => `${p.count} al lavoro`,
-  'home.reviewCount': (p: { count: number }) => `${p.count} da rivedere`,
-  'home.waiting': 'Aspetta te', 'home.commandReview': 'Comando da rivedere', 'home.permissionReview': 'Permesso richiesto', 'home.questionReview': 'Domanda',
-  'home.clear': 'Tutto in ordine. Nessuna decisione in attesa.', 'home.newAgent': 'Nuovo agente',
+  
+  
   'home.emptyAgents': 'Racconta all’Orchestrator cosa vuoi fare, oppure crea il tuo primo agente.',
-  'home.orchestratorBeside': 'L’Orchestrator è qui, alla tua destra →', 'home.startHere': 'Il tuo punto di partenza',
+  'home.startHere': 'Il tuo punto di partenza',
   'home.orchestratorWidth': 'Larghezza Orchestrator', 'home.orchestratorStart': 'Da dove partiamo?',
   'home.orchestratorIntro': 'Un solo posto per le tue idee, gli agenti e il prossimo passo. L’Orchestrator rimane qui mentre lavori.',
-  'home.greeting': (p: { name: string }) => `Ehi ${p.name}, cosa facciamo oggi?`,
   'home.headlineBy': (p: { model: string }) => `Battuta scritta da ${p.model} sui fatti di oggi; una al giorno, nella prima chiamata del Battito.`,
   'home.headlineBuiltin': 'Battuta della lista dell’app: quella scritta dal modello arriva con il prossimo aggiornamento.',
   'home.orchestrator': 'Orchestrator',
   'home.agents': 'Agenti', 'home.manageAgents': 'Gestisci agenti', 'home.back': 'Torna alla Grindhouse', 'home.workspace': 'Gli agenti al lavoro e l’Orchestrator',
-  'home.chooseEngine': 'Scegli il motore per l’Orchestrator', 'home.createOrchestrator': 'Avvia l’Orchestrator',
-  'home.title': 'Il tuo spazio', 'home.lead': 'Guarda i dati, apri i dettagli e parlane con l’Orchestrator.',
-  'home.map': 'Mappa del tuo spazio', 'home.summary': 'Riepilogo dai dati reali',
-  'home.spend': 'Spesa a listino', 'home.works': 'Cosa funziona', 'home.errors': 'Errori ricorrenti', 'home.ideas': 'Idee aperte',
-  'home.spendReading': (p: { calls: number }) => `${p.calls} chiamate nel periodo. Prezzi API di listino: non è una fattura e non include automaticamente tutti i motori.`,
+  'home.chooseEngine': 'Scegli il motore per l’Orchestrator', 
+  
+  
+  'home.works': 'Cosa funziona', 
   'home.rulesReading': (p: { days: number; pending: number }) => `Regole il cui errore non è ricomparso entro ${p.days} giorni osservati; ${p.pending} non valutabili. Non dimostra un successo causale.`,
-  'home.noRules': 'Non ci sono ancora regole valutabili nella finestra osservata.',
-  'home.errorsReading': (p: { count: number; unknown: number }) => `Categorie ripetute tra ${p.count} errori registrati; ${p.unknown} senza categoria riconosciuta. Non è un tasso per turno.`,
-  'home.ideasReading': (p: { active: number }) => `Idee ancora da valutare; altre ${p.active} sono in corso.`,
-  'home.registeredThrough': 'Storico registrato al', 'home.loading': 'Leggo i dati disponibili…', 'home.unavailable': 'Dato non disponibile: apri il dettaglio per verificarne la fonte.',
-  'home.updated': 'Letto il', 'home.readFailed': 'Aggiornamento non riuscito; gli eventuali dati precedenti restano visibili.',
-  'home.retry': 'Riprova', 'home.details': 'Vedi dettaglio', 'home.conversation': 'Parla con l’app e il suo brain',
-  'home.ask': 'Scrivi all’Orchestrator già esistente. Il modello parte solo quando invii.',
-  'home.noOrchestrator': 'L’Orchestrator non è attivo. Apri lo spazio modifiche o crea un Orchestrator dal suo pannello; qui non viene avviato automaticamente.',
-  'home.question': 'La tua richiesta', 'home.placeholder': 'Che cosa vuoi capire o migliorare?', 'home.send': 'Invia all’Orchestrator',
-  'home.openOrchestrator': 'Apri conversazione', 'home.sent': 'Richiesta inviata.', 'home.queued': 'Richiesta in coda nell’Orchestrator.', 'home.notSent': 'Richiesta non inviata: il testo resta qui. Riprova quando la chat è disponibile.',
-  'home.compare': 'Confronto modelli',
+  
+  
+  
+  
+  
 };

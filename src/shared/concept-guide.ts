@@ -326,20 +326,28 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Sul retro della carta, i costi dell’agente: costo mediano per lavoro e costo per lavoro riuscito e verificato (il costo di tutti i lavori conclusi diviso per i riusciti verificati), con su quanti lavori. Un numero che manca è un trattino, con una riga che dice perché.',
         'On the back of the card, the agent’s costs: median cost per run and cost per verified successful run (the cost of every ended run divided by the verified successful ones), with how many runs. A missing number is a dash, with one line saying why.'),
       // src/main/agents/standing.ts; src/renderer/components/AgentCatalogCard.tsx
-      b('Ogni carta ha un livello e una performance. Livello: conta solo i lavori riusciti e verificati, mai quelli falliti o non verificati, e il numero vero è scritto accanto («Lv 6 Maestro · 38 riusciti verificati»); Lv 2 a 5, Lv 3 a 15, Lv 4 a 30 (ogni livello ne chiede 5 in più). Performance: media dei voti (riuscito 100%, in parte 50%, fallito 0%) pesata per chi ha votato (tu e una revisione × 1, una revisione del Sentinel giudicata dai fatti × 0,8, l’Orchestrator × 0,6, il genitore verificato di un lavoro delegato × 0,5; l’agente su sé stesso non conta) e per età (metà peso ogni 30 giorni); sotto 5 lavori valutati l’agente è «in rodaggio». Il «?» accanto a ciascuno dà la formula.',
-        'Each card has a level and a performance. Level: only verified successful runs count, never failed or unverified ones, and the real number is written beside it ("Lv 6 Master · 38 verified successes"); Lv 2 at 5, Lv 3 at 15, Lv 4 at 30 (each level asks 5 more). Performance: the average of verdicts (success 100%, partial 50%, failure 0%) weighted by who gave them (you and a review × 1, a Sentinel review graded by what happened × 0.8, the Orchestrator × 0.6, the verified parent of a delegated run × 0.5; the agent on itself does not count) and by age (half weight every 30 days); below 5 judged runs the agent is "warming up". The "?" beside each gives the formula.'),
+      b('Ogni carta ha un livello e una performance. Livello: solo i lavori riusciti e verificati danno XP, da 1 a 5 secondo quanto è grande il lavoro (turni, tempo di lavoro, file cambiati, chat delegate), e accanto c’è il totale («Lv 7 Praticante · 124 XP»). Lv 2 a 6 XP (circa 3 lavori), Lv 10 a 202, Lv 100, il massimo, a 9.358: con 4 lavori verificati al giorno, un mese per il Lv 10 e circa 4 anni per il Lv 100. Performance: una stima che parte dal 50% e si sposta coi voti (riuscito 100%, in parte 50%, fallito 0%), pesati per chi ha votato (tu e una revisione × 1, una revisione del Sentinel giudicata dai fatti × 0,8, le ricevute × 0,7, l’Orchestrator × 0,6, un segnale sulle scelte dell’Orchestrator e il genitore verificato × 0,5, un esito di Flash × 0,3; l’agente su sé stesso non conta) e per età (metà peso ogni 30 giorni), con un ± di incertezza; con meno di 5 voti o un ± oltre 30 punti l’agente è «in rodaggio». Il «?» accanto a ciascuno dà la formula.',
+        'Each card has a level and a performance. Level: only verified successful runs give XP, 1 to 5 by the size of the job (turns, working time, files changed, delegated chats), and the total is written beside it ("Lv 7 Practitioner · 124 XP"). Lv 2 at 6 XP (about 3 runs), Lv 10 at 202, Lv 100, the top, at 9,358: with 4 verified runs a day, a month to Lv 10 and about 4 years to Lv 100. Performance: an estimate that starts at 50% and moves with the verdicts (success 100%, partial 50%, failure 0%), weighted by who gave them (you and a review × 1, a Sentinel review graded by what happened × 0.8, the receipts × 0.7, the Orchestrator × 0.6, a signal on the Orchestrator’s choices and a verified parent × 0.5, a Flash outcome × 0.3; the agent on itself does not count) and by age (half weight every 30 days), with a ± of uncertainty; with fewer than 5 verdicts or a ± beyond 30 points the agent is "warming up". The "?" beside each gives the formula.'),
+      // src/main/agents/standing.ts decisionSignals, decisionXp; src/main/agents/flash-outcomes.ts (ADR 0131)
+      b('L’Orchestrator guadagna con i lavori che ha avviato e sono riusciti verificati (gli XP del lavoro, dimezzati se il compito è passato a un altro ruolo o è stato rifatto), più 1 XP per un piano dello Strategist approvato senza modifiche; un compito passato a un altro ruolo, riaperto o rifatto pesa contro le sue scelte. Flash non apre lavori: una sua risposta regge se nei 5 minuti dopo non la correggi, non rifai la domanda e non la passi all’Orchestrator, e vale 0,25 XP. Tutto senza costo in token né nuove richieste di permesso.',
+        'The Orchestrator earns with the runs it started that are verified successes (the job’s XP, halved when the task went to another role or was redone), plus 1 XP for a Strategist plan approved with no change; a task handed to another role, reopened or redone weighs against its choices. Flash opens no runs: one of its answers holds when within 5 minutes you do not correct it, ask it again or hand it to the Orchestrator, and is worth 0.25 XP. All with no token cost and no new permission prompt.'),
       // src/main/agents/standing.ts earnedVerdict; src/main/agents/judge-sample.ts pickAudits (ADR 0125)
       b('Ogni ruolo sale di livello anche senza i tuoi voti, se l’interruttore «Abilita controllo livello e performance» è acceso: un lavoro avviato dall’Orchestrator è verificato dalla revisione di un Sentinel; un lavoro delegato prende il verdetto del genitore verificato, se il suo resoconto aveva tutti i criteri soddisfatti, è arrivato prima che il genitore finisse e non è stato corretto, riaperto, rifatto o bocciato dal genitore; la revisione del Sentinel è giudicata da ciò che succede dopo: il tuo voto sullo stesso lavoro, una seconda revisione indipendente (1 lavoro su 10, costo in più circa un decimo) o un lavoro che aveva promosso e poi è stato riaperto o rifatto. Il silenzio non conta mai.',
         'Every role levels up without your verdicts too, when the switch "Enable level and performance check" is on: a run the Orchestrator opened is verified by a Sentinel review; a delegated run takes its verified parent’s verdict, when its report met every criterion, arrived before the parent ended and was not corrected, reopened, redone or rejected by the parent; the Sentinel review is graded by what happens next: your verdict on the same run, a second independent review (1 run in 10, about a tenth more cost) or a run it passed that was then reopened or redone. Silence never counts.'),
+      // src/main/agents/receipts.ts; src/main/agents/judge-sample.ts byReceipts (ADR 0130)
+      b('Prima di una revisione l’app guarda le ricevute del lavoro, registrate gratis mentre girava: i comandi con il loro codice di uscita, i file cambiati, i commit e le PR. Se i test o i controlli del progetto, non toccati dall’agente, sono passati dopo l’ultima modifica e l’agente dice di aver finito, il lavoro è riuscito senza revisione (peso × 0,7); se falliscono e l’agente lo ammette, è fallito. Se le ricevute non bastano o non concordano col resoconto, decide il Sentinel; una ricevuta su dieci viene rivista comunque.',
+        'Before a review the app reads the run’s receipts, recorded for free while it ran: the commands with their exit code, the files changed, commits and PRs. If the project’s tests or checks, untouched by the agent, passed after the last change and the agent says it finished, the run succeeded with no review (weight × 0.7); if they fail and the agent admits it, it failed. When the receipts are not enough or disagree with the report, the Sentinel decides; one receipt in ten is reviewed anyway.'),
     ],
     analogy: b('Come il cruscotto di una flotta: consumi e tempi per veicolo, con scritto quando un dato manca invece di inventarlo.',
       'Like a fleet dashboard: consumption and times per vehicle, saying when a figure is missing instead of inventing it.'),
     tech: [
       tech(DATA, 'AgentMeasure { total, knownSubtotal, knownSessions, unknownSessions }; timing per categoria con medianMs.', 'AgentMeasure { total, knownSubtotal, knownSessions, unknownSessions }; timing per category with medianMs.'),
       // src/main/wiring.ts /api/agents/analytics
+      // src/main/agents/level-diagnosis.ts, scripts/levels.mjs (ADR 0131)
+      tech(WHERE, 'Diagnosi dei livelli: npm run levels -- <agent-runs.json> ricalcola livello e performance di ogni ruolo e dice perché i lavori non hanno dato XP (solo lettura, zero token).', 'Levels diagnostic: npm run levels -- <agent-runs.json> recomputes every role’s level and performance and says why runs gave no XP (read only, zero tokens).'),
       tech(WHERE, 'Metriche delle run: IPC agents:metrics, anche filtrate per tag skill, app e repo; le statistiche delle sessioni restano interne (/api/agents/analytics).', 'Run metrics: agents:metrics IPC, also filtered by skill, app and repo tags; the session statistics stay internal (/api/agents/analytics).'),
     ],
-    sources: ['src/main/agents/analytics.ts', 'src/main/agents/run-metrics.ts', 'src/main/agents/standing.ts', 'src/main/agents/judge-sample.ts', 'src/renderer/components/AgentCatalogCard.tsx', 'src/main/index.ts', 'src/main/agents/collector.ts', 'docs/agent-evidence.md', 'docs/adr/0125-every-role-levels-up-from-outcomes.md'],
+    sources: ['src/main/agents/analytics.ts', 'src/main/agents/run-metrics.ts', 'src/main/agents/standing.ts', 'src/main/agents/judge-sample.ts', 'src/renderer/components/AgentCatalogCard.tsx', 'src/main/index.ts', 'src/main/agents/collector.ts', 'docs/agent-evidence.md', 'docs/adr/0125-every-role-levels-up-from-outcomes.md', 'src/main/agents/receipts.ts', 'docs/adr/0130-run-receipts-before-reviews.md', 'src/main/agents/xp.ts', 'src/main/agents/flash-outcomes.ts', 'src/main/agents/level-diagnosis.ts', 'docs/adr/0131-levels-by-job-size-and-bayesian-performance.md'],
   },
   {
     id: 'errors-rules',
@@ -353,6 +361,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Ci sono 11 tipi ufficiali (es. test-passato-a-torto, richiesta-fraintesa, regola-ignorata); una riga illeggibile è «Formato non riconosciuto».',
         'There are 11 official types (e.g. test-passato-a-torto, richiesta-fraintesa, regola-ignorata); an unreadable line is "Unrecognised format".'),
       b('Un tipo è «ricorrente» da 2 righe in su; si confronta la settimana con la precedente.', 'A type is "recurring" from 2 rows up; the week is compared with the previous one.'),
+      // src/main/brainmodel/error-lessons.ts
+      b('Un errore ricorrente diventa da solo una regola per ogni ruolo in rules/lessons.md (la sua «regola:», se scritta), con Annulla nel Log.',
+        'A recurring error becomes a rule for every role in rules/lessons.md by itself (its own "regola:", when written), with Undo in the Log.'),
       // src/renderer/lib/correction.ts, src/renderer/components/CorrectThought.tsx (ADR 0058)
       b('«Correggi» su un pezzo di ragionamento manda all’agente la citazione e la tua correzione; è bloccato se c’è una domanda aperta.',
         '"Correct" on a piece of reasoning sends the agent the quote and your fix; it is blocked while a question is open.'),
@@ -536,9 +547,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/store/state.ts pending; src/main/chats/manager.ts
       b('Ogni domanda, permesso o comando da rivedere entra nell’elenco «pending»; la chat resta ferma finché non rispondi.',
         'Every question, permission or command to review joins the "pending" list; the chat stays blocked until you answer.'),
-      // src/renderer/lib/questions.ts; src/renderer/components/TopBar.tsx PopupsSwitch
-      b('«Domande in finestra» (interruttore «Popup» in alto, spento di default) le apre una alla volta in una finestra centrale.',
-        '"Questions in a window" (the "Popups" switch at the top, off by default) opens them one at a time in a central window.'),
+      // src/renderer/lib/questions.ts; src/renderer/components/QuestionsWindow.tsx
+      b('Si aprono sempre una alla volta in una finestra centrale: non c’è un interruttore per spegnerla.',
+        'They always open one at a time in a central window: there is no switch to turn it off.'),
       // src/renderer/components/QuestionsWindow.tsx
       b('Nella finestra puoi rispondere in qualsiasi ordine dalla colonna a sinistra; Esc vuol dire «Rispondi dopo», non «rifiuta».',
         'In the window you can answer in any order from the left rail; Esc means "Answer later", not "deny".'),
@@ -546,8 +557,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Se stai scrivendo, una domanda nuova aspetta come pillola e compare 2 secondi dopo che smetti.',
         'If you are typing, a new question waits as a pill and appears 2 seconds after you stop.'),
       // src/renderer/lib/later.ts, src/main/later.ts
-      b('«Rispondi dopo» tiene tutto in «Da rispondere» senza popup; Ctrl+J apre la prossima cosa che ti aspetta.',
-        '"Answer later" keeps everything in "To answer" with no popups; Ctrl+J opens the next thing waiting for you.'),
+      b('«Rispondi dopo» mette da parte solo quella richiesta in «Da rispondere»; Ctrl+J apre la prossima cosa che ti aspetta.',
+        '"Answer later" sets only that request aside in "To answer"; Ctrl+J opens the next thing waiting for you.'),
       // src/renderer/components/AskImages.tsx, src/main/ask-image.ts SCREENSHOT_HINT
       b('Gli screenshot che l’agente cita (un percorso PNG/JPG/WebP nella domanda o in un’opzione) compaiono come miniature, prima e dopo affiancati; un clic li apre grandi. Lo stesso vale per i messaggi in chat.',
         'Screenshots the agent names (a PNG/JPG/WebP path in the question or an option) show as thumbnails, before and after side by side; a click opens them large. Chat messages work the same way.'),
@@ -557,13 +568,13 @@ export const CONCEPTS: readonly ConceptCard[] = [
     ],
     analogy: b('Come i post-it sulla scrivania: restano lì finché non li togli tu, e puoi decidere di guardarli dopo pranzo.',
       'Like sticky notes on the desk: they stay until you remove them, and you can decide to look at them after lunch.'),
-    diagram: { kind: 'flow', steps: [b('Chat chiede', 'Chat asks'), b('In attesa', 'Pending'), b('Riquadro o finestra', 'Tile or window'), b('Risposta', 'Answer'), b('La chat riparte', 'Chat resumes')] },
+    diagram: { kind: 'flow', steps: [b('Chat chiede', 'Chat asks'), b('In attesa', 'Pending'), b('Finestra delle domande', 'Questions window'), b('Risposta', 'Answer'), b('La chat riparte', 'Chat resumes')] },
     tech: [
       tech(DATA, "Answer = { kind: 'permission', allow, always?, message? } | { kind: 'question', answers }.", "Answer = { kind: 'permission', allow, always?, message? } | { kind: 'question', answers }."),
-      tech(FILES, 'Impostazione questionsModal (default false); stato «Rispondi dopo» in userData/answer-later.json.', 'Setting questionsModal (default false); "Answer later" state in userData/answer-later.json.'),
+      tech(FILES, 'Nessuna impostazione; le richieste messe da parte con «Rispondi dopo» restano in memoria fino alla risposta.', 'No setting; requests set aside with "Answer later" stay in memory until answered.'),
       tech(WHERE, 'Le domande non svegliano l’Orchestrator da sole (orchestrator-wake.ts); l’ordine è quello di arrivo.', 'Questions never wake the Orchestrator by themselves (orchestrator-wake.ts); the order is arrival order.'),
     ],
-    sources: ['src/renderer/store/state.ts', 'src/renderer/lib/questions.ts', 'src/renderer/components/QuestionsWindow.tsx', 'src/renderer/components/AskImages.tsx', 'src/main/ask-image.ts', 'src/renderer/components/TopBar.tsx', 'src/renderer/lib/later.ts', 'src/main/later.ts', 'src/main/chats/orchestrator-wake.ts', 'src/shared/contract.ts'],
+    sources: ['src/renderer/store/state.ts', 'src/renderer/lib/questions.ts', 'src/renderer/components/QuestionsWindow.tsx', 'src/renderer/components/AskImages.tsx', 'src/main/ask-image.ts', 'src/renderer/lib/later.ts', 'src/main/later.ts', 'src/main/chats/orchestrator-wake.ts', 'src/shared/contract.ts'],
   },
   {
     id: 'grindhouse',
@@ -791,6 +802,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/brain/components/ReportHtml.tsx, ReportImages.tsx
       b('Report Markdown e HTML con le loro immagini (incorporate in base64 o file accanto al report), mai da internet; un clic su un’immagine la apre grande. L’HTML è ripulito: niente script, moduli o caricamenti esterni.',
         'Markdown and HTML reports with their images (embedded as base64 or files beside the report), never from the internet; a click on an image opens it large. The HTML is cleaned: no scripts, forms or external loads.'),
+      // src/renderer/components/viewer/ViewerOverlay.tsx, ShotsCompare.tsx; brain/components/FindBar.tsx, Toc.tsx; brain/pages/FileDiff.tsx
+      b('Si apre sopra la pagina, che resta com’era: Esc lo chiude, Alt+←/→ passano tra i file aperti, Espandi (F11) lo porta a tutto schermo. Ctrl+F cerca nel testo, un documento lungo ha l’indice a lato, Confronta mostra le modifiche affiancate parola per parola, e gli screenshot prima e dopo di un agente si confrontano affiancati o con un cursore.',
+        'It opens above the page, which stays as it was: Esc closes it, Alt+←/→ move between the files opened, Expand (F11) makes it full screen. Ctrl+F searches the text, a long document has its contents beside it, Compare shows the changes side by side word by word, and an agent’s before and after screenshots compare side by side or with a slider.'),
       // src/main/peek-file.ts
       b('Cliccare un percorso in chat apre prima un’anteprima piccola (14 righe), senza scrivere né eseguire nulla.',
         'Clicking a path in a chat first opens a small preview (14 lines), writing and running nothing.'),
@@ -829,9 +843,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/brain/routing.ts explore
       b('«Esplorazione» (0–50%) prova ogni tanto il modello con meno esempi, mai per l’Orchestrator e mai per le chat che avvii tu.',
         '"Exploration" (0–50%) sometimes tries the model with the fewest samples, never for the Orchestrator and never for chats you start.'),
-      // src/renderer/components/RoutingGroup.tsx
-      b('In Impostazioni la modifichi riga per riga; «L’AI può cambiarla» spento blocca la riga agli agenti; ogni salvataggio è una versione.',
-        'In Settings you edit it row by row; "AI may change it" off locks the row from agents; every save is a version.'),
+      // src/main/brain/routing.ts (the table's file in the brain)
+      b('La tabella è un file del brain: ogni salvataggio è una versione nuova e una riga «locked» non la cambiano gli agenti.',
+        'The table is a file in the brain: every save is a new version, and agents never change a «locked» row.'),
       // docs/adr/0047-routing-voted-and-priced-per-work.md
       b('Il voto dei lavori e il ciclo che aggiorna la tabella vivono negli script del brain (ADR 0047).',
         'Work votes and the loop that updates the table live in the brain’s scripts (ADR 0047).'),
@@ -846,7 +860,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
         '<brain>/ops/state/improve/routing/v<N>.json + current.json; prices and models in <brain>/harness/models.json, or in the app’s copy until a new brain has its own.'),
       tech(LIMITS, 'EXPLORE_MIN = 20 esempi; mai Fable; le aree App usano il motore delle chat dell’app.', 'EXPLORE_MIN = 20 samples; never Fable; App areas use the app chats’ engine.'),
     ],
-    sources: ['src/main/brain/routing.ts', 'src/main/brain/brain-estimates.ts', 'src/renderer/components/RoutingGroup.tsx', 'src/renderer/lib/routing.ts', 'docs/adr/0032-model-routing.md', 'docs/adr/0047-routing-voted-and-priced-per-work.md'],
+    sources: ['src/main/brain/routing.ts', 'src/main/brain/brain-estimates.ts', 'src/renderer/lib/routing.ts', 'docs/adr/0032-model-routing.md', 'docs/adr/0047-routing-voted-and-priced-per-work.md'],
   },
   {
     id: 'costs',

@@ -5,6 +5,7 @@
 // (ADR 0106), changes nothing and starts no work. «Fanne un lavoro» drafts the last question and its answer into the Orchestrator's
 // input (never sent by itself): work still starts only from the Orchestrator (ADR 0083). The eraser on its head empties its
 // context in one click, like /clear (clearFlash in actions.ts). Used by OrchestratorOverlay.tsx.
+import { lastAsk } from '../lib/typing-line';
 import { useEffect, useRef, useState } from 'react';
 import { isBusy } from '../store/state';
 import { createChat, stop, useApp } from '../store/store';
@@ -66,7 +67,7 @@ export function LampoTile({ onWork }: { onWork: () => void }) {
       </div>
       <div className="chat-topic-row"><ModelChip chat={lampo} profileId={FLASH_ID} testid="lampo-model" /><span className="chat-topic">{t('lampo.hint')}</span></div>
     </header>
-    <ItemList chatId={lampo.id} items={items ?? []} empty={t('lampo.empty')} footer={busy ? <Typing what={turnActivity(items)} testid="typing-lampo" /> : null} />
+    <ItemList chatId={lampo.id} items={items ?? []} empty={t('lampo.empty')} footer={busy ? <Typing what={turnActivity(items)} testid="typing-lampo" topic={lastAsk(items)} /> : null} />
     <ChatInput ref={input} chat={lampo} testid="lampo-input" />
   </section>;
 }

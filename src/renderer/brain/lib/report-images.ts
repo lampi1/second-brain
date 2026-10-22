@@ -9,6 +9,8 @@
 // - scrubCss: a report's own CSS without anything that could load from outside (url(), @import, image-set,
 //   expression(), behaviors), so a style can never fetch; stripHostSelectors: no :host rules, so it cannot restyle the
 //   viewer's shadow host.
+// - imageComparison / beforeAfterPair: which two screenshots are a before and an after (their file names or captions),
+//   for the gallery's labels and the viewer's "Prima / Dopo" (components/viewer/ShotsCompare.tsx; AskImages.tsx too).
 // Used by brain/components/ReportImages.tsx and brain/components/ReportHtml.tsx; pinned by test/unit/report-images.test.ts.
 import type { MarkedExtension } from 'marked';
 import {plainPath} from '../../lib/pathPatterns';
@@ -122,13 +124,40 @@ export const reportImageExtension: MarkedExtension = {
   }],
 };
 
-/** Only an explicit before/after filename component supplies comparison semantics. */
-export function imageComparison(path: string): { key: string; side: 'before' | 'after' } | null {
+type Side = 'before' | 'after';
+const SIDE: Readonly<Record<string, Side>> = { before: 'before', after: 'after', prima: 'before', dopo: 'after', vorher: 'before', nachher: 'after' };
+
+/** Only an explicit before/after filename component (English, Italian or German) supplies comparison semantics. The
+ *  key is the path with that word replaced, folder separators and case folded: the two sides of one pair share it. */
+export function imageComparison(path: string): { key: string; side: Side } | null {
   const folderEnd = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1;
-  const match = /(^|[-_ .])(before|after)(?=[-_ .]|$)/i.exec(path.slice(folderEnd));
+  const match = /(^|[-_ .])(before|after|prima|dopo|vorher|nachher)(?=[-_ .]|$)/i.exec(path.slice(folderEnd));
   if (!match) return null;
   const start = folderEnd + match.index + match[1]!.length;
-  return { key: path.slice(0, start).toLowerCase() + '{side}' + path.slice(start + match[2]!.length).toLowerCase(), side: match[2]!.toLowerCase() as 'before' | 'after' };
+  const fold = (s: string) => s.replace(/\\/g, '/').toLowerCase();
+  return { key: fold(path.slice(0, start)) + '{side}' + fold(path.slice(start + match[2]!.length)), side: SIDE[match[2]!.toLowerCase()]! };
+}
+
+/** A caption that says which side it is ("Prima", "Dopo: il bottone", "After (fixed)"). */
+export function captionSide(caption: string): Side | null {
+  const m = /^\s*(before|after|prima|dopo|vorher|nachher)\b/i.exec(caption);
+  return m ? SIDE[m[1]!.toLowerCase()]! : null;
+}
+
+/** The before/after pair among the screenshots an agent named (a message, a question, a report), for the viewer's
+ *  "Prima / Dopo": two files whose names differ only by the before/after word, else the only image captioned as
+ *  before and the only one captioned as after. Null when there is no such pair. */
+export function beforeAfterPair<T extends { path?: string; caption: string }>(images: readonly T[]): { before: T; after: T } | null {
+  const sides = images.map(im => (im.path ? imageComparison(im.path) : null));
+  for (let i = 0; i < images.length; i++) {
+    const s = sides[i];
+    if (s?.side !== 'before') continue;
+    const j = sides.findIndex(o => o?.side === 'after' && o.key === s.key);
+    if (j >= 0) return { before: images[i]!, after: images[j]! };
+  }
+  const by = (side: Side) => images.filter((im, i) => (captionSide(im.caption) ?? sides[i]?.side) === side);
+  const before = by('before'), after = by('after');
+  return before.length === 1 && after.length === 1 && before[0] !== after[0] ? { before: before[0]!, after: after[0]! } : null;
 }
 
 /** A comparison label may precede a gallery; arbitrary surrounding prose is never moved. */

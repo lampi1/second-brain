@@ -53,7 +53,7 @@ function useRows(): { rows: Row[]; ready: boolean } {
     ...(state?.skills ?? []).filter(s => s.home === 'brain').map(s => ({ kind: 'skill' as const, id: s.name, name: s.name, sub: s.description || s.rel || s.file, at: s.changedAt, open: s.rel ? () => goTarget(`file/${s.rel}`) : undefined })),
     ...(state?.rules ?? []).map(r => ({ kind: 'rule' as const, id: r.file, name: r.title, sub: r.file, at: r.changedAt, locked: ruleLocked(r.file, r.loaded) ? t('mh.ap.locked') : undefined, open: () => goTarget(`file/${r.file}`) })),
     ...confirmed.map(f => ({ kind: 'fact' as const, id: f.memoryId, name: `${f.subject} · ${f.predicate}`, sub: f.value, at: isoMs(f.transitions?.at(-1)?.at ?? f.observedAt) })),
-    ...(scripts.data?.scripts ?? []).map(s => ({ kind: 'script' as const, id: s.id, name: s.title, sub: s.file, at: isoMs(s.changedAt), open: () => goTarget(`memoria/script/${encodeURIComponent(s.id)}`) })),
+    ...(scripts.data?.scripts ?? []).filter(s => s.tested.state === 'ok').map(s => ({ kind: 'script' as const, id: s.id, name: s.title, sub: s.file, at: isoMs(s.changedAt), open: () => goTarget(`memoria/script/${encodeURIComponent(s.id)}`) })),
   ], [state, confirmed, scripts.data]);
   return { rows, ready: !!state };
 }

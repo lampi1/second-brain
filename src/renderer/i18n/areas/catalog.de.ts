@@ -3,7 +3,8 @@ import type { catalogIt } from './catalog.it';
 export const catalogDe: typeof catalogIt = {
   // the Agenti page's review switch (JudgingSwitch.tsx)
   'catalog.judging.title': 'Prüfung von Level und Leistung aktivieren',
-  'catalog.judging.onDesc': 'Ein: Jede erledigte Aufgabe wird von einem Sentinel in einer neuen Sitzung geprüft. Level und Leistung beruhen auf echten Urteilen.',
+  'catalog.judging.onDesc': 'Ein: Jede erledigte Aufgabe wird von einem Sentinel in einer neuen Sitzung geprüft, außer denen, die die Tests des Projekts schon entscheiden. Level und Leistung beruhen auf echten Urteilen.',
+  'catalog.judging.receipts': (p: { runs: string }) => `Weitere ${p.runs} Aufgaben pro Tag entscheiden ihre Belege (die nach der letzten Änderung ausgeführten Tests und Prüfungen): keine Prüfung, keine Kosten.`,
   'catalog.judging.offDesc': 'Aus: keine Prüfungen. Level und Leistung zählen nur deine Bewertungen, die des Orchestrators und die Fakten.',
   'catalog.judging.cost': (p: { cost: string; runs: string; each: string; audits: string }) => `Geschätzte Kosten: etwa ${p.cost} pro Tag (${p.runs} Aufgaben pro Tag × ${p.each} pro Prüfung, dazu ${p.audits} Zweitprüfungen pro Tag, die den Prüfer prüfen).`,
   'catalog.judging.costNoReview': (p: { runs: string }) => `Geschätzte Kosten: ${p.runs} Prüfungen pro Tag; der Preis einer Prüfung erscheint nach der ersten.`,
@@ -51,7 +52,7 @@ export const catalogDe: typeof catalogIt = {
   'catalog.costsWhy.noTotal': 'Kosten pro Erfolg: Die Summe der ältesten Runs fehlt; sie erscheint mit den nächsten.',
   'catalog.costsWhy.partial': ({ n, total }) => `Kosten pro Erfolg: Die Kosten sind nur für ${n} von ${total} Runs bekannt.`,
   'catalog.costsHelp': 'Mediankosten: Die Hälfte der beendeten Runs mit bekannten Kosten war billiger. Kosten pro geprüftem Erfolg: die Kosten aller beendeten Runs geteilt durch die geprüft erfolgreichen (die das Level zählt). Zu API-Listenpreisen: Mit einem Abo ist das nicht, was du zahlst.',
-  'catalog.metricsError': 'Statistik nicht verfügbar. Versuch es noch einmal.', 'catalog.back': 'Zurück zum Katalog',
+  'catalog.metricsError': 'Statistik nicht verfügbar. Versuch es noch einmal.', 
   // the built-in roles' purpose (name, purpose and character always come from the role: lib/role-text.ts)
   'catalog.purpose.orchestrator': 'Koordiniert die Arbeit: gibt jede Aufgabe an eine Rolle und hält dich über den Stand auf dem Laufenden.',
   'catalog.purpose.strategist': 'Zerlegt ein Ziel in einen Plan und gibt die Teile an die passenden Rollen.',
@@ -61,4 +62,6 @@ export const catalogDe: typeof catalogIt = {
   'catalog.purpose.herald': 'Bereitet Nachrichten und Entwürfe für Personen und externe Dienste vor; jeden Versand genehmigst du.',
   'catalog.purpose.flash': 'Schnelle Antworten neben dem Orchestrator: sieht seinen Chat, liest, ändert nichts',
   'catalog.purpose.pulse': 'Ideen, Tipps, Erinnerungen, Verknüpfungen und der Satz des Tages',
+  // the model tier's word, on the role card and in the studio
+  'roles.tier.light': 'leicht', 'roles.tier.mid': 'mittel', 'roles.tier.top': 'hoch',
 };

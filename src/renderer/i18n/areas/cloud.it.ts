@@ -17,14 +17,10 @@ export const cloudIt = {
   'cloud.by.agent': 'aperto dall’Orchestrator', 'cloud.by.user': 'aperto da te', 'cloud.by.vendor': 'aperto fuori dall’app',
   'cloud.failed': (p: { why: string }) => `Agente cloud: ${p.why}`,
   'cloud.applied': (p: { path: string }) => `Risultato portato in locale: ${p.path}`,
-  'cloud.started': (p: { engine: string }) => `Agente cloud avviato su ${p.engine}`,
-  'cloud.where': 'Dove', 'cloud.whereLocal': 'Locale', 'cloud.whereCloud': 'Cloud',
-  'cloud.whereHint': 'Cloud: l’agente gira nel cloud del fornitore e continua anche a PC spento. Serve un repository GitHub con il branch già pushato; l’agente pusha solo il suo branch.',
-  'cloud.engine': 'Motore cloud', 'cloud.checking': 'verifico…', 'cloud.ready': 'pronto',
-  'cloud.cost.cursor': 'a prezzo API, conta nel limite Cursor', 'cloud.cost.plan': 'dal tuo piano',
-  'cloud.env': 'Ambiente Codex cloud', 'cloud.envHint': 'l’id dell’ambiente del repository (chatgpt.com/codex → Ambienti); l’app lo ricorda',
-  'cloud.notReady': 'Nessun motore cloud è pronto per questa cartella.',
-  'cloud.create': 'Avvia nel cloud',
+  
+  
+  
+  
   'cloud.key': 'Chiave Cursor Cloud Agents',
   'cloud.keyHint': 'Dal Cursor Dashboard → Integrations. Serve solo per gli agenti cloud (a prezzo API, contano nel limite di spesa Cursor); cifrata su questo PC, mai mostrata.',
 };

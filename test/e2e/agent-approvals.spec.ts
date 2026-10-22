@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { launchDemo, shot } from './helpers';
+import { launchDemo, shot, setQuestionsAside } from './helpers';
 
 const roles = (page: Page) => page.evaluate(() => window.sb.invoke('agents:list', undefined)).then(l => l.profiles);
 const tiers = (page: Page) => page.evaluate(() => window.sb.invoke('proposals:list', undefined)).then(s => s.items.filter(c => c.source === 'tier'));
@@ -19,13 +19,15 @@ test('tier suggestions and their trials are decided in the Proposte deck', async
   }, {
     key: 'tier:artisan:light:[]', kind: 'tier', tier: 'light', skills: [], agentIds: ['artisan'], reason: 'Stessi esiti a un terzo del costo', evidence: [], at: Date.now() - 600_000, state: 'pending',
   }] }));
-  const { app, page } = await launchDemo({ userData });
+  const launched = await launchDemo({ userData });
+  const { app, page } = launched;
   try {
     expect((await tiers(page)).map(c => c.id)).toEqual(['tier:tier:artisan:light:[]', 'tier:tier:scout:top:[]']);
     // the Agenti page has no decision buttons: a line points to the deck; the suggestions survive a reload
     await page.getByTestId('nav-agenti').click();
     await expect(page.getByTestId('proposals-pointer')).toBeVisible();
     await page.reload();
+    await setQuestionsAside(launched); // a reload forgets «Rispondi dopo»: the demo's requests are set aside again
     expect(await tiers(page)).toHaveLength(2);
     await page.getByTestId('nav-agenti').click();
     await page.getByTestId('proposals-pointer-open').click();

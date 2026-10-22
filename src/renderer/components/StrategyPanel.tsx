@@ -1,23 +1,20 @@
-// A Strategist's plan with the user on its strip (ADR 0108), collapsed or expanded: while it asks, its open question
-// with the answers already clear and «Basta domande» (with "Popup" on the question opens in the questions window
-// instead: QuestionsWindow.tsx, and the strip keeps only what is already clear); then its short plan with «Approva e
-// parti» and «Cambia qualcosa» (chat:plan); once approved, the steps as a checklist, Claude Code style (✓ done, a
-// turning ring for the step under way, a dashed ring for the next ones), each with the role that does it. With "Popup"
-// on, the plan to approve opens in the questions window too (PlanApproval.tsx, ADR 0121): the strip keeps its steps and
-// points to it, no second pair of buttons. Used by ChatTile.tsx; the plan itself is ChatSummary.plan (shared/strategy.ts).
-import { useEffect, useRef, useState } from 'react';
+// A Strategist's plan with the user on its strip (ADR 0108), collapsed or expanded: while it asks, the answers already
+// clear, «Basta domande» and a pointer to its open question in the questions window (QuestionsWindow.tsx, always on
+// since 2026-10-22); then its short plan, approved or changed in that window too (PlanApproval.tsx, ADR 0121); once
+// approved, the steps as a checklist, Claude Code style (✓ done, a turning ring for the step under way, a dashed ring
+// for the next ones), each with the role that does it. Used by ChatTile.tsx; the plan itself is ChatSummary.plan
+// (shared/strategy.ts).
+import { useState } from 'react';
 import type { ChatSummary, PendingRequest } from '@shared/contract';
 import { ENOUGH_QUESTIONS, planCount, type PlanStep, type StrategyPlan } from '@shared/strategy';
 import { ROLE_DEFAULTS } from '@shared/roles';
 import { t } from '../i18n';
-import { answer, planDecide } from '../store/store';
+import { answer } from '../store/store';
 import { useNow } from '../lib/clock';
-import { callQuestions } from '../store/ui';
 import { reqKey } from '../actions';
 import { planAskKey } from '../lib/plan-ask';
 import { openQueue } from '../lib/later';
 import { AgentAvatar } from './AgentAvatar';
-import { RequestPanel } from './RequestPanel';
 import '../styles/strategy.css';
 
 const MIN = 60_000;
@@ -61,65 +58,33 @@ function Known({ plan }: { plan: StrategyPlan }) {
   </div>;
 }
 
-/** question = the Strategist's open question; inWindow = "Popup" is on: it opens in the questions window, not here. */
-export function StrategyPanel({ chat, question, inWindow }: { chat: ChatSummary; question?: PendingRequest; inWindow: boolean }) {
+/** question = the Strategist's open question: it opens in the questions window, the card points to it. */
+export function StrategyPanel({ chat, question }: { chat: ChatSummary; question?: PendingRequest }) {
   const plan = chat.plan;
   const [details, setDetails] = useState(false);
-  const [changing, setChanging] = useState(false), [text, setText] = useState(''), [busy, setBusy] = useState(false);
-  const card = useRef<HTMLDivElement>(null), changeBtn = useRef<HTMLButtonElement>(null), focusNext = useRef<'card' | 'change' | null>(null);
-  const phase = plan?.phase;
-  // the keyboard stays on the card when what had it goes away (the box after Annulla, the buttons after a decision)
-  useEffect(() => {
-    const f = focusNext.current;
-    focusNext.current = null;
-    if (f === 'change') changeBtn.current?.focus(); else if (f === 'card') card.current?.focus({ preventScroll: true });
-  }, [changing, phase]);
   if (!plan) return null;
   const id = chat.id;
-  const decide = (decision: 'approve' | 'change') => {
-    if (busy) return;
-    setBusy(true);
-    // the plan the user read: a newer proposal meanwhile is refused, never approved unseen
-    void planDecide(id, decision, plan.at, text).then(ok => { if (ok) { focusNext.current = 'card'; setChanging(false); setText(''); } setBusy(false); });
-  };
-  const cancel = () => { focusNext.current = 'change'; setChanging(false); };
   // «Basta domande»: the open question gets that answer, the Strategist proposes the plan with what it knows
   const enough = (req: PendingRequest) => void answer(req, { kind: 'question', answers: Object.fromEntries((req.questions ?? []).map(q => [q.question, ENOUGH_QUESTIONS])) });
 
   if (plan.phase === 'asking' || plan.phase === 'revising') {
-    return <div ref={card} tabIndex={-1} className="sp-card" data-testid={`plan-${id}`} data-phase={plan.phase}>
+    return <div tabIndex={-1} className="sp-card" data-testid={`plan-${id}`} data-phase={plan.phase}>
       <div className="sp-top"><span className="sp-kicker">{t(plan.phase === 'revising' ? 'tree.plan.revisingKicker' : 'tree.plan.asking')}</span>
         {question && <span className="sp-right" data-testid={`plan-question-n-${id}`}>{t('tree.plan.question', { n: plan.clarified.length + 1 })}</span>}</div>
-      {question && !inWindow
-        ? <div className="sp-ask"><RequestPanel req={question} variant="plain" chatTitle={chat.title} harness={chat.harness} testid={`plan-ask-${id}`} /></div>
-        : question
-          ? <p className="sp-note sp-in-window" data-testid={`plan-in-window-${id}`}>{t('tree.plan.inWindow')} <button type="button" className="sp-link" onClick={() => callQuestions(reqKey(question))} data-testid={`plan-open-window-${id}`}>{t('tree.plan.openWindow')}</button></p>
-          : <p className="sp-note">{t(plan.phase === 'revising' ? 'tree.plan.revising' : 'tree.plan.thinking')}</p>}
+      {question
+        ? <p className="sp-note sp-in-window" data-testid={`plan-in-window-${id}`}>{t('tree.plan.inWindow')} <button type="button" className="sp-link" onClick={() => openQueue(reqKey(question))} data-testid={`plan-open-window-${id}`}>{t('tree.plan.openWindow')}</button></p>
+        : <p className="sp-note">{t(plan.phase === 'revising' ? 'tree.plan.revising' : 'tree.plan.thinking')}</p>}
       <Known plan={plan} />
       {question && plan.phase === 'asking' && <div className="sp-foot"><button type="button" className="sp-link" onClick={() => enough(question)} data-testid={`plan-enough-${id}`}>{t('tree.plan.enough')}</button></div>}
     </div>;
   }
 
   if (plan.phase === 'proposed') {
-    return <div ref={card} tabIndex={-1} className="sp-card" data-testid={`plan-${id}`} data-phase="proposed">
+    return <div tabIndex={-1} className="sp-card" data-testid={`plan-${id}`} data-phase="proposed">
       <div className="sp-top"><span className="sp-kicker">{t('tree.plan.title')}</span><span className="sp-right">{t('tree.plan.steps', { n: plan.steps.length })}</span></div>
       <Steps plan={plan} timed={false} testid={`plan-steps-${id}`} />
       {plan.doneWhen && <div className="sp-done-when">{t('tree.plan.doneWhen', { text: plan.doneWhen })}</div>}
-      {inWindow
-        ? <p className="sp-note sp-in-window sp-foot" data-testid={`plan-in-window-${id}`}>{t('tree.plan.inWindowPlan')} <button type="button" className="sp-link" onClick={() => openQueue(planAskKey(id, plan.at))} data-testid={`plan-open-window-${id}`}>{t('tree.plan.openPlan')}</button></p>
-        : changing
-        ? <div className="sp-change">
-          <textarea value={text} onChange={e => setText(e.target.value)} placeholder={t('tree.plan.changePlaceholder')} rows={2} maxLength={2000} autoFocus aria-label={t('tree.plan.changePlaceholder')} data-testid={`plan-change-text-${id}`}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && text.trim()) { e.preventDefault(); decide('change'); } else if (e.key === 'Escape') { e.stopPropagation(); cancel(); } }} />
-          <div className="sp-foot">
-            <button type="button" className="sp-btn primary" disabled={busy || !text.trim()} onClick={() => decide('change')} data-testid={`plan-change-send-${id}`}>{t('tree.plan.send')}</button>
-            <button type="button" className="sp-btn" disabled={busy} onClick={cancel}>{t('tree.plan.cancel')}</button>
-          </div>
-        </div>
-        : <div className="sp-foot">
-          <button type="button" className="sp-btn primary" disabled={busy} onClick={() => decide('approve')} data-testid={`plan-approve-${id}`}>{t('tree.plan.approve')}</button>
-          <button ref={changeBtn} type="button" className="sp-btn" disabled={busy} onClick={() => setChanging(true)} data-testid={`plan-change-${id}`}>{t('tree.plan.change')}</button>
-        </div>}
+      <p className="sp-note sp-in-window sp-foot" data-testid={`plan-in-window-${id}`}>{t('tree.plan.inWindowPlan')} <button type="button" className="sp-link" onClick={() => openQueue(planAskKey(id, plan.at))} data-testid={`plan-open-window-${id}`}>{t('tree.plan.openPlan')}</button></p>
     </div>;
   }
 
@@ -127,7 +92,7 @@ export function StrategyPanel({ chat, question, inWindow }: { chat: ChatSummary;
   const qualityLabel = plan.steps.some(s => s.state === 'blocked') ? 'tree.plan.blocked'
     : plan.steps.some(s => s.outcome === 'blocked') ? 'tree.plan.resultBlocked'
       : plan.steps.some(s => s.outcome === 'partial') ? 'tree.plan.partial' : null;
-  return <div ref={card} tabIndex={-1} className="sp-card sp-progress" data-testid={`plan-${id}`} data-phase={plan.phase}>
+  return <div tabIndex={-1} className="sp-card sp-progress" data-testid={`plan-${id}`} data-phase={plan.phase}>
     <button type="button" className="sp-summary" aria-expanded={details} aria-controls={`plan-details-${id}`} onClick={() => setDetails(!details)} data-testid={`plan-toggle-${id}`}>
       <span className="sp-kicker">{t('tree.plan.title')}</span><span>{t('tree.plan.progress', { done, total })}</span>
       {qualityLabel && <span className="sp-blocked">{t(qualityLabel)}</span>}

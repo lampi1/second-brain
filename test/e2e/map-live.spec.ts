@@ -11,7 +11,7 @@ import { test, expect, type ElectronApplication, type Page } from '@playwright/t
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { launch, setSize, shot, openNotesMap } from './helpers';
+import { launch, setSize, shot, openNotesMap, setQuestionsAside } from './helpers';
 
 const FIX = path.resolve(import.meta.dirname, '..', 'fixtures', 'brain-ui');
 function fixtureBrain(): string {
@@ -38,6 +38,7 @@ test.beforeAll(async () => {
   await setSize(app, 1600, 1000);
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
+  await setQuestionsAside({ app, page }); // the demo's requests: «Rispondi dopo» (the window is always on)
   // the frames the map draws (a burst of WebGL draw calls = one frame)
   await page.evaluate(() => {
     const w = window as unknown as W;

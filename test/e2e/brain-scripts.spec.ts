@@ -1,6 +1,6 @@
 // End-to-end: the brain's Script page (ADR 0076) and the Log page that holds its changelog (ADR 0111) in the frozen demo,
 // over the made-up scripts and changelog of main/brain/scripts-demo.ts read by the real readers and the demo's Log events
-// (main/activity/demo.ts). The scripts are cards in a grid with their last test, searchable and filterable; a card opens
+// (main/activity/demo.ts). Only working scripts are cards in a grid, searchable; a card opens
 // in place with usage and code (the credential line of the demo is masked) and no button that runs anything; the Log
 // shows the tasks as chains, the changelog's lines in its stream, and a step's details in a side panel.
 // Screenshots: test-results/shots/brain-scripts-*.png, log-*.png.
@@ -11,21 +11,19 @@ let app: ElectronApplication, page: Page;
 test.beforeAll(async () => { ({ app, page } = await launchDemo()); });
 test.afterAll(async () => { await app?.close(); });
 
-test('Script: cards in a grid, search, filters, a card opens in place', async () => {
+test('Script: working scripts as cards, search, a card opens in place', async () => {
   const brain = page.getByTestId('nav-group-brain');
   await expect(brain).toBeVisible();
   await goPage(page, 'script'); // Memoria → Script & Query (ADR 0122)
   const p = page.getByTestId('brain-scripts');
   await expect(p).toBeVisible();
   const cards = p.getByTestId('bs-script-card');
-  await expect(cards).toHaveCount(4);
-  await expect(p.getByTestId('bs-count')).toHaveText('4');
+  await expect(cards).toHaveCount(3); // the demo's failing script stays hidden: only working ones show
+  await expect(p.getByTestId('bs-count')).toHaveText('3');
+  await expect(p).not.toContainText('Conta gli errori');
+  await expect(p.getByTestId('bs-filter-all')).toHaveCount(0);
   await shot(page, 'brain-scripts-grid');
 
-  await p.getByTestId('bs-filter-fix').click();
-  await expect(cards).toHaveCount(1);
-  await expect(cards.first()).toContainText('Conta gli errori');
-  await p.getByTestId('bs-filter-all').click();
   await p.getByTestId('bs-search').fill('ticket csv');
   await expect(cards).toHaveCount(1);
 

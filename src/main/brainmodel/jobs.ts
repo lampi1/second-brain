@@ -6,11 +6,13 @@
 //   migration      re-runnable, idempotent: every runbook / routines section of the brain becomes a skill in
 //                  <brain>/.claude/skills (a role loads it when a task asks for it: skills_suggest). Writes a report.
 //   corrections    the lessons queue (agent_learn_propose): each lesson goes to the role's text (default), to a skill,
-//                  or to the brain's rules (rules/lessons.md, a topic file listed in brain.json).
+//                  or to the brain's rules (rules/lessons.md, a topic file listed in brain.json); then the errors that
+//                  recur in ai-errors.md become rules there too (error-lessons.ts, called by service.ts).
 //   repeated-task  three or more ended runs with the same kind of goal and no skill covering it → a new skill with the
 //                  requests seen and what the runs reported, stored outside loadable skills pending verification.
 //   merge-skills   two brain skills with (nearly) the same text → one, the roles relinked to it.
-//   merge-memory   no automatic promotion: repeated claims retain their scope.
+//   merge-memory   the memory tidy-up (memory-tidy.ts, ADR 0129): near-duplicate facts merged, case-specific ones
+//                  rewritten as the reusable rule behind them or dropped; no promotion across scopes.
 // Used by brainmodel/service.ts; unit tests: test/unit/brainmodel/jobs.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -26,6 +28,8 @@ import { procedureSections, sectionText } from './procedure-sources';
 import { readSmall } from './model';
 import { checkPermissionText } from '../agents/tool-policy';
 import { changeText } from './change-text';
+import type { UpgradeAsk } from './upgrade';
+import { tidyMemoryJob } from './memory-tidy';
 
 /** The role side of a job: only the role text and the declared skills. */
 export interface AgentWriter {
@@ -42,6 +46,8 @@ export interface JobContext {
   agents: AgentWriter;
   log: ChangeLog;
   now(): number;
+  /** a one-shot question to an engine with no tools (the upgrade job's): the memory tidy-up generalizes with it */
+  ask?: UpgradeAsk;
 }
 export interface JobResult { job: MaintenanceJobId; changes: number; note?: string; report?: MigrationReport }
 
@@ -131,8 +137,8 @@ export function migrate(ctx: JobContext): JobResult {
 }
 
 // ── corrections ─────────────────────────────────────────────────────────────────────────────────────────────────────
-const LESSONS_RULE = 'rules/lessons.md';
-const LESSONS_WHEN = '---\nwhen: {"prompt":[],"tools":["Edit","Write","MultiEdit","Bash","PowerShell"],"paths":[]}\n---\n# Lezioni dalle correzioni\n\nRegole emerse dalle correzioni dell’utente, per ogni ruolo.\n';
+export const LESSONS_RULE = 'rules/lessons.md';
+export const LESSONS_WHEN = '---\nwhen: {"prompt":[],"tools":["Edit","Write","MultiEdit","Bash","PowerShell"],"paths":[]}\n---\n# Lezioni dalle correzioni\n\nRegole emerse dalle correzioni dell’utente, per ogni ruolo.\n';
 export function corrections(ctx: JobContext): JobResult {
   let changes = 0;
   for (const l of ctx.lessons.pending()) {
@@ -170,7 +176,7 @@ export function corrections(ctx: JobContext): JobResult {
   return { job: 'corrections', changes };
 }
 /** brain.json with `rel` added to rules.topicFiles (null when it is there already or brain.json is not readable). */
-function brainJsonWithTopic(root: string, rel: string): { file: string; text: string } | null {
+export function brainJsonWithTopic(root: string, rel: string): { file: string; text: string } | null {
   const file = path.join(root, 'brain.json');
   try {
     const raw = readSmall(file);
@@ -269,8 +275,7 @@ export function mergeSkills(ctx: JobContext): JobResult {
   return { job: 'merge-skills', changes };
 }
 
-// ── merge duplicate memories across agents ──────────────────────────────────────────────────────────────────────────
-/** Text repetition is not evidence of global validity. Preserve the original scoped files unchanged. */
-export function mergeMemory(_ctx: JobContext): JobResult {
-  return { job: 'merge-memory', changes: 0, note: 'Duplicate memories retain their original scope; sharing requires independent verification.' };
-}
+// ── the memory tidy-up ──────────────────────────────────────────────────────────────────────────────────────────────
+/** Merges, generalizes or drops facts within their own scope (memory-tidy.ts); text repetition across roles is not
+ *  evidence of global validity, so nothing is promoted to a shared fact and the legacy memory files stay as they are. */
+export function mergeMemory(ctx: JobContext): Promise<JobResult> { return tidyMemoryJob(ctx); }

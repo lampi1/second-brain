@@ -714,7 +714,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     },
     judgeEngine: () => agents.list().profiles.find(p => p.id === 'sentinel')?.engine ?? 'claude',
     refusal: h => !engineOn(brain.settings(), h) ? 'engine switched off' : !agentsMayOpen(brain.settings(), h) ? 'agents may not use this engine' : null,
-    feedback: (a, by) => runFeedback.recordFeedback(a, by) });
+    feedback: (a, by) => runFeedback.recordFeedback(a, by),
+    // a run its receipts decide is not reviewed (ADR 0130)
+    receipts: (runId, verdict, note) => runFeedback.recordReceipts(runId, verdict, note) });
   const judging = judgeSamplingOn(process.env);
   const judgeTick = () => { void judgeSampler.tick().catch(e => log.warn('agents', 'judge sample tick failed', { cause: errText(e), hint: 'tried again in 30 minutes' })); };
   // a run that ends is reviewed soon after (every run with the switch on; a review's own end frees a slot)

@@ -6,16 +6,23 @@
 // its diff against git HEAD, a commit/branch or another file (FileDiff.tsx). Main reads any
 // local file, bounded (never a network share); nothing here edits, runs or hands the file to another app: "Show in
 // folder" only selects it in Explorer, on the user's click.
-import {lazy,Suspense,useCallback,useEffect,useMemo,useRef,useState} from 'react';
+// It is shown in the viewer overlay above the page (components/viewer/ViewerOverlay.tsx, which passes its own controls
+// as `chrome`): a header with the file's name, folder, size and kind and its actions, Ctrl+F search in the text on
+// screen (FindBar.tsx), a table of contents beside a Markdown document with three or more headings (Toc.tsx), wrapped or
+// unwrapped code, and a click on a line number copies the internal link to that line (sb://file/…).
+import {lazy,Suspense,useCallback,useEffect,useMemo,useRef,useState,type MouseEvent as ReactMouseEvent,type ReactNode} from 'react';
 import DOMPurify from 'dompurify';
 import {DataTable,type Col} from '../components/DataTable';
 import {Markdown} from '../components/Markdown';
 import {ReportHtml} from '../components/ReportHtml';
 import {ReportReview} from '../components/ReportReview';
 import {Empty} from '../components/States';
-import {copyText,IconCopy,IconExternal,Seg,toast} from '../components/ui';
+import {copyText,IconCopy,IconSearch,Seg,toast} from '../components/ui';
+import {FindBar} from '../components/FindBar';
+import {Toc} from '../components/Toc';
 import {baseName} from '../lib/text';
-import {fmtBytes,highlightLines,parseCsv,prettyJson,viewOf,type FileView} from '../lib/file-format';
+import {extOf,fmtBytes,highlightLines,parseCsv,prettyJson,viewOf,type FileView} from '../lib/file-format';
+import {fileLink} from '../lib/viewer-tools';
 import {Compare} from './FileDiff';
 import type {PDFDocumentProxy,PDFPageProxy} from '../lib/pdf';
 import {pdfPagesToDraw,samePages} from '../lib/pdf-window';
@@ -41,8 +48,9 @@ function useHighlight(text:string,path:string,on:boolean):string[]|null{
   },[on,text,path]);
   return on&&state.text===text&&state.path===path?state.lines:null;
 }
-/** `base` = the file line number of the text's first line (none: main did not count that far, so no numbers). */
-function Code({ text, path, line, base=1 }: { text: string; path: string; line?: number; base?: number|null }) {
+/** `base` = the file line number of the text's first line (none: main did not count that far, so no numbers).
+ *  `wrap` = long lines wrap under themselves (the numbers keep their column); `onPick` = a line number was clicked. */
+function Code({ text, path, line, base=1, wrap=false, picked, onPick }: { text: string; path: string; line?: number; base?: number|null; wrap?: boolean; picked?: number; onPick?: (n:number)=>void }) {
   const ref = useRef<HTMLPreElement>(null);
   // rows follow main's line rule (lineCount): a lone \r stays inside its row, so a page's numbers match main's
   const flat = useMemo(()=>lineText(text),[text]);
@@ -51,14 +59,19 @@ function Code({ text, path, line, base=1 }: { text: string; path: string; line?:
   // a very long text without a cited line is one plain block, so it is not highlighted either
   const html = useHighlight(flat,path,lines.length<=WINDOW||!!at);
   const w = String(lines.length+(base??1)).length;
-  useEffect(() => {const pre=ref.current,target=line?pre?.querySelector<HTMLElement>(`[data-l="${line}"]`):null;if(pre&&target)pre.scrollTop+=target.getBoundingClientRect().top-pre.getBoundingClientRect().top-pre.clientHeight/2;}, [line, text, html]);
+  useEffect(() => {const target=line?ref.current?.querySelector<HTMLElement>(`[data-l="${line}"]`):null;target?.scrollIntoView({block:'center',inline:'nearest'});}, [line, text, html]);
+  const cls=`bx-code bx-scroll${wrap?' is-wrap':''}`;
   // a very long text stays one text block (one element per line would slow the page down)
-  if (lines.length > WINDOW&&!at) return <pre ref={ref} className="bx-code bx-scroll" style={{ maxHeight: '70vh' }} data-testid="bx-code">{text}</pre>;
+  if (lines.length > WINDOW&&!at) return <pre ref={ref} className={cls} data-testid="bx-code" data-wrap={wrap?'true':undefined}>{text}</pre>;
   const first=lines.length>WINDOW?Math.max(0,Math.min(lines.length-WINDOW,(at??1)-WINDOW/2)):0,number=(i:number)=>base?i+base:null;
+  const pick=(e:ReactMouseEvent<HTMLPreElement>)=>{const n=Number((e.target as HTMLElement).closest('.bx-ln')?.parentElement?.dataset.l);if(onPick&&n>0)onPick(n);};
   return (
-    <pre ref={ref} className="bx-code bx-scroll hljs" style={{ maxHeight: '70vh' }} data-testid="bx-code" data-highlighted={html?'true':undefined}>
-      {first>0&&<div>{t('viewer.window',{first:first+(base??1),last:Math.min(lines.length,first+WINDOW)+(base??1)-1,total:lines.length+(base??1)-1})}</div>}
-      {lines.slice(first,first+WINDOW).map((l, offset) => {const i=first+offset,h=html?.[i],n=number(i);return <div key={i} data-l={n??undefined} style={n!==null&&n === line ? { background: 'var(--bx-amber-bg)' } : undefined}>{n!==null&&<span style={{ color: 'var(--bx-text-4)', userSelect: 'none', display: 'inline-block', width: `${w + 2}ch` }}>{n}</span>}{h?<span dangerouslySetInnerHTML={{__html:h||' '}}/>:l || ' '}</div>;})}
+    <pre ref={ref} className={`${cls} hljs`} style={{['--ln-w' as string]:`${w+2}ch`}} data-testid="bx-code" data-highlighted={html?'true':undefined} data-wrap={wrap?'true':undefined} onClick={pick}>
+      {first>0&&<div className="bx-code-window" data-find-skip>{t('viewer.window',{first:first+(base??1),last:Math.min(lines.length,first+WINDOW)+(base??1)-1,total:lines.length+(base??1)-1})}</div>}
+      {lines.slice(first,first+WINDOW).map((l, offset) => {const i=first+offset,h=html?.[i],n=number(i);
+        return <div key={i} className={`bx-cl${n!==null&&n===line?' is-cited':''}${n!==null&&n===picked?' is-picked':''}`} data-l={n??undefined} style={n!==null&&n === line ? { background: 'var(--bx-amber-bg)' } : undefined}>
+          {n!==null&&<span className={`bx-ln${onPick?' is-link':''}`} data-find-skip title={onPick?t('vw.lineLink',{n}):undefined}>{n}</span>}
+          <span className="bx-lc">{h?<span dangerouslySetInnerHTML={{__html:h||' '}}/>:l || ' '}</span></div>;})}
     </pre>
   );
 }
@@ -164,26 +177,37 @@ function Pager({result,go}:{result:TextResult;go:(page:Request)=>void}){
 type Mode='formatted'|'source';
 /** The views a kind offers besides its source (markdown rendered, a table, pretty JSON); `code` has only the source. */
 const formattedLabel=(view:FileView)=>view==='csv'||view==='jsonl'?t('viewer.table'):view==='html'?t('viewer.report'):t('viewer.formatted');
+const WRAP_KEY='sb.viewer.wrap';
+const readWrap=()=>{try{return localStorage.getItem(WRAP_KEY)==='1';}catch{return false;}};
 
 /** `line` = the cited line, only while the page is the one opened around it. */
-function TextBody({result,line,go}:{result:TextResult;line?:number;go:(page:Request)=>void}){
+function TextBody({result,line,go,picked,onPick}:{result:TextResult;line?:number;go:(page:Request)=>void;picked?:number;onPick?:(n:number)=>void}){
   const view=viewOf(result.path),name=baseName(result.path),base=result.firstLine??null;
   const pretty=useMemo(()=>view==='json'&&!result.more&&result.offset===0?prettyJson(result.text):null,[view,result.text,result.more,result.offset]);
   // a page further into the file is shown as its source: a table or a document cut from the middle would mislead
   const formattable=result.offset===0&&view!=='code'&&!(view==='json'&&!pretty)&&!(view==='html'&&result.more);
   const [mode,setMode]=useState<Mode>(line?'source':'formatted');
+  const [wrap,setWrapState]=useState(readWrap);
+  const setWrap=(on:boolean)=>{setWrapState(on);try{localStorage.setItem(WRAP_KEY,on?'1':'0');}catch{/* storage off: this session only */}};
   const shown=formattable?mode:'source';
+  const code=shown==='source'||view==='json';
   const missing=!!line&&(!base||line<base||line>=base+lineCount(result.text));
   return <>
-    {formattable&&<div className="bx-row"><Seg label={t('viewer.mode')} value={mode} onChange={setMode} items={[{id:'formatted',label:formattedLabel(view)},{id:'source',label:t('viewer.source')}]}/></div>}
+    {(formattable||code)&&<div className="bx-row vw-tools">
+      {formattable&&<Seg label={t('viewer.mode')} value={mode} onChange={setMode} items={[{id:'formatted',label:formattedLabel(view)},{id:'source',label:t('viewer.source')}]}/>}
+      <span className="sp"/>
+      {code&&<button type="button" className="vw-toggle" aria-pressed={wrap} onClick={()=>setWrap(!wrap)} data-testid="viewer-wrap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h13a3 3 0 0 1 0 6h-4M4 18h5M14 15.5 11.5 18l2.5 2.5"/></svg>
+        {t('vw.wrap')}</button>}
+    </div>}
     {(result.more||result.offset>0)&&<Pager result={result} go={go}/>}
     {missing&&<p role="status">{t('viewer.lineUnavailable')}</p>}
-    {shown==='source'?<Code text={result.text} path={result.path} line={line} base={base}/>
+    {shown==='source'?<Code text={result.text} path={result.path} line={line} base={base} wrap={wrap} picked={picked} onPick={onPick}/>
       :view==='markdown'?<Markdown text={result.text} files={new Set()} root="" imageBase={result.path} name={name} copyBlocks testId="viewer-markdown"/>
       :view==='html'?<ReportHtml text={result.text} path={result.path}/>
       :view==='jsonl'?<Jsonl text={result.text} name={name}/>
       :view==='csv'?<Csv text={result.text} path={result.path} name={name}/>
-      :<Code text={pretty??result.text} path={result.path}/>}
+      :<Code text={pretty??result.text} path={result.path} wrap={wrap}/>}
   </>;
 }
 
@@ -192,9 +216,24 @@ async function showInFolder(path:string){
   if(!res)toast(t('viewer.folderError'));else if(res.how!=='folder')toast(res.reason);
 }
 
+/** The colour family of a file's badge in the header. */
+function badgeTone(path:string,kind:FileViewResult['kind']|undefined):string{
+  if(kind==='image')return'image';if(kind==='pdf')return'pdf';
+  const v=viewOf(path);return v==='code'?'code':v;
+}
+/** A 24-unit stroke icon (the header's actions). */
+const Ico=({d,size=15}:{d:string;size?:number})=><svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d}/></svg>;
+const LINK_ICON='M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1';
+const FOLDER_ICON='M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z';
+const COMPARE_ICON='M8 4v16M16 4v16M4 8l4-4 4 4M12 16l4 4 4-4';
+
+/** The controls the viewer overlay puts in the header: before the file badge (back/forward) and after the actions
+ *  (expand, close). Without them (the old page) the header has the file's own actions only. */
+export interface ViewerChrome{start?:ReactNode;end?:ReactNode}
+
 /** What main is asked for: the page around the cited line at first, then the page the pager moved to. */
 type Request={line?:number;offset?:number;align?:boolean;before?:number};
-function CitedFile({reference}:{reference:FileReference}){
+export function CitedFile({reference,chrome}:{reference:FileReference;chrome?:ViewerChrome}){
   const ref=JSON.stringify(reference);const[request,setRequest]=useState<{ref:string;page:Request}>({ref,page:{line:reference.line}});
   const page=request.ref===ref?request.page:{line:reference.line},key=JSON.stringify([ref,page]);
   const[state,setState]=useState<{key:string;result:FileViewResult|null}>({key:'',result:null});
@@ -215,19 +254,66 @@ function CitedFile({reference}:{reference:FileReference}){
   // the comparison is asked for per file: another file opens without it
   const[comparing,setComparing]=useState<string|null>(null),compare=comparing===ref&&result?.kind==='text';
   const real=result&&'path'in result?result.path:null;
-  return <div className="bx-viewer" data-testid="cited-file-viewer">
-    <div className="bx-viewer-head"><h2>{reference.path}{reference.line?`:${reference.line}${reference.column?`:${reference.column}`:''}`:''}</h2><span className="sp"/>
-      <span className="small muted">{t('viewer.readOnly')}{result&&'size'in result?` · ${fmtBytes(result.size)}`:''}</span>
-      <button type="button" className="bx-btn s" onClick={()=>void copyText(real??reference.path)}><IconCopy/>{t('viewer.copyPath')}</button>
-      {result?.kind==='text'&&<button type="button" className="bx-btn s" aria-pressed={compare} onClick={()=>setComparing(compare?null:ref)} data-testid="viewer-compare">{t('viewer.compare')}</button>}
-      {real&&<button type="button" className="bx-btn s" onClick={()=>void showInFolder(real)} data-testid="viewer-show-in-folder"><IconExternal/>{t('viewer.showInFolder')}</button>}</div>
-    {compare&&<Compare key={ref} path={reference.path} chatId={reference.chatId}/>}
-    {pageError&&<p role="alert" data-testid="viewer-page-error">{t(`viewer.${pageError}`)}</p>}
-    <div className="file-context-layout"><div className="file-context-main"><ReportReview key={real??ref} file={real??reference.path} snapshot={result&&'size'in result?{size:result.size,...('mtimeMs'in result&&typeof result.mtimeMs==='number'?{mtimeMs:result.mtimeMs}:{}),...(result.kind==='text'?{offset:result.offset,shown:result.shown}:{})}:undefined}>{!result?<p role="status">{t('viewer.loading')}</p>:reason?<Empty title={t(`viewer.${reason}`)}/>
-      :result.kind==='image'?<ImageBody key={result.path} result={result}/>
-      :result.kind==='pdf'?<Pdf key={ref} data={result.data} name={baseName(result.path)}/>
-      :result.kind==='text'?<TextBody key={ref} result={result} line={page.line} go={go}/>:null}</ReportReview></div>
-      {real&&<Suspense fallback={null}><FilePulse path={real}/></Suspense>}</div>
+  const shownPath=real??reference.path,name=baseName(shownPath)||shownPath,folder=shownPath.slice(0,Math.max(0,shownPath.length-name.length)).replace(/[\\/]$/,'');
+  const ext=(extOf(shownPath)||'txt').slice(0,4).toUpperCase(),kind=result?.kind;
+  // Ctrl+F (or F3) searches the text on screen; nothing to search in a PDF or an image
+  const searchable=kind==='text';
+  const[find,setFind]=useState<{key:number}|null>(null);
+  const host=useRef<HTMLDivElement>(null),[main,setMain]=useState<HTMLDivElement|null>(null);
+  useEffect(()=>{
+    if(!searchable){setFind(null);return;}
+    const k=(e:KeyboardEvent)=>{
+      if(e.defaultPrevented||e.altKey||!((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.code==='KeyF'||e.key==='F3'&&!e.ctrlKey))return;
+      // another dialog in front (a large image, the palette): its keys are its own
+      const me=host.current;if(!me||[...document.querySelectorAll('[aria-modal="true"]')].some(d=>!d.contains(me)))return;
+      e.preventDefault();setFind(f=>({key:(f?.key??0)+1}));
+    };
+    window.addEventListener('keydown',k);return()=>window.removeEventListener('keydown',k);
+  },[searchable]);
+  const[picked,setPicked]=useState<number|undefined>(undefined);
+  const copyLine=useCallback((n:number)=>{setPicked(n);void copyText(fileLink(reference,n)).then(ok=>toast(ok?t('vw.lineLinkCopied',{n}):t('vw.copyFailed')));},[reference]);
+  const copyPath=()=>void copyText(shownPath).then(ok=>toast(ok?t('vw.pathCopied'):t('vw.copyFailed')));
+  const copyFileLink=()=>void copyText(fileLink(reference,picked??reference.line)).then(ok=>toast(ok?t('vw.linkCopied'):t('vw.copyFailed')));
+  const lineNote=reference.line?`:${reference.line}${reference.column?`:${reference.column}`:''}`:'';
+  return <div ref={host} className="bx-viewer vw-file" tabIndex={-1} data-testid="cited-file-viewer" data-kind={kind}>
+    <header className="vw-head">
+      {chrome?.start}
+      <span className={`vw-badge vw-badge-${badgeTone(shownPath,kind)}`} aria-hidden="true">{ext}</span>
+      <div className="vw-title">
+        <h2 className="vw-name" title={shownPath} data-testid="viewer-name">{name}{lineNote&&<span className="vw-line">{lineNote}</span>}</h2>
+        <div className="vw-meta">
+          {folder&&<span className="vw-path" title={shownPath}><bdi>{folder}</bdi></span>}
+          {result&&'size'in result&&<span className="vw-chip">{fmtBytes(result.size)}</span>}
+          {(kind==='text'||kind==='image'||kind==='pdf')&&<span className="vw-chip">{t(`vw.kind.${kind==='text'?viewOf(shownPath):kind}`)}</span>}
+          <span className="vw-chip vw-chip-ro">{t('viewer.readOnly')}</span>
+        </div>
+      </div>
+      <div className="vw-actions">
+        {searchable&&<button type="button" className="vw-icon-btn" aria-pressed={!!find} onClick={()=>setFind(f=>f?null:{key:1})} aria-label={t('vw.find')} data-tip={`${t('vw.find')}|Ctrl+F`} data-testid="viewer-find-open"><IconSearch/></button>}
+        <button type="button" className="vw-icon-btn" onClick={copyPath} aria-label={t('viewer.copyPath')} data-tip={t('viewer.copyPath')} data-testid="viewer-copy-path"><IconCopy/></button>
+        <button type="button" className="vw-icon-btn" onClick={copyFileLink} aria-label={t('vw.copyLink')} data-tip={t('vw.copyLink')} data-testid="viewer-copy-link"><Ico d={LINK_ICON}/></button>
+        {real&&<button type="button" className="vw-icon-btn" onClick={()=>void showInFolder(real)} aria-label={t('viewer.showInFolder')} data-tip={t('viewer.showInFolder')} data-testid="viewer-show-in-folder"><Ico d={FOLDER_ICON}/></button>}
+        {result?.kind==='text'&&<button type="button" className="vw-btn" aria-pressed={compare} onClick={()=>setComparing(compare?null:ref)} data-testid="viewer-compare"><Ico d={COMPARE_ICON} size={14}/>{t('viewer.compare')}</button>}
+        {chrome?.end}
+      </div>
+    </header>
+    <div className="vw-stage">
+      {find&&searchable&&<FindBar root={main} focusKey={find.key} onClose={()=>{setFind(null);host.current?.focus();}}/>}
+      <div className="vw-body bx-scroll" data-testid="viewer-body">
+        <div className="vw-grid">
+          <Toc root={main}/>
+          <div ref={setMain} className="vw-main file-context-main">
+            {compare&&<Compare key={ref} path={reference.path} chatId={reference.chatId}/>}
+            {pageError&&<p role="alert" data-testid="viewer-page-error">{t(`viewer.${pageError}`)}</p>}
+            <ReportReview key={real??ref} file={real??reference.path} snapshot={result&&'size'in result?{size:result.size,...('mtimeMs'in result&&typeof result.mtimeMs==='number'?{mtimeMs:result.mtimeMs}:{}),...(result.kind==='text'?{offset:result.offset,shown:result.shown}:{})}:undefined}>{!result?<p role="status" className="vw-loading">{t('viewer.loading')}</p>:reason?<Empty title={t(`viewer.${reason}`)}/>
+              :result.kind==='image'?<ImageBody key={result.path} result={result}/>
+              :result.kind==='pdf'?<Pdf key={ref} data={result.data} name={baseName(result.path)}/>
+              :result.kind==='text'?<TextBody key={ref} result={result} line={page.line} go={go} picked={picked} onPick={copyLine}/>:null}</ReportReview>
+          </div>
+          {real&&<aside className="vw-side"><Suspense fallback={null}><FilePulse path={real}/></Suspense></aside>}
+        </div>
+      </div>
+    </div>
   </div>;
 }
 

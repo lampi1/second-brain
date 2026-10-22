@@ -2,8 +2,6 @@
 import type { proposalsIt } from './proposals.it';
 type N = { n: number };
 export const proposalsDe: typeof proposalsIt = {
-  'proposals.title': 'Vorschläge',
-  'proposals.lead': 'Eine Karte nach der anderen: nach rechts ziehen zum Freigeben, nach links zum Ablehnen. Änderungen, die die App schon selbst angewendet hat, behältst du oder machst sie rückgängig.',
   'proposals.deckLabel': 'Stapel der Vorschläge',
   'proposals.filters': 'Vorschläge filtern',
   'proposals.filter.all': 'Alle',
@@ -77,7 +75,6 @@ export const proposalsDe: typeof proposalsIt = {
   'proposals.readFirst': 'Öffne vor dem Freigeben den Entwurf und die Belege.',
   'proposals.readFirstOpen': 'Entwurf und Belege lesen',
   'proposals.note': 'Wie du es geprüft hast (optional)',
-  'proposals.noteReject': 'Warum du ablehnst (optional)',
   'proposals.done.title': 'Geschafft!',
   'proposals.done.lead': 'Im Moment gibt es nichts mehr zu entscheiden.',
   'proposals.done.approved': () => 'freigegeben oder behalten',
@@ -156,4 +153,15 @@ export const proposalsDe: typeof proposalsIt = {
   'proposals.yes.rememberNew': ({ who }: { who: string; n: number }) => `${who} merkt sich das Neue statt des Alten.`,
   'proposals.yes.rememberBoth': ({ who }: { who: string; n: number }) => `${who} merkt sich das Neue zusätzlich zum Alten.`,
   'proposals.no.rememberOld': ({ who }: { who: string; n: number }) => `${who} vergisst das Neue, alles bleibt wie es war.`,
+  'proposals.ask.rememberMany': ({ who, n }: { who: string; n: number }) => `Soll sich ${who} diese ${n} Fakten merken?`,
+  'proposals.yes.rememberMany': ({ who }: { who: string; n: number }) => `${who} merkt sich alle und nutzt sie in den nächsten Aufgaben.`,
+  'proposals.no.rememberMany': ({ who }: { who: string; n: number }) => `${who} vergisst sie alle.`,
+  'proposals.advice.specific': ({ what }: { what: string }) => `Wirkt an einen einzelnen Fall gebunden (${what}): nur merken, wenn es eine wiederkehrende Regel ist.`,
+  'proposals.advice.same': (p: N) => `${p.n}-mal vorgeschlagen: eine Karte für alle.`,
+  'proposals.sign.url': 'eine Adresse mit Port oder ID',
+  'proposals.sign.id': 'eine Ticket- oder PR-Nummer',
+  'proposals.sign.commit': 'ein Commit',
+  'proposals.sign.path': 'ein Benutzerordner',
+  'proposals.sign.date': 'ein Datum',
+  'proposals.sign.branch': 'ein Branch',
 };

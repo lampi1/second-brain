@@ -36,36 +36,30 @@ export function OrchestratorRenewDialog() {
   };
   const action = same ? t('dialogs.orchestratorRenew.restartButton') : t('dialogs.orchestratorRenew.switchButton', { engine: engineName(to) });
   return (
-    <Modal onClose={closeModal} label={t('dialogs.orchestratorRenew.title')} testid="orchestrator-renew" className="modal-renew">
-      <form onSubmit={e => { e.preventDefault(); void go(); }}>
-        <div className="modal-head">
-          <HarnessMark harness={chat.harness} orchestrator size={22} />
-          <h2>{t('dialogs.orchestratorRenew.title')}</h2><span className="sp" /><Keys combo={t('dialogs.orchestratorRenew.shortcutCombo')} /><span className="modal-head-hint">{t('dialogs.orchestratorRenew.hint')}</span>
-        </div>
-        <div className="modal-body">
-          <div className="harness-pick" role="radiogroup" aria-label={t('dialogs.orchestratorRenew.engineLabel')}>
-            {engines.map(({ id: h, name }) => (
-              <button key={h} type="button" role="radio" aria-checked={to === h} className={`harness-card ${to === h ? 'on' : ''}`} disabled={!!blockOf(h)}
-                onClick={() => setTo(h)} data-testid={`orchestrator-renew-${h}`}>
-                <HarnessMark harness={h} size={28} />
-                <span><b>{name}</b><small>{blockOf(h) ?? (h === chat.harness ? t('dialogs.orchestratorRenew.restart') : t('dialogs.orchestratorRenew.switchEngine', { engine: name }))}</small></span>
-              </button>
-            ))}
-          </div>
-          <label className="check">
-            <input type="checkbox" checked={summary} onChange={e => setSummary(e.target.checked)} data-testid="orchestrator-renew-summary" />
-            <span>{t('dialogs.orchestratorRenew.bringingSummary')} <small data-testid="orchestrator-renew-summary-what">{loaded ? t('dialogs.orchestratorRenew.summaryExplain') : t('dialogs.orchestratorRenew.summaryNone')}</small></span>
-          </label>
-          <p className="orchestrator-note" data-testid="orchestrator-renew-note">
-            <HarnessMark harness={chat.harness} size={16} />
-            <span>{t('dialogs.orchestratorRenew.note')} <b>«{chat.title}»</b> {t('dialogs.orchestratorRenew.noteSuffix')}</span>
-          </p>
-        </div>
-        <div className="modal-foot">
-          <button type="button" className="btn btn-ghost btn-m" onClick={closeModal} data-testid="orchestrator-renew-cancel">{t('dialogs.orchestratorRenew.cancelButton')} <Keys combo="Esc" /></button>
-          <button type="submit" className="btn btn-orchestrator btn-m" autoFocus data-autofocus disabled={busy || !!block} data-testid="orchestrator-renew-go">{busy ? t('dialogs.orchestratorRenew.restarting') : action}</button>
-        </div>
-      </form>
+    <Modal onClose={closeModal} label={t('dialogs.orchestratorRenew.title')} testid="orchestrator-renew" className="modal-renew" size="m" onSubmit={() => void go()}
+      icon={<HarnessMark harness={chat.harness} orchestrator size={20} />} title={t('dialogs.orchestratorRenew.title')} subtitle={t('dialogs.orchestratorRenew.hint')}
+      aside={<Keys combo={t('dialogs.orchestratorRenew.shortcutCombo')} />}
+      footer={<>
+        <button type="button" className="btn btn-ghost btn-m" onClick={closeModal} data-testid="orchestrator-renew-cancel">{t('dialogs.orchestratorRenew.cancelButton')} <Keys combo="Esc" /></button>
+        <button type="submit" className="btn btn-orchestrator btn-m" autoFocus data-autofocus disabled={busy || !!block} data-testid="orchestrator-renew-go">{busy ? t('dialogs.orchestratorRenew.restarting') : action}</button>
+      </>}>
+      <div className="harness-pick" role="radiogroup" aria-label={t('dialogs.orchestratorRenew.engineLabel')}>
+        {engines.map(({ id: h, name }) => (
+          <button key={h} type="button" role="radio" aria-checked={to === h} className={`harness-card ${to === h ? 'on' : ''}`} disabled={!!blockOf(h)}
+            onClick={() => setTo(h)} data-testid={`orchestrator-renew-${h}`}>
+            <HarnessMark harness={h} size={28} />
+            <span><b>{name}</b><small>{blockOf(h) ?? (h === chat.harness ? t('dialogs.orchestratorRenew.restart') : t('dialogs.orchestratorRenew.switchEngine', { engine: name }))}</small></span>
+          </button>
+        ))}
+      </div>
+      <label className="check">
+        <input type="checkbox" checked={summary} onChange={e => setSummary(e.target.checked)} data-testid="orchestrator-renew-summary" />
+        <span>{t('dialogs.orchestratorRenew.bringingSummary')} <small data-testid="orchestrator-renew-summary-what">{loaded ? t('dialogs.orchestratorRenew.summaryExplain') : t('dialogs.orchestratorRenew.summaryNone')}</small></span>
+      </label>
+      <p className="orchestrator-note" data-testid="orchestrator-renew-note">
+        <HarnessMark harness={chat.harness} size={16} />
+        <span>{t('dialogs.orchestratorRenew.note')} <b>«{chat.title}»</b> {t('dialogs.orchestratorRenew.noteSuffix')}</span>
+      </p>
     </Modal>
   );
 }

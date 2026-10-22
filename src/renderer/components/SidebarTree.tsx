@@ -1,5 +1,6 @@
 // The open agents as a tree under the Grindhouse entry of the sidebar (ADR 0083; the owner's chosen design,
-// sidebar-*.png, 2026-10-19): the Orchestrator on top ("N chat avviate"), then each chat as a two-line row (task name
+// sidebar-*.png, 2026-10-19): each chat as a two-line row (no Orchestrator row on top: every chat is started by it, the
+// owner 2026-10-22: "non serve mettere l'orchestrator") (task name
 // and state dot; the role's character and role, and on the right its children "N figli", "Ti aspetta" in amber, or its
 // state), delegated chats indented on guide lines under the chat that launched them. A chevron on each parent folds
 // its children (the same prefs.treeCollapsed as the Grindhouse's KidsBar, so both views agree and the fold survives a
@@ -37,34 +38,21 @@ function rowState(c: ChatSummary): ChildState {
 
 export function SidebarTree() {
   const tree = useApp(s => chatTree(s.order.filter(id => !s.chats[id]?.isOrchestrator && !s.chats[id]?.quick), s.chats), sameTree);
-  const orch = useApp(s => Object.values(s.chats).find(c => c?.isOrchestrator && !c.closedAt)?.id ?? null);
-  const started = useApp(s => tree.filter(n => n.depth === 0 && s.chats[n.id]?.run?.startedBy === 'orchestrator').length);
   const collapsed = ui.use(s => s.prefs.treeCollapsed);
   const focused = ui.use(s => s.focusMode ?? (s.focused?.startsWith('chat:') ? s.focused.slice(5) : null));
   const chats = useApp(s => s.chats);
   if (!tree.length) return null;
-  const orchFolded = !!orch && collapsed[orch] === true;
-  const rows = orchFolded ? [] : visibleTree(tree, collapsed).slice(0, MAX_ROWS);
-  const offset = orch ? 1 : 0;
+  const rows = visibleTree(tree, collapsed).slice(0, MAX_ROWS);
   return (
     <div className="side-tree" aria-label={t('tree.sidebar')} role="group" data-testid="nav-tree">
-      {orch && <div className="tn tn-orch" data-testid="nav-tree-orchestrator">
-        <button type="button" className="tn-chev" aria-expanded={!orchFolded} aria-label={t(orchFolded ? 'tree.unfold' : 'tree.fold', { title: 'Orchestrator' })} data-testid="nav-tree-fold-orchestrator" onClick={() => setTreeCollapsed(orch, !orchFolded)}>
-          {orchFolded ? <IconChevronRight size={12} /> : <IconChevronDown size={12} />}
-        </button>
-        <button type="button" className="tn-main" onClick={() => focusChat(orch)}>
-          <span className="tn-task tn-orch-name">Orchestrator</span>
-          <span className="tn-who"><AgentAvatar avatar={chats[orch]?.agent?.avatar} name="Orchestrator" size={16} />{t('tree.orchestratorStarted', { n: started })}</span>
-        </button>
-      </div>}
       {rows.length > 0 && <ul className="tn-list">
-        {rows.map(n => <Row key={n.id} node={n} chat={chats[n.id]} chats={chats} folded={collapsed[n.id] === true} on={focused === n.id} offset={offset} />)}
+        {rows.map(n => <Row key={n.id} node={n} chat={chats[n.id]} chats={chats} folded={collapsed[n.id] === true} on={focused === n.id} />)}
       </ul>}
     </div>
   );
 }
 
-function Row({ node, chat, chats, folded, on, offset }: { node: TreeNode; chat: ChatSummary | undefined; chats: Readonly<Record<string, ChatSummary | undefined>>; folded: boolean; on: boolean; offset: number }) {
+function Row({ node, chat, chats, folded, on }: { node: TreeNode; chat: ChatSummary | undefined; chats: Readonly<Record<string, ChatSummary | undefined>>; folded: boolean; on: boolean }) {
   if (!chat) return null;
   const state = rowState(chat);
   const kids = node.children.map(id => chats[id]).filter((c): c is ChatSummary => !!c);
@@ -72,7 +60,7 @@ function Row({ node, chat, chats, folded, on, offset }: { node: TreeNode; chat: 
     : kids.length ? <span className="tn-x">{t('tree.kids', { n: kids.length })}</span>
     : node.depth > 0 || state !== 'done' ? <span className="tn-x">{t(`tree.state.${state}`)}</span> : null;
   const running = kidCounts(kids.map(k => childState(k))).run;
-  const level = node.depth + offset;
+  const level = node.depth;
   return <li className={`tn${on ? ' on' : ''}${ENDED.has(state) ? ' ended' : ''}`} style={{ '--d': level } as CSSProperties} data-testid={`nav-tree-${node.id}`} data-depth={node.depth}>
     {Array.from({ length: level }, (_, k) => <i key={k} className="tn-guide" style={{ '--g': k } as CSSProperties} aria-hidden="true" />)}
     {kids.length > 0

@@ -273,7 +273,6 @@ test('README showcase: the Strategist\'s plan to approve in the questions window
   await goPage(page, 'home');
   if (!(await page.getByTestId('tile-chat-tree-plan').count())) await demo('tree');
   await expect(page.getByTestId('tile-chat-tree-plan')).toBeVisible({ timeout: 15_000 });
-  await page.evaluate(() => window.sb.invoke('settings:set', { questionsModal: true }));
   const at = Date.now();
   const plan = { phase: 'proposed', at, asked: 2, doneWhen: 'Order tests pass and the release notes are ready.',
     steps: [

@@ -3,7 +3,6 @@ import type { estimateIt } from './estimate.it';
 export const estimateDe: typeof estimateIt = {
   'estimate.label': 'Schätzung',
   'estimate.similar': (p: { n: number }) => p.n === 1 ? 'aus 1 ähnlichen Aufgabe' : `aus ${p.n} ähnlichen Aufgaben`,
-  'estimate.actual': 'tatsächlich',
   'estimate.held': 'Schätzung gehalten',
   'estimate.missed': 'Schätzung verfehlt',
   'estimate.left': (p: { d: string }) => `noch ~${p.d}`,

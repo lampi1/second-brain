@@ -1,4 +1,4 @@
-// Human-click actions for role feed entries (Annulla on an applied change, the way to Da approvare, Annulla on a
+// Human-click actions for role feed entries (Annulla on an applied change, the way to Memoria → Proposte, Annulla on a
 // maintenance pass the app ran by itself: brainmodel:rollback of each of its changes, newest first, ADR 0102); typed IPC
 // only, never agent mail as approval. Used by the feed cards (NotificationCenter.tsx) and the morning block.
 import { useState } from 'react';
@@ -18,7 +18,7 @@ export function AgentFeedAction({ action }: { action?: FeedAction }) {
   if (!action) return null;
   const click = async () => {
     if (busy || done) return;
-    if (action.kind === 'agent-proposals') { go({ page: 'agenti', arg: 'studio' }); return; }
+    if (action.kind === 'agent-proposals') { go({ page: 'memoria', arg: 'proposte' }); return; }
     setBusy(true); setError('');
     try {
       if (action.kind === 'brain-undo') { await undoChanges(action.ids); setDone(true); }

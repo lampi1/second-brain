@@ -1,4 +1,4 @@
-// Renderer entry. The app page: starts the data store, the browser-view reporter, the global-layer sync, the focus
+// Renderer entry. The app page: the opening splash when main asks it (lib/splash.ts), starts the data store, the browser-view reporter, the global-layer sync, the focus
 // keeper (lib/focusKeeper.ts) and the main→UI command listeners, then mounts App.tsx. The same bundle with #overlay is the global request layer page
 // (main/overlay.ts): it mounts OverlayApp.tsx only; with #brain-test/<page> it shows a brain page alone (the test
 // route of brain/testRoute.tsx).
@@ -12,7 +12,7 @@ import { sb } from './sb';
 import { startViewports } from './lib/viewports';
 import { startBeat } from './lib/beat';
 import { startInputLag } from './lib/inputlag';
-import { focusChat, nextThing, openLink, uiCommand } from './actions';
+import { nextThing, openLink, uiCommand } from './actions';
 import { checkDnd, startStore } from './store/store';
 import { now } from './lib/clock';
 import { startLayer } from './lib/layer';
@@ -22,6 +22,8 @@ import { OverlayApp } from './components/OverlayApp';
 import { BrainTestRoute, isBrainTestRoute } from './brain/testRoute';
 import { startLater } from './lib/later';
 import { LangRoot, startLang } from './i18n/LangRoot';
+import { Splash } from './components/Splash';
+import { splashMode, type SplashMode } from './lib/splash';
 import './styles/tokens.css';
 import './styles/app.css';
 import './styles/shell.css';
@@ -52,7 +54,7 @@ if (isBrainTestRoute()) {
   startStore();
   startViewports();
   startLater(); // "Rispondi dopo": main's flag, before the first popup can show
-  startLayer(focusChat, nextThing, link => { openLink(link); });
+  startLayer(() => nextThing(), link => { openLink(link); });
   startInputLag(); // key → letter on screen, one summary a minute to the `perf` log while the user types
   startFocusKeeper();
   startTypingWatch();
@@ -60,7 +62,12 @@ if (isBrainTestRoute()) {
   started = true;
   for (const cmd of early.splice(0)) uiCommand(cmd);
   sb.on('focus:next', () => nextThing());
+  // the opening splash (components/Splash.tsx) when main asked it: over the app, which renders under it at once; kept
+  // outside LangRoot's re-mount so a language change never replays it
+  let splash: SplashMode | null = null;
+  try { splash = splashMode(location.search, sessionStorage); } catch { splash = null; }
+  const draw = () => root.render(<StrictMode><LangRoot><App /></LangRoot>{splash && <Splash mode={splash} onDone={() => { splash = null; draw(); }} />}</StrictMode>);
   // the language first (ADR 0057): the first render is already in the right one
-  void startLang().then(() => root.render(<StrictMode><LangRoot><App /></LangRoot></StrictMode>));
+  void startLang().then(draw);
   });
 }

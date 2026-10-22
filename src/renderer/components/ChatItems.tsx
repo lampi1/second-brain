@@ -3,7 +3,7 @@
 // CorrectThought.tsx, ADR 0058, the correction shown as its own bubble), tool
 // rows (a plain Italian line of what the tool does, shared/explain.ts; status icon, +/− counts; the raw command, diff
 // or output folded under it), system notices (the "Dove eravamo" recap styled apart; the "continua da qui" divider of a
-// cold continuation, with the previous session folded above it: ADR 0031), turn results and the visuals a chat showed
+// cold continuation, with the previous session folded above it: ADR 0031), turn results, ```mermaid / ```chart blocks drawn (VisualBlock.tsx) and the visuals a chat showed
 // with show_ui (GenUi.tsx ArtifactCard; one waiting for its question is hidden). Code blocks of assistant messages get their own toolbar (Copia; Esegui on shell blocks of an app
 // chat: CodeBlock.tsx; the chat id comes from ItemList's chatId); a click on copyable inline code copies it, on a file path or a link it opens a preview (LinkPeek.tsx). Each row is memoized by its item, so a streaming
 // message re-renders only itself (at most once a frame, re-parsing only its last markdown block); tool rows show live
@@ -20,8 +20,10 @@ import type { ChatItem, FileDiff } from '@shared/contract';
 import { diffTotals, duration, formatCost, toolLabel } from '../lib/format';
 import { markdownParts, renderMarkdown, splitBlocks, type MdPart } from '../lib/markdown';
 import { CodeBlock } from './CodeBlock';
+import { VisualBlock, isVisualLang } from './VisualBlock';
 import { explainTool } from '@shared/explain';
 import { useNow } from '../lib/clock';
+import { LINE_MS, typingKey } from '../lib/typing-line';
 import { IconAlert, IconArrowDown, IconArrowRight, IconBell, IconBolt, IconBranch, IconCheck, IconChevronDown, IconChevronRight, IconInfo, IconLink, IconPlus, IconRefresh, IconSend, IconSparkle, IconSpinner, IconTerminal, IconX } from './Icons';
 import { splitNotes } from '../lib/sendable';
 import { getForeignLabel, foreignOf, showsSender, type Foreign, type ForeignKind } from '../lib/foreign';
@@ -144,18 +146,25 @@ const Message = memo(function Message({ id, text, streaming }: { id: string; tex
         const tail = !!streaming && i === groups.length - 1;
         return g.kind === 'md'
           ? <div key={i} className={`md ${tail ? 'streaming' : ''}`}>{g.parts.map(x => <div key={x.key} className="md-b" dangerouslySetInnerHTML={{ __html: x.html }} />)}</div>
+          : isVisualLang(g.part.lang) ? <VisualBlock key={i} chatId={chatId} itemId={id} lang={g.part.lang} code={g.part.code} streaming={tail} />
           : <CodeBlock key={i} chatId={chatId} itemId={id} lang={g.part.lang} code={g.part.code} streaming={tail} />;
       })}
     </div>
   );
 });
 
-/** The live line of a running turn. */
-/** The running turn's line; `children` replaces the generic word with what the chat does (a collapsed strip's step,
- *  StripActivity.tsx), the dots and the data-what hook stay. */
-export function Typing({ what, testid, children }: { what: 'scrive' | 'pensa' | 'lavora'; testid?: string; children?: ReactNode }) {
-  const text = what === 'scrive' ? t('chat.items.typing.writing') : what === 'pensa' ? t('chat.items.typing.thinking') : t('chat.items.typing.working');
-  return <div className="typing" role="status" aria-live="off" data-testid={testid} data-what={what}><span className="typing-dots" aria-hidden="true"><i /><i /><i /></span>{children ?? text}</div>;
+/** The running turn's line: a turning spark and, while it thinks or works, a workshop phrase picked by the task's kind of
+ *  work (lib/typing-line.ts; `topic` = the task's title or request), "sta scrivendo…" while it writes. `children`
+ *  replaces the words with what the chat does (a collapsed strip's step, StripActivity.tsx); the data-what hook stays. */
+export function Typing({ what, testid, topic = '', children }: { what: 'scrive' | 'pensa' | 'lavora'; testid?: string; topic?: string; children?: ReactNode }) {
+  const now = useNow(LINE_MS);
+  const key = what === 'scrive' ? 'chat.items.typing.writing' : typingKey(topic, now);
+  return <div className="typing" role="status" aria-live="off" data-testid={testid} data-what={what}><TypingSpark />{children ?? <span key={key} className="typing-line">{t(key)}</span>}</div>;
+}
+
+/** The working mark: a four-point spark that turns and breathes (transform and opacity only: the compositor draws it). */
+export function TypingSpark() {
+  return <span className="typing-spark" aria-hidden="true"><svg viewBox="0 0 16 16" width="12" height="12"><path d="M8 0.8 9.6 6.4 15.2 8 9.6 9.6 8 15.2 6.4 9.6 0.8 8 6.4 6.4Z" fill="currentColor" /></svg></span>;
 }
 
 function DiffView({ diff }: { diff: FileDiff[] }) {

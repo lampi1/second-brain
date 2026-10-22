@@ -225,5 +225,4 @@ export const appTextIt = {
   'appText.feedAction.undoChange': 'Annulla modifica',
   'appText.delegation.denied': 'Negato dall’utente.',
   'appText.codexAutonomy.noConfirm': 'Conferma non disponibile',
-  'appText.routing.saved': (p: { version: number | string }) => `Instradamento salvato: versione ${p.version}`,
 };

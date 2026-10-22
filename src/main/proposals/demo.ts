@@ -44,11 +44,12 @@ export function writeDemoProposals(userData: string, brainRoot: string, now: num
     proposeMemory(brainRoot, { scope: { roleId: 'artisan', project: 'brain' }, subject: tr('Pagina Mappa'), predicate: tr('usa per il 3D'),
       value: tr('three.js con un solo canvas condiviso; con meno di 60 fps si passa alla vista 2D da sola.'), sourceEventId: 'mappa-report', sourceRunId: 'r_000000000001' }, iso(28 * MIN));
     // a fact that says something else than one Scout already remembers: the card asks replace or keep both (ADR 0126)
-    const known = proposeMemory(brainRoot, { scope: { roleId: 'scout', project: 'alfa-shop' }, subject: tr('Prompt preparati'), predicate: 'nota',
-      value: tr('i prompt per dopo stanno nella cartella prompts/ del progetto.'), sourceEventId: 'prompts-1', sourceRunId: 'r_000000000003' }, iso(3 * DAY));
+    // a real predicate: free notes («nota») never contradict each other (ADR 0129)
+    const known = proposeMemory(brainRoot, { scope: { roleId: 'scout', project: 'alfa-shop' }, subject: tr('Prompt preparati'), predicate: tr('stanno'),
+      value: tr('nella cartella prompts/ del progetto.'), sourceEventId: 'prompts-1', sourceRunId: 'r_000000000003' }, iso(3 * DAY));
     confirmMemory(brainRoot, known.memoryId, { sourceEventId: 'demo-review', sourceRunId: 'demo-review', evidence: 'demo' }, iso(3 * DAY - MIN));
-    proposeMemory(brainRoot, { scope: { roleId: 'scout', project: 'alfa-shop' }, subject: tr('Prompt preparati'), predicate: 'nota',
-      value: tr('i prompt per dopo stanno in tmp/*-prompt.md e sono committati come «tmp: …»: guarda prima il git log.'), sourceEventId: 'prompts-2', sourceRunId: 'r_000000000004' }, iso(5 * MIN));
+    proposeMemory(brainRoot, { scope: { roleId: 'scout', project: 'alfa-shop' }, subject: tr('Prompt preparati'), predicate: tr('stanno'),
+      value: tr('in tmp/*-prompt.md e sono committati come «tmp: …»: guarda prima il git log.'), sourceEventId: 'prompts-2', sourceRunId: 'r_000000000004' }, iso(5 * MIN));
   }
   const name = demoCandidate(), text = candidateText();
   const file = path.join(fs.realpathSync(brainRoot), 'memory', 'skill-candidates', `${name}.md`);

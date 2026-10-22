@@ -5,7 +5,7 @@
 // region, tooltips, the questions window ("Domande in finestra") and dialogs. It owns the global keyboard map
 // (lib/keys.ts → actions.ts, G-letter go-to sequences), theme and density, highlights the element a link points to, and
 // tells the browser-view reporter when something covers everything. Mounted by main.tsx.
-import { useEffect, type CSSProperties } from 'react';
+import { lazy, Suspense, useEffect, type CSSProperties } from 'react';
 import{t}from'./i18n';
 import { BRAIN_PAGES, BrainMap, BrainPage, GO_ALIASES } from './brain';
 import { goSequence, resolveShortcut } from './lib/keys';
@@ -15,7 +15,7 @@ import { sameList } from './store/state';
 import { useApp } from './store/store';
 import { openModal, closeModal, pageLabel, setMap, setPrefs, toast, ui } from './store/ui';
 import {
-  back, brainBridge, escapeOne, focusChat, focusTile, forward, go, goTarget, nextThing, openLink, stopAllAsk, stopFocused, closeFocused, toggleCenter, toggleFocusMode, toggleMaximize, toggleOrchestrator, askRenewOrchestrator, newRequest,
+  back, brainBridge, closeViewer, escapeOne, toggleViewerFull, viewerStep, focusChat, focusTile, forward, go, goTarget, nextThing, openLink, stopAllAsk, stopFocused, closeFocused, toggleCenter, toggleFocusMode, toggleMaximize, toggleOrchestrator, askRenewOrchestrator, newRequest,
 } from './actions';
 import { TopBar } from './components/TopBar';
 import { BrainSetupBanner } from './components/BrainSetupBanner';
@@ -46,7 +46,10 @@ import { hubRedirect } from './lib/memory-hub';
 import { ClassifiersPage } from './components/brain-model/ClassifiersPage';
 import { MapPage } from './components/brain-model/MapPage';
 import { LogPage } from './components/LogPage';
-import { GuidePage } from './components/GuidePage';
+// the Guida (three languages of cards) loads when it opens, not with the first screen
+const GuidePage = lazy(() => import('./components/GuidePage').then(m => ({ default: m.GuidePage })));
+// the file viewer overlay loads when a file is first opened
+const ViewerOverlay = lazy(() => import('./components/viewer/ViewerOverlay').then(m => ({ default: m.ViewerOverlay })));
 
 const editable = (t: EventTarget | null) => {
   const el = t as HTMLElement | null;
@@ -58,7 +61,7 @@ function onKey(e: KeyboardEvent): void {
   if (e.defaultPrevented) return;
   const u = ui.get();
   // "G then a letter": go to a section (never while typing in a field, never under a dialog)
-  if (!u.modal && !editable(e.target)) {
+  if (!u.modal && !u.viewer.open && !editable(e.target)) {
     const r = goSequence(gPending, e, Date.now(), [...BRAIN_PAGES, ...GO_ALIASES]);
     gPending = r.pendingAt;
     if (r.target) { e.preventDefault(); go({ page: r.target as (typeof BRAIN_PAGES)[number]['id'] }); return; }
@@ -74,6 +77,22 @@ function onKey(e: KeyboardEvent): void {
   // the questions window in front: only the palette, Ctrl+J and Esc act; nothing hidden under it (Ctrl+W, Ctrl+1-9…)
   if (u.qwin.shown && cmd.type !== 'palette' && cmd.type !== 'next' && cmd.type !== 'escape') {
     if (cmd.type === 'closeFocused') e.preventDefault();
+    return;
+  }
+  // the file viewer in front (the keys inside it are its own, ViewerOverlay.tsx): Alt+←/→ move between its files, F11
+  // expands it, Esc and Ctrl+W close it; the palette and Ctrl+J still work; nothing acts on the page under it
+  if (u.viewer.open && !u.qwin.shown) {
+    switch (cmd.type) {
+      case 'back': viewerStep(-1); break;
+      case 'forward': viewerStep(1); break;
+      case 'maximize': toggleViewerFull(); break;
+      case 'escape': closeViewer(); break;
+      case 'closeFocused': if (!e.repeat) closeViewer(); break;
+      case 'palette': openModal('palette'); break;
+      case 'next': nextThing(); break;
+      default: return;
+    }
+    e.preventDefault();
     return;
   }
   switch (cmd.type) {
@@ -165,7 +184,7 @@ function PageFrame({ id }: { id: (typeof BRAIN_PAGES)[number]['id'] }) {
       </div>
       {/* keyed by the page: every page change replays the entry (linear.css panel-enter), no hard cut */}
       <div className="page-body" key={id}>
-        {hub ? null : id === 'log' ? <LogPage /> : id === 'guida' ? <GuidePage arg={arg ?? undefined} /> : id === 'agenti' ? <AgentCatalogPage /> : id === 'impostazioni'
+        {hub ? null : id === 'log' ? <LogPage /> : id === 'guida' ? <Suspense fallback={null}><GuidePage arg={arg ?? undefined} /></Suspense> : id === 'agenti' ? <AgentCatalogPage /> : id === 'impostazioni'
           ? <div className="bx bx-page bx-scroll" role="region" aria-label={t('cmp.app.settings')}><div className="bx-inner"><SettingsPage /></div></div>
           : id === 'memoria'
             ? <div className="bx bx-page bx-scroll" role="region" aria-label={pageLabel(id)}><div className="bx-inner mh-inner"><MemoryPage /></div></div>
@@ -207,6 +226,7 @@ export function App() {
     root.dataset.appearance=appearance.preset;
   }, [theme, density,appearance]);
   const qShown = ui.use(s => s.qwin.shown);
+  const viewerOpen = ui.use(s => s.viewer.open);
   useEffect(() => { setBlocked(modal !== null || map || qShown); }, [modal, map, qShown]);
   useEffect(() => { setKnownTabs(tabIds); }, [tabIds]);
   useEffect(() => { schedule(420); }, [maximized, focusMode, page, density, lanePeek, center, dock.right, dock.bottom]);
@@ -253,6 +273,7 @@ export function App() {
       <AutoCloser />
       <FirstInterviewGate />
       <UpdateCheckpointStatus />
+      {viewerOpen && <Suspense fallback={null}><ViewerOverlay /></Suspense>}
       {modal === 'palette' && <CommandPalette />}
       {modal === 'shortcuts' && <ShortcutsDialog />}
       {modal === 'confirm' && <ConfirmDialog />}

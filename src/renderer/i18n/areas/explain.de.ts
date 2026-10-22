@@ -19,6 +19,7 @@ export const explainDe: typeof explainIt = {
   'explain.judge.title': 'Was die Prüfung macht',
   'explain.judge.p1': 'Wenn eine Aufgabe fertig ist, lässt die App sie von einem Sentinel in einer neuen Sitzung prüfen, die nie gesehen hat, wie sie gemacht wurde. Seine Bewertung zählt mit vollem Gewicht (× 1) für Level und Leistung des Agenten. Höchstens zwei Prüfungen gleichzeitig; Aufgaben, die vor dem Einschalten fertig wurden, werden nicht geprüft.',
   'explain.judge.p2': 'Jede Prüfung ist ein echter Chat: Sie kostet so viel wie eine kurze Sentinel-Aufgabe. Die Schätzung daneben sind die Aufgaben pro Tag der letzten 7 Tage mal die Mediankosten einer Prüfung.',
+  'explain.judge.p3': 'Vor einer Prüfung liest die App die Belege der Aufgabe: die ausgeführten Befehle mit ihrem Ergebnis und die geänderten Dateien. Haben die Tests oder Prüfungen des Projekts (nicht vom Agenten selbst geschrieben) nach der letzten Änderung bestanden und sagt der Agent, er sei fertig, ist die Aufgabe ohne Prüfung gelungen; schlagen sie fehl und der Agent räumt es ein, ist sie gescheitert. Diese Bewertung wiegt × 0,7. In allen anderen Fällen, oder wenn Belege und Bericht des Agenten nicht übereinstimmen, entscheidet der Sentinel. Jeder zehnte Beleg wird trotzdem geprüft, um zu kontrollieren, dass die Belege richtig urteilen.',
   'explain.tiers.title': 'Leicht, mittel, hoch',
   'explain.tiers.p1': 'Jede Rolle verlangt eine Modellstufe statt eines bestimmten Modells: leicht für einfache, schnelle Aufgaben, mittel für die meisten, hoch für Planung und langes Nachdenken. Höher = fähiger, langsamer und teurer.',
   'explain.tiers.p2': 'Hier wählst du das Modell, das jede Stufe auf jeder Engine nutzt; leer = das, was die Modellregistry des Brain empfiehlt.',
@@ -30,5 +31,5 @@ export const explainDe: typeof explainIt = {
   'explain.skills.p2': '„Genutzt von“ listet die Agenten, die ihn bei jedem Start laden; „Ungenutzt“ heißt, kein Agent lädt ihn, aber er bleibt in jedem Chat als „/name“ verfügbar. Die Wartung schlägt vor, doppelte oder nutzlose zusammenzulegen oder zu entfernen.',
   'explain.team.title': 'Was diese Zahlen sagen',
   'explain.team.p1': '„Arbeitet“: Rollen mit mindestens einem gerade offenen Chat. „Auf Probe“: Rollen mit einer neuen Version auf Probe, die mit der vorigen verglichen wird, bevor sie bleibt.',
-  'explain.team.p2': 'Auf jeder Karte: Das Level steigt nur mit geprüften Erfolgen (deinen, denen einer geprüften Bewertung), daneben angezeigt; die Leistung ist der gewichtete Durchschnitt der Urteile, mit den Runs, auf denen sie beruht; das „?“ daneben zeigt jeweils die genaue Formel.',
+  'explain.team.p2': 'Auf jeder Karte: Das Level steigt mit den XP geprüft erfolgreicher Runs (1 bis 5 je nach Größe der Aufgabe); die Leistung ist eine Schätzung aus den Urteilen, mit einem ± der Unsicherheit; das „?“ daneben zeigt jeweils die genaue Formel.',
 };

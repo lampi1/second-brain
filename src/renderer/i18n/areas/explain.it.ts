@@ -20,6 +20,7 @@ export const explainIt = {
   'explain.judge.title': 'Cosa fa il controllo',
   'explain.judge.p1': 'Quando un lavoro finisce, l’app lo fa rivedere da un Sentinel in una sessione nuova che non ha visto come è stato fatto. Il suo voto entra nel livello e nella performance dell’agente con peso pieno (× 1). Al massimo due revisioni alla volta; i lavori finiti prima di accenderlo non vengono rivisti.',
   'explain.judge.p2': 'Ogni revisione è una chat vera: costa come un lavoro breve del Sentinel. La stima accanto è i lavori al giorno degli ultimi 7 giorni per il costo medio di una revisione.',
+  'explain.judge.p3': 'Prima della revisione l’app guarda le ricevute del lavoro: i comandi eseguiti con il loro esito e i file cambiati. Se i test o i controlli del progetto (non scritti dall’agente stesso) sono passati dopo l’ultima modifica e l’agente dice di aver finito, il lavoro è riuscito senza revisione; se falliscono e l’agente lo ammette, è fallito. Questo voto pesa × 0,7. Negli altri casi, o se le ricevute e il resoconto dell’agente non concordano, decide il Sentinel. Una ricevuta su dieci viene comunque rivista, per controllare che le ricevute giudichino bene.',
   'explain.tiers.title': 'Leggero, medio, alto',
   'explain.tiers.p1': 'Ogni ruolo dichiara un livello di modello invece di un modello preciso: leggero per lavori semplici e veloci, medio per la maggior parte, alto per pianificare e ragionare a lungo. Più alto = più capace, più lento e più caro.',
   'explain.tiers.p2': 'Qui scegli quale modello usa ogni livello su ciascun motore; vuoto = quello consigliato dal registro dei modelli del brain.',
@@ -31,5 +32,5 @@ export const explainIt = {
   'explain.skills.p2': '«Usata da» elenca gli agenti che la caricano a ogni avvio; «Non usata» vuol dire che nessun agente la carica, ma resta disponibile con «/nome» in ogni chat. La manutenzione propone di unire o togliere quelle doppie o inutili.',
   'explain.team.title': 'Cosa dicono questi numeri',
   'explain.team.p1': '«Al lavoro»: ruoli con almeno una chat aperta adesso. «In prova»: ruoli con una nuova versione in prova, confrontata con la precedente prima di tenerla.',
-  'explain.team.p2': 'Su ogni carta: il livello cresce solo con i lavori riusciti e verificati (da te, da una revisione verificata), scritti accanto; la performance è la media pesata dei voti, con su quanti lavori si basa; il «?» accanto a ciascuno dà la formula esatta.',
+  'explain.team.p2': 'Su ogni carta: il livello sale con gli XP dei lavori riusciti e verificati (da 1 a 5 secondo quanto è grande il lavoro); la performance è una stima dai voti, con un ± di incertezza; il «?» accanto a ciascuno dà la formula esatta.',
 };

@@ -1,8 +1,8 @@
 // A Strategist's plan with the user on its strip (ADR 0108), in the demo: under way, its steps as a checklist Claude Code
-// style with the role of each; while it asks, its open question right on the collapsed strip, with what is already
-// clear and «Basta domande», the answer reaching the chat and joining the clear lines; the short plan with «Cambia
-// qualcosa» (the change reaches it) and «Approva e parti» (it starts); with "Popup" on, the question opens in the
-// questions window and the strip points to it. Hidden window (SB_HIDDEN).
+// style with the role of each; while it asks, its open question in the questions window (always on since 2026-10-22)
+// and the strip pointing to it, with what is already clear and «Basta domande», the answer reaching the chat and
+// joining the clear lines; the short plan to approve in the window too, with «Cambia qualcosa» (the change reaches it)
+// and «Approva e parti» (it starts), the strip keeping its steps. Hidden window (SB_HIDDEN).
 // Screenshots: test-results/shots/strategist-plan-*.png.
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import type { StrategyPlan } from '../../src/shared/strategy';
@@ -45,34 +45,36 @@ test('a Strategist asks, proposes a short plan to approve and shows its steps on
     await top(page);
     await shot(page, 'strategist-plan-progress-dark');
 
-    // asking: the question on the strip itself, what is already clear under it
+    // asking: the question in the questions window, the strip says where it is and what is already clear
     await demo(app, 'plan', LEAD, plan({ clarified: [{ q: 'Dove', a: 'Carrello, ordine e reso' }] }));
     await ask(app);
     await expect(card).toHaveAttribute('data-phase', 'asking');
+    await expect(page.getByTestId('qwin-card-q')).toHaveText(QUESTION);
     await expect(page.getByTestId(`plan-question-n-${LEAD}`)).toHaveText('Domanda 2');
-    await expect(card).toContainText(QUESTION);
+    await expect(card).not.toContainText(QUESTION);
+    await expect(page.getByTestId(`plan-in-window-${LEAD}`)).toBeAttached();
     await expect(page.getByTestId('plan-known')).toContainText('Dove');
-    await expect(page.getByTestId(`plan-enough-${LEAD}`)).toBeVisible();
-    await top(page);
+    await expect(page.getByTestId(`plan-enough-${LEAD}`)).toBeAttached();
     await shot(page, 'strategist-plan-asking-dark');
-    // expanded, the question is not shown a second time below
-    await page.getByTestId(`chat-expand-${LEAD}`).click();
-    await expect(page.getByTestId(`chat-expand-${LEAD}`)).toHaveAttribute('aria-expanded', 'true');
-    await expect(tile.getByText(QUESTION, { exact: true })).toHaveCount(1);
-    await page.getByTestId(`chat-expand-${LEAD}`).click();
-    await card.getByText('No, solo a prezzo pieno', { exact: true }).click();
+    await page.getByTestId('qwin-card-opt-1').click();
     await expect.poll(() => demo<{ answer: { answers: Record<string, string> } }[]>(app, 'answers').then(a => a.at(-1)?.answer.answers[QUESTION])).toBe('No, solo a prezzo pieno (consigliato)');
     await expect(page.getByTestId('plan-known')).toContainText('Offerte');
     await expect(page.getByTestId(`plan-enough-${LEAD}`)).toHaveCount(0);
 
-    // «Basta domande» answers the open question for the user
+    // «Basta domande» on the strip answers the open question for the user (the window set aside first)
     await ask(app);
+    await expect(page.getByTestId('qwin-card-q')).toHaveText(QUESTION);
+    await page.getByTestId('qwin-later').click();
     await page.getByTestId(`plan-enough-${LEAD}`).click();
     await expect.poll(() => demo<{ answer: { answers: Record<string, string> } }[]>(app, 'answers').then(a => a.at(-1)?.answer.answers[QUESTION])).toContain('Basta domande');
 
-    // the plan: «Cambia qualcosa» sends the change, «Approva e parti» starts it
+    // the plan: in the window, «Cambia qualcosa» sends the change, «Approva e parti» starts it; the strip keeps the steps
     await demo(app, 'plan', LEAD, plan({ phase: 'proposed', steps: [...STEPS], doneWhen: 'I test ordini passano e le note sono pronte.' }));
     await expect(card).toHaveAttribute('data-phase', 'proposed');
+    await expect(page.getByTestId('qwin-plan')).toBeVisible();
+    await expect(page.getByTestId('qwin-plan-steps').locator('li')).toHaveCount(3);
+    await expect(page.getByTestId(`plan-approve-${LEAD}`)).toHaveCount(0); // no second pair of buttons on the strip
+    await page.getByTestId('qwin-later').click();
     // a click inside the card never folds or unfolds the strip
     await card.locator('.sp-title').first().click();
     await expect(page.getByTestId(`chat-expand-${LEAD}`)).toHaveAttribute('aria-expanded', 'false');
@@ -80,19 +82,24 @@ test('a Strategist asks, proposes a short plan to approve and shows its steps on
     await expect(card).toContainText('Finito quando: I test ordini passano');
     await top(page);
     await shot(page, 'strategist-plan-proposed-dark');
-    await page.getByTestId(`plan-change-${LEAD}`).click();
-    await page.getByTestId(`plan-change-text-${LEAD}`).fill('Prima i test');
-    await page.getByTestId(`plan-change-send-${LEAD}`).click();
+    await page.getByTestId(`plan-open-window-${LEAD}`).click(); // back to the window
+    await page.getByTestId('qwin-plan-change').click();
+    await page.getByTestId('qwin-plan-change-text').fill('Prima i test');
+    await page.getByTestId('qwin-plan-change-send').click();
     await expect(card).toHaveAttribute('data-phase', 'revising');
     await expect.poll(() => userTexts(page).then(t => t.at(-1))).toBe('Cambia il piano: Prima i test');
     await demo(app, 'plan', LEAD, plan({ phase: 'proposed', steps: [...STEPS] }));
-    await page.getByTestId(`plan-approve-${LEAD}`).click();
+    // the queue opened from the strip shows every waiting request again, oldest first: the new plan is one click away
+    await page.locator(`[data-testid="qwin-pick"][data-key^="${LEAD}/plan@"]`).click();
+    await page.getByTestId('qwin-plan-approve').click();
     await expect(card).toHaveAttribute('data-phase', 'running');
     await expect.poll(() => userTexts(page).then(t => t.at(-1))).toBe('Piano approvato: parti.');
     await expect(page.getByTestId(`plan-steps-${LEAD}-1`)).toHaveAttribute('data-state', 'todo');
 
     // light theme
     await demo(app, 'plan', LEAD, plan({ phase: 'proposed', steps: [...STEPS] }));
+    await expect(page.getByTestId('qwin')).toBeVisible();
+    while (await page.getByTestId('qwin').count()) await page.getByTestId('qwin-later').click(); // everything set aside
     await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'light' }));
     await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
     await top(page);
@@ -100,8 +107,8 @@ test('a Strategist asks, proposes a short plan to approve and shows its steps on
   } finally { await app.close(); }
 });
 
-test('with "Popup" on, a Strategist\'s question opens in the questions window, not on its strip', async () => {
-  const { app, page } = await launchDemo({ config: { questionsModal: true } });
+test('a Strategist\'s question opens in the questions window, not on its strip', async () => {
+  const { app, page } = await launchDemo();
   try {
     await demo(app, 'tree');
     await expect(page.getByTestId(`tile-chat-${LEAD}`)).toBeVisible({ timeout: 15_000 });

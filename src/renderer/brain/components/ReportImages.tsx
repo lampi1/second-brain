@@ -9,7 +9,7 @@
 //   look), with ← → across the report's images. Both modules load on demand: the brain pages never pull the app bridge.
 // Used by Markdown.tsx (imageBase) and ReportHtml.tsx, inside FileViewer.tsx.
 import {lazy,Suspense,useCallback,useEffect,useState,type ReactElement} from 'react';
-import {classifyImageSrc,embeddedRasterOk,imageComparison,isImageGalleryLead} from '../lib/report-images';
+import {beforeAfterPair,classifyImageSrc,embeddedRasterOk,imageComparison,isImageGalleryLead} from '../lib/report-images';
 import {baseName} from '../lib/text';
 import {t} from '../../i18n';
 import type {ZoomImage} from '../../components/ImageZoom';
@@ -60,6 +60,16 @@ export function useReportImages(root:HTMLElement|ShadowRoot|null,version:unknown
       }
     });
     const click=(e:Event)=>{
+      // "Prima / Dopo" of a gallery: the pair in the viewer, side by side or with the slider
+      const pair=e.type==='click'?(e.target as Element|null)?.closest?.('.sb-report-compare'):null;
+      if(pair instanceof HTMLElement){
+        e.preventDefault();e.stopPropagation();
+        const side=(name:'before'|'after')=>{const img=pair.closest('.sb-report-gallery')?.querySelector<HTMLImageElement>(`img[data-sb-side="${name}"]`);
+          return img?{caption:img.alt||t(name==='before'?'viewer.imageBefore':'viewer.imageAfter'),...(img.dataset.sbPath?{path:img.dataset.sbPath}:{}),...(img.src.startsWith('data:image/')?{src:img.src}:{})}:null;};
+        const before=side('before'),after=side('after');
+        if(before&&after)void import('../../actions').then(({openShots})=>openShots(before,after,reportFile?baseName(reportFile):undefined));
+        return;
+      }
       if(e instanceof KeyboardEvent&&e.key!=='Enter'&&e.key!==' ')return;
       const img=(e.target as Element|null)?.closest?.('img.sb-img');
       if(!(img instanceof HTMLImageElement)||!img.src.startsWith('data:image/'))return;
@@ -114,5 +124,13 @@ export function galleryImages(root: ParentNode, doc: Document): void {
       }
       img.replaceWith(card); card.append(img,caption);
     });
+    // a before and an after among them (file names or captions): one button opens the pair in the viewer's "Prima / Dopo"
+    const pair = beforeAfterPair(images.map(img => ({ img, caption: img.alt, path: img.dataset.sbPath })));
+    if (pair) {
+      pair.before.img.setAttribute('data-sb-side', 'before'); pair.after.img.setAttribute('data-sb-side', 'after');
+      const button = doc.createElement('button'); button.type = 'button'; button.className = 'sb-report-compare';
+      button.setAttribute('data-testid', 'report-compare'); button.textContent = t('vw.compareShots');
+      gallery.append(button);
+    }
   }
 }

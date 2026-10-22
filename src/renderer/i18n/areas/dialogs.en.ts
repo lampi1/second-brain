@@ -40,7 +40,6 @@ export const dialogsEn: typeof dialogsIt = {
   'dialogs.handoffDialog.writeNow': 'Write now',
   'dialogs.handoffDialog.notYetDone': 'When the chat finishes its turn',
   'dialogs.handoffDialog.closeButton': 'Close',
-  'dialogs.handoffDialog.resumeButton': 'Continue in new chat',
   'dialogs.handoffDialog.contextTokens': (p: { n: string }) => `${p.n} tokens of context`,
   'dialogs.handoffDialog.copyPathTip': 'click to copy',
 
@@ -66,7 +65,6 @@ export const dialogsEn: typeof dialogsIt = {
   // NotificationCenter
   'dialogs.notifications.title': 'Notifications',
   'dialogs.notifications.markAllRead': 'Mark all read',
-  'dialogs.notifications.markReadAriaLabel': (p: { count: number }) => `${p.count} new`,
   'dialogs.notifications.doNotDisturb': 'Do not disturb',
   'dialogs.notifications.disturb': 'Disturb',
   'dialogs.notifications.doNotDisturbTip': (p: { until?: string }) => p.until ? `Until ${p.until}` : 'No notifications (they stay here)',
@@ -119,9 +117,7 @@ export const dialogsEn: typeof dialogsIt = {
 
   // OrchestratorTile
   'dialogs.orchestrator.name': 'Orchestrator',
-  'dialogs.orchestrator.appName': 'Orchestrator',
   'dialogs.orchestrator.empty': 'No Orchestrator yet',
-  'dialogs.orchestrator.emptyDescription': 'The Orchestrator is the chat that coordinates the others: you ask it "what now?" and it proposes one thing at a time.',
   'dialogs.orchestrator.createButton': 'Create Orchestrator',
   'dialogs.orchestrator.statusLabel': 'Status: chats and PRs at a glance',
   'dialogs.orchestrator.statusShortcut': 'Ctrl+Shift+S',
@@ -129,7 +125,6 @@ export const dialogsEn: typeof dialogsIt = {
   'dialogs.orchestrator.stopShortcut': 'Ctrl+.',
   'dialogs.orchestrator.menuLabel': 'Engine, model, Clean and more',
   'dialogs.orchestrator.emptyPrompt': 'Ask the Orchestrator "what now?"',
-  'dialogs.orchestrator.nextQueue': 'Next:',
   'dialogs.orchestrator.tallyStarted': (p: { n: number }) => p.n === 1 ? 'Today 1 chat started' : `Today ${p.n} chats started`,
   'dialogs.orchestrator.tallyDone': (p: { n: number }) => `${p.n} done`,
   'dialogs.orchestrator.tallyRun': (p: { n: number }) => `${p.n} running`,
@@ -137,7 +132,6 @@ export const dialogsEn: typeof dialogsIt = {
   'dialogs.orchestrator.tallyStuck': (p: { n: number }) => `${p.n} stalled`,
   'dialogs.orchestrator.tallyOwn': (p: { cost: string }) => `Cost: ${p.cost} own`,
   'dialogs.orchestrator.tallyChats': (p: { cost: string }) => `${p.cost} for the chats started`,
-  'dialogs.orchestrator.moreNext': (p: { count: number }) => `+${p.count}`,
   'dialogs.orchestrator.heldCount': (p: { count: number }) => `${p.count} held ${p.count === 1 ? 'update' : 'updates'}`,
   'dialogs.orchestrator.heldNow': 'just now',
   'dialogs.orchestrator.heldSince': (p: { ago: string }) => `for ${p.ago}`,
@@ -162,8 +156,6 @@ export const dialogsEn: typeof dialogsIt = {
   'dialogs.sidebar.brain': 'Brain',
   'dialogs.sidebar.trends': 'Trends',
   'dialogs.sidebar.app': 'App',
-  'dialogs.sidebar.map': '3D Map',
-  'dialogs.sidebar.mapShortcut': 'Ctrl+Shift+M',
   'dialogs.sidebar.waiting': (p: { count: number }) => `${p.count} waiting for you`,
   'dialogs.sidebar.new': (p: { count: number }) => `${p.count} new`,
 
@@ -193,9 +185,6 @@ export const dialogsEn: typeof dialogsIt = {
   'dialogs.linkPeek.openOutside': 'Open outside',
   'dialogs.linkPeek.copyLink': 'Copy',
   'dialogs.linkPeek.copyLinkSuccess': 'Link copied',
-  'dialogs.linkPeek.readingFile': 'Reading file…',
-  'dialogs.linkPeek.noPreview': (p: { what: string }) => `No preview (${p.what}).`,
-  'dialogs.linkPeek.openFile': 'Open',
   'dialogs.linkPeek.copyPath': 'Copy path',
   'dialogs.linkPeek.copyPathSuccess': 'Path copied',
 };

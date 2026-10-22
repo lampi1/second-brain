@@ -4,8 +4,6 @@ export const queriesEn: typeof queriesIt = {
   'queries.eyebrow': 'Saved queries',
   'queries.title': 'Queries',
   'queries.lead': 'The queries someone runs again: SQL, KQL, GraphQL, PromQL, SPL… One file each in queries/, with what it answers and where it runs. Chats save the ones that worked; maintenance moves here the ones left in the notes.',
-  'queries.count': (p: { n: number }) => (p.n === 1 ? '1 query' : `${p.n} queries`),
-  'queries.languages': (p: { n: number }) => (p.n === 1 ? '1 language' : `${p.n} languages`),
   'queries.searchLabel': 'Search the queries',
   'queries.searchPlaceholder': 'Search by title, data source, tag…',
   'queries.filterLabel': 'Filter by language',

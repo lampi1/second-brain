@@ -3,7 +3,6 @@
 import type { learningIt } from './learning.it';
 type N = { n: number };
 export const learningDe: typeof learningIt = {
-  'learn.title': 'Lernen',
   'learn.lead': 'Alles, was die App von selbst im Brain ändert, ist eine Hypothese: Hier siehst du, ob es deine Korrekturen wirklich gesenkt hat, über wie viele Runs und mit welcher Fehlermarge. Keine Level: nur, was die Daten sagen.',
   'learn.v.aiuta': 'Hilft', 'learn.v.nessun-effetto': 'Keine Wirkung', 'learn.v.raccolta': 'Sammelt', 'learn.v.peggiora': 'Schlechter', 'learn.v.annullato': 'Rückgängig',
   'learn.k.aiuta': 'Belegter Nutzen', 'learn.k.nessun-effetto': 'Keine Wirkung', 'learn.k.raccolta': 'Sammelt', 'learn.k.peggiora': 'Schlechter', 'learn.k.annullato': 'Rückgängig',

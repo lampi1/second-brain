@@ -33,7 +33,11 @@ export function readLocal(file: string): unknown {
 }
 
 export function writeLocal(file: string, value: unknown): void {
-  const body = `${JSON.stringify(value, null, 2)}\n`;
+  writeLocalText(file, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+/** writeLocal of a body the caller already serialized (agent-runs.json: compact, serialized once). */
+export function writeLocalText(file: string, body: string): void {
   if (Buffer.byteLength(body, 'utf8') > 8_000_000) throw new Error('Archivio locale troppo grande. Il file precedente è conservato.');
   fs.mkdirSync(path.dirname(file), { recursive: true });
   try { const s = fs.lstatSync(file); if (!s.isFile() || s.nlink !== 1) throw new Error('Archivio locale collegato: scrittura rifiutata.'); }

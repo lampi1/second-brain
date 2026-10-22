@@ -1,16 +1,19 @@
 // Script: the brain's reusable, tested scripts (ADR 0076; the owner, 2026-10-19: "una sezione dedicata agli script, tutti
 // gli script creati e riutilizzabili provati che funzionano"), the first half of the Memoria hub's «Script & Query» tab
-// since ADR 0122: one line with the counts, search and filters (each with its count), then one card per script in a grid (title, what it does, language, last test, tags); a card opens in place, full width,
+// since ADR 0122: one line with the count, search, then one card per working script in a grid (title, what it does, tags,
+// then language, file and last test at the foot); a card opens in place, full width,
 // with how to run it, the code (credentials already masked by main), "Copia", "Apri il file" and "Discuti" (a draft for
 // the Orchestrator, never sent by itself). Read-only and zero tokens: nothing here runs a script; work chats add them
 // (brain_script_add), the app adds reusable "Esegui" commands that worked (ADR 0096), the Orchestrator fixes and deletes
-// them (brain_script_save / brain_script_delete) and every change shows on the Log page (ADR 0111).
+// them (brain_script_save / brain_script_delete) and every change shows on the Log page (ADR 0111). Only scripts whose last
+// test passed show (the owner, 2026-10-22: "togliere la sezione di script che non funzionano o da provare"): the others
+// stay in the brain for the Orchestrator to fix.
 // Rendered by components/brain-model/MemoryPage.tsx ('script/<id>' links open that card). Data: /api/scripts, /api/script?id=… (main brain/scripts.ts).
 import { useMemo, useState } from 'react';
 import type { BrainScriptSummary } from '@shared/contract';
 import { useBrain } from '../api';
 import { normScript, normScripts } from '../types';
-import { filterScripts, type ScriptFilter as Filter } from '../lib/brain-sections';
+import { filterScripts } from '../lib/brain-sections';
 import { copyText } from '../components/ui';
 import { toast } from '../../store/ui';
 import { brainBridge, go, openFileViewer } from '../../actions';
@@ -20,12 +23,6 @@ import '../../dashboard/dashboard.css';
 import '../../styles/brain-sections.css';
 
 const day = (iso: string | null) => iso ? new Date(iso.length === 10 ? `${iso}T12:00:00` : iso).toLocaleDateString(locale(), { day: 'numeric', month: 'short' }) : '';
-
-function Tested({ s }: { s: BrainScriptSummary }) {
-  const st = s.tested.state;
-  const label = st === 'ok' ? t('brainText.script.tested') : st === 'failed' ? t('brainText.script.needsFix') : t('brainText.script.untested');
-  return <span className={`bs-test bs-test-${st}`} title={s.tested.note || undefined} data-testid="bs-script-tested"><i aria-hidden="true">{st === 'ok' ? '✓' : st === 'failed' ? '!' : '·'}</i>{label}{s.tested.at ? ` · ${day(s.tested.at)}` : ''}</span>;
-}
 
 function Detail({ id, onClose }: { id: string; onClose: () => void }) {
   const r = useBrain(`/api/script?id=${encodeURIComponent(id)}`, normScript);
@@ -63,11 +60,11 @@ function Card({ s, open, onToggle }: { s: BrainScriptSummary; open: boolean; onT
   return (
     <article className={`bs-card${open ? ' open' : ''}`} data-testid="bs-script-card" data-id={s.id}>
       <button type="button" className="bs-card-main" aria-expanded={open} onClick={onToggle}>
-        <span className="bs-card-top"><span className={`bs-lang bs-lang-${s.language.toLowerCase()}`}>{s.language}</span><Tested s={s} /></span>
         <h3>{s.title}</h3>
         <p className="bs-desc">{s.description || t('brainText.script.noDescription')}</p>
         {s.tags.length > 0 && <span className="bs-tags">{s.tags.map(t => <span key={t}>{t}</span>)}</span>}
-        <span className="bs-card-foot"><code>{s.file}</code>{s.changedAt && <small>{t('brainText.script.changed')} {day(s.changedAt)}</small>}</span>
+        <span className="bs-card-foot"><span className={`bs-lang bs-lang-${s.language.toLowerCase()}`}>{s.language}</span><code>{s.file}</code>
+          {s.tested.at && <small title={s.tested.note || undefined} data-testid="bs-script-tested">{t('brainText.script.tested')} {day(s.tested.at)}</small>}</span>
       </button>
       {open && <Detail id={s.id} onClose={onToggle} />}
     </article>
@@ -77,21 +74,16 @@ function Card({ s, open, onToggle }: { s: BrainScriptSummary; open: boolean; onT
 export function Script({ arg }: { arg?: string }) {
   const list = useBrain('/api/scripts', normScripts);
   const [q, setQ] = useState('');
-  const [f, setF] = useState<Filter>('all');
   const [open, setOpen] = useState<string | null>(arg ? safeDecode(arg) : null);
-  const all = list.data?.scripts ?? [];
-  const shown = useMemo(() => filterScripts(all, q, f), [all, q, f]);
-  const ok = all.filter(s => s.tested.state === 'ok').length;
-  const count: Record<Filter, number> = { all: all.length, ok, fix: all.length - ok };
-  const filters: [Filter, string][] = [['all', t('brainText.script.filter.all')], ['ok', t('brainText.script.filter.ok')], ['fix', t('brainText.script.filter.fix')]];
+  const all = useMemo(() => filterScripts(list.data?.scripts ?? [], ''), [list.data]);
+  const shown = useMemo(() => filterScripts(all, q), [all, q]);
   return (
     <div className="dashboard bs-page" data-testid="brain-scripts">
-      <HubIntro lead={list.data ? t('mh.script.lead', { n: all.length, ok }) : t('brainText.script.loading')}
+      <HubIntro lead={list.data ? t('mh.script.lead', { n: all.length }) : t('brainText.script.loading')}
         actions={<button type="button" className="btn btn-ghost btn-s" onClick={() => go({ page: 'log' })} data-testid="bs-to-log"><span aria-hidden="true">↗</span> Log</button>} />
       <span hidden data-testid="bs-count">{list.data ? all.length : ''}</span>
       <div className="bs-toolbar" role="search">
         <label className="dash-search bs-search"><span aria-hidden="true">⌕</span><input type="search" value={q} onChange={e => setQ(e.target.value)} aria-label={t('brainText.script.searchLabel')} placeholder={t('brainText.script.searchPlaceholder')} data-testid="bs-search" /></label>
-        <div className="bs-chips" role="group" aria-label={t('brainText.script.filterLabel')}>{filters.map(([id, label]) => <button key={id} type="button" className="bs-chip" aria-pressed={f === id} onClick={() => setF(id)} data-testid={`bs-filter-${id}`}>{label}{list.data && <b className="bs-chip-n">{count[id]}</b>}</button>)}</div>
       </div>
       {list.error && !list.data ? <div className="dash-empty">{t('brainText.script.cannotReadAll')}: {list.error} <button type="button" className="btn btn-subtle btn-s" onClick={() => list.reload()}>{t('brainText.common.retry')}</button></div>
         : !list.data ? <div className="bs-grid">{[0, 1, 2].map(i => <div key={i} className="bs-card bs-skeleton" />)}</div>

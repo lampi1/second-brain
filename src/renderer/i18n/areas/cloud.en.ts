@@ -17,14 +17,10 @@ export const cloudEn: typeof cloudIt = {
   'cloud.by.agent': 'opened by the coordinator', 'cloud.by.user': 'opened by you', 'cloud.by.vendor': 'opened outside the app',
   'cloud.failed': (p: { why: string }) => `Cloud agent: ${p.why}`,
   'cloud.applied': (p: { path: string }) => `Result brought home: ${p.path}`,
-  'cloud.started': (p: { engine: string }) => `Cloud agent started on ${p.engine}`,
-  'cloud.where': 'Where', 'cloud.whereLocal': 'Local', 'cloud.whereCloud': 'Cloud',
-  'cloud.whereHint': 'Cloud: the agent runs in the vendor’s cloud and keeps going with the PC off. It needs a GitHub repository with the branch already pushed; the agent pushes only its own branch.',
-  'cloud.engine': 'Cloud engine', 'cloud.checking': 'checking…', 'cloud.ready': 'ready',
-  'cloud.cost.cursor': 'at API prices, counts in the Cursor limit', 'cloud.cost.plan': 'from your plan',
-  'cloud.env': 'Codex cloud environment', 'cloud.envHint': 'the repository’s environment id (chatgpt.com/codex → Environments); the app remembers it',
-  'cloud.notReady': 'No cloud engine is ready for this folder.',
-  'cloud.create': 'Start in the cloud',
+  
+  
+  
+  
   'cloud.key': 'Cursor Cloud Agents key',
   'cloud.keyHint': 'From the Cursor Dashboard → Integrations. Only for cloud agents (API prices, counted in the Cursor spending limit); encrypted on this PC, never shown.',
 };

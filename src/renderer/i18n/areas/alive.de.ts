@@ -55,12 +55,7 @@ export const aliveDe: typeof aliveIt = {
   'alive.pulse.budgetHint': 'Gemeinsame Obergrenze für Karten und Zeile, von 0,01 bis 2 $. Kosten, die die Engine nicht meldet, bleiben unbekannt.',
   'alive.pulse.today': (p: { usd: string; limit: string; runs: number }) => `Heute ${p.usd} von ${p.limit} · ${p.runs} ${p.runs === 1 ? 'Aufruf' : 'Aufrufe'}`,
   'alive.pulse.unknownCost': 'Kosten nicht gemeldet',
-  'alive.approval.kind': 'Battito-Vorschlag',
-  'alive.approval.apply': 'Anwenden', 'alive.approval.discard': 'Verwerfen',
-  'alive.approval.confirmApply': 'Die Regel wird zu den Anweisungen von Battito hinzugefügt. Anwenden?',
-  'alive.approval.confirmDiscard': 'Der Vorschlag verschwindet aus der Liste; Battito ändert sich nicht. Verwerfen?',
-  'alive.approval.evidence': (p: { n: number }) => `${p.n} Karten als Beleg`,
-  'alive.approval.done': (p: { name: string }) => `Vorschlag von ${p.name} entschieden.`,
+  
   'alive.next.pr': (p: { title: string }) => `Nichts wartet auf dich: Der Build von „${p.title}“ ist rot`,
   'alive.next.approvals': (p: { n: number }) => `Nichts wartet auf dich: ${p.n === 1 ? '1 Vorschlag' : `${p.n} Vorschläge`} zum Freigeben`,
   'alive.next.stalled': (p: { title: string; min: number }) => `Nichts wartet auf dich: „${p.title}“ hängt seit ${p.min} Min.`,

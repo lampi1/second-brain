@@ -1,21 +1,16 @@
 // The global layer page (index.html#overlay, shown by main/overlay.ts in a small top-most view above browser tiles and
-// every page). Tier a: the first open question or permission in full (who asks, the context in one line, the options
-// right there), a badge with how many wait, and the queue behind it. Tier b: at most two short grouped toasts for
-// important events, each with one action ("Apri", "Rispondi") and ✕. No waiting strip: the top bar's "Da rispondere"
-// counts what waits (the user, 2026-10-14). It only renders the model the app page sends
-// (overlay:model) and relays what the user does (overlay:action): 1-9 / Enter answer, Esc or "Rispondi dopo" turns
-// "Rispondi dopo" on (every card goes to "Da rispondere", lib/later.ts),
-// Ctrl+J goes to the next one. It never takes the keyboard by itself: only on a click or Ctrl+J (focusKey). No sounds.
+// every page): at most two short grouped toasts for important events, each with one action ("Apri", "Rispondi") and ✕.
+// Requests never show here: every question, permission and command is answered in the questions window (always on since
+// 2026-10-22, QuestionsWindow.tsx). It only renders the model the app page sends (overlay:model) and relays what the user
+// does (overlay:action): a toast's action or ✕, Ctrl+J (the app opens what waits), Ctrl+K / Ctrl+N (back to the app).
+// It never takes the keyboard by itself. No sounds.
 import { t as auditText } from '../i18n';
-import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react';
-import type { OverlayAction, OverlayCard, OverlayModel, OverlayToast } from '@shared/contract';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
+import type { OverlayAction, OverlayModel, OverlayToast } from '@shared/contract';
 import { sb } from '../sb';
-import { ago } from '../lib/format';
 import { freezeClock } from '../lib/clock';
-import { HarnessMark, IconAlert, IconArrowRight, IconCheck, IconInfo, IconX } from './Icons';
-import { RequestPanel } from './RequestPanel';
-import { Keys } from './ui';
-import { lang, setLang } from '../i18n';
+import { IconAlert, IconCheck, IconInfo, IconX } from './Icons';
+import { lang, langLoaded, loadLang, setLang } from '../i18n';
 
 const act = (a: OverlayAction) => { void sb.invoke('overlay:action', a).catch(() => {}); };
 
@@ -27,29 +22,6 @@ if (location.hash === '#overlay') {
   sb.on('overlay:model', m => { if (m.now) freezeClock(m.now); latest = m; for (const l of [...listeners]) l(); });
 }
 const subscribe = (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn); }; };
-
-function LayerCard({ card, queue, waiting, now }: { card: OverlayCard; queue: OverlayCard[]; waiting: number; now: number }) {
-  return (
-    <section className="layer-card" data-testid="layer-card" data-request={card.key} aria-label={auditText('auditExpression.OverlayApp.text70', { v0: card.chatTitle })}>
-      <header className="layer-head">
-        <HarnessMark harness={card.harness} orchestrator={card.isOrchestrator} size={18} />
-        <span className="layer-who"><b>{card.chatTitle}</b><span>{card.req.type === 'command' ? auditText('auditExpression.OverlayApp.text71') : auditText('auditExpression.OverlayApp.text72')} · {ago(card.req.at, now)}</span></span>
-        <span className="sp" />
-        <span className="layer-badge" data-testid="layer-badge" aria-label={auditText('auditExpression.OverlayApp.text73', { v0: waiting })}>{waiting}</span>
-      </header>
-      <RequestPanel key={`${card.key}#${card.attempt ?? 0}`} req={card.req} variant="tile" chatTitle={card.chatTitle} harness={card.harness} engine={card.engine} testid={`layer-request-${card.req.chatId}-${card.req.id}`}
-        onAnswer={answer => act({ kind: 'answer', key: card.key, answer })} onEscape={() => act({ kind: 'postpone', key: card.key })} onLater={() => act({ kind: 'postpone', key: card.key })}
-        command={{ onRun: confirmProd => { act({ kind: 'run', key: card.key, confirmProd }); return true; }, onDismiss: () => act({ kind: 'dismiss', key: card.key }), onOpen: () => act({ kind: 'open', key: card.key }) }} />
-      <footer className="layer-foot">
-        {queue.length > 0 ? (
-          <span className="layer-queue" data-testid="layer-queue">{auditText('audit.OverlayApp.then')}{' '}{queue.slice(0, 2).map(q => q.chatTitle).join(', ')}{queue.length > 2 ? auditText('auditExpression.OverlayApp.text74', { v0: queue.length - 2 }) : ''}</span>
-        ) : <span className="layer-queue">{auditText('audit.OverlayApp.nothingElseNeedsYou')}</span>}
-        <span className="sp" />
-        <button type="button" className="layer-open" onClick={() => act({ kind: 'open', key: card.key })} data-testid="layer-open">{auditText('audit.OverlayApp.open')}{' '}<IconArrowRight size={12} /></button>
-      </footer>
-    </section>
-  );
-}
 
 function EventToast({ t }: { t: OverlayToast }) {
   return (
@@ -69,9 +41,10 @@ function EventToast({ t }: { t: OverlayToast }) {
 export function OverlayApp() {
   const model = useSyncExternalStore(subscribe, () => latest);
   // the app page's language (ADR 0057): the root below re-mounts when it changes
-  if (model?.lang && model.lang !== lang()) setLang(model.lang);
+  const [, loaded] = useState(0);
+  useEffect(() => { if (model?.lang && !langLoaded(model.lang)) void loadLang(model.lang).then(() => loaded(n => n + 1), () => {}); }, [model?.lang]);
+  if (model?.lang && model.lang !== lang() && langLoaded(model.lang)) setLang(model.lang);
   const ref = useRef<HTMLDivElement>(null);
-  // the app page's clock (frozen in the demo) drives every "4 min" label here too
 
   useEffect(() => {
     const root = document.documentElement;
@@ -79,7 +52,7 @@ export function OverlayApp() {
     if (theme === 'system') delete root.dataset.theme; else root.dataset.theme = theme;
     root.dataset.density = model?.density ?? 'comfortable';
   }, [model?.theme, model?.density]);
-  // report the size the cards need (main sizes the view; it is transparent around them)
+  // report the size the toasts need (main sizes the view; it is transparent around them)
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -89,46 +62,19 @@ export function OverlayApp() {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  // the keyboard comes here only when asked (Ctrl+J in the app, or a click)
-  useEffect(() => {
-    if (!model?.focusKey) return;
-    requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-request-key]')?.focus());
-  }, [model?.focusKey, model?.nonce]);
-  // when the shown card changes while the layer has the keyboard, the next one takes it
-  const first = model?.cards[0]?.key;
-  useEffect(() => {
-    if (first && document.hasFocus()) requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-request-key]')?.focus());
-  }, [first]);
-  const firstRef = useRef<string | undefined>(undefined);
-  firstRef.current = first;
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.defaultPrevented) return; // a card handled it
-      if ((e.ctrlKey || e.metaKey) && e.code === 'KeyJ') { e.preventDefault(); act({ kind: 'next', from: firstRef.current }); }
+      if (e.defaultPrevented) return;
+      if ((e.ctrlKey || e.metaKey) && e.code === 'KeyJ') { e.preventDefault(); act({ kind: 'next' }); }
       else if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyK' || e.code === 'KeyN')) { e.preventDefault(); act({ kind: 'leave' }); }
-      else if (e.key === 'Escape' && firstRef.current) {
-        e.preventDefault();
-        // not the card just answered (it leaves by itself)
-        if (document.querySelector('[data-request-key][aria-busy="true"]')?.getAttribute('data-request-key') !== firstRef.current) act({ kind: 'postpone', key: firstRef.current });
-      }
-      else if (/^[1-9]$|^Enter$/.test(e.key) && !e.ctrlKey && !e.altKey) {
-        // the keyboard is in the layer but on nothing (just after the previous answer): give it to the card. Never when
-        // another control has it: Enter on "Apri" or on a toast button must not answer the card.
-        const card = document.querySelector<HTMLElement>('[data-request-key]');
-        const active = document.activeElement;
-        if (card && (!active || active === document.body)) { e.preventDefault(); card.focus(); card.dispatchEvent(new KeyboardEvent('keydown', { key: e.key, bubbles: true })); }
-      }
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
   }, []);
-  const cards = model?.cards ?? [];
   const toasts = model?.toasts ?? [];
   return (
-    <div key={lang()} className="layer" ref={ref} data-testid="layer" role="region" aria-label={auditText('audit.OverlayApp.requestsAndNoticesForYou')} aria-live="polite">
+    <div key={lang()} className="layer" ref={ref} data-testid="layer" role="region" aria-label={auditText('audit.OverlayApp.noticesForYou')} aria-live="polite">
       {toasts.map(t => <EventToast key={t.id} t={t} />)}
-      {cards[0] && <LayerCard card={cards[0]} queue={cards.slice(1)} waiting={model?.waiting ?? cards.length} now={model?.now ?? Date.now()} />}
-      {cards[0] && <div className="layer-hint" aria-hidden="true"><Keys combo="Ctrl+J" />{' '}{auditText('audit.OverlayApp.toAnswerWithTheKeyboard')}</div>}
     </div>
   );
 }

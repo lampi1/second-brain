@@ -21,6 +21,8 @@ import {studioIt}from'./areas/studio.it';
 import { permissionsIt } from './areas/permissions.it';
 import { langSwitchIt } from './areas/lang-switch.it';
 import { chatIt } from './areas/chat.it';
+import { visualsIt } from './areas/visuals.it';
+import { typingIt } from './areas/typing.it';
 import { dialogsIt } from './areas/dialogs.it';
 import { toolsIt } from './areas/tools.it';
 import { brainPagesIt } from './areas/brainPages.it';
@@ -32,7 +34,6 @@ import { levelsIt } from './areas/levels.it';
 import { explainIt } from './areas/explain.it';
 import { agentDetailIt } from './areas/agent-detail.it';
 import { agentImageIt } from './areas/agent-image.it';
-import { approvalsIt } from './areas/approvals.it';
 import { proposalsIt } from './areas/proposals.it';
 import {settingsIt}from'./areas/settings.it';
 import { profileIt } from './areas/profile.it';
@@ -48,6 +49,7 @@ import { estimateIt } from './areas/estimate.it';
 import { logIt } from './areas/log.it';
 import { reviewedContextIt } from './areas/reviewed-context.it';
 import { setupIt } from './areas/setup.it';
+import { viewerOverlayIt } from './areas/viewer-overlay.it';
 
 export const it = {
   ...learningReviewIt,
@@ -59,6 +61,7 @@ export const it = {
   ...connectorsIt,
   ...reviewedContextIt,
   ...setupIt,
+  ...viewerOverlayIt,
   ...homeIt,
   ...cloudIt,
   ...guideIt,
@@ -83,9 +86,9 @@ export const it = {
   'genui.chart.label': "Voce",
   'genui.chart.value': "Valore",
   'genui.chart.note': "Nota",
-  'genui.permission.once': "Consenti solo questa operazione.",
-  'genui.permission.session': "Consenti per questa sessione",
-  'genui.permission.deny': "Non autorizzare questa operazione.",
+  'genui.permission.once': 'Solo questa volta',
+  'genui.permission.session': 'Per tutta la sessione',
+  'genui.permission.deny': 'Non procedere',
   ...studioIt,
   ...permissionsIt,
   ...langSwitchIt,
@@ -99,11 +102,12 @@ export const it = {
   ...explainIt,
   ...agentDetailIt,
   ...agentImageIt,
-  ...approvalsIt,
   ...proposalsIt,
   ...settingsIt,
   ...profileIt,
   ...chatIt,
+  ...visualsIt,
+  ...typingIt,
   ...dialogsIt,
   ...toolsIt,
   ...brainPagesIt,
@@ -115,7 +119,6 @@ export const it = {
   'common.cancel': 'Annulla',
   'common.save': 'Salva',
   'settings.language': 'Lingua',
-  'settings.languageDesc': 'Lingua dell’interfaccia. Come il sistema = italiano o tedesco se Windows è in una delle due lingue, altrimenti inglese.',
   'settings.language.system': 'Come il sistema',
   'settings.language.it': 'Italiano',
   'settings.language.en': 'English',

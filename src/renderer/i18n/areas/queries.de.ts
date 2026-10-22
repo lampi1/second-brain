@@ -4,8 +4,6 @@ export const queriesDe: typeof queriesIt = {
   'queries.eyebrow': 'Gespeicherte Abfragen',
   'queries.title': 'Abfragen',
   'queries.lead': 'Die Abfragen, die jemand wieder ausführt: SQL, KQL, GraphQL, PromQL, SPL… Eine Datei pro Abfrage in queries/, mit dem, was sie beantwortet, und wo sie läuft. Chats speichern die, die funktioniert haben; die Wartung holt die, die noch in den Notizen stehen, hierher.',
-  'queries.count': (p: { n: number }) => (p.n === 1 ? '1 Abfrage' : `${p.n} Abfragen`),
-  'queries.languages': (p: { n: number }) => (p.n === 1 ? '1 Sprache' : `${p.n} Sprachen`),
   'queries.searchLabel': 'Abfragen durchsuchen',
   'queries.searchPlaceholder': 'Nach Titel, Datenquelle, Tag suchen…',
   'queries.filterLabel': 'Nach Sprache filtern',

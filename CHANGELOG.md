@@ -6,6 +6,19 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- **Leaner and more honest self-improvement** (ADR 0128–0131): run receipts (commands with exit codes, changed files)
+  decide clear runs without a Sentinel review, one in ten still audited; memory keeps only general, reusable knowledge
+  (a zero-token gate refuses case-specific facts, near-duplicates are one card, at most 3 cards per role a day, the
+  maintenance rewrites or drops one-off facts with Annulla); recurring errors of ai-errors.md become rules by themselves;
+  levels earn XP by job size up to Lv 100, Flash and the Orchestrator level too, performance is a Bayesian estimate with
+  a ± margin, and `npm run levels` explains a stuck role.
+- **Viewer, questions and modals**: the file viewer is an overlay with full screen, Ctrl+F, contents, side-by-side diff
+  and before/after screenshots; the questions window is always on (no switch), context always open, every command with a
+  two-word summary; one shared Modal. Diagrams (mermaid) and charts (chart.js) in replies, loaded on demand, and an
+  opening splash with the day's sentence.
+- **Lighter and cleaner**: only the active language and the Guide load at start, 375 dead texts removed, runs and chats
+  saved with one compact write; Script shows only working scripts; no «Orchestrator» line in the sidebar or above
+  chats; a smooth working spark with workshop phrases by kind of task.
 - **Faster first replies** (ADR 0127): a chat with no engine (after a restart) starts it while you type, a chat the
   Orchestrator opens for your request no longer waits for the CPU queue, the per-turn checkpoint reads git in
   parallel, a delegated chat takes an engine started ahead like a new chat does, and the logs time every step

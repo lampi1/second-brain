@@ -80,15 +80,14 @@ test('next-ask: the visual waits for the chat\'s question, rides on its panel, n
   const fence = '```sb-ui\n' + JSON.stringify({ component: 'barChart', title: 'Tempo stimato', props: { unit: 'h', bars: [{ label: 'A', value: 0.5 }, { label: 'B', value: 8 }] } }) + '\n```';
   await ask(app, 'fix', { type: 'question', tool: 'AskUserQuestion', title: 'Quale correzione?', detail: 'Quale correzione?', input: {},
     questions: [{ question: 'Quale correzione?', header: 'Fix', multiSelect: false, options: [{ label: 'A · Arrotonda alla fine (consigliato)', preview: `Piccola.\n\n${fence}` }, { label: 'B · Riscrivi il calcolo' }] }] });
-  await expandChats(page, 'fix'); // the request's panel is on the open strip
-  const panel = page.locator('[data-testid^="request-fix-"][data-request-key]').first();
-  await expect(panel).toBeVisible();
-  const base = (await panel.getAttribute('data-testid'))!;
+  // the questions window (always on since 2026-10-22) shows the question with the visual on it
+  const panel = page.getByTestId('qwin-card');
+  await expect(panel).toHaveAttribute('data-request-key', /^fix\//);
+  const base = 'qwin-card';
   await expect(page.getByTestId(`${base}-visuals`).getByTestId('artifact-opzioni')).toBeVisible();
-  // the option's preview: its sb-ui fence drawn as a chart
-  await page.getByTestId(`${base}-ctx-toggle`).click();
-  await expect(page.getByTestId(`${base}-ctx-body`).getByTestId('preview-visual')).toHaveAttribute('data-component', 'barChart');
-  await panel.screenshot({ path: 'test-results/shots/genui-question-panel.png' });
+  // the option's preview, open on its card: its sb-ui fence drawn as a chart
+  await expect(page.getByTestId(`${base}-opt-1`).locator('xpath=..').getByTestId('preview-visual')).toHaveAttribute('data-component', 'barChart');
+  await page.getByTestId('qwin').screenshot({ path: 'test-results/shots/genui-question-panel.png' });
   // opening the visual answers nothing; its Esc closes only the view
   await page.getByTestId(`${base}-visuals`).getByTestId('artifact-expand-opzioni').click();
   const full = page.getByTestId('artifact-full-opzioni');
@@ -101,7 +100,7 @@ test('next-ask: the visual waits for the chat\'s question, rides on its panel, n
   await page.keyboard.press('Shift+Tab');
   expect(await full.evaluate(el => el.contains(document.activeElement))).toBe(true);
   await page.keyboard.press('1');
-  await expect(panel).toBeVisible();
+  await expect(panel).toBeAttached(); // under the view (a dialog hides the window), not answered
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('artifact-full-opzioni')).toHaveCount(0);
   await expect(panel).toBeVisible();
@@ -110,6 +109,7 @@ test('next-ask: the visual waits for the chat\'s question, rides on its panel, n
   await page.keyboard.press('1');
   await expect(panel).toHaveCount(0);
   // the visual stays in the chat's history, marked as the question's
+  await expandChats(page, 'fix');
   await expect(page.getByTestId('artifact-opzioni')).toContainText('sulla domanda');
 
   // no question in time: a card in the chat

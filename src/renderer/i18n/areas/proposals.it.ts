@@ -2,8 +2,6 @@
 // ADR 0123): Italian labels, the source; English in proposals.en.ts, German in proposals.de.ts. Used through t().
 type N = { n: number };
 export const proposalsIt = {
-  'proposals.title': 'Proposte',
-  'proposals.lead': 'Una carta alla volta: trascina a destra per approvare, a sinistra per rifiutare. Le modifiche che l’app ha già applicato da sola si tengono o si annullano.',
   'proposals.deckLabel': 'Mazzo delle proposte',
   'proposals.filters': 'Filtra le proposte',
   'proposals.filter.all': 'Tutte',
@@ -77,7 +75,6 @@ export const proposalsIt = {
   'proposals.readFirst': 'Prima di approvare apri la bozza e le prove.',
   'proposals.readFirstOpen': 'Leggi bozza e prove',
   'proposals.note': 'Come l’hai verificato (facoltativo)',
-  'proposals.noteReject': 'Perché la rifiuti (facoltativo)',
   'proposals.done.title': 'Hai finito!',
   'proposals.done.lead': 'Per ora non c’è altro da decidere.',
   'proposals.done.approved': (p: N): string => (p.n === 1 ? 'approvata o tenuta' : 'approvate o tenute'),
@@ -156,4 +153,15 @@ export const proposalsIt = {
   'proposals.yes.rememberNew': ({ who }: { who: string; n: number }) => `${who} ricorda il nuovo al posto del vecchio.`,
   'proposals.yes.rememberBoth': ({ who, n }: { who: string; n: number }) => `${who} ricorda il nuovo insieme ${n === 1 ? 'al vecchio' : 'ai vecchi'}.`,
   'proposals.no.rememberOld': ({ who }: { who: string; n: number }) => `${who} dimentica il nuovo e resta com’era.`,
+  'proposals.ask.rememberMany': ({ who, n }: { who: string; n: number }) => `${who} deve ricordarsi questi ${n} fatti?`,
+  'proposals.yes.rememberMany': ({ who }: { who: string; n: number }) => `${who} se li ricorda tutti e li usa nei prossimi lavori.`,
+  'proposals.no.rememberMany': ({ who }: { who: string; n: number }) => `${who} li dimentica tutti.`,
+  'proposals.advice.specific': ({ what }: { what: string }) => `Sembra legato a un caso solo (${what}): vale la pena ricordarlo solo se è una regola che si ripete.`,
+  'proposals.advice.same': (p: N) => `Proposto ${p.n} volte: una carta sola per tutte.`,
+  'proposals.sign.url': 'un indirizzo con porta o id',
+  'proposals.sign.id': 'un numero di ticket o PR',
+  'proposals.sign.commit': 'un commit',
+  'proposals.sign.path': 'una cartella di un utente',
+  'proposals.sign.date': 'una data',
+  'proposals.sign.branch': 'un branch',
 };

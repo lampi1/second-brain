@@ -22,7 +22,7 @@ async function leaveFields(page: Page): Promise<void> {
 
 test('ten requests waiting: the rail lists them, the keyboard answers them one after another', async () => {
   test.setTimeout(90_000);
-  const { app, page } = await launchDemo({ config: { questionsModal: true } });
+  const { app, page } = await launchDemo();
   for (const id of ['orchestrator', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
   await leaveFields(page);
   const chats = ['orchestrator', 'qa', 'feedback', 'fix', 'sms'];

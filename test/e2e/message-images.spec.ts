@@ -6,7 +6,7 @@ import path from 'node:path';
 import {expandChats,launchDemo,shot} from './helpers';
 test('authorized absolute and owner-relative images render in chat and Orchestrator; outside roots stays refused',async()=>{
   const userData=fs.mkdtempSync(path.join(os.tmpdir(),'sb-image-profile-')),outside=fs.mkdtempSync(path.join(os.tmpdir(),'sb-image-outside-'));
-  const {app,page}=await launchDemo({userData,orchestrator:true,config:{questionsModal:false}});
+  const {app,page}=await launchDemo({userData,orchestrator:true});
   try{
     const png=await app.evaluate(({nativeImage})=>nativeImage.createFromBitmap(Buffer.from([80,120,220,255]),{width:1,height:1}).toPNG().toString('base64'));
     for(const file of [path.join(userData,'absolute.png'),path.join(userData,'relative.png'),path.join(outside,'outside.png')])fs.writeFileSync(file,Buffer.from(png,'base64'));

@@ -214,7 +214,7 @@ function useCounts(): Partial<Record<HubTab, number>> {
   const tables = useBrain('/api/tables', normTables);
   return {
     proposte: proposals, approvate: approved,
-    skill: state?.skills.length, regole: state?.rules.length, script: scripts.data?.scripts.length,
+    skill: state?.skills.length, regole: state?.rules.length, script: scripts.data?.scripts.filter(s => s.tested.state === 'ok').length, // only working scripts show (Script.tsx)
     idee: tables.data?.ideas.length, file: state?.memory.length,
     apprendimento: state?.changes.filter(c => c.claim).length,
   };

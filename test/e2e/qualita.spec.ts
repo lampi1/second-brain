@@ -6,7 +6,7 @@ import { test, expect, type ElectronApplication, type Page } from '@playwright/t
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { launch, setSize, shot, goPage } from './helpers';
+import { launch, setSize, shot, goPage, setQuestionsAside } from './helpers';
 
 const FIX = path.resolve(import.meta.dirname, '..', 'fixtures', 'brain-ui');
 function fixtureBrain(): string {
@@ -23,6 +23,7 @@ test.beforeAll(async () => {
   await setSize(app, 1600, 1000);
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
   await expect(page.getByTestId('app')).toBeVisible();
+  await setQuestionsAside({ app, page }); // the demo's requests: «Rispondi dopo» (the window is always on)
 });
 test.afterAll(async () => { await app?.close(); });
 

@@ -3,7 +3,6 @@
 // panels. Spread into it.ts; learning.en.ts has the same keys (typed by this object).
 type N = { n: number };
 export const learningIt = {
-  'learn.title': 'Apprendimento',
   'learn.lead': 'Ogni cosa che l’app cambia da sola nel brain è un’ipotesi: qui vedi se ha davvero ridotto le tue correzioni, con quante esecuzioni e quale margine d’errore. Niente livelli: solo quello che i dati dicono.',
   'learn.v.aiuta': 'Aiuta', 'learn.v.nessun-effetto': 'Nessun effetto', 'learn.v.raccolta': 'In raccolta', 'learn.v.peggiora': 'Peggiora', 'learn.v.annullato': 'Annullata',
   'learn.k.aiuta': 'Beneficio provato', 'learn.k.nessun-effetto': 'Senza effetto', 'learn.k.raccolta': 'In raccolta', 'learn.k.peggiora': 'Peggiora', 'learn.k.annullato': 'Annullati',

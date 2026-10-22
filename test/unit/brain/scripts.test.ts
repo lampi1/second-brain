@@ -106,8 +106,9 @@ describe('BrainScripts', () => {
     expect(findScripts(list, 'ticket csv').map(s => s.id)).toEqual(['export-ticket.py']);
     expect(findScripts(list, 'backup').map(s => s.id)).toEqual(['backup-note.mjs']);
     expect(findScripts(list, 'nulla di simile')).toEqual([]);
-    expect(filterScripts(list, '', 'fix').map(s => s.id)).toEqual(['conta-righe-log.sh']);
-    expect(filterScripts(list, 'branch', 'ok').map(s => s.id)).toEqual(['pulisci-branch.ps1']);
+    expect(filterScripts(list, '').map(s => s.id)).not.toContain('conta-righe-log.sh'); // last test failed: hidden
+    expect(filterScripts(list, '').length).toBe(3);
+    expect(filterScripts(list, 'branch').map(s => s.id)).toEqual(['pulisci-branch.ps1']);
   });
 
   it('knows which watcher paths touch it', () => {

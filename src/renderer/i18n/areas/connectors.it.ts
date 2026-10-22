@@ -61,7 +61,7 @@ export const connectorsIt = {
  'hub.cancel':'Annulla','hub.remove':'Rimuovi','hub.error':'Operazione non riuscita: riprova.','hub.loadError':'Impossibile leggere i server MCP. Riapri la pagina per riprovare.',
  'hub.importLead':'Letti dai file di Claude Code, Claude desktop, Cursor e Codex senza cambiarli. I token non vengono copiati: li inserirai qui, cifrati.','hub.importScanning':'Cerco i server configurati…','hub.importNone':'Nessun server trovato nelle configurazioni di Claude, Cursor e Codex.',
  'hub.importExists':'Già presente nell’app.','hub.importDropped':({list}:{list:string})=>`Non copiato: ${list}. Inseriscilo nel campo Token.`,'hub.importApply':({n}:{n:number})=>`Importa ${n}`,'hub.imported':({n}:{n:number})=>`${n} server importati: premi «Prova» su ciascuno.`,
- 'hub.emptyTitle':'Nessun server MCP ancora','hub.emptyBody':'Qui compariranno gli strumenti che dai ai tuoi agenti: ognuno con il suo stato, i suoi strumenti e quali ruoli lo usano. Aggiungine uno dal catalogo qui sopra.','hub.emptyExample':'Esempio: Azure DevOps (npx -y @azure-devops/mcp tua-org) per far leggere i ticket agli agenti.',
+ 'hub.emptyTitle':'Nessun server MCP ancora','hub.emptyBody':'Qui compariranno gli strumenti che dai ai tuoi agenti: ognuno con il suo stato, i suoi strumenti e quali ruoli lo usano. Aggiungine uno dal catalogo qui sopra.',
  'hub.keyringWhy':({why}:{why:string})=>`Token non salvabili: ${why}.`,
  // the agent card's MCP section (AgentMcpSection)
  'agentMcp.title':'Server MCP','agentMcp.tip':'Quali server MCP e strumenti può usare questo ruolo. Di default tutti. «Solo lettura» lascia gli strumenti che il server dichiara di sola lettura. Vale subito, anche per le chat aperte, e una chat delegata non ne ha mai più del ruolo che l’ha avviata.',

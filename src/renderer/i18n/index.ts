@@ -5,16 +5,29 @@
 // so plain t() calls anywhere (components, actions, toasts) always read the current one. Dates and numbers: locale().
 import type { ChatItem, Lang, LanguageMode } from '@shared/contract';
 import { it } from './it';
-import { en } from './en';
-import { de } from './de';
 
 export type Dict = typeof it;
 export type Key = keyof Dict;
 export type TextKey = {[K in Key]:Dict[K] extends string?K:never}[Key];
 type Args<K extends Key> = Dict[K] extends (p: infer P) => string ? [P] : [];
 
-const dicts: Record<Lang, Dict> = { it, en, de };
+// Italian is in the first chunk (the source, and the fallback of a key whose dictionary is still loading); English and
+// German are their own chunks, loaded once when chosen (loadLang): a user never parses the two they do not read.
+const dicts: Partial<Record<Lang, Dict>> = { it };
+const loading: Partial<Record<Lang, Promise<void>>> = {};
 let cur: Lang = 'it';
+
+/** whether a language's texts are here (Italian always is) */
+export const langLoaded = (l: Lang): boolean => !!dicts[l];
+/** Loads a language's dictionary once; the caller re-renders when it resolves (LangRoot, OverlayApp). */
+export function loadLang(l: Lang): Promise<void> {
+  if (dicts[l]) return Promise.resolve();
+  return loading[l] ??= (l === 'en' ? import('./en').then(m => { dicts.en = m.en; }) : import('./de').then(m => { dicts.de = m.de; }))
+    .catch(e => { delete loading[l]; throw e; });
+}
+/** A dictionary given directly (tests, which switch language synchronously). */
+export function registerLang(l: Lang, dict: Dict): void { dicts[l] = dict; }
+const dict = (): Dict => dicts[cur] ?? it;
 
 export const resolveLang = (mode: LanguageMode | undefined, system: Lang | undefined): Lang =>
   mode === 'it' || mode === 'en' || mode === 'de' ? mode : (system ?? 'it');
@@ -30,7 +43,7 @@ export const locale = (): string => localeOf(cur);
 export const localeOf = (l: Lang): string => (l === 'en' ? 'en-GB' : l === 'de' ? 'de-AT' : 'it-IT');
 
 export function t<K extends Key>(key: K, ...a: Args<K>): string {
-  const m = dicts[cur][key] as string | ((p: unknown) => string);
+  const m = dict()[key] as string | ((p: unknown) => string);
   return typeof m === 'function' ? m(a[0]) : m;
 }
 
@@ -39,6 +52,6 @@ export function t<K extends Key>(key: K, ...a: Args<K>): string {
 export function sysText(item: Extract<ChatItem, { kind: 'system' }>): string {
   if (!item.code) return item.text;
   const key = `sys.${item.code}` as Key;
-  const m = dicts[cur][key] as string | ((p: unknown) => string);
+  const m = dict()[key] as string | ((p: unknown) => string);
   return typeof m === 'function' ? m(item.params ?? {}) : m;
 }

@@ -8,6 +8,12 @@
 // agents/delegation.ts), the renderer (role editor, permissions editor, tree) and the tests.
 import { TOOL_CLASSES, type PermissionCeiling, type ToolClass } from './agents';
 
+/** How an agent that changed something visible ends its task (the owner, 2026-10-22: «dopo un task di un agente voglio
+ *  sempre che mi mandi gli screenshot prima e dopo»): the app pairs the two files by name and shows them in its viewer's
+ *  "Prima / Dopo" (side by side and with a slider; renderer brain/lib/report-images.ts beforeAfterPair). The way to save
+ *  and name a screenshot is main/ask-image.ts SCREENSHOT_HINT, in the chat's MCP instructions. */
+export const BEFORE_AFTER = 'When your task changes something visible in a UI, end it with a before and an after screenshot of the same view at the same size: take the before one before you change anything, save both as PNG under your chat\'s evidence folder with names that differ only by before/after (e.g. settings-before.png and settings-after.png), and write both absolute paths in your agent_report output (or final message): the app shows them side by side in its viewer.';
+
 export const ROLE_IDS = ['orchestrator', 'strategist', 'scout', 'artisan', 'sentinel', 'herald'] as const;
 export type RoleId = (typeof ROLE_IDS)[number];
 /** Every role but the Orchestrator: the ones a task is delegated to. */
@@ -108,13 +114,13 @@ export const ROLE_DEFAULTS: Record<RoleId, RoleDefaults> = {
   },
   artisan: {
     id: 'artisan', name: 'Artisan', summary: 'Fa le modifiche: codice, file, configurazioni, documenti e note del cervello, con i controlli del repository.',
-    instructions: 'Make the change the contract asks for, following the repository’s AGENTS.md / CLAUDE.md: branch, small commits, its checks. Preserve existing work. Documents and brain notes too: clear for their reader, sourced, consistent with the brain’s rules (the brain-edit skill holds them when your launch gives it); write only the files your contract names. Delegate a fact-finding detour to Scout and the verification to Sentinel when it is more than a quick run; never claim a check you did not run.',
-    output: 'What changed (files, branch, commits), the checks run with their results, and what remains.',
+    instructions: 'Make the change the contract asks for, following the repository’s AGENTS.md / CLAUDE.md: branch, small commits, its checks. Preserve existing work. Documents and brain notes too: clear for their reader, sourced, consistent with the brain’s rules (the brain-edit skill holds them when your launch gives it); write only the files your contract names. Delegate a fact-finding detour to Scout and the verification to Sentinel when it is more than a quick run; never claim a check you did not run. ' + BEFORE_AFTER,
+    output: 'What changed (files, branch, commits), the checks run with their results, the before and after screenshots of a visible change (their absolute paths), and what remains.',
     tools: all(), ceiling: null, tier: 'mid', tierMax: 'top', launches: ['scout', 'sentinel'], skills: [],
   },
   sentinel: {
     id: 'sentinel', name: 'Sentinel', summary: 'Verifica: esegue test e controlli, o giudica il risultato dalle prove quando non c’è nulla da eseguire, e dice cosa passa e cosa no.',
-    instructions: 'Verify the work against its done-criteria: run the tests and checks, reproduce the bug or the fix, look for regressions. Report each criterion as met or not with the command and its output. When nothing can be run (a document, a plan, a message, a result you only have as evidence), give an independent verdict from the evidence you are given and what you can read: does it meet each criterion, is it correct and well made, what is missing; quote what supports each point. You run in a clean session: judge what you see, never the author’s intentions. Do not fix what you find: report it.',
+    instructions: 'Verify the work against its done-criteria: run the tests and checks, reproduce the bug or the fix, look for regressions. Report each criterion as met or not with the command and its output. When nothing can be run (a document, a plan, a message, a result you only have as evidence), give an independent verdict from the evidence you are given and what you can read: does it meet each criterion, is it correct and well made, what is missing; quote what supports each point. You run in a clean session: judge what you see, never the author’s intentions. Do not fix what you find: report it. When the work changed something visible in a UI, judge it from its before and after screenshots (a missing pair is a finding) and name their absolute paths in your report, so the user sees them side by side in the app\'s viewer.',
     output: 'Each criterion met or not, with the command run and its output (or the evidence quoted when nothing could be run); a verdict (success, partial, fail); failures with how to reproduce them and the most important fix.',
     tools: all(), ceiling: null, tier: 'top', tierMax: 'top', launches: ['scout'], skills: ['code-review'],
   },

@@ -3,7 +3,7 @@
 // opens that strip's decision in the questions window (popups off too), and the headline moved to the Dashboard.
 // Frozen demo; screenshots in test-results/shots/strips-*.png and dashboard-headline.png.
 import { expect, test } from '@playwright/test';
-import { launchDemo, layerState, shot } from './helpers';
+import { launchDemo, layerState, setQuestionsAside, shot } from './helpers';
 
 test('strips: collapsed with their facts, click to expand and collapse, "Ti aspetta" opens the decision', async () => {
   const { app, page } = await launchDemo({ width: 1600, height: 900 });
@@ -92,6 +92,7 @@ test('a click expands a strip every time: repeated, on any part of it, with text
     await page.waitForTimeout(300);
     await page.reload();
     await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
+    await setQuestionsAside({ app, page }); // a reload forgets «Rispondi dopo»
     await page.getByTestId('tile-chat-fix').locator('.chat-strip-line').click();
     await expect(page.getByTestId('chat-expand-fix')).toHaveAttribute('aria-expanded', 'true');
     await page.mouse.move(2, 2);
@@ -144,6 +145,7 @@ test('the globe of a collapsed strip opens the strip and shows its browser; a se
     await page.evaluate(() => { const p = JSON.parse(localStorage.getItem('sb.prefs.v1') ?? '{}'); localStorage.setItem('sb.prefs.v1', JSON.stringify({ ...p, browsersHidden: true })); });
     await page.reload();
     await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
+    await setQuestionsAside({ app, page }); // a reload forgets «Rispondi dopo»
     await expect(page.getByTestId('chat-expand-sms')).toHaveAttribute('aria-expanded', 'false');
     const globe = page.getByTestId('chat-browser-sms');
     await globe.click();
@@ -185,22 +187,21 @@ test('a narrow column stacks an expanded strip with its browser: the browser goe
   }
 });
 
-test('a collapsed strip keeps its requests on its pill: none floats in the layer, Ctrl+J opens the strip on it', async () => {
+test('a collapsed strip keeps its requests on its pill: none floats in the layer, Ctrl+J opens them in the questions window', async () => {
   const { app, page } = await launchDemo({ width: 1600, height: 900 });
   try {
-    // the Orchestrator's decision leaves: only the work chats' requests are open, on collapsed strips
+    // the Orchestrator's decision leaves: only the work chats' requests are open, set aside, on collapsed strips
     await app.evaluate(() => (globalThis as unknown as { __sbDemo: { stop(id: string): Promise<void> } }).__sbDemo.stop('orchestrator'));
-    await expect(page.locator('[data-orchestrator-overlay] [data-request-key]')).toHaveCount(0);
     await expect(page.getByTestId('chat-wait-qa')).toBeVisible();
     await expect(page.getByTestId('chat-expand-qa')).toHaveAttribute('aria-expanded', 'false');
-    await expect.poll(async () => (await layerState(app)).cards).toBe(0);
-    // Ctrl+J: the oldest request takes the keyboard on its strip, opened for it
+    expect((await layerState(app)).attached).toBe(false); // the layer holds toasts only
+    // Ctrl+J: the oldest request takes the keyboard in the questions window; the strip stays as it was
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await page.keyboard.press('Control+J');
-    await expect.poll(() => page.evaluate(() => document.activeElement?.closest('[data-request-key]')?.getAttribute('data-request-key') ?? null)).not.toBeNull();
-    const chat = (await page.evaluate(() => document.activeElement!.closest('[data-request-key]')!.getAttribute('data-request-key')!)).split('/')[0]!;
-    await expect(page.getByTestId(`chat-expand-${chat}`)).toHaveAttribute('aria-expanded', 'true');
-    await expect.poll(async () => (await layerState(app)).cards).toBe(0);
+    await expect(page.getByTestId('qwin')).toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.activeElement?.closest('.qwin [data-request-key]')?.getAttribute('data-request-key') ?? null)).not.toBeNull();
+    await expect(page.getByTestId('chat-expand-qa')).toHaveAttribute('aria-expanded', 'false');
+    expect((await layerState(app)).attached).toBe(false);
   } finally {
     await app.close();
   }

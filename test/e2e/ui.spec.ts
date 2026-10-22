@@ -1,16 +1,16 @@
-// E2E tests of the renderer UI on the demo (SB_DEMO=1; frozen = deterministic): the agents workspace, answering a tile's panel with "1", sending and queueing from a tile input, Ferma tutto
+// E2E tests of the renderer UI on the demo (SB_DEMO=1; frozen = deterministic): the agents workspace, answering from the questions window with "1", sending and queueing from a tile input, Ferma tutto
 // with its confirm, maximize/restore, the palette hiding every browser view, ui:command from main, new chat, brain
 // pages, the live (unfrozen) demo streaming. Visual baselines (toHaveScreenshot) for a maximized chat and the
 // palette; extra screenshots (1280x800, light theme) in test-results/shots/.
 import { expect, test } from '@playwright/test';
-import { choose, demoLayout, expandChats, showBrowsers, launch, launchDemo, openOrchestrator, setSize, shot, VISUAL, waitThumbs } from './helpers';
+import { choose, demoLayout, expandChats, showBrowsers, launch, launchDemo, setSize, shot, VISUAL, waitThumbs } from './helpers';
 
 test('agents workspace: one column of chat strips, each browser right under its chat', async () => {
   const { app, page } = await launchDemo();
-  await expandChats(page, 'feedback'); await showBrowsers(page, 'qa', 'sms'); // open strips: their requests and browsers in sight
+  await expandChats(page, 'feedback'); await showBrowsers(page, 'qa', 'sms'); // open strips: their transcripts and browsers in sight
   await expect(page.getByTestId('view-agents')).toBeVisible();
-  await expect(page.getByTestId('needs-lane')).toHaveCount(0); // no "Ti aspettano" strip: each chat asks in its tile
-  await expect(page.locator('[data-request-key]')).toHaveCount(3); // QA and Feedback on their strips; the Orchestrator's own in its column (always open, ADR 0068)
+  await expect(page.getByTestId('needs-lane')).toHaveCount(0); // no "Ti aspettano" strip
+  await expect(page.locator('[data-request-key]')).toHaveCount(0); // every request is in the questions window (set aside here), none in a tile
   for (const id of ['qa', 'fix', 'sms', 'feedback']) await expect(page.getByTestId(`tile-chat-${id}`)).toBeVisible();
   await expect(page.getByTestId('tile-browser-tab-qa')).toBeVisible();
   // no "Finite oggi" dock: a finished chat stays a tile until it closes by itself (autoclose.spec.ts)
@@ -33,28 +33,26 @@ test('agents workspace: one column of chat strips, each browser right under its 
   await app.close();
 });
 
-test('answering a tile panel with "1" resolves the request without opening the chat', async () => {
-  const { page, app } = await launchDemo();
-  await openOrchestrator(page); // her decision on screen (reduced, it would float in the layer)
-  await expect(page.getByTestId('orchestrator-input')).toBeFocused(); // opened: the keyboard is in her input first
-  await expandChats(page, 'qa', 'feedback'); // their cards are on the open strips
-  await page.keyboard.press('Control+J'); // the oldest first: the Orchestrator's decision
-  await expect(page.getByTestId('request-orchestrator-orchestrator-q1')).toBeFocused();
+test('answering from the questions window with "1" resolves the request without opening the chat', async () => {
+  const { page, app } = await launchDemo({ questions: true });
+  const said = (chatId: string) => async () => JSON.stringify(await page.evaluate(id => window.sb.invoke('chat:items', { chatId: id }), chatId));
+  const card = page.getByTestId('qwin-card');
+  await page.keyboard.press('Control+J'); // the oldest first: the Orchestrator's decision, with the keyboard
+  await expect(card).toHaveAttribute('data-request-key', 'orchestrator/orchestrator-q1');
+  await expect(card).toBeFocused();
   await page.keyboard.press('1');
-  await expect(page.getByTestId('request-orchestrator-orchestrator-q1')).toHaveCount(0);
-  await openOrchestrator(page);
-  await expect(page.getByTestId('tile-orchestrator')).toContainText('Segnato: riparto da QA rimborsi');
-  // focus moved to the next card in page order (RequestPanel.tsx): from the Orchestrator's column it wraps to the first
-  // strip's, Feedback's permission; Esc on the focused card rejects it
-  await expect(page.getByTestId('request-feedback-feedback-p1')).toBeFocused();
-  await page.keyboard.press('Escape');
-  await expect(page.getByTestId('request-feedback-feedback-p1')).toHaveCount(0);
-  await expect(page.getByTestId('tile-chat-feedback')).toContainText('non lancio i test');
-  await expect(page.getByTestId('request-qa-qa-q1')).toBeFocused(); // and on to the next card
+  await expect.poll(said('orchestrator')).toContain('Segnato: riparto da **QA rimborsi**');
+  // the next request takes the card and the keyboard: QA's question, then Feedback's permission
+  await expect(card).toHaveAttribute('data-request-key', 'qa/qa-q1');
+  await expect(card).toBeFocused();
   await page.keyboard.press('1');
-  await expect(page.getByTestId('request-qa-qa-q1')).toHaveCount(0);
+  await expect.poll(said('qa')).toContain('Apro il bug');
+  await expect(card).toHaveAttribute('data-request-key', 'feedback/feedback-p1');
+  await expect(card).toBeFocused();
+  await page.keyboard.press('3'); // «Non procedere»
+  await expect.poll(said('feedback')).toContain('non lancio i test');
+  await expect(page.getByTestId('qwin')).toHaveCount(0);
   await expect(page.locator('[data-request-key]')).toHaveCount(0);
-  await expect(page.getByTestId('tile-chat-qa')).toContainText('Apro il bug');
   await expect(page.getByTestId('maximized')).toHaveCount(0); // the chat was not opened
   await app.close();
 });
@@ -200,8 +198,8 @@ test('the live demo streams text and finishes running tools', async () => {
   await page.getByTestId('tile-browser-tab-sms').scrollIntoViewIfNeeded();
   await expect(page.getByTestId('browser-action-tab-sms')).toBeVisible();
   await expect(page.getByTestId('browser-action-tab-sms')).not.toHaveText('click ref_12 · «Attività»', { timeout: 10_000 });
-  // and the permission it asks for shows up in its tile
-  await expect(page.locator('[data-request-key]', { hasText: 'Esegue git commit' })).toBeVisible({ timeout: 15_000 });
+  // and the permission it asks for is an open request (the questions window shows it; set aside here, launchDemo)
+  await expect.poll(async () => (await page.evaluate(() => window.sb.invoke('chat:pending', undefined))).some(p => p.chatId === 'fix' && p.type === 'permission' && p.detail.includes('git commit')), { timeout: 15_000 }).toBe(true);
   await app.close();
 });
 

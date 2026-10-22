@@ -38,7 +38,7 @@ test('Codex: turned on by the user, a chat answers a turn and asks a command app
 
     const chat: ChatSummary = await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'codex', cwd: dir, prompt: 'ciao', title: 'Codex E2E' }), cwd);
     expect(chat).toMatchObject({ harness: 'codex', title: 'Codex E2E' });
-    await expandChats(page, chat.id); // its strip, open: the requests show under it
+    await expandChats(page, chat.id); // its strip, open: the transcript
     const items = (): Promise<ChatItem[]> => page.evaluate(id => window.sb.invoke('chat:items', { chatId: id }), chat.id);
     await expect.poll(async () => (await items()).some(i => i.kind === 'assistant' && i.text === 'Ciao da Codex'), { timeout: 30_000 }).toBe(true);
     await expect.poll(async () => (await page.evaluate(() => window.sb.invoke('chat:list', undefined))).find(c => c.id === chat.id)?.state, { timeout: 30_000 }).toBe('idle');
@@ -60,11 +60,12 @@ test('Codex: turned on by the user, a chat answers a turn and asks a command app
     const mcp = (await page.evaluate(() => window.sb.invoke('chat:pending', undefined))).find(p => p.chatId === chat.id)!;
     expect(mcp.tool).toBe('mcp__second_brain_app__app_chats');
     expect(mcp.detail).toContain('Intervallo: 2h');
-    const panel = page.getByTestId(`request-${chat.id}-${mcp.id}`);
-    await expect(panel.getByTestId(`request-${chat.id}-${mcp.id}-explain`)).toHaveText('second brain app: app chats');
-    await panel.getByTestId(`request-${chat.id}-${mcp.id}-raw-toggle`).click();
-    await expect(panel.getByTestId(`request-${chat.id}-${mcp.id}-raw`)).toContainText(mcp.title);
-    await expect(panel.getByTestId(`request-${chat.id}-${mcp.id}-raw`)).toContainText('Intervallo: 2h');
+    // in the questions window (always on since 2026-10-22): the arguments whole, no "always" option
+    await expect(page.getByTestId('qwin-card')).toHaveAttribute('data-request-key', `${chat.id}/${mcp.id}`);
+    await expect(page.getByTestId('qwin-card-explain')).toHaveText('second brain app: app chats');
+    await expect(page.getByTestId('qwin-card-raw')).toContainText(mcp.title);
+    await expect(page.getByTestId('qwin-card-raw')).toContainText('Intervallo: 2h');
+    await expect(page.getByTestId('qwin-card-opt-2')).toHaveCount(0);
     await shot(page, 'codex-mcp-confirmation');
     await page.evaluate(([id, rid]) => window.sb.invoke('chat:answer', { chatId: id, requestId: rid, answer: { kind: 'permission', allow: false } }), [chat.id, mcp.id] as const);
     await expect.poll(async () => (await items()).some(i => i.kind === 'assistant' && i.text === 'MCP: decline'), { timeout: 30_000 }).toBe(true);

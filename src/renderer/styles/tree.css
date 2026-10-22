@@ -183,8 +183,6 @@
 .tn:hover .tn-dot, .tn:focus-within .tn-dot { opacity: 0; }
 .tn-close:hover { background: color-mix(in srgb, var(--red) 18%, var(--surface-2)); color: var(--red); }
 .tn-close:focus-visible { opacity: 1; outline: 2px solid var(--focus); outline-offset: 1px; }
-.tn-orch .tn-orch-name { color: var(--violet); font-weight: 600; }
-.tn-orch .tn-main { grid-template-columns: minmax(0, 1fr); }
 .tn-kids { grid-column: 2; display: flex; align-items: center; gap: 6px; padding: 4px 0 2px; font-size: 11px; color: var(--text-3); }
 .tn-kids b { color: var(--text-2); font-weight: 600; }
 .tn-kids .kids-stack > * { box-shadow: 0 0 0 2px var(--bg-2); }

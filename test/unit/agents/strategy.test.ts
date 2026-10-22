@@ -133,6 +133,9 @@ describe('a Strategist\'s plan with the user', () => {
     await f.call('plan_propose', s.id, PLAN);
     await decide(f, s.id, 'approve');
     expect(planOf(f, s.id).phase).toBe('running');
+    // the run keeps the plan's fate for the Orchestrator's decision signals (ADR 0131): two proposals, one change, approved
+    const runId = f.m.list().find(c => c.id === s.id)!.run!.runId;
+    expect(f.m.runs.get(runId)!.plan).toEqual({ proposals: 2, changes: 1, approvedAt: expect.any(Number) });
     expect(f.sent.get(s.id)!.at(-1)).toBe(PLAN_APPROVED);
     await expect(f.call('plan_propose', s.id, PLAN)).rejects.toThrow(/approved and under way/);
   });

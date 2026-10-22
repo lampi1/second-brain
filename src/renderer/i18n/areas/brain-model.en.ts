@@ -35,7 +35,6 @@ export const brainModelEn: typeof brainModelIt = {
   'bm.mig.lessons': (p: { lines: number; agents: number }) => `${p.lines} learned rules moved into the role of ${p.agents === 1 ? '1 agent' : `${p.agents} agents`}.`,
   'bm.mig.noAgent': 'no agent',
 
-  'bm.skills.title': 'Skills',
   'bm.skills.lead': (p: { n: number; used: number }) => `${p.n === 1 ? '1 skill' : `${p.n} skills`}, ${p.used} used by at least one agent. A skill is how a job is done: the agent that declares it loads it when it starts.`,
   'bm.skills.new': 'New skill',
   'bm.skills.search': 'Find a skill…', 'bm.skills.searchLabel': 'Search skills',
@@ -60,7 +59,6 @@ export const brainModelEn: typeof brainModelIt = {
   'bm.rules.empty': 'No rules in the brain. They come from your corrections: when you state one that applies to everyone, it lands here.',
 
   'bm.mem.title': 'Memory',
-  'bm.mem.lead': 'What the brain knows and what happened, plus one memory per agent. It never travels with an exported agent.',
   'bm.mem.knowledge': 'Knowledge', 'bm.mem.knowledgeLead': 'Customers, environments, people and references.',
   'bm.mem.happened': 'What happened', 'bm.mem.happenedLead': 'Open threads, journal and logged errors.',
   'bm.mem.agents': 'Agents’ memories', 'bm.mem.agentsLead': 'One per agent. What several agents knew goes to the shared memory, once.',
@@ -119,7 +117,5 @@ export const brainModelEn: typeof brainModelIt = {
   'bm.card.skills': 'Skills', 'bm.card.noSkills': 'No declared skills: it works from its role.',
   'bm.card.memory': 'Memory', 'bm.card.memoryNone': 'empty so far',
   'bm.card.back': 'Back',
-  'bm.studio.skills': 'Skills and memory',
-  'bm.studio.skillsHint': 'Declared skills are loaded when the agent starts; its memory travels with it. The maintenance changes them, or you from the Skills page.',
   'bm.studio.manage': 'Manage skills',
 };

@@ -5,5 +5,5 @@ import {Modal} from './ui';
 export function UpdateCheckpointStatus(){
   const pending=updateBarrier.use(value=>value.requestId);
   if(!pending)return null;
-  return <Modal label={auditText('audit.UpdateCheckpointStatus.savingForTheUpdate')} testid="update-checkpoint-status" onClose={()=>{}}><div className="modal-body"><h2>{auditText('audit.UpdateCheckpointStatus.savingYourWorkspace')}</h2><p role="status">{auditText('audit.UpdateCheckpointStatus.waitForTheUpdateResultEditing')}</p></div></Modal>;
+  return <Modal label={auditText('audit.UpdateCheckpointStatus.savingForTheUpdate')} testid="update-checkpoint-status" onClose={()=>{}} size="s" title={auditText('audit.UpdateCheckpointStatus.savingYourWorkspace')}><p role="status">{auditText('audit.UpdateCheckpointStatus.waitForTheUpdateResultEditing')}</p></Modal>;
 }

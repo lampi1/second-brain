@@ -58,20 +58,13 @@
 .guide-prominent .guide-summary{font-size:13.5px;max-width:760px;-webkit-line-clamp:unset}
 .guide-prominent .guide-diagram{margin:6px 0 6px}
 
-/* the reading panel: slides in from the right, inside the page */
-.guide-backdrop{position:absolute;inset:0;z-index:20;border:0;padding:0;margin:0;background:var(--backdrop);opacity:.6;cursor:default;animation:guide-fade 200ms var(--ease) both}
-.guide-panel{--guide-accent:var(--blue);position:absolute;z-index:21;top:12px;right:12px;bottom:12px;width:min(560px,calc(100% - 24px));display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border-2);border-radius:var(--r-xl);box-shadow:var(--shadow-pop);overflow:hidden;animation:guide-slide 280ms var(--ease) both}
+/* the reading panel: the shared side panel (app.css .modal-side) in the card's accent */
+.guide-panel{--guide-accent:var(--blue);position:relative}
 .guide-panel::before{content:'';position:absolute;inset:0 0 auto;height:160px;pointer-events:none;background:radial-gradient(90% 100% at 0% 0%,color-mix(in srgb,var(--guide-accent) 14%,transparent),transparent 70%)}
-.guide-panel-head{position:relative;display:flex;align-items:flex-start;gap:14px;padding:20px 20px 12px}
-.guide-panel-title{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:7px}
-.guide-panel-title h2{font-size:19px;font-weight:600;letter-spacing:-.45px;line-height:1.3;margin:2px 0 0}
-.guide-panel-title h2:focus{outline:none}
-.guide-panel-title .guide-badges{justify-content:flex-start}
-.guide-close{flex:none;display:grid;place-items:center;width:30px;height:30px;border-radius:var(--r-s);border:1px solid var(--border-2);background:var(--surface-2);color:var(--text-2);cursor:pointer;transition:background 150ms,color 150ms}
-.guide-close:hover{background:var(--surface-3);color:var(--text)}
-.guide-panel-scroll{position:relative;flex:1;min-height:0;overflow:auto;padding:0 20px 20px}
-.guide-panel-summary{margin:0 0 18px;font-size:13.5px;line-height:1.6;color:var(--text-2)}
-.guide-panel-foot{display:flex;justify-content:flex-end;gap:8px;padding:10px 16px;border-top:1px solid var(--border);background:var(--bg-2)}
+.guide-panel .modal-head{position:relative}
+.guide-panel .modal-icon{width:auto;height:auto;background:none}
+.guide-panel .guide-badges{justify-content:flex-start;margin-top:6px}
+.guide-panel .guide-panel-summary{margin:0 0 18px;line-height:1.6;color:var(--text-2)}
 .guide-body{display:flex;flex-direction:column;gap:18px}
 .guide-sec h4,.guide-tech h4,.guide-target h4,.guide-coming h4{font-size:10.5px;font-weight:650;margin:0 0 10px;color:var(--text-3);letter-spacing:.1em;text-transform:uppercase}
 .guide-points{list-style:none;counter-reset:pt;margin:0;padding:0;display:flex;flex-direction:column;gap:9px;font-size:13px;line-height:1.55}
@@ -114,14 +107,11 @@
 .guide :focus-visible{outline:2px solid var(--focus);outline-offset:3px}
 @container (max-width:640px){
   .guide-scroll{padding:22px 16px 40px}
-  .guide-panel{top:0;right:0;bottom:0;width:100%;border-radius:0;border-width:0 0 0 1px}
   .guide-prominent{padding:20px 18px 14px}
 }
 @keyframes guide-enter{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-@keyframes guide-fade{from{opacity:0}}
-@keyframes guide-slide{from{opacity:0;transform:translateX(28px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){
-  .guide-card,.guide-panel,.guide-backdrop{animation:none}
+  .guide-card{animation:none}
   .guide-card,.guide-card:hover,.guide-card:focus-within{transform:none;transition:none}
   .guide-discuss>span,.guide-toggle svg{transition:none}
 }

@@ -20,6 +20,8 @@ import { permissionsEn } from './areas/permissions.en';
 import { langSwitchEn } from './areas/lang-switch.en';
 import type { Dict } from './index';
 import { chatEn } from './areas/chat.en';
+import { visualsEn } from './areas/visuals.en';
+import { typingEn } from './areas/typing.en';
 import { dialogsEn } from './areas/dialogs.en';
 import { toolsEn } from './areas/tools.en';
 import { brainPagesEn } from './areas/brainPages.en';
@@ -31,7 +33,6 @@ import { levelsEn } from './areas/levels.en';
 import { explainEn } from './areas/explain.en';
 import { agentDetailEn } from './areas/agent-detail.en';
 import { agentImageEn } from './areas/agent-image.en';
-import { approvalsEn } from './areas/approvals.en';
 import { proposalsEn } from './areas/proposals.en';
 import {settingsEn}from'./areas/settings.en';
 import { profileEn } from './areas/profile.en';
@@ -47,6 +48,7 @@ import { estimateEn } from './areas/estimate.en';
 import { logEn } from './areas/log.en';
 import { reviewedContextEn } from './areas/reviewed-context.en';
 import { setupEn } from './areas/setup.en';
+import { viewerOverlayEn } from './areas/viewer-overlay.en';
 
 export const en: Dict = {
   ...learningReviewEn,
@@ -58,6 +60,7 @@ export const en: Dict = {
   ...connectorsEn,
   ...reviewedContextEn,
   ...setupEn,
+  ...viewerOverlayEn,
   ...homeEn,
   ...cloudEn,
   ...guideEn,
@@ -82,9 +85,9 @@ export const en: Dict = {
   'genui.chart.label': "Label",
   'genui.chart.value': "Value",
   'genui.chart.note': "Note",
-  'genui.permission.once': "Allow this operation only.",
-  'genui.permission.session': "Allow for this session",
-  'genui.permission.deny': "Do not authorize this operation.",
+  'genui.permission.once': 'Just this once',
+  'genui.permission.session': 'For the whole session',
+  'genui.permission.deny': 'Don’t do it',
   ...studioEn,
   ...permissionsEn,
   ...langSwitchEn,
@@ -98,11 +101,12 @@ export const en: Dict = {
   ...explainEn,
   ...agentDetailEn,
   ...agentImageEn,
-  ...approvalsEn,
   ...proposalsEn,
   ...settingsEn,
   ...profileEn,
   ...chatEn,
+  ...visualsEn,
+  ...typingEn,
   ...dialogsEn,
   ...toolsEn,
   ...brainPagesEn,
@@ -114,7 +118,6 @@ export const en: Dict = {
   'common.cancel': 'Cancel',
   'common.save': 'Save',
   'settings.language': 'Language',
-  'settings.languageDesc': 'The interface language. Same as the system = Italian or German when Windows is set to one of them, English otherwise.',
   'settings.language.system': 'Same as the system',
   'settings.language.it': 'Italiano',
   'settings.language.en': 'English',

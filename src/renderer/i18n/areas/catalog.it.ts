@@ -2,7 +2,8 @@
 export const catalogIt = {
   // the Agenti page's review switch (JudgingSwitch.tsx)
   'catalog.judging.title': 'Abilita controllo livello e performance',
-  'catalog.judging.onDesc': 'Acceso: ogni lavoro finito viene rivisto da un Sentinel in una sessione nuova. Livello e performance si basano su verdetti veri.',
+  'catalog.judging.onDesc': 'Acceso: ogni lavoro finito viene rivisto da un Sentinel in una sessione nuova, tranne quelli che i test del progetto già decidono. Livello e performance si basano su verdetti veri.',
+  'catalog.judging.receipts': (p: { runs: string }) => `Altri ${p.runs} lavori al giorno li decidono le ricevute (i test e i controlli eseguiti dopo l’ultima modifica): nessuna revisione, nessun costo.`,
   'catalog.judging.offDesc': 'Spento: nessuna revisione. Livello e performance contano solo i voti tuoi, dell’Orchestrator e i fatti.',
   'catalog.judging.cost': (p: { cost: string; runs: string; each: string; audits: string }) => `Costo stimato: circa ${p.cost} al giorno (${p.runs} lavori al giorno × ${p.each} a revisione, più ${p.audits} seconde revisioni al giorno che giudicano il giudice).`,
   'catalog.judging.costNoReview': (p: { runs: string }) => `Costo stimato: ${p.runs} revisioni al giorno; il prezzo di una revisione si vedrà dopo la prima.`,
@@ -51,7 +52,7 @@ export const catalogIt = {
   'catalog.costsWhy.noTotal': 'Costo per successo: manca il totale dei lavori più vecchi, compare con i prossimi.',
   'catalog.costsWhy.partial': ({ n, total }: { n: number; total: number }) => `Costo per successo: il costo è noto solo per ${n} lavori su ${total}.`,
   'catalog.costsHelp': 'Costo mediano: la metà dei lavori conclusi è costata meno, su quelli con un costo noto. Costo per successo verificato: il costo di tutti i lavori conclusi diviso per quelli riusciti e verificati (quelli che contano per il livello). Equivalente al listino API: con un abbonamento non è ciò che paghi.',
-  'catalog.metricsError': 'Statistiche non disponibili. Riprova.', 'catalog.back': 'Torna al catalogo',
+  'catalog.metricsError': 'Statistiche non disponibili. Riprova.', 
   // the built-in roles' purpose (name, purpose and character always come from the role: lib/role-text.ts)
   'catalog.purpose.orchestrator': 'Coordina il lavoro: delega ogni compito a un ruolo e ti tiene al corrente dello stato.',
   'catalog.purpose.strategist': 'Scompone un obiettivo in un piano e delega le parti ai ruoli giusti.',
@@ -61,4 +62,6 @@ export const catalogIt = {
   'catalog.purpose.herald': 'Prepara messaggi e bozze per persone e servizi esterni; ogni invio lo approvi tu.',
   'catalog.purpose.flash': 'Risposte al volo accanto all’Orchestrator: vede la sua chat, legge, non cambia nulla',
   'catalog.purpose.pulse': 'Idee, consigli, promemoria, collegamenti e frase in cima a Memoria',
+  // the model tier's word, on the role card and in the studio
+  'roles.tier.light': 'leggero', 'roles.tier.mid': 'medio', 'roles.tier.top': 'alto',
 };

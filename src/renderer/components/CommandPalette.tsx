@@ -22,9 +22,8 @@ import { closedChats } from '../lib/autoclose';
 import { now } from '../lib/clock';
 import {
   back, copyLink, currentLink, focusChat, reopenChat, focusRequest, focusTile, forward, go, nextThing, openLink, recentPlaces, stopAllAsk, stopFocused, toggleCenter, toggleFocusMode,
-  toggleMaximize, toggleOrchestrator, askRenewOrchestrator, askClearOrchestrator, orchestratorId, toggleQuestionsModal, newBrowser, newRequest,
+  toggleMaximize, toggleOrchestrator, askRenewOrchestrator, askClearOrchestrator, orchestratorId, newBrowser, newRequest,
 } from '../actions';
-import { questionsModalOn } from '../lib/questions';
 import {
   HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconBook, IconBranch, IconFile, IconBrain, IconChart, IconTarget, IconCoins, IconShield, IconFocus, IconGlobe,
   IconHistory, IconKeyboard, IconLayers, IconLightbulb, IconLink, IconList, IconLogin, IconMap, IconMaximize, IconPlus, IconQuestion, IconSearch, IconSettings, IconStop,
@@ -98,9 +97,6 @@ function buildCommands(): Cmd[] {
       { id: 'orchestratorrenew', title: auditText('cmp.palette.orchestratorRenew'), sub: auditText('cmp.palette.orchestratorRenewSub', { engine: engineName(orchestrator.harness) }), shortcut: 'Ctrl+Shift+R', icon: <HarnessMark harness={orchestrator.harness} size={18} />, run: () => askRenewOrchestrator(orchestrator.harness) },
       ...(to ? [{ id: 'orchestratorengine', title: auditText('cmp.palette.orchestratorEngine', { engine: engineName(to) }), sub: auditText('cmp.palette.orchestratorEngineSub', { engine: engineName(orchestrator.harness) }), icon: <HarnessMark harness={to} size={18} />, run: () => askRenewOrchestrator(to) }] : []),
     ] : []),
-    { id: 'qwin', title: questionsModalOn(s) ? auditText('cmp.palette.questionsOff') : auditText('cmp.palette.questionsOn'),
-      sub: questionsModalOn(s) ? auditText('cmp.palette.questionsOffSub') : auditText('cmp.palette.questionsOnSub'),
-      icon: <IconQuestion />, run: toggleQuestionsModal, text: 'domande finestra modale popup permessi' },
     { id: 'density', title: u.prefs.density === 'compact' ? auditText('cmp.palette.densityComfortable') : auditText('cmp.palette.densityCompact'), icon: <IconLayers />, run: () => setPrefs({ density: u.prefs.density === 'compact' ? 'comfortable' : 'compact' }) },
     { id: 'theme', title: auditText('cmp.palette.theme'), sub: auditText(u.prefs.theme === 'system' ? 'cmp.palette.themeNowSystem' : u.prefs.theme === 'dark' ? 'cmp.palette.themeNowDark' : 'cmp.palette.themeNowLight'), icon: <IconSettings />,
       run: () => setPrefs({ theme: u.prefs.theme === 'system' ? 'dark' : u.prefs.theme === 'dark' ? 'light' : 'system' }) },

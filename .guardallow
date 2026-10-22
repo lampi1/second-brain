@@ -128,3 +128,10 @@ docs/screenshots/orchestrator-flash.webp binary-media sha256:07a37035f2ab426a517
 docs/screenshots/reactions.webp binary-media sha256:dc59b9db976478b399945497ae7de4f7ad3cdf84b60b8873334bc1c604b08c57
 docs/screenshots/connectors.webp binary-media sha256:621523bf485e246974c7ec8886eeca7271f55d79a966ef9194137d8eb2a49d4c
 docs/screenshots/plan.webp binary-media sha256:7a29ced495ab88ba4ffcfb27346dad33be6eb03a04166569506f0421f84133e0
+# memory-worth tests: a made-up user "mario" in a Windows and a home path proves the memory gate flags user paths
+# (checked 2026-10-22). These two hashes pin the branch's earlier versions of the file; the current one builds the paths
+# from parts and is clean.
+test/unit/brainmodel/memory-worth.test.ts user-path sha256:7178a6995eb09661d5368d9c056bb00d430a7d080ae2e328ab7b6f55d8ca4e65
+test/unit/brainmodel/memory-worth.test.ts home-path sha256:7178a6995eb09661d5368d9c056bb00d430a7d080ae2e328ab7b6f55d8ca4e65
+test/unit/brainmodel/memory-worth.test.ts user-path sha256:2db3faeff757af65a1eeeb802a49294ec722dc3bd7cf6dcb1fe7531b46f71d63
+test/unit/brainmodel/memory-worth.test.ts home-path sha256:2db3faeff757af65a1eeeb802a49294ec722dc3bd7cf6dcb1fe7531b46f71d63

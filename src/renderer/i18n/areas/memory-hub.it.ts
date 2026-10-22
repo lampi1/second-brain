@@ -42,7 +42,7 @@ export const memoryHubIt = {
   'mh.idee.again': 'Un’altra', 'mh.idee.close': 'Chiudi',
   'mh.idee.months': (p: N) => `${p.n} mesi fa`, 'mh.idee.days': (p: N) => (p.n === 1 ? 'ieri' : `${p.n} giorni fa`), 'mh.idee.today': 'oggi',
   // Script
-  'mh.script.lead': (p: S) => `${p.n} script nel brain, ${p.ok} provati che funzionano: si cercano, si aprono qui e non partono mai da soli.`,
+  'mh.script.lead': (p: S) => `${p.n} script che funzionano: si cercano, si aprono qui e non partono mai da soli.`,
   // what the Dashboard handed to Costi and Qualità
   'mh.ctx.title': 'Contesto adesso',
   'mh.ctx.note': 'Quanto è pieno il contesto di ogni chat aperta: un contesto lungo fa costare di più ogni messaggio.',

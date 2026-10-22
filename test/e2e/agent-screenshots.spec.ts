@@ -56,7 +56,7 @@ function fixture() {
 for (const scheme of ['dark', 'light'] as const) {
   test(`reports in the file viewer show their images, large on a click · ${scheme}`, async () => {
     const { userData, ev } = fixture();
-    const { app, page } = await launchDemo({ scheme, userData, config: { questionsModal: false, theme: scheme } });
+    const { app, page } = await launchDemo({ scheme, userData, config: { theme: scheme } });
     try {
       await openFile(page, path.join(ev, 'report.html'));
       const report = page.getByTestId('viewer-report');
@@ -109,7 +109,7 @@ for (const scheme of ['dark', 'light'] as const) {
 
 test('a chat message with a screenshot path shows it inline; a click opens it large', async () => {
   const { userData, ev } = fixture();
-  const { app, page } = await launchDemo({ userData, config: { questionsModal: false } });
+  const { app, page } = await launchDemo({ userData });
   try {
     const chat = await page.evaluate(cwd => window.sb.invoke('chat:create', { harness: 'claude', cwd, title: 'Fix AT-7' }), ev);
     await demo(app, (d, id, text) => d.say(id, text), chat.id, `Fatto. Prima: ${path.join(ev, 'shots', 'before.png')}\n\nDopo: \`shots/after.png\` · report: [report.html](${path.join(ev, 'report.html')})`);
@@ -126,21 +126,19 @@ test('a chat message with a screenshot path shows it inline; a click opens it la
     await expect(viewer).toContainText('after.png · 2 di 2');
     await page.keyboard.press('Escape');
     await expect(viewer).toHaveCount(0);
-    // the question panel inside a chat: its question and context in the app's type scale too
-    await expandChats(page, 'qa');
-    const qa = page.getByTestId('tile-chat-qa');
-    const fs = await page.evaluate(() => { const s = getComputedStyle(document.documentElement); return { s: s.getPropertyValue('--fs-s').trim(), m: s.getPropertyValue('--fs-m').trim(), l: s.getPropertyValue('--fs-l').trim() }; });
-    await expect(qa.locator('.ask-q').first()).toHaveCSS('font-size', fs.l);
-    await expect(qa.locator('.ctx-toggle').first()).toHaveCSS('font-size', fs.s);
-    await qa.locator('.ctx-toggle').first().click();
-    await expect(qa.locator('.ctx-body').first()).toHaveCSS('font-size', fs.m);
+    // a question in the questions window (Ctrl+J brings the ones set aside): its question and context in the app's type scale too
+    await page.keyboard.press('Control+J');
+    await expect(page.getByTestId('qwin')).toBeVisible();
+    const fs = await page.evaluate(() => { const s = getComputedStyle(document.documentElement); return { l: s.getPropertyValue('--fs-l').trim(), xl: s.getPropertyValue('--fs-xl').trim() }; });
+    await expect(page.locator('.qwin .wq-q').first()).toHaveCSS('font-size', fs.xl);
+    await expect(page.locator('.qwin').first()).toHaveCSS('font-size', fs.l);
   } finally { await app.close(); }
 });
 
 for (const scheme of ['dark', 'light'] as const) {
   test(`a question with before/after screenshots, in the app's type scale · ${scheme}`, async () => {
     const { userData, ev } = fixture();
-    const { app, page } = await launchDemo({ scheme, userData, config: { questionsModal: true, theme: scheme } });
+    const { app, page } = await launchDemo({ scheme, userData, config: { theme: scheme } });
     try {
       for (const id of ['orchestrator', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
       const q = `Ho corretto il calcolo del rimborso con lo sconto. Approvi la correzione? ![Prima](${path.join(ev, 'shots', 'before.png')}) ![Dopo](${path.join(ev, 'shots', 'after.png')})`;

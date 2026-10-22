@@ -35,7 +35,6 @@ export const brainModelDe: typeof brainModelIt = {
   'bm.mig.lessons': (p: { lines: number; agents: number }) => `${p.lines} gelernte Regeln in die Rolle von ${p.agents === 1 ? '1 Agenten' : `${p.agents} Agenten`} verschoben.`,
   'bm.mig.noAgent': 'kein Agent',
 
-  'bm.skills.title': 'Skills',
   'bm.skills.lead': (p: { n: number; used: number }) => `${p.n === 1 ? '1 Skill' : `${p.n} Skills`}, ${p.used} von mindestens einem Agenten genutzt. Ein Skill beschreibt, wie eine Arbeit gemacht wird: Der Agent, der ihn angibt, lädt ihn beim Start.`,
   'bm.skills.new': 'Neuer Skill',
   'bm.skills.search': 'Skill suchen…', 'bm.skills.searchLabel': 'Skills durchsuchen',
@@ -60,7 +59,6 @@ export const brainModelDe: typeof brainModelIt = {
   'bm.rules.empty': 'Keine Regeln im Brain. Sie entstehen aus deinen Korrekturen: wenn du eine nennst, die für alle gilt, landet sie hier.',
 
   'bm.mem.title': 'Gedächtnis',
-  'bm.mem.lead': 'Was das Brain weiß und was passiert ist, plus ein Gedächtnis pro Agent. Es reist nie mit einem exportierten Agenten mit.',
   'bm.mem.knowledge': 'Wissen', 'bm.mem.knowledgeLead': 'Kunden, Umgebungen, Personen und Referenzen.',
   'bm.mem.happened': 'Was passiert ist', 'bm.mem.happenedLead': 'Offene Fäden, Tagebuch und erfasste Fehler.',
   'bm.mem.agents': 'Gedächtnis der Agenten', 'bm.mem.agentsLead': 'Eines pro Agent. Was mehrere Agenten wussten, kommt einmal ins gemeinsame Gedächtnis.',
@@ -119,7 +117,5 @@ export const brainModelDe: typeof brainModelIt = {
   'bm.card.skills': 'Skills', 'bm.card.noSkills': 'Keine angegebenen Skills: arbeitet mit seiner Rolle.',
   'bm.card.memory': 'Gedächtnis', 'bm.card.memoryNone': 'noch leer',
   'bm.card.back': 'Zurück',
-  'bm.studio.skills': 'Skills und Gedächtnis',
-  'bm.studio.skillsHint': 'Angegebene Skills werden beim Start des Agenten geladen; sein Gedächtnis reist mit ihm. Die Wartung ändert sie, oder du auf der Skills-Seite.',
   'bm.studio.manage': 'Skills verwalten',
 };

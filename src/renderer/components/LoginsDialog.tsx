@@ -9,7 +9,7 @@ import { sb } from '../sb';
 import { closeModal, setMaximized, toast } from '../store/ui';
 import { t } from '../i18n';
 import { IconAlert, IconCheck, IconLogin, IconSearch, IconShield, IconSpinner } from './Icons';
-import { Button, Keys, Modal } from './ui';
+import { Button, Modal } from './ui';
 
 const errText = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
 
@@ -62,18 +62,14 @@ export function CredentialsDialog() {
     return [...m.entries()];
   }, [shown]);
   return (
-    <Modal onClose={closeModal} label={t('dialogs.logins.title')} testid="credentials" className="modal-credentials">
-      <div className="modal-head">
-        <IconLogin size={16} />
-        <h2>{t('dialogs.logins.title')}</h2>
-        <span className="modal-head-hint">{t('dialogs.logins.hint')}</span>
-        <span className="sp" /><Keys combo="Esc" />
-      </div>
+    <Modal onClose={closeModal} label={t('dialogs.logins.title')} testid="credentials" className="modal-credentials" bodyClassName="cred-body" closeButton
+      icon={<IconLogin size={16} />} title={t('dialogs.logins.title')} subtitle={t('dialogs.logins.hint')}
+      footer={<span className="ho-safe"><IconShield size={13} /> {t('dialogs.logins.passwordSafe')}</span>}>
       <div className="palette-search cred-search">
         <IconSearch size={16} />
         <input autoFocus value={q} placeholder={t('dialogs.logins.filterPlaceholder')} aria-label={t('dialogs.logins.filterLabel')} data-testid="credentials-filter" onChange={e => setQ(e.target.value)} />
       </div>
-      <div className="modal-body cred-body" data-testid="credentials-list">
+      <div className="cred-list" data-testid="credentials-list">
         {list === null ? <div className="handoff-empty"><IconSpinner size={18} /></div>
           : list.length === 0 ? (
             <div className="handoff-empty" data-testid="credentials-empty"><IconAlert size={18} />
@@ -101,9 +97,6 @@ export function CredentialsDialog() {
               ))}
             </section>
           ))}
-      </div>
-      <div className="modal-foot cred-foot">
-        <span className="ho-safe"><IconShield size={13} /> {t('dialogs.logins.passwordSafe')}</span>
       </div>
     </Modal>
   );

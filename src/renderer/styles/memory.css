@@ -13,8 +13,8 @@ div.bm-page.agent-overview{display:block;min-width:0;padding:28px 32px 48px;font
 .mm-maint-btn{display:inline-flex;align-items:center;gap:7px;font-weight:600;box-shadow:0 0 0 3px color-mix(in srgb,var(--blue) 20%,transparent)}
 .mm-maint-btn svg{width:15px;height:15px}
 .mm-maint-last{font-size:var(--fs-xs);color:var(--text-3);white-space:nowrap}
-.mm-maint-modal{width:min(680px,calc(100vw - 32px))}
-.mm-maint-lead{margin:0;font-size:var(--fs-m);color:var(--text-2)}
+
+
 .mm-maint-error{margin:0;color:var(--red)}
 .mm-maint-h{margin:4px 0 0;font:600 var(--fs-l)/1.3 var(--font-display)}
 .mm-jobs{list-style:none;margin:0;padding:0;display:grid;border:1px solid var(--border);border-radius:var(--r-m);overflow:hidden}

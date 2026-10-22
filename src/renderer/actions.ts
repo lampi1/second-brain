@@ -16,20 +16,19 @@ import { t, locale } from './i18n';
 import { fileReference, fileViewArg,normalizeFileArg } from '@shared/file-view';
 import { freezeClock, now } from './lib/clock';
 import { setReporting } from './lib/viewports';
-import { floatsBehindPopup, focusLayer, inLayer, orchestratorCardOnScreen, visibleRequestKeys } from './lib/layer';
 import { makeLink, parseLink, visitSection } from './lib/notify';
 import { touch } from './lib/autoclose';
 import { hubRedirect } from './lib/memory-hub';
 import { isBusy } from './store/state';
-import { app, closeChat, closeTab, continueChat, createChat, createRoutedChat, dispatch, setChat, setSetting, stop, stopAll } from './store/store';
+import { app, closeChat, closeTab, continueChat, createChat, createRoutedChat, dispatch, setChat, stop, stopAll } from './store/store';
 import { orchestratorIdOf } from './lib/orchestrator-route';
-import { questionsModalOn } from './lib/questions';
-import { answerLater, openQueue, resumeQuestions } from './lib/later';
+import { answerLater, openQueue } from './lib/later';
 import { engineLabel } from './lib/engines';
 import {
   askConfirm, closeModal, flashTile, highlight, isBrainPage, openModal, openPage, requestFocus, setCenter, setClosing, setFocusMode, setLanePeek, setMap, setMaximized,
-  openOrchestratorRenew, setRead, setOrchestratorOpen, toast, ui, setOrchestratorFirst, setLayerHeld, callQuestions, setQuestionsAside, setChatExpanded, setTreeCollapsed, setBrowserOpen, type Place,type BrainPageId,
+  openOrchestratorRenew, setRead, setOrchestratorOpen, toast, ui, callQuestions, setQuestionsAside, setChatExpanded, setTreeCollapsed, setBrowserOpen, setViewer, type Place,type BrainPageId,
 } from './store/ui';
+import { currentEntry, pushEntry, stepEntry, type Shot, type ViewerEntry } from './lib/viewer-stack';
 
 /** The Orchestrator's id (the right column), null while there is none. */
 export const orchestratorId = (): string | null => orchestratorIdOf(app.get());
@@ -185,6 +184,11 @@ export function go(place: Place, opts: { push?: boolean } = {}): void {
   const hub = hubRedirect(aliased, (place.page as string) === 'spunti' ? 'ia' : place.arg);
   if (hub) place = { ...place, ...hub };
   const page = (ALIAS[place.page] ?? place.page) as Place['page'];
+  // a file opens in the viewer overlay above the page, which keeps its state; the old 'file' page route (sb://file/…,
+  // sb://esplora/…, map and palette links) lands here too
+  if (page === 'file' && place.arg) { openViewer({ kind: 'file', arg: normalizeFileArg(place.arg) }); return; }
+  // going to another place (the palette, a link, the sidebar, a toast) is leaving the file: the viewer closes
+  closeViewer();
   if (page !== 'mappa' && !isBrainPage(page)) { toast(t('appText.actions.unknownPage', { page: place.page }), 'warn'); return; }
   const target: Place = { page:page==='file'&&!place.arg?'home':page, arg:page==='file'&&place.arg?normalizeFileArg(place.arg):(place.page as string) === 'spunti' ? 'ia' : place.arg ?? null, element: place.element ?? null };
   if (page === 'mappa') setMap(true, target.arg ?? null);
@@ -238,6 +242,8 @@ export function openLink(text: string): boolean {
 /** The link of where the user is now: the page, and the focused tile in the Grindhouse. */
 export function currentLink(): string {
   const u = ui.get();
+  const shown = currentEntry(u.viewer);
+  if (shown?.kind === 'file') return makeLink('file', shown.arg);
   if (u.map) return makeLink('mappa', u.mapArg);
   if (u.page !== 'home') return makeLink(u.page, u.pageArg);
   const f = u.focused;
@@ -275,13 +281,6 @@ export function toggleOrchestrator(): void {
 }
 
 export const toggleCenter = () => setCenter(!ui.get().center);
-
-/** "Domande in finestra" on/off (top bar, Ctrl+K, Settings). The user's own change: applies at once. */
-export function toggleQuestionsModal(): void {
-  const on = !questionsModalOn(app.get());
-  if (on) resumeQuestions();
-  void setSetting({ questionsModal: on });
-}
 
 /** What the brain pages get for "Discuti" (the Orchestrator next to the page, a ready draft in its input, not sent): every
  *  entry point of a page goes to the Orchestrator, which decides and delegates; no page creates a work chat by itself
@@ -351,15 +350,26 @@ export async function openInAppBrowser(url: string): Promise<void> {
 /** Explicit user action from the toolbar/palette: an unowned blank tab, using existing native browser isolation. */
 export function newBrowser():Promise<void>{return openInAppBrowser('about:blank');}
 
-/** Opening a file is navigation only. Main resolves its scope when Esplora requests the bounded contents. */
+/** Opening a file is navigation only. Main resolves its scope when the viewer requests the bounded contents. */
 export function openFileViewer(raw:string,chatId?:string):void{
-  // An Orchestrator artifact remains mounted across page navigation; release its focus trap before showing the file.
+  openViewer({kind:'file',arg:fileViewArg(fileReference(raw,chatId))});
+}
+
+/** The viewer overlay shows `entry` above the current page (which keeps its state), after the one on screen in its
+ *  back/forward list. */
+export function openViewer(entry:ViewerEntry):void{
+  // An Orchestrator artifact or a large image is the open dialog; release its focus trap before showing the file.
   if(ui.get().modal==='visual')closeModal();
   // a link in the questions window (the window is on screen, so the click came from it): the window steps aside, else
-  // the file page would open behind its full-screen backdrop and nothing would visibly change
+  // the viewer would open behind its full-screen backdrop and nothing would visibly change
   if(ui.get().qwin.shown)setQuestionsAside(true);
-  go({page:'file',arg:fileViewArg(fileReference(raw,chatId))});
+  setViewer(v=>pushEntry(v,entry));
 }
+/** A before/after pair of screenshots in the viewer: side by side, or one over the other with a slider. */
+export const openShots=(before:Shot,after:Shot,title?:string):void=>openViewer({kind:'shots',before,after,...(title?{title}:{})});
+export const closeViewer=():void=>setViewer(v=>v.open?{...v,open:false}:v);
+export const viewerStep=(d:-1|1):void=>setViewer(v=>stepEntry(v,d));
+export const toggleViewerFull=():void=>setViewer(v=>({...v,full:!v.full}));
 
 /** "Apri" on a chat an Orchestrator opened or wrote to (ChatRefChips, ADR 0034): that chat on screen from any place; a closed
  *  one goes back on the grid first (no message, no tokens). */
@@ -431,64 +441,22 @@ export const awaitingCard = (): boolean => awaited !== null;
 /** Focus a request card: in the global layer if it floats there, else where it is on screen, else go and show it. */
 export function focusRequest(req: PendingRequest): void {
   closeModal();
-  // "Rispondi dopo" is on: asking for a request opens "Da rispondere" on it (quiet mode ends, lib/later.ts)
+  // a postponed one ("Rispondi dopo") reopens the queue on it
   if (ui.get().later) { openQueue(reqKey(req)); return; }
-  // "Domande in finestra" or the queue already open: the window shows it first, at once, with the keyboard
-  if (questionsModalOn(app.get()) || ui.get().qwin.open) { void sb.invoke('overlay:focus', { target: 'app' }).catch(() => {}); callQuestions(reqKey(req)); return; }
-  // the Orchestrator's own request: always answered in her widget (the layer's card that held the keyboard lets go of it)
-  const orchestratorOwn = req.chatId === orchestratorIdOf(app.get());
-  if (orchestratorOwn) setLayerHeld(null);
-  // it would float there but the Orchestrator widget shows a card (one popup at a time): the layer's card takes the keyboard
-  // and is the popup while it has it (ui layerHeld), the widget's card waits on "Poi:". Not another request of the
-  // Orchestrator's own: that one takes the widget's card below
-  const shown = orchestratorCardOnScreen();
-  if (shown && shown !== reqKey(req) && !orchestratorOwn && floatsBehindPopup(reqKey(req))) { focusLayer(reqKey(req)); return; }
-  // already on screen (lane, tile, Orchestrator): just take it, nothing moves. Checked before the layer: the layer's list is
-  // recomputed a moment later, so right after the Orchestrator opens it can still hold a card that is now on the page
-  const sel = `[data-request-key="${CSS.escape(reqKey(req))}"]`;
-  const here = visibleRequestKeys().has(reqKey(req)) ? document.querySelector<HTMLElement>(`${sel}[data-lane]`) ?? document.querySelector<HTMLElement>(sel) : null;
-  // floating in the global layer (not visible elsewhere): the keyboard goes there, the page stays where it is
-  if (!here && !orchestratorOwn && inLayer(reqKey(req))) { focusLayer(reqKey(req)); return; }
-  // the keyboard may be in the global layer (Ctrl+J pressed there): bring it back first, else Enter answers the layer card
+  // every request is answered in the questions window (always on since 2026-10-22): it shows this one first, with
+  // the keyboard (taken back from the global layer first)
   void sb.invoke('overlay:focus', { target: 'app' }).catch(() => {});
-  if (here) { here.focus(); here.scrollIntoView({ block: 'nearest', inline: 'nearest' }); return; }
-  const c = app.get().chats[req.chatId];
-  const u = ui.get();
-  // the Orchestrator's own requests: answered in her tile
-  const inOrchestrator = orchestratorOwn;
-  // her tab, over anything, with this request as the card shown (the widget shows one at a time)
-  if (inOrchestrator) { setOrchestratorFirst(reqKey(req)); setOrchestratorOpen(true); }
-  else if (u.page !== 'home' || u.map) go({ page: 'home' });
-  // a collapsed Grindhouse strip shows only its pill: it opens, so its panel mounts and takes the keyboard
-  if (!inOrchestrator && c && !c.isOrchestrator) {
-    for (let p = c.parentId, n = 0; p && n < 16; p = app.get().chats[p]?.parentId, n++) setTreeCollapsed(p, false);
-    if (ui.get().maximized && ui.get().maximized !== `chat:${req.chatId}`) setMaximized(null);
-    setChatExpanded(req.chatId, true);
-  }
-  if (c?.isOrchestrator && !inOrchestrator) setFocusMode(c.id);
-  if (u.focusMode && u.focusMode !== req.chatId && !inOrchestrator) setLanePeek(true);
-  flashTile(inOrchestrator ? 'orchestrator' : `chat:${req.chatId}`);
-  let tries = 0;
-  const key = reqKey(req);
-  awaited = key;
-  const find = () => {
-    const el = document.querySelector<HTMLElement>(`${sel}[data-lane]`) ?? document.querySelector<HTMLElement>(sel);
-    if (el) { if (awaited === key) awaited = null; if (!el.contains(document.activeElement)) el.focus(); el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); return; }
-    if (++tries < 10) requestAnimationFrame(find);
-    else if (awaited === key) awaited = null;
-  };
-  find(); // at once when the card is already on screen (the next key must land on it), else after the next frames
+  callQuestions(reqKey(req));
 }
 
-/** Ctrl+J: the oldest request first; pressed again, the next one. `from`: the card the cycle goes on from (the layer
- *  passes the one it shows, since the app page's own focus is elsewhere then). */
-export function nextThing(from?: string): void {
+/** Ctrl+J: the oldest request first; pressed again, the next one. */
+export function nextThing(): void {
   const hidden = new Set(ui.get().hidden);
   const list = app.get().pending.filter(p => !hidden.has(p.chatId));
   if (!list.length) { void nextAfterPending(); return; }
   // Reopening a paused queue starts at its oldest request; stale card focus is only a cursor once it is open.
   if (ui.get().later) { openQueue(null); return; }
-  const active = from ?? (document.activeElement as HTMLElement | null)?.closest?.('[data-request-key]')?.getAttribute('data-request-key');
+  const active = (document.activeElement as HTMLElement | null)?.closest?.('[data-request-key]')?.getAttribute('data-request-key');
   const i = list.findIndex(p => reqKey(p) === active);
   focusRequest(list[(i + 1) % list.length]!);
 }
@@ -503,10 +471,10 @@ async function nextAfterPending(): Promise<void> {
     : next.kind === 'stalled' ? t('alive.next.stalled', { title: next.chat.title, min: next.chat.quietMin }) : t('alive.next.idea', { title: next.idea.title }), 'info');
 }
 
-/** Where a morning row leads: the Task page for a PR, Da approvare, the stalled chat, the ideas. */
+/** Where a morning row leads: the Task page for a PR, Memoria → Proposte, the stalled chat, the ideas. */
 export function openMorningNext(next: MorningNext): void {
   if (next.kind === 'pr') go({ page: 'task' });
-  else if (next.kind === 'approvals') go({ page: 'agenti', arg: 'studio' });
+  else if (next.kind === 'approvals') go({ page: 'memoria', arg: 'proposte' });
   else if (next.kind === 'stalled') focusChat(next.chat.chatId);
   else go({ page: 'idee', arg: 'mie' });
 }
@@ -594,6 +562,7 @@ export function escapeOne(): boolean {
   const u = ui.get();
   if (u.center) { setCenter(false); return true; }
   if (u.qwin.shown) { answerLater(); return true; }
+  if (u.viewer.open) { closeViewer(); return true; }
   if (u.map) { setMap(false); return true; }
   if (u.lanePeek) { setLanePeek(false); return true; }
   if (u.maximized) { const k = u.maximized; setMaximized(null); flashTile(k); return true; }

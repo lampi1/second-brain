@@ -6,9 +6,10 @@
 // Copia / Vai alla chat / "Rispondi dopo" / Non serve.
 // Esegui runs the block in the chat that proposed it (run:start with that chat and message: the run, its output and
 // "Manda l'esito alla chat" stay under the block in that chat); a block that looks like production asks a second click
-// that says why, like under the block. Keys on the focused card: Enter = Esegui, Esc = what the host says (the layer:
-// later). In the questions window (`window`, ADR 0049) the chat's explanation is the large title and the command a
-// readable block under it. Used by RequestPanel.tsx (it hands over every request of type 'command').
+// that says why, like under the block. Keys on the focused card: Enter = Esegui, Esc = what the host says (the window:
+// later). In the questions window (`window`, ADR 0049) two words say what the command does (Gist.tsx), the chat's
+// explanation is the large title, the whole command a readable block under it and the context open under that (never
+// folded, the owner 2026-10-22). Used by RequestPanel.tsx (it hands over every request of type 'command').
 import { t as auditText } from '../i18n';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Harness, PendingRequest } from '@shared/contract';
@@ -20,6 +21,7 @@ import { dismissCommand, runCommand } from '../store/store';
 import { AskContext } from './AskContext';
 import { HarnessMark, IconAlert, IconArrowRight, IconCheck, IconCopy, IconPlay, IconTerminal } from './Icons';
 import { Kbd } from './ui';
+import { Gist } from './Gist';
 import { t } from '../i18n';
 
 export type CommandVariant = 'lane' | 'tile' | 'orchestrator' | 'compact' | 'window';
@@ -96,17 +98,16 @@ export function CommandRequest({ req, variant, chatTitle, harness = 'claude', te
     return (
       <div ref={ref} tabIndex={0} onKeyDown={onKey} className={`wq cmd-ask ${busy ? 'sent' : ''}`} role="group" data-request-key={reqKey(req)} data-testid={testBase} data-kind="command"
         aria-busy={busy} aria-label={t('chat.command.windowAskLabel', { chatTitle: chatTitle ?? auditText('cmp.commandRequest.aChat'), command: lines[0] ?? '' })}>
-        <div className="wq-kicker"><IconTerminal size={13} /><span>{t('chat.command.title')}</span>{prod && prodBadge}</div>
-        <h2 className="wq-q" data-testid={`${testBase}-lead`}>{cmd?.lead || t('chat.command.defaultLead')}</h2>
-        <div className={`ask-raw wq-code ${open ? 'open' : ''}`}>
-          <pre className="ask-cmd cmd-code" data-testid={`${testBase}-code`}>{open ? code : lines.slice(0, 6).join('\n')}</pre>
-          {lines.length > 6 && (
-            <button type="button" className="ask-raw-toggle" onClick={() => setOpen(o => !o)} aria-expanded={open} data-testid={`${testBase}-code-toggle`}>
-              {open ? t('chat.command.showLess') : t('chat.command.showMore', { lines: lines.length })}
-            </button>
-          )}
+        <div className="wq-kicker">
+          <Gist tool="command" input={null} command={code} testid={`${testBase}-gist`} />
+          <span className="wq-kind"><IconTerminal size={12} /><span>{t('chat.command.title')}</span></span>{prod && prodBadge}
         </div>
-        {withContext && <AskContext req={req} defaultOpen={false} testBase={testBase} layout="window" onToggle={() => requestAnimationFrame(() => ref.current?.focus())} />}
+        <h2 className="wq-q" data-testid={`${testBase}-lead`}>{cmd?.lead || t('chat.command.defaultLead')}</h2>
+        {/* the whole command, never folded: it is what the user runs */}
+        <div className="ask-raw wq-code">
+          <pre className="ask-cmd cmd-code" data-testid={`${testBase}-code`}>{code}</pre>
+        </div>
+        {withContext && <AskContext req={req} defaultOpen testBase={testBase} layout="window" />}
         <div className="wq-perm">
           <button type="button" className={`btn btn-primary btn-l ${armed ? 'armed' : ''}`} onClick={() => { void run(); }} disabled={busy} data-testid={`${testBase}-run`}
             data-tip={armed ? undefined : t('chat.command.helpWindow')}>

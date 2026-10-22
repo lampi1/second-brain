@@ -30,7 +30,7 @@ import { CLOSE_GRACE_MS, commandFor, findCli, killTrees, resolveClaude } from '.
 import { closePipes, engineKills, jobGuard, killEngineTree } from './jobguard';
 import { reapEnabled, reapEngine, type Root } from './proctree';
 import { LiveCost, priceUsage } from './live-cost';
-import { describeSuggestions, diffFor, diffFromResult, flattenAnswers, permissionText, questionsFrom, resultText, resumedAgent, toolSummary } from './claude-map';
+import { describeSuggestions, diffFor, diffFromResult, flattenAnswers, permissionText, questionsFrom, resultText, resumedAgent, shellExit, toolSummary } from './claude-map';
 import { cut, lastLine, nextId, stripAnsi, tokenUsage, toCommands, trimInput, type AnswerPatch, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
 import { releaseId } from '../release';
 import { drift, record } from './drift';
@@ -947,7 +947,8 @@ export class ClaudeSession implements HarnessSession {
         if (!t) continue;
         this.tools.delete(tid);
         const diff = diffFromResult(t.item.name, t.input, m.tool_use_result, this.opts.cwd);
-        const item: ToolItem = { ...t.item, status: b.is_error === true ? 'error' : 'ok', output: resultText(b.content), ...(diff ? { diff } : {}) };
+        const exitCode = shellExit(t.item.name, t.input, b.is_error === true, b.content, m.tool_use_result);
+        const item: ToolItem = { ...t.item, status: b.is_error === true ? 'error' : 'ok', output: resultText(b.content), ...(diff ? { diff } : {}), ...(exitCode !== undefined ? { exitCode } : {}) };
         this.sink.item(item, true);
         // a finished background agent resumed by SendMessage works again: counted from its result too, so the chat is
         // never closed while it runs even if the CLI's task events say nothing (its task_notification ends it)

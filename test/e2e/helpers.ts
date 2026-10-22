@@ -2,7 +2,8 @@
 // too), optionally in the demo (SB_DEMO=1, frozen = SB_DEMO_FREEZE=1) at a fixed window size and color scheme, wait
 // until it is settled (data loaded, clock frozen, browser snapshots in), read what the UI reported to main for the
 // browser views (globalThis.__sbDemo, demo only) and save screenshots in test-results/shots/. A spec may seed the
-// fresh profile's settings (`config`, e.g. questionsModal). The Orchestrator column is always open (ADR 0068); `orchestrator: true` waits for its chat.
+// fresh profile's settings (`config`, e.g. theme). The Orchestrator column is always open (ADR 0068); `orchestrator: true` waits for its chat.
+// The demo's own open requests are set aside at start (the questions window would cover the page) unless `questions: true`.
 import { _electron as electron, expect, type ElectronApplication, type Locator, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -69,7 +70,7 @@ export async function setSize(app: ElectronApplication, width: number, height: n
 }
 
 /** The demo, settled: data loaded, (frozen) clock applied, browser snapshots shown. */
-export async function launchDemo(opts: { freeze?: boolean; width?: number; height?: number; scheme?: 'dark' | 'light'; userData?: string; config?: Record<string, unknown>; orchestrator?: boolean; env?: Record<string, string> } = {}): Promise<Launched> {
+export async function launchDemo(opts: { freeze?: boolean; width?: number; height?: number; scheme?: 'dark' | 'light'; userData?: string; config?: Record<string, unknown>; orchestrator?: boolean; env?: Record<string, string>; questions?: boolean } = {}): Promise<Launched> {
   const { freeze = true, width = 1600, height = 1000, scheme = 'dark' } = opts;
   const userData = opts.userData ?? fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-'));
   // a fresh profile gets the settings the spec seeds; a reused one keeps its own
@@ -81,8 +82,31 @@ export async function launchDemo(opts: { freeze?: boolean; width?: number; heigh
   await expect(l.page.locator('[data-orchestrator-overlay]')).toBeVisible(); // the persistent Orchestrator column
   if (opts.orchestrator) await openOrchestrator(l.page);
   if (freeze) await expect(l.page.locator('html[data-clock="frozen"]')).toHaveCount(1);
+  if (!opts.questions) await (freeze ? setQuestionsAside(l) : keepQuestionsAside(l.page));
   await l.page.mouse.move(2, 2);
   return l;
+}
+
+/** The questions window is always on (2026-10-22) and the demo starts with open requests: a test about something else
+ *  sets them aside first with «Rispondi dopo», as the user would (each one stays in «Da rispondere»; Ctrl+J or the top
+ *  bar's counter brings them back). `launchDemo({ questions: true })` keeps the window up. */
+export async function setQuestionsAside({ app, page }: Pick<Launched, 'app' | 'page'>): Promise<void> {
+  const open = await app.evaluate(() => (globalThis as unknown as { __sbDemo?: { pending(): number } }).__sbDemo?.pending() ?? 0);
+  if (!open) return;
+  const win = page.getByTestId('qwin');
+  await expect(win).toBeVisible({ timeout: 15_000 });
+  for (let i = 0; i < open && await win.count(); i++) await page.getByTestId('qwin-later').click();
+  await expect(win).toHaveCount(0);
+}
+
+/** The live demo (not frozen) keeps asking while a test about something else runs: every request the window shows is
+ *  set aside with «Rispondi dopo» as soon as it shows, as a user busy elsewhere would (until the page reloads). */
+export async function keepQuestionsAside(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const aside = () => document.querySelector<HTMLButtonElement>('[data-testid="qwin-later"]')?.click();
+    new MutationObserver(aside).observe(document.body, { childList: true, subtree: true });
+    aside();
+  });
 }
 
 /** The Orchestrator column is always open (ADR 0068): waits until it shows its chat. */
@@ -200,7 +224,7 @@ export async function shot(page: Page, name: string): Promise<string> {
   return file;
 }
 
-/** The global request layer's page (main/overlay.ts), once it exists. */
+/** The global layer's page (main/overlay.ts: toasts only), once it exists. */
 export async function layerPage(app: ElectronApplication): Promise<Page> {
   for (let i = 0; i < 100; i++) {
     const p = app.windows().find(w => w.url().includes('#overlay'));
@@ -210,7 +234,7 @@ export async function layerPage(app: ElectronApplication): Promise<Page> {
   throw new Error('layer page not found');
 }
 
-export type LayerState = { attached: boolean; bounds: { x: number; y: number; width: number; height: number } | null; cards: number; toasts: number };
+export type LayerState = { attached: boolean; bounds: { x: number; y: number; width: number; height: number } | null; toasts: number };
 export async function layerState(app: ElectronApplication): Promise<LayerState> {
   return app.evaluate(() => (globalThis as unknown as { __sbOverlay: { state(): LayerState } }).__sbOverlay.state());
 }

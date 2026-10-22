@@ -2,8 +2,6 @@
 import type { proposalsIt } from './proposals.it';
 type N = { n: number };
 export const proposalsEn: typeof proposalsIt = {
-  'proposals.title': 'Proposals',
-  'proposals.lead': 'One card at a time: drag right to approve, left to reject. Changes the app already applied by itself are kept or undone.',
   'proposals.deckLabel': 'Deck of proposals',
   'proposals.filters': 'Filter the proposals',
   'proposals.filter.all': 'All',
@@ -77,7 +75,6 @@ export const proposalsEn: typeof proposalsIt = {
   'proposals.readFirst': 'Open the draft and its evidence before approving.',
   'proposals.readFirstOpen': 'Read draft and evidence',
   'proposals.note': 'How you checked it (optional)',
-  'proposals.noteReject': 'Why you reject it (optional)',
   'proposals.done.title': 'All done!',
   'proposals.done.lead': 'Nothing else to decide for now.',
   'proposals.done.approved': () => 'approved or kept',
@@ -156,4 +153,15 @@ export const proposalsEn: typeof proposalsIt = {
   'proposals.yes.rememberNew': ({ who }: { who: string; n: number }) => `${who} remembers the new one instead of the old.`,
   'proposals.yes.rememberBoth': ({ who, n }: { who: string; n: number }) => `${who} remembers the new one along with the ${n === 1 ? 'old one' : 'old ones'}.`,
   'proposals.no.rememberOld': ({ who }: { who: string; n: number }) => `${who} forgets the new one and nothing changes.`,
+  'proposals.ask.rememberMany': ({ who, n }: { who: string; n: number }) => `Should ${who} remember these ${n} facts?`,
+  'proposals.yes.rememberMany': ({ who }: { who: string; n: number }) => `${who} remembers them all and uses them in the next jobs.`,
+  'proposals.no.rememberMany': ({ who }: { who: string; n: number }) => `${who} forgets them all.`,
+  'proposals.advice.specific': ({ what }: { what: string }) => `It looks tied to one case (${what}): worth remembering only if it is a rule that repeats.`,
+  'proposals.advice.same': (p: N) => `Proposed ${p.n} times: one card for all of them.`,
+  'proposals.sign.url': 'an address with a port or an id',
+  'proposals.sign.id': 'a ticket or PR number',
+  'proposals.sign.commit': 'a commit',
+  'proposals.sign.path': 'a user’s folder',
+  'proposals.sign.date': 'a date',
+  'proposals.sign.branch': 'a branch',
 };
