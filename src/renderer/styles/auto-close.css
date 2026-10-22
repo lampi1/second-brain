@@ -3,7 +3,9 @@
 .agent-autoclose { display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:11px; color:var(--muted,#aab); }
 .autoclose-warnings[hidden] { display:none; }
 /* What a held work chat waits for (#86): a quiet pill under the tile header, amber when it waits for the user. */
-.agent-waiting { display:inline-flex; align-self:flex-start; gap:6px; align-items:center; margin:2px 10px 4px; padding:2px 9px 2px 8px; border-radius:20px; border:1px solid var(--blue-line,var(--border-2)); background:var(--blue-bg,transparent); color:var(--text-2); font-size:var(--fs-xs,11px); font-weight:550; white-space:nowrap; }
+.agent-waiting { display:inline-flex; align-self:flex-start; gap:6px; align-items:center; margin:2px 10px 4px; padding:2px 9px 2px 8px; border-radius:20px; border:1px solid var(--blue-line,var(--border-2)); background:var(--blue-bg,transparent); color:var(--text-2); font-size:var(--fs-xs,11px); font-weight:550; white-space:nowrap; max-width:calc(100% - 20px); min-width:0; box-sizing:border-box; overflow:hidden; }
+/* never wider than the tile: a long label is cut, it never widens the column and shifts the chat (#157) */
+.agent-waiting-text { min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .agent-waiting-dot { width:6px; height:6px; border-radius:50%; background:var(--blue); flex:none; }
 .agent-waiting:is([data-waiting="answer"],[data-waiting="permission"],[data-waiting="command"],[data-waiting="user"],[data-waiting="browser"]) { border-color:var(--amber-line,var(--border-2)); background:var(--amber-bg,transparent); }
 .agent-waiting:is([data-waiting="answer"],[data-waiting="permission"],[data-waiting="command"],[data-waiting="user"],[data-waiting="browser"]) .agent-waiting-dot { background:var(--amber); }
