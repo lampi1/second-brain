@@ -401,7 +401,6 @@ function ItemListFor({ items, empty, footer, chatId = null }: ItemListProps) {
   // an Orchestrator's messages get "Apri" chips for the work chats they name (one key of the titles: rebuilt only when they change)
   const tkey = useApp(s => { const c = chatId ? s.chats[chatId] : undefined; return c?.isOrchestrator ? titlesKey(s.chats) : ''; });
   const orch = useApp(s => !!chatId && !!s.chats[chatId]?.isOrchestrator);
-  const deliveryPending = useApp(s => chatId ? s.chats[chatId]?.pendingResultIds?.length ?? 0 : 0);
   const view = useMemo(() => chatView(shown, { foldProcess: orch }), [shown, orch]);
   const refs = useMemo(() => chatRefsOf(items, tkey), [items, tkey]);
   const fixed = useMemo(() => correctedThoughts(items), [items]);
@@ -411,7 +410,6 @@ function ItemListFor({ items, empty, footer, chatId = null }: ItemListProps) {
   return (
     <ChatIdCtx.Provider value={chatId}>
     <div className="items-wrap">
-      {deliveryPending > 0 && <div role="status" className="result-delivery-pending" data-testid="result-delivery-pending">{t('chat.resultDeliveryPending')} · {deliveryPending}</div>}
       <div className="items" ref={ref} data-chat-log={chatId??undefined} tabIndex={0} aria-label={auditText('audit.ChatItems.messages')} onClick={peek.onClick} onWheel={peek.onWheel} role="log" aria-live="off">
         <div ref={content} className="items-content">
         {cut > 0 && !pastOpen && <FoldedPast count={cut} onOpen={() => setPastOpen(true)} />}
