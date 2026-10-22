@@ -16,11 +16,14 @@ const readHtml = (app: ElectronApplication) => app.evaluate(async ({ clipboard }
 const say = (app: ElectronApplication, chatId: string, text: string) =>
   app.evaluate((_e, [c, t]) => { (globalThis as unknown as { __sbDemo: Demo }).__sbDemo.say(c, t); }, [chatId, text] as const);
 
+/** Esegui runs a block in PowerShell 5.1 on Windows and in the user's login shell ($SHELL -lc) on macOS and Linux
+ *  (ADR 0054, main/platform.ts userShell): the blocks below are written for the shell that runs them on this machine. */
+const WIN = process.platform === 'win32';
 const MSG = [
   'Per verificare lancia questo:',
-  '```powershell',
-  "Write-Output 'controllo ok'",
-  'Get-Date -Format yyyy',
+  WIN ? '```powershell' : '```sh',
+  WIN ? "Write-Output 'controllo ok'" : "echo 'controllo ok'",
+  WIN ? 'Get-Date -Format yyyy' : 'date +%Y',
   '```',
   'Il file di configurazione è questo:',
   '```json',
@@ -71,7 +74,7 @@ for (const scheme of ['dark', 'light'] as const) {
     await page.getByTestId('chat-max-qa').click();
 
     // a Cursor chat: the same toolbar, and a failing command shows its exit code
-    await say(app, 'sms', 'Prova:\n```bash\ncmd /c exit 4\n```');
+    await say(app, 'sms', 'Prova:\n```bash\n' + (WIN ? 'cmd /c exit 4' : 'exit 4') + '\n```');
     await page.getByTestId('chat-max-sms').click();
     const cur = page.getByTestId('maximized').getByTestId('codeblock').last();
     await cur.getByTestId('cb-exec').click();

@@ -1,9 +1,9 @@
 // End-to-end: Settings no longer exposes the model/task routing matrix. Opening the page, searching and saving an
-// unrelated preference must preserve the legacy routing table, locks, exploration, cost weight and history. The
+// unrelated preference (the theme, the archive delay) must preserve the legacy routing table, locks, exploration, cost weight and history. The
 // retained backend's validation/versioning has unit coverage in brain/routing.test.ts; no replacement editor is assumed.
 // Screenshot: test-results/shots/settings-routing-retired.png.
 import { expect, test } from '@playwright/test';
-import { launchDemo, shot } from './helpers';
+import { choose, launchDemo, shot } from './helpers';
 
 test('Settings retires the routing matrix without resetting legacy routing choices or history', async () => {
   const { app, page } = await launchDemo({ freeze: true });
@@ -27,8 +27,10 @@ test('Settings retires the routing matrix without resetting legacy routing choic
     await expect(settings.getByTestId('st-search-empty')).toBeVisible();
     await shot(page, 'settings-routing-retired');
     await search.press('Escape');
-    await settings.getByTestId('st-theme-choice-light').click();
-    await expect.poll(() => page.evaluate(async () => (await window.sb.invoke('settings:get', undefined)).theme)).toBe('light');
+    await choose(settings.getByTestId('st-theme-select'), 'light');
+    await expect(page.locator('html[data-theme="light"]')).toHaveCount(1);
+    await choose(settings.getByTestId('st-archive-select'), '5');
+    await expect.poll(() => page.evaluate(async () => (await window.sb.invoke('settings:get', undefined)).autoCloseMin)).toBe(5);
 
     const after = await page.evaluate(() => window.sb.invoke('routing:get', undefined));
     expect(after.table).toEqual(before.table);

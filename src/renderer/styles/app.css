@@ -123,6 +123,9 @@ html[data-blink="1"] .pill-dot { opacity: 0.35; } /* lib/beat.ts */
 .lang-btn:hover .lang-code, .lang-btn[aria-expanded="true"] .lang-code { color: var(--text); }
 .topbar[data-fit~="6"] .lang-btn { padding: 0; }
 .topbar[data-fit~="6"] .lang-btn svg { display: none; }
+/* 6 the narrowest windows: the search is its icon (Ctrl+K still opens it) and the actions sit closer */
+.topbar[data-fit~="6"] .search .keys { display: none; }
+.topbar[data-fit~="6"], .topbar[data-fit~="6"] .topbar-main, .topbar[data-fit~="6"] .topbar-end { gap: 6px; }
 /* the full-screen popups switch and the connectors (SPEC 21) */
 .popups-switch, .connectors-btn { gap: 7px; }
 .popups-track { position: relative; width: 26px; height: 15px; border-radius: 8px; background: var(--border-3); flex: none; transition: background var(--dur-fast); }
@@ -373,6 +376,7 @@ button.lc-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .items.skeleton { justify-content: flex-start; }
 .skeleton i { display: block; height: 11px; border-radius: 6px; margin: 4px 0 8px; background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2)); background-size: 200% 100%; animation: shimmer 1.3s linear infinite; }
 .skeleton i.short { width: 55%; }
+.skeleton.still i { animation: none; } /* a transcript off screen or folded: no endless shimmer (ChatTranscript.tsx) */
 .compact-body { flex: 1; min-height: 0; padding: 8px var(--pad); color: var(--text-2); font-size: 12.5px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 .compact-typing { flex: 0 1 auto; min-height: 0; overflow: hidden; padding: 0 var(--pad) 6px; } /* gives way before the input */
 .unseen {

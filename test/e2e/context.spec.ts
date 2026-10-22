@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { ChatSummary } from '../../src/shared/contract';
-import { launch, launchDemo, setSize, shot } from './helpers';
+import { closeSetup, expandChats, launch, launchDemo, setSize, shot } from './helpers';
 
 const FIX = path.resolve(import.meta.dirname, '..', 'fixtures');
 const tmp = (p: string) => fs.mkdtempSync(path.join(os.tmpdir(), p));
@@ -20,6 +20,7 @@ for (const engine of ['claude', 'cursor'] as const) {
     const { app, page } = await launch(env);
     await setSize(app, 1400, 900);
     await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+    await closeSetup(page); // a fresh profile opens the first-run setup over the app
     const chat: ChatSummary = await page.evaluate(([h, dir]) => window.sb.invoke('chat:create', { harness: h as 'claude', cwd: dir!, prompt: 'leggi il log big', title: 'Ordini · Fix totale' }), [engine, cwd] as const);
     const tile = page.getByTestId(`tile-chat-${chat.id}`);
     await expect(tile).toBeVisible();
@@ -55,6 +56,7 @@ for (const engine of ['claude', 'cursor'] as const) {
     const next = (await list()).find(c => c.continuedFrom?.id === chat.id)!;
     expect(next).toMatchObject({ harness: engine, cwd, title: 'Ordini · Fix totale (2)' });
     const nextTile = page.getByTestId(`tile-chat-${next.id}`);
+    await expandChats(page, next.id, chat.id); // transcripts and links: the strips start folded
     await expect(nextTile).toContainText('Ripreso dal passaggio', { timeout: 15_000 });
     await expect(page.getByTestId(`chat-links-${next.id}`)).toContainText('Segue da «Ordini · Fix totale»');
     await expect(page.getByTestId(`chat-links-${chat.id}`)).toContainText('Il lavoro continua in «Ordini · Fix totale (2)»');
@@ -70,9 +72,11 @@ test('claude: explicit legacy opt-in preserves cold continuation behavior', asyn
   const { app, page } = await launch({ SB_CLAUDE_PATH: path.join(FIX, 'fake-claude.mjs'), CLAUDE_CONFIG_DIR: tmp('sb-e2e-claude-'), SB_COLD_MS: '0,3000,300' });
   await setSize(app, 1400, 900);
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  await closeSetup(page); // a fresh profile opens the first-run setup over the app
   await page.evaluate(()=>window.sb.invoke('settings:set',{contextHandoff:true}));
   const chat: ChatSummary = await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'claude', cwd: dir, prompt: 'analizza il log big', title: 'Ordini · Totale' }), cwd);
   const tile = page.getByTestId(`tile-chat-${chat.id}`);
+  await expandChats(page, chat.id); // its transcript: the strips start folded
   const list = () => page.evaluate(() => window.sb.invoke('chat:list', undefined));
   const get = async () => (await list()).find(c => c.id === chat.id)!;
   await expect.poll(async () => (await get()).handoffAt ?? 0, { timeout: 20_000 }).toBeGreaterThan(0);
@@ -141,6 +145,7 @@ test('demo: the meter near the compaction, a cold continuation, the hand-off dia
   // the demo's cold continuation: the old session folded above "Continua da qui"
   await page.evaluate(() => window.sb.invoke('chat:reopen', { chatId: 'review' })); // closed in the demo (auto-close)
   const review = page.getByTestId('tile-chat-review');
+  await expandChats(page, 'review'); // its transcript: the strips start folded
   await expect(review.getByTestId('cold-divider')).toBeVisible();
   await expect(review.getByTestId('cold-past')).toContainText('3 righe');
   await expect(review).not.toContainText('Confronta le due versioni');

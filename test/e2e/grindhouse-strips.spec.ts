@@ -102,7 +102,9 @@ test('a click expands a strip every time: repeated, on any part of it, with text
 });
 
 test('an expanded strip opens its own browser beside its chat from its globe, each with its own full-screen control', async () => {
-  const { app, page } = await launchDemo({ width: 1600, height: 900 });
+  // a wide window: under 640 px of strips column (AgentStrips.tsx NARROW_PX; at 1600 px beside the Orchestrator's
+  // column it is ~630) the browser stacks under its chat instead
+  const { app, page } = await launchDemo({ width: 1920, height: 900 });
   try {
     await page.getByTestId('tile-chat-sms').locator('.chat-strip-line').click();
     await page.getByTestId('chat-browser-sms').click();

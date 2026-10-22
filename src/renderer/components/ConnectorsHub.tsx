@@ -31,7 +31,7 @@ export function HubTotalsRow({ servers, connectors }: { servers: readonly McpSer
   return <dl className="hub-totals" data-testid="hub-totals">
     <div data-tone="green"><dt>{t('hub.total.working')}<HelpTip title={t('hub.total.working')} label={t('hub.total.working')}>{t('hub.total.workingTip')}</HelpTip></dt><dd><b>{n.working}</b><small>{t('hub.total.of', { n: n.total })}</small></dd></div>
     <div data-tone={n.toFix ? 'red' : 'muted'}><dt>{t('hub.total.toFix')}<HelpTip title={t('hub.total.toFix')} label={t('hub.total.toFix')}>{t('hub.total.toFixTip')}</HelpTip></dt><dd><b>{n.toFix}</b><small>{n.toFix ? t('hub.total.toFixHint') : t('hub.total.allGood')}</small></dd></div>
-    <div data-tone="blue"><dt>{t('hub.total.tools')}<HelpTip title={t('hub.total.tools')} label={t('hub.total.tools')} example={t('hub.total.toolsEx')}>{t('hub.total.toolsTip')}</HelpTip></dt><dd><b>{n.tools}</b><small>{t('hub.total.reading', { r: n.reading, w: n.tools - n.reading })}</small></dd></div>
+    <div data-tone="blue"><dt>{t('hub.total.tools')}<HelpTip title={t('hub.total.tools')} label={t('hub.total.tools')} example={t('hub.total.toolsEx')} testid="hub-total-tools-help">{t('hub.total.toolsTip')}</HelpTip></dt><dd><b>{n.tools}</b><small>{t('hub.total.reading', { r: n.reading, w: n.tools - n.reading })}</small></dd></div>
   </dl>;
 }
 

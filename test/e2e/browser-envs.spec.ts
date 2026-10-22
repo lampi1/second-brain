@@ -149,7 +149,7 @@ test.describe.serial('browser environments and the password guard', () => {
 
     // focus-moving keys inside one call: the check runs again before every segment
     await refused('type', { ref: user, text: 'mario\tSegreto1' }, 'password field');
-    form = await agent.ok('read_page', { filter: 'interactive' });
+    form = await agent.ok('read_page', { filter: 'interactive', full: true }); // the whole tree, not the changes since the last read
     expect(form).toMatch(/textbox "Utente" value="mario"/);
     expect(form).not.toMatch(/type=password value=/);           // the password field stayed empty
     await agent.ok('click', { ref: user });
@@ -171,18 +171,22 @@ test.describe.serial('browser environments and the password guard', () => {
 
   test('HARD LIMIT: javascript cannot read or change password fields on remote hosts', async () => {
     test.skip(!sites.remote, '127.0.0.2 cannot be bound on this machine');
+    // caller JavaScript runs only on local stacks (actions.ts evaluate; browser-local-javascript.spec.ts): on a remote
+    // host every script is refused, a password field's value, reading anything, or changing an input's type
+    const remoteOnly = 'only on local stacks';
     await agent.ok('navigate', { url: `${sites.remote}/login` });
-    await refused('javascript', { code: 'document.getElementById("pass").value' }, 'holds a password field');
-    await refused('javascript', { code: '[...document.querySelectorAll("input")].map(i => i.value)' });
-    await refused('javascript', { code: 'document.title' });                       // any script, reading included
+    await refused('javascript', { code: 'document.getElementById("pass").value' }, remoteOnly);
+    await refused('javascript', { code: '[...document.querySelectorAll("input")].map(i => i.value)' }, remoteOnly);
+    await refused('javascript', { code: 'document.title' }, remoteOnly);           // any script, reading included
     await agent.ok('navigate', { url: `${sites.remote}/shadow.html` });          // password inside an open shadow root
-    await refused('javascript', { code: '1 + 1' }, 'holds a password field');
-    await agent.ok('navigate', { url: `${sites.remote}/hidden.html` });          // a hidden password field counts too
-    await refused('javascript', { code: '1 + 1' }, 'holds a password field');
-    await agent.ok('navigate', { url: `${sites.remote}/index.html` });           // no password field here...
-    expect(await agent.ok('javascript', { code: 'document.title' })).toBe('Fixture QA');
-    await refused('javascript', { code: 'document.getElementById("nome").type = "text"' }, "change an input's type");   // ...but no type changes
-    await refused('javascript', { code: 'document.getElementById("nome").setAttribute("type", "text")' }, "change an input's type");
+    await refused('javascript', { code: '1 + 1' }, remoteOnly);
+    await agent.ok('navigate', { url: `${sites.remote}/hidden.html` });          // a hidden password field
+    await refused('javascript', { code: '1 + 1' }, remoteOnly);
+    await agent.ok('navigate', { url: `${sites.remote}/index.html` });           // no password field here either
+    await refused('javascript', { code: 'document.title' }, remoteOnly);
+    await refused('javascript', { code: 'document.getElementById("nome").type = "text"' }, remoteOnly);
+    await refused('javascript', { code: 'document.getElementById("nome").setAttribute("type", "text")' }, remoteOnly);
+    expect(await agent.ok('get_page_text')).toContain('Pagina di prova');      // the page is still read the standard way
   });
 
   test('HARD LIMIT: no credentials in remote URLs, and they never show in results', async () => {

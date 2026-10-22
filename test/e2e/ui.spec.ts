@@ -3,14 +3,14 @@
 // pages, the live (unfrozen) demo streaming. Visual baselines (toHaveScreenshot) for a maximized chat and the
 // palette; extra screenshots (1280x800, light theme) in test-results/shots/.
 import { expect, test } from '@playwright/test';
-import { demoLayout, expandChats, showBrowsers, launch, launchDemo, openOrchestrator, setSize, shot, VISUAL, waitThumbs } from './helpers';
+import { choose, demoLayout, expandChats, showBrowsers, launch, launchDemo, openOrchestrator, setSize, shot, VISUAL, waitThumbs } from './helpers';
 
 test('agents workspace: one column of chat strips, each browser right under its chat', async () => {
   const { app, page } = await launchDemo();
   await expandChats(page, 'feedback'); await showBrowsers(page, 'qa', 'sms'); // open strips: their requests and browsers in sight
   await expect(page.getByTestId('view-agents')).toBeVisible();
   await expect(page.getByTestId('needs-lane')).toHaveCount(0); // no "Ti aspettano" strip: each chat asks in its tile
-  await expect(page.locator('[data-request-key]')).toHaveCount(2); // QA and Feedback; the reduced Orchestrator's own floats in the layer
+  await expect(page.locator('[data-request-key]')).toHaveCount(3); // QA and Feedback on their strips; the Orchestrator's own in its column (always open, ADR 0068)
   for (const id of ['qa', 'fix', 'sms', 'feedback']) await expect(page.getByTestId(`tile-chat-${id}`)).toBeVisible();
   await expect(page.getByTestId('tile-browser-tab-qa')).toBeVisible();
   // no "Finite oggi" dock: a finished chat stays a tile until it closes by itself (autoclose.spec.ts)
@@ -22,7 +22,12 @@ test('agents workspace: one column of chat strips, each browser right under its 
   const panes = await page.locator('[data-workspace-pane]').evaluateAll(els => els.map(e => e.getAttribute('data-workspace-pane')));
   expect(panes.indexOf('browser:tab-qa')).toBe(panes.indexOf('chat:qa') + 1);
   expect(panes.indexOf('browser:tab-sms')).toBe(panes.indexOf('chat:sms') + 1);
-  await expect.poll(async () => (await demoLayout(app)).filter(l => l.rect).length).toBe(2);
+  // a native view is placed while its tile is in the window (the column scrolls): each one, brought into view
+  const rect = (tabId: string) => async () => (await demoLayout(app)).find(l => l.tabId === tabId)?.rect ?? null;
+  await page.getByTestId('tile-browser-tab-sms').scrollIntoViewIfNeeded();
+  await expect.poll(rect('tab-sms')).not.toBeNull();
+  await page.getByTestId('tile-browser-tab-qa').scrollIntoViewIfNeeded();
+  await expect.poll(rect('tab-qa')).not.toBeNull();
   await waitThumbs(page);
   await shot(page, 'agents');
   await app.close();
@@ -37,20 +42,20 @@ test('answering a tile panel with "1" resolves the request without opening the c
   await expect(page.getByTestId('request-orchestrator-orchestrator-q1')).toBeFocused();
   await page.keyboard.press('1');
   await expect(page.getByTestId('request-orchestrator-orchestrator-q1')).toHaveCount(0);
-  await expect(page.getByTestId('request-qa-qa-q1')).toBeFocused(); // focus moved to the next card
-  await page.keyboard.press('1');
-  await expect(page.getByTestId('request-qa-qa-q1')).toHaveCount(0);
-  await expect(page.locator('[data-request-key]')).toHaveCount(1);
-  await expect(page.getByTestId('tile-chat-qa')).toContainText('Apro il bug');
-  await expect(page.getByTestId('maximized')).toHaveCount(0); // the chat was not opened
   await openOrchestrator(page);
   await expect(page.getByTestId('tile-orchestrator')).toContainText('Segnato: riparto da QA rimborsi');
-  // a permission: Esc on the focused card rejects it
-  await page.keyboard.press('Control+J');
+  // focus moved to the next card in page order (RequestPanel.tsx): from the Orchestrator's column it wraps to the first
+  // strip's, Feedback's permission; Esc on the focused card rejects it
   await expect(page.getByTestId('request-feedback-feedback-p1')).toBeFocused();
   await page.keyboard.press('Escape');
-  await expect(page.locator('[data-request-key]')).toHaveCount(0);
+  await expect(page.getByTestId('request-feedback-feedback-p1')).toHaveCount(0);
   await expect(page.getByTestId('tile-chat-feedback')).toContainText('non lancio i test');
+  await expect(page.getByTestId('request-qa-qa-q1')).toBeFocused(); // and on to the next card
+  await page.keyboard.press('1');
+  await expect(page.getByTestId('request-qa-qa-q1')).toHaveCount(0);
+  await expect(page.locator('[data-request-key]')).toHaveCount(0);
+  await expect(page.getByTestId('tile-chat-qa')).toContainText('Apro il bug');
+  await expect(page.getByTestId('maximized')).toHaveCount(0); // the chat was not opened
   await app.close();
 });
 
@@ -102,10 +107,17 @@ test('⤢ maximizes a tile, Esc restores it; F11 maximizes the focused tile', as
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('maximized')).toHaveCount(0);
   await expect(page.getByTestId('tile-chat-qa')).toBeVisible();
+  await showBrowsers(page, 'sms'); // its browser unfolds under its strip (folded until its globe is pressed)
+  const sms = async () => (await demoLayout(app)).find(l => l.tabId === 'tab-sms')?.rect ?? null;
+  await page.getByTestId('tile-browser-tab-sms').scrollIntoViewIfNeeded();
+  await expect.poll(sms).not.toBeNull();
+  const before = (await sms())!;
   await page.getByTestId('browser-url-tab-sms').focus();
   await page.keyboard.press('F11');
   await expect(page.getByTestId('maximized')).toHaveAttribute('data-key', 'browser:tab-sms');
-  await expect.poll(async () => (await demoLayout(app)).find(l => l.tabId === 'tab-sms')?.rect?.width ?? 0).toBeGreaterThan(1000);
+  // maximized, the page takes the Grindhouse's whole height and width (the Orchestrator column keeps its side, ADR 0068)
+  await expect.poll(async () => (await sms())?.height ?? 0).toBeGreaterThan(before.height + 100);
+  expect((await sms())!.width).toBeGreaterThanOrEqual(before.width);
   expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some(w => w.isFullScreen()))).toBe(false);
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('maximized')).toHaveCount(0);
@@ -114,7 +126,8 @@ test('⤢ maximizes a tile, Esc restores it; F11 maximizes the focused tile', as
 
 test('Ctrl+K opens the palette, hides every browser view, and jumps to a chat', async () => {
   const { page, app } = await launchDemo();
-  await showBrowsers(page, 'qa'); // its browser is beside the open strip; SMS stays collapsed
+  await showBrowsers(page, 'qa'); // its browser is under the open strip; SMS stays collapsed
+  await page.getByTestId('tile-browser-tab-qa').scrollIntoViewIfNeeded(); // a view is placed while its tile is in the window
   await expect.poll(async () => (await demoLayout(app)).filter(l => l.rect).length).toBe(1);
   await page.keyboard.press('Control+K');
   await expect(page.getByTestId('palette')).toBeVisible();
@@ -127,7 +140,9 @@ test('Ctrl+K opens the palette, hides every browser view, and jumps to a chat', 
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('palette')).toHaveCount(0);
   await expect(page.getByTestId('chat-input-sms')).toBeFocused(); // the jump opened its collapsed strip
-  await expect.poll(async () => (await demoLayout(app)).find(l => l.tabId === 'tab-sms')?.rect ?? null).not.toBeNull();
+  // the palette closed: the views it hid come back (QA's, in the window again; SMS's stays folded under its globe)
+  await page.getByTestId('tile-browser-tab-qa').scrollIntoViewIfNeeded();
+  await expect.poll(async () => (await demoLayout(app)).find(l => l.tabId === 'tab-qa')?.rect ?? null).not.toBeNull();
   // a brain page from the palette; Esc goes back
   await page.keyboard.press('Control+K');
   await page.getByTestId('palette-input').fill('costi');
@@ -171,14 +186,19 @@ test('Ctrl+N is a new request to the Orchestrator: its input takes the keyboard,
 
 test('the live demo streams text and finishes running tools', async () => {
   const { page, app } = await launchDemo({ freeze: false });
-  await expandChats(page, 'fix', 'sms'); // transcripts and requests are on the open strips
-  // the fix's running test finishes, then its next message streams in
+  await expandChats(page, 'fix'); await showBrowsers(page, 'sms'); // transcripts, requests and SMS's tab on the open strips
+  // the fix's running test finishes, then its next message streams in (a transcript out of the window keeps its last
+  // snapshot, ChatTranscript.tsx: the fix's is brought into view)
+  await page.getByTestId('tile-chat-fix').scrollIntoViewIfNeeded();
   await expect(page.getByTestId('tool-fix-t4')).toHaveAttribute('data-status', 'ok', { timeout: 15_000 });
   await expect(page.getByTestId('tile-chat-fix')).toContainText('Tutti verdi', { timeout: 10_000 });
   // the Cursor chat keeps driving its browser: new tool rows and a new last action on the tab
+  await page.getByTestId('tile-chat-sms').scrollIntoViewIfNeeded();
   const rows = page.getByTestId('tile-chat-sms').locator('.tool');
   const n = await rows.count();
   await expect.poll(async () => rows.count(), { timeout: 10_000 }).toBeGreaterThan(n);
+  await page.getByTestId('tile-browser-tab-sms').scrollIntoViewIfNeeded();
+  await expect(page.getByTestId('browser-action-tab-sms')).toBeVisible();
   await expect(page.getByTestId('browser-action-tab-sms')).not.toHaveText('click ref_12 · «Attività»', { timeout: 10_000 });
   // and the permission it asks for shows up in its tile
   await expect(page.locator('[data-request-key]', { hasText: 'Esegue git commit' })).toBeVisible({ timeout: 15_000 });
@@ -195,8 +215,11 @@ test('screenshots at 1280x800, in light theme, and with no data (empty states)',
   }
   {
     const { page, app } = await launchDemo({ scheme: 'light' });
-    await page.getByTestId('settings').click(); // the app's theme setting (default dark): light
-    await page.getByTestId('theme-light').click();
+    // the app's theme setting (default dark), on the Settings page: light
+    await page.getByTestId('settings').click();
+    await page.getByTestId('settings-all').click();
+    await choose(page.getByTestId('st-theme-select'), 'light');
+    await page.getByTestId('nav-home').click();
     await expect(page.locator('html[data-theme="light"]')).toHaveCount(1);
     await waitThumbs(page);
     await page.mouse.move(2, 2);

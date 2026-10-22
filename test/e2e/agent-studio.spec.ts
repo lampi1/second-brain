@@ -2,7 +2,7 @@
 // opens the editor and a draft survives page navigation; an edit (a skill, the tier, a launch) is a new version that
 // survives a restart; "Ripristina predefinito" brings the shipped role back. Screenshots dark and light.
 import { expect, test } from '@playwright/test';
-import { launchDemo, openAgents, shot } from './helpers';
+import { choose, launchDemo, openAgents, shot } from './helpers';
 
 test('a role page opens its editor on Modifica and the draft survives page navigation', async () => {
   const { app, page } = await launchDemo();
@@ -30,7 +30,7 @@ test('a role edit is a version that survives a restart; Ripristina predefinito b
     await first.page.getByTestId('agent-edit').click();
     await first.page.getByTestId('agent-skill-input').fill('brain-edit');
     await first.page.getByTestId('agent-skill-add').click();
-    await first.page.getByTestId('agent-tier').selectOption('top');
+    await choose(first.page.getByTestId('agent-tier'), 'top');
     await first.page.getByTestId('agent-launches').getByRole('checkbox', { name: 'Herald' }).check();
     await shot(first.page, 'role-editor-light');
     await first.page.getByTestId('agent-save').click();

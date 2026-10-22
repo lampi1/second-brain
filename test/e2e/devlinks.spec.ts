@@ -3,7 +3,7 @@
 // the cached DevOps data), the fifth sits in the "+1" menu, and a click hands the link to the system browser (where the
 // user is signed in to DevOps; a hidden run only records it, __sbOpened), never an internal tab.
 import { test, expect, type ElectronApplication } from '@playwright/test';
-import { launchDemo, shot } from './helpers';
+import { expandChats, launchDemo, shot } from './helpers';
 // the demo DevOps data's pull request URL (src/main/tasks/demo.ts)
 const prUrl = (id: number) => `https://dev.azure.com/o/Shop/_git/shop-web/pullrequest/${id}`;
 // what the hidden run would have opened outside the app (main/window.ts hiddenOpened)
@@ -13,6 +13,7 @@ test('a chat tile shows its DevOps links as chips; a click opens them in the sys
   test.setTimeout(120_000); // a launch takes 40-50 s on a loaded machine
   const { app, page } = await launchDemo();
   try {
+    await expandChats(page, 'qa'); // a folded strip is compact: its chips show on the open strip (ChatTile.tsx)
     const chips = page.getByTestId('chat-devlinks-qa');
     await expect(chips).toBeVisible();
     // newest first: the build and the PR of the last message, then the PR and the bug read by the tools

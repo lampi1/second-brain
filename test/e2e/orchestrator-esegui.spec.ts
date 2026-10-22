@@ -7,13 +7,16 @@ import { expect, test, type ElectronApplication } from '@playwright/test';
 import { expandChats, launchDemo, shot } from './helpers';
 
 type Demo = { say(c: string, t: string): void };
+/** Esegui runs a block in PowerShell 5.1 on Windows and in the user's login shell ($SHELL -lc) on macOS and Linux
+ *  (ADR 0054, main/platform.ts userShell): a command is written for the shell that runs it on this machine. */
+const echo = (text: string) => (process.platform === 'win32' ? `Write-Output '${text}'` : `echo '${text}'`);
 const say = (app: ElectronApplication, chatId: string, text: string) =>
   app.evaluate((_e, [c, t]) => { (globalThis as unknown as { __sbDemo: Demo }).__sbDemo.say(c, t); }, [chatId, text] as const);
 
 test('Esegui in the Orchestrator: its own blocks run as hers', async () => {
   const { app, page } = await launchDemo({ orchestrator: true });
   const orchestrator = page.getByTestId('tile-orchestrator');
-  await say(app, 'orchestrator', "Lancia questo:\n```powershell\nWrite-Output 'orchestrator ok'\n```");
+  await say(app, 'orchestrator', `Lancia questo:\n\`\`\`powershell\n${echo('orchestrator ok')}\n\`\`\``);
   const own = orchestrator.locator('.msg-md').getByTestId('codeblock').last();
   await own.getByTestId('cb-exec').click();
   await expect(own.getByTestId('cb-run')).toHaveAttribute('data-state', 'ok', { timeout: 30_000 });
@@ -26,7 +29,7 @@ test('Esegui in the Orchestrator: its own blocks run as hers', async () => {
 
 test('the questions window: a work chat\'s question brings the commands of its turn, with Esegui', async () => {
   const { app, page } = await launchDemo({ config: { questionsModal: true } });
-  await say(app, 'qa', "Prima di rispondere lancia:\n```powershell\nWrite-Output 'qa ok'\n```\nE questo lo lanci tu:\n```bash\naz webapp restart -n app-prod -g rg-prod\n```");
+  await say(app, 'qa', `Prima di rispondere lancia:\n\`\`\`powershell\n${echo('qa ok')}\n\`\`\`\nE questo lo lanci tu:\n\`\`\`bash\naz webapp restart -n app-prod -g rg-prod\n\`\`\``);
   await expect(page.getByTestId('qwin')).toBeVisible(); // the demo's requests, the Orchestrator's first
   await page.keyboard.press('Escape'); // set aside, then QA's question called from its tile's line
   await expandChats(page, 'qa'); // the line is on the open strip

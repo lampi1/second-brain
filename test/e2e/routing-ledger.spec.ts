@@ -1,5 +1,6 @@
 // The routing ledger end to end (ADR 0032, 0083): a role chat an Orchestrator opens with app_create_chat runs on its
-// role's tier (the brain registry's small model for Herald) and, at its first turn end, writes its prediction and then
+// role's engine with the routing table's row there (a role without its own model takes it, ADR 0090: the fixture's
+// «Prova» row, Haiku at low effort) and, at its first turn end, writes its prediction and then
 // its measured actuals to the shared ledger
 // (<brain>/ops/state/improve/outcomes.jsonl) that the improvement loop learns from (the user, 2026-10-14: "inizi a
 // raccogliere dati dalle sue prime scelte"). The real app with the fake Claude CLI and a fixture brain (registry +
@@ -50,9 +51,10 @@ test('a chat opened without a model writes its routing prediction, then its meas
     await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'claude', cwd: dir, orchestrator: true }), brain);
     const agent = new McpClient(`http://127.0.0.1:${port}/mcp/app`);
     await agent.init();
-    // the role decides the model (its tier on the engine), never the table; its route still writes the ledger
+    // the role decides the engine; a role without its own model takes the table's row on it (ADR 0090); its route
+    // writes the ledger
     const made = JSON.parse(await agent.ok('app_create_chat', { title: 'Prova · Leggi i log', prompt: 'ciao', roleId: 'herald' })) as { chatId: string; model: string; effort: string; route: { source: string; tableVersion: number } };
-    expect(made).toMatchObject({ model: 'claude-haiku-5-5', route: { source: 'agent', agent: { id: 'herald', chosenBy: 'orchestrator', modelFrom: 'tier' } } });
+    expect(made).toMatchObject({ model: 'claude-haiku-5-5', route: { source: 'agent', agent: { id: 'herald', chosenBy: 'orchestrator', modelFrom: 'table' } } });
 
     const ledger = path.join(brain, 'ops', 'state', 'improve', 'outcomes.jsonl');
     const lines = async (): Promise<Record<string, unknown>[]> => {

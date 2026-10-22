@@ -15,12 +15,19 @@ const question = (q: string, opts: string[]) => ({
 });
 type Stats = { renders: number; cardRenders: number; openMs: number };
 const stats = (page: Page) => page.evaluate(() => ({ ...(globalThis as unknown as { __sbQwin: Stats }).__sbQwin }));
+/** The Orchestrator's input has the keyboard by default (OrchestratorTile.tsx) and the window takes the keyboard only when
+ *  no field has it (ADR 0019, 0044): the field is left first, as a user who is not writing anywhere. */
+async function leaveFields(page: Page): Promise<void> {
+  await expect(page.getByTestId('orchestrator-input')).toBeFocused();
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+}
 const resetOpen = (page: Page) => page.evaluate(() => { (globalThis as unknown as { __sbQwin: Stats }).__sbQwin.openMs = -1; });
 
 test('the questions window opens fast, stays still, and other chats never render it', async () => {
   const { app, page } = await launchDemo({ config: { questionsModal: true } });
   for (const id of ['orchestrator', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
   await expect(page.getByTestId('qwin')).toHaveCount(0);
+  await leaveFields(page);
 
   // opening: under 100 ms, the card takes the keyboard (nobody is typing)
   await resetOpen(page);
@@ -65,6 +72,7 @@ test('ten requests waiting: the rail lists them, the keyboard answers them one a
   test.setTimeout(90_000);
   const { app, page } = await launchDemo({ config: { questionsModal: true } });
   for (const id of ['orchestrator', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
+  await leaveFields(page);
   const chats = ['orchestrator', 'qa', 'feedback', 'fix', 'sms'];
   for (let i = 0; i < 10; i++) await demo(app, (d, id, q) => d.ask(id, q), chats[i % chats.length]!, question(`Passo ${i + 1}: procedo?`, ['Sì', 'No']));
   await expect(page.getByTestId('qwin-count')).toHaveText('10');

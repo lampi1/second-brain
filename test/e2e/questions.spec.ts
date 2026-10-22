@@ -64,7 +64,7 @@ test('a file link clicked in the questions window shows the viewer in front; the
   await page.getByTestId('qwin-pick').filter({ hasText: 'Pubblico il commento sul TC16?' }).click();
   const win = page.getByTestId('qwin');
   await expect(win).toContainText('Pubblico il commento sul TC16?');
-  await win.getByText('report TC16').click();
+  await win.getByText('report TC16', { exact: true }).click(); // the link, not the context's lead line that quotes it
   // the viewer is on screen, not under the backdrop; the question waits as the pill (nothing answered, no "Rispondi dopo")
   await expect(page.getByTestId('cited-file-viewer')).toBeVisible();
   await expect(page.getByTestId('qwin')).toHaveCount(0);

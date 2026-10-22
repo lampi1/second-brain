@@ -39,8 +39,10 @@ test('answers stream in place, tools flip live, the typing line follows the turn
   await app.close();
 });
 
+// a short window: the full-screen strip's list overflows after a few of the browser loop's rows (at 1000 px it needs
+// over 20 s of them)
 test('scrolled up to read, the list does not jump: a "nuove righe" pill appears', async () => {
-  const { app, page } = await launchDemo({ freeze: false });
+  const { app, page } = await launchDemo({ freeze: false, height: 720 });
   await expandChats(page, 'sms'); // as the user would: open the strip, then full screen
   await page.getByTestId('chat-max-sms').click();
   const list = page.getByTestId('tile-chat-sms').locator('.items');
@@ -59,7 +61,7 @@ test('scrolled up to read, the list does not jump: a "nuove righe" pill appears'
 });
 
 test('at the bottom, the list stays there while content grows frame after frame (its own scroll never detaches it)', async () => {
-  const { app, page } = await launchDemo({ freeze: false });
+  const { app, page } = await launchDemo({ freeze: false, height: 720 });
   await expandChats(page, 'sms');
   await page.getByTestId('chat-max-sms').click();
   const tile = page.getByTestId('tile-chat-sms');
@@ -83,14 +85,18 @@ test('at the bottom, the list stays there while content grows frame after frame 
 });
 
 test('a small (compact) tile shows the typing line while its chat works', async () => {
-  const { app, page } = await launchDemo({ width: 1000, height: 640 }); // two rows of chats
-  // without the needs lane the chat zone never gets that short at the window's minimum size: shrink it to test the tile
-  await page.addStyleTag({ content: '[data-testid="tile-chat-fix"] { height:220px !important; max-height:220px !important; }' });
+  const { app, page } = await launchDemo({ width: 1000, height: 640 });
   const tile = page.getByTestId('tile-chat-fix');
+  // folded (the Grindhouse's default) the strip is compact: its one line shows what the running chat does, in place
+  // of its last text (ChatTile.tsx, StripActivity.tsx)
   await expect(tile).toHaveClass(/\bcompact\b/);
-  await expect(tile.getByTestId('chat-last-fix')).toBeVisible();
-  await expect(tile.getByTestId('typing-fix')).toBeVisible(); // the demo's "fix" chat is running
+  await expect(tile.locator('.chat-strip-line').getByTestId('typing-fix')).toBeVisible(); // the demo's "fix" chat is running
   await shot(page, 'compact-typing');
+  // open but short, the tile is compact too and still shows the typing line: shrink it, as a crowded window would
+  await expandChats(page, 'fix');
+  await page.addStyleTag({ content: '[data-testid="tile-chat-fix"] { height:220px !important; max-height:220px !important; }' });
+  await expect(tile).toHaveClass(/\bcompact\b/);
+  await expect(tile.getByTestId('typing-fix')).toBeVisible();
   await app.close();
 });
 

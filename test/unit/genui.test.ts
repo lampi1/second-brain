@@ -48,6 +48,9 @@ describe('checkUi: the catalog schemas', () => {
     expect(safeHref('https://tracker.example.com/bug/1')).toBe('web');
     expect(safeHref('C:\\report\\qa.md')).toBe('file');
     expect(safeHref('file:///C:/report/qa.md')).toBe('file');
+    expect(safeHref('/home/user/report/qa.md')).toBe('file'); // macOS / Linux (ADR 0054)
+    expect(safeHref('file:///Users/me/report/qa.md')).toBe('file');
+    for (const bad of ['//host/share/x', '/\\host\\x', 'file:////host/x']) expect(safeHref(bad)).toBeNull();
     for (const bad of ['javascript:alert(1)', 'data:text/html,x', '\\\\host\\share\\x', 'relative/x.md', 'file://host/share/x']) expect(safeHref(bad)).toBeNull();
     expect(checkUi('table', { columns: ['a'], rows: [{ cells: ['x'], link: { label: 'l', href: 'javascript:alert(1)' } }] })).toMatchObject({ ok: false, error: expect.stringContaining('expected an http(s) URL or an absolute local path') });
   });

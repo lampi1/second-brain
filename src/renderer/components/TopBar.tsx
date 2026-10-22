@@ -159,7 +159,8 @@ function MoreButton() {
 
 /** Fit steps, applied in order while the bar's actions overflow (2026-10-13, settings pushed off at 1920 px): 1 icon-only
  *  buttons, 2 shorter usage strip, 3 icon-only search / next, 4 no Cursor in the strip, 5 icon-only popups switch and
- *  connectors, 6 the language switch as its code only (no globe). Read by app.css (data-fit). */
+ *  connectors, 6 (the narrowest windows: 1000 px at 110 % zoom) the language switch as its code only (no globe), the
+ *  search without its Ctrl+K hint and tighter gaps. Every action stays on the bar. Read by app.css (data-fit). */
 const FIT_STEPS = 6;
 function useFit(head: RefObject<HTMLElement | null>, main: RefObject<HTMLElement | null>) {
   useLayoutEffect(() => {

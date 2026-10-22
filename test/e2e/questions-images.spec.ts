@@ -7,12 +7,19 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
-import { expect, test, type ElectronApplication } from '@playwright/test';
+import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { launchDemo, shot } from './helpers';
 
 type D = { stop(id: string): Promise<void>; ask(id: string, r: object): void };
 const demo = <A extends unknown[]>(app: ElectronApplication, fn: (d: D, ...a: A) => void, ...a: A) =>
   app.evaluate((_e, [src, args]) => { const d = (globalThis as unknown as { __sbDemo: D }).__sbDemo; return new Function('d', 'a', `return (${src})(d, ...a)`)(d, args); }, [fn.toString(), a] as const);
+
+/** The Orchestrator's input has the keyboard by default (OrchestratorTile.tsx) and the window takes the keyboard only when
+ *  no field has it (ADR 0019, 0044): the field is left first, as a user who is not writing anywhere. */
+async function leaveFields(page: Page): Promise<void> {
+  await expect(page.getByTestId('orchestrator-input')).toBeFocused();
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+}
 
 /** A real PNG of one color with a lighter band (so the thumbnails differ), built without a dependency. */
 function png(w: number, h: number, rgb: [number, number, number]): Buffer {
@@ -40,6 +47,7 @@ for (const scheme of ['dark', 'light'] as const) {
 
     const { app, page } = await launchDemo({ scheme, userData, config: { questionsModal: true, theme: scheme } });
     for (const id of ['orchestrator', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
+    await leaveFields(page);
     const q = `Approvi il nuovo disegno? ![Prima (oggi)](${path.join(ev, '0-prima.png')}) ![Dopo](${path.join(ev, '1-proposta.png')})`;
     await demo(app, (d, id, req) => d.ask(id, req), 'qa', {
       type: 'question', tool: 'AskUserQuestion', title: q, detail: q, input: {},

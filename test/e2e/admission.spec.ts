@@ -1,8 +1,8 @@
 // E2E of the CPU-aware queue (main/chats/admission.ts, ADR 0036) with the fake Claude engine and a forced load
 // (SB_LOAD_FORCE="95,40": CPU 95%, RAM 40% free). A chat whose turn the last quit cut resumes by itself (the app's own
 // message, not the user's): with the machine busy that resume waits, its tile (ChatTile.tsx) shows "In coda · CPU 95%"
-// and "Avvia ora", the top bar (TopBar.tsx) counts it; "Avvia ora" starts it at once. The three settings show in
-// Impostazioni (SettingsPage.tsx). A work chat waits ahead of a chat on the app that was queued first (the user,
+// and "Avvia ora", the top bar (TopBar.tsx) counts it; "Avvia ora" starts it at once. Its three settings are technical
+// (docs/settings-surface.md): not on the Impostazioni page (SettingsPage.tsx), kept at their values. A work chat waits ahead of a chat on the app that was queued first (the user,
 // 2026-10-14). Screenshots: test-results/shots/admission-1-queued.png, -2-started.png, -3-settings.png, -4-work-first.png.
 import { test, expect } from '@playwright/test';
 import crypto from 'node:crypto';
@@ -47,10 +47,9 @@ test('a resume after a restart waits while the machine is busy; "Avvia ora" star
   await shot(page, 'admission-2-started');
 
   await page.keyboard.press('Control+,');
-  await expect(page.getByTestId('st-load-queue-switch')).toHaveAttribute('aria-checked', 'true');
-  await expect(page.getByTestId('st-load-queue-cpu')).toContainText('75%');
-  await expect(page.getByTestId('st-load-queue-ram')).toContainText('15%');
-  await page.getByTestId('st-load-queue').scrollIntoViewIfNeeded();
+  await expect(page.getByTestId('settings-page')).toBeVisible();
+  await expect(page.locator('[data-testid^="st-load-queue"]')).toHaveCount(0);
+  expect(await page.evaluate(async () => window.sb.invoke('settings:get', undefined))).toMatchObject({ loadQueue: true, loadQueueCpu: 75, loadQueueRam: 15 });
   await shot(page, 'admission-3-settings');
   await app.close();
 });

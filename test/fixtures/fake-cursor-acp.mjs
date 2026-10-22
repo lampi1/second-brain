@@ -93,8 +93,8 @@ const opt = (optionId, name, kind) => ({ optionId, name, kind });
 
 async function prompt(id, p) {
   const sid = p.sessionId;
-  // the app's Orchestrator role text is not the user's: its words trigger nothing
-  const text = (p.prompt ?? []).map(b => b.text ?? '').join('\n').replace(/\[Role supplied by the app: [^\]\n]*\][\s\S]*?End role\]\n*/, '');
+  // the app's Orchestrator role text and the "[app estimate · …]" line it ends a message with are not the user's: their words trigger nothing
+  const text = (p.prompt ?? []).map(b => b.text ?? '').join('\n').replace(/\[Role supplied by the app: [^\]\n]*\][\s\S]*?End role\]\n*/, '').replace(/\n*\[app estimate · [^\]\n]*\][^\n]*$/, '');
   turn = { cancelled: false };
   // the app's hand-off request and the first message of a chat that continues another: answered as such, whatever
   // words they contain (FAKE_CURSOR_HANDOFF=off: an answer without the markers, so the app falls back to its own note)
