@@ -111,7 +111,7 @@ export function readRun(v: unknown): AgentRun | null {
   if (r.source !== undefined && r.source !== 'chat' && r.source !== 'oneshot') return null;
   const oneshot = r.oneshot as AgentRun['oneshot'];
   if (oneshot !== undefined && (!oneshot || typeof oneshot !== 'object' || !str(oneshot.engine, 80)
-    || !['pulse', 'headline'].includes(oneshot.job) || typeof oneshot.fallback !== 'boolean'
+    || !['pulse', 'headline', 'upgrade'].includes(oneshot.job) || typeof oneshot.fallback !== 'boolean'
     || !['reported', 'estimated', 'unknown'].includes(oneshot.costBasis))) return null;
   if (outcome === null) return null;
   const c = r.counters as Record<string, unknown> | null;

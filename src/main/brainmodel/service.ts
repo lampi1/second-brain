@@ -5,7 +5,8 @@
 // and all of them on the maintenance button. No job asks for approval (owner, 2026-10-19); each change is logged with
 // an undo; a pass the app ran by itself that changed something is announced in the feed (`applied`: a quiet "Ruolo
 // aggiornato" with Annulla, ADR 0102). Off in the test suites unless SB_BRAIN_JOBS=1 (the buttons and the IPC still work). Wired by wiring.ts and
-// demo-wiring.ts; IPC 'brainmodel:*' and 'classifiers:state' (index.ts). Tests: test/unit/brainmodel/service.test.ts.
+// demo-wiring.ts; IPC 'brainmodel:*' and 'classifiers:state' (index.ts). The 'upgrade' job (upgrade.ts, ADR 0116) runs by
+// itself a minute after start when the brain is not in line with this version's layout. Tests: test/unit/brainmodel/service.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
@@ -23,6 +24,7 @@ import { classifiersState, readJobs } from './classifiers';
 import { claimOf, learningState, measurable, seal, type IntervalCache } from './evidence';
 import { corrections, mergeMemory, mergeSkills, migrate, repeatedTask, type AgentWriter, type JobContext, type JobResult } from './jobs';
 import { procedureSections } from './procedure-sources';
+import { pending as upgradePending, upgrade, type UpgradeAsk } from './upgrade';
 import { memoryStats } from './memory-stats';
 import { handoffText, readNoise, scanLogs, writeNoise } from './log-scan';
 import { readMemory, readRules, readSkills, type SkillDir } from './model';
@@ -47,6 +49,10 @@ export interface BrainModelDeps {
   logDir?: () => string | null;
   /** hands the pass's result to the open Orchestrator (#150): resolves true when delivered; absent = nobody to tell */
   handoff?: (text: string) => Promise<boolean>;
+  /** the running app's version (recorded in the brain by the upgrade job) */
+  appVersion?: () => string;
+  /** the upgrade job's one-shot question (agents/oneshot.ts, no tools); absent = candidates wait for a pass with an engine */
+  upgradeAsk?: UpgradeAsk;
   /** run the jobs by themselves (timers); false in the test suites */
   auto: boolean;
   now?: () => number;
@@ -169,7 +175,9 @@ export class BrainModelService {
       const before = new Set(this.log.all().map(c => c.id));
       for (const id of job ? [job] : MAINTENANCE_JOBS) {
         try {
-          const r = id === 'migration' ? await migrate(ctx) : id === 'corrections' ? corrections(ctx) : id === 'repeated-task' ? repeatedTask(ctx) : id === 'merge-skills' ? mergeSkills(ctx) : mergeMemory(ctx);
+          const r = id === 'migration' ? await migrate(ctx)
+            : id === 'upgrade' ? await upgrade({ root, userData: this.d.userData, log: this.log, app: this.d.appVersion?.() ?? '0.0.0', ask: this.d.upgradeAsk, now: () => this.now() })
+            : id === 'corrections' ? corrections(ctx) : id === 'repeated-task' ? repeatedTask(ctx) : id === 'merge-skills' ? mergeSkills(ctx) : mergeMemory(ctx);
           if (r.report) writeLocal(this.reportFile, mergeReport(this.report(), r.report));
           done.push(r);
         } catch (e) {
@@ -248,12 +256,14 @@ export class BrainModelService {
       suggest: goal => this.d.suggestSkills(goal), jobs: () => readJobs(path.join(this.d.userData, 'jobs.jsonl')) }, this.now());
   }
 
-  /** Timers: the one-time migration a minute after start (when there is something to move), then every job every 6 h. */
+  /** Timers: a minute after start the one-time migration (when there is something to move) and the brain upgrade (when
+   *  the brain is not in line with this version's layout), then every job every 6 h. */
   start(): void {
     if (!this.d.auto) return;
     const first = setTimeout(() => {
       const root = this.root();
       try { if (root && !this.report() && procedureSections(root).length) void this.maintain('migration', { auto: true }).catch(() => { /* logged */ }); } catch { /* unreadable brain */ }
+      try { if (root && upgradePending(root, this.d.userData).length) void this.maintain('upgrade', { auto: true }).catch(() => { /* logged */ }); } catch { /* unreadable brain */ }
     }, 60_000);
     const every = setInterval(() => { void this.maintain(undefined, { auto: true }).catch(() => { /* logged */ }); }, SIX_HOURS);
     first.unref?.(); every.unref?.();

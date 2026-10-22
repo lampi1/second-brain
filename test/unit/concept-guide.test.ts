@@ -1,9 +1,11 @@
 // The Guida's content (src/shared/concept-guide.ts): every card is complete in both languages, cites source files that
-// exist, keeps diagram labels short, and «Discuti» sends the card's content to the Orchestrator.
+// exist, keeps diagram labels short, has every text in German too (concept-guide.de.ts, no stale entry), and «Discuti»
+// sends the card's content to the Orchestrator.
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { CONCEPTS, cardText, discussText, orchestratorText, type Bi } from '@shared/concept-guide';
+import { CONCEPTS, cardText, discussText, orchestratorText, textOf, type Bi } from '@shared/concept-guide';
+import { GUIDE_DE } from '@shared/concept-guide.de';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const full = (b: Bi) => b.it.trim().length > 0 && b.en.trim().length > 0;
@@ -85,5 +87,19 @@ describe('«Discuti» text for the Orchestrator', () => {
     expect(en).toContain(card.points[0]!.en);
     expect(it).toContain(card.points[0]!.it);
     expect(en).toContain('Scout');
+  });
+  it('has every English text in German, and no German entry for a text that is gone', () => {
+    const texts = new Set<string>();
+    const walk = (v: unknown): void => {
+      if (!v || typeof v !== 'object') return;
+      const o = v as Record<string, unknown>;
+      if (typeof o.it === 'string' && typeof o.en === 'string') { texts.add(o.en); return; }
+      for (const x of Object.values(o)) walk(x);
+    };
+    walk(CONCEPTS);
+    expect([...texts].filter(t => !(t in GUIDE_DE))).toEqual([]);
+    expect(Object.keys(GUIDE_DE).filter(k => !texts.has(k))).toEqual([]);
+    expect(textOf(CONCEPTS[0]!.title, 'de')).toBe('Jede Aufgabe läuft über eine Rolle');
+    expect(cardText(CONCEPTS[0]!, 'de')).toContain('So funktioniert es:');
   });
 });

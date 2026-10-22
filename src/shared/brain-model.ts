@@ -59,8 +59,9 @@ export interface MemoryFile {
   changedAt: number | null;
 }
 
-export type MaintenanceJobId = 'repeated-task' | 'merge-skills' | 'corrections' | 'merge-memory' | 'migration';
-export const MAINTENANCE_JOBS: readonly MaintenanceJobId[] = ['migration', 'corrections', 'repeated-task', 'merge-skills', 'merge-memory'];
+export type MaintenanceJobId = 'repeated-task' | 'merge-skills' | 'corrections' | 'merge-memory' | 'migration' | 'upgrade';
+/** 'upgrade' (ADR 0116): the brain brought in line with this app version's layout (brainmodel/upgrade.ts) */
+export const MAINTENANCE_JOBS: readonly MaintenanceJobId[] = ['migration', 'upgrade', 'corrections', 'repeated-task', 'merge-skills', 'merge-memory'];
 
 /** One change a maintenance job or the user's link toggle made. target: a skill name, a role id, a rule or memory file.
  *  canRollback false = undone already, or what it changed moved on since (a newer change on the same target). */

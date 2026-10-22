@@ -26,6 +26,7 @@ export const memoryDe: typeof memoryIt = {
   'mm.maint.sent': 'Ergebnis an den Orchestrator gesendet: er legt die Issues für die neuen Bugs an.',
   'mm.maint.notSent': (p: { why: string }) => `Ergebnis nicht an den Orchestrator gesendet: ${p.why}.`,
   'mm.maint.help3': 'Sie liest auch die App-Logs und schickt alles an den Orchestrator, der für jeden neuen Bug ein Issue anlegt (mit deiner Erlaubnis, wie jedes Schreiben nach außen).',
+  'mm.job.upgrade': 'Mit einer neuen App-Version wandert Inhalt, der jetzt einen eigenen Platz hat (zum Beispiel Skripte), aus den Notizen dorthin, mit einem Verweis.',
   'mm.job.migration': 'Abschnitte der alten Runbooks und Routinen werden zu Skills (einmalig).',
   'mm.job.corrections': 'Deine Korrekturen werden zu Regeln oder Lektionen für den Agenten, der sich geirrt hat.',
   'mm.job.repeated-task': 'Eine Arbeit, die mindestens 3-mal in 60 Tagen verlangt wurde, wird zur Skill.',

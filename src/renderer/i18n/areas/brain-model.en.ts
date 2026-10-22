@@ -10,7 +10,7 @@ export const brainModelEn: typeof brainModelIt = {
   'bm.lines': (p: N) => (p.n === 1 ? '1 line' : `${p.n} lines`),
   'bm.changed': (p: { at: string }) => `changed ${p.at}`,
 
-  'bm.job.migration': 'Migration', 'bm.job.corrections': 'Corrections', 'bm.job.repeated-task': 'Repeated task',
+  'bm.job.upgrade': 'Brain upgrade', 'bm.job.migration': 'Migration', 'bm.job.corrections': 'Corrections', 'bm.job.repeated-task': 'Repeated task',
   'bm.job.merge-skills': 'Duplicate skills', 'bm.job.merge-memory': 'Duplicate memories', 'bm.job.user': 'You', 'bm.job.orchestrator': 'Orchestrator',
   'bm.madeBy': (p: { job: string }) => `By: ${p.job}`,
   'bm.kind.skill': 'Skill', 'bm.kind.agent': 'Agent', 'bm.kind.rule': 'Rule', 'bm.kind.memory': 'Memory',

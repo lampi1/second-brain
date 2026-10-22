@@ -27,6 +27,7 @@ export const memoryIt = {
   'mm.maint.sent': 'Risultato mandato all’Orchestrator: apre le issue per i bug nuovi.',
   'mm.maint.notSent': (p: { why: string }) => `Risultato non mandato all’Orchestrator: ${p.why}.`,
   'mm.maint.help3': 'Legge anche i log dell’app e manda tutto all’Orchestrator, che apre una issue per ogni bug nuovo (con il tuo permesso, come ogni scrittura esterna).',
+  'mm.job.upgrade': 'Con una nuova versione dell’app, il contenuto che ora ha un suo posto (per esempio gli script) passa dalle note a lì, con un rimando.',
   'mm.job.migration': 'Le sezioni dei vecchi runbook e delle routine diventano skill (una volta sola).',
   'mm.job.corrections': 'Le tue correzioni diventano regole o lezioni per l’agente che ha sbagliato.',
   'mm.job.repeated-task': 'Un lavoro chiesto almeno 3 volte in 60 giorni diventa una skill.',
