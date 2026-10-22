@@ -1,11 +1,12 @@
-// The global request layer (product requirement: questions must reach the user wherever they are in the app, and be
-// answerable there). Browser tabs are native views drawn ABOVE the app page, so a DOM
-// overlay would hide under a browser tile: the layer is its own small, transparent, top-most WebContentsView that loads
-// the same renderer bundle (index.html#overlay) with the same preload. Main owns it: it is attached only while it has
-// cards or toasts (so it never intercepts clicks or shows up as a view otherwise), placed bottom-right (beside the Orchestrator widget: the model's `avoid`), sized to what its page
-// reports (overlay:size), kept on top whenever other views are added, and focused only on demand (overlay:focus from
-// Ctrl+J or a click: it never steals the keyboard while the user types). The app page decides the cards (overlay:model);
-// what the user does in the layer goes back to the app page (overlay:action). Used by index.ts.
+// The global layer: important events as short toasts wherever the user is in the app. Requests are not shown here any
+// more: every question, permission and command is answered in the questions window (always on since 2026-10-22).
+// Browser tabs are native views drawn ABOVE the app page, so a DOM overlay would hide under a browser tile: the layer is
+// its own small, transparent, top-most WebContentsView that loads the same renderer bundle (index.html#overlay) with the
+// same preload. Main owns it: it is attached only while it has toasts (so it never intercepts clicks or shows up as a
+// view otherwise), placed bottom-right (beside the Orchestrator widget: the model's `avoid`), sized to what its page
+// reports (overlay:size), kept on top whenever other views are added, and focused only on demand (overlay:focus: it
+// never steals the keyboard while the user types). The app page decides the toasts (overlay:model); what the user does
+// in the layer goes back to the app page (overlay:action). Used by index.ts.
 import { timersFor } from './timers';
 const { setInterval, clearInterval } = timersFor('overlay');
 import { WebContentsView, type BrowserWindow, type WebContents } from 'electron';
@@ -18,7 +19,7 @@ import { log } from './log';
 
 const MARGIN = 16;      // from the window's right and bottom edges
 const MIN_TOP = 56;     // never over the top bar
-const WIDTH = 420;      // the page lays its cards out in this width (shadows included)
+const WIDTH = 420;      // the page lays its toasts out in this width (shadows included)
 
 /** A room the page asks the layer to keep free, kept sane: a number, leaving the layer at least `keep` px. */
 const clampAvoid = (v: unknown, size: number, keep: number): number => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(Math.round(v), size - keep)) : 0);
@@ -41,7 +42,7 @@ export class OverlayLayer {
   /** The layer page's webContents (index.ts allows it as an IPC sender for the overlay:* channels only). */
   get contents(): WebContents | null { return this.view?.webContents ?? null; }
 
-  /** Create the view and load its page once the window exists (it stays detached until there are cards). */
+  /** Create the view and load its page once the window exists (it stays detached until there are toasts). */
   start(): void {
     const win = this.win();
     if (!win || this.view) return;
@@ -80,10 +81,7 @@ export class OverlayLayer {
 
   /** overlay:model from the app page. */
   setModel(model: OverlayModel): void {
-    const hadCards = (this.model?.cards.length ?? 0) > 0;
     this.model = model;
-    // the last card answered while the layer had the keyboard (toasts may keep it on screen): back to the app
-    if (hadCards && model.cards.length === 0 && this.view?.webContents.isFocused()) this.win()?.webContents.focus();
     if (this.ready) this.toOverlay.emit('overlay:model', model);
     this.sync();
   }
@@ -96,14 +94,11 @@ export class OverlayLayer {
     this.sync();
   }
 
-  /** overlay:action from the layer page → the app page (its store answers, postpones, opens). */
+  /** overlay:action from the layer page → the app page (it opens what a toast points to, or the questions window). */
   relay(action: OverlayAction): void {
-    // Ctrl+J with no card here: the keyboard goes back to the app first; if the request floats here after all,
-    // focusLayer's overlay:focus brings it back
-    if (action.kind === 'next' && !this.model?.cards.length) this.focus('app');
+    // Ctrl+J, leaving or using a toast (Apri / ✕): the keyboard goes back to the app first
+    this.focus('app');
     this.toApp.emit('overlay:action', action);
-    // leaving, opening a chat or using a toast (Apri / ✕): the keyboard goes back to the app
-    if (action.kind === 'leave' || action.kind === 'open' || action.kind === 'toast') this.focus('app');
   }
 
   /** overlay:focus: keyboard to the layer (Ctrl+J, click) or back to the app. */
@@ -114,8 +109,8 @@ export class OverlayLayer {
     else win.webContents.focus();
   }
 
-  // attached as soon as there are cards (the page must be on screen to lay out and report its real size)
-  private wanted(): boolean { return !!this.model && (this.model.cards.length > 0 || (this.model.toasts?.length ?? 0) > 0); }
+  // attached as soon as there are toasts (the page must be on screen to lay out and report its real size)
+  private wanted(): boolean { return (this.model?.toasts?.length ?? 0) > 0; }
 
   private sync(): void {
     const win = this.win();
@@ -156,7 +151,7 @@ export class OverlayLayer {
   }
 
   /** For e2e tests and the app-control screenshot: where the layer is, if shown. */
-  state(): { attached: boolean; bounds: { x: number; y: number; width: number; height: number } | null; cards: number; toasts: number } {
-    return { attached: this.attached, bounds: this.attached && this.view ? this.view.getBounds() : null, cards: this.model?.cards.length ?? 0, toasts: this.model?.toasts?.length ?? 0 };
+  state(): { attached: boolean; bounds: { x: number; y: number; width: number; height: number } | null; toasts: number } {
+    return { attached: this.attached, bounds: this.attached && this.view ? this.view.getBounds() : null, toasts: this.model?.toasts?.length ?? 0 };
   }
 }

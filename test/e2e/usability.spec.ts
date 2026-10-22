@@ -38,14 +38,14 @@ test.afterAll(() => {
   fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify({ at: new Date().toISOString(), results }, null, 2));
 });
 
-test('Rispondo a una domanda dalla sua tessera senza aprire la chat', async () => {
-  const { app, page } = await launchDemo();
-  await expandChats(page, 'qa', 'feedback'); // their questions sit on the open strips
-  const s = new Scenario('Rispondo a una domanda dalla sua tessera', page);
+test('Rispondo a una domanda dalla finestra delle domande senza aprire la chat', async () => {
+  const { app, page } = await launchDemo(); // the demo's three requests set aside: «Da rispondere»
+  const s = new Scenario('Rispondo a una domanda dalla finestra delle domande', page);
   await s.press('Control+J', 'Ctrl+J: la cosa più vecchia che mi aspetta');
+  await expect(page.getByTestId('qwin-card')).toBeFocused(); // the window, with the keyboard
   await s.press('1', '1: scelgo la prima opzione');
   await s.check('restano 2 domande, nessuna chat aperta', async () => {
-    await expect(page.locator('[data-request-key]')).toHaveCount(2);
+    await expect.poll(async () => (await page.evaluate(() => window.sb.invoke('chat:pending', undefined))).length).toBe(2);
     await expect(page.getByTestId('maximized')).toHaveCount(0);
   });
   await s.done(2);

@@ -5,7 +5,7 @@
 import { sb } from '../sb';
 import { app } from '../store/store';
 import { planAskKeys } from './plan-ask';
-import { callQuestions, closeModal, parkQuestions, setLater, setLayerHeld, ui } from '../store/ui';
+import { callQuestions, closeModal, parkQuestions, setLater, ui } from '../store/ui';
 
 const postponed = new Set<string>();
 const keyOf = (r: {chatId:string;id:string}) => `${r.chatId}/${r.id}`;
@@ -42,7 +42,6 @@ export function answerLater(key?:string):void {
   const targetKey=typeof target==='string'?target:target?keyOf(target):null;
   if(targetKey&&(pending.some(r=>keyOf(r)===targetKey)||planAskKeys(app.get()).includes(targetKey)))postponed.add(targetKey);
   parkQuestions();
-  setLayerHeld(null);
   notify();
 }
 

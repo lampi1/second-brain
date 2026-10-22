@@ -197,6 +197,8 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     /** a tool row as a live chat shows it (e2e: the report a turn wrote, offered in the question's context) */
     toolDone: (chatId: string, name: string, input: unknown, output?: string) => chats.push(chatId, { kind: 'tool', id: chats.nextId(), at: now(), name, summary: name, input, status: 'ok', ...(output !== undefined ? { output } : {}) }),
     failNextAnswer: () => { chats.failNextAnswer = true; },
+    /** the open requests (e2e: the helper sets the demo's own aside, so the questions window does not cover a test) */
+    pending: () => chats.pending().length,
     /** the answers the UI sent so far (e2e: what reached the chat) */
     answers: () => chats.answered,
     /** the chat stops by itself: its open requests leave without an answer (e2e: a popup must go at once) */

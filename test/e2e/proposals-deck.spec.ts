@@ -7,7 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { launchDemo, shot } from './helpers';
+import { launchDemo, setQuestionsAside, shot } from './helpers';
 
 const SHOTS = process.env.SB_SHOTS_COPY;
 async function snap(page: Page, name: string): Promise<void> {
@@ -162,6 +162,7 @@ test('the deck: every source in one stack, swipe / buttons / keys, undo, the end
 
     // the end state stays until the page is left; after a reload the deck is empty
     await page.reload();
+    await setQuestionsAside({ app, page }); // a reload forgets «Rispondi dopo»
     await openDeck(page);
     await expect(page.getByTestId('pd-empty')).toBeVisible();
     await snap(page, 'proposals-deck-empty-dark');

@@ -23,7 +23,6 @@ export const guideIt = {
   'guide.discussTip': 'Scrive la scheda nell’input dell’Orchestrator, pronta da mandare: nessuna nuova chat.',
   'guide.toOrchestrator': 'Scheda nell’input dell’Orchestrator: premi Invio per mandarla.',
   'guide.noOrchestrator': 'Nessun Orchestrator aperto: avvialo (Ctrl+R) e riprova.',
-  'guide.close': 'Chiudi',
   'guide.startHere': 'Parti da qui',
   'guide.pointsCount': (p: { count: number }) => `${p.count} punti`,
   'guide.withDiagram': 'con schema',

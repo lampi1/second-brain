@@ -37,6 +37,7 @@ import { withoutImages } from '../lib/askImages';
 import { splitAsk } from '../lib/askSplit';
 import { HarnessMark, IconQuestion, IconShield } from './Icons';
 import { Kbd } from './ui';
+import { Gist } from './Gist';
 import { ChoiceCard } from './genui/ChoiceCard';
 
 /** plain = a question alone, inside a host card that already says who asks (a Strategist's plan card, StrategyPanel.tsx) */
@@ -214,7 +215,7 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
 
   // One renderer for every host; disclosure actions are separate from answering.
   const choiceCards = () => q?.options.map((option, i) => (
-    <ChoiceCard key={draft.step + ':' + i} option={option} number={i + 1} recommended={i === recIdx}
+    <ChoiceCard key={draft.step + ':' + i} option={option} number={i + 1} recommended={i === recIdx} previewOpen={variant === 'window'}
       picked={draft.picks.includes(i)} multi={q.multiSelect} current={i === draft.cursor} disabled={sent}
       onChoose={() => apply(pickOption(req, draft, i))} testid={testBase + '-opt-' + (i + 1)} />
   ));
@@ -259,12 +260,13 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
       <div {...common} className={`wq ${isPerm ? 'perm' : 'question'} ${sent ? 'sent' : ''}`}>
         {keysTo && q && createPortal(<><Kbd>1</Kbd>–<Kbd>{otherKey ?? q.options.length}</Kbd>{' '}{t('genui.request.choose')} <Kbd>↑</Kbd><Kbd>↓</Kbd>{' '}{t('genui.request.move')} <Kbd>{t('genui.request.enter')}</Kbd>{' '}{t('genui.request.confirmHint')}</>, keysTo)}
         <div className="wq-kicker">
-          {isPerm ? <IconShield size={13} /> : <IconQuestion size={13} />}
-          <span data-testid={isPerm ? undefined : `${testBase}-header`}>{kicker}</span>
-          {total > 1 && <span className="wq-step" data-testid={`${testBase}-step`}>{t('genui.request.question').toLowerCase()} {draft.step + 1} {t('genui.request.of')} {total}</span>}
+          {/* a permission says in two words what it does (shared/gist.ts) */}
+          {isPerm && <Gist tool={req.tool} input={req.input} testid={`${testBase}-gist`} />}
+          <span className="wq-kind">{isPerm ? <IconShield size={12} /> : <IconQuestion size={12} />}<span data-testid={isPerm ? undefined : `${testBase}-header`}>{kicker}</span></span>
+          {total > 1 && <span className="wq-step" data-testid={`${testBase}-step`}>{draft.step + 1} {t('genui.request.of')} {total}</span>}
           {q?.multiSelect && <span className="wq-step">{t('genui.request.multiple')}</span>}
         </div>
-        <AskContext req={req} defaultOpen={false} testBase={testBase} onToggle={refocus} layout="window" lead={split?.lead}
+        <AskContext req={req} defaultOpen testBase={testBase} layout="window" lead={split?.lead}
           question={<h2 className="wq-q" data-testid={isPerm ? `${testBase}-explain` : `${testBase}-q`}>{split?.ask ?? title}</h2>} />
         {isPerm ? (
           <>

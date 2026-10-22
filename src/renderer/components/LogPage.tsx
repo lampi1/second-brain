@@ -6,8 +6,7 @@
 // on a step or a line opens its details: input, result, errors, tools. Reading it spends no AI tokens (the app's own
 // events, main/activity/journal.ts); only «Fai analizzare all'AI» prepares a message for the Orchestrator, sent by
 // the user. Mounted by App.tsx's PageFrame; pure helpers in lib/log-view.ts; styles in styles/log.css.
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { LOG_KINDS, LOG_RECENT, type LogEvent, type LogKind, type LogList } from '@shared/activity-log';
 import type { ChatSummary } from '@shared/contract';
 import { sb } from '../sb';
@@ -20,7 +19,8 @@ import { normChangelog } from '../brain/types';
 import { dayLabel } from '../brain/lib/brain-sections';
 import { buildTasks, byDay, clockOf, filterEvents, money, size, span, type ChainStep, type KindFilter, type LogFlag, type TaskChain } from '../lib/log-view';
 import { AgentAvatar } from './AgentAvatar';
-import { IconAlert, IconArrowRight, IconSparkle, IconX } from './Icons';
+import { Modal } from './ui';
+import { IconAlert, IconArrowRight, IconSparkle } from './Icons';
 import { now } from '../lib/clock';
 import { locale, t } from '../i18n';
 import '../dashboard/dashboard.css';
@@ -139,7 +139,7 @@ export function LogPage() {
         </section>
       </div>
       {/* on the body: the page is a size container, which would hold a fixed panel inside it */}
-      {detail && createPortal(<DetailPanel detail={detail} chats={chats} onClose={() => setDetail(null)} />, document.body)}
+      {detail && <DetailPanel detail={detail} chats={chats} onClose={() => setDetail(null)} />}
     </div>
   );
 }
@@ -224,51 +224,34 @@ function DetailPanel({ detail, chats, onClose }: { detail: Detail; chats: Readon
   const cost = evs.reduce((n, e) => n + (e.costUsd ?? 0), 0), ms = evs.reduce((n, e) => n + (e.ms ?? 0), 0);
   const tools = [...new Set(evs.flatMap(e => e.tools ?? []))];
   const flags = detail.kind === 'step' ? detail.task.flags.filter(f => f.stepKey === detail.step.key) : [];
-  // focus moves into the panel and goes back to the step or line that opened it
-  const closeRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    const back = document.activeElement as HTMLElement | null;
-    closeRef.current?.focus();
-    return () => { if (back?.isConnected) back.focus(); };
-  }, []);
-  return <div className="lg-scrim" onClick={onClose}>
-    <aside className="lg-detail" role="dialog" aria-modal="true" aria-label={head.title} onClick={e => e.stopPropagation()} onKeyDown={trapTab} data-testid="lg-detail">
-      <header><div><span className="dash-eyebrow">{detail.kind === 'step' ? detail.task.title : kindOne(detail.event.kind).toUpperCase()}</span><h3>{head.title}</h3>
-        <small>{new Date(head.at).toLocaleString(locale(), { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', second: '2-digit' })}{first?.who ? ` · ${first.who}` : ''}</small></div>
-        <button ref={closeRef} type="button" className="lg-close" onClick={onClose} aria-label={t('log.close')}><IconX size={14} /></button></header>
-      {flags.map((f, i) => <p key={i} className="lg-detail-flag"><IconAlert size={12} /><b>{f.title}.</b> {f.detail}</p>)}
-      {(cost > 0 || ms > 0 || tools.length > 0) && <div className="lg-detail-facts">
-        {cost > 0 && <div><span>{t('log.cost')}</span><b>{money(cost)}</b></div>}
-        {ms > 0 && <div><span>{t('log.time')}</span><b>{span(ms)}</b></div>}
-        {tools.length > 0 && <div><span>{t('log.toolsLabel')}</span><b>{tools.length}</b></div>}
-      </div>}
-      {tools.length > 0 && <div className="lg-tools">{tools.map(tool => <code key={tool}>{tool}</code>)}</div>}
-      <div className="lg-detail-body">
-        {evs.length > 1 ? evs.map((e, i) => <details key={e.id} className="lg-turn" open={i === evs.length - 1}>
-          <summary><b>{e.title}</b><span>{clockOf(e.at)}{typeof e.costUsd === 'number' ? ` · ${money(e.costUsd)}` : ''}{e.ms ? ` · ${span(e.ms)}` : ''}</span></summary>
-          <Block title={t('log.detail')} text={e.text} /><Block title={t('log.input')} text={e.input} /><Block title={t('log.result')} text={e.output} /><Block title={t('log.errorsLabel')} text={e.error} tone="err" />
-        </details>)
-          : <><Block title={t('log.detail')} text={first?.text} /><Block title={t('log.input')} text={first?.input} /><Block title={t('log.result')} text={first?.output} /><Block title={t('log.errorsLabel')} text={first?.error} tone="err" /></>}
-        {!evs.some(e => e.text || e.input || e.output || e.error) && <p className="bs-muted">{t('log.noDetail')}</p>}
-      </div>
-      <footer>
-        {chat && <button type="button" className="btn btn-subtle btn-s" onClick={() => { onClose(); openChatRef(chat.id); }}>{t('log.openChat')} <IconArrowRight size={11} /></button>}
-        {detail.kind === 'event' && detail.event.kind === 'brain' && <button type="button" className="btn btn-subtle btn-s" onClick={() => { onClose(); go({ page: (detail.event as HistoryEvent).page ?? 'memoria' }); }}>{t('log.history')} <IconArrowRight size={11} /></button>}
-        <span className="sp" />
-        <AiButton text={detail.kind === 'step' ? `${taskBrief(detail.task)}\n\n${t('log.aiStep')}: ${head.title}\n${evs.map(e => [e.input && `${t('log.input')}: ${e.input.slice(0, 600)}`, e.output && `${t('log.result')}: ${e.output.slice(0, 600)}`, e.error && `${t('log.errorsLabel')}: ${e.error}`].filter(Boolean).join('\n')).join('\n')}` : `${t('log.aiEvent')} (${kindOne(detail.event.kind)}, ${new Date(detail.event.at).toLocaleString(locale())}): ${detail.event.title}\n${[detail.event.text, detail.event.error].filter(Boolean).join('\n')}`} />
-      </footer>
-    </aside>
-  </div>;
-}
-
-/** Tab stays inside the detail panel (a modal dialog). */
-function trapTab(e: React.KeyboardEvent<HTMLElement>): void {
-  if (e.key !== 'Tab') return;
-  const all = [...e.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]), summary, [href], [tabindex]:not([tabindex="-1"])')];
-  const first = all[0], last = all.at(-1);
-  if (!first || !last) return;
-  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  // a side panel on the shared dialog (ui.tsx Modal): Esc, a click outside or ✕ close it, Tab stays inside, the focus
+  // goes back to the step or line that opened it
+  const eyebrow = detail.kind === 'step' ? detail.task.title : kindOne(detail.event.kind);
+  const when = new Date(head.at).toLocaleString(locale(), { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return <Modal onClose={onClose} label={head.title} testid="lg-detail" className="lg-detail" size="side" bodyClassName="lg-detail-main"
+    title={head.title} subtitle={`${eyebrow} · ${when}${first?.who ? ` · ${first.who}` : ''}`}
+    footer={<>
+      {chat && <button type="button" className="btn btn-ghost btn-m" onClick={() => { onClose(); openChatRef(chat.id); }}>{t('log.openChat')} <IconArrowRight size={11} /></button>}
+      {detail.kind === 'event' && detail.event.kind === 'brain' && <button type="button" className="btn btn-ghost btn-m" onClick={() => { onClose(); go({ page: (detail.event as HistoryEvent).page ?? 'memoria' }); }}>{t('log.history')} <IconArrowRight size={11} /></button>}
+      <span className="sp" />
+      <AiButton text={detail.kind === 'step' ? `${taskBrief(detail.task)}\n\n${t('log.aiStep')}: ${head.title}\n${evs.map(e => [e.input && `${t('log.input')}: ${e.input.slice(0, 600)}`, e.output && `${t('log.result')}: ${e.output.slice(0, 600)}`, e.error && `${t('log.errorsLabel')}: ${e.error}`].filter(Boolean).join('\n')).join('\n')}` : `${t('log.aiEvent')} (${kindOne(detail.event.kind)}, ${new Date(detail.event.at).toLocaleString(locale())}): ${detail.event.title}\n${[detail.event.text, detail.event.error].filter(Boolean).join('\n')}`} />
+    </>}>
+    {flags.map((f, i) => <p key={i} className="lg-detail-flag"><IconAlert size={12} /><b>{f.title}.</b> {f.detail}</p>)}
+    {(cost > 0 || ms > 0 || tools.length > 0) && <div className="lg-detail-facts">
+      {cost > 0 && <div><span>{t('log.cost')}</span><b>{money(cost)}</b></div>}
+      {ms > 0 && <div><span>{t('log.time')}</span><b>{span(ms)}</b></div>}
+      {tools.length > 0 && <div><span>{t('log.toolsLabel')}</span><b>{tools.length}</b></div>}
+    </div>}
+    {tools.length > 0 && <div className="lg-tools">{tools.map(tool => <code key={tool}>{tool}</code>)}</div>}
+    <div className="lg-detail-body">
+      {evs.length > 1 ? evs.map((e, i) => <details key={e.id} className="lg-turn" open={i === evs.length - 1}>
+        <summary><b>{e.title}</b><span>{clockOf(e.at)}{typeof e.costUsd === 'number' ? ` · ${money(e.costUsd)}` : ''}{e.ms ? ` · ${span(e.ms)}` : ''}</span></summary>
+        <Block title={t('log.detail')} text={e.text} /><Block title={t('log.input')} text={e.input} /><Block title={t('log.result')} text={e.output} /><Block title={t('log.errorsLabel')} text={e.error} tone="err" />
+      </details>)
+        : <><Block title={t('log.detail')} text={first?.text} /><Block title={t('log.input')} text={first?.input} /><Block title={t('log.result')} text={first?.output} /><Block title={t('log.errorsLabel')} text={first?.error} tone="err" /></>}
+      {!evs.some(e => e.text || e.input || e.output || e.error) && <p className="bs-muted">{t('log.noDetail')}</p>}
+    </div>
+  </Modal>;
 }
 
 /** «Fai analizzare all'AI»: a draft in the Orchestrator's input, never sent by the app (it spends tokens only if the user sends it). */

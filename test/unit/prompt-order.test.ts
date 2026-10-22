@@ -10,13 +10,15 @@ const { nextThing } = await import('../../src/renderer/actions');
 const { openQueue } = await import('../../src/renderer/lib/later');
 const requests: PendingRequest[] = ['A', 'B', 'C'].map((id, i) => ({ id, chatId: 'chat', type: 'permission', tool: 'Bash', title: id, detail: '', input: {}, at: i + 1 }));
 const key = (id: string) => `chat/${id}`;
+/** the request card that has the keyboard (Ctrl+J goes on from it) */
+const focusOn = (id: string) => vi.stubGlobal('document', { activeElement: { closest: () => ({ getAttribute: () => key(id) }) } });
 beforeEach(() => {
   invoke.mockReset().mockImplementation((channel: string, value?: { on: boolean }) => Promise.resolve(channel === 'later:set' ? value : undefined));
   let state = initialState;
   for (const req of requests) state = reduce(state, { type: 'pending:added', req });
   app.set(state);
   ui.set(s => ({ ...s, later: true, hidden: [], qwin: { open: false, first: null, call: 0, shown: false } }));
-  vi.stubGlobal('document', { activeElement: { closest: () => ({ getAttribute: () => key('A') }) } });
+  focusOn('A');
 });
 afterEach(() => { vi.unstubAllGlobals(); });
 const displayed = () => ui.get().qwin.first ?? `${app.get().pending[0]?.chatId}/${app.get().pending[0]?.id}`;
@@ -27,8 +29,8 @@ describe('request queue FIFO', () => {
     expect(displayed()).toBe(key('A'));
     expect(app.get().pending.map(p => p.id)).toEqual(['A', 'B', 'C']);
   });
-  it('opens a paused queue at A despite an old layer navigation origin B', () => {
-    nextThing(key('B'));
+  it('opens a paused queue at A despite an old focus on B', () => {
+    focusOn('B'); nextThing();
     expect(displayed()).toBe(key('A'));
   });
   it('topbar queue open and park clear a prior targeted selection', () => {
@@ -38,11 +40,11 @@ describe('request queue FIFO', () => {
     expect(displayed()).toBe(key('A'));
   });
   it('still cycles A to B to C once the queue is open and preserves targeted opening', () => {
-    openQueue(null); nextThing(key('A'));
+    openQueue(null); focusOn('A'); nextThing();
     expect(displayed()).toBe(key('B'));
-    nextThing(key('B'));
+    focusOn('B'); nextThing();
     expect(displayed()).toBe(key('C'));
-    nextThing(key('C'));
+    focusOn('C'); nextThing();
     expect(displayed()).toBe(key('A'));
     openQueue(key('C'));
     expect(displayed()).toBe(key('C'));

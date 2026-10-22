@@ -1,8 +1,8 @@
-// A Strategist's plan to approve in the questions window (ADR 0121), in the demo with "Popup" on: the proposed plan
+// A Strategist's plan to approve in the questions window (ADR 0121; always on since 2026-10-22): the proposed plan
 // opens there like the other questions, its steps numbered with their role and short detail, what is already clear and
 // when it is finished; the strip keeps the steps and only points to the window (no second pair of buttons); «Cambia
 // qualcosa» opens a box whose text reaches the Strategist; «Approva e parti» starts the plan, the card leaves and the
-// strip shows it under way. With "Popup" off the strip asks, as before. Hidden window (SB_HIDDEN), zero network.
+// strip shows it under way. There is no "Popup" switch any more: the strip never asks by itself. Hidden window (SB_HIDDEN), zero network.
 // Screenshots: test-results/shots/strategist-plan-popup-*.png.
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import type { StrategyPlan } from '../../src/shared/strategy';
@@ -24,8 +24,8 @@ const items = (page: Page): Promise<ChatItem[]> => page.evaluate(id => window.sb
 const userTexts = async (page: Page) => (await items(page)).flatMap(i => (i.kind === 'user' && 'text' in i ? [i.text as string] : []));
 const phase = (page: Page) => page.evaluate(id => window.sb.invoke('chat:list', undefined).then(l => l.find(c => c.id === id)?.plan?.phase), LEAD);
 
-test('with "Popup" on, the plan to approve opens in the questions window with its steps; approving it starts the plan', async () => {
-  const { app, page } = await launchDemo();
+test('the plan to approve opens in the questions window with its steps; approving it starts the plan', async () => {
+  const { app, page } = await launchDemo({ questions: true });
   try {
     await demo(app, 'tree');
     await expect(page.getByTestId(`tile-chat-${LEAD}`)).toBeVisible({ timeout: 15_000 });
@@ -89,17 +89,5 @@ test('with "Popup" on, the plan to approve opens in the questions window with it
     await expect.poll(() => userTexts(page).then(t => t.at(-1))).toBe('Piano approvato: parti.');
     await expect(page.getByTestId('qwin-plan')).toHaveCount(0);
     await expect(page.getByTestId(`plan-${LEAD}`)).toHaveAttribute('data-phase', 'running');
-  } finally { await app.close(); }
-});
-
-test('with "Popup" off, the plan to approve stays on the strip and never opens the window', async () => {
-  const { app, page } = await launchDemo();
-  try {
-    await demo(app, 'tree');
-    await expect(page.getByTestId(`tile-chat-${LEAD}`)).toBeVisible({ timeout: 15_000 });
-    await demo(app, 'plan', LEAD, proposed(Date.now()));
-    await expect(page.getByTestId(`plan-approve-${LEAD}`)).toBeVisible();
-    await expect(page.getByTestId('qwin-plan')).toHaveCount(0);
-    await expect(page.getByTestId(`plan-in-window-${LEAD}`)).toHaveCount(0);
   } finally { await app.close(); }
 });

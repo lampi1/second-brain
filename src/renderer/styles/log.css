@@ -104,28 +104,17 @@
 .lg-row.lv-error .lg-row-title { color: var(--red); }
 .lg-row.lv-warn .lg-row-title { color: var(--amber); }
 
-/* the details */
-.lg-scrim { position: fixed; inset: 0; z-index: 60; background: rgba(5, 6, 10, .42); backdrop-filter: blur(2px); animation: lg-fade 160ms ease both; }
-@keyframes lg-fade { from { opacity: 0; } }
-.lg-detail { position: absolute; top: 12px; right: 12px; bottom: 12px; width: min(560px, calc(100vw - 24px)); display: flex; flex-direction: column; background: var(--bg-2); border: 1px solid var(--border-2);
-  border-radius: 16px; box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .6); overflow: hidden; animation: lg-slide 240ms cubic-bezier(.2, .8, .2, 1) both; }
-@keyframes lg-slide { from { transform: translateX(24px); opacity: 0; } }
-.lg-detail > header { display: flex; gap: 12px; align-items: flex-start; padding: 18px 18px 12px; border-bottom: 1px solid var(--border); }
-.lg-detail > header > div { flex: 1; min-width: 0; }
-.lg-detail > header .dash-eyebrow { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lg-detail h3 { margin: 6px 0 4px; font-size: 17px; font-weight: 600; letter-spacing: -.3px; line-height: 1.35; overflow-wrap: anywhere; }
-.lg-detail > header small { color: var(--text-3); font-size: 12px; }
-.lg-close { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 8px; background: var(--surface-2); color: var(--text-2); cursor: pointer; }
-.lg-close:hover { background: var(--surface-3); color: var(--text); }
-.lg-detail-flag { margin: 12px 18px 0; padding: 9px 12px; border-radius: 9px; background: var(--amber-bg); color: var(--amber); font-size: 12.5px; line-height: 1.5; }
+/* the details: a side panel on the shared dialog (ui.tsx Modal size side; head, body and footer from app.css «Dialogs») */
+.modal-std .modal-body.lg-detail-main { padding: 0 0 4px; gap: 0; }
+.lg-detail-flag { margin: 12px 20px 0; padding: 9px 12px; border-radius: 9px; background: var(--amber-bg); color: var(--amber); font-size: 12.5px; line-height: 1.5; }
 .lg-detail-flag svg { vertical-align: -1px; margin-right: 4px; }
-.lg-detail-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 14px 18px 0; }
-.lg-detail-facts > div { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); }
-.lg-detail-facts span { font-size: 11px; color: var(--text-3); }
+.lg-detail-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 14px 20px 0; }
+.lg-detail-facts > div { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); }
+.lg-detail-facts span { font-size: 12px; color: var(--text-2); }
 .lg-detail-facts b { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.lg-tools { display: flex; flex-wrap: wrap; gap: 5px; padding: 10px 18px 0; }
+.lg-tools { display: flex; flex-wrap: wrap; gap: 5px; padding: 10px 20px 0; }
 .lg-tools code { font-family: var(--mono); font-size: 11px; padding: 2px 7px; border-radius: 6px; background: var(--surface-3); color: var(--text-2); }
-.lg-detail-body { flex: 1; overflow: auto; padding: 14px 18px; display: flex; flex-direction: column; gap: 12px; }
+.lg-detail-body { padding: 14px 20px; display: flex; flex-direction: column; gap: 12px; }
 .lg-block h4 { margin: 0 0 6px; font-size: 11px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); }
 .lg-block pre { margin: 0; padding: 10px 12px; max-height: 280px; overflow: auto; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); color: var(--text);
   font-family: var(--font); font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -137,9 +126,7 @@
 .lg-turn[open] > summary { border-bottom: 1px solid var(--border); }
 .lg-turn > .lg-block { padding: 10px 12px 0; }
 .lg-turn > .lg-block:last-child { padding-bottom: 12px; }
-.lg-detail > footer { display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border); }
-.lg-detail > footer .sp { flex: 1; }
 
 @media (prefers-reduced-motion: reduce) {
-  .lg-task, .lg-row, .lg-scrim, .lg-detail, .lg-state-run > i { animation: none; }
+  .lg-task, .lg-row, .lg-state-run > i { animation: none; }
 }

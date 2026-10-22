@@ -14,7 +14,7 @@ vi.mock('../../src/main/ipc',()=>({Emitter:class{emit(){}}}));
 vi.mock('../../src/main/keyguard',()=>({swallowCloseKey:()=>{}}));
 import{OverlayLayer}from'../../src/main/overlay';
 afterEach(()=>{vi.useRealTimers();mock.bounds=null;mock.loadURL.mockClear();});
-it('keeps a tall request below the top coordinator even with setup banners',()=>{
+it('keeps a tall layer below the top coordinator even with setup banners',()=>{
  vi.useFakeTimers();const children:unknown[]=[];
  const win=Object.assign(new EventEmitter(),{isDestroyed:()=>false,getContentSize:()=>[1280,800],contentView:{children,addChildView:(view:unknown)=>children.push(view),removeChildView:()=>{}},webContents:{focus:()=>{}}})as unknown as BrowserWindow;
  const outDir=path.resolve('/synthetic space & percent%23');
@@ -23,7 +23,7 @@ it('keeps a tall request below the top coordinator even with setup banners',()=>
  expect(mock.loadURL).toHaveBeenCalledExactlyOnceWith(expected.href);
  expect(expected.href).toContain('percent%2523');
  const shellTop=120,coordinatorHeight=300,occupiedBottom=shellTop+coordinatorHeight+16;
- layer.setModel({cards:[{}],waiting:1,avoid:{right:0,bottom:0,top:occupiedBottom}}as OverlayModel);
+ layer.setModel({theme:'system',density:'comfortable',toasts:[{id:'t',kind:'error',label:'',title:'',detail:'',count:1,action:'',tone:'err'}],avoid:{right:0,bottom:0,top:occupiedBottom}}satisfies OverlayModel);
  expect(mock.bounds?.y).toBeGreaterThanOrEqual(occupiedBottom);expect(mock.bounds!.y+mock.bounds!.height).toBeLessThanOrEqual(800);
  layer.stop();
 });

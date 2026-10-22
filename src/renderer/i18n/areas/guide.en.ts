@@ -23,7 +23,6 @@ export const guideEn: typeof guideIt = {
   'guide.discussTip': 'Writes the card into the Orchestrator\'s input, ready to send: no new chat.',
   'guide.toOrchestrator': 'Card in the Orchestrator\'s input: press Enter to send it.',
   'guide.noOrchestrator': 'No Orchestrator open: start it (Ctrl+R) and try again.',
-  'guide.close': 'Close',
   'guide.startHere': 'Start here',
   'guide.pointsCount': (p: { count: number }) => `${p.count} points`,
   'guide.withDiagram': 'with diagram',

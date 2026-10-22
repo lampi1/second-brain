@@ -96,8 +96,9 @@ test('question context and a full Orchestrator visual open files without answeri
   },{id:chat.id,report});
   const requests=()=>page.evaluate(()=>window.sb.invoke('chat:pending',undefined));
   const pending=(await requests()).find(req=>req.chatId===chat.id)!;expect(pending).toBeTruthy();
-  await page.getByTestId('nav-home').click();await page.getByTestId('chat-max-'+chat.id).click();
-  await page.locator(`[data-testid^="request-${chat.id}-"] .ctx-link.file`).first().click();
+  // the question is in the questions window (always on since 2026-10-22): its context's file link opens the viewer
+  await expect(page.getByTestId('qwin-card')).toHaveAttribute('data-request-key',`${chat.id}/${pending.id}`);
+  await page.locator('.qwin .ctx-link.file').first().click();
   await expect(page.getByTestId('cited-file-viewer').locator('[data-l="2"]')).toContainText('cited');
   expect((await requests()).some(req=>req.id===pending.id)).toBe(true);
   await app.evaluate((_electron,orchestratorFile)=>(globalThis as unknown as {__sbDemo:{show(id:string,args:object):string}}).__sbDemo.show('orchestrator',{id:'file-modal',component:'diffList',title:'Source',summary:'Synthetic source',props:{groups:[{area:'Source',files:[{path:orchestratorFile}]}]}}),orchestratorFile);

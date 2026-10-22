@@ -5,11 +5,11 @@
 // leave after 8 s, off the Orchestrator widget's corner (`avoid`, ADR 0028). A DevOps alert plays a short chime as it
 // arrives (feed:events, lib/chime.ts, setting tasks.sound), and so does every new request (ADR 0035). The model is pushed
 // to main only when it changes; what the user does in the layer comes back as overlay:action. Started by main.tsx.
-import type { OverlayAction, OverlayCard, OverlayModel, OverlayToast } from '@shared/contract';
+import type { OverlayAction, OverlayModel, OverlayToast } from '@shared/contract';
 import { sb } from '../sb';
-import { app, answer, dismissCommand, dndActive, runCommand } from '../store/store';
-import { dismissEventToasts, setLayerHeld, setRead, ui } from '../store/ui';
-import { answerLater, openQueue } from './later';
+import { app, dndActive } from '../store/store';
+import { dismissEventToasts, setRead, ui } from '../store/ui';
+import { openQueue } from './later';
 import { now } from './clock';
 import { columnSize, viewport } from './orchestrator-dock';
 import { linkOfEvent, markRead, toastGroups, type ToastGroup } from './notify';
@@ -28,14 +28,12 @@ const toneOf = (kind: string): OverlayToast['tone'] => (kind === 'error' || kind
 
 const keyOf = (r: { chatId: string; id: string }) => `${r.chatId}/${r.id}`;
 let last = '';
-let current: OverlayModel = { cards: [], waiting: 0, theme: 'system', density: 'comfortable' };
+let current: OverlayModel = { theme: 'system', density: 'comfortable' };
 let timer: ReturnType<typeof setTimeout> | null = null;
 
 export function computeModel(): OverlayModel {
   const s = app.get();
   const u = ui.get();
-  // every request is answered in the questions window (always on since 2026-10-22): the layer keeps only the toasts
-  const cards: OverlayCard[] = [];
   const at = now();
   if (!atStart && s.ready) atStart = new Set(s.feed.map(e => e.id));
   groups = toastGroups(atStart ? s.feed.filter(e => !atStart!.has(e.id)) : [], {
@@ -51,7 +49,7 @@ export function computeModel(): OverlayModel {
   const reserve = { right: size.w, bottom: 0, top: 0 };
   // Workspace padding is relative to the shell. Native bounds need the absolute occupied bottom, including banners.
   const avoid = {...reserve,...(reserve.top?{top:v.top+reserve.top}:{})};
-  return { cards, waiting: s.pending.length, avoid, theme: u.prefs.theme, lang: lang(), density: u.prefs.density, now: Math.floor(at / 15_000) * 15_000, toasts };
+  return { avoid, theme: u.prefs.theme, lang: lang(), density: u.prefs.density, now: Math.floor(at / 15_000) * 15_000, toasts };
 }
 
 function push(): void {
@@ -69,14 +67,8 @@ export function scheduleLayer(): void {
   timer = setTimeout(() => requestAnimationFrame(push), 30);
 }
 
-function onAction(a: OverlayAction, open: (chatId: string) => void, next: (from?: string) => void, openLink: (link: string) => void): void {
-  const find = (key: string) => app.get().pending.find(p => keyOf(p) === key);
-  if (a.kind === 'answer') { const req = find(a.key); if (req) void answer(req, a.answer); }
-  else if (a.kind === 'postpone') { answerLater(a.key); void sb.invoke('overlay:focus', { target: 'app' }).catch(() => {}); }
-  else if (a.kind === 'open') { const req = find(a.key); if (req) open(req.chatId); }
-  else if (a.kind === 'run') { const req = find(a.key); if (req) void runCommand(req, !!a.confirmProd); }
-  else if (a.kind === 'dismiss') { const req = find(a.key); if (req) void dismissCommand(req); }
-  else if (a.kind === 'next') next(a.from);
+function onAction(a: OverlayAction, next: () => void, openLink: (link: string) => void): void {
+  if (a.kind === 'next') next();
   else if (a.kind === 'toast') {
     const g = groups.find(x => x.id === a.id);
     if (g) {
@@ -92,11 +84,10 @@ function onAction(a: OverlayAction, open: (chatId: string) => void, next: (from?
 }
 
 let started = false;
-export function startLayer(open: (chatId: string) => void, next: (from?: string) => void, openLink: (link: string) => void): void {
+export function startLayer(next: () => void, openLink: (link: string) => void): void {
   if (started) return;
   started = true;
-  // streamed text changes only `items`, which the layer never shows: recomputing on each of those frames was wasted
-  // work; panels that scroll in or out of view are still caught by the 800 ms pass below
+  // streamed text changes only `items`, which the layer never shows: recomputing on each of those frames was wasted work
   let seen = app.get();
   app.subscribe(() => {
     const s = app.get();
@@ -105,7 +96,7 @@ export function startLayer(open: (chatId: string) => void, next: (from?: string)
     if (!same) scheduleLayer();
   });
   ui.subscribe(scheduleLayer);
-  sb.on('overlay:action', a => onAction(a, open, next, openLink));
+  sb.on('overlay:action', a => onAction(a, next, openLink));
   // the chime on arrival: a minimized window repaints the toasts late (throttled timers), the IPC event is not
   sb.on('feed:events', evs => {
     const s = app.get();
@@ -120,7 +111,6 @@ export function startLayer(open: (chatId: string) => void, next: (from?: string)
     ringing = setTimeout(() => { ringing = null; playChime(); }, REQUEST_RING_MS);
   });
   window.addEventListener('resize', scheduleLayer);
-  window.addEventListener('focus', () => setLayerHeld(null)); // the keyboard is back in the app: the layer holds nothing
-  setInterval(push, 800); // panels scrolled in/out of view, tiles resized: cheap and only sends on change
+  setInterval(push, 800); // toasts expiring, the column resized: cheap and only sends on change
   scheduleLayer();
 }

@@ -139,8 +139,8 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
     else if (el.closest('.tile-head')) setChatExpanded(chatId, false);
   };
   const first = reqs[0] ? reqKey(reqs[0]) : null;
-  // a Strategist's open question shows in its plan card, on the strip itself (ADR 0108), not again below
-  const planAsk = planQuestion(chat, activeOwn, false);
+  // a Strategist's open question: the strip points to the window, set aside too («Basta domande» stays reachable)
+  const planAsk = planQuestion(chat, reqs, false);
   const ownReqs = activeOwn;
   return (
     <section ref={ref} className={`tile chat-tile ${expanded?'is-expanded':'is-strip'} tone-${st.tone} ${isFocused ? 'focused' : ''} ${flash ? 'flash' : ''} ${compact ? 'compact' : ''} ${closing ? 'closing' : ''} ${pair.cls}${embedded ? ' is-embedded' : ''}`} style={pair.style} role="region"

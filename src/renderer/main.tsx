@@ -12,7 +12,7 @@ import { sb } from './sb';
 import { startViewports } from './lib/viewports';
 import { startBeat } from './lib/beat';
 import { startInputLag } from './lib/inputlag';
-import { focusChat, nextThing, openLink, uiCommand } from './actions';
+import { nextThing, openLink, uiCommand } from './actions';
 import { checkDnd, startStore } from './store/store';
 import { now } from './lib/clock';
 import { startLayer } from './lib/layer';
@@ -54,7 +54,7 @@ if (isBrainTestRoute()) {
   startStore();
   startViewports();
   startLater(); // "Rispondi dopo": main's flag, before the first popup can show
-  startLayer(focusChat, nextThing, link => { openLink(link); });
+  startLayer(() => nextThing(), link => { openLink(link); });
   startInputLag(); // key → letter on screen, one summary a minute to the `perf` log while the user types
   startFocusKeeper();
   startTypingWatch();

@@ -2,7 +2,7 @@
 // endpoint (agent_delegate, agent_report) as the real CLI would: a Strategist launches a Scout and a Sentinel, both show
 // as thread cards under it in the Grindhouse (expanding in place into their chat, "Vai alla chat" opening focus mode)
 // and in the sidebar tree (a row brings its card on screen), their results come back to it as messages,
-// and the fold of the tree survives a restart; a child's question shows in the parent's open chat and the child goes on
+// and the fold of the tree survives a restart; a child's question shows in the questions window (its card points to it) and the child goes on
 // after the answer; a child's permission above its parent's (a Strategist the user narrowed) is refused visibly; three Scouts run at once, each one
 // writable; the parallel limit refuses a call over it and shows on the parent. Hidden window (SB_HIDDEN).
 // Screenshots: test-results/shots/delegation-*.png (dark and light).
@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { ChatItem, ChatSummary, PendingRequest } from '../../src/shared/contract';
-import { closeSetup, expandChats, launch, setSize, shot } from './helpers';
+import { closeSetup, launch, setSize, shot } from './helpers';
 
 const FAKE = path.resolve(import.meta.dirname, '..', 'fixtures', 'fake-claude.mjs');
 
@@ -140,7 +140,7 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
   }
 });
 
-test('a child\'s question waits in the parent\'s open chat; a permission above the parent\'s is refused visibly', async () => {
+test('a child\'s question waits in the questions window; a permission above the parent\'s is refused visibly', async () => {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cwd-'));
   const brain = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-brain-')); // the catalog is saved in a brain
   const { app, page, home } = await start(undefined, { SB_BRAIN: brain });
@@ -168,26 +168,23 @@ test('a child\'s question waits in the parent\'s open chat; a permission above t
     const pending: PendingRequest[] = await page.evaluate(() => window.sb.invoke('chat:pending', undefined));
     expect(pending.filter(p => p.chatId === shell.id)).toEqual([]);
 
-    // the Sentinel's question shows in the parent's open chat, tagged with who asks; the child waits
-    await page.getByTestId('nav-home').click();
-    // shown once: with no chat open it is on the child's card only
-    await expect(page.getByTestId(`delegation-ask-${asker.id}`)).toBeVisible({ timeout: 20000 });
-    await expect(page.getByTestId(`child-request-${asker.id}`)).toHaveCount(0);
-    await expandChats(page, parent.id);
-    const ask = page.getByTestId(`child-request-${asker.id}`);
-    await expect(ask).toBeVisible({ timeout: 20000 });
-    // the parent's open chat holds it now: not the card, not the Orchestrator, one answerable panel in the whole window
-    await expect(page.getByTestId(`delegation-ask-${asker.id}`)).toHaveCount(0);
-    const key = (await ask.locator('[data-request-key]').first().getAttribute('data-request-key'))!;
+    // the Sentinel's question shows in the questions window (always on since 2026-10-22); the child waits
+    const win = page.getByTestId('qwin');
+    await expect(win).toContainText('Che colore?', { timeout: 20000 });
+    const key = (await page.getByTestId('qwin-card').getAttribute('data-request-key'))!;
+    expect(key.startsWith(`${asker.id}/`)).toBe(true);
+    // one answerable panel in the whole window: never the Orchestrator, never a tile
     await expect(page.locator(`[data-request-key="${key}"]`)).toHaveCount(1);
-    await expect(page.locator(`[data-orchestrator-overlay] [data-request-key="${key}"], [data-testid^="tile-orchestrator"] [data-request-key="${key}"]`)).toHaveCount(0);
-    await expect(ask).toContainText('Sentinel');
+    await page.getByTestId('qwin-later').click(); // set aside: the child's card says what it waits for
+    await page.getByTestId('nav-home').click();
+    const ask = page.getByTestId(`delegation-ask-${asker.id}`);
+    await expect(ask).toBeVisible({ timeout: 20000 });
     await expect(ask).toContainText('Che colore?');
     await page.mouse.move(2, 2);
     await shot(page, 'delegation-child-question');
-    const panel = ask.locator('[data-request-key]').first();
-    const base = (await panel.getAttribute('data-testid'))!;
-    await page.getByTestId(`${base}-opt-1`).click();
+    await page.getByTestId(`delegation-answer-${asker.id}`).click(); // back to the window, on that question
+    await expect(page.getByTestId('qwin-card')).toHaveAttribute('data-request-key', key);
+    await page.getByTestId('qwin-card-opt-1').click();
     await expect(ask).toHaveCount(0);
     // it goes on after the answer and reports to its parent
     await expect.poll(async () => (await items(page, parent.id)).some(i => i.kind === 'user' && textOf(i).includes('[risultato · Sentinel «Scelta ambiente»] Ambiente scelto e verificato')), { timeout: 20000 }).toBe(true);

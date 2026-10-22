@@ -15,6 +15,7 @@ import { lang, t } from '../i18n';
 import { toast } from '../store/ui';
 import { brainBridge } from '../actions';
 import { IconChevronRight } from './Icons';
+import { Modal } from './ui';
 import '../styles/guide.css';
 
 /** «Discuti»: the card goes to the Orchestrator's input as a ready message; no work chat is opened. */
@@ -121,69 +122,47 @@ function Card({ card, index, l, open, panel, onToggle }: { card: ConceptCard; in
   );
 }
 
-/** The reading panel of the opened card: slides in over the grid, Esc or a click outside closes it. */
+/** The reading panel of the opened card: the shared side panel (components/ui.tsx Modal, size side) in the card's
+ *  accent; Esc, its close button or a click outside closes it. */
 function DetailPanel({ id, card, index, l, onClose }: { id: string; card: ConceptCard; index: number; l: GuideLang; onClose: () => void }) {
   const L = (x: Parameters<typeof textOf>[0]) => textOf(x, l);
   const title = L(card.title);
-  const heading = useRef<HTMLHeadingElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    heading.current?.focus({ preventScroll: true });
-    scroller.current?.scrollTo({ top: 0 });
-  }, [card.id]);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) { e.preventDefault(); e.stopPropagation(); onClose(); } };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [onClose]);
+  useEffect(() => { scroller.current?.closest('.modal-body')?.scrollTo({ top: 0 }); }, [card.id]);
+  const badges = card.coming?.length || card.target?.length ? <Badges card={card} /> : undefined;
   return (
-    <>
-      <button type="button" className="guide-backdrop" aria-label={t('guide.close')} tabIndex={-1} onClick={onClose} data-testid="guide-backdrop" />
-      <aside className="guide-panel" id={id} style={accentOf(index)} role="dialog" aria-modal="false" aria-labelledby={`${id}-h`} data-testid="guide-panel">
-        <header className="guide-panel-head">
-          <Glyph id={card.id} size={22} />
-          <div className="guide-panel-title">
-            <h2 id={`${id}-h`} ref={heading} tabIndex={-1}>{title}</h2>
-            <Badges card={card} />
-          </div>
-          <button type="button" className="guide-close" onClick={onClose} aria-label={t('guide.close')} data-testid="guide-close" data-tip={t('guide.close')}>
-            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M4 4l8 8M12 4l-8 8" /></svg>
-          </button>
-        </header>
-        <div className="guide-panel-scroll" ref={scroller}>
-          <p className="guide-panel-summary">{L(card.summary)}</p>
-          <div className="guide-body" data-testid={`guide-body-${card.id}`}>
-            <section className="guide-sec" aria-label={t('guide.howItWorks')}>
-              <h4>{t('guide.howItWorks')}</h4>
-              <ol className="guide-points">{card.points.map((p, i) => <li key={i}>{L(p)}</li>)}</ol>
+    <Modal size="side" onClose={onClose} label={title} testid="guide-panel" className="guide-panel" style={accentOf(index)}
+      title={title} subtitle={badges} icon={<Glyph id={card.id} size={22} />} footer={<DiscussButton card={card} l={l} compact />}>
+      <div id={id} ref={scroller} className="guide-panel-content">
+        <p className="guide-panel-summary">{L(card.summary)}</p>
+        <div className="guide-body" data-testid={`guide-body-${card.id}`}>
+          <section className="guide-sec" aria-label={t('guide.howItWorks')}>
+            <h4>{t('guide.howItWorks')}</h4>
+            <ol className="guide-points">{card.points.map((p, i) => <li key={i}>{L(p)}</li>)}</ol>
+          </section>
+          {card.diagram && <section className="guide-sec"><Diagram d={card.diagram} title={title} l={l} /></section>}
+          <div className="guide-analogy"><strong>{t('guide.analogy')}</strong><p>{L(card.analogy)}</p></div>
+          {card.coming?.length ? (
+            <section className="guide-coming" data-testid="guide-coming">
+              <h4><span aria-hidden="true">◷</span> {t('guide.coming')}</h4>
+              <ul>{card.coming.map(x => <li key={x.pr}><strong>PR #{x.pr}</strong> · {L(x.text)}</li>)}</ul>
             </section>
-            {card.diagram && <section className="guide-sec"><Diagram d={card.diagram} title={title} l={l} /></section>}
-            <div className="guide-analogy"><strong>{t('guide.analogy')}</strong><p>{L(card.analogy)}</p></div>
-            {card.coming?.length ? (
-              <section className="guide-coming" data-testid="guide-coming">
-                <h4><span aria-hidden="true">◷</span> {t('guide.coming')}</h4>
-                <ul>{card.coming.map(x => <li key={x.pr}><strong>PR #{x.pr}</strong> · {L(x.text)}</li>)}</ul>
-              </section>
-            ) : null}
-            {card.target?.length ? (
-              <section className="guide-target" data-testid="guide-target">
-                <h4><span aria-hidden="true">⚑</span> {t('guide.target')}</h4>
-                <ul>{card.target.map((x, i) => <li key={i}>{L(x)}</li>)}</ul>
-              </section>
-            ) : null}
-            <section className="guide-tech" aria-label={t('guide.technical')}>
-              <h4>{t('guide.technical')}</h4>
-              <dl>{card.tech.map((x, i) => <div key={i}><dt>{L(x.label)}</dt><dd>{L(x.text)}</dd></div>)}</dl>
-              <h5>{t('guide.sources')}</h5>
-              <ul className="guide-sources">{card.sources.map(s => <li key={s}><code>{s}</code></li>)}</ul>
+          ) : null}
+          {card.target?.length ? (
+            <section className="guide-target" data-testid="guide-target">
+              <h4><span aria-hidden="true">⚑</span> {t('guide.target')}</h4>
+              <ul>{card.target.map((x, i) => <li key={i}>{L(x)}</li>)}</ul>
             </section>
-          </div>
+          ) : null}
+          <section className="guide-tech" aria-label={t('guide.technical')}>
+            <h4>{t('guide.technical')}</h4>
+            <dl>{card.tech.map((x, i) => <div key={i}><dt>{L(x.label)}</dt><dd>{L(x.text)}</dd></div>)}</dl>
+            <h5>{t('guide.sources')}</h5>
+            <ul className="guide-sources">{card.sources.map(s => <li key={s}><code>{s}</code></li>)}</ul>
+          </section>
         </div>
-        <footer className="guide-panel-foot">
-          <DiscussButton card={card} l={l} compact />
-        </footer>
-      </aside>
-    </>
+      </div>
+    </Modal>
   );
 }
 

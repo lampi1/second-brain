@@ -1,5 +1,6 @@
 // Rich request choices shared by all RequestPanel sizes. Inspecting content never submits an answer.
-// The existing preview contract carries markdown or validated sb-ui cards with pros, cons, effort and risk.
+// The existing preview contract carries markdown or validated sb-ui cards with pros, cons, effort and risk. In the
+// questions window the preview starts open (`previewOpen`: nothing there is folded, the owner 2026-10-22).
 import { useId, type ReactNode } from 'react';
 import type { QuestionOption } from '@shared/contract';
 import { cleanDescription, cleanLabel } from '../../lib/keys';
@@ -8,9 +9,9 @@ import { t } from '../../i18n';
 import { UiPreview } from '../GenUi';
 import { IconCheck } from '../Icons';
 
-export function ChoiceCard({ option, number, recommended, picked, multi, current, disabled, onChoose, testid, tone }: {
+export function ChoiceCard({ option, number, recommended, picked, multi, current, disabled, onChoose, testid, tone, previewOpen }: {
   option: QuestionOption; number: ReactNode; recommended?: boolean; picked?: boolean; multi?: boolean;
-  current?: boolean; disabled?: boolean; onChoose: () => void; testid: string; tone?: 'deny';
+  current?: boolean; disabled?: boolean; onChoose: () => void; testid: string; tone?: 'deny'; previewOpen?: boolean;
 }) {
   const id = useId();
   const description = option.description ? cleanDescription(withoutImages(option.description)) : '';
@@ -26,7 +27,7 @@ export function ChoiceCard({ option, number, recommended, picked, multi, current
         {recommended && <span className="gu-rec">{t('tools.genui.recommended')}</span>}
       </button>
       {option.preview?.trim() && (
-        <details className="gu-choice-preview" data-option-preview onKeyDown={e => {
+        <details className="gu-choice-preview" data-option-preview open={previewOpen} onKeyDown={e => {
           e.stopPropagation();
           if (e.key === 'Escape') {
             e.preventDefault();

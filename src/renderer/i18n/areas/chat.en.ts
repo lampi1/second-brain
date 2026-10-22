@@ -169,7 +169,7 @@ export const chatEn: typeof chatIt = {
   // CommandRequest
   'chat.command.title': 'Command to run',
   'chat.command.help': 'Runs in PowerShell 5.1 here in the app, in the chat\'s folder; output stays under the block in that chat',
-  'chat.command.helpWindow': 'Runs in PowerShell 5.1 here in the app, in the chat\'s folder; output stays under the block in that chat',
+  'chat.command.helpWindow': 'PowerShell 5.1, in the chat’s folder; the output stays in the chat',
   'chat.command.windowAskLabel': (p: { chatTitle: string; command: string }) => `Command to run from ${p.chatTitle}: ${p.command}`,
   'chat.command.askLabel': (p: { chatTitle: string; command: string }) => `Command to run from ${p.chatTitle}: ${p.command}`,
   'chat.command.defaultLead': 'Launch it?',
@@ -183,8 +183,7 @@ export const chatEn: typeof chatIt = {
   'chat.command.openChat': 'Go to the chat',
   'chat.command.later': 'Answer later',
   'chat.command.dismiss': 'Not needed',
-  'chat.command.dismissTip': 'Removes the request: the block stays in the chat with its Run',
-
+  'chat.command.dismissTip': 'Closes the request; the block stays in the chat',
   // FocusView
   'chat.focus.title': 'Focus mode',
   'chat.focus.waiting': (p: { n: number }) => `${p.n} waiting for you`,
@@ -195,8 +194,6 @@ export const chatEn: typeof chatIt = {
   // AskContext
   'chat.context.thinking': 'from the chat\'s reasoning',
   'chat.context.preview': (p: { label: string }) => `Preview · ${p.label}`,
-  'chat.context.more': 'Full context',
-  'chat.context.less': 'Collapse',
   'chat.context.again': (p: { answer?: string }) => `It asks it again: ${p.answer ? `you had answered «${p.answer}».` : 'you just answered.'}`,
   'chat.context.document': 'Text to approve',
   'chat.context.summaryPreview': (p: { label: string }) => `Preview: ${p.label}`,
@@ -224,11 +221,11 @@ export const chatEn: typeof chatIt = {
   'chat.questions.inWindow': (p: { noun: string }) => `${p.noun} in the questions window.`,
   'chat.questions.openQueue': 'Answer',
   'chat.questions.openWindow': 'Open',
-  'chat.questions.note': 'Your cursor is still in the field where you were writing: click here or',
+  'chat.questions.note': 'You are typing elsewhere: click here or',
   'chat.questions.note2': 'to answer.',
-  'chat.questions.openChat': 'Open the chat',
+  'chat.questions.openChat': 'Open chat',
   'chat.questions.later': 'Answer later',
-  'chat.questions.laterTip': 'Don\'t answer now: everything waits in "To answer"',
+  'chat.questions.laterTip': 'Waits in "To answer"',
   'chat.questions.request': (p: { chatTitle: string }) => `Request from ${p.chatTitle}`,
   'chat.questions.permission': 'Permission',
   'chat.questions.requestsCount': (p: { n: number }) => p.n === 1 ? 'one request' : `${p.n} requests`,

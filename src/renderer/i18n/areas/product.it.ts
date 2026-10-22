@@ -32,7 +32,7 @@ export const productIt={
  'ui.newBrowser':'Nuovo browser','ui.browserMine':'La tua scheda','ui.browserAddress':'Inserisci un indirizzo','ui.browserEditAddress':'Modifica indirizzo','ui.browserOpenError':(p:{error:string})=>`Browser non aperto: ${p.error}`,
  'ui.state.waiting':'ti aspetta','ui.state.queued':'in coda','ui.state.running':'al lavoro','ui.state.starting':'avvio…','ui.state.error':'errore','ui.state.closed':'chiusa','ui.state.orchestrator':'ti ascolta','ui.state.done':'finito','ui.state.children':'in attesa',
  
- 'ui.other':'Altro…','ui.writeAnswer':'scrivi la tua risposta','ui.mapDetails':'Fonti e dettagli',
+ 'ui.close':'Chiudi','ui.other':'Altro…','ui.writeAnswer':'scrivi la tua risposta','ui.mapDetails':'Fonti e dettagli',
  'context.handoffBusy':"Passaggio di consegne in corso.",
  'context.native':'Codex gestisce la compattazione nativa. Non serve cambiare chat per la sola lunghezza.','context.passive':'Dimensione del contesto riportata dal motore; la ripresa in una nuova chat resta una scelta manuale.',
  'origin.user':'Utente','origin.unavailable':'Non disponibile','origin.missingHint':'La fonte non registra il modello di origine. Il modello attuale non viene attribuito allo storico.',

@@ -126,14 +126,12 @@ test('a chat message with a screenshot path shows it inline; a click opens it la
     await expect(viewer).toContainText('after.png · 2 di 2');
     await page.keyboard.press('Escape');
     await expect(viewer).toHaveCount(0);
-    // the question panel inside a chat: its question and context in the app's type scale too
-    await expandChats(page, 'qa');
-    const qa = page.getByTestId('tile-chat-qa');
-    const fs = await page.evaluate(() => { const s = getComputedStyle(document.documentElement); return { s: s.getPropertyValue('--fs-s').trim(), m: s.getPropertyValue('--fs-m').trim(), l: s.getPropertyValue('--fs-l').trim() }; });
-    await expect(qa.locator('.ask-q').first()).toHaveCSS('font-size', fs.l);
-    await expect(qa.locator('.ctx-toggle').first()).toHaveCSS('font-size', fs.s);
-    await qa.locator('.ctx-toggle').first().click();
-    await expect(qa.locator('.ctx-body').first()).toHaveCSS('font-size', fs.m);
+    // a question in the questions window (Ctrl+J brings the ones set aside): its question and context in the app's type scale too
+    await page.keyboard.press('Control+J');
+    await expect(page.getByTestId('qwin')).toBeVisible();
+    const fs = await page.evaluate(() => { const s = getComputedStyle(document.documentElement); return { l: s.getPropertyValue('--fs-l').trim(), xl: s.getPropertyValue('--fs-xl').trim() }; });
+    await expect(page.locator('.qwin .wq-q').first()).toHaveCSS('font-size', fs.xl);
+    await expect(page.locator('.qwin').first()).toHaveCSS('font-size', fs.l);
   } finally { await app.close(); }
 });
 

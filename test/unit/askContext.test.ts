@@ -4,7 +4,7 @@
 // transcript because they are the only prose right before a question.
 import { describe, expect, it } from 'vitest';
 import type { ChatItem, PendingRequest } from '../../src/shared/contract';
-import { askContext, linksIn, thinkingBeforeAsk, turnItems, writtenDocs } from '../../src/renderer/lib/askContext';
+import { askContext, linksIn, thinkingBeforeAsk, turnItems, withoutCommand, writtenDocs } from '../../src/renderer/lib/askContext';
 
 const user = (id: string, text = 'fai'): ChatItem => ({ kind: 'user', id, at: 1, text } as ChatItem);
 const say = (id: string, text: string): ChatItem => ({ kind: 'assistant', id, at: 1, text } as ChatItem);
@@ -119,5 +119,24 @@ describe('thinkingBeforeAsk', () => {
     const items = [user('u'), think('t1', 'x'), say('a', 'testo'), think('t2', 'y')];
     expect([...thinkingBeforeAsk(items, true)]).toEqual(['t2']);
     expect([...thinkingBeforeAsk(items, false)]).toEqual([]);
+  });
+});
+
+describe('withoutCommand', () => {
+  const piece = (id: string, text: string, kind: 'text' | 'thinking' = 'text') => ({ id, kind, text });
+  it('drops the command block and the lead sentence the card already shows, and an emptied piece', () => {
+    const out = withoutCommand([
+      piece('a', 'Riproduco il bug con il cliente di prova.'),
+      piece('b', 'Fatto: il fix è in main. Ora lancia il controllo:\n\n```powershell\nnpm run doctor -- --dev\n```'),
+    ], 'npm run doctor -- --dev', 'Fatto: il fix è in main. Ora lancia il controllo:');
+    expect(out).toEqual([piece('a', 'Riproduco il bug con il cliente di prova.')]);
+  });
+  it('keeps other prose and other blocks, and reasoning as it is', () => {
+    const out = withoutCommand([
+      piece('b', 'Prima guarda il diff:\n```\ngit diff\n```\nPoi lancia:\n```powershell\nnpm test\n```'),
+      piece('t', '```\nnpm test\n```', 'thinking'),
+    ], 'npm test', 'Poi lancia:');
+    expect(out[0]!.text).toBe('Prima guarda il diff:\n```\ngit diff\n```');
+    expect(out[1]).toEqual(piece('t', '```\nnpm test\n```', 'thinking'));
   });
 });
