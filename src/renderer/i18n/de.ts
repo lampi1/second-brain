@@ -38,6 +38,7 @@ import { homeDe } from './areas/home.de';
 import { guideDe } from './areas/guide.de';
 import { treeDe } from './areas/tree.de';
 import { aliveDe } from './areas/alive.de';
+import { queriesDe } from './areas/queries.de';
 import { lampoDe } from './areas/lampo.de';
 import { learningDe } from './areas/learning.de';
 import { estimateDe } from './areas/estimate.de';
@@ -61,6 +62,7 @@ export const de: Dict = {
   ...guideDe,
   ...treeDe,
   ...aliveDe,
+  ...queriesDe,
   ...lampoDe,
   ...learningDe,
   ...estimateDe,

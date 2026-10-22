@@ -989,8 +989,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Una volta sola, i vecchi runbook e le sezioni «routines» del brain diventano skill, con un resoconto di dove è finito ciascuno.',
         'Once, the brain’s old runbooks and "routines" sections become skills, with a report of where each one went.'),
       // src/main/brainmodel/upgrade.ts, src/shared/brain-layout.ts
-      b('Con una nuova versione, il brain si mette in pari da solo: l’app descrive dove tiene ogni tipo di contenuto e ciò che nelle note ora ha un suo posto (per esempio uno script scritto in una nota) ci viene spostato, con un rimando dove stava. Un agente senza strumenti decide solo quando c’è qualcosa da spostare.',
-        'With a new version the brain catches up by itself: the app describes where it keeps each kind of content, and what in the notes now has a place of its own (a script written in a note, for example) moves there, with a pointer where it was. An agent with no tools decides only when there is something to move.'),
+      b('Con una nuova versione, il brain si mette in pari da solo: l’app descrive dove tiene ogni tipo di contenuto e ciò che nelle note ora ha un suo posto ci viene spostato, con un rimando dove stava: uno script in scripts/, una query SQL o KQL in queries/ (Memoria → Script & Query), un’idea («Idea:», «💡», le voci sotto «## Idee») in ideas.md con la nota da cui viene, la data e se era tua o dell’IA. Un agente senza strumenti decide solo quando c’è qualcosa da spostare.',
+        'With a new version the brain catches up by itself: the app describes where it keeps each kind of content, and what in the notes now has a place of its own moves there, with a pointer where it was: a script to scripts/, an SQL or KQL query to queries/ (Memory → Script & Query), an idea ("Idea:", "💡", the items under "## Ideas") to ideas.md with the note it came from, the date and whether it was yours or the AI’s. An agent with no tools decides only when there is something to move.'),
       // src/main/brainmodel/changes.ts rollback
       b('Ogni cambio finisce nel registro con cosa, perché e le prove; «Annulla» rimette il testo di prima, ma solo se nessuno l’ha cambiato dopo. Un cambio annullato non viene rifatto.',
         'Every change goes to the log with what, why and the evidence; "Undo" puts the earlier text back, but only if nobody changed it since. An undone change is not made again.'),
@@ -1007,7 +1007,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(FILES, 'userData/brain-changes.json: ultimi 400 cambi, istantanee prima/dopo fino a 256 KB ciascuna.', 'userData/brain-changes.json: last 400 changes, before/after snapshots up to 256 KB each.'),
       tech(LIMITS, 'Lavori: migration, upgrade, corrections, repeated-task, merge-skills, merge-memory; ogni 6 h, la migrazione e l’aggiornamento del brain un minuto dopo l’avvio.', 'Jobs: migration, upgrade, corrections, repeated-task, merge-skills, merge-memory; every 6 h, the migration and the brain upgrade a minute after start.'),
     ],
-    sources: ['src/main/brainmodel/jobs.ts', 'src/main/brainmodel/upgrade.ts', 'src/shared/brain-layout.ts', 'src/main/brainmodel/changes.ts', 'src/main/brainmodel/service.ts', 'src/shared/brain-model.ts', 'src/renderer/components/brain-model/MaintenanceButton.tsx'],
+    sources: ['src/main/brainmodel/jobs.ts', 'src/main/brainmodel/upgrade.ts', 'src/shared/brain-layout.ts', 'src/main/brain/queries.ts', 'src/main/brainmodel/changes.ts', 'src/main/brainmodel/service.ts', 'src/shared/brain-model.ts', 'src/renderer/components/brain-model/MaintenanceButton.tsx'],
   },
   {
     id: 'trials',

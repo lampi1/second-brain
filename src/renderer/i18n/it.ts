@@ -38,6 +38,7 @@ import { homeIt } from './areas/home.it';
 import { guideIt } from './areas/guide.it';
 import { treeIt } from './areas/tree.it';
 import { aliveIt } from './areas/alive.it';
+import { queriesIt } from './areas/queries.it';
 import { lampoIt } from './areas/lampo.it';
 import { learningIt } from './areas/learning.it';
 import { suggestIt } from './areas/suggest.it';
@@ -62,6 +63,7 @@ export const it = {
   ...guideIt,
   ...treeIt,
   ...aliveIt,
+  ...queriesIt,
   ...lampoIt,
   ...learningIt,
   ...suggestIt,

@@ -26,6 +26,8 @@ import { demoDevopsRun } from './tasks/demo';
 import { TaskService } from './tasks/service';
 import { writeDemoScripts } from './brain/scripts-demo';
 import { BrainScripts } from './brain/scripts';
+import { BrainQueries } from './brain/queries';
+import { writeDemoQueries } from './brain/queries-demo';
 import { BrainChangelog } from './brain/changelog';
 import { gitBranches } from './chats/branch';
 import path from 'node:path';
@@ -131,6 +133,9 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   brain.serveApi('/api/script', q => demoScripts.get(q.get('id') ?? ''));
   brain.serveApi('/api/changelog', () => demoChangelog.list());
   brain.serveApi('/api/improve', () => brain.learnApi());
+  // the saved queries (ADR 0124): a few made-up ones in the demo brain, deleted through the brain model's ChangeLog
+  writeDemoQueries(demoBrainRoot, now());
+  const queries = new BrainQueries(() => demoBrainRoot, () => brainModel.log);
 
   const mcp = new McpServer({ name: 'second-brain-demo', version: app.getVersion() });
   // made-up MCP servers for Settings → Connettori and the agent cards (ADR 0086): no process, no network
@@ -223,7 +228,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   return {
     morning,
     cloud, chats, browser, brain, mcp, mcpServers, runner, asks, wake, heldNews, tasks, skills, source, engines, later: createLater(ctx),
-    agents, runFeedback, agentLifecycle, agentPacks, brainModel, suggestSkills,
+    agents, runFeedback, agentLifecycle, agentPacks, brainModel, suggestSkills, queries,
     setup: new SetupService(ctx.userData, true, now),
     autoClose: new AutoCloseService({ now: autoCloseNow, delayMs: () => 0, candidates: () => [], archive: async () => false, emit: states => ctx.emitter.emit('chat:autoCloseStatus', states) }),
     progress: new ProgressService(ctx.userData, { enabled: false, chats: () => chats.list() }),

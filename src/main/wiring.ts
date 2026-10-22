@@ -112,6 +112,8 @@ import { apiSearch, brainSearchTool } from './search/hybrid/tool';
 import { BrainScripts, touchesScripts } from './brain/scripts';
 import { BrainChangelog } from './brain/changelog';
 import { brainScriptsTool, chatScriptAddTool } from './brain/scripts-tools';
+import { BrainQueries, touchesQueries } from './brain/queries';
+import { brainQueriesTool, chatQueryAddTool } from './brain/queries-tools';
 import { AutoScripts } from './brain/auto-scripts';
 import { mountRecallTool, RECALL_ENV } from './search/hybrid/recall';
 import { timersFor } from './timers';
@@ -129,6 +131,8 @@ export interface Wired {
   agentRuns?: AgentRunStore;
   memoryReview?: MemoryService;
   learningReview?: LearningReviewService;
+  /** the brain's saved queries (ADR 0124): Memoria → Script & Query, queries:* IPC */
+  queries?: BrainQueries;
   /** the hybrid brain search (SPEC 23); absent in the demo (Ctrl+K then uses its own index) */
   hybrid?: HybridSearch;
   /** the brain skills that fit a request, best first (skills/suggest.ts) */
@@ -367,7 +371,14 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const brainChangelog = new BrainChangelog(() => brain.info().brainRoot);
   const brainScripts = new BrainScripts(() => brain.info().brainRoot, brainChangelog);
   let scriptsTimer: NodeJS.Timeout | null = null;
+  // the saved queries (ADR 0124): their delete goes through the brain model's ChangeLog (created below)
+  const brainQueries = new BrainQueries(() => brain.info().brainRoot, () => brainModelRef.current?.log ?? null, brainChangelog);
+  let queriesTimer: NodeJS.Timeout | null = null;
   const onScriptFile = (f: string) => {
+    if (touchesQueries(f)) {
+      if (queriesTimer) clearTimeout(queriesTimer);
+      queriesTimer = setTimeout(() => { queriesTimer = null; ctx.emitter.emit('queries:changed', undefined); }, 500);
+    }
     if (!touchesScripts(f)) return;
     brainScripts.invalidate();
     if (scriptsTimer) clearTimeout(scriptsTimer);
@@ -434,7 +445,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const memoryReview = new MemoryService({ root: () => agentPacks.packs.root(), embed: (texts, mode) => hybrid.embed(texts, mode), invalidate: async () => { if (!await hybrid.sync()) throw new Error('Memory changed, but search invalidation is pending. Retry before continuing.'); } });
   // agent_learn_propose on a work chat's endpoint: only its own role's lessons, queued for the Orchestrator and the user
   const skillTools = () => brainModelRef.current?.skillTools() ?? [];
-  addChatTools([agentCatalogTool(() => agents.list(), skillTools), skillsSuggestTool(suggestSkills), chatLearnTool(agentPacks.learning, () => manager.runs.list()), brainSearchTool(async (q, o) => { await memoryReview.retryInvalidations(); return hybrid.query(q, o); }), brainScriptsTool(brainScripts)]);
+  addChatTools([agentCatalogTool(() => agents.list(), skillTools), skillsSuggestTool(suggestSkills), chatLearnTool(agentPacks.learning, () => manager.runs.list()), brainSearchTool(async (q, o) => { await memoryReview.retryInvalidations(); return hybrid.query(q, o); }), brainScriptsTool(brainScripts), brainQueriesTool(brainQueries)]);
   addChatTools(memoryTools({ root: () => agentPacks.packs.root(), recall: (scope, query, options) => memoryReview.recall(scope, query, options), context: chatId => {
     const chat = manager.list().find(c => c.id === chatId);
     if (!chat || chat.agent?.source !== 'catalog' || chat.isOrchestrator || !chat.run) return null;
@@ -620,6 +631,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const runner = commandRunner(ctx, chats, run => { autoScripts.onRun(run); });
   // brain_script_add on every chat's own endpoint: a work chat saves the script it ran with success itself
   addChatTools([chatScriptAddTool(brainScripts, id => chats.list().find(c => c.id === id)?.title ?? null)]);
+  // brain_query_add the same way: a query that ran and someone reruns goes to queries/ (ADR 0124)
+  addChatTools([chatQueryAddTool(brainQueries, id => chats.list().find(c => c.id === id)?.title ?? null)]);
   const asks = attachCommandAsks(ctx, runner, brain, undefined, chats);
   const keptFile = path.join(ctx.userData, 'auto-close-kept.json');
   let kept: string[] = [], keptProblem = false;
@@ -801,7 +814,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     stallMin: () => checkedDelegation(brain.settings().delegation).stallMin, lastEventAt: id => manager.lastEventAt(id) });
 
   return {
-    brainModel, memoryReview, learningReview,
+    brainModel, memoryReview, learningReview, queries: brainQueries,
     morning,
     mcpServers,
     cloud, chats, browser, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, suggestSkills,

@@ -37,6 +37,7 @@ import { homeEn } from './areas/home.en';
 import { guideEn } from './areas/guide.en';
 import { treeEn } from './areas/tree.en';
 import { aliveEn } from './areas/alive.en';
+import { queriesEn } from './areas/queries.en';
 import { lampoEn } from './areas/lampo.en';
 import { learningEn } from './areas/learning.en';
 import { suggestEn } from './areas/suggest.en';
@@ -61,6 +62,7 @@ export const en: Dict = {
   ...guideEn,
   ...treeEn,
   ...aliveEn,
+  ...queriesEn,
   ...lampoEn,
   ...learningEn,
   ...suggestEn,

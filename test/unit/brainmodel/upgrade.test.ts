@@ -1,5 +1,5 @@
 // The brain upgrade (issue #166, ADR 0116): a brain from an older version gets its inline scripts moved into scripts/
-// by itself, one undoable change, never twice; a future place ("queries", the issue's example) works with no code of its
+// by itself, one undoable change, never twice; saved queries go to queries/; a future place works with no code of its
 // own; nothing is asked of a model when the local scan finds nothing; a failed answer leaves the step pending; every
 // Brain page is either a layout entry's page or listed as holding no content.
 import fs from 'node:fs';
@@ -65,18 +65,44 @@ describe('brain upgrade', () => {
     expect(ask).toHaveBeenCalledTimes(1);
   });
 
-  it('a future place ("queries") needs only its layout entry: kusto blocks become notes in queries/', async () => {
-    write('clienti/acme.md', '# Acme\n\n```kusto\nCustomers\n| where active == 1\n| project id, name\n```\n');
-    const queries: LayoutSection = { id: 'queries', place: 'queries/', since: '0.3.0', page: 'query', holds: 'Saved SQL queries someone reruns.',
-      receives: { kind: 'code-block', languages: ['kusto'], minLines: 3, write: 'note-file' } };
+  it('a future place ("diagrams", made up) needs only its layout entry: mermaid blocks become notes in diagrams/', async () => {
+    write('clienti/acme.md', '# Acme\n\n```mermaid\ngraph TD\n  customers --> orders\n  orders --> invoices\n```\n');
+    const diagrams: LayoutSection = { id: 'diagrams', place: 'diagrams/', since: '9.9.0', page: 'memoria', holds: 'Diagrams someone keeps up to date.',
+      receives: { kind: 'code-block', languages: ['mermaid'], minLines: 3, write: 'note-file' } };
     await upgrade(ctx(smart)); // in line with today's layout first
     const ask = vi.fn(smart);
-    const r = await upgrade(ctx(ask, [...BRAIN_LAYOUT, queries]));
+    const r = await upgrade(ctx(ask, [...BRAIN_LAYOUT, diagrams]));
     expect(ask).toHaveBeenCalledTimes(1); // only the new entry is looked at
     expect(r.changes).toBe(1);
-    expect(read('queries/clienti-attivi.md')).toContain('```kusto\nCustomers\n| where active == 1\n| project id, name\n```');
-    expect(read('clienti/acme.md')).toContain('→ `queries/clienti-attivi.md`');
-    expect(readRecord(root, userData)!.sections.queries).toBe(sectionHash(queries));
+    expect(read('diagrams/clienti-attivi.md')).toContain('```mermaid\ngraph TD\n  customers --> orders\n  orders --> invoices\n```');
+    expect(read('clienti/acme.md')).toContain('→ `diagrams/clienti-attivi.md`');
+    expect(readRecord(root, userData)!.sections.diagrams).toBe(sectionHash(diagrams));
+  });
+
+  it('saved queries go to queries/ (not scripts/): a note with its header and the query byte for byte', async () => {
+    const KQL = 'Customers\r\n| where active == 1\r\n| project id, name';
+    write('clienti/acme.md', `# Acme\n\n## Report\n\nLa uso ogni lunedì:\n\n\`\`\`kusto\n${KQL}\n\`\`\`\n\n\`\`\`sql\nSELECT id\nFROM customers WHERE active = 1;\n\`\`\`\n`);
+    const queries = BRAIN_LAYOUT.find(s => s.id === 'queries')!;
+    expect((BRAIN_LAYOUT.find(s => s.id === 'scripts')!.receives as { languages: readonly string[] }).languages).not.toContain('sql');
+    expect(candidates(root, queries).map(c => c.lang)).toEqual(['kusto', 'sql']);
+    const ask = vi.fn<UpgradeAsk>(async (_s, prompt) => {
+      const { candidates: list } = JSON.parse(prompt) as { candidates: { id: string; language: string; code: string }[] };
+      return { ok: true, text: JSON.stringify({ items: list.map(c => c.language === 'kusto'
+        ? { id: c.id, keep: true, name: 'clienti-attivi', title: 'Clienti attivi', description: 'I clienti attivi con id e nome.', source: 'ADX help / Samples', tags: ['clienti'] }
+        : /deploy/.test(c.code) ? { id: c.id, keep: true, name: 'deploy-test', title: 'Deploy', description: 'Deploy.' } : { id: c.id, keep: false }) }) };
+    });
+    const r = await upgrade(ctx(ask));
+    expect(r.changes).toBe(2); // the scripts entry (the PowerShell block of ambienti/test.md) and the queries entry
+    expect(ask.mock.calls.some(([system]) => system.includes('source (where it runs'))).toBe(true);
+    const note = read('queries/clienti-attivi.md');
+    expect(note).toContain('# Clienti attivi');
+    expect(note).toContain('- **Runs on:** ADX help / Samples');
+    expect(note).toContain('- **From:** `clienti/acme.md` (Report), 2026-10-22');
+    expect(note).toContain(`\`\`\`kusto\n${KQL}\n\`\`\``); // CRLF and all
+    const acme = read('clienti/acme.md');
+    expect(acme).toContain('→ `queries/clienti-attivi.md`');
+    expect(acme).toContain('SELECT id'); // not kept: stays
+    expect(fs.existsSync(path.join(root, 'scripts', 'clienti-attivi.sql'))).toBe(false);
   });
 
   it('asks nothing when the scan finds nothing (a fresh brain) and records the layout', async () => {

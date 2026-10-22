@@ -237,6 +237,10 @@ app.whenReady().then(async () => {
     'learning:compare': a => { if (!s.learningReview) throw new Error('Replay comparison unavailable.'); return s.learningReview.compare(a.beforeId, a.afterId); },
     'brainmodel:maintain': a => s.brainModel.maintain(a?.job),
     'brainmodel:rollback': a => s.brainModel.rollback(String(a?.id ?? '')),
+    // the brain's saved queries (ADR 0124); a delete is a ChangeLog entry, undone with brainmodel:rollback
+    'queries:list': () => s.queries?.list() ?? { root: null, dir: 'queries', queries: [] },
+    'queries:get': a => { if (!s.queries) throw new Error('Queries unavailable.'); return s.queries.get(String(a?.id ?? '')); },
+    'queries:delete': a => { if (!s.queries) throw new Error('Queries unavailable.'); const r = s.queries.delete(String(a?.id ?? '')); emitter.emit('brainmodel:changed', undefined); emitter.emit('queries:changed', undefined); return r; },
     'brainmodel:noise': a => { if (typeof a?.key !== 'string' || !a.key || a.key.length > 1000 || typeof a?.known !== 'boolean') throw new Error('Invalid log group'); return s.brainModel.noise(a.key, a.known); },
     'brainmodel:link': a => { if (typeof a?.skill !== 'string' || typeof a?.agentId !== 'string' || typeof a?.on !== 'boolean') throw new Error('Invalid skill link'); return s.brainModel.link(a.skill, a.agentId, a.on); },
     'classifiers:state': () => s.brainModel.classifiers(),

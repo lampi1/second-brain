@@ -1030,6 +1030,20 @@ export interface BrainScriptSummary {
 }
 /** /api/script?id=…: the script's code with every line that may hold a credential replaced (`masked` lines). */
 export interface BrainScript extends BrainScriptSummary { path: string; code: string; masked: number }
+/** A saved query of the brain (ADR 0124; main brain/queries.ts): one file in queries/, a Markdown note with its header
+ *  (title, what it does, where it runs, tags, the note it came from) and the query in one fenced block, or a native
+ *  .sql/.kql/… file with an @-comment header. `lang` = the fence or file language as written, `language` its label. */
+export interface BrainQuerySummary {
+  id: string; file: string; title: string; description: string; language: string; lang: string;
+  /** where it runs: the data source, cluster, database or tool, as written ('' = not said) */
+  source: string; tags: string[];
+  /** the note it was moved from by the brain upgrade, or who saved it ('' = not said) */
+  from: string;
+  changedAt: string | null; bytes: number;
+}
+/** queries:get: the query's code (credential-looking lines masked) and its file's absolute path. */
+export interface BrainQuery extends BrainQuerySummary { path: string; code: string; masked: number }
+export interface BrainQueryList { root: string | null; dir: string; queries: BrainQuerySummary[] }
 /** One line of the brain's changelog (`changelog.md`, main brain/changelog.ts, /api/changelog): who changed what in the
  *  brain, newest first. `at` = local "YYYY-MM-DD HH:MM". */
 export type ChangelogKind = 'script' | 'rule' | 'procedure' | 'note' | 'agent' | 'skill' | 'other';
@@ -1283,6 +1297,10 @@ export interface InvokeMap {
   /** the maintenance button: run every job now (or one); every change is logged and can be undone */
   'brainmodel:maintain': [{ job?: MaintenanceJobId } | undefined, BrainModelState];
   'brainmodel:rollback': [{ id: string }, BrainModelState];
+  /** the brain's saved queries (ADR 0124): list, one with its code, delete through the ChangeLog (undo = brainmodel:rollback with changeId) */
+  'queries:list': [void, BrainQueryList];
+  'queries:get': [{ id: string }, BrainQuery];
+  'queries:delete': [{ id: string }, { changeId: string; file: string }];
   /** the user marks a log group of the maintenance as known noise (or not any more, #150) */
   'brainmodel:noise': [{ key: string; known: boolean }, BrainModelState];
   /** the user declares (on) or drops (off) a skill for an agent */
@@ -1566,6 +1584,8 @@ export interface EventMap {
   'search:status': SearchIndexStatus;
   /** a skill, rule, memory file or agent link changed (a maintenance job, a rollback, the brain on disk) */
   'brainmodel:changed': void;
+  /** a file under the brain's queries/ changed on disk (ADR 0124) */
+  'queries:changed': void;
   /** a script of the brain or its changelog changed on disk (brain watcher): the Script and Changelog pages reload */
   'scripts:changed': void;
   /** new Log events, in small batches (main/activity/journal.ts) */
@@ -1599,7 +1619,7 @@ export const INVOKE_CHANNELS = [
   'chat:userEvents', 'chat:synthesize', 'memory:reviewList', 'memory:confirm', 'memory:retract', 'memory:delete', 'learning:evidence', 'learning:state', 'learning:import', 'learning:replay', 'learning:saveCandidate', 'learning:promote', 'learning:compare',
   'agents:list', 'skills:suggest', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'agents:estimates', 'runs:macro', 'agents:judgingEstimate', 'run:outcome', 'agents:restoreVersion', 'avatars:get', 'avatars:set', 'avatars:reset', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:plan', 'chat:stop',
-  'agents:exportPlan', 'agents:exportFix', 'agents:export', 'brain:share', 'agents:importInspect', 'agents:importApply', 'agents:importCancel', 'brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'brainmodel:noise', 'brainmodel:link', 'classifiers:state', 'morning:brief', 'agents:trialDecide', 'agents:lifecycleDecide',
+  'agents:exportPlan', 'agents:exportFix', 'agents:export', 'brain:share', 'agents:importInspect', 'agents:importApply', 'agents:importCancel', 'brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'queries:list', 'queries:get', 'queries:delete', 'brainmodel:noise', 'brainmodel:link', 'classifiers:state', 'morning:brief', 'agents:trialDecide', 'agents:lifecycleDecide',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'chat:undoTurn', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
   'settings:undo', 'settings:propose', 'settings:pending', 'settings:confirm', 'estimate:record', 'brain:api',
@@ -1622,7 +1642,7 @@ export const EVENT_CHANNELS = [
   'chat:autoCloseStatus',
   'agents:changed', 'agents:lifecycleChanged', 'avatars:changed',
   'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'cli:ready', 'focus:next', 'ui:command',
-  'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'tasks:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'source:state', 'later:changed', 'search:status', 'brainmodel:changed', 'sync:state', 'headline:changed',
+  'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'tasks:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'source:state', 'later:changed', 'search:status', 'brainmodel:changed', 'queries:changed', 'sync:state', 'headline:changed',
   'cloud:changed',
   'mcpservers:changed',
   'orchestrator:heldChanged',
