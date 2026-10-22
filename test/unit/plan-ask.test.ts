@@ -51,7 +51,7 @@ describe('PlanApproval.tsx', () => {
     expect(out).toContain('data-request-key="s/1/plan@42"');
     expect(out).toContain('Piano da approvare');
     expect(out).toContain('Approvi questo piano?');
-    expect(out).toContain('Lo Strategist propone 3 passi');
+    expect(out).toContain('3 passi proposti. Niente parte senza il tuo ok.');
     expect(out.match(/class="pa-step"/g)).toHaveLength(3);
     expect(out).toMatch(/pa-n[^>]*>1<.*Trovo dove.*carrello e reso.*Scout/s);
     expect(out).toMatch(/data-testid="qp-step-2" data-role="artisan".*Artisan/s);

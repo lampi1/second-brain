@@ -171,7 +171,7 @@ export const chatDe: typeof chatIt = {
   // CommandRequest
   'chat.command.title': 'Auszuführender Befehl',
   'chat.command.help': 'Läuft in PowerShell 5.1 hier in der App, im Ordner des Chats; die Ausgabe bleibt unter dem Block in diesem Chat',
-  'chat.command.helpWindow': 'Läuft in PowerShell 5.1 hier in der App, im Ordner des Chats; die Ausgabe bleibt unter dem Block in diesem Chat',
+  'chat.command.helpWindow': 'PowerShell 5.1, im Ordner des Chats; die Ausgabe bleibt im Chat',
   'chat.command.windowAskLabel': (p: { chatTitle: string; command: string }) => `Befehl zum Ausführen von ${p.chatTitle}: ${p.command}`,
   'chat.command.askLabel': (p: { chatTitle: string; command: string }) => `Befehl zum Ausführen von ${p.chatTitle}: ${p.command}`,
   'chat.command.defaultLead': 'Starten?',
@@ -185,8 +185,7 @@ export const chatDe: typeof chatIt = {
   'chat.command.openChat': 'Zum Chat',
   'chat.command.later': 'Später antworten',
   'chat.command.dismiss': 'Nicht nötig',
-  'chat.command.dismissTip': 'Entfernt die Anfrage: der Block bleibt mit seinem Ausführen im Chat',
-
+  'chat.command.dismissTip': 'Schließt die Anfrage; der Block bleibt im Chat',
   // FocusView
   'chat.focus.title': 'Fokusmodus',
   'chat.focus.waiting': (p: { n: number }) => `${p.n} warten auf dich`,
@@ -197,8 +196,6 @@ export const chatDe: typeof chatIt = {
   // AskContext
   'chat.context.thinking': 'aus den Überlegungen des Chats',
   'chat.context.preview': (p: { label: string }) => `Vorschau · ${p.label}`,
-  'chat.context.more': 'Ganzer Kontext',
-  'chat.context.less': 'Einklappen',
   'chat.context.again': (p: { answer?: string }) => `Es fragt nochmal: ${p.answer ? `du hattest «${p.answer}» geantwortet.` : 'du hast gerade geantwortet.'}`,
   'chat.context.document': 'Text zum Freigeben',
   'chat.context.summaryPreview': (p: { label: string }) => `Vorschau: ${p.label}`,
@@ -226,11 +223,11 @@ export const chatDe: typeof chatIt = {
   'chat.questions.inWindow': (p: { noun: string }) => `${p.noun} im Fragenfenster.`,
   'chat.questions.openQueue': 'Antworten',
   'chat.questions.openWindow': 'Öffnen',
-  'chat.questions.note': 'Dein Cursor ist noch im Feld, in dem du geschrieben hast: klick hier oder',
+  'chat.questions.note': 'Du schreibst woanders: hier klicken oder',
   'chat.questions.note2': 'zum Antworten.',
   'chat.questions.openChat': 'Chat öffnen',
   'chat.questions.later': 'Später antworten',
-  'chat.questions.laterTip': 'Jetzt nicht antworten: alles wartet in „Zu beantworten“',
+  'chat.questions.laterTip': 'Wartet in „Zu beantworten“',
   'chat.questions.request': (p: { chatTitle: string }) => `Anfrage von ${p.chatTitle}`,
   'chat.questions.permission': 'Berechtigung',
   'chat.questions.requestsCount': (p: { n: number }) => p.n === 1 ? 'eine Anfrage' : `${p.n} Anfragen`,
