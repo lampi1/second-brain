@@ -1,4 +1,4 @@
-# ADR 0126 · Reply latency: the engine starts while the user types, the user's request skips the CPU queue
+# ADR 0127 · Reply latency: the engine starts while the user types, the user's request skips the CPU queue
 
 Date: 2026-10-22 · Status: accepted (owner, 2026-10-22: «c'è un serio problema di lentezza nelle risposte da sempre,
 un altro mio collega anche lui istanzia le cli ma non ha questo problema») · Builds on: ADR 0025, 0036, 0099, 0103

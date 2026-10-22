@@ -6,7 +6,7 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
-- **Faster first replies** (ADR 0126): a chat with no engine (after a restart) starts it while you type, a chat the
+- **Faster first replies** (ADR 0127): a chat with no engine (after a restart) starts it while you type, a chat the
   Orchestrator opens for your request no longer waits for the CPU queue, the per-turn checkpoint reads git in
   parallel, a delegated chat takes an engine started ahead like a new chat does, and the logs time every step
   between Enter and the engine (`timing: before send`).
