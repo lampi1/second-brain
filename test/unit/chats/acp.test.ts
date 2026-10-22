@@ -8,7 +8,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { cliArgv, engineAllowed, newestCursorVersion, resolveAcp, resolveCursor } from '../../../src/main/chats/cli';
-import { AcpSession, acpEffortValue, authHelp, cursorConfigDir, isNetError, modelRestart, netRetryPrompt, type AcpOptions } from '../../../src/main/chats/acp';
+import { AcpSession, acpEffortValue, acpExitCode, authHelp, cursorConfigDir, isNetError, modelRestart, netRetryPrompt, type AcpOptions } from '../../../src/main/chats/acp';
 import { costOf, priceOf } from '../../../src/main/chats/cursor-prices';
 import { engineStatus, openLogin } from '../../../src/main/cli';
 import { FAKE_CURSOR, PNG_1PX, cursorLog, recSink, tmp, waitFor, type RecSink } from './helpers';
@@ -20,6 +20,17 @@ const CURSOR = {
 } satisfies Partial<AcpOptions>;
 /** Another ACP engine: only its identity and start shape, none of Cursor's options. */
 const KIMI = { engineId: 'kimi', label: 'Kimi', args: ['acp'], acpCommand: 'kimi' } satisfies Partial<AcpOptions>;
+
+describe('acpExitCode (the run receipts, ADR 0130)', () => {
+  it('reads an exit code only when the rawOutput carries one; a status is never one', () => {
+    expect(acpExitCode({ exitCode: 0, stdout: 'ok' })).toEqual({ exitCode: 0 });
+    expect(acpExitCode({ exit_code: 3 })).toEqual({ exitCode: 3 });
+    expect(acpExitCode({ exitStatus: { exitCode: 1, signal: null } })).toEqual({ exitCode: 1 });
+    expect(acpExitCode({ output: 'done' })).toEqual({});
+    expect(acpExitCode('plain text')).toEqual({});
+    expect(acpExitCode({ exitCode: -1 })).toEqual({});
+  });
+});
 
 const open: AcpSession[] = [];
 const logs: string[] = [];

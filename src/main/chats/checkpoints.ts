@@ -6,7 +6,8 @@
 // again since the turn ended (the user's or another chat's later edit is never reverted); ignored files (builds,
 // node_modules) and nested repositories stay as they are. Before it touches a file, the undo records the tree as it is
 // under refs/sb/undo/<chat>/<time>, so an undo itself can be reverted with git. Why: agents run with the full default permissions (ADR 0085), and an undo is the safety net that needs no
-// popup. Used by ChatManager (deliverNow before a turn, undoTurn); pinned by test/unit/chats/checkpoints.test.ts.
+// popup. Used by ChatManager (deliverNow before a turn, undoTurn, and turnFiles for a run's receipts, ADR 0130); pinned
+// by test/unit/chats/checkpoints.test.ts.
 import { execFile } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -93,6 +94,13 @@ async function changes(root: string, from: string, to: string): Promise<{ file: 
     list.push({ file, status: (status ?? '').slice(0, 1), gitlink: oldMode === GITLINK || newMode === GITLINK });
   }
   return list;
+}
+
+/** The repo-relative paths a checkpoint's turn changed, created or deleted (cp.after must be recorded): the run's
+ *  receipts (agents/receipts.ts, ADR 0130). */
+export async function turnFiles(cp: Checkpoint): Promise<string[]> {
+  if (!cp.after) throw new Error('the turn end is not recorded');
+  return (await changes(cp.root, `${cp.commit}^{tree}`, cp.after)).map(c => c.file);
 }
 
 /** Puts back what the checkpoint's turn changed (see the header): a file the turn created is removed, one it changed or

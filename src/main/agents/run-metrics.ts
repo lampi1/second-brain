@@ -40,8 +40,8 @@ export interface RunTally {
   decisions?: number;
   /** of those decisions, the verified successes at prune time: the Orchestrator's level (its XP, ADR 0100) */
   decisionWins?: number;
-  /** successes earned at prune time by a verified parent (chain) or by a review's grade (standing.ts earnedVerdict,
-   *  ADR 0125): XP that `verdicts` (verified runs only) does not hold */
+  /** successes earned at prune time by a verified parent (chain), a review's grade or the receipts (standing.ts earnedVerdict,
+   *  ADR 0125, 0130): XP that `verdicts` (verified runs only) does not hold */
   earnedWins?: number;
   /** fitRollups dropped `tags` to stay in budget: later prunes do not rebuild a partial set, and filters leave this rollup out */
   tagsLost?: true;
@@ -185,7 +185,7 @@ export function rollUp(rollups: readonly RunTally[], pruned: readonly AgentRun[]
     const t = out.get(k)!;
     foldRun(t, run, index);
     const e = run.endedAt !== undefined && !run.oneshot?.fallback && run.oneshot?.job !== 'headline' ? earnedVerdict(run, earn) : null;
-    if (e?.verdict === 'success' && (e.basis === 'chain' || e.basis === 'graded')) t.earnedWins = (t.earnedWins ?? 0) + 1;
+    if (e?.verdict === 'success' && (e.basis === 'chain' || e.basis === 'graded' || e.basis === 'receipts')) t.earnedWins = (t.earnedWins ?? 0) + 1;
     if (countedDecision(run)) {
       t.decisions = (t.decisions ?? 0) + 1;
       if (verifiedVerdict(run, index.reworkStarts.get(run.runId), index.now)?.verdict === 'success') t.decisionWins = (t.decisionWins ?? 0) + 1;

@@ -19,6 +19,7 @@ export const explainEn: typeof explainIt = {
   'explain.judge.title': 'What the check does',
   'explain.judge.p1': 'When a task finishes, the app has a Sentinel review it in a new session that never saw how it was done. Its vote counts in the agent’s level and performance at full weight (× 1). At most two reviews at a time; tasks finished before it was switched on are not reviewed.',
   'explain.judge.p2': 'Each review is a real chat: it costs like a short Sentinel task. The estimate beside it is the tasks a day of the last 7 days times the median cost of a review.',
+  'explain.judge.p3': 'Before a review the app reads the task’s receipts: the commands run with their result and the files changed. If the project’s tests or checks (not written by the agent itself) passed after the last change and the agent says it finished, the task succeeded with no review; if they fail and the agent admits it, it failed. That vote weighs × 0.7. In any other case, or when the receipts and the agent’s report disagree, the Sentinel decides. One receipt in ten is reviewed anyway, to check that the receipts judge well.',
   'explain.tiers.title': 'Light, medium, high',
   'explain.tiers.p1': 'Each role asks for a model tier instead of a precise model: light for simple, quick jobs, medium for most, high for planning and long reasoning. Higher = more capable, slower and more expensive.',
   'explain.tiers.p2': 'Here you choose the model each tier runs on each engine; empty = the one the brain\'s model registry recommends.',

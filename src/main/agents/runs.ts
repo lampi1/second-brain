@@ -1,6 +1,7 @@
 // Role runs (AGENTS-DESIGN §1.2, §5): one record per chat started from a role, kept in agent-runs.json after
 // chats.json forgets the chat (60 closed chats). The pure lifecycle steps live here; ChatManager calls them on start,
-// end (completed / closed / stale), Brother's reopen, pending requests and settled turns.
+// end (completed / closed / stale), Brother's reopen, pending requests and settled turns. A run's receipts (what it did,
+// agents/receipts.ts, ADR 0130) are bounded there and read back here; ones out of shape are dropped, never the run.
 import path from 'node:path';
 import crypto from 'node:crypto';
 import type { AgentRun, AgentRunCorrections, AgentRunEnd, AgentRunOutcome, AgentRunReport, AgentRunTags, AgentRunTokens } from '../../shared/agents';
@@ -9,6 +10,7 @@ import { MODEL_TIERS, type ModelTier } from '../../shared/roles';
 import { SUMMARY_MAX } from './run-report';
 import { rollUp, SAMPLE_MAX, type RunTally, type TagTally } from './run-metrics';
 import { readLocal, writeLocalText } from './local-store';
+import { readReceipts } from './receipts';
 
 export const RUNS_MAX = 5000;
 /** Below the local store's 8 MB cap, with headroom for the run being added. */
@@ -22,7 +24,7 @@ export const ROLLUP_BYTES = 1_000_000;
 const ENDS: readonly AgentRunEnd[] = ['completed', 'closed', 'stale'];
 const VERDICTS: readonly AgentRunOutcome['verdict'][] = ['success', 'partial', 'fail', 'unknown'];
 const STARTED_BY: readonly AgentRun['startedBy'][] = ['user', 'orchestrator', 'parent', 'app'];
-const BASES: readonly AgentRunOutcome['basis'][] = ['human', 'reviewed-evidence', 'orchestrator-opinion', 'self-report', 'unknown'];
+const BASES: readonly AgentRunOutcome['basis'][] = ['human', 'reviewed-evidence', 'receipts', 'orchestrator-opinion', 'self-report', 'unknown'];
 export const RUN_ID = /^r_[a-f0-9]{12}$/;
 const AGENT_ID = /^[a-z][a-z0-9_-]{0,79}$/;
 const count = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) >= 0;
@@ -123,6 +125,7 @@ export function readRun(v: unknown): AgentRun | null {
   const report = r.report === undefined || (r.report as { ok?: unknown } | null)?.ok === false ? undefined : readReport(r.report);
   const corrections = r.corrections === undefined ? undefined : readCorrections(r.corrections);
   const tags = r.tags === undefined ? undefined : readTags(r.tags);
+  const receipts = r.receipts === undefined ? null : readReceipts(r.receipts);
   if (report === null || corrections === null || tags === null || (r.executionMs !== undefined && !time(r.executionMs))) return null;
   const delivery = r.delivery as AgentRun['delivery'];
   if (delivery !== undefined) {
@@ -163,6 +166,8 @@ export function readRun(v: unknown): AgentRun | null {
     costUsd: r.costUsd as number | null, tokens,
     ...(report ? { report } : {}), ...(corrections ? { corrections } : {}), ...(r.executionMs !== undefined ? { executionMs: r.executionMs as number } : {}),
     ...(tags ? { tags } : {}),
+    // receipts out of shape are dropped, never the run (ADR 0130)
+    ...(receipts ? { receipts } : {}),
   };
 }
 
@@ -176,6 +181,7 @@ export function endRun(run: AgentRun, reason: AgentRunEnd, at: number): boolean 
 export function reopenRun(run: AgentRun): boolean {
   if (run.endedAt === undefined) return false;
   delete run.endedAt; delete run.endReason; delete run.outcome;
+  if (run.receipts) delete run.receipts.verdict; // decided again at its next end
   run.counters.reopened++;
   return true;
 }

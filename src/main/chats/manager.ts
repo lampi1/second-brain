@@ -59,7 +59,8 @@ import { type UserTaskEvents, type TaskDeliveryPolicy, type AgentOwnerSnapshot, 
 import { AgentRunStore, addSkill, addTurn, APP_MAX, endRun, REPO_MAX, SKILL_ID, SKILLS_MAX, staleDue, tagName, type RunLinks } from '../agents/runs';
 import { reportOf } from '../agents/run-report';
 import { gateRequest, runtimePluginName, SubagentGate } from '../agents/role-gate';
-import { afterTree, KEEP as CHECKPOINTS_KEPT, prune as pruneCheckpoints, restore as restoreCheckpoint, snapshot as takeCheckpoint, type Checkpoint } from './checkpoints';
+import { afterTree, KEEP as CHECKPOINTS_KEPT, prune as pruneCheckpoints, restore as restoreCheckpoint, snapshot as takeCheckpoint, turnFiles, type Checkpoint } from './checkpoints';
+import { emptyReceipts, noteTool, noteTurnFiles, receiptVerdict } from '../agents/receipts';
 import { autoPermit } from './auto-permit';
 import { TurnToolBudget } from '../agents/orchestrator-budget';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
@@ -297,6 +298,11 @@ interface Rec {
   heldResults?: HeldChildResult[];
   /** the end-of-turn record of the last checkpoint, while git writes it (recordTurnEnd) */
   afterPending?: Promise<void> | undefined;
+  /** the run's receipts (ADR 0130): tool rows already noted, the checkpoint whose turn files are in, a turn's files
+   *  still being read (the verdict waits for them) */
+  receiptRows?: Set<string>;
+  receiptCp?: Checkpoint;
+  receiptsBusy?: boolean;
   undoNote?: string;
   /** the roles this chat's role may launch (resolved at creation; absent = unknown, e.g. a chat saved before) */
   launches?: string[];
@@ -2505,6 +2511,7 @@ export class ChatManager implements ChatService {
     // the agent's run-report, if this turn ends with one (the latest wins; a turn without one keeps the last); a run
     // ended during this turn (its Orchestrator marked it completed) still takes it
     const run = r.s.run, turnAt = r.turnAt;
+    this.receiptTurn(r, turnAt, item.at);
     // still running after the result: a queued turn follows at once (no state change starts it), and it starts now
     if (r.s.state === 'running') r.turnAt = item.at; else delete r.turnAt;
     const reply = turnReply(r.items), runReport = reportOf(reply, item.at);
@@ -2597,6 +2604,8 @@ export class ChatManager implements ChatService {
     const r = this.chats.get(run.chatId), mine = !!r && r.s.run === run;
     if (mine) this.ranUntil(r!, at);
     endRun(run, reason, at);
+    // the receipts' verdict now, unless a turn's files are still coming (receiptTurn settles it then)
+    if (mine && !r!.receiptsBusy && r!.turnAt === undefined) this.settleReceipts(run);
     this.hook('agent lifecycle', () => this.opts.onRunEnded?.(structuredClone(run)));
     log.info('chats', 'agent run ended', { chat: run.chatId, data: { runId: run.runId, reason } });
     for (const child of this.runs.children(run.runId)) this.finishRun(child, 'closed', at);
@@ -2716,6 +2725,44 @@ export class ChatManager implements ChatService {
     const cp = r.checkpoints?.at(-1);
     if (!cp || cp.after || r.afterPending) return;
     r.afterPending = afterTree(cp.root).then(tree => { if (tree) cp.after = tree; }).finally(() => { r.afterPending = undefined; });
+  }
+
+  /** A finished tool row of the open run (or of the turn it ended in) goes into its receipts (agents/receipts.ts,
+   *  ADR 0130): a command and its exit code, an edit, a PR. Each row once. */
+  private noteReceipt(r: Rec, item: Extract<ChatItem, { kind: 'tool' }>): void {
+    const run = r.s.run!;
+    if (item.status === 'running' || run.source === 'oneshot' || (run.endedAt !== undefined && (r.turnAt === undefined || run.endedAt < r.turnAt))) return;
+    const seen = r.receiptRows ??= new Set();
+    if (seen.has(item.id) || !noteTool(run.receipts ??= emptyReceipts(), item)) return;
+    seen.add(item.id);
+    if (seen.size > 500) seen.delete(seen.values().next().value!);
+    this.runs.touch();
+  }
+  /** A turn of the run ended: the files it changed go into the receipts once git recorded its end (recordTurnEnd); a
+   *  turn without its own checkpoint is a gap (files unknown). An ended run gets its verdict once they are in. */
+  private receiptTurn(r: Rec, turnAt: number | undefined, end: number): void {
+    const run = r.s.run;
+    if (!run || run.source === 'oneshot' || (run.endedAt !== undefined && (turnAt === undefined || run.endedAt < turnAt))) return;
+    const rc = run.receipts ??= emptyReceipts(), cp = r.checkpoints?.at(-1);
+    if (!r.turnCheckpoint || !cp || r.receiptCp === cp) { noteTurnFiles(rc, null, 0, end); this.receiptsIn(r, run); return; }
+    r.receiptCp = cp; r.receiptsBusy = true;
+    void (async () => {
+      let files: string[] | null = null;
+      try { await r.afterPending; if (cp.after) files = await turnFiles(cp); } catch (e) { log.debug('chats', 'turn files not read for the receipts', { chat: r.s.id, data: errText(e) }); }
+      noteTurnFiles(rc, files, cp.at, end);
+      r.receiptsBusy = false;
+      this.receiptsIn(r, run);
+    })();
+  }
+  private receiptsIn(r: Rec, run: AgentRun): void {
+    if (run.endedAt !== undefined && !r.receiptsBusy) this.settleReceipts(run); else this.runs.touch();
+  }
+  /** The run's deterministic verdict at its end (receipts.ts receiptVerdict), once. */
+  private settleReceipts(run: AgentRun): void {
+    const rc = run.receipts;
+    if (!rc || rc.verdict) return;
+    rc.verdict = { ...receiptVerdict({ receipts: rc, ...(run.report ? { report: run.report } : {}), doneWhen: run.taskContract?.doneWhen ?? [] }), at: Date.now() };
+    this.runSave();
   }
 
   async undoTurn(chatId: string): Promise<{ restored: number; removed: number }> {
@@ -3305,6 +3352,7 @@ export class ChatManager implements ChatService {
           const input = item.input as { skill?: unknown; command?: unknown } | null;
           if (addSkill(r.s.run, input?.skill ?? input?.command)) { if (r.s.run.skillSuggestions) r.s.run.skillSuggestions.used = [...r.s.run.tags!.skills]; this.runs.touch(); this.runSave(); }
         }
+        if (item.kind === 'tool' && r.s.run) this.noteReceipt(r, item);
         if (item.kind === 'result' && !replace) this.turnEnded(r, item);
       },
       pending: req => {

@@ -20,6 +20,20 @@ export function shortPath(p: string, cwd?: string): string {
   return p.replace(/\\/g, '/');
 }
 
+/** The exit code of a Bash / PowerShell result, when the CLI tells it (ADR 0130, the run's receipts): an error result
+ *  reads "Exit code N" first; a result that is no error exited 0, unless the command went to the background, was
+ *  interrupted, or the CLI reinterpreted its code (returnCodeInterpretation: grep's 1 "no matches"). Else undefined. */
+export function shellExit(name: string, input: unknown, isError: boolean, content: unknown, toolUseResult: unknown): number | undefined {
+  if (name !== 'Bash' && name !== 'PowerShell') return undefined;
+  const r = obj(toolUseResult);
+  if (obj(input).run_in_background === true || r.backgroundTaskId !== undefined || r.interrupted === true) return undefined;
+  if (isError) {
+    const m = /^\s*Exit code (\d{1,3})\b/.exec(resultText(content, 200));
+    return m ? Number(m[1]) : undefined;
+  }
+  return r.returnCodeInterpretation !== undefined ? undefined : 0;
+}
+
 /** One line for a tool row: "Bash: npm test", "Edit: src/app.ts", "Agent: review the diff". */
 export function toolSummary(name: string, input: unknown, cwd?: string): string {
   const i = obj(input);

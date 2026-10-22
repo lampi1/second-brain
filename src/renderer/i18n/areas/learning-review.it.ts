@@ -115,6 +115,7 @@ export const learningReviewIt = {
   "lr.basis.human": "giudizio umano",
   "lr.basis.reviewed-evidence": "prove verificate",
   "lr.basis.orchestrator-opinion": "opinione Orchestrator",
+  "lr.basis.receipts": "ricevute dei test",
   "lr.basis.self-report": "autodichiarazione",
   "lr.basis.unknown": "origine non nota",
   "lr.verified.yes": "Verificato",

@@ -90,10 +90,11 @@ export interface AgentOwnerSnapshot {
 }
 /** How a run ended: its work was marked completed (by agent_report, the Orchestrator or the user), its chat was closed, or it sat idle. */
 export type AgentRunEnd = 'completed' | 'closed' | 'stale';
-/** Only `human` and `reviewed-evidence` count for keep-or-rollback (AGENTS-DESIGN §1.2, §4.4). */
+/** Only `human` and `reviewed-evidence` count for keep-or-rollback (AGENTS-DESIGN §1.2, §4.4). `receipts` = the app's
+ *  deterministic verdict from what the run did (agents/receipts.ts, ADR 0130): repo checks run after the last change. */
 export interface AgentRunOutcome {
   verdict: 'success' | 'partial' | 'fail' | 'unknown';
-  basis: 'human' | 'reviewed-evidence' | 'orchestrator-opinion' | 'self-report' | 'unknown';
+  basis: 'human' | 'reviewed-evidence' | 'receipts' | 'orchestrator-opinion' | 'self-report' | 'unknown';
   at: number; by: string; note?: string;
 }
 export interface AgentRunCounters { questions: number; permissions: number; commands: number; reopened: number; contextPeak: number | null }
@@ -107,6 +108,30 @@ export interface AgentRunReport { canonical?: CanonicalResult; at: number; outco
   /** given with agent_report (its result was delivered to the parent or the Orchestrator as a message), not a
    *  run-report block in a reply */
   via?: 'agent_report' }
+/** One shell command a run's agent ran (agents/receipts.ts): its text (cut), its exit code (null = the engine did not
+ *  say), when it started; check = it runs a repo check (tests, typecheck, lint); masked = a pipe, `||`, `;` or `&`
+ *  around it, so its exit code is not the check's. */
+export interface AgentRunCommand { cmd: string; exit: number | null; at: number; check?: true; masked?: true }
+export type ReceiptResult = 'pass' | 'fail' | 'unknown';
+/** Why the receipts decided what they did (agents/receipts.ts receiptVerdict). */
+export type ReceiptReason = 'checks-passed' | 'check-failed' | 'claims-unverified' | 'not-code' | 'files-unknown' | 'own-tests' | 'no-check-after-change' | 'criteria-unmet';
+/** What the run did, recorded while it was open (ADR 0130), bounded: the commands with their exit codes, the files its
+ *  turns changed (from the per-turn checkpoints, ADR 0103), commits and PRs it made; the deterministic verdict at its end. */
+export interface AgentRunReceipts {
+  /** oldest first, at most RECEIPT_COMMANDS (a check outlives other commands); more = the ones left out */
+  commands: AgentRunCommand[]; more: number;
+  /** repo-relative paths, at most RECEIPT_FILES; filesMore = the ones left out */
+  files: string[]; filesMore: number;
+  /** a turn's changes were recorded (filesKnown); a turn's were not (filesGap: not git, checkpoints off, git failed) */
+  filesKnown: boolean; filesGap: boolean;
+  /** over all changed files, not only the kept ones: a test or check config, a code file (not docs) */
+  testsTouched: boolean; codeTouched: boolean;
+  /** when a file last changed (an edit tool, or the end of a turn whose files changed without one); null = never */
+  lastChangeAt: number | null;
+  commits: number; prs: number;
+  /** set once the run ended and its last turn's files are in */
+  verdict?: { result: ReceiptResult; reason: ReceiptReason; at: number };
+}
 /** The user's corrections in the run (§5): (a) "[Reasoning correction]" messages, (b) a reopen of a run whose agent had
  *  reported. Missing on runs recorded before they were counted: unknown, never zero. */
 export interface AgentRunCorrections { tagged: number; afterReport: number }
@@ -160,9 +185,9 @@ export interface AgentStanding {
   performance: number | null;
   /** runs with a weighted verdict (never the agent's own word), and the minimum before the performance is shown */
   evaluated: number; minRuns: number;
-  /** where the verdicts came from: the user, an independent review, a review graded by what happened later, the facts,
+  /** where the verdicts came from: the user, an independent review, the app's receipts (ADR 0130), a review graded by what happened later, the facts,
    *  the Orchestrator, a verified parent (chain), the agent itself (the last one is counted here but weighs nothing) */
-  sources: { human: number; review: number; graded: number; facts: number; orchestrator: number; chain: number; self: number };
+  sources: { human: number; review: number; receipts: number; graded: number; facts: number; orchestrator: number; chain: number; self: number };
 }
 /** One run = a chat started from a role (agent-runs.json is the source of truth; the chat keeps a mirror). */
 /** App delivery observations. Engine submission is recorded only after session.send succeeds. */
@@ -213,15 +238,19 @@ export interface AgentRun {
   /** what the run was about (AGENTS-DESIGN §4.8), set at start and frozen at its end; missing on runs recorded before tags
    *  existed: unknown in every filter, never a match */
   tags?: AgentRunTags;
+  /** what the run did, with its deterministic verdict (ADR 0130); missing on runs before it and on one-shots */
+  receipts?: AgentRunReceipts;
 }
 /** skills = skill ids it started with plus the ones its engine loaded while open; app = the product it is about;
  *  repo = the name of the git top-level folder of its cwd (null outside a repository). */
 export interface AgentRunTags { skills: string[]; app: string | null; repo: string | null }
 /** What the judging switch costs a day (main/agents/judge-sample.ts judgingEstimate). */
 export interface JudgingEstimate {
-  /** finished root runs a day that the switch would review (last 7 days) */
+  /** finished root runs a day that the switch would review (last 7 days): not the ones its receipts decide */
   runsPerDay: number;
-  /** second reviews a day that grade the first ones (one in AUDIT_EVERY, ADR 0125); in perDayUsd */
+  /** finished root runs a day that their receipts decide with no review (ADR 0130): zero tokens */
+  receiptsPerDay: number;
+  /** second reviews a day that grade the first ones or the receipts (one in AUDIT_EVERY, ADR 0125, 0130); in perDayUsd */
   auditsPerDay: number;
   /** the median cost of one review (past reviews, else the Sentinel's own runs); null = no data yet */
   reviewUsd: number | null;

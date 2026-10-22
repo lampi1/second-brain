@@ -116,6 +116,7 @@ export const learningReviewDe: { [K in keyof typeof learningReviewIt]: string } 
   "lr.basis.human": "menschliches Urteil",
   "lr.basis.reviewed-evidence": "geprüfte Nachweise",
   "lr.basis.orchestrator-opinion": "Einschätzung des Orchestrators",
+  "lr.basis.receipts": "Testbelege",
   "lr.basis.self-report": "Selbstauskunft",
   "lr.basis.unknown": "unbekannte Grundlage",
   "lr.verified.yes": "Geprüft",

@@ -59,7 +59,7 @@ describe('standings', () => {
     const s = standings(runs, [], NOW + 3600_000).get('scout')!;
     // 5 × 1 + fact fail 0 + opinion 0.6 × 0.5, over 5 + 1 + 0.6 (same age for all)
     expect(s.performance).toBeCloseTo((5 + 0.3) / 5.6);
-    expect(s).toMatchObject({ evaluated: 6, sources: { human: 5, review: 0, graded: 0, facts: 0, orchestrator: 1, chain: 0, self: 3 } });
+    expect(s).toMatchObject({ evaluated: 6, sources: { human: 5, review: 0, receipts: 0, graded: 0, facts: 0, orchestrator: 1, chain: 0, self: 3 } });
   });
   it('levels up only on verified successes: never on failed, unverified, provisional or self-reported runs (ADR 0100)', () => {
     const clean = (endedAt: number) => run({ endedAt, startedAt: endedAt - 1000, corrections: { tagged: 0, afterReport: 0 }, report: { at: endedAt, outcome: 'done', verified: 'yes', summary: 's', via: 'agent_report' } });
@@ -101,7 +101,7 @@ describe('the Orchestrator\'s standing (issue #112, ADR 0097)', () => {
       run({ startedBy: 'orchestrator', endedAt: undefined }),                            // still open
     ];
     const s = standings([...mine, ...others], [], NOW).get('orchestrator')!;
-    expect(s).toMatchObject({ runs: 5, wins: 4, level: 1, evaluated: 5, sources: { human: 5, review: 0, graded: 0, facts: 0, orchestrator: 0, chain: 0, self: 0 } });
+    expect(s).toMatchObject({ runs: 5, wins: 4, level: 1, evaluated: 5, sources: { human: 5, review: 0, receipts: 0, graded: 0, facts: 0, orchestrator: 0, chain: 0, self: 0 } });
     expect(s.performance).toBeCloseTo(0.8);
     // the run still counts for its own role too
     expect(standings(mine, [], NOW).get('scout')!.runs).toBe(3);
@@ -112,7 +112,7 @@ describe('the Orchestrator\'s standing (issue #112, ADR 0097)', () => {
     const mine = [...Array(5)].map(() => run({ startedBy: 'orchestrator', outcome: opinion('success') }));
     const judged = [...Array(5)].map(() => run({ startedBy: 'orchestrator', outcome: human('fail') }));
     const s = standings([...mine, ...judged], [], NOW).get('orchestrator')!;
-    expect(s.sources).toEqual({ human: 5, review: 0, graded: 0, facts: 0, orchestrator: 0, chain: 0, self: 5 });
+    expect(s.sources).toEqual({ human: 5, review: 0, receipts: 0, graded: 0, facts: 0, orchestrator: 0, chain: 0, self: 5 });
     expect(s).toMatchObject({ performance: 0, evaluated: 5, wins: 0 }); // its own word weighs nothing: only the 5 failures count
     // the role it rated keeps the Orchestrator's trust for that verdict
     expect(standings(mine, [], NOW).get('scout')!.sources.orchestrator).toBe(5);
@@ -251,5 +251,26 @@ describe('every role progresses without a manual verdict (ADR 0125)', () => {
     const s = root('strategist'), c = child('scout', s, { outcome: human('fail') });
     expect(earnedVerdict(c, earnIndex([s, c]))).toEqual({ verdict: 'fail', basis: 'human' });
     expect(wins([s, c], 'scout')).toBe(0);
+  });
+});
+
+describe('the receipts\' verdict (ADR 0130)', () => {
+  const byReceipts = (verdict: 'success' | 'fail') => run({ agentId: 'artisan', outcome: { verdict, basis: 'receipts', at: NOW, by: 'receipts' } });
+  it('weighs × 0.7, below the user and a review, above the Orchestrator; a review of the run outranks it', () => {
+    expect(TRUST.receipts).toBe(0.7);
+    expect(TRUST.receipts).toBeLessThan(TRUST.graded);
+    expect(TRUST.receipts).toBeGreaterThan(TRUST.orchestrator);
+    const r = byReceipts('success');
+    expect(verdictOf(r)).toEqual({ source: 'receipts', verdict: 'success' });
+    const review = run({ agentId: 'sentinel', reviewOf: r.runId, report: { at: NOW, outcome: 'done', verified: 'yes', summary: 's', verdict: 'fail' } });
+    expect(verdictOf(r, [review])).toEqual({ source: 'review', verdict: 'fail' });
+  });
+  it('a success earns XP, counts as a receipts source, and lives on through a prune', () => {
+    const runs = [...Array(4)].map(() => byReceipts('success')).concat(byReceipts('fail'));
+    expect(earnedVerdict(runs[0]!, earnIndex(runs))).toEqual({ verdict: 'success', basis: 'receipts' });
+    const st = standings(runs, [], NOW).get('artisan')!;
+    expect(st).toMatchObject({ wins: 4, evaluated: 5, sources: { receipts: 5 } });
+    expect(st.performance).toBeCloseTo(0.8);
+    expect(rollUp([], runs, runs, NOW)[0]).toMatchObject({ earnedWins: 4 });
   });
 });
