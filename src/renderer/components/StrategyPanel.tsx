@@ -11,7 +11,6 @@ import { ROLE_DEFAULTS } from '@shared/roles';
 import { t } from '../i18n';
 import { answer } from '../store/store';
 import { useNow } from '../lib/clock';
-import { callQuestions } from '../store/ui';
 import { reqKey } from '../actions';
 import { planAskKey } from '../lib/plan-ask';
 import { openQueue } from '../lib/later';
@@ -73,7 +72,7 @@ export function StrategyPanel({ chat, question }: { chat: ChatSummary; question?
       <div className="sp-top"><span className="sp-kicker">{t(plan.phase === 'revising' ? 'tree.plan.revisingKicker' : 'tree.plan.asking')}</span>
         {question && <span className="sp-right" data-testid={`plan-question-n-${id}`}>{t('tree.plan.question', { n: plan.clarified.length + 1 })}</span>}</div>
       {question
-        ? <p className="sp-note sp-in-window" data-testid={`plan-in-window-${id}`}>{t('tree.plan.inWindow')} <button type="button" className="sp-link" onClick={() => callQuestions(reqKey(question))} data-testid={`plan-open-window-${id}`}>{t('tree.plan.openWindow')}</button></p>
+        ? <p className="sp-note sp-in-window" data-testid={`plan-in-window-${id}`}>{t('tree.plan.inWindow')} <button type="button" className="sp-link" onClick={() => openQueue(reqKey(question))} data-testid={`plan-open-window-${id}`}>{t('tree.plan.openWindow')}</button></p>
         : <p className="sp-note">{t(plan.phase === 'revising' ? 'tree.plan.revising' : 'tree.plan.thinking')}</p>}
       <Known plan={plan} />
       {question && plan.phase === 'asking' && <div className="sp-foot"><button type="button" className="sp-link" onClick={() => enough(question)} data-testid={`plan-enough-${id}`}>{t('tree.plan.enough')}</button></div>}
