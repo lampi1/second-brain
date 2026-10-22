@@ -15,7 +15,7 @@ import { useApp } from '../store/store';
 import { sameList } from '../store/state';
 import { useHandoffTabs } from '../store/handoffs';
 import { setPrefs, ui } from '../store/ui';
-import { t as tr } from '../i18n';
+import { t as tr, locale } from '../i18n';
 import { ChatTile } from './ChatTile';
 import { BrowserTile } from './BrowserTile';
 import { ChildStrips } from './ChildStrips';
@@ -138,7 +138,7 @@ function Origin({ chatId }: { chatId: string }) {
   const o = useApp(s => originOf(s.chats[chatId], Object.values(s.chats)), (a, b) => JSON.stringify(a) === JSON.stringify(b));
   const avatar = useApp(s => Object.values(s.chats).find(c => c?.isOrchestrator)?.agent?.avatar);
   if (!o) return null;
-  const time = (at: number) => new Date(at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  const time = (at: number) => new Date(at).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
   if (o.kind === 'orchestrator') return <div className="tree-origin" data-testid={`tree-origin-${chatId}`} data-origin="orchestrator">
     <AgentAvatar avatar={avatar} name="Orchestrator" size={18} />
     <span><b>Orchestrator</b> {tr('tree.origin', { time: time(o.at) })}</span>

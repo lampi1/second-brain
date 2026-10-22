@@ -7,6 +7,7 @@
 // (app:askImage, main/ask-image.ts). Used by MessageImages.tsx; pinned by test/unit/message-images.test.ts.
 import {marked,type Token} from 'marked';
 import {LOCAL_START,plainPath} from './pathPatterns';
+import {t} from '../i18n';
 export interface MessageImage {path:string;caption:string}
 const IMAGE=/\.(png|jpe?g|webp)$/i;
 const BARE=new RegExp(String.raw`(?<![\w/\\:.])(?:file:\/\/\/?)?${LOCAL_START}[^\s<>"'\`|*?)\]]*?\.(?:png|jpe?g|webp)(?!\w|\.\w)`,'gi');
@@ -33,7 +34,7 @@ export function localMessageImages(text:string,cwd?:string):MessageImage[]{
     if(/^file:/i.test(href)&&!absolute)return;
     if(!IMAGE.test(path))return;
     const key=path.replace(/\\/g,'/').toLowerCase();if(seen.has(key))return;seen.add(key);
-    out.push({path,caption:(caption.trim()||path.split(/[\\/]/).pop()||'Immagine locale').slice(0,200)});
+    out.push({path,caption:(caption.trim()||path.split(/[\\/]/).pop()||t('appText.images.local')).slice(0,200)});
   };
   /** The prose of one inline run (consecutive text and escape tokens, which marked may split a Windows path into). */
   const prose=(run:string)=>{for(const m of run.matchAll(BARE))add(m[0],'',false);};

@@ -4,6 +4,7 @@
 // info aggiuntive sempre a costo 0 token". Pinned by test/unit/brain-ui/task-view.test.ts.
 import type { DevopsDetail, DevopsItem, DevopsPr, DevopsTest } from '@shared/contract';
 import type { Tone } from '../components/ui';
+import { t } from '../../i18n';
 
 const DAY = 864e5;
 /** Whole days since an ISO date (null when missing or unreadable). */
@@ -12,7 +13,7 @@ export function daysSince(iso: string | null | undefined, now = Date.now()): num
   return Number.isNaN(t) ? null : Math.max(0, Math.floor((now - t) / DAY));
 }
 /** "da oggi" · "da ieri" · "da 4 giorni" */
-export function sinceLabel(days: number): string { return days === 0 ? 'da oggi' : days === 1 ? 'da ieri' : `da ${days} giorni`; }
+export function sinceLabel(days: number): string { return days === 0 ? t('brainText.tasks.sinceToday') : days === 1 ? t('brainText.tasks.sinceYesterday') : t('brainText.tasks.sinceDays', { n: days }); }
 
 /** A work item has not moved for this many days: "fermo". */
 export const STUCK_DAYS = 3;
@@ -31,26 +32,30 @@ export function firstName(n: string): string {
 
 /** Who the PR is waiting for, the most blocking reason first. */
 export function prWait(p: DevopsPr): Wait {
-  if (p.draft) return { who: 'me', tone: 'outline', text: 'Bozza: la pubblichi tu' };
+  if (p.draft) return { who: 'me', tone: 'outline', text: t('brainText.tasks.wait.draft') };
   const rejected = p.reviewers.filter(r => r.vote <= -10);
-  if (rejected.length) return { who: 'me', tone: 'bad', text: `Aspetta te: rifiutata da ${rejected.map(r => firstName(r.name)).join(', ')}` };
-  if (p.build?.result === 'failed') return { who: 'me', tone: 'bad', text: 'Aspetta te: build fallita' };
-  if (p.build?.result === 'canceled') return { who: 'me', tone: 'warn', text: 'Aspetta te: build annullata' };
+  if (rejected.length) return { who: 'me', tone: 'bad', text: t('brainText.tasks.wait.rejected', { names: rejected.map(r => firstName(r.name)).join(', ') }) };
+  if (p.build?.result === 'failed') return { who: 'me', tone: 'bad', text: t('brainText.tasks.wait.buildFailed') };
+  if (p.build?.result === 'canceled') return { who: 'me', tone: 'warn', text: t('brainText.tasks.wait.buildCanceled') };
   const changes = p.reviewers.filter(r => r.vote === -5);
-  if (changes.length) return { who: 'me', tone: 'warn', text: `Aspetta te: ${changes.map(r => firstName(r.name)).join(', ')} ${changes.length === 1 ? 'chiede' : 'chiedono'} modifiche` };
-  if (p.activeThreads) return { who: 'me', tone: 'warn', text: `Aspetta te: ${p.activeThreads} ${p.activeThreads === 1 ? 'commento da risolvere' : 'commenti da risolvere'}` };
+  if (changes.length) return { who: 'me', tone: 'warn', text: t('brainText.tasks.wait.changes', { names: changes.map(r => firstName(r.name)).join(', '), n: changes.length }) };
+  if (p.activeThreads) return { who: 'me', tone: 'warn', text: t('brainText.tasks.wait.threads', { n: p.activeThreads }) };
   const missing = p.reviewers.filter(r => r.required && r.vote === 0);
-  if (missing.length) return { who: 'others', tone: 'blue', text: `Aspetta il voto di ${missing.map(r => firstName(r.name)).join(', ')}` };
-  if (p.build && p.build.status !== 'completed') return { who: 'others', tone: 'blue', text: 'Aspetta la build in corso' };
-  if (!p.reviewers.some(r => r.vote >= 5)) return { who: 'others', tone: 'blue', text: 'Aspetta una prima approvazione' };
+  if (missing.length) return { who: 'others', tone: 'blue', text: t('brainText.tasks.wait.vote', { names: missing.map(r => firstName(r.name)).join(', ') }) };
+  if (p.build && p.build.status !== 'completed') return { who: 'others', tone: 'blue', text: t('brainText.tasks.wait.build') };
+  if (!p.reviewers.some(r => r.vote >= 5)) return { who: 'others', tone: 'blue', text: t('brainText.tasks.wait.first') };
   return p.autoComplete
-    ? { who: 'none', tone: 'good', text: 'Pronta: si chiude da sola' }
-    : { who: 'me', tone: 'good', text: 'Pronta: manca solo il completamento' };
+    ? { who: 'none', tone: 'good', text: t('brainText.tasks.wait.auto') }
+    : { who: 'me', tone: 'good', text: t('brainText.tasks.wait.complete') };
 }
 
-/** A build's result or status in Italian ("failed" → "fallita"). */
-export const BUILD_WORDS: Record<string, string> = { failed: 'fallita', partiallySucceeded: 'riuscita in parte', succeeded: 'riuscita', canceled: 'annullata',
-  inProgress: 'in corso', notStarted: 'in coda', cancelling: 'in annullamento', postponed: 'rimandata' };
+/** A build's result or status in words ("failed" → "fallita"); getters, so each read is in the current language. */
+export const BUILD_WORDS: Record<string, string> = {
+  get failed() { return t('brainText.tasks.build.failed'); }, get partiallySucceeded() { return t('brainText.tasks.build.partiallySucceeded'); },
+  get succeeded() { return t('brainText.tasks.build.succeeded'); }, get canceled() { return t('brainText.tasks.build.canceled'); },
+  get inProgress() { return t('brainText.tasks.build.inProgress'); }, get notStarted() { return t('brainText.tasks.build.notStarted'); },
+  get cancelling() { return t('brainText.tasks.build.cancelling'); }, get postponed() { return t('brainText.tasks.build.postponed'); },
+};
 
 export interface TestSum { passed: number; failed: number; other: number; never: number; total: number; tone: Tone; text: string }
 /** "3 test: 2 passati, 1 fallito" with the worst outcome's tone. */
@@ -61,18 +66,18 @@ export function testSummary(tests: readonly DevopsTest[]): TestSum | null {
   const failed = n(t => t.outcome === 'Failed');
   const never = n(t => !t.outcome || /^(None|Unspecified|NotExecuted)$/i.test(t.outcome));
   const other = tests.length - passed - failed - never;
-  const parts = [passed && `${passed} ${passed === 1 ? 'passato' : 'passati'}`, failed && `${failed} ${failed === 1 ? 'fallito' : 'falliti'}`,
-    other && `${other} ${other === 1 ? 'bloccato o altro' : 'bloccati o altro'}`, never && `${never} da eseguire`].filter(Boolean);
+  const parts = [passed && t('brainText.tasks.sum.passed', { n: passed }), failed && t('brainText.tasks.sum.failed', { n: failed }),
+    other && t('brainText.tasks.sum.other', { n: other }), never && t('brainText.tasks.sum.never', { n: never })].filter(Boolean);
   const tone: Tone = failed ? 'bad' : other || never ? 'warn' : 'good';
-  return { passed, failed, other, never, total: tests.length, tone, text: `${tests.length} test: ${parts.join(', ')}` };
+  return { passed, failed, other, never, total: tests.length, tone, text: t('brainText.tasks.sum.total', { n: tests.length, parts: parts.join(', ') }) };
 }
 
 export function outcomeLabel(o: string | null): { label: string; tone: Tone } {
-  if (o === 'Passed') return { label: 'passato', tone: 'good' };
-  if (o === 'Failed') return { label: 'fallito', tone: 'bad' };
-  if (o === 'Blocked') return { label: 'bloccato', tone: 'warn' };
-  if (o === 'NotApplicable') return { label: 'non applicabile', tone: 'outline' };
-  if (!o || /^(None|Unspecified|NotExecuted)$/i.test(o)) return { label: 'da eseguire', tone: 'outline' };
+  if (o === 'Passed') return { label: t('brainText.tasks.outcome.passed'), tone: 'good' };
+  if (o === 'Failed') return { label: t('brainText.tasks.outcome.failed'), tone: 'bad' };
+  if (o === 'Blocked') return { label: t('brainText.tasks.outcome.blocked'), tone: 'warn' };
+  if (o === 'NotApplicable') return { label: t('brainText.tasks.outcome.na'), tone: 'outline' };
+  if (!o || /^(None|Unspecified|NotExecuted)$/i.test(o)) return { label: t('brainText.tasks.outcome.toRun'), tone: 'outline' };
   return { label: o, tone: 'warn' };
 }
 

@@ -7,7 +7,7 @@
 // inside it (minor ones that find no free spot are hidden, never overlapped). "Adatta" drops zoom and selection and
 // re-measures, so the whole map is fitted again (issue #77).
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { lang } from '../i18n';
+import { t } from '../i18n';
 import { fitLayout, layout, placeLabels } from './data';
 import { labelCandidates, nodeStyle } from './graph-style';
 
@@ -19,7 +19,6 @@ export function Graph({ nodes, edges, selected, onSelect, label, toolbar, legend
   /** the key drawn on the map's bottom-left corner */ legend?: ReactNode;
   /** shown in place of the drawing when there are no nodes (the toolbar stays, e.g. to clear a search) */ empty?: ReactNode; testId?: string;
 }) {
-  const en = lang() === 'en';
   const [zoom, setZoom] = useState(1);
   const select = (id: string) => { setZoom(1); onSelect(id); };
   // the drawing area's size in CSS pixels; 800x520 until the first measure (and in a non-DOM render)
@@ -67,7 +66,7 @@ export function Graph({ nodes, edges, selected, onSelect, label, toolbar, legend
   const x = Math.max(box.x, Math.min(box.x + box.w - width, (focus?.x ?? box.x + box.w / 2) - width / 2));
   const y = Math.max(box.y, Math.min(box.y + box.h - height, (focus?.y ?? box.y + box.h / 2) - height / 2));
   return <div className={`dash-graph ${dense ? 'dense' : ''} ${selected ? 'focused' : ''}`} data-testid={testId}>
-    {toolbar && <div className="dash-map-toolbar" data-testid="dash-map-toolbar" role="toolbar" aria-label={en ? 'Map commands' : 'Comandi della mappa'}>{toolbar}</div>}
+    {toolbar && <div className="dash-map-toolbar" data-testid="dash-map-toolbar" role="toolbar" aria-label={t('brainText.graph.commands')}>{toolbar}</div>}
     {nodes.length ? <div className="dash-graph-canvas" ref={canvas}><svg viewBox={`${x} ${y} ${width} ${height}`} role="group" aria-label={label} data-size={`${size.w}x${size.h}`}>
       <defs><radialGradient id="dash-aura"><stop stopColor="var(--blue)" stopOpacity=".13" /><stop offset="1" stopColor="var(--blue)" stopOpacity="0" /></radialGradient></defs>
       <circle cx={size.w / 2} cy={size.h / 2} r={Math.min(size.w, size.h) * .48} fill="url(#dash-aura)" />
@@ -102,10 +101,10 @@ export function Graph({ nodes, edges, selected, onSelect, label, toolbar, legend
     <div className="dash-graph-foot">
       {legend ?? <span />}
       <div className="dash-zoom" role="group" aria-label="Zoom">
-        <button type="button" className="dash-zoom-fit" title={en ? 'Show the whole map' : 'Mostra tutta la mappa'} onClick={() => { setZoom(1); onSelect(''); measure(); }}><span aria-hidden="true">⤢</span>{en ? 'Fit' : 'Adatta'}</button>
-        <button type="button" aria-label={en ? 'Zoom out' : 'Riduci'} title={en ? 'Zoom out' : 'Riduci'} onClick={() => setZoom(z => Math.max(1, z - .5))} disabled={zoom === 1}>−</button>
+        <button type="button" className="dash-zoom-fit" title={t('brainText.graph.fitTip')} onClick={() => { setZoom(1); onSelect(''); measure(); }}><span aria-hidden="true">⤢</span>{t('brainText.graph.fit')}</button>
+        <button type="button" aria-label={t('brainText.graph.zoomOut')} title={t('brainText.graph.zoomOut')} onClick={() => setZoom(z => Math.max(1, z - .5))} disabled={zoom === 1}>−</button>
         <output aria-live="polite">{Math.round(zoom * 100)}%</output>
-        <button type="button" aria-label={en ? 'Zoom in' : 'Ingrandisci'} title={en ? 'Zoom in' : 'Ingrandisci'} onClick={() => setZoom(z => Math.min(3, z + .5))} disabled={zoom === 3}>+</button>
+        <button type="button" aria-label={t('brainText.graph.zoomIn')} title={t('brainText.graph.zoomIn')} onClick={() => setZoom(z => Math.min(3, z + .5))} disabled={zoom === 3}>+</button>
       </div>
     </div>
   </div>;

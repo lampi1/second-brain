@@ -11,7 +11,7 @@ let localActions=0;
 const sb=trackBridge(rawSb,delta=>{localActions+=delta;});
 import {updateIsFrozen} from '../lib/update-barrier';
 import { createStore } from './createStore';
-import { t } from '../i18n';
+import { t, locale } from '../i18n';
 import { connectAutoClose } from './auto-close';
 import { initialState, isBusy, reduce, toFlush, type Action, type AppState, type QueuedMsg } from './state';
 import { announce, hideChat, hideTab, setPrefs, toast,toastKey, ui } from './ui';
@@ -41,7 +41,7 @@ export function dispatch(a: Action): void {
   }
   if (a.type === 'pending:added') {
     const c = next.chats[a.req.chatId];
-    announce(`${c?.title ?? 'Una chat'} ti aspetta: ${a.req.title}`);
+    announce(t('appText.store.waitsForYou', { title: c?.title ?? t('appText.store.aChat'), req: a.req.title }));
   }
 }
 
@@ -183,7 +183,7 @@ async function sendNow(chatId: string, msg: QueuedMsg, before?: ChatSummary, opt
     if (c && next && !busyNow(chatId, c)) flushOne(chatId, next);
     else tellNotes(chatId); // notes that came while it was on its way (tellNotes checks the chat is free)
   } catch (e) {
-    fail('Messaggio non inviato')(e);
+    fail(t('appText.store.notSent'))(e);
     // roll back only our optimistic copy: a newer chat:updated from main (an error, a state) wins
     if (before && optimistic && app.get().chats[chatId] === optimistic) dispatch({ type: 'chat:updated', chat: before });
     // images main refused would fail the same way at every retry: the text goes back without them
@@ -312,7 +312,7 @@ async function sendQueuedNowImpl(chatId: string, id: string): Promise<'sent' | '
   }
   dispatch({ type: 'promote', chatId, id });
   try { await sb.invoke('chat:stop', { chatId, keepQueued: true }); return 'interrupting'; }
-  catch (e) { fail('Non riesco a interromperla: il messaggio resta primo in coda')(e); return 'failed'; }
+  catch (e) { fail(t('appText.store.interruptFailed'))(e); return 'failed'; }
 }
 
 /** "Correggi il pensiero" (ADR 0058, lib/correction.ts): a sentence of the chat's reasoning and the user's fix.
@@ -322,9 +322,9 @@ async function sendQueuedNowImpl(chatId: string, id: string): Promise<'sent' | '
  *  normal message. Refused (nothing sent) while the chat waits on a question or permission: the stop would cancel it.
  *  Resolves what happened, or the reason it was refused. */
 export async function correctThought(chatId: string, quote: string, fix: string, mode: 'stop' | 'step'): Promise<{ done: 'sent' | 'stopping' | 'step' | 'failed' } | { blocked: string }> {
-  if(updateIsFrozen())return {blocked:'Attendi l’esito dell’aggiornamento prima di inviare una correzione.'};
+  if(updateIsFrozen())return {blocked:t('appText.store.correctionUpdating')};
   const text = correctionText(quote, fix);
-  if (!cleanQuote(quote) || !fix.trim()) return { blocked: 'Scrivi la correzione.' };
+  if (!cleanQuote(quote) || !fix.trim()) return { blocked: t('appText.store.writeCorrection') };
   const s = app.get();
   const c = s.chats[chatId];
   const why = correctionBlocked(c, s.pending.some(p => p.chatId === chatId));
@@ -337,7 +337,7 @@ export async function correctThought(chatId: string, quote: string, fix: string,
   }
   dispatch({ type: 'queue', chatId, msg: { id: `q:${++localN}`, text }, front: true });
   try { await sb.invoke('chat:stop', { chatId, keepQueued: true }); return { done: 'stopping' }; }
-  catch (e) { fail('Non riesco a fermarla: la correzione parte a fine turno')(e); return { done: 'failed' }; }
+  catch (e) { fail(t('appText.store.correctionStopFailed'))(e); return { done: 'failed' }; }
 }
 
 const attempts = new Map<string, number>();
@@ -351,11 +351,11 @@ export async function answer(req: PendingRequest, a: Answer): Promise<boolean> {
   try { await sb.invoke('chat:answer', { chatId: req.chatId, requestId: req.id, answer: a }); return true; }
   catch (e) {
     const msg = errText(e);
-    if (/non è più aperta|scaduta|no longer open/i.test(msg)) { toast(`Questa richiesta non è più aperta: ${msg}`, 'info'); return false; }
+    if (/non è più aperta|scaduta|no longer open/i.test(msg)) { toast(t('appText.store.requestClosed', { error: msg }), 'info'); return false; }
     const key = `${req.chatId}/${req.id}`;
     attempts.set(key, attemptOf(key) + 1);
     dispatch({ type: 'pending:added', req });
-    fail('Risposta non inviata')(e);
+    fail(t('appText.store.answerNotSent'))(e);
     return false;
   }
 }
@@ -363,7 +363,7 @@ export async function answer(req: PendingRequest, a: Answer): Promise<boolean> {
 /** A Strategist's proposed plan (ADR 0108): «Approva e parti», or «Cambia qualcosa» with what to change; false = not sent. */
 export async function planDecide(chatId: string, decision: 'approve' | 'change', at: number, text?: string): Promise<boolean> {
   try { await sb.invoke('chat:plan', { chatId, decision, at, ...(decision === 'change' ? { text } : {}) }); return true; }
-  catch (e) { fail('Risposta al piano non inviata')(e); return false; }
+  catch (e) { fail(t('appText.store.planAnswerNotSent'))(e); return false; }
 }
 
 /** "Comando da eseguire" → Esegui: the block runs in the chat that proposed it (main checks it is a block of that
@@ -375,14 +375,14 @@ export async function runCommand(req: PendingRequest, confirmProd = false): Prom
   try {
     await sb.invoke('run:start', { chatId: req.chatId, itemId: c.itemId, code: c.code, lang: c.lang, ...(confirmProd ? { confirmProd: true } : {}) });
     const chat = app.get().chats[req.chatId];
-    toast(`Comando avviato: l’output è nella chat ${chat?.isOrchestrator ? 'Orchestrator' : `«${chat?.title ?? ''}»`}, sotto il blocco`, 'ok');
+    toast(t('appText.store.commandStarted', { chat: chat?.isOrchestrator ? 'Orchestrator' : `«${chat?.title ?? ''}»` }), 'ok');
     return true;
   } catch (e) {
     // the card comes back usable everywhere (the layer re-mounts it: its key carries the attempt)
     const key = `${req.chatId}/${req.id}`;
     attempts.set(key, attemptOf(key) + 1);
     dispatch({ type: 'pending:added', req });
-    fail('Il comando non parte')(e);
+    fail(t('appText.store.commandNotStarted'))(e);
     return false;
   }
 }
@@ -399,20 +399,20 @@ export async function dismissCommand(req: PendingRequest): Promise<void> {
     const key = `${req.chatId}/${req.id}`;
     attempts.set(key, attemptOf(key) + 1);
     dispatch({ type: 'pending:added', req });
-    fail('Non riesco a toglierla')(e);
+    fail(t('appText.store.dismissFailed'))(e);
   }
 }
 
 export async function stop(chatId: string): Promise<void> {
-  try { await sb.invoke('chat:stop', { chatId }); } catch (e) { fail('Non riesco a fermarla')(e); }
+  try { await sb.invoke('chat:stop', { chatId }); } catch (e) { fail(t('appText.store.stopFailed'))(e); }
 }
 
 export async function stopAll(): Promise<number> {
   try {
     const n = await sb.invoke('chat:stopAll', undefined);
-    toast(n === 1 ? 'Fermata 1 chat' : `Fermate ${n} chat`, 'ok');
+    toast(t('appText.store.stopped', { n }), 'ok');
     return n;
-  } catch (e) { fail('Ferma tutto non riuscito')(e); return 0; }
+  } catch (e) { fail(t('appText.store.stopAllFailed'))(e); return 0; }
 }
 
 export async function createChat(req: NewChat): Promise<ChatSummary | null> {
@@ -421,7 +421,7 @@ export async function createChat(req: NewChat): Promise<ChatSummary | null> {
     dispatch({ type: 'chat:updated', chat: c });
     void loadItems(c.id);
     return c;
-  } catch (e) { fail('Chat non creata')(e); return null; }
+  } catch (e) { fail(t('appText.store.chatNotCreated'))(e); return null; }
 }
 
 /** A chat whose engine, model and effort the routing table picks in main ("Nuova chat", a new Orchestrator; ADR 0032). */
@@ -431,7 +431,7 @@ export async function createRoutedChat(req: RoutedNewChat): Promise<ChatSummary 
     dispatch({ type: 'chat:updated', chat: c });
     void loadItems(c.id);
     return c;
-  } catch (e) { fail('Chat non creata')(e); return null; }
+  } catch (e) { fail(t('appText.store.chatNotCreated'))(e); return null; }
 }
 
 /** The Orchestrator, made once on the engine the user picked (main: single-flight, in the brain folder; an existing
@@ -442,14 +442,14 @@ export async function ensureOrchestrator(harness: Harness): Promise<ChatSummary 
     dispatch({ type: 'chat:updated', chat: c });
     void loadItems(c.id);
     return c;
-  } catch (e) { fail('Orchestrator non creato')(e); return null; }
+  } catch (e) { fail(t('appText.store.orchestratorNotCreated'))(e); return null; }
 }
 
 export async function setChat(chatId: string, patch: { model?: string; effort?: Effort; permissionMode?: PermissionMode; title?: string; workStatus?: 'assigned'|'waiting-mail'|'completed' }): Promise<void> {
   const c = app.get().chats[chatId];
   if (c) dispatch({ type: 'chat:updated', chat: { ...c, ...patch, model: patch.model !== undefined ? patch.model || null : c.model } as ChatSummary });
   try { dispatch({ type: 'chat:updated', chat: await sb.invoke('chat:set', { chatId, ...patch }) }); }
-  catch (e) { if (c) dispatch({ type: 'chat:updated', chat: c }); fail('Impostazione non salvata')(e); }
+  catch (e) { if (c) dispatch({ type: 'chat:updated', chat: c }); fail(t('appText.store.settingNotSaved'))(e); }
 }
 
 // ---- long chats: the hand-off note and "Riprendi" (a new chat that starts from it)
@@ -460,18 +460,18 @@ export async function writeHandoff(chatId: string): Promise<HandoffInfo | null> 
   if (c) dispatch({ type: 'chat:updated', chat: { ...c, handoffBusy: true } });
   try {
     const h = await sb.invoke('chat:handoff', { chatId });
-    toast(h.source === 'chat' ? 'Passaggio di consegne salvato' : 'Passaggio di consegne automatico salvato', 'ok');
+    toast(t(h.source === 'chat' ? 'appText.store.handoffSaved' : 'appText.store.handoffAutoSaved'), 'ok');
     return h;
   } catch (e) {
     const now = app.get().chats[chatId];
     if (now?.handoffBusy) { const { handoffBusy: _, ...rest } = now; dispatch({ type: 'chat:updated', chat: rest }); }
-    fail('Passaggio non scritto')(e);
+    fail(t('appText.store.handoffNotWritten'))(e);
     return null;
   }
 }
 
 export async function readHandoff(chatId: string, session?: string | null): Promise<HandoffInfo | null> {
-  try { return await sb.invoke('chat:handoffRead', { chatId, ...(session ? { session } : {}) }); } catch (e) { fail('Passaggio non leggibile')(e); return null; }
+  try { return await sb.invoke('chat:handoffRead', { chatId, ...(session ? { session } : {}) }); } catch (e) { fail(t('appText.store.handoffNotRead'))(e); return null; }
 }
 
 const continuing = new Set<string>();
@@ -495,10 +495,10 @@ export async function continueChat(chatId: string): Promise<ChatSummary | null> 
     const c = await sb.invoke('chat:continue', { chatId });
     dispatch({ type: 'chat:updated', chat: c });
     void loadItems(c.id);
-    toast(`Ripresa in «${c.title}»: la chat vecchia resta consultabile`, 'ok');
+    toast(t('appText.store.resumedIn', { title: c.title }), 'ok');
     return c;
   } catch (e) {
-    fail('Ripresa non riuscita')(e);
+    fail(t('appText.store.resumeFailed'))(e);
     return null;
   } finally {
     continuing.delete(chatId);
@@ -564,10 +564,10 @@ export function closeTab(tabId: string): void {
 }
 
 export async function navigateTab(tabId: string, url: string): Promise<void> {
-  try { await sb.invoke('browser:navigate', { tabId, url }); } catch (e) { fail('Pagina non aperta')(e); }
+  try { await sb.invoke('browser:navigate', { tabId, url }); } catch (e) { fail(t('appText.store.pageNotOpened'))(e); }
 }
 export async function goTab(tabId: string, dir: 'back' | 'forward' | 'reload'): Promise<void> {
-  try { await sb.invoke('browser:go', { tabId, dir }); } catch (e) { fail('Comando non riuscito')(e); }
+  try { await sb.invoke('browser:go', { tabId, dir }); } catch (e) { fail(t('appText.store.commandFailed'))(e); }
 }
 
 /** The engines app:info lists (empty before it arrives); read here, not through lib/engines.ts, which imports this module. */
@@ -575,8 +575,8 @@ const knownEngines = () => app.get().info?.engines ?? [];
 
 export async function cliLogin(harness: Harness): Promise<void> {
   const label = knownEngines().find(e => e.id === harness)?.label ?? harness;
-  try { await sb.invoke('cli:login', { harness }); toast(`Login ${label} aperto in un terminale`, 'info'); }
-  catch (e) { fail('Login non aperto')(e); }
+  try { await sb.invoke('cli:login', { harness }); toast(t('appText.store.loginOpened', { label }), 'info'); }
+  catch (e) { fail(t('appText.store.loginNotOpened'))(e); }
 }
 
 /** One CLI's status when app:info has none yet (the check at start still running, or its event missed): asks
@@ -604,13 +604,13 @@ function keepCli(harness: Harness, st: CliStatus): void {
 export async function cliCheck(harness: Harness): Promise<void> {
   try {
     keepCli(harness, await sb.invoke('cli:status', { harness, checkLogin: true }));
-  } catch (e) { fail('Controllo non riuscito')(e); }
+  } catch (e) { fail(t('appText.store.checkFailed'))(e); }
 }
 
 /** The user's own change of a setting from the UI (logged as the user's), reflected at once. */
 export async function setSetting(patch: SettingsPatch): Promise<void> {
   try { dispatch({ type: 'settings', settings: await sb.invoke('settings:set', patch) }); toastKey('essential.saved', 'ok'); }
-  catch (e) { fail('Impostazione non salvata')(e); }
+  catch (e) { fail(t('appText.store.settingNotSaved'))(e); }
 }
 
 /** Mute one kind (settings mute.<kind>: no toast, still in the center), with an undo. */
@@ -618,8 +618,8 @@ export async function muteKind(kind: string, label: string, muted = true): Promi
   try {
     const s = await sb.invoke('settings:set', { mute: { [kind]: muted } });
     dispatch({ type: 'settings', settings: s });
-    if (muted) toast(`«${label}» silenziato: resta nelle notifiche, niente avvisi`, 'ok', { label: 'Annulla', run: () => { void muteKind(kind, label, false); } });
-  } catch (e) { fail('Non riuscito')(e); }
+    if (muted) toast(t('appText.store.muted', { label }), 'ok', { label: t('appText.store.undo'), run: () => { void muteKind(kind, label, false); } });
+  } catch (e) { fail(t('appText.store.failed'))(e); }
 }
 
 /** Do not disturb until a time (settings dndUntil: no event toasts until then; never sounds anyway). null = off,
@@ -628,8 +628,8 @@ export async function setDnd(until: number | null): Promise<void> {
   try {
     const s = await sb.invoke('settings:set', until === null ? { dnd: false, dndUntil: null } : { dndUntil: until });
     dispatch({ type: 'settings', settings: s });
-    toast(until ? `Non disturbare fino alle ${new Date(until).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}` : 'Non disturbare disattivato', 'ok');
-  } catch (e) { fail('Non riuscito')(e); }
+    toast(until ? t('appText.store.dndUntil', { time: new Date(until).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }) }) : t('appText.store.dndOff'), 'ok');
+  } catch (e) { fail(t('appText.store.failed'))(e); }
 }
 export function dndUntil(): number | null { return app.get().settings?.dndUntil ?? null; }
 /** Is do-not-disturb on now (untimed flag, or a time still ahead)? */
@@ -646,9 +646,9 @@ export function checkDnd(nowMs: number): void {
 /** Pending local effects have no replay ledger: an update must wait rather than duplicate or discard them. */
 export function updateStoreProblem():string|null{
   const state=app.get();
-  if(!state.ready)return 'Attendi il caricamento dello spazio di lavoro.';
-  if(Object.values(state.queued).some(queue=>queue.length))return 'Ci sono messaggi in coda. Inviali o rimuovili prima di aggiornare.';
-  if(settingsPending||localActions||pendingCloses.size||queuedActions||inFlight.size||undos.size||notes.size)return 'Ci sono invii o azioni da completare. Attendi e riprova.';
-  if(state.pending.length)return 'Rispondi alle richieste in attesa prima di aggiornare.';
+  if(!state.ready)return t('appText.store.updateWaitLoad');
+  if(Object.values(state.queued).some(queue=>queue.length))return t('appText.store.updateQueued');
+  if(settingsPending||localActions||pendingCloses.size||queuedActions||inFlight.size||undos.size||notes.size)return t('appText.store.updateBusy');
+  if(state.pending.length)return t('appText.store.updatePending');
   return null;
 }

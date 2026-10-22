@@ -7,6 +7,7 @@
 // (test/unit/brain-ui/api.test.ts); useBrain is the React hook the pages use.
 import { useEffect, useMemo, useReducer } from 'react';
 import type { BrainApiResult } from '@shared/contract';
+import { t } from '../i18n';
 
 export type Invoke = (path: string) => Promise<BrainApiResult>;
 export interface Entry {
@@ -30,7 +31,7 @@ export function unwrap(path: string, r: BrainApiResult, now: number): Entry {
   if (!WRAPPED.has(pathname(path))) return { data: r.data, at: now, error: null, loading: false, refreshing: false, fetchedAt: now };
   const w = (r.data ?? {}) as { value?: unknown; at?: number; refreshing?: boolean; error?: string | null };
   const has = w.value !== undefined && w.value !== null;
-  return { data: has ? w.value : null, at: typeof w.at === 'number' ? w.at : null, error: has ? null : (w.error || 'nessun dato dal brain'), loading: false, refreshing: !!w.refreshing, fetchedAt: now };
+  return { data: has ? w.value : null, at: typeof w.at === 'number' ? w.at : null, error: has ? null : (w.error || t('brainText.api.noData')), loading: false, refreshing: !!w.refreshing, fetchedAt: now };
 }
 
 export class BrainClient {

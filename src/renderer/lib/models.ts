@@ -4,10 +4,12 @@
 // a chat) is always kept as a choice so it still displays. Used by ChatTile.tsx, SettingsPage.tsx.
 import { useEffect, useState } from 'react';
 import type { Harness, ModelsSeen } from '@shared/contract';
+import { t } from '../i18n';
 
 type Option = { id: string; label: string };
 
-const CLI_DEFAULT: Option = { id: '', label: 'Predefinito della CLI' };
+// the label is read at use time (a getter): this table is built at import, before main.tsx sets the language
+const CLI_DEFAULT: Option = { id: '', get label() { return t('appText.models.cliDefault'); } };
 
 export const MODELS: Partial<Record<Harness, Option[]>> = {
   claude: [

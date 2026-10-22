@@ -14,7 +14,7 @@
 // An expanded chat also shows the open requests of the chats it delegated (lib/child-requests.ts), each tagged with the
 // role and task that asks: answering goes to that child, which then goes on (ADR 0083). A Strategist's plan with the
 // user (its questions, the plan to approve, the steps' checklist) sits under the head, collapsed too (StrategyPanel.tsx, ADR 0108).
-import { t as auditText } from '../i18n';
+import { t as auditText, locale } from '../i18n';
 import { memo, useEffect, useRef, useState } from 'react';
 import type { PendingRequest } from '@shared/contract';
 import { chatCost, queueReason, folderName, minutes, permissionBadge, modelWithEffort, stateInfo, workTime } from '../lib/format';
@@ -211,7 +211,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
             <div className="pause-tag">
               <AgentAvatar avatar={c.agent?.avatar} name={c.agent?.name || c.title} size={28} />
               <span className="pause-who"><b>{t('tree.asks', { role: c.agent?.name || '', title: c.title })}</b> {t('tree.asksVerb')}</span>
-              <span className="pause-from">{t('tree.childOfThis', { time: new Date(req.at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) })}</span>
+              <span className="pause-from">{t('tree.childOfThis', { time: new Date(req.at).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }) })}</span>
             </div>
             <RequestPanel req={req} variant={compact || smallPanel ? 'compact' : 'tile'} chatTitle={c.title} harness={c.harness} onLater={() => answerLater(reqKey(req))} />
             <div className="pause-foot">

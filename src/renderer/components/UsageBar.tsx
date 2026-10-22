@@ -4,7 +4,7 @@
 // source; see Usage.cursorPlanNote). Data: the 'usage' snapshot from the main process (brain/usage.ts) and the chats'
 // own costs (live estimate included): today's total moves at each message and the popup lists every chat of the day by
 // cost (lib/live-costs.ts, LiveCosts.tsx). Used by TopBar.tsx.
-import { t as auditText } from '../i18n';
+import { t as auditText, locale } from '../i18n';
 import { useRef, useState } from 'react';
 import type { ChatSummary, Usage } from '@shared/contract';
 import { formatCost, until } from '../lib/format';
@@ -20,23 +20,23 @@ type Tone = 'green' | 'amber' | 'red' | 'none';
 const toneOf = (pct: number | null | undefined): Tone => (pct == null ? 'none' : pct >= 90 ? 'red' : pct >= 70 ? 'amber' : 'green');
 const pctText = (pct: number) => `${Math.round(pct)}%`;
 
-const hhmm = (t: number) => new Intl.DateTimeFormat('it-IT', { hour: '2-digit', minute: '2-digit' }).format(new Date(t));
+const hhmm = (t: number) => new Intl.DateTimeFormat(locale(), { hour: '2-digit', minute: '2-digit' }).format(new Date(t));
 const dayKey = (t: number) => new Date(t).toDateString();
 /** "18:40" today, "dom 18:40" tomorrow or later in the week, "12/10 18:40" further away. */
 export function resetAt(t: number, now: number): string {
   if (dayKey(t) === dayKey(now)) return hhmm(t);
-  const wd = new Intl.DateTimeFormat('it-IT', { weekday: 'short' }).format(new Date(t)).replace('.', '');
+  const wd = new Intl.DateTimeFormat(locale(), { weekday: 'short' }).format(new Date(t)).replace('.', '');
   if (t - now < 6.5 * 864e5) return `${wd} ${hhmm(t)}`;
-  return `${new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: '2-digit' }).format(new Date(t))} ${hhmm(t)}`;
+  return `${new Intl.DateTimeFormat(locale(), { day: '2-digit', month: '2-digit' }).format(new Date(t))} ${hhmm(t)}`;
 }
 /** "tra 2 h 13 min" within a day, "tra 4 g 1 h" beyond. */
 const inTime = (t: number, now: number) => {
   const h = Math.floor((t - now) / 36e5);
   if (h < 24) return until(t, now);
   const d = Math.floor(h / 24), r = h % 24;
-  return r ? `tra ${d} g ${r} h` : `tra ${d} g`;
+  return auditText('appText.format.in', { time: r ? `${auditText('appText.format.days', { n: d })} ${r} h` : auditText('appText.format.days', { n: d }) });
 };
-const ago = (t: number, now: number) => { const m = Math.round((now - t) / 6e4); return m <= 1 ? 'adesso' : m < 60 ? `${m} min fa` : `${Math.round(m / 60)} h fa`; };
+const ago = (t: number, now: number) => { const m = Math.round((now - t) / 6e4); return m <= 1 ? auditText('appText.usageBar.justNow') : auditText('appText.usageBar.ago', { time: m < 60 ? `${m} min` : `${Math.round(m / 60)} h` }); };
 
 /** Cursor today as shown: "n/d", the exact $ of an export, or "≈ $" of the ledger estimate (with "±x%" when long). */
 export function cursorText(u: Usage | null, long = false): string {

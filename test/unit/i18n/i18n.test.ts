@@ -16,10 +16,13 @@ describe('language', () => {
     expect(resolveLang('en', 'it')).toBe('en');
     expect(resolveLang(undefined, undefined)).toBe('it');
   });
-  it('Windows: Italian only when the first preferred language is Italian; SB_LANG forces it', () => {
+  it('Windows: Italian or German only when the first preferred language is one of them; SB_LANG forces it', () => {
     expect(pickLang(undefined, ['it-IT', 'en-US'])).toBe('it');
     expect(pickLang(undefined, ['en-GB', 'it-IT'])).toBe('en');
-    expect(pickLang(undefined, ['de-DE'])).toBe('en');
+    expect(pickLang(undefined, ['de-DE'])).toBe('de');
+    expect(pickLang(undefined, ['de-AT', 'it-IT'])).toBe('de');
+    expect(pickLang(undefined, ['en-US', 'de-AT'])).toBe('en');
+    expect(pickLang('de', ['it-IT'])).toBe('de');
     expect(pickLang(undefined, [])).toBe('en');
     expect(pickLang('it', ['en-US'])).toBe('it');
     expect(pickLang('xx', ['it'])).toBe('it');

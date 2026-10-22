@@ -141,13 +141,13 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode, l
   const fileLink = (f: string | undefined) => {
     if (!f) return null;
     const rel = relFile(f, data?.root ?? '') ?? f;
-    return fileSet.has(rel) && onNavigate ? <button type="button" className="bx-go" onClick={() => openFile(rel)} title="Apri in Esplora">{rel}</button> : <span className="mono">{rel}</span>;
+    return fileSet.has(rel) && onNavigate ? <button type="button" className="bx-go" onClick={() => openFile(rel)} title={t('brainText.map.openInExplore')}>{rel}</button> : <span className="mono">{rel}</span>;
   };
   const search = () => { const n = findNode([...(view?.nodes ?? []), ...(data?.nodes ?? [])], q); if (n) pick(n.id); };
 
   const node = sel?.kind === 'node' ? allById.get(sel.id) ?? null : null;
   const glow = node ? lg?.glow.get(node.id) : undefined;
-  const titleOf = (chatId: string) => snap?.chats.find(c => c.id === chatId)?.title ?? 'chat';
+  const titleOf = (chatId: string) => snap?.chats.find(c => c.id === chatId)?.title ?? t('brainText.map.chat');
   const toggleLive = () => setLiveOn(v => { try { localStorage.setItem('sb.map.live', v ? '0' : '1'); } catch { /* per-viewer convenience only */ } return !v; });
   const out = node ? (view?.edges ?? []).filter(e => e.from === node.id && kindOn[e.kind]) : [];
   const inn = node ? (view?.edges ?? []).filter(e => e.to === node.id && kindOn[e.kind]) : [];
@@ -155,34 +155,34 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode, l
   // the live map's legend: over the canvas at the bottom right, or at the top of the 2D list
   const legend = data && source ? (
     <details className={`bx-map-live${showFlat?' inline':''}`} data-testid="bx-map-live">
-      <summary><i className={`bx-live-dot${lg?.working.some(w=>w.running)?' run':''}`} aria-hidden="true"/>Attività osservata</summary>
-      <button type="button" className="bx-btn ghost s" aria-pressed={liveOn} onClick={toggleLive} data-testid="bx-map-live-toggle">{liveOn?'Nascondi attività':'Mostra attività'}</button>
-      {liveOn&&lg?.working.length?<ul>{lg.working.slice(0,5).map(w=><li key={w.id}><button type="button" onClick={()=>onOpenChat?.(w.id)} disabled={!onOpenChat} data-testid="bx-map-live-chat"><span className="grow"><span>{w.title}</span><small>{w.running?'In corso':w.doing==='aspetta te'?'In attesa di te':'Attività recente'} · {short(w.doing,60)}</small></span></button></li>)}</ul>:<p className="counts">{liveOn?'Nessuna attività osservata.':'Attività nascosta.'}</p>}
+      <summary><i className={`bx-live-dot${lg?.working.some(w=>w.running)?' run':''}`} aria-hidden="true"/>{t('brainText.map.liveTitle')}</summary>
+      <button type="button" className="bx-btn ghost s" aria-pressed={liveOn} onClick={toggleLive} data-testid="bx-map-live-toggle">{liveOn?t('brainText.map.hideLive'):t('brainText.map.showLive')}</button>
+      {liveOn&&lg?.working.length?<ul>{lg.working.slice(0,5).map(w=><li key={w.id}><button type="button" onClick={()=>onOpenChat?.(w.id)} disabled={!onOpenChat} data-testid="bx-map-live-chat"><span className="grow"><span>{w.title}</span><small>{w.running?t('brainText.map.running'):w.doing===t('brainText.live.waitsYou')?t('brainText.map.waitingYou'):t('brainText.map.recent')} · {short(w.doing,60)}</small></span></button></li>)}</ul>:<p className="counts">{liveOn?t('brainText.map.noLive'):t('brainText.map.liveHidden')}</p>}
     </details>
   ) : null;
 
   return (
-    <div ref={root} className={`bx bx-map${embedded ? ' bx-map-embedded' : ''}`} role={embedded ? 'region' : 'dialog'} aria-label="Mappa del brain" tabIndex={-1} data-testid="brain-map">
+    <div ref={root} className={`bx bx-map${embedded ? ' bx-map-embedded' : ''}`} role={embedded ? 'region' : 'dialog'} aria-label={t('brainText.map.title')} tabIndex={-1} data-testid="brain-map">
       <div className="bx-map-bar">
-        <h2>Mappa del brain</h2>
+        <h2>{t('brainText.map.title')}</h2>
         <form className="bx-search" onSubmit={e => { e.preventDefault(); search(); }} role="search">
           <IconSearch />
-          <input className="bx-input" list="bx-map-nodes" type="search" placeholder="Cerca nella mappa…" aria-label="Cerca un pezzo" value={q} onChange={e => setQ(e.target.value)} onBlur={() => q && search()} />
+          <input className="bx-input" list="bx-map-nodes" type="search" placeholder={t('brainText.map.search')} aria-label={t('brainText.map.searchLabel')} value={q} onChange={e => setQ(e.target.value)} onBlur={() => q && search()} />
           <datalist id="bx-map-nodes">{(view?.nodes ?? []).map(n => <option key={n.id} value={n.label} />)}</datalist>
         </form>
         <span className="sp" />
-        <button type="button" className="bx-btn" onClick={()=>{if(document.fullscreenElement===root.current)void document.exitFullscreen();else void root.current?.requestFullscreen().catch(()=>{});}} title="Schermo intero, Esc per tornare">Espandi</button>
-        <button type="button" className="bx-btn" aria-pressed={!essential} title={essential ? 'Mostra ogni file e ogni freccia' : 'Torna ai pezzi principali'} onClick={() => { setEssential(e => !e); setKindOn(defaultKinds(!essential)); setSel(null); }} data-testid="bx-map-view">{essential ? 'Vista completa' : 'Vista essenziale'}</button>
-        {!showFlat && <button type="button" className="bx-btn" onClick={() => engine.current?.fit()}>Reset vista</button>}
-        {gl === 'ok' && <button type="button" className="bx-btn" aria-pressed={flat} onClick={() => setFlat(f => !f)} title="La mappa come elenco, per strato">{flat ? 'Mappa 3D' : 'Elenco'}</button>}
-        {!embedded && <button type="button" className="bx-btn close" aria-label="Chiudi la mappa" title="Chiudi (Esc)" onClick={onClose} data-testid="bx-map-close"><IconClose /></button>}
+        <button type="button" className="bx-btn" onClick={()=>{if(document.fullscreenElement===root.current)void document.exitFullscreen();else void root.current?.requestFullscreen().catch(()=>{});}} title={t('brainText.map.fullscreenTip')}>{t('brainText.map.expand')}</button>
+        <button type="button" className="bx-btn" aria-pressed={!essential} title={essential ? t('brainText.map.showAllTip') : t('brainText.map.backTip')} onClick={() => { setEssential(e => !e); setKindOn(defaultKinds(!essential)); setSel(null); }} data-testid="bx-map-view">{essential ? t('brainText.map.fullView') : t('brainText.map.essentialView')}</button>
+        {!showFlat && <button type="button" className="bx-btn" onClick={() => engine.current?.fit()}>{t('brainText.map.resetView')}</button>}
+        {gl === 'ok' && <button type="button" className="bx-btn" aria-pressed={flat} onClick={() => setFlat(f => !f)} title={t('brainText.map.listTip')}>{flat ? t('brainText.map.map3d') : t('brainText.map.list')}</button>}
+        {!embedded && <button type="button" className="bx-btn close" aria-label={t('brainText.map.close')} title={t('brainText.map.closeEsc')} onClick={onClose} data-testid="bx-map-close"><IconClose /></button>}
       </div>
       <div className="bx-map-body">
         {!data ? (
-          <div className="bx-map-msg"><div>{m.error ? <><b style={{ color: '#ff9a8a' }}>La mappa non si carica</b><span>{m.error}</span><button type="button" className="bx-btn" onClick={() => m.reload()}>Riprova</button></> : <><b>Disegno la mappa…</b><span>La prima volta il brain la calcola dai file (fino a 20 secondi).</span></>}</div></div>
+          <div className="bx-map-msg"><div>{m.error ? <><b style={{ color: '#ff9a8a' }}>{t('brainText.map.loadFail')}</b><span>{m.error}</span><button type="button" className="bx-btn" onClick={() => m.reload()}>{t('brainText.common.retry')}</button></> : <><b>{t('brainText.map.drawing')}</b><span>{t('brainText.map.firstTime')}</span></>}</div></div>
         ) : showFlat ? (
           <div className="bx-map-flat bx-scroll" data-testid="bx-map-flat" style={{ padding: '80px 18px 18px' }}>
-            {gl === 'fail' && !flat && mode !== 'flat' && <p className="bx-warnline" style={{ marginBottom: 12, background: 'rgba(242,182,76,0.08)' }}>La grafica 3D non parte su questo PC{glError ? ` (${glError})` : ' (WebGL non disponibile)'}: ecco la stessa mappa come elenco, per strato.</p>}
+            {gl === 'fail' && !flat && mode !== 'flat' && <p className="bx-warnline" style={{ marginBottom: 12, background: 'rgba(242,182,76,0.08)' }}>{t('brainText.map.noGl', { why: glError ? ` (${glError})` : t('brainText.map.noWebgl') })}</p>}
             {legend}
             <div className="layers">
               {view && byLayer({ ...view, nodes: drawn.nodes }).map(l => (
@@ -190,7 +190,7 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode, l
                   <h3><span className="sw" style={{ background: layerColor(l.id) }} />{l.label}<span className="muted small" style={{ marginLeft: 'auto' }}>{l.nodes.length}</span></h3>
                   {l.nodes.map(n => (
                     <button key={n.id} type="button" className={`${sel?.kind === 'node' && sel.id === n.id ? 'on' : ''} ${hi.nodes.has(n.id) ? 'lit' : ''} ${lg?.glow.has(n.id) ? 'live' : ''}`} onClick={() => pick(n.id)}>
-                      <span>{lg?.glow.has(n.id) && <i className={`bx-live-dot${lg.glow.get(n.id)!.running ? ' run' : ''}`} aria-label="al lavoro adesso" />}{n.label}{n.members?.length ? <span className="muted"> · {n.members.length}</span> : null}</span>
+                      <span>{lg?.glow.has(n.id) && <i className={`bx-live-dot${lg.glow.get(n.id)!.running ? ' run' : ''}`} aria-label={t('brainText.map.workingNow')} />}{n.label}{n.members?.length ? <span className="muted"> · {n.members.length}</span> : null}</span>
                       {(n.short || n.what) && <small>{short(n.short || n.what, 90)}</small>}
                       {fileName(n, data?.root ?? '') && <small className="mono bx-map-file">{fileName(n, data?.root ?? '')}</small>}
                     </button>
@@ -201,17 +201,17 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode, l
           </div>
         ) : (
           <>
-            <div className="bx-map-colors" aria-label="Legenda della mappa">{view?.layers.filter(layer => drawn.nodes.some(n => n.layer === layer.id)).map(layer => <span key={layer.id}><i style={{ background: layerColor(layer.id) }} />{layer.label}</span>)}</div>
-            <div ref={canvas} className="bx-map-canvas" data-testid="bx-map-canvas" tabIndex={0} onPointerDown={event=>event.currentTarget.focus({preventScroll:true})} role="group" aria-label="Mappa interattiva. Frecce per ruotare, più e meno per zoom, Home per ripristinare." onKeyDown={event=>{if(event.target!==event.currentTarget)return;const keys:Record<string,[number,number,number]>={ArrowLeft:[-1,0,1],ArrowRight:[1,0,1],ArrowUp:[0,-1,1],ArrowDown:[0,1,1],'+':[0,0,0.85],'=':[0,0,0.85],'-':[0,0,1.18]};if(event.key==='Home'){event.preventDefault();engine.current?.fit();}else if(keys[event.key]){event.preventDefault();engine.current?.nudge(...keys[event.key]!);}}} />
-            <div className="bx-map-hint">File, agenti e strumenti collegati nel brain. Clicca un nodo per vedere i collegamenti.<br />Trascina per ruotare · rotella per zoom · Reset vista per inquadrare tutto</div>
+            <div className="bx-map-colors" aria-label={t('brainText.map.legend')}>{view?.layers.filter(layer => drawn.nodes.some(n => n.layer === layer.id)).map(layer => <span key={layer.id}><i style={{ background: layerColor(layer.id) }} />{layer.label}</span>)}</div>
+            <div ref={canvas} className="bx-map-canvas" data-testid="bx-map-canvas" tabIndex={0} onPointerDown={event=>event.currentTarget.focus({preventScroll:true})} role="group" aria-label={t('brainText.map.canvas')} onKeyDown={event=>{if(event.target!==event.currentTarget)return;const keys:Record<string,[number,number,number]>={ArrowLeft:[-1,0,1],ArrowRight:[1,0,1],ArrowUp:[0,-1,1],ArrowDown:[0,1,1],'+':[0,0,0.85],'=':[0,0,0.85],'-':[0,0,1.18]};if(event.key==='Home'){event.preventDefault();engine.current?.fit();}else if(keys[event.key]){event.preventDefault();engine.current?.nudge(...keys[event.key]!);}}} />
+            <div className="bx-map-hint">{t('brainText.map.hint')}<br />{t('brainText.map.hintKeys')}</div>
             {legend}
           </>
         )}
 
 
         {sel && data && (
-          <aside className="bx-map-context" aria-label="Pezzo scelto" data-testid="bx-map-piece">
-            <div className="bx-row" style={{ padding: '8px 8px 0 12px' }}><span className="small muted">{sel.kind === 'node' ? (data.layers.find(l => l.id === node?.layer)?.label ?? '') : (EDGE_KINDS[sel.edge.kind] ?? sel.edge.kind)}</span><span className="sp" /><button type="button" ref={pieceClose} className="bx-btn ghost s" aria-label="Chiudi la scheda" onClick={() => setSel(null)}><IconClose /></button></div>
+          <aside className="bx-map-context" aria-label={t('brainText.map.piece')} data-testid="bx-map-piece">
+            <div className="bx-row" style={{ padding: '8px 8px 0 12px' }}><span className="small muted">{sel.kind === 'node' ? (data.layers.find(l => l.id === node?.layer)?.label ?? '') : (EDGE_KINDS[sel.edge.kind] ?? sel.edge.kind)}</span><span className="sp" /><button type="button" ref={pieceClose} className="bx-btn ghost s" aria-label={t('brainText.map.closeCard')} onClick={() => setSel(null)}><IconClose /></button></div>
             <div className="pbody bx-scroll">
               {sel.kind === 'link' ? (
                 <div className="bx-map-piece">
@@ -224,25 +224,25 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode, l
                   <div className="title"><span className="sw" style={{ background: layerColor(node.layer) }} /><h3>{node.label}</h3></div>
                   {glow && (
                     <div className="bx-map-now" data-testid="bx-map-now">
-                      <h4><i className={`bx-live-dot${glow.running ? ' run' : ''}`} aria-hidden="true" />{glow.running?'In corso':'Attività recente o in attesa'}</h4>
+                      <h4><i className={`bx-live-dot${glow.running ? ' run' : ''}`} aria-hidden="true" />{glow.running?t('brainText.map.running'):t('brainText.map.recentOrWaiting')}</h4>
                       <ul>{glow.doing.slice(0, 6).map((d, i) => <li key={i}>{short(d, 90)}</li>)}</ul>
-                      {onOpenChat && glow.chats.map(c => <button key={c} type="button" className="bx-btn s" onClick={() => onOpenChat(c)}>Apri «{short(titleOf(c), 40)}»</button>)}
+                      {onOpenChat && glow.chats.map(c => <button key={c} type="button" className="bx-btn s" onClick={() => onOpenChat(c)}>{t('brainText.map.openChat', { title: short(titleOf(c), 40) })}</button>)}
                     </div>
                   )}
                   <details className="bx-map-source"><summary>{t('ui.mapDetails')}</summary>
                   {node.what && node.kind !== 'gruppo' && node.what.trim()!==node.label.trim() && <p className="what">{short(node.what, 500)}</p>}
                   <dl className="bx-kv">
-                    {node.file && <><dt>File</dt><dd>{fileLink(node.file)}</dd></>}
-                    {node.modified && <><dt>Cambiato</dt><dd>{fmt.ago(node.modified)}</dd></>}
-                    {node.uses != null && <><dt>Usato</dt><dd>{node.uses} volte in 30 giorni</dd></>}
-                    {node.reads != null && <><dt>Letto</dt><dd>{node.reads} volte in 30 giorni</dd></>}
-                    {node.events?.length ? <><dt>Scatta su</dt><dd>{node.events.join(', ')}</dd></> : null}
-                    {node.fields?.model && <><dt>Modello</dt><dd>{node.fields.model}{node.fields.effort ? ` · impegno ${node.fields.effort}` : ''}</dd></>}
+                    {node.file && <><dt>{t('brainText.map.file')}</dt><dd>{fileLink(node.file)}</dd></>}
+                    {node.modified && <><dt>{t('brainText.map.changed')}</dt><dd>{fmt.ago(node.modified)}</dd></>}
+                    {node.uses != null && <><dt>{t('brainText.map.used')}</dt><dd>{t('brainText.map.times30', { n: node.uses })}</dd></>}
+                    {node.reads != null && <><dt>{t('brainText.map.read')}</dt><dd>{t('brainText.map.times30', { n: node.reads })}</dd></>}
+                    {node.events?.length ? <><dt>{t('brainText.map.triggers')}</dt><dd>{node.events.join(', ')}</dd></> : null}
+                    {node.fields?.model && <><dt>{t('brainText.map.model')}</dt><dd>{node.fields.model}{node.fields.effort ? t('brainText.map.effort', { effort: node.fields.effort }) : ''}</dd></>}
                   </dl>
-                  {node.members?.length ? <><h4>{node.kind === 'gruppo' ? `Dentro · ${node.members.length}` : `Insieme a lui · ${node.members.length}`}</h4><ul>{node.members.map(x => <li key={x.id}><b style={{ color: '#fff' }}>{x.label}</b>{x.name && x.name !== x.label ? <span className="muted mono"> {x.name}</span> : null}{x.what ? ` · ${short(x.what, 90)}` : ''}{x.uses != null ? <span className="muted"> · {x.uses} usi</span> : null}</li>)}</ul></> : null}
+                  {node.members?.length ? <><h4>{node.kind === 'gruppo' ? t('brainText.map.inside', { n: node.members.length }) : t('brainText.map.together', { n: node.members.length })}</h4><ul>{node.members.map(x => <li key={x.id}><b style={{ color: '#fff' }}>{x.label}</b>{x.name && x.name !== x.label ? <span className="muted mono"> {x.name}</span> : null}{x.what ? ` · ${short(x.what, 90)}` : ''}{x.uses != null ? <span className="muted">{t('brainText.map.uses', { n: x.uses })}</span> : null}</li>)}</ul></> : null}
                   </details>
-                  {out.length > 0 && <><h4>Verso · {out.length}</h4><ul>{out.slice(0, 30).map((e, i) => <li key={i}>→ <button type="button" onClick={() => pick(e.to)}>{labelOf(e.to)}</button> <span className="muted">{e.label}</span></li>)}</ul></>}
-                  {inn.length > 0 && <><h4>Da · {inn.length}</h4><ul>{inn.slice(0, 30).map((e, i) => <li key={i}>← <button type="button" onClick={() => pick(e.from)}>{labelOf(e.from)}</button> <span className="muted">{e.label}</span></li>)}</ul></>}
+                  {out.length > 0 && <><h4>{t('brainText.map.to', { n: out.length })}</h4><ul>{out.slice(0, 30).map((e, i) => <li key={i}>→ <button type="button" onClick={() => pick(e.to)}>{labelOf(e.to)}</button> <span className="muted">{e.label}</span></li>)}</ul></>}
+                  {inn.length > 0 && <><h4>{t('brainText.map.from', { n: inn.length })}</h4><ul>{inn.slice(0, 30).map((e, i) => <li key={i}>← <button type="button" onClick={() => pick(e.from)}>{labelOf(e.from)}</button> <span className="muted">{e.label}</span></li>)}</ul></>}
                 </div>
               )}
             </div>

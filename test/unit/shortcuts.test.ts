@@ -45,7 +45,7 @@ describe.skipIf(process.platform !== 'win32')('stable shortcuts', () => {
     ctx.read.mockReturnValueOnce({ target: 'x', icon: path.join(ctx.base, 'gone', 'icon.ico') });
     ensureShortcuts();
     expect(ctx.write).toHaveBeenCalledTimes(1);
-    expect(ctx.write.mock.calls[0]).toEqual([path.join(dir, 'second-brain.lnk'), 'update', { icon: path.join(ctx.base, 'icon.ico'), iconIndex: 0 }]);
+    expect(ctx.write.mock.calls[0]).toEqual([path.join(dir, 'second-brain.lnk'), 'update', { target: 'x', icon: path.join(ctx.base, 'icon.ico'), iconIndex: 0 }]);
   });
   it('copies the built icon to the shared dir when it is missing', () => {
     fs.rmSync(path.join(ctx.base, 'icon.ico'));

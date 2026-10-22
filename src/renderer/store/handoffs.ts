@@ -6,6 +6,7 @@ import type { BrowserHandoff } from '@shared/contract';
 import { sb } from '../sb';
 import { createStore } from './createStore';
 import { toast } from './ui';
+import { t } from '../i18n';
 
 const store = createStore<Record<string, BrowserHandoff>>({});   // open hand-offs by tab id
 let started = false;
@@ -45,14 +46,14 @@ export async function resolveHandoff(h: BrowserHandoff, outcome: 'done' | 'faile
   put({ ...h, state: outcome });                                  // optimistic: the banner closes at once
   try { await sb.invoke('browser:handoffResolve', { id: h.id, outcome }); } catch (e) {
     put(h);
-    toast(`Risposta non inviata: ${errText(e)}`, 'err');
+    toast(t('appText.handoffs.answerNotSent', { error: errText(e) }), 'err');
   }
 }
 
 /** main copies the value (the password is read from the credentials file there and never reaches this page). */
 export async function copyFromHandoff(id: string, field: 'user' | 'password'): Promise<boolean> {
   try { return await sb.invoke('browser:handoffCopy', { id, field }); } catch (e) {
-    toast(`Copia non riuscita: ${errText(e)}`, 'err');
+    toast(t('appText.handoffs.copyFailed', { error: errText(e) }), 'err');
     return false;
   }
 }

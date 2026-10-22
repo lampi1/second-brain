@@ -39,7 +39,7 @@ const KIND: Record<HeldNewsKind, TextKey> = {
 };
 const WHY: Record<HeldNewsWhy, TextKey> = { user: 'dialogs.orchestrator.heldWhy.user', busy: 'dialogs.orchestrator.heldWhy.busy', group: 'dialogs.orchestrator.heldWhy.group', quiet: 'dialogs.orchestrator.heldWhy.quiet' };
 
-const since = (at: number, now: number): string => { const a = ago(at, now); return a === 'ora' ? t('dialogs.orchestrator.heldNow') : t('dialogs.orchestrator.heldSince', { ago: a }); };
+const since = (at: number, now: number): string => { const a = ago(at, now); return a === t('appText.format.now') ? t('dialogs.orchestrator.heldNow') : t('dialogs.orchestrator.heldSince', { ago: a }); };
 const kindText = (k: HeldNewsKind): string => t(KIND[k]);
 
 /** One line for the tooltip: the first three, then "+N". */

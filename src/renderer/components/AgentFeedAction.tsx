@@ -6,6 +6,7 @@ import type { FeedAction } from '@shared/contract';
 import { sb } from '../sb';
 import { go } from '../actions';
 import { refreshAgents } from '../store/agents';
+import { t } from '../i18n';
 
 /** Undoes a maintenance pass: newest change first; stops at the first one that cannot be undone any more. */
 export async function undoChanges(ids: readonly string[]): Promise<void> {
@@ -26,6 +27,6 @@ export function AgentFeedAction({ action }: { action?: FeedAction }) {
     } catch (e) { setError(String(e)); }
     finally { setBusy(false); }
   };
-  const label = action.kind === 'agent-proposals' ? 'Esamina proposta' : done ? 'Annullata' : action.kind === 'brain-undo' ? 'Annulla' : 'Annulla modifica';
+  const label = t(action.kind === 'agent-proposals' ? 'appText.feedAction.review' : done ? 'appText.feedAction.undone' : action.kind === 'brain-undo' ? 'appText.feedAction.undo' : 'appText.feedAction.undoChange');
   return <><button type="button" className="btn btn-ghost" disabled={busy || done} onClick={() => void click()} data-testid={`feed-action-${action.kind}`}>{label}</button>{error && <span role="alert">{error}</span>}</>;
 }

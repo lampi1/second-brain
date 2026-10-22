@@ -2,6 +2,7 @@
 // categorical palette (fixed order, never cycled: past 8 categories the rest is grey "altro"), top-N with the rest
 // summed, label thinning so x labels never collide. Pure; unit-tested in test/unit/brain-ui/chart.test.ts.
 
+import { locale } from '../../i18n';
 /** A round axis: the smallest 1/2/2.5/5 × 10^n step that covers max in at most maxTicks intervals, and its top. */
 export function niceScale(max: number, maxTicks = 5): { top: number; step: number } {
   if (!Number.isFinite(max) || max <= 0) return { top: 1, step: 0.25 };
@@ -23,7 +24,7 @@ export function ticks(max: number): number[] {
 const decimals = (x: number): number => (Number.isInteger(x) ? 0 : Math.min(2, (String(Math.round(x * 1e6) / 1e6).split('.')[1] ?? '').length));
 /** A tick's text with as many decimals as its step needs (12,5 stays 12,5; 1.250 becomes 1,25k). */
 export function tickLabel(v: number, money = false, step = 1): string {
-  const s = Math.abs(v) >= 1000 ? `${(v / 1000).toLocaleString('it-IT', { maximumFractionDigits: decimals(step / 1000) })}k` : v.toLocaleString('it-IT', { maximumFractionDigits: decimals(step) });
+  const s = Math.abs(v) >= 1000 ? `${(v / 1000).toLocaleString(locale(), { maximumFractionDigits: decimals(step / 1000) })}k` : v.toLocaleString(locale(), { maximumFractionDigits: decimals(step) });
   return money ? `${s} $` : s;
 }
 

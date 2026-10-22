@@ -1,12 +1,14 @@
 // Semantic node styles and bounded label priority for the Dashboard's brain graph and tests.
+import { t } from '../i18n';
+
 export function nodeStyle(kind = 'note', layer?: string) {
   if (layer === 'regole') kind = 'rule';
   switch (kind) {
-    case 'area': case 'group': case 'gruppo': case 'cartella': return { color: '#d49a36', radius: 10, label: 'Area / gruppo' };
-    case 'agent': case 'agente': case 'orchestrator': case 'chat': return { color: '#aa83ed', radius: 8, label: 'Agente / chat' };
-    case 'skill': case 'tool': return { color: '#36aaa5', radius: 7, label: 'Skill / tool' };
-    case 'rule': case 'regola': return { color: '#e17891', radius: 6, label: 'Regola' };
-    default: return { color: '#659ad5', radius: 5, label: 'Nota / altro' };
+    case 'area': case 'group': case 'gruppo': case 'cartella': return { color: '#d49a36', radius: 10, label: t('brainText.graphStyle.area') };
+    case 'agent': case 'agente': case 'orchestrator': case 'chat': return { color: '#aa83ed', radius: 8, label: t('brainText.graphStyle.agent') };
+    case 'skill': case 'tool': return { color: '#36aaa5', radius: 7, label: t('brainText.graphStyle.skill') };
+    case 'rule': case 'regola': return { color: '#e17891', radius: 6, label: t('brainText.graphStyle.rule') };
+    default: return { color: '#659ad5', radius: 5, label: t('brainText.graphStyle.note') };
   }
 }
 

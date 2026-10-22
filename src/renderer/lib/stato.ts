@@ -11,6 +11,7 @@ import { BUILD_WORDS, firstName, prWait, type Wait } from '../brain/lib/tasks';
 import { bugName, clean } from '../brain/lib/text';
 import type { Tone } from '../brain/components/ui';
 import { stateInfo } from './format';
+import { t, type TextKey } from '../i18n';
 
 export interface StatoAsk { key: string; kind: PendingRequest['type']; text: string; req: PendingRequest }
 export interface StatoChat {
@@ -80,10 +81,12 @@ export function prName(p: Pick<DevopsPr, 'title' | 'workItems'>): string {
   return (w && bugName(w.title)) || clean(p.title) || p.title;
 }
 
-const VOTE: Record<string, { vote: string; tone: Tone }> = {
-  '10': { vote: 'approvata', tone: 'good' }, '5': { vote: 'approvata con suggerimenti', tone: 'good' }, '0': { vote: 'non ha votato', tone: 'outline' },
-  '-5': { vote: 'chiede modifiche', tone: 'warn' }, '-10': { vote: 'rifiutata', tone: 'bad' },
+// a function, not a table of texts: read at use time, in the language set by main.tsx
+const VOTE_TONE: Record<string, { key: TextKey; tone: Tone }> = {
+  '10': { key: 'appText.stato.vote.approved', tone: 'good' }, '5': { key: 'appText.stato.vote.suggestions', tone: 'good' }, '0': { key: 'appText.stato.vote.none', tone: 'outline' },
+  '-5': { key: 'appText.stato.vote.changes', tone: 'warn' }, '-10': { key: 'appText.stato.vote.rejected', tone: 'bad' },
 };
+const vote = (v: string): { vote: string; tone: Tone } | undefined => { const x = Object.hasOwn(VOTE_TONE, v) ? VOTE_TONE[v] : undefined; return x && { vote: t(x.key), tone: x.tone }; };
 
 /** "Rimborso con sconto: 1 test fallito" for the work items of the PR whose test cases failed or are blocked; the
  *  work item the PR is already named after (`named`) is not named twice. */
@@ -94,7 +97,7 @@ export function qaBlock(p: Pick<DevopsPr, 'workItems'>, details: TasksState['det
     const failed = tests.filter(t => t.outcome === 'Failed').length;
     const blocked = tests.filter(t => t.outcome === 'Blocked').length;
     if (!failed && !blocked) continue;
-    const what = [failed && `${failed} ${failed === 1 ? 'test fallito' : 'test falliti'}`, blocked && `${blocked} ${blocked === 1 ? 'test bloccato' : 'test bloccati'}`].filter(Boolean).join(', ');
+    const what = [failed && t('appText.stato.testsFailed', { n: failed }), blocked && t('appText.stato.testsBlocked', { n: blocked })].filter(Boolean).join(', ');
     const name = bugName(w.title) || w.title;
     parts.push(name === named ? what : `${name}: ${what}`);
   }
@@ -109,7 +112,7 @@ export function statoPr(p: DevopsPr, details: TasksState['details']): StatoPr {
   return {
     id: p.id, name, url: p.url, repo: p.repo, wait: prWait(p),
     build: b ? { label: `build ${word}`, tone, url: b.url } : null,
-    reviewers: p.reviewers.map(r => ({ name: firstName(r.name), required: r.required, ...(VOTE[String(r.vote)] ?? { vote: r.label || String(r.vote), tone: 'outline' as Tone }) })),
+    reviewers: p.reviewers.map(r => ({ name: firstName(r.name), required: r.required, ...(vote(String(r.vote)) ?? { vote: r.label || String(r.vote), tone: 'outline' as Tone }) })),
     qa: qaBlock(p, details, name),
   };
 }
@@ -138,18 +141,17 @@ export function buildStato(inp: StatoInput): Stato {
   };
 }
 
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /** The one-sentence answer at the top: "2 chat ti aspettano, 3 al lavoro · 4 PR: 1 bloccata dalla QA". */
 export function headline(s: Stato): string {
   const c = s.counts;
   const chats = [
-    c.waiting && plural(c.waiting, 'chat ti aspetta', 'chat ti aspettano'),
-    c.errors && plural(c.errors, 'in errore', 'in errore'),
-    c.running && `${c.running} al lavoro`,
-  ].filter(Boolean).join(', ') || (s.chats.length ? 'nessuna chat ti aspetta' : 'nessuna chat aperta');
+    c.waiting && t('appText.stato.chatsWaiting', { n: c.waiting }),
+    c.errors && t('appText.stato.chatsError', { n: c.errors }),
+    c.running && t('appText.stato.chatsRunning', { n: c.running }),
+  ].filter(Boolean).join(', ') || (s.chats.length ? t('appText.stato.noChatWaiting') : t('appText.stato.noChatOpen'));
   if (!s.tasks.read) return chats;
-  const prs = !c.prs ? 'nessuna PR aperta'
-    : `${plural(c.prs, 'PR aperta', 'PR aperte')}${c.qa ? `: ${plural(c.qa, 'bloccata dalla QA', 'bloccate dalla QA')}` : c.prsMine ? `: ${plural(c.prsMine, 'aspetta te', 'aspettano te')}` : ''}`;
+  const prs = !c.prs ? t('appText.stato.noPr')
+    : `${t('appText.stato.prsOpen', { n: c.prs })}${c.qa ? `: ${t('appText.stato.prsQa', { n: c.qa })}` : c.prsMine ? `: ${t('appText.stato.prsMine', { n: c.prsMine })}` : ''}`;
   return `${chats} · ${prs}`;
 }

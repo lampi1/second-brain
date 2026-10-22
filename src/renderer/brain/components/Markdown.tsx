@@ -52,7 +52,7 @@ export function renderMarkdown(text: string, files?: Set<string>, root = '', ima
 export function withCopy(html: string, inline = true): string {
   return html.split(/(<pre>[\s\S]*?<\/pre>)/).map(part => (part.startsWith('<pre>')
     ? `<div class="bx-pre">${part}<button type="button" class="bx-btn s bx-pre-copy" data-copy="block" title="${tr('brainLib.markdown.copyBlockTitle')}" aria-live="polite">${tr('brainLib.markdown.copyBlock')}</button></div>`
-    : inline ? part.replace(/<code>/g, '<code class="bx-copy" data-copy="inline" role="button" tabindex="0" title="Clic per copiare">') : part)).join('');
+    : inline ? part.replace(/<code>/g, `<code class="bx-copy" data-copy="inline" role="button" tabindex="0" title="${tr('brainText.markdown.clickToCopy')}">`) : part)).join('');
 }
 /** What Copia puts on the clipboard for a block: its text as shown, without the one line end marked adds at the end. */
 export const blockText = (text: string): string => text.replace(/\n$/, '');

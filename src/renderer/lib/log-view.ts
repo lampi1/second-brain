@@ -4,6 +4,7 @@
 // search and filters, the day groups. Plain software rules over the app's events: no model, no tokens.
 // Tests: test/unit/log-view.test.ts.
 import type { LogEvent, LogKind, LogLevel } from '@shared/activity-log';
+import { t } from '../i18n';
 
 export type StepKind = 'open' | 'classifier' | 'work' | 'request' | 'result' | 'review' | 'verdict' | 'closed' | 'error' | 'unverified';
 export interface ChainStep {
@@ -69,11 +70,11 @@ function chainOf(rootId: string, list: LogEvent[]): TaskChain {
   const delivered = list.some(e => e.step === 'result' || e.step === 'closed');
   if (!verified && delivered) {
     const last = list.at(-1)!;
-    steps.push({ key: `${rootId}-unverified`, kind: 'unverified', level: 'info', at: last.at, title: 'Verifica: non effettuata', text: 'Nessuna revisione né giudizio su questo lavoro.', depth: 0, costUsd: 0, ms: 0, turns: 0, tools: [], toolErrors: 0, events: [] });
+    steps.push({ key: `${rootId}-unverified`, kind: 'unverified', level: 'info', at: last.at, title: t('appText.log.unverified'), text: t('appText.log.unverifiedText'), depth: 0, costUsd: 0, ms: 0, turns: 0, tools: [], toolErrors: 0, events: [] });
   }
   const live = list.find(e => e.chatId === rootId);
   return {
-    rootId, title: live?.task ?? list.find(e => e.task)?.task ?? list[0]!.who ?? 'Incarico', first: list[0]!.at, last: list.at(-1)!.at,
+    rootId, title: live?.task ?? list.find(e => e.task)?.task ?? list[0]!.who ?? t('appText.log.task'), first: list[0]!.at, last: list.at(-1)!.at,
     costUsd: list.reduce((n, e) => n + (e.step === 'work' ? e.costUsd ?? 0 : 0), 0), steps, flags: flagsOf(list, steps),
     chats: [...new Set(list.map(e => e.chatId).filter((x): x is string => !!x))], errors: list.filter(e => e.level === 'error').length, verified,
   };
@@ -91,19 +92,19 @@ export function flagsOf(list: readonly LogEvent[], steps: readonly ChainStep[] =
     if (text.length < 20) continue;
     const key = `${e.step === 'result' ? 'r' : e.chatId}|${text}`;
     const before = seen.get(key);
-    if (before) { flags.push({ kind: 'duplicate', title: 'Risposta duplicata', detail: `${e.who ?? 'Un agente'} ha consegnato due volte la stessa risposta.`, stepKey: stepOf(e) }); break; }
+    if (before) { flags.push({ kind: 'duplicate', title: t('appText.log.duplicate'), detail: t('appText.log.duplicateText', { who: e.who ?? t('appText.log.anAgent') }), stepKey: stepOf(e) }); break; }
     seen.set(key, e);
   }
   // a permission closed without the user's answer
   for (const e of list) if (e.step === 'resolved' && e.reqType === 'permission' && e.by === 'other') {
-    flags.push({ kind: 'hidden-approval', title: 'Approvazione nascosta', detail: `Il permesso «${e.text ?? ''}» di ${e.who ?? 'un agente'} si è chiuso senza la tua risposta.`, stepKey: stepOf(e) });
+    flags.push({ kind: 'hidden-approval', title: t('appText.log.hiddenApproval'), detail: t('appText.log.hiddenApprovalText', { what: e.text ?? '', who: e.who ?? t('appText.log.anAgentLower') }), stepKey: stepOf(e) });
   }
   // a review that ended without a verdict
   for (const r of list) {
     if (r.step !== 'review' || !r.chatId) continue;
     const mine = list.filter(e => e.chatId === r.chatId);
     const ended = mine.some(e => e.step === 'closed' || e.step === 'result');
-    if (ended && !mine.some(e => e.step === 'verdict')) flags.push({ kind: 'review-no-verdict', title: 'Revisione senza verdetto', detail: `${r.who ?? 'La revisione'} ha finito senza dire se il lavoro è riuscito.`, stepKey: stepOf(r) });
+    if (ended && !mine.some(e => e.step === 'verdict')) flags.push({ kind: 'review-no-verdict', title: t('appText.log.noVerdict'), detail: t('appText.log.noVerdictText', { who: r.who ?? t('appText.log.theReview') }), stepKey: stepOf(r) });
   }
   return flags;
 }

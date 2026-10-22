@@ -20,7 +20,7 @@ import { focusChat, reqKey } from '../actions';
 import { useNow } from '../lib/clock';
 import { formatCost, modelWithEffort } from '../lib/format';
 import { selectedHere } from '../lib/strip-click';
-import { t } from '../i18n';
+import { t, locale } from '../i18n';
 import { openQueue } from '../lib/later';
 import { AgentAvatar } from './AgentAvatar';
 import { ChatTile, useFlash } from './ChatTile';
@@ -33,7 +33,7 @@ const lastRefusal = (items: readonly ChatItem[] | undefined): string => {
   const r = [...(items ?? [])].reverse().find(i => i.kind === 'system' && i.code === 'aboveParent');
   return r && r.kind === 'system' ? r.text : '';
 };
-const hhmm = (at: number) => new Date(at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+const hhmm = (at: number) => new Date(at).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
 /** "8 s", "4 min", "2 h": how long the delegated work has run (until its result) */
 export function span(ms: number): string {
   const s = Math.max(0, Math.round(ms / 1000));
@@ -115,7 +115,7 @@ function Ask({ req, chatId }: { req: PendingRequest; chatId: string }) {
     <div className="dc-act">
       {perm && <>
         <button type="button" className="btn btn-s dc-btn-amber" data-testid={`delegation-allow-${chatId}`} onClick={() => void answer(req, { kind: 'permission', allow: true })}>{t('tree.allowOnce')}</button>
-        <button type="button" className="btn btn-s btn-ghost" data-testid={`delegation-deny-${chatId}`} onClick={() => void answer(req, { kind: 'permission', allow: false, message: 'Negato dall’utente.' })}>{t('tree.deny')}</button>
+        <button type="button" className="btn btn-s btn-ghost" data-testid={`delegation-deny-${chatId}`} onClick={() => void answer(req, { kind: 'permission', allow: false, message: t('appText.delegation.denied') })}>{t('tree.deny')}</button>
       </>}
       <button type="button" className="btn btn-s dc-btn-quiet" data-testid={`delegation-answer-${chatId}`} onClick={() => openQueue(reqKey(req))}>{t(perm ? 'tree.goTo' : 'tree.answerHere')}</button>
     </div>

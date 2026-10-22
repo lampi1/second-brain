@@ -12,7 +12,7 @@ import { morningBriefNow } from './store/morning';
 import type { DiscussBridge } from './brain';
 import { setDraft } from './components/ChatInput';
 import { sb } from './sb';
-import { t } from './i18n';
+import { t, locale } from './i18n';
 import { fileReference, fileViewArg,normalizeFileArg } from '@shared/file-view';
 import { freezeClock, now } from './lib/clock';
 import { setReporting } from './lib/viewports';
@@ -78,17 +78,17 @@ export async function renewOrchestrator(chatId: string, to: Harness, summary: bo
   // come from the row for that engine, else the engine's default as before; main keeps the Orchestrator role on it
   const n = await createRoutedChat({
     title: old.title, cwd: old.cwd, orchestrator: true, replaces: old.id, ...(prompt ? { prompt } : {}),
-    defaults: { harness: to }, ask: { harness: to, reason: to === old.harness ? 'Orchestrator nuovo sullo stesso motore (scelta dell’utente)' : 'motore scelto dall’utente (Cambia motore)' },
+    defaults: { harness: to }, ask: { harness: to, reason: to === old.harness ? t('appText.actions.renewReasonSame') : t('appText.actions.renewReasonOther') },
   });
   if (!n) return false;
-  const when = new Date(now()).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', '');
-  const base = `${old.title.trim()} precedente · ${engineLabel(old.harness)} · ${when}`;
+  const when = new Date(now()).toLocaleString(locale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', '');
+  const base = t('appText.actions.oldTitle', { title: old.title.trim(), engine: engineLabel(old.harness), when });
   const taken = new Set(Object.values(app.get().chats).map(c => c.title));
   let oldTitle = base;
   for (let i = 2; taken.has(oldTitle); i++) oldTitle = `${base} (${i})`;
   await setChat(old.id, { title: oldTitle });
   if (archive) await archiveChat(old.id, false);
-  else toast(to === old.harness ? `Orchestrator nuovo su ${engineLabel(to)}. Il precedente resta tra le chat come «${oldTitle}».` : `L’Orchestrator ora usa ${engineLabel(to)}. Il precedente resta tra le chat come «${oldTitle}».`, 'info');
+  else toast(t(to === old.harness ? 'appText.actions.renewedSame' : 'appText.actions.renewedOther', { engine: engineLabel(to), title: oldTitle }), 'info');
   requestFocus(n.id);
   return true;
 }
@@ -99,7 +99,7 @@ export async function renewOrchestrator(chatId: string, to: Harness, summary: bo
 export function newRequest(): void {
   setOrchestratorOpen(true);
   const id = orchestratorId();
-  if (!id) { toast('Crea l’Orchestrator: è da lì che parte ogni lavoro.', 'info'); return; }
+  if (!id) { toast(t('appText.actions.createOrchestrator'), 'info'); return; }
   requestFocus(id);
   flashTile('orchestrator');
 }
@@ -109,7 +109,7 @@ export function newRequest(): void {
 export function askRenewOrchestrator(to?: Harness): void {
   const id = orchestratorId();
   const c = id ? app.get().chats[id] : null;
-  if (!id || !c) { toast('Non c’è ancora un Orchestrator: crealo nella sua colonna.', 'info'); return; }
+  if (!id || !c) { toast(t('appText.actions.noOrchestrator'), 'info'); return; }
   openOrchestratorRenew({ chatId: id, to: to ?? c.harness });
 }
 
@@ -117,11 +117,11 @@ export function askRenewOrchestrator(to?: Harness): void {
  *  old conversation stays as a closed chat to read (ADR 0021; the user, 2026-10-12: "che sia disponibile il clear"). */
 export function askClearOrchestrator(chatId: string | null = orchestratorId()): void {
   const c = chatId ? app.get().chats[chatId] : null;
-  if (!chatId || !c?.isOrchestrator) { toast('Non c’è ancora un Orchestrator: crealo nella sua colonna.', 'info'); return; }
+  if (!chatId || !c?.isOrchestrator) { toast(t('appText.actions.noOrchestrator'), 'info'); return; }
   askConfirm({
-    title: `Pulire l’Orchestrator «${c.title}»?`,
-    body: 'Riparte vuoto sullo stesso motore e rilegge da sola la memoria (now.md). La conversazione di adesso resta tra le chat chiuse, da consultare.',
-    confirmLabel: 'Pulisci', onConfirm: () => { void renewOrchestrator(chatId, c.harness, false, true); },
+    title: t('appText.actions.clearTitle', { title: c.title }),
+    body: t('appText.actions.clearBody'),
+    confirmLabel: t('appText.actions.clearConfirm'), onConfirm: () => { void renewOrchestrator(chatId, c.harness, false, true); },
   });
 }
 
@@ -171,7 +171,7 @@ export function placeOf(target: string): Place | null {
 /** onNavigate of the brain pages and of the map: every move goes through the history. */
 export function goTarget(target: string): void {
   const p = placeOf(target);
-  if (p) go(p); else toast(`Pagina sconosciuta: ${target}`, 'warn');
+  if (p) go(p); else toast(t('appText.actions.unknownPage', { page: target }), 'warn');
 }
 
 /** Old page names (app-control docs, links made before; the agents' workspace page is the Grindhouse since SPEC 19) → today's ids; "spunti" (the AI's ideas) opens Idee on "Dall'IA". */
@@ -180,7 +180,7 @@ const ALIAS: Record<string, string> = { oggi: 'task', adesso: 'task', dafare: 't
 /** Go to a place: a brain page (the Grindhouse holds the agents) or the map; `element` is highlighted for 1.5 s on arrival. */
 export function go(place: Place, opts: { push?: boolean } = {}): void {
   const page = (ALIAS[place.page] ?? place.page) as Place['page'];
-  if (page !== 'mappa' && !isBrainPage(page)) { toast(`Pagina sconosciuta: ${place.page}`, 'warn'); return; }
+  if (page !== 'mappa' && !isBrainPage(page)) { toast(t('appText.actions.unknownPage', { page: place.page }), 'warn'); return; }
   const target: Place = { page:page==='file'&&!place.arg?'home':page, arg:page==='file'&&place.arg?normalizeFileArg(place.arg):(place.page as string) === 'spunti' ? 'ia' : place.arg ?? null, element: place.element ?? null };
   if (page === 'mappa') setMap(true, target.arg ?? null);
     else { setMap(false); openPage(target.page as BrainPageId, target.arg ?? null); }
@@ -250,7 +250,7 @@ export async function copyLink(link: string = currentLink()): Promise<void> {
     document.execCommand('copy');
     ta.remove();
   }
-  toast(`Link copiato: ${link}`, 'ok');
+  toast(t('appText.actions.linkCopied', { link }), 'ok');
 }
 
 /** The overlay closes to its pill from inside (Ctrl+R, Esc, "Riduci"): the keyboard follows to the pill, never lost
@@ -360,7 +360,7 @@ export function openFileViewer(raw:string,chatId?:string):void{
  *  one goes back on the grid first (no message, no tokens). */
 export function openChatRef(chatId: string): void {
   const c = app.get().chats[chatId];
-  if (!c) { toast('Questa chat non c’è più.', 'info'); return; }
+  if (!c) { toast(t('appText.actions.chatGone'), 'info'); return; }
   if (c.closedAt) { void reopenChat(chatId); return; }
   focusChat(chatId);
 }
@@ -391,10 +391,10 @@ export async function archiveChat(chatId: string, auto = true): Promise<boolean>
   if (!reduced) await new Promise(r => setTimeout(r, CLOSE_ANIM_MS));
   try {
     dispatch({ type: 'chat:updated', chat: await sb.invoke('chat:archive', { chatId, auto }) });
-    toast(`Chiusa: ${c.title}`, 'info', { label: 'Riapri', run: () => { void reopenChat(chatId); } }, 8000);
+    toast(t('appText.actions.closed', { title: c.title }), 'info', { label: t('appText.actions.reopen'), run: () => { void reopenChat(chatId); } }, 8000);
     return true;
   } catch (e) {
-    if (!auto) toast(`Chat non chiusa: ${errText(e)}`, 'err');
+    if (!auto) toast(t('appText.actions.notClosed', { error: errText(e) }), 'err');
     return false;
   } finally { setClosing(chatId, false); }
 }
@@ -405,14 +405,14 @@ export async function reopenChat(chatId: string): Promise<void> {
     dispatch({ type: 'chat:updated', chat: await sb.invoke('chat:reopen', { chatId }) });
     touch(chatId, now());
     focusChat(chatId);
-  } catch (e) { toast(`Chat non riaperta: ${errText(e)}`, 'err'); }
+  } catch (e) { toast(t('appText.actions.notReopened', { error: errText(e) }), 'err'); }
 }
 
 /** "Avvia ora": a chat waiting in the CPU queue (ADR 0036) starts now, whatever the load. */
 export async function admitNow(chatId: string): Promise<void> {
   try {
-    if (!(await sb.invoke('chat:admitNow', { chatId }))) toast('La chat non era più in coda.', 'info');
-  } catch (e) { toast(`Chat non avviata: ${errText(e)}`, 'err'); }
+    if (!(await sb.invoke('chat:admitNow', { chatId }))) toast(t('appText.actions.notQueued'), 'info');
+  } catch (e) { toast(t('appText.actions.notStarted', { error: errText(e) }), 'err'); }
 }
 
 // the card a focusRequest still waits for: it takes the keyboard in the same commit it mounts in (RequestPanel's
@@ -492,7 +492,7 @@ export function nextThing(from?: string): void {
  *  approval → a stalled chat → an idea due), else "Niente ti aspetta adesso". */
 async function nextAfterPending(): Promise<void> {
   const next = nextPriority(await morningBriefNow());
-  if (!next) { toast('Niente ti aspetta adesso', 'ok'); return; }
+  if (!next) { toast(t('appText.actions.nothingWaiting'), 'ok'); return; }
   openMorningNext(next);
   toast(next.kind === 'pr' ? t('alive.next.pr', { title: next.pr.title }) : next.kind === 'approvals' ? t('alive.next.approvals', { n: next.n })
     : next.kind === 'stalled' ? t('alive.next.stalled', { title: next.chat.title, min: next.chat.quietMin }) : t('alive.next.idea', { title: next.idea.title }), 'info');
@@ -516,8 +516,8 @@ const chatOfTile = (key: string | null): string | null => {
 export function stopFocused(): void {
   const id = chatOfTile(ui.get().focused);
   const c = id ? app.get().chats[id] : undefined;
-  if (!c) { toast('Seleziona prima una chat (clic o Ctrl+K)', 'info'); return; }
-  if (!isBusy(c) && c.state !== 'waiting') { toast(`«${c.title}» non sta lavorando`, 'info'); return; }
+  if (!c) { toast(t('appText.actions.selectChat'), 'info'); return; }
+  if (!isBusy(c) && c.state !== 'waiting') { toast(t('appText.actions.notWorking', { title: c.title }), 'info'); return; }
   void stop(c.id);
 }
 
@@ -534,8 +534,8 @@ export function closeFocused(): void {
   // Every worker lives in the Grindhouse.
   const pageOff = !!c && u.page !== 'home';
   const offScreen = !!c && (!!c.closedAt || pageOff || u.map || (!!u.maximized && u.maximized !== `chat:${c.id}`) || (!!u.focusMode && u.focusMode !== c.id));
-  if (!c || offScreen) { toast('Seleziona prima una chat (clic o Ctrl+K)', 'info'); return; }
-  if (c.isOrchestrator) { toast('L’Orchestrator non si chiude con Ctrl+W: usa il suo menu ⋯', 'info'); return; }
+  if (!c || offScreen) { toast(t('appText.actions.selectChat'), 'info'); return; }
+  if (c.isOrchestrator) { toast(t('appText.actions.orchestratorNoCtrlW'), 'info'); return; }
   closeChat(c.id);
 }
 
@@ -544,29 +544,29 @@ export function closeFocused(): void {
 function closeFocusedTab(tabId: string): void {
   const u = ui.get();
   if (u.hiddenTabs.includes(tabId)) return;
-  const t = app.get().tabs.find(x => x.id === tabId);
+  const tab = app.get().tabs.find(x => x.id === tabId);
   const key = `browser:${tabId}`;
-  const offScreen = !!t && (u.page !== 'home' || u.map || (!!u.maximized && u.maximized !== key) || (!!u.focusMode && t.ownerChatId !== u.focusMode)
+  const offScreen = !!tab && (u.page !== 'home' || u.map || (!!u.maximized && u.maximized !== key) || (!!u.focusMode && tab.ownerChatId !== u.focusMode)
     || !document.querySelector(`.browser-tile[data-tab-id="${CSS.escape(tabId)}"]`));
-  if (!t || offScreen) { toast('Seleziona prima una chat (clic o Ctrl+K)', 'info'); return; }
+  if (!tab || offScreen) { toast(t('appText.actions.selectChat'), 'info'); return; }
   closeTab(tabId);
 }
 
 /** ■ Ferma tutto: no confirm for a single chat (cheap), a confirm when several are running. */
 export function stopAllAsk(): void {
   const busy = Object.values(app.get().chats).filter(isBusy);
-  if (busy.length === 0) { toast('Nessuna chat al lavoro', 'info'); return; }
+  if (busy.length === 0) { toast(t('appText.actions.noneWorking'), 'info'); return; }
   if (busy.length === 1) { void stopAll(); return; }
   askConfirm({
-    title: `Fermare ${busy.length} chat al lavoro?`, body: 'Il turno in corso di ognuna si interrompe (anche un comando in esecuzione). Le chat restano aperte.',
-    items: busy.map(c => c.title), confirmLabel: `Ferma ${busy.length} chat`, danger: true, onConfirm: () => { void stopAll(); },
+    title: t('appText.actions.stopAllTitle', { n: busy.length }), body: t('appText.actions.stopAllBody'),
+    items: busy.map(c => c.title), confirmLabel: t('appText.actions.stopAllConfirm', { n: busy.length }), danger: true, onConfirm: () => { void stopAll(); },
   });
 }
 
 export function toggleMaximize(key?: string | null): void {
   const k = key ?? ui.get().focused ?? ui.get().prefs.lastFocus;
-  if (!k) { toast('Seleziona prima una tessera', 'info'); return; }
-  if (k === 'orchestrator') { toast('L’Orchestrator si allarga trascinando il suo angolo in basso a destra', 'info'); return; }
+  if (!k) { toast(t('appText.actions.selectTile'), 'info'); return; }
+  if (k === 'orchestrator') { toast(t('appText.actions.orchestratorResize'), 'info'); return; }
   setMaximized(ui.get().maximized === k ? null : k);
 }
 
@@ -578,7 +578,7 @@ export function toggleFocusMode(): void {
   const open = (x: string | null | undefined): x is string => !!x && !!s.chats[x] && !s.chats[x]!.closedAt;
   const sel = chatOfTile(u.focused);
   const id = (open(sel) ? sel : null) ?? s.order.find(x => open(x) && !s.chats[x]!.isOrchestrator && isBusy(s.chats[x]!)) ?? s.order.find(x => open(x) && !s.chats[x]!.isOrchestrator);
-  if (!id || s.chats[id]?.isOrchestrator) { toast('Seleziona una chat per la modalità focus', 'info'); return; }
+  if (!id || s.chats[id]?.isOrchestrator) { toast(t('appText.actions.selectFocus'), 'info'); return; }
   if (u.page !== 'home' || u.map) go({ page: 'home' });
   setFocusMode(id);
   requestFocus(id);

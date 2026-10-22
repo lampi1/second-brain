@@ -19,7 +19,7 @@ export async function proposeAutonomy(roots: string[], remove: string | null, br
   if (remove === null && (!selected || roots.includes(selected))) return null;
   const result = await bridge.propose(remove === null ? [...roots, selected!] : roots.filter(root => root !== remove));
   if ('error' in result) throw new Error(result.error);
-  if (!('proposal' in result)) throw new Error('Conferma non disponibile');
+  if (!('proposal' in result)) throw new Error(t('appText.codexAutonomy.noConfirm'));
   return result.proposal;
 }
 export function CodexAutonomy({ roots, bridge = port }: { roots: string[]; bridge?: AutonomyPort }) {

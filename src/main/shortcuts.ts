@@ -38,7 +38,7 @@ function repairIcons(base: string, outDir?: string): void {
       if (cur.icon && fs.existsSync(cur.icon)) continue;
       const icon = durableIcon(base, outDir);
       if (!icon) return;
-      if (!shell.writeShortcutLink(lnk, 'update', { icon, iconIndex: 0 })) log.warn('shortcuts', 'icon not repaired', { data: { lnk } });
+      if (!shell.writeShortcutLink(lnk, 'update', { ...cur, icon, iconIndex: 0 })) log.warn('shortcuts', 'icon not repaired', { data: { lnk } });
       else log.info('shortcuts', 'shortcut icon repaired', { data: { lnk } });
     } catch (e) { log.warn('shortcuts', 'icon repair failed', { data: { lnk, error: String(e) } }); }
   }

@@ -2,6 +2,7 @@
 // Integration registers the shared contract channels, then connects this adapter once at renderer startup.
 import { AUTO_CLOSE_WAITING, type AutoClosePresence, type AutoCloseStatus } from '@shared/auto-close';
 import { createStore } from './createStore';
+import { t } from '../i18n';
 export interface AutoCloseBridge {
   get: () => Promise<AutoCloseStatus[]>;
   presence: (holds: AutoClosePresence[]) => Promise<void>;
@@ -16,7 +17,7 @@ let bridge: AutoCloseBridge | null = null;
 let detach: (() => void) | null = null;
 const received = new WeakMap<AutoCloseStatus, number>();
 function unavailable():void{
-  healthy=false;autoCloseProblem.set('Chiusura automatica sospesa: stato non disponibile.');
+  healthy=false;autoCloseProblem.set(t('appText.autoClose.unavailable'));
   reportAutoClosePresence(lastHolds);
 }
 function accept(states: AutoCloseStatus[]): void {
