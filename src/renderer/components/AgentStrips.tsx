@@ -20,7 +20,6 @@ import { ChatTile } from './ChatTile';
 import { BrowserTile } from './BrowserTile';
 import { ChildStrips } from './ChildStrips';
 import { DelegationCard, KidsBar, TreeRails } from './DelegationCard';
-import { AgentAvatar } from './AgentAvatar';
 import { go, toggleMaximize } from '../actions';
 import { originOf } from '../lib/chat-origin';
 import { GrindhouseEmpty } from './MorningBlock';
@@ -130,19 +129,15 @@ function ChildRails({ node }: { node: TreeNode }) {
   return <TreeRails node={node} state={state} />;
 }
 
-/** Who started a root chat, above it: "Orchestrator ha avviato questa chat · 09:12"; a chat the app started by itself
+/** Who started a root chat, above it, only when it was not the Orchestrator (every chat is, so that line said nothing; the
+ *  owner, 2026-10-22): a chat the app started by itself
  *  ("Avviata dall'app · revisione a campione · 2 di 3 oggi", the Judge's sampled reviews, agents/judge-sample.ts) or
  *  resumed after a restart ("Ripresa dall'app dopo il riavvio · 09:12") says so too (ADR 0102): a strip never appears
  *  from nowhere. */
 function Origin({ chatId }: { chatId: string }) {
   const o = useApp(s => originOf(s.chats[chatId], Object.values(s.chats)), (a, b) => JSON.stringify(a) === JSON.stringify(b));
-  const avatar = useApp(s => Object.values(s.chats).find(c => c?.isOrchestrator)?.agent?.avatar);
-  if (!o) return null;
+  if (!o || o.kind === 'orchestrator') return null;
   const time = (at: number) => new Date(at).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
-  if (o.kind === 'orchestrator') return <div className="tree-origin" data-testid={`tree-origin-${chatId}`} data-origin="orchestrator">
-    <AgentAvatar avatar={avatar} name="Orchestrator" size={18} />
-    <span><b>Orchestrator</b> {tr('tree.origin', { time: time(o.at) })}</span>
-  </div>;
   if (o.kind === 'resumed') return <div className="tree-origin is-app" data-testid={`tree-origin-${chatId}`} data-origin="resumed"><span>{tr('alive.origin.resumed', { time: time(o.at) })}</span></div>;
   return <div className="tree-origin is-app" data-testid={`tree-origin-${chatId}`} data-origin="app">
     <span><b>{tr('alive.origin.app')}</b>{o.review ? <> · {tr('alive.origin.review')}</> : null} · {time(o.at)}</span>
