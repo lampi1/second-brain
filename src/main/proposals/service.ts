@@ -70,6 +70,8 @@ export class ProposalsService {
   async decide(arg: ProposalDecide): Promise<ProposalDecideResult> {
     const id = typeof arg?.id === 'string' ? arg.id : '', decision = arg?.decision;
     const note = typeof arg?.note === 'string' ? arg.note.slice(0, 1000) : undefined;
+    const keep = arg?.keep === 'new' || arg?.keep === 'both' ? arg.keep : undefined;
+    const shown = Array.isArray(arg?.conflicts) ? arg.conflicts.filter((x): x is string => typeof x === 'string').slice(0, 50) : undefined;
     const fail = async (error: string): Promise<ProposalDecideResult> => ({ ok: false, error, state: await this.list() });
     if (!id || id.length > 300 || (decision !== 'approve' && decision !== 'reject')) return fail('Richiesta non valida.');
     const source = this.sources.find(s => id.startsWith(`${s.id}:`));
@@ -81,7 +83,7 @@ export class ProposalsService {
       if (!card) return await fail('La proposta non è più da decidere: forse è già stata decisa altrove.');
       if (decision === 'approve' ? !card.canApprove : !card.canReject) return await fail('Questa scelta non è più possibile su questa proposta.');
       if (typeof arg.seen === 'string' && arg.seen !== card.content) return await fail('La proposta è cambiata mentre la leggevi: guardala di nuovo prima di decidere.');
-      await source.decide(this.ports, card, decision, note);
+      await source.decide(this.ports, card, decision, note, keep && { keep, shown: shown ?? [] });
       log.info('proposals', 'decided by the user', { data: { source: card.source, decision, applied: card.applied } });
       return { ok: true, state: await this.list() };
     } catch (e) {

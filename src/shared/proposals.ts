@@ -9,7 +9,7 @@
 export const PROPOSAL_SOURCES = ['memory', 'candidate', 'change', 'setting', 'trial', 'tier', 'pulse', 'policy'] as const;
 export type ProposalSource = (typeof PROPOSAL_SOURCES)[number];
 /** The filter chips on top of the deck, in this order. */
-export const PROPOSAL_GROUPS = ['skill', 'rule', 'fact', 'role', 'setting', 'learning'] as const;
+export const PROPOSAL_GROUPS = ['skill', 'rule', 'fact', 'script', 'role', 'setting', 'learning'] as const;
 export type ProposalGroup = (typeof PROPOSAL_GROUPS)[number];
 /** approve = Approva (or Tieni on an applied change); reject = Rifiuta (or Annulla on an applied change). */
 export type ProposalDecision = 'approve' | 'reject';
@@ -23,6 +23,30 @@ export interface ProposalWho {
 /** A fact the renderer shows with its own label (proposals.fact.<key>): numbers and values, never prose. */
 export type ProposalFactKey = 'before' | 'after' | 'scope' | 'target' | 'tier' | 'version' | 'gain' | 'cases' | 'needs' | 'action';
 export interface ProposalFact { key: ProposalFactKey; value: string }
+
+/** What the card asks, as data the renderer words into one plain question with what each answer does
+ *  (lib/proposal-ask.ts): role ids stay ids (the renderer names them), values stay values, never prose. */
+export type ProposalAsk =
+  /** a fact an agent wants to remember: who keeps it (a role id when it is one) and where it holds */
+  | { kind: 'remember'; role?: string; subject: string; predicate: string; project?: string; repository?: string; environment?: string;
+    /** confirmed facts with the same subject that say something else: the user picks replace or keep both */
+    conflicts?: { id: string; value: string }[] }
+  /** a skill draft to add to the brain */
+  | { kind: 'skill'; name: string }
+  /** something the app already changed by itself: what, how, on which item (a role id for a role or its memory) */
+  | { kind: 'applied'; what: 'skill' | 'agent' | 'rule' | 'memory' | 'script' | 'query'; action: 'create' | 'update' | 'merge' | 'link' | 'unlink' | 'remove'; name: string; role?: string }
+  /** an agent asks to change a protected setting */
+  | { kind: 'setting'; label: string; before: string; after: string }
+  /** a role runs a trial version: keep it or go back */
+  | { kind: 'trial'; role: string; version: number; baseline: number; advice?: 'keep' | 'revert' | 'tier' }
+  /** the app suggests another level (and maybe skills) for one or more roles */
+  | { kind: 'tier'; roles: string[]; before?: string; tier?: string; skills: string[] }
+  /** a rule the Battito learned for an agent */
+  | { kind: 'rule'; role: string }
+  /** a new version of how the app decides something by itself (routing, notifications…) */
+  | { kind: 'policy'; domain: string; name: string; from?: number; to?: number; cases?: number };
+/** The code a card is about, shown as it is: a script or a saved query the change writes (or removes). */
+export interface ProposalCode { file: string; lang: string; text: string }
 
 export interface ProposalProvenance {
   who: ProposalWho;
@@ -45,6 +69,10 @@ export interface Proposal {
   /** already applied by the app (a maintenance change, a role trial): the card says «già applicata», Tieni / Annulla */
   applied: boolean;
   title: string;
+  /** the question the card asks, as data (the renderer words it) */
+  ask: ProposalAsk;
+  /** a script's or a query's code, when the card is about one */
+  code?: ProposalCode[];
   /** the full content, Markdown (the fact, the skill draft, the change's summary and reason) */
   content: string;
   facts: ProposalFact[];
@@ -68,7 +96,10 @@ export interface ProposalsState {
 }
 /** `seen`: the card's content the user decided on; main refuses when the card changed since (a skill draft edited
  *  between the read and the click is never approved unseen). */
-export interface ProposalDecide { id: string; decision: ProposalDecision; note?: string; seen?: string }
+/** keep: on a fact that contradicts confirmed ones, replace them (`new`) or keep them beside it (`both`). */
+export type ProposalKeep = 'new' | 'both';
+/** `conflicts`: with `keep`, the ids of the contradicted facts the card showed (main refuses when they changed since). */
+export interface ProposalDecide { id: string; decision: ProposalDecision; note?: string; seen?: string; keep?: ProposalKeep; conflicts?: string[] }
 export type ProposalDecideResult = { ok: true; state: ProposalsState } | { ok: false; error: string; state: ProposalsState };
 
 /** The newest first; ties by id, so the order never jumps between two reads. */

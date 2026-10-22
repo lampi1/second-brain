@@ -1,14 +1,15 @@
 // The demo's Proposte (SB_DEMO=1, ADR 0123): made-up items waiting for the user, written once into the demo brain and
 // its change log through the real stores, so the deck shows every kind of card without the user's data: three memory
 // facts the roles proposed (from the demo chats' runs: who, where and when resolve to «QA · Rimborsi», «App ·
-// Feedback», «App · Mappa 3D»), a skill candidate the maintenance wrote from a repeated job, a memory merge the
+// Feedback», «App · Mappa 3D»), a fact that contradicts one Scout already confirmed (ADR 0126), a script the maintenance
+// wrote (its card shows the code), a skill candidate the maintenance wrote from a repeated job, a memory merge the
 // maintenance applied by itself (beside the demo's rule and skill of demo-learning.ts), and an Orchestrator's request
 // for a protected setting. Deterministic (dates relative to `now`). Used by demo-wiring.ts; the e2e spec
 // test/e2e/proposals-deck.spec.ts decides them.
 import fs from 'node:fs';
 import path from 'node:path';
 import { readLocal, writeLocal } from '../agents/local-store';
-import { proposeMemory, readMemoryRecords } from '../rules/memory-records';
+import { confirmMemory, proposeMemory, readMemoryRecords } from '../rules/memory-records';
 import type { StoredChange } from '../brainmodel/changes';
 import type { BrainService } from '../services';
 import { localize, tr } from '../demo-text';
@@ -42,6 +43,12 @@ export function writeDemoProposals(userData: string, brainRoot: string, now: num
       value: tr('logs/feedback/AAAA-MM-GG.log, una riga JSON per richiesta; gli errori 500 hanno il campo "status": 500.'), sourceEventId: 'feedback-tool-3', sourceRunId: 'r_000000000004' }, iso(2 * MIN));
     proposeMemory(brainRoot, { scope: { roleId: 'artisan', project: 'brain' }, subject: tr('Pagina Mappa'), predicate: tr('usa per il 3D'),
       value: tr('three.js con un solo canvas condiviso; con meno di 60 fps si passa alla vista 2D da sola.'), sourceEventId: 'mappa-report', sourceRunId: 'r_000000000001' }, iso(28 * MIN));
+    // a fact that says something else than one Scout already remembers: the card asks replace or keep both (ADR 0126)
+    const known = proposeMemory(brainRoot, { scope: { roleId: 'scout', project: 'alfa-shop' }, subject: tr('Prompt preparati'), predicate: 'nota',
+      value: tr('i prompt per dopo stanno nella cartella prompts/ del progetto.'), sourceEventId: 'prompts-1', sourceRunId: 'r_000000000003' }, iso(3 * DAY));
+    confirmMemory(brainRoot, known.memoryId, { sourceEventId: 'demo-review', sourceRunId: 'demo-review', evidence: 'demo' }, iso(3 * DAY - MIN));
+    proposeMemory(brainRoot, { scope: { roleId: 'scout', project: 'alfa-shop' }, subject: tr('Prompt preparati'), predicate: 'nota',
+      value: tr('i prompt per dopo stanno in tmp/*-prompt.md e sono committati come «tmp: …»: guarda prima il git log.'), sourceEventId: 'prompts-2', sourceRunId: 'r_000000000004' }, iso(5 * MIN));
   }
   const name = demoCandidate(), text = candidateText();
   const file = path.join(fs.realpathSync(brainRoot), 'memory', 'skill-candidates', `${name}.md`);
@@ -58,6 +65,13 @@ export function writeDemoProposals(userData: string, brainRoot: string, now: num
       reason: 'Quattro righe dicevano la stessa cosa sull\'ambiente test-2 (accesso, dati di prova, reset notturno).', evidence: ['agents/sentinel/memory.md:12', 'agents/sentinel/memory.md:19', 'agents/sentinel/memory.md:27', 'agents/sentinel/memory.md:31'], files: [] },
   ]);
   extra[0]!.files = [{ file, before: null, after: text }];
+  // a script the maintenance wrote from a repeated job: the card shows its code
+  const script = path.join(fs.realpathSync(brainRoot), 'scripts', 'conta-errori-500.mjs');
+  const code = `// ${tr('Conta gli errori 500 di oggi nei log del modulo indicato.')}\n// node scripts/conta-errori-500.mjs feedback\nimport fs from 'node:fs';\n\nconst mod = process.argv[2] ?? 'feedback';\nconst day = new Date().toISOString().slice(0, 10);\nconst lines = fs.readFileSync(\`logs/\${mod}/\${day}.log\`, 'utf8').split('\\n').filter(Boolean);\nconst errors = lines.map(l => JSON.parse(l)).filter(r => r.status === 500);\nconsole.log(\`\${errors.length} errori 500 in \${mod} oggi\`);\n`;
+  fs.mkdirSync(path.dirname(script), { recursive: true });
+  if (!fs.existsSync(script)) fs.writeFileSync(script, code, 'utf8');
+  extra.push({ id: 'demo-p3', at: now - 50 * MIN, job: 'repeated-task', kind: 'script', action: 'create', target: 'scripts/conta-errori-500.mjs', summary: tr('Nuovo script «conta-errori-500»: conta gli errori 500 di oggi in un modulo'),
+    reason: tr('Hai chiesto tre volte in due giorni quanti errori 500 ci sono oggi: ora basta lanciare lo script.'), evidence: ['r_000000000004'], files: [{ file: script, before: null, after: fs.readFileSync(script, 'utf8') }] });
   writeLocal(logFile, { version: 1, changes: [...changes, ...extra] });
 }
 

@@ -146,3 +146,19 @@ it('persists deleted derivative invalidations across restart and fails closed un
   expect(paths).toContain('memory/derived/cached.md');
   expect(restarted.hasPendingInvalidations()).toBe(false);
 });
+it('resolves a contradiction only by the user\'s choice on the facts they saw: replace them or keep both', () => {
+  const root = brain(), ok = (n: string) => ({ sourceEventId: `review-${n}`, sourceRunId: `review-${n}`, evidence: 'checked' });
+  const a = proposeMemory(root, input, '2026-01-01T00:00:00Z');
+  confirmMemory(root, a.memoryId, ok('a'), '2026-01-02T00:00:00Z');
+  const b = proposeMemory(root, { ...input, value: 'trunk' }, '2026-02-01T00:00:00Z');
+  expect(() => confirmMemory(root, b.memoryId, ok('b'), '2026-02-02T00:00:00Z', { keep: 'both', ids: ['someone-else'] })).toThrow(/supersession/);
+  confirmMemory(root, b.memoryId, ok('b'), '2026-02-02T00:00:00Z', { keep: 'both', ids: [a.memoryId] });
+  let rows = readMemoryRecords(root);
+  expect(rows.filter(r => r.status === 'confirmed').map(r => r.value).sort()).toEqual(['develop', 'trunk']);
+  const c = proposeMemory(root, { ...input, value: 'main' }, '2026-03-01T00:00:00Z');
+  expect(() => confirmMemory(root, c.memoryId, ok('c'), '2026-03-02T00:00:00Z', { keep: 'new', ids: [a.memoryId] })).toThrow(/supersession/);
+  confirmMemory(root, c.memoryId, ok('c'), '2026-03-02T00:00:00Z', { keep: 'new', ids: [a.memoryId, b.memoryId] });
+  rows = readMemoryRecords(root);
+  expect(rows.filter(r => r.status === 'confirmed').map(r => r.value)).toEqual(['main']);
+  expect(rows.find(r => r.memoryId === a.memoryId)?.transitions?.at(-1)?.reason).toBe(`superseded:${c.memoryId}`);
+});

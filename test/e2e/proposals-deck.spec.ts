@@ -28,6 +28,7 @@ async function theme(page: Page, scheme: 'dark' | 'light'): Promise<void> {
 }
 const top = (page: Page) => page.getByTestId('pd-card-top');
 async function drag(page: Page, dx: number, release = true): Promise<void> {
+  await top(page).locator('.pd-title').scrollIntoViewIfNeeded();
   const box = (await top(page).locator('.pd-title').boundingBox())!;
   const x = box.x + box.width / 2, y = box.y + box.height / 2;
   await page.mouse.move(x, y);
@@ -91,10 +92,27 @@ test('the deck: every source in one stack, swipe / buttons / keys, undo, the end
     await expect.poll(async () => (await page.evaluate(() => window.sb.invoke('settings:get', undefined))).pulse?.dailyUsd, { timeout: 10_000 }).toBe(0.4);
 
     // the rest, each by another way: drag, keys, buttons; a skill candidate without its evidence can only be rejected
-    const decided: Record<string, 'approve' | 'reject'> = {};
+    const decided: Record<string, 'approve' | 'reject'> = {}, snapped = new Set<string>();
     for (let guard = 0; guard < 20 && await top(page).count(); guard++) {
       const id = (await top(page).getAttribute('data-card'))!, card = first.items.find(c => c.id === id)!;
-      if (card.source === 'candidate') {
+      // every card asks one plain question with what each answer does (ADR 0126)
+      await expect(page.getByTestId('pd-question')).toHaveText(/\?$/);
+      await expect(page.getByTestId('pd-answers')).toBeVisible();
+      if (!snapped.has(card.source)) { snapped.add(card.source); await snap(page, `proposals-card-${card.source}-dark`); }
+      if (card.ask.kind === 'remember' && card.ask.conflicts?.length) {
+        // it contradicts what Scout already remembers: Approva waits for replace or keep both
+        await expect(page.getByTestId('pd-conflict')).toContainText(card.ask.conflicts[0]!.value);
+        await page.getByTestId('pd-approve').click();
+        await expect(top(page)).toHaveAttribute('data-card', id);
+        await expect(page.locator('.pd-hint')).not.toBeEmpty();
+        await page.getByTestId('pd-keep-both').click();
+        await snap(page, 'proposals-card-conflict-dark');
+        // the radio keeps the focus: → approves, it does not switch the choice
+        await page.keyboard.press('ArrowRight'); decided[id] = 'approve';
+      } else if (card.id === 'change:demo-p3') {
+        await expect(page.getByTestId('pd-code')).toContainText('status === 500');
+        await page.keyboard.press('ArrowRight'); decided[id] = 'approve';
+      } else if (card.source === 'candidate') {
         await expect(page.getByTestId('pd-approve')).toBeDisabled();
         await drag(page, 260);
         await expect(top(page)).toHaveAttribute('data-card', id); // refused: back on top, with the reason

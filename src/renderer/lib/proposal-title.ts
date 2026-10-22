@@ -1,6 +1,6 @@
 // A Proposte card's title in the UI language (ADR 0123): a setting request names its setting from the dictionaries when
 // they hold it (main's schema labels, brain/settings-schema.ts, are Italian); every other card keeps main's title. Pure.
-// Used by components/brain-model/ProposalsDeck.tsx; pinned by test/unit/visible-language.test.ts.
+// Used by lib/proposal-ask.ts (a setting card's question); pinned by test/unit/visible-language.test.ts.
 import type { Proposal } from '@shared/proposals';
 import { t, type Key } from '../i18n';
 /** The settings an agent may ask for whose name the UI's dictionaries already hold: main's schema labels
