@@ -97,7 +97,7 @@ export const DEMO_DIFF: FileDiff[] = [
 
 /** A delegation tree (ADR 0083) for the README shots (test/shots/readme.spec.ts adds it through __sbDemo.tree, so the
  *  seed every other test reads stays as it is): a Strategist the Orchestrator started, its Scout (done, result sent
- *  back), its Artisan with a Sentinel of its own, and a Herald waiting for its turn. */
+ *  back), its Artisan with a Sentinel of its own (and that one's Scout), and a Herald waiting for its turn. */
 export function demoTree(E: number): { chats: ChatSummary[]; items: Record<string, ChatItem[]> } {
   const cwd = 'C:\\progetti\\alfa-shop';
   const role = (id: WorkRoleId, name: string): ChatSummary['agent'] => ({ id, name, purpose: ROLE_DEFAULTS[id].summary, avatar: { kind: 'character', value: id }, engine: 'claude', model: 'claude-opus-5-5', revision: 1, version: 1, source: 'catalog' });
@@ -121,6 +121,9 @@ export function demoTree(E: number): { chats: ChatSummary[]; items: Record<strin
     { costUsd: 0.09, lastText: 'Lancio dotnet test: 41 su 42 finora.' }, artisan.id, ['Esito della suite']);
   const herald = node('tree-herald', 'herald', 'Herald', 'Note di rilascio', 'Scrivi le note di rilascio quando il fix è in main.', 1,
     { costUsd: 0.02, lastText: 'Preparo la bozza, la chiudo quando Artisan finisce.' }, lead.id, ['Bozza delle note']);
+  // a grandchild of the Artisan's: the tree three levels deep (the cards' indentation, owner 2026-10-22)
+  const probe = node('tree-probe', 'scout', 'Scout', 'Perché il test 42 fallisce', 'Trova perché il test 42 fallisce.', 2,
+    { costUsd: 0.03, lastText: 'Leggo il log del test 42.' }, sentinel.id, ['Causa con la riga']);
   // its plan, approved by the user: what it asked, the steps and how far they got (ADR 0108)
   lead.plan = { phase: 'running', at: E - 15 * MIN, doneWhen: 'I test ordini passano e le note sono pronte.',
     clarified: [{ q: 'Dove', a: 'Carrello, ordine e reso' }, { q: 'Offerte', a: 'No, solo a prezzo pieno' }],
@@ -130,9 +133,23 @@ export function demoTree(E: number): { chats: ChatSummary[]; items: Record<strin
       { title: 'Verifico con la suite ordini', role: 'sentinel', state: 'todo' },
       { title: 'Scrivo le note di rilascio', role: 'herald', state: 'now', chatIds: [herald.id], startedAt: E - 1 * MIN },
     ] };
-  const chats = [lead, scout, artisan, sentinel, herald];
+  const chats = [lead, scout, artisan, sentinel, probe, herald];
+  // what each did, as tool rows: the cards' steps (lib/run-steps.ts)
+  const tool = (c: ChatSummary, k: number, name: string, input: Record<string, unknown>, status: 'ok' | 'running' = 'ok'): ChatItem =>
+    ({ kind: 'tool', id: `${c.id}-t${k}`, at: c.run!.startedAt + (k + 1) * 40_000, name, summary: name, input, status });
+  const work: Record<string, ChatItem[]> = {
+    [scout.id]: [tool(scout, 0, 'Grep', { pattern: 'ApplyDiscount', path: 'src/Shop' }), tool(scout, 1, 'Read', { file_path: 'src/Shop/Cart/Discount.cs' }), tool(scout, 2, 'Read', { file_path: 'src/Shop/Refund/Refund.cs' })],
+    [artisan.id]: [
+      tool(artisan, 0, 'TodoWrite', { todos: [{ content: 'Sconto sul lordo nel carrello', status: 'completed' }, { content: 'Sconto sul lordo nell\'ordine', status: 'completed' }, { content: 'Un solo arrotondamento nel reso', status: 'in_progress', activeForm: 'Tolgo il doppio arrotondamento dal reso' }, { content: 'Test ordini verdi', status: 'pending' }] }),
+      tool(artisan, 1, 'Read', { file_path: 'src/Shop/Cart/Discount.cs' }), tool(artisan, 2, 'Read', { file_path: 'src/Shop/Order/Totals.cs' }),
+      tool(artisan, 3, 'Edit', { file_path: 'src/Shop/Cart/Discount.cs' }), tool(artisan, 4, 'Edit', { file_path: 'src/Shop/Order/Totals.cs' }),
+      tool(artisan, 5, 'Read', { file_path: 'src/Shop/Refund/Refund.cs' }), tool(artisan, 6, 'Edit', { file_path: 'src/Shop/Refund/Refund.cs' }, 'running')],
+    [sentinel.id]: [tool(sentinel, 0, 'Bash', { command: 'dotnet test test/Shop.Tests --filter Orders' }, 'running')],
+    [probe.id]: [tool(probe, 0, 'Grep', { pattern: 'OrderTotals_Discount', path: 'test/Shop.Tests' }), tool(probe, 1, 'Read', { file_path: 'test/Shop.Tests/Orders/OrderTotalsTests.cs' }, 'running')],
+  };
   const items: Record<string, ChatItem[]> = Object.fromEntries(chats.map(c => [c.id, [
     { kind: 'user', id: `${c.id}-u1`, at: c.run!.startedAt, text: c.run!.goal } as ChatItem,
+    ...(work[c.id] ?? []),
     { kind: 'assistant', id: `${c.id}-a1`, at: c.updatedAt, text: c.lastText } as ChatItem,
   ]]));
   // in the UI language (demo-text.ts: Italian as written, English through its table)

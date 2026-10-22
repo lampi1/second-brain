@@ -92,4 +92,15 @@ describe('runSteps', () => {
     expect(r.steps.length).toBeLessThanOrEqual(5);
     expect(r.earlier).toBe(6 - r.steps.filter(s => s.code).length);
   });
+  it('all: every step the card left out, the plan\'s done items first and its open items last', () => {
+    const items = [
+      ...Array.from({ length: 6 }, (_, i) => tool('Bash', { command: `cmd ${i}` })),
+      tool('TodoWrite', { todos: [{ content: 'Uno', status: 'completed' }, { content: 'Due', status: 'completed' }, { content: 'Tre', status: 'completed' }, { content: 'Quattro', status: 'in_progress' }, { content: 'Cinque', status: 'pending' }] }),
+    ];
+    const r = runSteps(items, { live: true, all: true });
+    expect(r.earlier).toBe(0);
+    expect(r.steps.map(s => s.code ?? s.text)).toEqual(['Uno', 'Due', 'Tre', ...Array.from({ length: 6 }, (_, i) => `cmd ${i}`), 'Quattro', 'Cinque']);
+    const contract = runSteps([tool('Read', { file_path: '/w/a.ts' })], { live: false, doneWhen: ['a', 'b', 'c', 'd', 'e'], all: true });
+    expect(contract.steps.map(s => s.text)).toEqual(['Legge a.ts', 'a', 'b', 'c', 'd', 'e']);
+  });
 });

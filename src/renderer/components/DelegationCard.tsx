@@ -8,12 +8,12 @@
 // "Vai alla chat" opens it in focus mode. KidsBar is the parent's summary at the foot of its strip ("4 figli · 2 in
 // corso · 1 ti aspetta", the children's characters, one bar segment each, Comprimi / Espandi: prefs.treeCollapsed).
 // Mounted by AgentStrips.tsx; the sidebar tree (SidebarTree.tsx) brings a card on screen with focusChat.
-import { useEffect, useRef, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import type { ChatItem, ChatSummary, PendingRequest } from '@shared/contract';
 import { useApp, loadItems, answer, send, stop } from '../store/store';
 import { setChatExpanded, setFocusMode, setTreeCollapsed, ui } from '../store/ui';
 import { sameList } from '../store/state';
-import { childState, kidCounts, type ChildState, type TreeNode } from '../lib/chat-tree';
+import { activeState, childState, kidCounts, type ChildState, type TreeNode } from '../lib/chat-tree';
 import { runSteps, type RunStep, type StepMark } from '../lib/run-steps';
 import { requestHost } from '../lib/child-requests';
 import { focusChat, reqKey } from '../actions';
@@ -72,24 +72,47 @@ export function TreeRails({ node, state }: { node: TreeNode; state: ChildState }
   </span>;
 }
 
-function Who({ chat }: { chat: ChatSummary }) {
+/** The card's one head row (owner, 2026-10-22: «vista più compatta … pur vedendo tutti gli step e tutte le info»):
+ *  the role's face, the task, who runs it with its skills and model, the time, the state, "Vai alla chat"; the line
+ *  under it names the parent (it may have scrolled away) and what the work cost. */
+function Head({ chat, state, parent }: { chat: ChatSummary; state: ChildState; parent: string }) {
   const now = useNow(5_000);
   const role = chat.agent?.name ?? chat.delegation?.role ?? '';
   const skills = chat.run?.tags?.skills ?? [];
   const from = chat.delegation?.at ?? chat.run?.startedAt ?? now, until = chat.delegation?.result?.at ?? chat.closedAt ?? now;
   const model = modelWithEffort(chat);
-  return <div className="dc-who">
-    <AgentAvatar avatar={chat.agent?.avatar} name={role} size={20} />
-    <span className="dc-role">{role}</span>
-    {skills.slice(0, 2).map(s => <span key={s} className="dc-chip">{s}</span>)}
-    {model && <><span className="dc-sep">·</span><span className="dc-model">{model}</span></>}
-    <span className="dc-time">{chat.queued ? '—' : span(until - from)}</span>
-  </div>;
+  const tk = chat.run?.tokens;
+  const k = tk ? Math.round((tk.input + tk.output + tk.cacheRead + tk.cacheWrite) / 1000) : null;
+  const cost = [k ? t('tree.tokens', { k: String(k) }) : null, chat.costUsd ? formatCost(chat.costUsd) : null].filter(Boolean).join(' · ');
+  return <>
+    <div className="dc-head">
+      <AgentAvatar avatar={chat.agent?.avatar} name={role} size={20} />
+      <h4 className="dc-title" title={chat.delegation?.goal ?? chat.title}>{chat.title}</h4>
+      <span className="dc-who">
+        <span className="dc-role">{role}</span>
+        {skills.slice(0, 2).map(s => <span key={s} className="dc-chip">{s}</span>)}
+        {model && <span className="dc-model">{model}</span>}
+      </span>
+      <span className="dc-time">{chat.queued ? '—' : span(until - from)}</span>
+      <ChildPill state={state} testid={`delegation-state-${chat.id}`} />
+      <button type="button" className="dc-open" data-testid={`delegation-open-${chat.id}`} onClick={() => setFocusMode(chat.id)} aria-label={t('tree.focus', { title: chat.title })} title={t('tree.goTo')}>
+        <span aria-hidden="true">↗</span>
+      </button>
+    </div>
+    <div className="dc-sub">
+      {chat.parentId && <button type="button" className="dc-parent" data-testid={`delegation-parent-${chat.id}`} onClick={() => focusChat(chat.parentId!)}>{t('tree.parentLink', { parent })}</button>}
+      <span className="dc-cost">{cost || t('tree.cleanContext')}</span>
+    </div>
+  </>;
 }
 
 function Steps({ chat, items, state }: { chat: ChatSummary; items: readonly ChatItem[]; state: ChildState }) {
+  const [all, setAll] = useState(false);
   const live = state === 'run' || state === 'start';
-  const { steps, earlier } = runSteps(items, { live, doneWhen: chat.delegation?.doneWhen, ...(chat.delegation?.result ? { result: chat.delegation.result } : {}) });
+  const opts = { live, doneWhen: chat.delegation?.doneWhen, ...(chat.delegation?.result ? { result: chat.delegation.result } : {}) };
+  const { steps } = runSteps(items, { ...opts, all });
+  // every step stays reachable: the card shows the latest, one click shows them all
+  const total = all ? steps.length : runSteps(items, { ...opts, all: true }).steps.length;
   const shown = steps.length ? steps : [{ mark: live ? 'cur' : 'todo', text: t('tree.noSteps') } as RunStep];
   const MARK: Record<StepMark, string> = { done: '✓', cur: '✱', todo: '○', bad: '✗' };
   return <>
@@ -100,7 +123,9 @@ function Steps({ chat, items, state }: { chat: ChatSummary; items: readonly Chat
         <span className="at">{s.mark === 'cur' ? t('tree.now') : s.at ? hhmm(s.at) : ''}</span>
       </li>)}
     </ul>
-    {earlier > 0 && <div className="dc-more">{t('tree.more', { n: earlier })}</div>}
+    {(all || total > steps.length) && <button type="button" className="dc-more" data-testid={`delegation-more-${chat.id}`} aria-expanded={all} onClick={() => setAll(!all)}>
+      {all ? t('tree.fewerSteps') : t('tree.allSteps', { n: total })}
+    </button>}
   </>;
 }
 
@@ -122,25 +147,13 @@ function Ask({ req, chatId }: { req: PendingRequest; chatId: string }) {
   </div>;
 }
 
-function Result({ chat }: { chat: ChatSummary }) {
+function Result({ chat, parent }: { chat: ChatSummary; parent: string }) {
   const r = chat.delegation?.result;
   if (!r) return null;
   return <div className="dc-res" data-testid={`delegation-res-${chat.id}`}>
-    <div className="dc-k">{t('tree.result')}</div>
+    <div className="dc-k">{t('tree.result')}{!r.noReport && parent ? <span className="dc-k-sub"> · {t('tree.sentTo', { parent })}</span> : null}</div>
     <p className="dc-res-out">{r.summary}</p>
     {!!r.doneWhen?.length && <ul className="dc-crit">{r.doneWhen.map(x => <li key={x.criterion}><span className={x.met ? 'ok' : 'no'} aria-hidden="true">{x.met ? '✓' : '✗'}</span><span>{x.criterion}</span></li>)}</ul>}
-  </div>;
-}
-
-function Foot({ chat, children }: { chat: ChatSummary; children?: ReactNode }) {
-  const tk = chat.run?.tokens;
-  const k = tk ? Math.round((tk.input + tk.output + tk.cacheRead + tk.cacheWrite) / 1000) : null;
-  const cost = !k && !chat.costUsd ? t('tree.cleanContext') : [k ? t('tree.tokens', { k: String(k) }) : null, chat.costUsd ? formatCost(chat.costUsd) : null].filter(Boolean).join(' · ');
-  return <div className="dc-foot">
-    {children ?? <span className="dc-cost">{cost}</span>}
-    <button type="button" className="dc-open" data-testid={`delegation-open-${chat.id}`} onClick={() => setFocusMode(chat.id)} aria-label={t('tree.focus', { title: chat.title })}>
-      {t('tree.goTo')} <span aria-hidden="true">↗</span>
-    </button>
   </div>;
 }
 
@@ -156,9 +169,13 @@ export function DelegationCard({ chatId }: { chatId: string }) {
   const flash = useFlash(`chat:${chatId}`);
   const ref = useRef<HTMLElement>(null);
   const down = useRef('');
+  const [stepsOpen, setStepsOpen] = useState(false);
   useEffect(() => { if (flash) ref.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, [flash]);
   if (!chat) return null;
   const state = childState(chat, c.refused);
+  // a finished child folds by itself to its head and its result (owner, 2026-10-22: closing is the default); its steps
+  // stay one click away
+  const ended = !activeState(state);
   const depthHit = chat.limitHit?.kind === 'depth' ? chat.limitHit : undefined;
   // a click on the card (not on one of its controls, nor inside the open chat) expands it; on its head, folds it
   const onClick = (e: MouseEvent<HTMLElement>) => {
@@ -174,20 +191,17 @@ export function DelegationCard({ chatId }: { chatId: string }) {
     </span>
     : state === 'err' ? <span className="dc-act"><button type="button" className="btn btn-s btn-ghost" data-testid={`delegation-retry-${chatId}`} onClick={() => void send(chatId, t('tree.retryText'))}>{t('tree.retry')}</button></span>
     : state === 'refused' ? <span className="dc-cost">{t('tree.refusedBy')}</span>
-    : state === 'done' || state === 'partial' || state === 'blocked' ? <span className="dc-cost">{t('tree.sentTo', { parent: c.parent })}</span>
     : undefined;
-  return <article ref={ref} className={`delegation-card s-${state}${open ? ' is-open' : ''}${flash ? ' flash' : ''}${chat.closedAt ? ' is-ended' : ''}`} data-testid={`delegation-card-${chatId}`}
+  return <article ref={ref} className={`delegation-card s-${state}${open ? ' is-open' : ''}${ended && !open ? ' is-folded' : ''}${flash ? ' flash' : ''}${chat.closedAt ? ' is-ended' : ''}`} data-testid={`delegation-card-${chatId}`}
     data-state={chat.state} data-child-state={state} data-open={open || undefined}
     onClick={onClick} onPointerDown={() => { down.current = window.getSelection()?.toString() ?? ''; }}>
-    {chat.parentId && <button type="button" className="dc-parent" data-testid={`delegation-parent-${chatId}`} onClick={() => focusChat(chat.parentId!)}>{t('tree.parentLink', { parent: `${c.parent} · ${c.parentTitle}` })}</button>}
     <div className="dc-summary" title={t(open ? 'tree.foldCard' : 'tree.openCard')}>
-      <div className="dc-head">
-        <h4 className="dc-title" title={chat.delegation?.goal ?? chat.title}>{chat.title}</h4>
-        <ChildPill state={state} testid={`delegation-state-${chatId}`} />
-      </div>
-      <Who chat={chat} />
-      {state !== 'queued' && <Steps chat={chat} items={c.items} state={state} />}
+      <Head chat={chat} state={state} parent={`${c.parent} · ${c.parentTitle}`} />
+      {state !== 'queued' && (!ended || open || stepsOpen) && <Steps chat={chat} items={c.items} state={state} />}
     </div>
+    {ended && !open && state !== 'queued' && <button type="button" className="dc-more dc-fold-steps" data-testid={`delegation-fold-${chatId}`} aria-expanded={stepsOpen} onClick={() => setStepsOpen(!stepsOpen)}>
+      {t(stepsOpen ? 'tree.hideSteps' : 'tree.showSteps')}
+    </button>}
     {!open && hostsAsk && c.reqs[0] && <Ask req={c.reqs[0]} chatId={chatId} />}
     {state === 'queued' && <div className="dc-note">{t('tree.queuedNote')}</div>}
     {state === 'err' && <div className="dc-err"><span className="dc-k">{t('tree.error')}</span>{chat.lastError || t('tree.errorNone')}</div>}
@@ -195,9 +209,9 @@ export function DelegationCard({ chatId }: { chatId: string }) {
     {state === 'stall' && <div className="dc-note"><b>{t('tree.stallNote')}</b> {t('tree.stallNoteB')}</div>}
     {depthHit && <div className="dc-note" data-testid={`delegation-depth-${chatId}`}><b>{t('tree.limit.depth', { limit: depthHit.limit })}.</b> {t('tree.depthNote')}</div>}
     {chat.delegation?.originalGoal && <div className="dc-note" data-testid={`delegation-goal-${chatId}`} title={t('tree.goalWas', { goal: chat.delegation.originalGoal })}><b>{t('tree.goalChanged')}</b> {chat.delegation.goal}</div>}
-    <Result chat={chat} />
+    <Result chat={chat} parent={c.parent} />
+    {actions && <div className="dc-foot">{actions}</div>}
     {open && <div className="dc-chat" data-testid={`delegation-chat-${chatId}`}><ChatTile chatId={chatId} embedded /></div>}
-    <Foot chat={chat}>{actions}</Foot>
   </article>;
 }
 
