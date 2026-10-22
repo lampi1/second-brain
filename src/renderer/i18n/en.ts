@@ -20,6 +20,7 @@ import { permissionsEn } from './areas/permissions.en';
 import { langSwitchEn } from './areas/lang-switch.en';
 import type { Dict } from './index';
 import { chatEn } from './areas/chat.en';
+import { visualsEn } from './areas/visuals.en';
 import { dialogsEn } from './areas/dialogs.en';
 import { toolsEn } from './areas/tools.en';
 import { brainPagesEn } from './areas/brainPages.en';
@@ -101,6 +102,7 @@ export const en: Dict = {
   ...settingsEn,
   ...profileEn,
   ...chatEn,
+  ...visualsEn,
   ...dialogsEn,
   ...toolsEn,
   ...brainPagesEn,

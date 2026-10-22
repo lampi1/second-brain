@@ -5,9 +5,9 @@ import { detectProjectsFolder } from './brain/projects-folder';
 import { createAppConnectors } from '../modules/onboarding/app-host';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { initRelease } from './release';
-import { createWindow, hiddenOpened, hiddenRun } from './window';
+import { appPageUrl, createWindow, hiddenOpened, hiddenRun } from './window';
 import { startTaskbar } from './taskbar';
 import { Emitter, registerHandlers, type Handlers } from './ipc';
 import { createServices } from './wiring';
@@ -489,7 +489,7 @@ app.whenReady().then(async () => {
   void windowReady.then(() => proposals.start());
   registerHandlers(handlers, () => win?.webContents ?? null, { contents: () => overlay.contents, channels: ['overlay:size', 'overlay:action', 'overlay:focus'] });
   // Recovery starts before the renderer store: its IPC must already be registered on the first navigation.
-  void win.loadURL(pathToFileURL(path.join(outDir, 'renderer', 'index.html')).href);
+  void win.loadURL(appPageUrl(outDir));
   const prepareUpdates = setTimeout(() => { void updates.prepare(); }, 45_000); prepareUpdates.unref();
   // the hybrid brain search (SPEC 23) indexes in its worker a little after the window is up (never delaying the start)
   const startSearch = setTimeout(() => s.hybrid?.start(), 5_000); startSearch.unref();

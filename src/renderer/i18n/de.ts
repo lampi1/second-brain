@@ -21,6 +21,7 @@ import { permissionsDe } from './areas/permissions.de';
 import { langSwitchDe } from './areas/lang-switch.de';
 import type { Dict } from './index';
 import { chatDe } from './areas/chat.de';
+import { visualsDe } from './areas/visuals.de';
 import { dialogsDe } from './areas/dialogs.de';
 import { toolsDe } from './areas/tools.de';
 import { brainPagesDe } from './areas/brainPages.de';
@@ -100,6 +101,7 @@ export const de: Dict = {
   ...settingsDe,
   ...profileDe,
   ...chatDe,
+  ...visualsDe,
   ...dialogsDe,
   ...toolsDe,
   ...brainPagesDe,

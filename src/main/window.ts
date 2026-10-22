@@ -1,4 +1,5 @@
-// The app window: sandboxed renderer from out/renderer, no navigation away, no new windows, no permissions.
+// The app window: sandboxed renderer from out/renderer, no navigation away, no new windows, no permissions. Its URL
+// asks the opening splash when a person opens the app (splashQuery).
 // SB_HIDDEN=1 (e2e tests, the dev instance run by agents): the window still renders and can be screenshotted, but it
 // lives off every screen, out of the taskbar, never takes focus ("finchè testi mi apri l'app davanti") and is muted (a
 // DevOps alert's chime from a test never reaches the speakers).
@@ -17,6 +18,18 @@ export const hiddenRun = (env: NodeJS.ProcessEnv = process.env): boolean => env.
 /** What a hidden run would have opened outside the app (files, Explorer, the system browser): e2e reads it (__sbOpened). */
 export const hiddenOpened: string[] = [];
 
+/** The opening animation (renderer components/Splash.tsx) is asked in the page's query: only for a person opening the
+ *  app, never in a hidden run, a test or the frozen demo; SB_SPLASH=1 forces it (its own e2e), SB_SPLASH=hold keeps
+ *  its last frame until a click or a key (the e2e screenshot), SB_SPLASH=0 turns it off. */
+export function splashQuery(env: NodeJS.ProcessEnv = process.env): string {
+  const v = env.SB_SPLASH;
+  if (v === 'hold' || v === '1') return `?splash=${v}`;
+  if (v === '0' || hiddenRun(env) || env.SB_TEST === '1' || env.SB_DEMO_FREEZE === '1') return '';
+  return '?splash=1';
+}
+/** The app page's URL as the window loads it (main/index.ts too): out/renderer/index.html plus the splash query. */
+export const appPageUrl = (outDir: string): string => pathToFileURL(path.join(outDir, 'renderer', 'index.html')).href + splashQuery();
+
 export function createWindow(outDir: string, loadImmediately = true): BrowserWindow {
   const hidden = hiddenRun();
   const win = new BrowserWindow({
@@ -29,7 +42,7 @@ export function createWindow(outDir: string, loadImmediately = true): BrowserWin
       contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true, spellcheck: false,
     },
   });
-  const page = pathToFileURL(path.join(outDir, 'renderer', 'index.html')).href;
+  const page = appPageUrl(outDir);
   setAppPage(page);
   const wc = win.webContents;
   // a link the page opens (a chat's DevOps chips, a question's context links, "Apri fuori") goes to the system browser;

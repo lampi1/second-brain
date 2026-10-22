@@ -1,0 +1,14 @@
+/* Diagrams and charts in a chat reply (components/VisualBlock.tsx): the code block's frame (code.css .codeblock) with
+   a drawing inside. The diagram is an image at its natural size, never wider than the message; a click opens it large. */
+.viz .viz-lang { display: inline-flex; align-items: center; gap: 5px; }
+.viz .viz-lang svg { color: var(--blue); }
+.viz-body { padding: 12px; background: var(--surface); }
+.viz-wait { padding: 18px 12px; font: 12px var(--font); color: var(--text-3); }
+.viz-diagram {
+  display: block; margin: 0 auto; padding: 0; border: 0; background: none; cursor: zoom-in; max-width: 100%;
+  border-radius: var(--r-xs);
+}
+.viz-diagram img { display: block; max-width: 100%; height: auto; max-height: 560px; object-fit: contain; }
+.viz-diagram:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus); }
+.viz-chart { position: relative; width: 100%; min-width: 0; }
+.viz-chart canvas { display: block; }

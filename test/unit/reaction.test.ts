@@ -1,8 +1,8 @@
 // Unit tests of shared/reaction.ts: which replies the chat view shows as a reaction, and the rule every role frame
-// carries (main/agents/orchestrator-role.ts roleFrame), and the Orchestrator frame saying each thing once.
+// carries (main/agents/orchestrator-role.ts roleFrame) with the diagrams/charts line, and the Orchestrator frame saying each thing once.
 import { describe, expect, it } from 'vitest';
 import { REACTION_RULE, isReaction } from '../../src/shared/reaction';
-import { ORCHESTRATOR_ROLE, RETIRED_LINES, WAKE_RULE, orchestratorRole, roleFrame } from '../../src/main/agents/orchestrator-role';
+import { ORCHESTRATOR_ROLE, RETIRED_LINES, VISUALS_RULE, WAKE_RULE, orchestratorRole, roleFrame } from '../../src/main/agents/orchestrator-role';
 import { PRE_ADR0100_INSTRUCTIONS } from '../../src/main/agents/role-migrate';
 import { ROLE_DEFAULTS } from '../../src/shared/roles';
 import { wakeMessage } from '../../src/main/chats/orchestrator-wake';
@@ -20,6 +20,11 @@ describe('the rule in every frame', () => {
   it('is in a work role frame and in the Orchestrator frame', () => {
     expect(roleFrame('Scout', 'cerca')).toContain(REACTION_RULE);
     expect(ORCHESTRATOR_ROLE).toContain(REACTION_RULE);
+  });
+  it('every frame says, once and briefly, that a diagram or a chart block is drawn (owner, 2026-10-22)', () => {
+    for (const f of [roleFrame('Scout', 'cerca'), ORCHESTRATOR_ROLE]) expect(f.split(VISUALS_RULE)).toHaveLength(2);
+    expect(VISUALS_RULE).toMatch(/```mermaid.*```chart.*"series"/);
+    expect(VISUALS_RULE.length).toBeLessThan(260); // it rides on every session's first message
   });
 });
 
