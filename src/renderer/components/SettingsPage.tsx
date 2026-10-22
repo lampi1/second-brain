@@ -5,6 +5,7 @@
 import{useEffect,useState,type ReactNode}from'react';
 import { Select } from './Select';
 import type{CliStatus,EngineInfo,SecretsStatus}from'@shared/contract';
+import { isLang, LANGS } from '@shared/contract';
 import{IconBell,IconBranch,IconFolder,IconLink,IconMoon,IconRefresh,IconSearch,IconTerminal,IconUser}from'./Icons';
 import { DelegationSettings } from './DelegationSettings';
 import{useEngines}from'../lib/engines';
@@ -74,7 +75,7 @@ export function SettingsPage(){
   </>},
   {id:'appearance',icon:<IconMoon size={18}/>,description:t('essential.desc.appearance'),title:t('essential.appearance'),search:[t('essential.theme'),t('settings.language'),t('essential.density')].join(' '),body:<>
    <Row title={t('essential.theme')}><Select aria-label={t('essential.theme')} value={prefs.theme} onChange={event=>{const theme=event.target.value;if(theme==='system'||theme==='light'||theme==='dark')setPrefs({theme});}}>{(['system','light','dark']as const).map(value=><option key={value} value={value}>{t(`essential.${value}`)}</option>)}</Select></Row>
-   <Row title={t('settings.language')}><Select aria-label={t('settings.language')} value={settings.language} onChange={event=>{const language=event.target.value;if(language==='system'||language==='it'||language==='en'||language==='de')void setSetting({language});}} data-testid="st-language-select">{(['system','it','en','de']as const).map(value=><option key={value} value={value}>{t(`settings.language.${value}`)}</option>)}</Select></Row>
+   <Row title={t('settings.language')}><Select aria-label={t('settings.language')} value={settings.language} onChange={event=>{const language=event.target.value;if(language==='system'||isLang(language))void setSetting({language});}} data-testid="st-language-select">{(['system',...LANGS]as const).map(value=><option key={value} value={value}>{t(`settings.language.${value}`)}</option>)}</Select></Row>
    <Row title={t('essential.density')}><Select aria-label={t('essential.density')} value={prefs.density} onChange={event=>{const density=event.target.value;if(density==='compact'||density==='comfortable')setPrefs({density});}}>{(['comfortable','compact']as const).map(value=><option key={value} value={value}>{t(`essential.${value}`)}</option>)}</Select></Row>
    <div className="st-row st-row-block"><AppearancePreview/></div>
   </>},

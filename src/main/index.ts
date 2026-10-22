@@ -14,7 +14,7 @@ import { createServices } from './wiring';
 import { attachActivity } from './activity/wiring';
 import { demoLog } from './activity/demo';
 import { journal } from './activity/journal';
-import { log } from './log';
+import { errText, log } from './log';
 import { logInputLag } from './perf';
 import { APP_ID, ensureShortcuts } from './shortcuts';
 import { installAppMenu } from './app-menu';
@@ -359,7 +359,12 @@ app.whenReady().then(async () => {
     'cloud:watch': a => cloudOf(s).watch(typeof a?.id === 'string' ? a.id : null),
     'cloud:readiness': a => cloudOf(s).readiness(String(a?.cwd ?? '')),
     'cloud:dismiss': a => cloudOf(s).dismiss(String(a?.id ?? '')),
-    'settings:set': a => s.brain.setSettings(a),
+    'settings:set': async a => {
+      const saved = await s.brain.setSettings(a);
+      // one language for the UI and the AI (ADR 0120): me.md's `Language:` follows the setting (Windows' on «sistema»)
+      if (a && typeof a === 'object' && 'language' in a) void profile.syncLanguage(uiLang()).catch(e => log.warn('brain', 'profile language not updated', { cause: errText(e), hint: 'me.md keeps its Language line; edit it in Settings → Il mio profilo' }));
+      return saved;
+    },
     'settings:schema': () => s.brain.settingsSchema(),
     'settings:history': a => s.brain.settingsHistory(a?.limit),
     'settings:undo': a => s.brain.undoSetting(a?.changeId, 'user'),

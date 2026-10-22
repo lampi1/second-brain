@@ -4,12 +4,15 @@
 // and their agents; the app writes the least it can. Safety: a regular file directly inside the brain folder (no symlink, size
 // cap), the save carries the revision it read (a concurrent edit is refused, never overwritten), the write goes to a
 // temp file then a rename (no half-written me.md), single-line fields only (no markdown structure can be injected).
-// Used by main/index.ts ('profile:get', 'profile:save'); unit tests: test/unit/brain/profile.test.ts.
+// The `Language:` field also follows the app's language (ADR 0120): a change of the setting `language` (the top bar's
+// switch or Settings) rewrites it through the same checked save, only when it names another language.
+// Used by main/index.ts ('profile:get', 'profile:save', 'settings:set'); unit tests: test/unit/brain/profile.test.ts.
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import type { OwnerProfile, ProfileFields, ProfileResult, ProfileRule, ProfileSave } from '../../shared/profile';
 import { PROFILE_FORBIDDEN, PROFILE_LIMITS } from '../../shared/profile';
+import type { Lang } from '../../shared/contract';
 
 const MAX_BYTES = 256 * 1024;
 const BOM = String.fromCharCode(0xfeff), BOM_START = new RegExp('^' + BOM);
@@ -168,6 +171,14 @@ export function patchProfile(text: string, fields: Partial<ProfileFields>, templ
   return lines.map((l, i) => cr[i] ? l + '\r' : l).join('\n');
 }
 
+/** the `Language:` value the app writes for a UI language: each language's own name, as a fresh brain writes it */
+export const PROFILE_LANG: Readonly<Record<Lang, string>> = { it: 'italiano', en: 'English', de: 'Deutsch' };
+const LANG_WORDS: Readonly<Record<Lang, RegExp>> = {
+  it: /^(italiano|italian|italienisch|it)\b/i, en: /^(english|inglese|englisch|en)\b/i, de: /^(deutsch|german|tedesco|de)\b/i,
+};
+/** the profile's language already is `lang` (in any of the app's languages, maybe with more after it: "italiano e inglese") */
+export const sameLanguage = (value: string, lang: Lang): boolean => LANG_WORDS[lang].test(value.trim());
+
 const hash = (text: string) => crypto.createHash('sha256').update(text).digest('hex').slice(0, 32);
 /** rename over me.md; on Windows an editor or the antivirus holding the file makes it fail for a moment, so retry briefly */
 async function swap(temp: string, file: string): Promise<void> {
@@ -214,6 +225,15 @@ export class ProfileService {
     if (!file) return { ok: false, reason: 'no-brain' };
     try { const { text, mtime } = await this.read(file); return { ok: true, profile: await this.view(file, text, mtime) }; }
     catch { return { ok: false, reason: 'unreadable' }; }
+  }
+  /** the app's language changed (ADR 0120): `Language:` follows it; nothing when it already says so, or the line is not
+   *  the app's to rewrite (no brain, no me.md, a locked field) */
+  async syncLanguage(lang: Lang): Promise<'written' | 'same' | 'skipped'> {
+    const got = await this.get();
+    if (!got.ok || got.profile.locked.includes('language')) return 'skipped';
+    if (sameLanguage(got.profile.language, lang)) return 'same';
+    await this.save({ revision: got.profile.revision, fields: { language: PROFILE_LANG[lang] } });
+    return 'written';
   }
   async save(request: ProfileSave): Promise<OwnerProfile> {
     if (!request || typeof request.revision !== 'string') throw new Error('PROFILE_FIELDS');

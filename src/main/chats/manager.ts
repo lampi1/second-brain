@@ -22,7 +22,8 @@ const { setInterval, clearInterval, clearTimeout } = timersFor('chats/manager');
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Answer, ChatCommand, ChatItem, ChatSummary, CliStatus, ContextStats, CursorReasoning, Effort, HandoffInfo, Harness, NewChat, PendingRequest, PermissionMode } from '../../shared/contract';
+import type { Answer, ChatCommand, ChatItem, ChatSummary, CliStatus, ContextStats, CursorReasoning, Effort, HandoffInfo, Harness, Lang, NewChat, PendingRequest, PermissionMode } from '../../shared/contract';
+import { replyLangTurn } from './reply-lang';
 import { sysEn, type SysCode, type SysParams } from '../../shared/sys';
 import { checkImages } from './images';
 import type { Emitter } from '../ipc';
@@ -97,6 +98,8 @@ export interface ChatManagerOptions {
   suggestSkills?: (goal: string) => Promise<string[]>;
   /** the roles in a few lines, for the Orchestrator's first message of a session (agents/discovery.ts roleCatalogBrief) */
   roleCatalogBrief?: () => string;
+  /** the language the user wants replies in (ADR 0120: locale.ts uiLang, the setting or Windows'); absent = not named */
+  replyLang?: () => Lang;
   /** the review pack under a Sentinel's first message (agents/review-pack.ts): the change it checks, gathered with git */
   reviewPack?: (cwd: string) => Promise<string>;
   /** ADR 0103: record the files before each turn of a work chat in a git repository (checkpoints.ts); absent = off */
@@ -305,6 +308,8 @@ interface Rec {
   /** the session whose context holds the role text and that text's hash (persisted): sent once per context, again only
    *  in a new session, after a compaction or when the role text changed */
   rolePrimed?: { session: string; sig: string } | undefined;
+  /** the reply language this chat was last told (persisted, ADR 0120): a change goes in one line on its next turn */
+  replyLang?: Lang;
   /** the role text was compared with rolePrimed since the engine started */
   roleChecked?: boolean;
   children?: AgentChildrenReducer;
@@ -981,13 +986,16 @@ export class ChatManager implements ChatService {
     // a changed text is checked once per engine start (as before this, never mid-session: a catalog edit would resend it)
     const role = roleText && (!r.rolePrimed || (!r.roleChecked && r.rolePrimed.sig !== roleSig)) ? roleText : '';
     r.roleChecked = true;
+    // the reply language (ADR 0120): with the role text, and once on the first turn after the user changed it
+    const wantLang = this.opts.replyLang?.(), langHint = replyLangTurn(wantLang, role ? undefined : r.replyLang, !!role);
     // the files as they are before this turn (ADR 0103): what the user can put back with «Annulla l'ultimo turno»
     if (!this.midTurn(r)) r.turnCheckpoint = false;
     if (this.opts.checkpoints?.() && !r.s.isOrchestrator && !r.s.quick && !this.midTurn(r)) await this.checkpoint(r);
     try {
       receipt?.beforeSubmit();
-      r.session.send(`${role}${warning}${body}${hint}`, imgs);
+      r.session.send(`${role}${warning}${body}${hint}${langHint}`, imgs);
       receipt?.submitted();
+      if (langHint) { r.replyLang = wantLang; if (!role) this.persist(); }
       if (lampo) r.lampoSeen = { session: r.session, cursor: lampo.seen }; // seen only once it went
       if (role) { r.rolePrimed = { session: r.s.sessionId ?? '', sig: roleSig }; this.persist(); }
     } catch (e) {
@@ -2802,6 +2810,7 @@ export class ChatManager implements ChatService {
       // saved before ctxSince existed: its last turn is the latest its context can have begun
       ...(c.ctxSince || c.lastTurnAt ? { ctxSince: c.ctxSince ?? c.lastTurnAt } : {}),
       ...(c.rolePrimed ? { rolePrimed: c.rolePrimed } : {}),
+      ...(c.replyLang ? { replyLang: c.replyLang } : {}),
       ...(c.pastSessions?.length ? { pastSessions: c.pastSessions } : {}),
       ...(c.mcpAncestors ? { mcpAncestors: c.mcpAncestors } : {}),
     };
@@ -2825,6 +2834,7 @@ export class ChatManager implements ChatService {
       ...(r.coldNoteAt ? { coldNoteAt: r.coldNoteAt } : {}),
       ...(r.ctxSince ? { ctxSince: r.ctxSince } : {}),
       ...(r.rolePrimed?.session ? { rolePrimed: r.rolePrimed } : {}),
+      ...(r.replyLang ? { replyLang: r.replyLang } : {}),
       ...(r.pastSessions?.length ? { pastSessions: r.pastSessions } : {}),
       ...(r.s.contextTokens ? { context: { tokens: r.s.contextTokens, ...(r.s.contextMaxTokens ? { max: r.s.contextMaxTokens } : {}), ...(r.s.contextEstimated ? { estimated: true } : {}) } } : {}),
       ...(r.s.handoffAt ? { handoffAt: r.s.handoffAt, handoffSource: r.s.handoffSource ?? 'chat' } : {}),

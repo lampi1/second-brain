@@ -16,6 +16,7 @@ import path from 'node:path';
 import type { Effort, HeadlineState, Lang } from '../shared/contract';
 import type { TextRequest, TextResult } from './engines/text';
 import { errText, log } from './log';
+import { LANG_NAME } from './locale';
 
 export const HEADLINE_MODEL = 'claude-opus-5-5';
 export const HEADLINE_EFFORT: Effort = 'low';
@@ -74,7 +75,7 @@ export const BUILTIN: Record<Lang, readonly string[]> = {
 };
 const LOCALE: Record<Lang, string> = { it: 'it-IT', en: 'en-GB', de: 'de-AT' };
 const TODAY: Record<Lang, string> = { it: 'Oggi', en: 'Today', de: 'Heute' };
-export const LANG_NAME: Record<Lang, string> = { it: 'Italian', en: 'English', de: 'German (as written in Austria)' };
+export { LANG_NAME };
 
 /** One line of the built-in list, the same for a whole hour (a frozen demo always shows the same one). */
 export const builtinLine = (lang: Lang, now: number): string => { const l = BUILTIN[lang]; return l[Math.floor(now / HOUR) % l.length]!; };

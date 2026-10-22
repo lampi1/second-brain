@@ -27,6 +27,7 @@ import { estimateLine } from '../shared/task-estimate';
 import { agentCatalogTool, CATALOG_GUIDANCE, roleCatalogBrief, skillsSuggestTool } from './agents/discovery';
 import { SkillSuggester } from './skills/suggest';
 import { SetupService } from './agents/setup';
+import { uiLang } from './locale';
 import { AutoCloseService, autoCloseNow } from './chats/auto-close';
 import { readLocal, writeLocal } from './agents/local-store';
 import { ProgressService } from './agents/progress';
@@ -476,6 +477,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     onRunEnded: run => loopRef.current?.ended(run),
     onRunOutcome: run => { routingVerdict(run); loopRef.current?.outcome(run); },
     roleCatalogBrief: () => roleCatalogBrief(() => agents.list()),
+    // the reply language (ADR 0120): the setting, or Windows' language on «Come il sistema», the same as the UI's
+    replyLang: uiLang,
     // the estimate task_estimate would give, under the user's request (one model round trip less, ADR 0087)
     requestEstimate: text => {
       if (!runFeedbackRef.current) return null;

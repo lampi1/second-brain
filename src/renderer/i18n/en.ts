@@ -17,6 +17,7 @@ import { connectorsEn } from './areas/connectors.en';
 import { genuiRequestEn } from './areas/genui-request.en';
 import {studioEn}from'./areas/studio.en';
 import { permissionsEn } from './areas/permissions.en';
+import { langSwitchEn } from './areas/lang-switch.en';
 import type { Dict } from './index';
 import { chatEn } from './areas/chat.en';
 import { dialogsEn } from './areas/dialogs.en';
@@ -81,6 +82,7 @@ export const en: Dict = {
   'genui.permission.deny': "Do not authorize this operation.",
   ...studioEn,
   ...permissionsEn,
+  ...langSwitchEn,
   ...brainModelEn,
   ...memoryEn,
   ...statsEn,

@@ -19,6 +19,7 @@ import { connectorsIt } from './areas/connectors.it';
 import { genuiRequestIt } from './areas/genui-request.it';
 import {studioIt}from'./areas/studio.it';
 import { permissionsIt } from './areas/permissions.it';
+import { langSwitchIt } from './areas/lang-switch.it';
 import { chatIt } from './areas/chat.it';
 import { dialogsIt } from './areas/dialogs.it';
 import { toolsIt } from './areas/tools.it';
@@ -82,6 +83,7 @@ export const it = {
   'genui.permission.deny': "Non autorizzare questa operazione.",
   ...studioIt,
   ...permissionsIt,
+  ...langSwitchIt,
   ...brainModelIt,
   ...memoryIt,
   ...statsIt,

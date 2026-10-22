@@ -116,6 +116,13 @@ html[data-blink="1"] .pill-dot { opacity: 0.35; } /* lib/beat.ts */
    their words (the switch and the dots stay) */
 .topbar[data-fit~="4"] [data-testid="usage-cursor"], .topbar[data-fit~="4"] .usagebar .ub-sep:has(+ [data-testid="usage-cursor"]) { display: none; }
 .topbar[data-fit~="5"] .popups-label, .topbar[data-fit~="5"] .connectors-label, .topbar[data-fit~="5"] .connector-mark small { display: none; }
+/* the language switch (LangSwitch.tsx, ADR 0120): globe + code like the CLI marks; 6 = the code only, a square button */
+.lang-btn { height: 32px; min-width: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 0 8px; border-radius: var(--r-s); border: 0; background: transparent; color: var(--text-3); cursor: pointer; flex: none; }
+.lang-btn:hover, .lang-btn[aria-expanded="true"] { background: var(--surface-2); color: var(--text); }
+.lang-code { font: 600 11.5px/1 var(--font-display); letter-spacing: 0.04em; color: var(--text-2); }
+.lang-btn:hover .lang-code, .lang-btn[aria-expanded="true"] .lang-code { color: var(--text); }
+.topbar[data-fit~="6"] .lang-btn { padding: 0; }
+.topbar[data-fit~="6"] .lang-btn svg { display: none; }
 /* the full-screen popups switch and the connectors (SPEC 21) */
 .popups-switch, .connectors-btn { gap: 7px; }
 .popups-track { position: relative; width: 26px; height: 15px; border-radius: 8px; background: var(--border-3); flex: none; transition: background var(--dur-fast); }
