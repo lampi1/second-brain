@@ -373,8 +373,6 @@ export const brainTextDe: typeof brainTextIt = {
 
   // pages/Script.tsx and lib/brain-sections.ts
   'brainText.script.tested': 'Getestet',
-  'brainText.script.needsFix': 'Zu korrigieren',
-  'brainText.script.untested': 'Nicht getestet',
   'brainText.script.cannotRead': 'Kann das Skript nicht lesen',
   'brainText.script.loading': 'Lade…',
   'brainText.script.brainScript': 'Skript des Brain',
@@ -392,13 +390,8 @@ export const brainTextDe: typeof brainTextIt = {
   'brainText.script.copyPath': 'Pfad kopieren',
   'brainText.script.close': 'Schließen',
   'brainText.script.noDescription': 'Keine Beschreibung im Kopf.',
-  'brainText.script.changed': 'geändert',
-  'brainText.script.filter.all': 'Alle',
-  'brainText.script.filter.ok': 'Funktionierend',
-  'brainText.script.filter.fix': 'Zu korrigieren oder testen',
   'brainText.script.searchLabel': 'In den Skripten suchen',
   'brainText.script.searchPlaceholder': 'Suche nach Zweck, Befehl, Tag…',
-  'brainText.script.filterLabel': 'Filtern',
   'brainText.script.cannotReadAll': 'Kann die Skripte nicht lesen',
   'brainText.script.emptyTitle': 'Noch keine Skripte',
   'brainText.script.emptyBody': 'Wenn ein Agent ein funktionierendes Skript testet, speichert er es hier, mit Anleitung und Testdatum; einen wiederverwendbaren, mit „Ausführen“ erfolgreichen Befehl speichert die App selbst. So wird es nächstes Mal wiederverwendet statt neu geschrieben.',

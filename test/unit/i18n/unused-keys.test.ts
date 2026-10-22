@@ -17,13 +17,11 @@ function files(dir: string): string[] {
 
 it('every Italian UI text is still used by the code', () => {
   const code = files(SRC).map(f => fs.readFileSync(f, 'utf8')).join('\n');
-  const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // prefixes the code completes at run time: 'area.' + x, `area.${x}` (one scan, not one regex per key)
+  const prefixes = new Set([...code.matchAll(/[`'"]([\w.-]+\.)(?:\$\{|[`'"]\s*\+)/g)].map(m => m[1]));
   const dynamic = (key: string) => {
     const parts = key.split('.');
-    for (let i = parts.length - 1; i > 0; i--) {
-      const prefix = `${parts.slice(0, i).join('.')}.`;
-      if (new RegExp(`[\`'"]${escape(prefix)}(\\$\\{|[\`'"]\\s*\\+)`).test(code)) return true;
-    }
+    for (let i = parts.length - 1; i > 0; i--) if (prefixes.has(`${parts.slice(0, i).join('.')}.`)) return true;
     return false;
   };
   const unused = Object.keys(italian).filter(k => k.includes('.') && !k.startsWith('sys.') && !code.includes(k) && !dynamic(k));

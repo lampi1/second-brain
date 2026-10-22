@@ -37,7 +37,7 @@ export const memoryHubEn: typeof memoryHubIt = {
   'mh.idee.dustedK': (p: S) => `From the drawer · ${p.age}`,
   'mh.idee.again': 'Another one', 'mh.idee.close': 'Close',
   'mh.idee.months': (p: N) => `${p.n} months ago`, 'mh.idee.days': (p: N) => (p.n === 1 ? 'yesterday' : `${p.n} days ago`), 'mh.idee.today': 'today',
-  'mh.script.lead': (p: S) => `${p.n} scripts in the brain, ${p.ok} tested and working: search them, open them here; they never run by themselves.`,
+  'mh.script.lead': (p: S) => `${p.n} working scripts: search them, open them here; they never run by themselves.`,
   'mh.ctx.title': 'Context right now',
   'mh.ctx.note': 'How full each open chat’s context is: a long context makes every message cost more.',
   'mh.ctx.noteLong': (p: N) => (p.n === 1 ? '1 chat above the threshold in Settings: restarting from a summary costs less.' : `${p.n} chats above the threshold in Settings: restarting from a summary costs less.`),

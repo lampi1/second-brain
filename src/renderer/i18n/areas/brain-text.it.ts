@@ -372,8 +372,6 @@ export const brainTextIt = {
 
   // pages/Script.tsx and lib/brain-sections.ts
   'brainText.script.tested': 'Provato',
-  'brainText.script.needsFix': 'Da correggere',
-  'brainText.script.untested': 'Non provato',
   'brainText.script.cannotRead': 'Non riesco a leggere lo script',
   'brainText.script.loading': 'Carico…',
   'brainText.script.brainScript': 'Script del brain',
@@ -391,13 +389,8 @@ export const brainTextIt = {
   'brainText.script.copyPath': 'Copia percorso',
   'brainText.script.close': 'Chiudi',
   'brainText.script.noDescription': 'Nessuna descrizione nell’intestazione.',
-  'brainText.script.changed': 'modificato',
-  'brainText.script.filter.all': 'Tutti',
-  'brainText.script.filter.ok': 'Funzionanti',
-  'brainText.script.filter.fix': 'Da correggere o provare',
   'brainText.script.searchLabel': 'Cerca negli script',
   'brainText.script.searchPlaceholder': 'Cerca per cosa fa, comando, tag…',
-  'brainText.script.filterLabel': 'Filtra',
   'brainText.script.cannotReadAll': 'Non riesco a leggere gli script',
   'brainText.script.emptyTitle': 'Ancora nessuno script',
   'brainText.script.emptyBody': 'Quando un agente prova uno script che funziona lo salva qui, con come si usa e quando è stato provato; un comando riutilizzabile riuscito con Esegui l’app lo salva da sola. Così la prossima volta si riusa invece di riscriverlo.',

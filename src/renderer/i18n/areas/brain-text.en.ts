@@ -373,8 +373,6 @@ export const brainTextEn: typeof brainTextIt = {
 
   // pages/Script.tsx and lib/brain-sections.ts
   'brainText.script.tested': 'Tested',
-  'brainText.script.needsFix': 'Needs a fix',
-  'brainText.script.untested': 'Untested',
   'brainText.script.cannotRead': 'Cannot read the script',
   'brainText.script.loading': 'Loading…',
   'brainText.script.brainScript': 'Brain script',
@@ -392,13 +390,8 @@ export const brainTextEn: typeof brainTextIt = {
   'brainText.script.copyPath': 'Copy path',
   'brainText.script.close': 'Close',
   'brainText.script.noDescription': 'No description in its header.',
-  'brainText.script.changed': 'changed',
-  'brainText.script.filter.all': 'All',
-  'brainText.script.filter.ok': 'Working',
-  'brainText.script.filter.fix': 'To fix or test',
   'brainText.script.searchLabel': 'Search the scripts',
   'brainText.script.searchPlaceholder': 'Search by what it does, command, tag…',
-  'brainText.script.filterLabel': 'Filter',
   'brainText.script.cannotReadAll': 'Cannot read the scripts',
   'brainText.script.emptyTitle': 'No scripts yet',
   'brainText.script.emptyBody': 'When an agent runs a script that works it saves it here, with how to run it and when it was tested; a reusable command that worked with Esegui is saved by the app itself. Next time it is reused instead of rewritten.',

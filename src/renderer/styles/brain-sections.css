@@ -25,20 +25,14 @@
 .bs-card.open .bs-desc{-webkit-line-clamp:unset}
 .bs-tags{display:flex;flex-wrap:wrap;gap:5px}
 .bs-tags>span{font-size:10.5px;color:var(--text-3);background:var(--surface-3);border-radius:5px;padding:2px 7px}
-.bs-card-foot{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding-top:6px;color:var(--text-3)}
+.bs-card-foot{margin-top:auto;display:flex;align-items:center;gap:8px;width:100%;padding-top:6px;color:var(--text-3)}
 .bs-card-foot code{font-family:var(--mono);font-size:10.5px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.bs-card-foot small{font-size:10.5px;white-space:nowrap}
+.bs-card-foot small{margin-left:auto;font-size:10.5px;white-space:nowrap;color:var(--green)}
 .bs-lang{font-size:10px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:6px;background:var(--surface-3);color:var(--text-2)}
 .bs-lang-python{background:var(--blue-bg);color:var(--blue)}
 .bs-lang-javascript,.bs-lang-typescript{background:var(--amber-bg);color:var(--amber)}
 .bs-lang-powershell,.bs-lang-batch{background:var(--violet-bg);color:var(--violet)}
 .bs-lang-shell,.bs-lang-ruby{background:var(--green-bg);color:var(--green)}
-.bs-test{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text-3);white-space:nowrap}
-.bs-test>i{display:grid;place-items:center;width:15px;height:15px;border-radius:50%;font-style:normal;font-size:9px;font-weight:700;background:var(--surface-3)}
-.bs-test-ok{color:var(--green)}
-.bs-test-ok>i{background:var(--green-bg);color:var(--green)}
-.bs-test-failed{color:var(--amber)}
-.bs-test-failed>i{background:var(--amber-bg);color:var(--amber)}
 .bs-skeleton{min-height:196px;animation:bs-pulse 1.4s ease-in-out infinite}
 @keyframes bs-pulse{50%{opacity:.55}}
 

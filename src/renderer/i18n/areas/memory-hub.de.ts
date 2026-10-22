@@ -39,7 +39,7 @@ export const memoryHubDe: typeof memoryHubIt = {
   'mh.idee.dustedK': (p: S) => `Aus der Schublade · ${p.age}`,
   'mh.idee.again': 'Noch eine', 'mh.idee.close': 'Schließen',
   'mh.idee.months': (p: N) => `vor ${p.n} Monaten`, 'mh.idee.days': (p: N) => (p.n === 1 ? 'gestern' : `vor ${p.n} Tagen`), 'mh.idee.today': 'heute',
-  'mh.script.lead': (p: S) => `${p.n} Skripte im Brain, ${p.ok} getestet und funktionieren: hier suchen und öffnen; sie starten nie von selbst.`,
+  'mh.script.lead': (p: S) => `${p.n} funktionierende Skripte: hier suchen und öffnen; sie starten nie von selbst.`,
   'mh.ctx.title': 'Kontext gerade jetzt',
   'mh.ctx.note': 'Wie voll der Kontext jedes offenen Chats ist: ein langer Kontext macht jede Nachricht teurer.',
   'mh.ctx.noteLong': (p: N) => (p.n === 1 ? '1 Chat über der Schwelle in den Einstellungen: mit einer Zusammenfassung neu starten kostet weniger.' : `${p.n} Chats über der Schwelle in den Einstellungen: mit einer Zusammenfassung neu starten kostet weniger.`),
