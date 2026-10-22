@@ -143,11 +143,11 @@ test('"?" explanations across the app: Orchestrator, strips, Agenti summary, Set
     await expect(page.locator('section.chat-tile.is-expanded')).toHaveCount(0); // the "?" did not expand the strip
     await goPage(page, 'agenti');
     await open('catalog-summary-help', 'In prova', 'explain-agents-dark');
+    await open('judging-help', 'peso pieno', 'explain-agents-judging-dark');
     await goPage(page, 'impostazioni');
     await expect(page.getByTestId('settings-page')).toBeVisible();
     await open('st-toasts-help', 'Urgenti', 'explain-settings-toasts-dark');
     await open('st-stall-help', 'agent_children', 'explain-settings-stall-dark');
-    await open('st-judge-help', 'peso pieno', 'explain-settings-judge-dark');
     await open('st-tiers-help', 'leggero', 'explain-settings-tiers-dark');
     await theme(page, 'light');
     await goPage(page, 'skill');

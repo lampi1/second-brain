@@ -1,18 +1,19 @@
-// The app's sampled independent reviews (ADR 0083, the app owns the improvement loop): a few times a day the app picks
-// finished root role runs nobody judged yet (no verdict of the user or of a review; a delegated child's run is never
+// The app's independent reviews (ADR 0083, the app owns the improvement loop): with the Agenti page's switch «Abilita
+// controllo livello e performance» on (setting judging, 2026-10-22; it replaced the daily count delegation.judgeDaily),
+// every finished root role run that ended since it was switched on (judgingSince) and nobody judged yet (no verdict of the user or of a review; a delegated child's run is never
 // sampled: its content belongs to its parent, which judged the result when it read it), starts a Sentinel chat on each
 // (ADR 0100: the Judge's job is Sentinel's; a root chat linked to the run with reviewOf: a new session that never saw the
 // run's reasoning, on the Sentinel's own model, ADR 0091), and when that review ends turns its verdict into the run's
 // feedback (run-feedback.ts recordFeedback: it counts as reviewed evidence only when the reviewer verified it). A review
-// a Judge started before ADR 0100 is still recorded when it ends. The file, the setting and the feedback caller keep
-// their "judge" names (judge-samples.json, delegation.judgeDaily, 'judge-sample'): they are stored data. At most
-// Settings.delegation.judgeDaily a day (0 = off). It spends tokens, so wiring.ts starts it only in the user's own app
-// (judgeSamplingOn: never in tests or an agent's hidden run; SB_JUDGE_SAMPLE=1/0 forces it), first a few minutes after
-// the start, then every 30 minutes; each tick that starts or skips logs why (issue #112, ADR 0097). Pure picking
-// (pickSamples, reviewPrompt, judgeSamplingOn) is unit-tested in test/unit/agents/judge-sample.test.ts.
+// a Judge started before ADR 0100 is still recorded when it ends. The file and the feedback caller keep their "judge"
+// names (judge-samples.json, 'judge-sample'): they are stored data. At most MAX_RUNNING reviews run at once; the rest
+// wait for the next tick. It spends tokens, so wiring.ts starts it only in the user's own app (judgeSamplingOn: never in
+// tests or an agent's hidden run; SB_JUDGE_SAMPLE=1/0 forces it), a few minutes after the start, every 30 minutes and
+// right after a run ends; each tick that starts or skips logs why (issue #112, ADR 0097). judgingEstimate says what the
+// switch costs a day. Pure parts are unit-tested in test/unit/agents/judge-sample.test.ts.
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import type { AgentRun } from '../../shared/agents';
+import type { AgentRun, JudgingEstimate } from '../../shared/agents';
 import type { AgentFeedbackArgs } from '../../shared/agent-lifecycle';
 import type { ChatSummary, Harness, NewChat } from '../../shared/contract';
 import { isWorkRole, roleName } from '../../shared/roles';
@@ -26,13 +27,18 @@ const REVIEWERS: ReadonlySet<string> = new Set([REVIEWER_ROLE, 'judge']);
 /** a run older than this is not sampled any more */
 export const SAMPLE_WINDOW_MS = 7 * 86_400_000;
 const KEPT = 200;
+/** reviews running at the same time; a review that never ended within STALE_MS stops counting */
+export const MAX_RUNNING = 2;
+const STALE_MS = 6 * 3_600_000;
 
 export interface JudgeSampleDeps {
   file: string;
   runs: () => readonly AgentRun[];
   chat: (id: string) => ChatSummary | undefined;
   create: (req: NewChat) => Promise<ChatSummary>;
-  daily: () => number;
+  /** the switch (Settings.judging) and since when it is on (Settings.judgingSince, ms; runs that ended before are not
+   *  reviewed: turning it on never starts a backlog) */
+  judging: () => { on: boolean; since: number };
   /** the engine the reviewer role (Sentinel) runs on */
   judgeEngine: () => Harness;
   /** why a chat may not start on that engine now (switched off, agents may not use it); null = it may */
@@ -79,6 +85,20 @@ export function reviewPrompt(run: AgentRun, chat: Pick<ChatSummary, 'title' | 'c
     `Finish with agent_report: outcome describes completion of this review; output contains your evidence and limitations; doneWhen answers this exact criterion: ${REVIEW_CRITERIA[0]}. Supply verdict (success|partial|fail) for the reviewed work and verified (yes|partial|no) for what you independently checked. A finished review does not imply verified yes.`,
     'Only for a legacy session where agent_report is unavailable, finish with this fenced format (choose one value per enum; verified yes only for evidence checked yourself):\n```run-report\n{"outcome":"done","verified":"yes|partial|no","summary":"…","verdict":"success|partial|fail"}\n```',
   ].join('\n');
+}
+
+const median = (v: number[]): number | null => { if (!v.length) return null; const s = [...v].sort((a, b) => a - b), m = s.length >> 1; return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2; };
+/** What the switch costs a day (zero tokens: the run store only): how many runs it would review, times what a review
+ *  has cost so far. */
+export function judgingEstimate(runs: readonly AgentRun[], now: number): JudgingEstimate {
+  const week = 7 * 86_400_000;
+  const reviewable = runs.filter(r => r.endedAt !== undefined && now - r.endedAt <= week && r.endReason === 'completed' && r.source !== 'oneshot'
+    && !r.parentRunId && !r.reviewOf && isWorkRole(r.agentId) && !!r.report).length;
+  const costs = (f: (r: AgentRun) => boolean) => runs.filter(r => r.endedAt !== undefined && r.costUsd !== null && now - r.endedAt <= 30 * 86_400_000 && f(r)).map(r => r.costUsd!);
+  const reviews = costs(r => !!r.reviewOf && REVIEWERS.has(r.agentId));
+  const basis = reviews.length ? reviews : costs(r => r.agentId === REVIEWER_ROLE);
+  const reviewUsd = median(basis), runsPerDay = Math.round(reviewable / 7 * 10) / 10;
+  return { runsPerDay, reviewUsd, perDayUsd: reviewUsd === null ? null : Math.round(runsPerDay * reviewUsd * 100) / 100, basis: basis.length };
 }
 
 /** Whether this process runs the sampled reviews, and why. Before issue #112 only a stable release (SB_RELEASE) ran
@@ -129,14 +149,15 @@ export class JudgeSampler {
     if (this.ticking) return 0;
     this.ticking = true;
     try {
-      const now = this.now(), day = dayOf(now), daily = this.d.daily();
+      const now = this.now(), day = dayOf(now), judging = this.d.judging();
       if (this.state.day !== day) { this.state.day = day; this.state.started = 0; }
-      if (daily <= 0) return this.skipped('off (delegation.judgeDaily = 0)');
-      const left = Math.max(0, daily - this.state.started);
-      if (!left) return this.skipped('daily cap reached', { daily });
+      if (!judging.on) return this.skipped('off (judging switch)');
+      const running = this.state.reviews.filter(r => r.state === 'running' && now - r.at < STALE_MS).length;
+      const left = Math.max(0, MAX_RUNNING - running);
+      if (!left) return this.skipped('reviews running', { running });
       const engine = this.d.judgeEngine(), refused = this.d.refusal(engine);
       if (refused) return this.skipped(refused, { engine });
-      const candidates = pickSamples(this.d.runs(), new Set(this.state.reviews.map(r => r.runId)), now, Number.MAX_SAFE_INTEGER);
+      const candidates = pickSamples(this.d.runs(), new Set(this.state.reviews.map(r => r.runId)), now, Number.MAX_SAFE_INTEGER).filter(r => r.endedAt! >= judging.since);
       let started = 0, gone = 0, child = 0, failed = false;
       for (const run of candidates) {
         if (started >= left) break;
@@ -160,7 +181,7 @@ export class JudgeSampler {
       if (!started) return failed ? 0 : this.skipped('no finished run to review', { candidates: candidates.length, chatGone: gone, delegated: child });
       this.lastSkip = '';
       this.save();
-      log.info('agents', 'judge samples started', { data: { started, today: this.state.started, daily, engine } });
+      log.info('agents', 'judge samples started', { data: { started, today: this.state.started, running: running + started, engine } });
       return started;
     } finally { this.ticking = false; }
   }

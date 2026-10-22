@@ -14,6 +14,7 @@ import { useApp } from '../store/store';
 import { isBusy } from '../store/state';
 import { ui } from '../store/ui';
 import { AgentCatalogCard } from './AgentCatalogCard';
+import { JudgingSwitch } from './JudgingSwitch';
 import { HelpTip } from './HelpTip';
 import { AgentStudio, EDIT_ELEMENT } from './AgentStudio';
 import { ContextPulse } from './ContextPulse';
@@ -44,11 +45,13 @@ export function AgentCatalogPage() {
     <ContextPulse key={profile.id} place={`agent:${profile.id}`} />
   </AgentStudio>;
   const profiles = catalog?.profiles ?? [];
-  const working = useApp(s => profiles.filter(p => !p.trial && Object.values(s.chats).some(c => c.agent?.id === p.id && !c.closedAt && isBusy(c))).length);
+  // from the chats read above (a hook here, after the role page's early return, would change the hook order)
+  const working = profiles.filter(p => !p.trial && Object.values(chats).some(c => c.agent?.id === p.id && !c.closedAt && isBusy(c))).length;
   const trial = profiles.filter(p => p.trial).length;
   return <section className="agent-overview" aria-label={t('catalog.title')} data-testid="agent-overview">
     <header className="catalog-head"><div><h2>{t('catalog.title')}</h2><p>{t('catalog.subtitle')}</p></div>
       <button type="button" className="btn btn-ghost" onClick={() => requestPack({ kind: 'import' })} data-testid="agent-import">{t('pack.import')}</button></header>
+    <JudgingSwitch />
     <AgentApprovals />
     <p className="catalog-intro">{t('catalog.intro')}</p>
     {(error || catalog?.problem) && <p role="alert">{error || catalog?.problem}<button type="button" className="link-btn" onClick={() => void refreshAgents()}>{t('studio.retry')}</button></p>}

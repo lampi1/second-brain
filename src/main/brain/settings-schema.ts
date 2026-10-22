@@ -116,6 +116,11 @@ const BASE: readonly SettingDef[] = [
     description: "Quando una chat di lavoro finisce, si ferma su un errore, aspetta una tua risposta o ti lascia un comando, l'app lo scrive all’Orchestrator (una riga per chat, al massimo una volta ogni 2 minuti per chat) e lo sveglia se è fermo: decide lui se dirtelo. Ogni risveglio è un turno dell’Orchestrator." },
   // the chat learns how its command went (the user, 2026-10-12: "vorrei che ti accorgessi da sola quando eseguo un
   // comando dal play senza che ti scriva fatto")
+  // the Agenti page's switch (agents/judge-sample.ts): protected, it spends tokens
+  { key: 'judging', type: 'boolean', default: false, protected: true, label: 'Controllo livello e performance',
+    description: 'Ogni lavoro finito viene rivisto da un Sentinel in una sessione nuova: livello e performance dei ruoli si basano su verdetti veri. Spende token.' },
+  { key: 'judgingSince', type: 'int', min: 0, max: 8_640_000_000_000, default: 0, protected: true, label: 'Controllo acceso dal',
+    description: 'Quando il controllo è stato acceso (ms): i lavori finiti prima non vengono rivisti.' },
   { key: 'runResults', type: 'boolean', default: true, protected: true, label: 'Esito dei comandi alla chat',
     description: "Quando un comando lanciato con Esegui finisce, l'app scrive alla chat che l'ha proposto il comando, l'exit code e le ultime righe dell'output: non devi scriverle «fatto» né incollarle il risultato. Se la chat sta lavorando, il messaggio parte appena è libera. Ogni esito è un turno della chat." },
   // the user, 2026-10-12: "le domande vorrei un toggle per farle comparire proprio come modale"
@@ -244,6 +249,7 @@ export function defaults(): Settings {
     orchestratorOpacity: 100,
     orchestratorEvents: true,
     runResults: true,
+    judging: false, judgingSince: 0,
     questionsModal: false,
     appRepo: null,
     projectsRoot: null,

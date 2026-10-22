@@ -216,6 +216,17 @@ export interface AgentRun {
 /** skills = skill ids it started with plus the ones its engine loaded while open; app = the product it is about;
  *  repo = the name of the git top-level folder of its cwd (null outside a repository). */
 export interface AgentRunTags { skills: string[]; app: string | null; repo: string | null }
+/** What the judging switch costs a day (main/agents/judge-sample.ts judgingEstimate). */
+export interface JudgingEstimate {
+  /** finished root runs a day that the switch would review (last 7 days) */
+  runsPerDay: number;
+  /** the median cost of one review (past reviews, else the Sentinel's own runs); null = no data yet */
+  reviewUsd: number | null;
+  /** runsPerDay × reviewUsd; null = no data */
+  perDayUsd: number | null;
+  /** how many costs the median is made of */
+  basis: number;
+}
 /** Metric filters (all optional; together they must all match). */
 export interface AgentMetricsFilter { since?: number; skill?: string; app?: string; repo?: string }
 export interface AgentModelChoice {

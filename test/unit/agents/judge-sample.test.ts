@@ -1,6 +1,6 @@
 // The app's sampled independent reviews (src/main/agents/judge-sample.ts, ADR 0083; a Sentinel runs them since ADR
-// 0100): which finished runs are picked (reported, recent, unjudged, not a review itself, not reviewed yet), the daily
-// cap and its reset, the self-contained contract the reviewer gets, and the review's verdict turned into the run's
+// 0100): which finished runs are picked (reported, recent, unjudged, not a review itself, not reviewed yet), the switch
+// (on since a moment: no backlog) and the cap on reviews running at once, what the switch costs a day, the contract the reviewer gets, and the review's verdict turned into the run's
 // feedback (none without a verdict; a Judge review started before ADR 0100 still counts).
 import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
@@ -9,7 +9,7 @@ import path from 'node:path';
 import type { AgentRun } from '../../../src/shared/agents';
 import type { AgentFeedbackArgs } from '../../../src/shared/agent-lifecycle';
 import type { ChatSummary, NewChat } from '../../../src/shared/contract';
-import { JudgeSampler, judgeSamplingOn, pickSamples, reviewPrompt, REVIEW_CRITERIA } from '../../../src/main/agents/judge-sample';
+import { JudgeSampler, judgeSamplingOn, judgingEstimate, MAX_RUNNING, pickSamples, reviewPrompt, REVIEW_CRITERIA } from '../../../src/main/agents/judge-sample';
 
 const NOW = Date.UTC(2026, 9, 19, 12);
 const run = (id: string, over: Partial<AgentRun> = {}): AgentRun => ({ runId: `r_${id.padStart(12, '0')}`, chatId: `c_${id}`, agentId: 'scout', version: 1, goal: 'Trova gli errori',
@@ -62,28 +62,41 @@ describe('pickSamples', () => {
 });
 
 describe('JudgeSampler', () => {
-  const make = (runs: AgentRun[], daily = 2, refusal: string | null = null, chatOf: (id: string) => ChatSummary = chat) => {
+  // on = the switch; since = when it was turned on
+  const make = (runs: AgentRun[], on: boolean | number = true, refusal: string | null = null, chatOf: (id: string) => ChatSummary = chat, since = 0) => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-judge-')); dirs.push(dir);
     const created: NewChat[] = [], fed: [AgentFeedbackArgs, string][] = [];
     let now = NOW, n = 0;
     const s = new JudgeSampler({ file: path.join(dir, 'judge-samples.json'), runs: () => runs, chat: id => chatOf(id),
-      create: async req => { created.push(req); return { ...chat(`j${++n}`), id: `j${n}` }; }, daily: () => daily, judgeEngine: () => 'codex',
+      create: async req => { created.push(req); return { ...chat(`j${++n}`), id: `j${n}` }; }, judging: () => ({ on: !!on, since }), judgeEngine: () => 'codex',
       refusal: () => refusal, feedback: async (a, by) => { fed.push([a, by]); }, now: () => now });
     return { s, created, fed, later: (ms: number) => { now += ms; } };
   };
-  it('starts at most judgeDaily a day, as Sentinel chats linked to the run, then again the next day', async () => {
-    const { s, created, later } = make([run('1'), run('2'), run('3')], 2);
-    expect(await s.tick()).toBe(2);
+  it('reviews every finished run, as Sentinel chats linked to it, at most MAX_RUNNING at once', async () => {
+    const { s, created } = make([run('1'), run('2'), run('3')]);
+    expect(await s.tick()).toBe(MAX_RUNNING);
     expect(created[0]).toMatchObject({ harness: 'codex', roleId: 'sentinel', cwd: '/w', doneWhen: REVIEW_CRITERIA });
     expect(created[0]).not.toHaveProperty('independentOf'); // a new session is the review's independence (ADR 0091)
     expect(created.map(c => c.reviewOf).every(id => id?.startsWith('r_'))).toBe(true);
-    expect(await s.tick()).toBe(0);                 // the day's cap
-    later(86_400_000);
+    expect(await s.tick()).toBe(0);                 // two running already
+    const [a] = s.list();
+    await s.ended(run('97', { agentId: 'sentinel', chatId: a!.chatId, reviewOf: a!.runId, report: { at: NOW, outcome: 'done', verified: 'yes', summary: 'Ok', verdict: 'success' } }));
     expect(await s.tick()).toBe(1);                 // the one left, never one reviewed already
     expect(new Set(created.map(c => c.reviewOf)).size).toBe(3);
   });
+  it('turning it on starts no backlog: only runs that ended since then', async () => {
+    const { s, created } = make([run('1', { endedAt: NOW - 7200_000 }), run('2', { endedAt: NOW - 60_000 })], true, null, chat, NOW - 600_000);
+    expect(await s.tick()).toBe(1);
+    expect(created.map(c => c.reviewOf)).toEqual(['r_000000000002']);
+  });
+  it('the daily cost of the switch: runs a day times what a review cost; unknown without data', () => {
+    const roots = Array.from({ length: 14 }, (_, i) => run(String(i + 1)));
+    const reviews = [0.2, 0.4, 0.3].map((c, i) => run(String(50 + i), { agentId: 'sentinel', reviewOf: roots[i]!.runId, costUsd: c }));
+    expect(judgingEstimate([...roots, ...reviews], NOW)).toEqual({ runsPerDay: 2, reviewUsd: 0.3, perDayUsd: 0.6, basis: 3 });
+    expect(judgingEstimate(roots, NOW)).toMatchObject({ runsPerDay: 2, reviewUsd: null, perDayUsd: null });
+  });
   it('never puts a delegated child\'s answer in a root review chat (the Orchestrator would read it)', async () => {
-    const { s, created } = make([run('1')], 2, null, id => ({ ...chat(id), parentId: 'c_parent' }));
+    const { s, created } = make([run('1')], true, null, id => ({ ...chat(id), parentId: 'c_parent' }));
     expect(await s.tick()).toBe(0);
     expect(created).toEqual([]);
   });
@@ -92,22 +105,22 @@ describe('JudgeSampler', () => {
     saved.scope = { brainRoot: path.resolve('/brain'), projectRoot: path.resolve('/original') };
     saved.report!.canonical = { taskId: saved.runId, taskVersion: 1, runId: saved.runId, at: NOW, outcome: 'done', summary: 'Saved', output: 'Original evidence', doneWhen: [] };
     const missing = () => undefined as unknown as ChatSummary;
-    const good = make([saved], 1, null, missing);
+    const good = make([saved], true, null, missing);
     expect(await good.s.tick()).toBe(1);
     expect(good.created[0]).toMatchObject({ cwd: saved.scope.projectRoot, doneWhen: REVIEW_CRITERIA });
     expect(good.created[0]!.prompt).toContain('Original evidence');
     const unsafe = { ...saved, scope: { ...saved.scope, projectRoot: 'relative' } };
-    expect(await make([unsafe], 1, null, missing).s.tick()).toBe(0);
-    expect(await make([run('2', { scope: saved.scope })], 1, null, missing).s.tick()).toBe(0);
+    expect(await make([unsafe], true, null, missing).s.tick()).toBe(0);
+    expect(await make([run('2', { scope: saved.scope })], true, null, missing).s.tick()).toBe(0);
   });
   it('starts nothing when off or when the engine is refused', async () => {
-    expect(await make([run('1')], 0).s.tick()).toBe(0);
-    const r = make([run('1')], 2, 'engine switched off');
+    expect(await make([run('1')], false).s.tick()).toBe(0);
+    const r = make([run('1')], true, 'engine switched off');
     expect(await r.s.tick()).toBe(0);
     expect(r.created).toEqual([]);
   });
   it('turns the review\'s verdict into the run\'s feedback, with the review as evidence; none without a verdict', async () => {
-    const { s, fed } = make([run('1'), run('2')], 2);
+    const { s, fed } = make([run('1'), run('2')]);
     await s.tick();
     const [a, b] = s.list();
     const judge = (target: string, chatId: string, verdict?: 'fail', agentId = 'sentinel'): AgentRun => run('99', { agentId, chatId, reviewOf: target,
@@ -121,14 +134,14 @@ describe('JudgeSampler', () => {
     expect(fed).toHaveLength(1);
   });
   it('still records a Judge review started before ADR 0100 when it ends, under its successor\'s name', async () => {
-    const { s, fed } = make([run('1')], 2);
+    const { s, fed } = make([run('1')]);
     await s.tick();
     const [a] = s.list();
     await s.ended(run('98', { agentId: 'judge', chatId: a!.chatId, reviewOf: a!.runId, report: { at: NOW, outcome: 'done', verified: 'yes', summary: 'Ok', verdict: 'success' } }));
     expect(fed).toMatchObject([[{ runId: a!.runId, verdict: 'success', notes: 'Sentinel: Ok' }, 'judge-sample']]);
   });
   it('passes over a run whose chat is gone or is a delegated child\'s and still fills the day (issue #112)', async () => {
-    const { s, created } = make([run('1'), run('2'), run('3')], 2, null, id => id === 'c_1' ? undefined as unknown as ChatSummary : id === 'c_2' ? { ...chat(id), parentId: 'p' } : chat(id));
+    const { s, created } = make([run('1'), run('2'), run('3')], true, null, id => id === 'c_1' ? undefined as unknown as ChatSummary : id === 'c_2' ? { ...chat(id), parentId: 'p' } : chat(id));
     expect(await s.tick()).toBe(1);
     expect(created.map(c => c.reviewOf)).toEqual(['r_000000000003']);
   });

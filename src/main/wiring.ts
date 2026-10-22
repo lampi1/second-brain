@@ -685,19 +685,21 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     remember: (roleId, line, chat) => writeAgentMemory(agentPacks.packs.root(), portableId(roleId), line, { scope: { roleId: portableId(roleId), project: chat.cwd }, sourceRunId: chat.run?.runId ?? `legacy-chat:${chat.id}`, sourceEventId: `report:${chat.run?.runId ?? chat.id}` }) }));
   // a Strategist's plan with the user (ADR 0108): proposed on its strip, approved by the user's click, its steps' progress
   addChatTools(strategyTools(manager));
-  // the Judge's sampled reviews of finished runs (agents/judge-sample.ts): they spend tokens, so they run only in the
-  // user's own app, never in tests or an agent's hidden run (judgeSamplingOn, issue #112), at most delegation.judgeDaily a day
+  // the independent reviews of finished runs (agents/judge-sample.ts): they spend tokens, so they run only in the user's
+  // own app, never in tests or an agent's hidden run (judgeSamplingOn, issue #112), and only with the Agenti switch on
   const judgeSampler = new JudgeSampler({ file: path.join(ctx.userData, 'judge-samples.json'), runs: () => manager.runs.list(),
     chat: id => manager.list().find(c => c.id === id), create: req => manager.create(req, 'app'),
-    daily: () => checkedDelegation(brain.settings().delegation).judgeDaily,
+    judging: () => ({ on: brain.settings().judging === true, since: Number(brain.settings().judgingSince) || 0 }),
     judgeEngine: () => agents.list().profiles.find(p => p.id === 'sentinel')?.engine ?? 'claude',
     refusal: h => !engineOn(brain.settings(), h) ? 'engine switched off' : !agentsMayOpen(brain.settings(), h) ? 'agents may not use this engine' : null,
     feedback: (a, by) => runFeedback.recordFeedback(a, by) });
-  loopRef.current = { ended: run => { loop.hooks.ended(run); void judgeSampler.ended(run); }, outcome: run => loop.hooks.outcome(run) };
-  // first a few minutes after the start (a restart within 30 minutes used to postpone it again), then every 30 minutes
   const judging = judgeSamplingOn(process.env);
-  log.info('agents', judging.on ? 'judge samples scheduled' : 'judge samples off', { data: { why: judging.why } });
   const judgeTick = () => { void judgeSampler.tick().catch(e => log.warn('agents', 'judge sample tick failed', { cause: errText(e), hint: 'tried again in 30 minutes' })); };
+  // a run that ends is reviewed soon after (every run with the switch on; a review's own end frees a slot)
+  const judgeSoon = () => { if (judging.on && brain.settings().judging === true) setTimeout(judgeTick, 5_000).unref(); };
+  loopRef.current = { ended: run => { loop.hooks.ended(run); void judgeSampler.ended(run).finally(judgeSoon); }, outcome: run => loop.hooks.outcome(run) };
+  // first a few minutes after the start (a restart within 30 minutes used to postpone it again), then every 30 minutes
+  log.info('agents', judging.on ? 'judge samples scheduled' : 'judge samples off', { data: { why: judging.why } });
   const judgeFirst = judging.on ? setTimeout(judgeTick, 3 * 60_000) : null;
   judgeFirst?.unref();
   const judgeTimer = judging.on ? setInterval(judgeTick, 30 * 60_000) : null;

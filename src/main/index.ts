@@ -40,6 +40,7 @@ import { createRoutedChat, previewRoute } from './chats/routed';
 import { FROZEN_EPOCH } from './demo';
 import { checkRunIds, demoEstimateRuns, estimatesState, mergeRuns } from './agents/run-estimates';
 import { macroTasks } from '../shared/macro-tasks';
+import { judgingEstimate } from './agents/judge-sample';
 import { systemLang } from './lang';
 import { ProfileService } from './brain/profile';
 import { AgentImageStore, nativeReencode } from './agents/agent-images';
@@ -245,6 +246,10 @@ app.whenReady().then(async () => {
       const now = demo && process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now();
       const runs = mergeRuns(demo ? demoEstimateRuns(now) : s.agentRuns?.list() ?? [], s.chats.list().map(c => c.run));
       return estimatesState(runs, checkRunIds(a?.runIds), now);
+    },
+    'agents:judgingEstimate': () => {
+      const now = demo && process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now();
+      return judgingEstimate(mergeRuns(demo ? demoEstimateRuns(now) : s.agentRuns?.list() ?? [], s.chats.list().map(c => c.run)), now);
     },
     'runs:macro': a => {
       const now = demo && process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now();
