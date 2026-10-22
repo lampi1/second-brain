@@ -61,4 +61,6 @@ export const catalogDe: typeof catalogIt = {
   'catalog.purpose.herald': 'Bereitet Nachrichten und Entwürfe für Personen und externe Dienste vor; jeden Versand genehmigst du.',
   'catalog.purpose.flash': 'Schnelle Antworten neben dem Orchestrator: sieht seinen Chat, liest, ändert nichts',
   'catalog.purpose.pulse': 'Ideen, Tipps, Erinnerungen, Verknüpfungen und der Satz des Tages',
+  // the model tier's word, on the role card and in the studio
+  'roles.tier.light': 'leicht', 'roles.tier.mid': 'mittel', 'roles.tier.top': 'hoch',
 };

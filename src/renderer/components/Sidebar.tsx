@@ -16,7 +16,6 @@ import {
 } from './Icons';
 import { t } from '../i18n';
 import {workProfile} from '../../shared/work-profiles';
-import { useApprovalCount } from '../store/agent-approvals';
 import { SidebarTree } from './SidebarTree';
 import { useProposalCount } from '../lib/proposals';
 import { HUB_PAGES } from '../lib/memory-hub';
@@ -59,8 +58,6 @@ export function Sidebar() {
   // Task only while the brain can read it: hidden once the read says the brain has no devops-me.mjs
   const tasksOn = useTasks(s => s !== null && s.error?.kind !== 'script'); // not before the first read: no flash
   const b = badges(feed, read);
-  // pending agent changes (Da approvare, components/AgentApprovals.tsx) outrank the Agenti page's feed count
-  const approvals = useApprovalCount();
   // proposals waiting for the user (Memoria → Proposte, ADR 0122, 0123)
   const proposals = useProposalCount();
   const item = (id: string, label: string, icon: ReactNode, on: boolean, onClick: () => void, extra: { key?: string; badge?: ReactNode; testid: string; onHover?: () => void }) => (
@@ -76,7 +73,7 @@ export function Sidebar() {
   const page1 = (id: BrainPageId) => {
     const p = BRAIN_PAGES.find(x => x.id === id)!;
     return item(p.id, p.id==='agenti'?t('catalog.title'):p.label, ICON[p.id] ?? <IconBrain />, page === p.id && !map, () => go({ page: p.id }), {
-      key: p.key, testid: `nav-${p.id}`, badge: p.id === 'home' && waiting ? waitingBadge : p.id === 'memoria' && proposals ? <span className="nav-badge amber nav-badge-pulse" data-testid="nav-badge-proposals" aria-label={t('mh.badge', { n: proposals })}>{proposals > 99 ? '99+' : proposals}</span> : p.id === 'agenti' && approvals ? <span className="nav-badge amber" data-testid="nav-badge-approvals" aria-label={t('approvals.countLabel', { n: approvals })}>{approvals > 99 ? '99+' : approvals}</span> : <span data-testid={`nav-badge-${p.id}`}><Badge n={p.id === 'task' ? tasksUnread : b[p.id] ?? 0} warn={WARN_SECTIONS.has(p.id)} /></span>,
+      key: p.key, testid: `nav-${p.id}`, badge: p.id === 'home' && waiting ? waitingBadge : p.id === 'memoria' && proposals ? <span className="nav-badge amber nav-badge-pulse" data-testid="nav-badge-proposals" aria-label={t('mh.badge', { n: proposals })}>{proposals > 99 ? '99+' : proposals}</span> : <span data-testid={`nav-badge-${p.id}`}><Badge n={p.id === 'task' ? tasksUnread : b[p.id] ?? 0} warn={WARN_SECTIONS.has(p.id)} /></span>,
     });
   };
   const title = (txt: string, id: string) => <div className="nav-title" data-testid={`nav-group-${id}`}>{txt}</div>;

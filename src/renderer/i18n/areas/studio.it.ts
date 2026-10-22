@@ -47,7 +47,7 @@ export const studioIt = {
   'studio.save': 'Salva il ruolo',
   'studio.editRole': ({ name }: { name: string }) => `Modifica ${name}`,
   'studio.newSessions': 'Le modifiche valgono per le prossime chat; quelle aperte restano come sono.',
-  'studio.trialOpen': 'C’è una prova in corso su questo ruolo: chiudila in «Da approvare» prima di cambiarlo.',
+  'studio.trialOpen': 'C’è una prova in corso su questo ruolo: chiudila in Memoria → Proposte prima di cambiarlo.',
   'studio.saved': 'Ruolo salvato per le prossime chat',
   'studio.saveError': ({ detail }: { detail: string }) => `Non salvato: ${detail} La bozza resta qui.`,
   'studio.stale': 'Il ruolo è cambiato mentre lo modificavi.',

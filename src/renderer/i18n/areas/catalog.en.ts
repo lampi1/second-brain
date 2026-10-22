@@ -61,4 +61,6 @@ export const catalogEn: typeof catalogIt = {
   'catalog.purpose.herald': 'Prepares messages and drafts for people and outside services; you approve every send.',
   'catalog.purpose.flash': 'Quick answers beside the Orchestrator: sees its conversation, reads, changes nothing',
   'catalog.purpose.pulse': 'Ideas, tips, reminders, links and the day’s sentence',
+  // the model tier's word, on the role card and in the studio
+  'roles.tier.light': 'light', 'roles.tier.mid': 'mid', 'roles.tier.top': 'top',
 };

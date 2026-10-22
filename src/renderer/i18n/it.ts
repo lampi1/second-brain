@@ -32,7 +32,6 @@ import { levelsIt } from './areas/levels.it';
 import { explainIt } from './areas/explain.it';
 import { agentDetailIt } from './areas/agent-detail.it';
 import { agentImageIt } from './areas/agent-image.it';
-import { approvalsIt } from './areas/approvals.it';
 import { proposalsIt } from './areas/proposals.it';
 import {settingsIt}from'./areas/settings.it';
 import { profileIt } from './areas/profile.it';
@@ -99,7 +98,6 @@ export const it = {
   ...explainIt,
   ...agentDetailIt,
   ...agentImageIt,
-  ...approvalsIt,
   ...proposalsIt,
   ...settingsIt,
   ...profileIt,

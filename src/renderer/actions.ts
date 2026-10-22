@@ -503,10 +503,10 @@ async function nextAfterPending(): Promise<void> {
     : next.kind === 'stalled' ? t('alive.next.stalled', { title: next.chat.title, min: next.chat.quietMin }) : t('alive.next.idea', { title: next.idea.title }), 'info');
 }
 
-/** Where a morning row leads: the Task page for a PR, Da approvare, the stalled chat, the ideas. */
+/** Where a morning row leads: the Task page for a PR, Memoria → Proposte, the stalled chat, the ideas. */
 export function openMorningNext(next: MorningNext): void {
   if (next.kind === 'pr') go({ page: 'task' });
-  else if (next.kind === 'approvals') go({ page: 'agenti', arg: 'studio' });
+  else if (next.kind === 'approvals') go({ page: 'memoria', arg: 'proposte' });
   else if (next.kind === 'stalled') focusChat(next.chat.chatId);
   else go({ page: 'idee', arg: 'mie' });
 }

@@ -47,7 +47,7 @@ export const studioEn: typeof studioIt = {
   'studio.save': 'Save the role',
   'studio.editRole': ({ name }: { name: string }) => `Edit ${name}`,
   'studio.newSessions': 'Changes apply to the next chats; open ones stay as they are.',
-  'studio.trialOpen': 'A trial is open on this role: close it in “To approve” before changing it.',
+  'studio.trialOpen': 'A trial is open on this role: close it in Memory → Proposals before changing it.',
   'studio.saved': 'Role saved for the next chats',
   'studio.saveError': ({ detail }: { detail: string }) => `Not saved: ${detail} The draft stays here.`,
   'studio.stale': 'The role changed while you were editing it.',

@@ -32,7 +32,6 @@ import { levelsDe } from './areas/levels.de';
 import { explainDe } from './areas/explain.de';
 import { agentDetailDe } from './areas/agent-detail.de';
 import { agentImageDe } from './areas/agent-image.de';
-import { approvalsDe } from './areas/approvals.de';
 import { proposalsDe } from './areas/proposals.de';
 import { settingsDe } from './areas/settings.de';
 import { profileDe } from './areas/profile.de';
@@ -97,7 +96,6 @@ export const de: Dict = {
   ...explainDe,
   ...agentDetailDe,
   ...agentImageDe,
-  ...approvalsDe,
   ...proposalsDe,
   ...settingsDe,
   ...profileDe,

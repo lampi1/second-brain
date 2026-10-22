@@ -47,7 +47,7 @@ export const studioDe: typeof studioIt = {
   'studio.save': 'Rolle speichern',
   'studio.editRole': ({ name }: { name: string }) => `${name} bearbeiten`,
   'studio.newSessions': 'Änderungen gelten für die nächsten Chats; offene bleiben, wie sie sind.',
-  'studio.trialOpen': 'Für diese Rolle läuft eine Probe: Schließ sie unter „Zur Freigabe“, bevor du sie änderst.',
+  'studio.trialOpen': 'Für diese Rolle läuft eine Probe: Schließ sie unter Gedächtnis → Vorschläge, bevor du sie änderst.',
   'studio.saved': 'Rolle für die nächsten Chats gespeichert',
   'studio.saveError': ({ detail }: { detail: string }) => `Nicht gespeichert: ${detail} Der Entwurf bleibt hier.`,
   'studio.stale': 'Die Rolle hat sich geändert, während du sie bearbeitet hast.',

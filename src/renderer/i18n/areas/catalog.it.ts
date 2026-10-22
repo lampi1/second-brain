@@ -61,4 +61,6 @@ export const catalogIt = {
   'catalog.purpose.herald': 'Prepara messaggi e bozze per persone e servizi esterni; ogni invio lo approvi tu.',
   'catalog.purpose.flash': 'Risposte al volo accanto all’Orchestrator: vede la sua chat, legge, non cambia nulla',
   'catalog.purpose.pulse': 'Idee, consigli, promemoria, collegamenti e frase in cima a Memoria',
+  // the model tier's word, on the role card and in the studio
+  'roles.tier.light': 'leggero', 'roles.tier.mid': 'medio', 'roles.tier.top': 'alto',
 };
