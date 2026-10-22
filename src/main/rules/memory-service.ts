@@ -2,7 +2,7 @@
 // Reuses the existing local embedding provider, retaining no text/vector cache or extra searchable document copies.
 import { acknowledgeMemoryInvalidations, pendingMemoryInvalidations, queueMemoryInvalidation } from './memory-invalidations';
 import { randomUUID } from 'node:crypto';
-import { budgetMemory, confirmMemory, deleteMemory, memoryAt, memoryWords, quoteMemory, readMemoryRecords, recallMemory, retractMemory, scopedMemory, type MemoryRecord, type MemoryScope } from './memory-records';
+import { budgetMemory, confirmMemory, memoryConflicts, type MemoryConflictChoice, deleteMemory, memoryAt, memoryWords, quoteMemory, readMemoryRecords, recallMemory, retractMemory, scopedMemory, type MemoryRecord, type MemoryScope } from './memory-records';
 
 export interface MemoryServiceDeps {
   root(): string | null;
@@ -37,14 +37,15 @@ export class MemoryService {
     const record = readMemoryRecords(root).find(r => r.memoryId === id);
     return ['memory/records.json', ...(record ? [`agents/${record.scope.roleId}/memory.md`, 'memory/shared.md', ...(record.derivedFiles ?? [])] : [])];
   }
-  async confirm(id: string, evidence: string): Promise<MemoryRecord> {
+  async confirm(id: string, evidence: string, choice?: MemoryConflictChoice): Promise<MemoryRecord> {
     const root = this.root();
     // This method is reachable only through the authenticated desktop UI. No assertion from a model can invoke it.
-    const previous = readMemoryRecords(root).find(r => r.memoryId === id)?.supersedes;
-    const old = previous ? readMemoryRecords(root).find(r => r.memoryId === previous) : undefined;
-    const paths = ['memory/records.json', ...(old ? [`agents/${old.scope.roleId}/memory.md`, 'memory/shared.md', ...(old.derivedFiles ?? [])] : [])];
-    queueMemoryInvalidation(root, paths);
-    const r = confirmMemory(root, id, { sourceEventId: `human-review:${randomUUID()}`, sourceRunId: `human:${randomUUID()}`, evidence });
+    const records = readMemoryRecords(root), record = records.find(r => r.memoryId === id);
+    const previous = record?.supersedes;
+    const olds = [...(previous ? records.filter(r => r.memoryId === previous) : []), ...(record && choice?.keep === 'new' ? memoryConflicts(records, record) : [])];
+    const paths = ['memory/records.json', ...olds.flatMap(old => [`agents/${old.scope.roleId}/memory.md`, 'memory/shared.md', ...(old.derivedFiles ?? [])])];
+    queueMemoryInvalidation(root, [...new Set(paths)]);
+    const r = confirmMemory(root, id, { sourceEventId: `human-review:${randomUUID()}`, sourceRunId: `human:${randomUUID()}`, evidence }, undefined, choice);
     await this.retryInvalidations();
     return r;
   }

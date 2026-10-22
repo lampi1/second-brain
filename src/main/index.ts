@@ -221,7 +221,7 @@ app.whenReady().then(async () => {
     // the Brain pages (ADR 0077): read, the maintenance button, an undo, a skill toggle; Classificatori read-only
     'brainmodel:state': () => s.brainModel.state(),
     'memory:reviewList': a => s.memoryReview?.list(undefined, a?.asOf) ?? [],
-    'memory:confirm': async a => { requireReviewRoot(a.expectedRoot); if (!s.memoryReview) throw new Error('Memory review unavailable.'); try { return await s.memoryReview.confirm(a.id, a.evidence); } finally { await search.invalidateBrain(); } },
+    'memory:confirm': async a => { requireReviewRoot(a.expectedRoot); if (!s.memoryReview) throw new Error('Memory review unavailable.'); try { return await s.memoryReview.confirm(a.id, a.evidence, a.keep === 'new' || a.keep === 'both' ? { keep: a.keep, ids: Array.isArray(a.conflicts) ? a.conflicts.filter(x => typeof x === 'string').slice(0, 50) : [] } : undefined); } finally { await search.invalidateBrain(); } },
     'memory:retract': async a => { requireReviewRoot(a.expectedRoot); if (!s.memoryReview) throw new Error('Memory review unavailable.'); try { return await s.memoryReview.retract(a.id, a.reason); } finally { await search.invalidateBrain(); } },
     'memory:delete': async a => { requireReviewRoot(a.expectedRoot); if (!s.memoryReview) throw new Error('Memory review unavailable.'); try { return await s.memoryReview.delete(a.id); } finally { await search.invalidateBrain(); } },
     'learning:state': () => s.learningReview?.state() ?? { datasets: [], replays: [], candidates: [], replayAvailable: false },
@@ -467,7 +467,7 @@ app.whenReady().then(async () => {
       runs: () => s.agentRuns?.list() ?? [], chats: () => s.chats.list(),
       ...(s.memoryReview ? { memory: {
         list: () => (s.brain.info().brainRoot ? call('memory:reviewList', undefined) : []),
-        confirm: (id: string, evidence: string) => call('memory:confirm', { expectedRoot: reviewRoot(), id, evidence }),
+        confirm: (id: string, evidence: string, choice?: { keep: 'new' | 'both'; ids: string[] }) => call('memory:confirm', { expectedRoot: reviewRoot(), id, evidence, ...(choice ? { keep: choice.keep, conflicts: choice.ids } : {}) }),
         retract: (id: string, reason: string) => call('memory:retract', { expectedRoot: reviewRoot(), id, reason }),
       } } : {}),
       ...(s.learningReview ? { candidates: {

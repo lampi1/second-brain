@@ -4,7 +4,7 @@
 // Ctrl+Z / «Annulla ultima» takes it back while it is held (nothing was applied yet). A refused decision brings its card
 // back with the reason. Used by components/brain-model/ProposalsDeck.tsx and the Memoria sidebar badge (Sidebar.tsx).
 import { useEffect } from 'react';
-import type { Proposal, ProposalDecision, ProposalGroup, ProposalsState } from '@shared/proposals';
+import type { Proposal, ProposalDecision, ProposalGroup, ProposalKeep, ProposalsState } from '@shared/proposals';
 import { PROPOSAL_GROUPS } from '@shared/proposals';
 import { sb } from '../sb';
 import { createStore } from '../store/createStore';
@@ -12,7 +12,7 @@ import { createStore } from '../store/createStore';
 /** How long a decision waits before it is applied (Z takes it back meanwhile). */
 export const HOLD_MS = 6000;
 
-export interface Decided { card: Proposal; decision: ProposalDecision; note?: string; state: 'held' | 'sent' | 'done' }
+export interface Decided { card: Proposal; decision: ProposalDecision; note?: string; keep?: ProposalKeep; state: 'held' | 'sent' | 'done' }
 export interface DeckState {
   data: ProposalsState | null;
   loading: boolean;
@@ -54,7 +54,7 @@ export async function flushDecision(): Promise<void> {
   const mark = (state: Decided['state']) => deck.set(s => ({ ...s, decided: s.decided.map(d => (d === held || (d.card.id === held.card.id && d.state !== 'done') ? { ...d, state } : d)) }));
   mark('sent');
   try {
-    const r = await sb.invoke('proposals:decide', { id: held.card.id, decision: held.decision, seen: held.card.content, ...(held.note ? { note: held.note } : {}) });
+    const r = await sb.invoke('proposals:decide', { id: held.card.id, decision: held.decision, seen: held.card.content, ...(held.note ? { note: held.note } : {}), ...(held.keep ? { keep: held.keep } : {}) });
     deck.set(s => ({
       ...s, data: r.state, count: r.state.items.length,
       decided: r.ok ? s.decided.map(d => (d.card.id === held.card.id && d.state === 'sent' ? { ...d, state: 'done' as const } : d)) : s.decided.filter(d => !(d.card.id === held.card.id && d.state === 'sent')),
@@ -66,9 +66,9 @@ export async function flushDecision(): Promise<void> {
 }
 
 /** The user's swipe, button or key: the previous held decision goes to main, this one is held. */
-export function decide(card: Proposal, decision: ProposalDecision, note?: string): void {
+export function decide(card: Proposal, decision: ProposalDecision, note?: string, keep?: ProposalKeep): void {
   void flushDecision();
-  deck.set(s => ({ ...s, refused: null, decided: [...s.decided, { card, decision, ...(note?.trim() ? { note: note.trim() } : {}), state: 'held' }] }));
+  deck.set(s => ({ ...s, refused: null, decided: [...s.decided, { card, decision, ...(note?.trim() ? { note: note.trim() } : {}), ...(keep ? { keep } : {}), state: 'held' }] }));
   holdTimer = setTimeout(() => { void flushDecision(); }, HOLD_MS);
 }
 /** Z / Ctrl+Z / «Annulla ultima»: the held decision back (its card on top again); false = nothing to take back. */

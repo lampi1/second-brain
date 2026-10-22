@@ -147,4 +147,26 @@ describe('ProposalsService', () => {
     await s.decide({ id: 'memory:a', decision: 'approve' });
     expect(emit.mock.calls).toEqual([[4], [3]]);
   });
+
+  it('a fact that contradicts a confirmed one asks replace or keep both, and approves only with the choice', async () => {
+    const calls: string[] = [];
+    const old = { ...fact('old', NOW - 9 * H), subject: 'Fatto a', status: 'confirmed', value: 'vecchio' } as MemoryReviewRecord;
+    let rows = [fact('a', NOW - 2 * H), old];
+    const { p } = ports({ memory: { list: () => rows, confirm: async (id, _ev, choice) => { calls.push(`confirm ${id} ${JSON.stringify(choice)}`); rows = rows.filter(r => r.memoryId !== id); }, retract: async () => {} } });
+    const s = new ProposalsService({ ports: p, userData: tmp() });
+    const card = (await s.list()).items.find(c => c.id === 'memory:a')!;
+    expect(card.ask).toMatchObject({ kind: 'remember', role: 'scout', subject: 'Fatto a', conflicts: [{ id: 'old', value: 'vecchio' }] });
+    expect(await s.decide({ id: 'memory:a', decision: 'approve' })).toMatchObject({ ok: false, error: expect.stringContaining('sostituirlo o tenerli entrambi') });
+    expect((await s.decide({ id: 'memory:a', decision: 'approve', keep: 'new' })).ok).toBe(true);
+    expect(calls).toEqual(['confirm a {"keep":"new","ids":["old"]}']);
+  });
+
+  it('a change to a script or a query shows its code and words its question from data', async () => {
+    const list = [change('s1', NOW - H, { job: 'repeated-task', kind: 'script', action: 'create', target: 'scripts/conta.mjs' }), change('q1', NOW - 2 * H, { job: 'corrections', kind: 'script', action: 'update', target: 'queries/errori.md' })];
+    const stored = [{ ...list[0], files: [{ file: '/brain/scripts/conta.mjs', before: null, after: 'console.log(1);\n' }] }, { ...list[1], files: [{ file: '/brain/queries/errori.md', before: 'x', after: '# Errori\n\n```kql\nlogs | where status == 500\n```\n' }] }];
+    const { p } = ports({ changes: { list: () => list, stored: () => stored as never, rollback: () => {} } });
+    const items = (await new ProposalsService({ ports: p, userData: tmp() }).list()).items;
+    expect(items.find(c => c.id === 'change:s1')).toMatchObject({ group: 'script', ask: { kind: 'applied', what: 'script', action: 'create', name: 'conta.mjs' }, code: [{ file: 'scripts/conta.mjs', lang: 'javascript', text: 'console.log(1);\n' }] });
+    expect(items.find(c => c.id === 'change:q1')).toMatchObject({ group: 'script', ask: { what: 'query', name: 'errori' }, code: [{ file: 'queries/errori.md', lang: 'kql', text: 'logs | where status == 500' }] });
+  });
 });

@@ -67,8 +67,20 @@ export function proposeMemory(root: string, input: MemoryProposal, now = new Dat
     records.push(record); return record;
   });
 }
+/** The user's answer when a confirmed fact with the same subject and predicate already says something else: `new`
+ *  retracts those facts (the new one supersedes them), `both` keeps them beside it. `ids` are the facts the user saw. */
+export interface MemoryConflictChoice { keep: 'new' | 'both'; ids: string[] }
+/** The confirmed facts a proposed one contradicts (same scope, subject and predicate, another value), not the one it
+ *  already supersedes. */
+export function memoryConflicts(records: readonly MemoryRecord[], r: MemoryRecord): MemoryRecord[] {
+  return records.filter(x => x.memoryId !== r.memoryId && x.memoryId !== r.supersedes && sameScope(x.scope, r.scope) && x.subject === r.subject && x.predicate === r.predicate && x.status === 'confirmed' && !x.validTo && x.value !== r.value);
+}
+const retire = (root: string, old: MemoryRecord, by: string, now: string): void => {
+  purgeCopies(root, old); delete old.derivedFiles; old.validTo = now;
+  (old.transitions ??= [{ at: old.observedAt, status: old.status }]).push({ at: now, status: 'retracted', reason: `superseded:${by}` }); old.status = 'retracted';
+};
 /** Host-only transition: callers must supply an independently verified event, never model tool arguments. */
-export function confirmMemory(root: string, memoryId: string, verification: NonNullable<MemoryRecord['verification']>, now = new Date().toISOString()): MemoryRecord {
+export function confirmMemory(root: string, memoryId: string, verification: NonNullable<MemoryRecord['verification']>, now = new Date().toISOString(), choice?: MemoryConflictChoice): MemoryRecord {
   clean(verification.evidence); clean(verification.sourceEventId); clean(verification.sourceRunId);
   if (!Number.isFinite(Date.parse(now))) throw new Error('Invalid verification date.');
   return mutate(root, records => {
@@ -76,10 +88,12 @@ export function confirmMemory(root: string, memoryId: string, verification: NonN
     if (r?.status === 'confirmed' && r.verification?.evidence === verification.evidence) return r;
     if (!r || r.status !== 'proposed' || verification.sourceEventId === r.sourceEventId || verification.sourceRunId === r.sourceRunId) throw new Error('Independent verification is required.');
     if (Date.parse(now) < Date.parse(r.observedAt)) throw new Error('Verification predates observation.');
-    const conflict = records.find(x => x.memoryId !== r.memoryId && sameScope(x.scope, r.scope) && x.subject === r.subject && x.predicate === r.predicate && x.status === 'confirmed' && !x.validTo && x.value !== r.value);
-    if (conflict && conflict.memoryId !== r.supersedes) throw new Error('Conflicting confirmed fact requires explicit supersession.');
-    r.status = 'confirmed'; (r.transitions ??= [{ at: r.observedAt, status: 'proposed' }]).push({ at: now, status: 'confirmed' }); r.verification = { ...verification };
-    if (r.supersedes) { const old = records.find(x => x.memoryId === r.supersedes); if (old) { purgeCopies(root, old); delete old.derivedFiles; old.validTo = now; (old.transitions ??= [{ at: old.observedAt, status: old.status }]).push({ at: now, status: 'retracted', reason: `superseded:${r.memoryId}` }); old.status = 'retracted'; } }
+    // A contradiction is resolved only by the user's explicit choice on exactly the facts they saw.
+    const conflicts = memoryConflicts(records, r), ids = new Set(choice?.ids ?? []);
+    if (conflicts.length && (!choice || conflicts.length !== ids.size || conflicts.some(x => !ids.has(x.memoryId)))) throw new Error('Conflicting confirmed fact requires explicit supersession.');
+    r.status = 'confirmed'; (r.transitions ??= [{ at: r.observedAt, status: 'proposed' }]).push({ at: now, status: 'confirmed', ...(conflicts.length && choice?.keep === 'both' ? { reason: `kept-beside:${conflicts.map(x => x.memoryId).join(',')}` } : {}) }); r.verification = { ...verification };
+    if (r.supersedes) { const old = records.find(x => x.memoryId === r.supersedes); if (old) retire(root, old, r.memoryId, now); }
+    if (choice?.keep === 'new') for (const old of conflicts) retire(root, old, r.memoryId, now);
     return r;
   });
 }

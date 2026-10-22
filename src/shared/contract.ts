@@ -1278,7 +1278,9 @@ export interface InvokeMap {
   'chat:userEvents': [{ chatId: string; afterSeq?: number }, UserTaskEvents];
   'chat:synthesize': [{ runId: string }, void];
   'memory:reviewList': [{ asOf?: string } | undefined, MemoryReviewRecord[]];
-  'memory:confirm': [{ expectedRoot: string; id: string; evidence: string }, MemoryReviewRecord];
+  /** keep: the user's answer when confirmed facts say something else (new = replace them, both = keep them too), on the
+   *  fact ids they saw (memory-records.ts confirmMemory) */
+  'memory:confirm': [{ expectedRoot: string; id: string; evidence: string; keep?: 'new' | 'both'; conflicts?: string[] }, MemoryReviewRecord];
   'memory:retract': [{ expectedRoot: string; id: string; reason: string }, MemoryReviewRecord];
   'memory:delete': [{ expectedRoot: string; id: string }, void];
   'learning:evidence': [{ runId: string; expectedRoot: string }, LearningEvidence];

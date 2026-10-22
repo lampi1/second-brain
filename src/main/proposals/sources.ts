@@ -12,9 +12,9 @@ import type { BrainChange } from '../../shared/brain-model';
 import type { ChatSummary, LearnAction, LearnResult, SettingProposal } from '../../shared/contract';
 import type { MemoryReviewRecord, SkillCandidateView } from '../../shared/learning-review';
 import type { ApprovalItem as PulseApproval, PulseResult } from '../../shared/pulse';
-import type { Proposal, ProposalDecision, ProposalFact, ProposalProvenance, ProposalSource, ProposalWho } from '../../shared/proposals';
+import type { Proposal, ProposalAsk, ProposalCode, ProposalDecision, ProposalKeep, ProposalFact, ProposalProvenance, ProposalSource, ProposalWho } from '../../shared/proposals';
 import { isRoleId } from '../../shared/roles';
-import type { StoredChange } from '../brainmodel/changes';
+import type { FileSnapshot, StoredChange } from '../brainmodel/changes';
 
 /** Changes older than this are history, not news: they stay in the change log only. */
 export const CHANGE_WINDOW_MS = 14 * 86_400_000;
@@ -27,7 +27,7 @@ export interface ProposalPorts {
   now(): number;
   runs(): readonly AgentRun[];
   chats(): readonly ChatSummary[];
-  memory?: { list(): MemoryReviewRecord[] | Promise<MemoryReviewRecord[]>; confirm(id: string, evidence: string): Promise<unknown>; retract(id: string, reason: string): Promise<unknown> };
+  memory?: { list(): MemoryReviewRecord[] | Promise<MemoryReviewRecord[]>; confirm(id: string, evidence: string, choice?: { keep: ProposalKeep; ids: string[] }): Promise<unknown>; retract(id: string, reason: string): Promise<unknown> };
   candidates?: { list(): SkillCandidateView[] | Promise<SkillCandidateView[]>; promote(name: string, digest: string, replayId: string, exampleRunId: string): unknown };
   changes?: { list(): BrainChange[]; stored(): StoredChange[]; rollback(id: string): unknown };
   settings?: { pending(): SettingProposal[]; confirm(id: string, accept: boolean): unknown };
@@ -44,7 +44,7 @@ export interface Source {
   id: ProposalSource;
   available(p: ProposalPorts): boolean;
   list(p: ProposalPorts): Promise<Proposal[]>;
-  decide(p: ProposalPorts, card: Proposal, decision: ProposalDecision, note?: string): Promise<void>;
+  decide(p: ProposalPorts, card: Proposal, decision: ProposalDecision, note?: string, keep?: ProposalKeep): Promise<void>;
 }
 
 const iso = (ms: number): string => new Date(Number.isFinite(ms) ? ms : 0).toISOString();
@@ -70,6 +70,31 @@ function chatWho(p: ProposalPorts, chatId: string | undefined): { who: ProposalW
   return { who: roleWho(role, { kind: 'app', id: 'agent' }), chat: { id: c.id, title: c.title } };
 }
 function card(source: ProposalSource, id: string, x: Omit<Proposal, 'id' | 'source'>): Proposal { return { id: `${source}:${id}`, source, ...x }; }
+/** A script or a saved query a change wrote (or removed), with its code: scripts/<name>.<ext> as it is, a query note
+ *  (queries/<name>.md, ADR 0124) by its fenced block. */
+const CODE_FILE = /(?:^|[\\/])(scripts|queries)[\\/][^\\/]+$/;
+const LANG: Readonly<Record<string, string>> = { mjs: 'javascript', cjs: 'javascript', js: 'javascript', ts: 'typescript', py: 'python', sh: 'bash', ps1: 'powershell', psm1: 'powershell', bat: 'bat', cmd: 'bat', sql: 'sql', kql: 'kql', graphql: 'graphql', gql: 'graphql' };
+export const MAX_CODE = 20_000;
+export function codeOf(files: readonly FileSnapshot[]): ProposalCode[] {
+  return files.flatMap(f => {
+    const dir = CODE_FILE.exec(f.file)?.[1], text = f.after ?? f.before;
+    if (!dir || text === null) return [];
+    const ext = path.extname(f.file).slice(1).toLowerCase(), name = f.file.replace(/^.*[\\/](scripts|queries)[\\/]/, '$1/');
+    if (ext === 'md') {
+      const block = /^(`{3,}|~{3,})([\w+-]*)[^\n]*\n([\s\S]*?)\n\1[ \t]*$/m.exec(text);
+      return block ? [{ file: name, lang: block[2]!.toLowerCase() || 'text', text: clip(block[3]!, MAX_CODE) }] : [{ file: name, lang: 'markdown', text: clip(text, MAX_CODE) }];
+    }
+    return [{ file: name, lang: LANG[ext] ?? (ext || 'text'), text: clip(text, MAX_CODE) }];
+  });
+}
+/** The item a change is about, short: a role id for a role or its memory, a file's name without the folder. */
+function changeAsk(c: BrainChange, code: readonly ProposalCode[]): ProposalAsk {
+  const roleOf = /(?:^|[\\/])agents[\\/]([^\\/]+)[\\/]/.exec(c.target)?.[1];
+  const role = c.kind === 'agent' ? c.target : roleOf;
+  const name = c.target.split(/[\\/]/).pop()!.replace(/\.md$/i, '') || c.target;
+  const what = code.some(x => x.file.startsWith('queries/')) || /(?:^|[\\/])queries[\\/]/.test(c.target) ? 'query' : c.kind;
+  return { kind: 'applied', what, action: c.action, name, ...(role && isRoleId(role) ? { role } : {}) };
+}
 const prov = (x: ProposalProvenance): ProposalProvenance => ({ ...x, evidence: x.evidence.filter(e => !!e && e.trim()).map(e => clip(e.trim())) });
 
 // ── memory facts to confirm ───────────────────────────────────────────────────────────────────────────────────────
@@ -78,21 +103,31 @@ const memory: Source = {
   available: p => !!p.memory,
   async list(p) {
     const rows = await p.memory!.list();
+    const same = (a: MemoryReviewRecord, b: MemoryReviewRecord): boolean => a.scope.roleId === b.scope.roleId && a.scope.userId === b.scope.userId && a.scope.project === b.scope.project
+      && a.scope.repository === b.scope.repository && a.scope.environment === b.scope.environment && a.subject === b.subject && a.predicate === b.predicate;
     return rows.filter(r => r.status === 'proposed').map(r => {
+      // the same check as memory-records.ts memoryConflicts: the card asks replace or keep both before Approva works
+      const conflicts = rows.filter(x => x.memoryId !== r.memoryId && x.memoryId !== r.supersedes && same(x, r) && x.status === 'confirmed' && !x.validTo && x.value !== r.value)
+        .map(x => ({ id: x.memoryId, value: x.value }));
       const { run, chat } = whereFrom(p, r.sourceRunId);
       const scope = Object.entries(r.scope).map(([k, v]) => `${k}: ${v}`).join(' · ');
       const evidence = [run?.report?.summary ?? '', run?.goal ? `${run.goal}` : '', `${r.sourceEventId}`];
       return card('memory', r.memoryId, {
         group: 'fact', applied: false, title: `${r.subject} · ${r.predicate}`, content: r.value,
+        ask: { kind: 'remember', ...(isRoleId(r.scope.roleId) ? { role: r.scope.roleId } : {}), subject: r.subject, predicate: r.predicate,
+          ...(r.scope.project ? { project: r.scope.project } : {}), ...(r.scope.repository ? { repository: r.scope.repository } : {}), ...(r.scope.environment ? { environment: r.scope.environment } : {}),
+          ...(conflicts.length ? { conflicts } : {}) },
         facts: [{ key: 'scope', value: scope }, ...(r.supersedes ? [{ key: 'before' as const, value: r.supersedes }] : [])],
         provenance: prov({ who: roleWho(run?.agentId ?? r.scope.roleId, { kind: 'app', id: 'agent' }), ...(chat ? { chat } : {}), runId: r.sourceRunId, files: ['memory/records.json'], at: r.observedAt, evidence }),
         canApprove: true, canReject: true,
       });
     });
   },
-  async decide(p, c, decision, note) {
+  async decide(p, c, decision, note, keep) {
     const id = native(c), text = note?.trim().replace(/[\x00-\x1f\x7f]+/g, ' ').slice(0, 900);
-    if (decision === 'approve') await p.memory!.confirm(id, text || DECK_EVIDENCE);
+    const conflicts = c.ask.kind === 'remember' ? c.ask.conflicts ?? [] : [];
+    if (decision === 'approve' && conflicts.length && keep !== 'new' && keep !== 'both') throw new Error('Scegli prima cosa fare con quello che ricordava già: sostituirlo o tenerli entrambi.');
+    if (decision === 'approve') await p.memory!.confirm(id, text || DECK_EVIDENCE, ...(conflicts.length && keep ? [{ keep, ids: conflicts.map(x => x.id) }] : []));
     else await p.memory!.retract(id, `Rejected in Memoria → Proposte${text ? `: ${text}` : ''}`);
   },
 };
@@ -115,7 +150,7 @@ const candidate: Source = {
       if (!ready && !undo) return []; // nothing the user could do with it here
       const { run, chat } = whereFrom(p, v.sourceRunIds[0]);
       return [card('candidate', v.name, {
-        group: 'skill', applied: false, title: v.name, content: v.text,
+        group: 'skill', applied: false, title: v.name, content: v.text, ask: { kind: 'skill', name: v.name },
         facts: [{ key: 'version', value: v.digest.slice(0, 12) }, ...(v.sourceRunIds.length ? [{ key: 'cases' as const, value: String(v.sourceRunIds.length) }] : [])],
         provenance: prov({ who: roleWho(run?.agentId, { kind: 'maintenance', id: 'repeated-task' }), ...(chat ? { chat } : {}), ...(v.sourceRunIds[0] ? { runId: v.sourceRunIds[0] } : {}),
           files: origin?.files.map(f => f.file) ?? [], at: iso(origin?.at ?? p.now()), evidence: [origin?.reason ?? '', ...v.sourceRunIds.map(id => `run ${id}`)] }),
@@ -142,13 +177,14 @@ const change: Source = {
     const since = p.now() - CHANGE_WINDOW_MS, stored = p.changes!.stored();
     const candidates = new Set((await p.candidates?.list() ?? []).map(c => c.name));
     return p.changes!.list().filter(c => c.at >= since && !c.rolledBackAt && !FORMAT_JOBS.includes(c.job) && !p.reviewed.has(c.id)).flatMap(c => {
-      const files = stored.find(s => s.id === c.id)?.files.map(f => f.file) ?? [];
+      const snaps = stored.find(s => s.id === c.id)?.files ?? [], files = snaps.map(f => f.file);
       // a skill candidate is its own card (Approva / Rifiuta), never twice
       if (files.some(isCandidateFile) || (c.job === 'repeated-task' && candidates.has(c.target))) return [];
-      const group = c.kind === 'skill' ? 'skill' : c.kind === 'rule' ? 'rule' : c.kind === 'memory' ? 'fact' : 'role';
+      const code = codeOf(snaps), ask = changeAsk(c, code);
+      const group = ask.kind === 'applied' && (ask.what === 'script' || ask.what === 'query') ? 'script' : c.kind === 'skill' ? 'skill' : c.kind === 'rule' ? 'rule' : c.kind === 'memory' ? 'fact' : 'role';
       const facts: ProposalFact[] = [{ key: 'action', value: c.action }, { key: 'target', value: c.target }];
       return [card('change', c.id, {
-        group, applied: true, title: c.summary, content: c.reason, facts,
+        group, applied: true, title: c.summary, content: c.reason, facts, ask, ...(code.length ? { code } : {}),
         provenance: prov({ who: { kind: 'maintenance', id: c.job }, files: files.length ? files : c.kind === 'rule' || c.kind === 'memory' ? [c.target] : [], at: iso(c.at), evidence: c.evidence }),
         canApprove: true, canReject: c.canRollback, ...(c.canRollback ? {} : { blocked: ['changed-since'] }),
       })];
@@ -169,7 +205,7 @@ const setting: Source = {
     return p.settings!.pending().map(s => {
       const { who, chat } = chatWho(p, s.chatId);
       return card('setting', s.id, {
-        group: 'setting', applied: false, title: s.label, content: s.reason ?? '',
+        group: 'setting', applied: false, title: s.label, content: s.reason ?? '', ask: { kind: 'setting', label: s.label, before: valueText(s.before), after: valueText(s.after) },
         facts: [{ key: 'target', value: s.key }, { key: 'before', value: valueText(s.before) }, { key: 'after', value: valueText(s.after) }],
         provenance: prov({ who, ...(chat ? { chat } : {}), at: iso(s.at), evidence: [s.reason ?? ''] }),
         canApprove: true, canReject: true,
@@ -190,6 +226,7 @@ const trial: Source = {
       const evaluation = snapshot?.evaluations.find(e => e.agentId === r.id && e.version === t.version)?.result;
       return card('trial', r.id, {
         group: 'role', applied: true, title: r.name, content: advice?.reason ?? evaluation?.reason ?? '',
+        ask: { kind: 'trial', role: r.id, version: t.version, baseline: t.baseline, ...(advice ? { advice: advice.kind } : {}) },
         facts: [{ key: 'version', value: `v${t.version}` }, { key: 'before', value: `v${t.baseline}` }, ...(r.tier ? [{ key: 'tier' as const, value: r.tier }] : []), ...(advice ? [{ key: 'action' as const, value: advice.kind }] : [])],
         provenance: prov({ who: { kind: 'app', id: 'lifecycle' }, at: iso(t.startedAt), evidence: [advice?.reason ?? '', ...(advice?.evidence ?? []).map(e => `${e.kind} ${e.ref}`)] }),
         canApprove: true, canReject: true,
@@ -209,6 +246,7 @@ const tier: Source = {
       const run = x.evidence.find(e => e.kind === 'run')?.ref, { chat } = whereFrom(p, run);
       return card('tier', x.key, {
         group: 'role', applied: false, title: names, content: x.reason,
+        ask: { kind: 'tier', roles: x.agentIds, ...(before ? { before } : {}), ...(x.tier ? { tier: x.tier } : {}), skills: x.skills ?? [] },
         facts: [...(before ? [{ key: 'before' as const, value: before }] : []), ...(x.tier ? [{ key: 'tier' as const, value: x.tier }] : []), ...(x.skills?.length ? [{ key: 'target' as const, value: x.skills.join(', ') }] : [])],
         provenance: prov({ who: { kind: 'app', id: 'lifecycle' }, ...(chat ? { chat } : {}), ...(run ? { runId: run } : {}), at: iso(x.at), evidence: [x.reason, ...x.evidence.map(e => `${e.kind} ${e.ref}`)] }),
         canApprove: true, canReject: true,
@@ -225,7 +263,7 @@ const pulse: Source = {
   async list(p) {
     const rows = await p.pulse!.list();
     return (Array.isArray(rows) ? rows : []).filter(x => x?.state === 'pending').map(x => card('pulse', x.id, {
-      group: 'rule', applied: false, title: x.title, content: x.text, facts: [{ key: 'target', value: x.agentId }],
+      group: 'rule', applied: false, title: x.title, content: x.text, facts: [{ key: 'target', value: x.agentId }], ask: { kind: 'rule', role: x.agentId },
       provenance: prov({ who: { kind: 'role', id: 'pulse' }, at: iso(x.createdAt), evidence: x.evidence.map(e => `${e}`) }),
       canApprove: true, canReject: true,
     }));
@@ -253,8 +291,10 @@ const policy: Source = {
         ...(typeof ev.shared === 'number' ? [{ key: 'cases' as const, value: String(ev.shared) }] : []),
         ...(typeof diff.mean === 'number' ? [{ key: 'gain' as const, value: `${(diff.mean as number).toFixed(3)} [${Number(diff.lo).toFixed(3)}, ${Number(diff.hi).toFixed(3)}]` }] : [])];
       const at = typeof pend.at === 'string' && Number.isFinite(Date.parse(pend.at)) ? pend.at : iso(p.now());
+      const name = typeof pend.name === 'string' && pend.name ? pend.name : String(pend.id);
       return card('policy', String(pend.id), {
-        group: 'learning', applied: false, title: typeof pend.name === 'string' && pend.name ? pend.name : String(pend.id), content: '', facts,
+        group: 'learning', applied: false, title: name, content: '', facts,
+        ask: { kind: 'policy', domain: String(x.domain), name, ...(typeof x.version === 'number' ? { from: x.version, to: x.version + 1 } : {}), ...(typeof ev.shared === 'number' ? { cases: ev.shared } : {}) },
         provenance: prov({ who: { kind: 'app', id: 'improve' }, at: new Date(at).toISOString(), evidence: [] }),
         canApprove: true, canReject: true,
       });

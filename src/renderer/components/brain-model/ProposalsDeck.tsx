@@ -1,18 +1,19 @@
 // Memoria → Proposte (ADR 0123): every item the app puts in front of the user, one card at a time, newest first. Drag
 // the top card (pointer events: right = approve or keep, left = reject or undo, with its stamp while dragging, a threshold
 // and a spring back), or the round buttons under it, or ← / →; Z or Ctrl+Z takes the last decision back while it is held
-// (lib/proposals.ts). Each card: its kind, the title, the content (expandable), who proposed it, in which chat or run,
+// (lib/proposals.ts). Each card: its kind, a plain question with what each answer does (ADR 0126, lib/proposal-ask.ts),
+// the content and any script or query code (expandable), who proposed it, in which chat or run,
 // when, and the evidence, with links to the chat and the file. Filter chips by group with their counts; a done state
 // with the session's counts and an empty state. Decisions go to main (proposals:decide), which checks them again and
 // runs them through their own source. Rendered by MemoryPage.tsx (the Proposte tab).
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import type { Proposal, ProposalDecision, ProposalGroup } from '@shared/proposals';
+import type { Proposal, ProposalDecision, ProposalGroup, ProposalKeep } from '@shared/proposals';
 import { characterOf } from '@shared/characters';
 import { roleName } from '@shared/roles';
 import { t, locale } from '../../i18n';
 import { renderMarkdown } from '../../lib/markdown';
 import { canUndo, decide, dismissRefusal, groupCounts, openCards, refreshProposals, tally, undoLast, useDeck } from '../../lib/proposals';
-import { proposalTitle } from '../../lib/proposal-title';
+import { cardWords } from '../../lib/proposal-ask';
 import { go, openChatRef, openFileViewer } from '../../actions';
 import { app } from '../../store/store';
 import { AgentAvatar } from '../AgentAvatar';
@@ -43,6 +44,8 @@ const factValue = (c: Proposal, key: string, value: string): string => {
 };
 const labels = (c: Proposal) => (c.applied ? { yes: t('proposals.keep'), no: t('proposals.undo'), yesStamp: t('proposals.stamp.keep'), noStamp: t('proposals.stamp.undo') }
   : { yes: t('proposals.approve'), no: t('proposals.reject'), yesStamp: t('proposals.stamp.approve'), noStamp: t('proposals.stamp.reject') });
+/** The card's kind chip: a query change says «Query», not «Script». */
+const kindLabel = (c: Proposal): string => (c.ask.kind === 'applied' && c.ask.what === 'query' ? t('proposals.kind.query') : t(`proposals.kind.${c.group}`));
 const blockedText = (code: string): string => (code === 'changed-since' ? t('proposals.blocked.changed-since') : (['missing-provenance', 'invalid-steps', 'missing-verified-example', 'missing-holdout-replay', 'already-promoted'] as const).includes(code as never) ? t(`lr.problem.${code as 'missing-provenance'}`) : t('lr.problem.unknown'));
 /** A skill draft's header (--- name / description ---) apart from its body: the description is the card's lead. */
 export function splitHeader(md: string): { lead: string; body: string } {
@@ -68,35 +71,37 @@ function WhoAvatar({ c, size = 34 }: { c: Proposal; size?: number }) {
 }
 
 export interface CardHandle { fling(d: ProposalDecision): void }
-interface CardProps { card: Proposal; depth: number; returning: 'left' | 'right' | null; onDecide(d: ProposalDecision, note?: string): void; onBlocked(text: string): void }
+interface CardProps { card: Proposal; depth: number; returning: 'left' | 'right' | null; onDecide(d: ProposalDecision, note?: string, keep?: ProposalKeep): void; onBlocked(text: string): void }
 
 /** One card; only the top one (depth 0) moves. */
 export const ProposalCard = forwardRef<CardHandle, CardProps>(function ProposalCard({ card: c, depth, returning, onDecide, onBlocked }, ref) {
   const [drag, setDrag] = useState<{ dx: number; dy: number } | null>(null);
   const [leaving, setLeaving] = useState<ProposalDecision | null>(null);
-  const [open, setOpen] = useState(false), [read, setRead] = useState(false), [note, setNote] = useState(''), [shake, setShake] = useState(0);
+  const [open, setOpen] = useState(false), [read, setRead] = useState(false), [note, setNote] = useState(''), [shake, setShake] = useState(0), [keep, setKeep] = useState<ProposalKeep | null>(null);
+  const conflicts = c.ask.kind === 'remember' ? c.ask.conflicts ?? [] : [];
   const el = useRef<HTMLElement>(null), start = useRef<{ x: number; y: number; t: number; id: number } | null>(null);
   const top = depth === 0, l = labels(c);
   const why = (d: ProposalDecision): string | null => {
     if (d === 'approve' && !c.canApprove) return c.blocked?.map(blockedText).join(' ') || t('proposals.blocked.title');
     if (d === 'reject' && !c.canReject) return c.blocked?.map(blockedText).join(' ') || t('proposals.blocked.undoTitle');
     if (d === 'approve' && c.readFirst && !read) return t('proposals.readFirst');
+    if (d === 'approve' && conflicts.length && !keep) return t('proposals.conflict.pick');
     return null;
   };
   const fling = (d: ProposalDecision) => {
     if (leaving) return;
     const no = why(d);
-    if (no) { setDrag(null); setShake(n => n + 1); onBlocked(c.blocked?.length && no !== t('proposals.readFirst') ? (d === 'approve' ? t('proposals.blocked.title') : t('proposals.blocked.undoTitle')) : no); return; }
+    if (no) { setDrag(null); setShake(n => n + 1); onBlocked(c.blocked?.length && no !== t('proposals.readFirst') && no !== t('proposals.conflict.pick') ? (d === 'approve' ? t('proposals.blocked.title') : t('proposals.blocked.undoTitle')) : no); return; }
     setDrag(null); setLeaving(d);
-    const n = note;
-    if (reduced()) onDecide(d, n); else setTimeout(() => onDecide(d, n), FLY_MS);
+    const n = note, k = conflicts.length && d === 'approve' ? keep ?? undefined : undefined;
+    if (reduced()) onDecide(d, n, k); else setTimeout(() => onDecide(d, n, k), FLY_MS);
   };
   useImperativeHandle(ref, () => ({ fling }));
   const width = () => el.current?.offsetWidth ?? 480;
   const threshold = () => Math.max(90, width() * 0.28);
   const onDown = (e: ReactPointerEvent) => {
     if (!top || leaving || e.button !== 0) return;
-    if ((e.target as HTMLElement).closest('button, a, input, textarea, select, summary, .pd-scroll')) return;
+    if ((e.target as HTMLElement).closest('button, a, input, label, textarea, select, summary, .pd-scroll')) return;
     start.current = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId };
     el.current?.setPointerCapture(e.pointerId);
   };
@@ -118,10 +123,15 @@ export const ProposalCard = forwardRef<CardHandle, CardProps>(function ProposalC
     : top ? { transform: `translate(${dx}px, ${drag?.dy ?? 0}px) rotate(${Math.max(-14, Math.min(14, dx * 0.045))}deg)` }
       : { transform: `translateY(${depth * 14}px) scale(${1 - depth * 0.045})`, opacity: depth > 2 ? 0 : 1 - depth * 0.18 };
   const evidence = c.provenance.evidence;
+  // the quote under who proposed it is words, never a bare run id or file:line (those stay in «Mostra tutto»)
+  const quote = evidence.find(e => /\s/.test(e.trim()) && !/^run \S+$/.test(e.trim()));
   const root = app.use(s => s.info?.brainRoot ?? null);
   const files = c.provenance.files ?? [];
-  const { lead, body } = useMemo(() => splitHeader(c.content), [c.content]);
-  const html = useMemo(() => (body ? renderMarkdown(body) : ''), [body]);
+  const words = useMemo(() => cardWords(c, keep), [c, keep]);
+  const { lead: draftLead, body } = useMemo(() => splitHeader(c.content), [c.content]);
+  const lead = words.lead || draftLead;
+  const html = useMemo(() => (body && !words.hideBody ? renderMarkdown(body) : ''), [body, words.hideBody]);
+  const code = c.code ?? [];
   return <article ref={el} className={`pd-card pd-g-${c.group}${top ? ' pd-top' : ''}${drag ? ' pd-dragging' : ''}${leaving ? ' pd-leaving' : ''}${returning && top ? ` pd-return-${returning}` : ''}${open ? ' pd-open' : ''}${shake ? ` pd-shake-${shake % 2}` : ''}`}
     style={{ ...style, zIndex: 10 - depth, ['--k' as string]: String(k) }} aria-hidden={top ? undefined : true}
     data-testid={top ? 'pd-card-top' : undefined} data-card={c.id} data-group={c.group} data-applied={c.applied || undefined}
@@ -131,31 +141,49 @@ export const ProposalCard = forwardRef<CardHandle, CardProps>(function ProposalC
     <span className="pd-stamp pd-stamp-yes" style={{ opacity: Math.max(0, k) }} aria-hidden="true" data-testid={top ? 'pd-stamp-yes' : undefined}>{l.yesStamp}</span>
     <span className="pd-stamp pd-stamp-no" style={{ opacity: Math.max(0, -k) }} aria-hidden="true" data-testid={top ? 'pd-stamp-no' : undefined}>{l.noStamp}</span>
     <header className="pd-card-head">
-      <span className="pd-kind">{t(`proposals.kind.${c.group}`)}</span>
+      <span className="pd-kind">{kindLabel(c)}</span>
       {c.applied && <span className="pd-applied">{t('proposals.applied')}</span>}
       <time className="pd-when" dateTime={c.provenance.at}>{shortWhen(c.provenance.at)}</time>
     </header>
-    <h3 className="pd-title">{proposalTitle(c)}</h3>
+    <h3 className="pd-title" data-testid={top ? 'pd-question' : undefined}>{words.question}</h3>
     <div className={`pd-body${open ? ' pd-scroll' : ''}`}>
+      {code.map(x => <figure key={x.file} className="pd-code" data-testid={top ? 'pd-code' : undefined}>
+        <figcaption><span className="pd-label">{t('proposals.code')}</span><code>{x.file}</code></figcaption>
+        <pre className="pd-scroll" data-lang={x.lang}><code>{x.text}</code></pre>
+      </figure>)}
       {lead && <p className="pd-lead">{lead}</p>}
-      {html && <div className="md pd-md" dangerouslySetInnerHTML={{ __html: html }} />}
-      {c.facts.length > 0 && <dl className="pd-facts">{c.facts.map((f, i) => <div key={i} className={`pd-fact pd-fact-${f.key}`}><dt>{t(`proposals.fact.${f.key}`)}</dt><dd>{factValue(c, f.key, f.value)}</dd></div>)}</dl>}
-      {open && evidence.length > 1 && <ul className="pd-evidence-all">{evidence.slice(1).map((e, i) => <li key={i}>{e}</li>)}</ul>}
+      {html && <div className="pd-why">{words.bodyLabel && <span className="pd-label">{words.bodyLabel}</span>}<div className="md pd-md" dangerouslySetInnerHTML={{ __html: html }} /></div>}
+      {(words.scope || words.advice) && <p className="pd-scope">{[words.scope, words.advice].filter(Boolean).join(' ')}</p>}
+      {open && c.facts.length > 0 && <div className="pd-tech"><span className="pd-label">{t('proposals.details')}</span><dl className="pd-facts">{c.facts.map((f, i) => <div key={i} className={`pd-fact pd-fact-${f.key}`}><dt>{t(`proposals.fact.${f.key}`)}</dt><dd>{factValue(c, f.key, f.value)}</dd></div>)}</dl></div>}
+      {open && evidence.some(e => e !== quote) && <ul className="pd-evidence-all">{evidence.filter(e => e !== quote).map((e, i) => <li key={i}>{e}</li>)}</ul>}
       {open && files.length > 0 && <ul className="pd-files">{files.map(f => <li key={f}><code>{f}</code></li>)}</ul>}
       {open && top && root && c.evidenceRuns?.map(id => <LearningEvidenceInspector key={id} root={root} runId={id} />)}
       {open && top && c.source === 'memory' && <label className="pd-note">{t('proposals.note')}<input value={note} maxLength={900} onChange={e => setNote(e.target.value)} data-testid="pd-note" /></label>}
     </div>
-    {(html.length > 220 || evidence.length > 1 || files.length > 0 || c.readFirst || c.source === 'memory') && top &&
+    {(html.length > 220 || code.length > 0 || c.facts.length > 0 || evidence.some(e => e !== quote) || files.length > 0 || c.readFirst || c.source === 'memory') && top &&
       <button type="button" className="pd-more" aria-expanded={open} data-testid="pd-more" onClick={() => { setOpen(o => !o); setRead(true); }}>
         {open ? t('proposals.less') : c.readFirst && !read ? t('proposals.readFirstOpen') : t('proposals.more')}
       </button>}
+    {conflicts.length > 0 && <fieldset className="pd-conflict" data-testid={top ? 'pd-conflict' : undefined}>
+      <legend>{t('proposals.conflict.title', { who: words.who ?? '', n: conflicts.length })}</legend>
+      <ul>{conflicts.map(x => <li key={x.id}>{x.value}</li>)}</ul>
+      <div className="pd-conflict-choices" role="radiogroup" aria-label={t('proposals.conflict.question')}>
+        {(['new', 'both'] as const).map(k => <label key={k} className={keep === k ? 'on' : ''}>
+          <input type="radio" name={`keep-${c.id}`} value={k} checked={keep === k} disabled={!top} onChange={() => setKeep(k)} data-testid={top ? `pd-keep-${k}` : undefined} />
+          {t(`proposals.conflict.${k}`, { n: conflicts.length })}</label>)}
+      </div>
+    </fieldset>}
+    <dl className="pd-answers" data-testid={top ? 'pd-answers' : undefined}>
+      <div className="pd-answer pd-answer-yes"><dt>{t('proposals.ifYes', { yes: l.yes })}</dt><dd>{words.yes}</dd></div>
+      <div className="pd-answer pd-answer-no"><dt>{t('proposals.ifNo', { no: l.no })}</dt><dd>{words.no}</dd></div>
+    </dl>
     {c.blocked && <p className="pd-blocked" role="note">{c.blocked.map(blockedText).join(' ')}</p>}
     <footer className="pd-prov" data-testid={top ? 'pd-provenance' : undefined}>
       <div className="pd-who"><WhoAvatar c={c} />
         <p><b>{t('proposals.from', { who: whoName(c) })}</b>{c.provenance.chat && c.provenance.chat.title !== whoName(c) && <> · <span className="pd-chat">{t('proposals.inChat', { title: c.provenance.chat.title })}</span></>}
           {!c.provenance.chat && c.provenance.runId && <> · <span>{t('proposals.run', { id: c.provenance.runId })}</span></>} · <time dateTime={c.provenance.at}>{shortWhen(c.provenance.at)}</time></p>
       </div>
-      {evidence[0] && <blockquote className="pd-quote" title={t('proposals.evidence')}>{evidence[0]}</blockquote>}
+      {quote && <blockquote className="pd-quote" title={t('proposals.evidence')}>{quote}</blockquote>}
       {top && (c.provenance.chat || files[0]) && <div className="pd-links">
         {c.provenance.chat && <button type="button" className="pd-link" onClick={() => openChatRef(c.provenance.chat!.id)}>{t('proposals.openChat')} ↗</button>}
         {files[0] && <button type="button" className="pd-link" onClick={() => openFileViewer(absolute(files[0]!))}>{t('proposals.openFile')} ↗</button>}
@@ -198,7 +226,7 @@ export function ProposalsDeck() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
-  const onDecide = (card: Proposal) => (d: ProposalDecision, note?: string) => { setReturning(null); decide(card, d, note); };
+  const onDecide = (card: Proposal) => (d: ProposalDecision, note?: string, keep?: ProposalKeep) => { setReturning(null); decide(card, d, note, keep); };
 
   if (!s.data && s.loading) return <section className="pd pd-center" data-testid="proposals-deck"><p className="pd-muted">{t('proposals.loading')}</p></section>;
   if (!s.data && s.error) return <section className="pd pd-center" data-testid="proposals-deck"><p role="alert">{t('proposals.error', { error: s.error })}</p><button type="button" className="btn btn-s" onClick={() => void refreshProposals()}>{t('proposals.retry')}</button></section>;
@@ -250,7 +278,7 @@ export function ProposalsDeck() {
           </div>
           {showRejected && <ul className="pd-rejected" aria-label={t('proposals.done.rejectedList')} data-testid="pd-rejected-list">{sum.rejectedCards.map(c => <li key={c.id} className={`pd-g-${c.group}`}>
             <WhoAvatar c={c} size={28} />
-            <div className="pd-rej-main"><span><span className="pd-kind">{t(`proposals.kind.${c.group}`)}</span><b title={proposalTitle(c)}>{proposalTitle(c)}</b></span>
+            <div className="pd-rej-main"><span><span className="pd-kind">{kindLabel(c)}</span><b title={cardWords(c).question}>{cardWords(c).question}</b></span>
               <small>{t('proposals.from', { who: whoName(c) })} · {shortWhen(c.provenance.at)}</small></div>
             {c.provenance.chat ? <button type="button" className="pd-link" onClick={() => openChatRef(c.provenance.chat!.id)}>{t('proposals.openChat')} ↗</button> : <span />}
           </li>)}</ul>}
