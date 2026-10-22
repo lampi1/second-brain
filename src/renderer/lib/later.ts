@@ -1,5 +1,5 @@
 // Request-local postponement: Esc parks only the chosen request; new requests remain eligible for popups.
-// Pending data stays in the normal store. Opening the queue or enabling popups makes postponed requests visible again.
+// Pending data stays in the normal store. Opening the queue makes postponed requests visible again.
 // Used by QuestionsWindow, the global layer, and request navigation. The former persisted global quiet flag is retired.
 // A Strategist's plan to approve (lib/plan-ask.ts) is postponed the same way, by its key.
 import { sb } from '../sb';
@@ -23,11 +23,8 @@ export function resumeQuestions():void {
 /** Remove the old restart-wide silence; retain only still-open postponed request keys during this session. */
 export function startLater():void {
   void sb.invoke('later:set',{on:false}).catch(()=>{});
-  let enabled = app.get().settings?.questionsModal === true;
   app.subscribe(()=>{
-    const s=app.get(),next=s.settings?.questionsModal===true;
-    if(next&&!enabled){enabled=next;resumeQuestions();return;}
-    enabled=next;
+    const s=app.get();
     const keys=new Set([...s.pending.map(keyOf),...planAskKeys(s)]);
     let changed=false;
     for(const key of postponed)if(!keys.has(key)){postponed.delete(key);changed=true;}

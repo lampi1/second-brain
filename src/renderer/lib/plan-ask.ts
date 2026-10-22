@@ -1,8 +1,7 @@
-// A Strategist's plan waiting for the user's ok, as one more request of the questions window (ADR 0121): with "Popup" on
-// (settings questionsModal) a plan in phase "proposed" opens there like the other questions, its steps on a card
+// A Strategist's plan waiting for the user's ok, as one more request of the questions window (ADR 0121, always on): a
+// plan in phase "proposed" opens there like the other questions, its steps on a card
 // (PlanApproval.tsx) with «Approva e parti» and «Cambia qualcosa»; the strip then only points to it. The plan itself
-// stays ChatSummary.plan (shared/strategy.ts): no request is made in main, so an answer anywhere (the window, the strip
-// once "Popup" is off, a restart) moves the plan's phase and the card leaves by itself, never twice. Its key carries the
+// stays ChatSummary.plan (shared/strategy.ts): no request is made in main, so an answer anywhere (the window, a restart) moves the plan's phase and the card leaves by itself, never twice. Its key carries the
 // plan's `at`, the proposal the user reads (chat:plan refuses a newer one). Used by QuestionsWindow.tsx, lib/later.ts
 // and StrategyPanel.tsx.
 import type { ChatSummary } from '@shared/contract';

@@ -115,7 +115,7 @@ html[data-blink="1"] .pill-dot { opacity: 0.35; } /* lib/beat.ts */
 /* 4 the usage strip without Cursor (still in its panel); 5 the popups switch and the connectors without
    their words (the switch and the dots stay) */
 .topbar[data-fit~="4"] [data-testid="usage-cursor"], .topbar[data-fit~="4"] .usagebar .ub-sep:has(+ [data-testid="usage-cursor"]) { display: none; }
-.topbar[data-fit~="5"] .popups-label, .topbar[data-fit~="5"] .connectors-label, .topbar[data-fit~="5"] .connector-mark small { display: none; }
+.topbar[data-fit~="5"] .connectors-label, .topbar[data-fit~="5"] .connector-mark small { display: none; }
 /* the language switch (LangSwitch.tsx, ADR 0120): globe + code like the CLI marks; 6 = the code only, a square button */
 .lang-btn { height: 32px; min-width: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 0 8px; border-radius: var(--r-s); border: 0; background: transparent; color: var(--text-3); cursor: pointer; flex: none; }
 .lang-btn:hover, .lang-btn[aria-expanded="true"] { background: var(--surface-2); color: var(--text); }
@@ -126,17 +126,11 @@ html[data-blink="1"] .pill-dot { opacity: 0.35; } /* lib/beat.ts */
 /* 6 the narrowest windows: the search is its icon (Ctrl+K still opens it) and the actions sit closer */
 .topbar[data-fit~="6"] .search .keys { display: none; }
 .topbar[data-fit~="6"], .topbar[data-fit~="6"] .topbar-main, .topbar[data-fit~="6"] .topbar-end { gap: 6px; }
-/* the full-screen popups switch and the connectors (SPEC 21) */
-.popups-switch, .connectors-btn { gap: 7px; }
-.popups-track { position: relative; width: 26px; height: 15px; border-radius: 8px; background: var(--border-3); flex: none; transition: background var(--dur-fast); }
-.popups-knob { position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: var(--text-2); transition: transform var(--dur-fast), background var(--dur-fast); }
-.popups-switch.on .popups-track { background: var(--blue); }
-.popups-switch.on .popups-knob { transform: translateX(11px); background: #fff; }
-.popups-label b { font-weight: 600; }
+/* the connectors (SPEC 21) */
+.connectors-btn { gap: 7px; }
 .connector-mark { display: inline-flex; align-items: center; gap: 4px; }
 .connector-mark small { font-size: 11.5px; color: var(--text-2); }
 .cli-dot.warn { background: var(--amber); }
-@media (prefers-reduced-motion: reduce) { .popups-track, .popups-knob { transition: none; } }
 .topbar[data-fit~="1"] .new-browser > span { display: none; }
 .brand { display: flex; align-items: center; gap: 9px; font: 600 14px var(--font-display); letter-spacing: -0.005em; padding-right: 4px; white-space: nowrap; }
 

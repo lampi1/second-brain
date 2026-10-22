@@ -2,7 +2,7 @@
 // too), optionally in the demo (SB_DEMO=1, frozen = SB_DEMO_FREEZE=1) at a fixed window size and color scheme, wait
 // until it is settled (data loaded, clock frozen, browser snapshots in), read what the UI reported to main for the
 // browser views (globalThis.__sbDemo, demo only) and save screenshots in test-results/shots/. A spec may seed the
-// fresh profile's settings (`config`, e.g. questionsModal). The Orchestrator column is always open (ADR 0068); `orchestrator: true` waits for its chat.
+// fresh profile's settings (`config`, e.g. theme). The Orchestrator column is always open (ADR 0068); `orchestrator: true` waits for its chat.
 import { _electron as electron, expect, type ElectronApplication, type Locator, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';

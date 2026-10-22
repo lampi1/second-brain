@@ -1,4 +1,4 @@
-// The questions window ("Domande in finestra", settings questionsModal; the user, 2026-10-12): with the switch on,
+// The questions window (the user, 2026-10-12; always on since 2026-10-22, the owner: "popup sempre attivi"):
 // every open question, permission and command shows here, in front of everything (the Orchestrator overlay too, under the
 // dialogs), one at a time as a page read top to bottom (ADR 0049, the user 2026-10-14: "non lo trovo molto leggibile"):
 // who asks, a muted lead (context), the question large, a text to approve as a document, the options as large cards
@@ -9,20 +9,17 @@
 // they type a request waits as a pill, and when it shows it takes the keyboard only if no other field has it (a note
 // says so; Ctrl+J or a click anywhere on it, backdrop too, moves it here). Esc or "Rispondi dopo" turns "Rispondi dopo"
 // on that request (lib/later.ts): it stays in "Da rispondere", while other and new requests can still appear. The same window
-// is that queue's view: Ctrl+J or the top bar's counter call it with every open request, switch on or off (off: it
-// closes once the queue is empty). One modal, anchored near the top like a command palette: what loads late grows
-// downward and nothing on screen moves. It has no off switch of its own: a "Spegni" in its head, under the pointer when
-// the window popped up, turned the setting off by mistake again and again (the user, 2026-10-16: "è come se a volte si
-// togliesse da sola"); the switch is in Settings, "…" and Ctrl+K only. Answered with the keyboard, the next one takes the keyboard; when it closes,
+// is that queue's view: Ctrl+J or the top bar's counter call it with every open request. One modal, anchored near the top like a command palette: what loads late grows
+// downward and nothing on screen moves. There is no off switch anywhere. Answered with the keyboard, the next one takes the keyboard; when it closes,
 // the keyboard goes back to the field it came from. It renders only on its own requests' changes (selectors return
-// primitives or stable lists; counted in lib/questions.ts qwinStats). With the switch on, a Strategist's plan waiting for
+// primitives or stable lists; counted in lib/questions.ts qwinStats). A Strategist's plan waiting for
 // the user's ok is one more card here (lib/plan-ask.ts, PlanApproval.tsx, ADR 0121), in the order it came, its strip only
 // pointing to it. Mounted by App.tsx; pinned by test/e2e/questions.spec.ts, answer-later.spec.ts, questions-perf.spec.ts,
 // questions-gallery.spec.ts and strategist-plan-popup.spec.ts.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PendingRequest } from '@shared/contract';
 import { focusChat, reqKey } from '../actions';
-import { isEditable, qwinStats, questionsModalOn, typingLeft, writingElsewhere } from '../lib/questions';
+import { isEditable, qwinStats, typingLeft, writingElsewhere } from '../lib/questions';
 import { commandsOfTurn } from '../lib/orchestrator-route';
 import { sameList } from '../store/state';
 import { useApp } from '../store/store';
@@ -40,21 +37,17 @@ import { t } from '../i18n';
 
 /** what the window shows: an open request, or a Strategist's plan to approve */
 type Ask = PendingRequest | PlanAsk;
-const EMPTY: readonly Ask[] = [];
-const NO_KEYS: string[] = [];
 
 export function QuestionsWindow() {
-  const setting = useApp(questionsModalOn);
   const hidden = ui.use(s => s.hidden, sameList);
   const q = ui.use(s => s.qwin);
   const dialog = ui.use(s => s.modal !== null);
   // Postponed requests stay in the store; only those keys are omitted until the queue is explicitly reopened.
-  const on = setting || q.open;
   const allPending = useApp(s => s.pending, sameList);
-  // the plans waiting for the user's ok: only with the switch on (off, they stay on their strips)
-  const planKeys = useApp(s => (setting ? planAskKeys(s) : NO_KEYS), sameList);
+  // the plans waiting for the user's ok
+  const planKeys = useApp(planAskKeys, sameList);
   const plans = useMemo(() => planKeys.map(planAskOf).filter((p): p is PlanAsk => !!p), [planKeys]);
-  const pending: readonly Ask[] = on ? withPlans(allPending, plans).filter(p => !hidden.includes(p.chatId) && !requestPostponed(reqKey(p))) : EMPTY;
+  const pending: readonly Ask[] = withPlans(allPending, plans).filter(p => !hidden.includes(p.chatId) && !requestPostponed(reqKey(p)));
   const queue = [...pending];
   if (q.first) { const i = queue.findIndex(p => reqKey(p) === q.first); if (i > 0) queue.unshift(...queue.splice(i, 1)); }
   const cur = queue[0];
@@ -77,7 +70,7 @@ export function QuestionsWindow() {
   const aside = !!q.aside && onFile;
   useEffect(() => { if (q.aside && !onFile) setQuestionsAside(false); }, [q.aside, onFile]);
   // under a dialog (Ctrl+K) the window stays mounted but hidden: a free answer being typed in it survives
-  const up = on && !!cur && calm && !aside;
+  const up = !!cur && calm && !aside;
   const shown = up && !dialog;
   useEffect(() => { setQuestionsShown(shown); }, [shown]);
   useEffect(() => () => setQuestionsShown(false), []);
@@ -113,12 +106,12 @@ export function QuestionsWindow() {
     if (called || !writingElsewhere()) el.focus({ preventScroll: true });
   }, [shown, curKey, q.call]);
 
-  // the queue called with the switch off: done once it is empty (a later request goes back to the tiles)
+  // the queue called by hand: done once it is empty
   const empty = q.open && !pending.length;
   useEffect(() => { if (empty) parkQuestions(); }, [empty]);
 
-  if (!on || !pending.length || !up) openedAt.current = 0;
-  if (!on || !pending.length) return null;
+  if (!pending.length || !up) openedAt.current = 0;
+  if (!pending.length) return null;
   if (dialog && !up) return null;
   if (!up || !cur) {
     return (
@@ -130,10 +123,10 @@ export function QuestionsWindow() {
     );
   }
   if (!openedAt.current) openedAt.current = performance.now();
-  return <Window cur={cur} all={pending} boxRef={box} hidden={dialog} setting={setting} openedAt={openedAt} />;
+  return <Window cur={cur} all={pending} boxRef={box} hidden={dialog} openedAt={openedAt} />;
 }
 
-function Window({ cur, all, boxRef, hidden, setting, openedAt }: { cur: Ask; all: readonly Ask[]; boxRef: React.RefObject<HTMLDivElement | null>; hidden: boolean; setting: boolean; openedAt: React.RefObject<number> }) {
+function Window({ cur, all, boxRef, hidden, openedAt }: { cur: Ask; all: readonly Ask[]; boxRef: React.RefObject<HTMLDivElement | null>; hidden: boolean; openedAt: React.RefObject<number> }) {
   const [keysEl, setKeysEl] = useState<HTMLSpanElement | null>(null);
   qwinStats.renders++;
   // primitives only: the asking chat's other changes (cost, last line) do not render the window
@@ -218,7 +211,7 @@ function Window({ cur, all, boxRef, hidden, setting, openedAt }: { cur: Ask; all
             <span className="qwin-age">{ago(cur.at, now)}</span>
             <span className="sp" />
             {!isOrchestrator && (
-              <button type="button" className="btn btn-subtle btn-s" onClick={() => { if (setting) later(); else parkQuestions(); focusChat(cur.chatId); }} data-testid="qwin-open-chat">{t('chat.questions.openChat')} <IconArrowRight size={12} /></button>
+              <button type="button" className="btn btn-subtle btn-s" onClick={() => { later(); focusChat(cur.chatId); }} data-testid="qwin-open-chat">{t('chat.questions.openChat')} <IconArrowRight size={12} /></button>
             )}
           </div>
           {noteSlot && !elsewhere && <div className="qwin-note gone" aria-hidden="true" data-testid="qwin-elsewhere-slot">{t('chat.questions.note')} <Keys combo="Ctrl+J" /> {t('chat.questions.note2')}</div>}

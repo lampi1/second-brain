@@ -1,25 +1,19 @@
 // App-page side of the global layer (main/overlay.ts shows it above everything, browser tiles included). The app page
-// is the one source of truth. Tier a: the open questions/permissions NOT already visible somewhere on screen (needs
-// lane, the chat's own tile, the Orchestrator's decision), oldest first; requests postponed with "Rispondi dopo" stay
-// in "Da rispondere" (lib/later.ts); cards also wait while another request popup is on screen (the Orchestrator widget's card, the questions window): at most one popup at a
-// time (the user, 2026-10-13: two popups of questions at once, one of them "appeso" on the Orchestrator). Tier b: important events
+// is the one source of truth. Requests no longer float here: every open question, permission and command is answered
+// in the questions window (QuestionsWindow.tsx, always on since 2026-10-22). What stays: important events
 // (lib/notify.ts TOAST_KINDS) as at most two grouped toasts with one action, unless muted or do-not-disturb; they
-// leave after 8 s. No waiting strip: what waits is counted by the top bar's "Da rispondere" (the user, 2026-10-14:
-// "c'è già in alto il «da rispondere» che va benissimo quello"). All stay off the Orchestrator widget's corner (`avoid`, ADR 0028). A DevOps alert plays a short chime as it arrives (feed:events,
-// lib/chime.ts, setting tasks.sound), and so does every new request, "Rispondi dopo" or not (ADR 0035). The model is pushed to main only when it changes. What the user does in the layer comes back here
-// as overlay:action and goes through the same actions as everywhere else. Started by main.tsx; Ctrl+J uses focusLayer().
+// leave after 8 s, off the Orchestrator widget's corner (`avoid`, ADR 0028). A DevOps alert plays a short chime as it
+// arrives (feed:events, lib/chime.ts, setting tasks.sound), and so does every new request (ADR 0035). The model is pushed
+// to main only when it changes; what the user does in the layer comes back as overlay:action. Started by main.tsx.
 import type { OverlayAction, OverlayCard, OverlayModel, OverlayToast } from '@shared/contract';
-import { chatName } from '@shared/orchestrator';
 import { sb } from '../sb';
-import { app, answer, attemptOf, dismissCommand, dndActive, runCommand } from '../store/store';
+import { app, answer, dismissCommand, dndActive, runCommand } from '../store/store';
 import { dismissEventToasts, setLayerHeld, setRead, ui } from '../store/ui';
-import { answerLater, openQueue, requestPostponed } from './later';
+import { answerLater, openQueue } from './later';
 import { now } from './clock';
 import { columnSize, viewport } from './orchestrator-dock';
-import { questionsModalOn } from './questions';
 import { linkOfEvent, markRead, toastGroups, type ToastGroup } from './notify';
 import { playChime, requestChimes, toChime } from './chime';
-import { engineOf } from './engines';
 import { lang, t } from '../i18n';
 
 const TOAST_MS = 8000;
@@ -35,62 +29,13 @@ const toneOf = (kind: string): OverlayToast['tone'] => (kind === 'error' || kind
 const keyOf = (r: { chatId: string; id: string }) => `${r.chatId}/${r.id}`;
 let last = '';
 let current: OverlayModel = { cards: [], waiting: 0, theme: 'system', density: 'comfortable' };
-let focusKey: string | undefined;
-let nonce = 0;
 let timer: ReturnType<typeof setTimeout> | null = null;
 
-/** Is this request panel on screen in the app page? */
-function onScreen(el: HTMLElement): boolean {
-  const r = el.getBoundingClientRect();
-  if (r.width < 4 || r.height < 4 || r.right <= 0 || r.bottom <= 0 || r.left >= window.innerWidth || r.top >= window.innerHeight) return false;
-  // inside a list that scrolls (a tile's requests): scrolled out of it is not on screen
-  const box = el.closest<HTMLElement>('.tile-requests')?.getBoundingClientRect();
-  return !(box && (r.bottom <= box.top || r.top >= box.bottom));
-}
-
-/** Request keys whose panel is on screen in the app page (and not under a dialog). */
-export function visibleRequestKeys(): Set<string> {
-  const out = new Set<string>();
-  if (ui.get().modal) return out; // a dialog covers the page: nothing below it counts as visible
-  if (!app.get().pending.length) return out; // no request anywhere: no panel to look for (and no forced layout)
-  for (const el of document.querySelectorAll<HTMLElement>('[data-request-key]')) if (onScreen(el)) out.add(el.dataset.requestKey ?? '');
-  // a collapsed Grindhouse strip shows its requests as its "waits for you" pill: on screen, they do not float
-  for (const el of document.querySelectorAll<HTMLElement>('[data-waits-keys]')) if (onScreen(el)) for (const k of (el.dataset.waitsKeys ?? '').split(' ')) if (k) out.add(k);
-  return out;
-}
-
-/** The key of the request card the Orchestrator widget shows on screen (it floats like the layer), if any. */
-export function orchestratorCardOnScreen(): string | null {
-  if (ui.get().modal || !app.get().pending.length) return null;
-  const el = [...document.querySelectorAll<HTMLElement>('[data-orchestrator-overlay] [data-request-key]')].find(onScreen);
-  return el?.dataset.requestKey ?? null;
-}
-
-/** A request popup is on screen in the app page: the Orchestrator widget's card or the questions window. Then the layer shows
- *  no card: never two popups at once. */
-export const popupOnScreen = (): boolean => ui.get().qwin.shown || orchestratorCardOnScreen() !== null;
-
-/** Would this request float in the layer, were no other popup on screen? (Ctrl+J to it: the popup moves there.) */
-export const floatsBehindPopup = (key: string): boolean => computeModel(true).cards.some(c => c.key === key);
-
-export function computeModel(ignorePopup = false): OverlayModel {
+export function computeModel(): OverlayModel {
   const s = app.get();
   const u = ui.get();
-  const visible = visibleRequestKeys();
+  // every request is answered in the questions window (always on since 2026-10-22): the layer keeps only the toasts
   const cards: OverlayCard[] = [];
-  // "Domande in finestra": the questions window shows them all (QuestionsWindow.tsx), the layer keeps only the toasts;
-  // the same while the Orchestrator widget shows a request card (one popup at a time), unless the user is answering here
-  // (the layer has the keyboard on a card still open: the Orchestrator's card waits instead, OrchestratorTile.tsx)
-  const held = !!u.layerHeld && s.pending.some(p => keyOf(p) === u.layerHeld);
-  for (const req of questionsModalOn(s) || (!ignorePopup && !held && popupOnScreen()) ? [] : s.pending) {
-    const key = keyOf(req);
-    if (requestPostponed(key) || u.hidden.includes(req.chatId) || visible.has(key)) continue;
-    const c = s.chats[req.chatId];
-    cards.push({ key, req, chatTitle: c ? chatName(c) : 'Chat', harness: c?.harness ?? 'claude', engine: (c && engineOf(c.harness)) ?? null, isOrchestrator: !!c?.isOrchestrator, attempt: attemptOf(key) });
-  }
-  if (focusKey && !cards.some(c => c.key === focusKey)) focusKey = undefined;
-  // the card the keyboard is sent to (Ctrl+J) is the one shown in full
-  if (focusKey) { const i = cards.findIndex(c => c.key === focusKey); if (i > 0) cards.unshift(...cards.splice(i, 1)); }
   const at = now();
   if (!atStart && s.ready) atStart = new Set(s.feed.map(e => e.id));
   groups = toastGroups(atStart ? s.feed.filter(e => !atStart!.has(e.id)) : [], {
@@ -106,7 +51,7 @@ export function computeModel(ignorePopup = false): OverlayModel {
   const reserve = { right: size.w, bottom: 0, top: 0 };
   // Workspace padding is relative to the shell. Native bounds need the absolute occupied bottom, including banners.
   const avoid = {...reserve,...(reserve.top?{top:v.top+reserve.top}:{})};
-  return { cards, waiting: s.pending.length, avoid, theme: u.prefs.theme, lang: lang(), density: u.prefs.density, ...(focusKey ? { focusKey, nonce } : {}), now: Math.floor(at / 15_000) * 15_000, toasts };
+  return { cards, waiting: s.pending.length, avoid, theme: u.prefs.theme, lang: lang(), density: u.prefs.density, now: Math.floor(at / 15_000) * 15_000, toasts };
 }
 
 function push(): void {
@@ -124,23 +69,10 @@ export function scheduleLayer(): void {
   timer = setTimeout(() => requestAnimationFrame(push), 30);
 }
 
-/** Is this request floating in the layer right now? Computed afresh (a push may still be scheduled: the Orchestrator's card
- *  that just came on screen must count). */
-export const inLayer = (key: string): boolean => { push(); return current.cards.some(c => c.key === key); };
-
-/** Move the keyboard to the layer, on that card (Ctrl+J). Never called automatically. */
-export function focusLayer(key: string): void {
-  focusKey = key;
-  setLayerHeld(key);
-  nonce++;
-  push();
-  void sb.invoke('overlay:focus', { target: 'overlay' }).catch(() => {});
-}
-
 function onAction(a: OverlayAction, open: (chatId: string) => void, next: (from?: string) => void, openLink: (link: string) => void): void {
   const find = (key: string) => app.get().pending.find(p => keyOf(p) === key);
   if (a.kind === 'answer') { const req = find(a.key); if (req) void answer(req, a.answer); }
-  else if (a.kind === 'postpone') { answerLater(a.key); focusKey = undefined; void sb.invoke('overlay:focus', { target: 'app' }).catch(() => {}); }
+  else if (a.kind === 'postpone') { answerLater(a.key); void sb.invoke('overlay:focus', { target: 'app' }).catch(() => {}); }
   else if (a.kind === 'open') { const req = find(a.key); if (req) open(req.chatId); }
   else if (a.kind === 'run') { const req = find(a.key); if (req) void runCommand(req, !!a.confirmProd); }
   else if (a.kind === 'dismiss') { const req = find(a.key); if (req) void dismissCommand(req); }

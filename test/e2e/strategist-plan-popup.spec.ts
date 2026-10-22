@@ -25,7 +25,7 @@ const userTexts = async (page: Page) => (await items(page)).flatMap(i => (i.kind
 const phase = (page: Page) => page.evaluate(id => window.sb.invoke('chat:list', undefined).then(l => l.find(c => c.id === id)?.plan?.phase), LEAD);
 
 test('with "Popup" on, the plan to approve opens in the questions window with its steps; approving it starts the plan', async () => {
-  const { app, page } = await launchDemo({ config: { questionsModal: true } });
+  const { app, page } = await launchDemo();
   try {
     await demo(app, 'tree');
     await expect(page.getByTestId(`tile-chat-${LEAD}`)).toBeVisible({ timeout: 15_000 });

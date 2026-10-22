@@ -57,7 +57,7 @@ async function snap(page: Page, name: string) {
 for (const [scheme, width, height] of [['dark', 1366, 768], ['light', 1920, 1080], ['light', 1366, 768], ['dark', 1920, 1080]] as const) {
   test(`questions window gallery · ${scheme} ${width}`, async () => {
     test.setTimeout(120_000);
-    const { app, page } = await launchDemo({ scheme, width, height, config: { questionsModal: true, theme: scheme } });
+    const { app, page } = await launchDemo({ scheme, width, height, config: { theme: scheme } });
     const tag = `${scheme}-${width}`;
     await clear(app, page);
 

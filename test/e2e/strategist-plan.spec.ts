@@ -101,7 +101,7 @@ test('a Strategist asks, proposes a short plan to approve and shows its steps on
 });
 
 test('with "Popup" on, a Strategist\'s question opens in the questions window, not on its strip', async () => {
-  const { app, page } = await launchDemo({ config: { questionsModal: true } });
+  const { app, page } = await launchDemo();
   try {
     await demo(app, 'tree');
     await expect(page.getByTestId(`tile-chat-${LEAD}`)).toBeVisible({ timeout: 15_000 });

@@ -19,7 +19,7 @@ import { isBusy, sameList } from '../store/state';
 import { ensureOrchestrator, stop, useApp } from '../store/store';
 import { openModal, setFocused, ui } from '../store/ui';
 import { t } from '../i18n';
-import { answerLater, requestPostponed } from '../lib/later';
+import { requestPostponed } from '../lib/later';
 import { pairHover, usePair } from '../lib/pairs';
 import { awaitingCard, clearOrchestratorNow, go, reqKey } from '../actions';
 import { ItemList, turnActivity, Typing } from './ChatItems';
@@ -34,9 +34,7 @@ import { ChildStrips } from './ChildStrips';
 import { MorningLine } from './MorningBlock';
 import { MaintenanceButton } from './brain-model/MaintenanceButton';
 import { pendingOf, useFlash } from './ChatTile';
-import { RequestPanel } from './RequestPanel';
 import { InWindowLine } from './QuestionsWindow';
-import { questionsModalOn } from '../lib/questions';
 import { HarnessMark, IconEraser, IconList, IconMore, IconStop } from './Icons';
 import { IconButton, StatePill } from './ui';
 import { Select } from './Select';
@@ -84,17 +82,9 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
   const chat = useApp(s => (id ? s.chats[id] : undefined));
   const items = useApp(s => (id ? s.items[id] : undefined));
   const reqs = useApp(s => (id ? pendingOf(s.pending, id) : []), sameList);
-  const inWindow = useApp(questionsModalOn);
-  // one card at a time (the oldest, or the one Ctrl+J asked for); the rest named below it
-  const wanted = ui.use(s => s.orchestratorFirst);
-  // the user is answering in the global layer or the questions window (the queue): that is the one popup, the
-  // Orchestrator's card waits (named on "Poi:")
-  const held = ui.use(s => !!s.layerHeld || s.qwin.shown);
   const postponed = ui.use(() => reqs.filter(r => requestPostponed(reqKey(r))), sameList);
+  // its open requests are answered in the questions window: the column names them and opens it
   const open = reqs.filter(r => !postponed.includes(r)).sort((a, b) => a.at - b.at);
-  const w = open.findIndex(r => reqKey(r) === wanted);
-  if (w > 0) open.unshift(...open.splice(w, 1));
-  const first = held ? undefined : open[0];
   const ready = useApp(s => s.ready);
   const isFocused = ui.use(s => s.focused === 'orchestrator');
   const focusReq = ui.use(s => (id && s.focusReq?.chatId === id ? s.focusReq.n : 0));
@@ -113,13 +103,6 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
     if ((!document.activeElement || document.activeElement === document.body) && !awaitingCard()) input.current?.focus();
   }, [chat]);
   useEffect(() => { if (focusReq) input.current?.focus(); }, [focusReq]);
-
-  // Esc / "Rispondi dopo": the card goes unanswered into "Da rispondere"; the keyboard it had goes to the input
-  const later = () => {
-    const had = !!(document.activeElement as HTMLElement | null)?.closest('[data-orchestrator-overlay] [data-request-key]');
-    if (first) answerLater(reqKey(first));
-    if (had) requestAnimationFrame(() => input.current?.focus());
-  };
 
   if (!chat) {
     return (
@@ -168,19 +151,7 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
       <MorningLine />
       <ItemList chatId={chat.id} items={items ?? []} empty={t('dialogs.orchestrator.emptyPrompt')} footer={isBusy(chat) ? <Typing what={turnActivity(items)} testid="typing-orchestrator" /> : null} />
       {postponed.length > 0 && <InWindowLine reqs={postponed} queued testid="orchestrator-queued" />}
-      {inWindow && open.length > 0 && <InWindowLine reqs={open} testid="orchestrator-in-window" />}
-      {!inWindow && open.length > 0 && (
-        <div className="tile-requests orchestrator-requests">
-          {first && <RequestPanel key={reqKey(first)} req={first} variant="orchestrator" chatTitle={t('dialogs.orchestrator.name')} harness={chat.harness} onEscape={later} onLater={later} />}
-          {open.length > (first ? 1 : 0) && (
-            <div className="qwin-queue orchestrator-next" data-testid="orchestrator-next">
-              <span className="qwin-queue-k">{t('dialogs.orchestrator.nextQueue')}</span>
-              {open.slice(first ? 1 : 0, 4).map(r => <span key={reqKey(r)} className="qwin-queue-item">{r.title}</span>)}
-              {open.length > 4 && <span className="qwin-queue-item">{t('dialogs.orchestrator.moreNext', { count: open.length - 4 })}</span>}
-            </div>
-          )}
-        </div>
-      )}
+      {open.length > 0 && <InWindowLine reqs={open} testid="orchestrator-in-window" />}
       {/* in the place of the old "Novità" feed (#88): what the app holds back for this Orchestrator */}
       <ChatInput ref={input} chat={chat} orchestrator testid="orchestrator-input" />
       <ChatMenu chat={chat} anchor={menuBtn} open={menu} onClose={() => setMenu(false)} onRename={() => setRenaming(true)} orchestrator />

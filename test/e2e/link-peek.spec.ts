@@ -86,7 +86,7 @@ test('question context and a full Orchestrator visual open files without answeri
  const cwd=path.resolve('test-results','cited-chat-folder');fs.mkdirSync(cwd,{recursive:true});
  const report=path.join(cwd,'report.ts');fs.writeFileSync(report,'// first\n// cited\n');
  const orchestratorFile=path.join(dir,'orchestrator.ts');fs.writeFileSync(orchestratorFile,'// Orchestrator source\n');
- const{app,page}=await launchDemo({env:{SB_BRAIN:dir},config:{questionsModal:false}});
+ const{app,page}=await launchDemo({env:{SB_BRAIN:dir}});
  try{
   const chat=await page.evaluate(cwd=>window.sb.invoke('chat:create',{cwd,harness:'claude',title:'Citation context'}),cwd);
   await app.evaluate((_electron,{id,report})=>{

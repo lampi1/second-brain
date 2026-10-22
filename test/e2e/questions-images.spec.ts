@@ -45,7 +45,7 @@ for (const scheme of ['dark', 'light'] as const) {
     const outside = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-out-')), 'fuori.png');
     fs.writeFileSync(outside, png(40, 40, [200, 200, 0]));
 
-    const { app, page } = await launchDemo({ scheme, userData, config: { questionsModal: true, theme: scheme } });
+    const { app, page } = await launchDemo({ scheme, userData, config: { theme: scheme } });
     for (const id of ['orchestrator', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
     await leaveFields(page);
     const q = `Approvi il nuovo disegno? ![Prima (oggi)](${path.join(ev, '0-prima.png')}) ![Dopo](${path.join(ev, '1-proposta.png')})`;

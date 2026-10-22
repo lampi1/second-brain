@@ -1,15 +1,9 @@
-// "Domande in finestra" (settings questionsModal; the user, 2026-10-12: "le domande vorrei un toggle per farle comparire
-// proprio come modale invece che nell’Orchestrator o nelle chat"): the switch, and the typing guard that keeps the window from
-// taking the user's text (the user: "la modale non deve rubare il testo che sto scrivendo"). While the user types in a
-// field (a key less than TYPING_IDLE_MS ago, the field still focused) a new request waits as a small pill; once the
-// typing stops it shows, and it takes the keyboard only if no field outside it has it. Used by QuestionsWindow.tsx,
-// ChatTile.tsx, OrchestratorTile.tsx, lib/layer.ts, actions.ts; started by main.tsx.
-import type { AppState } from '../store/state';
-
+// The questions window (QuestionsWindow.tsx, always on since 2026-10-22: the owner wants every question, permission
+// and command there, never off) and the typing guard that keeps it from taking the user's text (the user: "la modale
+// non deve rubare il testo che sto scrivendo"). While the user types in a field (a key less than TYPING_IDLE_MS ago, the
+// field still focused) a new request waits as a small pill; once the typing stops it shows, and it takes the keyboard
+// only if no field outside it has it. Used by QuestionsWindow.tsx; started by main.tsx.
 export const TYPING_IDLE_MS = 2000;
-
-/** The switch, read from the app state (off unless the user turned it on). */
-export const questionsModalOn = (s: Pick<AppState, 'settings'>): boolean => s.settings?.questionsModal === true;
 
 export const isEditable = (el: Element | null | undefined): boolean =>
   !!el && (el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || (el as HTMLElement).isContentEditable || (el.tagName === 'INPUT' && !/^(button|checkbox|radio|submit|reset|range|color|file)$/.test((el as HTMLInputElement).type)));

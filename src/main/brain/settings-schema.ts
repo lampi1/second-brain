@@ -131,9 +131,6 @@ const BASE: readonly SettingDef[] = [
     description: 'Quando il controllo è stato acceso (ms): i lavori finiti prima non vengono rivisti.' },
   { key: 'runResults', type: 'boolean', default: true, protected: true, label: 'Esito dei comandi alla chat',
     description: "Quando un comando lanciato con Esegui finisce, l'app scrive alla chat che l'ha proposto il comando, l'exit code e le ultime righe dell'output: non devi scriverle «fatto» né incollarle il risultato. Se la chat sta lavorando, il messaggio parte appena è libera. Ogni esito è un turno della chat." },
-  // the user, 2026-10-12: "le domande vorrei un toggle per farle comparire proprio come modale"
-  { key: 'questionsModal', type: 'boolean', default: false, protected: true, label: 'Domande in finestra',
-    description: 'Ogni domanda e permesso compare in una finestra in primo piano, una alla volta in coda, con il contesto. Mentre scrivi aspetta che ti fermi e non ti prende la tastiera. Spento: le domande restano nelle chat e nell’Orchestrator.' },
   // the app's own code: "Aggiorna" (Settings → Aggiornamenti, ADR 0075) updates and builds it; a chat working there is app work
   { key: 'appRepo', type: 'path', nullable: true, default: null, protected: true, label: "Cartella del codice dell'app",
     description: "Da dove «Aggiorna» prende la nuova versione (una cartella git); le chat che lavorano lì lavorano sull'app. Vuoto = quella da cui è stata fatta la versione in uso." },
@@ -260,7 +257,6 @@ export function defaults(): Settings {
     // on by default (owner, 2026-10-22: every role levels up without manual verdicts, ADR 0125); judgingSince 0 = from
     // the first sampler pass, never a backlog
     judging: true, judgingSince: 0,
-    questionsModal: false,
     appRepo: null,
     projectsRoot: null,
     loadQueue: true, loadQueueCpu: 75, loadQueueRam: 15,

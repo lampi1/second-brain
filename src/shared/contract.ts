@@ -790,9 +790,6 @@ export interface Settings {
    *  independent Sentinel review; judgingSince = when it was turned on (ms, 0 = never: runs ended before are skipped) */
   judging: boolean;
   judgingSince: number;
-  /** "Domande in finestra": every open question and permission shows in one modal window in front, one at a time in
-   *  a queue (instead of the chats' tiles and the Orchestrator); it never takes the keyboard while the user types */
-  questionsModal: boolean;
   /** the folder of the app's own code (a git repo) that "Aggiorna" updates; null = the one the running release was built from */
   appRepo: string | null;
   /** the folder that holds the owner's projects (their git repos): asked by the first-run setup only when the app
@@ -836,7 +833,7 @@ export type SettingKey =
   | 'pulse.on' | 'pulse.dailyUsd' | 'pulse.slots' | 'pulse.headline.on' | `pulse.types.${PulseType}` | `pulse.places.${'board' | 'agent' | 'search' | 'file'}` | 'jobs.fallback'
   | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'orchestratorDayCompact' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'tasks.enabled' | 'tasks.everyMin' | 'tasks.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
-  | `orchestratorChats.${keyof OrchestratorChatDefaults}` | 'orchestratorOpacity' | 'orchestratorEvents' | 'runResults' | 'judging' | 'judgingSince' | 'questionsModal' | 'appRepo' | 'projectsRoot' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'codexAutonomyRoots'
+  | `orchestratorChats.${keyof OrchestratorChatDefaults}` | 'orchestratorOpacity' | 'orchestratorEvents' | 'runResults' | 'judging' | 'judgingSince' | 'appRepo' | 'projectsRoot' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'codexAutonomyRoots'
   | 'suggestOn' | 'suggestModel' | 'suggestDailyUsd'
   | `delegation.${keyof DelegationSettings}` | `modelTiers.${Harness}.${ModelTier}`;
 export interface SettingDef {

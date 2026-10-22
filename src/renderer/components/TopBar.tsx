@@ -11,8 +11,7 @@ import { useEngines } from '../lib/engines';
 import { queuedCount, runningCount } from '../store/state';
 import { cliCheck, cliLogin, useApp } from '../store/store';
 import { openModal, ui } from '../store/ui';
-import { back, focusChat, forward, go, newBrowser, nextThing, recentPlaces, stopAllAsk, toggleCenter, toggleQuestionsModal } from '../actions';
-import { questionsModalOn } from '../lib/questions';
+import { back, focusChat, forward, go, newBrowser, nextThing, recentPlaces, stopAllAsk, toggleCenter } from '../actions';
 import { bellCount } from '../lib/notify';
 import { placeLabel } from '../store/ui';
 import { openQueue } from '../lib/later';
@@ -126,22 +125,8 @@ function Bell() {
   );
 }
 
-/** The full-screen popups (the questions window, lib/questions.ts) on and off in one click, with its state in sight
- *  (SPEC 21; before, a "…" menu item). The setting is the same one Settings writes. */
-function PopupsSwitch() {
-  const on = useApp(questionsModalOn);
-  const label = t(on ? 'ui.popupsOn' : 'ui.popupsOff');
-  return (
-    <button type="button" role="switch" aria-checked={on} className={`btn btn-ghost btn-m popups-switch${on ? ' on' : ''}`} onClick={toggleQuestionsModal}
-      aria-label={label} data-tip={label} data-testid="topbar-qwin">
-      <span className="popups-track" aria-hidden="true"><span className="popups-knob" /></span>
-      <span className="popups-label">{t('ui.popups')} <b>{t(on ? 'ui.popupsStateOn' : 'ui.popupsStateOff')}</b></span>
-    </button>
-  );
-}
-
 /** "…": the actions used now and then, always here (2026-10-15, before they moved in and out with the width):
- *  Credenziali (the questions window moved onto the bar, PopupsSwitch). */
+ *  Credenziali. */
 function MoreButton() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
@@ -225,7 +210,6 @@ export function TopBar() {
         <IconBolt size={14} /><span className="next-label">{inQueue ? auditText('auditExpression.TopBar.text204') : paused ? auditText('auditExpression.TopBar.text205') : waiting ? auditText('auditExpression.TopBar.text206') : auditText('auditExpression.TopBar.text207')}</span>
         {waiting > 0 && <span className="count-badge" data-testid="topbar-next-count">{waiting}</span>}
       </button>
-      <PopupsSwitch />
       <button type="button" className="btn btn-ghost btn-m new-browser" onClick={() => void newBrowser()} data-testid="topbar-new-browser" aria-label={t('ui.newBrowser')} data-tip={t('ui.newBrowser')}><IconGlobe size={14}/><span>{t('ui.newBrowser')}</span></button>
       <button type="button" className="btn btn-danger btn-m" onClick={stopAllAsk} disabled={running === 0} data-testid="topbar-stopall" data-tip={auditText('audit.TopBar.stopAllWorkingChatsCtrlShift')}
         aria-label={auditText('auditExpression.TopBar.text208', { v0: running })}>

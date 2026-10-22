@@ -56,7 +56,7 @@ function fixture() {
 for (const scheme of ['dark', 'light'] as const) {
   test(`reports in the file viewer show their images, large on a click · ${scheme}`, async () => {
     const { userData, ev } = fixture();
-    const { app, page } = await launchDemo({ scheme, userData, config: { questionsModal: false, theme: scheme } });
+    const { app, page } = await launchDemo({ scheme, userData, config: { theme: scheme } });
     try {
       await openFile(page, path.join(ev, 'report.html'));
       const report = page.getByTestId('viewer-report');
@@ -109,7 +109,7 @@ for (const scheme of ['dark', 'light'] as const) {
 
 test('a chat message with a screenshot path shows it inline; a click opens it large', async () => {
   const { userData, ev } = fixture();
-  const { app, page } = await launchDemo({ userData, config: { questionsModal: false } });
+  const { app, page } = await launchDemo({ userData });
   try {
     const chat = await page.evaluate(cwd => window.sb.invoke('chat:create', { harness: 'claude', cwd, title: 'Fix AT-7' }), ev);
     await demo(app, (d, id, text) => d.say(id, text), chat.id, `Fatto. Prima: ${path.join(ev, 'shots', 'before.png')}\n\nDopo: \`shots/after.png\` · report: [report.html](${path.join(ev, 'report.html')})`);
@@ -140,7 +140,7 @@ test('a chat message with a screenshot path shows it inline; a click opens it la
 for (const scheme of ['dark', 'light'] as const) {
   test(`a question with before/after screenshots, in the app's type scale · ${scheme}`, async () => {
     const { userData, ev } = fixture();
-    const { app, page } = await launchDemo({ scheme, userData, config: { questionsModal: true, theme: scheme } });
+    const { app, page } = await launchDemo({ scheme, userData, config: { theme: scheme } });
     try {
       for (const id of ['orchestrator', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id);
       const q = `Ho corretto il calcolo del rimborso con lo sconto. Approvi la correzione? ![Prima](${path.join(ev, 'shots', 'before.png')}) ![Dopo](${path.join(ev, 'shots', 'after.png')})`;

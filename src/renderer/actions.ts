@@ -16,19 +16,17 @@ import { t, locale } from './i18n';
 import { fileReference, fileViewArg,normalizeFileArg } from '@shared/file-view';
 import { freezeClock, now } from './lib/clock';
 import { setReporting } from './lib/viewports';
-import { floatsBehindPopup, focusLayer, inLayer, orchestratorCardOnScreen, visibleRequestKeys } from './lib/layer';
 import { makeLink, parseLink, visitSection } from './lib/notify';
 import { touch } from './lib/autoclose';
 import { hubRedirect } from './lib/memory-hub';
 import { isBusy } from './store/state';
-import { app, closeChat, closeTab, continueChat, createChat, createRoutedChat, dispatch, setChat, setSetting, stop, stopAll } from './store/store';
+import { app, closeChat, closeTab, continueChat, createChat, createRoutedChat, dispatch, setChat, stop, stopAll } from './store/store';
 import { orchestratorIdOf } from './lib/orchestrator-route';
-import { questionsModalOn } from './lib/questions';
-import { answerLater, openQueue, resumeQuestions } from './lib/later';
+import { answerLater, openQueue } from './lib/later';
 import { engineLabel } from './lib/engines';
 import {
   askConfirm, closeModal, flashTile, highlight, isBrainPage, openModal, openPage, requestFocus, setCenter, setClosing, setFocusMode, setLanePeek, setMap, setMaximized,
-  openOrchestratorRenew, setRead, setOrchestratorOpen, toast, ui, setOrchestratorFirst, setLayerHeld, callQuestions, setQuestionsAside, setChatExpanded, setTreeCollapsed, setBrowserOpen, type Place,type BrainPageId,
+  openOrchestratorRenew, setRead, setOrchestratorOpen, toast, ui, callQuestions, setQuestionsAside, setChatExpanded, setTreeCollapsed, setBrowserOpen, type Place,type BrainPageId,
 } from './store/ui';
 
 /** The Orchestrator's id (the right column), null while there is none. */
@@ -276,13 +274,6 @@ export function toggleOrchestrator(): void {
 
 export const toggleCenter = () => setCenter(!ui.get().center);
 
-/** "Domande in finestra" on/off (top bar, Ctrl+K, Settings). The user's own change: applies at once. */
-export function toggleQuestionsModal(): void {
-  const on = !questionsModalOn(app.get());
-  if (on) resumeQuestions();
-  void setSetting({ questionsModal: on });
-}
-
 /** What the brain pages get for "Discuti" (the Orchestrator next to the page, a ready draft in its input, not sent): every
  *  entry point of a page goes to the Orchestrator, which decides and delegates; no page creates a work chat by itself
  *  (owner, 2026-10-19). */
@@ -431,53 +422,12 @@ export const awaitingCard = (): boolean => awaited !== null;
 /** Focus a request card: in the global layer if it floats there, else where it is on screen, else go and show it. */
 export function focusRequest(req: PendingRequest): void {
   closeModal();
-  // "Rispondi dopo" is on: asking for a request opens "Da rispondere" on it (quiet mode ends, lib/later.ts)
+  // a postponed one ("Rispondi dopo") reopens the queue on it
   if (ui.get().later) { openQueue(reqKey(req)); return; }
-  // "Domande in finestra" or the queue already open: the window shows it first, at once, with the keyboard
-  if (questionsModalOn(app.get()) || ui.get().qwin.open) { void sb.invoke('overlay:focus', { target: 'app' }).catch(() => {}); callQuestions(reqKey(req)); return; }
-  // the Orchestrator's own request: always answered in her widget (the layer's card that held the keyboard lets go of it)
-  const orchestratorOwn = req.chatId === orchestratorIdOf(app.get());
-  if (orchestratorOwn) setLayerHeld(null);
-  // it would float there but the Orchestrator widget shows a card (one popup at a time): the layer's card takes the keyboard
-  // and is the popup while it has it (ui layerHeld), the widget's card waits on "Poi:". Not another request of the
-  // Orchestrator's own: that one takes the widget's card below
-  const shown = orchestratorCardOnScreen();
-  if (shown && shown !== reqKey(req) && !orchestratorOwn && floatsBehindPopup(reqKey(req))) { focusLayer(reqKey(req)); return; }
-  // already on screen (lane, tile, Orchestrator): just take it, nothing moves. Checked before the layer: the layer's list is
-  // recomputed a moment later, so right after the Orchestrator opens it can still hold a card that is now on the page
-  const sel = `[data-request-key="${CSS.escape(reqKey(req))}"]`;
-  const here = visibleRequestKeys().has(reqKey(req)) ? document.querySelector<HTMLElement>(`${sel}[data-lane]`) ?? document.querySelector<HTMLElement>(sel) : null;
-  // floating in the global layer (not visible elsewhere): the keyboard goes there, the page stays where it is
-  if (!here && !orchestratorOwn && inLayer(reqKey(req))) { focusLayer(reqKey(req)); return; }
-  // the keyboard may be in the global layer (Ctrl+J pressed there): bring it back first, else Enter answers the layer card
+  // every request is answered in the questions window (always on since 2026-10-22): it shows this one first, with
+  // the keyboard (taken back from the global layer first)
   void sb.invoke('overlay:focus', { target: 'app' }).catch(() => {});
-  if (here) { here.focus(); here.scrollIntoView({ block: 'nearest', inline: 'nearest' }); return; }
-  const c = app.get().chats[req.chatId];
-  const u = ui.get();
-  // the Orchestrator's own requests: answered in her tile
-  const inOrchestrator = orchestratorOwn;
-  // her tab, over anything, with this request as the card shown (the widget shows one at a time)
-  if (inOrchestrator) { setOrchestratorFirst(reqKey(req)); setOrchestratorOpen(true); }
-  else if (u.page !== 'home' || u.map) go({ page: 'home' });
-  // a collapsed Grindhouse strip shows only its pill: it opens, so its panel mounts and takes the keyboard
-  if (!inOrchestrator && c && !c.isOrchestrator) {
-    for (let p = c.parentId, n = 0; p && n < 16; p = app.get().chats[p]?.parentId, n++) setTreeCollapsed(p, false);
-    if (ui.get().maximized && ui.get().maximized !== `chat:${req.chatId}`) setMaximized(null);
-    setChatExpanded(req.chatId, true);
-  }
-  if (c?.isOrchestrator && !inOrchestrator) setFocusMode(c.id);
-  if (u.focusMode && u.focusMode !== req.chatId && !inOrchestrator) setLanePeek(true);
-  flashTile(inOrchestrator ? 'orchestrator' : `chat:${req.chatId}`);
-  let tries = 0;
-  const key = reqKey(req);
-  awaited = key;
-  const find = () => {
-    const el = document.querySelector<HTMLElement>(`${sel}[data-lane]`) ?? document.querySelector<HTMLElement>(sel);
-    if (el) { if (awaited === key) awaited = null; if (!el.contains(document.activeElement)) el.focus(); el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); return; }
-    if (++tries < 10) requestAnimationFrame(find);
-    else if (awaited === key) awaited = null;
-  };
-  find(); // at once when the card is already on screen (the next key must land on it), else after the next frames
+  callQuestions(reqKey(req));
 }
 
 /** Ctrl+J: the oldest request first; pressed again, the next one. `from`: the card the cycle goes on from (the layer

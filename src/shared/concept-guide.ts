@@ -536,9 +536,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/store/state.ts pending; src/main/chats/manager.ts
       b('Ogni domanda, permesso o comando da rivedere entra nell’elenco «pending»; la chat resta ferma finché non rispondi.',
         'Every question, permission or command to review joins the "pending" list; the chat stays blocked until you answer.'),
-      // src/renderer/lib/questions.ts; src/renderer/components/TopBar.tsx PopupsSwitch
-      b('«Domande in finestra» (interruttore «Popup» in alto, spento di default) le apre una alla volta in una finestra centrale.',
-        '"Questions in a window" (the "Popups" switch at the top, off by default) opens them one at a time in a central window.'),
+      // src/renderer/lib/questions.ts; src/renderer/components/QuestionsWindow.tsx
+      b('Si aprono sempre una alla volta in una finestra centrale: non c’è un interruttore per spegnerla.',
+        'They always open one at a time in a central window: there is no switch to turn it off.'),
       // src/renderer/components/QuestionsWindow.tsx
       b('Nella finestra puoi rispondere in qualsiasi ordine dalla colonna a sinistra; Esc vuol dire «Rispondi dopo», non «rifiuta».',
         'In the window you can answer in any order from the left rail; Esc means "Answer later", not "deny".'),
@@ -546,8 +546,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Se stai scrivendo, una domanda nuova aspetta come pillola e compare 2 secondi dopo che smetti.',
         'If you are typing, a new question waits as a pill and appears 2 seconds after you stop.'),
       // src/renderer/lib/later.ts, src/main/later.ts
-      b('«Rispondi dopo» tiene tutto in «Da rispondere» senza popup; Ctrl+J apre la prossima cosa che ti aspetta.',
-        '"Answer later" keeps everything in "To answer" with no popups; Ctrl+J opens the next thing waiting for you.'),
+      b('«Rispondi dopo» mette da parte solo quella richiesta in «Da rispondere»; Ctrl+J apre la prossima cosa che ti aspetta.',
+        '"Answer later" sets only that request aside in "To answer"; Ctrl+J opens the next thing waiting for you.'),
       // src/renderer/components/AskImages.tsx, src/main/ask-image.ts SCREENSHOT_HINT
       b('Gli screenshot che l’agente cita (un percorso PNG/JPG/WebP nella domanda o in un’opzione) compaiono come miniature, prima e dopo affiancati; un clic li apre grandi. Lo stesso vale per i messaggi in chat.',
         'Screenshots the agent names (a PNG/JPG/WebP path in the question or an option) show as thumbnails, before and after side by side; a click opens them large. Chat messages work the same way.'),
@@ -557,13 +557,13 @@ export const CONCEPTS: readonly ConceptCard[] = [
     ],
     analogy: b('Come i post-it sulla scrivania: restano lì finché non li togli tu, e puoi decidere di guardarli dopo pranzo.',
       'Like sticky notes on the desk: they stay until you remove them, and you can decide to look at them after lunch.'),
-    diagram: { kind: 'flow', steps: [b('Chat chiede', 'Chat asks'), b('In attesa', 'Pending'), b('Riquadro o finestra', 'Tile or window'), b('Risposta', 'Answer'), b('La chat riparte', 'Chat resumes')] },
+    diagram: { kind: 'flow', steps: [b('Chat chiede', 'Chat asks'), b('In attesa', 'Pending'), b('Finestra delle domande', 'Questions window'), b('Risposta', 'Answer'), b('La chat riparte', 'Chat resumes')] },
     tech: [
       tech(DATA, "Answer = { kind: 'permission', allow, always?, message? } | { kind: 'question', answers }.", "Answer = { kind: 'permission', allow, always?, message? } | { kind: 'question', answers }."),
-      tech(FILES, 'Impostazione questionsModal (default false); stato «Rispondi dopo» in userData/answer-later.json.', 'Setting questionsModal (default false); "Answer later" state in userData/answer-later.json.'),
+      tech(FILES, 'Nessuna impostazione; le richieste messe da parte con «Rispondi dopo» restano in memoria fino alla risposta.', 'No setting; requests set aside with "Answer later" stay in memory until answered.'),
       tech(WHERE, 'Le domande non svegliano l’Orchestrator da sole (orchestrator-wake.ts); l’ordine è quello di arrivo.', 'Questions never wake the Orchestrator by themselves (orchestrator-wake.ts); the order is arrival order.'),
     ],
-    sources: ['src/renderer/store/state.ts', 'src/renderer/lib/questions.ts', 'src/renderer/components/QuestionsWindow.tsx', 'src/renderer/components/AskImages.tsx', 'src/main/ask-image.ts', 'src/renderer/components/TopBar.tsx', 'src/renderer/lib/later.ts', 'src/main/later.ts', 'src/main/chats/orchestrator-wake.ts', 'src/shared/contract.ts'],
+    sources: ['src/renderer/store/state.ts', 'src/renderer/lib/questions.ts', 'src/renderer/components/QuestionsWindow.tsx', 'src/renderer/components/AskImages.tsx', 'src/main/ask-image.ts', 'src/renderer/lib/later.ts', 'src/main/later.ts', 'src/main/chats/orchestrator-wake.ts', 'src/shared/contract.ts'],
   },
   {
     id: 'grindhouse',

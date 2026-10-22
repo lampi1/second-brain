@@ -1,7 +1,7 @@
 // Main-only UI acceptance: the user's own browser is available from the toolbar and command palette.
 import{expect,test}from'@playwright/test';import{launchDemo,shot}from'./helpers';
 for(const lang of['it','en'])test(`manual browser has no agent owner (${lang})`,async()=>{
- const{app,page}=await launchDemo({config:{questionsModal:false},env:{SB_LANG:lang}});
+ const{app,page}=await launchDemo({env:{SB_LANG:lang}});
  try{
   const count=()=>page.evaluate(async()=> (await window.sb.invoke('browser:list',undefined)).filter(tab=>tab.ownerChatId===null&&tab.url==='about:blank').length);
   const before=await count();await page.getByTestId('topbar-new-browser').click();await expect.poll(count).toBe(before+1);
