@@ -778,6 +778,9 @@ export class BrowserActions {
 
   async evaluate(tab: Tab, code: string, frameArg?: unknown): Promise<string> {
     this.guard(tab);
+    // the user is working in this tab (a hand-off, a login above all): no caller script runs there meanwhile, as in act()
+    const h = this.tabs.handoffs.openFor(tab.id);
+    if (h) throw new Error(`The user is working in this tab (hand-off ${h.id}: ${h.reason}). Wait with handoff_to_user handoff_id "${h.id}".`);
     if(parseFrame(frameArg)!==0)throw new Error('Caller JavaScript supports only the verified local top page. Use frame-aware read_page / get_page_text / screenshot for iframe inspection.');
     const cdp=this.cdp(tab),frame=tab.wc.mainFrame;
     const before={url:tab.wc.getURL(),frameUrl:frame.url,origin:frame.origin,process:frame.processId,routing:frame.routingId,tree:frame.frameTreeNodeId};

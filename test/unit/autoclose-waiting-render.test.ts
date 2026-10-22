@@ -28,6 +28,7 @@ it('shows what the chat waits for, amber when it waits for the user', () => {
   expect(user).toContain('data-testid="autoclose-waiting-w"');
   expect(user).toContain('data-waiting="user"');
   expect(user).toContain('In attesa dell’utente');
+  expect(user).toContain('class="agent-waiting-text"'); // the label is cut by its own box, never widens the tile (#157)
   autoCloseState.set([row({ waitingFor: 'colleagues' })]);
   expect(html()).toContain('In attesa dei colleghi');
   autoCloseState.set([row({ waitingFor: 'report' })]);

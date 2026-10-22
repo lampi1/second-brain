@@ -60,7 +60,7 @@ describe('learn page data', () => {
       expect(t.length, k).toBeGreaterThan(40);
       expect(t, k).not.toMatch(/champion|challenger|bootstrap|conformal|backtest|baseline/i);
     }
-    expect(HELP().intro).toMatch(/Applica/);
+    expect(HELP().intro).toMatch(/Memoria → Proposte/);
     expect(HELP().intro).toMatch(/Ripristina/);
   });
 

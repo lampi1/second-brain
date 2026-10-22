@@ -22,7 +22,8 @@ const { setInterval, clearInterval, clearTimeout } = timersFor('chats/manager');
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Answer, ChatCommand, ChatItem, ChatSummary, CliStatus, ContextStats, CursorReasoning, Effort, HandoffInfo, Harness, NewChat, PendingRequest, PermissionMode } from '../../shared/contract';
+import type { Answer, ChatCommand, ChatItem, ChatSummary, CliStatus, ContextStats, CursorReasoning, Effort, HandoffInfo, Harness, Lang, NewChat, PendingRequest, PermissionMode } from '../../shared/contract';
+import { replyLangTurn } from './reply-lang';
 import { sysEn, type SysCode, type SysParams } from '../../shared/sys';
 import { checkImages } from './images';
 import type { Emitter } from '../ipc';
@@ -97,6 +98,8 @@ export interface ChatManagerOptions {
   suggestSkills?: (goal: string) => Promise<string[]>;
   /** the roles in a few lines, for the Orchestrator's first message of a session (agents/discovery.ts roleCatalogBrief) */
   roleCatalogBrief?: () => string;
+  /** the language the user wants replies in (ADR 0120: locale.ts uiLang, the setting or Windows'); absent = not named */
+  replyLang?: () => Lang;
   /** the review pack under a Sentinel's first message (agents/review-pack.ts): the change it checks, gathered with git */
   reviewPack?: (cwd: string) => Promise<string>;
   /** ADR 0103: record the files before each turn of a work chat in a git repository (checkpoints.ts); absent = off */
@@ -262,6 +265,8 @@ interface Rec {
   askedParentAt?: number;
   /** a delegated child was told once that its turn ended without agent_report (#152): the next such end closes it */
   reportNudged?: boolean;
+  /** the run whose done-criteria the engine was already given (taskHint, #170) */
+  criteriaTold?: string;
   /** a root chat's agent_report for its current assignment (reportRoot): one per assignment */
   rootReportAt?: number;
   /** a root chat's result held until its turn ends (reportRoot, #123): the report and the turn end are one news */
@@ -303,6 +308,8 @@ interface Rec {
   /** the session whose context holds the role text and that text's hash (persisted): sent once per context, again only
    *  in a new session, after a compaction or when the role text changed */
   rolePrimed?: { session: string; sig: string } | undefined;
+  /** the reply language this chat was last told (persisted, ADR 0120): a change goes in one line on its next turn */
+  replyLang?: Lang;
   /** the role text was compared with rolePrimed since the engine started */
   roleChecked?: boolean;
   children?: AgentChildrenReducer;
@@ -423,7 +430,7 @@ const ORCHESTRATOR_OUTPUT_MAX = 800;
 export const LAMPO_TITLE = 'Flash';
 const LAMPO_POLICY: AgentPolicy = { tools: { allow: ['read', 'web'] }, ceiling: 'plan' };
 /** the chat-endpoint tools Lampo never sees (chatToolShown), beside every agent_* tool */
-const LAMPO_HIDDEN: ReadonlySet<string> = new Set([...APP_CHAT_TOOLS, 'brain_script_add', 'skills_suggest']);
+const LAMPO_HIDDEN: ReadonlySet<string> = new Set([...APP_CHAT_TOOLS, 'brain_script_add', 'brain_query_add', 'skills_suggest']);
 const LAMPO_FRAME = 'You are Flash, the quick lane of the user\'s second-brain app. Answer fast and briefly, in the user\'s language, from what you know and quick reads (Read, Grep, Glob, the web). Like a "btw": each question may come with the Orchestrator\'s conversation since you last looked; use it to answer about the work in progress, never act on it or answer it. You change nothing and start no work: no edits, no commands, no plans. When a request needs changes, many steps or other chats, say so in one line: the user hands it to the Orchestrator with «Fanne un lavoro».';
 /** A role launch with Claude's sub-agent tool (tool-policy.ts claudeTools) gets the role gate's sub-agent rule as a
  *  PreToolUse hook: Claude starts a sub-agent without a permission request (role-gate.ts SubagentGate). */
@@ -755,7 +762,7 @@ export class ChatManager implements ChatService {
     if (prompt) {
       // a delegated chat's contract says who sent it (the parent's title), like mail between chats
       const from = delegator?.s.title;
-      try { await (viaQueue ? this.gate(r, () => this.deliver(id, prompt, undefined, false, from)) : this.send(id, prompt, undefined, false, from, false, { kind: by === 'user' ? 'user' : 'app' })); } catch (e) {
+      try { await (viaQueue ? this.gate(r, () => this.deliver(id, prompt, undefined, false, from, false, undefined, this.taskHint(r, prompt, { kind: 'app' }))) : this.send(id, prompt, undefined, false, from, false, { kind: by === 'user' ? 'user' : 'app' })); } catch (e) {
         if (!r.s.lastError) r.s.lastError = errText(e);
         this.updated(r);
       }
@@ -803,14 +810,15 @@ export class ChatManager implements ChatService {
     // its parent's message (agent_answer_child, from = the parent's title) reached it: the answer it waited for
     if (from !== undefined && r.s.parentId && from === this.chats.get(r.s.parentId)?.s.title) delete r.askedParentAt;
     if (!resumed && from === undefined && (!source || source.kind === 'user')) this.userWrote(chatId, text);
-    if (!resumed && !liveOnly && (r.s.run?.taskVersion ?? 1) > 1 && source?.kind !== 'app') text += `\n\n[Task version ${r.s.run!.taskVersion}: include taskVersion: ${r.s.run!.taskVersion} in agent_report.]`;
+    // what the engine must know for agent_report goes to the engine only, never into the user's bubble (#158, #170)
+    const hint = !resumed && !liveOnly ? this.taskHint(r, text, source) : '';
     // a new assignment from the Orchestrator: whether the user waits for it is decided again (#123)
     if (from !== undefined && !r.s.parentId && !r.s.isOrchestrator && r.s.run?.startedBy === 'orchestrator' && source?.kind === 'chat' && source.chatId === this.openOrchestrator()?.s.id) r.userWaits = this.orchestratorAnswering();
-    if (!this.admission) return this.deliver(chatId, text, images, resumed, from, liveOnly, receipt);
+    if (!this.admission) return this.deliver(chatId, text, images, resumed, from, liveOnly, receipt, hint);
     // the user's own message never waits (ADR 0036): what waited for this chat goes first, now, then this one
     if (!resumed && from === undefined) {
       this.admission.admitNow(chatId);
-      return this.deliver(chatId, text, images, resumed, from, liveOnly, receipt);
+      return this.deliver(chatId, text, images, resumed, from, liveOnly, receipt, hint);
     }
     // an agent's message (another chat, the Orchestrator, the app's own resume): checked now
     if (liveOnly && ((!r.session && r.s.state !== 'idle') || r.archiving || r.s.closedAt)) throw new Error('La chat non è attiva: la posta resta da leggere.');
@@ -820,11 +828,11 @@ export class ChatManager implements ChatService {
     // hours, and reached the chat only when the user wrote): what waited for this chat goes first, then this one
     if (!resumed && !r.s.closedAt) {
       this.admission.admitNow(chatId);
-      return this.deliver(chatId, text, images, resumed, from, liveOnly, receipt);
+      return this.deliver(chatId, text, images, resumed, from, liveOnly, receipt, hint);
     }
     // the app's own resume, or an agent reopening a closed chat (a new engine): it may wait for the load
     if (r.s.closedAt && !r.archiving) this.unarchive(r); // back on the grid now: its tile shows that it waits
-    return this.gate(r, () => this.deliver(chatId, text, images, resumed, from, liveOnly, receipt));
+    return this.gate(r, () => this.deliver(chatId, text, images, resumed, from, liveOnly, receipt, hint));
   }
 
   /** a turn runs in a live engine: a message joins it (a chat cut by a restart has working set but no engine) */
@@ -893,8 +901,23 @@ export class ChatManager implements ChatService {
   /** The delivery of a message (send() decided it goes now). One at a time per chat, on every engine: a later message
    *  whose steps end sooner (a faster recall, no checkpoint to take) never reaches the engine before an earlier one, so
    *  the engine reads them in the transcript's order (#127: the user's message and a child's mail at once). */
-  private deliver(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false, receipt?: SubmissionReceipt): Promise<void> {
-    const run = () => this.deliverNow(chatId, text, images, resumed, from, liveOnly, receipt).catch(error => { receipt?.failed(error); throw error; });
+  /** The lines a role chat needs for agent_report and never saw (#170): its done-criteria, exactly as stored, once per
+   *  assignment (a delegation's own prompt already lists them), and the task version after a follow-up. Engine only. */
+  private taskHint(r: Rec, text: string, source?: TaskSource): string {
+    const run = r.s.run;
+    if (!run || r.s.isOrchestrator) return '';
+    const lines: string[] = [];
+    const criteria = run.taskContract?.doneWhen ?? [];
+    if (criteria.length && r.criteriaTold !== run.runId) {
+      r.criteriaTold = run.runId;
+      if (!criteria.every(c => text.includes(`- ${c}`))) lines.push('Done when (agent_report doneWhen: one entry per line below, criterion copied exactly):', ...criteria.map(c => `- ${c}`));
+    }
+    if ((run.taskVersion ?? 1) > 1 && source?.kind !== 'app') lines.push(`Task version ${run.taskVersion}: include taskVersion: ${run.taskVersion} in agent_report.`);
+    return lines.length ? `\n\n[${lines.join('\n')}]` : '';
+  }
+
+  private deliver(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false, receipt?: SubmissionReceipt, hint = ''): Promise<void> {
+    const run = () => this.deliverNow(chatId, text, images, resumed, from, liveOnly, receipt, hint).catch(error => { receipt?.failed(error); throw error; });
     const previous = this.deliveries.get(chatId);
     const delivery = previous ? previous.catch(() => {}).then(run) : run();
     this.deliveries.set(chatId, delivery);
@@ -903,7 +926,7 @@ export class ChatManager implements ChatService {
     return delivery;
   }
 
-  private async deliverNow(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false, receipt?: SubmissionReceipt): Promise<void> {
+  private async deliverNow(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false, receipt?: SubmissionReceipt, hint = ''): Promise<void> {
     updateActivity.assertOpen();
     const r = this.need(chatId);
     const releaseDelivery = this.holdActivity(chatId);
@@ -963,13 +986,16 @@ export class ChatManager implements ChatService {
     // a changed text is checked once per engine start (as before this, never mid-session: a catalog edit would resend it)
     const role = roleText && (!r.rolePrimed || (!r.roleChecked && r.rolePrimed.sig !== roleSig)) ? roleText : '';
     r.roleChecked = true;
+    // the reply language (ADR 0120): with the role text, and once on the first turn after the user changed it
+    const wantLang = this.opts.replyLang?.(), langHint = replyLangTurn(wantLang, role ? undefined : r.replyLang, !!role);
     // the files as they are before this turn (ADR 0103): what the user can put back with «Annulla l'ultimo turno»
     if (!this.midTurn(r)) r.turnCheckpoint = false;
     if (this.opts.checkpoints?.() && !r.s.isOrchestrator && !r.s.quick && !this.midTurn(r)) await this.checkpoint(r);
     try {
       receipt?.beforeSubmit();
-      r.session.send(`${role}${warning}${body}`, imgs);
+      r.session.send(`${role}${warning}${body}${hint}${langHint}`, imgs);
       receipt?.submitted();
+      if (langHint) { r.replyLang = wantLang; if (!role) this.persist(); }
       if (lampo) r.lampoSeen = { session: r.session, cursor: lampo.seen }; // seen only once it went
       if (role) { r.rolePrimed = { session: r.s.sessionId ?? '', sig: roleSig }; this.persist(); }
     } catch (e) {
@@ -1173,7 +1199,7 @@ export class ChatManager implements ChatService {
     if (!plan) throw new Error('plan_propose: only a Strategist the Orchestrator or the user started has a plan with the user.');
     if (plan.phase === 'running' || plan.phase === 'done') throw new Error('plan_propose: the plan is approved and under way; update its steps with plan_update.');
     if (plan.phase === 'proposed') throw new Error('plan_propose: your plan already waits for the user. End your turn: the answer arrives as a message.');
-    r.s.plan = { phase: 'proposed', clarified: plan.clarified, steps, ...(doneWhen ? { doneWhen } : {}), at: Date.now() };
+    r.s.plan = { phase: 'proposed', clarified: plan.clarified, ...(plan.asked ? { asked: plan.asked } : {}), steps, ...(doneWhen ? { doneWhen } : {}), at: Date.now() };
     this.persist();
     this.updated(r);
     log.info('chats', 'plan proposed', { chat: chatId, data: { steps: steps.length } });
@@ -1274,8 +1300,10 @@ export class ChatManager implements ChatService {
   }
 
   /** Archives a finished work chat: its process ends gracefully, the record stays (closedAt) and reopen() brings it
-   *  back with its history. auto = the UI's auto-close: refused if the chat went back to work meanwhile. */
-  async archive(chatId: string, opts: { auto?: boolean } = {}): Promise<ChatSummary> {
+   *  back with its history. auto = the UI's auto-close: refused if the chat went back to work meanwhile. undoable = the
+   *  user's ✕ with its «Annulla» (#168): the run ends only when the close is final (chat:close, or 15 s with no reopen),
+   *  so an Annulla gets the chat back with its run still open. */
+  async archive(chatId: string, opts: { auto?: boolean; undoable?: boolean } = {}): Promise<ChatSummary> {
     const r = this.need(chatId);
     // the Orchestrator never closes (its title is the mail address the brain's rules and the chats write to)
     if (r.s.isOrchestrator) throw new Error('L’Orchestrator non si chiude: per ripartire usa Pulisci.');
@@ -1299,6 +1327,8 @@ export class ChatManager implements ChatService {
             log.warn('chats', 'hand-off before the auto-close not written', { chat: chatId, cause: errText(e), hint: '"Riprendi" on this chat writes it then' });
           }
         }
+        // the user's ✕ stops a running turn at once (#168): the engine's exit may take seconds, its work must not
+        if (sess && !opts.auto && sess.busy) await sess.interrupt({ byUser: true }).catch(e => log.info('chats', 'interrupt at close failed', { chat: chatId, data: errText(e) }));
         if (sess && !keep) { await sess.close(); this.reapKept(r); }
       })();
       try { await r.archiving; } finally { r.archiving = undefined; }
@@ -1307,7 +1337,11 @@ export class ChatManager implements ChatService {
     this.flushItems(chatId);
     r.s.closedAt = Date.now();
     r.s.closedBy = opts.auto ? 'auto' : 'user';
-    this.endRunOf(r, 'closed', r.s.closedAt);
+    if (opts.undoable && !opts.auto) {
+      const at = r.s.closedAt;
+      const t = setTimeout(() => { if (this.chats.get(chatId) === r && r.s.closedAt === at) this.endRunOf(r, 'closed', at); }, 15_000);
+      t.unref?.();
+    } else this.endRunOf(r, 'closed', r.s.closedAt);
     r.working = false;
     if (keep) r.closeAfterCold = true;
     if (r.s.state !== 'error') r.s.state = 'closed';
@@ -1430,7 +1464,8 @@ export class ChatManager implements ChatService {
     // a failed write (a locked file, a full disk, an unreadable store) still answers from memory
     try { this.runs.flush(); } catch (e) { log.warn('chats', 'agent runs not saved', { cause: errText(e), hint: 'the next run change writes them again' }); }
     const runs = this.runs.list(), rollups = this.runs.rolledUp();
-    const metrics = runMetrics(runs, { rollups, ...(opts.aiErrors !== undefined ? { aiErrors: aiErrorRuns(opts.aiErrors) } : {}), ...(opts.since !== undefined ? { since: opts.since } : {}),
+    const live = (run: AgentRun) => { const r = this.chats.get(run.chatId); return !!r && !r.s.closedAt && r.s.run?.runId === run.runId; };
+    const metrics = runMetrics(runs, { rollups, live, ...(opts.aiErrors !== undefined ? { aiErrors: aiErrorRuns(opts.aiErrors) } : {}), ...(opts.since !== undefined ? { since: opts.since } : {}),
       filter: { ...(opts.skill !== undefined ? { skill: opts.skill } : {}), ...(opts.app !== undefined ? { app: opts.app } : {}), ...(opts.repo !== undefined ? { repo: opts.repo } : {}) } });
     // the card's level and performance are the agent's whole record, whatever the filter
     const standing = standings(runs, rollups, Date.now());
@@ -1933,7 +1968,7 @@ export class ChatManager implements ChatService {
     if (result.verdict !== undefined || result.verified !== undefined) throw new Error('Delegated reports cannot claim independent review fields.');
     this.checkReportVersion(r, result);
     if (r.s.plan && result.outcome !== 'blocked') r.s.plan = finishPlan(r.s.plan, Date.now());
-    if (d.result) throw new Error('agent_report: this delegation already has its result.');
+    if (d.result) throw new Error('agent_report: this delegation already has its result: the first report was saved and nothing else is needed. Stop here.');
     const at = Date.now(), met = result.doneWhen.filter(x => x.met).length;
     // the user changed the child's goal in its chat: the card shows the user's goal, the contract's stays as originalGoal
     const goal = result.goalChangedByUser && result.newGoal ? { goal: result.newGoal, originalGoal: d.originalGoal ?? d.goal } : {};
@@ -2097,7 +2132,7 @@ export class ChatManager implements ChatService {
     if (review && (run.endedAt !== undefined || r.s.closedAt)) throw new Error('The review assignment has already ended.');
     this.checkReportVersion(r, result);
     if (r.s.plan && result.outcome !== 'blocked') r.s.plan = finishPlan(r.s.plan, Date.now());
-    if (run.report?.via === 'agent_report' || r.rootReportAt !== undefined && r.rootReportAt >= (r.s.work?.updatedAt ?? 0)) throw new Error('agent_report: this assignment already has its result.');
+    if (run.report?.via === 'agent_report' || r.rootReportAt !== undefined && r.rootReportAt >= (r.s.work?.updatedAt ?? 0)) throw new Error('agent_report: this assignment already has its result: the first report was saved and nothing else is needed. Stop here.');
     const at = Date.now(), met = result.doneWhen.filter(x => x.met).length;
     {
       const policy = run.startedBy === 'orchestrator' ? this.deliveryPolicy(run.taskContract?.deliveryPolicy) : 'display';
@@ -2781,6 +2816,7 @@ export class ChatManager implements ChatService {
       // saved before ctxSince existed: its last turn is the latest its context can have begun
       ...(c.ctxSince || c.lastTurnAt ? { ctxSince: c.ctxSince ?? c.lastTurnAt } : {}),
       ...(c.rolePrimed ? { rolePrimed: c.rolePrimed } : {}),
+      ...(c.replyLang ? { replyLang: c.replyLang } : {}),
       ...(c.pastSessions?.length ? { pastSessions: c.pastSessions } : {}),
       ...(c.mcpAncestors ? { mcpAncestors: c.mcpAncestors } : {}),
     };
@@ -2804,6 +2840,7 @@ export class ChatManager implements ChatService {
       ...(r.coldNoteAt ? { coldNoteAt: r.coldNoteAt } : {}),
       ...(r.ctxSince ? { ctxSince: r.ctxSince } : {}),
       ...(r.rolePrimed?.session ? { rolePrimed: r.rolePrimed } : {}),
+      ...(r.replyLang ? { replyLang: r.replyLang } : {}),
       ...(r.pastSessions?.length ? { pastSessions: r.pastSessions } : {}),
       ...(r.s.contextTokens ? { context: { tokens: r.s.contextTokens, ...(r.s.contextMaxTokens ? { max: r.s.contextMaxTokens } : {}), ...(r.s.contextEstimated ? { estimated: true } : {}) } } : {}),
       ...(r.s.handoffAt ? { handoffAt: r.s.handoffAt, handoffSource: r.s.handoffSource ?? 'chat' } : {}),
@@ -3179,7 +3216,7 @@ export class ChatManager implements ChatService {
         log.warn('chats', 'warm engine refused the chat choices: starting a fresh one', { chat: r.s.id, data: errText(e) });
         if (r.session === sess) {
           r.session = null;
-          void sess.close(1000);
+          void sess.close();
           r.s.sessionId = crypto.randomUUID(); // never two engines on one session id
           this.startSession(r);
         }

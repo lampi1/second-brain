@@ -41,6 +41,7 @@ test('Apprendimento: verdicts, the change to look at, curves per role, the list 
     await theme(page, 'light');
     await shot(page, 'learning-light');
     await goPage(page, 'memoria');
+    await page.getByTestId('mh-tab-file').click(); // the memory's files and their upkeep (ADR 0122)
     await expect(page.getByTestId('bm-maint-memory').getByTestId('bm-claim').first()).toBeVisible();
   } finally { await app.close(); }
 });

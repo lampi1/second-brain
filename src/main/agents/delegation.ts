@@ -18,7 +18,7 @@ import { canLaunch, isWorkRole, launchGap, ROLE_DEFAULTS, WORK_ROLE_IDS, type De
 import { oneLine } from '../../shared/agent-label';
 import { CRITERION_MAX, EVIDENCE_MAX, RESULT_OUTPUT_MAX, SUMMARY_MAX, checkContract, checkResult, delegationPrompt, depthOf, type DelegationLimitHit, type DelegationResult, type TaskAssignmentOptions } from '../../shared/delegation';
 import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
-import { stepIndex, type StrategyPlan } from '../../shared/strategy';
+import { delegationGate, stepIndex, type StrategyPlan } from '../../shared/strategy';
 import type { McpTool } from '../mcp/server';
 import { allowsClass, belowParent, type AgentPolicy } from './tool-policy';
 import { withinParent } from './worktrees';
@@ -132,7 +132,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     }
     // a Strategist that planned with the user delegates only once the user approved the plan (its strip, ADR 0108)
     const plan = d.chats.planOf?.(parent.id) ?? null;
-    if (plan && plan.phase !== 'running' && plan.phase !== 'done') throw new Error('agent_delegate refused: the user has not approved your plan yet. Propose it with plan_propose and wait for «Piano approvato».');
+    const gate = delegationGate(plan, 'agent_delegate');
+    if (gate) throw new Error(gate);
     const parentPolicy = d.chats.agentPolicy(parent.id);
     // everything is checked before any chat starts: one bad part refuses the whole call
     const plans = raw.map((value, i) => {
@@ -224,7 +225,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (refused) throw new Error(`agent_assign_task: ${refused}`);
     if (child.harness !== parent.harness && (child.closedAt || !['running', 'waiting', 'idle'].includes(child.state))) throw new Error('A stopped engine of another kind requires the user.');
     const plan = d.chats.planOf?.(parent.id) ?? null;
-    if (plan && plan.phase !== 'running' && plan.phase !== 'done') throw new Error('The user has not approved your plan yet.');
+    const gate = delegationGate(plan, 'agent_assign_task');
+    if (gate) throw new Error(gate);
     if (a.step !== undefined && !plan) throw new Error('step requires a plan approved by the user.');
     if (plan && a.step === undefined) throw new Error('Name the approved plan step for this reused child.');
     const step = a.step !== undefined && plan ? stepIndex(plan, a.step, 'step') : null;

@@ -1,4 +1,4 @@
-// Brain area of the app: the pages of the brain (Task, Fatto e standup, Idee, Costi, Qualità,
+// Brain area of the app: the pages of the brain (Task, Fatto e standup, Idee (shown as a Memoria tab, ADR 0122), Costi, Qualità,
 // Confronto modelli, Esplora; Task took the place of Oggi and Adesso on 2026-10-12, their old links open it; the old
 // Miglioramento page lives inside Regole since ADR 0082, its links open Regole) and the full-screen 3D map, in the app's own style, fed by the
 // brain's data API (invoke 'brain:api'). This file is the ONE mount point the workspace UI imports:
@@ -30,7 +30,7 @@ export type { DiscussBridge };
 export type { LiveSnapshot, LiveSource, LiveTool } from './lib/live';
 export { FADE_MS } from './lib/live';
 
-export type BrainPageId = 'dashboard' | 'home' | 'task' | 'fatto' | 'idee' | 'costi' | 'qualita' | 'apprendimento' | 'script' | 'log' | 'confronto' | 'file' | 'skill' | 'impostazioni' | 'agenti' | 'guida' | 'regole' | 'memoria' | 'classificatori' | 'collegamenti';
+export type BrainPageId = 'home' | 'task' | 'fatto' | 'idee' | 'costi' | 'qualita' | 'apprendimento' | 'script' | 'log' | 'confronto' | 'file' | 'skill' | 'impostazioni' | 'agenti' | 'guida' | 'regole' | 'memoria' | 'classificatori' | 'collegamenti';
 
 /** label is a getter (ADR 0057): read at use time, so it follows the current language */
 const page = (id: BrainPageId, key: string): { id: BrainPageId; readonly label: string; key: string } => ({ id, key, get label() { return id==='file'?t('viewer.title'):t(`brainPages.nav.${id}`); } });
@@ -38,19 +38,19 @@ export const BRAIN_PAGES: { id: BrainPageId; readonly label: string; key: string
   page('home', 'G H'),
   page('agenti', 'G A'),
   page('task', 'G O'),
-  page('dashboard', 'G D'),
   page('fatto', 'G F'),
+  // Idee, Skill, Regole, Script and Apprendimento are tabs of Memoria (ADR 0122): their ids, keys and links stay and land
+  // on the tab (actions.ts go() → lib/memory-hub.ts); the sidebar no longer lists them
   page('idee', 'G I'),
   page('costi', 'G C'),
   page('qualita', 'G Q'),
-  // rendered by the app (App.tsx PageFrame): what the brain's changes proved (ADR 0109)
+  // what the brain's changes proved (ADR 0109) and the brain's scripts (ADR 0076): Memoria tabs; the app's Log, which
+  // also holds the brain's changelog since the Changelog page left (ADR 0111), is rendered by App.tsx PageFrame
   page('apprendimento', 'G J'),
-  // rendered by the app (App.tsx PageFrame) in the Dashboard's look: the brain's scripts (ADR 0076) and the app's Log,
-  // which also holds the brain's changelog since the Changelog page left (ADR 0111)
   page('script', 'G T'),
   page('log', 'G N'),
   page('confronto', 'G M'),
-  // not a brain page: the skills and agents of the CLIs (components/SkillsPage.tsx, rendered by App.tsx; ADR 0018)
+  // the skills (components/SkillsPage.tsx, ADR 0018): a Memoria tab
   page('skill', 'G S'),
   // not a brain page: the app's Settings (components/SettingsPage.tsx, rendered by App.tsx); listed here for places, links and G P
   page('impostazioni', 'G P'),
@@ -68,9 +68,10 @@ export const isBrainPage = (s: string): s is BrainPageId => IDS.has(s);
 /** Old page ids still found in links (feed, notes, the Orchestrator's habits) → today's. Oggi (home) and Adesso became DevOps
  *  (the user, 2026-10-12: "li trovo ridondanti e poco utili, mentre sezione devops super utile"), DevOps became Task
  *  (ADR 0079). */
-export const PAGE_ALIAS: Record<string, BrainPageId> = { oggi: 'task', adesso: 'task', dafare: 'task', devops: 'task', esplora: 'file', procedure: 'skill', procedura: 'skill', miglioramento: 'regole', changelog: 'log', diagnostica: 'log' };
-/** Their old go-to keys still work: G R (the old Regole imparate) opens Regole, where those rules live now (ADR 0082). */
-export const GO_ALIASES: { id: BrainPageId; key: string }[] = [{ id: 'regole', key: 'G R' }];
+export const PAGE_ALIAS: Record<string, BrainPageId> = { oggi: 'task', adesso: 'task', dafare: 'task', devops: 'task', esplora: 'file', procedure: 'skill', procedura: 'skill', miglioramento: 'regole', changelog: 'log', diagnostica: 'log', dashboard: 'memoria' };
+/** Their old go-to keys still work: G R (the old Regole imparate) opens Regole, where those rules live now (ADR 0082);
+ *  G D (the Dashboard, gone with ADR 0122: its parts live in Memoria, Costi, Qualità and Idee) opens Memoria. */
+export const GO_ALIASES: { id: BrainPageId; key: string }[] = [{ id: 'regole', key: 'G R' }, { id: 'memoria', key: 'G D' }];
 
 /** "esplora/ops/x.md" → { id: 'esplora', arg: 'ops/x.md' }; "mappa/tutto" → { map: true, full: true }. */
 export function parseTarget(t: string): { map: true; full: boolean; focus?: string } | { map: false; id: BrainPageId; arg?: string } | null {

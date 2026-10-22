@@ -43,7 +43,7 @@ export function HandoffBanner({ h, chatTitle }: { h: BrowserHandoff; chatTitle: 
         <span className="ho-icon" aria-hidden="true">{login ? <IconLogin size={16} /> : <IconAlert size={16} />}</span>
         <div className="ho-titles">
           <b className="ho-title">{h.reason}</b>
-          <span className="ho-sub">{chatTitle ? <><span className="ho-who">{chatTitle}</span>{t('dialogs.handoffBanner.waitingSuffix')}</> : `${t('dialogs.handoffBanner.anAgent')}${t('dialogs.handoffBanner.waitingSuffix')}`} · {ago(h.at, now) === 'ora' ? t('dialogs.handoffBanner.justNow') : t('dialogs.handoffBanner.sinceTime', { time: ago(h.at, now) })}{h.env ? <> · {t('dialogs.handoffBanner.envLabel')} <span className="ho-env">{h.env}</span></> : null}</span>
+          <span className="ho-sub">{chatTitle ? <><span className="ho-who">{chatTitle}</span>{t('dialogs.handoffBanner.waitingSuffix')}</> : `${t('dialogs.handoffBanner.anAgent')}${t('dialogs.handoffBanner.waitingSuffix')}`} · {ago(h.at, now) === t('appText.format.now') ? t('dialogs.handoffBanner.justNow') : t('dialogs.handoffBanner.sinceTime', { time: ago(h.at, now) })}{h.env ? <> · {t('dialogs.handoffBanner.envLabel')} <span className="ho-env">{h.env}</span></> : null}</span>
         </div>
       </div>
       {h.instructions && <p className="ho-text" data-testid={`handoff-text-${h.tabId}`}>{h.instructions}</p>}

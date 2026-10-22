@@ -10,7 +10,7 @@ import type { FeedInput } from '../services';
 
 /** an undo names at most this many changes (a bigger pass is undone from the Skill page's change log) */
 export const UNDO_MAX = 20;
-const KIND: Record<BrainChange['kind'], string> = { skill: 'skill', agent: 'ruolo', rule: 'regola', memory: 'memoria' };
+const KIND: Record<BrainChange['kind'], string> = { skill: 'skill', agent: 'ruolo', rule: 'regola', memory: 'memoria', script: 'script' };
 
 export function maintenanceEvent(changes: readonly BrainChange[]): FeedInput | null {
   if (!changes.length) return null;

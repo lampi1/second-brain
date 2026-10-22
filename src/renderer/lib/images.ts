@@ -5,6 +5,7 @@
 // Used by ChatInput (Ctrl+V, drag and drop: every chat tile and the Orchestrator) and pinned by test/unit/images.test.ts (the
 // pure parts).
 import { IMAGE_MAX_BYTES, IMAGE_MAX_COUNT, type ImageAttachment } from '@shared/contract';
+import { t } from '../i18n';
 
 const DIRECT: readonly string[] = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
 /** longest side sent; the Claude API scales anything above ~1568 px down anyway and refuses > 2000 px in long chats */
@@ -50,7 +51,7 @@ export const roomFor = (have: number) => Math.max(0, IMAGE_MAX_COUNT - have);
 function draw(bmp: ImageBitmap, w: number, h: number): OffscreenCanvas {
   const c = new OffscreenCanvas(Math.max(1, Math.round(w)), Math.max(1, Math.round(h)));
   const g = c.getContext('2d');
-  if (!g) throw new Error('canvas non disponibile');
+  if (!g) throw new Error(t('appText.images.noCanvas'));
   g.drawImage(bmp, 0, 0, c.width, c.height);
   return c;
 }
@@ -58,14 +59,14 @@ function draw(bmp: ImageBitmap, w: number, h: number): OffscreenCanvas {
 const toDataUrl = (b: Blob) => new Promise<string>((resolve, reject) => {
   const r = new FileReader();
   r.onload = () => resolve(String(r.result));
-  r.onerror = () => reject(r.error ?? new Error('lettura non riuscita'));
+  r.onerror = () => reject(r.error ?? new Error(t('appText.images.readFailed')));
   r.readAsDataURL(b);
 });
 
 /** One image file → an attachment (throws an Italian message when it cannot be read or stays too big). */
 export async function toAttachment(file: Blob): Promise<ImageAttachment> {
   let bmp: ImageBitmap;
-  try { bmp = await createImageBitmap(file); } catch { throw new Error('Immagine non leggibile.'); }
+  try { bmp = await createImageBitmap(file); } catch { throw new Error(t('appText.images.unreadable')); }
   try {
     const real = sniff(new Uint8Array(await file.slice(0, 12).arrayBuffer()));
     const p = plan(real, file.size, bmp.width, bmp.height);
@@ -74,7 +75,7 @@ export async function toAttachment(file: Blob): Promise<ImageAttachment> {
       const c = draw(bmp, bmp.width * p.scale, bmp.height * p.scale);
       blob = await c.convertToBlob({ type: 'image/png' });
       if (blob.size > IMAGE_MAX_BYTES) blob = await c.convertToBlob({ type: 'image/jpeg', quality: 0.85 });
-      if (blob.size > IMAGE_MAX_BYTES) throw new Error('Immagine troppo grande anche ridotta.');
+      if (blob.size > IMAGE_MAX_BYTES) throw new Error(t('appText.images.tooBig'));
     }
     const k = Math.min(1, THUMB_W / bmp.width, THUMB_H / bmp.height);
     const thumb = await toDataUrl(await draw(bmp, bmp.width * k, bmp.height * k).convertToBlob({ type: 'image/webp', quality: 0.8 }));

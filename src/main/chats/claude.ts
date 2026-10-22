@@ -151,12 +151,13 @@ const RESULT_ERROR_CODES = new Set(['error_max_turns', 'error_max_budget_usd', '
 const END_TASK = new Set(['completed', 'failed', 'killed', 'stopped']);
 const LIVE_TASK = new Set(['pending', 'running', 'in_progress']);
 // What the CLI sends that the app knowingly ignores (drift.ts: anything else outside the handled cases is reported).
-// Checked against CLI 2.1.283; a new CLI's first run warns once for each new name (`npm run logs -- --scope drift`).
+// Checked against CLI 2.1.283 (thinking_tokens, background_tasks_changed, vcs_state_changed are new there and carry
+// nothing the app shows, #155); a new CLI's first run warns once for each new name (`npm run logs -- --scope drift`).
 const QUIET_TYPES = new Set(['keep_alive', 'auth_status', 'tool_progress', 'tool_use_summary', 'prompt_suggestion']);
 const QUIET_STREAM = new Set(['message_delta', 'message_stop', 'ping']);
 const QUIET_DELTAS = new Set(['input_json_delta', 'signature_delta', 'citations_delta']);
 const QUIET_BLOCKS = new Set(['tool_use', 'server_tool_use', 'redacted_thinking', 'mcp_tool_use', 'mcp_tool_result', 'web_search_tool_result', 'web_fetch_tool_result', 'code_execution_tool_result']);
-const QUIET_SYSTEM = new Set(['hook_started', 'hook_progress', 'hook_response', 'files_persisted', 'elicitation_complete', 'task_progress']);
+const QUIET_SYSTEM = new Set(['hook_started', 'hook_progress', 'hook_response', 'files_persisted', 'elicitation_complete', 'task_progress', 'thinking_tokens', 'background_tasks_changed', 'vcs_state_changed']);
 const SESSION_STATES = new Set(['running', 'idle', 'requires_action']);
 
 /** The shape a message is recorded under (drift.ts record): type, then the sub-kind that picks the parser branch. */

@@ -4,18 +4,19 @@ import type { AgentCatalog, AgentDraft, SetupDraft, SetupState } from '@shared/a
 import { useEffect } from 'react';
 import { sb } from '../sb';
 import { createStore } from './createStore';
+import { t } from '../i18n';
 
 export const agents = createStore<{ catalog: AgentCatalog | null; setup: SetupState | null; error: string | null }>({ catalog: null, setup: null, error: null });
 let started = false, catalogRevision = 0, setupRevision = 0;
 export async function refreshAgents(): Promise<void> {
   const revision = ++catalogRevision;
   try { const catalog = await sb.invoke('agents:list', undefined); if (revision === catalogRevision) agents.set(s => ({ ...s, catalog, error: null })); }
-  catch { if(revision === catalogRevision) agents.set(s => ({ ...s, error: 'Catalogo non disponibile. Puoi riprovare senza perdere le conversazioni.' })); }
+  catch { if(revision === catalogRevision) agents.set(s => ({ ...s, error: t('appText.agents.catalogUnavailable') })); }
 }
 export async function refreshSetup(): Promise<void> {
   const revision = ++setupRevision;
   try { const setup = await sb.invoke('setup:get', undefined); if (revision === setupRevision) agents.set(s => ({ ...s, setup, error: null })); }
-  catch { if(revision === setupRevision) agents.set(s => ({ ...s, error: 'Configurazione iniziale non disponibile: riprova.' })); }
+  catch { if(revision === setupRevision) agents.set(s => ({ ...s, error: t('appText.agents.setupUnavailable') })); }
 }
 function start(): void {
   if (started) return; started = true;

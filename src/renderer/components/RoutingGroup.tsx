@@ -11,7 +11,7 @@
 // the «Peso del costo» (0-10, the λ the daily loop weighs cost against quality with). A writing row on an Anthropic model
 // also has «Sui crediti API» (ADR 0052, off until the user turns it on): its chats run on the Anthropic API engine, paid
 // by the API credits of the user's Max plan. Rendered by SettingsPage.tsx.
-import { t as auditText } from '../i18n';
+import { t as auditText, locale } from '../i18n';
 import { Select } from './Select';
 import { useEffect, useState } from 'react';
 import type { RoutingInfo, TaskKind } from '@shared/contract';
@@ -27,7 +27,7 @@ const today = (): string => new Date().toISOString().slice(0, 10);
 const explorationOf = (pct: string): number | undefined => (pct.trim() === '' ? undefined : Number(pct) / 100);
 /** The typed cost weight (0-10, as is: main refuses one out of range); empty = the one in force stays. */
 const weightOf = (w: string): number | undefined => (w.trim() === '' ? undefined : Number(w));
-const when = (iso: string): string => new Date(iso).toLocaleString('it-IT', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+const when = (iso: string): string => new Date(iso).toLocaleString(locale(), { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
 
 export function RoutingGroup() {
   const [info, setInfo] = useState<RoutingInfo | null>(null);
@@ -63,7 +63,7 @@ export function RoutingGroup() {
     try {
       const r = await window.sb.invoke('routing:save', { routes: rows.map(e => fromEdit(e, reg, today())), ...(explorationOf(pct) !== undefined ? { exploration: explorationOf(pct) } : {}), ...(weightOf(weight) !== undefined ? { costWeight: weightOf(weight) } : {}), ...(reason.trim() ? { reason: reason.trim() } : {}), ...(info?.table ? { baseVersion: info.table.version } : {}) });
       load(r);
-      toast(`Instradamento salvato: versione ${r.table?.version ?? '?'}`, 'ok');
+      toast(auditText('appText.routing.saved', { version: r.table?.version ?? '?' }), 'ok');
     } catch (err) {
       // main's message, without Electron's "Error invoking remote method" prefix
       setError(mainError(err));

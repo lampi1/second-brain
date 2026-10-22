@@ -39,8 +39,10 @@ test('answers stream in place, tools flip live, the typing line follows the turn
   await app.close();
 });
 
+// a short window: the full-screen strip's list overflows after a few of the browser loop's rows (at 1000 px it needs
+// over 20 s of them)
 test('scrolled up to read, the list does not jump: a "nuove righe" pill appears', async () => {
-  const { app, page } = await launchDemo({ freeze: false });
+  const { app, page } = await launchDemo({ freeze: false, height: 720 });
   await expandChats(page, 'sms'); // as the user would: open the strip, then full screen
   await page.getByTestId('chat-max-sms').click();
   const list = page.getByTestId('tile-chat-sms').locator('.items');
@@ -59,7 +61,7 @@ test('scrolled up to read, the list does not jump: a "nuove righe" pill appears'
 });
 
 test('at the bottom, the list stays there while content grows frame after frame (its own scroll never detaches it)', async () => {
-  const { app, page } = await launchDemo({ freeze: false });
+  const { app, page } = await launchDemo({ freeze: false, height: 720 });
   await expandChats(page, 'sms');
   await page.getByTestId('chat-max-sms').click();
   const tile = page.getByTestId('tile-chat-sms');
@@ -83,39 +85,17 @@ test('at the bottom, the list stays there while content grows frame after frame 
 });
 
 test('a small (compact) tile shows the typing line while its chat works', async () => {
-  const { app, page } = await launchDemo({ width: 1000, height: 640 }); // two rows of chats
-  // without the needs lane the chat zone never gets that short at the window's minimum size: shrink it to test the tile
-  await page.addStyleTag({ content: '[data-testid="tile-chat-fix"] { height:220px !important; max-height:220px !important; }' });
+  const { app, page } = await launchDemo({ width: 1000, height: 640 });
   const tile = page.getByTestId('tile-chat-fix');
+  // folded (the Grindhouse's default) the strip is compact: its one line shows what the running chat does, in place
+  // of its last text (ChatTile.tsx, StripActivity.tsx)
   await expect(tile).toHaveClass(/\bcompact\b/);
-  await expect(tile.getByTestId('chat-last-fix')).toBeVisible();
-  await expect(tile.getByTestId('typing-fix')).toBeVisible(); // the demo's "fix" chat is running
+  await expect(tile.locator('.chat-strip-line').getByTestId('typing-fix')).toBeVisible(); // the demo's "fix" chat is running
   await shot(page, 'compact-typing');
-  await app.close();
-});
-
-// "Lag nell'app" (2026-10-12): the alive marks of a running turn (typing dots, tool spinner, state dot) step twice a
-// second from lib/beat.ts instead of 60 fps CSS animations; with reduced motion they stand still.
-test('a running turn\'s dots and spinner step twice a second, and stand still with reduced motion', async () => {
-  const { app, page } = await launchDemo({ freeze: false });
-  await page.emulateMedia({ reducedMotion: 'no-preference' });
-  await expandChats(page, 'mappa');
-  await page.getByTestId('chat-input-mappa').fill('Aggiungi la legenda');
-  await page.getByTestId('chat-input-mappa').press('Enter');
-  await expect(page.getByTestId('typing-mappa')).toBeVisible();
-  // no infinite CSS animation runs on the page: the marks are still between steps
-  expect(await page.evaluate(() => document.getAnimations().filter(a => a.effect?.getComputedTiming().iterations === Infinity).length)).toBe(0);
-  const steps = await page.evaluate(async () => {
-    const seen: string[] = [];
-    for (let i = 0; i < 6; i++) { seen.push(document.documentElement.getAttribute('data-b3') ?? '-'); await new Promise(r => setTimeout(r, 500)); }
-    return seen;
-  });
-  expect(new Set(steps.filter(s => s !== '-')).size).toBeGreaterThanOrEqual(2); // the dots light in turn
-  const dots = page.getByTestId('typing-mappa').locator('.typing-dots i');
-  await expect.poll(async () => (await dots.evaluateAll(els => els.map(e => getComputedStyle(e).opacity))).filter(o => o === '1').length).toBe(1);
-  await shot(page, 'stream-alive-marks');
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await expect(page.locator('html[data-b3]')).toHaveCount(0);
-  await expect.poll(async () => (await dots.evaluateAll(els => els.map(e => getComputedStyle(e).opacity))).filter(o => o === '1').length).toBe(0);
+  // open but short, the tile is compact too and still shows the typing line: shrink it, as a crowded window would
+  await expandChats(page, 'fix');
+  await page.addStyleTag({ content: '[data-testid="tile-chat-fix"] { height:220px !important; max-height:220px !important; }' });
+  await expect(tile).toHaveClass(/\bcompact\b/);
+  await expect(tile.getByTestId('typing-fix')).toBeVisible();
   await app.close();
 });

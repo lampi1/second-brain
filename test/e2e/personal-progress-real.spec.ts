@@ -14,8 +14,11 @@ const FAKE = path.resolve(import.meta.dirname, '..', 'fixtures', 'fake-claude.mj
 test('the real profile awards its milestones: "Confermo" on a finished result, a customized role, a completed setup', async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-claude-'));
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cwd-'));
-  // a profile past its first run (the "Collega la tua IA" gate was skipped), as a returning user's
+  // a profile past its first run (the "Collega la tua IA" gate was skipped), as a returning user's, with a brain folder
+  // (a customized role keeps its skills in the brain: agents/pack/flows.ts root())
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-'));
+  const brain = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-brain-'));
+  fs.writeFileSync(path.join(userData, 'config.json'), JSON.stringify({ brainRoot: brain }));
   fs.writeFileSync(path.join(userData, 'setup.json'), JSON.stringify({ version: 1, status: 'skipped', updatedAt: 1, preferences: { step: 0, work: '', goals: '', tools: '', style: 'balanced' } }));
   const { app, page } = await launch({ SB_CLAUDE_PATH: FAKE, CLAUDE_CONFIG_DIR: home }, userData);
   try {

@@ -172,6 +172,6 @@ export class WarmPool {
     this.forget(x);
     log.info('chats', 'warm engine closed', { chat: x.engine.chatId, data: { why } });
     x.engine.sink.onOrphanExit = null;
-    void x.engine.session.close(1000);
+    void x.engine.session.close();
   }
 }

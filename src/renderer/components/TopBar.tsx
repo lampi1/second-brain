@@ -1,6 +1,7 @@
 // The app action bar: history, search, observed status, requests, browsers and stop controls.
 // Settings owns appearance and connectors; its gear menu only links to settings and shortcuts.
-// Used by App.tsx; fit steps keep the final action group reachable at narrow widths.
+// Used by App.tsx; fit steps keep the final action group reachable at narrow widths. The end group holds the language
+// switch (LangSwitch.tsx, ADR 0120), so it is always reachable.
 import { t as auditText } from '../i18n';
 import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import{t}from'../i18n';
@@ -19,6 +20,7 @@ import { HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconGlo
 import { UsageBar } from './UsageBar';
 import { SyncStatus } from './SyncStatus';
 import { StatoButton } from './OrchestratorOverlay';
+import { LangSwitch } from './LangSwitch';
 import { IconButton, Keys, MenuItem, MenuLabel, Popover } from './ui';
 
 function CliRow({ engine: { id: harness, name }, st }: { engine: EngineInfo; st: CliStatus | undefined }) {
@@ -48,7 +50,7 @@ function CliStatusButton() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
   const bad = shown.some(e => { const c = cli?.[e.id]; return !!c?.found && c.loggedIn === false; });
-  const label = !cli ? 'CLI: controllo in corso' : bad ? 'CLI: serve un accesso' : 'CLI pronte';
+  const label = !cli ? t('appText.topBar.cliChecking') : bad ? t('appText.topBar.cliLogin') : t('appText.topBar.cliReady');
   return (
     <>
       <button ref={ref} type="button" className={`cli-btn ${bad ? 'bad' : ''}`} onClick={() => setOpen(o => !o)} aria-label={label} data-tip={label} aria-expanded={open} data-testid="cli-status">
@@ -157,8 +159,9 @@ function MoreButton() {
 
 /** Fit steps, applied in order while the bar's actions overflow (2026-10-13, settings pushed off at 1920 px): 1 icon-only
  *  buttons, 2 shorter usage strip, 3 icon-only search / next, 4 no Cursor in the strip, 5 icon-only popups switch and
- *  connectors. Read by app.css (data-fit). */
-const FIT_STEPS = 5;
+ *  connectors, 6 (the narrowest windows: 1000 px at 110 % zoom) the language switch as its code only (no globe), the
+ *  search without its Ctrl+K hint and tighter gaps. Every action stays on the bar. Read by app.css (data-fit). */
+const FIT_STEPS = 6;
 function useFit(head: RefObject<HTMLElement | null>, main: RefObject<HTMLElement | null>) {
   useLayoutEffect(() => {
     const h = head.current, m = main.current;
@@ -230,6 +233,7 @@ export function TopBar() {
       </button>
       </div>
       <div className="topbar-end">
+        <LangSwitch />
         <MoreButton />
         <Bell />
         <SettingsButton />

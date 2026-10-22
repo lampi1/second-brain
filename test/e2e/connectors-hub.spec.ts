@@ -1,7 +1,9 @@
 // Settings → Connettori (issue #91, ADR 0086) on the demo's made-up MCP servers (no process, no network, no real
 // token): the totals and the cards say what each server is, whether it works, its tools and roles; "Prova" turns an
 // untried server into a working one; the missing token is said with its fix and typed write-only (only its mask comes
-// back); a server is added from the form; the herald card's MCP section narrows a server. Dark and light screenshots of
+// back); the tool catalog sits on top (ToolCatalog.tsx, ADR 0119) and a server is added from the technical form, which
+// lives in Settings → Avanzate; the herald card's MCP section narrows a server once the card's «Server MCP» tool class
+// is on (the demo's Herald reads only, so its section starts disabled). Dark and light screenshots of
 // the section. Hidden window (SB_HIDDEN, set by the helpers).
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import fs from 'node:fs';
@@ -50,9 +52,13 @@ test('Connettori: accounts and MCP servers as cards, Prova, write-only token, ad
     const state = await page.evaluate(() => (window as unknown as { sb: { invoke(c: string, a: unknown): Promise<unknown> } }).sb.invoke('mcpservers:state', undefined));
     expect(JSON.stringify(state)).not.toContain(token);
 
-    // a new server from the form
-    await group.getByTestId('hub-add').click();
-    const editor = group.getByTestId('hub-editor');
+    // the catalog in Connettori; the technical form only in Avanzate
+    await expect(group.getByTestId('tool-catalog')).toBeVisible();
+    await expect(group.getByTestId('hub-add')).toHaveCount(0);
+    const advanced = page.getByTestId('st-group-advanced');
+    await advanced.scrollIntoViewIfNeeded();
+    await advanced.getByTestId('hub-add').click();
+    const editor = advanced.getByTestId('hub-editor');
     await editor.getByRole('textbox', { name: 'Nome', exact: true }).fill('Sentry');
     await editor.getByRole('textbox', { name: 'Comando', exact: true }).fill('npx');
     await editor.getByRole('textbox', { name: 'Argomenti (uno per riga)', exact: true }).fill('-y\n@sentry/mcp-server');
@@ -64,7 +70,7 @@ test('Connettori: accounts and MCP servers as cards, Prova, write-only token, ad
     await expect(sentry.getByRole('status')).toHaveText('Manca il token');
     await expect(sentry).toContainText('npx -y @sentry/mcp-server');
     // a secret in a plain field is refused with what to do
-    await group.getByTestId('hub-add').click();
+    await advanced.getByTestId('hub-add').click();
     await editor.getByRole('textbox', { name: 'Nome', exact: true }).fill('Bad');
     await editor.getByRole('textbox', { name: 'Comando', exact: true }).fill('npx');
     await editor.getByRole('textbox', { name: 'Variabili (NOME=valore)', exact: true }).fill('GITHUB_TOKEN=ghp_x');
@@ -84,6 +90,10 @@ test('Connettori: accounts and MCP servers as cards, Prova, write-only token, ad
     const select = section.getByTestId('agent-mcp-herald-azure-devops');
     await expect(select).toHaveAttribute('data-value', 'read');
     await expect(section).toContainText('4 di 6 strumenti');
+    // the demo's Herald was narrowed to reading (no «Server MCP» class): no server reaches it until the class is on
+    await expect(select).toBeDisabled();
+    await page.getByTestId('role-permissions').getByTestId('perm-toggle-mcp').click();
+    await expect(select).toBeEnabled();
     await section.scrollIntoViewIfNeeded();
     await shotOf(page.getByTestId('perm-section-mcp'), 'connectors-hub-agent-card');
     await choose(select, 'none');

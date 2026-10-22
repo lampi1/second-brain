@@ -80,6 +80,10 @@ describe('agent metrics', () => {
     const [m] = runMetrics([run({ endedAt: undefined, endReason: undefined })]);
     expect(m).toMatchObject({ agentId: 'coder', open: 1, versions: [], all: null });
   });
+  it('an open run whose chat is closed or gone is not "in corso" (live)', () => {
+    const runs = [run({ runId: 'a', chatId: 'c1', endedAt: undefined, endReason: undefined }), run({ runId: 'b', chatId: 'gone', endedAt: undefined, endReason: undefined })];
+    expect(runMetrics(runs, { live: r => r.chatId === 'c1' })[0]).toMatchObject({ open: 1 });
+  });
 
   it('every version has its own row and the all-versions row adds them up', () => {
     const m = one([run({ version: 1, ...outcome('success', 'human') }), run({ version: 2, ...outcome('partial', 'human') })]);

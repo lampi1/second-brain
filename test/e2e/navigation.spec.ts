@@ -16,7 +16,8 @@ async function openPage(page: Page, id: 'costi' | 'idee') {
   await page.keyboard.press('Control+K');
   await page.getByTestId('palette-input').fill(`sb://${id}`);
   await page.getByTestId('palette-item-link').click();
-  await expect(page.getByTestId(`page-${id}`)).toBeVisible();
+  // Idee is a tab of Memoria (ADR 0122): its old link lands there
+  await expect(page.getByTestId(id === 'idee' ? 'page-memoria' : `page-${id}`)).toBeVisible();
 }
 
 test('an important event shows a toast above everything; its action opens the place and highlights it', async () => {
@@ -77,22 +78,15 @@ test('notification center: filter by kind, mark all read (remembered after a rel
 test('section badges count new events and clear when the section is visited', async () => {
   // a live clock: frozen, the visit and the event share one instant and the event is never newer than the visit
   const { app, page } = await launchDemo({ freeze: false });
-  // Badges are still available when a saved role explicitly includes these secondary pages.
-  await page.evaluate(() => {
-    const prefs = JSON.parse(localStorage.getItem('sb.prefs.v1') ?? '{}');
-    prefs.role = { schemaVersion: 1, presetId: 'cto', presetRevision: 1, overrides: { addPageIds: ['idee'] } };
-    localStorage.setItem('sb.prefs.v1', JSON.stringify(prefs));
-  });
-  await page.reload();
-  await expect(page.getByTestId('nav-idee')).toBeVisible();
+  await expect(page.getByTestId('nav-idee')).toHaveCount(0); // a Memoria tab now (ADR 0122), never a rail entry
   // Costi's badge is a warning mark, not a number (WARN_SECTIONS): it shows with a new budget event
   const badge = page.getByTestId('nav-badge-costi');
   await page.getByTestId('nav-costi').click();
   await expect(badge).toHaveText('');
-  await page.getByTestId('nav-idee').click();
-  // logged-only kinds never badge (policy 2026-10-13): an idea leaves Idee's badge as it was; the budget event after it
-  // shows Costi's mark, so the idea was handled by then
-  const ideas = page.getByTestId('nav-badge-idee');
+  await page.getByTestId('nav-qualita').click();
+  // logged-only kinds never badge (policy 2026-10-13): an idea leaves the other badges as they were; the budget event
+  // after it shows Costi's mark, so the idea was handled by then
+  const ideas = page.getByTestId('nav-badge-qualita');
   const ideasBefore = await ideas.textContent();
   await event(app, { kind: 'idea', title: 'Una idea in più' });
   await event(app, { kind: 'budget', title: 'Claude al 80 % del limite di oggi' });
@@ -145,7 +139,7 @@ test('back/forward, recents, Ctrl+1, G-letter keys, the persistent Orchestrator 
   const { app, page } = await launchDemo();
   await openPage(page, 'costi');
   await openPage(page, 'idee');
-  await expect(page.getByTestId('page-idee')).toBeVisible();
+  await expect(page.getByTestId('mh-panel-idee')).toBeVisible();
   await page.keyboard.press('Alt+ArrowLeft');
   await expect(page.getByTestId('page-costi')).toBeVisible();
   await page.keyboard.press('Alt+ArrowLeft');
@@ -201,9 +195,8 @@ test('copy an internal link and paste it in Ctrl+K: it goes there and highlights
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('view-agents')).toBeVisible();
   await expect(page.locator('[data-sb-id="chat-qa"][data-highlighted="true"]')).toBeVisible();
-  // a page link from its frame
+  // an old page link lands on its Memoria tab (ADR 0122); no «Copia link» at the top of a page (owner, 2026-10-22)
   await openPage(page, 'idee');
-  await page.getByTestId('page-copy-link').click();
-  await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toBe('sb://idee');
+  await expect(page.getByTestId('page-copy-link')).toHaveCount(0);
   await app.close();
 });

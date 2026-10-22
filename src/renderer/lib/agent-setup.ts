@@ -4,6 +4,7 @@ import type { SetupDraft, SetupProfile } from '@shared/agents';
 import type { OwnerProfile, ProfileFields } from '@shared/profile';
 import { PROFILE_FORBIDDEN, PROFILE_LIMITS, PROFILE_PLACEHOLDERS, REPLY_PRESETS } from '@shared/profile';
 import { workAreas } from './profile';
+import { t } from '../i18n';
 
 const placeholder = (key: keyof typeof PROFILE_PLACEHOLDERS, value: string) => !value || (PROFILE_PLACEHOLDERS[key] as readonly string[]).includes(value);
 /** the owner's name is already known: the interview shows it instead of asking */
@@ -41,12 +42,12 @@ export function wizardLocked(current: OwnerProfile | null): Set<string> {
 export function answerProblems(draft: SetupDraft, current: OwnerProfile | null): Partial<Record<'name' | 'role' | 'language' | 'areas', string>> {
   const all = draft.profile ?? {}, locked = wizardLocked(current), out: Partial<Record<'name' | 'role' | 'language' | 'areas', string>> = {};
   const p = { ...all, name: knownName(current) || locked.has('name') ? undefined : all.name, role: locked.has('role') ? undefined : all.role, language: locked.has('language') ? undefined : all.language, areas: locked.has('mainWork') ? undefined : all.areas };
-  if (p.name && PROFILE_FORBIDDEN.name.test(p.name)) out.name = 'Il nome non può contenere # * ` [ ] < > | _ \\';
-  if (p.role && PROFILE_FORBIDDEN.role.test(p.role)) out.role = 'Il ruolo non può contenere «. Language:».';
-  if (p.language && PROFILE_FORBIDDEN.language.test(p.language)) out.language = 'Scrivi solo la lingua, per esempio: italiano.';
+  if (p.name && PROFILE_FORBIDDEN.name.test(p.name)) out.name = t('appText.agentSetup.name');
+  if (p.role && PROFILE_FORBIDDEN.role.test(p.role)) out.role = t('appText.agentSetup.role');
+  if (p.language && PROFILE_FORBIDDEN.language.test(p.language)) out.language = t('appText.agentSetup.language');
   const areas = workAreas(p.areas ?? '');
-  if (areas.length > PROFILE_LIMITS.areas) out.areas = `Al massimo ${PROFILE_LIMITS.areas} aree: raggruppa le più vicine.`;
-  else if (areas.some(a => a.length > PROFILE_LIMITS.area)) out.areas = `Ogni area al massimo ${PROFILE_LIMITS.area} caratteri.`;
+  if (areas.length > PROFILE_LIMITS.areas) out.areas = t('appText.agentSetup.areas', { n: PROFILE_LIMITS.areas });
+  else if (areas.some(a => a.length > PROFILE_LIMITS.area)) out.areas = t('appText.agentSetup.area', { n: PROFILE_LIMITS.area });
   return out;
 }
 /** the me.md fields to save on confirm: only answers given in this run, changed, unlocked and valid */

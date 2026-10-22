@@ -58,8 +58,6 @@ export interface AgentCatalogDeps {
   now?: () => number;
   onCustomized?: () => void;
 }
-/** A pack's skills attached to a built-in role (pack/flows.ts importApply): its know-how changes, as a trial version. */
-export interface PackInstall { id: string; knowhow: NonNullable<AgentDraft['knowhow']>; pack: NonNullable<AgentDraft['pack']> }
 /** What a chat starts with: the request with the role's engine, model and effort, its owner snapshot, the composed
  *  instructions and the tool policy; skills = the role's default skills; launches = the roles it may delegate to. */
 export interface ResolvedRole {
@@ -341,18 +339,6 @@ export class AgentCatalogService {
   }
   history(id: string): AgentVersion[] { this.find(id); return this.store.list(id); }
 
-  /** Main-only pack metadata update; never accepts a renderer-authored provenance object. */
-  packIdentity(id: string, pack: AgentProfile['pack']): void {
-    this.writable(); const old = this.find(id);
-    const profile = { ...old, pack: checkedPackIdentity(pack) };
-    this.commit(this.profiles.map(p => p.id === id ? profile : p), []);
-  }
-  /** A reviewed pack attaches its skills to built-in roles: each role's know-how changes as a trial version. */
-  validatePacks(items: PackInstall[]): void { for (const i of items) { const p = this.find(i.id); if (p.trial) throw new Error(`C’è una prova in corso su ${p.name}: chiudila prima di importare.`); checkedKnowhow(i.knowhow); checkedPackIdentity(i.pack); } }
-  applyPacks(items: PackInstall[]): AgentProfile[] {
-    this.writable(); this.validatePacks(items);
-    return items.map(i => { const old = this.find(i.id); return this.version(old, { ...this.behaviour({}, old.id, false, old), knowhow: i.knowhow, pack: i.pack }, 'user', 'Abilità importate da un pacchetto', 'trial'); });
-  }
   /** Ends the open trial: keep its version, or roll back to the baseline. */
   resolveTrial(id: string, decision: 'keep' | 'rollback'): AgentProfile {
     this.writable(); const p = this.find(id);

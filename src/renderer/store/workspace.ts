@@ -2,6 +2,7 @@
 // here: the Orchestrator orders the agents (lib/agent-order.ts). The stored shape stays { version: 1, root, purposes } so
 // copies written by older versions still load; their saved `root` (the retired drag layout) is ignored and saved as null.
 import { createStore } from './createStore';
+import { t } from '../i18n';
 
 const KEY = 'sb.agents.workspace.v1';
 interface WorkspaceState { purposes: Record<string, string> }
@@ -28,7 +29,7 @@ export function setAgentPurpose(id: string, purpose: string): void {
 }
 
 export function checkpointWorkspace(): string {
-  if (Object.keys(workspace.get().purposes).length > 500) throw Error('Gli scopi salvati superano il limite di ripristino. L’app resta aperta.');
+  if (Object.keys(workspace.get().purposes).length > 500) throw Error(t('appText.workspace.tooMany'));
   const value = stored(); localStorage.setItem(KEY, value); return value;
 }
 export function restoreCheckpointWorkspace(): void { workspace.set(load()); }

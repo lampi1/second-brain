@@ -9,6 +9,7 @@ import path from 'node:path';
 import type { AgentRun } from '../../shared/agents';
 import { writeLocal } from '../agents/local-store';
 import type { StoredChange } from './changes';
+import { localize } from '../demo-text';
 
 const DAY = 86_400_000;
 /** [role, days from now (oldest first), corrections pattern before, the day it changes, pattern after] */
@@ -50,5 +51,6 @@ export function writeDemoChanges(userData: string, now: number): void {
     c('demo-l5', 10, { job: 'repeated-task', kind: 'skill', action: 'create', target: 'aggiorna-dipendenze', summary: 'Nuova skill «aggiorna-dipendenze» da un lavoro ripetuto 4 volte', reason: 'Quattro lavori simili in tre settimane.', evidence: ['aggiorna-dipendenze'], seed: { hypothesis: 'fewer', scope: [], skill: 'aggiorna-dipendenze' } }),
     c('demo-l6', 4, { job: 'corrections', kind: 'rule', action: 'create', target: 'rules/nomi-branch.md', summary: 'Regola: i branch si chiamano tipo/descrizione-breve', reason: 'Una correzione ripetuta su due ruoli.', evidence: ['rules/nomi-branch.md'], seed: { hypothesis: 'fewer', scope: [], skill: null } }),
   ];
-  writeLocal(file, { version: 1, changes });
+  // in the UI language (demo-text.ts): summaries, reasons and the skill and rule names they cite
+  writeLocal(file, { version: 1, changes: localize(changes) });
 }

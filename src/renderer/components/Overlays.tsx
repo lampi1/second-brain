@@ -1,9 +1,10 @@
 // Small overlays: the confirm dialog (only for what cannot be undone, e.g. Ferma tutto with several chats running),
-// the keyboard shortcuts sheet (Ctrl+/), and calm toasts (at most two in a reserved row below the top bar, with
-// an undo action for undoable things). The row never overlays the work area. Used by App.tsx.
+// the keyboard shortcuts sheet (Ctrl+/), and calm toasts (floating under the top bar, out of the layout flow so they
+// never move the page, #169; an undo action for undoable things). Used by App.tsx.
 import { getKeymap } from '../lib/keys';
 import { closeModal, dismissToast, expireToasts, ui } from '../store/ui';
-import{useEffect}from'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
+import { registerOverlay, schedule } from '../lib/viewports';
 import { t } from '../i18n';
 import { IconAlert, IconCheck, IconInfo, IconUndo, IconX } from './Icons';
 import { Keys, Modal } from './ui';
@@ -44,8 +45,12 @@ export function Toasts() {
   const toasts = ui.use(s => s.toasts);
   useEffect(()=>{expireToasts();window.addEventListener('focus',expireToasts);document.addEventListener('visibilitychange',expireToasts);return()=>{window.removeEventListener('focus',expireToasts);document.removeEventListener('visibilitychange',expireToasts);};},[]);
   const closeLabel = t('dialogs.toast.closeLabel');
+  // it floats over the page (#169): a browser view under a toast steps aside while it shows
+  const area = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => (area.current ? registerOverlay(area.current) : undefined), []);
+  useLayoutEffect(() => { schedule(); }, [toasts]);
   return (
-    <div className="toasts" aria-live="polite" data-testid="toasts">
+    <div ref={area} className="toasts" aria-live="polite" data-testid="toasts">
       {toasts.map(toast => (
         <div key={toast.id} className={`toast toast-${toast.tone}`} role={toast.tone === 'err' ? 'alert' : 'status'} data-testid="toast">
           {toast.tone === 'ok' ? <IconCheck size={14} /> : toast.tone === 'err' || toast.tone === 'warn' ? <IconAlert size={14} /> : <IconInfo size={14} />}

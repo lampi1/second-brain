@@ -2,6 +2,7 @@
 // as a real brain's data server (ops/tools/brain-site.mjs: /api/tables, now, cost, day, map, files, file, search,
 // version), dates relative to "today" so every run looks current. Fictional content only (the repo is public): the
 // owner is "Alex", work areas are generic, links point to dev.example.com. Pure: build(now) returns the whole dataset.
+// The map's labels come in English when SB_LANG=en (the README screenshots, test/shots/readme.spec.ts); Italian otherwise.
 
 const DAY = 864e5;
 const iso = t => new Date(t).toISOString();
@@ -255,14 +256,135 @@ export function build(now = Date.now(), opts = {}) {
   };
 
   // ── map (brain-map.mjs --json) ─────────────────────────────────────────────────────────────────────────────────
+  // the map in English when the UI is (SB_LANG=en: the README screenshots); anything without an entry stays as written
+  const MAP_EN = {
+    'tu e i colleghi': 'you and your colleagues',
+    'l’Orchestrator e le chat di lavoro': 'the Orchestrator and the work chats',
+    'specialisti, taccuini, skill': 'specialists, notebooks, skills',
+    'script e hook che scattano da soli': 'scripts and hooks that fire by themselves',
+    'dove il cervello scrive quello che succede': 'where the brain writes what happens',
+    'come devono lavorare gli agenti': 'how the agents must work',
+    'servizi fuori dal PC e i due programmi': 'services outside the PC and the two programs',
+    'Persone': 'People',
+    'Chat': 'Chats',
+    'Agenti e skill': 'Agents and skills',
+    'Tool e hook': 'Tools and hooks',
+    'Memoria': 'Memory',
+    'Regole': 'Rules',
+    'Esterni': 'External',
+    'decide e lancia lui la produzione': 'decides, and runs production himself',
+    'Lo sviluppatore: lavora con le chat, decide.': 'The developer: works with the chats, decides.',
+    'Colleghi e QA': 'Colleagues and QA',
+    'chi taggare e come scrivere': 'whom to tag and how to write',
+    'Colleghi, ruoli, chi taggare.': 'Colleagues, roles, whom to tag.',
+    'l\'unica chat con cui parli': 'the one chat you talk to',
+    'La chat che coordina le altre.': 'The chat that coordinates the others.',
+    'Chat di lavoro': 'Work chats',
+    'una per ogni lavoro vero': 'one for every real job',
+    'Le chat aperte dall’Orchestrator.': 'The chats the Orchestrator opens.',
+    'il programma delle chat': 'the chats’ program',
+    'l\'altro programma': 'the other program',
+    'Revisore del codice': 'Code reviewer',
+    'rilegge ogni diff prima del fatto': 'reads every diff before done',
+    'Revisione di correttezza.': 'Correctness review.',
+    'Tester nel browser': 'Browser tester',
+    'esegue i test case': 'runs the test cases',
+    'QA nel browser.': 'QA in the browser.',
+    'comandi brevi: /stato, /opzioni…': 'short commands: /stato, /opzioni…',
+    'Stato di tutto': 'Status of everything',
+    'Stato di tutto il lavoro aperto': 'Status of all open work',
+    'Cosa posso fare': 'What can I do',
+    'Cosa puoi fare adesso': 'What you can do now',
+    'Spiegami a domande': 'Explain with questions',
+    'Spiega a domande': 'Explains with questions',
+    'Urgenze': 'Urgent',
+    'Corsia urgenze': 'The urgent lane',
+    'Scrittura memoria': 'Memory writer',
+    'scrive la memoria, una riga': 'writes memory, one line',
+    'Il tool unico della memoria.': 'The one memory tool.',
+    'Posta tra chat': 'Mail between chats',
+    'la posta tra chat': 'mail between chats',
+    'Caselle di posta tra chat.': 'Mailboxes between chats.',
+    'Costi del cervello': 'Brain costs',
+    'quanto costa e dove': 'what it costs and where',
+    'I costi per giorno, modello, chat.': 'Costs by day, model, chat.',
+    'scattano da soli a fine turno': 'fire by themselves at the end of a turn',
+    'Salvataggio automatico': 'Automatic save',
+    'Salva il cervello a fine turno': 'Saves the brain at the end of a turn',
+    'Notizie all’Orchestrator': 'News to the Orchestrator',
+    'Le novità delle chat': 'The chats’ news',
+    'Guardia dei comandi': 'Command guard',
+    'Ferma i comandi pericolosi': 'Stops dangerous commands',
+    'Fili aperti': 'Open threads',
+    'i fili aperti, una riga ciascuno': 'the open threads, one line each',
+    'Stato di ogni filo.': 'The state of every thread.',
+    'Diario': 'Journal',
+    'cosa è successo, giorno per giorno': 'what happened, day by day',
+    'Errori dell\'IA': 'AI errors',
+    'ogni errore dell\'IA': 'every AI error',
+    'Errori registrati.': 'Logged errors.',
+    'Idee da riprendere': 'Ideas to pick up',
+    'idee tue e dell\'IA': 'your ideas and the AI’s',
+    'Le idee.': 'The ideas.',
+    'Regole di lavoro': 'Work rules',
+    'chi sei e come lavori': 'who you are and how you work',
+    'Preferenze e sicurezza.': 'Preferences and safety.',
+    'Regole del codice': 'Code rules',
+    'regole per il codice': 'rules for code',
+    'Fix, PR, commit.': 'Fixes, PRs, commits.',
+    'PR, bug, build': 'PRs, bugs, builds',
+    'Il tracker.': 'The tracker.',
+    'Posta e chat': 'Mail and chat',
+    'mail e messaggi': 'mail and messages',
+    'Outlook e Teams.': 'Outlook and Teams.',
+    'scrive solo all’Orchestrator': 'writes only to the Orchestrator',
+    'apre una chat per ogni lavoro': 'opens a chat for every job',
+    'chiama il reviewer prima del fatto': 'calls the reviewer before done',
+    'chiama la QA': 'calls QA',
+    'scrive alle altre chat': 'writes to the other chats',
+    'consegna all’Orchestrator': 'delivers to the Orchestrator',
+    'salva una riga di memoria': 'saves a memory line',
+    'aggiorna il filo': 'updates the thread',
+    'registra l\'errore': 'logs the error',
+    'un errore che torna diventa una regola': 'an error that comes back becomes a rule',
+    'a fine turno': 'at the end of a turn',
+    'legge sempre': 'always reads',
+    'legge per il codice': 'reads for code',
+    'taccuino': 'notebook',
+    'legge mail e messaggi': 'reads mail and messages',
+    'apre PR e bug': 'opens PRs and bugs',
+    'usa': 'uses',
+    'usa le skill': 'uses the skills',
+    'chat su Cursor': 'a chat on Cursor',
+    'l’Orchestrator su Claude': 'the Orchestrator on Claude',
+    'commentano su DevOps': 'comment on DevOps',
+    'Parli con l’Orchestrator': 'You talk to the Orchestrator',
+    'salva lo stato': 'saves the state',
+    'Un errore diventa una regola': 'An error becomes a rule',
+    'una riga in ai-errors.md': 'one line in ai-errors.md',
+    'se torna, diventa una regola': 'if it comes back, it becomes a rule',
+    'Prima del fatto, il reviewer': 'Before done, the reviewer',
+    'il lavoro parte': 'the work starts',
+    'rilegge il diff': 'reads the diff',
+    'Le chat si scrivono': 'The chats write to each other',
+    'scrive alla casella': 'writes to the mailbox',
+    'l’Orchestrator legge': 'the Orchestrator reads',
+    'scatta': 'fires',
+    'regole dell’Orchestrator': 'the Orchestrator’s rules',
+    'cita': 'cites',
+    'Skill (4)': 'Skills (4)',
+    'Hook (3)': 'Hooks (3)',
+  };
+  const L = t => (process.env.SB_LANG === 'en' && typeof t === 'string' && MAP_EN[t]) || t;
   const root = 'C:/brains/demo';
   const layers = [
     { id: 'persone', label: 'Persone', hint: 'tu e i colleghi' }, { id: 'chat', label: 'Chat', hint: 'l’Orchestrator e le chat di lavoro' },
     { id: 'agenti', label: 'Agenti e skill', hint: 'specialisti, taccuini, skill' }, { id: 'tool', label: 'Tool e hook', hint: 'script e hook che scattano da soli' },
     { id: 'memoria', label: 'Memoria', hint: 'dove il cervello scrive quello che succede' }, { id: 'regole', label: 'Regole', hint: 'come devono lavorare gli agenti' },
     { id: 'esterni', label: 'Esterni', hint: 'servizi fuori dal PC e i due programmi' },
-  ];
-  const N = (id, layer, kind, label, short, what, extra = {}) => ({ id, layer, kind, label, short, what, file: `${root}/${extra.file ?? `${id.replace(/^\w+:/, '')}.md`}`, modified: iso(now - (extra.age ?? 2) * DAY), degree: extra.degree ?? 3, members: [], ...extra });
+
+  ].map(l => ({ ...l, label: L(l.label), hint: L(l.hint) }));
+  const N = (id, layer, kind, label, short, what, extra = {}) => ({ id, layer, kind, label: L(label), short: L(short), what: L(what), file: `${root}/${extra.file ?? `${id.replace(/^\w+:/, '')}.md`}`, modified: iso(now - (extra.age ?? 2) * DAY), degree: extra.degree ?? 3, members: [], ...extra });
   const simpleNodes = [
     N('owner', 'persone', 'persona', OWNER, 'decide e lancia lui la produzione', 'Lo sviluppatore: lavora con le chat, decide.', { degree: 6, file: 'me.md' }),
     N('colleghi', 'persone', 'persona', 'Colleghi e QA', 'chi taggare e come scrivere', 'Colleghi, ruoli, chi taggare.', { degree: 1, file: 'people.md' }),
@@ -289,7 +411,8 @@ export function build(now = Date.now(), opts = {}) {
     N('ext:devops', 'esterni', 'servizio', 'DevOps', 'PR, bug, build', 'Il tracker.', { degree: 3, file: 'ops/AGENTS.md' }),
     N('ext:mail', 'esterni', 'servizio', 'Posta e chat', 'mail e messaggi', 'Outlook e Teams.', { degree: 1, file: 'hub.md' }),
   ];
-  const E = (from, to, kind, label, src) => ({ from, to, kind, label, ...(src ? { source: { file: src[0], text: src[1] } } : {}) });
+  for (const g of simpleNodes.filter(n => n.kind === 'gruppo')) Object.assign(g, { label: L(g.label), short: L(g.short), members: g.members.map(m => ({ ...m, label: L(m.label), what: L(m.what) })) });
+  const E = (from, to, kind, label, src) => ({ from, to, kind, label: L(label), ...(src ? { source: { file: src[0], text: src[1] } } : {}) });
   const simpleEdges = [
     E('owner', 'chat:orchestrator', 'flusso', 'scrive solo all’Orchestrator', ['hub.md', 'talks only to the hub chat']),
     E('chat:orchestrator', 'chat:lavoro', 'flusso', 'apre una chat per ogni lavoro', ['hub.md', 'one chat per real job']),
@@ -309,12 +432,12 @@ export function build(now = Date.now(), opts = {}) {
     E('colleghi', 'ext:devops', 'esterno', 'commentano su DevOps'),
   ];
   const label = id => simpleNodes.find(n => n.id === id)?.label ?? id;
-  const step = (from, to, l, file, text, verified = true) => ({ from, to, label: l, verified, source: { file, text }, fromLabel: label(from), toLabel: label(to) });
+  const step = (from, to, l, file, text, verified = true) => ({ from, to, label: L(l), verified, source: { file, text }, fromLabel: label(from), toLabel: label(to) });
   const flows = [
-    { id: 'orchestrator', title: 'Parli con l’Orchestrator', steps: [step('owner', 'chat:orchestrator', 'scrive solo all’Orchestrator', 'hub.md', 'talks only to the hub chat'), step('chat:orchestrator', 'chat:lavoro', 'apre una chat per ogni lavoro', 'hub.md', 'one chat per real job'), step('chat:lavoro', 'tool:mem', 'salva lo stato', 'map.md', 'every write goes through mem.mjs')] },
-    { id: 'errore', title: 'Un errore diventa una regola', steps: [step('chat:lavoro', 'tool:mem', 'registra l\'errore', 'AGENTS.md', 'logged at once'), step('tool:mem', 'mem:errors', 'una riga in ai-errors.md', 'AGENTS.md', 'one line'), step('mem:errors', 'rule:me', 'se torna, diventa una regola', 'brain-rules.md', 'a repeated error becomes a rule', false)] },
-    { id: 'review', title: 'Prima del fatto, il reviewer', steps: [step('chat:orchestrator', 'chat:lavoro', 'il lavoro parte', 'hub.md', 'one chat per job'), step('chat:lavoro', 'agent:reviewer', 'rilegge il diff', 'code.md', 'reviewer on the diff')] },
-    { id: 'posta', title: 'Le chat si scrivono', steps: [step('chat:lavoro', 'tool:inbox', 'scrive alla casella', 'hub.md', 'mail between chats'), step('tool:inbox', 'chat:orchestrator', 'l’Orchestrator legge', 'hub.md', 'delivered at the end of the turn')] },
+    { id: 'orchestrator', title: L('Parli con l’Orchestrator'), steps: [step('owner', 'chat:orchestrator', 'scrive solo all’Orchestrator', 'hub.md', 'talks only to the hub chat'), step('chat:orchestrator', 'chat:lavoro', 'apre una chat per ogni lavoro', 'hub.md', 'one chat per real job'), step('chat:lavoro', 'tool:mem', 'salva lo stato', 'map.md', 'every write goes through mem.mjs')] },
+    { id: 'errore', title: L('Un errore diventa una regola'), steps: [step('chat:lavoro', 'tool:mem', 'registra l\'errore', 'AGENTS.md', 'logged at once'), step('tool:mem', 'mem:errors', 'una riga in ai-errors.md', 'AGENTS.md', 'one line'), step('mem:errors', 'rule:me', 'se torna, diventa una regola', 'brain-rules.md', 'a repeated error becomes a rule', false)] },
+    { id: 'review', title: L('Prima del fatto, il reviewer'), steps: [step('chat:orchestrator', 'chat:lavoro', 'il lavoro parte', 'hub.md', 'one chat per job'), step('chat:lavoro', 'agent:reviewer', 'rilegge il diff', 'code.md', 'reviewer on the diff')] },
+    { id: 'posta', title: L('Le chat si scrivono'), steps: [step('chat:lavoro', 'tool:inbox', 'scrive alla casella', 'hub.md', 'mail between chats'), step('tool:inbox', 'chat:orchestrator', 'l’Orchestrator legge', 'hub.md', 'delivered at the end of the turn')] },
   ];
   // the full view: the same pieces plus one node per member and a few more files
   const extra = [];

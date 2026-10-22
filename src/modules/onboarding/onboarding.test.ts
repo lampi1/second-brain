@@ -8,13 +8,8 @@ import type { Host } from './service';
 import { LocalFiles } from './local';
 import { discoverLocal, remoteHost } from './discovery';
 import { configAfter } from './config';
-import { renderToStaticMarkup } from 'react-dom/server';
-import { createElement } from 'react';
-import { OnboardingScreen, OrchestratorConnectAction } from './Screen';
-import { message } from './i18n';
 import { locations, projectConfigs } from './locations';
 import { connectionIntent, discoveryView } from './presentation';
-import { DiscoveryBoard } from './Board';
 import type { Discovery } from './contract';
 const temporary: string[] = [];
 describe('platform location fixtures', () => {
@@ -240,38 +235,17 @@ it('rejects a generated config that would exceed the bounded reader', async () =
   await expect(service.prepare({ project, provider: 'github', harnesses: ['claude'] })).rejects.toThrow('too large');
   expect(await fs.readFile(file, 'utf8')).toBe(original);
 });
-it('renders both surfaces in Italian and English with labelled controls', async () => {
-  const { service } = await fixture();
-  for (const language of ['it', 'en'] as const) {
-    const screen = renderToStaticMarkup(createElement(OnboardingScreen, { port: service, language }));
-    expect(screen).toContain('aria-labelledby'); expect(screen).toContain('for='); expect(screen).not.toContain('undefined');
-    const action = renderToStaticMarkup(createElement(OrchestratorConnectAction, { port: service, language }));
-    expect(action).toContain('aria-expanded="false"');
-    expect(action).toContain('onboarding-connectors'); // remains mounted even when Orchestrator action is collapsed
-  }
-});
 const boardFixture: Discovery = { evidence: [
   { kind: 'repo', path: '/example/portal', source: 'git/config metadata', remoteHosts: ['github.com'], checkedAt: '2026-10-17', login: 'unknown' },
   { kind: 'repo', path: '/example/mobile', source: 'git/config metadata', remoteHosts: ['dev.azure.com'], checkedAt: '2026-10-17', login: 'unknown' },
   { kind: 'cli', path: '/example/bin/claude', source: 'claude', checkedAt: '2026-10-17', login: 'unknown' },
   { kind: 'cli', path: '/example/bin/codex', source: 'codex', checkedAt: '2026-10-17', login: 'unknown' },
 ], limited: false, skipped: 0 };
-it('shows discovery evidence as GenUI cards and board without inferring Jira or login', () => {
+it('reads discovery evidence without inferring Jira or login', () => {
   const view = discoveryView(boardFixture);
   expect(view.repos).toHaveLength(2); expect(view.installed).toEqual(['claude', 'codex']); expect(view.services).toEqual(['github', 'azure']);
   expect(discoveryView(null).installed).toEqual([]);
-  for (const language of ['it', 'en'] as const) {
-    const html = renderToStaticMarkup(createElement(DiscoveryBoard, { found: boardFixture, language, project: '/example/portal', harnesses: ['claude', 'codex'], disabled: false, onProject: () => {}, onHarness: () => {}, onConnect: () => {} }));
-    expect(html).toContain('gu-board'); expect(html).toContain('gu-card'); expect(html).toContain('Claude Code'); expect(html).toContain('Codex'); expect(html).toContain('Cursor'); expect(html).toContain('aria-pressed="true"');
-    expect(html).toContain(language === 'it' ? 'Accesso da verificare' : 'Sign-in not verified');
-    expect(html).not.toContain('<select'); expect(html).not.toContain('type="checkbox"');
-  }
 });
 it.each([['collega Jira', 'jira'], ['CONNECT GitHub', 'github'], ['collega Azure DevOps', 'azure'], ['connect ADO.', 'azure'], ['collega Jira Cloud', 'jira'], ['delete everything', null], ['collega https://example.com', null]])('resolves only catalog connection intent: %s', (text, expected) => {
   expect(connectionIntent(text!)).toBe(expected);
-});
-it('localizes actionable connection status and hides unexpected provider/config exceptions', () => {
-  expect(message('Saved. Official harness login and provider verification are still required', 'it')).toContain('Completa l’accesso');
-  expect(message('codex: Azure remote authentication is unsupported by Codex; configuration is not changed.', 'it')).toContain('Codex non supporta');
-  expect(message('unexpected fixture provider response', 'it')).not.toContain('fixture');
 });

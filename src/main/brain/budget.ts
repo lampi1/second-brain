@@ -8,6 +8,7 @@
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import type { BudgetAlert, BudgetSettings, Harness } from '../../shared/contract';
+import { uiLocale } from '../locale';
 
 export interface ChatSpend { id: string; title: string; usd: number }
 export interface Spend {
@@ -19,7 +20,7 @@ export type Crossing = Omit<BudgetAlert, 'id' | 'at'> & { key: string };
 
 const HN: Record<Harness, string> = { claude: 'Claude', cursor: 'Cursor' };
 const money = (v: number) => `${v >= 100 ? Math.round(v) : v.toFixed(v >= 10 ? 0 : 2)} $`;
-const hhmm = (t: number) => new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }).format(new Date(t));
+const hhmm = (t: number) => new Intl.DateTimeFormat(uiLocale(), { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }).format(new Date(t));
 const level = (pct: number): 80 | 100 | null => (pct >= 100 ? 100 : pct >= 80 ? 80 : null);
 // A plan window is identified by its reset time rounded to the minute: Claude reports it with the server's clock
 // fraction (…:00.231987 one read, …:00.845 the next) or in whole seconds (stream), all the same window.

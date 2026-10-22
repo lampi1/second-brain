@@ -6,6 +6,7 @@ import type { Wired, Ctx } from '../wiring';
 import { electronNode, runNode } from '../brain/node';
 import { localDay } from '../jobs/scheduler';
 import { PulseService } from './service';
+import { uiLang } from '../locale';
 
 export function createPulse(s: Wired, ctx: Ctx, legacyHeadline: () => HeadlineState): PulseService | null {
   if (!s.oneShot || !s.agentRuns) return null;
@@ -24,7 +25,7 @@ export function createPulse(s: Wired, ctx: Ctx, legacyHeadline: () => HeadlineSt
   return new PulseService({ file: path.join(ctx.userData, 'pulse.json'), once: s.oneShot, runs: s.agentRuns,
     settings: () => s.brain.settings(), visible: () => { const w = ctx.window(); return !!w && !w.isDestroyed() && w.isVisible() && !w.isMinimized(); },
     calls: !process.env.SB_TEST && !process.env.VITEST && !process.env.SB_DEMO,
-    lang: () => s.brain.settings().language === 'en' ? 'en' : 'it', legacyHeadline,
+    lang: uiLang, legacyHeadline,
     material: () => ({ now: read('now.md'), ideas: read('ideas.md'),
       journal: Array.from({ length: 7 }, (_, i) => read(`journal/${localDay(Date.now() - (6 - i) * 86400_000)}.md`)).join('\n'), errors: read('ai-errors.md'),
       chats: s.chats.list().map(c => ({ id: c.id, title: c.title, state: c.state })),

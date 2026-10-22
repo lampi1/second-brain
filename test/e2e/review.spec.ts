@@ -4,7 +4,7 @@
 // for Cursor questions too (with a note), long permission details keeping the buttons visible, a failed answer coming
 // back answerable, browser tiles without a snapshot showing title and address.
 import { expect, test, type ElectronApplication } from '@playwright/test';
-import { expandChats, launchDemo, layerPage, layerState, goPage } from './helpers';
+import { expandChats, launchDemo, layerPage, layerState, goPage, showBrowsers } from './helpers';
 
 type Demo = { stop(c: string): Promise<void>; say(c: string, t: string): void; ask(c: string, r: object): void; event(e: object): void; failNextAnswer(): void; clearThumbs(): void };
 const demo = <T,>(app: ElectronApplication, fn: (d: Demo, arg: T) => void, arg: T) =>
@@ -36,7 +36,9 @@ test('S1: markdown from a chat cannot navigate the app window (area/map, forms, 
     target: el.querySelector('a[href^="https:"]')?.getAttribute('target'),
   }));
   expect(r.bad).toBe(0);
-  expect(r.hrefs).toEqual(['A:https://example.com/ok', 'A:mailto:a@example.com']);
+  // a local path (file:, UNC) is never a navigable URL: it becomes an inert #sb-file= fragment that only opens the
+  // app's file viewer on a click (lib/markdown.ts localFileLink, LinkPeek.tsx); //host and javascript: lose their href
+  expect(r.hrefs).toEqual(['A:#sb-file=%5Cevil%5Cshare%5Cx.html', 'A:#sb-file=file%3A%2F%2F%2FC%3A%2Fx.html', 'A:https://example.com/ok', 'A:mailto:a@example.com']);
   expect(r.srcs).toEqual([]);
   expect(r.styles).toBe(0);
   expect(r.target).toBe('_blank');
@@ -100,7 +102,11 @@ test('C1: Ctrl+J from inside the layer to an app card brings the keyboard back t
 test('C9: the layer page reloads after a crash and shows the cards again', async () => {
   const { app, page } = await launchDemo();
   await goPage(page, 'costi');
-  await expect.poll(async () => (await layerState(app)).cards).toBe(3);
+  // the Orchestrator column is always open (ADR 0068): while its own request waits there it is the one popup and the
+  // layer holds the others; once it leaves, QA and Feedback float
+  await expect.poll(async () => (await layerState(app)).cards).toBe(0);
+  await demo(app, d => d.stop('orchestrator'), null);
+  await expect.poll(async () => (await layerState(app)).cards).toBe(2);
   await app.evaluate(({ webContents }) => webContents.getAllWebContents().find(w => w.getURL().includes('#overlay'))?.forcefullyCrashRenderer());
   await page.waitForTimeout(1200);
   await expect.poll(async () => app.evaluate(async ({ webContents }) => {
@@ -115,6 +121,7 @@ test('C9: the layer page reloads after a crash and shows the cards again', async
 test('C2/C10: an old finished chat is reachable from the palette, tabs without a snapshot show title and address', async () => {
   const { app, page } = await launchDemo();
   await demo(app, d => d.clearThumbs(), null);
+  await showBrowsers(page, 'qa', 'sms'); // the browsers under the strips show once their globe is pressed
   await expect(page.getByTestId('browser-info-tab-qa')).toContainText('Rimborso 2026/118');
   await expect(page.getByTestId('browser-info-tab-sms')).toContainText('test-2.app.example.com');
   await page.keyboard.press('Control+K');
@@ -159,6 +166,7 @@ test('C3/C4/C7: free text for Cursor questions too, with a note; long details ke
   expect(box!.y + box!.height).toBeLessThanOrEqual(vh);
   // C7: back in the Grindhouse, a failed answer brings the card back, answerable again
   await page.getByTestId('nav-home').click();
+  await expandChats(page, 'mappa'); // its request shows on the open strip
   await demo(app, d => d.failNextAnswer(), null);
   const card = page.locator('[data-request-key^="mappa/"]').first(); // the long permission, in its tile
   await card.focus();

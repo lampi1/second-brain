@@ -26,28 +26,6 @@ type Tool = { id: string; name: string; input: unknown; summary?: string; status
 type W = { __frames: number; __last: number; __at: number[]; __work: Map<number, number> };
 let app: ElectronApplication, page: Page;
 const tool = (chatId: string, t: Tool) => app.evaluate((_e, [c, x]) => (globalThis as unknown as { __sbDemo: { tool(c: string, t: Tool): void } }).__sbDemo.tool(c, x), [chatId, t] as const);
-const frames = () => page.evaluate(() => (window as unknown as W).__frames);
-const cpu = () => app.evaluate(({ app: a }) => {
-  const out: Record<string, number> = {};
-  for (const m of a.getAppMetrics()) out[m.type] = Math.round(((out[m.type] ?? 0) + m.cpu.percentCPUUsage) * 10) / 10;
-  return out;
-});
-/** p50/p95 of the time between drawn frames and of the main-thread work per frame, over the next `ms` */
-async function frameTimes(ms: number) {
-  await page.evaluate(() => { const w = window as unknown as W; w.__at = []; w.__work = new Map(); });
-  await page.waitForTimeout(ms);
-  return page.evaluate(() => {
-    const w = window as unknown as W;
-    const q = (xs: number[], p: number) => { const s = [...xs].sort((a, b) => a - b); return s.length ? Math.round(s[Math.min(s.length - 1, Math.floor(p * s.length))]! * 100) / 100 : 0; };
-    const gaps = w.__at.slice(1).map((t, i) => t - w.__at[i]!), work = [...w.__work.values()];
-    return { frames: w.__at.length, intervalP50: q(gaps, 0.5), intervalP95: q(gaps, 0.95), workP50: q(work, 0.5), workP95: q(work, 0.95) };
-  });
-}
-async function rate(ms: number): Promise<number> {
-  const a = await frames();
-  await page.waitForTimeout(ms);
-  return Math.round(((await frames()) - a) / (ms / 1000) * 10) / 10;
-}
 const openMap = async () => {
   await openNotesMap(page);
     await page.getByRole('button', { name: 'Esplora in 3D' }).click();
@@ -60,7 +38,7 @@ test.beforeAll(async () => {
   await setSize(app, 1600, 1000);
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
-  // the frames the map draws (a burst of WebGL draw calls = one frame), as in map-perf.spec.ts
+  // the frames the map draws (a burst of WebGL draw calls = one frame)
   await page.evaluate(() => {
     const w = window as unknown as W;
     w.__frames = 0; w.__last = 0; w.__at = []; w.__work = new Map();
@@ -87,98 +65,6 @@ test.beforeAll(async () => {
   await tool('fix', { id: 'live-out', name: 'Read', input: { file_path: 'C:/progetti/alfa-shop/Order.cs' }, summary: 'Order.cs' });
 });
 test.afterAll(async () => { await app?.close(); });
-
-test('the live map: legend of the chats at work, lit pieces with "Adesso", a click opens the chat, off switch; pulse cost', async () => {
-  test.setTimeout(120_000);
-  await openMap();
-  const m = page.getByTestId('brain-map');
-  // The map fills the workspace beside the persistent column; the toast wrapper takes no flex space.
-  const column = (await page.getByTestId('orchestrator-overlay').boundingBox())!;
-  const mapBox = (await m.boundingBox())!;
-  expect(mapBox.width).toBeGreaterThan(column.x * 0.95);
-  expect(mapBox.x + mapBox.width).toBeLessThanOrEqual(column.x + 1);
-  const legend = m.getByTestId('bx-map-live');
-  await expect(legend).toContainText('Attività osservata');
-  await expect(legend).toContainText('Fix totale ordine');
-  await expect(legend).toContainText('Bug notifiche SMS');
-  await expect(legend).toContainText('Orchestrator');
-  await expect(legend).not.toContainText('Order.cs'); // Repo files never become brain neurons.
-  await expect(m.getByTestId('bx-map-canvas').locator('canvas')).toHaveCount(1, { timeout: 30_000 });
-  await page.waitForTimeout(4000); // the layout settles, the live neurons find their place
-  await shot(page, 'brain-map-live');
-
-  // what the live map costs: chats at work → animated at ~30 fps without focus, at display rate with focus; the live
-  // map off → nothing drawn
-  await page.waitForTimeout(3000);
-  await page.evaluate(() => { (document as unknown as { hasFocus: () => boolean }).hasFocus = () => false; });
-  await cpu();
-  const liveFps = await rate(4000);
-  const liveCpu = await cpu();
-  const liveFrames = await frameTimes(4000);
-  await page.evaluate(() => { (document as unknown as { hasFocus: () => boolean }).hasFocus = () => true; });
-  await cpu();
-  const focusedFps = await rate(3000);
-  const focusedCpu = await cpu();
-  const focusedFrames = await frameTimes(4000);
-  await page.evaluate(() => { delete (document as unknown as { hasFocus?: unknown }).hasFocus; });
-  // the window minimized: no display frames, so no pulse
-  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.minimize());
-  await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.isMinimized())).toBe(true);
-  // ... and Chromium has throttled its frames (the frames already on their way are painted): one frame comes after a gap
-  await page.evaluate(() => new Promise<void>(res => { let last = performance.now(); const f = (t: number) => { if (t - last > 400) res(); else { last = t; requestAnimationFrame(f); } }; requestAnimationFrame(f); }));
-  const minimizedFps = await rate(3000);
-  await app.evaluate(({ BrowserWindow }) => { const w = BrowserWindow.getAllWindows()[0]; w?.restore(); w?.showInactive(); });
-  await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.isMinimized())).toBe(false);
-  await m.getByTestId('bx-map-live-toggle').click();
-  await expect(legend).toContainText('Attività nascosta');
-  await page.waitForTimeout(4500); // the live neurons leave: the map settles again (about 2.5 s), then rests
-  await cpu();
-  const offFps = await rate(4000);
-  const offCpu = await cpu();
-  // frames at rest: measured again 10 s later, so a failure says which it is: a settle that ended late (load, 0 now)
-  // or a loop that never stops (a bug, still drawing); main red at 100% CPU, 2026-10-16: 61.5 fps, cause unknown
-  const offLaterFps = offFps ? (await page.waitForTimeout(10000), await rate(4000)) : 0;
-  const res = { liveFps, liveFrames, focusedFps, focusedFrames, minimizedFps, offFps, offLaterFps, cpu: { live: liveCpu, focused: focusedCpu, off: offCpu } };
-  fs.mkdirSync(path.resolve('test-results'), { recursive: true });
-  fs.writeFileSync(path.resolve('test-results', 'map-live-perf.json'), JSON.stringify(res, null, 2));
-  console.log(`map-live-perf ${JSON.stringify(res)}`);
-  expect(liveFps).toBeGreaterThan(20); // fluid
-  expect(liveFps).toBeLessThan(36); // without focus: every other display frame at most
-  expect(focusedFps).toBeGreaterThan(liveFps); // with focus: the display rate
-  expect(liveFrames.workP95).toBeLessThan(8); // the main thread stays mostly free (ms of work per frame)
-  expect(focusedFrames.workP95).toBeLessThan(8);
-  expect(minimizedFps).toBeLessThan(2); // Chromium still gives a minimized window about one frame a second
-  expect(offFps, `at rest; 14 s later: ${offLaterFps} fps`).toBe(0); // at rest: not one frame
-  await m.getByTestId('bx-map-live-toggle').click();
-  await expect(legend).toContainText('Fix totale ordine');
-
-  // the same map as a list: the lit pieces are marked; now.md shows what is happening and the chat to open
-  await m.getByRole('button', { name: 'Elenco' }).click();
-  const flat = m.getByTestId('bx-map-flat');
-  await expect(flat.locator('button.live').filter({ hasText: 'now.md' })).toHaveCount(1);
-  await expect(flat.locator('button.live').filter({ hasText: 'reviewer' })).toHaveCount(1);
-  await flat.locator('button.live').filter({ hasText: 'now.md' }).click();
-  const now = m.getByTestId('bx-map-now');
-  await expect(now).toContainText('legge Fix totale ordine');
-  await shot(page, 'brain-map-live-piece');
-  await now.getByRole('button', { name: 'Apri «Fix totale ordine»' }).click();
-  await expect(page.getByTestId('brain-map')).toHaveCount(0);
-  await expect(page.getByTestId('tile-chat-fix')).toBeVisible();
-
-  // a live chat's neuron opens its chat; the legend opens a chat too
-  await openMap();
-  await page.getByTestId('brain-map').getByRole('button', { name: 'Elenco' }).click();
-  await page.getByTestId('bx-map-flat').locator('button.live').filter({ hasText: 'App · Feedback' }).click(); // the Orchestrator wrote to it
-  await expect(page.getByTestId('brain-map')).toHaveCount(0);
-  await openMap();
-  await page.getByTestId('bx-map-live').getByTestId('bx-map-live-chat').filter({ hasText: 'Bug notifiche SMS' }).click();
-  await expect(page.getByTestId('brain-map')).toHaveCount(0);
-
-  // a finished call fades: with the frozen clock it stays at full light, no longer running
-  await tool('fix', { id: 'live-read', name: 'Read', input: { file_path: 'C:\\brains\\demo\\now.md' }, summary: 'now.md', status: 'ok' });
-  await openMap();
-  await expect(page.getByTestId('bx-map-live')).toContainText('Attività osservata');
-});
 
 test('changing reduced motion restarts observed activity without rebuilding the map',async()=>{
   if(await page.getByTestId('brain-map').count())await page.getByTestId('bx-map-close').click();

@@ -14,7 +14,7 @@
 // An expanded chat also shows the open requests of the chats it delegated (lib/child-requests.ts), each tagged with the
 // role and task that asks: answering goes to that child, which then goes on (ADR 0083). A Strategist's plan with the
 // user (its questions, the plan to approve, the steps' checklist) sits under the head, collapsed too (StrategyPanel.tsx, ADR 0108).
-import { t as auditText } from '../i18n';
+import { t as auditText, locale } from '../i18n';
 import { memo, useEffect, useRef, useState } from 'react';
 import type { PendingRequest } from '@shared/contract';
 import { chatCost, queueReason, folderName, minutes, permissionBadge, modelWithEffort, stateInfo, workTime } from '../lib/format';
@@ -49,6 +49,7 @@ import { questionsModalOn } from '../lib/questions';
 import { childRequestsFor, requestHost, type ChildRequest } from '../lib/child-requests';
 import { IconAlert, IconChevronDown, IconGlobe, IconMaximize, IconMinimize, IconMore, IconStop, IconX } from './Icons';
 import { IconButton, StatePill, useSize } from './ui';
+import { rolePurpose } from '../lib/role-text';
 
 // the ✕ (of a chat or a browser tile) ignores the later clicks of a double click (detail > 1): the grid reflows and the
 // next tile's ✕ lands under the pointer, so a double click would close two tiles. Not a time window: one swallowed a
@@ -152,7 +153,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
       {!embedded && <header className="tile-head">
         <div className="th-row">
           <AgentAvatar avatar={chat.agent?.avatar} name={chat.agent?.name||chat.title} size={24}/>
-          <h3 className="th-title" title={chat.agent?.purpose||chat.title}>{chat.agent?.name||chat.title}</h3>
+          <h3 className="th-title" title={(chat.agent?.purpose&&rolePurpose(chat.agent.id,chat.agent.purpose))||chat.title}>{chat.agent?.name||chat.title}</h3>
           {/* the pill takes the state's place; the state stays in the DOM (hidden) as the strip's data-state hook */}
           {first ? <span hidden><StatePill chat={chat} testid={`chat-state-${chatId}`} /></span> : <StatePill chat={chat} testid={`chat-state-${chatId}`} />}
           {first && <button type="button" className="strip-wait" onClick={() => openQueue(first)} aria-label={t('product.waitsYouOpen', { title: chat.agent?.name || chat.title })} data-testid={`chat-wait-${chatId}`} data-state={chat.state} {...(expanded ? {} : { 'data-waits-keys': reqs.map(reqKey).join(' ') })}>
@@ -211,7 +212,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
             <div className="pause-tag">
               <AgentAvatar avatar={c.agent?.avatar} name={c.agent?.name || c.title} size={28} />
               <span className="pause-who"><b>{t('tree.asks', { role: c.agent?.name || '', title: c.title })}</b> {t('tree.asksVerb')}</span>
-              <span className="pause-from">{t('tree.childOfThis', { time: new Date(req.at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) })}</span>
+              <span className="pause-from">{t('tree.childOfThis', { time: new Date(req.at).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }) })}</span>
             </div>
             <RequestPanel req={req} variant={compact || smallPanel ? 'compact' : 'tile'} chatTitle={c.title} harness={c.harness} onLater={() => answerLater(reqKey(req))} />
             <div className="pause-foot">

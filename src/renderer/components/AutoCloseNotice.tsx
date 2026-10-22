@@ -16,7 +16,7 @@ export function AutoCloseNotice({ chatId }: { chatId: string }) {
   const [failed, setFailed] = useState(false);
   if (row && !row.keptOpen && row.deadline === null && row.waitingFor) {
     return <div className="agent-waiting" data-testid={`autoclose-waiting-${chatId}`} data-waiting={row.waitingFor} title={auditText('cmp.autoClose.waitingTip')}>
-      <span className="agent-waiting-dot" aria-hidden="true" />{auditText(`cmp.autoClose.waiting.${row.waitingFor}`)}
+      <span className="agent-waiting-dot" aria-hidden="true" /><span className="agent-waiting-text">{auditText(`cmp.autoClose.waiting.${row.waitingFor}`)}</span>
     </div>;
   }
   if (!row || (!row.keptOpen && (row.deadline === null || autoCloseRemaining(row) > 120_000))) return null;

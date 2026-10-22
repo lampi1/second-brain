@@ -1,14 +1,15 @@
-// Stable shell integration uses the durable root icon. Dev/staged copies must not modify real desktop/menu links.
+// Stable shell integration uses the durable root icon. Dev/staged copies must not modify real desktop/menu links,
+// except the icon of an existing link whose icon file is gone (a blank page on the taskbar).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ base: '', release: '1.0.0-test', write: vi.fn((_link: string, _operation: string, _details: Electron.ShortcutDetails) => true) }));
-vi.mock('electron', () => ({ app: { getPath: (name: string) => path.join(ctx.base, name) }, shell: { writeShortcutLink: ctx.write } }));
+const ctx = vi.hoisted(() => ({ base: '', release: '1.0.0-test', write: vi.fn((_link: string, _operation: string, _details: Electron.ShortcutDetails) => true), read: vi.fn((_link: string): Electron.ShortcutDetails => ({ target: 'x' })) }));
+vi.mock('electron', () => ({ app: { getPath: (name: string) => path.join(ctx.base, name) }, shell: { writeShortcutLink: ctx.write, readShortcutLink: ctx.read } }));
 vi.mock('../../src/main/platform', () => ({ sharedDir: () => ctx.base, linuxDesktopEntry: vi.fn(), macCommandFile: vi.fn() }));
 vi.mock('../../src/main/release', () => ({ releaseId: () => ctx.release || null }));
-vi.mock('../../src/main/log', () => ({ log: { warn: vi.fn() } }));
+vi.mock('../../src/main/log', () => ({ log: { warn: vi.fn(), info: vi.fn() } }));
 import { ensureShortcuts } from '../../src/main/shortcuts';
 
 const saved = process.env.SB_RELEASES_ROOT;
@@ -35,6 +36,25 @@ describe.skipIf(process.platform !== 'win32')('stable shortcuts', () => {
     ctx.release = '';
     ensureShortcuts();
     expect(ctx.write).not.toHaveBeenCalled();
+  });
+  it('a dev run points an existing link with a missing icon at the durable icon, and only that', () => {
+    ctx.release = '';
+    const dir = path.join(ctx.base, 'desktop');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'second-brain.lnk'), 'link');
+    ctx.read.mockReturnValueOnce({ target: 'x', icon: path.join(ctx.base, 'gone', 'icon.ico') });
+    ensureShortcuts();
+    expect(ctx.write).toHaveBeenCalledTimes(1);
+    expect(ctx.write.mock.calls[0]).toEqual([path.join(dir, 'second-brain.lnk'), 'update', { target: 'x', icon: path.join(ctx.base, 'icon.ico'), iconIndex: 0 }]);
+  });
+  it('copies the built icon to the shared dir when it is missing', () => {
+    fs.rmSync(path.join(ctx.base, 'icon.ico'));
+    const out = path.join(ctx.base, 'out');
+    fs.mkdirSync(out);
+    fs.writeFileSync(path.join(out, 'icon.ico'), 'built icon');
+    ensureShortcuts(out);
+    expect(fs.readFileSync(path.join(ctx.base, 'icon.ico'), 'utf8')).toBe('built icon');
+    for (const call of ctx.write.mock.calls) expect(call[2].icon).toBe(path.join(ctx.base, 'icon.ico'));
   });
   it('writes nothing from an isolated stable/installer test', () => {
     process.env.SB_RELEASES_ROOT = path.join(ctx.base, 'isolated');

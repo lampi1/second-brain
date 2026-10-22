@@ -66,7 +66,7 @@ describe('parent child task continuity',()=>{
     const reuse=f.call('agent_assign_task',f.args());
     // Flush the worktree lookup, without timers or a runtime engine.
     await Promise.resolve();await Promise.resolve();
-    await expect(f.call('agent_delegate',{tasks:[{role:'scout',title:'New child',contract:{goal:'Read',doneWhen:['Evidence']}}]})).rejects.toThrow(/parallel/);
+    await expect(f.call('agent_delegate',{tasks:[{role:'scout',title:'New child',contract:{goal:'Read',doneWhen:['Evidence']}}]})).rejects.toThrow(/already running/);
     reject(new Error('Assignment refused'));await expect(reuse).rejects.toThrow(/Assignment refused/);
     await expect(f.call('agent_assign_task',f.args())).resolves.toMatchObject({chatId:'child'});
   });

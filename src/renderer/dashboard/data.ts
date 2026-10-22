@@ -1,41 +1,9 @@
-// Pure dashboard projections: preserve source coverage and unknowns, derive only observed activity.
-// Used by Dashboard and its unit tests; no bridge calls or invented telemetry.
+// Pure projections of the app's live data: preserve source coverage and unknowns, derive only observed activity (the
+// errors seen, each chat's context, the map layout). Once the Dashboard's (gone with ADR 0122); used by AppErrors.tsx,
+// brain/pages/Costi.tsx, Graph.tsx, BrainNotesMap.tsx and the unit tests; no bridge calls or invented telemetry.
 import type { ChatItem, ChatSummary, FeedEvent } from '@shared/contract';
 import { isLongChat } from '@shared/context';
 import type { MapEdge, MapNode } from '../brain/types';
-
-export interface Connection { from: string; to: string; at: number | null }
-export function connections(chats: ChatSummary[], items: Readonly<Record<string, readonly ChatItem[]>>): Connection[] {
-  const edges = new Map<string, Connection>();
-  const add = (from: string, to: string, at: number | null) => {
-    if (from === to) return;
-    const key = [from, to].sort().join('|');
-    const old = edges.get(key);
-    edges.set(key, { from, to, at: Math.max(old?.at ?? 0, at ?? 0) || null });
-  };
-  const resolve = (value: unknown) => {
-    if (typeof value !== 'string') return undefined;
-    const exact = chats.find(c => c.id === value);
-    if (exact) return exact;
-    const titles = chats.filter(c => c.title === value);
-    return titles.length === 1 ? titles[0] : undefined;
-  };
-  const owner = chats.find(c => c.isOrchestrator && !c.closedAt)?.id;
-  for (const c of chats) {
-    if (owner && c.id !== owner) add(owner, c.id, null);
-    for (const item of items[c.id] ?? []) {
-      if (item.kind === 'user' && item.from) {
-        const sender = resolve(item.from);
-        if (sender) add(sender.id, c.id, item.at);
-      }
-      if (item.kind !== 'tool' || item.status !== 'ok' || !/(?:^|__)\w*send_to_chat$/.test(item.name)) continue;
-      const input = item.input && typeof item.input === 'object' ? item.input as Record<string, unknown> : {};
-      const target = resolve(input.chatId ?? input.to);
-      if (target) add(c.id, target.id, item.at);
-    }
-  }
-  return [...edges.values()];
-}
 
 export interface ObservedError { id: string; at: number; title: string; detail: string; source: string;
   /** the chat it happened in, its role (agent) and the skills its run started with, when known */

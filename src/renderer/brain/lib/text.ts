@@ -4,6 +4,7 @@
 // code: it is read from the data (ownerOf) and only used to turn third-person lines into first person.
 import type { Brief, BriefItem, BriefPr, DayReport, Idea } from '../types';
 import { fmt } from './format';
+import { t as tr } from '../../i18n';
 
 export const short = (s: unknown, n = 80): string => { const t = String(s ?? ''); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
 /** drop a leading "#<id>", a conventional-commit prefix and double spaces */
@@ -19,7 +20,7 @@ export const prName = (pr: Pick<BriefPr, 'title' | 'items'>): string => {
 /** a diary line, readable: no "[personale]" tag, cut at the first sentence end */
 export const firstClause = (s: unknown, n = 110): string => short(clean(String(s ?? '').replace(/\[personale\]\s*/gi, '')).split(/(?<=[.;])\s/)[0], n);
 export const quote = (s: string): string => `«${s}»`;
-export const list3 = (a: string[]): string => (a.length <= 1 ? a.join('') : `${a.slice(0, -1).join(', ')} e ${a[a.length - 1]}`);
+export const list3 = (a: string[]): string => (a.length <= 1 ? a.join('') : `${a.slice(0, -1).join(', ')}${tr('brainText.standup.and')}${a[a.length - 1]}`);
 export const baseName = (s: unknown): string => String(s ?? '').replace(/\\/g, '/').split('/').filter(Boolean).pop() ?? '';
 const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -81,26 +82,26 @@ export function standupText(rep: Pick<DayReport, 'rows' | 'day' | 'areas'> | nul
   const did = areas.map(a => {
     const rows = (rep?.rows ?? []).filter(r => r.area === a);
     const merged = rows.filter(r => r.kind === 'pr-unita'), opened = rows.filter(r => r.kind === 'pr-aperta');
-    const prs = (list: typeof rows, verb: string) => (list.length ? [`${verb} ${list.length === 1 ? 'la PR' : `${list.length} PR:`} ${list3(list.slice(0, 3).map(r => quote(short(clean(r.title), 60))))}`] : []);
+    const prs = (list: typeof rows, verb: string) => (list.length ? [`${verb} ${list.length === 1 ? tr('brainText.standup.thePr') : tr('brainText.standup.nPrs', { n: list.length })} ${list3(list.slice(0, 3).map(r => quote(short(clean(r.title), 60))))}`] : []);
     const bits = [
-      ...prs(merged, 'ho unito'), ...prs(opened, 'ho aperto'),
-      ...rows.filter(r => r.kind === 'diario' && /fatto/i.test(r.tag ?? '')).map(r => `ho chiuso ${quote(short(noTag(String(r.title).split(':')[0] ?? ''), 60))}`),
-      ...rows.filter(r => r.kind === 'chat' && (r.his ?? 0) > 0).map(r => `ho lavorato a ${quote(noTag(r.title))}`),
+      ...prs(merged, tr('brainText.standup.merged')), ...prs(opened, tr('brainText.standup.opened')),
+      ...rows.filter(r => r.kind === 'diario' && /fatto/i.test(r.tag ?? '')).map(r => tr('brainText.standup.closed', { what: quote(short(noTag(String(r.title).split(':')[0] ?? ''), 60)) })),
+      ...rows.filter(r => r.kind === 'chat' && (r.his ?? 0) > 0).map(r => tr('brainText.standup.worked', { what: quote(noTag(r.title)) })),
     ];
     return bits.length ? `${a}: ${list3([...new Set(bits)].slice(0, 3))}.` : null;
   }).filter((x): x is string => !!x);
-  const dayLabel = rep?.day ? fmt.day(rep.day).replace(/^\w/, c => c.toUpperCase()) : 'Ieri';
-  S.push(did.length ? `${dayLabel} · ${did.join(' ')}` : `${dayLabel}: niente di registrato sul lavoro.`);
+  const dayLabel = rep?.day ? fmt.day(rep.day).replace(/^\w/, c => c.toUpperCase()) : tr('brainText.standup.yesterday');
+  S.push(did.length ? `${dayLabel} · ${did.join(' ')}` : tr('brainText.standup.nothing', { day: dayLabel }));
   const prs = (br?.prs ?? []).filter(p => isWorkArea(p.area));
-  if (prs.length) S.push(`Ho ${prs.length === 1 ? 'una PR aperta' : `${prs.length} PR aperte`}: ${list3(prs.slice(0, 3).map(p => quote(prName(p))))}${prs.some(p => /nessuno/.test(p.votes ?? '')) ? ', aspettano revisione' : ''}.`);
+  if (prs.length) S.push(tr('brainText.standup.openPrs', { n: prs.length, list: list3(prs.slice(0, 3).map(p => quote(prName(p)))), waiting: prs.some(p => /nessuno/.test(p.votes ?? '')) }));
   const open = (br?.threads ?? []).filter(t => !t.done && isWorkArea(t.area) && !isAgentsSection(t.section));
   // read aloud: names, not numbers (a PR number → PR «the bug it fixes»)
   const idx = devopsIndex(br);
   const named = (s: string) => linkify(s, idx).map(p => (typeof p === 'string' ? p : p.label)).join('');
   const next = open.filter(t => /prossimo/i.test(t.next) && !/aspetta/i.test(t.next) && !t.stale);
-  if (next.length) S.push(`Oggi: ${list3(next.slice(0, 3).map(t => `${noTag(t.label)} (${short(named(nextText(t.next)), 90)})`))}.`);
+  if (next.length) S.push(tr('brainText.standup.today', { list: list3(next.slice(0, 3).map(t => `${noTag(t.label)} (${short(named(nextText(t.next)), 90)})`)) }));
   const wait = open.filter(t => /aspetta/i.test(t.next));
-  if (wait.length) S.push(`Aspetto: ${list3(wait.slice(0, 2).map(t => `${noTag(t.label)} (${short(named(nextText(t.next)), 80)})`))}.`);
+  if (wait.length) S.push(tr('brainText.standup.waiting', { list: list3(wait.slice(0, 2).map(t => `${noTag(t.label)} (${short(named(nextText(t.next)), 80)})`)) }));
   return firstPerson(S.join('\n'), owner);
 }
 

@@ -1,9 +1,9 @@
 // Regole imparate, the section of the Regole page with what the brain's shared self-improvement loop has learned
 // (ADR 0030; a page of its own until ADR 0082 folded it into Regole, old links open Regole). One card per policy (time and
 // cost estimates, model choice, notification thresholds): the version in force and since when, its typical error now
-// with the last ones as bars, how often the 80% range held, results out of the count, a proposal waiting with
-// [Applica] / [No], the after-check of the last change and [Ripristina v<N-1>]. Nothing changes without a click here
-// (or a policy whitelisted in the brain). Reads /api/improve (the brain's improve.mjs status, through the proxy; a
+// with the last ones as bars, how often the 80% range held, results out of the count, a proposal waiting (decided in
+// Memoria → Proposte, ADR 0123: here a line points there), the after-check of the last change and [Ripristina v<N-1>].
+// Nothing changes without the user's click (or a policy whitelisted in the brain). Reads /api/improve (the brain's improve.mjs status, through the proxy; a
 // brain without that CLI gets main's "loop missing" answer and the section stays hidden, as it does with no policy yet); a
 // click goes to main ('learn:act'), which runs the brain's own improve.mjs. Words and numbers: lib/learn.ts. A short
 // intro and a "?" beside every term that is not obvious (HELP), shown on hover or focus. The brain's own cost/time
@@ -17,6 +17,7 @@ import { Sparkline } from '../components/Charts';
 import { Pill, toast } from '../components/ui';
 import type { LearnAction } from '@shared/contract';
 import { t } from '../../i18n';
+import { ProposalsPointer } from '../../components/brain-model/ProposalsPointer';
 
 /** A "?" with its explanation, on hover or keyboard focus (to be replaced by the shared tooltip of feat/spiegazioni). */
 function Help({ text, id }: { text: string; id: string }) {
@@ -56,10 +57,7 @@ function Policy({ p, busy, act }: { p: LearnPolicy; busy: boolean; act: (a: Lear
       {p.pending && (
         <div className="bx-learn-prop" data-testid="bx-learn-proposal">
           <p><b>{p.pending.kind === 'ripristino' ? t('brainPages.miglioramento.proposalRestore') : t('brainPages.miglioramento.proposal')}:</b> {p.pending.name || p.pending.id} · {gainLine(p.pending)}. <Help id={`h-prop-${p.domain}`} text={HELP().proposal} /></p>
-          <div className="bx-row">
-            <button type="button" className="bx-btn primary" disabled={busy} data-testid="bx-learn-apply" onClick={() => act({ action: 'apply', id: p.pending!.id })}>{t('brainPages.miglioramento.applyBtn')}</button>
-            <button type="button" className="bx-btn" disabled={busy} data-testid="bx-learn-reject" onClick={() => act({ action: 'reject', id: p.pending!.id })}>{t('brainPages.miglioramento.rejectBtn')}</button>
-          </div>
+          <ProposalsPointer compact />
         </div>
       )}
       {check && <p data-testid="bx-learn-check"><b>{t('brainPages.miglioramento.checkTitle')}:</b> {check}. <Help id={`h-check-${p.domain}`} text={HELP().check} /></p>}

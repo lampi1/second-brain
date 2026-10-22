@@ -1,25 +1,13 @@
-// Portable pack contracts and validation, shared by import/export and their review surfaces (ADR 0069, 0083). A pack
-// is one role's skills and the brain's rules: it attaches to the built-in role it names (agent.role) and never creates a
-// role; the role text, tools and permissions in it are a description for other tools (Claude, Cursor, Codex exports),
-// never applied on import.
+// Know-how contracts and validation (ADR 0069, 0077, 0083): a role's know-how snapshot and identity, the lessons queue,
+// the guard findings of the shareable brain zip (ADR 0088) and the manifest the know-how sanitizer (main/agents/pack/
+// read.ts) still recognises. The agent pack import/export and its review surfaces are gone (ADR 0125: the roles are
+// fixed); the stored fields (AgentProfile.pack) stay readable.
 import { TOOL_CLASSES, PERMISSION_CEILINGS, type AgentToolPolicy, type PermissionCeiling } from './agents';
 import type { Effort } from './contract';
 import { currentRoleId, isWorkRole, type WorkRoleId } from './roles';
 import { NAME_RE } from './skillmd';
 
-export type PackTarget = 'sbagent' | 'claude' | 'cursor' | 'codex';
 export interface PackFinding { file: string; line: number | null; rule: string }
-export interface PackExportPlan { token: string; items: { id: string; label: string; included: boolean; required: boolean; ownership?: 'owned' | 'shared' }[]; findings: PackFinding[]; warnings: string[] }
-export interface PackImportReview {
-  token: string; kind: string; agents: { name: string; description: string }[]; skills: string[];
-  /** the built-in role the pack names (null: a foreign folder or a pack of shared skills only; the user picks one) */
-  role: WorkRoleId | null;
-  /** the brain rules the pack carries (rules/<name>.md), written to the brain when absent (ADR 0077) */
-  rules: string[];
-  scripts: { file: string; text: string; kind: 'file' | 'dynamic' | 'hooks' }[]; ignored: string[]; findings: PackFinding[]; clamps: string[];
-  /** update = a newer revision of a pack already on that role; present = the same or an older one */
-  collision: { kind: 'none' | 'update' | 'present'; agentId?: string }; warnings: string[];
-}
 /** Where a lesson goes (ADR 0077): the role's text, a skill, or the brain's rules. */
 export type LessonTarget = 'role' | 'skill' | 'rule';
 /** A lesson from the user's corrections. approved = applied by the maintenance job (note says where), never by a click.

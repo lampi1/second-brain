@@ -4,6 +4,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { CreatedBrain } from '../../shared/brain-create';
+import { isLang, type Lang } from '../../shared/contract';
 import { writeFreshBrain } from '../../main/rules/new-brain';
 export interface DefaultBrainHost {
   userData: string; templateRoot: string; current: () => string | null; revision: () => number;
@@ -17,17 +18,23 @@ async function directory(file: string): Promise<void> {
   const stat = await fs.lstat(file);
   if (!stat.isDirectory() || stat.isSymbolicLink() || path.resolve(await fs.realpath(file)) !== path.resolve(file)) throw new Error('AI_SETUP_LOCAL_DIRECTORY');
 }
+/** The fresh brain's placeholders in the language chosen at setup (ADR 0117 adds German). */
+const FRESH: Record<Lang, { owner: string; role: string; lang: string; none: string }> = {
+  it: { owner: 'Tu', role: 'Da conoscere insieme', lang: 'italiano', none: 'Da collegare' },
+  en: { owner: 'You', role: 'To discover together', lang: 'English', none: 'Not connected yet' },
+  de: { owner: 'Du', role: 'Gemeinsam herauszufinden', lang: 'Deutsch', none: 'Noch nicht verbunden' },
+};
 export class DefaultBrain {
   private pending: Promise<CreatedBrain> | null = null;
   constructor(private readonly host: DefaultBrainHost) {}
-  ensure(language: 'it' | 'en', harness: string): Promise<CreatedBrain> {
+  ensure(language: Lang, harness: string): Promise<CreatedBrain> {
     const current = this.host.current();
     if (current) return Promise.resolve({ root: current, connected: this.host.usable?.() ?? true });
-    if (!['it', 'en'].includes(language) || !['none', 'claude', 'codex', 'cursor'].includes(harness)) return Promise.reject(new Error('AI_SETUP_FIELDS'));
+    if (!isLang(language) || !['none', 'claude', 'codex', 'cursor'].includes(harness)) return Promise.reject(new Error('AI_SETUP_FIELDS'));
     if (!this.pending) this.pending = this.create(language, harness).finally(() => { this.pending = null; });
     return this.pending;
   }
-  private async create(language: 'it' | 'en', harness: string): Promise<CreatedBrain> {
+  private async create(language: Lang, harness: string): Promise<CreatedBrain> {
     const h = this.host, previous = h.current(), revision = h.revision();
     await directory(h.userData); await directory(h.templateRoot);
     // An exclusively reserved fresh directory needs no replace/rename operation on any OS.
@@ -35,9 +42,9 @@ export class DefaultBrain {
     const projects = h.projects?.() ?? null;
     try {
       writeFreshBrain(root, {
-        OWNER: language === 'it' ? 'Tu' : 'You', ROLE: language === 'it' ? 'Da conoscere insieme' : 'To discover together', LANG: language === 'it' ? 'italiano' : 'English',
+        OWNER: FRESH[language].owner, ROLE: FRESH[language].role, LANG: FRESH[language].lang,
         TODAY: (h.now?.() ?? new Date()).toISOString().slice(0, 10), REPOS: forward(projects ?? path.join(root, 'projects')),
-        HARNESSES: harness === 'none' ? (language === 'it' ? 'Da collegare' : 'Not connected yet') : ({ claude: 'Claude Code', codex: 'Codex', cursor: 'Cursor' } as Record<string, string>)[harness]!,
+        HARNESSES: harness === 'none' ? FRESH[language].none : ({ claude: 'Claude Code', codex: 'Codex', cursor: 'Cursor' } as Record<string, string>)[harness]!,
       });
     } catch { throw new Error('AI_SETUP_TEMPLATE_INCOMPLETE'); } // the empty reservation is kept: never delete user data
     // without a projects folder of the owner's, the default one for their repositories (REPOS): empty, nothing in it

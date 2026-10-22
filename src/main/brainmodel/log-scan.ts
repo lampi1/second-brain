@@ -45,7 +45,7 @@ export function scanLogs(dir: string, since: number | null, known: ReadonlySet<s
   return { since, files, groups: list };
 }
 
-const JOB_NAME: Record<string, string> = { migration: 'migrazione', corrections: 'correzioni', 'repeated-task': 'compiti ripetuti', 'merge-skills': 'unione skill', 'merge-memory': 'unione memoria' };
+const JOB_NAME: Record<string, string> = { migration: 'migrazione', corrections: 'correzioni', 'repeated-task': 'compiti ripetuti', 'merge-skills': 'unione skill', 'merge-memory': 'unione memoria', upgrade: 'aggiornamento del brain' };
 
 /** The one message the Orchestrator gets at the end of the pass (its first line is the app's label, added by the caller). */
 export function handoffText(run: Pick<MaintenanceRun, 'jobs'>, scan: LogScan): string {

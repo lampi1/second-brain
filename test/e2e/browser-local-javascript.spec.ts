@@ -13,7 +13,8 @@ test('remote browser inspection works while caller JavaScript is limited to the 
     await expect.poll(async()=>(await agent.call('read_page')).text).toContain('Fixture QA');
     const refused=await agent.call('javascript',{code:'document.title'});
     expect(refused.text).toContain('only on local stacks');
-    await agent.ok('navigate',{url:sites.a+'/index.html'});
+    // a local stack loads only in environment "local" (rules.ts envRefusal): navigate with env "local" opens a tab there
+    await agent.ok('navigate',{url:sites.a+'/index.html',env:'local'});
     await expect.poll(async()=>(await agent.call('javascript',{code:'document.title'})).text).toContain('Fixture QA');
     await shot(page,'browser-local-js-remote-standard-inspection');
   }finally{await app.close();await sites.close();}

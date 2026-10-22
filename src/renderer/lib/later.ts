@@ -1,8 +1,10 @@
 // Request-local postponement: Esc parks only the chosen request; new requests remain eligible for popups.
 // Pending data stays in the normal store. Opening the queue or enabling popups makes postponed requests visible again.
 // Used by QuestionsWindow, the global layer, and request navigation. The former persisted global quiet flag is retired.
+// A Strategist's plan to approve (lib/plan-ask.ts) is postponed the same way, by its key.
 import { sb } from '../sb';
 import { app } from '../store/store';
+import { planAskKeys } from './plan-ask';
 import { callQuestions, closeModal, parkQuestions, setLater, setLayerHeld, ui } from '../store/ui';
 
 const postponed = new Set<string>();
@@ -26,7 +28,7 @@ export function startLater():void {
     const s=app.get(),next=s.settings?.questionsModal===true;
     if(next&&!enabled){enabled=next;resumeQuestions();return;}
     enabled=next;
-    const keys=new Set(s.pending.map(keyOf));
+    const keys=new Set([...s.pending.map(keyOf),...planAskKeys(s)]);
     let changed=false;
     for(const key of postponed)if(!keys.has(key)){postponed.delete(key);changed=true;}
     if(changed)notify();
@@ -41,7 +43,7 @@ export function answerLater(key?:string):void {
   const chosen=key??shown??focused;
   const target=chosen??pending.find(r=>!postponed.has(keyOf(r)));
   const targetKey=typeof target==='string'?target:target?keyOf(target):null;
-  if(targetKey&&pending.some(r=>keyOf(r)===targetKey))postponed.add(targetKey);
+  if(targetKey&&(pending.some(r=>keyOf(r)===targetKey)||planAskKeys(app.get()).includes(targetKey)))postponed.add(targetKey);
   parkQuestions();
   setLayerHeld(null);
   notify();

@@ -6,6 +6,23 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- **Memoria is the brain's one hub** (ADR 0122, 0123): tabs Proposte, Approvate, Skill, Regole, Script & Query, Idee,
+  File, Apprendimento, Statistiche, with live counters and the day's sentence on top; the Dashboard is gone, its parts
+  merged once into Memoria, Costi and Qualità; the sidebar's Memoria badge counts the open proposals. Every proposal the
+  app makes is one card of the Proposte deck (swipe or ✓/✕, keys ←/→, Z undoes), with who proposed it, where and when;
+  Approvate lists what is in the brain with a one-click delete and Annulla.
+- **Saved queries and ideas** (ADR 0124): queries/ next to scripts/, and the maintenance moves queries and scattered
+  ideas from old notes into their place, logged with Annulla. The brain upgrade follows the app's layout by itself for
+  every future change (#166, ADR 0116).
+- **Every role levels up from outcomes** (ADR 0125): delegated children earn through their verified parent, the
+  Sentinel is judged by what happens next; the judging switch on the Agenti page (ADR 0114) is on by default. Agent
+  import/export and the page-top «Copia link» are gone.
+- **German (de-AT)** and a language switch in the top bar that also sets the AI's reply language (#162, #163, ADR 0117,
+  0120); a simpler first-run setup, language first, with tool tiles (#164, #165, ADR 0119); a Tab suggestion in the
+  composer (#167, ADR 0118); the Strategist asks at least one question and its plan opens in the questions window
+  (ADR 0121); the app's shortcut always carries its icon; a README tour with English screenshots.
+- **Tests**: the e2e specs red on main follow the current app (PR #135 merged in).
+
 - **One Manutenzione for the brain and the app** (#150, ADR 0112): the button is also on the Orchestrator's head; the
   pass you start also groups the app's log warnings and errors (each with «Noto, ignora») and sends the result to the
   Orchestrator, which has a Herald comment on or open the issues, with your permission.

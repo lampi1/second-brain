@@ -52,15 +52,16 @@ export class ChangeLog {
   }
   private persist(): void { writeLocal(this.file, { version: 1, changes: this.entries.slice(-MAX) }); }
 
-  /** Applies the file writes of one change and records it; nothing is recorded when no file actually changes. */
+  /** Applies the file writes of one change and records it; nothing is recorded when no file actually changes. All or
+   *  nothing: when one file is too big to keep a copy of (it could not be undone), none is written (a move that wrote
+   *  only its pointers would lose what it moved). */
   apply(change: Omit<StoredChange, 'id' | 'at' | 'files'>, writes: { file: string; text: string | null }[], agent?: AgentSnapshot): StoredChange | null {
+    const todo = writes.map(w => ({ ...w, before: read(w.file) })).filter(w => w.before !== w.text);
+    if (todo.some(w => (w.before?.length ?? 0) > SNAP || (w.text?.length ?? 0) > SNAP)) return null;
     const files: FileSnapshot[] = [];
-    for (const w of writes) {
-      const before = read(w.file);
-      // a file too big to keep a copy of is never changed by a job: it could not be undone
-      if (before === w.text || (before?.length ?? 0) > SNAP || (w.text?.length ?? 0) > SNAP) continue;
+    for (const w of todo) {
       writeText(w.file, w.text);
-      files.push({ file: w.file, before, after: w.text });
+      files.push({ file: w.file, before: w.before, after: w.text });
     }
     if (!files.length && !agent) return null;
     return this.record(change, files, agent);

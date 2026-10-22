@@ -29,6 +29,7 @@ import { runResultMessage } from './run/results';
 import { splitMode } from '../shared/newchat';
 import type { AgentMetrics, AgentRunOutcome } from '../shared/agents';
 import { demoAgentMetrics } from './demo-agent-runs';
+import { localize, tr } from './demo-text';
 
 /** The fixed "now" of SB_DEMO_FREEZE=1 (2026-10-11 10:30 Rome). The UI receives it through ui:command 'clock'. */
 export const FROZEN_EPOCH = Date.UTC(2026, 9, 11, 8, 30, 0);
@@ -134,7 +135,8 @@ export function demoTree(E: number): { chats: ChatSummary[]; items: Record<strin
     { kind: 'user', id: `${c.id}-u1`, at: c.run!.startedAt, text: c.run!.goal } as ChatItem,
     { kind: 'assistant', id: `${c.id}-a1`, at: c.updatedAt, text: c.lastText } as ChatItem,
   ]]));
-  return { chats, items };
+  // in the UI language (demo-text.ts: Italian as written, English through its table)
+  return localize({ chats, items });
 }
 
 export interface Seed { chats: ChatSummary[]; items: Record<string, ChatItem[]>; pending: PendingRequest[]; tabs: BrowserTab[]; feed: FeedEvent[]; usage: Usage }
@@ -206,7 +208,7 @@ export function seed(E: number): Seed {
     ],
     qa: [
       { kind: 'user', id: 'qa-u1', at: E - 26 * MIN, text: 'Esegui i test case dei rimborsi in ambiente di test e fammi il report.' },
-      { kind: 'system', id: 'qa-s1', at: E - 6 * MIN, level: 'info', text: sysEn('recap', { summary: '6 test case su 9 passati in ambiente di test, il 7 fallisce anche su master.' }), code: 'recap', params: { summary: '6 test case su 9 passati in ambiente di test, il 7 fallisce anche su master.' } },
+      { kind: 'system', id: 'qa-s1', at: E - 6 * MIN, level: 'info', text: sysEn('recap', { summary: tr('6 test case su 9 passati in ambiente di test, il 7 fallisce anche su master.') }), code: 'recap', params: { summary: '6 test case su 9 passati in ambiente di test, il 7 fallisce anche su master.' } },
       // DevOps references (the tile's link chips, lib/devlinks.ts): a work item read by the DevOps MCP, a PR, a test plan, a pipeline
       { kind: 'tool', id: 'qa-dv1', at: E - 25 * MIN, name: 'mcp__my-devops__testplan_list_test_cases', summary: 'test plan 5100', input: { project: 'Shop', planid: 5100, suiteid: 5104 }, status: 'ok', output: '9 test case' },
       { kind: 'tool', id: 'qa-dv2', at: E - 24 * MIN, name: 'mcp__my-devops__wit_get_work_item', summary: 'work item 4720', input: { id: 4720, project: 'Shop' }, status: 'ok',
@@ -306,7 +308,8 @@ export function seed(E: number): Seed {
     ev('f-e6', 4 * 1440 * MIN, 'error', 'Errore', 'quiet', 'File mancante', "ENOENT: no such file or directory, open 'C:\\progetti\\shop\\config\\test.json'", { chatId: 'sms', away: true }),
   ];
   const usage: Usage = { todayUsd: 38.2, fiveHourPct: 42, fiveHourResetsAt: E + 133 * MIN, weekPct: 31, weekResetsAt: E + 4 * 1440 * MIN + 95 * MIN, cursorTodayUsd: 1.84, cursorExact: false, cursorMarginPct: 9, cursorNote: 'Cursor: stima ±9% (fattore dal CSV del 10/10)', cursorPlanNote: CURSOR_PLAN_NOTE };
-  return { chats, items, pending, tabs, feed, usage };
+  // in the UI language (demo-text.ts: Italian as written, English through its table)
+  return localize({ chats, items, pending, tabs, feed, usage });
 }
 
 // ---------------------------------------------------------------- the chats
@@ -332,7 +335,8 @@ export class Run {
   user(text: string, thumbs: string[] = []): void { this.d.push(this.chatId, { kind: 'user', id: this.d.nextId(), at: this.d.now(), text, ...(thumbs.length ? { images: thumbs.length, thumbs } : {}) }); }
 
   /** Streams an assistant message word by word (instantly when frozen). `continueId` extends an existing message. */
-  async say(text: string, continueId?: string): Promise<void> {
+  async say(said: string, continueId?: string): Promise<void> {
+    const text = tr(said);
     const existing = continueId ? this.d.item(this.chatId, continueId) : undefined;
     const base = existing && existing.kind === 'assistant' ? existing.text : '';
     const id = existing ? existing.id : this.d.nextId();
@@ -356,7 +360,7 @@ export class Run {
   }
 
   async think(text: string): Promise<void> {
-    this.d.push(this.chatId, { kind: 'thinking', id: this.d.nextId(), at: this.d.now(), text });
+    this.d.push(this.chatId, { kind: 'thinking', id: this.d.nextId(), at: this.d.now(), text: tr(text) });
     await this.sleep(900);
   }
 
@@ -364,7 +368,7 @@ export class Run {
   async tool(name: string, summary: string, input: unknown, ms: number, done: { output?: string; diff?: FileDiff[]; status?: 'ok' | 'error' } = {}): Promise<string> {
     const id = this.d.nextId();
     const at = this.d.now();
-    this.d.push(this.chatId, { kind: 'tool', id, at, name, summary, input, status: 'running' });
+    this.d.push(this.chatId, { kind: 'tool', id, at, name, summary: tr(summary), input, status: 'running' });
     await this.sleep(ms);
     this.finishTool(id, done);
     return id;
@@ -373,12 +377,12 @@ export class Run {
   finishTool(id: string, done: { output?: string; diff?: FileDiff[]; status?: 'ok' | 'error' }): void {
     const it = this.d.item(this.chatId, id);
     if (!it || it.kind !== 'tool') return;
-    this.d.upsert(this.chatId, { ...it, status: done.status ?? 'ok', ...(done.output !== undefined ? { output: done.output } : {}), ...(done.diff ? { diff: done.diff } : {}) });
+    this.d.upsert(this.chatId, { ...it, status: done.status ?? 'ok', ...(done.output !== undefined ? { output: tr(done.output) } : {}), ...(done.diff ? { diff: done.diff } : {}) });
   }
 
   /** A browser step: a tool row plus the page's cursor moving and the tab's "last action". */
-  async browse(tabId: string, tool: string, summary: string, action: DemoAction, ms = 1400): Promise<void> {
-    const id = this.d.nextId();
+  async browse(tabId: string, tool: string, said: string, act: DemoAction, ms = 1400): Promise<void> {
+    const id = this.d.nextId(), summary = tr(said), action = { ...act, label: tr(act.label) };
     this.d.push(this.chatId, { kind: 'tool', id, at: this.d.now(), name: `mcp__sb-browser__${tool}`, summary, input: { tabId }, status: 'running' });
     this.d.browser?.act(tabId, action);
     await this.sleep(ms);
@@ -387,7 +391,7 @@ export class Run {
 
   /** Asks the user (question or permission) and waits for the answer. */
   ask(req: Omit<PendingRequest, 'id' | 'chatId' | 'at'>): Promise<Answer> {
-    return this.d.ask(this.chatId, req, this.signal);
+    return this.d.ask(this.chatId, localize(req), this.signal);
   }
 
   result(costUsd: number, durationMs: number, turns: number): void {
@@ -397,13 +401,13 @@ export class Run {
 
 /** The hand-off a demo chat "writes" (fictional, same sections as the real one). */
 function demoHandoff(c: ChatSummary): string {
-  return [
+  return tr([
     '## Stato', `${c.lastText || 'Lavoro in corso.'}`,
     '## File e worktree', `- cartella: \`${c.cwd}\``, '- branch `feat/mappa-v2`, worktree `../alfa-wt/mappa`',
     '## Decisioni prese', '- la mappa usa lo stesso layout delle strisce del Grindhouse', '- i test e2e girano con la finestra nascosta',
     '## Provato e scartato', '- il rendering in WebGL puro: troppo lento sui portatili',
     '## Prossimo passo', 'Verificare gli screenshot della v2 e chiedere la revisione.',
-  ].join('\n');
+  ].join('\n'));
 }
 
 const lastLine = (t: string) => {
@@ -545,7 +549,7 @@ export class DemoChats implements ChatService {
     if (c.resumedAt) this.patch(chatId, { resumedAt: undefined }); // the user's message clears "ripresa dopo il riavvio"
     if (this.runs.has(chatId)) { this.sends.set(chatId, [...(this.sends.get(chatId) ?? []), text]); return; }
     const thumbs = (images ?? []).flatMap(im => (im.thumb ? [im.thumb] : []));
-    this.startRun(chatId, async run => { run.user(text, thumbs); await (c.isOrchestrator ? orchestratorReply(run, text, this) : genericReply(run, text)); });
+    this.startRun(chatId, async run => { run.user(text, thumbs); await (c.isOrchestrator ? orchestratorReply(run, text, this) : c.quick ? flashReply(run, this) : genericReply(run, text)); });
   }
 
   /** e2e: the next answer fails like a broken connection (the request stays open). */
@@ -616,7 +620,7 @@ export class DemoChats implements ChatService {
     this.emit('chat:removed', { chatId });
   }
 
-  async archive(chatId: string, opts: { auto?: boolean } = {}): Promise<ChatSummary> {
+  async archive(chatId: string, opts: { auto?: boolean; undoable?: boolean } = {}): Promise<ChatSummary> {
     const c = this.chats.get(chatId);
     if (!c) throw new Error('Chat non trovata.');
     if (c.isOrchestrator) throw new Error('L’Orchestrator non si chiude: per ripartire usa Pulisci.');
@@ -802,13 +806,13 @@ async function resumeSms(run: Run): Promise<void> {
 }
 
 const continueOrchestrator: Continuation = async (run, a) => {
-  const label = picked(a, 'Da cosa riparto?') || 'QA rimborsi';
+  const label = picked(a, tr('Da cosa riparto?')) || tr('QA rimborsi');
   await run.say(`Segnato: riparto da **${label}**.`);
 };
 
 const continueQa: Continuation = async (run, a) => {
-  const label = picked(a, 'Il test case 7 fallisce anche su master: cosa faccio?');
-  if (/^Apro un bug/.test(label)) {
+  const label = picked(a, tr('Il test case 7 fallisce anche su master: cosa faccio?'));
+  if (label.startsWith(tr('Apro un bug'))) {
     await run.say('Apro il bug con i passi e lo screenshot, e taggo la QA.');
     await run.tool('mcp__tracker__create_bug', 'Bug «Rimborso senza sconto» · non assegnato', { title: 'Rimborso senza sconto' }, 2500, { output: 'Creato · tag ai-found · QA taggata' });
     await run.say('Fatto. Passo al **test case 8**: rimborso parziale.');
@@ -816,10 +820,10 @@ const continueQa: Continuation = async (run, a) => {
     await run.browse('tab-qa', 'browser_type', 'ref_9 · importo 40,00', { label: 'type ref_9 · 40,00', x: 46, y: 52 });
     await run.browse('tab-qa', 'browser_click', 'ref_14 · «Emetti rimborso»', { label: 'click ref_14 · «Emetti»', x: 33, y: 78 });
     await run.say('Test case 8 passato. Restano il 9 e il report.');
-  } else if (/^Lo segno/.test(label)) {
+  } else if (label.startsWith(tr('Lo segno'))) {
     await run.say('Lo segno nel report come «fallisce anche su master» e vado avanti con l\'8.');
     await run.tool('Write', 'report-qa-rimborsi.md', {}, 900, { output: 'report aggiornato' });
-  } else if (/^Mi fermo/.test(label)) {
+  } else if (label.startsWith(tr('Mi fermo'))) {
     await run.say('Ok, mi fermo qui. Il report è aggiornato fino al test case 7.');
   } else {
     await run.say(`Ok: «${label}». Procedo così.`);
@@ -846,6 +850,19 @@ async function genericReply(run: Run, text: string): Promise<void> {
   run.result(0.06, 20_000, 1);
 }
 
+/** Flash (ADR 0106, 0107): a "btw" on the Orchestrator's chat, read only: who waits, who works, its last answer. */
+async function flashReply(run: Run, d: DemoChats): Promise<void> {
+  await run.sleep(300);
+  await run.think('Leggo la chat dell\'Orchestrator e lo stato delle chat, senza toccare nulla.');
+  const all = d.list().filter(c => !c.isOrchestrator && !c.quick && !c.closedAt);
+  const waiting = all.filter(c => c.state === 'waiting' || c.pending > 0).map(c => c.title);
+  const working = all.filter(c => c.state === 'running' || c.state === 'starting').map(c => c.title);
+  const last = d.list().find(c => c.isOrchestrator && !c.closedAt)?.lastText;
+  await run.say(['Dalla chat dell\'Orchestrator, senza toccare nulla:', '', `- **Ti aspetta**: ${waiting.join(', ') || 'nessuna'}`, `- **Al lavoro**: ${working.join(', ') || 'nessuna'}`,
+    ...(last ? [`- **Ultima risposta dell'Orchestrator**: ${last}`] : []), '', 'Per cambiare qualcosa, «Fanne un lavoro» lo passa all\'Orchestrator.'].join('\n'));
+  run.result(0.01, 4000, 1);
+}
+
 async function orchestratorReply(run: Run, text: string, d: DemoChats): Promise<void> {
   await run.sleep(400);
   // "Strategist" ticked, or an older "Veloce" (ADR 0034, 2026-10-20): she opens a work chat for the request, like app_create_chat
@@ -853,7 +870,7 @@ async function orchestratorReply(run: Run, text: string, d: DemoChats): Promise<
   const nc = splitMode(text);
   if (nc.mode) {
     const ask = nc.text.trim();
-    const title = `Demo · ${titleFrom(ask) || 'nuova richiesta'}`.slice(0, 80);
+    const title = tr(`Demo · ${titleFrom(ask) || 'nuova richiesta'}`).slice(0, 80);
     const c = await d.create({ harness: 'claude', cwd: d.list().find(x => x.id === run.chatId)?.cwd ?? '', title, prompt: ask });
     await run.tool('mcp__app__app_create_chat', `app_create_chat · ${title}`, { title, prompt: ask }, 600, { output: JSON.stringify({ chatId: c.id, title: c.title, harness: 'claude', cwd: c.cwd, model: null, effort: null }, null, 1) });
     await run.say(`Aperta «${c.title}»: ci lavora lei, ti scrive quando ha finito.`);
@@ -894,7 +911,7 @@ export class DemoBrain implements BrainService {
     this.base = initial.usage.todayUsd - sum;
     this.startToday = initial.usage.todayUsd;
     chats.onEvent = (kind, chat, detail) => this.push({
-      id: `fe-${++this.n}`, at: chats.now(), kind, label: kind === 'chat-waiting' ? 'Ti aspetta' : 'Chat finita',
+      id: `fe-${++this.n}`, at: chats.now(), kind, label: tr(kind === 'chat-waiting' ? 'Ti aspetta' : 'Chat finita'),
       priority: kind === 'chat-waiting' ? 'urgent' : 'quiet', title: chat.title, detail, chatId: chat.id,
     });
     this.offCfg.push(cfg.onChange((c, now) => this.emit('settings:changed', { ...c, settings: now })));
@@ -906,7 +923,7 @@ export class DemoBrain implements BrainService {
     let i = 0;
     this.timers.push(setInterval(() => {
       const [kind, label, priority, title, detail] = LIVE_FEED[i++ % LIVE_FEED.length]!;
-      this.push({ id: `fe-${++this.n}`, at: this.chats.now(), kind, label, priority, title, detail, file: kind === 'idea' ? 'ideas.md' : undefined });
+      this.push({ id: `fe-${++this.n}`, at: this.chats.now(), kind, label: tr(label), priority, title: tr(title), detail: tr(detail), file: kind === 'idea' ? 'ideas.md' : undefined });
     }, 9000));
     this.timers.push(setInterval(() => this.emit('usage', this.usage()), 3000));
   }

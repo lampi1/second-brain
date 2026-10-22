@@ -4,10 +4,12 @@
 // beside each part cites the file it was read from; a statement about what the app does NOT do yet goes in `target`,
 // never in `points`. Kept as data, not JSX, so updating a card is a text edit. Also holds the pure helpers of «Discuti»:
 // the text that carries a card into a chat (discussText) and the message «Discuti» sends to the Orchestrator
-// (orchestratorText).
+// (orchestratorText). German (ADR 0117) is not written beside each pair: concept-guide.de.ts maps every English text to
+// its German one, and textOf falls back to English when an entry is missing.
+import { GUIDE_DE } from './concept-guide.de';
 
-export type GuideLang = 'it' | 'en';
-/** One text in both UI languages (ADR 0057). */
+export type GuideLang = 'it' | 'en' | 'de';
+/** One text in Italian and English (ADR 0057); German comes from GUIDE_DE. */
 export type Bi = Readonly<{ it: string; en: string }>;
 /** A "Dettagli tecnici" row: a label (data shape, files, thresholds, where it lives) and its text. */
 export interface ConceptTech { readonly label: Bi; readonly text: Bi }
@@ -71,8 +73,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Le chat dei ruoli di lavoro hanno una «run» con contatori e costo; l’Orchestrator e le chat avviate senza ruolo (con i tuoi permessi) no.',
         'Work-role chats have a "run" with counters and cost; the Orchestrator and chats started without a role (with your permissions) do not.'),
       // src/main/agents/loop.ts; src/main/agents/trials.ts; src/main/agents/suggestions.ts
-      b('L’app migliora i ruoli da sola: testi e skill subito, con «Annulla»; livello di modello, strumenti e permessi solo con il tuo sì in «Da approvare», come versione in prova.',
-        'The app improves the roles by itself: texts and skills at once, with "Undo"; model tier, tools and permissions only with your yes in "To approve", as a trial version.'),
+      b('L’app migliora i ruoli da sola: testi e skill subito, con «Annulla»; livello di modello, strumenti e permessi solo con il tuo sì in Memoria → Proposte, come versione in prova.',
+        'The app improves the roles by itself: texts and skills at once, with "Undo"; model tier, tools and permissions only with your yes in Memory → Proposals, as a trial version.'),
     ],
     analogy: b(
       'Come una squadra con ruoli fissi: il coordinatore assegna, ognuno fa il suo pezzo in vista di tutti e torna con il risultato; se manca un saper fare, si scrive il manuale, non si assume un altro.',
@@ -152,8 +154,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Permessi: di base ogni ruolo ha tutti gli strumenti e nessun limite («Tutto consentito»), così non trovi chiamate rifiutate né popup inutili. La scheda «Permessi» del ruolo (o «Modifica permessi» sul retro della card) li restringe: un interruttore per classe di strumenti e un limite tra quattro, ognuno con il suo «?». Ogni salvataggio è una versione; «Ripristina predefiniti» torna a tutto consentito.',
         'Permissions: by default every role has every tool and no limit ("Everything allowed"), so you find no refused calls and no useless popups. The role’s "Permissions" card (or "Edit permissions" on the back of its card) narrows them: one switch per tool class and a limit among four, each with its "?". Every save is a version; "Restore defaults" goes back to everything allowed.'),
       // src/main/agents/catalog.ts reset()
-      b('«Ripristina predefinito» riporta il ruolo com’è nell’app, dopo una conferma; le skill arrivate da un pacchetto restano.',
-        '"Restore default" brings the role back as the app ships it, after a confirmation; skills that came from a pack stay.'),
+      b('«Ripristina predefinito» riporta il ruolo com’è nell’app, dopo una conferma. I ruoli sono fissi: non si creano, non si importano e non si esportano (si condivide il brain intero, Impostazioni → «Condividi il brain»).',
+        '"Restore default" brings the role back as the app ships it, after a confirmation. The roles are fixed: they are not created, imported or exported (the whole brain is shared instead, Settings → "Condividi il brain").'),
       // src/shared/agents.ts BEHAVIOUR_FIELDS; src/main/agents/versions.ts
       b('Ogni cambio di comportamento è una versione nuova: la pagina ne mostra le ultime e ne riattiva una vecchia con un clic.',
         'Every behaviour change is a new version: the page shows the latest ones and brings an older one back with a click.'),
@@ -190,8 +192,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Una skill è un file SKILL.md nel brain (.claude/skills) o nelle tue cartelle. Un ruolo usa le sue skill di serie e quelle che il suo avvio gli dà; una skill che non ha gli viene rifiutata.',
         'A skill is a SKILL.md file in the brain (.claude/skills) or in your folders. A role uses its default skills and the ones its launch gives it; a skill it does not have is refused.'),
       // src/renderer/components/SkillsPage.tsx; src/main/brainmodel/service.ts link
-      b('La pagina Skill mostra quale ruolo usa ogni skill e quali strumenti chiama; «Ruoli» su una scheda la collega o la toglie subito, senza approvazione.',
-        'The Skill page shows which role uses each skill and which tools it calls; "Roles" on a card links or drops it at once, with no approval.'),
+      b('La scheda Skill di Memoria mostra quale ruolo usa ogni skill e quali strumenti chiama; «Ruoli» su una scheda la collega o la toglie subito, senza approvazione.',
+        'The Skills tab of Memoria shows which role uses each skill and which tools it calls; "Roles" on a card links or drops it at once, with no approval.'),
       // src/main/brainmodel/jobs.ts
       b('La manutenzione gira da sola ogni 6 ore, o subito con il pulsante «Manutenzione» in cima a Skill, Regole e Memoria, che dice cosa ha fatto ogni lavoro: una skill nuova da un lavoro ripetuto, skill doppie unite, ricordi doppi nella memoria condivisa, le tue correzioni applicate al ruolo, alla skill o a una regola. Una lezione proposta da una chat di lavoro aspetta che l’Orchestrator te la chieda.',
         'Maintenance runs by itself every 6 hours, or at once with the "Manutenzione" button atop Skill, Regole and Memoria, which says what each job did: a new skill from a repeated task, duplicate skills merged, duplicate memories moved to the shared one, your corrections applied to the role, the skill or a rule. A lesson a work chat proposes waits until the Orchestrator asks you.'),
@@ -199,14 +201,11 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Ogni modifica è registrata con cosa, perché e le prove, e «Annulla» la riporta com’era. L’app cambia da sola solo il testo di un ruolo e le sue skill; il tuo sì resta per produzione, strumenti, tetto, motore e livello di un ruolo, impostazioni e testi per altri.',
         'Every change is logged with what, why and the evidence, and "Undo" puts it back. The app changes by itself only a role’s text and its skills; your yes stays for production, a role’s tools, ceiling, engine and tier, settings and texts for others.'),
       // src/main/brainmodel/procedure-sources.ts
-      b('Le sezioni dei runbook e delle routine del brain diventano skill, senza perdere testo e senza ripetersi: il resoconto è sulla pagina Skill.',
-        'The brain’s runbook and routines sections become skills, losing no text and never twice: the report is on the Skill page.'),
+      b('Le sezioni dei runbook e delle routine del brain diventano skill, senza perdere testo e senza ripetersi: il resoconto è nella scheda Skill di Memoria.',
+        'The brain’s runbook and routines sections become skills, losing no text and never twice: the report is in Memoria’s Skills tab.'),
       // src/renderer/components/brain-model/
       b('Regole valgono per tutti i ruoli; Memoria tiene conoscenza, quello che è successo e una memoria per ruolo, con i numeri (righe per ruolo, crescita per settimana, ricordi più richiamati, file fermi, errori ricorrenti, skill utili o mai usate, curiosità; ogni «?» dice come è calcolato) e ogni file si apre nel visore; Mappa mostra ruolo → skill → regole → memoria.',
         'Rules apply to every role; Memory holds knowledge, what happened and one memory per role, with the numbers (lines per role, weekly growth, most recalled memories, stale files, recurring errors, useful or never used skills, curious facts; each "?" says how it is computed) and every file opens in the viewer; Map shows role → skills → rules → memory.'),
-      // src/main/agents/pack/emit.ts, rules.ts
-      b('Esportare un ruolo porta il suo testo, le skill, l’elenco degli strumenti (TOOLS.md) e le regole; mai la memoria. Importare un pacchetto aggiunge skill e regole al ruolo che scegli, come versione in prova: il ruolo tiene i suoi permessi.',
-        'Exporting a role carries its text, skills, the tools list (TOOLS.md) and the rules; never memory. Importing a pack adds skills and rules to the role you pick, as a trial version: the role keeps its permissions.'),
       // src/main/brainmodel/classifiers.ts
       b('Classificatori, in sola lettura: una scheda per classificatore (tipo di lavoro, modello, skill, stima dai task simili, stime, tipo nel registro dei costi) con cosa decide, i suoi numeri, l’andamento per settimana, quanto ha imparato e una curiosità; un clic apre il dettaglio con la storia e le tabelle (la tabella del modello, le skill suggerite contro quelle date).',
         'Classifiers, read only: one card per classifier (kind of work, model, skills, estimates, cost-ledger kind) with what it decides, its numbers, the weekly trend, how much it has learned and a curious fact; a click opens the detail with the history and the tables (the model table, the suggested skills versus the ones given).'),
@@ -327,8 +326,11 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Sul retro della carta, i costi dell’agente: costo mediano per lavoro e costo per lavoro riuscito e verificato (il costo di tutti i lavori conclusi diviso per i riusciti verificati), con su quanti lavori. Un numero che manca è un trattino, con una riga che dice perché.',
         'On the back of the card, the agent’s costs: median cost per run and cost per verified successful run (the cost of every ended run divided by the verified successful ones), with how many runs. A missing number is a dash, with one line saying why.'),
       // src/main/agents/standing.ts; src/renderer/components/AgentCatalogCard.tsx
-      b('Ogni carta ha un livello e una performance. Livello: conta solo i lavori riusciti e verificati (dal tuo voto, da una revisione indipendente verificata o dai fatti: criteri soddisfatti, nessuna tua correzione, non rifatto in 7 giorni), mai quelli falliti o non verificati, e il numero vero è scritto accanto («Lv 6 Maestro · 38 riusciti verificati»); Lv 2 a 5, Lv 3 a 15, Lv 4 a 30 (ogni livello ne chiede 5 in più). Performance: media dei voti (riuscito 100%, in parte 50%, fallito 0%) pesata per chi ha votato (tu, una revisione o i fatti × 1, l’Orchestrator × 0,6; l’agente su sé stesso non conta) e per età (metà peso ogni 30 giorni); sotto 5 lavori valutati l’agente è «in rodaggio». Il «?» accanto a ciascuno dà la formula.',
-        'Each card has a level and a performance. Level: only verified successful runs count (by your verdict, a verified independent review or the facts: criteria met, no correction from you, not redone within 7 days), never failed or unverified ones, and the real number is written beside it ("Lv 6 Master · 38 verified successes"); Lv 2 at 5, Lv 3 at 15, Lv 4 at 30 (each level asks 5 more). Performance: the average of verdicts (success 100%, partial 50%, failure 0%) weighted by who gave them (you, a review or the facts × 1, the Orchestrator × 0.6; the agent on itself does not count) and by age (half weight every 30 days); below 5 judged runs the agent is "warming up". The "?" beside each gives the formula.'),
+      b('Ogni carta ha un livello e una performance. Livello: conta solo i lavori riusciti e verificati, mai quelli falliti o non verificati, e il numero vero è scritto accanto («Lv 6 Maestro · 38 riusciti verificati»); Lv 2 a 5, Lv 3 a 15, Lv 4 a 30 (ogni livello ne chiede 5 in più). Performance: media dei voti (riuscito 100%, in parte 50%, fallito 0%) pesata per chi ha votato (tu e una revisione × 1, una revisione del Sentinel giudicata dai fatti × 0,8, l’Orchestrator × 0,6, il genitore verificato di un lavoro delegato × 0,5; l’agente su sé stesso non conta) e per età (metà peso ogni 30 giorni); sotto 5 lavori valutati l’agente è «in rodaggio». Il «?» accanto a ciascuno dà la formula.',
+        'Each card has a level and a performance. Level: only verified successful runs count, never failed or unverified ones, and the real number is written beside it ("Lv 6 Master · 38 verified successes"); Lv 2 at 5, Lv 3 at 15, Lv 4 at 30 (each level asks 5 more). Performance: the average of verdicts (success 100%, partial 50%, failure 0%) weighted by who gave them (you and a review × 1, a Sentinel review graded by what happened × 0.8, the Orchestrator × 0.6, the verified parent of a delegated run × 0.5; the agent on itself does not count) and by age (half weight every 30 days); below 5 judged runs the agent is "warming up". The "?" beside each gives the formula.'),
+      // src/main/agents/standing.ts earnedVerdict; src/main/agents/judge-sample.ts pickAudits (ADR 0125)
+      b('Ogni ruolo sale di livello anche senza i tuoi voti, se l’interruttore «Abilita controllo livello e performance» è acceso: un lavoro avviato dall’Orchestrator è verificato dalla revisione di un Sentinel; un lavoro delegato prende il verdetto del genitore verificato, se il suo resoconto aveva tutti i criteri soddisfatti, è arrivato prima che il genitore finisse e non è stato corretto, riaperto, rifatto o bocciato dal genitore; la revisione del Sentinel è giudicata da ciò che succede dopo: il tuo voto sullo stesso lavoro, una seconda revisione indipendente (1 lavoro su 10, costo in più circa un decimo) o un lavoro che aveva promosso e poi è stato riaperto o rifatto. Il silenzio non conta mai.',
+        'Every role levels up without your verdicts too, when the switch "Enable level and performance check" is on: a run the Orchestrator opened is verified by a Sentinel review; a delegated run takes its verified parent’s verdict, when its report met every criterion, arrived before the parent ended and was not corrected, reopened, redone or rejected by the parent; the Sentinel review is graded by what happens next: your verdict on the same run, a second independent review (1 run in 10, about a tenth more cost) or a run it passed that was then reopened or redone. Silence never counts.'),
     ],
     analogy: b('Come il cruscotto di una flotta: consumi e tempi per veicolo, con scritto quando un dato manca invece di inventarlo.',
       'Like a fleet dashboard: consumption and times per vehicle, saying when a figure is missing instead of inventing it.'),
@@ -337,7 +339,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/wiring.ts /api/agents/analytics
       tech(WHERE, 'Metriche delle run: IPC agents:metrics, anche filtrate per tag skill, app e repo; le statistiche delle sessioni restano interne (/api/agents/analytics).', 'Run metrics: agents:metrics IPC, also filtered by skill, app and repo tags; the session statistics stay internal (/api/agents/analytics).'),
     ],
-    sources: ['src/main/agents/analytics.ts', 'src/main/agents/run-metrics.ts', 'src/main/agents/standing.ts', 'src/renderer/components/AgentCatalogCard.tsx', 'src/main/index.ts', 'src/main/agents/collector.ts', 'docs/agent-evidence.md'],
+    sources: ['src/main/agents/analytics.ts', 'src/main/agents/run-metrics.ts', 'src/main/agents/standing.ts', 'src/main/agents/judge-sample.ts', 'src/renderer/components/AgentCatalogCard.tsx', 'src/main/index.ts', 'src/main/agents/collector.ts', 'docs/agent-evidence.md', 'docs/adr/0125-every-role-levels-up-from-outcomes.md'],
   },
   {
     id: 'errors-rules',
@@ -355,8 +357,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('«Correggi» su un pezzo di ragionamento manda all’agente la citazione e la tua correzione; è bloccato se c’è una domanda aperta.',
         '"Correct" on a piece of reasoning sends the agent the quote and your fix; it is blocked while a question is open.'),
       // src/renderer/brain/pages/LearnedRules.tsx, src/renderer/components/brain-model/RulesPage.tsx, src/renderer/brain/lib/learn.ts (ADR 0082)
-      b('«Regole imparate», in fondo alla pagina Regole, mostra le politiche di auto-miglioramento del brain (stime, scelta del modello, soglie) con Applica, No, Ripristina; compare solo quando il brain ne ha.',
-        '"Learned rules", at the bottom of the Rules page, shows the brain’s self-improvement policies (estimates, model choice, thresholds) with Apply, No, Restore; it appears only when the brain has some.'),
+      b('«Regole imparate», in fondo alla scheda Regole di Memoria, mostra le politiche di auto-miglioramento del brain (stime, scelta del modello, soglie) con Ripristina; una proposta in attesa si decide in Memoria → Proposte. Compare solo quando il brain ne ha.',
+        '"Learned rules", at the bottom of Memoria’s Rules tab, shows the brain’s self-improvement policies (estimates, model choice, thresholds) with Restore; a waiting proposal is decided in Memory → Proposals. It appears only when the brain has some.'),
       // src/renderer/i18n/areas/home.it.ts home.rulesReading
       b('Una regola conta come «tenuta» se il suo errore non ricompare nei giorni osservati: non è una prova di causa.',
         'A rule counts as "holding" if its error does not reappear in the observed days: it is not proof of cause.'),
@@ -395,8 +397,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Ogni cambiamento è una riga in changelog.md: quando, cosa, quale file, chi e perché. L’Orchestrator vi annota anche regole, skill e note che cambia.',
         'Every change is a line in changelog.md: when, what, which file, who and why. The Orchestrator also logs the rules, skills and notes it changes.'),
       // src/renderer/brain/pages/Script.tsx; src/renderer/components/LogPage.tsx (ADR 0111)
-      b('La pagina Script, nella sezione Brain, mostra gli script a schede; nessun bottone esegue uno script. Le righe del changelog stanno nel Log, tipo «Brain».',
-        'The Script page, in the Brain section, shows the scripts as cards; no button runs a script. The changelog lines are on the Log page, kind "Brain".'),
+      b('La scheda Script & Query di Memoria mostra gli script a schede; nessun bottone esegue uno script. Le righe del changelog stanno nel Log, tipo «Brain».',
+        'Memoria’s Scripts & Queries tab shows the scripts as cards; no button runs a script. The changelog lines are on the Log page, kind "Brain".'),
       // docs/adr/0076-brain-scripts-and-changelog.md
       b('Nessun classificatore sceglie gli script: con pochi script che si descrivono da soli basta la ricerca per parole.',
         'No classifier picks scripts: with a few self-describing scripts a word search is enough.'),
@@ -605,40 +607,42 @@ export const CONCEPTS: readonly ConceptCard[] = [
     sources: ['src/renderer/brain/pages/Home.tsx', 'src/renderer/components/AgentStrips.tsx', 'src/renderer/lib/agent-order.ts', 'src/renderer/lib/grid.ts', 'src/renderer/components/ChatTile.tsx', 'src/renderer/components/RunEstimate.tsx', 'src/renderer/components/BrowserTile.tsx', 'src/renderer/components/CloudStrips.tsx', 'src/main/cloud/service.ts'],
   },
   {
-    id: 'dashboard',
-    title: b('La Dashboard', 'The Dashboard'),
-    summary: b('Solo statistiche, dal vivo: agenti, contesto, errori, temi e spunti, tutte da dati reali. I costi sono in Andamento → Costi, la mappa del brain nella pagina Mappa.',
-      'Statistics only, live: agents, context, errors, themes and tips, all from real data. Costs are in Andamento → Costi, the brain map on the Map page.'),
+    id: 'memory-hub',
+    title: b('La Memoria, un posto solo', 'Memoria, one place'),
+    summary: b('Memoria è il posto unico di tutto quello che il brain contiene: in cima è viva (la frase del giorno, i contatori dal vivo, le ultime modifiche, «Manutenzione»), sotto le schede Proposte, Approvate, Skill, Regole, Script & Query, Idee, File, Apprendimento e Statistiche.',
+      'Memoria is the one place for everything the brain holds: its top is alive (the day’s sentence, live counters, the latest changes, \"Maintenance\"), below it the tabs Proposals, Approved, Skills, Rules, Scripts & Queries, Ideas, Files, Learning and Statistics.'),
     points: [
-      // src/renderer/dashboard/Dashboard.tsx, src/renderer/dashboard/data.ts
-      b('«Mappa agenti»: le chat aperte e chi parla con chi (proprietà dell’Orchestrator, messaggi tra chat).',
-        '"Agents map": open chats and who talks to whom (Orchestrator ownership, messages between chats).'),
-      // src/renderer/dashboard/BrainNotesMap.tsx (ADR 0077)
-      b('Le note del brain e i loro collegamenti sono in Mappa → «Note del brain», letti ogni 30 secondi; «Adatta» rimette tutta la mappa in vista.',
-        'The brain’s notes and their links are in Map → "Brain notes", read every 30 seconds; "Fit" brings the whole map back into view.'),
-      b('«Token e contesto» avvisa all’80% della finestra di compattazione Claude, se riportata con il contesto misurato; altrimenti usa contextWarnTokens (default 200 000).',
-        '"Tokens & context" warns at 80% of the Claude compaction window when reported with measured context; otherwise it uses contextWarnTokens (default 200,000).'),
-      // src/renderer/dashboard/ErrorsTab.tsx, src/renderer/dashboard/errors.ts
-      b('«Errori» raggruppa gli errori che si ripetono in schede: causa in parole semplici (limite d’uso, rete, accesso, contesto pieno…), quante volte, l’andamento su 14 giorni, l’ultima volta, dove (chat, ruolo, skill), cosa vuol dire e cosa fare; sotto, gli errori dell’AI che hai corretto per tipo, con la regola nata e se l’errore è tornato.',
-        '"Errors" groups recurring errors into cards: the cause in plain words (usage limit, network, login, full context…), how many times, the 14-day trend, the last time, where (chat, role, skill), what it means and what to do; below, the AI errors you corrected by type, with the rule produced and whether the error came back.'),
-      b('Ogni numero ha un «?»: dice esattamente come è calcolato. «Spunti» deriva segnali come contesti lunghi e costi alti.',
-        'Every number has a "?": it says exactly how it is computed. "Tips" derives signals such as long contexts and high costs.'),
-      b('Ogni pannello ha «Discuti»: mette una bozza all’Orchestrator, non la invia mai da solo.',
-        'Every panel has "Discuss": it puts a draft in the Orchestrator, never sends it by itself.'),
+      // src/renderer/lib/memory-hub.ts, src/renderer/actions.ts, src/renderer/components/Sidebar.tsx
+      b('Skill, Regole, Script, Idee e Apprendimento non sono più pagine a sé nella barra: sono schede di Memoria; i vecchi link, gli id e i tasti G (G S, G L, G T, G I, G J) aprono la scheda giusta, e «memoria/<scheda>» apre una scheda da un link.',
+        'Skills, Rules, Scripts, Ideas and Learning are no longer pages of their own in the rail: they are Memoria tabs; old links, ids and G keys (G S, G L, G T, G I, G J) open the right tab, and \"memoria/<tab>\" opens a tab from a link.'),
+      b('La voce Memoria nella barra porta il numero delle proposte che aspettano te; la scheda Proposte le mostra una alla volta.',
+        'The Memoria entry in the rail carries the number of proposals waiting for you; the Proposals tab shows them one at a time.'),
+      // src/renderer/components/brain-model/ApprovedTab.tsx, src/main/brainmodel/service.ts
+      b('«Approvate» elenca tutto quello che è nel brain adesso (skill, regole, fatti confermati, script): il cestino lo toglie con un clic e per qualche secondo «Annulla» lo rimette; skill, regole e script passano dal registro delle modifiche, quindi restano annullabili anche in Apprendimento.',
+        '\"Approved\" lists everything in the brain now (skills, rules, confirmed facts, scripts): the bin takes one out in a click and for a few seconds \"Undo\" puts it back; skills, rules and scripts go through the change log, so they stay undoable in Learning too.'),
+      // src/renderer/brain/pages/Idee.tsx
+      b('«Idee» divide le tue da quelle dell’AI (la colonna «Chi» di ideas.md: «IA» è l’AI) e «Rispolvera» ti ripropone a caso un’idea vecchia ancora aperta; sotto, il Battito e i temi delle idee.',
+        '\"Ideas\" splits yours from the AI’s (the \"Chi\" column of ideas.md: \"IA\" is the AI) and \"Dust one off\" brings back an old idea still open at random; below, the Pulse and the ideas’ themes.'),
+      b('La Dashboard non c’è più: la frase e i contatori sono in cima a Memoria, il contesto delle chat in Costi, gli errori dell’app e i temi degli errori in Qualità, gli spunti dell’AI in Idee; il resto erano doppioni.',
+        'The Dashboard is gone: the sentence and the counters are at the top of Memoria, the chats’ context in Costi, the app’s errors and the errors’ themes in Quality, the AI’s tips in Ideas; the rest were duplicates.'),
+      b('Ogni numero ha un «?» che dice come è calcolato; ogni pannello ha «Discuti», che prepara una bozza all’Orchestrator senza mai inviarla.',
+        'Every number has a \"?\" saying how it is computed; every panel has \"Discuss\", which drafts for the Orchestrator and never sends.'),
     ],
-    analogy: b('Come il quadro strumenti dell’auto: non guida, ma ti dice com’è la situazione adesso.',
-      'Like a car’s instrument panel: it does not drive, it tells you how things are right now.'),
+    analogy: b('Come lo studio di casa dove tieni tutto: la scrivania con la posta da aprire, gli scaffali in ordine e un cassetto da cui ogni tanto ripeschi un’idea.',
+      'Like the study at home where you keep everything: the desk with the mail to open, tidy shelves and a drawer you now and then fish an idea out of.'),
     tech: [
-      tech(DATA, 'Un contesto non riportato conta come sconosciuto, mai come sotto soglia.', 'An unreported context counts as unknown, never as below the threshold.'),
-      tech(WHERE, 'API del brain /api/map, /api/cost, /api/tables più lo stato delle chat dell’app.', 'Brain APIs /api/map, /api/cost, /api/tables plus the app’s chat state.'),
+      tech(WHERE, 'Schede in lib/memory-hub.ts (HUB_TABS, parseHubArg, hubRedirect), reindirizzamento in actions.ts go(); pagina components/brain-model/MemoryPage.tsx; ADR 0122.',
+        'Tabs in lib/memory-hub.ts (HUB_TABS, parseHubArg, hubRedirect), redirect in actions.ts go(); page components/brain-model/MemoryPage.tsx; ADR 0122.'),
+      tech(DATA, 'Il cestino chiama brainmodel:remove (skill del brain, file in rules/, script) e torna l’id della modifica; «Annulla» è brainmodel:rollback. Un fatto confermato si cancella con memory:delete solo quando il messaggio scade.',
+        'The bin calls brainmodel:remove (brain skills, rules/ files, scripts) and gets the change id back; \"Undo\" is brainmodel:rollback. A confirmed fact is erased with memory:delete only once its message expires.'),
     ],
-    sources: ['src/renderer/dashboard/Dashboard.tsx', 'src/renderer/dashboard/ErrorsTab.tsx', 'src/renderer/dashboard/errors.ts', 'src/renderer/dashboard/BrainNotesMap.tsx', 'src/renderer/dashboard/data.ts', 'src/shared/context.ts'],
+    sources: ['src/renderer/components/brain-model/MemoryPage.tsx', 'src/renderer/components/brain-model/ApprovedTab.tsx', 'src/renderer/lib/memory-hub.ts', 'src/renderer/brain/pages/Idee.tsx', 'src/renderer/components/ContextNow.tsx', 'src/renderer/dashboard/AppErrors.tsx', 'src/main/brainmodel/service.ts'],
   },
   {
     id: 'task-fatto',
     title: b('Task e Fatto', 'Tasks and Done'),
-    summary: b('Task mostra quello che ti aspetta su Azure DevOps; Fatto è il registro di quello che è stato fatto, dal più recente.',
-      'Tasks shows what waits for you on Azure DevOps; Done is the log of what was done, newest first.'),
+    summary: b('Task mostra quello che ti aspetta su Azure DevOps; Fatto elenca le attività che hai chiesto, dalla più recente, con il loro costo.',
+      'Tasks shows what waits for you on Azure DevOps; Done lists the tasks you asked for, newest first, with their cost.'),
     points: [
       // src/renderer/brain/pages/Task.tsx, src/main/tasks/service.ts
       b('«Task» legge con il lettore devops-me.mjs le tue PR, le review, i work item e le menzioni: quello incluso nell’app, o quello del brain se c’è; sola lettura, zero token.',
@@ -647,59 +651,59 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'The read starts with "Refresh now" or by itself, every 15 minutes up to 2 hours, when the automatic read is on; a mention alerts you with a sound you can turn off.'),
       b('Ogni record ha «Discuti»: l’Orchestrator riceve una bozza con titolo, link, stato e cartella; se serve lavoro, è lui ad aprire e istruire la chat.',
         'Every record has "Discuss": the Orchestrator gets a draft with title, link, state and folder; if work is needed, it opens and briefs the chat itself.'),
-      // src/renderer/brain/pages/Fatto.tsx, src/renderer/brain/lib/done-log.ts
-      b('«Fatto» elenca per giorno, dal più recente, PR, work item, righe «fatto» e «decisione» del diario e chat concluse.',
-        '"Done" lists by day, newest first, PRs, work items, "fatto" and "decisione" diary lines and finished chats.'),
-      b('Ogni voce dice cosa, chi (tu, o l’agente o il motore della chat), quando e ha il suo link: Azure DevOps fuori dall’app, la chat dentro.',
-        'Each entry says what, who (you, or the chat’s agent or engine), when, and has its link: Azure DevOps outside the app, the chat inside it.'),
-      b('«Mostra altri giorni» aggiunge tre giorni; lo stand-up di oggi resta in cima, da copiare.',
-        '"Show more days" adds three days; today’s stand-up stays on top, ready to copy.'),
+      // src/renderer/brain/pages/Fatto.tsx, src/shared/macro-tasks.ts
+      b('«Fatto» elenca per giorno, dalla più recente, solo le attività principali: quelle avviate da te o dall’Orchestrator; una chat delegata non è mai una riga a sé.',
+        '"Done" lists by day, newest first, only the main tasks: the ones you or the Orchestrator started; a delegated chat is never a row of its own.'),
+      b('Il costo di una riga è il suo più quello di tutto ciò che ha avviato (figli, nipoti, revisioni, rifacimenti); «n/d» se una parte non ha un costo noto. Ogni giorno ha il suo totale.',
+        'A row’s cost is its own plus everything it started (children, grandchildren, reviews, reworks); "n/a" when a part has no known cost. Each day has its total.'),
+      b('Lo stand-up in cima ha una riga per attività dell’ultimo giorno di lavoro e di oggi, da copiare; la pagina non spende token e non legge niente fuori dall’app.',
+        'The stand-up on top has one line per task of the last work day and today, ready to copy; the page spends no tokens and reads nothing outside the app.'),
     ],
     analogy: b('Task è la posta in arrivo del lavoro; Fatto è il diario di bordo.',
       'Tasks is the work’s inbox; Done is the logbook.'),
     tech: [
-      tech(DATA, 'Task: la cache tasks.json nella cartella dati dell’app; Fatto: /api/day?kind=report del brain più l’elenco delle chat dell’app.',
-        'Tasks: the tasks.json cache in the app’s data folder; Done: the brain’s /api/day?kind=report plus the app’s chat list.'),
+      tech(DATA, 'Task: la cache tasks.json nella cartella dati dell’app; Fatto: il registro delle esecuzioni dell’app (agent-runs.json, IPC runs:macro).',
+        'Tasks: the tasks.json cache in the app’s data folder; Done: the app’s run store (agent-runs.json, IPC runs:macro).'),
       tech(WHERE, 'Lettura e avvisi in src/main/tasks/, le pagine in brain/pages/Task.tsx e Fatto.tsx. Fino al 19/10/2026 Task si chiamava DevOps: impostazioni e link vecchi passano da soli al nome nuovo (ADR 0079).',
         'Reads and alerts in src/main/tasks/, the pages in brain/pages/Task.tsx and Fatto.tsx. Until 19/10/2026 Tasks was called DevOps: old settings and links move to the new name by themselves (ADR 0079).'),
     ],
-    sources: ['src/renderer/brain/pages/Task.tsx', 'src/main/tasks/service.ts', 'src/renderer/brain/pages/Fatto.tsx', 'src/renderer/brain/lib/done-log.ts', 'brain-template/ops/tools/day.mjs'],
+    sources: ['src/renderer/brain/pages/Task.tsx', 'src/main/tasks/service.ts', 'src/renderer/brain/pages/Fatto.tsx', 'src/shared/macro-tasks.ts'],
   },
   {
     id: 'setup',
     title: b('La prima configurazione', 'The first setup'),
-    summary: b('Una sola finestra, sette passi: cartelle, la tua IA, gli strumenti, chi sei, il tuo lavoro, la squadra e il riepilogo. Riprendi quando vuoi.',
-      'One window, seven steps: folders, your AI, tools, who you are, your work, the team and the summary. Resume whenever you like.'),
+    summary: b('Una sola finestra, sei passi: lingua, la tua IA, gli strumenti, chi sei, le cartelle e pronto. Riprendi quando vuoi.',
+      'One window, six steps: language, your AI, tools, who you are, folders and ready. Resume whenever you like.'),
     points: [
-      // src/renderer/components/SetupFolders.tsx; src/modules/ai-first/default-brain.ts
-      b('Cartelle: nessuna scelta tra opzioni. La memoria è nuova e vuota (creata alla conferma nella cartella dati dell’app) oppure un brain che hai già, indicato con «Usa un brain esistente…».',
-        'Folders: no options to pick. The memory is a new, empty one (created on confirmation in the app’s data folder) or a brain you already have, pointed to with "Use an existing brain…".'),
-      // src/main/brain/projects-folder.ts
-      b('La cartella dei progetti la cerca l’app da sola: i repository in cui Claude Code e Cursor hanno già lavorato e i posti abituali (source/repos, Projects, dev…). Te la chiede solo se non la trova; la cambi o la rilevi di nuovo in Impostazioni → Il mio spazio.',
-        'The app looks for the projects folder by itself: the repositories Claude Code and Cursor already worked in and the usual places (source/repos, Projects, dev…). It asks only when it finds none.'),
+      // src/renderer/components/SetupLanguage.tsx; src/renderer/i18n/LangRoot.tsx
+      b('Lingua per prima: tre pulsanti grandi, già scelta quella del sistema. Un clic cambia subito la lingua dell’app; le risposte restano. La stessa lingua va in me.md per le chat e nel brain nuovo.',
+        'Language first: three big buttons, the system one already picked. A click changes the app’s language at once; the answers stay. The same language goes into me.md for the chats and into the new brain.'),
       // src/renderer/components/SetupEngines.tsx; src/renderer/lib/setup-wizard.ts
-      b('La tua IA: «Collega» apre l’accesso ufficiale in una finestra a parte; la configurazione resta aperta e ricontrolla da sola ogni pochi secondi, finché la scheda dice «Collegata» con l’account e l’ora della verifica.',
-        'Your AI: "Collega" opens the official sign-in in a separate window; the setup stays open and checks again by itself every few seconds, until the card says "Collegata" with the account and the time of the check.'),
-      // src/renderer/components/SetupConnectors.tsx; src/renderer/lib/setup-connectors.ts
-      b('Strumenti (GitHub, Azure DevOps, Jira): ogni accesso finisce con una verifica vera in sola lettura. «Connesso come …» dice l’account e quanti progetti ha letto; «Non connesso» dice il motivo e cosa fare.',
-        'Tools (GitHub, Azure DevOps, Jira): every sign-in ends in a real read-only check. "Connected as …" names the account and how many projects it read; "Not connected" says why and what to do.'),
-      // src/renderer/components/FirstInterview.tsx; src/main/brain/profile.ts
-      b('Nome, ruolo, lingua, aree e stile delle risposte finiscono in me.md alla conferma; ogni risposta è salvata come bozza mezzo secondo dopo, così «Più tardi» o Esc riprendono dallo stesso passo.',
-        'Name, role, language, areas and reply style go into me.md on confirmation; every answer is saved as a draft half a second later, so "Più tardi" or Esc resume on the same step.'),
+      b('La tua IA: una consigliata, le altre sotto «Altre IA». «Collega» apre l’accesso ufficiale in una finestra a parte; la configurazione resta aperta e ricontrolla da sola ogni pochi secondi. La prima IA scelta è quella dei ruoli.',
+        'Your AI: one recommended, the others under "More AI tools". "Collega" opens the official sign-in in a separate window; the setup stays open and checks again by itself every few seconds. The first AI chosen is the roles’ one.'),
+      // src/renderer/components/ToolCatalog.tsx; src/renderer/lib/tool-presets.ts
+      b('Strumenti (GitHub, Jira, Azure DevOps): ogni riquadro crea insieme l’account e il server MCP degli agenti. Chiede solo organizzazione o sito, poi un token (con il link alla pagina dove si crea) o l’accesso nel browser, e prova subito: «Funziona: vedo N progetti» o cosa fare. Il modulo tecnico sta in Impostazioni → Avanzate.',
+        'Tools (GitHub, Jira, Azure DevOps): each tile creates the account and the agents’ MCP server together. It asks only for the organization or site, then a token (with the link to the page where it is made) or the browser sign-in, and tests at once: "Works: I see N projects" or what to do. The technical form is in Settings → Advanced.'),
+      // src/renderer/components/SetupFolders.tsx; src/main/brain/projects-folder.ts; src/modules/ai-first/default-brain.ts
+      b('Cartelle: sempre un brain nuovo e vuoto nel posto predefinito (creato alla conferma); la cartella dei progetti la cerca l’app da sola e te la chiede solo se non la trova. Un brain che hai già lo indichi in Impostazioni → Il mio spazio.',
+        'Folders: always a new, empty brain in the default place (created on confirmation); the app looks for the projects folder by itself and asks only when it finds none. A brain you already have is pointed to in Settings → My workspace.'),
+      // src/renderer/components/FirstInterview.tsx; src/modules/ai-first/model.ts
+      b('Pronto: obiettivi, aree di lavoro e squadra non si chiedono qui ma dopo, nella prima chat con la guida, una domanda alla volta. Ogni risposta è salvata come bozza mezzo secondo dopo, così «Più tardi» o Esc riprendono dallo stesso passo.',
+        'Ready: goals, work areas and team are not asked here but later, in the first chat with the guide, one question at a time. Every answer is saved as a draft half a second later, so "Più tardi" or Esc resume on the same step.'),
       // src/renderer/components/ui.tsx Modal
       b('Niente dentro la finestra la chiude da solo: un clic fuori non fa nulla, e la si riapre da Impostazioni → «Configura il mio lavoro».',
         'Nothing inside the window closes it by itself: a click outside does nothing, and you reopen it from Settings → "Configura il mio lavoro".'),
     ],
     analogy: b('Come il primo giorno in un ufficio nuovo: ti mostrano la scrivania, ti danno i badge e controllano che aprano davvero le porte.',
       'Like the first day at a new office: they show you your desk, hand you the badges and check they really open the doors.'),
-    diagram: { kind: 'flow', steps: [b('Cartelle', 'Folders'), b('La tua IA', 'Your AI'), b('Strumenti', 'Tools'), b('Chi sei e lavoro', 'You and your work'), b('Conferma', 'Confirm')] },
+    diagram: { kind: 'flow', steps: [b('Lingua', 'Language'), b('La tua IA', 'Your AI'), b('Strumenti', 'Tools'), b('Chi sei', 'About you'), b('Cartelle', 'Folders'), b('Pronto', 'Ready')] },
     tech: [
       tech(WHERE, 'Le scelte stanno in config.json (brainRoot, projectsRoot); la bozza in setup.json; il brain nuovo usa projectsRoot come cartella dei repository (REPOS).',
         'The choices live in config.json (brainRoot, projectsRoot); the draft in setup.json; a new brain uses projectsRoot as its repositories folder (REPOS).'),
       tech(LIMITS, 'Ricerca dei progetti: solo nomi di cartelle e presenza di .git, al massimo 300 cartelle note alle CLI; nessun file aperto. Ricontrollo degli accessi: ogni 4 secondi per 3 minuti.',
         'Projects search: folder names and .git presence only, at most 300 folders known to the CLIs; no file opened. Sign-in re-checks: every 4 seconds for 3 minutes.'),
     ],
-    sources: ['src/renderer/components/FirstInterview.tsx', 'src/renderer/components/SetupFolders.tsx', 'src/renderer/components/SetupEngines.tsx', 'src/renderer/components/SetupConnectors.tsx', 'src/renderer/lib/setup-wizard.ts', 'src/renderer/lib/setup-connectors.ts', 'src/main/brain/projects-folder.ts', 'src/renderer/components/ProjectsFolderSetting.tsx', 'src/modules/ai-first/default-brain.ts', 'src/renderer/components/ui.tsx'],
+    sources: ['src/renderer/components/FirstInterview.tsx', 'src/renderer/components/SetupFolders.tsx', 'src/renderer/components/SetupEngines.tsx', 'src/renderer/components/SetupLanguage.tsx', 'src/renderer/components/ToolCatalog.tsx', 'src/renderer/lib/setup-wizard.ts', 'src/renderer/lib/tool-presets.ts', 'src/renderer/lib/setup-connectors.ts', 'src/main/brain/projects-folder.ts', 'src/renderer/components/ProjectsFolderSetting.tsx', 'src/modules/ai-first/default-brain.ts', 'src/renderer/components/ui.tsx'],
   },
   {
     id: 'brain',
@@ -986,12 +990,15 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/brainmodel/jobs.ts migration
       b('Una volta sola, i vecchi runbook e le sezioni «routines» del brain diventano skill, con un resoconto di dove è finito ciascuno.',
         'Once, the brain’s old runbooks and "routines" sections become skills, with a report of where each one went.'),
+      // src/main/brainmodel/upgrade.ts, src/shared/brain-layout.ts
+      b('Con una nuova versione, il brain si mette in pari da solo: l’app descrive dove tiene ogni tipo di contenuto e ciò che nelle note ora ha un suo posto ci viene spostato, con un rimando dove stava: uno script in scripts/, una query SQL o KQL in queries/ (Memoria → Script & Query), un’idea («Idea:», «💡», le voci sotto «## Idee») in ideas.md con la nota da cui viene, la data e se era tua o dell’IA. Un agente senza strumenti decide solo quando c’è qualcosa da spostare.',
+        'With a new version the brain catches up by itself: the app describes where it keeps each kind of content, and what in the notes now has a place of its own moves there, with a pointer where it was: a script to scripts/, an SQL or KQL query to queries/ (Memory → Script & Query), an idea ("Idea:", "💡", the items under "## Ideas") to ideas.md with the note it came from, the date and whether it was yours or the AI’s. An agent with no tools decides only when there is something to move.'),
       // src/main/brainmodel/changes.ts rollback
       b('Ogni cambio finisce nel registro con cosa, perché e le prove; «Annulla» rimette il testo di prima, ma solo se nessuno l’ha cambiato dopo. Un cambio annullato non viene rifatto.',
         'Every change goes to the log with what, why and the evidence; "Undo" puts the earlier text back, but only if nobody changed it since. An undone change is not made again.'),
       // src/main/brainmodel/jobs.ts header: what stays with the user
-      b('Non tocca mai da sola permessi, strumenti, motore, livello di modello o limiti di un ruolo: quelli vanno in «Da approvare».',
-        'It never changes a role’s permissions, tools, engine, model tier or limits by itself: those go to "To approve".'),
+      b('Non tocca mai da sola permessi, strumenti, motore, livello di modello o limiti di un ruolo: quelli diventano una carta in Memoria → Proposte.',
+        'It never changes a role’s permissions, tools, engine, model tier or limits by itself: those become a card in Memory → Proposals.'),
     ],
     analogy: b('Come chi riordina l’archivio di notte: unisce i doppioni, scrive le schede che mancano e lascia un biglietto per ogni cosa spostata, così la rimetti a posto se non ti piace.',
       'Like someone who tidies the archive at night: merges duplicates, writes the missing cards and leaves a note for everything moved, so you can put it back if you do not like it.'),
@@ -1000,19 +1007,49 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(DATA, 'BrainChange { id, at, job, kind: skill | agent | rule | memory, action, target, summary, reason, evidence, rolledBackAt?, canRollback }.',
         'BrainChange { id, at, job, kind: skill | agent | rule | memory, action, target, summary, reason, evidence, rolledBackAt?, canRollback }.'),
       tech(FILES, 'userData/brain-changes.json: ultimi 400 cambi, istantanee prima/dopo fino a 256 KB ciascuna.', 'userData/brain-changes.json: last 400 changes, before/after snapshots up to 256 KB each.'),
-      tech(LIMITS, 'Lavori: migration, corrections, repeated-task, merge-skills, merge-memory; ogni 6 h, la migrazione un minuto dopo l’avvio.', 'Jobs: migration, corrections, repeated-task, merge-skills, merge-memory; every 6 h, the migration a minute after start.'),
+      tech(LIMITS, 'Lavori: migration, upgrade, corrections, repeated-task, merge-skills, merge-memory; ogni 6 h, la migrazione e l’aggiornamento del brain un minuto dopo l’avvio.', 'Jobs: migration, upgrade, corrections, repeated-task, merge-skills, merge-memory; every 6 h, the migration and the brain upgrade a minute after start.'),
     ],
-    sources: ['src/main/brainmodel/jobs.ts', 'src/main/brainmodel/changes.ts', 'src/main/brainmodel/service.ts', 'src/shared/brain-model.ts', 'src/renderer/components/brain-model/MaintenanceButton.tsx'],
+    sources: ['src/main/brainmodel/jobs.ts', 'src/main/brainmodel/upgrade.ts', 'src/shared/brain-layout.ts', 'src/main/brain/queries.ts', 'src/main/brainmodel/changes.ts', 'src/main/brainmodel/service.ts', 'src/shared/brain-model.ts', 'src/renderer/components/brain-model/MaintenanceButton.tsx'],
+  },
+  {
+    id: 'proposals',
+    title: b('Memoria → Proposte', 'Memory → Proposals'),
+    summary: b('Tutto quello che l’app propone e aspetta il tuo sì è una carta in un solo mazzo: una alla volta, approvi o rifiuti.',
+      'Everything the app proposes and that waits for your yes is a card in a single deck: one at a time, you approve or reject.'),
+    points: [
+      // ADR 0123; src/main/proposals/sources.ts (SOURCES), src/main/proposals/service.ts, src/renderer/components/brain-model/ProposalsDeck.tsx, src/renderer/lib/proposals.ts
+      b('Il mazzo raccoglie fatti di memoria proposti, skill candidate, richieste di impostazioni degli agenti, livelli e prove dei ruoli, regole del Battito, politiche dell’auto-miglioramento e i cambi che la manutenzione ha già fatto negli ultimi 14 giorni.',
+        'The deck gathers proposed memory facts, skill candidates, the agents’ setting requests, the roles’ tiers and trials, the Battito’s rules, the self-improvement policies and the changes the maintenance already made in the last 14 days.'),
+      b('Ogni carta dice chi l’ha proposta, dove (chat e run), quando e con quali prove; la più recente sta in cima, i filtri sopra la dividono per gruppo.',
+        'Every card says who proposed it, where (chat and run), when and with what evidence; the newest is on top, the filters above split it by group.'),
+      b('Trascina a destra o premi ✓ (→) per approvare, a sinistra o ✕ (←) per rifiutare; Z o Ctrl+Z annulla l’ultima scelta finché non è partita, dopo circa 6 secondi o alla scelta seguente.',
+        'Drag right or press ✓ (→) to approve, left or ✕ (←) to reject; Z or Ctrl+Z undoes the last choice until it is sent, after about 6 seconds or at the next choice.'),
+      b('Un cambio già applicato si mostra «già applicato» con Tieni o Annulla: Annulla è il ripristino del registro dei cambi, Tieni lo toglie dal mazzo.',
+        'A change already made shows as "already applied" with Keep or Undo: Undo is the change log’s rollback, Keep takes it off the deck.'),
+      b('Ogni decisione passa dalla strada di sempre della sua fonte, e prima l’app ricontrolla che la carta sia ancora aperta; se la fonte rifiuta, la carta torna con il motivo.',
+        'Every decision goes through its source’s usual path, and first the app checks again that the card is still open; if the source refuses, the card comes back with the reason.'),
+      b('Una skill candidata si approva solo dopo aver aperto la bozza e le prove; le altre pagine non decidono più, rimandano qui. Il numero accanto a Memoria conta le carte aperte.',
+        'A skill candidate can be approved only after opening its draft and evidence; the other pages no longer decide, they point here. The number beside Memory counts the open cards.'),
+    ],
+    analogy: b('Come la pila della posta sulla scrivania: una busta alla volta, la apri, decidi, passi alla prossima, finché la pila è vuota.',
+      'Like the pile of mail on the desk: one envelope at a time, you open it, decide, move to the next, until the pile is empty.'),
+    tech: [
+      tech(DATA, 'Proposal { id `<fonte>:<id>`, source, group, applied, title, content, facts, provenance { who, chat?, runId?, files?, at, evidence }, canApprove, canReject, blocked?, readFirst? }.',
+        'Proposal { id `<source>:<id>`, source, group, applied, title, content, facts, provenance { who, chat?, runId?, files?, at, evidence }, canApprove, canReject, blocked?, readFirst? }.'),
+      tech(WHERE, 'IPC proposals:list, proposals:count, proposals:decide; evento proposals:changed { count }. I «Tieni» in userData/proposals-reviewed.json (60 giorni).',
+        'IPC proposals:list, proposals:count, proposals:decide; event proposals:changed { count }. The "Keep" marks in userData/proposals-reviewed.json (60 days).'),
+    ],
+    sources: ['src/shared/proposals.ts', 'src/main/proposals/sources.ts', 'src/main/proposals/service.ts', 'src/renderer/lib/proposals.ts', 'src/renderer/components/brain-model/ProposalsDeck.tsx'],
   },
   {
     id: 'trials',
-    title: b('Versioni in prova e «Da approvare»', 'Trial versions and "To approve"'),
-    summary: b('Quello che l’app non cambia da sola diventa una proposta in «Da approvare», con i numeri prima e dopo.',
-      'What the app does not change by itself becomes a proposal in "To approve", with the numbers before and after.'),
+    title: b('Versioni in prova', 'Trial versions'),
+    summary: b('Quello che l’app non cambia da sola diventa una proposta in Memoria → Proposte, con i numeri prima e dopo.',
+      'What the app does not change by itself becomes a proposal in Memory → Proposals, with the numbers before and after.'),
     points: [
       // src/main/agents/lifecycle.ts header
-      b('Testi e skill dei ruoli si aggiornano da soli; livello di modello, strumenti e permessi solo con il tuo sì, nella sezione «Da approvare» della pagina Agenti.',
-        'The roles’ texts and skills update by themselves; model tier, tools and permissions only with your yes, in the "To approve" section of the Agents page.'),
+      b('Testi e skill dei ruoli si aggiornano da soli; livello di modello, strumenti e permessi solo con il tuo sì, su una carta di Memoria → Proposte (la pagina Agenti rimanda lì).',
+        'The roles’ texts and skills update by themselves; model tier, tools and permissions only with your yes, on a card of Memory → Proposals (the Agents page points there).'),
       // src/main/agents/trials.ts evaluateTrial
       b('Una versione in prova si confronta con la versione di prima sugli stessi lavori (stesso ruolo, stesse skill): fino a 21 giorni, servono almeno 5 lavori per parte.',
         'A trial version is compared with the version before on the same jobs (same role, same skills): up to 21 days, at least 5 jobs on each side.'),
@@ -1022,7 +1059,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/agents/trials.ts: coverage < 60%
       b('Se meno del 60% dei lavori ha un esito, aspetta: senza esiti non c’è niente da confrontare. Il tuo voto sulla striscia è ciò che riempie il confronto.',
         'When fewer than 60% of the jobs have an outcome, it waits: without outcomes there is nothing to compare. Your vote on the strip is what fills the comparison.'),
-      // src/main/agents/suggestions.ts (tier rule); src/renderer/components/AgentApprovalCards.tsx
+      // src/main/agents/suggestions.ts (tier rule); src/main/proposals/sources.ts (trial, tier)
       b('Ogni proposta dice perché, cosa cambia e i numeri con quanti lavori li sostengono; la decidi tu, o la chiudi.',
         'Every proposal says why, what changes and the numbers with how many jobs back them; you decide it, or dismiss it.'),
     ],
@@ -1033,7 +1070,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'TRIAL_DAYS = 21 days; at least 5 comparable jobs per side; outcome coverage ≥ 60%; success −5 points = revert; cost and time within ×1.25.'),
       tech(FILES, 'userData/agent-lifecycle.json (le proposte); le versioni in role-history.json.', 'userData/agent-lifecycle.json (the proposals); the versions in role-history.json.'),
     ],
-    sources: ['src/main/agents/trials.ts', 'src/main/agents/lifecycle.ts', 'src/main/agents/suggestions.ts', 'src/renderer/components/AgentApprovalCards.tsx'],
+    sources: ['src/main/agents/trials.ts', 'src/main/agents/lifecycle.ts', 'src/main/agents/suggestions.ts', 'src/main/proposals/sources.ts'],
   },
   {
     id: 'auto-close',
@@ -1194,27 +1231,27 @@ export const CONCEPTS: readonly ConceptCard[] = [
   },
 ];
 
-export const textOf = (t: Bi, lang: GuideLang): string => t[lang];
+export const textOf = (t: Bi, lang: GuideLang): string => (lang === 'de' ? GUIDE_DE[t.en] ?? t.en : t[lang]);
 
 /** The card as plain text for a chat: title, summary, numbered points, analogy, technical part, target, sources. */
 export function cardText(card: ConceptCard, lang: GuideLang): string {
   const L = (t: Bi) => textOf(t, lang);
-  const h = (it: string, en: string) => (lang === 'en' ? en : it);
+  const h = (it: string, en: string, de: string) => (lang === 'en' ? en : lang === 'de' ? de : it);
   const lines = [
     `# ${L(card.title)}`,
     L(card.summary),
     '',
-    h('Come funziona:', 'How it works:'),
+    h('Come funziona:', 'How it works:', 'So funktioniert es:'),
     ...card.points.map((p, i) => `${i + 1}. ${L(p)}`),
     '',
-    `${h('Analogia', 'Analogy')}: ${L(card.analogy)}`,
+    `${h('Analogia', 'Analogy', 'Vergleich')}: ${L(card.analogy)}`,
     '',
-    h('Dettagli tecnici:', 'Technical details:'),
+    h('Dettagli tecnici:', 'Technical details:', 'Technische Details:'),
     ...card.tech.map(x => `- ${L(x.label)}: ${L(x.text)}`),
   ];
-  if (card.coming?.length) lines.push('', h('In arrivo (non ancora su main):', 'Coming (not on main yet):'), ...card.coming.map(x => `- PR #${x.pr}: ${L(x.text)}`));
-  if (card.target?.length) lines.push('', h('Obiettivo, non ancora così oggi:', 'Target, not today’s behaviour:'), ...card.target.map(x => `- ${L(x)}`));
-  lines.push('', `${h('Fonti nel codice', 'Sources in the code')}: ${card.sources.join(', ')}`);
+  if (card.coming?.length) lines.push('', h('In arrivo (non ancora su main):', 'Coming (not on main yet):', 'In Arbeit (noch nicht auf main):'), ...card.coming.map(x => `- PR #${x.pr}: ${L(x.text)}`));
+  if (card.target?.length) lines.push('', h('Obiettivo, non ancora così oggi:', 'Target, not today’s behaviour:', 'Ziel, heute noch nicht so:'), ...card.target.map(x => `- ${L(x)}`));
+  lines.push('', `${h('Fonti nel codice', 'Sources in the code', 'Quellen im Code')}: ${card.sources.join(', ')}`);
   return lines.join('\n');
 }
 
@@ -1222,6 +1259,8 @@ export function cardText(card: ConceptCard, lang: GuideLang): string {
 export function discussText(card: ConceptCard, lang: GuideLang): string {
   const ask = lang === 'en'
     ? 'Explain this concept of the second-brain app to me, a developer, a bit more technically. Check the source files above before answering and tell me if something here is out of date.'
+    : lang === 'de'
+    ? 'Erklär mir, einem Entwickler, dieses Konzept der App second-brain etwas technischer. Prüf vor der Antwort die Quelldateien oben und sag mir, ob hier etwas veraltet ist.'
     : 'Spiegami questo concetto dell’app second-brain, a me che sono uno sviluppatore, andando un po’ sul tecnico. Controlla i file sorgente qui sopra prima di rispondere e dimmi se qualcosa qui è superato.';
   return `${cardText(card, lang)}\n\n${ask}`;
 }
@@ -1231,6 +1270,8 @@ export function discussText(card: ConceptCard, lang: GuideLang): string {
 export function orchestratorText(card: ConceptCard, lang: GuideLang): string {
   const ask = lang === 'en'
     ? `I want to discuss the concept «${card.title.en}» from the app's guide. Explain it to me yourself; if it needs reading the code first, delegate that to a Scout and tell me what it found.`
+    : lang === 'de'
+    ? `Ich möchte das Konzept «${textOf(card.title, 'de')}» aus dem Leitfaden der App besprechen. Erklär es mir selbst; wenn dafür zuerst der Code gelesen werden muss, gib das an einen Scout ab und sag mir, was er gefunden hat.`
     : `Voglio discutere il concetto «${card.title.it}» della guida dell'app. Spiegamelo tu; se prima serve leggere il codice, delega la lettura a uno Scout e dimmi cosa ha trovato.`;
   return `${ask}\n\n---\n${discussText(card, lang)}`;
 }

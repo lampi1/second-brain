@@ -93,6 +93,8 @@ test('next-ask: the visual waits for the chat\'s question, rides on its panel, n
   await page.getByTestId(`${base}-visuals`).getByTestId('artifact-expand-opzioni').click();
   const full = page.getByTestId('artifact-full-opzioni');
   await expect(full).toBeVisible();
+  // the view takes the keyboard as it opens (Modal in ui.tsx): the keys below are typed inside it
+  await expect.poll(() => full.evaluate(el => el.contains(document.activeElement))).toBe(true);
   await page.keyboard.press('1');
   // a click on its content and Shift+Tab keep the keyboard inside the view (the review's case)
   await full.locator('.gu-sum').click();
@@ -119,7 +121,7 @@ test('next-ask: the visual waits for the chat\'s question, rides on its panel, n
 
 test('target orchestrator: the visual shows in the Orchestrator widget, with the chat that sent it', async () => {
   const { app, page } = await launchDemo({ orchestrator: true, width: 1600, height: 1000 });
-  expect(await show(app, 'qa', { id: 'stato-qa', component: 'board', target: 'orchestrator', ...VISUALS.board })).toContain('nell’Orchestrator «Orchestrator»');
+  expect(await show(app, 'qa', { id: 'stato-qa', component: 'board', target: 'orchestrator', ...VISUALS.board })).toContain('Mostrato nell’Orchestrator:'); // one Orchestrator: no name to tell it apart
   const card = page.getByTestId('tile-orchestrator').getByTestId('artifact-stato-qa');
   await expect(card).toBeVisible();
   await expect(page.getByTestId('artifact-from-stato-qa')).toHaveText('da «QA · Rimborsi»');

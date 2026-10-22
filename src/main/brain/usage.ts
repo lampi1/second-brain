@@ -21,6 +21,7 @@ import { runNode, type NodeRunner } from './node';
 import { brainScript } from '../rules/tools';
 import type { ChatSpend, Spend } from './budget';
 import type { CursorDay } from './cursor-ledger';
+import { uiLocale } from '../locale';
 
 // Checked 2026-10-11 (cursor-cost research note §1, §3, outside the repo): no documented usage API for a personal account (the
 // Admin API is for team admins), the CLI's ACP mode sends no tokens (bug confirmed by Cursor), the dashboard's internal
@@ -36,8 +37,8 @@ const MAX_CHATS = 200;
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
-const ddmm = (t: number) => new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit' }).format(new Date(t));
-const hhmm = (t: number) => new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }).format(new Date(t));
+const ddmm = (t: number) => new Intl.DateTimeFormat(uiLocale(), { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit' }).format(new Date(t));
+const hhmm = (t: number) => new Intl.DateTimeFormat(uiLocale(), { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }).format(new Date(t));
 
 /** cost.mjs --json → today's Claude $, per-chat $ (key = Claude session id), Cursor's $ when its export covers today. */
 export function parseCost(j: unknown, today: string): CostSnapshot {

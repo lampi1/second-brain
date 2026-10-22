@@ -2,7 +2,7 @@
 // 96 px, English name, what it is for, engine, model tier, trial and customized chips, Avvia), its run numbers, the
 // permissions card (RolePermissions: tool classes and ceiling, each with its "?", ADR 0085), the instructions it runs
 // with, its configuration (tools, permission ceiling, the roles it may launch), the skills it loads at every launch, its
-// versions, its pack actions and the user's milestones (ProgressPanel). "Modifica" opens the editor in place: only the
+// versions, and the user's milestones (ProgressPanel). "Modifica" opens the editor in place: only the
 // behaviour is editable (instructions, engine, model, tier, launches, skills, context; the permissions on their own
 // card); name and summary belong to the role; the character can be swapped for the user's own picture
 // (AgentImagePicker, under the badge). The card back's «Modifica il ruolo» lands straight in the editor (EDIT_ELEMENT, #126):
@@ -26,13 +26,14 @@ import { holdUpdate } from '../lib/update-barrier';
 import { back, go, goTarget } from '../actions';
 import { locale, t } from '../i18n';
 import { AgentAvatar } from './AgentAvatar';
+import { useWorkingChats } from './AgentCatalogCard';
 import { AgentImagePicker } from './AgentImagePicker';
 import { AgentReadiness } from './AgentReadiness';
-import { AgentPackDetails } from './AgentPackDetails';
 import { ProgressPanel } from './ProgressPanel';
 import { useBrainModel } from '../store/brain-model';
 import '../styles/agent-studio.css';
 import '../styles/brain-model.css';
+import { rolePurpose } from '../lib/role-text';
 
 const percent = (v: number) => new Intl.NumberFormat(locale(), { style: 'percent', maximumFractionDigits: 0 }).format(v);
 const usd = (v: number) => formatCost(v);
@@ -233,7 +234,8 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
   const model = catalog?.models.find(m => m.engine === profile.engine);
   const engine = model?.label ?? profile.engine;
   const open = metrics?.open ?? 0;
-  const state = profile.trial ? 'trial' : open > 0 ? 'working' : 'active';
+  const working = useWorkingChats(profile.id);
+  const state = profile.trial ? 'trial' : working > 0 ? 'working' : 'active';
   const unknown = t('catalog.unknown');
   const stats = metrics?.all;
   const loaded = metrics !== undefined;
@@ -277,9 +279,9 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
         <div className="ad-id">
           <p className="ad-eyebrow">{t(profile.userLocked ? 'studio.customized' : 'studio.builtIn')}</p>
           <h2>{profile.name}</h2>
-          <p className="ad-purpose">{profile.purpose}</p>
+          <p className="ad-purpose">{rolePurpose(profile.id, profile.purpose)}</p>
           <div className="ad-chips">
-            <span className="ad-badge" data-state={state}><i aria-hidden="true" />{profile.trial ? t('studio.trial') : open > 0 ? t('agentsGrid.working') : t('catalog.active')}</span>
+            <span className="ad-badge" data-state={state}><i aria-hidden="true" />{profile.trial ? t('studio.trial') : working > 0 ? t('agentsGrid.working') : t('catalog.active')}</span>
             <span className="ad-chip">{engine}</span>
             <span className="ad-chip">{t('studio.tierChip', { tier: tierLabel(profile.tier) })}</span>
             {profile.model && <span className="ad-chip ad-chip-mono">{profile.model}</span>}
@@ -319,7 +321,6 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
             {profile.skills.length ? <div className="bm-chips">{profile.skills.map(s => <button key={s} type="button" className="bm-chip" onClick={() => go({ page: 'skill', arg: s })}>{s}</button>)}</div> : <p>{t('studio.skillsNone')}</p>}
             <p>{t('bm.card.memory')}: {memory?.entries ? <button type="button" className="link-btn" onClick={() => goTarget(`file/${memory.file}`)}>{t('bm.mem.entries', { n: memory.entries })}</button> : t('bm.card.memoryNone')}</p>
             <button type="button" className="link-btn" onClick={() => go({ page: 'skill' })}>{t('bm.studio.manage')}</button>
-            <AgentPackDetails profile={profile} />
           </section>
           <Versions profile={profile} />
         </div>

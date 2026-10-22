@@ -28,12 +28,11 @@ test('strips say their step; the morning line unfolds and Ok dismisses it; the B
   await expect(page.getByTestId('st-pulse-today')).toContainText('Oggi');
   await page.getByTestId('st-pulse').scrollIntoViewIfNeeded();
   await shot(page, 'alive-settings-pulse');
-  // Dashboard → Spunti: the Battito's board, at most three cards
-  await goPage(page, 'dashboard');
-  await page.locator('#dash-tab-tips').click();
+  // Memoria → Idee «Dell'AI»: the Battito's board, at most three cards (it was the Dashboard's Spunti, ADR 0122)
+  await page.keyboard.press('Control+K'); await page.getByTestId('palette-input').fill('sb://memoria/idee/ia'); await page.keyboard.press('Enter');
   const board = page.locator('[data-testid="context-pulse"][data-place="board"]');
   await expect(board).toBeVisible();
   expect(await board.locator('[data-testid^="context-card-"]').count()).toBeLessThanOrEqual(3);
-  await shot(page, 'alive-dashboard-board');
+  await shot(page, 'alive-idee-board');
   await app.close();
 });

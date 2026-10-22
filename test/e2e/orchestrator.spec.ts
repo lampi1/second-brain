@@ -3,11 +3,15 @@
 // and the palette, the old Orchestrator staying as a normal chat, and the new agent dialog never offering a second
 // Orchestrator. Screenshots, dark and light, in test-results/shots/.
 import { expect, test, type Page } from '@playwright/test';
-import { launchDemo, shot } from './helpers';
+import { choose, launchDemo, shot } from './helpers';
 
 async function lightTheme(page: Page): Promise<void> {
+  // the theme lives on the Settings page (gear menu → all settings), a custom Select (Select.tsx)
   await page.getByTestId('settings').click();
-  await page.getByTestId('theme-light').click();
+  await page.getByTestId('settings-all').click();
+  const theme = page.getByTestId('settings-page').getByTestId('st-theme-select');
+  await theme.scrollIntoViewIfNeeded();
+  await choose(theme, 'light');
   await expect(page.locator('html[data-theme="light"]')).toHaveCount(1);
   await page.keyboard.press('Escape');
   await page.mouse.move(2, 2);
@@ -79,11 +83,12 @@ test('the Orchestrator menu, Ricomincia da capo (Ctrl+Shift+R) and Cambia motore
   await expect(page.getByTestId(`tile-chat-${second}`)).toContainText(`Orchestrator precedente · Claude · ${when} (2)`); // same minute: never two equal names
   await expect(page.getByTestId('tile-orchestrator')).not.toContainText('Passaggio di consegne');
   await expect(page.locator('[data-testid="tile-orchestrator"]')).toHaveCount(1);
-  // the Cursor Orchestrator's menu: Cursor models, no effort/permissions, the way back
+  // the Cursor Orchestrator's menu: Cursor models, an effort (ACP takes one since ADR 0092), no permissions, the way back
   const third = await orchestratorIdOf(page);
   await page.getByTestId('orchestrator-menu').click();
   await expect(page.getByTestId(`chat-engine-${third}`)).toContainText('Cambia motore → Claude Code');
-  await expect(page.getByTestId(`chat-effort-${third}-high`)).toHaveCount(0);
+  await expect(page.getByTestId(`chat-effort-${third}-high`)).toBeVisible();
+  await expect(page.getByTestId(`chat-perm-${third}-default`)).toHaveCount(0);
   await page.keyboard.press('Escape');
   await page.mouse.move(2, 2);
   await shot(page, 'orchestrator-cursor');

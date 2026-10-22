@@ -7,8 +7,10 @@
 // numbers, the errors that repeat, grouped by pattern (ADR 0037: count, last seen, chats, rule, this week against the
 // one before). Every number and every pattern has its reading and the discussion bar ("Discuti", to the Orchestrator).
 // Data: /api/tables (the brain: tables.errors, tables.quality, proposals) and /api/quality (main: turns, PRs, reopened
-// bugs); computations in lib/quality.ts and lib/stats.ts.
-import type { ReactNode } from 'react';
+// bugs); computations in lib/quality.ts and lib/stats.ts. Since the Dashboard left (ADR 0122), below the patterns: the
+// app's and the tools' own errors of this session (dashboard/AppErrors.tsx) and the errors grouped by meaning
+// (dashboard/Themes.tsx), the two parts of its Errori and Temi tabs Qualità did not have.
+import { lazy, Suspense, type ReactNode } from 'react';
 import { normAppQuality, normTables } from '../types';
 import { FeedbackOrigins } from '../components/FeedbackOrigins';
 import { useBrain } from '../api';
@@ -22,12 +24,19 @@ import { HelpTip } from '../../components/HelpTip';
 import { DiscussBar } from '../components/Discuss';
 import { ErrorPatterns, PatternsHelp, Reading } from '../components/Stats';
 import { ExtLink, Pill, Section, type Navigate, type Tone } from '../components/ui';
+import { locale, t as tr, type TextKey } from '../../i18n';
+import '../../styles/memory-hub.css';
+// app-side parts (they read the app's live store and actions): loaded when shown, so the brain pages stay importable alone
+const AppErrors = lazy(() => import('../../dashboard/AppErrors').then(m => ({ default: m.AppErrors })));
+const ThemesPanel = lazy(() => import('../../dashboard/Themes').then(m => ({ default: m.ThemesPanel })));
 
-const STATUS: Record<string, { label: string; tone: Tone }> = {
-  tornato: { label: 'tornato', tone: 'bad' }, 'non-tornato': { label: 'non tornato', tone: 'good' },
-  'troppo-presto': { label: 'troppo presto', tone: '' }, 'senza-tipo': { label: 'senza tipo', tone: 'warn' },
+const STATUS: Record<string, { label: TextKey; tone: Tone }> = {
+  tornato: { label: 'brainText.qualita.status.tornato', tone: 'bad' }, 'non-tornato': { label: 'brainText.qualita.status.nonTornato', tone: 'good' },
+  'troppo-presto': { label: 'brainText.qualita.status.presto', tone: '' }, 'senza-tipo': { label: 'brainText.qualita.status.senzaTipo', tone: 'warn' },
 };
-const range = (from: string | null | undefined, to: string | null | undefined) => (from && to ? (from === to ? `il ${fmt.day(from)}` : `dal ${fmt.day(from)} al ${fmt.day(to)}`) : 'nessun dato');
+const statusLabel = (s: string) => { const k = STATUS[s]?.label; return k ? tr(k) : undefined; };
+const range = (from: string | null | undefined, to: string | null | undefined) => (from && to ? (from === to ? tr('brainText.qualita.rangeOne', { day: fmt.day(from) }) : tr('brainText.qualita.rangeSpan', { from: fmt.day(from), to: fmt.day(to) })) : tr('brainText.qualita.noData'));
+const num = (n: number) => n.toLocaleString(locale());
 
 function Metric({ id, title, help, value, unit, tone, reading, find, next, source, quote, children }: {
   id: string; title: string; help?: ReactNode; value: ReactNode; unit?: ReactNode; tone?: 'warn' | 'bad'; reading?: Trend | null; find?: ReactNode; next?: ReactNode; source: ReactNode;
@@ -39,7 +48,7 @@ function Metric({ id, title, help, value, unit, tone, reading, find, next, sourc
       <p className="bx-q-v"><span className="bx-big">{value}</span>{unit && <span className="u"> {unit}</span>}</p>
       {reading && <Reading t={reading} testId={`bx-q-${id}-reading`} />}
       <Explain find={find} next={next} />
-      <p className="bx-q-src"><b>Fonte:</b> {source}</p>
+      <p className="bx-q-src"><b>{tr('brainText.qualita.source')}</b> {source}</p>
       {children}
       {quote && <DiscussBar topic={{ kind: 'quote', quote }} testId={`bx-q-${id}-discuss`} />}
     </section>
@@ -58,76 +67,75 @@ export function Qualita({ nav }: { arg?: string; nav: Navigate }) {
   const share = app ? reopenShare(app.reopen) : null;
   const weeks = caught ? caughtWeeks(caught) : null;
   const caughtReading = weeks && weeks.cur !== null
-    ? trend(weeks.cur, weeks.prev, { what: 'ogni 100 turni', now: 'negli ultimi 7 giorni', before: 'nei 7 prima' }) : null;
+    ? trend(weeks.cur, weeks.prev, { what: tr('brainText.qualita.per100'), now: tr('brainText.common.last7'), before: tr('brainText.common.prev7') }) : null;
   const patterns = d ? errorPatterns(d.errors, q?.rules ?? [], d.today, ownerOf(d.ideas)) : null;
-  const errReading = patterns && patterns.to ? trend(patterns.week, patterns.prevWeek, { what: patterns.week === 1 ? 'errore registrato' : 'errori registrati', now: 'negli ultimi 7 giorni', before: 'nei 7 prima' }) : null;
+  const errReading = patterns && patterns.to ? trend(patterns.week, patterns.prevWeek, { what: tr('brainText.qualita.errLogged', { n: patterns.week }), now: tr('brainText.common.last7'), before: tr('brainText.common.prev7') }) : null;
   const applied = d?.proposals.filter(p => p.stato === 'applicata').length ?? 0;
   const measured = d?.proposals.filter(p => /confermata|inutile|peggiorata/.test(p.stato)).length ?? 0;
 
   return (
     <>
-      <PageHead title="Qualità" at={t.at} onRefresh={reload} refreshing={app?.reopen.refreshing}
+      <PageHead title={tr('brainText.qualita.title')} at={t.at} onRefresh={reload} refreshing={app?.reopen.refreshing}
         lead={caught && rules && app ? <>
-          {caught.per100 !== null ? <><b>{caught.per100.toLocaleString('it-IT')} errori ogni 100 turni</b> li hai dovuti trovare tu</> : <>Turni non ancora misurati</>};{' '}
-          <b>{rules.tornato} regole su {rules.judged}</b> non hanno fermato il loro errore; {app.prs.at ? <><b>{app.prs.blocked.length} PR ferme</b></> : <>PR non lette</>}; {app.reopen.at ? <><b>{app.reopen.bugs.length} bug</b> tornati attivi in {app.reopen.days} giorni</> : <>bug riaperti non ancora letti</>}.
+          {caught.per100 !== null ? <><b>{tr('brainText.qualita.leadCaught', { n: num(caught.per100) })}</b>{tr('brainText.qualita.leadCaughtRest')}</> : <>{tr('brainText.qualita.leadNotMeasured')}</>};{' '}
+          <b>{tr('brainText.qualita.leadRules', { n: rules.tornato, of: rules.judged })}</b>{tr('brainText.qualita.leadRulesRest')}; {app.prs.at ? <><b>{tr('brainText.qualita.leadPrs', { n: app.prs.blocked.length })}</b></> : <>{tr('brainText.qualita.leadPrsUnread')}</>}; {app.reopen.at ? <><b>{tr('brainText.qualita.leadBugs', { n: app.reopen.bugs.length })}</b>{tr('brainText.qualita.leadBugsRest', { days: app.reopen.days })}</> : <>{tr('brainText.qualita.leadBugsUnread')}</>}.
         </> : undefined}
-        what="Quattro misure dai registri veri: ognuna dice da dove viene e che giorni copre." guide="quality" />
+        what={tr('brainText.qualita.what')} guide="quality" />
       <Async loading={t.loading && !d} error={d ? null : t.error} onRetry={reload} lines={6} block>
         {() => d && (
           <div className="bx-section" data-testid="bx-quality">
-            {!q && <p className="bx-warnline" role="note">Il brain non calcola ancora la qualità degli errori (manca quality() in ops/tools/recurrence.mjs): aggiorna il brain.</p>}
+            {!q && <p className="bx-warnline" role="note">{tr('brainText.qualita.noQuality')}</p>}
             <div className="bx-grid-2">
-              {q && <Metric id="trovati" title="Errori che hai dovuto trovare tu"
-                help="Errori degli agenti che hai scoperto tu, non un reviewer, la QA o un controllo automatico. Più il numero è basso, meno tempo perdi a ricontrollare il loro lavoro."
-                value={caught?.per100 != null ? caught.per100.toLocaleString('it-IT') : '—'} unit="ogni 100 turni" tone={caught?.per100 ? 'warn' : undefined}
+              {q && <Metric id="trovati" title={tr('brainText.qualita.caught.title')}
+                help={tr('brainText.qualita.caught.help')}
+                value={caught?.per100 != null ? num(caught.per100) : '—'} unit={tr('brainText.qualita.per100')} tone={caught?.per100 ? 'warn' : undefined}
                 reading={caughtReading}
-                quote={caught?.per100 != null ? { id: 'q|trovati', what: 'numero', title: 'errori che ho dovuto trovare io, ogni 100 turni', source: 'ai-errors.md («visto da») ÷ turni nei log dell\'app',
-                  facts: [`${caught.per100.toLocaleString('it-IT')} ogni 100 turni ${range(caught.from, caught.to)}: ${caught.caught} trovati da me su ${caught.turns} turni, ${caught.others} trovati da altri`,
-                    caughtReading ? caughtReading.text : '', 'le chat fuori dall\'app hanno errori ma non turni: il numero può essere più alto del vero'],
-                  question: 'Cosa ci dice questo numero? Quali errori avrei potuto non dover trovare io, e con quale controllo automatico?' } : undefined}
-                find={caught && caught.from ? <>{range(caught.from, caught.to)}: <b>{caught.caught} errori li hai visti tu</b> su {fmt.int(caught.turns)} turni; altri {caught.others} li hanno trovati reviewer, QA, hook o l'agente stesso.{caught.unknown ? <> {caught.unknown} righe senza «visto da».</> : null}</>
-                  : <>I log dell'app non hanno ancora turni: il conto parte dal primo giorno di log.</>}
-                next={caught?.caught ? <>apri gli errori trovati da te (<button type="button" className="bx-go" onClick={() => nav('esplora/ai-errors.md')}>ai-errors.md</button>): quelli che si ripetono chiedono un controllo automatico, non una regola in più</> : undefined}
-                source={<>ai-errors.md (campo «visto da» con il tuo nome) ÷ turni finiti nei log dell'app, solo nei giorni coperti da entrambi ({range(app?.turns.from, app?.turns.to)}; i log tengono 14 giorni).
-                  Le chat fuori dall'app (Claude desktop, Cursor) hanno errori ma non turni: il numero può essere più alto del vero.{caught?.before ? <> {caught.before} errori trovati da te prima dei log restano fuori.</> : null}</>}>
+                quote={caught?.per100 != null ? { id: 'q|trovati', what: 'numero', title: tr('brainText.qualita.caught.quoteTitle'), source: tr('brainText.qualita.caught.quoteSource'),
+                  facts: [tr('brainText.qualita.caught.fact', { per100: num(caught.per100), range: range(caught.from, caught.to), caught: caught.caught, turns: caught.turns, others: caught.others }),
+                    caughtReading ? caughtReading.text : '', tr('brainText.qualita.caught.factOutside')],
+                  question: tr('brainText.qualita.caught.question') } : undefined}
+                find={caught && caught.from ? <>{range(caught.from, caught.to)}: <b>{tr('brainText.qualita.caught.find', { n: caught.caught })}</b>{tr('brainText.qualita.caught.findRest', { turns: fmt.int(caught.turns), others: caught.others })}{caught.unknown ? <>{tr('brainText.qualita.caught.unknown', { n: caught.unknown })}</> : null}</>
+                  : <>{tr('brainText.qualita.caught.noTurns')}</>}
+                next={caught?.caught ? <>{tr('brainText.qualita.caught.nextOpen')}<button type="button" className="bx-go" onClick={() => nav('esplora/ai-errors.md')}>ai-errors.md</button>{tr('brainText.qualita.caught.nextRest')}</> : undefined}
+                source={<>{tr('brainText.qualita.caught.source', { range: range(app?.turns.from, app?.turns.to) })}{caught?.before ? <>{tr('brainText.qualita.caught.before', { n: caught.before })}</> : null}</>}>
                 {caught && caught.days.length > 0 && (
-                  <details className="bx-q-more"><summary>Giorno per giorno</summary>
+                  <details className="bx-q-more"><summary>{tr('brainText.qualita.caught.byDay')}</summary>
                     <ul className="bx-list compact" data-testid="bx-q-trovati-days">
-                      {caught.days.map(x => <li key={x.date}><span className="meta">{fmt.day(x.date)}</span><span className="t">{x.caught} su {fmt.int(x.turns)} turni</span><span className="meta">{rate(x.caught, x.turns)} / 100</span></li>)}
+                      {caught.days.map(x => <li key={x.date}><span className="meta">{fmt.day(x.date)}</span><span className="t">{tr('brainText.qualita.caught.dayRow', { caught: x.caught, turns: fmt.int(x.turns) })}</span><span className="meta">{rate(x.caught, x.turns)} / 100</span></li>)}
                     </ul>
                   </details>
                 )}
               </Metric>}
 
-              {q && rules && out && <Metric id="tornati" title="Errori tornati dopo la regola"
-                help="Dopo un errore si scrive una regola perché non si ripeta. Qui conti le regole che non sono bastate: lo stesso tipo di errore è tornato entro pochi giorni."
-                value={rules.judged ? `${rules.tornato} su ${rules.judged}` : '—'} unit={`regole: l'errore è tornato entro ${q.windowDays} giorni`} tone={rules.tornato ? 'bad' : undefined}
-                quote={rules.judged ? { id: 'q|tornati', what: 'numero', title: 'regole che non hanno fermato il loro errore', source: 'ai-errors.md, righe con «regola:»',
-                  facts: [`${rules.tornato} ${rules.tornato === 1 ? 'regola' : 'regole'} su ${rules.judged} giudicate: l'errore è tornato entro ${q.windowDays} giorni (${range(q.from, q.to)})`,
-                    ...rules.rules.filter(r => r.status === 'tornato').slice(0, 4).map(r => `non ha tenuto: ${r.rule} (${r.type}, ${r.area}; di nuovo il ${r.again.map(x => fmt.day(x.date)).join(', ')})`),
-                    `${rules.presto} ${rules.presto === 1 ? 'regola troppo recente' : 'regole troppo recenti'} per dirlo`],
-                  question: 'Perché queste regole non hanno fermato il loro errore? Per ognuna: regola da riscrivere o controllo automatico?' } : undefined}
-                find={<><b>{rules.presto} regole troppo recenti</b> per dirlo (meno di {q.windowDays} giorni){rules.senzaTipo ? <>, {rules.senzaTipo} senza un tipo valido</> : null}.</>}
-                next={rules.tornato ? <>riscrivi la regola del primo «tornato» qui sotto: chiedilo all’Orchestrator con le parole dell'errore</> : out.total ? <>correggi il tipo delle righe fuori conteggio (uno degli 11 dell'intestazione di ai-errors.md)</> : undefined}
-                source={<>ai-errors.md, righe con «regola:» ({range(q.from, q.to)}). Tornato = stesso tipo (gli 11 ufficiali; i sinonimi evidenti contano come il loro tipo) e un'area con una parola in comune, entro {q.windowDays} giorni dalla regola.</>}>
-                {out.total > 0 && <p className="bx-warnline" role="note" data-testid="bx-q-fuori">{out.total} righe su {q.lines} fuori dal conteggio: {out.unparsed} illeggibili (manca «detto:» o un campo), {out.invalid} senza tipo valido.</p>}
+              {q && rules && out && <Metric id="tornati" title={tr('brainText.qualita.rules.title')}
+                help={tr('brainText.qualita.rules.help')}
+                value={rules.judged ? tr('brainText.common.ofCount', { n: rules.tornato, of: rules.judged }) : '—'} unit={tr('brainText.qualita.rules.unit', { days: q.windowDays })} tone={rules.tornato ? 'bad' : undefined}
+                quote={rules.judged ? { id: 'q|tornati', what: 'numero', title: tr('brainText.qualita.rules.quoteTitle'), source: tr('brainText.qualita.rules.quoteSource'),
+                  facts: [tr('brainText.qualita.rules.fact', { n: rules.tornato, of: rules.judged, days: q.windowDays, range: range(q.from, q.to) }),
+                    ...rules.rules.filter(r => r.status === 'tornato').slice(0, 4).map(r => tr('brainText.qualita.rules.factFailed', { rule: r.rule, type: r.type, area: r.area, dates: r.again.map(x => fmt.day(x.date)).join(', ') })),
+                    tr('brainText.qualita.rules.factYoung', { n: rules.presto })],
+                  question: tr('brainText.qualita.rules.question') } : undefined}
+                find={<><b>{tr('brainText.qualita.rules.find', { n: rules.presto })}</b>{tr('brainText.qualita.rules.findRest', { days: q.windowDays })}{rules.senzaTipo ? <>{tr('brainText.qualita.rules.findNoType', { n: rules.senzaTipo })}</> : null}.</>}
+                next={rules.tornato ? <>{tr('brainText.qualita.rules.nextRewrite')}</> : out.total ? <>{tr('brainText.qualita.rules.nextFix')}</> : undefined}
+                source={<>{tr('brainText.qualita.rules.source', { range: range(q.from, q.to), days: q.windowDays })}</>}>
+                {out.total > 0 && <p className="bx-warnline" role="note" data-testid="bx-q-fuori">{tr('brainText.qualita.rules.outside', { total: out.total, lines: q.lines, unparsed: out.unparsed, invalid: out.invalid })}</p>}
                 {out.total > 0 && (
-                  <details className="bx-q-more"><summary>Quali righe</summary>
+                  <details className="bx-q-more"><summary>{tr('brainText.qualita.rules.whichRows')}</summary>
                     <ul className="bx-list compact">
-                      {out.labels.map(([l, c]) => <li key={l}><span className="t">«{short(l, 70)}»</span><span className="meta">{c} {c === 1 ? 'riga' : 'righe'}</span></li>)}
-                      {q.unparsed.map((u, i) => <li key={`u${i}`}><span className="meta">{fmt.day(u.date)}</span><span className="t">{short(u.line.replace(/^- \S+ (\S+ )?· /, ''), 110)}</span><span className="meta">illeggibile</span></li>)}
+                      {out.labels.map(([l, c]) => <li key={l}><span className="t">«{short(l, 70)}»</span><span className="meta">{tr('brainText.qualita.rules.rowCount', { n: c })}</span></li>)}
+                      {q.unparsed.map((u, i) => <li key={`u${i}`}><span className="meta">{fmt.day(u.date)}</span><span className="t">{short(u.line.replace(/^- \S+ (\S+ )?· /, ''), 110)}</span><span className="meta">{tr('brainText.qualita.rules.unreadable')}</span></li>)}
                     </ul>
                   </details>
                 )}
                 {rules.rules.length > 0 && (
                   <ul className="bx-list" data-testid="bx-q-regole">
                     {rules.rules.slice(0, 6).map((r, i) => (
-                      <li key={i}><Pill tone={STATUS[r.status]?.tone}>{STATUS[r.status]?.label}</Pill><span className="t" title={r.rule}>{short(r.rule, 90)}</span><span className="meta">{r.type} · {fmt.day(r.date)}{r.again.length ? ` · tornato il ${r.again.map(x => fmt.day(x.date)).join(', ')}` : ''}</span></li>
+                      <li key={i}><Pill tone={STATUS[r.status]?.tone}>{statusLabel(r.status)}</Pill><span className="t" title={r.rule}>{short(r.rule, 90)}</span><span className="meta">{r.type} · {fmt.day(r.date)}{r.again.length ? tr('brainText.qualita.rules.backOn', { dates: r.again.map(x => fmt.day(x.date)).join(', ') }) : ''}</span></li>
                     ))}
                     {rules.rules.length > 6 && (
-                      <li><details className="bx-q-more"><summary>{rules.rules.length === 7 ? 'Un’altra regola' : `Altre ${rules.rules.length - 6} regole`}</summary>
+                      <li><details className="bx-q-more"><summary>{rules.rules.length === 7 ? tr('brainText.qualita.rules.oneMore') : tr('brainText.qualita.rules.more', { n: rules.rules.length - 6 })}</summary>
                         <ul className="bx-list compact">
-                          {rules.rules.slice(6).map((r, i) => <li key={i}><Pill tone={STATUS[r.status]?.tone}>{STATUS[r.status]?.label}</Pill><span className="t" title={r.rule}>{short(r.rule, 90)}</span><span className="meta">{r.type} · {fmt.day(r.date)}</span></li>)}
+                          {rules.rules.slice(6).map((r, i) => <li key={i}><Pill tone={STATUS[r.status]?.tone}>{statusLabel(r.status)}</Pill><span className="t" title={r.rule}>{short(r.rule, 90)}</span><span className="meta">{r.type} · {fmt.day(r.date)}</span></li>)}
                         </ul>
                       </details></li>
                     )}
@@ -135,15 +143,15 @@ export function Qualita({ nav }: { arg?: string; nav: Navigate }) {
                 )}
               </Metric>}
 
-              {app && <Metric id="pr" title="Tue PR ferme per QA o build"
-                help="Una PR è ferma quando il prossimo passo è tuo: build fallita, un test fallito o bloccato, oppure un revisore che rifiuta o chiede modifiche."
-                value={app.prs.blocked.length} unit={`su ${app.prs.total} PR attive`} tone={app.prs.blocked.length ? 'bad' : undefined}
-                quote={app.prs.blocked.length ? { id: 'q|pr', what: 'numero', title: 'mie PR ferme per QA o build', source: `lettura DevOps delle mie PR attive${app.prs.at ? `, ${fmt.when(app.prs.at)}` : ''}`,
-                  facts: [`${app.prs.blocked.length} PR ferme su ${app.prs.total} attive`, ...app.prs.blocked.slice(0, 5).map(p => `${p.title} (${p.repo}): ${p.reasons.join(', ')}`)],
-                  question: 'Da quale parto e qual è il primo passo per sbloccarla?' } : undefined}
-                find={app.prs.blocked.length ? <><b>{app.prs.blocked.length} PR</b> aspettano te prima del lavoro nuovo.</> : app.prs.total ? <>Nessuna PR ferma: nessuna build fallita, nessun test case fallito o voto negativo.</> : <>Nessuna PR attiva all'ultima lettura.</>}
-                next={app.prs.blocked.length ? <>sistema queste prima di tutto il resto: la QA è ferma su di te</> : undefined}
-                source={<>lettura DevOps delle tue PR attive (pagina Task, sola lettura){app.prs.at ? <>, {fmt.when(app.prs.at)}</> : <>: mai letta</>}. Ferma = build fallita, test case collegato Failed o Blocked, voto «rifiutata» o «in attesa dell'autore».</>}>
+              {app && <Metric id="pr" title={tr('brainText.qualita.pr.title')}
+                help={tr('brainText.qualita.pr.help')}
+                value={app.prs.blocked.length} unit={tr('brainText.qualita.pr.unit', { total: app.prs.total })} tone={app.prs.blocked.length ? 'bad' : undefined}
+                quote={app.prs.blocked.length ? { id: 'q|pr', what: 'numero', title: tr('brainText.qualita.pr.quoteTitle'), source: tr('brainText.qualita.pr.quoteSource', { when: app.prs.at ? fmt.when(app.prs.at) : '' }),
+                  facts: [tr('brainText.qualita.pr.fact', { n: app.prs.blocked.length, total: app.prs.total }), ...app.prs.blocked.slice(0, 5).map(p => `${p.title} (${p.repo}): ${p.reasons.join(', ')}`)],
+                  question: tr('brainText.qualita.pr.question') } : undefined}
+                find={app.prs.blocked.length ? <><b>{tr('brainText.qualita.pr.find', { n: app.prs.blocked.length })}</b>{tr('brainText.qualita.pr.findRest')}</> : app.prs.total ? <>{tr('brainText.qualita.pr.noneBlocked')}</> : <>{tr('brainText.qualita.pr.noneActive')}</>}
+                next={app.prs.blocked.length ? <>{tr('brainText.qualita.pr.next')}</> : undefined}
+                source={<>{tr('brainText.qualita.pr.source')}{app.prs.at ? <>, {fmt.when(app.prs.at)}</> : <>{tr('brainText.qualita.pr.neverRead')}</>}{tr('brainText.qualita.pr.sourceRest')}</>}>
                 {app.prs.error && <p className="bx-warnline" role="note">{app.prs.error}</p>}
                 {app.prs.blocked.length > 0 && (
                   <ul className="bx-list" data-testid="bx-q-pr-list">
@@ -152,47 +160,53 @@ export function Qualita({ nav }: { arg?: string; nav: Navigate }) {
                 )}
               </Metric>}
 
-              {app && <Metric id="riaperti" title="Bug tornati attivi dopo il tuo fix"
-                help="Bug che avevi messo Resolved e che qualcuno, di solito la QA, ha riaperto: il fix non bastava. La percentuale è su tutti i bug che hai risolto nel periodo."
-                value={app.reopen.at ? app.reopen.reopened : '—'} unit={app.reopen.at ? <>su {app.reopen.resolved} risolti da te{share !== null ? ` (${share}%)` : ''}</> : undefined} tone={app.reopen.reopened ? 'warn' : undefined}
-                quote={app.reopen.reopened ? { id: 'q|riaperti', what: 'numero', title: 'bug tornati attivi dopo il mio fix', source: `storico degli stati su DevOps, ultimi ${app.reopen.days} giorni`,
-                  facts: [`${app.reopen.reopened} su ${app.reopen.resolved} risolti da me${share !== null ? ` (${share}%)` : ''}`,
-                    ...app.reopen.bugs.slice(0, 5).map(b => `${b.title}: ${b.reopened.map(r => `riaperto il ${fmt.day(r.reopenedAt.slice(0, 10))}${r.by ? ` da ${r.by}` : ''}`).join(', ')}`)],
-                  question: 'Cosa è sfuggito ai miei test in questi bug, e cosa controllo prima del prossimo Resolved?' } : undefined}
-                find={app.reopen.at ? (app.reopen.reopened ? <><b>{app.reopen.bugs.length} bug</b> sono tornati Active (o New) dopo che li avevi messi Resolved.</> : <>Nessun bug tornato indietro dopo un tuo Resolved.</>)
-                  : app.reopen.refreshing ? <>Lettura in corso: premi Aggiorna tra un minuto.</> : <>Non ancora letto.</>}
-                next={app.reopen.reopened ? <>apri il più recente e leggi il commento di chi l'ha riaperto: cosa è sfuggito al test?</> : undefined}
-                source={<>storico degli stati su DevOps (ops/tools/bug-reopen.mjs, sola lettura), ultimi {app.reopen.days} giorni{app.reopen.at ? <>, letto {fmt.when(app.reopen.at)}</> : null}; si rilegge da solo ogni 12 ore quando la lettura DevOps è accesa. Conta solo i Resolved fatti da te.</>}>
+              {app && <Metric id="riaperti" title={tr('brainText.qualita.reopen.title')}
+                help={tr('brainText.qualita.reopen.help')}
+                value={app.reopen.at ? app.reopen.reopened : '—'} unit={app.reopen.at ? <>{tr('brainText.qualita.reopen.unit', { n: app.reopen.resolved, share })}</> : undefined} tone={app.reopen.reopened ? 'warn' : undefined}
+                quote={app.reopen.reopened ? { id: 'q|riaperti', what: 'numero', title: tr('brainText.qualita.reopen.quoteTitle'), source: tr('brainText.qualita.reopen.quoteSource', { days: app.reopen.days }),
+                  facts: [tr('brainText.qualita.reopen.fact', { n: app.reopen.reopened, of: app.reopen.resolved, share }),
+                    ...app.reopen.bugs.slice(0, 5).map(b => `${b.title}: ${b.reopened.map(r => tr('brainText.qualita.reopen.reopenedOn', { day: fmt.day(r.reopenedAt.slice(0, 10)), by: r.by || null })).join(', ')}`)],
+                  question: tr('brainText.qualita.reopen.question') } : undefined}
+                find={app.reopen.at ? (app.reopen.reopened ? <><b>{tr('brainText.qualita.reopen.find', { n: app.reopen.bugs.length })}</b>{tr('brainText.qualita.reopen.findRest')}</> : <>{tr('brainText.qualita.reopen.none')}</>)
+                  : app.reopen.refreshing ? <>{tr('brainText.qualita.reopen.reading')}</> : <>{tr('brainText.qualita.reopen.notRead')}</>}
+                next={app.reopen.reopened ? <>{tr('brainText.qualita.reopen.next')}</> : undefined}
+                source={<>{tr('brainText.qualita.reopen.source', { days: app.reopen.days })}{app.reopen.at ? <>{tr('brainText.qualita.reopen.readAt', { when: fmt.when(app.reopen.at) })}</> : null}{tr('brainText.qualita.reopen.sourceRest')}</>}>
                 {app.reopen.error && <p className="bx-warnline" role="note">{app.reopen.error}</p>}
                 {app.reopen.bugs.length > 0 && (
                   <ul className="bx-list" data-testid="bx-q-riaperti-list">
                     {[...app.reopen.bugs].sort((x, y) => (y.reopened.at(-1)?.reopenedAt ?? '').localeCompare(x.reopened.at(-1)?.reopenedAt ?? '')).slice(0, 6).map(b => (
                       <li key={b.id}><span className="t"><ExtLink href={b.url || undefined}>{short(b.title, 90)}</ExtLink><br />
-                        <span className="meta">{b.reopened.map(r => `risolto ${fmt.day(r.resolvedAt.slice(0, 10))}, riaperto ${fmt.day(r.reopenedAt.slice(0, 10))}${r.by ? ` da ${r.by}` : ''}`).join(' · ')}</span></span>
+                        <span className="meta">{b.reopened.map(r => tr('brainText.qualita.reopen.row', { resolved: fmt.day(r.resolvedAt.slice(0, 10)), reopened: fmt.day(r.reopenedAt.slice(0, 10)), by: r.by || null })).join(' · ')}</span></span>
                         <span className="meta">{b.state}</span></li>
                     ))}
                   </ul>
                 )}
               </Metric>}
             </div>
-            {a.error && !app && <p className="bx-warnline" role="note">Turni, PR e bug riaperti non letti: {a.error}</p>}
+            {a.error && !app && <p className="bx-warnline" role="note">{tr('brainText.qualita.appError', { error: a.error })}</p>}
 
             {patterns && (
-              <Section title="Errori che si ripetono" count={patterns.recurring.length} testId="bx-q-errori" actions={<PatternsHelp />}
-                note={<>raggruppati per tipo, da ai-errors.md ({range(patterns.from, patterns.to)}); prima i più frequenti di questa settimana</>}>
+              <Section title={tr('brainText.qualita.patterns.title')} count={patterns.recurring.length} testId="bx-q-errori" actions={<PatternsHelp />}
+                note={<>{tr('brainText.qualita.patterns.note', { range: range(patterns.from, patterns.to) })}</>}>
                 {errReading && <Reading t={errReading} testId="bx-q-errori-reading" />}
                 <ErrorPatterns p={patterns} nav={nav} />
               </Section>
             )}
 
+            <Suspense fallback={null}><ThemesPanel kind="errors" /></Suspense>
+
             <FeedbackOrigins rows={d.wins} />
             <p className="bx-q-row" data-testid="bx-q-proposte">
-              <b>Proposte di miglioramento:</b> {d.proposals.length}, di cui {applied} applicate, {measured} misurate (confermate, inutili o peggiorate).
-              {' '}<button type="button" className="bx-go" onClick={() => nav('esplora/proposals.md')}>Apri proposals.md</button>
+              <b>{tr('brainText.qualita.proposals')}</b>{tr('brainText.qualita.proposalsRest', { n: d.proposals.length, applied, measured })}
+              {' '}<button type="button" className="bx-go" onClick={() => nav('memoria/proposte')}>{tr('brainText.qualita.openProposals')}</button>
             </p>
           </div>
         )}
       </Async>
+      {/* the app's and the tools' own errors need no brain data: they show even when the brain's server is not there */}
+      <Suspense fallback={null}>
+        <Section title={tr('mh.q.appErrors')} note={tr('mh.q.appErrorsNote')} testId="bx-q-app-errors"><AppErrors /></Section>
+      </Suspense>
     </>
   );
 }

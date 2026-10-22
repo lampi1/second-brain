@@ -14,7 +14,7 @@ import { createServices } from './wiring';
 import { attachActivity } from './activity/wiring';
 import { demoLog } from './activity/demo';
 import { journal } from './activity/journal';
-import { log } from './log';
+import { errText, log } from './log';
 import { logInputLag } from './perf';
 import { APP_ID, ensureShortcuts } from './shortcuts';
 import { installAppMenu } from './app-menu';
@@ -39,12 +39,19 @@ import { findTranscript } from './chats/transcript';
 import { createRoutedChat, previewRoute } from './chats/routed';
 import { FROZEN_EPOCH } from './demo';
 import { checkRunIds, demoEstimateRuns, estimatesState, mergeRuns } from './agents/run-estimates';
+import { macroTasks } from '../shared/macro-tasks';
+import { judgingEstimate } from './agents/judge-sample';
 import { systemLang } from './lang';
+import { setUiLangSource, uiLang } from './locale';
+import { isLang } from '../shared/contract';
 import { ProfileService } from './brain/profile';
 import { AgentImageStore, nativeReencode } from './agents/agent-images';
 import { createAppUpdates } from './update/wiring';
 import { OrchestratorService } from './chats/orchestrator-service';
 import { Headline } from './headline';
+import { ComposerSuggest, SUGGEST_FALLBACK_MODEL } from './suggest/service';
+import { tierModel } from './agents/model-tier';
+import { ANTHROPIC_API } from '../shared/contract';
 import { pulseStubHandlers } from './pulse/handlers';
 import { createPulse } from './pulse/wiring';
 import { pulseDemoHandlers } from './pulse/demo';
@@ -52,6 +59,8 @@ import { markRunOutcome } from './run/outcome';
 import { canonicalRepoRoot } from './brain/adapters/codex-policy';
 import { suggestRequest } from './skills/suggest';
 import type { CloudService } from './cloud/service';
+import { ProposalsService } from './proposals/service';
+import type { InvokeArg, InvokeChannel, InvokeResult } from '../shared/contract';
 
 /** The cloud agents' service (ADR 0080), or a clear error where a wiring has none. */
 const cloudOf = (w: { cloud?: CloudService }): CloudService => { if (!w.cloud) throw new Error('Agenti cloud non disponibili.'); return w.cloud; };
@@ -72,7 +81,7 @@ let win: BrowserWindow | null = null;
 
 app.whenReady().then(async () => {
   log.init(app.getPath('userData'));
-  ensureShortcuts();
+  ensureShortcuts(outDir);
   installAppMenu();
   // macOS: the Dock shows the shared Electron bundle's icon unless told otherwise (no app bundle of our own, ADR 0054)
   if (process.platform === 'darwin') app.dock?.setIcon(path.join(outDir, 'icon.png'));
@@ -84,6 +93,7 @@ app.whenReady().then(async () => {
   // engines' Job Objects (ADR 0026): the helper loads while the services start; engines started before it is ready wait
   if (process.env.SB_DEMO !== '1') jobGuard.start(path.join(app.getPath('userData'), 'jobguard'));
   const s = await createServices({ emitter, window: () => win, userData: app.getPath('userData') });
+  setUiLangSource(() => { const l = s.brain.settings().language; return isLang(l) ? l : systemLang(); });
   // the Log page (ADR 0111): the app's own events, readable and live, kept 7 days at most; zero tokens
   const activity = attachActivity({ userData: app.getPath('userData'), emitter, chats: () => s.chats.list(), brainRoot: () => s.brain.info().brainRoot });
   if (process.env.SB_DEMO === '1') journal.seed(demoLog(process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now()));
@@ -137,7 +147,7 @@ app.whenReady().then(async () => {
     file: path.join(app.getPath('userData'), 'headline.json'),
     complete: (req, signal) => s.engines.text.complete(req, signal),
     settings: () => ({ on: s.brain.settings().pulse?.headline.on !== false }),
-    lang: () => { const l = s.brain.settings().language; return l === 'it' || l === 'en' ? l : systemLang(); },
+    lang: uiLang,
     material: () => {
       const d = new Date(), day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       return { chats: s.chats.list(), nowMd: readBrain('now.md'), journal: readBrain(path.join('journal', `${day}.md`)), aiErrors: readBrain('ai-errors.md') };
@@ -146,6 +156,14 @@ app.whenReady().then(async () => {
     emit: st => emitter.emit('headline:changed', st),
     calls: !demo && !process.env.SB_TEST,
     ...(demo && process.env.SB_DEMO_FREEZE === '1' ? { now: () => FROZEN_EPOCH } : {}),
+  });
+  // the chat composer's model suggestion (ADR 0118): the light tier on the API engine, never a call in the demo or under test
+  const composerSuggest = new ComposerSuggest({
+    file: path.join(app.getPath('userData'), 'suggest.json'),
+    complete: (req, signal) => s.engines.text.complete(req, signal),
+    settings: () => { const c = s.brain.settings(); return { on: c.suggestOn !== false, modelOn: c.suggestModel !== false, dailyUsd: c.suggestDailyUsd ?? 0.05 }; },
+    model: () => { const c = s.brain.settings(), reg = s.brain.routingInfo().registry; return tierModel(ANTHROPIC_API, 'light', reg, c.modelTiers) ?? tierModel('claude', 'light', reg, c.modelTiers) ?? SUGGEST_FALLBACK_MODEL; },
+    calls: !demo && !process.env.SB_TEST && !process.env.VITEST,
   });
   const pulse = createPulse(s, { emitter, window: () => win, userData: app.getPath('userData') }, () => headline.get());
   // the Battito's proposals count in the morning block's "Da approvare" (ADR 0102)
@@ -161,6 +179,7 @@ app.whenReady().then(async () => {
       'connectors:probe': a => connectors.service.probe(a?.provider),
       'connectors:select': a => connectors.service.select(a?.provider, a?.projects),
       'connectors:disconnect': a => connectors.service.disconnect(a?.provider),
+      'connectors:useToken': a => connectors.service.useToken(a),
       // the user's MCP servers (ADR 0086): the user's clicks only; a token goes in once and never comes back
       'mcpservers:state': () => mcpServers().state(),
       'mcpservers:save': a => mcpServers().save(a),
@@ -198,13 +217,7 @@ app.whenReady().then(async () => {
     'agents:undo': a => { if (!s.runFeedback) throw new Error('Annulla non disponibile.'); return s.runFeedback.undo(a); },
     'agents:save': a => s.agentPacks.learning.save(a.profile, a.id),
     'agents:reset': a => s.agents.reset(String(a?.id ?? '')),
-    'agents:exportPlan': a => s.agentPacks.packs.exportPlan(a.id, a.target),
-    'agents:exportFix': a => s.agentPacks.packs.exportFix(a.token, a.item, a.action),
-    'agents:export': a => s.agentPacks.packs.export(a.token, a.includeStats),
     'brain:share': () => s.agentPacks.share(),
-    'agents:importInspect': a => s.agentPacks.packs.importInspect(a),
-    'agents:importApply': a => s.agentPacks.packs.importApply(a.token, a.approveScripts, a.roleId, a.approvePersonalData),
-    'agents:importCancel': a => s.agentPacks.packs.cancel(a.token),
     // the Brain pages (ADR 0077): read, the maintenance button, an undo, a skill toggle; Classificatori read-only
     'brainmodel:state': () => s.brainModel.state(),
     'memory:reviewList': a => s.memoryReview?.list(undefined, a?.asOf) ?? [],
@@ -218,10 +231,19 @@ app.whenReady().then(async () => {
     'learning:saveCandidate': a => { requireReviewRoot(a.expectedRoot); if (!s.learningReview) throw new Error('Candidate review unavailable.'); return s.learningReview.saveCandidate(a.name, a.text, a.expectedDigest); },
     'learning:promote': a => { requireReviewRoot(a.expectedRoot); if (!s.learningReview) throw new Error('Candidate promotion unavailable.'); const result = s.learningReview.promote(a.name, a.expectedDigest, a.replayId, a.exampleRunId); emitter.emit('brainmodel:changed', undefined); return result; },
     'learning:compare': a => { if (!s.learningReview) throw new Error('Replay comparison unavailable.'); return s.learningReview.compare(a.beforeId, a.afterId); },
+    // Memoria → Proposte (ADR 0123): one list of what waits for the user; each decision runs its source's own handler
+    'proposals:list': () => proposals.list(),
+    'proposals:count': () => proposals.count(),
+    'proposals:decide': a => proposals.decide(a),
     'brainmodel:maintain': a => s.brainModel.maintain(a?.job),
     'brainmodel:rollback': a => s.brainModel.rollback(String(a?.id ?? '')),
+    // the brain's saved queries (ADR 0124); a delete is a ChangeLog entry, undone with brainmodel:rollback
+    'queries:list': () => s.queries?.list() ?? { root: null, dir: 'queries', queries: [] },
+    'queries:get': a => { if (!s.queries) throw new Error('Queries unavailable.'); return s.queries.get(String(a?.id ?? '')); },
+    'queries:delete': a => { if (!s.queries) throw new Error('Queries unavailable.'); const r = s.queries.delete(String(a?.id ?? '')); emitter.emit('brainmodel:changed', undefined); emitter.emit('queries:changed', undefined); return r; },
     'brainmodel:noise': a => { if (typeof a?.key !== 'string' || !a.key || a.key.length > 1000 || typeof a?.known !== 'boolean') throw new Error('Invalid log group'); return s.brainModel.noise(a.key, a.known); },
     'brainmodel:link': a => { if (typeof a?.skill !== 'string' || typeof a?.agentId !== 'string' || typeof a?.on !== 'boolean') throw new Error('Invalid skill link'); return s.brainModel.link(a.skill, a.agentId, a.on); },
+    'brainmodel:remove': a => { if (!['skill', 'rule', 'script'].includes(a?.kind as string) || typeof a?.target !== 'string' || !a.target || a.target.length > 500) throw new Error('Invalid item to remove'); return s.brainModel.remove(a.kind, a.target); },
     'classifiers:state': () => s.brainModel.classifiers(),
     // the morning block (ADR 0102): the renderer's presence, Ctrl+J's fallback, the user's Esc / Ok
     'morning:brief': a => s.morning ? s.morning.handle(a) : { history: false, show: false, brief: null },
@@ -244,6 +266,15 @@ app.whenReady().then(async () => {
       const now = demo && process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now();
       const runs = mergeRuns(demo ? demoEstimateRuns(now) : s.agentRuns?.list() ?? [], s.chats.list().map(c => c.run));
       return estimatesState(runs, checkRunIds(a?.runIds), now);
+    },
+    'agents:judgingEstimate': () => {
+      const now = demo && process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now();
+      return judgingEstimate(mergeRuns(demo ? demoEstimateRuns(now) : s.agentRuns?.list() ?? [], s.chats.list().map(c => c.run)), now);
+    },
+    'runs:macro': a => {
+      const now = demo && process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now();
+      const since = typeof a?.since === 'number' && Number.isFinite(a.since) ? a.since : now - 14 * 864e5;
+      return macroTasks(mergeRuns(demo ? demoEstimateRuns(now) : s.agentRuns?.list() ?? [], s.chats.list().map(c => c.run)), since);
     },
     'agents:restoreVersion': a => s.agents.restoreVersion(a.id, a.version),
     'setup:get': () => s.setup.get(),
@@ -307,7 +338,7 @@ app.whenReady().then(async () => {
     'chat:stop': a => { activity.stopped(a.chatId); return s.chats.stop(a.chatId, a.keepQueued === true); },
     'chat:stopAll': () => { activity.stopped(); return s.chats.stopAll(); },
     'chat:close': a => { activity.stopped(a.chatId); return s.chats.close(a.chatId); },
-    'chat:archive': a => { if (a.auto !== true) activity.stopped(a.chatId); return s.chats.archive(a.chatId, { auto: a.auto === true }); },
+    'chat:archive': a => { if (a.auto !== true) activity.stopped(a.chatId); return s.chats.archive(a.chatId, { auto: a.auto === true, undoable: a.undoable === true }); },
     'chat:reopen': async a => { const c = await s.chats.reopen(a.chatId); s.chats.resumedByUser?.(a.chatId); return s.chats.list().find(x => x.id === a.chatId) ?? c; },
     'chat:admitNow': a => s.chats.admitNow(a.chatId),
     'chat:set': ({ chatId, ...patch }) => s.chats.set(chatId, patch),
@@ -345,7 +376,12 @@ app.whenReady().then(async () => {
     'cloud:watch': a => cloudOf(s).watch(typeof a?.id === 'string' ? a.id : null),
     'cloud:readiness': a => cloudOf(s).readiness(String(a?.cwd ?? '')),
     'cloud:dismiss': a => cloudOf(s).dismiss(String(a?.id ?? '')),
-    'settings:set': a => s.brain.setSettings(a),
+    'settings:set': async a => {
+      const saved = await s.brain.setSettings(a);
+      // one language for the UI and the AI (ADR 0120): me.md's `Language:` follows the setting (Windows' on «sistema»)
+      if (a && typeof a === 'object' && 'language' in a) void profile.syncLanguage(uiLang()).catch(e => log.warn('brain', 'profile language not updated', { cause: errText(e), hint: 'me.md keeps its Language line; edit it in Settings → Il mio profilo' }));
+      return saved;
+    },
     'settings:schema': () => s.brain.settingsSchema(),
     'settings:history': a => s.brain.settingsHistory(a?.limit),
     'settings:undo': a => s.brain.undoSetting(a?.changeId, 'user'),
@@ -411,12 +447,45 @@ app.whenReady().then(async () => {
     'sync:resolve': a => s.brain.syncResolve(a?.domain, a?.choice),
     'headline:get': () => pulse?.headline() ?? headline.get(),
     'log:list': () => activity.list(),
+    'suggest:get': a => composerSuggest.suggest(a),
+    'suggest:cancel': a => composerSuggest.cancel(String(a?.chatId ?? '')),
+    'suggest:state': () => composerSuggest.state(),
     'orchestrator:held': () => s.heldNews?.get() ?? { items: [] },
     'orchestrator:heldSeen': a => { if (typeof a?.chatId !== 'string' || !a.chatId || a.chatId.length > 100) throw new Error('chatId required'); return s.heldNews?.seen(a.chatId) ?? { items: [] }; },
     ...(pulse?.handlers() ?? (demo ? pulseDemoHandlers(process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now(), {
       settings: () => s.brain.settings().pulse, changed: () => emitter.emit('pulse:changed', undefined), approvalsChanged: () => emitter.emit('approvals:changed', undefined),
     }) : pulseStubHandlers())),
   };
+  // the deck's sources call the same handlers their old pages called (never a second path to the same write)
+  const call = <K extends InvokeChannel>(ch: K, arg: InvokeArg<K>): Promise<InvokeResult<K>> =>
+    Promise.resolve((handlers[ch] as unknown as (x: InvokeArg<K>, e: never) => InvokeResult<K> | Promise<InvokeResult<K>>)(arg, undefined as never));
+  const reviewRoot = () => s.brain.info().brainRoot ?? '';
+  const proposals = new ProposalsService({
+    userData: app.getPath('userData'), root: () => s.brain.info().brainRoot, emit: count => emitter.emit('proposals:changed', { count }),
+    ports: {
+      now: demo && process.env.SB_DEMO_FREEZE === '1' ? () => FROZEN_EPOCH : () => Date.now(),
+      runs: () => s.agentRuns?.list() ?? [], chats: () => s.chats.list(),
+      ...(s.memoryReview ? { memory: {
+        list: () => (s.brain.info().brainRoot ? call('memory:reviewList', undefined) : []),
+        confirm: (id: string, evidence: string) => call('memory:confirm', { expectedRoot: reviewRoot(), id, evidence }),
+        retract: (id: string, reason: string) => call('memory:retract', { expectedRoot: reviewRoot(), id, reason }),
+      } } : {}),
+      ...(s.learningReview ? { candidates: {
+        list: async () => (await call('learning:state', undefined)).candidates,
+        promote: (name: string, expectedDigest: string, replayId: string, exampleRunId: string) => call('learning:promote', { expectedRoot: reviewRoot(), name, expectedDigest, replayId, exampleRunId }),
+      } } : {}),
+      changes: { list: () => s.brainModel.changes(), stored: () => s.brainModel.log.all(), rollback: (id: string) => call('brainmodel:rollback', { id }) },
+      settings: { pending: () => s.brain.pendingSettings(), confirm: (proposalId: string, accept: boolean) => call('settings:confirm', { proposalId, accept }) },
+      roles: { list: () => s.agents.list().profiles, resolveTrial: (id: string, decision: 'keep' | 'rollback') => call('agents:trialDecide', { id, decision }) },
+      ...(s.agentLifecycle ? { lifecycle: { read: () => s.agentLifecycle!.read({}), decide: (key: string, decision: 'approve' | 'dismiss') => call('agents:lifecycleDecide', { key, decision }) } } : {}),
+      pulse: { list: () => call('approvals:list', {}), decide: (id: string, decision: 'approve' | 'discard') => call('approvals:decide', { id, decision }) },
+      policies: { status: async () => { const r = await call('brain:api', { path: '/api/improve' }); return r.ok ? r.data : null; }, act: a => call('learn:act', a) },
+    },
+  });
+  // the badge follows its sources' own events; settings proposals and the loop's status are read every minute too
+  const PROPOSAL_EVENTS: readonly string[] = ['brainmodel:changed', 'approvals:changed', 'agents:lifecycleChanged', 'agents:changed', 'settings:proposed', 'settings:changed'];
+  emitter.tap(channel => { if (PROPOSAL_EVENTS.includes(channel)) proposals.changed(); });
+  void windowReady.then(() => proposals.start());
   registerHandlers(handlers, () => win?.webContents ?? null, { contents: () => overlay.contents, channels: ['overlay:size', 'overlay:action', 'overlay:focus'] });
   // Recovery starts before the renderer store: its IPC must already be registered on the first navigation.
   void win.loadURL(pathToFileURL(path.join(outDir, 'renderer', 'index.html')).href);
@@ -449,7 +518,7 @@ app.whenReady().then(async () => {
     quitting = true;
     void connectors.service.cancelLogin();
     headline.stop();
-    pulse?.stop(); unsubscribePulse(); stopTaskbar();
+    pulse?.stop(); unsubscribePulse(); stopTaskbar(); proposals.stop();
     log.info('app', 'quit started');
     // the stable launcher (scripts/release.mjs) waits for a quitting app to go before starting again; an open one it leaves be
     try { fs.writeFileSync(path.join(app.getPath('userData'), 'quitting.json'), JSON.stringify({ pid: process.pid, at: new Date().toISOString() })); } catch { /* best effort */ }

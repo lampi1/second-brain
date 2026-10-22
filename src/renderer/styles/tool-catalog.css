@@ -1,0 +1,47 @@
+/* The tool catalog (components/ToolCatalog.tsx, ADR 0119): a grid of tiles on the shared tokens, light and dark, in the
+   setup wizard and in Settings → Connettori. A tile opened to connect spans the whole row; its state is always the
+   outcome of a real check (green works, blue waiting, red with what to do). Motion off for reduced-motion users. */
+.tc { display: flex; flex-direction: column; gap: 14px; }
+.tc-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.tc-tile { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 16px; border: 1px solid var(--border-2); border-radius: var(--r-l); background: var(--surface-2); transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
+.tc-tile.is-open { grid-column: 1 / -1; border-color: var(--blue-line); box-shadow: 0 0 0 3px var(--blue-bg); }
+.tc-tile.is-ok { border-color: color-mix(in srgb, var(--green) 45%, var(--border-2)); }
+.tc-tile.is-wait { border-color: var(--blue-line); }
+.tc-tile.is-bad { border-color: color-mix(in srgb, var(--red) 40%, var(--border-2)); }
+.tc-head { display: grid; grid-template-columns: 38px minmax(0, 1fr); grid-template-areas: 'mark name' 'mark state' 'desc desc'; align-items: center; gap: 4px 12px; }
+.tc-tile.is-open .tc-head { grid-template-columns: 38px minmax(0, 1fr) auto; grid-template-areas: 'mark name state' 'mark desc desc'; }
+.tc-mark { grid-area: mark; align-self: start; display: grid; place-items: center; width: 38px; height: 38px; border-radius: var(--r-m); font-weight: 700; font-size: 13px; letter-spacing: -.2px; color: var(--text); background: var(--surface-3); }
+.tc-mark-github { background: color-mix(in srgb, var(--text) 12%, var(--surface-3)); }
+.tc-mark-jira { background: var(--blue-bg); color: var(--blue); }
+.tc-mark-azure { background: color-mix(in srgb, var(--blue) 18%, var(--surface-3)); color: var(--blue); }
+.tc-tile.is-ok .tc-mark { background: var(--green-bg); color: var(--green); }
+.tc-name { grid-area: name; font-size: 14px; min-width: 0; }
+.tc-head .sw-pill { grid-area: state; justify-self: start; }
+.tc-tile.is-open .tc-head .sw-pill { justify-self: end; }
+.tc-desc { grid-area: desc; margin-top: 6px; font-size: 12px; line-height: 1.45; color: var(--text-3); }
+.tc-tile.is-open .tc-desc { margin-top: 0; }
+.tc-ok, .tc-bad { display: flex; flex-direction: column; gap: 3px; padding: 9px 12px; border-radius: var(--r-m); font-size: 12.5px; line-height: 1.5; color: var(--text); }
+.tc-ok { background: var(--green-bg); }
+.tc-bad { background: var(--red-bg); }
+.tc-ok p, .tc-bad p { margin: 0; display: flex; gap: 6px; align-items: flex-start; font-weight: 600; }
+.tc-ok p svg { flex: none; margin-top: 2px; color: var(--green); }
+.tc-bad p svg { flex: none; margin-top: 2px; color: var(--red); }
+.tc-ok small, .tc-bad small { color: var(--text-2); overflow-wrap: anywhere; }
+.tc-fix { font-weight: 500; }
+.tc-form { display: flex; flex-direction: column; gap: 14px; padding-top: 2px; }
+.tc-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.tc-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.tc-field label { font-size: 12px; font-weight: 500; color: var(--text-2); }
+.tc-field small { font-size: 11.5px; color: var(--text-3); }
+.tc-field .st-input { width: 100%; text-align: left; }
+.tc-field-bad { color: var(--red) !important; font-size: 12px; }
+.tc-token { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px dashed var(--border-3); border-radius: var(--r-m); background: var(--surface); }
+.tc-how { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 12.5px; line-height: 1.5; color: var(--text-3); }
+.tc-how a { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; color: var(--blue); text-decoration: none; }
+.tc-how a:hover { text-decoration: underline; }
+.tc-how-browser { padding: 10px 12px; border-radius: var(--r-m); background: var(--blue-bg); color: var(--text-2); }
+.tc-actions { margin-top: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tc :is(button, input, a):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.tc-trust { margin: 0; }
+@media (prefers-reduced-motion: reduce) { .tc-tile { transition: none; } }
+.sw-pill-bad { color: var(--red); background: var(--red-bg); border-color: transparent; }

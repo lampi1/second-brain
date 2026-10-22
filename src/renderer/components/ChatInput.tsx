@@ -12,15 +12,22 @@
 // list opens. An Orchestrator's input also has "Strategist" (ADR 0034, 2026-10-20): ticked, the message goes with the
 // line that asks her for a Strategist's plan (shared/newchat.ts); it resets after a send. "Veloce" is gone (#124): quick
 // questions go to Lampo (ADR 0105).
+// The inline suggestion (issue #167, ADR 0118): grey text after the caret, from local sources first (past prompts,
+// "/" commands, roles, skills, chat titles, the chat's files: lib/composer-suggest.ts, zero tokens), else from a small
+// model after a typing pause ('suggest:get'; every key cancels the pause and the request in flight). Tab accepts it,
+// Esc hides it, any other key goes on as usual; with no suggestion Tab moves the focus as always.
 // Used by ChatTile and OrchestratorTile (also the Orchestrator docked with Ctrl+R).
 import { t as auditText } from '../i18n';
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ClipboardEvent, type DragEvent } from 'react';
+import { SUGGEST_DEBOUNCE_MS, SUGGEST_MODEL_MIN_LINE, continueCached } from '@shared/composer-suggest';
+import { ROLE_DEFAULTS, ROLE_IDS } from '@shared/roles';
+import { SuggestScheduler, filesOf, localSuggestion, promptsOf, rememberPrompt, savedPrompts, type LocalSources } from '../lib/composer-suggest';
 import { splitMode, withMode, type SendMode } from '@shared/newchat';
 import { IMAGES_MAX_TOTAL, type ChatCommand, type ChatSummary, type ImageAttachment } from '@shared/contract';
 import { applyCommand, filterCommands, slashQuery } from '../lib/slash';
 import { fullSrc, imageFiles, pasteKind, roomFor, toAttachment } from '../lib/images';
 import { isBusy, type QueuedMsg } from '../store/state';
-import { send, sendQueuedNow, unqueue, useApp } from '../store/store';
+import { app, send, sendQueuedNow, unqueue, useApp } from '../store/store';
 import { toast } from '../store/ui';
 import { IconBolt, IconBranch, IconSend, IconSpinner, IconX } from './Icons';
 import { ImageStrip } from './ImageStrip';
@@ -92,6 +99,15 @@ function SlashMenu({ items, sel, onPick, testid }: { items: ChatCommand[]; sel: 
   );
 }
 const NO_IMAGES: readonly ImageAttachment[] = [];
+const ROLE_NAMES = ROLE_IDS.map(id => ROLE_DEFAULTS[id].name);
+/** the user's past prompts of the chats on screen, computed once per items snapshot (not at every key) */
+const promptCache = new WeakMap<object, string[]>();
+const promptsNow = (items: Parameters<typeof promptsOf>[0]): string[] => {
+  let p = promptCache.get(items);
+  if (!p) { p = promptsOf(items); promptCache.set(items, p); }
+  return p;
+};
+type Ghost = { forText: string; suffix: string; from: 'local' | 'model' };
 /** Text or images not sent, also for a chat whose input is not on screen (the auto-close keeps it open). */
 export const hasDraft = (chatId: string): boolean =>
   !!drafts.get(chatId)?.trim() || !!draftImages.get(chatId)?.length || (readingN.get(chatId) ?? 0) > 0;
@@ -138,6 +154,61 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
     setCaret(r.caret);
     requestAnimationFrame(() => { const el = ta.current; if (el) { el.focus(); el.setSelectionRange(r.caret, r.caret); } });
   };
+  // the inline suggestion (ADR 0118): what it is for, whether Esc hid it for this text, whether the input has the focus
+  const suggestOn = useApp(s => s.settings?.suggestOn !== false);
+  const suggestModel = useApp(s => s.settings?.suggestModel !== false);
+  const [ghost, setGhost] = useState<Ghost | null>(null);
+  const [ghostOff, setGhostOff] = useState<string | null>(null);
+  const [focused, setFocused] = useState(false);
+  const textNow = useRef(visibleText);
+  textNow.current = visibleText;
+  const history = useRef<string[] | null>(null);
+  const sched = useRef<SuggestScheduler | null>(null);
+  if (!sched.current) sched.current = new SuggestScheduler({
+    delayMs: SUGGEST_DEBOUNCE_MS,
+    fetch: req => window.sb.invoke('suggest:get', req),
+    cancel: () => { void window.sb.invoke('suggest:cancel', { chatId: chat.id }).catch(() => {}); },
+    onAnswer: (forText, suffix) => { if (suffix && textNow.current === forText) setGhost({ forText, suffix, from: 'model' }); },
+  });
+  useEffect(() => () => sched.current?.dispose(), []);
+  const sourcesNow = (): LocalSources => {
+    const st = app.get();
+    history.current ??= savedPrompts();
+    return {
+      commands: cmds ?? [], roles: ROLE_NAMES, files: filesOf(st.items[chat.id]),
+      chats: Object.values(st.chats).map(c => c.title).filter(Boolean),
+      history: [...new Set([...history.current, ...promptsNow(st.items)])],
+    };
+  };
+  /** after the text or the caret changed: a local suggestion now, else the model after the pause */
+  const refreshGhost = (v: string, c: number) => {
+    sched.current!.key();
+    if (!suggestOn || !v.trim() || c !== v.length) { setGhost(null); return; }
+    if (ghost?.from === 'model' && continueCached(ghost.forText, ghost.suffix, v)) return; // typing along the model's answer
+    const local = localSuggestion(v, c, sourcesNow());
+    if (local) { setGhost({ forText: v, suffix: local, from: 'local' }); return; }
+    setGhost(null);
+    const line = v.slice(v.lastIndexOf('\n') + 1);
+    if (suggestModel && !v.startsWith('/') && line.trim().length >= SUGGEST_MODEL_MIN_LINE) sched.current!.schedule(v, { chatId: chat.id, line, lastMessage: chat.lastText ?? '' });
+  };
+  const ghostText = ghost && suggestOn && focused && !slashOpen && caret === visibleText.length && ghostOff !== visibleText
+    ? continueCached(ghost.forText, ghost.suffix, visibleText) : null;
+  const acceptGhost = (suffix: string) => {
+    const v = visibleText + suffix, next = withReviewedContext(v, context);
+    setText(next);
+    drafts.set(chat.id, next);
+    setCaret(v.length);
+    refreshGhost(v, v.length);
+    caretAfter.current = v.length;
+  };
+  // the caret after an accepted suggestion, placed right after the render (before the next key: fast typing goes on there)
+  const caretAfter = useRef<number | null>(null);
+  const mirror = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ta.current;
+    if (el && caretAfter.current !== null) { el.setSelectionRange(caretAfter.current, caretAfter.current); el.scrollTop = el.scrollHeight; caretAfter.current = null; }
+    if (mirror.current && el) mirror.current.scrollTop = el.scrollTop;
+  });
   const queued = useApp(s => s.queued[chat.id] ?? EMPTY);
   // the message being sent now (first in the queue while the turn is interrupted: a spinner on its chip) and whether
   // the stop is still on its way (the other buttons wait for it). The engine may first finish messages it already
@@ -183,6 +254,10 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
     const r = send(chat.id, as && orchestrator ? withMode(as, text) : text, images);
     if (r === 'empty') return;
     if (orchestrator) setMode(null);
+    rememberPrompt(text);
+    history.current = null;
+    sched.current?.key();
+    setGhost(null);
     setText('');
     drafts.delete(chat.id);
     const hook = onSentHooks.get(chat.id);
@@ -281,12 +356,19 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
         )}
         <div className="composer-row">
           {slashOpen && <SlashMenu items={matches} sel={Math.min(sel, matches.length - 1)} onPick={pick} testid={testid} />}
+          <div className="composer-field">
+          {ghostText && (
+            <div ref={mirror} className="composer-ghost" aria-hidden="true"><span className="composer-ghost-typed">{visibleText}</span><span className="composer-ghost-text" data-testid={`${testid}-ghost`}>{ghostText}</span></div>
+          )}
           <textarea
             ref={ta} rows={1} value={visibleText} placeholder={placeholder} aria-label={orchestrator ? t('chat.input.messageToOrchestrator') : t('chat.input.messageToChat', { title: chat.title })} data-testid={testid} spellCheck={false}
-            aria-expanded={slashOpen} aria-controls={slashOpen ? `${testid}-slash-list` : undefined} aria-autocomplete="list"
+            aria-expanded={slashOpen} aria-controls={slashOpen ? `${testid}-slash-list` : undefined} aria-autocomplete={ghostText ? 'both' : 'list'}
+            aria-describedby={ghostText ? `${testid}-ghost-hint` : undefined}
+            onFocus={() => { setFocused(true); if (suggestOn && !cmds) loadCommands(chat.id, setCmds); }} onBlur={() => setFocused(false)}
+            onScroll={e => { if (mirror.current) mirror.current.scrollTop = e.currentTarget.scrollTop; }}
             aria-activedescendant={slashOpen ? `${testid}-slash-o${Math.min(sel, matches.length - 1)}` : undefined}
-            onChange={e => { const next = withReviewedContext(e.target.value, context); setText(next); setCaret(e.target.selectionStart); drafts.set(chat.id, next); if (!next.trim()) onSentHooks.delete(chat.id); if (!e.target.value.startsWith('/')) setSlashOff(null); }}
-            onSelect={e => setCaret(e.currentTarget.selectionStart)}
+            onChange={e => { const next = withReviewedContext(e.target.value, context); setText(next); setCaret(e.target.selectionStart); drafts.set(chat.id, next); if (!next.trim()) onSentHooks.delete(chat.id); if (!e.target.value.startsWith('/')) setSlashOff(null); refreshGhost(e.target.value, e.target.selectionStart); }}
+            onSelect={e => { const el = e.currentTarget; setCaret(el.selectionStart); if (el.selectionStart !== el.selectionEnd || el.selectionStart !== el.value.length) sched.current?.key(); }}
             onPaste={onPaste}
             onKeyDown={e => {
               if (slashOpen && !e.nativeEvent.isComposing) {
@@ -298,9 +380,17 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
                 const byName = cur.name !== query && cur.name.toLowerCase().includes((query ?? '').toLowerCase());
                 if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && (byName || (chose && cur.name !== query)))) { e.preventDefault(); pick(cur); return; }
               }
+              // the inline suggestion: Tab takes it, Esc hides it; with none, Tab moves the focus as always
+              if (ghostText && !e.nativeEvent.isComposing) {
+                if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) { e.preventDefault(); acceptGhost(ghostText); return; }
+                if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setGhostOff(visibleText); sched.current?.key(); return; }
+              }
+              if (!['Shift', 'Control', 'Alt', 'Meta', 'Tab', 'CapsLock'].includes(e.key)) sched.current?.key(); // the next key cancels the model's request
               if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); if (!emptyEnter()) submit(); }
             }}
           />
+          {ghostText && <span id={`${testid}-ghost-hint`} className="sr-only">{t('suggest.srHint', { text: ghostText })}</span>}
+          </div>
           {orchestrator && (
             <button type="button" className={`newchat-toggle ${mode === 'plan' ? 'on' : ''}`} aria-pressed={mode === 'plan'} onClick={() => { setMode(mode === 'plan' ? null : 'plan'); ta.current?.focus(); }}
               data-tip={mode === 'plan' ? t('chat.input.modeTipOff') : t('chat.input.planTip')}

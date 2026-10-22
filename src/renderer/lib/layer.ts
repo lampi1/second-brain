@@ -20,7 +20,7 @@ import { questionsModalOn } from './questions';
 import { linkOfEvent, markRead, toastGroups, type ToastGroup } from './notify';
 import { playChime, requestChimes, toChime } from './chime';
 import { engineOf } from './engines';
-import { lang } from '../i18n';
+import { lang, t } from '../i18n';
 
 const TOAST_MS = 8000;
 /** requests arriving within this window ring once */
@@ -91,22 +91,22 @@ export function computeModel(ignorePopup = false): OverlayModel {
   if (focusKey && !cards.some(c => c.key === focusKey)) focusKey = undefined;
   // the card the keyboard is sent to (Ctrl+J) is the one shown in full
   if (focusKey) { const i = cards.findIndex(c => c.key === focusKey); if (i > 0) cards.unshift(...cards.splice(i, 1)); }
-  const t = now();
+  const at = now();
   if (!atStart && s.ready) atStart = new Set(s.feed.map(e => e.id));
   groups = toastGroups(atStart ? s.feed.filter(e => !atStart!.has(e.id)) : [], {
-    since: t - TOAST_MS, dismissed: new Set(u.toastDismissed), muted: s.settings?.mute ?? {}, dnd: dndActive(t),
+    since: at - TOAST_MS, dismissed: new Set(u.toastDismissed), muted: s.settings?.mute ?? {}, dnd: dndActive(at),
     skipChats: new Set(s.pending.map(p => p.chatId)),
   });
   const toasts: OverlayToast[] = groups.map(g => ({
     id: g.id, kind: g.kind, label: g.label, title: g.title, detail: g.detail, count: g.count, tone: toneOf(g.kind),
-    action: g.kind === 'chat-waiting' ? 'Rispondi' : 'Apri',
+    action: g.kind === 'chat-waiting' ? t('appText.layer.answer') : t('appText.layer.open'),
   }));
   const v = viewport();
   const size = columnSize(u.prefs.orchestratorSize, v, u.page === 'home' && !u.map);
   const reserve = { right: size.w, bottom: 0, top: 0 };
   // Workspace padding is relative to the shell. Native bounds need the absolute occupied bottom, including banners.
   const avoid = {...reserve,...(reserve.top?{top:v.top+reserve.top}:{})};
-  return { cards, waiting: s.pending.length, avoid, theme: u.prefs.theme, lang: lang(), density: u.prefs.density, ...(focusKey ? { focusKey, nonce } : {}), now: Math.floor(t / 15_000) * 15_000, toasts };
+  return { cards, waiting: s.pending.length, avoid, theme: u.prefs.theme, lang: lang(), density: u.prefs.density, ...(focusKey ? { focusKey, nonce } : {}), now: Math.floor(at / 15_000) * 15_000, toasts };
 }
 
 function push(): void {

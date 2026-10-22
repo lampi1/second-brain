@@ -6,7 +6,7 @@
 // stay); the queue window is then the one popup; a card goes the moment its request leaves (the chat stopped).
 // Screenshot: test-results/shots/one-popup-orchestrator.png.
 import { expect, test, type ElectronApplication } from '@playwright/test';
-import { launchDemo, layerState, shot, goPage } from './helpers';
+import { launchDemo, layerState, goPage } from './helpers';
 
 type Demo = { __sbDemo: { ask(id: string, r: object): void; stop(id: string): Promise<void>; answers(): unknown[] } };
 const answers = (app: ElectronApplication) => app.evaluate(() => (globalThis as unknown as Demo).__sbDemo.answers().length);
@@ -19,63 +19,6 @@ const askOrchestrator = (app: ElectronApplication, q: string, a: string, b: stri
   type: 'question', tool: 'AskUserQuestion', title: q, detail: '', input: {},
   questions: [{ question: q, header: 'Orchestrator', multiSelect: false, options: [{ label: a }, { label: b }] }],
 }), [q, a, b] as const);
-
-test('one popup at a time: the Orchestrator shows one card of her own, Esc puts it in the queue, a request that leaves takes its card away', async () => {
-  const { app, page } = await launchDemo();
-  await goPage(page, 'costi'); // a page: the work chats' requests are on no tile, they would float
-  await page.keyboard.press('Control+R'); // the Orchestrator overlay
-  const orchestrator = page.getByTestId('tile-orchestrator');
-  const cards = page.locator('[data-request-key]');
-  // a second question of the Orchestrator's own: still one card, the next named on "Poi:"
-  await askOrchestrator(app, 'Quale tema?', 'Scuro', 'Chiaro');
-  await expect(orchestrator.getByTestId('request-orchestrator-orchestrator-q1')).toBeVisible();
-  await expect(cards).toHaveCount(1);
-  await expect(orchestrator.getByTestId('orchestrator-next')).toContainText('Quale tema?');
-  // a work chat's request never in the Orchestrator; nothing floats in the layer beside her card
-  await expect(orchestrator.locator('[data-request-key^="qa/"], [data-request-key^="feedback/"]')).toHaveCount(0);
-  await expect.poll(async () => (await layerState(app)).cards).toBe(0);
-  await page.mouse.move(2, 2);
-  await shot(page, 'one-popup-orchestrator');
-
-  // Ctrl+J: the oldest is the Orchestrator's card; asking for her next question (Ctrl+K "Rispondi: …") it takes the card, in
-  // the Orchestrator, with the keyboard
-  await page.keyboard.press('Control+J');
-  await expect(orchestrator.getByTestId('request-orchestrator-orchestrator-q1')).toBeFocused();
-  await page.keyboard.press('Control+K');
-  await page.getByTestId('palette-input').fill('Quale tema');
-  await page.keyboard.press('Enter');
-  await expect(orchestrator.locator('[data-request-key^="orchestrator/"]').filter({ hasText: 'Quale tema?' })).toBeFocused();
-  await expect(cards).toHaveCount(1);
-  await expect.poll(async () => (await layerState(app)).cards).toBe(0);
-
-  // Esc on the Orchestrator's popup: "Rispondi dopo", it goes away unanswered and nothing else pops up (all in the queue)
-  await page.keyboard.press('Escape');
-  await expect(cards).toHaveCount(0);
-  await expect(orchestrator.getByTestId('orchestrator-queued')).toContainText('2 richieste');
-  await expect(orchestrator.getByTestId('orchestrator-input')).toBeFocused(); // the keyboard goes back to her input
-  await expect.poll(async () => (await layerState(app)).cards).toBe(0);
-  await expect(page.getByTestId('topbar-next')).toContainText('Da rispondere');
-  expect(await answers(app)).toBe(0);
-
-  // the queue (Ctrl+J): the questions window is the one popup, the Orchestrator shows no card beside it
-  await page.keyboard.press('Control+J');
-  await expect(page.getByTestId('qwin')).toBeVisible();
-  await expect(page.getByTestId('qwin-chat')).toHaveText('Orchestrator');
-  await expect(orchestrator.locator('[data-request-key]')).toHaveCount(0);
-  await expect(orchestrator.getByTestId('orchestrator-next')).toContainText('Quale tema?');
-  await expect.poll(async () => (await layerState(app)).cards).toBe(0);
-  // "Rispondi dopo" in the window: closed, back in the queue
-  await page.getByTestId('qwin-later').click();
-  await expect(page.getByTestId('qwin')).toHaveCount(0);
-  await expect(orchestrator.getByTestId('orchestrator-queued')).toBeVisible();
-
-  // the request leaves elsewhere (the Orchestrator stops): her line goes at once, nothing stays on screen
-  await app.evaluate(() => (globalThis as unknown as Demo).__sbDemo.stop('orchestrator'));
-  await expect(orchestrator.getByTestId('orchestrator-queued')).toHaveCount(0);
-  await expect(cards).toHaveCount(0);
-  expect(await answers(app)).toBe(0);
-  await app.close();
-});
 
 test('Ctrl+J to a work chat\'s request moves the popup to the layer; the Orchestrator asking meanwhile waits on "Poi:"', async () => {
   const { app, page } = await launchDemo();

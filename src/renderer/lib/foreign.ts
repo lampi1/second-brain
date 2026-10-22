@@ -24,6 +24,16 @@ const MAIL = /^\[Messaggio dalla chat "(.*?)" tramite second-brain[^\n]*\]/;
 const AGENT = /^\[Messaggio di un agente tramite second-brain[^\n]*\]/;
 const EVENT = /^\[evento app[^\n]*\]/;
 const RUN = /^\[esito di Esegui[^\n]*\]/;
+/** The outcome of an Esegui run as main writes it for the chat (run/results.ts runResultText, in Italian: the chats read
+ *  it) in the UI language: «riuscito (exit code 0)», «fallito (exit code 1)», «fermato dall'utente…», then « · N s» and the
+ *  production mark. Anything else stays as written. */
+export function runOutcome(how: string): string {
+  const parts = how.split(' · ');
+  const head = parts[0] ?? '';
+  const ok = /^riuscito \(exit code (-?\d+)\)$/.exec(head), bad = /^fallito(?: \(exit code (-?\d+)\))?$/.exec(head);
+  const first = ok ? t('tools.foreign.runOk', { code: ok[1]! }) : bad ? t('tools.foreign.runFail', { code: bad[1] ?? '' }) : /^fermato dall.utente prima della fine$/.test(head) ? t('tools.foreign.runStopped') : head;
+  return [first, ...parts.slice(1).map(p => (/^comando di produzione/.test(p) ? t('tools.foreign.runProd') : p))].join(' · ');
+}
 const RESUME = /^\[second-brain\][^\n]*/;
 const HOOK = /^(?:<user-prompt-submit-hook>|UserPromptSubmit hook additional context:)/;
 
@@ -56,7 +66,7 @@ export function foreignOf(item: UserItem): Foreign | null {
   if (RUN.test(text)) {
     const body = after(text, RUN);
     const code = body.match(/```powershell\n([^\n]*)/)?.[1] ?? '';
-    const how = body.match(/^Esito: ([^\n]*)/m)?.[1] ?? '';
+    const how = runOutcome(body.match(/^Esito: ([^\n]*)/m)?.[1] ?? '');
     return { kind: 'run', sender: t('chat.command.exec'), summary: oneLine([code, how].filter(Boolean).join(' · ')), body };
   }
   if (RESUME.test(text)) return { kind: 'resume', sender: 'App', summary: oneLine(after(text, /^\[second-brain\]\s*/)), body: text };

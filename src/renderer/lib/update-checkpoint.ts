@@ -9,11 +9,12 @@ import {updateStoreProblem} from '../store/store';
 import {createCheckpointCoordinator,adoptUpdateRecovery,validateUpdateSnapshot} from './update-checkpoint-core';
 import {freezeForUpdate,releaseUpdate,updateHoldProblem,updateIsFrozen,updateRecovery} from './update-barrier';
 import {suspendViews} from './viewports';
+import {t} from '../i18n';
 let started=false,composing=false;
 let releaseViews:(()=>void)|null=null;
 function problem():string|null{
-  if(composing)return 'Termina la composizione del testo prima di aggiornare.';
-  if(ui.get().modal||ui.get().confirm||[...document.querySelectorAll('[role="dialog"]')].some(element=>element.getAttribute('data-testid')!=='update-checkpoint-status'))return 'Completa o chiudi la finestra aperta prima di aggiornare.';
+  if(composing)return t('appText.checkpoint.composing');
+  if(ui.get().modal||ui.get().confirm||[...document.querySelectorAll('[role="dialog"]')].some(element=>element.getAttribute('data-testid')!=='update-checkpoint-status'))return t('appText.checkpoint.dialogOpen');
   return updateHoldProblem()??updateStoreProblem()??chatDraftCheckpointProblem()??agentDraftCheckpointProblem();
 }
 function snapshot():UpdateSnapshot{
@@ -25,7 +26,7 @@ function validateRam(value:UpdateSnapshot):void{
   const chat=JSON.parse(value['sb.update.chat-drafts.v1']),agent=JSON.parse(value['sb.update.agent-drafts.v1']);
   if(chat!==null)validateChatDraftCopy(chat);if(agent!==null)validateAgentDraftCopy(agent);
   const layout=JSON.parse(value['sb.agents.workspace.v1']);
-  if(layout!==null&&!readPurposes(layout))throw Error('Disposizione della copia non valida.');
+  if(layout!==null&&!readPurposes(layout))throw Error(t('appText.checkpoint.badLayout'));
 }
 function adopt(value:UpdateSnapshot):void{
   const chat=JSON.parse(value['sb.update.chat-drafts.v1']),agent=JSON.parse(value['sb.update.agent-drafts.v1']);
@@ -44,7 +45,7 @@ export async function startUpdateCheckpoint():Promise<void>{
     flush:()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))),
     problem,snapshot,answer:answer=>sb.invoke('update:checkpointAnswer',answer),
   });
-  sb.on('update:checkpointRequest',request=>{void coordinator.request(request).catch(()=>toast('Il salvataggio per l’aggiornamento non è stato confermato. L’app resta aperta.','err'));});
+  sb.on('update:checkpointRequest',request=>{void coordinator.request(request).catch(()=>toast(t('appText.checkpoint.saveNotConfirmed'),'err'));});
   sb.on('update:checkpointRelease',request=>coordinator.release(request.requestId));
   // Load previous adopted copies before React/input/store startup; their writes stay current after recovery.
   let retained:UpdateSnapshot|null=null;
@@ -56,8 +57,8 @@ export async function startUpdateCheckpoint():Promise<void>{
     const recovery=await Promise.race([sb.invoke('update:recovery',undefined),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(Error('Recovery timeout')),5000);})]).finally(()=>{if(timer)clearTimeout(timer);});
     if(recovery){retained=validateUpdateSnapshot(recovery.snapshot);adoptUpdateRecovery(retained,localStorage,validateRam,adopt);await sb.invoke('update:recoveryAck',{id:recovery.id});}
   }catch(error){
-    const reason=error instanceof Error?error.message.slice(0,300):'La copia non è leggibile in questa versione.';
+    const reason=error instanceof Error?error.message.slice(0,300):t('appText.checkpoint.versionUnreadable');
     updateRecovery.set({problem:reason,copy:retained});
-    toast('Ripristino sospeso. Apri Impostazioni → Aggiornamenti per rivedere il motivo e le bozze conservate.','err');
+    toast(t('appText.checkpoint.recoveryPaused'),'err');
   }
 }

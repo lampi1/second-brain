@@ -1,7 +1,7 @@
 // Role metrics and pruned-run rollups used by agent cards. Verified quality uses only human or independent evidence;
 // self-reports and observation proxies do not enter success. Costs and usage retain their own data coverage.
 import type { DeliveryMetrics, AgentMetrics, AgentRun, AgentRunTokens, AgentRunOutcome, Metric, VersionMetrics } from '../../shared/agents';
-import { countedDecision } from './standing';
+import { countedDecision, earnIndex, earnedVerdict } from './standing';
 import { FACTS_SETTLE_MS, reworkStartsOf, reworkedWithin, verifiedVerdict } from '../../shared/run-verdict';
 
 /** the newest values kept per sample for medians (n counts them all) */
@@ -18,7 +18,7 @@ export interface ReviewTally { runs: number; findings: number; blockingRuns: num
 /** Additive per (agentId, version): the kept runs fold into one; the pruned ones live on as one (agent-runs.json `rollups`). */
 export interface RunTally {
   agentId: string; version: number;
-  /** v2 excludes silence proxies; older aggregate verdicts have no recoverable provenance. */
+  /** The current rollup excludes silence proxies; older aggregate verdicts have no recoverable provenance. */
   verdictSchema?: 2;
   ended: number;
   /** Verified only: basis human or reviewed-evidence. */
@@ -40,6 +40,9 @@ export interface RunTally {
   decisions?: number;
   /** of those decisions, the verified successes at prune time: the Orchestrator's level (its XP, ADR 0100) */
   decisionWins?: number;
+  /** successes earned at prune time by a verified parent (chain) or by a review's grade (standing.ts earnedVerdict,
+   *  ADR 0125): XP that `verdicts` (verified runs only) does not hold */
+  earnedWins?: number;
   /** fitRollups dropped `tags` to stay in budget: later prunes do not rebuild a partial set, and filters leave this rollup out */
   tagsLost?: true;
 }
@@ -62,6 +65,9 @@ export interface MetricsInput {
   windowOf?: (agentId: string, version: number) => number | null;
   /** Only runs whose tags match; untagged runs never match. Rollups retain counts for combined filters too. */
   filter?: TagFilter;
+  /** Whether an open run still belongs to a chat in the app (not closed, not gone, still its current run): a run left
+   *  open by a crash or a chat that went away is not "in corso" (the Agenti card, 2026-10-22). Absent = every open run. */
+  live?: (run: AgentRun) => boolean;
 }
 
 const emptySample = (): Sample => ({ n: 0, values: [], sum: 0 });
@@ -138,6 +144,7 @@ export function mergeTallies(a: RunTally, b: RunTally, agentId = a.agentId, vers
     contextPeak: mergeSample(a.contextPeak, b.contextPeak), elapsed: mergeSample(a.elapsed, b.elapsed), execution: mergeSample(a.execution, b.execution), reviews,
     ...(a.decisions || b.decisions ? { decisions: (a.decisions ?? 0) + (b.decisions ?? 0) } : {}),
     ...(a.decisionWins || b.decisionWins ? { decisionWins: (a.decisionWins ?? 0) + (b.decisionWins ?? 0) } : {}),
+    ...(a.earnedWins || b.earnedWins ? { earnedWins: (a.earnedWins ?? 0) + (b.earnedWins ?? 0) } : {}),
     ...(a.tagsLost || b.tagsLost ? { tagsLost: true as const } : (() => { const tags = mergeTags(a.tags, b.tags); return tags ? { tags } : {}; })()),
   };
 }
@@ -171,12 +178,14 @@ function mergeTags(a: TagTallies | undefined, b: TagTallies | undefined): TagTal
 /** Pruned runs into the rollups: `all` = every run known before the prune (their reworks and reviews). Each pruned run is
  *  folded once, into its tally and into one bucket per tag it carries. */
 export function rollUp(rollups: readonly RunTally[], pruned: readonly AgentRun[], all: readonly AgentRun[], now = Date.now()): RunTally[] {
-  const index = indexRuns(all, now), out = new Map(rollups.map(t => [keyOf(t.agentId, t.version), structuredClone(t)]));
+  const index = indexRuns(all, now), earn = earnIndex(all), out = new Map(rollups.map(t => [keyOf(t.agentId, t.version), structuredClone(t)]));
   for (const run of [...pruned].sort((a, b) => (a.endedAt ?? 0) - (b.endedAt ?? 0))) {
     const k = keyOf(run.agentId, run.version);
     if (!out.has(k)) out.set(k, emptyTally(run.agentId, run.version));
     const t = out.get(k)!;
     foldRun(t, run, index);
+    const e = run.endedAt !== undefined && !run.oneshot?.fallback && run.oneshot?.job !== 'headline' ? earnedVerdict(run, earn) : null;
+    if (e?.verdict === 'success' && (e.basis === 'chain' || e.basis === 'graded')) t.earnedWins = (t.earnedWins ?? 0) + 1;
     if (countedDecision(run)) {
       t.decisions = (t.decisions ?? 0) + 1;
       if (verifiedVerdict(run, index.reworkStarts.get(run.runId), index.now)?.verdict === 'success') t.decisionWins = (t.decisionWins ?? 0) + 1;
@@ -277,7 +286,7 @@ export function runMetrics(runs: readonly AgentRun[], input: MetricsInput = {}):
   }
   for (const run of runs) {
     if (!matchesTags(run, filter)) continue;
-    if (run.endedAt === undefined) { open.set(run.agentId, (open.get(run.agentId) ?? 0) + 1); continue; }
+    if (run.endedAt === undefined) { if (input.live?.(run) !== false) open.set(run.agentId, (open.get(run.agentId) ?? 0) + 1); continue; }
     if (input.since !== undefined && run.endedAt < input.since) continue;
     const k = keyOf(run.agentId, run.version);
     if (!tallies.has(k)) tallies.set(k, emptyTally(run.agentId, run.version));

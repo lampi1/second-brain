@@ -14,8 +14,9 @@ back, ADR 0083); **Grindhouse** = the home page, the one place for the
 agents (a strip each, the browsers they drive under them; the old Mosaico / Corsie views are retired, ADR 0068);
 **agent** = who works: a chat running a role, whose tools, ceiling, tier and skills decide its engine, model and
 permissions (not a per-chat choice or a routing row, ADR 0078, 0083); **skill** = how a job is
-done (`SKILL.md`, shared, loaded on demand; there are no "procedures", ADR 0077); **Brain** section = Agenti, Skill,
-Regole, Memoria, Classificatori, Mappa; **brain** = the user's folder of notes, rules and tools the agents read and
+done (`SKILL.md`, shared, loaded on demand; there are no "procedures", ADR 0077); **Brain** section = Agenti, Memoria
+(the hub: Proposte, Approvate, Skill, Regole, Script & Query, Idee, File, Apprendimento, Statistiche as tabs; no
+Dashboard, ADR 0122), Classificatori, Mappa; **brain** = the user's folder of notes, rules and tools the agents read and
 write (a template ships in the product; a fresh install starts empty); **Task** = the page of the user's work items and
 PRs (Azure DevOps, read only; called DevOps before ADR 0079); **stable / dev** = the user's frozen release vs. anything
 run from this repo; **Aggiorna** (the button, Settings → Aggiornamenti) = update the app to main's tip.

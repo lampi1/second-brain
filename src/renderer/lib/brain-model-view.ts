@@ -6,6 +6,7 @@
 import type { BrainChange, BrainModelState, BrainSkill, ClassifierChoice, MemoryFile } from '@shared/brain-model';
 import type { SkillCatalog, SkillEntry } from '@shared/contract';
 import { formatCost } from './format';
+import { locale } from '../i18n';
 
 export type SkillRowHome = BrainSkill['home'] | 'cursor';
 export interface SkillRow {
@@ -82,7 +83,7 @@ export function linkGraph(state: BrainModelState | null): { nodes: LinkNode[]; e
 export const choiceMatch = (c: ClassifierChoice): 'same' | 'differ' | 'none' => (!c.suggested.length ? 'none' : c.used.every(s => c.suggested.includes(s)) ? 'same' : 'differ');
 
 /** 0.5 → "50%"; null stays null (the page says "no data yet"). */
-export const pct = (v: number | null, locale = 'it-IT'): string | null => (v === null ? null : new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 }).format(v));
+export const pct = (v: number | null, loc = locale()): string | null => (v === null ? null : new Intl.NumberFormat(loc, { style: 'percent', maximumFractionDigits: 0 }).format(v));
 /** the app's one money format (lib/format.ts formatCost, ADR 0101); the locale is the UI's */
 export const usd = (v: number | null, _locale?: string): string | null => (v === null ? null : formatCost(v));
 /** A route or week without data: every value null and no run. */

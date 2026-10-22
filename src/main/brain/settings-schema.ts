@@ -47,7 +47,7 @@ const BASE: readonly SettingDef[] = [
     description: 'Porta locale (solo 127.0.0.1) dove gli agenti guidano il browser interno. 0 = una porta libera a caso.' },
   { key: 'theme', type: 'enum', values: ['dark', 'light', 'system'], default: 'dark', protected: false, label: 'Tema',
     description: 'Scuro, chiaro o come il sistema.' },
-  { key: 'language', type: 'enum', values: ['system', 'it', 'en'], default: 'system', protected: false, label: 'Lingua',
+  { key: 'language', type: 'enum', values: ['system', 'it', 'en', 'de'], default: 'system', protected: false, label: 'Lingua',
     description: "Lingua dell'interfaccia: come il sistema (italiano se Windows è in italiano, altrimenti inglese), italiano o inglese." },
   { key: 'compactWindowTokens', type: 'int', min: 0, max: 1_000_000, default: COMPACT_WINDOW, protected: false, label: 'Compatta le chat Claude a (token)',
     description: 'Ogni chat Claude dell’app, Orchestrator compreso, compatta da sola il suo contesto in un riassunto poco prima di questa finestra, anche con i modelli da 1M e nelle cartelle che ne chiedono un’altra. Da 100000 a 1000000; 0 = come dicono le impostazioni di Claude.' },
@@ -76,6 +76,14 @@ const BASE: readonly SettingDef[] = [
     description: 'Sopra questa CPU (media degli ultimi secondi) le chat e i messaggi degli agenti aspettano.' },
   { key: 'loadQueueRam', type: 'int', min: 0, max: 90, default: 15, protected: true, label: 'Coda per carico: RAM libera sotto (%)',
     description: 'Sotto questa memoria libera le chat e i messaggi degli agenti aspettano. 0 = non guardare la RAM.' },
+  // the chat composer's inline suggestion (ADR 0118): local sources cost nothing; the model part spends, so it and its
+  // budget are protected like the other spending limits
+  { key: 'suggestOn', type: 'boolean', default: true, protected: false, label: 'Suggerimenti nella chat',
+    description: 'Mentre scrivi, un testo grigio dopo il cursore: Tab lo accetta, Esc lo nasconde. Dai tuoi messaggi passati, dai comandi, dai ruoli, dalle chat e dai file, senza token.' },
+  { key: 'suggestModel', type: 'boolean', default: true, protected: true, label: 'Suggerimenti nella chat: modello',
+    description: 'Quando le fonti locali non hanno niente, dopo una pausa nella scrittura chiede al modello più piccolo sulla chiave API (ultima riga e ultimo messaggio soltanto). Spento: solo i suggerimenti locali.' },
+  { key: 'suggestDailyUsd', type: 'usd', min: 0.01, max: 1, default: 0.05, protected: true, label: 'Suggerimenti nella chat: budget giornaliero ($)',
+    description: 'Raggiunto il budget, il modello si ferma fino a domani; i suggerimenti locali restano.' },
   { key: 'osToasts', type: 'enum', values: ['urgent', 'normal', 'off'], default: 'urgent', protected: true, label: 'Notifiche di sistema',
     description: 'Solo le urgenti (una chat ti aspetta), anche le normali, o nessuna (resta tutto nel feed).' },
   { key: 'dndUntil', type: 'int', min: 0, max: 8.64e15, nullable: true, default: null, protected: true, label: 'Non disturbare fino a',
@@ -116,6 +124,11 @@ const BASE: readonly SettingDef[] = [
     description: "Quando una chat di lavoro finisce, si ferma su un errore, aspetta una tua risposta o ti lascia un comando, l'app lo scrive all’Orchestrator (una riga per chat, al massimo una volta ogni 2 minuti per chat) e lo sveglia se è fermo: decide lui se dirtelo. Ogni risveglio è un turno dell’Orchestrator." },
   // the chat learns how its command went (the user, 2026-10-12: "vorrei che ti accorgessi da sola quando eseguo un
   // comando dal play senza che ti scriva fatto")
+  // the Agenti page's switch (agents/judge-sample.ts): protected, it spends tokens
+  { key: 'judging', type: 'boolean', default: true, protected: true, label: 'Controllo livello e performance',
+    description: 'Ogni lavoro finito viene rivisto da un Sentinel in una sessione nuova: livello e performance dei ruoli si basano su verdetti veri. Spende token.' },
+  { key: 'judgingSince', type: 'int', min: 0, max: 8_640_000_000_000, default: 0, protected: true, label: 'Controllo acceso dal',
+    description: 'Quando il controllo è stato acceso (ms): i lavori finiti prima non vengono rivisti.' },
   { key: 'runResults', type: 'boolean', default: true, protected: true, label: 'Esito dei comandi alla chat',
     description: "Quando un comando lanciato con Esegui finisce, l'app scrive alla chat che l'ha proposto il comando, l'exit code e le ultime righe dell'output: non devi scriverle «fatto» né incollarle il risultato. Se la chat sta lavorando, il messaggio parte appena è libera. Ogni esito è un turno della chat." },
   // the user, 2026-10-12: "le domande vorrei un toggle per farle comparire proprio come modale"
@@ -244,10 +257,14 @@ export function defaults(): Settings {
     orchestratorOpacity: 100,
     orchestratorEvents: true,
     runResults: true,
+    // on by default (owner, 2026-10-22: every role levels up without manual verdicts, ADR 0125); judgingSince 0 = from
+    // the first sampler pass, never a backlog
+    judging: true, judgingSince: 0,
     questionsModal: false,
     appRepo: null,
     projectsRoot: null,
     loadQueue: true, loadQueueCpu: 75, loadQueueRam: 15,
+    suggestOn: true, suggestModel: true, suggestDailyUsd: 0.05,
     delegation: { ...DELEGATION_DEFAULTS }, modelTiers: {},
   };
 }

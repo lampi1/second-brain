@@ -171,6 +171,15 @@ describe('warm Claude engine', () => {
     expect(pool.current).toBeNull();
   });
 
+  it('a dropped warm engine gets the default grace, never a 1 s close and a kill (#156)', () => {
+    const graces: unknown[] = [];
+    const session = { alive: true, close: (g?: number) => { graces.push(g); return Promise.resolve(); } } as unknown as HarnessSession;
+    const pool = new WarmPool({ enabled: () => true, spawn: cwd => ({ chatId: 'c_w', sessionId: 's', cwd, session, sink: new BufferedSink(), at: Date.now() }) });
+    pool.fill(tmp('grace'));
+    pool.discard('test');
+    expect(graces).toEqual([undefined]); // close() → CLOSE_GRACE_MS
+  });
+
   it('BufferedSink replays what came before the owner, in order, then forwards', () => {
     const b = new BufferedSink();
     let orphan = 0;

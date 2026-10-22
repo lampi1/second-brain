@@ -1,5 +1,12 @@
 // Catalogue overview strings for Italian users; composed into the typed UI dictionary.
 export const catalogIt = {
+  // the Agenti page's review switch (JudgingSwitch.tsx)
+  'catalog.judging.title': 'Abilita controllo livello e performance',
+  'catalog.judging.onDesc': 'Acceso: ogni lavoro finito viene rivisto da un Sentinel in una sessione nuova. Livello e performance si basano su verdetti veri.',
+  'catalog.judging.offDesc': 'Spento: nessuna revisione. Livello e performance contano solo i voti tuoi, dell’Orchestrator e i fatti.',
+  'catalog.judging.cost': (p: { cost: string; runs: string; each: string; audits: string }) => `Costo stimato: circa ${p.cost} al giorno (${p.runs} lavori al giorno × ${p.each} a revisione, più ${p.audits} seconde revisioni al giorno che giudicano il giudice).`,
+  'catalog.judging.costNoReview': (p: { runs: string }) => `Costo stimato: ${p.runs} revisioni al giorno; il prezzo di una revisione si vedrà dopo la prima.`,
+  'catalog.judging.costNone': 'Costo stimato: ancora nessun dato (nessun lavoro finito negli ultimi 7 giorni).',
   'catalog.deliveryCoverage': "Copertura consegne",
   'catalog.deliveryScope': "Risultati canonici conservati di esecuzioni concluse; storico aggregato escluso.",
   'catalog.deliveryRate': "Risultati consegnati",
@@ -45,4 +52,13 @@ export const catalogIt = {
   'catalog.costsWhy.partial': ({ n, total }: { n: number; total: number }) => `Costo per successo: il costo è noto solo per ${n} lavori su ${total}.`,
   'catalog.costsHelp': 'Costo mediano: la metà dei lavori conclusi è costata meno, su quelli con un costo noto. Costo per successo verificato: il costo di tutti i lavori conclusi diviso per quelli riusciti e verificati (quelli che contano per il livello). Equivalente al listino API: con un abbonamento non è ciò che paghi.',
   'catalog.metricsError': 'Statistiche non disponibili. Riprova.', 'catalog.back': 'Torna al catalogo',
+  // the built-in roles' purpose (name, purpose and character always come from the role: lib/role-text.ts)
+  'catalog.purpose.orchestrator': 'Coordina il lavoro: delega ogni compito a un ruolo e ti tiene al corrente dello stato.',
+  'catalog.purpose.strategist': 'Scompone un obiettivo in un piano e delega le parti ai ruoli giusti.',
+  'catalog.purpose.scout': 'Cerca e verifica fatti: codice, log, web e pagine, senza cambiare nulla.',
+  'catalog.purpose.artisan': 'Fa le modifiche: codice, file, configurazioni, documenti e note del cervello, con i controlli del repository.',
+  'catalog.purpose.sentinel': 'Verifica: esegue test e controlli, o giudica il risultato dalle prove quando non c’è nulla da eseguire, e dice cosa passa e cosa no.',
+  'catalog.purpose.herald': 'Prepara messaggi e bozze per persone e servizi esterni; ogni invio lo approvi tu.',
+  'catalog.purpose.flash': 'Risposte al volo accanto all’Orchestrator: vede la sua chat, legge, non cambia nulla',
+  'catalog.purpose.pulse': 'Idee, consigli, promemoria, collegamenti e frase della Dashboard',
 };

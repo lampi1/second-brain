@@ -1,23 +1,27 @@
-// Runtime parity is explicit for every UI area, visible labels must resolve after changing language, and the app
-// shell (components/, App.tsx, main.tsx) carries no Italian UI text outside the dictionaries (ADR 0057).
+// Runtime parity is explicit for every UI area (Italian, English and German, ADR 0117), visible labels must resolve
+// after changing language, and the renderer's components (components/, brain/, dashboard/, App.tsx, main.tsx) carry no
+// Italian UI text outside the dictionaries (ADR 0057, 0117).
 import{afterEach,expect,it}from'vitest';
 import{readFileSync,readdirSync}from'node:fs';
 import{join}from'node:path';
 import ts from'typescript';
 import{it as italian}from'../../src/renderer/i18n/it';
 import{en as english}from'../../src/renderer/i18n/en';
+import{de as german}from'../../src/renderer/i18n/de';
 import{stateInfo}from'../../src/renderer/lib/format';
-import{setLang,t}from'../../src/renderer/i18n';
+import{locale,setLang,t}from'../../src/renderer/i18n';
 afterEach(()=>setLang('it'));
 const AREAS=join(__dirname,'../../src/renderer/i18n/areas');
-it('keeps Italian and English keys in parity, in the whole dictionary and in every area pair',async()=>{
+it('keeps Italian, English and German keys in parity, in the whole dictionary and in every area',async()=>{
  expect(Object.keys(italian).sort()).toEqual(Object.keys(english).sort());
+ expect(Object.keys(german).sort()).toEqual(Object.keys(italian).sort());
  const areas=readdirSync(AREAS).filter(f=>f.endsWith('.it.ts')).map(f=>f.slice(0,-6));
  expect(areas.length).toBeGreaterThan(15);
  for(const area of areas){
-  const[itMod,enMod]=await Promise.all([import(join(AREAS,`${area}.it.ts`)),import(join(AREAS,`${area}.en.ts`))]);
-  const[itDict,enDict]=[Object.values(itMod)[0],Object.values(enMod)[0]] as [Record<string,unknown>,Record<string,unknown>];
-  expect(Object.keys(enDict).sort(),area).toEqual(Object.keys(itDict).sort());
+  const[itMod,enMod,deMod]=await Promise.all([import(join(AREAS,`${area}.it.ts`)),import(join(AREAS,`${area}.en.ts`)),import(join(AREAS,`${area}.de.ts`))]);
+  const[itDict,enDict,deDict]=[Object.values(itMod)[0],Object.values(enMod)[0],Object.values(deMod)[0]] as Record<string,unknown>[];
+  expect(Object.keys(enDict!).sort(),area).toEqual(Object.keys(itDict!).sort());
+  expect(Object.keys(deDict!).sort(),`${area} (de)`).toEqual(Object.keys(itDict!).sort());
  }
 });
 it('renders the reported legacy control labels in English',()=>{
@@ -39,7 +43,9 @@ const VISIBLE_CALLS=new Set(['toast','announce','setError','setStatus','askConfi
 function shellFiles():string[]{
  const root=join(__dirname,'../../src/renderer');
  const walk=(d:string):string[]=>readdirSync(d,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(join(d,e.name)):e.name.endsWith('.tsx')?[join(d,e.name)]:[]);
- return[...walk(join(root,'components')),join(root,'App.tsx'),join(root,'main.tsx')];
+ // brain/testRoute.tsx is the e2e suite's own route; the genui preview and fixtures are a developer page with sample data
+ const own=(f:string)=>!/testRoute\.tsx$|genui[\\/](fixtures|preview)|genui-preview\.tsx$/.test(f);
+ return[...walk(join(root,'components')),...walk(join(root,'brain')),...walk(join(root,'dashboard')),join(root,'App.tsx'),join(root,'main.tsx')].filter(own);
 }
 function italianLiterals(file:string):string[]{
  const src=ts.createSourceFile(file,readFileSync(file,'utf8'),ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);const out:string[]=[];
@@ -54,7 +60,31 @@ function italianLiterals(file:string):string[]{
  };
  visit(src);return out;
 }
-it('keeps the app shell free of hard-coded Italian UI text',()=>{
- const files=shellFiles();expect(files.length).toBeGreaterThan(50);
+it('keeps the renderer\'s components free of hard-coded Italian UI text',()=>{
+ const files=shellFiles();expect(files.length).toBeGreaterThan(80);
  expect(files.flatMap(italianLiterals)).toEqual([]);
+});
+it('renders German with the Austrian locale',()=>{
+ setLang('de');
+ expect(locale()).toBe('de-AT');expect(t('settings.language')).toBe('Sprache');expect(t('common.close')).toBe('Schließen');
+});
+// Texts that reach the UI as data, not as literals the scan above sees: the brain map's fixed layers (a brain's server
+// names them in its own language), the built-in agents' purpose (main writes it in Italian, shared/roles.ts), the
+// outcome of an Esegui run (main writes it for the chat, in Italian) and a setting card's name (main's schema is
+// Italian). Each must come from the dictionaries, in English with no Italian left.
+it('names the map layers, the built-in agents\' purpose, Esegui outcomes and setting cards in the UI language',async()=>{
+ const{LAYER_COLOR,layerLabel}=await import('../../src/renderer/brain/lib/map');
+ const{BUILT_IN_PURPOSE,rolePurpose}=await import('../../src/renderer/lib/role-text');
+ const{runOutcome}=await import('../../src/renderer/lib/foreign');
+ const{proposalTitle}=await import('../../src/renderer/lib/proposal-title');
+ const{ROLE_DEFAULTS}=await import('../../src/shared/roles');
+ // the Italian dictionary keeps main's wording, so the two never drift apart
+ for(const id of Object.keys(ROLE_DEFAULTS))expect(rolePurpose(id,'x'),id).toBe(ROLE_DEFAULTS[id as keyof typeof ROLE_DEFAULTS].summary);
+ setLang('en');
+ const en=[...Object.keys(LAYER_COLOR).map(id=>layerLabel({id,label:'Etichetta del brain'})),...BUILT_IN_PURPOSE.map(id=>rolePurpose(id,'x')),
+  runOutcome('riuscito (exit code 0) · 2 s'),runOutcome('fallito (exit code 1)'),runOutcome('fermato dall\'utente prima della fine'),runOutcome('riuscito (exit code 0) · 3 s · comando di produzione, confermato dall\'utente'),
+  proposalTitle({source:'setting',title:'Battito: budget giornaliero ($)',facts:[{key:'target',value:'pulse.dailyUsd'}]} as never)];
+ expect(en.filter(x=>ITALIAN.test(x)||x==='Etichetta del brain')).toEqual([]);
+ expect(layerLabel({id:'altro',label:'Altro'})).toBe('Altro');expect(rolePurpose('custom','Mio agente')).toBe('Mio agente');
+ expect(runOutcome('riuscito (exit code 0) · 2 s')).toBe('succeeded (exit code 0) · 2 s');
 });

@@ -1,5 +1,8 @@
 # ADR 0088 · The brain without the app: a shareable zip and a standalone install
 
+> Amended by ADR 0125 (2026-10-22): the agent pack import/export this ADR builds on is gone; the shareable brain zip
+> stays, with the parts it shares (`pack/zip.ts`, `toml.ts`, `rules.ts packRules`, the guard scan).
+
 Date: 2026-10-20 · Status: accepted (owner, 2026-10-20: «vorrei che il brain fosse esportabile e condivisibile con i
 colleghi che magari lo usano anche loro dalla loro harness magari slegata da quest'app … che si esportasse uno zip che
 il brain fosse semplice da usare anche su Cursor o Claude Code o Codex senza per forza passare dall'app»; «vorrei anche

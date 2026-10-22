@@ -1,8 +1,10 @@
+import { appTextIt } from './areas/app-text.it';
+import { brainTextIt } from './areas/brain-text.it';
 import { learningReviewIt } from './areas/learning-review.it';
 import { cloudIt } from './areas/cloud.it';
-import { agentPackIt } from './areas/agent-pack.it';
 import { brainModelIt } from './areas/brain-model.it';
 import { memoryIt } from './areas/memory.it';
+import { memoryHubIt } from './areas/memory-hub.it';
 import { statsIt } from './areas/stats.it';
 import { costsIt } from './areas/costs.it';
 import { auditIt } from './areas/audit.it';
@@ -17,6 +19,7 @@ import { connectorsIt } from './areas/connectors.it';
 import { genuiRequestIt } from './areas/genui-request.it';
 import {studioIt}from'./areas/studio.it';
 import { permissionsIt } from './areas/permissions.it';
+import { langSwitchIt } from './areas/lang-switch.it';
 import { chatIt } from './areas/chat.it';
 import { dialogsIt } from './areas/dialogs.it';
 import { toolsIt } from './areas/tools.it';
@@ -25,18 +28,22 @@ import { brainLibIt } from './areas/brainLib.it';
 import { SYS_IT } from '@shared/sys';
 import {productIt}from'./areas/product.it';
 import { agentsGridIt } from './areas/agents-grid.it';
+import { levelsIt } from './areas/levels.it';
 import { explainIt } from './areas/explain.it';
 import { agentDetailIt } from './areas/agent-detail.it';
 import { agentImageIt } from './areas/agent-image.it';
 import { approvalsIt } from './areas/approvals.it';
+import { proposalsIt } from './areas/proposals.it';
 import {settingsIt}from'./areas/settings.it';
 import { profileIt } from './areas/profile.it';
 import { homeIt } from './areas/home.it';
 import { guideIt } from './areas/guide.it';
 import { treeIt } from './areas/tree.it';
 import { aliveIt } from './areas/alive.it';
+import { queriesIt } from './areas/queries.it';
 import { lampoIt } from './areas/lampo.it';
 import { learningIt } from './areas/learning.it';
+import { suggestIt } from './areas/suggest.it';
 import { estimateIt } from './areas/estimate.it';
 import { logIt } from './areas/log.it';
 import { reviewedContextIt } from './areas/reviewed-context.it';
@@ -47,7 +54,6 @@ export const it = {
   ...auditIt,
   ...auditExpressionsIt,
   ...componentsIt,
-  ...agentPackIt,
   ...catalogIt,
   ...costsIt,
   ...connectorsIt,
@@ -58,8 +64,10 @@ export const it = {
   ...guideIt,
   ...treeIt,
   ...aliveIt,
+  ...queriesIt,
   ...lampoIt,
   ...learningIt,
+  ...suggestIt,
   ...estimateIt,
   ...logIt,
   ...genuiRequestIt,
@@ -80,15 +88,19 @@ export const it = {
   'genui.permission.deny': "Non autorizzare questa operazione.",
   ...studioIt,
   ...permissionsIt,
+  ...langSwitchIt,
   ...brainModelIt,
   ...memoryIt,
+  ...memoryHubIt,
   ...statsIt,
   ...productIt,
   ...agentsGridIt,
+  ...levelsIt,
   ...explainIt,
   ...agentDetailIt,
   ...agentImageIt,
   ...approvalsIt,
+  ...proposalsIt,
   ...settingsIt,
   ...profileIt,
   ...chatIt,
@@ -96,13 +108,16 @@ export const it = {
   ...toolsIt,
   ...brainPagesIt,
   ...brainLibIt,
+  ...brainTextIt,
+  ...appTextIt,
   ...SYS_IT,
   'common.close': 'Chiudi',
   'common.cancel': 'Annulla',
   'common.save': 'Salva',
   'settings.language': 'Lingua',
-  'settings.languageDesc': 'Lingua dell’interfaccia. Come il sistema = italiano se Windows è in italiano, altrimenti inglese.',
+  'settings.languageDesc': 'Lingua dell’interfaccia. Come il sistema = italiano o tedesco se Windows è in una delle due lingue, altrimenti inglese.',
   'settings.language.system': 'Come il sistema',
   'settings.language.it': 'Italiano',
   'settings.language.en': 'English',
+  'settings.language.de': 'Deutsch',
 };

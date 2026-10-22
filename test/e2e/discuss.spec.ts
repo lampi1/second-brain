@@ -52,7 +52,7 @@ test("Idee · Dall'IA: Discuti docks the Orchestrator with an editable draft tha
   await expect(input).toBeFocused();
   await expect(input).toHaveValue(/^Let's discuss the AI's suggestion «Una chat finita si chiude da sola» \(ideas\.md, line \d+, from /);
   await expect(input).toHaveValue(/Do not change the state in ideas\.md/);
-  await expect(page.getByTestId('page-idee')).toBeVisible(); // the page stays
+  await expect(page.getByTestId('mh-panel-idee')).toBeVisible(); // the page stays (Memoria → Idee, ADR 0122)
   const row = page.getByRole('row').filter({ hasText: 'Una chat finita si chiude da sola' });
   await expect(row.getByTestId('bx-idea-discussed')).toHaveCount(0); // not sent yet: not discussed
   await shot(page, 'discuss-orchestrator-draft');
@@ -78,7 +78,7 @@ test('Idee: the "Discussa" mark leads back to the Orchestrator; no work chat was
   const card = page.getByTestId('bx-peek');
   await card.getByTestId('bx-discuss-open').click();
   await expect(page.getByTestId('orchestrator-input')).toBeFocused();
-  await expect(page.getByTestId('page-idee')).toBeVisible();
+  await expect(page.getByTestId('mh-panel-idee')).toBeVisible();
 });
 
 test('Idee: the table marks the discussed idea; the side peek has Discuti (light theme too)', async () => {

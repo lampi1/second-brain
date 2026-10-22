@@ -17,6 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { BrainService } from './services';
 import { log } from './log';
+import { uiLocale } from './locale';
 
 const QUIET_MS = Number(process.env.SB_SYNC_QUIET_MS ?? 10 * 60e3);
 
@@ -38,7 +39,7 @@ export function globToRegExp(glob: string): RegExp {
 /** "11/10 20:22" in the machine's time zone. */
 const when = (iso: string): string => {
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', '');
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString(uiLocale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', '');
 };
 
 /** An outcome → its feed event. lastOkAt: when GitHub was last updated (null = never; undefined = not known, no line). */

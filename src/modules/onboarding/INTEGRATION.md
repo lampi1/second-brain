@@ -12,9 +12,9 @@ The candidate has no consumed module registry, so the registration export in
    main IPC handlers and preload allowlist, using the same single service.
    `apply` accepts only a previously prepared opaque plan id; never accept a
    renderer-supplied file path, contents, URL or plan object at that endpoint.
-3. Mount `<OnboardingScreen port={port} language={language}/>` in FirstInterview
-   and `<OrchestratorConnectAction port={port} language={language}/>` in OrchestratorOverlay.
-   Keep `port` stable. Both surfaces share current() and preserve live undo.
+3. (Retired, ADR 0119.) The candidate screen (`OnboardingScreen`, `OrchestratorConnectAction`)
+   was never mounted and has been removed; the setup wizard's tool tiles
+   (renderer/components/ToolCatalog.tsx) replace it. A new surface needs a new design.
 4. Supply a native, no-hydration metadata adapter on Windows/macOS/Linux.
    It must inspect recall/offline/link flags and normalize them to local.ts bits.
    No adapter means discovery and config access stop before content reads.

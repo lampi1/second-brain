@@ -3,12 +3,20 @@
 // person, weak points (computed by the brain, never written by hand) and the members a group stands for. Pure; used by
 // map/BrainMap.tsx and its 2D fallback; unit-tested in test/unit/brain-ui/map.test.ts.
 import type { Flow, MapData, MapEdge, MapNode } from '../types';
+import { t, type Key } from '../../i18n';
 
 /** The night world: fixed colors, readable on the dark background whatever the app theme. */
 export const NIGHT = { bg: '#090b11', ink: '#eef0f6', dim: '#5d6578', muted: '#9aa3b8', accent: '#ff7a45', link: 'rgba(160,172,196,0.32)' };
 export const LAYER_COLOR: Record<string, string> = { persone: '#f0b44c', chat: '#6aa2ff', agenti: '#b28cff', tool: '#3cd6d0', memoria: '#72d98f', regole: '#ff7a93', esterni: '#a7b2c2' };
 export const layerColor = (layer: string): string => LAYER_COLOR[layer] ?? '#8b93a7';
-export const EDGE_KINDS: Record<string, string> = { flusso: 'Come funziona', hook: 'Hook', posta: 'Posta tra chat', legge: 'Taccuino', contesto: 'Contesto fisso', esterno: 'Servizi esterni', istanza: 'Chat vive', usa: 'Codice che nomina file', cita: 'Citazioni' };
+/** A layer's name in the UI language: the fixed layers (LAYER_COLOR's ids) from the dictionary, any other the brain's own label. */
+export const layerLabel = (layer: { id: string; label: string }): string => (layer.id in LAYER_COLOR ? t(`brainText.mapLib.layer.${layer.id}` as Key) : layer.label);
+/** The arrow kinds and their names; getters, so each read is in the current language. */
+export const EDGE_KINDS: Record<string, string> = {
+  get flusso() { return t('brainText.mapLib.edge.flusso'); }, get hook() { return t('brainText.mapLib.edge.hook'); }, get posta() { return t('brainText.mapLib.edge.posta'); },
+  get legge() { return t('brainText.mapLib.edge.legge'); }, get contesto() { return t('brainText.mapLib.edge.contesto'); }, get esterno() { return t('brainText.mapLib.edge.esterno'); },
+  get istanza() { return t('brainText.mapLib.edge.istanza'); }, get usa() { return t('brainText.mapLib.edge.usa'); }, get cita() { return t('brainText.mapLib.edge.cita'); },
+};
 const ON_ESSENTIAL = ['flusso', 'hook', 'posta', 'legge', 'contesto'];
 const ON_FULL = [...ON_ESSENTIAL, 'esterno', 'istanza'];
 export const defaultKinds = (essential: boolean): Record<string, boolean> => Object.fromEntries(Object.keys(EDGE_KINDS).map(k => [k, (essential ? ON_ESSENTIAL : ON_FULL).includes(k)]));

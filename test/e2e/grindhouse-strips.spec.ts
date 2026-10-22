@@ -102,7 +102,9 @@ test('a click expands a strip every time: repeated, on any part of it, with text
 });
 
 test('an expanded strip opens its own browser beside its chat from its globe, each with its own full-screen control', async () => {
-  const { app, page } = await launchDemo({ width: 1600, height: 900 });
+  // a wide window: under 640 px of strips column (AgentStrips.tsx NARROW_PX; at 1600 px beside the Orchestrator's
+  // column it is ~630) the browser stacks under its chat instead
+  const { app, page } = await launchDemo({ width: 1920, height: 900 });
   try {
     await page.getByTestId('tile-chat-sms').locator('.chat-strip-line').click();
     await page.getByTestId('chat-browser-sms').click();
@@ -204,17 +206,17 @@ test('a collapsed strip keeps its requests on its pill: none floats in the layer
   }
 });
 
-test('the headline sentence is on the Dashboard', async () => {
+test('the headline sentence heads Memoria (G D, the old Dashboard key, lands there: ADR 0122)', async () => {
   const { app, page } = await launchDemo({ width: 1600, height: 900 });
   try {
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await page.keyboard.press('g');
     await page.keyboard.press('d');
-    await expect(page.getByTestId('dashboard')).toBeVisible();
-    const line = page.getByTestId('dash-headline');
+    await expect(page.getByTestId('bm-memory-page')).toBeVisible();
+    const line = page.getByTestId('mh-hero').getByTestId('dash-headline');
     await expect(line).toHaveAttribute('data-source', 'builtin'); // the demo has no API key: the built-in line
     await expect(line).not.toBeEmpty();
-    await shot(page, 'dashboard-headline');
+    await shot(page, 'memoria-headline');
   } finally {
     await app.close();
   }

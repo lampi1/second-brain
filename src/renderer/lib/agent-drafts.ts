@@ -6,6 +6,7 @@ import { EFFORTS } from './format';
 import { PERMISSION_CEILINGS, TOOL_CLASSES, type AgentDraft, type AgentProfile } from '@shared/agents';
 import { MODEL_TIERS, isWorkRole } from '@shared/roles';
 import { isCharacterId } from '@shared/characters';
+import { t } from '../i18n';
 
 export interface AgentEditorDraft { id: string; baseRevision?: number; draft: AgentDraft }
 /** The editable behaviour of a role, from its profile: the editor's starting draft (AgentStudio.tsx) and the base of a
@@ -30,7 +31,7 @@ export function forgetAgentEditor(id: string): void { drafts.delete(id); if (act
 
 const AGENT_RECOVERY_KEY = 'sb.update.agent-drafts.v1';
 let recoveredAgents = false, agentStorageProblem = false;
-export function agentDraftCheckpointProblem(): string | null { return agentStorageProblem ? 'La copia locale delle modifiche ai ruoli non è stata salvata. Libera spazio prima di aggiornare.' : null; }
+export function agentDraftCheckpointProblem(): string | null { return agentStorageProblem ? t('appText.agentDrafts.notSaved') : null; }
 export function agentDraftCheckpoint() { return { version: 1, active, entries: [...drafts.entries()] }; }
 
 const text = (v: unknown, max: number) => typeof v === 'string' && v.length <= max;
@@ -49,7 +50,7 @@ function validDraft(value: unknown): value is AgentDraft {
 }
 export function validateAgentDraftCopy(value: unknown): ReturnType<typeof agentDraftCheckpoint> {
   const copy = value as ReturnType<typeof agentDraftCheckpoint>;
-  const bad = () => Error('Copia delle modifiche ai ruoli non valida.');
+  const bad = () => Error(t('appText.agentDrafts.invalid'));
   if (!copy || copy.version !== 1 || !Array.isArray(copy.entries) || copy.entries.length > 20 || copy.active !== null && typeof copy.active !== 'string') throw bad();
   const keys = new Set<string>();
   for (const entry of copy.entries) {

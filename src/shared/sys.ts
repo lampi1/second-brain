@@ -237,6 +237,112 @@ export const SYS_EN: typeof SYS_IT = {
   'sys.apiNetworkUnreachable': (p: { host: string; code: string }) => `Network: ${p.host} unreachable${p.code ? ` (${p.code})` : ''}.`,
 };
 
+/** German renderings of the helpers above, used by SYS_DE; keep in step with missEn/attemptEn/laterEn. */
+function missDe(one: string): string {
+  const [kind, a, b] = parts(one);
+  if (kind === 'askedModel') return `angefragtes Modell ${a}`;
+  if (kind === 'notOffered') return `${a} ${b} nicht angeboten`;
+  if (kind === 'notApplied') return `${a} ${b} nicht angewendet`;
+  if (kind === 'refused') return `${a} ${b} abgelehnt`;
+  return one;
+}
+function missesDe(joined: string): string {
+  return (joined ? joined.split(';;') : []).map(missDe).join('; ');
+}
+function attemptDe(nm: string): string {
+  const [n, m] = nm.split('/');
+  return `Versuch ${n} von ${m}`;
+}
+const LATER_WORD_DE: Record<string, string> = { title: 'Titel', model: 'Modell', effort: 'Aufwand', permissionMode: 'Berechtigungen' };
+function laterDe(joined: string): string {
+  return (joined ? joined.split(',') : []).map(k => LATER_WORD_DE[k] ?? k).join(', ');
+}
+
+export const SYS_DE: typeof SYS_IT = {
+  'sys.stoppedByYou': 'Von dir gestoppt.',
+  'sys.stoppedByYouResend': 'Von dir gestoppt: startet mit deiner Nachricht neu.',
+  'sys.interrupted': 'Unterbrochen.',
+  'sys.queueCancelled': (p: { n: number }) => `Nachrichten in der Warteschlange verworfen: ${p.n}.`,
+
+  'sys.api.authentication_failed': 'Claude-Anmeldung ungültig: führ `claude` in einem Terminal aus und dann `/login`, danach erneut versuchen.',
+  'sys.api.oauth_org_not_allowed': 'Dieses Konto kann Claude Code nicht nutzen: prüf die Anmeldung (`claude /login`).',
+  'sys.api.rate_limit': 'Nutzungslimit erreicht: warte auf das Zurücksetzen oder wechsle das Modell.',
+  'sys.api.overloaded': 'Anthropic API überlastet: versuch es gleich noch einmal.',
+  'sys.api.billing_error': 'Abrechnungsproblem beim Claude-Konto.',
+  'sys.api.model_not_found': 'Modell nicht gefunden: wähl ein anderes.',
+  'sys.api.max_output_tokens': 'Antwort abgeschnitten: Limit der Output-Tokens erreicht.',
+  'sys.api.other': (p: { err: string }) => `API-Fehler: ${p.err}`,
+
+  'sys.turnFailed.error_max_turns': 'Turn mit Fehler beendet: Schrittlimit des Turns erreicht.',
+  'sys.turnFailed.error_max_budget_usd': 'Turn mit Fehler beendet: Maximalbudget des Turns erreicht.',
+  'sys.turnFailed.error_during_execution': 'Turn mit Fehler beendet: ein Fehler bei der Ausführung (die Engine hat nichts weiter gesagt).',
+  'sys.turnFailed.error_max_structured_output_retries': 'Turn mit Fehler beendet: nach mehreren Versuchen keine gültige strukturierte Antwort.',
+  'sys.turnFailed.other': (p: { subtype: string }) => `Turn mit Fehler beendet: ${p.subtype}.`,
+  'sys.turnFailed.none': 'Turn mit Fehler beendet: die Engine hat nicht gesagt, warum.',
+
+  'sys.compacting': 'Kontext wird komprimiert…',
+  'sys.compacted': (p: { pre: string | number; post: string | number }) => `Kontext komprimiert (${p.pre} → ${p.post} Tokens).`,
+  'sys.apiRetry': (p: { attempt: string | number; max: string | number; error: string }) => `Neuer API-Versuch ${p.attempt}/${p.max} (${p.error || 'Fehler'}).`,
+  'sys.permissionDenied': (p: { tool: string; message: string }) => `Berechtigung verweigert: ${p.tool}${p.message ? ` · ${p.message}` : ''}`,
+  'sys.commandReadOnly': (p: { command: string }) => `Befehl abgelehnt: diese Rolle darf nur lesen (${p.command}).`,
+  'sys.commandDestructive': (p: { command: string; reason: string }) => `Befehl von der App abgelehnt: ${p.reason} (${p.command}).`,
+  'sys.turnUndone': (p: { restored: number; removed: number; skipped?: number }) => `Letzter Turn rückgängig gemacht: Dateien wie vor dem Turn (${p.restored} wiederhergestellt, ${p.removed} entfernt${p.skipped ? `; ${p.skipped} nach dem Turn erneut geändert, so belassen` : ''}). Der Chat erfährt es mit seiner nächsten Nachricht.`,
+  'sys.resultReady': (p: { role: string; title: string; summary: string }) => `${p.role} „${p.title}“ hat die Antwort, auf die du gewartet hast: ${p.summary}`,
+  'sys.delegationDepth': (p: { limit: number }) => `Delegation abgelehnt: Tiefengrenze ${p.limit} erreicht (Einstellungen → Rollen und Delegation). Erledige diesen Teil selbst oder melde ihn an deinen Elternchat.`,
+  'sys.delegationParallel': (p: { limit: number }) => `Delegation abgelehnt: sie würde die Grenze von ${p.limit} gleichzeitigen Kind-Chats überschreiten (Einstellungen → Rollen und Delegation). Warte, bis einer berichtet.`,
+  'sys.userWroteChild': (p: { role: string; title: string }) => `Du hast in den Kind-Chat ${p.role} „${p.title}“ geschrieben: dieser Chat erfährt es mit seiner nächsten Nachricht.`,
+  'sys.aboveParent': (p: { tool: string; parent: string }) => `Berechtigung abgelehnt: ${p.tool} geht über die Berechtigungen von „${p.parent}“ hinaus, dem Chat, der diesen delegiert hat.`,
+  'sys.subagentRefused': (p: { type: string }) => `Subagent „${p.type}“ abgelehnt: delegierte Arbeit geht an einen sichtbaren Chat (agent_delegate). Hier nur schnelle Suchen (Explore).`,
+  'sys.skillRefused': (p: { skill: string; role: string }) => `Skill „${p.skill}“ ist der Rolle ${p.role} nicht zugewiesen: abgelehnt.`,
+  'sys.brainOnly': (p: { tool: string; path: string; role: string }) => `Schreiben abgelehnt: die Rolle ${p.role} darf nur im Brain-Ordner schreiben (${p.tool} auf „${p.path}“).`,
+  'sys.readToolsList': (p: { tool: string; role: string }) => `Schreiben abgelehnt: nur du änderst die Liste der nur lesenden Tools (read-only-tools.md) (${p.tool}, Rolle ${p.role}).`,
+  'sys.modelRefusal': 'Das Modell hat die Anfrage abgelehnt.',
+
+  'sys.compactedPlain': 'Kontext komprimiert.',
+  'sys.commandNoOutput': '(Befehl ausgeführt)',
+
+  'sys.resumeFailed': (p: { label: string; error: string }) => `${p.label} hat die vorige Sitzung nicht fortgesetzt (${p.error}): eine neue wird geöffnet.`,
+  'sys.noResume': (p: { label: string }) => `Diese Version von ${p.label} setzt keine Sitzungen fort: eine neue wird geöffnet.`,
+  'sys.runningOther': (p: { label: string; variant: string; misses: string }) => `${p.label} läuft mit ${p.variant} (${missesDe(p.misses)}).`,
+  'sys.imagesNotSent': (p: { label: string; error: string }) => `Bilder nicht an ${p.label} gesendet: ${p.error}`,
+  'sys.engineError': (p: { label: string; error: string }) => `Fehler von ${p.label}: ${p.error}`,
+  'sys.turnCut': (p: { label: string; stop: string }) => `Turn von ${p.label} abgebrochen (${p.stop}).`,
+  'sys.netRetriesExhausted': (p: { label: string; error: string; n: string | number }) => `${p.label} ist nach ${p.n} automatischen Wiederholungen erneut an einem Netzwerkfehler (${p.error}) hängen geblieben: schreib „weiter“, sobald das Netzwerk wieder da ist.`,
+  'sys.netRetryScheduled': (p: { label: string; seconds: string | number; attempt: string }) => `Netzwerkfehler bei ${p.label}: startet in ${p.seconds} s von selbst neu (${attemptDe(p.attempt)}).`,
+  'sys.netRetried': (p: { label: string; attempt: string }) => `Nach einem Netzwerkfehler bei ${p.label} von selbst neu gestartet (${attemptDe(p.attempt)}).`,
+  'sys.netRetryCancelledStopped': 'Automatische Wiederholung abgebrochen (gestoppt).',
+  'sys.netRetryCancelledHandoff': 'Automatische Wiederholung abgebrochen (Übergabe unterbrochen).',
+  'sys.netRetryCancelledClosed': 'Automatische Wiederholung abgebrochen (Sitzung geschlossen).',
+  'sys.todos': (p: { list: string }) => `Aufgaben:\n${p.list}`,
+  'sys.plan': (p: { list: string }) => `Plan:\n${p.list}`,
+  'sys.subagent': (p: { description: string }) => `Subagent: ${p.description}`,
+
+  'sys.modelChangeQueued': (p: { model: string; label: string; reopen: string | number }) => `Modell ${p.model || 'Standard'}: ${p.label} startet mit der nächsten Nachricht mit diesem Modell neu${p.reopen ? ', sobald dieser Turn endet' : ''}.`,
+  'sys.appliedLater': (p: { items: string }) => `Ab dem nächsten Start angewendet: ${laterDe(p.items)}.`,
+  'sys.handoffSavedChat': 'Übergabe gespeichert: „Fortsetzen“ öffnet einen neuen Chat, der von hier ausgeht.',
+  'sys.handoffSavedAuto': 'Automatische Übergabe gespeichert (der Chat hat sie nicht geschrieben): „Fortsetzen“ öffnet einen neuen Chat, der von hier ausgeht.',
+  'sys.continuedIn': (p: { title: string }) => `Die Arbeit geht im Chat „${p.title}“ weiter. Dieser bleibt lesbar.`,
+  'sys.dayCompactStart': 'Neuer Tag: der Kontext des Orchestrators wird zu einer Zusammenfassung kompaktiert (die Chats, die er verfolgt, und die Warteschlange bleiben).',
+  'sys.dayCompactFailed': 'Der Kontext des Orchestrators konnte nicht zusammengefasst werden: neuer Versuch morgen; bis dahin komprimiert er sich bei seiner eingestellten Grenze selbst.',
+  'sys.handoffAsking': 'Der Chat wird um seine Übergabe gebeten (ein kurzer Turn).',
+  'sys.coldContinued': 'Es geht von hier weiter: eine neue Sitzung aus der Übergabe (der Cache der vorigen war abgelaufen).',
+
+  'sys.recap': (p: { summary: string }) => `Wo wir stehen geblieben sind: ${p.summary}`,
+
+  'sys.apiTextOnly': 'Diese Engine akzeptiert nur Text: Bilder wurden nicht gesendet.',
+  'sys.apiMissingKey': 'Kein API-Schlüssel: leg ihn unter Einstellungen → Engines fest.',
+  'sys.apiMissingModel': 'Kein Modell: wähl eines für diesen Chat.',
+  'sys.apiTimeout': (p: { host: string; seconds: string | number }) => `${p.host} hat nicht innerhalb von ${p.seconds} s geantwortet.`,
+  'sys.apiNoBody': (p: { host: string }) => `${p.host} hat keinen Antwortinhalt gesendet.`,
+  'sys.apiProviderError': (p: { host: string; detail: string }) => `Fehler von ${p.host}: ${p.detail}`,
+  'sys.apiKeyRejected': (p: { host: string }) => `API-Schlüssel von ${p.host} abgelehnt.`,
+  'sys.apiTooManyRequests': (p: { host: string }) => `Zu viele Anfragen an ${p.host} (429): versuch es gleich noch einmal.`,
+  'sys.apiServerError': (p: { host: string; status: string | number }) => `${p.host} hat ein Problem (Fehler ${p.status}): versuch es gleich noch einmal.`,
+  'sys.apiRedirect': (p: { host: string }) => `${p.host} hat mit einer Weiterleitung geantwortet: der Anfrage wurde nicht gefolgt.`,
+  'sys.apiRequestRejected': (p: { host: string; status: string | number; detail: string }) => `Anfrage von ${p.host} abgelehnt (${p.status})${p.detail ? `: ${p.detail}` : '.'}`,
+  'sys.apiNetworkUnreachable': (p: { host: string; code: string }) => `Netzwerk: ${p.host} nicht erreichbar${p.code ? ` (${p.code})` : ''}.`,
+};
+
 /** Keys built from askedModel/notOffered/notApplied/refused fragments (acp.ts applyModelConfig), joined with ";;".
  *  Names and values come from the engine: URI-encoded, so a "|" or ";;" in them can't break the split. */
 const enc = encodeURIComponent;

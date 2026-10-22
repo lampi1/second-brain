@@ -1,0 +1,28 @@
+// German (de-AT) equivalents of the rich request-panel chrome, checked against the Italian module (genui-request.it.ts).
+import type { genuiRequestIt } from './genui-request.it';
+export const genuiRequestDe: typeof genuiRequestIt = {
+  'genui.request.less': 'Weniger anzeigen',
+  'genui.request.command': 'Ganzen Befehl anzeigen',
+  'genui.request.commandLines': ({ count }) => `Ganzen Befehl anzeigen (${count} ${count === 1 ? 'Zeile' : 'Zeilen'})`,
+  'genui.request.write': 'Antwort schreiben',
+  'genui.request.free': 'Freitext-Antwort',
+  'genui.request.written': ({ engine }) => `${engine} bekommt das statt der Optionen als deine geschriebene Antwort.`,
+  'genui.request.enter': 'Eingabe',
+  'genui.request.sendHint': 'senden',
+  'genui.request.backHint': 'zurück zur Auswahl',
+  'genui.request.cancel': 'Abbrechen',
+  'genui.request.send': 'Senden',
+  'genui.request.later': 'Später antworten',
+  'genui.request.laterHint': 'Unbeantwortet lassen: Der Chat wartet weiter',
+  'genui.request.confirm': 'Bestätigen',
+  'genui.request.choose': 'wählen',
+  'genui.request.move': 'bewegen',
+  'genui.request.confirmHint': 'bestätigen',
+  'genui.request.of': 'von',
+  'genui.request.multiple': 'Mehrfachauswahl',
+  'genui.request.commands': 'Vom Chat vorgeschlagene Befehle',
+  'genui.request.ownWords': 'Antworte mit eigenen Worten…',
+  'genui.request.count': ({ count }) => count === 0 ? 'Keine Auswahl' : count === 1 ? '1 Option' : `${count} Optionen`,
+  'genui.request.decision': 'Entscheidung',
+  'genui.request.toChoose': 'zu wählen',
+};

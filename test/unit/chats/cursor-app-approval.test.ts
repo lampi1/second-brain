@@ -27,7 +27,7 @@ it('creates a private config without a user config, and removes stale app grants
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cursor-approval-')); dirs.push(root);
   const from = path.join(root, 'missing'), to = path.join(root, 'app');
   snapshotCursorConfig(from, to, false, [], cursorAppPermissions(...urls));
-  expect(JSON.parse(fs.readFileSync(path.join(to, 'cli-config.json'), 'utf8')).permissions.allow).toHaveLength(10);
+  expect(JSON.parse(fs.readFileSync(path.join(to, 'cli-config.json'), 'utf8')).permissions.allow).toHaveLength(12);
   snapshotCursorConfig(from, to);
   expect(fs.existsSync(path.join(to, 'cli-config.json'))).toBe(false);
 });

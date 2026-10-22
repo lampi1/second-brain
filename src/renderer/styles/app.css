@@ -116,6 +116,16 @@ html[data-blink="1"] .pill-dot { opacity: 0.35; } /* lib/beat.ts */
    their words (the switch and the dots stay) */
 .topbar[data-fit~="4"] [data-testid="usage-cursor"], .topbar[data-fit~="4"] .usagebar .ub-sep:has(+ [data-testid="usage-cursor"]) { display: none; }
 .topbar[data-fit~="5"] .popups-label, .topbar[data-fit~="5"] .connectors-label, .topbar[data-fit~="5"] .connector-mark small { display: none; }
+/* the language switch (LangSwitch.tsx, ADR 0120): globe + code like the CLI marks; 6 = the code only, a square button */
+.lang-btn { height: 32px; min-width: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 0 8px; border-radius: var(--r-s); border: 0; background: transparent; color: var(--text-3); cursor: pointer; flex: none; }
+.lang-btn:hover, .lang-btn[aria-expanded="true"] { background: var(--surface-2); color: var(--text); }
+.lang-code { font: 600 11.5px/1 var(--font-display); letter-spacing: 0.04em; color: var(--text-2); }
+.lang-btn:hover .lang-code, .lang-btn[aria-expanded="true"] .lang-code { color: var(--text); }
+.topbar[data-fit~="6"] .lang-btn { padding: 0; }
+.topbar[data-fit~="6"] .lang-btn svg { display: none; }
+/* 6 the narrowest windows: the search is its icon (Ctrl+K still opens it) and the actions sit closer */
+.topbar[data-fit~="6"] .search .keys { display: none; }
+.topbar[data-fit~="6"], .topbar[data-fit~="6"] .topbar-main, .topbar[data-fit~="6"] .topbar-end { gap: 6px; }
 /* the full-screen popups switch and the connectors (SPEC 21) */
 .popups-switch, .connectors-btn { gap: 7px; }
 .popups-track { position: relative; width: 26px; height: 15px; border-radius: 8px; background: var(--border-3); flex: none; transition: background var(--dur-fast); }
@@ -366,6 +376,7 @@ button.lc-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .items.skeleton { justify-content: flex-start; }
 .skeleton i { display: block; height: 11px; border-radius: 6px; margin: 4px 0 8px; background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2)); background-size: 200% 100%; animation: shimmer 1.3s linear infinite; }
 .skeleton i.short { width: 55%; }
+.skeleton.still i { animation: none; } /* a transcript off screen or folded: no endless shimmer (ChatTranscript.tsx) */
 .compact-body { flex: 1; min-height: 0; padding: 8px var(--pad); color: var(--text-2); font-size: 12.5px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 .compact-typing { flex: 0 1 auto; min-height: 0; overflow: hidden; padding: 0 var(--pad) 6px; } /* gives way before the input */
 .unseen {
@@ -644,6 +655,14 @@ html[data-blink="1"] .md.streaming > .md-b:last-child > :last-child::after { opa
 .msg-images-count { display: block; text-align: right; font-size: 11.5px; color: var(--text-3); margin-bottom: 2px; }
 .composer textarea { flex: 1; min-width: 0; resize: none; border: 0; outline: none; background: transparent; color: var(--text); line-height: 20px; padding: 2px 0; min-height: 24px; max-height: 168px; }
 .composer textarea::placeholder { color: var(--text-3); }
+/* the inline suggestion (ADR 0118): a mirror of the text under the textarea, the typed part invisible, the rest grey */
+.composer-field { flex: 1; min-width: 0; display: flex; position: relative; }
+.composer-field textarea { position: relative; z-index: 1; }
+.composer-ghost {
+  position: absolute; inset: 0; z-index: 0; padding: 2px 0; line-height: 20px; white-space: pre-wrap; overflow-wrap: break-word;
+  overflow: hidden; pointer-events: none; color: transparent;
+}
+.composer-ghost-text { color: var(--text-4); }
 .composer-hint { flex: none; display: flex; align-items: center; gap: 6px; height: 24px; font-size: 11px; color: var(--text-4); white-space: nowrap; }
 .send { width: 26px; height: 26px; flex: none; border-radius: 7px; border: 0; background: var(--blue); color: var(--on-accent); display: grid; place-items: center; cursor: pointer; animation: popIn var(--dur-fast) var(--ease); }
 .send:hover { background: var(--blue-strong); }
@@ -993,7 +1012,12 @@ html[data-blink="1"] .md.streaming > .md-b:last-child > :last-child::after { opa
 .keymap-row dd { margin: 0; color: var(--text-2); }
 
 /* ---------------------------------------------------------------- toasts, tooltips */
-.toasts { position: relative; flex:none; display:flex;flex-direction:column;gap:4px;width:auto;padding:0 var(--pad);pointer-events:none; }
+/* floating, out of the layout flow (#169): showing or hiding a toast never moves anything; under the top bar, centred
+   on the workspace (the Orchestrator column's room left free), under modals (backdrop z 40); registered as an overlay
+   so a browser view under it steps aside while it shows (lib/viewports) */
+.toasts { position: fixed; z-index: 39; top: calc(var(--topbar-h) + 8px); left: calc((100vw - var(--orchestrator-r, 0px)) / 2); transform: translateX(-50%);
+  width: min(460px, calc(100vw - var(--orchestrator-r, 0px) - 32px)); max-height: calc(100vh - var(--topbar-h) - 120px); overflow: hidden;
+  display:flex;flex-direction:column;gap:4px;pointer-events:none; }
 .toasts:empty{display:none}
 .toast {
   pointer-events: auto; position: relative; overflow: hidden; display: flex; align-items: center; gap: 9px; padding: 9px 8px 9px 12px; border-radius: var(--r-m);

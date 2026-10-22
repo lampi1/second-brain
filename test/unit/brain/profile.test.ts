@@ -2,12 +2,13 @@
 // template, patching only them (the rest byte-identical, CRLF and BOM kept), a name change limited to the template's
 // owner lines, the locks (a name in the owner's own lines, a Main work block richer than plain areas), mixed line ends,
 // refused patches (multi-line, markdown in the name, unknown keys, locked fields), the revision check
-// against a concurrent edit, and the file guards (no brain, missing file, symlink).
+// against a concurrent edit, the file guards (no brain, missing file, symlink), and the `Language:` line following the
+// app's language setting (ADR 0120: syncLanguage, sameLanguage).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { ProfileService, checkFields, lockedFields, parseProfile, patchProfile } from '../../../src/main/brain/profile';
+import { PROFILE_LANG, ProfileService, checkFields, lockedFields, parseProfile, patchProfile, sameLanguage } from '../../../src/main/brain/profile';
 
 const TEMPLATE = fs.readFileSync(path.join(__dirname, '../../../brain-template/me.template.md'), 'utf8');
 const VALUES: Record<string, string> = { OWNER: 'Tu', ROLE: 'Da conoscere insieme', LANG: 'italiano', TODAY: '2026-10-17', SHELL: 'PowerShell', BRAIN_NAME: 'memory', OS: 'Windows', REPOS_WIN: 'C:\\r', BRAIN_WIN: 'C:\\b', HARNESSES: 'Claude Code' };
@@ -129,5 +130,38 @@ describe('ProfileService', () => {
     const root = tmp(), outside = path.join(tmp(), 'me.md');
     fs.writeFileSync(outside, ME); fs.symlinkSync(outside, path.join(root, 'me.md'));
     expect(await new ProfileService({ root: () => root }).get()).toEqual({ ok: false, reason: 'unreadable' });
+  });
+});
+
+describe('the Language line follows the app language (ADR 0120)', () => {
+  const brain = (text = ME) => { const root = tmp(); fs.writeFileSync(path.join(root, 'me.md'), text); return root; };
+  it('knows a language by any of its names, also with more after it', () => {
+    expect(sameLanguage('italiano', 'it')).toBe(true);
+    expect(sameLanguage('Italian', 'it')).toBe(true);
+    expect(sameLanguage('italiano e inglese', 'it')).toBe(true);
+    expect(sameLanguage('Deutsch', 'de')).toBe(true);
+    expect(sameLanguage('German', 'de')).toBe(true);
+    expect(sameLanguage('English', 'it')).toBe(false);
+    expect(sameLanguage('', 'en')).toBe(false);
+  });
+  it('rewrites only the language on the Who line, keeping the rest of me.md byte-identical', async () => {
+    const root = brain(), service = new ProfileService({ root: () => root, template: TEMPLATE });
+    expect(await service.syncLanguage('de')).toBe('written');
+    const out = fs.readFileSync(path.join(root, 'me.md'), 'utf8');
+    expect(parseProfile(out).language).toBe(PROFILE_LANG.de);
+    const changed = out.split('\n').filter(l => !ME.split('\n').includes(l));
+    expect(changed).toEqual(['Tu, Da conoscere insieme. Language: Deutsch in chat; code, commits and PR texts in English.']);
+    expect(out.split('\n').length).toBe(ME.split('\n').length);
+    expect(await service.syncLanguage('en')).toBe('written');
+    expect(parseProfile(fs.readFileSync(path.join(root, 'me.md'), 'utf8')).language).toBe('English');
+  });
+  it('leaves a line that already says the language, and a profile it cannot rewrite, as they are', async () => {
+    const root = brain(), service = new ProfileService({ root: () => root, template: TEMPLATE });
+    expect(await service.syncLanguage('it')).toBe('same');
+    expect(fs.readFileSync(path.join(root, 'me.md'), 'utf8')).toBe(ME);
+    const odd = brain('# Notes\n\nno Who section here\n');
+    expect(await new ProfileService({ root: () => odd }).syncLanguage('en')).toBe('skipped');
+    expect(fs.readFileSync(path.join(odd, 'me.md'), 'utf8')).toBe('# Notes\n\nno Who section here\n');
+    expect(await new ProfileService({ root: () => null }).syncLanguage('en')).toBe('skipped');
   });
 });

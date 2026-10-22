@@ -8,6 +8,7 @@
 // (renderer/lib/liveSource.ts) and drawn by map/BrainMap.tsx + map/engine.ts.
 import type { MapEdge, MapNode } from '../types';
 import { edgeKey, groupIndex, relFile } from './map';
+import { t as tr } from '../../i18n';
 
 /** `engine` = the engine's short name ("Claude", "Kimi"), from the app's registry */
 export interface LiveChat { id: string; title: string; harness: string; engine: string; state: string; isOrchestrator: boolean; cwd: string }
@@ -129,7 +130,7 @@ export function liveGraph(s: LiveSnapshot, viewNodes: MapNode[], allNodes: MapNo
   // a chat node: the Orchestrator is the map's own Orchestrator; any other chat at work gets its own neuron in the chat layer
   const chatNode = (c: LiveChat): string => {
     if (c.isOrchestrator && orchestratorNode) { chatOf.set(orchestratorNode, c.id); return orchestratorNode; }
-    const id = extra({ id: `live:chat:${c.id}`, layer: 'chat', kind: 'chat-viva', label: c.title, short: `chat su ${c.engine}`, degree: 2, members: [] });
+    const id = extra({ id: `live:chat:${c.id}`, layer: 'chat', kind: 'chat-viva', label: c.title, short: tr('brainText.live.chatOn', { engine: c.engine }), degree: 2, members: [] });
     chatOf.set(id, c.id);
     return id;
   };
@@ -142,11 +143,11 @@ export function liveGraph(s: LiveSnapshot, viewNodes: MapNode[], allNodes: MapNo
     const chatRunning = c.state === 'running' || c.state === 'starting';
     const chatLevel = active ? 1 : Math.max(...ts.map(t => levelOf(t, now)));
     const cid = chatNode(c);
-    const doing = ts[0] ? ts[0].summary || ts[0].name : c.state === 'waiting' ? 'aspetta te' : 'sta pensando';
+    const doing = ts[0] ? ts[0].summary || ts[0].name : c.state === 'waiting' ? tr('brainText.live.waitsYou') : tr('brainText.live.thinking');
     light(cid, 'chat', chatLevel, chatRunning, doing, c.id);
     working.push({ id: c.id, title: c.title, harness: c.harness, engine: c.engine, doing, level: chatLevel, running: chatRunning, isOrchestrator: c.isOrchestrator });
     const eng = engineNode(c.harness);
-    if (eng && active) { light(eng, 'engine', chatLevel, chatRunning, c.title, c.id); link(eng, cid, `gira su ${c.engine}`, chatLevel, chatRunning); }
+    if (eng && active) { light(eng, 'engine', chatLevel, chatRunning, c.title, c.id); link(eng, cid, tr('brainText.live.runsOn', { engine: c.engine }), chatLevel, chatRunning); }
 
     for (const t of ts) {
       const lv = levelOf(t, now), run = t.endAt == null;
@@ -158,13 +159,13 @@ export function liveGraph(s: LiveSnapshot, viewNodes: MapNode[], allNodes: MapNo
         const n = norm(f.path);
         const id = byFile.get(n) ?? folders.find(([dir]) => n.startsWith(`${dir}/`))?.[1]
           ?? extra({ id: `live:file:${rel}`, layer: 'memoria', kind: 'file-vivo', label: base(rel), short: rel, file: f.path, degree: 1, members: [] });
-        light(id, 'file', lv, run, `${f.write ? 'scrive' : 'legge'} ${c.title}`, c.id);
-        link(cid, id, f.write ? 'scrive' : 'legge', lv, run);
+        light(id, 'file', lv, run, tr('brainText.live.fileBy', { write: f.write, title: c.title }), c.id);
+        link(cid, id, f.write ? tr('brainText.live.writes') : tr('brainText.live.reads'), lv, run);
         continue;
       }
       if (isSendTool(t.name)) {
         const to = chats.get(str(input.chatId));
-        if (to) { const tid = chatNode(to); light(tid, 'chat', lv, run, `messaggio da ${c.title}`, to.id); link(cid, tid, 'gli scrive', lv, run); }
+        if (to) { const tid = chatNode(to); light(tid, 'chat', lv, run, tr('brainText.live.messageFrom', { title: c.title }), to.id); link(cid, tid, tr('brainText.live.writesTo'), lv, run); }
         continue;
       }
       if (isAppTool(t.name)) continue;
@@ -175,39 +176,39 @@ export function liveGraph(s: LiveSnapshot, viewNodes: MapNode[], allNodes: MapNo
           const b = base(n.file);
           if (b.length < 4 || !cmd.includes(b)) continue;
           const id = shown(n.id);
-          if (id) { light(id, 'tool', lv, run, c.title, c.id); link(cid, id, 'usa', lv, run); }
+          if (id) { light(id, 'tool', lv, run, c.title, c.id); link(cid, id, tr('brainText.live.uses'), lv, run); }
         }
         // the mail between chats: inbox.mjs send --to "<chat>"
         const to = /inbox\.mjs\s+send\b[^\n]*?--to\s+["']([^"']+)["']/.exec(cmd)?.[1];
         const target = to ? byTitle.get(to.toLowerCase()) : undefined;
-        if (target && target.id !== c.id) { const tid = chatNode(target); light(tid, 'chat', lv, run, `posta da ${c.title}`, target.id); link(cid, tid, 'posta', lv, run); }
+        if (target && target.id !== c.id) { const tid = chatNode(target); light(tid, 'chat', lv, run, tr('brainText.live.mailFrom', { title: c.title }), target.id); link(cid, tid, tr('brainText.live.mail'), lv, run); }
         continue;
       }
       if (t.name === 'Agent' || t.name === 'Task') {
         const who = str(input.subagent_type).toLowerCase();
         const id = who ? findBy(n => n.layer === 'agenti' && (n.id === `agent:${who}` || (n.name ?? n.label).toLowerCase() === who)) : null;
-        if (id) { light(id, 'agent', lv, run, c.title, c.id); link(cid, id, 'chiama', lv, run); }
+        if (id) { light(id, 'agent', lv, run, c.title, c.id); link(cid, id, tr('brainText.live.calls'), lv, run); }
         continue;
       }
       if (t.name === 'Skill') {
         const sk = str(input.skill || input.command).replace(/^\//, '').toLowerCase();
         const id = sk ? findBy(n => (n.name ?? n.label).toLowerCase() === `/${sk}` || n.id === `skill:${sk}`) ?? (() => { for (const g of viewNodes) if (g.members?.some(m => (m.name ?? m.label).toLowerCase() === `/${sk}` || m.id === `skill:${sk}`)) return g.id; return null; })() : null;
-        if (id) { light(id, 'tool', lv, run, c.title, c.id); link(cid, id, 'usa', lv, run); }
+        if (id) { light(id, 'tool', lv, run, c.title, c.id); link(cid, id, tr('brainText.live.uses'), lv, run); }
         continue;
       }
       if (isBrowserTool(t.name)) {
         const tab = s.tabs.find(x => x.chatId === c.id);
         const env = tab?.env || 'browser';
-        const id = extra({ id: `live:env:${env}`, layer: 'esterni', kind: 'ambiente', label: env === 'browser' ? 'Browser' : env, short: tab?.title || 'browser interno', degree: 1, members: [] });
+        const id = extra({ id: `live:env:${env}`, layer: 'esterni', kind: 'ambiente', label: env === 'browser' ? 'Browser' : env, short: tab?.title || tr('brainText.live.innerBrowser'), degree: 1, members: [] });
         light(id, 'browser', lv, run, c.title, c.id);
-        link(cid, id, 'nel browser', lv, run);
+        link(cid, id, tr('brainText.live.inBrowser'), lv, run);
         continue;
       }
       const srv = mcpServer(t.name);
       if (srv) {
         const words = srv.toLowerCase().split(/[-_]/).filter(w => w.length > 3 && !['mcp', 'claude', 'server'].includes(w));
         const id = words.length ? findBy(n => n.layer === 'esterni' && n.kind !== 'harness' && words.some(w => n.id.toLowerCase().includes(w) || n.label.toLowerCase().includes(w))) : null;
-        if (id) { light(id, 'service', lv, run, c.title, c.id); link(cid, id, 'usa', lv, run); }
+        if (id) { light(id, 'service', lv, run, c.title, c.id); link(cid, id, tr('brainText.live.uses'), lv, run); }
       }
     }
   }

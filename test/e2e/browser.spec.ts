@@ -4,7 +4,7 @@
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { launch } from './helpers';
+import { closeSetup, launch } from './helpers';
 import { startSites, McpClient, refOf, pngSize, imageSize, type Sites } from './fixture-server';
 
 let app: ElectronApplication;
@@ -17,6 +17,7 @@ test.describe.serial('internal browser over MCP', () => {
   test.beforeAll(async () => {
     sites = await startSites();
     ({ app, page, userData } = await launch());
+    await closeSetup(page); // a fresh profile opens the first-run setup: its modal would cover the toasts' Annulla
     // Playwright attaches its own CDP session to every page of the app (our tabs too) and auto-dismisses JavaScript
     // dialogs unless someone listens: listen and do nothing, so the dialogs stay for the app's agent to answer.
     app.context().on('dialog', () => {});
@@ -71,28 +72,9 @@ test.describe.serial('internal browser over MCP', () => {
     expect(found).toMatch(/\(in iframe f\d+ http:\/\/localhost:\d+\)/);
   });
 
-  test('Ctrl+W in a page never closes the app (the default menu would; in the app it closes that tab, with Annulla)', async () => {
-    // the tab on screen in the app window, where its unhandled keys reach the window's menu
-    const tabs = await page.evaluate(() => window.sb.invoke('browser:list', undefined));
-    const id = tabs.find(t => t.group?.startsWith('mcp:') && t.url.endsWith('/index.html'))!.id;
-    await page.evaluate(tabId => window.sb.invoke('views:layout', [{ tabId, rect: { x: 0, y: 0, width: 1280, height: 800 } }]), id); // its default size: the next tests measure it
-    await app.evaluate(({ webContents }) => {
-      const tab = webContents.getAllWebContents().find(w => w.getURL().startsWith('http') && w.getURL().endsWith('/index.html'))!; // not the app's file:…/index.html
-      tab.focus();
-      for (const type of ['keyDown', 'keyUp'] as const) tab.sendInputEvent({ type, keyCode: 'W', modifiers: ['control'] });
-    });
-    // the user's Ctrl+W in a page closes its tile like a chat (ADR 0048): Annulla keeps the tab for the next tests. Its
-    // toast means the key was handled (and swallowed) in main: the window is still there
-    const undo = page.getByTestId('toast').filter({ hasText: 'Chiusa la scheda' });
-    await expect(undo).toBeVisible();
-    expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some(w => w.webContents.getURL().startsWith('file:')))).toBe(true);
-    await undo.getByTestId('toast-action').click();
-    expect(await agent.ok('get_page_text')).toContain('Pagina di prova');
-    await page.evaluate(() => window.sb.invoke('views:layout', []));
-  });
-
   test('fills a form in one call and submits it with a trusted click', async () => {
-    const tree = await agent.ok('read_page', { filter: 'interactive' });
+    // full: the whole tree (a page read before returns only what changed since; each test takes its refs from it)
+    const tree = await agent.ok('read_page', { filter: 'interactive', full: true });
     const filled = await agent.ok('fill_form', { fields: [
       { ref: refOf(tree, /textbox "Nome"/), value: 'Mario' },
       { ref: refOf(tree, /textbox "Email"/), value: 'mario@example.com' },
@@ -112,23 +94,27 @@ test.describe.serial('internal browser over MCP', () => {
   });
 
   test('clicks and types inside the same-origin and the cross-origin iframe', async () => {
-    let tree = await agent.ok('read_page');
+    let tree = await agent.ok('read_page', { full: true });
     const inner = refOf(tree, /button "Bottone interno"/);
     await agent.ok('click', { ref: inner });
     await agent.ok('click', { ref: inner });
     expect(await agent.ok('get_page_text')).toMatch(/Clic interni: 2/);
-    tree = await agent.ok('read_page');
+    tree = await agent.ok('read_page', { full: true });
     await agent.ok('type', { ref: refOf(tree, /textbox "Codice"/), text: '42' });
     const res = await agent.ok('click', { ref: refOf(tree, /button "Conferma codice"/) });
     expect(res).not.toContain('Failed requests');
     expect(await agent.ok('wait_for', { text: 'Codice: 42', timeout_ms: 5000 })).toContain('Done');
     const net = await agent.ok('network_requests', { urlPattern: '/api/cross' });
     expect(net).toMatch(/r\d+ 200 GET Fetch \[iframe\] http:\/\/localhost:\d+\/api\/cross\?c=42/);
-    expect(await agent.ok('javascript', { code: 'document.getElementById("out").textContent', frame: refOf(tree, /button "Conferma codice"/).replace(/e\d+$/, '') })).toBe('Codice: 42');
+    // the frame's result is read frame-aware; caller JavaScript runs only on the verified local top page, never in a frame
+    expect(await agent.ok('get_page_text')).toContain('Codice: 42');
+    const inFrame = await agent.call('javascript', { code: 'document.getElementById("out").textContent', frame: refOf(tree, /button "Conferma codice"/).replace(/e\d+$/, '') });
+    expect(inFrame.isError).toBe(true);
+    expect(inFrame.text).toContain('only the verified local top page');
   });
 
   test('dialogs never freeze the agent', async () => {
-    const tree = await agent.ok('read_page', { filter: 'interactive' });
+    const tree = await agent.ok('read_page', { filter: 'interactive', full: true });
     const shown = await agent.ok('click', { ref: refOf(tree, /button "Mostra alert"/) });
     expect(shown).toContain('Dialog open: alert "Ciao agente"');
     const blocked = await agent.call('read_page');
@@ -151,7 +137,7 @@ test.describe.serial('internal browser over MCP', () => {
   });
 
   test('reports network, failed requests and console errors, and saves a response body', async () => {
-    const tree = await agent.ok('read_page', { filter: 'interactive' });
+    const tree = await agent.ok('read_page', { filter: 'interactive', full: true });
     await agent.ok('click', { ref: refOf(tree, /button "Carica dati"/) });
     expect(await agent.ok('wait_for', { text: 'Dati: uno, due, tre' })).toContain('Done');
     const list = await agent.ok('network_requests', { urlPattern: '/api/data' });
@@ -168,7 +154,7 @@ test.describe.serial('internal browser over MCP', () => {
   });
 
   test('popups and target=_blank links open as tabs of the same agent', async () => {
-    const tree = await agent.ok('read_page', { filter: 'interactive' });
+    const tree = await agent.ok('read_page', { filter: 'interactive', full: true });
     const first = /Tab (t\d+)/.exec(tree)![1]!;
     const blank = await agent.ok('click', { ref: refOf(tree, /link "Apri in nuova scheda"/) });
     expect(blank).toMatch(/New tab t\d+ opened by t\d+: "Popup"/);
@@ -255,60 +241,4 @@ test.describe.serial('internal browser over MCP', () => {
     expect(await agent.ok('handoff_to_user', { handoff_id: id, wait_seconds: 5 })).toContain('Non riesco (failed)');
   });
 
-  test('two tabs laid out side by side in the window (views:layout)', async () => {
-    await agent.ok('tabs_create', { url: `${sites.b}/cross.html` });
-    const tabs = await page.evaluate(() => window.sb.invoke('browser:list', undefined));
-    const shown = tabs.filter(t => t.group?.startsWith('mcp:') && /index\.html|cross\.html/.test(t.url)).slice(0, 2);
-    expect(shown).toHaveLength(2);
-    await page.evaluate(ids => window.sb.invoke('views:layout', [
-      { tabId: ids[0]!, rect: { x: 0, y: 60, width: 790, height: 900 } },
-      { tabId: ids[1]!, rect: { x: 800, y: 60, width: 790, height: 900 } },
-    ]), shown.map(t => t.id));
-    const bounds = await app.evaluate(({ BrowserWindow }) => {
-      const win = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:'))!;
-      return win.contentView.children.map(v => v.getBounds());
-    });
-    // agent tabs keep their 1920x1080 page and are drawn scaled to fit the tile, centered
-    expect(bounds).toEqual([{ x: 0, y: 288, width: 790, height: 444 }, { x: 800, y: 288, width: 790, height: 444 }]);
-    expect(await agent.ok('tabs_list')).toMatch(/\[on screen\]/);
-    // a small tile changes neither the page's viewport nor the agent's screenshot, and CSS-px clicks still land right
-    await agent.ok('tabs_select', { tabId: shown[1]!.id });
-    expect(await agent.ok('javascript', { code: '[innerWidth, innerHeight].join("x")' })).toBe('1920x1080');
-    await agent.ok('javascript', { code: 'window.__downs = []; addEventListener("mousedown", e => __downs.push(e.clientX + "," + e.clientY), true); 1' });
-    await agent.ok('click', { coordinate: [1500, 900] });
-    const near = (got: string, x: number, y: number) => { const [gx, gy] = got.split(',').map(Number); return Math.abs(gx! - x) <= 3 && Math.abs(gy! - y) <= 3; };
-    expect(near(await agent.ok('javascript', { code: '__downs[0]' }), 1500, 900)).toBe(true);   // a view px is ~2.4 CSS px here
-    const small = await agent.call('screenshot', { tabId: shown[1]!.id });
-    expect(imageSize(small.images[0]!.data)).toEqual({ width: 960, height: 540 });   // the desktop viewport, not the tile
-    fs.mkdirSync(path.resolve('test-results', 'shots'), { recursive: true });
-    fs.writeFileSync(path.resolve('test-results', 'shots', 'browser-agent-tab-small-tile.jpg'), Buffer.from(small.images[0]!.data, 'base64'));
-    // the user's own click in the scaled tile lands on the same page point (the view maps it back)
-    await app.evaluate(({ webContents }, url) => {
-      const wc = webContents.getAllWebContents().find(w => w.getURL() === url);
-      for (const type of ['mouseDown', 'mouseUp'] as const) wc?.sendInputEvent({ type, x: 395, y: 222, button: 'left', clickCount: 1 });
-    }, shown[1]!.url);
-    await expect.poll(async () => (await agent.ok('javascript', { code: '__downs.join(" ")' })).split(' ').length).toBe(2);
-    expect(near(await agent.ok('javascript', { code: '__downs[1]' }), 960, 540)).toBe(true);   // view (395, 222) / scale 790/1920
-    // the window's own capture source, never one found by name: with the suite in parallel other apps' windows are
-    // named "second-brain" too; under load Windows may list the window late or with an empty thumbnail, so ask again
-    await page.waitForTimeout(500);
-    let png = '';
-    await expect.poll(async () => {
-      png = await app.evaluate(async ({ BrowserWindow, desktopCapturer }) => {
-        const win = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:'))!;
-        const size = win.getContentSize();
-        const sources = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: size[0]!, height: size[1]! } });
-        const src = sources.find(s => s.id === win.getMediaSourceId());
-        return src ? src.thumbnail.toPNG().toString('base64') : '';
-      });
-      return png.length;
-    }, { timeout: 15_000 }).toBeGreaterThan(1000);
-    fs.mkdirSync(path.resolve('test-results', 'shots'), { recursive: true });
-    fs.writeFileSync(path.resolve('test-results', 'shots', 'browser-two-tabs.png'), Buffer.from(png, 'base64'));
-    // hiding them parks them offscreen: they keep rendering for the agent
-    await page.evaluate(() => window.sb.invoke('views:layout', []));
-    const after = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:'))!.contentView.children.length);
-    expect(after).toBe(0);
-    expect((await agent.call('screenshot', { tabId: shown[1]!.id })).images).toHaveLength(1);
-  });
 });

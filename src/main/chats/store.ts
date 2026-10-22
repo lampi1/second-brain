@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { ChatLink, ChatSummary, Effort, HandoffSource, Harness, PermissionMode, RouteDecision } from '../../shared/contract';
+import { isLang, type ChatLink, type ChatSummary, type Effort, type HandoffSource, type Harness, type Lang, type PermissionMode, type RouteDecision } from '../../shared/contract';
 import { validRoute } from '../brain/routing';
 import { errText, log } from '../log';
 import { isUuid } from './session';
@@ -96,6 +96,8 @@ export interface StoredChat {
   /** the session whose context already holds the role text, and a hash of that text: a resume of that same session
    *  does not send it again (it is in the history; the token plan, proposal 1) */
   rolePrimed?: { session: string; sig: string };
+  /** the reply language its context was last told (ADR 0120): a change is said once, on its next turn */
+  replyLang?: Lang;
   /** the sessions this chat had before its cold continuations, oldest first (their transcripts show folded above) */
   pastSessions?: PastSession[];
   /** "Riprendi" links: this chat continues another one / is continued by another one */
@@ -159,6 +161,7 @@ function extras(c: Record<string, unknown>): Partial<StoredChat> {
     ...(num(c.coldNoteAt) ? { coldNoteAt: c.coldNoteAt } : {}),
     ...(num(c.ctxSince) ? { ctxSince: c.ctxSince } : {}),
     ...(isRolePrimed(c.rolePrimed) ? { rolePrimed: { session: c.rolePrimed.session, sig: c.rolePrimed.sig } } : {}),
+    ...(isLang(c.replyLang) ? { replyLang: c.replyLang } : {}),
     ...(Array.isArray(c.pastSessions) ? { pastSessions: c.pastSessions.flatMap(p => { const x = p as Record<string, unknown>; return isUuid(x?.sessionId) && num(x.at) && typeof x.notePath === 'string' ? [{ sessionId: x.sessionId, at: x.at, notePath: x.notePath }] : []; }).slice(-20) } : {}),
     ...(num(c.handoffAt) ? { handoffAt: c.handoffAt, handoffSource: c.handoffSource === 'auto' ? 'auto' as const : 'chat' as const } : {}),
     ...(from ? { continuedFrom: from } : {}), ...(by ? { continuedBy: by } : {}),

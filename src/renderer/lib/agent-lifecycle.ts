@@ -1,6 +1,7 @@
 // Lifecycle read client over the existing sender-checked, read-only brain API bridge.
 import { AGENT_LIFECYCLE_PATH, type AgentLifecycleClient, type AgentLifecycleSnapshot } from '@shared/agent-lifecycle';
 import { sb } from '../sb';
+import { t } from '../i18n';
 
 export const lifecycleClient: AgentLifecycleClient = {
   async read(query) {
@@ -9,7 +10,7 @@ export const lifecycleClient: AgentLifecycleClient = {
     if (!result.ok) throw Error(result.error);
     const data = result.data as AgentLifecycleSnapshot | null;
     if (!data || !Array.isArray(data.proposals) || !Array.isArray(data.feedback) || !Array.isArray(data.evaluations)
-      || !(data.problem === null || typeof data.problem === 'string')) throw Error('Risposta ciclo Agenti non valida');
+      || !(data.problem === null || typeof data.problem === 'string')) throw Error(t('appText.agentLifecycle.invalid'));
     return data;
   },
 };

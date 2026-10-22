@@ -2,8 +2,9 @@
 // with the answers already clear and «Basta domande» (with "Popup" on the question opens in the questions window
 // instead: QuestionsWindow.tsx, and the strip keeps only what is already clear); then its short plan with «Approva e
 // parti» and «Cambia qualcosa» (chat:plan); once approved, the steps as a checklist, Claude Code style (✓ done, a
-// turning ring for the step under way, a dashed ring for the next ones), each with the role that does it. Used by
-// ChatTile.tsx; the plan itself is ChatSummary.plan (shared/strategy.ts).
+// turning ring for the step under way, a dashed ring for the next ones), each with the role that does it. With "Popup"
+// on, the plan to approve opens in the questions window too (PlanApproval.tsx, ADR 0121): the strip keeps its steps and
+// points to it, no second pair of buttons. Used by ChatTile.tsx; the plan itself is ChatSummary.plan (shared/strategy.ts).
 import { useEffect, useRef, useState } from 'react';
 import type { ChatSummary, PendingRequest } from '@shared/contract';
 import { ENOUGH_QUESTIONS, planCount, type PlanStep, type StrategyPlan } from '@shared/strategy';
@@ -13,6 +14,8 @@ import { answer, planDecide } from '../store/store';
 import { useNow } from '../lib/clock';
 import { callQuestions } from '../store/ui';
 import { reqKey } from '../actions';
+import { planAskKey } from '../lib/plan-ask';
+import { openQueue } from '../lib/later';
 import { AgentAvatar } from './AgentAvatar';
 import { RequestPanel } from './RequestPanel';
 import '../styles/strategy.css';
@@ -102,7 +105,9 @@ export function StrategyPanel({ chat, question, inWindow }: { chat: ChatSummary;
       <div className="sp-top"><span className="sp-kicker">{t('tree.plan.title')}</span><span className="sp-right">{t('tree.plan.steps', { n: plan.steps.length })}</span></div>
       <Steps plan={plan} timed={false} testid={`plan-steps-${id}`} />
       {plan.doneWhen && <div className="sp-done-when">{t('tree.plan.doneWhen', { text: plan.doneWhen })}</div>}
-      {changing
+      {inWindow
+        ? <p className="sp-note sp-in-window sp-foot" data-testid={`plan-in-window-${id}`}>{t('tree.plan.inWindowPlan')} <button type="button" className="sp-link" onClick={() => openQueue(planAskKey(id, plan.at))} data-testid={`plan-open-window-${id}`}>{t('tree.plan.openPlan')}</button></p>
+        : changing
         ? <div className="sp-change">
           <textarea value={text} onChange={e => setText(e.target.value)} placeholder={t('tree.plan.changePlaceholder')} rows={2} maxLength={2000} autoFocus aria-label={t('tree.plan.changePlaceholder')} data-testid={`plan-change-text-${id}`}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && text.trim()) { e.preventDefault(); decide('change'); } else if (e.key === 'Escape') { e.stopPropagation(); cancel(); } }} />

@@ -1,69 +1,80 @@
-// End-to-end: the Settings page (components/SettingsPage.tsx) on the demo. Reached from the gear menu and with Ctrl+,;
-// the theme applies at once (light and dark screenshots); cross-engine messaging is always available;
-// the model comparison shows what it compares and its cost so far, and its experiment and agent switches go through
-// 'compare:set' (the demo keeps them in memory; the real app runs the brain's switch.mjs, unit-tested in
-// test/unit/brain/compare.test.ts); "Chat aperte dall'Orchestrator" saves engine, models and effort, and every chat it opens starts
-// from them; «Motori» turns a new engine on by the user's click and keeps its API key encrypted, shown only as a mask
-// (ADR 0046). Screenshots: test-results/shots/settings-*.png.
+// End-to-end: the Settings page (components/SettingsPage.tsx) on the demo: the essential groups only
+// (docs/settings-surface.md). Reached from the gear menu and with Ctrl+,; the theme applies at once (light and dark
+// screenshots) from its Select, by mouse and keyboard; cross-engine messaging is always available; the technical
+// controls of earlier releases (model comparison, spending limits, MCP port, "Chat aperte dall'Orchestrator", compaction)
+// are retired from the page and their stored values are kept as they were; Windows notifications, the brain folder and
+// the archive delay stay; «Account e strumenti» turns an engine on and off by the user's click (switching one off also
+// closes the key an older release reads, ADR 0046) and keeps an API key encrypted, shown only as "saved"; the search
+// matches titles, descriptions and keywords; Codex autonomy is an explicit repository list confirmed by the user.
+// Screenshots: test-results/shots/settings-*.png.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { expect, test } from '@playwright/test';
-import { launchDemo, shot } from './helpers';
+import { expect, test, type ElectronApplication } from '@playwright/test';
+import { choose, launchDemo, shot } from './helpers';
 
-test('Impostazioni: groups, theme live, messaging always available, model comparison switches with their cost', async () => {
+const ESSENTIAL = ['profile', 'update', 'connectors', 'accounts', 'roles', 'space', 'writing', 'appearance', 'notifications', 'advanced'];
+
+/** A Linux container has no keyring, so safeStorage refuses keys there (engines/secrets.ts); on such a machine only, a
+ *  stand-in cipher (never the plain text) plays the OS one so the page's key flow can be checked. Windows uses the real one. */
+async function keyringStandIn(app: ElectronApplication): Promise<void> {
+  await app.evaluate(({ safeStorage }) => {
+    if (safeStorage.isEncryptionAvailable() && safeStorage.getSelectedStorageBackend?.() !== 'basic_text') return;
+    const flip = (s: string) => [...s].reverse().map(c => String.fromCharCode(c.charCodeAt(0) ^ 1)).join('');
+    Object.assign(safeStorage, {
+      isEncryptionAvailable: () => true,
+      getSelectedStorageBackend: () => 'gnome_libsecret',
+      encryptString: (s: string) => Buffer.from(flip(s), 'utf8'),
+      decryptString: (b: Buffer) => flip(b.toString('utf8')),
+    });
+  });
+}
+
+test('Impostazioni: groups, theme live, messaging always available, the model comparison retired with its switches kept', async () => {
   const { app, page } = await launchDemo();
+  const compare = () => page.evaluate(async () => window.sb.invoke('compare:list', undefined));
+  const before = await compare();
   await page.getByTestId('settings').click();
   await page.getByTestId('settings-all').click();
   const s = page.getByTestId('settings-page');
   await expect(s).toBeVisible();
-  for (const g of ['st-group-look', 'st-group-chat', 'st-group-compare']) await expect(s.getByTestId(g)).toBeVisible();
+  await expect(s.locator('.st-group')).toHaveCount(ESSENTIAL.length);
+  for (const g of ESSENTIAL) await expect(s.getByTestId(`st-group-${g}`)).toHaveCount(1);
+  await expect(s.getByTestId('st-group-profile')).toBeVisible();
   await expect(s.getByTestId('st-view')).toHaveCount(0);
   await expect(s.getByTestId('st-group-routing')).toHaveCount(0);
 
-  // the model comparison: what it compares, the cost so far, one switch per experiment and per agent
-  const exp = s.getByTestId('st-exp-cursor-vs-claude');
-  // the main switch, first on the page, in the user's words
-  await expect(s.locator('.st-group').first()).toHaveAttribute('data-testid', 'st-group-compare');
-  await expect(exp).toContainText('Opus rifà in automatico il lavoro dei reviewer di Cursor');
-  // each side and the judge by engine, model and effort (ADR 0046 §4), side a's compared agents in brackets
-  await expect(s.getByTestId('st-exp-sides-cursor-vs-claude')).toHaveText('A: Cursor (reviewer) · B: Claude opus medium · giudice: Claude sonnet');
-  await expect(s.getByTestId('st-exp-cost-cursor-vs-claude')).toContainText('Finora 4 confronti · Claude opus medium 6,12 $ · Cursor 1,84 $ (1 confronto senza costo)');
-  const main = s.getByTestId('st-exp-switch-cursor-vs-claude');
-  await expect(main).toHaveAttribute('aria-checked', 'true');
-  const inv = s.getByTestId('st-agent-switch-cursor-vs-claude-code-investigator');
-  await expect(inv).toHaveAttribute('aria-checked', 'false');
-  await inv.click();
-  await expect(inv).toHaveAttribute('aria-checked', 'true');
-  await expect.poll(() => page.evaluate(async () => {
-    const r = await window.sb.invoke('compare:list', undefined);
-    return r.ok ? r.experiments[0]!.agents.find(a => a.name === 'code-investigator')!.on : null;
-  })).toBe(true);
-  await expect(s.getByTestId('st-exp-sides-cursor-vs-claude')).toContainText('A: Cursor (reviewer, code-investigator)');
+  // the model comparison is no longer on the page; its experiments and agent switches are kept as they were
+  await expect(s.getByTestId('st-group-compare')).toHaveCount(0);
+  await expect(s.locator('[data-testid^="st-exp-"], [data-testid^="st-agent-switch-"]')).toHaveCount(0);
   await shot(page, 'settings-dark');
-
-  await main.click();
-  await expect(main).toHaveAttribute('aria-checked', 'false');
-  await expect(s.getByTestId('st-agent-cursor-vs-claude-reviewer')).toHaveClass(/dim/);
-  await expect(exp).toContainText("valgono solo con l'interruttore sopra acceso");
+  expect(await compare()).toEqual(before);
 
   // Chat-to-chat transport has no switch; engine launch controls stay separate.
   await expect(s.getByTestId('st-cross-switch')).toHaveCount(0);
   await expect.poll(() => page.evaluate(async () => (await window.sb.invoke('settings:get', undefined)).messaging.crossHarness)).toBe(true);
 
   // theme: applied at once
-  await s.getByTestId('st-theme-choice-light').click();
+  const theme = s.getByTestId('st-theme-select');
+  await theme.scrollIntoViewIfNeeded();
+  await choose(theme, 'light');
   await expect(page.locator('html[data-theme="light"]')).toHaveCount(1);
-  await expect(s.getByTestId('st-theme-choice-light')).toHaveAttribute('aria-checked', 'true');
+  await page.mouse.move(2, 2);
   await shot(page, 'settings-light');
-  await s.getByTestId('st-theme-choice-dark').click();
+  await choose(theme, 'dark');
   await expect(page.locator('html[data-theme="dark"]')).toHaveCount(1);
-  // the keyboard, like radio buttons: one tab stop, the arrows move the choice
-  await expect(s.getByTestId('st-theme-choice-light')).toHaveAttribute('tabindex', '-1');
-  await page.keyboard.press('ArrowRight');
+  // the keyboard: Enter opens the list on the current choice, the arrows move, Enter picks and gives the focus back
+  await theme.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('st-theme-select-list')).toBeVisible();
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('Enter');
   await expect(page.locator('html[data-theme="light"]')).toHaveCount(1);
-  await expect(s.getByTestId('st-theme-choice-light')).toBeFocused();
-  await page.keyboard.press('ArrowLeft');
+  await expect(theme).toHaveAttribute('data-value', 'light');
+  await expect(theme).toBeFocused();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
   await expect(page.locator('html[data-theme="dark"]')).toHaveCount(1);
 
   // Ctrl+, from the chats
@@ -74,168 +85,154 @@ test('Impostazioni: groups, theme live, messaging always available, model compar
   await app.close();
 });
 
-test('spending limits, Windows notifications, the engines the Orchestrator may use, the brain folder read only', async () => {
-  const { app, page } = await launchDemo();
+test('spending limits and the MCP port retired with their values kept; Windows notifications, engines on and off, the brain folder', async () => {
+  const budget = { enabled: true, claude: { mode: 'warn', dailyUsd: 12.5, perChatUsd: null }, cursor: { mode: 'off', dailyUsd: null, perChatUsd: null } };
+  const { app, page } = await launchDemo({ config: { budget } });
   await page.getByTestId('settings').click();
   await page.getByTestId('settings-all').click();
   const s = page.getByTestId('settings-page');
   const get = () => page.evaluate(async () => window.sb.invoke('settings:get', undefined));
+  await expect(s).toBeVisible();
 
-  // spending limits: a $ amount saved on Enter; a wrong one is put back and nothing is saved
-  const g = s.getByTestId('st-group-budget');
-  await g.scrollIntoViewIfNeeded();
-  await expect(g.getByTestId('st-budget-enabled-switch')).toHaveAttribute('aria-checked', 'true');
-  const daily = g.getByTestId('st-budget-claude-daily');
-  await daily.fill('50');
-  await daily.press('Enter');
-  await expect.poll(async () => (await get()).budget.claude.dailyUsd).toBe(50);
-  for (const bad of ['-3', '1.000']) { // "1.000" is never read as 1 $
-    await daily.fill(bad);
-    await daily.press('Enter');
-    await expect(daily).toHaveValue('50');
-  }
-  expect((await get()).budget.claude.dailyUsd).toBe(50);
-  await daily.fill('');
-  await daily.blur();
-  await expect.poll(async () => (await get()).budget.claude.dailyUsd).toBeNull();
-  // "chiedi se continuare" is not wired yet: not offered
-  await expect(g.getByTestId('st-budget-cursor-mode-ask')).toHaveCount(0);
-  await g.getByTestId('st-budget-cursor-mode-off').click();
-  await expect.poll(async () => (await get()).budget.cursor.mode).toBe('off');
-  await expect(g.getByTestId('st-budget-cursor-chat')).toHaveCount(0); // Cursor gives no per-chat cost
-  await g.getByTestId('st-budget-claude-daily').fill('12,5');
-  await g.getByTestId('st-budget-claude-daily').press('Enter');
-  await expect.poll(async () => (await get()).budget.claude.dailyUsd).toBe(12.5);
-  await shot(page, 'settings-budget');
+  // spending limits and the MCP port are no longer on the page; the saved limits stay as they were
+  await expect(s.getByTestId('st-group-budget')).toHaveCount(0);
+  await expect(s.locator('[data-testid^="st-budget-"]')).toHaveCount(0);
+  await expect(s.getByTestId('st-group-app')).toHaveCount(0);
+  await expect(s.getByTestId('st-mcp-port')).toHaveCount(0);
 
   // Windows notifications
-  await s.getByTestId('st-toasts-choice-off').click();
+  const toasts = s.getByTestId('st-toasts-select');
+  await toasts.scrollIntoViewIfNeeded();
+  await expect(toasts).toHaveAttribute('data-value', 'urgent');
+  await choose(toasts, 'off');
   await expect.poll(async () => (await get()).osToasts).toBe('off');
+  expect((await get()).budget).toEqual(budget);
 
-  // each engine on or off, and whether the Orchestrators may use it (ADR 0046)
-  const eng = s.getByTestId('st-group-engines');
-  await eng.scrollIntoViewIfNeeded();
-  const cur = eng.getByTestId('st-engine-claude-switch');
-  await cur.click();
-  await expect(cur).toHaveAttribute('aria-checked', 'false');
-  await expect.poll(async () => (await get()).engines.claude).toBe(false);
-  // an engine off closes «Gli Orchestrator possono usare» too (the only key an older release reads) and dims it
-  const off = eng.getByTestId('st-engine-on-cursor-switch');
-  await off.click();
+  // each engine on or off by the user's click; one off also closes «Gli Orchestrator possono usare» (the only key an
+  // older release reads)
+  const cursor = s.getByTestId('st-tool-cursor');
+  await cursor.scrollIntoViewIfNeeded();
+  await expect(cursor.locator('.st-state')).toHaveText('Disponibile');
+  await cursor.getByRole('button', { name: 'Configura', exact: true }).click();
+  await cursor.getByRole('button', { name: 'Disattiva', exact: true }).click();
   await expect.poll(async () => (await get()).engineOn.cursor).toBe(false);
   await expect.poll(async () => (await get()).engines.cursor).toBe(false);
-  await expect(eng.getByTestId('st-engine-cursor-switch')).toHaveAttribute('aria-checked', 'false');
-  await expect(eng.getByTestId('st-engine-cursor')).toHaveClass(/dim/);
+  await expect(cursor.locator('.st-state')).toHaveText('Disattivato');
+  await expect(cursor.getByRole('button', { name: 'Attiva', exact: true })).toBeVisible();
+  await expect(s.getByTestId('st-tool-claude').locator('.st-state')).toHaveText('Disponibile');
+  await page.mouse.move(2, 2);
   await shot(page, 'settings-engines');
 
-  // the brain folder and the MCP port: read only
-  const info = s.getByTestId('st-group-app');
-  await info.scrollIntoViewIfNeeded();
-  await expect(info.getByTestId('st-brain-root')).toContainText((await get()).brainRoot ?? 'non collegata');
-  await expect(info.locator('input, select, button:not(.help-tip)')).toHaveCount(0); // the "?" (HelpTip, ADR 0040) only explains
-  const mcpUrl = (await page.evaluate(async () => window.sb.invoke('app:info', undefined))).mcpUrl;
-  await expect(info.getByTestId('st-mcp-port')).toContainText(new URL(mcpUrl).port); // the port in use, not the saved one
-  await page.getByTestId('st-theme-choice-light').click();
+  // the brain folder: what is linked, changed only through the folder picker
+  const space = s.getByTestId('st-group-space');
+  await space.scrollIntoViewIfNeeded();
+  await expect(space).toContainText((await get()).brainRoot ?? 'Non collegato');
+  await expect(space.getByRole('button', { name: 'Collega cartella', exact: true })).toBeVisible();
+  await choose(s.getByTestId('st-theme-select'), 'light');
   await expect(page.locator('html[data-theme="light"]')).toHaveCount(1);
-  await g.scrollIntoViewIfNeeded();
-  await shot(page, 'settings-budget-light');
+  await space.scrollIntoViewIfNeeded();
+  await shot(page, 'settings-space-light');
+  expect((await get()).budget).toEqual(budget);
   await app.close();
 });
 
-test('Chat aperte dall’Orchestrator: engine, models (Cursor\'s own list), effort; saved at once', async () => {
-  const { app, page } = await launchDemo();
-  await page.getByTestId('settings').click();
-  await page.getByTestId('settings-all').click();
-  const g = page.getByTestId('st-group-orchestrator-chats');
-  await g.scrollIntoViewIfNeeded();
-  await expect(g).toBeVisible();
-  // CLI defaults until chosen
-  await expect(g.getByTestId('st-rc-harness-choice-claude')).toHaveAttribute('aria-checked', 'true');
-  await expect(g.getByTestId('st-rc-cursor-model-select')).toHaveValue('');
-  // the Cursor list is the one the CLI offered (demo: with Grok 4.7), not the built-in one
-  await expect(g.getByTestId('st-rc-cursor-model-select').locator('option[value="grok-4.7-fast"]')).toHaveCount(1);
-  await expect(g.getByTestId('st-rc-cursor-model')).toContainText("ha offerto all'ultima chat Cursor");
-
-  await g.getByTestId('st-rc-harness-choice-cursor').click();
-  await g.getByTestId('st-rc-cursor-model-select').selectOption('grok-4.7');
-  await g.getByTestId('st-rc-claude-model-select').selectOption('claude-opus-5-5');
-  await g.getByTestId('st-rc-claude-effort-select').selectOption('high');
-  // Cursor reasoning and fast (every Cursor chat): medium and off until changed
-  await expect(g.getByTestId('st-rc-cursor-reasoning-select')).toHaveValue('medium');
-  await expect(g.getByTestId('st-rc-cursor-fast-switch')).toHaveAttribute('aria-checked', 'false');
-  await g.getByTestId('st-rc-cursor-reasoning-select').selectOption('low');
-  await g.getByTestId('st-rc-cursor-fast-switch').click();
-  await expect.poll(() => page.evaluate(async () => (await window.sb.invoke('settings:get', undefined)).orchestratorChats))
-    .toEqual({ harness: 'cursor', claudeModel: 'claude-opus-5-5', cursorModel: 'grok-4.7', claudeEffort: 'high', cursorReasoning: 'low', cursorFast: true });
-  await expect(g.getByTestId('st-rc-harness-choice-cursor')).toHaveAttribute('aria-checked', 'true');
-  await shot(page, 'settings-orchestrator-chats');
-
-  await app.close();
-});
-
-test('Impostazioni: the Claude chats compact at 200k by default and «Orchestrators corte» is on; both saved at once', async () => {
-  const { app, page } = await launchDemo();
+test('Chat aperte dall’Orchestrator: retired from Settings, the saved engine, models and effort kept', async () => {
+  const chats = { harness: 'cursor', claudeModel: 'claude-opus-5-5', cursorModel: 'grok-4.7', claudeEffort: 'high', cursorReasoning: 'low', cursorFast: true };
+  const { app, page } = await launchDemo({ config: { orchestratorChats: chats } });
   try {
+    const get = () => page.evaluate(async () => window.sb.invoke('settings:get', undefined));
+    expect((await get()).orchestratorChats).toEqual(chats);
     await page.getByTestId('settings').click();
     await page.getByTestId('settings-all').click();
     const s = page.getByTestId('settings-page');
-    const row = s.getByTestId('st-compact');
-    await row.scrollIntoViewIfNeeded();
-    await expect(row.getByRole('radio', { name: '200k' })).toHaveAttribute('aria-checked', 'true');
-    const day = s.getByTestId('st-orchestrator-day-switch');
-    await expect(day).toHaveAttribute('aria-checked', 'true');
+    await expect(s).toBeVisible();
+    // the model a chat runs on comes from its role now (agent profiles): no editor here
+    await expect(s.getByTestId('st-group-orchestrator-chats')).toHaveCount(0);
+    await expect(s.locator('[data-testid^="st-rc-"]')).toHaveCount(0);
+    // saving an unrelated setting leaves them as they were
+    const archive = s.getByTestId('st-archive-select');
+    await archive.scrollIntoViewIfNeeded();
+    await choose(archive, '10');
+    await expect.poll(async () => (await get()).autoCloseMin).toBe(10);
+    expect((await get()).orchestratorChats).toEqual(chats);
     await page.mouse.move(2, 2);
-    await shot(page, 'settings-compact');
-    await row.getByRole('radio', { name: '150k' }).click();
-    await day.click();
-    await expect(day).toHaveAttribute('aria-checked', 'false');
-    await expect.poll(() => page.evaluate(async () => {
-      const st = await window.sb.invoke('settings:get', undefined);
-      return [st.compactWindowTokens, st.orchestratorDayCompact];
-    })).toEqual([150_000, false]);
+    await shot(page, 'settings-orchestrator-chats-retired');
   } finally {
     await app.close();
   }
 });
 
-test('Motori: a new engine turns on by the user\'s click, its API key is saved encrypted and shown only as a mask', async () => {
-  const { app, page, userData } = await launchDemo();
+test('Impostazioni: the compaction window and «Orchestrators corte» retired from the page, their values kept', async () => {
+  const { app, page } = await launchDemo({ config: { compactWindowTokens: 150_000, orchestratorDayCompact: false } });
+  try {
+    const read = () => page.evaluate(async () => {
+      const st = await window.sb.invoke('settings:get', undefined);
+      return [st.compactWindowTokens, st.orchestratorDayCompact];
+    });
+    expect(await read()).toEqual([150_000, false]);
+    await page.getByTestId('settings').click();
+    await page.getByTestId('settings-all').click();
+    const s = page.getByTestId('settings-page');
+    await expect(s).toBeVisible();
+    await expect(s.getByTestId('st-compact')).toHaveCount(0);
+    await expect(s.getByTestId('st-orchestrator-day-switch')).toHaveCount(0);
+    const density = s.getByTestId('st-density-select');
+    await density.scrollIntoViewIfNeeded();
+    await choose(density, 'compact');
+    await expect(page.locator('html[data-density="compact"]')).toHaveCount(1);
+    await page.mouse.move(2, 2);
+    await shot(page, 'settings-compact');
+    expect(await read()).toEqual([150_000, false]);
+  } finally {
+    await app.close();
+  }
+});
+
+test('Account e strumenti: an engine turns on by the user\'s click, its API key is saved encrypted and never shown again', async () => {
+  const { app, page, userData } = await launchDemo({ config: { engineOn: { codex: false } } });
+  await keyringStandIn(app);
   await page.getByTestId('settings').click();
   await page.getByTestId('settings-all').click();
-  const eng = page.getByTestId('settings-page').getByTestId('st-group-engines');
-  await eng.scrollIntoViewIfNeeded();
+  const codex = page.getByTestId('settings-page').getByTestId('st-tool-codex');
+  await codex.scrollIntoViewIfNeeded();
   const get = () => page.evaluate(async () => window.sb.invoke('settings:get', undefined));
 
-  // Codex ships off; how it starts is shown before the user turns it on, and only their click turns it on
-  const on = eng.getByTestId('st-engine-on-codex-switch');
-  await expect(on).toHaveAttribute('aria-checked', 'false');
-  await expect(eng.getByTestId('st-engine-on-codex-runs')).toHaveText('Avvio: codex app-server · accesso: codex login');
-  await on.click();
-  await expect(on).toHaveAttribute('aria-checked', 'true');
+  // off until the user turns it on; only their click turns it on
+  await expect(codex.locator('.st-state')).toHaveText('Disattivato');
+  await codex.getByRole('button', { name: 'Configura', exact: true }).click();
+  await codex.getByRole('button', { name: 'Attiva', exact: true }).click();
   await expect.poll(async () => (await get()).engineOn.codex).toBe(true);
+  // the user's click records the engine's fingerprint (engines/trust.ts)
   await expect.poll(() => JSON.parse(fs.readFileSync(path.join(userData, 'engine-trust.json'), 'utf8')).codex).toMatch(/^[0-9a-f]{16}$/);
-  // Gemini CLI was removed from the app (ADR 0046, 15/10): no row
-  await expect(eng.getByTestId('st-engine-on-gemini-switch')).toHaveCount(0);
+  await expect(codex.locator('.st-state')).toHaveText('Disponibile');
+  // Gemini CLI and Kimi were removed from the app (ADR 0046): no rows
+  await expect(page.getByTestId('st-tool-gemini')).toHaveCount(0);
+  await expect(page.getByTestId('st-tool-kimi')).toHaveCount(0);
 
-  // the key: typed once, sent, the field emptied, then only its mask
+  // the key: typed once, sent, the field emptied, then only "saved"
   const KEY = 'sk-e2eTestKeyNotReal0123456789wxyz';
-  const row = eng.getByTestId('st-key-anthropic');
-  await expect(row.getByTestId('st-key-anthropic-input')).toHaveAttribute('type', 'password');
-  await row.getByTestId('st-key-anthropic-input').fill(KEY);
-  await row.getByTestId('st-key-anthropic-save').click();
-  await expect(row.getByTestId('st-key-anthropic-mask')).toHaveText('Salvata: sk-…wxyz');
-  await expect(row.getByTestId('st-key-anthropic-input')).toHaveValue('');
+  const input = codex.getByLabel('Chiave del servizio', { exact: true });
+  await expect(input).toHaveAttribute('type', 'password');
+  await expect(input).toBeEnabled();
+  await input.fill(KEY);
+  await codex.getByRole('button', { name: 'Salva', exact: true }).click();
+  await expect(codex).toContainText('Chiave salvata su questo PC');
+  await expect(input).toHaveValue('');
+  expect(await page.content()).not.toContain('0123456789');
   const status = await page.evaluate(async () => window.sb.invoke('secrets:status', undefined));
+  expect(status.keys.codex).toBeTruthy();
   expect(JSON.stringify(status)).not.toContain('0123456789');
   expect(fs.readFileSync(path.join(userData, 'secrets.json'), 'utf8')).not.toContain(KEY);
   // an engine that logs in by itself has no key field
-  await expect(eng.getByTestId('st-key-kimi')).toHaveCount(0);
-  await expect(eng.getByTestId('st-key-claude')).toHaveCount(0);
-  await row.scrollIntoViewIfNeeded();
+  const claude = page.getByTestId('st-tool-claude');
+  await claude.getByRole('button', { name: 'Configura', exact: true }).click();
+  await expect(claude.getByLabel('Chiave del servizio', { exact: true })).toHaveCount(0);
+  await codex.scrollIntoViewIfNeeded();
+  await page.mouse.move(2, 2);
   await shot(page, 'settings-engines-keys');
 
-  await row.getByTestId('st-key-anthropic-delete').click();
-  await expect(row.getByTestId('st-key-anthropic-mask')).toHaveCount(0);
+  await codex.getByRole('button', { name: 'Rimuovi chiave', exact: true }).click();
+  await expect(codex).not.toContainText('Chiave salvata su questo PC');
   await app.close();
   const logs = path.join(userData, 'logs');
   for (const f of fs.readdirSync(logs)) expect(fs.readFileSync(path.join(logs, f), 'utf8')).not.toContain(KEY);
@@ -244,28 +241,39 @@ test('Motori: a new engine turns on by the user\'s click, its API key is saved e
 test('settings search finds labels, descriptions and sections, preserves drafts and explains no matches', async () => {
   const { app, page } = await launchDemo({ config: { messaging: { crossHarness: false } } });
   try {
+    await keyringStandIn(app);
     await page.keyboard.press('Control+Comma');
     const s = page.getByTestId('settings-page');
     const search = s.getByRole('searchbox', { name: 'Cerca nelle impostazioni' });
     await expect(s.getByTestId('st-cross-switch')).toHaveCount(0);
     expect(await page.evaluate(async () => (await window.sb.invoke('settings:get', undefined)).messaging.crossHarness)).toBe(true);
-    await search.fill('DENSITA');
-    await expect(s.getByTestId('st-group-look')).toBeVisible();
+    // a label, without its accent
+    await search.fill('SPAZIATURA');
+    await expect(s.getByTestId('st-group-appearance')).toBeVisible();
     await expect(s.locator('.st-group:visible')).toHaveCount(1);
-    await search.fill('solo 127.0.0.1');
-    await expect(s.getByTestId('st-group-app')).toBeVisible();
-    await expect(s.getByTestId('st-group-look')).toBeHidden();
+    // a group's description
+    await search.fill('pulizia dei lavori conclusi');
+    await expect(s.getByTestId('st-group-space')).toBeVisible();
+    await expect(s.getByTestId('st-group-appearance')).toBeHidden();
+    await expect(s.locator('.st-group:visible')).toHaveCount(1);
+    // a section's title
+    await search.fill('Notifiche');
+    await expect(s.getByTestId('st-group-notifications')).toBeVisible();
     await search.press('Escape');
     await expect(search).toHaveValue('');
     await expect(search).toBeFocused();
-    const key = s.getByTestId('st-key-anthropic-input');
+    const codex = s.getByTestId('st-tool-codex');
+    await codex.getByRole('button', { name: 'Configura', exact: true }).click();
+    const key = codex.getByLabel('Chiave del servizio', { exact: true });
     await key.fill('unsavedKeyDraftXYZ');
     await search.fill('unsavedKeyDraftXYZ');
-    await expect(s.getByTestId('st-search-empty')).toContainText('Prova con altre parole');
+    await expect(s.getByTestId('st-search-empty')).toContainText('Nessuna impostazione trovata');
     await expect(s.locator('.st-group:visible')).toHaveCount(0);
     await shot(page, 'settings-search-empty');
     await s.getByTestId('st-search-clear').click();
+    await expect(search).toHaveValue('');
     await expect(search).toBeFocused();
+    // the unsaved key typed before the search is still there
     await expect(key).toHaveValue('unsavedKeyDraftXYZ');
     await search.fill('notifiche');
     await shot(page, 'settings-search');
@@ -277,19 +285,31 @@ test('Codex autonomy is an explicit empty-by-default repository selection and ca
   fs.mkdirSync(path.join(root, '.git'));
   const { app, page } = await launchDemo();
   try {
+    // the folder picker answers with the test repository (no native dialog in a hidden run)
+    await app.evaluate(({ dialog }, dir) => {
+      dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [dir] })) as typeof dialog.showOpenDialog;
+    }, root);
+    const roots = () => page.evaluate(async () => (await window.sb.invoke('settings:get', undefined)).codexAutonomyRoots);
     await page.keyboard.press('Control+Comma');
     const s = page.getByTestId('settings-page');
     await s.getByTestId('st-search').fill('Autonomia Codex');
-    const row = s.getByTestId('st-codex-autonomy');
-    const input = row.getByTestId('st-codex-autonomy-roots');
-    await expect(input).toHaveValue('');
-    await expect(row).toContainText('i permessi in attesa richiedono ancora la tua risposta');
-    await input.fill(root);
-    await row.getByTestId('st-codex-autonomy-save').click();
-    await expect.poll(() => page.evaluate(async () => (await window.sb.invoke('settings:get', undefined)).codexAutonomyRoots)).toEqual([fs.realpathSync.native(root)]);
+    const row = s.getByTestId('codex-autonomy');
+    await expect(row).toContainText('Nessun repository autorizzato');
+    await expect(row).toContainText('senza chiedere conferma per ogni comando');
+    expect(await roots()).toEqual([]);
+    // adding one is a proposal the user confirms; nothing changes before the confirmation
+    await row.getByRole('button', { name: 'Aggiungi cartella', exact: true }).click();
+    const confirm = row.getByRole('group', { name: 'Conferma modifica' });
+    await expect(confirm).toContainText(fs.realpathSync.native(root));
+    expect(await roots()).toEqual([]);
+    await confirm.getByRole('button', { name: 'Conferma modifica', exact: true }).click();
+    await expect.poll(roots).toEqual([fs.realpathSync.native(root)]);
+    await expect(row.locator('code')).toHaveText(fs.realpathSync.native(root));
     await shot(page, 'settings-codex-autonomy');
-    await input.fill('');
-    await row.getByTestId('st-codex-autonomy-save').click();
-    await expect.poll(() => page.evaluate(async () => (await window.sb.invoke('settings:get', undefined)).codexAutonomyRoots)).toEqual([]);
+    // revoked the same way
+    await row.getByRole('button', { name: `Rimuovi ${fs.realpathSync.native(root)}`, exact: true }).click();
+    await row.getByRole('group', { name: 'Conferma modifica' }).getByRole('button', { name: 'Conferma modifica', exact: true }).click();
+    await expect.poll(roots).toEqual([]);
+    await expect(row).toContainText('Nessun repository autorizzato');
   } finally { await app.close(); }
 });

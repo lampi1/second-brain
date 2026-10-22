@@ -5,7 +5,7 @@
 // shows the tasks as chains, the changelog's lines in its stream, and a step's details in a side panel.
 // Screenshots: test-results/shots/brain-scripts-*.png, log-*.png.
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { launchDemo, shot } from './helpers';
+import { goPage, launchDemo, shot } from './helpers';
 
 let app: ElectronApplication, page: Page;
 test.beforeAll(async () => { ({ app, page } = await launchDemo()); });
@@ -14,7 +14,7 @@ test.afterAll(async () => { await app?.close(); });
 test('Script: cards in a grid, search, filters, a card opens in place', async () => {
   const brain = page.getByTestId('nav-group-brain');
   await expect(brain).toBeVisible();
-  await page.getByTestId('nav-script').click();
+  await goPage(page, 'script'); // Memoria → Script & Query (ADR 0122)
   const p = page.getByTestId('brain-scripts');
   await expect(p).toBeVisible();
   const cards = p.getByTestId('bs-script-card');

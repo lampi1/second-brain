@@ -4,6 +4,7 @@
 // Used by components/SyncStatus.tsx.
 import type { DomainSyncStatus, SyncBlock, SyncState } from '@shared/contract';
 import { ago } from './format';
+import { t } from '../i18n';
 
 export type SyncTone = 'ok' | 'busy' | 'bad';
 
@@ -11,28 +12,28 @@ export function syncSummary(st: SyncState | null): { show: boolean; tone: SyncTo
   const synced = st?.domains.filter(d => d.state !== 'off') ?? [];
   if (!synced.length) return { show: false, tone: 'ok', label: '' };
   const blocked = synced.filter(d => d.state === 'blocked');
-  if (blocked.length) return { show: true, tone: 'bad', label: blocked.length === 1 ? `Sincronizzazione ferma: ${blocked[0]!.name}` : `Sincronizzazione ferma: ${blocked.length} domini` };
-  if (synced.some(d => d.state === 'syncing')) return { show: true, tone: 'busy', label: 'Sincronizzo il brain…' };
-  return { show: true, tone: 'ok', label: 'Brain sincronizzato' };
+  if (blocked.length) return { show: true, tone: 'bad', label: blocked.length === 1 ? t('appText.sync.stoppedOne', { name: blocked[0]!.name }) : t('appText.sync.stoppedMany', { n: blocked.length }) };
+  if (synced.some(d => d.state === 'syncing')) return { show: true, tone: 'busy', label: t('appText.sync.syncing') };
+  return { show: true, tone: 'ok', label: t('appText.sync.synced') };
 }
 
-export const scopeLabel = (d: Pick<DomainSyncStatus, 'scope'>): string => (d.scope === 'everywhere' ? 'su tutti i tuoi PC' : 'solo su questo PC');
+export const scopeLabel = (d: Pick<DomainSyncStatus, 'scope'>): string => (d.scope === 'everywhere' ? t('appText.sync.everywhere') : t('appText.sync.thisPc'));
 
 /** "sincronizzato 4 min fa · 2 da inviare · 1 da ricevere" */
 export function domainLine(d: DomainSyncStatus, now: number): string {
-  if (d.state === 'off') return d.problem ?? 'non si sincronizza (nessun remote)';
-  const parts = [d.state === 'syncing' ? 'sincronizzo…' : d.lastSync ? `sincronizzato ${ago(d.lastSync, now) === 'ora' ? 'ora' : `${ago(d.lastSync, now)} fa`}` : 'mai sincronizzato'];
-  if (d.ahead) parts.push(`${d.ahead} da inviare`);
-  if (d.behind) parts.push(`${d.behind} da ricevere`);
+  if (d.state === 'off') return d.problem ?? t('appText.sync.noRemote');
+  const parts = [d.state === 'syncing' ? t('appText.sync.syncingShort') : d.lastSync ? (ago(d.lastSync, now) === t('appText.format.now') ? t('appText.sync.syncedNow') : t('appText.sync.syncedAgo', { ago: ago(d.lastSync, now) })) : t('appText.sync.never')];
+  if (d.ahead) parts.push(t('appText.sync.ahead', { n: d.ahead }));
+  if (d.behind) parts.push(t('appText.sync.behind', { n: d.behind }));
   return parts.join(' · ');
 }
 
 export function blockTitle(b: SyncBlock): string {
   switch (b.kind) {
-    case 'conflict': return 'Conflitto: lo stesso file è cambiato qui e sull\'altro PC';
-    case 'guard': return 'Il controllo di pubblicazione ha bloccato l\'invio';
-    case 'no-guard': return 'Invio bloccato: manca il controllo di pubblicazione';
-    case 'error': return 'Sincronizzazione non riuscita';
+    case 'conflict': return t('appText.sync.conflict');
+    case 'guard': return t('appText.sync.guard');
+    case 'no-guard': return t('appText.sync.noGuard');
+    case 'error': return t('appText.sync.error');
   }
 }
 

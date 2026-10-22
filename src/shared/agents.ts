@@ -148,7 +148,8 @@ export interface AgentMetrics { agentId: string; versions: VersionMetrics[]; all
 export interface AgentStanding {
   /** ended runs (kept + rolled up) */
   runs: number;
-  /** verified successful runs (the user's verdict, a verified review's): the level's XP */
+  /** verified successful runs (the user's verdict, a verified review's, a verified parent's for a delegated child, the
+   *  later outcome's for a Sentinel's review: standing.ts earnedVerdict, ADR 0125): the level's XP */
   wins: number;
   level: number;
   /** verified successes where this level starts, and where the next one does (null at the top level) */
@@ -159,9 +160,9 @@ export interface AgentStanding {
   performance: number | null;
   /** runs with a weighted verdict (never the agent's own word), and the minimum before the performance is shown */
   evaluated: number; minRuns: number;
-  /** where the verdicts came from: the user, an independent review, the facts, the Orchestrator, the agent itself (the
-   *  last one is counted here but weighs nothing) */
-  sources: { human: number; review: number; facts: number; orchestrator: number; self: number };
+  /** where the verdicts came from: the user, an independent review, a review graded by what happened later, the facts,
+   *  the Orchestrator, a verified parent (chain), the agent itself (the last one is counted here but weighs nothing) */
+  sources: { human: number; review: number; graded: number; facts: number; orchestrator: number; chain: number; self: number };
 }
 /** One run = a chat started from a role (agent-runs.json is the source of truth; the chat keeps a mirror). */
 /** App delivery observations. Engine submission is recorded only after session.send succeeds. */
@@ -186,7 +187,7 @@ export interface AgentRun {
   /** Snapshot captured before launch; missing means historical suggestions are unknown. */
   skillSuggestions?: { at: number; suggested: string[]; used: string[] };
   source?: 'chat' | 'oneshot';
-  oneshot?: { engine: string; job: 'pulse' | 'headline'; fallback: boolean; costBasis: 'reported' | 'estimated' | 'unknown' };
+  oneshot?: { engine: string; job: 'pulse' | 'headline' | 'upgrade'; fallback: boolean; costBasis: 'reported' | 'estimated' | 'unknown' };
   runId: string; chatId: string; agentId: string;
   version: number;
   goal: string; startedBy: 'user' | 'orchestrator' | 'parent' | 'app'; startedAt: number;
@@ -216,6 +217,19 @@ export interface AgentRun {
 /** skills = skill ids it started with plus the ones its engine loaded while open; app = the product it is about;
  *  repo = the name of the git top-level folder of its cwd (null outside a repository). */
 export interface AgentRunTags { skills: string[]; app: string | null; repo: string | null }
+/** What the judging switch costs a day (main/agents/judge-sample.ts judgingEstimate). */
+export interface JudgingEstimate {
+  /** finished root runs a day that the switch would review (last 7 days) */
+  runsPerDay: number;
+  /** second reviews a day that grade the first ones (one in AUDIT_EVERY, ADR 0125); in perDayUsd */
+  auditsPerDay: number;
+  /** the median cost of one review (past reviews, else the Sentinel's own runs); null = no data yet */
+  reviewUsd: number | null;
+  /** (runsPerDay + the audits) × reviewUsd; null = no data */
+  perDayUsd: number | null;
+  /** how many costs the median is made of */
+  basis: number;
+}
 /** Metric filters (all optional; together they must all match). */
 export interface AgentMetricsFilter { since?: number; skill?: string; app?: string; repo?: string }
 export interface AgentModelChoice {

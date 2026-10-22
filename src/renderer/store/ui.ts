@@ -12,6 +12,7 @@ import { emptyRead, type ReadState } from '../lib/notify';
 import { now } from '../lib/clock';
 import { DEFAULT_V, type DockSize } from '../lib/orchestrator-dock';
 import { createStore } from './createStore';
+import { parseHubArg } from '../lib/memory-hub';
 import{t,type TextKey}from'../i18n';
 
 export type Density = 'comfortable' | 'compact';
@@ -19,8 +20,8 @@ export type Theme = 'system' | 'light' | 'dark';
 export type Modal = 'palette' | 'shortcuts' | 'confirm' | 'settings' | 'orchestratorRenew' | 'handoff' | 'credentials' | 'stato' | 'visual' | 'setup';
 export { BRAIN_PAGES, type BrainPageId };
 export const isBrainPage = (id: string): id is BrainPageId => id==='file'||BRAIN_PAGES.some(p => p.id === id);
-export const pageLabel = (id: string): string => (id==='file'?t('viewer.title'): id === 'mappa' ? 'Mappa 3D' : BRAIN_PAGES.find(p => p.id === id)?.label ?? id);
-export const placeLabel = (p: Place): string => {const file=p.page==='file'||p.page==='esplora'?readFileViewArg(p.arg??undefined):null;const arg=file?`${file.path}${file.line?`:${file.line}`:''}`:p.arg;return `${p.page==='file'||p.page==='esplora'?t('viewer.title'):pageLabel(p.page)}${arg ? ` · ${arg}` : ''}${p.element ? ` · ${p.element.replace(/^chat-/, '')}` : ''}`;};
+export const pageLabel = (id: string): string => (id==='file'?t('viewer.title'): id === 'mappa' ? t('appText.ui.map3d') : BRAIN_PAGES.find(p => p.id === id)?.label ?? id);
+export const placeLabel = (p: Place): string => {const file=p.page==='file'||p.page==='esplora'?readFileViewArg(p.arg??undefined):null;const hub=p.page==='memoria'&&p.arg?parseHubArg(p.arg):null;const arg=file?`${file.path}${file.line?`:${file.line}`:''}`:hub?[t(`mh.tab.${hub.tab}`),hub.rest].filter(Boolean).join(' · '):p.arg;return `${p.page==='file'||p.page==='esplora'?t('viewer.title'):pageLabel(p.page)}${arg ? ` · ${arg}` : ''}${p.element ? ` · ${p.element.replace(/^chat-/, '')}` : ''}`;};
 
 /** A place in the app: a brain page (the Grindhouse, 'home', holds the agents) or the full-screen map. `arg` is what the page shows inside
  *  ("esplora" → a file, "costi" → a period; "mappa" → "tutto", "flat" or a piece to focus); `element` = what to

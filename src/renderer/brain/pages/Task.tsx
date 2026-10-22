@@ -28,23 +28,22 @@ import { QaSection } from './TaskQa';
 import { RecordDiscussButton } from '../components/RecordDiscussButton';
 import { HelpTip } from '../../components/HelpTip';
 import { IconSettings } from '../../components/Icons';
-import { t as tr } from '../../i18n';
+import { t as tr, type TextKey } from '../../i18n';
 import '../../styles/agent-catalog.css';
 import './worklog.css';
 
-const VERB: Record<DevopsNews['kind'], string> = {
-  mention: 'ti menziona', touched: 'ha cambiato un tuo work item', taken: 'ti ha tolto un work item', review: 'ti chiede una review',
-  comment: 'commenta la tua PR', vote: 'ha votato la tua PR', build: 'build fallita sulla tua PR', followed: 'aggiorna un ticket che segui',
+const VERB: Record<DevopsNews['kind'], TextKey> = {
+  mention: 'brainText.task.verb.mention', touched: 'brainText.task.verb.touched', taken: 'brainText.task.verb.taken', review: 'brainText.task.verb.review',
+  comment: 'brainText.task.verb.comment', vote: 'brainText.task.verb.vote', build: 'brainText.task.verb.build', followed: 'brainText.task.verb.followed',
 };
 const KIND_TONE: Partial<Record<DevopsNews['kind'], Tone>> = { mention: 'warn', build: 'bad', review: 'blue', taken: 'warn', comment: 'violet' };
-const newsLine = (n: DevopsNews) => (n.who ? `${n.who} ${VERB[n.kind]}` : VERB[n.kind].charAt(0).toUpperCase() + VERB[n.kind].slice(1));
+const newsLine = (n: DevopsNews) => { const v = tr(VERB[n.kind]); return n.who ? `${n.who} ${v}` : v.charAt(0).toUpperCase() + v.slice(1); };
 /** "failed (20261011.4)" → "fallita (20261011.4)": the script's build result in Italian. */
 const buildDetail = (d: string) => d.replace(/^(\w+)/, w => BUILD_WORDS[w] ?? w);
-const ERROR_TITLE: Record<NonNullable<TasksState['error']>['kind'], string> = { login: 'Accesso a DevOps scaduto', script: 'Script di DevOps non trovato', failed: 'Lettura di DevOps non riuscita' };
+const ERROR_TITLE: Record<NonNullable<TasksState['error']>['kind'], TextKey> = { login: 'brainText.task.error.login', script: 'brainText.task.error.script', failed: 'brainText.task.error.failed' };
 type SecId = 'news' | 'prs' | 'qa' | 'reviews' | 'items' | 'followed' | 'standup';
 /** Scrolls to a section and moves the keyboard focus there (Tab goes on inside it, not back among the tiles). */
 const jump = (id: SecId) => { const el = document.getElementById(`dv-${id}`); el?.scrollIntoView({ behavior: 'smooth', block: 'start' }); el?.focus({ preventScroll: true }); };
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 // ---- small pieces ------------------------------------------------------------------------------------------------
 
@@ -70,7 +69,7 @@ function Text({ text, lines = 6, testId }: { text: string; lines?: number; testI
   return (
     <div className="dv-text-wrap">
       <div ref={ref} className={`dv-text ${open ? '' : 'clamp'}`} style={{ ['--lines' as string]: lines }} data-testid={testId}>{text}</div>
-      {(over || open) && <button type="button" className="bx-go small" onClick={() => setOpen(o => !o)}>{open ? 'Mostra meno' : 'Mostra tutto'}</button>}
+      {(over || open) && <button type="button" className="bx-go small" onClick={() => setOpen(o => !o)}>{open ? tr('brainText.task.showLess') : tr('brainText.task.showAll')}</button>}
     </div>
   );
 }
@@ -80,8 +79,8 @@ function CommentView({ c, compact = false }: { c: DevopsComment; compact?: boole
     <div className={`dv-comment ${c.mine ? 'mine' : ''}`}>
       <Avatar name={c.who} />
       <div className="dv-comment-body">
-        <div className="dv-comment-head"><b>{c.mine ? 'Tu' : c.who || 'Qualcuno'}</b><span className="muted" title={fmt.when(c.at)}>{fmt.ago(c.at)}</span></div>
-        <Text text={c.text || '(commento vuoto)'} lines={compact ? 3 : 6} />
+        <div className="dv-comment-head"><b>{c.mine ? tr('brainText.task.you') : c.who || tr('brainText.task.someone')}</b><span className="muted" title={fmt.when(c.at)}>{fmt.ago(c.at)}</span></div>
+        <Text text={c.text || tr('brainText.task.emptyComment')} lines={compact ? 3 : 6} />
       </div>
     </div>
   );
@@ -107,19 +106,19 @@ function DetailView({ w, d }: { w: DevopsItem; d: DevopsDetail | undefined }) {
     <div className="dv-detail" data-testid={`task-detail-${w.id}`}>
       <div className="dv-facts small muted">
         {since !== null && <span>{w.state} {sinceLabel(since)}</span>}
-        {d?.createdAt && <span>aperto {fmt.ago(d.createdAt)}</span>}
-        {w.assignedTo && <span>assegnato a {w.assignedTo.replace(/\s*<.*$/, '')}</span>}
+        {d?.createdAt && <span>{tr('brainText.task.opened', { ago: fmt.ago(d.createdAt) })}</span>}
+        {w.assignedTo && <span>{tr('brainText.common.assignedTo', { name: w.assignedTo.replace(/\s*<.*$/, '') })}</span>}
         {w.iteration && <span>{w.iteration.split('\\').pop()}</span>}
         <span className="sp" />
-        <ExtLink href={w.url} className="dv-open">Apri in DevOps <IconExternal /></ExtLink>
+        <ExtLink href={w.url} className="dv-open">{tr('brainText.task.openInDevops')} <IconExternal /></ExtLink>
       </div>
-      {!d ? <p className="small muted">Descrizione e commenti di questo work item non sono stati letti (lo script del brain li legge con --full, per i primi 60): aprilo in DevOps.</p> : (
+      {!d ? <p className="small muted">{tr('brainText.task.notRead')}</p> : (
         <>
-          <div className="dv-block"><span className="bx-eyebrow">Descrizione</span>{d.description ? <Text text={d.description} lines={8} testId={`task-desc-${w.id}`} /> : <p className="small muted">Nessuna descrizione.</p>}</div>
-          {d.tests.length > 0 && <div className="dv-block"><span className="bx-eyebrow">Test case</span><TestChips tests={d.tests} /></div>}
+          <div className="dv-block"><span className="bx-eyebrow">{tr('brainText.task.description')}</span>{d.description ? <Text text={d.description} lines={8} testId={`task-desc-${w.id}`} /> : <p className="small muted">{tr('brainText.task.noDescription')}</p>}</div>
+          {d.tests.length > 0 && <div className="dv-block"><span className="bx-eyebrow">{tr('brainText.task.testCases')}</span><TestChips tests={d.tests} /></div>}
           <div className="dv-block">
-            <span className="bx-eyebrow">Ultimi commenti</span>
-            {d.comments.length ? <div className="dv-comments">{d.comments.map((c, i) => <CommentView key={i} c={c} />)}</div> : <p className="small muted">Nessun commento.</p>}
+            <span className="bx-eyebrow">{tr('brainText.task.lastComments')}</span>
+            {d.comments.length ? <div className="dv-comments">{d.comments.map((c, i) => <CommentView key={i} c={c} />)}</div> : <p className="small muted">{tr('brainText.task.noComments')}</p>}
           </div>
         </>
       )}
@@ -140,14 +139,14 @@ function ItemRow({ w, d, now, state = true }: { w: DevopsItem; d: DevopsDetail |
         {state && <Pill tone={stateTone(w.state)}>{w.state || '—'}</Pill>}
         <span className="dv-item-main">
           <span className="dv-item-title">
-            {w.priority !== null && <span className={`dv-prio ${urgent ? 'hot' : ''}`} title={`Priorità ${w.priority}`}>P{w.priority}</span>}
+            {w.priority !== null && <span className={`dv-prio ${urgent ? 'hot' : ''}`} title={tr('brainText.task.priority', { n: w.priority })}>P{w.priority}</span>}
             <b>{w.title}</b>
           </span>
           <span className="dv-item-sub small">
             <span className="muted">{w.type}</span>
-            {stuck !== null ? <span className={stuck >= 7 ? 'dv-bad' : 'dv-warn'}>fermo {sinceLabel(stuck)}</span> : w.changedAt ? <span className="muted">mosso {fmt.ago(w.changedAt)}</span> : null}
+            {stuck !== null ? <span className={stuck >= 7 ? 'dv-bad' : 'dv-warn'}>{tr('brainText.task.stuck', { since: sinceLabel(stuck) })}</span> : w.changedAt ? <span className="muted">{tr('brainText.task.moved', { ago: fmt.ago(w.changedAt) })}</span> : null}
             {sum && <span className={`dv-${sum.tone || 'muted'}`}>{sum.text}</span>}
-            {last && <span className="dv-last bx-clip1" title={last.text}><b>{last.mine ? 'Tu' : firstName(last.who)}:</b> {last.text.replace(/\s+/g, ' ')}</span>}
+            {last && <span className="dv-last bx-clip1" title={last.text}><b>{last.mine ? tr('brainText.task.you') : firstName(last.who)}:</b> {last.text.replace(/\s+/g, ' ')}</span>}
           </span>
         </span>
         <RecordDiscussButton rec={{ kind: 'workitem', item: w }} />
@@ -169,8 +168,8 @@ function NewsCard({ n, details, now }: { n: DevopsNews; details: TasksState['det
         <span className="dv-news-who"><b>{newsLine(n)}</b><span className="muted" title={fmt.when(n.at)}> · {fmt.ago(n.at)}</span></span>
         <span className="sp" />
         {n.item ? <RecordDiscussButton rec={{ kind: 'workitem', item: n.item }} /> : n.pr ? <RecordDiscussButton rec={{ kind: 'pr', pr: n.pr, mine: n.kind !== 'review' }} /> : null}
-        {n.unread ? <Pill tone={KIND_TONE[n.kind] ?? 'blue'}>nuova</Pill> : <Pill tone="outline">letta</Pill>}
-        {n.unread && <button type="button" className="bx-btn s" onClick={() => markTasksRead([n.key])} data-testid={`task-read-${n.key}`}>Letta</button>}
+        {n.unread ? <Pill tone={KIND_TONE[n.kind] ?? 'blue'}>{tr('brainText.task.new')}</Pill> : <Pill tone="outline">{tr('brainText.task.read')}</Pill>}
+        {n.unread && <button type="button" className="bx-btn s" onClick={() => markTasksRead([n.key])} data-testid={`task-read-${n.key}`}>{tr('brainText.task.markRead')}</button>}
       </div>
       <div className="dv-news-what">
         {n.item && <Pill tone={stateTone(n.item.state)}>{n.item.state}</Pill>}
@@ -181,11 +180,11 @@ function NewsCard({ n, details, now }: { n: DevopsNews; details: TasksState['det
       {text && <blockquote className="dv-quote"><Text text={text} lines={8} testId={`task-body-${n.key}`} /></blockquote>}
       {n.item && d && (
         <details className="dv-more">
-          <summary>Descrizione, commenti e test del ticket</summary>
+          <summary>{tr('brainText.task.ticketDetails')}</summary>
           <DetailView w={n.item} d={d} />
         </details>
       )}
-      {n.item && !d && n.kind !== 'followed' && stuckDays(n.item, now) !== null && <p className="small muted">fermo {sinceLabel(stuckDays(n.item, now)!)}</p>}
+      {n.item && !d && n.kind !== 'followed' && stuckDays(n.item, now) !== null && <p className="small muted">{tr('brainText.task.stuck', { since: sinceLabel(stuckDays(n.item, now)!) })}</p>}
     </article>
   );
 }
@@ -200,17 +199,17 @@ function FollowedCard({ news, details }: { news: DevopsNews[]; details: TasksSta
       <div className="dv-news-what">
         {first.item && <Pill tone={stateTone(first.item.state)}>{first.item.state}</Pill>}
         <ExtLink href={first.url}>{first.title}</ExtLink>
-        {first.item?.assignedTo && <span className="small muted">a {first.item.assignedTo.replace(/\s*<.*$/, '')}</span>}
+        {first.item?.assignedTo && <span className="small muted">{tr('brainText.common.to', { name: first.item.assignedTo.replace(/\s*<.*$/, '') })}</span>}
         <span className="sp" />
         {first.item && <RecordDiscussButton rec={{ kind: 'workitem', item: first.item }} />}
-        {unread.length > 0 && <button type="button" className="bx-btn s" onClick={() => markTasksRead(unread.map(n => n.key))} data-testid={`task-read-followed-${first.item?.id ?? first.key}`}>Letta</button>}
+        {unread.length > 0 && <button type="button" className="bx-btn s" onClick={() => markTasksRead(unread.map(n => n.key))} data-testid={`task-read-followed-${first.item?.id ?? first.key}`}>{tr('brainText.task.markRead')}</button>}
       </div>
       <ul className="dv-changes">
         {news.map(n => (
           <li key={n.key} className={n.unread ? 'unread' : ''} data-testid={`task-news-${n.key}`} data-unread={n.unread ? '1' : '0'}>
             <Avatar name={n.who} />
             <div className="dv-comment-body">
-              <div className="dv-comment-head"><b>{n.who ?? 'Qualcuno'}</b><span className="muted">{(n.detail ?? '').replace(/ · commento: ".*$/, '').replace(/^commento: ".*$/, 'ha commentato') || 'aggiorna un ticket che segui'}</span><span className="muted" title={fmt.when(n.at)}>· {fmt.ago(n.at)}</span>{n.unread && <Pill tone="blue">nuova</Pill>}</div>
+              <div className="dv-comment-head"><b>{n.who ?? tr('brainText.task.someone')}</b><span className="muted">{(n.detail ?? '').replace(/ · commento: ".*$/, '').replace(/^commento: ".*$/, tr('brainText.task.commented')) || tr('brainText.task.verb.followed')}</span><span className="muted" title={fmt.when(n.at)}>· {fmt.ago(n.at)}</span>{n.unread && <Pill tone="blue">{tr('brainText.task.new')}</Pill>}</div>
               {n.body && <Text text={n.body} lines={4} />}
             </div>
           </li>
@@ -218,7 +217,7 @@ function FollowedCard({ news, details }: { news: DevopsNews[]; details: TasksSta
       </ul>
       {first.item && d && (
         <details className="dv-more">
-          <summary>Descrizione, commenti e test del ticket</summary>
+          <summary>{tr('brainText.task.ticketDetails')}</summary>
           <DetailView w={first.item} d={d} />
         </details>
       )}
@@ -237,18 +236,18 @@ function voteMark(vote: number): { mark: string; tone: Tone } {
 }
 /** The build's result as a link to its run ("build ok", "build fallita", "build in corso"). */
 function buildLink(b: DevopsPr['build']) {
-  if (!b) return <span>nessuna build</span>;
+  if (!b) return <span>{tr('brainText.task.noBuild')}</span>;
   const word = b.result ?? b.status ?? '';
-  const label = b.result === 'succeeded' ? 'build ok' : `build ${BUILD_WORDS[word] ?? word}`;
+  const label = b.result === 'succeeded' ? tr('brainText.task.buildOk') : tr('brainText.task.build', { word: BUILD_WORDS[word] ?? word });
   return <ExtLink href={b.url} title={`Build ${b.number}${b.at ? `, ${fmt.ago(b.at)}` : ''}`}>{label}</ExtLink>;
 }
 /** The votes in one line: how many approved, and whether a required reviewer still says no or nothing. */
 function voteSummary(rs: DevopsPr['reviewers']): { text: string; tone: Tone } {
-  if (!rs.length) return { text: 'nessun revisore', tone: '' };
+  if (!rs.length) return { text: tr('brainText.task.noReviewers'), tone: '' };
   const ok = rs.filter(r => r.vote >= 5).length;
   const no = rs.some(r => r.vote <= -10);
   const missing = rs.some(r => r.required && r.vote < 5);
-  return { text: `${ok} su ${rs.length} ${ok === 1 ? 'approva' : 'approvano'}`, tone: no ? 'bad' : missing ? 'warn' : 'good' };
+  return { text: tr('brainText.task.approve', { ok, n: rs.length }), tone: no ? 'bad' : missing ? 'warn' : 'good' };
 }
 /** One step of a PR's check strip: a dot in its tone, its name, its state. */
 function Check({ k, tone, children }: { k: ReactNode; tone: Tone; children: ReactNode }) {
@@ -267,26 +266,26 @@ function PrCard({ p, details, now }: { p: DevopsPr; details: TasksState['details
   return (
     <article className={`dv-pr t-${wait.tone || 'none'}`} data-testid={`task-pr-${p.id}`}>
       <div className={`dv-wait ${wait.tone}`} data-testid={`task-wait-${p.id}`}>{wait.text}</div>
-      <div className="dv-pr-head"><h3><ExtLink href={p.url} title="Apri la PR in DevOps">{p.title} <IconExternal /></ExtLink></h3><RecordDiscussButton rec={{ kind: 'pr', pr: p, mine: true }} /></div>
-      <div className="small muted">{p.draft && <Pill tone="outline">bozza</Pill>} {p.repo}{p.target ? ` → ${p.target}` : ''}{age !== null ? ` · aperta ${age === 0 ? 'oggi' : `da ${plural(age, 'giorno', 'giorni')}`}` : ''}</div>
+      <div className="dv-pr-head"><h3><ExtLink href={p.url} title={tr('brainText.common.openPr')}>{p.title} <IconExternal /></ExtLink></h3><RecordDiscussButton rec={{ kind: 'pr', pr: p, mine: true }} /></div>
+      <div className="small muted">{p.draft && <Pill tone="outline">{tr('brainText.task.draft')}</Pill>} {p.repo}{p.target ? ` → ${p.target}` : ''}{age !== null ? (age === 0 ? tr('brainText.task.openedToday') : tr('brainText.task.openedDays', { n: age })) : ''}</div>
       <div className="dv-checks" data-testid={`task-checks-${p.id}`}>
-        <Check k="Build" tone={!p.build ? '' : p.build.result === 'succeeded' ? 'good' : p.build.result === 'failed' ? 'bad' : 'warn'}>{buildLink(p.build)}</Check>
-        <Check k="Voti" tone={votes.tone}>{votes.text}</Check>
-        <Check k="Discussioni" tone={p.activeThreads ? 'warn' : 'good'}>{p.activeThreads ? plural(p.activeThreads, 'aperta', 'aperte') : 'nessuna aperta'}</Check>
-        <Check k={<>Auto-complete<HelpTip label="Auto-complete" title="Auto-complete">Acceso: la PR si unisce da sola appena build, voti obbligatori e controlli sono verdi. Spento: qualcuno deve premere «Complete» in DevOps.</HelpTip></>} tone={p.autoComplete ? 'good' : ''}>{p.autoComplete ? 'auto-complete attivo' : 'senza auto-complete'}</Check>
+        <Check k={tr('brainText.task.check.build')} tone={!p.build ? '' : p.build.result === 'succeeded' ? 'good' : p.build.result === 'failed' ? 'bad' : 'warn'}>{buildLink(p.build)}</Check>
+        <Check k={tr('brainText.task.check.votes')} tone={votes.tone}>{votes.text}</Check>
+        <Check k={tr('brainText.task.check.threads')} tone={p.activeThreads ? 'warn' : 'good'}>{p.activeThreads ? tr('brainText.task.threadsOpen', { n: p.activeThreads }) : tr('brainText.task.threadsNone')}</Check>
+        <Check k={<>Auto-complete<HelpTip label="Auto-complete" title="Auto-complete">{tr('brainText.task.autoHelp')}</HelpTip></>} tone={p.autoComplete ? 'good' : ''}>{p.autoComplete ? tr('brainText.task.autoOn') : tr('brainText.task.autoOff')}</Check>
       </div>
       {p.reviewers.length > 0
-        ? <div className="dv-voters">{p.reviewers.map(r => { const v = voteMark(r.vote); return <span key={r.name} className={`dv-voter ${v.tone}`} data-tip={`${r.required ? 'Revisore obbligatorio: senza il suo sì la PR non si unisce' : 'Revisore facoltativo: il suo voto non blocca'}. Voto: ${r.label || 'nessuno'}`}><span className="m">{v.mark}</span>{r.name}: {r.label || 'nessun voto'}{r.required ? <span className="muted"> · obbligatorio</span> : ''}</span>; })}</div>
-        : <p className="small muted">Nessun revisore.</p>}
+        ? <div className="dv-voters">{p.reviewers.map(r => { const v = voteMark(r.vote); return <span key={r.name} className={`dv-voter ${v.tone}`} data-tip={tr('brainText.task.voteTip', { kind: r.required ? tr('brainText.task.reviewerRequired') : tr('brainText.task.reviewerOptional'), vote: r.label || tr('brainText.task.voteNobody') })}><span className="m">{v.mark}</span>{r.name}: {r.label || tr('brainText.task.noVote')}{r.required ? <span className="muted">{tr('brainText.task.required')}</span> : ''}</span>; })}</div>
+        : <p className="small muted">{tr('brainText.task.noReviewer')}</p>}
       {p.lastComment && (
         <div className="dv-pr-last">
-          <span className="bx-eyebrow">Ultimo commento</span>
+          <span className="bx-eyebrow">{tr('brainText.task.lastComment')}</span>
           <CommentView c={p.lastComment} compact />
         </div>
       )}
       {p.workItems.length > 0 && (
         <div className="dv-pr-items">
-          <span className="bx-eyebrow">Work item collegati</span>
+          <span className="bx-eyebrow">{tr('brainText.task.linkedItems')}</span>
           {p.workItems.map(w => <ItemRow key={w.id} w={w} d={details[String(w.id)]} now={now} />)}
         </div>
       )}
@@ -300,16 +299,16 @@ function ErrorBanner({ e }: { e: NonNullable<TasksState['error']> }) {
   return (
     <div className="bx-error" role="alert" data-testid="task-error">
       <div className="t">
-        <b>{ERROR_TITLE[e.kind]}</b>
+        <b>{tr(ERROR_TITLE[e.kind])}</b>
         <span className="cause">{e.message}</span>
         {e.command && (
           <span className="bx-row" style={{ marginTop: 4 }}>
             <code className="bx-kbd" data-testid="task-error-command">{e.command}</code>
-            <button type="button" className="bx-btn s" onClick={() => { void copyText(e.command!).then(ok => toast(ok ? 'Comando copiato' : 'Copia non riuscita')); }}><IconCopy /> Copia</button>
+            <button type="button" className="bx-btn s" onClick={() => { void copyText(e.command!).then(ok => toast(ok ? tr('brainText.common.commandCopied') : tr('brainText.common.copyFailed'))); }}><IconCopy /> {tr('brainText.common.copy')}</button>
           </span>
         )}
       </div>
-      <button type="button" className="bx-btn" onClick={refreshTasks}>Aggiorna ora</button>
+      <button type="button" className="bx-btn" onClick={refreshTasks}>{tr('brainPages.task.refresh')}</button>
     </div>
   );
 }
@@ -350,8 +349,8 @@ function Reviews({ list, now }: { list: DevopsPrRef[]; now: number }) {
       return (
         <li key={p.id} data-testid={`task-review-${p.id}`}>
           <Avatar name={p.author} />
-          <span className="t"><ExtLink href={p.url} title="Apri la PR in DevOps">{p.title}</ExtLink><span className="small muted"> · {p.author?.replace(/\s*<.*$/, '') ?? ''} · {p.repo}</span></span>
-          {d !== null && <Pill tone={d >= 3 ? 'warn' : 'outline'}>aspetta {sinceLabel(d)}</Pill>}
+          <span className="t"><ExtLink href={p.url} title={tr('brainText.common.openPr')}>{p.title}</ExtLink><span className="small muted"> · {p.author?.replace(/\s*<.*$/, '') ?? ''} · {p.repo}</span></span>
+          {d !== null && <Pill tone={d >= 3 ? 'warn' : 'outline'}>{tr('brainText.task.waits', { since: sinceLabel(d) })}</Pill>}
           <RecordDiscussButton rec={{ kind: 'pr', pr: p, mine: false }} />
         </li>
       );
@@ -407,25 +406,25 @@ export function TaskPage({ nav }: { nav?: Navigate }) {
   const hasQa = s.qa.length > 0 || !!s.qaError;
 
   const secs: { id: SecId; label: string; n?: number; hot?: boolean }[] = [
-    { id: 'news', label: 'Da leggere', n: unreadDirect.length, hot: unreadDirect.length > 0 },
-    { id: 'prs', label: 'Le mie PR', n: s.prs.length, hot: waitMe.length > 0 },
-    ...(hasQa ? [{ id: 'qa' as const, label: 'Test e QA', n: s.qa.length }] : []),
-    { id: 'reviews', label: 'Review', n: reviews.length, hot: reviews.length > 0 },
-    { id: 'items', label: 'Work item', n: s.assigned.length, hot: hot.length > 0 },
-    ...(followed.size ? [{ id: 'followed' as const, label: 'Ticket che segui', n: followed.size, hot: unreadFollowed > 0 }] : []),
-    ...(t.data ? [{ id: 'standup' as const, label: 'Stand-up' }] : []),
+    { id: 'news', label: tr('brainText.task.sec.news'), n: unreadDirect.length, hot: unreadDirect.length > 0 },
+    { id: 'prs', label: tr('brainText.task.sec.prs'), n: s.prs.length, hot: waitMe.length > 0 },
+    ...(hasQa ? [{ id: 'qa' as const, label: tr('brainText.taskQa.title'), n: s.qa.length }] : []),
+    { id: 'reviews', label: tr('brainText.task.sec.reviews'), n: reviews.length, hot: reviews.length > 0 },
+    { id: 'items', label: tr('brainText.task.sec.items'), n: s.assigned.length, hot: hot.length > 0 },
+    ...(followed.size ? [{ id: 'followed' as const, label: tr('brainText.task.sec.followed'), n: followed.size, hot: unreadFollowed > 0 }] : []),
+    ...(t.data ? [{ id: 'standup' as const, label: tr('brainText.task.sec.standup') }] : []),
   ];
   const lead = s.error
-    ? <><b>{ERROR_TITLE[s.error.kind]}</b>{s.at ? <>: qui sotto i dati dell'ultima lettura riuscita ({fmt.ago(s.at)}).</> : '.'}</>
+    ? <><b>{tr(ERROR_TITLE[s.error.kind])}</b>{s.at ? <>{tr('brainText.task.lead.lastOk', { ago: fmt.ago(s.at) })}</> : '.'}</>
     : never
-      ? <b>{s.running ? 'Leggo Azure DevOps per la prima volta…' : 'Task non ancora letti: premi «Aggiorna ora».'}</b>
+      ? <b>{s.running ? tr('brainText.task.lead.firstRead') : tr('brainText.task.lead.never')}</b>
       : <>
-          <b>{unreadDirect.length ? `${unreadDirect.length} novità da leggere` : 'Nessuna novità da leggere'}</b>
-          {mentions > 0 && <>, {plural(mentions, 'menzione', 'menzioni')}</>}
-          {unreadFollowed > 0 && ` · ${unreadFollowed} sui ticket che segui`}
-          {` · ${waitMe.length ? `${plural(waitMe.length, 'PR aspetta', 'PR aspettano')} te` : 'nessuna PR aspetta te'}`}
-          {reviews.length > 0 && ` · ${plural(reviews.length, 'review', 'review')} da fare`}
-          {hot.length > 0 && <> · <b className="dv-bad">{plural(hot.length, 'bug P1/P2 fermo', 'bug P1/P2 fermi')}</b></>}
+          <b>{unreadDirect.length ? tr('brainText.task.lead.unread', { n: unreadDirect.length }) : tr('brainText.task.lead.noUnread')}</b>
+          {mentions > 0 && <>, {tr('brainText.task.mentions', { n: mentions })}</>}
+          {unreadFollowed > 0 && tr('brainText.task.lead.followed', { n: unreadFollowed })}
+          {waitMe.length ? tr('brainText.task.lead.waitMe', { n: waitMe.length }) : tr('brainText.task.lead.noWait')}
+          {reviews.length > 0 && tr('brainText.task.lead.reviews', { n: reviews.length })}
+          {hot.length > 0 && <> · <b className="dv-bad">{tr('brainText.task.lead.hot', { n: hot.length })}</b></>}
         </>;
 
   return (
@@ -437,14 +436,14 @@ export function TaskPage({ nav }: { nav?: Navigate }) {
       {never ? (s.running ? <Loading label={tr('brainPages.task.firstRead')} lines={4} /> : <p className="tk-empty" data-testid="task-never"><b>{tr('brainPages.task.neverTitle')}</b> {tr('brainPages.task.neverBody')}</p>) : (
         <>
           <div className="tk-tiles" data-testid="task-tiles">
-            <Tile k="Da leggere" v={unreadDirect.length} to="news" testId="task-tile-news" index={0} tone={mentions ? 'warn' : unreadDirect.length ? 'blue' : ''}
-              s={unreadDirect.length ? (mentions ? `${plural(mentions, 'menzione', 'menzioni')} per te` : 'commenti e cambi') : unreadFollowed ? `+ ${unreadFollowed} sui ticket che segui` : 'tutto letto'} />
-            <Tile k="Le mie PR" v={s.prs.length} to="prs" testId="task-tile-prs" index={1} tone={s.prs.some(p => prWait(p).tone === 'bad') ? 'bad' : waitMe.length ? 'warn' : ''}
-              s={s.prs.length ? (waitMe.length ? `${waitMe.length} ${waitMe.length === 1 ? 'aspetta' : 'aspettano'} te` : 'aspettano gli altri') : 'nessuna attiva'} />
-            <Tile k="Review per te" v={reviews.length} to="reviews" testId="task-tile-reviews" index={2} tone={reviews.some(p => (daysSince(p.createdAt, now) ?? 0) >= 3) ? 'warn' : reviews.length ? 'blue' : ''}
-              s={reviews.length ? `la più vecchia aspetta ${sinceLabel(Math.max(...reviews.map(p => daysSince(p.createdAt, now) ?? 0)))}` : 'nessuna'} />
-            <Tile k="Work item" v={s.assigned.length} to="items" testId="task-tile-items" index={3} tone={hot.length ? 'bad' : stuck.length ? 'warn' : ''}
-              s={!s.assigned.length ? 'nessuno aperto' : stuck.length ? `${stuck.length} ferm${stuck.length === 1 ? 'o' : 'i'} da 3+ giorni${hot.length ? `, ${hot.length} P1/P2` : ''}` : 'tutti si muovono'} />
+            <Tile k={tr('brainText.task.sec.news')} v={unreadDirect.length} to="news" testId="task-tile-news" index={0} tone={mentions ? 'warn' : unreadDirect.length ? 'blue' : ''}
+              s={unreadDirect.length ? (mentions ? tr('brainText.task.tile.mentionsForYou', { n: mentions }) : tr('brainText.task.tile.commentsChanges')) : unreadFollowed ? tr('brainText.task.tile.followed', { n: unreadFollowed }) : tr('brainText.task.tile.allRead')} />
+            <Tile k={tr('brainText.task.sec.prs')} v={s.prs.length} to="prs" testId="task-tile-prs" index={1} tone={s.prs.some(p => prWait(p).tone === 'bad') ? 'bad' : waitMe.length ? 'warn' : ''}
+              s={s.prs.length ? (waitMe.length ? tr('brainText.task.tile.waitYou', { n: waitMe.length }) : tr('brainText.task.tile.waitOthers')) : tr('brainText.task.tile.noneActive')} />
+            <Tile k={tr('brainText.task.tile.reviews')} v={reviews.length} to="reviews" testId="task-tile-reviews" index={2} tone={reviews.some(p => (daysSince(p.createdAt, now) ?? 0) >= 3) ? 'warn' : reviews.length ? 'blue' : ''}
+              s={reviews.length ? tr('brainText.task.tile.oldest', { since: sinceLabel(Math.max(...reviews.map(p => daysSince(p.createdAt, now) ?? 0))) }) : tr('brainText.task.tile.noReviews')} />
+            <Tile k={tr('brainText.task.sec.items')} v={s.assigned.length} to="items" testId="task-tile-items" index={3} tone={hot.length ? 'bad' : stuck.length ? 'warn' : ''}
+              s={!s.assigned.length ? tr('brainText.task.tile.noneOpen') : stuck.length ? tr('brainText.task.tile.stuck', { n: stuck.length, hot: hot.length }) : tr('brainText.task.tile.allMove')} />
           </div>
 
           <nav className="dv-secbar" aria-label={tr('brainPages.task.sections')} data-testid="task-sections">
@@ -456,14 +455,14 @@ export function TaskPage({ nav }: { nav?: Navigate }) {
           </nav>
 
           <Anchor id="news">
-            <Section title="Da leggere" count={fresh.length} note="menzioni, commenti e voti sulle tue PR, cambi ai tuoi work item: il testo è qui" testId="task-news"
-              actions={unreadDirect.length > 0 ? <button type="button" className="bx-btn s" onClick={() => markTasksRead(unreadDirect.map(n => n.key))} data-testid="task-mark-all">Segna tutte come lette</button> : undefined}>
+            <Section title={tr('brainText.task.sec.news')} count={fresh.length} note={tr('brainText.task.news.note')} testId="task-news"
+              actions={unreadDirect.length > 0 ? <button type="button" className="bx-btn s" onClick={() => markTasksRead(unreadDirect.map(n => n.key))} data-testid="task-mark-all">{tr('brainText.task.news.markAll')}</button> : undefined}>
               {fresh.length > 0
                 ? <div className="dv-stack">{fresh.map(n => <NewsCard key={n.key} n={n} details={s.details} now={now} />)}</div>
-                : <Empty title="Niente da leggere">Le novità nuove compaiono qui, con il testo intero.</Empty>}
+                : <Empty title={tr('brainText.task.news.nothing')}>{tr('brainText.task.news.nothingBody')}</Empty>}
               {read.length > 0 && (
                 <details className="bx-details">
-                  <summary>Già lette (ultimi 14 giorni) · {read.length}</summary>
+                  <summary>{tr('brainText.task.news.alreadyRead', { n: read.length })}</summary>
                   <div className="body dv-stack">{read.map(n => <NewsCard key={n.key} n={n} details={s.details} now={now} />)}</div>
                 </details>
               )}
@@ -471,33 +470,33 @@ export function TaskPage({ nav }: { nav?: Navigate }) {
           </Anchor>
 
           <Anchor id="prs">
-            <Section title="Le mie PR" count={s.prs.length} note="chi aspetta chi, build, voti, discussioni, ultimo commento e test dei work item" testId="task-prs">
-              {s.prs.length ? <div className="dv-prs">{[...s.prs].sort((a, b) => Number(prWait(b).who === 'me') - Number(prWait(a).who === 'me')).map(p => <PrCard key={p.id} p={p} details={s.details} now={now} />)}</div> : <Empty title="Nessuna PR attiva" />}
+            <Section title={tr('brainText.task.sec.prs')} count={s.prs.length} note={tr('brainText.task.prs.note')} testId="task-prs">
+              {s.prs.length ? <div className="dv-prs">{[...s.prs].sort((a, b) => Number(prWait(b).who === 'me') - Number(prWait(a).who === 'me')).map(p => <PrCard key={p.id} p={p} details={s.details} now={now} />)}</div> : <Empty title={tr('brainText.task.prs.none')} />}
             </Section>
           </Anchor>
 
           {hasQa && <Anchor id="qa"><QaSection qa={s.qa} error={s.qaError} /></Anchor>}
 
           <Anchor id="reviews">
-            <Section title="Review che aspettano te" count={reviews.length} note="la più vecchia per prima conta di più" testId="task-reviews">
-              {reviews.length ? <Reviews list={reviews} now={now} /> : <Empty title="Nessuna review da fare" />}
+            <Section title={tr('brainText.task.reviews.title')} count={reviews.length} note={tr('brainText.task.reviews.note')} testId="task-reviews">
+              {reviews.length ? <Reviews list={reviews} now={now} /> : <Empty title={tr('brainText.task.reviews.none')} />}
             </Section>
           </Anchor>
 
           <Anchor id="items">
-            <Section title="I miei work item" count={s.assigned.length} note="clic su una riga: descrizione, commenti e test case" testId="task-assigned">
+            <Section title={tr('brainText.task.items.title')} count={s.assigned.length} note={tr('brainText.task.items.note')} testId="task-assigned">
               {s.assigned.length ? <div className="dv-groups">{byState(s.assigned).map(g => (
                 <div key={g.state} className="dv-group" data-testid={`task-state-${g.state}`}>
                   <h3><Pill tone={stateTone(g.state)}>{g.state}</Pill><span className="count">{g.items.length}</span></h3>
                   <div className="dv-items">{g.items.map(w => <ItemRow key={w.id} w={w} d={s.details[String(w.id)]} now={now} state={false} />)}</div>
                 </div>
-              ))}</div> : <Empty title="Nessun work item aperto" />}
+              ))}</div> : <Empty title={tr('brainText.task.items.none')} />}
             </Section>
           </Anchor>
 
           {followed.size > 0 && (
             <Anchor id="followed">
-              <Section title="Ticket che segui" count={followed.size} note="stato, assegnatario e commenti degli altri" testId="task-followed">
+              <Section title={tr('brainText.task.sec.followed')} count={followed.size} note={tr('brainText.task.followed.note')} testId="task-followed">
                 <div className="dv-stack">{[...followed.values()].map(ns => <FollowedCard key={ns[0]!.key} news={ns} details={s.details} />)}</div>
               </Section>
             </Anchor>
@@ -507,7 +506,7 @@ export function TaskPage({ nav }: { nav?: Navigate }) {
             <Anchor id="standup">
               <div className="dv-standup">
                 <Standup tables={t.data} owner={ownerOf(t.data.ideas)} />
-                {nav && <button type="button" className="bx-go" onClick={() => nav('fatto')}>Tutto il fatto e il diario →</button>}
+                {nav && <button type="button" className="bx-go" onClick={() => nav('fatto')}>{tr('brainText.task.allDone')}</button>}
               </div>
             </Anchor>
           )}

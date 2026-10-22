@@ -27,6 +27,7 @@ import { estimateLine } from '../shared/task-estimate';
 import { agentCatalogTool, CATALOG_GUIDANCE, roleCatalogBrief, skillsSuggestTool } from './agents/discovery';
 import { SkillSuggester } from './skills/suggest';
 import { SetupService } from './agents/setup';
+import { uiLang } from './locale';
 import { AutoCloseService, autoCloseNow } from './chats/auto-close';
 import { readLocal, writeLocal } from './agents/local-store';
 import { ProgressService } from './agents/progress';
@@ -111,6 +112,8 @@ import { apiSearch, brainSearchTool } from './search/hybrid/tool';
 import { BrainScripts, touchesScripts } from './brain/scripts';
 import { BrainChangelog } from './brain/changelog';
 import { brainScriptsTool, chatScriptAddTool } from './brain/scripts-tools';
+import { BrainQueries, touchesQueries } from './brain/queries';
+import { brainQueriesTool, chatQueryAddTool } from './brain/queries-tools';
 import { AutoScripts } from './brain/auto-scripts';
 import { mountRecallTool, RECALL_ENV } from './search/hybrid/recall';
 import { timersFor } from './timers';
@@ -128,6 +131,8 @@ export interface Wired {
   agentRuns?: AgentRunStore;
   memoryReview?: MemoryService;
   learningReview?: LearningReviewService;
+  /** the brain's saved queries (ADR 0124): Memoria → Script & Query, queries:* IPC */
+  queries?: BrainQueries;
   /** the hybrid brain search (SPEC 23); absent in the demo (Ctrl+K then uses its own index) */
   hybrid?: HybridSearch;
   /** the brain skills that fit a request, best first (skills/suggest.ts) */
@@ -366,7 +371,14 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const brainChangelog = new BrainChangelog(() => brain.info().brainRoot);
   const brainScripts = new BrainScripts(() => brain.info().brainRoot, brainChangelog);
   let scriptsTimer: NodeJS.Timeout | null = null;
+  // the saved queries (ADR 0124): their delete goes through the brain model's ChangeLog (created below)
+  const brainQueries = new BrainQueries(() => brain.info().brainRoot, () => brainModelRef.current?.log ?? null, brainChangelog);
+  let queriesTimer: NodeJS.Timeout | null = null;
   const onScriptFile = (f: string) => {
+    if (touchesQueries(f)) {
+      if (queriesTimer) clearTimeout(queriesTimer);
+      queriesTimer = setTimeout(() => { queriesTimer = null; ctx.emitter.emit('queries:changed', undefined); }, 500);
+    }
     if (!touchesScripts(f)) return;
     brainScripts.invalidate();
     if (scriptsTimer) clearTimeout(scriptsTimer);
@@ -433,7 +445,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const memoryReview = new MemoryService({ root: () => agentPacks.packs.root(), embed: (texts, mode) => hybrid.embed(texts, mode), invalidate: async () => { if (!await hybrid.sync()) throw new Error('Memory changed, but search invalidation is pending. Retry before continuing.'); } });
   // agent_learn_propose on a work chat's endpoint: only its own role's lessons, queued for the Orchestrator and the user
   const skillTools = () => brainModelRef.current?.skillTools() ?? [];
-  addChatTools([agentCatalogTool(() => agents.list(), skillTools), skillsSuggestTool(suggestSkills), chatLearnTool(agentPacks.learning, () => manager.runs.list()), brainSearchTool(async (q, o) => { await memoryReview.retryInvalidations(); return hybrid.query(q, o); }), brainScriptsTool(brainScripts)]);
+  addChatTools([agentCatalogTool(() => agents.list(), skillTools), skillsSuggestTool(suggestSkills), chatLearnTool(agentPacks.learning, () => manager.runs.list()), brainSearchTool(async (q, o) => { await memoryReview.retryInvalidations(); return hybrid.query(q, o); }), brainScriptsTool(brainScripts), brainQueriesTool(brainQueries)]);
   addChatTools(memoryTools({ root: () => agentPacks.packs.root(), recall: (scope, query, options) => memoryReview.recall(scope, query, options), context: chatId => {
     const chat = manager.list().find(c => c.id === chatId);
     if (!chat || chat.agent?.source !== 'catalog' || chat.isOrchestrator || !chat.run) return null;
@@ -476,6 +488,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     onRunEnded: run => loopRef.current?.ended(run),
     onRunOutcome: run => { routingVerdict(run); loopRef.current?.outcome(run); },
     roleCatalogBrief: () => roleCatalogBrief(() => agents.list()),
+    // the reply language (ADR 0120): the setting, or Windows' language on «Come il sistema», the same as the UI's
+    replyLang: uiLang,
     // the estimate task_estimate would give, under the user's request (one model round trip less, ADR 0087)
     requestEstimate: text => {
       if (!runFeedbackRef.current) return null;
@@ -617,6 +631,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const runner = commandRunner(ctx, chats, run => { autoScripts.onRun(run); });
   // brain_script_add on every chat's own endpoint: a work chat saves the script it ran with success itself
   addChatTools([chatScriptAddTool(brainScripts, id => chats.list().find(c => c.id === id)?.title ?? null)]);
+  // brain_query_add the same way: a query that ran and someone reruns goes to queries/ (ADR 0124)
+  addChatTools([chatQueryAddTool(brainQueries, id => chats.list().find(c => c.id === id)?.title ?? null)]);
   const asks = attachCommandAsks(ctx, runner, brain, undefined, chats);
   const keptFile = path.join(ctx.userData, 'auto-close-kept.json');
   let kept: string[] = [], keptProblem = false;
@@ -682,22 +698,30 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // parent-to-child delegation between role chats (ADR 0083): every chat's own endpoint, the caller is its token's chat
   addChatTools(delegationTools({ chats: manager, roles: () => agents.list(), settings: () => checkedDelegation(brain.settings().delegation),
     engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), label: AGENT_LABEL, runs: () => manager.runs.list(), worktrees: gitWorktrees, skillTools,
-    remember: (roleId, line, chat) => writeAgentMemory(agentPacks.packs.root(), portableId(roleId), line, { scope: { roleId: portableId(roleId), project: chat.cwd }, sourceRunId: chat.run?.runId ?? `legacy-chat:${chat.id}`, sourceEventId: `report:${chat.run?.runId ?? chat.id}` }) }));
+    remember: (roleId, line, chat) => writeAgentMemory(agentPacks.packs.root(), portableId(roleId), line, { scope: { roleId: portableId(roleId), project: chat.cwd }, sourceRunId: chat.run?.runId ?? `chat:${chat.id}`, sourceEventId: `report:${chat.run?.runId ?? chat.id}` }) }));
   // a Strategist's plan with the user (ADR 0108): proposed on its strip, approved by the user's click, its steps' progress
   addChatTools(strategyTools(manager));
-  // the Judge's sampled reviews of finished runs (agents/judge-sample.ts): they spend tokens, so they run only in the
-  // user's own app, never in tests or an agent's hidden run (judgeSamplingOn, issue #112), at most delegation.judgeDaily a day
+  // the independent reviews of finished runs (agents/judge-sample.ts): they spend tokens, so they run only in the user's
+  // own app, never in tests or an agent's hidden run (judgeSamplingOn, issue #112), and only with the Agenti switch on
   const judgeSampler = new JudgeSampler({ file: path.join(ctx.userData, 'judge-samples.json'), runs: () => manager.runs.list(),
     chat: id => manager.list().find(c => c.id === id), create: req => manager.create(req, 'app'),
-    daily: () => checkedDelegation(brain.settings().delegation).judgeDaily,
+    judging: () => {
+      const st = brain.settings(), on = st.judging === true;
+      let since = Number(st.judgingSince) || 0;
+      // on by default with no start yet (a fresh install, an upgrade): from now on, never the runs that ended before
+      if (on && !since) { since = Date.now(); void brain.setSettings({ judgingSince: since }).catch(e => log.warn('agents', 'judging start not saved', { cause: errText(e) })); }
+      return { on, since };
+    },
     judgeEngine: () => agents.list().profiles.find(p => p.id === 'sentinel')?.engine ?? 'claude',
     refusal: h => !engineOn(brain.settings(), h) ? 'engine switched off' : !agentsMayOpen(brain.settings(), h) ? 'agents may not use this engine' : null,
     feedback: (a, by) => runFeedback.recordFeedback(a, by) });
-  loopRef.current = { ended: run => { loop.hooks.ended(run); void judgeSampler.ended(run); }, outcome: run => loop.hooks.outcome(run) };
-  // first a few minutes after the start (a restart within 30 minutes used to postpone it again), then every 30 minutes
   const judging = judgeSamplingOn(process.env);
-  log.info('agents', judging.on ? 'judge samples scheduled' : 'judge samples off', { data: { why: judging.why } });
   const judgeTick = () => { void judgeSampler.tick().catch(e => log.warn('agents', 'judge sample tick failed', { cause: errText(e), hint: 'tried again in 30 minutes' })); };
+  // a run that ends is reviewed soon after (every run with the switch on; a review's own end frees a slot)
+  const judgeSoon = () => { if (judging.on && brain.settings().judging === true) setTimeout(judgeTick, 5_000).unref(); };
+  loopRef.current = { ended: run => { loop.hooks.ended(run); void judgeSampler.ended(run).finally(judgeSoon); }, outcome: run => loop.hooks.outcome(run) };
+  // first a few minutes after the start (a restart within 30 minutes used to postpone it again), then every 30 minutes
+  log.info('agents', judging.on ? 'judge samples scheduled' : 'judge samples off', { data: { why: judging.why } });
   const judgeFirst = judging.on ? setTimeout(judgeTick, 3 * 60_000) : null;
   judgeFirst?.unref();
   const judgeTimer = judging.on ? setInterval(judgeTick, 30 * 60_000) : null;
@@ -767,6 +791,11 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning, runs: () => manager.runs.list(), routing: () => brain.routingInfo(),
     suggestSkills: async text => (await suggestSkills(text)).candidates.map(c => c.name),
     emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: !process.env.SB_TEST || process.env.SB_BRAIN_JOBS === '1',
+    // the Memoria hub's trash (ADR 0122): a script's file, and the Script tab told at once
+    scripts: { file: id => brainScripts.get(id).path, changed: () => { brainScripts.invalidate(); ctx.emitter.emit('scripts:changed', undefined); } },
+    // the brain upgrade (ADR 0116): Artisan, with no tools, says which notes' excerpts belong in a new place of the layout
+    appVersion: () => app.getVersion(),
+    upgradeAsk: async (system, prompt) => { const r = await oneShot.runOnce({ agentId: 'artisan', purpose: 'upgrade', system, prompt, maxOutputTokens: 1200, timeoutMs: 90_000 }); return { ok: r.ok, text: r.text, ...(r.reason ? { reason: r.reason } : {}) }; },
     // the pass the user starts reads the app logs and ends in the open Orchestrator, labelled as the app's (#150)
     logDir: () => log.folder,
     handoff: async text => {
@@ -793,7 +822,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     stallMin: () => checkedDelegation(brain.settings().delegation).stallMin, lastEventAt: id => manager.lastEventAt(id) });
 
   return {
-    brainModel, memoryReview, learningReview,
+    brainModel, memoryReview, learningReview, queries: brainQueries,
     morning,
     mcpServers,
     cloud, chats, browser, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, suggestSkills,

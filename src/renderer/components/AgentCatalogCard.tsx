@@ -21,6 +21,15 @@ import { PERMISSIONS_ELEMENT, permissionSummary } from './RolePermissions';
 import { go } from '../actions';
 import { HelpTip } from './HelpTip';
 import { formatCost } from '../lib/format';
+import { useApp } from '../store/store';
+import { isBusy } from '../store/state';
+import { rolePurpose } from '../lib/role-text';
+
+/** How many open chats of this role are working right now (a turn running or starting), from the live chat list: «Al
+ *  lavoro» says what is true now, never an open run whose chat waits, closed or went away (2026-10-22). */
+export function useWorkingChats(agentId: string): number {
+  return useApp(s => Object.values(s.chats).filter(c => c.agent?.id === agentId && !c.closedAt && isBusy(c)).length);
+}
 
 type Value = { text: string | null; samples?: string };
 
@@ -61,7 +70,7 @@ const pct = (v: number) => new Intl.NumberFormat(locale(), { style: 'percent', m
 /** The level (with its verified successes and the way to the next one) and the performance gauge, each with its "?"
  *  formula. An agent with no verified success is a Lv 1 "Recluta" at 0 of 5; before agents:metrics answers both read as
  *  unknown. */
-const NONE: AgentStanding = { runs: 0, wins: 0, level: 1, levelAt: 0, nextAt: 5, progress: 0, performance: null, evaluated: 0, minRuns: 5, sources: { human: 0, review: 0, facts: 0, orchestrator: 0, self: 0 } };
+const NONE: AgentStanding = { runs: 0, wins: 0, level: 1, levelAt: 0, nextAt: 5, progress: 0, performance: null, evaluated: 0, minRuns: 5, sources: { human: 0, review: 0, graded: 0, facts: 0, orchestrator: 0, chain: 0, self: 0 } };
 function Standing({ id, standing: s }: { id: string; standing: AgentStanding | null }) {
   const left = s && s.nextAt !== null ? s.nextAt - s.wins : 0;
   const perf = s?.performance ?? null;
@@ -71,7 +80,7 @@ function Standing({ id, standing: s }: { id: string; standing: AgentStanding | n
     <section className="catalog-level" aria-label={t('agentsGrid.level')} data-testid={`catalog-level-${id}`} data-level={s?.level}>
       <h4>{t('agentsGrid.level')}
         <HelpTip title={t('agentsGrid.levelHelpTitle')} wide testid={`catalog-level-help-${id}`}>
-          <p>{t('agentsGrid.levelHelp1')}</p><p>{t('agentsGrid.levelHelp2')}</p><p>{t('agentsGrid.levelHelp3')}</p>
+          <p>{t('agentsGrid.levelHelp1')}</p><p>{t('levels.verified')}</p><p>{t('agentsGrid.levelHelp2')}</p><p>{t('agentsGrid.levelHelp3')}</p>
           {s && <p className="catalog-help-now">{t('agentsGrid.levelHelpEx', { wins: s.wins, runs: s.runs, level: s.level, next: s.nextAt === null ? null : s.level + 1, left })}</p>}
         </HelpTip></h4>
       <p className="catalog-level-value">{s ? <><b>{t('agentsGrid.levelShort', { n: s.level })}</b> <span>{t('agentsGrid.levelTitle', { n: s.level })}</span>
@@ -132,7 +141,8 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
     cost: { text: cost?.value != null ? formatCost(cost.value) : null, samples: sample(cost?.n ?? 0) },
   };
   const trial = !!profile.trial;
-  const working = !trial && (open ?? 0) > 0;
+  const busy = useWorkingChats(profile.id);
+  const working = !trial && busy > 0;
   const state = trial ? 'trial' : working ? 'working' : 'active';
   const origin = t(profile.userLocked ? 'studio.customized' : 'studio.builtIn');
   const tier = t('studio.tierChip', { tier: t(`roles.tier.${profile.tier}`) });
@@ -154,7 +164,7 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
             {standing && <span className="catalog-level-medal" aria-hidden="true">{t('agentsGrid.levelShort', { n: standing.level })}</span>}</span>
           <h3><button ref={front} type="button" onClick={() => flip(true)} aria-expanded={flipped} aria-controls={backId} aria-describedby={`${backId}-f`} data-testid={`catalog-flip-${profile.id}`}>{profile.name}</button></h3>
           <span id={`${backId}-f`} className="sr-only">{t('bm.card.flip', { name: profile.name })}</span>
-          <p className="catalog-purpose" title={profile.purpose || undefined}>{profile.purpose}</p>
+          <p className="catalog-purpose" title={rolePurpose(profile.id, profile.purpose) || undefined}>{rolePurpose(profile.id, profile.purpose)}</p>
         </header>
         <div className="catalog-chips">
           <span className="catalog-chip" data-kind="engine">{engine}</span>

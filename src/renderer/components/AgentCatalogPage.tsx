@@ -1,18 +1,20 @@
 // The Agenti page: the six roles (the Orchestrator first, then the five work roles) and Pulse, each a card that flips
 // to its instructions and skills (#81) and opens the role's own page (AgentStudio: the editor, its versions, its pulse).
-// "Da approvare" on top holds the decisions that change a role's reach or cost (ADR 0083). No role is created here: the
-// catalog is fixed, a missing know-how becomes a skill. Rendered by App.tsx for page 'agenti'.
+// The decisions that change a role's reach or cost (a trial to keep, a tier suggestion: ADR 0083) are cards of Memoria →
+// Proposte (ADR 0123): a line on top points there. No role is created here: the catalog is fixed, a missing know-how
+// becomes a skill. Rendered by App.tsx for page 'agenti'.
 import { useEffect, useState } from 'react';
 import type { AgentMetrics } from '@shared/agents';
-import { AgentApprovals } from './AgentApprovals';
+import { ProposalsPointer } from './brain-model/ProposalsPointer';
 import { go } from '../actions';
 import { t } from '../i18n';
-import { requestPack } from '../lib/agent-pack-ui';
 import { sb } from '../sb';
 import { refreshAgents, useAgents } from '../store/agents';
 import { useApp } from '../store/store';
+import { isBusy } from '../store/state';
 import { ui } from '../store/ui';
 import { AgentCatalogCard } from './AgentCatalogCard';
+import { JudgingSwitch } from './JudgingSwitch';
 import { HelpTip } from './HelpTip';
 import { AgentStudio, EDIT_ELEMENT } from './AgentStudio';
 import { ContextPulse } from './ContextPulse';
@@ -43,12 +45,13 @@ export function AgentCatalogPage() {
     <ContextPulse key={profile.id} place={`agent:${profile.id}`} />
   </AgentStudio>;
   const profiles = catalog?.profiles ?? [];
-  const working = profiles.filter(p => !p.trial && (metrics?.find(m => m.agentId === p.id)?.open ?? 0) > 0).length;
+  // from the chats read above (a hook here, after the role page's early return, would change the hook order)
+  const working = profiles.filter(p => !p.trial && Object.values(chats).some(c => c.agent?.id === p.id && !c.closedAt && isBusy(c))).length;
   const trial = profiles.filter(p => p.trial).length;
   return <section className="agent-overview" aria-label={t('catalog.title')} data-testid="agent-overview">
-    <header className="catalog-head"><div><h2>{t('catalog.title')}</h2><p>{t('catalog.subtitle')}</p></div>
-      <button type="button" className="btn btn-ghost" onClick={() => requestPack({ kind: 'import' })} data-testid="agent-import">{t('pack.import')}</button></header>
-    <AgentApprovals />
+    <header className="catalog-head"><div><h2>{t('catalog.title')}</h2><p>{t('catalog.subtitle')}</p></div></header>
+    <JudgingSwitch />
+    <ProposalsPointer />
     <p className="catalog-intro">{t('catalog.intro')}</p>
     {(error || catalog?.problem) && <p role="alert">{error || catalog?.problem}<button type="button" className="link-btn" onClick={() => void refreshAgents()}>{t('studio.retry')}</button></p>}
     {!catalog && !error && <p role="status">{t('studio.loading')}</p>}

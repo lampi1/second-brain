@@ -1,5 +1,12 @@
 // Italian UI texts of the "chat" area (ADR 0057): spread into it.ts. Keys start with "chat.".
 export const chatIt = {
+  // closing a chat or a tab (store.ts closeChat, closeTab)
+  'chat.close.done': (p: { title: string }) => `Chiusa «${p.title}»`,
+  'chat.close.tabDone': (p: { title: string }) => `Chiusa la scheda «${p.title}»`,
+  'chat.close.undo': 'Annulla',
+  'chat.close.failed': 'Chat non chiusa',
+  'chat.close.tabFailed': 'Scheda non chiusa',
+  'chat.close.reopenFailed': 'Non riaperta',
   // ChatInput
   'chat.input.slashMenu': 'Comandi e skill',
   'chat.input.slashHelp': '↑↓ scegli · Tab completa · Esc chiudi',

@@ -17,6 +17,7 @@ import { DiscussBar, DiscussContext } from './Discuss';
 import { useAppChats } from './Composer';
 import { Pill, type Navigate, type Tone } from './ui';
 import { HelpTip } from '../../components/HelpTip';
+import { t as tr, type TextKey } from '../../i18n';
 
 const ARROW = { su: '↑', giu: '↓', uguale: '→' } as const;
 /** "↓ in calo: 3 errori questa settimana contro 7" */
@@ -43,16 +44,17 @@ export function chatFor(name: string, chats: ChatSummary[] | null): ChatSummary 
   return chats.find(c => norm(c.title) === n || norm(chatName(c)) === n) ?? (n === 'orchestrator' ? chats.find(c => c.isOrchestrator) ?? null : null);
 }
 
-const STATUS: Record<string, { label: string; tone: Tone }> = {
-  tornato: { label: 'la regola non è bastata', tone: 'bad' }, 'non-tornato': { label: 'la regola tiene', tone: 'good' },
-  'troppo-presto': { label: 'regola recente', tone: '' }, 'senza-tipo': { label: 'regola senza tipo', tone: 'warn' },
+const STATUS: Record<string, { label: TextKey; tone: Tone }> = {
+  tornato: { label: 'brainText.stats.status.tornato', tone: 'bad' }, 'non-tornato': { label: 'brainText.stats.status.nonTornato', tone: 'good' },
+  'troppo-presto': { label: 'brainText.stats.status.presto', tone: '' }, 'senza-tipo': { label: 'brainText.stats.status.senzaTipo', tone: 'warn' },
 };
+const statusLabel = (s: string) => { const k = STATUS[s]?.label; return k ? tr(k) : undefined; };
 const when = (g: ErrorGroup) => `${fmt.day(g.last)}${g.lastTime ? ` ${g.lastTime}` : ''}`;
 const list = (xs: [string, number][]) => xs.slice(0, 4).map(([a, n]) => `${a} (${n})`).join(', ');
 const quiet = (g: ErrorGroup) => g.week === 0 && g.prevWeek === 0;
 const weekTrend = (g: ErrorGroup): Trend => (quiet(g)
-  ? { dir: null, good: null, text: 'nessuno nelle ultime 2 settimane' }
-  : trend(g.week, g.prevWeek, { what: g.week === 1 ? 'volta' : 'volte', now: 'negli ultimi 7 giorni', before: 'nei 7 prima' }));
+  ? { dir: null, good: null, text: tr('brainText.stats.quiet') }
+  : trend(g.week, g.prevWeek, { what: tr('brainText.stats.times', { n: g.week }), now: tr('brainText.common.last7'), before: tr('brainText.common.prev7') }));
 
 /** The quote a pattern's discussion starts from: every number the card shows. */
 export function patternQuote(g: ErrorGroup): Quote {
@@ -60,12 +62,12 @@ export function patternQuote(g: ErrorGroup): Quote {
   return {
     id: `err|${g.type}`, what: 'errore', title: typeLabel(g.type), source: 'ai-errors.md',
     facts: [
-      `${g.count} volte dal ${fmt.day(g.first)} al ${fmt.day(g.last)}; ${quiet(g) ? 'nessuno nelle ultime 2 settimane' : `ultimi 7 giorni ${g.week}, i 7 prima ${g.prevWeek}`}`,
-      g.byOwner ? `trovati da me: ${g.byOwner} su ${g.count}${g.byOwner < g.count ? '; gli altri da reviewer, QA, hook o dall\'agente stesso' : ''}` : '',
-      g.areas.length ? `aree: ${list(g.areas)}` : '',
-      g.chats.length ? `chat: ${list(g.chats)}` : '',
-      g.latest.detto || g.latest.vero ? `l'ultimo (${when(g)}): detto «${g.latest.detto}», vero «${g.latest.vero}»` : `l'ultimo (${when(g)}): ${g.latest.riga ?? ''}`,
-      r ? `regola nata: ${r.rule}${r.status ? ` (${STATUS[r.status]?.label})` : ''}` : 'nessuna regola nata da questi errori',
+      `${tr('brainText.stats.fact.count', { n: g.count, first: fmt.day(g.first), last: fmt.day(g.last) })}; ${quiet(g) ? tr('brainText.stats.quiet') : tr('brainText.stats.fact.weeks', { week: g.week, prev: g.prevWeek })}`,
+      g.byOwner ? `${tr('brainText.stats.fact.byOwner', { n: g.byOwner, of: g.count })}${g.byOwner < g.count ? tr('brainText.stats.fact.byOthers') : ''}` : '',
+      g.areas.length ? tr('brainText.stats.fact.areas', { list: list(g.areas) }) : '',
+      g.chats.length ? tr('brainText.stats.fact.chats', { list: list(g.chats) }) : '',
+      g.latest.detto || g.latest.vero ? tr('brainText.stats.fact.latestClaim', { when: when(g), said: g.latest.detto, real: g.latest.vero }) : tr('brainText.stats.fact.latestRaw', { when: when(g), line: g.latest.riga ?? '' }),
+      r ? tr('brainText.stats.fact.rule', { rule: r.rule, status: r.status ? String(statusLabel(r.status)) : '' }) : tr('brainText.stats.fact.noRule'),
     ],
   };
 }
@@ -77,35 +79,35 @@ function Pattern({ g, chats }: { g: ErrorGroup; chats: ChatSummary[] | null }) {
     <li className="bx-card bx-pattern" data-testid="bx-q-pattern" data-type={g.type}>
       <div className="bx-pattern-head">
         <span className="bx-pattern-n" aria-hidden="true">{g.count}×</span>
-        <h3><span className="bx-sr">{g.count} volte: </span>{typeLabel(g.type)}</h3>
-        {!g.official && <Pill tone="warn" title="Non è uno degli 11 tipi dell'intestazione di ai-errors.md">tipo non ufficiale</Pill>}
+        <h3><span className="bx-sr">{tr('brainText.stats.nTimes', { n: g.count })}</span>{typeLabel(g.type)}</h3>
+        {!g.official && <Pill tone="warn" title={tr('brainText.stats.notOfficialTip')}>{tr('brainText.stats.notOfficial')}</Pill>}
         <span className="sp" />
-        <span className="small muted">ultimo {when(g)}</span>
+        <span className="small muted">{tr('brainText.stats.last', { when: when(g) })}</span>
       </div>
       <Reading t={weekTrend(g)} />
       {g.latest.detto || g.latest.vero
-        ? <p className="bx-pattern-last"><span className="muted">Ultimo:</span> detto «{short(g.latest.detto, 120)}» <span className="muted">→ vero:</span> {short(g.latest.vero, 140)}</p>
-        : <p className="bx-pattern-last"><span className="muted">Ultimo:</span> <span className="bx-raw">{short(g.latest.riga ?? '', 220)}</span></p>}
+        ? <p className="bx-pattern-last"><span className="muted">{tr('brainText.stats.lastLabel')}</span> {tr('brainText.stats.said')} «{short(g.latest.detto, 120)}» <span className="muted">{tr('brainText.stats.real')}</span> {short(g.latest.vero, 140)}</p>
+        : <p className="bx-pattern-last"><span className="muted">{tr('brainText.stats.lastLabel')}</span> <span className="bx-raw">{short(g.latest.riga ?? '', 220)}</span></p>}
       <dl className="bx-pattern-facts">
         <dt><ModelOrigin origin={g.latest.responsibleEpisode}/></dt><dd/>
-        {g.areas.length > 0 && <><dt>Aree</dt><dd>{g.areas.slice(0, 3).map(([a, n]) => `${short(a, 40)}${n > 1 ? ` (${n})` : ''}`).join(' · ')}{g.areas.length > 3 ? ` · altre ${g.areas.length - 3}` : ''}</dd></>}
-        {g.chats.length > 0 && <><dt>Chat</dt>
+        {g.areas.length > 0 && <><dt>{tr('brainText.stats.areas')}</dt><dd>{g.areas.slice(0, 3).map(([a, n]) => `${short(a, 40)}${n > 1 ? ` (${n})` : ''}`).join(' · ')}{g.areas.length > 3 ? ` · ${tr('brainText.stats.more', { n: g.areas.length - 3 })}` : ''}</dd></>}
+        {g.chats.length > 0 && <><dt>{tr('brainText.stats.chat')}</dt>
           <dd className="bx-pattern-chats">
             {g.chats.slice(0, 3).map(([name, n]) => {
               const c = chatFor(name, chats);
               return (
                 <span key={name}>
                   {short(name, 36)}{n > 1 ? ` (${n})` : ''}
-                  {c && bridge && <button type="button" className="bx-go" onClick={() => bridge.showChat(c.id)} data-testid="bx-q-pattern-open" aria-label={`Apri la chat «${chatName(c)}»`}>Apri</button>}
+                  {c && bridge && <button type="button" className="bx-go" onClick={() => bridge.showChat(c.id)} data-testid="bx-q-pattern-open" aria-label={tr('brainText.stats.openChat', { name: chatName(c) })}>{tr('brainText.common.open')}</button>}
                 </span>
               );
             })}
-            {g.chats.length > 3 && <span className="muted">altre {g.chats.length - 3}</span>}
+            {g.chats.length > 3 && <span className="muted">{tr('brainText.stats.more', { n: g.chats.length - 3 })}</span>}
           </dd></>}
-        <dt>Regola</dt>
-        <dd>{r ? <>{r.status && <Pill tone={STATUS[r.status]?.tone}>{STATUS[r.status]?.label}</Pill>} <span title={r.rule}>{short(r.rule, 110)}</span></>
-          : <span className="muted">nessuna: se torna ancora, chiedi una regola o un controllo</span>}</dd>
-        {g.byOwner > 0 && <><dt>Trovati da te</dt><dd>{g.byOwner} su {g.count}</dd></>}
+        <dt>{tr('brainText.stats.rule')}</dt>
+        <dd>{r ? <>{r.status && <Pill tone={STATUS[r.status]?.tone}>{statusLabel(r.status)}</Pill>} <span title={r.rule}>{short(r.rule, 110)}</span></>
+          : <span className="muted">{tr('brainText.stats.noRuleYet')}</span>}</dd>
+        {g.byOwner > 0 && <><dt>{tr('brainText.stats.byYou')}</dt><dd>{tr('brainText.common.ofCount', { n: g.byOwner, of: g.count })}</dd></>}
       </dl>
       <DiscussBar topic={{ kind: 'quote', quote: patternQuote(g) }} testId="bx-q-pattern-discuss" />
     </li>
@@ -115,22 +117,14 @@ function Pattern({ g, chats }: { g: ErrorGroup; chats: ChatSummary[] | null }) {
 /** The detailed explanation of the section ("?" next to its title). */
 export function PatternsHelp() {
   return (
-    <Help label="errori che si ripetono" testId="bx-q-errori-help">
-      <p><b>Da dove vengono.</b> Ogni riga di ai-errors.md è un errore di un agente o di una chat: la scrive subito la chat
-        che lo riceve (con <code>mem.mjs error</code>) quando correggi un agente, quando un reviewer o la QA smentisce
-        una sua affermazione o quando l'agente scopre da solo di aver sbagliato. Il file non si sfoltisce mai.</p>
-      <p><b>Tipo.</b> Lo schema dell'errore, uno degli 11 dell'intestazione di ai-errors.md (es. «fatto non verificato» =
-        detto senza controllare). Qui gli errori sono raggruppati per tipo; un'etichetta fuori lista resta un gruppo a sé,
-        segnato «tipo non ufficiale».</p>
-      <p><b>Area e chat.</b> L'area è il prodotto o la parte toccata; la chat è chi ha sbagliato. «Apri» porta alla chat se
-        è ancora nell'app.</p>
-      <p><b>Trovati da te.</b> Quante volte te ne sei accorto tu (campo «visto da»), invece di un reviewer, della QA, di un
-        hook o dell'agente stesso: sono quelli che ti costano tempo.</p>
-      <p><b>Confronto.</b> Gli ultimi 7 giorni (oggi compreso) contro i 7 prima: «in calo» è buono.</p>
-      <p><b>Regola.</b> La regola nata dall'errore (campo «regola:» o il conteggio del brain): «la regola non è bastata»
-        = lo stesso tipo è tornato entro 14 giorni.</p>
-      <p><b>Cosa farne.</b> Un tipo che si ripete chiede una cosa sola: una regola più chiara o un controllo automatico.
-        «Discuti» mette all’Orchestrator una bozza con questi numeri: se serve lavoro, è lui ad aprire la chat giusta.</p>
+    <Help label={tr('brainText.stats.help.label')} testId="bx-q-errori-help">
+      <p><b>{tr('brainText.stats.help.originB')}</b>{tr('brainText.stats.help.origin')}<code>mem.mjs error</code>{tr('brainText.stats.help.originRest')}</p>
+      <p><b>{tr('brainText.stats.help.typeB')}</b>{tr('brainText.stats.help.type')}</p>
+      <p><b>{tr('brainText.stats.help.areaB')}</b>{tr('brainText.stats.help.area')}</p>
+      <p><b>{tr('brainText.stats.help.byYouB')}</b>{tr('brainText.stats.help.byYou')}</p>
+      <p><b>{tr('brainText.stats.help.compareB')}</b>{tr('brainText.stats.help.compare')}</p>
+      <p><b>{tr('brainText.stats.help.ruleB')}</b>{tr('brainText.stats.help.rule')}</p>
+      <p><b>{tr('brainText.stats.help.doB')}</b>{tr('brainText.stats.help.do')}</p>
     </Help>
   );
 }
@@ -142,19 +136,19 @@ export function ErrorPatterns({ p, nav }: { p: Patterns; nav: Navigate }) {
     <div className="bx-patterns" data-testid="bx-q-patterns">
       {p.recurring.length ? (
         <ul className="bx-pattern-list">{p.recurring.map(g => <Pattern key={g.type} g={g} chats={chats} />)}</ul>
-      ) : <p className="muted">Nessun errore che si ripete negli ultimi 30 giorni.</p>}
+      ) : <p className="muted">{tr('brainText.stats.none')}</p>}
       {p.unknown.length > 0 && (
         <details className="bx-card tight bx-q-more" data-testid="bx-q-unknown">
-          <summary><b>Formato non riconosciuto</b> · {p.unknown.length} {p.unknown.length === 1 ? 'riga' : 'righe'} senza un tipo leggibile: correggile in ai-errors.md</summary>
+          <summary><b>{tr('brainText.stats.unknown')}</b>{tr('brainText.stats.unknownRest', { n: p.unknown.length })}</summary>
           <ul className="bx-list compact">
             {p.unknown.map((r, i) => <li key={i}><span className="meta">{fmt.day(r.data)}</span><span className="t bx-raw">{r.riga || `${r.chi} · ${r.area} · ${r.detto}`}</span></li>)}
           </ul>
         </details>
       )}
       <p className="small muted" data-testid="bx-q-patterns-rest">
-        {p.once ? <>{p.once} {p.once === 1 ? 'tipo comparso una volta sola' : 'tipi comparsi una volta sola'}: ancora nessuno schema da correggere. </> : null}
-        {p.quiet.length ? <>{p.quiet.length} {p.quiet.length === 1 ? 'schema fermo' : 'schemi fermi'} da più di 30 giorni ({p.quiet.map(g => typeLabel(g.type)).join(', ')}). </> : null}
-        <button type="button" className="bx-go" onClick={() => nav('esplora/ai-errors.md')}>Apri ai-errors.md</button>
+        {p.once ? <>{tr('brainText.stats.once', { n: p.once })}</> : null}
+        {p.quiet.length ? <>{tr('brainText.stats.quiet30', { n: p.quiet.length, list: p.quiet.map(g => typeLabel(g.type)).join(', ') })}</> : null}
+        <button type="button" className="bx-go" onClick={() => nav('esplora/ai-errors.md')}>{tr('brainText.stats.openErrors')}</button>
       </p>
     </div>
   );

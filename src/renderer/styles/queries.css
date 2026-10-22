@@ -1,0 +1,57 @@
+/* The saved queries of Memoria → «Script & Query» (components/brain-model/QueriesTab.tsx, ADR 0124): the Script page's
+   cards (brain-sections.css .bs-*) with a language chip per family, the data source line, icon actions on hover/focus,
+   a leave animation on delete. Theme tokens only (tokens.css): dark and light alike. CSS motion only, off under
+   prefers-reduced-motion. */
+.qy-tab{display:flex;flex-direction:column;gap:16px;min-width:0}
+.qy-head{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap}
+.qy-head h2{display:flex;align-items:center;gap:10px;margin:4px 0 6px;font-size:20px;font-weight:620;letter-spacing:-.3px}
+.qy-head p{margin:0;max-width:78ch;color:var(--text-3);font-size:12.5px;line-height:1.6}
+.qy-count{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 7px;border-radius:11px;background:var(--blue-bg);color:var(--blue);font-size:11.5px;font-weight:650;letter-spacing:0}
+.qy-chip{display:inline-flex;align-items:center;gap:6px}
+.qy-chip>b{font-weight:600;color:var(--text-3);font-variant-numeric:tabular-nums}
+.qy-swatch{width:8px;height:8px;padding:0!important;border-radius:50%;background:currentColor!important}
+
+/* language families */
+.qy-lang{font-size:10px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:6px}
+.qy-lang-blue{background:var(--blue-bg);color:var(--blue)}
+.qy-lang-violet{background:var(--violet-bg);color:var(--violet)}
+.qy-lang-pink{background:var(--red-bg);color:var(--red)}
+.qy-lang-amber{background:var(--amber-bg);color:var(--amber)}
+.qy-lang-green{background:var(--green-bg);color:var(--green)}
+.qy-lang-neutral{background:var(--surface-3);color:var(--text-2)}
+
+/* the card: the Script card, a coloured rail on the left, actions top right */
+.qy-card{animation-delay:calc(var(--row-index, 0) * 45ms);overflow:hidden}
+.qy-card::before{content:'';position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:0 3px 3px 0;background:var(--qy-accent, var(--border-3));opacity:.75;transition:opacity 180ms,top 180ms,bottom 180ms}
+.qy-card:hover::before,.qy-card.open::before{opacity:1;top:0;bottom:0}
+.qy-card[data-tone=blue]{--qy-accent:var(--blue)}
+.qy-card[data-tone=violet]{--qy-accent:var(--violet)}
+.qy-card[data-tone=pink]{--qy-accent:var(--red)}
+.qy-card[data-tone=amber]{--qy-accent:var(--amber)}
+.qy-card[data-tone=green]{--qy-accent:var(--green)}
+.qy-main{min-height:206px}
+.qy-card .bs-card-top{min-height:24px;padding-right:104px}
+.qy-actions{position:absolute;top:12px;right:12px;z-index:1;display:flex;gap:2px;padding:2px;border-radius:9px;background:var(--surface);border:1px solid var(--border);opacity:.55;transition:opacity 160ms,border-color 160ms}
+.qy-card:hover .qy-actions,.qy-card:focus-within .qy-actions,.qy-card.open .qy-actions{opacity:1;border-color:var(--border-2)}
+.qy-icon{appearance:none;display:grid;place-items:center;width:28px;height:26px;border:0;border-radius:7px;background:none;color:var(--text-2);cursor:pointer;transition:background 140ms,color 140ms}
+.qy-icon:hover{background:var(--surface-3);color:var(--text)}
+.qy-icon:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+.qy-danger:hover{background:var(--red-bg);color:var(--red)}
+.qy-source{display:flex;align-items:center;gap:6px;max-width:100%;min-width:0;font-size:11.5px;color:var(--text-2);padding:5px 9px;border-radius:7px;background:var(--surface-3)}
+.qy-source>svg{flex:none;color:var(--qy-accent, var(--text-3))}
+.qy-source>b{flex:none;font-weight:600;color:var(--text-3);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em}
+.qy-source>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qy-source.none>span{color:var(--text-4);font-style:italic}
+.qy-detail{display:flex;flex-direction:column;gap:10px;padding:16px 18px 18px;border-top:1px solid var(--border)}
+.qy-detail pre{max-height:360px}
+.qy-from{margin:0;font-size:11.5px;color:var(--text-3)}
+.qy-from>span{font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:.06em;margin-right:4px}
+.qy-card.leaving{animation:qy-leave 200ms ease-in forwards;pointer-events:none}
+@keyframes qy-leave{to{opacity:0;transform:scale(.96) translateY(4px)}}
+.qy-empty-icon{display:grid;place-items:center;width:46px;height:46px;margin-bottom:14px;border-radius:14px;background:var(--blue-bg);color:var(--blue)}
+.qy-empty-icon>svg{width:22px;height:22px}
+
+@media (prefers-reduced-motion: reduce){
+  .qy-card,.qy-card.leaving{animation:none}
+  .qy-card::before,.qy-actions,.qy-icon{transition:none}
+}

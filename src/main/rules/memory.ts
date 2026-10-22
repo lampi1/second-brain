@@ -35,7 +35,7 @@ export function writeError(root: string, text: string, agent: string): void {
 export function writeAgentMemory(root: string, agentId: string, text: string, provenance?: Pick<MemoryProposal, 'scope' | 'sourceEventId' | 'sourceRunId'>): string {
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(agentId) || agentId.length > 64) throw new Error('Use the agent id given at launch.');
   const rel = `agents/${agentId}/memory.md`, entry = `- ${new Date().toISOString().slice(0, 10)} · ${line(text, 1000)}`;
-  proposeMemory(root, { scope: { ...provenance?.scope, roleId: agentId }, subject: 'setup', predicate: 'note', value: line(text, 1000), sourceEventId: provenance?.sourceEventId ?? `legacy-write:${randomUUID()}`, sourceRunId: provenance?.sourceRunId ?? 'unknown' });
+  proposeMemory(root, { scope: { ...provenance?.scope, roleId: agentId }, subject: 'setup', predicate: 'note', value: line(text, 1000), sourceEventId: provenance?.sourceEventId ?? `untracked-write:${randomUUID()}`, sourceRunId: provenance?.sourceRunId ?? 'unknown' });
   fs.mkdirSync(path.dirname(confined(root, rel)), { recursive: true });
   if (provenance) return 'memory/records.json';
   locked(root, rel, () => {

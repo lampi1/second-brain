@@ -11,10 +11,10 @@ export const brainModelIt = {
   'bm.changed': (p: { at: string }) => `modificato ${p.at}`,
 
   // who made a change
-  'bm.job.migration': 'Migrazione', 'bm.job.corrections': 'Correzioni', 'bm.job.repeated-task': 'Lavoro ripetuto',
+  'bm.job.upgrade': 'Aggiornamento del brain', 'bm.job.migration': 'Migrazione', 'bm.job.corrections': 'Correzioni', 'bm.job.repeated-task': 'Lavoro ripetuto',
   'bm.job.merge-skills': 'Skill doppie', 'bm.job.merge-memory': 'Memorie doppie', 'bm.job.user': 'Tu', 'bm.job.orchestrator': 'Orchestrator',
   'bm.madeBy': (p: { job: string }) => `Da: ${p.job}`,
-  'bm.kind.skill': 'Skill', 'bm.kind.agent': 'Agente', 'bm.kind.rule': 'Regola', 'bm.kind.memory': 'Memoria',
+  'bm.kind.skill': 'Skill', 'bm.kind.agent': 'Agente', 'bm.kind.rule': 'Regola', 'bm.kind.memory': 'Memoria', 'bm.kind.script': 'Script',
 
   // maintenance panel
   'bm.maint.title': 'Manutenzione automatica',

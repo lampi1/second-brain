@@ -1,8 +1,10 @@
+import { appTextEn } from './areas/app-text.en';
+import { brainTextEn } from './areas/brain-text.en';
 import { learningReviewEn } from './areas/learning-review.en';
 import { cloudEn } from './areas/cloud.en';
-import { agentPackEn } from './areas/agent-pack.en';
 import { brainModelEn } from './areas/brain-model.en';
 import { memoryEn } from './areas/memory.en';
+import { memoryHubEn } from './areas/memory-hub.en';
 import { statsEn } from './areas/stats.en';
 import { costsEn } from './areas/costs.en';
 import { auditEn } from './areas/audit.en';
@@ -15,6 +17,7 @@ import { connectorsEn } from './areas/connectors.en';
 import { genuiRequestEn } from './areas/genui-request.en';
 import {studioEn}from'./areas/studio.en';
 import { permissionsEn } from './areas/permissions.en';
+import { langSwitchEn } from './areas/lang-switch.en';
 import type { Dict } from './index';
 import { chatEn } from './areas/chat.en';
 import { dialogsEn } from './areas/dialogs.en';
@@ -24,18 +27,22 @@ import { brainLibEn } from './areas/brainLib.en';
 import { SYS_EN } from '@shared/sys';
 import {productEn}from'./areas/product.en';
 import { agentsGridEn } from './areas/agents-grid.en';
+import { levelsEn } from './areas/levels.en';
 import { explainEn } from './areas/explain.en';
 import { agentDetailEn } from './areas/agent-detail.en';
 import { agentImageEn } from './areas/agent-image.en';
 import { approvalsEn } from './areas/approvals.en';
+import { proposalsEn } from './areas/proposals.en';
 import {settingsEn}from'./areas/settings.en';
 import { profileEn } from './areas/profile.en';
 import { homeEn } from './areas/home.en';
 import { guideEn } from './areas/guide.en';
 import { treeEn } from './areas/tree.en';
 import { aliveEn } from './areas/alive.en';
+import { queriesEn } from './areas/queries.en';
 import { lampoEn } from './areas/lampo.en';
 import { learningEn } from './areas/learning.en';
+import { suggestEn } from './areas/suggest.en';
 import { estimateEn } from './areas/estimate.en';
 import { logEn } from './areas/log.en';
 import { reviewedContextEn } from './areas/reviewed-context.en';
@@ -46,7 +53,6 @@ export const en: Dict = {
   ...auditEn,
   ...auditExpressionsEn,
   ...componentsEn,
-  ...agentPackEn,
   ...catalogEn,
   ...costsEn,
   ...connectorsEn,
@@ -57,8 +63,10 @@ export const en: Dict = {
   ...guideEn,
   ...treeEn,
   ...aliveEn,
+  ...queriesEn,
   ...lampoEn,
   ...learningEn,
+  ...suggestEn,
   ...estimateEn,
   ...logEn,
   ...genuiRequestEn,
@@ -79,15 +87,19 @@ export const en: Dict = {
   'genui.permission.deny': "Do not authorize this operation.",
   ...studioEn,
   ...permissionsEn,
+  ...langSwitchEn,
   ...brainModelEn,
   ...memoryEn,
+  ...memoryHubEn,
   ...statsEn,
   ...productEn,
   ...agentsGridEn,
+  ...levelsEn,
   ...explainEn,
   ...agentDetailEn,
   ...agentImageEn,
   ...approvalsEn,
+  ...proposalsEn,
   ...settingsEn,
   ...profileEn,
   ...chatEn,
@@ -95,13 +107,16 @@ export const en: Dict = {
   ...toolsEn,
   ...brainPagesEn,
   ...brainLibEn,
+  ...brainTextEn,
+  ...appTextEn,
   ...SYS_EN,
   'common.close': 'Close',
   'common.cancel': 'Cancel',
   'common.save': 'Save',
   'settings.language': 'Language',
-  'settings.languageDesc': 'The interface language. Same as the system = Italian when Windows is in Italian, English otherwise.',
+  'settings.languageDesc': 'The interface language. Same as the system = Italian or German when Windows is set to one of them, English otherwise.',
   'settings.language.system': 'Same as the system',
   'settings.language.it': 'Italiano',
   'settings.language.en': 'English',
+  'settings.language.de': 'Deutsch',
 };

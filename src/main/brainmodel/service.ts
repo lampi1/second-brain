@@ -5,7 +5,8 @@
 // and all of them on the maintenance button. No job asks for approval (owner, 2026-10-19); each change is logged with
 // an undo; a pass the app ran by itself that changed something is announced in the feed (`applied`: a quiet "Ruolo
 // aggiornato" with Annulla, ADR 0102). Off in the test suites unless SB_BRAIN_JOBS=1 (the buttons and the IPC still work). Wired by wiring.ts and
-// demo-wiring.ts; IPC 'brainmodel:*' and 'classifiers:state' (index.ts). Tests: test/unit/brainmodel/service.test.ts.
+// demo-wiring.ts; IPC 'brainmodel:*' and 'classifiers:state' (index.ts). The 'upgrade' job (upgrade.ts, ADR 0116) runs by
+// itself a minute after start when the brain is not in line with this version's layout. Tests: test/unit/brainmodel/service.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
@@ -23,6 +24,7 @@ import { classifiersState, readJobs } from './classifiers';
 import { claimOf, learningState, measurable, seal, type IntervalCache } from './evidence';
 import { corrections, mergeMemory, mergeSkills, migrate, repeatedTask, type AgentWriter, type JobContext, type JobResult } from './jobs';
 import { procedureSections } from './procedure-sources';
+import { pending as upgradePending, upgrade, type UpgradeAsk } from './upgrade';
 import { memoryStats } from './memory-stats';
 import { handoffText, readNoise, scanLogs, writeNoise } from './log-scan';
 import { readMemory, readRules, readSkills, type SkillDir } from './model';
@@ -47,6 +49,13 @@ export interface BrainModelDeps {
   logDir?: () => string | null;
   /** hands the pass's result to the open Orchestrator (#150): resolves true when delivered; absent = nobody to tell */
   handoff?: (text: string) => Promise<boolean>;
+  /** the running app's version (recorded in the brain by the upgrade job) */
+  appVersion?: () => string;
+  /** the upgrade job's one-shot question (agents/oneshot.ts, no tools); absent = candidates wait for a pass with an engine */
+  upgradeAsk?: UpgradeAsk;
+  /** the brain's scripts (brain/scripts.ts): a script's file by its id, and the hook that tells the Script tab it changed;
+   *  absent = scripts cannot be removed here (ADR 0122) */
+  scripts?: { file: (id: string) => string; changed: () => void };
   /** run the jobs by themselves (timers); false in the test suites */
   auto: boolean;
   now?: () => number;
@@ -169,7 +178,9 @@ export class BrainModelService {
       const before = new Set(this.log.all().map(c => c.id));
       for (const id of job ? [job] : MAINTENANCE_JOBS) {
         try {
-          const r = id === 'migration' ? await migrate(ctx) : id === 'corrections' ? corrections(ctx) : id === 'repeated-task' ? repeatedTask(ctx) : id === 'merge-skills' ? mergeSkills(ctx) : mergeMemory(ctx);
+          const r = id === 'migration' ? await migrate(ctx)
+            : id === 'upgrade' ? await upgrade({ root, userData: this.d.userData, log: this.log, app: this.d.appVersion?.() ?? '0.0.0', ask: this.d.upgradeAsk, now: () => this.now() })
+            : id === 'corrections' ? corrections(ctx) : id === 'repeated-task' ? repeatedTask(ctx) : id === 'merge-skills' ? mergeSkills(ctx) : mergeMemory(ctx);
           if (r.report) writeLocal(this.reportFile, mergeReport(this.report(), r.report));
           done.push(r);
         } catch (e) {
@@ -218,6 +229,7 @@ export class BrainModelService {
   rollback(id: string): BrainModelState {
     const c = this.log.rollback(id, this.restorer());
     log.info('brain', 'maintenance change undone', { data: { job: c.job, kind: c.kind, target: c.target } });
+    if (c.kind === 'script') this.d.scripts?.changed();
     this.d.emit();
     return this.state();
   }
@@ -232,6 +244,42 @@ export class BrainModelService {
     if (snap) this.log.record({ job: 'user', kind: 'agent', action: on ? 'link' : 'unlink', target: agentId, summary: `${p.name} ${on ? 'usa' : 'non usa più'} «${skill}»`, reason: 'Scelta tua sulla pagina Skill.', evidence: [skill] }, [], snap);
     this.d.emit();
     return this.state();
+  }
+  /** The Memoria hub's trash (ADR 0122): removes one brain skill (its whole folder), one rules/ file or one script
+   *  through the change log, so its «Annulla» puts every file back. Only what lives in the brain: the user's own and
+   *  Cursor's skills, the always-loaded files (CLAUDE.md and the like) and files too big to keep a copy of are refused. */
+  remove(kind: 'skill' | 'rule' | 'script', target: string): { state: BrainModelState; changeId: string } {
+    const root = this.root();
+    if (!root) throw new Error('Scegli prima la cartella del brain.');
+    let files: string[] = [], summary = '', reason = 'Eliminata da te in Memoria → Approvate.', evidence: string[] = [];
+    if (kind === 'skill') {
+      const skill = readSkills(this.skillDirs(root), root, []).find(x => x.name === target && x.home === 'brain');
+      if (!skill) throw new Error('Skill del brain non trovata.');
+      const dir = path.dirname(skill.file);
+      if (!insideBrain(root, dir)) throw new Error('Questa skill è un collegamento fuori dal brain: eliminala dal disco.');
+      files = listFiles(dir);
+      if (files.some(f => !isText(f))) throw new Error('La skill ha file non di testo (modelli, immagini): non si potrebbero rimettere con Annulla, eliminala dal disco.');
+      summary = `Skill «${skill.name}» eliminata`; evidence = [skill.rel ?? skill.file];
+    } else if (kind === 'rule') {
+      const rel = target.replace(/\\/g, '/');
+      const r = readRules(root).find(x => x.file === rel);
+      if (!r) throw new Error('Regola non trovata.');
+      if (!/^rules\/[^/]+\.md$/i.test(r.file) || r.loaded === 'always') throw new Error('Questo file è sempre caricato: si modifica, non si elimina da qui.');
+      files = [path.join(root, r.file)];
+      summary = `Regola «${r.title}» eliminata`; evidence = [r.file];
+    } else {
+      if (!this.d.scripts) throw new Error('Gli script non si possono eliminare qui.');
+      files = [this.d.scripts.file(target)];
+      summary = `Script «${target}» eliminato`; reason = 'Eliminato da te in Memoria → Approvate.'; evidence = [`scripts/${target}`];
+    }
+    if (!files.length) throw new Error('Niente da eliminare.');
+    if (files.length > 64 || files.some(f => { try { return fs.statSync(f).size > 256 * 1024; } catch { return true; } })) throw new Error('Troppo grande per poterlo annullare: eliminalo dal disco.');
+    const c = this.log.apply({ job: 'user', kind, action: 'remove', target, summary, reason, evidence }, files.map(file => ({ file, text: null })));
+    if (!c) throw new Error('Niente da eliminare.');
+    log.info('brain', 'item removed by the user', { data: { kind, files: files.length } });
+    if (kind === 'script') this.d.scripts?.changed();
+    this.d.emit();
+    return { state: this.state(), changeId: c.id };
   }
   /** The brain's skills by name and description, for skills_suggest (skills/suggest.ts). */
   skillList(): { name: string; description: string }[] {
@@ -248,18 +296,53 @@ export class BrainModelService {
       suggest: goal => this.d.suggestSkills(goal), jobs: () => readJobs(path.join(this.d.userData, 'jobs.jsonl')) }, this.now());
   }
 
-  /** Timers: the one-time migration a minute after start (when there is something to move), then every job every 6 h. */
+  /** Timers: a minute after start the one-time migration (when there is something to move) and the brain upgrade (when
+   *  the brain is not in line with this version's layout), then every job every 6 h. */
   start(): void {
     if (!this.d.auto) return;
     const first = setTimeout(() => {
       const root = this.root();
       try { if (root && !this.report() && procedureSections(root).length) void this.maintain('migration', { auto: true }).catch(() => { /* logged */ }); } catch { /* unreadable brain */ }
+      try { if (root && upgradePending(root, this.d.userData).length) void this.maintain('upgrade', { auto: true }).catch(() => { /* logged */ }); } catch { /* unreadable brain */ }
     }, 60_000);
     const every = setInterval(() => { void this.maintain(undefined, { auto: true }).catch(() => { /* logged */ }); }, SIX_HOURS);
     first.unref?.(); every.unref?.();
     this.timers.push(first, every);
   }
   stop(): void { for (const t of this.timers) { clearTimeout(t); clearInterval(t); } this.timers = []; }
+}
+
+/** The folder and every folder up to the brain are real folders inside it, none a link (a skill folder linked to
+ *  ~/.claude/skills would delete the files at the link's target). */
+function insideBrain(root: string, dir: string): boolean {
+  try {
+    const top = path.resolve(root);
+    for (let d = path.resolve(dir); d !== top; d = path.dirname(d)) {
+      if (d === path.dirname(d) || fs.lstatSync(d).isSymbolicLink()) return false;
+    }
+    return fs.realpathSync(dir).startsWith(fs.realpathSync(root));
+  } catch { return false; }
+}
+/** A file the change log can keep a copy of: UTF-8 text without NUL bytes (it snapshots text only). */
+function isText(file: string): boolean {
+  try {
+    const b = fs.readFileSync(file);
+    return !b.includes(0) && Buffer.from(b.toString('utf8'), 'utf8').equals(b);
+  } catch { return false; }
+}
+
+/** Every file under a folder (a skill's SKILL.md and what sits beside it), at most 65: more is refused by the caller. */
+function listFiles(dir: string): string[] {
+  const out: string[] = [];
+  const walk = (d: string) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      if (out.length > 64) return;
+      const f = path.join(d, e.name);
+      if (e.isDirectory()) walk(f); else if (e.isFile()) out.push(f);
+    }
+  };
+  walk(dir);
+  return out;
 }
 
 /** A re-run keeps the earlier report's items and adds the new ones (one line per former section). */

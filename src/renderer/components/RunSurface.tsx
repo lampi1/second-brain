@@ -15,7 +15,7 @@ export function RunChips({ run }: { run: AgentRun }) {
   return <span className="run-chips" data-testid="run-chips">
     <span className="th-badge" title={t('runs.version')}>v{run.version}</span>
     {run.startedBy === 'orchestrator' && <span className="th-badge" title={t('runs.auto')}>auto</span>}
-    {profile?.trial?.version === run.version && <span className="th-badge">{t('pack.trial')}</span>}
+    {profile?.trial?.version === run.version && <span className="th-badge">{t('studio.trial')}</span>}
   </span>;
 }
 

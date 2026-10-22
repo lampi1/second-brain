@@ -13,14 +13,15 @@ import { copyText, ExtLink, IconCopy, IconExternal, Pill, Section, toast } from 
 import { stateTone } from '../lib/tasks';
 import { RecordDiscussButton } from '../components/RecordDiscussButton';
 import { HelpTip } from '../../components/HelpTip';
+import { t as tr } from '../../i18n';
 
 function Bar({ t }: { t: QaReport['totals'] }) {
   if (!t.total) return null;
   const seg = (k: number, cls: string, label: string) => k > 0 && <span className={`qa-seg ${cls}`} style={{ flexGrow: k }} data-tip={`${k} ${label}`} />;
   return (
-    <div className="qa-bar" role="img" aria-label={`${t.done} su ${t.total} eseguiti`}>
-      {seg(t.passed, 'good', 'passati')}{seg(t.failed, 'bad', 'falliti')}{seg(t.blocked, 'warn', 'bloccati')}
-      {seg(t.notApplicable + t.other, 'na', 'non applicabili o altro')}{seg(t.missing, 'todo', 'da fare')}
+    <div className="qa-bar" role="img" aria-label={tr('brainText.taskQa.barLabel', { done: t.done, total: t.total })}>
+      {seg(t.passed, 'good', tr('brainText.taskQa.seg.passed'))}{seg(t.failed, 'bad', tr('brainText.taskQa.seg.failed'))}{seg(t.blocked, 'warn', tr('brainText.taskQa.seg.blocked'))}
+      {seg(t.notApplicable + t.other, 'na', tr('brainText.taskQa.seg.na'))}{seg(t.missing, 'todo', tr('brainText.qa.todo'))}
     </div>
   );
 }
@@ -28,9 +29,9 @@ function Bar({ t }: { t: QaReport['totals'] }) {
 function BugLine({ b }: { b: QaBug }) {
   return (
     <span className="qa-bug">
-      <Pill tone={b.open ? 'bad' : stateTone(b.state)}>bug {b.state}</Pill>
+      <Pill tone={b.open ? 'bad' : stateTone(b.state)}>{tr('brainText.taskQa.bug', { state: b.state })}</Pill>
       <ExtLink href={b.url}>{b.title}</ExtLink>
-      {b.assignedTo && <span className="small muted">a {b.assignedTo}</span>}
+      {b.assignedTo && <span className="small muted">{tr('brainText.common.to', { name: b.assignedTo })}</span>}
     </span>
   );
 }
@@ -39,11 +40,11 @@ function PlanView({ p, bugs, pr }: { p: QaPlan; bugs: Map<number, QaBug>; pr: De
   return (
     <details className="qa-plan" data-testid={`qa-plan-${p.id}`}>
       <summary>
-        <span className="t">Test plan <b>{p.name}</b></span>
-        <span className="small muted">{p.totals.done} su {p.totals.total}</span>
+        <span className="t">{tr('brainText.taskQa.testPlan')} <b>{p.name}</b></span>
+        <span className="small muted">{tr('brainText.common.ofCount', { n: p.totals.done, of: p.totals.total })}</span>
         <span className="sp" />
         <RecordDiscussButton rec={{ kind: 'testplan', plan: p, pr }} />
-        <ExtLink href={p.url} className="dv-open" title="Apri il test plan in DevOps">Apri <IconExternal /></ExtLink>
+        <ExtLink href={p.url} className="dv-open" title={tr('brainText.taskQa.openPlan')}>{tr('brainText.common.open')} <IconExternal /></ExtLink>
       </summary>
       <ul className="qa-points">
         {qaOrder(p.points).map(x => {
@@ -52,9 +53,9 @@ function PlanView({ p, bugs, pr }: { p: QaPlan; bugs: Map<number, QaBug>; pr: De
             <li key={x.id} data-testid={`qa-point-${x.id}`}>
               <Pill tone={o.tone}>{o.label}</Pill>
               <span className="qa-point-main">
-                <ExtLink href={x.testCase.url} title="Apri il test case in DevOps">{x.testCase.title}</ExtLink>
+                <ExtLink href={x.testCase.url} title={tr('brainText.taskQa.openCase')}>{x.testCase.title}</ExtLink>
                 <span className="small muted">
-                  {x.outcome ? <>{x.ranBy ?? 'qualcuno'}{x.ranAt && <span title={fmt.when(x.ranAt)}> · {fmt.ago(x.ranAt)}</span>}</> : x.tester ? `assegnato a ${x.tester}` : 'non assegnato'}
+                  {x.outcome ? <>{x.ranBy ?? tr('brainText.taskQa.someone')}{x.ranAt && <span title={fmt.when(x.ranAt)}> · {fmt.ago(x.ranAt)}</span>}</> : x.tester ? tr('brainText.common.assignedTo', { name: x.tester }) : tr('brainText.taskQa.unassigned')}
                 </span>
                 {x.bugs.map(id => bugs.get(id)).filter((b): b is QaBug => !!b).map(b => <BugLine key={b.id} b={b} />)}
               </span>
@@ -74,15 +75,15 @@ function QaCard({ r }: { r: QaReport }) {
   return (
     <article className={`dv-pr qa-card t-${h.tone || 'none'}`} data-testid={`qa-report-${r.pr?.id ?? r.plans[0]?.id}`}>
       <div className={`dv-wait ${h.tone}`} data-testid="qa-headline">{h.text}</div>
-      {r.pr ? <h3><ExtLink href={r.pr.url} title="Apri la PR in DevOps">{r.pr.title} <IconExternal /></ExtLink></h3> : <h3>{r.plans[0]?.name}</h3>}
+      {r.pr ? <h3><ExtLink href={r.pr.url} title={tr('brainText.common.openPr')}>{r.pr.title} <IconExternal /></ExtLink></h3> : <h3>{r.plans[0]?.name}</h3>}
       <Bar t={r.totals} />
       {r.totals.byPerson.length > 0 && (
-        <div className="small" data-testid="qa-people"><span className="muted">Eseguiti da </span>{r.totals.byPerson.map((p, i) => <span key={p.name}>{i > 0 && ', '}<b>{p.name}</b> {p.done}</span>)}</div>
+        <div className="small" data-testid="qa-people"><span className="muted">{tr('brainText.taskQa.ranBy')}</span>{r.totals.byPerson.map((p, i) => <span key={p.name}>{i > 0 && ', '}<b>{p.name}</b> {p.done}</span>)}</div>
       )}
       {r.plans.map(p => <PlanView key={p.id} p={p} bugs={bugs} pr={r.pr} />)}
       {loose.length > 0 && (
         <div className="dv-pr-items">
-          <span className="bx-eyebrow">Altri bug collegati</span>
+          <span className="bx-eyebrow">{tr('brainText.taskQa.otherBugs')}</span>
           {loose.map(b => <BugLine key={b.id} b={b} />)}
         </div>
       )}
@@ -93,18 +94,18 @@ function QaCard({ r }: { r: QaReport }) {
 export function QaSection({ qa, error }: { qa: QaReport[]; error: string | null }) {
   const people = qaPeople(qa);
   const missing = qa.reduce((s, r) => s + r.totals.missing, 0);
-  const copy = () => { void copyText(qaStandup(qa)).then(ok => toast(ok ? 'Stand-up copiato' : 'Copia non riuscita')); };
+  const copy = () => { void copyText(qaStandup(qa)).then(ok => toast(ok ? tr('brainText.taskQa.standupCopied') : tr('brainText.common.copyFailed'))); };
   return (
-    <Section title="Test e QA" count={qa.length} testId="task-qa"
-      help={<HelpTip label="Test e QA" title="Come leggere la barra" testid="qa-help"
-        example="7 su 10: 5 passati, 1 fallito, 1 bloccato, 3 ancora da fare.">
-        Ogni PR con un test plan collegato: verde passati, rosso falliti, giallo bloccati, grigio non applicabili, vuoto da fare. Bloccato = la QA non può eseguirlo finché qualcosa non si sblocca (ambiente, dati, un altro bug).
+    <Section title={tr('brainText.taskQa.title')} count={qa.length} testId="task-qa"
+      help={<HelpTip label={tr('brainText.taskQa.title')} title={tr('brainText.taskQa.helpTitle')} testid="qa-help"
+        example={tr('brainText.taskQa.helpExample')}>
+        {tr('brainText.taskQa.helpBody')}
       </HelpTip>}
-      note={qa.length ? <>{missing ? `mancano ${missing} test case` : 'tutti i test eseguiti'}{people.length > 0 && ` · eseguiti da ${people.map(p => `${p.name} ${p.done}`).join(', ')}`}</> : 'i test plan delle tue PR attive'}
-      actions={qa.length > 0 ? <button type="button" className="bx-btn s" onClick={copy} data-testid="qa-copy"><IconCopy /> Copia per lo stand-up</button> : undefined}>
-      {error && <p className="small dv-bad" role="status" data-testid="qa-error">{error}{qa.length ? ' Qui sotto la lettura precedente.' : ''}</p>}
+      note={qa.length ? <>{missing ? tr('brainText.taskQa.missing', { n: missing }) : tr('brainText.taskQa.allRun')}{people.length > 0 && tr('brainText.taskQa.ranByList', { list: people.map(p => `${p.name} ${p.done}`).join(', ') })}</> : tr('brainText.taskQa.noteEmpty')}
+      actions={qa.length > 0 ? <button type="button" className="bx-btn s" onClick={copy} data-testid="qa-copy"><IconCopy /> {tr('brainText.taskQa.copyStandup')}</button> : undefined}>
+      {error && <p className="small dv-bad" role="status" data-testid="qa-error">{error}{qa.length ? tr('brainText.taskQa.previous') : ''}</p>}
       {qa.length ? <div className="dv-prs">{qa.map(r => <QaCard key={r.pr?.id ?? r.plans[0]?.id} r={r} />)}</div>
-        : !error && <Empty title="Nessuna PR attiva con test">Quando una tua PR ha un test plan collegato, qui vedi cosa è fatto, chi l'ha fatto e cosa manca.</Empty>}
+        : !error && <Empty title={tr('brainText.taskQa.emptyTitle')}>{tr('brainText.taskQa.emptyBody')}</Empty>}
     </Section>
   );
 }

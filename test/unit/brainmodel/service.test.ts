@@ -26,13 +26,13 @@ const DEV = 'artisan';
 const OTHER = 'scout';
 const routing: RoutingInfo = { table: null, registry: null, kinds: [], error: null, history: [] };
 
-function world(opts: { demo?: boolean; runs?: AgentRun[]; applied?: (c: BrainChange[]) => void; logDir?: string; handoff?: (text: string) => Promise<boolean> } = {}) {
+function world(opts: { demo?: boolean; scripts?: { file: (id: string) => string; changed: () => void }; runs?: AgentRun[]; applied?: (c: BrainChange[]) => void; logDir?: string; handoff?: (text: string) => Promise<boolean> } = {}) {
   const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-brainmodel-'))); roots.push(base);
   const data = path.join(base, 'data'); fs.mkdirSync(data);
   const brain = opts.demo ? writeDemoBrain(path.join(base, 'brain'), NOW) : path.join(base, 'brain');
   if (!opts.demo) { fs.mkdirSync(brain); put(brain, 'brain.json', JSON.stringify({ machinery: 'product-v1', rules: { topicFiles: [], appRules: true } })); }
   const catalog = new AgentCatalogService({ userData: data, models });
-  const flows = new AgentPackFlows({ catalog, brainRoot: () => brain, version: '0.1.0', guards: () => [], scan: async () => ({ ok: true }), pickImport: async () => null, pickExport: async () => null, tempRoot: base, runtimeRoot: path.join(base, 'runtime'),
+  const flows = new AgentPackFlows({ catalog, brainRoot: () => brain, tempRoot: base, runtimeRoot: path.join(base, 'runtime'),
     sharedSkills: () => { const dir = path.join(brain, '.claude', 'skills'); try { return fs.readdirSync(dir).map(name => ({ name, folder: path.join(dir, name) })); } catch { return []; } } });
   catalog.onKnowhowChange((p, previous) => flows.publishCurrent(p, previous));
   const learning = new AgentPackLearning(flows, data);
@@ -40,7 +40,7 @@ function world(opts: { demo?: boolean; runs?: AgentRun[]; applied?: (c: BrainCha
   const service = new BrainModelService({ userData: data, root: () => brain, home: null, catalog, packs: flows, learning, runs: () => opts.runs ?? [], routing: () => routing,
     suggestSkills: async () => [],
     emit: () => { emitted++; }, auto: false, now: () => NOW, ...(opts.applied ? { applied: opts.applied } : {}),
-    ...(opts.logDir ? { logDir: () => opts.logDir! } : {}), ...(opts.handoff ? { handoff: opts.handoff } : {}) });
+    ...(opts.logDir ? { logDir: () => opts.logDir! } : {}), ...(opts.handoff ? { handoff: opts.handoff } : {}), ...(opts.scripts ? { scripts: opts.scripts } : {}) });
   const agent = (id: string) => catalog.list().profiles.find(p => p.id === id)!;
   return { base, brain, data, catalog, flows, learning, service, agent, emitted: () => emitted };
 }
@@ -90,7 +90,7 @@ describe('one-time migration', () => {
     const state = await w.service.maintain();
     expect(state).toMatchObject({ skills: [], rules: [], memory: [], changes: [] });
     expect(state.migration).toEqual({ at: NOW, items: [] });
-    expect(state.lastRun!.jobs.map(j => j.job)).toEqual(['migration', 'corrections', 'repeated-task', 'merge-skills', 'merge-memory']);
+    expect(state.lastRun!.jobs.map(j => j.job)).toEqual(['migration', 'upgrade', 'corrections', 'repeated-task', 'merge-skills', 'merge-memory']);
     expect(w.emitted()).toBe(1);
   });
 });
@@ -298,5 +298,42 @@ describe('one Manutenzione that reads the logs and hands the result to the Orche
     const w = world({ logDir: logs, handoff: async () => false });
     const state = await w.service.maintain();
     expect(state.lastRun!.handoff).toEqual({ sent: false, why: 'nessun Orchestrator aperto' });
+  });
+});
+
+describe('the Memoria hub trash (ADR 0122)', () => {
+  it('removes a brain skill folder, a rules/ file and a script through the change log, and Annulla puts each back', () => {
+    let changed = 0;
+    const w0 = world({ scripts: { file: id => path.join(w0Brain(), 'scripts', id), changed: () => { changed++; } } });
+    function w0Brain() { return w0?.brain ?? ''; }
+    const { brain, service } = w0;
+    put(brain, '.claude/skills/pulizia/SKILL.md', '---\nname: pulizia\ndescription: Pulisce.\n---\nPassi.\n');
+    put(brain, '.claude/skills/pulizia/helper.mjs', 'export {};\n');
+    put(brain, 'rules/stile.md', '# Stile\n\nFrasi brevi.\n');
+    put(brain, 'scripts/conta.mjs', '// conta\nconsole.log(1);\n');
+    const s1 = service.remove('skill', 'pulizia');
+    expect(fs.existsSync(path.join(brain, '.claude/skills/pulizia'))).toBe(false);
+    expect(s1.state.skills.some(x => x.name === 'pulizia')).toBe(false);
+    const c1 = s1.state.changes.find(c => c.id === s1.changeId)!;
+    expect(c1).toMatchObject({ job: 'user', kind: 'skill', action: 'remove', target: 'pulizia', canRollback: true });
+    const r = service.remove('rule', 'rules/stile.md');
+    expect(fs.existsSync(path.join(brain, 'rules/stile.md'))).toBe(false);
+    const sc = service.remove('script', 'conta.mjs');
+    expect(fs.existsSync(path.join(brain, 'scripts/conta.mjs'))).toBe(false);
+    expect(changed).toBe(1);
+    service.rollback(sc.changeId); service.rollback(r.changeId); service.rollback(s1.changeId);
+    expect(fs.readFileSync(path.join(brain, '.claude/skills/pulizia/helper.mjs'), 'utf8')).toBe('export {};\n');
+    expect(fs.readFileSync(path.join(brain, 'rules/stile.md'), 'utf8')).toContain('Frasi brevi');
+    expect(fs.existsSync(path.join(brain, 'scripts/conta.mjs'))).toBe(true);
+    expect(changed).toBe(2);
+  });
+  it('refuses what is not the brain\'s to delete: an unknown skill, an always-loaded file, scripts without a reader', () => {
+    const { brain, service } = world();
+    put(brain, 'CLAUDE.md', '# Regole\n');
+    put(brain, 'brain.json', JSON.stringify({ machinery: 'product-v1', fixedFiles: ['CLAUDE.md'], rules: { topicFiles: [], appRules: true } }));
+    expect(() => service.remove('skill', 'nessuna')).toThrow(/non trovata/);
+    expect(() => service.remove('rule', 'CLAUDE.md')).toThrow();
+    expect(fs.existsSync(path.join(brain, 'CLAUDE.md'))).toBe(true);
+    expect(() => service.remove('script', 'x.mjs')).toThrow();
   });
 });

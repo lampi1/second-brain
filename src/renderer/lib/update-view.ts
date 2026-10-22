@@ -1,5 +1,6 @@
 // Consume main update state without letting stale reads or rejected actions restore an actionable package.
 import type {AppUpdateState,PreparedAppUpdate} from '@shared/app-update';
+import {t} from '../i18n';
 const phases=['preparing','ready','applying','applied','failed','restored'];
 export function validUpdateState(value:unknown):value is AppUpdateState{
   const state=value as AppUpdateState;if(!state||typeof state.available!=='boolean'||typeof state.checking!=='boolean'||state.reason!==undefined&&typeof state.reason!=='string'||state.checkedAt!==null&&!Number.isFinite(state.checkedAt))return false;
@@ -7,7 +8,7 @@ export function validUpdateState(value:unknown):value is AppUpdateState{
   return !!update&&typeof update.id==='string'&&typeof update.version==='string'&&Array.isArray(update.changes)&&update.changes.every(line=>typeof line==='string')&&phases.includes(update.phase)&&(update.blocked===null||typeof update.blocked==='string');
 }
 export function blockedUpdate(state:AppUpdateState,problem:string|null):PreparedAppUpdate|null{
-  return state.update?{...state.update,blocked:problem||(!state.available?state.reason||'Applicazione degli aggiornamenti non disponibile.':state.update.blocked)}:null;
+  return state.update?{...state.update,blocked:problem||(!state.available?state.reason||t('appText.updateView.unavailable'):state.update.blocked)}:null;
 }
 export function connectUpdateView(api:{get():Promise<AppUpdateState>;listen(accept:(state:AppUpdateState)=>void):()=>void},render:(state:AppUpdateState)=>void,failed:()=>void){
   let revision=0,active=true;

@@ -1,12 +1,9 @@
-// The Dashboard's Errori view, made readable (owner, 2026-10-19: "la parte delle statistiche errori proprio non ci
+// The app's own errors on Qualità (AppErrors.tsx; once the Dashboard's Errori view, ADR 0122), made readable (owner, 2026-10-19: "la parte delle statistiche errori proprio non ci
 // siamo, non si capisce nulla"): recurring errors grouped instead of listed one by one. App and tool errors (the feed
 // and the chats' error items, data.ts observedErrors) are grouped by a signature of their text (numbers, ids, paths,
 // quotes and links removed) and tagged with a known cause (rate limit, overloaded service, full context, login,
 // network, timeout, missing file, permission, MCP, tool, failed turn) that the page explains in plain Italian with
-// what to do. The AI errors the user corrected (ai-errors.md) are grouped by their type, with who made them, the area,
-// one "said / was true" example, the rule each produced and whether it came back after the rule. Each group carries a
-// 14-day count series for its trend. Pure: no React, no IPC; unit-tested in test/unit/dashboard-errors.test.ts.
-import type { ErrorRow, ErrQuality } from '../brain/types';
+// what to do (the AI errors the user corrected are Qualità's own patterns, lib/stats.ts). Each group carries a 14-day count series for its trend. Pure: no React, no IPC; unit-tested in test/unit/dashboard-errors.test.ts.
 
 export type Cause = 'rateLimit' | 'overloaded' | 'context' | 'auth' | 'timeout' | 'network' | 'notFound' | 'permission' | 'mcp' | 'turn' | 'tool' | 'other';
 /** Most specific first: the first matching cause wins. */
@@ -76,35 +73,6 @@ export function groupErrors(rows: ObservedLike[], now: number, days = 14): Error
     groups.set(key, g);
   }
   return [...groups.values()].sort((a, b) => b.count - a.count || b.lastAt - a.lastAt);
-}
-
-export interface AiErrorGroup {
-  type: string; count: number; days: number[]; last: string;
-  who: string[]; areas: string[];
-  /** the newest occurrence's "the AI said" / "it was true" */
-  said: string; truth: string;
-  rule: string;
-  /** the rule's status from recurrence.mjs quality(): came back after the rule, did not, too early */
-  status: string | null;
-}
-
-/** ai-errors.md grouped by type (rows without a type fall under "senza tipo"), the most frequent first. */
-export function groupAiErrors(rows: ErrorRow[], today: string, quality: ErrQuality | null, days = 14, untyped = 'senza tipo'): AiErrorGroup[] {
-  const end = Date.parse(`${today}T00:00:00Z`);
-  const groups = new Map<string, AiErrorGroup>();
-  for (const r of [...rows].sort((a, b) => `${b.data} ${b.ora}`.localeCompare(`${a.data} ${a.ora}`))) {
-    const type = r.tipo.trim() || untyped;
-    const g: AiErrorGroup = groups.get(type) ?? { type, count: 0, days: Array(days).fill(0), last: r.data, who: [], areas: [], said: r.detto, truth: r.vero, rule: r.regola, status: null };
-    g.count++;
-    const at = Date.parse(`${r.data}T00:00:00Z`);
-    if (Number.isFinite(at) && Number.isFinite(end)) { const i = days - 1 - Math.round((end - at) / DAY); if (i >= 0 && i < days) g.days[i]!++; }
-    if (r.chi && !g.who.includes(r.chi)) g.who.push(r.chi);
-    if (r.area && !g.areas.includes(r.area)) g.areas.push(r.area);
-    if (!g.rule && r.regola) g.rule = r.regola;
-    groups.set(type, g);
-  }
-  for (const q of quality?.rules ?? []) { const g = groups.get(q.type); if (g && (g.status === null || q.status === 'tornato')) g.status = q.status; }
-  return [...groups.values()].sort((a, b) => b.count - a.count || b.last.localeCompare(a.last));
 }
 
 /** "up" when the last 7 days hold more than the 7 before, "down" when fewer, "flat" otherwise (14-day series). */

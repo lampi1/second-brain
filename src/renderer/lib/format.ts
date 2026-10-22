@@ -1,7 +1,7 @@
 // Italian formatting helpers for the UI (costs, models, efforts, states, relative times, folders). Pure functions:
 // every tile, the top bar and the palette use them, and the unit tests pin their output (test/unit/format.test.ts).
 import type { ChatState, ChatSummary, Effort, Harness, PermissionMode } from '@shared/contract';
-import { locale, t } from '../i18n';
+import { locale, t, type TextKey } from '../i18n';
 import { waitsOnChildren } from './agent-children';
 
 /** THE money format of the app (ADR 0101): the number in the UI's locale, then " $" — 1.84 → "1,84 $" (it),
@@ -24,7 +24,7 @@ export const costOrNull = (usd: number | null | undefined, opts?: { round?: bool
  *  of it is the running turn's estimate (the real figure replaces it at the end of the turn). */
 export function chatCost(c: Pick<ChatSummary, 'harness' | 'costUsd'> & { costKnown?: boolean; costLiveUsd?: number; costLedgerUsd?: number }): string {
   if (c.costLedgerUsd !== undefined) return `≈ ${formatCost(c.costLedgerUsd)}`;
-  if (c.costKnown === false || (c.harness === 'cursor' && !c.costUsd)) return 'costo n/d';
+  if (c.costKnown === false || (c.harness === 'cursor' && !c.costUsd)) return t('appText.format.costNa');
   return `${c.costLiveUsd ? '≈ ' : ''}${formatCost(c.costUsd)}`;
 }
 
@@ -32,7 +32,7 @@ const FAMILY: Record<string, string> = { opus: 'Opus', sonnet: 'Sonnet', haiku: 
 
 /** "claude-opus-5-5" → "Opus 5.5", "claude-haiku-4-5-20251001" → "Haiku 4.5", "grok-4.7" → "Grok 4.7", "gpt-5" → "GPT-5". */
 export function prettyModel(model: string | null | undefined, harness: Harness = 'claude'): string {
-  if (!model) return harness === 'cursor' ? 'Cursor (predefinito)' : 'predefinito';
+  if (!model) return harness === 'cursor' ? t('appText.format.cursorDefault') : t('appText.format.default');
   const m = model.trim();
   const claude = /^claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?(\[1m\])?$/i.exec(m);
   if (claude) {
@@ -47,9 +47,8 @@ export function prettyModel(model: string | null | undefined, harness: Harness =
 const cap = (s: string) => (s ? s[0]!.toUpperCase() + s.slice(1) : s);
 
 export const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
-const EFFORT_IT: Record<Effort, string> = { low: 'bassa', medium: 'media', high: 'alta', xhigh: 'molto alta', max: 'massima' };
 export function effortLabel(e: Effort | null | undefined): string | null {
-  return e ? EFFORT_IT[e] : null;
+  return e ? t(`appText.format.effort.${e}`) : null;
 }
 
 /** The effort a chat runs with, as its engine reports it (effortStatus.effective), else the value the app last sent with
@@ -67,20 +66,16 @@ export function modelWithEffort(c: Pick<ChatSummary, 'model' | 'harness' | 'effo
 }
 
 export const PERMISSION_MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions'];
-const PERM_IT: Record<PermissionMode, string> = {
-  default: 'Chiedi ogni volta', acceptEdits: 'Accetta le modifiche', auto: 'Automatico', plan: 'Solo piano', bypassPermissions: 'Senza permessi',
-};
-const PERM_SHORT: Record<PermissionMode, string | null> = { default: null, acceptEdits: 'modifiche ok', auto: 'auto', plan: 'piano', bypassPermissions: 'senza permessi' };
-export function permissionLabel(p: PermissionMode): string { return PERM_IT[p]; }
+export function permissionLabel(p: PermissionMode): string { return t(`appText.format.perm.${p}`); }
 /** Short badge for the sub-line; null for the default mode (nothing to show). */
-export function permissionBadge(p: PermissionMode | null | undefined): string | null { return p ? PERM_SHORT[p] : null; }
+export function permissionBadge(p: PermissionMode | null | undefined): string | null { return p && p !== 'default' ? t(`appText.format.permShort.${p}`) : null; }
 
 /** Last segment of a path ("C:\\lavoro\\core-web" → "core-web"). */
 /** Token counts for people: 820 · 46k · 238k · 1,2M. */
 export function tokensShort(n: number): string {
   if (n < 1000) return String(Math.round(n));
   if (n < 999_500) return `${Math.round(n / 1000)}k`;
-  return `${(n / 1_000_000).toLocaleString('it-IT', { maximumFractionDigits: 1 })}M`;
+  return `${(n / 1_000_000).toLocaleString(locale(), { maximumFractionDigits: 1 })}M`;
 }
 
 export function folderName(cwd: string): string {
@@ -110,28 +105,28 @@ export function stateInfo(c: Pick<ChatSummary, 'state' | 'isOrchestrator' | 'pen
 /** Why a chat waits in the CPU queue (ADR 0036): the figure over its limit, or the chats ahead of it. */
 export function queueReason(q: NonNullable<ChatSummary['queued']>, limits: { cpu: number; ram: number }): string {
   if (q.cpu > limits.cpu) return `CPU ${q.cpu}%`;
-  if (q.freeRam < limits.ram) return `RAM libera ${q.freeRam}%`;
-  return 'dietro altre';
+  if (q.freeRam < limits.ram) return t('appText.format.freeRam', { pct: q.freeRam });
+  return t('appText.format.behindOthers');
 }
 
 /** Relative time in Italian, short: "ora", "4 min", "2 h", "3 g". */
 export function ago(ts: number, now: number): string {
   const s = Math.max(0, Math.round((now - ts) / 1000));
-  if (s < 45) return 'ora';
+  if (s < 45) return t('appText.format.now');
   const m = Math.round(s / 60);
   if (m < 60) return `${m} min`;
   const h = Math.round(m / 60);
   if (h < 24) return `${h} h`;
-  return `${Math.round(h / 24)} g`;
+  return t('appText.format.days', { n: Math.round(h / 24) });
 }
 
 /** "tra 2 h 13 min" for a future reset time. */
 export function until(ts: number, now: number): string {
   const m = Math.max(0, Math.round((ts - now) / 60000));
-  if (m < 60) return `tra ${m} min`;
+  if (m < 60) return t('appText.format.in', { time: `${m} min` });
   const h = Math.floor(m / 60);
   const r = m % 60;
-  return r ? `tra ${h} h ${r} min` : `tra ${h} h`;
+  return t('appText.format.in', { time: r ? `${h} h ${r} min` : `${h} h` });
 }
 
 /** Durations for tool rows and results: 42000 → "0:42", 134000 → "2:14", 3780000 → "1 h 03". */
@@ -168,8 +163,8 @@ export function sameDay(a: number, b: number): boolean {
 /** When a chat closed: "18:42" today, "10/10 18:42" before (the palette's "Chiuse" group). */
 export function closedTime(at: number, now: number): string {
   const d = new Date(at);
-  const hm = d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-  return sameDay(at, now) ? hm : `${d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })} ${hm}`;
+  const hm = d.toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
+  return sameDay(at, now) ? hm : `${d.toLocaleDateString(locale(), { day: '2-digit', month: '2-digit' })} ${hm}`;
 }
 
 /** Tool names as people read them: "mcp__sb-browser__browser_click" → "Browser · click", "Edit" → "Modifica". */
@@ -182,11 +177,12 @@ export function toolLabel(name: string): string {
     return `${server.replace(/[-_]/g, ' ')} · ${tool.replace(/_/g, ' ')}`;
   }
   if (/^browser_/.test(name)) return `Browser · ${name.replace(/^browser_/, '').replace(/_/g, ' ')}`;
-  const IT: Record<string, string> = {
-    Edit: 'Modifica', MultiEdit: 'Modifica', Write: 'Scrive', Read: 'Legge', Grep: 'Cerca', Glob: 'File', Bash: 'Bash', PowerShell: 'PowerShell',
-    WebFetch: 'Web', WebSearch: 'Ricerca web', Task: 'Agente', Agent: 'Agente', TodoWrite: 'Da fare', AskUserQuestion: 'Domanda',
+  const IT: Record<string, TextKey | string> = {
+    Edit: 'appText.format.tool.edit', MultiEdit: 'appText.format.tool.edit', Write: 'appText.format.tool.write', Read: 'appText.format.tool.read', Grep: 'appText.format.tool.search', Glob: 'File', Bash: 'Bash', PowerShell: 'PowerShell',
+    WebFetch: 'Web', WebSearch: 'appText.format.tool.webSearch', Task: 'appText.format.tool.agent', Agent: 'appText.format.tool.agent', TodoWrite: 'appText.format.tool.todo', AskUserQuestion: 'appText.format.tool.question',
   };
-  return IT[name] ?? name;
+  const k = Object.hasOwn(IT, name) ? IT[name]! : name;
+  return k.startsWith('appText.') ? t(k as TextKey) : k;
 }
 
 /** Sum of +/− over the diffs of a tool row. */

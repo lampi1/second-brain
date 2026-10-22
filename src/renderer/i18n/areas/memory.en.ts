@@ -26,6 +26,7 @@ export const memoryEn: typeof memoryIt = {
   'mm.maint.sent': 'Result sent to the Orchestrator: it opens the issues for the new bugs.',
   'mm.maint.notSent': (p: { why: string }) => `Result not sent to the Orchestrator: ${p.why}.`,
   'mm.maint.help3': 'It also reads the app logs and sends everything to the Orchestrator, which opens an issue for each new bug (with your permission, like any external write).',
+  'mm.job.upgrade': 'With a new app version, content that now has its own place (scripts, for example) moves there from the notes, with a pointer.',
   'mm.job.migration': 'Sections of the old runbooks and routines become skills (once).',
   'mm.job.corrections': 'Your corrections become rules or lessons for the agent that got it wrong.',
   'mm.job.repeated-task': 'A job asked for at least 3 times in 60 days becomes a skill.',

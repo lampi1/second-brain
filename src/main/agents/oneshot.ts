@@ -14,7 +14,7 @@ import { type AgentRunStore, endRun } from './runs';
 
 export interface OneShotRequest {
   agentId: string; system: string; prompt: string; maxOutputTokens: number; timeoutMs: number;
-  purpose: 'pulse' | 'headline';
+  purpose: 'pulse' | 'headline' | 'upgrade';
 }
 export type OneShotResult = {
   ok: boolean; text: string; reason?: string; noEngine?: boolean; runId?: string;

@@ -33,9 +33,27 @@ async function settled(): Promise<void> {
 }
 
 
+/** Fatto's macro tasks (#160): a root with two children (known costs) and one with an unknown part, started today. */
+function seededRuns(): string {
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-'));
+  const today = new Date(); today.setHours(9, 0, 0, 0);
+  const at = (h: number) => today.getTime() + h * 36e5;
+  const counters = { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null };
+  const r = (id: string, o: Record<string, unknown>) => ({ runId: `r_${id}`, chatId: `c_${id}`, agentId: 'scout', version: 1, goal: 'Cerca', startedBy: 'orchestrator',
+    startedAt: at(0), endedAt: at(1), endReason: 'completed', costUsd: 0, tokens: null, counters, ...o });
+  const runs = [
+    r('aaaaaaaaaaa1', { goal: 'Analisi export fatture', costUsd: 0.4, report: { at: at(1), outcome: 'done', verified: 'yes', summary: 'ok' } }),
+    r('aaaaaaaaaaa2', { agentId: 'artisan', goal: 'Correggi export', parentRunId: 'r_aaaaaaaaaaa1', costUsd: 0.2 }),
+    r('aaaaaaaaaaa3', { agentId: 'sentinel', goal: 'Rivedi export', parentRunId: 'r_aaaaaaaaaaa2', costUsd: 0.1 }),
+    r('aaaaaaaaaaa4', { goal: 'Ricerca librerie grafici', startedAt: at(2), endedAt: at(3), costUsd: null }),
+  ];
+  fs.writeFileSync(path.join(userData, 'agent-runs.json'), JSON.stringify({ version: 1, runs, rollups: [] }));
+  return userData;
+}
+
 test.beforeAll(async () => {
   brain = fixtureBrain();
-  ({ app, page } = await launch({ SB_BRAIN: brain }));
+  ({ app, page } = await launch({ SB_BRAIN: brain }, seededRuns()));
   await page.emulateMedia({ colorScheme: "dark" }); // the app default; one light shot at the end
   await expect(page.getByTestId('app')).toBeVisible();
   await open('fatto', true);
@@ -54,38 +72,31 @@ test('Oggi, Adesso and DevOps are gone: their old links open Task', async () => 
   await expect(page.getByTestId('brain-page-home')).toBeVisible();
 });
 
-test('Fatto: a log newest first, grouped by day, each entry with what, who, when and its link; more days on demand', async () => {
+test('Fatto: only the macro tasks, newest first, each with the cost of all it started; day total; stand-up from them', async () => {
   await open('fatto');
   const p = page.getByTestId('brain-page-fatto');
   await settled();
   await expect(p.getByRole('heading', { level: 2, name: 'Fatto' })).toBeVisible();
   await expect(p.locator('.catalog-head')).toBeVisible(); // the head of Agenti and Guida (ADR 0079)
-  await expect(p.getByTestId('bx-standup')).toContainText('Export fatture');
   const days = p.getByTestId('fatto-log').locator('section.wl-day');
   await expect(days).toHaveCount(3);
   const today = days.first();
   await expect(today.getByRole('heading', { level: 3 })).toHaveText('Oggi');
-  await expect(today.getByTestId('fatto-day-count')).toHaveText('13 esiti');
-  // newest first (the 3D map chat ended 15:20, the Procedure chat 14:10, its diary line 13:05), the untimed Cursor chat last
+  // two roots: the children (Artisan, Sentinel) are no rows of their own
   const rows = today.getByTestId('fatto-entry');
-  const times = await rows.locator('.wl-time').allInnerTexts();
-  expect(times.slice(0, 3)).toEqual(['15:20', '14:10', '13:05']);
-  expect(times.at(-1)).toBe('senza ora');
-  const pr = rows.filter({ hasText: 'apply the discount once' });
-  await expect(pr.getByRole('link')).toHaveAttribute('href', /pullrequest\/51001$/);
-  await expect(pr).toContainText('PR unita');
-  await expect(pr.locator('.wl-who')).toHaveText('Tu');
-  await expect(rows.filter({ hasText: 'QA ordini' }).locator('.wl-who')).toHaveText('Claude');
-  await expect(rows.filter({ hasText: 'Ricerca librerie grafici' }).locator('.wl-who')).toHaveText('Cursor');
-  // the app's own work is listed like any other since "Migliora l'app" is gone (ADR 0079); lessons stay in the diary
-  await expect(today).toContainText('Pagina Procedure');
-  await expect(today).not.toContainText('La stima dei costi va sempre mostrata');
+  await expect(rows).toHaveCount(2);
+  await expect(today.getByTestId('fatto-day-count')).toHaveText('2 attività');
+  await expect(rows.first()).toContainText('Ricerca librerie grafici'); // newest first
+  await expect(rows.first().getByTestId('fatto-cost')).toHaveText('n/d'); // an unknown part: never a partial sum
+  const fatture = rows.filter({ hasText: 'Analisi export fatture' });
+  await expect(fatture.getByTestId('fatto-cost')).toHaveText(/0,70/); // 0,40 + 0,20 + 0,10
+  await expect(fatture).toContainText('fatto');
+  await expect(fatture).toContainText('3 chat');
+  await expect(today.getByTestId('fatto-day-total')).toHaveText('Totale n/d');
+  await expect(p.getByTestId('bx-standup')).toContainText('Oggi: Analisi export fatture (Scout, fatto)');
   await shot(page, 'brain-fatto');
-  await today.locator('summary', { hasText: 'Dettaglio tecnico' }).click();
-  await expect(today).toContainText('3 commit');
   await p.getByTestId('fatto-more').click();
   await expect(days).toHaveCount(6);
-  await settled();
   await p.getByTestId('fatto-log').evaluate(el => el.scrollIntoView());
 });
 

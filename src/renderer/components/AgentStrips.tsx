@@ -15,7 +15,7 @@ import { useApp } from '../store/store';
 import { sameList } from '../store/state';
 import { useHandoffTabs } from '../store/handoffs';
 import { setPrefs, ui } from '../store/ui';
-import { t as tr } from '../i18n';
+import { t as tr, locale } from '../i18n';
 import { ChatTile } from './ChatTile';
 import { BrowserTile } from './BrowserTile';
 import { ChildStrips } from './ChildStrips';
@@ -136,18 +136,17 @@ function ChildRails({ node }: { node: TreeNode }) {
  *  from nowhere. */
 function Origin({ chatId }: { chatId: string }) {
   const o = useApp(s => originOf(s.chats[chatId], Object.values(s.chats)), (a, b) => JSON.stringify(a) === JSON.stringify(b));
-  const judgeDaily = useApp(s => s.settings?.delegation?.judgeDaily ?? 3);
   const avatar = useApp(s => Object.values(s.chats).find(c => c?.isOrchestrator)?.agent?.avatar);
   if (!o) return null;
-  const time = (at: number) => new Date(at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  const time = (at: number) => new Date(at).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
   if (o.kind === 'orchestrator') return <div className="tree-origin" data-testid={`tree-origin-${chatId}`} data-origin="orchestrator">
     <AgentAvatar avatar={avatar} name="Orchestrator" size={18} />
     <span><b>Orchestrator</b> {tr('tree.origin', { time: time(o.at) })}</span>
   </div>;
   if (o.kind === 'resumed') return <div className="tree-origin is-app" data-testid={`tree-origin-${chatId}`} data-origin="resumed"><span>{tr('alive.origin.resumed', { time: time(o.at) })}</span></div>;
   return <div className="tree-origin is-app" data-testid={`tree-origin-${chatId}`} data-origin="app">
-    <span><b>{tr('alive.origin.app')}</b>{o.review ? <> · {tr('alive.origin.review')} ({tr('alive.origin.reviewOf', { n: o.review, of: Math.max(o.review, judgeDaily) })})</> : null} · {time(o.at)}</span>
-    {o.review ? <button type="button" className="link-btn" onClick={() => go({ page: 'impostazioni' })} data-testid={`tree-origin-settings-${chatId}`}>{tr('alive.origin.settings')}</button> : null}
+    <span><b>{tr('alive.origin.app')}</b>{o.review ? <> · {tr('alive.origin.review')}</> : null} · {time(o.at)}</span>
+    {o.review ? <button type="button" className="link-btn" onClick={() => go({ page: 'agenti' })} data-testid={`tree-origin-settings-${chatId}`}>{tr('alive.origin.settings')}</button> : null}
   </div>;
 }
 

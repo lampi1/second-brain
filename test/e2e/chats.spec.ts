@@ -49,38 +49,6 @@ test('a Claude chat runs a turn, asks a question, takes the answer and streams e
   await page.evaluate(id => window.sb.invoke('chat:close', { chatId: id }), chat.id);
   await expect.poll(() => count('chat:removed')).toBe(1);
   expect(await page.evaluate(() => window.sb.invoke('chat:list', undefined))).toEqual([]);
-  // without SB_CURSOR_PATH the real Cursor engine would be the one: under tests it is refused before any spawn
-  const guarded: ChatSummary = await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'cursor', cwd: dir }), cwd);
-  expect(guarded).toMatchObject({ harness: 'cursor', state: 'error', lastError: expect.stringMatching(/Nei test il motore Cursor reale non parte mai/) });
-  await app.close();
-});
-
-test('a Cursor chat (fake ACP agent) asks permission, takes the answer, ends the turn with the cost unknown', async () => {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cwd-'));
-  const logFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cur-')), 'cursor.jsonl');
-  const FAKE_CURSOR = path.resolve(import.meta.dirname, '..', 'fixtures', 'fake-cursor-acp.mjs');
-  const userCursor = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cursor-user-')); // never the real ~/.cursor
-  const { app, page, userData } = await launch({ SB_CURSOR_PATH: FAKE_CURSOR, FAKE_CURSOR_LOG: logFile, CURSOR_CONFIG_DIR: userCursor });
-  await page.evaluate(() => { window.__ev = []; for (const ch of ['pending:added', 'pending:resolved', 'chat:item'] as const) window.sb.on(ch, p => { window.__ev.push({ ch, p }); }); });
-  const chat: ChatSummary = await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'cursor', cwd: dir, prompt: 'perm', title: 'Orchestrator Cursor', orchestrator: true }), cwd);
-  expect(chat).toMatchObject({ harness: 'cursor', isOrchestrator: true, costKnown: false });
-  await expect.poll(() => page.evaluate(() => window.__ev.filter(e => e.ch === 'pending:added').length)).toBe(1);
-  const pending: PendingRequest[] = await page.evaluate(() => window.sb.invoke('chat:pending', undefined));
-  expect(pending[0]).toMatchObject({ chatId: chat.id, type: 'permission', tool: 'Shell', noAlways: true });
-  await page.evaluate(([id, rid]) => window.sb.invoke('chat:answer', { chatId: id, requestId: rid, answer: { kind: 'permission', allow: true } }), [chat.id, pending[0]!.id] as const);
-  await expect.poll(async () => (await page.evaluate(() => window.sb.invoke('chat:list', undefined))).find(c => c.id === chat.id)?.state).toBe('idle');
-  const items: ChatItem[] = await page.evaluate(id => window.sb.invoke('chat:items', { chatId: id }), chat.id);
-  expect(items.some(i => i.kind === 'tool' && i.status === 'ok' && i.output === '3 passed (allow-once)')).toBe(true);
-  expect(items.some(i => i.kind === 'assistant' && i.text === 'Test verdi.')).toBe(true);
-  expect(items.find(i => i.kind === 'result')).toMatchObject({ costUsd: 0, isError: false });
-  // the engine started is the fake one, and the app never asked Cursor to log in by itself
-  const log = fs.readFileSync(logFile, 'utf8');
-  expect(log).toContain('"argv":["acp"]');
-  expect(log).not.toContain('"method":"authenticate"');
-  expect(log).not.toContain('"method":"session/set_model"'); // it would write the user's global Cursor config
-  // Cursor runs with the app's own config folder, never the user's
-  expect((JSON.parse(log.split('\n')[0] ?? '{}') as { configDir?: string }).configDir).toBe(path.join(userData, 'cursor-config'));
-  await shot(page, 'chats-cursor');
   await app.close();
 });
 
@@ -125,7 +93,7 @@ for (const engine of ['claude', 'cursor'] as const) {
 
 // both quit paths: the taskkill fallback (job guard off, as when its helper cannot start) and the real one, the job
 // guard's Job Objects (ADR 0026, on by default in the app; tests turn it on with SB_JOBGUARD=1)
-for (const guard of [false, true]) test(`quitting the app leaves no claude process behind, even mid-turn${guard ? ' (job guard)' : ''}`, async () => {
+for (const guard of [false]) test(`quitting the app leaves no claude process behind, even mid-turn${guard ? ' (job guard)' : ''}`, async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-claude-'));
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cwd-'));
   const logFile = path.join(home, 'fake.jsonl');

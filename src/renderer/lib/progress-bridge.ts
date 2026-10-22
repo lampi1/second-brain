@@ -1,7 +1,9 @@
 // Main owns milestones. This bridge suppresses initial/replayed feedback and stale async reads.
 import type {AchievementId,ProgressState} from '@shared/progress';
+import {t} from '../i18n';
+// getters: read at use time, in the language main.tsx set (this table is built at import)
 export const MILESTONE_LABELS:Record<AchievementId,string>={
-  'first-agent':'Primo ruolo personalizzato','setup-complete':'Spazio di lavoro configurato','first-result':'Primo risultato confermato',
+  get 'first-agent'(){return t('appText.progress.firstAgent');},get 'setup-complete'(){return t('appText.progress.setupComplete');},get 'first-result'(){return t('appText.progress.firstResult');},
 };
 interface Bridge {
   get():Promise<ProgressState>;

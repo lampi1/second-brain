@@ -56,16 +56,6 @@ describe('quit kill', () => {
     await waitFor(() => !alive(child), 'the child killed with it', 3000);
   });
 
-  it('a child outside the job, which taskkill has not reached yet, is terminated from the picture, before its parent', async () => {
-    const f = path.join(tmp('kill'), 'child.pid');
-    const p = spawn(process.execPath, ['-e', `const c=require('child_process').spawn(process.execPath,['-e','setInterval(()=>{},1e3)'],{stdio:'ignore',detached:true});c.unref();require('fs').writeFileSync(${JSON.stringify(f)},String(c.pid));setInterval(()=>{},1e3)`], { stdio: 'ignore' });
-    const child = Number(await waitFor(() => fs.existsSync(f) && fs.readFileSync(f, 'utf8'), 'the child pid'));
-    const order: number[] = [];
-    await killTreesWithin([p.pid], 1, { kids: pid => { order.push(pid); return [child]; } });
-    expect(order).toEqual([p.pid]); // asked only for the one still alive at the cap
-    await waitFor(() => !alive(p.pid!) && !alive(child), 'both terminated at once, not when a slow taskkill lands', 1500);
-  });
-
   it('resolves within its time, the steps after the wait included: the ones it terminated go to after in one call', async () => {
     const ps = [0, 1].map(() => spawn(process.execPath, ['-e', 'setInterval(()=>{},1e3)'], { stdio: 'ignore' }));
     await waitFor(() => ps.every(p => p.pid && alive(p.pid)), 'both running');

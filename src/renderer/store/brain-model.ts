@@ -1,7 +1,7 @@
 // The Brain pages' shared state (ADR 0077): skills and their agents, rules, memory, the maintenance change log and the
 // migration report, read from main ('brainmodel:state') and refreshed on 'brainmodel:changed' (a job, an undo, a file
 // changed on disk) and 'agents:changed'. The maintenance button, an undo and a skill toggle go through the typed IPC and
-// put the fresh state back. Used by the Agenti, Skill, Regole, Memoria and Mappa pages and the agent flip card.
+// put the fresh state back; the Memoria hub's trash too (removeBrainItem). Used by the Agenti, Skill, Regole, Memoria and Mappa pages and the agent flip card.
 import { useEffect } from 'react';
 import type { BrainModelState, MaintenanceJobId } from '@shared/brain-model';
 import { sb } from '../sb';
@@ -38,3 +38,12 @@ export const runMaintenance = (job?: MaintenanceJobId) => act(() => sb.invoke('b
 export const markLogGroup = (key: string, known: boolean) => act(() => sb.invoke('brainmodel:noise', { key, known }));
 export const rollbackChange = (id: string) => act(() => sb.invoke('brainmodel:rollback', { id }));
 export const linkSkill = (skill: string, agentId: string, on: boolean) => act(() => sb.invoke('brainmodel:link', { skill, agentId, on }));
+/** The Memoria hub's trash (ADR 0122): removes a brain skill, a rules/ file or a script through the change log.
+ *  Resolves to the change id («Annulla» = rollbackChange of it) or an error text. */
+export async function removeBrainItem(kind: 'skill' | 'rule' | 'script', target: string): Promise<{ changeId: string } | { error: string }> {
+  try {
+    const r = await sb.invoke('brainmodel:remove', { kind, target });
+    revision++; brainModel.set(s => ({ ...s, state: r.state, error: null }));
+    return { changeId: r.changeId };
+  } catch (e) { return { error: errText(e) }; }
+}

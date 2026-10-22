@@ -38,7 +38,7 @@ export interface ChatService {
   stopAll(): Promise<number>;
   close(chatId: string): Promise<void>;
   /** archive a finished chat (closedAt; out of the grid, reopenable); auto = the auto-close, refused if it went back to work */
-  archive(chatId: string, opts?: { auto?: boolean }): Promise<ChatSummary>;
+  archive(chatId: string, opts?: { auto?: boolean; undoable?: boolean }): Promise<ChatSummary>;
   /** an archived chat back on the grid; its session resumes on the next message */
   reopen(chatId: string): Promise<ChatSummary>;
   /** the user went on with this chat himself (chat:send, chat:reopen only): reopens its ended agent run (A5) */

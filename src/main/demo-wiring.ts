@@ -9,12 +9,18 @@ import type { CanonicalResult } from '../shared/agents';
 import { sysEn, type SysCode, type SysParams } from '../shared/sys';
 import type { StrategyPlan } from '../shared/strategy';
 import { app, safeStorage } from 'electron';
-import type { BrowserHandoff, CliStatus, PendingRequest } from '../shared/contract';
+import { isLang, type BrowserHandoff, type CliStatus, type Lang, type PendingRequest } from '../shared/contract';
+import { setDemoLang } from './demo-text';
+import { setUiLangSource } from './locale';
+import { systemLang } from './lang';
 import { ConfigStore } from './brain/config';
 import { DemoBrain, DemoChats, FROZEN_EPOCH, seed, demoTree, type Emit, demoQuality } from './demo';
 import { DemoBrowser } from './demo-browser';
 import { demoBrainRuns, writeDemoBrain } from './brainmodel/demo';
 import { demoLearningRuns, writeDemoChanges } from './brainmodel/demo-learning';
+import { requestDemoSetting, writeDemoProposals } from './proposals/demo';
+import { MemoryService } from './rules/memory-service';
+import { LearningReviewService } from './brainmodel/learning-review';
 import type { AgentRun } from '../shared/agents';
 import { BrainModelService } from './brainmodel/service';
 import { writeDemoLogs } from './brainmodel/log-scan';
@@ -26,6 +32,8 @@ import { demoDevopsRun } from './tasks/demo';
 import { TaskService } from './tasks/service';
 import { writeDemoScripts } from './brain/scripts-demo';
 import { BrainScripts } from './brain/scripts';
+import { BrainQueries } from './brain/queries';
+import { writeDemoQueries } from './brain/queries-demo';
 import { BrainChangelog } from './brain/changelog';
 import { gitBranches } from './chats/branch';
 import path from 'node:path';
@@ -62,13 +70,19 @@ const DEMO_BRANCHES: Record<string, string> = { brain: 'main', 'alfa-e2e': 'feat
 export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const freeze = process.env.SB_DEMO_FREEZE === '1';
   const now = freeze ? () => FROZEN_EPOCH : () => Date.now();
+  // the UI language picks the demo's content (demo-text.ts) and, from now on, main's own texts (locale.ts; index.ts
+  // registers the same source once the services are up): the migration below writes its change summaries in it
+  const config = new ConfigStore(ctx.userData, { SB_MCP_PORT: process.env.SB_MCP_PORT });
+  const lang = (): Lang => { const l = config.get().language; return isLang(l) ? l : systemLang(); };
+  setDemoLang(lang());
+  setUiLangSource(lang);
   const s = seed(now());
   const emit: Emit = (ch, p) => ctx.emitter.emit(ch, p);
   const chats = new DemoChats(emit, { freeze, now }, s);
   const browser = new DemoBrowser(ctx.window, emit, freeze, (chatId, tabIds) => { chats.patch(chatId, { browserTabIds: tabIds }); });
   chats.browser = browser;
   browser.seed(s.tabs, { 'tab-qa': 'nota', 'tab-sms': 'sms' });
-  const brain = new DemoBrain(emit, chats, s, new ConfigStore(ctx.userData, { SB_MCP_PORT: process.env.SB_MCP_PORT }));
+  const brain = new DemoBrain(emit, chats, s, config);
   chats.start();
   brain.start();
   // the demo brain is no folder: the app's engines only; keys and trust as in the real app (its own userData)
@@ -92,7 +106,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   brain.onSettingChange(c => { if (c.key.startsWith('tasks.')) tasks.schedule(); });
   tasks.schedule();
   brain.serveApi('/api/quality', () => demoQuality());
-  // the roles' lifecycle queue: no daily pass, no feedback writer (e2e agent-lifecycle.spec.ts); it reads the demo's run
+  // the roles' lifecycle queue: no daily pass, no feedback writer (the Proposte deck's e2e, proposals-deck.spec.ts); it reads the demo's run
   // feedback store, the same single store as in the real app. The user's decisions work on the demo catalog.
   const roles = () => agents.list().profiles.filter(p => p.scope === 'role');
   const agentLifecycle = createLifecycleApi(new AgentLifecycle({ userData: ctx.userData, changed: () => ctx.emitter.emit('agents:lifecycleChanged', null),
@@ -114,15 +128,22 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const demoBrainRoot = writeDemoBrain(path.join(ctx.userData, 'demo-agent-brain'), now());
   // the Apprendimento page (ADR 0109): past changes with their claims and runs with the user's corrections
   writeDemoChanges(ctx.userData, now());
+  // Memoria → Proposte (ADR 0123): facts to confirm, a skill candidate, a memory merge, written once through the real stores
+  writeDemoProposals(ctx.userData, demoBrainRoot, now());
   const demoLogs = writeDemoLogs(path.join(ctx.userData, 'demo-logs'), path.join(ctx.userData, 'maintenance-noise.json'), now());
   const brainModel: BrainModelService = new BrainModelService({ userData: ctx.userData, root: () => demoBrainRoot, home: null, catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning,
     runs: (): AgentRun[] => [...demoBrainRuns(now(), brainModel.skillList().map(s => s.name)), ...demoLearningRuns(now()), ...(demoCls ??= writeDemoClassifiers(demoBrainRoot, ctx.userData, now(), brainModel.skillList().map((x: { name: string }) => x.name).filter(n => n !== 'pulizia-ambiente'))).runs], routing: () => brain.routingInfo(), now,
     suggestSkills: async text => (await suggestSkills(text)).candidates.map(c => c.name),
     emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: false,
+    scripts: { file: id => demoScripts.get(id).path, changed: () => { demoScripts.invalidate(); ctx.emitter.emit('scripts:changed', undefined); } },
     // the log step and the hand-off of the Manutenzione (#150): made-up logs, the demo Orchestrator gets the message
     logDir: () => demoLogs,
     handoff: async text => { const o = chats.list().find(c => c.isOrchestrator && !c.closedAt); if (!o) return false; await chats.send(o.id, `${APP_EVENT_LABEL}\n${text}`); return true; } });
   if (!brainModel.report()) await brainModel.maintain('migration').catch(e => log.warn('demo', 'demo migration failed', { cause: errText(e), hint: 'the Skill page shows the demo brain without the migrated skills' }));
+  // the memory review and the skill candidates on the demo brain (their real services; no local model, no replay engine)
+  const memoryReview = new MemoryService({ root: () => demoBrainRoot });
+  const learningReview = new LearningReviewService({ userData: ctx.userData, root: () => demoBrainRoot, log: brainModel.log, runs: () => chats.list().flatMap(c => (c.run ? [c.run] : [])), now });
+  requestDemoSetting(brain);
   // the Script and Changelog pages (ADR 0076): made-up scripts and changelog read by the real readers
   const scriptsDir = writeDemoScripts(path.join(ctx.userData, 'demo-scripts'), now());
   const demoChangelog = new BrainChangelog(() => scriptsDir);
@@ -131,6 +152,9 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   brain.serveApi('/api/script', q => demoScripts.get(q.get('id') ?? ''));
   brain.serveApi('/api/changelog', () => demoChangelog.list());
   brain.serveApi('/api/improve', () => brain.learnApi());
+  // the saved queries (ADR 0124): a few made-up ones in the demo brain, deleted through the brain model's ChangeLog
+  writeDemoQueries(demoBrainRoot, now());
+  const queries = new BrainQueries(() => demoBrainRoot, () => brainModel.log);
 
   const mcp = new McpServer({ name: 'second-brain-demo', version: app.getVersion() });
   // made-up MCP servers for Settings → Connettori and the agent cards (ADR 0086): no process, no network
@@ -223,7 +247,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   return {
     morning,
     cloud, chats, browser, brain, mcp, mcpServers, runner, asks, wake, heldNews, tasks, skills, source, engines, later: createLater(ctx),
-    agents, runFeedback, agentLifecycle, agentPacks, brainModel, suggestSkills,
+    agents, runFeedback, agentLifecycle, agentPacks, brainModel, suggestSkills, queries, memoryReview, learningReview,
     setup: new SetupService(ctx.userData, true, now),
     autoClose: new AutoCloseService({ now: autoCloseNow, delayMs: () => 0, candidates: () => [], archive: async () => false, emit: states => ctx.emitter.emit('chat:autoCloseStatus', states) }),
     progress: new ProgressService(ctx.userData, { enabled: false, chats: () => chats.list() }),

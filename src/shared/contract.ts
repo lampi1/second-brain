@@ -5,20 +5,22 @@
 import type { LearningEvidence, LearningReviewState, MemoryReviewRecord, ReplayComparison, ReplayRecord, SkillCandidateView } from './learning-review';
 import type { SysCode, SysParams } from './sys';
 import type { AgentLifecycleDecide, AgentLifecycleSnapshot } from './agent-lifecycle';
-import type { PackTarget, PackExportPlan, PackFinding, PackImportReview } from './agent-pack';
+import type { ProposalDecide, ProposalDecideResult, ProposalsState } from './proposals';
+import type { PackFinding } from './agent-pack';
 /** What the shareable brain zip holds (counts), or why it was not written: guard findings, or no brain / no guard. */
 export type BrainShareResult = { ok: true; path: string; skills: number; rules: number; roles: number; scripts: number; skipped: number } | { ok: false; findings: PackFinding[] } | { ok: false; error: string };
 import type { BrainModelState, ClassifiersState, MaintenanceJobId } from './brain-model';
 import type { ApprovalDecision, ApprovalItem, PulseActResult, PulseDismissReason, PulseList, PulsePlace, PulseResult, PulseStatus, PulseSettings, PulseType } from './pulse';
-import type { ConnectorId, ConnectorState } from './connectors';
+import type { ConnectorId, ConnectorState, ConnectorToken } from './connectors';
 import type { McpImportCandidate, McpServerDef, McpServersState, McpToolAccess } from './mcp-servers';
 import type { FileViewResult } from './file-view';
 import type { DiffAgainst, FileDiffResult } from './file-diff';
 import type { UserTaskEvents, TaskDeliveryPolicy, CanonicalResult, AgentCatalog, AgentMetrics, AgentMetricsFilter, AgentDraft, AgentOwnerSnapshot, AgentProfile, AgentRun, AgentUndo, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
-import type { DelegationSettings, ModelTier, RoleId, WorkRoleId } from './roles';
+import type { DelegationSettings, ModelTier, RoleId } from './roles';
 import type { ChatDelegation, DelegationLimitHit } from './delegation';
 import type { StrategyPlan } from './strategy';
 import type { SkillSuggestions } from './skill-suggest';
+import type { SuggestAnswer, SuggestRequest, SuggestState } from './composer-suggest';
 import type { AutoClosePresence, AutoCloseStatus } from './auto-close';
 import type { LogEvent, LogList } from './activity-log';
 import type { ChatEffortStatus } from './effort';
@@ -30,6 +32,8 @@ import type { CloudAgent, CloudApplyResult, CloudCaps, CloudStartRequest, CloudS
 import type { MorningOp, MorningState } from './morning';
 export type { MorningBrief, MorningChange, MorningCloud, MorningIdea, MorningNext, MorningOp, MorningOutcome, MorningPr, MorningRun, MorningStalled, MorningState } from './morning';
 import type { RunEstimates } from './task-estimate';
+import type { MacroTask } from './macro-tasks';
+import type { JudgingEstimate } from './agents';
 import type { AgentImages } from './agent-images';
 export type { CloudAgent, CloudApplyResult, CloudCaps, CloudEngine, CloudMessage, CloudReady, CloudStartRequest, CloudState, CloudStatus } from './cloud';
 
@@ -707,9 +711,13 @@ export interface Usage {
 /** Windows toasts: only urgent kinds (default), urgent + normal, or none (in-app feed only). */
 export type ToastLevel = 'urgent' | 'normal' | 'off';
 export type ThemeMode = 'dark' | 'light' | 'system';
-/** The UI language (ADR 0057): system = Windows' language (Italian when it is Italian, English otherwise) */
-export type LanguageMode = 'system' | 'it' | 'en';
-export type Lang = 'it' | 'en';
+/** The UI language (ADR 0057, German ADR 0117): system = Windows' language (Italian when it is Italian, German when it
+ *  is German, English otherwise). 'de' is German as written in Austria (dates and numbers de-AT). */
+export type LanguageMode = 'system' | 'it' | 'en' | 'de';
+export type Lang = 'it' | 'en' | 'de';
+/** every UI language, in the order the pickers show them */
+export const LANGS: readonly Lang[] = ['it', 'en', 'de'];
+export const isLang = (v: unknown): v is Lang => v === 'it' || v === 'en' || v === 'de';
 /** warn = feed + toast · ask = also a 'budget:alert' the chat manager turns into a "stop or continue?" question · off */
 export type BudgetMode = 'warn' | 'ask' | 'off';
 export interface BudgetLimits { mode: BudgetMode; dailyUsd: number | null; perChatUsd: number | null }
@@ -778,6 +786,10 @@ export interface Settings {
   /** "Esito alla chat": when a run of Esegui ends, the chat that proposed the block gets the exit code and the output's
    *  tail as an app message (main/run/results.ts) */
   runResults: boolean;
+  /** the Agenti page's «Abilita controllo livello e performance» (agents/judge-sample.ts): every finished root run gets an
+   *  independent Sentinel review; judgingSince = when it was turned on (ms, 0 = never: runs ended before are skipped) */
+  judging: boolean;
+  judgingSince: number;
   /** "Domande in finestra": every open question and permission shows in one modal window in front, one at a time in
    *  a queue (instead of the chats' tiles and the Orchestrator); it never takes the keyboard while the user types */
   questionsModal: boolean;
@@ -791,6 +803,10 @@ export interface Settings {
   loadQueue: boolean;
   loadQueueCpu: number;
   loadQueueRam: number;
+  /** the chat composer's inline suggestion (ADR 0118): on at all, its model part, the model part's daily budget ($) */
+  suggestOn?: boolean;
+  suggestModel?: boolean;
+  suggestDailyUsd?: number;
   /** fields forced by the environment (SB_BRAIN, SB_MCP_PORT): shown read-only, never saved */
   locked?: ('brainRoot' | 'mcpPort')[];
 }
@@ -820,7 +836,8 @@ export type SettingKey =
   | 'pulse.on' | 'pulse.dailyUsd' | 'pulse.slots' | 'pulse.headline.on' | `pulse.types.${PulseType}` | `pulse.places.${'board' | 'agent' | 'search' | 'file'}` | 'jobs.fallback'
   | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'orchestratorDayCompact' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'tasks.enabled' | 'tasks.everyMin' | 'tasks.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
-  | `orchestratorChats.${keyof OrchestratorChatDefaults}` | 'orchestratorOpacity' | 'orchestratorEvents' | 'runResults' | 'questionsModal' | 'appRepo' | 'projectsRoot' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'codexAutonomyRoots'
+  | `orchestratorChats.${keyof OrchestratorChatDefaults}` | 'orchestratorOpacity' | 'orchestratorEvents' | 'runResults' | 'judging' | 'judgingSince' | 'questionsModal' | 'appRepo' | 'projectsRoot' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'codexAutonomyRoots'
+  | 'suggestOn' | 'suggestModel' | 'suggestDailyUsd'
   | `delegation.${keyof DelegationSettings}` | `modelTiers.${Harness}.${ModelTier}`;
 export interface SettingDef {
   key: SettingKey;            // 'mute.*' stands for every feed kind
@@ -1014,6 +1031,20 @@ export interface BrainScriptSummary {
 }
 /** /api/script?id=…: the script's code with every line that may hold a credential replaced (`masked` lines). */
 export interface BrainScript extends BrainScriptSummary { path: string; code: string; masked: number }
+/** A saved query of the brain (ADR 0124; main brain/queries.ts): one file in queries/, a Markdown note with its header
+ *  (title, what it does, where it runs, tags, the note it came from) and the query in one fenced block, or a native
+ *  .sql/.kql/… file with an @-comment header. `lang` = the fence or file language as written, `language` its label. */
+export interface BrainQuerySummary {
+  id: string; file: string; title: string; description: string; language: string; lang: string;
+  /** where it runs: the data source, cluster, database or tool, as written ('' = not said) */
+  source: string; tags: string[];
+  /** the note it was moved from by the brain upgrade, or who saved it ('' = not said) */
+  from: string;
+  changedAt: string | null; bytes: number;
+}
+/** queries:get: the query's code (credential-looking lines masked) and its file's absolute path. */
+export interface BrainQuery extends BrainQuerySummary { path: string; code: string; masked: number }
+export interface BrainQueryList { root: string | null; dir: string; queries: BrainQuerySummary[] }
 /** One line of the brain's changelog (`changelog.md`, main brain/changelog.ts, /api/changelog): who changed what in the
  *  brain, newest first. `at` = local "YYYY-MM-DD HH:MM". */
 export type ChangelogKind = 'script' | 'rule' | 'procedure' | 'note' | 'agent' | 'skill' | 'other';
@@ -1181,6 +1212,9 @@ export interface InvokeMap {
   'connectors:probe': [{ provider: ConnectorId }, ConnectorState];
   'connectors:select': [{ provider: ConnectorId; projects: string[] }, ConnectorState];
   'connectors:disconnect': [{ provider: ConnectorId }, void];
+  /** a tool tile of the setup / Settings catalog (ADR 0119): the token the user pasted there (GitHub: a fine-grained
+   *  token; Jira Cloud: site, email and API token) is kept encrypted for the account and probed at once */
+  'connectors:useToken': [ConnectorToken, ConnectorState];
   // the app-managed MCP servers (ADR 0086): only the user's clicks in Settings → Connettori and on the agent card
   'mcpservers:state': [void, McpServersState];
   'mcpservers:save': [{ def: McpServerDef; previousId?: string }, McpServersState];
@@ -1207,15 +1241,8 @@ export interface InvokeMap {
   'skills:suggest': [{ request: string }, SkillSuggestions];
   /** the user's Annulla on a change the app applied (feed card, change log) */
   'agents:undo': [AgentUndo, AgentProfile];
-  'agents:exportPlan': [{ id: string; target: PackTarget }, PackExportPlan];
-  'agents:exportFix': [{ token: string; item: string; action: 'exclude' | 'rescan' | 'allow' | 'open' }, PackExportPlan];
-  'agents:export': [{ token: string; includeStats: boolean }, { ok: true; path: string } | { ok: false; findings: PackFinding[] }];
   /** the shareable brain zip for colleagues (ADR 0088): rules, skills, roles, scripts, never memory; null = save dialog cancelled */
   'brain:share': [void, BrainShareResult | null];
-  'agents:importInspect': [{ pick: true } | { dropped: string }, PackImportReview | null];
-  /** attaches the reviewed pack's skills to `roleId` (a trial version of that role) and writes its rules when absent */
-  'agents:importApply': [{ token: string; approveScripts: boolean; approvePersonalData?: boolean; roleId: WorkRoleId }, AgentProfile[]];
-  'agents:importCancel': [{ token: string }, void];
   /** ends a role's open trial: keep its version or roll back to the baseline */
   'agents:trialDecide': [{ id: string; decision: 'keep' | 'rollback' }, AgentProfile];
   /** the user's decision on one "Da approvare" entry (AgentLifecycleProposal, read at /api/agents/lifecycle): approve does
@@ -1232,6 +1259,11 @@ export interface InvokeMap {
   /** the task estimates of these runs (estimate made before each started, actual once ended) and the estimator's weekly
    *  accuracy (ADR 0087, src/main/agents/run-estimates.ts) */
   'agents:estimates': [{ runIds?: string[] } | undefined, RunEstimates];
+  /** the macro tasks started since then (top-level runs with the cost of all they started, #160; shared/macro-tasks.ts),
+   *  newest first; from the run store only, zero tokens */
+  'runs:macro': [{ since?: number } | undefined, MacroTask[]];
+  /** what «Abilita controllo livello e performance» costs a day (agents/judge-sample.ts judgingEstimate), zero tokens */
+  'agents:judgingEstimate': [void, JudgingEstimate];
   /** Brother's verdict on a settled agent run (Home strip); renderer only, never an agent tool. */
   'run:outcome': [{ chatId: string; verdict: 'success' | 'partial' | 'fail' }, ChatSummary];
   'agents:restoreVersion': [{ id: string; version: number }, AgentProfile];
@@ -1256,13 +1288,26 @@ export interface InvokeMap {
   'learning:saveCandidate': [{ expectedRoot: string; name: string; text: string; expectedDigest: string }, SkillCandidateView];
   'learning:promote': [{ expectedRoot: string; name: string; expectedDigest: string; replayId: string; exampleRunId: string }, SkillCandidateView];
   'learning:compare': [{ beforeId: string; afterId: string }, ReplayComparison];
+  /** Memoria → Proposte (ADR 0123, main/proposals): every item waiting for the user's decision, newest first, with who,
+   *  where, when and the evidence; decide runs the item's own source path after main checks it is still open; count
+   *  = the sidebar badge (an event proposals:changed when it changes) */
+  'proposals:list': [void, ProposalsState];
+  'proposals:count': [void, number];
+  'proposals:decide': [ProposalDecide, ProposalDecideResult];
   /** the maintenance button: run every job now (or one); every change is logged and can be undone */
   'brainmodel:maintain': [{ job?: MaintenanceJobId } | undefined, BrainModelState];
   'brainmodel:rollback': [{ id: string }, BrainModelState];
+  /** the brain's saved queries (ADR 0124): list, one with its code, delete through the ChangeLog (undo = brainmodel:rollback with changeId) */
+  'queries:list': [void, BrainQueryList];
+  'queries:get': [{ id: string }, BrainQuery];
+  'queries:delete': [{ id: string }, { changeId: string; file: string }];
   /** the user marks a log group of the maintenance as known noise (or not any more, #150) */
   'brainmodel:noise': [{ key: string; known: boolean }, BrainModelState];
   /** the user declares (on) or drops (off) a skill for an agent */
   'brainmodel:link': [{ skill: string; agentId: string; on: boolean }, BrainModelState];
+  /** the Memoria hub's «Approvate» trash (ADR 0122): removes a brain skill (by name), a rules/ file or a script (by id)
+   *  through the change log, so «Annulla» (brainmodel:rollback of the returned change) puts it back */
+  'brainmodel:remove': [{ kind: 'skill' | 'rule' | 'script'; target: string }, { state: BrainModelState; changeId: string }];
   /** Classificatori (read-only): the routing table with history and measured results, recent agent choices */
   'classifiers:state': [void, ClassifiersState];
   /** the morning block (ADR 0102, main/morning/): presence = the user is here (the block opens on the first presence of
@@ -1314,7 +1359,8 @@ export interface InvokeMap {
   'chat:stopAll': [void, number];
   'chat:close': [{ chatId: string }, void];
   /** archive a finished chat (its process ends, its browser tabs close, the env sign-in stays); reopen brings it back */
-  'chat:archive': [{ chatId: string; auto?: boolean }, ChatSummary];
+  /** undoable: the user's ✕ with «Annulla» (#168): the run ends when the close is final */
+  'chat:archive': [{ chatId: string; auto?: boolean; undoable?: boolean }, ChatSummary];
   'chat:reopen': [{ chatId: string }, ChatSummary];
   /** "Avvia ora": a chat waiting in the CPU queue starts now (ADR 0036); false = it was not waiting */
   'chat:admitNow': [{ chatId: string }, boolean];
@@ -1444,6 +1490,10 @@ export interface InvokeMap {
   'headline:get': [void, HeadlineState];
   /** the Log page (shared/activity-log.ts): the recent events, the folder's size and its limits; zero tokens */
   'log:list': [void, LogList];
+  /** the chat composer's model suggestion (ADR 0118): get after a typing pause, cancel on the next key, today's spend */
+  'suggest:get': [SuggestRequest, SuggestAnswer];
+  'suggest:cancel': [{ chatId: string }, void];
+  'suggest:state': [void, SuggestState];
   'orchestrator:held': [void, HeldNewsState];
   /** the user opened a held news item's chat from the list: that chat's items are read, never wake the Orchestrator (#123) */
   'orchestrator:heldSeen': [{ chatId: string }, HeldNewsState];
@@ -1537,6 +1587,8 @@ export interface EventMap {
   'search:status': SearchIndexStatus;
   /** a skill, rule, memory file or agent link changed (a maintenance job, a rollback, the brain on disk) */
   'brainmodel:changed': void;
+  /** a file under the brain's queries/ changed on disk (ADR 0124) */
+  'queries:changed': void;
   /** a script of the brain or its changelog changed on disk (brain watcher): the Script and Changelog pages reload */
   'scripts:changed': void;
   /** new Log events, in small batches (main/activity/journal.ts) */
@@ -1549,6 +1601,8 @@ export interface EventMap {
   'orchestrator:heldChanged': HeldNewsState;
   'pulse:changed': void;
   'approvals:changed': void;
+  /** the number of open proposals changed (Memoria's badge, ADR 0123) */
+  'proposals:changed': { count: number };
   'cloud:changed': CloudState;
   'mcpservers:changed': McpServersState;
 }
@@ -1561,16 +1615,16 @@ export type InvokeResult<K extends InvokeChannel> = InvokeMap[K][1];
 // Runtime lists (the preload allow-list). Kept in sync with the maps by the compile-time checks below.
 export const INVOKE_CHANNELS = [
   'pulse:list', 'pulse:status', 'pulse:seen', 'pulse:save', 'pulse:act', 'pulse:dismiss', 'pulse:runNow', 'approvals:list', 'approvals:decide',
-  'connectors:list', 'connectors:login', 'connectors:cancelLogin', 'connectors:probe', 'connectors:select', 'connectors:disconnect',
+  'connectors:list', 'connectors:login', 'connectors:cancelLogin', 'connectors:probe', 'connectors:select', 'connectors:disconnect', 'connectors:useToken',
   'mcpservers:state', 'mcpservers:save', 'mcpservers:remove', 'mcpservers:setSecret', 'mcpservers:deleteSecret', 'mcpservers:setAccess', 'mcpservers:test', 'mcpservers:importScan', 'mcpservers:importApply',
   'update:get', 'update:apply', 'update:checkpointAnswer', 'update:recovery', 'update:recoveryAck',
   'app:createBrain', 'app:projectsFolder', 'app:pickProjects',
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
-  'chat:userEvents', 'chat:synthesize', 'memory:reviewList', 'memory:confirm', 'memory:retract', 'memory:delete', 'learning:evidence', 'learning:state', 'learning:import', 'learning:replay', 'learning:saveCandidate', 'learning:promote', 'learning:compare',
-  'agents:list', 'skills:suggest', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'agents:estimates', 'run:outcome', 'agents:restoreVersion', 'avatars:get', 'avatars:set', 'avatars:reset', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
+  'chat:userEvents', 'chat:synthesize', 'memory:reviewList', 'memory:confirm', 'memory:retract', 'memory:delete', 'learning:evidence', 'learning:state', 'learning:import', 'learning:replay', 'learning:saveCandidate', 'learning:promote', 'learning:compare', 'proposals:list', 'proposals:count', 'proposals:decide',
+  'agents:list', 'skills:suggest', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'agents:estimates', 'runs:macro', 'agents:judgingEstimate', 'run:outcome', 'agents:restoreVersion', 'avatars:get', 'avatars:set', 'avatars:reset', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:plan', 'chat:stop',
-  'agents:exportPlan', 'agents:exportFix', 'agents:export', 'brain:share', 'agents:importInspect', 'agents:importApply', 'agents:importCancel', 'brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'brainmodel:noise', 'brainmodel:link', 'classifiers:state', 'morning:brief', 'agents:trialDecide', 'agents:lifecycleDecide',
+  'brain:share', 'brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'queries:list', 'queries:get', 'queries:delete', 'brainmodel:noise', 'brainmodel:link', 'brainmodel:remove', 'classifiers:state', 'morning:brief', 'agents:trialDecide', 'agents:lifecycleDecide',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'chat:undoTurn', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
   'settings:undo', 'settings:propose', 'settings:pending', 'settings:confirm', 'estimate:record', 'brain:api',
@@ -1582,17 +1636,18 @@ export const INVOKE_CHANNELS = [
   'orchestrator:get', 'orchestrator:ensure',
   'search:query', 'search:status', 'search:retryModel', 'later:get', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
   'sync:get', 'sync:now', 'sync:resolve', 'headline:get', 'log:list',
+  'suggest:get', 'suggest:cancel', 'suggest:state',
   'orchestrator:held', 'orchestrator:heldSeen',
   'cloud:list', 'cloud:start', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:readiness', 'cloud:dismiss',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
-  'pulse:changed', 'approvals:changed',
+  'pulse:changed', 'approvals:changed', 'proposals:changed',
   'update:state', 'update:checkpointRequest', 'update:checkpointRelease',
   'progress:changed',
   'chat:autoCloseStatus',
   'agents:changed', 'agents:lifecycleChanged', 'avatars:changed',
   'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'cli:ready', 'focus:next', 'ui:command',
-  'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'tasks:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'source:state', 'later:changed', 'search:status', 'brainmodel:changed', 'sync:state', 'headline:changed',
+  'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'tasks:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'source:state', 'later:changed', 'search:status', 'brainmodel:changed', 'queries:changed', 'sync:state', 'headline:changed',
   'cloud:changed',
   'mcpservers:changed',
   'orchestrator:heldChanged',
@@ -1608,7 +1663,6 @@ void _invokeComplete; void _eventComplete;
 
 /** What the preload exposes as window.sb. */
 export interface Bridge {
-  pathForFile?: (file: File) => string;
   invoke<K extends InvokeChannel>(channel: K, arg: InvokeArg<K>): Promise<InvokeResult<K>>;
   on<K extends EventChannel>(channel: K, fn: (payload: EventMap[K]) => void): () => void;
 }

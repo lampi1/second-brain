@@ -1,5 +1,6 @@
 // Bound raster headers before Chromium allocates decoded image memory. UI-only; main repeats authoritative checks.
 // No remote URLs or SVG. File bytes are bounded before reading; a decoder still validates the complete raster.
+import {t} from '../i18n';
 export const AVATAR_BYTES=256_000;
 interface Size {width:number;height:number}
 export function avatarRasterSize(bytes:Uint8Array,mime:string,bounds={min:16,max:1024}):Size|null {
@@ -35,12 +36,12 @@ export function avatarRasterSize(bytes:Uint8Array,mime:string,bounds={min:16,max
   return size && size.width>=bounds.min && size.height>=bounds.min && size.width<=bounds.max && size.height<=bounds.max ? size:null;
 }
 export async function validateAvatarImage(file:File,decode:(blob:Blob)=>Promise<{width:number;height:number;close():void}>=createImageBitmap):Promise<void>{
-  if(!['image/png','image/jpeg','image/webp'].includes(file.type) || file.size===0 || file.size>AVATAR_BYTES)throw new Error('Formato o dimensione non supportati');
+  if(!['image/png','image/jpeg','image/webp'].includes(file.type) || file.size===0 || file.size>AVATAR_BYTES)throw new Error(t('appText.raster.avatarFormat'));
   const bytes=new Uint8Array(await file.arrayBuffer());
   const header=avatarRasterSize(bytes,file.type);
-  if(!header)throw new Error('Dimensioni raster non supportate');
+  if(!header)throw new Error(t('appText.raster.avatarSize'));
   const decoded=await decode(file);
   // A decoder may apply EXIF orientation. Swapping bounded sides preserves the allocation bound.
-  try{if(!(decoded.width===header.width && decoded.height===header.height || decoded.width===header.height && decoded.height===header.width))throw new Error('Raster non valido');}
+  try{if(!(decoded.width===header.width && decoded.height===header.height || decoded.width===header.height && decoded.height===header.width))throw new Error(t('appText.raster.avatarInvalid'));}
   finally{decoded.close();}
 }

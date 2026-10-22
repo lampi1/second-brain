@@ -3,15 +3,18 @@
 // connectors (Azure DevOps, GitHub, Jira: AppConnectorScreen embedded) and the MCP servers the agents use: each card
 // says what it is (local command or remote address), whether it works (its last "Prova"), what it is used for, how
 // many tools it has (reading and writing) and how many roles may use it, with the error and its fix when it fails and
-// the token field (write-only: typed once, then only its mask) when it needs one. "Aggiungi server" opens the form in
-// place; "Importa da Claude e Cursor" reads their configs once, read only, and imports the chosen servers without any
-// secret. Clean install: a friendly empty state saying what will appear. Styles: styles/connectors-hub.css.
+// the token field (write-only: typed once, then only its mask) when it needs one. A tool is added from the catalog
+// (ToolCatalog.tsx: account and server together, tested at once, ADR 0119); the technical form (command, args, env,
+// headers) and "Importa da Claude e Cursor" (their configs read once, read only, imported without any secret) live in
+// Settings → Avanzate (McpAdvanced, below). Clean install: a friendly empty state saying what will appear. Styles:
+// styles/connectors-hub.css.
 import { useCallback, useEffect, useId, useState, type ReactNode } from 'react';
 import type { ConnectorState } from '@shared/connectors';
 import type { McpImportCandidate, McpServerView, McpServersState } from '@shared/mcp-servers';
 import { slotKey } from '@shared/mcp-servers';
 import { AppConnectorScreen } from '../../modules/onboarding/AppScreen';
 import { HelpTip } from './HelpTip';
+import { ToolCatalog } from './ToolCatalog';
 import { IconPlus, IconRefresh } from './Icons';
 import { locale, t } from '../i18n';
 import { toast } from '../store/ui';
@@ -28,7 +31,7 @@ export function HubTotalsRow({ servers, connectors }: { servers: readonly McpSer
   return <dl className="hub-totals" data-testid="hub-totals">
     <div data-tone="green"><dt>{t('hub.total.working')}<HelpTip title={t('hub.total.working')} label={t('hub.total.working')}>{t('hub.total.workingTip')}</HelpTip></dt><dd><b>{n.working}</b><small>{t('hub.total.of', { n: n.total })}</small></dd></div>
     <div data-tone={n.toFix ? 'red' : 'muted'}><dt>{t('hub.total.toFix')}<HelpTip title={t('hub.total.toFix')} label={t('hub.total.toFix')}>{t('hub.total.toFixTip')}</HelpTip></dt><dd><b>{n.toFix}</b><small>{n.toFix ? t('hub.total.toFixHint') : t('hub.total.allGood')}</small></dd></div>
-    <div data-tone="blue"><dt>{t('hub.total.tools')}<HelpTip title={t('hub.total.tools')} label={t('hub.total.tools')} example={t('hub.total.toolsEx')}>{t('hub.total.toolsTip')}</HelpTip></dt><dd><b>{n.tools}</b><small>{t('hub.total.reading', { r: n.reading, w: n.tools - n.reading })}</small></dd></div>
+    <div data-tone="blue"><dt>{t('hub.total.tools')}<HelpTip title={t('hub.total.tools')} label={t('hub.total.tools')} example={t('hub.total.toolsEx')} testid="hub-total-tools-help">{t('hub.total.toolsTip')}</HelpTip></dt><dd><b>{n.tools}</b><small>{t('hub.total.reading', { r: n.reading, w: n.tools - n.reading })}</small></dd></div>
   </dl>;
 }
 
@@ -49,7 +52,7 @@ function TokenRow({ server, slot, available, onSaved }: { server: McpServerView;
 }
 
 /** One MCP server's card. */
-export function ServerCard({ server, state, onEdit, onState, testing, onTest }: { server: McpServerView; state: McpServersState; onEdit: () => void; onState: (s: McpServersState) => void; testing: boolean; onTest: () => void }) {
+export function ServerCard({ server, state, onEdit, onState, testing, onTest }: { server: McpServerView; state: McpServersState; onEdit?: () => void; onState: (s: McpServersState) => void; testing: boolean; onTest: () => void }) {
   const status = serverStatus(server), test = server.lastTest, tools = test?.tools ?? [];
   const reading = tools.filter(x => x.readOnly).length, roles = rolesWith(state, server.id).length;
   return <article className="hub-card" aria-label={server.label} data-status={status} data-tone={server.transport} data-testid={`hub-server-${server.id}`}>
@@ -71,7 +74,7 @@ export function ServerCard({ server, state, onEdit, onState, testing, onTest }: 
     {tools.length > 0 && <details className="hub-details hub-tools"><summary>{t('hub.toolList', { n: tools.length })}</summary><ul>{tools.map(x => <li key={x.name} data-ro={x.readOnly}><i aria-hidden="true" /><code>{x.name}</code><span>{x.readOnly ? t('hub.read') : t('hub.write')}</span>{x.description && <small>{x.description}</small>}</li>)}</ul></details>}
     <footer className="hub-card-foot">
       <button type="button" className="btn btn-primary btn-m" disabled={testing} onClick={onTest} aria-label={t('hub.testName', { name: server.label })}>{t('hub.test')}</button>
-      <button type="button" className="btn btn-ghost btn-m" onClick={onEdit} aria-label={t('hub.editName', { name: server.label })}>{t('hub.edit')}</button>
+      {onEdit && <button type="button" className="btn btn-ghost btn-m" onClick={onEdit} aria-label={t('hub.editName', { name: server.label })}>{t('hub.edit')}</button>}
     </footer>
   </article>;
 }
@@ -156,9 +159,8 @@ function ImportPanel({ onDone }: { onDone: (s?: McpServersState) => void }) {
 export function ConnectorsHub() {
   const { state, error, set } = useMcpServers();
   const [connectors, setConnectors] = useState<ConnectorState[]>([]);
-  const [editing, setEditing] = useState<string | 'new' | null>(null), [importing, setImporting] = useState(false), [testing, setTesting] = useState<string[]>([]);
+  const [testing, setTesting] = useState<string[]>([]);
   const onStates = useCallback((s: ConnectorState[]) => setConnectors(s), []);
-  const done = (s?: McpServersState) => { if (s) set(s); setEditing(null); setImporting(false); };
   const test = async (id: string) => {
     setTesting(x => [...x, id]);
     try { set(await window.sb.invoke('mcpservers:test', { id })); } catch { toast(t('hub.error'), 'err'); } finally { setTesting(x => x.filter(y => y !== id)); }
@@ -168,27 +170,52 @@ export function ConnectorsHub() {
   return <div className="hub" data-testid="connectors-hub">
     <p className="hub-lead">{t('hub.lead')}<HelpTip title={t('hub.whatTitle')} label={t('hub.whatTitle')} wide guide="mcp-servers">{t('hub.whatTip')}</HelpTip></p>
     <HubTotalsRow servers={servers} connectors={connectors} />
+    <section className="hub-section" aria-labelledby="hub-catalog" data-testid="hub-catalog">
+      <header className="hub-section-head"><h3 id="hub-catalog">{t('hub.catalog')}</h3><p>{t('hub.serversLead')}</p></header>
+      <ToolCatalog />
+      <p className="hub-muted">{t('hub.advancedNote')}</p>
+    </section>
     <section className="hub-section" aria-labelledby="hub-accounts">
       <header className="hub-section-head"><h3 id="hub-accounts">{t('hub.accounts')}<HelpTip title={t('hub.accounts')} label={t('hub.accounts')}>{t('hub.accountsTip')}</HelpTip></h3><p>{t('hub.accountsLead')}</p></header>
       <AppConnectorScreen embedded onStates={onStates} />
     </section>
     <section className="hub-section" aria-labelledby="hub-servers" data-testid="hub-servers">
-      <header className="hub-section-head"><h3 id="hub-servers">{t('hub.servers')}<HelpTip title={t('hub.servers')} label={t('hub.servers')} wide>{t('hub.serversTip')}</HelpTip></h3><p>{t('hub.serversLead')}</p>
+      <header className="hub-section-head"><h3 id="hub-servers">{t('hub.servers')}<HelpTip title={t('hub.servers')} label={t('hub.servers')} wide>{t('hub.serversTip')}</HelpTip></h3>
+        {servers.length > 1 && <div className="hub-actions"><button type="button" className="btn btn-ghost btn-m" onClick={testAll} disabled={testing.length > 0}><IconRefresh size={14} />{t('hub.testAll')}</button></div>}
+      </header>
+      {error && <p role="alert" className="hub-error">{t('hub.loadError')}</p>}
+      {state && !servers.length && <div className="hub-empty" data-testid="hub-empty"><b>{t('hub.emptyTitle')}</b><p>{t('hub.emptyBody')}</p></div>}
+      <div className="hub-grid">
+        {state && servers.map(s => <ServerCard key={s.id} server={s} state={state} testing={testing.includes(s.id)} onTest={() => void test(s.id)} onState={set} />)}
+      </div>
+      {!state?.secretsAvailable && state?.secretsWhy && <p className="hub-muted">{t('hub.keyringWhy', { why: state.secretsWhy })}</p>}
+    </section>
+  </div>;
+}
+
+/** Settings → Avanzate (ADR 0119): the technical MCP form (stdio/http, command, args, env, headers), the import from
+ *  Claude and Cursor, and editing or removing any server field by field. */
+export function McpAdvanced() {
+  const { state, error, set } = useMcpServers();
+  const [editing, setEditing] = useState<string | 'new' | null>(null), [importing, setImporting] = useState(false);
+  const done = (s?: McpServersState) => { if (s) set(s); setEditing(null); setImporting(false); };
+  const servers = state?.servers ?? [];
+  return <div className="hub" data-testid="mcp-advanced">
+    <section className="hub-section" aria-labelledby="hub-adv-servers">
+      <header className="hub-section-head"><h3 id="hub-adv-servers">{t('hub.adv.servers')}</h3><p>{t('hub.adv.lead')}</p>
         <div className="hub-actions">
           <button type="button" className="btn btn-primary btn-m" onClick={() => { setImporting(false); setEditing('new'); }} data-testid="hub-add"><IconPlus size={14} />{t('hub.add')}</button>
           <button type="button" className="btn btn-ghost btn-m" onClick={() => { setEditing(null); setImporting(true); }} data-testid="hub-import-open">{t('hub.import')}</button>
-          {servers.length > 1 && <button type="button" className="btn btn-ghost btn-m" onClick={testAll} disabled={testing.length > 0}><IconRefresh size={14} />{t('hub.testAll')}</button>}
         </div>
       </header>
       {importing && <ImportPanel onDone={done} />}
       {error && <p role="alert" className="hub-error">{t('hub.loadError')}</p>}
-      {state && !servers.length && editing !== 'new' && !importing && <div className="hub-empty" data-testid="hub-empty"><b>{t('hub.emptyTitle')}</b><p>{t('hub.emptyBody')}</p><p className="hub-muted">{t('hub.emptyExample')}</p></div>}
-      <div className="hub-grid">
-        {editing === 'new' && <ServerEditor server={null} onDone={done} />}
-        {state && servers.map(s => editing === s.id ? <ServerEditor key={s.id} server={s} onDone={done} />
-          : <ServerCard key={s.id} server={s} state={state} testing={testing.includes(s.id)} onTest={() => void test(s.id)} onEdit={() => { setImporting(false); setEditing(s.id); }} onState={set} />)}
-      </div>
-      {!state?.secretsAvailable && state?.secretsWhy && <p className="hub-muted">{t('hub.keyringWhy', { why: state.secretsWhy })}</p>}
+      {editing === 'new' && <div className="hub-grid"><ServerEditor server={null} onDone={done} /></div>}
+      {state && !servers.length && editing !== 'new' && <p className="hub-muted">{t('hub.adv.empty')}</p>}
+      {servers.length > 0 && <ul className="hub-adv-list">{servers.map(s => editing === s.id
+        ? <li key={s.id} className="hub-adv-edit"><ServerEditor server={s} onDone={done} /></li>
+        : <li key={s.id} data-testid={`hub-adv-${s.id}`}><span className="hub-mark" aria-hidden="true">{monogram(s.label)}</span><b>{s.label}</b><code title={runsAs(s)}>{runsAs(s)}</code>
+          <button type="button" className="btn btn-ghost btn-s" onClick={() => { setImporting(false); setEditing(s.id); }} aria-label={t('hub.editName', { name: s.label })}>{t('hub.edit')}</button></li>)}</ul>}
     </section>
   </div>;
 }

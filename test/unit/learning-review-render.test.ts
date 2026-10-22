@@ -1,4 +1,5 @@
-// Render the real memory/candidate review UI: unknown evidence, historical immutability and promotion gates.
+// Render the real memory/candidate review UI: unknown evidence, historical immutability, the promotion gates' logic and
+// the pointer to Memoria → Proposte that replaced the decision buttons (ADR 0123).
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -19,16 +20,18 @@ describe('memory and learning review', () => {
     expect(html).toContain('&lt;script&gt;Fact&lt;/script&gt;');
     expect(html).not.toContain('<button'); expect(html).not.toContain('<input');
     const current = renderToStaticMarkup(createElement(MemoryReviewCard, { root: '/fixture', record, historical: false, onRefresh: refresh }));
-    expect(current).toContain('Conferma il fatto'); expect(current).toContain('Rifiuta proposta');
-    expect(current.match(/disabled=""/g)).toHaveLength(2); // evidence is required for both decisions
+    // a proposed fact is decided only in Memoria → Proposte (ADR 0123): a line points there, no decision here
+    expect(current).toContain('proposals-pointer'); expect(current).toContain('Apri Proposte');
+    expect(current).not.toContain('Conferma il fatto'); expect(current).not.toContain('Rifiuta proposta');
   });
   it('requires all backend gates, verified examples and passed replay, then still waits for explicit inspection', () => {
     expect(candidateCanPromote(candidate)).toBe(true);
     for (const patch of [{ stepsReady: false }, { promoted: true }, { promotionProblems: ['Synthetic replay'] }, { verifiedExampleRunIds: [] }, { eligibleReplayIds: [] }]) expect(candidateCanPromote({ ...candidate, ...patch })).toBe(false);
     const html = renderToStaticMarkup(createElement(CandidateReview, { root: '/fixture', candidate, refresh }));
-    expect(html).toContain('maxLength="24000"'); expect(html).toContain('Apri il risultato completo');
+    expect(html).toContain('maxLength="24000"');
     expect(html).toContain('source-run'); expect(html).toContain('verified-run'); expect(html).toContain('replay-1');
-    expect(html).toMatch(/disabled=""[^>]*>Promuovi questa versione/);
+    // promotion happens on the deck's card, which keeps the read-first gate (ADR 0123)
+    expect(html).not.toContain('Promuovi questa versione'); expect(html).toContain('proposals-pointer');
   });
   it('shows actual deliverables and review criteria, but identifies a legacy summary as incomplete', () => {
     const run = { runId: 'r1', agentId: 'scout', goal: 'Check evidence', startedAt: 1, report: { at: 1, outcome: 'done' as const, verified: 'yes' as const, summary: 'Legacy summary' } };
