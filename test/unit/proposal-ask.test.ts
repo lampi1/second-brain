@@ -2,8 +2,9 @@
 // answer does, role ids become names, the raw scope becomes «nel progetto …», a fact with an empty predicate is its value.
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { Proposal } from '../../src/shared/proposals';
+import type { cardWords as CardWords } from '../../src/renderer/lib/proposal-ask';
 
-let cardWords: typeof import('../../src/renderer/lib/proposal-ask').cardWords;
+let cardWords: typeof CardWords;
 beforeAll(async () => {
   const i18n = await import('../../src/renderer/i18n');
   i18n.setLang('it');
