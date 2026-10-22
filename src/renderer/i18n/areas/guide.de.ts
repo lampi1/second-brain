@@ -23,7 +23,6 @@ export const guideDe: typeof guideIt = {
   'guide.discussTip': 'Schreibt die Karte in die Eingabe des Orchestrators, bereit zum Senden: kein neuer Chat.',
   'guide.toOrchestrator': 'Karte in der Eingabe des Orchestrators: Drück Eingabe, um sie zu senden.',
   'guide.noOrchestrator': 'Kein Orchestrator offen: Starte ihn (Strg+R) und versuch es noch einmal.',
-  'guide.close': 'Schließen',
   'guide.startHere': 'Hier anfangen',
   'guide.pointsCount': (p: { count: number }) => p.count === 1 ? '1 Punkt' : `${p.count} Punkte`,
   'guide.withDiagram': 'mit Diagramm',
