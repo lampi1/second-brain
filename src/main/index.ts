@@ -74,7 +74,7 @@ let win: BrowserWindow | null = null;
 
 app.whenReady().then(async () => {
   log.init(app.getPath('userData'));
-  ensureShortcuts();
+  ensureShortcuts(outDir);
   installAppMenu();
   // macOS: the Dock shows the shared Electron bundle's icon unless told otherwise (no app bundle of our own, ADR 0054)
   if (process.platform === 'darwin') app.dock?.setIcon(path.join(outDir, 'icon.png'));
