@@ -3,7 +3,7 @@
 // role-specific section badges (count, cleared on visit); back/forward; Ctrl+1 back to the chats; the persistent Orchestrator on a brain page;
 // G-letter keys; copying an internal link and pasting it in Ctrl+K.
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { launchDemo, layerPage, shot, windowShot, openNotesMap } from './helpers';
+import { launchDemo, layerPage, shot, windowShot, openNotesMap, setQuestionsAside } from './helpers';
 
 const event = (app: ElectronApplication, e: { kind: string; title: string; detail?: string; chatId?: string }) =>
   app.evaluate((_e, ev) => (globalThis as unknown as { __sbDemo: { event(x: object): void } }).__sbDemo.event(ev), e);
@@ -60,6 +60,7 @@ test('notification center: filter by kind, mark all read (remembered after a rel
   await expect(page.getByTestId('bell-count')).toHaveCount(0);
   await page.reload();
   await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
+  await setQuestionsAside({ app, page }); // a reload forgets «Rispondi dopo»
   await expect(page.getByTestId('bell-count')).toHaveCount(0);
   // mute a kind from its row (settings mute.<kind>): its toasts stop
   await page.keyboard.press('Control+Shift+N');
@@ -162,11 +163,14 @@ test('back/forward, recents, Ctrl+1, G-letter keys, the persistent Orchestrator 
   await expect(page.getByTestId('orchestrator-input')).toBeFocused();
   await page.getByTestId('orchestrator-input').fill('che si fa adesso?');
   await page.getByTestId('orchestrator-input').press('Enter');
-  // the Orchestrator waits on its decision: the message is queued (sent when it is free), the decision answerable right here
+  // the Orchestrator waits on its decision: the message is queued (sent when it is free), the decision answerable from
+  // the questions window without leaving the page
   await expect(page.getByTestId('orchestrator-input-queued-0')).toContainText('che si fa adesso?');
-  await page.locator('[data-testid="orchestrator-overlay"] [data-request-key="orchestrator/orchestrator-q1"]').focus();
+  await page.keyboard.press('Control+J');
+  await expect(page.getByTestId('qwin-card')).toHaveAttribute('data-request-key', 'orchestrator/orchestrator-q1');
   await page.keyboard.press('1');
   await expect(page.getByTestId('orchestrator-overlay')).toContainText('Ecco il quadro');
+  await setQuestionsAside({ app, page }); // the queue opened by Ctrl+J shows the others next: set aside again
   await expect(page.getByTestId('page-qualita')).toBeVisible();
   await shot(page, 'orchestrator-overlay');
   await page.keyboard.press('Control+R');

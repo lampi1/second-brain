@@ -24,29 +24,26 @@ const opened = (app: ElectronApplication) => app.evaluate(() => [...((globalThis
 
 test('a question carries its context: the turn\'s prose, the reasoning before it, web and file links', async () => {
   const { app, page } = await launchDemo();
-  await expandChats(page, 'qa', 'fix'); // requests, transcripts and inputs are on open strips
+  await expandChats(page, 'qa', 'fix'); // transcripts are on open strips
   await expect(page.getByTestId('needs-lane')).toHaveCount(0); // the agents workspace has no "Ti aspettano" strip
+  for (const id of ['orchestrator', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id); // only the new question shows
   await demo(app, (d, id) => {
     d.say(id, 'Ho preparato il report dei rimborsi: [report TC16](file:///C:/progetti/report/tc16.md). La PR è https://dev.azure.com/o/proj/_git/app/pullrequest/27.');
     d.toolDone(id, 'Write', { file_path: 'C:\\progetti\\report\\tc16-screen.png' });
     d.think(id, 'Il commento per Sara è pronto, manca solo il tuo ok per pubblicarlo sul TC16.');
   }, 'qa');
   await demo(app, (d, id, q) => d.ask(id, q), 'qa', question('Pubblico il commento sul TC16?', ['Pubblica', 'Aspetta']));
-  const panel = page.locator('[data-testid^="request-qa-req-"][data-request-key]').first();
-  await expect(panel).toBeVisible();
-  const base = (await panel.getAttribute('data-testid'))!;
-  // the reasoning right before the question is open in the transcript, marked
+  // the questions window shows the question with its whole context open: the prose, the reasoning, the links
+  const base = 'qwin-card';
+  await expect(page.getByTestId(base)).toBeFocused();
+  // the reasoning right before the question is open in the transcript too, marked
   await expect(page.locator('[data-before-ask]').last()).toContainText('manca solo il tuo ok');
-  // in the tile the context is folded (the transcript is above), the links always in sight
-  await expect(page.getByTestId(`${base}-ctx-toggle`)).toContainText('manca solo il tuo ok');
+  await expect(page.getByTestId(`${base}-ctx-body`)).toContainText('dal ragionamento della chat');
+  await expect(page.getByTestId(`${base}-ctx-body`)).toContainText('Ho preparato il report dei rimborsi');
   await expect(page.getByTestId(`${base}-ctx-links`)).toContainText('report TC16');
   await expect(page.getByTestId(`${base}-ctx-links`)).toContainText('PR 27');
   await expect(page.getByTestId(`${base}-ctx-links`)).toContainText('tc16-screen.png');
-  await page.getByTestId(`${base}-ctx-toggle`).click();
-  await expect(page.getByTestId(`${base}-ctx-body`)).toContainText('dal ragionamento della chat');
-  await expect(page.getByTestId(`${base}-ctx-body`)).toContainText('Ho preparato il report dei rimborsi');
-  await expect(panel).toBeFocused(); // the toggle gives the keyboard back to the panel
-  await shot(page, 'questions-context-tile');
+  await shot(page, 'questions-context-window');
   // a file link opens in the app's viewer, never outside (a hidden run would record it); a missing one says so
   await page.getByTestId(`${base}-ctx-links`).getByText('report TC16').click();
   await expect(page.getByTestId('cited-file-viewer')).toContainText('Il file non è disponibile');
@@ -55,7 +52,7 @@ test('a question carries its context: the turn\'s prose, the reasoning before it
 });
 
 test('a file link clicked in the questions window shows the viewer in front; the pill brings the same question back', async () => {
-  const { app, page } = await launchDemo();
+  const { app, page } = await launchDemo({ questions: true });
   await demo(app, (d, id) => d.say(id, 'Ho preparato il report dei rimborsi: [report TC16](file:///C:/progetti/report/tc16.md).'), 'qa');
   await demo(app, (d, id, q) => d.ask(id, q), 'qa', question('Pubblico il commento sul TC16?', ['Pubblica', 'Aspetta']));
   await expect(page.getByTestId('qwin')).toBeVisible();
@@ -63,7 +60,7 @@ test('a file link clicked in the questions window shows the viewer in front; the
   await page.getByTestId('qwin-pick').filter({ hasText: 'Pubblico il commento sul TC16?' }).click();
   const win = page.getByTestId('qwin');
   await expect(win).toContainText('Pubblico il commento sul TC16?');
-  await win.getByText('report TC16', { exact: true }).click(); // the link, not the context's lead line that quotes it
+  await page.getByTestId('qwin-card-ctx-links').getByText('report TC16', { exact: true }).click(); // the link chip
   // the viewer is on screen, not under the backdrop; the question waits as the pill (nothing answered, no "Rispondi dopo")
   await expect(page.getByTestId('cited-file-viewer')).toBeVisible();
   await expect(page.getByTestId('qwin')).toHaveCount(0);
@@ -135,15 +132,14 @@ test('the questions window: the first click on an option answers, even when the 
 
 test('the questions window, two questions in a row: the second shows once, with its own reasoning, and says it is asked again', async () => {
   const { app, page } = await launchDemo();
-  await expandChats(page, 'qa', 'fix'); // requests, transcripts and inputs are on open strips
-  await expect(page.getByTestId('qwin')).toBeVisible();
   for (const id of ['orchestrator', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id); // the demo's requests leave: only the new ones show
   await expect(page.getByTestId('qwin')).toHaveCount(0);
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur()); // not typing anywhere: the card takes the keyboard
   const q = question('Il pezzo 1 ti è chiaro?', ['Chiaro, vai avanti', 'Rispiegamelo diverso']);
   await demo(app, (d, id, req) => { d.think(id, 'Pezzo 1: la casella di posta passa i messaggi tra le chat.'); d.ask(id, req); }, 'fix', q);
   await expect(page.getByTestId('qwin-card')).toBeFocused();
-  // the why in two lines above the question (ADR 0049): here the reasoning before the question
-  await expect(page.getByTestId('qwin-card-ctx-lead')).toContainText('la casella di posta');
+  // the reasoning before the question, open under it
+  await expect(page.getByTestId('qwin-card-ctx-body')).toContainText('la casella di posta');
   await expect(page.getByTestId('qwin-card-ctx-again')).toHaveCount(0);
   await page.keyboard.press('1');
   await expect(page.getByTestId('qwin')).toHaveCount(0);
@@ -156,8 +152,7 @@ test('the questions window, two questions in a row: the second shows once, with 
   await expect(page.getByTestId('qwin-card')).toBeFocused();
   await expect(page.getByTestId('qwin-queue')).toHaveCount(0); // one card, not two: no rail
   await expect(page.getByTestId('qwin-card-ctx-again')).toContainText('avevi risposto «su tutte le piattaforme?»');
-  await page.getByTestId('qwin-card-ctx-toggle').click(); // "Contesto completo": the whole prose, the keyboard stays on the card
-  await expect(page.getByTestId('qwin-card-ctx-body')).toContainText('Solo su questo PC');
+  await expect(page.getByTestId('qwin-card-ctx-body')).toContainText('Solo su questo PC'); // the context is always open
   await expect(page.getByTestId('qwin-card-ctx-body')).not.toContainText('la casella di posta'); // never the previous question's reasoning
   await expect(page.getByTestId('qwin-card')).toBeFocused();
   await shot(page, 'questions-window-asked-again');
@@ -165,8 +160,7 @@ test('the questions window, two questions in a row: the second shows once, with 
 });
 
 test('the questions window answers in any order: a waiting request is one click away, the others stay', async () => {
-  const { app, page } = await launchDemo();
-  await expandChats(page, 'qa', 'fix'); // requests, transcripts and inputs are on open strips
+  const { app, page } = await launchDemo({ questions: true });
   await expect(page.getByTestId('qwin-chat')).toHaveText('Orchestrator');
   const picks = page.getByTestId('qwin-pick');
   await expect(picks).toHaveCount(2);
@@ -175,6 +169,7 @@ test('the questions window answers in any order: a waiting request is one click 
   await page.mouse.move(2, 2);
   await shot(page, 'questions-any-order');
   // a free answer half written on the Orchestrator's, then QA now: its card, with the keyboard; the Orchestrator's waits among the others
+  await page.getByTestId('qwin-card').focus();
   await page.keyboard.press('3');
   await page.getByTestId('qwin-card-other-input').fill('ci penso');
   await picks.nth(0).click();
@@ -207,21 +202,18 @@ test('the questions window reads context first: the agent\'s lead muted on top, 
   const lead = (await page.getByTestId('qwin-card-ctx-lead').boundingBox())!;
   const q = (await page.getByTestId('qwin-card-q').boundingBox())!;
   expect(lead.y).toBeLessThan(q.y);
-  // the turn's prose stays one click away, opening under the question (which never moves); the keyboard stays on the card
-  await page.evaluate(() => Promise.all(document.getAnimations().map(a => a.finished)));
-  const q0 = (await page.getByTestId('qwin-card-q').boundingBox())!.y;
-  await page.getByTestId('qwin-card-ctx-toggle').click();
+  // the turn's prose is open under the question, nothing to click; the keyboard stays on the card
   await expect(page.getByTestId('qwin-card-ctx-body')).toContainText('fallisce su entrambi');
   await expect(page.getByTestId('qwin-card')).toBeFocused();
-  expect((await page.getByTestId('qwin-card-q').boundingBox())!.y).toBeCloseTo(q0, 0);
+  expect((await page.getByTestId('qwin-card-ctx-body').boundingBox())!.y).toBeGreaterThan(q.y);
   await shot(page, 'questions-window-lead');
   await page.keyboard.press('1');
   await expect(page.getByTestId('qwin')).toHaveCount(0);
-  // a bare question stays whole: nothing split off it, the lead on top is only the turn's own prose (the "why")
+  // a bare question stays whole: nothing split off it, no lead on top; the turn's prose is the context under it
   await demo(app, (d, id, q) => d.ask(id, q), 'fix', question('Rilancio la pipeline?', ['Sì', 'No']));
   await expect(page.getByTestId('qwin-card-q')).toHaveText('Rilancio la pipeline?');
-  await expect(page.getByTestId('qwin-card-ctx-lead')).toHaveClass(/(^| )why( |$)/);
-  await expect(page.getByTestId('qwin-card-ctx-lead')).toContainText('fallisce su entrambi');
+  await expect(page.getByTestId('qwin-card-ctx-lead')).toHaveCount(0);
+  await expect(page.getByTestId('qwin-card-ctx-body')).toContainText('fallisce su entrambi');
   await page.keyboard.press('1');
   // two questions in one request: each step shows its own lead, never the first one's
   const q1 = 'Ho trovato il bug nel parser. Lo sistemo subito?', q2 = 'Il test in CI vuole un fix di configurazione. Lo aggiorno?';

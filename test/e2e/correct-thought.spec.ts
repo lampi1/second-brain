@@ -32,8 +32,8 @@ const endedAfter = async (page: Page, id: string, text: string) => {
 };
 
 /** Opens the chat's first reasoning block and selects SENTENCE in it, as a mouse would (press, select, release). */
-async function selectSentence(page: Page, chatId: string): Promise<void> {
-  await closeSetup(page);
+async function selectSentence(page: Page, chatId: string, setupClosed = false): Promise<void> {
+  if (!setupClosed) await closeSetup(page);
   await expandChats(page, chatId); // the transcript is on the expanded strip
   const tile = page.getByTestId(`tile-chat-${chatId}`);
   await expect(tile.getByTestId('thinking-toggle').first()).toBeVisible({ timeout: 15000 });
@@ -111,7 +111,9 @@ test('an open question refuses the correction with the reason, and nothing is se
   await expect(page.getByTestId(`chat-state-${chat.id}`)).toHaveAttribute('data-state', 'idle', { timeout: 20000 });
   await page.evaluate(id => window.sb.invoke('chat:send', { chatId: id, text: 'ask' }), chat.id);
   await expect(page.getByTestId(`chat-state-${chat.id}`)).toHaveAttribute('data-state', 'waiting', { timeout: 15000 });
-  await selectSentence(page, chat.id);
+  await closeSetup(page);
+  await page.getByTestId('qwin-later').click(); // the question in the window, set aside: the transcript is reachable
+  await selectSentence(page, chat.id, true);
   await page.getByTestId('thought-pick').click();
   await page.getByTestId('thought-fix-input').fill('no');
   await expect(page.getByTestId('thought-fix-why')).toContainText('rispondi prima al pannello');
