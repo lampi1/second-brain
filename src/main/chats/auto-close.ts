@@ -17,6 +17,9 @@ export interface AutoCloseCandidate {
   reason?: string;
   /** what a held chat waits for (ADR 0084): shown as "In attesa di…" on its tile */
   waitingFor?: AutoCloseWaiting;
+  /** levels above it in its delegation tree (0 = a root): a tree due at once closes from its leaves up, so no child
+   *  is left for a moment without its parent (it would jump out as a strip of its own) */
+  depth?: number;
 }
 export interface AutoCloseReservation { generation: number; deadline: number; stamp: string }
 export interface AutoCloseDeps {
@@ -128,7 +131,9 @@ export class AutoCloseService {
   async tick(): Promise<void> {
     this.refresh();
     const now = this.d.now();
-    for (const e of this.entries.values()) {
+    const depth = new Map(this.d.candidates().map(c => [c.id, c.depth ?? 0]));
+    const leavesFirst = [...this.entries.values()].sort((a, b) => (depth.get(b.status.chatId) ?? 0) - (depth.get(a.status.chatId) ?? 0));
+    for (const e of leavesFirst) {
       const s = e.status;
       if (this.inFlight.has(s.chatId) || s.deadline === null || now < s.deadline) continue;
       if (s.warningStartedAt === null || now - s.warningStartedAt < AUTO_CLOSE_WARNING_MS) {
