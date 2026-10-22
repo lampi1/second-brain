@@ -6,7 +6,7 @@
 // motion and for a chat the user closed (the ✕ and Ctrl+W close at once, close-fast.spec.ts). Used by AgentStrips.tsx.
 export const LEAVE_MS = 320;
 
-const HOOKS = ['id', 'data-testid', 'data-chat-id', 'data-tab-id', 'data-autoclose-id', 'data-workspace-pane', 'data-transcript-visible'];
+const HOOKS = ['id', 'data-testid', 'data-chat-id', 'data-tab-id', 'data-autoclose-id', 'data-workspace-pane', 'data-transcript-visible', 'data-chat-index', 'data-sb-id'];
 
 /** Leave a fading, folding copy of `el` in its place; `el` itself is about to be removed by React. */
 export function leaveGhost(el: HTMLElement): void {

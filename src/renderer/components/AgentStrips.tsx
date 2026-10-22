@@ -135,9 +135,10 @@ function useLeaveRef(): (chatId: string) => (el: HTMLDivElement | null) => () =>
     let ref = refs.current.get(chatId);
     if (!ref) {
       ref = el => () => {
-        refs.current.delete(chatId);
         const c = app.get().chats[chatId];
-        if (el && c?.closedAt && c.closedBy === 'auto') leaveGhost(el);
+        if (!c?.closedAt) return; // folded away or remounted (StrictMode): the same ref serves it again
+        refs.current.delete(chatId);
+        if (el && c.closedBy === 'auto') leaveGhost(el);
       };
       refs.current.set(chatId, ref);
     }

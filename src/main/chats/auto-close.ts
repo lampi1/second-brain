@@ -20,6 +20,8 @@ export interface AutoCloseCandidate {
   /** levels above it in its delegation tree (0 = a root): a tree due at once closes from its leaves up, so no child
    *  is left for a moment without its parent (it would jump out as a strip of its own) */
   depth?: number;
+  /** the root of its delegation tree, with depth: a member never closes while a deeper one of its tree is still open */
+  tree?: string;
 }
 export interface AutoCloseReservation { generation: number; deadline: number; stamp: string }
 export interface AutoCloseDeps {
@@ -136,6 +138,12 @@ export class AutoCloseService {
     for (const e of leavesFirst) {
       const s = e.status;
       if (this.inFlight.has(s.chatId) || s.deadline === null || now < s.deadline) continue;
+      // a deeper member of its tree still open (touched later, kept open, or still closing in another pass): this one
+      // waits a new warning, so a child is never left on screen without its parent
+      const open = this.d.candidates(), self = open.find(c => c.id === s.chatId);
+      if (self?.tree !== undefined && open.some(c => c.tree === self.tree && (c.depth ?? 0) > (self.depth ?? 0))) {
+        s.deadline = now + AUTO_CLOSE_WARNING_MS; s.warningStartedAt = null; s.generation = this.nextGeneration++; this.emit(); continue;
+      }
       if (s.warningStartedAt === null || now - s.warningStartedAt < AUTO_CLOSE_WARNING_MS) {
         s.deadline = now + AUTO_CLOSE_WARNING_MS; s.warningStartedAt = null; s.generation = this.nextGeneration++; this.emit(); continue;
       }

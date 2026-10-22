@@ -118,5 +118,5 @@
 .child-strip-agent { flex:none; display:inline-flex; align-items:center; gap:5px; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; color:var(--text); }
 .child-strip-agent.is-none { font-weight:500; font-style:italic; color:var(--text-3); }
 /* a strip the app closed by itself folds away and the rows under it slide up (lib/leave-ghost.ts) */
-.agent-pane-wrap.leave-ghost { animation:none; box-sizing:border-box; overflow:hidden; pointer-events:none; transition:height 320ms var(--ease), opacity 220ms ease, padding 320ms var(--ease), margin-bottom 320ms var(--ease), transform 320ms var(--ease); }
-.agent-pane-wrap.leave-ghost.is-leaving { height:0 !important; opacity:0; padding-top:0; padding-bottom:0; margin-bottom:-8px; transform:scale(.98); }
+.agent-pane-wrap.leave-ghost { animation:none; box-sizing:border-box; overflow:hidden; pointer-events:none; transition:height 320ms var(--ease), opacity 220ms ease, padding 320ms var(--ease), margin 320ms var(--ease), transform 320ms var(--ease); }
+.agent-pane-wrap.leave-ghost.is-leaving { height:0 !important; opacity:0; padding-top:0; padding-bottom:0; margin-top:0; margin-bottom:-8px; transform:scale(.98); }

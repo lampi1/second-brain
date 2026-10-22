@@ -103,4 +103,27 @@ describe('backend automatic-close warning', () => {
     expect(f.service.state()[0]?.waitingFor).toBeUndefined();
     expect(f.service.state()[0]?.deadline).not.toBeNull();
   });
+
+  it('never closes a parent while a deeper chat of its tree is still open (a child would jump out on its own)', async () => {
+    let now = 1_000_000;
+    const open = new Set(['parent', 'child']);
+    const all: AutoCloseCandidate[] = [
+      { id: 'parent', stamp: 'p', activityAt: now - 900_000, eligible: true, depth: 0, tree: 'parent' },
+      { id: 'child', stamp: 'c', activityAt: now - 900_000, eligible: true, depth: 1, tree: 'parent' },
+    ];
+    const archived: string[] = [];
+    const service = new AutoCloseService({ now: () => now, delayMs: () => 120_000, candidates: () => all.filter(c => open.has(c.id)), emit: () => {},
+      archive: async (id, _e, valid) => { if (!valid()) return false; archived.push(id); open.delete(id); return true; } });
+    let childDraft = true; // the user writes in the child: it is held, the parent is due alone
+    const beat = () => service.setPresence([...open].map(id => {
+      const row = service.state().find(r => r.chatId === id);
+      return { chatId: id, draft: id === 'child' && childDraft, shown: false, browser: false, queued: 0, touchedAt: 0, ...(row?.deadline != null ? { ackDeadline: row.deadline, ackGeneration: row.generation } : {}) };
+    }));
+    for (let i = 0; i < 40; i++) { beat(); await service.tick(); now += 5_000; }
+    expect(archived).toEqual([]);
+    childDraft = false;
+    for (let i = 0; i < 80 && open.size; i++) { beat(); await service.tick(); now += 5_000; }
+    expect(archived).toEqual(['child', 'parent']);
+  });
 });
+
