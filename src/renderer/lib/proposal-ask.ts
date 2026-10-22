@@ -69,7 +69,8 @@ export function cardWords(c: Pick<Proposal, 'ask' | 'title' | 'content' | 'appli
     }
     case 'tier': {
       const roles = list(a.roles.map(who)), skills = list(a.skills.map(s => `«${s}»`)), tier = level(a.tier);
-      const yes = [tier ? t('proposals.yes.tier', { roles, tier }) : '', a.skills.length ? t('proposals.yes.tierSkills', { roles, skills }) : ''].filter(Boolean).join(' ');
+      const n = a.roles.length;
+      const yes = [tier ? t('proposals.yes.tier', { roles, tier, n }) : '', a.skills.length ? t('proposals.yes.tierSkills', { roles, skills, n }) : ''].filter(Boolean).join(' ');
       return { question: tier ? t('proposals.ask.tier', { roles, tier }) : t('proposals.ask.tierSkills', { roles, skills }), yes, no: t('proposals.no.tier'), lead: '', bodyLabel: t('proposals.why') };
     }
     case 'rule': {

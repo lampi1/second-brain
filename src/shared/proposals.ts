@@ -98,7 +98,8 @@ export interface ProposalsState {
  *  between the read and the click is never approved unseen). */
 /** keep: on a fact that contradicts confirmed ones, replace them (`new`) or keep them beside it (`both`). */
 export type ProposalKeep = 'new' | 'both';
-export interface ProposalDecide { id: string; decision: ProposalDecision; note?: string; seen?: string; keep?: ProposalKeep }
+/** `conflicts`: with `keep`, the ids of the contradicted facts the card showed (main refuses when they changed since). */
+export interface ProposalDecide { id: string; decision: ProposalDecision; note?: string; seen?: string; keep?: ProposalKeep; conflicts?: string[] }
 export type ProposalDecideResult = { ok: true; state: ProposalsState } | { ok: false; error: string; state: ProposalsState };
 
 /** The newest first; ties by id, so the order never jumps between two reads. */

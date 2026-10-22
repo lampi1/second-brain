@@ -147,7 +147,7 @@ export const ProposalCard = forwardRef<CardHandle, CardProps>(function ProposalC
     </header>
     <h3 className="pd-title" data-testid={top ? 'pd-question' : undefined}>{words.question}</h3>
     <div className={`pd-body${open ? ' pd-scroll' : ''}`}>
-      {code.map(x => <figure key={x.file} className="pd-code" data-testid={top ? 'pd-code' : undefined}>
+      {code.map((x, i) => <figure key={`${i}:${x.file}`} className="pd-code" data-testid={top ? 'pd-code' : undefined}>
         <figcaption><span className="pd-label">{t('proposals.code')}</span><code>{x.file}</code></figcaption>
         <pre className="pd-scroll" data-lang={x.lang}><code>{x.text}</code></pre>
       </figure>)}
@@ -217,7 +217,8 @@ export function ProposalsDeck() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
-      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      // a radio of the card (replace / keep both) keeps ← → for the deck, never for switching the choice
+      if (el && (el.isContentEditable || (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) && (el as HTMLInputElement).type !== 'radio'))) return;
       if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
       if (e.key === 'ArrowRight' && !e.altKey && !e.ctrlKey && !e.metaKey) { if (topRef.current) { e.preventDefault(); topRef.current.fling('approve'); } }
       else if (e.key === 'ArrowLeft' && !e.altKey && !e.ctrlKey && !e.metaKey) { if (topRef.current) { e.preventDefault(); topRef.current.fling('reject'); } }

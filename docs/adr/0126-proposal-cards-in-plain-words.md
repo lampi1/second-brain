@@ -27,7 +27,8 @@ store refused it with an English error and the card stayed.
 - **A contradicted fact asks.** The memory source lists the confirmed facts with the same scope, subject and predicate
   and another value (`ask.conflicts`). The card shows them and two choices, «Sostituiscilo con il nuovo» and «Tienili
   entrambi»; Approva waits for one (the hint says so). The choice travels as `keep` (`proposals:decide` →
-  `memory:confirm { keep, conflicts }`) and `confirmMemory` accepts it only on exactly the conflicting ids it finds
+  `memory:confirm { keep, conflicts }`) with the ids the card showed; main refuses when they differ from the ones it
+  finds now, and `confirmMemory` accepts it only on exactly the conflicting ids it finds
   now: `new` retracts them (superseded by the new one), `both` confirms beside them with a `kept-beside:` reason. Without
   a choice the store still refuses, so a model cannot get around it.
 

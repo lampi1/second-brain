@@ -44,7 +44,7 @@ export interface Source {
   id: ProposalSource;
   available(p: ProposalPorts): boolean;
   list(p: ProposalPorts): Promise<Proposal[]>;
-  decide(p: ProposalPorts, card: Proposal, decision: ProposalDecision, note?: string, keep?: ProposalKeep): Promise<void>;
+  decide(p: ProposalPorts, card: Proposal, decision: ProposalDecision, note?: string, choice?: { keep: ProposalKeep; shown: string[] }): Promise<void>;
 }
 
 const iso = (ms: number): string => new Date(Number.isFinite(ms) ? ms : 0).toISOString();
@@ -79,9 +79,9 @@ export function codeOf(files: readonly FileSnapshot[]): ProposalCode[] {
   return files.flatMap(f => {
     const dir = CODE_FILE.exec(f.file)?.[1], text = f.after ?? f.before;
     if (!dir || text === null) return [];
-    const ext = path.extname(f.file).slice(1).toLowerCase(), name = f.file.replace(/^.*[\\/](scripts|queries)[\\/]/, '$1/');
+    const ext = path.extname(f.file).slice(1).toLowerCase(), name = f.file.replace(/^(?:.*[\\/])?(scripts|queries)[\\/]/, '$1/');
     if (ext === 'md') {
-      const block = /^(`{3,}|~{3,})([\w+-]*)[^\n]*\n([\s\S]*?)\n\1[ \t]*$/m.exec(text);
+      const block = /^(`{3,}|~{3,})([\w+-]*)[^\n]*\n([\s\S]*?)\r?\n\1[ \t\r]*$/m.exec(text);
       return block ? [{ file: name, lang: block[2]!.toLowerCase() || 'text', text: clip(block[3]!, MAX_CODE) }] : [{ file: name, lang: 'markdown', text: clip(text, MAX_CODE) }];
     }
     return [{ file: name, lang: LANG[ext] ?? (ext || 'text'), text: clip(text, MAX_CODE) }];
@@ -123,12 +123,15 @@ const memory: Source = {
       });
     });
   },
-  async decide(p, c, decision, note, keep) {
+  async decide(p, c, decision, note, choice) {
     const id = native(c), text = note?.trim().replace(/[\x00-\x1f\x7f]+/g, ' ').slice(0, 900);
     const conflicts = c.ask.kind === 'remember' ? c.ask.conflicts ?? [] : [];
-    if (decision === 'approve' && conflicts.length && keep !== 'new' && keep !== 'both') throw new Error('Scegli prima cosa fare con quello che ricordava già: sostituirlo o tenerli entrambi.');
+    if (decision === 'approve' && conflicts.length && !choice) throw new Error('Scegli prima cosa fare con quello che ricordava già: sostituirlo o tenerli entrambi.');
+    // the choice holds only for the facts the card showed: one confirmed since is never retracted unseen
+    const stale = (ids: string[]): boolean => ids.length !== conflicts.length || conflicts.some(x => !ids.includes(x.id));
+    if (decision === 'approve' && conflicts.length && stale(choice!.shown)) throw new Error('Nel frattempo è stato confermato un altro fatto sullo stesso argomento: rileggi la carta e scegli di nuovo.');
     if (decision === 'approve') {
-      try { await p.memory!.confirm(id, text || DECK_EVIDENCE, ...(conflicts.length && keep ? [{ keep, ids: conflicts.map(x => x.id) }] : [])); }
+      try { await p.memory!.confirm(id, text || DECK_EVIDENCE, ...(conflicts.length && choice ? [{ keep: choice.keep, ids: choice.shown }] : [])); }
       catch (e) {
         // another fact on the same topic was confirmed after the card was read: the card shows it now (#173)
         if (e instanceof Error && /explicit supersession/.test(e.message)) throw new Error('Nel frattempo è stato confermato un altro fatto sullo stesso argomento: rileggi la carta e scegli di nuovo.');

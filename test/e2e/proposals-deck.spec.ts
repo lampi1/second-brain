@@ -107,7 +107,8 @@ test('the deck: every source in one stack, swipe / buttons / keys, undo, the end
         await expect(page.locator('.pd-hint')).not.toBeEmpty();
         await page.getByTestId('pd-keep-both').click();
         await snap(page, 'proposals-card-conflict-dark');
-        await page.getByTestId('pd-approve').click(); decided[id] = 'approve';
+        // the radio keeps the focus: → approves, it does not switch the choice
+        await page.keyboard.press('ArrowRight'); decided[id] = 'approve';
       } else if (card.id === 'change:demo-p3') {
         await expect(page.getByTestId('pd-code')).toContainText('status === 500');
         await page.keyboard.press('ArrowRight'); decided[id] = 'approve';

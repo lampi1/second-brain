@@ -157,17 +157,20 @@ describe('ProposalsService', () => {
     const card = (await s.list()).items.find(c => c.id === 'memory:a')!;
     expect(card.ask).toMatchObject({ kind: 'remember', role: 'scout', subject: 'Fatto a', conflicts: [{ id: 'old', value: 'vecchio' }] });
     expect(await s.decide({ id: 'memory:a', decision: 'approve' })).toMatchObject({ ok: false, error: expect.stringContaining('sostituirlo o tenerli entrambi') });
-    expect((await s.decide({ id: 'memory:a', decision: 'approve', keep: 'new' })).ok).toBe(true);
+    // the choice holds only on the facts the card showed: another one appeared since → refused, nothing retracted
+    expect(await s.decide({ id: 'memory:a', decision: 'approve', keep: 'new', conflicts: [] })).toMatchObject({ ok: false, error: expect.stringContaining('rileggi la carta') });
+    expect(calls).toEqual([]);
+    expect((await s.decide({ id: 'memory:a', decision: 'approve', keep: 'new', conflicts: ['old'] })).ok).toBe(true);
     expect(calls).toEqual(['confirm a {"keep":"new","ids":["old"]}']);
     // a fact confirmed after the card was read: the store refuses, the reason comes back in words
     rows = [fact('b', NOW - 2 * H), { ...old, subject: 'Fatto b' }];
     const stale = ports({ memory: { list: () => rows, confirm: async () => { throw new Error('Conflicting confirmed fact requires explicit supersession.'); }, retract: async () => {} } });
-    expect(await new ProposalsService({ ports: stale.p, userData: tmp() }).decide({ id: 'memory:b', decision: 'approve', keep: 'both' })).toMatchObject({ ok: false, error: expect.stringContaining('rileggi la carta') });
+    expect(await new ProposalsService({ ports: stale.p, userData: tmp() }).decide({ id: 'memory:b', decision: 'approve', keep: 'both', conflicts: ['old'] })).toMatchObject({ ok: false, error: expect.stringContaining('rileggi la carta') });
   });
 
   it('a change to a script or a query shows its code and words its question from data', async () => {
     const list = [change('s1', NOW - H, { job: 'repeated-task', kind: 'script', action: 'create', target: 'scripts/conta.mjs' }), change('q1', NOW - 2 * H, { job: 'corrections', kind: 'script', action: 'update', target: 'queries/errori.md' })];
-    const stored = [{ ...list[0], files: [{ file: '/brain/scripts/conta.mjs', before: null, after: 'console.log(1);\n' }] }, { ...list[1], files: [{ file: '/brain/queries/errori.md', before: 'x', after: '# Errori\n\n```kql\nlogs | where status == 500\n```\n' }] }];
+    const stored = [{ ...list[0], files: [{ file: '/brain/scripts/conta.mjs', before: null, after: 'console.log(1);\n' }] }, { ...list[1], files: [{ file: 'C:\\brain\\queries\\errori.md', before: 'x', after: '# Errori\r\n\r\n```kql\r\nlogs | where status == 500\r\n```\r\n' }] }];
     const { p } = ports({ changes: { list: () => list, stored: () => stored as never, rollback: () => {} } });
     const items = (await new ProposalsService({ ports: p, userData: tmp() }).list()).items;
     expect(items.find(c => c.id === 'change:s1')).toMatchObject({ group: 'script', ask: { kind: 'applied', what: 'script', action: 'create', name: 'conta.mjs' }, code: [{ file: 'scripts/conta.mjs', lang: 'javascript', text: 'console.log(1);\n' }] });
