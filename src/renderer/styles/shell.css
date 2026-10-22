@@ -141,14 +141,14 @@
 .ev-x:hover { background: var(--surface-4); color: var(--text); }
 
 /* ---------------------------------------------------------------- live turn: the spark and the workshop phrase */
-.typing { flex: none; display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-3); padding: 2px 2px 0; }
+.typing { flex: none; max-width: 100%; display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-3); padding: 2px 2px 0; }
 /* a turning, breathing spark (lib/typing-line.ts has the words): transform and opacity only, so the compositor draws it
    without restyling the page (the "Lag nell'app" rule of lib/beat.ts); paused while the window is hidden, still with
    reduced motion */
 .typing-spark { flex: none; display: inline-grid; place-items: center; width: 14px; height: 14px; color: var(--amber); will-change: transform; animation: typing-spark 1.6s cubic-bezier(.45,.05,.55,.95) infinite; }
 .typing-spark svg { filter: drop-shadow(0 0 3px color-mix(in srgb, var(--amber) 55%, transparent)); }
 @keyframes typing-spark { 0% { transform: rotate(0deg) scale(.78); opacity: .7; } 50% { transform: rotate(180deg) scale(1.08); opacity: 1; } 100% { transform: rotate(360deg) scale(.78); opacity: .7; } }
-.typing-line { animation: typing-line 420ms cubic-bezier(.2,.8,.2,1) both; }
+.typing-line { animation: typing-line 420ms cubic-bezier(.2,.8,.2,1) both; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* a joke never widens its strip */
 @keyframes typing-line { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
 html[data-hidden] .typing-spark, html[data-hidden] .spin { animation-play-state: paused; }
 @media (prefers-reduced-motion: reduce) { .typing-spark, .typing-line, .spin { animation: none; } }

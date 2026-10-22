@@ -6,12 +6,13 @@
 // that expands in place into its chat (DelegationCard.tsx); a parent's KidsBar folds and unfolds its children (the fold
 // is kept across restarts); a root chat the Orchestrator started, or the app started or resumed by itself, says so above
 // it (Origin, ADR 0102).
-import { useEffect, useLayoutEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { workspaceTiles, tileKey, type TileRef } from '../lib/grid';
 import { areaOf } from '../lib/agent-order';
 import { chatTree, childState, visibleTree, type TreeNode } from '../lib/chat-tree';
 import { schedule } from '../lib/viewports';
-import { useApp } from '../store/store';
+import { app, useApp } from '../store/store';
+import { leaveGhost } from '../lib/leave-ghost';
 import { sameList } from '../store/state';
 import { useHandoffTabs } from '../store/handoffs';
 import { setPrefs, ui } from '../store/ui';
@@ -58,6 +59,7 @@ export function AgentStrips() {
   const keep = useHandoffTabs();
   const clouds = useCloudIds().length; // cloud agents' strips follow (CloudStrips.tsx, ADR 0080): not an empty Grindhouse
   const [column, setColumn] = useState<HTMLDivElement | null>(null); // a state, not a ref: the column mounts after hydration
+  const leaveRef = useLeaveRef();
   // every strip starts collapsed (Brother, 18/10: the strips are the Grindhouse); prefs with another chatPanelsV start collapsed too
   useEffect(() => { if (ready && panelsVersion !== 2) setPrefs({ chatPanelsV: 2, chatExpanded: {} }); }, [ready, panelsVersion]);
   // a browser shows beside its chat while that strip is expanded AND the user opened its browsers with the strip's globe
@@ -106,7 +108,8 @@ export function AgentStrips() {
         const accent = side.length ? pairs[tiles.indexOf(side[0]!)] ?? null : lead.kind === 'browser' && !max && owners[lead.id] ? pairs[tiles.indexOf(lead)] ?? null : null;
         const owned = lead.kind === 'browser' && !max && !!owners[lead.id];
         // the strips enter in turn (agent-strips.css, off under reduced motion)
-        return <div className={`agent-pane-wrap${owned ? ' owned-pane' : ''}${depth ? ' tree-child' : ''}${!max && node?.children.length ? ' tree-parent' : ''}`} key={key} data-depth={depth || undefined} style={{ '--row-index': Math.min(i, 8), '--depth': depth, ...(accent !== null ? pairStyle(accent) : {}) } as CSSProperties}>
+        return <div className={`agent-pane-wrap${owned ? ' owned-pane' : ''}${depth ? ' tree-child' : ''}${!max && node?.children.length ? ' tree-parent' : ''}`} key={key} data-depth={depth || undefined} style={{ '--row-index': Math.min(i, 8), '--depth': depth, ...(accent !== null ? pairStyle(accent) : {}) } as CSSProperties}
+          ref={lead.kind === 'chat' ? leaveRef(lead.id) : undefined}>
           {firstOfArea && <h3 className="workspace-area">{area || tr('product.noArea')}</h3>}
           {/* a chat keeps the same parent with or without its browsers beside it: expanding never remounts it */}
           {card && node && <ChildRails node={node} />}
@@ -121,6 +124,26 @@ export function AgentStrips() {
       })}
     </div>
   </div>;
+}
+
+/** One stable ref per chat row: when the row leaves because the app closed its chat by itself, a copy of it fades and
+ *  folds in its place (lib/leave-ghost.ts) instead of the rows under it jumping up. A row folded away under its parent,
+ *  or a chat the user closed, just goes. */
+function useLeaveRef(): (chatId: string) => (el: HTMLDivElement | null) => () => void {
+  const refs = useRef(new Map<string, (el: HTMLDivElement | null) => () => void>());
+  return chatId => {
+    let ref = refs.current.get(chatId);
+    if (!ref) {
+      ref = el => () => {
+        const c = app.get().chats[chatId];
+        if (!c?.closedAt) return; // folded away or remounted (StrictMode): the same ref serves it again
+        refs.current.delete(chatId);
+        if (el && c.closedBy === 'auto') leaveGhost(el);
+      };
+      refs.current.set(chatId, ref);
+    }
+    return ref;
+  };
 }
 
 /** A delegated card's thread lines, tinted by its state. */

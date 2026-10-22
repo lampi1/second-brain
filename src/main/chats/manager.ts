@@ -1128,10 +1128,16 @@ export class ChatManager implements ChatService {
     const trees = new Map<string, AutoCloseCandidate[]>();
     for (const c of own) { const root = rootOf(c.id); trees.set(root, [...trees.get(root) ?? [], c]); }
     for (const root of this.treeActivity.keys()) if (!trees.has(root)) this.treeActivity.delete(root);
-    return own.map(c => {
-      const root = rootOf(c.id), tree = trees.get(root)!;
+    const depthOf = (id: string): number => {
+      let n = 0;
+      for (let cur = this.chats.get(id)?.s.parentId; cur && this.chats.has(cur) && n < 50; cur = this.chats.get(cur)?.s.parentId) n++;
+      return n;
+    };
+    return own.map(lone => {
+      const root = rootOf(lone.id), tree = trees.get(root)!;
       // a lone chat, unless what is left of a tree whose other chats closed first
-      if (tree.length < 2 && !this.treeActivity.has(root)) return c;
+      if (tree.length < 2 && !this.treeActivity.has(root)) return lone;
+      const c = { ...lone, depth: depthOf(lone.id), tree: root };
       // only a member still at work holds the tree: one that ended with an error, a Stop or no result never closes by
       // itself and must not keep its tree open forever
       if (c.eligible && tree.some(x => !x.eligible && this.atWork(x.id))) return { ...c, eligible: false, reason: 'Si chiude insieme al resto dell’albero, quando hanno finito tutti' };
