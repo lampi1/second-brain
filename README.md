@@ -52,27 +52,71 @@ Finish with a three-line summary: where the code lives, how I start the app, and
 That's it. Updating later is one click: **Impostazioni → Aggiornamenti → Aggiorna** pulls `main`, rebuilds and
 restarts (or `npm run pull` in a terminal).
 
-## What it does
+## Take the tour
 
-- **A crew, not a pile of tabs.** You tell the Orchestrator what you want; it hands the work to five roles
-  (Strategist, Scout, Artisan, Sentinel, Herald) that split it into child chats and report back.
-- **Answer with one key.** Questions and permissions show up as panels, with an estimate before ("~4 min · ~0,12 $")
-  and a verdict after.
-- **Browsers they drive.** Real tabs inside the app over MCP: the agents click, type and take screenshots; passwords
-  stay yours.
-- **A brain that learns.** Notes, rules, skills and scripts in a plain Markdown folder, shown live on a 3D map; roles
-  level up only on verified successes.
-- **Your own logins.** It drives the official CLIs with your account and never touches their settings. The UI speaks
-  Italian and English.
+Meet the crew: you talk to the Orchestrator, and it hands the work to five roles (Strategist, Scout, Artisan, Sentinel,
+Herald) that split it into child chats you can watch and report back.
 
 <p align="center"><img src="docs/screenshots/crew.webp" alt="The six roles: Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald" width="544"></p>
 
-<table>
-<tr>
-<td width="50%"><img src="docs/screenshots/browser.webp" alt="A QA chat in focus mode with the browser tab it drives"><br><b>Browsers they drive.</b> A QA chat asks you something while its tab waits.</td>
-<td width="50%"><img src="docs/screenshots/brain-map.webp" alt="Brain → Mappa, the 3D map of notes, agents and tools"><br><b>The brain map.</b> Notes, agents and tools, glowing where the work happens.</td>
-</tr>
-</table>
+### Memory you swipe
+
+Everything the agents learn lands as a card: a fact, a skill, a rule, a setting. Swipe right to keep it, left to drop
+it (or ✓ / ✕, or the arrow keys, with Z to undo), and every card says who proposed it, in which chat and when. Behind
+the deck, one hub with tabs (Approved, Skills, Rules, Scripts & Queries, Ideas, Files, Learning, Statistics) under a
+header whose counters move while the agents work.
+
+<p align="center"><img src="docs/screenshots/memory.webp" alt="Memory: the live header with its counters, the tabs, and a proposal card swiped toward APPROVE" width="560"></p>
+
+### Agents that level up
+
+Every role earns its level from verified outcomes only, never from vibes: a delegated job counts when its parent's
+work checks out, and the Sentinel, the one who judges, is judged by what happens next. Each card shows the level and a
+performance %.
+
+<p align="center"><img src="docs/screenshots/agent-levels.webp" alt="Agent cards for the Orchestrator, the Artisan and the Sentinel, each with its level, verified successes and performance percentage" width="720"></p>
+
+### The brain map
+
+Notes, chats, agents and tools as a 3D map you can spin, glowing along the links where the work is happening right now.
+
+<p align="center"><img src="docs/screenshots/brain-map.webp" alt="The 3D brain map: notes, chats, agents and tools linked, the live ones glowing" width="640"></p>
+
+### The Orchestrator and Flash
+
+The **Orchestrator** is where work starts: it plans, hands each job to the right role, answers their mail and tells you
+what is waiting. **Flash**, the tab next to it, is the "btw": a quick read-only agent on its own model that sees the
+Orchestrator's conversation and answers side questions in seconds, without touching it. When a question turns into
+real work, "Make it a job" drafts it for the Orchestrator.
+
+<p align="center"><img src="docs/screenshots/orchestrator-flash.webp" alt="The Orchestrator's column with its subagents and a decision, and Flash beside it" width="760"></p>
+
+### Emoji instead of essays
+
+Say "thanks" and you get a 👍 on your message, not a paragraph of pleasantries. Any agent with nothing to add reacts
+instead of replying, on every engine, so those tokens go to work instead.
+
+<p align="center"><img src="docs/screenshots/reactions.webp" alt="A thanks to the Orchestrator answered with a thumbs-up reaction under the message" width="560"></p>
+
+### Plan mode
+
+Tick **Plan** and a Strategist takes the job: it asks you a few questions first, then proposes a short plan, each step
+with the role that will do it. You approve it in the questions window (or right on its strip), and only then does it start the other agents,
+as the tree of thread cards at the top of this page, its steps ticking off on its strip.
+
+<p align="center"><img src="docs/screenshots/plan.webp" alt="The questions window: a Strategist's four-step plan to approve, each step with its role" width="680"></p>
+
+## Also on board
+
+- **Answer with one key.** Questions and permissions show up as panels, with an estimate before ("~4 min · ~0.12 $")
+  and a verdict after.
+- **Browsers they drive.** Real tabs inside the app over MCP: the agents click, type and take screenshots; passwords
+  stay yours.
+- **A brain in plain Markdown.** Notes, rules, skills and scripts live in a folder you own, readable without the app.
+- **Your own logins.** It drives the official CLIs with your account and never touches their settings. The UI speaks
+  Italian, English and German.
+
+<p align="center"><img src="docs/screenshots/browser.webp" alt="A QA chat in focus mode with the browser tab it drives" width="720"></p>
 
 ## The rest
 
