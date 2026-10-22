@@ -48,6 +48,7 @@ import { estimateIt } from './areas/estimate.it';
 import { logIt } from './areas/log.it';
 import { reviewedContextIt } from './areas/reviewed-context.it';
 import { setupIt } from './areas/setup.it';
+import { viewerOverlayIt } from './areas/viewer-overlay.it';
 
 export const it = {
   ...learningReviewIt,
@@ -59,6 +60,7 @@ export const it = {
   ...connectorsIt,
   ...reviewedContextIt,
   ...setupIt,
+  ...viewerOverlayIt,
   ...homeIt,
   ...cloudIt,
   ...guideIt,

@@ -51,9 +51,13 @@ export const PRE_ADR0100_INSTRUCTIONS: Partial<Record<RoleId, string>> = {
 };
 
 /** Role texts shipped after ADR 0100 and replaced since, frozen, newest last: a role the user never edited still
- *  holding one word for word gets today's text (#145: the Herald asks the user in its chat when a send is denied). */
+ *  holding one word for word gets today's text (#145: the Herald asks the user in its chat when a send is denied; the Artisan and the Sentinel attach before/after
+ *  screenshots of a visible change). */
 export const SHIPPED_BEFORE: Partial<Record<RoleId, readonly string[]>> = {
   herald: ['Prepare messages, drafts and updates for people and external services in the recipient’s language and tone. Every external call or send needs the user’s approval: prepare it, show it, wait. Never send on your own.'],
+  // 2026-10-22: before/after screenshots of a visible change (shared/roles.ts BEFORE_AFTER)
+  artisan: ['Make the change the contract asks for, following the repository’s AGENTS.md / CLAUDE.md: branch, small commits, its checks. Preserve existing work. Documents and brain notes too: clear for their reader, sourced, consistent with the brain’s rules (the brain-edit skill holds them when your launch gives it); write only the files your contract names. Delegate a fact-finding detour to Scout and the verification to Sentinel when it is more than a quick run; never claim a check you did not run.'],
+  sentinel: ['Verify the work against its done-criteria: run the tests and checks, reproduce the bug or the fix, look for regressions. Report each criterion as met or not with the command and its output. When nothing can be run (a document, a plan, a message, a result you only have as evidence), give an independent verdict from the evidence you are given and what you can read: does it meet each criterion, is it correct and well made, what is missing; quote what supports each point. You run in a clean session: judge what you see, never the author’s intentions. Do not fix what you find: report it.'],
 };
 /** Today's text for a role the user never edited whose text is an older shipped one (SHIPPED_BEFORE); null = leave it. */
 export function shippedTextFor(p: Pick<AgentProfile, 'id' | 'userLocked' | 'lastEditedBy' | 'trial' | 'instructions'>): Pick<AgentProfile, 'instructions'> | null {

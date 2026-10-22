@@ -64,9 +64,9 @@ export function QuestionsWindow() {
     check();
     return () => clearTimeout(t);
   }, [curKey, q.call, calm]);
-  // a file link clicked in the window opened the viewer: the window waits as the pill while that file page is on
-  // screen (Ctrl+J or the pill bring it back, nothing is answered or put off; store/ui.ts setQuestionsAside)
-  const onFile = ui.use(s => s.page === 'file' && !s.map);
+  // a file link clicked in the window opened the viewer: the window waits as the pill while the viewer is on screen
+  // (Ctrl+J or the pill bring it back, nothing is answered or put off; store/ui.ts setQuestionsAside)
+  const onFile = ui.use(s => s.viewer.open);
   const aside = !!q.aside && onFile;
   useEffect(() => { if (q.aside && !onFile) setQuestionsAside(false); }, [q.aside, onFile]);
   // under a dialog (Ctrl+K) the window stays mounted but hidden: a free answer being typed in it survives

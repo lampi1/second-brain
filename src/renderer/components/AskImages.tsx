@@ -2,7 +2,10 @@
 // che le immagini si potessero vedere direttamente nella domanda"): thumbnails with their caption, a click opens them
 // large inside the app (ImageZoom.tsx: ← → move between them, Esc or a click outside closes; the Esc never reaches the question).
 // main reads each file once (app:askImage: allowed folders, magic bytes, size) and hands a data: URL; one that is
-// missing or refused says why in one line instead. Used by AskContext.tsx (every size of the panel that has a context).
+// missing or refused says why in one line instead. A before and an after among them (their file names or captions,
+// brain/lib/report-images.ts beforeAfterPair) get a "Prima / Dopo" button: the pair in the viewer overlay, side by side
+// or with a slider (components/viewer/ShotsCompare.tsx). Used by AskContext.tsx (every size of the panel that has a
+// context) and MessageImages.tsx (chat messages, agent reports).
 import { t as auditText } from '../i18n';
 import { memo, useCallback, useEffect, useState } from 'react';
 import type { AskImageResult } from '@shared/contract';
@@ -11,6 +14,8 @@ import { sb } from '../sb';
 import {safePreviewRaster} from '../lib/preview-raster';
 import {currentImageResults,imageResultsKey,type ImageResults} from '../lib/image-results';
 import { openFile } from './GenUi';
+import { openShots } from '../actions';
+import { beforeAfterPair } from '../brain/lib/report-images';
 import { ImageZoom } from './ImageZoom';
 import { t } from '../i18n';
 
@@ -48,6 +53,8 @@ export const AskImages = memo(function AskImages({ images, testBase, size = 'm' 
   const shown = images.map((im, i) => ({ im, r: res[i] })).filter((x): x is { im: AskImage; r: Extract<AskImageResult, { kind: 'image' }> } => x.r?.kind === 'image');
   const bad = images.map((im, i) => ({ im, r: res[i] })).filter(x => x.r && x.r.kind !== 'image');
   const close = useCallback(() => setOpen(null), []);
+  // the pair is offered once both sides are shown (a missing file has nothing to compare)
+  const pair = beforeAfterPair(shown.map(x => x.im));
   if (!images.length) return null;
   return (
     <div className={`ask-imgs ask-imgs-${size}`} data-testid={`${testBase}-imgs`}>
@@ -65,6 +72,10 @@ export const AskImages = memo(function AskImages({ images, testBase, size = 'm' 
             </figure>
           );
         })}
+        {pair && <button type="button" className="ask-img-compare" onClick={() => openShots(pair.before, pair.after)} data-testid={`${testBase}-img-compare`} data-tip={t('vw.compareShotsTip')}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5" /><path d="M12 3v18" /></svg>
+          <span>{t('vw.compareShots')}</span>
+        </button>}
       </div>
       {bad.map(x => (
         <div key={x.im.path} className="ask-img-bad" data-testid={`${testBase}-img-bad`}>

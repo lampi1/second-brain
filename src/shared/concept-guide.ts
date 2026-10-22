@@ -797,6 +797,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/brain/components/ReportHtml.tsx, ReportImages.tsx
       b('Report Markdown e HTML con le loro immagini (incorporate in base64 o file accanto al report), mai da internet; un clic su un’immagine la apre grande. L’HTML è ripulito: niente script, moduli o caricamenti esterni.',
         'Markdown and HTML reports with their images (embedded as base64 or files beside the report), never from the internet; a click on an image opens it large. The HTML is cleaned: no scripts, forms or external loads.'),
+      // src/renderer/components/viewer/ViewerOverlay.tsx, ShotsCompare.tsx; brain/components/FindBar.tsx, Toc.tsx; brain/pages/FileDiff.tsx
+      b('Si apre sopra la pagina, che resta com’era: Esc lo chiude, Alt+←/→ passano tra i file aperti, Espandi (F11) lo porta a tutto schermo. Ctrl+F cerca nel testo, un documento lungo ha l’indice a lato, Confronta mostra le modifiche affiancate parola per parola, e gli screenshot prima e dopo di un agente si confrontano affiancati o con un cursore.',
+        'It opens above the page, which stays as it was: Esc closes it, Alt+←/→ move between the files opened, Expand (F11) makes it full screen. Ctrl+F searches the text, a long document has its contents beside it, Compare shows the changes side by side word by word, and an agent’s before and after screenshots compare side by side or with a slider.'),
       // src/main/peek-file.ts
       b('Cliccare un percorso in chat apre prima un’anteprima piccola (14 righe), senza scrivere né eseguire nulla.',
         'Clicking a path in a chat first opens a small preview (14 lines), writing and running nothing.'),

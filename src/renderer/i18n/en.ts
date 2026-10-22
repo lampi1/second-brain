@@ -47,6 +47,7 @@ import { estimateEn } from './areas/estimate.en';
 import { logEn } from './areas/log.en';
 import { reviewedContextEn } from './areas/reviewed-context.en';
 import { setupEn } from './areas/setup.en';
+import { viewerOverlayEn } from './areas/viewer-overlay.en';
 
 export const en: Dict = {
   ...learningReviewEn,
@@ -58,6 +59,7 @@ export const en: Dict = {
   ...connectorsEn,
   ...reviewedContextEn,
   ...setupEn,
+  ...viewerOverlayEn,
   ...homeEn,
   ...cloudEn,
   ...guideEn,

@@ -47,6 +47,7 @@ import { estimateDe } from './areas/estimate.de';
 import { logDe } from './areas/log.de';
 import { reviewedContextDe } from './areas/reviewed-context.de';
 import { setupDe } from './areas/setup.de';
+import { viewerOverlayDe } from './areas/viewer-overlay.de';
 
 export const de: Dict = {
   ...learningReviewDe,
@@ -58,6 +59,7 @@ export const de: Dict = {
   ...connectorsDe,
   ...reviewedContextDe,
   ...setupDe,
+  ...viewerOverlayDe,
   ...homeDe,
   ...cloudDe,
   ...guideDe,
