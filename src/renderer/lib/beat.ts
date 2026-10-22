@@ -1,4 +1,4 @@
-// The one heartbeat of every "alive" mark (typing dots, tool spinners, state pill dots, the streaming caret, the
+// The one heartbeat of the small "alive" marks (state pill dots, the streaming caret, the
 // brain's live dots). Why: an infinite CSS animation makes the page restyle and the GPU draw 60 frames a second for as
 // long as it is on screen; five chats at work kept the app near half a core with nobody typing, and the keys typed
 // meanwhile waited behind those frames ("Lag nell'app", owner 2026-10-12). Here one timer steps attributes on <html>
@@ -7,7 +7,8 @@
 // Started by main.tsx on every page.
 
 const STEP_MS = 500; // bench at rest, 5 working chats: 5 steps a second 0.15 core, 2 a second 0.08, none 0.05
-const ALIVE = '.typing-dots, .spin, .pill-dot, .md.streaming, .bx-live, .bx-live-dot.run';
+const ALIVE = '.pill-dot, .md.streaming, .bx-live, .bx-live-dot.run';
+// the working spark and the spinners turn smoothly on the compositor (shell.css, app.css): html[data-hidden] pauses them
 
 let n = 0;
 let timer: ReturnType<typeof setInterval> | null = null;
@@ -17,7 +18,7 @@ function set(name: string, value: string): void {
   if (root().getAttribute(name) !== value) root().setAttribute(name, value);
 }
 
-/** One step: typing dots light in turn (3 steps = 1.5 s), spinners turn by 90° (4 steps), pulses blink each step. */
+/** One step: pulses blink each step (data-b3 / data-b4 kept for the marks that count in threes or fours). */
 export function step(): void {
   if (!document.querySelector(ALIVE)) return; // nothing alive on screen: no style change, no frame
   n = (n + 1) % 12;
@@ -37,6 +38,7 @@ export function startBeat(): void {
   const still = window.matchMedia?.('(prefers-reduced-motion: reduce)');
   const sync = () => {
     const run = !document.hidden && !still?.matches;
+    if (document.hidden) root().setAttribute('data-hidden', ''); else root().removeAttribute('data-hidden');
     if (run && !timer) timer = setInterval(step, STEP_MS);
     if (!run && timer) { clearInterval(timer); timer = null; }
     if (still?.matches) clear(); // the resting look: the same as the old animations' end frame

@@ -60,8 +60,6 @@ export const chatIt = {
   'chat.items.modeTip.plan': 'Affidata a una chat Strategist che pianifica e delega',
   'chat.items.modeTip.new': 'L’Orchestrator apre una chat nuova per questa richiesta',
   'chat.items.typing.writing': 'sta scrivendo…',
-  'chat.items.typing.thinking': 'sta pensando…',
-  'chat.items.typing.working': 'sta lavorando…',
   'chat.items.toolStatus.running': 'in corso',
   'chat.items.toolStatus.ok': 'fatto',
   'chat.items.toolStatus.error': 'errore',

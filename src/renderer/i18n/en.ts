@@ -21,6 +21,7 @@ import { langSwitchEn } from './areas/lang-switch.en';
 import type { Dict } from './index';
 import { chatEn } from './areas/chat.en';
 import { visualsEn } from './areas/visuals.en';
+import { typingEn } from './areas/typing.en';
 import { dialogsEn } from './areas/dialogs.en';
 import { toolsEn } from './areas/tools.en';
 import { brainPagesEn } from './areas/brainPages.en';
@@ -105,6 +106,7 @@ export const en: Dict = {
   ...profileEn,
   ...chatEn,
   ...visualsEn,
+  ...typingEn,
   ...dialogsEn,
   ...toolsEn,
   ...brainPagesEn,
