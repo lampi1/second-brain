@@ -356,6 +356,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Ci sono 11 tipi ufficiali (es. test-passato-a-torto, richiesta-fraintesa, regola-ignorata); una riga illeggibile è «Formato non riconosciuto».',
         'There are 11 official types (e.g. test-passato-a-torto, richiesta-fraintesa, regola-ignorata); an unreadable line is "Unrecognised format".'),
       b('Un tipo è «ricorrente» da 2 righe in su; si confronta la settimana con la precedente.', 'A type is "recurring" from 2 rows up; the week is compared with the previous one.'),
+      // src/main/brainmodel/error-lessons.ts
+      b('Un errore ricorrente diventa da solo una regola per ogni ruolo in rules/lessons.md (la sua «regola:», se scritta), con Annulla nel Log.',
+        'A recurring error becomes a rule for every role in rules/lessons.md by itself (its own "regola:", when written), with Undo in the Log.'),
       // src/renderer/lib/correction.ts, src/renderer/components/CorrectThought.tsx (ADR 0058)
       b('«Correggi» su un pezzo di ragionamento manda all’agente la citazione e la tua correzione; è bloccato se c’è una domanda aperta.',
         '"Correct" on a piece of reasoning sends the agent the quote and your fix; it is blocked while a question is open.'),

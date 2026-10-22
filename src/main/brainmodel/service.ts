@@ -23,6 +23,10 @@ import { ChangeLog, type AgentRestorer, type AgentSnapshot } from './changes';
 import { classifiersState, readJobs } from './classifiers';
 import { claimOf, learningState, measurable, seal, type IntervalCache } from './evidence';
 import { corrections, mergeMemory, mergeSkills, migrate, repeatedTask, type AgentWriter, type JobContext, type JobResult } from './jobs';
+import { errorLessons } from './error-lessons';
+
+/** The corrections job and, in the same pass, the recurring errors of ai-errors.md as rules (error-lessons.ts). */
+const withErrorLessons = (r: JobResult, ctx: JobContext): JobResult => ({ ...r, changes: r.changes + errorLessons(ctx) });
 import { procedureSections } from './procedure-sources';
 import { pending as upgradePending, upgrade, type UpgradeAsk } from './upgrade';
 import { memoryStats } from './memory-stats';
@@ -180,7 +184,7 @@ export class BrainModelService {
         try {
           const r = id === 'migration' ? await migrate(ctx)
             : id === 'upgrade' ? await upgrade({ root, userData: this.d.userData, log: this.log, app: this.d.appVersion?.() ?? '0.0.0', ask: this.d.upgradeAsk, now: () => this.now() })
-            : id === 'corrections' ? corrections(ctx) : id === 'repeated-task' ? repeatedTask(ctx) : id === 'merge-skills' ? mergeSkills(ctx) : mergeMemory(ctx);
+            : id === 'corrections' ? withErrorLessons(corrections(ctx), ctx) : id === 'repeated-task' ? repeatedTask(ctx) : id === 'merge-skills' ? mergeSkills(ctx) : mergeMemory(ctx);
           if (r.report) writeLocal(this.reportFile, mergeReport(this.report(), r.report));
           done.push(r);
         } catch (e) {
