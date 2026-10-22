@@ -39,6 +39,7 @@ import { findTranscript } from './chats/transcript';
 import { createRoutedChat, previewRoute } from './chats/routed';
 import { FROZEN_EPOCH } from './demo';
 import { checkRunIds, demoEstimateRuns, estimatesState, mergeRuns } from './agents/run-estimates';
+import { macroTasks } from '../shared/macro-tasks';
 import { systemLang } from './lang';
 import { ProfileService } from './brain/profile';
 import { AgentImageStore, nativeReencode } from './agents/agent-images';
@@ -244,6 +245,11 @@ app.whenReady().then(async () => {
       const now = demo && process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now();
       const runs = mergeRuns(demo ? demoEstimateRuns(now) : s.agentRuns?.list() ?? [], s.chats.list().map(c => c.run));
       return estimatesState(runs, checkRunIds(a?.runIds), now);
+    },
+    'runs:macro': a => {
+      const now = demo && process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now();
+      const since = typeof a?.since === 'number' && Number.isFinite(a.since) ? a.since : now - 14 * 864e5;
+      return macroTasks(mergeRuns(demo ? demoEstimateRuns(now) : s.agentRuns?.list() ?? [], s.chats.list().map(c => c.run)), since);
     },
     'agents:restoreVersion': a => s.agents.restoreVersion(a.id, a.version),
     'setup:get': () => s.setup.get(),
