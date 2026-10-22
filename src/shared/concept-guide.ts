@@ -670,38 +670,38 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'setup',
     title: b('La prima configurazione', 'The first setup'),
-    summary: b('Una sola finestra, sette passi: cartelle, la tua IA, gli strumenti, chi sei, il tuo lavoro, la squadra e il riepilogo. Riprendi quando vuoi.',
-      'One window, seven steps: folders, your AI, tools, who you are, your work, the team and the summary. Resume whenever you like.'),
+    summary: b('Una sola finestra, sei passi: lingua, la tua IA, gli strumenti, chi sei, le cartelle e pronto. Riprendi quando vuoi.',
+      'One window, six steps: language, your AI, tools, who you are, folders and ready. Resume whenever you like.'),
     points: [
-      // src/renderer/components/SetupFolders.tsx; src/modules/ai-first/default-brain.ts
-      b('Cartelle: nessuna scelta tra opzioni. La memoria è nuova e vuota (creata alla conferma nella cartella dati dell’app) oppure un brain che hai già, indicato con «Usa un brain esistente…».',
-        'Folders: no options to pick. The memory is a new, empty one (created on confirmation in the app’s data folder) or a brain you already have, pointed to with "Use an existing brain…".'),
-      // src/main/brain/projects-folder.ts
-      b('La cartella dei progetti la cerca l’app da sola: i repository in cui Claude Code e Cursor hanno già lavorato e i posti abituali (source/repos, Projects, dev…). Te la chiede solo se non la trova; la cambi o la rilevi di nuovo in Impostazioni → Il mio spazio.',
-        'The app looks for the projects folder by itself: the repositories Claude Code and Cursor already worked in and the usual places (source/repos, Projects, dev…). It asks only when it finds none.'),
+      // src/renderer/components/SetupLanguage.tsx; src/renderer/i18n/LangRoot.tsx
+      b('Lingua per prima: tre pulsanti grandi, già scelta quella del sistema. Un clic cambia subito la lingua dell’app; le risposte restano. La stessa lingua va in me.md per le chat e nel brain nuovo.',
+        'Language first: three big buttons, the system one already picked. A click changes the app’s language at once; the answers stay. The same language goes into me.md for the chats and into the new brain.'),
       // src/renderer/components/SetupEngines.tsx; src/renderer/lib/setup-wizard.ts
-      b('La tua IA: «Collega» apre l’accesso ufficiale in una finestra a parte; la configurazione resta aperta e ricontrolla da sola ogni pochi secondi, finché la scheda dice «Collegata» con l’account e l’ora della verifica.',
-        'Your AI: "Collega" opens the official sign-in in a separate window; the setup stays open and checks again by itself every few seconds, until the card says "Collegata" with the account and the time of the check.'),
-      // src/renderer/components/SetupConnectors.tsx; src/renderer/lib/setup-connectors.ts
-      b('Strumenti (GitHub, Azure DevOps, Jira): ogni accesso finisce con una verifica vera in sola lettura. «Connesso come …» dice l’account e quanti progetti ha letto; «Non connesso» dice il motivo e cosa fare.',
-        'Tools (GitHub, Azure DevOps, Jira): every sign-in ends in a real read-only check. "Connected as …" names the account and how many projects it read; "Not connected" says why and what to do.'),
-      // src/renderer/components/FirstInterview.tsx; src/main/brain/profile.ts
-      b('Nome, ruolo, lingua, aree e stile delle risposte finiscono in me.md alla conferma; ogni risposta è salvata come bozza mezzo secondo dopo, così «Più tardi» o Esc riprendono dallo stesso passo.',
-        'Name, role, language, areas and reply style go into me.md on confirmation; every answer is saved as a draft half a second later, so "Più tardi" or Esc resume on the same step.'),
+      b('La tua IA: una consigliata, le altre sotto «Altre IA». «Collega» apre l’accesso ufficiale in una finestra a parte; la configurazione resta aperta e ricontrolla da sola ogni pochi secondi. La prima IA scelta è quella dei ruoli.',
+        'Your AI: one recommended, the others under "More AI tools". "Collega" opens the official sign-in in a separate window; the setup stays open and checks again by itself every few seconds. The first AI chosen is the roles’ one.'),
+      // src/renderer/components/ToolCatalog.tsx; src/renderer/lib/tool-presets.ts
+      b('Strumenti (GitHub, Jira, Azure DevOps): ogni riquadro crea insieme l’account e il server MCP degli agenti. Chiede solo organizzazione o sito, poi un token (con il link alla pagina dove si crea) o l’accesso nel browser, e prova subito: «Funziona: vedo N progetti» o cosa fare. Il modulo tecnico sta in Impostazioni → Avanzate.',
+        'Tools (GitHub, Jira, Azure DevOps): each tile creates the account and the agents’ MCP server together. It asks only for the organization or site, then a token (with the link to the page where it is made) or the browser sign-in, and tests at once: "Works: I see N projects" or what to do. The technical form is in Settings → Advanced.'),
+      // src/renderer/components/SetupFolders.tsx; src/main/brain/projects-folder.ts; src/modules/ai-first/default-brain.ts
+      b('Cartelle: sempre un brain nuovo e vuoto nel posto predefinito (creato alla conferma); la cartella dei progetti la cerca l’app da sola e te la chiede solo se non la trova. Un brain che hai già lo indichi in Impostazioni → Il mio spazio.',
+        'Folders: always a new, empty brain in the default place (created on confirmation); the app looks for the projects folder by itself and asks only when it finds none. A brain you already have is pointed to in Settings → My workspace.'),
+      // src/renderer/components/FirstInterview.tsx; src/modules/ai-first/model.ts
+      b('Pronto: obiettivi, aree di lavoro e squadra non si chiedono qui ma dopo, nella prima chat con la guida, una domanda alla volta. Ogni risposta è salvata come bozza mezzo secondo dopo, così «Più tardi» o Esc riprendono dallo stesso passo.',
+        'Ready: goals, work areas and team are not asked here but later, in the first chat with the guide, one question at a time. Every answer is saved as a draft half a second later, so "Più tardi" or Esc resume on the same step.'),
       // src/renderer/components/ui.tsx Modal
       b('Niente dentro la finestra la chiude da solo: un clic fuori non fa nulla, e la si riapre da Impostazioni → «Configura il mio lavoro».',
         'Nothing inside the window closes it by itself: a click outside does nothing, and you reopen it from Settings → "Configura il mio lavoro".'),
     ],
     analogy: b('Come il primo giorno in un ufficio nuovo: ti mostrano la scrivania, ti danno i badge e controllano che aprano davvero le porte.',
       'Like the first day at a new office: they show you your desk, hand you the badges and check they really open the doors.'),
-    diagram: { kind: 'flow', steps: [b('Cartelle', 'Folders'), b('La tua IA', 'Your AI'), b('Strumenti', 'Tools'), b('Chi sei e lavoro', 'You and your work'), b('Conferma', 'Confirm')] },
+    diagram: { kind: 'flow', steps: [b('Lingua', 'Language'), b('La tua IA', 'Your AI'), b('Strumenti', 'Tools'), b('Chi sei', 'About you'), b('Cartelle', 'Folders'), b('Pronto', 'Ready')] },
     tech: [
       tech(WHERE, 'Le scelte stanno in config.json (brainRoot, projectsRoot); la bozza in setup.json; il brain nuovo usa projectsRoot come cartella dei repository (REPOS).',
         'The choices live in config.json (brainRoot, projectsRoot); the draft in setup.json; a new brain uses projectsRoot as its repositories folder (REPOS).'),
       tech(LIMITS, 'Ricerca dei progetti: solo nomi di cartelle e presenza di .git, al massimo 300 cartelle note alle CLI; nessun file aperto. Ricontrollo degli accessi: ogni 4 secondi per 3 minuti.',
         'Projects search: folder names and .git presence only, at most 300 folders known to the CLIs; no file opened. Sign-in re-checks: every 4 seconds for 3 minutes.'),
     ],
-    sources: ['src/renderer/components/FirstInterview.tsx', 'src/renderer/components/SetupFolders.tsx', 'src/renderer/components/SetupEngines.tsx', 'src/renderer/components/SetupConnectors.tsx', 'src/renderer/lib/setup-wizard.ts', 'src/renderer/lib/setup-connectors.ts', 'src/main/brain/projects-folder.ts', 'src/renderer/components/ProjectsFolderSetting.tsx', 'src/modules/ai-first/default-brain.ts', 'src/renderer/components/ui.tsx'],
+    sources: ['src/renderer/components/FirstInterview.tsx', 'src/renderer/components/SetupFolders.tsx', 'src/renderer/components/SetupEngines.tsx', 'src/renderer/components/SetupLanguage.tsx', 'src/renderer/components/ToolCatalog.tsx', 'src/renderer/lib/setup-wizard.ts', 'src/renderer/lib/tool-presets.ts', 'src/renderer/lib/setup-connectors.ts', 'src/main/brain/projects-folder.ts', 'src/renderer/components/ProjectsFolderSetting.tsx', 'src/modules/ai-first/default-brain.ts', 'src/renderer/components/ui.tsx'],
   },
   {
     id: 'brain',

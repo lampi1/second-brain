@@ -143,3 +143,10 @@
 /* the settings inputs are sized for a row's right-hand control: full width and left-aligned in the hub's forms */
 .hub-form .st-input, .hub-token .st-input { width: 100%; max-width: none; min-width: 0; text-align: left; box-sizing: border-box; }
 .hub-form textarea.st-input { height: auto; padding: 7px 10px; line-height: 1.45; }
+
+/* Settings → Avanzate (McpAdvanced, ADR 0119): one row per server, its editor in place */
+.hub-adv-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.hub-adv-list > li { --tone: var(--blue); display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border-2); border-radius: var(--r-m); background: var(--surface-2); min-width: 0; }
+.hub-adv-list > li .hub-mark { width: 30px; height: 30px; border-radius: 8px; font-size: 11px; }
+.hub-adv-list > li code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 12px; color: var(--text-3); }
+.hub-adv-list > li.hub-adv-edit { display: block; padding: 0; border: 0; background: none; }

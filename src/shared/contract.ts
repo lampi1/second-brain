@@ -10,7 +10,7 @@ import type { PackTarget, PackExportPlan, PackFinding, PackImportReview } from '
 export type BrainShareResult = { ok: true; path: string; skills: number; rules: number; roles: number; scripts: number; skipped: number } | { ok: false; findings: PackFinding[] } | { ok: false; error: string };
 import type { BrainModelState, ClassifiersState, MaintenanceJobId } from './brain-model';
 import type { ApprovalDecision, ApprovalItem, PulseActResult, PulseDismissReason, PulseList, PulsePlace, PulseResult, PulseStatus, PulseSettings, PulseType } from './pulse';
-import type { ConnectorId, ConnectorState } from './connectors';
+import type { ConnectorId, ConnectorState, ConnectorToken } from './connectors';
 import type { McpImportCandidate, McpServerDef, McpServersState, McpToolAccess } from './mcp-servers';
 import type { FileViewResult } from './file-view';
 import type { DiffAgainst, FileDiffResult } from './file-diff';
@@ -1197,6 +1197,9 @@ export interface InvokeMap {
   'connectors:probe': [{ provider: ConnectorId }, ConnectorState];
   'connectors:select': [{ provider: ConnectorId; projects: string[] }, ConnectorState];
   'connectors:disconnect': [{ provider: ConnectorId }, void];
+  /** a tool tile of the setup / Settings catalog (ADR 0119): the token the user pasted there (GitHub: a fine-grained
+   *  token; Jira Cloud: site, email and API token) is kept encrypted for the account and probed at once */
+  'connectors:useToken': [ConnectorToken, ConnectorState];
   // the app-managed MCP servers (ADR 0086): only the user's clicks in Settings → Connettori and on the agent card
   'mcpservers:state': [void, McpServersState];
   'mcpservers:save': [{ def: McpServerDef; previousId?: string }, McpServersState];
@@ -1587,7 +1590,7 @@ export type InvokeResult<K extends InvokeChannel> = InvokeMap[K][1];
 // Runtime lists (the preload allow-list). Kept in sync with the maps by the compile-time checks below.
 export const INVOKE_CHANNELS = [
   'pulse:list', 'pulse:status', 'pulse:seen', 'pulse:save', 'pulse:act', 'pulse:dismiss', 'pulse:runNow', 'approvals:list', 'approvals:decide',
-  'connectors:list', 'connectors:login', 'connectors:cancelLogin', 'connectors:probe', 'connectors:select', 'connectors:disconnect',
+  'connectors:list', 'connectors:login', 'connectors:cancelLogin', 'connectors:probe', 'connectors:select', 'connectors:disconnect', 'connectors:useToken',
   'mcpservers:state', 'mcpservers:save', 'mcpservers:remove', 'mcpservers:setSecret', 'mcpservers:deleteSecret', 'mcpservers:setAccess', 'mcpservers:test', 'mcpservers:importScan', 'mcpservers:importApply',
   'update:get', 'update:apply', 'update:checkpointAnswer', 'update:recovery', 'update:recoveryAck',
   'app:createBrain', 'app:projectsFolder', 'app:pickProjects',

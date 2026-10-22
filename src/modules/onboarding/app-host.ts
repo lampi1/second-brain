@@ -1,4 +1,5 @@
-// Production connector adapters: fixed official gh commands and Jira Cloud read-only REST; called only by UI actions.
+// Production connector adapters: fixed official gh commands, Jira Cloud read-only REST and, for a token typed in a tool
+// tile (ADR 0119), GitHub's read-only REST; called only by UI actions.
 import { execFile, spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -9,8 +10,8 @@ import { safeStorageCipher } from '../../main/engines/secrets';
 import { launchPosixLogin } from '../ai-first/login-terminal';
 import { AppConnectorService, verifiedOf } from './app-service';
 import type { ConnectorSelections } from './app-service';
-import { githubProbe, jiraProbe } from './app-providers';
-import { JiraVault } from './app-vault';
+import { githubProbe, githubTokenProbe, jiraProbe } from './app-providers';
+import { GithubVault, JiraVault } from './app-vault';
 import { credentialEntry } from './credential-entry';
 import { azureAccount, azureLogin, azureProof, azureReadProof } from './app-azure';
 import type { TasksState } from '../../shared/contract';
@@ -42,6 +43,8 @@ export function createAppConnectors(userData: string, refreshTasks: () => Promis
     async azureLogin() { enabled(); await azureLogin(); },
     async azureProbe() { enabled(); return azureProof(azureAccount, refreshTasks); },
     vault: new JiraVault(userData, safeStorageCipher(safeStorage)),
+    githubToken: new GithubVault(userData, safeStorageCipher(safeStorage)),
+    async githubTokenProbe(token) { enabled(); return githubTokenProbe(token); },
     loadSelections: () => selections,
     async saveSelections(value) {
       await fs.mkdir(userData, { recursive: true }); const temporary = `${file}.${randomUUID()}.tmp`;

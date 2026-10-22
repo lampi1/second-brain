@@ -177,6 +177,7 @@ app.whenReady().then(async () => {
       'connectors:probe': a => connectors.service.probe(a?.provider),
       'connectors:select': a => connectors.service.select(a?.provider, a?.projects),
       'connectors:disconnect': a => connectors.service.disconnect(a?.provider),
+      'connectors:useToken': a => connectors.service.useToken(a),
       // the user's MCP servers (ADR 0086): the user's clicks only; a token goes in once and never comes back
       'mcpservers:state': () => mcpServers().state(),
       'mcpservers:save': a => mcpServers().save(a),

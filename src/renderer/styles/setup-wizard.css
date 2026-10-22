@@ -1,4 +1,4 @@
-/* The first-run setup wizard (components/FirstInterview.tsx, SetupFolders.tsx, SetupEngines.tsx, SetupConnectors.tsx): one fixed-size modal with a
+/* The first-run setup wizard (components/FirstInterview.tsx, SetupLanguage.tsx, SetupFolders.tsx, SetupEngines.tsx; the tool tiles: tool-catalog.css): one fixed-size modal with a
    step rail on the left and the current step on the right, in the Dashboard's look (eyebrow, display titles, cards on
    the shared tokens, light and dark). The modal keeps its size between steps so moving on never feels like a new
    window; only the step body scrolls. Motion is off for reduced-motion users. Scoped under .sw / .modal-setup. */
@@ -44,7 +44,7 @@
 .sw-stack { display: flex; flex-direction: column; gap: 16px; animation: sw-in 220ms var(--ease) both; }
 .sw-foot { display: flex; align-items: center; gap: 8px; padding: 14px 28px; border-top: 1px solid var(--border); background: var(--bg-2); }
 .sw-saved { font-size: 11px; color: var(--text-3); }
-.sw :is(button, input, textarea, summary):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sw :is(button, input, textarea, summary, .sw-more-toggle):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* ---- shared pieces */
 .sw-card { margin: 0; display: flex; align-items: center; gap: 14px; padding: 16px 18px; border: 1px solid var(--border-2); border-radius: var(--r-l); background: var(--surface-2); }
@@ -116,31 +116,38 @@
 .sw-folder-warn svg { flex: none; margin-top: 2px; }
 .sw-folder > .btn { flex: none; }
 
-/* ---- tools: one row per connector, its state always the outcome of a real check */
-.sw-tools { display: flex; flex-direction: column; gap: 12px; }
-.sw-tool-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.sw-tool { display: flex; align-items: flex-start; gap: 14px; padding: 14px 16px; border: 1px solid var(--border-2); border-radius: var(--r-l); background: var(--surface-2); transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
-.sw-tool.is-ok { border-color: color-mix(in srgb, var(--green) 45%, var(--border-2)); }
-.sw-tool.is-wait { border-color: var(--blue-line); box-shadow: 0 0 0 3px var(--blue-bg); }
-.sw-tool.is-bad { border-color: color-mix(in srgb, var(--red) 40%, var(--border-2)); }
-.sw-tool-mark { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: var(--r-s); background: var(--surface-3); font-weight: 700; font-size: 12px; color: var(--text-2); }
-.sw-tool.is-ok .sw-tool-mark { background: var(--green-bg); color: var(--green); }
-.sw-tool-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
-.sw-tool-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; }
-.sw-tool-hint { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-3); }
-.sw-tool-ok, .sw-tool-bad { display: flex; flex-direction: column; gap: 3px; padding: 9px 12px; border-radius: var(--r-m); font-size: 12.5px; line-height: 1.5; }
-.sw-tool-ok { background: var(--green-bg); color: var(--text); }
-.sw-tool-bad { background: var(--red-bg); color: var(--text); }
-.sw-tool-ok p, .sw-tool-bad p { margin: 0; display: flex; gap: 6px; align-items: flex-start; font-weight: 600; }
-.sw-tool-ok p svg { flex: none; margin-top: 2px; color: var(--green); }
-.sw-tool-bad p svg { flex: none; margin-top: 2px; color: var(--red); }
-.sw-tool-ok small, .sw-tool-bad small { color: var(--text-2); overflow-wrap: anywhere; }
-.sw-tool-projects { font-size: 12px; color: var(--text-2); }
-.sw-tool-projects summary { cursor: pointer; }
-.sw-tool-project-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px 14px; margin-top: 8px; max-height: 160px; overflow-y: auto; }
-.sw-tool-actions { flex: none; display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 132px; }
-.sw-tool-actions .btn { justify-content: center; }
-.sw-pill-bad { color: var(--red); background: var(--red-bg); border-color: transparent; }
+/* ---- language: one big button per language, each in its own words */
+.sw-langs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.sw-lang { appearance: none; position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 18px; min-height: 150px; padding: 20px; border: 1px solid var(--border-2); border-radius: var(--r-l); background: var(--surface-2); color: var(--text); font: inherit; text-align: left; cursor: pointer; transition: border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease); }
+.sw-lang:hover:not(:disabled) { border-color: var(--border-3); transform: translateY(-1px); }
+.sw-lang:disabled { cursor: default; }
+.sw-lang.is-on { border-color: var(--blue-line); background: var(--blue-bg); box-shadow: 0 0 0 3px var(--blue-bg); }
+.sw-lang-code { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--surface-3); font-size: 13px; font-weight: 700; letter-spacing: .04em; color: var(--text-2); }
+.sw-lang.is-on .sw-lang-code { background: var(--blue); color: var(--on-accent); }
+.sw-lang-text { margin-top: auto; display: flex; flex-direction: column; gap: 4px; }
+.sw-lang-text b { font: 600 21px/1.2 var(--font-display); letter-spacing: -.4px; }
+.sw-lang-text small { font-size: 12px; color: var(--text-3); }
+.sw-lang-check { position: absolute; top: 16px; right: 16px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border-3); color: var(--on-accent); }
+.sw-lang.is-on .sw-lang-check { border-color: transparent; background: var(--blue); }
+
+/* ---- your AI: the recommended one on top, the others folded under «More» */
+.sw-engine.is-rec { padding: 20px; gap: 14px; }
+.sw-engine-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 16px; }
+.sw-rec-badge { padding: 2px 8px; border-radius: 20px; background: var(--blue-bg); color: var(--blue); font-size: 11px; font-weight: 600; letter-spacing: .02em; }
+.sw-engine-why { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-2); }
+.sw-more { border: 1px solid var(--border-2); border-radius: var(--r-l); background: var(--surface); }
+.sw-more-toggle { display: flex; width: 100%; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 12px 16px; cursor: pointer; border: 0; background: none; border-radius: var(--r-l); text-align: left; font: inherit; font-size: 13px; font-weight: 600; color: var(--text-2); }
+.sw-more-toggle:hover { color: var(--text); }
+.sw-more-toggle::before { content: "›"; display: inline-block; width: 10px; color: var(--text-3); transition: transform var(--dur-fast) var(--ease); }
+.sw-more.is-open .sw-more-toggle::before { transform: rotate(90deg); }
+.sw-more-toggle small { font-weight: 400; font-size: 12px; color: var(--text-3); }
+.sw-more > .sw-engine-list { padding: 0 14px 14px; }
+
+/* ---- ready: the guide chat that asks goals, work areas and team */
+.sw-guide { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border: 1px solid var(--blue-line); border-radius: var(--r-l); background: var(--blue-bg); cursor: pointer; font-size: 13px; }
+.sw-guide input { margin: 3px 0 0; accent-color: var(--blue); flex: none; }
+.sw-guide-icon { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--r-s); background: var(--surface); color: var(--blue); }
+.sw-guide small { display: block; margin-top: 3px; font-size: 12px; line-height: 1.5; color: var(--text-2); }
 
 /* ---- summary */
 .sw-summary { margin: 0; border: 1px solid var(--border-2); border-radius: var(--r-l); overflow: hidden; background: var(--surface-2); }
@@ -152,7 +159,7 @@
 .sw-edit:hover:not(:disabled) { background: var(--blue-bg); }
 
 @keyframes sw-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .sw-stack, .sw-engines { animation: none; } .sw-step, .sw-choice, .sw-engine, .sw-tool { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .sw-stack, .sw-engines { animation: none; } .sw-step, .sw-choice, .sw-engine, .sw-lang { transition: none; } }
 
 /* ---- narrow windows: the rail becomes a row of numbered steps above the step */
 @media (max-width: 760px) {
@@ -165,8 +172,10 @@
   .sw-step:not(.is-current) .sw-step-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .sw-head, .sw-body, .sw-foot { padding-left: 16px; padding-right: 16px; }
   .sw-grid2, .sw-choices { grid-template-columns: 1fr; }
-  .sw-folder, .sw-tool { flex-wrap: wrap; }
-  .sw-tool-actions { flex-direction: row; min-width: 0; }
+  .sw-folder { flex-wrap: wrap; }
+  .sw-langs { grid-template-columns: 1fr; }
+  .sw-lang { min-height: 0; flex-direction: row; align-items: center; }
+  .sw-lang-text { margin-top: 0; }
   .sw-summary-row { grid-template-columns: 1fr auto; }
   .sw-summary-row dd { grid-column: 1 / -1; grid-row: 2; }
 }

@@ -1,12 +1,12 @@
 // Settings page (rendered by App.tsx): essential settings only, laid out like the Dashboard: a page header with the
 // search, a row of section links, then one card per group (icon, title, one-line description, rows of text left and
-// control right). Connettori: ConnectorsHub.tsx (accounts and MCP servers, ADR 0086). Ruoli e deleghe: DelegationSettings.tsx (ADR 0083). Aggiornamenti: AppUpdateSettings.tsx (ADR 0075; "impostazioni/update" opens on it). Scrittura: SuggestSettings.tsx (the composer's inline suggestion, ADR 0118). Stored technical policies and engine denials are preserved, never enabled by rendering.
+// control right). Connettori: ConnectorsHub.tsx (accounts and MCP servers, ADR 0086; the tool catalog, ADR 0119). Avanzate: the technical MCP form and import (ConnectorsHub.tsx McpAdvanced, ADR 0119). Ruoli e deleghe: DelegationSettings.tsx (ADR 0083). Aggiornamenti: AppUpdateSettings.tsx (ADR 0075; "impostazioni/update" opens on it). Scrittura: SuggestSettings.tsx (the composer's inline suggestion, ADR 0118). Stored technical policies and engine denials are preserved, never enabled by rendering.
 // Account actions use existing typed login/secure-storage/trust boundaries; no provider routing matrix or policy wall.
 import{useEffect,useState,type ReactNode}from'react';
 import { Select } from './Select';
 import type{CliStatus,EngineInfo,SecretsStatus}from'@shared/contract';
 import { isLang, LANGS } from '@shared/contract';
-import{IconBell,IconBranch,IconEdit,IconFolder,IconLink,IconMoon,IconRefresh,IconSearch,IconTerminal,IconUser}from'./Icons';
+import{IconBell,IconBranch,IconEdit,IconFolder,IconLink,IconMoon,IconRefresh,IconSearch,IconSettings,IconTerminal,IconUser}from'./Icons';
 import { DelegationSettings } from './DelegationSettings';
 import{useEngines}from'../lib/engines';
 import{matchesSettingsSearch}from'../lib/settings-page';
@@ -20,7 +20,7 @@ import{ProfileSettings}from'./ProfileSettings';
 import{holdUpdate}from'../lib/update-barrier';
 import { ProjectsFolderSetting } from './ProjectsFolderSetting';
 import { BrainShareSetting } from './BrainShareSetting';
-import { ConnectorsHub } from './ConnectorsHub';
+import { ConnectorsHub, McpAdvanced } from './ConnectorsHub';
 import { CodexAutonomy } from './CodexAutonomy';
 import { AppUpdateSettings } from './AppUpdateSettings';
 import { CloudKeySetting } from './CloudKeySetting';
@@ -82,6 +82,7 @@ export function SettingsPage(){
    <div className="st-row st-row-block"><AppearancePreview/></div>
   </>},
   {id:'notifications',icon:<IconBell size={18}/>,description:t('essential.desc.notifications'),title:t('essential.notifications'),search:`${t('essential.toasts')} ${t('alive.pulse.title')} battito pulse budget ${t('brainPages.task.autoLabel')} ${t('brainPages.task.sound')} Task`,body:<><Row title={t('essential.toasts')} description={t('essential.notificationsHint')} help={<HelpTip title={t('explain.toasts.title')} testid="st-toasts-help"><p>{t('explain.toasts.p1')}</p></HelpTip>}><Select aria-label={t('essential.toasts')} value={settings.osToasts} onChange={event=>{const osToasts=event.target.value;if(osToasts==='urgent'||osToasts==='normal'||osToasts==='off')void setSetting({osToasts});}}>{(['urgent','normal','off']as const).map(value=><option key={value} value={value}>{t(value==='off'?'essential.none':`essential.${value}`)}</option>)}</Select></Row><PulseSettings/><TaskReadSettings/></>},
+  {id:'advanced',icon:<IconSettings size={18}/>,description:t('hub.adv.groupDesc'),title:t('hub.adv.group'),search:'MCP server stdio http comando command argomenti args env variabili headers intestazioni importa import Claude Cursor Codex avanzate advanced',body:<McpAdvanced/>},
  ];
  const matched=groups.filter(group=>matchesSettingsSearch(query,group.title+' '+group.search));
  const jump=(id:string)=>{const target=document.getElementById(`st-section-${id}`);target?.scrollIntoView({block:'start',behavior:'smooth'});target?.focus({preventScroll:true});};

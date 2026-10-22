@@ -1,18 +1,18 @@
-// The first step of the first-run setup wizard (FirstInterview.tsx): where the memory lives and where the owner's
-// projects are. No choice between options (owner, 2026-10-19: "tieni di default la cartella del nuovo brain o l'esplora
-// file per segnare un altro brain ma non la scelta delle opzioni"): the memory is a new one by default (created empty
-// on confirm, in the app's data folder) or one already connected, with one native folder picker to point at another
-// existing brain. Below, the projects folder: found by the app by itself when it can ('app:projectsFolder', read only:
+// The folders step of the first-run setup wizard (FirstInterview.tsx): where the brain lives and where the owner's
+// projects are. Nothing to choose (issue #165, ADR 0119): a clean install always gets a NEW brain in the default place
+// (created empty on confirm, in the app's data folder); the wizard never offers an existing brain (Settings → Il mio
+// spazio still changes the brain folder or points at an existing one); a brain already connected is only shown. Below,
+// the projects folder: found by the app by itself when it can ('app:projectsFolder', read only:
 // folder names and .git, main/brain/projects-folder.ts), asked with a native picker only when it cannot
 // ('app:pickProjects' saves the setting projectsRoot). A found folder is saved on confirm by the wizard.
 import { t } from '../i18n';
 import type { AppInfo, ProjectsFolderInfo } from '@shared/contract';
 import { IconAlert, IconBranch, IconCheck, IconFolder, IconSparkle, IconSpinner } from './Icons';
 
-export function SetupFolders({ info, projects, onPickBrain, onPickProjects }: { info: AppInfo | null; projects: ProjectsFolderInfo | null | undefined; onPickBrain: () => void; onPickProjects: () => void }) {
+export function SetupFolders({ info, projects, onPickProjects }: { info: AppInfo | null; projects: ProjectsFolderInfo | null | undefined; onPickProjects: () => void }) {
   const brainReady = !!info?.brainRoot && !info.brainProblem, broken = !!info?.brainRoot && !!info.brainProblem;
   const chosen = projects?.saved ?? null, found = projects?.detected ?? null;
-  return <div className="sw-stack" data-testid="setup-memory">
+  return <div className="sw-stack" data-testid="setup-folders">
     <section className="sw-folder" data-testid="setup-memory-card" data-state={brainReady ? 'connected' : broken ? 'problem' : 'new'}>
       <span className={`sw-folder-icon ${brainReady ? 'is-ok' : ''}`} aria-hidden="true">{brainReady ? <IconCheck size={18}/> : <IconSparkle size={18}/>}</span>
       <div className="sw-folder-text">
@@ -24,7 +24,6 @@ export function SetupFolders({ info, projects, onPickBrain, onPickProjects }: { 
             {projects?.newMemoryIn && <code>{projects.newMemoryIn}</code>}
             <p>{t('setup.memory.newHint')}</p></>}
       </div>
-      <button type="button" className="btn btn-m btn-ghost" onClick={onPickBrain} data-testid="setup-pick-brain">{brainReady || broken ? t('setup.memory.change') : t('setup.memory.pickExisting')}</button>
     </section>
 
     <section className="sw-folder" data-testid="setup-projects" data-state={projects === undefined ? 'loading' : chosen ? 'chosen' : found ? 'found' : 'ask'}>

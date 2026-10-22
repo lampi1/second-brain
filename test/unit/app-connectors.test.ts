@@ -1,7 +1,7 @@
 // Connector state/security regression tests with fake official CLI, Jira, vault and selection persistence adapters.
 import { describe, expect, it, vi } from 'vitest';
 import { AppConnectorService, jiraCredential, type ConnectorAdapters, type ConnectorSelections } from '../../src/modules/onboarding/app-service';
-import { githubProbe, jiraProbe } from '../../src/modules/onboarding/app-providers';
+import { githubProbe, githubTokenProbe, jiraProbe } from '../../src/modules/onboarding/app-providers';
 const credential = { site: 'https://example.atlassian.net', email: 'user@example.com', token: 'synthetic-test-value' };
 const userInfoSite = new URL(credential.site);
 userInfoSite.username = 'user';
@@ -178,5 +178,43 @@ describe('official provider adapters', () => {
     expect(() => jiraCredential({ ...credential, email: 'user:password@example.com' })).toThrow();
     await expect(jiraProbe(credential, vi.fn<typeof fetch>().mockResolvedValue(new Response('', { status: 401 })))).rejects.toThrow();
     await expect(jiraProbe(credential, vi.fn<typeof fetch>().mockResolvedValue(new Response('x'.repeat(512 * 1024 + 1))))).rejects.toThrow('grande');
+  });
+});
+describe('a token from a tool tile (ADR 0119)', () => {
+  const token = 'github_pat_11ABCDEFG0123456789_abcdefghijklmnop';
+  function withGithubVault() {
+    const f = fixture(); let kept: string | null = null;
+    f.adapters.githubToken = { available: () => true, get: vi.fn(async () => kept), set: vi.fn(async (v: string | null) => { kept = v; }) };
+    f.adapters.githubTokenProbe = vi.fn(async () => ({ identity: 'github.com/giulia', account: 'giulia', projects: [{ id: '1', name: 'giulia/shop' }, { id: '2', name: 'giulia/api' }] }));
+    return { ...f, service: new AppConnectorService(f.adapters) };
+  }
+  it('keeps a GitHub token encrypted and probes with it, not with gh; never in the state', async () => {
+    const { service, adapters } = withGithubVault();
+    const state = await service.useToken({ provider: 'github', token: ` ${token} ` });
+    expect(adapters.githubToken!.set).toHaveBeenCalledWith(token);
+    expect(adapters.githubTokenProbe).toHaveBeenCalledWith(token); expect(adapters.githubProbe).not.toHaveBeenCalled();
+    expect(state).toMatchObject({ status: 'verified', account: 'giulia' }); expect(state.projects).toHaveLength(2);
+    expect(JSON.stringify(await service.list())).not.toContain(token);
+    await service.disconnect('github');
+    expect(adapters.githubToken!.set).toHaveBeenLastCalledWith(null);
+  });
+  it('refuses a malformed GitHub token before storing anything', async () => {
+    const { service, adapters } = withGithubVault();
+    await expect(service.useToken({ provider: 'github', token: 'not a token' })).rejects.toThrow('GitHub');
+    expect(adapters.githubToken!.set).not.toHaveBeenCalled();
+  });
+  it('keeps the Jira site, email and token typed in the tile and probes them at once', async () => {
+    const { service, adapters } = fixture();
+    expect((await service.useToken({ provider: 'jira', token: credential.token, site: credential.site, email: ` ${credential.email} ` })).status).toBe('verified');
+    expect(adapters.vault.set).toHaveBeenCalledWith(credential);
+    await expect(service.useToken({ provider: 'jira', token: credential.token, site: 'https://attacker.test', email: credential.email })).rejects.toThrow('Jira');
+    await expect(service.useToken({ provider: 'azure', token: 'x' } as never)).rejects.toThrow();
+  });
+  it('reads GitHub with the token only: fixed REST GETs, no redirects', async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({ login: 'giulia' })).mockResolvedValueOnce(Response.json([{ id: 7, full_name: 'giulia/shop' }]));
+    expect(await githubTokenProbe(token, request)).toEqual({ identity: 'github.com/giulia', account: 'giulia', projects: [{ id: '7', name: 'giulia/shop' }] });
+    expect(request.mock.calls.map(c => c[0])).toEqual(['https://api.github.com/user', 'https://api.github.com/user/repos?per_page=100&sort=updated']);
+    expect(request.mock.calls.every(c => c[1]?.method === 'GET' && c[1]?.redirect === 'error' && (c[1]?.headers as Record<string, string>).Authorization === `Bearer ${token}`)).toBe(true);
+    await expect(githubTokenProbe('bad token', request)).rejects.toThrow();
   });
 });

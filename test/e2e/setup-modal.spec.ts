@@ -1,6 +1,7 @@
 // End-to-end: the first-run setup is ONE modal from start to finish (components/FirstInterview.tsx, SetupEngines.tsx;
-// owner, 2026-10-18). Every step happens in the same dialog; "Collega" on an AI opens its sign-in (stubbed here: no CLI
-// runs, no tokens) and the wizard waits on the same step with "Verifica"; a stray click on the backdrop does not close
+// owner, 2026-10-18; six steps, ADR 0119). Every step happens in the same dialog; the AI step recommends one engine
+// (here Codex, the one signed in) and folds the others under «Altre IA»; "Collega" on an AI opens its sign-in (stubbed
+// here: no CLI runs, no tokens) and the wizard waits on the same step with "Verifica"; a stray click on the backdrop does not close
 // it; "Più tardi" saves and a reopening resumes on the same step; Esc saves too. Demo app, the engine status, sign-in
 // and trust handlers replaced in main. Screenshots: test-results/shots/setup-modal-*.png (each step, dark, one light).
 import { expect, test } from '@playwright/test';
@@ -28,21 +29,25 @@ test('setup wizard: one modal, sign-in waits in place, resumable', async () => {
     const next = () => setup.getByRole('button', { name: 'Continua', exact: true }).click();
     const title = setup.locator('#sw-title');
 
-    // 1 memory
-    await expect(setup.getByText('Passo 1 di 7')).toBeVisible();
-    await expect(title).toHaveText('Il tuo brain e i tuoi progetti');
-    await expect(setup.getByTestId('setup-memory')).toBeVisible();
-    await shot(page, 'setup-modal-1-memory');
+    // 1 language
+    await expect(setup.getByText('Passo 1 di 6')).toBeVisible();
+    await expect(title).toHaveText('Scegli la tua lingua');
+    await expect(setup.getByTestId('setup-language')).toBeVisible();
+    await shot(page, 'setup-modal-1-language');
 
     // 2 AI: Collega opens the sign-in and the same modal waits on the same step
     await next();
     await expect(title).toHaveText('Collega la tua IA');
     await expect(title).toBeFocused();
     const claude = setup.getByTestId('setup-engine-claude');
-    await expect(claude).toHaveAttribute('data-phase', 'signedOut');
     await expect(setup.getByTestId('setup-engine-codex')).toHaveAttribute('data-phase', 'connected');
-    await expect(setup.getByTestId('setup-engine-cursor')).toHaveAttribute('data-phase', 'missing');
+    // the one signed in is the recommended one; the others sit under «Altre IA», open here because Claude Code is
+    // already turned on in the demo (the engines turned on are preselected)
+    await expect(setup.getByTestId('setup-engine-codex')).toHaveAttribute('data-recommended', 'true');
+    await expect(setup.getByTestId('setup-engines-more-toggle')).toHaveAttribute('aria-expanded', 'true');
     await shot(page, 'setup-modal-2-ai');
+    await expect(claude).toHaveAttribute('data-phase', 'signedOut');
+    await expect(setup.getByTestId('setup-engine-cursor')).toHaveAttribute('data-phase', 'missing');
     await setup.getByTestId('setup-connect-claude').click();
     await expect(claude).toHaveAttribute('data-phase', 'waiting');
     await expect(setup.getByTestId('setup-engine-claude-waiting')).toContainText('Completalo lì');
@@ -73,35 +78,29 @@ test('setup wizard: one modal, sign-in waits in place, resumable', async () => {
     // 3 tools
     await next();
     await expect(title).toHaveText('Collega i tuoi strumenti');
-    await expect(setup.getByTestId('setup-connectors')).toBeVisible();
+    await expect(setup.getByTestId('tool-catalog')).toBeVisible();
     await shot(page, 'setup-modal-3-tools');
 
-    // 4 about you
+    // 4 about you (Enter in a one-line answer moves on like Continua)
     await next();
     await expect(title).toHaveText('Raccontaci chi sei');
     await shot(page, 'setup-modal-4-you');
-
-    // 5 your work (Enter in a one-line answer moves on like Continua)
     await setup.getByTestId('setup-role').fill('product manager');
     await setup.getByTestId('setup-role').press('Enter');
-    await expect(title).toHaveText('Il tuo lavoro');
-    await setup.getByTestId('setup-goals').fill('Preparare riunioni');
-    await shot(page, 'setup-modal-5-work');
 
-    // 6 agents
-    await next();
-    await expect(title).toHaveText('Una squadra di partenza');
-    await shot(page, 'setup-modal-6-agents');
+    // 5 folders
+    await expect(title).toHaveText('Le tue cartelle');
+    await shot(page, 'setup-modal-5-folders');
 
-    // 7 summary, also in light; Esc saves and closes, the step indicator goes back
+    // 6 ready, also in light; Esc saves and closes, the step indicator goes back
     await next();
     await expect(title).toHaveText('Tutto pronto');
     await expect(setup).toContainText('Claude Code');
-    await expect(setup).toContainText('Preparare riunioni');
+    await expect(setup).toContainText('product manager');
     await expect(page.getByTestId('setup-complete')).toBeEnabled();
-    await shot(page, 'setup-modal-7-done');
+    await shot(page, 'setup-modal-6-done');
     await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; }); // the demo pins dark: a visual check only
-    await shot(page, 'setup-modal-7-done-light');
+    await shot(page, 'setup-modal-6-done-light');
     await setup.getByTestId('setup-step-you').click();
     await expect(title).toHaveText('Raccontaci chi sei');
     await expect(setup.getByTestId('setup-role')).toHaveValue('product manager');

@@ -36,7 +36,7 @@ export const PROFILE_LIMITS = { name: 80, role: 240, language: 40, area: 160, ar
  * language share the "Name, role. Language: x in chat" line */
 export const PROFILE_FORBIDDEN = { name: /[#*`[\]<>|_\\]/, role: /\. Language: /, language: / in chat|\. Language: / } as const;
 /** what a brain created before the owner introduced themselves says (default-brain.ts, install.mjs): "not known yet" */
-export const PROFILE_PLACEHOLDERS = { name: ['Tu', 'You'], role: ['Da conoscere insieme', 'To discover together'] } as const;
+export const PROFILE_PLACEHOLDERS = { name: ['Tu', 'You', 'Du'], role: ['Da conoscere insieme', 'To discover together', 'Gemeinsam herauszufinden'] } as const;
 /** the first interview's reply styles as written into me.md (the template's own text stands for "balanced") */
 export const REPLY_PRESETS = {
   concise: 'short and direct: first line = the answer or the next action; no preambles, recaps or closing lines.',

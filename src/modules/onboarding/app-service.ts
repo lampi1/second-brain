@@ -3,10 +3,13 @@
 // check, the projects it saw; never a credential) is saved beside the project selections, so it survives a restart
 // until a failed probe, a new sign-in or a disconnect clears it (issue #95); a good read of the app's own Task page is
 // the same proof for Azure DevOps and marks it verified too (observe), unless the user disconnected it (saved too, until
-// a probe or a sign-in).
-import type { ConnectorId, ConnectorPort, ConnectorProject, ConnectorState } from '../../shared/connectors';
+// a probe or a sign-in). A tool tile (ADR 0119) hands a token over in place (useToken): GitHub's kept in its own
+// encrypted vault and probed with GitHub's REST API, Jira's in the Jira vault, both checked at once.
+import type { ConnectorId, ConnectorPort, ConnectorProject, ConnectorState, ConnectorToken } from '../../shared/connectors';
 export interface JiraCredential { site: string; email: string; token: string }
 export interface ConnectorVault { get(): Promise<JiraCredential | null>; set(value: JiraCredential | null): Promise<void>; available(): boolean }
+/** GitHub's token from a tool tile, encrypted by the OS like the Jira vault (app-vault.ts GithubVault). */
+export interface TokenVault { get(): Promise<string | null>; set(value: string | null): Promise<void>; available(): boolean }
 /** The last good verification of a connector as saved on disk: what Settings shows, never a secret. */
 export interface ConnectorVerified { account: string; checkedAt: string; projects: ConnectorProject[] }
 /** disconnected: the user disconnected it (identity and projects empty); kept across restarts so a Task read does not
@@ -21,6 +24,9 @@ export interface ConnectorAdapters {
   jiraLogin(save: (value: JiraCredential) => Promise<void>, signal: AbortSignal): Promise<void>;
   jiraProbe(value: JiraCredential): Promise<ConnectorProof>;
   vault: ConnectorVault;
+  /** a GitHub token typed in a tool tile: when one is saved, the probe reads GitHub with it instead of gh */
+  githubToken?: TokenVault;
+  githubTokenProbe?(token: string): Promise<ConnectorProof>;
   loadSelections(): ConnectorSelections;
   saveSelections(value: ConnectorSelections): Promise<void>;
 }
@@ -141,6 +147,32 @@ export class AppConnectorService implements ConnectorPort {
     if (this.loginAbort === abort) this.loginDone = task.catch(() => {});
     await task;
   }
+  /** A tool tile's token (ADR 0119): kept encrypted for this account (never logged, never sent back), then probed at
+   *  once; a token that cannot be stored or is malformed is refused before anything is written. */
+  async useToken(raw: ConnectorToken): Promise<ConnectorState> {
+    const provider = connectorId(raw?.provider);
+    if (provider === 'azure' || typeof raw.token !== 'string') throw new Error('Strumento non supportato');
+    const token = raw.token.trim();
+    await this.exclusive(provider, async () => {
+      if (raw.provider === 'jira') {
+        if (!this.adapters.vault.available()) throw new Error('Portachiavi cifrato di sistema non disponibile');
+        let value: JiraCredential;
+        try { value = jiraCredential({ site: String(raw.site ?? ''), email: String(raw.email ?? '').trim(), token }); }
+        catch { throw new Error('Controlla sito, email e token di Jira'); }
+        await this.adapters.vault.set(value);
+      } else {
+        const vault = this.adapters.githubToken;
+        if (!vault || !this.adapters.githubTokenProbe) throw new Error('Strumento non supportato');
+        if (!vault.available()) throw new Error('Portachiavi cifrato di sistema non disponibile');
+        if (!/^[A-Za-z0-9_]{20,255}$/.test(token)) throw new Error('Il token GitHub non sembra valido: copialo di nuovo da GitHub');
+        await vault.set(token);
+      }
+      this.states[provider] = initial(provider);
+      await this.reconnect(provider);
+      await this.remember(provider, null, null);
+    });
+    return this.probe(provider);
+  }
   async cancelLogin() { this.loginAbort?.abort(); await this.loginDone; }
   async probe(raw: ConnectorId): Promise<ConnectorState> {
     const provider = connectorId(raw);
@@ -149,7 +181,9 @@ export class AppConnectorService implements ConnectorPort {
       try {
         const value = provider === 'jira' ? await this.adapters.vault.get() : null;
         if (provider === 'jira' && !value) throw new Error('missing');
-        const result = provider === 'github' ? await this.adapters.githubProbe()
+        const token = provider === 'github' && this.adapters.githubTokenProbe ? await this.adapters.githubToken?.get() ?? null : null;
+        const result = token ? await this.adapters.githubTokenProbe!(token)
+          : provider === 'github' ? await this.adapters.githubProbe()
           : provider === 'azure' ? await this.adapters.azureProbe?.()
           : await this.adapters.jiraProbe(jiraCredential(value!));
         if (!result) throw new Error('Azure non disponibile');
@@ -181,6 +215,7 @@ export class AppConnectorService implements ConnectorPort {
     const provider = connectorId(raw);
     await this.exclusive(provider, async () => {
       if (provider === 'jira') await this.adapters.vault.set(null);
+      if (provider === 'github') await this.adapters.githubToken?.set(null);
       // remembered across restarts: a Task read after a restart must not verify it again by itself
       const next: ConnectorSelections = { ...this.selections, [provider]: { identity: '', projects: [], disconnected: true } };
       await this.adapters.saveSelections(next); this.selections = next; this.states[provider] = initial(provider);

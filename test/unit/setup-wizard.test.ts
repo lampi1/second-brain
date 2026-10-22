@@ -1,10 +1,11 @@
-// The first-run setup wizard's flow (src/renderer/lib/setup-wizard.ts): one modal from start to finish. "Collega" opens
+// The first-run setup wizard's flow (src/renderer/lib/setup-wizard.ts): one modal from start to finish, six steps with
+// the language first (issues #164, #165), one recommended AI. "Collega" opens
 // the official sign-in and leaves the wizard waiting on the same step (it never closes the modal or moves on), "Verifica"
 // is a token-free status check, a saved run resumes on its step with its answers, and only the three explicit exits end it.
 import { describe, expect, it, vi } from 'vitest';
 import type { SetupDraft, SetupState } from '@shared/agents';
 import type { CliStatus } from '@shared/contract';
-import { SETUP_STEPS, canAdvance, canJump, canSignIn, clampStep, exitStatus, linkFromStatus, openSignIn, openingDraft, plainError, stepId, stepProblems, verifySignIn, withEngine } from '../../src/renderer/lib/setup-wizard';
+import { LANG_NATIVE, LANG_PROFILE, SETUP_STEPS, canAdvance, canJump, canSignIn, clampStep, exitStatus, linkFromStatus, openSignIn, openingDraft, plainError, recommendedEngine, stepId, stepProblems, verifySignIn, withEngine } from '../../src/renderer/lib/setup-wizard';
 import type { EngineLinkPort } from '../../src/renderer/lib/setup-wizard';
 import { closeModal, openModal, ui } from '../../src/renderer/store/ui';
 
@@ -13,25 +14,37 @@ const state = (status: SetupState['status'], preferences: Partial<SetupDraft> = 
 const status = (patch: Partial<CliStatus> = {}): CliStatus => ({ found: true, path: '/bin/x', version: '1', loggedIn: false, ...patch });
 
 describe('steps', () => {
-  it('runs memory → AI → tools → you → work → agents → summary, in one list', () => {
-    expect(SETUP_STEPS).toEqual(['memory', 'ai', 'tools', 'you', 'work', 'agents', 'done']);
-    expect([NaN, -1, 90, 1.5, 3].map(clampStep)).toEqual([0, 0, 6, 0, 3]);
+  it('runs language → AI → tools → you → folders → ready, in one list (goals, areas and team are not asked)', () => {
+    expect(SETUP_STEPS).toEqual(['language', 'ai', 'tools', 'you', 'folders', 'done']);
+    expect([NaN, -1, 90, 1.5, 3].map(clampStep)).toEqual([0, 0, 5, 0, 3]);
+    expect(stepId(0)).toBe('language');
     expect(stepId(1)).toBe('ai');
   });
-  it('holds a step only for its own answer problems, the summary for all of them', () => {
-    const problems = { name: 'bad name', areas: 'too many' };
+  it('holds a step only for its own answer problems, the summary for all of them; the language is never typed', () => {
+    const problems = { name: 'bad name', role: 'bad role', language: 'bad language', areas: 'too many' };
     expect(stepProblems(SETUP_STEPS.indexOf('ai'), problems)).toEqual([]);
-    expect(stepProblems(SETUP_STEPS.indexOf('you'), problems)).toEqual(['bad name']);
-    expect(stepProblems(SETUP_STEPS.indexOf('work'), problems)).toEqual(['too many']);
-    expect(stepProblems(SETUP_STEPS.indexOf('done'), problems)).toEqual(['bad name', 'too many']);
+    expect(stepProblems(SETUP_STEPS.indexOf('language'), problems)).toEqual([]);
+    expect(stepProblems(SETUP_STEPS.indexOf('you'), problems)).toEqual(['bad name', 'bad role']);
+    expect(stepProblems(SETUP_STEPS.indexOf('done'), problems)).toEqual(['bad name', 'bad role']);
     expect(canAdvance(SETUP_STEPS.indexOf('you'), problems)).toBe(false);
     expect(canAdvance(SETUP_STEPS.indexOf('tools'), problems)).toBe(true);
   });
   it('lets the step indicator go back always and forward only past steps that may be left', () => {
     expect(canJump(5, 0, { name: 'x' })).toBe(true);
-    expect(canJump(0, 6, {})).toBe(true);
+    expect(canJump(0, 5, {})).toBe(true);
     expect(canJump(0, 3, { name: 'x' })).toBe(true); // reaching "you" is fine, leaving it is not
     expect(canJump(0, 4, { name: 'x' })).toBe(false);
+  });
+  it('writes the picked language into me.md in its own words, one per UI language', () => {
+    expect(LANG_PROFILE).toEqual({ it: 'italiano', en: 'English', de: 'Deutsch' });
+    expect(Object.values(LANG_NATIVE).map(l => l.name)).toEqual(['Italiano', 'English', 'Deutsch']);
+  });
+  it('recommends one AI: signed in first, then installed, then Claude Code', () => {
+    expect(recommendedEngine({})).toBe('claude');
+    expect(recommendedEngine({ claude: { phase: 'signedOut' }, codex: { phase: 'connected' }, cursor: { phase: 'missing' } })).toBe('codex');
+    expect(recommendedEngine({ claude: { phase: 'missing' }, codex: { phase: 'missing' }, cursor: { phase: 'signedOut' } })).toBe('cursor');
+    expect(recommendedEngine({ claude: { phase: 'signedOut' }, codex: { phase: 'unknown' }, cursor: { phase: 'signedOut' } })).toBe('claude');
+    expect(recommendedEngine({ claude: { phase: 'missing' }, codex: { phase: 'missing' }, cursor: { phase: 'missing' } })).toBe('claude');
   });
 });
 
@@ -44,11 +57,11 @@ describe('exits and resume', () => {
   it('resumes a run in progress on its step with its answers', () => {
     const draft = openingDraft(state('draft', { step: 1, goals: 'meetings', engines: ['codex'], profile: { name: 'Giulia' }, guide: { stage: 'fallback' } }), { claude: true });
     expect(draft).toMatchObject({ step: 1, goals: 'meetings', engines: ['codex'], profile: { name: 'Giulia' }, guide: { stage: 'fallback' } });
-    expect(openingDraft(state('draft', { step: 42 }), {}).step).toBe(6);
+    expect(openingDraft(state('draft', { step: 42 }), {}).step).toBe(5);
     expect(openingDraft(state('new'), { claude: true }).engines).toEqual([]);
   });
   it('starts a finished run over from the first step, without re-writing old answers', () => {
-    const draft = openingDraft(state('completed', { step: 6, profile: { role: 'pm' } }), { claude: true, cursor: true });
+    const draft = openingDraft(state('completed', { step: 5, profile: { role: 'pm' } }), { claude: true, cursor: true });
     expect(draft.step).toBe(0);
     expect(draft.profile).toBeUndefined();
     expect(openingDraft(state('skipped'), { claude: true, cursor: true }).engines).toEqual(['claude', 'cursor']);
