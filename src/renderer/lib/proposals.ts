@@ -54,7 +54,7 @@ export async function flushDecision(): Promise<void> {
   const mark = (state: Decided['state']) => deck.set(s => ({ ...s, decided: s.decided.map(d => (d === held || (d.card.id === held.card.id && d.state !== 'done') ? { ...d, state } : d)) }));
   mark('sent');
   try {
-    const r = await sb.invoke('proposals:decide', { id: held.card.id, decision: held.decision, ...(held.note ? { note: held.note } : {}) });
+    const r = await sb.invoke('proposals:decide', { id: held.card.id, decision: held.decision, seen: held.card.content, ...(held.note ? { note: held.note } : {}) });
     deck.set(s => ({
       ...s, data: r.state, count: r.state.items.length,
       decided: r.ok ? s.decided.map(d => (d.card.id === held.card.id && d.state === 'sent' ? { ...d, state: 'done' as const } : d)) : s.decided.filter(d => !(d.card.id === held.card.id && d.state === 'sent')),

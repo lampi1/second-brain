@@ -66,7 +66,9 @@ export interface ProposalsState {
   problems: ProposalSource[];
   at: number;
 }
-export interface ProposalDecide { id: string; decision: ProposalDecision; note?: string }
+/** `seen`: the card's content the user decided on; main refuses when the card changed since (a skill draft edited
+ *  between the read and the click is never approved unseen). */
+export interface ProposalDecide { id: string; decision: ProposalDecision; note?: string; seen?: string }
 export type ProposalDecideResult = { ok: true; state: ProposalsState } | { ok: false; error: string; state: ProposalsState };
 
 /** The newest first; ties by id, so the order never jumps between two reads. */

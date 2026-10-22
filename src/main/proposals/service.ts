@@ -80,6 +80,7 @@ export class ProposalsService {
       const card = (await source.list(this.ports)).find(c => c.id === id);
       if (!card) return await fail('La proposta non è più da decidere: forse è già stata decisa altrove.');
       if (decision === 'approve' ? !card.canApprove : !card.canReject) return await fail('Questa scelta non è più possibile su questa proposta.');
+      if (typeof arg.seen === 'string' && arg.seen !== card.content) return await fail('La proposta è cambiata mentre la leggevi: guardala di nuovo prima di decidere.');
       await source.decide(this.ports, card, decision, note);
       log.info('proposals', 'decided by the user', { data: { source: card.source, decision, applied: card.applied } });
       return { ok: true, state: await this.list() };

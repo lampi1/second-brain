@@ -255,7 +255,10 @@ export class BrainModelService {
     if (kind === 'skill') {
       const skill = readSkills(this.skillDirs(root), root, []).find(x => x.name === target && x.home === 'brain');
       if (!skill) throw new Error('Skill del brain non trovata.');
-      files = listFiles(path.dirname(skill.file));
+      const dir = path.dirname(skill.file);
+      if (!insideBrain(root, dir)) throw new Error('Questa skill è un collegamento fuori dal brain: eliminala dal disco.');
+      files = listFiles(dir);
+      if (files.some(f => !isText(f))) throw new Error('La skill ha file non di testo (modelli, immagini): non si potrebbero rimettere con Annulla, eliminala dal disco.');
       summary = `Skill «${skill.name}» eliminata`; evidence = [skill.rel ?? skill.file];
     } else if (kind === 'rule') {
       const rel = target.replace(/\\/g, '/');
@@ -307,6 +310,25 @@ export class BrainModelService {
     this.timers.push(first, every);
   }
   stop(): void { for (const t of this.timers) { clearTimeout(t); clearInterval(t); } this.timers = []; }
+}
+
+/** The folder and every folder up to the brain are real folders inside it, none a link (a skill folder linked to
+ *  ~/.claude/skills would delete the files at the link's target). */
+function insideBrain(root: string, dir: string): boolean {
+  try {
+    const top = path.resolve(root);
+    for (let d = path.resolve(dir); d !== top; d = path.dirname(d)) {
+      if (d === path.dirname(d) || fs.lstatSync(d).isSymbolicLink()) return false;
+    }
+    return fs.realpathSync(dir).startsWith(fs.realpathSync(root));
+  } catch { return false; }
+}
+/** A file the change log can keep a copy of: UTF-8 text without NUL bytes (it snapshots text only). */
+function isText(file: string): boolean {
+  try {
+    const b = fs.readFileSync(file);
+    return !b.includes(0) && Buffer.from(b.toString('utf8'), 'utf8').equals(b);
+  } catch { return false; }
 }
 
 /** Every file under a folder (a skill's SKILL.md and what sits beside it), at most 65: more is refused by the caller. */

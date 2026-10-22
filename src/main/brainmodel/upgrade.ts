@@ -265,8 +265,9 @@ export function markedItems(root: string, section: LayoutSection, r: MarkedItems
   return out;
 }
 
-/** An item's text on one line, without its heading hashes, list marker and the marker that flagged it. */
-export function itemText(c: Pick<Candidate, 'code'>, markers: readonly string[]): string {
+/** An item's text on one line, without its heading hashes, list marker and the marker that flagged it (`max`: at most
+ *  that many characters; the moved entry keeps it whole, the item already is at most MAX_ITEM). */
+export function itemText(c: Pick<Candidate, 'code'>, markers: readonly string[], max = 800): string {
   const [first = '', ...rest] = c.code.split('\n').map(l => l.replace(/\r$/, ''));
   let head = first.replace(/^#{1,6}[ \t]+/, '').replace(LIST, '').replace(/^[ \t]*(?:>[ \t]*)*/, '');
   for (const m of [...markers].sort((a, b) => b.length - a.length)) {
@@ -274,7 +275,7 @@ export function itemText(c: Pick<Candidate, 'code'>, markers: readonly string[])
     if (re.test(head)) { head = head.replace(re, ''); break; }
   }
   const tail = rest.map(x => x.replace(/^[ \t]*(?:[-*+]|\d{1,3}[.)])?[ \t]*/, '').trim()).filter(Boolean);
-  return [head.trim(), ...tail].join(' ').replace(/\s+/g, ' ').trim().slice(0, 800);
+  return [head.trim(), ...tail].join(' ').replace(/\s+/g, ' ').trim().slice(0, max);
 }
 
 // ── 2. the agent's verdict ──────────────────────────────────────────────────────────────────────────────────────────
@@ -387,7 +388,7 @@ const oneLine = (s: string) => s.replace(/\s+/g, ' ').replace(/ · /g, ' - ').tr
  *  the brain's parser reads it); the owner's gets an Event origin line of kind human (an AI's origin is never invented). */
 function itemEntry(c: Candidate, v: Verdict, markers: readonly string[], today: string, at: number): string {
   const where = `\`${c.file}\`${c.heading ? ` (${oneLine(c.heading)})` : ''}`;
-  const lines = [`## ${c.date ?? today} · [${v.area ?? 'lavoro'}] · ${v.title} · \`aperta\``, `- **Idea:** ${itemText(c, markers) || v.title}`];
+  const lines = [`## ${c.date ?? today} · [${v.area ?? 'lavoro'}] · ${v.title} · \`aperta\``, `- **Idea:** ${itemText(c, markers, MAX_ITEM) || v.title}`];
   if (v.author === 'ai') lines.push(`- **Fonte:** IA · nota ${oneLine(c.file)} · spostata dalle note il ${today}`, `- **Notato:** era scritta in ${where}`);
   else lines.push(`- **Fonte:** nota ${where}, spostata il ${today}`, `- **Event origin:** ${encodeURIComponent(JSON.stringify({ kind: 'human', source: 'brain-upgrade', at }))}`);
   return `${lines.join('\n')}\n`;

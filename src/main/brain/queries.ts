@@ -192,6 +192,7 @@ export class BrainQueries {
   delete(id: string): { changeId: string; file: string } {
     const dir = this.dir(), log = this.log();
     if (!dir || !log) throw new Error('nessuna cartella brain configurata');
+    if (fs.existsSync(dir) && fs.lstatSync(dir).isSymbolicLink()) throw new Error('queries/ is a link: refused');
     const q = this.read(dir, this.checkName(id));
     if (!q) throw new Error(`query non trovata: ${id}`);
     const c = log.apply({ job: 'user', kind: 'memory', action: 'remove', target: q.file, summary: `Query eliminata: ${q.title}`,

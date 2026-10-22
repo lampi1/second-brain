@@ -38,6 +38,10 @@ describe('ChangeLog', () => {
     expect(fs.readFileSync(file, 'utf8')).toBe('modificato a mano');
     expect(log.apply(base, [{ file, text: 'modificato a mano' }])).toBeNull(); // unchanged: nothing recorded
     expect(log.apply(base, [{ file, text: 'x'.repeat(300 * 1024) }])).toBeNull(); // too big to keep a copy of
+    // all or nothing: one file too big and the other write is not made either (a move never writes only its pointers)
+    const other = path.join(d, 'b.md');
+    expect(log.apply(base, [{ file: other, text: 'puntatore' }, { file, text: 'x'.repeat(300 * 1024) }])).toBeNull();
+    expect(fs.existsSync(other)).toBe(false);
     expect(fs.readFileSync(file, 'utf8')).toBe('modificato a mano');
   });
   it('undoes an agent change only while the agent is still on the version it left', () => {
