@@ -178,6 +178,21 @@ describe('ChatManager with the CPU queue', () => {
     void orchestrator;
   });
 
+  it("a chat the Orchestrator opens while answering the user's own message never waits; one it opens on its own does", async () => {
+    const { m, cwd, users } = setup();
+    const orchestrator = await m.create({ harness: 'claude', cwd, orchestrator: true });
+    await waitFor(() => m.list().find(x => x.id === orchestrator.id)?.state === 'idle', 'Orchestrator up');
+    // with no turn of the user's going on, its new chat waits for the load as before
+    const own = await m.create({ harness: 'claude', cwd, prompt: 'on its own' }, 'agent');
+    expect(own.queued?.kind).toBe('start');
+    await m.send(orchestrator.id, 'slow: the user asks something');
+    await waitFor(() => m.list().find(x => x.id === orchestrator.id)?.state === 'running', 'the user\'s turn runs');
+    const forUser = await m.create({ harness: 'claude', cwd, prompt: 'for the user' }, 'agent');
+    expect(forUser.queued).toBeUndefined();
+    await waitFor(() => users(forUser.id).includes('for the user'), 'delivered at once');
+    expect(m.list().find(x => x.id === own.id)?.queued?.kind).toBe('start');
+  });
+
   it("the user's own chat and message never wait; the user's message takes the queued one with it, in order", async () => {
     const { m, cwd, users } = setup();
     const mine = await m.create({ harness: 'claude', cwd, prompt: 'mine' });

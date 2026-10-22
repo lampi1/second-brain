@@ -341,6 +341,7 @@ app.whenReady().then(async () => {
     'chat:archive': a => { if (a.auto !== true) activity.stopped(a.chatId); return s.chats.archive(a.chatId, { auto: a.auto === true, undoable: a.undoable === true }); },
     'chat:reopen': async a => { const c = await s.chats.reopen(a.chatId); s.chats.resumedByUser?.(a.chatId); return s.chats.list().find(x => x.id === a.chatId) ?? c; },
     'chat:admitNow': a => s.chats.admitNow(a.chatId),
+    'chat:prewarm': a => s.chats.prewarm?.(a.chatId) ?? false,
     'chat:set': ({ chatId, ...patch }) => s.chats.set(chatId, patch),
     'chat:handoff': a => s.chats.handoff(a.chatId, { reason: 'manual' }),
     'chat:handoffRead': a => s.chats.readHandoff(a.chatId, typeof a.session === 'string' ? a.session : undefined),

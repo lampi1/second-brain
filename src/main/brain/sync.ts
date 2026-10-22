@@ -425,5 +425,12 @@ export class DomainSync {
  *  is bounded by DomainSync.beforeRead itself; its failure never stops the chat. */
 export function syncBeforeCreate<A extends unknown[], R>(target: { create: (...a: A) => Promise<R> }, before: () => Promise<void>): void {
   const create = target.create.bind(target);
-  target.create = async (...a: A) => { await before().catch(() => undefined); return create(...a); };
+  target.create = async (...a: A) => {
+    const t0 = Date.now();
+    await before().catch(() => undefined);
+    const ms = Date.now() - t0;
+    // a pull that holds a new chat back shows in the logs (`npm run logs -- --scope chats --grep timing`)
+    if (ms >= 300) log.info('chats', 'timing: brain sync before a new chat', { data: { ms } });
+    return create(...a);
+  };
 }

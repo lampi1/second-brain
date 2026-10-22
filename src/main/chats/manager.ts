@@ -289,6 +289,8 @@ interface Rec {
   /** the session whose first API call was counted already (context-stats.ts cache) */
   cacheSession?: string;
   gitRoot?: string | null;
+  /** the folder gitRoot was found for (a later checkpoint from the same folder skips `git rev-parse`) */
+  gitRootOf?: string;
   /** child results a quit held back (shutdown), sent after the next start (resumeInterrupted) */
   heldResults?: HeldChildResult[];
   /** the end-of-turn record of the last checkpoint, while git writes it (recordTurnEnd) */
@@ -613,6 +615,7 @@ export class ChatManager implements ChatService {
   /** links = the run links an Orchestrator tool sets (A7): refused before anything starts when one names an unknown run. */
   /** by: who asks; 'app' = one of the app's own jobs (the Judge's sampled reviews): like an agent, its run says startedBy 'app' */
   async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user', inherited?: { owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links: RunLinks = {}, opts: { boundByOrchestrator?: boolean; continuation?: boolean } = {}): Promise<ChatSummary> {
+    const createdT0 = Date.now();
     this.deliveryPolicy(req.deliveryPolicy, !!req.parentId);
     if (req.doneWhen && (req.doneWhen.length > 12 || req.doneWhen.some(x => typeof x !== 'string' || !x.trim() || x.length > 300))) throw new Error('Invalid task criteria.');
     updateActivity.assertOpen();
@@ -699,7 +702,10 @@ export class ChatManager implements ChatService {
     // shows its progress on its strip (ADR 0108): the app's fixed flow follows the request, the plan starts asking
     const strategist = by === 'agent' && agent.owner.source === 'catalog' && agent.owner.id === 'strategist' && !delegator && !req.orchestrator;
     const prompt = given && pack ? `${given}\n\n${pack}` : given && strategist ? `${given}\n\n${STRATEGY_FLOW}` : given;
-    const viaQueue = by !== 'user' && !!prompt && !!this.admission;
+    // a root chat the Orchestrator opens while answering the user's own message is the user's request: like his own
+    // messages (ADR 0036) it never waits for the CPU queue (a start of 10-25 s was then followed by the queue's wait)
+    const forUser = by === 'agent' && !delegator && !req.orchestrator && this.orchestratorAnswering();
+    const viaQueue = by !== 'user' && !forUser && !!prompt && !!this.admission;
     const r: Rec = {
       s: {
         agent: agent.owner,
@@ -753,7 +759,7 @@ export class ChatManager implements ChatService {
     }
     this.ensureHistory(r); // a fork shows the past it starts from
     this.persist();
-    log.info('chats', 'chat created', { chat: id, data: { harness: req.harness, cwd, fork: !!forkOf, model: r.choice.model, permissionMode: r.choice.permissionMode, orchestrator: r.s.isOrchestrator, warm: !!warm } });
+    log.info('chats', 'chat created', { chat: id, data: { harness: req.harness, cwd, fork: !!forkOf, model: r.choice.model, permissionMode: r.choice.permissionMode, orchestrator: r.s.isOrchestrator, warm: !!warm, prepMs: Date.now() - createdT0, queued: viaQueue } });
     this.updated(r);
     if (warm) this.adoptWarm(r, warm); else if (!viaQueue) this.startSession(r);
     // the next chat like this one finds an engine waiting (a role's own launch; an Orchestrator, fork or bypass chat: a plain one)
@@ -930,6 +936,8 @@ export class ChatManager implements ChatService {
     updateActivity.assertOpen();
     const r = this.need(chatId);
     const releaseDelivery = this.holdActivity(chatId);
+    // where the time goes between Enter and the engine: logged as `timing: before send`
+    const t0 = Date.now(), lap: Record<string, number> = {};
     try {
     // an engine released for idleness still gets its mail: the chat resumes for it (ensureSession below)
     if (liveOnly && ((!r.session && r.s.state !== 'idle') || r.archiving || r.s.closedAt)) throw new Error('La chat non è attiva: la posta resta da leggere.');
@@ -945,9 +953,14 @@ export class ChatManager implements ChatService {
     this.needAgentMay(r, from); // again: the engine may have been released while the message waited in the queue
     if (r.s.closedAt) this.unarchive(r); // a message (the user's, or an agent's through app_send_to_chat) reopens it
     // a cold chat (ADR 0031): after the cache expired the message goes on in a fresh session from its note
+    let lapT = Date.now();
     const cold = await this.coldSwitch(r);
+    lap.coldMs = Date.now() - lapT;
+    const hadEngine = !!r.session;
+    lapT = Date.now();
     try {
       await this.ensureSession(r);
+      lap.engineMs = Date.now() - lapT;
       if (!r.session) throw new Error(r.s.lastError ?? 'Avvio della chat non riuscito.');
       if (liveOnly && engineOf(r.s.harness)?.kind !== 'claude' && (r.session.busy || r.s.state !== 'idle')) throw new Error('La chat sta lavorando: la posta resta da leggere fino al prossimo turno.');
     } catch (e) {
@@ -990,11 +1003,14 @@ export class ChatManager implements ChatService {
     const wantLang = this.opts.replyLang?.(), langHint = replyLangTurn(wantLang, role ? undefined : r.replyLang, !!role);
     // the files as they are before this turn (ADR 0103): what the user can put back with «Annulla l'ultimo turno»
     if (!this.midTurn(r)) r.turnCheckpoint = false;
+    lapT = Date.now();
     if (this.opts.checkpoints?.() && !r.s.isOrchestrator && !r.s.quick && !this.midTurn(r)) await this.checkpoint(r);
+    lap.checkpointMs = Date.now() - lapT;
     try {
       receipt?.beforeSubmit();
       r.session.send(`${role}${warning}${body}${hint}${langHint}`, imgs);
       receipt?.submitted();
+      log.info('chats', 'timing: before send', { chat: r.s.id, data: { totalMs: Date.now() - t0, ...lap, engineStarted: !hadEngine, cold: !!cold, harness: r.s.harness } });
       if (langHint) { r.replyLang = wantLang; if (!role) this.persist(); }
       if (lampo) r.lampoSeen = { session: r.session, cursor: lampo.seen }; // seen only once it went
       if (role) { r.rolePrimed = { session: r.s.sessionId ?? '', sig: roleSig }; this.persist(); }
@@ -2671,9 +2687,11 @@ export class ChatManager implements ChatService {
   private async checkpoint(r: Rec): Promise<void> {
     if (r.gitRoot === null) return;
     try {
-      const cp = await takeCheckpoint(r.s.cwd, `refs/sb/checkpoints/${r.s.id}/${Date.now()}`);
+      const known = r.gitRoot && r.gitRootOf === r.s.cwd ? r.gitRoot : undefined;
+      const cp = await takeCheckpoint(r.s.cwd, `refs/sb/checkpoints/${r.s.id}/${Date.now()}`, known);
       if (!cp) { r.gitRoot = null; return; }
       r.gitRoot = cp.root;
+      r.gitRootOf = r.s.cwd;
       r.turnCheckpoint = true;
       const list = r.checkpoints ??= [];
       list.push(cp);
@@ -2745,6 +2763,22 @@ export class ChatManager implements ChatService {
     if (!r || r.session || this.quitting || updateActivity.frozen || !engineOf(r.s.harness)?.caps.warm || this.opts.engineOn?.(r.s.harness) === false || !fs.existsSync(r.s.cwd)) return;
     log.info('chats', 'Orchestrator engine started ahead of the first message', { chat: r.s.id });
     this.ensureSession(r).catch(e => log.warn('chats', 'Orchestrator engine not started ahead', { chat: r.s.id, cause: errText(e), hint: 'it starts with the first message as before' }));
+  }
+
+  /** The user started typing in a chat whose engine was released for idleness (engineIdleMin): it resumes now (a
+   *  resume, no message, no tokens), so the CLI's start-up (10-25 s measured in ADR 0025, more on a busy Windows PC)
+   *  runs while the user types instead of after the Enter. Never for a chat whose next message goes to a fresh session
+   *  (coldRoute: the switch starts that one), nor for one closed, queued, closing or opening. True = an engine starts. */
+  prewarm(chatId: string): boolean {
+    const r = this.chats.get(chatId);
+    if (!r || r.session || r.releasing || r.archiving || r.switching || r.opening || r.s.closedAt || r.s.state === 'error') return false;
+    if (this.quitting || updateActivity.frozen || this.admission?.entry(r.s.id)) return false;
+    if (!engineOf(r.s.harness)?.caps.warm || this.opts.engineOn?.(r.s.harness) === false || !isUuid(r.s.sessionId) || !fs.existsSync(r.s.cwd)) return false;
+    if (this.coldOn() && coldRoute(this.coldView(r), Date.now(), this.ttl())) return false;
+    r.activeAt = Date.now(); // a started engine the user then leaves is released again after engineIdleMin, not at once
+    log.info('chats', 'engine started while the user types', { chat: r.s.id });
+    this.ensureSession(r).catch(e => log.warn('chats', 'engine not started ahead of the message', { chat: r.s.id, cause: errText(e), hint: 'it starts with the message, as before' }));
+    return true;
   }
 
   /** The app's estimate line for a request, or null: an estimate that fails never holds the message. */
