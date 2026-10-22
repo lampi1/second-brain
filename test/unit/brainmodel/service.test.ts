@@ -90,7 +90,7 @@ describe('one-time migration', () => {
     const state = await w.service.maintain();
     expect(state).toMatchObject({ skills: [], rules: [], memory: [], changes: [] });
     expect(state.migration).toEqual({ at: NOW, items: [] });
-    expect(state.lastRun!.jobs.map(j => j.job)).toEqual(['migration', 'corrections', 'repeated-task', 'merge-skills', 'merge-memory']);
+    expect(state.lastRun!.jobs.map(j => j.job)).toEqual(['migration', 'upgrade', 'corrections', 'repeated-task', 'merge-skills', 'merge-memory']);
     expect(w.emitted()).toBe(1);
   });
 });

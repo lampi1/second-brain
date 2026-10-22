@@ -523,7 +523,7 @@ export function closeChat(chatId: string): void {
   if (wasMax || wasFocus) ui.set(s => ({ ...s, maximized: wasMax ? null : s.maximized, focusMode: wasFocus ? null : s.focusMode, lanePeek: wasFocus ? false : s.lanePeek }));
   hideChat(chatId, true);
   let undone = false;
-  const closing = sb.invoke('chat:archive', { chatId, auto: false }).then(chat => { if (!undone) dispatch({ type: 'chat:updated', chat }); return true; },
+  const closing = sb.invoke('chat:archive', { chatId, auto: false, undoable: true }).then(chat => { if (!undone) dispatch({ type: 'chat:updated', chat }); return true; },
     e => { hideChat(chatId, false); fail(t('chat.close.failed'))(e); return false; });
   const timer = setTimeout(() => {
     pendingCloses.delete(timer);

@@ -616,7 +616,7 @@ export class DemoChats implements ChatService {
     this.emit('chat:removed', { chatId });
   }
 
-  async archive(chatId: string, opts: { auto?: boolean } = {}): Promise<ChatSummary> {
+  async archive(chatId: string, opts: { auto?: boolean; undoable?: boolean } = {}): Promise<ChatSummary> {
     const c = this.chats.get(chatId);
     if (!c) throw new Error('Chat non trovata.');
     if (c.isOrchestrator) throw new Error('L’Orchestrator non si chiude: per ripartire usa Pulisci.');

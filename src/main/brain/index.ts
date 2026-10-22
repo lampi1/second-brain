@@ -245,7 +245,9 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
       return { brainRoot: root, brainProblem: problem };
     },
     settings: () => cfg.get(),
-    setSettings: async patch => cfg.set(patch, { by: 'user' }),
+    // turning judging on starts it from now (ADR 0114: no backlog), whoever sends the patch, not only the Agenti switch
+    setSettings: async patch => cfg.set(patch && typeof patch === 'object' && (patch as { judging?: unknown }).judging === true && cfg.get().judging !== true
+      && (patch as { judgingSince?: unknown }).judgingSince === undefined ? { ...patch, judgingSince: Date.now() } : patch, { by: 'user' }),
     settingsSchema: () => cfg.schema(),
     settingsHistory: limit => cfg.history(limit),
     undoSetting: (changeId, by = 'user') => { if (typeof changeId !== 'string') throw new Error('changeId mancante'); return cfg.undo(changeId, { by }); },

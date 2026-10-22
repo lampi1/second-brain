@@ -1335,7 +1335,8 @@ export interface InvokeMap {
   'chat:stopAll': [void, number];
   'chat:close': [{ chatId: string }, void];
   /** archive a finished chat (its process ends, its browser tabs close, the env sign-in stays); reopen brings it back */
-  'chat:archive': [{ chatId: string; auto?: boolean }, ChatSummary];
+  /** undoable: the user's ✕ with «Annulla» (#168): the run ends when the close is final */
+  'chat:archive': [{ chatId: string; auto?: boolean; undoable?: boolean }, ChatSummary];
   'chat:reopen': [{ chatId: string }, ChatSummary];
   /** "Avvia ora": a chat waiting in the CPU queue starts now (ADR 0036); false = it was not waiting */
   'chat:admitNow': [{ chatId: string }, boolean];

@@ -105,6 +105,45 @@ describe('brain upgrade', () => {
     expect(pendingSections(readRecord(root, userData))).toEqual([]);
   });
 
+  it('an empty block never swallows the next one, and a script not known to work gets no @tested line', async () => {
+    write('ambienti/test.md', `# Vuoto\n\n\`\`\`bash\n\`\`\`\n\nTesto.\n\n\`\`\`bash\necho deploy\necho two\necho three\n\`\`\`\n`);
+    const found = candidates(root, BRAIN_LAYOUT.find(s => s.id === 'scripts')!);
+    expect(found.map(c => c.code)).toEqual(['echo deploy\necho two\necho three']);
+    const untried: UpgradeAsk = async (_s, prompt) => {
+      const { candidates: list } = JSON.parse(prompt) as { candidates: { id: string }[] };
+      return { ok: true, text: JSON.stringify({ items: list.map(c => ({ id: c.id, keep: true, name: 'deploy-test', title: 'T', description: 'D', worked: false })) }) };
+    };
+    await upgrade(ctx(untried));
+    const script = read('scripts/deploy-test.sh');
+    expect(script).not.toContain('@tested');
+    expect(read('ambienti/test.md')).toContain('Testo.');
+  });
+
+  it('a note edited while the agent was reading keeps its block for the next pass', async () => {
+    const edits: UpgradeAsk = async (s, prompt) => { write('ambienti/test.md', `Nuova riga in cima.\n${NOTE}`); return smart(s, prompt); };
+    const r = await upgrade(ctx(edits));
+    expect(r.changes).toBe(0);
+    expect(read('ambienti/test.md')).toContain('az webapp deploy');
+    expect(fs.existsSync(path.join(root, 'scripts', 'deploy-test.ps1'))).toBe(false);
+  });
+
+  it('never writes through a symlinked scripts/ folder', async () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-upgrade-out-'));
+    try {
+      fs.symlinkSync(outside, path.join(root, 'scripts'), 'dir');
+      await upgrade(ctx(smart));
+      expect(fs.readdirSync(outside)).toEqual([]);
+      expect(read('ambienti/test.md')).toBe(NOTE);
+    } finally { fs.rmSync(outside, { recursive: true, force: true }); }
+  });
+
+  it('an unreadable brain.json is left as it is and the record goes to userData', async () => {
+    write('brain.json', '{ broken');
+    await upgrade(ctx(smart));
+    expect(read('brain.json')).toBe('{ broken');
+    expect(pendingSections(readRecord(root, userData))).toEqual([]);
+  });
+
   it('parses only well-formed verdicts for the asked ids', () => {
     expect(parseVerdicts('nope', ['c1'])).toBeNull();
     expect(parseVerdicts('```json\n{"items":[{"id":"c1","keep":true,"name":"Deploy Test!","title":"T","description":"D"},{"id":"c9","keep":true}]}\n```', ['c1']))

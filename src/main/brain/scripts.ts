@@ -66,7 +66,7 @@ export function stripHeader(text: string): string {
   return [...shebang, ...out].join('\n');
 }
 
-export interface ScriptMeta { title: string; description: string; usage?: string; tags?: string[]; tested: { ok: boolean; note: string; at?: string } }
+export interface ScriptMeta { title: string; description: string; usage?: string; tags?: string[]; /** absent: never run, no @tested line (shown as untested) */ tested?: { ok: boolean; note: string; at?: string } }
 
 /** The script text the app writes: shebang, the header in the language's comment syntax, a blank line, the body. */
 export function withHeader(file: string, body: string, meta: ScriptMeta): string {
@@ -79,7 +79,7 @@ export function withHeader(file: string, body: string, meta: ScriptMeta): string
     `${c} @description ${one(meta.description)}`,
     ...(meta.usage ?? '').split(/\r?\n/).map(one).filter(Boolean).map(u => `${c} @usage ${u}`),
     ...(meta.tags?.length ? [`${c} @tags ${meta.tags.map(one).filter(Boolean).join(', ')}`] : []),
-    `${c} @tested ${meta.tested.at ?? new Date().toISOString().slice(0, 10)} ${meta.tested.ok ? 'ok' : 'failed'}${meta.tested.note ? `: ${one(meta.tested.note)}` : ''}`,
+    ...(meta.tested ? [`${c} @tested ${meta.tested.at ?? new Date().toISOString().slice(0, 10)} ${meta.tested.ok ? 'ok' : 'failed'}${meta.tested.note ? `: ${one(meta.tested.note)}` : ''}`] : []),
   ];
   // the body's own line ends and byte-order mark stay (Windows PowerShell 5.1 and .cmd labels depend on them)
   const eol = body.includes('\r\n') ? '\r\n' : '\n', bom = body.startsWith('\uFEFF') ? '\uFEFF' : '';

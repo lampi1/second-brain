@@ -80,7 +80,9 @@ describe('ComposerSuggest', () => {
     expect((await second).reason).toBe('cancelled');
     s.cancel('c1');
     expect((await third).reason).toBe('cancelled');
-    expect(s.state().calls).toBe(0); // nothing answered, nothing spent
+    // nothing answered, but each call was sent and may be billed: counted at the estimate against the daily cap
+    expect(s.state().calls).toBe(3);
+    expect(s.state().usd).toBeGreaterThan(0);
   });
   it('stops at the daily budget, keeps today across a restart, starts over the next day', async () => {
     settings.dailyUsd = 0.01;

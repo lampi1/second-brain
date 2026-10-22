@@ -37,8 +37,8 @@ export interface Candidate {
   id: string;
   /** brain-relative path of the note */
   file: string;
-  /** the whole fence, ``` lines included: what is replaced in the note */
-  start: number; end: number;
+  /** the whole fence, ``` lines included: what is replaced in the note, and its text when it was read */
+  start: number; end: number; whole: string;
   lang: string;
   code: string;
   /** the nearest Markdown heading above it, and the prose line just before it */
@@ -46,7 +46,8 @@ export interface Candidate {
 }
 interface Verdict { id: string; keep: boolean; name?: string; title?: string; description?: string; usage?: string; tags?: string[]; worked?: boolean }
 
-const MAX_NOTE = 256 * 1024, MAX_CANDIDATES = 40, BATCH = 8, CODE_IN_PROMPT = 1400;
+// a note above the ChangeLog snapshot limit (changes.ts, 256 KB) could not be put back by Annulla: never touched
+const MAX_NOTE = 250 * 1024, MAX_CANDIDATES = 40, BATCH = 8, CODE_IN_PROMPT = 1400, MAX_PROMPT = 10_000;
 const SKIP_DIRS = new Set(['journal', 'node_modules', 'scripts', 'agents', 'rules']);
 const SKIP_FILES = new Set(['changelog.md', 'now.md', 'ai-errors.md']);
 const EXT: Record<string, string> = {
@@ -75,8 +76,10 @@ export function readRecord(root: string, userData: string): LayoutRecord | null 
 /** Writes the record, keeping every other key of brain.json (an unreadable brain.json is never rewritten). */
 export function writeRecord(root: string, userData: string, record: LayoutRecord): void {
   const file = brainJson(root);
-  if (fs.existsSync(file)) {
-    const json = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^﻿/, '')) as Record<string, unknown>;
+  let json: Record<string, unknown> | null = null;
+  try { if (fs.existsSync(file)) { const raw = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '')) as unknown; json = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : null; } }
+  catch { json = null; } // unreadable: left as it is, the userData copy keeps the record
+  if (json) {
     const tmp = `${file}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, `${JSON.stringify({ ...json, layout: record }, null, 2)}\n`, 'utf8');
     fs.renameSync(tmp, file);
@@ -87,7 +90,9 @@ export function writeRecord(root: string, userData: string, record: LayoutRecord
 }
 
 // ── 1. local scan ───────────────────────────────────────────────────────────────────────────────────────────────────
-const FENCE = /^([ \t]*)(`{3,}|~{3,})[ \t]*([A-Za-z0-9_+-]*)[^\n]*\n([\s\S]*?)\n\1\2[ \t]*$/gm;
+// the closing fence may follow the opening one at once (an empty block): the body never runs past it into the next block
+const FENCE = /^([ \t]*)(`{3,}|~{3,})[ \t]*([A-Za-z0-9_+-]*)[^\n]*\n([\s\S]*?)^\1\2[ \t]*$/gm;
+const FENCE_LINE = /^[ \t]*(?:`{3,}|~{3,})/m;
 const inPlace = (rel: string, place: string) => place.endsWith('/') ? rel.startsWith(place) : rel === place;
 
 function notes(root: string, place: string): string[] {
@@ -118,12 +123,16 @@ export function candidates(root: string, section: LayoutSection): Candidate[] {
     let text: string;
     try { text = fs.readFileSync(path.join(root, file), 'utf8'); } catch { continue; }
     for (const m of text.matchAll(FENCE)) {
-      const lang = m[3]!.toLowerCase(), code = m[4]!;
+      const lang = m[3]!.toLowerCase(), code = m[4]!.replace(/\r?\n$/, '');
+      if (FENCE_LINE.test(code)) continue; // a block with a fence inside it is not one clean script
       if (!langs.has(lang) || code.split('\n').filter(l => l.trim()).length < r.minLines || secretLine(code)) continue;
       const head = text.slice(0, m.index);
       const heading = [...head.matchAll(/^#{1,6}\s+(.+)$/gm)].at(-1)?.[1]?.trim() ?? '';
-      const before = head.trimEnd().split('\n').at(-1)?.trim() ?? '';
-      out.push({ id: `c${out.length + 1}`, file, start: m.index!, end: m.index! + m[0].length, lang, code, heading, before: before.startsWith('#') ? '' : before.slice(0, 200) });
+      let before = head.trimEnd().split('\n').at(-1)?.trim() ?? '';
+      // the context goes to the model too: a line that may hold a credential is left out (the heading drops the candidate)
+      if (secretLine(heading)) continue;
+      if (secretLine(before)) before = '';
+      out.push({ id: `c${out.length + 1}`, file, start: m.index!, end: m.index! + m[0].length, whole: m[0], lang, code, heading, before: before.startsWith('#') ? '' : before.slice(0, 200) });
       if (out.length >= MAX_CANDIDATES) return out;
     }
   }
@@ -170,6 +179,18 @@ export function parseVerdicts(text: string, ids: readonly string[]): Verdict[] |
   return out;
 }
 
+/** Candidates in groups of at most BATCH whose prompt stays under the one-shot limit (12,000 characters). */
+function batches(section: LayoutSection, list: readonly Candidate[]): Candidate[][] {
+  const out: Candidate[][] = [];
+  let cur: Candidate[] = [];
+  for (const c of list) {
+    if (cur.length && (cur.length >= BATCH || upgradePrompt(section, [...cur, c]).length > MAX_PROMPT)) { out.push(cur); cur = []; }
+    cur.push(c);
+  }
+  if (cur.length) out.push(cur);
+  return out;
+}
+
 // ── 3. the writes ───────────────────────────────────────────────────────────────────────────────────────────────────
 function freeName(dir: string, base: string, ext: string, taken: Set<string>): string {
   let existing: string[] = [];
@@ -183,28 +204,36 @@ function freeName(dir: string, base: string, ext: string, taken: Set<string>): s
 /** The files the kept candidates become and the notes with their pointer lines. */
 export function plan(root: string, section: LayoutSection, list: readonly Candidate[], verdicts: readonly Verdict[], today: string): { file: string; text: string | null }[] {
   const r = section.receives!, dir = path.join(root, section.place), taken = new Set<string>();
+  // the place must be a real folder inside the brain (a symlinked scripts/ would write outside it)
+  try { if (fs.lstatSync(dir).isSymbolicLink() || !fs.realpathSync(dir).startsWith(fs.realpathSync(root))) return []; } catch { /* not there yet: created inside */ }
+  const texts = new Map<string, string>();
+  const current = (file: string): string => texts.get(file) ?? texts.set(file, fs.readFileSync(path.join(root, file), 'utf8')).get(file)!;
+  const original = (c: Candidate): string => c.whole;
   const writes: { file: string; text: string | null }[] = [];
   const pointers = new Map<string, { start: number; end: number; line: string }[]>();
   for (const c of list) {
     const v = verdicts.find(x => x.id === c.id);
     if (!v?.keep) continue;
+    // the note changed while the agent was reading (the user, another agent): this candidate waits for the next pass
+    if (current(c.file).slice(c.start, c.end) !== original(c)) continue;
     const note = `${c.file}${c.heading ? ` (${c.heading})` : ''}`;
     let name: string, text: string;
     if (r.write === 'script-file') {
       if (!EXT[c.lang]) continue;
       name = freeName(dir, v.name!, EXT[c.lang]!, taken);
       text = withHeader(name, c.code, { title: v.title!, description: v.description!, usage: v.usage, tags: v.tags,
-        tested: { ok: !!v.worked, at: today, note: v.worked ? `noted as working in ${note}, not run again by the app` : `from ${note}, not tested yet` } });
+        ...(v.worked ? { tested: { ok: true, at: today, note: `noted as working in ${note}, not run again by the app` } } : {}) });
     } else {
       name = freeName(dir, v.name!, '.md', taken);
       text = `# ${v.title}\n\n${v.description}\n\n\`\`\`${c.lang}\n${c.code}\n\`\`\`\n\n_From ${note}._\n`;
     }
+    if (secretLine(text)) continue; // a field the model wrote must not carry a credential either
     writes.push({ file: path.join(dir, name), text });
     const at = pointers.get(c.file) ?? pointers.set(c.file, []).get(c.file)!;
     at.push({ start: c.start, end: c.end, line: `→ \`${section.place}${name}\`` });
   }
   for (const [file, cuts] of pointers) {
-    let text = fs.readFileSync(path.join(root, file), 'utf8');
+    let text = current(file);
     for (const cut of [...cuts].sort((a, b) => b.start - a.start)) text = text.slice(0, cut.start) + cut.line + text.slice(cut.end);
     writes.push({ file: path.join(root, file), text });
   }
@@ -231,8 +260,8 @@ export async function upgrade(ctx: UpgradeContext): Promise<JobResult> {
       if (!ctx.ask) { notes.push(`${section.id}: nessun motore per leggere ${list.length} candidati`); continue; }
       const verdicts: Verdict[] = [];
       let failed = '';
-      for (let i = 0; i < list.length && !failed; i += BATCH) {
-        const batch = list.slice(i, i + BATCH);
+      for (const batch of batches(section, list)) {
+        if (failed) break;
         const r = await ctx.ask(UPGRADE_SYSTEM, upgradePrompt(section, batch)).catch((e: unknown) => ({ ok: false, text: '', reason: String(e) }));
         const v = r.ok ? parseVerdicts(r.text, batch.map(c => c.id)) : null;
         if (!v) failed = r.reason || 'risposta non valida'; else verdicts.push(...v);

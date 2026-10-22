@@ -1300,8 +1300,10 @@ export class ChatManager implements ChatService {
   }
 
   /** Archives a finished work chat: its process ends gracefully, the record stays (closedAt) and reopen() brings it
-   *  back with its history. auto = the UI's auto-close: refused if the chat went back to work meanwhile. */
-  async archive(chatId: string, opts: { auto?: boolean } = {}): Promise<ChatSummary> {
+   *  back with its history. auto = the UI's auto-close: refused if the chat went back to work meanwhile. undoable = the
+   *  user's ✕ with its «Annulla» (#168): the run ends only when the close is final (chat:close, or 15 s with no reopen),
+   *  so an Annulla gets the chat back with its run still open. */
+  async archive(chatId: string, opts: { auto?: boolean; undoable?: boolean } = {}): Promise<ChatSummary> {
     const r = this.need(chatId);
     // the Orchestrator never closes (its title is the mail address the brain's rules and the chats write to)
     if (r.s.isOrchestrator) throw new Error('L’Orchestrator non si chiude: per ripartire usa Pulisci.');
@@ -1335,7 +1337,11 @@ export class ChatManager implements ChatService {
     this.flushItems(chatId);
     r.s.closedAt = Date.now();
     r.s.closedBy = opts.auto ? 'auto' : 'user';
-    this.endRunOf(r, 'closed', r.s.closedAt);
+    if (opts.undoable && !opts.auto) {
+      const at = r.s.closedAt;
+      const t = setTimeout(() => { if (this.chats.get(chatId) === r && r.s.closedAt === at) this.endRunOf(r, 'closed', at); }, 15_000);
+      t.unref?.();
+    } else this.endRunOf(r, 'closed', r.s.closedAt);
     r.working = false;
     if (keep) r.closeAfterCold = true;
     if (r.s.state !== 'error') r.s.state = 'closed';

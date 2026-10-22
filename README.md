@@ -29,16 +29,16 @@ Open Claude Code, Codex, Cursor or whatever agent you trust with a terminal, and
 Set up the second-brain desktop app for me, from source, so I can use it and also hack on it.
 
 1. Check my machine first: git, Node.js (the version in package.json "engines", 22 or newer), npm, and the GitHub
-   CLI `gh`. If something is missing, tell me and install it the normal way for my OS (Windows: winget;
-   macOS: Homebrew; Linux: my package manager or nvm). Ask me before installing anything system-wide.
+   CLI `gh`. If something is missing, tell me what and how you would install it the normal way for my OS
+   (Windows: winget; macOS: Homebrew; Linux: my package manager or nvm), and install it only after I say yes.
 2. Get the code. If `gh auth status` says I'm not logged in, run `gh auth login` and let me finish it myself.
-   If I can't push to lampi1/second-brain (most people can't), fork it and clone my fork:
+   If I can't push to lampi1/second-brain (most people can't), ask me before forking it, then clone my fork:
    `gh repo fork lampi1/second-brain --clone`; otherwise `git clone https://github.com/lampi1/second-brain.git`.
    Make sure `upstream` points to lampi1/second-brain.
 3. Read AGENTS.md and CONTRIBUTING.md in the clone, and follow them from here on.
 4. Install: `npm run setup` (pinned deps with install scripts off, the Electron binary, the git hooks).
-   On Linux, if Electron fails to start, install the system libraries it asks for (e.g. libnss3, libgtk-3,
-   libasound2) and try again.
+   On Linux, if Electron fails to start, tell me which system libraries it asks for (e.g. libnss3, libgtk-3,
+   libasound2), install them after I say yes, and try again.
 5. Build and start: `npm run build`, then `npm start`. The first start opens a short setup window: I'll go
    through it myself. Then run `npm run doctor` and tell me in plain words what is still missing
    (for example: logging in to at least one of `claude`, `codex` or Cursor's `agent`, which I do myself).

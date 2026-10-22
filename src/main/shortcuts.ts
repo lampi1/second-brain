@@ -48,7 +48,8 @@ export function ensureShortcuts(outDir?: string): void {
   const base = sharedDir();
   // A staged/installer smoke copy must never rewrite the real user's shell integration.
   if (process.env.SB_RELEASES_ROOT && path.resolve(process.env.SB_RELEASES_ROOT) !== path.resolve(base)) return;
-  if (!releaseId()) { if (process.platform === 'win32') repairIcons(base, outDir); return; }
+  // (a test or e2e run never touches the real user's links)
+  if (!releaseId()) { if (process.platform === 'win32' && !process.env.SB_TEST) repairIcons(base, outDir); return; }
   if (process.platform !== 'win32') { posixShortcuts(); return; }
   const vbs = path.join(base, 'launch.vbs');
   if (!fs.existsSync(vbs)) { log.warn('shortcuts', 'launch.vbs missing: shortcuts not written', { data: { vbs } }); return; }

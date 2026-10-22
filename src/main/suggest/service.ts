@@ -128,12 +128,14 @@ export class ComposerSuggest {
     const ctl = new AbortController();
     this.inflight.set(chatId, ctl);
     const prompt = `${last ? `Last message in the chat:\n${last}\n\n` : ''}Current line (continue right after its end):\n${line}`;
-    const r = await this.d.complete({ purpose: 'composer-suggest', model: this.d.model(), maxTokens: SUGGEST_MAX_OUT, system: SUGGEST_SYSTEM, prompt },
-      AbortSignal.any([ctl.signal, AbortSignal.timeout(this.d.timeoutMs ?? TIMEOUT_MS)])).catch((e: unknown): TextResult => ({ ok: false, error: errText(e) }));
+    const signal = AbortSignal.any([ctl.signal, AbortSignal.timeout(this.d.timeoutMs ?? TIMEOUT_MS)]);
+    const r = await this.d.complete({ purpose: 'composer-suggest', model: this.d.model(), maxTokens: SUGGEST_MAX_OUT, system: SUGGEST_SYSTEM, prompt }, signal).catch((e: unknown): TextResult => ({ ok: false, error: errText(e) }));
     if (this.inflight.get(chatId) === ctl) this.inflight.delete(chatId);
     if ('unavailable' in r && r.unavailable) return { text: null, cached: false, reason: 'unavailable' };
     const answered = r.ok || r.usd !== undefined;
-    if (answered) this.spent(r.ok ? r.usd : r.usd ?? null, r.ok ? r.usage : null, prompt.length);
+    // a request stopped after it was sent (typing on, timeout) may still be billed: counted at the estimate, so a fast
+    // typist cannot run past the daily cap with calls that never report a cost
+    if (answered || signal.aborted) this.spent(r.ok ? r.usd : r.usd ?? null, r.ok ? r.usage : null, prompt.length);
     if (ctl.signal.aborted) return { text: null, cached: false, reason: 'cancelled' };
     if (!r.ok) {
       log.info('suggest', 'no model suggestion', { data: { why: r.error } });
