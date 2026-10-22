@@ -22,10 +22,10 @@ function manager(dir: string, extra: Partial<ConstructorParameters<typeof ChatMa
       return { request: req, owner: { id, name: r.name, purpose: r.summary, engine: 'claude', model: null, revision: 1, source: 'catalog' as const, version: 1 }, instructions: r.instructions,
         policy: { tools: { allow: [...r.tools] }, ceiling: r.ceiling }, skills: [...r.skills], launches: [...r.launches] };
     },
-    sessionFactory: (_h: string, _o: SessionOptions, s: SessionSink) => ({ harness: 'claude', sessionId: null, pid: null, root: null, alive: true, busy: false,
+    sessionFactory: extra.sessionFactory ?? ((_h: string, _o: SessionOptions, s: SessionSink) => ({ harness: 'claude', sessionId: null, pid: null, root: null, alive: true, busy: false,
       start() { s.changed({ state: 'idle' }); }, send() {}, close: async () => { s.changed({ state: 'closed' }); s.exit({ code: 0, error: null }); }, killNow() {}, interrupt: async () => {},
       answer: () => true, rename: async () => {}, setModel: async () => {}, setEffort: async () => {}, setPermissionMode: async () => {}, contextUsage: async () => null, usage: async () => null,
-    }) as unknown as HarnessSession });
+    }) as unknown as HarnessSession) });
   managers.push(m);
   return m;
 }
@@ -94,5 +94,25 @@ describe('the MCP role chain of a delegated chat', () => {
     expect(next).toBeDefined();
     const root = await m.create({ harness: 'claude', cwd: dir, roleId: 'scout', title: 'Scout root', prompt: 'z' }, 'user');
     expect(root.id).not.toBe(next);
+  });
+
+  it('a delegated chat that adopts a waiting engine runs at its ceiling (the parent\'s mode), not the user\'s default above it', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-mcp-warm-mode-'));
+    roots.push(dir);
+    fs.mkdirSync(path.join(dir, '.claude'));
+    fs.writeFileSync(path.join(dir, '.claude', 'settings.json'), JSON.stringify({ permissions: { defaultMode: 'acceptEdits' } }));
+    const modes: { chatId: string; mode: string }[] = [];
+    const m = manager(dir, { prewarm: true, prewarmDelayMs: 0, env: { CLAUDE_CONFIG_DIR: path.join(dir, 'none') },
+      sessionFactory: (_h: string, o: SessionOptions, s: SessionSink) => ({ harness: 'claude', sessionId: null, pid: null, root: null, alive: true, busy: false, ready: Promise.resolve(),
+        start() { s.changed({ state: 'idle' }); }, send() {}, close: async () => { s.changed({ state: 'closed' }); s.exit({ code: 0, error: null }); }, killNow() {}, interrupt: async () => {},
+        answer: () => true, rename: async () => {}, setModel: async () => {}, setEffort: async () => {}, setPermissionMode: async (mode: string) => { modes.push({ chatId: o.chatId, mode }); },
+        contextUsage: async () => null, usage: async () => null,
+      }) as unknown as HarnessSession });
+    const parent = await m.create({ harness: 'claude', cwd: dir, roleId: 'strategist', title: 'Root', prompt: 'x', permissionMode: 'plan' }, 'user');
+    await m.create({ harness: 'claude', cwd: dir, roleId: 'scout', parentId: parent.id, title: 'Scout 1', prompt: 'x' }, 'agent');
+    await new Promise(r => setTimeout(r, 200));
+    const second = await m.create({ harness: 'claude', cwd: dir, roleId: 'scout', parentId: parent.id, title: 'Scout 2', prompt: 'y' }, 'agent');
+    for (let i = 0; i < 50 && !modes.some(x => x.chatId === second.id); i++) await new Promise(r => setTimeout(r, 20));
+    expect(modes.filter(x => x.chatId === second.id).map(x => x.mode)).toEqual(['plan']);
   });
 });

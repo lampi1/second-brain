@@ -3264,7 +3264,10 @@ export class ChatManager implements ChatService {
         await sess.ready;
         if (c.model) await sess.setModel(c.model);
         if (c.effort) await sess.setEffort(c.effort);
-        if (c.permissionMode) await sess.setPermissionMode(c.permissionMode);
+        // the mode the chat would be launched with (its choice, or the user's default clamped to its ceiling: a
+        // delegated chat's is its parent's mode), never the waiting engine's default above that ceiling
+        const mode = this.modeFor(r);
+        if (mode) await sess.setPermissionMode(mode);
       } catch (e) {
         log.warn('chats', 'warm engine refused the chat choices: starting a fresh one', { chat: r.s.id, data: errText(e) });
         if (r.session === sess) {

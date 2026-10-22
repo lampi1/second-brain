@@ -82,7 +82,8 @@ export interface WarmPoolOptions {
   enabled(): boolean;
   /** an engine older than this is replaced, so settings and CLAUDE.md edits reach the next chat (default 30 min) */
   maxAgeMs?: number;
-  /** engines waiting at once, all in one folder (default 3: a plain one, the last role's, the last delegated child's) */
+  /** engines waiting at once, all in one folder (default 3, e.g. a plain one, a role's and a delegated child's; the least
+   *  recently used leaves first) */
   maxSlots?: number;
 }
 
@@ -139,7 +140,8 @@ export class WarmPool {
     mine.recycle = setTimeout(() => {
       if (!this.slots.includes(mine)) return;
       this.drop(mine, 'too old');
-      this.fill(mine.engine.cwd, launch);
+      // a child's engine is not started again: its delegation tree has likely ended (the next child refills it)
+      if (!launch.view?.child) this.fill(mine.engine.cwd, launch);
     }, this.o.maxAgeMs ?? 30 * 60_000);
     mine.recycle.unref?.();
     log.info('chats', 'warm engine started', { chat: mine.engine.chatId, data: { cwd, pid: mine.engine.session.pid, launch: launch.sig || 'plain' } });

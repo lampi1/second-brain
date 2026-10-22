@@ -40,7 +40,9 @@ chats (ADR 0025, 0099), the Orchestrator never released. What still sat between 
   child's tools (`agent_ask_parent`) and `mcpContext` answers that chain, so its managed MCP servers are bounded as a
   cold child's; a parent with no known chain → cold, as before. After a delegated chat starts, one like it waits for
   the next (a role's steps one after another, e.g. the Strategist's plan); parallel delegations take one, the others
-  start cold. The pool keeps up to 3 engines (plain, last role, last child) instead of 2.
+  start cold. The pool keeps up to 3 engines instead of 2 (least recently used leaves first); a child's
+  engine past 30 min is closed, not started again. An adopted engine gets the mode the chat would be launched with
+  (`modeFor`: a delegated chat's ceiling is its parent's mode), never the user's default above it.
 
 ## Consequences
 - Writing to a chat after a restart: the start-up overlaps the typing instead of following the Enter.
