@@ -705,7 +705,13 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // own app, never in tests or an agent's hidden run (judgeSamplingOn, issue #112), and only with the Agenti switch on
   const judgeSampler = new JudgeSampler({ file: path.join(ctx.userData, 'judge-samples.json'), runs: () => manager.runs.list(),
     chat: id => manager.list().find(c => c.id === id), create: req => manager.create(req, 'app'),
-    judging: () => ({ on: brain.settings().judging === true, since: Number(brain.settings().judgingSince) || 0 }),
+    judging: () => {
+      const st = brain.settings(), on = st.judging === true;
+      let since = Number(st.judgingSince) || 0;
+      // on by default with no start yet (a fresh install, an upgrade): from now on, never the runs that ended before
+      if (on && !since) { since = Date.now(); void brain.setSettings({ judgingSince: since }).catch(e => log.warn('agents', 'judging start not saved', { cause: errText(e) })); }
+      return { on, since };
+    },
     judgeEngine: () => agents.list().profiles.find(p => p.id === 'sentinel')?.engine ?? 'claude',
     refusal: h => !engineOn(brain.settings(), h) ? 'engine switched off' : !agentsMayOpen(brain.settings(), h) ? 'agents may not use this engine' : null,
     feedback: (a, by) => runFeedback.recordFeedback(a, by) });

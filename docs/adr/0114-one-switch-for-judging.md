@@ -5,7 +5,7 @@ e performance», a ogni iterazione, con una stima del costo al giorno") · Super
 delegation settings (JudgeSampler `daily`) · Builds on: ADR 0100 (levels from verified successes)
 
 ## Decision
-- The Agenti page has one switch, «Abilita controllo livello e performance» (`JudgingSwitch.tsx`), off by default
+- The Agenti page has one switch, «Abilita controllo livello e performance» (`JudgingSwitch.tsx`), off by default (on by default since ADR 0125)
   (settings `judging`, `judgingSince`). Turning it on sets `judgingSince` to now: only runs that end after it are judged.
 - On: every finished run of a work role gets an independent Sentinel review (`agents/judge-sample.ts`), at most two at
   a time, five seconds after the run ends; a review older than six hours is dropped as stale. Off: none, and the levels

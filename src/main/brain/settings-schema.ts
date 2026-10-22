@@ -125,7 +125,7 @@ const BASE: readonly SettingDef[] = [
   // the chat learns how its command went (the user, 2026-10-12: "vorrei che ti accorgessi da sola quando eseguo un
   // comando dal play senza che ti scriva fatto")
   // the Agenti page's switch (agents/judge-sample.ts): protected, it spends tokens
-  { key: 'judging', type: 'boolean', default: false, protected: true, label: 'Controllo livello e performance',
+  { key: 'judging', type: 'boolean', default: true, protected: true, label: 'Controllo livello e performance',
     description: 'Ogni lavoro finito viene rivisto da un Sentinel in una sessione nuova: livello e performance dei ruoli si basano su verdetti veri. Spende token.' },
   { key: 'judgingSince', type: 'int', min: 0, max: 8_640_000_000_000, default: 0, protected: true, label: 'Controllo acceso dal',
     description: 'Quando il controllo è stato acceso (ms): i lavori finiti prima non vengono rivisti.' },
@@ -257,7 +257,9 @@ export function defaults(): Settings {
     orchestratorOpacity: 100,
     orchestratorEvents: true,
     runResults: true,
-    judging: false, judgingSince: 0,
+    // on by default (owner, 2026-10-22: every role levels up without manual verdicts, ADR 0125); judgingSince 0 = from
+    // the first sampler pass, never a backlog
+    judging: true, judgingSince: 0,
     questionsModal: false,
     appRepo: null,
     projectsRoot: null,

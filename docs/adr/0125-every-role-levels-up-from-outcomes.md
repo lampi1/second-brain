@@ -47,3 +47,6 @@ runtime plugin sanitizer `read.ts`).
 - Two Sentinel sessions on the same model can share a blind spot: an audit agreement weighs less than the user's.
 - Not done: test or build results inside a run, a merged PR, a plan step done are not recorded per run; they would be
   further objective facts (open point).
+- The judging switch is on by default (owner's choice, 2026-10-22: every role must level up without manual verdicts):
+  with no `judgingSince` yet, the first sampler pass sets it to now (main/wiring.ts), so an upgraded install never
+  reviews its backlog. The estimate beside the switch shows the cost; one click turns it off.
