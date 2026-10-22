@@ -73,7 +73,7 @@ export const GOAL_MAX = 2000, OUTPUT_MAX = 2000, CONTEXT_MAX = 6000, CRITERION_M
 const SKILL = /^[a-z0-9][a-z0-9_-]{0,79}$/;
 const text = (v: unknown, max: number, what: string): string => {
   if (typeof v !== 'string' || !v.trim()) throw new Error(`${what}: required text.`);
-  if (v.length > max) throw new Error(`${what}: at most ${max} characters.`);
+  if (v.length > max) throw new Error(`${what}: at most ${max} characters (this one has ${v.length}).`);
   return v.trim();
 };
 const object = (v: unknown, what: string): Record<string, unknown> => {
@@ -131,7 +131,8 @@ export function checkResult(v: unknown, doneWhen: readonly string[]): Delegation
   });
   // a goal the user changed may leave criteria of the old contract without an answer
   const missing = changed ? [] : doneWhen.filter(c => !answers.some(a => a.criterion === c));
-  if (missing.length) throw new Error(`doneWhen: answer every criterion of your contract, exactly as written (missing: ${missing.map(m => `«${m}»`).join(', ')}).`);
+  // the whole array to copy, not only what is missing: a second guess is one call, never two (#170)
+  if (missing.length) throw new Error(`doneWhen: answer every criterion of your contract, exactly as written (missing: ${missing.map(m => `«${m}»`).join(', ')}). doneWhen must be: [${doneWhen.map(c => `{"criterion":${JSON.stringify(c)},"met":<true|false>,"evidence":"…"}`).join(', ')}]`);
   if (o.outcome === 'done' && answers.some(a => !a.met)) throw new Error('outcome "done" needs every criterion met: say "partial" or "blocked" instead.');
   const questions = o.questions === undefined ? undefined : Array.isArray(o.questions) && o.questions.length <= 8 ? o.questions.map((q, i) => text(q, 500, `questions[${i}]`)) : null;
   if (questions === null) throw new Error('questions: up to 8.');
