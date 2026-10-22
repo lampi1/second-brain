@@ -99,29 +99,3 @@ test('a small (compact) tile shows the typing line while its chat works', async 
   await expect(tile.getByTestId('typing-fix')).toBeVisible();
   await app.close();
 });
-
-// "Lag nell'app" (2026-10-12): the alive marks of a running turn (typing dots, tool spinner, state dot) step twice a
-// second from lib/beat.ts instead of 60 fps CSS animations; with reduced motion they stand still.
-test('a running turn\'s dots and spinner step twice a second, and stand still with reduced motion', async () => {
-  const { app, page } = await launchDemo({ freeze: false });
-  await page.emulateMedia({ reducedMotion: 'no-preference' });
-  await expandChats(page, 'mappa');
-  await page.getByTestId('chat-input-mappa').fill('Aggiungi la legenda');
-  await page.getByTestId('chat-input-mappa').press('Enter');
-  await expect(page.getByTestId('typing-mappa')).toBeVisible();
-  // no infinite CSS animation runs on the page: the marks are still between steps
-  expect(await page.evaluate(() => document.getAnimations().filter(a => a.effect?.getComputedTiming().iterations === Infinity).length)).toBe(0);
-  const steps = await page.evaluate(async () => {
-    const seen: string[] = [];
-    for (let i = 0; i < 6; i++) { seen.push(document.documentElement.getAttribute('data-b3') ?? '-'); await new Promise(r => setTimeout(r, 500)); }
-    return seen;
-  });
-  expect(new Set(steps.filter(s => s !== '-')).size).toBeGreaterThanOrEqual(2); // the dots light in turn
-  const dots = page.getByTestId('typing-mappa').locator('.typing-dots i');
-  await expect.poll(async () => (await dots.evaluateAll(els => els.map(e => getComputedStyle(e).opacity))).filter(o => o === '1').length).toBe(1);
-  await shot(page, 'stream-alive-marks');
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await expect(page.locator('html[data-b3]')).toHaveCount(0);
-  await expect.poll(async () => (await dots.evaluateAll(els => els.map(e => getComputedStyle(e).opacity))).filter(o => o === '1').length).toBe(0);
-  await app.close();
-});

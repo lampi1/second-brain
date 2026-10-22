@@ -13,7 +13,7 @@ import path from 'node:path';
 import { expect, test, type ElectronApplication } from '@playwright/test';
 import { choose, launchDemo, shot } from './helpers';
 
-const ESSENTIAL = ['profile', 'update', 'connectors', 'accounts', 'roles', 'space', 'appearance', 'notifications'];
+const ESSENTIAL = ['profile', 'update', 'connectors', 'accounts', 'roles', 'space', 'writing', 'appearance', 'notifications', 'advanced'];
 
 /** A Linux container has no keyring, so safeStorage refuses keys there (engines/secrets.ts); on such a machine only, a
  *  stand-in cipher (never the plain text) plays the OS one so the page's key flow can be checked. Windows uses the real one. */

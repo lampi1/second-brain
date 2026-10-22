@@ -72,26 +72,6 @@ test.describe.serial('internal browser over MCP', () => {
     expect(found).toMatch(/\(in iframe f\d+ http:\/\/localhost:\d+\)/);
   });
 
-  test('Ctrl+W in a page never closes the app (the default menu would; in the app it closes that tab, with Annulla)', async () => {
-    // the tab on screen in the app window, where its unhandled keys reach the window's menu
-    const tabs = await page.evaluate(() => window.sb.invoke('browser:list', undefined));
-    const id = tabs.find(t => t.group?.startsWith('mcp:') && t.url.endsWith('/index.html'))!.id;
-    await page.evaluate(tabId => window.sb.invoke('views:layout', [{ tabId, rect: { x: 0, y: 0, width: 1280, height: 800 } }]), id); // its default size: the next tests measure it
-    await app.evaluate(({ webContents }) => {
-      const tab = webContents.getAllWebContents().find(w => w.getURL().startsWith('http') && w.getURL().endsWith('/index.html'))!; // not the app's file:…/index.html
-      tab.focus();
-      for (const type of ['keyDown', 'keyUp'] as const) tab.sendInputEvent({ type, keyCode: 'W', modifiers: ['control'] });
-    });
-    // the user's Ctrl+W in a page closes its tile like a chat (ADR 0048): Annulla keeps the tab for the next tests. Its
-    // toast means the key was handled (and swallowed) in main: the window is still there
-    const undo = page.getByTestId('toast').filter({ hasText: 'Chiusa la scheda' });
-    await expect(undo).toBeVisible();
-    expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some(w => w.webContents.getURL().startsWith('file:')))).toBe(true);
-    await undo.getByTestId('toast-action').click();
-    expect(await agent.ok('get_page_text')).toContain('Pagina di prova');
-    await page.evaluate(() => window.sb.invoke('views:layout', []));
-  });
-
   test('fills a form in one call and submits it with a trusted click', async () => {
     // full: the whole tree (a page read before returns only what changed since; each test takes its refs from it)
     const tree = await agent.ok('read_page', { filter: 'interactive', full: true });

@@ -106,7 +106,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   brain.onSettingChange(c => { if (c.key.startsWith('tasks.')) tasks.schedule(); });
   tasks.schedule();
   brain.serveApi('/api/quality', () => demoQuality());
-  // the roles' lifecycle queue: no daily pass, no feedback writer (e2e agent-lifecycle.spec.ts); it reads the demo's run
+  // the roles' lifecycle queue: no daily pass, no feedback writer (the Proposte deck's e2e, proposals-deck.spec.ts); it reads the demo's run
   // feedback store, the same single store as in the real app. The user's decisions work on the demo catalog.
   const roles = () => agents.list().profiles.filter(p => p.scope === 'role');
   const agentLifecycle = createLifecycleApi(new AgentLifecycle({ userData: ctx.userData, changed: () => ctx.emitter.emit('agents:lifecycleChanged', null),

@@ -94,7 +94,7 @@ for (const [scheme, width, height] of [['dark', 1366, 768], ['light', 1920, 1080
     // 4. a permission with a long command
     await demo(app, (d, id, q) => d.ask(id, q), 'feedback', {
       type: 'permission', tool: 'Bash', title: 'Bash', detail: '',
-      input: { command: 'npx playwright test test/e2e/questions.spec.ts test/e2e/answer-later.spec.ts test/e2e/one-popup.spec.ts --workers=1 --reporter=list && node scripts/report.mjs --out test-results/report.html', description: 'Lancia gli e2e delle domande e scrive il report' },
+      input: { command: 'npx playwright test test/e2e/questions.spec.ts test/e2e/one-popup.spec.ts --workers=1 --reporter=list && node scripts/report.mjs --out test-results/report.html', description: 'Lancia gli e2e delle domande e scrive il report' },
     });
     await snap(page, `qgal-permission-${tag}`);
     await clear(app, page);

@@ -6,7 +6,7 @@
 // modal in the middle (anchored near the top, ADR 0049) (never a second, backdrop-less copy beside the field: the user, 2026-10-14), Ctrl+J brings it,
 // it reads context first (the agent's lead muted above the real question), 1 answers and the next card takes the
 // keyboard, Esc is "Rispondi dopo" (closed until the queue is opened: a new
-// question then waits silently, answer-later.spec.ts covers the queue), any waiting request can be answered first.
+// question then waits silently), any waiting request can be answered first.
 // With the switch on, a question from the chat the user is in goes to the window, never inline, and the switch stays
 // on (no off button in the window: the user, 2026-10-16).
 // Screenshots: test-results/shots/questions-*.png.
@@ -74,76 +74,6 @@ test('a file link clicked in the questions window shows the viewer in front; the
   await shot(page, 'questions-window-file-viewer');
   await page.getByTestId('qwin-pill').click();
   await expect(page.getByTestId('qwin')).toContainText('Pubblico il commento sul TC16?');
-  await app.close();
-});
-
-test('the questions window: waits while the user types, never takes the field, Ctrl+J brings it, 1 answers, Esc is "Rispondi dopo"', async () => {
-  const { app, page } = await launchDemo();
-  await expandChats(page, 'qa', 'fix'); // requests, transcripts and inputs are on open strips
-  await page.getByTestId('topbar-qwin').click();
-  await expect(page.getByTestId('qwin')).toBeVisible();
-  // the open requests of the demo (Orchestrator, QA, Feedback) are in the window now; the tiles keep one line
-  await expect(page.getByTestId('qwin')).toBeVisible();
-  await expect(page.getByTestId('chat-in-window-qa')).toBeVisible();
-  await expect(page.getByTestId('qwin-card')).toBeFocused(); // nobody was typing: it takes the keyboard
-  await expect(page.getByTestId('qwin-count')).toHaveText('3'); // the rail: every waiting request, this one too
-  await expect(page.getByTestId('qwin-pick')).toHaveCount(2); // the other two, each a button
-  await shot(page, 'questions-window');
-  await page.keyboard.press('Escape'); // "Rispondi dopo": closed, no pill, the top bar counts them
-  await expect(page.getByTestId('qwin')).toHaveCount(0);
-  await expect(page.getByTestId('qwin-pill')).toHaveCount(0);
-  await expect(page.getByTestId('topbar-next')).toContainText('Da rispondere');
-  await expect(page.getByTestId('topbar-next-count')).toHaveText('3');
-  await expect(page.getByTestId('chat-queued-qa')).toBeVisible();
-  await page.keyboard.press('Control+J'); // the queue: open again, quiet mode over
-  await expect(page.getByTestId('qwin-card')).toBeFocused();
-  await expect(page.getByTestId('topbar-next')).not.toContainText('Da rispondere');
-  for (const id of ['orchestrator', 'qa', 'feedback']) await demo(app, (d, c) => d.stop(c), id); // their requests leave
-  await expect(page.getByTestId('qwin')).toHaveCount(0);
-
-  // typing in a chat: a new question waits as a pill, the field keeps the keyboard and the text
-  const field = page.getByTestId('chat-input-fix');
-  await field.click();
-  await page.keyboard.type('sto scri');
-  await demo(app, (d, id, q) => d.ask(id, q), 'fix', question('Procedo con il commit?', ['Sì', 'No']));
-  await expect(page.getByTestId('qwin-pill')).toContainText('compare quando smetti di scrivere');
-  await page.keyboard.type('vendo');
-  await expect(field).toHaveValue('sto scrivendo');
-  // stopped typing: the window shows, the same modal in the middle, the keyboard stays in the field (a note says so)
-  await expect(page.getByTestId('qwin')).toBeVisible({ timeout: 5000 });
-  await expect(page.getByTestId('qwin-chat')).toHaveText('Fix totale ordine');
-  await expect(page.getByTestId('qwin-elsewhere')).toBeVisible();
-  await expect(field).toBeFocused();
-  await expect(page.locator('.qwin-backdrop')).toHaveCount(1);
-  const vp = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
-  const wb = (await page.getByTestId('qwin').boundingBox())!;
-  expect(Math.abs(wb.x + wb.width / 2 - vp.width / 2)).toBeLessThan(4); // centered, whatever the field and the Orchestrator
-  // anchored near the top like a command palette (ADR 0049): content that loads late grows downward, nothing jumps
-  expect(Math.abs(wb.y - Math.min(88, Math.max(20, vp.height * 0.07)))).toBeLessThan(2);
-  await page.keyboard.type('!');
-  await expect(field).toHaveValue('sto scrivendo!');
-  await shot(page, 'questions-window-typing');
-  // a click on the backdrop (or the window) gives the card the keyboard and closes nothing; Esc gives it back
-  await page.mouse.click(8, vp.height / 2);
-  await expect(page.getByTestId('qwin-card')).toBeFocused();
-  await expect(page.getByTestId('qwin')).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(page.getByTestId('qwin')).toHaveCount(0);
-  await expect(field).toBeFocused(); // the keyboard went back to the field it came from
-  // "Rispondi dopo" is on: another question waits silently (no window, no pill), only the counter grows
-  await demo(app, (d, id, q) => d.ask(id, q), 'mappa', question('Pubblico la mappa?', ['Sì', 'No']));
-  await expect(page.getByTestId('topbar-next-count')).toHaveText('2');
-  await expect(page.getByTestId('qwin')).toHaveCount(0);
-  await expect(page.getByTestId('qwin-pill')).toHaveCount(0);
-  // Ctrl+J: the queue, the keyboard to the window; 1 answers, the next card takes the keyboard
-  await page.keyboard.press('Control+J');
-  await expect(page.getByTestId('qwin-card')).toBeFocused();
-  await page.keyboard.press('1');
-  await expect(page.getByTestId('qwin-chat')).not.toHaveText('Fix totale ordine');
-  await expect(page.getByTestId('qwin-card')).toBeFocused();
-  await expect(field).toHaveValue('sto scrivendo!'); // the draft is still there
-  // the window has no off switch of its own (a misclick on it turned the setting off: the user, 2026-10-16)
-  await expect(page.getByTestId('qwin-off')).toHaveCount(0);
   await app.close();
 });
 

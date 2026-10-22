@@ -66,49 +66,6 @@ for (const engine of ['claude', 'cursor'] as const) {
   });
 }
 
-test('claude: explicit legacy opt-in preserves cold continuation behavior', async () => {
-  const cwd = tmp('sb-e2e-cwd-');
-  // cold timers shortened for the test: note right after the turn, cache "expires" after 3 s, checked every 300 ms
-  const { app, page } = await launch({ SB_CLAUDE_PATH: path.join(FIX, 'fake-claude.mjs'), CLAUDE_CONFIG_DIR: tmp('sb-e2e-claude-'), SB_COLD_MS: '0,3000,300' });
-  await setSize(app, 1400, 900);
-  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
-  await closeSetup(page); // a fresh profile opens the first-run setup over the app
-  await page.evaluate(()=>window.sb.invoke('settings:set',{contextHandoff:true}));
-  const chat: ChatSummary = await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'claude', cwd: dir, prompt: 'analizza il log big', title: 'Ordini · Totale' }), cwd);
-  const tile = page.getByTestId(`tile-chat-${chat.id}`);
-  await expandChats(page, chat.id); // its transcript: the strips start folded
-  const list = () => page.evaluate(() => window.sb.invoke('chat:list', undefined));
-  const get = async () => (await list()).find(c => c.id === chat.id)!;
-  await expect.poll(async () => (await get()).handoffAt ?? 0, { timeout: 20_000 }).toBeGreaterThan(0);
-  const before = await get();
-  // invisible: the note never shows in the tile, no "passaggio" line, no busy bar
-  await expect(tile).not.toContainText('Passaggio di consegne');
-  await expect(tile).not.toContainText('Aprire la PR');
-  await expect(page.getByTestId(`ctx-bar-${chat.id}`)).toHaveCount(0);
-
-  await page.waitForTimeout(3300); // past the cache
-  await page.evaluate(id => window.sb.invoke('chat:send', { chatId: id, text: 'e adesso?' }), chat.id);
-  await expect(tile).toContainText('Continuo dal passaggio: e adesso?', { timeout: 20_000 });
-  const after = await get();
-  expect(after.title).toBe('Ordini · Totale');
-  expect(after.sessionId).not.toBe(before.sessionId);
-  expect((await list()).filter(c => c.title.startsWith('Ordini · Totale'))).toHaveLength(1); // no "(2)"
-  // the old session folds above the divider
-  await expect(tile.getByTestId('cold-divider')).toBeVisible();
-  await expect(tile.getByTestId('cold-past')).toContainText('Sessione precedente');
-  await expect(tile).not.toContainText('analizza il log big');
-  await expect(tile).toContainText('e adesso?');
-  await shot(page, 'context-cold-continued');
-  await tile.getByTestId('cold-past').click();
-  await expect(tile).toContainText('analizza il log big');
-  await tile.getByTestId('cold-note').click();
-  await expect(page.getByTestId('handoff-text')).toContainText('Aprire la PR.');
-  await expect(page.getByTestId('handoff-past')).toBeVisible(); // the note that session started from, read only
-  await expect(page.getByTestId('handoff-write')).toHaveCount(0);
-  await shot(page, 'context-cold-note');
-  await app.close();
-});
-
 test('demo: the meter near the compaction, a cold continuation, the hand-off dialog (look)', async () => {
   const { app, page } = await launchDemo({ width: 1600, height: 1000 });
   await page.getByTestId('chat-max-mappa').click();

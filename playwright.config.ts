@@ -9,7 +9,6 @@ import { defineConfig } from '@playwright/test';
 
 /** Specs that need the machine to themselves, and why. */
 export const EXCLUSIVE: Record<string, string> = {
-  'map-perf.spec.ts': 'frame times and fps budgets',
   'map-live.spec.ts': 'frame times and fps budgets',
   'chats.spec.ts': 'quit timed against a budget, process trees counted',
   'stability.spec.ts': 'hang and reload delays timed on the clock',
