@@ -1248,4 +1248,3 @@ html.overlay body:focus-within .layer-hint { display: none; }
 .result-synth-btn:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }
 .result-synth-btn:disabled { cursor: default; background: var(--surface-3); color: var(--text-3); box-shadow: none; }
 .result-synthesis small { color: var(--text-3); font-size: 11px; }
-.result-delivery-pending { padding: 6px 12px; font-size: 12px; }
