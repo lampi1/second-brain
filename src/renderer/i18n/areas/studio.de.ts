@@ -52,7 +52,6 @@ export const studioDe: typeof studioIt = {
   'studio.saveError': ({ detail }: { detail: string }) => `Nicht gespeichert: ${detail} Der Entwurf bleibt hier.`,
   'studio.stale': 'Die Rolle hat sich geändert, während du sie bearbeitet hast.',
   'studio.reload': 'Mit der aktuellen Version neu beginnen',
-  'studio.defaultEngine': 'Standard der Engine',
   'studio.disabled': 'deaktiviert',
   'studio.trust': 'freizugeben',
   'studio.unavailable': 'nicht verfügbar',

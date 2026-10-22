@@ -112,7 +112,6 @@ export const en: Dict = {
   'common.cancel': 'Cancel',
   'common.save': 'Save',
   'settings.language': 'Language',
-  'settings.languageDesc': 'The interface language. Same as the system = Italian or German when Windows is set to one of them, English otherwise.',
   'settings.language.system': 'Same as the system',
   'settings.language.it': 'Italiano',
   'settings.language.en': 'English',

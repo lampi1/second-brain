@@ -38,7 +38,6 @@ export const dialogsIt = {
   'dialogs.handoffDialog.writeNow': 'Scrivi ora',
   'dialogs.handoffDialog.notYetDone': 'Quando la chat ha finito il turno',
   'dialogs.handoffDialog.closeButton': 'Chiudi',
-  'dialogs.handoffDialog.resumeButton': 'Riprendi in chat nuova',
   'dialogs.handoffDialog.contextTokens': (p: { n: string }) => `a ${p.n} token di contesto`,
   'dialogs.handoffDialog.copyPathTip': 'clic per copiare',
 
@@ -64,7 +63,6 @@ export const dialogsIt = {
   // NotificationCenter
   'dialogs.notifications.title': 'Notifiche',
   'dialogs.notifications.markAllRead': 'Segna tutto letto',
-  'dialogs.notifications.markReadAriaLabel': (p: { count: number }) => `${p.count} nuove`,
   'dialogs.notifications.doNotDisturb': 'Non disturbare',
   'dialogs.notifications.disturb': 'Disturba',
   'dialogs.notifications.doNotDisturbTip': (p: { until?: string }) => p.until ? `Fino alle ${p.until}` : 'Nessun avviso a comparsa (restano qui)',
@@ -117,9 +115,7 @@ export const dialogsIt = {
 
   // OrchestratorTile
   'dialogs.orchestrator.name': 'Orchestrator',
-  'dialogs.orchestrator.appName': 'Orchestrator',
   'dialogs.orchestrator.empty': 'Nessun Orchestrator ancora',
-  'dialogs.orchestrator.emptyDescription': 'L’Orchestrator è la chat che coordina le altre: gli chiedi «che si fa adesso?» e ti propone una cosa alla volta.',
   'dialogs.orchestrator.createButton': 'Crea l’Orchestrator',
   'dialogs.orchestrator.statusLabel': 'Stato: chat e PR in un colpo d’occhio',
   'dialogs.orchestrator.statusShortcut': 'Ctrl+Shift+S',
@@ -160,8 +156,6 @@ export const dialogsIt = {
   'dialogs.sidebar.brain': 'Brain',
   'dialogs.sidebar.trends': 'Andamento',
   'dialogs.sidebar.app': 'App',
-  'dialogs.sidebar.map': 'Mappa 3D',
-  'dialogs.sidebar.mapShortcut': 'Ctrl+Shift+M',
   'dialogs.sidebar.waiting': (p: { count: number }) => `${p.count} ti aspettano`,
   'dialogs.sidebar.new': (p: { count: number }) => `${p.count} nuove`,
 
@@ -191,9 +185,6 @@ export const dialogsIt = {
   'dialogs.linkPeek.openOutside': 'Apri fuori',
   'dialogs.linkPeek.copyLink': 'Copia',
   'dialogs.linkPeek.copyLinkSuccess': 'Link copiato',
-  'dialogs.linkPeek.readingFile': 'Leggo il file…',
-  'dialogs.linkPeek.noPreview': (p: { what: string }) => `Nessuna anteprima (${p.what}).`,
-  'dialogs.linkPeek.openFile': 'Apri',
   'dialogs.linkPeek.copyPath': 'Copia percorso',
   'dialogs.linkPeek.copyPathSuccess': 'Percorso copiato',
 };

@@ -112,7 +112,6 @@ export const de: Dict = {
   'common.cancel': 'Abbrechen',
   'common.save': 'Speichern',
   'settings.language': 'Sprache',
-  'settings.languageDesc': 'Die Sprache der Oberfläche. Wie das System = Italienisch oder Deutsch, wenn Windows so eingestellt ist, sonst Englisch.',
   'settings.language.system': 'Wie das System',
   'settings.language.it': 'Italiano',
   'settings.language.en': 'English',

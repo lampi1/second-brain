@@ -22,7 +22,7 @@ export const memoryIt = {
   'mm.job.logs': 'Gli avvisi e gli errori dell’app dall’ultima manutenzione, raggruppati: l’Orchestrator apre una issue per ogni bug nuovo.',
   'mm.maint.groups': (p: N) => (p.n === 1 ? '1 gruppo nuovo' : `${p.n} gruppi nuovi`), 'mm.maint.noGroups': 'nessun gruppo nuovo',
   'mm.maint.logsTitle': 'Gruppi dei log', 'mm.maint.logsLabel': 'Gruppi di avvisi ed errori dei log',
-  'mm.maint.known': 'Noto, ignora', 'mm.maint.unknown': 'Non ignorare più', 'mm.maint.knownTag': 'noto',
+  'mm.maint.known': 'Noto, ignora', 'mm.maint.unknown': 'Non ignorare più', 
   'mm.maint.knownTip': 'Non lo riporta più all’Orchestrator nelle prossime manutenzioni',
   'mm.maint.sent': 'Risultato mandato all’Orchestrator: apre le issue per i bug nuovi.',
   'mm.maint.notSent': (p: { why: string }) => `Risultato non mandato all’Orchestrator: ${p.why}.`,
@@ -36,27 +36,20 @@ export const memoryIt = {
 
   // shared bits
   'mm.openFile': 'Apri il file', 'mm.openNamed': (p: { name: string }) => `Apri il file di ${p.name}`,
-  'mm.lines': 'Righe', 'mm.runs': 'run', 'mm.rule': 'Regola nata:', 'mm.lastTime': 'L’ultima volta:',
+  'mm.lines': 'Righe', 'mm.rule': 'Regola nata:', 
   'mm.time': 'volta', 'mm.times': 'volte', 'mm.timesTitle': (p: N) => `Successo ${volte(p.n)}`,
   'mm.again': (p: N) => `ricorrente ×${p.n}`,
-  'mm.fromTo': (p: { from: string; to: string }) => `dal ${p.from} al ${p.to}`,
   'mm.daysAgo': (p: N) => (p.n === 1 ? 'fermo da 1 giorno' : `fermo da ${p.n} giorni`),
   'mm.kind.agent': 'Memorie degli agenti', 'mm.kind.errors': 'Errori', 'mm.kind.journal': 'Diario', 'mm.kind.knowledge': 'Conoscenza',
   'mm.weekday.0': 'lunedì', 'mm.weekday.1': 'martedì', 'mm.weekday.2': 'mercoledì', 'mm.weekday.3': 'giovedì', 'mm.weekday.4': 'venerdì', 'mm.weekday.5': 'sabato', 'mm.weekday.6': 'domenica',
 
   // key numbers
-  'mm.k.lines': 'Righe in memoria', 'mm.k.linesS': (p: N) => `in ${p.n} file`,
-  'mm.k.linesHelp': 'Le righe di elenco di tutti i file di memoria: note di conoscenza, fili aperti, ogni riga del diario, ogni errore registrato e le memorie degli agenti. Un file senza elenco conta 1.',
-  'mm.k.agents': 'Agenti con memoria', 'mm.k.agentsS': (p: N) => (p.n ? (p.n === 1 ? '1 non ha ancora scritto nulla' : `${p.n} non hanno ancora scritto nulla`) : 'tutti hanno la loro'),
-  'mm.k.agentsHelp': 'Quanti ruoli hanno il file agents/<ruolo>/memory.md, su tutti i ruoli. Un agente lo scrive la prima volta che impara qualcosa da ricordare.',
-  'mm.k.errors': 'Errori registrati', 'mm.k.errorsS': (p: N) => `${p.n} negli ultimi 30 giorni`,
-  'mm.k.errorsHelp': 'Le righe datate di ai-errors.md: ogni volta che hai corretto un agente o una revisione ha trovato un errore. Arancione quando gli ultimi 30 giorni ne hanno più dei 30 prima.',
-  'mm.k.unused': 'Skill mai usate', 'mm.k.unusedS': 'nessun run le ha caricate',
-  'mm.k.unusedHelp': 'Skill del brain che nessun run ha avuto (né al lancio né caricata dal motore) e che esistono da almeno 14 giorni. Una skill più giovane è «nuova», non «mai usata».',
-  'mm.k.last30': 'Ultimi 30 giorni', 'mm.k.prev30': (p: N) => `30 giorni prima: ${p.n}`,
-  'mm.k.last30Help': 'Errori con la data negli ultimi 30 giorni, contro i 30 giorni prima. Verde se calano, arancione se crescono.',
-  'mm.k.recurring': 'Errori ripetuti', 'mm.k.recurringS': (p: N) => (p.n === 1 ? 'in 1 gruppo' : `in ${p.n} gruppi`),
-  'mm.k.recurringHelp': 'Errori che appartengono a un gruppo di almeno 2: stesso tipo e stessa area, o le stesse parole. Sono quelli da cui conviene far nascere una regola.',
+  
+  
+  
+  
+  
+  
 
   // Lo sapevi?
   'mm.facts': 'Lo sapevi?', 'mm.factsLead': 'Le cose più curiose che dicono i numeri della tua memoria.',
@@ -94,13 +87,7 @@ export const memoryIt = {
   'mm.perAgentHelp': 'Le righe di elenco della memoria di ogni agente (agents/<ruolo>/memory.md). Gli agenti senza file non compaiono.',
   'mm.perAgentFind': (p: { name: string; n: number; silent: number }) => `${p.name} ricorda di più (${p.n} righe)${p.silent ? `; ${p.silent} agenti non hanno ancora una memoria` : ''}.`,
   'mm.perAgentEmpty': 'Nessun agente ha ancora scritto la sua memoria.',
-  'mm.trendLabel': (p: { label: string }) => `Andamento settimanale di «${p.label}»`,
-  'mm.errors': 'Errori ricorrenti',
-  'mm.errorsLead': (p: { n: number; groups: number }) => `${p.n} errori registrati${p.groups ? `, ${p.groups} si ripetono` : ''}. Le barrette mostrano le ultime 12 settimane.`,
-  'mm.errorsEmpty': 'Nessun errore registrato: quando correggi un agente, la correzione arriva qui.',
-  'mm.errorsHelp': 'Da ai-errors.md. Due errori sono lo stesso errore quando hanno lo stesso tipo e la stessa area, o quando le parole importanti si somigliano (almeno un terzo in comune, o 3 parole). Il nome del gruppo è la frase che si ripete di più.',
-  'mm.byAgent': 'Errori per agente', 'mm.errorsN': 'Errori',
-  'mm.byAgentHelp': 'Chi ha sbagliato: la chat o l’agente scritto sulla riga dell’errore.',
+  
   'mm.skills': 'Skill utili e inutili',
   'mm.skillsLead': (p: { useful: number; weak: number; unused: number; total: number }) => `Su ${p.total} skill: ${p.useful} utili, ${p.weak} da rivedere, ${p.unused} mai usate.`,
   'mm.skillsEmpty': 'Nessuna skill nel brain ancora.',

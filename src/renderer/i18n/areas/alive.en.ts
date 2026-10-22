@@ -55,12 +55,7 @@ export const aliveEn: typeof aliveIt = {
   'alive.pulse.budgetHint': 'Admission cap shared by cards and line, from 0.01 to 2 $. Costs the engine does not report stay unknown.',
   'alive.pulse.today': (p: { usd: string; limit: string; runs: number }) => `Today ${p.usd} of ${p.limit} · ${p.runs} ${p.runs === 1 ? 'call' : 'calls'}`,
   'alive.pulse.unknownCost': 'cost not reported',
-  'alive.approval.kind': 'Pulse proposal',
-  'alive.approval.apply': 'Apply', 'alive.approval.discard': 'Discard',
-  'alive.approval.confirmApply': 'The rule is added to the Pulse’s instructions. Apply it?',
-  'alive.approval.confirmDiscard': 'The proposal leaves the list; the Pulse does not change. Discard it?',
-  'alive.approval.evidence': (p: { n: number }) => `${p.n} cards as evidence`,
-  'alive.approval.done': (p: { name: string }) => `${p.name}’s proposal decided.`,
+  
   'alive.next.pr': (p: { title: string }) => `Nothing waits for you: the build of “${p.title}” is red`,
   'alive.next.approvals': (p: { n: number }) => `Nothing waits for you: ${p.n === 1 ? '1 proposal' : `${p.n} proposals`} to approve`,
   'alive.next.stalled': (p: { title: string; min: number }) => `Nothing waits for you: “${p.title}” stalled for ${p.min} min`,

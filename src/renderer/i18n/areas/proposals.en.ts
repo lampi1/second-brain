@@ -2,8 +2,6 @@
 import type { proposalsIt } from './proposals.it';
 type N = { n: number };
 export const proposalsEn: typeof proposalsIt = {
-  'proposals.title': 'Proposals',
-  'proposals.lead': 'One card at a time: drag right to approve, left to reject. Changes the app already applied by itself are kept or undone.',
   'proposals.deckLabel': 'Deck of proposals',
   'proposals.filters': 'Filter the proposals',
   'proposals.filter.all': 'All',
@@ -77,7 +75,6 @@ export const proposalsEn: typeof proposalsIt = {
   'proposals.readFirst': 'Open the draft and its evidence before approving.',
   'proposals.readFirstOpen': 'Read draft and evidence',
   'proposals.note': 'How you checked it (optional)',
-  'proposals.noteReject': 'Why you reject it (optional)',
   'proposals.done.title': 'All done!',
   'proposals.done.lead': 'Nothing else to decide for now.',
   'proposals.done.approved': () => 'approved or kept',

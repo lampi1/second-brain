@@ -4,8 +4,6 @@ export const queriesIt = {
   'queries.eyebrow': 'Query salvate',
   'queries.title': 'Query',
   'queries.lead': 'Le interrogazioni che qualcuno rilancia: SQL, KQL, GraphQL, PromQL, SPL… Una per file in queries/, con cosa risponde e dove gira. Le chat salvano quelle che hanno funzionato; la manutenzione sposta qui quelle rimaste nelle note.',
-  'queries.count': (p: { n: number }) => (p.n === 1 ? '1 query' : `${p.n} query`),
-  'queries.languages': (p: { n: number }) => (p.n === 1 ? '1 linguaggio' : `${p.n} linguaggi`),
   'queries.searchLabel': 'Cerca tra le query',
   'queries.searchPlaceholder': 'Cerca per titolo, fonte dati, tag…',
   'queries.filterLabel': 'Filtra per linguaggio',

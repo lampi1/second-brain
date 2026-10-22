@@ -829,9 +829,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/brain/routing.ts explore
       b('«Esplorazione» (0–50%) prova ogni tanto il modello con meno esempi, mai per l’Orchestrator e mai per le chat che avvii tu.',
         '"Exploration" (0–50%) sometimes tries the model with the fewest samples, never for the Orchestrator and never for chats you start.'),
-      // src/renderer/components/RoutingGroup.tsx
-      b('In Impostazioni la modifichi riga per riga; «L’AI può cambiarla» spento blocca la riga agli agenti; ogni salvataggio è una versione.',
-        'In Settings you edit it row by row; "AI may change it" off locks the row from agents; every save is a version.'),
+      // src/main/brain/routing.ts (the table's file in the brain)
+      b('La tabella è un file del brain: ogni salvataggio è una versione nuova e una riga «locked» non la cambiano gli agenti.',
+        'The table is a file in the brain: every save is a new version, and agents never change a «locked» row.'),
       // docs/adr/0047-routing-voted-and-priced-per-work.md
       b('Il voto dei lavori e il ciclo che aggiorna la tabella vivono negli script del brain (ADR 0047).',
         'Work votes and the loop that updates the table live in the brain’s scripts (ADR 0047).'),
@@ -846,7 +846,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
         '<brain>/ops/state/improve/routing/v<N>.json + current.json; prices and models in <brain>/harness/models.json, or in the app’s copy until a new brain has its own.'),
       tech(LIMITS, 'EXPLORE_MIN = 20 esempi; mai Fable; le aree App usano il motore delle chat dell’app.', 'EXPLORE_MIN = 20 samples; never Fable; App areas use the app chats’ engine.'),
     ],
-    sources: ['src/main/brain/routing.ts', 'src/main/brain/brain-estimates.ts', 'src/renderer/components/RoutingGroup.tsx', 'src/renderer/lib/routing.ts', 'docs/adr/0032-model-routing.md', 'docs/adr/0047-routing-voted-and-priced-per-work.md'],
+    sources: ['src/main/brain/routing.ts', 'src/main/brain/brain-estimates.ts', 'src/renderer/lib/routing.ts', 'docs/adr/0032-model-routing.md', 'docs/adr/0047-routing-voted-and-priced-per-work.md'],
   },
   {
     id: 'costs',

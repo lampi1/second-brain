@@ -62,7 +62,7 @@ export const connectorsEn: typeof connectorsIt = {
  'hub.cancel':'Cancel','hub.remove':'Remove','hub.error':'Operation failed: retry.','hub.loadError':'Cannot read the MCP servers. Reopen the page to retry.',
  'hub.importLead':'Read from the Claude Code, Claude desktop, Cursor and Codex files without changing them. Tokens are not copied: you enter them here, encrypted.','hub.importScanning':'Looking for configured servers…','hub.importNone':'No server found in the Claude, Cursor and Codex configurations.',
  'hub.importExists':'Already in the app.','hub.importDropped':({list}:{list:string})=>`Not copied: ${list}. Enter it in the Token field.`,'hub.importApply':({n}:{n:number})=>`Import ${n}`,'hub.imported':({n}:{n:number})=>`${n} servers imported: press “Test” on each.`,
- 'hub.emptyTitle':'No MCP server yet','hub.emptyBody':'The tools you give your agents will appear here: each one with its state, its tools and which roles use it. Add one from the catalog above.','hub.emptyExample':'Example: Azure DevOps (npx -y @azure-devops/mcp your-org) to let agents read tickets.',
+ 'hub.emptyTitle':'No MCP server yet','hub.emptyBody':'The tools you give your agents will appear here: each one with its state, its tools and which roles use it. Add one from the catalog above.',
  'hub.keyringWhy':({why}:{why:string})=>`Tokens cannot be saved: ${why}.`,
  // the agent card's MCP section (AgentMcpSection)
  'agentMcp.title':'MCP servers','agentMcp.tip':'Which MCP servers and tools this role may use. All of them by default. “Read only” keeps the tools the server marks read-only. It applies at once, open chats included, and a delegated chat never has more than the role that started it.',

@@ -113,7 +113,6 @@ export const it = {
   'common.cancel': 'Annulla',
   'common.save': 'Salva',
   'settings.language': 'Lingua',
-  'settings.languageDesc': 'Lingua dell’interfaccia. Come il sistema = italiano o tedesco se Windows è in una delle due lingue, altrimenti inglese.',
   'settings.language.system': 'Come il sistema',
   'settings.language.it': 'Italiano',
   'settings.language.en': 'English',

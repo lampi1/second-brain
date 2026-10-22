@@ -21,7 +21,7 @@ export const memoryDe: typeof memoryIt = {
   'mm.job.logs': 'Die Warnungen und Fehler der App seit der letzten Wartung, gruppiert: der Orchestrator legt für jeden neuen Bug ein Issue an.',
   'mm.maint.groups': (p: N) => (p.n === 1 ? '1 neue Gruppe' : `${p.n} neue Gruppen`), 'mm.maint.noGroups': 'keine neue Gruppe',
   'mm.maint.logsTitle': 'Log-Gruppen', 'mm.maint.logsLabel': 'Gruppen von Log-Warnungen und -Fehlern',
-  'mm.maint.known': 'Bekannt, ignorieren', 'mm.maint.unknown': 'Nicht mehr ignorieren', 'mm.maint.knownTag': 'bekannt',
+  'mm.maint.known': 'Bekannt, ignorieren', 'mm.maint.unknown': 'Nicht mehr ignorieren', 
   'mm.maint.knownTip': 'Wird in den nächsten Wartungen nicht mehr an den Orchestrator gemeldet',
   'mm.maint.sent': 'Ergebnis an den Orchestrator gesendet: er legt die Issues für die neuen Bugs an.',
   'mm.maint.notSent': (p: { why: string }) => `Ergebnis nicht an den Orchestrator gesendet: ${p.why}.`,
@@ -34,26 +34,19 @@ export const memoryDe: typeof memoryIt = {
   'mm.job.merge-memory': 'Eine Erinnerung, die mehrere Agenten wortgleich haben, kommt einmal ins gemeinsame Gedächtnis.',
 
   'mm.openFile': 'Datei öffnen', 'mm.openNamed': (p: { name: string }) => `Datei von ${p.name} öffnen`,
-  'mm.lines': 'Zeilen', 'mm.runs': 'Runs', 'mm.rule': 'Daraus entstandene Regel:', 'mm.lastTime': 'Zuletzt:',
+  'mm.lines': 'Zeilen', 'mm.rule': 'Daraus entstandene Regel:', 
   'mm.time': 'Mal', 'mm.times': 'Mal', 'mm.timesTitle': (p: N) => `${times(p.n)} passiert`,
   'mm.again': (p: N) => `wiederkehrend ×${p.n}`,
-  'mm.fromTo': (p: { from: string; to: string }) => `von ${p.from} bis ${p.to}`,
   'mm.daysAgo': (p: N) => (p.n === 1 ? 'seit 1 Tag unverändert' : `seit ${p.n} Tagen unverändert`),
   'mm.kind.agent': 'Gedächtnis der Agenten', 'mm.kind.errors': 'Fehler', 'mm.kind.journal': 'Tagebuch', 'mm.kind.knowledge': 'Wissen',
   'mm.weekday.0': 'Montag', 'mm.weekday.1': 'Dienstag', 'mm.weekday.2': 'Mittwoch', 'mm.weekday.3': 'Donnerstag', 'mm.weekday.4': 'Freitag', 'mm.weekday.5': 'Samstag', 'mm.weekday.6': 'Sonntag',
 
-  'mm.k.lines': 'Zeilen im Gedächtnis', 'mm.k.linesS': (p: N) => (p.n === 1 ? 'in 1 Datei' : `in ${p.n} Dateien`),
-  'mm.k.linesHelp': 'Die Listenzeilen aller Gedächtnisdateien: Wissensnotizen, offene Fäden, jede Tagebuchzeile, jeder erfasste Fehler und das Gedächtnis der Agenten. Eine Datei ohne Liste zählt 1.',
-  'mm.k.agents': 'Agenten mit Gedächtnis', 'mm.k.agentsS': (p: N) => (p.n ? (p.n === 1 ? '1 hat noch nichts geschrieben' : `${p.n} haben noch nichts geschrieben`) : 'jeder hat sein eigenes'),
-  'mm.k.agentsHelp': 'Wie viele Rollen agents/<role>/memory.md haben, von allen Rollen. Ein Agent schreibt es, wenn er zum ersten Mal etwas Merkenswertes lernt.',
-  'mm.k.errors': 'Erfasste Fehler', 'mm.k.errorsS': (p: N) => `${p.n} in den letzten 30 Tagen`,
-  'mm.k.errorsHelp': 'Die datierten Zeilen von ai-errors.md: jedes Mal, wenn du einen Agenten korrigiert hast oder ein Review einen Fehler gefunden hat. Orange, wenn die letzten 30 Tage mehr haben als die 30 davor.',
-  'mm.k.unused': 'Nie genutzte Skills', 'mm.k.unusedS': 'kein Run hat sie geladen',
-  'mm.k.unusedHelp': 'Brain-Skills, die kein Run hatte (weder beim Start noch von der Engine geladen) und die es seit mindestens 14 Tagen gibt. Ein jüngerer Skill ist „neu“, nicht „nie genutzt“.',
-  'mm.k.last30': 'Letzte 30 Tage', 'mm.k.prev30': (p: N) => `30 Tage davor: ${p.n}`,
-  'mm.k.last30Help': 'Fehler mit Datum in den letzten 30 Tagen, verglichen mit den 30 Tagen davor. Grün, wenn sie sinken, orange, wenn sie steigen.',
-  'mm.k.recurring': 'Wiederholte Fehler', 'mm.k.recurringS': (p: N) => (p.n === 1 ? 'in 1 Gruppe' : `in ${p.n} Gruppen`),
-  'mm.k.recurringHelp': 'Fehler in einer Gruppe von mindestens 2: gleicher Typ und Bereich oder dieselben Wörter. Für die lohnt sich eine Regel.',
+  
+  
+  
+  
+  
+  
 
   'mm.facts': 'Schon gewusst?', 'mm.factsLead': 'Die kuriosesten Dinge, die die Zahlen deines Gedächtnisses verraten.',
   'mm.factsHelp': 'Jetzt aus den Brain-Dateien und den erfassten Runs berechnet, ohne Modelle oder Tokens. Sie erscheinen nur, wenn die Zahlen etwas aussagen (zum Beispiel ein mindestens zweimal wiederholter Fehler).',
@@ -89,13 +82,7 @@ export const memoryDe: typeof memoryIt = {
   'mm.perAgentHelp': 'Die Listenzeilen im Gedächtnis jedes Agenten (agents/<role>/memory.md). Agenten ohne die Datei werden nicht angezeigt.',
   'mm.perAgentFind': (p: { name: string; n: number; silent: number }) => `${p.name} merkt sich am meisten (${p.n} Zeilen)${p.silent ? `; ${p.silent} Agenten haben noch kein Gedächtnis` : ''}.`,
   'mm.perAgentEmpty': 'Noch kein Agent hat sein Gedächtnis geschrieben.',
-  'mm.trendLabel': (p: { label: string }) => `Wochenverlauf von „${p.label}“`,
-  'mm.errors': 'Wiederkehrende Fehler',
-  'mm.errorsLead': (p: { n: number; groups: number }) => `${p.n} erfasste Fehler${p.groups ? `, ${p.groups} wiederholen sich` : ''}. Die Balken zeigen die letzten 12 Wochen.`,
-  'mm.errorsEmpty': 'Kein Fehler erfasst: wenn du einen Agenten korrigierst, landet die Korrektur hier.',
-  'mm.errorsHelp': 'Aus ai-errors.md. Zwei Fehler sind derselbe Fehler, wenn sie gleichen Typ und Bereich haben oder ihre wichtigen Wörter sich ähneln (mindestens ein Drittel gemeinsam oder 3 Wörter). Der Name der Gruppe ist der Satz, der sich am öftesten wiederholt.',
-  'mm.byAgent': 'Fehler pro Agent', 'mm.errorsN': 'Fehler',
-  'mm.byAgentHelp': 'Wer sich geirrt hat: der Chat oder Agent, der in der Fehlerzeile steht.',
+  
   'mm.skills': 'Nützliche und nutzlose Skills',
   'mm.skillsLead': (p: { useful: number; weak: number; unused: number; total: number }) => `Von ${p.total} Skills: ${p.useful} nützlich, ${p.weak} zu überprüfen, ${p.unused} nie genutzt.`,
   'mm.skillsEmpty': 'Noch kein Skill im Brain.',

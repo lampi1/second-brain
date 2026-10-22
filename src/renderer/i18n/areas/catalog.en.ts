@@ -51,7 +51,7 @@ export const catalogEn: typeof catalogIt = {
   'catalog.costsWhy.noTotal': 'Cost per success: the total of the oldest runs is missing; it shows with the next ones.',
   'catalog.costsWhy.partial': ({ n, total }) => `Cost per success: the cost is known for only ${n} of ${total} runs.`,
   'catalog.costsHelp': 'Median cost: half of the ended runs cost less, among those with a known cost. Cost per verified success: the cost of every ended run divided by the verified successful ones (those the level counts). At API list prices: with a subscription it is not what you pay.',
-  'catalog.metricsError': 'Statistics unavailable. Please retry.', 'catalog.back': 'Back to catalogue',
+  'catalog.metricsError': 'Statistics unavailable. Please retry.', 
   // the built-in roles' purpose (name, purpose and character always come from the role: lib/role-text.ts)
   'catalog.purpose.orchestrator': 'Coordinates the work: hands every job to a role and keeps you posted on where things stand.',
   'catalog.purpose.strategist': 'Breaks a goal into a plan and hands the parts to the right roles.',

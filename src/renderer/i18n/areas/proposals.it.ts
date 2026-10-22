@@ -2,8 +2,6 @@
 // ADR 0123): Italian labels, the source; English in proposals.en.ts, German in proposals.de.ts. Used through t().
 type N = { n: number };
 export const proposalsIt = {
-  'proposals.title': 'Proposte',
-  'proposals.lead': 'Una carta alla volta: trascina a destra per approvare, a sinistra per rifiutare. Le modifiche che l’app ha già applicato da sola si tengono o si annullano.',
   'proposals.deckLabel': 'Mazzo delle proposte',
   'proposals.filters': 'Filtra le proposte',
   'proposals.filter.all': 'Tutte',
@@ -77,7 +75,6 @@ export const proposalsIt = {
   'proposals.readFirst': 'Prima di approvare apri la bozza e le prove.',
   'proposals.readFirstOpen': 'Leggi bozza e prove',
   'proposals.note': 'Come l’hai verificato (facoltativo)',
-  'proposals.noteReject': 'Perché la rifiuti (facoltativo)',
   'proposals.done.title': 'Hai finito!',
   'proposals.done.lead': 'Per ora non c’è altro da decidere.',
   'proposals.done.approved': (p: N): string => (p.n === 1 ? 'approvata o tenuta' : 'approvate o tenute'),

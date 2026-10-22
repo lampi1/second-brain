@@ -51,7 +51,7 @@ export const catalogIt = {
   'catalog.costsWhy.noTotal': 'Costo per successo: manca il totale dei lavori più vecchi, compare con i prossimi.',
   'catalog.costsWhy.partial': ({ n, total }: { n: number; total: number }) => `Costo per successo: il costo è noto solo per ${n} lavori su ${total}.`,
   'catalog.costsHelp': 'Costo mediano: la metà dei lavori conclusi è costata meno, su quelli con un costo noto. Costo per successo verificato: il costo di tutti i lavori conclusi diviso per quelli riusciti e verificati (quelli che contano per il livello). Equivalente al listino API: con un abbonamento non è ciò che paghi.',
-  'catalog.metricsError': 'Statistiche non disponibili. Riprova.', 'catalog.back': 'Torna al catalogo',
+  'catalog.metricsError': 'Statistiche non disponibili. Riprova.', 
   // the built-in roles' purpose (name, purpose and character always come from the role: lib/role-text.ts)
   'catalog.purpose.orchestrator': 'Coordina il lavoro: delega ogni compito a un ruolo e ti tiene al corrente dello stato.',
   'catalog.purpose.strategist': 'Scompone un obiettivo in un piano e delega le parti ai ruoli giusti.',

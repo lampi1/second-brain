@@ -226,5 +226,4 @@ export const appTextEn: typeof appTextIt = {
   'appText.feedAction.undoChange': 'Undo change',
   'appText.delegation.denied': 'Denied by the user.',
   'appText.codexAutonomy.noConfirm': 'Confirmation not available',
-  'appText.routing.saved': (p: { version: number | string }) => `Routing saved: version ${p.version}`,
 };

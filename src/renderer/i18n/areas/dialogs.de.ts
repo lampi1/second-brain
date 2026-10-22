@@ -40,7 +40,6 @@ export const dialogsDe: typeof dialogsIt = {
   'dialogs.handoffDialog.writeNow': 'Jetzt schreiben',
   'dialogs.handoffDialog.notYetDone': 'Wenn der Chat seinen Turn beendet',
   'dialogs.handoffDialog.closeButton': 'Schließen',
-  'dialogs.handoffDialog.resumeButton': 'In neuem Chat fortsetzen',
   'dialogs.handoffDialog.contextTokens': (p: { n: string }) => `${p.n} Tokens Kontext`,
   'dialogs.handoffDialog.copyPathTip': 'zum Kopieren klicken',
 
@@ -66,7 +65,6 @@ export const dialogsDe: typeof dialogsIt = {
   // NotificationCenter
   'dialogs.notifications.title': 'Benachrichtigungen',
   'dialogs.notifications.markAllRead': 'Alle als gelesen markieren',
-  'dialogs.notifications.markReadAriaLabel': (p: { count: number }) => `${p.count} neu`,
   'dialogs.notifications.doNotDisturb': 'Nicht stören',
   'dialogs.notifications.disturb': 'Stören',
   'dialogs.notifications.doNotDisturbTip': (p: { until?: string }) => p.until ? `Bis ${p.until}` : 'Keine Pop-ups (sie bleiben hier)',
@@ -119,9 +117,7 @@ export const dialogsDe: typeof dialogsIt = {
 
   // OrchestratorTile
   'dialogs.orchestrator.name': 'Orchestrator',
-  'dialogs.orchestrator.appName': 'Orchestrator',
   'dialogs.orchestrator.empty': 'Noch kein Orchestrator',
-  'dialogs.orchestrator.emptyDescription': 'Der Orchestrator ist der Chat, der die anderen koordiniert: Du fragst ihn „Was jetzt?“ und er schlägt dir eins nach dem anderen vor.',
   'dialogs.orchestrator.createButton': 'Orchestrator erstellen',
   'dialogs.orchestrator.statusLabel': 'Status: Chats und PRs auf einen Blick',
   'dialogs.orchestrator.statusShortcut': 'Strg+Umschalt+S',
@@ -162,8 +158,6 @@ export const dialogsDe: typeof dialogsIt = {
   'dialogs.sidebar.brain': 'Brain',
   'dialogs.sidebar.trends': 'Verlauf',
   'dialogs.sidebar.app': 'App',
-  'dialogs.sidebar.map': '3D-Karte',
-  'dialogs.sidebar.mapShortcut': 'Strg+Umschalt+M',
   'dialogs.sidebar.waiting': (p: { count: number }) => p.count === 1 ? '1 wartet auf dich' : `${p.count} warten auf dich`,
   'dialogs.sidebar.new': (p: { count: number }) => `${p.count} neu`,
 
@@ -193,9 +187,6 @@ export const dialogsDe: typeof dialogsIt = {
   'dialogs.linkPeek.openOutside': 'Extern öffnen',
   'dialogs.linkPeek.copyLink': 'Kopieren',
   'dialogs.linkPeek.copyLinkSuccess': 'Link kopiert',
-  'dialogs.linkPeek.readingFile': 'Lese Datei…',
-  'dialogs.linkPeek.noPreview': (p: { what: string }) => `Keine Vorschau (${p.what}).`,
-  'dialogs.linkPeek.openFile': 'Öffnen',
   'dialogs.linkPeek.copyPath': 'Pfad kopieren',
   'dialogs.linkPeek.copyPathSuccess': 'Pfad kopiert',
 };

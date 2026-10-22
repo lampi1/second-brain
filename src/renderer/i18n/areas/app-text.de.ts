@@ -226,5 +226,4 @@ export const appTextDe: typeof appTextIt = {
   'appText.feedAction.undoChange': 'Änderung rückgängig',
   'appText.delegation.denied': 'Vom Benutzer abgelehnt.',
   'appText.codexAutonomy.noConfirm': 'Bestätigung nicht verfügbar',
-  'appText.routing.saved': (p: { version: number | string }) => `Routing gespeichert: Version ${p.version}`,
 };

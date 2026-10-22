@@ -10,7 +10,6 @@ export const guideDe: typeof guideIt = {
   'guide.count': (p: { count: number }) => p.count === 1 ? '1 Begriff' : `${p.count} Begriffe`,
   'guide.howItWorks': 'Wie es funktioniert',
   'guide.link': 'Wie es funktioniert',
-  'guide.hide': 'Ausblenden',
   'guide.analogy': 'In der Praxis ist es wie…',
   'guide.technical': 'Technische Details',
   'guide.sources': 'Quellen im Code',

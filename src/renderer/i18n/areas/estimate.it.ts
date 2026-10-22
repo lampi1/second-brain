@@ -3,7 +3,6 @@
 export const estimateIt = {
   'estimate.label': 'stima',
   'estimate.similar': (p: { n: number }) => `su ${p.n} lavori simili`,
-  'estimate.actual': 'reale',
   'estimate.held': 'stima rispettata',
   'estimate.missed': 'fuori stima',
   'estimate.left': (p: { d: string }) => `ne restano ~${p.d}`,

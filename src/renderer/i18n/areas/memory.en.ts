@@ -21,7 +21,7 @@ export const memoryEn: typeof memoryIt = {
   'mm.job.logs': 'The app warnings and errors since the last maintenance, grouped: the Orchestrator opens an issue for each new bug.',
   'mm.maint.groups': (p: N) => (p.n === 1 ? '1 new group' : `${p.n} new groups`), 'mm.maint.noGroups': 'no new group',
   'mm.maint.logsTitle': 'Log groups', 'mm.maint.logsLabel': 'Groups of log warnings and errors',
-  'mm.maint.known': 'Known, ignore', 'mm.maint.unknown': 'Stop ignoring', 'mm.maint.knownTag': 'known',
+  'mm.maint.known': 'Known, ignore', 'mm.maint.unknown': 'Stop ignoring', 
   'mm.maint.knownTip': 'No longer reported to the Orchestrator in the next maintenance passes',
   'mm.maint.sent': 'Result sent to the Orchestrator: it opens the issues for the new bugs.',
   'mm.maint.notSent': (p: { why: string }) => `Result not sent to the Orchestrator: ${p.why}.`,
@@ -34,26 +34,19 @@ export const memoryEn: typeof memoryIt = {
   'mm.job.merge-memory': 'A memory several agents hold verbatim goes once into the shared memory.',
 
   'mm.openFile': 'Open the file', 'mm.openNamed': (p: { name: string }) => `Open the file of ${p.name}`,
-  'mm.lines': 'Lines', 'mm.runs': 'runs', 'mm.rule': 'Rule it produced:', 'mm.lastTime': 'Last time:',
+  'mm.lines': 'Lines', 'mm.rule': 'Rule it produced:', 
   'mm.time': 'time', 'mm.times': 'times', 'mm.timesTitle': (p: N) => `Happened ${times(p.n)}`,
   'mm.again': (p: N) => `recurring ×${p.n}`,
-  'mm.fromTo': (p: { from: string; to: string }) => `from ${p.from} to ${p.to}`,
   'mm.daysAgo': (p: N) => (p.n === 1 ? 'untouched for 1 day' : `untouched for ${p.n} days`),
   'mm.kind.agent': 'Agents\' memories', 'mm.kind.errors': 'Errors', 'mm.kind.journal': 'Journal', 'mm.kind.knowledge': 'Knowledge',
   'mm.weekday.0': 'Monday', 'mm.weekday.1': 'Tuesday', 'mm.weekday.2': 'Wednesday', 'mm.weekday.3': 'Thursday', 'mm.weekday.4': 'Friday', 'mm.weekday.5': 'Saturday', 'mm.weekday.6': 'Sunday',
 
-  'mm.k.lines': 'Lines in memory', 'mm.k.linesS': (p: N) => `in ${p.n} files`,
-  'mm.k.linesHelp': 'The list lines of every memory file: knowledge notes, open threads, every journal line, every logged error and the agents\' memories. A file without a list counts 1.',
-  'mm.k.agents': 'Agents with memory', 'mm.k.agentsS': (p: N) => (p.n ? (p.n === 1 ? '1 has not written anything yet' : `${p.n} have not written anything yet`) : 'each has its own'),
-  'mm.k.agentsHelp': 'How many roles have agents/<role>/memory.md, out of all roles. An agent writes it the first time it learns something worth keeping.',
-  'mm.k.errors': 'Logged errors', 'mm.k.errorsS': (p: N) => `${p.n} in the last 30 days`,
-  'mm.k.errorsHelp': 'The dated lines of ai-errors.md: each time you corrected an agent or a review found a mistake. Orange when the last 30 days have more than the 30 before.',
-  'mm.k.unused': 'Skills never used', 'mm.k.unusedS': 'no run loaded them',
-  'mm.k.unusedHelp': 'Brain skills no run had (neither at launch nor loaded by the engine) that exist for at least 14 days. A younger skill is "new", not "never used".',
-  'mm.k.last30': 'Last 30 days', 'mm.k.prev30': (p: N) => `30 days before: ${p.n}`,
-  'mm.k.last30Help': 'Errors dated in the last 30 days, against the 30 days before. Green when they fall, orange when they grow.',
-  'mm.k.recurring': 'Repeated errors', 'mm.k.recurringS': (p: N) => (p.n === 1 ? 'in 1 group' : `in ${p.n} groups`),
-  'mm.k.recurringHelp': 'Errors in a group of at least 2: same type and area, or the same words. These are the ones worth a rule.',
+  
+  
+  
+  
+  
+  
 
   'mm.facts': 'Did you know?', 'mm.factsLead': 'The most curious things your memory\'s numbers say.',
   'mm.factsHelp': 'Computed now from the brain files and the recorded runs, without models or tokens. They show only when the numbers say something (for example an error repeated at least twice).',
@@ -89,13 +82,7 @@ export const memoryEn: typeof memoryIt = {
   'mm.perAgentHelp': 'The list lines of each agent\'s memory (agents/<role>/memory.md). Agents without the file are not shown.',
   'mm.perAgentFind': (p: { name: string; n: number; silent: number }) => `${p.name} remembers the most (${p.n} lines)${p.silent ? `; ${p.silent} agents have no memory yet` : ''}.`,
   'mm.perAgentEmpty': 'No agent has written its memory yet.',
-  'mm.trendLabel': (p: { label: string }) => `Weekly trend of "${p.label}"`,
-  'mm.errors': 'Recurring errors',
-  'mm.errorsLead': (p: { n: number; groups: number }) => `${p.n} logged errors${p.groups ? `, ${p.groups} repeat` : ''}. The bars show the last 12 weeks.`,
-  'mm.errorsEmpty': 'No error logged: when you correct an agent, the correction lands here.',
-  'mm.errorsHelp': 'From ai-errors.md. Two errors are the same error when they have the same type and area, or when their important words are alike (at least a third in common, or 3 words). The group\'s name is the phrase that repeats most.',
-  'mm.byAgent': 'Errors per agent', 'mm.errorsN': 'Errors',
-  'mm.byAgentHelp': 'Who got it wrong: the chat or agent written on the error\'s line.',
+  
   'mm.skills': 'Useful and useless skills',
   'mm.skillsLead': (p: { useful: number; weak: number; unused: number; total: number }) => `Of ${p.total} skills: ${p.useful} useful, ${p.weak} to review, ${p.unused} never used.`,
   'mm.skillsEmpty': 'No skill in the brain yet.',

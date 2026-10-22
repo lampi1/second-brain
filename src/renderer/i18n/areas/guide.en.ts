@@ -10,7 +10,6 @@ export const guideEn: typeof guideIt = {
   'guide.count': (p: { count: number }) => `${p.count} concepts`,
   'guide.howItWorks': 'How it works',
   'guide.link': 'How it works',
-  'guide.hide': 'Hide',
   'guide.analogy': 'In practice it is like…',
   'guide.technical': 'Technical details',
   'guide.sources': 'Sources in the code',

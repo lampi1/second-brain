@@ -17,14 +17,10 @@ export const cloudDe: typeof cloudIt = {
   'cloud.by.agent': 'vom Orchestrator geöffnet', 'cloud.by.user': 'von dir geöffnet', 'cloud.by.vendor': 'außerhalb der App geöffnet',
   'cloud.failed': (p: { why: string }) => `Cloud-Agent: ${p.why}`,
   'cloud.applied': (p: { path: string }) => `Ergebnis heimgeholt: ${p.path}`,
-  'cloud.started': (p: { engine: string }) => `Cloud-Agent auf ${p.engine} gestartet`,
-  'cloud.where': 'Wo', 'cloud.whereLocal': 'Lokal', 'cloud.whereCloud': 'Cloud',
-  'cloud.whereHint': 'Cloud: Der Agent läuft in der Cloud des Anbieters und arbeitet auch bei ausgeschaltetem PC weiter. Er braucht ein GitHub-Repository mit bereits gepushtem Branch; der Agent pusht nur seinen eigenen Branch.',
-  'cloud.engine': 'Cloud-Engine', 'cloud.checking': 'wird geprüft…', 'cloud.ready': 'bereit',
-  'cloud.cost.cursor': 'zu API-Preisen, zählt zum Cursor-Limit', 'cloud.cost.plan': 'aus deinem Abo',
-  'cloud.env': 'Codex-Cloud-Umgebung', 'cloud.envHint': 'die Environment-ID des Repositorys (chatgpt.com/codex → Environments); die App merkt sie sich',
-  'cloud.notReady': 'Für diesen Ordner ist keine Cloud-Engine bereit.',
-  'cloud.create': 'In der Cloud starten',
+  
+  
+  
+  
   'cloud.key': 'Schlüssel für Cursor Cloud Agents',
   'cloud.keyHint': 'Aus dem Cursor Dashboard → Integrations. Nur für Cloud-Agenten (API-Preise, zählen zum Cursor-Ausgabenlimit); verschlüsselt auf diesem PC, nie angezeigt.',
 };

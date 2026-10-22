@@ -52,7 +52,6 @@ export const studioIt = {
   'studio.saveError': ({ detail }: { detail: string }) => `Non salvato: ${detail} La bozza resta qui.`,
   'studio.stale': 'Il ruolo è cambiato mentre lo modificavi.',
   'studio.reload': 'Riparti dalla versione attuale',
-  'studio.defaultEngine': 'Default del motore',
   'studio.disabled': 'disattivato',
   'studio.trust': 'da autorizzare',
   'studio.unavailable': 'non disponibile',

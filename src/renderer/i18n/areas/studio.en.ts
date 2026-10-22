@@ -52,7 +52,6 @@ export const studioEn: typeof studioIt = {
   'studio.saveError': ({ detail }: { detail: string }) => `Not saved: ${detail} The draft stays here.`,
   'studio.stale': 'The role changed while you were editing it.',
   'studio.reload': 'Start again from the current version',
-  'studio.defaultEngine': 'Engine default',
   'studio.disabled': 'disabled',
   'studio.trust': 'to authorize',
   'studio.unavailable': 'not available',

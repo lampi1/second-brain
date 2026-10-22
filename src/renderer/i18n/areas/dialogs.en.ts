@@ -40,7 +40,6 @@ export const dialogsEn: typeof dialogsIt = {
   'dialogs.handoffDialog.writeNow': 'Write now',
   'dialogs.handoffDialog.notYetDone': 'When the chat finishes its turn',
   'dialogs.handoffDialog.closeButton': 'Close',
-  'dialogs.handoffDialog.resumeButton': 'Continue in new chat',
   'dialogs.handoffDialog.contextTokens': (p: { n: string }) => `${p.n} tokens of context`,
   'dialogs.handoffDialog.copyPathTip': 'click to copy',
 
@@ -66,7 +65,6 @@ export const dialogsEn: typeof dialogsIt = {
   // NotificationCenter
   'dialogs.notifications.title': 'Notifications',
   'dialogs.notifications.markAllRead': 'Mark all read',
-  'dialogs.notifications.markReadAriaLabel': (p: { count: number }) => `${p.count} new`,
   'dialogs.notifications.doNotDisturb': 'Do not disturb',
   'dialogs.notifications.disturb': 'Disturb',
   'dialogs.notifications.doNotDisturbTip': (p: { until?: string }) => p.until ? `Until ${p.until}` : 'No notifications (they stay here)',
@@ -119,9 +117,7 @@ export const dialogsEn: typeof dialogsIt = {
 
   // OrchestratorTile
   'dialogs.orchestrator.name': 'Orchestrator',
-  'dialogs.orchestrator.appName': 'Orchestrator',
   'dialogs.orchestrator.empty': 'No Orchestrator yet',
-  'dialogs.orchestrator.emptyDescription': 'The Orchestrator is the chat that coordinates the others: you ask it "what now?" and it proposes one thing at a time.',
   'dialogs.orchestrator.createButton': 'Create Orchestrator',
   'dialogs.orchestrator.statusLabel': 'Status: chats and PRs at a glance',
   'dialogs.orchestrator.statusShortcut': 'Ctrl+Shift+S',
@@ -162,8 +158,6 @@ export const dialogsEn: typeof dialogsIt = {
   'dialogs.sidebar.brain': 'Brain',
   'dialogs.sidebar.trends': 'Trends',
   'dialogs.sidebar.app': 'App',
-  'dialogs.sidebar.map': '3D Map',
-  'dialogs.sidebar.mapShortcut': 'Ctrl+Shift+M',
   'dialogs.sidebar.waiting': (p: { count: number }) => `${p.count} waiting for you`,
   'dialogs.sidebar.new': (p: { count: number }) => `${p.count} new`,
 
@@ -193,9 +187,6 @@ export const dialogsEn: typeof dialogsIt = {
   'dialogs.linkPeek.openOutside': 'Open outside',
   'dialogs.linkPeek.copyLink': 'Copy',
   'dialogs.linkPeek.copyLinkSuccess': 'Link copied',
-  'dialogs.linkPeek.readingFile': 'Reading file…',
-  'dialogs.linkPeek.noPreview': (p: { what: string }) => `No preview (${p.what}).`,
-  'dialogs.linkPeek.openFile': 'Open',
   'dialogs.linkPeek.copyPath': 'Copy path',
   'dialogs.linkPeek.copyPathSuccess': 'Path copied',
 };

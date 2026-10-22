@@ -3,7 +3,6 @@ import type { estimateIt } from './estimate.it';
 export const estimateEn: typeof estimateIt = {
   'estimate.label': 'estimate',
   'estimate.similar': (p: { n: number }) => `from ${p.n} similar tasks`,
-  'estimate.actual': 'actual',
   'estimate.held': 'estimate held',
   'estimate.missed': 'off the estimate',
   'estimate.left': (p: { d: string }) => `~${p.d} left`,

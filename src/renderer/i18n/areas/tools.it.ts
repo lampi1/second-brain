@@ -18,8 +18,6 @@ export const toolsIt = {
   'tools.genui.riskHigh': 'alto',
   'tools.genui.empty': 'vuota',
   'tools.genui.stateHeader': 'Stato',
-  'tools.genui.shownInFolder': 'Mostrato nella sua cartella: non è un documento da aprire qui.',
-  'tools.genui.fileNotOpened': 'File non aperto:',
   'tools.genui.copyFailed': 'Copia non riuscita',
   'tools.genui.copyDone': 'Copiato',
   'tools.genui.copyPath': (p: { path: string }) => `Copia il percorso ${p.path}`,

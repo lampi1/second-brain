@@ -31,7 +31,7 @@ it('renders the reported legacy control labels in English',()=>{
 it('renders the converted component labels and messages in English',()=>{
  setLang('en');
  expect(t('cmp.app.settings')).toBe('Settings');expect(t('cmp.context.resume')).toBe('Resume in a new chat');
- expect(t('cmp.palette.group.Azioni')).not.toBe('Azioni');expect(t('cmp.interview.step.Riepilogo')).toBe('Summary');
+ expect(t('cmp.palette.group.Azioni')).not.toBe('Azioni');
  expect(t('cmp.usage.fiveHour',{pct:'40%'})).toBe('5 hours at 40%');
  setLang('it');expect(t('cmp.context.resume')).toBe('Riprendi in chat nuova');
 });

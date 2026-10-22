@@ -2,8 +2,6 @@
 import type { proposalsIt } from './proposals.it';
 type N = { n: number };
 export const proposalsDe: typeof proposalsIt = {
-  'proposals.title': 'Vorschläge',
-  'proposals.lead': 'Eine Karte nach der anderen: nach rechts ziehen zum Freigeben, nach links zum Ablehnen. Änderungen, die die App schon selbst angewendet hat, behältst du oder machst sie rückgängig.',
   'proposals.deckLabel': 'Stapel der Vorschläge',
   'proposals.filters': 'Vorschläge filtern',
   'proposals.filter.all': 'Alle',
@@ -77,7 +75,6 @@ export const proposalsDe: typeof proposalsIt = {
   'proposals.readFirst': 'Öffne vor dem Freigeben den Entwurf und die Belege.',
   'proposals.readFirstOpen': 'Entwurf und Belege lesen',
   'proposals.note': 'Wie du es geprüft hast (optional)',
-  'proposals.noteReject': 'Warum du ablehnst (optional)',
   'proposals.done.title': 'Geschafft!',
   'proposals.done.lead': 'Im Moment gibt es nichts mehr zu entscheiden.',
   'proposals.done.approved': () => 'freigegeben oder behalten',

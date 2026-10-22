@@ -1,7 +1,7 @@
 // German (de-AT) role cards of the Agenti catalogue; parity checked against the Italian source (agents-grid.it.ts).
 import type { agentsGridIt } from './agents-grid.it';
 export const agentsGridDe: typeof agentsGridIt = {
-  'agentsGrid.runs': 'Beendet', 'agentsGrid.open': 'Offen', 'agentsGrid.success': 'Erfolg', 'agentsGrid.cost': 'Kosten',
+  'agentsGrid.runs': 'Beendet', 'agentsGrid.open': 'Offen', 'agentsGrid.cost': 'Kosten',
   'agentsGrid.working': 'Arbeitet','agentsGrid.openProfile': 'Rolle bearbeiten', 'agentsGrid.count': ({ n }) => n === 1 ? '1 Rolle' : `${n} Rollen`,
   'agentsGrid.workingCount': ({ n }) => n === 1 ? '1 arbeitet' : `${n} arbeiten`,
   'agentsGrid.trialCount': ({ n }) => `${n} auf Probe`,
