@@ -71,6 +71,16 @@ const bumpReading = (chatId: string, d: number) => {
   changed();
 };
 const EMPTY: readonly QueuedMsg[] = [];
+/** per chat: when the app was last asked to start its engine while the user types (at most once a minute) */
+const prewarmAt = new Map<string, number>();
+/** The user writes in a chat whose engine may have been released for idleness: main starts it now (no message, no
+ *  tokens), so its start-up runs during the typing (ChatManager.prewarm). */
+function prewarm(chatId: string): void {
+  const now = Date.now();
+  if (now - (prewarmAt.get(chatId) ?? 0) < 60_000) return;
+  prewarmAt.set(chatId, now);
+  void window.sb.invoke('chat:prewarm', { chatId }).catch(() => { /* it starts with the message, as before */ });
+}
 /** per chat: its "/" commands and when they were read (read again after 30 s: the engine may have reported its own) */
 const commandCache = new Map<string, { at: number; list: ChatCommand[] }>();
 function loadCommands(chatId: string, done: (list: ChatCommand[]) => void): void {
@@ -367,7 +377,7 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
             onFocus={() => { setFocused(true); if (suggestOn && !cmds) loadCommands(chat.id, setCmds); }} onBlur={() => setFocused(false)}
             onScroll={e => { if (mirror.current) mirror.current.scrollTop = e.currentTarget.scrollTop; }}
             aria-activedescendant={slashOpen ? `${testid}-slash-o${Math.min(sel, matches.length - 1)}` : undefined}
-            onChange={e => { const next = withReviewedContext(e.target.value, context); setText(next); setCaret(e.target.selectionStart); drafts.set(chat.id, next); if (!next.trim()) onSentHooks.delete(chat.id); if (!e.target.value.startsWith('/')) setSlashOff(null); refreshGhost(e.target.value, e.target.selectionStart); }}
+            onChange={e => { const next = withReviewedContext(e.target.value, context); setText(next); setCaret(e.target.selectionStart); drafts.set(chat.id, next); if (!next.trim()) onSentHooks.delete(chat.id); else prewarm(chat.id); if (!e.target.value.startsWith('/')) setSlashOff(null); refreshGhost(e.target.value, e.target.selectionStart); }}
             onSelect={e => { const el = e.currentTarget; setCaret(el.selectionStart); if (el.selectionStart !== el.selectionEnd || el.selectionStart !== el.value.length) sched.current?.key(); }}
             onPaste={onPaste}
             onKeyDown={e => {

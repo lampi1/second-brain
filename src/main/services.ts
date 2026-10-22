@@ -57,6 +57,8 @@ export interface ChatService {
   resumeInterrupted(): number;
   /** "Avvia ora": the chat's start or turn waiting in the CPU queue runs now (ADR 0036); false = nothing waited */
   admitNow(chatId: string): boolean;
+  /** the user is typing: an engine released for idleness starts ahead of the message (ChatManager.prewarm) */
+  prewarm?(chatId: string): boolean;
   /** the CPU queue: the load last sampled and the waiting chats, in order (null = no queue wired) */
   queueState(): { cpu: number; freeRam: number; enabled: boolean; waiting: { chatId: string; kind: 'start' | 'turn'; position: number; since: number }[] } | null;
   set(chatId: string, patch: { model?: string; effort?: Effort; permissionMode?: PermissionMode; title?: string; workStatus?: 'assigned'|'waiting-mail'|'completed' }): Promise<ChatSummary>;

@@ -54,12 +54,12 @@ async function worktreeTree(root: string): Promise<string> {
   } finally { fs.rmSync(tmp, { force: true }); }
 }
 
-/** Records the working tree of the repository at cwd; null when cwd is no git work tree or git fails. */
+/** Records the working tree of the repository at cwd; null when cwd is no git work tree or git fails. The tree and
+ *  HEAD are read together: every git call here runs between the user's Enter and the engine. */
 export async function snapshot(cwd: string, ref: string): Promise<Checkpoint | null> {
   const root = await repoRoot(cwd);
   if (!root) return null;
-  const tree = await worktreeTree(root);
-  const head = await git(root, ['rev-parse', '-q', '--verify', 'HEAD']).then(s => s.trim(), () => '');
+  const [tree, head] = await Promise.all([worktreeTree(root), git(root, ['rev-parse', '-q', '--verify', 'HEAD']).then(s => s.trim(), () => '')]);
   const commit = (await git(root, ['commit-tree', tree, ...(head ? ['-p', head] : []), '-m', 'second-brain checkpoint'], IDENTITY)).trim();
   await git(root, ['update-ref', ref, commit]);
   return { commit, at: Date.now(), root };
