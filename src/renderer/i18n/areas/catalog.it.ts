@@ -60,5 +60,5 @@ export const catalogIt = {
   'catalog.purpose.sentinel': 'Verifica: esegue test e controlli, o giudica il risultato dalle prove quando non c’è nulla da eseguire, e dice cosa passa e cosa no.',
   'catalog.purpose.herald': 'Prepara messaggi e bozze per persone e servizi esterni; ogni invio lo approvi tu.',
   'catalog.purpose.flash': 'Risposte al volo accanto all’Orchestrator: vede la sua chat, legge, non cambia nulla',
-  'catalog.purpose.pulse': 'Idee, consigli, promemoria, collegamenti e frase della Dashboard',
+  'catalog.purpose.pulse': 'Idee, consigli, promemoria, collegamenti e frase in cima a Memoria',
 };
