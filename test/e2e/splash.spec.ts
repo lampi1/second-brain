@@ -36,11 +36,11 @@ test('the splash cuts GRINDHOUSE with the day\'s sentence, then a key lets the u
 });
 
 test('the splash ends by itself and a click skips it', async () => {
-  const { app, page } = await launchDemo({ env: { SB_SPLASH: '1' } });
+  const { app, page } = await launchDemo({ env: { SB_SPLASH: '1' }, questions: true });
   // a hidden test window may get few frames: the hard stop still ends it
   await expect(page.getByTestId('splash')).toHaveCount(0, { timeout: 10_000 });
   await app.close();
-  const again = await launchDemo({ env: { SB_SPLASH: 'hold' } });
+  const again = await launchDemo({ env: { SB_SPLASH: 'hold' }, questions: true });
   const splash = again.page.getByTestId('splash');
   await expect(splash).toBeVisible();
   await splash.click({ position: { x: 20, y: 20 } });
