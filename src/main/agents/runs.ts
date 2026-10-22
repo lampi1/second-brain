@@ -8,7 +8,7 @@ import { checkResult } from '../../shared/delegation';
 import { MODEL_TIERS, type ModelTier } from '../../shared/roles';
 import { SUMMARY_MAX } from './run-report';
 import { rollUp, SAMPLE_MAX, type RunTally, type TagTally } from './run-metrics';
-import { readLocal, writeLocal } from './local-store';
+import { readLocal, writeLocalText } from './local-store';
 
 export const RUNS_MAX = 5000;
 /** Below the local store's 8 MB cap, with headroom for the run being added. */
@@ -328,12 +328,19 @@ export class AgentRunStore {
     if (this.problem) throw new Error(this.problem);
     const all = this.list();
     const ended = all.filter(r => r.endedAt !== undefined).sort((a, b) => a.endedAt! - b.endedAt! || a.startedAt - b.startedAt);
-    const bytesOf = (v: unknown) => Buffer.byteLength(JSON.stringify(v, null, 2), 'utf8');
+    // Runs on the main process at every run event: the file (up to RUNS_BYTES) is written compact and serialized once
+    // when nothing has to go; only a store over its budget measures runs one by one.
+    const bytesOf = (v: unknown) => Buffer.byteLength(JSON.stringify(v), 'utf8');
+    const record = (runs: AgentRun[], rollups: RunTally[], prunedThrough: number) =>
+      ({ version: 1, runs, ...(rollups.length ? { rollups } : {}), ...(prunedThrough ? { prunedThrough } : {}) });
+    const whole = `${JSON.stringify(record(all, this.rollups, this.prunedThrough))}\n`;
     // the rollups only grow when runs are pruned: their budget is checked with the runs about to go
-    const budget = (rollups: RunTally[]) => RUNS_BYTES - Math.min(ROLLUP_BYTES, bytesOf(rollups));
+    const budget = RUNS_BYTES - Math.min(ROLLUP_BYTES, this.rollups.length ? bytesOf(this.rollups) : 0);
     const drop = new Set<AgentRun>();
-    let bytes = bytesOf({ version: 1, runs: all, rollups: this.rollups }) + 1;
-    const over = () => all.length - drop.size > RUNS_MAX || bytes > budget(this.rollups);
+    let bytes = Buffer.byteLength(whole, 'utf8');
+    const over = () => all.length - drop.size > RUNS_MAX || bytes > budget;
+    this.dirty = true; // stays set when the write fails: the next flush tries again
+    if (!over()) { writeLocalText(this.file, whole); this.dirty = false; return; }
     const take = (r: AgentRun) => { if (!drop.has(r)) { drop.add(r); bytes -= bytesOf(r); } };
     // a review goes with the run it reviews (its findings count there); then, if still over, any ended run
     for (const r of ended) {
@@ -347,8 +354,7 @@ export class AgentRunStore {
     const rollups = drop.size ? fitRollups(rollUp(this.rollups, [...drop], all)) : this.rollups;
     const next = all.filter(r => !drop.has(r));
     const prunedThrough = Math.max(this.prunedThrough, ...[...drop].map(r => r.endedAt!));
-    this.dirty = true; // stays set when the write fails: the next flush tries again
-    writeLocal(this.file, { version: 1, runs: next, ...(rollups.length ? { rollups } : {}), ...(prunedThrough ? { prunedThrough } : {}) });
+    writeLocalText(this.file, `${JSON.stringify(record(next, rollups, prunedThrough))}\n`);
     for (const r of drop) this.runs.delete(r.runId);
     this.rollups = rollups; this.prunedThrough = prunedThrough;
     this.dirty = false;
