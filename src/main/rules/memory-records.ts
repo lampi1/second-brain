@@ -1,9 +1,13 @@
 // Scoped durable facts for memory writers and launch recall. Model assertions stay proposed; history is retained.
 // The JSON store is canonical and is deliberately separate from the existing document/hybrid search index.
+// Every new fact passes the worth gate (memory-worth.ts, ADR 0129): a case-specific one is refused with what to save
+// instead. The maintenance's tidy-up (tidyMemory: merge, generalize, drop) is undone by undoMemoryTidy.
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { atomicWrite, confined, locked, read } from './storage';
+import { checkMemoryWorth } from './memory-worth';
+import { emptyPredicate } from '../../shared/proposals';
 
 export interface MemoryScope { roleId: string; userId?: string; project?: string; repository?: string; environment?: string }
 export type MemoryStatus = 'observed' | 'proposed' | 'confirmed' | 'disputed' | 'retracted';
@@ -57,6 +61,7 @@ export function proposeMemory(root: string, input: MemoryProposal, now = new Dat
   const scope = scopeOf(input.scope), subject = clean(input.subject), predicate = clean(input.predicate), value = clean(input.value);
   const sourceEventId = clean(input.sourceEventId), sourceRunId = clean(input.sourceRunId);
   if (!Number.isFinite(Date.parse(now))) throw new Error('Invalid observation date.');
+  checkMemoryWorth(subject, predicate, value);
   return mutate(root, records => {
     const previous = input.supersedes ? records.find(r => r.memoryId === input.supersedes) : undefined;
     if (input.supersedes && (!previous || !sameScope(previous.scope, scope) || previous.subject !== subject || previous.predicate !== predicate)) throw new Error('Supersession must identify the same scoped fact.');
@@ -73,6 +78,8 @@ export interface MemoryConflictChoice { keep: 'new' | 'both'; ids: string[] }
 /** The confirmed facts a proposed one contradicts (same scope, subject and predicate, another value), not the one it
  *  already supersedes. */
 export function memoryConflicts(records: readonly MemoryRecord[], r: MemoryRecord): MemoryRecord[] {
+  // free notes («setup · note», every agent_report `remember` line) are separate facts, never two values of one thing
+  if (emptyPredicate(r.predicate)) return [];
   return records.filter(x => x.memoryId !== r.memoryId && x.memoryId !== r.supersedes && sameScope(x.scope, r.scope) && x.subject === r.subject && x.predicate === r.predicate && x.status === 'confirmed' && !x.validTo && x.value !== r.value);
 }
 const retire = (root: string, old: MemoryRecord, by: string, now: string): void => {
@@ -158,6 +165,65 @@ export function deleteMemory(root: string, memoryId: string): string[] {
     const invalidated = purgeCopies(root, records[index]!); records.splice(index, 1);
     for (const r of records) if (r.supersedes === memoryId) r.supersedes = null;
     return [FILE, ...invalidated];
+  });
+}
+// ── the maintenance's tidy-up (brainmodel/jobs.ts mergeMemory, ADR 0129) ───────────────────────────────────────────────
+/** One pass's work on the store: facts retired (merged into another, already known, not generalizable) and facts
+ *  rewritten as the general rule behind them (a new record beside the old one, which is retired). */
+export interface MemoryTidy { retire: { id: string; reason: string }[]; generalize: { id: string; value: string }[] }
+/** What undoes one tidy-up: the facts it retired and the ones it wrote, under the tag of its change. */
+export interface MemoryTidyUndo { tag: string; retired: string[]; added: string[] }
+const open = (r: MemoryRecord | undefined): r is MemoryRecord => !!r && r.validTo === null && (r.status === 'proposed' || r.status === 'confirmed') && !r.derivedFiles?.length;
+/** Applies a tidy-up under the store's lock: only open facts (proposed or confirmed, no derived copies) are touched; a
+ *  generalized fact keeps its scope, subject, predicate, status and verification, with a new value; its old record is
+ *  retired. Nothing is purged: the history stays, and undoMemoryTidy puts it back. */
+export function tidyMemory(root: string, tidy: MemoryTidy, tag: string, now = new Date().toISOString()): MemoryTidyUndo {
+  clean(tag, 100);
+  return mutate(root, records => {
+    const undo: MemoryTidyUndo = { tag, retired: [], added: [] };
+    const retire = (r: MemoryRecord, reason: string) => {
+      (r.transitions ??= [{ at: r.observedAt, status: r.status }]).push({ at: now, status: 'retracted', reason: `${tag}:${reason}` });
+      r.status = 'retracted'; r.validTo = now; undo.retired.push(r.memoryId);
+    };
+    for (const g of tidy.generalize) {
+      const old = records.find(r => r.memoryId === g.id);
+      if (!open(old) || undo.retired.includes(old.memoryId)) continue;
+      const value = clean(g.value);
+      checkMemoryWorth(old.subject, old.predicate, value);
+      const record: MemoryRecord = { memoryId: randomUUID(), scope: { ...old.scope }, subject: old.subject, predicate: old.predicate, value, sourceEventId: `${tag}:${old.memoryId}`,
+        sourceRunId: old.sourceRunId, observedAt: now, validFrom: now, validTo: null, status: old.status, supersedes: null,
+        transitions: [{ at: now, status: old.status, reason: `${tag}:generalized-from:${old.memoryId}` }],
+        ...(old.verification ? { verification: { ...old.verification, evidence: clean(`${old.verification.evidence} (generalized by the maintenance)`.slice(0, 1000)) } } : {}) };
+      records.push(record); undo.added.push(record.memoryId);
+      retire(old, `generalized:${record.memoryId}`);
+    }
+    for (const x of tidy.retire) {
+      const r = records.find(y => y.memoryId === x.id);
+      if (open(r) && !undo.retired.includes(r.memoryId)) retire(r, clean(x.reason, 200));
+    }
+    return undo;
+  });
+}
+/** The tidy-up can still be undone: every fact it retired is still retired by it, every fact it wrote still untouched. */
+export function canUndoMemoryTidy(root: string, undo: MemoryTidyUndo): boolean {
+  let records: MemoryRecord[];
+  try { records = readMemoryRecords(root); } catch { return false; }
+  return undo.retired.every(id => { const r = records.find(x => x.memoryId === id); return r?.status === 'retracted' && !!r.transitions?.at(-1)?.reason?.startsWith(`${undo.tag}:`); })
+    && undo.added.every(id => { const r = records.find(x => x.memoryId === id); return !!r && r.validTo === null && r.transitions?.length === 1; });
+}
+/** Puts the store back as it was before the tidy-up: the retired facts open again, the written ones go. */
+export function undoMemoryTidy(root: string, undo: MemoryTidyUndo): void {
+  if (!canUndoMemoryTidy(root, undo)) throw new Error('This memory change can no longer be undone: the facts changed since.');
+  mutate(root, records => {
+    for (const id of undo.retired) {
+      const r = records.find(x => x.memoryId === id)!;
+      r.transitions!.pop();
+      r.status = r.transitions!.at(-1)?.status ?? 'proposed'; r.validTo = null;
+    }
+    for (const id of undo.added) {
+      const at = records.findIndex(x => x.memoryId === id);
+      if (at >= 0) records.splice(at, 1);
+    }
   });
 }
 export const memoryWords = (s: string): Set<string> => new Set(s.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').match(/[\p{L}\p{N}]{3,}/gu) ?? []);

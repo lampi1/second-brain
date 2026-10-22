@@ -30,7 +30,13 @@ export type ProposalAsk =
   /** a fact an agent wants to remember: who keeps it (a role id when it is one) and where it holds */
   | { kind: 'remember'; role?: string; subject: string; predicate: string; project?: string; repository?: string; environment?: string;
     /** confirmed facts with the same subject that say something else: the user picks replace or keep both */
-    conflicts?: { id: string; value: string }[] }
+    conflicts?: { id: string; value: string }[];
+    /** near-duplicates decided with it (ADR 0129): how many times the fact was proposed */
+    same?: number;
+    /** the signs of a one-off fact (ADR 0129): the card says the fact looks tied to one case */
+    specific?: MemorySign[];
+    /** a batch card (ADR 0129): this many facts of one role and day, listed in the content, decided as a whole */
+    many?: number }
   /** a skill draft to add to the brain */
   | { kind: 'skill'; name: string }
   /** something the app already changed by itself: what, how, on which item (a role id for a role or its memory) */
@@ -46,6 +52,18 @@ export type ProposalAsk =
   /** a new version of how the app decides something by itself (routing, notifications…) */
   | { kind: 'policy'; domain: string; name: string; from?: number; to?: number; cases?: number };
 /** The code a card is about, shown as it is: a script or a saved query the change writes (or removes). */
+/** What makes a memory fact look tied to one case (main/rules/memory-worth.ts, ADR 0129). */
+export type MemorySign = 'url' | 'id' | 'commit' | 'path' | 'date' | 'branch';
+/** Predicates that say nothing by themselves («setup · note»): the fact is its value alone. */
+const EMPTY_PREDICATE = /^(notes?|nota|fact|fatto|info|is|è|ist|value|valore)$/i;
+/** A predicate that says nothing: such facts are free notes, never two values of one thing (no contradiction). */
+export const emptyPredicate = (predicate: string): boolean => !predicate.trim() || EMPTY_PREDICATE.test(predicate.trim());
+/** A memory fact as one sentence: «Rimborsi parziali si calcolano su …», or its value alone when the predicate is empty. */
+export function factSentence(subject: string, predicate: string, value: string): string {
+  const v = value.trim();
+  if (emptyPredicate(predicate) || !subject.trim()) return v;
+  return `${subject.trim()} ${predicate.trim()} ${v}`;
+}
 export interface ProposalCode { file: string; lang: string; text: string }
 
 export interface ProposalProvenance {

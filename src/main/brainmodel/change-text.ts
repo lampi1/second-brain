@@ -12,6 +12,7 @@ interface ChangeText {
   candidate(p: { name: string; n: number }): string;
   link(p: { agent: string; name: string; drop?: string }): string;
   merge(p: { drop: string; keep: string }): string;
+  memoryTidy(p: { agent: string; generalized: number; merged: number; dropped: number }): string;
 }
 
 const TEXT: Readonly<Record<Lang, ChangeText>> = {
@@ -22,6 +23,7 @@ const TEXT: Readonly<Record<Lang, ChangeText>> = {
     candidate: p => `Skill candidata «${p.name}» da ${p.n} richieste`,
     link: p => `${p.agent} usa «${p.name}»${p.drop ? ` al posto di «${p.drop}»` : ''}`,
     merge: p => `«${p.drop}» unita in «${p.keep}»`,
+    memoryTidy: p => `Memoria di ${p.agent}: ${[p.generalized ? `${p.generalized} ${p.generalized === 1 ? 'fatto reso generale' : 'fatti resi generali'}` : '', p.merged ? `${p.merged} ${p.merged === 1 ? 'doppione unito' : 'doppioni uniti'}` : '', p.dropped ? `${p.dropped} ${p.dropped === 1 ? 'fatto legato a un caso tolto' : 'fatti legati a un caso tolti'}` : ''].filter(Boolean).join(', ')}`,
   },
   en: {
     newSkill: p => `New skill «${p.name}» from ${p.file} (${p.title})`,
@@ -30,6 +32,7 @@ const TEXT: Readonly<Record<Lang, ChangeText>> = {
     candidate: p => `Candidate skill «${p.name}» from ${p.n} requests`,
     link: p => `${p.agent} uses «${p.name}»${p.drop ? ` instead of «${p.drop}»` : ''}`,
     merge: p => `«${p.drop}» merged into «${p.keep}»`,
+    memoryTidy: p => `${p.agent}'s memory: ${[p.generalized ? `${p.generalized} ${p.generalized === 1 ? 'fact made general' : 'facts made general'}` : '', p.merged ? `${p.merged} ${p.merged === 1 ? 'duplicate merged' : 'duplicates merged'}` : '', p.dropped ? `${p.dropped} case-specific ${p.dropped === 1 ? 'fact' : 'facts'} dropped` : ''].filter(Boolean).join(', ')}`,
   },
   de: {
     newSkill: p => `Neuer Skill «${p.name}» aus ${p.file} (${p.title})`,
@@ -38,6 +41,7 @@ const TEXT: Readonly<Record<Lang, ChangeText>> = {
     candidate: p => `Skill-Kandidat «${p.name}» aus ${p.n} Anfragen`,
     link: p => `${p.agent} nutzt «${p.name}»${p.drop ? ` statt «${p.drop}»` : ''}`,
     merge: p => `«${p.drop}» in «${p.keep}» zusammengeführt`,
+    memoryTidy: p => `Gedächtnis von ${p.agent}: ${[p.generalized ? `${p.generalized} ${p.generalized === 1 ? 'Fakt verallgemeinert' : 'Fakten verallgemeinert'}` : '', p.merged ? `${p.merged} ${p.merged === 1 ? 'Duplikat zusammengeführt' : 'Duplikate zusammengeführt'}` : '', p.dropped ? `${p.dropped} ${p.dropped === 1 ? 'fallbezogener Fakt' : 'fallbezogene Fakten'} entfernt` : ''].filter(Boolean).join(', ')}`,
   },
 };
 
