@@ -14,7 +14,9 @@ import type { BrainChange } from '../../../src/shared/brain-model';
 const NOW = Date.parse('2026-10-20T10:00:00Z');
 const H = 3_600_000;
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'sb-proposals-'));
-const fact = (id: string, at: number, run = 'r_000000000001'): MemoryReviewRecord => ({ memoryId: id, scope: { roleId: 'scout' }, subject: `Fatto ${id}`, predicate: 'usa', value: 'valore', sourceEventId: `ev-${id}`, sourceRunId: run, observedAt: new Date(at).toISOString(), validFrom: new Date(at).toISOString(), validTo: null, status: 'proposed', supersedes: null } as MemoryReviewRecord);
+// distinct values: near-duplicates are one card (memory-deck.ts)
+const VALUES: Record<string, string> = { a: 'il modulo feedback scrive i log nella cartella logs del progetto', b: 'i test end to end si lanciano con npm run check sul ramo principale' };
+const fact = (id: string, at: number, run = 'r_000000000001'): MemoryReviewRecord => ({ memoryId: id, scope: { roleId: 'scout' }, subject: `Fatto ${id}`, predicate: 'usa', value: VALUES[id] ?? `valore ${id}`, sourceEventId: `ev-${id}`, sourceRunId: run, observedAt: new Date(at).toISOString(), validFrom: new Date(at).toISOString(), validTo: null, status: 'proposed', supersedes: null } as MemoryReviewRecord);
 const change = (id: string, at: number, x: Partial<BrainChange> = {}): BrainChange => ({ id, at, job: 'merge-memory', kind: 'memory', action: 'merge', target: 'agents/sentinel/memory.md', summary: `Cambio ${id}`, reason: 'doppioni', evidence: ['r_1'], canRollback: true, ...x } as BrainChange);
 const candidate = (x: Partial<SkillCandidateView> = {}): SkillCandidateView => ({ name: 'triage', text: '## Steps\n1. a\n2. b', digest: 'abcdef0123456789', stepsReady: true, sourceRunIds: ['r_000000000002'], verifiedExampleRunIds: ['r_000000000002'], eligibleReplayIds: ['rep-1'], promotionProblems: [], promoted: false, ...x });
 

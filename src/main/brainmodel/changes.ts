@@ -1,6 +1,7 @@
 // The brain model's change log (ADR 0077): every change a maintenance job or the user's skill toggle makes to skills,
 // roles, rules or memory is one entry, with what changed, why, the evidence and what undoes it: the files' text before
-// and after (a created file has no "before", a removed one no "after") and, for a role, the version before and after.
+// and after (a created file has no "before", a removed one no "after"), for a role, the version before and after, and for
+// the maintenance's memory tidy-up the facts it retired and wrote (rules/memory-records.ts tidyMemory, ADR 0128).
 // Rollback restores the "before" only while the target still is the "after" (a newer change, or the user's own edit on
 // disk, is never overwritten: undo the newer change first). Kept in userData (brain-changes.json, last 400 entries,
 // snapshots of at most 256 KB each): the app's machinery stays out of the brain. Each entry keeps the seed of its evidence
@@ -12,14 +13,19 @@ import { randomBytes } from 'node:crypto';
 import { MAINTENANCE_JOBS, type BrainChange } from '../../shared/brain-model';
 import { readLocal, writeLocal } from '../agents/local-store';
 import { validSeed, type ClaimSeed } from './evidence';
+import type { MemoryTidyUndo } from '../rules/memory-records';
 
 export interface FileSnapshot { file: string; before: string | null; after: string | null }
 /** A role's version before and after. */
 export interface AgentSnapshot { id: string; before: number; after: number }
-export interface StoredChange extends Omit<BrainChange, 'canRollback' | 'claim'> { files: FileSnapshot[]; agent?: AgentSnapshot; seed?: ClaimSeed }
+export interface StoredChange extends Omit<BrainChange, 'canRollback' | 'claim'> { files: FileSnapshot[]; agent?: AgentSnapshot; seed?: ClaimSeed; memory?: MemoryTidyUndo }
 /** Seals a change's evidence claim when it is recorded (evidence.ts seal with the roles of that moment). */
 export type Sealer = (c: Pick<BrainChange, 'kind' | 'action' | 'target'>) => ClaimSeed | undefined;
-export interface AgentRestorer { activeVersion(id: string): number | null; restore(id: string, version: number, expected: number): void }
+export interface AgentRestorer {
+  activeVersion(id: string): number | null; restore(id: string, version: number, expected: number): void;
+  /** the memory store's side (absent = a memory tidy-up cannot be undone here) */
+  memory?: { canUndo(u: MemoryTidyUndo): boolean; undo(u: MemoryTidyUndo): void };
+}
 const JOBS: readonly string[] = [...MAINTENANCE_JOBS, 'user'];
 
 const MAX = 400, SNAP = 256 * 1024;
@@ -92,17 +98,19 @@ export class ChangeLog {
     if (c.rolledBackAt) return false;
     if (c.files.some(f => read(f.file) !== f.after)) return false;
     if (c.agent && agents.activeVersion(c.agent.id) !== c.agent.after) return false;
+    if (c.memory && !agents.memory?.canUndo(c.memory)) return false;
     return true;
   }
   /** The renderer's view, newest first. */
   list(agents: AgentRestorer, limit = 120): BrainChange[] {
-    return [...this.entries].reverse().slice(0, limit).map(({ files: _f, agent: _a, seed: _s, ...c }) => { void _f; void _a; void _s; return { ...c, canRollback: this.canRollback(this.entries.find(e => e.id === c.id)!, agents) }; });
+    return [...this.entries].reverse().slice(0, limit).map(({ files: _f, agent: _a, seed: _s, memory: _m, ...c }) => { void _f; void _a; void _s; void _m; return { ...c, canRollback: this.canRollback(this.entries.find(e => e.id === c.id)!, agents) }; });
   }
   rollback(id: string, agents: AgentRestorer): StoredChange {
     const c = this.entries.find(e => e.id === id);
     if (!c) throw new Error('Modifica non trovata.');
     if (!this.canRollback(c, agents)) throw new Error('Questa modifica non si può più annullare: è già annullata, o il file o il ruolo sono cambiati dopo. Annulla prima la modifica più recente.');
     if (c.agent) agents.restore(c.agent.id, c.agent.before, c.agent.after);
+    if (c.memory) agents.memory!.undo(c.memory);
     for (const f of [...c.files].reverse()) writeText(f.file, f.before);
     c.rolledBackAt = this.now();
     this.persist();

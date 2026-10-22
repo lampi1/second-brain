@@ -28,6 +28,7 @@ import { pending as upgradePending, upgrade, type UpgradeAsk } from './upgrade';
 import { memoryStats } from './memory-stats';
 import { handoffText, readNoise, scanLogs, writeNoise } from './log-scan';
 import { readMemory, readRules, readSkills, type SkillDir } from './model';
+import { canUndoMemoryTidy, undoMemoryTidy } from '../rules/memory-records';
 
 export interface BrainModelDeps {
   userData: string;
@@ -51,7 +52,8 @@ export interface BrainModelDeps {
   handoff?: (text: string) => Promise<boolean>;
   /** the running app's version (recorded in the brain by the upgrade job) */
   appVersion?: () => string;
-  /** the upgrade job's one-shot question (agents/oneshot.ts, no tools); absent = candidates wait for a pass with an engine */
+  /** the one-shot question (agents/oneshot.ts, no tools) of the upgrade job and of the memory tidy-up (memory-tidy.ts,
+   *  ADR 0128); absent = their candidates wait for a pass with an engine */
   upgradeAsk?: UpgradeAsk;
   /** the brain's scripts (brain/scripts.ts): a script's file by its id, and the hook that tells the Script tab it changed;
    *  absent = scripts cannot be removed here (ADR 0122) */
@@ -111,6 +113,11 @@ export class BrainModelService {
         if (p?.trial && p.trial.version === expected && p.activeVersion === expected && p.trial.baseline === version) this.d.catalog.rejectTrial(id, version);
         else this.d.catalog.maintainRestore(id, version, expected);
       },
+      // a memory tidy-up (ADR 0128): undone in the store of the brain it was made in, only while its facts are unchanged
+      memory: {
+        canUndo: u => { const root = this.root(); return !!root && canUndoMemoryTidy(root, u); },
+        undo: u => { const root = this.root(); if (!root) throw new Error('Scegli prima la cartella del brain.'); undoMemoryTidy(root, u); },
+      },
     };
   }
   private writer(): AgentWriter {
@@ -134,7 +141,7 @@ export class BrainModelService {
       profiles: () => this.profiles().filter(p => p.scope === 'role'),
       runs: () => { try { return this.d.runs(); } catch { return []; } },
       lessons: this.d.learning, agents: this.writer(), log: this.log,
-      now: () => this.now(),
+      now: () => this.now(), ...(this.d.upgradeAsk ? { ask: this.d.upgradeAsk } : {}),
     };
   }
   report(): MigrationReport | null { try { return (readLocal(this.reportFile) as MigrationReport | undefined) ?? null; } catch { return null; } }
@@ -180,7 +187,7 @@ export class BrainModelService {
         try {
           const r = id === 'migration' ? await migrate(ctx)
             : id === 'upgrade' ? await upgrade({ root, userData: this.d.userData, log: this.log, app: this.d.appVersion?.() ?? '0.0.0', ask: this.d.upgradeAsk, now: () => this.now() })
-            : id === 'corrections' ? corrections(ctx) : id === 'repeated-task' ? repeatedTask(ctx) : id === 'merge-skills' ? mergeSkills(ctx) : mergeMemory(ctx);
+            : id === 'corrections' ? corrections(ctx) : id === 'repeated-task' ? repeatedTask(ctx) : id === 'merge-skills' ? mergeSkills(ctx) : await mergeMemory(ctx);
           if (r.report) writeLocal(this.reportFile, mergeReport(this.report(), r.report));
           done.push(r);
         } catch (e) {

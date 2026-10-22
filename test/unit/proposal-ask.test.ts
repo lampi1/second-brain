@@ -26,6 +26,13 @@ describe('cardWords', () => {
     expect(cardWords(c, 'new').yes).toBe('Scout ricorda il nuovo al posto del vecchio.');
     expect(cardWords(c, 'both').yes).toBe('Scout ricorda il nuovo insieme al vecchio.');
   });
+  it('a batch of facts, a fact proposed several times and a case-specific one say so in words (ADR 0128)', () => {
+    const many = cardWords(card({ content: '- a\n- b\n- c', ask: { kind: 'remember', role: 'artisan', subject: '', predicate: '', many: 3 } }));
+    expect(many).toMatchObject({ question: 'Artisan deve ricordarsi questi 3 fatti?', yes: expect.stringContaining('tutti'), no: 'Artisan li dimentica tutti.', lead: '' });
+    expect(many.hideBody).toBeFalsy();
+    const one = cardWords(card({ content: 'Statistiche: https://localhost:44309', ask: { kind: 'remember', role: 'artisan', subject: 'setup', predicate: 'note', specific: ['url', 'date'], same: 2 } }));
+    expect(one.advice).toBe('Sembra legato a un caso solo (un indirizzo con porta o id e una data): vale la pena ricordarlo solo se è una regola che si ripete. Proposto 2 volte: una carta sola per tutte.');
+  });
   it('every other kind asks a question in words', () => {
     const qs = [
       card({ ask: { kind: 'skill', name: 'triage' } }),

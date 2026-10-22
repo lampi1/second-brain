@@ -25,6 +25,7 @@ import { withinParent } from './worktrees';
 import { gapLines, skillGaps } from './skill-needs';
 import type { SkillToolsSource } from './discovery';
 import { log } from '../log';
+import { memoryWorth, specificHint } from '../rules/memory-worth';
 
 /** What delegation needs from the chats (ChatManager). */
 export interface DelegationChats {
@@ -271,6 +272,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       ? (a.remember as string[]).map(l => l.trim()) : null;
     if (!lines) throw new Error(`agent_report: remember = up to ${REMEMBER_MAX} single lines of at most ${REMEMBER_LINE} characters.`);
     if (!lines.length) return () => 0;
+    // the worth gate (ADR 0128) before the report is accepted: the agent generalizes the line or leaves it out
+    lines.forEach((line, i) => { const w = memoryWorth('setup', 'note', line); if (w.specific) throw new Error(`agent_report: remember line ${i + 1}: ${specificHint(w)}`); });
     const roleId = self?.agent?.source === 'catalog' ? self.agent.id : null;
     if (!roleId || !d.remember) throw new Error('agent_report: remember works only in a role chat with a brain; leave it out.');
     // the report is already delivered when this runs: a failed write is logged, never turned into a refused report
@@ -406,7 +409,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       questions: { type: 'array', items: { ...str, maxLength: 500 }, maxItems: 8 },
       goalChangedByUser: { type: 'boolean', description: 'true when the user wrote to you directly and changed your goal (you followed the user)' },
       newGoal: { ...str, description: 'with goalChangedByUser: the goal the user gave you' },
-      remember: { type: 'array', items: { ...str, maxLength: REMEMBER_LINE }, maxItems: REMEMBER_MAX, description: 'optional, up to 3 short lines for YOUR role\'s memory (read at every launch of your role): facts about this user\'s setup a future run would otherwise rediscover or ask again; never the task result or a general rule' },
+      remember: { type: 'array', items: { ...str, maxLength: REMEMBER_LINE }, maxItems: REMEMBER_MAX, description: 'optional, up to 3 short lines for YOUR role\'s memory (read at every launch of your role): general, reusable knowledge a future run would otherwise rediscover or ask again (a procedure, a convention, a how-to, where things are kept). Generalize a specific finding first (no URLs with ports, ticket / PR / commit ids, user paths, dates, branch names): a case-specific line refuses the report. Never the task result' },
     } },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: (a, ctx) => JSON.stringify(report(a, callerOf(ctx.params))),

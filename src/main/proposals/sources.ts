@@ -1,6 +1,7 @@
 // The Proposte deck's sources (ADR 0123): each one turns what an existing module already keeps waiting for the user into
 // cards (shared/proposals.ts) with who, where, when and the evidence, and decides a card only through that module's own
-// path, the same call its old page made: a memory fact → memory:confirm / memory:retract; a skill candidate →
+// path, the same call its old page made: a memory fact → memory:confirm / memory:retract (near-duplicates, the daily
+// cap and the batch card: memory-deck.ts, ADR 0128); a skill candidate →
 // learning:promote / the rollback of the change that wrote it; a change the maintenance applied → Tieni (a reviewed mark)
 // / brainmodel:rollback; an agent's protected setting → settings:confirm; a role trial → agents:trialDecide; a tier
 // suggestion → agents:lifecycleDecide; a Battito rule → approvals:decide; an improvement-loop policy → learn:act.
@@ -12,9 +13,10 @@ import type { BrainChange } from '../../shared/brain-model';
 import type { ChatSummary, LearnAction, LearnResult, SettingProposal } from '../../shared/contract';
 import type { MemoryReviewRecord, SkillCandidateView } from '../../shared/learning-review';
 import type { ApprovalItem as PulseApproval, PulseResult } from '../../shared/pulse';
-import type { Proposal, ProposalAsk, ProposalCode, ProposalDecision, ProposalKeep, ProposalFact, ProposalProvenance, ProposalSource, ProposalWho } from '../../shared/proposals';
+import { factSentence, type Proposal, type ProposalAsk, type ProposalCode, type ProposalDecision, type ProposalKeep, type ProposalFact, type ProposalProvenance, type ProposalSource, type ProposalWho } from '../../shared/proposals';
 import { isRoleId } from '../../shared/roles';
 import type { FileSnapshot, StoredChange } from '../brainmodel/changes';
+import { memoryCards, type FactGroup, type MemoryCard } from './memory-deck';
 
 /** Changes older than this are history, not news: they stay in the change log only. */
 export const CHANGE_WINDOW_MS = 14 * 86_400_000;
@@ -97,48 +99,62 @@ function changeAsk(c: BrainChange, code: readonly ProposalCode[]): ProposalAsk {
 }
 const prov = (x: ProposalProvenance): ProposalProvenance => ({ ...x, evidence: x.evidence.filter(e => !!e && e.trim()).map(e => clip(e.trim())) });
 
-// ── memory facts to confirm ───────────────────────────────────────────────────────────────────────────────────────
+// ── memory facts to confirm (grouped, capped and flagged: memory-deck.ts, ADR 0128) ─────────────────────────────────
+const scopeOf = (r: MemoryReviewRecord) => ({ ...(r.scope.project ? { project: r.scope.project } : {}), ...(r.scope.repository ? { repository: r.scope.repository } : {}), ...(r.scope.environment ? { environment: r.scope.environment } : {}) });
+function oneCard(p: ProposalPorts, g: FactGroup): Proposal {
+  const r = g.rep, { run, chat } = whereFrom(p, r.sourceRunId);
+  const conflicts = g.conflicts.map(x => ({ id: x.memoryId, value: x.value }));
+  const scope = Object.entries(r.scope).map(([k, v]) => `${k}: ${v}`).join(' · ');
+  const evidence = [run?.report?.summary ?? '', run?.goal ? `${run.goal}` : '', `${r.sourceEventId}`, ...g.dups.map(d => d.value)];
+  return card('memory', r.memoryId, {
+    group: 'fact', applied: false, title: `${r.subject} · ${r.predicate}`, content: r.value,
+    ask: { kind: 'remember', ...(isRoleId(r.scope.roleId) ? { role: r.scope.roleId } : {}), subject: r.subject, predicate: r.predicate, ...scopeOf(r),
+      ...(conflicts.length ? { conflicts } : {}), ...(g.dups.length ? { same: g.dups.length + 1 } : {}), ...(g.worth.specific ? { specific: g.worth.signs } : {}) },
+    facts: [{ key: 'scope', value: scope }, ...(r.supersedes ? [{ key: 'before' as const, value: r.supersedes }] : []), ...(g.dups.length ? [{ key: 'cases' as const, value: String(g.dups.length + 1) }] : [])],
+    provenance: prov({ who: roleWho(run?.agentId ?? r.scope.roleId, { kind: 'app', id: 'agent' }), ...(chat ? { chat } : {}), runId: r.sourceRunId, files: ['memory/records.json'], at: r.observedAt, evidence }),
+    canApprove: true, canReject: true,
+  });
+}
+function batchCard(b: Extract<MemoryCard, { kind: 'batch' }>): Proposal {
+  const first = b.groups[0]!.rep, latest = b.groups.map(g => g.rep.observedAt).sort().at(-1)!;
+  const same = b.groups.every(g => JSON.stringify(scopeOf(g.rep)) === JSON.stringify(scopeOf(first)));
+  return card('memory', b.id, {
+    group: 'fact', applied: false, title: `${b.role} · ${b.day}`, content: b.groups.map(g => `- ${factSentence(g.rep.subject, g.rep.predicate, g.rep.value)}`).join('\n'),
+    ask: { kind: 'remember', ...(isRoleId(b.role) ? { role: b.role } : {}), subject: '', predicate: '', ...(same ? scopeOf(first) : {}), many: b.groups.length },
+    facts: [{ key: 'cases', value: String(b.groups.reduce((n, g) => n + 1 + g.dups.length, 0)) }],
+    provenance: prov({ who: roleWho(b.role, { kind: 'app', id: 'agent' }), files: ['memory/records.json'], at: latest, evidence: b.groups.map(g => g.rep.sourceEventId) }),
+    canApprove: true, canReject: true,
+  });
+}
 const memory: Source = {
   id: 'memory',
   available: p => !!p.memory,
   async list(p) {
-    const rows = await p.memory!.list();
-    const same = (a: MemoryReviewRecord, b: MemoryReviewRecord): boolean => a.scope.roleId === b.scope.roleId && a.scope.userId === b.scope.userId && a.scope.project === b.scope.project
-      && a.scope.repository === b.scope.repository && a.scope.environment === b.scope.environment && a.subject === b.subject && a.predicate === b.predicate;
-    return rows.filter(r => r.status === 'proposed').map(r => {
-      // the same check as memory-records.ts memoryConflicts: the card asks replace or keep both before Approva works
-      const conflicts = rows.filter(x => x.memoryId !== r.memoryId && x.memoryId !== r.supersedes && same(x, r) && x.status === 'confirmed' && !x.validTo && x.value !== r.value)
-        .map(x => ({ id: x.memoryId, value: x.value }));
-      const { run, chat } = whereFrom(p, r.sourceRunId);
-      const scope = Object.entries(r.scope).map(([k, v]) => `${k}: ${v}`).join(' · ');
-      const evidence = [run?.report?.summary ?? '', run?.goal ? `${run.goal}` : '', `${r.sourceEventId}`];
-      return card('memory', r.memoryId, {
-        group: 'fact', applied: false, title: `${r.subject} · ${r.predicate}`, content: r.value,
-        ask: { kind: 'remember', ...(isRoleId(r.scope.roleId) ? { role: r.scope.roleId } : {}), subject: r.subject, predicate: r.predicate,
-          ...(r.scope.project ? { project: r.scope.project } : {}), ...(r.scope.repository ? { repository: r.scope.repository } : {}), ...(r.scope.environment ? { environment: r.scope.environment } : {}),
-          ...(conflicts.length ? { conflicts } : {}) },
-        facts: [{ key: 'scope', value: scope }, ...(r.supersedes ? [{ key: 'before' as const, value: r.supersedes }] : [])],
-        provenance: prov({ who: roleWho(run?.agentId ?? r.scope.roleId, { kind: 'app', id: 'agent' }), ...(chat ? { chat } : {}), runId: r.sourceRunId, files: ['memory/records.json'], at: r.observedAt, evidence }),
-        canApprove: true, canReject: true,
-      });
-    });
+    return memoryCards(await p.memory!.list()).map(c => (c.kind === 'one' ? oneCard(p, c.group) : batchCard(c)));
   },
   async decide(p, c, decision, note, choice) {
     const id = native(c), text = note?.trim().replace(/[\x00-\x1f\x7f]+/g, ' ').slice(0, 900);
+    const fresh = memoryCards(await p.memory!.list()), found = fresh.find(x => (x.kind === 'one' ? x.group.rep.memoryId : x.id) === id);
+    if (!found) throw new Error('La proposta non è più da decidere: forse è già stata decisa altrove.');
+    const groups = found.kind === 'one' ? [found.group] : found.groups;
+    if (decision === 'reject') {
+      for (const g of groups) for (const r of [g.rep, ...g.dups]) await p.memory!.retract(r.memoryId, `Rejected in Memoria → Proposte${text ? `: ${text}` : ''}`);
+      return;
+    }
     const conflicts = c.ask.kind === 'remember' ? c.ask.conflicts ?? [] : [];
-    if (decision === 'approve' && conflicts.length && !choice) throw new Error('Scegli prima cosa fare con quello che ricordava già: sostituirlo o tenerli entrambi.');
+    if (conflicts.length && !choice) throw new Error('Scegli prima cosa fare con quello che ricordava già: sostituirlo o tenerli entrambi.');
     // the choice holds only for the facts the card showed: one confirmed since is never retracted unseen
     const stale = (ids: string[]): boolean => ids.length !== conflicts.length || conflicts.some(x => !ids.includes(x.id));
-    if (decision === 'approve' && conflicts.length && stale(choice!.shown)) throw new Error('Nel frattempo è stato confermato un altro fatto sullo stesso argomento: rileggi la carta e scegli di nuovo.');
-    if (decision === 'approve') {
-      try { await p.memory!.confirm(id, text || DECK_EVIDENCE, ...(conflicts.length && choice ? [{ keep: choice.keep, ids: choice.shown }] : [])); }
+    if (conflicts.length && stale(choice!.shown)) throw new Error('Nel frattempo è stato confermato un altro fatto sullo stesso argomento: rileggi la carta e scegli di nuovo.');
+    for (const g of groups) {
+      try { await p.memory!.confirm(g.rep.memoryId, text || DECK_EVIDENCE, ...(conflicts.length && choice ? [{ keep: choice.keep, ids: choice.shown }] : [])); }
       catch (e) {
         // another fact on the same topic was confirmed after the card was read: the card shows it now (#173)
         if (e instanceof Error && /explicit supersession/.test(e.message)) throw new Error('Nel frattempo è stato confermato un altro fatto sullo stesso argomento: rileggi la carta e scegli di nuovo.');
         throw e;
       }
+      for (const d of g.dups) await p.memory!.retract(d.memoryId, `Merged into ${g.rep.memoryId} in Memoria → Proposte`);
     }
-    else await p.memory!.retract(id, `Rejected in Memoria → Proposte${text ? `: ${text}` : ''}`);
   },
 };
 

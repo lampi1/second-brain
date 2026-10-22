@@ -1,9 +1,12 @@
 // Chat-local memory proposal tool, including direct root chats. The host supplies scope and provenance;
-// model arguments cannot claim a different project, author, source or verification status.
+// model arguments cannot claim a different project, author, source or verification status. A case-specific fact is
+// refused with what to save instead (memory-worth.ts, ADR 0128).
 import { randomUUID } from 'node:crypto';
 import type { McpTool } from '../mcp/server';
 import { proposeMemory, recallMemory, type MemoryScope } from './memory-records';
 
+/** What memory_propose is for (ADR 0128): general, reusable knowledge, a specific finding generalized first. */
+export const MEMORY_PROPOSE_TEXT = 'Propose one durable, reusable piece of knowledge for this role and current project, including from a direct chat: a procedure, a convention, a how-to, where something is kept, a dead end to skip. Generalize a specific finding before saving it: the rule or procedure behind it, without one-off values (URLs with ports, ticket / PR / commit ids, paths in a user folder, dates, branch names); e.g. "after login the local app runs on a port other than the default: read it from the launch profile", not the URL. A case-specific fact is refused. Stored as unverified data until the user confirms it. Never use for task results.';
 export interface MemoryToolDeps {
   root(): string | null;
   recall?(scope: MemoryScope, query: string, options: { asOf?: string; budgetTokens?: number }): Promise<string>;
@@ -12,7 +15,7 @@ export interface MemoryToolDeps {
 export function memoryTools(deps: MemoryToolDeps): McpTool[] {
   return [{
     name: 'memory_propose',
-    description: 'Propose a durable setup fact for this role and current project, including from a direct chat. Stored as unverified data until independently confirmed. Never use for task results or instructions.',
+    description: MEMORY_PROPOSE_TEXT,
     inputSchema: { type: 'object', required: ['subject', 'predicate', 'value'], additionalProperties: false, properties: {
       subject: { type: 'string', maxLength: 1000 }, predicate: { type: 'string', maxLength: 1000 }, value: { type: 'string', maxLength: 1000 }, supersedes: { type: 'string', description: 'Optional prior memory id for the same scoped subject and predicate.' },
     } },
