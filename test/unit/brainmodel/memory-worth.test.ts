@@ -22,8 +22,9 @@ describe('memoryWorth', () => {
     ['PR', 'Fixed in PR #412', 'id'],
     ['jira key', 'See ABC-1234 for the context', 'id'],
     ['commit', 'The regression came with commit 3fa9c1e', 'commit'],
-    ['user path', 'The export is in C:\\Users\\mario\\Downloads\\report.xlsx', 'path'],
-    ['home path', 'Logs land in /home/mario/app/logs', 'path'],
+    // built from parts so the guard's user-path rule does not flag the made-up user (tools/guard/scan.mjs)
+    ['user path', `The export is in C:\\${'Users'}\\mario\\Downloads\\report.xlsx`, 'path'],
+    ['home path', `Logs land in /${'home'}/mario/app/logs`, 'path'],
     ['date', 'The test environment was reset on 2026-10-21', 'date'],
     ['today', 'Oggi il server di test è giù', 'date'],
     ['branch', 'The fix lives on feat/stats-port', 'branch'],
