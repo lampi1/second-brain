@@ -23,8 +23,8 @@ export const agentsGridDe: typeof agentsGridIt = {
   'agentsGrid.perfJudged': ({ n }) => n === 1 ? '1 bewerteter Run' : `${n} bewertete Runs`,
   'agentsGrid.perfHelpTitle': 'Wie die Leistung berechnet wird',
   'agentsGrid.perfHelp1': 'Der Durchschnitt der Urteile über seine Runs: Erfolg zählt 100 %, teilweise 50 %, gescheitert 0 %. Runs ohne Urteil zählen nicht. Die Zahl darunter sagt, auf wie vielen Runs sie beruht.',
-  'agentsGrid.perfHelp2': 'Jedes Urteil wiegt nach dem, der es gab (du, eine unabhängige Prüfung × 1, der Orchestrator × 0.6; der eigene Bericht des Agenten über sich zählt nicht), und nach seinem Alter: Ein 30 Tage altes Urteil wiegt halb so viel wie ein heutiges, ein 60 Tage altes ein Viertel.',
-  'agentsGrid.perfHelp3': ({ min }) => `Sie erscheint nach ${min} bewerteten Runs; davor „wärmt sich“ der Agent „auf“. Stufen: ab 85 % ausgezeichnet, 70–84 % gut, 50–69 % passabel, unter 50 % ausbaufähig.`,
+  'agentsGrid.perfHelp2': 'Jedes Urteil wiegt nach dem, der es gab (du, eine unabhängige Prüfung × 1, der Orchestrator × 0,6; der eigene Bericht des Agenten über sich zählt nicht), und nach seinem Alter: Ein 30 Tage altes Urteil wiegt halb so viel wie ein heutiges, ein 60 Tage altes ein Viertel.',
+  'agentsGrid.perfHelp3': ({ min }) => `Sie erscheint nach ${min} bewerteten Runs; davor zeigt der Agent „Wärmt sich auf“. Stufen: ab 85 % ausgezeichnet, 70–84 % gut, 50–69 % passabel, unter 50 % ausbaufähig.`,
   'agentsGrid.perfSources': ({ human, review, facts, orchestrator, self }) =>
     `Urteile bisher: ${human} von dir, ${review} aus unabhängigen Prüfungen, ${facts} aus den Fakten, ${orchestrator} vom Orchestrator` + (self ? `; ${self} nur vom Agenten selbst, die nicht zählen.` : '.'),
   'agentsGrid.costHelp': 'Die Mediankosten eines beendeten Runs: Die Hälfte der Runs kostet weniger, die Hälfte mehr. Es zählen nur Runs, deren Engine Kosten meldet.',

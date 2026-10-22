@@ -8,7 +8,7 @@ export const learningDe: typeof learningIt = {
   'learn.v.aiuta': 'Hilft', 'learn.v.nessun-effetto': 'Keine Wirkung', 'learn.v.raccolta': 'Sammelt', 'learn.v.peggiora': 'Schlechter', 'learn.v.annullato': 'Rückgängig',
   'learn.k.aiuta': 'Belegter Nutzen', 'learn.k.nessun-effetto': 'Keine Wirkung', 'learn.k.raccolta': 'Sammelt', 'learn.k.peggiora': 'Schlechter', 'learn.k.annullato': 'Rückgängig',
   'learn.k.aiutaHelp': 'Änderungen, nach denen deine Korrekturen pro Run gesunken sind, mit dem ganzen 90-%-Intervall unter null.',
-  'learn.k.nessun-effettoHelp': 'Änderungen, lange genug gemessen, ohne eine Wirkung größer als die Marge (ein Viertel der Korrekturen davor, mindestens 0.1).',
+  'learn.k.nessun-effettoHelp': 'Änderungen, lange genug gemessen, ohne eine Wirkung größer als die Marge (ein Viertel der Korrekturen davor, mindestens 0,1).',
   'learn.k.raccoltaHelp': 'Änderungen, die auf mehr Runs warten: Ein Urteil kommt nur bei 20, 40, 80 und 160 Runs nach der Änderung, nie bei jedem neuen Run.',
   'learn.k.peggioraHelp': 'Änderungen, nach denen die Korrekturen gestiegen sind, mit dem ganzen Intervall über null. Die App macht sie nicht von selbst rückgängig: Du entscheidest.',
   'learn.k.annullatoHelp': 'Änderungen, die rückgängig gemacht wurden, nachdem sie aktiv waren.',

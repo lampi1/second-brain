@@ -14,7 +14,7 @@ export const cloudDe: typeof cloudIt = {
   'cloud.webOnly': (p: { engine: string }) => `Nachrichten und Stopp für ${p.engine} gehen über seine Seite: „Öffnen“.`,
   'cloud.noOutput': 'Der Anbieter zeigt der App seine Nachrichten nicht: Öffne sie auf seiner Seite.',
   'cloud.noMessages': 'Noch keine Nachrichten: Sie aktualisieren sich, solange die Leiste offen ist.',
-  'cloud.by.agent': 'vom Koordinator geöffnet', 'cloud.by.user': 'von dir geöffnet', 'cloud.by.vendor': 'außerhalb der App geöffnet',
+  'cloud.by.agent': 'vom Orchestrator geöffnet', 'cloud.by.user': 'von dir geöffnet', 'cloud.by.vendor': 'außerhalb der App geöffnet',
   'cloud.failed': (p: { why: string }) => `Cloud-Agent: ${p.why}`,
   'cloud.applied': (p: { path: string }) => `Ergebnis heimgeholt: ${p.path}`,
   'cloud.started': (p: { engine: string }) => `Cloud-Agent auf ${p.engine} gestartet`,

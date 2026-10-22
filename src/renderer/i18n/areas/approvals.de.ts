@@ -11,7 +11,7 @@ export const approvalsDe: typeof approvalsIt = {
   'approvals.refresh': 'Aktualisieren',
   'approvals.dismiss': 'Nachricht schließen',
   'approvals.failed': (p: { detail: string }) => `Entscheidung nicht angewendet: ${p.detail}`,
-  'approvals.unavailable': 'Offene Entscheidungen nicht lesbar. Versuch es mit Aktualisieren noch einmal.',
+  'approvals.unavailable': 'Offene Entscheidungen nicht lesbar. Versuch es mit „Aktualisieren“ noch einmal.',
   'approvals.problem.lifecycle': 'Die Rollenvorschläge sind nicht lesbar: Hier könnten welche fehlen.',
   'approvals.problem.metrics': 'Run-Zahlen sind nicht verfügbar: Entscheidungen sind trotzdem möglich.',
   'approvals.kind.trial': 'Version auf Probe',

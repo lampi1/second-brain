@@ -3,8 +3,8 @@ import type { catalogIt } from './catalog.it';
 export const catalogDe: typeof catalogIt = {
   // the Agenti page's review switch (JudgingSwitch.tsx)
   'catalog.judging.title': 'Prüfung von Level und Leistung aktivieren',
-  'catalog.judging.onDesc': 'Ein: Jede erledigte Aufgabe wird von einem Sentinel in einer neuen Session geprüft. Level und Leistung beruhen auf echten Urteilen.',
-  'catalog.judging.offDesc': 'Aus: keine Prüfungen. Level und Leistung zählen nur deine Bewertungen, die des Orchestrator und die Fakten.',
+  'catalog.judging.onDesc': 'Ein: Jede erledigte Aufgabe wird von einem Sentinel in einer neuen Sitzung geprüft. Level und Leistung beruhen auf echten Urteilen.',
+  'catalog.judging.offDesc': 'Aus: keine Prüfungen. Level und Leistung zählen nur deine Bewertungen, die des Orchestrators und die Fakten.',
   'catalog.judging.cost': (p: { cost: string; runs: string; each: string }) => `Geschätzte Kosten: etwa ${p.cost} pro Tag (${p.runs} Aufgaben pro Tag × ${p.each} pro Prüfung).`,
   'catalog.judging.costNoReview': (p: { runs: string }) => `Geschätzte Kosten: ${p.runs} Prüfungen pro Tag; der Preis einer Prüfung erscheint nach der ersten.`,
   'catalog.judging.costNone': 'Geschätzte Kosten: noch keine Daten (keine Aufgabe in den letzten 7 Tagen erledigt).',
@@ -15,7 +15,7 @@ export const catalogDe: typeof catalogIt = {
   'catalog.displayLatency': "Bericht bis Hinweis",
   'catalog.displayLatencyNote': "Median vom Bericht bis zur Veröffentlichung des Hinweises; misst nicht, wann du das Ergebnis liest.",
   'catalog.synthesisSubmissions': "Beobachtete Synthese-Übergaben",
-  'catalog.synthesisSubmissionsNote': "Unterschiedliche Pakete, die an die Engine übergeben wurden: Mehrere Ergebnisse zusammen zählen einmal. Das sind nicht unbedingt neue KI-Züge. Verlauf ohne Telemetrie ist unbekannt.",
+  'catalog.synthesisSubmissionsNote': "Unterschiedliche Pakete, die an die Engine übergeben wurden: Mehrere Ergebnisse zusammen zählen einmal. Das sind nicht unbedingt neue KI-Turns. Verlauf ohne Telemetrie ist unbekannt.",
   'runs.version': 'Beim Start festgelegte Version',
   'runs.auto': 'Vom Orchestrator gestartet', 'runs.outcome': 'Wie ist es gelaufen?',
   'runs.success': 'Erfolg', 'runs.partial': 'Teilweise', 'runs.fail': 'Gescheitert',
@@ -23,7 +23,7 @@ export const catalogDe: typeof catalogIt = {
   'runs.facts.success': 'Keine Korrektur in 7 Tagen beobachtet (Näherung, nicht geprüft).',
   'runs.facts.provisional': ({ until }: { until: Date }) => `Als fertig gemeldet; Beobachtung bis ${until.toLocaleDateString()}. Das ist keine Prüfung.`,
   'runs.facts.reworked': 'Nacharbeit beobachtet (Näherung, kein geprüftes Urteil).',
-  'runs.facts.blocked': 'Vom Agent gemeldete Blockade, nicht unabhängig geprüft.',
+  'runs.facts.blocked': 'Vom Agenten gemeldete Blockade, nicht unabhängig geprüft.',
   'runs.run': 'Starten', 'runs.started': 'Gestartet, auf der Startseite', 'runs.startedShort': 'Gestartet', 'runs.open': 'Öffnen',
   'runs.goal': 'Ziel', 'runs.folder': 'Ordner', 'runs.startError': 'Start nicht möglich. Versuch es noch einmal.',
   'contextPulse.title': 'Aus Battito', 'contextPulse.error': 'Karten nicht verfügbar.', 'contextPulse.actionError': 'Aktion fehlgeschlagen. Versuch es noch einmal.',
@@ -51,5 +51,5 @@ export const catalogDe: typeof catalogIt = {
   'catalog.costsWhy.noTotal': 'Kosten pro Erfolg: Die Summe der ältesten Runs fehlt; sie erscheint mit den nächsten.',
   'catalog.costsWhy.partial': ({ n, total }) => `Kosten pro Erfolg: Die Kosten sind nur für ${n} von ${total} Runs bekannt.`,
   'catalog.costsHelp': 'Mediankosten: Die Hälfte der beendeten Runs mit bekannten Kosten war billiger. Kosten pro geprüftem Erfolg: die Kosten aller beendeten Runs geteilt durch die geprüft erfolgreichen (die das Level zählt). Zu API-Listenpreisen: Mit einem Abo ist das nicht, was du zahlst.',
-  'catalog.metricsError': 'Statistik nicht verfügbar. Bitte noch einmal versuchen.', 'catalog.back': 'Zurück zum Katalog',
+  'catalog.metricsError': 'Statistik nicht verfügbar. Versuch es noch einmal.', 'catalog.back': 'Zurück zum Katalog',
 };

@@ -253,7 +253,7 @@ function attemptDe(nm: string): string {
   const [n, m] = nm.split('/');
   return `Versuch ${n} von ${m}`;
 }
-const LATER_WORD_DE: Record<string, string> = { title: 'Titel', model: 'Modell', effort: 'Effort', permissionMode: 'Berechtigungen' };
+const LATER_WORD_DE: Record<string, string> = { title: 'Titel', model: 'Modell', effort: 'Aufwand', permissionMode: 'Berechtigungen' };
 function laterDe(joined: string): string {
   return (joined ? joined.split(',') : []).map(k => LATER_WORD_DE[k] ?? k).join(', ');
 }
@@ -280,8 +280,8 @@ export const SYS_DE: typeof SYS_IT = {
   'sys.turnFailed.other': (p: { subtype: string }) => `Turn mit Fehler beendet: ${p.subtype}.`,
   'sys.turnFailed.none': 'Turn mit Fehler beendet: die Engine hat nicht gesagt, warum.',
 
-  'sys.compacting': 'Kontext wird kompaktiert…',
-  'sys.compacted': (p: { pre: string | number; post: string | number }) => `Kontext kompaktiert (${p.pre} → ${p.post} Tokens).`,
+  'sys.compacting': 'Kontext wird komprimiert…',
+  'sys.compacted': (p: { pre: string | number; post: string | number }) => `Kontext komprimiert (${p.pre} → ${p.post} Tokens).`,
   'sys.apiRetry': (p: { attempt: string | number; max: string | number; error: string }) => `Neuer API-Versuch ${p.attempt}/${p.max} (${p.error || 'Fehler'}).`,
   'sys.permissionDenied': (p: { tool: string; message: string }) => `Berechtigung verweigert: ${p.tool}${p.message ? ` · ${p.message}` : ''}`,
   'sys.commandReadOnly': (p: { command: string }) => `Befehl abgelehnt: diese Rolle darf nur lesen (${p.command}).`,
@@ -292,13 +292,13 @@ export const SYS_DE: typeof SYS_IT = {
   'sys.delegationParallel': (p: { limit: number }) => `Delegation abgelehnt: sie würde die Grenze von ${p.limit} gleichzeitigen Kind-Chats überschreiten (Einstellungen → Rollen und Delegation). Warte, bis einer berichtet.`,
   'sys.userWroteChild': (p: { role: string; title: string }) => `Du hast in den Kind-Chat ${p.role} „${p.title}“ geschrieben: dieser Chat erfährt es mit seiner nächsten Nachricht.`,
   'sys.aboveParent': (p: { tool: string; parent: string }) => `Berechtigung abgelehnt: ${p.tool} geht über die Berechtigungen von „${p.parent}“ hinaus, dem Chat, der diesen delegiert hat.`,
-  'sys.subagentRefused': (p: { type: string }) => `Sub-Agent „${p.type}“ abgelehnt: delegierte Arbeit geht an einen sichtbaren Chat (agent_delegate). Hier nur schnelle Suchen (Explore).`,
+  'sys.subagentRefused': (p: { type: string }) => `Subagent „${p.type}“ abgelehnt: delegierte Arbeit geht an einen sichtbaren Chat (agent_delegate). Hier nur schnelle Suchen (Explore).`,
   'sys.skillRefused': (p: { skill: string; role: string }) => `Skill „${p.skill}“ ist der Rolle ${p.role} nicht zugewiesen: abgelehnt.`,
   'sys.brainOnly': (p: { tool: string; path: string; role: string }) => `Schreiben abgelehnt: die Rolle ${p.role} darf nur im Brain-Ordner schreiben (${p.tool} auf „${p.path}“).`,
   'sys.readToolsList': (p: { tool: string; role: string }) => `Schreiben abgelehnt: nur du änderst die Liste der nur lesenden Tools (read-only-tools.md) (${p.tool}, Rolle ${p.role}).`,
   'sys.modelRefusal': 'Das Modell hat die Anfrage abgelehnt.',
 
-  'sys.compactedPlain': 'Kontext kompaktiert.',
+  'sys.compactedPlain': 'Kontext komprimiert.',
   'sys.commandNoOutput': '(Befehl ausgeführt)',
 
   'sys.resumeFailed': (p: { label: string; error: string }) => `${p.label} hat die vorige Sitzung nicht fortgesetzt (${p.error}): eine neue wird geöffnet.`,
@@ -323,7 +323,7 @@ export const SYS_DE: typeof SYS_IT = {
   'sys.handoffSavedAuto': 'Automatische Übergabe gespeichert (der Chat hat sie nicht geschrieben): „Fortsetzen“ öffnet einen neuen Chat, der von hier ausgeht.',
   'sys.continuedIn': (p: { title: string }) => `Die Arbeit geht im Chat „${p.title}“ weiter. Dieser bleibt lesbar.`,
   'sys.dayCompactStart': 'Neuer Tag: der Kontext des Orchestrators wird zu einer Zusammenfassung kompaktiert (die Chats, die er verfolgt, und die Warteschlange bleiben).',
-  'sys.dayCompactFailed': 'Der Kontext des Orchestrators konnte nicht zusammengefasst werden: neuer Versuch morgen; bis dahin kompaktiert er sich bei seiner eingestellten Grenze selbst.',
+  'sys.dayCompactFailed': 'Der Kontext des Orchestrators konnte nicht zusammengefasst werden: neuer Versuch morgen; bis dahin komprimiert er sich bei seiner eingestellten Grenze selbst.',
   'sys.handoffAsking': 'Der Chat wird um seine Übergabe gebeten (ein kurzer Turn).',
   'sys.coldContinued': 'Es geht von hier weiter: eine neue Sitzung aus der Übergabe (der Cache der vorigen war abgelaufen).',
 

@@ -7,7 +7,7 @@ export const genuiRequestDe: typeof genuiRequestIt = {
   'genui.request.write': 'Antwort schreiben',
   'genui.request.free': 'Freitext-Antwort',
   'genui.request.written': ({ engine }) => `${engine} bekommt das statt der Optionen als deine geschriebene Antwort.`,
-  'genui.request.enter': 'Enter',
+  'genui.request.enter': 'Eingabe',
   'genui.request.sendHint': 'senden',
   'genui.request.backHint': 'zurück zur Auswahl',
   'genui.request.cancel': 'Abbrechen',

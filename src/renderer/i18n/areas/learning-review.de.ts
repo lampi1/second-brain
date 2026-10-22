@@ -1,7 +1,7 @@
 // German (de-AT) counterparts of the "learning-review" area (learning-review.it.ts): memory and skill validation UI text; provenance, review gates and unknown measurements remain explicit.
 import type { learningReviewIt } from './learning-review.it';
 export const learningReviewDe: { [K in keyof typeof learningReviewIt]: string } = {
-  "lr.memoryTitle": "Memory-Prüfung",
+  "lr.memoryTitle": "Gedächtnisprüfung",
   "lr.memoryLead": "Prüf Quellen und Gültigkeit, bevor du einen Fakt bestätigst. Vorschläge sind keine geprüften Fakten.",
   "lr.scope": "Bereich",
   "lr.source": "Quelle: Run · Ereignis",
@@ -26,7 +26,7 @@ export const learningReviewDe: { [K in keyof typeof learningReviewIt]: string } 
   "lr.today": "Zurück zum aktuellen Stand",
   "lr.historical": "Historische Ansicht, nur lesen:",
   "lr.loading": "Wird geladen…",
-  "lr.memoryEmpty": "Keine Memory-Einträge in dieser Ansicht.",
+  "lr.memoryEmpty": "Keine Gedächtniseinträge in dieser Ansicht.",
   "lr.learningTitle": "Prüfung der Skill-Kandidaten",
   "lr.learningLead": "Sieh dir den Entwurf an, prüf ein echtes Beispiel und spiel Testfälle erneut ab, bevor du einen Skill übernimmst.",
   "lr.promoted": "Übernommen",
@@ -69,7 +69,7 @@ export const learningReviewDe: { [K in keyof typeof learningReviewIt]: string } 
   "lr.after": "Nachher",
   "lr.metric": "Messgröße (Abdeckung n/gesamt)",
   "lr.quality": "Geprüfte Qualität",
-  "lr.turns": "Züge",
+  "lr.turns": "Turns",
   "lr.cost": "Kosten USD",
   "lr.elapsed": "Dauer ms",
   "lr.comparisonNote": "Beschreibender Vergleich; keine Aussagen zu Ursachen oder Einsparungen. Gepaarte Fälle:",
@@ -115,7 +115,7 @@ export const learningReviewDe: { [K in keyof typeof learningReviewIt]: string } 
   "lr.verdict.unknown": "Unbekannt",
   "lr.basis.human": "menschliches Urteil",
   "lr.basis.reviewed-evidence": "geprüfte Nachweise",
-  "lr.basis.orchestrator-opinion": "Einschätzung des Orchestrator",
+  "lr.basis.orchestrator-opinion": "Einschätzung des Orchestrators",
   "lr.basis.self-report": "Selbstauskunft",
   "lr.basis.unknown": "unbekannte Grundlage",
   "lr.verified.yes": "Geprüft",
