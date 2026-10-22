@@ -91,6 +91,8 @@ function uniqueChildResults(items: readonly HeldChildResult[]): HeldChildResult[
   return unique;
 }
 
+/** an engine started while the user typed (ChatManager.prewarm) and never written to ends after this */
+const PREWARM_UNUSED_MS = 5 * 60_000;
 /** Internal outbox receipts are tied to engine submission, never CPU queue admission. */
 interface SubmissionReceipt { beforeSubmit(): void; submitted(): void; failed(error: unknown): void }
 
@@ -181,6 +183,8 @@ export interface ChatManagerOptions {
   orchestratorDayCompact?: () => boolean;
   /** ms after the last call before an idle long chat writes its cold note (default 50 min) */
   coldIdleMs?: () => number;
+  /** tests: how long an engine started while the user typed waits for a message (default PREWARM_UNUSED_MS) */
+  prewarmUnusedMs?: number;
   /** how long the prompt cache lives after its last use (default 55 min; tests shorten it) */
   cacheTtlMs?: number;
   /** ms between two checks of the cold chats (default 60 s; 0 = no timer, tests call coldTick) */
@@ -289,8 +293,6 @@ interface Rec {
   /** the session whose first API call was counted already (context-stats.ts cache) */
   cacheSession?: string;
   gitRoot?: string | null;
-  /** the folder gitRoot was found for (a later checkpoint from the same folder skips `git rev-parse`) */
-  gitRootOf?: string;
   /** child results a quit held back (shutdown), sent after the next start (resumeInterrupted) */
   heldResults?: HeldChildResult[];
   /** the end-of-turn record of the last checkpoint, while git writes it (recordTurnEnd) */
@@ -2687,11 +2689,9 @@ export class ChatManager implements ChatService {
   private async checkpoint(r: Rec): Promise<void> {
     if (r.gitRoot === null) return;
     try {
-      const known = r.gitRoot && r.gitRootOf === r.s.cwd ? r.gitRoot : undefined;
-      const cp = await takeCheckpoint(r.s.cwd, `refs/sb/checkpoints/${r.s.id}/${Date.now()}`, known);
+      const cp = await takeCheckpoint(r.s.cwd, `refs/sb/checkpoints/${r.s.id}/${Date.now()}`);
       if (!cp) { r.gitRoot = null; return; }
       r.gitRoot = cp.root;
-      r.gitRootOf = r.s.cwd;
       r.turnCheckpoint = true;
       const list = r.checkpoints ??= [];
       list.push(cp);
@@ -2765,19 +2765,32 @@ export class ChatManager implements ChatService {
     this.ensureSession(r).catch(e => log.warn('chats', 'Orchestrator engine not started ahead', { chat: r.s.id, cause: errText(e), hint: 'it starts with the first message as before' }));
   }
 
-  /** The user started typing in a chat whose engine was released for idleness (engineIdleMin): it resumes now (a
-   *  resume, no message, no tokens), so the CLI's start-up (10-25 s measured in ADR 0025, more on a busy Windows PC)
-   *  runs while the user types instead of after the Enter. Never for a chat whose next message goes to a fresh session
-   *  (coldRoute: the switch starts that one), nor for one closed, queued, closing or opening. True = an engine starts. */
+  /** The user started typing in a chat with no engine (restored after a restart, or its engine ended): it resumes
+   *  now (a resume, no message, no tokens), so the CLI's start-up (10-25 s measured in ADR 0025, more on a busy Windows
+   *  PC) runs while the user types instead of after the Enter. Never for a chat whose next message goes, or will soon
+   *  go, to a fresh session (coldRoute: the switch starts that one), nor for one closed, queued, closing or opening.
+   *  An engine nobody writes to within PREWARM_UNUSED_MS ends again (no Claude engine is released for idleness while
+   *  its sub-agents cannot be observed, so nothing else would end it). True = an engine starts. */
   prewarm(chatId: string): boolean {
     const r = this.chats.get(chatId);
     if (!r || r.session || r.releasing || r.archiving || r.switching || r.opening || r.s.closedAt || r.s.state === 'error') return false;
     if (this.quitting || updateActivity.frozen || this.admission?.entry(r.s.id)) return false;
     if (!engineOf(r.s.harness)?.caps.warm || this.opts.engineOn?.(r.s.harness) === false || !isUuid(r.s.sessionId) || !fs.existsSync(r.s.cwd)) return false;
-    if (this.coldOn() && coldRoute(this.coldView(r), Date.now(), this.ttl())) return false;
-    r.activeAt = Date.now(); // a started engine the user then leaves is released again after engineIdleMin, not at once
+    const now = Date.now();
+    if (this.coldOn() && coldRoute(this.coldView(r), now + (this.opts.prewarmUnusedMs ?? PREWARM_UNUSED_MS), this.ttl())) return false;
+    // never a quiet cold-note turn on an engine started only for this: without it the chat could not write one either
+    r.coldAskedFor = r.lastTurnAt;
+    r.activeAt = now;
+    const turns = r.lastTurnAt;
     log.info('chats', 'engine started while the user types', { chat: r.s.id });
     this.ensureSession(r).catch(e => log.warn('chats', 'engine not started ahead of the message', { chat: r.s.id, cause: errText(e), hint: 'it starts with the message, as before' }));
+    const sess = r.session as HarnessSession | null;
+    if (sess) setTimeout(() => {
+      if (this.quitting || this.chats.get(chatId) !== r || r.session !== sess || !sess.alive || sess.busy || r.working || r.lastTurnAt !== turns) return;
+      if (r.releasing || r.archiving || r.switching || r.pending.size > 0 || (r.deliveryHolds ?? 0) > 0 || this.deliveries.has(chatId)) return;
+      log.info('chats', 'engine started while typing ended unused', { chat: r.s.id });
+      r.releasing = this.closeKeeping(r, sess).finally(() => { r.releasing = undefined; });
+    }, this.opts.prewarmUnusedMs ?? PREWARM_UNUSED_MS).unref();
     return true;
   }
 

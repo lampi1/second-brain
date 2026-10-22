@@ -54,11 +54,10 @@ async function worktreeTree(root: string): Promise<string> {
   } finally { fs.rmSync(tmp, { force: true }); }
 }
 
-/** Records the working tree of the repository at cwd; null when cwd is no git work tree or git fails. `knownRoot`: the
- *  repository's top folder from an earlier checkpoint of the same chat (one git start less before each turn: every
- *  git call here runs between the user's Enter and the engine). */
-export async function snapshot(cwd: string, ref: string, knownRoot?: string): Promise<Checkpoint | null> {
-  const root = knownRoot && fs.existsSync(knownRoot) ? knownRoot : await repoRoot(cwd);
+/** Records the working tree of the repository at cwd; null when cwd is no git work tree or git fails. The tree and
+ *  HEAD are read together: every git call here runs between the user's Enter and the engine. */
+export async function snapshot(cwd: string, ref: string): Promise<Checkpoint | null> {
+  const root = await repoRoot(cwd);
   if (!root) return null;
   const [tree, head] = await Promise.all([worktreeTree(root), git(root, ['rev-parse', '-q', '--verify', 'HEAD']).then(s => s.trim(), () => '')]);
   const commit = (await git(root, ['commit-tree', tree, ...(head ? ['-p', head] : []), '-m', 'second-brain checkpoint'], IDENTITY)).trim();

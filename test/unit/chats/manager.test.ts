@@ -644,5 +644,20 @@ describe('ChatManager', () => {
     await waitFor(() => results(m, c.id).length === 2, 'the message used that engine');
     expect(argvs(e)).toHaveLength(spawns);
   });
+
+  it('an engine started while the user typed and never written to ends again', async () => {
+    const e = env();
+    const { m } = manager(e, { prewarmUnusedMs: 300, sessionFactory: (_h, options, sink) => new ClaudeSession({ ...options, claudePath: FAKE }, { ...sink, childrenCoverage: (coverage, reason) => sink.childrenCoverage?.(coverage === 'partial' ? 'complete' : coverage, reason) }) });
+    const c = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'hello there' });
+    await waitFor(() => results(m, c.id).length === 1 && m.list().find(x => x.id === c.id)?.state === 'idle', 'first turn');
+    expect(m.releaseIdle(60_000, Date.now() + 61_000)).toBe(1);
+    await waitFor(() => m.engines().live.length === 0, 'released');
+    expect(m.prewarm(c.id)).toBe(true);
+    await waitFor(() => m.engines().live.length === 1, 'engine started while typing');
+    await waitFor(() => m.engines().live.length === 0, 'ended unused', 5000);
+    expect(results(m, c.id)).toHaveLength(1);
+    await m.send(c.id, 'again');
+    await waitFor(() => results(m, c.id).length === 2, 'the next message resumes as before');
+  });
 });
 

@@ -6,9 +6,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
-- **Faster replies after a pause** (ADR 0126): a chat whose engine was released starts it again while you type, a
-  chat the Orchestrator opens for your request no longer waits for the CPU queue, the per-turn checkpoint does one git
-  call less, and the logs time every step between Enter and the engine (`timing: before send`).
+- **Faster first replies** (ADR 0126): a chat with no engine (after a restart) starts it while you type, a chat the
+  Orchestrator opens for your request no longer waits for the CPU queue, the per-turn checkpoint reads git in
+  parallel, and the logs time every step between Enter and the engine (`timing: before send`).
 - **Memoria is the brain's one hub** (ADR 0122, 0123): tabs Proposte, Approvate, Skill, Regole, Script & Query, Idee,
   File, Apprendimento, Statistiche, with live counters and the day's sentence on top; the Dashboard is gone, its parts
   merged once into Memoria, Costi and Qualità; the sidebar's Memoria badge counts the open proposals. Every proposal the
