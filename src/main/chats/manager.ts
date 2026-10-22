@@ -3179,7 +3179,7 @@ export class ChatManager implements ChatService {
         log.warn('chats', 'warm engine refused the chat choices: starting a fresh one', { chat: r.s.id, data: errText(e) });
         if (r.session === sess) {
           r.session = null;
-          void sess.close(1000);
+          void sess.close();
           r.s.sessionId = crypto.randomUUID(); // never two engines on one session id
           this.startSession(r);
         }
