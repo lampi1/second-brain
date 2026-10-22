@@ -55,7 +55,7 @@ compacted only on the next day, on an expired cache (ADR 0031: ~2.10 $ for a col
 - Claude starts a sub-agent without a permission request, so the role gate never saw it: a role chat with the sub-agent
   tool gets the gate's rule as an in-process PreToolUse hook (`role-gate.ts SubagentGate`, Explore only).
 - A waiting engine launched for a role lists tools as that role's root chat would (no delegation tools for a role that
-  launches nobody, no `agent_ask_parent`, its browser access and managed servers); a delegated chat starts cold (until ADR 0126: now it takes an engine launched as a child under the same role chain).
+  launches nobody, no `agent_ask_parent`, its browser access and managed servers); a delegated chat starts cold (until ADR 0127: now it takes an engine launched as a child under the same role chain).
 - Child results still waiting for their siblings when the app quits are kept on the parent and sent after the start.
 - A clean report keeps its own slot in the Orchestrator's news: a later error of the same chat never hides it.
 
