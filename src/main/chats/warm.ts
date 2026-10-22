@@ -57,8 +57,9 @@ export interface WarmLaunch {
   agentAssets?: { pluginDir: string; skillRoot: string };
   compactWindowTokens?: number;
   /** what the chat endpoint answers for the engine before a chat owns it (its tool list is read once, at start): the
-   *  role's catalog id and the roles it may launch (null = unknown) */
-  view?: { role: string | null; launches: string[] | null };
+   *  role's catalog id and the roles it may launch (null = unknown); `child` = an engine for a delegated chat, with the
+   *  role chain of the parent it will work under (its managed MCP servers are bounded by it, as for a cold child) */
+  view?: { role: string | null; launches: string[] | null; child?: { ancestors: (string | null)[] } };
 }
 export const PLAIN_LAUNCH: WarmLaunch = { sig: '' };
 
@@ -81,7 +82,7 @@ export interface WarmPoolOptions {
   enabled(): boolean;
   /** an engine older than this is replaced, so settings and CLAUDE.md edits reach the next chat (default 30 min) */
   maxAgeMs?: number;
-  /** engines waiting at once, all in one folder (default 2: a plain one and the last role's) */
+  /** engines waiting at once, all in one folder (default 3: a plain one, the last role's, the last delegated child's) */
   maxSlots?: number;
 }
 
@@ -126,7 +127,7 @@ export class WarmPool {
     if (same && same.engine.session.alive) { same.usedAt = Date.now(); return; }
     if (same) this.drop(same, 'dead');
     for (const x of this.slots.filter(x => !sameDir(x.engine.cwd, cwd))) this.drop(x, 'another folder');
-    while (this.slots.length >= Math.max(1, this.o.maxSlots ?? 2)) this.drop([...this.slots].sort((a, b) => a.usedAt - b.usedAt)[0]!, 'pool full');
+    while (this.slots.length >= Math.max(1, this.o.maxSlots ?? 3)) this.drop([...this.slots].sort((a, b) => a.usedAt - b.usedAt)[0]!, 'pool full');
     let next: WarmEngine | null = null;
     try { next = this.o.spawn(cwd, launch); } catch (e) { log.warn('chats', 'warm engine not started', { data: { cwd, error: String(e) } }); }
     // a start that failed at once (folder gone, no engine) already reported its exit: never kept, never recycled

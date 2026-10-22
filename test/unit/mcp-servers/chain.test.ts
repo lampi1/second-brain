@@ -69,4 +69,30 @@ describe('the MCP role chain of a delegated chat', () => {
     expect(warm.length).toBeGreaterThan(0);
     for (const a of warm) expect(a.ctx).toEqual({ roles: [null], policy: null });
   });
+
+  it('a delegated chat leaves an engine launched as a child under the same chain; the next such child adopts it', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-mcp-warm-child-'));
+    roots.push(dir);
+    const asked: { id: string; ctx: unknown }[] = [];
+    let m: ChatManager | null = null;
+    m = manager(dir, { prewarm: true, prewarmDelayMs: 0, extMcp: id => { asked.push({ id, ctx: m?.mcpContext(id) ?? 'none' }); return { servers: [], denied: [] }; } });
+    const parent = await m.create({ harness: 'claude', cwd: dir, roleId: 'strategist', title: 'Root', prompt: 'x' }, 'user');
+    const first = await m.create({ harness: 'claude', cwd: dir, roleId: 'scout', parentId: parent.id, title: 'Scout 1', prompt: 'x' }, 'agent');
+    const known = new Set([parent.id, first.id]);
+    const isChildEngine = (a: { ctx: unknown }) => JSON.stringify((a.ctx as { roles?: unknown }).roles) === JSON.stringify(['scout', 'strategist']);
+    for (let i = 0; i < 50 && !asked.some(a => !known.has(a.id) && isChildEngine(a)); i++) await new Promise(r => setTimeout(r, 20));
+    const waiting = asked.find(a => !known.has(a.id) && isChildEngine(a))?.id;
+    // bounded by the parent's chain like a cold child, and it lists the child's own tool
+    expect(waiting).toBeDefined();
+    expect(m.chatToolShown(waiting!, 'agent_ask_parent')).toBe(true);
+    const second = await m.create({ harness: 'claude', cwd: dir, roleId: 'scout', parentId: parent.id, title: 'Scout 2', prompt: 'y' }, 'agent');
+    expect(second.id).toBe(waiting);
+    expect(m.mcpContext(second.id)?.roles).toEqual(['scout', 'strategist']);
+    // a root chat of the same role never takes a child's engine (another launch digest)
+    for (let i = 0; i < 50 && !asked.some(a => ![...known, second.id].includes(a.id) && isChildEngine(a)); i++) await new Promise(r => setTimeout(r, 20));
+    const next = asked.find(a => ![...known, second.id].includes(a.id) && isChildEngine(a))?.id;
+    expect(next).toBeDefined();
+    const root = await m.create({ harness: 'claude', cwd: dir, roleId: 'scout', title: 'Scout root', prompt: 'z' }, 'user');
+    expect(root.id).not.toBe(next);
+  });
 });

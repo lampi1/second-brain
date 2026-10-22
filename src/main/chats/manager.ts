@@ -684,10 +684,16 @@ export class ChatManager implements ChatService {
     // a new Claude chat adopts an engine already waiting in its folder and launched like it (warm.ts): no 10-25 s
     // start-up. A role's tools, ceiling, skills plugin and "Contesto massimo" are fixed when the engine starts (#80), so
     // only an engine launched with the same ones fits (launchSig)
-    // a delegated chat starts cold: its endpoint answers from its ancestors, which a waiting engine cannot know
-    const warmable = caps.warm && !forkOf && !req.worktree && !req.orchestrator && !delegator && req.permissionMode !== 'bypassPermissions';
-    const launch = this.warmLaunch(policy, agent.assets, agent.maxContext, policy ? { role: agent.owner?.source === 'catalog' ? agent.owner.id : null, launches: agent.launches ?? null } : undefined);
-    const warm = warmable ? this.warm.take(cwd, launch.sig) : null;
+    // a delegated chat takes only an engine launched for a child of the same role under the same role chain: its
+    // endpoint lists the child's tools (agent_ask_parent) and its managed MCP servers are bounded by those ancestors
+    const warmable = caps.warm && !forkOf && !req.worktree && !req.orchestrator && req.permissionMode !== 'bypassPermissions';
+    const ancestors = delegator ? this.mcpContext(delegator.s.id)?.roles ?? null : undefined;
+    const role = agent.owner?.source === 'catalog' ? agent.owner.id : null;
+    const launch = this.warmLaunch(policy, agent.assets, agent.maxContext, delegator ? (ancestors ? { role, launches: agent.launches ?? null, child: { ancestors } } : undefined)
+      : policy ? { role, launches: agent.launches ?? null } : undefined);
+    // a child whose parent has no known role chain starts cold, as before (fail closed: no managed server)
+    const childOk = !delegator || !!ancestors;
+    const warm = warmable && childOk ? this.warm.take(cwd, launch.sig) : null;
     const id = warm?.chatId ?? `c_${crypto.randomBytes(5).toString('hex')}`;
     const now = Date.now();
     // `replaces`: the new Orchestrator takes the role, the old one goes on as a normal chat (history kept, never deleted)
@@ -765,7 +771,7 @@ export class ChatManager implements ChatService {
     this.updated(r);
     if (warm) this.adoptWarm(r, warm); else if (!viaQueue) this.startSession(r);
     // the next chat like this one finds an engine waiting (a role's own launch; an Orchestrator, fork or bypass chat: a plain one)
-    if (caps.warm) this.warm.schedule(cwd, this.opts.prewarmDelayMs ?? 5000, warmable ? launch : PLAIN_LAUNCH);
+    if (caps.warm) this.warm.schedule(cwd, this.opts.prewarmDelayMs ?? 5000, warmable && childOk ? launch : PLAIN_LAUNCH);
     // the chat exists from here on: a failed first send shows as state 'error' + lastError, not as a lost chat
     if (prompt) {
       // a delegated chat's contract says who sent it (the parent's title), like mail between chats
@@ -3064,7 +3070,7 @@ export class ChatManager implements ChatService {
     const r = this.chats.get(chatId), s = r?.s;
     // a waiting engine launched for a role: what that role's root chat would see (it lists tools once, at start)
     const warm = r ? undefined : this.warmViews.get(chatId)?.view;
-    if (warm) return !(DELEGATING_ONLY.has(tool) && warm.launches?.length === 0) && tool !== 'agent_ask_parent' && !PLAN_TOOLS.has(tool);
+    if (warm) return !(DELEGATING_ONLY.has(tool) && warm.launches?.length === 0) && (tool !== 'agent_ask_parent' || !!warm.child) && !PLAN_TOOLS.has(tool);
     if (!r || !s) return true;
     if (s.isOrchestrator) return !ORCHESTRATOR_HIDDEN.has(tool);
     // Lampo starts no work (ADR 0105): no mail to other chats, no delegation, no report, no saved script
@@ -3098,7 +3104,7 @@ export class ChatManager implements ChatService {
     // its tool list, which the engine enforces itself); once adopted, its real role is read at every gateway call
     if (!r) {
       const warm = this.warmViews.get(chatId);
-      if (warm?.view && (this.warmChat === chatId || this.warm.has(chatId))) return { roles: [warm.view.role], policy: { tools: warm.toolPolicy ?? null, ceiling: warm.ceiling ?? null } };
+      if (warm?.view && (this.warmChat === chatId || this.warm.has(chatId))) return { roles: [warm.view.role, ...(warm.view.child?.ancestors ?? [])], policy: { tools: warm.toolPolicy ?? null, ceiling: warm.ceiling ?? null } };
       return this.warmChat === chatId || this.warm.has(chatId) ? { roles: [null], policy: null } : null;
     }
     const policy = r.policy ?? null, own = r.s.agent?.source === 'catalog' ? r.s.agent.id : null;

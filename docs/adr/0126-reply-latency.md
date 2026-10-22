@@ -31,8 +31,19 @@ chats (ADR 0025, 0099), the Orchestrator never released. What still sat between 
   `queued` on `chat created`, `timing: brain sync before a new chat` when the pull before a new chat takes ≥ 300 ms.
   `npm run logs -- --scope chats --grep timing`.
 
+## Amended (owner, 2026-10-22: «SI fallo subito»): a waiting engine for delegated chats
+- Asked «perché non conviene avere le CLI sempre accese?»: an open Claude chat's CLI already stays on (`releaseIdle`
+  never ends one whose sub-agents it cannot observe). One idle CLI measured ~190 MB RSS (Linux, no MCP server, CLI
+  2.1.308), plus its MCP servers; no tokens. One per role was judged too much memory for engines mostly idle.
+- A delegated chat now takes a waiting engine too: launched as a child of the same role under the same role chain
+  (`WarmLaunch.view.child.ancestors`, part of the launch digest). Before a chat owns it, its endpoint lists the
+  child's tools (`agent_ask_parent`) and `mcpContext` answers that chain, so its managed MCP servers are bounded as a
+  cold child's; a parent with no known chain → cold, as before. After a delegated chat starts, one like it waits for
+  the next (a role's steps one after another, e.g. the Strategist's plan); parallel delegations take one, the others
+  start cold. The pool keeps up to 3 engines (plain, last role, last child) instead of 2.
+
 ## Consequences
 - Writing to a chat after a restart: the start-up overlaps the typing instead of following the Enter.
 - Not changed here, to measure first with the new timings: the Orchestrator → role hop itself (two model calls before
-  a role's answer), a delegated child's cold start, the cold continuation after the cache expired (a fresh session
+  a role's answer), the cold continuation after the cache expired (a fresh session
   that starts at the Enter), the checkpoint on the critical path.
