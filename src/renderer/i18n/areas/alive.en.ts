@@ -49,7 +49,7 @@ export const aliveEn: typeof aliveIt = {
   'alive.pulse.title': 'Pulse',
   'alive.pulse.hint': 'Cards and the line of the day written by a model, only while the window is open, within the budget below. Off: no calls.',
   'alive.pulse.slots': 'Pulse: times',
-  'alive.pulse.slotsHint': 'One to three times (HH:MM) separated by commas. The Dashboard line is written in the first one, once a day.',
+  'alive.pulse.slotsHint': 'One to three times (HH:MM) separated by commas. The line atop Memory is written at the first one, once a day.',
   'alive.pulse.slotsBad': 'One to three HH:MM times, for example 08:30, 13:00, 18:30.',
   'alive.pulse.budget': 'Pulse: daily budget ($)',
   'alive.pulse.budgetHint': 'Admission cap shared by cards and line, from 0.01 to 2 $. Costs the engine does not report stay unknown.',

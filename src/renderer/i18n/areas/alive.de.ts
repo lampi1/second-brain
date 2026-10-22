@@ -49,7 +49,7 @@ export const aliveDe: typeof aliveIt = {
   'alive.pulse.title': 'Battito',
   'alive.pulse.hint': 'Karten und die Zeile des Tages, von einem Modell geschrieben, nur solange das Fenster offen ist, innerhalb des Budgets unten. Aus: keine Aufrufe.',
   'alive.pulse.slots': 'Battito: Uhrzeiten',
-  'alive.pulse.slotsHint': 'Eine bis drei Uhrzeiten (HH:MM), durch Kommas getrennt. Die Dashboard-Zeile wird zur ersten geschrieben, einmal am Tag.',
+  'alive.pulse.slotsHint': 'Eine bis drei Uhrzeiten (HH:MM), durch Kommas getrennt. Der Satz oben auf «Gedächtnis» entsteht zur ersten Uhrzeit, einmal am Tag.',
   'alive.pulse.slotsBad': 'Eine bis drei Uhrzeiten HH:MM, zum Beispiel 08:30, 13:00, 18:30.',
   'alive.pulse.budget': 'Battito: Tagesbudget ($)',
   'alive.pulse.budgetHint': 'Gemeinsame Obergrenze für Karten und Zeile, von 0,01 bis 2 $. Kosten, die die Engine nicht meldet, bleiben unbekannt.',

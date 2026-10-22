@@ -50,7 +50,7 @@ export const aliveIt = {
   'alive.pulse.title': 'Battito',
   'alive.pulse.hint': 'Carte e la frase del giorno scritte da un modello, solo a finestra aperta, nel budget qui sotto. Spento: nessuna chiamata.',
   'alive.pulse.slots': 'Battito: orari',
-  'alive.pulse.slotsHint': 'Da uno a tre orari (HH:MM) separati da virgole. La frase della Dashboard nasce nel primo, una volta al giorno.',
+  'alive.pulse.slotsHint': 'Da uno a tre orari (HH:MM) separati da virgole. La frase in cima a Memoria nasce nel primo, una volta al giorno.',
   'alive.pulse.slotsBad': 'Da uno a tre orari HH:MM, per esempio 08:30, 13:00, 18:30.',
   'alive.pulse.budget': 'Battito: budget giornaliero ($)',
   'alive.pulse.budgetHint': 'Tetto di ammissione condiviso tra carte e frase, da 0,01 a 2 $. I costi che il motore non riporta restano sconosciuti.',
