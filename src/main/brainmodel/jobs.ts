@@ -67,9 +67,15 @@ export function jaccard(a: Set<string>, b: Set<string>): number {
   for (const x of a) if (b.has(x)) both++;
   return both / (a.size + b.size - both);
 }
-/** A skill name from a title: lower case, digits and single hyphens, at most 48 characters, never empty. */
+// words that carry no topic in a heading: left out of a generated name (#159: half sentences matched every request)
+const NAME_FILLERS = new Set('il lo la i gli le un uno una di a da in con su per tra fra del della dei delle al alla ai e ed o che come non solo quando dove the an of to on at for with by from and or how when only'.split(' '));
+/** A skill name from a title: a short one whole, a long one by its key words (fillers left out), in lower case with single hyphens, whole words up to
+ *  40 characters (the full heading stays in the skill's text), never empty. */
 export function skillName(title: string, taken: Set<string>): string {
-  const base = fold(title).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48).replace(/-+$/g, '') || 'skill';
+  const all = fold(title).split(/[^a-z0-9]+/).filter(Boolean), keys = all.join('-').length <= 40 ? all : all.filter(w => !NAME_FILLERS.has(w));
+  let base = '';
+  for (const w of keys.length ? keys : all) { const next = base ? `${base}-${w}` : w; if (next.length > 40) break; base = next; }
+  base = base || (keys[0] ?? all[0] ?? '').slice(0, 40) || 'skill';
   let name = base;
   for (let n = 2; taken.has(name); n++) name = `${base.slice(0, 44)}-${n}`;
   if (!NAME_RE.test(name)) throw new Error('Invalid generated skill name');

@@ -313,10 +313,13 @@ export interface AgentChoice {
 }
 /** One task kind in the ledger: app chats predicted, how many have a known outcome, how many of those succeeded. */
 export interface KindStats { chats: number; known: number; ok: number }
+/** Below this many known outcomes a success share says nothing ("100%" from one outcome, #159): only the counts. */
+export const STATS_MIN_OUTCOMES = 5;
 /** "16 chat, 10 con esito, 70% riuscite" (issue #72); null = no chat yet. */
 export function statsLine(s: KindStats | null | undefined): string | null {
   if (!s || s.chats <= 0) return null;
   if (s.known <= 0) return `${s.chats} chat, nessuna con esito`;
+  if (s.known < STATS_MIN_OUTCOMES) return `${s.chats} chat, ${s.known} con esito (troppo pochi per una percentuale)`;
   return `${s.chats} chat, ${s.known} con esito, ${Math.round(100 * s.ok / s.known)}% riuscite`;
 }
 /** A row's stored reason with today's counts: a stale "nessun dato ancora" goes once there is data (issue #72). */
@@ -332,6 +335,7 @@ export function freshReason(why: string | null | undefined, s: KindStats | null 
 export function agentStatsLine(m: { ended: number; successRate: { value: number | null; n: number } } | null | undefined): string | null {
   if (!m || m.ended <= 0) return null;
   if (!m.successRate.n || m.successRate.value === null) return `${m.ended} run, nessuna con esito`;
+  if (m.successRate.n < STATS_MIN_OUTCOMES) return `${m.ended} run, ${m.successRate.n} con esito (troppo pochi per una percentuale)`;
   return `${m.ended} run, ${m.successRate.n} con esito, ${Math.round(100 * m.successRate.value)}% riuscite`;
 }
 const CHOSEN_BY: Record<RouteAgent['chosenBy'], string> = { orchestrator: 'avviato dall’Orchestrator', parent: 'avviato dal suo genitore', app: 'avviato dall’app' };

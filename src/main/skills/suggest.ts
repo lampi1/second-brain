@@ -1,5 +1,5 @@
 // Local, advisory skill suggestions: which of the brain's skills fit a request, best first (top SKILL_SUGGESTIONS_MAX,
-// no threshold: the caller decides). Words (BM25 with query coverage) and, when the local model is ready, the hybrid
+// above a floor and near the best one, #159: no list of weak matches in name order). Words (BM25 with query coverage) and, when the local model is ready, the hybrid
 // search's embeddings. Never loads, grants or installs a skill. Used by the skills_suggest MCP tool on every chat
 // endpoint (wiring.ts), the role start dialog (skills:suggest IPC) and the Classificatori page (suggested vs used).
 import { createHash } from 'node:crypto';
@@ -16,6 +16,13 @@ type Row = { id: string; text: string; why: SkillCandidate['why'] };
 const CACHE_MAX = 6000;
 const BATCH = 16;
 const FULL_COVERAGE = 4;
+/** A suggestion scores at least this (0-100): one shared word out of a long request (~20) or a semantic score just over
+ *  the cosine floor (~15) is no fit (#159). */
+export const SUGGEST_MIN_SCORE = 30;
+/** ...and at least this share of the best one: a strong match is not followed by four weak ones. */
+export const SUGGEST_MIN_SHARE = 0.5;
+/** Three or more skills tied at the top with a score under this: nothing really fits (the tie would be broken by name). */
+const TIE_STRONG = 60;
 /** How long a request waits for the local model before answering with words only (the start dialog and skills_suggest
  *  stay responsive while the worker is busy indexing or the vectors are still being built). */
 export const SEMANTIC_DEADLINE_MS = 2500;
@@ -146,7 +153,9 @@ export class SkillSuggester {
       const score = Math.round(100 * scores[i]!);
       if (!best.has(r.id) || score > best.get(r.id)!.score) best.set(r.id, { name: r.id, score, why: r.why });
     });
-    const candidates = [...best.values()].filter(c => c.score > 0).sort((a, b) => b.score - a.score || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)).slice(0, SKILL_SUGGESTIONS_MAX);
-    return { candidates, mode };
+    const ranked = [...best.values()].filter(c => c.score >= SUGGEST_MIN_SCORE).sort((a, b) => b.score - a.score || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    const top = ranked[0]?.score ?? 0;
+    if (top < TIE_STRONG && ranked.filter(c => c.score === top).length >= 3) return { candidates: [], mode };
+    return { candidates: ranked.filter(c => c.score >= top * SUGGEST_MIN_SHARE).slice(0, SKILL_SUGGESTIONS_MAX), mode };
   }
 }

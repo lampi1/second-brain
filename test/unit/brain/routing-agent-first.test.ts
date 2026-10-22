@@ -67,6 +67,10 @@ describe('fresh reasons (#72)', () => {
     expect(freshReason('scelta di Davide, nessun dato ancora', { chats: 16, known: 10, ok: 7 })).toBe('scelta di Davide · 16 chat, 10 con esito, 70% riuscite');
     expect(freshReason('scelta di Davide, nessun dato ancora', { chats: 0, known: 0, ok: 0 })).toBe('scelta di Davide, nessun dato ancora');
     expect(agentStatsLine({ ended: 12, successRate: { value: 0.78, n: 9 } })).toBe('12 run, 9 con esito, 78% riuscite');
+    // a share from one outcome says nothing (#159)
+    expect(agentStatsLine({ ended: 49, successRate: { value: 1, n: 1 } })).toBe('49 run, 1 con esito (troppo pochi per una percentuale)');
+    expect(agentStatsLine({ ended: 49, successRate: { value: 0.8, n: 5 } })).toBe('49 run, 5 con esito, 80% riuscite');
+    expect(statsLine({ chats: 9, known: 4, ok: 4 })).not.toContain('%');
     expect(agentStatsLine({ ended: 0, successRate: { value: null, n: 0 } })).toBeNull();
   });
 

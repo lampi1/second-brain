@@ -117,7 +117,7 @@ export class ChatWatch {
     }
     const sk = c.run?.skillSuggestions;
     if (sk && (sk.suggested.length || sk.used.length)) {
-      out.push({ ...base, kind: 'classifier', level: 'info', title: `Skill per ${base.who}: ${sk.used.length ? sk.used.join(', ') : 'nessuna'}`, text: sk.suggested.length ? `Suggerite: ${sk.suggested.join(', ')}` : 'Nessuna skill suggerita' });
+      out.push({ ...base, kind: 'classifier', level: 'info', title: `Skill per ${base.who}: ${sk.used.length ? sk.used.join(', ') : 'nessuna'}`, text: sk.suggested.length ? `Suggerite: ${sk.suggested.join(', ')}` : 'Nessuna skill adatta' });
     }
     return out;
   }
