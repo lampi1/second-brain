@@ -225,10 +225,17 @@ test('README showcase: Memoria, agent levels, Orchestrator and Flash, reactions'
   const cb0 = (await column.boundingBox())!;
   const topPart = { x: Math.round(cb0.x), y: Math.round(cb0.y), width: Math.round(cb0.width), height: 745 };
   const orch = await png(topPart);
+  // Flash beside it: a side question about the work in progress, answered read-only from the Orchestrator's chat
   await page.getByTestId('lane-lampo').click();
   await expect(page.getByTestId('tile-lampo')).toBeVisible();
+  await page.getByTestId('lampo-open').click();
+  await page.getByTestId('lampo-input').click();
+  await page.keyboard.type('btw, what is waiting for me?');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('tile-lampo')).toContainText('Make it a job', { timeout: 15_000 });
+  await expect(page.getByTestId('tile-lampo')).toContainText('From the Orchestrator’s chat', { timeout: 15_000 });
   await page.mouse.move(2, 2);
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(500);
   const flash = await png(topPart);
   await page.getByTestId('lane-orchestrator').click();
   await expect(page.getByTestId('tile-orchestrator')).toBeVisible();
@@ -236,7 +243,7 @@ test('README showcase: Memoria, agent levels, Orchestrator and Flash, reactions'
 
   // a thanks needs no answer: the Orchestrator's one-emoji reply sticks to the message as a reaction (her decision
   // answered first, so the message goes at once instead of queuing behind her turn)
-  await page.getByTestId('tile-orchestrator').getByRole('button', { name: /^QA rimborsi/ }).click();
+  await page.getByTestId('tile-orchestrator').getByRole('button', { name: /^Refunds QA/ }).click();
   await expect.poll(() => page.evaluate(async () => (await window.sb.invoke('chat:list', undefined)).find(c => c.isOrchestrator && !c.closedAt)?.state), { timeout: 20_000 }).toBe('idle');
   await page.getByTestId('orchestrator-input').click();
   await page.keyboard.type('thanks!');

@@ -9,6 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentRun, AgentRunOutcome } from '../../shared/agents';
+import { tr } from '../demo-text';
 
 const DAY = 24 * 3600e3;
 // built in pieces: a fake value, never a real one, and no secret pattern in this source file
@@ -247,10 +248,11 @@ export function writeDemoBrain(dir: string, now: number): string {
   fs.mkdirSync(dir, { recursive: true });
   if (!fs.existsSync(path.join(dir, 'brain.json'))) fs.writeFileSync(path.join(dir, 'brain.json'), `${JSON.stringify({ machinery: 'product-v1', template: {}, rules: { topicFiles: ['rules/stile.md'], appRules: true } }, null, 2)}\n`);
   const dated = (t: string) => t.replace(/\{d:(\d+)\}/g, (_m, n: string) => new Date(now - Number(n) * DAY).toISOString().slice(0, 10));
+  // in the UI language (demo-text.ts): Italian as written, English through its table (paths, headings and lines)
   for (const [rel, [text, days]] of Object.entries(FILES)) {
-    const f = path.join(dir, dated(rel));
+    const f = path.join(dir, dated(tr(rel)));
     fs.mkdirSync(path.dirname(f), { recursive: true });
-    fs.writeFileSync(f, dated(text));
+    fs.writeFileSync(f, dated(tr(text)));
     const t = new Date(now - days * DAY);
     fs.utimesSync(f, t, t);
   }
@@ -278,21 +280,21 @@ const GOALS = [
  *  spread over the last ten weeks. `skills` = the demo brain's skill names now (the migrated ones are named at start);
  *  the first three migrated ones get runs, «pulizia-ambiente» none (a skill never used). */
 export function demoBrainRuns(now: number, skills: string[]): AgentRun[] {
-  const migrated = skills.filter(s => s !== 'note-di-rilascio' && s !== 'pulizia-ambiente');
+  const notes = tr('note-di-rilascio'), migrated = skills.filter(s => s !== notes && s !== tr('pulizia-ambiente'));
   // [role, days ago, skill (index in migrated, or a name), verdict]
   const plan: [string, number, number | string, AgentRunOutcome['verdict'] | null][] = [];
   const verdicts: AgentRunOutcome['verdict'][] = ['success', 'success', 'partial', 'success', 'fail', 'success', 'success', 'unknown'];
   for (let i = 0; i < 34; i++) {
     // slot 5 is the release notes (an Artisan with the brain skill, ADR 0100), slot 6 an independent review (a Sentinel)
     const slot = i % 7, role = ['scout', 'artisan', 'sentinel', 'scout', 'artisan', 'artisan', 'sentinel'][slot]!;
-    const skill: number | string = slot === 5 ? 'note-di-rilascio' : slot === 2 ? 2 : slot === 1 || slot === 4 ? (i % 3 === 0 ? 1 : 0) : i % 5 === 0 ? 1 : 0;
+    const skill: number | string = slot === 5 ? notes : slot === 2 ? 2 : slot === 1 || slot === 4 ? (i % 3 === 0 ? 1 : 0) : i % 5 === 0 ? 1 : 0;
     plan.push([role, 2 + Math.floor((i * 67) / 34), skill, slot === 2 ? (i % 2 ? 'fail' : 'partial') : verdicts[i % verdicts.length]!]);
   }
   return plan.map(([role, days, skill, verdict], i): AgentRun => {
     const name = typeof skill === 'number' ? migrated[skill] : skill;
     const startedAt = now - days * DAY - (i % 5) * 3600e3;
     return {
-      source: 'chat', runId: `r_demo_${i}`, chatId: `demo-run-${i}`, agentId: role, version: 1, goal: GOALS[i % GOALS.length]!, startedBy: 'orchestrator', startedAt,
+      source: 'chat', runId: `r_demo_${i}`, chatId: `demo-run-${i}`, agentId: role, version: 1, goal: tr(GOALS[i % GOALS.length]!), startedBy: 'orchestrator', startedAt,
       endedAt: startedAt + 40 * 60e3, endReason: 'completed', counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null }, costUsd: null, tokens: null,
       ...(verdict ? { outcome: { verdict, basis: 'human', at: startedAt + 41 * 60e3, by: 'demo' } } : {}),
       tags: { skills: name ? [name] : [], app: null, repo: null },

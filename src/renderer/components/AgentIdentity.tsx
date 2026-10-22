@@ -7,6 +7,7 @@ import{setChat}from'../store/store';
 import{go}from'../actions';
 import{t,locale}from'../i18n';
 import {Popover}from'./ui';
+import{rolePurpose}from'../lib/role-text';
 import'../styles/agent-identity.css';
 export function AgentIdentity({chat}:{chat:ChatSummary}){
  const anchor=useRef<HTMLButtonElement>(null),[open,setOpen]=useState(false);
@@ -17,7 +18,7 @@ export function AgentIdentity({chat}:{chat:ChatSummary}){
   <button ref={anchor} type="button" className="link-btn" aria-expanded={open} onClick={()=>setOpen(v=>!v)} data-testid={`agent-team-${chat.id}`}>{t('product.details')}{children?.observedActive?` · ${children.observedActive}`:''}</button>
   <Popover anchor={anchor} open={open} onClose={close} width={340} kind="dialog" label={t('product.details')}>
   <div className="agent-detail-content">
-   {chat.agent?.purpose&&<p>{chat.agent.purpose}</p>}
+   {chat.agent?.purpose&&<p>{rolePurpose(chat.agent.id,chat.agent.purpose)}</p>}
    <button type="button" className="link-btn" onClick={()=>go({page:'agenti'})}>{t('product.profiles')}</button>
    <label>{t('product.workDeclare')}<Select value={chat.work?.status??''} onChange={e=>{const status=e.target.value;if(status==='assigned'||status==='waiting-mail'||status==='completed')void setChat(chat.id,{workStatus:status});}}>
     <option value="" disabled>{t('product.workUnset')}</option><option value="assigned">{t('product.workAssigned')}</option><option value="waiting-mail">{t('product.workWaiting')}</option><option value="completed">{t('product.workCompleted')}</option>

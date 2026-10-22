@@ -12,6 +12,7 @@ import { roleName } from '@shared/roles';
 import { t, locale } from '../../i18n';
 import { renderMarkdown } from '../../lib/markdown';
 import { canUndo, decide, dismissRefusal, groupCounts, openCards, refreshProposals, tally, undoLast, useDeck } from '../../lib/proposals';
+import { proposalTitle } from '../../lib/proposal-title';
 import { go, openChatRef, openFileViewer } from '../../actions';
 import { app } from '../../store/store';
 import { AgentAvatar } from '../AgentAvatar';
@@ -134,7 +135,7 @@ export const ProposalCard = forwardRef<CardHandle, CardProps>(function ProposalC
       {c.applied && <span className="pd-applied">{t('proposals.applied')}</span>}
       <time className="pd-when" dateTime={c.provenance.at}>{shortWhen(c.provenance.at)}</time>
     </header>
-    <h3 className="pd-title">{c.title}</h3>
+    <h3 className="pd-title">{proposalTitle(c)}</h3>
     <div className={`pd-body${open ? ' pd-scroll' : ''}`}>
       {lead && <p className="pd-lead">{lead}</p>}
       {html && <div className="md pd-md" dangerouslySetInnerHTML={{ __html: html }} />}
@@ -249,7 +250,7 @@ export function ProposalsDeck() {
           </div>
           {showRejected && <ul className="pd-rejected" aria-label={t('proposals.done.rejectedList')} data-testid="pd-rejected-list">{sum.rejectedCards.map(c => <li key={c.id} className={`pd-g-${c.group}`}>
             <WhoAvatar c={c} size={28} />
-            <div className="pd-rej-main"><span><span className="pd-kind">{t(`proposals.kind.${c.group}`)}</span><b title={c.title}>{c.title}</b></span>
+            <div className="pd-rej-main"><span><span className="pd-kind">{t(`proposals.kind.${c.group}`)}</span><b title={proposalTitle(c)}>{proposalTitle(c)}</b></span>
               <small>{t('proposals.from', { who: whoName(c) })} · {shortWhen(c.provenance.at)}</small></div>
             {c.provenance.chat ? <button type="button" className="pd-link" onClick={() => openChatRef(c.provenance.chat!.id)}>{t('proposals.openChat')} ↗</button> : <span />}
           </li>)}</ul>}

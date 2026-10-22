@@ -68,3 +68,23 @@ it('renders German with the Austrian locale',()=>{
  setLang('de');
  expect(locale()).toBe('de-AT');expect(t('settings.language')).toBe('Sprache');expect(t('common.close')).toBe('Schließen');
 });
+// Texts that reach the UI as data, not as literals the scan above sees: the brain map's fixed layers (a brain's server
+// names them in its own language), the built-in agents' purpose (main writes it in Italian, shared/roles.ts), the
+// outcome of an Esegui run (main writes it for the chat, in Italian) and a setting card's name (main's schema is
+// Italian). Each must come from the dictionaries, in English with no Italian left.
+it('names the map layers, the built-in agents\' purpose, Esegui outcomes and setting cards in the UI language',async()=>{
+ const{LAYER_COLOR,layerLabel}=await import('../../src/renderer/brain/lib/map');
+ const{BUILT_IN_PURPOSE,rolePurpose}=await import('../../src/renderer/lib/role-text');
+ const{runOutcome}=await import('../../src/renderer/lib/foreign');
+ const{proposalTitle}=await import('../../src/renderer/lib/proposal-title');
+ const{ROLE_DEFAULTS}=await import('../../src/shared/roles');
+ // the Italian dictionary keeps main's wording, so the two never drift apart
+ for(const id of Object.keys(ROLE_DEFAULTS))expect(rolePurpose(id,'x'),id).toBe(ROLE_DEFAULTS[id as keyof typeof ROLE_DEFAULTS].summary);
+ setLang('en');
+ const en=[...Object.keys(LAYER_COLOR).map(id=>layerLabel({id,label:'Etichetta del brain'})),...BUILT_IN_PURPOSE.map(id=>rolePurpose(id,'x')),
+  runOutcome('riuscito (exit code 0) · 2 s'),runOutcome('fallito (exit code 1)'),runOutcome('fermato dall\'utente prima della fine'),runOutcome('riuscito (exit code 0) · 3 s · comando di produzione, confermato dall\'utente'),
+  proposalTitle({source:'setting',title:'Battito: budget giornaliero ($)',facts:[{key:'target',value:'pulse.dailyUsd'}]} as never)];
+ expect(en.filter(x=>ITALIAN.test(x)||x==='Etichetta del brain')).toEqual([]);
+ expect(layerLabel({id:'altro',label:'Altro'})).toBe('Altro');expect(rolePurpose('custom','Mio agente')).toBe('Mio agente');
+ expect(runOutcome('riuscito (exit code 0) · 2 s')).toBe('succeeded (exit code 0) · 2 s');
+});

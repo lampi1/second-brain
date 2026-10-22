@@ -1,7 +1,9 @@
 // HTML of the demo browser tabs (SB_DEMO=1): fictional "Alfa" back-office pages (a refund, a customer's activities)
 // loaded as data: URLs, with a small page script that moves a visible agent cursor and highlights the clicked element.
 // Why: the browser tiles, their live thumbnails and the e2e screenshots need real-looking pages with no network.
-// Used by demo-browser.ts only. Fictional data: no real people, companies or customers.
+// Its texts in the UI language through demo-text.ts. Used by demo-browser.ts only. Fictional data: no real people, companies or customers.
+
+import { demoLang, tr } from './demo-text';
 
 export type DemoPage = 'nota' | 'sms' | 'blank';
 
@@ -28,39 +30,39 @@ const script = `
 window.__sb={move:function(x,y){var c=document.getElementById('cur');c.style.left=x+'%';c.style.top=y+'%';c.classList.add('click');setTimeout(function(){c.classList.remove('click')},350)}};
 `;
 
-const nav = (host: string, section: string) => `<div class="nav"><b>Alfa</b><span>${host}</span><span>${section}</span><div class="sp"></div><span>Azienda di prova</span><div class="av"></div></div>`;
-const side = (on: string) => `<div class="side">${['Dashboard', 'Clienti', 'Ordini', 'Fatture', 'Magazzino', 'Report'].map(s => `<div class="${s === on ? 'on' : ''}">${s}</div>`).join('')}</div>`;
+const nav = (host: string, section: string) => `<div class="nav"><b>Alfa</b><span>${host}</span><span>${section}</span><div class="sp"></div><span>${tr('Azienda di prova')}</span><div class="av"></div></div>`;
+const side = (on: string) => `<div class="side">${['Dashboard', 'Clienti', 'Ordini', 'Fatture', 'Magazzino', 'Report'].map(x => tr(x)).map(s => `<div class="${s === on ? 'on' : ''}">${s}</div>`).join('')}</div>`;
 
 function body(page: DemoPage): string {
   if (page === 'nota') {
-    return `${nav('test', 'ambiente di test')}${side('Ordini')}<div class="main">
-<div class="crumb">Ordini › Rimborsi</div><h1>Rimborso 2026/118</h1>
+    return `${nav('test', tr('ambiente di test'))}${side(tr('Ordini'))}<div class="main">
+<div class="crumb">${tr('Ordini › Rimborsi')}</div><h1>${tr('Rimborso 2026/118')}</h1>
 <div class="card"><div class="grid">
-<div class="k">Cliente</div><div>Cliente di prova</div>
-<div class="k">Fattura originale</div><div>2026/097 · 120,00 €</div>
-<div class="k">Sconto fattura</div><div>10 %</div>
-<div class="k">Totale rimborso</div><div class="bad">120,00 € (atteso 108,00 €)</div>
+<div class="k">${tr('Cliente')}</div><div>${tr('Cliente di prova')}</div>
+<div class="k">${tr('Fattura originale')}</div><div>${tr('2026/097 · 120,00 €')}</div>
+<div class="k">${tr('Sconto fattura')}</div><div>10 %</div>
+<div class="k">${tr('Totale rimborso')}</div><div class="bad">${tr('120,00 € (atteso 108,00 €)')}</div>
 </div></div>
-<div class="card"><table><tr><th>Voce</th><th>Qtà</th><th>Importo</th></tr>
-<tr><td>Abbonamento base</td><td>1</td><td>80,00 €</td></tr><tr><td>Assistenza</td><td>1</td><td>40,00 €</td></tr></table></div>
-<div class="btns"><span class="b p">Emetti rimborso</span><span class="b">Annulla</span></div>
+<div class="card"><table><tr><th>${tr('Voce')}</th><th>${tr('Qtà')}</th><th>${tr('Importo')}</th></tr>
+<tr><td>${tr('Abbonamento base')}</td><td>1</td><td>${tr('80,00 €')}</td></tr><tr><td>${tr('Assistenza')}</td><td>1</td><td>${tr('40,00 €')}</td></tr></table></div>
+<div class="btns"><span class="b p">${tr('Emetti rimborso')}</span><span class="b">${tr('Annulla')}</span></div>
 </div><div id="cur" style="left:33%;top:78%"></div>`;
   }
   if (page === 'sms') {
-    return `${nav('test-2', 'ambiente di test 2')}${side('Clienti')}<div class="main">
-<div class="crumb">Clienti › Cliente di prova</div><h1>Cliente di prova</h1>
-<div class="tabs"><div>Anagrafica</div><div class="on">Attività</div><div>Documenti</div><div>Ordini</div></div>
-<div class="card" style="display:flex;justify-content:space-between;align-items:center"><div><b>Promemoria rinnovo</b><br><span style="color:#6b778c">SMS al +39 333 000 0000 · domani 9:00</span></div><span class="b p">Invia SMS</span></div>
-<div class="card"><table><tr><th>Attività</th><th>Quando</th><th>Stato</th></tr>
-<tr><td>SMS promemoria rinnovo</td><td>oggi 10:12</td><td><span class="pill err">non inviato</span></td></tr>
-<tr><td>Email conferma ordine</td><td>ieri 17:40</td><td><span class="pill ok">inviata</span></td></tr>
-<tr><td>Sollecito pagamento</td><td>3 ott</td><td><span class="pill">pianificato</span></td></tr></table></div>
+    return `${nav('test-2', tr('ambiente di test 2'))}${side(tr('Clienti'))}<div class="main">
+<div class="crumb">${tr('Clienti › Cliente di prova')}</div><h1>${tr('Cliente di prova')}</h1>
+<div class="tabs"><div>${tr('Anagrafica')}</div><div class="on">${tr('Attività')}</div><div>${tr('Documenti')}</div><div>${tr('Ordini')}</div></div>
+<div class="card" style="display:flex;justify-content:space-between;align-items:center"><div><b>${tr('Promemoria rinnovo')}</b><br><span style="color:#6b778c">${tr('SMS al +39 333 000 0000 · domani 9:00')}</span></div><span class="b p">${tr('Invia SMS')}</span></div>
+<div class="card"><table><tr><th>${tr('Attività')}</th><th>${tr('Quando')}</th><th>${tr('Stato')}</th></tr>
+<tr><td>${tr('SMS promemoria rinnovo')}</td><td>${tr('oggi 10:12')}</td><td><span class="pill err">${tr('non inviato')}</span></td></tr>
+<tr><td>${tr('Email conferma ordine')}</td><td>${tr('ieri 17:40')}</td><td><span class="pill ok">${tr('inviata')}</span></td></tr>
+<tr><td>${tr('Sollecito pagamento')}</td><td>${tr('3 ott')}</td><td><span class="pill">${tr('pianificato')}</span></td></tr></table></div>
 </div><div id="cur" style="left:34%;top:21%"></div>`;
   }
-  return `${nav('nuova scheda', '')}<div class="main" style="left:0"><h1>Nuova scheda</h1><div class="card">Pagina vuota della demo.</div></div><div id="cur" style="left:50%;top:50%"></div>`;
+  return `${nav(tr('nuova scheda'), '')}<div class="main" style="left:0"><h1>${tr('Nuova scheda')}</h1><div class="card">${tr('Pagina vuota della demo.')}</div></div><div id="cur" style="left:50%;top:50%"></div>`;
 }
 
 export function pageUrl(page: DemoPage): string {
-  const html = `<!doctype html><html lang="it"><head><meta charset="utf-8"><title>Alfa</title><style>${css}</style></head><body>${body(page)}<script>${script}</script></body></html>`;
+  const html = `<!doctype html><html lang="${demoLang()}"><head><meta charset="utf-8"><title>Alfa</title><style>${css}</style></head><body>${body(page)}<script>${script}</script></body></html>`;
   return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
 }

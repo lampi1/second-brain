@@ -33,6 +33,7 @@ import { ProgressPanel } from './ProgressPanel';
 import { useBrainModel } from '../store/brain-model';
 import '../styles/agent-studio.css';
 import '../styles/brain-model.css';
+import { rolePurpose } from '../lib/role-text';
 
 const percent = (v: number) => new Intl.NumberFormat(locale(), { style: 'percent', maximumFractionDigits: 0 }).format(v);
 const usd = (v: number) => formatCost(v);
@@ -278,7 +279,7 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
         <div className="ad-id">
           <p className="ad-eyebrow">{t(profile.userLocked ? 'studio.customized' : 'studio.builtIn')}</p>
           <h2>{profile.name}</h2>
-          <p className="ad-purpose">{profile.purpose}</p>
+          <p className="ad-purpose">{rolePurpose(profile.id, profile.purpose)}</p>
           <div className="ad-chips">
             <span className="ad-badge" data-state={state}><i aria-hidden="true" />{profile.trial ? t('studio.trial') : working > 0 ? t('agentsGrid.working') : t('catalog.active')}</span>
             <span className="ad-chip">{engine}</span>

@@ -9,7 +9,10 @@ import type { CanonicalResult } from '../shared/agents';
 import { sysEn, type SysCode, type SysParams } from '../shared/sys';
 import type { StrategyPlan } from '../shared/strategy';
 import { app, safeStorage } from 'electron';
-import type { BrowserHandoff, CliStatus, PendingRequest } from '../shared/contract';
+import { isLang, type BrowserHandoff, type CliStatus, type Lang, type PendingRequest } from '../shared/contract';
+import { setDemoLang } from './demo-text';
+import { setUiLangSource } from './locale';
+import { systemLang } from './lang';
 import { ConfigStore } from './brain/config';
 import { DemoBrain, DemoChats, FROZEN_EPOCH, seed, demoTree, type Emit, demoQuality } from './demo';
 import { DemoBrowser } from './demo-browser';
@@ -67,13 +70,19 @@ const DEMO_BRANCHES: Record<string, string> = { brain: 'main', 'alfa-e2e': 'feat
 export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const freeze = process.env.SB_DEMO_FREEZE === '1';
   const now = freeze ? () => FROZEN_EPOCH : () => Date.now();
+  // the UI language picks the demo's content (demo-text.ts) and, from now on, main's own texts (locale.ts; index.ts
+  // registers the same source once the services are up): the migration below writes its change summaries in it
+  const config = new ConfigStore(ctx.userData, { SB_MCP_PORT: process.env.SB_MCP_PORT });
+  const lang = (): Lang => { const l = config.get().language; return isLang(l) ? l : systemLang(); };
+  setDemoLang(lang());
+  setUiLangSource(lang);
   const s = seed(now());
   const emit: Emit = (ch, p) => ctx.emitter.emit(ch, p);
   const chats = new DemoChats(emit, { freeze, now }, s);
   const browser = new DemoBrowser(ctx.window, emit, freeze, (chatId, tabIds) => { chats.patch(chatId, { browserTabIds: tabIds }); });
   chats.browser = browser;
   browser.seed(s.tabs, { 'tab-qa': 'nota', 'tab-sms': 'sms' });
-  const brain = new DemoBrain(emit, chats, s, new ConfigStore(ctx.userData, { SB_MCP_PORT: process.env.SB_MCP_PORT }));
+  const brain = new DemoBrain(emit, chats, s, config);
   chats.start();
   brain.start();
   // the demo brain is no folder: the app's engines only; keys and trust as in the real app (its own userData)

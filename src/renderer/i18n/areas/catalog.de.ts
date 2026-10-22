@@ -52,4 +52,13 @@ export const catalogDe: typeof catalogIt = {
   'catalog.costsWhy.partial': ({ n, total }) => `Kosten pro Erfolg: Die Kosten sind nur für ${n} von ${total} Runs bekannt.`,
   'catalog.costsHelp': 'Mediankosten: Die Hälfte der beendeten Runs mit bekannten Kosten war billiger. Kosten pro geprüftem Erfolg: die Kosten aller beendeten Runs geteilt durch die geprüft erfolgreichen (die das Level zählt). Zu API-Listenpreisen: Mit einem Abo ist das nicht, was du zahlst.',
   'catalog.metricsError': 'Statistik nicht verfügbar. Versuch es noch einmal.', 'catalog.back': 'Zurück zum Katalog',
+  // the built-in roles' purpose (name, purpose and character always come from the role: lib/role-text.ts)
+  'catalog.purpose.orchestrator': 'Koordiniert die Arbeit: gibt jede Aufgabe an eine Rolle und hält dich über den Stand auf dem Laufenden.',
+  'catalog.purpose.strategist': 'Zerlegt ein Ziel in einen Plan und gibt die Teile an die passenden Rollen.',
+  'catalog.purpose.scout': 'Sucht und prüft Fakten: Code, Logs, Web und Seiten, ohne etwas zu ändern.',
+  'catalog.purpose.artisan': 'Macht die Änderungen: Code, Dateien, Konfiguration, Dokumente und Notizen im Gedächtnis, mit den Prüfungen des Repositorys.',
+  'catalog.purpose.sentinel': 'Prüft: führt Tests und Kontrollen aus oder beurteilt das Ergebnis anhand der Belege, wenn nichts auszuführen ist, und sagt, was besteht und was nicht.',
+  'catalog.purpose.herald': 'Bereitet Nachrichten und Entwürfe für Personen und externe Dienste vor; jeden Versand genehmigst du.',
+  'catalog.purpose.flash': 'Schnelle Antworten neben dem Orchestrator: sieht seinen Chat, liest, ändert nichts',
+  'catalog.purpose.pulse': 'Ideen, Tipps, Erinnerungen, Verknüpfungen und der Satz des Tages',
 };

@@ -120,6 +120,11 @@ export const toolsDe: typeof toolsIt = {
   'tools.foreign.labelHook': 'Hook-Hinweis',
   'tools.foreign.labelDone': 'Von dir erledigt',
   'tools.foreign.you': 'Du',
+  // a run's outcome in an Esegui result folded to one line (lib/foreign.ts runOutcome)
+  'tools.foreign.runOk': (p: { code: string }) => `erfolgreich (Exit-Code ${p.code})`,
+  'tools.foreign.runFail': (p: { code: string }) => p.code ? `fehlgeschlagen (Exit-Code ${p.code})` : 'fehlgeschlagen',
+  'tools.foreign.runStopped': 'von dir vor dem Ende gestoppt',
+  'tools.foreign.runProd': 'Produktionsbefehl, von dir bestätigt',
 
   // Keys: keyboard shortcuts
   'tools.keys.paletteKey': 'Strg K',

@@ -23,6 +23,7 @@ import { HelpTip } from './HelpTip';
 import { formatCost } from '../lib/format';
 import { useApp } from '../store/store';
 import { isBusy } from '../store/state';
+import { rolePurpose } from '../lib/role-text';
 
 /** How many open chats of this role are working right now (a turn running or starting), from the live chat list: «Al
  *  lavoro» says what is true now, never an open run whose chat waits, closed or went away (2026-10-22). */
@@ -163,7 +164,7 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
             {standing && <span className="catalog-level-medal" aria-hidden="true">{t('agentsGrid.levelShort', { n: standing.level })}</span>}</span>
           <h3><button ref={front} type="button" onClick={() => flip(true)} aria-expanded={flipped} aria-controls={backId} aria-describedby={`${backId}-f`} data-testid={`catalog-flip-${profile.id}`}>{profile.name}</button></h3>
           <span id={`${backId}-f`} className="sr-only">{t('bm.card.flip', { name: profile.name })}</span>
-          <p className="catalog-purpose" title={profile.purpose || undefined}>{profile.purpose}</p>
+          <p className="catalog-purpose" title={rolePurpose(profile.id, profile.purpose) || undefined}>{rolePurpose(profile.id, profile.purpose)}</p>
         </header>
         <div className="catalog-chips">
           <span className="catalog-chip" data-kind="engine">{engine}</span>

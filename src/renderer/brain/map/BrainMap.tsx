@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import{t}from'../../i18n';
 import { normFiles, normMap, type MapEdge, type MapNode } from '../types';
 import { useBrain } from '../api';
-import { byLayer, centerId, defaultKinds, EDGE_KINDS, edgeKey, fileName, findNode, groupIndex, layerColor, pickView, relFile } from '../lib/map';
+import { byLayer, centerId, defaultKinds, EDGE_KINDS, edgeKey, fileName, findNode, groupIndex, layerColor, layerLabel, pickView, relFile } from '../lib/map';
 import { fmt } from '../lib/format';
 import { short } from '../lib/text';
 import { IconClose, IconSearch, useEsc } from '../components/ui';
@@ -186,8 +186,8 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode, l
             {legend}
             <div className="layers">
               {view && byLayer({ ...view, nodes: drawn.nodes }).map(l => (
-                <section key={l.id} className="layer" aria-label={l.label}>
-                  <h3><span className="sw" style={{ background: layerColor(l.id) }} />{l.label}<span className="muted small" style={{ marginLeft: 'auto' }}>{l.nodes.length}</span></h3>
+                <section key={l.id} className="layer" aria-label={layerLabel(l)}>
+                  <h3><span className="sw" style={{ background: layerColor(l.id) }} />{layerLabel(l)}<span className="muted small" style={{ marginLeft: 'auto' }}>{l.nodes.length}</span></h3>
                   {l.nodes.map(n => (
                     <button key={n.id} type="button" className={`${sel?.kind === 'node' && sel.id === n.id ? 'on' : ''} ${hi.nodes.has(n.id) ? 'lit' : ''} ${lg?.glow.has(n.id) ? 'live' : ''}`} onClick={() => pick(n.id)}>
                       <span>{lg?.glow.has(n.id) && <i className={`bx-live-dot${lg.glow.get(n.id)!.running ? ' run' : ''}`} aria-label={t('brainText.map.workingNow')} />}{n.label}{n.members?.length ? <span className="muted"> · {n.members.length}</span> : null}</span>
@@ -201,7 +201,7 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode, l
           </div>
         ) : (
           <>
-            <div className="bx-map-colors" aria-label={t('brainText.map.legend')}>{view?.layers.filter(layer => drawn.nodes.some(n => n.layer === layer.id)).map(layer => <span key={layer.id}><i style={{ background: layerColor(layer.id) }} />{layer.label}</span>)}</div>
+            <div className="bx-map-colors" aria-label={t('brainText.map.legend')}>{view?.layers.filter(layer => drawn.nodes.some(n => n.layer === layer.id)).map(layer => <span key={layer.id}><i style={{ background: layerColor(layer.id) }} />{layerLabel(layer)}</span>)}</div>
             <div ref={canvas} className="bx-map-canvas" data-testid="bx-map-canvas" tabIndex={0} onPointerDown={event=>event.currentTarget.focus({preventScroll:true})} role="group" aria-label={t('brainText.map.canvas')} onKeyDown={event=>{if(event.target!==event.currentTarget)return;const keys:Record<string,[number,number,number]>={ArrowLeft:[-1,0,1],ArrowRight:[1,0,1],ArrowUp:[0,-1,1],ArrowDown:[0,1,1],'+':[0,0,0.85],'=':[0,0,0.85],'-':[0,0,1.18]};if(event.key==='Home'){event.preventDefault();engine.current?.fit();}else if(keys[event.key]){event.preventDefault();engine.current?.nudge(...keys[event.key]!);}}} />
             <div className="bx-map-hint">{t('brainText.map.hint')}<br />{t('brainText.map.hintKeys')}</div>
             {legend}
@@ -211,7 +211,7 @@ export function BrainMapView({ onClose, onNavigate, full = false, focus, mode, l
 
         {sel && data && (
           <aside className="bx-map-context" aria-label={t('brainText.map.piece')} data-testid="bx-map-piece">
-            <div className="bx-row" style={{ padding: '8px 8px 0 12px' }}><span className="small muted">{sel.kind === 'node' ? (data.layers.find(l => l.id === node?.layer)?.label ?? '') : (EDGE_KINDS[sel.edge.kind] ?? sel.edge.kind)}</span><span className="sp" /><button type="button" ref={pieceClose} className="bx-btn ghost s" aria-label={t('brainText.map.closeCard')} onClick={() => setSel(null)}><IconClose /></button></div>
+            <div className="bx-row" style={{ padding: '8px 8px 0 12px' }}><span className="small muted">{sel.kind === 'node' ? (() => { const l = data.layers.find(x => x.id === node?.layer); return l ? layerLabel(l) : ''; })() : (EDGE_KINDS[sel.edge.kind] ?? sel.edge.kind)}</span><span className="sp" /><button type="button" ref={pieceClose} className="bx-btn ghost s" aria-label={t('brainText.map.closeCard')} onClick={() => setSel(null)}><IconClose /></button></div>
             <div className="pbody bx-scroll">
               {sel.kind === 'link' ? (
                 <div className="bx-map-piece">

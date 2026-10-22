@@ -118,6 +118,11 @@ export const toolsIt = {
   'tools.foreign.labelHook': 'Nota di un hook',
   'tools.foreign.labelDone': 'Fatto da te',
   'tools.foreign.you': 'Tu',
+  // a run's outcome in an Esegui result folded to one line (lib/foreign.ts runOutcome)
+  'tools.foreign.runOk': (p: { code: string }) => `riuscito (exit code ${p.code})`,
+  'tools.foreign.runFail': (p: { code: string }) => p.code ? `fallito (exit code ${p.code})` : 'fallito',
+  'tools.foreign.runStopped': 'fermato dall’utente prima della fine',
+  'tools.foreign.runProd': 'comando di produzione, confermato da te',
 
   // Keys: keyboard shortcuts
   'tools.keys.paletteKey': 'Ctrl K',

@@ -52,4 +52,13 @@ export const catalogEn: typeof catalogIt = {
   'catalog.costsWhy.partial': ({ n, total }) => `Cost per success: the cost is known for only ${n} of ${total} runs.`,
   'catalog.costsHelp': 'Median cost: half of the ended runs cost less, among those with a known cost. Cost per verified success: the cost of every ended run divided by the verified successful ones (those the level counts). At API list prices: with a subscription it is not what you pay.',
   'catalog.metricsError': 'Statistics unavailable. Please retry.', 'catalog.back': 'Back to catalogue',
+  // the built-in roles' purpose (name, purpose and character always come from the role: lib/role-text.ts)
+  'catalog.purpose.orchestrator': 'Coordinates the work: hands every job to a role and keeps you posted on where things stand.',
+  'catalog.purpose.strategist': 'Breaks a goal into a plan and hands the parts to the right roles.',
+  'catalog.purpose.scout': 'Finds and checks facts: code, logs, the web and pages, without changing anything.',
+  'catalog.purpose.artisan': 'Makes the changes: code, files, configuration, documents and brain notes, with the repository’s checks.',
+  'catalog.purpose.sentinel': 'Verifies: runs tests and checks, or judges the result from the evidence when there is nothing to run, and says what passes and what does not.',
+  'catalog.purpose.herald': 'Prepares messages and drafts for people and outside services; you approve every send.',
+  'catalog.purpose.flash': 'Quick answers beside the Orchestrator: sees its conversation, reads, changes nothing',
+  'catalog.purpose.pulse': 'Ideas, tips, reminders, links and the day’s sentence',
 };

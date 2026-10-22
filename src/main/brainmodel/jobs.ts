@@ -25,6 +25,7 @@ import type { AgentSnapshot, ChangeLog } from './changes';
 import { procedureSections, sectionText } from './procedure-sources';
 import { readSmall } from './model';
 import { checkPermissionText } from '../agents/tool-policy';
+import { changeText } from './change-text';
 
 /** The role side of a job: only the role text and the declared skills. */
 export interface AgentWriter {
@@ -122,7 +123,7 @@ export function migrate(ctx: JobContext): JobResult {
     const text = skillText(name, description, [`# ${s.title}`, '', body.text, '',
       `${marker} il ${day(ctx.now())}.${body.masked ? ` ${body.masked} righe con possibili credenziali sono nascoste qui: il testo intero resta nel file originale.` : ''}`].join('\n'));
     const file = path.join(ctx.skillDir, name, 'SKILL.md');
-    const c = ctx.log.apply({ job: 'migration', kind: 'skill', action: 'create', target: name, summary: `Nuova skill «${name}» da ${s.file} (${s.title})`, reason: 'Le procedure diventano skill: il contenuto è lo stesso, ora un ruolo la carica quando il compito la chiede (skills_suggest).', evidence: [source] }, [{ file, text }]);
+    const c = ctx.log.apply({ job: 'migration', kind: 'skill', action: 'create', target: name, summary: changeText().newSkill({ name, file: s.file, title: s.title }), reason: 'Le procedure diventano skill: il contenuto è lo stesso, ora un ruolo la carica quando il compito la chiede (skills_suggest).', evidence: [source] }, [{ file, text }]);
     if (c) changes++;
     items.push({ source, title: s.title, skill: name, status: 'moved', ...(body.masked ? { note: `${body.masked} righe nascoste (credenziali)` } : {}) });
   }
@@ -147,7 +148,7 @@ export function corrections(ctx: JobContext): JobResult {
         if (text === null) throw new Error('skill non leggibile');
         const p2 = parseMd(text);
         const next = setBody(text, appendUnder(p2.body, 'Lezioni', line));
-        if (ctx.log.apply({ job: 'corrections', kind: 'skill', action: 'update', target: skill.name, summary: `Lezione aggiunta alla skill «${skill.name}»: ${oneLine(l.rule, 120)}`, reason: `Correzione dell’utente (${p.name}).`, evidence: [l.evidence] }, [{ file: skill.file, text: next }])) changes++;
+        if (ctx.log.apply({ job: 'corrections', kind: 'skill', action: 'update', target: skill.name, summary: changeText().lesson({ skill: skill.name, rule: oneLine(l.rule, 120) }), reason: `Correzione dell’utente (${p.name}).`, evidence: [l.evidence] }, [{ file: skill.file, text: next }])) changes++;
         ctx.lessons.settle(l.id, 'approved', `skill ${skill.name}`);
       } else if (l.target === 'rule') {
         const file = path.join(ctx.root, LESSONS_RULE);
@@ -155,7 +156,7 @@ export function corrections(ctx: JobContext): JobResult {
         const writes = [{ file, text: appendUnder(current, p.name, line) }];
         const cfg = brainJsonWithTopic(ctx.root, LESSONS_RULE);
         if (cfg) writes.push(cfg);
-        if (ctx.log.apply({ job: 'corrections', kind: 'rule', action: 'update', target: LESSONS_RULE, summary: `Nuova regola: ${oneLine(l.rule, 120)}`, reason: `Correzione dell’utente (${p.name}); vale per ogni ruolo.`, evidence: [l.evidence] }, writes)) changes++;
+        if (ctx.log.apply({ job: 'corrections', kind: 'rule', action: 'update', target: LESSONS_RULE, summary: changeText().newRule({ rule: oneLine(l.rule, 120) }), reason: `Correzione dell’utente (${p.name}); vale per ogni ruolo.`, evidence: [l.evidence] }, writes)) changes++;
         ctx.lessons.settle(l.id, 'approved', `regola in ${LESSONS_RULE}`);
       } else {
         const instructions = appendUnder(p.instructions, 'Lezioni dalle correzioni', line);
@@ -224,7 +225,7 @@ export function repeatedTask(ctx: JobContext): JobResult {
       '## Passi', '', 'Documentare qui i passi concreti: le richieste ripetute non descrivono una procedura.', '',
       '## Candidata non verificata', '', 'Non eseguire automaticamente. Prima di promuoverla: documentare passi concreti, un esempio verificato indipendentemente e un replay riuscito con evidenze.', ''].join('\n');
     const file = path.join(ctx.root, 'memory', 'skill-candidates', `${name}.md`);
-    const c = ctx.log.apply({ job: 'repeated-task', kind: 'skill', action: 'create', target: name, summary: `Skill candidata «${name}» da ${g.runs.length} richieste`, reason: `${distinctTasks.size} incarichi distinti in ${chats.size} chat nello stesso progetto: candidata in attesa di verifica indipendente e replay, non caricabile come skill.`, evidence: g.runs.slice(-6).map(r => r.runId) },
+    const c = ctx.log.apply({ job: 'repeated-task', kind: 'skill', action: 'create', target: name, summary: changeText().candidate({ name, n: g.runs.length }), reason: `${distinctTasks.size} incarichi distinti in ${chats.size} chat nello stesso progetto: candidata in attesa di verifica indipendente e replay, non caricabile come skill.`, evidence: g.runs.slice(-6).map(r => r.runId) },
       [{ file, text: skillText(name, `Come fare: ${oneLine(last.goal, 160)}`, body) }]);
     if (!c) continue;
     changes++;
@@ -236,7 +237,7 @@ function linkTo(ctx: JobContext, p: AgentProfile, name: string, job: Maintenance
   try {
     const snap = ctx.agents.update(p.id, { linked }, `Manutenzione: usa la skill ${name}`);
     if (!snap) return false;
-    ctx.log.record({ job, kind: 'agent', action: 'link', target: p.id, summary: `${p.name} usa «${name}»${drop ? ` al posto di «${drop}»` : ''}`, reason, evidence: [name] }, [], snap);
+    ctx.log.record({ job, kind: 'agent', action: 'link', target: p.id, summary: changeText().link({ agent: p.name, name, ...(drop ? { drop } : {}) }), reason, evidence: [name] }, [], snap);
     return true;
   } catch { return false; }
 }
@@ -259,7 +260,7 @@ export function mergeSkills(ctx: JobContext): JobResult {
     const kt = text.get(keep.name)!, kp = parseMd(kt), have = new Set(kp.body.split(/\r?\n/).map(l => l.trim()).filter(Boolean));
     const extra = parseMd(text.get(drop.name)!).body.split(/\r?\n/).filter(l => l.trim() && !have.has(l.trim()) && !/^#\s/.test(l));
     const merged = extra.length ? setBody(kt, `${kp.body.replace(/\s+$/, '')}\n\n## Da «${drop.name}»\n\n${extra.join('\n')}\n`) : kt;
-    const c = ctx.log.apply({ job: 'merge-skills', kind: 'skill', action: 'merge', target: `${drop.name}>${keep.name}`, summary: `«${drop.name}» unita in «${keep.name}»`, reason: `Le due skill dicevano quasi le stesse cose (somiglianza ≥ ${Math.round(MERGE_SIM * 100)}%).`, evidence: [brainRel(ctx.root, drop.file), brainRel(ctx.root, keep.file)] },
+    const c = ctx.log.apply({ job: 'merge-skills', kind: 'skill', action: 'merge', target: `${drop.name}>${keep.name}`, summary: changeText().merge({ drop: drop.name, keep: keep.name }), reason: `Le due skill dicevano quasi le stesse cose (somiglianza ≥ ${Math.round(MERGE_SIM * 100)}%).`, evidence: [brainRel(ctx.root, drop.file), brainRel(ctx.root, keep.file)] },
       [{ file: keep.file, text: merged }, { file: drop.file, text: null }]);
     if (!c) continue;
     changes++; gone.add(drop.name);
