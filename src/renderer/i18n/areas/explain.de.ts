@@ -31,5 +31,5 @@ export const explainDe: typeof explainIt = {
   'explain.skills.p2': '„Genutzt von“ listet die Agenten, die ihn bei jedem Start laden; „Ungenutzt“ heißt, kein Agent lädt ihn, aber er bleibt in jedem Chat als „/name“ verfügbar. Die Wartung schlägt vor, doppelte oder nutzlose zusammenzulegen oder zu entfernen.',
   'explain.team.title': 'Was diese Zahlen sagen',
   'explain.team.p1': '„Arbeitet“: Rollen mit mindestens einem gerade offenen Chat. „Auf Probe“: Rollen mit einer neuen Version auf Probe, die mit der vorigen verglichen wird, bevor sie bleibt.',
-  'explain.team.p2': 'Auf jeder Karte: Das Level steigt nur mit geprüften Erfolgen (deinen, denen einer geprüften Bewertung), daneben angezeigt; die Leistung ist der gewichtete Durchschnitt der Urteile, mit den Runs, auf denen sie beruht; das „?“ daneben zeigt jeweils die genaue Formel.',
+  'explain.team.p2': 'Auf jeder Karte: Das Level steigt mit den XP geprüft erfolgreicher Runs (1 bis 5 je nach Größe der Aufgabe); die Leistung ist eine Schätzung aus den Urteilen, mit einem ± der Unsicherheit; das „?“ daneben zeigt jeweils die genaue Formel.',
 };

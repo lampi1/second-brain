@@ -31,5 +31,5 @@ export const explainEn: typeof explainIt = {
   'explain.skills.p2': '"Used by" lists the agents that load it at every start; "Unused" means no agent loads it, but it stays available as "/name" in any chat. Maintenance proposes merging or removing duplicate or useless ones.',
   'explain.team.title': 'What these numbers say',
   'explain.team.p1': '"Working": roles with at least one chat open now. "On trial": roles with a new version on trial, compared with the previous one before keeping it.',
-  'explain.team.p2': 'On each card: the level grows only with verified successes (yours, a verified review\'s), shown beside it; the performance is the weighted average of verdicts, with the runs it rests on; the "?" beside each gives the exact formula.',
+  'explain.team.p2': 'On each card: the level grows with the XP of verified successful runs (1 to 5 by the size of the job); the performance is an estimate from the verdicts, with a ± of uncertainty; the "?" beside each gives the exact formula.',
 };
