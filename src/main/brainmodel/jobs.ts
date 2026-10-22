@@ -200,7 +200,7 @@ export function repeatedTask(ctx: JobContext): JobResult {
   let changes = 0;
   for (const g of groups) {
     const distinctTasks = new Map<string, AgentRun>();
-    for (const r of g.runs) { const key = r.taskId ?? `legacy-chat:${r.chatId}`, prior = distinctTasks.get(key); if (!prior || r.startedAt > prior.startedAt) distinctTasks.set(key, r); }
+    for (const r of g.runs) { const key = r.taskId ?? `chat:${r.chatId}`, prior = distinctTasks.get(key); if (!prior || r.startedAt > prior.startedAt) distinctTasks.set(key, r); }
     if (distinctTasks.size < REPEAT_MIN) continue;
     // Follow-ups and rework share their task identity; they never inflate repetition or word frequencies.
     g.runs = [...distinctTasks.values()];

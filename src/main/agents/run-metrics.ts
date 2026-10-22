@@ -18,7 +18,7 @@ export interface ReviewTally { runs: number; findings: number; blockingRuns: num
 /** Additive per (agentId, version): the kept runs fold into one; the pruned ones live on as one (agent-runs.json `rollups`). */
 export interface RunTally {
   agentId: string; version: number;
-  /** v2 excludes silence proxies; older aggregate verdicts have no recoverable provenance. */
+  /** The current rollup excludes silence proxies; older aggregate verdicts have no recoverable provenance. */
   verdictSchema?: 2;
   ended: number;
   /** Verified only: basis human or reviewed-evidence. */
