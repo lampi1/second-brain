@@ -4,11 +4,11 @@
 // renamed card never leaves a dead link (test/unit/guide-link.test.ts pins every id used in the renderer). Used by
 // HelpTip (its `guide` prop) and by page leads (ClassifiersPage, Qualità, Costi…). `actions` is imported on click, not at
 // load: HelpTip is in every page and in unit tests that render without the preload bridge (actions → sb → window.sb).
-import { CONCEPTS } from '@shared/concept-guide';
+import { CONCEPT_IDS } from '@shared/concept-ids';
 import { t } from '../i18n';
 import { closeHelpTip } from './HelpTip';
 
-export const isConcept = (id: string): boolean => CONCEPTS.some(c => c.id === id);
+export const isConcept = (id: string): boolean => CONCEPT_IDS.includes(id);
 
 export function GuideLink({ concept, className = '' }: { concept: string; className?: string }) {
   if (!isConcept(concept)) return null;

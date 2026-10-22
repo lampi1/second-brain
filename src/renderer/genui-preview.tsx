@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { Bridge, Lang } from '@shared/contract';
-import { setLang } from './i18n';
+import { loadLang, setLang } from './i18n';
 import { catalogFixtures, questionFixture } from './components/genui/fixtures';
 import './styles/tokens.css';
 import './styles/app.css';
@@ -24,7 +24,7 @@ function Preview() {
   return <main style={{ maxWidth: 1000, margin: '0 auto', padding: 24 }}>
     <h1>GenUI · {language === 'it' ? 'Anteprima componenti' : 'Component preview'}</h1>
     <nav style={{ marginBottom: 24 }} aria-label="Preview controls">
-      <button style={control} onClick={() => { const next = language === 'it' ? 'en' : 'it'; setLang(next); languageSet(next); }}>IT / EN</button>
+      <button style={control} onClick={() => { const next = language === 'it' ? 'en' : 'it'; void loadLang(next).then(() => { setLang(next); languageSet(next); }); }}>IT / EN</button>
       <button style={control} onClick={() => { const next = theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = next; themeSet(next); }}>{theme}</button>
       <button style={control} onClick={() => revise(n => n + 1)}>{language === 'it' ? 'Aggiorna stesso id' : 'Update same id'}</button>
       <output aria-live="polite">{language === 'it' ? 'Risposte inviate' : 'Answers submitted'}: {answers}</output>

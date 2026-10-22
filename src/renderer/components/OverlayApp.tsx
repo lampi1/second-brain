@@ -7,7 +7,7 @@
 // "Rispondi dopo" on (every card goes to "Da rispondere", lib/later.ts),
 // Ctrl+J goes to the next one. It never takes the keyboard by itself: only on a click or Ctrl+J (focusKey). No sounds.
 import { t as auditText } from '../i18n';
-import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { OverlayAction, OverlayCard, OverlayModel, OverlayToast } from '@shared/contract';
 import { sb } from '../sb';
 import { ago } from '../lib/format';
@@ -15,7 +15,7 @@ import { freezeClock } from '../lib/clock';
 import { HarnessMark, IconAlert, IconArrowRight, IconCheck, IconInfo, IconX } from './Icons';
 import { RequestPanel } from './RequestPanel';
 import { Keys } from './ui';
-import { lang, setLang } from '../i18n';
+import { lang, langLoaded, loadLang, setLang } from '../i18n';
 
 const act = (a: OverlayAction) => { void sb.invoke('overlay:action', a).catch(() => {}); };
 
@@ -69,7 +69,9 @@ function EventToast({ t }: { t: OverlayToast }) {
 export function OverlayApp() {
   const model = useSyncExternalStore(subscribe, () => latest);
   // the app page's language (ADR 0057): the root below re-mounts when it changes
-  if (model?.lang && model.lang !== lang()) setLang(model.lang);
+  const [, loaded] = useState(0);
+  useEffect(() => { if (model?.lang && !langLoaded(model.lang)) void loadLang(model.lang).then(() => loaded(n => n + 1), () => {}); }, [model?.lang]);
+  if (model?.lang && model.lang !== lang() && langLoaded(model.lang)) setLang(model.lang);
   const ref = useRef<HTMLDivElement>(null);
   // the app page's clock (frozen in the demo) drives every "4 min" label here too
 

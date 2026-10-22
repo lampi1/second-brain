@@ -5,7 +5,7 @@
 // region, tooltips, the questions window ("Domande in finestra") and dialogs. It owns the global keyboard map
 // (lib/keys.ts → actions.ts, G-letter go-to sequences), theme and density, highlights the element a link points to, and
 // tells the browser-view reporter when something covers everything. Mounted by main.tsx.
-import { useEffect, type CSSProperties } from 'react';
+import { lazy, Suspense, useEffect, type CSSProperties } from 'react';
 import{t}from'./i18n';
 import { BRAIN_PAGES, BrainMap, BrainPage, GO_ALIASES } from './brain';
 import { goSequence, resolveShortcut } from './lib/keys';
@@ -46,7 +46,8 @@ import { hubRedirect } from './lib/memory-hub';
 import { ClassifiersPage } from './components/brain-model/ClassifiersPage';
 import { MapPage } from './components/brain-model/MapPage';
 import { LogPage } from './components/LogPage';
-import { GuidePage } from './components/GuidePage';
+// the Guida (three languages of cards) loads when it opens, not with the first screen
+const GuidePage = lazy(() => import('./components/GuidePage').then(m => ({ default: m.GuidePage })));
 
 const editable = (t: EventTarget | null) => {
   const el = t as HTMLElement | null;
@@ -165,7 +166,7 @@ function PageFrame({ id }: { id: (typeof BRAIN_PAGES)[number]['id'] }) {
       </div>
       {/* keyed by the page: every page change replays the entry (linear.css panel-enter), no hard cut */}
       <div className="page-body" key={id}>
-        {hub ? null : id === 'log' ? <LogPage /> : id === 'guida' ? <GuidePage arg={arg ?? undefined} /> : id === 'agenti' ? <AgentCatalogPage /> : id === 'impostazioni'
+        {hub ? null : id === 'log' ? <LogPage /> : id === 'guida' ? <Suspense fallback={null}><GuidePage arg={arg ?? undefined} /></Suspense> : id === 'agenti' ? <AgentCatalogPage /> : id === 'impostazioni'
           ? <div className="bx bx-page bx-scroll" role="region" aria-label={t('cmp.app.settings')}><div className="bx-inner"><SettingsPage /></div></div>
           : id === 'memoria'
             ? <div className="bx bx-page bx-scroll" role="region" aria-label={pageLabel(id)}><div className="bx-inner mh-inner"><MemoryPage /></div></div>

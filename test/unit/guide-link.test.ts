@@ -6,6 +6,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { CONCEPTS } from '../../src/shared/concept-guide';
+import { CONCEPT_IDS } from '../../src/shared/concept-ids';
 import { GuideLink, isConcept } from '../../src/renderer/components/GuideLink';
 
 const SRC = path.resolve(import.meta.dirname, '../../src/renderer');
@@ -14,6 +15,10 @@ function files(dir: string): string[] {
 }
 
 describe('guide links', () => {
+  it('knows the same card ids as the guide (concept-ids.ts lets the first screen skip the guide)', () => {
+    expect([...CONCEPT_IDS]).toEqual(CONCEPTS.map(c => c.id));
+  });
+
   it('names only Guida cards that exist', () => {
     const used = new Set<string>();
     for (const f of files(SRC)) {
