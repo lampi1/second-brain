@@ -120,7 +120,7 @@ export const brainTextIt = {
   'brainText.qualita.patterns.note': (p: { range: string }) => `raggruppati per tipo, da ai-errors.md (${p.range}); prima i più frequenti di questa settimana`,
   'brainText.qualita.proposals': 'Proposte di miglioramento:',
   'brainText.qualita.proposalsRest': (p: { n: number; applied: number; measured: number }) => ` ${p.n}, di cui ${p.applied} applicate, ${p.measured} misurate (confermate, inutili o peggiorate).`,
-  'brainText.qualita.openProposals': 'Apri proposals.md',
+  'brainText.qualita.openProposals': 'Decidi in Memoria',
 
   // components/Stats.tsx
   'brainText.stats.status.tornato': 'la regola non è bastata',

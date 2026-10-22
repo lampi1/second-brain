@@ -198,7 +198,7 @@ export function Qualita({ nav }: { arg?: string; nav: Navigate }) {
             <FeedbackOrigins rows={d.wins} />
             <p className="bx-q-row" data-testid="bx-q-proposte">
               <b>{tr('brainText.qualita.proposals')}</b>{tr('brainText.qualita.proposalsRest', { n: d.proposals.length, applied, measured })}
-              {' '}<button type="button" className="bx-go" onClick={() => nav('esplora/proposals.md')}>{tr('brainText.qualita.openProposals')}</button>
+              {' '}<button type="button" className="bx-go" onClick={() => nav('memoria/proposte')}>{tr('brainText.qualita.openProposals')}</button>
             </p>
           </div>
         )}

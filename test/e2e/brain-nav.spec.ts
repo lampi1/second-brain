@@ -40,8 +40,8 @@ test('brain pages: arguments through links and history, page-to-page links, map 
   // from Qualità, a link to another page goes through the history (Task's link to Fatto shows only once Task is read)
   await page.keyboard.press('Control+K');await page.getByTestId('palette-input').fill('sb://qualita');await page.keyboard.press('Enter');
   await settled(page);
-  await page.getByTestId('brain-page-qualita').getByRole('button', { name: 'Apri proposals.md' }).click();
-  await expect(page.getByTestId('page-file')).toBeVisible();
+  await page.getByTestId('brain-page-qualita').getByRole('button', { name: 'Decidi in Memoria' }).click();
+  await expect(page.getByTestId('page-memoria')).toBeVisible();
   await page.keyboard.press('Alt+ArrowLeft');
   await expect(page.getByTestId('page-qualita')).toBeVisible();
   // the map (2D list) opens a file and closes

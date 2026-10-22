@@ -1,7 +1,7 @@
 // End-to-end: the Qualità page in the frozen demo (SB_DEMO=1 SB_DEMO_FREEZE=1) pointed at the synthetic brain of
 // test/fixtures/brain-ui (SB_BRAIN), with the demo's /api/quality (demo.ts demoQuality: turns, held PRs, reopened bugs).
 // Four metrics, each with its source and dates; rows out of the count said on screen; the details open; proposals in
-// one row that opens proposals.md. Screenshots: test-results/shots/qualita-*.png.
+// one row that opens the Proposte deck in Memoria. Screenshots: test-results/shots/qualita-*.png.
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -58,6 +58,6 @@ test('Qualità: four true metrics with source and dates, out-of-count rows visib
   await expect(rules).toContainText('«bug-introdotto»');
   await shot(page, 'qualita-dettagli');
 
-  await p.getByTestId('bx-q-proposte').getByRole('button', { name: 'Apri proposals.md' }).click();
-  await expect(page.getByTestId('page-file')).toBeVisible();
+  await p.getByTestId('bx-q-proposte').getByRole('button', { name: 'Decidi in Memoria' }).click();
+  await expect(page.getByTestId('page-memoria')).toBeVisible();
 });

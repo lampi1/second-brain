@@ -121,7 +121,7 @@ export const brainTextDe: typeof brainTextIt = {
   'brainText.qualita.patterns.note': (p: { range: string }) => `nach Typ gruppiert, aus ai-errors.md (${p.range}); die häufigsten dieser Woche zuerst`,
   'brainText.qualita.proposals': 'Verbesserungsvorschläge:',
   'brainText.qualita.proposalsRest': (p: { n: number; applied: number; measured: number }) => ` ${p.n}, davon ${p.applied} umgesetzt, ${p.measured} gemessen (bestätigt, nutzlos oder schlechter).`,
-  'brainText.qualita.openProposals': 'proposals.md öffnen',
+  'brainText.qualita.openProposals': 'Im Gedächtnis entscheiden',
 
   // components/Stats.tsx
   'brainText.stats.status.tornato': 'die Regel hat nicht gereicht',
