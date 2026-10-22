@@ -124,11 +124,13 @@ export function actionSteps(items: readonly ChatItem[], live: boolean): RunStep[
   return out;
 }
 
-/** The card's steps: the plan's done items, the latest actions, then the plan's open items (or the contract's). */
-export function runSteps(items: readonly ChatItem[], opts: { live: boolean; doneWhen?: readonly string[]; result?: { doneWhen?: readonly { criterion: string; met: boolean }[] }; max?: number }): RunSteps {
+/** The card's steps: the plan's done items, the latest actions, then the plan's open items (or the contract's).
+ *  `all` (the card's «+ N azioni prima» clicked open): every one of them, nothing left out. */
+export function runSteps(items: readonly ChatItem[], opts: { live: boolean; doneWhen?: readonly string[]; result?: { doneWhen?: readonly { criterion: string; met: boolean }[] }; max?: number; all?: boolean }): RunSteps {
   const max = opts.max ?? 5;
   const plan = enginePlan(items);
   const actions = actionSteps(items, opts.live);
+  if (plan && opts.all) return { source: 'plan', steps: [...plan.filter(p => p.mark === 'done' || p.mark === 'bad'), ...actions, ...plan.filter(p => p.mark === 'cur' || p.mark === 'todo')], earlier: 0 };
   if (plan) {
     const done = plan.filter(p => p.mark === 'done' || p.mark === 'bad'), open = plan.filter(p => p.mark === 'cur' || p.mark === 'todo');
     const room = Math.max(1, max - Math.min(open.length, 2) - Math.min(done.length, 2));
@@ -138,6 +140,7 @@ export function runSteps(items: readonly ChatItem[], opts: { live: boolean; done
   }
   // once reported, the criteria show with the result (DelegationCard's Esito), not twice
   const contract = opts.doneWhen?.length && !opts.result ? contractSteps(opts.doneWhen) : [];
+  if (opts.all) return { source: contract.length ? 'contract' : null, steps: [...actions, ...contract], earlier: 0 };
   const room = Math.max(1, max - Math.min(contract.length, 2));
   const shown = actions.slice(-room);
   return { source: contract.length ? 'contract' : null, steps: [...shown, ...contract.slice(0, Math.max(1, max - shown.length))], earlier: actions.length - shown.length };
