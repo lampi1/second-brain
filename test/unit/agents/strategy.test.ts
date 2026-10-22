@@ -2,7 +2,9 @@
 // starts asking with the app's flow after its request (a user's or a child's does not); the user's answers become "already
 // clear" lines; plan_propose puts the plan up for the user's ok and agent_delegate is refused until then; «Approva e
 // parti» and «Cambia qualcosa» reach the Strategist as the user's messages; a delegated step is under way and done once its
-// children reported; plan_update moves its own steps; the plan tools exist only on its chat and survive a restart.
+// children reported; plan_update moves its own steps; the plan tools exist only on its chat and survive a restart. The
+// app enforces the flow (ADR 0121): a first proposal before any question needs a reason, and every refusal of a
+// delegation before the user's ok says what to do next.
 // Pins shared/strategy.ts, agents/strategy-tools.ts and the plan part of chats/manager.ts and agents/delegation.ts.
 import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
@@ -17,7 +19,7 @@ import type { AgentCatalog } from '../../../src/shared/agents';
 import type { NewChat } from '../../../src/shared/contract';
 import type { McpTool } from '../../../src/main/mcp/server';
 import type { PermissionCeiling, ToolClass } from '../../../src/shared/agents';
-import { finishPlan, afterReport, checkProposal, ENOUGH_QUESTIONS, PLAN_APPROVED, readPlan, STRATEGY_FLOW, withClarified, withDelegated, withStep, type StrategyPlan } from '../../../src/shared/strategy';
+import { finishPlan, afterReport, checkProposal, delegationGate, proposalGate, ENOUGH_QUESTIONS, PLAN_APPROVED, readPlan, STRATEGY_FLOW, withClarified, withDelegated, withStep, type StrategyPlan } from '../../../src/shared/strategy';
 
 /** Roles a user narrowed: tools, ceiling and launches per role (the rest stays the default). */
 type Narrowed = Partial<Record<RoleId, { tools: ToolClass[]; ceiling: PermissionCeiling | null; launches: string[] }>>;
@@ -67,7 +69,9 @@ function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: str
   return { m, dir, starts, sinks, sent, answers, call, root, task };
 }
 
-const PLAN = { steps: [{ title: 'Trovo dove si calcola lo sconto', role: 'scout' }, { title: 'Applico lo sconto', role: 'artisan' }, { title: 'Scrivo il riepilogo' }], doneWhen: 'I test passano' };
+const STEPS3 = [{ title: 'Trovo dove si calcola lo sconto', role: 'scout' }, { title: 'Applico lo sconto', role: 'artisan' }, { title: 'Scrivo il riepilogo' }];
+/** a proposal with the reason no question was needed (the gate of ADR 0121 is pinned in its own test below) */
+const PLAN = { steps: STEPS3, doneWhen: 'I test passano', noQuestionReason: 'La richiesta dice già cosa, dove e quando è finito' };
 const tick = () => new Promise(res => setTimeout(res, 20));
 const planOf = (f: ReturnType<typeof fixture>, id: string) => f.m.list().find(c => c.id === id)!.plan!;
 /** the user's click on the plan they see now */
@@ -131,6 +135,38 @@ describe('a Strategist\'s plan with the user', () => {
     expect(planOf(f, s.id).phase).toBe('running');
     expect(f.sent.get(s.id)!.at(-1)).toBe(PLAN_APPROVED);
     await expect(f.call('plan_propose', s.id, PLAN)).rejects.toThrow(/approved and under way/);
+  });
+
+  it('it really asks: a first proposal before any question is refused unless it says why none was needed (ADR 0121)', async () => {
+    const f = fixture();
+    const s = await f.root('strategist');
+    const bare = { steps: STEPS3 };
+    await expect(f.call('plan_propose', s.id, bare)).rejects.toThrow(/not asked the user anything yet.*AskUserQuestion.*noQuestionReason/s);
+    await expect(f.call('plan_propose', s.id, { ...bare, noQuestionReason: '   ' })).rejects.toThrow(/not asked/);
+    await expect(f.call('plan_propose', s.id, { ...bare, noQuestionReason: 'x'.repeat(201) })).rejects.toThrow(/not asked/);
+    expect(planOf(f, s.id).phase).toBe('asking');
+    // one answered question («Basta domande» counts: the user chose to stop) opens the way
+    const q = { question: 'Vale anche sulle offerte?', header: 'Offerte', multiSelect: false, options: [{ label: 'No' }, { label: 'Sì' }] };
+    f.sinks.get(s.id)!.pending({ id: 'q1', type: 'question', tool: 'AskUserQuestion', title: q.question, detail: '', input: {}, questions: [q], at: 1 });
+    await f.m.answer(s.id, 'q1', { kind: 'question', answers: { [q.question]: ENOUGH_QUESTIONS } });
+    expect(planOf(f, s.id)).toMatchObject({ asked: 1, clarified: [] });
+    await f.call('plan_propose', s.id, { steps: [{ title: 'Trovo', role: 'scout', detail: '  carrello,   ordine e reso ' }, STEPS3[1]] });
+    expect(planOf(f, s.id)).toMatchObject({ phase: 'proposed', asked: 1, steps: [{ title: 'Trovo', detail: 'carrello, ordine e reso' }, { title: 'Applico lo sconto' }] });
+    // a change asked by the user: the new proposal needs no reason
+    await decide(f, s.id, 'change', 'Aggiungi i test');
+    await f.call('plan_propose', s.id, { steps: STEPS3 });
+    expect(planOf(f, s.id).phase).toBe('proposed');
+  });
+
+  it('every refusal before the user\'s ok says what to do next; agent_assign_task is refused too', async () => {
+    const f = fixture();
+    const s = await f.root('strategist');
+    await expect(f.call('agent_delegate', s.id, { tasks: [f.task('scout', 'Ordini · Dove')] })).rejects.toThrow(/agent_delegate refused: the user has not approved your plan yet\. Finish your questions, propose the plan with plan_propose/);
+    await f.call('plan_propose', s.id, PLAN);
+    await expect(f.call('agent_delegate', s.id, { tasks: [f.task('scout', 'Ordini · Dove')] })).rejects.toThrow(/waits for the user: end your turn now/);
+    await decide(f, s.id, 'change', 'Prima i test');
+    await expect(f.call('agent_delegate', s.id, { tasks: [f.task('scout', 'Ordini · Dove')] })).rejects.toThrow(/propose the changed plan with plan_propose/);
+    expect(f.m.list().filter(c => c.parentId === s.id)).toEqual([]);
   });
 
   it('a delegated step is under way, done once its children reported done, blocked when one did not; plan_update moves its own steps', async () => {
@@ -208,6 +244,29 @@ describe('shared/strategy.ts', () => {
     expect(() => checkProposal({ steps: [{ title: 'x'.repeat(121) }] })).toThrow(/120/);
     expect(() => checkProposal({ steps: [{ title: 'x', owner: 'me' }] })).toThrow(/unknown field owner/);
     expect(() => checkProposal({ steps: [{ title: 'x' }], doneWhen: 3 })).toThrow(/doneWhen/);
+  });
+  it('the gates, pure: proposal before any question, delegation before the ok', () => {
+    const asking: StrategyPlan = { phase: 'asking', at: 1, clarified: [], steps: [] };
+    expect(proposalGate(asking, undefined)).toMatch(/not asked/);
+    expect(proposalGate(asking, 'Dice già tutto')).toBeNull();
+    expect(proposalGate({ ...asking, asked: 2 }, undefined)).toBeNull();
+    expect(proposalGate({ ...asking, phase: 'revising' }, undefined)).toBeNull();
+    expect(delegationGate(null, 'agent_delegate')).toBeNull();
+    expect(delegationGate({ ...asking, phase: 'running' }, 'agent_delegate')).toBeNull();
+    expect(delegationGate({ ...asking, phase: 'done' }, 'agent_delegate')).toBeNull();
+    for (const phase of ['asking', 'proposed', 'revising'] as const) expect(delegationGate({ ...asking, phase }, 'agent_assign_task')).toMatch(new RegExp(`^agent_assign_task refused: .*«${PLAN_APPROVED}»`));
+  });
+  it('a step may carry a short detail, checked and kept across a restart; the questions asked are counted', () => {
+    expect(() => checkProposal({ steps: [{ title: 'x', detail: 'y'.repeat(201) }] })).toThrow(/detail: at most 200/);
+    expect(() => checkProposal({ steps: [{ title: 'x', detail: 3 }] })).toThrow(/detail: required text/);
+    expect(checkProposal({ steps: [{ title: 'x', detail: '' }] }).steps[0]).toEqual({ title: 'x', state: 'todo' });
+    const p: StrategyPlan = { phase: 'proposed', at: 1, asked: 2, clarified: [], steps: checkProposal({ steps: [{ title: 'x', role: 'scout', detail: 'carrello e reso' }] }).steps };
+    expect(readPlan(JSON.parse(JSON.stringify(p)))).toEqual(p);
+    expect(readPlan({ ...p, asked: -1 })).toBeNull();
+    expect(readPlan({ ...p, steps: [{ title: 'x', state: 'todo', detail: 'y'.repeat(201) }] })).toBeNull();
+    const q = { question: 'Dove?' };
+    expect(withClarified(p, [q], { 'Dove?': ENOUGH_QUESTIONS })).toMatchObject({ asked: 3, clarified: [] });
+    expect(withClarified(p, [], {})).toBe(p);
   });
   it('moves steps: times kept, every step done ends the plan, a reopened step reopens it', () => {
     let p = withStep(plan(), 0, 'now', 10);

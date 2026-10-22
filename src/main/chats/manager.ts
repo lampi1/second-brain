@@ -1199,7 +1199,7 @@ export class ChatManager implements ChatService {
     if (!plan) throw new Error('plan_propose: only a Strategist the Orchestrator or the user started has a plan with the user.');
     if (plan.phase === 'running' || plan.phase === 'done') throw new Error('plan_propose: the plan is approved and under way; update its steps with plan_update.');
     if (plan.phase === 'proposed') throw new Error('plan_propose: your plan already waits for the user. End your turn: the answer arrives as a message.');
-    r.s.plan = { phase: 'proposed', clarified: plan.clarified, steps, ...(doneWhen ? { doneWhen } : {}), at: Date.now() };
+    r.s.plan = { phase: 'proposed', clarified: plan.clarified, ...(plan.asked ? { asked: plan.asked } : {}), steps, ...(doneWhen ? { doneWhen } : {}), at: Date.now() };
     this.persist();
     this.updated(r);
     log.info('chats', 'plan proposed', { chat: chatId, data: { steps: steps.length } });

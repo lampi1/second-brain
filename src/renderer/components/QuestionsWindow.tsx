@@ -15,8 +15,10 @@
 // the window popped up, turned the setting off by mistake again and again (the user, 2026-10-16: "è come se a volte si
 // togliesse da sola"); the switch is in Settings, "…" and Ctrl+K only. Answered with the keyboard, the next one takes the keyboard; when it closes,
 // the keyboard goes back to the field it came from. It renders only on its own requests' changes (selectors return
-// primitives or stable lists; counted in lib/questions.ts qwinStats). Mounted by App.tsx; pinned by
-// test/e2e/questions.spec.ts, answer-later.spec.ts, questions-perf.spec.ts and questions-gallery.spec.ts.
+// primitives or stable lists; counted in lib/questions.ts qwinStats). With the switch on, a Strategist's plan waiting for
+// the user's ok is one more card here (lib/plan-ask.ts, PlanApproval.tsx, ADR 0121), in the order it came, its strip only
+// pointing to it. Mounted by App.tsx; pinned by test/e2e/questions.spec.ts, answer-later.spec.ts, questions-perf.spec.ts,
+// questions-gallery.spec.ts and strategist-plan-popup.spec.ts.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PendingRequest } from '@shared/contract';
 import { focusChat, reqKey } from '../actions';
@@ -31,10 +33,15 @@ import { ago } from '../lib/format';
 import { useNow } from '../lib/clock';
 import { CodeBlock } from './CodeBlock';
 import { RequestPanel } from './RequestPanel';
+import { PlanApproval } from './PlanApproval';
+import { planAskKeys, planAskOf, withPlans, type PlanAsk } from '../lib/plan-ask';
 import { Kbd, Keys } from './ui';
 import { t } from '../i18n';
 
-const EMPTY: readonly PendingRequest[] = [];
+/** what the window shows: an open request, or a Strategist's plan to approve */
+type Ask = PendingRequest | PlanAsk;
+const EMPTY: readonly Ask[] = [];
+const NO_KEYS: string[] = [];
 
 export function QuestionsWindow() {
   const setting = useApp(questionsModalOn);
@@ -44,7 +51,10 @@ export function QuestionsWindow() {
   // Postponed requests stay in the store; only those keys are omitted until the queue is explicitly reopened.
   const on = setting || q.open;
   const allPending = useApp(s => s.pending, sameList);
-  const pending = on ? allPending.filter(p => !hidden.includes(p.chatId) && !requestPostponed(reqKey(p))) : EMPTY;
+  // the plans waiting for the user's ok: only with the switch on (off, they stay on their strips)
+  const planKeys = useApp(s => (setting ? planAskKeys(s) : NO_KEYS), sameList);
+  const plans = useMemo(() => planKeys.map(planAskOf).filter((p): p is PlanAsk => !!p), [planKeys]);
+  const pending: readonly Ask[] = on ? withPlans(allPending, plans).filter(p => !hidden.includes(p.chatId) && !requestPostponed(reqKey(p))) : EMPTY;
   const queue = [...pending];
   if (q.first) { const i = queue.findIndex(p => reqKey(p) === q.first); if (i > 0) queue.unshift(...queue.splice(i, 1)); }
   const cur = queue[0];
@@ -123,7 +133,7 @@ export function QuestionsWindow() {
   return <Window cur={cur} all={pending} boxRef={box} hidden={dialog} setting={setting} openedAt={openedAt} />;
 }
 
-function Window({ cur, all, boxRef, hidden, setting, openedAt }: { cur: PendingRequest; all: readonly PendingRequest[]; boxRef: React.RefObject<HTMLDivElement | null>; hidden: boolean; setting: boolean; openedAt: React.RefObject<number> }) {
+function Window({ cur, all, boxRef, hidden, setting, openedAt }: { cur: Ask; all: readonly Ask[]; boxRef: React.RefObject<HTMLDivElement | null>; hidden: boolean; setting: boolean; openedAt: React.RefObject<number> }) {
   const [keysEl, setKeysEl] = useState<HTMLSpanElement | null>(null);
   qwinStats.renders++;
   // primitives only: the asking chat's other changes (cost, last line) do not render the window
@@ -192,7 +202,7 @@ function Window({ cur, all, boxRef, hidden, setting, openedAt }: { cur: PendingR
               {all.map((p, i) => {
                 const k = reqKey(p);
                 const [h, r] = harnesses[i]!.split(':');
-                const body = <><HarnessMark harness={h ?? 'claude'} orchestrator={r === 'r'} size={14} /><span className="qwin-rail-t"><b>{titles[i]}</b><span>{p.type === 'permission' ? `${t('chat.questions.permission')}: ${p.title}` : p.title}</span></span></>;
+                const body = <><HarnessMark harness={h ?? 'claude'} orchestrator={r === 'r'} size={14} /><span className="qwin-rail-t"><b>{titles[i]}</b><span>{p.type === 'plan' ? t('tree.plan.ask.kicker') : p.type === 'permission' ? `${t('chat.questions.permission')}: ${p.title}` : p.title}</span></span></>;
                 return k === curKey
                   ? <div key={k} className="qwin-rail-item cur" aria-current="true" data-testid="qwin-current">{body}</div>
                   : <button key={k} type="button" className="qwin-rail-item" onClick={() => callQuestions(k)} data-testid="qwin-pick" data-key={k}
@@ -216,7 +226,9 @@ function Window({ cur, all, boxRef, hidden, setting, openedAt }: { cur: PendingR
             <div className="qwin-note" role="status" data-testid="qwin-elsewhere">{t('chat.questions.note')} <Keys combo="Ctrl+J" /> {t('chat.questions.note2')}</div>
           )}
           <div className="qwin-body">
-            <RequestPanel key={curKey} req={cur} variant="window" chatTitle={name} harness={harness} commands={commands} onEscape={later} keysTo={keysEl} testid="qwin-card" />
+            {cur.type === 'plan'
+              ? <PlanApproval key={curKey} ask={cur} chatTitle={name} onEscape={later} keysTo={keysEl} testid="qwin-plan" />
+              : <RequestPanel key={curKey} req={cur} variant="window" chatTitle={name} harness={harness} commands={commands} onEscape={later} keysTo={keysEl} testid="qwin-card" />}
           </div>
           <div className="qwin-foot">
             {/* a question's keys, written by the card for the step it shows (a permission's and a command's are on their buttons) */}

@@ -4,7 +4,10 @@
 // strip shows the steps as a checklist, Claude Code style. This file holds the plan a Strategist root chat carries
 // (ChatSummary.plan, persisted with the chat), the checks of a proposed plan, the step changes that delegation and
 // results make, and the app's fixed text that tells the Strategist this flow. Pure: used by main/chats/manager.ts,
-// main/agents/strategy-tools.ts, main/agents/delegation.ts and the renderer (StrategyPanel.tsx).
+// main/agents/strategy-tools.ts, main/agents/delegation.ts and the renderer (StrategyPanel.tsx, and with "Popup" on the
+// questions window's plan card, PlanApproval.tsx). The app enforces the flow, not only the text (ADR 0121): a first
+// proposal before any question needs a stated reason (proposalGate), and no delegation before the user's ok
+// (delegationGate).
 import { isWorkRole, type WorkRoleId } from './roles';
 import type { DelegationOutcome } from './delegation';
 
@@ -15,6 +18,8 @@ export type StepState = 'todo' | 'now' | 'done' | 'blocked';
 export const STEP_STATES: readonly StepState[] = ['todo', 'now', 'done', 'blocked'];
 export interface PlanStep {
   title: string;
+  /** optional: one short line on what the step covers (shown on the plan to approve) */
+  detail?: string;
   /** the role that does it (absent: the Strategist itself) */
   role?: WorkRoleId;
   state: StepState;
@@ -35,9 +40,11 @@ export interface StrategyPlan {
   doneWhen?: string;
   /** the last change of phase */
   at: number;
+  /** questions the user answered while it asked («Basta domande» too): none = it has not asked yet */
+  asked?: number;
 }
 
-export const STEPS_MIN = 1, STEPS_MAX = 8, STEP_TITLE_MAX = 120, DONE_WHEN_MAX = 200, CLARIFIED_MAX = 8, CLARIFIED_TEXT_MAX = 120;
+export const STEPS_MIN = 1, STEPS_MAX = 8, STEP_TITLE_MAX = 120, STEP_DETAIL_MAX = 200, NO_QUESTION_MAX = 200, DONE_WHEN_MAX = 200, CLARIFIED_MAX = 8, CLARIFIED_TEXT_MAX = 120;
 /** what the user's «Approva e parti» sends to the Strategist (also how its transcript shows the click) */
 export const PLAN_APPROVED = 'Piano approvato: parti.';
 /** the user's «Cambia qualcosa»: the Strategist proposes again */
@@ -49,8 +56,8 @@ export const ENOUGH_QUESTIONS = 'Basta domande: proponi ora il piano con quello 
  *  in the role's instructions: the user's edits to the role never drop the flow the strip depends on. */
 export const STRATEGY_FLOW = [
   '[app · how you work with the user here]',
-  '1. First find out what the user really wants, at a high level: ask ONE question at a time with your question tool (AskUserQuestion on Claude), in the user\'s language, with 2 to 4 short options, the recommended one first ending with " (consigliato)", and a short header naming the topic. If a missing goal, scope, constraint or success criterion would change your plan, ask the user before proposing it; never silently invent it. Skip what the request already says. Stop as soon as goal, scope, constraints and "done" are clear, after at most 5 questions, or when the user answers "Basta domande".',
-  `2. Then propose the plan with plan_propose: 2 to 6 steps, each one short plain line in the user's language with the role that does it; no jargon, no sub-steps. End your turn and wait: the user approves on your strip ("${PLAN_APPROVED}") or writes what to change, and then you propose again. Delegate nothing before the approval.`,
+  '1. First find out what the user really wants, at a high level: ask ONE question at a time with your question tool (AskUserQuestion on Claude), in the user\'s language, with 2 to 4 short options, the recommended one first ending with " (consigliato)", and a short header naming the topic. Ask at least one real question whenever the request leaves anything open (goal, scope, constraints, what "done" means, a preference between reasonable options): never silently invent it. Skip what the request already says. Stop as soon as goal, scope, constraints and "done" are clear, after at most 5 questions, or when the user answers "Basta domande". Only if the request truly settles everything may you propose without asking: then plan_propose needs `noQuestionReason`, one line saying why.',
+  `2. Then propose the plan with plan_propose: 2 to 6 steps, each one short plain line in the user's language with the role that does it (and, if useful, a short \`detail\`); no jargon, no sub-steps. The user's approval is required, always: end your turn and wait; the user approves ("${PLAN_APPROVED}") or writes what to change, and then you propose again. The app refuses agent_delegate and agent_assign_task until the user approved.`,
   '3. Once approved, inspect agent_children and reuse a compatible child with agent_assign_task (read agent_task_events first), or delegate new work with agent_delegate, giving its number as `step` (independent steps in parallel). A step you do yourself: plan_update it to "now", then to "done". The user follows the steps on your strip. At the end, agent_report as usual.',
 ].join('\n');
 
@@ -68,13 +75,33 @@ export function checkProposal(a: Record<string, unknown>): { steps: PlanStep[]; 
   const steps = raw.map((v, i): PlanStep => {
     const s = v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : null;
     if (!s) throw new Error(`steps[${i}]: object required.`);
-    const extra = Object.keys(s).find(k => k !== 'title' && k !== 'role');
+    const extra = Object.keys(s).find(k => k !== 'title' && k !== 'role' && k !== 'detail');
     if (extra) throw new Error(`steps[${i}]: unknown field ${extra}.`);
     if (s.role !== undefined && !isWorkRole(s.role)) throw new Error(`steps[${i}].role: one of the work roles, or leave it out for a step you do yourself.`);
-    return { title: line(s.title, STEP_TITLE_MAX, `steps[${i}].title`), ...(s.role !== undefined ? { role: s.role as WorkRoleId } : {}), state: 'todo' };
+    const detail = s.detail === undefined || s.detail === '' ? undefined : line(s.detail, STEP_DETAIL_MAX, `steps[${i}].detail`);
+    return { title: line(s.title, STEP_TITLE_MAX, `steps[${i}].title`), ...(detail ? { detail } : {}), ...(s.role !== undefined ? { role: s.role as WorkRoleId } : {}), state: 'todo' };
   });
   const doneWhen = a.doneWhen === undefined ? undefined : line(a.doneWhen, DONE_WHEN_MAX, 'doneWhen');
   return { steps, ...(doneWhen ? { doneWhen } : {}) };
+}
+
+/** plan_propose on the plan as it stands: null = it may propose; else why not. The first proposal of a Strategist that
+ *  has asked nothing yet needs `noQuestionReason` (one line): the user wanted a Strategist that really asks (ADR 0121). */
+export function proposalGate(plan: StrategyPlan, noQuestionReason: unknown): string | null {
+  if (plan.phase !== 'asking' || (plan.asked ?? 0) > 0) return null;
+  if (typeof noQuestionReason === 'string' && noQuestionReason.trim() && noQuestionReason.trim().length <= NO_QUESTION_MAX) return null;
+  return 'plan_propose refused: you have not asked the user anything yet. Ask at least one real clarifying question with your question tool (AskUserQuestion), one at a time, then propose. Only if the request truly leaves nothing open, call plan_propose again with noQuestionReason: one line saying why.';
+}
+
+/** agent_delegate / agent_assign_task from a Strategist with a plan: null once the user approved it; else what to do. */
+export function delegationGate(plan: StrategyPlan | null, tool: 'agent_delegate' | 'agent_assign_task'): string | null {
+  if (!plan || plan.phase === 'running' || plan.phase === 'done') return null;
+  const next = plan.phase === 'proposed'
+    ? 'Your plan waits for the user: end your turn now; the answer arrives as the user\'s message.'
+    : plan.phase === 'revising'
+      ? 'The user asked for changes: propose the changed plan with plan_propose, end your turn and wait.'
+      : 'Finish your questions, propose the plan with plan_propose, end your turn and wait.';
+  return `${tool} refused: the user has not approved your plan yet. ${next} You may delegate only after «${PLAN_APPROVED}».`;
 }
 
 /** A step number (1-based) of the plan, or an error naming the range. */
@@ -134,7 +161,9 @@ export function withClarified(plan: StrategyPlan, qs: { question: string; header
     const a = answers[q.question], text = Array.isArray(a) ? a.join(', ') : a;
     return typeof text === 'string' && text.trim() && text !== ENOUGH_QUESTIONS ? [{ q: cut(q.header?.trim() || q.question), a: cut(text) }] : [];
   });
-  return added.length ? { ...plan, clarified: [...plan.clarified, ...added].slice(-CLARIFIED_MAX) } : plan;
+  if (!qs.length) return plan;
+  const asked = (plan.asked ?? 0) + qs.length;
+  return added.length ? { ...plan, asked, clarified: [...plan.clarified, ...added].slice(-CLARIFIED_MAX) } : { ...plan, asked };
 }
 
 /** A saved plan, checked (an unreadable one is dropped, never guessed). */
@@ -144,13 +173,15 @@ export function readPlan(v: unknown): StrategyPlan | null {
   const str = (x: unknown, max: number) => typeof x === 'string' && x.length > 0 && x.length <= max;
   const time = (x: unknown) => x === undefined || (typeof x === 'number' && Number.isFinite(x) && x > 0);
   if (!Array.isArray(p.clarified) || p.clarified.length > CLARIFIED_MAX || !p.clarified.every(c => c && str(c.q, CLARIFIED_TEXT_MAX) && str(c.a, CLARIFIED_TEXT_MAX))) return null;
-  if (!Array.isArray(p.steps) || p.steps.length > STEPS_MAX || !p.steps.every(s => s && str(s.title, STEP_TITLE_MAX) && (s.role === undefined || isWorkRole(s.role))
+  if (p.asked !== undefined && !(Number.isSafeInteger(p.asked) && (p.asked as number) >= 0)) return null;
+  if (!Array.isArray(p.steps) || p.steps.length > STEPS_MAX || !p.steps.every(s => s && str(s.title, STEP_TITLE_MAX) && (s.detail === undefined || str(s.detail, STEP_DETAIL_MAX)) && (s.role === undefined || isWorkRole(s.role))
     && (s.outcome === undefined || ['done', 'partial', 'blocked'].includes(s.outcome)) && STEP_STATES.includes(s.state) && (s.chatIds === undefined || Array.isArray(s.chatIds) && s.chatIds.length <= 10 && s.chatIds.every((id: unknown) => typeof id === 'string' && /^[\w-]{1,80}$/.test(id)))
     && time(s.startedAt) && time(s.endedAt))) return null;
   if (p.doneWhen !== undefined && !str(p.doneWhen, DONE_WHEN_MAX)) return null;
   return {
     phase: p.phase as PlanPhase, at: p.at as number, clarified: (p.clarified as Clarified[]).map(c => ({ q: c.q, a: c.a })),
-    steps: (p.steps as PlanStep[]).map(s => ({ title: s.title, ...(s.role ? { role: s.role } : {}), state: s.state, ...(s.outcome ? { outcome: s.outcome } : {}), ...(s.chatIds ? { chatIds: [...s.chatIds] } : {}),
+    ...(p.asked ? { asked: p.asked as number } : {}),
+    steps: (p.steps as PlanStep[]).map(s => ({ title: s.title, ...(s.detail ? { detail: s.detail } : {}), ...(s.role ? { role: s.role } : {}), state: s.state, ...(s.outcome ? { outcome: s.outcome } : {}), ...(s.chatIds ? { chatIds: [...s.chatIds] } : {}),
       ...(s.startedAt ? { startedAt: s.startedAt } : {}), ...(s.endedAt ? { endedAt: s.endedAt } : {}) })),
     ...(p.doneWhen ? { doneWhen: p.doneWhen as string } : {}),
   };
