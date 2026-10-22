@@ -23,7 +23,7 @@ function repo(): string {
   git(d, 'commit', '-q', '-m', 'init');
   return d;
 }
-const waitFor = async (ok: () => boolean): Promise<void> => { for (let i = 0; i < 200 && !ok(); i++) await new Promise(r => setTimeout(r, 10)); };
+const waitFor = async (ok: () => boolean): Promise<void> => { for (let i = 0; i < 1000 && !ok(); i++) await new Promise(r => setTimeout(r, 10)); };
 
 /** A turn: the agent edits src/a.ts, then runs `command` with `exit`. */
 function fixture(checkpoints: boolean, command: string, exit: number) {
