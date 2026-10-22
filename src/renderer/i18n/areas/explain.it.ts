@@ -32,5 +32,5 @@ export const explainIt = {
   'explain.skills.p2': '«Usata da» elenca gli agenti che la caricano a ogni avvio; «Non usata» vuol dire che nessun agente la carica, ma resta disponibile con «/nome» in ogni chat. La manutenzione propone di unire o togliere quelle doppie o inutili.',
   'explain.team.title': 'Cosa dicono questi numeri',
   'explain.team.p1': '«Al lavoro»: ruoli con almeno una chat aperta adesso. «In prova»: ruoli con una nuova versione in prova, confrontata con la precedente prima di tenerla.',
-  'explain.team.p2': 'Su ogni carta: il livello cresce solo con i lavori riusciti e verificati (da te, da una revisione verificata), scritti accanto; la performance è la media pesata dei voti, con su quanti lavori si basa; il «?» accanto a ciascuno dà la formula esatta.',
+  'explain.team.p2': 'Su ogni carta: il livello sale con gli XP dei lavori riusciti e verificati (da 1 a 5 secondo quanto è grande il lavoro); la performance è una stima dai voti, con un ± di incertezza; il «?» accanto a ciascuno dà la formula esatta.',
 };

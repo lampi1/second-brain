@@ -82,7 +82,7 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 .agent-overview .catalog-standing p{margin:3px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .catalog-standing b{font-size:var(--fs-xl);font-weight:650;letter-spacing:-.3px;font-variant-numeric:tabular-nums;color:var(--text)}
 .catalog-standing p span{font-size:var(--fs-s);color:var(--text-2)}
-/* «Lv 6 Maestro · 38 riusciti verificati»: the real count beside the level wraps under it in a narrow card (ADR 0100) */
+/* «Lv 7 Praticante · 124 XP»: the XP beside the level wraps under it in a narrow card (ADR 0100, 0131) */
 .agent-overview .catalog-standing p.catalog-level-value{white-space:normal}
 .catalog-standing .catalog-level-wins{white-space:nowrap;font-variant-numeric:tabular-nums}
 .catalog-standing small{display:block;margin-top:5px;font-size:var(--fs-xs);color:var(--text-3);line-height:1.35}
@@ -99,6 +99,8 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 .catalog-perf[data-band=warmup] .fill{stroke:var(--text-3)}
 .catalog-perf[data-band] p span{color:var(--perf,var(--text-2));font-weight:550}
 .catalog-perf .warmup{font-size:var(--fs-m)!important;color:var(--text-2)!important}
+/* the estimate's uncertainty beside the % (ADR 0131): small and quiet, never the band's colour */
+.catalog-perf[data-band] p .catalog-perf-spread{margin-left:3px;font-size:var(--fs-xs);font-weight:500;color:var(--text-3);font-variant-numeric:tabular-nums}
 .catalog-stats dt .help-tip{position:relative;z-index:1;margin-left:4px}
 .catalog-stats:has(>div:nth-child(3):last-child){grid-template-columns:repeat(3,minmax(0,1fr))}
 .help-bubble .catalog-help-now{padding-top:6px;margin-top:7px!important;border-top:1px solid var(--border);color:var(--text)}

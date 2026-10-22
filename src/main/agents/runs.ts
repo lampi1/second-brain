@@ -2,15 +2,19 @@
 // chats.json forgets the chat (60 closed chats). The pure lifecycle steps live here; ChatManager calls them on start,
 // end (completed / closed / stale), Brother's reopen, pending requests and settled turns. A run's receipts (what it did,
 // agents/receipts.ts, ADR 0130) are bounded there and read back here; ones out of shape are dropped, never the run.
+// The same file keeps Flash's answer outcomes (`flash`, agents/flash-outcomes.ts, ADR 0131: Flash records no run) and a
+// Strategist run's plan record (`plan`, a decision signal for the Orchestrator); both read leniently.
 import path from 'node:path';
 import crypto from 'node:crypto';
-import type { AgentRun, AgentRunCorrections, AgentRunEnd, AgentRunOutcome, AgentRunReport, AgentRunTags, AgentRunTokens } from '../../shared/agents';
+import type { AgentRun, AgentRunCorrections, AgentRunEnd, AgentRunOutcome, AgentRunPlan, AgentRunReport, AgentRunTags, AgentRunTokens } from '../../shared/agents';
+import { emptyFlashLog, flashAnswered, flashAsked, flashHanded, readFlashLog, type FlashLog } from './flash-outcomes';
 import { checkResult } from '../../shared/delegation';
 import { MODEL_TIERS, type ModelTier } from '../../shared/roles';
 import { SUMMARY_MAX } from './run-report';
 import { rollUp, SAMPLE_MAX, type RunTally, type TagTally } from './run-metrics';
 import { readLocal, writeLocalText } from './local-store';
 import { readReceipts } from './receipts';
+import { XP_MAX } from './xp';
 
 export const RUNS_MAX = 5000;
 /** Below the local store's 8 MB cap, with headroom for the run being added. */
@@ -137,6 +141,7 @@ export function readRun(v: unknown): AgentRun | null {
     if (delivery.policy !== 'synthesize' && (delivery.synthesisSubmittedAt !== undefined || delivery.synthesisBatchId !== undefined)) return null;
   }
   if (r.turns !== undefined && !count(r.turns)) return null;
+  const plan = readPlan(r.plan);
   const scope = r.scope as AgentRun['scope'];
   if (scope !== undefined && (!scope || typeof scope.brainRoot !== 'string' || !path.isAbsolute(scope.brainRoot) || typeof scope.projectRoot !== 'string' || !path.isAbsolute(scope.projectRoot) || scope.brainRoot.length > 4000 || scope.projectRoot.length > 4000)) return null;
   const contract = r.taskContract as AgentRun['taskContract'];
@@ -168,7 +173,15 @@ export function readRun(v: unknown): AgentRun | null {
     ...(tags ? { tags } : {}),
     // receipts out of shape are dropped, never the run (ADR 0130)
     ...(receipts ? { receipts } : {}),
+    // a plan record out of shape is dropped, never the run (ADR 0131)
+    ...(plan ? { plan } : {}),
   };
+}
+/** A run's plan record (ADR 0131), or null when absent or out of shape. */
+function readPlan(v: unknown): AgentRunPlan | null {
+  const p = v as Record<string, unknown> | null;
+  if (!p || typeof p !== 'object' || !count(p.proposals) || !count(p.changes) || (p.approvedAt !== undefined && !time(p.approvedAt))) return null;
+  return { proposals: p.proposals, changes: p.changes, ...(p.approvedAt !== undefined ? { approvedAt: p.approvedAt as number } : {}) };
 }
 
 /** Ends an open run; false when it had already ended (the first end wins). */
@@ -236,6 +249,9 @@ export function readTally(v: unknown): RunTally | null {
   if (t.decisions !== undefined && !count(t.decisions)) return null;
   if (t.decisionWins !== undefined && (!count(t.decisionWins) || t.decisionWins > ((t.decisions as number | undefined) ?? 0))) return null;
   if (t.earnedWins !== undefined && (!count(t.earnedWins) || t.earnedWins > (t.ended as number))) return null;
+  // XP (ADR 0131): at most XP_MAX a run; a rollup saved before it has none (its successes count at their floor)
+  const xpOk = (v: unknown, max: number) => v === undefined || (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= max);
+  if (!xpOk(t.xp, XP_MAX * (t.ended as number)) || !xpOk(t.decisionXp, XP_MAX * ((t.decisions as number | undefined) ?? 0))) return null;
   if ((t.tags !== undefined && !tagTallies(t.tags)) || (t.tagsLost !== undefined && t.tagsLost !== true) || (t.tags !== undefined && t.tagsLost !== undefined)) return null;
   const result = structuredClone(t) as unknown as RunTally;
   if (result.verdictSchema !== 2) {
@@ -243,6 +259,7 @@ export function readTally(v: unknown): RunTally | null {
     result.verdicts = { success: 0, partial: 0, fail: 0 };
     result.decisionWins = 0;
     result.earnedWins = 0;
+    delete result.xp; delete result.decisionXp;
     for (const bucket of Object.values(result.tags ?? {})) for (const tag of Object.values(bucket as Record<string, TagTally>)) tag.verdicts = { success: 0, partial: 0, fail: 0 };
     result.verdictSchema = 2;
   }
@@ -257,6 +274,7 @@ export class AgentRunStore {
   private rollups: RunTally[] = [];
   /** the latest end among the pruned runs: a chat mirror of an ended run up to it is already in the rollups, never adopted */
   private prunedThrough = 0;
+  private flash: FlashLog = emptyFlashLog();
   private dirty = false;
   /** the runs just pruned (folded into the rollups): ChatManager drops their chat mirrors */
   onPrune?: (runIds: Set<string>) => void;
@@ -269,6 +287,8 @@ export class AgentRunStore {
       if (raw === undefined) return;
       if (raw.version !== 1 || !Array.isArray(raw.runs) || raw.runs.length > RUNS_MAX || (raw.rollups !== undefined && !Array.isArray(raw.rollups)) || (raw.prunedThrough !== undefined && !time(raw.prunedThrough))) throw new Error('Invalid agent runs');
       this.prunedThrough = (raw.prunedThrough as number | undefined) ?? 0;
+      // Flash's outcomes (ADR 0131): out of shape = a fresh log, never a reason to refuse the file
+      if ((raw as { flash?: unknown }).flash !== undefined) this.flash = readFlashLog((raw as { flash?: unknown }).flash);
       const keys = new Set<string>();
       for (const v of (raw.rollups ?? []) as unknown[]) {
         const t = readTally(v);
@@ -280,7 +300,18 @@ export class AgentRunStore {
         if (!run || this.runs.has(run.runId)) throw new Error('Invalid agent run');
         this.runs.set(run.runId, run);
       }
-    } catch { this.runs.clear(); this.rollups = []; this.prunedThrough = 0; this.problem = 'Il registro delle esecuzioni degli Agenti non è leggibile. Il file è conservato; le nuove esecuzioni non vengono registrate.'; }
+    } catch { this.runs.clear(); this.rollups = []; this.prunedThrough = 0; this.flash = emptyFlashLog(); this.problem = 'Il registro delle esecuzioni degli Agenti non è leggibile. Il file è conservato; le nuove esecuzioni non vengono registrate.'; }
+  }
+
+  /** Flash's answer outcomes (flash-outcomes.ts, ADR 0131): a copy. */
+  flashLog(): FlashLog { return structuredClone(this.flash); }
+  /** The user asked Flash / Flash answered / the user wrote to the Orchestrator: written with the next flush. */
+  flashEvent(e: { kind: 'asked' | 'handed'; text: string; at: number } | { kind: 'answered'; at: number }): void {
+    if (this.problem) return;
+    if (e.kind === 'asked') flashAsked(this.flash, e.text, e.at);
+    else if (e.kind === 'handed') { if (!this.flash.open.length) return; flashHanded(this.flash, e.text, e.at); }
+    else flashAnswered(this.flash, e.at);
+    this.dirty = true;
   }
 
   /** The live record (the chat's mirror is this same object). */
@@ -338,7 +369,9 @@ export class AgentRunStore {
     // when nothing has to go; only a store over its budget measures runs one by one.
     const bytesOf = (v: unknown) => Buffer.byteLength(JSON.stringify(v), 'utf8');
     const record = (runs: AgentRun[], rollups: RunTally[], prunedThrough: number) =>
-      ({ version: 1, runs, ...(rollups.length ? { rollups } : {}), ...(prunedThrough ? { prunedThrough } : {}) });
+      ({ version: 1, runs, ...(rollups.length ? { rollups } : {}), ...(prunedThrough ? { prunedThrough } : {}),
+        // Flash's outcomes: bounded by flash-outcomes.ts (a few tens of KB at most), inside the same byte budget
+        ...(this.flash.open.length || this.flash.done.length || this.flash.asking || this.flash.total.success + this.flash.total.partial + this.flash.total.fail ? { flash: this.flash } : {}) });
     const whole = `${JSON.stringify(record(all, this.rollups, this.prunedThrough))}\n`;
     // the rollups only grow when runs are pruned: their budget is checked with the runs about to go
     const budget = RUNS_BYTES - Math.min(ROLLUP_BYTES, this.rollups.length ? bytesOf(this.rollups) : 0);

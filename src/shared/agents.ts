@@ -168,26 +168,31 @@ export interface VersionMetrics {
 export interface AgentMetrics { agentId: string; versions: VersionMetrics[]; all: VersionMetrics | null; open: number;
   /** level and performance on the agent card (agents/standing.ts), over all its runs whatever the filter */
   standing?: AgentStanding }
-/** The agent card's level (from its verified successful runs, ADR 0100) and performance % (verdicts weighted by trust
- *  and recency): agents/standing.ts. */
+/** The agent card's level (from the XP of its verified successful runs, ADR 0100, 0131) and performance % (a Bayesian
+ *  estimate of its verdicts weighted by trust and recency): agents/standing.ts. */
 export interface AgentStanding {
-  /** ended runs (kept + rolled up) */
+  /** ended runs (kept + rolled up); for Flash, its answers */
   runs: number;
-  /** verified successful runs (the user's verdict, a verified review's, a verified parent's for a delegated child, the
-   *  later outcome's for a Sentinel's review: standing.ts earnedVerdict, ADR 0125): the level's XP */
+  /** verified successful runs (the user's verdict, a verified review's, the receipts', a verified parent's for a delegated
+   *  child, the later outcome's for a Sentinel's review: standing.ts earnedVerdict, ADR 0125) */
   wins: number;
+  /** the level's XP: each verified success weighted by the size of its job, 1..5 (agents/xp.ts, ADR 0131) */
+  xp: number;
   level: number;
-  /** verified successes where this level starts, and where the next one does (null at the top level) */
+  /** XP where this level starts, and where the next one does (null at the top level) */
   levelAt: number; nextAt: number | null;
   /** 0..1 of the way to the next level (1 at the top) */
   progress: number;
-  /** 0..1, null while fewer than `minRuns` runs have a weighted verdict ("in rodaggio") */
+  /** 0..1, the posterior mean; null while too few verdicts or too wide a spread ("in rodaggio") */
   performance: number | null;
-  /** runs with a weighted verdict (never the agent's own word), and the minimum before the performance is shown */
+  /** the 90% spread (±, 0..1) of the estimate; null = no verdict */
+  spread: number | null;
+  /** runs with a weighted verdict (never the agent's own word), and the minimum before the performance can show */
   evaluated: number; minRuns: number;
-  /** where the verdicts came from: the user, an independent review, the app's receipts (ADR 0130), a review graded by what happened later, the facts,
-   *  the Orchestrator, a verified parent (chain), the agent itself (the last one is counted here but weighs nothing) */
-  sources: { human: number; review: number; receipts: number; graded: number; facts: number; orchestrator: number; chain: number; self: number };
+  /** where the verdicts came from: the user, an independent review, the app's receipts (ADR 0130), a review graded by what
+   *  happened later, the facts, the Orchestrator, the Orchestrator's decision signals (ADR 0131), a verified parent
+   *  (chain), Flash's answer outcomes (quick), the agent itself (the last one is counted here but weighs nothing) */
+  sources: { human: number; review: number; receipts: number; graded: number; facts: number; orchestrator: number; decision: number; chain: number; quick: number; self: number };
 }
 /** One run = a chat started from a role (agent-runs.json is the source of truth; the chat keeps a mirror). */
 /** App delivery observations. Engine submission is recorded only after session.send succeeds. */
@@ -240,7 +245,11 @@ export interface AgentRun {
   tags?: AgentRunTags;
   /** what the run did, with its deterministic verdict (ADR 0130); missing on runs before it and on one-shots */
   receipts?: AgentRunReceipts;
+  /** a Strategist's plan with the user on this run (ADR 0108, 0131): plans proposed, «Cambia qualcosa» asked, when the
+   *  user approved one; a decision signal for the Orchestrator */
+  plan?: AgentRunPlan;
 }
+export interface AgentRunPlan { proposals: number; changes: number; approvedAt?: number }
 /** skills = skill ids it started with plus the ones its engine loaded while open; app = the product it is about;
  *  repo = the name of the git top-level folder of its cwd (null outside a repository). */
 export interface AgentRunTags { skills: string[]; app: string | null; repo: string | null }

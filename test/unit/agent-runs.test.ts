@@ -293,3 +293,31 @@ describe('agent run store: A6 fields and rollups', () => {
     expect(fit[0]!.cost.values.at(-1)).toBe(big[0]!.cost.values.at(-1)); // the newest stay
   });
 });
+
+describe('Flash outcomes and plan records in the run store (ADR 0131)', () => {
+  it('keeps Flash\'s answer outcomes across a restart; a flash block out of shape never refuses the file', () => {
+    const dir = tmp(), s = new AgentRunStore(dir);
+    s.start(start());
+    s.flashEvent({ kind: 'asked', text: 'quanto costa il piano Pro di Claude?', at: 1000 });
+    s.flashEvent({ kind: 'answered', at: 2000 });
+    s.flashEvent({ kind: 'asked', text: 'no, è sbagliato', at: 3000 });
+    s.flush();
+    const again = new AgentRunStore(dir);
+    expect(again.problem).toBeNull();
+    expect(again.flashLog().done).toEqual([{ at: 3000, verdict: 'fail', why: 'corrected' }]);
+    const file = path.join(dir, 'agent-runs.json'), raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+    expect(JSON.stringify(raw.flash)).not.toContain('piano');
+    fs.writeFileSync(file, JSON.stringify({ ...raw, flash: { version: 1, open: 'x', done: [{ at: 'no' }] } }));
+    const lenient = new AgentRunStore(dir);
+    expect(lenient.problem).toBeNull();
+    expect(lenient.list()).toHaveLength(1);
+    expect(lenient.flashLog().done).toEqual([]);
+  });
+  it('reads a run\'s plan record, dropping one out of shape without refusing the run', () => {
+    const run = new AgentRunStore(tmp()).start(start());
+    run.plan = { proposals: 2, changes: 1, approvedAt: 5000 };
+    expect(readRun(run)!.plan).toEqual({ proposals: 2, changes: 1, approvedAt: 5000 });
+    expect(readRun({ ...run, plan: { proposals: -1, changes: 0 } })).not.toBeNull();
+    expect(readRun({ ...run, plan: { proposals: -1, changes: 0 } })!.plan).toBeUndefined();
+  });
+});

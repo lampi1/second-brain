@@ -1,12 +1,23 @@
 // E2E of the agent cards' front (owner, 2026-10-19): on the frozen demo (made-up runs, main/demo-agent-runs.ts) every
-// card shows the character large and centred, a level with its verified successes beside it («Lv 4 Esperto · 38
-// riusciti verificati», ADR 0100) and its way to the next one, and a performance % — or "In rodaggio" below 5 judged
-// runs — each with a "?" whose bubble gives the formula; a role with no runs is a Lv 1 with the empty-state line; the
+// card shows the character large and centred, a level with its XP beside it («Lv 7 Praticante · 124 XP», ADR 0100,
+// 0131) and its way to the next one, and a performance % with its ± — or "In rodaggio" with too few verdicts — each
+// with a "?" whose bubble gives the formula; the Orchestrator and Flash level up too (ADR 0131); a role with no runs is a Lv 1 with the empty-state line; the
 // model tier chip reads «Modello: …», never «Livello». The flip to the back still works, and the back holds the
 // agent's costs (#125): median per run and per verified success, with their counts, never a raw timestamp. «Modifica il ruolo» on the back opens the role's editor; Esc and «Chiudi senza salvare» come back (#126).
 // Screenshots dark and light: test-results/shots/agent-cards-*.png.
 import { expect, test, type Page } from '@playwright/test';
 import { goPage, launchDemo, shot } from './helpers';
+
+/** the demo's questions window is open at launch and would take the clicks: «Rispondi dopo» */
+async function laterQuestions(page: Page) {
+  const later = page.getByTestId('qwin-later'), backdrop = page.getByTestId('qwin-backdrop');
+  await backdrop.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+  for (let i = 0; i < 10 && await backdrop.count(); i++) {
+    if (await later.isVisible()) await later.click(); else await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+  }
+  await expect(backdrop).toHaveCount(0);
+}
 
 async function theme(page: Page, scheme: 'dark' | 'light') {
   await page.evaluate(t => window.sb.invoke('settings:set', { theme: t }), scheme);
@@ -18,6 +29,7 @@ test('agent cards: big centred character, level and performance with their "?" f
   test.setTimeout(90_000);
   const { app, page } = await launchDemo({ width: 1440, height: 1000 });
   try {
+    await laterQuestions(page);
     await goPage(page, 'agenti');
     const overview = page.getByTestId('agent-overview');
     await expect(overview.getByTestId('catalog-card-artisan')).toBeVisible();
@@ -27,7 +39,11 @@ test('agent cards: big centred character, level and performance with their "?" f
     await expect(artisan.getByTestId('catalog-level-artisan')).toContainText(/Lv \d+/);
     expect(Number(await artisan.getByTestId('catalog-level-artisan').getAttribute('data-level'))).toBeGreaterThan(1);
     await expect(artisan.getByTestId('catalog-perf-artisan')).toContainText('%');
-    await expect(artisan.getByTestId('catalog-level-wins-artisan')).toContainText(/\d+ riusciti verificati/);
+    await expect(artisan.getByTestId('catalog-level-wins-artisan')).toContainText(/\d+ XP/);
+    await expect(artisan.getByTestId('catalog-perf-spread-artisan')).toContainText(/±\d+/);
+    // ADR 0131: the Orchestrator (its decisions) and Flash (its answers) level up too
+    expect(Number(await overview.getByTestId('catalog-level-orchestrator').getAttribute('data-level'))).toBeGreaterThan(1);
+    expect(Number(await overview.getByTestId('catalog-level-flash').getAttribute('data-level'))).toBeGreaterThan(1);
     await expect(artisan.locator('.catalog-chip[data-kind="model"]')).toContainText('Modello:');
     const big = await artisan.locator('.catalog-hero .agent-avatar').boundingBox();
     expect(big!.width).toBeGreaterThanOrEqual(96);
@@ -41,9 +57,9 @@ test('agent cards: big centred character, level and performance with their "?" f
     await artisan.getByTestId('catalog-level-help-artisan').click();
     const lv = page.getByTestId('catalog-level-help-artisan-bubble');
     await expect(lv).toBeVisible();
-    await expect(lv).toContainText('5 × N × (N − 1) ÷ 2');
+    await expect(lv).toContainText('Lv 100 (il massimo) a 9.358');
     await expect(lv).toContainText('riusciti verificati su');
-    await expect(lv).toContainText('solo con i lavori riusciti e verificati');
+    await expect(lv).toContainText('solo con lavori riusciti e verificati');
     // ADR 0125: every role levels up without the user's verdicts; the Sentinel's reviews are judged by what happened
     await expect(lv).toContainText('per un lavoro delegato, il lavoro del genitore riuscito verificato');
     await expect(lv).toContainText('una seconda revisione indipendente (1 ogni 10)');
@@ -125,6 +141,17 @@ test('agent cards: big centred character, level and performance with their "?" f
     await page.getByTestId('catalog-level-help-scout').click();
     await expect(page.getByTestId('catalog-level-help-scout-bubble')).toContainText('Verificato vuol dire');
     await shot(page, 'agent-cards-level-help-light');
+    await page.keyboard.press('Escape');
+    // the Orchestrator's and Flash's own rules in their "?" (ADR 0131)
+    await page.getByTestId('catalog-card-orchestrator').scrollIntoViewIfNeeded();
+    await page.getByTestId('catalog-level-help-orchestrator').click();
+    await expect(page.getByTestId('catalog-level-help-orchestrator-bubble')).toContainText('piano approvato senza modifiche');
+    await shot(page, 'agent-cards-orchestrator-level-light');
+    await page.keyboard.press('Escape');
+    await page.getByTestId('catalog-card-flash').scrollIntoViewIfNeeded();
+    await page.getByTestId('catalog-level-help-flash').click();
+    await expect(page.getByTestId('catalog-level-help-flash-bubble')).toContainText('0,25 XP');
+    await shot(page, 'agent-cards-flash-level-light');
   } finally { await app.close(); }
 });
 
@@ -143,6 +170,7 @@ test('"?" explanations across the app: Orchestrator, strips, Agenti summary, Set
     await expect(bubble).toBeHidden();
   };
   try {
+    await laterQuestions(page);
     await open('orchestrator-help', 'coordina il lavoro', 'explain-orchestrator-dark');
     const strip = page.locator('[data-testid^="chat-help-"]').first();
     await expect(strip).toBeVisible();

@@ -45,6 +45,7 @@
     "check:branch": "node scripts/check-branch.mjs",
     "doctor": "node scripts/doctor.mjs",
     "logs": "node scripts/logs.mjs",
+    "levels": "node scripts/levels.mjs",
     "setup": "npm ci && node node_modules/electron/install.js && node scripts/setup-hooks.mjs",
     "pull": "node scripts/pull.mjs",
     "promote": "node scripts/release.mjs promote",
