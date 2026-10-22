@@ -26,6 +26,7 @@ import { holdUpdate } from '../lib/update-barrier';
 import { back, go, goTarget } from '../actions';
 import { locale, t } from '../i18n';
 import { AgentAvatar } from './AgentAvatar';
+import { useWorkingChats } from './AgentCatalogCard';
 import { AgentImagePicker } from './AgentImagePicker';
 import { AgentReadiness } from './AgentReadiness';
 import { AgentPackDetails } from './AgentPackDetails';
@@ -233,7 +234,8 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
   const model = catalog?.models.find(m => m.engine === profile.engine);
   const engine = model?.label ?? profile.engine;
   const open = metrics?.open ?? 0;
-  const state = profile.trial ? 'trial' : open > 0 ? 'working' : 'active';
+  const working = useWorkingChats(profile.id);
+  const state = profile.trial ? 'trial' : working > 0 ? 'working' : 'active';
   const unknown = t('catalog.unknown');
   const stats = metrics?.all;
   const loaded = metrics !== undefined;
@@ -279,7 +281,7 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
           <h2>{profile.name}</h2>
           <p className="ad-purpose">{profile.purpose}</p>
           <div className="ad-chips">
-            <span className="ad-badge" data-state={state}><i aria-hidden="true" />{profile.trial ? t('studio.trial') : open > 0 ? t('agentsGrid.working') : t('catalog.active')}</span>
+            <span className="ad-badge" data-state={state}><i aria-hidden="true" />{profile.trial ? t('studio.trial') : working > 0 ? t('agentsGrid.working') : t('catalog.active')}</span>
             <span className="ad-chip">{engine}</span>
             <span className="ad-chip">{t('studio.tierChip', { tier: tierLabel(profile.tier) })}</span>
             {profile.model && <span className="ad-chip ad-chip-mono">{profile.model}</span>}

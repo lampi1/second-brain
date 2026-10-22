@@ -11,6 +11,7 @@ import { requestPack } from '../lib/agent-pack-ui';
 import { sb } from '../sb';
 import { refreshAgents, useAgents } from '../store/agents';
 import { useApp } from '../store/store';
+import { isBusy } from '../store/state';
 import { ui } from '../store/ui';
 import { AgentCatalogCard } from './AgentCatalogCard';
 import { HelpTip } from './HelpTip';
@@ -43,7 +44,7 @@ export function AgentCatalogPage() {
     <ContextPulse key={profile.id} place={`agent:${profile.id}`} />
   </AgentStudio>;
   const profiles = catalog?.profiles ?? [];
-  const working = profiles.filter(p => !p.trial && (metrics?.find(m => m.agentId === p.id)?.open ?? 0) > 0).length;
+  const working = useApp(s => profiles.filter(p => !p.trial && Object.values(s.chats).some(c => c.agent?.id === p.id && !c.closedAt && isBusy(c))).length);
   const trial = profiles.filter(p => p.trial).length;
   return <section className="agent-overview" aria-label={t('catalog.title')} data-testid="agent-overview">
     <header className="catalog-head"><div><h2>{t('catalog.title')}</h2><p>{t('catalog.subtitle')}</p></div>

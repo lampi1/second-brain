@@ -62,6 +62,9 @@ export interface MetricsInput {
   windowOf?: (agentId: string, version: number) => number | null;
   /** Only runs whose tags match; untagged runs never match. Rollups retain counts for combined filters too. */
   filter?: TagFilter;
+  /** Whether an open run still belongs to a chat in the app (not closed, not gone, still its current run): a run left
+   *  open by a crash or a chat that went away is not "in corso" (the Agenti card, 2026-10-22). Absent = every open run. */
+  live?: (run: AgentRun) => boolean;
 }
 
 const emptySample = (): Sample => ({ n: 0, values: [], sum: 0 });
@@ -277,7 +280,7 @@ export function runMetrics(runs: readonly AgentRun[], input: MetricsInput = {}):
   }
   for (const run of runs) {
     if (!matchesTags(run, filter)) continue;
-    if (run.endedAt === undefined) { open.set(run.agentId, (open.get(run.agentId) ?? 0) + 1); continue; }
+    if (run.endedAt === undefined) { if (input.live?.(run) !== false) open.set(run.agentId, (open.get(run.agentId) ?? 0) + 1); continue; }
     if (input.since !== undefined && run.endedAt < input.since) continue;
     const k = keyOf(run.agentId, run.version);
     if (!tallies.has(k)) tallies.set(k, emptyTally(run.agentId, run.version));

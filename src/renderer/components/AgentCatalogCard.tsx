@@ -21,6 +21,14 @@ import { PERMISSIONS_ELEMENT, permissionSummary } from './RolePermissions';
 import { go } from '../actions';
 import { HelpTip } from './HelpTip';
 import { formatCost } from '../lib/format';
+import { useApp } from '../store/store';
+import { isBusy } from '../store/state';
+
+/** How many open chats of this role are working right now (a turn running or starting), from the live chat list: «Al
+ *  lavoro» says what is true now, never an open run whose chat waits, closed or went away (2026-10-22). */
+export function useWorkingChats(agentId: string): number {
+  return useApp(s => Object.values(s.chats).filter(c => c.agent?.id === agentId && !c.closedAt && isBusy(c)).length);
+}
 
 type Value = { text: string | null; samples?: string };
 
@@ -132,7 +140,8 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
     cost: { text: cost?.value != null ? formatCost(cost.value) : null, samples: sample(cost?.n ?? 0) },
   };
   const trial = !!profile.trial;
-  const working = !trial && (open ?? 0) > 0;
+  const busy = useWorkingChats(profile.id);
+  const working = !trial && busy > 0;
   const state = trial ? 'trial' : working ? 'working' : 'active';
   const origin = t(profile.userLocked ? 'studio.customized' : 'studio.builtIn');
   const tier = t('studio.tierChip', { tier: t(`roles.tier.${profile.tier}`) });
