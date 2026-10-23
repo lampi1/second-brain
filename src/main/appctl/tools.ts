@@ -630,13 +630,13 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   if (authed()) {
     tools.push({
       name: 'app_unblock',
-      description: `After a recap the user asked for: opens the app's questions window with everything that waits for him from every chat (questions, permissions, commands to run, Strategist plans), the ones he set aside with «Ci penso dopo» too, one after the other, ready to answer there (Sì / No / his own words) without opening the chats. Returns how many wait. Refused unless the user wrote to the Orchestrator in the last ${UNBLOCK_ASK_MIN} minutes.`,
+      description: `After a recap the user asked for: opens the app's questions window with everything that waits for him from every chat (questions, permissions, commands to run, Strategist plans), the ones he set aside with «Ci penso dopo» too, one after the other, ready to answer there (Sì / No / his own words) without opening the chats. Returns how many wait. Refused unless the Orchestrator's latest message is the user's own, written in the last ${UNBLOCK_ASK_MIN} minutes (never on a turn woken by app news or an agent). The window never takes his keyboard while he types.`,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
       inputSchema: obj(),
       run: () => {
         const orchestrator = caller();
         if (!orchestrator) throw new Error('bloccato: solo l’Orchestrator apre le richieste in attesa');
-        if (!decidedSince(orchestrator.id, Date.now() - UNBLOCK_ASK_MIN * 60_000)) throw new Error('bloccato: apri le richieste in attesa solo quando l’utente ti chiede un recap');
+        if (!userTurn(orchestrator.id, Date.now() - UNBLOCK_ASK_MIN * 60_000)) throw new Error('bloccato: apri le richieste in attesa solo quando l’utente ti chiede un recap');
         const asks = [...d.chats.pending(), ...(d.commandAsks?.() ?? [])].filter(r => !other(r.chatId)).length;
         const plans = d.chats.list().filter(c => !c.closedAt && !other(c.id) && c.plan?.phase === 'proposed').length;
         if (!asks && !plans) return { waiting: 0, note: 'Niente aspetta l’utente: non c’è nulla da aprire.' };
@@ -667,6 +667,13 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   function decidedSince(orchestratorId: string, at: number): boolean {
     return d.chats.items(orchestratorId).some(i => i.at >= at && (
       i.kind === 'user' ? !labelled(i.text) : i.kind === 'tool' && /question/i.test(i.name) && i.status === 'ok'));
+  }
+
+  /** is this turn the user's: the Orchestrator's latest message is one he wrote (not app news, not an agent's mail), at
+   *  or after `at`? (app_unblock: a turn woken by an agent can never open the requests) */
+  function userTurn(orchestratorId: string, at: number): boolean {
+    const last = d.chats.items(orchestratorId).filter(i => i.kind === 'user').at(-1);
+    return !!last && last.kind === 'user' && last.at >= at && !labelled(last.text);
   }
 
   function need(chatId: string): ChatSummary {

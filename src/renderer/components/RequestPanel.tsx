@@ -217,11 +217,12 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
   ) : null;
 
   // One renderer for every host; disclosure actions are separate from answering.
-  // a yes/no question (the only kind agents ask, ADR 0134): its No card has the refusal's tone
+  // a yes/no question (the only kind agents ask, ADR 0134): its No card has the refusal's tone, unless No is the one
+  // recommended (the tone must never push toward «Sì»)
   const yesNo = !!q && isYesNo(q);
   const choiceCards = () => q?.options.map((option, i) => (
     <ChoiceCard key={draft.step + ':' + i} option={option} number={i + 1} recommended={i === recIdx} previewOpen={variant === 'window'}
-      tone={yesNo && yesNoOf(option.label) === 'no' ? 'deny' : undefined}
+      tone={yesNo && yesNoOf(option.label) === 'no' && i !== recIdx ? 'deny' : undefined}
       picked={draft.picks.includes(i)} multi={q.multiSelect} current={i === draft.cursor} disabled={sent}
       onChoose={() => apply(pickOption(req, draft, i))} testid={testBase + '-opt-' + (i + 1)} />
   ));

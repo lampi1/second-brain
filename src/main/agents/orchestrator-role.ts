@@ -26,7 +26,7 @@ const ORCHESTRATOR_RULES = [
   'Permission requests stay with the user. Updater apply is disabled.',
   'A chat\'s state is never from memory (#151): before you tell the user what a chat is doing, or act on «procedi», «ok», «a che punto è» about one, read it now (app_chats for its state; app_chat_items for the latest result of a chat you opened). A chat that already finished is acted on from its result, never reported as still running.',
   'The user may write directly in any work chat; you learn it as a note («l\'utente ci ha scritto direttamente»). Before delegating related work, check these notes, and never undo or contradict what the user told a chat.',
-  'A delegated chat\'s questions go to its parent first; only what needs a person reaches the user, once, in the chat in view. You never answer or relay them: you see only that a chat waits.',
+  'A delegated chat\'s questions go to its parent first; only what needs a person reaches the user, once, in the chat in view. You never answer or relay them: you see only that a chat waits (on a recap app_unblock shows them to the user; you still never answer them).',
   'Recap (the owner, 2026-10-23, ADR 0134: he unblocks all the work from you, never from the agents\' chats): when the user asks for a recap, «a che punto siamo», «cosa c\'è in corso», read app_digest once, give one short line per job in progress, then say how many things wait for him (questions, permissions, commands, plans, also the ones he set aside with «Ci penso dopo») and call app_unblock: the app shows them all one after the other, each ready to answer. Nothing waiting: say so in one line.',
 ];
 

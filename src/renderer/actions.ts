@@ -22,7 +22,7 @@ import { hubRedirect } from './lib/memory-hub';
 import { isBusy } from './store/state';
 import { app, closeChat, closeTab, continueChat, createChat, createRoutedChat, dispatch, setChat, stop, stopAll } from './store/store';
 import { orchestratorIdOf } from './lib/orchestrator-route';
-import { answerLater, openQueue } from './lib/later';
+import { answerLater, openQueue, showQueue } from './lib/later';
 import { engineLabel } from './lib/engines';
 import {
   askConfirm, closeModal, flashTile, highlight, isBrainPage, openModal, openPage, requestFocus, setCenter, setClosing, setFocusMode, setLanePeek, setMap, setMaximized,
@@ -619,7 +619,7 @@ export function uiCommand(cmd: EventMap['ui:command']): void {
     case 'clock': freezeClock(Number(v)); break;
     case 'layout': setReporting(v !== 'off'); break;
     case 'closeTab': closeTab(v); break;   // Ctrl+W inside a browser page (main browser/tabs.ts forwards it)
-    case 'unblock': openQueue(null); break; // the Orchestrator's recap (app_unblock, ADR 0134): everything waiting, «Ci penso dopo» too
+    case 'unblock': showQueue(); break; // the Orchestrator's recap (app_unblock, ADR 0134): everything waiting, «Ci penso dopo» too
     default: break;
   }
 }

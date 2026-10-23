@@ -749,7 +749,9 @@ export class ClaudeSession implements HarnessSession {
    *  row per chat: then it is shown as it is, so a chat that cannot comply never stays stuck. */
   private refuseNotYesNo(id: string, input: Obj, toolUseId: string): boolean {
     if (!(this.opts.yesNo ?? yesNoGateOn(process.env))) return false;
-    if (yesNoShape(questionsFrom(input))) { this.yesNoRefused = 0; return false; }
+    const qs = questionsFrom(input);
+    // nothing readable (the CLI's input changed shape): shown as it is, never refused for the app's own parse
+    if (!qs.length || yesNoShape(qs)) { this.yesNoRefused = 0; return false; }
     if (this.yesNoRefused >= YESNO_RETRIES) { this.yesNoRefused = 0; return false; }
     this.yesNoRefused++;
     log.info('chats', 'question sent back: not yes/no', { chat: this.opts.chatId, data: { requestId: id, attempt: this.yesNoRefused } });

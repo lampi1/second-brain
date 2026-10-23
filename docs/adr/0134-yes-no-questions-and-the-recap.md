@@ -26,14 +26,18 @@ look at each chat.
   (`chats/acp.ts`) that is not yes/no (`yesNoShape`: two options, a yes and a no in Italian, English or German, single
   choice) goes back to the agent with `YESNO_REFUSAL` (how to ask) instead of reaching the user. At most
   `YESNO_RETRIES` (2) in a row per chat: the next one is shown as it is, so a chat that cannot comply never stays
-  stuck. Off in the test suites (their fake CLIs ask with free options) unless `SB_YESNO=1`; `SB_YESNO=0` turns it off.
+  stuck. A question the app cannot read (the CLI changed its input) is shown, never refused. Off in the test suites (their fake CLIs ask with free options) unless `SB_YESNO=1`; `SB_YESNO=0` turns it off.
   Codex questions get the rule only (no gate).
 - **The panel.** Unchanged in shape: the options, «Altro…» for his own words, and the set-aside button, now called
-  «Ci penso dopo». A yes/no question's «No» card has the refusal's tone.
+  «Ci penso dopo». A yes/no question's «No» card has the refusal's tone, unless «No» is the recommended one. The
+  Strategist's «già chiaro» lines keep the question with a yes/no answer (not its header: «Ambito · Sì» says nothing).
 - **The recap unblocks.** A new Orchestrator tool, `app_unblock` (only on an Orchestrator's own authenticated mount,
-  and only within 10 minutes of a message the user wrote to it, like `app_update_code`), opens the questions window
-  with everything that waits for the user from every chat: questions, permissions, commands, Strategist plans, and the
-  ones set aside with «Ci penso dopo» (`ui:command` `unblock` → `lib/later.ts openQueue`). It answers nothing. The
+  and only when the Orchestrator's latest message is the user's own, written in the last 10 minutes: a turn woken by
+  app news or an agent's mail cannot call it), opens the questions window with everything that waits for the user
+  from every chat: questions, permissions, commands, Strategist plans, and the ones set aside with «Ci penso dopo»
+  (`ui:command` `unblock` → `lib/later.ts showQueue`). It answers nothing, and unlike a call by hand it never takes the
+  keyboard from a field he is typing in, never closes another dialog and never raises the window: an agent's turn
+  must not put a permission under his keystrokes (review 2026-10-11). The
   Orchestrator's rules say: on a recap, one `app_digest`, a line per job, how many things wait, then `app_unblock`.
 
 ## Consequences

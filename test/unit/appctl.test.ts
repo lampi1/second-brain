@@ -6,7 +6,7 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { AgentCatalogService } from '../../src/main/agents/catalog';
 import type { AgentModelChoice } from '../../src/shared/agents';
-import { AGENT_LABEL, CHAT_PROMPT_MAX, CHAT_TITLE_MAX, PULL_ASK_MIN, RESOLVED_LABEL, appControlTools, orchestratorEndpointAuth } from '../../src/main/appctl/tools';
+import { AGENT_LABEL, CHAT_PROMPT_MAX, CHAT_TITLE_MAX, PULL_ASK_MIN, UNBLOCK_ASK_MIN, RESOLVED_LABEL, appControlTools, orchestratorEndpointAuth } from '../../src/main/appctl/tools';
 import { EndpointTokens } from '../../src/main/mcp/tokens';
 import { log } from '../../src/main/log';
 import type { BrainService, BrowserService, ChatService } from '../../src/main/services';
@@ -450,6 +450,11 @@ describe('app control tools', () => {
     const tool = appControlTools(base, 'or').find(x => x.name === 'app_unblock')!;
     await expect(Promise.resolve().then(() => tool.run({}))).rejects.toThrow(/recap/);
     items = [{ kind: 'user', id: 'v', at: now, text: `${AGENT_LABEL} recap` }];
+    await expect(Promise.resolve().then(() => tool.run({}))).rejects.toThrow(/recap/);
+    // too old, or an agent's mail after his message (a woken turn): refused
+    items = [{ kind: 'user', id: 'u', at: now - (UNBLOCK_ASK_MIN + 1) * 60_000, text: 'fammi un recap' }];
+    await expect(Promise.resolve().then(() => tool.run({}))).rejects.toThrow(/recap/);
+    items = [{ kind: 'user', id: 'u', at: now, text: 'fammi un recap' }, { kind: 'user', id: 'm', at: now, text: `${AGENT_LABEL} fatto` }];
     await expect(Promise.resolve().then(() => tool.run({}))).rejects.toThrow(/recap/);
     items = [{ kind: 'user', id: 'u', at: now, text: 'fammi un recap' }];
     expect(await tool.run({})).toMatchObject({ waiting: 0 });

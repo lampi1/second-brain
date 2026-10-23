@@ -1010,7 +1010,7 @@ export class AcpSession implements HarnessSession {
         questions.push({ question: text, ...(s(p.title) ? { header: cut(s(p.title), 30) } : {}), options: labels.map(label => ({ label })), multiSelect: q.allowMultiple === true });
       });
       // not yes/no (ADR 0134): skipped with how to ask, at most YESNO_RETRIES times in a row, then shown as it is
-      if ((this.opts.yesNo ?? yesNoGateOn(process.env)) && !yesNoShape(questions) && this.yesNoRefused < YESNO_RETRIES) {
+      if ((this.opts.yesNo ?? yesNoGateOn(process.env)) && questions.length > 0 && !yesNoShape(questions) && this.yesNoRefused < YESNO_RETRIES) {
         this.yesNoRefused++;
         log.info('chats', 'question sent back: not yes/no', { chat: this.opts.chatId, data: { engine: this.engine, attempt: this.yesNoRefused } });
         this.respond(id, { outcome: { outcome: 'skipped', reason: YESNO_REFUSAL } });
