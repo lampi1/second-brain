@@ -33,7 +33,7 @@ test('a yes/no question: Sì / No / Altro / Ci penso dopo, back on the recap', a
   await page.mouse.move(2, 2);
   await shot(page, 'qyesno-window');
   // the two tiles in view, the pointer on «No» (it lifts)
-  await page.getByTestId('qwin-card-opt-2').scrollIntoViewIfNeeded();
+  await page.getByTestId('qwin-card-opt-2').evaluate(el => el.scrollIntoView({ block: 'center' }));
   await page.getByTestId('qwin-card-opt-2').hover();
   await page.waitForTimeout(250);
   await shot(page, 'qyesno-tiles');

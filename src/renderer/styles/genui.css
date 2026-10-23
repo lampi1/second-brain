@@ -185,40 +185,56 @@
 .gu-chart-fill.negative { background: var(--violet); }
 .gu-chart-note { color: var(--text-3); font-size: 11.5px; margin-top: 5px; }
 @media (prefers-reduced-motion: reduce) { .gu-chart-fill { transition: none; } }
-@media (max-width: 600px) { .gu-choice-answer { flex-wrap: wrap; } .gu-choice-answer > .gu-rec { margin-left: 38px; } }
+@media (max-width: 600px) { .gu-choice-answer { flex-wrap: wrap; } .gu-choice-answer > .gu-rec:not(.gu-yn-rec) { margin-left: 38px; } }
 @container (max-width: 420px) {
   .gu-choice-answer { flex-wrap: wrap; }
   .gu-choice-copy { flex-basis: calc(100% - 38px); }
-  .gu-choice-answer > .gu-rec { margin-left: 38px; }
+  .gu-choice-answer > .gu-rec:not(.gu-yn-rec) { margin-left: 38px; }
 }
 
 /* A yes/no question's answers (ChoiceCard yn, ADR 0135): two big tiles side by side, a round check or cross, the word
-   large, the key a small hint in the corner; each in its own hue with the same weight, the recommended one glowing. */
-.gu-yn { --yn: var(--green); --yn-bg: var(--green-bg); position: relative; overflow: visible; border-radius: 16px; border-color: color-mix(in srgb, var(--yn) 28%, var(--border-2));
+   large, the key a small hint in the corner; each in its own hue with the same weight, only the recommended one filled
+   and glowing. Smaller in the lane, the Orchestrator and the chat tiles; a narrow tile puts its pill under the word. */
+.gu-yn { --yn: var(--green); --yn-bg: var(--green-bg); --yn-glow: 0 10px 28px -12px color-mix(in srgb, var(--yn) 70%, transparent);
+  position: relative; border-radius: 16px; border-color: color-mix(in srgb, var(--yn) 28%, var(--border-2));
   background: radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--yn) 16%, transparent), transparent 70%), var(--surface);
   transition: transform 160ms cubic-bezier(.2, .8, .2, 1), box-shadow 160ms ease, border-color 160ms ease; }
 .gu-yn.no { --yn: var(--red); --yn-bg: var(--red-bg); }
-.gu-yn.rec { border-color: color-mix(in srgb, var(--yn) 70%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--yn) 35%, transparent), 0 10px 28px -12px color-mix(in srgb, var(--yn) 70%, transparent); }
-.gu-yn:hover:has(> .gu-yn-answer:not(:disabled)) { transform: translateY(-2px); border-color: var(--yn); box-shadow: 0 0 0 1px color-mix(in srgb, var(--yn) 45%, transparent), 0 14px 32px -12px color-mix(in srgb, var(--yn) 80%, transparent); }
+.gu-yn.rec { border-color: color-mix(in srgb, var(--yn) 70%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--yn) 35%, transparent), var(--yn-glow); }
+.gu-yn:hover:has(> .gu-yn-answer:not(:disabled)) { transform: translateY(-2px); border-color: var(--yn); box-shadow: 0 0 0 1px color-mix(in srgb, var(--yn) 45%, transparent), var(--yn-glow); }
 .gu-yn:active:has(> .gu-yn-answer:not(:disabled)) { transform: translateY(0) scale(.985); }
+/* the keyboard's place: a focus ring, also on the recommended tile it starts on */
 .gu-yn.cur { border-color: var(--yn); }
-.gu-yn-answer { position: relative; min-height: 132px; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 22px 16px 18px; text-align: center; border-radius: 16px; }
+:focus-visible > .gu-yn.cur, .wq:focus .gu-yn.cur, .need-card:focus .gu-yn.cur, .decision:focus .gu-yn.cur, .ask:focus .gu-yn.cur { box-shadow: 0 0 0 2px var(--focus), var(--yn-glow); }
+.gu-yn-answer { position: relative; min-height: 112px; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 18px 14px 14px; text-align: center; border-radius: 16px; }
 .gu-yn-answer:hover:not(:disabled) { background: transparent; }
 .gu-yn-answer:focus-visible { outline-offset: 2px; border-radius: 16px; }
-.gu-yn-icon { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; color: var(--yn); background: var(--yn-bg);
+.gu-yn-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; color: var(--yn); background: var(--yn-bg);
   box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--yn) 55%, transparent), 0 0 24px -6px color-mix(in srgb, var(--yn) 60%, transparent);
   transition: transform 220ms cubic-bezier(.3, 1.6, .5, 1), background-color 160ms ease, color 160ms ease; }
 .gu-yn-icon svg { stroke-width: 2.6; }
-.gu-yn.rec .gu-yn-icon, .gu-yn:hover .gu-yn-icon { color: var(--surface); background: var(--yn); }
-.gu-yn:hover .gu-yn-icon { transform: scale(1.08) rotate(-4deg); }
+.gu-yn.rec .gu-yn-icon { color: var(--surface); background: var(--yn); }
+.gu-yn:hover:has(> .gu-yn-answer:not(:disabled)) .gu-yn-icon { transform: scale(1.08) rotate(-4deg); background: color-mix(in srgb, var(--yn) 24%, transparent); }
+.gu-yn.rec:hover:has(> .gu-yn-answer:not(:disabled)) .gu-yn-icon { background: var(--yn); }
 .gu-yn-label { font-size: 22px; font-weight: 700; letter-spacing: -.01em; line-height: 1.1; color: var(--text); }
 .gu-yn-desc { max-width: 34ch; }
 .gu-yn-key { position: absolute; left: 12px; top: 12px; display: grid; place-items: center; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 6px;
-  font: 600 11px/1 var(--mono); color: var(--text-3, var(--text-2)); border: 1px solid var(--border-3); border-bottom-width: 2px; background: var(--surface-2); }
-.gu-yn-rec { position: absolute; right: 10px; top: 10px; color: var(--surface); background: var(--yn); }
-.need-opts:has(> .gu-yn), .ask-actions:has(> .gu-yn) { grid-template-columns: 1fr 1fr; }
-.need-opts:has(> .gu-yn) > :not(.gu-choice), .ask-actions:has(> .gu-yn) > :not(.gu-choice) { grid-column: 1 / -1; }
-.need-card .gu-yn-answer { min-height: 92px; padding: 14px 10px 12px; gap: 6px; }
-.need-card .gu-yn-icon { width: 38px; height: 38px; }
-.need-card .gu-yn-label { font-size: 17px; }
-@media (prefers-reduced-motion: reduce) { .gu-yn, .gu-yn-icon { transition: none; } .gu-yn:hover, .gu-yn:active, .gu-yn:hover .gu-yn-icon { transform: none; } }
+  font: 600 11px/1 var(--mono); color: var(--text-3); border: 1px solid var(--border-3); border-bottom-width: 2px; background: var(--surface-2); }
+.gu-yn-rec { position: absolute; right: 10px; top: 10px; white-space: nowrap; color: var(--surface); background: var(--yn); }
+.gu-yn > .gu-choice-preview { border-top-color: color-mix(in srgb, var(--yn) 25%, var(--border)); }
+/* side by side wherever choices are listed; «Altro…», «Conferma» and the like take the whole row */
+.need-opts:has(> .gu-yn), .ask-opts:has(> .gu-yn), .ask-plain-opts:has(> .gu-yn) { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.need-opts:has(> .gu-yn) > :not(.gu-choice), .ask-opts:has(> .gu-yn) > :not(.gu-choice), .ask-plain-opts:has(> .gu-yn) > :not(.gu-choice) { grid-column: 1 / -1; }
+/* the smaller hosts: the lane, the Orchestrator's card, a chat tile, the Strategist's strip (no lift: their rows clip it) */
+:is(.need-card, .decision, .ask, .ask-plain-opts) .gu-yn-answer { min-height: 84px; padding: 12px 8px 10px; gap: 5px; }
+:is(.need-card, .decision, .ask, .ask-plain-opts) .gu-yn-icon { width: 34px; height: 34px; }
+:is(.need-card, .decision, .ask, .ask-plain-opts) .gu-yn-icon svg { width: 18px; height: 18px; }
+:is(.need-card, .decision, .ask, .ask-plain-opts) .gu-yn-label { font-size: 16px; }
+:is(.need-card, .decision, .ask, .ask-plain-opts) .gu-yn-key { display: none; }
+:is(.need-card, .decision, .ask, .ask-plain-opts) .gu-yn-rec { position: static; order: 3; }
+:is(.need-card, .ask) .gu-yn:hover:has(> .gu-yn-answer:not(:disabled)), :is(.need-card, .ask) .gu-yn:active:has(> .gu-yn-answer:not(:disabled)) { transform: none; }
+@container (max-width: 200px) { .gu-yn-key { display: none; } .gu-yn-rec { position: static; order: 3; } }
+@media (prefers-reduced-motion: reduce) {
+  .gu-yn, .gu-yn-icon { transition: none; }
+  .gu-yn:hover:has(> .gu-yn-answer:not(:disabled)), .gu-yn:active:has(> .gu-yn-answer:not(:disabled)), .gu-yn:hover:has(> .gu-yn-answer:not(:disabled)) .gu-yn-icon { transform: none; }
+}

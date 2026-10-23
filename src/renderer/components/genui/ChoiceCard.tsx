@@ -20,6 +20,19 @@ export function ChoiceCard({ option, number, recommended, picked, multi, current
 }) {
   const id = useId();
   const description = option.description ? cleanDescription(withoutImages(option.description)) : '';
+  const preview = option.preview?.trim() && (
+    <details className="gu-choice-preview" data-option-preview open={previewOpen} onKeyDown={e => {
+      e.stopPropagation();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.currentTarget.open = false;
+        e.currentTarget.querySelector('summary')?.focus();
+      }
+    }}>
+      <summary>{t('genui.choice.preview')}</summary>
+      <div className="gu-choice-preview-body"><UiPreview text={option.preview} /></div>
+    </details>
+  );
   if (yn) return (
     <div className={`gu-choice gu-yn ${yn} ${recommended ? 'rec' : ''} ${current ? 'cur' : ''}`}>
       <button type="button" className="gu-choice-answer gu-yn-answer" onClick={onChoose} disabled={disabled}
@@ -30,6 +43,7 @@ export function ChoiceCard({ option, number, recommended, picked, multi, current
         <span className="gu-yn-key" aria-hidden="true">{number}</span>
         {recommended && <span className="gu-rec gu-yn-rec">{t('tools.genui.recommended')}</span>}
       </button>
+      {preview}
     </div>
   );
   return (
@@ -43,19 +57,7 @@ export function ChoiceCard({ option, number, recommended, picked, multi, current
         </span>
         {recommended && <span className="gu-rec">{t('tools.genui.recommended')}</span>}
       </button>
-      {option.preview?.trim() && (
-        <details className="gu-choice-preview" data-option-preview open={previewOpen} onKeyDown={e => {
-          e.stopPropagation();
-          if (e.key === 'Escape') {
-            e.preventDefault();
-            e.currentTarget.open = false;
-            e.currentTarget.querySelector('summary')?.focus();
-          }
-        }}>
-          <summary>{t('genui.choice.preview')}</summary>
-          <div className="gu-choice-preview-body"><UiPreview text={option.preview} /></div>
-        </details>
-      )}
+      {preview}
     </div>
   );
 }
