@@ -108,7 +108,8 @@ import { HeadlessRunner } from './compare/headless';
 import { OneShotService } from './agents/oneshot';
 import type { AgentRunStore } from './agents/runs';
 import { CompareQueue, queueAllowed } from './compare/queue';
-import { gitWorktrees } from './agents/worktrees';
+import { DelegateWorktrees, gitWorktrees } from './agents/worktrees';
+import { stageDelegatedChanges, stageDelegatedChangesMany } from './agents/delegation-integration';
 import { JudgeSampler, judgeSamplingOn } from './agents/judge-sample';
 import { COMPACT_WINDOW } from './brain/settings-schema';
 import { setRecorder } from './chats/drift';
@@ -483,7 +484,11 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // trial evaluated again
   const loopRef: { current?: { ended(run: AgentRun): void; outcome(run: AgentRun): void } } = {};
   const runFeedbackRef: { current?: { runList(): readonly AgentRun[] } } = {};
+  const delegateWorktrees = new DelegateWorktrees(path.join(ctx.userData, 'delegation-worktrees.json'));
   const manager = new ChatManager({
+    prepareDelegation: delegateWorktrees.prepare,
+    freshSessions: () => true,
+    continuationContext: chatId => workflowsRef ? JSON.stringify(workflowsRef.list().filter(row => row.chatIds.includes(chatId))) : null,
     suggestSkills: async goal => (await suggestSkills(goal)).candidates.map(c => c.name),
     onAutoCloseActivity: id => autoCloseRef.current?.invalidate(id),
     worktrees: gitWorktrees,
@@ -683,6 +688,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   autoCloseRef.current = autoCloseService;
   const autoCloseTimer = setInterval(() => { void autoCloseService.tick().catch(e => log.warn('chats', 'automatic archive suspended', { cause: errText(e) })); }, 1000);
   autoCloseTimer.unref();
+  agentPacks.learning.evidenceRuns = () => manager.runs.list();
   const workflows = workflowsRef = new Workflows(path.join(ctx.userData, 'work-threads.json'), rows => ctx.emitter.emit('work:changed', rows), Date.now, row => {
     const linked = chats.list().filter(c => row.chatIds.includes(c.id) && c.plan);
     const approved = linked.filter(c => ['running', 'done'].includes(c.plan!.phase) && (c.run?.plan?.approvedAt ?? 0) > 0);
@@ -722,7 +728,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // a parent's own child runs: listed and judged on its chat's token endpoint (agents/child-feedback.ts)
   addChatTools(childFeedbackTools(lifecycleApi));
   // parent-to-child delegation between role chats (ADR 0083): every chat's own endpoint, the caller is its token's chat
-  addChatTools(delegationTools({ chats: manager, roles: () => agents.list(), settings: () => checkedDelegation(brain.settings().delegation),
+  addChatTools(delegationTools({
+    integrate: async (parent, child) => stageDelegatedChanges(delegateWorktrees.allocation(parent, child), parent, child),
+    integrateMany: async (parent, children) => stageDelegatedChangesMany(children.map(child => ({ owned: delegateWorktrees.allocation(parent, child), child })), parent), chats: manager, roles: () => agents.list(), settings: () => checkedDelegation(brain.settings().delegation),
     engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), label: AGENT_LABEL, runs: () => manager.runs.list(), worktrees: gitWorktrees, skillTools,
     remember: (roleId, line, chat) => writeAgentMemory(agentPacks.packs.root(), portableId(roleId), line, { scope: { roleId: portableId(roleId), project: chat.cwd }, sourceRunId: chat.run?.runId ?? `chat:${chat.id}`, sourceEventId: `report:${chat.run?.runId ?? chat.id}` }) }));
   // a Strategist's plan with the user (ADR 0108): proposed on its strip, approved by the user's click, its steps' progress
@@ -870,7 +878,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const executeReplay = replayExecutor({ root: replayRoot, runs: () => manager.runs.list(),
     roleEngine: role => agents.list().profiles.find(p => p.id === role)?.engine ?? 'claude',
     create: request => manager.create(request, 'app'), feedback: args => runFeedback.recordFeedback(args, 'evaluation-replay') });
-  const learningReview = new LearningReviewService({ userData: ctx.userData, root: replayRoot, log: brainModel.log, runs: () => manager.runs.list(),
+  const learningReview = new LearningReviewService({ lessonSources: () => agentPacks.learning.waiting().flatMap(p => p.assessment?.state === 'supported' ? p.assessment.sources.map(source => source.runId) : []), userData: ctx.userData, root: replayRoot, log: brainModel.log, runs: () => manager.runs.list(),
     execute: request => { if (request.brainRoot !== replayRoot()) throw new Error('Brain changed before replay.'); return executeReplay(request); } });
   brainModel.start();
   // the morning block ("Mentre eri via", ADR 0102): zero tokens, from what the app holds

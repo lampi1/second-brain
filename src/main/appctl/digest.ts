@@ -11,6 +11,7 @@ import { chatName } from '../../shared/orchestrator';
 import { redact } from '../log';
 import { engineLabel } from '../engines/registry';
 import { uiLocale } from '../locale';
+import { workRecap } from '../../shared/work-recap';
 
 export interface DigestInput {
   chats: ChatSummary[];
@@ -50,12 +51,10 @@ const VOTES: Record<string, string> = { '10': 'approvata', '5': 'approvata con s
 
 /** One line per PR: name (the bug it fixes), build, votes that matter, QA failures; QA-blocked first. */
 export function prLines(d: TasksState): string[] {
-  const rows = d.prs.map(p => {
+  const rows = workRecap(d).prs.map(({ pr: p, failed, blocked, missing, openBugs }) => {
     const bug = p.workItems.find(w => /bug/i.test(w.type)) ?? p.workItems[0];
     const name = one(bug?.title || p.title, 90);
-    let failed = 0, blocked = 0;
-    for (const w of p.workItems) for (const t of d.details[String(w.id)]?.tests ?? []) { if (t.outcome === 'Failed') failed++; else if (t.outcome === 'Blocked') blocked++; }
-    const qa = failed || blocked ? `QA: ${[failed && `${failed} test falliti`, blocked && `${blocked} bloccati`].filter(Boolean).join(', ')}` : '';
+    const qa = failed || blocked || missing || openBugs ? `QA: ${[failed && `${failed} test falliti`, blocked && `${blocked} bloccati`, missing && `${missing} da eseguire`, openBugs && `${openBugs} bug aperti`].filter(Boolean).join(', ')}` : '';
     const build = p.build ? `build ${p.build.result ?? p.build.status}` : '';
     const votes = p.reviewers.filter(r => r.vote !== 0).map(r => `${r.name.split(/\s+/)[0]} ${VOTES[String(r.vote)] ?? r.label}`).join(', ');
     const waiting = p.reviewers.filter(r => r.required && r.vote === 0).map(r => r.name.split(/\s+/)[0]);
@@ -139,6 +138,13 @@ export function digest(inp: DigestInput): string {
     const news = d.news.filter(n => n.unread && (since === null || Date.parse(n.at) >= since));
     if (news.length) out.push('', `Novità Task non lette (${news.length}):`, ...news.slice(0, 8).map(n => `- ${n.kind}${n.who ? ` · ${n.who.split(/\s+/)[0]}` : ''}: ${one(n.title, 90)}${n.detail ? ` — ${one(n.detail, 110)}` : ''} ${n.url}`));
     if (d.reviews.length) out.push(`Review che aspettano il suo voto: ${d.reviews.length}.`);
+  }
+  if (d?.error) out.push(`PR non aggiornate: ${one(d.error.message, 160)}. I dati mostrati restano l’ultima lettura riuscita.`);
+  if (d?.at) {
+    const recap = workRecap(d, now);
+    out.push(`QA: ${recap.qaAt ? `ultima lettura riuscita ${new Date(recap.qaAt).toISOString()}` : 'data di lettura non disponibile'}${d.qaError ? `; lettura fallita: ${one(d.qaError, 160)}` : recap.qaFreshness === 'stale' ? '; dati oltre un’ora' : ''}.`);
+    const unknown = recap.prs.filter(p => !p.qaKnown).length;
+    if (unknown) out.push(`QA non disponibili per ${unknown} PR: assenza di errori non significa verifiche superate.`);
   }
   return out.join('\n');
 }

@@ -14,6 +14,9 @@ test('the work thread stays visible after a no and exposes a fresh recap', async
   try {
     await expect(page.getByTestId('work-cockpit')).toBeVisible();
     await expect(page.getByTestId('work-recap')).toBeVisible();
+    await page.getByTestId('work-routine').locator('summary').click();
+    await expect(page.getByTestId('work-routine')).toContainText('riepilogo senza modello');
+    await expect(page.getByRole('button', { name: 'Aggiorna PR e QA' })).toBeVisible();
     await expect(page.getByTestId('work-thread')).toContainText('Search accessibility');
     await shot(page, 'work-cockpit-proposal');
     await page.getByRole('button', { name: 'No, proponi altro', exact: true }).click();

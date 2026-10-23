@@ -9,6 +9,7 @@ import { readLocal, writeLocal } from '../local-store';
 import { checkPermissionText } from '../tool-policy';
 import type { AgentPackFlows } from './flows';
 import type { McpTool } from '../../mcp/server';
+import { assessLesson, sameLessonEvidence } from './lesson-evidence';
 
 export class AgentPackLearning {
   private readonly file: string;
@@ -17,9 +18,16 @@ export class AgentPackLearning {
     this.file = path.join(userData, 'agent-learn-proposals.json');
     const raw = readLocal(this.file) as { proposals?: LearnedRuleProposal[] } | undefined;
     if (raw && (!Array.isArray(raw.proposals) || raw.proposals.length > 500 || raw.proposals.some(p => !p || typeof p.rule !== 'string' || typeof p.evidence !== 'string' || !['pending', 'approved', 'discarded'].includes(p.status) || (p.fromChat !== undefined && typeof p.fromChat !== 'string')))) throw new Error('Invalid learned-rule proposal store');
-    this.proposals = (raw?.proposals ?? []).map(p => p.status === 'pending' && !p.userApproved ? { ...p, fromChat: p.fromChat || 'orchestrator' } : p);
+    this.proposals = (raw?.proposals ?? []).map(p => p.status === 'pending' && (!p.userApproved || !p.assessment) ? { ...p, fromChat: p.fromChat || 'orchestrator' } : p);
   }
   private persist(): void { writeLocal(this.file, { version: 1, proposals: this.proposals }); }
+  /** Main-process injection only: tool arguments cannot supply outcomes or provenance. */
+  evidenceRuns: () => readonly AgentRun[] = () => [];
+  private assessment(p: LearnedRuleProposal): NonNullable<LearnedRuleProposal['assessment']> {
+    try { return assessLesson(p, this.evidenceRuns(), this.flows.root()); }
+    catch { return { state: 'insufficient', reason: 'Fonti non disponibili: la lezione non può essere applicata.', proposalHash: '', checkedAt: Date.now(), causal: false, sources: [] }; }
+  }
+  private supported(p: LearnedRuleProposal): boolean { return sameLessonEvidence(p.assessment, this.assessment(p)); }
   /** Called after a lesson is queued: the service runs the corrections job (wired by brainmodel/service.ts). */
   onProposed: (() => void) | null = null;
   /** fromChat = the work chat that proposed it (its own endpoint): the lesson waits for the Orchestrator and the user. */
@@ -34,19 +42,30 @@ export class AgentPackLearning {
     if (fromChat !== undefined && this.waiting().length >= 50) throw new Error('Too many lessons waiting for the Orchestrator: send this one with send_to_chat instead.');
     const proposal: LearnedRuleProposal = { id: randomBytes(8).toString('hex'), agentId, rule: rule.trim(), evidence: evidence.trim(), createdAt: Date.now(), status: 'pending',
       ...(target ? { target } : {}), ...(skill ? { skill } : {}), fromChat: fromChat || 'orchestrator' };
+    proposal.assessment = this.assessment(proposal);
     this.proposals = [...this.proposals.slice(-499), proposal]; this.persist();
     // Every proposal waits for a real user decision, including the Orchestrator's.
     return structuredClone(proposal);
   }
   /** Lessons the corrections job applies, oldest first: a work chat's lesson only once accepted. */
-  pending(): LearnedRuleProposal[] { return structuredClone(this.proposals.filter(p => p.status === 'pending' && p.userApproved === true && !p.fromChat)); }
+  pending(): LearnedRuleProposal[] { return structuredClone(this.proposals.filter(p => p.status === 'pending' && p.userApproved === true && !p.fromChat && this.supported(p))); }
   /** Work chats' lessons waiting for the Orchestrator and the user, oldest first. */
-  waiting(): LearnedRuleProposal[] { return structuredClone(this.proposals.filter(p => p.status === 'pending' && !!p.fromChat)); }
+  waiting(): LearnedRuleProposal[] {
+    return structuredClone(this.proposals.filter(p => p.status === 'pending').flatMap(p => {
+      const current = this.assessment(p), supported = sameLessonEvidence(p.assessment, current);
+      if (!p.fromChat && supported) return [];
+      return [{ ...p, assessment: supported ? p.assessment : { ...current, state: 'insufficient' as const,
+        reason: current.state === 'insufficient' ? current.reason : 'La proposta non corrisponde alle fonti verificate: invia una nuova proposta prima dell’approvazione.' } }];
+    }));
+  }
   /** The renderer's explicit user decision on a waiting lesson (agent_lessons_waiting): accepted = applied by the job. */
   review(id: string, accept: boolean): LearnedRuleProposal {
-    const p = this.proposals.find(x => x.id === id && x.status === 'pending' && !!x.fromChat);
+    const p = this.proposals.find(x => x.id === id && x.status === 'pending' && (!!x.fromChat || !this.supported(x)));
     if (!p || typeof accept !== 'boolean') throw new Error('Waiting lesson not found.');
-    if (accept) checkPermissionText(p.rule);
+    if (accept) {
+      checkPermissionText(p.rule);
+      if (!this.supported(p)) throw new Error('Insufficient or changed lesson evidence: submit a new evidence-backed proposal before approval.');
+    }
     const next: LearnedRuleProposal = { ...p, note: accept ? `accettata (da ${p.fromChat})` : 'rifiutata', ...(accept ? {} : { status: 'discarded' as const }) };
     if (accept) { delete next.fromChat; next.userApproved = true; }
     this.proposals = this.proposals.map(x => x === p ? next : x);
@@ -56,6 +75,7 @@ export class AgentPackLearning {
   }
   /** The job's outcome for one lesson: applied (where, in `note`) or discarded (why). */
   settle(id: string, status: 'approved' | 'discarded', note: string): void {
+    if (status === 'approved' && !this.pending().some(p => p.id === id)) throw new Error('Only an approved, evidence-backed lesson can be settled as applied.');
     this.proposals = this.proposals.map(p => p.id === id && p.status === 'pending' ? { ...p, status, note: note.slice(0, 300) } : p);
     this.persist();
   }
@@ -72,8 +92,8 @@ export class AgentPackLearning {
 /** The lessons tool on the app endpoints. With `queueAs` (an endpoint that is not the authenticated Orchestrator), the
  *  lesson waits like a work chat's (fromChat) and may not be a rule for every role. */
 export function agentLearnTool(service: AgentPackLearning, queueAs?: string): McpTool {
-  return { name: 'agent_learn_propose', description: queueAs ? 'Record one lesson from the user\'s corrections, with evidence (run ids). It waits for the Orchestrator and the user before it is applied: target "role" (default) for the role\'s text, "skill" for the named skill. Never for permissions, settings or hooks.'
-    : 'Record one lesson from the user\'s corrections, with evidence (run ids). The app queues it for explicit user approval in Regia before applying it: target "role" (default) adds it to the role\'s text, "skill" to the named skill (how a job is done), "rule" to the brain\'s rules (applies to every role). Never for permissions, settings, limits or hooks: those change only in Brain → Agenti. Lessons proposed by work chats wait in agent_lessons_waiting.',
+  return { name: 'agent_learn_propose', description: queueAs ? 'Record one lesson from the user\'s corrections, with explicit evidence (run:<id> for completed runs with independently verified outcomes). It waits for the Orchestrator and the user before it is applied: target "role" (default) for the role\'s text, "skill" for the named skill. Never for permissions, settings or hooks.'
+    : 'Record one lesson from the user\'s corrections, with explicit evidence (run:<id> for completed runs with independently verified outcomes). The app queues it for explicit user approval in Regia before applying it: target "role" (default) adds it to the role\'s text, "skill" to the named skill (how a job is done), "rule" to the brain\'s rules (applies to every role). Never for permissions, settings, limits or hooks: those change only in Brain → Agenti. Lessons proposed by work chats wait in agent_lessons_waiting.',
     inputSchema: { type: 'object', properties: { agentId: { type: 'string', description: 'the role id (scout, artisan…)' }, rule: { type: 'string' }, evidence: { type: 'string' }, target: { type: 'string', enum: queueAs ? ['role', 'skill'] : ['role', 'skill', 'rule'] }, skill: { type: 'string' } }, required: ['agentId', 'rule', 'evidence'], additionalProperties: false },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: args => {
@@ -93,7 +113,7 @@ function parseLesson(args: Record<string, unknown>): { agentId?: string; rule: s
  *  caller's open run only (the chat the token names, never an argument), as role or skill, never a rule for every role,
  *  and queued: it waits until the authenticated Orchestrator accepts it with the user (agent_lessons_waiting). */
 export function chatLearnTool(service: AgentPackLearning, runs: () => readonly AgentRun[]): McpTool {
-  return { name: 'agent_learn_propose', description: 'Record one lesson from the user\'s corrections about YOUR role (the one your chat runs as), with evidence (run ids). It waits for the Orchestrator and the user before it is applied: target "role" (default) for your role\'s text, "skill" for the named skill. Never for permissions, settings or hooks; a rule for every role goes to your parent with agent_report.',
+  return { name: 'agent_learn_propose', description: 'Record one lesson from the user\'s corrections about YOUR role (the one your chat runs as), with explicit evidence (run:<id> for completed runs with independently verified outcomes). It waits for the Orchestrator and the user before it is applied: target "role" (default) for your role\'s text, "skill" for the named skill. Never for permissions, settings or hooks; a rule for every role goes to your parent with agent_report.',
     inputSchema: { type: 'object', properties: { agentId: { type: 'string', description: 'optional: your own role id (default)' }, rule: { type: 'string' }, evidence: { type: 'string' }, target: { type: 'string', enum: ['role', 'skill'] }, skill: { type: 'string' } }, required: ['rule', 'evidence'], additionalProperties: false },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: (args, ctx) => {

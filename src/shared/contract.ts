@@ -633,6 +633,8 @@ export interface TasksState {
   qa: QaReport[];
   /** the QA read failed (the rest of the page read fine): the last good qa stays */
   qaError: string | null;
+  /** Last successful QA read, separate from PR refresh; absent in legacy snapshots. */
+  qaAt?: number | null;
   /** repo name → its local clone (<home>/source/repos/<repo>), for the repos of the PRs on the page: "Discuti" names it
    *  to the Orchestrator as the folder of a PR's work; a repo with no clone is missing */
   repoDirs: Record<string, string>;

@@ -92,6 +92,12 @@ export interface StoredChat {
   /** its saved hand-off is a cold note (ADR 0031) written at this time: a message after the cache expired continues
    *  the chat in a fresh session from it */
   coldNoteAt?: number;
+  /** The previous session's note still needs delivery to this session; survives a crash before first submission. */
+  continuationPending?: string;
+  /** Exact completed question/permission context belongs only to this chat, not the shared user-event ledger. */
+  continuationDecisions?: string;
+  /** A history eviction or image input makes an automatic text-only continuation unsafe. */
+  continuityUnsafe?: true;
   /** when the context in force began (first turn since the session start or the last compaction): an Orchestrator's day
    *  compaction (continuity.ts orchestratorDayDue) */
   ctxSince?: number;
@@ -173,6 +179,9 @@ function extras(c: Record<string, unknown>): Partial<StoredChat> {
     ...(num(c.lastTurnAt) ? { lastTurnAt: c.lastTurnAt } : {}),
     ...(ctx && typeof ctx === 'object' && num(ctx.tokens) ? { context: { tokens: ctx.tokens, ...(num(ctx.max) ? { max: ctx.max } : {}), ...(ctx.estimated === true ? { estimated: true } : {}) } } : {}),
     ...(num(c.coldNoteAt) ? { coldNoteAt: c.coldNoteAt } : {}),
+    ...(isUuid(c.continuationPending) ? { continuationPending: c.continuationPending } : {}),
+    ...(typeof c.continuationDecisions === 'string' ? { continuationDecisions: c.continuationDecisions } : {}),
+    ...(c.continuityUnsafe === true || (c.continuationDecisions !== undefined && typeof c.continuationDecisions !== 'string') ? { continuityUnsafe: true as const } : {}),
     ...(num(c.ctxSince) ? { ctxSince: c.ctxSince } : {}),
     ...(isRolePrimed(c.rolePrimed) ? { rolePrimed: { session: c.rolePrimed.session, sig: c.rolePrimed.sig } } : {}),
     ...(isLang(c.replyLang) ? { replyLang: c.replyLang } : {}),
