@@ -30,10 +30,22 @@ Two limits come from Electron and Google, not from us: Google blocks sign-in fro
   takes the CSV that Google Password Manager (passwords.google.com → Esporta), Chrome, Edge and Firefox export. This is
   a third exception to AGENTS.md rule 2, for the user's own browsing only.
 - Bookmarks, sessions, history (2000 entries) and the last tabs: `<userData>/personal-browser.json`, never in the brain.
+- **«Affida a un agente»** (owner, 2026-10-23: «posso volendo comunque dare il controllo ad un agente di quella sezione
+  browser?», he chose it in this same change): the user gives **one** tab to a chat of their choice, with an optional
+  note. The same page (alive, with the user's sign-ins) moves into that chat's browser group as a tab of env
+  `personal`; the chat is told with an app message and drives it with its usual browser tools, until the user clicks
+  «Riprendi» or closes it from the agent's strip, which gives the page back to the Browser page instead of destroying
+  it. Only the user's click lends: no agent tool asks for a tab. Only open chats with browser access «all» can take
+  one. While lent the tab writes no history and offers no passwords; the other personal tabs, bookmarks, history and
+  passwords stay out of every agent tool, and `app_screenshot` never shows a page of the personal session (the lent
+  tab included). The tab's back history is cleared when lent, so the agent cannot step back to what the user saw. A
+  popup or its opener is not lent (they reach each other's pages): the user opens the address in a new tab. When the
+  tab comes back, the tabs the agent opened from it are closed.
 
 ## Consequences
 - The user browses without leaving the app, and nothing of it reaches an agent or a brain file.
 - Google sign-in may fail on some accounts: not fixable from the app. Chrome sync, Google Password Manager itself and
   Chrome extensions are not available; the CSV import is the bridge.
 - No camera, microphone, location or notification prompts yet (denied): a video call needs Chrome for now.
-- Giving one personal tab to an agent, on the user's click, is a possible later step (owner, 2026-10-23); not in this ADR.
+- A lent tab carries the user's cookies for every site, not only the one it shows: what the agent does there, it does
+  as the user, wherever it navigates. The page says so before «Affida», and «Riprendi» is one click away.

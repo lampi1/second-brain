@@ -34,9 +34,12 @@ export const detectScript = (): string => `(() => { ${HELPERS}
   return passwords().length > 0 || all('input[autocomplete~="username"]').length > 0;
 })()`;
 
-/** Fills the form: user name and password; a two-step sign-in (Google: e-mail first) gets the user name alone.
+/** Fills the form: user name and password; a two-step sign-in (Google: e-mail first) gets the user name alone. Only
+ *  on `site` (scheme + host, www. ignored: vault.ts siteOf), checked in the page itself.
  *  → 'both' | 'user' | 'password' | 'none'. */
-export const fillScript = (user: string, password: string): string => `(() => { ${HELPERS}
+export const fillScript = (user: string, password: string, site: string): string => `(() => { ${HELPERS}
+  const here = location.protocol + '//' + location.hostname.replace(/^www\\./, '') + (location.port ? ':' + location.port : '');
+  if (here !== ${JSON.stringify(site)}) return 'none';
   const user = ${JSON.stringify(user)}, password = ${JSON.stringify(password)};
   const pw = passwords()[0] || null;
   const u = userBefore(pw);
@@ -52,5 +55,5 @@ export const readScript = (): string => `(() => { ${HELPERS}
   const pw = filled.find(p => p === document.activeElement) || filled[0];
   if (!pw) return null;
   const u = userBefore(pw);
-  return { user: u && u.value ? String(u.value) : '', password: String(pw.value) };
+  return { user: u && u.value ? String(u.value) : '', password: String(pw.value), href: location.href };
 })()`;

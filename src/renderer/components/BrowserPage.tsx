@@ -11,11 +11,13 @@ import { t, locale } from '../i18n';
 import { registerOverlay, registerView } from '../lib/viewports';
 import { sameList } from '../store/state';
 import {
-  addBookmark, clearHistory, closeTab, copyLogin, fillLogin, go, goTab, importLogins, openSession, openTab, removeBookmark, removeLogin, removeSession, restoreTabs, saveLogin, saveSession, selectTab, usePersonal,
+  addBookmark, clearHistory, closeTab, lendTab, reclaimTab, copyLogin, fillLogin, go, goTab, importLogins, openSession, openTab, removeBookmark, removeLogin, removeSession, restoreTabs, saveLogin, saveSession, selectTab, usePersonal,
 } from '../store/personal';
-import { IconArrowLeft, IconArrowRight, IconBook, IconCopy, IconGlobe, IconHistory, IconKey, IconLayers, IconPanel, IconPlus, IconRefresh, IconSearch, IconShield, IconSpinner, IconStar, IconTrash, IconUser, IconX } from './Icons';
+import { IconArrowLeft, IconArrowRight, IconBook, IconCopy, IconGlobe, IconHistory, IconKey, IconLayers, IconPanel, IconPlus, IconRefresh, IconSearch, IconShield, IconSparkle, IconSpinner, IconStar, IconTrash, IconUser, IconX } from './Icons';
 import { IconButton } from './ui';
 import { askConfirm } from '../store/ui';
+import { useApp } from '../store/store';
+import { focusChat } from '../actions';
 import '../styles/personal-browser.css';
 
 type Panel = 'bookmarks' | 'sessions' | 'history' | 'logins';
@@ -42,15 +44,23 @@ export function BrowserPage() {
   const tabs = usePersonal(s => s?.tabs ?? [], sameTabs);
   const active = tabs.find(x => x.active) ?? null;
   const [panel, setPanel] = useLocal<Panel | ''>('sb.pbrowser.panel', '');
+  const [lending, setLending] = useState(false);
+  // main withholds app_screenshot while this page is on screen: the agents never see the user's browsing
+  useEffect(() => {
+    try { void window.sb.invoke('personal:onScreen', { on: true }).catch(() => {}); } catch { /* no bridge */ }
+    return () => { try { void window.sb.invoke('personal:onScreen', { on: false }).catch(() => {}); } catch { /* no bridge */ } };
+  }, []);
+  useEffect(() => { if (!active?.url || active.lentTo) setLending(false); }, [active?.id, active?.url, active?.lentTo]);
   if (!ready) return <div className="pb pb-loading" data-testid="personal-browser"><IconSpinner size={18} /></div>;
   return (
     <div className="pb" data-testid="personal-browser">
       <TabStrip tabs={tabs} />
-      <Toolbar tab={active} panel={panel} setPanel={setPanel} />
+      <Toolbar tab={active} panel={panel} setPanel={setPanel} lending={lending} setLending={setLending} />
+      {lending && active && <LendBar tab={active} onDone={() => setLending(false)} />}
       <BookmarksBar tab={active} />
       <div className="pb-body">
         <div className="pb-stage">
-          {active && active.url ? <PageView tab={active} key={active.id} /> : <StartPage tabId={active?.id ?? null} />}
+          {active?.lentTo ? <LentView tab={active} /> : active && active.url ? <PageView tab={active} key={active.id} /> : <StartPage tabId={active?.id ?? null} />}
         </div>
         {panel && <SidePanel panel={panel} setPanel={setPanel} tab={active} />}
       </div>
@@ -59,7 +69,7 @@ export function BrowserPage() {
 }
 
 function sameTabs(a: PersonalTab[], b: PersonalTab[]): boolean {
-  return a.length === b.length && a.every((x, i) => { const y = b[i]!; return x.id === y.id && x.url === y.url && x.title === y.title && x.loading === y.loading && x.active === y.active && x.canBack === y.canBack && x.canForward === y.canForward && x.login === y.login; });
+  return a.length === b.length && a.every((x, i) => { const y = b[i]!; return x.id === y.id && x.url === y.url && x.title === y.title && x.loading === y.loading && x.active === y.active && x.canBack === y.canBack && x.canForward === y.canForward && x.login === y.login && x.lentTo === y.lentTo; });
 }
 
 // ---------- tabs ----------
@@ -68,10 +78,10 @@ function TabStrip({ tabs }: { tabs: PersonalTab[] }) {
   return (
     <div className="pb-tabs" role="tablist" aria-label={t('pbrowser.tabs')} data-testid="pb-tabs">
       {tabs.map(tab => (
-        <div key={tab.id} className={`pb-tab ${tab.active ? 'on' : ''}`} role="tab" aria-selected={tab.active} data-testid={`pb-tab-${tab.id}`}
+        <div key={tab.id} className={`pb-tab ${tab.active ? 'on' : ''} ${tab.lentTo ? 'lent' : ''}`} role="tab" aria-selected={tab.active} data-testid={`pb-tab-${tab.id}`}
           onMouseDown={e => { if (e.button === 1) { e.preventDefault(); closeTab(tab.id); } }}>
           <button type="button" className="pb-tab-main" onClick={() => selectTab(tab.id)} title={tab.url || t('pbrowser.untitled')}>
-            {tab.loading ? <IconSpinner size={13} /> : tab.url ? <Monogram url={tab.url} size={16} /> : <IconGlobe size={14} />}
+            {tab.lentTo ? <span className="pb-lent-mark" aria-label={t('pbrowser.lentMark')}><IconSparkle size={12} /></span> : tab.loading ? <IconSpinner size={13} /> : tab.url ? <Monogram url={tab.url} size={16} /> : <IconGlobe size={14} />}
             <span className="pb-tab-title">{tab.title || (tab.url ? hostOf(tab.url) : t('pbrowser.untitled'))}</span>
           </button>
           <button type="button" className="pb-tab-x" onClick={() => closeTab(tab.id)} aria-label={t('pbrowser.closeTab')} data-testid={`pb-tab-close-${tab.id}`}><IconX size={12} /></button>
@@ -85,17 +95,18 @@ function TabStrip({ tabs }: { tabs: PersonalTab[] }) {
 
 // ---------- toolbar ----------
 
-function Toolbar({ tab, panel, setPanel }: { tab: PersonalTab | null; panel: Panel | ''; setPanel: (p: Panel | '') => void }) {
+function Toolbar({ tab, panel, setPanel, lending, setLending }: { tab: PersonalTab | null; panel: Panel | ''; setPanel: (p: Panel | '') => void; lending: boolean; setLending: (v: boolean) => void }) {
   const bookmark = usePersonal(s => (tab?.url ? s?.bookmarks.find(b => b.url === tab.url) ?? null : null));
   const siteLogins = usePersonal(s => { const site = tab?.url ? siteOf(tab.url) : null; return site ? (s?.logins ?? []).filter(l => l.site === site).length : 0; });
-  const web = !!tab?.url && /^https?:/i.test(tab.url);
+  const web = !!tab?.url && /^https?:/i.test(tab.url) && !tab.lentTo;
+  const own = !!tab && !tab.lentTo;
   return (
     <div className="pb-bar" data-testid="pb-bar">
-      <IconButton label={t('pbrowser.back')} shortcut="Alt+←" disabled={!tab?.canBack} onClick={() => tab && goTab(tab.id, 'back')} testid="pb-back"><IconArrowLeft size={15} /></IconButton>
-      <IconButton label={t('pbrowser.forward')} shortcut="Alt+→" disabled={!tab?.canForward} onClick={() => tab && goTab(tab.id, 'forward')} testid="pb-forward"><IconArrowRight size={15} /></IconButton>
-      {tab?.loading
+      <IconButton label={t('pbrowser.back')} shortcut="Alt+←" disabled={!own || !tab?.canBack} onClick={() => tab && goTab(tab.id, 'back')} testid="pb-back"><IconArrowLeft size={15} /></IconButton>
+      <IconButton label={t('pbrowser.forward')} shortcut="Alt+→" disabled={!own || !tab?.canForward} onClick={() => tab && goTab(tab.id, 'forward')} testid="pb-forward"><IconArrowRight size={15} /></IconButton>
+      {tab?.loading && own
         ? <IconButton label={t('pbrowser.stop')} onClick={() => goTab(tab.id, 'stop')} testid="pb-stop"><IconX size={15} /></IconButton>
-        : <IconButton label={t('pbrowser.reload')} shortcut="F5" disabled={!tab?.url} onClick={() => tab && goTab(tab.id, 'reload')} testid="pb-reload"><IconRefresh size={15} /></IconButton>}
+        : <IconButton label={t('pbrowser.reload')} shortcut="F5" disabled={!own || !tab?.url} onClick={() => tab && goTab(tab.id, 'reload')} testid="pb-reload"><IconRefresh size={15} /></IconButton>}
       <AddressBar tab={tab} />
       <IconButton label={bookmark ? t('pbrowser.unbookmark') : t('pbrowser.bookmark')} disabled={!web} className={bookmark ? 'pb-on' : ''} testid="pb-star"
         onClick={() => { if (!tab) return; if (bookmark) removeBookmark(bookmark.id); else addBookmark(tab.url, tab.title); }}>
@@ -104,6 +115,7 @@ function Toolbar({ tab, panel, setPanel }: { tab: PersonalTab | null; panel: Pan
       <IconButton label={t('pbrowser.keyButton')} disabled={!web} className={`${tab?.login ? 'pb-hint' : ''} ${panel === 'logins' ? 'pb-on' : ''}`} testid="pb-key" onClick={() => setPanel(panel === 'logins' ? '' : 'logins')}>
         <IconKey size={15} />{siteLogins > 0 && <span className="pb-count">{siteLogins}</span>}
       </IconButton>
+      <IconButton label={t('pbrowser.lend')} disabled={!web} className={lending ? 'pb-on' : ''} testid="pb-lend" onClick={() => setLending(!lending)}><IconSparkle size={15} /></IconButton>
       <IconButton label={t('pbrowser.panel')} className={panel && panel !== 'logins' ? 'pb-on' : ''} testid="pb-panel" onClick={() => setPanel(panel && panel !== 'logins' ? '' : 'bookmarks')}><IconPanel size={15} /></IconButton>
     </div>
   );
@@ -146,7 +158,7 @@ function AddressBar({ tab }: { tab: PersonalTab | null }) {
   return (
     <form className="pb-address" onSubmit={submit} role="search">
       <span className="pb-address-icon" aria-hidden="true">{tab?.url?.startsWith('https:') ? <IconShield size={13} /> : <IconSearch size={13} />}</span>
-      <input ref={input} value={editing ? text : tab?.url ?? ''} placeholder={t('pbrowser.address')} aria-label={t('pbrowser.address')} data-testid="pb-address" spellCheck={false}
+      <input ref={input} disabled={!!tab?.lentTo} value={editing ? text : tab?.url ?? ''} placeholder={t('pbrowser.address')} aria-label={t('pbrowser.address')} data-testid="pb-address" spellCheck={false}
         onFocus={e => { setEditing(true); setText(tab?.url ?? ''); setPick(-1); requestAnimationFrame(() => e.target.select()); }}
         onBlur={() => setTimeout(() => setEditing(false), 120)}
         onChange={e => { setText(e.target.value); setPick(-1); }}
@@ -194,6 +206,51 @@ function PageView({ tab }: { tab: PersonalTab }) {
   return (
     <div className="pb-view" ref={holder} data-testid={`pb-view-${tab.id}`}>
       <div className="pb-view-under">{tab.loading ? <><IconSpinner size={16} /> {t('pbrowser.loading')}</> : <><b>{tab.title}</b><span>{tab.url}</span></>}</div>
+    </div>
+  );
+}
+
+/** «Affida a un agente»: pick a chat, say what it should do; the tab goes to it until «Riprendi». */
+function LendBar({ tab, onDone }: { tab: PersonalTab; onDone: () => void }) {
+  const chats = useApp(s => s.order.flatMap(id => { const c = s.chats[id]; return c && !c.closedAt && !c.quick ? [{ id: c.id, title: c.isOrchestrator ? 'Orchestrator' : c.title || t('pbrowser.untitled') }] : []; }), (a, b) => sameList(a.map(x => x.id + x.title), b.map(x => x.id + x.title)));
+  const [pick, setPick] = useState<string | null>(null);
+  const [note, setNote] = useState('');
+  const chosen = pick && chats.some(c => c.id === pick) ? pick : null;
+  return (
+    <div className="pb-lendbar" data-testid="pb-lendbar">
+      <div className="pb-lend-head"><IconSparkle size={14} /><b>{t('pbrowser.lendTitle')}</b><span>{t('pbrowser.lendLead')}</span></div>
+      {!chats.length ? <p className="pb-empty">{t('pbrowser.lendNoChats')}</p> : (
+        <>
+          <div className="pb-lend-chats" role="radiogroup" aria-label={t('pbrowser.lendPick')}>
+            {chats.map(c => <button key={c.id} type="button" role="radio" aria-checked={chosen === c.id} className={`pb-chip ${chosen === c.id ? 'on' : ''}`} onClick={() => setPick(c.id)} data-testid={`pb-lend-chat-${c.id}`}>{c.title}</button>)}
+          </div>
+          <form className="pb-form" onSubmit={e => { e.preventDefault(); if (chosen) { lendTab(tab.id, chosen, note); onDone(); } }}>
+            <input value={note} onChange={e => setNote(e.target.value)} placeholder={t('pbrowser.lendNote')} aria-label={t('pbrowser.lendNote')} data-testid="pb-lend-note" maxLength={4000} />
+            <button type="submit" className="btn btn-s btn-primary" disabled={!chosen} data-testid="pb-lend-go">{t('pbrowser.lendGo')}</button>
+            <button type="button" className="btn btn-s btn-ghost" onClick={onDone}>{t('pbrowser.lendCancel')}</button>
+          </form>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** A lent tab: the page is under its agent's strip in the Grindhouse; here the way back. */
+function LentView({ tab }: { tab: PersonalTab }) {
+  const chat = useApp(s => (tab.lentTo ? s.chats[tab.lentTo] : undefined));
+  const name = chat ? (chat.isOrchestrator ? 'Orchestrator' : chat.title) : t('pbrowser.anAgent');
+  return (
+    <div className="pb-start pb-lent" data-testid="pb-lent">
+      <div className="pb-start-inner">
+        <div className="pb-start-orb pb-lent-orb" aria-hidden="true"><IconSparkle size={28} /></div>
+        <h1>{t('pbrowser.lentTitle', { name })}</h1>
+        <p className="pb-start-lead">{t('pbrowser.lentLead')}</p>
+        <div className="pb-lent-url"><Monogram url={tab.url} size={22} /><span>{tab.title || hostOf(tab.url)}</span><em>{hostOf(tab.url)}</em></div>
+        <div className="pb-lent-actions">
+          <button type="button" className="btn btn-primary btn-m" onClick={() => reclaimTab(tab.id)} data-testid="pb-reclaim">{t('pbrowser.reclaim')}</button>
+          {chat && <button type="button" className="btn btn-m" onClick={() => focusChat(chat.id)} data-testid="pb-lent-chat">{t('pbrowser.goToChat')}</button>}
+        </div>
+      </div>
     </div>
   );
 }

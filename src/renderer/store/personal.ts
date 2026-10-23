@@ -33,6 +33,8 @@ export const navigate = (tabId: string, input: string) => void window.sb.invoke(
 export const goTab = (tabId: string, dir: 'back' | 'forward' | 'reload' | 'stop') => void window.sb.invoke('personal:go', { tabId, dir }).catch(fail);
 export const selectTab = (tabId: string) => void window.sb.invoke('personal:select', { tabId }).catch(fail);
 export const closeTab = (tabId: string) => void window.sb.invoke('personal:close', { tabId }).catch(fail);
+export const lendTab = (tabId: string, chatId: string, note: string) => void window.sb.invoke('personal:lend', { tabId, chatId, note }).then(() => toast(t('pbrowser.lent'), 'ok'), fail);
+export const reclaimTab = (tabId: string) => void window.sb.invoke('personal:reclaim', { tabId }).catch(fail);
 export const restoreTabs = () => void window.sb.invoke('personal:restore', undefined).catch(fail);
 
 /** Opens an address in the given tab, or in a new one when there is none. */

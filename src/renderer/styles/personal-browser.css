@@ -125,7 +125,24 @@
 .pb-login-user{flex:1;min-width:0;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pb-import{margin:0 2px 14px}
 
+/* «Affida a un agente» */
+.pb-tab.lent{color:var(--violet)}
+.pb-lent-mark{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:5px;color:var(--violet);background:var(--violet-bg)}
+.pb-lendbar{padding:10px 14px 4px;background:linear-gradient(120deg,color-mix(in srgb,var(--violet) 10%,var(--surface-2)),var(--surface-2) 60%);border-bottom:1px solid color-mix(in srgb,var(--violet) 35%,var(--border));animation:pb-pop 160ms var(--ease) both}
+.pb-lend-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:9px;color:var(--violet)}
+.pb-lend-head b{color:var(--text);font-size:12.5px;font-weight:600}
+.pb-lend-head span{color:var(--text-3);font-size:11.5px}
+.pb-lend-chats{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;scrollbar-width:thin}
+.pb-lend-chats .pb-chip{flex:none;height:28px}
+.pb-chip.on{border-color:var(--violet);color:var(--text);background:var(--violet-bg)}
+.pb-lent{background:radial-gradient(60% 50% at 50% 0%,color-mix(in srgb,var(--violet) 14%,transparent),transparent 70%),var(--bg)}
+.pb-lent-orb{color:var(--violet);border-color:color-mix(in srgb,var(--violet) 50%,transparent);box-shadow:0 18px 40px -20px var(--violet);animation:pb-breathe 2.6s ease-in-out infinite}
+.pb-lent-url{display:inline-flex;align-items:center;gap:9px;max-width:100%;padding:8px 14px;border-radius:12px;background:var(--surface);border:1px solid var(--border-2);font-size:12.5px}
+.pb-lent-url span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pb-lent-url em{font-style:normal;color:var(--text-3);font-size:11.5px}
+.pb-lent-actions{display:flex;gap:8px;margin-top:18px}
+@keyframes pb-breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
 @keyframes pb-pop{from{opacity:0;transform:translateY(-4px) scale(.99)}to{opacity:1;transform:none}}
 @keyframes pb-rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 @keyframes pb-slide{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
-@media (prefers-reduced-motion:reduce){.pb-start-inner,.pb-side,.pb-suggest{animation:none}.pb-tile:hover{transform:none}}
+@media (prefers-reduced-motion:reduce){.pb-start-inner,.pb-side,.pb-suggest,.pb-lendbar,.pb-lent-orb{animation:none}.pb-tile:hover{transform:none}}

@@ -112,16 +112,19 @@ export class LoginVault {
 
   /** Saves (or updates: same site and user) a login. */
   save(url: string, user: string, password: string): { login: PersonalLogin; updated: boolean } {
-    const r = this.put(url, user, password);
-    this.flush();
-    return r;
+    const before = this.saved.map(x => ({ ...x }));
+    try { const r = this.put(url, user, password); this.flush(); return r; } catch (e) { this.saved = before; throw e; }
   }
 
   /** Many logins at once (the CSV import): one write. */
   saveMany(items: { site: string; user: string; password: string }[]): { added: number; updated: number } {
+    // all or nothing: a failure half way (the limit, the OS encryption) leaves the saved list as it was
+    const before = this.saved.map(x => ({ ...x }));
     let added = 0, updated = 0;
-    for (const it of items) { if (this.put(it.site, it.user, it.password).updated) updated++; else added++; }
-    this.flush();
+    try {
+      for (const it of items) { if (this.put(it.site, it.user, it.password).updated) updated++; else added++; }
+      this.flush();
+    } catch (e) { this.saved = before; throw e; }
     return { added, updated };
   }
 

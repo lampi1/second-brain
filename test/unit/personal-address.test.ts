@@ -30,8 +30,8 @@ describe('cleanUserAgent', () => {
 
 describe('page scripts', () => {
   it('parse, and a value never escapes its string literal', () => {
-    for (const code of [detectScript(), readScript(), fillScript('me', 'pw')]) expect(() => new Function(`return ${code}`)).not.toThrow();
-    const evil = fillScript('"); alert(1); ("', '`${alert(2)}`\\\n</script>');
+    for (const code of [detectScript(), readScript(), fillScript('me', 'pw', 'https://example.com')]) expect(() => new Function(`return ${code}`)).not.toThrow();
+    const evil = fillScript('"); alert(1); ("', '`${alert(2)}`\\\n</script>', 'https://example.com');
     expect(() => new Function(`return ${evil}`)).not.toThrow();
     expect(evil).toContain(JSON.stringify('"); alert(1); ("'));
     expect(evil).not.toMatch(/[^\\]"\); alert\(1\)/);

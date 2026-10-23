@@ -736,7 +736,20 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   lifecycleTimer?.unref();
   // a role chat's route says how its active version has done so far
   const agentStats = (agentId: string, version: number) => agentStatsLine(runMetrics(manager.runs.list(), { rollups: manager.runs.rolledUp() }).find(m => m.agentId === agentId)?.versions.find(v => v.version === version));
-  const personal = new PersonalBrowser({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, cipher: safeStorageCipher(safeStorage), appName: app.getName(), lang: () => { const l = brain.settings().language; return l === 'it' || l === 'en' ? l : systemLang(); } });
+  const personalLang = () => { const l = brain.settings().language; return l === 'it' || l === 'en' ? l : systemLang(); };
+  const personal = new PersonalBrowser({
+    emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, cipher: safeStorageCipher(safeStorage), appName: app.getName(), lang: personalLang,
+    // «Affida a un agente» (ADR 0133): only a live chat whose role drives a browser gets the tab, told by an app message
+    lend: (chatId, view, back) => ({ tabId: browser.lend!(chatId, view, back).id }),
+    reclaim: agentTab => browser.close(agentTab),
+    canLend: chatId => {
+      const it = personalLang() === 'it';
+      const c = chats.list().find(x => x.id === chatId);
+      if (!c || c.closedAt || c.quick) return it ? 'Chat non trovata o chiusa.' : 'Chat not found or closed.';
+      return manager.browserAccess(chatId) === 'all' ? null : it ? 'Questo agente non usa il browser: scegline un altro.' : 'This agent does not drive a browser: pick another one.';
+    },
+    tell: (chatId, text) => chats.send(chatId, text),
+  });
   const appDeps: Parameters<typeof attachAppTools>[1] = { personal, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog } };
   attachAppTools(mcp, appDeps, source, false, orchestratorTokens);
 

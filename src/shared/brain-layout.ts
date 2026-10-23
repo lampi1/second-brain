@@ -99,7 +99,7 @@ export const BRAIN_LAYOUT: readonly LayoutSection[] = [
 /** The Brain pages that keep no brain content of their own (they show runs, logs, the app's state or other pages'
  *  content): a page missing from both lists fails test/unit/brainmodel/upgrade.test.ts, so a new page that holds
  *  content cannot ship without its layout entry. */
-export const PAGES_WITHOUT_CONTENT: readonly string[] = ['home', 'agenti', 'task', 'dashboard', 'fatto', 'costi', 'qualita', 'apprendimento', 'confronto', 'file', 'guida', 'classificatori', 'collegamenti'];
+export const PAGES_WITHOUT_CONTENT: readonly string[] = ['home', 'agenti', 'task', 'dashboard', 'fatto', 'costi', 'qualita', 'apprendimento', 'confronto', 'file', 'guida', 'browser', 'classificatori', 'collegamenti'];
 
 /** A short stable hash of an entry (FNV-1a over its fields): changes when what the entry means changes. */
 export function sectionHash(s: LayoutSection): string {

@@ -519,6 +519,8 @@ export interface PersonalTab {
   active: boolean;
   /** the page shows a password field (the key button offers to fill or save) */
   login: boolean;
+  /** lent to this chat («Affida a un agente»): its agent drives it until the user takes it back */
+  lentTo: string | null;
 }
 export interface PersonalBookmark { id: string; url: string; title: string; at: number }
 export interface PersonalSession { id: string; name: string; at: number; tabs: { url: string; title: string }[] }
@@ -1432,6 +1434,12 @@ export interface InvokeMap {
   'personal:loginCopy': [{ id: string; field: 'user' | 'password' }, boolean];
   /** a passwords CSV exported from Google Password Manager, Chrome, Edge or Firefox, chosen in a file dialog */
   'personal:loginImport': [void, { added: number; updated: number; skipped: number; cancelled?: boolean; reason?: string }];
+  /** «Affida a un agente»: the tab goes to that chat (only from the user's click); note = what it should do */
+  'personal:lend': [{ tabId: string; chatId: string; note?: string }, void];
+  /** «Riprendi»: the lent tab comes back to the user */
+  'personal:reclaim': [{ tabId: string }, void];
+  /** the Browser page is mounted or not (app_screenshot withholds the window while it is) */
+  'personal:onScreen': [{ on: boolean }, void];
   /** the "Credenziali" panel: the entries of the user's credentials file, without passwords */
   'credentials:list': [void, CredentialEntry[]];
   /** main copies an entry's user name or password (read from the file now); a password is cleared from the clipboard
@@ -1679,7 +1687,7 @@ export const INVOKE_CHANNELS = [
   'compare:list', 'compare:set', 'learn:act', 'models:seen', 'routing:get', 'routing:save', 'routing:restore', 'routing:preview',
   'browser:handoffs', 'browser:handoffResolve', 'browser:handoffCopy', 'browser:envList',
   'personal:state', 'personal:open', 'personal:navigate', 'personal:go', 'personal:select', 'personal:close', 'personal:restore', 'personal:bookmarkAdd', 'personal:bookmarkRemove',
-  'personal:sessionSave', 'personal:sessionOpen', 'personal:sessionRemove', 'personal:historyClear', 'personal:loginFill', 'personal:loginSave', 'personal:loginRemove', 'personal:loginCopy', 'personal:loginImport',
+  'personal:sessionSave', 'personal:sessionOpen', 'personal:sessionRemove', 'personal:historyClear', 'personal:loginFill', 'personal:loginSave', 'personal:loginRemove', 'personal:loginCopy', 'personal:loginImport', 'personal:lend', 'personal:reclaim', 'personal:onScreen',
   'credentials:list', 'credentials:copy', 'overlay:model', 'overlay:size', 'overlay:action', 'overlay:focus',
   'run:start', 'run:stop', 'run:list', 'run:dismiss', 'app:inputLag', 'skills:list', 'skills:read', 'skills:save', 'skills:delete', 'chat:commands', 'source:get', 'source:dismissLaunch', 'source:check', 'source:updateNow',
   'clipboard:image',

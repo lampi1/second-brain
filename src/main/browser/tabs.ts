@@ -86,6 +86,8 @@ export interface Tab {
   openedBy: string | null;
   createdAt: number;
   closedByUser?: { url: string };             // the user closed it in the app (✕ / Ctrl+W on its tile): its agent is told so
+  /** a tab of the user's personal browser lent to this chat (ADR 0133): closing it gives it back, never destroys it */
+  lentBack?: (view: WebContentsView) => void;
   agentInput?: number;                        // CDP input of an agent running on it (actions.ts): its keys are not the user's
 }
 
@@ -280,22 +282,22 @@ export class BrowserTabs {
 
   // ---------- tabs ----------
 
-  create(group: string, owner: string | null, url?: string, opts: { webContents?: WebContents; openedBy?: string; env?: string; id?: string } = {}): Tab {
+  create(group: string, owner: string | null, url?: string, opts: { webContents?: WebContents; view?: WebContentsView; openedBy?: string; env?: string; id?: string } = {}): Tab {
     if (this.tabsOf(group).length >= MAX_TABS_PER_GROUP) throw new Error(`Too many tabs (${MAX_TABS_PER_GROUP}) in this group: close some with tabs_close.`);
     const envExplicit = opts.env !== undefined && opts.env !== '';
     const env = envExplicit ? envSlug(opts.env) : envForUrl(url);
     const id = opts.id ?? `t${++this.seq}`;
-    this.sessionFor(env);
-    const view = opts.webContents
+    if (!opts.view) this.sessionFor(env);             // a lent personal view keeps its own session (ADR 0133)
+    const view = opts.view ?? (opts.webContents
       ? new WebContentsView({ webContents: opts.webContents })
       : new WebContentsView({
         webPreferences: { partition: envPartition(env), sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, backgroundThrottling: false, spellcheck: false },
-      });
+      }));
     const wc = view.webContents;
     const agent = group !== 'user';
-    if (agent) this.envStore.markAgent(env);
+    if (agent && !opts.view) this.envStore.markAgent(env);
     const tab: Tab = {
-      id, group, owner, agent, env, envExplicit, fresh: !opts.webContents && (!url || url === 'about:blank'),
+      id, group, owner, agent, env, envExplicit, fresh: !opts.webContents && !opts.view && (!url || url === 'about:blank'),
       view, wc, wcId: wc.id, cdp: null, host: null, size: { ...(agent ? DESKTOP : DEFAULT_SIZE) }, scale: 1, emu: null, committed: false, frameNos: new Map(), frameSeq: 0, refStart: new Map(),
       console: [], consoleSeq: 0, net: new NetLog(), dialog: null, dialogSeq: 0, lastDialog: null, dialogWaiters: new Set(), pendingDialogCb: null,
       forceUnload: false, unloadBlockedAt: 0, downloads: [], openedBy: opts.openedBy ?? null, createdAt: Date.now(),
@@ -313,11 +315,23 @@ export class BrowserTabs {
       void tab.cdp.attach().then(() => this.emulate(tab));
     }
     this.place(tab);
-    if (url && !opts.webContents) wc.loadURL(url).catch(e => { if (!/ERR_ABORTED/.test(errText(e))) log.info('browser', 'initial load failed', { data: { tab: id, url: redact(url), cause: errText(e) } }); });
+    if (url && !opts.webContents && !opts.view) wc.loadURL(url).catch(e => { if (!/ERR_ABORTED/.test(errText(e))) log.info('browser', 'initial load failed', { data: { tab: id, url: redact(url), cause: errText(e) } }); });
     log.info('browser', 'tab opened', { chat: owner ?? undefined, data: { tab: id, group, env, popup: !!opts.webContents } });
     this.emitTabs();
     this.emitEnvs();
     return tab;
+  }
+
+  /** A tab of the user's personal browser, lent to a chat on the user's click (personal/browser.ts, ADR 0133): its
+   *  view joins the chat's group as an agent tab (CDP, its tools) in the environment "personal"; closing it (the agent,
+   *  the user's ✕ or «Riprendi», the chat gone) gives the view back through `back` instead of destroying the page. */
+  lend(chatId: string, view: WebContentsView, back: (view: WebContentsView) => void): Tab {
+    const t = this.create(`chat:${chatId}`, chatId, undefined, { view, env: 'personal' });
+    t.committed = true;                                // the page is already there: emulation may start now
+    t.lentBack = back;
+    this.emulate(t);
+    log.info('browser', 'personal tab lent to a chat', { chat: chatId, data: { tab: t.id } });
+    return t;
   }
 
   /** A tab that has not loaded a real page yet moves to another environment (same id, same place on screen). */
@@ -366,8 +380,21 @@ export class BrowserTabs {
     if (!t) return;
     if (by === 'user' && t.agent) t.closedByUser = { url: t.wc.isDestroyed() ? '' : redact(t.wc.getURL()) };   // before wc.close: its 'destroyed' may run remove() first
     this.dropDialog(t, 'dismissed (tab closed)');      // answered while the page is still alive
+    if (t.lentBack && !t.wc.isDestroyed()) {           // a lent personal tab goes back to the user, alive
+      const back = t.lentBack;
+      this.closePopupsOf(t.id);                        // what the agent opened from it is signed in as the user: closed
+
+      this.remove(t);
+      back(t.view);
+      return;
+    }
     if (!t.wc.isDestroyed()) t.wc.close({ waitForBeforeUnload: false });
     this.remove(t);
+  }
+
+  /** Closes the tabs opened from a tab (window.open, target=_blank), and theirs. */
+  private closePopupsOf(id: string): void {
+    for (const x of [...this.tabs.values()]) if (x.openedBy === id && x.id !== id) { this.closePopupsOf(x.id); this.close(x.id); }
   }
 
   private remove(t: Tab): void {
@@ -427,30 +454,34 @@ export class BrowserTabs {
 
   private wire(tab: Tab): void {
     const wc = tab.wc;
-    const changed = () => this.emitTabs();
+    // a lent personal tab outlives this record (ADR 0133): once given back, none of these listeners acts on it
+    const live = () => this.tabs.get(tab.id) === tab;
+    const changed = () => { if (live()) this.emitTabs(); };
     for (const ev of ['did-start-loading', 'did-stop-loading', 'did-navigate-in-page', 'page-title-updated'] as const) wc.on(ev as 'did-stop-loading', changed);
-    wc.on('did-navigate', (_e, url) => { this.dropDialog(tab, 'dismissed (page navigated)'); if (url && url !== 'about:blank') tab.fresh = false; tab.committed = true; tab.emu = null; this.emulate(tab); this.emitTabs(); });
-    wc.on('did-stop-loading', () => { void this.onPageLoaded(tab); });
-    wc.on('did-navigate-in-page', (_e, _url, isMain) => { if (isMain) void this.onPageLoaded(tab); });
+    wc.on('did-navigate', (_e, url) => { if (!live()) return; this.dropDialog(tab, 'dismissed (page navigated)'); if (url && url !== 'about:blank') tab.fresh = false; tab.committed = true; tab.emu = null; this.emulate(tab); this.emitTabs(); });
+    wc.on('did-stop-loading', () => { if (live()) void this.onPageLoaded(tab); });
+    wc.on('did-navigate-in-page', (_e, _url, isMain) => { if (isMain && live()) void this.onPageLoaded(tab); });
     wc.on('destroyed', () => this.remove(tab));
     // the mouse over the page, which the UI cannot see (a native view on top of it): the UI lights up the tab's chat
     // (renderer lib/pairs.ts). Only the user's real cursor counts, never an agent's input (synthetic, no leave event).
     wc.on('input-event', (_e, ev) => {
-      if (ev.type !== 'mouseMove' && ev.type !== 'mouseEnter' && ev.type !== 'mouseLeave') return;
+      if (!live() || (ev.type !== 'mouseMove' && ev.type !== 'mouseEnter' && ev.type !== 'mouseLeave')) return;
       this.setPointer(tab, ev.type !== 'mouseLeave' && (process.env.SB_TEST === '1' || this.cursorOver(tab)));
     });
     swallowCloseKey(wc); // Ctrl+W in a page would reach the default menu and quit the app (keyguard.ts)
     // ... and the user's Ctrl+W in a page closes its tile, like Ctrl+W on a chat (renderer closeTab, with the undo). Only
     // with the keyboard really in this page (window and page focused): an agent's synthetic keys never close a tab.
     wc.on('before-input-event', (_e, input) => {
-      if (isCloseKey(input) && !tab.agentInput && (process.env.SB_TEST === '1' || this.userTyping(tab))) this.opts.emitter.emit('ui:command', { action: 'closeTab', value: tab.id });
+      if (live() && isCloseKey(input) && !tab.agentInput && (process.env.SB_TEST === '1' || this.userTyping(tab))) this.opts.emitter.emit('ui:command', { action: 'closeTab', value: tab.id });
     });
     wc.on('console-message', e => {
+      if (!live()) return;
       const d = e as unknown as { level: string; message: string; lineNumber: number; sourceId: string; frame?: WebFrameMain | null };
       tab.console.push({ seq: ++tab.consoleSeq, at: Date.now(), level: d.level, text: redact(String(d.message)).slice(0, 2000), source: `${redact(String(d.sourceId ?? ''))}:${d.lineNumber ?? ''}`, frame: safeFrameUrl(d.frame) });
       if (tab.console.length > 500) tab.console.shift();
     });
     wc.on('will-prevent-unload', e => {
+      if (!live()) return;
       if (!tab.agent || tab.forceUnload) { e.preventDefault(); return; }
       tab.unloadBlockedAt = Date.now();
     });

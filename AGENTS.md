@@ -81,7 +81,8 @@ first runs on main: say so in the hand-off, so the Orchestrator knows which bran
    that server's own process env or request header, never to an engine or a chat (ADR 0086); the passwords of the
    user's personal Browser page, encrypted with safeStorage, filled only into a page of their own site at the user's
    click, never shown to the renderer, an agent, the app MCP or a log; its tabs in `persist:personal`, out of every
-   agent tool and screenshot (ADR 0133).
+   agent tool and screenshot, except one tab the user gives to a chat with «Affida a un agente» until «Riprendi»
+   (ADR 0133).
 3. **Dependencies:** only well-known packages, exact versions, published ≥ 14 days before install (`npm install
    --save-exact --before=<date>`), an ADR line for each new runtime dependency. Prefer writing 100 lines over adding a
    package with a large tree.

@@ -59,9 +59,11 @@ test.describe.serial('personal browser', () => {
       const wc = webContents.getAllWebContents().find(w => w.session.getStoragePath()?.includes('personal') && w.getURL().endsWith('/login'))!;
       return a.world ? wc.executeJavaScriptInIsolatedWorld(a.world, [{ code: a.code }]) : wc.executeJavaScript(a.code);
     }, { code, world });
-    expect(await run(fillScript('user-at-example', 'pa"ss'), PERSONAL_WORLD)).toBe('both');
+    expect(await run(fillScript('user-at-example', 'pa"ss', 'https://example.com'), PERSONAL_WORLD)).toBe('none');   // another site: nothing filled
+    expect(await run('pass.value', 0)).toBe('');
+    expect(await run(fillScript('user-at-example', 'pa"ss', new URL(sites.a).origin), PERSONAL_WORLD)).toBe('both');
     expect(await run('[user.value, pass.value, typeof userBefore]', 0)).toEqual(['user-at-example', 'pa"ss', 'undefined']);
-    expect(await run(readScript(), PERSONAL_WORLD)).toEqual({ user: 'user-at-example', password: 'pa"ss' });
+    expect(await run(readScript(), PERSONAL_WORLD)).toEqual({ user: 'user-at-example', password: 'pa"ss', href: `${sites.a}/login` });
     await expect(page.getByTestId('pb-back')).toBeEnabled();
     await page.getByTestId('pb-back').click();
     await expect(page.getByTestId('pb-address')).toHaveValue(`${sites.a}/index.html`);

@@ -28,7 +28,17 @@ const MAX_TABS = 40;
 const CLEAR_MS = 30_000;
 const MAX_CSV = 20 * 1024 * 1024;
 
-interface PTab { id: string; view: WebContentsView; wc: WebContents; login: boolean; shown: boolean; createdAt: number }
+interface PTab {
+  id: string; view: WebContentsView; wc: WebContents; login: boolean; shown: boolean; createdAt: number;
+  /** lent to a chat on the user's click (ADR 0133): the agent's tab id there; null = the user's */
+  lent: { chatId: string; agentTab: string } | null;
+  /** the personal tab that opened this one (window.open, target=_blank): they can reach each other's pages */
+  opener: string | null;
+  /** when this tab last opened popups (at most POPUPS per POPUP_WINDOW_MS) */
+  popups: number[];
+}
+const POPUPS = 5;
+const POPUP_WINDOW_MS = 10_000;
 
 export interface PersonalOptions {
   emitter: Emitter;
@@ -37,6 +47,14 @@ export interface PersonalOptions {
   cipher: SecretCipher;
   appName?: string;
   lang?: () => Lang;
+  /** «Affida a un agente» (wiring.ts → browser/tabs.ts lend): the view joins the chat's tabs; `back` gives it back */
+  lend?: (chatId: string, view: WebContentsView, back: () => void) => { tabId: string };
+  /** «Riprendi»: the agent's tab closes, which gives the view back */
+  reclaim?: (agentTabId: string) => void;
+  /** null = this chat can drive a browser; else why not, in the UI language */
+  canLend?: (chatId: string) => string | null;
+  /** the message the chat gets when it receives a tab */
+  tell?: (chatId: string, text: string) => Promise<void>;
 }
 
 /** The clipboard: the system one, or (SB_TEST=1) the in-memory one the e2e suite reads (browser/service.ts's). */
@@ -55,6 +73,9 @@ export class PersonalBrowser {
   private clearTimer: ReturnType<typeof setTimeout> | null = null;
   private restored = false;
   private closing = false;
+  /** the Browser page is mounted (app_screenshot withholds the window even when no page view is attached) */
+  private pageOn = false;
+  private hookedWin: BrowserWindow | null = null;
   readonly store: PersonalStore;
   readonly vault: LoginVault;
 
@@ -80,9 +101,13 @@ export class PersonalBrowser {
 
   // ---------- state ----------
 
-  owns(wc: WebContents | undefined | null): boolean { return !!wc && [...this.tabs.values()].some(t => t.wc === wc); }
-  /** A personal tab is on screen (app_screenshot then leaves the window out: it would show the user's pages). */
-  anyShown(): boolean { return [...this.tabs.values()].some(t => t.shown); }
+  /** A page of the personal session: its tabs, a lent one and what the agent opened from it too. app_screenshot never
+   *  shows them (the chat a tab was lent to has its own browser tools). */
+  owns(wc: WebContents | undefined | null): boolean { return !!wc && !wc.isDestroyed() && ((!!this.ses && wc.session === this.ses) || [...this.tabs.values()].some(t => t.wc === wc)); }
+  /** The Browser page or a personal tab is on screen: app_screenshot then withholds the window (the tab strip, the
+   *  address bar, the panel's history and logins would show the user's browsing). */
+  anyShown(): boolean { return this.pageOn || [...this.tabs.values()].some(t => t.shown); }
+  setOnScreen(on: boolean): void { this.pageOn = on === true; }
 
   private toTab(t: PTab): PersonalTab {
     const dead = t.wc.isDestroyed();
@@ -90,6 +115,7 @@ export class PersonalBrowser {
     return {
       id: t.id, url: url === 'about:blank' ? '' : url, title: dead ? '' : t.wc.getTitle(), loading: !dead && t.wc.isLoading(),
       canBack: !dead && t.wc.navigationHistory.canGoBack(), canForward: !dead && t.wc.navigationHistory.canGoForward(), active: this.active === t.id, login: t.login,
+      lentTo: t.lent?.chatId ?? null,
     };
   }
 
@@ -106,7 +132,7 @@ export class PersonalBrowser {
     this.emitTimer = setTimeout(() => {
       this.emitTimer = null;
       this.o.emitter.emit('personal:changed', this.state());
-      if (this.restored || this.tabs.size) this.store.setLastTabs(this.openTabs());
+      if (this.restored) this.store.setLastTabs(this.openTabs());   // before a restore the last run's tabs stay offered
     }, 60);
   }
 
@@ -122,17 +148,17 @@ export class PersonalBrowser {
 
   // ---------- tabs ----------
 
-  open(url?: string, opts: { webContents?: WebContents; background?: boolean } = {}): PersonalTab {
+  open(url?: string, opts: { webContents?: WebContents; background?: boolean; after?: string } = {}): PersonalTab {
     if (this.tabs.size >= MAX_TABS) throw new Error(this.it() ? `Hai già ${MAX_TABS} schede aperte: chiudine qualcuna.` : `${MAX_TABS} tabs are open already: close some.`);
     const ses = this.session();
     const view = opts.webContents
       ? new WebContentsView({ webContents: opts.webContents })
       : new WebContentsView({ webPreferences: { session: ses, sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, spellcheck: false, backgroundThrottling: true } });
     view.setBackgroundColor('#ffffff');
-    const t: PTab = { id: `p${++this.seq}`, view, wc: view.webContents, login: false, shown: false, createdAt: Date.now() };
+    const t: PTab = { id: `p${++this.seq}`, view, wc: view.webContents, login: false, shown: false, createdAt: Date.now(), lent: null, opener: opts.webContents ? opts.after ?? null : null, popups: [] };
     this.tabs.set(t.id, t);
-    const at = this.active ? this.order.indexOf(this.active) : -1;
-    if (opts.webContents && at >= 0) this.order.splice(at + 1, 0, t.id); else this.order.push(t.id);
+    const at = opts.after ? this.order.indexOf(opts.after) : -1;   // a popup sits right after its opener
+    if (at >= 0) this.order.splice(at + 1, 0, t.id); else this.order.push(t.id);
     if (!opts.background) this.active = t.id;
     this.wire(t);
     if (!opts.webContents && url) this.load(t, resolveInput(url));
@@ -166,6 +192,7 @@ export class PersonalBrowser {
   close(tabId: string): void {
     const t = this.tabs.get(tabId);
     if (!t) return;
+    if (t.lent) this.o.reclaim?.(t.lent.agentTab);   // taken back from the agent first, then closed
     if (!t.wc.isDestroyed()) t.wc.close({ waitForBeforeUnload: false });
     this.remove(t);
   }
@@ -191,22 +218,67 @@ export class PersonalBrowser {
     return last.length > 0;
   }
 
-  /** The start page's «Non ora»: the last tabs are not offered again (they are forgotten at the next change). */
+  /** A page was opened: from now on the open tabs are what the next start offers. */
   private markRestored(): void { this.restored = true; }
+
+  // ---------- lending a tab to an agent ----------
+
+  /** «Affida a un agente»: the tab (its page, its sign-ins) goes to one chat until the user takes it back. Only from the
+   *  user's click (an IPC of the app window): no MCP tool asks for it. The other tabs and the passwords stay private. */
+  async lendTab(tabId: string, chatId: string, note: string): Promise<void> {
+    const it = this.it();
+    const t = this.tab(tabId);
+    if (t.lent) throw new Error(it ? 'Questa scheda è già affidata a un agente.' : 'This tab is already lent to an agent.');
+    if (!/^https?:/i.test(t.wc.getURL())) throw new Error(it ? 'Apri prima una pagina web in questa scheda.' : 'Open a web page in this tab first.');
+    if (!this.o.lend) throw new Error(it ? 'Gli agenti non sono disponibili.' : 'Agents are not available.');
+    // a popup and its opener reach each other's pages (window.opener, window.open by name): neither is lent
+    if ((t.opener && this.tabs.has(t.opener)) || [...this.tabs.values()].some(x => x.opener === t.id)) throw new Error(it ? 'Questa scheda è collegata a un\'altra (una l\'ha aperta dall\'altra): apri l\'indirizzo in una scheda nuova e affida quella.' : 'This tab is linked to another one (one opened the other): open the address in a new tab and lend that one.');
+    const why = this.o.canLend?.(chatId) ?? null;
+    if (why) throw new Error(why);
+    t.wc.navigationHistory.clear();                     // the agent cannot step back to what the user saw in this tab
+    this.unshow(t);
+    const { tabId: agentTab } = this.o.lend(chatId, t.view, () => this.giveBack(t));
+    t.lent = { chatId, agentTab };
+    log.info('personal', 'tab lent to a chat', { chat: chatId, data: { tab: t.id, agentTab } });
+    this.emit();
+    const ask = String(note ?? '').trim().slice(0, 4000);
+    const text = `[app] The user gave you a tab of their personal browser: tab ${agentTab} (use it with your browser tools, tabId "${agentTab}"), open on ${t.wc.getURL()}. `
+      + "It is signed in with the user's own accounts: act only on what the user asks, never change account settings, passwords, security or payments, and never send anything on their behalf without asking first. "
+      + 'The user can take the tab back at any time: then your calls on it fail.'
+      + (ask ? `\nThe user's request: ${ask}` : '\nAsk the user what to do with it if it is not clear.');
+    await this.o.tell?.(chatId, text).catch(e => log.warn('personal', 'the chat was not told about its tab', { chat: chatId, cause: errText(e), hint: 'tell the chat yourself: the tab is in its browser' }));
+  }
+
+  /** «Riprendi»: the tab comes back to the user (the agent's next call on it fails). */
+  reclaimTab(tabId: string): void {
+    const t = this.tab(tabId);
+    if (t.lent) this.o.reclaim?.(t.lent.agentTab);
+  }
+
+  /** The agent's tab closed (the user's «Riprendi» or ✕, the agent, the chat gone): the page is the user's again. */
+  private giveBack(t: PTab): void {
+    const chat = t.lent?.chatId;
+    t.lent = null;
+    if (this.closing || t.wc.isDestroyed() || this.tabs.get(t.id) !== t) return;
+    t.wc.setWindowOpenHandler(d => this.onPopup(t, d));   // the agent's handler goes with its tab
+    log.info('personal', 'tab given back', { chat, data: { tab: t.id } });
+    this.emit();
+  }
 
   private wire(t: PTab): void {
     const wc = t.wc;
     const changed = () => this.emit();
     for (const ev of ['did-start-loading', 'did-stop-loading', 'page-title-updated', 'did-navigate-in-page'] as const) wc.on(ev as 'did-stop-loading', changed);
-    wc.on('did-navigate', (_e, url) => { t.login = false; this.markRestored(); this.store.visit(url, wc.getTitle()); this.emit(); });
+    // while lent, what the agent opens is not the user's history, and the keys and menu are the agent tab's
+    wc.on('did-navigate', (_e, url) => { t.login = false; if (t.lent) return; this.markRestored(); this.store.visit(url, wc.getTitle()); this.emit(); });
     // a single-page sign-in (Google: e-mail, then password) changes its form without a load
-    wc.on('did-navigate-in-page', (_e, url, isMain) => { if (isMain) { this.store.visit(url, wc.getTitle()); setTimeout(() => void this.detect(t), 700); } });
-    wc.on('page-title-updated', (_e, title) => { this.store.retitle(wc.getURL(), title); });
-    wc.on('did-stop-loading', () => { void this.detect(t); });
+    wc.on('did-navigate-in-page', (_e, url, isMain) => { if (isMain && !t.lent) { this.store.visit(url, wc.getTitle()); setTimeout(() => void this.detect(t), 700); } });
+    wc.on('page-title-updated', (_e, title) => { if (!t.lent) this.store.retitle(wc.getURL(), title); });
+    wc.on('did-stop-loading', () => { if (!t.lent) void this.detect(t); });
     wc.on('destroyed', () => this.remove(t));
     wc.on('render-process-gone', (_e, d) => log.warn('personal', 'page crashed', { data: { tab: t.id, reason: d.reason }, hint: 'reload the tab' }));
     wc.on('before-input-event', (e, input) => {
-      if (input.type !== 'keyDown') return;
+      if (input.type !== 'keyDown' || t.lent) return;
       const ctrl = input.control || input.meta;
       const k = input.key.toLowerCase();
       if (isCloseKey(input)) { e.preventDefault(); this.close(t.id); }
@@ -215,14 +287,22 @@ export class PersonalBrowser {
       else if (input.alt && !ctrl && input.key === 'ArrowLeft') { e.preventDefault(); if (wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack(); }
       else if (input.alt && !ctrl && input.key === 'ArrowRight') { e.preventDefault(); if (wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward(); }
     });
-    wc.setWindowOpenHandler(d => {
-      if (/^(?:mailto|tel):/i.test(d.url)) { void shell.openExternal(d.url); return { action: 'deny' }; }
-      if (!/^(?:https?:|about:blank)/i.test(d.url) || this.tabs.size >= MAX_TABS) return { action: 'deny' };
-      const background = d.disposition === 'background-tab';
-      return { action: 'allow', createWindow: options => { this.open(undefined, { webContents: (options as { webContents?: WebContents }).webContents, background }); return (options as { webContents: WebContents }).webContents; } };
-    });
-    wc.on('will-navigate', (e, url) => { if (/^(?:mailto|tel):/i.test(url)) { e.preventDefault(); void shell.openExternal(url); } });
-    wc.on('context-menu', (_e, p) => this.menu(t, p));
+    wc.setWindowOpenHandler(d => this.onPopup(t, d));
+    wc.on('will-navigate', (e, url) => { if (/^(?:mailto|tel):/i.test(url)) { e.preventDefault(); if (!t.lent) void shell.openExternal(url); } });
+    wc.on('context-menu', (_e, p) => { if (!t.lent) this.menu(t, p); });
+  }
+
+  /** window.open / target=_blank: a tab of its own right after its opener (opener kept: OAuth popups work), in the
+   *  background unless the opener is the tab on screen; a page opening more than POPUPS in POPUP_WINDOW_MS is refused. */
+  private onPopup(t: PTab, d: Electron.HandlerDetails): Electron.WindowOpenHandlerResponse {
+    if (/^(?:mailto|tel):/i.test(d.url)) { void shell.openExternal(d.url); return { action: 'deny' }; }
+    if (!/^(?:https?:|about:blank)/i.test(d.url) || this.tabs.size >= MAX_TABS) return { action: 'deny' };
+    const now = Date.now();
+    t.popups = t.popups.filter(x => now - x < POPUP_WINDOW_MS);
+    if (t.popups.length >= POPUPS) return { action: 'deny' };
+    t.popups.push(now);
+    const background = d.disposition === 'background-tab' || this.active !== t.id;
+    return { action: 'allow', createWindow: options => { const w = (options as { webContents: WebContents }).webContents; this.open(undefined, { webContents: w, background, after: t.id }); return w; } };
   }
 
   private menu(t: PTab, p: Electron.ContextMenuParams): void {
@@ -279,7 +359,13 @@ export class PersonalBrowser {
     const rects = new Map<string, ViewLayout['rect']>();
     for (const v of Array.isArray(views) ? views : []) if (v && typeof v.tabId === 'string' && this.tabs.has(v.tabId)) rects.set(v.tabId, v.rect);
     const win = this.o.window();
+    if (win && !win.isDestroyed() && win !== this.hookedWin) {
+      this.hookedWin = win;
+      // the window's views may go before shutdown() runs: the open tabs are kept for the next start now
+      win.once('close', () => { if (this.restored) this.store.setLastTabs(this.openTabs()); this.store.flush(); });
+    }
     for (const t of this.tabs.values()) {
+      if (t.lent) continue;                            // drawn under its agent's strip meanwhile
       const r = rects.get(t.id);
       const ok = !!r && [r.x, r.y, r.width, r.height].every(n => typeof n === 'number' && Number.isFinite(n)) && r.width >= 20 && r.height >= 20;
       if (!ok || !win || win.isDestroyed() || t.wc.isDestroyed()) { this.unshow(t); continue; }
@@ -318,9 +404,12 @@ export class PersonalBrowser {
   /** Fills the tab's form with a saved login: only one of the page's own site (vault.ts passwordFor). */
   async fillLogin(tabId: string, id: string): Promise<boolean> {
     const t = this.tab(tabId);
-    const cred = this.vault.passwordFor(id, t.wc.getURL());
-    if (!cred) return false;
-    const r = await this.run<string>(t, fillScript(cred.user, cred.password), 3000).catch(() => null);
+    if (t.lent) return false;
+    const site = siteOf(t.wc.getURL());
+    const cred = site ? this.vault.passwordFor(id, t.wc.getURL()) : null;
+    if (!cred || !site) return false;
+    // the script checks the site again in the page: a navigation between this check and the fill never gets it
+    const r = await this.run<string>(t, fillScript(cred.user, cred.password, site), 3000).catch(() => null);
     return r === 'both' || r === 'user' || r === 'password';
   }
 
@@ -330,11 +419,14 @@ export class PersonalBrowser {
     const t = this.tab(tabId);
     const why = this.vault.unavailable();
     if (why) return { ok: false, reason: it ? `Non posso salvare password: ${why}.` : `Passwords cannot be saved: ${why}.` };
-    if (!siteOf(t.wc.getURL())) return { ok: false, reason: it ? 'Le password si salvano solo su siti https.' : 'Passwords are saved only on https sites.' };
-    const typed = await this.run<{ user: unknown; password: unknown } | null>(t, readScript(), 3000).catch(() => null);
+    const site = siteOf(t.wc.getURL());
+    if (!site || t.lent) return { ok: false, reason: it ? 'Le password si salvano solo su siti https.' : 'Passwords are saved only on https sites.' };
+    const typed = await this.run<{ user: unknown; password: unknown; href: unknown } | null>(t, readScript(), 3000).catch(() => null);
+    // read on the same site it is saved for: a redirect meanwhile (accounts.x → app.x) never files it under another site
+    if (typed && (siteOf(typed.href) !== site || siteOf(t.wc.getURL()) !== site)) return { ok: false, reason: it ? 'La pagina è cambiata mentre salvavo: riprova.' : 'The page changed while saving: try again.' };
     if (!typed || typeof typed.password !== 'string' || !typed.password) return { ok: false, reason: it ? 'Scrivi prima user name e password nel modulo della pagina, poi premi Salva.' : 'Type the user name and password in the page’s form first, then press Save.' };
     try {
-      const { login } = this.vault.save(t.wc.getURL(), typeof typed.user === 'string' ? typed.user : '', typed.password);
+      const { login } = this.vault.save(site, typeof typed.user === 'string' ? typed.user : '', typed.password);
       log.info('personal', 'password saved');
       this.emit();
       return { ok: true, login };
@@ -380,7 +472,7 @@ export class PersonalBrowser {
 
   async shutdown(): Promise<void> {
     if (this.emitTimer) { clearTimeout(this.emitTimer); this.emitTimer = null; }
-    if (this.restored || this.tabs.size) this.store.setLastTabs(this.openTabs());
+    if (this.restored) this.store.setLastTabs(this.openTabs());
     this.closing = true;
     this.store.flush();
     for (const t of [...this.tabs.values()]) { try { this.close(t.id); } catch { /* gone */ } }
