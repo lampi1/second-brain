@@ -6,6 +6,7 @@ export const brainPagesEn: typeof brainPagesIt = {
   'brainPages.nav.home': 'Grindhouse',
   'brainPages.nav.dashboard': 'Dashboard',
   'brainPages.nav.guida': 'Guide',
+  'brainPages.nav.browser': 'Browser',
   'brainPages.nav.task': 'Tasks',
   'brainPages.nav.fatto': 'Done & stand-up',
   'brainPages.nav.idee': 'Ideas',

@@ -113,6 +113,11 @@ export function claudeConfigFile(env: NodeJS.ProcessEnv = process.env): string {
   return env.CLAUDE_CONFIG_DIR ? path.join(env.CLAUDE_CONFIG_DIR, '.claude.json') : path.join(os.homedir(), '.claude.json');
 }
 export const CACHE_TTL_MS = 3600e3;
+/** cost.mjs reads every transcript of the day: on a busy day it took over the old 120 s (#184); a run still going is
+ *  never doubled (UsageMonitor.running) */
+export const COST_TIMEOUT_MS = 300e3;
+/** a cost.mjs timeout is logged at most this often (it repeats every 3 min on a busy day) */
+const TIMEOUT_WARN_MS = 3600e3;
 export function readClaudeCache(file: string, now = Date.now()): Limits | null {
   try {
     const j = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
@@ -157,6 +162,8 @@ export interface UsageMonitorOptions {
   claudeConfig?: string | null;  // null = do not read Claude Code's cache (tests)
   cursor?: () => CursorDay;      // today's Cursor ledger (brain/cursor-ledger.ts cursorToday); absent = cost.mjs's CSV only
   cursorEveryMs?: number;        // default 30 s
+  costTimeoutMs?: number;        // cost.mjs's time limit, default COST_TIMEOUT_MS
+  now?: () => number;            // clock (tests)
   onUsage(u: Usage, spend: Spend): void;
 }
 
@@ -168,6 +175,7 @@ export class UsageMonitor {
   private cursorTimer: NodeJS.Timeout | null = null;
   private running = false;
   private warned = false;
+  private timeoutWarnAt = -Infinity;
 
   constructor(private o: UsageMonitorOptions) {}
 
@@ -232,13 +240,20 @@ export class UsageMonitor {
         this.cost = { todayUsd: 0, chats: [], cursorTodayUsd: null, cursorNote: 'Cursor: costo sconosciuto', costKnown: false, costNote: 'costi non disponibili: il brain non ha ops/tools/cost.mjs' };
       } else {
         const at = Date.now(); // before the run: what a chat spends while cost.mjs reads may count twice until the next run, never lost
-        const r = await runNode(this.o.node, script, ['--days', '1', '--json'], this.o.root!, 120e3);
+        const limit = this.o.costTimeoutMs ?? COST_TIMEOUT_MS;
+        const r = await runNode(this.o.node, script, ['--days', '1', '--json'], this.o.root!, limit);
         let j: unknown = null;
         try { j = JSON.parse(r.stdout); } catch { /* below */ }
         if (j) this.cost = { ...parseCost(j, romeDay()), at };
         else {
-          log.warn('brain', 'cost.mjs gave no JSON', { data: { code: r.code, error: r.error, stderr: r.stderr.slice(0, 300) } });
-          if (!this.cost) this.cost = { todayUsd: 0, chats: [], cursorTodayUsd: null, cursorNote: '', costKnown: false, costNote: 'cost.mjs non ha risposto: riprovo tra 3 minuti' };
+          if (r.killed) {
+            const now = this.o.now?.() ?? Date.now();
+            if (now - this.timeoutWarnAt >= TIMEOUT_WARN_MS) {
+              this.timeoutWarnAt = now;
+              log.warn('brain', `cost.mjs timed out after ${Math.round(limit / 1000)} s`, { data: { signal: r.signal ?? null }, cause: 'the day has more chat transcripts than cost.mjs reads in time', hint: 'costs stay at the last reading; the next run retries in 3 minutes (logged once an hour)' });
+            }
+          } else log.warn('brain', 'cost.mjs gave no JSON', { data: { code: r.code, error: r.error, stderr: r.stderr.slice(0, 300) }, cause: r.error ?? 'empty or invalid output', hint: 'run the brain\'s ops/tools/cost.mjs --days 1 --json by hand to see its error' });
+          if (!this.cost) this.cost = { todayUsd: 0, chats: [], cursorTodayUsd: null, cursorNote: '', costKnown: false, costNote: r.killed ? 'cost.mjs è troppo lento oggi: riprovo tra 3 minuti' : 'cost.mjs non ha risposto: riprovo tra 3 minuti' };
         }
       }
       this.readCursor();

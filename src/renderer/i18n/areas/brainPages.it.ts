@@ -4,6 +4,7 @@ export const brainPagesIt = {
   'brainPages.nav.home': 'Grindhouse',
   'brainPages.nav.dashboard': 'Dashboard',
   'brainPages.nav.guida': 'Guida',
+  'brainPages.nav.browser': 'Browser',
   'brainPages.nav.task': 'Task',
   'brainPages.nav.fatto': 'Fatto e standup',
   'brainPages.nav.idee': 'Idee',

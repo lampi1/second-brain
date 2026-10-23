@@ -17,6 +17,7 @@
 │   search/  Ctrl+K index · skills/ skills page · update/ Aggiorna (Settings)   │
 │   brainmodel/ Brain section: skills, rules, memory, jobs + undo (0077, 0082)  │
 │   cloud/   cloud agents: Cursor REST v1 · codex cloud · claude --cloud (0080) │
+│   personal/ the user's own Browser page: persist:personal, vault (ADR 0133)   │
 │   overlay.ts  request layer: a top-most view for questions over browser tabs  │
 │   ipc.ts   typed handlers (sender check) + Emitter                            │
 └───────────────▲──────────────────────────────────────────┬────────────────────┘

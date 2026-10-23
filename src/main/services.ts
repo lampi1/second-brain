@@ -96,6 +96,8 @@ export interface BrowserService {
   copyCredential(id: string, field: 'user' | 'password'): boolean;
   /** How a chat is woken when the user answers a hand-off its agent no longer waits for (set by wiring). */
   setWake(fn: (chatId: string, text: string) => void): void;
+  /** «Affida a un agente» (ADR 0133): a personal tab's view joins the chat's tabs; closing that tab calls back. */
+  lend?(chatId: string, view: Electron.WebContentsView, back: () => void): BrowserTab;
   /** Known environments with session status and last sign-in (no cookies, no secrets). */
   envs(): Promise<BrowserEnv[]>;
   /** A chat is gone for good: close its tabs and revoke its MCP endpoint token. */

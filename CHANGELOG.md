@@ -208,6 +208,12 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   "Discusso", which leads back to the Orchestrator. The command card's "Apri chat" (an existing chat) is now "Vai alla
   chat".
 ### Fixed
+- **Fewer wasted agent calls and quiet warnings** (#172, #183-#187): `app_create_chat` / `app_assign_task` show their
+  prompt and title limits in the schema and name the refused length; `agent_report` shows `verdict` / `verified` only to
+  an independent reviewer (sent by another chat they are dropped, not refused); `agent_delegate` says in its schema and
+  error that a child stays in the parent's repository and what to do instead; the skill suggestion snapshot works for
+  goals over 2000 characters; a slow `cost.mjs` gets 300 s and is logged as a timeout once an hour; a chat titled like
+  another open chat gets « · 2», so their mail is never held.
 - **Messages reach a chat's engine in the order shown** (#127): deliveries to one chat go one at a time on every
   engine, so the user's message and a child's mail arriving together are never swapped by a checkpoint still running.
 - **Pulse's Apply works and says why when it cannot** (#128): a role keeps the model it already runs with when only
