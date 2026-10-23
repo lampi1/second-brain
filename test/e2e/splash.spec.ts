@@ -12,13 +12,13 @@ test('no splash in a test run unless asked', async () => {
   await app.close();
 });
 
-test('the splash cuts GRINDHOUSE with the day\'s sentence, then a key lets the user in', async () => {
+test('the splash builds second-brain with the day\'s sentence, then a key lets the user in', async () => {
   // launched without the demo's reduced motion (launchDemo asks it): the full animation
   const { app, page } = await launch({ SB_DEMO: '1', SB_DEMO_FREEZE: '1', SB_SPLASH: 'hold' });
   await setSize(app, 1600, 1000);
   const splash = page.getByTestId('splash');
   await expect(splash).toBeVisible({ timeout: 15_000 });
-  // mid-cut, as it is (sparks and all): a look, not an assertion
+  // mid-flight, as it is (sparks and all): a look, not an assertion
   await page.waitForTimeout(450);
   await page.screenshot({ path: path.resolve(import.meta.dirname, '..', '..', 'test-results', 'shots', 'splash-cut.png') });
   await expect(splash).toHaveAttribute('data-phase', 'hot', { timeout: 10_000 });

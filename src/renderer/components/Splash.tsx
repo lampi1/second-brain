@@ -1,8 +1,11 @@
-// The opening splash (owner, 2026-10-22: «un'animazione epica all'apertura, qualcosa di caratteristico che richiami il
-// grinding … con una frase diversa ogni giorno»): an angle grinder cuts the word GRINDHOUSE out of the dark, left to
-// right, spraying sparks; the word glows hot and cools, then the day's sentence rises under it and the whole thing
-// fades into the app. At most SPLASH_MS (2.4 s); a click or any key skips it; prefers-reduced-motion shows the word
-// and the sentence still, briefly. Drawn here, no image: SVG (disc, gears), CSS (the word) and one canvas (sparks).
+// The opening splash (owner, 2026-10-22: «un'animazione epica all'apertura … con una frase diversa ogni giorno»;
+// 2026-10-23: «con la scritta second-brain non grindhouse e la voglio più fica»): the app's mark wakes up in the dark
+// (the hub lights, its links draw out, the nodes pop, signals run along the links), then a stream of sparks of
+// thought leaves the hub and flies into place, assembling the word second-brain left to right; when the last one lands
+// the real word lights up over them with a shockwave and a glint, the day's sentence rises under it and the whole
+// thing fades into the app. At most SPLASH_MS (2.4 s); a click or any key skips it; prefers-reduced-motion shows the
+// mark, the word and the sentence still, briefly. Drawn here, no image: SVG (the mark), CSS (the word) and one canvas
+// (the particles: the word's own pixels, sampled from an offscreen canvas, are their landing spots).
 // The app renders under it from the first frame (the splash only covers it; browser views are held back meanwhile,
 // lib/viewports suspendViews, since native views would draw over it). Shown only when main asks it (lib/splash.ts:
 // a person opening the app, once per window; never in hidden runs, tests or the frozen demo). The sentence is the
@@ -16,35 +19,55 @@ import { locale, t, type Key } from '../i18n';
 import '../styles/splash.css';
 
 export const SPLASH_MS = 2400;
-const CUT_FROM = 0.12, CUT_TO = 1.12; // seconds: the disc crosses the word
+export const SPLASH_WORD = 'second-brain';
+const FLY_FROM = 0.22, FLY_SPAN = 0.5; // seconds: the first spark leaves the hub; the last leaves this much later
+const FLY_MIN = 0.36, FLY_MAX = 0.5; // seconds: one spark's flight
+const LIT_AT = 1.12; // seconds: the real word lights up over the landed sparks
 const OUT_AT = 1.95; // seconds: the fade into the app starts
 const LINE_WAIT_MS = 700; // the headline has this long to arrive; then the splash's own line
+const MAX_SPARKS = 2400;
 
-/** A gear's outline (teeth trapezoids around a circle), for the slow machinery in the background. */
-function gearPath(teeth: number, r: number, depth: number): string {
-  const pts: string[] = [];
-  const step = (Math.PI * 2) / teeth;
-  for (let i = 0; i < teeth; i++) {
-    const a = i * step;
-    for (const [da, rr] of [[0.05, r - depth], [0.22, r], [0.5, r], [0.67, r - depth]] as const) {
-      const ang = a + da * step;
-      pts.push(`${(Math.cos(ang) * rr).toFixed(1)},${(Math.sin(ang) * rr).toFixed(1)}`);
+// the mark (build/icon.svg's network): four nodes linked to one hub, in a 256 box centred on the hub
+const NODES = [[-56, -46, 17], [58, -50, 15], [-50, 52, 15], [54, 54, 17]] as const;
+
+type Spark = { sx: number; sy: number; cx: number; cy: number; tx: number; ty: number; at: number; dur: number; hue: number; size: number; drift: number; px: number; py: number };
+
+const easeOut = (p: number) => 1 - (1 - p) ** 3;
+
+/** The word's pixels at its place on screen, a few px apart: where the sparks land. */
+function wordTargets(el: HTMLElement): { x: number; y: number }[] {
+  const r = el.getBoundingClientRect();
+  const cs = getComputedStyle(el);
+  const fontPx = parseFloat(cs.fontSize) || 120;
+  let gap = Math.max(3, Math.round(fontPx / 30));
+  const off = document.createElement('canvas');
+  off.width = Math.ceil(r.width); off.height = Math.ceil(r.height);
+  const c = off.getContext('2d', { willReadFrequently: true });
+  if (!c || !off.width || !off.height) return [];
+  c.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  try { (c as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = cs.letterSpacing === 'normal' ? '0px' : cs.letterSpacing; } catch { /* older canvas */ }
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillStyle = '#fff';
+  c.fillText(el.textContent ?? '', off.width / 2, off.height / 2 + fontPx * 0.04);
+  const data = c.getImageData(0, 0, off.width, off.height).data;
+  let pts: { x: number; y: number }[] = [];
+  for (;;) {
+    pts = [];
+    for (let y = 0; y < off.height; y += gap) for (let x = 0; x < off.width; x += gap) {
+      if (data[(y * off.width + x) * 4 + 3]! > 140) pts.push({ x: r.left + x, y: r.top + y });
     }
+    if (pts.length <= MAX_SPARKS) return pts;
+    gap++;
   }
-  return `M${pts.join('L')}Z`;
 }
-const GEAR_A = gearPath(18, 210, 26), GEAR_B = gearPath(11, 120, 20);
-
-type Spark = { x: number; y: number; vx: number; vy: number; life: number; max: number; w: number; hue: number };
 
 export function Splash({ mode, onDone }: { mode: SplashMode; onDone: () => void }) {
   const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   const [line, setLine] = useState<string | null>(null);
   const [phase, setPhase] = useState<'run' | 'hot' | 'out'>(reduce ? 'hot' : 'run');
   const word = useRef<HTMLDivElement>(null);
-  const disc = useRef<HTMLDivElement>(null);
+  const mark = useRef<SVGSVGElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
-  const stage = useRef<HTMLDivElement>(null);
   const done = useRef(false);
 
   // the sentence: the day's headline if main has a recent one, else the splash's own line of the day
@@ -65,7 +88,7 @@ export function Splash({ mode, onDone }: { mode: SplashMode; onDone: () => void 
     if (done.current) return;
     done.current = true;
     setPhase('out');
-    setTimeout(onDone, reduce ? 120 : 380);
+    setTimeout(onDone, reduce ? 120 : 420);
   };
 
   // skip: a click anywhere or any key
@@ -75,120 +98,111 @@ export function Splash({ mode, onDone }: { mode: SplashMode; onDone: () => void 
     return () => window.removeEventListener('keydown', skip, true);
   });
 
-  // the timeline: one animation frame loop drives the disc, the reveal and the sparks
+  // the timeline: one animation frame loop flies the sparks; the mark and the word animate in CSS
   useEffect(() => {
     if (reduce) {
       if (mode === 'hold') return;
       const id = setTimeout(finish, 1500);
       return () => clearTimeout(id);
     }
-    const cv = canvas.current, w = word.current, d = disc.current, st = stage.current;
+    const cv = canvas.current, w = word.current, m = mark.current;
     const ctx = cv?.getContext('2d');
-    if (!cv || !ctx || !w || !d || !st) return;
+    if (!cv || !ctx || !w || !m) return;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const size = () => { cv.width = innerWidth * dpr; cv.height = innerHeight * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); };
     size();
     window.addEventListener('resize', size);
-    const sparks: Spark[] = [];
-    let raf = 0, t0 = 0, last = 0, burst = false, hot = false;
-    const spawn = (x: number, y: number, n: number, dir: number, spread: number, speed: [number, number]) => {
-      for (let i = 0; i < n; i++) {
-        const a = dir + (Math.random() - 0.5) * spread;
-        const v = speed[0] + Math.random() * (speed[1] - speed[0]);
-        const max = 24 + Math.random() * 40;
-        sparks.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: max, max, w: 1 + Math.random() * 1.6, hue: 28 + Math.random() * 26 });
-      }
+    let sparks: Spark[] = [];
+    let raf = 0, t0 = 0, lit = false, hubX = 0, hubY = 0, left = 0, width = 1;
+    const build = () => {
+      const mr = m.getBoundingClientRect();
+      hubX = mr.left + mr.width / 2; hubY = mr.top + mr.height / 2;
+      const wr = w.getBoundingClientRect();
+      left = wr.left; width = Math.max(1, wr.width);
+      sparks = wordTargets(w).map(p => {
+        const u = (p.x - left) / width; // 0 at the word's left edge: the word assembles left to right
+        const sx = hubX + (Math.random() - 0.5) * 14, sy = hubY + (Math.random() - 0.5) * 14;
+        // a curved flight: the control point swings out sideways and up, more for the far letters
+        const mx = (sx + p.x) / 2, my = (sy + p.y) / 2;
+        const swing = (Math.random() - 0.5) * 220 + (u - 0.5) * 160;
+        return {
+          sx, sy, cx: mx + swing, cy: my - 60 - Math.random() * 160, tx: p.x, ty: p.y,
+          at: FLY_FROM + u * FLY_SPAN + Math.random() * 0.1, dur: FLY_MIN + Math.random() * (FLY_MAX - FLY_MIN),
+          hue: 262 - u * 74 + (Math.random() - 0.5) * 16, size: 1.3 + Math.random() * 1.1, drift: 0.4 + Math.random(), px: sx, py: sy,
+        };
+      });
     };
     const frame = (ts: number) => {
-      if (!t0) { t0 = ts; last = ts; }
+      if (!t0) { t0 = ts; build(); }
       const s = (ts - t0) / 1000;
-      const k = Math.min(3, (ts - last) / 16.67); // frames elapsed at 60 fps: the same motion at any refresh rate
-      last = ts;
-      const r = w.getBoundingClientRect();
-      const p = Math.max(0, Math.min(1, (s - CUT_FROM) / (CUT_TO - CUT_FROM)));
-      const ease = p < 0.5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2;
-      const edge = r.left + (r.width + 24) * ease - 12;
-      const cy = r.top + r.height * 0.62;
-      // the word is cut out up to the disc; the disc rides the cut, then lifts off
-      w.style.clipPath = p >= 1 ? 'none' : `inset(-40% ${Math.max(0, r.right - edge)}px -40% -12%)`;
-      const lift = Math.max(0, s - CUT_TO);
-      d.style.transform = `translate(${edge + 66}px, ${cy - lift * 260}px) translate(-50%, -50%) scale(${1 - Math.min(0.6, lift * 1.5)})`;
-      d.style.opacity = String(s < CUT_FROM - 0.06 ? 0 : Math.max(0, 1 - lift * 3.2));
-      // grinding shakes the stage a hair
-      st.style.transform = p > 0 && p < 1 ? `translate(${(Math.random() - 0.5) * 1.6}px, ${(Math.random() - 0.5) * 1.6}px)` : '';
-      if (p > 0 && p < 1) {
-        // sparks fly back and down off the bottom of the disc, a fan, plus a few up the cut
-        spawn(edge + 2, cy + 22, Math.round(14 * k), Math.PI * 0.84, 0.8, [8, 21]);
-        spawn(edge + 2, cy - 18, Math.round(3 * k), -Math.PI * 0.66, 0.9, [4, 10]);
-      }
-      if (p >= 1 && !burst) {
-        burst = true;
-        spawn(r.right - 4, cy, 140, Math.PI, Math.PI * 2, [3, 14]);
-      }
-      if (p >= 1 && !hot) { hot = true; setPhase(ph => (ph === 'run' ? 'hot' : ph)); }
       ctx.clearRect(0, 0, innerWidth, innerHeight);
       ctx.globalCompositeOperation = 'lighter';
-      ctx.lineCap = 'round';
-      if (p > 0 && p < 1) {
-        // the white-hot kerf along the cut
-        const g = ctx.createLinearGradient(0, r.top, 0, r.bottom);
-        g.addColorStop(0, 'rgba(255,170,60,0)'); g.addColorStop(0.5, 'rgba(255,236,190,0.95)'); g.addColorStop(1, 'rgba(255,120,30,0)');
-        ctx.strokeStyle = g;
-        for (const [lw, a] of [[16, 0.18], [3, 1]] as const) { ctx.globalAlpha = a; ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(edge, r.top + 6); ctx.lineTo(edge, r.bottom - 6); ctx.stroke(); }
-        ctx.globalAlpha = 1;
+      // after the word lights up the sparks fade out under it and a few drift off as dust
+      const fade = s < LIT_AT ? 1 : Math.max(0, 1 - (s - LIT_AT) / 0.45);
+      for (const q of sparks) {
+        if (s < q.at) continue;
+        const p = Math.min(1, (s - q.at) / q.dur);
+        const e = easeOut(p), ie = 1 - e;
+        let x = ie * ie * q.sx + 2 * ie * e * q.cx + e * e * q.tx;
+        let y = ie * ie * q.sy + 2 * ie * e * q.cy + e * e * q.ty;
+        if (s > LIT_AT) { const d = (s - LIT_AT) * 26; x += (q.tx - hubX) * 0.0025 * d; y -= d * q.drift; }
+        const land = p >= 1 ? Math.max(0, 1 - (s - q.at - q.dur) / 0.18) : 0; // a flash on landing
+        const light = 62 + land * 30 + (1 - p) * 10;
+        ctx.globalAlpha = fade;
+        if (p < 1) {
+          // the trail: from where it was last frame
+          ctx.strokeStyle = `hsl(${q.hue}, 100%, ${light}%)`;
+          ctx.lineWidth = q.size;
+          ctx.beginPath(); ctx.moveTo(q.px, q.py); ctx.lineTo(x, y); ctx.stroke();
+        }
+        ctx.fillStyle = `hsl(${q.hue}, 100%, ${light}%)`;
+        const sz = q.size * (1 + land * 1.4);
+        ctx.fillRect(x - sz / 2, y - sz / 2, sz, sz);
+        q.px = x; q.py = y;
       }
-      for (let i = sparks.length - 1; i >= 0; i--) {
-        const q = sparks[i]!;
-        q.vx *= 0.985 ** k; q.vy = q.vy * 0.985 ** k + 0.38 * k; q.x += q.vx * k; q.y += q.vy * k; q.life -= k;
-        if (q.life <= 0 || q.y > innerHeight + 20) { sparks.splice(i, 1); continue; }
-        const f = q.life / q.max;
-        ctx.strokeStyle = `hsla(${q.hue}, 100%, ${55 + f * 40}%, ${Math.min(1, f * 1.4)})`;
-        ctx.lineWidth = q.w * (0.5 + f * 0.7);
-        ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(q.x - q.vx * 2.2, q.y - q.vy * 2.2); ctx.stroke();
-      }
+      ctx.globalAlpha = 1;
+      if (s >= LIT_AT && !lit) { lit = true; setPhase(ph => (ph === 'run' ? 'hot' : ph)); }
       if (mode !== 'hold' && s >= OUT_AT) { finish(); }
-      if (s < SPLASH_MS / 1000 + 0.5 || sparks.length) raf = requestAnimationFrame(frame);
+      if (s < LIT_AT + 0.6) raf = requestAnimationFrame(frame);
+      else ctx.clearRect(0, 0, innerWidth, innerHeight);
     };
     raf = requestAnimationFrame(frame);
     // a hard stop, whatever the frame loop does (a busy or hidden window gets few frames)
     const stop = mode === 'hold' ? 0 : window.setTimeout(finish, SPLASH_MS);
-    return () => { cancelAnimationFrame(raf); clearTimeout(stop); window.removeEventListener('resize', size); };
+    // and the word lights up on time even when frames are scarce
+    const light = window.setTimeout(() => setPhase(ph => (ph === 'run' ? 'hot' : ph)), LIT_AT * 1000 + 250);
+    return () => { cancelAnimationFrame(raf); clearTimeout(stop); clearTimeout(light); window.removeEventListener('resize', size); };
   }, []); // the timeline runs once
 
   const date = new Date(now()).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' });
   return (
     <div className={`splash splash-${phase}${reduce ? ' splash-still' : ''}`} data-testid="splash" data-phase={phase} data-line={line ? 'ready' : 'wait'} aria-hidden="true" onPointerDown={finish}>
-      <svg className="splash-gears" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice">
-        <g transform="translate(1390 170)"><path className="splash-gear g1" d={GEAR_A} /><circle r="58" className="splash-hub" /></g>
-        <g transform="translate(1135 300)"><path className="splash-gear g2" d={GEAR_B} /><circle r="34" className="splash-hub" /></g>
-        <g transform="translate(170 880)"><path className="splash-gear g2" d={GEAR_A} /><circle r="58" className="splash-hub" /></g>
-      </svg>
-      <div className="splash-stage" ref={stage}>
-        <div className="splash-word" ref={word} data-text="GRINDHOUSE">GRINDHOUSE</div>
+      <div className="splash-aurora" />
+      <div className="splash-grid" />
+      <div className="splash-stage">
+        <svg className="splash-mark" ref={mark} viewBox="-86 -86 172 172" width="120" height="120">
+          <defs>
+            <radialGradient id="splash-hub-g"><stop offset="0" stopColor="#ffffff" /><stop offset="1" stopColor="#c9bcff" /></radialGradient>
+          </defs>
+          <circle className="splash-halo" r="96" />
+          <g className="splash-links">
+            {NODES.map(([x, y], i) => <line key={i} className="splash-link" x1="0" y1="0" x2={x} y2={y} style={{ animationDelay: `${0.06 + i * 0.05}s` }} />)}
+            <line className="splash-link splash-link-faint" x1={NODES[0][0]} y1={NODES[0][1]} x2={NODES[1][0]} y2={NODES[1][1]} />
+          </g>
+          {NODES.map(([x, y], i) => <path key={i} className="splash-pulse" d={`M0 0L${x} ${y}`} style={{ animationDelay: `${0.42 + i * 0.13}s` }} />)}
+          {NODES.map(([x, y, r], i) => <circle key={i} className="splash-node" cx={x} cy={y} r={r} style={{ animationDelay: `${0.2 + i * 0.05}s` }} />)}
+          <circle className="splash-ring" r="30" />
+          <circle className="splash-hub" r="30" fill="url(#splash-hub-g)" />
+          <circle className="splash-core" r="14" />
+        </svg>
+        <div className="splash-word" ref={word} data-text={SPLASH_WORD}>{SPLASH_WORD}</div>
         <div className="splash-rule" />
         <div className="splash-sub">
           <span className="splash-label">{t('splash.label')} · {date}</span>
-          <p className="splash-line">{line ?? ' '}</p>
+          <p className="splash-line">{line ?? ' '}</p>
         </div>
       </div>
       <canvas className="splash-sparks" ref={canvas} />
-      {!reduce && (
-        <div className="splash-disc" ref={disc}>
-          <svg viewBox="-60 -60 120 120" width="150" height="150">
-            <defs>
-              <radialGradient id="splash-disc-g" cx="0" cy="0" r="58" gradientUnits="userSpaceOnUse">
-                <stop offset="0.28" stopColor="#5b6070" /><stop offset="0.3" stopColor="#2b2f38" /><stop offset="0.92" stopColor="#3b3f4a" /><stop offset="1" stopColor="#ffb347" />
-              </radialGradient>
-            </defs>
-            <g className="splash-spin">
-              <circle r="56" fill="url(#splash-disc-g)" />
-              {Array.from({ length: 24 }, (_, i) => <line key={i} x1="0" y1="-22" x2="0" y2="-54" transform={`rotate(${i * 15})`} className="splash-grit" />)}
-              <circle r="18" className="splash-nut" /><circle r="6" fill="#0b0d12" />
-            </g>
-            <circle r="57" className="splash-rim" />
-          </svg>
-        </div>
-      )}
       <div className="splash-skip">{t('splash.skip')}</div>
     </div>
   );
