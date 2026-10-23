@@ -26,6 +26,8 @@ import { answerLater, openQueue, showQueue } from './lib/later';
 import { planAskKeys, planAskOf, withPlans, type PlanAsk } from './lib/plan-ask';
 import { durableAsks, withDurableAsks } from './lib/work-ask';
 import { workflowState } from './store/workflows';
+import { flowState } from './store/flows';
+import { flowAsks } from './lib/flow-ask';
 import { engineLabel } from './lib/engines';
 import {
   askConfirm, closeModal, flashTile, highlight, isBrainPage, openModal, openPage, requestFocus, setCenter, setClosing, setFocusMode, setLanePeek, setMap, setMaximized,
@@ -457,7 +459,7 @@ export function nextThing(): void {
   const hidden = new Set(ui.get().hidden);
   const state = app.get(), work = workflowState.get();
   const plans = planAskKeys(state).map(planAskOf).filter((p): p is PlanAsk => !!p);
-  const list = withDurableAsks(withPlans(state.pending, plans).filter(p => !hidden.has(p.chatId)), durableAsks(work.rows, work.lessons));
+  const list = [...withDurableAsks(withPlans(state.pending, plans).filter(p => !hidden.has(p.chatId)), durableAsks(work.rows, work.lessons)), ...flowAsks(flowState.get().snapshot)];
   if (!list.length) { void nextAfterPending(); return; }
   // Reopening a paused queue starts at its oldest request; stale card focus is only a cursor once it is open.
   if (ui.get().later) { openQueue(null); return; }

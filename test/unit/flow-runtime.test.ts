@@ -1,0 +1,75 @@
+// Integration boundaries for brain-scoped flows and authenticated Orchestrator tools.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { createFlowRuntime } from '../../src/main/flows/runtime';
+import { appControlTools } from '../../src/main/appctl/tools';
+import type { ChatSummary } from '../../src/shared/contract';
+import type { BrainService, BrowserService, ChatService } from '../../src/main/services';
+const folders: string[] = [];
+afterEach(() => { for (const folder of folders.splice(0)) fs.rmSync(folder, { recursive: true, force: true }); });
+function setup() {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'flow-runtime-')); folders.push(folder);
+  const a = path.join(folder, 'a'), b = path.join(folder, 'b'); fs.mkdirSync(a); fs.mkdirSync(b);
+  let root: string | null = a;
+  const rows = [{ id: 'o', isOrchestrator: true }] as ChatSummary[];
+  const events: unknown[] = [];
+  const runtime = createFlowRuntime({ userData: folder, brainRoot: () => root, chats: () => rows, changed: value => events.push(value) });
+  return { runtime, rows, a, b, events, switchBrain: (value: string | null) => { root = value; } };
+}
+describe('flow host boundaries', () => {
+  it('starts empty, isolates brains and updates live hints without touching brain files', () => {
+    const s = setup(), first = s.runtime.service();
+    expect(first.snapshot().versions).toEqual([]);
+    expect(s.runtime.hint('fix', 'o')).toContain('Catalogo vuoto');
+    first.propose({ expectedRevision: 0, definition: { id: 'custom', title: 'Custom', description: 'User definition', aliases: ['custom'], scope: {}, steps: [{ id: 'gate', title: 'Gate', kind: 'approval', instructions: 'Confirm', inputs: [], evidence: [], timeoutMs: 1000, maxAttempts: 1, effect: 'read-only' }] } });
+    first.decideDefinition({ id: 'custom', expectedRevision: 1, answer: 'yes' });
+    expect(s.runtime.hint('custom', 'o')).toContain('"id":"custom"');
+    s.switchBrain(s.b);
+    expect(s.runtime.service().snapshot().drafts).toEqual([]);
+    expect(s.runtime.service().snapshot().contextKey).not.toBe(first.snapshot().contextKey);
+    s.switchBrain(s.a); expect(s.runtime.service()).toBe(first);
+    expect(fs.readdirSync(s.a)).toEqual([]);
+    s.switchBrain(null); expect(() => s.runtime.service()).toThrow(/brain/);
+  });
+  it('exposes flow tools only to a live Orchestrator and rechecks authentication on every call', () => {
+    const s = setup();
+    const deps = { flows: s.runtime, chats: { list: () => s.rows } as ChatService, brain: {} as BrainService, browser: {} as BrowserService, window: () => null, emitUi: () => {}, version: '0' };
+    expect(appControlTools(deps).some(t => t.name.startsWith('app_flow_'))).toBe(false);
+    const tools = appControlTools(deps, 'o');
+    expect(tools.some(t => t.name === 'app_flow_start')).toBe(true);
+    expect(tools.some(t => /app_flow_.*(approve|decide|activate)/.test(t.name))).toBe(false);
+    const list = tools.find(t => t.name === 'app_flow_list')!;
+    expect(list.run({})).toMatchObject({ drafts: [], runs: [] });
+    s.rows[0]!.closedAt = 1;
+    expect(() => list.run({})).toThrow(/Authenticated/);
+  });
+  it.each([false, true])('accepts fresh canonical reports, requiring success for independent review=%s', review => {
+    const s = setup(), service = s.runtime.service();
+    const definition = { id: 'reviewed', title: 'Reviewed', description: 'User defined', aliases: ['reviewed'], scope: {}, steps: [{ id: 'work', title: 'Work', kind: 'agent' as const, instructions: 'Do work', workspaceInput: 'repo', inputs: ['repo'], evidence: ['result'], timeoutMs: 10000, maxAttempts: 2, effect: 'code' as const }] };
+    service.propose({ definition, expectedRevision: 0 }); service.decideDefinition({ id: definition.id, expectedRevision: 1, answer: 'yes' });
+    s.rows.push({ id: 'worker', run: { runId: 'fresh', taskVersion: 1, ...(review ? { reviewOf: 'implementation' } : {}), scope: { brainRoot: s.a, projectRoot: s.a } } } as ChatSummary);
+    const run = service.start({ flowId: definition.id, flowVersion: 1, subjectKey: 'subject', scope: {}, inputs: { repo: s.a } }, 'o');
+    const bound = service.bindAgent(run.id, run.revision, 'work', s.runtime.resolveBinding('worker', 'o', s.a)!, 'o');
+    const report = { at: 100, via: 'agent_report', outcome: 'done', verified: 'yes', verdict: (review ? 'partial' : 'fail') as string | undefined, blocking: 0, summary: 'Report', canonical: { runId: 'fresh', taskVersion: 1, outcome: 'done', doneWhen: [{ criterion: 'result', met: true, evidence: 'verified output' }] } };
+    s.rows[1]!.run!.report = report as unknown as NonNullable<ChatSummary['run']>['report'];
+    const completion = { runId: run.id, expectedRevision: bound.revision, stepId: 'work', reportId: 'fresh:100' };
+    expect(() => service.report(completion, 'o')).toThrow(/host-linked/);
+    report.verdict = review ? 'success' : undefined;
+    expect(service.report(completion, 'o').status).toBe('completed');
+    expect(s.runtime.resolveBinding('worker', 'o', s.a)).toBeNull();
+  });
+  it('rejects agent binding from another brain, delegated child, or changed task run', () => {
+    const s = setup();
+    s.rows.push({ id: 'w', run: { runId: 'r', taskVersion: 2, scope: { brainRoot: s.b, projectRoot: s.a } } } as ChatSummary);
+    expect(s.runtime.resolveBinding('w', 'o', s.a)).toBeNull();
+    s.rows[1]!.run!.scope!.brainRoot = s.a;
+    expect(s.runtime.resolveBinding('w', 'o', s.a)).toEqual({ chatId: 'w', chatRunId: 'r', taskVersion: 2 });
+    expect(s.runtime.resolveBinding('w', 'o', s.b)).toBeNull();
+    s.rows[1]!.run!.endedAt = 1; expect(s.runtime.resolveBinding('w', 'o', s.a)).toBeNull();
+    delete s.rows[1]!.run!.endedAt;
+    s.rows[1]!.parentId = 'parent'; expect(s.runtime.resolveBinding('w', 'o', s.a)).toBeNull();
+    expect(s.runtime.resolveBinding('w', 'missing', s.a)).toBeNull();
+  });
+});

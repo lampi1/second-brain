@@ -1,3 +1,4 @@
+import { flowsDe } from './areas/flows.de';
 import { suggestDe } from './areas/suggest.de';
 import { appTextDe } from './areas/app-text.de';
 import { brainTextDe } from './areas/brain-text.de';
@@ -52,6 +53,7 @@ import { setupDe } from './areas/setup.de';
 import { viewerOverlayDe } from './areas/viewer-overlay.de';
 
 export const de: Dict = {
+  ...flowsDe,
   ...learningReviewDe,
   ...auditDe,
   ...auditExpressionsDe,

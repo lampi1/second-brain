@@ -25,12 +25,13 @@ import { preloadEngine } from './map/engine';
 import { brainClient } from './api';
 import { DiscussContext, type DiscussBridge } from './components/Discuss';
 import { t } from '../i18n';
+const Flows = lazy(() => import('./pages/Flows').then(module => ({ default: module.Flows })));
 const Home = lazy(() => import('./pages/Home').then(module => ({ default: module.Home })));
 export type { DiscussBridge };
 export type { LiveSnapshot, LiveSource, LiveTool } from './lib/live';
 export { FADE_MS } from './lib/live';
 
-export type BrainPageId = 'home' | 'task' | 'fatto' | 'idee' | 'costi' | 'qualita' | 'apprendimento' | 'script' | 'log' | 'confronto' | 'file' | 'skill' | 'impostazioni' | 'agenti' | 'guida' | 'browser' | 'regole' | 'memoria' | 'classificatori' | 'collegamenti';
+export type BrainPageId = 'home' | 'flussi' | 'task' | 'fatto' | 'idee' | 'costi' | 'qualita' | 'apprendimento' | 'script' | 'log' | 'confronto' | 'file' | 'skill' | 'impostazioni' | 'agenti' | 'guida' | 'browser' | 'regole' | 'memoria' | 'classificatori' | 'collegamenti';
 
 /** label is a getter (ADR 0057): read at use time, so it follows the current language */
 const page = (id: BrainPageId, key: string): { id: BrainPageId; readonly label: string; key: string } => ({ id, key, get label() { return id==='file'?t('viewer.title'):t(`brainPages.nav.${id}`); } });
@@ -38,6 +39,7 @@ export const BRAIN_PAGES: { id: BrainPageId; readonly label: string; key: string
   page('home', 'G H'),
   page('agenti', 'G A'),
   page('task', 'G O'),
+  page('flussi', 'G U'),
   page('fatto', 'G F'),
   // Idee, Skill, Regole, Script and Apprendimento are tabs of Memoria (ADR 0122): their ids, keys and links stay and land
   // on the tab (actions.ts go() → lib/memory-hub.ts); the sidebar no longer lists them
@@ -105,6 +107,7 @@ export function BrainPage({ id, arg, onNavigate, bridge }: { id: BrainPageId; ar
   let page: ReactNode;
   switch (cur.id) {
     case 'home': page = <Suspense fallback={null}><Home nav={nav} /></Suspense>; break;
+    case 'flussi': page = <Suspense fallback={null}><Flows /></Suspense>; break;
     case 'fatto': page = <Fatto arg={cur.arg} nav={nav} />; break;
     case 'idee': page = <Idee arg={cur.arg} nav={nav} />; break;
     case 'costi': page = <Costi arg={cur.arg} nav={nav} />; break;

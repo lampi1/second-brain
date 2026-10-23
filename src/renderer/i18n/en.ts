@@ -1,3 +1,4 @@
+import { flowsEn } from './areas/flows.en';
 import { appTextEn } from './areas/app-text.en';
 import { brainTextEn } from './areas/brain-text.en';
 import { learningReviewEn } from './areas/learning-review.en';
@@ -52,6 +53,7 @@ import { setupEn } from './areas/setup.en';
 import { viewerOverlayEn } from './areas/viewer-overlay.en';
 
 export const en: Dict = {
+  ...flowsEn,
   ...learningReviewEn,
   ...auditEn,
   ...auditExpressionsEn,
