@@ -39,6 +39,7 @@ import { settingsDe } from './areas/settings.de';
 import { profileDe } from './areas/profile.de';
 import { homeDe } from './areas/home.de';
 import { guideDe } from './areas/guide.de';
+import { pbrowserDe } from './areas/pbrowser.de';
 import { treeDe } from './areas/tree.de';
 import { aliveDe } from './areas/alive.de';
 import { queriesDe } from './areas/queries.de';
@@ -64,6 +65,7 @@ export const de: Dict = {
   ...homeDe,
   ...cloudDe,
   ...guideDe,
+  ...pbrowserDe,
   ...treeDe,
   ...aliveDe,
   ...queriesDe,
