@@ -25,6 +25,4 @@ export interface AutoClosePresence {
   queued: number;
   /** Compatibility field name: opaque positive interaction sequence, not wall-clock authority. */
   touchedAt: number;
-  ackDeadline?: number;
-  ackGeneration?: number;
 }

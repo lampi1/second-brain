@@ -17,7 +17,7 @@ it('handles malformed startup data without inventing empty status or authorizing
   const off=connectAutoClose({get:async()=>null as unknown as AutoCloseStatus[],presence,keep:async()=>{},listen:()=>()=>{}});
   await Promise.resolve();await Promise.resolve();
   expect(autoCloseState.get()).toEqual([row]);expect(autoCloseProblem.get()).toContain('sospesa');
-  reportAutoClosePresence([{chatId:'a',draft:false,shown:false,browser:false,queued:0,touchedAt:0,ackDeadline:121000,ackGeneration:1}]);
+  reportAutoClosePresence([{chatId:'a',draft:false,shown:false,browser:false,queued:0,touchedAt:0}]);
   expect(presence).toHaveBeenLastCalledWith([{chatId:'a',draft:false,shown:true,browser:false,queued:0,touchedAt:0}]);off();
 });
 it('reports rejected startup reads and accepts a later valid recovery event',async()=>{

@@ -1,10 +1,11 @@
-// Main-owned automatic archive scheduler. Requires fresh presence, current backend guards, and 120 seconds of
-// acknowledged warning; no renderer fade or stale deadline can authorize closure. Clock/IO are injected for tests.
+// Main-owned automatic archive scheduler. Requires fresh presence (or the window hidden: nobody can type or look), current
+// backend guards, and a 120-second warning. The warning runs whether or not the user sees it (owner, 2026-10-23: «di
+// default le chat finite si chiudessero»): a closed chat comes back from Ctrl+K «Chiuse». Clock/IO are injected for tests.
 import type { AutoClosePresence, AutoCloseStatus, AutoCloseWaiting } from '../../shared/auto-close';
 
 export const AUTO_CLOSE_WARNING_MS = 120_000;
 export const PRESENCE_LEASE_MS = 15_000;
-/** Epoch-shaped monotonic clock: wall-clock adjustments cannot shorten leases or the acknowledged warning. */
+/** Epoch-shaped monotonic clock: wall-clock adjustments cannot shorten leases or the warning. */
 export const autoCloseNow = (): number => performance.timeOrigin + performance.now();
 export interface AutoCloseCandidate {
   id: string;
@@ -33,6 +34,9 @@ export interface AutoCloseDeps {
    * pending/browser state. Return false on cancellation. Never start a model turn to auto-archive. */
   archive: (chatId: string, reservation: AutoCloseReservation, stillValid: () => boolean) => Promise<boolean>;
   emit: (status: AutoCloseStatus[]) => void;
+  /** The app window is hidden or minimized: a stale presence keeps its last holds instead of suspending the close
+   *  (a hidden renderer's timers are throttled, its 15-second lease would always lapse). */
+  away?: () => boolean;
   initialKeptOpen?: readonly string[];
   saveKeptOpen?: (ids: string[]) => void;
 }
@@ -65,15 +69,6 @@ export class AutoCloseService {
       // Changed positive hints (including a renderer restart) can only extend a hold. Backend time never moves back.
       const touchedAt = rendererTouch !== (previous?.rendererTouch ?? 0) ? now : previous?.touchedAt ?? 0;
       this.presence.set(p.chatId, { ...p, touchedAt, rendererTouch, receivedAt: now });
-      const e = this.entries.get(p.chatId);
-      if (e && e.status.warningStartedAt !== null && e.status.deadline !== null && (p.ackDeadline !== e.status.deadline || p.ackGeneration !== e.status.generation)) {
-        // The warning disappeared behind a modal, scroll or a hidden window: its visible interval must start again.
-        e.status.warningStartedAt = null; e.status.deadline = now + AUTO_CLOSE_WARNING_MS; e.status.generation = this.nextGeneration++;
-      }
-      if (e && !p.draft && !p.shown && !p.browser && e.status.warningStartedAt === null && p.ackDeadline === e.status.deadline && p.ackGeneration === e.status.generation && e.status.deadline !== null && e.status.deadline - now <= AUTO_CLOSE_WARNING_MS) {
-        e.status.warningStartedAt = now;
-        e.status.deadline = Math.max(e.status.deadline, now + AUTO_CLOSE_WARNING_MS);
-      }
     }
     this.refresh();
   }
@@ -95,12 +90,14 @@ export class AutoCloseService {
     if (!(this.d.delayMs() > 0) || !Number.isFinite(this.d.delayMs())) return 'Chiusura automatica disattivata';
     if (!c.eligible || !Number.isFinite(c.activityAt)) return c.reason || 'Lavoro o attività da completare';
     const p = this.presence.get(c.id);
-    if (!p || now - p.receivedAt >= PRESENCE_LEASE_MS || now < p.receivedAt) return 'Presenza non aggiornata: chiusura sospesa';
+    if (!p || now < p.receivedAt) return 'Presenza non aggiornata: chiusura sospesa';
+    if (now - p.receivedAt >= PRESENCE_LEASE_MS && !this.away()) return 'Presenza non aggiornata: chiusura sospesa';
     if (p.draft) return 'Bozza in composizione';
     if (p.queued > 0) return 'Messaggi in coda';
     if (p.shown || p.browser) return 'Agente o browser in uso';
     return null;
   }
+  private away(): boolean { try { return this.d.away?.() === true; } catch { return false; } }
   private cancel(e: Entry, reason: string): void {
     if (e.status.deadline !== null || e.status.reason !== reason) e.status.generation = this.nextGeneration++;
     e.status.deadline = null; e.status.warningStartedAt = null; e.status.reason = reason; e.fingerprint = null;
@@ -125,6 +122,8 @@ export class AutoCloseService {
         e.fingerprint = fingerprint;
         e.status = { chatId: c.id, generation: this.nextGeneration++, keptOpen: false, deadline: Math.max(Math.min(c.activityAt, now) + this.d.delayMs(), p.touchedAt + this.d.delayMs(), now + AUTO_CLOSE_WARNING_MS), warningStartedAt: null, reason: null, clockAt: now };
       }
+      // the countdown shows on its tile and in the corner list from here on
+      if (e.status.deadline !== null && e.status.warningStartedAt === null && e.status.deadline - now <= AUTO_CLOSE_WARNING_MS) e.status.warningStartedAt = now;
     }
     this.emit();
   }
@@ -142,9 +141,6 @@ export class AutoCloseService {
       // waits a new warning, so a child is never left on screen without its parent
       const open = this.d.candidates(), self = open.find(c => c.id === s.chatId);
       if (self?.tree !== undefined && open.some(c => c.tree === self.tree && (c.depth ?? 0) > (self.depth ?? 0))) {
-        s.deadline = now + AUTO_CLOSE_WARNING_MS; s.warningStartedAt = null; s.generation = this.nextGeneration++; this.emit(); continue;
-      }
-      if (s.warningStartedAt === null || now - s.warningStartedAt < AUTO_CLOSE_WARNING_MS) {
         s.deadline = now + AUTO_CLOSE_WARNING_MS; s.warningStartedAt = null; s.generation = this.nextGeneration++; this.emit(); continue;
       }
       const candidate = this.d.candidates().find(c => c.id === s.chatId);

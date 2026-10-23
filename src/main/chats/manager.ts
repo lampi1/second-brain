@@ -242,6 +242,9 @@ export function turnReply(items: readonly ChatItem[]): string {
 export const workBehind = (s: Pick<ChatSummary, 'background' | 'waitsOnWork' | 'work'>): boolean => (s.background ?? 0) > 0 || !!s.waitsOnWork || !!s.work && s.work.status !== 'completed';
 
 /** The scheduler's reason for each waiting kind (Italian, as its other reasons; the tile shows its own label). */
+const storedResult = (x: { at: number; isError: boolean; interrupted?: boolean } | undefined): Pick<StoredChat, 'lastResult'> =>
+  x ? { lastResult: { at: x.at, isError: x.isError, ...(x.interrupted ? { interrupted: true as const } : {}) } } : {};
+
 export const WAITING_REASON: Record<AutoCloseWaiting, string> = {
   answer: 'In attesa di una tua risposta', permission: 'In attesa di un tuo permesso', command: 'In attesa di un tuo comando',
   user: 'In attesa dell’utente', colleagues: 'In attesa dei colleghi', work: 'In attesa del lavoro in corso',
@@ -364,6 +367,10 @@ interface Rec {
   /** a turn is running (persisted): set when the CLI reports running/waiting, cleared by its result, a CLI exit
    *  while the app runs, or an archive; still set after a quit or crash = resume it on the next start */
   working?: boolean;
+  /** its engine ended with an error or mid-turn (persisted): not finished, never closed by itself; cleared by a result */
+  unfinished?: boolean;
+  /** the last result saved before a restart (ADR 0134): read by the auto-close only, the summary starts without one */
+  savedResult?: { at: number; isError: boolean; interrupted?: boolean };
   /** close the session when this turn ends, so the next message reopens it (Cursor: the new --model; a former Orchestrator:
    *  without the app-control tools) */
   reopen?: boolean;
@@ -1181,19 +1188,33 @@ export class ChatManager implements ChatService {
 
   private ownAutoCloseCandidates(externalHold: (chatId: string) => boolean | AutoCloseWaiting): AutoCloseCandidate[] {
     return [...this.chats.values()].filter(r => !r.s.closedAt).map(r => {
-      const c = r.s, child = c.agentChildren;
+      const c = r.s;
       let held: boolean | AutoCloseWaiting = true;
       try { held = externalHold(c.id); } catch { /* fail closed */ }
-      const eligible = !this.quitting && !updateActivity.frozen && !c.isOrchestrator && !c.quick && !held &&
-        (c.state === 'idle' || r.autoClosing && c.state === 'closed') && !!c.lastResult && !c.lastResult.isError && !c.lastResult.interrupted && !c.lastError &&
+      // finished: idle after a clean result, or its engine gone (ended by itself, or restored at start-up with its saved
+      // result; a chat saved before results were saved counts as done when it had turns). Errors, the user's Stop and an
+      // engine gone mid-turn stay open.
+      const ended = c.state === 'closed' && (!r.session || r.autoClosing);
+      const finished = (c.state === 'idle' || ended) && !c.lastError &&
+        !r.unfinished && ((result => result ? !result.isError && !result.interrupted : ended && !r.session && r.lastTurnAt > 0)(c.lastResult ?? r.savedResult));
+      const eligible = !this.quitting && !updateActivity.frozen && !c.isOrchestrator && !c.quick && !held && finished &&
         !r.working && !r.session?.busy && r.pending.size === 0 && !workBehind(c) && !c.waitsOn && c.plan?.phase !== 'proposed' && !c.queued && !r.deliveryHolds &&
-        !r.opening && !r.releasing && !r.switching && !r.handoffTurn && (!r.archiving || r.autoClosing) &&
-        child?.coverage === 'complete' && child.active === 0 && !child.children.some(x => x.state === 'running' || x.state === 'waiting' || x.state === 'unknown');
+        !r.opening && !r.releasing && !r.switching && !r.handoffTurn && (!r.archiving || r.autoClosing) && this.childrenDone(r);
       const waitingFor = eligible || c.isOrchestrator || c.quick ? undefined : this.waitingOf(r, held);
       return { id: c.id, eligible: !!eligible, stamp: `${r.activityRevision ?? 0}:${r.lastTurnAt}:${c.lastResult?.at ?? 0}:${c.pending}:${c.model ?? ''}:${c.work?.status ?? ''}:${c.waitsOn ?? ''}`,
         activityAt: r.autoActivityAt ??= autoCloseNow(), ...(waitingFor ? { waitingFor } : {}),
-        reason: waitingFor ? WAITING_REASON[waitingFor] : child?.coverage !== 'complete' ? 'Sottoagenti non completamente osservabili: chiusura sospesa' : 'Attività o stato da verificare' };
+        reason: waitingFor ? WAITING_REASON[waitingFor] : !this.childrenDone(r) ? 'Sottoagenti ancora al lavoro' : 'Attività o stato da verificare' };
     });
+  }
+  /** No sub-agent left at work. The CLI engines (Claude, Codex, Cursor) never report a complete census, so a live
+   *  session counts what it saw: every sub-agent it observed has ended (its background tasks are held apart, `background`).
+   *  An engine that is gone left none running (its sub-agents ended with it; rows it never saw end read 'unknown'). */
+  private childrenDone(r: Rec): boolean {
+    const child = r.s.agentChildren;
+    if (!r.session) return (child?.active ?? 0) === 0 && !child?.children.some(x => x.state === 'running' || x.state === 'waiting');
+    if (!child) return false;
+    if (child.coverage === 'complete' && child.active !== 0) return false;
+    return !child.children.some(x => x.state === 'running' || x.state === 'waiting' || x.state === 'unknown');
   }
 
   /** What a held work chat waits for, the most urgent first (#86): the user's answers before running work, running
@@ -2550,6 +2571,7 @@ export class ChatManager implements ChatService {
     r.ctxSince ??= item.at;
     this.recordTurnEnd(r);
     r.s.lastResult = { at: item.at, isError: item.isError, ...(item.interrupted ? { interrupted: true } : {}) };
+    r.unfinished = false;
     // "Aspetto la QA…": its work still runs, whatever the engine counts (shared/waiting.ts, the chats of 2026-10-16)
     if (waitsForWork(lastAnswer(r.items))) r.s.waitsOnWork = true; else delete r.s.waitsOnWork;
     // the agent's run-report, if this turn ends with one (the latest wins; a turn without one keeps the last); a run
@@ -2933,6 +2955,7 @@ export class ChatManager implements ChatService {
         ...(c.parentId ? { parentId: c.parentId } : {}),
         ...(c.delegation ? { delegation: c.delegation } : {}),
         ...(c.plan ? { plan: c.plan } : {}),
+        ...(c.waitsOn ? { waitsOn: c.waitsOn } : {}), ...(c.waitsOnWork ? { waitsOnWork: true } : {}),
       },
       createdAt: c.createdAt,
       agentInstructions: c.agentInstructions ?? '',
@@ -2952,6 +2975,7 @@ export class ChatManager implements ChatService {
       ...(c.userWaits ? { userWaits: true } : {}),
       ...(c.autoCompleted ? { autoCompleted: true } : {}),
       working: c.working === true, ...(c.heldResults?.length ? { heldResults: c.heldResults } : {}),
+      ...(c.unfinished ? { unfinished: true } : {}), ...(c.lastResult ? { savedResult: c.lastResult } : {}),
       items: [], pending: new Map(), session: null, historyLoaded: false,
       jobNew: false, firstPrompt: null, turnSinceDone: false, // a restored chat continues a job begun in an earlier run
       lastTurnAt: c.lastTurnAt ?? 0,
@@ -2992,6 +3016,9 @@ export class ChatManager implements ChatService {
       ...(r.s.continuedFrom ? { continuedFrom: r.s.continuedFrom } : {}), ...(r.s.continuedBy ? { continuedBy: r.s.continuedBy } : {}),
       ...(r.s.closedAt ? { closedAt: r.s.closedAt, closedBy: r.s.closedBy ?? 'auto' } : {}),
       ...(r.working ? { working: true as const } : {}),
+      ...storedResult(r.s.lastResult ?? r.savedResult),
+      ...(r.s.waitsOn ? { waitsOn: r.s.waitsOn } : {}), ...(r.s.waitsOnWork ? { waitsOnWork: true as const } : {}),
+      ...(r.unfinished ? { unfinished: true as const } : {}),
       ...(r.userTaskEvents ? { userTaskEvents: r.userTaskEvents } : {}),
       ...(r.heldResult ? { heldResult: r.heldResult } : {}),
       ...(r.rootReportAt ? { rootReportAt: r.rootReportAt } : {}),
@@ -3243,7 +3270,9 @@ export class ChatManager implements ChatService {
     // the role text is in the context only when this very session resumes (a fork of an external one never had it)
     if (!resume || fork || !r.rolePrimed || r.rolePrimed.session !== sessionId) r.rolePrimed = undefined;
     r.roleChecked = false;
-    const past = resume ? r.children?.snapshot() : undefined;
+    // the previous engine's sub-agents it never saw end ('unknown') died with it: a new engine cannot settle them
+    const before = resume ? r.children?.snapshot() : undefined;
+    const past = before ? { ...before, children: before.children.filter(x => x.state !== 'unknown') } : undefined;
     r.children = new AgentChildrenReducer(past);
     r.children.coverage(engine.kind === 'api' ? 'complete' : 'unknown');
     r.s.agentChildren = r.children.snapshot();
@@ -3460,6 +3489,8 @@ export class ChatManager implements ChatService {
         delete r.s.background; // its background tasks died with it
         // died mid-turn with an error while the app runs: no result will come, so no onDone either; tell the brain now
         const crashed = !!error && r.working && !this.quitting;
+        // gone with an error, or by itself in the middle of a turn: its work is not finished (no auto-close, ADR 0134)
+        if (!this.quitting && (error || (r.working && !r.autoEnding && !r.releasing && !r.archiving))) r.unfinished = true;
         if (!this.quitting) r.working = false; // a crash while the app runs shows as an error, it is not resumed later
         if (error) r.s.lastError = error;
         if (error) delete r.s.resumedAt; // a resume that failed is no "ripresa": the error shows alone

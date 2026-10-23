@@ -98,14 +98,13 @@ describe('main automatic archive reservations', () => {
     expect(f.m.releaseIdle(1, Date.now() + 60_000)).toBe(0);
     expect(f.close).not.toHaveBeenCalled();
   });
-  it('closes through the real scheduler reservation after a continuous acknowledged warning', async () => {
+  it('closes through the real scheduler reservation after its two-minute warning', async () => {
     const f = fixture(), c = await f.m.create({ harness: 'anthropic', cwd: f.dir, model: 'known', prompt: 'First' });
     let clock = autoCloseNow();
     const scheduler = new AutoCloseService({ now: () => clock, delayMs: () => 1, candidates: () => f.m.autoCloseCandidates(() => false), archive: (id, _permit, valid) => f.m.archiveAutomatic(id, valid), emit() {} });
     scheduler.setPresence([{ chatId: c.id, draft: false, shown: false, browser: false, queued: 0, touchedAt: 0 }]);
     for (let i = 0; i <= 12; i++) {
-      const row = scheduler.state()[0]!;
-      scheduler.setPresence([{ chatId: c.id, draft: false, shown: false, browser: false, queued: 0, touchedAt: 0, ackGeneration: row.generation, ackDeadline: row.deadline ?? undefined }]);
+      scheduler.setPresence([{ chatId: c.id, draft: false, shown: false, browser: false, queued: 0, touchedAt: 0 }]);
       if (i < 12) clock += 10_000;
     }
     await scheduler.tick();
@@ -145,12 +144,58 @@ describe('main automatic archive reservations', () => {
     expect(f.m.pending().map(p => p.id)).toContain('new-question');
     expect(f.m.list()[0]?.closedAt).toBeUndefined();
   });
-  it('does not close unknown provider children, incomplete work or main holds', async () => {
+  it('closes a finished CLI chat without a full child census, never one with a sub-agent at work or a main hold', async () => {
     const f = fixture('codex'), c = await f.m.create({ harness: 'codex', cwd: f.dir, prompt: 'First' });
     expect(f.m.list()[0]?.agentChildren?.coverage).toBe('unknown');
-    expect(await f.m.archiveAutomatic(c.id, () => true)).toBe(false);
-    expect(f.close).not.toHaveBeenCalled();
     expect(f.m.autoCloseCandidates(() => true)[0]?.eligible).toBe(false);
+    f.sink().children?.({ key: 'agent:one', nativeId: 'one', toolCallId: null, parentNativeId: null, kind: 'agent', state: 'running', task: 'Sub', observedAt: Date.now(), source: 'live' });
+    expect(f.m.autoCloseCandidates(() => false)[0]).toMatchObject({ eligible: false, waitingFor: 'work' });
+    expect(await f.m.archiveAutomatic(c.id, () => true)).toBe(false);
+    f.sink().children?.({ key: 'agent:one', nativeId: 'one', toolCallId: null, parentNativeId: null, kind: 'agent', state: 'completed', task: 'Sub', observedAt: Date.now() + 1, source: 'live' });
+    expect(f.m.autoCloseCandidates(() => false)[0]?.eligible).toBe(true);
+    expect(await f.m.archiveAutomatic(c.id, () => true)).toBe(true);
+    expect(f.m.list()[0]?.closedBy).toBe('auto');
+  });
+  it('closes a finished chat restored at start-up (its result is not saved), never an errored, interrupted or unused one', async () => {
+    const f = fixture('claude'), done = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'First' });
+    const empty = await f.m.create({ harness: 'claude', cwd: f.dir });
+    await f.m.shutdown();
+    const r = fixture('claude', { userData: f.dir });
+    expect(r.m.list().find(x => x.id === done.id)?.state).toBe('closed');
+    const eligible = (id: string) => r.m.autoCloseCandidates(() => false).find(x => x.id === id)?.eligible;
+    expect(eligible(done.id)).toBe(true);
+    expect(eligible(empty.id)).toBe(false);
+    expect(await r.m.archiveAutomatic(done.id, () => true)).toBe(true);
+    expect(r.m.list().find(x => x.id === done.id)?.closedBy).toBe('auto');
+    const g = fixture('claude'), failed = await g.m.create({ harness: 'claude', cwd: g.dir, prompt: 'First' });
+    g.sink().item({ kind: 'result', id: 'rx', at: Date.now(), isError: true, costUsd: 0, durationMs: 1, turns: 1 }, false);
+    expect(g.m.autoCloseCandidates(() => false).find(x => x.id === failed.id)?.eligible).toBe(false);
+    // its saved result goes through the restart: still not finished
+    await g.m.shutdown();
+    const g2 = fixture('claude', { userData: g.dir });
+    expect(g2.m.autoCloseCandidates(() => false).find(x => x.id === failed.id)?.eligible).toBe(false);
+  });
+  it('keeps a chat open after a restart when its engine died mid-turn or its answer waits for the user', async () => {
+    const f = fixture('claude'), cut = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'First' });
+    f.sink().changed({ state: 'running' }); f.sink().exit({ code: 0, error: null });
+    expect(f.m.autoCloseCandidates(() => false).find(x => x.id === cut.id)?.eligible).toBe(false);
+    const asks = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'First' });
+    (f.m as unknown as { chats: Map<string, { s: ChatSummary }> }).chats.get(asks.id)!.s.waitsOn = 'user';
+    await f.m.shutdown();
+    const r = fixture('claude', { userData: f.dir });
+    const row = (id: string) => r.m.autoCloseCandidates(() => false).find(x => x.id === id);
+    expect(row(cut.id)?.eligible).toBe(false);
+    expect(row(asks.id)).toMatchObject({ eligible: false, waitingFor: 'user' });
+  });
+  it('drops the sub-agents a previous engine never saw end when the chat resumes, so it can close again', async () => {
+    const f = fixture('claude'), c = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'First' });
+    f.sink().children?.({ key: 'agent:ghost', nativeId: 'ghost', toolCallId: null, parentNativeId: null, kind: 'agent', state: 'running', task: 'Ghost', observedAt: Date.now(), source: 'live' });
+    await f.m.shutdown();
+    const r = fixture('claude', { userData: f.dir });
+    expect(r.m.list().find(x => x.id === c.id)?.agentChildren?.children[0]?.state).toBe('unknown');
+    await r.m.send(c.id, 'Again');
+    expect(r.m.list().find(x => x.id === c.id)?.agentChildren?.children).toEqual([]);
+    expect(r.m.autoCloseCandidates(() => false).find(x => x.id === c.id)?.eligible).toBe(true);
   });
   it('does not cancel its own close when a verified-empty provider reports exit bookkeeping', async () => {
     const f = fixture('claude'), c = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'First' });
