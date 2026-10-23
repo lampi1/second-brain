@@ -19,8 +19,12 @@ Auto-close was on by default (2 minutes), yet finished chats piled up. Three cau
    `running`, `waiting` or `unknown`; a complete census also needs `active === 0`). Its background tasks stay held
    apart (`background`, `waitsOnWork`). An engine that is gone left nothing running: only `running`/`waiting` rows hold.
    A foreground Claude `Agent`/`Task` call ends `completed` with its result unless a native task took it over.
-2. **Ended and restored chats count as finished** when they had turns (`lastTurnAt > 0`), no error, nothing pending or
-   queued; their clock starts at start-up, so they get the full delay and warning.
+2. **Ended and restored chats count as finished** when their last result was clean and nothing waits. `chats.json` now
+   keeps `lastResult`, `waitsOn`, `waitsOnWork` and `unfinished` (the engine ended with an error or in the middle of a
+   turn), so an error, a Stop, «Vuoi che proceda?» or «Aspetto la QA…» stay open across a restart. A chat saved before
+   this (no saved result) counts as finished when it had turns. The saved result feeds only the auto-close
+   (`Rec.savedResult`); the summary still starts without one. Their clock starts at start-up (full delay and warning).
+   On resume, the sub-agent rows the previous engine never saw end (`unknown`) are dropped: they died with it.
 3. **The warning runs whether or not it is seen.** The notice still shows on the strip and in the corner list with
    «Resta aperto»; any touch, draft, focus or queued message still stops it. With the window hidden or minimized
    (`away`) a stale presence keeps its last holds instead of suspending the close. The renderer no longer sends

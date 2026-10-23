@@ -170,6 +170,32 @@ describe('main automatic archive reservations', () => {
     const g = fixture('claude'), failed = await g.m.create({ harness: 'claude', cwd: g.dir, prompt: 'First' });
     g.sink().item({ kind: 'result', id: 'rx', at: Date.now(), isError: true, costUsd: 0, durationMs: 1, turns: 1 }, false);
     expect(g.m.autoCloseCandidates(() => false).find(x => x.id === failed.id)?.eligible).toBe(false);
+    // its saved result goes through the restart: still not finished
+    await g.m.shutdown();
+    const g2 = fixture('claude', { userData: g.dir });
+    expect(g2.m.autoCloseCandidates(() => false).find(x => x.id === failed.id)?.eligible).toBe(false);
+  });
+  it('keeps a chat open after a restart when its engine died mid-turn or its answer waits for the user', async () => {
+    const f = fixture('claude'), cut = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'First' });
+    f.sink().changed({ state: 'running' }); f.sink().exit({ code: 0, error: null });
+    expect(f.m.autoCloseCandidates(() => false).find(x => x.id === cut.id)?.eligible).toBe(false);
+    const asks = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'First' });
+    (f.m as unknown as { chats: Map<string, { s: ChatSummary }> }).chats.get(asks.id)!.s.waitsOn = 'user';
+    await f.m.shutdown();
+    const r = fixture('claude', { userData: f.dir });
+    const row = (id: string) => r.m.autoCloseCandidates(() => false).find(x => x.id === id);
+    expect(row(cut.id)?.eligible).toBe(false);
+    expect(row(asks.id)).toMatchObject({ eligible: false, waitingFor: 'user' });
+  });
+  it('drops the sub-agents a previous engine never saw end when the chat resumes, so it can close again', async () => {
+    const f = fixture('claude'), c = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'First' });
+    f.sink().children?.({ key: 'agent:ghost', nativeId: 'ghost', toolCallId: null, parentNativeId: null, kind: 'agent', state: 'running', task: 'Ghost', observedAt: Date.now(), source: 'live' });
+    await f.m.shutdown();
+    const r = fixture('claude', { userData: f.dir });
+    expect(r.m.list().find(x => x.id === c.id)?.agentChildren?.children[0]?.state).toBe('unknown');
+    await r.m.send(c.id, 'Again');
+    expect(r.m.list().find(x => x.id === c.id)?.agentChildren?.children).toEqual([]);
+    expect(r.m.autoCloseCandidates(() => false).find(x => x.id === c.id)?.eligible).toBe(true);
   });
   it('does not cancel its own close when a verified-empty provider reports exit bookkeeping', async () => {
     const f = fixture('claude'), c = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'First' });
