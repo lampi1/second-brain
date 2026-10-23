@@ -18,7 +18,7 @@
   filter:blur(8px);animation:mh-drift 18s ease-in-out infinite alternate}
 @keyframes mh-drift{from{transform:translate(0,0) scale(1)}to{transform:translate(-14%,10%) scale(1.12)}}
 .mh-hero-top{display:flex;align-items:flex-start;gap:20px;justify-content:space-between;flex-wrap:wrap}
-.mh-hero-text{flex:1;min-width:280px}
+.mh-hero-text{flex:1;min-width:min(280px,100%);overflow-wrap:anywhere}
 .mh-eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:10px;letter-spacing:.16em;text-transform:uppercase;font-weight:650;color:var(--text-3)}
 .mh-live{flex:none;width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 0 color-mix(in srgb,var(--green) 55%,transparent);animation:mh-beat 2.4s ease-out infinite}
 @keyframes mh-beat{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--green) 55%,transparent)}70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}
@@ -51,15 +51,14 @@ button.mh-pulse:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .mh-activity li>button:hover{background:var(--surface-2);color:var(--text)}
 .mh-activity li[data-undone=true] .mh-activity-what{text-decoration:line-through;color:var(--text-4)}
 .mh-activity .bm-tag{flex:none}
-.mh-activity-what{flex:1;min-width:0;font-size:var(--fs-s);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mh-activity-what{flex:1;min-width:0;font-size:var(--fs-s);white-space:normal;overflow-wrap:anywhere;line-height:1.45}
 .mh-activity time{flex:none;font-size:var(--fs-xs);color:var(--text-4);font-variant-numeric:tabular-nums}
 .mh-activity-empty{margin:0;font-size:var(--fs-s);color:var(--text-3);line-height:1.5}
 
 /* ── the tab bar ── */
 .mh-tabs-wrap{position:sticky;top:0;z-index:5;margin:16px 0 0;padding:8px 0;background:linear-gradient(var(--bg) 70%,transparent)}
-.mh-tabs{position:relative;display:flex;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:2px;padding:4px;width:max-content;max-width:100%;box-sizing:border-box;
+.mh-tabs{position:relative;display:flex;flex-wrap:wrap;gap:2px;padding:4px;width:100%;max-width:100%;box-sizing:border-box;
   border:1px solid var(--border);border-radius:14px;background:var(--surface);box-shadow:0 10px 30px -24px #000}
-.mh-tabs::-webkit-scrollbar{display:none}
 .mh-tabs>button{position:relative;z-index:1;flex:none;appearance:none;display:inline-flex;align-items:center;gap:7px;padding:8px 13px;border:0;border-radius:10px;background:transparent;
   font:inherit;font-size:var(--fs-s);font-weight:500;color:var(--text-3);white-space:nowrap;cursor:pointer;transition:color 180ms,background 180ms}
 .mh-tabs>button:hover{color:var(--text)}
@@ -112,11 +111,11 @@ button.mh-pulse:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .mh-row:hover{background:color-mix(in srgb,var(--surface-3) 60%,transparent)}
 .mh-row-dot{flex:none;width:6px;height:6px;border-radius:50%;background:var(--tone);opacity:.8}
 .mh-row-main{flex:1;min-width:0;display:grid;gap:1px}
-.mh-row-name{appearance:none;justify-self:start;max-width:100%;padding:0;border:0;background:none;font:inherit;font-size:var(--fs-m);font-weight:600;color:var(--text);text-align:left;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mh-row-name{appearance:none;justify-self:start;max-width:100%;padding:0;border:0;background:none;font:inherit;font-size:var(--fs-m);font-weight:600;color:var(--text);text-align:left;cursor:pointer;white-space:normal;overflow-wrap:anywhere;line-height:1.45}
 b.mh-row-name{cursor:default}
 .mh-row-name code{font-family:var(--mono);font-size:12.5px}
 button.mh-row-name:hover{color:var(--blue);text-decoration:underline;text-underline-offset:3px}
-.mh-row-main small{font-size:var(--fs-xs);color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mh-row-main small{font-size:var(--fs-xs);color:var(--text-3);white-space:normal;overflow-wrap:anywhere;line-height:1.45}
 .mh-row-when{flex:none;font-size:var(--fs-xs);color:var(--text-4);font-variant-numeric:tabular-nums}
 .mh-trash{flex:none;appearance:none;display:inline-grid;place-items:center;width:30px;height:30px;border-radius:8px;border:1px solid transparent;background:transparent;color:var(--text-4);cursor:pointer;
   opacity:.55;transition:opacity var(--dur),color var(--dur),background var(--dur),border-color var(--dur),transform 160ms var(--ease)}
@@ -183,9 +182,8 @@ button.mh-row-name:hover{color:var(--blue);text-decoration:underline;text-underl
 
 /* ── narrow windows ── */
 @container mh (max-width:1020px){.mh-hero-bottom{grid-template-columns:1fr}}
-/* one row always (a sticky second row would cover the cards): no icons and tighter tabs when narrow, then it scrolls */
-@container mh (max-width:1060px){.mh-tab-icon{display:none}.mh-tabs>button{padding:8px 9px;gap:5px}
-  .mh-tabs{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent)}}
+/* Wrap every tab into view beside the Orchestrator; never hide destinations behind a fade. */
+@container mh (max-width:1060px){.mh-tab-icon{display:none}.mh-tabs>button{padding:8px 9px;gap:5px}}
 @container mh (max-width:600px){.mh-groups{grid-template-columns:1fr}}
 @container mh (max-width:760px){.mh-split{grid-template-columns:1fr 1fr}.mh-split-side{grid-column:1/-1;flex-direction:row;flex-wrap:wrap}}
 @container mh (max-width:560px){.mh-split{grid-template-columns:1fr}}

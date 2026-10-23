@@ -131,3 +131,32 @@ test('Memoria hub: live top, tabs with keys and deep links, old G-keys, trash wi
     await shot(page, 'hub-idee-ia-light');
   } finally { await app.close(); }
 });
+
+// Regression: a narrow center pane must expose every tab and complete approved-memory text.
+// Authored for the normal E2E run on main; do not run as part of this branch fix.
+test('Memoria keeps all tabs and long approved entries readable in a narrow pane', async () => {
+  const { app, page } = await launchDemo({ height: 900, width: 1200, env: { SB_BRAIN: fixtureBrain() } });
+  try {
+    await page.getByTestId('nav-memoria').click();
+    const mem = page.getByTestId('bm-memory-page');
+    await mem.evaluate(el => { el.style.width = '580px'; el.style.maxWidth = '100%'; });
+    await page.getByTestId('mh-tab-approvate').click();
+    const bar = page.getByTestId('mh-tabs');
+    await expect.poll(() => bar.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+    for (const id of TABS) {
+      await expect(page.getByTestId(`mh-tab-${id}`)).toBeVisible();
+      expect(await page.getByTestId(`mh-tab-${id}`).evaluate(el => {
+        const box = el.getBoundingClientRect(), parent = el.parentElement!.getBoundingClientRect();
+        return box.left >= parent.left && box.right <= parent.right && box.bottom <= parent.bottom;
+      })).toBe(true);
+    }
+    const row = mem.locator('.mh-row-name').first();
+    await expect(row).toBeVisible();
+    await row.evaluate(el => { (el.querySelector('code') ?? el).textContent = 'Una regola con un nome molto lungo che deve restare leggibile '.repeat(3); });
+    await expect.poll(() => row.evaluate(el => el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= el.clientHeight + 1)).toBe(true);
+    await shot(page, 'hub-narrow-approved-unclipped');
+    await page.getByTestId('mh-tab-statistiche').click();
+    await expect(mem).toHaveAttribute('data-tab', 'statistiche');
+    await shot(page, 'hub-narrow-unclipped');
+  } finally { await app.close(); }
+});

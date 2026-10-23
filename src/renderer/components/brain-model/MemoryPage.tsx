@@ -235,7 +235,11 @@ function TabBar({ tab, onTab }: { tab: HubTab; onTab: (tab: HubTab) => void }) {
     };
     place();
     const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(place) : null;
-    if (bar.current) ro?.observe(bar.current);
+    if (bar.current) {
+      ro?.observe(bar.current);
+      // Counts and translated labels can reflow tabs without changing the bar's size.
+      bar.current.querySelectorAll('button').forEach(button => ro?.observe(button));
+    }
     return () => ro?.disconnect();
   }, [tab, counts.skill, counts.idee, counts.script, counts.approvate]);
   const key = (e: KeyboardEvent, i: number) => {
