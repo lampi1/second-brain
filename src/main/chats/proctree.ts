@@ -15,6 +15,7 @@ import { errText, log } from '../log';
 import { etimeSeconds } from '../platform';
 import { killTrees } from './cli';
 import { jobGuard, type JobMember } from './jobguard';
+import { listLinuxProcesses } from './linux-procs';
 
 export interface Proc { pid: number; ppid: number; /** creation time, ms since epoch */ created: number; /** image name, e.g. node.exe */ name?: string }
 
@@ -105,6 +106,9 @@ export function listProcesses(timeoutMs = 90000): Promise<Proc[] | null> {
       } else {
         // etime, not etimes: macOS's BSD ps has no etimes (platform.ts etimeSeconds, ADR 0054)
         execFile('ps', ['-A', '-o', 'pid=,ppid=,pgid=,etime=,comm='], { encoding: 'utf8', timeout: timeoutMs }, (err, stdout) => {
+          // A parent-mounted /proc can make procps reject its own PID inside a namespace. Read and map only our
+          // exact namespace in that case; never use the host PIDs exposed by that mount as kill targets.
+          if (err && process.platform === 'linux') { void listLinuxProcesses().then(resolve); return; }
           done(err, psToList(String(stdout ?? ''), Date.now(), true));
         });
       }
