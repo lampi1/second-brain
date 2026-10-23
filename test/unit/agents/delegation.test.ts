@@ -1069,4 +1069,10 @@ describe('two open chats with the same title (#187)', () => {
     const live = new ChatMail({ root: () => null, chats: { list: () => f.m.list().map(x => ({ ...x, state: 'idle' as const })), send: async () => {} }, instance: 'test' }).liveChats();
     expect([...live.values()].map(x => x.id).sort()).toEqual([a.id, b.id, c.id].sort());
   });
+  it('children started at once with one title still get distinct titles', async () => {
+    const f = fixture({}, undefined, undefined, undefined, {}, [], { suggestSkills: async () => { await new Promise(r => setTimeout(r, 20)); return []; } });
+    const parent = await f.root('strategist');
+    const out = await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Log'), f.task('scout', 'Ordini · Log')] });
+    expect(out.children.map((c: { title: string }) => c.title).sort()).toEqual(['Ordini · Log', 'Ordini · Log · 2']);
+  });
 });

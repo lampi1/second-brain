@@ -707,9 +707,10 @@ export class ChatManager implements ChatService {
     const old = req.orchestrator && req.replaces ? this.chats.get(req.replaces) : undefined;
     if (req.orchestrator && req.replaces && !old?.s.isOrchestrator) throw new Error('L’Orchestrator da sostituire non c’è più.');
     const typedTitle = req.title?.trim() || (req.prompt?.trim() ? cut(req.prompt, 50) : forkOf ? 'Fork' : 'Nuova chat');
-    // every open chat with a given title keeps its own mail box (mail.ts: box = slug of the title); a placeholder
-    // («Nuova chat», «Fork») is replaced by the session's own title later; the Orchestrator's is handled below
-    const title = req.orchestrator || !req.title?.trim() ? typedTitle : this.uniqueTitle(typedTitle);
+    // every open chat keeps its own mail box (mail.ts: box = slug of the title, #187); a placeholder («Nuova chat»,
+    // «Fork») is checked when the session's own title replaces it; the Orchestrator's below, Flash is one of a kind
+    const uniqueOk = !req.orchestrator && !req.quick && (!!req.title?.trim() || !!req.prompt?.trim());
+    const title = uniqueOk ? this.uniqueTitle(typedTitle) : typedTitle;
     // an agent's chat with a prompt starts with its first message, through the CPU queue (ADR 0036); a warm engine is
     // already running: adopting it is no new start (its first turn still asks the queue)
     const given = req.prompt?.trim() ? req.prompt : null;
@@ -769,6 +770,8 @@ export class ChatManager implements ChatService {
     }
     // the Orchestrator opened it while answering the user's own message: the user waits for what it finds (#123)
     if (by === 'agent' && !delegator && r.s.run?.startedBy === 'orchestrator') r.userWaits = this.orchestratorAnswering();
+    // checked again where the chat joins the list: chats created at once (agent_delegate's children) awaited in between
+    if (uniqueOk) r.s.title = this.uniqueTitle(r.s.title);
     this.chats.set(id, r);
     if (r.s.isOrchestrator) { this.restoreRootNotices(); this.resumeRootSyntheses(); for (const worker of this.chats.values()) if (worker.heldResult && !this.midTurn(worker)) this.releaseResult(worker); }
     if (old) {
@@ -3109,7 +3112,7 @@ export class ChatManager implements ChatService {
       if (!r.s.lastText && h.lastText) r.s.lastText = h.lastText;
       // the CLI restores a session's spend on resume (2.1.277+): its total is the baseline for per-turn costs
       if (h.costTotalUsd !== null && !r.costTotalUsd) r.costTotalUsd = h.costTotalUsd;
-      if (h.title && (r.s.title === 'Nuova chat' || r.s.title === 'Fork')) r.s.title = r.forkFrom ? `${h.title} (fork)` : h.title;
+      if (h.title && (r.s.title === 'Nuova chat' || r.s.title === 'Fork')) r.s.title = this.uniqueTitle(r.forkFrom ? `${h.title} (fork)` : h.title, r.s.id);
       log.info('chats', 'history loaded', { chat: r.s.id, data: { items: h.items.length, file: path.basename(file) } });
     } catch (e) {
       log.warn('chats', 'history not readable', { chat: r.s.id, data: { file, error: errText(e) } });
