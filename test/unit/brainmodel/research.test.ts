@@ -141,6 +141,7 @@ describe('ResearchService', () => {
     expect(bug).toMatchObject({ kind: 'app-bug', logKey: 'k1', chatId: null });
     expect(bug.issue!.body).not.toContain('/home/user');
     expect(t.svc.brainCards().map(c => c.forget?.name)).toEqual(['old-one']);
+    expect(t.applied).toEqual([]); // Finding an obsolete skill never authorizes deleting it.
   });
 
   it('lets a research rewrite the log step\'s card of the same group', async () => {
@@ -158,6 +159,7 @@ describe('ResearchService', () => {
     await t.svc.start(opts);
     const { id } = t.svc.propose('c1', { kind: 'rule', title: 'Check the port', adds: 'Dev server on 5173.', why: 'Asked 4 times.', change: { text: 'Dev server runs on 5173.' } });
     expect(t.svc.brainCards().map(c => c.id)).toEqual([id]);
+    expect(t.applied).toEqual([]); // Research proposes exact text; only the following user decision applies it.
     expect(t.svc.approve(id)).toBe('chg-1');
     expect(t.svc.store.get(id)).toMatchObject({ state: 'approved', changeId: 'chg-1' });
     expect(() => t.svc.approve(id)).toThrow(/non più aperta/);

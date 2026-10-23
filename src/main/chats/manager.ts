@@ -33,7 +33,7 @@ import { cliVersion, killTrees, killTreesWithin, resolveClaude } from './cli';
 import { reapAfterQuit, reapEnabled, reapEngine, snapshotTrees } from './proctree';
 import { jobGuard } from './jobguard';
 import { AFTER_CALLS, CACHE_TTL_MS, coldArmed, coldRoute, continuityStep, type ColdView, ORCHESTRATOR_COMPACT, ORCHESTRATOR_PAUSE_COMPACT, romeDay } from './continuity';
-import { autoHandoff, coldPrompt, continuePrompt, extractHandoff, HANDOFF_END, HANDOFF_START, handoffRequest, HandoffStore, nextTitle } from './handoff';
+import { autoHandoff, coldPrompt, contextBudgetDue, continuePrompt, FRESH_HANDOFF_MARK, FRESH_IDLE_MS, protectedHandoff, extractHandoff, HANDOFF_END, HANDOFF_START, handoffRequest, HandoffStore, nextTitle } from './handoff';
 import { ContextCounters } from './context-stats';
 
 /** The app's own message to a chat whose turn a restart cut (resumeInterrupted). */
@@ -149,7 +149,7 @@ export interface ChatManagerOptions {
   /** ms after a new Claude chat (or the app's start) before the next waiting engine starts (default 5 s / 20 s) */
   prewarmDelayMs?: number;
   /** the CPU-aware queue (ADR 0036): agents' starts and turns wait while the machine is busy; absent = never wait */
-  admission?: { sampler: LoadSampler; limits: () => AdmissionLimits; tickMs?: number; autoTick?: boolean };
+  admission?: { priority?: (key: string) => number; sampler: LoadSampler; limits: () => AdmissionLimits; tickMs?: number; autoTick?: boolean };
   /** custom session factory (tests, future engines) */
   sessionFactory?: (harness: Harness, opts: SessionOptions, sink: SessionSink) => HarnessSession;
 
@@ -180,6 +180,13 @@ export interface ChatManagerOptions {
   compactWindowTokens?: () => number;
   /** the invisible continuation of cold chats (ADR 0031; default off here, wiring reads the setting) */
   coldHandoff?: () => boolean;
+  /** Idle-only budget-based engine freshness; does not infer quality degradation. Default off. */
+  freshSessions?: () => boolean;
+  /** Host-owned preparation sees the final narrowed policy before any delegated engine can start. */
+  prepareDelegation?: (parent: ChatSummary, req: NewChat, policy: AgentPolicy | null, continuationOf?: string) => Promise<{ cwd: string; parentRunId: string | undefined; parentTaskVersion: number | undefined; bind?: (childId: string) => void }>;
+  /** Unabridged authoritative workflow state, including decisions and unanswered context. Empty = no linked
+   *  workflow; null or an exception = unsafe to continue, so retain the current engine. */
+  continuationContext?: (chatId: string) => string | null;
   /** «Orchestrators corte» (ADR 0051): an Orchestrator with a context from an earlier day compacts it once on a new day (default off
    *  here, wiring reads the setting orchestratorDayCompact) */
   orchestratorDayCompact?: () => boolean;
@@ -382,6 +389,16 @@ interface Rec {
   /** the saved hand-off is a cold note written at this time (persisted): a message after the cache expired goes on
    *  in a fresh session from it */
   coldNoteAt?: number | undefined;
+  /** Previous session's archived note must reach the new engine before this marker is cleared (persisted). */
+  continuationPending?: string | undefined;
+  /** Deduplicates diagnostic deferrals for one session and reason; not an inferred quality score. */
+  freshDeferred?: string | undefined;
+  /** Exact request scope and user decisions, private to this chat; never shared through user-event tools. */
+  continuationDecisions?: string | undefined;
+  /** A text note cannot preserve an evicted history item or an image input; persist this conservative blocker. */
+  continuityUnsafe?: true;
+  /** Only this newly assigned run may cross a previously checked idle boundary before its first submission. */
+  freshAssignmentRun?: string | undefined;
   /** the lastTurnAt the cold note was asked for (once per idle stretch, even when it failed) */
   coldAskedFor?: number | undefined;
   /** when the context in force began: the first real turn since the session start or the last compaction (persisted) */
@@ -415,7 +432,7 @@ interface Rec {
 /** A cold switch in flight (coldSwitch → ensureSession → coldDone / coldUndo): the note, the old session, what to restore. */
 interface ColdStep {
   h: HandoffInfo; old: string | null; at: number; idleMin: number; notePath: string;
-  prev: { forkFrom: Rec['forkFrom']; costTotalUsd: Rec['costTotalUsd']; contextTokens: number | undefined; contextMaxTokens: number | undefined; coldNoteAt: number | undefined; after: Rec['after'] };
+  prev: { forkFrom: Rec['forkFrom']; costTotalUsd: Rec['costTotalUsd']; contextTokens: number | undefined; contextMaxTokens: number | undefined; coldNoteAt: number | undefined; after: Rec['after']; ctxSince: Rec['ctxSince'] };
 }
 
 /** The divider of a cold continuation (ADR 0031): the same id live and when the history is read again. */
@@ -636,7 +653,7 @@ export class ChatManager implements ChatService {
 
   /** links = the run links an Orchestrator tool sets (A7): refused before anything starts when one names an unknown run. */
   /** by: who asks; 'app' = one of the app's own jobs (the Judge's sampled reviews): like an agent, its run says startedBy 'app' */
-  async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user', inherited?: { owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links: RunLinks = {}, opts: { boundByOrchestrator?: boolean; continuation?: boolean } = {}): Promise<ChatSummary> {
+  async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user', inherited?: { owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links: RunLinks = {}, opts: { boundByOrchestrator?: boolean; continuation?: boolean; continuationOf?: string } = {}): Promise<ChatSummary> {
     const createdT0 = Date.now();
     this.deliveryPolicy(req.deliveryPolicy, !!req.parentId);
     if (req.doneWhen && (req.doneWhen.length > 12 || req.doneWhen.some(x => typeof x !== 'string' || !x.trim() || x.length > 300))) throw new Error('Invalid task criteria.');
@@ -689,6 +706,19 @@ export class ChatManager implements ChatService {
     // default is every permission, the mount is any local process)
     const policy = delegator ? narrowest(belowParent(agent.policy, delegator.policy, this.modeFor(delegator)), req.delegation?.tools ? { tools: { allow: req.delegation.tools }, ceiling: null } : null)
       : narrowest(agent.policy, parent === bound && bound ? narrowest(bound.policy, FAIL_CLOSED) : parent?.policy);
+    let bindDelegation: ((childId: string) => void) | undefined;
+    if (delegator && this.opts.prepareDelegation) {
+      const parentPermissions = JSON.stringify({ policy: delegator.policy, mode: this.modeFor(delegator) });
+      const prepared = await this.opts.prepareDelegation(structuredClone(delegator.s), req, policy, opts.continuationOf);
+      if (delegator.s.closedAt || delegator.s.run?.endedAt !== undefined || delegator.s.run?.report?.via === 'agent_report' || delegator.s.delegation?.result || delegator.s.run?.runId !== prepared.parentRunId || delegator.s.run?.taskVersion !== prepared.parentTaskVersion) throw new Error('Parent assignment changed while preparing isolation.');
+      if (parentPermissions !== JSON.stringify({ policy: delegator.policy, mode: this.modeFor(delegator) })) throw new Error('Parent permissions changed while preparing isolation.');
+      req = { ...req, cwd: prepared.cwd };
+      bindDelegation = id => {
+        if (delegator.s.closedAt || delegator.s.run?.endedAt !== undefined || delegator.s.run?.report?.via === 'agent_report' || delegator.s.delegation?.result || delegator.s.run?.runId !== prepared.parentRunId || delegator.s.run?.taskVersion !== prepared.parentTaskVersion
+          || parentPermissions !== JSON.stringify({ policy: delegator.policy, mode: this.modeFor(delegator) })) throw new Error('Parent assignment or permissions changed before delegation started.');
+        prepared.bind?.(id);
+      };
+    }
     // an explicit mode above the agent's ceiling runs at the ceiling (the chat shows the mode it really has)
     if (policy && req.permissionMode && aboveCeiling(req.permissionMode, policy.ceiling)) req = { ...req, permissionMode: policy.ceiling! };
     const engine = engineOrThrow(req.harness);
@@ -779,15 +809,20 @@ export class ChatManager implements ChatService {
       items: [], pending: new Map(), session: null, historyLoaded: false,
       jobNew: true, firstPrompt: null, turnSinceDone: false, lastTurnAt: 0,
     };
+    const runGoal = req.goal ?? prompt ?? title;
+    const suggestFor = agent.owner.source === 'catalog' && !req.orchestrator ? suggestInput(runGoal) : null;
+    let suggested: string[] | undefined;
+    if (suggestFor && this.opts.suggestSkills) {
+      try { suggested = await this.opts.suggestSkills(suggestFor); }
+      catch (e) { log.warn('chats', 'skill suggestion snapshot unavailable', { cause: errText(e), hint: 'the launch continues without a suggestion snapshot' }); }
+    }
+    // Finish every await and bind live delegation authority before a durable child run exists.
+    bindDelegation?.(id);
     if (agent.owner.source === 'catalog' && !req.orchestrator) this.startRun(r, { agentId: agent.owner.id, version: agent.owner.version ?? 1, goal: req.goal ?? prompt ?? title, startedBy: delegator ? 'parent' : by === 'app' ? 'app' : by === 'agent' ? 'orchestrator' : 'user', costKnown: caps.cost, ...links,
       tags: { ...asked, repo: repoOf(cwd) }, ...(agent.tier ? { tier: agent.tier } : {}), model: req.model ?? null });
     if (r.s.run) { r.s.run.taskContract = { ...(by === 'app' && req.doneWhen !== undefined ? { reportExpected: true } : {}), goal: r.s.run.goal, doneWhen: req.doneWhen ?? req.delegation?.doneWhen ?? [], deliveryPolicy: this.deliveryPolicy(req.deliveryPolicy, !!delegator) }; this.runSave(); }
     if (r.s.run?.startedBy === 'app' && r.s.run.reviewOf && r.s.run.taskContract?.reportExpected && !r.s.work) r.s.work = { status: 'assigned', updatedAt: now };
-    const suggestFor = suggestInput(r.s.run?.goal);
-    if (r.s.run && suggestFor && this.opts.suggestSkills) {
-      try { r.s.run.skillSuggestions = { at: now, suggested: await this.opts.suggestSkills(suggestFor), used: [] }; this.runSave(); }
-      catch (e) { log.warn('chats', 'skill suggestion snapshot unavailable', { cause: errText(e), hint: 'the launch continues without a suggestion snapshot' }); }
-    }
+    if (r.s.run && suggested) { r.s.run.skillSuggestions = { at: now, suggested, used: [] }; this.runSave(); }
     // the Orchestrator opened it while answering the user's own message: the user waits for what it finds (#123)
     if (by === 'agent' && !delegator && r.s.run?.startedBy === 'orchestrator') r.userWaits = this.orchestratorAnswering();
     // checked again where the chat joins the list: chats created at once (agent_delegate's children) awaited in between
@@ -1024,7 +1059,9 @@ export class ChatManager implements ChatService {
     this.addItem(r, { kind: 'user', id: nextId('u'), at: Date.now(), text: t, ...(imgs.length ? { images: imgs.length } : {}), ...(thumbs.length ? { thumbs } : {}), ...(from ? { from: from.slice(0, 80) } : {}) }, false);
     r.activeAt = Date.now();
     if (r.jobNew) this.startJob(r, t || `[${imgs.length} immagini]`);
-    const text0 = cold ? coldPrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, cold.h, t) : t;
+    const continuation = cold?.h ?? (r.continuationPending ? this.handoffs.read(r.s.id, r.continuationPending) : null);
+    if (r.continuationPending && !continuation) throw new Error('Passaggio di consegne non disponibile: ripristina la nota prima di continuare.');
+    const text0 = continuation ? coldPrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, continuation, t) : t;
     // what the user wrote in its children since its last message rides along (shown in its transcript already)
     const notes = this.notesFor.get(chatId);
     if (notes?.length) this.notesFor.delete(chatId);
@@ -1057,6 +1094,7 @@ export class ChatManager implements ChatService {
       receipt?.beforeSubmit();
       r.session.send(`${role}${warning}${body}${hint}${langHint}`, imgs);
       receipt?.submitted();
+      if (r.continuationPending) { r.continuationPending = undefined; this.persist(true); }
       log.info('chats', 'timing: before send', { chat: r.s.id, data: { totalMs: Date.now() - t0, ...lap, engineStarted: !hadEngine, cold: !!cold, harness: r.s.harness } });
       if (langHint) { r.replyLang = wantLang; if (!role) this.persist(); }
       if (lampo) r.lampoSeen = { session: r.session, cursor: lampo.seen }; // seen only once it went
@@ -1268,6 +1306,12 @@ export class ChatManager implements ChatService {
     const req = r.pending.get(requestId)!;
     const ok = r.session.answer(requestId, answer);
     if (!ok) { this.dropPending(r, requestId); return; }
+    // Full request scope stays private (ADR 0083); shared user events carry only the user's own choices/words.
+    const decision = JSON.stringify({ requestId, title: req.title, detail: req.detail, questions: req.questions ?? [], answer });
+    r.continuationDecisions = r.continuationDecisions ? `${r.continuationDecisions}\n${decision}` : decision;
+    this.persist(true);
+    if (answer.kind === 'question') this.userWrote(chatId, JSON.stringify({ requestId, answers: Object.values(answer.answers) }));
+    else this.userWrote(chatId, JSON.stringify({ requestId, allow: answer.allow, ...(answer.message ? { message: answer.message } : {}) }));
     // a Strategist still asking: the answer is one more thing its strip shows as already clear (ADR 0108)
     const plan = r.s.plan;
     if (plan && (plan.phase === 'asking' || plan.phase === 'revising') && answer.kind === 'question' && req.questions?.length) {
@@ -1503,12 +1547,15 @@ export class ChatManager implements ChatService {
       if (source.kind !== 'chat' || source.chatId !== r.s.parentId || !plan || !['running', 'done'].includes(plan.phase) || !Number.isSafeInteger(options.planStep) || !plan.steps[options.planStep]) throw new Error('Invalid or unapproved parent plan step.');
     }
     if (this.midTurn(r) || r.pending.size || r.s.queued || r.opening || r.releasing || r.switching || r.archiving || this.deliveries.has(chatId)) throw new Error('The chat is busy or has queued work; wait before assigning another task.');
+    const freshBoundary = this.freshReady(r, Date.now());
     this.beginAssignment(r, prompt, options);
+    if (freshBoundary) r.freshAssignmentRun = r.s.run?.runId;
     if (options.mode === 'new-task' && r.s.plan) prompt += `\n\n${STRATEGY_FLOW}`;
     if (options.planStep !== undefined && r.s.parentId) this.planDelegated(r.s.parentId, options.planStep, [chatId]);
     if (source.kind === 'chat' && r.userTaskEvents) { r.userTaskEvents.acknowledgedSeq = r.userTaskEvents.latestSeq; this.persist(true); this.updated(r); }
     const from = source.kind === 'chat' ? this.need(source.chatId).s.title : source.kind === 'app' ? 'App' : undefined;
-    await this.send(chatId, prompt, undefined, false, from, false, source);
+    try { await this.send(chatId, prompt, undefined, false, from, false, source); }
+    finally { r.freshAssignmentRun = undefined; }
   }
 
   private beginAssignment(r: Rec, prompt: string, options: TaskAssignmentOptions): void {
@@ -1783,7 +1830,7 @@ export class ChatManager implements ChatService {
       prompt: `${opts.promptPrefix ? `${opts.promptPrefix}\n\n` : ''}${continuePrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, h)}`,
       ...(parentRec ? { parentId: parentRec.s.id, ...(r.s.delegation ? { delegation: structuredClone(r.s.delegation) } : {}) } : {}),
     }, 'user', { owner: r.s.agent ?? plainOwner(r.s.harness, r.choice.model), instructions: r.agentInstructions ?? '', policy: r.policy ?? null, assets: r.agentAssets, ...(r.skills ? { skills: [...r.skills] } : {}), ...(r.maxContext ? { maxContext: r.maxContext } : {}) },
-    {}, { continuation: !!parentRec });
+    {}, { continuation: !!parentRec, continuationOf: r.s.id });
     const nr = this.chats.get(c.id);
     // the worktree hint follows the chain (A → B → C)
     if (nr) { nr.s.continuedFrom = { id: r.s.id, title: r.s.title }; if (r.inWorktree) nr.inWorktree = true; this.updated(nr); }
@@ -1816,6 +1863,45 @@ export class ChatManager implements ChatService {
   private coldOn(): boolean { return !!this.opts.coldHandoff?.(); }
   private ttl(): number { return this.opts.cacheTtlMs ?? CACHE_TTL_MS; }
 
+  /** Budget freshness uses the existing auto-close observed-idle boundary for live Claude, not a fictitious
+   *  complete census. Running/waiting/unknown observations and app/background work still block. The older cache
+   *  expiry path keeps its stricter complete-census guard. Recheck all guards at delivery. */
+  private freshWorkBehind(r: Rec): boolean {
+    const justAssigned = r.freshAssignmentRun && r.s.run?.runId === r.freshAssignmentRun && r.s.work?.status === 'assigned';
+    return (r.s.background ?? 0) > 0 || !!r.s.waitsOnWork || (!!r.s.work && r.s.work.status !== 'completed' && !justAssigned);
+  }
+
+  private freshReady(r: Rec, now: number): boolean {
+    return !!this.opts.freshSessions?.() && r.s.harness === 'claude' && !r.s.isOrchestrator && !r.s.quick
+      && !r.s.closedAt && !r.s.continuedBy && r.s.state === 'idle' && !r.working && !r.session?.busy
+      && !r.pending.size && !r.commandsOpen?.size && !r.handoffTurn && !r.archiving && !r.autoClosing && !r.releasing && !r.opening && !r.s.queued && (r.deliveryHolds ?? 0) <= 1
+      && !r.askedParentAt && !this.freshWorkBehind(r) && !r.s.waitsOn && r.s.plan?.phase !== 'proposed'
+      && !r.unfinished && !r.s.lastError && !!r.s.lastResult && !r.s.lastResult.isError && !r.s.lastResult.interrupted
+      && r.s.agentChildren?.coverage !== 'unknown' && this.childrenDone(r) && !this.observedChildrenBusy(r)
+      && !!r.lastTurnAt && now - r.lastTurnAt >= FRESH_IDLE_MS && contextBudgetDue(r.s);
+  }
+
+  /** Deterministic state, rebuilt immediately before switching so an intervening user decision cannot go stale. */
+  private freshHandoff(r: Rec): HandoffInfo | null {
+    this.ensureHistory(r);
+    // Never assume evicted history or image context can be reconstructed from a partial text note.
+    if (r.continuityUnsafe || r.userTaskEvents?.latestSeq === Number.MAX_SAFE_INTEGER || (!r.s.run?.taskContract && !r.items.some(i => i.kind === 'user'))) return null;
+    let workflow: string | null;
+    try { workflow = this.opts.continuationContext?.(r.s.id) ?? null; } catch { return null; }
+    if (workflow === null) return null;
+    const text = protectedHandoff(r.s, r.items, {
+      chatId: r.s.id, cwd: r.s.cwd, parentId: r.s.parentId, delegation: r.s.delegation,
+      run: r.s.run, userEvents: r.userTaskEvents, plan: r.s.plan, privateDecisions: r.continuationDecisions,
+      // Keep visible messages absent from the event ledger (e.g. original delegated assignment) and their provenance.
+      messages: r.items.filter(i => i.kind === 'user'),
+    }, workflow);
+    if (!text) return null;
+    const info = this.handoffs.write(r.s.id, { title: r.s.title, text, at: Date.now(), source: 'auto', ...(r.s.contextTokens !== undefined ? { contextTokens: r.s.contextTokens } : {}) });
+    r.s.handoffAt = info.at; r.s.handoffSource = info.source; r.coldNoteAt = info.at;
+    this.persist(); this.updated(r);
+    return info;
+  }
+
   private coldView(r: Rec): ColdView {
     return {
       harness: r.s.harness, isOrchestrator: r.s.isOrchestrator, continuedBy: r.s.continuedBy,
@@ -1837,6 +1923,16 @@ export class ChatManager implements ChatService {
     let n = 0;
     for (const r of this.chats.values()) {
       if ((r.deliveryHolds ?? 0) > 0 || this.observedChildrenBusy(r)) continue;
+      if (this.freshReady(r, now)) {
+        const existing = this.handoffs.read(r.s.id);
+        if (existing?.text.startsWith(FRESH_HANDOFF_MARK) && existing.at >= r.lastTurnAt) continue;
+        if (this.freshHandoff(r)) { n++; continue; }
+      }
+      if (this.opts.freshSessions?.() && contextBudgetDue(r.s) && now - r.lastTurnAt >= FRESH_IDLE_MS) {
+        const reason = this.freshReady(r, now) ? 'protected-context-unavailable-or-too-large' : 'chat-not-idle-or-unsettled-work';
+        const key = `${r.s.sessionId}:${reason}`;
+        if (r.freshDeferred !== key) { r.freshDeferred = key; log.info('chats', 'fresh session deferred', { chat: r.s.id, data: { reason, coverage: r.s.agentChildren?.coverage ?? 'unknown' } }); }
+      }
       const v = this.coldView(r);
       const step = continuityStep({ ...v, ctxSince: r.ctxSince, askedOn: r.dayCompactOn }, now, { cold: on, day, idleMs: idle, ttlMs: this.ttl() });
       if (step === 'note') { n++; void this.coldNote(r); continue; }
@@ -1904,31 +2000,43 @@ export class ChatManager implements ChatService {
    *  goes on as usual. A second message meanwhile waits for the switch. */
   private async coldSwitch(r: Rec): Promise<ColdStep | null> {
     if (r.switching) { await r.switching; return null; }
-    if (!this.coldOn() || this.unsettledChildren(r) || !coldRoute(this.coldView(r), Date.now(), this.ttl())) return null;
-    const h = this.handoffs.read(r.s.id);
-    if (!h || h.source !== 'chat' || h.at < r.lastTurnAt) { r.coldNoteAt = undefined; return null; }
+    const fresh = this.freshReady(r, Date.now());
+    if (!fresh && (!this.coldOn() || this.unsettledChildren(r) || !coldRoute(this.coldView(r), Date.now(), this.ttl()))) return null;
+    let h = fresh ? this.freshHandoff(r) : this.handoffs.read(r.s.id);
+    if (!h || (!fresh && h.source !== 'chat') || h.at < r.lastTurnAt) { r.coldNoteAt = undefined; return null; }
     const run = (async (): Promise<ColdStep | null> => {
       if (r.releasing) await r.releasing;
-      if (this.unsettledChildren(r) || !coldRoute(this.coldView(r), Date.now(), this.ttl())) return null;
+      if (fresh ? !this.freshReady(r, Date.now()) : this.unsettledChildren(r) || !coldRoute(this.coldView(r), Date.now(), this.ttl())) return null;
       const revision = r.activityRevision;
       if (r.session) {
         r.autoEnding = true;
         try { await this.closeKeeping(r, r.session); } finally { r.autoEnding = false; }
       }
-      if (r.activityRevision !== revision || this.unsettledChildren(r) || r.pending.size > 0 || workBehind(r.s)) return null;
+      if (r.activityRevision !== revision || (fresh ? !this.childrenDone(r) || this.observedChildrenBusy(r) || !!r.s.lastError : this.unsettledChildren(r)) || r.pending.size > 0 || r.commandsOpen?.size || (fresh ? this.freshWorkBehind(r) : workBehind(r.s))) return null;
+      // Closing can await provider teardown while a workflow decision changes; use the latest durable snapshot.
+      if (fresh) { h = this.freshHandoff(r); if (!h) return null; }
       const now = Date.now(), old = r.s.sessionId;
+      if (!h) return null;
       const step: ColdStep = {
         h, old, at: now, idleMin: Math.round((now - Math.max(r.lastTurnAt, r.coldNoteAt ?? 0)) / 60000),
-        prev: { forkFrom: r.forkFrom, costTotalUsd: r.costTotalUsd, contextTokens: r.s.contextTokens, contextMaxTokens: r.s.contextMaxTokens, coldNoteAt: r.coldNoteAt, after: r.after },
+        prev: { forkFrom: r.forkFrom, costTotalUsd: r.costTotalUsd, contextTokens: r.s.contextTokens, contextMaxTokens: r.s.contextMaxTokens, coldNoteAt: r.coldNoteAt, after: r.after, ctxSince: r.ctxSince },
         notePath: isUuid(old) ? this.handoffs.archive(r.s.id, old) : h.path,
       };
+      // Never commit a new session without its immutable recovery note (the best-effort archive may fail).
+      if (isUuid(old)) {
+        const archived = this.handoffs.read(r.s.id, old);
+        if (!archived || archived.at !== h.at || archived.text !== h.text) return null;
+      }
       if (isUuid(old)) { (r.pastSessions ??= []).push({ sessionId: old, at: now, notePath: step.notePath }); r.pastSessions.splice(0, Math.max(0, r.pastSessions.length - 20)); }
       r.s.sessionId = crypto.randomUUID();
+      // Durable before the new engine starts. A send/start failure or process restart must never lose the handoff.
+      if (isUuid(old)) r.continuationPending = old;
       delete r.forkFrom;
       r.costTotalUsd = 0; // the new session's own running total starts from zero
       delete r.s.contextTokens; delete r.s.contextMaxTokens;
-      r.coldNoteAt = undefined;
+      r.coldNoteAt = undefined; r.ctxSince = undefined;
       r.after = { kind: 'continuation', left: AFTER_CALLS };
+      this.persist(true);
       return step;
     })();
     r.switching = run;
@@ -1948,13 +2056,14 @@ export class ChatManager implements ChatService {
   private coldUndo(r: Rec, c: ColdStep): void {
     if (r.session) return; // an engine on the new id runs: keep it
     if (c.old) r.s.sessionId = c.old;
+    r.continuationPending = undefined;
     if (isUuid(c.old)) r.pastSessions?.pop();
     if (c.prev.forkFrom) r.forkFrom = c.prev.forkFrom;
     r.costTotalUsd = c.prev.costTotalUsd;
     if (c.prev.contextTokens !== undefined) r.s.contextTokens = c.prev.contextTokens;
     if (c.prev.contextMaxTokens !== undefined) r.s.contextMaxTokens = c.prev.contextMaxTokens;
     r.coldNoteAt = c.prev.coldNoteAt;
-    r.after = c.prev.after;
+    r.after = c.prev.after; r.ctxSince = c.prev.ctxSince;
     this.persist();
     this.updated(r);
     log.warn('chats', 'cold continuation not started', { chat: r.s.id, cause: r.s.lastError ?? 'engine did not start', hint: 'the note stays: the next message tries the fresh session again' });
@@ -2981,8 +3090,11 @@ export class ChatManager implements ChatService {
       lastTurnAt: c.lastTurnAt ?? 0,
       ...(c.run && c.runIdleSince ? { idleSince: c.runIdleSince } : {}),
       ...(c.coldNoteAt ? { coldNoteAt: c.coldNoteAt } : {}),
+      ...(c.continuationPending ? { continuationPending: c.continuationPending } : {}),
+      ...(c.continuationDecisions ? { continuationDecisions: c.continuationDecisions } : {}),
+      ...(c.continuityUnsafe ? { continuityUnsafe: true as const } : {}),
       // saved before ctxSince existed: its last turn is the latest its context can have begun
-      ...(c.ctxSince || c.lastTurnAt ? { ctxSince: c.ctxSince ?? c.lastTurnAt } : {}),
+      ...(c.ctxSince || (c.lastTurnAt && !c.continuationPending) ? { ctxSince: c.ctxSince ?? c.lastTurnAt } : {}),
       ...(c.rolePrimed ? { rolePrimed: c.rolePrimed } : {}),
       ...(c.replyLang ? { replyLang: c.replyLang } : {}),
       ...(c.pastSessions?.length ? { pastSessions: c.pastSessions } : {}),
@@ -3007,6 +3119,9 @@ export class ChatManager implements ChatService {
       createdAt: r.createdAt, costTotalUsd: r.costTotalUsd, ...(r.inWorktree ? { inWorktree: true } : {}),
       ...(r.lastTurnAt ? { lastTurnAt: r.lastTurnAt } : {}),
       ...(r.coldNoteAt ? { coldNoteAt: r.coldNoteAt } : {}),
+      ...(r.continuationPending ? { continuationPending: r.continuationPending } : {}),
+      ...(r.continuationDecisions ? { continuationDecisions: r.continuationDecisions } : {}),
+      ...(r.continuityUnsafe ? { continuityUnsafe: true as const } : {}),
       ...(r.ctxSince ? { ctxSince: r.ctxSince } : {}),
       ...(r.rolePrimed?.session ? { rolePrimed: r.rolePrimed } : {}),
       ...(r.replyLang ? { replyLang: r.replyLang } : {}),
@@ -3081,13 +3196,14 @@ export class ChatManager implements ChatService {
 
   private addItem(r: Rec, item: ChatItem, replace: boolean): void {
     r.eventAt = Date.now();
+    if (item.kind === 'user' && item.images && !r.continuityUnsafe) { r.continuityUnsafe = true; this.persist(); }
     let rep = false;
     if (replace) {
       for (let i = r.items.length - 1; i >= 0; i--) if (r.items[i]?.id === item.id) { r.items[i] = item; rep = true; break; }
     }
     if (!rep) {
       r.items.push(item);
-      if (r.items.length > this.max) r.items.splice(0, r.items.length - this.max);
+      if (r.items.length > this.max) { r.continuityUnsafe = true; r.items.splice(0, r.items.length - this.max); this.persist(); }
     }
     this.emitItem(r.s.id, item, rep);
   }
@@ -3137,18 +3253,33 @@ export class ChatManager implements ChatService {
     const past: ChatItem[] = [];
     for (const p of r.pastSessions ?? []) {
       const f = findTranscript(p.sessionId, r.s.cwd, this.home);
-      try { if (f) past.push(...readHistory(f, { cwd: r.s.cwd, maxItems: this.max }).items); } catch (e) {
+      try {
+        if (f) {
+          const h = readHistory(f, { cwd: r.s.cwd, maxItems: this.max });
+          if (fs.statSync(f).size > 4 * 1024 * 1024 || h.items.length >= this.max || h.items.some(i => i.kind === 'user' && !!i.images)) r.continuityUnsafe = true;
+          past.push(...h.items);
+        } else r.continuityUnsafe = true;
+      } catch (e) {
+        r.continuityUnsafe = true;
         log.warn('chats', 'past session not readable', { chat: r.s.id, data: { file: f, error: errText(e) } });
       }
       past.push(coldDivider(p.sessionId, p.at, p.notePath));
     }
+    if (past.length + r.items.length >= this.max || (r.pastSessions?.length ?? 0) >= 20) r.continuityUnsafe = true;
     if (past.length) r.items = [...past, ...r.items].slice(-this.max);
     const sid = r.s.sessionId ?? r.forkFrom;
     if (!sid) return;
     const file = findTranscript(sid, r.s.cwd, this.home);
-    if (!file) return;
+    if (!file) {
+      // A known historical session with no readable transcript cannot prove that old images/questions survived.
+      // Brand-new sessions legitimately have no transcript before their first turn.
+      if (r.lastTurnAt > 0 || r.forkFrom) r.continuityUnsafe = true;
+      return;
+    }
     try {
       const h = readHistory(file, { cwd: r.s.cwd, maxItems: this.max });
+      if (!h.items.length && (r.lastTurnAt > 0 || r.forkFrom)) r.continuityUnsafe = true;
+      if (fs.statSync(file).size > 4 * 1024 * 1024 || past.length + h.items.length >= this.max || h.items.some(i => i.kind === 'user' && !!i.images)) r.continuityUnsafe = true;
       r.items = [...past, ...h.items, ...r.items.slice(past.length)].slice(-this.max);
       if (!r.s.lastText && h.lastText) r.s.lastText = h.lastText;
       // the CLI restores a session's spend on resume (2.1.277+): its total is the baseline for per-turn costs
@@ -3156,6 +3287,7 @@ export class ChatManager implements ChatService {
       if (h.title && (r.s.title === 'Nuova chat' || r.s.title === 'Fork')) r.s.title = this.uniqueTitle(r.forkFrom ? `${h.title} (fork)` : h.title, r.s.id);
       log.info('chats', 'history loaded', { chat: r.s.id, data: { items: h.items.length, file: path.basename(file) } });
     } catch (e) {
+      r.continuityUnsafe = true;
       log.warn('chats', 'history not readable', { chat: r.s.id, data: { file, error: errText(e) } });
     }
   }

@@ -73,6 +73,7 @@ import { runMetrics } from './agents/run-metrics';
 import { listPrice, priceTableSource, setPriceTable } from './chats/live-cost';
 import type { McpServer, McpTool, ToolOutput } from './mcp/server';
 import { createBrowserModule, mcpPortFromEnv } from './browser/service';
+import { Workflows } from './workflows/service';
 import { AGENT_LABEL, appControlTools, orchestratorEndpointAuth, type ToolDef, type ToolOut } from './appctl/tools';
 import { ChatMail, mailTools } from './chats/mail';
 import { brainClassifier } from './chats/orchestrator-delivery';
@@ -107,7 +108,8 @@ import { HeadlessRunner } from './compare/headless';
 import { OneShotService } from './agents/oneshot';
 import type { AgentRunStore } from './agents/runs';
 import { CompareQueue, queueAllowed } from './compare/queue';
-import { gitWorktrees } from './agents/worktrees';
+import { DelegateWorktrees, gitWorktrees } from './agents/worktrees';
+import { stageDelegatedChanges, stageDelegatedChangesMany } from './agents/delegation-integration';
 import { JudgeSampler, judgeSamplingOn } from './agents/judge-sample';
 import { COMPACT_WINDOW } from './brain/settings-schema';
 import { setRecorder } from './chats/drift';
@@ -140,6 +142,7 @@ export interface Wired {
   /** the hybrid brain search (SPEC 23); absent in the demo (Ctrl+K then uses its own index) */
   hybrid?: HybridSearch;
   /** the brain skills that fit a request, best first (skills/suggest.ts) */
+  workflows?: Workflows;
   suggestSkills?: (request: string) => Promise<SkillSuggestions>;
   updateChats?: { problem: () => string | null; checkpoint: () => void };
   progress: ProgressService;
@@ -360,6 +363,7 @@ export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: Engin
 
 export async function createServices(ctx: Ctx): Promise<Wired> {
   if (process.env.SB_DEMO === '1') return createDemoServices(ctx);
+  let workflowsRef: Workflows | undefined;
   // the dev instance records the shapes real CLIs send (sanitized, a few per kind): fixtures for the contract tests (ADR 0055)
   setRecorder(!releaseId() && !process.env.SB_TEST ? path.join(ctx.userData, 'cli-records') : null);
   let cliCache: Record<Harness, CliStatus> | null = null;
@@ -480,7 +484,11 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // trial evaluated again
   const loopRef: { current?: { ended(run: AgentRun): void; outcome(run: AgentRun): void } } = {};
   const runFeedbackRef: { current?: { runList(): readonly AgentRun[] } } = {};
+  const delegateWorktrees = new DelegateWorktrees(path.join(ctx.userData, 'delegation-worktrees.json'));
   const manager = new ChatManager({
+    prepareDelegation: delegateWorktrees.prepare,
+    freshSessions: () => true,
+    continuationContext: chatId => workflowsRef ? JSON.stringify(workflowsRef.list().filter(row => row.chatIds.includes(chatId))) : null,
     suggestSkills: async goal => (await suggestSkills(goal)).candidates.map(c => c.name),
     onAutoCloseActivity: id => autoCloseRef.current?.invalidate(id),
     worktrees: gitWorktrees,
@@ -527,6 +535,12 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     // agents' new chats and turns wait while the machine is busy (ADR 0036); SB_LOAD_FORCE="cpu,freeRam" fixes the load
     // for the e2e suite
     admission: {
+      priority: key => {
+        if (!workflowsRef) return 2;
+        const all = manager.list(); let id: string | undefined = key, priority = 2; const seen = new Set<string>();
+        while (id && !seen.has(id)) { seen.add(id); priority = Math.min(priority, workflowsRef.priorityFor(id)); id = all.find(c => c.id === id)?.parentId; }
+        return priority;
+      },
       sampler: forcedSampler(process.env.SB_LOAD_FORCE) ?? new OsLoadSampler(),
       limits: () => { const st = brain.settings(); return { enabled: st.loadQueue !== false, cpu: st.loadQueueCpu ?? 75, ram: st.loadQueueRam ?? 15 }; },
     },
@@ -674,9 +688,15 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   autoCloseRef.current = autoCloseService;
   const autoCloseTimer = setInterval(() => { void autoCloseService.tick().catch(e => log.warn('chats', 'automatic archive suspended', { cause: errText(e) })); }, 1000);
   autoCloseTimer.unref();
+  agentPacks.learning.evidenceRuns = () => manager.runs.list();
+  const workflows = workflowsRef = new Workflows(path.join(ctx.userData, 'work-threads.json'), rows => ctx.emitter.emit('work:changed', rows), Date.now, row => {
+    const linked = chats.list().filter(c => row.chatIds.includes(c.id) && c.plan);
+    const approved = linked.filter(c => ['running', 'done'].includes(c.plan!.phase) && (c.run?.plan?.approvedAt ?? 0) > 0);
+    return { pending: linked.some(c => !['running', 'done'].includes(c.plan!.phase)), approved: approved.length === linked.length ? approved.map(c => `${c.id} / task ${c.run?.taskVersion ?? 1}: ${c.plan!.steps.map(s => s.title).join('; ')}`).join('\n') : '' };
+  });
   const wake = attachOrchestratorWake(ctx, chats, () => brain.settings().orchestratorEvents !== false && (!process.env.SB_TEST || process.env.SB_ORCHESTRATOR_EVENTS === '1'));
   manager.onUserWrote(n => wake.userMessage(n)); // the user typed in a work chat: quiet news (ADR 0083)
-  manager.onCleanReport(n => wake.cleanReport(n)); // a root chat's clean result: quiet news, no turn of its own
+  manager.onCleanReport(n => wake.cleanReport({ ...n, workflow: workflows.list().some(r => r.status === 'active' && r.chatIds.includes(n.chatId)) })); // linked workflow results wake the coordinator; unrelated results remain quiet
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && (!process.env.SB_TEST || process.env.SB_RUN_RESULTS === '1'));
   const heldNews = attachHeldNews(ctx.emitter, wake, mail);
   const source = createAppSource(ctx, () => brain.settings().appRepo ?? null);
@@ -708,7 +728,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // a parent's own child runs: listed and judged on its chat's token endpoint (agents/child-feedback.ts)
   addChatTools(childFeedbackTools(lifecycleApi));
   // parent-to-child delegation between role chats (ADR 0083): every chat's own endpoint, the caller is its token's chat
-  addChatTools(delegationTools({ chats: manager, roles: () => agents.list(), settings: () => checkedDelegation(brain.settings().delegation),
+  addChatTools(delegationTools({
+    integrate: async (parent, child) => stageDelegatedChanges(delegateWorktrees.allocation(parent, child), parent, child),
+    integrateMany: async (parent, children) => stageDelegatedChangesMany(children.map(child => ({ owned: delegateWorktrees.allocation(parent, child), child })), parent), chats: manager, roles: () => agents.list(), settings: () => checkedDelegation(brain.settings().delegation),
     engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), label: AGENT_LABEL, runs: () => manager.runs.list(), worktrees: gitWorktrees, skillTools,
     remember: (roleId, line, chat) => writeAgentMemory(agentPacks.packs.root(), portableId(roleId), line, { scope: { roleId: portableId(roleId), project: chat.cwd }, sourceRunId: chat.run?.runId ?? `chat:${chat.id}`, sourceEventId: `report:${chat.run?.runId ?? chat.id}` }) }));
   // a Strategist's plan with the user (ADR 0108): proposed on its strip, approved by the user's click, its steps' progress
@@ -758,7 +780,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     },
     tell: (chatId, text) => chats.send(chatId, text),
   });
-  const appDeps: Parameters<typeof attachAppTools>[1] = { personal, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog } };
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, personal, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog } };
   attachAppTools(mcp, appDeps, source, false, orchestratorTokens);
 
   // Task page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
@@ -856,7 +878,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const executeReplay = replayExecutor({ root: replayRoot, runs: () => manager.runs.list(),
     roleEngine: role => agents.list().profiles.find(p => p.id === role)?.engine ?? 'claude',
     create: request => manager.create(request, 'app'), feedback: args => runFeedback.recordFeedback(args, 'evaluation-replay') });
-  const learningReview = new LearningReviewService({ userData: ctx.userData, root: replayRoot, log: brainModel.log, runs: () => manager.runs.list(),
+  const learningReview = new LearningReviewService({ lessonSources: () => agentPacks.learning.waiting().flatMap(p => p.assessment?.state === 'supported' ? p.assessment.sources.map(source => source.runId) : []), userData: ctx.userData, root: replayRoot, log: brainModel.log, runs: () => manager.runs.list(),
     execute: request => { if (request.brainRoot !== replayRoot()) throw new Error('Brain changed before replay.'); return executeReplay(request); } });
   brainModel.start();
   // the morning block ("Mentre eri via", ADR 0102): zero tokens, from what the app holds
@@ -867,7 +889,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     stallMin: () => checkedDelegation(brain.settings().delegation).stallMin, lastEventAt: id => manager.lastEventAt(id) });
 
   return {
-    brainModel, research, phrases, memoryReview, learningReview, queries: brainQueries,
+    workflows, brainModel, research, phrases, memoryReview, learningReview, queries: brainQueries,
     morning,
     mcpServers,
     cloud, chats, browser, personal, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, suggestSkills,

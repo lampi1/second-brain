@@ -11,6 +11,7 @@
 // one click, without the confirm (clearOrchestratorNow, the quick /clear). With no Orchestrator yet it offers to create
 // one. Under its head, a line with the chats it started today by state and the cost apart, its own and theirs (#153,
 // lib/orchestrator-tally.ts); on its head the one «Manutenzione» for every page (#150, MaintenanceButton compact); the morning block's line while strips are open (no plan panel: the strips carry each estimate, #124) (MorningBlock.tsx, ADR 0102). When it drives a browser, it wears that pair's accent like any chat (lib/pairs.ts). Used by OrchestratorOverlay.tsx.
+import { RecapButton } from './WorkCockpit';
 import { lastAsk } from '../lib/typing-line';
 import { memo, useEffect, useRef, useState } from 'react';
 import { chatCost, formatCost, modelWithEffort } from '../lib/format';
@@ -140,6 +141,7 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
           <IconButton ref={menuBtn} label={t('dialogs.orchestrator.menuLabel')} onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-haspopup="menu" testid="orchestrator-menu"><IconMore /></IconButton>
         </div>
         <div className="chat-topic-row"><ModelChip chat={chat} profileId={ORCHESTRATOR_ROLE_ID} testid="orchestrator-model" /><span className="chat-topic">{chat.title}</span><AgentIdentity chat={chat}/></div>
+        <div className="work-recap-line"><RecapButton /></div>
         <TallyLine chat={chat} />
         <div className="th-sub sr-only" data-testid="orchestrator-sub">
           <span className="th-engine" data-tip={t('dialogs.orchestrator.engineTip', { name: engineName(chat.harness) })} aria-label={t('dialogs.orchestrator.engineTip', { name: engineName(chat.harness) })} role="img" data-engine={chat.harness} data-testid="orchestrator-engine"><HarnessMark harness={chat.harness} size={14} /></span>

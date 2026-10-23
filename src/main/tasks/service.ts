@@ -46,6 +46,7 @@ interface Saved {
   prs: DevopsPr[];
   details: Record<string, DevopsDetail>;
   qa: QaReport[];
+  qaAt: number | null;
   /** keys of the news already seen by a read (alerts dedupe across restarts) */
   notified: string[];
 }
@@ -59,7 +60,7 @@ export function appScript(bundleUrl: string = import.meta.url): string | null {
 /** The brain's own script first (the owner's personal one wins), else the app's. */
 const defaultLocate = (root: string): string | null => found(root, SCRIPT) ?? appScript();
 const defaultLocateQa = (root: string): string | null => found(root, QA_SCRIPT);
-const EMPTY: Saved = { lastOk: null, news: [], read: [], assigned: [], urgent: [], oldReviews: [], reviews: [], prs: [], details: {}, qa: [], notified: [] };
+const EMPTY: Saved = { lastOk: null, news: [], read: [], assigned: [], urgent: [], oldReviews: [], reviews: [], prs: [], details: {}, qa: [], qaAt: null, notified: [] };
 /** A repo name usable as a folder name (no path separators, not only dots). */
 const SAFE_REPO = /^(?!\.+$)[A-Za-z0-9._-]{1,100}$/;
 const defaultRepoDir = (repo: string): string | null => { const p = path.join(os.homedir(), 'source', 'repos', repo); return fs.existsSync(p) ? p : null; };
@@ -104,7 +105,7 @@ export class TaskService {
     return {
       enabled: s.enabled, everyMin: s.everyMin, sound: s.sound !== false, running: this.running !== null, at: this.saved.lastOk, nextAt: this.nextAt, error: this.error,
       news, assigned: this.saved.assigned, urgent: this.saved.urgent, oldReviews: this.saved.oldReviews, reviews: this.saved.reviews, prs: this.saved.prs, details: this.saved.details,
-      unread: news.filter(n => n.unread).length, qa: this.saved.qa, qaError: this.qaError, repoDirs: this.repoDirs(),
+      unread: news.filter(n => n.unread).length, qa: this.saved.qa, qaAt: this.saved.qaAt, qaError: this.qaError, repoDirs: this.repoDirs(),
     };
   }
 
@@ -231,7 +232,7 @@ export class TaskService {
       return;
     }
     this.qaError = null;
-    this.saved = { ...this.saved, qa };
+    this.saved = { ...this.saved, qa, qaAt: this.now() };
     this.save();
   }
 
@@ -256,6 +257,7 @@ export class TaskService {
         : [...news.flatMap(n => (n.kind === 'review' && n.pr ? [n.pr] : [])), ...oldReviews].filter((p, i, xs) => xs.findIndex(x => x.id === p.id) === i);
       return {
         lastOk: typeof raw.lastOk === 'number' ? raw.lastOk : null,
+        qaAt: typeof raw.qaAt === 'number' && Number.isFinite(raw.qaAt) ? raw.qaAt : null,
         // every row checked again, like the script's output: a hand-edited file never breaks the start
         news, read: Array.isArray(raw.read) ? raw.read.filter(k => typeof k === 'string') : [],
         assigned: some(raw.assigned, itemOf), urgent: some(raw.urgent, itemOf), oldReviews, reviews, prs: some(raw.prs, prOf), details: detailsOf(raw.details), qa: some(raw.qa, qaReportOf),

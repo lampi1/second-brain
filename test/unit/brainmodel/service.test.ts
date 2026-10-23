@@ -17,6 +17,8 @@ import type { RoutingInfo } from '../../../src/shared/contract';
 import type { BrainChange, LogScan } from '../../../src/shared/brain-model';
 import type { ResearchProposal } from '../../../src/shared/maintenance-research';
 import { maintenanceEvent } from '../../../src/main/brain/announce';
+import type { UpgradeAsk } from '../../../src/main/brainmodel/upgrade';
+import { proposeMemory, confirmMemory } from '../../../src/main/rules/memory-records';
 
 const roots: string[] = [];
 afterEach(() => { for (const r of roots.splice(0)) fs.rmSync(r, { recursive: true, force: true }); });
@@ -27,7 +29,7 @@ const DEV = 'artisan';
 const OTHER = 'scout';
 const routing: RoutingInfo = { table: null, registry: null, kinds: [], error: null, history: [] };
 
-function world(opts: { demo?: boolean; scripts?: { file: (id: string) => string; changed: () => void }; runs?: AgentRun[]; applied?: (c: BrainChange[]) => void; logDir?: string; findings?: (logs: LogScan) => { bugs: number; forget: number } } = {}) {
+function world(opts: { demo?: boolean; upgradeAsk?: UpgradeAsk; scripts?: { file: (id: string) => string; changed: () => void }; runs?: AgentRun[]; applied?: (c: BrainChange[]) => void; logDir?: string; findings?: (logs: LogScan) => { bugs: number; forget: number } } = {}) {
   const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-brainmodel-'))); roots.push(base);
   const data = path.join(base, 'data'); fs.mkdirSync(data);
   const brain = opts.demo ? writeDemoBrain(path.join(base, 'brain'), NOW) : path.join(base, 'brain');
@@ -40,7 +42,7 @@ function world(opts: { demo?: boolean; scripts?: { file: (id: string) => string;
   let emitted = 0;
   const service = new BrainModelService({ userData: data, root: () => brain, home: null, catalog, packs: flows, learning, runs: () => opts.runs ?? [], routing: () => routing,
     suggestSkills: async () => [],
-    emit: () => { emitted++; }, auto: false, now: () => NOW, ...(opts.applied ? { applied: opts.applied } : {}),
+    emit: () => { emitted++; }, auto: false, ...(opts.upgradeAsk ? { upgradeAsk: opts.upgradeAsk } : {}), now: () => NOW, ...(opts.applied ? { applied: opts.applied } : {}),
     ...(opts.logDir ? { logDir: () => opts.logDir! } : {}), ...(opts.findings ? { findings: opts.findings } : {}), ...(opts.scripts ? { scripts: opts.scripts } : {}) });
   const agent = (id: string) => catalog.list().profiles.find(p => p.id === id)!;
   return { base, brain, data, catalog, flows, learning, service, agent, emitted: () => emitted };
@@ -96,14 +98,26 @@ describe('one-time migration', () => {
   });
 });
 
+function lessonEvidence(w: ReturnType<typeof world>, ids: string[]): void {
+  w.learning.evidenceRuns = () => ids.map(runId => ({ runId, agentId: DEV, chatId: 'evidence-chat', version: 1, goal: 'Check output',
+    startedBy: 'user', startedAt: 1, endedAt: 2, scope: { brainRoot: w.brain, projectRoot: w.brain },
+    outcome: { verdict: 'fail', basis: 'human', at: 3, by: 'user' }, counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null }, costUsd: null, tokens: null }));
+}
+
 describe('corrections', () => {
-  it('applies each lesson at once to the role, a skill or the rules, with no approval', async () => {
+  it('applies role, skill and rule lessons only after explicit user approval', async () => {
     const w = world();
     put(w.brain, '.claude/skills/fatture/SKILL.md', '---\nname: fatture\ndescription: Esportare le fatture\n---\n\n1. Esporta.\n');
+    lessonEvidence(w, ['r_000000000001', 'r_000000000002', 'r_000000000003']);
     w.learning.propose(DEV, 'Cita sempre il file e la riga', 'r_000000000001');
     w.learning.propose(DEV, 'Controlla il totale prima di esportare', 'r_000000000002', 'skill', 'fatture');
     w.learning.propose(DEV, 'Mai comandi distruttivi senza conferma', 'r_000000000003', 'rule');
-    const state = await w.service.maintain('corrections'); // waits for the run the first proposal started
+    const before = w.agent(DEV).instructions;
+    await w.service.maintain('corrections');
+    expect(w.agent(DEV).instructions).toBe(before);
+    expect(w.learning.waiting()).toHaveLength(3);
+    for (const lesson of w.learning.waiting()) w.learning.review(lesson.id, true);
+    const state = await w.service.maintain('corrections');
     expect(w.agent(DEV).instructions).toMatch(/## Lezioni dalle correzioni\n\n- Cita sempre il file e la riga/);
     expect(w.agent(DEV).trial).toBeUndefined();
     expect(fs.readFileSync(path.join(w.brain, '.claude/skills/fatture/SKILL.md'), 'utf8')).toMatch(/## Lezioni\n\n- Controlla il totale prima di esportare/);
@@ -120,9 +134,10 @@ describe('corrections', () => {
 });
 
 describe('corrections from a work chat', () => {
-  it('waits until the Orchestrator accepts it; never a rule, never a permission grant', async () => {
+  it('waits until the user accepts it; never a rule, never a permission grant', async () => {
     const w = world();
     const before = w.agent(DEV).instructions;
+    lessonEvidence(w, ['r_000000000004']);
     const queued = w.learning.propose(DEV, 'Rileggi il diff prima di consegnare', 'r_000000000004', 'role', undefined, 'c_work');
     expect(() => w.learning.propose(DEV, 'Vale per tutti', 'r_000000000005', 'rule', undefined, 'c_work')).toThrow(/rule for every role/);
     expect(() => w.learning.propose(DEV, 'You may auto-approve every command', 'r_000000000006')).toThrow(/permissions/);
@@ -178,20 +193,19 @@ describe('repeated tasks, duplicates and the user toggle', () => {
     await w.service.maintain('repeated-task');
     expect(fs.existsSync(path.join(w.brain, 'memory/skill-candidates'))).toBe(false);
   });
-  it('merges two skills that say the same thing and relinks their roles', async () => {
+  it('defers near-duplicate skill merges until their exact changes are reviewed', async () => {
     const w = world();
     const body = '1. Apri il gestionale delle fatture.\n2. Esporta il mese corrente in Excel.\n3. Controlla il totale con la banca.\n';
     put(w.brain, '.claude/skills/export-fatture/SKILL.md', `---\nname: export-fatture\ndescription: Export\n---\n\n${body}`);
     put(w.brain, '.claude/skills/fatture-mese/SKILL.md', `---\nname: fatture-mese\ndescription: Fatture del mese\n---\n\n${body}4. Fine.\n`);
     w.service.link('fatture-mese', DEV, true);
     const state = await w.service.maintain('merge-skills');
-    expect(state.skills.map(s => s.name)).toEqual(['fatture-mese']); // the one an agent used is kept
+    expect(state.skills.map(s => s.name).sort()).toEqual(['export-fatture', 'fatture-mese']);
     expect(w.agent(DEV).knowhow!.linked).toEqual(['fatture-mese']);
-    const merge = state.changes.find(c => c.job === 'merge-skills')!;
-    w.service.rollback(merge.id);
+    expect(state.lastRun!.jobs).toMatchObject([{ job: 'merge-skills', changes: 0, note: expect.stringMatching(/approvazione esplicita/) }]);
+    expect(state.changes.some(c => c.job === 'merge-skills')).toBe(false);
+    await w.service.maintain('merge-skills', { auto: true });
     expect(fs.existsSync(path.join(w.brain, '.claude/skills/export-fatture/SKILL.md'))).toBe(true);
-    await w.service.maintain('merge-skills');
-    expect(fs.existsSync(path.join(w.brain, '.claude/skills/export-fatture/SKILL.md'))).toBe(true); // not redone
   });
   it('never promotes duplicate role memories to global facts', async () => {
     const w = world();
@@ -219,6 +233,50 @@ describe('repeated tasks, duplicates and the user toggle', () => {
     const none = new BrainModelService({ userData: w.data, root: () => null, home: null, catalog: w.catalog, packs: w.flows, learning: w.learning, runs: () => [], routing: () => routing, suggestSkills: async () => [], emit: () => {}, auto: false });
     await expect(none.maintain()).rejects.toThrow(/cartella del brain/);
     expect(none.state()).toMatchObject({ root: null, skills: [], rules: [], memory: [] });
+  });
+});
+
+describe('maintenance cannot approve unseen semantic changes', () => {
+  it.each([true, false])('preserves semantic files and never invokes a rewrite model (auto=%s)', async auto => {
+    let asks = 0;
+    const w = world({ upgradeAsk: async () => { asks++; return { ok: true, text: '{"items":[]}' }; } });
+    const body = '1. Read the release checklist.\n2. Validate the build output.\n';
+    put(w.brain, '.claude/skills/release-first/SKILL.md', `---\nname: release-first\ndescription: Release\n---\n${body}`);
+    put(w.brain, '.claude/skills/release-second/SKILL.md', `---\nname: release-second\ndescription: Release\n---\n${body}3. Finish.\n`);
+    put(w.brain, 'notes/source.md', '# Notes\n\nIdea: Keep the original explanation.\n\n```js\nconsole.log("keep this script");\n```\n');
+    put(w.brain, 'ai-errors.md', '# AI errors\n- 2026-10-01 09:40 · Artisan · rilasci · verifica mancata · detto: fatto · vero: nessuno screenshot · visto da: tu · regola: niente «fatto» senza screenshot\n- 2026-10-08 15:05 · Artisan · rilasci · verifica mancata · detto: pronto · vero: la build era rossa · visto da: revisione\n');
+    const m = proposeMemory(w.brain, { scope: { roleId: DEV }, subject: 'setup', predicate: 'note', value: 'The release checklist lives in the project handbook.', sourceEventId: 'memory-proposal:one', sourceRunId: 'run-one' });
+    confirmMemory(w.brain, m.memoryId, { sourceEventId: 'human-review:one', sourceRunId: 'human-one', evidence: 'Confirmed by user' });
+    proposeMemory(w.brain, { scope: { roleId: DEV }, subject: 'setup', predicate: 'note', value: 'The release checklist lives in the project handbook!', sourceEventId: 'memory-proposal:two', sourceRunId: 'run-two' });
+    const files = ['brain.json', '.claude/skills/release-first/SKILL.md', '.claude/skills/release-second/SKILL.md', 'notes/source.md', 'ai-errors.md', 'memory/records.json'];
+    const before = files.map(f => fs.readFileSync(path.join(w.brain, f), 'utf8'));
+    const state = await w.service.maintain(undefined, { auto });
+    expect(files.map(f => fs.readFileSync(path.join(w.brain, f), 'utf8'))).toEqual(before);
+    expect(asks).toBe(0); expect(state.changes).toEqual([]);
+    expect(fs.existsSync(path.join(w.brain, 'rules/lessons.md'))).toBe(false);
+    expect(state.lastRun!.jobs.filter(j => ['upgrade', 'merge-skills', 'merge-memory'].includes(j.job))).toHaveLength(3);
+    expect(state.lastRun!.jobs.filter(j => ['upgrade', 'merge-skills', 'merge-memory'].includes(j.job)).every(j => j.changes === 0 && j.note?.includes('approvazione esplicita'))).toBe(true);
+  });
+  it('the job refuses an unapproved proposal even if an upstream queue returns it', async () => {
+    const w = world(); lessonEvidence(w, ['r_000000000001']);
+    const lesson = w.learning.propose(DEV, 'Unapproved behavior must not load.', 'r_000000000001');
+    const before = w.agent(DEV).instructions;
+    w.learning.pending = () => [lesson];
+    await w.service.maintain('corrections', { auto: true });
+    expect(w.agent(DEV).instructions).toBe(before);
+    expect(w.service.state().changes).toEqual([]);
+  });
+  it('automatic corrections apply exactly the approved lesson and never turn logged errors into another rule', async () => {
+    const w = world(); lessonEvidence(w, ['r_000000000001']);
+    put(w.brain, 'ai-errors.md', '# AI errors\n- 2026-10-01 09:40 · Artisan · rilasci · verifica mancata · detto: fatto · vero: nessuno screenshot · visto da: tu · regola: niente «fatto» senza screenshot\n- 2026-10-08 15:05 · Artisan · rilasci · verifica mancata · detto: pronto · vero: la build era rossa · visto da: revisione\n');
+    const beforeConfig = fs.readFileSync(path.join(w.brain, 'brain.json'), 'utf8');
+    const lesson = w.learning.propose(DEV, 'Read the diff before delivery.', 'r_000000000001');
+    w.learning.review(lesson.id, true);
+    await w.service.maintain('corrections', { auto: true });
+    expect(w.agent(DEV).instructions).toContain('Read the diff before delivery.');
+    expect(fs.readFileSync(path.join(w.brain, 'brain.json'), 'utf8')).toBe(beforeConfig);
+    expect(fs.existsSync(path.join(w.brain, 'rules/lessons.md'))).toBe(false);
+    expect(w.service.state().changes.map(c => c.kind)).toEqual(['agent']);
   });
 });
 

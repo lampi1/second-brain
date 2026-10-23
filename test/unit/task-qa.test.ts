@@ -59,8 +59,10 @@ describe('TaskService QA', () => {
     expect(t.calls.at(-1)).toEqual(['qa-status.mjs', '--mine', '--json']);
     expect(s.qa).toHaveLength(1);
     expect(s.qaError).toBeNull();
+    expect(s.qaAt).toBe(NOW);
     const again = make(() => ok({ reports: [] }), { dir: t.dir });
     expect(again.svc.get().qa[0]!.pr!.title).toBe('Fix preventivi');
+    expect(again.svc.get().qaAt).toBe(NOW);
     t.svc.shutdown(); again.svc.shutdown();
   });
 
@@ -68,7 +70,7 @@ describe('TaskService QA', () => {
     const t = make(() => ok({ reports: [report()] }), { locateQa: () => null });
     const s = await t.svc.refresh();
     expect(t.calls.some(c => c[0] === 'qa-status.mjs')).toBe(false);
-    expect(s).toMatchObject({ qa: [], qaError: null, error: null });
+    expect(s).toMatchObject({ qa: [], qaAt: null, qaError: null, error: null });
     t.svc.shutdown();
   });
 
@@ -81,6 +83,7 @@ describe('TaskService QA', () => {
     expect(s.error).toBeNull();
     expect(s.qaError).toBe('Lettura dei test non riuscita: HTTP 500 on testplan');
     expect(s.qa).toHaveLength(1);
+    expect(s.qaAt).toBe(NOW);
     const garbage = make(() => ({ stdout: 'not json', stderr: '', code: 0 }));
     expect((await garbage.svc.refresh()).qaError).toMatch(/Lettura dei test non riuscita/);
     t.svc.shutdown(); garbage.svc.shutdown();

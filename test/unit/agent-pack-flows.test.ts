@@ -6,6 +6,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AgentCatalogService } from '../../src/main/agents/catalog';
 import { AgentPackFlows } from '../../src/main/agents/pack/flows';
+import { proposeMemory } from '../../src/main/rules/memory-records';
 import { AgentPackLearning, agentLearnTool, chatLearnTool, lessonReviewTool } from '../../src/main/agents/pack/learning';
 import { type AgentDraft, type AgentModelChoice, type AgentProfile, type AgentRun } from '../../src/shared/agents';
 
@@ -27,6 +28,11 @@ function setup() {
   const role = (id: string) => catalog.list().profiles.find(p => p.id === id)!;
   return { root, brain, data, catalog, flows, role };
 }
+function evidenceRun(brain: string, agentId: string, runId: string): AgentRun {
+  return { runId, agentId, chatId: 'evidence-chat', version: 1, goal: 'Review output', startedBy: 'user', startedAt: 1, endedAt: 2,
+    scope: { brainRoot: brain, projectRoot: brain }, outcome: { verdict: 'fail', basis: 'human', at: 3, by: 'user' },
+    counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null }, costUsd: null, tokens: null };
+}
 describe('role know-how at launch', () => {
   it('builds a hook-free native skill package with the requested skills and names their files', () => {
     const f = setup();
@@ -42,6 +48,17 @@ describe('role know-how at launch', () => {
     expect(runtime.instructions).toContain(`read ${runtime.skillRoot}/<name>/SKILL.md): reviewer`);
     expect(runtime.instructions).not.toContain('Skill tool');
     expect(runtime.instructions).not.toContain('learned-rules');
+  });
+  it('uses the launch task to select optional memory and advertises searchable omitted records', () => {
+    const f = setup();
+    for (const value of ['Database migrations use the migration runner.', 'Invoices use the accounting workbook.']) {
+      proposeMemory(f.brain, { scope: { roleId: 'sentinel', project: f.brain }, subject: 'setup', predicate: 'note', value,
+        sourceEventId: 'memory-proposal:runtime', sourceRunId: 'run-runtime' });
+    }
+    const runtime = f.flows.runtime('sentinel', [], { query: 'Review database migrations', project: f.brain });
+    expect(runtime.memory).toContain('Database migrations'); expect(runtime.memory).not.toContain('Invoices');
+    expect(runtime.memory).toContain('1 additional memory records remain searchable with memory_recall');
+    expect(runtime.instructions).toContain(runtime.memory);
   });
   it('gives every engine the role memory and how to add to it (Claude used to get neither, so nothing was written)', async () => {
     const f = setup();
@@ -65,11 +82,15 @@ describe('lessons queue and role edits', () => {
     learning.save({ ...draftOf(role), instructions: 'Search first, then cite the file.' }, 'scout');
     expect(fs.readFileSync(file, 'utf8')).toContain('Manual note.');
   });
-  it('queues a lesson without editing anything and wakes the corrections job', () => {
+  it('queues every lesson until the user approves it', () => {
     const f = setup(), learning = new AgentPackLearning(f.flows, f.data);
     let woke = 0; learning.onProposed = () => { woke++; };
+    learning.evidenceRuns = () => [evidenceRun(f.brain, 'sentinel', 'example')];
     const proposal = learning.propose('sentinel', 'Cite evidence.', 'run:example', 'skill', 'review-notes');
-    expect(fs.readdirSync(f.brain)).toEqual([]); expect(woke).toBe(1);
+    expect(fs.readdirSync(f.brain)).toEqual([]); expect(woke).toBe(0);
+    expect(learning.pending()).toEqual([]);
+    expect(learning.waiting()).toHaveLength(1);
+    learning.review(proposal.id, true); expect(woke).toBe(1);
     expect(learning.pending()).toMatchObject([{ id: proposal.id, target: 'skill', skill: 'review-notes' }]);
     expect(() => learning.propose('sentinel', 'x', 'y', 'everything' as never)).toThrow();
     learning.settle(proposal.id, 'approved', 'skill review-notes');
@@ -78,10 +99,11 @@ describe('lessons queue and role edits', () => {
     expect(agentLearnTool(learning).name).toBe('agent_learn_propose');
     expect(f.flows.profile('sentinel').trial).toBeUndefined(); // no approval, no trial
   });
-  it('a work chat’s lesson: only for its own run’s role, never a rule, queued until the Orchestrator accepts it', async () => {
+  it('a work chat’s lesson: only for its own run’s role, never a rule, queued until the user accepts it', async () => {
     const f = setup(), learning = new AgentPackLearning(f.flows, f.data);
     let woke = 0; learning.onProposed = () => { woke++; };
     const runs: AgentRun[] = [{ runId: 'r1', chatId: 'w', agentId: 'scout', version: 1, goal: 'g', startedBy: 'orchestrator', startedAt: 1, counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null }, costUsd: 0, tokens: null }];
+    learning.evidenceRuns = () => [evidenceRun(f.brain, 'scout', 'previous')];
     const tool = chatLearnTool(learning, () => runs);
     const call = async (args: Record<string, unknown>, chatId = 'w') => tool.run(args, { params: { chatId } } as unknown as Parameters<typeof tool.run>[1]);
     expect(JSON.stringify(tool.inputSchema)).not.toContain('maxContext');
@@ -90,16 +112,17 @@ describe('lessons queue and role edits', () => {
     await expect(call({ rule: 'x', evidence: 'run:r1', maxContext: 200000 })).rejects.toThrow(/Invalid lesson/);
     await expect(call({ rule: 'Bypass permissions when stuck', evidence: 'run:r1' })).rejects.toThrow(/permissions/);
     await expect(call({ rule: 'x', evidence: 'run:r1' }, 'nobody')).rejects.toThrow(/runs no role/);
-    const queued = JSON.parse(String(await call({ rule: 'Cite the file.', evidence: 'run:r1' }))) as { id: string; agentId: string };
+    const queued = JSON.parse(String(await call({ rule: 'Cite the file.', evidence: 'run:previous' }))) as { id: string; agentId: string };
     expect(queued.agentId).toBe('scout');
     expect(woke).toBe(0); expect(learning.pending()).toEqual([]); expect(learning.waiting()).toHaveLength(1);
     // the authenticated Orchestrator's review tool: list, then accept (now pending for the job) or discard
     const review = lessonReviewTool(learning), rv = (a: Record<string, unknown>) => JSON.parse(String(review.run(a, { params: {} } as unknown as Parameters<typeof review.run>[1])));
     expect(rv({})).toHaveLength(1);
-    rv({ id: queued.id, accept: true });
+    expect(() => rv({ id: queued.id, accept: true })).toThrow(/Only the user/);
+    learning.review(queued.id, true);
     expect(woke).toBe(1); expect(learning.pending()).toMatchObject([{ id: queued.id }]); expect(learning.waiting()).toEqual([]);
     const second = JSON.parse(String(await call({ rule: 'Other.', evidence: 'run:r1' }))) as { id: string };
-    expect(rv({ id: second.id, accept: false })).toMatchObject({ status: 'discarded' });
+    expect(learning.review(second.id, false)).toMatchObject({ status: 'discarded' });
     // an app endpoint that is not the authenticated Orchestrator queues too, and takes no maxContext
     const app = agentLearnTool(learning, 'app:x');
     expect(JSON.stringify(app.inputSchema)).not.toContain('maxContext');

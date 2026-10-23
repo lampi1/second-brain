@@ -192,6 +192,15 @@ describe('learning evidence inspector', () => {
     expect(() => service.evidence(source.runId)).toThrow('selected brain');
     expect(() => service.evidence(reviewer.runId)).toThrow('selected brain');
   });
+  it('allows only currently linked lesson sources and keeps the brain scope guard', () => {
+    const root = tmp(), other = tmp(), data = tmp(), source = recorded();
+    source.scope = { brainRoot: root, projectRoot: root };
+    let refs = [source.runId], currentRoot = root;
+    const service = new LearningReviewService({ userData: data, root: () => currentRoot, log: new ChangeLog(data), runs: () => [source], lessonSources: () => refs });
+    expect(service.evidence(source.runId).run.runId).toBe(source.runId);
+    refs = []; expect(() => service.evidence(source.runId)).toThrow('selected brain');
+    refs = [source.runId]; currentRoot = other; expect(() => service.evidence(source.runId)).toThrow('selected brain');
+  });
   it('allows candidate source evidence with historical missing scope but never invents full output', () => {
     const root = tmp(), data = tmp(), source = recorded();
     delete source.report!.canonical;

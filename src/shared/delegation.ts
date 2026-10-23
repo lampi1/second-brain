@@ -66,6 +66,23 @@ export interface ChatDelegation {
   /** the goal as the contract gave it, kept when the user changed it in the child's chat (goal is then the user's) */
   originalGoal?: string;
 }
+/** Host-generated integration evidence. A staged tree is not a merged or semantically verified result. */
+export interface DelegationIntegration {
+  status: 'staged' | 'conflict' | 'blocked';
+  reason: string;
+  checksRequired: true;
+  parentUnchanged: true;
+  cwd?: string;
+  parentHead?: string;
+  appliedChildIds?: string[];
+  sources?: { chatId: string; childHead: string; baseHead: string }[];
+  childHead?: string;
+  baseHead?: string;
+  tree?: string;
+  conflicts?: string[];
+  whitespace?: { command: 'git diff --cached --check'; exit: number | null; at: number; tree: string };
+}
+
 /** A delegation limit the chat hit, shown on it until it delegates again. */
 export interface DelegationLimitHit { kind: 'depth' | 'parallel'; limit: number; at: number }
 

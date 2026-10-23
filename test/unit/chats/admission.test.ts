@@ -297,3 +297,15 @@ describe('ChatManager with the CPU queue', () => {
     expect(m.queueState()?.waiting.map(w => w.chatId)).toEqual([other.id]);
   });
 });
+
+describe('workflow priority', () => {
+  it('reorders queued work when linked to an incident, without interrupting running work', () => {
+    const f = fakeLoad(); let urgent = false; const ran: string[] = [];
+    const q = new AdmissionQueue({ sampler: f.sampler, limits: () => ON, autoTick: false, underNeeded: 1,
+      priority: key => urgent && key === 'incident' ? 0 : key === 'support' ? 1 : 2 });
+    for (const key of ['normal', 'incident', 'support']) q.request(key, 'start', () => ran.push(key));
+    expect(q.list().map(e => e.key)).toEqual(['support', 'normal', 'incident']);
+    urgent = true; expect(q.list()[0]!.key).toBe('incident');
+    f.load.cpu = 10; q.tick(); expect(ran).toEqual(['incident']); q.stop();
+  });
+});

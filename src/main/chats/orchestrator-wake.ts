@@ -235,13 +235,13 @@ export class OrchestratorWake {
   /** A root chat's clean result (ChatManager.onCleanReport): quiet news with its summary, never a turn of its own; it rides
    *  along with the next delivery (the user's next message injects it into that turn). False = not taken (off, no
    *  Orchestrator): the caller sends the result as a message. */
-  cleanReport(n: { chatId: string; title: string; role: string; summary: string; at?: number }): boolean {
+  cleanReport(n: { chatId: string; title: string; role: string; summary: string; at?: number; workflow?: boolean }): boolean {
     if (!this.d.enabled() || !this.orchestratorId()) return false;
     const known = this.chats.get(n.chatId), listed = known ? undefined : this.d.list?.().find(x => x.id === n.chatId);
     if (listed) this.remember(listed);
     const c = known ?? listed;
     if (!c || c.isOrchestrator) return false;
-    const e: WakeEvent = { chatId: n.chatId, title: n.title, harness: c.harness, kind: 'done', detail: cut(n.summary, 300), at: n.at ?? this.now(), report: { role: n.role }, silent: true };
+    const e: WakeEvent = { chatId: n.chatId, title: n.title, harness: c.harness, kind: 'done', detail: cut(n.summary, 300), at: n.at ?? this.now(), report: { role: n.role }, silent: !n.workflow };
     this.buffer.set(slotOf(e), e);
     // the chat's plain "finished" of the same turn says less than the report
     if (this.buffer.get(n.chatId)?.kind === 'done') this.buffer.delete(n.chatId);

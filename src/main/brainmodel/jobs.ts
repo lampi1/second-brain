@@ -1,13 +1,12 @@
-// The brain model's maintenance jobs (ADR 0077, 0083): the app keeps its roles' texts, skills, rules and memory up to
-// date by itself, with no user step and zero tokens (local text work only). Every change is one ChangeLog entry (what,
-// why, evidence, undo); a change the user undid is never made again by the same job. The user's approval stays for
-// production actions, permissions / settings / hooks, a role's tools, ceiling, engine, model tier and limits (catalog.
-// maintain refuses them; they go to «Da approvare») and texts for colleagues or external systems.
+// Brain maintenance implementations and review-backed writes (ADR 0077, 0083, 0137). The live dispatcher only
+// runs structural migration, explicitly approved corrections and non-loadable repeated-task candidates. Semantic
+// skill/memory merge helpers are retained for compatibility but cannot run from a timer or generic maintenance click.
+// Every approved mutation is logged with undo; permissions, settings and tools remain outside these helpers.
 //   migration      re-runnable, idempotent: every runbook / routines section of the brain becomes a skill in
 //                  <brain>/.claude/skills (a role loads it when a task asks for it: skills_suggest). Writes a report.
 //   corrections    the lessons queue (agent_learn_propose): each lesson goes to the role's text (default), to a skill,
-//                  or to the brain's rules (rules/lessons.md, a topic file listed in brain.json); then the errors that
-//                  recur in ai-errors.md become rules there too (error-lessons.ts, called by service.ts).
+//                  or to the brain's rules (rules/lessons.md, a topic file listed in brain.json), only after explicit
+//                  approval of the evidence-backed proposal. Recurring error text is not applied on its own.
 //   repeated-task  three or more ended runs with the same kind of goal and no skill covering it → a new skill with the
 //                  requests seen and what the runs reported, stored outside loadable skills pending verification.
 //   merge-skills   two brain skills with (nearly) the same text → one, the roles relinked to it.
@@ -144,7 +143,7 @@ export function corrections(ctx: JobContext): JobResult {
   for (const l of ctx.lessons.pending()) {
     const p = ctx.profiles().find(x => x.id === l.agentId);
     if (!p) { ctx.lessons.settle(l.id, 'discarded', 'ruolo sconosciuto'); continue; }
-    if (l.fromChat) continue; // a work chat's lesson waits for the Orchestrator and the user (pack/learning.ts)
+    if (l.fromChat || l.userApproved !== true || l.assessment?.state !== 'supported') continue; // exact evidence is rechecked by learning.pending()
     try { checkPermissionText(l.rule); } catch { ctx.lessons.settle(l.id, 'discarded', 'una lezione non concede permessi'); continue; }
     const line = `- ${l.rule} (${day(l.createdAt)}; ${l.evidence})`;
     const skill = l.target === 'skill' ? ctx.skills().find(s => s.name === l.skill && s.home === 'brain') : undefined;

@@ -1,12 +1,6 @@
-// The brain model service (ADR 0077): the one entry point of the Brain pages and the maintenance jobs. It reads the
-// model (model.ts), runs the jobs (jobs.ts) with the change log (changes.ts), adds the Memoria page's statistics
-// (memory-stats.ts), each change's evidence claim and the Apprendimento page (evidence.ts, ADR 0109) and serves the read-only Classificatori view (classifiers.ts). Jobs run by themselves: the one-time migration shortly after start on a brain that has former
-// runbook sections and no report yet, the corrections job right after a lesson is queued, every job every six hours,
-// and all of them on the maintenance button. No job asks for approval (owner, 2026-10-19); each change is logged with
-// an undo; a pass the app ran by itself that changed something is announced in the feed (`applied`: a quiet "Ruolo
-// aggiornato" with Annulla, ADR 0102). Off in the test suites unless SB_BRAIN_JOBS=1 (the buttons and the IPC still work). Wired by wiring.ts and
-// demo-wiring.ts; IPC 'brainmodel:*' and 'classifiers:state' (index.ts). The 'upgrade' job (upgrade.ts, ADR 0116) runs by
-// itself a minute after start when the brain is not in line with this version's layout. Tests: test/unit/brainmodel/service.test.ts.
+// Brain pages and maintenance dispatch. Structural migration, approved lessons and non-loadable candidates may run
+// automatically; semantic rewrites require an exact proposal and the existing explicit user review (ADR 0137).
+// Timers and the generic maintenance button never authorize new rules, skill merges or memory rewrites.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
@@ -22,13 +16,9 @@ import { errText, log } from '../log';
 import { ChangeLog, type AgentRestorer, type AgentSnapshot } from './changes';
 import { classifiersState, readJobs } from './classifiers';
 import { claimOf, learningState, measurable, seal, type IntervalCache } from './evidence';
-import { appendUnder, brainJsonWithTopic, corrections, LESSONS_RULE, LESSONS_WHEN, mergeMemory, mergeSkills, migrate, repeatedTask, skillText, type AgentWriter, type JobContext, type JobResult } from './jobs';
-import { errorLessons } from './error-lessons';
-
-/** The corrections job and, in the same pass, the recurring errors of ai-errors.md as rules (error-lessons.ts). */
-const withErrorLessons = (r: JobResult, ctx: JobContext): JobResult => ({ ...r, changes: r.changes + errorLessons(ctx) });
+import { appendUnder, brainJsonWithTopic, corrections, LESSONS_RULE, LESSONS_WHEN, migrate, repeatedTask, skillText, type AgentWriter, type JobContext, type JobResult } from './jobs';
 import { procedureSections } from './procedure-sources';
-import { pending as upgradePending, upgrade, type UpgradeAsk } from './upgrade';
+import type { UpgradeAsk } from './upgrade';
 import { memoryStats } from './memory-stats';
 import { readNoise, scanLogs, writeNoise } from './log-scan';
 import { readMemory, readRules, readSkills, readSmall, type SkillDir } from './model';
@@ -58,10 +48,9 @@ export interface BrainModelDeps {
   /** the cards the pass the user started makes from its log step and the skills nobody uses (ADR 0132, before it the
    *  pass's result went to the Orchestrator, #150); absent = no cards */
   findings?: (logs: LogScan) => { bugs: number; forget: number };
-  /** the running app's version (recorded in the brain by the upgrade job) */
+  /** Compatibility input for a future reviewed upgrade; generic maintenance does not rewrite layout metadata. */
   appVersion?: () => string;
-  /** the one-shot question (agents/oneshot.ts, no tools) of the upgrade job and of the memory tidy-up (memory-tidy.ts,
-   *  ADR 0129); absent = their candidates wait for a pass with an engine */
+  /** Compatibility input for reviewed rewrites; never invoked by automatic or generic manual maintenance. */
   upgradeAsk?: UpgradeAsk;
   /** the brain's scripts (brain/scripts.ts): a script's file by its id, and the hook that tells the Script tab it changed;
    *  absent = scripts cannot be removed here (ADR 0122) */
@@ -149,7 +138,7 @@ export class BrainModelService {
       profiles: () => this.profiles().filter(p => p.scope === 'role'),
       runs: () => { try { return this.d.runs(); } catch { return []; } },
       lessons: this.d.learning, agents: this.writer(), log: this.log,
-      now: () => this.now(), ...(this.d.upgradeAsk ? { ask: this.d.upgradeAsk } : {}),
+      now: () => this.now(),
     };
   }
   report(): MigrationReport | null { try { return (readLocal(this.reportFile) as MigrationReport | undefined) ?? null; } catch { return null; } }
@@ -193,9 +182,12 @@ export class BrainModelService {
       const before = new Set(this.log.all().map(c => c.id));
       for (const id of job ? [job] : MAINTENANCE_JOBS) {
         try {
-          const r = id === 'migration' ? await migrate(ctx)
-            : id === 'upgrade' ? await upgrade({ root, userData: this.d.userData, log: this.log, app: this.d.appVersion?.() ?? '0.0.0', ask: this.d.upgradeAsk, now: () => this.now() })
-            : id === 'corrections' ? withErrorLessons(corrections(ctx), ctx) : id === 'repeated-task' ? repeatedTask(ctx) : id === 'merge-skills' ? mergeSkills(ctx) : await mergeMemory(ctx);
+          // A timer or the generic maintenance button is not approval of unseen semantic edits. Keep this an
+          // allowlist: future jobs must supply a concrete reviewed proposal before entering the mutation path.
+          const r: JobResult = id === 'migration' ? migrate(ctx)
+            : id === 'corrections' ? { ...corrections(ctx), note: 'Solo lezioni già approvate; gli errori ricorrenti restano da proporre con evidenze e approvare.' }
+            : id === 'repeated-task' ? repeatedTask(ctx)
+            : { job: id, changes: 0, note: 'Modifica rinviata: serve una proposta concreta in Proposte e l’approvazione esplicita prima di cambiare skill, memoria o struttura.' };
           if (r.report) writeLocal(this.reportFile, mergeReport(this.report(), r.report));
           done.push(r);
         } catch (e) {
@@ -374,14 +366,12 @@ export class BrainModelService {
       suggest: goal => this.d.suggestSkills(goal), jobs: () => readJobs(path.join(this.d.userData, 'jobs.jsonl')) }, this.now());
   }
 
-  /** Timers: a minute after start the one-time migration (when there is something to move) and the brain upgrade (when
-   *  the brain is not in line with this version's layout), then every job every 6 h. */
+  /** Timers run structural migration once, then safe maintenance every six hours; semantic edits remain deferred. */
   start(): void {
     if (!this.d.auto) return;
     const first = setTimeout(() => {
       const root = this.root();
       try { if (root && !this.report() && procedureSections(root).length) void this.maintain('migration', { auto: true }).catch(() => { /* logged */ }); } catch { /* unreadable brain */ }
-      try { if (root && upgradePending(root, this.d.userData).length) void this.maintain('upgrade', { auto: true }).catch(() => { /* logged */ }); } catch { /* unreadable brain */ }
     }, 60_000);
     const every = setInterval(() => { void this.maintain(undefined, { auto: true }).catch(() => { /* logged */ }); }, SIX_HOURS);
     first.unref?.(); every.unref?.();

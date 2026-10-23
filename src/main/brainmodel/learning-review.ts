@@ -13,6 +13,8 @@ export interface LearningReviewDeps {
   root(): string | null;
   log: ChangeLog;
   runs(): readonly AgentRun[];
+  /** Host-verified pending lesson sources; never arbitrary ids supplied by the renderer. */
+  lessonSources?(): readonly string[];
   execute?(request: ReplayExecution & { brainRoot: string }): Promise<string>;
   now?(): number;
 }
@@ -38,10 +40,10 @@ export class LearningReviewService {
     const s = this.scope();
     return { datasets: s.evaluations.datasets(), replays: s.evaluations.replays(), candidates: s.candidates.list(), replayAvailable: s.evaluations.available() };
   }
-  /** Evidence is readable only through this brain's candidate/replay references, never by arbitrary run id. */
+  /** Evidence is readable only through this brain's candidate/replay/verified-lesson references. */
   evidence(runId: string): LearningEvidence {
     const s = this.scope(), runs = this.deps.runs();
-    const direct = new Set([...s.candidates.list().flatMap(c => c.sourceRunIds), ...s.evaluations.replays().flatMap(r => r.cases.flatMap(c => c.runId ? [c.runId] : []))]);
+    const direct = new Set([...s.candidates.list().flatMap(c => c.sourceRunIds), ...s.evaluations.replays().flatMap(r => r.cases.flatMap(c => c.runId ? [c.runId] : [])), ...(this.deps.lessonSources?.() ?? [])]);
     const canonicalRoot = (root: string): string => {
       let full: string; try { full = fs.realpathSync(root); } catch { full = path.resolve(root); }
       return process.platform === 'win32' ? full.toLowerCase() : full;

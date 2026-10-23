@@ -16,7 +16,7 @@ import type { ChatSummary, Harness, NewChat } from '../../shared/contract';
 import type { AgentCatalog, AgentRun, UserTaskEvents } from '../../shared/agents';
 import { canLaunch, isWorkRole, launchGap, ROLE_DEFAULTS, WORK_ROLE_IDS, type DelegationSettings } from '../../shared/roles';
 import { oneLine } from '../../shared/agent-label';
-import { CRITERION_MAX, EVIDENCE_MAX, RESULT_OUTPUT_MAX, SUMMARY_MAX, checkContract, checkResult, delegationPrompt, depthOf, type DelegationLimitHit, type DelegationResult, type TaskAssignmentOptions } from '../../shared/delegation';
+import { CRITERION_MAX, EVIDENCE_MAX, RESULT_OUTPUT_MAX, SUMMARY_MAX, checkContract, checkResult, delegationPrompt, depthOf, type DelegationLimitHit, type DelegationResult, type DelegationIntegration, type TaskAssignmentOptions } from '../../shared/delegation';
 import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
 import { delegationGate, stepIndex, type StrategyPlan } from '../../shared/strategy';
 import type { McpTool } from '../mcp/server';
@@ -58,6 +58,9 @@ export interface DelegationDeps {
   label: string;
   /** the git worktrees of the repository at a folder (agents/worktrees.ts); a child may work in one of its parent's */
   worktrees?: (cwd: string) => Promise<string[]>;
+  /** Host-owned staging only: no parent checkout mutation, branch merge, push or arbitrary command. */
+  integrateMany?: (parent: ChatSummary, children: ChatSummary[]) => Promise<DelegationIntegration>;
+  integrate?: (parent: ChatSummary, child: ChatSummary) => Promise<DelegationIntegration>;
   runs: () => readonly AgentRun[];
   /** the brain's skills with their tools: a part whose skill needs tools its role lacks is said in the answer (#93) */
   skillTools?: SkillToolsSource;
@@ -194,7 +197,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
         return lines.length ? { warnings: lines } : {};
       };
       const children = settled.map((s, i) => s.status === 'fulfilled'
-        ? { role: plans[i]!.role, title: s.value.title, chatId: s.value.id, harness: s.value.harness, model: s.value.model, state: s.value.queued ? 'queued' : s.value.state, ...warnings(i, s.value.id) }
+        ? { role: plans[i]!.role, title: s.value.title, chatId: s.value.id, cwd: s.value.cwd, harness: s.value.harness, model: s.value.model, state: s.value.queued ? 'queued' : s.value.state, ...warnings(i, s.value.id) }
         : { role: plans[i]!.role, title: plans[i]!.title, error: s.reason instanceof Error ? s.reason.message : String(s.reason) });
       // each step of the plan with its started children: the strip shows it under way
       const steps = new Map<number, string[]>();
@@ -334,6 +337,30 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     })) };
   }
 
+  async function integrateChildren(a: Record<string, unknown>, callerId: string, many = false): Promise<DelegationIntegration> {
+    const parent = structuredClone(activeParent(callerId, many ? 'agent_integrate_children' : 'agent_integrate_child'));
+    const ids = many ? a.chatIds : [a.chatId];
+    if (Object.keys(a).some(k => k !== (many ? 'chatIds' : 'chatId')) || !Array.isArray(ids) || !ids.length || ids.length > TASKS_MAX || ids.some(id => typeof id !== 'string') || new Set(ids).size !== ids.length) throw new Error('Integration requires 1 to 10 distinct IDs of YOUR direct children.');
+    const selected = ids.map(id => chat(id as string));
+    if (selected.some(c => !c || c.parentId !== callerId)) throw new Error('Integration requires IDs of YOUR direct children.');
+    const children = structuredClone(selected as ChatSummary[]), policy = structuredClone(d.chats.agentPolicy(parent.id));
+    if (parent.permissionMode === 'plan' || policy?.ceiling === 'plan' || (policy?.tools && !policy.tools.allow.some(c => c === 'edit' || c === 'shell'))) throw new Error('Your current permissions do not allow staging repository changes.');
+    if ((many && !d.integrateMany) || (!many && !d.integrate)) throw new Error('Safe isolated integration is unavailable.');
+    if (children.some(c => assigning.has(c.id))) throw new Error('A selected child has an assignment or integration in progress.');
+    children.forEach(c => assigning.add(c.id));
+    try {
+      const result = many ? await d.integrateMany!(structuredClone(parent), structuredClone(children)) : await d.integrate!(structuredClone(parent), structuredClone(children[0]!));
+      let current: ChatSummary;
+      try { current = activeParent(callerId, 'agent_integrate_children'); }
+      catch { return { ...result, status: 'blocked', reason: 'The parent assignment ended while staging; do not use this stale integration result.' }; }
+      if (!current || current.closedAt || current.cwd !== parent.cwd || current.permissionMode !== parent.permissionMode || JSON.stringify(d.chats.agentPolicy(parent.id)) !== JSON.stringify(policy)
+        || current.run?.runId !== parent.run?.runId || current.run?.taskVersion !== parent.run?.taskVersion || current.run?.endedAt !== parent.run?.endedAt
+        || children.some(c => { const now = chat(c.id); return !now || now.cwd !== c.cwd || now.run?.runId !== c.run?.runId || now.run?.taskVersion !== c.run?.taskVersion; })) return { ...result, status: 'blocked', reason: 'An assignment changed while staging; do not use this stale integration result.' };
+      return result;
+    }
+    finally { children.forEach(c => assigning.delete(c.id)); }
+  }
+
   async function askParent(a: Record<string, unknown>, callerId: string): Promise<unknown> {
     const self = chat(callerId);
     if (!self?.delegation || !self.parentId) throw new Error('agent_ask_parent: only a delegated chat has a parent to ask; ask the user instead.');
@@ -387,11 +414,11 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     } };
   return [{
     name: 'agent_delegate',
-    description: 'Delegate parts of your task to other roles, only when it has several independent parts: a quick single-part task you do yourself (a child costs more tokens and time than it saves; task_estimate on the Orchestrator says which). each part starts a visible chat under yours, running the role you name (only roles your role may launch: agent_catalog). The child sees only its contract, never this conversation: write it self-contained. Several parts start at once (parallel). It never gets more permissions than you, works inside your folder, and returns one result with agent_report that reaches you as a message. Limits (depth, children running at once) are the user\'s.',
+    description: 'Delegate parts of your task to other roles, only when it has several independent parts: a quick single-part task you do yourself (a child costs more tokens and time than it saves; task_estimate on the Orchestrator says which). each part starts a visible chat under yours, running the role you name (only roles your role may launch: agent_catalog). The child sees only its contract, never this conversation: write it self-contained. Several parts start at once (parallel). It never gets more permissions than you, uses an isolated Git worktree when it can write (a clean committed baseline is required), and returns one result with agent_report that reaches you as a message. Limits (depth, children running at once) are the user\'s.',
     inputSchema: { type: 'object', required: ['tasks'], additionalProperties: false, properties: {
       tasks: { type: 'array', minItems: 1, maxItems: TASKS_MAX, items: { type: 'object', required: ['role', 'title', 'contract'], additionalProperties: false, properties: {
         role: { type: 'string', enum: [...WORK_ROLE_IDS] }, title: { ...str, description: '"Area · what", e.g. "Ordini · Log degli errori"' },
-        cwd: { ...str, description: 'optional absolute folder inside yours or one of your repository\'s worktrees; default: your folder. Never another repository: for that, report the part with agent_report as a ready contract (outcome blocked, with the folder) so the Orchestrator opens the chat there (app_create_chat with cwd)' },
+        cwd: { ...str, description: 'optional absolute folder inside yours or one of your repository\'s worktrees; default: your folder; writing children receive a new isolated worktree from that committed baseline. Never another repository: for that, report the part with agent_report as a ready contract (outcome blocked, with the folder) so the Orchestrator opens the chat there (app_create_chat with cwd)' },
         step: { type: 'integer', minimum: 1, description: 'with a plan approved by the user (plan_propose): the step number this part does' },
         contract: { type: 'object', required: ['goal', 'doneWhen'], additionalProperties: false, properties: {
           goal: str, output: { ...str, description: 'what to give back; default: the role\'s output' },
@@ -419,6 +446,18 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     } },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: async (a, ctx) => JSON.stringify(await assignChild(a, callerOf(ctx.params))),
+  }, {
+    name: 'agent_integrate_child',
+    description: 'Stage one finished direct child’s committed changes in a fresh detached worktree. Never changes your checkout, merges a branch or pushes. Returns pinned heads, staging cwd and a whitespace-only check; repository tests and independent review are still required. Dirty sources and missing host isolation are blocked.',
+    inputSchema: { type: 'object', required: ['chatId'], additionalProperties: false, properties: { chatId: str } },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    run: async (a, ctx) => JSON.stringify(await integrateChildren(a, callerOf(ctx.params))),
+  }, {
+    name: 'agent_integrate_children',
+    description: 'Combine 1 to 10 finished direct children’s committed changes into one fresh detached staging worktree. Uses host-owned allocations and pinned commits; reports conflicts and a whitespace-only receipt. Run repository checks and independent review on the returned union tree. Never merges branches, changes your checkout or pushes.',
+    inputSchema: { type: 'object', required: ['chatIds'], additionalProperties: false, properties: { chatIds: { type: 'array', items: str, minItems: 1, maxItems: TASKS_MAX, uniqueItems: true } } },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    run: async (a, ctx) => JSON.stringify(await integrateChildren(a, callerOf(ctx.params), true)),
   }, {
     name: 'agent_task_events',
     description: 'Read the complete ordered user instruction ledger for YOUR direct child before reassigning it. Pass latestSeq as expectedEventSeq to agent_assign_task; no model turn is started.',

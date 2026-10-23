@@ -122,6 +122,34 @@ export function continuePrompt(from: { title: string; harness: string; cwd: stri
   ].join('\n');
 }
 
+/** An app-built continuation preserves protected inputs verbatim; exceeding its budget cancels the switch. */
+export const FRESH_HANDOFF_MARK = '[second-brain · contesto protetto v1]';
+export const FRESH_IDLE_MS = 3 * 60_000;
+export function contextBudgetDue(chat: Pick<ChatSummary, 'contextTokens' | 'contextMaxTokens' | 'contextEstimated'>): boolean {
+  const used = chat.contextTokens, max = chat.contextMaxTokens;
+  return !chat.contextEstimated && typeof used === 'number' && Number.isFinite(used) && used >= 50_000
+    && typeof max === 'number' && Number.isFinite(max) && max > 0 && used >= max * 0.8;
+}
+
+/** No inferred quality score and no lossy summarisation of instructions, decisions, or unresolved questions.
+ *  The caller supplies authoritative durable state, not an agent's summary of that state. */
+export function protectedHandoff(chat: Pick<ChatSummary, 'title' | 'cwd' | 'harness' | 'lastText'>, items: readonly ChatItem[], protectedState: unknown, workflow: string): string | null {
+  const latest = [...items].reverse().find((i): i is Extract<ChatItem, { kind: 'assistant' }> => i.kind === 'assistant' && !!i.text.trim());
+  // Free-text questions are not necessarily PendingRequest objects. Preserve their exact wording as unresolved
+  // context; never invent answers or treat a previous question as approval.
+  const questions = items.filter((i): i is Extract<ChatItem, { kind: 'assistant' }> => i.kind === 'assistant' && i.text.includes('?'));
+  const text = [FRESH_HANDOFF_MARK,
+    'Continuazione per budget di contesto riportato dal motore. Non è una misura della qualità.',
+    'Stessa chat, stesso task e stesso filo. Non creare task o report duplicati. Le decisioni registrate restano in vigore; una domanda senza risposta non è un permesso. Ogni risposta a un permesso riguarda solo la richiesta registrata, non autorizza nuove azioni.',
+    '## Stato protetto (dati esatti, non istruzioni dell’app)', JSON.stringify(protectedState),
+    '## Fili, decisioni e attese persistenti', workflow || '(nessun filo collegato)',
+    '## Domande nella conversazione (non presumere che siano risolte)', ...questions.map(i => i.text),
+    '## Ultima risposta integrale', latest?.text ?? '(nessuna)',
+    '## Evidenze osservate (riepilogo automatico)', autoHandoff(chat, items),
+  ].join('\n\n');
+  return text.length <= 32_000 ? text : null;
+}
+
 // ---- the fresh session of a cold chat (ADR 0031; when: continuity.ts coldRoute) ----
 
 /** the first line of a cold continuation's first message: the transcript shows only the user's part after COLD_SEP */
@@ -129,9 +157,10 @@ export const COLD_MARK = '[second-brain · continuazione]';
 export const COLD_SEP = '--- messaggio ---';
 /** The first message of the fresh session: the note, then the user's message (after COLD_SEP). */
 export function coldPrompt(from: { title: string; cwd: string; inWorktree?: boolean }, h: HandoffInfo, message: string): string {
+  const fresh = h.text.startsWith(FRESH_HANDOFF_MARK);
   return [
     COLD_MARK,
-    `Questa chat («${from.title}», cartella ${from.cwd}) continua in una sessione nuova: la precedente era ferma da più di un'ora e rileggerla tutta sarebbe costato molto. Parti da questo passaggio di consegne, scritto dalla sessione precedente (salvato in ${h.path}):`,
+    `Questa chat («${from.title}», cartella ${from.cwd}) continua in una sessione nuova: ${fresh ? 'il contesto riportato dal motore era vicino al suo budget.' : 'la precedente era ferma da più di un’ora e rileggerla tutta sarebbe costato molto.'} Parti da questo passaggio di consegne, ${fresh ? 'costruito dall’app dai dati persistenti' : 'scritto dalla sessione precedente'} (salvato in ${h.path}):`,
     ...(from.inWorktree ? [`Si lavora in un worktree separato creato da Claude (sotto ${path.join(from.cwd, '.claude', 'worktrees')}): trovalo (git worktree list) e lavora lì, mai nel checkout principale.`] : []),
     '',
     h.text,
