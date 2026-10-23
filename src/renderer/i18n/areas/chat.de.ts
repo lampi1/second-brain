@@ -225,7 +225,7 @@ export const chatDe: typeof chatIt = {
   'chat.questions.note2': 'zum Antworten.',
   'chat.questions.openChat': 'Chat öffnen',
   'chat.questions.later': 'Später überlegen',
-  'chat.questions.laterTip': 'Wartet in „Zu beantworten“',
+  'chat.questions.laterTip': 'Wartet in „Zu beantworten“: der Orchestrator bringt es beim nächsten Überblick zurück',
   'chat.questions.request': (p: { chatTitle: string }) => `Anfrage von ${p.chatTitle}`,
   'chat.questions.permission': 'Berechtigung',
   'chat.questions.requestsCount': (p: { n: number }) => p.n === 1 ? 'eine Anfrage' : `${p.n} Anfragen`,

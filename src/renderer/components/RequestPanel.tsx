@@ -284,7 +284,7 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
         ) : q ? (
           <>
             {commands && <div className="wq-cmds"><div className="wq-label">{t('genui.request.commands')}</div>{commands}</div>}
-            <div className="wq-opts" role={q.multiSelect ? 'group' : undefined}>
+            <div className={`wq-opts ${yesNo ? 'yesno' : ''}`} role={q.multiSelect ? 'group' : undefined}>
               {choiceCards()}
               {canOther && (other === null ? (
                 <button type="button" className="wq-opt wq-other" onClick={() => setOther('')} disabled={sent} data-testid={`${testBase}-other`}>

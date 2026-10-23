@@ -223,7 +223,7 @@ export const chatIt = {
   'chat.questions.note2': 'per rispondere.',
   'chat.questions.openChat': 'Apri chat',
   'chat.questions.later': 'Ci penso dopo',
-  'chat.questions.laterTip': 'Resta in «Da rispondere»',
+  'chat.questions.laterTip': 'Resta in «Da rispondere»: l’Orchestrator te la ripropone quando gli chiedi un recap',
   'chat.questions.request': (p: { chatTitle: string }) => `Richiesta da ${p.chatTitle}`,
   'chat.questions.permission': 'Permesso',
   'chat.questions.requestsCount': (p: { n: number }) => p.n === 1 ? 'una richiesta' : `${p.n} richieste`,
