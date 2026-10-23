@@ -74,6 +74,7 @@ import { listPrice, priceTableSource, setPriceTable } from './chats/live-cost';
 import type { McpServer, McpTool, ToolOutput } from './mcp/server';
 import { createBrowserModule, mcpPortFromEnv } from './browser/service';
 import { Workflows } from './workflows/service';
+import { createFlowRuntime, type FlowRuntime } from './flows/runtime';
 import { AGENT_LABEL, appControlTools, orchestratorEndpointAuth, type ToolDef, type ToolOut } from './appctl/tools';
 import { ChatMail, mailTools } from './chats/mail';
 import { brainClassifier } from './chats/orchestrator-delivery';
@@ -143,6 +144,7 @@ export interface Wired {
   hybrid?: HybridSearch;
   /** the brain skills that fit a request, best first (skills/suggest.ts) */
   workflows?: Workflows;
+  flows?: FlowRuntime;
   suggestSkills?: (request: string) => Promise<SkillSuggestions>;
   updateChats?: { problem: () => string | null; checkpoint: () => void };
   progress: ProgressService;
@@ -364,6 +366,7 @@ export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: Engin
 export async function createServices(ctx: Ctx): Promise<Wired> {
   if (process.env.SB_DEMO === '1') return createDemoServices(ctx);
   let workflowsRef: Workflows | undefined;
+  let flowsRef: FlowRuntime | undefined;
   // the dev instance records the shapes real CLIs send (sanitized, a few per kind): fixtures for the contract tests (ADR 0055)
   setRecorder(!releaseId() && !process.env.SB_TEST ? path.join(ctx.userData, 'cli-records') : null);
   let cliCache: Record<Harness, CliStatus> | null = null;
@@ -507,6 +510,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     onRunEnded: run => loopRef.current?.ended(run),
     onRunOutcome: run => { routingVerdict(run); loopRef.current?.outcome(run); },
     roleCatalogBrief: () => roleCatalogBrief(() => agents.list()),
+    flowContext: (text, chatId) => flowsRef?.hint(text, chatId) ?? '[app flows] Catalogo non ancora pronto: consulta app_flow_list prima di scegliere un flusso.',
     // the reply language (ADR 0120): the setting, or Windows' language on «Come il sistema», the same as the UI's
     replyLang: uiLang,
     // the estimate task_estimate would give, under the user's request (one model round trip less, ADR 0087)
@@ -689,11 +693,20 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const autoCloseTimer = setInterval(() => { void autoCloseService.tick().catch(e => log.warn('chats', 'automatic archive suspended', { cause: errText(e) })); }, 1000);
   autoCloseTimer.unref();
   agentPacks.learning.evidenceRuns = () => manager.runs.list();
+  const flows = flowsRef = createFlowRuntime({ userData: ctx.userData, brainRoot: () => brain.info().brainRoot,
+    chats: () => chats.list(), changed: snapshot => ctx.emitter.emit('flows:changed', snapshot) });
   const workflows = workflowsRef = new Workflows(path.join(ctx.userData, 'work-threads.json'), rows => ctx.emitter.emit('work:changed', rows), Date.now, row => {
     const linked = chats.list().filter(c => row.chatIds.includes(c.id) && c.plan);
     const approved = linked.filter(c => ['running', 'done'].includes(c.plan!.phase) && (c.run?.plan?.approvedAt ?? 0) > 0);
     return { pending: linked.some(c => !['running', 'done'].includes(c.plan!.phase)), approved: approved.length === linked.length ? approved.map(c => `${c.id} / task ${c.run?.taskVersion ?? 1}: ${c.plan!.steps.map(s => s.title).join('; ')}`).join('\n') : '' };
   });
+  // Reconcile deadlines without model calls or launching work; the Orchestrator remains the sole entry point.
+  const flowDeadlineTimer = process.env.SB_TEST ? null : setInterval(() => {
+    if (!brain.info().brainRoot) return;
+    try { flows.service().snapshot(); }
+    catch (error) { log.warn('flows', 'Flow deadline reconciliation unavailable', { cause: String(error), hint: 'Reconnect the selected brain and reopen Flussi.' }); }
+  }, 30_000);
+  flowDeadlineTimer?.unref();
   const wake = attachOrchestratorWake(ctx, chats, () => brain.settings().orchestratorEvents !== false && (!process.env.SB_TEST || process.env.SB_ORCHESTRATOR_EVENTS === '1'));
   manager.onUserWrote(n => wake.userMessage(n)); // the user typed in a work chat: quiet news (ADR 0083)
   manager.onCleanReport(n => wake.cleanReport({ ...n, workflow: workflows.list().some(r => r.status === 'active' && r.chatIds.includes(n.chatId)) })); // linked workflow results wake the coordinator; unrelated results remain quiet
@@ -780,7 +793,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     },
     tell: (chatId, text) => chats.send(chatId, text),
   });
-  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, personal, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog } };
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, flows, personal, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog } };
   attachAppTools(mcp, appDeps, source, false, orchestratorTokens);
 
   // Task page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
@@ -889,7 +902,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     stallMin: () => checkedDelegation(brain.settings().delegation).stallMin, lastEventAt: id => manager.lastEventAt(id) });
 
   return {
-    workflows, brainModel, research, phrases, memoryReview, learningReview, queries: brainQueries,
+    workflows, flows, brainModel, research, phrases, memoryReview, learningReview, queries: brainQueries,
     morning,
     mcpServers,
     cloud, chats, browser, personal, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, suggestSkills,
@@ -900,7 +913,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot, Date.now, () => progressService.award('setup-complete')),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { mcpServers.stop(); brainModel.stop(); phrases.stop(); cloud.shutdown(); clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), personal.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { mcpServers.stop(); brainModel.stop(); phrases.stop(); cloud.shutdown(); clearInterval(autoCloseTimer); if (flowDeadlineTimer) clearInterval(flowDeadlineTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), personal.shutdown(), brain.shutdown()]); },
     killNow: () => { compareRuns.killNow(); manager.killAll(); runner.shutdown(); },
   };
 }

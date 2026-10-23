@@ -474,6 +474,26 @@ app.whenReady().then(async () => {
       const target = orchestrator.get();
       if (a.feedback && target) void s.chats.send(target.id, `[evento app] L’utente chiede una proposta diversa per la regola ${reviewed.id}. Proposta rifiutata: ${JSON.stringify(reviewed.rule)}. Risposta: ${JSON.stringify(reviewed.note)}. Prepara la nuova proposta nella modale; nessuna modifica è approvata.`, undefined, false, 'Decisioni', false, { kind: 'app' }).catch(e => log.warn('chats', 'lesson feedback wake failed', { cause: errText(e), hint: 'The feedback is saved in the lesson review record.' }));
     },
+    'flows:list': () => s.flows?.service().snapshot() ?? { contextKey: 'unavailable', drafts: [], versions: [], active: {}, runs: [] },
+    'flows:definitionDecide': a => {
+      const service = s.flows?.service();
+      if (!service || a.contextKey !== service.snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la proposta.');
+      const { contextKey: _context, ...decision } = a;
+      service.decideDefinition(decision);
+      const target = orchestrator.get();
+      if (target) void s.chats.send(target.id, '[evento app] Decisione sulla definizione del flusso salvata. Rileggi app_flow_list. Approvare la definizione non autorizza operazioni esterne o produzione.', undefined, false, 'Flussi', false, { kind: 'app' }).catch(e => log.warn('flows', 'Definition decision wake failed', { cause: errText(e), hint: 'Decision persisted; reread the catalog.' }));
+      return service.snapshot();
+    },
+    'flows:decide': a => {
+      const service = s.flows?.service();
+      if (!service || a.contextKey !== service.snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la decisione.');
+      const { contextKey: _context, ...decision } = a;
+      service.decide(decision);
+      const run = service.snapshot().runs.find(r => r.id === a.runId);
+      const target = s.chats.list().find(c => c.id === run?.ownerOrchestratorId && c.isOrchestrator && !c.closedAt);
+      if (target) void s.chats.send(target.id, `[evento app] Decisione salvata per il flusso ${a.runId}. Rileggi app_flow_status; questa notifica non concede altri permessi.`, undefined, false, 'Flussi', false, { kind: 'app' }).catch(e => log.warn('flows', 'Run decision wake failed', { cause: errText(e), hint: 'Decision persisted in the flow run.' }));
+      return service.snapshot();
+    },
     'work:list': () => workflows.list(),
     'work:decide': a => {
       const row = workflows.decide(a);

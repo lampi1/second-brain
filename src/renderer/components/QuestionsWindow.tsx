@@ -37,9 +37,14 @@ import { t } from '../i18n';
 import { durableAsks, withDurableAsks, type DurableAsk } from '../lib/work-ask';
 import { useWorkflows } from '../store/workflows';
 import { WorkApproval } from './WorkApproval';
+import { FlowApproval } from './FlowApproval';
+import { flowAsks, type FlowAsk } from '../lib/flow-ask';
+import { useFlows } from '../store/flows';
 
 /** what the window shows: an open request, or a Strategist's plan to approve */
-type Ask = PendingRequest | PlanAsk | DurableAsk;
+type Ask = PendingRequest | PlanAsk | DurableAsk | FlowAsk;
+const isFlow = (ask: Ask): ask is FlowAsk => ask.type === 'flow-definition' || ask.type === 'flow-run';
+const isHost = (ask: Ask): ask is DurableAsk | FlowAsk => isDurable(ask) || isFlow(ask);
 const isDurable = (ask: Ask): ask is DurableAsk => ask.type === 'work' || ask.type === 'lesson';
 
 export function QuestionsWindow() {
@@ -53,7 +58,9 @@ export function QuestionsWindow() {
   const plans = useMemo(() => planKeys.map(planAskOf).filter((p): p is PlanAsk => !!p), [planKeys]);
   const { rows, lessons } = useWorkflows();
   const decisions = useMemo(() => durableAsks(rows, lessons), [rows, lessons]);
-  const pending: readonly Ask[] = withDurableAsks(withPlans(allPending, plans), decisions).filter(p => (isDurable(p) || !hidden.includes(p.chatId)) && !requestPostponed(reqKey(p)));
+  const { snapshot } = useFlows();
+  const flows = useMemo(() => flowAsks(snapshot), [snapshot]);
+  const pending: readonly Ask[] = [...withDurableAsks(withPlans(allPending, plans), decisions), ...flows].filter(p => (isHost(p) || !hidden.includes(p.chatId)) && !requestPostponed(reqKey(p)));
   const queue = [...pending];
   if (q.first) { const i = queue.findIndex(p => reqKey(p) === q.first); if (i > 0) queue.unshift(...queue.splice(i, 1)); }
   const cur = queue[0];
@@ -136,11 +143,11 @@ function Window({ cur, all, boxRef, hidden, openedAt }: { cur: Ask; all: readonl
   const [keysEl, setKeysEl] = useState<HTMLSpanElement | null>(null);
   qwinStats.renders++;
   // primitives only: the asking chat's other changes (cost, last line) do not render the window
-  const name = useApp(s => isDurable(cur) ? cur.title : (s.chats[cur.chatId]?.isOrchestrator ? 'Orchestrator' : (s.chats[cur.chatId]?.title ?? 'Chat')));
+  const name = useApp(s => isHost(cur) ? cur.title : (s.chats[cur.chatId]?.isOrchestrator ? 'Orchestrator' : (s.chats[cur.chatId]?.title ?? 'Chat')));
   const harness = useApp(s => s.chats[cur.chatId]?.harness ?? 'claude');
-  const isOrchestrator = useApp(s => isDurable(cur) || !!s.chats[cur.chatId]?.isOrchestrator);
-  const titles = useApp(s => all.map(p => isDurable(p) ? p.title : (s.chats[p.chatId]?.isOrchestrator ? 'Orchestrator' : (s.chats[p.chatId]?.title ?? 'Chat'))), sameList);
-  const harnesses = useApp(s => all.map(p => `${s.chats[p.chatId]?.harness ?? 'claude'}${isDurable(p) || s.chats[p.chatId]?.isOrchestrator ? ':r' : ''}`), sameList);
+  const isOrchestrator = useApp(s => isHost(cur) || !!s.chats[cur.chatId]?.isOrchestrator);
+  const titles = useApp(s => all.map(p => isHost(p) ? p.title : (s.chats[p.chatId]?.isOrchestrator ? 'Orchestrator' : (s.chats[p.chatId]?.title ?? 'Chat'))), sameList);
+  const harnesses = useApp(s => all.map(p => `${s.chats[p.chatId]?.harness ?? 'claude'}${isHost(p) || s.chats[p.chatId]?.isOrchestrator ? ':r' : ''}`), sameList);
   const now = useNow(30_000);
   // a question brings the commands its chat gave in the same turn; a permission's command is the agent's own (never run twice)
   const items = useApp(s => (cur.type === 'question' ? s.items[cur.chatId] : undefined));
@@ -225,7 +232,9 @@ function Window({ cur, all, boxRef, hidden, openedAt }: { cur: Ask; all: readonl
             <div className="qwin-note" role="status" data-testid="qwin-elsewhere">{t('chat.questions.note')} <Keys combo="Ctrl+J" /> {t('chat.questions.note2')}</div>
           )}
           <div className="qwin-body">
-            {isDurable(cur)
+            {isFlow(cur)
+              ? <FlowApproval key={curKey} ask={cur} onEscape={later} />
+              : isDurable(cur)
               ? <WorkApproval key={curKey} ask={cur} onEscape={later} />
               : cur.type === 'plan'
               ? <PlanApproval key={curKey} ask={cur} chatTitle={name} onEscape={later} keysTo={keysEl} testid="qwin-plan" />

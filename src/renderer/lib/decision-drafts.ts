@@ -7,3 +7,8 @@ export function saveDecisionDraft(key: string, text: string): void {
   drafts.delete(key); drafts.set(key, text);
   if (drafts.size > 100) drafts.delete(drafts.keys().next().value!);
 }
+
+/** Drop a brain-bound queue's drafts when its source changes; never carry answers into another brain. */
+export function clearDecisionDrafts(prefix: string): void {
+  for (const key of drafts.keys()) if (key.startsWith(prefix)) drafts.delete(key);
+}

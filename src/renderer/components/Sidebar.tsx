@@ -21,7 +21,7 @@ import { useProposalCount } from '../lib/proposals';
 import { HUB_PAGES } from '../lib/memory-hub';
 
 const ICON: Record<BrainPageId, ReactNode> = {
-  home: <IconGrid />,
+  home: <IconGrid />, flussi: <IconBranch />,
   agenti: <IconLayers />,
   fatto: <IconBook />, idee: <IconLightbulb />,
   costi: <IconCoins />, qualita: <IconChart />, apprendimento: <IconTarget />, script: <IconTerminal />, log: <IconList />, confronto: <IconLayers />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
@@ -48,7 +48,7 @@ export function Sidebar() {
   const saved=ui.use(s=>s.prefs.workProfile);
   const composition=workProfile(saved,BRAIN_PAGES.map(page=>page.id));
   const show=(id:BrainPageId)=>!composition||composition.pageIds.includes(id);
-  const brainPages=composition?composition.pageIds.filter((id):id is BrainPageId=>BRAIN_PAGES.some(page=>page.id===id)&&!['home','log','guida','browser','task','fatto','impostazioni',...BRAIN_CORE,...TRENDS,...IN_MEMORIA].includes(id)):BRAIN_GROUP;
+  const brainPages=composition?composition.pageIds.filter((id):id is BrainPageId=>BRAIN_PAGES.some(page=>page.id===id)&&!['home','log','guida','browser','task','flussi','fatto','impostazioni',...BRAIN_CORE,...TRENDS,...IN_MEMORIA].includes(id)):BRAIN_GROUP;
   const page = ui.use(s => s.page);
   const map = ui.use(s => s.map);
   const read = ui.use(s => s.read);
@@ -84,6 +84,7 @@ export function Sidebar() {
         <SidebarTree />
         {title(t('dialogs.sidebar.work'), 'work')}
         {tasksOn && show('task') && page1('task')}
+        {page1('flussi')}
         {show('fatto')&&page1('fatto')}
         {title(t('dialogs.sidebar.brain'), 'brain')}
         {BRAIN_CORE.map(page1)}

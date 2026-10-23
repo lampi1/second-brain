@@ -51,6 +51,8 @@ import type { BrainScripts } from '../brain/scripts';
 import type { BrainChangelog } from '../brain/changelog';
 import { scriptWriteTools } from '../brain/scripts-tools';
 import { AGENT_LABEL } from '../../shared/agent-label';
+import { flowTools } from '../flows/tools';
+import type { FlowRuntime } from '../flows/runtime';
 import { workflowTools } from '../workflows/tools';
 import type { Workflows } from '../workflows/service';
 
@@ -59,6 +61,7 @@ export interface ToolDef { name: string; description: string; inputSchema: objec
 
 export interface AppCtlDeps {
   workflows?: Workflows;
+  flows?: FlowRuntime;
   /** cloud agents (ADR 0080): app_create_chat where:'cloud' starts one, app_chats lists them */
   cloud?: CloudService;
   agentLearning?: AgentPackLearning;
@@ -175,6 +178,10 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   const delegated = (chatId: string) => d.chats.list().some(c => c.id === chatId && !!c.parentId);
   const contentOf = (chatId: string) => { guard(chatId); if (delegated(chatId)) throw new Error('chat delegata da un altro ruolo: il suo contenuto lo legge il genitore; tu ne vedi lo stato (app_chats, app_digest)'); return chatId; };
   const tools: ToolDef[] = [
+    ...(d.flows && authed() ? flowTools({
+      service: () => { if (!authed()) throw new Error('Authenticated Orchestrator required'); return d.flows!.service(); },
+      ownerId: callerId!, resolveBinding: d.flows.resolveBinding,
+    }) : []),
     ...(d.workflows && authed() ? workflowTools(d.workflows, id => d.chats.list().some(c => c.id === id && mine(c) && !c.parentId && !c.isOrchestrator), id => d.chats.list().find(c => c.id === id)) : []),
     ...(d.agentLearning ? [learnTool(d, callerId, authed())] : []),
     ...(d.agentLearning && authed() ? [toolDef(lessonReviewTool(d.agentLearning))] : []),
@@ -645,9 +652,15 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const plans = d.chats.list().filter(c => !c.closedAt && !other(c.id) && c.plan?.phase === 'proposed').length;
         const workflows = d.workflows?.list().filter(r => r.status === 'approval' && r.proposal).length ?? 0;
         const lessons = d.agentLearning?.waiting().length ?? 0;
-        if (!asks && !plans && !workflows && !lessons) return { waiting: 0, note: 'Niente aspetta l’utente: non c’è nulla da aprire.' };
+        let flows = 0;
+        try {
+          const state = d.flows?.service().snapshot();
+          flows = (state?.drafts.filter(x => x.status === 'proposed').length ?? 0)
+            + (state?.runs.filter(x => (x.status === 'approval' || x.status === 'blocked') && x.steps[x.currentStep]?.decisionPending !== false).length ?? 0);
+        } catch { /* An unavailable brain must not hide ordinary questions. */ }
+        if (!asks && !plans && !workflows && !lessons && !flows) return { waiting: 0, note: 'Niente aspetta l’utente: non c’è nulla da aprire.' };
         d.emitUi({ action: 'unblock' });
-        return { waiting: asks + plans + workflows + lessons, questionsAndPermissions: asks, plans, workflows, lessons, note: 'La finestra delle domande è aperta con tutte le richieste in attesa.' };
+        return { waiting: asks + plans + workflows + lessons + flows, questionsAndPermissions: asks, plans, workflows, lessons, flows, note: 'La finestra delle domande è aperta con tutte le richieste in attesa.' };
       },
     });
   }

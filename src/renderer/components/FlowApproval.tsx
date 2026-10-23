@@ -1,0 +1,64 @@
+// Exact-version flow decisions use the shared modal's focus, postponement and bounded session drafts.
+import { useId, useRef, useState } from 'react';
+import type { FlowAsk } from '../lib/flow-ask';
+import { flowDecisionMode, flowDecisionSubmission, flowGateEvidence } from '../lib/flow-decision';
+import { openChatRef } from '../actions';
+import { useApp } from '../store/store';
+import { decideFlow } from '../store/flows';
+import { decisionDraft, saveDecisionDraft } from '../lib/decision-drafts';
+import { t } from '../i18n';
+import { FlowDefinition } from './FlowDefinition';
+import '../styles/flows.css';
+export function FlowApproval({ ask, onEscape }: { ask: FlowAsk; onEscape: () => void }) {
+  const key = `${ask.chatId}/${ask.id}`, inputId = useId(), evidenceId = useId();
+  const evidenceKey = `${key}/evidence`;
+  const [evidence, setEvidence] = useState(() => decisionDraft(evidenceKey));
+  const [feedback, setFeedback] = useState(() => decisionDraft(key));
+  const [changing, setChanging] = useState(() => !!decisionDraft(key));
+  const [busy, setBusy] = useState(false);
+  const submitting = useRef(false);
+  const definition = ask.type === 'flow-definition' ? ask.draft.definition : ask.version?.definition;
+  const run = ask.type === 'flow-run' ? ask.run : undefined;
+  const current = run?.steps[run.currentStep];
+  const boundChat = useApp(s => current?.chatId && s.chats[current.chatId] ? current.chatId : null);
+  const mode = flowDecisionMode(ask);
+  const gate = flowGateEvidence(ask);
+  const canApprove = flowDecisionSubmission(ask, 'yes', feedback, evidence) !== null;
+  const decide = async (answer: 'yes' | 'no' | 'other') => {
+    const submission = flowDecisionSubmission(ask, answer, feedback, evidence);
+    if (submitting.current || !submission) return;
+    submitting.current = true; setBusy(true);
+    const ok = await decideFlow(ask, submission.answer, submission.feedback);
+    if (ok) { saveDecisionDraft(key, ''); saveDecisionDraft(evidenceKey, ''); }
+    submitting.current = false; setBusy(false);
+  };
+  return <div className="wq flow-review" tabIndex={0} role="group" aria-label={ask.title} aria-busy={busy} data-request-key={key} data-testid={ask.type === 'flow-definition' ? 'qwin-flow-definition' : 'qwin-flow-run'} onKeyDown={e => {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onEscape(); }
+  }}>
+    <div className="wq-kicker">{t('flows.title')} · {ask.type === 'flow-definition' ? `r${ask.draft.revision}` : `v${ask.run.flowVersion} · r${ask.run.revision}`}</div>
+    <p className="wq-lead">{ask.title}</p>
+    <h2 className="wq-q">{t(ask.type === 'flow-definition' ? 'flows.proposalQuestion' : 'flows.stepQuestion')}</h2>
+    {ask.type === 'flow-definition' && <p className="wq-lead">{t('flows.activationHint')}</p>}
+    {definition?.description && <p>{definition.description}</p>}
+    {run && <><p className="flow-target" data-testid="flow-target"><strong>{t('flows.target')}:</strong> {run.subjectKey}<span className="flows-muted"> · {[run.scope.project, run.scope.areaPath].filter(Boolean).join(' · ') || '—'}</span></p><details data-testid="flow-run-context"><summary>{t('flows.runContext')}</summary><dl className="flow-facts"><dt>{t('flows.target')}</dt><dd>{run.subjectKey}</dd><dt>{t('flows.scope')}</dt><dd>{[run.scope.project, run.scope.areaPath].filter(Boolean).join(' · ') || '—'}</dd><dt>{t('flows.inputs')}</dt><dd>{Object.keys(run.inputs).length ? <dl className="flow-facts">{Object.entries(run.inputs).map(([name, value]) => <div key={name} className="flow-input-pair"><dt>{name}</dt><dd>{value}</dd></div>)}</dl> : '—'}</dd></dl></details></>}
+    {current && <p>{t('flows.current')}: <strong>{definition?.steps[run!.currentStep]?.title ?? current.stepId}</strong></p>}
+    {current?.reason && <p className="flow-block" role="status">{current.reason}</p>}
+    {boundChat && <button type="button" className="btn btn-ghost btn-s" onClick={() => { onEscape(); openChatRef(boundChat); }} data-testid="flow-open-agent">{t('flows.openAgent')}</button>}
+    {mode === 'retry' && <p className="wq-lead">{t('flows.retryHint')}</p>}
+    {definition && <details><summary>{t('flows.details')} · {definition.steps.length}</summary><FlowDefinition definition={definition} run={run} /></details>}
+    {gate.required && <div className="pa-change flow-evidence">
+      <label className="wq-label" htmlFor={evidenceId}>{t('flows.evidence')}</label>
+      <p className="wq-lead">{t(gate.labels.length ? 'flows.evidenceFormat' : 'flows.manualEvidence')}</p>
+      {gate.labels.length > 0 && <ul className="flow-evidence-labels">{gate.labels.map(label => <li key={label}><code>{label}: …</code></li>)}</ul>}
+      <textarea id={evidenceId} value={evidence} onChange={e => { setEvidence(e.target.value); saveDecisionDraft(evidenceKey, e.target.value); }} rows={3} maxLength={16000} disabled={busy} required data-testid="flow-evidence" />
+    </div>}
+    <div className="wq-perm">
+      <button type="button" className="btn btn-primary btn-l" disabled={busy || !canApprove} onClick={() => void decide('yes')} data-testid="flow-approve">{t(mode === 'retry' ? 'flows.yesRetry' : 'flows.yes')}</button>
+      <button type="button" className="btn btn-ghost btn-l" disabled={busy} onClick={() => void decide('no')} data-testid="flow-reject">{t('flows.no')}</button>
+      <button type="button" className="btn btn-ghost btn-l" disabled={busy} onClick={() => setChanging(v => !v)} aria-expanded={changing} data-testid="flow-other">{t('flows.other')}</button>
+    </div>
+    {changing && <div className="pa-change"><label className="wq-label" htmlFor={inputId}>{t('flows.answer')}</label><textarea id={inputId} value={feedback} onChange={e => { setFeedback(e.target.value); saveDecisionDraft(key, e.target.value); }} rows={3} maxLength={2000} disabled={busy} autoFocus data-testid="flow-feedback" />
+      <p className="wq-lead">{t('flows.otherHint')}</p><button type="button" className="btn btn-primary btn-l" disabled={busy || !feedback.trim()} onClick={() => void decide('other')} data-testid="flow-feedback-send">{t('flows.sendAnswer')}</button>
+    </div>}
+  </div>;
+}

@@ -102,6 +102,8 @@ export interface ChatManagerOptions {
   suggestSkills?: (goal: string) => Promise<string[]>;
   /** the roles in a few lines, for the Orchestrator's first message of a session (agents/discovery.ts roleCatalogBrief) */
   roleCatalogBrief?: () => string;
+  /** Live brain-scoped flow discovery on each user turn, separate from model routing estimates. */
+  flowContext?: (text: string, chatId: string) => string;
   /** the language the user wants replies in (ADR 0120: locale.ts uiLang, the setting or Windows'); absent = not named */
   replyLang?: () => Lang;
   /** the review pack under a Sentinel's first message (agents/review-pack.ts): the change it checks, gathered with git */
@@ -1071,7 +1073,15 @@ export class ChatManager implements ChatService {
     r.undoNote = undefined;
     // the user's own request to the Orchestrator carries the app's estimate (zero tokens), never the app's news or mail
     const estimate = r.s.isOrchestrator && !from && !resumed && t && !t.startsWith('[') ? this.requestEstimate(t) : null;
-    const asked0 = estimate ? `${noted}\n\n${estimate}` : noted;
+    let flowHint = '';
+    if (r.s.isOrchestrator && !from && !resumed && t && !t.startsWith('[') && this.opts.flowContext) {
+      try { flowHint = this.opts.flowContext(t, chatId); }
+      catch (e) {
+        log.warn('flows', 'flow discovery unavailable', { cause: errText(e), hint: 'Read app_flow_list before using a saved flow.' });
+        flowHint = '[app flows] Catalogo non disponibile: non assumere che sia vuoto e non ricostruire un flusso dalla memoria. Verifica app_flow_list; segnala il blocco in una domanda.';
+      }
+    }
+    const asked0 = [noted, estimate, flowHint].filter(Boolean).join('\n\n');
     // Lampo is a "btw" (ADR 0106): the user's question carries what the Orchestrator said and did since it last looked
     const lampo = r.s.quick && !from && !resumed ? this.lampoContext(r) : null;
     const body = lampo ? `${lampo.text}${asked0}` : asked0;

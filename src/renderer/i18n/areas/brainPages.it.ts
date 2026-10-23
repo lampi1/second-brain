@@ -1,6 +1,7 @@
 // Italian UI texts of the "brainPages" area (ADR 0057): spread into it.ts. Keys start with "brainPages.".
 export const brainPagesIt = {
   // index.tsx - brain page labels
+  'brainPages.nav.flussi': 'Flussi',
   'brainPages.nav.home': 'Grindhouse',
   'brainPages.nav.dashboard': 'Dashboard',
   'brainPages.nav.guida': 'Guida',
