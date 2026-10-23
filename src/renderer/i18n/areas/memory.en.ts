@@ -133,7 +133,7 @@ export const memoryEn: typeof memoryIt = {
   // Memoria → «App ideas» (ADR 0132)
   'ai.title': 'App ideas', 'ai.lead': 'Improvements and bugs in the app\'s code the maintenance found, with the issue already written. «Open issue» asks the Orchestrator, which opens it on GitHub.',
   'ai.kind.bug': 'Bug', 'ai.kind.idea': 'Idea', 'ai.kind.bold': 'Bold idea', 'ai.from.research': 'from the research', 'ai.from.logs': 'from the logs',
-  'ai.asked': 'Asked of the Orchestrator', 'ai.issue': 'The issue', 'ai.showIssue': 'Show the issue text', 'ai.hideIssue': 'Hide the text',
+  'ai.again': 'Ask again', 'ai.againTip': 'If the Orchestrator did not open it, asks again', 'ai.retry': 'Retry', 'ai.asked': 'Asked of the Orchestrator', 'ai.issue': 'The issue', 'ai.showIssue': 'Show the issue text', 'ai.hideIssue': 'Hide the text',
   'ai.dup': (p: N) => `May already exist: #${p.n}`, 'ai.openChat': 'Open the research chat', 'ai.dismiss': 'Dismiss', 'ai.open': 'Open issue',
   'ai.openAll': (p: N) => (p.n ? `Open all (${p.n})` : 'Open all'),
   'ai.sentOne': 'Asked of the Orchestrator: it opens the issue.', 'ai.sentMany': (p: N) => `Asked of the Orchestrator: it opens ${p.n} issues.`, 'ai.notSent': 'Not sent to the Orchestrator.',

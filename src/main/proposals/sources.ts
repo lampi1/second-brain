@@ -337,11 +337,11 @@ const policy: Source = {
 };
 
 // ── the maintenance's findings (ADR 0132) ─────────────────────────────────────────────────────────────────────────────
-const RESEARCH_GROUP: Readonly<Record<string, ProposalGroup>> = { skill: 'skill', rule: 'rule', memory: 'fact', role: 'role', forget: 'forget' };
+const RESEARCH_GROUP: Readonly<Record<string, ProposalGroup>> = { skill: 'skill', rule: 'rule', role: 'role', forget: 'forget' };
 /** The text the card is about, as it is: what a change adds, or what forgetting removes. */
 function researchContent(x: ResearchProposal): string {
   if (x.change) return x.change.target === 'skill' ? x.change.text : `> ${x.change.text.replace(/\n/g, '\n> ')}`;
-  if (x.forget) return `\`${x.forget.what === 'rule' ? x.forget.name : x.forget.what === 'skill' ? `.claude/skills/${x.forget.name}/` : x.forget.name}\``;
+  if (x.forget) return `\`${x.forget.what === 'rule' ? x.forget.name : `.claude/skills/${x.forget.name}/`}\``;
   return '';
 }
 const research: Source = {
@@ -351,7 +351,7 @@ const research: Source = {
     const chats = p.chats();
     return p.research!.list().map(x => {
       const chat = x.chatId ? chats.find(c => c.id === x.chatId) : undefined;
-      const role = x.change?.role ?? x.forget?.role;
+      const role = x.change?.role;
       return card('research', x.id, {
         group: x.kind === 'bold' ? RESEARCH_GROUP[x.change?.target ?? 'rule'] ?? 'rule' : RESEARCH_GROUP[x.kind] ?? 'rule', applied: false, title: x.title, content: researchContent(x),
         ask: { kind: 'research', finding: x.kind, adds: x.adds, removes: x.removes, why: x.why, expected: x.expected, risk: x.risk, evidence: x.evidence, sources: x.sources },

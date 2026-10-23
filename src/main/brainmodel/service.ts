@@ -31,7 +31,7 @@ import { procedureSections } from './procedure-sources';
 import { pending as upgradePending, upgrade, type UpgradeAsk } from './upgrade';
 import { memoryStats } from './memory-stats';
 import { readNoise, scanLogs, writeNoise } from './log-scan';
-import { rawEntries, readMemory, readRules, readSkills, readSmall, type SkillDir } from './model';
+import { readMemory, readRules, readSkills, readSmall, type SkillDir } from './model';
 import type { ResearchProposal } from '../../shared/maintenance-research';
 import { NAME_RE, parseMd, setBody } from '../../shared/skillmd';
 import { checkPermissionText } from '../agents/tool-policy';
@@ -313,16 +313,8 @@ export class BrainModelService {
     if (p.kind === 'forget') {
       const f = p.forget;
       if (!f) throw new Error('Proposta senza cosa dimenticare.');
-      if (f.what === 'skill' || f.what === 'rule') return this.remove(f.what, f.name, { job: 'research', reason: why, evidence }).changeId;
-      const role = roleOf(f.role), rel = role ? `agents/${portableId(role.id)}/memory.md` : 'memory/shared.md';
-      const file = path.join(root, rel), text = readSmall(file);
-      if (text === null) throw new Error('File di memoria non trovato.');
-      const lines = text.split('\n'), i = lines.findIndex(l => rawEntries(l).includes(f.name.trim()));
-      if (i < 0) throw new Error('Riga di memoria non trovata: forse è già cambiata.');
-      lines.splice(i, 1);
-      const c = this.log.apply({ job: 'research', kind: 'memory', action: 'remove', target: rel, summary: `Dimenticato: ${oneLine(f.name, 120)}`, reason: why, evidence }, [{ file, text: lines.join('\n') }]);
-      if (!c) throw new Error('Niente da dimenticare.');
-      return this.done(c.id);
+      if (f.what !== 'skill' && f.what !== 'rule') throw new Error('Si dimenticano solo skill e regole.');
+      return this.remove(f.what, f.name, { job: 'research', reason: why, evidence }).changeId;
     }
     const ch = p.change;
     if (!ch) throw new Error('Proposta senza modifica da applicare.');
@@ -339,25 +331,18 @@ export class BrainModelService {
       const before = have ? readSmall(file) : null;
       if (have && before === null) throw new Error('Skill non leggibile.');
       const next = before !== null ? setBody(before, appendUnder(parseMd(before).body, 'Dalla manutenzione', text)) : skillText(name, oneLine(p.title, 300), text);
-      const c = this.log.apply({ job: 'research', kind: 'skill', action: have ? 'update' : 'create', target: name, summary: `${have ? 'Skill aggiornata' : 'Nuova skill'} «${name}»: ${oneLine(p.title, 100)}`, reason: why, evidence }, [{ file, text: next }]);
-      if (!c) throw new Error('Niente da cambiare.');
-      // the role it is for declares it (its own change: undone apart, like a link made on the Skill page)
+      // the role it is for declares it, in the same change: «Annulla» takes back the skill and the link together
       const linked = role ? this.d.packs.profile(role.id).knowhow?.linked ?? [] : null;
-      if (role && linked && !linked.includes(name)) {
-        const snap = this.writer().update(role.id, { linked: [...linked, name] }, `Manutenzione: skill ${name}`);
-        if (snap) this.log.record({ job: 'research', kind: 'agent', action: 'link', target: role.id, summary: `${role.name} usa «${name}»`, reason: why, evidence: [name] }, [], snap);
-      }
-      return this.done(c.id);
-    }
-    if (ch.target === 'memory') {
-      const rel = role ? `agents/${portableId(role.id)}/memory.md` : 'memory/shared.md', file = path.join(root, rel);
-      const before = readSmall(file) ?? `# ${role ? `Memoria di ${role.name}` : 'Memoria condivisa'}\n`;
-      const c = this.log.apply({ job: 'research', kind: 'memory', action: 'update', target: rel, summary: `Ricordato: ${oneLine(text, 120)}`, reason: why, evidence }, [{ file, text: `${before.replace(/\s+$/, '')}\n- ${oneLine(text, 600)} ${stamp}\n` }]);
+      const snap = role && linked && !linked.includes(name) ? this.writer().update(role.id, { linked: [...linked, name] }, `Manutenzione: skill ${name}`) : null;
+      const c = this.log.apply({ job: 'research', kind: 'skill', action: have ? 'update' : 'create', target: name, summary: `${have ? 'Skill aggiornata' : 'Nuova skill'} «${name}»${role && snap ? ` per ${role.name}` : ''}: ${oneLine(p.title, 100)}`, reason: why, evidence }, [{ file, text: next }], snap ?? undefined);
       if (!c) throw new Error('Niente da cambiare.');
       return this.done(c.id);
     }
     if (ch.target === 'rule' && !role) {
-      const file = path.join(root, LESSONS_RULE), writes = [{ file, text: appendUnder(readSmall(file) ?? LESSONS_WHEN, 'Dalla manutenzione', `- ${oneLine(text, 600)} ${stamp}`) }];
+      const file = path.join(root, LESSONS_RULE), had = readSmall(file);
+      // a lessons file that is there but not readable here (a link, too big) is never replaced by a new one
+      if (had === null && fs.existsSync(file)) throw new Error(`${LESSONS_RULE} non si può leggere qui: la manutenzione non lo riscrive.`);
+      const writes = [{ file, text: appendUnder(had ?? LESSONS_WHEN, 'Dalla manutenzione', `- ${oneLine(text, 600)} ${stamp}`) }];
       const cfg = brainJsonWithTopic(root, LESSONS_RULE);
       if (cfg) writes.push(cfg);
       const c = this.log.apply({ job: 'research', kind: 'rule', action: 'update', target: LESSONS_RULE, summary: `Regola: ${oneLine(text, 120)}`, reason: why, evidence }, writes);

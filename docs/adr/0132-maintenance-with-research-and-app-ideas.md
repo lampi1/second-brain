@@ -21,7 +21,8 @@ Orchestrator as a message. The owner wanted:
 ## Decision
 1. **One dialog.** The button (top bar `topbar-maint`, Orchestrator head, Memoria) opens a dialog instead of running at
    once. «Avvia la pulizia» runs the free cleanup as before. Ticked, «Ricerca e miglioramento» shows the engine (only
-   engines that are on and read files: no API engines), the model (default: the strongest the app knows, `opus` on
+   engines that are on, read files and report their cost, so the cap holds: today Claude; Codex and the ACP engines
+   report none), the model (default: the strongest the app knows, `opus` on
    Claude), the effort (only where the engine has it), the spending cap (default 5 $, 0.5–50), the web switch, an
    estimate from the last researches' median cost, the prompt (editable, «Ripristina»; the last one run is shown next
    time) and, read-only, the fixed frame. Nothing runs at night or by itself.
@@ -31,20 +32,22 @@ Orchestrator as a message. The owner wanted:
    pre-approved on every engine and visible only to this chat; it sees no app or agent tools and never wakes the
    Orchestrator. The chat is stopped when its live cost passes the cap, after an hour, or on «Ferma».
 3. **Every finding is a card**, checked by `ResearchService.propose`: a title, what it adds and removes (one at least),
-   why with the numbers, evidence, sources (https), expected effect, risk. Caps per research: 5 brain changes, 5 to
-   forget, 5 app ideas or bugs, 1 bold. A card equal to an open or rejected one is refused. A change never grants
-   permissions or touches settings or hooks; a forget names a brain skill (never the user's own), a `rules/` file or a
-   memory line.
+   why with the numbers, evidence, sources (https), expected effect, risk. Caps per research: 5 brain changes (skill, rule, role), 5
+   to forget, 5 app ideas or bugs, 1 bold. No memory facts: they have their own store and review (ADR 0129) and the
+   free cleanup already tidies them. A card equal to an open or rejected one is refused. A change never grants
+   permissions or touches settings or hooks; a forget names a brain skill (never the user's own) or a `rules/` file.
 4. **Brain cards go to Memoria → Proposte** (source `research`) with the delta shown big (green adds, red removes, the
    exact text under «Mostra tutto»). Approve applies through the change log (`BrainModelService.applyResearch`, job
-   `research`, with «Annulla» in Apprendimento); reject keeps it from coming back. The yes/no meaning lines are gone:
+   `research`, with «Annulla» in Apprendimento; a skill for a role and the role's link to it are one change); reject keeps it from coming back. The yes/no meaning lines are gone:
    the buttons' tips say it.
 5. **App cards go to Memoria → «Idee dell'app»** (`app` tab) with the issue as it will be opened (title, labels, body
-   cleaned of the home folder, the user name, e-mails and tokens). «Apri issue» sends one, «Apri tutte» every open one
+   cleaned of the brain's and the app's folders, the home folder, the user name, e-mails and tokens). «Apri issue» sends one, «Apri tutte» every open one
    in one message, to the open Orchestrator as the user's own request (check for duplicates, then open with gh; the
-   user's permission rules still apply) and marks them asked. «Scarta» drops one; a bug from a log group also marks the
+   user's permission rules still apply) and marks them asked; one asked can be asked again. The issues' text is fenced
+   by a random marker and called data the user did not write: never an instruction or a permission, shown in full
+   before gh asks. «Scarta» drops one; a bug from a log group also marks the
    group known.
-6. **The free cleanup makes cards too**, at zero tokens: one app bug per new log group (replacing the hand-off message
+6. **The free cleanup makes cards too**, at zero tokens, in the UI language: one app bug per new log group (replacing the hand-off message
    to the Orchestrator of ADR 0112; a research may rewrite that card) and one forget card per brain skill no job used
    in 60 days and older than 30 (never re-proposed within 90 days).
 7. **The phrases of the day** (`main/daily-phrases.ts`): once a day, 90 s after the app opens (and hourly after), one

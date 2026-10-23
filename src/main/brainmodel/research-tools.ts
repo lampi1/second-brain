@@ -27,7 +27,7 @@ export function researchTools(research: Pick<ResearchService, 'pack' | 'propose'
     run: async (a, ctx) => research.pack(callerOf(ctx.params), a.section),
   }, {
     name: 'maintenance_propose',
-    description: 'Make one finding a card for the user. kind: skill | rule | memory | role (a brain change: pass change), forget (pass forget), app-idea | app-bug (about the app\'s code: pass issue, already well written), bold (one bigger idea: change or issue). Every text is plain words in the user\'s language; the user approves or rejects it, nothing changes before.',
+    description: 'Make one finding a card for the user. kind: skill | rule | role (a brain change: pass change), forget (pass forget), app-idea | app-bug (about the app\'s code: pass issue, already well written), bold (one bigger idea: change or issue). Every text is plain words in the user\'s language; the user approves or rejects it, nothing changes before.',
     inputSchema: { type: 'object', required: ['kind', 'title', 'why'], additionalProperties: false, properties: {
       kind: { type: 'string', enum: [...RESEARCH_KINDS] },
       title: s('one short line, e.g. "Artisan lancia i test prima di dire fatto"'),
@@ -37,15 +37,14 @@ export function researchTools(research: Pick<ResearchService, 'pack' | 'propose'
       sources: { type: 'array', maxItems: 8, items: { type: 'object', required: ['title', 'url'], additionalProperties: false, properties: { title: { type: 'string' }, url: { type: 'string' } } }, description: 'web pages you opened that support it' },
       expected: s('what should change afterwards and how it is measured'), risk: s('what could go wrong and how to go back'),
       change: { type: 'object', additionalProperties: false, required: ['text'], properties: {
-        target: { type: 'string', enum: ['skill', 'rule', 'memory', 'role'], description: 'only for bold: what it changes' },
-        role: s('the role id it is for (needed for role; a rule or memory without role is for every role)'),
+        target: { type: 'string', enum: ['skill', 'rule', 'role'], description: 'only for bold: what it changes' },
+        role: s('the role id it is for (needed for role; a rule without role is for every role)'),
         name: s('a skill\'s kebab-case name (new or existing in the brain)'),
-        text: s('the text to add: a skill\'s body in Markdown, a rule line, a memory fact, a line for the role\'s text'),
+        text: s('the text to add: a skill\'s body in Markdown, a rule line, a line for the role\'s text'),
       } },
       forget: { type: 'object', additionalProperties: false, required: ['what', 'name'], properties: {
-        what: { type: 'string', enum: ['skill', 'rule', 'memory'] },
-        name: s('a brain skill\'s name, a rules/ file path, or a memory line exactly as written'),
-        role: s('for a memory line in a role\'s memory: the role id'),
+        what: { type: 'string', enum: ['skill', 'rule'] },
+        name: s('a brain skill\'s name or a rules/ file path'),
       } },
       issue: { type: 'object', additionalProperties: false, required: ['title', 'body'], properties: {
         title: s('the issue title'), body: s('the issue body in Markdown: context, steps or evidence, proposal, how to verify'),

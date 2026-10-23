@@ -124,7 +124,12 @@ export function MaintenanceButton({ testId = 'bm-maint-now', compact = false, ba
   // stamps every change with the same time)
   const before = useRef<Set<string>>(new Set());
   // the dialog's choices start from what the app suggests and the prompt last run; a running research opens on its state
-  useEffect(() => { if (open && setup && !c) { setC(choiceOf(setup, false)); if (setup.running) setPhase('run'); } }, [open, setup, c]);
+  // (the cleanup before it is over: its jobs show their last result, and no change counts as this opening's)
+  useEffect(() => {
+    if (!open || !setup || c) return;
+    setC(choiceOf(setup, false));
+    if (setup.running) { before.current = new Set((brainModel.get().state?.changes ?? []).map(x => x.id)); setRan(true); setPhase('run'); }
+  }, [open, setup, c]);
   const openDialog = () => { setError(null); setRan(false); setPhase('setup'); setC(null); setOpen(true); };
   const start = async () => {
     if (!c) return;

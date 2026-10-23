@@ -8,7 +8,9 @@
 import type { Effort, Harness } from './contract';
 
 /** What a proposal is about. Brain kinds go to Proposte, app kinds to «Idee dell'app». */
-export const RESEARCH_KINDS = ['skill', 'rule', 'memory', 'role', 'forget', 'bold', 'app-idea', 'app-bug'] as const;
+// No memory kind: facts have their own store and review (rules/memory-records.ts, ADR 0129), and the free cleanup's
+// merge-memory job already rewrites or retires them with «Annulla».
+export const RESEARCH_KINDS = ['skill', 'rule', 'role', 'forget', 'bold', 'app-idea', 'app-bug'] as const;
 export type ResearchKind = (typeof RESEARCH_KINDS)[number];
 /** The kinds that are about the app's code: they never change the brain, they become issues. */
 export const APP_KINDS: readonly ResearchKind[] = ['app-idea', 'app-bug'];
@@ -17,23 +19,22 @@ export const isAppKind = (k: ResearchKind): boolean => APP_KINDS.includes(k);
 /** An outside page the proposal cites (one the research chat opened). */
 export interface ResearchSource { title: string; url: string }
 
-/** A brain change to apply when the user approves (kinds skill, rule, memory, role, bold). */
+/** A brain change to apply when the user approves (kinds skill, rule, role, bold). */
 export interface ResearchChange {
-  target: 'skill' | 'rule' | 'memory' | 'role';
+  target: 'skill' | 'rule' | 'role';
   /** the role it is for (a role id), when it is one role's */
   role?: string;
-  /** the skill's name (kebab-case) or the memory fact's subject */
+  /** the skill's name (kebab-case) */
   name?: string;
-  /** the text to add: a rule line, a skill's SKILL.md body, a fact, a line for the role's text */
+  /** the text to add: a rule line, a skill's SKILL.md body, a line for the role's text */
   text: string;
 }
 
 /** What a forget card would archive (kind forget). */
 export interface ResearchForget {
-  what: 'skill' | 'rule' | 'memory';
-  /** a skill's name, a rule's line (as written), a memory fact's id */
+  what: 'skill' | 'rule';
+  /** a skill's name or a rules/ file */
   name: string;
-  role?: string;
   /** when it was last used (ms), null = never seen in use */
   lastUsed?: number | null;
   /** how many verified successful runs used it in the window */

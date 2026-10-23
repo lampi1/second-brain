@@ -55,7 +55,7 @@ export function writeDemoResearch(store: ResearchStore, now: number): void {
 
 /** What a research started in the demo proposes while its chat answers. */
 export const DEMO_LIVE: readonly Record<string, unknown>[] = [
-  { kind: 'memory', title: 'Il server di staging si chiama «stg-eu»', adds: 'Un fatto nella memoria condivisa: il server di staging è «stg-eu» (non «staging-1»).', removes: '',
+  { kind: 'rule', title: 'Il server di staging si chiama «stg-eu»', adds: 'Una riga nelle lezioni per tutti i ruoli: il server di staging è «stg-eu» (non «staging-1»).', removes: '',
     why: 'In 3 lavori su 5 di questa settimana Scout ha cercato «staging-1», che non esiste più.', evidence: ['run scout-31, scout-33, scout-36'], expected: 'Nessuna ricerca a vuoto del server.', risk: 'Se il nome cambia di nuovo, va aggiornato.',
     change: { text: 'Il server di staging si chiama stg-eu (staging-1 non esiste più).' } },
   { kind: 'app-idea', title: 'Un filtro «solo errori» nella pagina Log', adds: 'Un interruttore nella pagina Log che mostra solo gli errori.', removes: '',

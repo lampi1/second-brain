@@ -16,13 +16,17 @@ export async function refreshSetup(): Promise<void> {
   catch (e) { maintenance.set(s => ({ ...s, error: errText(e) })); }
 }
 export async function refreshIdeas(): Promise<void> {
-  try { const ideas = await sb.invoke('maintenance:ideas', undefined); maintenance.set(s => ({ ...s, ideas })); }
+  try { const ideas = await sb.invoke('maintenance:ideas', undefined); maintenance.set(s => ({ ...s, ideas, error: null })); }
   catch (e) { maintenance.set(s => ({ ...s, error: errText(e) })); }
 }
 function start(): void {
   if (started) return; started = true;
   sb.on('maintenance:changed', () => { void refreshSetup(); if (maintenance.get().ideas) void refreshIdeas(); });
-  sb.on('chat:updated', c => { if (c.isOrchestrator && maintenance.get().ideas) void refreshIdeas(); });
+  // «Apri issue» needs an open Orchestrator: read again only when that changes (its chat streams many updates)
+  sb.on('chat:updated', c => {
+    const ideas = maintenance.get().ideas;
+    if (c.isOrchestrator && ideas && ideas.orchestrator !== !c.closedAt) void refreshIdeas();
+  });
 }
 /** The dialog's data, read when `open` turns true. */
 export function useMaintenance(open = true) {
@@ -31,7 +35,7 @@ export function useMaintenance(open = true) {
 }
 export function useAppIdeas() {
   useEffect(() => { start(); void refreshIdeas(); }, []);
-  return maintenance.use(s => s.ideas);
+  return maintenance.use(s => ({ ideas: s.ideas, error: s.error }));
 }
 
 /** Starts the research (after the free cleanup): an error text, or null. */

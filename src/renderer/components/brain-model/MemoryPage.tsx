@@ -214,7 +214,7 @@ function useCounts(): Partial<Record<HubTab, number>> {
   const approved = useApprovedCount();
   const scripts = useBrain('/api/scripts', normScripts);
   const tables = useBrain('/api/tables', normTables);
-  const ideas = useAppIdeas();
+  const { ideas } = useAppIdeas();
   return {
     proposte: proposals, approvate: approved,
     skill: state?.skills.length, regole: state?.rules.length, script: scripts.data?.scripts.filter(s => s.tested.state === 'ok').length, // only working scripts show (Script.tsx)

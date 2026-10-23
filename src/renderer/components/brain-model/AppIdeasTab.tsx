@@ -10,7 +10,7 @@ import { renderMarkdown } from '../../lib/markdown';
 import { openChatRef } from '../../actions';
 import { toast } from '../../store/ui';
 import { app } from '../../store/store';
-import { dismissIdea, openIssues, useAppIdeas } from '../../store/maintenance';
+import { dismissIdea, openIssues, refreshIdeas, useAppIdeas } from '../../store/maintenance';
 import { shortWhen } from './ProposalsDeck';
 import '../../styles/app-ideas.css';
 
@@ -49,13 +49,15 @@ function Idea({ p, onOpen, busy }: { p: ResearchProposal; onOpen: (ids: string[]
       {p.chatId && <button type="button" className="btn btn-s btn-ghost" onClick={() => openChatRef(p.chatId!)}>{t('ai.openChat')}</button>}
       <span className="sp" />
       <button type="button" className="btn btn-s btn-ghost" onClick={() => void dismiss()} data-testid="ai-dismiss">{t('ai.dismiss')}</button>
-      {!asked && <button type="button" className="btn btn-s btn-primary" disabled={busy} onClick={() => onOpen([p.id])} data-testid="ai-open">{t('ai.open')}</button>}
+      {asked
+        ? <button type="button" className="btn btn-s btn-ghost" disabled={busy} onClick={() => onOpen([p.id])} data-tip={t('ai.againTip')} data-testid="ai-again">{t('ai.again')}</button>
+        : <button type="button" className="btn btn-s btn-primary" disabled={busy} onClick={() => onOpen([p.id])} data-testid="ai-open">{t('ai.open')}</button>}
     </footer>
   </article>;
 }
 
 export function AppIdeasTab() {
-  const ideas = useAppIdeas();
+  const { ideas, error } = useAppIdeas();
   const [busy, setBusy] = useState(false);
   const live = app.use(s => Object.values(s.chats).some(c => c.isOrchestrator && !c.closedAt));
   const open = (ideas?.items ?? []).filter(p => p.state === 'open' && p.issue);
@@ -69,7 +71,9 @@ export function AppIdeasTab() {
       if (o) openChatRef(o.id);
     } else toast(err || t('ai.notSent'), 'err');
   };
-  if (!ideas) return <p className="bm-empty">{t('bm.loading')}</p>;
+  if (!ideas) return error
+    ? <p className="bm-empty" role="alert">{error} <button type="button" className="btn btn-s" onClick={() => void refreshIdeas()}>{t('ai.retry')}</button></p>
+    : <p className="bm-empty">{t('bm.loading')}</p>;
   return <section className="ai" data-testid="app-ideas">
     <header className="ai-top">
       <div><h2>{t('ai.title')}</h2><p className="ai-lead">{t('ai.lead')}</p></div>

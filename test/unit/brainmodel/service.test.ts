@@ -15,6 +15,7 @@ import { writeDemoBrain } from '../../../src/main/brainmodel/demo';
 import type { AgentModelChoice, AgentRun } from '../../../src/shared/agents';
 import type { RoutingInfo } from '../../../src/shared/contract';
 import type { BrainChange, LogScan } from '../../../src/shared/brain-model';
+import type { ResearchProposal } from '../../../src/shared/maintenance-research';
 import { maintenanceEvent } from '../../../src/main/brain/announce';
 
 const roots: string[] = [];
@@ -335,5 +336,29 @@ describe('the Memoria hub trash (ADR 0122)', () => {
     expect(() => service.remove('rule', 'CLAUDE.md')).toThrow();
     expect(fs.existsSync(path.join(brain, 'CLAUDE.md'))).toBe(true);
     expect(() => service.remove('script', 'x.mjs')).toThrow();
+  });
+});
+
+describe('applyResearch (ADR 0132)', () => {
+  const card = (x: Partial<ResearchProposal>): ResearchProposal => ({ id: 'r-1', chatId: 'c1', at: NOW, kind: 'skill', title: 'Release notes', adds: 'a', removes: '', why: 'w', evidence: [], sources: [], expected: '', risk: '', state: 'open', ...x });
+  it('a skill for a role is one change: «Annulla» takes back the skill and the link together', () => {
+    const w = world();
+    const id = w.service.applyResearch(card({ change: { target: 'skill', role: DEV, name: 'note-rilascio', text: 'Titoli per area.' } }));
+    const file = path.join(w.brain, '.claude/skills/note-rilascio/SKILL.md');
+    expect(fs.readFileSync(file, 'utf8')).toContain('Titoli per area.');
+    expect(w.agent(DEV).knowhow?.linked).toContain('note-rilascio');
+    w.service.rollback(id);
+    expect(fs.existsSync(file)).toBe(false);
+    expect(w.agent(DEV).knowhow?.linked ?? []).not.toContain('note-rilascio');
+  });
+  it('a rule for every role goes to the lessons; a lessons file that cannot be read is never replaced', () => {
+    const w = world();
+    w.service.applyResearch(card({ kind: 'rule', change: { target: 'rule', text: 'Lancia i test prima di dire fatto.' } }));
+    expect(fs.readFileSync(path.join(w.brain, 'rules/lessons.md'), 'utf8')).toContain('Lancia i test prima di dire fatto.');
+    const v = world();
+    const real = path.join(v.base, 'elsewhere.md'); fs.writeFileSync(real, '# mine\n');
+    fs.mkdirSync(path.join(v.brain, 'rules'), { recursive: true }); fs.symlinkSync(real, path.join(v.brain, 'rules/lessons.md'));
+    expect(() => v.service.applyResearch(card({ kind: 'rule', change: { target: 'rule', text: 'x' } }))).toThrow(/non si può leggere/);
+    expect(fs.readFileSync(real, 'utf8')).toBe('# mine\n');
   });
 });

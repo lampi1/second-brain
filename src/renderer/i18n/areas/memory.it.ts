@@ -139,7 +139,7 @@ export const memoryIt = {
   // Memoria → «Idee dell'app» (ADR 0132)
   'ai.title': 'Idee dell’app', 'ai.lead': 'Miglioramenti e bug del codice dell’app trovati dalla manutenzione, con la issue già scritta. «Apri issue» la chiede all’Orchestrator, che la apre su GitHub.',
   'ai.kind.bug': 'Bug', 'ai.kind.idea': 'Idea', 'ai.kind.bold': 'Idea audace', 'ai.from.research': 'dalla ricerca', 'ai.from.logs': 'dai log',
-  'ai.asked': 'Chiesta all’Orchestrator', 'ai.issue': 'La issue', 'ai.showIssue': 'Mostra il testo della issue', 'ai.hideIssue': 'Nascondi il testo',
+  'ai.again': 'Chiedi di nuovo', 'ai.againTip': 'Se l’Orchestrator non l’ha aperta, la richiede', 'ai.retry': 'Riprova', 'ai.asked': 'Chiesta all’Orchestrator', 'ai.issue': 'La issue', 'ai.showIssue': 'Mostra il testo della issue', 'ai.hideIssue': 'Nascondi il testo',
   'ai.dup': (p: N) => `Forse c’è già: #${p.n}`, 'ai.openChat': 'Apri la chat della ricerca', 'ai.dismiss': 'Scarta', 'ai.open': 'Apri issue',
   'ai.openAll': (p: N) => (p.n ? `Apri tutte (${p.n})` : 'Apri tutte'),
   'ai.sentOne': 'Chiesta all’Orchestrator: apre la issue.', 'ai.sentMany': (p: N) => `Chieste all’Orchestrator: apre ${p.n} issue.`, 'ai.notSent': 'Non mandata all’Orchestrator.',

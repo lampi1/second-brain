@@ -133,7 +133,7 @@ export const memoryDe: typeof memoryIt = {
   // Memoria → «App-Ideen» (ADR 0132)
   'ai.title': 'App-Ideen', 'ai.lead': 'Verbesserungen und Bugs im Code der App, die die Wartung gefunden hat, mit fertig geschriebenem Issue. «Issue öffnen» fragt den Orchestrator, der es auf GitHub anlegt.',
   'ai.kind.bug': 'Bug', 'ai.kind.idea': 'Idee', 'ai.kind.bold': 'Mutige Idee', 'ai.from.research': 'aus der Recherche', 'ai.from.logs': 'aus den Logs',
-  'ai.asked': 'Beim Orchestrator angefragt', 'ai.issue': 'Das Issue', 'ai.showIssue': 'Text des Issues zeigen', 'ai.hideIssue': 'Text ausblenden',
+  'ai.again': 'Erneut anfragen', 'ai.againTip': 'Falls der Orchestrator es nicht geöffnet hat, erneut anfragen', 'ai.retry': 'Erneut versuchen', 'ai.asked': 'Beim Orchestrator angefragt', 'ai.issue': 'Das Issue', 'ai.showIssue': 'Text des Issues zeigen', 'ai.hideIssue': 'Text ausblenden',
   'ai.dup': (p: N) => `Gibt es vielleicht schon: #${p.n}`, 'ai.openChat': 'Chat der Recherche öffnen', 'ai.dismiss': 'Verwerfen', 'ai.open': 'Issue öffnen',
   'ai.openAll': (p: N) => (p.n ? `Alle öffnen (${p.n})` : 'Alle öffnen'),
   'ai.sentOne': 'Beim Orchestrator angefragt: er legt das Issue an.', 'ai.sentMany': (p: N) => `Beim Orchestrator angefragt: er legt ${p.n} Issues an.`, 'ai.notSent': 'Nicht an den Orchestrator geschickt.',

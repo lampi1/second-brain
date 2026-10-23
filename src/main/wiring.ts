@@ -814,9 +814,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // the maintenance with research (ADR 0132): the dialog's research chat, its cards in Proposte and «Idee dell'app»
   const orchestratorChat = () => manager.list().find(c => c.isOrchestrator && !c.closedAt);
   const issuesUrl = issuesUrlOf(app.getAppPath()), appIssuesUrl = () => issuesUrl;
-  const research = new ResearchService({ userData: ctx.userData, lang: uiLang, root: () => brain.info().brainRoot, appVersion: () => app.getVersion(), issuesUrl: appIssuesUrl,
-    // engines that are on and read files (an API engine has no tools here)
-    engines: () => engineInfos().filter(e => e.kind !== 'api' && engineOn(brain.settings(), e.id)).map(e => ({ harness: e.id, label: e.label, web: true, effort: e.caps.effort })),
+  const research = new ResearchService({ userData: ctx.userData, lang: uiLang, root: () => brain.info().brainRoot, appVersion: () => app.getVersion(), issuesUrl: appIssuesUrl, appDir: () => app.getAppPath(),
+    // engines that are on, read files (an API engine has no tools here) and report their cost (the cap is enforced on
+    // it: Codex and the ACP engines report none, so the research would run to the hour with "0 $" on screen)
+    engines: () => engineInfos().filter(e => e.kind !== 'api' && e.caps.cost && e.caps.tools && engineOn(brain.settings(), e.id)).map(e => ({ harness: e.id, label: e.label, web: true, effort: e.caps.effort })),
     // the Claude CLI's «opus» is its strongest model, whatever its version; the others start on their CLI's default
     bestModel: h => (engineOf(h)?.kind === 'claude' ? 'opus' : null),
     runs: () => manager.runs.list(), roles: () => agents.list().profiles.filter(p => p.scope === 'role'),
