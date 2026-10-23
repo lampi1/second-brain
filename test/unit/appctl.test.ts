@@ -437,6 +437,29 @@ describe('app control tools', () => {
     expect(pulls).toBe(1);
   });
 
+  it('app_unblock (ADR 0134): only the authenticated Orchestrator after the user wrote to it; opens the questions window with what waits', async () => {
+    const now = Date.now();
+    let items: unknown[] = [];
+    let pending: unknown[] = [];
+    const list: Record<string, unknown>[] = [{ id: 'or', harness: 'claude', state: 'idle', isOrchestrator: true, title: 'Orchestrator', lastText: '' }, { id: 'w', harness: 'claude', state: 'waiting', title: 'Lavoro', lastText: '' }];
+    const chats = { list: () => list, items: () => items, pending: () => pending } as unknown as ChatService;
+    const ui: unknown[] = [];
+    const base = { chats, browser: { list: () => [] } as unknown as BrowserService, brain: { feed: () => [], usage: () => ({}), info: () => ({ brainRoot: null }) } as unknown as BrainService, window: () => null, emitUi: (c: unknown) => ui.push(c), version: '0' };
+    expect(appControlTools(base).some(x => x.name === 'app_unblock')).toBe(false);
+    expect(appControlTools(base, 'w').some(x => x.name === 'app_unblock')).toBe(false);
+    const tool = appControlTools(base, 'or').find(x => x.name === 'app_unblock')!;
+    await expect(Promise.resolve().then(() => tool.run({}))).rejects.toThrow(/recap/);
+    items = [{ kind: 'user', id: 'v', at: now, text: `${AGENT_LABEL} recap` }];
+    await expect(Promise.resolve().then(() => tool.run({}))).rejects.toThrow(/recap/);
+    items = [{ kind: 'user', id: 'u', at: now, text: 'fammi un recap' }];
+    expect(await tool.run({})).toMatchObject({ waiting: 0 });
+    expect(ui).toEqual([]);
+    pending = [{ id: 'r1', chatId: 'w', type: 'question', tool: 'AskUserQuestion', title: 'Procedo?', detail: '', input: {}, at: 0 }];
+    list.push({ id: 's', harness: 'claude', state: 'idle', title: 'Piano', lastText: '', plan: { phase: 'proposed', at: 1 } });
+    expect(await tool.run({})).toMatchObject({ waiting: 2, questionsAndPermissions: 1, plans: 1 });
+    expect(ui).toEqual([{ action: 'unblock' }]);
+  });
+
   it('app_close_chat closes like the ✕ (log + feed), never the Orchestrator nor a chat waiting for the user', async () => {
     const base = { harness: 'claude', state: 'idle', pending: 0, model: null, costUsd: 0, isOrchestrator: false, lastText: 'fatto' };
     const list = [{ ...base, id: 'w', title: 'Lavoro' }, { ...base, id: 'r', title: 'Orchestrator', isOrchestrator: true }, { ...base, id: 'q', title: 'Domanda', state: 'waiting', pending: 1 }];

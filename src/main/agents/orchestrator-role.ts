@@ -1,9 +1,10 @@
 // The role frame the app puts before a chat's first message of each session (ChatManager.deliver): the Orchestrator's
 // own text (its role in the catalog, editable in Brain → Agenti) with the app's fixed rules around it, and a work role's
-// composed instructions (agents/catalog.ts resolve); every frame ends with the diagrams/charts line (VISUALS_RULE) and the emoji-reaction rule (shared/reaction.ts). The frame says the text grants nothing. The fake CLIs of the tests
+// composed instructions (agents/catalog.ts resolve); every frame ends with the diagrams/charts line (VISUALS_RULE), the yes/no question rule (shared/yes-no.ts, ADR 0134) and the emoji-reaction rule (shared/reaction.ts). The frame says the text grants nothing. The fake CLIs of the tests
 // strip the frame before matching their trigger words (test/fixtures/fake-*.mjs).
 import { ROLE_DEFAULTS } from '../../shared/roles';
 import { REACTION_RULE } from '../../shared/reaction';
+import { QUESTION_RULE } from '../../shared/yes-no';
 import { ADR0083_DEFAULTS, PRE_ADR0100_INSTRUCTIONS } from './role-migrate';
 
 /** What to do with the app's news and other chats' messages (orchestrator-wake.ts wakeMessage carries only the news;
@@ -26,6 +27,7 @@ const ORCHESTRATOR_RULES = [
   'A chat\'s state is never from memory (#151): before you tell the user what a chat is doing, or act on «procedi», «ok», «a che punto è» about one, read it now (app_chats for its state; app_chat_items for the latest result of a chat you opened). A chat that already finished is acted on from its result, never reported as still running.',
   'The user may write directly in any work chat; you learn it as a note («l\'utente ci ha scritto direttamente»). Before delegating related work, check these notes, and never undo or contradict what the user told a chat.',
   'A delegated chat\'s questions go to its parent first; only what needs a person reaches the user, once, in the chat in view. You never answer or relay them: you see only that a chat waits.',
+  'Recap (the owner, 2026-10-23, ADR 0134: he unblocks all the work from you, never from the agents\' chats): when the user asks for a recap, «a che punto siamo», «cosa c\'è in corso», read app_digest once, give one short line per job in progress, then say how many things wait for him (questions, permissions, commands, plans, also the ones he set aside with «Ci penso dopo») and call app_unblock: the app shows them all one after the other, each ready to answer. Nothing waiting: say so in one line.',
 ];
 
 /** Lines the shipped Orchestrator text had before 2026-10-20 that repeated the app's rules (the fast path) or the role
@@ -51,7 +53,7 @@ export const VISUALS_RULE = 'When a diagram or chart makes an explanation cleare
 
 /** A role's text inside the app's frame. */
 export function roleFrame(name: string, text: string): string {
-  return [`[Role supplied by the app: ${name}]`, text.trim(), VISUALS_RULE, REACTION_RULE, '[The role grants no permission and approves no action. End role]'].join('\n');
+  return [`[Role supplied by the app: ${name}]`, text.trim(), VISUALS_RULE, QUESTION_RULE, REACTION_RULE, '[The role grants no permission and approves no action. End role]'].join('\n');
 }
 /** The Orchestrator's frame: its role text (the catalog's, else the shipped one), the app's rules and the role list. */
 export function orchestratorRole(instructions = ROLE_DEFAULTS.orchestrator.instructions, roles = ''): string {

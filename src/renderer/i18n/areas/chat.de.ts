@@ -181,7 +181,7 @@ export const chatDe: typeof chatIt = {
   'chat.command.execConfirm': (p: { warning: string }) => `Bestätigen? ${p.warning}`,
   'chat.command.copy': 'Kopieren',
   'chat.command.openChat': 'Zum Chat',
-  'chat.command.later': 'Später antworten',
+  'chat.command.later': 'Später überlegen',
   'chat.command.dismiss': 'Nicht nötig',
   'chat.command.dismissTip': 'Schließt die Anfrage; der Block bleibt im Chat',
   // FocusView
@@ -224,7 +224,7 @@ export const chatDe: typeof chatIt = {
   'chat.questions.note': 'Du schreibst woanders: hier klicken oder',
   'chat.questions.note2': 'zum Antworten.',
   'chat.questions.openChat': 'Chat öffnen',
-  'chat.questions.later': 'Später antworten',
+  'chat.questions.later': 'Später überlegen',
   'chat.questions.laterTip': 'Wartet in „Zu beantworten“',
   'chat.questions.request': (p: { chatTitle: string }) => `Anfrage von ${p.chatTitle}`,
   'chat.questions.permission': 'Berechtigung',

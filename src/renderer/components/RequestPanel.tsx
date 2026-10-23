@@ -12,7 +12,9 @@
 // A "Comando da eseguire" (type 'command') is handed to CommandRequest.tsx, in the same sizes.
 // The tile, compact and Orchestrator sizes carry the request's context (AskContext.tsx: the turn's prose, its links and files), folded
 // in the chat's own tile, open in a work chat's Orchestrator card and in the questions window (`ctxOpen`).
-// With `onLater` a "Rispondi dopo" button leaves it unanswered (every host passes lib/later.ts answerLater: it waits in
+// Agents ask only yes/no questions (shared/yes-no.ts, ADR 0134): Sì / No (the No card in the refusal's tone), «Altro…»
+// for his own words and «Ci penso dopo».
+// With `onLater` a "Ci penso dopo" button leaves it unanswered (every host passes lib/later.ts answerLater: it waits in
 // "Da rispondere"; Esc does the same when the host gives `onEscape`; then a permission is rejected with 3, never Esc).
 // The questions window has its own size (`window`, ADR 0049): a muted lead on top (the agent's context sentence split
 // from its question by lib/askSplit.ts when certain, else two lines of why), the question large, a text to approve as a
@@ -23,6 +25,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type 
 import { createPortal } from 'react-dom';
 import{t}from'../i18n';
 import { explainTool } from '@shared/explain';
+import { isYesNo, yesNoOf } from '@shared/yes-no';
 import type { Answer, EngineInfo, Harness, PendingRequest } from '@shared/contract';
 import { answerText, confirmPicks, getPermissionOptions, initialDraft, markedRecommended, permissionAnswer, pickOption, requestKey, type Draft, type KeyResult } from '../lib/keys';
 import { ago, toolLabel } from '../lib/format';
@@ -214,8 +217,11 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
   ) : null;
 
   // One renderer for every host; disclosure actions are separate from answering.
+  // a yes/no question (the only kind agents ask, ADR 0134): its No card has the refusal's tone
+  const yesNo = !!q && isYesNo(q);
   const choiceCards = () => q?.options.map((option, i) => (
     <ChoiceCard key={draft.step + ':' + i} option={option} number={i + 1} recommended={i === recIdx} previewOpen={variant === 'window'}
+      tone={yesNo && yesNoOf(option.label) === 'no' ? 'deny' : undefined}
       picked={draft.picks.includes(i)} multi={q.multiSelect} current={i === draft.cursor} disabled={sent}
       onChoose={() => apply(pickOption(req, draft, i))} testid={testBase + '-opt-' + (i + 1)} />
   ));

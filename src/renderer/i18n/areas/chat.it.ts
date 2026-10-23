@@ -179,7 +179,7 @@ export const chatIt = {
   'chat.command.execConfirm': (p: { warning: string }) => `Confermi? ${p.warning}`,
   'chat.command.copy': 'Copia',
   'chat.command.openChat': 'Vai alla chat',
-  'chat.command.later': 'Rispondi dopo',
+  'chat.command.later': 'Ci penso dopo',
   'chat.command.dismiss': 'Non serve',
   'chat.command.dismissTip': 'Chiude la richiesta; il blocco resta nella chat',
   // FocusView
@@ -222,7 +222,7 @@ export const chatIt = {
   'chat.questions.note': 'Stai scrivendo altrove: clic qui o',
   'chat.questions.note2': 'per rispondere.',
   'chat.questions.openChat': 'Apri chat',
-  'chat.questions.later': 'Rispondi dopo',
+  'chat.questions.later': 'Ci penso dopo',
   'chat.questions.laterTip': 'Resta in «Da rispondere»',
   'chat.questions.request': (p: { chatTitle: string }) => `Richiesta da ${p.chatTitle}`,
   'chat.questions.permission': 'Permesso',

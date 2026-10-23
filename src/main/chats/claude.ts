@@ -10,6 +10,7 @@
 //   stdout → SDK messages (system/init, stream_event deltas, assistant, user tool results, result with cost) and the
 //            CLI's own control requests: can_use_tool (permissions and AskUserQuestion), answered with
 //            {"type":"control_response","response":{"subtype":"success",request_id,response:{behavior,…}}}.
+//            An AskUserQuestion that is not yes/no is denied with how to ask (shared/yes-no.ts, ADR 0134).
 //            With opts.preToolUse, initialize registers one PreToolUse hook callback and the CLI asks it with
 //            hook_callback before each tool call (answered with the hook's JSON output: {} or a deny with its reason).
 //            With opts.productHooks (a product brain), the brain's rules hooks for UserPromptSubmit, PreToolUse and
@@ -38,6 +39,7 @@ import { ownProcessGroup, sharedDir } from '../platform';
 import { AgentChildrenReporter } from './agent-children';
 import type { ChildObservation } from '../../shared/agents';
 import { claudeMcp, claudeTools, suggestedAbove } from '../agents/tool-policy';
+import { YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoShape } from '../../shared/yes-no';
 
 export interface ClaudeOptions extends SessionOptions {
   /** claude binary or a .mjs fake (tests); default: `claude` resolved on PATH */
@@ -48,6 +50,8 @@ export interface ClaudeOptions extends SessionOptions {
   stable?: boolean;
   /** a %LOCALAPPDATA%-like parent of second-brain/ (tests); default the app's shared folder, platform.ts */
   localAppData?: string;
+  /** send a question that is not yes/no back to the agent (shared/yes-no.ts, ADR 0134); default: yesNoGateOn(env) */
+  yesNo?: boolean;
 }
 
 /** A Windows or POSIX absolute path in Claude Code's absolute rule form: C:\a\b → //c/a/b (docs: permissions,
@@ -189,6 +193,8 @@ export class ClaudeSession implements HarnessSession {
   private calls = new Map<string, Call>();
   /** an MCP form the app cannot show was logged for this chat (#148): once per chat */
   private elicitationLogged = false;
+  /** questions sent back in a row for not being yes/no (ADR 0134): after YESNO_RETRIES the next one is shown as it is */
+  private yesNoRefused = 0;
   private tools = new Map<string, { item: ToolItem; input: unknown }>();
   private streams = new Map<string, Stream>();          // `${messageId}:${index}` → streamed block
   private order = new Map<string, Stream[]>();          // messageId → its streamed blocks, in arrival order
@@ -716,6 +722,7 @@ export class ClaudeSession implements HarnessSession {
     const tool = s(r.tool_name);
     const input = o(r.input);
     const question = tool === 'AskUserQuestion';
+    if (question && this.refuseNotYesNo(id, input, s(r.tool_use_id))) return;
     const noAlways = r.suppress_always_allow_rule === true;
     // a suggested mode above the agent's ceiling is never offered ("Sempre" would raise it before the manager could react)
     const suggestions = arr(r.permission_suggestions).filter(x => o(x).type !== 'setMode' || !suggestedAbove(o(x).mode, this.opts.ceiling ?? null));
@@ -736,6 +743,18 @@ export class ClaudeSession implements HarnessSession {
     log.info('chats', 'can_use_tool', { chat: this.opts.chatId, data: { requestId: id, tool, type: req.type, toolUseId: call.toolUseId || null } });
     this.setState('waiting');
     this.sink.pending(req);
+  }
+
+  /** A question that is not yes/no goes back to the agent with how to ask (ADR 0134), at most YESNO_RETRIES times in a
+   *  row per chat: then it is shown as it is, so a chat that cannot comply never stays stuck. */
+  private refuseNotYesNo(id: string, input: Obj, toolUseId: string): boolean {
+    if (!(this.opts.yesNo ?? yesNoGateOn(process.env))) return false;
+    if (yesNoShape(questionsFrom(input))) { this.yesNoRefused = 0; return false; }
+    if (this.yesNoRefused >= YESNO_RETRIES) { this.yesNoRefused = 0; return false; }
+    this.yesNoRefused++;
+    log.info('chats', 'question sent back: not yes/no', { chat: this.opts.chatId, data: { requestId: id, attempt: this.yesNoRefused } });
+    try { this.write({ type: 'control_response', response: { subtype: 'success', request_id: id, response: { behavior: 'deny', message: YESNO_REFUSAL, toolUseID: toolUseId } } }); } catch { /* gone */ }
+    return true;
   }
 
   /** An MCP server asks the user through the CLI (#148): a form without fields (a confirmation) is a permission panel,

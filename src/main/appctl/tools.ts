@@ -16,6 +16,8 @@
 // - Both mounts see the shared Grindhouse. Only an Orchestrator's own mount brings the app's code folder up to date
 //   when the user asks (app_update_code, ADR 0074); no tool promotes or restarts the app (only the user's click on
 //   "Aggiorna" in Settings, ADR 0075).
+// - After a recap the user asked for, an Orchestrator's own mount opens the questions window with everything waiting
+//   for him (app_unblock, ADR 0134); it never answers any of it.
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { ChatItem, ChatSummary, TasksState, Effort, EventMap, NewChat, PendingRequest, RoutingRow, RunInfo, TaskKind } from '../../shared/contract';
@@ -110,6 +112,8 @@ export const CHAT_PROMPT_MAX = 8000;
 export const CHAT_TITLE_MAX = 80;
 /** app_update_code runs only within this many minutes of a message the user wrote to the Orchestrator (ADR 0074) */
 export const PULL_ASK_MIN = 10;
+/** app_unblock opens the waiting requests only within this many minutes of a message the user wrote to the Orchestrator */
+export const UNBLOCK_ASK_MIN = 10;
 export { AGENT_LABEL };
 /** how a work chat sees an answer the Orchestrator delivered for the user (app_resolve_question) */
 export const RESOLVED_LABEL = 'Risposto nell’Orchestrator dall\'utente:';
@@ -620,6 +624,27 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       },
     },
   ];
+  // only the authenticated Orchestrator mount: the questions window comes up with everything that waits for the user
+  // (ADR 0134: he unblocks the work from the Orchestrator's recap, never from the agents' chats); only right after he
+  // wrote to it, so an agent cannot bring a permission under his keystrokes at any moment (review 2026-10-11)
+  if (authed()) {
+    tools.push({
+      name: 'app_unblock',
+      description: `After a recap the user asked for: opens the app's questions window with everything that waits for him from every chat (questions, permissions, commands to run, Strategist plans), the ones he set aside with «Ci penso dopo» too, one after the other, ready to answer there (Sì / No / his own words) without opening the chats. Returns how many wait. Refused unless the user wrote to the Orchestrator in the last ${UNBLOCK_ASK_MIN} minutes.`,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+      inputSchema: obj(),
+      run: () => {
+        const orchestrator = caller();
+        if (!orchestrator) throw new Error('bloccato: solo l’Orchestrator apre le richieste in attesa');
+        if (!decidedSince(orchestrator.id, Date.now() - UNBLOCK_ASK_MIN * 60_000)) throw new Error('bloccato: apri le richieste in attesa solo quando l’utente ti chiede un recap');
+        const asks = [...d.chats.pending(), ...(d.commandAsks?.() ?? [])].filter(r => !other(r.chatId)).length;
+        const plans = d.chats.list().filter(c => !c.closedAt && !other(c.id) && c.plan?.phase === 'proposed').length;
+        if (!asks && !plans) return { waiting: 0, note: 'Niente aspetta l’utente: non c’è nulla da aprire.' };
+        d.emitUi({ action: 'unblock' });
+        return { waiting: asks + plans, questionsAndPermissions: asks, plans, note: 'La finestra delle domande è aperta con tutte le richieste in attesa.' };
+      },
+    });
+  }
   // only the authenticated Orchestrator mount (/mcp/app/o/<id>/<token>): the plain mount is open to local processes
   if (d.code?.pull && authed()) {
     const pull = d.code.pull;
