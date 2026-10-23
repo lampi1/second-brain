@@ -1,5 +1,6 @@
 // Explicit coordination request: read fresh evidence and present actionable decisions in the shared modal queue.
 // This control stays in the Orchestrator; Home contains only agent strips.
+import { t } from '../i18n';
 import { useApp, send } from '../store/store';
 import { openQueue } from '../lib/later';
 import { reloadWorkflows, reloadLessons } from '../store/workflows';
@@ -10,11 +11,11 @@ export function RecapButton() {
   const orch = useApp(s => Object.values(s.chats).find(c => c.isOrchestrator && !c.closedAt));
   const queued = useApp(s => orch ? (s.queued[orch.id] ?? []).some(m => m.text === RECAP) : false);
   return <button className="btn btn-primary btn-s" type="button" data-testid="work-recap" disabled={!orch || queued}
-    title="Chiede proposte concrete all’Orchestrator da decidere con Sì o No" onClick={() => {
+    title={t('cmp.durable.cockpit.title')} onClick={() => {
       if (!orch) return;
       void reloadWorkflows(); void reloadLessons();
       if (orch.pending || orch.state === 'waiting') openQueue(null);
       const result = send(orch.id, RECAP);
-      if (result !== 'empty') toast(result === 'queued' ? 'Proposte in coda: il lavoro in corso continua.' : 'L’Orchestrator prepara le proposte.', 'ok');
-    }}>{queued ? 'Proposte in coda' : 'Fai il punto'}</button>;
+      if (result !== 'empty') toast(result === 'queued' ? t('cmp.durable.cockpit.queuedToast') : t('cmp.durable.cockpit.preparing'), 'ok');
+    }}>{queued ? t('cmp.durable.cockpit.queued') : t('cmp.durable.cockpit.recap')}</button>;
 }

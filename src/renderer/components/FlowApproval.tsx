@@ -7,6 +7,7 @@ import { useApp } from '../store/store';
 import { decideFlow } from '../store/flows';
 import { decisionDraft, saveDecisionDraft } from '../lib/decision-drafts';
 import { t } from '../i18n';
+import { FlowAutomationSummary } from './FlowAutomationSummary';
 import { FlowDefinition } from './FlowDefinition';
 import '../styles/flows.css';
 export function FlowApproval({ ask, onEscape }: { ask: FlowAsk; onEscape: () => void }) {
@@ -32,13 +33,14 @@ export function FlowApproval({ ask, onEscape }: { ask: FlowAsk; onEscape: () => 
     if (ok) { saveDecisionDraft(key, ''); saveDecisionDraft(evidenceKey, ''); }
     submitting.current = false; setBusy(false);
   };
-  return <div className="wq flow-review" tabIndex={0} role="group" aria-label={ask.title} aria-busy={busy} data-request-key={key} data-testid={ask.type === 'flow-definition' ? 'qwin-flow-definition' : 'qwin-flow-run'} onKeyDown={e => {
+  return <div className="wq flow-review" tabIndex={0} role="group" aria-label={ask.title} aria-busy={busy} data-request-key={key} data-testid={`qwin-${ask.type}`} onKeyDown={e => {
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onEscape(); }
   }}>
-    <div className="wq-kicker">{t('flows.title')} · {ask.type === 'flow-definition' ? `r${ask.draft.revision}` : `v${ask.run.flowVersion} · r${ask.run.revision}`}</div>
+    <div className="wq-kicker">{t('flows.title')} · {ask.type === 'flow-definition' ? `r${ask.draft.revision}` : ask.type === 'flow-automation' ? `v${ask.rule.config.flowVersion} · r${ask.rule.revision}` : `v${ask.run.flowVersion} · r${ask.run.revision}`}</div>
     <p className="wq-lead">{ask.title}</p>
-    <h2 className="wq-q">{t(ask.type === 'flow-definition' ? 'flows.proposalQuestion' : 'flows.stepQuestion')}</h2>
+    <h2 className="wq-q">{t(ask.type === 'flow-definition' ? 'flows.proposalQuestion' : ask.type === 'flow-automation' ? 'flows.autoQuestion' : 'flows.stepQuestion')}</h2>
     {ask.type === 'flow-definition' && <p className="wq-lead">{t('flows.activationHint')}</p>}
+    {ask.type === 'flow-automation' && <><p className="wq-lead">{t('flows.autoHint')}</p><FlowAutomationSummary config={ask.rule.config} /></>}
     {definition?.description && <p>{definition.description}</p>}
     {run && <><p className="flow-target" data-testid="flow-target"><strong>{t('flows.target')}:</strong> {run.subjectKey}<span className="flows-muted"> · {[run.scope.project, run.scope.areaPath].filter(Boolean).join(' · ') || '—'}</span></p><details data-testid="flow-run-context"><summary>{t('flows.runContext')}</summary><dl className="flow-facts"><dt>{t('flows.target')}</dt><dd>{run.subjectKey}</dd><dt>{t('flows.scope')}</dt><dd>{[run.scope.project, run.scope.areaPath].filter(Boolean).join(' · ') || '—'}</dd><dt>{t('flows.inputs')}</dt><dd>{Object.keys(run.inputs).length ? <dl className="flow-facts">{Object.entries(run.inputs).map(([name, value]) => <div key={name} className="flow-input-pair"><dt>{name}</dt><dd>{value}</dd></div>)}</dl> : '—'}</dd></dl></details></>}
     {current && <p>{t('flows.current')}: <strong>{definition?.steps[run!.currentStep]?.title ?? current.stepId}</strong></p>}

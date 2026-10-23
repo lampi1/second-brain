@@ -86,7 +86,6 @@ export const treeEn: typeof treeIt = {
   'tree.plan.title': 'Plan',
   'tree.plan.steps': (p: { n: number }) => `${p.n} steps`,
   'tree.plan.doneWhen': (p: { text: string }) => `Done when: ${p.text}`,
-  'tree.plan.approve': 'Approve and start',
   'tree.plan.change': 'Change something',
   'tree.plan.changePlaceholder': 'What should change in the plan?',
   'tree.plan.send': 'Send',

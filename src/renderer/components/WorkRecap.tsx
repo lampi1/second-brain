@@ -1,25 +1,26 @@
 // Read-only routine PR/QA recap from the Task service; the cockpit offers its existing refresh without a model turn.
+import { locale, t } from '../i18n';
 import type { TasksState } from '@shared/contract';
 import { workRecap } from '@shared/work-recap';
 
 export function WorkRecap({ tasks, refresh, now = Date.now() }: { tasks: TasksState | null; refresh: () => void; now?: number }) {
   const recap = workRecap(tasks, now);
-  const stamp = (at: number | null) => at ? new Date(at).toLocaleString() : 'mai letti';
-  const fresh = { missing: 'data non disponibile', stale: 'dati oltre un’ora', current: 'ultimo controllo disponibile', error: 'aggiornamento fallito' };
+  const stamp = (at: number | null) => at ? new Date(at).toLocaleString(locale()) : t('cmp.durable.recap.neverRead');
+  const fresh = { missing: t('cmp.durable.recap.missing'), stale: t('cmp.durable.recap.stale'), current: t('cmp.durable.recap.current'), error: t('cmp.durable.recap.error') };
   return <details className="work-routine" data-testid="work-routine">
-    <summary>PR e QA · {recap.prs.length} PR · riepilogo senza modello · QA: {fresh[recap.qaFreshness]}</summary>
+    <summary>{t('cmp.durable.recap.summary', { count: recap.prs.length, freshness: fresh[recap.qaFreshness] })}</summary>
     <div className="work-routine-heading"><p>PR: {stamp(recap.readAt)} · {fresh[recap.freshness]}<br />QA: {stamp(recap.qaAt)} · {fresh[recap.qaFreshness]}</p>
-      <button type="button" className="btn btn-ghost btn-s" onClick={refresh} disabled={tasks?.running}>{tasks?.running ? 'Lettura in corso' : 'Aggiorna PR e QA'}</button></div>
+      <button type="button" className="btn btn-ghost btn-s" onClick={refresh} disabled={tasks?.running}>{tasks?.running ? t('cmp.durable.recap.reading') : t('cmp.durable.recap.refresh')}</button></div>
     {tasks?.error && <p role="status">{tasks.error.message}</p>}
-    {tasks?.qaError && <p role="status">QA non aggiornate: {tasks.qaError}. Restano gli ultimi dati riusciti.</p>}
-    {!recap.prs.length && <p>{recap.readAt ? 'Nessuna PR attiva nell’ultima lettura.' : 'Leggi i dati DevOps per vedere le PR e le verifiche disponibili.'}</p>}
+    {tasks?.qaError && <p role="status">{t('cmp.durable.recap.qaError', { error: tasks.qaError })}</p>}
+    {!recap.prs.length && <p>{recap.readAt ? t('cmp.durable.recap.noPr') : t('cmp.durable.recap.readData')}</p>}
     {recap.prs.map(({ pr, risks, qaKnown }) => <article key={`${pr.project}/${pr.repo}/${pr.id}`} className="work-routine-pr">
-      <strong>#{pr.id} · {pr.title}</strong><small>{pr.repo} → {pr.target}{pr.draft ? ' · bozza' : ''}{pr.autoComplete ? ' · auto-complete attivo' : ''}</small>
+      <strong>#{pr.id} · {pr.title}</strong><small>{pr.repo} → {pr.target}{pr.draft ? t('cmp.durable.recap.draft') : ''}{pr.autoComplete ? t('cmp.durable.recap.autoComplete') : ''}</small>
       {risks.length > 0 && <p className="work-routine-risk">{risks.join(' · ')}</p>}
-      <p>Build: {pr.build?.result ?? pr.build?.status ?? 'non disponibile'} · Review richieste: {pr.reviewers.filter(r => r.required && r.vote === 0).length}</p>
-      {!qaKnown && <p>QA non disponibili: nessun esito verificabile.</p>}
-      {qaKnown && !risks.length && <p>Nessun problema segnalato nei dati disponibili.</p>}
+      <p>{t('cmp.durable.recap.build', { build: pr.build?.result ?? pr.build?.status ?? t('cmp.durable.recap.unavailable'), reviews: pr.reviewers.filter(r => r.required && r.vote === 0).length })}</p>
+      {!qaKnown && <p>{t('cmp.durable.recap.noQa')}</p>}
+      {qaKnown && !risks.length && <p>{t('cmp.durable.recap.noIssues')}</p>}
     </article>)}
-    <small>Questo riepilogo non approva merge o produzione. Per interpretare i dati usa «Fai il punto».</small>
+    <small>{t('cmp.durable.recap.authority')}</small>
   </details>;
 }

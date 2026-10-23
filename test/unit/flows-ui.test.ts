@@ -11,8 +11,10 @@ import { flowAsks } from '../../src/renderer/lib/flow-ask';
 import { flowDecisionMode, flowDecisionSubmission } from '../../src/renderer/lib/flow-decision';
 import { flowRequest } from '../../src/renderer/lib/flow-request';
 import { Flows } from '../../src/renderer/brain/pages/Flows';
+import { FlowDiagram } from '../../src/renderer/components/FlowDiagram';
+import { FlowAutomation } from '../../src/renderer/components/FlowAutomation';
 import { FlowApproval } from '../../src/renderer/components/FlowApproval';
-import { flowState, decideFlow, reloadFlows } from '../../src/renderer/store/flows';
+import { flowState, decideFlow, reloadFlows, controlFlowAutomation } from '../../src/renderer/store/flows';
 import { answerLater, requestPostponed, startLater } from '../../src/renderer/lib/later';
 import { decisionDraft, saveDecisionDraft } from '../../src/renderer/lib/decision-drafts';
 const definition: FlowDefinition = { id: 'review-doc', title: 'Revisione documento', description: 'Solo i documenti selezionati.', category: 'Documenti', aliases: ['rivedi documento'], scope: { project: 'Demo' }, steps: [{ id: 'review', title: 'Conferma il testo', kind: 'approval', instructions: 'Controlla il testo e approva la versione.', inputs: ['document'], evidence: ['[Report](file:///tmp/review.md)'], timeoutMs: 5000, maxAttempts: 1, effect: 'read-only' }] };
@@ -163,4 +165,108 @@ it('offers navigation to the bound agent only while that exact chat remains avai
     app.set(s => ({ ...s, chats }));
     expect(renderToStaticMarkup(createElement(FlowApproval, { ask, onEscape: vi.fn() }))).not.toContain('data-testid="flow-open-agent"');
   } finally { app.set(s => ({ ...s, chats })); }
+});
+
+const automated = (): FlowSnapshot => ({ ...snapshot(), drafts: [], automation: {
+  revision: 12, paused: false, background: false, events: [], rules: [{
+    id: 'auto-review', revision: 3, ownerOrchestratorId: 'o', status: 'proposed', failures: 0, createdAt: 1, updatedAt: 4,
+    config: { flowId: definition.id, flowVersion: 1, scope: { project: 'Selected project', areaPath: 'Selected area' },
+      inputs: { workspace: '/selected/workspace' }, priority: 'normal', trigger: { kind: 'devops', everyMinutes: 15,
+        organization: 'selected-org', project: 'Selected project', areaPath: 'Selected area', workItemType: 'Bug', states: ['New'], includeExisting: false } },
+  }],
+} });
+it('adds exact automatic proposals to the common queue and preserves revision-specific postponement', () => {
+  const state = automated(), ask = flowAsks(state)[0]!;
+  expect(ask.type).toBe('flow-automation');
+  expect(ask.id).toBe('%2Fbrain%2Fa/automation/auto-review@3');
+  saveDecisionDraft(`flow/${ask.id}`, 'Only my selected scope');
+  const changed = automated(); changed.automation!.rules[0]!.revision = 4;
+  expect(flowAsks(changed)[0]!.id).not.toBe(ask.id);
+  expect(decisionDraft(`flow/${flowAsks(changed)[0]!.id}`)).toBe('');
+  expect(flowAsks({ ...state, automation: { ...state.automation!, storageError: 'unreadable' } })).toEqual([]);
+  for (const status of ['enabled', 'paused', 'rejected'] as const) {
+    expect(flowAsks({ ...state, automation: { ...state.automation!, rules: [{ ...state.automation!.rules[0]!, status }] } })).toEqual([]);
+  }
+  saveDecisionDraft(`flow/${ask.id}`, '');
+});
+it('shows the exact automatic scope, cadence, inputs, cost and revision before consent', () => {
+  const ask = flowAsks(automated())[0]!;
+  const html = renderToStaticMarkup(createElement(FlowApproval, { ask, onEscape: vi.fn() }));
+  for (const value of ['qwin-flow-automation', 'v1 · r3', 'Selected project', 'Selected area', 'selected-org', 'Bug', 'New', '15', '/selected/workspace', 'Esclusi', 'consumare il tuo piano AI', 'Le approvazioni dei passaggi restano necessarie']) expect(html).toContain(value);
+  expect(html.indexOf('flow-auto-summary')).toBeLessThan(html.indexOf('flow-approve'));
+  expect(flowDecisionSubmission(ask, 'other', 'Change the trigger', '')).toEqual({ answer: 'other', feedback: 'Change the trigger' });
+  expect(flowDecisionSubmission(ask, 'yes', '', '')).toEqual({ answer: 'yes' });
+  const unavailable = flowAsks({ ...automated(), versions: [] })[0]!;
+  expect(flowDecisionSubmission(unavailable, 'yes', '', '')).toBeNull();
+});
+it('submits automatic consent to its own exact-brain revision channel and rejects cross-brain decisions', async () => {
+  const state = automated(); flowState.set({ snapshot: state, error: null, loading: false });
+  const ask = flowAsks(state)[0]!; invoke.mockResolvedValue(state);
+  expect(await decideFlow(ask, 'other', 'Only new bugs')).toBe(true);
+  expect(invoke).toHaveBeenCalledWith('flows:autoDecide', { contextKey: state.contextKey, id: 'auto-review', expectedRevision: 3, answer: 'other', feedback: 'Only new bugs' });
+  flowState.set({ snapshot: { ...state, contextKey: 'another-brain' }, error: null, loading: false });
+  invoke.mockClear(); expect(await decideFlow(ask, 'yes')).toBe(false); expect(invoke).not.toHaveBeenCalled();
+});
+it('sends scoped pause and global controls without silently changing other settings', async () => {
+  const state = automated(); flowState.set({ snapshot: state, error: null, loading: false }); invoke.mockResolvedValue(state);
+  await controlFlowAutomation(state.contextKey, { id: 'auto-review', expectedRevision: 3, paused: true });
+  expect(invoke).toHaveBeenLastCalledWith('flows:autoPause', { contextKey: state.contextKey, id: 'auto-review', expectedRevision: 3, paused: true });
+  await controlFlowAutomation(state.contextKey, { expectedRevision: 12, background: true });
+  expect(invoke).toHaveBeenLastCalledWith('flows:autoControl', { contextKey: state.contextKey, expectedRevision: 12, background: true });
+  await controlFlowAutomation(state.contextKey, { expectedRevision: 12, paused: false });
+  expect(invoke).toHaveBeenLastCalledWith('flows:autoControl', { contextKey: state.contextKey, expectedRevision: 12, paused: false });
+  invoke.mockClear(); expect(await controlFlowAutomation('another-brain', { expectedRevision: 12, paused: false })).toBe(false); expect(invoke).not.toHaveBeenCalled();
+});
+it('never restores a previous brain after a pending automatic control completes', async () => {
+  const state = automated(); flowState.set({ snapshot: state, error: null, loading: false });
+  let complete!: (value: FlowSnapshot) => void; invoke.mockImplementation(() => new Promise(resolve => { complete = resolve; }));
+  const action = controlFlowAutomation(state.contextKey, { expectedRevision: 12, background: true });
+  flowState.set({ snapshot: { ...state, contextKey: 'new-brain' }, error: null, loading: false });
+  complete(state); await action;
+  expect(flowState.get().snapshot?.contextKey).toBe('new-brain');
+});
+it('offers resume only for the approved paused revision and shows real blocked events and errors', () => {
+  const state = automated(), rule = state.automation!.rules[0]!;
+  rule.status = 'paused'; rule.approvedRevision = 2; rule.error = 'No Orchestrator available'; rule.lastResult = '2 selected items';
+  state.automation!.events = [{ id: 'event', ruleId: rule.id, ruleRevision: rule.revision, sourceKey: 'source', subjectKey: 'item', title: 'Selected item', inputs: {}, createdAt: 1, updatedAt: 2, status: 'blocked', attempts: 3, reason: 'Dispatch needs retry' }];
+  const props = { version: state.versions[0]!, snapshot: state };
+  const html = renderToStaticMarkup(createElement(FlowAutomation, props));
+  expect(html).not.toContain('Riprendi e riprova');
+  for (const value of ['Selected item', 'Dispatch needs retry', 'No Orchestrator available', '2 selected items']) expect(html).toContain(value);
+  rule.approvedRevision = 3;
+  expect(renderToStaticMarkup(createElement(FlowAutomation, props))).toContain('Riprendi e riprova');
+});
+it('renders only actual sequence and review edges with keyboard-operable recorded-state nodes', () => {
+  const graph = { ...definition, steps: [definition.steps[0]!, { ...definition.steps[0]!, id: 'verify', title: 'Independent verification', reviewOf: 'review', kind: 'agent' as const }] };
+  const recorded = { ...run, steps: [{ ...run.steps[0]!, status: 'completed' as const }, { stepId: 'verify', status: 'running' as const, attempts: 1 }], currentStep: 1 };
+  const html = renderToStaticMarkup(createElement(FlowDiagram, { definition: graph, run: recorded }));
+  expect(html.match(/data-edge="sequence"/g)).toHaveLength(1); expect(html.match(/data-edge="review"/g)).toHaveLength(1);
+  expect(html.match(/data-testid="flow-node"/g)).toHaveLength(2);
+  expect(html).toContain('data-status="running"'); expect(html).toContain('data-status="completed"'); expect(html).toContain('aria-controls='); expect(html).toContain('aria-pressed="true"');
+  const noRun = renderToStaticMarkup(createElement(FlowDiagram, { definition: graph }));
+  expect(noRun).not.toContain('flow-node-live');
+  expect(noRun).not.toContain('data-status="running"');
+});
+it('keeps the approved definition and automatic mode visible when an older draft exists', () => {
+  const state = automated(); state.automation!.rules[0]!.status = 'enabled';
+  state.drafts = [{ definition: { ...definition, title: 'Obsolete draft title' }, revision: 1, updatedAt: 1, status: 'rejected' }];
+  flowState.set({ snapshot: state, error: null, loading: false });
+  const html = renderToStaticMarkup(createElement(Flows));
+  expect(html).toContain('Revisione documento'); expect(html).not.toContain('Obsolete draft title'); expect(html).toContain('flow-auto-rule'); expect(html).toContain('Automatico');
+});
+it('requests exact automatic configuration through the existing Orchestrator proposal tool', () => {
+  const request = flowRequest('automate', { id: definition.id, name: definition.title, version: 1 });
+  for (const value of ['app_flow_auto_propose', 'versione 1', 'cadenza', 'consumo AI', 'Non attivare o avviare nulla implicitamente']) expect(request).toContain(value);
+});
+
+it('keeps the newest completed run and its recorded evidence visible after work finishes', () => {
+  const finished: FlowRun = { ...run, status: 'completed', updatedAt: 12, steps: [{ ...run.steps[0]!, status: 'completed', receipt: { id: 'finished-receipt', stepId: 'review', kind: 'user', at: 12, summary: 'Verified the selected document.', evidence: ['Selected revision 8'] } }] };
+  const older: FlowRun = { ...finished, id: 'older-run', subjectKey: 'Old document', updatedAt: 7, steps: [{ ...finished.steps[0]!, receipt: { ...finished.steps[0]!.receipt!, summary: 'Older result.' } }] };
+  flowState.set({ snapshot: { ...snapshot(), drafts: [], runs: [older, finished] }, error: null, loading: false });
+  const html = renderToStaticMarkup(createElement(Flows));
+  expect(html).toContain('data-testid="flow-run"');
+  expect(html).toContain('value="r" selected=""');
+  expect(html).toContain('data-status="completed"');
+  expect(html).toContain('Verified the selected document.');
+  expect(html).not.toContain('Older result.');
 });

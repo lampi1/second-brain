@@ -86,7 +86,6 @@ export const treeIt = {
   'tree.plan.title': 'Piano',
   'tree.plan.steps': (p: { n: number }) => `${p.n} step`,
   'tree.plan.doneWhen': (p: { text: string }) => `Finito quando: ${p.text}`,
-  'tree.plan.approve': 'Approva e parti',
   'tree.plan.change': 'Cambia qualcosa',
   'tree.plan.changePlaceholder': 'Cosa cambio nel piano?',
   'tree.plan.send': 'Invia',

@@ -211,7 +211,7 @@ export function TopBar() {
           <span className="queue-label">{auditText('audit.TopBar.queued')}</span><span className="count-badge">{queued}</span>
         </button>
       )}
-      {(error || lessonError || flows.error) && <button type="button" className="btn btn-amber btn-s" role="status" onClick={() => { void reloadWorkflows(); void reloadLessons(); void reloadFlows(); }} data-testid="work-queue-retry">Proposte non disponibili · Riprova</button>}
+      {(error || lessonError || flows.error) && <button type="button" className="btn btn-amber btn-s" role="status" onClick={() => { void reloadWorkflows(); void reloadLessons(); void reloadFlows(); }} data-testid="work-queue-retry">{t('cmp.durable.queue.retry')}</button>}
       <CliStatusButton />
       <SyncStatus />
       <button type="button" className={`btn btn-m ${waiting ? 'btn-amber' : 'btn-ghost'} next-btn`} onClick={() => (paused ? openQueue(null) : nextThing())} data-testid="topbar-next" data-queue={inQueue ? '' : undefined} data-paused={paused ? '' : undefined}
