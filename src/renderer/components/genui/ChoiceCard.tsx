@@ -37,7 +37,7 @@ export function ChoiceCard({ option, number, recommended, picked, multi, current
     <div className={`gu-choice gu-yn ${yn} ${recommended ? 'rec' : ''} ${current ? 'cur' : ''}`}>
       <button type="button" className="gu-choice-answer gu-yn-answer" onClick={onChoose} disabled={disabled}
         aria-describedby={description ? `${id}-description` : undefined} data-testid={testid}>
-        <span className="gu-yn-icon" aria-hidden="true">{yn === 'yes' ? <IconCheck size={26} /> : <IconX size={24} />}</span>
+        <span className="gu-yn-icon" aria-hidden="true">{yn === 'yes' ? <IconCheck size={18} /> : <IconX size={18} />}</span>
         <strong className="gu-yn-label">{cleanLabel(option.label)}</strong>
         {description && <span id={`${id}-description`} className="gu-choice-description gu-yn-desc">{description}</span>}
         <span className="gu-yn-key" aria-hidden="true">{number}</span>
