@@ -202,7 +202,7 @@ describe('AcpSession as Cursor', () => {
     expect(answerOf(logFile)).toEqual({ outcome: 'selected', optionId: 'allow-once' });
   });
 
-  it('cursor/ask_question that is not yes/no: skipped with how to ask, twice in a row, then shown (ADR 0134)', async () => {
+  it('cursor/ask_question that is not yes/no: skipped with how to ask, twice in a row, then shown (ADR 0135)', async () => {
     const { s, sink, logFile } = start({ yesNo: true });
     for (const n of [1, 2]) {
       s.send('ask');

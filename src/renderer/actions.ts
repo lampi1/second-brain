@@ -619,7 +619,7 @@ export function uiCommand(cmd: EventMap['ui:command']): void {
     case 'clock': freezeClock(Number(v)); break;
     case 'layout': setReporting(v !== 'off'); break;
     case 'closeTab': closeTab(v); break;   // Ctrl+W inside a browser page (main browser/tabs.ts forwards it)
-    case 'unblock': showQueue(); break; // the Orchestrator's recap (app_unblock, ADR 0134): everything waiting, «Ci penso dopo» too
+    case 'unblock': showQueue(); break; // the Orchestrator's recap (app_unblock, ADR 0135): everything waiting, «Ci penso dopo» too
     default: break;
   }
 }

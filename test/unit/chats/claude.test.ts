@@ -135,7 +135,7 @@ describe('ClaudeSession', () => {
     expect(sink.last('assistant')?.text).toBe('Hai scelto Blu');
   });
 
-  it('sends a question that is not yes/no back to the agent, at most twice in a row, then shows it (ADR 0134)', async () => {
+  it('sends a question that is not yes/no back to the agent, at most twice in a row, then shows it (ADR 0135)', async () => {
     const { s, sink } = start({ yesNo: true });
     for (const n of [1, 2]) {
       s.send('ask me');

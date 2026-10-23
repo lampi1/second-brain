@@ -45,7 +45,7 @@ export function answerLater(key?:string):void {
   notify();
 }
 
-/** The Orchestrator's recap (app_unblock, ADR 0134): the postponed requests come back and the window opens on the
+/** The Orchestrator's recap (app_unblock, ADR 0135): the postponed requests come back and the window opens on the
  *  first one, but never takes the keyboard from a field the user is typing in (no call bump), never closes another
  *  dialog and never raises the window: an agent's turn must not put a permission under his keystrokes. */
 export function showQueue():void {

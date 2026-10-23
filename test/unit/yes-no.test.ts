@@ -1,4 +1,4 @@
-// Yes/no questions only (shared/yes-no.ts, ADR 0134): the shape check the question gates use and when the gate is on.
+// Yes/no questions only (shared/yes-no.ts, ADR 0135): the shape check the question gates use and when the gate is on.
 import { describe, expect, it } from 'vitest';
 import { isYesNo, yesNoGateOn, yesNoOf, yesNoShape } from '../../src/shared/yes-no';
 

@@ -1,4 +1,4 @@
-// Yes/no questions only (owner, 2026-10-23, ADR 0134): every question an agent or the Orchestrator asks the user is one
+// Yes/no questions only (owner, 2026-10-23, ADR 0135): every question an agent or the Orchestrator asks the user is one
 // yes/no question that first says what was done and how it is known (a screenshot, a file, a test), so the user answers
 // with Sì / No, writes his own answer («Altro…») or sets it aside («Ci penso dopo») and never opens a chat to understand.
 // QUESTION_RULE rides on every role frame (agents/orchestrator-role.ts roleFrame); yesNoShape() is the check the

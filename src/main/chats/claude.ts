@@ -10,7 +10,7 @@
 //   stdout → SDK messages (system/init, stream_event deltas, assistant, user tool results, result with cost) and the
 //            CLI's own control requests: can_use_tool (permissions and AskUserQuestion), answered with
 //            {"type":"control_response","response":{"subtype":"success",request_id,response:{behavior,…}}}.
-//            An AskUserQuestion that is not yes/no is denied with how to ask (shared/yes-no.ts, ADR 0134).
+//            An AskUserQuestion that is not yes/no is denied with how to ask (shared/yes-no.ts, ADR 0135).
 //            With opts.preToolUse, initialize registers one PreToolUse hook callback and the CLI asks it with
 //            hook_callback before each tool call (answered with the hook's JSON output: {} or a deny with its reason).
 //            With opts.productHooks (a product brain), the brain's rules hooks for UserPromptSubmit, PreToolUse and
@@ -50,7 +50,7 @@ export interface ClaudeOptions extends SessionOptions {
   stable?: boolean;
   /** a %LOCALAPPDATA%-like parent of second-brain/ (tests); default the app's shared folder, platform.ts */
   localAppData?: string;
-  /** send a question that is not yes/no back to the agent (shared/yes-no.ts, ADR 0134); default: yesNoGateOn(env) */
+  /** send a question that is not yes/no back to the agent (shared/yes-no.ts, ADR 0135); default: yesNoGateOn(env) */
   yesNo?: boolean;
 }
 
@@ -193,7 +193,7 @@ export class ClaudeSession implements HarnessSession {
   private calls = new Map<string, Call>();
   /** an MCP form the app cannot show was logged for this chat (#148): once per chat */
   private elicitationLogged = false;
-  /** questions sent back in a row for not being yes/no (ADR 0134): after YESNO_RETRIES the next one is shown as it is */
+  /** questions sent back in a row for not being yes/no (ADR 0135): after YESNO_RETRIES the next one is shown as it is */
   private yesNoRefused = 0;
   private tools = new Map<string, { item: ToolItem; input: unknown }>();
   private streams = new Map<string, Stream>();          // `${messageId}:${index}` → streamed block
@@ -750,7 +750,7 @@ export class ClaudeSession implements HarnessSession {
     this.sink.pending(req);
   }
 
-  /** A question that is not yes/no goes back to the agent with how to ask (ADR 0134), at most YESNO_RETRIES times in a
+  /** A question that is not yes/no goes back to the agent with how to ask (ADR 0135), at most YESNO_RETRIES times in a
    *  row per chat: then it is shown as it is, so a chat that cannot comply never stays stuck. */
   private refuseNotYesNo(id: string, input: Obj, toolUseId: string): boolean {
     if (!(this.opts.yesNo ?? yesNoGateOn(process.env))) return false;

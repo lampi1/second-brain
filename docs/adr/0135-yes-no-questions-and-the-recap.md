@@ -1,4 +1,4 @@
-# ADR 0134 · Yes/no questions only, «Ci penso dopo», and a recap that unblocks everything
+# ADR 0135 · Yes/no questions only, «Ci penso dopo», and a recap that unblocks everything
 
 Date: 2026-10-23 · Status: accepted (owner, 2026-10-23: «vorrei che l'orchestrator e in generale sempre io avessi solo
 domande con risposta sì no o campo di testo per altro. Anche opzione ci penso dopo dove semplicemente poi

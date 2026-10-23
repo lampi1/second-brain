@@ -103,7 +103,7 @@ describe('a Strategist\'s plan with the user', () => {
     const q = { question: 'Lo sconto vale anche sui prodotti in offerta?', header: 'Offerte', multiSelect: false, options: [{ label: 'No' }, { label: 'Sì' }] };
     f.sinks.get(s.id)!.pending({ id: 'q1', type: 'question', tool: 'AskUserQuestion', title: q.question, detail: '', input: {}, questions: [q], at: 1 });
     await f.m.answer(s.id, 'q1', { kind: 'question', answers: { [q.question]: 'No' } });
-    expect(planOf(f, s.id).clarified).toEqual([{ q: 'Lo sconto vale anche sui prodotti in offerta?', a: 'No' }]); // a yes/no answer keeps its question (ADR 0134)
+    expect(planOf(f, s.id).clarified).toEqual([{ q: 'Lo sconto vale anche sui prodotti in offerta?', a: 'No' }]); // a yes/no answer keeps its question (ADR 0135)
     f.sinks.get(s.id)!.pending({ id: 'q2', type: 'question', tool: 'AskUserQuestion', title: 'Altro?', detail: '', input: {}, questions: [{ ...q, header: undefined, question: 'Altro?' }], at: 2 });
     await f.m.answer(s.id, 'q2', { kind: 'question', answers: { 'Altro?': ENOUGH_QUESTIONS } });
     expect(planOf(f, s.id).clarified).toHaveLength(1);
@@ -270,7 +270,7 @@ describe('shared/strategy.ts', () => {
     const q = { question: 'Dove?' };
     expect(withClarified(p, [q], { 'Dove?': ENOUGH_QUESTIONS })).toMatchObject({ asked: 3, clarified: [] });
     expect(withClarified(p, [], {})).toBe(p);
-    // a yes/no answer (ADR 0134) keeps its question, not its header
+    // a yes/no answer (ADR 0135) keeps its question, not its header
     const yn = { question: 'Tocco solo il carrello?', header: 'Ambito' };
     expect(withClarified(p, [yn], { 'Tocco solo il carrello?': 'Sì (consigliato)' }).clarified).toEqual([{ q: 'Tocco solo il carrello?', a: 'Sì' }]);
     expect(withClarified(p, [{ question: 'Dove?', header: 'Luogo' }], { 'Dove?': 'Milano' }).clarified).toEqual([{ q: 'Luogo', a: 'Milano' }]);

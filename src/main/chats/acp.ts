@@ -25,7 +25,7 @@
 //   ← session/request_permission → a permission panel answered allow-once / reject-once only: Cursor's allow-always
 //     would write a permanent rule into the user's Cursor config, which the app never changes
 //   ← cursor/ask_question → a question panel (ids ↔ labels); a free-text "Altro…" answer goes back as outcome skipped;
-//     a question that is not yes/no goes back skipped with how to ask (shared/yes-no.ts, ADR 0134)
+//     a question that is not yes/no goes back skipped with how to ask (shared/yes-no.ts, ADR 0135)
 //     with the text as its reason (the CLI's answered outcome keeps only option ids: acp ask-question-handler)
 //   ← cursor/create_plan → "Approvi il piano?" ("Altro…" = rejected with the user's words as the reason)
 //   ← cursor/update_todos, cursor/task (requests in practice) → shown and acknowledged
@@ -62,7 +62,7 @@ import type { ChildObservation } from '../../shared/agents';
 import { YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoShape } from '../../shared/yes-no';
 
 export interface AcpOptions extends SessionOptions {
-  /** send a question that is not yes/no back to the agent (shared/yes-no.ts, ADR 0134); default: yesNoGateOn(env) */
+  /** send a question that is not yes/no back to the agent (shared/yes-no.ts, ADR 0135); default: yesNoGateOn(env) */
   yesNo?: boolean;
   /** App-owned launch rules, sent once as a separate context block, never persisted to global engine config. */
   brainInstructions?: string | null;
@@ -325,7 +325,7 @@ export class AcpSession implements HarnessSession {
   private stopping: { sendNow: boolean } | null = null;
   private turnFiles: string[] = [];   // screenshots saved for this turn (no image support): deleted when it ends
   private open = false;          // session/new or session/load done
-  private yesNoRefused = 0;      // questions sent back in a row for not being yes/no (ADR 0134)
+  private yesNoRefused = 0;      // questions sent back in a row for not being yes/no (ADR 0135)
   private prompting = false;
   private loading = false;
   private caps: Obj = {};
@@ -1009,7 +1009,7 @@ export class AcpSession implements HarnessSession {
         acp.push({ text, id: s(q.id), byLabel: new Map(labels.map((l, j) => [l, s(opts[j]?.id)])) });
         questions.push({ question: text, ...(s(p.title) ? { header: cut(s(p.title), 30) } : {}), options: labels.map(label => ({ label })), multiSelect: q.allowMultiple === true });
       });
-      // not yes/no (ADR 0134): skipped with how to ask, at most YESNO_RETRIES times in a row, then shown as it is
+      // not yes/no (ADR 0135): skipped with how to ask, at most YESNO_RETRIES times in a row, then shown as it is
       if ((this.opts.yesNo ?? yesNoGateOn(process.env)) && questions.length > 0 && !yesNoShape(questions) && this.yesNoRefused < YESNO_RETRIES) {
         this.yesNoRefused++;
         log.info('chats', 'question sent back: not yes/no', { chat: this.opts.chatId, data: { engine: this.engine, attempt: this.yesNoRefused } });

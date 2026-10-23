@@ -437,7 +437,7 @@ describe('app control tools', () => {
     expect(pulls).toBe(1);
   });
 
-  it('app_unblock (ADR 0134): only the authenticated Orchestrator after the user wrote to it; opens the questions window with what waits', async () => {
+  it('app_unblock (ADR 0135): only the authenticated Orchestrator after the user wrote to it; opens the questions window with what waits', async () => {
     const now = Date.now();
     let items: unknown[] = [];
     let pending: unknown[] = [];

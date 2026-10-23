@@ -1,4 +1,4 @@
-// E2E: a yes/no question in the questions window (ADR 0134): Sì / No (the No card in the refusal's tone), «Altro…»
+// E2E: a yes/no question in the questions window (ADR 0135): Sì / No (the No card in the refusal's tone), «Altro…»
 // and «Ci penso dopo»; a question set aside comes back when the Orchestrator's recap opens everything waiting
 // (ui:command unblock, what app_unblock sends). Demo app, hidden window. Screenshots: qyesno-<step>.png.
 import { expect, test, type ElectronApplication } from '@playwright/test';

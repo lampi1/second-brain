@@ -17,7 +17,7 @@
 //   when the user asks (app_update_code, ADR 0074); no tool promotes or restarts the app (only the user's click on
 //   "Aggiorna" in Settings, ADR 0075).
 // - After a recap the user asked for, an Orchestrator's own mount opens the questions window with everything waiting
-//   for him (app_unblock, ADR 0134); it never answers any of it.
+//   for him (app_unblock, ADR 0135); it never answers any of it.
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { ChatItem, ChatSummary, TasksState, Effort, EventMap, NewChat, PendingRequest, RoutingRow, RunInfo, TaskKind } from '../../shared/contract';
@@ -625,7 +625,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     },
   ];
   // only the authenticated Orchestrator mount: the questions window comes up with everything that waits for the user
-  // (ADR 0134: he unblocks the work from the Orchestrator's recap, never from the agents' chats); only right after he
+  // (ADR 0135: he unblocks the work from the Orchestrator's recap, never from the agents' chats); only right after he
   // wrote to it, so an agent cannot bring a permission under his keystrokes at any moment (review 2026-10-11)
   if (authed()) {
     tools.push({
