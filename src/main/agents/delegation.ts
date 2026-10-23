@@ -72,6 +72,17 @@ export const TASKS_MAX = 10;
 const TITLE_MAX = 80;
 const QUESTION_MAX = 1000, OPTIONS_MAX = 6, ANSWER_MAX = 4000, REMEMBER_MAX = 3, REMEMBER_LINE = 300;
 
+/** An app-owned independent review run (the Judge's sample, ADR 0100): the only report that carries verdict / verified. */
+export function independentReview(c: ChatSummary | undefined): boolean {
+  return !!c?.run?.reviewOf && c.run.startedBy === 'app' && ['sentinel', 'judge'].includes(c.run.agentId) && !c.parentId && !c.delegation && !c.isOrchestrator;
+}
+
+/** agent_report's schema without the review-only fields: what every other chat sees. */
+export function withoutReviewFields(schema: Record<string, unknown>): Record<string, unknown> {
+  const { verdict: _v, verified: _w, ...properties } = schema.properties as Record<string, unknown>;
+  return { ...schema, properties };
+}
+
 const callerOf = (params: Record<string, string>): string => {
   const id = params.chatId;
   if (!id) throw new Error('This tool works only on a chat\'s own endpoint.');
@@ -160,7 +171,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       const outside = (contract.tools ?? []).filter(c => !(profile.tools?.allow ?? []).includes(c));
       if (outside.length) throw new Error(`tasks[${i}].contract.tools: ${outside.join(', ')} is not among ${profile.name}'s tools; contract.tools only narrows them.`);
       const cwd = typeof t.cwd === 'string' && t.cwd.trim() ? t.cwd.trim() : parent.cwd;
-      if (!withinParent(parent.cwd, cwd, trees)) throw new Error(`tasks[${i}].cwd: a folder inside yours (${parent.cwd}) or one of your repository's worktrees; a child never leaves its parent's repository.`);
+      if (!withinParent(parent.cwd, cwd, trees)) throw new Error(`tasks[${i}].cwd: ${cwd} is outside your folder (${parent.cwd}) and its repository's worktrees; a child never leaves its parent's repository. For work in another repository: leave this part out and report it with agent_report (outcome blocked or partial) as a ready contract (role, goal, done-criteria, the folder): the Orchestrator opens that chat there (app_create_chat with cwd).`);
       const refused = d.engineRefusal(parent.harness, profile.engine);
       if (refused) throw new Error(`tasks[${i}]: ${profile.name} runs on ${profile.engine}: ${refused}`);
       if (t.step !== undefined && !plan) throw new Error(`tasks[${i}].step: only a plan approved by the user has steps; leave it out.`);
@@ -290,8 +301,14 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     const self = chat(callerId);
     // `remember` is the role memory's, not the result's: the result keeps its exact shape (shared/delegation.ts checkResult)
     const { remember: _remember, ...a } = all, write = rememberLines(all, self);
-    const review = !!self?.run?.reviewOf && self.run.startedBy === 'app' && ['sentinel', 'judge'].includes(self.run.agentId) && !self.parentId && !self.delegation && !self.isOrchestrator;
-    if ((a.verdict !== undefined || a.verified !== undefined) && (!review || self?.closedAt || self?.run?.endedAt !== undefined)) throw new Error('Review fields require an active app-owned independent reviewer run.');
+    const review = independentReview(self);
+    if ((a.verdict !== undefined || a.verified !== undefined) && review && (self?.closedAt || self?.run?.endedAt !== undefined)) throw new Error('Review fields require an active app-owned independent reviewer run.');
+    // any other chat never had the fields in its schema (reportSchema); one sent anyway (an engine that listed tools
+    // before the chat was known) is dropped, not a refused report (#183)
+    if (!review && (a.verdict !== undefined || a.verified !== undefined)) {
+      log.info('agents', 'review fields dropped from a non-review report', { chat: callerId });
+      delete a.verdict; delete a.verified;
+    }
     if (review && (a.verdict === undefined || a.verified === undefined)) throw new Error('Independent reviews require explicit verdict and verified fields.');
     // Root contracts are host-owned. Direct-user and explicit app replay roots retain their results locally.
     if (self && !self.delegation && !self.parentId && !self.isOrchestrator && self.run && (self.run.startedBy === 'orchestrator' || self.run.startedBy === 'user' || self.run.taskContract?.reportExpected) && d.chats.reportRoot) {
@@ -357,13 +374,24 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
   }
 
   const str = { type: 'string' };
+  const reportSchema: Record<string, unknown> = { type: 'object', required: ['outcome', 'summary', 'output', 'doneWhen'], additionalProperties: false, properties: {
+      outcome: { type: 'string', enum: ['done', 'partial', 'blocked'] }, summary: { ...str, maxLength: SUMMARY_MAX }, output: { ...str, maxLength: RESULT_OUTPUT_MAX },
+      verdict: { type: 'string', enum: ['success', 'partial', 'fail'], description: 'Only app-owned independent reviews: assessment of the reviewed work, separate from completion of your review.' },
+      verified: { type: 'string', enum: ['yes', 'partial', 'no'], description: 'Only with verdict: yes only when you independently checked the evidence; never inferred from completing the review.' },
+      taskVersion: { type: 'integer', minimum: 1, description: 'Current task version supplied with the assignment; required after a follow-up. Stale reports are refused.' },
+      doneWhen: { type: 'array', description: 'one entry per criterion of your contract, written exactly as in the contract (the field is doneWhen, never criteria)', items: { type: 'object', required: ['criterion', 'met'], additionalProperties: false, properties: { criterion: { ...str, maxLength: CRITERION_MAX }, met: { type: 'boolean' }, evidence: { ...str, maxLength: EVIDENCE_MAX } } } },
+      questions: { type: 'array', items: { ...str, maxLength: 500 }, maxItems: 8 },
+      goalChangedByUser: { type: 'boolean', description: 'true when the user wrote to you directly and changed your goal (you followed the user)' },
+      newGoal: { ...str, description: 'with goalChangedByUser: the goal the user gave you' },
+      remember: { type: 'array', items: { ...str, maxLength: REMEMBER_LINE }, maxItems: REMEMBER_MAX, description: 'optional, up to 3 short lines for YOUR role\'s memory (read at every launch of your role): general, reusable knowledge a future run would otherwise rediscover or ask again (a procedure, a convention, a how-to, where things are kept). Generalize a specific finding first (no URLs with ports, ticket / PR / commit ids, user paths, dates, branch names): a case-specific line refuses the report. Never the task result' },
+    } };
   return [{
     name: 'agent_delegate',
     description: 'Delegate parts of your task to other roles, only when it has several independent parts: a quick single-part task you do yourself (a child costs more tokens and time than it saves; task_estimate on the Orchestrator says which). each part starts a visible chat under yours, running the role you name (only roles your role may launch: agent_catalog). The child sees only its contract, never this conversation: write it self-contained. Several parts start at once (parallel). It never gets more permissions than you, works inside your folder, and returns one result with agent_report that reaches you as a message. Limits (depth, children running at once) are the user\'s.',
     inputSchema: { type: 'object', required: ['tasks'], additionalProperties: false, properties: {
       tasks: { type: 'array', minItems: 1, maxItems: TASKS_MAX, items: { type: 'object', required: ['role', 'title', 'contract'], additionalProperties: false, properties: {
         role: { type: 'string', enum: [...WORK_ROLE_IDS] }, title: { ...str, description: '"Area · what", e.g. "Ordini · Log degli errori"' },
-        cwd: { ...str, description: 'optional absolute folder inside yours; default: your folder' },
+        cwd: { ...str, description: 'optional absolute folder inside yours or one of your repository\'s worktrees; default: your folder. Never another repository: for that, report the part with agent_report as a ready contract (outcome blocked, with the folder) so the Orchestrator opens the chat there (app_create_chat with cwd)' },
         step: { type: 'integer', minimum: 1, description: 'with a plan approved by the user (plan_propose): the step number this part does' },
         contract: { type: 'object', required: ['goal', 'doneWhen'], additionalProperties: false, properties: {
           goal: str, output: { ...str, description: 'what to give back; default: the role\'s output' },
@@ -400,18 +428,11 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
   }, {
     name: 'agent_report',
     description: 'Your one result for the chat that started you (your parent, or the Orchestrator for a chat it opened): outcome (done | partial | blocked), summary (one or two sentences), output (the deliverable), doneWhen (every criterion of your contract, exactly as written, with met and evidence), optional questions, optional remember (lines for your role\'s memory). It reaches your parent at once; call it once, at the end. The app shows output in your chat as your answer: do not write it in the chat too.',
-    inputSchema: { type: 'object', required: ['outcome', 'summary', 'output', 'doneWhen'], additionalProperties: false, properties: {
-      outcome: { type: 'string', enum: ['done', 'partial', 'blocked'] }, summary: { ...str, maxLength: SUMMARY_MAX }, output: { ...str, maxLength: RESULT_OUTPUT_MAX },
-      verdict: { type: 'string', enum: ['success', 'partial', 'fail'], description: 'Only app-owned independent reviews: assessment of the reviewed work, separate from completion of your review.' },
-      verified: { type: 'string', enum: ['yes', 'partial', 'no'], description: 'Only with verdict: yes only when you independently checked the evidence; never inferred from completing the review.' },
-      taskVersion: { type: 'integer', minimum: 1, description: 'Current task version supplied with the assignment; required after a follow-up. Stale reports are refused.' },
-      doneWhen: { type: 'array', description: 'one entry per criterion of your contract, written exactly as in the contract (the field is doneWhen, never criteria)', items: { type: 'object', required: ['criterion', 'met'], additionalProperties: false, properties: { criterion: { ...str, maxLength: CRITERION_MAX }, met: { type: 'boolean' }, evidence: { ...str, maxLength: EVIDENCE_MAX } } } },
-      questions: { type: 'array', items: { ...str, maxLength: 500 }, maxItems: 8 },
-      goalChangedByUser: { type: 'boolean', description: 'true when the user wrote to you directly and changed your goal (you followed the user)' },
-      newGoal: { ...str, description: 'with goalChangedByUser: the goal the user gave you' },
-      remember: { type: 'array', items: { ...str, maxLength: REMEMBER_LINE }, maxItems: REMEMBER_MAX, description: 'optional, up to 3 short lines for YOUR role\'s memory (read at every launch of your role): general, reusable knowledge a future run would otherwise rediscover or ask again (a procedure, a convention, a how-to, where things are kept). Generalize a specific finding first (no URLs with ports, ticket / PR / commit ids, user paths, dates, branch names): a case-specific line refuses the report. Never the task result' },
-    } },
+    inputSchema: reportSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    // verdict / verified only where the report check accepts them: an app-owned independent review (#183); an engine
+    // not yet owned by a chat (a warm one) sees them all, as before
+    inputSchemaFor: params => { const self = params.chatId ? chat(params.chatId) : undefined; return !self || independentReview(self) ? reportSchema : withoutReviewFields(reportSchema); },
     run: (a, ctx) => JSON.stringify(report(a, callerOf(ctx.params))),
   }, {
     name: 'agent_ask_parent',

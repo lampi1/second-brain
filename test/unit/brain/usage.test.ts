@@ -1,9 +1,10 @@
 // Usage (src/main/brain/usage.ts): the cost.mjs parser on an anonymized fixture of its --json output, the three
 // rate-limit shapes (stream event, get_usage answer, Claude Code's cache), the 1-hour cache TTL, expired windows, and
 // the monitor with a fake cost.mjs.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import { runNode } from '../../../src/main/brain/node';
 import { CACHE_TTL_MS, UsageMonitor, composeUsage, mergeLimits, parseCost, parseRateLimits, readClaudeCache } from '../../../src/main/brain/usage';
 import { log } from '../../../src/main/log';
 import type { Usage } from '../../../src/shared/contract';
@@ -116,5 +117,31 @@ describe('usage', () => {
     const m = new UsageMonitor({ root: tmpDir(), node: plainNode, claudeConfig: null, onUsage: u => got.push(u) });
     await m.refresh();
     expect(got[0]).toMatchObject({ todayUsd: 0, costKnown: false, costNote: expect.stringMatching(/cost\.mjs/) });
+  });
+  it('a cost.mjs past its time limit is reported as a timeout, once an hour; a refresh while one runs starts nothing (#184)', async () => {
+    const root = tmpDir();
+    fs.mkdirSync(path.join(root, 'ops', 'tools'), { recursive: true });
+    const script = path.join(root, 'ops', 'tools', 'cost.mjs'), runs = path.join(root, 'runs.txt');
+    fs.writeFileSync(script, `import fs from 'node:fs';\nfs.appendFileSync(${JSON.stringify(runs)}, 'x');\nsetTimeout(() => {}, 30000);\n`);
+    const killed = await runNode(plainNode, script, [], root, 300);
+    expect(killed).toMatchObject({ code: null, killed: true });
+    let now = 1_000_000;
+    const got: Usage[] = [];
+    const m = new UsageMonitor({ root, node: plainNode, claudeConfig: null, costTimeoutMs: 300, now: () => now, onUsage: u => got.push(u) });
+    const warn = vi.spyOn(log, 'warn');
+    const timeouts = () => warn.mock.calls.filter(([scope, msg]) => scope === 'brain' && /cost\.mjs timed out after 0 s/.test(msg)).length;
+    const before = timeouts();
+    fs.writeFileSync(runs, '');
+    await Promise.all([m.refresh(), m.refresh()]);
+    expect(fs.readFileSync(runs, 'utf8')).toBe('x');
+    expect(timeouts() - before).toBe(1);
+    expect(got.at(-1)).toMatchObject({ costKnown: false, costNote: expect.stringMatching(/troppo lento/) });
+    now += 60e3;
+    await m.refresh();
+    expect(timeouts() - before).toBe(1);
+    now += 3600e3;
+    await m.refresh();
+    expect(timeouts() - before).toBe(2);
+    warn.mockRestore();
   });
 });

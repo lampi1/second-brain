@@ -171,7 +171,10 @@ export class Ledger {
       const r = await runNode(node, script, ['--days', String(BACKFILL_DAYS), '--json', '--no-cursor'], root!, 300e3);
       let j: unknown = null;
       try { j = JSON.parse(r.stdout); } catch { /* below */ }
-      if (!j) { log.warn('brain', 'estimates backfill: cost.mjs gave no JSON', { data: { code: r.code, error: r.error, stderr: r.stderr.slice(0, 300) } }); return { added: 0, skipped: 'cost.mjs senza risposta' }; }
+      if (!j) {
+        log.warn('brain', r.killed ? 'estimates backfill: cost.mjs timed out after 300 s' : 'estimates backfill: cost.mjs gave no JSON', { data: { code: r.code, error: r.error, signal: r.signal ?? null, stderr: r.stderr.slice(0, 300) } });
+        return { added: 0, skipped: r.killed ? 'cost.mjs troppo lento' : 'cost.mjs senza risposta' };
+      }
       const from = Date.parse(`${String((j as { from?: unknown }).from ?? '')}T00:00:00+02:00`);
       const rows = backfillFromCost(j, { now, windowStartMs: Number.isFinite(from) ? from : now - BACKFILL_DAYS * 864e5 });
       let added = 0;

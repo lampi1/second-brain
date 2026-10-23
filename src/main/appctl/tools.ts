@@ -105,6 +105,9 @@ const lastDigest = new Map<string, number>();
 const obj = (props: Record<string, object> = {}, required: string[] = []) => ({ type: 'object', properties: props, required });
 const str = (description: string) => ({ type: 'string', description });
 const num = (description: string) => ({ type: 'number', description });
+/** app_create_chat / app_assign_task limits: one constant for the schema the model reads and the handler's check (#172) */
+export const CHAT_PROMPT_MAX = 8000;
+export const CHAT_TITLE_MAX = 80;
 /** app_update_code runs only within this many minutes of a message the user wrote to the Orchestrator (ADR 0074) */
 export const PULL_ASK_MIN = 10;
 export { AGENT_LABEL };
@@ -380,7 +383,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       name: 'app_create_chat',
       description: 'Delegate: create a work chat that runs one role (roleId, from agent_catalog) and start it with a self-contained prompt. Fast path first (task_estimate): a short question needs no chat; a quick one-part job is ONE chat that works alone; only several independent parts get a plan. The answer carries the estimate from similar past tasks; it shows under you in the sidebar tree and reports back to you. Never an Orchestrator: only the user picks it. Title "Area · cosa". The role decides engine, model and effort (its tier; `tier` asks a higher one up to the role\'s tierMax); nothing overrides it. `skills` = the brain skills the chat may use (skills_suggest ranks them; without a skill the role cannot use it; `warnings` in the answer names a skill that needs tools the role lacks). Its permissions are its role\'s (tools, ceiling) within the user\'s defaults, not yours: you plan, the chat does the work. reviewOf / reworkOf = the run it reviews or redoes; goal = the run\'s goal. The chat starts in the brain folder unless cwd is given (pick the repo or worktree from the task). The prompt is labelled as written by an agent.',
       inputSchema: obj({
-        title: str('"Area · cosa", e.g. "Ordini · Fix totale"'), prompt: str('what the chat must do: goal, inputs, constraints, the expected output'),
+        title: { ...str('"Area · cosa", e.g. "Ordini · Fix totale"'), maxLength: CHAT_TITLE_MAX }, prompt: { ...str(`what the chat must do: goal, inputs, constraints, the expected output; at most ${CHAT_PROMPT_MAX} characters`), maxLength: CHAT_PROMPT_MAX },
         roleId: { type: 'string', enum: ROLE_IDS.filter(r => r !== 'orchestrator'), description: 'the role the chat runs (agent_catalog)' },
         roleVersion: { type: 'integer', description: 'Expected active role version; refused if it changed.' },
         doneWhen: { type: 'array', maxItems: 12, items: { type: 'string', maxLength: 300 } },
@@ -419,8 +422,10 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         // a chat in the app's code folder or one of its worktrees works on the app (routing area App)
         const app = await d.code?.inRepo?.(cwd) ?? false;
         if (a.orchestrator !== undefined && a.orchestrator !== false) throw new Error('app_create_chat crea solo chat di lavoro: l’Orchestrator lo sceglie l’utente (Nuova chat → «È l’Orchestrator» o «Cambia motore»)');
-        const title = String(a.title ?? '').trim().slice(0, 80), prompt = String(a.prompt ?? '').trim();
-        if (!title || !prompt || prompt.length > 8000) throw new Error('title and prompt are required (prompt ≤ 8000 chars)');
+        const title = String(a.title ?? '').trim().slice(0, CHAT_TITLE_MAX), prompt = String(a.prompt ?? '').trim();
+        if (!title) throw new Error('title: required');
+        if (!prompt) throw new Error('prompt: required');
+        if (prompt.length > CHAT_PROMPT_MAX) throw new Error(`prompt: at most ${CHAT_PROMPT_MAX} characters (this one has ${prompt.length})`);
         // a former Orchestrator's title is the Orchestrator's mail box: a new chat may not take its mail
         if (title.trim().toLowerCase() === ORCHESTRATOR_TITLE.toLowerCase()) throw new Error(`The title «${title}» is reserved for the Orchestrator's mail: choose another.`);
         const s = d.brain.settings();
@@ -484,7 +489,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     {
       name: 'app_assign_task',
       description: 'Continue a compatible work conversation with a distinct measured run. Use continue for related follow-ups, new-task for a distinct assignment in the same scope, rework only for an explicit correction. Requires the current task version from app_chats, the same role and project folder. Independent Sentinel reviews always need a fresh chat. Does not change tools or permissions.',
-      inputSchema: obj({ chatId: str('Existing conversation ID'), prompt: str('Self-contained assignment, up to 8000 characters'),
+      inputSchema: obj({ chatId: str('Existing conversation ID'), prompt: { ...str(`Self-contained assignment, up to ${CHAT_PROMPT_MAX} characters`), maxLength: CHAT_PROMPT_MAX },
         doneWhen: { type: 'array', maxItems: 12, items: { type: 'string', maxLength: 300 }, description: 'Checkable criteria for this assignment' },
         mode: { type: 'string', enum: ['continue', 'new-task', 'rework'] }, roleId: str('Existing work role'), cwd: str('Same absolute project folder'),
         expectedVersion: { type: 'integer', minimum: 1, description: 'Current taskVersion from app_chats' },
@@ -502,7 +507,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (!profile || profile.activeVersion !== target.agent.version) throw new Error('Role configuration changed: create a fresh chat.');
         if (!['continue', 'new-task', 'rework'].includes(String(a.mode)) || !Number.isSafeInteger(a.expectedVersion) || Number(a.expectedVersion) < 1) throw new Error('Invalid assignment mode/version.');
         const prompt = typeof a.prompt === 'string' ? a.prompt.trim() : '';
-        if (!prompt || prompt.length > 8000) throw new Error('prompt: 1–8000 characters.');
+        if (!prompt) throw new Error('prompt: required');
+        if (prompt.length > CHAT_PROMPT_MAX) throw new Error(`prompt: at most ${CHAT_PROMPT_MAX} characters (this one has ${prompt.length})`);
         const doneWhen = a.doneWhen === undefined ? undefined : Array.isArray(a.doneWhen) && a.doneWhen.length <= 12 && a.doneWhen.every(c => typeof c === 'string' && c.trim() && c.length <= 300) ? a.doneWhen as string[] : null;
         if (doneWhen === null) throw new Error('Invalid doneWhen criteria.');
         const refused = crossRefusal(d.brain.settings(), orchestrator.harness, target.harness);
