@@ -10,7 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
-import type { BrainChange, BrainModelState, ClassifiersState, MaintenanceJobId, MaintenanceRun, MigrationReport } from '../../shared/brain-model';
+import type { BrainChange, BrainModelState, ClassifiersState, LogScan, MaintenanceJobId, MaintenanceRun, MigrationReport } from '../../shared/brain-model';
 import { MAINTENANCE_JOBS } from '../../shared/brain-model';
 import type { RoutingInfo } from '../../shared/contract';
 import type { AgentCatalogService } from '../agents/catalog';
@@ -22,7 +22,7 @@ import { errText, log } from '../log';
 import { ChangeLog, type AgentRestorer, type AgentSnapshot } from './changes';
 import { classifiersState, readJobs } from './classifiers';
 import { claimOf, learningState, measurable, seal, type IntervalCache } from './evidence';
-import { corrections, mergeMemory, mergeSkills, migrate, repeatedTask, type AgentWriter, type JobContext, type JobResult } from './jobs';
+import { appendUnder, brainJsonWithTopic, corrections, LESSONS_RULE, LESSONS_WHEN, mergeMemory, mergeSkills, migrate, repeatedTask, skillText, type AgentWriter, type JobContext, type JobResult } from './jobs';
 import { errorLessons } from './error-lessons';
 
 /** The corrections job and, in the same pass, the recurring errors of ai-errors.md as rules (error-lessons.ts). */
@@ -30,8 +30,11 @@ const withErrorLessons = (r: JobResult, ctx: JobContext): JobResult => ({ ...r, 
 import { procedureSections } from './procedure-sources';
 import { pending as upgradePending, upgrade, type UpgradeAsk } from './upgrade';
 import { memoryStats } from './memory-stats';
-import { handoffText, readNoise, scanLogs, writeNoise } from './log-scan';
-import { readMemory, readRules, readSkills, type SkillDir } from './model';
+import { readNoise, scanLogs, writeNoise } from './log-scan';
+import { rawEntries, readMemory, readRules, readSkills, readSmall, type SkillDir } from './model';
+import type { ResearchProposal } from '../../shared/maintenance-research';
+import { NAME_RE, parseMd, setBody } from '../../shared/skillmd';
+import { checkPermissionText } from '../agents/tool-policy';
 import { canUndoMemoryTidy, undoMemoryTidy } from '../rules/memory-records';
 
 export interface BrainModelDeps {
@@ -52,8 +55,9 @@ export interface BrainModelDeps {
   applied?: (changes: BrainChange[]) => void;
   /** the app's log folder (log.ts): the log step of a pass the user starts (#150); absent = no log step */
   logDir?: () => string | null;
-  /** hands the pass's result to the open Orchestrator (#150): resolves true when delivered; absent = nobody to tell */
-  handoff?: (text: string) => Promise<boolean>;
+  /** the cards the pass the user started makes from its log step and the skills nobody uses (ADR 0132, before it the
+   *  pass's result went to the Orchestrator, #150); absent = no cards */
+  findings?: (logs: LogScan) => { bugs: number; forget: number };
   /** the running app's version (recorded in the brain by the upgrade job) */
   appVersion?: () => string;
   /** the one-shot question (agents/oneshot.ts, no tools) of the upgrade job and of the memory tidy-up (memory-tidy.ts,
@@ -202,15 +206,15 @@ export class BrainModelService {
       const previous = this.lastRun();
       // logsAt goes forward through every pass (a timer's too): the next log step reads only what came after the last one
       const pass: MaintenanceRun = { at: this.now(), jobs: done.map(({ report: _r, ...x }) => { void _r; return x; }), ...(previous?.logsAt !== undefined ? { logsAt: previous.logsAt } : {}) };
-      // the full pass the user started also reads the logs and ends in the Orchestrator (#150); a timer's pass does not
+      // the full pass the user started also reads the logs (#150) and turns what it found into cards: app bugs in «Idee
+      // dell'app», skills nobody uses in Proposte (ADR 0132); a timer's pass does not
       const dir = !job && !opts.auto ? this.d.logDir?.() ?? null : null;
       if (dir) {
         pass.logs = scanLogs(dir, previous?.logsAt ?? null, readNoise(this.noiseFile), this.now());
         pass.logsAt = this.now();
-        const fresh = pass.logs.groups.filter(g => !g.known).length;
-        try { pass.handoff = !this.d.handoff ? { sent: false, why: 'nessun Orchestrator' } : await this.d.handoff(handoffText(pass, pass.logs)) ? { sent: true } : { sent: false, why: 'nessun Orchestrator aperto' }; }
-        catch (e) { pass.handoff = { sent: false, why: errText(e).slice(0, 200) }; log.warn('brain', 'maintenance result not handed to the Orchestrator', { cause: errText(e), hint: 'open the Orchestrator and run the maintenance again' }); }
-        log.info('brain', 'maintenance log step', { data: { files: pass.logs.files.length, groups: pass.logs.groups.length, fresh, handedOff: pass.handoff.sent } });
+        try { if (this.d.findings) pass.cards = this.d.findings(pass.logs); }
+        catch (e) { log.warn('brain', 'maintenance cards not made', { cause: errText(e), hint: 'the log groups stay listed in the dialog; the next pass tries again' }); }
+        log.info('brain', 'maintenance log step', { data: { files: pass.logs.files.length, groups: pass.logs.groups.length, fresh: pass.logs.groups.filter(g => !g.known).length, ...pass.cards } });
       }
       writeLocal(this.runFile, pass);
       if (done.some(r => r.changes)) log.info('brain', 'maintenance applied', { data: Object.fromEntries(done.map(r => [r.job, r.changes])) });
@@ -259,10 +263,10 @@ export class BrainModelService {
   /** The Memoria hub's trash (ADR 0122): removes one brain skill (its whole folder), one rules/ file or one script
    *  through the change log, so its «Annulla» puts every file back. Only what lives in the brain: the user's own and
    *  Cursor's skills, the always-loaded files (CLAUDE.md and the like) and files too big to keep a copy of are refused. */
-  remove(kind: 'skill' | 'rule' | 'script', target: string): { state: BrainModelState; changeId: string } {
+  remove(kind: 'skill' | 'rule' | 'script', target: string, by?: { job: 'research'; reason: string; evidence: string[] }): { state: BrainModelState; changeId: string } {
     const root = this.root();
     if (!root) throw new Error('Scegli prima la cartella del brain.');
-    let files: string[] = [], summary = '', reason = 'Eliminata da te in Memoria → Approvate.', evidence: string[] = [];
+    let files: string[] = [], summary = '', reason = by?.reason ?? 'Eliminata da te in Memoria → Approvate.', evidence: string[] = [];
     if (kind === 'skill') {
       const skill = readSkills(this.skillDirs(root), root, []).find(x => x.name === target && x.home === 'brain');
       if (!skill) throw new Error('Skill del brain non trovata.');
@@ -281,17 +285,95 @@ export class BrainModelService {
     } else {
       if (!this.d.scripts) throw new Error('Gli script non si possono eliminare qui.');
       files = [this.d.scripts.file(target)];
-      summary = `Script «${target}» eliminato`; reason = 'Eliminato da te in Memoria → Approvate.'; evidence = [`scripts/${target}`];
+      summary = `Script «${target}» eliminato`; reason = by?.reason ?? 'Eliminato da te in Memoria → Approvate.'; evidence = [`scripts/${target}`];
     }
     if (!files.length) throw new Error('Niente da eliminare.');
     if (files.length > 64 || files.some(f => { try { return fs.statSync(f).size > 256 * 1024; } catch { return true; } })) throw new Error('Troppo grande per poterlo annullare: eliminalo dal disco.');
-    const c = this.log.apply({ job: 'user', kind, action: 'remove', target, summary, reason, evidence }, files.map(file => ({ file, text: null })));
+    const c = this.log.apply({ job: by?.job ?? 'user', kind, action: 'remove', target, summary, reason, evidence: [...evidence, ...(by?.evidence ?? [])] }, files.map(file => ({ file, text: null })));
     if (!c) throw new Error('Niente da eliminare.');
-    log.info('brain', 'item removed by the user', { data: { kind, files: files.length } });
+    log.info('brain', by ? 'item forgotten (maintenance card)' : 'item removed by the user', { data: { kind, files: files.length } });
     if (kind === 'script') this.d.scripts?.changed();
     this.d.emit();
     return { state: this.state(), changeId: c.id };
   }
+  /** A maintenance finding the user approved in Proposte (ADR 0132), through the change log (its «Annulla» puts the brain
+   *  back): a skill (new, or a section added to one of the brain's), a rule (a role's text, or rules/lessons.md for
+   *  every role), a memory line (a role's memory or the shared one), a line in a role's text, or what to forget (a brain
+   *  skill, a rules/ file, one memory line). Returns the change's id. Never grants permissions (checkPermissionText). */
+  applyResearch(p: ResearchProposal): string {
+    const root = this.root();
+    if (!root) throw new Error('Scegli prima la cartella del brain.');
+    const why = oneLine(p.why, 400), evidence = [`maintenance:${p.id}`, ...p.evidence.slice(0, 5).map(e => oneLine(e, 200))];
+    const roleOf = (id: string | undefined) => {
+      if (!id) return null;
+      const r = this.roles().find(x => x.id === id);
+      if (!r) throw new Error(`Ruolo sconosciuto: ${id}.`);
+      return r;
+    };
+    if (p.kind === 'forget') {
+      const f = p.forget;
+      if (!f) throw new Error('Proposta senza cosa dimenticare.');
+      if (f.what === 'skill' || f.what === 'rule') return this.remove(f.what, f.name, { job: 'research', reason: why, evidence }).changeId;
+      const role = roleOf(f.role), rel = role ? `agents/${portableId(role.id)}/memory.md` : 'memory/shared.md';
+      const file = path.join(root, rel), text = readSmall(file);
+      if (text === null) throw new Error('File di memoria non trovato.');
+      const lines = text.split('\n'), i = lines.findIndex(l => rawEntries(l).includes(f.name.trim()));
+      if (i < 0) throw new Error('Riga di memoria non trovata: forse è già cambiata.');
+      lines.splice(i, 1);
+      const c = this.log.apply({ job: 'research', kind: 'memory', action: 'remove', target: rel, summary: `Dimenticato: ${oneLine(f.name, 120)}`, reason: why, evidence }, [{ file, text: lines.join('\n') }]);
+      if (!c) throw new Error('Niente da dimenticare.');
+      return this.done(c.id);
+    }
+    const ch = p.change;
+    if (!ch) throw new Error('Proposta senza modifica da applicare.');
+    checkPermissionText(ch.text);
+    const text = ch.text.trim(), stamp = `(${new Date(this.now()).toISOString().slice(0, 10)}; manutenzione)`;
+    if (!text || text.length > 8000) throw new Error('Testo della modifica vuoto o troppo lungo.');
+    const role = roleOf(ch.role);
+    if (ch.target === 'skill') {
+      const name = ch.name ?? '';
+      if (!NAME_RE.test(name) || name.length > 64) throw new Error('Nome della skill non valido.');
+      const have = readSkills(this.skillDirs(root), root, []).find(s => s.name === name);
+      if (have && have.home !== 'brain') throw new Error('Questa skill è tua (fuori dal brain): la manutenzione non la cambia.');
+      const file = have?.file ?? path.join(root, '.claude', 'skills', name, 'SKILL.md');
+      const before = have ? readSmall(file) : null;
+      if (have && before === null) throw new Error('Skill non leggibile.');
+      const next = before !== null ? setBody(before, appendUnder(parseMd(before).body, 'Dalla manutenzione', text)) : skillText(name, oneLine(p.title, 300), text);
+      const c = this.log.apply({ job: 'research', kind: 'skill', action: have ? 'update' : 'create', target: name, summary: `${have ? 'Skill aggiornata' : 'Nuova skill'} «${name}»: ${oneLine(p.title, 100)}`, reason: why, evidence }, [{ file, text: next }]);
+      if (!c) throw new Error('Niente da cambiare.');
+      // the role it is for declares it (its own change: undone apart, like a link made on the Skill page)
+      const linked = role ? this.d.packs.profile(role.id).knowhow?.linked ?? [] : null;
+      if (role && linked && !linked.includes(name)) {
+        const snap = this.writer().update(role.id, { linked: [...linked, name] }, `Manutenzione: skill ${name}`);
+        if (snap) this.log.record({ job: 'research', kind: 'agent', action: 'link', target: role.id, summary: `${role.name} usa «${name}»`, reason: why, evidence: [name] }, [], snap);
+      }
+      return this.done(c.id);
+    }
+    if (ch.target === 'memory') {
+      const rel = role ? `agents/${portableId(role.id)}/memory.md` : 'memory/shared.md', file = path.join(root, rel);
+      const before = readSmall(file) ?? `# ${role ? `Memoria di ${role.name}` : 'Memoria condivisa'}\n`;
+      const c = this.log.apply({ job: 'research', kind: 'memory', action: 'update', target: rel, summary: `Ricordato: ${oneLine(text, 120)}`, reason: why, evidence }, [{ file, text: `${before.replace(/\s+$/, '')}\n- ${oneLine(text, 600)} ${stamp}\n` }]);
+      if (!c) throw new Error('Niente da cambiare.');
+      return this.done(c.id);
+    }
+    if (ch.target === 'rule' && !role) {
+      const file = path.join(root, LESSONS_RULE), writes = [{ file, text: appendUnder(readSmall(file) ?? LESSONS_WHEN, 'Dalla manutenzione', `- ${oneLine(text, 600)} ${stamp}`) }];
+      const cfg = brainJsonWithTopic(root, LESSONS_RULE);
+      if (cfg) writes.push(cfg);
+      const c = this.log.apply({ job: 'research', kind: 'rule', action: 'update', target: LESSONS_RULE, summary: `Regola: ${oneLine(text, 120)}`, reason: why, evidence }, writes);
+      if (!c) throw new Error('Niente da cambiare.');
+      return this.done(c.id);
+    }
+    // a rule for one role, or a line of its text: in the role's own text (a new version, like the corrections job)
+    if (!role) throw new Error('Manca il ruolo a cui va la modifica.');
+    const instructions = appendUnder(role.instructions, 'Dalla manutenzione', `- ${oneLine(text, 800)} ${stamp}`);
+    if (instructions.length > 8000) throw new Error(`Il testo di ${role.name} è al limite di 8000 caratteri: prima va accorciato.`);
+    const snap = this.writer().update(role.id, { instructions }, `Manutenzione: ${oneLine(p.title, 100)}`);
+    if (!snap) throw new Error('Il ruolo non si può cambiare adesso (forse è in prova).');
+    const c = this.log.record({ job: 'research', kind: 'agent', action: 'update', target: role.id, summary: `${role.name}: ${oneLine(text, 140)}`, reason: why, evidence }, [], snap);
+    return this.done(c.id);
+  }
+  private done(changeId: string): string { this.d.emit(); return changeId; }
   /** The brain's skills by name and description, for skills_suggest (skills/suggest.ts). */
   skillList(): { name: string; description: string }[] {
     const root = this.root();
@@ -322,6 +404,8 @@ export class BrainModelService {
   }
   stop(): void { for (const t of this.timers) { clearTimeout(t); clearInterval(t); } this.timers = []; }
 }
+
+const oneLine = (s: string, n: number): string => { const t = s.replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
 
 /** The folder and every folder up to the brain are real folders inside it, none a link (a skill folder linked to
  *  ~/.claude/skills would delete the files at the link's target). */

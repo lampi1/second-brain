@@ -80,5 +80,8 @@ export function cardWords(c: Pick<Proposal, 'ask' | 'title' | 'content' | 'appli
     case 'policy':
       return { question: a.domain === 'routing' || a.domain === 'notifications' ? t(`proposals.ask.policy.${a.domain}`) : t('proposals.ask.policy.other', { domain: a.domain }),
         yes: a.cases ? t('proposals.yes.policyCases', { name: a.name, n: a.cases }) : t('proposals.yes.policy', { name: a.name }), no: t('proposals.no.policy'), lead: '' };
+    // a maintenance finding (ADR 0132): its own words, shown as they are (adds, removes, why) by the deck
+    case 'research':
+      return { question: c.title, yes: a.adds, no: a.removes, lead: '' };
   }
 }

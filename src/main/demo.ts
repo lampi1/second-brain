@@ -526,7 +526,7 @@ export class DemoChats implements ChatService {
     return this.patch(chatId, { run })!;
   }
 
-  async create(req: NewChat, by: 'user' | 'agent' = 'user'): Promise<ChatSummary> {
+  async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user'): Promise<ChatSummary> {
     // one Orchestrator, like the real manager: a coordinator request returns the current one unless it replaces it
     if (req.orchestrator) {
       if (by !== 'user') throw new Error('Only the user can create the Orchestrator.');
@@ -540,6 +540,11 @@ export class DemoChats implements ChatService {
       if (current) return current;
       req = { ...req, title: 'Flash', permissionMode: 'plan' };
     }
+    // the maintenance research (ADR 0132), like the real manager: the app's own chat
+    if (req.research) {
+      if (by !== 'app') throw new Error('The maintenance research is the app\'s own chat.');
+      req = { ...req, title: 'Manutenzione', permissionMode: 'default' };
+    }
     const id = `c${++this.counter}`;
     // like the real manager: `replaces` moves the Orchestrator's role to the new chat
     const old = req.orchestrator && req.replaces ? this.chats.get(req.replaces) : undefined;
@@ -549,7 +554,7 @@ export class DemoChats implements ChatService {
       id, harness: req.harness, origin: 'app', title: req.orchestrator ? 'Orchestrator' : req.title?.trim() || titleFrom(req.prompt) || 'Nuova chat', cwd: req.cwd, sessionId: null,
       model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null, state: req.prompt ? 'starting' : 'idle', costUsd: 0,
       pending: 0, isOrchestrator: !!req.orchestrator, lastText: '', updatedAt: this.now(), browserTabIds: [],
-      ...(req.route ? { route: req.route } : {}), ...(req.quick ? { quick: true as const } : {}),
+      ...(req.route ? { route: req.route } : {}), ...(req.quick ? { quick: true as const } : {}), ...(req.research ? { research: true as const } : {}),
     };
     this.chats.set(id, c);
     this.itemsOf.set(id, []);

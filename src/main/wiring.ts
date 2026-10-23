@@ -6,7 +6,7 @@ import { app, safeStorage, shell } from 'electron';
 import os from 'node:os';
 import { LearningReviewService } from './brainmodel/learning-review';
 import { replayExecutor } from './brainmodel/replay-executor';
-import type { CliStatus, Harness, RunInfo } from '../shared/contract';
+import type { ChatSummary, CliStatus, Harness, RunInfo } from '../shared/contract';
 import { SEND_MODE_RULE } from '../shared/newchat';
 import { engineStatuses } from './cli';
 import { engineReadiness } from './engines/readiness';
@@ -58,6 +58,8 @@ import type { Emitter } from './ipc';
 import type { BrainService, BrowserService, ChatService, TasksApi, SkillsApi } from './services';
 import { SkillsService } from './skills/service';
 import { BrainModelService } from './brainmodel/service';
+import { issuesUrlOf, ResearchService } from './brainmodel/research';
+import { researchTools } from './brainmodel/research-tools';
 import { createBrain } from './brain';
 import { setLaunchRules } from './brain/adapters/domains';
 import { setCodexAutonomyRoots } from './brain/adapters/codex-policy';
@@ -94,7 +96,6 @@ import { electronNode, runNode } from './brain/node';
 import path from 'node:path';
 import { templateRoot } from './rules/tools';
 import { log, errText } from './log';
-import { APP_EVENT_LABEL } from './chats/orchestrator-wake';
 import { AnswerLaterStore, REQUEST_KINDS } from './later';
 import { Artifacts, showUiTool } from './genui/artifacts';
 import { releaseId } from './release';
@@ -144,6 +145,8 @@ export interface Wired {
   agentPacks: ReturnType<typeof createAgentPacks>;
   /** the Brain pages and their maintenance jobs (ADR 0077) */
   brainModel: BrainModelService;
+  /** the maintenance with research (ADR 0132): maintenance:* and appIdeas:* IPC, the Proposte deck's 'research' source */
+  research?: ResearchService;
   /** the morning block ("Mentre eri via", ADR 0102); absent = the channel answers "nothing to show" */
   morning?: MorningService;
   setup: SetupService;
@@ -439,6 +442,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // skills_suggest: the brain's skills that fit a request, on the search's own HybridSearch (one worker and one model for
   // search, recall, corrections and skill suggestions); the skills are read when asked (the Brain pages' reader)
   const brainModelRef: { current?: BrainModelService } = {};
+  const researchRef: { current?: ResearchService } = {};
   const suggester = new SkillSuggester(hybrid);
   const suggestSkills = (request: string): Promise<SkillSuggestions> => suggester.suggest(request, brainModelRef.current?.skillList() ?? [], manager.runs.list());
   const agentPacks = createAgentPacks(ctx.userData, brain, agents);
@@ -798,17 +802,29 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     // the brain upgrade (ADR 0116): Artisan, with no tools, says which notes' excerpts belong in a new place of the layout
     appVersion: () => app.getVersion(),
     upgradeAsk: async (system, prompt) => { const r = await oneShot.runOnce({ agentId: 'artisan', purpose: 'upgrade', system, prompt, maxOutputTokens: 1200, timeoutMs: 90_000 }); return { ok: r.ok, text: r.text, ...(r.reason ? { reason: r.reason } : {}) }; },
-    // the pass the user starts reads the app logs and ends in the open Orchestrator, labelled as the app's (#150)
+    // the pass the user starts reads the app logs (#150) and makes cards of what it found (ADR 0132)
     logDir: () => log.folder,
-    handoff: async text => {
-      const orchestrator = manager.list().find(c => c.isOrchestrator && !c.closedAt);
-      if (!orchestrator) return false;
-      await manager.send(orchestrator.id, `${APP_EVENT_LABEL}\n${text}`, undefined, false, 'Manutenzione', false, { kind: 'app' });
-      return true;
-    },
+    findings: logs => researchRef.current?.afterPass(logs) ?? { bugs: 0, forget: 0 },
     // a pass the app ran by itself: a quiet feed event with Annulla (ADR 0102)
     applied: changes => { const e = maintenanceEvent(changes); if (e) brain.publish([e]); } });
   brainModelRef.current = brainModel;
+  // the maintenance with research (ADR 0132): the dialog's research chat, its cards in Proposte and «Idee dell'app»
+  const orchestratorChat = () => manager.list().find(c => c.isOrchestrator && !c.closedAt);
+  const issuesUrl = issuesUrlOf(app.getAppPath()), appIssuesUrl = () => issuesUrl;
+  const research = new ResearchService({ userData: ctx.userData, lang: uiLang, root: () => brain.info().brainRoot, appVersion: () => app.getVersion(), issuesUrl: appIssuesUrl,
+    // engines that are on and read files (an API engine has no tools here)
+    engines: () => engineInfos().filter(e => e.kind !== 'api' && engineOn(brain.settings(), e.id)).map(e => ({ harness: e.id, label: e.label, web: true, effort: e.caps.effort })),
+    // the Claude CLI's «opus» is its strongest model, whatever its version; the others start on their CLI's default
+    bestModel: h => (engineOf(h)?.kind === 'claude' ? 'opus' : null),
+    runs: () => manager.runs.list(), roles: () => agents.list().profiles.filter(p => p.scope === 'role'),
+    brain: { state: () => brainModel.state(), apply: p => brainModel.applyResearch(p), noise: (key, known) => { brainModel.noise(key, known); } },
+    chats: { create: req => manager.create(req, 'app'), get: id => manager.list().find(c => c.id === id), stop: id => manager.stop(id) },
+    // «Apri issue» is the user's click: their request to the Orchestrator, as if typed (the permission rules still apply)
+    orchestrator: { open: () => !!orchestratorChat(), send: async text => { const o = orchestratorChat(); if (!o) return false; await manager.send(o.id, text); return true; } },
+    changed: () => { ctx.emitter.emit('maintenance:changed', undefined); ctx.emitter.emit('appIdeas:changed', undefined); } });
+  researchRef.current = research;
+  ctx.emitter.tap((channel, payload) => { if (channel === 'chat:updated') research.chatUpdated(payload as ChatSummary); });
+  addChatTools(researchTools(research));
   const replayRoot = () => { const root = brain.info().brainRoot; return root ? fs.realpathSync(root) : null; };
   const executeReplay = replayExecutor({ root: replayRoot, runs: () => manager.runs.list(),
     roleEngine: role => agents.list().profiles.find(p => p.id === role)?.engine ?? 'claude',
@@ -824,7 +840,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     stallMin: () => checkedDelegation(brain.settings().delegation).stallMin, lastEventAt: id => manager.lastEventAt(id) });
 
   return {
-    brainModel, memoryReview, learningReview, queries: brainQueries,
+    brainModel, research, memoryReview, learningReview, queries: brainQueries,
     morning,
     mcpServers,
     cloud, chats, browser, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, suggestSkills,

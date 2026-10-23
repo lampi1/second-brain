@@ -184,6 +184,8 @@ export class OrchestratorWake {
     if (c.isOrchestrator) { if (this.buffer.size && (!was || gateOf(was) !== gateOf(c))) this.schedule(this.now()); return; }
     // Lampo (ADR 0105) is the user's quick lane, never work the Orchestrator follows
     if (c.quick) return;
+    // the maintenance research (ADR 0132) ends in cards for the user, never news for the Orchestrator
+    if (c.research) return;
     if (c.handoffBusy) { this.handoff.add(c.id); return; }
     // the hand-off turn ends (handoffBusy goes before idle): not a turn of the chat
     if (this.handoff.has(c.id)) { if (!BUSY.has(c.state)) this.handoff.delete(c.id); return; }

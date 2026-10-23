@@ -4,12 +4,13 @@
 // Battito's learned rules, the improvement loop's policies) and shown one card at a time by the renderer
 // (components/brain-model/ProposalsDeck.tsx). Data only: main rechecks every decision and runs it through the source's
 // own path. Used by the contract (proposals:*), main/proposals and renderer/lib/proposals.ts.
+import type { ResearchKind, ResearchSource } from './maintenance-research';
 
 /** Where an item comes from: each source keeps its own decide path (main/proposals/sources.ts). */
-export const PROPOSAL_SOURCES = ['memory', 'candidate', 'change', 'setting', 'trial', 'tier', 'pulse', 'policy'] as const;
+export const PROPOSAL_SOURCES = ['memory', 'candidate', 'change', 'setting', 'trial', 'tier', 'pulse', 'policy', 'research'] as const;
 export type ProposalSource = (typeof PROPOSAL_SOURCES)[number];
 /** The filter chips on top of the deck, in this order. */
-export const PROPOSAL_GROUPS = ['skill', 'rule', 'fact', 'script', 'role', 'setting', 'learning'] as const;
+export const PROPOSAL_GROUPS = ['skill', 'rule', 'fact', 'script', 'role', 'setting', 'learning', 'forget'] as const;
 export type ProposalGroup = (typeof PROPOSAL_GROUPS)[number];
 /** approve = Approva (or Tieni on an applied change); reject = Rifiuta (or Annulla on an applied change). */
 export type ProposalDecision = 'approve' | 'reject';
@@ -50,7 +51,10 @@ export type ProposalAsk =
   /** a rule the Battito learned for an agent */
   | { kind: 'rule'; role: string }
   /** a new version of how the app decides something by itself (routing, notifications…) */
-  | { kind: 'policy'; domain: string; name: string; from?: number; to?: number; cases?: number };
+  | { kind: 'policy'; domain: string; name: string; from?: number; to?: number; cases?: number }
+  /** a finding of the maintenance (ADR 0132): the card shows what it adds and removes, why, the evidence and the sources
+   *  as they are (plain words the research or the cleanup wrote), never «if you press…» lines */
+  | { kind: 'research'; finding: ResearchKind; adds: string; removes: string; why: string; expected: string; risk: string; evidence: string[]; sources: ResearchSource[] };
 /** The code a card is about, shown as it is: a script or a saved query the change writes (or removes). */
 /** What makes a memory fact look tied to one case (main/rules/memory-worth.ts, ADR 0129). */
 export type MemorySign = 'url' | 'id' | 'commit' | 'path' | 'date' | 'branch';
