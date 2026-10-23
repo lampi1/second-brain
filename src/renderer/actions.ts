@@ -22,7 +22,7 @@ import { hubRedirect } from './lib/memory-hub';
 import { isBusy } from './store/state';
 import { app, closeChat, closeTab, continueChat, createChat, createRoutedChat, dispatch, setChat, stop, stopAll } from './store/store';
 import { orchestratorIdOf } from './lib/orchestrator-route';
-import { answerLater, openQueue } from './lib/later';
+import { answerLater, openQueue, showQueue } from './lib/later';
 import { engineLabel } from './lib/engines';
 import {
   askConfirm, closeModal, flashTile, highlight, isBrainPage, openModal, openPage, requestFocus, setCenter, setClosing, setFocusMode, setLanePeek, setMap, setMaximized,
@@ -589,7 +589,8 @@ export function focusTile(index: number): void {
 
 /** ui:command from main (app-control MCP, notifications): view, focus, maximize, restore, page (home | mappa | a
  *  brain page id), link (sb://…), notifications, back, forward, palette, next; and for tools/tests: clock (frozen demo
- *  time), layout off|on (stop/resume reporting browser view rects); closeTab (Ctrl+W typed inside a browser page). */
+ *  time), layout off|on (stop/resume reporting browser view rects); closeTab (Ctrl+W typed inside a browser page);
+ *  unblock (app_unblock: the questions window with every waiting request, the postponed ones too). */
 export function uiCommand(cmd: EventMap['ui:command']): void {
   const v = cmd.value ?? '';
   switch (cmd.action) {
@@ -618,6 +619,7 @@ export function uiCommand(cmd: EventMap['ui:command']): void {
     case 'clock': freezeClock(Number(v)); break;
     case 'layout': setReporting(v !== 'off'); break;
     case 'closeTab': closeTab(v); break;   // Ctrl+W inside a browser page (main browser/tabs.ts forwards it)
+    case 'unblock': showQueue(); break; // the Orchestrator's recap (app_unblock, ADR 0135): everything waiting, «Ci penso dopo» too
     default: break;
   }
 }

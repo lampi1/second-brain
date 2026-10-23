@@ -111,6 +111,9 @@
 
 /* the options: large cards, the number on the left, the recommended one marked three ways (border, fill, label) */
 .wq-opts { display: flex; flex-direction: column; gap: 8px; }
+/* a yes/no question (ADR 0135): Sì and No side by side, «Altro…» under them */
+.wq-opts.yesno { display: grid; grid-template-columns: 1fr 1fr; }
+.wq-opts.yesno > :not(.gu-choice) { grid-column: 1 / -1; }
 .wq-opt {
   position: relative; display: flex; align-items: flex-start; gap: 14px; width: 100%; padding: 13px 16px; border-radius: var(--r-m);
   border: 1px solid var(--border-2); background: var(--surface-2); color: var(--text); font: inherit; text-align: left; cursor: pointer;

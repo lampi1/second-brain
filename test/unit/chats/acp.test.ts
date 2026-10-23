@@ -202,6 +202,18 @@ describe('AcpSession as Cursor', () => {
     expect(answerOf(logFile)).toEqual({ outcome: 'selected', optionId: 'allow-once' });
   });
 
+  it('cursor/ask_question that is not yes/no: skipped with how to ask, twice in a row, then shown (ADR 0135)', async () => {
+    const { s, sink, logFile } = start({ yesNo: true });
+    for (const n of [1, 2]) {
+      s.send('ask');
+      await waitFor(() => results(sink).length === n, `turn ${n}`);
+      expect(sink.pendings).toHaveLength(0);
+      expect(answerOf(logFile)).toMatchObject({ outcome: 'skipped', reason: expect.stringContaining('only yes/no questions') });
+    }
+    s.send('ask');
+    await waitFor(() => sink.pendings[0], 'the third ask is shown');
+  });
+
   it('cursor/ask_question: labels back to ACP ids, multi-select, skip', async () => {
     const { s, sink, logFile } = start();
     s.send('ask');

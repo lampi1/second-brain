@@ -10,6 +10,7 @@
 // (delegationGate).
 import { isWorkRole, type WorkRoleId } from './roles';
 import type { DelegationOutcome } from './delegation';
+import { yesNoOf } from './yes-no';
 
 /** asking = it questions the user · proposed = the plan waits for the user's ok · revising = the user asked for changes ·
  *  running = approved, steps under way · done = every step done */
@@ -56,7 +57,7 @@ export const ENOUGH_QUESTIONS = 'Basta domande: proponi ora il piano con quello 
  *  in the role's instructions: the user's edits to the role never drop the flow the strip depends on. */
 export const STRATEGY_FLOW = [
   '[app · how you work with the user here]',
-  '1. First find out what the user really wants, at a high level: ask ONE question at a time with your question tool (AskUserQuestion on Claude), in the user\'s language, with 2 to 4 short options, the recommended one first ending with " (consigliato)", and a short header naming the topic. Ask at least one real question whenever the request leaves anything open (goal, scope, constraints, what "done" means, a preference between reasonable options): never silently invent it. Skip what the request already says. Stop as soon as goal, scope, constraints and "done" are clear, after at most 5 questions, or when the user answers "Basta domande". Only if the request truly settles everything may you propose without asking: then plan_propose needs `noQuestionReason`, one line saying why.',
+  '1. First find out what the user really wants, at a high level: ask ONE question at a time with your question tool (AskUserQuestion on Claude), in the user\'s language, as a yes/no question (ADR 0135): exactly two options "Sì" and "No", the one you recommend ending with " (consigliato)" (a choice between options is asked as yes/no on the one you recommend; the user can also type his own answer), and a short header naming the topic. Ask at least one real question whenever the request leaves anything open (goal, scope, constraints, what "done" means, a preference between reasonable options): never silently invent it. Skip what the request already says. Stop as soon as goal, scope, constraints and "done" are clear, after at most 5 questions (a «No» that needs a follow-up question does not count), or when the user answers "Basta domande". Only if the request truly settles everything may you propose without asking: then plan_propose needs `noQuestionReason`, one line saying why.',
   `2. Then propose the plan with plan_propose: 2 to 6 steps, each one short plain line in the user's language with the role that does it (and, if useful, a short \`detail\`); no jargon, no sub-steps. The user's approval is required, always: end your turn and wait; the user approves ("${PLAN_APPROVED}") or writes what to change, and then you propose again. The app refuses agent_delegate and agent_assign_task until the user approved.`,
   '3. Once approved, inspect agent_children and reuse a compatible child with agent_assign_task (read agent_task_events first), or delegate new work with agent_delegate, giving its number as `step` (independent steps in parallel). A step you do yourself: plan_update it to "now", then to "done". The user follows the steps on your strip. At the end, agent_report as usual.',
 ].join('\n');
@@ -159,7 +160,9 @@ export function withClarified(plan: StrategyPlan, qs: { question: string; header
   const cut = (s: string) => { const x = s.replace(/\s+/g, ' ').trim(); return x.length > CLARIFIED_TEXT_MAX ? `${x.slice(0, CLARIFIED_TEXT_MAX - 1)}…` : x; };
   const added = qs.flatMap(q => {
     const a = answers[q.question], text = Array.isArray(a) ? a.join(', ') : a;
-    return typeof text === 'string' && text.trim() && text !== ENOUGH_QUESTIONS ? [{ q: cut(q.header?.trim() || q.question), a: cut(text) }] : [];
+    // a yes/no answer (ADR 0135) says nothing without its question: the question is the line, not its header
+    const yn = typeof text === 'string' && yesNoOf(text) !== null;
+    return typeof text === 'string' && text.trim() && text !== ENOUGH_QUESTIONS ? [{ q: cut(yn ? q.question : q.header?.trim() || q.question), a: cut(yn ? text.replace(/\s*\((consigliat[oa]|recommended|empfohlen)\)\s*/i, '').trim() : text) }] : [];
   });
   if (!qs.length) return plan;
   const asked = (plan.asked ?? 0) + qs.length;

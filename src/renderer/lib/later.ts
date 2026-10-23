@@ -45,6 +45,14 @@ export function answerLater(key?:string):void {
   notify();
 }
 
+/** The Orchestrator's recap (app_unblock, ADR 0135): the postponed requests come back and the window opens on the
+ *  first one, but never takes the keyboard from a field the user is typing in (no call bump), never closes another
+ *  dialog and never raises the window: an agent's turn must not put a permission under his keystrokes. */
+export function showQueue():void {
+  resumeQuestions();
+  ui.set(s=>({...s,qwin:{...s.qwin,open:true,first:null,aside:false}}));
+}
+
 /** Explicit navigation opens the actual request above any other dialog, without answering it. */
 export function openQueue(key:string|null):void {
   resumeQuestions();

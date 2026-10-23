@@ -6,7 +6,7 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { AgentCatalogService } from '../../src/main/agents/catalog';
 import type { AgentModelChoice } from '../../src/shared/agents';
-import { AGENT_LABEL, CHAT_PROMPT_MAX, CHAT_TITLE_MAX, PULL_ASK_MIN, RESOLVED_LABEL, appControlTools, orchestratorEndpointAuth } from '../../src/main/appctl/tools';
+import { AGENT_LABEL, CHAT_PROMPT_MAX, CHAT_TITLE_MAX, PULL_ASK_MIN, UNBLOCK_ASK_MIN, RESOLVED_LABEL, appControlTools, orchestratorEndpointAuth } from '../../src/main/appctl/tools';
 import { EndpointTokens } from '../../src/main/mcp/tokens';
 import { log } from '../../src/main/log';
 import type { BrainService, BrowserService, ChatService } from '../../src/main/services';
@@ -435,6 +435,34 @@ describe('app control tools', () => {
     items = [{ kind: 'user', id: 'u', at: now, text: 'aggiornati' }];
     expect(await tool.run({})).toMatchObject({ ok: true });
     expect(pulls).toBe(1);
+  });
+
+  it('app_unblock (ADR 0135): only the authenticated Orchestrator after the user wrote to it; opens the questions window with what waits', async () => {
+    const now = Date.now();
+    let items: unknown[] = [];
+    let pending: unknown[] = [];
+    const list: Record<string, unknown>[] = [{ id: 'or', harness: 'claude', state: 'idle', isOrchestrator: true, title: 'Orchestrator', lastText: '' }, { id: 'w', harness: 'claude', state: 'waiting', title: 'Lavoro', lastText: '' }];
+    const chats = { list: () => list, items: () => items, pending: () => pending } as unknown as ChatService;
+    const ui: unknown[] = [];
+    const base = { chats, browser: { list: () => [] } as unknown as BrowserService, brain: { feed: () => [], usage: () => ({}), info: () => ({ brainRoot: null }) } as unknown as BrainService, window: () => null, emitUi: (c: unknown) => ui.push(c), version: '0' };
+    expect(appControlTools(base).some(x => x.name === 'app_unblock')).toBe(false);
+    expect(appControlTools(base, 'w').some(x => x.name === 'app_unblock')).toBe(false);
+    const tool = appControlTools(base, 'or').find(x => x.name === 'app_unblock')!;
+    await expect(Promise.resolve().then(() => tool.run({}))).rejects.toThrow(/recap/);
+    items = [{ kind: 'user', id: 'v', at: now, text: `${AGENT_LABEL} recap` }];
+    await expect(Promise.resolve().then(() => tool.run({}))).rejects.toThrow(/recap/);
+    // too old, or an agent's mail after his message (a woken turn): refused
+    items = [{ kind: 'user', id: 'u', at: now - (UNBLOCK_ASK_MIN + 1) * 60_000, text: 'fammi un recap' }];
+    await expect(Promise.resolve().then(() => tool.run({}))).rejects.toThrow(/recap/);
+    items = [{ kind: 'user', id: 'u', at: now, text: 'fammi un recap' }, { kind: 'user', id: 'm', at: now, text: `${AGENT_LABEL} fatto` }];
+    await expect(Promise.resolve().then(() => tool.run({}))).rejects.toThrow(/recap/);
+    items = [{ kind: 'user', id: 'u', at: now, text: 'fammi un recap' }];
+    expect(await tool.run({})).toMatchObject({ waiting: 0 });
+    expect(ui).toEqual([]);
+    pending = [{ id: 'r1', chatId: 'w', type: 'question', tool: 'AskUserQuestion', title: 'Procedo?', detail: '', input: {}, at: 0 }];
+    list.push({ id: 's', harness: 'claude', state: 'idle', title: 'Piano', lastText: '', plan: { phase: 'proposed', at: 1 } });
+    expect(await tool.run({})).toMatchObject({ waiting: 2, questionsAndPermissions: 1, plans: 1 });
+    expect(ui).toEqual([{ action: 'unblock' }]);
   });
 
   it('app_close_chat closes like the ✕ (log + feed), never the Orchestrator nor a chat waiting for the user', async () => {

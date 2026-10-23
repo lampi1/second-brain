@@ -135,6 +135,26 @@ describe('ClaudeSession', () => {
     expect(sink.last('assistant')?.text).toBe('Hai scelto Blu');
   });
 
+  it('sends a question that is not yes/no back to the agent, at most twice in a row, then shows it (ADR 0135)', async () => {
+    const { s, sink } = start({ yesNo: true });
+    for (const n of [1, 2]) {
+      s.send('ask me');
+      await waitFor(() => sink.trace.filter(t => t === 'result').length === n, `turn ${n}`);
+      expect(sink.pendings).toHaveLength(0);
+      expect(sink.last('tool')?.output).toContain('only yes/no questions');
+      expect(sink.last('assistant')?.text).toBe('Va bene, niente domanda.');
+    }
+    s.send('ask me');
+    const q = await waitFor(() => sink.pendings[0], 'the third ask is shown');
+    expect(q.questions?.[0]?.options.map(o => o.label)).toEqual(['Blu', 'Rosso']);
+    s.answer(q.id, { kind: 'question', answers: { 'Che colore?': 'Blu' } });
+    await waitFor(() => sink.trace.filter(t => t === 'result').length === 3, 'turn 3');
+    // the counter starts again: the next one goes back
+    s.send('ask me');
+    await waitFor(() => sink.trace.filter(t => t === 'result').length === 4, 'turn 4');
+    expect(sink.last('tool')?.output).toContain('only yes/no questions');
+  });
+
   it('never offers a suggested mode above an agent ceiling (A2)', async () => {
     const free = start();
     free.s.send('mode');
