@@ -12,7 +12,7 @@
 // A "Comando da eseguire" (type 'command') is handed to CommandRequest.tsx, in the same sizes.
 // The tile, compact and Orchestrator sizes carry the request's context (AskContext.tsx: the turn's prose, its links and files), folded
 // in the chat's own tile, open in a work chat's Orchestrator card and in the questions window (`ctxOpen`).
-// Agents ask only yes/no questions (shared/yes-no.ts, ADR 0135): Sì / No (the No card in the refusal's tone), «Altro…»
+// Agents ask only yes/no questions (shared/yes-no.ts, ADR 0135): Sì / No as two big tiles (ChoiceCard yn), «Altro…»
 // for his own words and «Ci penso dopo».
 // With `onLater` a "Ci penso dopo" button leaves it unanswered (every host passes lib/later.ts answerLater: it waits in
 // "Da rispondere"; Esc does the same when the host gives `onEscape`; then a permission is rejected with 3, never Esc).
@@ -217,12 +217,11 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
   ) : null;
 
   // One renderer for every host; disclosure actions are separate from answering.
-  // a yes/no question (the only kind agents ask, ADR 0135): its No card has the refusal's tone, unless No is the one
-  // recommended (the tone must never push toward «Sì»)
+  // a yes/no question (the only kind agents ask, ADR 0135): its answers are the big Sì / No tiles (ChoiceCard yn)
   const yesNo = !!q && isYesNo(q);
   const choiceCards = () => q?.options.map((option, i) => (
     <ChoiceCard key={draft.step + ':' + i} option={option} number={i + 1} recommended={i === recIdx} previewOpen={variant === 'window'}
-      tone={yesNo && yesNoOf(option.label) === 'no' && i !== recIdx ? 'deny' : undefined}
+      yn={yesNo && !q.multiSelect ? yesNoOf(option.label) ?? undefined : undefined}
       picked={draft.picks.includes(i)} multi={q.multiSelect} current={i === draft.cursor} disabled={sent}
       onChoose={() => apply(pickOption(req, draft, i))} testid={testBase + '-opt-' + (i + 1)} />
   ));

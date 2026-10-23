@@ -1,4 +1,4 @@
-// E2E: a yes/no question in the questions window (ADR 0135): Sì / No (the No card in the refusal's tone), «Altro…»
+// E2E: a yes/no question in the questions window (ADR 0135): Sì / No (two big tiles), «Altro…»
 // and «Ci penso dopo»; a question set aside comes back when the Orchestrator's recap opens everything waiting
 // (ui:command unblock, what app_unblock sends). Demo app, hidden window. Screenshots: qyesno-<step>.png.
 import { expect, test, type ElectronApplication } from '@playwright/test';
@@ -26,11 +26,18 @@ test('a yes/no question: Sì / No / Altro / Ci penso dopo, back on the recap', a
     questions: [{ question: Q, header: 'Fix', multiSelect: false, options: [{ label: 'Sì (consigliato)' }, { label: 'No' }] }] });
   await expect(page.getByTestId('qwin')).toBeVisible();
   await expect(page.getByTestId('qwin-card-opt-1')).toContainText('Sì');
-  await expect(page.locator('.gu-choice.deny')).toContainText('No');
+  await expect(page.locator('.gu-yn.no')).toContainText('No');
+  await expect(page.locator('.gu-yn.yes.rec')).toContainText('Sì');
   await expect(page.getByTestId('qwin-card-other')).toBeVisible();
   await expect(page.getByTestId('qwin-later')).toContainText('Ci penso dopo');
   await page.mouse.move(2, 2);
   await shot(page, 'qyesno-window');
+  // the two tiles in view, the pointer on «No» (it lifts)
+  await page.getByTestId('qwin-card-opt-2').scrollIntoViewIfNeeded();
+  await page.getByTestId('qwin-card-opt-2').hover();
+  await page.waitForTimeout(250);
+  await shot(page, 'qyesno-tiles');
+  await page.mouse.move(2, 2);
 
   // «Ci penso dopo»: the window goes, the question still waits; the recap brings it back
   await page.getByTestId('qwin-later').click();
