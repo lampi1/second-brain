@@ -28,7 +28,8 @@ async function theme(page: Page, scheme: 'dark' | 'light'): Promise<void> {
 }
 const top = (page: Page) => page.getByTestId('pd-card-top');
 async function drag(page: Page, dx: number, release = true): Promise<void> {
-  await top(page).locator('.pd-title').scrollIntoViewIfNeeded();
+  // centred: the cards are tall (ADR 0132) and the sticky tab bar may cover a title that is only "in view"
+  await top(page).locator('.pd-title').evaluate(e => e.scrollIntoView({ block: 'center' }));
   const box = (await top(page).locator('.pd-title').boundingBox())!;
   const x = box.x + box.width / 2, y = box.y + box.height / 2;
   await page.mouse.move(x, y);

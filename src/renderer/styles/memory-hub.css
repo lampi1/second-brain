@@ -184,7 +184,8 @@ button.mh-row-name:hover{color:var(--blue);text-decoration:underline;text-underl
 /* ── narrow windows ── */
 @container mh (max-width:1020px){.mh-hero-bottom{grid-template-columns:1fr}}
 /* one row always (a sticky second row would cover the cards): no icons and tighter tabs when narrow, then it scrolls */
-@container mh (max-width:1060px){.mh-tab-icon{display:none}.mh-tabs>button{padding:8px 9px;gap:5px}}
+@container mh (max-width:1060px){.mh-tab-icon{display:none}.mh-tabs>button{padding:8px 9px;gap:5px}
+  .mh-tabs{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent)}}
 @container mh (max-width:600px){.mh-groups{grid-template-columns:1fr}}
 @container mh (max-width:760px){.mh-split{grid-template-columns:1fr 1fr}.mh-split-side{grid-column:1/-1;flex-direction:row;flex-wrap:wrap}}
 @container mh (max-width:560px){.mh-split{grid-template-columns:1fr}}
