@@ -1,6 +1,5 @@
 // A Strategist's plan to approve in the questions window (ADR 0121; always on since 2026-10-22): the proposed plan
-// opens there like the other questions, its steps numbered with their role and short detail, what is already clear and
-// when it is finished; the strip keeps the steps and only points to the window (no second pair of buttons); «Cambia
+// opens with a concise scope and yes/no/free-text choices; its complete steps and constraints are expandable; the strip keeps the steps and only points to the window (no second pair of buttons); «Cambia
 // qualcosa» opens a box whose text reaches the Strategist; «Approva e parti» starts the plan, the card leaves and the
 // strip shows it under way. There is no "Popup" switch any more: the strip never asks by itself. Hidden window (SB_HIDDEN), zero network.
 // Screenshots: test-results/shots/strategist-plan-popup-*.png.
@@ -39,13 +38,19 @@ test('the plan to approve opens in the questions window with its steps; approvin
     await pick.click();
     await expect(page.getByTestId('qwin-current')).toContainText('Piano da approvare');
 
-    // the window: kind, question, the steps numbered with their role and detail, what is clear, when it is finished
+    // The default card stays short; the complete proposal is available without losing any step or constraint.
     const card = page.getByTestId('qwin-plan');
     await expect(page.getByTestId('qwin-backdrop')).toBeVisible();
     await expect(card).toBeVisible();
     await expect(card).toContainText('Piano da approvare');
     await expect(card).toContainText('Approvi questo piano?');
     await expect(page.getByTestId('qwin-plan-count')).toHaveText('4 step');
+    await expect(page.getByTestId('qwin-plan-details')).not.toHaveAttribute('open', '');
+    await expect(page.getByTestId('qwin-plan-step-1')).toBeHidden();
+    await expect(page.getByTestId('qwin-plan-approve')).toHaveText('Sì (consigliato)');
+    await expect(page.getByTestId('qwin-plan-reject')).toHaveText('No');
+    await shot(page, 'strategist-plan-popup-compact-dark');
+    await page.getByTestId('qwin-plan-details').locator('summary').click();
     await expect(page.getByTestId('qwin-plan-steps').locator('li')).toHaveCount(4);
     await expect(page.getByTestId('qwin-plan-step-1')).toContainText('Trovo dove si calcola lo sconto oggi');
     await expect(page.getByTestId('qwin-plan-step-1')).toContainText('carrello, ordine e reso');
@@ -70,6 +75,15 @@ test('the plan to approve opens in the questions window with its steps; approvin
     await page.getByTestId('qwin-plan-change-send').click();
     await expect.poll(() => phase(page)).toBe('revising');
     await expect.poll(() => userTexts(page).then(t => t.at(-1))).toBe('Cambia il piano: Prima i test, poi lo sconto');
+    await expect(page.getByTestId('qwin-plan')).toHaveCount(0);
+
+    // No requires no explanation and only asks for a revised plan: it never starts the proposed work.
+    const rejectedAt = Date.now();
+    await demo(app, 'plan', LEAD, proposed(rejectedAt));
+    await page.locator(`[data-testid="qwin-pick"][data-key="${LEAD}/plan@${rejectedAt}"]`).click();
+    await page.getByTestId('qwin-plan-reject').click();
+    await expect.poll(() => phase(page)).toBe('revising');
+    await expect.poll(() => userTexts(page).then(t => t.at(-1))).toContain('Non approvo questo piano. Non avviare i passi proposti.');
     await expect(page.getByTestId('qwin-plan')).toHaveCount(0);
 
     // a new proposal opens again; light theme

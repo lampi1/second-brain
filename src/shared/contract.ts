@@ -1242,7 +1242,7 @@ export interface InputLagReport { keys: number; p50: number; p95: number; max: n
 
 export interface InvokeMap {
   'work:lessons': [void, LearnedRuleProposal[]];
-  'work:lessonDecide': [{ id: string; rule: string; approve: boolean }, void];
+  'work:lessonDecide': [{ id: string; rule: string; approve: boolean; feedback?: string }, void];
   'work:list': [void, WorkThread[]];
   'work:decide': [WorkDecision, WorkThread];
   'connectors:list': [void, ConnectorState[]];

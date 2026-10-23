@@ -29,7 +29,7 @@ export interface WorkReport {
   implementation?: { chatId: string; runId: string; taskVersion: number };
   summary: string; waitingOn?: string; nextAction?: string; evidence?: string; chatIds?: string[];
 }
-export interface WorkDecision { id: string; expectedVersion: number; proposalId: string; approve: boolean }
+export interface WorkDecision { id: string; expectedVersion: number; proposalId: string; approve: boolean; feedback?: string }
 export const WORK_LABELS: Record<WorkStage, string> = { analysis: 'Analisi', mockup: 'Mockup', plan: 'Piano', develop: 'Sviluppo', review: 'Review', test: 'Test', pr: 'PR', qa: 'QA', deploy: 'Deploy' };
 export const WORK_PRIORITY: Record<WorkPriority, number> = { production: 0, support: 1, normal: 2 };
 export function orderWork(a: WorkThread, b: WorkThread): number {

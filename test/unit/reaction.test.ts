@@ -2,7 +2,7 @@
 // carries (main/agents/orchestrator-role.ts roleFrame) with the diagrams/charts line, and the Orchestrator frame saying each thing once.
 import { describe, expect, it } from 'vitest';
 import { REACTION_RULE, isReaction } from '../../src/shared/reaction';
-import { ORCHESTRATOR_ROLE, RETIRED_LINES, VISUALS_RULE, WAKE_RULE, orchestratorRole, roleFrame } from '../../src/main/agents/orchestrator-role';
+import { ORCHESTRATOR_ROLE, RETIRED_LINES, VISUALS_RULE, WAKE_RULE, DECISION_FLOW_RULE, orchestratorRole, roleFrame } from '../../src/main/agents/orchestrator-role';
 import { PRE_ADR0100_INSTRUCTIONS } from '../../src/main/agents/role-migrate';
 import { ROLE_DEFAULTS } from '../../src/shared/roles';
 import { wakeMessage } from '../../src/main/chats/orchestrator-wake';
@@ -20,6 +20,15 @@ describe('the rule in every frame', () => {
   it('is in a work role frame and in the Orchestrator frame', () => {
     expect(roleFrame('Scout', 'cerca')).toContain(REACTION_RULE);
     expect(ORCHESTRATOR_ROLE).toContain(REACTION_RULE);
+  });
+  it('makes the whole workflow decision-driven and keeps detailed reports behind file links', () => {
+    for (const f of [roleFrame('Scout', 'cerca'), ORCHESTRATOR_ROLE]) expect(f).toContain(DECISION_FLOW_RULE);
+    expect(DECISION_FLOW_RULE).toContain('free-text answer');
+    expect(DECISION_FLOW_RULE).toContain('file viewer');
+    expect(DECISION_FLOW_RULE).toContain('never implicit approval');
+    expect(ORCHESTRATOR_ROLE).not.toContain('give one short line per job');
+    expect(ORCHESTRATOR_ROLE).not.toContain('Regia card');
+    expect(ORCHESTRATOR_ROLE).toContain('call app_unblock');
   });
   it('every frame says, once and briefly, that a diagram or a chart block is drawn (owner, 2026-10-22)', () => {
     for (const f of [roleFrame('Scout', 'cerca'), ORCHESTRATOR_ROLE]) expect(f.split(VISUALS_RULE)).toHaveLength(2);

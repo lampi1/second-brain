@@ -1,24 +1,50 @@
-// Live workflow projection: token-free reads; explicit user decisions use the typed main bridge.
-import { createStore } from './createStore';
+// Live, token-free workflow and lesson projections used by the modal queue and its navigation count.
+// Decisions preserve the exact visible proposal/version; a refused stale answer remains available for retry.
+import type { LearnedRuleProposal } from '@shared/agent-pack';
 import type { WorkThread } from '@shared/workflows';
+import { sb } from '../sb';
+import { createStore } from './createStore';
+import { durableAsks } from '../lib/work-ask';
 import { toast } from './ui';
-const state = createStore<{ rows: WorkThread[]; error: string | null }>({ rows: [], error: null });
-let started = false;
+export const workflowState = createStore<{ rows: WorkThread[]; lessons: LearnedRuleProposal[]; error: string | null; lessonError: string | null }>({ rows: [], lessons: [], error: null, lessonError: null });
+let started = false, workRead = 0, lessonRead = 0;
 export async function reloadWorkflows(): Promise<void> {
-  try { const rows = await window.sb.invoke('work:list', undefined); state.set({ rows, error: null }); }
-  catch (e) { state.set(s => ({ ...s, error: String(e) })); }
+  const read = ++workRead;
+  try { const rows = await sb.invoke('work:list', undefined); if (read === workRead) workflowState.set(s => ({ ...s, rows, error: null })); }
+  catch (e) { if (read === workRead) { if (!workflowState.get().error) toast('Proposte di lavoro non disponibili. Riprova con Fai il punto.', 'err'); workflowState.set(s => ({ ...s, error: String(e) })); } }
+}
+export async function reloadLessons(): Promise<void> {
+  const read = ++lessonRead;
+  try { const lessons = await sb.invoke('work:lessons', undefined); if (read === lessonRead) workflowState.set(s => ({ ...s, lessons, lessonError: null })); }
+  catch (e) { if (read === lessonRead) { if (!workflowState.get().lessonError) toast('Proposte di miglioramento non disponibili. Riprova con Fai il punto.', 'err'); workflowState.set(s => ({ ...s, lessonError: String(e) })); } }
 }
 export function useWorkflows() {
   if (!started && typeof window !== 'undefined' && window.sb) {
     started = true;
-    let received = false;
-    window.sb.on('work:changed', rows => { received = true; state.set({ rows, error: null }); });
-    void window.sb.invoke('work:list', undefined).then(rows => { if (!received) state.set({ rows, error: null }); }, e => state.set({ rows: [], error: String(e) }));
+    sb.on('work:changed', rows => { ++workRead; workflowState.set(s => ({ ...s, rows, error: null })); });
+    void reloadWorkflows(); void reloadLessons();
+    setInterval(() => void reloadLessons(), 30_000);
   }
-  return state.use(s => s);
+  return workflowState.use(s => s);
 }
-export async function decideWork(row: WorkThread, approve: boolean): Promise<void> {
-  if (!row.proposal) return;
-  try { await window.sb.invoke('work:decide', { id: row.id, expectedVersion: row.version, proposalId: row.proposal.id, approve }); }
-  catch (e) { toast(`Decisione non registrata: ${String(e)}`, 'err'); }
+export const durableAskKeys = (): string[] => {
+  const { rows, lessons } = workflowState.get();
+  return durableAsks(rows, lessons).map(p => `${p.chatId}/${p.id}`);
+};
+export async function decideWork(row: WorkThread, approve: boolean, feedback?: string): Promise<boolean> {
+  if (!row.proposal) return false;
+  try {
+    const next = await sb.invoke('work:decide', { id: row.id, expectedVersion: row.version, proposalId: row.proposal.id, approve, ...(feedback ? { feedback } : {}) });
+    ++workRead;
+    workflowState.set(s => ({ ...s, rows: s.rows.map(r => r.id === next.id && r.version <= next.version ? next : r) }));
+    return true;
+  } catch (e) { toast(`Decisione non registrata: ${String(e)}`, 'err'); void reloadWorkflows(); return false; }
+}
+export async function decideLesson(proposal: LearnedRuleProposal, approve: boolean, feedback?: string): Promise<boolean> {
+  try {
+    await sb.invoke('work:lessonDecide', { id: proposal.id, rule: proposal.rule, approve, ...(feedback ? { feedback } : {}) });
+    ++lessonRead;
+    workflowState.set(s => ({ ...s, lessons: s.lessons.filter(p => p.id !== proposal.id || p.rule !== proposal.rule) }));
+    return true;
+  } catch (e) { toast(`Modifica non applicata: ${String(e)}`, 'err'); void reloadLessons(); return false; }
 }

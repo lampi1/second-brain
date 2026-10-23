@@ -1,4 +1,4 @@
-// Lessons from every agent wait for explicit user approval in Regia. Only approved lessons reach the corrections job.
+// Lessons from every agent wait for explicit user approval in the shared questions modal. Only approved lessons reach the corrections job.
 // Old pending lessons migrate to the waiting queue; agent tools cannot approve. User role edits still snapshot skills.
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -10,6 +10,7 @@ import { checkPermissionText } from '../tool-policy';
 import type { AgentPackFlows } from './flows';
 import type { McpTool } from '../../mcp/server';
 import { assessLesson, sameLessonEvidence } from './lesson-evidence';
+import { decisionFeedback } from '../../../shared/decision-feedback';
 
 export class AgentPackLearning {
   private readonly file: string;
@@ -59,19 +60,24 @@ export class AgentPackLearning {
     }));
   }
   /** The renderer's explicit user decision on a waiting lesson (agent_lessons_waiting): accepted = applied by the job. */
-  review(id: string, accept: boolean): LearnedRuleProposal {
+  review(id: string, accept: boolean, feedback?: string): LearnedRuleProposal {
+    const correction = decisionFeedback(feedback, accept);
     const p = this.proposals.find(x => x.id === id && x.status === 'pending' && (!!x.fromChat || !this.supported(x)));
     if (!p || typeof accept !== 'boolean') throw new Error('Waiting lesson not found.');
     if (accept) {
       checkPermissionText(p.rule);
       if (!this.supported(p)) throw new Error('Insufficient or changed lesson evidence: submit a new evidence-backed proposal before approval.');
     }
-    const next: LearnedRuleProposal = { ...p, note: accept ? `accettata (da ${p.fromChat})` : 'rifiutata', ...(accept ? {} : { status: 'discarded' as const }) };
+    const next: LearnedRuleProposal = { ...p, note: accept ? `accettata (da ${p.fromChat})` : correction ? `Risposta libera dell’utente: ${correction}` : 'rifiutata', ...(correction ? { feedback: correction } : {}), ...(accept ? {} : { status: 'discarded' as const }) };
     if (accept) { delete next.fromChat; next.userApproved = true; }
     this.proposals = this.proposals.map(x => x === p ? next : x);
     this.persist();
     if (accept) try { this.onProposed?.(); } catch { /* the next maintenance pass applies it */ }
     return structuredClone(this.proposals.find(x => x.id === id)!);
+  }
+  /** Durable user corrections remain readable after a failed wake or restart; these are history, not approvals. */
+  feedbackHistory(): LearnedRuleProposal[] {
+    return structuredClone(this.proposals.filter(p => p.status === 'discarded' && typeof p.feedback === 'string' && p.feedback.trim()));
   }
   /** The job's outcome for one lesson: applied (where, in `note`) or discarded (why). */
   settle(id: string, status: 'approved' | 'discarded', note: string): void {
@@ -93,7 +99,7 @@ export class AgentPackLearning {
  *  lesson waits like a work chat's (fromChat) and may not be a rule for every role. */
 export function agentLearnTool(service: AgentPackLearning, queueAs?: string): McpTool {
   return { name: 'agent_learn_propose', description: queueAs ? 'Record one lesson from the user\'s corrections, with explicit evidence (run:<id> for completed runs with independently verified outcomes). It waits for the Orchestrator and the user before it is applied: target "role" (default) for the role\'s text, "skill" for the named skill. Never for permissions, settings or hooks.'
-    : 'Record one lesson from the user\'s corrections, with explicit evidence (run:<id> for completed runs with independently verified outcomes). The app queues it for explicit user approval in Regia before applying it: target "role" (default) adds it to the role\'s text, "skill" to the named skill (how a job is done), "rule" to the brain\'s rules (applies to every role). Never for permissions, settings, limits or hooks: those change only in Brain → Agenti. Lessons proposed by work chats wait in agent_lessons_waiting.',
+    : 'Record one lesson from the user\'s corrections, with explicit evidence (run:<id> for completed runs with independently verified outcomes). The app queues it for explicit user approval in the shared questions modal before applying it: target "role" (default) adds it to the role\'s text, "skill" to the named skill (how a job is done), "rule" to the brain\'s rules (applies to every role). Never for permissions, settings, limits or hooks: those change only in Brain → Agenti. Lessons proposed by work chats wait in agent_lessons_waiting.',
     inputSchema: { type: 'object', properties: { agentId: { type: 'string', description: 'the role id (scout, artisan…)' }, rule: { type: 'string' }, evidence: { type: 'string' }, target: { type: 'string', enum: queueAs ? ['role', 'skill'] : ['role', 'skill', 'rule'] }, skill: { type: 'string' } }, required: ['agentId', 'rule', 'evidence'], additionalProperties: false },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: args => {
@@ -128,14 +134,13 @@ export function chatLearnTool(service: AgentPackLearning, runs: () => readonly A
     } };
 }
 
-/** agent_lessons_waiting, the authenticated Orchestrator's only (appctl/tools.ts): the work chats' queued lessons; with
- *  id + accept, its decision after asking the user (accepted = applied by the corrections job, with an undo). */
+/** Read-only proposals and rejected user corrections; renderer IPC alone records user decisions. */
 export function lessonReviewTool(service: AgentPackLearning): McpTool {
-  return { name: 'agent_lessons_waiting', description: 'Read lessons awaiting the user in Regia. Only the user can approve or reject them through the app; no agent may decide.',
+  return { name: 'agent_lessons_waiting', description: 'Read pending lessons and rejected lesson history containing user feedback. Discarded entries are recorded corrections, never approvals or pending questions: resume an unaddressed correction after failed notification or restart, without repeating already addressed work. Only the user decides pending proposals in the questions modal.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     run: args => {
-      if (Object.keys(args).length) throw new Error('Only the user can decide lessons in Regia.');
-      return JSON.stringify(service.waiting());
+      if (Object.keys(args).length) throw new Error('Only the user can decide lessons in the shared questions modal.');
+      return JSON.stringify([...service.waiting(), ...service.feedbackHistory()]);
     } };
 }

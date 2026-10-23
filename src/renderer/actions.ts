@@ -23,6 +23,9 @@ import { isBusy } from './store/state';
 import { app, closeChat, closeTab, continueChat, createChat, createRoutedChat, dispatch, setChat, stop, stopAll } from './store/store';
 import { orchestratorIdOf } from './lib/orchestrator-route';
 import { answerLater, openQueue, showQueue } from './lib/later';
+import { planAskKeys, planAskOf, withPlans, type PlanAsk } from './lib/plan-ask';
+import { durableAsks, withDurableAsks } from './lib/work-ask';
+import { workflowState } from './store/workflows';
 import { engineLabel } from './lib/engines';
 import {
   askConfirm, closeModal, flashTile, highlight, isBrainPage, openModal, openPage, requestFocus, setCenter, setClosing, setFocusMode, setLanePeek, setMap, setMaximized,
@@ -452,13 +455,15 @@ export function focusRequest(req: PendingRequest): void {
 /** Ctrl+J: the oldest request first; pressed again, the next one. */
 export function nextThing(): void {
   const hidden = new Set(ui.get().hidden);
-  const list = app.get().pending.filter(p => !hidden.has(p.chatId));
+  const state = app.get(), work = workflowState.get();
+  const plans = planAskKeys(state).map(planAskOf).filter((p): p is PlanAsk => !!p);
+  const list = withDurableAsks(withPlans(state.pending, plans).filter(p => !hidden.has(p.chatId)), durableAsks(work.rows, work.lessons));
   if (!list.length) { void nextAfterPending(); return; }
   // Reopening a paused queue starts at its oldest request; stale card focus is only a cursor once it is open.
   if (ui.get().later) { openQueue(null); return; }
   const active = (document.activeElement as HTMLElement | null)?.closest?.('[data-request-key]')?.getAttribute('data-request-key');
   const i = list.findIndex(p => reqKey(p) === active);
-  focusRequest(list[(i + 1) % list.length]!);
+  openQueue(reqKey(list[(i + 1) % list.length]!));
 }
 
 /** Ctrl+J with nothing pending (ADR 0102): the first thing of the morning block's priority (a red build on a PR → an

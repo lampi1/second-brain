@@ -3,6 +3,9 @@
 // Used by App.tsx; fit steps keep the final action group reachable at narrow widths. «Manutenzione» sits here for every
 // page (ADR 0132). The end group holds the language
 // switch (LangSwitch.tsx, ADR 0120), so it is always reachable.
+import { useWorkflows, reloadWorkflows, reloadLessons } from '../store/workflows';
+import { durableAsks } from '../lib/work-ask';
+import { planAskKeys } from '../lib/plan-ask';
 import { t as auditText } from '../i18n';
 import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import{t}from'../i18n';
@@ -172,7 +175,8 @@ function useFit(head: RefObject<HTMLElement | null>, main: RefObject<HTMLElement
 }
 
 export function TopBar() {
-  const waiting = useApp(s => s.pending.length);
+  const { rows, lessons, error, lessonError } = useWorkflows();
+  const waiting = useApp(s => s.pending.length + planAskKeys(s).length) + durableAsks(rows, lessons).length;
   const later = ui.use(s => s.later);
   const inQueue = later && waiting > 0; // "Da rispondere" (not the CPU queue below)
   // "Rispondi dopo" on with nothing waiting: say it, a click turns the popups back on (lib/later.ts)
@@ -204,6 +208,7 @@ export function TopBar() {
           <span className="queue-label">{auditText('audit.TopBar.queued')}</span><span className="count-badge">{queued}</span>
         </button>
       )}
+      {(error || lessonError) && <button type="button" className="btn btn-amber btn-s" role="status" onClick={() => { void reloadWorkflows(); void reloadLessons(); }} data-testid="work-queue-retry">Proposte non disponibili · Riprova</button>}
       <CliStatusButton />
       <SyncStatus />
       <button type="button" className={`btn btn-m ${waiting ? 'btn-amber' : 'btn-ghost'} next-btn`} onClick={() => (paused ? openQueue(null) : nextThing())} data-testid="topbar-next" data-queue={inQueue ? '' : undefined} data-paused={paused ? '' : undefined}
