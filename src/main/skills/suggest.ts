@@ -5,7 +5,7 @@
 import { createHash } from 'node:crypto';
 import type { AgentRun } from '../../shared/agents';
 import { reworkStartsOf, verifiedVerdict } from '../../shared/run-verdict';
-import { SKILL_SUGGESTIONS_MAX, type SkillCandidate, type SkillSuggestions } from '../../shared/skill-suggest';
+import { SKILL_SUGGESTIONS_MAX, SUGGEST_REQUEST_MAX, type SkillCandidate, type SkillSuggestions } from '../../shared/skill-suggest';
 import { cosine, type HybridSearch } from '../search/hybrid/service';
 import { conceptOf } from '../../shared/work-concepts';
 
@@ -50,7 +50,7 @@ const words = (s: string): string[] => (s.toLowerCase().normalize('NFD').replace
 /** Same stem, or one stem (at least 4 letters) begins the other: "scriv" ~ "scriver", "lent" ~ "lentezz". */
 const same = (q: string, t: string): boolean => q === t || (q[0] !== '#' && t[0] !== '#' && Math.min(q.length, t.length) >= 4 && (t.startsWith(q) || q.startsWith(t)));
 export function suggestRequest(value: unknown): string {
-  if (typeof value !== 'string' || !value.trim() || value.length > 2000) throw Error('skills_suggest: request must contain 1–2000 characters.');
+  if (typeof value !== 'string' || !value.trim() || value.length > SUGGEST_REQUEST_MAX) throw Error(`skills_suggest: request must contain 1–${SUGGEST_REQUEST_MAX} characters.`);
   return value.trim();
 }
 

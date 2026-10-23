@@ -46,6 +46,8 @@ export interface McpTool {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  /** the schema a given caller sees (route params, e.g. its chatId); absent = inputSchema for everyone */
+  inputSchemaFor?: (params: Record<string, string>) => Record<string, unknown>;
   annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean; title?: string };
   run(args: Record<string, unknown>, ctx: CallCtx): ToolOutput | Promise<ToolOutput>;
 }
@@ -239,7 +241,7 @@ export class McpServer {
         }
         case 'ping': return ok(id, {});
         case 'tools/list':
-          return ok(id, { tools: (await this.toolsOf(mount, ctx)).map(({ name, description, inputSchema, annotations }) => ({ name, description, inputSchema, ...(annotations ? { annotations } : {}) })) });
+          return ok(id, { tools: (await this.toolsOf(mount, ctx)).map(({ name, description, inputSchema, inputSchemaFor, annotations }) => ({ name, description, inputSchema: inputSchemaFor?.(ctx.params) ?? inputSchema, ...(annotations ? { annotations } : {}) })) });
         case 'tools/call': {
           const name = typeof p.name === 'string' ? p.name : '';
           const tool = (await this.toolsOf(mount, ctx)).find(t => t.name === name);

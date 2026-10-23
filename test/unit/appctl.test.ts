@@ -6,7 +6,7 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { AgentCatalogService } from '../../src/main/agents/catalog';
 import type { AgentModelChoice } from '../../src/shared/agents';
-import { AGENT_LABEL, PULL_ASK_MIN, RESOLVED_LABEL, appControlTools, orchestratorEndpointAuth } from '../../src/main/appctl/tools';
+import { AGENT_LABEL, CHAT_PROMPT_MAX, CHAT_TITLE_MAX, PULL_ASK_MIN, RESOLVED_LABEL, appControlTools, orchestratorEndpointAuth } from '../../src/main/appctl/tools';
 import { EndpointTokens } from '../../src/main/mcp/tokens';
 import { log } from '../../src/main/log';
 import type { BrainService, BrowserService, ChatService } from '../../src/main/services';
@@ -207,6 +207,22 @@ describe('app control tools', () => {
     expect(made[0]).toMatchObject({ routeHint: { kind: 'review' } });
     await t.run({ title: 'Ordini · Controllo 2', prompt: 'guarda il ramo', roleId: 'sentinel' });
     expect(asked[1]).not.toHaveProperty('routeHint');
+  });
+
+  it('app_create_chat shows the prompt and title limits in its schema and names the length it refuses (#172)', async () => {
+    const chats = { list: () => [{ id: 'r', harness: 'claude', model: 'claude-opus-5-5', isOrchestrator: true, title: 'Orchestrator' }], create: async (req: Record<string, unknown>) => ({ id: 'n1', title: req.title }) } as unknown as ChatService;
+    const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true }, engines: { claude: true }, orchestratorChats: { harness: 'claude' } }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
+    const catalog = roleCatalog();
+    const all = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', agents: () => catalog.list(), resolveRole: req => catalog.resolve(req) }, 'r');
+    const t = all.find(x => x.name === 'app_create_chat')!;
+    const props = (t.inputSchema as { properties: Record<string, { maxLength?: number }> }).properties;
+    expect(props.prompt!.maxLength).toBe(CHAT_PROMPT_MAX);
+    expect(props.title!.maxLength).toBe(CHAT_TITLE_MAX);
+    expect((all.find(x => x.name === 'app_assign_task')!.inputSchema as { properties: Record<string, { maxLength?: number }> }).properties.prompt!.maxLength).toBe(CHAT_PROMPT_MAX);
+    const long = 'x'.repeat(CHAT_PROMPT_MAX + 1);
+    await expect(Promise.resolve(t.run({ title: 'X', prompt: long, roleId: 'scout' }))).rejects.toThrow(new RegExp(`${CHAT_PROMPT_MAX}.*${CHAT_PROMPT_MAX + 1}`));
+    await expect(Promise.resolve(t.run({ title: ' ', prompt: 'y', roleId: 'scout' }))).rejects.toThrow(/^title: required$/);
+    expect(await t.run({ title: 'X', prompt: 'x'.repeat(CHAT_PROMPT_MAX), roleId: 'scout' })).toMatchObject({ chatId: 'n1' });
   });
 
   it('app_create_chat warns when a passed skill needs tools the role lacks (#93); with full permissions it does not', async () => {

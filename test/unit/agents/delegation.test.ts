@@ -8,7 +8,7 @@
 // Orchestrator opened reports to it with agent_report (issue #93), quietly when the result is clean; a child's result
 // waits for its siblings' so the parent reads them in one turn. Pins agents/delegation.ts, agents/role-gate.ts and
 // the delegation part of chats/manager.ts.
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -23,6 +23,9 @@ import { AGENT_LABEL, oneLine } from '../../../src/shared/agent-label';
 import type { AgentCatalog } from '../../../src/shared/agents';
 import type { NewChat } from '../../../src/shared/contract';
 import type { McpTool } from '../../../src/main/mcp/server';
+import { log } from '../../../src/main/log';
+import { ChatMail } from '../../../src/main/chats/mail';
+import { SUGGEST_REQUEST_MAX, suggestInput } from '../../../src/shared/skill-suggest';
 import { ADR0083_DEFAULTS } from '../../../src/main/agents/role-migrate';
 import type { PermissionCeiling, ToolClass } from '../../../src/shared/agents';
 
@@ -72,7 +75,7 @@ function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: str
   const call = async (name: string, chatId: string, args: Record<string, unknown>) => JSON.parse(await tool(name).run(args, { mount: 'chat', params: { chatId }, sessionId: '', signal: new AbortController().signal } as never) as string);
   const root = (role: RoleId, cwd = dir) => m.create({ harness: 'claude', cwd, roleId: role, title: `${ROLE_DEFAULTS[role].name} root`, prompt: 'PARENT SECRET HISTORY' }, 'user');
   const task = (role: string, title: string, extra: Record<string, unknown> = {}) => ({ role, title, contract: { goal: `Goal of ${title}`, doneWhen: ['criterion A'], ...extra } });
-  return { m, dir, starts, sinks, sent, answers, call, root, task };
+  return { m, dir, starts, sinks, sent, answers, call, root, task, tool };
 }
 
 describe('agent_delegate', () => {
@@ -186,7 +189,11 @@ describe('agent_delegate', () => {
     const sub = path.join(f.dir, 'repo'); fs.mkdirSync(sub);
     const parent = await f.root('strategist');
     await expect(f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Cerca', { tools: ['shell-read'] })] })).rejects.toThrow(/shell-read goes beyond your own permissions/);
-    await expect(f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Fuori'), cwd: os.tmpdir() }] })).rejects.toThrow(/inside yours/);
+    await expect(f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Fuori'), cwd: os.tmpdir() }] })).rejects.toThrow(/outside your folder.*report it with agent_report.*app_create_chat with cwd/);
+    // the schema says it before any refusal (#186)
+    const cwdHelp = JSON.stringify(f.tool('agent_delegate').inputSchema);
+    expect(cwdHelp).toMatch(/worktrees/);
+    expect(cwdHelp).toMatch(/Never another repository.*app_create_chat with cwd/);
     await expect(f.m.create({ harness: 'claude', cwd: os.tmpdir(), roleId: 'scout', parentId: parent.id }, 'agent')).rejects.toThrow(/dentro quella del genitore/);
     // a planner narrowed to ADR 0083's launches never launches a writing role: the work goes in its report
     await expect(f.call('agent_delegate', parent.id, { tasks: [f.task('artisan', 'Fix')] })).rejects.toThrow(/may not launch Artisan.*the Orchestrator starts it/);
@@ -1012,16 +1019,54 @@ describe('explicit independent review reports', () => {
     expect(() => checkResult({ ...report, verdict: 'unknown' }, [])).toThrow(/verdict/);
     expect(() => checkResult({ ...report, verified: ['yes'] }, [])).toThrow(/verification/);
   });
-  it('refuses self-assessment fields from ordinary roots, including user-started Sentinel', async () => {
+  it('ordinary roots, including a user-started Sentinel, never see the review fields; sent anyway they are dropped, not refused (#183)', async () => {
     const f = fixture();
     const c = await f.root('sentinel');
-    await expect(f.call('agent_report', c.id, report)).rejects.toThrow(/app-owned independent reviewer/);
+    const props = (params: Record<string, string>) => Object.keys((f.tool('agent_report').inputSchemaFor!(params).properties ?? {}) as object);
+    expect(props({ chatId: c.id })).not.toContain('verdict');
+    expect(props({ chatId: c.id })).not.toContain('verified');
+    expect(props({ chatId: 'c_warm' })).toContain('verdict');
+    await expect(f.call('agent_report', c.id, report)).resolves.toMatchObject({ reported: true });
+    const run = f.m.runs.list().find(r => r.chatId === c.id)!;
+    expect(run.report).not.toHaveProperty('verdict');
   });
   it('requires explicit review fields for an app-created sampled Sentinel', async () => {
     const f = fixture();
     const original = await f.root('scout');
     const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'sentinel', reviewOf: original.run!.runId, doneWhen: [], prompt: 'Review evidence' }, 'app');
+    expect(Object.keys(f.tool('agent_report').inputSchemaFor!({ chatId: c.id }).properties as object)).toEqual(expect.arrayContaining(['verdict', 'verified']));
     await expect(f.call('agent_report', c.id, { ...report, verdict: undefined, verified: undefined })).rejects.toThrow(/explicit verdict/);
     await expect(f.call('agent_report', c.id, report)).resolves.toMatchObject({ reported: true });
+  });
+});
+
+describe('skill suggestion snapshot for long goals (#185)', () => {
+  it('a run whose goal is longer than the skills_suggest limit still gets its snapshot, from the first 2000 characters; an empty goal asks nothing', async () => {
+    const asked: string[] = [];
+    const warn = vi.spyOn(log, 'warn');
+    const f = fixture({}, undefined, undefined, undefined, {}, [], { suggestSkills: async goal => { asked.push(goal); return ['debug']; } });
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', title: 'Lungo', prompt: `Analizza ${'x'.repeat(5000)}` }, 'user');
+    expect(asked[0]).toHaveLength(SUGGEST_REQUEST_MAX);
+    expect(f.m.list().find(x => x.id === c.id)!.run!.skillSuggestions?.suggested).toEqual(['debug']);
+    expect(warn.mock.calls.some(([, msg]) => msg === 'skill suggestion snapshot unavailable')).toBe(false);
+    expect(suggestInput('   ')).toBeNull();
+    expect(suggestInput(undefined)).toBeNull();
+    warn.mockRestore();
+  });
+});
+
+describe('two open chats with the same title (#187)', () => {
+  it('the second one gets a suffix, also on rename; each keeps its own mail box', async () => {
+    const f = fixture();
+    const a = await f.m.create({ harness: 'claude', cwd: f.dir, title: 'Ordini · Revisione', prompt: 'p' }, 'user');
+    const b = await f.m.create({ harness: 'claude', cwd: f.dir, title: 'Ordini · Revisione', prompt: 'p' }, 'user');
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, title: 'ordini revisione', prompt: 'p' }, 'user');
+    expect([a.title, b.title, c.title]).toEqual(['Ordini · Revisione', 'Ordini · Revisione · 2', 'ordini revisione · 3']);
+    await f.m.set(c.id, { title: 'Ordini · Revisione' });
+    expect(f.m.list().find(x => x.id === c.id)!.title).toBe('Ordini · Revisione · 3');
+    await f.m.set(a.id, { title: 'Ordini · Revisione' });
+    expect(f.m.list().find(x => x.id === a.id)!.title).toBe('Ordini · Revisione');
+    const live = new ChatMail({ root: () => null, chats: { list: () => f.m.list().map(x => ({ ...x, state: 'idle' as const })), send: async () => {} }, instance: 'test' }).liveChats();
+    expect([...live.values()].map(x => x.id).sort()).toEqual([a.id, b.id, c.id].sort());
   });
 });

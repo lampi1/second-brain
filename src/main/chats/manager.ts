@@ -56,6 +56,7 @@ import { withinParent } from '../agents/worktrees';
 import { FAIL_CLOSED, aboveCeiling, allowsClass, belowParent, browserAccess, claudeDefaultMode, claudeTools, COMMAND_TOOLS, commandsReadOnly, narrowest, readOnlyCommand, toolClassOf, within, type AgentPolicy, type BrowserAccess, type ReadScripts } from '../agents/tool-policy';
 import { readOnlyTools } from '../agents/read-tools';
 import { type UserTaskEvents, type TaskDeliveryPolicy, type AgentOwnerSnapshot, type AgentRun, type AgentRunEnd, type AgentRunOutcome, type AgentRunTags } from '../../shared/agents';
+import { suggestInput } from '../../shared/skill-suggest';
 import { AgentRunStore, addSkill, addTurn, APP_MAX, endRun, REPO_MAX, SKILL_ID, SKILLS_MAX, staleDue, tagName, type RunLinks } from '../agents/runs';
 import { reportOf } from '../agents/run-report';
 import { gateRequest, runtimePluginName, SubagentGate } from '../agents/role-gate';
@@ -705,7 +706,10 @@ export class ChatManager implements ChatService {
     // `replaces`: the new Orchestrator takes the role, the old one goes on as a normal chat (history kept, never deleted)
     const old = req.orchestrator && req.replaces ? this.chats.get(req.replaces) : undefined;
     if (req.orchestrator && req.replaces && !old?.s.isOrchestrator) throw new Error('L’Orchestrator da sostituire non c’è più.');
-    const title = req.title?.trim() || (req.prompt?.trim() ? cut(req.prompt, 50) : forkOf ? 'Fork' : 'Nuova chat');
+    const typedTitle = req.title?.trim() || (req.prompt?.trim() ? cut(req.prompt, 50) : forkOf ? 'Fork' : 'Nuova chat');
+    // every open chat with a given title keeps its own mail box (mail.ts: box = slug of the title); a placeholder
+    // («Nuova chat», «Fork») is replaced by the session's own title later; the Orchestrator's is handled below
+    const title = req.orchestrator || !req.title?.trim() ? typedTitle : this.uniqueTitle(typedTitle);
     // an agent's chat with a prompt starts with its first message, through the CPU queue (ADR 0036); a warm engine is
     // already running: adopting it is no new start (its first turn still asks the queue)
     const given = req.prompt?.trim() ? req.prompt : null;
@@ -758,8 +762,9 @@ export class ChatManager implements ChatService {
       tags: { ...asked, repo: repoOf(cwd) }, ...(agent.tier ? { tier: agent.tier } : {}), model: req.model ?? null });
     if (r.s.run) { r.s.run.taskContract = { ...(by === 'app' && req.doneWhen !== undefined ? { reportExpected: true } : {}), goal: r.s.run.goal, doneWhen: req.doneWhen ?? req.delegation?.doneWhen ?? [], deliveryPolicy: this.deliveryPolicy(req.deliveryPolicy, !!delegator) }; this.runSave(); }
     if (r.s.run?.startedBy === 'app' && r.s.run.reviewOf && r.s.run.taskContract?.reportExpected && !r.s.work) r.s.work = { status: 'assigned', updatedAt: now };
-    if (r.s.run && this.opts.suggestSkills) {
-      try { r.s.run.skillSuggestions = { at: now, suggested: await this.opts.suggestSkills(r.s.run.goal), used: [] }; this.runSave(); }
+    const suggestFor = suggestInput(r.s.run?.goal);
+    if (r.s.run && suggestFor && this.opts.suggestSkills) {
+      try { r.s.run.skillSuggestions = { at: now, suggested: await this.opts.suggestSkills(suggestFor), used: [] }; this.runSave(); }
       catch (e) { log.warn('chats', 'skill suggestion snapshot unavailable', { cause: errText(e), hint: 'the launch continues without a suggestion snapshot' }); }
     }
     // the Orchestrator opened it while answering the user's own message: the user waits for what it finds (#123)
@@ -1491,7 +1496,8 @@ export class ChatManager implements ChatService {
     if (mode === 'continue') next.continuedFrom = previous.runId;
     r.s.run = next;
     if (mode === 'new-task' && r.s.plan) r.s.plan = { phase: 'asking', clarified: [], steps: [], at };
-    if (this.opts.suggestSkills) void this.opts.suggestSkills(prompt).then(suggested => {
+    const suggestFor = suggestInput(prompt);
+    if (suggestFor && this.opts.suggestSkills) void this.opts.suggestSkills(suggestFor).then(suggested => {
       next.skillSuggestions = { at, suggested, used: [...(next.tags?.skills ?? [])] }; this.runSave(); this.persist();
     }).catch(e => log.warn('chats', 'skill suggestion snapshot unavailable', { cause: errText(e), hint: 'the task continues without a snapshot' }));
     r.s.work = { status: 'assigned', updatedAt: at };
@@ -1613,8 +1619,9 @@ export class ChatManager implements ChatService {
       try { await fn(); } catch (e) { later.push(what); log.warn('chats', 'setting not applied live', { chat: chatId, data: { what, error: errText(e) } }); }
     };
     if (patch.title !== undefined) {
-      const t = patch.title.trim();
-      if (!t) throw new Error('Titolo vuoto.');
+      const typed = patch.title.trim();
+      if (!typed) throw new Error('Titolo vuoto.');
+      const t = r.s.isOrchestrator ? typed : this.uniqueTitle(typed, chatId);
       r.s.title = t;
       await apply('title', sess ? () => sess.rename(t) : undefined);
     }
@@ -3128,6 +3135,16 @@ export class ChatManager implements ChatService {
     const warm = r ? undefined : this.warmViews.get(chatId);
     if (warm?.view) return browserAccess({ tools: warm.toolPolicy ?? null, ceiling: warm.ceiling ?? null });
     return browserAccess(r?.policy);
+  }
+
+  /** `title`, or `title · 2`, `· 3`… when another open chat already has its mail box (the slug of its title): two live
+   *  chats with one box would hold their mail until someone renamed one (#187). */
+  private uniqueTitle(title: string, self?: string): string {
+    const taken = new Set([...this.chats.values()].filter(x => x.s.id !== self && !x.s.closedAt).map(x => slugTitle(x.s.title)));
+    if (!taken.has(slugTitle(title))) return title;
+    let n = 2;
+    while (taken.has(slugTitle(`${title} · ${n}`))) n++;
+    return `${title} · ${n}`;
   }
 
   /** Whether a chat sees one of the tools added to its own endpoint: only those its kind could never use are left out
