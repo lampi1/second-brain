@@ -149,6 +149,20 @@ describe('provider child observations', () => {
     await session.close();
     expect(state.snapshot().children[0]?.state).toBe('failed');
   });
+  it('settles a finished foreground Claude Agent call (no run_in_background) instead of leaving it unknown', async () => {
+    const { sink, state } = recording();
+    const session = new ClaudeSession({ chatId: 'parent', cwd: '.' }, sink);
+    line(session, { type: 'assistant', message: { id: 'm', content: [{ type: 'tool_use', id: 'fg', name: 'Agent', input: { description: 'Look up' } }] } });
+    expect(state.snapshot().children[0]?.state).toBe('running');
+    line(session, { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'fg', content: 'Found it.' }] } });
+    expect(state.snapshot().children[0]?.state).toBe('completed');
+    // taken over by a native task (moved to the background): its task events settle it, not the tool result
+    line(session, { type: 'assistant', message: { id: 'm2', content: [{ type: 'tool_use', id: 'bg', name: 'Agent', input: { description: 'Long one' } }] } });
+    line(session, { type: 'system', subtype: 'task_started', task_id: 'native', tool_use_id: 'bg', task_type: 'local_agent', description: 'Long one' });
+    line(session, { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'bg', content: 'Moved to the background.' }] } });
+    expect(state.snapshot().children.find(row => row.toolCallId === 'bg')?.state).not.toBe('completed');
+    await session.close();
+  });
   it('settles a rejected Claude background Agent tool instead of leaving a running ghost', async () => {
     const { sink, state } = recording();
     const session = new ClaudeSession({ chatId: 'parent', cwd: '.' }, sink);

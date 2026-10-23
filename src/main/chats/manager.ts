@@ -1181,19 +1181,32 @@ export class ChatManager implements ChatService {
 
   private ownAutoCloseCandidates(externalHold: (chatId: string) => boolean | AutoCloseWaiting): AutoCloseCandidate[] {
     return [...this.chats.values()].filter(r => !r.s.closedAt).map(r => {
-      const c = r.s, child = c.agentChildren;
+      const c = r.s;
       let held: boolean | AutoCloseWaiting = true;
       try { held = externalHold(c.id); } catch { /* fail closed */ }
-      const eligible = !this.quitting && !updateActivity.frozen && !c.isOrchestrator && !c.quick && !held &&
-        (c.state === 'idle' || r.autoClosing && c.state === 'closed') && !!c.lastResult && !c.lastResult.isError && !c.lastResult.interrupted && !c.lastError &&
+      // finished: idle after a clean result, or its engine gone (ended by itself, or restored at start-up: the result is
+      // not saved, a chat that had turns counts as done). Errors and the user's Stop stay open.
+      const ended = c.state === 'closed' && (!r.session || r.autoClosing);
+      const finished = (c.state === 'idle' || ended) && !c.lastError &&
+        (c.lastResult ? !c.lastResult.isError && !c.lastResult.interrupted : ended && !r.session && r.lastTurnAt > 0);
+      const eligible = !this.quitting && !updateActivity.frozen && !c.isOrchestrator && !c.quick && !held && finished &&
         !r.working && !r.session?.busy && r.pending.size === 0 && !workBehind(c) && !c.waitsOn && c.plan?.phase !== 'proposed' && !c.queued && !r.deliveryHolds &&
-        !r.opening && !r.releasing && !r.switching && !r.handoffTurn && (!r.archiving || r.autoClosing) &&
-        child?.coverage === 'complete' && child.active === 0 && !child.children.some(x => x.state === 'running' || x.state === 'waiting' || x.state === 'unknown');
+        !r.opening && !r.releasing && !r.switching && !r.handoffTurn && (!r.archiving || r.autoClosing) && this.childrenDone(r);
       const waitingFor = eligible || c.isOrchestrator || c.quick ? undefined : this.waitingOf(r, held);
       return { id: c.id, eligible: !!eligible, stamp: `${r.activityRevision ?? 0}:${r.lastTurnAt}:${c.lastResult?.at ?? 0}:${c.pending}:${c.model ?? ''}:${c.work?.status ?? ''}:${c.waitsOn ?? ''}`,
         activityAt: r.autoActivityAt ??= autoCloseNow(), ...(waitingFor ? { waitingFor } : {}),
-        reason: waitingFor ? WAITING_REASON[waitingFor] : child?.coverage !== 'complete' ? 'Sottoagenti non completamente osservabili: chiusura sospesa' : 'Attività o stato da verificare' };
+        reason: waitingFor ? WAITING_REASON[waitingFor] : !this.childrenDone(r) ? 'Sottoagenti ancora al lavoro' : 'Attività o stato da verificare' };
     });
+  }
+  /** No sub-agent left at work. The CLI engines (Claude, Codex, Cursor) never report a complete census, so a live
+   *  session counts what it saw: every sub-agent it observed has ended (its background tasks are held apart, `background`).
+   *  An engine that is gone left none running (its sub-agents ended with it; rows it never saw end read 'unknown'). */
+  private childrenDone(r: Rec): boolean {
+    const child = r.s.agentChildren;
+    if (!r.session) return (child?.active ?? 0) === 0 && !child?.children.some(x => x.state === 'running' || x.state === 'waiting');
+    if (!child) return false;
+    if (child.coverage === 'complete' && child.active !== 0) return false;
+    return !child.children.some(x => x.state === 'running' || x.state === 'waiting' || x.state === 'unknown');
   }
 
   /** What a held work chat waits for, the most urgent first (#86): the user's answers before running work, running

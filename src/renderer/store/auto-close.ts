@@ -37,7 +37,7 @@ export function connectAutoClose(next: AutoCloseBridge): () => void {
 }
 export function reportAutoClosePresence(holds: AutoClosePresence[]): void {
   lastHolds=holds;
-  const presence=healthy?holds:holds.map(hold=>{const {ackDeadline:_,ackGeneration:__,...safe}=hold;return {...safe,shown:true};});
+  const presence=healthy?holds:holds.map(hold=>({...hold,shown:true}));
   void bridge?.presence(presence).catch(() => {});
 }
 export async function keepAgentOpen(chatId: string, keep: boolean): Promise<boolean> {

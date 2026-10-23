@@ -6,16 +6,8 @@ import { touch } from '../lib/autoclose';
 import { now } from '../lib/clock';
 import { app } from '../store/store';
 import { ui } from '../store/ui';
-import { autoCloseRemaining, autoCloseState, autoCloseProblem, reportAutoClosePresence } from '../store/auto-close';
+import { autoCloseProblem, reportAutoClosePresence } from '../store/auto-close';
 import { AutoCloseWarnings } from './AutoCloseNotice';
-import { noticeVisible } from '../lib/notice-visible';
-
-function warningVisible(id: string): boolean {
-  if (document.hidden) return false;
-  return [...document.querySelectorAll<HTMLElement>(`[data-autoclose-id="${CSS.escape(id)}"]`)].some(el => {
-    return noticeVisible(el);
-  });
-}
 
 let lastPresence = '', lastSentAt = 0;
 let interactionSequence = 0;
@@ -23,16 +15,13 @@ const interactions = new Map<string, number>();
 function report(): void {
   const s = app.get(), u = ui.get();
   if (!s.ready) return;
-  const status = new Map(autoCloseState.get().map(row => [row.chatId, row]));
   const holds = Object.values(s.chats).filter(c => !c.closedAt).map(c => {
-    const tabs = s.tabs.filter(t => t.ownerChatId === c.id), row = status.get(c.id);
-    const acknowledged = !u.modal && !u.map && row?.deadline != null && autoCloseRemaining(row) <= 120_000 && warningVisible(c.id);
+    const tabs = s.tabs.filter(t => t.ownerChatId === c.id);
     return {
       chatId: c.id, queued: s.queued[c.id]?.length ?? 0, draft: hasDraft(c.id),
       shown: u.maximized === `chat:${c.id}` || u.focusMode === c.id || u.focused === `chat:${c.id}` || u.hidden.includes(c.id),
       browser: tabs.some(t => !!t.handoffId || u.maximized === `browser:${t.id}` || u.focused === `browser:${t.id}`),
       touchedAt: interactions.get(c.id) ?? 0,
-      ...(acknowledged ? { ackDeadline: row!.deadline!, ackGeneration: row!.generation } : {}),
     };
   });
   const key = JSON.stringify(holds), at = now();
@@ -54,9 +43,8 @@ export function AutoCloser() {
     const options = { capture: true, passive: true } as const;
     for (const event of events) document.addEventListener(event, onTouch, options);
     const offApp = app.subscribe(report), offUi = ui.subscribe(report);
-    const offStatus = autoCloseState.subscribe(() => { requestAnimationFrame(report); });
     const timer = setInterval(report, 5_000); report();
-    return () => { for (const event of events) document.removeEventListener(event, onTouch, options); offApp(); offUi(); offStatus(); clearInterval(timer); };
+    return () => { for (const event of events) document.removeEventListener(event, onTouch, options); offApp(); offUi(); clearInterval(timer); };
   }, []);
   return problem ? <p role="status" className="auto-close-service-problem">{problem}</p> : <AutoCloseWarnings />;
 }

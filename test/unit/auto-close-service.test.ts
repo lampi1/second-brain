@@ -3,60 +3,62 @@ import { describe, expect, it } from 'vitest';
 import { AUTO_CLOSE_WARNING_MS as WARNING, AutoCloseService, type AutoCloseCandidate, type AutoCloseDeps } from '../../src/main/chats/auto-close';
 import type { AutoClosePresence } from '../../src/shared/auto-close';
 
-function fixture() {
+function fixture(opts: { away?: boolean } = {}) {
   let now = 1_000_000;
   let candidate: AutoCloseCandidate = { id: 'agent', stamp: 'turn-1', activityAt: now - 900_000, eligible: true };
   const archived: string[] = [];
-  const deps: AutoCloseDeps = { now: () => now, delayMs: () => 120_000, candidates: () => [candidate], emit: () => {}, archive: async (id, _expected, valid) => { if (!valid()) return false; archived.push(id); return true; } };
+  const deps: AutoCloseDeps = { now: () => now, delayMs: () => 120_000, candidates: () => [candidate], emit: () => {}, away: () => !!opts.away, archive: async (id, _expected, valid) => { if (!valid()) return false; archived.push(id); return true; } };
   const service = new AutoCloseService(deps);
   const presence = (patch: Partial<AutoClosePresence> = {}) => {
-    const row = service.state()[0];
-    service.setPresence([{ chatId: 'agent', draft: false, shown: false, browser: false, queued: 0, touchedAt: 0,
-      ...(row?.warningStartedAt != null ? { ackDeadline: row.deadline!, ackGeneration: row.generation } : {}), ...patch }]);
+    service.setPresence([{ chatId: 'agent', draft: false, shown: false, browser: false, queued: 0, touchedAt: 0, ...patch }]);
   };
   const advance = (ms: number) => { now += ms; };
   const heartbeatUntil = async (at: number) => { while (now < at) { advance(Math.min(5_000, at - now)); presence(); await service.tick(); } };
-  const acknowledge = () => { const s = service.state()[0]!; presence({ ackDeadline: s.deadline!, ackGeneration: s.generation }); };
-  return { service, deps, archived, presence, advance, acknowledge, heartbeatUntil, now: () => now, change: (p: Partial<AutoCloseCandidate>) => { candidate = { ...candidate, ...p }; } };
+  return { service, deps, archived, presence, advance, heartbeatUntil, now: () => now, change: (p: Partial<AutoCloseCandidate>) => { candidate = { ...candidate, ...p }; } };
 }
 
 describe('backend automatic-close warning', () => {
-  it('never closes an old restored result immediately, and requires a full acknowledged two-minute warning', async () => {
+  it('never closes an old restored result immediately, and gives it a full two-minute warning', async () => {
     const f = fixture(); f.presence();
     const first = f.service.state()[0]!;
-    expect(first.deadline).toBe(f.now() + WARNING); f.acknowledge();
+    expect(first.deadline).toBe(f.now() + WARNING); expect(first.warningStartedAt).toBe(f.now());
     await f.heartbeatUntil(first.deadline! - 1); expect(f.archived).toEqual([]);
     await f.heartbeatUntil(first.deadline!); expect(f.archived).toEqual(['agent']);
   });
-  it('does not mistake a scheduled timer for a warning that the renderer actually received', async () => {
+  it('closes when the warning ends even if nobody looked at it (owner, 2026-10-23)', async () => {
     const f = fixture(); f.presence(); const deadline = f.service.state()[0]!.deadline!;
-    await f.heartbeatUntil(deadline + 5_000); expect(f.archived).toEqual([]);
-    expect(f.service.state()[0]!.deadline).toBeGreaterThan(deadline);
+    await f.heartbeatUntil(deadline); expect(f.archived).toEqual(['agent']);
+  });
+  it('closes with the window hidden: a throttled renderer keeps its last holds instead of suspending the close', async () => {
+    const away = fixture({ away: true }); away.presence(); const deadline = away.service.state()[0]!.deadline!;
+    away.advance(deadline - away.now()); await away.service.tick(); expect(away.archived).toEqual(['agent']);
+    const draft = fixture({ away: true }); draft.presence({ draft: true }); draft.advance(WARNING * 3); await draft.service.tick();
+    expect(draft.archived).toEqual([]); expect(draft.service.state()[0]!.deadline).toBe(null);
   });
   it('fails closed when renderer heartbeat is lost or clock moves backwards', async () => {
-    const f = fixture(); f.presence(); f.acknowledge(); f.advance(WARNING + 1); await f.service.tick();
+    const f = fixture(); f.presence(); f.advance(WARNING + 1); await f.service.tick();
     expect(f.archived).toEqual([]); expect(f.service.state()[0]!.deadline).toBe(null);
     f.advance(-WARNING * 2); await f.service.tick(); expect(f.archived).toEqual([]);
   });
   it.each(['draft', 'shown', 'browser'] as const)('cancels deadline for %s and grants a fresh warning afterwards', async hold => {
-    const f = fixture(); f.presence(); f.acknowledge(); f.advance(100_000);
+    const f = fixture(); f.presence(); f.advance(100_000);
     f.presence({ [hold]: true }); expect(f.service.state()[0]!.deadline).toBe(null);
     f.presence(); expect(f.service.state()[0]!.deadline).toBeGreaterThanOrEqual(f.now() + WARNING);
   });
-  it('keep-open invalidates old acknowledgements and stale archive reservations', async () => {
-    const f = fixture(); f.presence(); const old = f.service.state()[0]!; f.acknowledge();
+  it('keep-open invalidates stale archive reservations and a fresh warning follows', async () => {
+    const f = fixture(); f.presence();
     f.service.keepOpen('agent'); expect(f.service.state()[0]!.keptOpen).toBe(true);
     await f.heartbeatUntil(f.now() + WARNING * 2); expect(f.archived).toEqual([]);
-    f.service.keepOpen('agent', false); f.presence({ ackDeadline: old.deadline!, ackGeneration: old.generation });
-    expect(f.service.state()[0]!.warningStartedAt).toBe(null);
+    f.service.keepOpen('agent', false); f.presence();
+    expect(f.service.state()[0]!.deadline).toBeGreaterThanOrEqual(f.now() + WARNING);
   });
   it('cancels on backend work/tool/child/mail/delivery guard changes', async () => {
-    const f = fixture(); f.presence(); f.acknowledge();
+    const f = fixture(); f.presence();
     f.change({ eligible: false, reason: 'Mail delivery in progress', stamp: 'delivery-1' }); await f.service.tick();
     expect(f.service.state()[0]!.deadline).toBe(null); expect(f.archived).toEqual([]);
   });
   it('rechecks touch/draft acquired while archive awaits, without trusting the old renderer fade', async () => {
-    const f = fixture(); f.presence(); f.acknowledge();
+    const f = fixture(); f.presence();
     let resume: (() => void) | undefined;
     f.deps.archive = async (_id, _reservation, valid) => { await new Promise<void>(resolve => { resume = resolve; }); if (valid()) f.archived.push('agent'); return valid(); };
     await f.heartbeatUntil(f.now() + WARNING - 1);
@@ -65,7 +67,7 @@ describe('backend automatic-close warning', () => {
     expect(f.archived).toEqual([]);
   });
   it('rejects backend stamp changes while the manager prepares a handoff', async () => {
-    const f = fixture(); f.presence(); f.acknowledge();
+    const f = fixture(); f.presence();
     f.deps.archive = async (_id, _reservation, valid) => { f.change({ stamp: 'new-mail', eligible: false }); expect(valid()).toBe(false); return false; };
     await f.heartbeatUntil(f.now() + WARNING); expect(f.archived).toEqual([]);
   });
@@ -81,12 +83,6 @@ describe('backend automatic-close warning', () => {
     f.presence(); const first = events;
     f.presence(); f.presence(); expect(events).toBe(first);
     f.presence({ queued: 1 }); expect(f.service.state()[0]!.deadline).toBe(null);
-  });
-  it('starts the warning again if it disappears behind a modal or scroll clipping', () => {
-    const f = fixture(); f.presence(); f.acknowledge(); f.advance(90_000);
-    f.presence({ ackDeadline: undefined, ackGeneration: undefined });
-    expect(f.service.state()[0]!.warningStartedAt).toBe(null);
-    expect(f.service.state()[0]!.deadline).toBe(f.now() + WARNING);
   });
   it('renews on a new positive interaction marker after renderer restart or backward wall-clock change', () => {
     const f = fixture(); f.presence({ touchedAt: 9e12 }); const previous = f.service.state()[0]!.deadline!;
@@ -116,8 +112,7 @@ describe('backend automatic-close warning', () => {
       archive: async (id, _e, valid) => { if (!valid()) return false; archived.push(id); open.delete(id); return true; } });
     let childDraft = true; // the user writes in the child: it is held, the parent is due alone
     const beat = () => service.setPresence([...open].map(id => {
-      const row = service.state().find(r => r.chatId === id);
-      return { chatId: id, draft: id === 'child' && childDraft, shown: false, browser: false, queued: 0, touchedAt: 0, ...(row?.deadline != null ? { ackDeadline: row.deadline, ackGeneration: row.generation } : {}) };
+      return { chatId: id, draft: id === 'child' && childDraft, shown: false, browser: false, queued: 0, touchedAt: 0};
     }));
     for (let i = 0; i < 40; i++) { beat(); await service.tick(); now += 5_000; }
     expect(archived).toEqual([]);

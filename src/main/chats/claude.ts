@@ -221,6 +221,7 @@ export class ClaudeSession implements HarnessSession {
   private tasks = new Set<string>();  // background tasks started and not yet ended (task_started / task_notification)
   private readonly childTelemetry: AgentChildrenReporter;
   private readonly childTools = new Map<string, unknown>();
+  private readonly nativeTools = new Set<string>(); // Agent/Task calls a native task took over: its events settle it
   /** start-up and per-turn timings (logged, scope chats): where a slow first answer spends its time */
   private spawnedAt = 0;
   private readyAt = 0;                // the initialize reply: the engine is up and takes messages
@@ -626,6 +627,7 @@ export class ClaudeSession implements HarnessSession {
   private childTask(m: Obj, state: ChildObservation['state']): void {
     const id = s(m.task_id);
     if (!id) return;
+    if (s(m.tool_use_id)) this.nativeTools.add(s(m.tool_use_id));
     this.childTelemetry.observe({
       key: `claude:task:${id}`, nativeId: id, toolCallId: s(m.tool_use_id) || null, parentNativeId: null,
       kind: m.task_type === 'local_agent' ? 'agent' : m.task_type === 'local_bash' ? 'shell' : 'unknown',
@@ -651,9 +653,12 @@ export class ClaudeSession implements HarnessSession {
       } else if (m.type === 'user' && b.type === 'tool_result' && this.childTools.has(s(b.tool_use_id))) {
         const id = s(b.tool_use_id), input = this.childTools.get(id);
         this.childTools.delete(id);
-        // A background acknowledgment does not settle the child; native task events do.
+        // A background acknowledgment does not settle the child; native task events do. A foreground call (no
+        // run_in_background) that a native task did not take over has ended with its result: an 'unknown' left there
+        // held its chat open for ever (the auto-close of 2026-10-23).
+        const native = this.nativeTools.delete(id);
         if (b.is_error === true || o(input).run_in_background !== true) {
-          this.childTool(id, input, b.is_error === true ? 'failed' : o(input).run_in_background === false ? 'completed' : 'unknown');
+          this.childTool(id, input, b.is_error === true ? 'failed' : o(input).run_in_background === false || !native ? 'completed' : 'unknown');
         }
       }
     }
