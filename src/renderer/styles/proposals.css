@@ -1,7 +1,7 @@
 /* Memoria → Proposte (components/brain-model/ProposalsDeck.tsx, ADR 0123): the filter chips, the stack of cards (the next
    ones peek behind), the stamps while dragging, the round buttons, the done and empty states. Tokens only (tokens.css),
    both themes; every motion is CSS and stops under prefers-reduced-motion. */
-.pd { --pd-w: min(560px, 100%); display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 6px 0 28px; min-height: 560px; }
+.pd { --pd-w: min(680px, 100%); display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 6px 0 28px; min-height: 560px; }
 .pd-center { justify-content: center; text-align: center; gap: 10px; }
 .pd-muted { color: var(--text-3); margin: 0; }
 .pd .pd-g-skill { --pd-c: var(--blue); }
@@ -11,6 +11,7 @@
 .pd .pd-g-setting { --pd-c: var(--pair-0); }
 .pd .pd-g-learning { --pd-c: var(--pair-1); }
 .pd .pd-g-script { --pd-c: var(--pair-2, var(--blue)); }
+.pd .pd-g-forget { --pd-c: var(--text-3); }
 
 /* ── head: chips and progress ─────────────────────────────────────────────────────────────────────────────── */
 .pd-head { width: min(780px, 100%); display: flex; flex-direction: column; gap: 12px; }
@@ -35,7 +36,7 @@
 
 /* ── the stack ──────────────────────────────────────────────────────────────────────────────────────────── */
 .pd-stage { width: var(--pd-w); display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.pd-stack { position: relative; width: 100%; height: 480px; margin-bottom: 26px; perspective: 1200px; }
+.pd-stack { position: relative; width: 100%; height: 580px; margin-bottom: 26px; perspective: 1200px; }
 .pd-card { --pd-c: var(--blue); --k: 0; position: absolute; inset: 0; display: flex; flex-direction: column; gap: 10px; padding: 18px 20px 16px; overflow: hidden;
   border-radius: 18px; border: 1px solid var(--border-2); background:
     radial-gradient(120% 60% at 0% 0%, color-mix(in srgb, var(--pd-c) 10%, transparent), transparent 60%), var(--surface);
@@ -185,7 +186,8 @@
   .pd-round:hover:not(:disabled) { transform: none; }
 }
 
-/* The card in plain words (ADR 0126): what each answer does, the reason, the code, the pick on a contradicted fact. */
+/* The card in plain words (ADR 0126): the reason, the code, the pick on a contradicted fact. What each answer does is on
+   its button (the lines under the card went away, owner 2026-10-23). */
 .pd-label { display: block; margin-bottom: 3px; color: var(--text-3); font: 600 var(--fs-xs) var(--font-small); letter-spacing: 0.04em; text-transform: uppercase; }
 .pd-why .pd-md { font-size: var(--fs-m); color: var(--text-2); }
 .pd-scope { margin: 0; color: var(--text-3); font-size: var(--fs-s); }
@@ -197,12 +199,6 @@
   font: 12.5px/1.5 var(--mono); color: var(--text); white-space: pre; user-select: text; cursor: text; tab-size: 2; }
 .pd-open .pd-code pre { max-height: none; }
 .pd-tech { display: flex; flex-direction: column; gap: 4px; }
-.pd-answers { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.pd-answer { padding: 8px 10px; border-radius: var(--r-s); background: var(--surface-2); border: 1px solid var(--border); border-left-width: 3px; }
-.pd-answer dt { color: var(--text-3); font: 600 var(--fs-xs) var(--font-small); }
-.pd-answer dd { margin: 2px 0 0; color: var(--text); font-size: var(--fs-s); line-height: 1.4; }
-.pd-answer-yes { border-left-color: var(--green); }
-.pd-answer-no { border-left-color: var(--red); }
 .pd-conflict { margin: 0; padding: 10px 12px; border-radius: var(--r-s); border: 1px solid color-mix(in srgb, var(--amber) 45%, var(--border)); background: color-mix(in srgb, var(--amber) 8%, var(--surface-2)); }
 .pd-conflict legend { padding: 0 4px; color: var(--text); font-size: var(--fs-s); font-weight: 600; }
 .pd-conflict ul { margin: 2px 0 8px; padding-left: 18px; color: var(--text-2); font-size: var(--fs-s); line-height: 1.45; max-height: 64px; overflow: auto; }
@@ -211,4 +207,17 @@
   font-size: var(--fs-s); color: var(--text-2); cursor: pointer; }
 .pd-conflict-choices label.on { border-color: var(--amber); color: var(--text); background: color-mix(in srgb, var(--amber) 16%, var(--surface)); }
 .pd-conflict-choices input { accent-color: var(--amber); margin: 0; }
-@media (max-width: 560px) { .pd-answers { grid-template-columns: 1fr; } }
+
+/* A maintenance finding (ADR 0132): what it adds (green) and removes (red) side by side, then why, what to expect, the
+   risk and the pages it rests on; the exact text it writes in a quiet box. */
+.pd-research { display: flex; flex-direction: column; gap: 10px; }
+.pd-delta { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.pd-delta > div { padding: 10px 12px; border-radius: var(--r-s); border: 1px solid var(--border); border-left-width: 3px; background: var(--surface-2); }
+.pd-delta p, .pd-rs p { margin: 0; color: var(--text); font-size: var(--fs-m); line-height: 1.5; user-select: text; }
+.pd-delta-add { border-left-color: var(--green) !important; background: color-mix(in srgb, var(--green) 7%, var(--surface-2)) !important; }
+.pd-delta-del { border-left-color: var(--red) !important; background: color-mix(in srgb, var(--red) 7%, var(--surface-2)) !important; }
+.pd-rs p { color: var(--text-2); }
+.pd-sources { margin: 0; padding-left: 18px; font-size: var(--fs-s); line-height: 1.5; }
+.pd-sources a { color: var(--blue); }
+.pd-exact { padding: 10px 12px; border-radius: var(--r-s); background: var(--surface-2); border: 1px dashed var(--border-2); }
+.pd-exact .pd-md { font-size: var(--fs-s); }

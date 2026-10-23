@@ -18,7 +18,7 @@ export const memoryHubIt = {
   'mh.ago.now': 'adesso', 'mh.ago.min': (p: N) => `${p.n} min fa`, 'mh.ago.hours': (p: N) => (p.n === 1 ? '1 ora fa' : `${p.n} ore fa`), 'mh.ago.days': (p: N) => (p.n === 1 ? 'ieri' : `${p.n} giorni fa`),
   'mh.tabsLabel': 'Sezioni della memoria',
   'mh.tab.proposte': 'Proposte', 'mh.tab.approvate': 'Approvate', 'mh.tab.skill': 'Skill', 'mh.tab.regole': 'Regole', 'mh.tab.script': 'Script & Query',
-  'mh.tab.idee': 'Idee', 'mh.tab.file': 'File', 'mh.tab.apprendimento': 'Apprendimento', 'mh.tab.statistiche': 'Statistiche',
+  'mh.tab.idee': 'Idee', 'mh.tab.app': 'Idee dell’app', 'mh.tab.file': 'File', 'mh.tab.apprendimento': 'Apprendimento', 'mh.tab.statistiche': 'Statistiche',
   'mh.badge': (p: N) => (p.n === 1 ? '1 proposta da decidere' : `${p.n} proposte da decidere`),
   // Approvate
   'mh.ap.lead': (p: N) => (p.n === 1 ? 'Una cosa è nel brain adesso. Un clic sul cestino la toglie; per qualche secondo puoi annullare.' : `${p.n} cose sono nel brain adesso. Un clic sul cestino ne toglie una; per qualche secondo puoi annullare.`),

@@ -148,15 +148,21 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     bestModel: h => (h === 'claude' ? 'opus' : null), runs: () => demoLearningRuns(now()), roles,
     brain: { state: () => brainModel.state(), apply: p => brainModel.applyResearch(p), noise: (key, known) => { brainModel.noise(key, known); } },
     chats: {
+      // the demo answers at once (frozen): the chat starts without its prompt, the research is registered, then the
+      // canned findings arrive and the prompt runs (running → idle ends the research)
       create: async req => {
-        const c = await chats.create(req, 'app');
-        for (const [i, card] of DEMO_LIVE.entries()) setTimeout(() => { try { research.propose(c.id, card); } catch { /* the research ended first */ } }, 300 + i * 200);
+        const { prompt, ...rest } = req;
+        const c = await chats.create(rest, 'app');
+        setTimeout(() => {
+          for (const card of DEMO_LIVE) { try { research.propose(c.id, card); } catch { /* the research ended first */ } }
+          if (prompt) void chats.send(c.id, prompt).catch(() => { /* the demo chat was closed */ });
+        }, 300);
         return c;
       },
       get: id => chats.list().find(c => c.id === id), stop: id => chats.stop(id),
     },
     orchestrator: { open: () => !!demoOrchestrator(), send: async text => { const o = demoOrchestrator(); if (!o) return false; await chats.send(o.id, text); return true; } },
-    changed: () => { ctx.emitter.emit('maintenance:changed', undefined); ctx.emitter.emit('appIdeas:changed', undefined); } });
+    changed: () => ctx.emitter.emit('maintenance:changed', undefined) });
   writeDemoResearch(research.store, now());
   ctx.emitter.tap((channel, payload) => { if (channel === 'chat:updated') research.chatUpdated(payload as ChatSummary); });
   if (!brainModel.report()) await brainModel.maintain('migration').catch(e => log.warn('demo', 'demo migration failed', { cause: errText(e), hint: 'the Skill page shows the demo brain without the migrated skills' }));

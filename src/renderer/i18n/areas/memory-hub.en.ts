@@ -16,7 +16,7 @@ export const memoryHubEn: typeof memoryHubIt = {
   'mh.ago.now': 'now', 'mh.ago.min': (p: N) => `${p.n} min ago`, 'mh.ago.hours': (p: N) => (p.n === 1 ? '1 hour ago' : `${p.n} hours ago`), 'mh.ago.days': (p: N) => (p.n === 1 ? 'yesterday' : `${p.n} days ago`),
   'mh.tabsLabel': 'Memory sections',
   'mh.tab.proposte': 'Proposals', 'mh.tab.approvate': 'Approved', 'mh.tab.skill': 'Skills', 'mh.tab.regole': 'Rules', 'mh.tab.script': 'Scripts & Queries',
-  'mh.tab.idee': 'Ideas', 'mh.tab.file': 'Files', 'mh.tab.apprendimento': 'Learning', 'mh.tab.statistiche': 'Statistics',
+  'mh.tab.idee': 'Ideas', 'mh.tab.app': 'App ideas', 'mh.tab.file': 'Files', 'mh.tab.apprendimento': 'Learning', 'mh.tab.statistiche': 'Statistics',
   'mh.badge': (p: N) => (p.n === 1 ? '1 proposal to decide' : `${p.n} proposals to decide`),
   'mh.ap.lead': (p: N) => (p.n === 1 ? 'One thing is in the brain now. A click on the bin takes it out; for a few seconds you can undo.' : `${p.n} things are in the brain now. A click on the bin takes one out; for a few seconds you can undo.`),
   'mh.ap.search': 'Search everything in the brain',

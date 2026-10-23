@@ -209,6 +209,9 @@ export interface ChatSummary {
   research?: true;
 }
 
+/** The working-line phrases of the day (main/daily-phrases.ts): lines per kind (typing kinds), in `lang`. */
+export interface DailyPhrases { day: string; lang: Lang; lines: Record<string, string[]> }
+
 export interface ChatLink { id: string; title: string }
 /** chat = written by the chat itself on request · auto = built by the app without tokens (no decisions inside) */
 export type HandoffSource = 'chat' | 'auto';
@@ -1294,17 +1297,19 @@ export interface InvokeMap {
   'brainmodel:rollback': [{ id: string }, BrainModelState];
   /** the «Manutenzione» dialog (ADR 0132): its defaults, the method prompt (the user's last edit) and the research
    *  running or last ended */
+  /** the working-line phrases of the day (main/daily-phrases.ts): null = the fixed ones */
+  'phrases:today': [void, DailyPhrases | null];
   'maintenance:setup': [void, MaintenanceSetup];
   /** starts a research with what the user picked (the cleanup runs first, zero tokens); one at a time */
   'maintenance:research': [ResearchOptions, ResearchRunInfo];
   /** stops the running research chat */
   'maintenance:stop': [void, MaintenanceSetup];
   /** Memoria → «Idee dell'app» (ADR 0132): app ideas and bugs with their issue already written */
-  'appIdeas:list': [void, AppIdeasState];
+  'maintenance:ideas': [void, AppIdeasState];
   /** «Apri issue» / «Apri tutte»: the issues go to the open Orchestrator, which opens them on GitHub */
-  'appIdeas:open': [{ ids: string[] }, { sent: boolean; why?: string; state: AppIdeasState }];
+  'maintenance:openIssues': [{ ids: string[] }, { sent: boolean; why?: string; state: AppIdeasState }];
   /** «Scarta»: the idea leaves the tab (kept in the store as dismissed, never proposed again) */
-  'appIdeas:dismiss': [{ id: string }, AppIdeasState];
+  'maintenance:dismissIdea': [{ id: string }, AppIdeasState];
   /** the brain's saved queries (ADR 0124): list, one with its code, delete through the ChangeLog (undo = brainmodel:rollback with changeId) */
   'queries:list': [void, BrainQueryList];
   'queries:get': [{ id: string }, BrainQuery];
@@ -1614,9 +1619,9 @@ export interface EventMap {
   /** the number of open proposals changed (Memoria's badge, ADR 0123) */
   'proposals:changed': { count: number };
   /** the research started, moved (cost) or ended (ADR 0132) */
+  'phrases:changed': void;
   'maintenance:changed': void;
   /** the «Idee dell'app» list changed */
-  'appIdeas:changed': void;
   'cloud:changed': CloudState;
   'mcpservers:changed': McpServersState;
 }
@@ -1636,7 +1641,7 @@ export const INVOKE_CHANNELS = [
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
   'chat:userEvents', 'chat:synthesize', 'memory:reviewList', 'memory:confirm', 'memory:retract', 'memory:delete', 'learning:evidence', 'learning:state', 'learning:import', 'learning:replay', 'learning:saveCandidate', 'learning:promote', 'learning:compare', 'proposals:list', 'proposals:count', 'proposals:decide',
-  'maintenance:setup', 'maintenance:research', 'maintenance:stop', 'appIdeas:list', 'appIdeas:open', 'appIdeas:dismiss',
+  'phrases:today', 'maintenance:setup', 'maintenance:research', 'maintenance:stop', 'maintenance:ideas', 'maintenance:openIssues', 'maintenance:dismissIdea',
   'agents:list', 'skills:suggest', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'agents:estimates', 'runs:macro', 'agents:judgingEstimate', 'run:outcome', 'agents:restoreVersion', 'avatars:get', 'avatars:set', 'avatars:reset', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:plan', 'chat:stop',
   'brain:share', 'brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'queries:list', 'queries:get', 'queries:delete', 'brainmodel:noise', 'brainmodel:link', 'brainmodel:remove', 'classifiers:state', 'morning:brief', 'agents:trialDecide', 'agents:lifecycleDecide',
@@ -1656,7 +1661,7 @@ export const INVOKE_CHANNELS = [
   'cloud:list', 'cloud:start', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:readiness', 'cloud:dismiss',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
-  'pulse:changed', 'approvals:changed', 'proposals:changed', 'maintenance:changed', 'appIdeas:changed',
+  'pulse:changed', 'approvals:changed', 'proposals:changed', 'maintenance:changed', 'phrases:changed',
   'update:state', 'update:checkpointRequest', 'update:checkpointRelease',
   'progress:changed',
   'chat:autoCloseStatus',

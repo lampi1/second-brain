@@ -95,9 +95,9 @@ test('the deck: every source in one stack, swipe / buttons / keys, undo, the end
     const decided: Record<string, 'approve' | 'reject'> = {}, snapped = new Set<string>();
     for (let guard = 0; guard < 20 && await top(page).count(); guard++) {
       const id = (await top(page).getAttribute('data-card'))!, card = first.items.find(c => c.id === id)!;
-      // every card asks one plain question with what each answer does (ADR 0126)
+      // every card asks one plain question (ADR 0126); what each answer does is on the buttons' tips (ADR 0132)
       await expect(page.getByTestId('pd-question')).toHaveText(/\?$/);
-      await expect(page.getByTestId('pd-answers')).toBeVisible();
+      await expect(page.getByTestId('pd-approve')).toHaveAttribute('title', /.+/);
       if (!snapped.has(card.source)) { snapped.add(card.source); await snap(page, `proposals-card-${card.source}-dark`); }
       if (card.ask.kind === 'remember' && card.ask.conflicts?.length) {
         // it contradicts what Scout already remembers: Approva waits for replace or keep both

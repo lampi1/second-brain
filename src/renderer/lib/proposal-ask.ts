@@ -80,8 +80,10 @@ export function cardWords(c: Pick<Proposal, 'ask' | 'title' | 'content' | 'appli
     case 'policy':
       return { question: a.domain === 'routing' || a.domain === 'notifications' ? t(`proposals.ask.policy.${a.domain}`) : t('proposals.ask.policy.other', { domain: a.domain }),
         yes: a.cases ? t('proposals.yes.policyCases', { name: a.name, n: a.cases }) : t('proposals.yes.policy', { name: a.name }), no: t('proposals.no.policy'), lead: '' };
-    // a maintenance finding (ADR 0132): its own words, shown as they are (adds, removes, why) by the deck
+    // a maintenance finding (ADR 0132): its title is the question; the deck shows its own words (adds, removes, why)
     case 'research':
-      return { question: c.title, yes: a.adds, no: a.removes, lead: '' };
+      // the finding's title read as the question («Dimenticare la skill «x»?», «Artisan lancia i test prima di dire «fatto»?»)
+      return { question: `${c.title.trim().replace(/[.!?:;…\s]+$/u, '')}?`, yes: t(a.finding === 'forget' ? 'proposals.yes.forget' : 'proposals.yes.research'), no: t('proposals.no.research'), lead: '',
+        ...(c.content ? { bodyLabel: t(a.finding === 'forget' ? 'proposals.research.forgets' : 'proposals.research.exact') } : {}) };
   }
 }

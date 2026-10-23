@@ -59,6 +59,7 @@ import type { BrainService, BrowserService, ChatService, TasksApi, SkillsApi } f
 import { SkillsService } from './skills/service';
 import { BrainModelService } from './brainmodel/service';
 import { issuesUrlOf, ResearchService } from './brainmodel/research';
+import { DailyPhrasesService } from './daily-phrases';
 import { researchTools } from './brainmodel/research-tools';
 import { createBrain } from './brain';
 import { setLaunchRules } from './brain/adapters/domains';
@@ -145,8 +146,10 @@ export interface Wired {
   agentPacks: ReturnType<typeof createAgentPacks>;
   /** the Brain pages and their maintenance jobs (ADR 0077) */
   brainModel: BrainModelService;
-  /** the maintenance with research (ADR 0132): maintenance:* and appIdeas:* IPC, the Proposte deck's 'research' source */
+  /** the maintenance with research (ADR 0132): maintenance:* IPC, the Proposte deck's 'research' source */
   research?: ResearchService;
+  /** the working-line phrases of the day: 'phrases:today' */
+  phrases?: DailyPhrasesService;
   /** the morning block ("Mentre eri via", ADR 0102); absent = the channel answers "nothing to show" */
   morning?: MorningService;
   setup: SetupService;
@@ -821,10 +824,14 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     chats: { create: req => manager.create(req, 'app'), get: id => manager.list().find(c => c.id === id), stop: id => manager.stop(id) },
     // «Apri issue» is the user's click: their request to the Orchestrator, as if typed (the permission rules still apply)
     orchestrator: { open: () => !!orchestratorChat(), send: async text => { const o = orchestratorChat(); if (!o) return false; await manager.send(o.id, text); return true; } },
-    changed: () => { ctx.emitter.emit('maintenance:changed', undefined); ctx.emitter.emit('appIdeas:changed', undefined); } });
+    changed: () => ctx.emitter.emit('maintenance:changed', undefined) });
   researchRef.current = research;
   ctx.emitter.tap((channel, payload) => { if (channel === 'chat:updated') research.chatUpdated(payload as ChatSummary); });
   addChatTools(researchTools(research));
+  // the working-line phrases of the day (owner, 2026-10-23): one small request a day to the lightest model, never in the tests
+  const phrases = new DailyPhrasesService({ userData: ctx.userData, lang: uiLang, emit: () => ctx.emitter.emit('phrases:changed', undefined),
+    ask: async (system, prompt) => { const r = await oneShot.runOnce({ agentId: 'herald', purpose: 'phrases', light: true, system, prompt, maxOutputTokens: 2400, timeoutMs: 90_000 }); return { ok: r.ok, text: r.text, ...(r.reason ? { reason: r.reason } : {}) }; } });
+  if (!process.env.SB_TEST) phrases.start();
   const replayRoot = () => { const root = brain.info().brainRoot; return root ? fs.realpathSync(root) : null; };
   const executeReplay = replayExecutor({ root: replayRoot, runs: () => manager.runs.list(),
     roleEngine: role => agents.list().profiles.find(p => p.id === role)?.engine ?? 'claude',
@@ -840,7 +847,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     stallMin: () => checkedDelegation(brain.settings().delegation).stallMin, lastEventAt: id => manager.lastEventAt(id) });
 
   return {
-    brainModel, research, memoryReview, learningReview, queries: brainQueries,
+    brainModel, research, phrases, memoryReview, learningReview, queries: brainQueries,
     morning,
     mcpServers,
     cloud, chats, browser, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, suggestSkills,
@@ -851,7 +858,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot, Date.now, () => progressService.award('setup-complete')),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { mcpServers.stop(); brainModel.stop(); cloud.shutdown(); clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { mcpServers.stop(); brainModel.stop(); phrases.stop(); cloud.shutdown(); clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
     killNow: () => { compareRuns.killNow(); manager.killAll(); runner.shutdown(); },
   };
 }

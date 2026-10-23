@@ -135,7 +135,7 @@ export interface MaintenanceSetup {
   last: ResearchRunInfo | null;
 }
 
-/** The «Idee dell'app» tab (appIdeas:list). */
+/** The «Idee dell'app» tab (maintenance:ideas). */
 export interface AppIdeasState {
   /** app-idea and app-bug proposals, open first, newest first */
   items: ResearchProposal[];

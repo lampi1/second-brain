@@ -8,7 +8,7 @@
 // in Memoria → «Idee dell'app», each with its issue already written: «Apri issue» / «Apri tutte» hand them to the
 // Orchestrator as the user's request (gh opens them; the user's permission rules still apply). The pass the user starts
 // also makes cards by itself, at zero tokens: one app bug per new log group and the brain skills no job used in 60
-// days. Used by wiring.ts and demo-wiring.ts; IPC maintenance:* and appIdeas:* (index.ts); tests:
+// days. Used by wiring.ts and demo-wiring.ts; IPC maintenance:* (index.ts); tests:
 // test/unit/brainmodel/research.test.ts.
 import fs from 'node:fs';
 import os from 'node:os';

@@ -34,6 +34,7 @@ export function shortWhen(iso: string): string {
 export function whoName(c: Proposal): string {
   const w = c.provenance.who;
   if (w.kind === 'role') return w.id === 'pulse' ? t('alive.pulse.title') : roleName(w.id);
+  if (w.kind === 'maintenance' && (w.id === 'research' || w.id === 'cleanup')) return t(`proposals.who.${w.id}`);
   if (w.kind === 'maintenance') return (['corrections', 'repeated-task', 'merge-skills', 'merge-memory', 'migration', 'upgrade'] as const).includes(w.id as never) ? t(`proposals.job.${w.id as 'corrections'}`) : t('proposals.who.maintenance');
   return w.id === 'lifecycle' ? t('proposals.who.lifecycle') : w.id === 'improve' ? t('proposals.who.improve') : t('proposals.who.agent');
 }
@@ -68,6 +69,22 @@ function WhoAvatar({ c, size = 34 }: { c: Proposal; size?: number }) {
       ? <svg viewBox="0 0 24 24" width={size * 0.5} height={size * 0.5} aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.2L4 16.8V20h3.2l5.3-5.3a4 4 0 0 0 5.2-5.4l-2.6 2.6-2.4-.6-.6-2.4z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>
       : <svg viewBox="0 0 24 24" width={size * 0.5} height={size * 0.5} aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}
   </span>;
+}
+
+/** A maintenance finding (ADR 0132): what it adds and removes, why, what to expect, the risk, the evidence and the pages
+ *  it rests on, in the words the research wrote. Only the top card lists the sources as links. */
+function ResearchBody({ a, top }: { a: Extract<Proposal['ask'], { kind: 'research' }>; top: boolean }) {
+  return <div className="pd-research" data-testid={top ? 'pd-research' : undefined}>
+    {(a.adds || a.removes) && <div className="pd-delta">
+      {a.adds && <div className="pd-delta-add" data-testid={top ? 'pd-adds' : undefined}><span className="pd-label">{t('proposals.research.adds')}</span><p>{a.adds}</p></div>}
+      {a.removes && <div className="pd-delta-del" data-testid={top ? 'pd-removes' : undefined}><span className="pd-label">{t('proposals.research.removes')}</span><p>{a.removes}</p></div>}
+    </div>}
+    <div className="pd-rs"><span className="pd-label">{t('proposals.research.why')}</span><p>{a.why}</p></div>
+    {a.expected && <div className="pd-rs"><span className="pd-label">{t('proposals.research.expected')}</span><p>{a.expected}</p></div>}
+    {a.risk && <div className="pd-rs"><span className="pd-label">{t('proposals.research.risk')}</span><p>{a.risk}</p></div>}
+    {a.sources.length > 0 && <div className="pd-rs"><span className="pd-label">{t('proposals.research.sources')}</span>
+      <ul className="pd-sources">{a.sources.map(x => <li key={x.url}>{top ? <a href={x.url} target="_blank" rel="noreferrer">{x.title}</a> : x.title}</li>)}</ul></div>}
+  </div>;
 }
 
 export interface CardHandle { fling(d: ProposalDecision): void }
@@ -151,8 +168,9 @@ export const ProposalCard = forwardRef<CardHandle, CardProps>(function ProposalC
         <figcaption><span className="pd-label">{t('proposals.code')}</span><code>{x.file}</code></figcaption>
         <pre className="pd-scroll" data-lang={x.lang}><code>{x.text}</code></pre>
       </figure>)}
+      {c.ask.kind === 'research' && <ResearchBody a={c.ask} top={top} />}
       {lead && <p className="pd-lead">{lead}</p>}
-      {html && <div className="pd-why">{words.bodyLabel && <span className="pd-label">{words.bodyLabel}</span>}<div className="md pd-md" dangerouslySetInnerHTML={{ __html: html }} /></div>}
+      {html && <div className={`pd-why${c.ask.kind === 'research' ? ' pd-exact' : ''}`}>{words.bodyLabel && <span className="pd-label">{words.bodyLabel}</span>}<div className="md pd-md" dangerouslySetInnerHTML={{ __html: html }} /></div>}
       {(words.scope || words.advice) && <p className="pd-scope">{[words.scope, words.advice].filter(Boolean).join(' ')}</p>}
       {open && c.facts.length > 0 && <div className="pd-tech"><span className="pd-label">{t('proposals.details')}</span><dl className="pd-facts">{c.facts.map((f, i) => <div key={i} className={`pd-fact pd-fact-${f.key}`}><dt>{t(`proposals.fact.${f.key}`)}</dt><dd>{factValue(c, f.key, f.value)}</dd></div>)}</dl></div>}
       {open && evidence.some(e => e !== quote) && <ul className="pd-evidence-all">{evidence.filter(e => e !== quote).map((e, i) => <li key={i}>{e}</li>)}</ul>}
@@ -160,7 +178,7 @@ export const ProposalCard = forwardRef<CardHandle, CardProps>(function ProposalC
       {open && top && root && c.evidenceRuns?.map(id => <LearningEvidenceInspector key={id} root={root} runId={id} />)}
       {open && top && c.source === 'memory' && <label className="pd-note">{t('proposals.note')}<input value={note} maxLength={900} onChange={e => setNote(e.target.value)} data-testid="pd-note" /></label>}
     </div>
-    {(html.length > 220 || code.length > 0 || c.facts.length > 0 || evidence.some(e => e !== quote) || files.length > 0 || c.readFirst || c.source === 'memory') && top &&
+    {(html.length > 220 || code.length > 0 || c.ask.kind === 'research' || c.facts.length > 0 || evidence.some(e => e !== quote) || files.length > 0 || c.readFirst || c.source === 'memory') && top &&
       <button type="button" className="pd-more" aria-expanded={open} data-testid="pd-more" onClick={() => { setOpen(o => !o); setRead(true); }}>
         {open ? t('proposals.less') : c.readFirst && !read ? t('proposals.readFirstOpen') : t('proposals.more')}
       </button>}
@@ -173,10 +191,6 @@ export const ProposalCard = forwardRef<CardHandle, CardProps>(function ProposalC
           {t(`proposals.conflict.${k}`, { n: conflicts.length })}</label>)}
       </div>
     </fieldset>}
-    <dl className="pd-answers" data-testid={top ? 'pd-answers' : undefined}>
-      <div className="pd-answer pd-answer-yes"><dt>{t('proposals.ifYes', { yes: l.yes })}</dt><dd>{words.yes}</dd></div>
-      <div className="pd-answer pd-answer-no"><dt>{t('proposals.ifNo', { no: l.no })}</dt><dd>{words.no}</dd></div>
-    </dl>
     {c.blocked && <p className="pd-blocked" role="note">{c.blocked.map(blockedText).join(' ')}</p>}
     <footer className="pd-prov" data-testid={top ? 'pd-provenance' : undefined}>
       <div className="pd-who"><WhoAvatar c={c} />
@@ -205,6 +219,8 @@ export function ProposalsDeck() {
   const all = openCards(s), chips = groupCounts(all);
   const cards = filter === 'all' ? all : all.filter(c => c.group === filter);
   const top = cards[0];
+  // what each answer does, on its button (the lines under the card are gone: owner, 2026-10-23)
+  const topWords = top ? cardWords(top) : null;
   const sum = tally(s), done = sum.approved + sum.rejected, undoable = canUndo(s);
   useEffect(() => { if (filter !== 'all' && !chips.some(g => g.group === filter) && !all.length) setFilter('all'); }, [filter, chips, all.length]);
   useEffect(() => { if (!hint) return; const id = setTimeout(() => setHint(null), 3200); return () => clearTimeout(id); }, [hint]);
@@ -253,11 +269,11 @@ export function ProposalsDeck() {
       </div>
       <p className="pd-hint" role="status" aria-live="polite">{hint ?? (undoable ? t('proposals.held') : '')}</p>
       <div className="pd-controls">
-        <button type="button" className="pd-round pd-no" data-testid="pd-reject" aria-label={labels(top).no} title={`${labels(top).no} (←)`} disabled={!top.canReject} onClick={() => topRef.current?.fling('reject')}>
+        <button type="button" className="pd-round pd-no" data-testid="pd-reject" aria-label={labels(top).no} title={`${topWords?.no ?? labels(top).no} (←)`} disabled={!top.canReject} onClick={() => topRef.current?.fling('reject')}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg><span>{labels(top).no}</span></button>
         <button type="button" className="pd-round pd-undo" data-testid="pd-undo" aria-label={t('proposals.undoLast')} title={`${t('proposals.undoLast')} (Z)`} disabled={!undoable} onClick={undo}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5" /><path d="M4 9h10a6 6 0 0 1 0 12h-3" /></svg></button>
-        <button type="button" className="pd-round pd-yes" data-testid="pd-approve" aria-label={labels(top).yes} title={`${labels(top).yes} (→)`} disabled={!top.canApprove} onClick={() => topRef.current?.fling('approve')}>
+        <button type="button" className="pd-round pd-yes" data-testid="pd-approve" aria-label={labels(top).yes} title={`${topWords?.yes ?? labels(top).yes} (→)`} disabled={!top.canApprove} onClick={() => topRef.current?.fling('approve')}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg><span>{labels(top).yes}</span></button>
       </div>
       <p className="pd-keys">{t('proposals.keys')}</p>

@@ -238,12 +238,13 @@ app.whenReady().then(async () => {
     'proposals:decide': a => proposals.decide(a),
     'brainmodel:maintain': a => s.brainModel.maintain(a?.job),
     // the maintenance with research and «Idee dell'app» (ADR 0132)
+    'phrases:today': () => s.phrases?.today() ?? null,
     'maintenance:setup': () => research().setup(),
     'maintenance:research': a => research().start(a),
     'maintenance:stop': () => research().stop(),
-    'appIdeas:list': () => research().appIdeas(),
-    'appIdeas:open': a => research().openIssues(a?.ids),
-    'appIdeas:dismiss': a => research().dismiss(a?.id),
+    'maintenance:ideas': () => research().appIdeas(),
+    'maintenance:openIssues': a => research().openIssues(a?.ids),
+    'maintenance:dismissIdea': a => research().dismiss(a?.id),
     'brainmodel:rollback': a => s.brainModel.rollback(String(a?.id ?? '')),
     // the brain's saved queries (ADR 0124); a delete is a ChangeLog entry, undone with brainmodel:rollback
     'queries:list': () => s.queries?.list() ?? { root: null, dir: 'queries', queries: [] },
