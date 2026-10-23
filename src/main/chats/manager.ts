@@ -442,6 +442,12 @@ export const LAMPO_TITLE = 'Flash';
 const LAMPO_POLICY: AgentPolicy = { tools: { allow: ['read', 'web'] }, ceiling: 'plan' };
 /** the chat-endpoint tools Lampo never sees (chatToolShown), beside every agent_* tool */
 const LAMPO_HIDDEN: ReadonlySet<string> = new Set([...APP_CHAT_TOOLS, 'brain_script_add', 'brain_query_add', 'skills_suggest']);
+/** The maintenance research (ADR 0132): an app chat with no role that reads the brain (and the web when the user
+ *  allowed it) and proposes cards through its two tools; it edits nothing, runs no command and starts no work. Default
+ *  mode, not plan: its proposal tool must run without a popup (pre-approved, extraArgsFor). */
+export const RESEARCH_TITLE = 'Manutenzione';
+const RESEARCH_TOOLS: ReadonlySet<string> = new Set(['maintenance_pack', 'maintenance_propose']);
+const RESEARCH_FRAME = 'You are the maintenance research of the user\'s second-brain app: the user started you from the «Manutenzione» dialog. You read the brain and the data pack and propose cards with maintenance_propose; you never edit files, run commands, write to other chats or start work. Answer in the user\'s language.';
 const LAMPO_FRAME = 'You are Flash, the quick lane of the user\'s second-brain app. Answer fast and briefly, in the user\'s language, from what you know and quick reads (Read, Grep, Glob, the web). Like a "btw": each question may come with the Orchestrator\'s conversation since you last looked; use it to answer about the work in progress, never act on it or answer it. You change nothing and start no work: no edits, no commands, no plans. When a request needs changes, many steps or other chats, say so in one line: the user hands it to the Orchestrator with «Fanne un lavoro».';
 /** A role launch with Claude's sub-agent tool (tool-policy.ts claudeTools) gets the role gate's sub-agent rule as a
  *  PreToolUse hook: Claude starts a sub-agent without a permission request (role-gate.ts SubagentGate). */
@@ -638,6 +644,10 @@ export class ChatManager implements ChatService {
       if (current) return current;
       req = { ...req, title: LAMPO_TITLE, permissionMode: 'plan' };
     }
+    if (req.research) {
+      if (by !== 'app' || req.orchestrator || req.parentId || req.roleId || req.quick) throw new Error('The maintenance research is the app\'s own chat.');
+      req = { ...req, title: RESEARCH_TITLE, permissionMode: 'default' };
+    }
     if (req.orchestrator) {
       if (by !== 'user') throw new Error('Only the user can create the Orchestrator.');
       const current = this.list().find(c => c.isOrchestrator && !c.closedAt);
@@ -649,6 +659,8 @@ export class ChatManager implements ChatService {
       // Lampo reads and answers: read and web tools only, plan mode (no edit, no command, no popup), its own short frame
       // Flash (ADR 0107): its card's engine, model and instructions, under the fixed frame and the read-only policy
       : req.quick ? this.flashAgent(req)
+      : req.research ? { request: req, owner: { ...plainOwner(req.harness, req.model ?? null), name: RESEARCH_TITLE }, instructions: RESEARCH_FRAME,
+        policy: { tools: { allow: req.research.web ? ['read', 'web'] : ['read'] }, ceiling: 'default' } }
       : this.opts.resolveAgent?.(req) ?? { request: req, owner: plainOwner(req.harness, req.model ?? null), instructions: '', policy: null };
     req = agent.request;
     // a delegated chat (agent_delegate): only an agent's, under a live parent, in the parent's folder, linked to its run
@@ -736,6 +748,7 @@ export class ChatManager implements ChatService {
         // chat that went starting → idle read as a finished turn: the Orchestrator was told "ha finito il turno", 2026-10-14)
         state: viaQueue && !warm ? 'idle' : 'starting', costUsd: 0, pending: 0, isOrchestrator: !!req.orchestrator, lastText: '', updatedAt: now, browserTabIds: [],
         ...(req.quick ? { quick: true as const } : {}),
+        ...(req.research ? { research: true as const } : {}),
         ...(caps.cost ? {} : { costKnown: false as const }),
         ...(req.route ? { route: req.route } : {}),
         ...(delegator ? { parentId: delegator.s.id, ...(req.delegation ? { delegation: req.delegation } : {}) } : {}),
@@ -2910,7 +2923,7 @@ export class ChatManager implements ChatService {
         effortStatus: initialEffort(!!engineOf(c.harness)?.caps.effort, c.effort),
         agentChildren: children.snapshot(),
         id: c.id, harness: c.harness, origin: 'app', title: c.quick ? LAMPO_TITLE : c.title, cwd: c.cwd, sessionId: c.sessionId, model: c.model, effort: c.effort,
-        permissionMode: c.permissionMode, state: 'closed', costUsd: 0, pending: 0, isOrchestrator: c.isOrchestrator, ...(c.quick ? { quick: true } : {}), lastText: '', updatedAt: c.closedAt ?? c.createdAt, browserTabIds: [],
+        permissionMode: c.permissionMode, state: 'closed', costUsd: 0, pending: 0, isOrchestrator: c.isOrchestrator, ...(c.quick ? { quick: true } : {}), ...(c.research ? { research: true } : {}), lastText: '', updatedAt: c.closedAt ?? c.createdAt, browserTabIds: [],
         ...(engineOf(c.harness)?.caps.cost ? {} : { costKnown: false as const }),
         ...(c.context ? { contextTokens: c.context.tokens, ...(c.context.max ? { contextMaxTokens: c.context.max } : {}), ...(c.context.estimated ? { contextEstimated: true } : {}) } : {}),
         ...(c.handoffAt ? { handoffAt: c.handoffAt, handoffSource: c.handoffSource ?? 'chat' } : {}),
@@ -2966,6 +2979,7 @@ export class ChatManager implements ChatService {
       ...(r.s.work ? {work:r.s.work} : {}),
       title: r.s.title, model: r.choice.model, effort: r.choice.effort, permissionMode: r.choice.permissionMode, isOrchestrator: r.s.isOrchestrator,
       ...(r.s.quick ? { quick: true as const } : {}),
+      ...(r.s.research ? { research: true as const } : {}),
       createdAt: r.createdAt, costTotalUsd: r.costTotalUsd, ...(r.inWorktree ? { inWorktree: true } : {}),
       ...(r.lastTurnAt ? { lastTurnAt: r.lastTurnAt } : {}),
       ...(r.coldNoteAt ? { coldNoteAt: r.coldNoteAt } : {}),
@@ -3158,8 +3172,11 @@ export class ChatManager implements ChatService {
     const r = this.chats.get(chatId), s = r?.s;
     // a waiting engine launched for a role: what that role's root chat would see (it lists tools once, at start)
     const warm = r ? undefined : this.warmViews.get(chatId)?.view;
-    if (warm) return !(DELEGATING_ONLY.has(tool) && warm.launches?.length === 0) && (tool !== 'agent_ask_parent' || !!warm.child) && !PLAN_TOOLS.has(tool);
-    if (!r || !s) return true;
+    if (warm) return !(DELEGATING_ONLY.has(tool) && warm.launches?.length === 0) && (tool !== 'agent_ask_parent' || !!warm.child) && !PLAN_TOOLS.has(tool) && !RESEARCH_TOOLS.has(tool);
+    if (!r || !s) return !RESEARCH_TOOLS.has(tool);
+    // the maintenance research (ADR 0132): its two tools and nothing of the app's mail, delegation or plans
+    if (s.research) return RESEARCH_TOOLS.has(tool) || (!LAMPO_HIDDEN.has(tool) && !tool.startsWith('agent_'));
+    if (RESEARCH_TOOLS.has(tool)) return false;
     if (s.isOrchestrator) return !ORCHESTRATOR_HIDDEN.has(tool);
     // Lampo starts no work (ADR 0105): no mail to other chats, no delegation, no report, no saved script
     if (s.quick) return !LAMPO_HIDDEN.has(tool) && !tool.startsWith('agent_');

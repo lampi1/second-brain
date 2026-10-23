@@ -1,6 +1,7 @@
 // The app action bar: history, search, observed status, requests, browsers and stop controls.
 // Settings owns appearance and connectors; its gear menu only links to settings and shortcuts.
-// Used by App.tsx; fit steps keep the final action group reachable at narrow widths. The end group holds the language
+// Used by App.tsx; fit steps keep the final action group reachable at narrow widths. «Manutenzione» sits here for every
+// page (ADR 0132). The end group holds the language
 // switch (LangSwitch.tsx, ADR 0120), so it is always reachable.
 import { t as auditText } from '../i18n';
 import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
@@ -20,6 +21,7 @@ import { UsageBar } from './UsageBar';
 import { SyncStatus } from './SyncStatus';
 import { StatoButton } from './OrchestratorOverlay';
 import { LangSwitch } from './LangSwitch';
+import { MaintenanceButton } from './brain-model/MaintenanceButton';
 import { IconButton, Keys, MenuItem, MenuLabel, Popover } from './ui';
 
 function CliRow({ engine: { id: harness, name }, st }: { engine: EngineInfo; st: CliStatus | undefined }) {
@@ -211,6 +213,8 @@ export function TopBar() {
         {waiting > 0 && <span className="count-badge" data-testid="topbar-next-count">{waiting}</span>}
       </button>
       <button type="button" className="btn btn-ghost btn-m new-browser" onClick={() => void newBrowser()} data-testid="topbar-new-browser" aria-label={t('ui.newBrowser')} data-tip={t('ui.newBrowser')}><IconGlobe size={14}/><span>{t('ui.newBrowser')}</span></button>
+      {/* the one «Manutenzione», always here (owner, 2026-10-23, ADR 0132): its dialog picks the free cleanup or a research */}
+      <MaintenanceButton bar testId="topbar-maint" />
       <button type="button" className="btn btn-danger btn-m" onClick={stopAllAsk} disabled={running === 0} data-testid="topbar-stopall" data-tip={auditText('audit.TopBar.stopAllWorkingChatsCtrlShift')}
         aria-label={auditText('auditExpression.TopBar.text208', { v0: running })}>
         <IconStop size={13} /><span>{auditText('audit.TopBar.stopAll')}</span>{running > 0 && <span className="count-badge red">{running}</span>}

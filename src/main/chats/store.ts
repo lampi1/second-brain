@@ -75,6 +75,8 @@ export interface StoredChat {
   isOrchestrator: boolean;
   /** «Lampo», the quick lane (ADR 0105) */
   quick?: true;
+  /** the maintenance research (ADR 0132) */
+  research?: true;
   /** child results a quit held back from this parent, sent after the next start */
   heldResults?: HeldChildResult[];
   createdAt: number;
@@ -222,6 +224,7 @@ function valid(x: unknown): StoredChat | null {
     permissionMode: MODES.includes(String(c.permissionMode)) ? (c.permissionMode as PermissionMode) : null,
     isOrchestrator: orchestrator,
     ...(c.quick === true && !orchestrator ? { quick: true as const } : {}),
+    ...(c.research === true && !orchestrator ? { research: true as const } : {}),
     createdAt: typeof c.createdAt === 'number' ? c.createdAt : Date.now(),
     ...(typeof c.costTotalUsd === 'number' && Number.isFinite(c.costTotalUsd) ? { costTotalUsd: c.costTotalUsd } : {}),
     ...extras(c),

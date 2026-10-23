@@ -23,7 +23,8 @@ import { CodeBlock } from './CodeBlock';
 import { VisualBlock, isVisualLang } from './VisualBlock';
 import { explainTool } from '@shared/explain';
 import { useNow } from '../lib/clock';
-import { LINE_MS, typingKey } from '../lib/typing-line';
+import { LINE_MS, typingText } from '../lib/typing-line';
+import { useDailyPhrases } from '../store/daily-phrases';
 import { IconAlert, IconArrowDown, IconArrowRight, IconBell, IconBolt, IconBranch, IconCheck, IconChevronDown, IconChevronRight, IconInfo, IconLink, IconPlus, IconRefresh, IconSend, IconSparkle, IconSpinner, IconTerminal, IconX } from './Icons';
 import { splitNotes } from '../lib/sendable';
 import { getForeignLabel, foreignOf, showsSender, type Foreign, type ForeignKind } from '../lib/foreign';
@@ -158,8 +159,9 @@ const Message = memo(function Message({ id, text, streaming }: { id: string; tex
  *  replaces the words with what the chat does (a collapsed strip's step, StripActivity.tsx); the data-what hook stays. */
 export function Typing({ what, testid, topic = '', children }: { what: 'scrive' | 'pensa' | 'lavora'; testid?: string; topic?: string; children?: ReactNode }) {
   const now = useNow(LINE_MS);
-  const key = what === 'scrive' ? 'chat.items.typing.writing' : typingKey(topic, now);
-  return <div className="typing" role="status" aria-live="off" data-testid={testid} data-what={what}><TypingSpark />{children ?? <span key={key} className="typing-line">{t(key)}</span>}</div>;
+  const daily = useDailyPhrases();
+  const line = what === 'scrive' ? t('chat.items.typing.writing') : typingText(topic, now, daily);
+  return <div className="typing" role="status" aria-live="off" data-testid={testid} data-what={what}><TypingSpark />{children ?? <span key={line} className="typing-line">{line}</span>}</div>;
 }
 
 /** The working mark: a four-point spark that turns and breathes (transform and opacity only: the compositor draws it). */

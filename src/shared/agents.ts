@@ -217,7 +217,7 @@ export interface AgentRun {
   /** Snapshot captured before launch; missing means historical suggestions are unknown. */
   skillSuggestions?: { at: number; suggested: string[]; used: string[] };
   source?: 'chat' | 'oneshot';
-  oneshot?: { engine: string; job: 'pulse' | 'headline' | 'upgrade'; fallback: boolean; costBasis: 'reported' | 'estimated' | 'unknown' };
+  oneshot?: { engine: string; job: 'pulse' | 'headline' | 'upgrade' | 'phrases'; fallback: boolean; costBasis: 'reported' | 'estimated' | 'unknown' };
   runId: string; chatId: string; agentId: string;
   version: number;
   goal: string; startedBy: 'user' | 'orchestrator' | 'parent' | 'app'; startedAt: number;

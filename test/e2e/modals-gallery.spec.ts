@@ -32,10 +32,14 @@ for (const scheme of ['dark', 'light'] as const) {
       await keys.getByTestId('shortcuts-close-x').click();
       await expect(keys).toHaveCount(0);
 
-      // the Manutenzione: its jobs in the body, «Chiudi» as the footer's primary action
+      // the Manutenzione: its choices first, then its jobs in the body, «Chiudi» as the footer's primary action
       await page.getByTestId('tile-orchestrator').getByTestId('orchestrator-maint-run').click();
       const maint = page.getByTestId('orchestrator-maint-dialog');
-      await expect(maint.getByTestId('mm-maint-handoff')).toBeVisible();
+      await expect(maint.getByTestId('mm-r-research')).toBeVisible();
+      await page.mouse.move(2, 2);
+      await shot(page, `modal-maintenance-setup-${scheme}`);
+      await maint.getByTestId('orchestrator-maint-start').click();
+      await expect(maint.getByTestId('mm-r-to-ideas')).toBeVisible();
       await page.mouse.move(2, 2);
       await shot(page, `modal-maintenance-${scheme}`);
       await maint.getByTestId('orchestrator-maint-close').click();

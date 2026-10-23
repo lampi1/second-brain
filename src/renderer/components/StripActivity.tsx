@@ -8,7 +8,8 @@ import { useMemo } from 'react';
 import { useApp } from '../store/store';
 import { useNow } from '../lib/clock';
 import { stripStatus } from '../lib/strip-status';
-import { LINE_MS, typingKey } from '../lib/typing-line';
+import { LINE_MS, typingText } from '../lib/typing-line';
+import { useDailyPhrases } from '../store/daily-phrases';
 import { t } from '../i18n';
 import { turnActivity, Typing } from './ChatItems';
 
@@ -20,12 +21,13 @@ export function StripActivity({ chatId, testid }: { chatId: string; testid?: str
   const what = turnActivity(items);
   const topic = useApp(s => s.chats[chatId]?.title ?? '');
   const lineAt = useNow(LINE_MS);
+  const daily = useDailyPhrases();
   if (!st.step && st.quietMin === null) return <Typing what={what} testid={testid} topic={topic} />;
   const parts: string[] = [];
   if (st.plan) parts.push(t('alive.step', st.plan));
   return <Typing what={what} testid={testid}>
     <span className="strip-step" data-testid={`strip-step-${chatId}`}>
-      {st.step ? <span className="strip-step-text">{st.step.text}{st.step.code && <> <code>{st.step.code}</code></>}</span> : <span className="strip-step-text">{t(what === 'scrive' ? 'chat.items.typing.writing' : typingKey(topic, lineAt))}</span>}
+      {st.step ? <span className="strip-step-text">{st.step.text}{st.step.code && <> <code>{st.step.code}</code></>}</span> : <span className="strip-step-text">{what === 'scrive' ? t('chat.items.typing.writing') : typingText(topic, lineAt, daily)}</span>}
       {parts.map(p => <span key={p} className="strip-step-plan" data-testid={`strip-plan-${chatId}`}> · {p}</span>)}
       {st.quietMin !== null && <span className={`strip-step-quiet${st.stalled ? ' is-stalled' : ''}`} data-testid={`strip-quiet-${chatId}`} data-stalled={st.stalled || undefined}
         {...(st.stalled ? { 'data-tip': t('alive.stalledTip', { min: stallMin }) } : {})}> · {t(st.toolRunning ? 'alive.toolFor' : 'alive.quiet', { min: st.quietMin })}</span>}

@@ -12,16 +12,18 @@ import type { AgentLifecycleSnapshot } from '../../shared/agent-lifecycle';
 import type { BrainChange } from '../../shared/brain-model';
 import type { ChatSummary, LearnAction, LearnResult, SettingProposal } from '../../shared/contract';
 import type { MemoryReviewRecord, SkillCandidateView } from '../../shared/learning-review';
+import type { ResearchProposal } from '../../shared/maintenance-research';
 import type { ApprovalItem as PulseApproval, PulseResult } from '../../shared/pulse';
-import { factSentence, type Proposal, type ProposalAsk, type ProposalCode, type ProposalDecision, type ProposalKeep, type ProposalFact, type ProposalProvenance, type ProposalSource, type ProposalWho } from '../../shared/proposals';
+import { factSentence, type Proposal, type ProposalAsk, type ProposalGroup, type ProposalCode, type ProposalDecision, type ProposalKeep, type ProposalFact, type ProposalProvenance, type ProposalSource, type ProposalWho } from '../../shared/proposals';
 import { isRoleId } from '../../shared/roles';
 import type { FileSnapshot, StoredChange } from '../brainmodel/changes';
 import { memoryCards, type FactGroup, type MemoryCard } from './memory-deck';
 
 /** Changes older than this are history, not news: they stay in the change log only. */
 export const CHANGE_WINDOW_MS = 14 * 86_400_000;
-/** Jobs whose changes are moves of the brain's own format, not knowledge to review. */
-const FORMAT_JOBS: readonly string[] = ['migration', 'upgrade', 'user'];
+/** Jobs whose changes are not news to review: moves of the brain's own format, the user's own edits, and the
+ *  maintenance findings the user approved on their card already (ADR 0132). */
+const FORMAT_JOBS: readonly string[] = ['migration', 'upgrade', 'user', 'research'];
 /** The default verification a confirmed fact records when the user adds no note (memory-records.ts needs one line). */
 export const DECK_EVIDENCE = 'Confirmed by the user in Memoria → Proposte';
 
@@ -37,6 +39,8 @@ export interface ProposalPorts {
   lifecycle?: { read(): AgentLifecycleSnapshot | Promise<AgentLifecycleSnapshot>; decide(key: string, decision: 'approve' | 'dismiss'): unknown };
   pulse?: { list(): PulseApproval[] | Promise<PulseApproval[]>; decide(id: string, decision: 'approve' | 'discard'): PulseResult | Promise<PulseResult> };
   policies?: { status(): Promise<unknown>; act(a: LearnAction): Promise<LearnResult> };
+  /** the maintenance's findings for the brain (ADR 0132): open cards, applied through the change log on approval */
+  research?: { list(): ResearchProposal[]; approve(id: string): unknown; reject(id: string): unknown };
   /** the reviewed marks (Tieni on an applied change) */
   reviewed: { has(id: string): boolean; mark(id: string): void };
 }
@@ -332,6 +336,36 @@ const policy: Source = {
   },
 };
 
-export const SOURCES: readonly Source[] = [memory, candidate, change, setting, trial, tier, pulse, policy];
+// ── the maintenance's findings (ADR 0132) ─────────────────────────────────────────────────────────────────────────────
+const RESEARCH_GROUP: Readonly<Record<string, ProposalGroup>> = { skill: 'skill', rule: 'rule', role: 'role', forget: 'forget' };
+/** The text the card is about, as it is: what a change adds, or what forgetting removes. */
+function researchContent(x: ResearchProposal): string {
+  if (x.change) return x.change.target === 'skill' ? x.change.text : `> ${x.change.text.replace(/\n/g, '\n> ')}`;
+  if (x.forget) return `\`${x.forget.what === 'rule' ? x.forget.name : `.claude/skills/${x.forget.name}/`}\``;
+  return '';
+}
+const research: Source = {
+  id: 'research',
+  available: p => !!p.research,
+  async list(p) {
+    const chats = p.chats();
+    return p.research!.list().map(x => {
+      const chat = x.chatId ? chats.find(c => c.id === x.chatId) : undefined;
+      const role = x.change?.role;
+      return card('research', x.id, {
+        group: x.kind === 'bold' ? RESEARCH_GROUP[x.change?.target ?? 'rule'] ?? 'rule' : RESEARCH_GROUP[x.kind] ?? 'rule', applied: false, title: x.title, content: researchContent(x),
+        ask: { kind: 'research', finding: x.kind, adds: x.adds, removes: x.removes, why: x.why, expected: x.expected, risk: x.risk, evidence: x.evidence, sources: x.sources },
+        facts: [...(role ? [{ key: 'target' as const, value: role }] : []), ...(x.change?.name ? [{ key: 'target' as const, value: x.change.name }] : [])],
+        provenance: prov({ who: { kind: 'maintenance', id: x.chatId ? 'research' : 'cleanup' }, ...(chat ? { chat: { id: chat.id, title: chat.title } } : {}), at: iso(x.at), evidence: x.evidence }),
+        canApprove: true, canReject: true,
+      });
+    });
+  },
+  async decide(p, c, decision) {
+    if (decision === 'approve') await p.research!.approve(native(c)); else await p.research!.reject(native(c));
+  },
+};
+
+export const SOURCES: readonly Source[] = [memory, candidate, change, setting, trial, tier, pulse, policy, research];
 /** A path shown short: relative to the brain when it is inside it. */
 export const shortPath = (file: string, root: string | null): string => (root && path.isAbsolute(file) && path.resolve(file).startsWith(path.resolve(root) + path.sep) ? path.relative(root, file).split(path.sep).join('/') : file);

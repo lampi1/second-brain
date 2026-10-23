@@ -57,7 +57,7 @@ button.mh-pulse:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 
 /* ── the tab bar ── */
 .mh-tabs-wrap{position:sticky;top:0;z-index:5;margin:16px 0 0;padding:8px 0;background:linear-gradient(var(--bg) 70%,transparent)}
-.mh-tabs{position:relative;display:flex;flex-wrap:wrap;gap:2px;padding:4px;width:max-content;max-width:100%;box-sizing:border-box;
+.mh-tabs{position:relative;display:flex;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:2px;padding:4px;width:max-content;max-width:100%;box-sizing:border-box;
   border:1px solid var(--border);border-radius:14px;background:var(--surface);box-shadow:0 10px 30px -24px #000}
 .mh-tabs::-webkit-scrollbar{display:none}
 .mh-tabs>button{position:relative;z-index:1;flex:none;appearance:none;display:inline-flex;align-items:center;gap:7px;padding:8px 13px;border:0;border-radius:10px;background:transparent;
@@ -183,7 +183,9 @@ button.mh-row-name:hover{color:var(--blue);text-decoration:underline;text-underl
 
 /* ── narrow windows ── */
 @container mh (max-width:1020px){.mh-hero-bottom{grid-template-columns:1fr}}
-@container mh (max-width:900px){.mh-tab-icon{display:none}.mh-tabs>button{padding:8px 10px;gap:6px}}
+/* one row always (a sticky second row would cover the cards): no icons and tighter tabs when narrow, then it scrolls */
+@container mh (max-width:1060px){.mh-tab-icon{display:none}.mh-tabs>button{padding:8px 9px;gap:5px}
+  .mh-tabs{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent)}}
 @container mh (max-width:600px){.mh-groups{grid-template-columns:1fr}}
 @container mh (max-width:760px){.mh-split{grid-template-columns:1fr 1fr}.mh-split-side{grid-column:1/-1;flex-direction:row;flex-wrap:wrap}}
 @container mh (max-width:560px){.mh-split{grid-template-columns:1fr}}

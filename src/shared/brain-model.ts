@@ -67,7 +67,8 @@ export const MAINTENANCE_JOBS: readonly MaintenanceJobId[] = ['migration', 'upgr
  *  canRollback false = undone already, or what it changed moved on since (a newer change on the same target). */
 export interface BrainChange {
   id: string; at: number;
-  job: MaintenanceJobId | 'user';
+  /** research = a maintenance finding the user approved in Proposte (ADR 0132) */
+  job: MaintenanceJobId | 'user' | 'research';
   kind: 'skill' | 'agent' | 'rule' | 'memory' | 'script';
   action: 'create' | 'update' | 'merge' | 'link' | 'unlink' | 'remove';
   target: string;
@@ -150,6 +151,8 @@ export interface MaintenanceRun {
   logsAt?: number;
   /** the pass's result went to the Orchestrator (#150): true = delivered, else why not */
   handoff?: { sent: true } | { sent: false; why: string };
+  /** the cards the pass the user started made (ADR 0132): app bugs from the log step, skills to forget */
+  cards?: { bugs: number; forget: number };
 }
 
 /** The warn and error lines of the app logs (userData/logs/app-*.jsonl) grouped by scope | msg | cause (#150). */

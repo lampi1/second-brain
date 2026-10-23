@@ -6,6 +6,11 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- **Maintenance with research** (ADR 0132): the «Manutenzione» button in the top bar opens a dialog; besides the free
+  cleanup, «Ricerca e miglioramento» runs one chat on the engine, model and effort chosen, with a spending cap and the
+  prompt shown and editable. Its findings are big cards with what is added and removed (what to forget included);
+  ideas and bugs about the app go to Memoria → «Idee dell'app» with the issue already written, opened on GitHub by the
+  Orchestrator from «Apri issue» / «Apri tutte». The working-line jokes are rewritten once a day by the lightest model.
 - **Leaner and more honest self-improvement** (ADR 0128–0131): run receipts (commands with exit codes, changed files)
   decide clear runs without a Sentinel review, one in ten still audited; memory keeps only general, reusable knowledge
   (a zero-token gate refuses case-specific facts, near-duplicates are one card, at most 3 cards per role a day, the

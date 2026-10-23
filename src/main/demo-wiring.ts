@@ -9,9 +9,9 @@ import type { CanonicalResult } from '../shared/agents';
 import { sysEn, type SysCode, type SysParams } from '../shared/sys';
 import type { StrategyPlan } from '../shared/strategy';
 import { app, safeStorage } from 'electron';
-import { isLang, type BrowserHandoff, type CliStatus, type Lang, type PendingRequest } from '../shared/contract';
+import { isLang, type BrowserHandoff, type ChatSummary, type CliStatus, type Lang, type PendingRequest } from '../shared/contract';
 import { setDemoLang } from './demo-text';
-import { setUiLangSource } from './locale';
+import { setUiLangSource, uiLang } from './locale';
 import { systemLang } from './lang';
 import { ConfigStore } from './brain/config';
 import { DemoBrain, DemoChats, FROZEN_EPOCH, seed, demoTree, type Emit, demoQuality } from './demo';
@@ -23,8 +23,9 @@ import { MemoryService } from './rules/memory-service';
 import { LearningReviewService } from './brainmodel/learning-review';
 import type { AgentRun } from '../shared/agents';
 import { BrainModelService } from './brainmodel/service';
+import { ResearchService } from './brainmodel/research';
+import { DEMO_LIVE, writeDemoResearch } from './brainmodel/research-demo';
 import { writeDemoLogs } from './brainmodel/log-scan';
-import { APP_EVENT_LABEL } from './chats/orchestrator-wake';
 import { writeDemoClassifiers, type DemoClassifierData } from './demo-classifiers';
 import { SkillSuggester } from './skills/suggest';
 import type { SkillSuggestions } from '../shared/skill-suggest';
@@ -137,9 +138,34 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     suggestSkills: async text => (await suggestSkills(text)).candidates.map(c => c.name),
     emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: false,
     scripts: { file: id => demoScripts.get(id).path, changed: () => { demoScripts.invalidate(); ctx.emitter.emit('scripts:changed', undefined); } },
-    // the log step and the hand-off of the Manutenzione (#150): made-up logs, the demo Orchestrator gets the message
+    // the log step of the Manutenzione (#150): made-up logs, whose new groups become app bug cards (ADR 0132)
     logDir: () => demoLogs,
-    handoff: async text => { const o = chats.list().find(c => c.isOrchestrator && !c.closedAt); if (!o) return false; await chats.send(o.id, `${APP_EVENT_LABEL}\n${text}`); return true; } });
+    findings: logs => research.afterPass(logs) });
+  // the maintenance with research (ADR 0132) on the demo chats: past findings written once, a research proposes two more
+  const demoOrchestrator = () => chats.list().find(c => c.isOrchestrator && !c.closedAt);
+  const research: ResearchService = new ResearchService({ userData: ctx.userData, lang: uiLang, root: () => demoBrainRoot, appVersion: () => app.getVersion(),
+    issuesUrl: () => 'https://github.com/lampi1/second-brain/issues', now,
+    engines: () => [{ harness: 'claude', label: 'Claude', web: true, effort: true }, { harness: 'cursor', label: 'Cursor', web: true, effort: false }],
+    bestModel: h => (h === 'claude' ? 'opus' : null), runs: () => demoLearningRuns(now()), roles,
+    brain: { state: () => brainModel.state(), apply: p => brainModel.applyResearch(p), noise: (key, known) => { brainModel.noise(key, known); } },
+    chats: {
+      // the demo answers at once (frozen): the chat starts without its prompt, the research is registered, then the
+      // canned findings arrive and the prompt runs (running → idle ends the research)
+      create: async req => {
+        const { prompt, ...rest } = req;
+        const c = await chats.create(rest, 'app');
+        setTimeout(() => {
+          for (const card of DEMO_LIVE) { try { research.propose(c.id, card); } catch { /* the research ended first */ } }
+          if (prompt) void chats.send(c.id, prompt).catch(() => { /* the demo chat was closed */ });
+        }, 300);
+        return c;
+      },
+      get: id => chats.list().find(c => c.id === id), stop: id => chats.stop(id),
+    },
+    orchestrator: { open: () => !!demoOrchestrator(), send: async text => { const o = demoOrchestrator(); if (!o) return false; await chats.send(o.id, text); return true; } },
+    changed: () => ctx.emitter.emit('maintenance:changed', undefined) });
+  writeDemoResearch(research.store, now());
+  ctx.emitter.tap((channel, payload) => { if (channel === 'chat:updated') research.chatUpdated(payload as ChatSummary); });
   if (!brainModel.report()) await brainModel.maintain('migration').catch(e => log.warn('demo', 'demo migration failed', { cause: errText(e), hint: 'the Skill page shows the demo brain without the migrated skills' }));
   // the memory review and the skill candidates on the demo brain (their real services; no local model, no replay engine)
   const memoryReview = new MemoryService({ root: () => demoBrainRoot });
@@ -252,7 +278,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   return {
     morning,
     cloud, chats, browser, personal, brain, mcp, mcpServers, runner, asks, wake, heldNews, tasks, skills, source, engines, later: createLater(ctx),
-    agents, runFeedback, agentLifecycle, agentPacks, brainModel, suggestSkills, queries, memoryReview, learningReview,
+    agents, runFeedback, agentLifecycle, agentPacks, brainModel, research, suggestSkills, queries, memoryReview, learningReview,
     setup: new SetupService(ctx.userData, true, now),
     autoClose: new AutoCloseService({ now: autoCloseNow, delayMs: () => 0, candidates: () => [], archive: async () => false, emit: states => ctx.emitter.emit('chat:autoCloseStatus', states) }),
     progress: new ProgressService(ctx.userData, { enabled: false, chats: () => chats.list() }),

@@ -28,7 +28,8 @@ async function theme(page: Page, scheme: 'dark' | 'light'): Promise<void> {
 }
 const top = (page: Page) => page.getByTestId('pd-card-top');
 async function drag(page: Page, dx: number, release = true): Promise<void> {
-  await top(page).locator('.pd-title').scrollIntoViewIfNeeded();
+  // centred: the cards are tall (ADR 0132) and the sticky tab bar may cover a title that is only "in view"
+  await top(page).locator('.pd-title').evaluate(e => e.scrollIntoView({ block: 'center' }));
   const box = (await top(page).locator('.pd-title').boundingBox())!;
   const x = box.x + box.width / 2, y = box.y + box.height / 2;
   await page.mouse.move(x, y);
@@ -95,9 +96,9 @@ test('the deck: every source in one stack, swipe / buttons / keys, undo, the end
     const decided: Record<string, 'approve' | 'reject'> = {}, snapped = new Set<string>();
     for (let guard = 0; guard < 20 && await top(page).count(); guard++) {
       const id = (await top(page).getAttribute('data-card'))!, card = first.items.find(c => c.id === id)!;
-      // every card asks one plain question with what each answer does (ADR 0126)
+      // every card asks one plain question (ADR 0126); what each answer does is on the buttons' tips (ADR 0132)
       await expect(page.getByTestId('pd-question')).toHaveText(/\?$/);
-      await expect(page.getByTestId('pd-answers')).toBeVisible();
+      await expect(page.getByTestId('pd-approve')).toHaveAttribute('title', /.+/);
       if (!snapped.has(card.source)) { snapped.add(card.source); await snap(page, `proposals-card-${card.source}-dark`); }
       if (card.ask.kind === 'remember' && card.ask.conflicts?.length) {
         // it contradicts what Scout already remembers: Approva waits for replace or keep both

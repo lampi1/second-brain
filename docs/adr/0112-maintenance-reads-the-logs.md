@@ -1,6 +1,6 @@
 # ADR 0112 · One Manutenzione that reads the app logs and ends in the Orchestrator
 
-Date: 2026-10-21 · Status: accepted (owner, issue #150) · Builds on: ADR 0077 (brain maintenance jobs), ADR 0111 (Log page)
+Date: 2026-10-21 · Status: accepted (owner, issue #150); the hand-off to the Orchestrator is replaced by bug cards (ADR 0132) · Builds on: ADR 0077 (brain maintenance jobs), ADR 0111 (Log page)
 
 ## Context
 The «Manutenzione» button ran the brain jobs only, from the Skill, Regole and Memoria pages, and its result stayed in a

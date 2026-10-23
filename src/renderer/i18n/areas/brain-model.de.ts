@@ -11,7 +11,7 @@ export const brainModelDe: typeof brainModelIt = {
   'bm.changed': (p: { at: string }) => `geändert ${p.at}`,
 
   'bm.job.upgrade': 'Brain-Aktualisierung', 'bm.job.migration': 'Migration', 'bm.job.corrections': 'Korrekturen', 'bm.job.repeated-task': 'Wiederholte Arbeit',
-  'bm.job.merge-skills': 'Doppelte Skills', 'bm.job.merge-memory': 'Doppelte Erinnerungen', 'bm.job.user': 'Du', 'bm.job.orchestrator': 'Orchestrator',
+  'bm.job.merge-skills': 'Doppelte Skills', 'bm.job.merge-memory': 'Doppelte Erinnerungen', 'bm.job.user': 'Du', 'bm.job.research': 'Wartung, von dir bestätigt', 'bm.job.orchestrator': 'Orchestrator',
   'bm.madeBy': (p: { job: string }) => `Von: ${p.job}`,
   'bm.kind.skill': 'Skill', 'bm.kind.agent': 'Agent', 'bm.kind.rule': 'Regel', 'bm.kind.memory': 'Gedächtnis', 'bm.kind.script': 'Skript',
 

@@ -14,7 +14,8 @@ import { BrainModelService } from '../../../src/main/brainmodel/service';
 import { writeDemoBrain } from '../../../src/main/brainmodel/demo';
 import type { AgentModelChoice, AgentRun } from '../../../src/shared/agents';
 import type { RoutingInfo } from '../../../src/shared/contract';
-import type { BrainChange } from '../../../src/shared/brain-model';
+import type { BrainChange, LogScan } from '../../../src/shared/brain-model';
+import type { ResearchProposal } from '../../../src/shared/maintenance-research';
 import { maintenanceEvent } from '../../../src/main/brain/announce';
 
 const roots: string[] = [];
@@ -26,7 +27,7 @@ const DEV = 'artisan';
 const OTHER = 'scout';
 const routing: RoutingInfo = { table: null, registry: null, kinds: [], error: null, history: [] };
 
-function world(opts: { demo?: boolean; scripts?: { file: (id: string) => string; changed: () => void }; runs?: AgentRun[]; applied?: (c: BrainChange[]) => void; logDir?: string; handoff?: (text: string) => Promise<boolean> } = {}) {
+function world(opts: { demo?: boolean; scripts?: { file: (id: string) => string; changed: () => void }; runs?: AgentRun[]; applied?: (c: BrainChange[]) => void; logDir?: string; findings?: (logs: LogScan) => { bugs: number; forget: number } } = {}) {
   const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-brainmodel-'))); roots.push(base);
   const data = path.join(base, 'data'); fs.mkdirSync(data);
   const brain = opts.demo ? writeDemoBrain(path.join(base, 'brain'), NOW) : path.join(base, 'brain');
@@ -40,7 +41,7 @@ function world(opts: { demo?: boolean; scripts?: { file: (id: string) => string;
   const service = new BrainModelService({ userData: data, root: () => brain, home: null, catalog, packs: flows, learning, runs: () => opts.runs ?? [], routing: () => routing,
     suggestSkills: async () => [],
     emit: () => { emitted++; }, auto: false, now: () => NOW, ...(opts.applied ? { applied: opts.applied } : {}),
-    ...(opts.logDir ? { logDir: () => opts.logDir! } : {}), ...(opts.handoff ? { handoff: opts.handoff } : {}), ...(opts.scripts ? { scripts: opts.scripts } : {}) });
+    ...(opts.logDir ? { logDir: () => opts.logDir! } : {}), ...(opts.findings ? { findings: opts.findings } : {}), ...(opts.scripts ? { scripts: opts.scripts } : {}) });
   const agent = (id: string) => catalog.list().profiles.find(p => p.id === id)!;
   return { base, brain, data, catalog, flows, learning, service, agent, emitted: () => emitted };
 }
@@ -258,7 +259,7 @@ describe('evidence claims (ADR 0109)', () => {
   });
 });
 
-describe('one Manutenzione that reads the logs and hands the result to the Orchestrator (#150)', () => {
+describe('one Manutenzione that reads the logs and makes cards of them (#150, ADR 0132)', () => {
   const line = (t: string, lvl: string, scope: string, msg: string, cause?: string) => JSON.stringify({ t, lvl, scope, msg, ...(cause ? { cause } : {}) });
   it('groups the new warnings and errors, skips the known one, sends one message, and a one-job pass does neither', async () => {
     const logs = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-logs-'))); roots.push(logs);
@@ -271,19 +272,18 @@ describe('one Manutenzione that reads the logs and hands the result to the Orche
       line('2026-10-19T08:05:00Z', 'info', 'chats', 'turn done'),
       'not json',
     ].join('\n'));
-    const sent: string[] = [];
-    const w = world({ logDir: logs, handoff: async text => { sent.push(text); return true; } });
+    const seen: LogScan[] = [];
+    const w = world({ logDir: logs, findings: scan => { seen.push(scan); return { bugs: scan.groups.filter(g => !g.known).length, forget: 0 }; } });
     await w.service.maintain('migration');
-    expect(sent).toEqual([]); // a single job is not the full pass
+    expect(seen).toEqual([]); // a single job is not the full pass
     let state = await w.service.maintain();
     const groups = state.lastRun!.logs!.groups;
     expect(groups.map(g => [g.lvl, g.scope, g.count])).toEqual([['error', 'task', 2], ['warn', 'chats', 2], ['warn', 'cli', 1]]);
-    expect(state.lastRun!.handoff).toEqual({ sent: true });
-    expect(sent).toHaveLength(1);
-    expect(sent[0]).toContain('Lettura delle novità failed');
-    expect(sent[0]).toContain(path.join(logs, 'app-2026-10-19.jsonl'));
-    expect(sent[0]).toMatch(/Herald.*issue aperte.*commenta.*nuova/s);
-    // the user marks the drift as known: listed apart and never handed on
+    // the groups become cards (ADR 0132), never a message to the Orchestrator
+    expect(state.lastRun!.cards).toEqual({ bugs: 3, forget: 0 });
+    expect(state.lastRun!.handoff).toBeUndefined();
+    expect(seen[0]!.files).toEqual([path.join(logs, 'app-2026-10-19.jsonl')]);
+    // the user marks the drift as known: listed apart and never carded
     const drift = groups.find(g => g.scope === 'cli')!;
     state = w.service.noise(drift.key, true);
     expect(state.lastRun!.logs!.groups.find(g => g.key === drift.key)!.known).toBe(true);
@@ -291,13 +291,14 @@ describe('one Manutenzione that reads the logs and hands the result to the Orche
     await w.service.maintain('corrections'); // a one-job pass (like a timer's) keeps the log step's time
     state = await w.service.maintain();
     expect(state.lastRun!.logs!.since).toBe(NOW);
-    expect(sent[1]).toContain('nessun gruppo nuovo');
+    expect(state.lastRun!.cards).toEqual({ bugs: 0, forget: 0 });
   });
-  it('says so when no Orchestrator is open', async () => {
+  it('still records the pass when making the cards fails', async () => {
     const logs = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-logs-'))); roots.push(logs);
-    const w = world({ logDir: logs, handoff: async () => false });
+    const w = world({ logDir: logs, findings: () => { throw new Error('store locked'); } });
     const state = await w.service.maintain();
-    expect(state.lastRun!.handoff).toEqual({ sent: false, why: 'nessun Orchestrator aperto' });
+    expect(state.lastRun!.logs).toBeDefined();
+    expect(state.lastRun!.cards).toBeUndefined();
   });
 });
 
@@ -335,5 +336,29 @@ describe('the Memoria hub trash (ADR 0122)', () => {
     expect(() => service.remove('rule', 'CLAUDE.md')).toThrow();
     expect(fs.existsSync(path.join(brain, 'CLAUDE.md'))).toBe(true);
     expect(() => service.remove('script', 'x.mjs')).toThrow();
+  });
+});
+
+describe('applyResearch (ADR 0132)', () => {
+  const card = (x: Partial<ResearchProposal>): ResearchProposal => ({ id: 'r-1', chatId: 'c1', at: NOW, kind: 'skill', title: 'Release notes', adds: 'a', removes: '', why: 'w', evidence: [], sources: [], expected: '', risk: '', state: 'open', ...x });
+  it('a skill for a role is one change: «Annulla» takes back the skill and the link together', () => {
+    const w = world();
+    const id = w.service.applyResearch(card({ change: { target: 'skill', role: DEV, name: 'note-rilascio', text: 'Titoli per area.' } }));
+    const file = path.join(w.brain, '.claude/skills/note-rilascio/SKILL.md');
+    expect(fs.readFileSync(file, 'utf8')).toContain('Titoli per area.');
+    expect(w.agent(DEV).knowhow?.linked).toContain('note-rilascio');
+    w.service.rollback(id);
+    expect(fs.existsSync(file)).toBe(false);
+    expect(w.agent(DEV).knowhow?.linked ?? []).not.toContain('note-rilascio');
+  });
+  it('a rule for every role goes to the lessons; a lessons file that cannot be read is never replaced', () => {
+    const w = world();
+    w.service.applyResearch(card({ kind: 'rule', change: { target: 'rule', text: 'Lancia i test prima di dire fatto.' } }));
+    expect(fs.readFileSync(path.join(w.brain, 'rules/lessons.md'), 'utf8')).toContain('Lancia i test prima di dire fatto.');
+    const v = world();
+    const real = path.join(v.base, 'elsewhere.md'); fs.writeFileSync(real, '# mine\n');
+    fs.mkdirSync(path.join(v.brain, 'rules'), { recursive: true }); fs.symlinkSync(real, path.join(v.brain, 'rules/lessons.md'));
+    expect(() => v.service.applyResearch(card({ kind: 'rule', change: { target: 'rule', text: 'x' } }))).toThrow(/non si può leggere/);
+    expect(fs.readFileSync(real, 'utf8')).toBe('# mine\n');
   });
 });
