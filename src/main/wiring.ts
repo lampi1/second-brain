@@ -669,6 +669,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     }, initialKeptOpen: kept,
     saveKeptOpen: ids => { try { writeLocal(keptFile, { version: 1, ids }); } catch (e) { keptProblem = true; throw e; } },
     emit: states => ctx.emitter.emit('chat:autoCloseStatus', states),
+    away: () => { const w = ctx.window(); return !w || w.isDestroyed() || !w.isVisible() || w.isMinimized(); },
   });
   autoCloseRef.current = autoCloseService;
   const autoCloseTimer = setInterval(() => { void autoCloseService.tick().catch(e => log.warn('chats', 'automatic archive suspended', { cause: errText(e) })); }, 1000);

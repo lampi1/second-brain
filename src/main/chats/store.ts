@@ -112,6 +112,13 @@ export interface StoredChat {
   closedBy?: 'auto' | 'user';
   /** a turn was running when this was written: if the app stops now, the next start resumes the chat by itself */
   working?: true;
+  /** how its last turn ended and what its last answer waits for: a restored chat closes by itself only after a clean
+   *  result that waits for nobody (ADR 0134) */
+  lastResult?: { at: number; isError: boolean; interrupted?: true };
+  waitsOn?: 'user' | 'colleagues';
+  waitsOnWork?: true;
+  /** its engine ended with an error or in the middle of a turn: not finished, it never closes by itself */
+  unfinished?: true;
   /** how an agent's app_create_chat chose its engine (the routing table, ADR 0032) */
   route?: RouteDecision;
   /** the chat that delegated this one (agent_delegate) and the contract it got (shared/delegation.ts) */
@@ -140,6 +147,11 @@ function readChatWork(value:unknown):NonNullable<StoredChat['work']>{
   if(work&&['assigned','waiting-mail','completed'].includes(String(work.status))&&typeof work.updatedAt==='number'&&Number.isFinite(work.updatedAt)&&work.updatedAt>=0)return {status:work.status!,updatedAt:work.updatedAt};
   // Invalid persisted holds fail closed until an explicit lifecycle update; they never turn into completed work.
   return {status:'assigned',updatedAt:0};
+}
+function readLastResult(value: unknown): StoredChat['lastResult'] | undefined {
+  const v = value as Record<string, unknown> | null | undefined;
+  if (!v || typeof v !== 'object' || !num(v.at) || typeof v.isError !== 'boolean') return undefined;
+  return { at: v.at as number, isError: v.isError, ...(v.interrupted === true ? { interrupted: true as const } : {}) };
 }
 function extras(c: Record<string, unknown>): Partial<StoredChat> {
   const ctx = c.context as Record<string, unknown> | undefined;
@@ -236,6 +248,10 @@ function valid(x: unknown): StoredChat | null {
     // the Orchestrator is never archived, whatever the file says
     ...(typeof c.closedAt === 'number' && Number.isFinite(c.closedAt) && !orchestrator ? { closedAt: c.closedAt, closedBy: c.closedBy === 'user' ? 'user' as const : 'auto' as const } : {}),
     ...(c.working === true && typeof c.closedAt !== 'number' ? { working: true as const } : {}),
+    ...(readLastResult(c.lastResult) ? { lastResult: readLastResult(c.lastResult)! } : {}),
+    ...(c.waitsOn === 'user' || c.waitsOn === 'colleagues' ? { waitsOn: c.waitsOn } : {}),
+    ...(c.waitsOnWork === true ? { waitsOnWork: true as const } : {}),
+    ...(c.unfinished === true ? { unfinished: true as const } : {}),
     ...(heldResults(c.heldResults) ? { heldResults: heldResults(c.heldResults)! } : {}),
   };
 }
