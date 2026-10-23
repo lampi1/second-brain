@@ -94,8 +94,12 @@ try {
   await page.getByTestId('plan-toggle-tree-plan').click();
   await page.getByTestId('plan-steps-tree-plan').waitFor();
   await capture('plan-expanded');
-  const result = page.getByTestId('canonical-result').last();
-  await result.locator('summary').click();
+  const ready = page.getByTestId('tile-orchestrator').getByTestId('result-ready').filter({
+    has: page.locator('[data-testid="chatref-open"][data-chat-id="tree-plan"]'),
+  });
+  await ready.getByTestId('result-ready-toggle').click();
+  const result = ready.getByTestId('canonical-result');
+  await result.waitFor();
   await result.scrollIntoViewIfNeeded();
   await result.getByText('Proposta disponibile', { exact: false }).waitFor();
   await capture('canonical-result');

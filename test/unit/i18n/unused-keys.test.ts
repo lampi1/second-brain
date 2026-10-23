@@ -24,6 +24,9 @@ it('every Italian UI text is still used by the code', () => {
     for (let i = parts.length - 1; i > 0; i--) if (prefixes.has(`${parts.slice(0, i).join('.')}.`)) return true;
     return false;
   };
-  const unused = Object.keys(italian).filter(k => k.includes('.') && !k.startsWith('sys.') && !code.includes(k) && !dynamic(k));
+  // Index direct mentions once; keep the substring fallback for keys embedded in longer tokens.
+  // Dynamic keys also avoid rescanning the entire source tree for each dictionary entry.
+  const tokens = new Set(code.match(/[\w.-]+/g));
+  const unused = Object.keys(italian).filter(k => k.includes('.') && !k.startsWith('sys.') && !dynamic(k) && !tokens.has(k) && !code.includes(k));
   expect(unused).toEqual([]);
 });
