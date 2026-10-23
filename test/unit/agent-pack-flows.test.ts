@@ -65,11 +65,14 @@ describe('lessons queue and role edits', () => {
     learning.save({ ...draftOf(role), instructions: 'Search first, then cite the file.' }, 'scout');
     expect(fs.readFileSync(file, 'utf8')).toContain('Manual note.');
   });
-  it('queues a lesson without editing anything and wakes the corrections job', () => {
+  it('queues every lesson until the user approves it', () => {
     const f = setup(), learning = new AgentPackLearning(f.flows, f.data);
     let woke = 0; learning.onProposed = () => { woke++; };
     const proposal = learning.propose('sentinel', 'Cite evidence.', 'run:example', 'skill', 'review-notes');
-    expect(fs.readdirSync(f.brain)).toEqual([]); expect(woke).toBe(1);
+    expect(fs.readdirSync(f.brain)).toEqual([]); expect(woke).toBe(0);
+    expect(learning.pending()).toEqual([]);
+    expect(learning.waiting()).toHaveLength(1);
+    learning.review(proposal.id, true); expect(woke).toBe(1);
     expect(learning.pending()).toMatchObject([{ id: proposal.id, target: 'skill', skill: 'review-notes' }]);
     expect(() => learning.propose('sentinel', 'x', 'y', 'everything' as never)).toThrow();
     learning.settle(proposal.id, 'approved', 'skill review-notes');
@@ -78,7 +81,7 @@ describe('lessons queue and role edits', () => {
     expect(agentLearnTool(learning).name).toBe('agent_learn_propose');
     expect(f.flows.profile('sentinel').trial).toBeUndefined(); // no approval, no trial
   });
-  it('a work chat’s lesson: only for its own run’s role, never a rule, queued until the Orchestrator accepts it', async () => {
+  it('a work chat’s lesson: only for its own run’s role, never a rule, queued until the user accepts it', async () => {
     const f = setup(), learning = new AgentPackLearning(f.flows, f.data);
     let woke = 0; learning.onProposed = () => { woke++; };
     const runs: AgentRun[] = [{ runId: 'r1', chatId: 'w', agentId: 'scout', version: 1, goal: 'g', startedBy: 'orchestrator', startedAt: 1, counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null }, costUsd: 0, tokens: null }];
@@ -96,10 +99,11 @@ describe('lessons queue and role edits', () => {
     // the authenticated Orchestrator's review tool: list, then accept (now pending for the job) or discard
     const review = lessonReviewTool(learning), rv = (a: Record<string, unknown>) => JSON.parse(String(review.run(a, { params: {} } as unknown as Parameters<typeof review.run>[1])));
     expect(rv({})).toHaveLength(1);
-    rv({ id: queued.id, accept: true });
+    expect(() => rv({ id: queued.id, accept: true })).toThrow(/Only the user/);
+    learning.review(queued.id, true);
     expect(woke).toBe(1); expect(learning.pending()).toMatchObject([{ id: queued.id }]); expect(learning.waiting()).toEqual([]);
     const second = JSON.parse(String(await call({ rule: 'Other.', evidence: 'run:r1' }))) as { id: string };
-    expect(rv({ id: second.id, accept: false })).toMatchObject({ status: 'discarded' });
+    expect(learning.review(second.id, false)).toMatchObject({ status: 'discarded' });
     // an app endpoint that is not the authenticated Orchestrator queues too, and takes no maxContext
     const app = agentLearnTool(learning, 'app:x');
     expect(JSON.stringify(app.inputSchema)).not.toContain('maxContext');

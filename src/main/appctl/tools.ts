@@ -51,11 +51,14 @@ import type { BrainScripts } from '../brain/scripts';
 import type { BrainChangelog } from '../brain/changelog';
 import { scriptWriteTools } from '../brain/scripts-tools';
 import { AGENT_LABEL } from '../../shared/agent-label';
+import { workflowTools } from '../workflows/tools';
+import type { Workflows } from '../workflows/service';
 
 export type ToolOut = string | { text?: string; images?: { data: string; mimeType: string; caption?: string }[] } | object;
 export interface ToolDef { name: string; description: string; inputSchema: object; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean }; run(args: Record<string, unknown>): Promise<ToolOut> | ToolOut }
 
 export interface AppCtlDeps {
+  workflows?: Workflows;
   /** cloud agents (ADR 0080): app_create_chat where:'cloud' starts one, app_chats lists them */
   cloud?: CloudService;
   agentLearning?: AgentPackLearning;
@@ -91,7 +94,7 @@ export interface AppCtlDeps {
   brainScripts?: { scripts: BrainScripts; changelog: BrainChangelog };
 }
 
-/** agent_learn_propose on the app endpoints: for the authenticated Orchestrator a lesson applied at once with an undo;
+/** agent_learn_propose on the app endpoints: all proposals require a renderer user decision before application;
  *  on any other app endpoint the lesson waits like a work chat's (no rule). */
 function learnTool(d: AppCtlDeps, callerId: string | undefined, authenticated: boolean): ToolDef {
   return toolDef(authenticated && callerId ? agentLearnTool(d.agentLearning!) : agentLearnTool(d.agentLearning!, `app:${callerId ?? 'orchestrator'}`.slice(0, 120)));
@@ -172,6 +175,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   const delegated = (chatId: string) => d.chats.list().some(c => c.id === chatId && !!c.parentId);
   const contentOf = (chatId: string) => { guard(chatId); if (delegated(chatId)) throw new Error('chat delegata da un altro ruolo: il suo contenuto lo legge il genitore; tu ne vedi lo stato (app_chats, app_digest)'); return chatId; };
   const tools: ToolDef[] = [
+    ...(d.workflows && authed() ? workflowTools(d.workflows, id => d.chats.list().some(c => c.id === id && mine(c) && !c.parentId && !c.isOrchestrator), id => d.chats.list().find(c => c.id === id)) : []),
     ...(d.agentLearning ? [learnTool(d, callerId, authed())] : []),
     ...(d.agentLearning && authed() ? [toolDef(lessonReviewTool(d.agentLearning))] : []),
     ...(d.brainScripts && authed() ? scriptWriteTools(d.brainScripts.scripts, d.brainScripts.changelog, () => caller()?.title || 'Orchestrator') : []),

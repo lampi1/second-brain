@@ -97,13 +97,18 @@ describe('one-time migration', () => {
 });
 
 describe('corrections', () => {
-  it('applies each lesson at once to the role, a skill or the rules, with no approval', async () => {
+  it('applies role, skill and rule lessons only after explicit user approval', async () => {
     const w = world();
     put(w.brain, '.claude/skills/fatture/SKILL.md', '---\nname: fatture\ndescription: Esportare le fatture\n---\n\n1. Esporta.\n');
     w.learning.propose(DEV, 'Cita sempre il file e la riga', 'r_000000000001');
     w.learning.propose(DEV, 'Controlla il totale prima di esportare', 'r_000000000002', 'skill', 'fatture');
     w.learning.propose(DEV, 'Mai comandi distruttivi senza conferma', 'r_000000000003', 'rule');
-    const state = await w.service.maintain('corrections'); // waits for the run the first proposal started
+    const before = w.agent(DEV).instructions;
+    await w.service.maintain('corrections');
+    expect(w.agent(DEV).instructions).toBe(before);
+    expect(w.learning.waiting()).toHaveLength(3);
+    for (const lesson of w.learning.waiting()) w.learning.review(lesson.id, true);
+    const state = await w.service.maintain('corrections');
     expect(w.agent(DEV).instructions).toMatch(/## Lezioni dalle correzioni\n\n- Cita sempre il file e la riga/);
     expect(w.agent(DEV).trial).toBeUndefined();
     expect(fs.readFileSync(path.join(w.brain, '.claude/skills/fatture/SKILL.md'), 'utf8')).toMatch(/## Lezioni\n\n- Controlla il totale prima di esportare/);
@@ -120,7 +125,7 @@ describe('corrections', () => {
 });
 
 describe('corrections from a work chat', () => {
-  it('waits until the Orchestrator accepts it; never a rule, never a permission grant', async () => {
+  it('waits until the user accepts it; never a rule, never a permission grant', async () => {
     const w = world();
     const before = w.agent(DEV).instructions;
     const queued = w.learning.propose(DEV, 'Rileggi il diff prima di consegnare', 'r_000000000004', 'role', undefined, 'c_work');

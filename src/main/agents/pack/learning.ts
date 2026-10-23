@@ -1,9 +1,5 @@
-// The lessons queue (ADR 0077, 0083): the Orchestrator records a lesson from the user's corrections with
-// agent_learn_propose, and the brain model's "corrections" maintenance job applies it at once, without the user's
-// approval, to the role's text, to a skill or to a rule (brainmodel/jobs.ts), logged with an undo. A work chat (its own
-// token endpoint, chatLearnTool) may only propose a lesson for its own open run's role, never a rule for every role, and
-// its lesson waits (fromChat) until the authenticated Orchestrator accepts it with the user. Also the save path of the
-// role editor (Brain → Agenti), which keeps the role's know-how snapshot.
+// Lessons from every agent wait for explicit user approval in Regia. Only approved lessons reach the corrections job.
+// Old pending lessons migrate to the waiting queue; agent tools cannot approve. User role edits still snapshot skills.
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import type { AgentDraft, AgentProfile } from '../../../shared/agents';
@@ -21,7 +17,7 @@ export class AgentPackLearning {
     this.file = path.join(userData, 'agent-learn-proposals.json');
     const raw = readLocal(this.file) as { proposals?: LearnedRuleProposal[] } | undefined;
     if (raw && (!Array.isArray(raw.proposals) || raw.proposals.length > 500 || raw.proposals.some(p => !p || typeof p.rule !== 'string' || typeof p.evidence !== 'string' || !['pending', 'approved', 'discarded'].includes(p.status) || (p.fromChat !== undefined && typeof p.fromChat !== 'string')))) throw new Error('Invalid learned-rule proposal store');
-    this.proposals = raw?.proposals ?? [];
+    this.proposals = (raw?.proposals ?? []).map(p => p.status === 'pending' && !p.userApproved ? { ...p, fromChat: p.fromChat || 'orchestrator' } : p);
   }
   private persist(): void { writeLocal(this.file, { version: 1, proposals: this.proposals }); }
   /** Called after a lesson is queued: the service runs the corrections job (wired by brainmodel/service.ts). */
@@ -37,22 +33,22 @@ export class AgentPackLearning {
     if (this.proposals.filter(p => p.status === 'pending').length >= 200) throw new Error('Too many lessons waiting: the maintenance applies them first');
     if (fromChat !== undefined && this.waiting().length >= 50) throw new Error('Too many lessons waiting for the Orchestrator: send this one with send_to_chat instead.');
     const proposal: LearnedRuleProposal = { id: randomBytes(8).toString('hex'), agentId, rule: rule.trim(), evidence: evidence.trim(), createdAt: Date.now(), status: 'pending',
-      ...(target ? { target } : {}), ...(skill ? { skill } : {}), ...(fromChat ? { fromChat } : {}) };
+      ...(target ? { target } : {}), ...(skill ? { skill } : {}), fromChat: fromChat || 'orchestrator' };
     this.proposals = [...this.proposals.slice(-499), proposal]; this.persist();
-    if (!fromChat) try { this.onProposed?.(); } catch { /* the next maintenance pass applies it */ }
+    // Every proposal waits for a real user decision, including the Orchestrator's.
     return structuredClone(proposal);
   }
   /** Lessons the corrections job applies, oldest first: a work chat's lesson only once accepted. */
-  pending(): LearnedRuleProposal[] { return structuredClone(this.proposals.filter(p => p.status === 'pending' && !p.fromChat)); }
+  pending(): LearnedRuleProposal[] { return structuredClone(this.proposals.filter(p => p.status === 'pending' && p.userApproved === true && !p.fromChat)); }
   /** Work chats' lessons waiting for the Orchestrator and the user, oldest first. */
   waiting(): LearnedRuleProposal[] { return structuredClone(this.proposals.filter(p => p.status === 'pending' && !!p.fromChat)); }
-  /** The authenticated Orchestrator's decision on a waiting lesson (agent_lessons_waiting): accepted = applied by the job. */
+  /** The renderer's explicit user decision on a waiting lesson (agent_lessons_waiting): accepted = applied by the job. */
   review(id: string, accept: boolean): LearnedRuleProposal {
     const p = this.proposals.find(x => x.id === id && x.status === 'pending' && !!x.fromChat);
     if (!p || typeof accept !== 'boolean') throw new Error('Waiting lesson not found.');
     if (accept) checkPermissionText(p.rule);
     const next: LearnedRuleProposal = { ...p, note: accept ? `accettata (da ${p.fromChat})` : 'rifiutata', ...(accept ? {} : { status: 'discarded' as const }) };
-    if (accept) delete next.fromChat;
+    if (accept) { delete next.fromChat; next.userApproved = true; }
     this.proposals = this.proposals.map(x => x === p ? next : x);
     this.persist();
     if (accept) try { this.onProposed?.(); } catch { /* the next maintenance pass applies it */ }
@@ -77,7 +73,7 @@ export class AgentPackLearning {
  *  lesson waits like a work chat's (fromChat) and may not be a rule for every role. */
 export function agentLearnTool(service: AgentPackLearning, queueAs?: string): McpTool {
   return { name: 'agent_learn_propose', description: queueAs ? 'Record one lesson from the user\'s corrections, with evidence (run ids). It waits for the Orchestrator and the user before it is applied: target "role" (default) for the role\'s text, "skill" for the named skill. Never for permissions, settings or hooks.'
-    : 'Record one lesson from the user\'s corrections, with evidence (run ids). The app applies it at once, without asking the user, and logs it with an undo: target "role" (default) adds it to the role\'s text, "skill" to the named skill (how a job is done), "rule" to the brain\'s rules (applies to every role). Never for permissions, settings, limits or hooks: those change only in Brain → Agenti. Lessons proposed by work chats wait in agent_lessons_waiting.',
+    : 'Record one lesson from the user\'s corrections, with evidence (run ids). The app queues it for explicit user approval in Regia before applying it: target "role" (default) adds it to the role\'s text, "skill" to the named skill (how a job is done), "rule" to the brain\'s rules (applies to every role). Never for permissions, settings, limits or hooks: those change only in Brain → Agenti. Lessons proposed by work chats wait in agent_lessons_waiting.',
     inputSchema: { type: 'object', properties: { agentId: { type: 'string', description: 'the role id (scout, artisan…)' }, rule: { type: 'string' }, evidence: { type: 'string' }, target: { type: 'string', enum: queueAs ? ['role', 'skill'] : ['role', 'skill', 'rule'] }, skill: { type: 'string' } }, required: ['agentId', 'rule', 'evidence'], additionalProperties: false },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: args => {
@@ -115,13 +111,11 @@ export function chatLearnTool(service: AgentPackLearning, runs: () => readonly A
 /** agent_lessons_waiting, the authenticated Orchestrator's only (appctl/tools.ts): the work chats' queued lessons; with
  *  id + accept, its decision after asking the user (accepted = applied by the corrections job, with an undo). */
 export function lessonReviewTool(service: AgentPackLearning): McpTool {
-  return { name: 'agent_lessons_waiting', description: 'Lessons that work chats proposed for their own role, waiting (they are not applied). List them with no arguments; ask the user, then pass id and accept (true = applied at once with an undo, false = discarded).',
-    inputSchema: { type: 'object', properties: { id: { type: 'string' }, accept: { type: 'boolean' } }, additionalProperties: false },
-    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  return { name: 'agent_lessons_waiting', description: 'Read lessons awaiting the user in Regia. Only the user can approve or reject them through the app; no agent may decide.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     run: args => {
-      if (Object.keys(args).some(k => !['id', 'accept'].includes(k))) throw new Error('agent_lessons_waiting: unknown argument.');
-      if (args.id === undefined && args.accept === undefined) return JSON.stringify(service.waiting());
-      if (typeof args.id !== 'string' || typeof args.accept !== 'boolean') throw new Error('Pass both id and accept.');
-      return JSON.stringify(service.review(args.id, args.accept));
+      if (Object.keys(args).length) throw new Error('Only the user can decide lessons in Regia.');
+      return JSON.stringify(service.waiting());
     } };
 }

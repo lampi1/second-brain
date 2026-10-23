@@ -484,3 +484,15 @@ describe('OrchestratorWake: quiet results and app-started chats (token plan 2026
     expect(sent).toHaveLength(1);
   });
 });
+
+describe('workflow completion wake', () => {
+  it('wakes for a linked clean report so automatic review can continue', async () => {
+    vi.useFakeTimers();
+    try {
+      const { w, up, sent } = make(); up({ id: 'implementation', state: 'idle' });
+      w.cleanReport({ chatId: 'implementation', title: 'Implementation', role: 'Artisan', summary: 'Ready for review', workflow: true });
+      await vi.advanceTimersByTimeAsync(1100);
+      expect(sent).toHaveLength(1); expect(sent[0]!.text).toContain('Ready for review'); w.stop();
+    } finally { vi.useRealTimers(); }
+  });
+});

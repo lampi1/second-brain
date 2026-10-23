@@ -2,6 +2,8 @@
 // result) and event channels (main → renderer). The preload exposes exactly these channels and nothing else
 // (src/preload/index.ts reads INVOKE_CHANNELS / EVENT_CHANNELS); main registers a handler for every invoke channel
 // (src/main/ipc.ts) and rejects senders that are not the app's own page. Change a shape here first, then both sides.
+import type { WorkThread, WorkDecision } from './workflows';
+import type { LearnedRuleProposal } from './agent-pack';
 import type { LearningEvidence, LearningReviewState, MemoryReviewRecord, ReplayComparison, ReplayRecord, SkillCandidateView } from './learning-review';
 import type { SysCode, SysParams } from './sys';
 import type { AgentLifecycleDecide, AgentLifecycleSnapshot } from './agent-lifecycle';
@@ -1237,6 +1239,10 @@ export interface SearchIndexStatus { model: SearchModelState; docs: number; chun
 export interface InputLagReport { keys: number; p50: number; p95: number; max: number; longTaskMs: number; windowSec: number }
 
 export interface InvokeMap {
+  'work:lessons': [void, LearnedRuleProposal[]];
+  'work:lessonDecide': [{ id: string; rule: string; approve: boolean }, void];
+  'work:list': [void, WorkThread[]];
+  'work:decide': [WorkDecision, WorkThread];
   'connectors:list': [void, ConnectorState[]];
   'connectors:login': [{ provider: ConnectorId }, void];
   'connectors:cancelLogin': [void, void];
@@ -1620,6 +1626,7 @@ export interface ClipboardImage { mimeType: string; bytes: Uint8Array }
 
 /** main → renderer. */
 export interface EventMap {
+  'work:changed': WorkThread[];
   'update:state': AppUpdateState;
   'update:checkpointRequest': UpdateCheckpointRequest;
   'update:checkpointRelease': { requestId: string };
@@ -1697,6 +1704,7 @@ export type InvokeResult<K extends InvokeChannel> = InvokeMap[K][1];
 
 // Runtime lists (the preload allow-list). Kept in sync with the maps by the compile-time checks below.
 export const INVOKE_CHANNELS = [
+  'work:lessons', 'work:lessonDecide', 'work:list', 'work:decide',
   'pulse:list', 'pulse:status', 'pulse:seen', 'pulse:save', 'pulse:act', 'pulse:dismiss', 'pulse:runNow', 'approvals:list', 'approvals:decide',
   'connectors:list', 'connectors:login', 'connectors:cancelLogin', 'connectors:probe', 'connectors:select', 'connectors:disconnect', 'connectors:useToken',
   'mcpservers:state', 'mcpservers:save', 'mcpservers:remove', 'mcpservers:setSecret', 'mcpservers:deleteSecret', 'mcpservers:setAccess', 'mcpservers:test', 'mcpservers:importScan', 'mcpservers:importApply',
@@ -1728,6 +1736,7 @@ export const INVOKE_CHANNELS = [
   'cloud:list', 'cloud:start', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:readiness', 'cloud:dismiss',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
+  'work:changed',
   'pulse:changed', 'approvals:changed', 'proposals:changed', 'maintenance:changed', 'phrases:changed',
   'update:state', 'update:checkpointRequest', 'update:checkpointRelease',
   'progress:changed',

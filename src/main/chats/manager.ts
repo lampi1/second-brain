@@ -149,7 +149,7 @@ export interface ChatManagerOptions {
   /** ms after a new Claude chat (or the app's start) before the next waiting engine starts (default 5 s / 20 s) */
   prewarmDelayMs?: number;
   /** the CPU-aware queue (ADR 0036): agents' starts and turns wait while the machine is busy; absent = never wait */
-  admission?: { sampler: LoadSampler; limits: () => AdmissionLimits; tickMs?: number; autoTick?: boolean };
+  admission?: { priority?: (key: string) => number; sampler: LoadSampler; limits: () => AdmissionLimits; tickMs?: number; autoTick?: boolean };
   /** custom session factory (tests, future engines) */
   sessionFactory?: (harness: Harness, opts: SessionOptions, sink: SessionSink) => HarnessSession;
 

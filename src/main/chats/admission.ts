@@ -84,6 +84,8 @@ export interface QueuedEntry {
 }
 
 export interface AdmissionOptions {
+  /** Dynamic work-thread urgency: 0 production, 1 support, 2 normal. Never preempts running commands. */
+  priority?: (key: string) => number;
   sampler: LoadSampler;
   limits: () => AdmissionLimits;
   /** ms between two samples while something waits (default 2 s) */
@@ -157,7 +159,13 @@ export class AdmissionQueue {
     return true;
   }
 
+  private prioritize(): void {
+    const priority = (e: Entry) => this.o.priority?.(e.key) ?? 2;
+    this.q.sort((a, b) => priority(a) - priority(b) || Number(a.app) - Number(b.app) || a.since - b.since);
+  }
+
   entry(key: string): QueuedEntry | null {
+    this.prioritize();
     const i = this.q.findIndex(e => e.key === key);
     if (i < 0) return null;
     const e = this.q[i]!;
@@ -165,12 +173,14 @@ export class AdmissionQueue {
   }
 
   list(): QueuedEntry[] {
+    this.prioritize();
     return this.q.map((e, i) => ({ key: e.key, kind: e.kind, since: e.since, ...(e.app ? { app: true } : {}), position: i + 1 }));
   }
 
   /** One sample: under the thresholds `underNeeded` times in a row admits the head (one per sample). The switch
    *  turned off empties the queue in order. */
   tick(): void {
+    this.prioritize();
     if (!this.q.length) { this.disarm(); return; }
     const l = this.o.limits();
     if (!l.enabled) {

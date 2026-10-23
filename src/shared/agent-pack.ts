@@ -13,7 +13,7 @@ export type LessonTarget = 'role' | 'skill' | 'rule';
 /** A lesson from the user's corrections. approved = applied by the maintenance job (note says where), never by a click.
  *  fromChat = proposed by a work chat on its own endpoint: it waits (the job skips it) until the authenticated
  *  Orchestrator, with the user, accepts it (agent_lessons_waiting), so a work chat never writes a role's text on its own. */
-export interface LearnedRuleProposal { id: string; agentId: string; rule: string; evidence: string; createdAt: number; status: 'pending' | 'approved' | 'discarded'; target?: LessonTarget; skill?: string; note?: string; fromChat?: string }
+export interface LearnedRuleProposal { id: string; agentId: string; rule: string; evidence: string; createdAt: number; status: 'pending' | 'approved' | 'discarded'; target?: LessonTarget; skill?: string; note?: string; fromChat?: string; userApproved?: boolean }
 export interface AgentKnowhow { folder: string; linked: string[]; hash: string }
 export interface AgentPackIdentity { id: string; revision: number; importedFrom?: string }
 export interface PackStats { runs: number; successHuman: number; failHuman: number; versions: number; monthsUsed: number }

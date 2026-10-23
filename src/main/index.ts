@@ -60,6 +60,7 @@ import { canonicalRepoRoot } from './brain/adapters/codex-policy';
 import { suggestRequest } from './skills/suggest';
 import type { CloudService } from './cloud/service';
 import { ProposalsService } from './proposals/service';
+import { Workflows } from './workflows/service';
 import type { InvokeArg, InvokeChannel, InvokeResult } from '../shared/contract';
 
 /** The cloud agents' service (ADR 0080), or a clear error where a wiring has none. */
@@ -134,6 +135,7 @@ app.whenReady().then(async () => {
       emitter, problem: () => s.updateChats?.problem() ?? null, saveChats: () => { if (!s.updateChats) throw new Error('Salvataggio chat non disponibile.'); s.updateChats.checkpoint(); },
       flush: () => win?.webContents.session.flushStorageData(), quit: () => app.quit(),
     });
+  const workflows = s.workflows ?? new Workflows(path.join(app.getPath('userData'), 'work-threads.json'), rows => emitter.emit('work:changed', rows));
   const orchestrator = new OrchestratorService(s.chats, () => s.brain.info().brainRoot, {
     route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h),
     orchestratorChats: () => s.brain.settings().orchestratorChats,
@@ -464,6 +466,19 @@ app.whenReady().then(async () => {
     },
     // "Aggiorna" (Settings → Aggiornamenti, ADR 0075): update and restart only on the user's click, never from an agent's tool
     'source:get': a => (a?.refresh || !s.source.state().at ? s.source.refresh() : s.source.state()),
+    'work:lessons': () => s.agentPacks.learning.waiting(),
+    'work:lessonDecide': a => {
+      const lesson = s.agentPacks.learning.waiting().find(p => p.id === a.id);
+      if (!lesson || lesson.rule !== a.rule) throw new Error('La proposta è cambiata: rileggila.');
+      s.agentPacks.learning.review(a.id, a.approve);
+    },
+    'work:list': () => workflows.list(),
+    'work:decide': a => {
+      const row = workflows.decide(a);
+      const target = orchestrator.get();
+      if (target) void s.chats.send(target.id, `[evento app] Decisione registrata nel filo ${row.id}. Rileggi app_work_list e prosegui dalla decisione salvata; questa notifica non concede altri permessi.`, undefined, false, 'Regia', false, { kind: 'app' }).catch(e => log.warn('chats', 'workflow decision wake failed', { cause: errText(e), hint: 'The decision is saved; Fai il punto resumes it.' }));
+      return row;
+    },
     'orchestrator:get': () => orchestrator.get(),
     'orchestrator:ensure': a => orchestrator.ensure(a),
     'source:dismissLaunch': () => s.source.dismissLaunch(),
