@@ -5,6 +5,7 @@
 import { sb } from '../sb';
 import { app } from '../store/store';
 import { planAskKeys } from './plan-ask';
+import { durableAskKeys, reloadWorkflows, reloadLessons, workflowState } from '../store/workflows';
 import { callQuestions, closeModal, parkQuestions, setLater, ui } from '../store/ui';
 
 const postponed = new Set<string>();
@@ -23,13 +24,15 @@ export function resumeQuestions():void {
 /** Remove the old restart-wide silence; retain only still-open postponed request keys during this session. */
 export function startLater():void {
   void sb.invoke('later:set',{on:false}).catch(()=>{});
-  app.subscribe(()=>{
+  const prune = () => {
     const s=app.get();
-    const keys=new Set([...s.pending.map(keyOf),...planAskKeys(s)]);
+    const keys=new Set([...s.pending.map(keyOf),...planAskKeys(s),...durableAskKeys()]);
     let changed=false;
     for(const key of postponed)if(!keys.has(key)){postponed.delete(key);changed=true;}
     if(changed)notify();
-  });
+  };
+  app.subscribe(prune);
+  workflowState.subscribe(prune);
 }
 
 /** Park one unresolved request, never future requests or the other cards in the queue. */
@@ -40,7 +43,7 @@ export function answerLater(key?:string):void {
   const chosen=key??shown??focused;
   const target=chosen??pending.find(r=>!postponed.has(keyOf(r)));
   const targetKey=typeof target==='string'?target:target?keyOf(target):null;
-  if(targetKey&&(pending.some(r=>keyOf(r)===targetKey)||planAskKeys(app.get()).includes(targetKey)))postponed.add(targetKey);
+  if(targetKey&&(pending.some(r=>keyOf(r)===targetKey)||planAskKeys(app.get()).includes(targetKey)||durableAskKeys().includes(targetKey)))postponed.add(targetKey);
   parkQuestions();
   notify();
 }
@@ -50,12 +53,14 @@ export function answerLater(key?:string):void {
  *  dialog and never raises the window: an agent's turn must not put a permission under his keystrokes. */
 export function showQueue():void {
   resumeQuestions();
+  void reloadWorkflows(); void reloadLessons();
   ui.set(s=>({...s,qwin:{...s.qwin,open:true,first:null,aside:false}}));
 }
 
 /** Explicit navigation opens the actual request above any other dialog, without answering it. */
 export function openQueue(key:string|null):void {
   resumeQuestions();
+  void reloadWorkflows(); void reloadLessons();
   closeModal();
   void sb.invoke('overlay:focus',{target:'app'}).catch(()=>{});
   callQuestions(key);

@@ -1,4 +1,4 @@
-/* Calm work overview and bounded detail, used by WorkCockpit above the agent strips. */
+/* Legacy read-only work recap styling and Orchestrator action spacing; no board is mounted on Home. */
 .work-cockpit{padding:20px;border:1px solid var(--border,#363642);border-radius:16px;background:var(--surface,#1c1c24);margin-bottom:18px}
 .work-heading,.work-card header,.work-card footer{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .work-heading{justify-content:space-between;margin-bottom:14px}.work-heading h2{font-size:22px;margin:4px 0}.work-eyebrow{font-size:10px;letter-spacing:.12em;opacity:.65}.work-live{font-size:11px;opacity:.65}

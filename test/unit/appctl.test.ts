@@ -465,6 +465,19 @@ describe('app control tools', () => {
     expect(ui).toEqual([{ action: 'unblock' }]);
   });
 
+  it('app_unblock opens durable workflow and learning decisions without any live chat request', async () => {
+    const ui: unknown[] = [];
+    const base = {
+      chats: { list: () => [{ id: 'or', isOrchestrator: true }], items: () => [{ kind: 'user', at: Date.now(), text: 'Fai il punto' }], pending: () => [] } as unknown as ChatService,
+      browser: {} as BrowserService, brain: {} as BrainService, window: () => null, version: '0', emitUi: (c: unknown) => ui.push(c),
+      workflows: { list: () => [{ status: 'approval', proposal: { id: 'p' } }, { status: 'done' }] },
+      agentLearning: { waiting: () => [{ id: 'lesson' }] },
+    } as unknown as Parameters<typeof appControlTools>[0];
+    const tool = appControlTools(base, 'or').find(x => x.name === 'app_unblock')!;
+    expect(await tool.run({})).toMatchObject({ waiting: 2, workflows: 1, lessons: 1, questionsAndPermissions: 0, plans: 0 });
+    expect(ui).toEqual([{ action: 'unblock' }]);
+  });
+
   it('app_close_chat closes like the ✕ (log + feed), never the Orchestrator nor a chat waiting for the user', async () => {
     const base = { harness: 'claude', state: 'idle', pending: 0, model: null, costUsd: 0, isOrchestrator: false, lastText: 'fatto' };
     const list = [{ ...base, id: 'w', title: 'Lavoro' }, { ...base, id: 'r', title: 'Orchestrator', isOrchestrator: true }, { ...base, id: 'q', title: 'Domanda', state: 'waiting', pending: 1 }];

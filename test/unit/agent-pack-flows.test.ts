@@ -73,6 +73,19 @@ describe('role know-how at launch', () => {
 });
 
 describe('lessons queue and role edits', () => {
+  it('keeps free-text corrections in a rejected lesson without applying a rule', () => {
+    const f = setup(), learning = new AgentPackLearning(f.flows, f.data);
+    const p = learning.propose('scout', 'Cite evidence.', 'An observation');
+    expect(() => learning.review(p.id, true, 'Change the scope.')).toThrow(/approvazione/);
+    expect(() => learning.review(p.id, false, 'x'.repeat(2001))).toThrow();
+    expect(learning.waiting()).toHaveLength(1);
+    expect(learning.review(p.id, false, 'Only for code reviews.')).toMatchObject({ status: 'discarded', note: expect.stringContaining('Only for code reviews.') });
+    expect(learning.pending()).toEqual([]);
+    expect(new AgentPackLearning(f.flows, f.data).waiting()).toEqual([]);
+    const restored = new AgentPackLearning(f.flows, f.data);
+    const history = JSON.parse(String(lessonReviewTool(restored).run({}, {} as never)));
+    expect(history).toMatchObject([{ id: p.id, rule: p.rule, status: 'discarded', feedback: 'Only for code reviews.' }]);
+  });
   it('preserves direct brain edits on save and never seeds learned-rules.md (ADR 0077)', () => {
     const f = setup(), learning = new AgentPackLearning(f.flows, f.data);
     const role = learning.save({ ...draftOf(f.role('scout')), instructions: 'Search first, then cite.' }, 'scout');

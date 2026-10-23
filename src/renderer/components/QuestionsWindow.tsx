@@ -34,9 +34,13 @@ import { PlanApproval } from './PlanApproval';
 import { planAskKeys, planAskOf, withPlans, type PlanAsk } from '../lib/plan-ask';
 import { Kbd, Keys } from './ui';
 import { t } from '../i18n';
+import { durableAsks, withDurableAsks, type DurableAsk } from '../lib/work-ask';
+import { useWorkflows } from '../store/workflows';
+import { WorkApproval } from './WorkApproval';
 
 /** what the window shows: an open request, or a Strategist's plan to approve */
-type Ask = PendingRequest | PlanAsk;
+type Ask = PendingRequest | PlanAsk | DurableAsk;
+const isDurable = (ask: Ask): ask is DurableAsk => ask.type === 'work' || ask.type === 'lesson';
 
 export function QuestionsWindow() {
   const hidden = ui.use(s => s.hidden, sameList);
@@ -47,7 +51,9 @@ export function QuestionsWindow() {
   // the plans waiting for the user's ok
   const planKeys = useApp(planAskKeys, sameList);
   const plans = useMemo(() => planKeys.map(planAskOf).filter((p): p is PlanAsk => !!p), [planKeys]);
-  const pending: readonly Ask[] = withPlans(allPending, plans).filter(p => !hidden.includes(p.chatId) && !requestPostponed(reqKey(p)));
+  const { rows, lessons } = useWorkflows();
+  const decisions = useMemo(() => durableAsks(rows, lessons), [rows, lessons]);
+  const pending: readonly Ask[] = withDurableAsks(withPlans(allPending, plans), decisions).filter(p => (isDurable(p) || !hidden.includes(p.chatId)) && !requestPostponed(reqKey(p)));
   const queue = [...pending];
   if (q.first) { const i = queue.findIndex(p => reqKey(p) === q.first); if (i > 0) queue.unshift(...queue.splice(i, 1)); }
   const cur = queue[0];
@@ -130,11 +136,11 @@ function Window({ cur, all, boxRef, hidden, openedAt }: { cur: Ask; all: readonl
   const [keysEl, setKeysEl] = useState<HTMLSpanElement | null>(null);
   qwinStats.renders++;
   // primitives only: the asking chat's other changes (cost, last line) do not render the window
-  const name = useApp(s => (s.chats[cur.chatId]?.isOrchestrator ? 'Orchestrator' : (s.chats[cur.chatId]?.title ?? 'Chat')));
+  const name = useApp(s => isDurable(cur) ? cur.title : (s.chats[cur.chatId]?.isOrchestrator ? 'Orchestrator' : (s.chats[cur.chatId]?.title ?? 'Chat')));
   const harness = useApp(s => s.chats[cur.chatId]?.harness ?? 'claude');
-  const isOrchestrator = useApp(s => !!s.chats[cur.chatId]?.isOrchestrator);
-  const titles = useApp(s => all.map(p => (s.chats[p.chatId]?.isOrchestrator ? 'Orchestrator' : (s.chats[p.chatId]?.title ?? 'Chat'))), sameList);
-  const harnesses = useApp(s => all.map(p => `${s.chats[p.chatId]?.harness ?? 'claude'}${s.chats[p.chatId]?.isOrchestrator ? ':r' : ''}`), sameList);
+  const isOrchestrator = useApp(s => isDurable(cur) || !!s.chats[cur.chatId]?.isOrchestrator);
+  const titles = useApp(s => all.map(p => isDurable(p) ? p.title : (s.chats[p.chatId]?.isOrchestrator ? 'Orchestrator' : (s.chats[p.chatId]?.title ?? 'Chat'))), sameList);
+  const harnesses = useApp(s => all.map(p => `${s.chats[p.chatId]?.harness ?? 'claude'}${isDurable(p) || s.chats[p.chatId]?.isOrchestrator ? ':r' : ''}`), sameList);
   const now = useNow(30_000);
   // a question brings the commands its chat gave in the same turn; a permission's command is the agent's own (never run twice)
   const items = useApp(s => (cur.type === 'question' ? s.items[cur.chatId] : undefined));
@@ -219,7 +225,9 @@ function Window({ cur, all, boxRef, hidden, openedAt }: { cur: Ask; all: readonl
             <div className="qwin-note" role="status" data-testid="qwin-elsewhere">{t('chat.questions.note')} <Keys combo="Ctrl+J" /> {t('chat.questions.note2')}</div>
           )}
           <div className="qwin-body">
-            {cur.type === 'plan'
+            {isDurable(cur)
+              ? <WorkApproval key={curKey} ask={cur} onEscape={later} />
+              : cur.type === 'plan'
               ? <PlanApproval key={curKey} ask={cur} chatTitle={name} onEscape={later} keysTo={keysEl} testid="qwin-plan" />
               : <RequestPanel key={curKey} req={cur} variant="window" chatTitle={name} harness={harness} commands={commands} onEscape={later} keysTo={keysEl} testid="qwin-card" />}
           </div>

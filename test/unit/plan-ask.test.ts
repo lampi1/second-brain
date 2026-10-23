@@ -1,11 +1,12 @@
 // A Strategist's plan to approve as a card of the questions window (ADR 0121): which plans wait (proposed, open chats,
 // oldest first; put in among the requests where they came), the key's shape (`${chatId}/plan@${at}`, as reqKey builds keys) and back, and the card's markup in
-// every language: the steps numbered with their role and detail, when it is finished, what is clear, the two actions;
+// every language: the steps numbered with their role and detail, when it is finished, what is clear, yes/no/free-text actions and the collapsed complete plan;
 // nothing for a plan that no longer waits or a newer proposal than the one asked. Rendered without a browser.
 import { createElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ChatSummary } from '../../src/shared/contract';
 import type { StrategyPlan } from '../../src/shared/strategy';
+vi.mock('../../src/renderer/components/GenUi', () => ({ openFile: async () => {} }));
 vi.mock('../../src/renderer/sb', () => ({ sb: {} }));
 vi.mock('../../src/renderer/actions', () => ({ claimFocus: () => false }));
 let chats: Record<string, Partial<ChatSummary>> = {};
@@ -45,7 +46,7 @@ describe('lib/plan-ask.ts', () => {
 });
 
 describe('PlanApproval.tsx', () => {
-  it('shows the steps numbered with their role and detail, when it is finished, what is clear, the two actions', () => {
+  it('shows concise context and yes/no/free text, preserving the complete scope in a closed disclosure', () => {
     chats = { 's/1': { id: 's/1', plan: plan() } };
     const out = html();
     expect(out).toContain('data-request-key="s/1/plan@42"');
@@ -58,8 +59,24 @@ describe('PlanApproval.tsx', () => {
     expect(out).toMatch(/data-testid="qp-step-3" data-role="strategist".*Strategist/s);
     expect(out).toContain('I test passano');
     expect(out).toContain('Offerte');
-    expect(out).toContain('Approva e parti');
-    expect(out).toContain('Cambia qualcosa');
+    expect(out).toContain('Sì (consigliato)');
+    expect(out).toContain('data-testid="qp-reject">No</button>');
+    expect(out).toContain('Altro…');
+    expect(out).toContain('<details class="pa-details" data-testid="qp-details">');
+    expect(out).not.toContain('<details open');
+    expect(out.indexOf('qp-summary')).toBeLessThan(out.indexOf('<details'));
+    expect(out.indexOf('carrello e reso')).toBeGreaterThan(out.indexOf('<details'));
+  });
+  it('keeps report links and screenshot previews visible outside the full plan disclosure', () => {
+    chats = { 's/1': { id: 's/1', plan: plan({ doneWhen: 'See [Report](file:///C:/reports/plan.md) and https://example.com/review',
+      clarified: [{ q: 'Preview', a: '![Before](C:/reports/before.png)' }] }) } };
+    const out = html();
+    expect(out).toContain('data-testid="qp-link-0"');
+    expect(out).toContain('href="https://example.com/review"');
+    expect(out).toContain('rel="noopener noreferrer"');
+    expect(out).toContain('data-testid="qp-imgs"');
+    expect(out.indexOf('qp-links')).toBeLessThan(out.indexOf('<details'));
+    expect(out.indexOf('qp-imgs')).toBeLessThan(out.indexOf('<details'));
   });
   it('speaks the user\'s language', () => {
     chats = { 's/1': { id: 's/1', plan: plan() } };
@@ -67,7 +84,7 @@ describe('PlanApproval.tsx', () => {
     expect(html()).toContain('Do you approve this plan?');
     setLang('de');
     expect(html()).toContain('Gibst du diesen Plan frei?');
-    expect(html()).toContain('Freigeben und starten');
+    expect(html()).toContain('Ja (empfohlen)');
   });
   it('renders nothing once the plan no longer waits, or for an older proposal than the one shown', () => {
     chats = { 's/1': { id: 's/1', plan: plan({ phase: 'running' }) } };

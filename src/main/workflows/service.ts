@@ -1,6 +1,7 @@
 // Durable work threads independent of chat lifetime. Gates are decided only through renderer IPC.
 // Stage reports are agent evidence, not execution authority: this service never runs a command or grants permissions.
 import { randomUUID } from 'node:crypto';
+import { decisionFeedback } from '../../shared/decision-feedback';
 import { readLocal, writeLocal } from '../agents/local-store';
 import { WORK_ROUTES, WORK_STAGES, WORK_PRIORITY, orderWork, type WorkCreate, type WorkDecision, type WorkReport, type WorkThread, type WorkEvent } from '../../shared/workflows';
 const gates = new Set(['mockup', 'plan', 'deploy']);
@@ -121,6 +122,7 @@ export class Workflows {
   }
   decide(input: WorkDecision): WorkThread {
     if (typeof input.approve !== 'boolean') throw new Error('Decisione non valida.');
+    const feedback = decisionFeedback(input.feedback, input.approve);
     const row = this.current(input.id, input.expectedVersion);
     if (!row.proposal || row.proposal.id !== input.proposalId) throw new Error('Proposta scaduta: rileggi il filo.');
     const proposal = row.proposal.text;
@@ -130,6 +132,7 @@ export class Workflows {
     row.status = input.approve ? 'active' : 'blocked'; row.waitingOn = input.approve ? '' : 'Nuova proposta';
     if (input.approve && row.cycles >= 3 && ['review', 'test', 'qa'].includes(row.stage)) { row.stage = 'develop'; row.cycles = 0; row.evidence = ''; }
     row.nextAction = input.approve ? 'Eseguire la proposta approvata e verificarne l’esito' : 'Preparare una proposta alternativa';
-    return this.event(row, input.approve ? 'approved' : 'rejected', proposal);
+    return this.event(row, input.approve ? 'approved' : 'rejected', feedback
+      ? `${proposal}\nRisposta libera dell’utente (${input.proposalId}, versione ${input.expectedVersion}): ${feedback}` : proposal);
   }
 }

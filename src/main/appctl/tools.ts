@@ -634,7 +634,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   if (authed()) {
     tools.push({
       name: 'app_unblock',
-      description: `After a recap the user asked for: opens the app's questions window with everything that waits for him from every chat (questions, permissions, commands to run, Strategist plans), the ones he set aside with «Ci penso dopo» too, one after the other, ready to answer there (Sì / No / his own words) without opening the chats. Returns how many wait. Refused unless the Orchestrator's latest message is the user's own, written in the last ${UNBLOCK_ASK_MIN} minutes (never on a turn woken by app news or an agent). The window never takes his keyboard while he types.`,
+      description: `After a recap the user asked for: opens the app's questions window with everything that waits for him from every chat (questions, permissions, commands to run, Strategist plans, workflow proposals and learned rules), the ones he set aside with «Ci penso dopo» too, one after the other, ready to answer there (Sì / No / his own words) without opening the chats. Returns how many wait. Refused unless the Orchestrator's latest message is the user's own, written in the last ${UNBLOCK_ASK_MIN} minutes (never on a turn woken by app news or an agent). The window never takes his keyboard while he types.`,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
       inputSchema: obj(),
       run: () => {
@@ -643,9 +643,11 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (!userTurn(orchestrator.id, Date.now() - UNBLOCK_ASK_MIN * 60_000)) throw new Error('bloccato: apri le richieste in attesa solo quando l’utente ti chiede un recap');
         const asks = [...d.chats.pending(), ...(d.commandAsks?.() ?? [])].filter(r => !other(r.chatId)).length;
         const plans = d.chats.list().filter(c => !c.closedAt && !other(c.id) && c.plan?.phase === 'proposed').length;
-        if (!asks && !plans) return { waiting: 0, note: 'Niente aspetta l’utente: non c’è nulla da aprire.' };
+        const workflows = d.workflows?.list().filter(r => r.status === 'approval' && r.proposal).length ?? 0;
+        const lessons = d.agentLearning?.waiting().length ?? 0;
+        if (!asks && !plans && !workflows && !lessons) return { waiting: 0, note: 'Niente aspetta l’utente: non c’è nulla da aprire.' };
         d.emitUi({ action: 'unblock' });
-        return { waiting: asks + plans, questionsAndPermissions: asks, plans, note: 'La finestra delle domande è aperta con tutte le richieste in attesa.' };
+        return { waiting: asks + plans + workflows + lessons, questionsAndPermissions: asks, plans, workflows, lessons, note: 'La finestra delle domande è aperta con tutte le richieste in attesa.' };
       },
     });
   }

@@ -1,5 +1,6 @@
 // FIFO queue entry and deliberate navigation: paused queues restart at the oldest request, not stale DOM focus.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { WorkThread } from '@shared/workflows';
 import type { PendingRequest } from '@shared/contract';
 const invoke = vi.fn();
 vi.mock('../../src/renderer/sb', () => ({ sb: { invoke: (...args: unknown[]) => invoke(...args), on: () => () => {} } }));
@@ -8,12 +9,15 @@ const { initialState, reduce } = await import('../../src/renderer/store/state');
 const { ui, callQuestions, parkQuestions } = await import('../../src/renderer/store/ui');
 const { nextThing } = await import('../../src/renderer/actions');
 const { openQueue } = await import('../../src/renderer/lib/later');
+const { workflowState, durableAskKeys } = await import('../../src/renderer/store/workflows');
+const { answerLater, requestPostponed } = await import('../../src/renderer/lib/later');
 const requests: PendingRequest[] = ['A', 'B', 'C'].map((id, i) => ({ id, chatId: 'chat', type: 'permission', tool: 'Bash', title: id, detail: '', input: {}, at: i + 1 }));
 const key = (id: string) => `chat/${id}`;
 /** the request card that has the keyboard (Ctrl+J goes on from it) */
 const focusOn = (id: string) => vi.stubGlobal('document', { activeElement: { closest: () => ({ getAttribute: () => key(id) }) } });
 beforeEach(() => {
-  invoke.mockReset().mockImplementation((channel: string, value?: { on: boolean }) => Promise.resolve(channel === 'later:set' ? value : undefined));
+  invoke.mockReset().mockImplementation((channel: string, value?: { on: boolean }) => Promise.resolve(channel === 'later:set' ? value : channel === 'work:list' ? workflowState.get().rows : channel === 'work:lessons' ? workflowState.get().lessons : undefined));
+  workflowState.set({ rows: [], lessons: [], error: null, lessonError: null });
   let state = initialState;
   for (const req of requests) state = reduce(state, { type: 'pending:added', req });
   app.set(state);
@@ -55,4 +59,16 @@ describe('request queue FIFO', () => {
     expect(displayed()).toBe(key('A'));
     expect(app.get().pending.map(p => p.id)).toEqual(['A', 'B', 'C']);
   });
+});
+
+it('Ctrl+J and the topbar reopen a postponed durable proposal when no native request remains', () => {
+  app.set(initialState);
+  workflowState.set({ rows: [{ id: 'thread', version: 1, status: 'approval', updatedAt: 1, proposal: { id: 'p', text: 'Scoped action' } } as WorkThread], lessons: [], error: null, lessonError: null });
+  const proposal = durableAskKeys()[0]!;
+  answerLater(proposal);
+  expect(requestPostponed(proposal)).toBe(true);
+  nextThing();
+  expect(ui.get().qwin.open).toBe(true);
+  expect(requestPostponed(proposal)).toBe(false);
+  expect(invoke.mock.calls.some(([channel]) => channel === 'morning:get')).toBe(false);
 });

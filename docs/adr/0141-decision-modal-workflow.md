@@ -1,0 +1,11 @@
+# 0141 — Agent-only Home and a decision-driven workflow
+
+The owner rejected the persistent Regia overview on 2026-10-23: Home is exclusively for agents, and all human work decisions must use Sì, No or a free response, with little but explanatory text. This supersedes the Home board and prose recap parts of ADR 0136 and 0140; persistent threads, evidence, exact approvals and deterministic observations remain.
+
+Workflow proposals and learned-rule proposals join QuestionsWindow after existing questions, permissions and plans. They stay reachable after their chats close, participate in the top-bar queue count and retain request-local postponement. Reopening the queue includes these decisions; app_unblock counts them even without a pending chat request. Workflow keys carry version and proposal identity, lesson keys their exact text; stale reads cannot resurrect an answered proposal.
+
+Fai il punto requests fresh evidence and actionable proposals, continuing authorized work and reusing pending decisions. Every role frame defaults to short explanatory questions with detailed reports linked to the file viewer and useful screenshots inline. Explicit explanations remain concise. No actionable decision means no invented question or approval and at most a short status. Existing persisted contexts pick up changed role signatures on engine start.
+
+The custom proposal modal displays exact authorization scope, optional details, file links, images and Sì / No / Altro. Free text rejects the displayed proposal and records the correction with its identity; it is never approval. The host validates and persists the correction before waking the Orchestrator. Recorded lesson corrections remain readable through agent_lessons_waiting if an immediate wake fails; the recap resumes only unaddressed corrections. Missing evidence still disables learned-rule approval. Focus guards, permission ordering and execution permission checks remain intact.
+
+Validation uses focused unit/render checks, typechecking, lint and build. The modal integration e2e spec is updated but must not run under the owner's explicit e2e ban; visual runtime verification is reported separately, never inferred from unit renders.

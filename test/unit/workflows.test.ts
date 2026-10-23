@@ -18,6 +18,19 @@ function setup(profile: 'feature' | 'bugfix' | 'investigation' = 'feature') {
   }, decide(approve: boolean) { row = service.decide({ id: row.id, expectedVersion: row.version, proposalId: row.proposal!.id, approve }); return row; } };
 }
 describe('work threads', () => {
+  it('persists free-text corrections against the exact proposal without approving it', () => {
+    const f = setup(); f.report('propose');
+    const decision = { id: f.row.id, expectedVersion: f.row.version, proposalId: f.row.proposal!.id, approve: false, feedback: 'Use staging only.' };
+    expect(() => f.service.decide({ ...decision, approve: true })).toThrow(/approvazione/);
+    expect(() => f.service.decide({ ...decision, feedback: ' '.repeat(2) })).toThrow();
+    expect(() => f.service.decide({ ...decision, feedback: 'x'.repeat(2001) })).toThrow();
+    const row = f.service.decide(decision);
+    expect(row.status).toBe('blocked'); expect(row.approvedProposal).toBeUndefined();
+    expect(row.events.at(-1)).toMatchObject({ kind: 'rejected', text: expect.stringContaining('Use staging only.') });
+    expect(row.events.at(-1)?.text).toContain(decision.proposalId);
+    expect(new Workflows(f.file).list()[0]).toEqual(row);
+    expect(() => f.service.decide(decision)).toThrow(/cambiato/);
+  });
   it('survives restart with the same identity, stage and history, without a live chat', () => {
     const f = setup(); f.report('complete', { evidence: 'requirements.md' });
     expect(new Workflows(f.file).list()).toEqual([f.row]); expect(f.row.stage).toBe('mockup');
