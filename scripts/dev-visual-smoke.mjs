@@ -75,6 +75,19 @@ try {
       ],
     });
   });
+  // The frozen demo starts with several requests. Keep a capture of the real modal, then defer each request
+  // through its visible control so the plan beneath it is reachable without answering or disabling popups.
+  const questions = page.getByTestId('qwin');
+  await questions.waitFor();
+  await capture('request-queue');
+  for (let deferred = 0; await questions.isVisible(); deferred++) {
+    if (deferred >= 20) throw new Error('Demo request queue did not clear after postponing 20 requests');
+    const key = await questions.locator('[data-request-key]').getAttribute('data-request-key');
+    if (!key) throw new Error('Visible request has no identity');
+    await questions.getByTestId('qwin-later').click();
+    await page.waitForFunction(previous => document.querySelector('[data-testid="qwin"] [data-request-key]')?.getAttribute('data-request-key') !== previous, key);
+  }
+  await page.getByTestId('qwin-backdrop').waitFor({ state: 'hidden' });
   await page.getByTestId('plan-toggle-tree-plan').waitFor();
   await page.getByTestId('tile-chat-tree-plan').scrollIntoViewIfNeeded();
   await capture('plan-compact');
@@ -86,10 +99,9 @@ try {
   await result.scrollIntoViewIfNeeded();
   await result.getByText('Proposta disponibile', { exact: false }).waitFor();
   await capture('canonical-result');
-  await page.evaluate(() => document.activeElement?.blur());
-  await page.keyboard.press('g');
-  await page.keyboard.press('y');
+  await page.getByTestId('nav-memoria').click();
   await page.getByTestId('bm-memory-page').waitFor();
+  await page.getByTestId('mh-tab-statistiche').click();
   await page.getByTestId('mm-insights').waitFor();
   await capture('memory');
   // The demo has no review services. A separate isolated SB_TEST instance reads a clearly synthetic memory
@@ -123,18 +135,22 @@ try {
   const setup = page.getByTestId('first-interview');
   await setup.waitFor({ timeout: 3000 }).catch(() => {});
   if (await setup.isVisible()) { await page.keyboard.press('Escape'); await setup.waitFor({ state: 'hidden' }); }
-  await page.evaluate(() => document.activeElement?.blur());
-  await page.keyboard.press('g');
-  await page.keyboard.press('y');
-  const memory = page.getByTestId('memory-review-synthetic-visual-memory');
+  await page.getByTestId('nav-memoria').click();
+  await page.getByTestId('mh-tab-proposte').click();
+  await page.getByTestId('pd-chip-fact').click();
+  const memory = page.getByTestId('pd-card-top').and(page.locator('[data-card="memory:synthetic-visual-memory"]'));
   await memory.waitFor();
+  await memory.getByTestId('pd-more').click();
+  await memory.getByTestId('pd-provenance').getByText('synthetic-run', { exact: false }).waitFor();
   await memory.scrollIntoViewIfNeeded();
   await capture('memory-provenance-synthetic');
-  const learning = page.getByTestId('learning-review');
-  await learning.locator('select').first().selectOption('synthetic-workflow-v1');
+  // Review panels were replaced by hub tabs; capture the current learning view without running an evaluation.
+  await page.getByTestId('mh-tab-apprendimento').click();
+  const learning = page.getByTestId('learning-page');
+  await learning.getByTestId('lr-counter').waitFor();
   await learning.scrollIntoViewIfNeeded();
-  await capture('evaluation-cold-start-synthetic');
-  manifest.reviewFixture = 'Real services; synthetic memory proposal and built-in synthetic dataset; no replay or provider launched';
+  await capture('learning-cold-start-synthetic');
+  manifest.reviewFixture = 'Real services; synthetic memory proposal in Proposte and empty learning history in Apprendimento; no decisions, replay or provider launched';
   if (manifest.rendererErrors.length) throw new Error('Renderer errors; inspect manifest.json');
   console.log(`Captured ${manifest.captures.length} dev views in ${output}`);
 } catch (error) {

@@ -15,9 +15,11 @@ afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursiv
 const models = (): AgentModelChoice[] => [{ engine: 'claude', label: 'Claude', enabled: true, trusted: true, effort: true, defaultModel: true, modelSelectable: true, modelReason: null, source: 'observed', models: [{ id: 'known-model', name: 'Known model' }], installed: null, authenticated: null }];
 const draftOf = (p: AgentProfile): AgentDraft => ({ name: p.name, purpose: p.purpose, instructions: p.instructions, engine: p.engine, model: p.model, avatar: p.avatar,
   tools: p.tools, permissionCeiling: p.permissionCeiling, tier: p.tier, tierMax: p.tierMax, launches: p.launches, skills: p.skills });
-function setup() {
+function setup(linkedBrain = false) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-pack-flow-')); roots.push(root);
-  const brain = path.join(root, 'brain'), data = path.join(root, 'data'); fs.mkdirSync(brain); fs.mkdirSync(data);
+  let brain = path.join(root, 'brain');
+  const data = path.join(root, 'data'); fs.mkdirSync(brain); fs.mkdirSync(data);
+  if (linkedBrain) { const alias = path.join(root, 'brain-link'); fs.symlinkSync(brain, alias, 'junction'); brain = alias; }
   const catalog = new AgentCatalogService({ userData: data, models });
   // a shared skill (outside the brain, as a user's home skill would be), with a hook its runtime copy must drop
   const shared = path.join(root, 'home-skills', 'reviewer');
@@ -73,6 +75,32 @@ describe('role know-how at launch', () => {
 });
 
 describe('lessons queue and role edits', () => {
+  it('accepts evidence through a brain alias but invalidates approval if its target changes', () => {
+    // Reproduces macOS /var → /private/var on every platform; Windows junctions need no symlink privilege.
+    const f = setup(true), learning = new AgentPackLearning(f.flows, f.data);
+    learning.evidenceRuns = () => [evidenceRun(f.brain, 'sentinel', 'linked')];
+    expect(f.flows.root()).not.toBe(f.brain);
+    const proposal = learning.propose('sentinel', 'Cite evidence.', 'run:linked');
+    expect(proposal.assessment?.state).toBe('supported');
+    learning.review(proposal.id, true);
+    expect(learning.pending()).toHaveLength(1);
+    const other = path.join(f.root, 'other-brain'); fs.mkdirSync(other);
+    fs.unlinkSync(f.brain); fs.symlinkSync(other, f.brain, 'junction');
+    expect(learning.pending()).toEqual([]);
+    expect(() => learning.review(proposal.id, true)).toThrow(/evidence/);
+  });
+  it('rejects a different brain behind a link and fails closed when that link disappears', () => {
+    const f = setup(true), learning = new AgentPackLearning(f.flows, f.data);
+    const other = path.join(f.root, 'other-brain'); fs.mkdirSync(other);
+    learning.evidenceRuns = () => [evidenceRun(other, 'sentinel', 'other')];
+    const wrong = learning.propose('sentinel', 'Cite evidence.', 'run:other');
+    expect(wrong.assessment?.state).toBe('insufficient');
+    expect(() => learning.review(wrong.id, true)).toThrow(/evidence/);
+    learning.evidenceRuns = () => [evidenceRun(f.brain, 'sentinel', 'missing')];
+    const missing = learning.propose('sentinel', 'Cite evidence.', 'run:missing');
+    fs.unlinkSync(f.brain);
+    expect(() => learning.review(missing.id, true)).toThrow(/evidence/);
+  });
   it('keeps free-text corrections in a rejected lesson without applying a rule', () => {
     const f = setup(), learning = new AgentPackLearning(f.flows, f.data);
     const p = learning.propose('scout', 'Cite evidence.', 'An observation');
