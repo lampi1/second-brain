@@ -39,6 +39,7 @@ import {settingsIt}from'./areas/settings.it';
 import { profileIt } from './areas/profile.it';
 import { homeIt } from './areas/home.it';
 import { guideIt } from './areas/guide.it';
+import { pbrowserIt } from './areas/pbrowser.it';
 import { treeIt } from './areas/tree.it';
 import { aliveIt } from './areas/alive.it';
 import { queriesIt } from './areas/queries.it';
@@ -65,6 +66,7 @@ export const it = {
   ...homeIt,
   ...cloudIt,
   ...guideIt,
+  ...pbrowserIt,
   ...treeIt,
   ...aliveIt,
   ...queriesIt,

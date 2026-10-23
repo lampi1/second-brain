@@ -30,7 +30,7 @@ export type { DiscussBridge };
 export type { LiveSnapshot, LiveSource, LiveTool } from './lib/live';
 export { FADE_MS } from './lib/live';
 
-export type BrainPageId = 'home' | 'task' | 'fatto' | 'idee' | 'costi' | 'qualita' | 'apprendimento' | 'script' | 'log' | 'confronto' | 'file' | 'skill' | 'impostazioni' | 'agenti' | 'guida' | 'regole' | 'memoria' | 'classificatori' | 'collegamenti';
+export type BrainPageId = 'home' | 'task' | 'fatto' | 'idee' | 'costi' | 'qualita' | 'apprendimento' | 'script' | 'log' | 'confronto' | 'file' | 'skill' | 'impostazioni' | 'agenti' | 'guida' | 'browser' | 'regole' | 'memoria' | 'classificatori' | 'collegamenti';
 
 /** label is a getter (ADR 0057): read at use time, so it follows the current language */
 const page = (id: BrainPageId, key: string): { id: BrainPageId; readonly label: string; key: string } => ({ id, key, get label() { return id==='file'?t('viewer.title'):t(`brainPages.nav.${id}`); } });
@@ -62,6 +62,8 @@ export const BRAIN_PAGES: { id: BrainPageId; readonly label: string; key: string
   page('collegamenti', 'G B'),
   // not a brain page either: the guide to the app's concepts (components/GuidePage.tsx, content in shared/concept-guide.ts)
   page('guida', 'G E'),
+  // not a brain page either: the user's own everyday browser (components/BrowserPage.tsx, ADR 0133)
+  page('browser', 'G W'),
 ];
 const IDS = new Set<string>(['file',...BRAIN_PAGES.map(p => p.id)]);
 export const isBrainPage = (s: string): s is BrainPageId => IDS.has(s);
@@ -109,7 +111,7 @@ export function BrainPage({ id, arg, onNavigate, bridge }: { id: BrainPageId; ar
     case 'qualita': page = <Qualita arg={cur.arg} nav={nav} />; break;
     case 'confronto': page = <Confronto nav={nav} />; break;
     case 'file': page = <FileViewer arg={cur.arg}/>; break;
-    case 'impostazioni': case 'apprendimento': case 'skill': case 'guida': case 'regole': case 'memoria': case 'classificatori': case 'collegamenti': case 'script': case 'log': page = null; break; // rendered by the app (App.tsx PageFrame)
+    case 'impostazioni': case 'apprendimento': case 'skill': case 'guida': case 'browser': case 'regole': case 'memoria': case 'classificatori': case 'collegamenti': case 'script': case 'log': page = null; break; // rendered by the app (App.tsx PageFrame)
     case 'task': page = <TaskPage nav={nav} />; break;
   }
   return (
