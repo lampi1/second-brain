@@ -694,22 +694,24 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   autoCloseTimer.unref();
   agentPacks.learning.evidenceRuns = () => manager.runs.list();
   const flows = flowsRef = createFlowRuntime({ userData: ctx.userData, brainRoot: () => brain.info().brainRoot,
-    chats: () => chats.list(), changed: snapshot => ctx.emitter.emit('flows:changed', snapshot) });
+    chats: () => chats.list(), changed: snapshot => ctx.emitter.emit('flows:changed', snapshot),
+    send: (ownerId, message) => chats.send(ownerId, message, undefined, false, 'Flussi automatici', false, { kind: 'app' }) });
   const workflows = workflowsRef = new Workflows(path.join(ctx.userData, 'work-threads.json'), rows => ctx.emitter.emit('work:changed', rows), Date.now, row => {
     const linked = chats.list().filter(c => row.chatIds.includes(c.id) && c.plan);
     const approved = linked.filter(c => ['running', 'done'].includes(c.plan!.phase) && (c.run?.plan?.approvedAt ?? 0) > 0);
     return { pending: linked.some(c => !['running', 'done'].includes(c.plan!.phase)), approved: approved.length === linked.length ? approved.map(c => `${c.id} / task ${c.run?.taskVersion ?? 1}: ${c.plan!.steps.map(s => s.title).join('; ')}`).join('\n') : '' };
   });
-  // Reconcile deadlines without model calls or launching work; the Orchestrator remains the sole entry point.
+  // Poll without model calls; relevant events and canonical reports wake the owning Orchestrator.
   const flowDeadlineTimer = process.env.SB_TEST ? null : setInterval(() => {
     if (!brain.info().brainRoot) return;
-    try { flows.service().snapshot(); }
+    try { void flows.tick().catch(error => log.warn('flows', 'Automatic flow tick failed', { cause: errText(error), hint: 'Inspect Flussi for blocked checks.' })); }
     catch (error) { log.warn('flows', 'Flow deadline reconciliation unavailable', { cause: String(error), hint: 'Reconnect the selected brain and reopen Flussi.' }); }
-  }, 30_000);
+  }, 5_000);
   flowDeadlineTimer?.unref();
   const wake = attachOrchestratorWake(ctx, chats, () => brain.settings().orchestratorEvents !== false && (!process.env.SB_TEST || process.env.SB_ORCHESTRATOR_EVENTS === '1'));
   manager.onUserWrote(n => wake.userMessage(n)); // the user typed in a work chat: quiet news (ADR 0083)
-  manager.onCleanReport(n => wake.cleanReport({ ...n, workflow: workflows.list().some(r => r.status === 'active' && r.chatIds.includes(n.chatId)) })); // linked workflow results wake the coordinator; unrelated results remain quiet
+  manager.onCleanReport(n => flows.reportReady(n.chatId) || wake.cleanReport({ ...n, workflow: workflows.list().some(r => r.status === 'active' && r.chatIds.includes(n.chatId)) })); // linked results wake their coordinator
+
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && (!process.env.SB_TEST || process.env.SB_RUN_RESULTS === '1'));
   const heldNews = attachHeldNews(ctx.emitter, wake, mail);
   const source = createAppSource(ctx, () => brain.settings().appRepo ?? null);
@@ -913,7 +915,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot, Date.now, () => progressService.award('setup-complete')),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { mcpServers.stop(); brainModel.stop(); phrases.stop(); cloud.shutdown(); clearInterval(autoCloseTimer); if (flowDeadlineTimer) clearInterval(flowDeadlineTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), personal.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { flows.stop(); mcpServers.stop(); brainModel.stop(); phrases.stop(); cloud.shutdown(); clearInterval(autoCloseTimer); if (flowDeadlineTimer) clearInterval(flowDeadlineTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), personal.shutdown(), brain.shutdown()]); },
     killNow: () => { compareRuns.killNow(); manager.killAll(); runner.shutdown(); },
   };
 }

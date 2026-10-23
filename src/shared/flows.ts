@@ -1,5 +1,6 @@
 // Versioned reusable flow contracts shared by the host, Orchestrator tools and the decision UI.
 // Definitions describe work; only host evidence and exact user decisions advance execution.
+import type { FlowAutomationSnapshot } from './flow-automation';
 export interface FlowScope { project?: string; areaPath?: string }
 export interface FlowStep {
   id: string; title: string; kind: 'check' | 'agent' | 'approval' | 'manual'; instructions: string;
@@ -35,7 +36,7 @@ export interface FlowRun {
 }
 export interface FlowSnapshot {
   contextKey: string; drafts: FlowDraft[]; versions: FlowVersion[]; active: Record<string, number>;
-  runs: FlowRun[]; storageError?: string;
+  runs: FlowRun[]; storageError?: string; automation?: FlowAutomationSnapshot;
 }
 export interface FlowMatch { status: 'none' | 'match' | 'ambiguous'; candidates: FlowVersion[] }
 export interface FlowPropose { definition: FlowDefinition; expectedRevision: number }

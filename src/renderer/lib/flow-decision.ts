@@ -1,6 +1,7 @@
 // Conservative UI capability for an exact flow gate: retries rerun an interrupted agent and never mark work complete.
 import type { FlowAsk } from './flow-ask';
 export function flowDecisionMode(ask: FlowAsk): 'approve' | 'retry' | 'blocked' {
+  if (ask.type === 'flow-automation') return ask.version ? 'approve' : 'blocked';
   if (ask.type === 'flow-definition') return 'approve';
   const definition = ask.version?.definition, run = ask.run;
   const step = definition?.steps[run.currentStep], current = run.steps[run.currentStep];

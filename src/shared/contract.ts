@@ -3,6 +3,7 @@
 // (src/preload/index.ts reads INVOKE_CHANNELS / EVENT_CHANNELS); main registers a handler for every invoke channel
 // (src/main/ipc.ts) and rejects senders that are not the app's own page. Change a shape here first, then both sides.
 import type { WorkThread, WorkDecision } from './workflows';
+import type { FlowAutomationDecision, FlowAutomationPause, FlowAutomationControl } from './flow-automation';
 import type { FlowSnapshot, FlowActivate, FlowDecision, FlowContext } from './flows';
 import type { LearnedRuleProposal } from './agent-pack';
 import type { LearningEvidence, LearningReviewState, MemoryReviewRecord, ReplayComparison, ReplayRecord, SkillCandidateView } from './learning-review';
@@ -1243,6 +1244,9 @@ export interface InputLagReport { keys: number; p50: number; p95: number; max: n
 
 export interface InvokeMap {
   'flows:list': [void, FlowSnapshot];
+  'flows:autoDecide': [FlowContext<FlowAutomationDecision>, FlowSnapshot];
+  'flows:autoPause': [FlowContext<FlowAutomationPause>, FlowSnapshot];
+  'flows:autoControl': [FlowContext<FlowAutomationControl>, FlowSnapshot];
   'flows:definitionDecide': [FlowContext<FlowActivate>, FlowSnapshot];
   'flows:decide': [FlowContext<FlowDecision>, FlowSnapshot];
   'work:lessons': [void, LearnedRuleProposal[]];
@@ -1711,7 +1715,7 @@ export type InvokeResult<K extends InvokeChannel> = InvokeMap[K][1];
 
 // Runtime lists (the preload allow-list). Kept in sync with the maps by the compile-time checks below.
 export const INVOKE_CHANNELS = [
-  'flows:list', 'flows:definitionDecide', 'flows:decide',
+  'flows:list', 'flows:definitionDecide', 'flows:decide', 'flows:autoDecide', 'flows:autoPause', 'flows:autoControl',
   'work:lessons', 'work:lessonDecide', 'work:list', 'work:decide',
   'pulse:list', 'pulse:status', 'pulse:seen', 'pulse:save', 'pulse:act', 'pulse:dismiss', 'pulse:runNow', 'approvals:list', 'approvals:decide',
   'connectors:list', 'connectors:login', 'connectors:cancelLogin', 'connectors:probe', 'connectors:select', 'connectors:disconnect', 'connectors:useToken',

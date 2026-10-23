@@ -2,21 +2,22 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createFlowRuntime } from '../../src/main/flows/runtime';
 import { appControlTools } from '../../src/main/appctl/tools';
 import type { ChatSummary } from '../../src/shared/contract';
 import type { BrainService, BrowserService, ChatService } from '../../src/main/services';
 const folders: string[] = [];
-afterEach(() => { for (const folder of folders.splice(0)) fs.rmSync(folder, { recursive: true, force: true }); });
+afterEach(() => { vi.restoreAllMocks(); for (const folder of folders.splice(0)) fs.rmSync(folder, { recursive: true, force: true }); });
 function setup() {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'flow-runtime-')); folders.push(folder);
   const a = path.join(folder, 'a'), b = path.join(folder, 'b'); fs.mkdirSync(a); fs.mkdirSync(b);
   let root: string | null = a;
-  const rows = [{ id: 'o', isOrchestrator: true }] as ChatSummary[];
+  const rows = [{ id: 'o', isOrchestrator: true, state: 'idle' }] as ChatSummary[];
   const events: unknown[] = [];
-  const runtime = createFlowRuntime({ userData: folder, brainRoot: () => root, chats: () => rows, changed: value => events.push(value) });
-  return { runtime, rows, a, b, events, switchBrain: (value: string | null) => { root = value; } };
+  const send = vi.fn(async () => {});
+  const runtime = createFlowRuntime({ send, userData: folder, brainRoot: () => root, chats: () => rows, changed: value => events.push(value) });
+  return { runtime, rows, send, a, b, events, switchBrain: (value: string | null) => { root = value; } };
 }
 describe('flow host boundaries', () => {
   it('starts empty, isolates brains and updates live hints without touching brain files', () => {
@@ -59,6 +60,42 @@ describe('flow host boundaries', () => {
     report.verdict = review ? 'success' : undefined;
     expect(service.report(completion, 'o').status).toBe('completed');
     expect(s.runtime.resolveBinding('worker', 'o', s.a)).toBeNull();
+  });
+  it('reconciles canonical reports after a brain switch and failed delivery without duplicate busy sends', async () => {
+    const s = setup(), flow = s.runtime.service();
+    flow.propose({ expectedRevision: 0, definition: { id: 'work', title: 'Work', description: 'Fixture', aliases: [], scope: {}, steps: [{ id: 'work', title: 'Work', kind: 'agent', instructions: 'Do work', workspaceInput: 'repo', inputs: ['repo'], evidence: ['result'], timeoutMs: 600000, maxAttempts: 2, effect: 'code' }] } });
+    flow.decideDefinition({ id: 'work', expectedRevision: 1, answer: 'yes' });
+    s.rows.push({ id: 'worker', run: { runId: 'fresh', taskVersion: 1, scope: { brainRoot: s.a, projectRoot: s.a } } } as ChatSummary);
+    const run = flow.start({ flowId: 'work', flowVersion: 1, subjectKey: 'subject', scope: {}, inputs: { repo: s.a } }, 'o');
+    flow.bindAgent(run.id, run.revision, 'work', s.runtime.resolveBinding('worker', 'o', s.a)!, 'o');
+    s.rows[1]!.run!.report = { at: 100, via: 'agent_report', outcome: 'done', verified: 'yes', blocking: 0, summary: 'Report', canonical: { runId: 'fresh', taskVersion: 1, outcome: 'done', doneWhen: [{ criterion: 'result', met: true, evidence: 'output' }] } } as unknown as NonNullable<ChatSummary['run']>['report'];
+    const report = s.rows[1]!.run!.report!;
+    const originalVerdict = report.verdict; report.verdict = 'fail'; await s.runtime.tick(); expect(s.send).not.toHaveBeenCalled(); report.verdict = originalVerdict;
+    const originalRun = report.canonical!.runId; report.canonical!.runId = 'stale'; await s.runtime.tick(); expect(s.send).not.toHaveBeenCalled(); report.canonical!.runId = originalRun;
+    s.switchBrain(s.b); expect(s.runtime.reportReady('worker')).toBe(false); await s.runtime.tick(); expect(s.send).not.toHaveBeenCalled();
+    s.switchBrain(s.a); s.send.mockRejectedValueOnce(new Error('Unavailable')); await s.runtime.tick(); await Promise.resolve(); expect(s.send).toHaveBeenCalledOnce();
+    await s.runtime.tick(); expect(s.send).toHaveBeenCalledOnce();
+    const now = Date.now(); vi.spyOn(Date, 'now').mockReturnValue(now + 61000);
+    s.rows[0]!.state = 'running'; await s.runtime.tick(); expect(s.send).toHaveBeenCalledOnce();
+    s.rows[0]!.state = 'idle'; await s.runtime.tick(); expect(s.send).toHaveBeenCalledTimes(2);
+    s.runtime.stop();
+  });
+  it('detects without starting runs and rechecks automatic tool authentication', async () => {
+    const s = setup(), flow = s.runtime.service();
+    flow.propose({ expectedRevision: 0, definition: { id: 'check', title: 'Check', description: 'Fixture', aliases: [], scope: {}, steps: [{ id: 'gate', title: 'Gate', kind: 'approval', instructions: 'Confirm', inputs: [], evidence: [], timeoutMs: 1000, maxAttempts: 1, effect: 'read-only' }] } });
+    flow.decideDefinition({ id: 'check', expectedRevision: 1, answer: 'yes' });
+    const auto = s.runtime.automation();
+    const rule = auto.propose({ expectedRevision: 0, config: { flowId: 'check', flowVersion: 1, trigger: { kind: 'interval', everyMinutes: 1 }, scope: {}, inputs: {}, priority: 'normal' } }, 'o');
+    auto.decide({ id: rule.id, expectedRevision: 1, answer: 'yes' });
+    s.rows[0]!.state = 'running'; await s.runtime.tick(); expect(s.send).not.toHaveBeenCalled();
+    s.rows[0]!.state = 'idle'; await s.runtime.tick(); expect(s.send).toHaveBeenCalledOnce(); expect(flow.snapshot().runs).toEqual([]);
+    const tools = appControlTools({ flows: s.runtime, chats: { list: () => s.rows } as ChatService, brain: {} as BrainService, browser: {} as BrowserService, window: () => null, emitUi: () => {}, version: '0' }, 'o');
+    const start = tools.find(t => t.name === 'app_flow_auto_start')!;
+    const args = { contextKey: flow.snapshot().contextKey, eventId: auto.snapshot().events[0]!.id };
+    expect(() => start.run({ ...args, contextKey: 'stale' })).toThrow(/context/);
+    expect(start.run(args)).toMatchObject({ flowId: 'check' });
+    s.rows[0]!.closedAt = 1; expect(() => start.run(args)).toThrow(/Authenticated/);
+    s.runtime.stop();
   });
   it('rejects agent binding from another brain, delegated child, or changed task run', () => {
     const s = setup();

@@ -52,6 +52,7 @@ import type { BrainChangelog } from '../brain/changelog';
 import { scriptWriteTools } from '../brain/scripts-tools';
 import { AGENT_LABEL } from '../../shared/agent-label';
 import { flowTools } from '../flows/tools';
+import { automationTools } from '../flows/automation-tools';
 import type { FlowRuntime } from '../flows/runtime';
 import { workflowTools } from '../workflows/tools';
 import type { Workflows } from '../workflows/service';
@@ -178,6 +179,10 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   const delegated = (chatId: string) => d.chats.list().some(c => c.id === chatId && !!c.parentId);
   const contentOf = (chatId: string) => { guard(chatId); if (delegated(chatId)) throw new Error('chat delegata da un altro ruolo: il suo contenuto lo legge il genitore; tu ne vedi lo stato (app_chats, app_digest)'); return chatId; };
   const tools: ToolDef[] = [
+    ...(d.flows && authed() ? automationTools({
+      service: () => { if (!authed()) throw new Error('Authenticated Orchestrator required'); return d.flows!.automation(); },
+      contextKey: () => d.flows!.service().snapshot().contextKey, ownerId: callerId!,
+    }) : []),
     ...(d.flows && authed() ? flowTools({
       service: () => { if (!authed()) throw new Error('Authenticated Orchestrator required'); return d.flows!.service(); },
       ownerId: callerId!, resolveBinding: d.flows.resolveBinding,
@@ -654,8 +659,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const lessons = d.agentLearning?.waiting().length ?? 0;
         let flows = 0;
         try {
-          const state = d.flows?.service().snapshot();
-          flows = (state?.drafts.filter(x => x.status === 'proposed').length ?? 0)
+          const state = d.flows?.snapshot();
+          flows = (state?.automation?.rules.filter(r => r.status === 'proposed').length ?? 0) + (state?.drafts.filter(x => x.status === 'proposed').length ?? 0)
             + (state?.runs.filter(x => (x.status === 'approval' || x.status === 'blocked') && x.steps[x.currentStep]?.decisionPending !== false).length ?? 0);
         } catch { /* An unavailable brain must not hide ordinary questions. */ }
         if (!asks && !plans && !workflows && !lessons && !flows) return { waiting: 0, note: 'Niente aspetta l’utente: non c’è nulla da aprire.' };

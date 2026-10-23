@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initRelease } from './release';
 import { appPageUrl, createWindow, hiddenOpened, hiddenRun } from './window';
+import { createFlowBackground } from './flows/background';
 import { startTaskbar } from './taskbar';
 import { Emitter, registerHandlers, type Handlers } from './ipc';
 import { createServices } from './wiring';
@@ -95,6 +96,10 @@ app.whenReady().then(async () => {
   if (process.env.SB_DEMO !== '1') jobGuard.start(path.join(app.getPath('userData'), 'jobguard'));
   const s = await createServices({ emitter, window: () => win, userData: app.getPath('userData') });
   setUiLangSource(() => { const l = s.brain.settings().language; return isLang(l) ? l : systemLang(); });
+  const flowBackground = createFlowBackground({ window: win, icon: path.join(outDir, process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
+    hidden: hiddenRun(), quit: () => app.quit(), enabled: () => !!s.brain.info().brainRoot && s.flows?.automation().snapshot().background === true });
+  emitter.tap(channel => { if (channel === 'flows:changed' || channel === 'settings:changed') flowBackground.sync(); });
+  flowBackground.sync();
   // the Log page (ADR 0111): the app's own events, readable and live, kept 7 days at most; zero tokens
   const activity = attachActivity({ userData: app.getPath('userData'), emitter, chats: () => s.chats.list(), brainRoot: () => s.brain.info().brainRoot });
   if (process.env.SB_DEMO === '1') journal.seed(demoLog(process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now()));
@@ -474,7 +479,28 @@ app.whenReady().then(async () => {
       const target = orchestrator.get();
       if (a.feedback && target) void s.chats.send(target.id, `[evento app] L’utente chiede una proposta diversa per la regola ${reviewed.id}. Proposta rifiutata: ${JSON.stringify(reviewed.rule)}. Risposta: ${JSON.stringify(reviewed.note)}. Prepara la nuova proposta nella modale; nessuna modifica è approvata.`, undefined, false, 'Decisioni', false, { kind: 'app' }).catch(e => log.warn('chats', 'lesson feedback wake failed', { cause: errText(e), hint: 'The feedback is saved in the lesson review record.' }));
     },
-    'flows:list': () => s.flows?.service().snapshot() ?? { contextKey: 'unavailable', drafts: [], versions: [], active: {}, runs: [] },
+    'flows:list': () => s.flows?.snapshot() ?? { contextKey: 'unavailable', drafts: [], versions: [], active: {}, runs: [] },
+    'flows:autoDecide': a => {
+      if (!s.flows || a.contextKey !== s.flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la proposta.');
+      const { contextKey: _context, ...decision } = a;
+      const rule = s.flows.automation().decide(decision);
+      const target = s.chats.list().find(c => c.id === rule.ownerOrchestratorId && c.isOrchestrator && !c.closedAt);
+      if (target) void s.chats.send(target.id, `[evento app] Decisione sulla modalità automatica ${rule.id} salvata. Rileggi app_flow_auto_list; se c’è una risposta libera prepara la proposta corretta nella modale. Questa notifica non concede altri permessi.`, undefined, false, 'Flussi', false, { kind: 'app' }).catch(e => log.warn('flows', 'Automatic decision wake failed', { cause: errText(e), hint: 'Decision and feedback remain saved in Flussi.' }));
+      return s.flows.snapshot();
+    },
+    'flows:autoPause': a => {
+      if (!s.flows || a.contextKey !== s.flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi il flusso.');
+      const { contextKey: _context, ...decision } = a;
+      s.flows.automation().pause(decision);
+      return s.flows.snapshot();
+    },
+    'flows:autoControl': a => {
+      if (!s.flows || a.contextKey !== s.flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi i controlli.');
+      const { contextKey: _context, ...decision } = a;
+      if (decision.background === true) flowBackground.prepare();
+      try { s.flows.automation().control(decision); } finally { flowBackground.sync(); }
+      return s.flows.snapshot();
+    },
     'flows:definitionDecide': a => {
       const service = s.flows?.service();
       if (!service || a.contextKey !== service.snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la proposta.');
@@ -482,7 +508,7 @@ app.whenReady().then(async () => {
       service.decideDefinition(decision);
       const target = orchestrator.get();
       if (target) void s.chats.send(target.id, '[evento app] Decisione sulla definizione del flusso salvata. Rileggi app_flow_list. Approvare la definizione non autorizza operazioni esterne o produzione.', undefined, false, 'Flussi', false, { kind: 'app' }).catch(e => log.warn('flows', 'Definition decision wake failed', { cause: errText(e), hint: 'Decision persisted; reread the catalog.' }));
-      return service.snapshot();
+      return s.flows!.snapshot();
     },
     'flows:decide': a => {
       const service = s.flows?.service();
@@ -492,7 +518,7 @@ app.whenReady().then(async () => {
       const run = service.snapshot().runs.find(r => r.id === a.runId);
       const target = s.chats.list().find(c => c.id === run?.ownerOrchestratorId && c.isOrchestrator && !c.closedAt);
       if (target) void s.chats.send(target.id, `[evento app] Decisione salvata per il flusso ${a.runId}. Rileggi app_flow_status; questa notifica non concede altri permessi.`, undefined, false, 'Flussi', false, { kind: 'app' }).catch(e => log.warn('flows', 'Run decision wake failed', { cause: errText(e), hint: 'Decision persisted in the flow run.' }));
-      return service.snapshot();
+      return s.flows!.snapshot();
     },
     'work:list': () => workflows.list(),
     'work:decide': a => {
@@ -582,11 +608,13 @@ app.whenReady().then(async () => {
   // of claude.exe would otherwise outlive the app); will-quit kills again in case this path is skipped.
   let quitting = false;
   app.on('before-quit', e => {
+    flowBackground.beforeQuit();
     // closing the window quits twice (our 'closed' handler + Electron's window-all-closed): every repeat is held too,
     // or the app would exit in the same tick without the clean shutdown (app.exit below emits no before-quit)
     e.preventDefault();
     if (quitting) return;
     quitting = true;
+    flowBackground.stop();
     void connectors.service.cancelLogin();
     headline.stop();
     pulse?.stop(); unsubscribePulse(); stopTaskbar(); proposals.stop();
@@ -614,4 +642,4 @@ app.whenReady().then(async () => {
   app.on('will-quit', () => s.killNow());
 });
 
-app.on('second-instance', () => { if (win && !hiddenRun()) { if (win.isMinimized()) win.restore(); win.focus(); } });
+app.on('second-instance', () => { if (win && !hiddenRun()) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); } });

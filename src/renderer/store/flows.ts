@@ -1,5 +1,6 @@
 // Live flow catalog and exact-brain decisions. A changed brain clears cached proposals before any replacement read.
 import { useEffect } from 'react';
+import type { FlowAutomationControl, FlowAutomationPause } from '@shared/flow-automation';
 import type { FlowSnapshot } from '@shared/flows';
 import type { FlowAsk } from '../lib/flow-ask';
 import { clearDecisionDrafts } from '../lib/decision-drafts';
@@ -52,7 +53,9 @@ export async function decideFlow(ask: FlowAsk, answer: 'yes' | 'no' | 'other', f
   const ticket = read;
   try {
     const common = { contextKey: ask.contextKey, answer, ...(feedback ? { feedback } : {}) };
-    const snapshot = ask.type === 'flow-definition'
+    const snapshot = ask.type === 'flow-automation'
+      ? await sb.invoke('flows:autoDecide', { ...common, id: ask.rule.id, expectedRevision: ask.rule.revision })
+      : ask.type === 'flow-definition'
       ? await sb.invoke('flows:definitionDecide', { ...common, id: ask.draft.definition.id, expectedRevision: ask.draft.revision })
       : await sb.invoke('flows:decide', { ...common, runId: ask.run.id, expectedRevision: ask.run.revision, stepId: ask.run.steps[ask.run.currentStep]!.stepId });
     if (ticket === read && flowState.get().snapshot?.contextKey === ask.contextKey) {
@@ -64,5 +67,20 @@ export async function decideFlow(ask: FlowAsk, answer: 'yes' | 'no' | 'other', f
     toast(t('flows.failedDecision'), 'err');
     void reloadFlows();
     return false;
+  }
+}
+
+/** User controls retain the displayed brain and revision; a late response never replaces a newer snapshot. */
+export async function controlFlowAutomation(contextKey: string, control: FlowAutomationControl | FlowAutomationPause): Promise<boolean> {
+  if (flowState.get().snapshot?.contextKey !== contextKey) return false;
+  const ticket = read;
+  try {
+    const snapshot = 'id' in control
+      ? await sb.invoke('flows:autoPause', { ...control, contextKey })
+      : await sb.invoke('flows:autoControl', { ...control, contextKey });
+    if (ticket === read && flowState.get().snapshot?.contextKey === contextKey) { ++read; acceptSnapshot(snapshot); }
+    return true;
+  } catch {
+    toast(t('flows.failedDecision'), 'err'); void reloadFlows(); return false;
   }
 }
