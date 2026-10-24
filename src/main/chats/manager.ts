@@ -2474,7 +2474,10 @@ export class ChatManager implements ChatService {
     if (r.s.run?.taskContract) checkResult(result, r.s.run.taskContract.doneWhen);
   }
 
-  /** App notices are rebuilt from every retained root run, never from a delegated/private result. */
+  /** App notices are rebuilt from every retained root run, never from a delegated/private result. The Orchestrator gets
+   *  only the ones not shown yet: one already shown (delivery.displayedAt) never comes back after a restart or in a new
+   *  Orchestrator (owner, 2026-10-24: «ogni volta che riavvio l'app mi trovo tutte le box degli agenti»). A local result
+   *  stays in its own chat. */
   private restoreRootNotices(): void {
     const orchestrator = this.openOrchestrator(), changed = new Set<Rec>();
     for (const run of this.runs.list().slice().sort((a, b) => a.startedAt - b.startedAt)) {
@@ -2483,6 +2486,7 @@ export class ChatManager implements ChatService {
       const local = run.startedBy === 'user' || run.startedBy === 'app' && run.taskContract?.reportExpected;
       const target = run.startedBy === 'orchestrator' ? orchestrator : local ? worker : undefined;
       if (!target || worker?.s.run?.runId === run.runId && (worker.working || this.midTurn(worker))) continue;
+      if (target === orchestrator && run.delivery?.displayedAt !== undefined) continue;
       const id = `result-${result.runId}-${result.at}`;
       if (target.items.some(item => item.id === id)) continue;
       const title = worker?.s.title ?? run.goal, role = worker?.s.agent?.name ?? run.agentId;
