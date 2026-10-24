@@ -1,7 +1,7 @@
 // scripts/pull.mjs (ADR 0074): the plan from git's state (refusals in Italian with the way out), which changed files
 // mean a dependency reinstall, and the script end to end on a temp clone of a temp bare remote: up to date, a
 // fast-forward, local commits that stop it, uncommitted changes that stop it.
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -41,12 +41,24 @@ describe('scripts/pull.mjs on a temp clone', () => {
     g(up, 'add', '-A'); g(up, 'commit', '-q', '-m', 'first'); g(up, 'push', '-q', 'origin', 'main');
     g(root, 'clone', '-q', remote, me);
     const push = (msg: string) => { fs.writeFileSync(path.join(up, `${msg}.txt`), msg); g(up, 'add', '-A'); g(up, 'commit', '-q', '-m', msg); g(up, 'push', '-q', 'origin', 'main'); };
-    const run = (...extra: string[]) => {
-      try { return JSON.parse(execFileSync(process.execPath, [path.join(me, 'scripts', 'pull.mjs'), '--json', '--no-build', ...extra], { cwd: me, encoding: 'utf8' }).trim()); }
-      catch (e) { return JSON.parse(String((e as { stdout?: string }).stdout).trim()); }
+    const runAt = (script: string, ...extra: string[]) => {
+      const result = spawnSync(process.execPath, [script, '--json', '--no-build', ...extra], { cwd: me, encoding: 'utf8', windowsHide: true });
+      if (result.error) throw result.error;
+      try { return JSON.parse(result.stdout.trim()); }
+      catch (cause) { throw new Error(`pull.mjs returned invalid JSON (exit ${result.status}, signal ${result.signal}): stdout=${JSON.stringify(result.stdout)}, stderr=${JSON.stringify(result.stderr)}`, { cause }); }
     };
-    return { root, me, push, run };
+    const run = (...extra: string[]) => runAt(path.join(me, 'scripts', 'pull.mjs'), ...extra);
+    return { root, me, push, run, runAt };
   };
+
+  it('executes through a symlinked checkout path, as with macOS temporary directories', () => {
+    const t = setup(), linked = path.join(t.root, 'linked-checkout');
+    try {
+      // A directory junction avoids elevated symlink permissions on Windows.
+      fs.symlinkSync(t.me, linked, 'junction');
+      expect(t.runAt(path.join(linked, 'scripts', 'pull.mjs'), '--check')).toMatchObject({ ok: true, check: true, behind: 0 });
+    } finally { fs.rmSync(t.root, { recursive: true, force: true }); }
+  });
 
   it('nothing new, then a fast-forward with the commit list, never a reinstall for plain files', () => {
     const t = setup();
