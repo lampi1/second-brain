@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import type { ChatSummary } from '../../shared/contract';
-import type { FlowAgentBinding, FlowRoleInfo, FlowSnapshot, FlowTestDbEvidence, FlowVerifiedReport } from '../../shared/flows';
+import type { FlowAgentBinding, FlowCancel, FlowDecision, FlowRestart, FlowRestartDecision, FlowRestartProposal, FlowRoleInfo, FlowRun, FlowSnapshot, FlowTestDbEvidence, FlowVerifiedReport } from '../../shared/flows';
 import type { WorkRoleId } from '../../shared/roles';
 import { log } from '../log';
 import { FlowService } from './service';
@@ -19,6 +19,8 @@ export interface FlowRuntimeOptions {
   userData: string; brainRoot(): string | null; chats(): readonly ChatSummary[];
   changed(snapshot: FlowSnapshot): void;
   send?(ownerId: string, message: string): Promise<void>;
+  /** Host interruption only; the runtime verifies the exact bound chat/run/task before invoking it. */
+  stopChat?(chatId: string): void | Promise<void>;
   detect?(config: FlowAutomationConfig, cursor: Record<string, string>, signal?: AbortSignal): Promise<FlowDetectionResult>;
   /** Tests inject token and fetch for the DevOps write adapter (ADR 0145). */
   devopsWrite?: Pick<DevOpsWriterOptions, 'token' | 'request'>;
@@ -31,6 +33,13 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   const instances = new Map<string, FlowService>();
   const automations = new Map<string, FlowAutomationService>();
   const writers = new Map<string, DevOpsWriter>();
+  const activeRequests = new Map<string, Set<AbortController>>();
+  const interrupting = new Set<string>();
+  const abortRequests = (runId?: string): void => { for (const [id, requests] of activeRequests) if (runId === undefined || id === runId) for (const controller of requests) controller.abort(); };
+  const requestSignal = (runId: string, signal?: AbortSignal) => {
+    const controller = new AbortController(), requests = activeRequests.get(runId) ?? new Set<AbortController>(); requests.add(controller); activeRequests.set(runId, requests);
+    return { signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal, done: () => { requests.delete(controller); if (!requests.size) activeRequests.delete(runId); } };
+  };
   const testDbExecutor = new TestDbQueryExecutor({ file: path.join(options.userData, 'test-db-targets.json'), ...options.testDbRead });
   const detector = options.detect ?? createDevOpsDetector();
   let selectedKey: string | null = null, stopped = false;
@@ -42,10 +51,11 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   const withRoles = (snapshot: FlowSnapshot): FlowSnapshot => { const r = roles(); return r ? { ...snapshot, roles: r } : snapshot; };
   const current = () => {
     const root = options.brainRoot();
-    if (!root) { for (const auto of automations.values()) auto.stop(); automations.clear(); selectedKey = null; throw new Error('Collega il brain per definire e usare i flussi.'); }
+    if (!root) { abortRequests(); for (const auto of automations.values()) auto.stop(); automations.clear(); selectedKey = null; throw new Error('Collega il brain per definire e usare i flussi.'); }
     const canonical = fs.realpathSync(root);
     const key = createHash('sha256').update(process.platform === 'win32' ? canonical.toLowerCase() : canonical).digest('hex');
     if (selectedKey !== key) {
+      abortRequests();
       for (const auto of automations.values()) auto.stop();
       automations.clear(); selectedKey = key;
     }
@@ -128,12 +138,96 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   };
   const tick = async (): Promise<void> => {
     if (stopped) return;
-    if (!options.brainRoot()) { for (const auto of automations.values()) auto.stop(); automations.clear(); selectedKey = null; return; }
-    const runs = service().snapshot().runs;
-    for (const run of runs) { const chatId = run.steps[run.currentStep]?.chatId; if (run.status === 'active' && chatId) reportReady(chatId); }
+    if (!options.brainRoot()) { abortRequests(); for (const auto of automations.values()) auto.stop(); automations.clear(); selectedKey = null; return; }
+    const context = current(), flow = service();
+    for (const run of flow.snapshot().runs.filter(run => run.status === 'cancelled' && run.cancellation?.interruption === 'pending')) {
+      try { await confirmStopped(run, context); }
+      catch (error) { log.warn('flows', 'Cancelled flow still awaiting worker interruption', { cause: String(error), hint: 'The automatic slot remains reserved; interruption retries for the exact bound task.' }); }
+      if (stopped || current().key !== context.key) return;
+    }
+    for (const run of flow.snapshot().runs) { const chatId = run.steps[run.currentStep]?.chatId; if (run.status === 'active' && chatId) reportReady(chatId); recoveryReady(run); }
     await automation().tick();
   };
-  const stop = () => { stopped = true; for (const auto of automations.values()) auto.stop(); automations.clear(); };
+  const stop = () => { stopped = true; abortRequests(); for (const auto of automations.values()) auto.stop(); automations.clear(); };
+  const interrupt = async (run: FlowRun, root: string): Promise<void> => {
+    const step = run.steps[run.currentStep];
+    if (!step?.chatId || !step.chatRunId || !step.taskVersion) return;
+    const chat = scopedChat({ chatId: step.chatId, chatRunId: step.chatRunId, taskVersion: step.taskVersion }, root);
+    if (!chat || chat.closedAt || chat.run?.endedAt !== undefined) return;
+    if (!options.stopChat) throw new Error('Chat interruption is unavailable; stop the linked chat before starting more work');
+    await options.stopChat(chat.id);
+  };
+  const confirmStopped = async (run: FlowRun, context: { key: string; root: string }): Promise<void> => {
+    if (run.status === 'cancelled' && run.cancellation?.interruption === 'pending') {
+      abortRequests(run.id); await interrupt(run, context.root);
+      instances.get(context.key)!.confirmInterruption(run.id, run.cancellation.expectedRevision);
+    }
+  };
+  const reconcileRecovery = async (run: FlowRun, context: { key: string; root: string }): Promise<void> => {
+    await confirmStopped(run, context);
+    if (!stopped && current().key === context.key) { automation().reconcileRuns(); await tick(); }
+  };
+  const cancel = async (input: FlowCancel, ownerId?: string): Promise<FlowRun> => {
+    if (stopped) throw new Error('Flow runtime stopped');
+    const context = current(), flow = service(), run = flow.cancel(input, ownerId); await reconcileRecovery(run, context); return flow.status(run.id, run.ownerOrchestratorId);
+  };
+  const proposeCancel = async (input: FlowCancel, ownerId: string): Promise<FlowRun> => service().proposeCancel(input, ownerId);
+  const decideCancel = async (input: FlowRestartDecision): Promise<FlowRun> => {
+    if (!['yes', 'no', 'other'].includes(input.answer)) throw new Error('Invalid cancellation decision');
+    if (input.answer === 'yes') return cancel(service().cancellationRequest(input));
+    const run = service().dismissCancel(input); await tick(); return run;
+  };
+  const decide = async (input: FlowDecision): Promise<FlowRun> => {
+    if (stopped) throw new Error('Flow runtime stopped');
+    const context = current(), flow = service(), run = flow.decide(input); await reconcileRecovery(run, context); return flow.status(run.id, run.ownerOrchestratorId);
+  };
+  const restart = async (input: FlowRestart): Promise<FlowRun> => {
+    if (stopped) throw new Error('Flow runtime stopped');
+    const context = current(), flow = service(), source = flow.snapshot().runs.find(run => run.id === input.runId);
+    if (!source) throw new Error('Flow run not found');
+    if (!options.chats().some(chat => chat.id === source.ownerOrchestratorId && chat.isOrchestrator && !chat.closedAt)) throw new Error('Reopen the owning Orchestrator before restarting this flow');
+    const existing = flow.restarted(input);
+    if (existing) { const run = source.subjectKey.startsWith('auto:') ? automation().restart(input) : existing; await reconcileRecovery(source, context); return run; }
+    if (input.acknowledgeEffects !== true) throw new Error('Restart requires explicit acknowledgement of repeated effects');
+    if (source.subjectKey.startsWith('auto:')) automation().restartConfig(input); else flow.restartTarget(input);
+    // Do not publish a runnable successor while the old worker might still execute. Recheck the exact approved
+    // source and target after interruption, since a report or brain switch may race that asynchronous operation.
+    if (interrupting.has(source.id)) throw new Error('A recovery is already interrupting this run');
+    interrupting.add(source.id);
+    try {
+      abortRequests(source.id); await interrupt(source, context.root);
+      if (stopped || current().key !== context.key) throw new Error('Brain context changed during restart');
+      if (!options.chats().some(chat => chat.id === source.ownerOrchestratorId && chat.isOrchestrator && !chat.closedAt)) throw new Error('Owning Orchestrator closed during restart');
+      const run = source.subjectKey.startsWith('auto:') ? automation().restart(input) : flow.restart(input);
+      const cancelled = flow.status(source.id, source.ownerOrchestratorId);
+      if (cancelled.status === 'cancelled' && cancelled.cancellation?.interruption === 'pending') flow.confirmInterruption(source.id, cancelled.cancellation.expectedRevision);
+      automation().reconcileRuns(); await tick(); return run;
+    } finally { interrupting.delete(source.id); }
+  };
+  const proposeRestart = async (input: FlowRestartProposal, ownerId: string): Promise<FlowRun> => {
+    const flow = service(), source = flow.status(input.runId, ownerId);
+    if (source.subjectKey.startsWith('auto:')) automation().restartConfig(input); else flow.restartTarget(input);
+    return flow.proposeRestart(input, ownerId);
+  };
+  const decideRestart = async (input: FlowRestartDecision): Promise<FlowRun> => {
+    if (!['yes', 'no', 'other'].includes(input.answer)) throw new Error('Invalid recovery decision');
+    if (input.answer !== 'yes') { const run = service().dismissRestart(input); await tick(); return run; }
+    return restart(service().recovery(input));
+  };
+  /** Persisted ready recovery/clarification state is the retry source; this map only throttles duplicate wakes. */
+  const recoveryReady = (run: FlowRun): void => {
+    const ready = run.restartOf && run.status === 'active' && run.steps[run.currentStep]?.status === 'ready', feedback = run.recoveryFeedback?.deliveredAt === undefined ? run.recoveryFeedback : undefined;
+    if (!ready && !feedback) return;
+    const owner = options.chats().find(chat => chat.id === run.ownerOrchestratorId && chat.isOrchestrator && !chat.closedAt);
+    const contextKey = current().key, key = `${contextKey}:${run.id}:recovery:${run.revision}:${feedback?.at ?? 'ready'}`;
+    if (!owner || owner.state !== 'idle' || !options.send || notifyingOwners.has(owner.id) || Date.now() - (reportNotifications.get(key) ?? 0) < 60_000) return;
+    reportNotifications.set(key, Date.now()); notifyingOwners.add(owner.id);
+    if (ready && feedback) reportNotifications.set(`${contextKey}:${run.id}:recovery:${run.revision}:ready`, Date.now());
+    if (reportNotifications.size > 2000) reportNotifications.delete(reportNotifications.keys().next().value!);
+    const message = `[evento app · Routine] Run ${run.id}, revisione ${run.revision}.${ready ? ` Ripartenza approvata: leggi app_flow_status e coordina il passaggio ${run.steps[run.currentStep]!.stepId} con una nuova chat e app_flow_bind; verifica prima che sia ancora pronto.` : ''}${feedback ? ` Chiarimento dell’utente sulla richiesta ${feedback.kind}, dati citati: ${JSON.stringify(feedback.message)}. Non è un’autorizzazione a interrompere o ripetere operazioni: prepara una nuova proposta se serve.` : ''} Non avviare un secondo run e non ripetere passaggi già completati.`;
+    void options.send(owner.id, message).then(() => { if (feedback) instances.get(contextKey)?.acknowledgeRecoveryFeedback(run.id, feedback.at, feedback.message, feedback.kind); })
+      .catch(error => log.warn('flows', 'Recovery wake failed', { cause: String(error), hint: 'The recovery remains in the run; delivery retries when the owner is idle.' })).finally(() => notifyingOwners.delete(owner.id));
+  };
   const reportReady = (chatId: string): boolean => {
     if (!options.brainRoot() || stopped) return false;
     const runs = service().snapshot().runs.filter(r => r.status === 'active' && r.steps[r.currentStep]?.chatId === chatId);
@@ -167,7 +261,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     const s = service(), snapshot = { ...s.snapshot(), automation: automation().snapshot() };
     const catalog = Object.entries(snapshot.active).flatMap(([id, version]) => snapshot.versions.filter(v => v.definition.id === id && v.version === version));
     const candidates = s.match(text).candidates;
-    const runs = snapshot.runs.filter(r => r.ownerOrchestratorId === ownerId && r.status !== 'completed');
+    const runs = snapshot.runs.filter(r => r.ownerOrchestratorId === ownerId && !['completed', 'cancelled'].includes(r.status));
     if (!catalog.length && !runs.length && !snapshot.drafts.length) return '[app flows] Catalogo vuoto. Per richieste ripetibili puoi proporre di costruire un flusso dal brain con domande Sì/No/Altro. Non inventare procedure aziendali; nessun flusso è attivo.';
     return `[app flows · context ${snapshot.contextKey}] ${JSON.stringify({ candidates: candidates.map(v => ({ id: v.definition.id, version: v.version, title: v.definition.title, scope: v.definition.scope })), activeRuns: runs.slice(0, 20).map(r => ({ id: r.id, revision: r.revision, status: r.status, step: r.steps[r.currentStep]?.stepId })), catalog: catalog.slice(0, 20).map(v => ({ id: v.definition.id, version: v.version, title: v.definition.title, aliases: v.definition.aliases })), automation: { paused: snapshot.automation.paused, rules: snapshot.automation.rules.filter(r => r.ownerOrchestratorId === ownerId).map(r => ({ id: r.id, status: r.status })), pendingEvents: snapshot.automation.events.filter(e => ['pending', 'notified', 'blocked'].includes(e.status)).map(e => ({ id: e.id, ruleId: e.ruleId, status: e.status })) }, more: catalog.length > 20 || runs.length > 20 })}. Read app_flow_list/status before acting; ambiguous matches need a question. Matching is not approval. Start/reuse flows only through authenticated Orchestrator tools; never replace required host evidence with prose.`;
   };
@@ -180,6 +274,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     const run = snap.runs.find(r => { const step = r.steps[r.currentStep]; return r.status === 'active' && step?.status === 'running' && step.chatId === chatId && step.chatRunId === chat.run!.runId && step.taskVersion === (chat.run!.taskVersion ?? 1); });
     const spec = run && snap.versions.find(v => v.definition.id === run.flowId && v.version === run.flowVersion)?.definition.steps[run.currentStep];
     if (!run || !spec || !adapted(spec)) throw new Error('DevOps write: the current step of this chat does not declare the devops-write adapter.');
+    if (interrupting.has(run.id)) throw new Error('DevOps write: flow recovery is interrupting this run.');
     const step = run.steps[run.currentStep]!;
     if (!scopedChat({ chatId, chatRunId: step.chatRunId!, taskVersion: step.taskVersion! }, context.root)) throw new Error('DevOps write: the chat is outside the selected brain.');
     if (Date.now() - (step.startedAt ?? 0) > spec.timeoutMs) throw new Error('DevOps write: the step timed out.');
@@ -191,7 +286,9 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
         audit: entry => log.info('flows', 'DevOps write', { data: entry }) });
       writers.set(context.key, writer);
     }
-    return writer.execute({ runId: run.id, ...granted }, request, signal);
+    const active = requestSignal(run.id, signal);
+    try { return await writer.execute({ runId: run.id, ...granted }, request, active.signal); }
+    finally { active.done(); }
   };
   /** Only the authenticated chat bound to the current read-only adapter step may query an approved test target. */
   const testDbRead = async (chatId: string, request: Record<string, unknown>, signal?: AbortSignal): Promise<Record<string, unknown>> => {
@@ -205,6 +302,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
       const run = snap.runs.find(r => { const step = r.steps[r.currentStep]; return r.status === 'active' && step?.status === 'running' && step.chatId === chatId && step.chatRunId === chat.run!.runId && step.taskVersion === (chat.run!.taskVersion ?? 1); });
       const spec = run && snap.versions.find(v => v.definition.id === run.flowId && v.version === run.flowVersion)?.definition.steps[run.currentStep];
       if (!run || !spec || !testDbAdapted(spec) || snap.active[run.flowId] !== run.flowVersion) throw new Error('Test DB read: no current test-db-read capability binding');
+      if (interrupting.has(run.id)) throw new Error('Test DB read: flow recovery is interrupting this run');
       const step = run.steps[run.currentStep]!, binding = { chatId, chatRunId: step.chatRunId!, taskVersion: step.taskVersion! };
       if (!scopedChat(binding, context.root) || !options.chats().some(c => c.id === run.ownerOrchestratorId && c.isOrchestrator && !c.closedAt)) throw new Error('Test DB read: chat or owner is outside the active flow');
       if (Date.now() - (step.startedAt ?? 0) > spec.timeoutMs) throw new Error('Test DB read: the step timed out');
@@ -215,11 +313,12 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     const { run, binding, grant } = authorize(), query = validateTestDbQueryRequest(request);
     if (!grant.targetIds.includes(query.targetId)) throw new Error('Test DB read: target is outside the user-approved grant');
     let evidence: FlowTestDbEvidence | undefined;
+    const active = requestSignal(run.id, signal);
     try {
       // Re-check consent before resolving the target; the executor repeats it after the durable evidence callback.
       const latest = authorize();
       if (latest.run.id !== run.id || latest.binding.chatRunId !== binding.chatRunId || latest.binding.taskVersion !== binding.taskVersion || !latest.grant.targetIds.includes(query.targetId)) throw new Error('Test DB read: grant changed');
-      const result = await testDbExecutor.execute(query, signal, () => {
+      const result = await testDbExecutor.execute(query, active.signal, () => {
         const live = authorize();
         if (live.run.id !== run.id || live.binding.chatRunId !== binding.chatRunId || live.binding.taskVersion !== binding.taskVersion || !live.grant.targetIds.includes(query.targetId)) throw new Error('Test DB read: grant changed');
       }, database => { evidence = flow.beginTestDbQuery(run.id, binding, query.targetId, database, query.query); });
@@ -236,8 +335,8 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
       const evidenceId = evidence?.id;
       if (evidenceId && flow.snapshot().runs.find(item => item.id === run.id)?.testDbEvidence?.find(item => item.id === evidenceId)?.status === 'pending') flow.finishTestDbQuery(run.id, evidenceId);
       throw new Error('Test DB read failed or permission changed; inspect the run query evidence');
-    }
+    } finally { active.done(); }
   };
-  return { service, automation, snapshot, tick, stop, reportReady, resolveBinding, hint, devopsWrite, testDbRead };
+  return { service, automation, snapshot, tick, stop, cancel, proposeCancel, decideCancel, decide, restart, proposeRestart, decideRestart, reportReady, resolveBinding, hint, devopsWrite, testDbRead };
 }
 export type FlowRuntime = ReturnType<typeof createFlowRuntime>;

@@ -138,6 +138,8 @@ describe('agent_delegate', () => {
     // a case-specific line (ADR 0129) refuses the report with what to save instead
     await expect(f.call('agent_report', scout.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }], remember: ['Logs are in D:/logs', 'Stats at https://localhost:44309/stats'] }))
       .rejects.toThrow(/remember line 2: This fact is tied to one case.*launch profile/);
+    await expect(f.call('agent_report', scout.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }], remember: ['All tests passed'] }))
+      .rejects.toThrow(/remember line 1: This is a task update/);
     expect(remembered).toEqual([]);
     const r = await f.call('agent_report', scout.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }], remember: ['Logs are in D:/logs'] });
     expect(r).toMatchObject({ reported: true, remembered: 1 });

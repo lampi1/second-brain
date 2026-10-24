@@ -1,11 +1,13 @@
 // The maintenance's memory tidy-up (job 'merge-memory', ADR 0129): memory keeps general, reusable knowledge, so each
 // pass, by itself (no approval, owner 2026-10-19), over the open facts of memory/records.json:
 //   1. merges: a proposed fact with the same words as a confirmed one in its scope is retired as already known; of
-//      proposed near-duplicates (memory-worth.ts nearSame) the best is kept and the others retired as merged into it;
+//      proposed identical facts: the best is kept and the others retired as merged into it;
 //   2. generalizes: a case-specific fact (memoryWorth: a URL with a port, a ticket / PR / commit id, a user path, a
 //      date, a branch) goes to a one-shot agent with no tools (the same engine as the upgrade job) that rewrites it as
 //      the reusable rule or procedure behind it, or says nothing reusable is left: then it is dropped (retired). A
-//      rewrite that is still case-specific counts as nothing reusable. Without an engine nothing is generalized or
+//      rewrite that is still case-specific counts as nothing reusable. Confirmed originals are never retired: their
+//      rewrites are proposed supersessions awaiting independent review, and a drop leaves them untouched.
+//      Without an engine nothing is generalized or
 //      dropped (the next pass with one does it);
 //   3. writes it all through rules/memory-records.ts tidyMemory and records one change per role in the change log, with
 //      what was merged, rewritten and dropped as its evidence, and its undo (ChangeLog → undoMemoryTidy). A fact a
@@ -15,7 +17,7 @@
 import { randomBytes } from 'node:crypto';
 import { queueMemoryInvalidation } from '../rules/memory-invalidations';
 import { memoryConflicts, readMemoryRecords, tidyMemory, type MemoryRecord, type MemoryScope } from '../rules/memory-records';
-import { factWords, memoryWorth, nearSame } from '../rules/memory-worth';
+import { memoryWorth, sameMemoryFact } from '../rules/memory-worth';
 import { changeText } from './change-text';
 import type { JobContext, JobResult } from './jobs';
 
@@ -34,7 +36,6 @@ type Line = { kind: 'merged' | 'known' | 'generalized' | 'dropped'; old: string;
 interface Plan { retire: { id: string; reason: string }[]; generalize: { id: string; value: string }[]; lines: Line[] }
 
 const sameScope = (a: MemoryScope, b: MemoryScope): boolean => a.roleId === b.roleId && a.userId === b.userId && a.project === b.project && a.repository === b.repository && a.environment === b.environment;
-const sameWords = (a: string, b: string): boolean => { const x = factWords(a), y = factWords(b); return x.size > 0 && x.size === y.size && [...x].every(w => y.has(w)); };
 const clip = (s: string, n = 160): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 /** The agent's answer: per asked id a one-line rewrite or a drop; null when it is not the JSON asked for. */
@@ -58,23 +59,25 @@ export async function tidyMemoryJob(ctx: JobContext): Promise<JobResult> {
   let records: MemoryRecord[];
   try { records = readMemoryRecords(ctx.root); } catch (e) { return { job, changes: 0, note: `memoria non leggibile: ${e instanceof Error ? e.message : String(e)}`.slice(0, 200) }; }
   // the facts a tidy-up touched and the user undid: their undo is the decision
-  const undone = new Set(ctx.log.all().filter(c => c.job === job && c.rolledBackAt && c.memory).flatMap(c => c.memory!.retired));
+  const undone = new Set(ctx.log.all().filter(c => c.job === job && c.rolledBackAt && c.memory).flatMap(c => [...c.memory!.retired, ...(c.memory!.proposedFrom ?? [])]));
   const open = records.filter(r => r.validTo === null && (r.status === 'proposed' || r.status === 'confirmed') && !r.derivedFiles?.length && !undone.has(r.memoryId)
-    && !(r.status === 'proposed' && memoryConflicts(records, r).length));
+    && !(r.status === 'confirmed' && records.some(x => x.supersedes === r.memoryId))
+    && !(r.status === 'proposed' && (r.supersedes || memoryConflicts(records, r).length)));
   const plans = new Map<string, Plan>(), gone = new Set<string>();
   const plan = (r: MemoryRecord): Plan => { let p = plans.get(r.scope.roleId); if (!p) plans.set(r.scope.roleId, p = { retire: [], generalize: [], lines: [] }); return p; };
   const retire = (r: MemoryRecord, reason: string, line: Line) => { gone.add(r.memoryId); const p = plan(r); p.retire.push({ id: r.memoryId, reason }); p.lines.push(line); };
 
-  // 1. merges: proposed facts already known, proposed near-duplicates (the best one stays)
+  // 1. merges: proposed facts already known, proposed duplicates (the best one stays)
   const confirmed = open.filter(r => r.status === 'confirmed');
   const proposed = open.filter(r => r.status === 'proposed').map(r => ({ r, w: memoryWorth(r.subject, r.predicate, r.value) }))
     .sort((a, b) => b.w.score - a.w.score || b.r.observedAt.localeCompare(a.r.observedAt) || a.r.memoryId.localeCompare(b.r.memoryId));
   for (const { r } of proposed) {
     if (gone.has(r.memoryId)) continue;
-    const known = confirmed.find(c => sameScope(c.scope, r.scope) && sameWords(c.value, r.value));
+    const known = confirmed.find(c => sameScope(c.scope, r.scope) && sameMemoryFact(c, r));
     if (known) { retire(r, `known:${known.memoryId}`, { kind: 'known', old: r.value }); continue; }
     for (const { r: d } of proposed) {
-      if (d !== r && !gone.has(d.memoryId) && sameScope(d.scope, r.scope) && nearSame(d.value, r.value)) retire(d, `merged:${r.memoryId}`, { kind: 'merged', old: d.value, to: r.value });
+      if (d !== r && !gone.has(d.memoryId) && sameScope(d.scope, r.scope) && !d.supersedes && !r.supersedes
+        && sameMemoryFact(d, r)) retire(d, `merged:${r.memoryId}`, { kind: 'merged', old: d.value, to: r.value });
     }
   }
 
@@ -91,10 +94,17 @@ export async function tidyMemoryJob(ctx: JobContext): Promise<JobResult> {
     batch.forEach((r, j) => {
       if (!verdicts.has(ids[j]!)) return; // not answered: the next pass asks again
       const value = verdicts.get(ids[j]!) ?? null;
-      if (value === null || memoryWorth(r.subject, r.predicate, value).specific) { retire(r, 'not-generalizable', { kind: 'dropped', old: r.value }); return; }
+      if (value === null || memoryWorth(r.subject, r.predicate, value).specific) {
+        if (r.status === 'proposed') retire(r, 'not-generalizable', { kind: 'dropped', old: r.value });
+        return;
+      }
       // the rule is already remembered in its scope: the case goes as merged into it
-      const twin = open.find(x => x !== r && !gone.has(x.memoryId) && sameScope(x.scope, r.scope) && nearSame(x.value, value));
-      if (twin) { retire(r, `merged:${twin.memoryId}`, { kind: 'merged', old: r.value, to: twin.value }); return; }
+      const twin = open.find(x => x !== r && !gone.has(x.memoryId) && sameScope(x.scope, r.scope)
+        && sameMemoryFact(x, { ...r, value }));
+      if (twin) {
+        if (r.status === 'proposed') retire(r, `merged:${twin.memoryId}`, { kind: 'merged', old: r.value, to: twin.value });
+        return;
+      }
       gone.add(r.memoryId); const p = plan(r); p.generalize.push({ id: r.memoryId, value }); p.lines.push({ kind: 'generalized', old: r.value, to: value });
     });
   }

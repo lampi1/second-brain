@@ -45,4 +45,4 @@ quindi le sue regole base sono qui.
   consigliata prima. Parole semplici: niente id, percorsi, nomi tecnici o gergo. L'essenziale degli artifact va
   nell'anteprima dell'opzione (`hub.md`). Esempio buono: "Le chat si bloccano a creare i dati di test: il permesso è
   scritto dove Claude non lo legge; si annulla in un minuto. / Lo sposto dove lo legge?"
-- Sicurezza di `me.md` sempre: query su DB di produzione solo dopo aver mostrato la query e avuto l'ok; niente scritture in prod.
+- Sicurezza di `me.md` sempre: mai eseguire query su DB di produzione, neanche in sola lettura; mostra il testo completo perché le esegua {{OWNER}}. Nessuna approvazione autorizza l'agente a eseguirle; niente scritture in prod.

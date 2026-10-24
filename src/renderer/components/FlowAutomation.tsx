@@ -5,6 +5,7 @@ import type { FlowAutomationControl, FlowAutomationPause } from '@shared/flow-au
 import { flowAsks } from '../lib/flow-ask';
 import { openQueue } from '../lib/later';
 import { controlFlowAutomation } from '../store/flows';
+import { useApp } from '../store/store';
 import { t, locale } from '../i18n';
 import { FlowAutomationSummary } from './FlowAutomationSummary';
 function useControl(contextKey: string) {
@@ -28,6 +29,7 @@ export function FlowAutomationControls({ snapshot }: { snapshot: FlowSnapshot })
 }
 export function FlowAutomation({ version, snapshot }: { version: FlowVersion; snapshot: FlowSnapshot }) {
   const { busy, apply } = useControl(snapshot.contextKey);
+  const chats = useApp(state => state.chats);
   const auto = snapshot.automation;
   const rules = auto?.rules.filter(rule => rule.config.flowId === version.definition.id && rule.config.flowVersion === version.version) ?? [];
   if (!rules.length) return <p className="flows-muted flow-mode-label">{t('flows.versionMode')}: <strong>{t('flows.manual')}</strong> · v{version.version}</p>;
@@ -41,13 +43,14 @@ export function FlowAutomation({ version, snapshot }: { version: FlowVersion; sn
           {ask && <button type="button" className="btn btn-amber btn-s" onClick={() => openQueue(`${ask.chatId}/${ask.id}`)}>{t('flows.reviewOpen')}</button>}
           {(rule.status === 'enabled' || resumable) && <button type="button" className="btn btn-ghost btn-s" disabled={busy || !!auto?.storageError} onClick={() => void apply({ id: rule.id, expectedRevision: rule.revision, paused: rule.status === 'enabled' })}>{t(resumable ? 'flows.resume' : 'flows.pause')}</button>}
         </div>
+        <p className="flows-muted">{t('flows.runOwner')}: {chats[rule.ownerOrchestratorId]?.title || rule.ownerOrchestratorId}</p>
         <dl className="flow-auto-timing"><div><dt>{t('flows.nextCheck')}</dt><dd>{rule.status === 'enabled' && !auto!.paused && rule.nextCheckAt ? new Date(rule.nextCheckAt).toLocaleString(locale()) : t('flows.notScheduled')}</dd></div><div><dt>{t('flows.lastCheck')}</dt><dd>{rule.lastCheckAt ? new Date(rule.lastCheckAt).toLocaleString(locale()) : t('flows.noChecks')}</dd></div></dl>
         {rule.lastResult && <p className="flows-muted">{t('flows.lastResult')}: {rule.lastResult}</p>}
         {rule.error && <p className="flow-block" role="alert">{rule.error}</p>}
         {rule.feedback && <p className="flows-muted">{rule.feedback}</p>}
         <details><summary>{t(rule.status === 'enabled' || resumable ? 'flows.configuration' : 'flows.details')}</summary><FlowAutomationSummary config={rule.config} /></details>
         <details className="flow-event-queue"><summary>{t('flows.events')} · {events.length}{events.some(event => event.status === 'pending' || event.status === 'notified') ? ` · ${events.filter(event => event.status === 'pending' || event.status === 'notified').length} ${t('flows.pending')}` : ''}{events.some(event => event.status === 'blocked') ? ` · ${events.filter(event => event.status === 'blocked').length} ${t('flows.blocked')}` : ''}</summary>
-          {events.length ? <ul>{events.map(event => <li key={event.id}><div><strong>{event.title}</strong><span className="flow-version">r{event.ruleRevision}</span><span className="flow-badge" data-status={event.status}>{t(`flows.${event.status}`)}</span></div>{event.reason && <p>{event.reason}</p>}</li>)}</ul> : <p className="flows-muted">{t('flows.noEvents')}</p>}
+          {events.length ? <ul>{events.map(event => <li key={event.id}><div><strong>{event.title}</strong><span className="flow-version">r{event.ruleRevision}</span><span className="flow-badge" data-status={event.status}>{t(event.status === 'pending' ? 'flows.queuedState' : `flows.${event.status}`)}</span></div>{event.reason ? <p>{event.reason}</p> : (event.status === 'pending' || event.status === 'notified' || event.status === 'blocked') && <p>{t(event.status === 'pending' ? 'flows.queueWaiting' : 'flows.queueDecision')}</p>}</li>)}</ul> : <p className="flows-muted">{t('flows.noEvents')}</p>}
         </details>
       </div>;
     })}

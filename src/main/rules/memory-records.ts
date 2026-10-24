@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { atomicWrite, confined, locked, read } from './storage';
-import { checkMemoryWorth } from './memory-worth';
+import { checkMemoryWorth, sameMemoryFact } from './memory-worth';
 import { emptyPredicate } from '../../shared/proposals';
 
 export interface MemoryScope { roleId: string; userId?: string; project?: string; repository?: string; environment?: string }
@@ -65,8 +65,14 @@ export function proposeMemory(root: string, input: MemoryProposal, now = new Dat
   return mutate(root, records => {
     const previous = input.supersedes ? records.find(r => r.memoryId === input.supersedes) : undefined;
     if (input.supersedes && (!previous || !sameScope(previous.scope, scope) || previous.subject !== subject || previous.predicate !== predicate)) throw new Error('Supersession must identify the same scoped fact.');
-    const duplicate = records.find(r => sameScope(r.scope, scope) && r.subject === subject && r.predicate === predicate && r.value === value && r.validTo === null && r.status !== 'retracted' && r.status !== 'disputed');
+    const equivalents = records.filter(r => sameScope(r.scope, scope) && sameMemoryFact(r, { subject, predicate, value }));
+    const duplicate = equivalents.find(r => r.validTo === null && r.status !== 'retracted' && r.status !== 'disputed'
+      && (!previous || r.memoryId === previous.memoryId || r.supersedes === previous.memoryId));
     if (duplicate) return duplicate;
+    // Repeating an observation is neither new evidence nor a reason to ask again after dismissal. Retain the
+    // original record, provenance and status; an explicitly linked supersession still requires fresh approval.
+    const dismissed = !previous && equivalents.findLast(r => r.status === 'retracted' || r.status === 'disputed');
+    if (dismissed) return dismissed;
     const record: MemoryRecord = { memoryId: randomUUID(), scope, subject, predicate, value, sourceEventId, sourceRunId, observedAt: now, validFrom: now, validTo: null, status: 'proposed', transitions: [{ at: now, status: 'proposed' }], supersedes: previous?.memoryId ?? null };
     // A proposal never invalidates confirmed evidence. Contradictions require independent resolution.
     records.push(record); return record;
@@ -172,11 +178,11 @@ export function deleteMemory(root: string, memoryId: string): string[] {
  *  rewritten as the general rule behind them (a new record beside the old one, which is retired). */
 export interface MemoryTidy { retire: { id: string; reason: string }[]; generalize: { id: string; value: string }[] }
 /** What undoes one tidy-up: the facts it retired and the ones it wrote, under the tag of its change. */
-export interface MemoryTidyUndo { tag: string; retired: string[]; added: string[] }
+export interface MemoryTidyUndo { tag: string; retired: string[]; added: string[]; proposedFrom?: string[] }
 const open = (r: MemoryRecord | undefined): r is MemoryRecord => !!r && r.validTo === null && (r.status === 'proposed' || r.status === 'confirmed') && !r.derivedFiles?.length;
-/** Applies a tidy-up under the store's lock: only open facts (proposed or confirmed, no derived copies) are touched; a
- *  generalized fact keeps its scope, subject, predicate, status and verification, with a new value; its old record is
- *  retired. Nothing is purged: the history stays, and undoMemoryTidy puts it back. */
+/** Applies a tidy-up under the store's lock. Rewriting confirmed evidence creates an unverified proposed supersession;
+ *  the original stays current until independent approval. Only proposed originals can be retired automatically.
+ *  Nothing is purged: history stays, and undoMemoryTidy restores retired proposals and removes untouched additions. */
 export function tidyMemory(root: string, tidy: MemoryTidy, tag: string, now = new Date().toISOString()): MemoryTidyUndo {
   clean(tag, 100);
   return mutate(root, records => {
@@ -188,18 +194,19 @@ export function tidyMemory(root: string, tidy: MemoryTidy, tag: string, now = ne
     for (const g of tidy.generalize) {
       const old = records.find(r => r.memoryId === g.id);
       if (!open(old) || undo.retired.includes(old.memoryId)) continue;
+      if (old.status === 'confirmed' && records.some(r => r.supersedes === old.memoryId)) continue;
       const value = clean(g.value);
       checkMemoryWorth(old.subject, old.predicate, value);
       const record: MemoryRecord = { memoryId: randomUUID(), scope: { ...old.scope }, subject: old.subject, predicate: old.predicate, value, sourceEventId: `${tag}:${old.memoryId}`,
-        sourceRunId: old.sourceRunId, observedAt: now, validFrom: now, validTo: null, status: old.status, supersedes: null,
-        transitions: [{ at: now, status: old.status, reason: `${tag}:generalized-from:${old.memoryId}` }],
-        ...(old.verification ? { verification: { ...old.verification, evidence: clean(`${old.verification.evidence} (generalized by the maintenance)`.slice(0, 1000)) } } : {}) };
+        sourceRunId: old.sourceRunId, observedAt: now, validFrom: now, validTo: null, status: 'proposed', supersedes: old.status === 'confirmed' ? old.memoryId : null,
+        transitions: [{ at: now, status: 'proposed', reason: `${tag}:generalized-from:${old.memoryId}` }] };
       records.push(record); undo.added.push(record.memoryId);
-      retire(old, `generalized:${record.memoryId}`);
+      if (old.status === 'proposed') retire(old, `generalized:${record.memoryId}`);
+      else (undo.proposedFrom ??= []).push(old.memoryId);
     }
     for (const x of tidy.retire) {
       const r = records.find(y => y.memoryId === x.id);
-      if (open(r) && !undo.retired.includes(r.memoryId)) retire(r, clean(x.reason, 200));
+      if (open(r) && r.status === 'proposed' && !undo.retired.includes(r.memoryId)) retire(r, clean(x.reason, 200));
     }
     return undo;
   });

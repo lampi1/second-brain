@@ -1,13 +1,13 @@
-// The memory cards of the Proposte deck (ADR 0129): near-duplicates are one card led by the best fact, a fact already
-// confirmed with the same words is not shown, at most three cards per role and day (rules first, case-specific last),
-// the rest one batch card; a contradiction always keeps its own card. Through the deck: a batch and a merged card decide
-// every fact they hold.
+// The memory cards of the Proposte deck: exact duplicates share a card; three leading facts per role across dates,
+// then bounded literal-text batches within one scope. Contradictions and supersessions always stay individual;
+// changing batch membership invalidates its approval identity. No backlog record is removed by viewing the deck.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../../src/main/log', () => ({ log: { info: vi.fn(), warn: vi.fn() }, errText: (e: unknown) => String(e instanceof Error ? e.message : e) }));
-import { memoryCards, MEMORY_CARDS_PER_DAY } from '../../../src/main/proposals/memory-deck';
+import { memoryBatchContent, memoryCards, MEMORY_CARDS_PER_ROLE, MEMORY_BATCH_MAX_FACTS, MEMORY_BATCH_MAX_CHARS } from '../../../src/main/proposals/memory-deck';
+import { marked } from 'marked';
 import { ProposalsService } from '../../../src/main/proposals/service';
 import type { MemoryReviewRecord } from '../../../src/shared/learning-review';
 
@@ -21,7 +21,7 @@ const rec = (value: string, x: Partial<MemoryReviewRecord> = {}): MemoryReviewRe
 describe('memoryCards', () => {
   it('merges near-duplicates into one card led by the best fact', () => {
     const a = rec('Il server di test si riavvia ogni notte alle 6', { memoryId: 'a', observedAt: `${DAY}T01:00:00.000Z` });
-    const b = rec('il server di test si riavvia ogni notte alle 6.', { memoryId: 'b', observedAt: `${DAY}T02:00:00.000Z` });
+    const b = rec('Il server di test si riavvia ogni notte alle 6', { memoryId: 'b', observedAt: `${DAY}T02:00:00.000Z` });
     const other = rec('I prompt per dopo stanno nella cartella prompts', { memoryId: 'c' });
     const cards = memoryCards([a, b, other]);
     expect(cards).toHaveLength(2);
@@ -30,14 +30,26 @@ describe('memoryCards', () => {
   });
   it('hides a fact already confirmed with the same words, keeps a contradiction alone', () => {
     const known = rec('I log sono in logs/feedback', { memoryId: 'k', status: 'confirmed' });
-    const again = rec('i log sono in LOGS/feedback', { memoryId: 'again' });
+    const again = rec('I log sono in logs/feedback', { memoryId: 'again' });
     const contra = rec('nuovo valore', { memoryId: 'x', subject: 'App locale', predicate: 'usa la porta' });
     const old = rec('vecchio valore', { memoryId: 'o', subject: 'App locale', predicate: 'usa la porta', status: 'confirmed' });
     const cards = memoryCards([known, again, contra, old]);
     expect(cards.map(c => (c.kind === 'one' ? c.group.rep.memoryId : c.id))).toEqual(['x']);
     expect(cards[0]!.kind === 'one' && cards[0]!.group.conflicts.map(c => c.memoryId)).toEqual(['o']);
   });
-  it('caps each role and day, rules first and case-specific last, the rest in one batch', () => {
+  it('never hides or groups different subjects, numbers or negation as the same approval', () => {
+    const rows = [
+      rec('The server restarts every night at 6', { memoryId: 'confirmed', status: 'confirmed' }),
+      rec('The server restarts every night at 7', { memoryId: 'hour' }),
+      rec('The server never restarts every night at 6', { memoryId: 'negated' }),
+      rec('The server restarts every night at 6', { memoryId: 'other-subject', subject: 'database' }),
+    ];
+    const cards = memoryCards(rows);
+    expect(cards).toHaveLength(3);
+    expect(cards.every(c => c.kind === 'one' && !c.group.dups.length)).toBe(true);
+    expect(cards.map(c => c.kind === 'one' && c.group.rep.memoryId)).toEqual(expect.arrayContaining(['hour', 'negated', 'other-subject']));
+  });
+  it('caps each role across days, rules first and case-specific last, the rest in one batch', () => {
     const facts = [
       rec('Il bug è il work item 48213', { memoryId: 'specific' }),
       rec('La cartella dei report è reports/mensili', { memoryId: 'plain1' }),
@@ -49,25 +61,83 @@ describe('memoryCards', () => {
     ];
     const cards = memoryCards(facts);
     const shown = cards.filter(c => c.kind === 'one').map(c => (c.kind === 'one' ? c.group.rep.memoryId : ''));
-    expect(shown.slice(0, MEMORY_CARDS_PER_DAY)).toContain('rule');
+    expect(shown.slice(0, MEMORY_CARDS_PER_ROLE)).toContain('rule');
     expect(shown).not.toContain('specific');
-    expect(shown).toEqual(expect.arrayContaining(['other-day', 'scout']));
+    expect(shown).toContain('scout');
     const batch = cards.find(c => c.kind === 'batch')!;
-    expect(batch.kind === 'batch' && [batch.id, batch.groups.map(g => g.rep.memoryId)]).toEqual([`batch-artisan-${DAY}`, expect.arrayContaining(['specific'])]);
-    expect(batch.kind === 'batch' && batch.groups).toHaveLength(2);
-    expect(cards).toHaveLength(MEMORY_CARDS_PER_DAY + 2 + 1);
+    expect(batch.kind === 'batch' && batch.groups.map(g => g.rep.memoryId)).toEqual(expect.arrayContaining(['specific']));
+    expect(batch.kind === 'batch' && batch.groups).toHaveLength(3);
+    expect(cards).toHaveLength(MEMORY_CARDS_PER_ROLE + 1 + 1);
   });
   it('one fact over the cap is shown alone, not as a batch of one', () => {
     const cards = memoryCards(['Uno: la cartella dati è data', 'Due: i test stanno in test', 'Tre: il build va in out', 'Quattro: i log stanno in logs'].map(v => rec(v)));
     expect(cards.every(c => c.kind === 'one')).toBe(true);
     expect(cards).toHaveLength(4);
   });
+  it('compacts an existing backlog across dates without losing any facts or mixing scopes', () => {
+    const rows = Array.from({ length: 20 }, (_, i) => rec(`The durable knowledge for topic ${i}`, {
+      memoryId: `history-${i}`, subject: `topic ${i}`, observedAt: `2026-10-${String(i + 1).padStart(2, '0')}T08:00:00Z`,
+      scope: { roleId: 'artisan', userId: i < 12 ? 'first' : 'second', project: i < 12 ? 'alpha' : 'beta' },
+    }));
+    const before = structuredClone(rows), cards = memoryCards(rows);
+    expect(cards.length).toBeLessThan(rows.length / 2);
+    const groups = cards.flatMap(c => c.kind === 'one' ? [c.group] : c.groups);
+    expect(groups.map(g => g.rep.memoryId).sort()).toEqual(rows.map(r => r.memoryId).sort());
+    for (const card of cards) if (card.kind === 'batch') {
+      expect(card.groups.length).toBeLessThanOrEqual(MEMORY_BATCH_MAX_FACTS);
+      expect(memoryBatchContent(card.groups).length).toBeLessThanOrEqual(MEMORY_BATCH_MAX_CHARS);
+      expect(new Set(card.groups.map(g => JSON.stringify(g.rep.scope))).size).toBe(1);
+    }
+    expect(memoryCards([...rows].reverse())).toEqual(cards);
+    expect(rows).toEqual(before);
+  });
+  it('bounds long batch content and preserves markup as visible literal fact text', () => {
+    const rows = Array.from({ length: 12 }, (_, i) => rec(`${'x'.repeat(900)} literal-${i} <!-- hidden condition -->`, {
+      memoryId: `long-${i}`, subject: `${'s'.repeat(900)} ${i}`, predicate: 'p'.repeat(900),
+    }));
+    const cards = memoryCards(rows, 0), batches = cards.filter(c => c.kind === 'batch');
+    expect(batches.length).toBeGreaterThan(1);
+    expect(cards.flatMap(c => c.kind === 'one' ? [c.group] : c.groups)).toHaveLength(rows.length);
+    for (const batch of batches) {
+      const content = memoryBatchContent(batch.groups), html = marked.parse(content, { async: false });
+      expect(content.length).toBeLessThanOrEqual(MEMORY_BATCH_MAX_CHARS);
+      expect(html).not.toContain('<!-- hidden condition -->');
+      expect(html).toContain('&lt;!-- hidden condition --&gt;');
+      for (const g of batch.groups) expect(html).toContain(g.rep.value.slice(0, 900));
+    }
+  });
+  it('keeps competing pending values and explicit replacements outside batch decisions', () => {
+    const old = rec('old value', { memoryId: 'old', subject: 'config', predicate: 'setting', status: 'confirmed' });
+    const replacement = rec('new value', { memoryId: 'replacement', subject: 'config', predicate: 'setting', supersedes: old.memoryId });
+    const a = rec('3', { memoryId: 'three', subject: 'client', predicate: 'retries' });
+    const b = rec('5', { memoryId: 'five', subject: 'client', predicate: 'retries' });
+    const cards = memoryCards([old, replacement, a, b], 0);
+    expect(cards).toHaveLength(3);
+    expect(cards.every(c => c.kind === 'one')).toBe(true);
+  });
 });
 
 describe('through the deck', () => {
+  it('refuses a stale batch after new membership and exposes its complete user scope', async () => {
+    const rows = Array.from({ length: 7 }, (_, i) => rec(`Durable fact for topic ${i}`, {
+      memoryId: `batch-${i}`, subject: `topic ${i}`, scope: { roleId: 'artisan', userId: 'first-user', project: 'alpha' },
+    }));
+    const calls: string[] = [];
+    const service = new ProposalsService({ userData: fs.mkdtempSync(path.join(os.tmpdir(), 'sb-batch-')), ports: {
+      now: () => Date.parse(`${DAY}T12:00:00Z`), runs: () => [], chats: () => [], memory: {
+        list: () => rows, confirm: async id => { calls.push(id); }, retract: async id => { calls.push(id); },
+      },
+    } });
+    const batch = (await service.list()).items.find(c => c.ask.kind === 'remember' && c.ask.many)!;
+    expect(batch.facts).toContainEqual({ key: 'scope', value: 'roleId: artisan · userId: first-user · project: alpha' });
+    expect(batch.content.split('\n')).toHaveLength(4);
+    rows.push(rec('A newly observed durable convention', { memoryId: 'new-member', subject: 'new topic', observedAt: `${DAY}T23:00:00Z`, scope: rows[0]!.scope }));
+    expect(await service.decide({ id: batch.id, decision: 'approve', seen: batch.content })).toMatchObject({ ok: false });
+    expect(calls).toEqual([]);
+  });
   it('a batch and a merged card decide every fact they hold', async () => {
     const rows = [
-      rec('Il server di test si riavvia ogni notte alle 6', { memoryId: 'a' }), rec('il server di test si riavvia ogni notte alle 6!', { memoryId: 'a2' }),
+      rec('Il server di test si riavvia ogni notte alle 6', { memoryId: 'a' }), rec('Il server di test si riavvia ogni notte alle 6', { memoryId: 'a2' }),
       rec('Prima di un merge lancia npm run check:branch', { memoryId: 'r1' }), rec('Quando il build fallisce guarda prima i log', { memoryId: 'r2' }),
       rec('La cartella dei report è reports/mensili', { memoryId: 'p1' }), rec('Il catalogo si aggiorna dal file prodotti.csv', { memoryId: 'p2' }),
     ];
@@ -76,7 +146,7 @@ describe('through the deck', () => {
     const s = new ProposalsService({ userData: fs.mkdtempSync(path.join(os.tmpdir(), 'sb-deck-')), ports: { now: () => Date.parse(`${DAY}T12:00:00Z`), runs: () => [], chats: () => [],
       memory: { list: () => open, confirm: async id => { calls.push(`confirm ${id}`); open = open.filter(r => r.memoryId !== id); }, retract: async (id, why) => { calls.push(`retract ${id} ${why.split(' ')[0]}`); open = open.filter(r => r.memoryId !== id); } } } });
     const items = (await s.list()).items;
-    const batch = items.find(c => c.id === `memory:batch-artisan-${DAY}`)!;
+    const batch = items.find(c => c.ask.kind === 'remember' && c.ask.many)!;
     expect(batch.ask).toMatchObject({ kind: 'remember', role: 'artisan', many: 2 });
     expect(batch.content.split('\n')).toHaveLength(2);
     const merged = items.find(c => c.ask.kind === 'remember' && c.ask.same === 2)!;

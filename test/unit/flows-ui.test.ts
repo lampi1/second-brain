@@ -25,7 +25,7 @@ beforeEach(() => { invoke.mockReset(); flowState.set({ snapshot: snapshot(), loa
 it('starts empty without sample templates, fake progress or direct execution controls', () => {
   flowState.set({ snapshot: { contextKey: 'empty', drafts: [], versions: [], active: {}, runs: [] }, loading: false, error: null });
   const html = renderToStaticMarkup(createElement(Flows));
-  expect(html).toContain('Nessun flusso definito'); expect(html).toContain('Chiedi all’Orchestrator');
+  expect(html).toContain('Nessuna routine definita'); expect(html).toContain('Chiedi all’Orchestrator');
   expect(html).not.toContain('flow-definition'); expect(html).not.toContain('flow-run'); expect(html).not.toContain('Attiva');
   expect(invoke).not.toHaveBeenCalled();
 });

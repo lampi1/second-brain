@@ -447,13 +447,12 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     visible: () => { const w = ctx.window(); return !!w && !w.isDestroyed() && w.isVisible() && !w.isMinimized(); },
   });
   cloud.startPolling();
-  // personal milestones (Brother, 18/10: they must be earnable): on in the real profile; the demo keeps them read-only.
-  // Created before the catalog so a customized Agent earns 'first-agent'; the chats are read only on a confirmation.
-  const progressService = new ProgressService(ctx.userData, { enabled: true, chats: () => chats.list(), emit: state => ctx.emitter.emit('progress:changed', state) });
+  // Retired personal milestones: keep legacy IPC read-only and preserve the existing progress file.
+  const progressService = new ProgressService(ctx.userData, { enabled: false, chats: () => [] });
   // live turn costs and the Claude model list at the brain's per-model list prices (harness/models.json, else the
   // release template's), re-read at most every 30 s; set before the catalog reads its models (issue #96)
   setPriceTable(priceTableSource(() => brain.routingInfo().registry, () => { try { return path.join(templateRoot(), 'harness', 'models.json'); } catch { return null; } }));
-  const agents = createAgentCatalog(ctx, brain, engines, () => ({ ...cliCache, ...engineReadiness() }), () => progressService.award('first-agent'));
+  const agents = createAgentCatalog(ctx, brain, engines, () => ({ ...cliCache, ...engineReadiness() }));
   // Probe only after registry/trust initialization; reconcile untouched seeds when readiness arrives and tell the
   // renderer (issue #96: the role editor showed the startup snapshot). Tests never run installed vendors.
   if (!process.env.SB_TEST) void engineStatuses().then(all => { cliCache = all; agents.refresh(); ctx.emitter.emit('cli:ready', all); });
@@ -699,9 +698,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   autoCloseTimer.unref();
   agentPacks.learning.evidenceRuns = () => manager.runs.list();
   const flows = flowsRef = createFlowRuntime({ userData: ctx.userData, testDbRead: { env: testDbCredential }, brainRoot: () => brain.info().brainRoot,
-    chats: () => chats.list(), changed: snapshot => ctx.emitter.emit('flows:changed', snapshot),
+    chats: () => chats.list(), stopChat: chatId => chats.stop(chatId), changed: snapshot => ctx.emitter.emit('flows:changed', snapshot),
     roles: () => flowRoles(agents.list().profiles, (engine, tier) => tierModel(engine, tier, brain.routingInfo().registry, brain.settings().modelTiers)),
-    send: (ownerId, message) => chats.send(ownerId, message, undefined, false, 'Flussi automatici', false, { kind: 'app' }) });
+    send: (ownerId, message) => chats.send(ownerId, message, undefined, false, 'Routine automatiche', false, { kind: 'app' }) });
   addChatTools(devopsWriteTools((chatId, request, signal) => flows.devopsWrite(chatId, request, signal)));
   addChatTools(testDbReadTools((chatId, request, signal) => flows.testDbRead(chatId, request, signal)));
   const workflows = workflowsRef = new Workflows(path.join(ctx.userData, 'work-threads.json'), rows => ctx.emitter.emit('work:changed', rows), Date.now, row => {
@@ -921,7 +920,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
       checkpoint: () => manager.checkpointForUpdate(),
     },
-    setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot, Date.now, () => progressService.award('setup-complete')),
+    setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
     shutdown: async () => { flows.stop(); mcpServers.stop(); brainModel.stop(); phrases.stop(); cloud.shutdown(); clearInterval(autoCloseTimer); if (flowDeadlineTimer) clearInterval(flowDeadlineTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), personal.shutdown(), brain.shutdown()]); },

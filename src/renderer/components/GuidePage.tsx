@@ -34,7 +34,6 @@ const GLYPHS: Record<string, ReactNode> = {
   runs: <><circle cx="12" cy="12" r="9" /><path d="M10 8.5l5 3.5-5 3.5z" /></>,
   metrics: <><path d="M4 20h16" /><path d="M7 17v-6M12 17V6M17 17v-9" /></>,
   'errors-rules': <><path d="M12 3.5l9 16H3z" /><path d="M12 10v4M12 16.8v.2" /></>,
-  milestones: <><path d="M6 21V4" /><path d="M6 4h11l-2.5 4L17 12H6" /></>,
   classifiers: <><path d="M4 5h16l-6 7.5V18l-4 2v-7.5z" /></>,
   permissions: <><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3M12 15v2" /></>,
   questions: <><path d="M5 4.5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-4 3.5v-3.5H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z" /><path d="M10 9a2 2 0 1 1 2.8 1.8c-.5.3-.8.7-.8 1.2M12 14v.2" /></>,

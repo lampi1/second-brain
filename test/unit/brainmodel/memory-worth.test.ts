@@ -54,6 +54,18 @@ describe('memoryWorth', () => {
     expect(() => checkMemoryWorth('setup', 'note', 'Stats: http://127.0.0.1:44309/x')).toThrow(/tied to one case \(an address with a port or an id\).*launch profile/);
     expect(() => checkMemoryWorth('setup', 'note', 'Use the launch profile for the port')).not.toThrow();
   });
+  it.each(['Done!', 'All tests passed', 'Il build è completato', 'I updated the documentation', 'The user asked to inspect the logs', 'L’utente ha chiesto di aprire il progetto'])('refuses clear task chatter: %s', value => {
+    expect(() => checkMemoryWorth('setup', 'note', value)).toThrow(/task update or conversation acknowledgement/);
+  });
+  it('checks structured status facts without losing durable preferences and troubleshooting lessons', () => {
+    expect(() => checkMemoryWorth('Tests', 'status', 'passed')).toThrow(/task update/);
+    for (const value of ['The user prefers concise replies in Italian', 'Prefer focused unit tests before a merge',
+      'Tests failed when the database timezone differs from UTC', 'The user asked to always keep examples short',
+      'I test falliscono quando manca il profilo locale', 'The reports are kept in reports/monthly']) {
+      expect(() => checkMemoryWorth('setup', 'note', value), value).not.toThrow();
+    }
+    expect(() => checkMemoryWorth('user', 'preferred response language', 'Italian')).not.toThrow();
+  });
 });
 
 describe('nearSame', () => {
@@ -63,6 +75,15 @@ describe('nearSame', () => {
     expect(nearSame('Il server di test si riavvia alle 6', 'Il database di prova si svuota il lunedì')).toBe(false);
     expect(nearSame('porta 4319', 'porta 4329')).toBe(false); // short values: only the very same words
   });
+  it.each([
+    ['The test server restarts every night at 6', 'The test server restarts every night at 7'],
+    ['The user wants no notifications during focused work', 'The user wants notifications during focused work'],
+    ['The agent must run unit tests before committing changes', 'The agent may run unit tests before committing changes'],
+    ['Copy the source directory to the target directory', 'Copy the target directory to the source directory'],
+    ['A < B is the required threshold for validation', 'A > B is the required threshold for validation'],
+  ])('keeps potentially different claims separate: %s', (a, b) => {
+    expect(nearSame(a, b)).toBe(false);
+  });
 });
 
 describe('the gate on every new fact', () => {
@@ -70,6 +91,8 @@ describe('the gate on every new fact', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-worth-')); dirs.push(root);
     const base = { scope: { roleId: 'artisan' }, subject: 'setup', predicate: 'note', sourceEventId: 'e', sourceRunId: 'r' };
     expect(() => proposeMemory(root, { ...base, value: 'Statistiche prestazioni: https://localhost:44309/stats' })).toThrow(/tied to one case/);
+    expect(readMemoryRecords(root)).toEqual([]);
+    expect(() => proposeMemory(root, { ...base, value: 'All tests passed' })).toThrow(/task update/);
     expect(readMemoryRecords(root)).toEqual([]);
     expect(proposeMemory(root, { ...base, value: 'After login the local app runs on a port other than the default: read it from the launch profile' }).status).toBe('proposed');
   });

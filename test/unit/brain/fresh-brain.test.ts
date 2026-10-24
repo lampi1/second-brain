@@ -121,6 +121,8 @@ describe('the app still delivers its machinery to a fresh brain', () => {
     const rules = fs.readFileSync(launch.rulesFile!, 'utf8');
     expect(rules).toContain(`# Personal brain: ${fwd(root)}`);
     expect(rules).toContain('Safety: production and shared systems');
+    expect(rules).toContain('never execute them; show the full text for the owner to run');
+    expect(rules).not.toContain('run only after an explicit ok');
     expect(rules).toContain('# Mario Rossi'); // the owner's own profile follows the product's text
     // topic rules: the template's, rendered in the copy, injected by the hook runtime from there
     const topics = JSON.parse(fs.readFileSync(path.join(tools, '.sb-tools.json'), 'utf8')).topics as string[];

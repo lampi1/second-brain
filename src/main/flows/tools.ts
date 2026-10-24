@@ -1,12 +1,14 @@
 // Authenticated Orchestrator flow tools; approval and user decisions intentionally have no agent tool.
 import type { ToolDef } from '../appctl/tools';
-import type { FlowAgentBinding, FlowPropose, FlowReport, FlowStart } from '../../shared/flows';
+import type { FlowAgentBinding, FlowCancel, FlowPropose, FlowReport, FlowRestartProposal, FlowRun, FlowStart } from '../../shared/flows';
 import type { FlowService } from './service';
 import { keys, object, text, validateScope } from './schema';
 
 export interface FlowToolsDeps {
   service: () => FlowService; ownerId: string;
   resolveBinding: (chatId: string, ownerId: string, workspace: string) => FlowAgentBinding | null;
+  proposeCancel?: (input: FlowCancel, ownerId: string) => Promise<FlowRun>;
+  proposeRestart?: (input: FlowRestartProposal, ownerId: string) => Promise<FlowRun>;
 }
 const string = { type: 'string' }, integer = { type: 'integer', minimum: 0 };
 const scope = { type: 'object', properties: { project: string, areaPath: string }, additionalProperties: false };
@@ -43,5 +45,11 @@ export function flowTools(deps: FlowToolsDeps): ToolDef[] {
       return service.bindAgent(text(args.runId, 'runId', 200), args.expectedRevision as number, text(args.stepId, 'stepId', 80), binding, deps.ownerId);
     }),
     tool('app_flow_report', 'Propose completion using a host-recorded canonical agent report id (<chatRunId>:<report timestamp>). Text supplied here cannot certify anything. Host checks bound run/task identity, successful final report, required evidence labels and independent review. No approval bypass.', { contextKey: string, ...revision, reportId: string }, (service, args) => service.report(args as unknown as FlowReport, deps.ownerId)),
+    tool('app_flow_cancel_propose', 'Request native user approval to cancel one owned run. This never stops execution by itself. The user reviews the exact run revision before its worker is interrupted and its automatic slot is released. Preserve history; never silently abandon work to free concurrency.', { contextKey: string, runId: string, expectedRevision: integer, reason: string }, (_service, args) => {
+      if (!deps.proposeCancel) throw new Error('Host cancellation approval is unavailable'); return deps.proposeCancel(args as unknown as FlowCancel, deps.ownerId);
+    }, false, ['contextKey', 'runId', 'expectedRevision']),
+    tool('app_flow_restart_propose', 'Request native user approval to restart an owned run. This never executes recovery. Pin targetVersion and targetDigest from app_flow_list: from-start uses the current active version; from-step uses the source pinned version and requires every preceding step completed. Automatic runs also require automationRule {id,revision} from app_flow_auto_list. The user reviews repeated external effects before a new run is created; original evidence stays in history.', { contextKey: string, runId: string, expectedRevision: integer, mode: { type: 'string', enum: ['from-start', 'from-step'] }, stepId: string, targetVersion: { type: 'integer', minimum: 1 }, targetDigest: string, automationRule: { type: 'object', properties: { id: string, revision: { type: 'integer', minimum: 1 } }, required: ['id', 'revision'], additionalProperties: false } }, (_service, args) => {
+      if (!deps.proposeRestart) throw new Error('Host recovery approval is unavailable'); return deps.proposeRestart(args as unknown as FlowRestartProposal, deps.ownerId);
+    }, false, ['contextKey', 'runId', 'expectedRevision', 'mode', 'targetVersion', 'targetDigest']),
   ];
 }

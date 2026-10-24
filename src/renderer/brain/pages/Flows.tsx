@@ -1,6 +1,6 @@
 // One focused catalog for manual and automatic flows. All creation/configuration/start requests go through the Orchestrator.
 import { useMemo, useState } from 'react';
-import type { FlowDraft, FlowSnapshot, FlowVersion } from '@shared/flows';
+import type { FlowDraft, FlowRun, FlowSnapshot, FlowVersion } from '@shared/flows';
 import type { ModelTier } from '@shared/roles';
 import { flowAsks } from '../../lib/flow-ask';
 import { flowRequest, type FlowRequestKind } from '../../lib/flow-request';
@@ -12,7 +12,9 @@ import { toast } from '../../store/ui';
 import { focusChat } from '../../actions';
 import { FlowDefinition } from '../../components/FlowDefinition';
 import { FlowDiagram } from '../../components/FlowDiagram';
-import { FlowFullscreen } from '../../components/FlowFullscreen';
+import { FlowFullscreen, FlowFullscreenButton } from '../../components/FlowFullscreen';
+import { FlowRecoveryDialog, FlowRunControls } from '../../components/FlowRunControls';
+import { flowRunCanCancel, type FlowRecoveryMode } from '../../lib/flow-recovery';
 import { FlowImport } from '../../components/FlowImport';
 import { FlowAutomation, FlowAutomationControls } from '../../components/FlowAutomation';
 import { IconBranch } from '../../components/Icons';
@@ -33,14 +35,15 @@ function FlowDetail({ version: preferredVersion, draft, snapshot, ready }: { ver
   const version = versions.find(row => row.version === pickedVersion) ?? preferredVersion;
   // An older proposal cannot replace the approved definition or its automatic configuration.
   const definition = version?.definition ?? draft!.definition;
+  const [recovery, setRecovery] = useState<{ snapshot: FlowSnapshot; run: FlowRun; mode: FlowRecoveryMode } | null>(null);
   const [pickedRun, setPickedRun] = useState<string | null>(null);
   const runs = snapshot.runs.filter(run => run.flowId === definition.id).sort((a, b) => b.updatedAt - a.updatedAt);
-  const run = pickedRun === 'definition' ? undefined : runs.find(row => row.id === pickedRun) ?? runs.find(row => row.status !== 'completed') ?? runs[0];
+  const run = pickedRun === 'definition' ? undefined : runs.find(row => row.id === pickedRun) ?? runs.find(flowRunCanCancel) ?? runs[0];
   const runVersion = run && snapshot.versions.find(row => row.definition.id === run.flowId && row.version === run.flowVersion && row.digest === run.definitionDigest);
   const shownDefinition = runVersion?.definition ?? definition;
   const shownVersion = runVersion ?? version;
   const draftAsk = flowAsks(snapshot).find(ask => ask.type === 'flow-definition' && ask.draft.definition.id === definition.id);
-  const runAsk = run && flowAsks(snapshot).find(ask => ask.type === 'flow-run' && ask.run.id === run.id);
+  const runAsk = run && flowAsks(snapshot).find(ask => (ask.type === 'flow-run' || ask.type === 'flow-restart' || ask.type === 'flow-cancel') && ask.run.id === run.id);
   // Tier menu on the definition view only: the exact shown definition is the base; a pending proposal behind an active
   // version locks it (decide that one first), a pick only proposes the next revision for the existing modal.
   const pending = draft?.status === 'proposed' ? draft : undefined;
@@ -48,6 +51,7 @@ function FlowDetail({ version: preferredVersion, draft, snapshot, ready }: { ver
     locked: version ? !!pending || snapshot.active[definition.id] !== version.version : !pending,
     pick: (stepId: string, tier: ModelTier | null) => void editFlowStepTier(snapshot.contextKey, { flowId: definition.id, base: version ? { version: version.version } : { draftRevision: draft!.revision }, stepId, tier }),
   };
+  const controls = run && <FlowRunControls run={run} onRequest={mode => { setFullscreen(false); setRecovery({ snapshot, run, mode }); }} />;
   return <article className="flow-detail" data-testid="flow-definition">
     <header className="flow-detail-head"><div className="flow-card-head"><h2>{definition.title}</h2><span className="flow-version">{version ? `v${version.version}` : `r${draft!.revision}`}</span><span className="flow-badge" data-status={version && snapshot.active[definition.id] === version.version ? 'active' : 'draft'}>{t(version ? snapshot.active[definition.id] === version.version ? 'flows.active' : 'flows.approvedVersion' : 'flows.draft')}</span></div>
       <p>{definition.description}</p><div className="flow-actions">
@@ -59,14 +63,16 @@ function FlowDetail({ version: preferredVersion, draft, snapshot, ready }: { ver
     {version && <FlowAutomation version={version} snapshot={snapshot} />}
     {snapshot.versions.filter(other => other.definition.id === definition.id && other.version !== version?.version && snapshot.automation?.rules.some(rule => rule.config.flowId === definition.id && rule.config.flowVersion === other.version)).map(other => <FlowAutomation key={other.version} version={other} snapshot={snapshot} />)}
     {versions.length > 1 && <div className="flow-view-picker"><label htmlFor="flow-version-picker">{t('flows.versionPicker')}</label><select id="flow-version-picker" value={version?.version} onChange={event => { setPickedVersion(Number(event.target.value)); setPickedRun('definition'); }}>{versions.map(row => <option key={row.version} value={row.version}>v{row.version}{snapshot.active[definition.id] === row.version ? ` · ${t('flows.active')}` : ''}</option>)}</select></div>}
-    <div className="flow-view-picker"><label htmlFor="flow-run-picker">{t('flows.runs')}</label><select id="flow-run-picker" value={run?.id ?? 'definition'} onChange={e => setPickedRun(e.target.value)}><option value="definition">{t('flows.definitionView')}{version ? ` · v${version.version}` : ''}</option>{runs.map(row => <option key={row.id} value={row.id}>{row.subjectKey} · v{row.flowVersion} · {t(`flows.${row.status}`)} · {new Date(row.createdAt).toLocaleString(locale())}</option>)}</select></div>
-    {run && <div className="flow-run-focus" data-testid="flow-run"><div className="flow-card-head"><strong>{run.subjectKey}</strong><span className="flow-version">v{run.flowVersion}</span><span className="flow-badge" data-status={run.status}>{t(`flows.${run.status}`)}</span>{runAsk && <button type="button" className="btn btn-amber btn-s" onClick={() => openQueue(`${runAsk.chatId}/${runAsk.id}`)}>{t('flows.reviewOpen')}</button>}</div><p className="flows-muted">{[run.scope.project, run.scope.areaPath].filter(Boolean).join(' · ')}</p></div>}
+    <div className="flow-view-picker"><label htmlFor="flow-run-picker">{t('flows.runs')}</label><select id="flow-run-picker" value={run?.id ?? 'definition'} onChange={e => setPickedRun(e.target.value)}><option value="definition">{t('flows.definitionView')}{version ? ` · v${version.version}` : ''}</option>{runs.map(row => <option key={row.id} value={row.id}>{row.subjectKey} · v{row.flowVersion} · {t(row.cancellation?.interruption === 'pending' ? 'flows.interruptionPending' : `flows.${row.status}`)} · {new Date(row.createdAt).toLocaleString(locale())}</option>)}</select></div>
+    {run && <div className="flow-run-focus" data-testid="flow-run"><div className="flow-card-head"><strong>{run.subjectKey}</strong><span className="flow-version">v{run.flowVersion}</span><span className="flow-badge" data-status={run.status}>{t(run.cancellation?.interruption === 'pending' ? 'flows.interruptionPending' : `flows.${run.status}`)}</span>{runAsk && <button type="button" className="btn btn-amber btn-s" onClick={() => openQueue(`${runAsk.chatId}/${runAsk.id}`)}>{t('flows.reviewOpen')}</button>}</div><p className="flows-muted">{[run.scope.project, run.scope.areaPath].filter(Boolean).join(' · ')}</p></div>}
+    {controls}
     <div className="flow-portable-actions">
-      {(!run || runVersion) && <button type="button" className="btn btn-ghost btn-s" data-testid="flow-fullscreen-open" onClick={() => setFullscreen(true)}>{t('flows.fullscreen')}</button>}
+      {(!run || runVersion) && <FlowFullscreenButton onClick={() => setFullscreen(true)} />}
       {shownVersion && (!run || runVersion) && <div className="flow-export-group" aria-label={t('flows.export')}><span className="flows-muted">{t('flows.export')} · v{shownVersion.version}</span><button type="button" className="btn btn-ghost btn-s" onClick={() => void exportFlowDefinition(snapshot.contextKey, definition.id, shownVersion.version, 'json')} data-testid="flow-export-json">JSON</button><button type="button" className="btn btn-ghost btn-s" onClick={() => void exportFlowDefinition(snapshot.contextKey, definition.id, shownVersion.version, 'markdown')} data-testid="flow-export-markdown">Markdown</button></div>}
     </div>
     {shownVersion && <p className="flow-export-hint">{t('flows.exportHint')}</p>}
-    {fullscreen && (!run || runVersion) && <FlowFullscreen definition={shownDefinition} version={shownVersion?.version} run={run} onClose={() => setFullscreen(false)} />}
+    {fullscreen && (!run || runVersion) && <FlowFullscreen definition={shownDefinition} version={shownVersion?.version} run={run} controls={controls} onClose={() => setFullscreen(false)} />}
+    {recovery && <FlowRecoveryDialog {...recovery} onClose={() => setRecovery(null)} onDone={setPickedRun} />}
     {(!run || runVersion) && <FlowDiagram key={`${shownDefinition.id}/${shownVersion?.version ?? draft?.revision}/${run?.id ?? 'definition'}`} definition={shownDefinition} run={run} />}
     {(!run || runVersion) && <details className="flow-full-definition"><summary>{t('flows.details')}{shownVersion ? ` · v${shownVersion.version}` : ''}</summary><FlowDefinition definition={shownDefinition} run={runVersion ? run : undefined} edit={tierEdit} /></details>}
     {run && !runVersion && <p className="flow-block" role="status">{t('flows.versionUnavailable')}</p>}
@@ -98,13 +104,14 @@ export function Flows() {
     {error && <div className="flow-block" role="alert"><strong>{t('flows.unavailable')}</strong><p>{error}</p><button type="button" className="btn btn-ghost btn-s" onClick={() => void reloadFlows()}>{t('flows.retry')}</button></div>}
     {loading && !snapshot && <p role="status" className="flows-muted">{t('flows.loading')}</p>}
     {!loading && !error && rows.length === 0 && <div className="flows-empty" data-testid="flows-empty"><IconBranch size={28} /><h2>{t('flows.empty')}</h2><p>{t('flows.emptyHint')}</p><button type="button" className="btn btn-primary btn-m" disabled={!ready} onClick={() => askOrchestrator('create')}>{t('flows.ask')}</button><span className="flows-muted">{t(ready ? 'flows.readOnly' : 'flows.noOrchestrator')}</span></div>}
+    {!ready && rows.length > 0 && <p role="status" className="flows-muted">{t('flows.noOrchestrator')}</p>}
     {snapshot?.automation?.storageError && <p className="flow-block" role="alert">{snapshot.automation.storageError}</p>}
     {snapshot && <FlowAutomationControls snapshot={snapshot} />}
     {snapshot && rows.length > 0 && <div className="flows-workspace"><nav className="flows-master" aria-label={t('flows.flowList')}><div className="flows-section-head"><h2>{t('flows.flowList')}</h2><span className="flows-count">{rows.length}</span></div>
       {categories.length > 0 && <div className="flows-tabs" aria-label={t('flows.definitions')}><button type="button" className="btn btn-ghost btn-s" aria-pressed={!selectedCategory} onClick={() => setCategory(null)}>{t('flows.all')}</button>{categories.map(value => <button key={value} type="button" className="btn btn-ghost btn-s" aria-pressed={selectedCategory === value} onClick={() => setCategory(value)}>{value}</button>)}</div>}
       <div className="flows-catalog">{visible.map(row => {
         const automatic = snapshot.automation?.rules.some(rule => rule.config.flowId === row.id && rule.config.flowVersion === row.version?.version && (rule.status === 'enabled' || rule.status === 'paused'));
-        const pending = flowAsks(snapshot).filter(ask => ask.type === 'flow-definition' ? ask.draft.definition.id === row.id : ask.type === 'flow-run' ? ask.run.flowId === row.id : ask.rule.config.flowId === row.id).length;
+        const pending = flowAsks(snapshot).filter(ask => ask.type === 'flow-definition' ? ask.draft.definition.id === row.id : ask.type === 'flow-run' || ask.type === 'flow-restart' || ask.type === 'flow-cancel' ? ask.run.flowId === row.id : ask.rule.config.flowId === row.id).length;
         return <button type="button" key={row.id} className="flow-catalog-item" aria-pressed={selected?.id === row.id} onClick={() => setPicked(row.id)}><span className="flow-catalog-icon"><IconBranch size={18} /></span><span><strong>{row.definition.title}</strong><small>{t(automatic ? 'flows.automatic' : 'flows.manual')} · {row.version ? `v${row.version.version}` : t('flows.draft')}</small>{pending > 0 && <small className="flow-needs-decision">{t('flows.review')} · {pending}</small>}</span></button>;
       })}</div></nav>{selected && <FlowDetail key={`${snapshot.contextKey}/${selected.id}`} version={selected.version} draft={selected.draft} snapshot={snapshot} ready={ready} />}</div>}
   </section>;

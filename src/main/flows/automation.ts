@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { renameRetrying } from '../rules/storage';
 import { createHash, randomUUID } from 'node:crypto';
-import type { FlowRun } from '../../shared/flows';
+import type { FlowRestart, FlowRestartProposal, FlowRun } from '../../shared/flows';
 import { DEVOPS_WRITE_OPS, type DevOpsWriteGrant, type TestDbReadGrant } from '../../shared/flow-automation';
 import type { FlowAutomationConfig, FlowAutomationControl, FlowAutomationDecision, FlowAutomationEvent, FlowAutomationPause, FlowAutomationPropose, FlowAutomationRule, FlowAutomationSnapshot, FlowDetectionResult } from '../../shared/flow-automation';
 import type { FlowService } from './service';
@@ -20,6 +20,7 @@ const empty = (): Stored => ({ schema: 1, revision: 0, paused: false, background
 const copy = <T>(value: T): T => structuredClone(value);
 const hash = (value: unknown): string => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const pending = (event: FlowAutomationEvent): boolean => ['pending', 'notified', 'blocked'].includes(event.status);
+const occupied = (run: FlowRun): boolean => run.status !== 'completed' && (run.status !== 'cancelled' || run.cancellation?.interruption === 'pending');
 const MAX_EVENTS = 200, MAX_HISTORY = 2000, MAX_SEEN = 20000;
 const DEVOPS_INPUTS = ['work-item-id', 'work-item-revision', 'work-item-url'];
 /** Detector cursors are opaque state, not flow input names; preserve their strings exactly. */
@@ -70,6 +71,7 @@ export class FlowAutomationService {
   private starting?: string;
   private generation = 0;
   private running?: Promise<void>;
+  private reconciling = false;
   private controller?: AbortController;
   private readonly now: () => number;
   constructor(private readonly options: FlowAutomationOptions) {
@@ -82,6 +84,7 @@ export class FlowAutomationService {
     } catch { this.data = empty(); this.storageError = 'Automatic flow storage is invalid or unavailable; restore the original file before restarting.'; }
   }
   snapshot(): FlowAutomationSnapshot {
+    this.reconcileRuns();
     const { revision, paused, background, rules, events } = this.data;
     return copy({ revision, paused, background, rules, events, ...(this.storageError ? { storageError: this.storageError } : {}) });
   }
@@ -153,6 +156,7 @@ export class FlowAutomationService {
   /** Called only by the authenticated Orchestrator mount; the event supplies all run identity and inputs. */
   startEvent(eventId: string, ownerId: string): FlowRun {
     this.healthy();
+    this.reconcileRuns();
     const event = this.data.events.find(item => item.id === text(eventId, 'eventId', 200));
     if (!event) throw new Error('Automatic flow event not found');
     const rule = this.data.rules.find(item => item.id === event.ruleId);
@@ -163,13 +167,14 @@ export class FlowAutomationService {
     // Recover a flow commit even if the process died before the event ledger commit.
     if (existing) {
       if (existing.ownerOrchestratorId !== ownerId || hash(existing.inputs) !== hash(event.inputs) || hash(existing.scope) !== hash(rule.config.scope)) throw new Error('Automatic flow run identity mismatch');
-      this.change(() => { event.status = 'started'; event.runId = existing.id; event.updatedAt = this.now(); delete event.reason; }); return existing;
+      this.change(() => { event.status = existing.status === 'cancelled' ? 'cancelled' : 'started'; event.runId = existing.id; event.updatedAt = this.now(); delete event.reason; }); return existing;
     }
+    if (event.sourceKey.startsWith('restart:')) throw new Error('Recovery events require the exact user-approved restart; they cannot start as ordinary events');
     if (this.data.paused || rule.status !== 'enabled' || rule.approvedRevision !== rule.revision) throw new Error('Automatic flow is paused or not approved');
     if (!['pending', 'notified'].includes(event.status)) throw new Error('Automatic flow event is blocked; resume explicitly to retry');
     try { this.usable(rule.config, event.inputs); } catch (error) { this.blockEvent(event, errorText(error)); throw error; }
-    const occupied = snapshot.runs.filter(run => run.status !== 'completed' && this.data.rules.some(item => run.subjectKey.startsWith(`auto:${item.id}:`)));
-    if (occupied.length >= 2 || occupied.some(run => run.subjectKey.startsWith(`auto:${rule.id}:`))) throw new Error('Automatic flow concurrency limit reached; event remains queued');
+    const running = snapshot.runs.filter(run => occupied(run) && this.data.rules.some(item => run.subjectKey.startsWith(`auto:${item.id}:`)));
+    if (running.length >= 2 || running.some(run => run.subjectKey.startsWith(`auto:${rule.id}:`))) throw new Error('Automatic flow concurrency limit reached; event remains queued');
     // While flow.start prepares the first step, grantFor accepts only this event's own start (before runId is recorded).
     this.starting = event.id;
     let run: FlowRun;
@@ -177,6 +182,82 @@ export class FlowAutomationService {
     finally { this.starting = undefined; }
     this.change(() => { event.status = 'started'; event.runId = run.id; event.updatedAt = this.now(); delete event.reason; });
     return run;
+  }
+  /** Current rule approval is rechecked for a user-requested restart; an old grant never follows a new version. */
+  restartConfig(input: FlowRestartProposal): { rule: FlowAutomationRule; source: FlowRun; inputs: Record<string, string> } {
+    this.healthy();
+    const { source, version } = this.options.flow().restartTarget(input);
+    const ruleId = /^auto:([^:]+):/.exec(source.subjectKey)?.[1], rule = this.data.rules.find(item => item.id === ruleId);
+    if (!rule || this.data.paused || rule.status !== 'enabled' || rule.approvedRevision !== rule.revision || rule.ownerOrchestratorId !== source.ownerOrchestratorId
+      || rule.config.flowId !== source.flowId || rule.config.flowVersion !== version.version) throw new Error('Restart needs a currently enabled user-approved automatic rule for this exact version and owner');
+    if (input.automationRule?.id !== rule.id || input.automationRule.revision !== rule.revision) throw new Error('Automatic restart configuration changed; review the exact rule revision again');
+    const inputs = validateInputs(source.inputs); this.usable(rule.config, inputs);
+    if (hash(rule.config.scope) !== hash(source.scope) || Object.entries(rule.config.inputs).some(([key, value]) => inputs[key] !== value)) throw new Error('Automatic restart requires unchanged scope and inputs; detect a new event for a changed target');
+    if (rule.config.trigger.kind === 'devops') {
+      const trigger = rule.config.trigger, expected = `https://dev.azure.com/${encodeURIComponent(trigger.organization)}/${encodeURIComponent(trigger.project)}/_workitems/edit/${inputs['work-item-id']}`;
+      if (inputs['work-item-url'] !== expected) throw new Error('Automatic restart cannot move a work item to a different organization or project');
+    }
+    const running = this.options.flow().snapshot().runs.filter(run => run.id !== source.id && occupied(run) && this.data.rules.some(item => run.subjectKey.startsWith(`auto:${item.id}:`)));
+    if (running.length >= 2 || running.some(run => run.subjectKey.startsWith(`auto:${rule.id}:`))) throw new Error('Automatic flow concurrency limit reached; cancel the other run before restarting');
+    return copy({ rule, source, inputs });
+  }
+  /** Renderer approval only: create a distinct durable event, then use the existing atomic flow recovery. */
+  restart(input: FlowRestart): FlowRun {
+    if (input.acknowledgeEffects !== true) throw new Error('Restart requires explicit acknowledgement of repeated effects');
+    const flow = this.options.flow(), existing = flow.restarted(input);
+    if (existing) {
+      const event = this.data.events.find(item => item.subjectKey === existing.subjectKey && hash(item.inputs) === hash(existing.inputs)
+        && item.sourceKey === `restart:${input.runId}:${input.expectedRevision}:${input.mode}:${input.stepId ?? 'start'}:${input.targetDigest}`);
+      if (!event || event.ruleId !== input.automationRule?.id || event.ruleRevision !== input.automationRule.revision || (event.runId && event.runId !== existing.id)) throw new Error('Committed recovery event identity mismatch');
+      if (event.status !== 'cancelled' && existing.status !== 'cancelled' && (event.status !== 'started' || event.runId !== existing.id)) {
+        this.change(() => { event.status = 'started'; event.runId = existing.id; event.updatedAt = this.now(); delete event.reason; });
+      }
+      this.reconcileRuns(); return existing;
+    }
+    const { rule, source, inputs } = this.restartConfig(input), sourceKey = `restart:${source.id}:${input.expectedRevision}:${input.mode}:${input.stepId ?? 'start'}:${input.targetDigest}`;
+    let event = this.data.events.find(item => item.ruleId === rule.id && item.ruleRevision === rule.revision && item.sourceKey === sourceKey);
+    if (!event) {
+      if (this.data.seen.length >= MAX_SEEN || this.data.events.filter(pending).length >= MAX_EVENTS) throw new Error('Automatic flow recovery backlog is full');
+      event = this.change(() => {
+        const made: FlowAutomationEvent = { id: randomUUID(), ruleId: rule.id, ruleRevision: rule.revision, sourceKey, subjectKey: `auto:${rule.id}:${rule.revision}:${hash(sourceKey)}`,
+          title: `Restart ${source.flowId}`, inputs, createdAt: this.now(), updatedAt: this.now(), status: 'blocked', attempts: 0, reason: 'User-approved recovery awaiting host commit' };
+        this.data.seen.push(hash([rule.id, rule.revision, sourceKey])); this.data.events.push(made); return made;
+      });
+    }
+    this.starting = event.id;
+    let run: FlowRun;
+    try { run = flow.restart(input, { subjectKey: event.subjectKey, inputs, scope: rule.config.scope }); }
+    finally { this.starting = undefined; }
+    const eventId = event.id;
+    this.change(() => { const stored = this.data.events.find(item => item.id === eventId)!; stored.status = 'started'; stored.runId = run.id; stored.updatedAt = this.now(); delete stored.reason; });
+    this.reconcileRuns(); return run;
+  }
+  /** Terminal flow state is authoritative, including after a crash between the two durable files. */
+  reconcileRuns(): void {
+    if (this.reconciling || this.storageError || this.stopped) return;
+    this.reconciling = true;
+    try {
+      const runs = this.options.flow().snapshot().runs;
+      const cancelled = this.data.events.filter(event => event.status !== 'cancelled' && runs.some(run => run.status === 'cancelled' && run.subjectKey === event.subjectKey && (!event.runId || event.runId === run.id)));
+      const recovered = this.data.events.flatMap(event => {
+        if (event.status === 'cancelled' || !event.sourceKey.startsWith('restart:')) return [];
+        const run = runs.find(run => run.subjectKey === event.subjectKey), origin = run?.restartOf, rule = this.data.rules.find(rule => rule.id === event.ruleId);
+        const source = origin && runs.find(source => source.id === origin.runId);
+        if (!run || !origin || !source || !rule || run.status === 'cancelled' || !['cancelled', 'completed'].includes(source.status)
+          || event.ruleRevision !== rule.revision || rule.config.flowId !== run.flowId || rule.config.flowVersion !== run.flowVersion
+          || source.flowId !== run.flowId || source.ownerOrchestratorId !== run.ownerOrchestratorId || rule.ownerOrchestratorId !== run.ownerOrchestratorId
+          || hash(event.inputs) !== hash(run.inputs) || hash(rule.config.scope) !== hash(run.scope)
+          || event.sourceKey !== `restart:${origin.runId}:${origin.expectedRevision}:${origin.mode}:${origin.mode === 'from-start' ? 'start' : origin.stepId}:${run.definitionDigest}`
+          || (event.runId !== undefined && event.runId !== run.id) || (event.status === 'started' && event.runId === run.id)) return [];
+        return [{ event, run }];
+      });
+      if (cancelled.length || recovered.length) this.change(() => {
+        for (const event of cancelled) { const run = runs.find(run => run.subjectKey === event.subjectKey)!; event.status = 'cancelled'; event.runId = run.id; event.reason = run.cancellation?.reason ?? 'Flow run cancelled'; event.updatedAt = this.now(); delete event.nextAttemptAt; }
+        // A split-file commit can leave the successor durable while its event is still blocked. Repair only that
+        // exact existing recovery; no work is created and the current rule still controls every adapter grant.
+        for (const { event, run } of recovered) { event.status = 'started'; event.runId = run.id; event.updatedAt = this.now(); delete event.reason; delete event.nextAttemptAt; }
+      });
+    } finally { this.reconciling = false; }
   }
   /** The DevOps write grant of a run started from this rule's own event, or null: enabled exact revision, same owner,
    *  scope and inputs, the global switch on. Every adapter write re-checks it (ADR 0145). */
@@ -193,7 +274,7 @@ export class FlowAutomationService {
     return rule?.config.testDbRead ? copy(rule.config.testDbRead) : null;
   }
   private ruleFor(run: FlowRun): FlowAutomationRule | null {
-    if (this.stopped || this.storageError || this.data.paused) return null;
+    if (this.stopped || this.storageError || this.data.paused || ['completed', 'cancelled'].includes(run.status)) return null;
     const match = /^auto:([^:]+):(\d+):[a-f0-9]{64}$/.exec(run.subjectKey);
     const rule = match && this.data.rules.find(item => item.id === match[1]);
     if (!rule || String(rule.revision) !== match![2] || rule.status !== 'enabled' || rule.approvedRevision !== rule.revision
@@ -206,6 +287,7 @@ export class FlowAutomationService {
   }
   stop(): void { this.stopped = true; this.invalidate(); }
   private async poll(): Promise<void> {
+    this.reconcileRuns();
     const generation = this.generation, flow = this.options.flow(), context = flow.snapshot().contextKey;
     const valid = (): boolean => !this.stopped && !this.data.paused && generation === this.generation && this.options.flow() === flow && flow.snapshot().contextKey === context;
     this.controller = new AbortController();
@@ -256,10 +338,10 @@ export class FlowAutomationService {
           event.reason = event.attempts >= 3 ? 'Orchestrator acknowledgement timed out after three dispatch attempts; resume explicitly to retry.' : 'Awaiting Orchestrator acknowledgement; retry queued.';
         }
       });
-      for (const event of this.data.events.filter(item => item.ruleId === rule.id && item.ruleRevision === rule.revision && item.status === 'pending' && (item.nextAttemptAt ?? 0) <= this.now())) {
+      for (const event of this.data.events.filter(item => item.ruleId === rule.id && item.ruleRevision === rule.revision && item.status === 'pending' && !item.sourceKey.startsWith('restart:') && (item.nextAttemptAt ?? 0) <= this.now())) {
         if (!valid()) return;
         if (rule.error) break;
-        const runs = flow.snapshot().runs.filter(run => run.status !== 'completed' && this.data.rules.some(item => run.subjectKey.startsWith(`auto:${item.id}:`)));
+        const runs = flow.snapshot().runs.filter(run => occupied(run) && this.data.rules.some(item => run.subjectKey.startsWith(`auto:${item.id}:`)));
         if (runs.length >= 2 || runs.some(run => run.subjectKey.startsWith(`auto:${rule.id}:`))) break;
         try {
           const sent = await this.options.dispatch(copy(rule), copy(event));
@@ -330,7 +412,7 @@ export class FlowAutomationService {
   private retry(id: string): void {
     const rule = this.data.rules.find(item => item.id === id)!;
     rule.failures = 0; rule.nextCheckAt = this.now(); delete rule.error;
-    for (const event of this.data.events.filter(item => item.ruleId === id && item.ruleRevision === rule.revision && ['blocked', 'notified'].includes(item.status))) { event.status = 'pending'; event.attempts = 0; event.updatedAt = this.now(); delete event.reason; delete event.nextAttemptAt; }
+    for (const event of this.data.events.filter(item => item.ruleId === id && item.ruleRevision === rule.revision && ['blocked', 'notified'].includes(item.status) && !item.sourceKey.startsWith('restart:'))) { event.status = 'pending'; event.attempts = 0; event.updatedAt = this.now(); delete event.reason; delete event.nextAttemptAt; }
   }
   private cancel(id: string, reason: string): void { for (const event of this.data.events.filter(item => item.ruleId === id && pending(item))) { event.status = 'cancelled'; event.reason = reason; event.updatedAt = this.now(); } }
   private blockEvent(event: FlowAutomationEvent, reason: string): void { this.change(() => { event.status = 'blocked'; event.reason = reason; event.updatedAt = this.now(); }); }

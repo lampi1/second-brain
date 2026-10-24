@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it } from 'vitest';
-import { confirmMemory, proposeMemory, readMemoryRecords, recallMemory } from '../../../src/main/rules/memory-records';
+import { confirmMemory, proposeMemory, readMemoryRecords, recallMemory, retractMemory } from '../../../src/main/rules/memory-records';
 import { memoryTools } from '../../../src/main/rules/memory-tool';
 const dirs: string[] = [];
 const brain = () => { const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-records-')); dirs.push(root); return root; };
@@ -22,6 +22,48 @@ it('deduplicates across dates without turning assertions into confirmed facts', 
   expect(readMemoryRecords(root)).toHaveLength(1);
   expect(a.status).toBe('proposed');
   expect(() => confirmMemory(root, a.memoryId, { sourceEventId: 'event-2', sourceRunId: 'run-1', evidence: 'same author assertion' })).toThrow(/Independent/);
+});
+it('reuses repeated observations without refreshing their evidence, dates or review status', () => {
+  const root = brain(), first = proposeMemory(root, { ...input, subject: 'user', predicate: 'preference', value: 'Prefer concise explanations in Italian' }, '2026-01-01T00:00:00Z');
+  const repeat = { ...input, subject: 'user', predicate: 'preference', value: '  Prefer concise explanations in Italian  ', sourceEventId: 'event-2', sourceRunId: 'run-2' };
+  expect(proposeMemory(root, repeat, '2026-02-01T00:00:00Z')).toEqual(first);
+  const approved = confirmMemory(root, first.memoryId, { sourceEventId: 'review', sourceRunId: 'review', evidence: 'user confirmed preference' }, '2026-02-02T00:00:00Z');
+  expect(proposeMemory(root, repeat, '2026-03-01T00:00:00Z')).toEqual(approved);
+  expect(readMemoryRecords(root)).toEqual([approved]);
+});
+it('does not recreate a dismissed fact just because another run observes it again', () => {
+  const root = brain(), first = proposeMemory(root, input, '2026-01-01T00:00:00Z');
+  const dismissed = retractMemory(root, first.memoryId, 'Rejected in Memoria → Proposte', '2026-01-02T00:00:00Z').record;
+  expect(proposeMemory(root, { ...input, value: ' develop ', sourceEventId: 'new-event', sourceRunId: 'new-run' }, '2026-02-01T00:00:00Z')).toEqual(dismissed);
+  expect(readMemoryRecords(root)).toEqual([dismissed]);
+});
+it('keeps meaningful changes and different fact keys or scopes as separate unverified proposals', () => {
+  const root = brain(), fact = { ...input, subject: 'test server', predicate: 'schedule', value: 'The test server restarts every night at 6' };
+  const first = proposeMemory(root, fact);
+  const variations = [
+    { ...fact, value: 'The test server restarts every night at 7' },
+    { ...fact, value: 'The test server never restarts every night at 6' },
+    { ...fact, subject: 'production server' },
+    { ...fact, predicate: 'previous schedule' },
+    { ...fact, scope: { ...fact.scope, project: '/project/b' } },
+    { ...fact, scope: { ...fact.scope, roleId: 'artisan' } },
+  ];
+  for (const proposal of variations) {
+    const next = proposeMemory(root, proposal);
+    expect(next.memoryId).not.toBe(first.memoryId); expect(next.status).toBe('proposed');
+  }
+  expect(readMemoryRecords(root)).toHaveLength(1 + variations.length);
+});
+it.each([
+  ['Always use the strict validation procedure before running any shared database query.', 'Always use the relaxed validation procedure before running any shared database query.'],
+  ['Set the local offset to -6 hours for every scheduled task', 'Set the local offset to +6 hours for every scheduled task'],
+  ['Use the APP_MODE environment variable for local configuration.', 'Use the app_mode environment variable for local configuration.'],
+  ['The suffix token is !', 'The suffix token is ?'],
+  ['The separator is "A  B"', 'The separator is "A B"'],
+])('does not reuse a superficially similar claim: %s', (value, different) => {
+  const root = brain(), first = proposeMemory(root, { ...input, value });
+  expect(proposeMemory(root, { ...input, value: different }).memoryId).not.toBe(first.memoryId);
+  expect(readMemoryRecords(root)).toHaveLength(2);
 });
 it('isolates project and role and ranks relevant whole records within budget', () => {
   const root = brain(); proposeMemory(root, input);

@@ -34,7 +34,7 @@ describe('local discreet milestones', () => {
     const dir = tmp(), demo = new ProgressService(dir, { enabled: false, chats: () => [chat()] });
     demo.award('first-agent'); expect(demo.get().earned).toEqual([]);
     expect(demo.get()).toMatchObject({ available: false, reason: expect.any(String) });
-    expect(() => demo.confirmResult(chat().id, 100)).toThrow(/demo/);
+    expect(() => demo.confirmResult(chat().id, 100)).toThrow(/disattivati/);
     const file = path.join(dir, 'progress.json'); fs.writeFileSync(file, '{broken');
     const p = new ProgressService(dir, { enabled: true, chats: () => [] }); p.award('setup-complete');
     expect(p.get()).toMatchObject({ available: false, problem: expect.any(String) }); expect(fs.readFileSync(file, 'utf8')).toBe('{broken');

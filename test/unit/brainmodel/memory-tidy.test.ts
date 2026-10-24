@@ -10,7 +10,7 @@ import { ChangeLog, type AgentRestorer } from '../../../src/main/brainmodel/chan
 import { parseTidy, tidyMemoryJob } from '../../../src/main/brainmodel/memory-tidy';
 import type { JobContext } from '../../../src/main/brainmodel/jobs';
 import type { UpgradeAsk } from '../../../src/main/brainmodel/upgrade';
-import { canUndoMemoryTidy, confirmMemory, proposeMemory, readMemoryRecords, undoMemoryTidy, type MemoryRecord } from '../../../src/main/rules/memory-records';
+import { canUndoMemoryTidy, confirmMemory, readMemoryRecords, retractMemory, tidyMemory, undoMemoryTidy, type MemoryRecord } from '../../../src/main/rules/memory-records';
 
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
@@ -33,15 +33,27 @@ const restorer = (root: string): AgentRestorer => ({ activeVersion: () => null, 
 const byId = (root: string) => new Map(readMemoryRecords(root).map(r => [r.memoryId, r]));
 
 describe('tidyMemoryJob', () => {
+  it('leaves different numeric claims, negation and fact subjects for review', async () => {
+    const root = tmp(), log = new ChangeLog(tmp(), () => NOW);
+    store(root, [
+      { value: 'The server restarts every night at 6', status: 'confirmed' },
+      { value: 'The server restarts every night at 7' },
+      { value: 'The server never restarts every night at 6' },
+      { value: 'The server restarts every night at 6', subject: 'database' },
+    ]);
+    const before = readMemoryRecords(root);
+    expect(await tidyMemoryJob(ctx(root, log))).toMatchObject({ changes: 0 });
+    expect(readMemoryRecords(root)).toEqual(before);
+  });
   it('merges, generalizes and drops in one logged change per role, and the undo puts everything back', async () => {
     const root = tmp(), log = new ChangeLog(tmp(), () => NOW);
     store(root, [
       { value: 'Statistiche prestazioni locally: https://localhost:44309/stats (after login ExampleApp runs on 44309, not 44319)' },
       { value: 'Il bug era il work item 48213' },
       { value: 'Il server di test si riavvia ogni notte alle 6' },
-      { value: 'il server di test si riavvia ogni notte alle 6.', observedAt: '2026-10-21T08:00:00.000Z' },
+      { value: 'Il server di test si riavvia ogni notte alle 6', observedAt: '2026-10-21T08:00:00.000Z' },
       { value: 'I log stanno in logs/feedback', status: 'confirmed' },
-      { value: 'i log stanno in LOGS/feedback' },
+      { value: 'I log stanno in logs/feedback' },
       { value: 'Prima di un merge lancia i test', scope: { roleId: 'scout' } },
     ]);
     const before = fs.readFileSync(path.join(root, 'memory/records.json'), 'utf8');
@@ -74,7 +86,7 @@ describe('tidyMemoryJob', () => {
   });
   it('a rewrite that is still case-specific drops the fact; no engine: only the merges, with a note', async () => {
     const root = tmp(), log = new ChangeLog(tmp(), () => NOW);
-    store(root, [{ value: 'Deploy fatto dal ramo feat/x il 2026-10-20' }, { value: 'Il server di test si riavvia ogni notte alle 6' }, { value: 'Il server di test si riavvia ogni notte alle 6!' }]);
+    store(root, [{ value: 'Deploy fatto dal ramo feat/x il 2026-10-20' }, { value: 'Il server di test si riavvia ogni notte alle 6' }, { value: 'Il server di test si riavvia ogni notte alle 6' }]);
     const none = await tidyMemoryJob(ctx(root, log));
     expect(none).toMatchObject({ changes: 1, note: expect.stringMatching(/1 fatti legati a un caso aspettano un motore/) });
     expect(byId(root).get('f0')!.status).toBe('proposed');
@@ -84,7 +96,7 @@ describe('tidyMemoryJob', () => {
   });
   it('a change made since blocks the undo', async () => {
     const root = tmp(), log = new ChangeLog(tmp(), () => NOW);
-    store(root, [{ value: 'Il server di test si riavvia ogni notte alle 6' }, { value: 'Il server di test si riavvia ogni notte alle 6!' }]);
+    store(root, [{ value: 'Il server di test si riavvia ogni notte alle 6' }, { value: 'Il server di test si riavvia ogni notte alle 6' }]);
     await tidyMemoryJob(ctx(root, log));
     const change = log.all()[0]!, kept = readMemoryRecords(root).find(r => r.status === 'proposed')!;
     expect(log.canRollback(change, restorer(root))).toBe(true);
@@ -94,15 +106,49 @@ describe('tidyMemoryJob', () => {
     // a restorer without a memory side cannot undo it
     expect(log.canRollback(change, { activeVersion: () => null, restore: () => {} })).toBe(false);
   });
-  it('generalized confirmed facts stay confirmed and pass the gate', async () => {
+  it('generalized confirmed facts remain unchanged until a separately reviewed replacement is approved', async () => {
     const root = tmp(), log = new ChangeLog(tmp(), () => NOW);
-    const ok = proposeMemory(root, { scope: { roleId: 'artisan' }, subject: 'setup', predicate: 'note', value: 'I report stanno in reports/mensili', sourceEventId: 'e', sourceRunId: 'r' });
-    expect(ok.status).toBe('proposed');
     store(root, [{ value: 'App locale su http://localhost:44309', status: 'confirmed', verification: { sourceEventId: 'h', sourceRunId: 'h', evidence: 'ok' } }]);
+    const original = readMemoryRecords(root)[0]!;
     const ask: UpgradeAsk = async () => ({ ok: true, text: '{"items":[{"id":"m1","keep":"Dopo il login l’app locale gira su una porta diversa da quella di default: leggila dal profilo di avvio"}]}' });
     await tidyMemoryJob(ctx(root, log, ask));
-    const now = readMemoryRecords(root).find(r => r.validTo === null)!;
-    expect(now).toMatchObject({ status: 'confirmed', verification: { evidence: expect.stringMatching(/generalized by the maintenance/) } });
+    const rows = readMemoryRecords(root), replacement = rows.find(r => r.memoryId !== original.memoryId)!;
+    expect(rows.find(r => r.memoryId === original.memoryId)).toEqual(original);
+    expect(replacement).toMatchObject({ status: 'proposed', supersedes: original.memoryId, validTo: null });
+    expect(replacement.verification).toBeUndefined();
+    expect(replacement.transitions).toEqual([{ at: new Date(NOW).toISOString(), status: 'proposed', reason: expect.stringContaining(`generalized-from:${original.memoryId}`) }]);
+    expect(await tidyMemoryJob(ctx(root, log, ask))).toMatchObject({ changes: 0 });
+    confirmMemory(root, replacement.memoryId, { sourceEventId: 'review-new', sourceRunId: 'review-new', evidence: 'user checked replacement' }, '2026-10-22T10:00:00Z');
+    expect(byId(root).get(original.memoryId)?.status).toBe('retracted');
+    expect(byId(root).get(replacement.memoryId)?.status).toBe('confirmed');
+  });
+  it('undoing a proposed rewrite preserves the original and prevents repeated cleanup prompts', async () => {
+    const root = tmp(), log = new ChangeLog(tmp(), () => NOW);
+    store(root, [{ value: 'App locale su http://localhost:44309', status: 'confirmed', verification: { sourceEventId: 'h', sourceRunId: 'h', evidence: 'ok' } }]);
+    const before = readMemoryRecords(root);
+    const ask: UpgradeAsk = async () => ({ ok: true, text: '{"items":[{"id":"m1","keep":"Read the local port from the launch profile"}]}' });
+    await tidyMemoryJob(ctx(root, log, ask));
+    const change = log.all()[0]!;
+    expect(log.canRollback(change, restorer(root))).toBe(true);
+    log.rollback(change.id, restorer(root));
+    expect(readMemoryRecords(root)).toEqual(before);
+    expect(await tidyMemoryJob(ctx(root, log, ask))).toMatchObject({ changes: 0 });
+  });
+  it('never auto-retires approved records or re-proposes a dismissed replacement', async () => {
+    const root = tmp(), log = new ChangeLog(tmp(), () => NOW);
+    store(root, [{ value: 'App locale su http://localhost:44309', status: 'confirmed', verification: { sourceEventId: 'h', sourceRunId: 'h', evidence: 'ok' } }]);
+    const before = readMemoryRecords(root);
+    const drop: UpgradeAsk = async () => ({ ok: true, text: '{"items":[{"id":"m1","drop":true}]}' });
+    expect(await tidyMemoryJob(ctx(root, log, drop))).toMatchObject({ changes: 0 });
+    expect(tidyMemory(root, { retire: [{ id: 'f0', reason: 'not useful' }], generalize: [] }, 'tidy-test', new Date(NOW).toISOString())).toMatchObject({ retired: [], added: [] });
+    expect(readMemoryRecords(root)).toEqual(before);
+    const rewrite: UpgradeAsk = async () => ({ ok: true, text: '{"items":[{"id":"m1","keep":"Read the local port from the launch profile"}]}' });
+    await tidyMemoryJob(ctx(root, log, rewrite));
+    const replacement = readMemoryRecords(root).find(r => r.supersedes === 'f0')!;
+    retractMemory(root, replacement.memoryId, 'Rejected in Memoria → Proposte', '2026-10-22T10:00:00Z');
+    expect(await tidyMemoryJob(ctx(root, log, rewrite))).toMatchObject({ changes: 0 });
+    expect(readMemoryRecords(root)).toHaveLength(2);
+    expect(byId(root).get('f0')).toEqual(before[0]);
   });
 });
 
