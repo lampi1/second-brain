@@ -4,7 +4,7 @@ import type { typingIt } from './typing.it';
 export const typingEn: typeof typingIt = {
   'typing.any.0': 'Dropping the production DB… kidding (maybe)…',
   'typing.any.1': 'Searching Stack Overflow…',
-  'typing.any.2': 'Off to take a dump, brb…',
+  'typing.any.2': 'Getting my thoughts in order…',
   'typing.any.3': 'Asking another AI, don’t tell anyone…',
   'typing.any.4': 'Restarting to see if it goes away…',
   'typing.any.5': 'Works on my machine…',
