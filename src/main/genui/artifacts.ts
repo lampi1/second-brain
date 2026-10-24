@@ -24,6 +24,10 @@ export interface ArtifactDeps {
   emit: (chatId: string, item: ChatItem) => void;    // 'chat:item' to the page
   now?: () => number;
   askWaitMs?: number;
+  /** why the card could not show this screenshot (outside the allowed folders, missing, not an image), null when it can */
+  imageProblem?: (path: string) => string | null;
+  /** where a chat saves screenshots the card can show, named when one is refused */
+  evidenceDir?: string;
 }
 
 /** The model's id for a visual: short, safe in an item id. */
@@ -54,6 +58,13 @@ export class Artifacts {
     const ui = checkUi(a.component, a.props);
     if (ui.ok && ui.spec.component === 'brief' && target !== 'next-ask') throw new Error('brief: only with target "next-ask" (it is the context of your next question)');
     if (!ui.ok) throw new Error(`${ui.error}. Fix the props and call show_ui again (the shapes are in the tool's description).`);
+    // a brief's screenshot the card cannot show is sent back now, while the chat can still move it (ADR 0150)
+    if (ui.spec.component === 'brief' && this.d.imageProblem) {
+      for (const [i, im] of (ui.spec.props.images ?? []).entries()) {
+        const why = this.d.imageProblem(im.path);
+        if (why) throw new Error(`images[${i}] (${im.path}): ${why} The question card cannot show it. Save the screenshot as PNG, JPG or WebP${this.d.evidenceDir ? ` under ${this.d.evidenceDir}` : ' under your evidence folder'} (or the brain, the app's repo), then call show_ui again with that absolute path.`);
+      }
+    }
     if (a.id !== undefined && a.id !== null && (typeof a.id !== 'string' || !KEY.test(a.id))) throw new Error('id: 1-40 letters, digits, ".", "_" or "-"');
     const key = typeof a.id === 'string' ? a.id : `${this.now().toString(36)}${++this.n}`;
 

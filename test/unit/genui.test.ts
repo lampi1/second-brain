@@ -141,6 +141,17 @@ describe('Artifacts: the store behind show_ui', () => {
     store.stop();
   });
 
+  it('a brief screenshot the card could not show is sent back at once, naming the evidence folder', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-genui-'));
+    const store = new Artifacts({ dir, chats: () => [chat('w')], emit: () => {}, askWaitMs: 60_000, evidenceDir: 'C:\\sb\\evidence',
+      imageProblem: p => (p.startsWith('C:\\qa') ? 'Fuori dalle cartelle ammesse.' : null) });
+    expect(() => store.show('w', args({ component: 'brief', props: brief, target: 'next-ask' }))).toThrow(/images\[0\] \(C:\\qa\\dopo\.png\): Fuori dalle cartelle ammesse\..*under C:\\sb\\evidence/);
+    expect(store.hasBrief('w')).toBe(false);
+    store.show('w', args({ component: 'brief', props: { ...brief, images: [{ path: 'C:\\sb\\evidence\\dopo.png' }] }, target: 'next-ask' }));
+    expect(store.hasBrief('w')).toBe(true);
+    store.stop();
+  });
+
   it('target chat: an item of the calling chat, emitted and saved; a wrong call throws a clear error', () => {
     const { store, sent, dir } = setup([chat('w')]);
     expect(store.show('w', args({ id: 'qa' }))).toContain('Mostrato in questa chat: table "Esiti QA" (id qa');

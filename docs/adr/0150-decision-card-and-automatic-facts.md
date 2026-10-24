@@ -17,7 +17,9 @@ knowledge for the agents.
 ## Decision
 - **The brief.** A new catalog component `brief` (`shared/genui.ts`): `done` (1-5 lines on what was done), `ifYes`,
   `ifNo`, and the evidence the chat has: `checks` (label + status), `images` (screenshot paths), `files` (path, why,
-  +/−). Only with `show_ui` target `next-ask`: it is the context of the chat's next question.
+  +/−). Only with `show_ui` target `next-ask`: it is the context of the chat's next question. A screenshot the card
+  could not show (outside the allowed folders of `ask-image.ts`, missing, not an image) makes `show_ui` fail at once,
+  naming the evidence folder, so the chat moves it there before asking (owner 2026-10-24: «immagine non mostrata»).
 - **The rule and the gate.** `QUESTION_RULE` tells every chat to send the brief right before asking and to keep the
   question short and self-contained (never «come sopra»). The engines' question gates (`chats/claude.ts`,
   `chats/acp.ts`) send a yes/no question without a waiting brief (`Artifacts.hasBrief`, through

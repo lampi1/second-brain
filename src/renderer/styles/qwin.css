@@ -185,6 +185,8 @@
 .ask-img-compare:hover, .ask-img-compare:focus-visible { border-style: solid; border-color: var(--blue); background: color-mix(in srgb, var(--blue) 16%, var(--surface-2)); outline: none; }
 .ask-img-compare:active { transform: scale(.98); }
 .ask-img-bad { display: flex; align-items: baseline; gap: 8px; font-size: var(--fs-s); color: var(--text-3); overflow-wrap: anywhere; }
+.ask-img-bad > span { flex: 1 1 auto; min-width: 0; }
+.ask-img-bad > button { flex: none; white-space: nowrap; overflow-wrap: normal; }
 .modal.ask-img-viewer { display: flex; flex-direction: column; }
 .modal.ask-img-viewer img { display: block; max-width: calc(100vw - 64px); max-height: calc(100vh - 120px); object-fit: contain; }
 .ask-img-bar { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 44px; padding: 6px 12px; background: var(--surface); border-top: 1px solid var(--border); }
