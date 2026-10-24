@@ -56,12 +56,13 @@ describe('flow host boundaries', () => {
     const report = { at: 100, via: 'agent_report', outcome: 'done', verified: 'yes', verdict: (review ? 'partial' : 'fail') as string | undefined, blocking: 0, summary: 'Report', canonical: { runId: 'fresh', taskVersion: 1, outcome: 'done', doneWhen: [{ criterion: 'result', met: true, evidence: 'verified output' }] } };
     s.rows[1]!.run!.report = report as unknown as NonNullable<ChatSummary['run']>['report'];
     const completion = { runId: run.id, expectedRevision: bound.revision, stepId: 'work', reportId: 'fresh:100' };
-    expect(() => service.report(completion, 'o')).toThrow(/host-linked/);
+    expect(() => service.report({ ...completion, reportId: 'fresh:99' }, 'o')).toThrow('Expected host reportId fresh:100');
+    expect(() => service.report(completion, 'o')).toThrow(/Report fresh:100/);
     report.verdict = review ? 'success' : undefined;
     expect(service.report(completion, 'o').status).toBe('completed');
     expect(s.runtime.resolveBinding('worker', 'o', s.a)).toBeNull();
   });
-  it('reconciles canonical reports after a brain switch and failed delivery without duplicate busy sends', async () => {
+  it('consumes a persisted canonical report after returning to its brain without another Orchestrator turn', async () => {
     const s = setup(), flow = s.runtime.service();
     flow.propose({ expectedRevision: 0, definition: { id: 'work', title: 'Work', description: 'Fixture', aliases: [], scope: {}, steps: [{ id: 'work', title: 'Work', kind: 'agent', instructions: 'Do work', workspaceInput: 'repo', inputs: ['repo'], evidence: ['result'], timeoutMs: 600000, maxAttempts: 2, effect: 'code' }] } });
     flow.decideDefinition({ id: 'work', expectedRevision: 1, answer: 'yes' });
@@ -69,15 +70,10 @@ describe('flow host boundaries', () => {
     const run = flow.start({ flowId: 'work', flowVersion: 1, subjectKey: 'subject', scope: {}, inputs: { repo: s.a } }, 'o');
     flow.bindAgent(run.id, run.revision, 'work', s.runtime.resolveBinding('worker', 'o', s.a)!, 'o');
     s.rows[1]!.run!.report = { at: 100, via: 'agent_report', outcome: 'done', verified: 'yes', blocking: 0, summary: 'Report', canonical: { runId: 'fresh', taskVersion: 1, outcome: 'done', doneWhen: [{ criterion: 'result', met: true, evidence: 'output' }] } } as unknown as NonNullable<ChatSummary['run']>['report'];
-    const report = s.rows[1]!.run!.report!;
-    const originalVerdict = report.verdict; report.verdict = 'fail'; await s.runtime.tick(); expect(s.send).not.toHaveBeenCalled(); report.verdict = originalVerdict;
-    const originalRun = report.canonical!.runId; report.canonical!.runId = 'stale'; await s.runtime.tick(); expect(s.send).not.toHaveBeenCalled(); report.canonical!.runId = originalRun;
     s.switchBrain(s.b); expect(s.runtime.reportReady('worker')).toBe(false); await s.runtime.tick(); expect(s.send).not.toHaveBeenCalled();
-    s.switchBrain(s.a); s.send.mockRejectedValueOnce(new Error('Unavailable')); await s.runtime.tick(); await Promise.resolve(); expect(s.send).toHaveBeenCalledOnce();
-    await s.runtime.tick(); expect(s.send).toHaveBeenCalledOnce();
-    const now = Date.now(); vi.spyOn(Date, 'now').mockReturnValue(now + 61000);
-    s.rows[0]!.state = 'running'; await s.runtime.tick(); expect(s.send).toHaveBeenCalledOnce();
-    s.rows[0]!.state = 'idle'; await s.runtime.tick(); expect(s.send).toHaveBeenCalledTimes(2);
+    s.switchBrain(s.a); await s.runtime.tick(); expect(flow.status(run.id, 'o').status).toBe('completed');
+    expect(flow.status(run.id, 'o').steps[0]!.receipt?.reportId).toBe('fresh:100');
+    await s.runtime.tick(); expect(s.send).not.toHaveBeenCalled(); expect(flow.snapshot().runs).toHaveLength(1);
     s.runtime.stop();
   });
   it('detects without starting runs and rechecks automatic tool authentication', async () => {

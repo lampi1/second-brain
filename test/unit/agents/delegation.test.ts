@@ -736,6 +736,23 @@ describe('stalled children ("Ferma dopo", delegation.stallMin)', () => {
 
 describe('versioned task continuity and canonical results', () => {
   const result = { outcome: 'done', summary: 'Full summary', output: 'FULL DELIVERABLE', doneWhen: [{ criterion: 'criterion A', met: true, evidence: 'artifact.txt' }] };
+  it.each(['done', 'partial', 'blocked'] as const)('notifies host reconciliation of a saved %s report without sending an Orchestrator turn', async outcome => {
+    const f = fixture(), observed: string[] = [];
+    const owner = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    const worker = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', goal: 'Routine task', doneWhen: ['criterion A'] }, 'app');
+    expect(f.sent.get(worker.id)).toBeUndefined();
+    f.m.onReportSaved(id => {
+      const report = f.m.list().find(chat => chat.id === id)!.run!.report!;
+      expect(report.via).toBe('agent_report');
+      expect(report.canonical?.runId).toBe(worker.run!.runId);
+      observed.push(`${id}:${report.at}`);
+    });
+    f.m.reportRoot(worker.id, checkResult({ ...result, outcome }, []));
+    expect(observed).toEqual([`${worker.id}:${f.m.runs.get(worker.run!.runId)!.report!.at}`]);
+    expect(f.sent.get(owner.id)).toBeUndefined();
+    expect(() => f.m.reportRoot(worker.id, checkResult(result, []))).toThrow(/already/);
+    expect(observed).toHaveLength(1);
+  });
   it('user roots and explicit app replay tasks report locally; app outputs cannot be synthesized', async () => {
     const f = fixture();
     const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');

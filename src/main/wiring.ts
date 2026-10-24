@@ -77,6 +77,7 @@ import type { McpServer, McpTool, ToolOutput } from './mcp/server';
 import { createBrowserModule, mcpPortFromEnv } from './browser/service';
 import { Workflows } from './workflows/service';
 import { createFlowRuntime, type FlowRuntime } from './flows/runtime';
+import { createFlowWorker } from './flows/worker';
 import { devopsWriteTools } from './flows/devops-write-tool';
 import { testDbReadTools } from './flows/test-db-tool';
 import { testDbCredential } from './flows/test-db-env';
@@ -699,6 +700,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   agentPacks.learning.evidenceRuns = () => manager.runs.list();
   const flows = flowsRef = createFlowRuntime({ userData: ctx.userData, testDbRead: { env: testDbCredential }, brainRoot: () => brain.info().brainRoot,
     chats: () => chats.list(), stopChat: chatId => chats.stop(chatId), changed: snapshot => ctx.emitter.emit('flows:changed', snapshot),
+    createWorker: createFlowWorker({ catalog: agents, brain, chats: () => manager.list(), create: request => manager.create(request, 'app') }),
+    sendWorker: (chatId, prompt, authorize, failed) => manager.send(chatId, `${AGENT_LABEL}\n\n${prompt}`, undefined, false, 'Routine', false, { kind: 'app' },
+      { beforeSubmit: authorize, submitted() {}, failed }),
+    discardWorker: chatId => manager.close(chatId),
     roles: () => flowRoles(agents.list().profiles, (engine, tier) => tierModel(engine, tier, brain.routingInfo().registry, brain.settings().modelTiers)),
     send: (ownerId, message) => chats.send(ownerId, message, undefined, false, 'Routine automatiche', false, { kind: 'app' }) });
   addChatTools(devopsWriteTools((chatId, request, signal) => flows.devopsWrite(chatId, request, signal)));
@@ -717,7 +722,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   flowDeadlineTimer?.unref();
   const wake = attachOrchestratorWake(ctx, chats, () => brain.settings().orchestratorEvents !== false && (!process.env.SB_TEST || process.env.SB_ORCHESTRATOR_EVENTS === '1'));
   manager.onUserWrote(n => wake.userMessage(n)); // the user typed in a work chat: quiet news (ADR 0083)
-  manager.onCleanReport(n => flows.reportReady(n.chatId) || wake.cleanReport({ ...n, workflow: workflows.list().some(r => r.status === 'active' && r.chatIds.includes(n.chatId)) })); // linked results wake their coordinator
+  manager.onReportSaved(chatId => { flows.reportReady(chatId); });
+  manager.onCleanReport(n => flows.reportReady(n.chatId) || wake.cleanReport({ ...n, workflow: workflows.list().some(r => r.status === 'active' && r.chatIds.includes(n.chatId)) }));
 
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && (!process.env.SB_TEST || process.env.SB_RUN_RESULTS === '1'));
   const heldNews = attachHeldNews(ctx.emitter, wake, mail);

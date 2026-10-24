@@ -9,6 +9,8 @@ import { adapted, testDbAdapted, digest, type RoleTierMax, inScope, integer, key
 export interface FlowServiceOptions {
   file: string; contextKey: string; now?: () => number; changed?: (snapshot: FlowSnapshot) => void;
   resolveReport?: (binding: FlowAgentBinding, reportId: string) => FlowVerifiedReport | null;
+  /** Host diagnostics use the persisted report timestamp and canonical identity, never model-supplied receipts. */
+  reportFailure?: (binding: FlowAgentBinding, reportId: string, requiredEvidence: readonly string[]) => string | undefined;
   /** True only while the user-approved automatic rule that started this run grants the declared host adapter. */
   adapterGranted?: (run: FlowRun, step: FlowStep) => boolean;
   /** The catalog's tierMax per role, checked when a draft is proposed. */
@@ -267,12 +269,22 @@ export class FlowService {
       const step = run.steps[run.currentStep]!, definition = this.version(run.flowId, run.flowVersion).definition.steps[run.currentStep]!;
       if (definition.kind !== 'agent' || step.status !== 'running' || !step.chatId || !step.chatRunId || !step.taskVersion) throw new Error('No bound running agent step');
       if (this.now() - (step.startedAt ?? 0) > definition.timeoutMs) { this.block(run, 'Step timed out; inspect evidence before retry.'); this.touch(run); return run; }
-      const report = this.options.resolveReport?.({ chatId: step.chatId, chatRunId: step.chatRunId, taskVersion: step.taskVersion }, text(input.reportId, 'reportId', 200));
+      const binding = { chatId: step.chatId, chatRunId: step.chatRunId, taskVersion: step.taskVersion }, reportId = text(input.reportId, 'reportId', 200);
+      const failure = this.options.reportFailure?.(binding, reportId, definition.evidence); if (failure) throw new Error(failure);
+      const report = this.options.resolveReport?.(binding, reportId);
       if (!report || !report.completed || report.id !== input.reportId || report.chatId !== step.chatId || report.chatRunId !== step.chatRunId || report.taskVersion !== step.taskVersion) throw new Error('A matching completed host-linked agent report is required');
       if (definition.reviewOf && (report.roleId !== 'sentinel' || report.reviewOf !== run.steps.find(s => s.stepId === definition.reviewOf)?.chatRunId)) throw new Error('Independent review must bind the reviewed agent run and Sentinel role');
       if (!report.summary.trim() || !report.evidence.length || definition.evidence.some(label => !report.evidence.some(value => value.startsWith(`${label}: `) && value.length > label.length + 2))) throw new Error('The linked report is missing required evidence');
       this.finish(run, { id: randomUUID(), stepId: step.stepId, kind: 'agent-report', at: this.now(), summary: report.summary, chatId: step.chatId, reportId: report.id, evidence: copy(report.evidence) });
       this.prepare(run); this.touch(run); return run;
+    });
+  }
+  /** Host-only execution failure: retains binding/evidence and requires an explicit user retry. */
+  blockStep(runId: string, expectedRevision: number, stepId: string, reason: string): FlowRun {
+    return this.change(() => {
+      const run = this.guarded(runId, expectedRevision, stepId), step = run.steps[run.currentStep]!;
+      if (run.status !== 'active' || !['ready', 'running'].includes(step.status)) throw new Error('Only an active agent step can fail');
+      this.block(run, text(reason, 'failure reason', 16000)); this.touch(run); return run;
     });
   }
   /** A user can approve a gate or request a bounded retry, but cannot certify unsupported external actions. */

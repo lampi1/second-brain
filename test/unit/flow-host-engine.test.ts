@@ -1,0 +1,93 @@
+// Host-driven routine steps: canonical receipts advance work without a coordinator turn; launch stays bound and scoped.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ChatSummary } from '../../src/shared/contract';
+import type { FlowStep } from '../../src/shared/flows';
+import { createFlowRuntime, type FlowRuntime, type FlowWorkerRequest } from '../../src/main/flows/runtime';
+const worlds: { root: string; runtime: FlowRuntime }[] = [];
+afterEach(() => { for (const world of worlds.splice(0)) { world.runtime.stop(); fs.rmSync(world.root, { recursive: true, force: true }); } });
+const step = (id: string, extra: Partial<FlowStep> = {}): FlowStep => ({ id, title: id, kind: 'agent', instructions: `Perform ${id} using the fixture.`, inputs: ['workspace'], workspaceInput: 'workspace', evidence: ['proof'], timeoutMs: 600000, maxAttempts: 2, effect: 'read-only', role: 'artisan', ...extra });
+function world(steps = [step('first'), step('second')]) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'host-flow-')), rows = [{ id: 'owner', isOrchestrator: true, state: 'idle' }] as ChatSummary[];
+  let current: string | null = root, count = 0;
+  const create = vi.fn(async (request: FlowWorkerRequest): Promise<ChatSummary> => {
+    const id = `worker-${++count}`, chat = { id, state: 'idle', run: { runId: `${id}-run`, taskVersion: 1, agentId: request.roleId, ...(request.reviewOf ? { reviewOf: request.reviewOf } : {}), scope: { brainRoot: root, projectRoot: request.workspace } }, route: { agent: { tier: request.tier, modelFrom: 'tier' } } } as ChatSummary;
+    rows.push(chat); return chat;
+  });
+  const sendWorker = vi.fn(async (id: string, _prompt: string, authorize: () => void, _onFailure: (error: unknown) => void) => { authorize(); rows.find(row => row.id === id)!.state = 'running'; });
+  const discardWorker = vi.fn(async (id: string) => { rows.find(row => row.id === id)!.closedAt = Date.now(); });
+  const stopChat = vi.fn(async (id: string) => { rows.find(row => row.id === id)!.state = 'idle'; }), send = vi.fn(async () => {});
+  const runtime = createFlowRuntime({ userData: path.join(root, 'data'), brainRoot: () => current, chats: () => rows, changed: () => {}, createWorker: create, sendWorker, discardWorker, stopChat, send });
+  worlds.push({ root, runtime }); const flow = runtime.service();
+  flow.propose({ expectedRevision: 0, definition: { id: 'fixture', title: 'Fixture', description: 'Synthetic routine.', aliases: [], scope: {}, steps } }); flow.decideDefinition({ id: 'fixture', expectedRevision: 1, answer: 'yes' });
+  const start = (subjectKey = 'fixture-task') => flow.start({ flowId: 'fixture', flowVersion: 1, subjectKey, scope: {}, inputs: { workspace: root } }, 'owner');
+  const report = (id: string, modify: (value: NonNullable<ChatSummary['run']>['report']) => void = () => {}) => {
+    const chat = rows.find(row => row.id === id)!; chat.state = 'idle';
+    chat.run!.report = { at: 42, via: 'agent_report', outcome: 'done', verified: 'yes', blocking: 0, summary: 'Fixture complete', ...(chat.run!.reviewOf ? { verdict: 'success' } : {}), canonical: { runId: chat.run!.runId, taskVersion: 1, outcome: 'done', doneWhen: [{ criterion: 'proof', met: true, evidence: 'Fixture result' }] } } as NonNullable<ChatSummary['run']>['report'];
+    modify(chat.run!.report); expect(runtime.reportReady(id)).toBe(true);
+  };
+  return { root, runtime, flow, rows, create, sendWorker, discardWorker, stopChat, send, start, report, switchBrain: (value: string | null) => { current = value; } };
+}
+describe('host routine engine', () => {
+  it('binds before the first turn, consumes canonical evidence, and launches the next step without waking the owner', async () => {
+    const w = world(), source = w.start();
+    w.sendWorker.mockImplementation(async (id, _prompt, authorize) => { const run = w.flow.status(source.id, 'owner'); expect(run.steps[run.currentStep]).toMatchObject({ status: 'running', chatId: id }); authorize(); w.rows.find(row => row.id === id)!.state = 'running'; });
+    await Promise.all([w.runtime.tick(), w.runtime.tick()]); expect(w.create).toHaveBeenCalledTimes(1); expect(w.sendWorker).toHaveBeenCalledTimes(1);
+    expect(w.sendWorker.mock.calls[0]![1]).toContain('Required evidence labels: ["proof"]');
+    w.report('worker-1'); await w.runtime.tick();
+    const run = w.flow.status(source.id, 'owner'); expect(run.currentStep).toBe(1); expect(run.steps[0]!.receipt?.reportId).toBe('worker-1-run:42'); expect(run.steps[1]!.chatId).toBe('worker-2'); expect(w.create).toHaveBeenCalledTimes(2); expect(w.send).not.toHaveBeenCalled();
+    expect(w.sendWorker.mock.calls[1]![1]).toContain('Fixture result'); expect(w.sendWorker.mock.calls[1]![1]).toContain('fixture-task'); expect(w.sendWorker.mock.calls[1]![1]).toContain('worker-1-run:42');
+    w.report('worker-2'); await w.runtime.tick(); expect(w.flow.status(source.id, 'owner').status).toBe('completed');
+  });
+  it.each(['partial', 'blocked', 'missing', 'prefix', 'stale'] as const)('blocks %s canonical reports with the host-known report id and no automatic retry', async kind => {
+    const w = world(), source = w.start(); await w.runtime.tick();
+    w.report('worker-1', report => { if (kind === 'partial' || kind === 'blocked') report!.outcome = kind; if (kind === 'missing') report!.canonical!.doneWhen[0]!.evidence = ''; if (kind === 'prefix') report!.canonical!.doneWhen[0]!.criterion = 'proof: unrelated'; if (kind === 'stale') report!.canonical!.taskVersion = 2; });
+    await w.runtime.tick(); const run = w.flow.status(source.id, 'owner');
+    expect(run.status).toBe('blocked'); expect(run.steps[0]!.reason).toContain('worker-1-run:42'); expect(run.steps[0]!.receipt).toBeUndefined(); expect(w.send).toHaveBeenCalledWith('owner', expect.stringContaining('bloccato')); await w.runtime.tick(); expect(w.create).toHaveBeenCalledTimes(1);
+  });
+  it('waits for native approval and binds an independent Sentinel review to the exact preceding run', async () => {
+    const w = world([step('first'), { id: 'gate', title: 'Gate', kind: 'approval', instructions: 'Confirm', inputs: [], evidence: [], timeoutMs: 1000, maxAttempts: 1, effect: 'read-only' }, step('review', { role: 'sentinel', tier: 'mid', reviewOf: 'first' })]), source = w.start();
+    await w.runtime.tick(); w.report('worker-1'); await w.runtime.tick(); const waiting = w.flow.status(source.id, 'owner'); expect(waiting.status).toBe('approval'); expect(w.create).toHaveBeenCalledTimes(1);
+    await w.runtime.decide({ runId: source.id, expectedRevision: waiting.revision, stepId: 'gate', answer: 'yes' });
+    expect(w.create.mock.calls[1]![0]).toMatchObject({ roleId: 'sentinel', tier: 'mid', reviewOf: 'worker-1-run' });
+    w.report('worker-2'); await w.runtime.tick(); expect(w.flow.status(source.id, 'owner').status).toBe('completed');
+  });
+  it.each([{ effect: 'external-write' as const }, { effect: 'production' as const }])('does not auto-launch an unsupported action %j', async extra => {
+    const w = world([step('first', extra)]), source = w.start(); await w.runtime.tick(); expect(w.flow.status(source.id, 'owner').status).toBe('blocked'); expect(w.create).not.toHaveBeenCalled();
+  });
+  it('leaves a legacy optional-role step ready for manual binding and explains the handoff once', async () => {
+    const w = world([step('first', { role: undefined })]), source = w.start(); await w.runtime.tick();
+    const ready = w.flow.status(source.id, 'owner'); expect(ready.steps[0]!.status).toBe('ready'); expect(w.create).not.toHaveBeenCalled(); expect(w.send).toHaveBeenCalledTimes(1);
+    expect(w.flow.bindAgent(source.id, ready.revision, 'first', { chatId: 'manual-worker', chatRunId: 'manual-worker-run', taskVersion: 1 }, 'owner').steps[0]!.status).toBe('running');
+  });
+  it('blocks an unusable workspace explicitly before creating a worker', async () => {
+    const w = world([step('first')]), source = w.flow.start({ flowId: 'fixture', flowVersion: 1, subjectKey: 'relative-workspace', scope: {}, inputs: { workspace: '.' } }, 'owner'); await w.runtime.tick();
+    expect(w.flow.status(source.id, 'owner').steps[0]!.reason).toContain('absolute configured workspace'); expect(w.create).not.toHaveBeenCalled();
+  });
+  it('preserves the two-worker limit across concurrent routine pumps', async () => {
+    const w = world([step('first')]); w.start('one'); w.start('two'); const third = w.start('three'); await Promise.all([w.runtime.tick(), w.runtime.tick()]);
+    expect(w.create).toHaveBeenCalledTimes(2); expect(w.flow.status(third.id, 'owner').steps[0]!.status).toBe('ready');
+  });
+  it('discards a freshly-created worker when cancellation wins before binding', async () => {
+    const w = world(); let release!: () => void; const original = w.create.getMockImplementation()!;
+    w.create.mockImplementation(async request => { await new Promise<void>(done => { release = done; }); return original(request); });
+    const source = w.start(), ticking = w.runtime.tick(); await Promise.resolve(); await Promise.resolve();
+    await w.runtime.cancel({ runId: source.id, expectedRevision: source.revision }); release(); await ticking;
+    expect(w.sendWorker).not.toHaveBeenCalled(); expect(w.discardWorker).toHaveBeenCalledWith('worker-1'); expect(w.flow.status(source.id, 'owner').status).toBe('cancelled');
+  });
+  it('rechecks the final submission after queued cancellation and never sends a first turn', async () => {
+    const w = world(); let submit!: () => void; w.sendWorker.mockImplementation(async (_id, _prompt, authorize) => { submit = authorize; });
+    const source = w.start(); await w.runtime.tick(); const bound = w.flow.status(source.id, 'owner'); await w.runtime.cancel({ runId: source.id, expectedRevision: bound.revision });
+    expect(() => submit()).toThrow(/changed/); expect(w.flow.status(source.id, 'owner').status).toBe('cancelled'); expect(w.create).toHaveBeenCalledTimes(1);
+  });
+  it('records delayed queue failures immediately and notifies an unchanged blocker only once', async () => {
+    const w = world(); let failed!: (error: unknown) => void;
+    w.sendWorker.mockImplementation(async (_id, _prompt, _authorize, onFailure) => { failed = onFailure; });
+    const source = w.start(); await w.runtime.tick(); failed(new Error('Synthetic queued delivery failure')); await w.runtime.tick(); await Promise.resolve();
+    expect(w.flow.status(source.id, 'owner').steps[0]!.reason).toContain('Synthetic queued delivery failure'); expect(w.send).toHaveBeenCalledTimes(1);
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 61000); await w.runtime.tick(); expect(w.send).toHaveBeenCalledTimes(1); clock.mockRestore();
+    failed(new Error('Duplicate delivery callback')); expect(w.flow.status(source.id, 'owner').steps[0]!.reason).toContain('Synthetic queued delivery failure');
+  });
+});

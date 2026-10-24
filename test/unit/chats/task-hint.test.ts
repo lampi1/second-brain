@@ -39,6 +39,17 @@ function fixture() {
 }
 
 describe('task hint (#158, #170)', () => {
+  it('checks host authorization immediately before a delayed first send', async () => {
+    const f = fixture();
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, goal: 'Routine task', doneWhen: ['A'] }, 'app', f.role);
+    let allowed = true;
+    const sent = f.m.send(c.id, 'Start the routine step.', undefined, false, 'Routine', false, { kind: 'app' }, {
+      beforeSubmit() { if (!allowed) throw new Error('Routine was cancelled'); }, submitted() {}, failed() {},
+    });
+    allowed = false;
+    await expect(sent).rejects.toThrow('Routine was cancelled');
+    expect(f.sent).toEqual([]);
+  });
   it('a chat the Orchestrator opens with doneWhen gets the criteria as stored; a follow-up gets them again with its version', async () => {
     const f = fixture();
     const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true });
