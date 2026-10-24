@@ -1,0 +1,252 @@
+<!doctype html>
+<!-- Routine page mockup C, "Tabella a binari": every run of every routine in one dense table with a metro line of its
+     steps, your actions pinned as the first rows, a run's timeline in a drawer on the right. Static proposal, no app code. -->
+<html lang="it"><head><meta charset="utf-8"><title>Routine · proposta C</title>
+<link rel="stylesheet" href="mockup.css">
+<style>
+.wrap { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 440px; gap: 0; margin: 0 calc(-1 * var(--page-gutter)); }
+.main { padding: 0 var(--page-gutter) 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.todo { display: flex; flex-direction: column; gap: 6px; }
+.trow { display: grid; grid-template-columns: 4px 1fr auto; gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-m); padding: 9px 12px 9px 0; overflow: hidden; }
+.trow .bar { align-self: stretch; margin: -9px 0; }
+.trow .bar.red { background: var(--red); } .trow .bar.amber { background: var(--amber); }
+.trow .q { font-weight: 600; }
+.trow .sy { display: flex; gap: 6px; }
+.mini-y { height: 30px; padding: 0 14px; border-radius: var(--r-s); border: 1px solid color-mix(in srgb, var(--green) 60%, transparent); font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.mini-n { height: 30px; padding: 0 12px; border-radius: var(--r-s); border: 1px solid var(--border-2); font-weight: 600; display: flex; align-items: center; }
+.grid { border: 1px solid var(--border); border-radius: var(--r-l); overflow: hidden; background: var(--surface); }
+.gh { display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: center; padding: 9px 12px; background: var(--surface-2); border-bottom: 1px solid var(--border); }
+.gh .f { display: flex; gap: 4px; flex-wrap: wrap; }
+.gr { display: grid; grid-template-columns: 40px 1fr 230px 130px 120px; gap: 10px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: var(--fs-s); }
+.gr.sel { background: var(--blue-bg); box-shadow: inset 3px 0 0 var(--blue); }
+.gr .ti { font-size: var(--fs-m); font-weight: 600; }
+.metro { display: flex; align-items: center; }
+.metro i { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--border-3); flex: none; background: var(--surface); }
+.metro b { flex: 1; height: 2px; background: var(--border-3); }
+.metro i.g { background: var(--green); border-color: var(--green); } .metro b.g { background: var(--green); }
+.metro i.r { background: var(--red); border-color: var(--red); box-shadow: 0 0 0 4px var(--red-bg); }
+.metro i.u { border-color: var(--blue); box-shadow: 0 0 0 4px var(--blue-bg); }
+.metro i.p { border-color: var(--red); border-style: dashed; }
+.colh { display: grid; grid-template-columns: 40px 1fr 230px 130px 120px; gap: 10px; padding: 6px 12px; font: 600 10.5px var(--font-small); letter-spacing: .08em; color: var(--text-4); text-transform: uppercase; border-bottom: 1px solid var(--border); }
+.drawer { border-left: 1px solid var(--border); background: var(--bg-2); padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow: hidden; }
+.vt { display: grid; grid-template-columns: 22px 1fr; gap: 0 10px; }
+.vt .r { display: flex; flex-direction: column; align-items: center; }
+.vt .r i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border-3); margin-top: 3px; }
+.vt .r b { flex: 1; width: 2px; background: var(--border-2); }
+.vt.g .r i { background: var(--green); border-color: var(--green); } .vt.g .r b { background: var(--green); }
+.vt.r1 .r i { background: var(--red); border-color: var(--red); }
+.vt .c { padding-bottom: 12px; font-size: var(--fs-s); display: flex; flex-direction: column; gap: 5px; }
+.vt .c > b { font-size: var(--fs-m); }
+.rec { border: 1px solid var(--border); border-radius: var(--r-s); padding: 6px 8px; background: var(--surface); }
+.dtab { width: 100%; border-collapse: collapse; font-size: var(--fs-s); }
+.dtab td { padding: 8px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+</style></head><body>
+
+<p class="caption">Proposta C · Tabella a binari · schermata principale</p>
+<div class="frame">
+  <div class="topbar"><span class="logo"></span><span class="search">Cerca chat… <span class="kbd">Ctrl K</span></span><span class="spacer"></span>
+    <span class="pill amber">⚡ Prossima cosa per te <b>3</b></span><span class="pill">● 3 routine attive</span><span class="pill">IT</span></div>
+  <div class="body">
+    <nav class="side">
+      <div class="it">Grindhouse <span class="badge">3</span></div>
+      <div class="sec">LAVORO</div>
+      <div class="it">Task</div>
+      <div class="it on">Routine <span class="badge">3</span></div>
+      <div class="it">Fatto e standup</div>
+      <div class="sec">BRAIN</div>
+      <div class="it">Agenti</div><div class="it">Memoria</div><div class="it">Classificatori</div><div class="it">Mappa</div>
+      <div class="sec">ANDAMENTO</div>
+      <div class="it">Costi</div><div class="it">Qualità</div>
+      <div class="sec">APP</div>
+      <div class="it">Log</div><div class="it">Guida</div>
+    </nav>
+    <main class="page">
+      <div class="head"><h1>Routine</h1><span class="sub">4 routine · 5 esecuzioni · 3 per te</span><span class="grow"></span>
+        <span class="btn ghost">⇪ Esporta</span><span class="btn">◎ Prova a vuoto</span><span class="btn primary">▶ Avvia…</span></div>
+      <div class="wrap">
+        <div class="main">
+          <div class="todo">
+            <span class="label">Tocca a te · 3</span>
+            <div class="trow"><span class="bar red"></span><div><div class="q">Sposta le 37 licenze in produzione: lo esegui tu?</div><div class="faint" style="font-size:var(--fs-s)">Spostamento licenze · step 2 · comando pronto con licenze.csv · test 37/37 ok</div></div>
+              <div class="sy"><span class="btn" style="background:var(--red);border-color:var(--red);color:#fff">▶ Esegui</span><span class="mini-n">Dopo</span></div></div>
+            <div class="trow"><span class="bar amber"></span><div><div class="q">Riprovo la Verifica del bug 48213?</div><div class="faint" style="font-size:var(--fs-s)">2 test su 148 rossi su Edge · tentativo 2 di 3 · No = torno alla Correzione</div></div>
+              <div class="sy"><span class="mini-y">✓ Sì</span><span class="mini-n">✕ No</span></div></div>
+            <div class="trow"><span class="bar amber"></span><div><div class="q">Passo Bug 48190 alla nuova versione v8 della routine?</div><div class="faint" style="font-size:var(--fs-s)">v8 aggiunge «Revisione PR». Step fatti: 1. No = resta su v7 fino alla fine</div></div>
+              <div class="sy"><span class="mini-y">✓ Sì</span><span class="mini-n">✕ No</span></div></div>
+          </div>
+          <div class="grid">
+            <div class="gh"><span class="toggle on"></span><div><b>Bugfix automatico</b> <span class="faint">v7 · ultima 12 min fa</span><div class="f" style="margin-top:4px"><span class="chip blue">DevOps · Bug</span><span class="chip">Air\Backend</span><span class="chip green">+ ai-ok</span><span class="chip red">− ai-needs-human</span><span class="chip">≤ 4/ora</span><span class="chip">1 run per item</span></div></div>
+              <div class="row"><span class="chip amber">Coda 92</span><span class="btn ghost">Svuota…</span><span class="btn ghost">Filtri</span></div></div>
+            <div class="colh"><span></span><span>Work item</span><span>Passaggi</span><span>Stato</span><span>Prossimo</span></div>
+            <div class="gr sel"><span class="dot red"></span><div><div class="ti ell">Login SSO fallisce su Edge</div><span class="faint">Bug 48213 · 14:01</span></div>
+              <div class="metro"><i class="g"></i><b class="g"></b><i class="g"></i><b class="g"></b><i class="r"></i><b></b><i></i><b></b><i></i></div><span class="chip red">ferma · Verifica</span><span class="faint">tocca a te ↑</span></div>
+            <div class="gr"><span class="dot blue"></span><div><div class="ti ell">Export CSV tronca oltre 10k</div><span class="faint">Bug 48190 · 14:20</span></div>
+              <div class="metro"><i class="g"></i><b class="g"></b><i class="u"></i><b></b><i></i><b></b><i></i><b></b><i></i></div><span class="chip blue">Correzione · 6 min</span><span class="faint">nessuna azione</span></div>
+            <div class="gr"><span class="dot green"></span><div><div class="ti ell">Totale ordine senza sconto</div><span class="faint">Bug 48177 · 13:10</span></div>
+              <div class="metro"><i class="g"></i><b class="g"></b><i class="g"></i><b class="g"></b><i class="g"></i><b class="g"></b><i class="g"></i><b class="g"></b><i class="g"></i></div><span class="chip green">finita · PR #312</span><span class="faint">—</span></div>
+            <div class="gh"><span class="toggle on"></span><div><b>Spostamento licenze</b> <span class="faint">v2 · a mano · 📎 csv</span></div><div class="row"><span class="chip">Coda 0</span></div></div>
+            <div class="gr"><span class="dot amber"></span><div><div class="ti ell">Licenze Team Air → Team Fly</div><span class="faint">Task 48102 · 📎 licenze.csv</span></div>
+              <div class="metro"><i class="g"></i><b class="g"></b><i class="p"></i><b></b><i></i></div><span class="chip prod">prod · tocca a te</span><span class="faint">Esegui ↑</span></div>
+            <div class="gh" style="border-bottom:0"><span class="toggle"></span><div class="muted"><b>Deploy prod</b> · solo prova a vuoto &nbsp;·&nbsp; <b>Note di rilascio</b> · in pausa</div><span></span></div>
+          </div>
+        </div>
+        <aside class="drawer">
+          <div class="row"><b class="grow" style="font-size:var(--fs-l)">Login SSO fallisce su Edge</b><span class="faint">✕</span></div>
+          <div class="faint" style="font-size:var(--fs-s)">Bug 48213 ↗ · Bugfix automatico v7 · da evento DevOps 14:01</div>
+          <div class="row"><span class="btn">⏸ Pausa</span><span class="btn">↺ Riparti da…</span><span class="btn danger">Annulla</span></div>
+          <div class="vt g"><div class="r"><i></i><b></b></div><div class="c"><b>1 · Analisi</b><span class="muted">Scout · Sonnet 5.5 · 4 min</span>
+            <span class="rec mono">bug-context.sql · test · sola lettura · 0,4 s · 12 righe · exit 0</span></div></div>
+          <div class="vt g"><div class="r"><i></i><b></b></div><div class="c"><b>2 · Correzione</b><span class="muted">Artisan · Opus 5.5 · 9 min · AuthRedirect.cs +14 −3</span></div></div>
+          <div class="vt r1"><div class="r"><i></i><b></b></div><div class="c"><b style="color:var(--red)">3 · Verifica · ferma</b>
+            <span>«146 verdi, 2 rossi su Edge: il cookie si perde dopo il redirect.»</span>
+            <span class="rec mono">run-tests.ps1 · sha 9c1e…a7 · -Filter Auth -Env test<br>14:12→14:16 · exit 1 · app (runner)</span>
+            <div class="row"><span class="chip red">146/148</span><span class="chip">log-test.txt</span><span class="btn ghost">Apri chat ↗</span></div></div></div>
+          <div class="vt"><div class="r"><i></i><b></b></div><div class="c"><b class="muted">4 · Revisione PR</b></div></div>
+          <div class="vt"><div class="r"><i></i></div><div class="c"><b class="muted">5 · Aggiorna work item</b></div></div>
+          <div class="field faint" style="margin-top:auto">✎ Scrivi allo step 3…</div>
+        </aside>
+      </div>
+    </main>
+  </div>
+</div>
+
+<p class="caption">Proposta C · Avvia (work item + allegato) nel pannello</p>
+<div class="frame">
+  <div class="topbar"><span class="logo"></span><span class="search">Cerca chat… <span class="kbd">Ctrl K</span></span><span class="spacer"></span>
+    <span class="pill amber">⚡ Prossima cosa per te <b>3</b></span><span class="pill">● 3 routine attive</span><span class="pill">IT</span></div>
+  <div class="body">
+    <nav class="side">
+      <div class="it">Grindhouse <span class="badge">3</span></div>
+      <div class="sec">LAVORO</div>
+      <div class="it">Task</div>
+      <div class="it on">Routine <span class="badge">3</span></div>
+      <div class="it">Fatto e standup</div>
+      <div class="sec">BRAIN</div>
+      <div class="it">Agenti</div><div class="it">Memoria</div><div class="it">Classificatori</div><div class="it">Mappa</div>
+      <div class="sec">ANDAMENTO</div>
+      <div class="it">Costi</div><div class="it">Qualità</div>
+      <div class="sec">APP</div>
+      <div class="it">Log</div><div class="it">Guida</div>
+    </nav>
+    <main class="page">
+      <div class="head" style="opacity:.4"><h1>Routine</h1></div>
+      <div class="wrap"><div class="main" style="opacity:.3"><div class="grid" style="height:400px"></div></div>
+        <aside class="drawer" style="background:var(--surface)">
+          <div class="row"><b class="grow" style="font-size:var(--fs-l)">Avvia una routine</b><span class="faint">✕</span></div>
+          <span class="label">Routine</span><div class="field">Bugfix automatico · v7 ▾</div>
+          <span class="label">Work item · link o numero</span><div class="field mono">48231</div>
+          <div class="rec" style="display:flex;flex-direction:column;gap:4px;padding:10px">
+            <div class="row"><span class="chip red">Bug</span><b class="ell">Il PDF della fattura arrotonda male il totale</b></div>
+            <span class="faint" style="font-size:var(--fs-s)">Air\Backend · Sprint 44 · fatture, ai-ok · Active</span>
+            <div class="row"><span class="chip green">✓ nei filtri</span><span class="chip green">✓ nessun doppione</span></div></div>
+          <span class="label">Allegato</span>
+          <div class="drop" style="text-align:left;display:flex;gap:10px;align-items:center;border-style:solid">📄 <div class="grow"><b>casi-fattura.txt</b><div class="mono faint">5 righe · sha 8d21…4f</div></div><span class="faint">✕</span></div>
+          <span class="label">Parametri</span>
+          <div class="row"><span class="field grow">Ambiente test ▾</span><span class="field grow">Tentativi 3</span></div>
+          <div style="margin-top:auto;display:flex;flex-direction:column;gap:8px">
+            <span class="faint" style="font-size:var(--fs-s)">Stessi passaggi di un avvio automatico. Nessuno step prod parte da solo.</span>
+            <div class="row"><span class="btn">Prova a vuoto</span><span class="grow"></span><span class="btn primary big">▶ Avvia</span></div></div>
+        </aside></div>
+    </main>
+  </div>
+</div>
+
+<p class="caption">Proposta C · Prova a vuoto (dry-run) nel pannello</p>
+<div class="frame">
+  <div class="topbar"><span class="logo"></span><span class="search">Cerca chat… <span class="kbd">Ctrl K</span></span><span class="spacer"></span>
+    <span class="pill amber">⚡ Prossima cosa per te <b>3</b></span><span class="pill">● 3 routine attive</span><span class="pill">IT</span></div>
+  <div class="body">
+    <nav class="side">
+      <div class="it">Grindhouse <span class="badge">3</span></div>
+      <div class="sec">LAVORO</div>
+      <div class="it">Task</div>
+      <div class="it on">Routine <span class="badge">3</span></div>
+      <div class="it">Fatto e standup</div>
+      <div class="sec">BRAIN</div>
+      <div class="it">Agenti</div><div class="it">Memoria</div><div class="it">Classificatori</div><div class="it">Mappa</div>
+      <div class="sec">ANDAMENTO</div>
+      <div class="it">Costi</div><div class="it">Qualità</div>
+      <div class="sec">APP</div>
+      <div class="it">Log</div><div class="it">Guida</div>
+    </nav>
+    <main class="page">
+      <div class="head" style="opacity:.4"><h1>Routine</h1></div>
+      <div class="wrap" style="grid-template-columns:1fr 680px"><div class="main" style="opacity:.3"><div class="grid" style="height:400px"></div></div>
+        <aside class="drawer" style="background:var(--surface)">
+          <div class="row"><b class="grow" style="font-size:var(--fs-l)">Prova a vuoto · Deploy prod v1</b><span class="chip green">non esegue nulla</span></div>
+          <div class="row"><span class="chip">1 automatico</span><span class="chip prod">3 li esegui tu</span><span class="chip green">✓ parametri</span><span class="chip green">✓ hash</span></div>
+          <table class="dtab">
+            <tr><td>1</td><td><b>Controllo pre-deploy</b><div class="cmd" style="margin-top:4px">sqlcmd -S <span class="p">air-prod-sql</span> -d <span class="p">Air</span> -i pre-deploy-check.sql</div></td><td><span class="chip prod">lo esegui tu</span></td></tr>
+            <tr><td>2</td><td><b>Migrazioni DB</b> <span class="faint">📎 migrazioni.txt · 4</span><div class="cmd" style="margin-top:4px">sqlcmd -S <span class="p">air-prod-sql</span> -d <span class="p">Air</span> -i <span class="p">2026-10-24_01_fatture.sql</span> (+3)</div></td><td><span class="chip prod">lo esegui tu</span></td></tr>
+            <tr><td>3</td><td><b>Smoke test</b><div class="cmd" style="margin-top:4px">pwsh smoke.ps1 -Env <span class="p">test</span></div></td><td><span class="chip green">automatico</span></td></tr>
+            <tr><td>4</td><td><b>Release Azure</b><div class="cmd" style="margin-top:4px">az pipelines release create --project <span class="p">Air</span> --definition-name <span class="p">"Air-Prod"</span> --artifact-metadata-list <span class="p">air-build=20261024.3</span></div></td><td><span class="chip prod">lo esegui tu</span></td></tr>
+          </table>
+          <div class="row" style="margin-top:auto"><span class="grow"></span><span class="btn">Chiudi</span><span class="btn" style="opacity:.55">Avvio reale spento: solo prova</span></div>
+        </aside></div>
+    </main>
+  </div>
+</div>
+<p class="caption">Proposta C · Esporta per un cloud agent (pannello)</p>
+<div class="frame">
+  <div class="topbar"><span class="logo"></span><span class="search">Cerca chat… <span class="kbd">Ctrl K</span></span><span class="spacer"></span>
+    <span class="pill amber">⚡ Prossima cosa per te <b>3</b></span><span class="pill">● 3 routine attive</span><span class="pill">IT</span></div>
+  <div class="body">
+    <nav class="side">
+      <div class="it">Grindhouse <span class="badge">3</span></div>
+      <div class="sec">LAVORO</div>
+      <div class="it">Task</div>
+      <div class="it on">Routine <span class="badge">3</span></div>
+      <div class="it">Fatto e standup</div>
+      <div class="sec">BRAIN</div>
+      <div class="it">Agenti</div><div class="it">Memoria</div><div class="it">Classificatori</div><div class="it">Mappa</div>
+      <div class="sec">ANDAMENTO</div>
+      <div class="it">Costi</div><div class="it">Qualità</div>
+      <div class="sec">APP</div>
+      <div class="it">Log</div><div class="it">Guida</div>
+    </nav>
+    <main class="page">
+      <div class="head" style="opacity:.4"><h1>Routine</h1></div>
+      <div class="wrap" style="grid-template-columns:1fr 900px"><div class="main" style="opacity:.3"><div class="grid" style="height:400px"></div></div>
+        <aside class="drawer" style="background:var(--surface);gap:14px">
+      <div class="row"><h2 class="grow" style="margin:0;font:600 var(--fs-xl) var(--font-display)">Esporta routine · Bugfix automatico v7</h2><span class="chip green">nessun segreto dentro</span></div>
+      <div class="exp">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <span class="label">Cosa contiene</span>
+          <ul>
+            <li>Passaggi, istruzioni, criteri di uscita, evidenze richieste</li>
+            <li>Per ogni step: ruolo, motore, modello e sforzo fissati</li>
+            <li>Skill usate (SKILL.md) con hash</li>
+            <li>Script e query con hash e parametri tipizzati</li>
+            <li>Strumenti MCP richiesti (solo i nomi)</li>
+            <li>Trigger e filtri (tag, id, area, max/ora)</li>
+            <li>Step prod marcati: fuori dall'app restano «lo esegui tu»</li>
+            <li class="no">Token, password, connessioni: chiesti all'avvio</li>
+          </ul>
+          <span class="label">Dove deve girare</span>
+          <div class="target"><span class="on">Questa app</span><span class="on">Claude Code (cloud)</span><span>Cursor Cloud Agents</span><span>Codex cloud</span></div>
+          <div class="row" style="font-size:var(--fs-s)"><span class="chip green">✓ Claude Code: stessi modelli</span><span class="chip amber">Cursor: step 5 senza Haiku 5.5</span></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;min-width:0">
+          <span class="label">Anteprima</span>
+          <div class="tree">bugfix-automatico.routine/<br>├ routine.yaml<br>├ lock.json <span class="faint">(hash di tutto)</span><br>├ skills/bug-triage/SKILL.md<br>├ scripts/run-tests.ps1<br>├ queries/bug-context.sql<br>└ README.md <span class="faint">(come avviarla)</span></div>
+<div class="yaml"><span class="k">routine</span>: bugfix-automatico
+<span class="k">version</span>: 7
+<span class="k">steps</span>:
+  - <span class="k">id</span>: analyze
+    <span class="k">role</span>: Scout
+    <span class="k">engine</span>: claude-code
+    <span class="k">model</span>: claude-sonnet-5-5
+    <span class="k">effort</span>: medium
+    <span class="k">skills</span>: [bug-triage@41c0e2]
+  - <span class="k">id</span>: verify
+    <span class="k">run</span>: scripts/run-tests.ps1@9c1ea7
+    <span class="k">params</span>: { Filter: Auth, Env: test }
+  <span class="c"># … 3 passaggi</span></div>
+        </div>
+      </div>
+      <div class="row"><span class="faint grow" style="font-size:var(--fs-s)">Reimportabile qui o in un'altra installazione: stesso risultato con gli stessi modelli.</span><span class="btn">Copia prompt di avvio</span><span class="btn primary big">⇩ Scarica .zip</span></div>
+        </aside></div>
+    </main>
+  </div>
+</div>
+</body></html>
