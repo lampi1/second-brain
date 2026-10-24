@@ -21,6 +21,8 @@ export function parseCards(answer: string, digest: PulseDigest, previous: PulseC
   for (const value of (raw as { cards: unknown[] }).cards.slice(0, 4)) {
     if (!value || typeof value !== 'object') continue;
     const c = value as Record<string, unknown>, type = c.type as PulseType;
+    // ideas come only from the user's «Manutenzione» now (ADR 0149): the Battito never makes an idea card
+    if (type === 'idea') continue;
     if (!PULSE_TYPES.includes(type) || !validText(c.title, 80) || !validText(c.body, 280) || !validText(c.why, 160)
       || !Array.isArray(c.refs) || c.refs.length < 1 || c.refs.length > 3 || !Array.isArray(c.places) || !c.places.length || c.places.length > 4) continue;
     const refs = c.refs.map(r => typeof r === 'string' ? digest.entries.find(e => e.id === r)?.ref : undefined);

@@ -2,7 +2,8 @@
 // newest first; a decision is checked against a fresh read of its source (still open, that side still possible) and run
 // through the source's own path; the count for the sidebar badge, pushed as proposals:changed when it changes (after a
 // decision, an event of a source, or the minute's check). The "Tieni" marks on applied changes are kept in userData
-// (proposals-reviewed.json, small: 60 days at most). Used by index.ts; unit tests: test/unit/proposals/service.test.ts.
+// (proposals-reviewed.json, small: 60 days at most). Skill and rule proposals from the app's other parts appear only
+// once the user presses «Manutenzione» (heldBack, ADR 0149). Used by index.ts; unit tests: test/unit/proposals/service.test.ts.
 import path from 'node:path';
 import { sortProposals, type Proposal, type ProposalDecide, type ProposalDecideResult, type ProposalSource, type ProposalsState } from '../../shared/proposals';
 import { readLocal, writeLocal } from '../agents/local-store';
@@ -37,7 +38,17 @@ export interface ProposalsOptions {
   /** the count changed */
   emit?: (count: number) => void;
   sources?: readonly Source[];
+  /** when the user last pressed «Manutenzione» (ms; null = never): the skill and rule proposals the app's other parts
+   *  make wait for it (ADR 0149); absent = nothing is held */
+  clickAt?: () => number | null;
 }
+
+/** The sources whose skill and rule proposals wait for the user's «Manutenzione» (ADR 0149): the skill candidates
+ *  and the Battito's learned rules. The maintenance's own cards, applied changes, settings, trials and tiers do not. */
+const HELD: readonly ProposalSource[] = ['candidate', 'pulse'];
+/** A held card made after the last click: hidden until the next one. */
+export const heldBack = (c: Proposal, clickAt: number | null): boolean =>
+  HELD.includes(c.source) && (clickAt === null || Date.parse(c.provenance.at) > clickAt);
 
 export class ProposalsService {
   private readonly ports: ProposalPorts;
@@ -56,7 +67,7 @@ export class ProposalsService {
     const read = await Promise.allSettled(this.sources.map(s => (s.available(this.ports) ? s.list(this.ports) : Promise.resolve([]))));
     const problems: ProposalSource[] = [], items: Proposal[] = [];
     read.forEach((r, i) => {
-      if (r.status === 'fulfilled') items.push(...r.value);
+      if (r.status === 'fulfilled') { const at = this.o.clickAt ? this.o.clickAt() : undefined; items.push(...(at === undefined ? r.value : r.value.filter(c => !heldBack(c, at)))); }
       else { problems.push(this.sources[i]!.id); log.warn('proposals', 'source not read', { data: { source: this.sources[i]!.id }, cause: errText(r.reason), hint: 'the deck shows the other sources; it reads this one again next time' }); }
     });
     for (const it of items) if (it.provenance.files) it.provenance.files = it.provenance.files.map(f => shortPath(f, root));

@@ -6,6 +6,8 @@
 // every page load (ui:command 'clock'). The comparison queue (compare/queue.ts) is not wired here: the demo runs no
 // engine, so its side b never runs (its experiments are switched in memory, demo.ts).
 import type { CanonicalResult } from '../shared/agents';
+import { newIssueUrl } from './brainmodel/issue-open';
+import { hiddenOpened } from './window';
 import { sysEn, type SysCode, type SysParams } from '../shared/sys';
 import type { StrategyPlan } from '../shared/strategy';
 import { app, safeStorage } from 'electron';
@@ -141,13 +143,14 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     // the log step of the Manutenzione (#150): made-up logs, whose new groups become app bug cards (ADR 0132)
     logDir: () => demoLogs,
     findings: logs => research.afterPass(logs) });
-  // the maintenance with research (ADR 0132) on the demo chats: past findings written once, a research proposes two more
-  const demoOrchestrator = () => chats.list().find(c => c.isOrchestrator && !c.closedAt);
+  // the one-click maintenance (ADR 0132, 0149) on the demo chats: past findings written once, a research proposes two
+  // more; an approved issue card opens nothing (the demo records the page it would open)
   const research: ResearchService = new ResearchService({ userData: ctx.userData, lang: uiLang, root: () => demoBrainRoot, appVersion: () => app.getVersion(),
     issuesUrl: () => 'https://github.com/lampi1/second-brain/issues', now,
     engines: () => [{ harness: 'claude', label: 'Claude', web: true, effort: true }, { harness: 'cursor', label: 'Cursor', web: true, effort: false }],
     bestModel: h => (h === 'claude' ? 'opus' : null), runs: () => demoLearningRuns(now()), roles,
-    brain: { state: () => brainModel.state(), apply: p => brainModel.applyResearch(p), noise: (key, known) => { brainModel.noise(key, known); } },
+    brain: { state: () => brainModel.state(), apply: p => brainModel.applyResearch(p), noise: (key, known) => { brainModel.noise(key, known); }, maintain: () => brainModel.maintain() },
+    issues: { open: async (repo, issue) => { const url = newIssueUrl(repo, issue); hiddenOpened.push(`external ${url}`); return { url, via: 'browser' }; } },
     chats: {
       // the demo answers at once (frozen): the chat starts without its prompt, the research is registered, then the
       // canned findings arrive and the prompt runs (running → idle ends the research)
@@ -162,8 +165,8 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
       },
       get: id => chats.list().find(c => c.id === id), stop: id => chats.stop(id),
     },
-    orchestrator: { open: () => !!demoOrchestrator(), send: async text => { const o = demoOrchestrator(); if (!o) return false; await chats.send(o.id, text); return true; } },
-    changed: () => ctx.emitter.emit('maintenance:changed', undefined) });
+    changed: () => ctx.emitter.emit('maintenance:changed', undefined),
+    done: d => ctx.emitter.emit('maintenance:done', d) });
   writeDemoResearch(research.store, now());
   ctx.emitter.tap((channel, payload) => { if (channel === 'chat:updated') research.chatUpdated(payload as ChatSummary); });
   if (!brainModel.report()) await brainModel.maintain('migration').catch(e => log.warn('demo', 'demo migration failed', { cause: errText(e), hint: 'the Skill page shows the demo brain without the migrated skills' }));

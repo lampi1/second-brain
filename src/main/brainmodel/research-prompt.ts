@@ -1,8 +1,7 @@
-// The research's prompt (ADR 0132): the method, which the user sees in the «Manutenzione» dialog and may change at every
-// run (the last one they ran comes back next time, «Ripristina» gives this one again), and the app's fixed frame after
-// it (tools, limits, safety, card language), shown read-only. The method is in the UI language (it is the user's text
-// to read and edit; German gets the English one); the frame is in English like the app's other prompts. Pure. Used by
-// research.ts; tests: test/unit/brainmodel/research.test.ts.
+// The research's prompt (ADR 0132, 0149): the method and the app's fixed frame after it (tools, limits, safety, card
+// language). Since the one-click «Manutenzione» (ADR 0149) nobody edits it: the method is in the UI language (German
+// gets the English one), the frame in English like the app's other prompts. Pure. Used by research.ts; tests:
+// test/unit/brainmodel/research.test.ts.
 import type { Lang } from '../../shared/contract';
 import { RESEARCH_CAPS } from '../../shared/maintenance-research';
 import { LANG_NAME } from '../locale';
@@ -17,7 +16,7 @@ Metodo:
 5. Ogni testo aggiunto al brain costa token in ogni lavoro: preferisci togliere o unire. Proponi di aggiungere solo quando almeno 3 lavori mostrano il bisogno.
 6. Per ogni proposta scrivi, con i numeri del pacchetto: cosa aggiunge, cosa toglie, perché, cosa ti aspetti di vedere dopo e come si misura, cosa può andare storto.
 7. Proponi anche cosa dimenticare: skill o regole mai usate o superate (i fatti della memoria li riordina già la pulizia gratuita).
-8. Idee e bug sul codice dell'app vanno come app-idea o app-bug, con la issue già scritta bene (contesto, passi o prove, proposta, come verificarla).
+8. Idee e bug sul codice dell'app vanno come app-idea o app-bug, con la issue già scritta bene (contesto, passi o prove, proposta, come verificarla): l'utente vede una card «Apro la issue?» e, se approva, la issue si apre su GitHub così com'è. Le app-idea finiscono anche tra le Idee dell'IA.
 9. Al massimo una proposta audace (bold): un cambio più grande che secondo te vale la pena, con il rischio spiegato.
 Meglio due proposte solide che cinque deboli. Se non trovi niente che regga, dillo.`;
 
@@ -31,14 +30,14 @@ Method:
 5. Every text added to the brain costs tokens in every job: prefer removing or merging. Propose an addition only when at least 3 jobs show the need.
 6. For each proposal write, with the pack's numbers: what it adds, what it removes, why, what you expect to see afterwards and how it is measured, what could go wrong.
 7. Propose what to forget too: skills or rules never used or outdated (the free cleanup already tidies memory facts).
-8. Ideas and bugs about the app's code go as app-idea or app-bug, with the issue already well written (context, steps or evidence, proposal, how to verify it).
+8. Ideas and bugs about the app's code go as app-idea or app-bug, with the issue already well written (context, steps or evidence, proposal, how to verify it): the user sees a card «Open this issue?» and, when approved, it is opened on GitHub as written. App ideas also land in the AI's Idee.
 9. At most one bold proposal: a bigger change you think is worth it, with the risk explained.
 Two solid proposals beat five weak ones. If nothing holds up, say so.`;
 
 /** The method as shipped, in the UI language. */
 export const defaultPrompt = (lang: Lang): string => (lang === 'it' ? IT : EN);
 
-/** The longest method the dialog accepts. */
+/** The longest method a research accepts. */
 export const MAX_PROMPT = 12_000;
 
 /** The fixed part after the method: never edited by the user. */

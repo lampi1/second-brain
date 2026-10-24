@@ -1,11 +1,12 @@
-// The maintenance's findings and runs (ADR 0132), kept in userData/maintenance-research.json: every card a research or
-// the free cleanup proposed (open, approved, rejected, an issue asked of the Orchestrator, dismissed), the last
-// researches with their cost (the dialog's estimate) and the prompt the user last ran (shown again next time). Decided
+// The maintenance's findings and runs (ADR 0132, 0149), kept in userData/maintenance-research.json: every card a research
+// or the free cleanup proposed (open, approved with its change or its issue's link, rejected; issue-asked and dismissed
+// from the old «Idee dell'app» tab), the last researches with their cost and the last click's end (the button shows it,
+// and the time of the last click holds back the cards other parts of the app propose, ADR 0149). Decided
 // cards older than 90 days are dropped; at most 400 cards and 30 runs. Used by research.ts; tests:
 // test/unit/brainmodel/research.test.ts.
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { RESEARCH_KINDS, type ResearchProposal, type ResearchRunInfo } from '../../shared/maintenance-research';
+import { RESEARCH_KINDS, type MaintenanceDone, type ResearchProposal, type ResearchRunInfo } from '../../shared/maintenance-research';
 import { readLocal, writeLocal } from '../agents/local-store';
 import { errText, log } from '../log';
 
@@ -13,7 +14,7 @@ const KEEP_MS = 90 * 86_400_000;
 const MAX_CARDS = 400;
 const MAX_RUNS = 30;
 
-interface Data { version: 1; proposals: ResearchProposal[]; runs: ResearchRunInfo[]; prompt?: string }
+interface Data { version: 1; proposals: ResearchProposal[]; runs: ResearchRunInfo[]; lastDone?: MaintenanceDone; clickAt?: number }
 
 export const researchId = (now: number): string => `r-${now.toString(36)}-${randomBytes(3).toString('hex')}`;
 
@@ -29,7 +30,8 @@ export class ResearchStore {
       version: 1,
       proposals: Array.isArray(raw?.proposals) ? raw.proposals.filter(p => !!p && typeof p.id === 'string' && (RESEARCH_KINDS as readonly string[]).includes(p.kind)) : [],
       runs: Array.isArray(raw?.runs) ? raw.runs.filter(r => !!r && typeof r.chatId === 'string') : [],
-      ...(typeof raw?.prompt === 'string' ? { prompt: raw.prompt } : {}),
+      ...(raw?.lastDone && typeof raw.lastDone.at === 'number' ? { lastDone: raw.lastDone } : {}),
+      ...(typeof raw?.clickAt === 'number' ? { clickAt: raw.clickAt } : {}),
     };
   }
   private save(): void {
@@ -54,7 +56,7 @@ export class ResearchStore {
     this.save();
     return structuredClone(this.data.proposals[i]);
   }
-  update(id: string, patch: Partial<Pick<ResearchProposal, 'state' | 'decidedAt' | 'changeId'>>): ResearchProposal | undefined {
+  update(id: string, patch: Partial<Pick<ResearchProposal, 'state' | 'decidedAt' | 'changeId' | 'issueUrl' | 'ideaSaved'>>): ResearchProposal | undefined {
     const p = this.data.proposals.find(x => x.id === id);
     if (!p) return undefined;
     Object.assign(p, patch);
@@ -67,9 +69,9 @@ export class ResearchStore {
     if (i >= 0) this.data.runs[i] = structuredClone(r); else this.data.runs.push(structuredClone(r));
     this.save();
   }
-  prompt(): string | undefined { return this.data.prompt; }
-  setPrompt(text: string | undefined): void {
-    if (text === undefined) delete this.data.prompt; else this.data.prompt = text;
-    this.save();
-  }
+  lastDone(): MaintenanceDone | undefined { return this.data.lastDone ? structuredClone(this.data.lastDone) : undefined; }
+  setLastDone(d: MaintenanceDone): void { this.data.lastDone = structuredClone(d); this.save(); }
+  /** When the user last pressed «Manutenzione» (ms), null = never. */
+  clickAt(): number | null { return this.data.clickAt ?? null; }
+  setClickAt(at: number): void { this.data.clickAt = at; this.save(); }
 }

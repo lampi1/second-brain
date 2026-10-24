@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { HeadlineState } from '../../shared/contract';
 import type { Wired, Ctx } from '../wiring';
-import { electronNode, runNode } from '../brain/node';
+import { ideaTool, saveAiIdea } from '../brain/save-idea';
 import { localDay } from '../jobs/scheduler';
 import { PulseService } from './service';
 import { uiLang } from '../locale';
@@ -21,7 +21,6 @@ export function createPulse(s: Wired, ctx: Ctx, legacyHeadline: () => HeadlineSt
       return fs.readFileSync(file, 'utf8');
     } catch { return ''; }
   };
-  const tool = () => { const base = root(); return base ? path.join(base, 'ops', 'tools', 'mem.mjs') : null; };
   return new PulseService({ file: path.join(ctx.userData, 'pulse.json'), once: s.oneShot, runs: s.agentRuns,
     settings: () => s.brain.settings(), visible: () => { const w = ctx.window(); return !!w && !w.isDestroyed() && w.isVisible() && !w.isMinimized(); },
     calls: !process.env.SB_TEST && !process.env.VITEST && !process.env.SB_DEMO,
@@ -38,18 +37,8 @@ export function createPulse(s: Wired, ctx: Ctx, legacyHeadline: () => HeadlineSt
         const base = root(); return base && path.isAbsolute(e.file!) ? path.relative(base, e.file!).split(path.sep).join('/') : e.file!.split(path.sep).join('/');
       }))] }),
     emit: () => ctx.emitter.emit('pulse:changed', undefined), emitApprovals: () => ctx.emitter.emit('approvals:changed', undefined),
-    emitHeadline: st => ctx.emitter.emit('headline:changed', st), canSave: () => !!tool() && fs.existsSync(tool()!),
-    saveIdea: async c => {
-      const script = tool(), base = root(); if (!script || !base) throw Error('mem.mjs non disponibile');
-      const dir = path.join(ctx.userData, 'pulse-ideas'); fs.mkdirSync(dir, { recursive: true });
-      const temp = fs.mkdtempSync(path.join(dir, 'idea-'));
-      const file = path.join(temp, 'idea.txt');
-      fs.writeFileSync(file, `Idea: ${c.body}\nPerché: ${c.why}\nFonte: IA · Battito · ${c.why}\n`, { flag: 'wx' });
-      try {
-        const r = await runNode(electronNode(), script, ['idea', '--area', 'personale', '--per', 'owner', '--title', c.title, '--file', file], base);
-        if (r.code !== 0) throw Error('Salvataggio idea non riuscito');
-      } finally { fs.unlinkSync(file); fs.rmdirSync(temp); }
-    },
+    emitHeadline: st => ctx.emitter.emit('headline:changed', st), canSave: () => !!ideaTool(root()),
+    saveIdea: c => saveAiIdea({ root: root(), userData: ctx.userData, title: c.title, body: c.body, why: c.why, source: 'Battito' }),
     act: async c => {
       const chat = s.chats.list().find(x => x.isOrchestrator && !x.closedAt);
       if (!chat) throw Error('Apri prima l’Orchestrator');

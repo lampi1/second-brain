@@ -67,10 +67,11 @@ export function reduce(s: AppState, a: Action): AppState {
   switch (a.type) {
     case 'init': {
       const chats: Record<string, ChatSummary> = {};
-      for (const c of a.chats) chats[c.id] = withLedger(c, a.usage);
+      const listed = a.chats.filter(c => !c.research);
+      for (const c of listed) chats[c.id] = withLedger(c, a.usage);
       // keep chats that arrived by event while the initial load was in flight
       for (const id of s.order) if (!chats[id] && s.chats[id]) chats[id] = s.chats[id];
-      const order = [...a.chats.map(c => c.id), ...s.order.filter(id => !a.chats.some(c => c.id === id))];
+      const order = [...listed.map(c => c.id), ...s.order.filter(id => !listed.some(c => c.id === id))];
       const pending = dedupePending([...a.pending, ...s.pending]);
       return { ...s, ready: true, chats, order, pending, tabs: a.tabs, feed: mergeFeed(s.feed, a.feed), usage: a.usage ?? s.usage, info: a.info ?? s.info };
     }
@@ -86,6 +87,8 @@ export function reduce(s: AppState, a: Action): AppState {
       return { ...s, items: { ...s.items, [a.chatId]: merged.slice(-MAX_ITEMS) } };
     }
     case 'chat:updated': {
+      // the maintenance research (ADR 0149) works out of sight: never a strip, a list entry or a notice
+      if (a.chat.research) return s;
       const prev = s.chats[a.chat.id];
       const chat = withLedger(a.chat, s.usage);
       if (prev && shallowEqual(prev, chat)) return s;

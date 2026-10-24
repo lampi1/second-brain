@@ -60,8 +60,6 @@ export interface BrainModelDeps {
   now?: () => number;
 }
 
-const SIX_HOURS = 6 * 3600e3;
-
 export class BrainModelService {
   readonly log: ChangeLog;
   private readonly reportFile: string;
@@ -366,16 +364,17 @@ export class BrainModelService {
       suggest: goal => this.d.suggestSkills(goal), jobs: () => readJobs(path.join(this.d.userData, 'jobs.jsonl')) }, this.now());
   }
 
-  /** Timers run structural migration once, then safe maintenance every six hours; semantic edits remain deferred. */
+  /** The structural migration once, a minute after the start. Nothing else runs by itself: the cleanup, the memory's
+   *  tidy-up and every proposal wait for the user's «Manutenzione» (owner, 2026-10-24, ADR 0149; until then a timer
+   *  ran the safe jobs every six hours). */
   start(): void {
     if (!this.d.auto) return;
     const first = setTimeout(() => {
       const root = this.root();
       try { if (root && !this.report() && procedureSections(root).length) void this.maintain('migration', { auto: true }).catch(() => { /* logged */ }); } catch { /* unreadable brain */ }
     }, 60_000);
-    const every = setInterval(() => { void this.maintain(undefined, { auto: true }).catch(() => { /* logged */ }); }, SIX_HOURS);
-    first.unref?.(); every.unref?.();
-    this.timers.push(first, every);
+    first.unref?.();
+    this.timers.push(first);
   }
   stop(): void { for (const t of this.timers) { clearTimeout(t); clearInterval(t); } this.timers = []; }
 }

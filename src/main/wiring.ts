@@ -63,6 +63,9 @@ import type { BrainService, BrowserService, ChatService, TasksApi, SkillsApi } f
 import { SkillsService } from './skills/service';
 import { BrainModelService } from './brainmodel/service';
 import { issuesUrlOf, ResearchService } from './brainmodel/research';
+import { ghRun, openIssue } from './brainmodel/issue-open';
+import { hiddenOpened, hiddenRun } from './window';
+import { saveAiIdea } from './brain/save-idea';
 import { DailyPhrasesService } from './daily-phrases';
 import { researchTools } from './brainmodel/research-tools';
 import { createBrain } from './brain';
@@ -881,8 +884,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     // a pass the app ran by itself: a quiet feed event with Annulla (ADR 0102)
     applied: changes => { const e = maintenanceEvent(changes); if (e) brain.publish([e]); } });
   brainModelRef.current = brainModel;
-  // the maintenance with research (ADR 0132): the dialog's research chat, its cards in Proposte and «Idee dell'app»
-  const orchestratorChat = () => manager.list().find(c => c.isOrchestrator && !c.closedAt);
+  // the one-click maintenance (ADR 0132, 0149): the free cleanup, the invisible research chat, its cards in Proposte
   const issuesUrl = issuesUrlOf(app.getAppPath()), appIssuesUrl = () => issuesUrl;
   const research = new ResearchService({ userData: ctx.userData, lang: uiLang, root: () => brain.info().brainRoot, appVersion: () => app.getVersion(), issuesUrl: appIssuesUrl, appDir: () => app.getAppPath(),
     // engines that are on, read files (an API engine has no tools here) and report their cost (the cap is enforced on
@@ -891,11 +893,16 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     // the Claude CLI's «opus» is its strongest model, whatever its version; the others start on their CLI's default
     bestModel: h => (engineOf(h)?.kind === 'claude' ? 'opus' : null),
     runs: () => manager.runs.list(), roles: () => agents.list().profiles.filter(p => p.scope === 'role'),
-    brain: { state: () => brainModel.state(), apply: p => brainModel.applyResearch(p), noise: (key, known) => { brainModel.noise(key, known); } },
+    brain: { state: () => brainModel.state(), apply: p => brainModel.applyResearch(p), noise: (key, known) => { brainModel.noise(key, known); }, maintain: () => brainModel.maintain() },
     chats: { create: req => manager.create(req, 'app'), get: id => manager.list().find(c => c.id === id), stop: id => manager.stop(id) },
-    // «Apri issue» is the user's click: their request to the Orchestrator, as if typed (the permission rules still apply)
-    orchestrator: { open: () => !!orchestratorChat(), send: async text => { const o = orchestratorChat(); if (!o) return false; await manager.send(o.id, text); return true; } },
-    changed: () => ctx.emitter.emit('maintenance:changed', undefined) });
+    // an approved «Apri issue» card: gh with the user's own login, else GitHub's new-issue page already filled in; an
+    // agent's hidden run never reaches GitHub (it records the page like any link it would open)
+    issues: { open: (repo, issue) => openIssue(repo, issue, hiddenRun()
+      ? { run: () => Promise.reject(new Error('hidden run')), openUrl: async url => { hiddenOpened.push(`external ${url}`); } }
+      : { run: ghRun, openUrl: url => shell.openExternal(url) }) },
+    saveIdea: idea => saveAiIdea({ root: brain.info().brainRoot, userData: ctx.userData, ...idea, source: 'Manutenzione' }),
+    changed: () => ctx.emitter.emit('maintenance:changed', undefined),
+    done: d => ctx.emitter.emit('maintenance:done', d) });
   researchRef.current = research;
   ctx.emitter.tap((channel, payload) => { if (channel === 'chat:updated') research.chatUpdated(payload as ChatSummary); });
   addChatTools(researchTools(research));

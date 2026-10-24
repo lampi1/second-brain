@@ -1,13 +1,14 @@
-// The maintenance with research (ADR 0132): the data the «Manutenzione» dialog, the research chat's proposal tool, the
-// Proposte deck and the Memoria tab «Idee dell'app» share. The owner (2026-10-23): one always-visible «Manutenzione» in
-// the top bar; a free cleanup plus, on request, a research by the best model on the user's own history, brain and logs,
-// with a prompt the user sees and may change at every run; every finding is a card that says what it adds and removes
-// and why; forgetting is a proposal too; ideas and bugs about the app's code go to their own tab, with the issue already
-// written and «Apri issue» / «Apri tutte» handing it to the Orchestrator. Data only: main (brainmodel/research*.ts,
-// proposals/sources.ts) checks and stores, the renderer words. Used by the contract, main and the renderer.
+// The maintenance (ADR 0132, one click since ADR 0149): the data the «Manutenzione» button, the research chat's proposal
+// tool and the Proposte deck share. The owner (2026-10-24): ideas, skill and rule proposals and the memory cleanup
+// happen only when the user presses «Manutenzione»; one click runs the free cleanup and an invisible research by the best
+// model on the user's own history, brain and logs; every finding is a card that says what it adds and removes and why;
+// forgetting is a proposal too; an idea about the app also lands in Idee (the AI's side) and every idea or bug about the
+// app's code is a card «Apro la issue su GitHub?» that opens it at once when approved. Data only: main
+// (brainmodel/research*.ts, proposals/sources.ts) checks and stores, the renderer words. Used by the contract, main and
+// the renderer.
 import type { Effort, Harness } from './contract';
 
-/** What a proposal is about. Brain kinds go to Proposte, app kinds to «Idee dell'app». */
+/** What a proposal is about. Brain kinds change the brain; app kinds become GitHub issues (a card «Apri issue»). */
 // No memory kind: facts have their own store and review (rules/memory-records.ts, ADR 0129), and the free cleanup's
 // merge-memory job already rewrites or retires them with «Annulla».
 export const RESEARCH_KINDS = ['skill', 'rule', 'role', 'forget', 'bold', 'app-idea', 'app-bug'] as const;
@@ -51,6 +52,7 @@ export interface ResearchIssue {
   duplicateOf?: { number: number; url: string };
 }
 
+/** issue-asked and dismissed: the old «Idee dell'app» tab's states (ADR 0132), still read from older files */
 export type ResearchState = 'open' | 'approved' | 'rejected' | 'issue-asked' | 'dismissed';
 
 /** One finding, as a card. Every text is plain words in the user's language. */
@@ -85,9 +87,13 @@ export interface ResearchProposal {
   decidedAt?: number;
   /** the change log entry an approval wrote (its Annulla) */
   changeId?: string;
+  /** an app card approved: the issue it opened on GitHub (or the new-issue page opened in the browser) */
+  issueUrl?: string;
+  /** an app idea also written to the brain's Idee (the AI's side) */
+  ideaSaved?: boolean;
 }
 
-/** What the user picks in the dialog to start a research (after the free cleanup, which always runs first). */
+/** What a research runs with: the app's best choice (ResearchService.defaults), never a dialog since ADR 0149. */
 export interface ResearchOptions {
   harness: Harness;
   /** null = the engine's default */
@@ -97,7 +103,7 @@ export interface ResearchOptions {
   web: boolean;
   /** the chat is stopped when its live cost passes this */
   capUsd: number;
-  /** the method, as the user left it in the dialog (the app's fixed frame is added after it) */
+  /** the method (the app's fixed frame is added after it) */
   prompt: string;
 }
 
@@ -118,32 +124,31 @@ export interface ResearchRunInfo {
   why?: string;
 }
 
-/** The dialog's data (maintenance:setup). */
-export interface MaintenanceSetup {
-  /** the app's method prompt, as shipped */
-  defaultPrompt: string;
-  /** the prompt of the last research (the user's edit), else the default */
-  prompt: string;
-  /** the fixed part the app adds after the prompt (tools, pack, safety): shown read-only */
-  frame: string;
-  /** the best choice the app knows now: the strongest model of an engine that is on */
-  defaults: { harness: Harness; model: string | null; effort: Effort | null; web: boolean; capUsd: number };
-  /** engines that are on, with web search or not */
-  engines: { harness: Harness; label: string; web: boolean; effort: boolean }[];
-  /** the median cost of the past researches; null = none yet («stima senza dati») */
-  estimate: { medianUsd: number; n: number } | null;
-  running: ResearchRunInfo | null;
-  last: ResearchRunInfo | null;
+/** The button's state (maintenance:status): a pass or a research running, and the last one's end. */
+export interface MaintenanceStatus {
+  /** the free cleanup is running (seconds) or the research is (minutes) */
+  running: boolean;
+  /** the research running now: its cost so far against its cap */
+  research: ResearchRunInfo | null;
+  /** the last one that ended */
+  last: MaintenanceDone | null;
+  /** a research can run (an engine that is on reads files and reports its cost); false = only the free cleanup */
+  canResearch: boolean;
 }
 
-/** The «Idee dell'app» tab (maintenance:ideas). */
-export interface AppIdeasState {
-  /** app-idea and app-bug proposals, open first, newest first */
-  items: ResearchProposal[];
-  /** the app repository's issues page (package.json bugs.url), null when unknown */
-  issuesUrl: string | null;
-  /** an Orchestrator is open (Apri issue needs one) */
-  orchestrator: boolean;
+/** What one click did, when it is all over (the end notice, maintenance:done). */
+export interface MaintenanceDone {
+  at: number;
+  /** free = only the zero-token cleanup ran (no engine for the research) */
+  state: ResearchRunState | 'free';
+  /** cards in Proposte about the brain (skill, rule, role, forget) */
+  proposals: number;
+  /** ideas written to Idee (the AI's side) */
+  ideas: number;
+  /** cards «Apri issue» */
+  issues: number;
+  costUsd: number;
+  why?: string;
 }
 
 /** Caps: what one research may propose, per family (the tool refuses more). */

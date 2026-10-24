@@ -40,7 +40,7 @@ export interface ProposalPorts {
   pulse?: { list(): PulseApproval[] | Promise<PulseApproval[]>; decide(id: string, decision: 'approve' | 'discard'): PulseResult | Promise<PulseResult> };
   policies?: { status(): Promise<unknown>; act(a: LearnAction): Promise<LearnResult> };
   /** the maintenance's findings for the brain (ADR 0132): open cards, applied through the change log on approval */
-  research?: { list(): ResearchProposal[]; approve(id: string): unknown; reject(id: string): unknown };
+  research?: { list(): ResearchProposal[]; approve(id: string): unknown; reject(id: string): unknown; repo?(): string | null };
   /** the reviewed marks (Tieni on an applied change) */
   reviewed: { has(id: string): boolean; mark(id: string): void };
 }
@@ -339,8 +339,9 @@ const policy: Source = {
 
 // ── the maintenance's findings (ADR 0132) ─────────────────────────────────────────────────────────────────────────────
 const RESEARCH_GROUP: Readonly<Record<string, ProposalGroup>> = { skill: 'skill', rule: 'rule', role: 'role', forget: 'forget' };
-/** The text the card is about, as it is: what a change adds, or what forgetting removes. */
+/** The text the card is about, as it is: what a change adds, what forgetting removes, or the issue as it will be opened. */
 function researchContent(x: ResearchProposal): string {
+  if (x.issue && !x.change) return x.issue.body;
   if (x.change) return x.change.target === 'skill' ? x.change.text : `> ${x.change.text.replace(/\n/g, '\n> ')}`;
   if (x.forget) return `\`${x.forget.what === 'rule' ? x.forget.name : `.claude/skills/${x.forget.name}/`}\``;
   return '';
@@ -353,12 +354,17 @@ const research: Source = {
     return p.research!.list().map(x => {
       const chat = x.chatId ? chats.find(c => c.id === x.chatId) : undefined;
       const role = x.change?.role;
+      // an idea or a bug about the app's code (or a bold idea that is one): a card that opens its issue on GitHub (ADR 0149)
+      const issue = !!x.issue && !x.change && (x.kind === 'app-idea' || x.kind === 'app-bug' || x.kind === 'bold');
+      const repo = issue ? p.research!.repo?.() ?? null : null;
       return card('research', x.id, {
-        group: x.kind === 'bold' ? RESEARCH_GROUP[x.change?.target ?? 'rule'] ?? 'rule' : RESEARCH_GROUP[x.kind] ?? 'rule', applied: false, title: x.title, content: researchContent(x),
+        group: issue ? 'issue' : x.kind === 'bold' ? RESEARCH_GROUP[x.change?.target ?? 'rule'] ?? 'rule' : RESEARCH_GROUP[x.kind] ?? 'rule', applied: false, title: issue ? x.issue!.title : x.title, content: researchContent(x),
         ask: { kind: 'research', finding: x.kind, adds: x.adds, removes: x.removes, why: x.why, expected: x.expected, risk: x.risk, evidence: x.evidence, sources: x.sources },
-        facts: [...(role ? [{ key: 'target' as const, value: role }] : []), ...(x.change?.name ? [{ key: 'target' as const, value: x.change.name }] : [])],
+        facts: [...(role ? [{ key: 'target' as const, value: role }] : []), ...(x.change?.name ? [{ key: 'target' as const, value: x.change.name }] : []),
+          ...(issue && repo ? [{ key: 'target' as const, value: repo }] : []), ...(issue && x.issue!.labels?.length ? [{ key: 'scope' as const, value: x.issue!.labels.join(', ') }] : []),
+          ...(issue && x.issue!.duplicateOf ? [{ key: 'before' as const, value: x.issue!.duplicateOf.url }] : [])],
         provenance: prov({ who: { kind: 'maintenance', id: x.chatId ? 'research' : 'cleanup' }, ...(chat ? { chat: { id: chat.id, title: chat.title } } : {}), at: iso(x.at), evidence: x.evidence }),
-        canApprove: true, canReject: true,
+        canApprove: !issue || !!repo, canReject: true, ...(issue && !repo ? { blocked: ['noRepo'] } : {}),
       });
     });
   },
