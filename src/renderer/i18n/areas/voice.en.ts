@@ -38,4 +38,13 @@ export const voiceEn: typeof voiceIt = {
   'voice.modelsMissing': ({ mb }: { mb: number }) => `To download once: ${mb} MB. Also starts by itself on the first Ctrl+M.`,
   'voice.downloading': ({ pct }: { pct: number }) => `Downloading… ${pct}%`,
   'voice.download': 'Download',
+  'mic.title': 'Microphone',
+  'mic.hint': 'The one that listens in voice mode and in recorded calls. Plug one in (USB too) and it is used at once.',
+  'mic.default': 'System default',
+  'mic.none': 'No microphone found. Plug one in: it shows up here by itself.',
+  'mic.away': ({ name }: { name: string }) => `“${name}” is not plugged in: using the default until it is back.`,
+  'mic.unnamed': ({ n }: { n: number }) => `Microphone ${n}`,
+  'mic.plugged': ({ name }: { name: string }) => `Microphone plugged in: now using “${name}”.`,
+  'mic.gone': ({ name }: { name: string }) => `“${name}” unplugged: using the default microphone.`,
+  'mic.undo': 'Undo',
 };

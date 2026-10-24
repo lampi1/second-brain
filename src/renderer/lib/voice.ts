@@ -10,6 +10,7 @@ import { createStore } from '../store/createStore';
 import { app, send } from '../store/store';
 import { toast } from '../store/ui';
 import { t } from '../i18n';
+import { micAudio, onMicChange, openMicStream } from './mic';
 import { VOICE_RATE, isNoise, parseSpokenAnswer, replyToSpeak, speakable, spokenQuestion, type SpokenAnswer, type SpokenQuestionInput, type VoiceName, type VoiceState } from '@shared/voice';
 
 export type VoiceTarget = 'orchestrator' | 'flash';
@@ -54,6 +55,13 @@ export function startVoice(): void {
   });
   window.sb.on('voice:heard', ({ text }) => heard(text));
   app.subscribe(watchReplies);
+  // another microphone (chosen in Settings → Voce, plugged in, unplugged) while voice is on: reopened on it at once
+  // (after the reply being read aloud: reopening sets «listening», which would hear the app's own voice)
+  onMicChange(() => {
+    const reopen = () => { if (stream && ['listening', 'hearing', 'transcribing'].includes(voice.get().phase)) { closeMic(); void openMic(session); } };
+    if (voice.get().phase !== 'speaking') { reopen(); return; }
+    const off = voice.subscribe(() => { if (voice.get().phase !== 'speaking') { off(); reopen(); } });
+  });
   window.addEventListener('keydown', e => { if (e.key === 'Escape' && voice.get().phase === 'speaking') { e.preventDefault(); e.stopPropagation(); stopSpeaking(); } }, true);
   void window.sb.invoke('voice:state', undefined).then(st => set({ engine: st }), () => {});
 }
@@ -109,7 +117,10 @@ async function openMic(my: number): Promise<void> {
   const fake = !!voice.get().engine?.fake;
   let got: MediaStream | null = null;
   try {
-    got = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+    const want = JSON.stringify(micAudio().deviceId ?? null);
+    got = await openMicStream();
+    // another microphone was chosen or plugged in while this one was opening: open that one instead
+    if (my === session && JSON.stringify(micAudio().deviceId ?? null) !== want) { got.getTracks().forEach(tr => tr.stop()); got = null; await openMic(my); return; }
     // turned off (or started again) while the permission or the device was pending: this stream is never used
     if (my !== session) { got.getTracks().forEach(tr => tr.stop()); return; }
     stream = got;

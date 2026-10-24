@@ -1,11 +1,13 @@
 // Settings → Voce (ADR 0152): which Whisper transcribes (Veloce / Precisa), which Italian voice answers (with «Prova»),
-// and the local models: what is on disk, what is missing, the one-time download with its progress. Writes go through
+// which microphone listens (lib/mic.ts: the list follows what is plugged in), and the local models: what is on disk, what is missing, the one-time download with its progress. Writes go through
 // settings:set like every other row of the page. Mounted by SettingsPage.tsx.
 import { useEffect, useState } from 'react';
 import { VOICE_ASRS, VOICE_NAMES, type VoiceAsr, type VoiceName } from '@shared/voice';
 import { setSetting, useApp } from '../store/store';
 import { previewVoice, startVoice, useVoice, voice } from '../lib/voice';
+import { chooseMic, micName, pick, refreshMics, useMics } from '../lib/mic';
 import { IconPlay } from './Icons';
+import { Select } from './Select';
 import { t } from '../i18n';
 
 export function VoiceSettings() {
@@ -16,6 +18,8 @@ export function VoiceSettings() {
     startVoice();
     void window.sb.invoke('voice:state', undefined).then(st => voice.set(s => ({ ...s, engine: st })), () => {});
   }, [settings?.voiceAsr, settings?.voiceName]);
+  const mic = useMics(m => m);
+  useEffect(() => { refreshMics(); }, []);
   if (!settings) return null;
   const asr: VoiceAsr = settings.voiceAsr ?? 'fast', name: VoiceName = settings.voiceName ?? 'paola';
   const dl = engine?.downloading, pct = dl && dl.total ? Math.round((dl.done / dl.total) * 100) : 0;
@@ -39,6 +43,17 @@ export function VoiceSettings() {
           {VOICE_NAMES.map(v => <button key={v} type="button" role="radio" aria-checked={name === v} className={name === v ? 'on' : ''} onClick={() => void setSetting({ voiceName: v })} data-testid={`st-voice-name-${v}`}>{t(`voice.name.${v}`)}</button>)}
         </div>
         <button type="button" className="btn btn-ghost btn-s" disabled={trying || !engine?.ready.tts} onClick={() => void tryIt()} data-tip={engine?.ready.tts ? undefined : t('voice.tryNeedsDownload')} data-testid="st-voice-try"><IconPlay size={12} /> {t('voice.try')}</button>
+      </div>
+    </div>
+    <div className="st-row" data-testid="st-voice-mic">
+      <div className="st-text"><span className="st-title">{t('mic.title')}</span>
+        <p className="st-desc" data-testid="st-voice-mic-desc">{!mic.devices.length ? t('mic.none') : mic.chosen && !mic.using ? t('mic.away', { name: micName(mic.chosen) }) : t('mic.hint')}</p></div>
+      <div className="st-ctl">
+        <Select value={pick(mic.chosen, mic.devices)?.id ?? ''} aria-label={t('mic.title')} data-testid="st-voice-mic-pick"
+          onChange={e => { const d = mic.devices.find(x => x.id === e.target.value); chooseMic(d ?? null); }}>
+          <option value="">{t('mic.default')}</option>
+          {mic.devices.map((d, i) => <option key={d.id} value={d.id}>{micName(d, i)}</option>)}
+        </Select>
       </div>
     </div>
     <div className="st-row" data-testid="st-voice-models">

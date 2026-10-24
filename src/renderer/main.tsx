@@ -16,6 +16,7 @@ import { nextThing, openLink, uiCommand } from './actions';
 import { checkDnd, startStore } from './store/store';
 import { startVoice } from './lib/voice';
 import { startRecs } from './lib/recorder';
+import { startMics } from './lib/mic';
 import { now } from './lib/clock';
 import { startLayer } from './lib/layer';
 import './lib/notice'; // notify() and its e2e hook (__sbNotify)
@@ -56,6 +57,7 @@ if (isBrainTestRoute()) {
   root.render(<div role="status">{auditText('cmp.main.restoring')}</div>);
   void startUpdateCheckpoint().catch(()=>toast(auditText('cmp.main.restoreUnavailable'),'err')).then(()=>{
   startStore();
+  startMics();
   startVoice();
   startRecs();
   startViewports();

@@ -9,6 +9,7 @@
 import { createStore } from '../store/createStore';
 import { toast } from '../store/ui';
 import { t } from '../i18n';
+import { openMicStream } from './mic';
 import { blockVoiceWhile, stopVoice, voice } from './voice';
 import { REC_IMPORT_MAX_BYTES, REC_RATE, recExtensionOk, type RecState } from '@shared/recordings';
 
@@ -127,7 +128,7 @@ export async function startCall(): Promise<void> {
       }
       sys = true;
     } else {
-      const mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+      const mic = await openMicStream(); // the one chosen in Settings → Voce (lib/mic.ts); a call keeps it until the stop
       me.streams.push(mic);
       if (!live()) { release(me); return; }
       ac.createMediaStreamSource(mic).connect(merger, 0, 0);
