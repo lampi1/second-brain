@@ -82,7 +82,7 @@ export function cardWords(c: Pick<Proposal, 'ask' | 'title' | 'content' | 'appli
         yes: a.cases ? t('proposals.yes.policyCases', { name: a.name, n: a.cases }) : t('proposals.yes.policy', { name: a.name }), no: t('proposals.no.policy'), lead: '' };
     // a maintenance finding (ADR 0132): its title is the question; the deck shows its own words (adds, removes, why)
     case 'research':
-      // an idea or a bug about the app's code: approving opens its issue on GitHub at once (ADR 0149)
+      // an idea or a bug about the app's code: approving opens its issue on GitHub at once (ADR 0152)
       if (c.group === 'issue') return { question: t('proposals.ask.issue', { title: c.title.trim() }), yes: t('proposals.yes.issue'), no: t('proposals.no.issue'), lead: '',
         ...(c.content ? { bodyLabel: t('proposals.research.issueBody') } : {}) };
       // the finding's title read as the question («Dimenticare la skill «x»?», «Artisan lancia i test prima di dire «fatto»?»)

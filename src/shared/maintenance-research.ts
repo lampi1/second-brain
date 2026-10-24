@@ -1,4 +1,4 @@
-// The maintenance (ADR 0132, one click since ADR 0149): the data the «Manutenzione» button, the research chat's proposal
+// The maintenance (ADR 0132, one click since ADR 0152): the data the «Manutenzione» button, the research chat's proposal
 // tool and the Proposte deck share. The owner (2026-10-24): ideas, skill and rule proposals and the memory cleanup
 // happen only when the user presses «Manutenzione»; one click runs the free cleanup and an invisible research by the best
 // model on the user's own history, brain and logs; every finding is a card that says what it adds and removes and why;
@@ -93,7 +93,7 @@ export interface ResearchProposal {
   ideaSaved?: boolean;
 }
 
-/** What a research runs with: the app's best choice (ResearchService.defaults), never a dialog since ADR 0149. */
+/** What a research runs with: the app's best choice (ResearchService.defaults), never a dialog since ADR 0152. */
 export interface ResearchOptions {
   harness: Harness;
   /** null = the engine's default */

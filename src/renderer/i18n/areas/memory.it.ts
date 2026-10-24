@@ -26,6 +26,7 @@ export const memoryIt = {
   'mm.done.nothing': 'Manutenzione finita: era già tutto in ordine.',
   'mm.done.failed': 'Manutenzione finita, ma la ricerca non è riuscita',
   'mm.done.capped': 'Manutenzione finita al tetto di spesa',
+  'mm.done.label': 'Manutenzione finita', 'mm.done.title': 'Il tuo brain è in ordine',
   'mm.done.open': 'Apri Memoria',
 
   // shared bits
@@ -105,6 +106,5 @@ export const memoryIt = {
   'mm.clean.errors': 'Gli errori ricorrenti', 'mm.clean.errorsText': 'Quando correggi un agente l’errore viene registrato; quelli che si ripetono diventano regole.',
   'mm.clean.skills': 'Le skill utili e inutili', 'mm.clean.skillsText': 'Per ogni skill: quante volte è servita, quanto bene e quando l’ultima volta.',
   'mm.clean.facts': 'Le curiosità', 'mm.clean.factsText': 'Il ricordo più usato, il giorno con più errori, la skill dimenticata.',
-  // the maintenance with research (ADR 0132)
-  // Memoria → «Idee dell'app» (ADR 0132)
+  // the one-click maintenance (ADR 0132, 0152)
 };

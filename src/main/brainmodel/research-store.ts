@@ -1,7 +1,7 @@
-// The maintenance's findings and runs (ADR 0132, 0149), kept in userData/maintenance-research.json: every card a research
+// The maintenance's findings and runs (ADR 0132, 0152), kept in userData/maintenance-research.json: every card a research
 // or the free cleanup proposed (open, approved with its change or its issue's link, rejected; issue-asked and dismissed
 // from the old «Idee dell'app» tab), the last researches with their cost and the last click's end (the button shows it,
-// and the time of the last click holds back the cards other parts of the app propose, ADR 0149). Decided
+// and the time of the last click holds back the cards other parts of the app propose, ADR 0152). Decided
 // cards older than 90 days are dropped; at most 400 cards and 30 runs. Used by research.ts; tests:
 // test/unit/brainmodel/research.test.ts.
 import path from 'node:path';

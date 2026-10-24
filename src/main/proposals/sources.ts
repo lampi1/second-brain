@@ -354,7 +354,7 @@ const research: Source = {
     return p.research!.list().map(x => {
       const chat = x.chatId ? chats.find(c => c.id === x.chatId) : undefined;
       const role = x.change?.role;
-      // an idea or a bug about the app's code (or a bold idea that is one): a card that opens its issue on GitHub (ADR 0149)
+      // an idea or a bug about the app's code (or a bold idea that is one): a card that opens its issue on GitHub (ADR 0152)
       const issue = !!x.issue && !x.change && (x.kind === 'app-idea' || x.kind === 'app-bug' || x.kind === 'bold');
       const repo = issue ? p.research!.repo?.() ?? null : null;
       return card('research', x.id, {

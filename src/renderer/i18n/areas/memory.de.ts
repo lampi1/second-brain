@@ -25,6 +25,7 @@ export const memoryDe: typeof memoryIt = {
   'mm.done.nothing': 'Wartung fertig: Es war schon alles in Ordnung.',
   'mm.done.failed': 'Wartung fertig, aber die Recherche hat nicht geklappt',
   'mm.done.capped': 'Wartung beim Ausgabenlimit gestoppt',
+  'mm.done.label': 'Wartung fertig', 'mm.done.title': 'Dein Brain ist in Ordnung',
   'mm.done.open': 'Memoria öffnen',
 
   'mm.openFile': 'Datei öffnen', 'mm.openNamed': (p: { name: string }) => `Datei von ${p.name} öffnen`,
@@ -99,6 +100,5 @@ export const memoryDe: typeof memoryIt = {
   'mm.clean.errors': 'Wiederkehrende Fehler', 'mm.clean.errorsText': 'Wenn du einen Agenten korrigierst, wird der Fehler erfasst; die, die sich wiederholen, werden zu Regeln.',
   'mm.clean.skills': 'Nützliche und nutzlose Skills', 'mm.clean.skillsText': 'Für jeden Skill: wie oft er gedient hat, wie gut und wann zuletzt.',
   'mm.clean.facts': 'Kuriose Fakten', 'mm.clean.factsText': 'Die meistgenutzte Erinnerung, der Tag mit den meisten Fehlern, der vergessene Skill.',
-  // the maintenance with research (ADR 0132)
-  // Memoria → «App-Ideen» (ADR 0132)
+  // the one-click maintenance (ADR 0132, 0152)
 };

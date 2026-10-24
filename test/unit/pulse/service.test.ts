@@ -18,7 +18,7 @@ function fixture() {
   const settings = defaults(), at = new Date(2026, 9, 18, 13).getTime();
   const material = { now: '- prepare review', ideas: '', errors: '', journal: '', agents: [], chats: [], files: [] };
   const runOnce = vi.fn(async () => ({ ok: true, engine: 'claude', model: 'sonnet', costUsd: 0.01, costBasis: 'reported', tokens: null, durationMs: 1,
-    text: JSON.stringify({ cards: [{ type: 'idea', title: 'Revisione pronta', body: 'Leggi il diff.', why: 'La revisione è aperta.', refs: ['d1'], places: ['board'] }] }) }));
+    text: JSON.stringify({ cards: [{ type: 'consiglio', title: 'Revisione pronta', body: 'Leggi il diff.', why: 'La revisione è aperta.', refs: ['d1'], places: ['board'] }] }) }));
   const saveIdea = vi.fn(async () => {}), act = vi.fn(async () => 'orchestrator'), approve = vi.fn(async () => {});
   const deps = { file: path.join(dir, 'pulse.json'), once: { runOnce, profile: () => ({}), pick: () => ({ id: 'claude' }), availability: () => [] } as unknown as OneShotService,
     runs: new AgentRunStore(dir), settings: () => settings, material: () => material, visible: () => true, calls: true, env: {},
@@ -105,4 +105,12 @@ it('an Apply that fails says why, on screen and in the log, and leaves the propo
   expect(await decide({ id: 'pa_1', decision: 'approve' }, undefined as never)).toEqual({ ok: false, error: 'Proposta non applicata: Il modello non è tra quelli noti del motore.' });
   expect(data.approvals[0]!.state).toBe('pending');
   expect(await decide({ id: 'pa_1', decision: 'nope' as never }, undefined as never)).toEqual({ ok: false, error: 'Proposta non applicata.' });
+});
+it('makes no idea cards: ideas come only from the user\'s «Manutenzione» (ADR 0152)', async () => {
+  const f = fixture();
+  f.runOnce.mockResolvedValue({ ok: true, engine: 'claude', model: 'sonnet', costUsd: 0.01, costBasis: 'reported', tokens: null, durationMs: 1,
+    text: JSON.stringify({ cards: [{ type: 'idea', title: 'Un’idea', body: 'Fai X.', why: 'Perché sì.', refs: ['d1'], places: ['board'] }] }) });
+  expect(await f.service.run('pulse')).toEqual({ ok: true });
+  expect(f.service.list('board').cards.filter(c => c.type === 'idea')).toEqual([]);
+  expect(String((f.runOnce.mock.calls[0] as unknown as [{ prompt: string }])[0].prompt)).not.toContain('"type":"idea');
 });

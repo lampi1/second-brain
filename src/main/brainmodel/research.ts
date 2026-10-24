@@ -1,4 +1,4 @@
-// The maintenance with research (ADR 0132; one click and invisible since ADR 0149). The «Manutenzione» button runs the
+// The maintenance with research (ADR 0132; one click and invisible since ADR 0152). The «Manutenzione» button runs the
 // free cleanup (the brain jobs and the log step, BrainModelService.maintain) and then this research, with the app's best
 // choice (the strongest model of an engine that is on, a 5 $ cap, the web when the engine has it): one app chat
 // («Manutenzione», no role, ChatManager `research`) the user never sees (the renderer keeps it out of every list),
@@ -407,7 +407,7 @@ export class ResearchService {
   /** Open findings, newest first: brain changes and what to forget, and the app cards that open an issue. */
   cards(): ResearchProposal[] { return this.store.all().filter(p => p.state === 'open').reverse(); }
   /** When the user last pressed «Manutenzione»: the other parts of the app's skill and rule proposals made after it
-   *  wait for the next click (ADR 0149). null = never pressed. */
+   *  wait for the next click (ADR 0152). null = never pressed. */
   clickAt(): number | null { return this.store.clickAt(); }
   /** The app repository as owner/name, null when unknown (an app card then cannot be approved). */
   repo(): string | null { return repoOf(this.d.issuesUrl()); }

@@ -1,4 +1,4 @@
-// The one-click «Manutenzione» (ADR 0132, 0149): the button's state (a pass or the invisible research running, its cost,
+// The one-click «Manutenzione» (ADR 0132, 0152): the button's state (a pass or the invisible research running, its cost,
 // the last one's end), read from main ('maintenance:status') and again on 'maintenance:changed'; one click
 // ('maintenance:run'), «Ferma» ('maintenance:stop'); 'maintenance:done' brings the end notice
 // (lib/maintenance-notice.ts). Used by components/brain-model/MaintenanceButton.tsx.

@@ -195,8 +195,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('La scheda Skill di Memoria mostra quale ruolo usa ogni skill e quali strumenti chiama; «Ruoli» su una scheda la collega o la toglie subito, senza approvazione.',
         'The Skills tab of Memoria shows which role uses each skill and which tools it calls; "Roles" on a card links or drops it at once, with no approval.'),
       // src/main/brainmodel/jobs.ts
-      b('La manutenzione gira da sola ogni 6 ore, o subito con il pulsante «Manutenzione» in cima a Skill, Regole e Memoria, che dice cosa ha fatto ogni lavoro: una skill nuova da un lavoro ripetuto, skill doppie unite, ricordi doppi nella memoria condivisa, le tue correzioni applicate al ruolo, alla skill o a una regola. Una lezione proposta da una chat di lavoro aspetta che l’Orchestrator te la chieda.',
-        'Maintenance runs by itself every 6 hours, or at once with the "Manutenzione" button atop Skill, Regole and Memoria, which says what each job did: a new skill from a repeated task, duplicate skills merged, duplicate memories moved to the shared one, your corrections applied to the role, the skill or a rule. A lesson a work chat proposes waits until the Orchestrator asks you.'),
+      b('La manutenzione parte solo quando premi «Manutenzione» (in alto, sulla testa dell’Orchestrator o in Memoria): un clic, poi lavora da sola in background. Mette in ordine skill, regole e memoria e un agente invisibile propone skill e regole nuove, cosa dimenticare e le issue per l’app, tutto come carte in Memoria → Proposte. Una lezione proposta da una chat di lavoro aspetta che l’Orchestrator te la chieda.',
+        'Maintenance starts only when you press "Manutenzione" (top bar, the Orchestrator’s head or Memoria): one click, then it works by itself in the background. It tidies skills, rules and memory, and an invisible agent proposes new skills and rules, what to forget and issues for the app, all as cards in Memoria → Proposte. A lesson a work chat proposes waits until the Orchestrator asks you.'),
       // src/main/brainmodel/changes.ts; src/main/agents/catalog.ts maintain (ADR 0083)
       b('Ogni modifica è registrata con cosa, perché e le prove, e «Annulla» la riporta com’era. L’app cambia da sola solo il testo di un ruolo e le sue skill; il tuo sì resta per produzione, strumenti, tetto, motore e livello di un ruolo, impostazioni e testi per altri.',
         'Every change is logged with what, why and the evidence, and "Undo" puts it back. The app changes by itself only a role’s text and its skills; your yes stays for production, a role’s tools, ceiling, engine and tier, settings and texts for others.'),
@@ -963,12 +963,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'maintenance',
     title: b('La manutenzione del brain', 'Brain maintenance'),
-    summary: b('Ogni 6 ore l’app riordina da sola skill, regole e memorie dei ruoli; ogni cambio ha un perché e un «Annulla».',
-      'Every 6 hours the app tidies the roles’ skills, rules and memories by itself; every change has a reason and an "Undo".'),
+    summary: b('Solo quando premi «Manutenzione»: un clic, l’app riordina skill, regole e memoria e un agente invisibile propone miglioramenti come carte; ogni cambio ha un perché e un «Annulla».',
+      'Only when you press "Manutenzione": one click, the app tidies skills, rules and memory and an invisible agent proposes improvements as cards; every change has a reason and an "Undo".'),
     points: [
-      // src/main/brainmodel/service.ts start(): SIX_HOURS
-      b('Gira da sola ogni 6 ore, senza spendere token: è lavoro sul testo fatto sul tuo PC. Il pulsante «Manutenzione» (Skill, Regole, Memoria) la fa partire subito.',
-        'It runs by itself every 6 hours, spending no tokens: text work done on your PC. The "Maintenance" button (Skill, Rules, Memory) starts it at once.'),
+      // src/main/brainmodel/service.ts start(), brainmodel/research.ts runAll (ADR 0152)
+      b('Parte solo dal tuo clic, mai da sola: la pulizia non spende token (lavoro sul testo fatto sul tuo PC), poi la ricerca usa il modello più forte con un tetto di 5 $ e ti avvisa quando finisce. Le idee sull’app vanno in Idee (lato IA) e ogni idea o bug diventa una carta «Apro la issue?» che, con il tuo sì, apre la issue su GitHub.',
+        'It starts only from your click, never by itself: the cleanup spends no tokens (text work on your PC), then the research uses the strongest model with a 5 $ cap and gives you a notice when it ends. Ideas about the app go to Ideas (the AI’s side) and every idea or bug becomes a card "Open the issue?" that, with your yes, opens it on GitHub.'),
       // src/main/brainmodel/jobs.ts repeated-task, merge-skills
       b('Se tre o più lavori finiti chiedono la stessa cosa e nessuna skill la copre, scrive una skill nuova; due skill quasi uguali diventano una.',
         'When three or more finished jobs ask the same thing and no skill covers it, it writes a new skill; two near-identical skills become one.'),
@@ -988,14 +988,14 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Non tocca mai da sola permessi, strumenti, motore, livello di modello o limiti di un ruolo: quelli diventano una carta in Memoria → Proposte.',
         'It never changes a role’s permissions, tools, engine, model tier or limits by itself: those become a card in Memory → Proposals.'),
     ],
-    analogy: b('Come chi riordina l’archivio di notte: unisce i doppioni, scrive le schede che mancano e lascia un biglietto per ogni cosa spostata, così la rimetti a posto se non ti piace.',
-      'Like someone who tidies the archive at night: merges duplicates, writes the missing cards and leaves a note for everything moved, so you can put it back if you do not like it.'),
+    analogy: b('Come chi riordina l’archivio quando glielo chiedi: unisce i doppioni, scrive le schede che mancano e lascia un biglietto per ogni cosa spostata, così la rimetti a posto se non ti piace.',
+      'Like someone who tidies the archive when you ask: merges duplicates, writes the missing cards and leaves a note for everything moved, so you can put it back if you do not like it.'),
     diagram: { kind: 'cycle', steps: [b('Lavori finiti', 'Finished jobs'), b('Manutenzione', 'Maintenance'), b('Cambio con perché', 'Change with a reason'), b('Annulla se serve', 'Undo if needed')] },
     tech: [
       tech(DATA, 'BrainChange { id, at, job, kind: skill | agent | rule | memory, action, target, summary, reason, evidence, rolledBackAt?, canRollback }.',
         'BrainChange { id, at, job, kind: skill | agent | rule | memory, action, target, summary, reason, evidence, rolledBackAt?, canRollback }.'),
       tech(FILES, 'userData/brain-changes.json: ultimi 400 cambi, istantanee prima/dopo fino a 256 KB ciascuna.', 'userData/brain-changes.json: last 400 changes, before/after snapshots up to 256 KB each.'),
-      tech(LIMITS, 'Lavori: migration, upgrade, corrections, repeated-task, merge-skills, merge-memory; ogni 6 h, la migrazione e l’aggiornamento del brain un minuto dopo l’avvio.', 'Jobs: migration, upgrade, corrections, repeated-task, merge-skills, merge-memory; every 6 h, the migration and the brain upgrade a minute after start.'),
+      tech(LIMITS, 'Lavori: migration, upgrade, corrections, repeated-task, merge-skills, merge-memory; solo al clic su «Manutenzione», la migrazione un minuto dopo l’avvio.', 'Jobs: migration, upgrade, corrections, repeated-task, merge-skills, merge-memory; only on a «Manutenzione» click, the migration a minute after start.'),
     ],
     sources: ['src/main/brainmodel/jobs.ts', 'src/main/brainmodel/upgrade.ts', 'src/shared/brain-layout.ts', 'src/main/brain/queries.ts', 'src/main/brainmodel/changes.ts', 'src/main/brainmodel/service.ts', 'src/shared/brain-model.ts', 'src/renderer/components/brain-model/MaintenanceButton.tsx'],
   },

@@ -71,7 +71,7 @@ export const brainPagesDe: typeof brainPagesIt = {
   'brainPages.task.every': 'Alle',
   'brainPages.task.everyLabel': 'Wie viele Minuten zwischen den Lesevorgängen',
   'brainPages.task.sound': 'Hinweiston',
-  'brainPages.task.soundTip': 'Jeder Hinweis, der von selbst kommt, spielt einen Ton, je nach Art verschieden: Frage, Fehler, Erwähnung, Login- oder Sync-Problem',
+  'brainPages.task.soundTip': 'Jeder Hinweis, der von selbst kommt, spielt einen Ton, je nach Art verschieden: Frage, Fehler, Erwähnung, Login- oder Sync-Problem, Ende der Wartung',
   'brainPages.task.off': 'Aus',
   'brainPages.task.on': 'Ein',
   'brainPages.task.next': (p: { when: string }) => `nächstes Lesen ${p.when}`,

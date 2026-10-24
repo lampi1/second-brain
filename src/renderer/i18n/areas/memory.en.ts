@@ -25,6 +25,7 @@ export const memoryEn: typeof memoryIt = {
   'mm.done.nothing': 'Maintenance done: everything was already in order.',
   'mm.done.failed': 'Maintenance done, but the research failed',
   'mm.done.capped': 'Maintenance stopped at the spending cap',
+  'mm.done.label': 'Maintenance done', 'mm.done.title': 'Your brain is in order',
   'mm.done.open': 'Open Memoria',
 
   'mm.openFile': 'Open the file', 'mm.openNamed': (p: { name: string }) => `Open the file of ${p.name}`,
@@ -99,6 +100,5 @@ export const memoryEn: typeof memoryIt = {
   'mm.clean.errors': 'Recurring errors', 'mm.clean.errorsText': 'When you correct an agent the error is logged; those that repeat become rules.',
   'mm.clean.skills': 'Useful and useless skills', 'mm.clean.skillsText': 'For each skill: how often it served, how well and when last.',
   'mm.clean.facts': 'Curious facts', 'mm.clean.factsText': 'The most used memory, the day with the most errors, the forgotten skill.',
-  // the maintenance with research (ADR 0132)
-  // Memoria → «App ideas» (ADR 0132)
+  // the one-click maintenance (ADR 0132, 0152)
 };

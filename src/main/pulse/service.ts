@@ -2,7 +2,7 @@
 // No output mutates a brain file or agent until a renderer action calls the supplied capability. One scheduled job, the
 // cards at the user's slots; the Dashboard line rides in the day's first call (at most once a day, ADR 0102), and the
 // cards may carry an action (promemoria: "Fallo" hands it to the Orchestrator). No idea cards: ideas come only from the
-// user's «Manutenzione» (ADR 0149).
+// user's «Manutenzione» (ADR 0152).
 import { randomBytes } from 'node:crypto';
 import type { HeadlineState, Lang, Settings } from '../../shared/contract';
 import { PULSE_ID } from '../../shared/roles';

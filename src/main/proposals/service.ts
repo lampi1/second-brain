@@ -3,7 +3,7 @@
 // through the source's own path; the count for the sidebar badge, pushed as proposals:changed when it changes (after a
 // decision, an event of a source, or the minute's check). The "Tieni" marks on applied changes are kept in userData
 // (proposals-reviewed.json, small: 60 days at most). Skill and rule proposals from the app's other parts appear only
-// once the user presses «Manutenzione» (heldBack, ADR 0149). Used by index.ts; unit tests: test/unit/proposals/service.test.ts.
+// once the user presses «Manutenzione» (heldBack, ADR 0152). Used by index.ts; unit tests: test/unit/proposals/service.test.ts.
 import path from 'node:path';
 import { sortProposals, type Proposal, type ProposalDecide, type ProposalDecideResult, type ProposalSource, type ProposalsState } from '../../shared/proposals';
 import { readLocal, writeLocal } from '../agents/local-store';
@@ -39,11 +39,11 @@ export interface ProposalsOptions {
   emit?: (count: number) => void;
   sources?: readonly Source[];
   /** when the user last pressed «Manutenzione» (ms; null = never): the skill and rule proposals the app's other parts
-   *  make wait for it (ADR 0149); absent = nothing is held */
+   *  make wait for it (ADR 0152); absent = nothing is held */
   clickAt?: () => number | null;
 }
 
-/** The sources whose skill and rule proposals wait for the user's «Manutenzione» (ADR 0149): the skill candidates
+/** The sources whose skill and rule proposals wait for the user's «Manutenzione» (ADR 0152): the skill candidates
  *  and the Battito's learned rules. The maintenance's own cards, applied changes, settings, trials and tiers do not. */
 const HELD: readonly ProposalSource[] = ['candidate', 'pulse'];
 /** A held card made after the last click: hidden until the next one. */

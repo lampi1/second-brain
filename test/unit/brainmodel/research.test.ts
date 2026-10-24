@@ -1,4 +1,4 @@
-// The one-click maintenance (ADR 0132, 0149, brainmodel/research.ts): one click runs the cleanup then the research with
+// The one-click maintenance (ADR 0132, 0152, brainmodel/research.ts): one click runs the cleanup then the research with
 // the app's best choice and ends in one notice; starting checks the options, the tools work only for the running
 // research and check every card (caps, duplicates, private data out of issues), the cost cap stops the chat, the free
 // cleanup cards log bugs and unused skills, approve applies through the brain or opens the issue, an app idea lands in

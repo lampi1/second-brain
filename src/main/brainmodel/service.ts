@@ -365,7 +365,7 @@ export class BrainModelService {
   }
 
   /** The structural migration once, a minute after the start. Nothing else runs by itself: the cleanup, the memory's
-   *  tidy-up and every proposal wait for the user's «Manutenzione» (owner, 2026-10-24, ADR 0149; until then a timer
+   *  tidy-up and every proposal wait for the user's «Manutenzione» (owner, 2026-10-24, ADR 0152; until then a timer
    *  ran the safe jobs every six hours). */
   start(): void {
     if (!this.d.auto) return;

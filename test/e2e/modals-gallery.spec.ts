@@ -1,5 +1,5 @@
 // E2E gallery of the dialogs on the shared base (components/ui.tsx Modal, 2026-10-22): a confirmation (size s, «Ferma
-// tutto»), a dialog (size m, the keyboard shortcuts; the Manutenzione with its jobs) and a side panel (the Log's
+// tutto»), a dialog (size m, the keyboard shortcuts) and a side panel (the Log's
 // detail), in dark and light, so the one look (head with title and subtitle, the body, the footer with the primary
 // action on the right) is seen whole. Each one also closes with Esc. Screenshots: test-results/shots/modal-<name>-<theme>.png.
 import { expect, test } from '@playwright/test';
@@ -31,19 +31,6 @@ for (const scheme of ['dark', 'light'] as const) {
       await shot(page, `modal-shortcuts-${scheme}`);
       await keys.getByTestId('shortcuts-close-x').click();
       await expect(keys).toHaveCount(0);
-
-      // the Manutenzione: its choices first, then its jobs in the body, «Chiudi» as the footer's primary action
-      await page.getByTestId('tile-orchestrator').getByTestId('orchestrator-maint-run').click();
-      const maint = page.getByTestId('orchestrator-maint-dialog');
-      await expect(maint.getByTestId('mm-r-research')).toBeVisible();
-      await page.mouse.move(2, 2);
-      await shot(page, `modal-maintenance-setup-${scheme}`);
-      await maint.getByTestId('orchestrator-maint-start').click();
-      await expect(maint.getByTestId('mm-r-to-ideas')).toBeVisible();
-      await page.mouse.move(2, 2);
-      await shot(page, `modal-maintenance-${scheme}`);
-      await maint.getByTestId('orchestrator-maint-close').click();
-      await expect(maint).toHaveCount(0);
 
       // a side panel: the Log's detail, down the right edge
       await goPage(page, 'log');

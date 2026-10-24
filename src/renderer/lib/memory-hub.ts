@@ -1,4 +1,4 @@
-// The Memoria hub's places (ADR 0122; the «Idee dell'app» tab of ADR 0132 is gone since ADR 0149: its ideas are in Idee
+// The Memoria hub's places (ADR 0122; the «Idee dell'app» tab of ADR 0132 is gone since ADR 0152: its ideas are in Idee
 // and its issues are cards in Proposte, so 'app' opens Proposte): its tabs in order, the page arg that opens one ("memoria/<tab>[/<more>]"), and
 // the old pages that became tabs (Skill, Regole, Script, Idee, Apprendimento: their ids, links and G-keys still exist and
 // land on the matching tab). Pure: used by actions.ts go() (the redirect), components/brain-model/MemoryPage.tsx (the

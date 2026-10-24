@@ -158,7 +158,7 @@ export function diffChats(before: Map<string, ChatRow> | null, now: ChatRow[]): 
 }
 
 /** The end of an app chat's turn (or its CLI dying mid-turn: `crash` = the error) → its feed event. An Orchestrator's own turns are no event (it reports in its own tile),
- *  nor the maintenance research's (it works out of sight and ends in its own notice, ADR 0149);
+ *  nor the maintenance research's (it works out of sight and ends in its own notice, ADR 0152);
  *  a turn that ended with an error is "chat-failed" (a toast: the user is needed), any other "chat-done" (center only). */
 export function doneEvent(c: Pick<ChatSummary, 'id' | 'title' | 'isOrchestrator' | 'lastResult' | 'research'> | undefined, crash?: string): RawEvent | null {
   if (!c || c.isOrchestrator || c.research) return null;

@@ -1,4 +1,4 @@
-// Opens a maintenance card's GitHub issue at once when the user approves it in Proposte (ADR 0149; before it «Apri
+// Opens a maintenance card's GitHub issue at once when the user approves it in Proposte (ADR 0152; before it «Apri
 // issue» handed the text to the Orchestrator, ADR 0132). First `gh issue create` with the user's own gh login (the app
 // never sees a token: gh keeps its own), the body passed on stdin, never through a shell; labels the repository does
 // not have make gh fail, so it tries once more without them. When gh is missing, not logged in or refused, the

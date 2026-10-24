@@ -1359,7 +1359,7 @@ export interface InvokeMap {
   'brainmodel:rollback': [{ id: string }, BrainModelState];
   /** the working-line phrases of the day (main/daily-phrases.ts): null = the fixed ones */
   'phrases:today': [void, DailyPhrases | null];
-  /** the «Manutenzione» button (ADR 0149): one click runs the free cleanup, then the invisible research with the app's
+  /** the «Manutenzione» button (ADR 0152): one click runs the free cleanup, then the invisible research with the app's
    *  best choice; the result arrives as cards and the end notice (maintenance:done). One at a time. */
   'maintenance:run': [void, MaintenanceStatus];
   'maintenance:status': [void, MaintenanceStatus];
@@ -1705,9 +1705,9 @@ export interface EventMap {
   /** the number of open proposals changed (Memoria's badge, ADR 0123) */
   'proposals:changed': { count: number };
   'phrases:changed': void;
-  /** the maintenance started, moved (cost) or ended, or one of its cards changed (ADR 0132, 0149) */
+  /** the maintenance started, moved (cost) or ended, or one of its cards changed (ADR 0132, 0152) */
   'maintenance:changed': void;
-  /** one click's maintenance is over: what it made (the end notice, ADR 0149) */
+  /** one click's maintenance is over: what it made (the end notice, ADR 0152) */
   'maintenance:done': MaintenanceDone;
   'cloud:changed': CloudState;
   'mcpservers:changed': McpServersState;
