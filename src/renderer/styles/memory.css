@@ -1,4 +1,4 @@
-/* The Memoria page's statistics (MemoryInsights.tsx) and the "Manutenzione" button with its dialog (MaintenanceButton.tsx),
+/* The Memoria page's statistics (MemoryInsights.tsx) and the one-click "Manutenzione" button (MaintenanceButton.tsx),
    in the Dashboard / Agenti look: gradient cards with a tone hairline, KPI tiles, charts from brain/components/Charts.tsx.
    Theme tokens only (tokens.css), so dark and light follow the app; one column on narrow windows. Prefix mm-. */
 
@@ -8,89 +8,27 @@ div.bm-page.agent-overview{display:block;min-width:0;padding:28px 32px 48px;font
 .mm-page.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 @media(max-width:600px){div.bm-page.agent-overview{padding:18px 16px 32px}}
 
-/* ── the Manutenzione button (head of Skill, Regole, Memoria) ── */
+/* ── the Manutenzione button (top bar, Orchestrator head, Memoria hero) ── */
 .mm-maint{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
-.mm-maint-btn{display:inline-flex;align-items:center;gap:7px;font-weight:600;box-shadow:0 0 0 3px color-mix(in srgb,var(--blue) 20%,transparent)}
+.mm-maint-btn{position:relative;display:inline-flex;align-items:center;gap:7px;font-weight:600;box-shadow:0 0 0 3px color-mix(in srgb,var(--blue) 20%,transparent)}
 .mm-maint-btn svg{width:15px;height:15px}
-.mm-maint-last{font-size:var(--fs-xs);color:var(--text-3);white-space:nowrap}
-
-
-.mm-maint-error{margin:0;color:var(--red)}
-.mm-maint-h{margin:4px 0 0;font:600 var(--fs-l)/1.3 var(--font-display)}
-.mm-jobs{list-style:none;margin:0;padding:0;display:grid;border:1px solid var(--border);border-radius:var(--r-m);overflow:hidden}
-.mm-job{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-top:1px solid var(--border);background:color-mix(in srgb,var(--bg) 35%,transparent)}
-.mm-job:first-child{border-top:0}
-.mm-job-dot{flex:none;width:9px;height:9px;margin-top:5px;border-radius:50%;background:var(--text-4)}
-.mm-job[data-status=running] .mm-job-dot{background:var(--blue);animation:mm-pulse 1.1s ease-in-out infinite}
-.mm-job[data-status=changed] .mm-job-dot{background:var(--green)}
-.mm-job[data-status=note] .mm-job-dot{background:var(--amber)}
-.mm-job-main{flex:1;min-width:0;display:grid;gap:2px}
-.mm-job-main b{font-size:var(--fs-s);font-weight:600}
-.mm-job-main small{font-size:var(--fs-xs);color:var(--text-3);line-height:1.5}
-.mm-job-note{color:var(--amber)!important}
-.mm-job-result{flex:none;font-size:var(--fs-xs);font-weight:600;color:var(--text-3);white-space:nowrap}
-.mm-job[data-status=changed] .mm-job-result{color:var(--green)}
+.mm-maint-last{font-size:var(--fs-xs);color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:min(52ch,60vw)}
 @keyframes mm-pulse{50%{opacity:.35}}
+/* working (ADR 0153): the sparkle turns slowly and breathes; the hero's button wears a soft moving sheen */
+@keyframes mm-spin{to{transform:rotate(360deg)}}
+@keyframes mm-sheen{from{background-position:-160% 0}to{background-position:260% 0}}
+.mm-maint .busy svg{color:var(--blue);animation:mm-spin 2.4s linear infinite,mm-pulse 1.4s ease-in-out infinite}
+.mm-maint-btn.busy{background-image:linear-gradient(100deg,transparent 30%,color-mix(in srgb,#fff 28%,transparent) 50%,transparent 70%);background-size:60% 100%;background-repeat:no-repeat;animation:mm-sheen 1.8s ease-in-out infinite}
+/* done: one burst of light around the sparkle, then calm */
+@keyframes mm-burst{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--green) 55%,transparent)}70%{box-shadow:0 0 0 12px transparent}100%{box-shadow:0 0 0 0 transparent}}
+@keyframes mm-pop{0%{transform:scale(1)}35%{transform:scale(1.35) rotate(18deg)}100%{transform:scale(1)}}
+.mm-maint .done{animation:mm-burst 1.1s ease-out 2;border-radius:var(--r-s)}
+.mm-maint .done svg{color:var(--green);animation:mm-pop .7s cubic-bezier(.3,1.6,.5,1) 2}
 .mm-maint.compact{display:contents}
-/* the top bar's button (ADR 0132): a ghost button like «Nuovo browser»; a running research makes its icon breathe */
+/* the top bar's button (ADR 0132): a ghost button like «Nuovo browser» */
 .mm-maint.bar{display:contents}
 .mm-maint-bar{display:inline-flex;align-items:center;gap:6px}
-.mm-maint-bar.busy svg{color:var(--blue);animation:mm-pulse 1.4s ease-in-out infinite}
-/* ── the dialog's setup (ADR 0132): the free cleanup, the research with its choices and its prompt ── */
-.mm-r-setup{display:grid;gap:12px}
-.mm-r-block{padding:12px 14px;border:1px solid var(--border);border-radius:var(--r-m);background:color-mix(in srgb,var(--bg) 35%,transparent)}
-.mm-r-h{display:flex;align-items:center;gap:8px;margin:0 0 4px;font:600 var(--fs-m)/1.3 var(--font-display)}
-.mm-r-pill{padding:1px 8px;border-radius:999px;background:var(--green-bg,color-mix(in srgb,var(--green) 14%,transparent));color:var(--green);font:600 var(--fs-xs) var(--font-small)}
-.mm-r-lead{margin:0;color:var(--text-2);font-size:var(--fs-s);line-height:1.5}
-.mm-r-research{display:grid;gap:12px;transition:border-color var(--dur) var(--ease),background var(--dur) var(--ease)}
-.mm-r-research.on{border-color:color-mix(in srgb,var(--blue) 45%,var(--border));background:radial-gradient(120% 80% at 0% 0%,color-mix(in srgb,var(--blue) 9%,transparent),transparent 60%),color-mix(in srgb,var(--bg) 35%,transparent)}
-.mm-r-toggle{display:flex;align-items:flex-start;gap:10px;cursor:pointer}
-.mm-r-toggle input{margin-top:3px;width:16px;height:16px;accent-color:var(--blue)}
-.mm-r-toggle span{display:grid;gap:3px}
-.mm-r-toggle b{font:600 var(--fs-m)/1.3 var(--font-display)}
-.mm-r-toggle small{color:var(--text-2);font-size:var(--fs-s);line-height:1.5}
-.mm-r-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
-.mm-r-grid label{display:grid;gap:4px;color:var(--text-3);font:600 var(--fs-xs) var(--font-small);letter-spacing:.02em}
-.mm-r-cap{display:flex;align-items:center;gap:6px}
-.mm-r-cap input{width:100%;min-width:0}
-.mm-r-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
-.mm-r-check{display:inline-flex;align-items:center;gap:8px;font-size:var(--fs-s);color:var(--text)}
-.mm-r-check input{accent-color:var(--blue)}
-.mm-r-estimate{font-size:var(--fs-xs);color:var(--text-3)}
-.mm-r-prompt{display:grid;gap:6px}
-.mm-r-prompt-head{display:flex;align-items:center;gap:8px}
-.mm-r-prompt-head label{flex:1;font:600 var(--fs-s) var(--font)}
-.mm-r-edited{padding:1px 8px;border-radius:999px;background:var(--amber-bg);color:var(--amber);font:600 var(--fs-xs) var(--font-small)}
-.mm-r-prompt textarea{width:100%;min-height:180px;resize:vertical;padding:10px 12px;border-radius:var(--r-s);border:1px solid var(--border-2);background:var(--surface);color:var(--text);font:12.5px/1.55 var(--mono)}
-.mm-r-prompt textarea:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
-.mm-r-frame-btn{justify-self:start;border:0;background:none;padding:0;color:var(--blue);font-size:var(--fs-xs);cursor:pointer}
-.mm-r-frame{margin:0;max-height:200px;overflow:auto;padding:10px 12px;border-radius:var(--r-s);border:1px dashed var(--border-2);background:var(--surface-2);color:var(--text-2);font:11.5px/1.55 var(--mono);white-space:pre-wrap}
-/* the research's live line: state, cost against the cap, cards, its chat */
-.mm-r-status{display:grid;gap:8px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--r-m);background:color-mix(in srgb,var(--bg) 35%,transparent)}
-.mm-r-status-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.mm-r-status[data-state=running] .mm-job-dot{background:var(--blue);animation:mm-pulse 1.1s ease-in-out infinite}
-.mm-r-status[data-state=done] .mm-job-dot{background:var(--green)}
-.mm-r-status[data-state=capped] .mm-job-dot,.mm-r-status[data-state=stopped] .mm-job-dot{background:var(--amber)}
-.mm-r-status[data-state=failed] .mm-job-dot{background:var(--red)}
-.mm-r-status-top .mm-job-dot{margin-top:0}
-.mm-r-why{color:var(--text-3);font-size:var(--fs-xs)}
-.mm-r-cards{margin-left:auto;font:600 var(--fs-xs) var(--font-small);color:var(--text-2)}
-.mm-r-meter{height:6px;border-radius:6px;background:var(--surface-3);overflow:hidden}
-.mm-r-meter i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--green),var(--amber));transition:width var(--dur-slow) var(--ease)}
-.mm-r-status-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:var(--fs-xs);color:var(--text-3);font-variant-numeric:tabular-nums}
-.mm-r-actions{display:inline-flex;gap:6px}
-.mm-r-links{display:flex;gap:8px;flex-wrap:wrap}
-@media (prefers-reduced-motion:reduce){.mm-maint-bar.busy svg,.mm-r-status[data-state=running] .mm-job-dot{animation:none}}
-.mm-logs{list-style:none;margin:0;padding:0;border:1px solid var(--border);border-radius:10px;overflow:hidden;max-height:280px;overflow-y:auto}
-.mm-log{display:flex;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid var(--border)}
-.mm-log:first-child{border-top:0}
-.mm-log-main{flex:1;min-width:0;display:grid;gap:2px}
-.mm-log-main b{font-size:var(--fs-s);font-weight:600;overflow-wrap:anywhere}
-.mm-log-main small{font-size:var(--fs-xs);color:var(--text-3);overflow-wrap:anywhere}
-.mm-log[data-lvl=error] .mm-log-main b{color:var(--red)}
-.mm-log.known{opacity:.6}
-.mm-log-n{flex:none;font-size:var(--fs-xs);font-weight:600;color:var(--text-3)}
-@media (prefers-reduced-motion:reduce){.mm-job[data-status=running] .mm-job-dot{animation:none}}
+@media (prefers-reduced-motion:reduce){.mm-maint .busy svg,.mm-maint-btn.busy,.mm-maint .done,.mm-maint .done svg{animation:none}}
 
 /* ── statistics ── */
 .mm-insights{display:grid;gap:18px;margin:18px 0 6px}

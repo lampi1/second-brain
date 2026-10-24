@@ -101,7 +101,6 @@ describe('pages', () => {
     const mem = renderToStaticMarkup(createElement(MemoryPage));
     expect(mem).toContain('Clienti');
     expect(mem).toContain('Memoria: Revisione');
-    expect(mem).toContain('Unisci i doppioni');
     expect(mem).toContain('Merged one line');
     setLang('en');
     expect(renderToStaticMarkup(createElement(RulesPage))).toContain('When relevant');

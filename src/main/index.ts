@@ -260,14 +260,11 @@ app.whenReady().then(async () => {
     'proposals:count': () => proposals.count(),
     'proposals:decide': a => proposals.decide(a),
     'brainmodel:maintain': a => s.brainModel.maintain(a?.job),
-    // the maintenance with research and «Idee dell'app» (ADR 0132)
+    // the one-click maintenance (ADR 0132, 0153): the free cleanup, then the invisible research; its cards in Proposte
     'phrases:today': () => s.phrases?.today() ?? null,
-    'maintenance:setup': () => research().setup(),
-    'maintenance:research': a => research().start(a),
+    'maintenance:run': () => research().runAll(),
+    'maintenance:status': () => research().status(),
     'maintenance:stop': () => research().stop(),
-    'maintenance:ideas': () => research().appIdeas(),
-    'maintenance:openIssues': a => research().openIssues(a?.ids),
-    'maintenance:dismissIdea': a => research().dismiss(a?.id),
     'brainmodel:rollback': a => s.brainModel.rollback(String(a?.id ?? '')),
     // the brain's saved queries (ADR 0124); a delete is a ChangeLog entry, undone with brainmodel:rollback
     'queries:list': () => s.queries?.list() ?? { root: null, dir: 'queries', queries: [] },
@@ -645,8 +642,9 @@ app.whenReady().then(async () => {
       ...(s.agentLifecycle ? { lifecycle: { read: () => s.agentLifecycle!.read({}), decide: (key: string, decision: 'approve' | 'dismiss') => call('agents:lifecycleDecide', { key, decision }) } } : {}),
       pulse: { list: () => call('approvals:list', {}), decide: (id: string, decision: 'approve' | 'discard') => call('approvals:decide', { id, decision }) },
       policies: { status: async () => { const r = await call('brain:api', { path: '/api/improve' }); return r.ok ? r.data : null; }, act: a => call('learn:act', a) },
-      ...(s.research ? { research: { list: () => s.research!.brainCards(), approve: (id: string) => s.research!.approve(id), reject: (id: string) => s.research!.reject(id) } } : {}),
+      ...(s.research ? { research: { list: () => s.research!.cards(), approve: (id: string) => s.research!.approve(id), reject: (id: string) => s.research!.reject(id), repo: () => s.research!.repo() } } : {}),
     },
+    ...(s.research ? { clickAt: () => s.research!.clickAt() } : {}),
   });
   // the badge follows its sources' own events; settings proposals and the loop's status are read every minute too
   const PROPOSAL_EVENTS: readonly string[] = ['maintenance:changed', 'brainmodel:changed', 'approvals:changed', 'agents:lifecycleChanged', 'agents:changed', 'settings:proposed', 'settings:changed'];

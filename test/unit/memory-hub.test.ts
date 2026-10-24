@@ -4,7 +4,7 @@ import { DEFAULT_TAB, HUB_PAGES, HUB_TABS, hubArg, hubRedirect, parseHubArg, pic
 
 describe('the Memoria hub tabs', () => {
   it('keeps the tabs in the agreed order', () => {
-    expect(HUB_TABS).toEqual(['proposte', 'approvate', 'skill', 'regole', 'script', 'idee', 'app', 'file', 'apprendimento', 'statistiche']);
+    expect(HUB_TABS).toEqual(['proposte', 'approvate', 'skill', 'regole', 'script', 'idee', 'file', 'apprendimento', 'statistiche']);
     expect(DEFAULT_TAB).toBe('proposte');
   });
 

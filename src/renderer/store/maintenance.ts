@@ -1,58 +1,47 @@
-// The maintenance with research and «Idee dell'app» (ADR 0132): the dialog's data (engines, the prompt the user last ran,
-// the fixed frame, the estimate, the research running now or the last one) and the app ideas, read from main
-// ('maintenance:setup', 'maintenance:ideas') and both read again on 'maintenance:changed'. Used by
-// components/brain-model/MaintenanceButton.tsx and AppIdeasTab.tsx.
+// The one-click «Manutenzione» (ADR 0132, 0153): the button's state (a pass or the invisible research running, its cost,
+// the last one's end), read from main ('maintenance:status') and again on 'maintenance:changed'; one click
+// ('maintenance:run'), «Ferma» ('maintenance:stop'); 'maintenance:done' brings the end notice
+// (lib/maintenance-notice.ts). Used by components/brain-model/MaintenanceButton.tsx.
 import { useEffect } from 'react';
-import type { AppIdeasState, MaintenanceSetup, ResearchOptions } from '@shared/maintenance-research';
+import type { MaintenanceDone, MaintenanceStatus } from '@shared/maintenance-research';
+import { announceMaintenanceDone } from '../lib/maintenance-notice';
 import { sb } from '../sb';
 import { createStore } from './createStore';
 
-export const maintenance = createStore<{ setup: MaintenanceSetup | null; ideas: AppIdeasState | null; error: string | null }>({ setup: null, ideas: null, error: null });
+/** `justDone`: the end the button celebrates for a few seconds (null after) */
+export const maintenance = createStore<{ status: MaintenanceStatus | null; error: string | null; justDone: MaintenanceDone | null }>({ status: null, error: null, justDone: null });
 const errText = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
 let started = false;
+let doneTimer: ReturnType<typeof setTimeout> | null = null;
 
-export async function refreshSetup(): Promise<void> {
-  try { const setup = await sb.invoke('maintenance:setup', undefined); maintenance.set(s => ({ ...s, setup, error: null })); }
-  catch (e) { maintenance.set(s => ({ ...s, error: errText(e) })); }
-}
-export async function refreshIdeas(): Promise<void> {
-  try { const ideas = await sb.invoke('maintenance:ideas', undefined); maintenance.set(s => ({ ...s, ideas, error: null })); }
+export async function refreshMaintenance(): Promise<void> {
+  try { const status = await sb.invoke('maintenance:status', undefined); maintenance.set(s => ({ ...s, status })); }
   catch (e) { maintenance.set(s => ({ ...s, error: errText(e) })); }
 }
 function start(): void {
   if (started) return; started = true;
-  sb.on('maintenance:changed', () => { void refreshSetup(); if (maintenance.get().ideas) void refreshIdeas(); });
-  // «Apri issue» needs an open Orchestrator: read again only when that changes (its chat streams many updates)
-  sb.on('chat:updated', c => {
-    const ideas = maintenance.get().ideas;
-    if (c.isOrchestrator && ideas && ideas.orchestrator !== !c.closedAt) void refreshIdeas();
+  sb.on('maintenance:changed', () => { void refreshMaintenance(); });
+  sb.on('maintenance:done', d => {
+    announceMaintenanceDone(d);
+    maintenance.set(s => ({ ...s, justDone: d }));
+    if (doneTimer) clearTimeout(doneTimer);
+    doneTimer = setTimeout(() => { doneTimer = null; maintenance.set(s => ({ ...s, justDone: null })); }, 6000);
+    void refreshMaintenance();
   });
 }
-/** The dialog's data, read when `open` turns true. */
-export function useMaintenance(open = true) {
-  useEffect(() => { start(); if (open) void refreshSetup(); }, [open]);
+export function useMaintenance() {
+  useEffect(() => { start(); void refreshMaintenance(); }, []);
   return maintenance.use(s => s);
 }
-export function useAppIdeas() {
-  useEffect(() => { start(); void refreshIdeas(); }, []);
-  return maintenance.use(s => ({ ideas: s.ideas, error: s.error }));
-}
 
-/** Starts the research (after the free cleanup): an error text, or null. */
-export async function startResearch(o: ResearchOptions): Promise<string | null> {
-  try { await sb.invoke('maintenance:research', o); await refreshSetup(); return null; } catch (e) { return errText(e); }
+/** The click: the free cleanup, then the research in the background. An error text, or null. */
+export async function runMaintenanceNow(): Promise<string | null> {
+  start();
+  // the button turns busy at once, before main answers
+  maintenance.set(s => ({ ...s, error: null, status: s.status ? { ...s.status, running: true } : { running: true, research: null, last: null, canResearch: true } }));
+  try { const status = await sb.invoke('maintenance:run', undefined); maintenance.set(s => ({ ...s, status })); return null; }
+  catch (e) { const error = errText(e); maintenance.set(s => ({ ...s, error })); void refreshMaintenance(); return error; }
 }
-export async function stopResearch(): Promise<void> {
-  try { const setup = await sb.invoke('maintenance:stop', undefined); maintenance.set(s => ({ ...s, setup })); } catch (e) { maintenance.set(s => ({ ...s, error: errText(e) })); }
-}
-/** «Apri issue» / «Apri tutte»: null when the Orchestrator got them, else why not. */
-export async function openIssues(ids: string[]): Promise<string | null> {
-  try {
-    const r = await sb.invoke('maintenance:openIssues', { ids });
-    maintenance.set(s => ({ ...s, ideas: r.state }));
-    return r.sent ? null : r.why ?? '';
-  } catch (e) { return errText(e); }
-}
-export async function dismissIdea(id: string): Promise<string | null> {
-  try { const ideas = await sb.invoke('maintenance:dismissIdea', { id }); maintenance.set(s => ({ ...s, ideas })); return null; } catch (e) { return errText(e); }
+export async function stopMaintenance(): Promise<void> {
+  try { const status = await sb.invoke('maintenance:stop', undefined); maintenance.set(s => ({ ...s, status })); } catch (e) { maintenance.set(s => ({ ...s, error: errText(e) })); }
 }

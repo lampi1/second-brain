@@ -18,7 +18,7 @@ export const memoryHubDe: typeof memoryHubIt = {
   'mh.ago.now': 'jetzt', 'mh.ago.min': (p: N) => `vor ${p.n} Min.`, 'mh.ago.hours': (p: N) => (p.n === 1 ? 'vor 1 Stunde' : `vor ${p.n} Stunden`), 'mh.ago.days': (p: N) => (p.n === 1 ? 'gestern' : `vor ${p.n} Tagen`),
   'mh.tabsLabel': 'Bereiche des Gedächtnisses',
   'mh.tab.proposte': 'Vorschläge', 'mh.tab.approvate': 'Freigegeben', 'mh.tab.skill': 'Skills', 'mh.tab.regole': 'Regeln', 'mh.tab.script': 'Skripte & Abfragen',
-  'mh.tab.idee': 'Ideen', 'mh.tab.app': 'App-Ideen', 'mh.tab.file': 'Dateien', 'mh.tab.apprendimento': 'Lernen', 'mh.tab.statistiche': 'Statistik',
+  'mh.tab.idee': 'Ideen', 'mh.tab.file': 'Dateien', 'mh.tab.apprendimento': 'Lernen', 'mh.tab.statistiche': 'Statistik',
   'mh.badge': (p: N) => (p.n === 1 ? '1 offener Vorschlag' : `${p.n} offene Vorschläge`),
   'mh.ap.lead': (p: N) => (p.n === 1 ? 'Eine Sache ist jetzt im Brain. Ein Klick auf den Papierkorb nimmt sie heraus; ein paar Sekunden lang kannst du es rückgängig machen.' : `${p.n} Sachen sind jetzt im Brain. Ein Klick auf den Papierkorb nimmt eine heraus; ein paar Sekunden lang kannst du es rückgängig machen.`),
   'mh.ap.search': 'Alles im Brain durchsuchen',
