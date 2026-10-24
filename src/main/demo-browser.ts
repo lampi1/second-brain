@@ -15,9 +15,9 @@ import { swallowCloseKey } from './keyguard';
 import { log } from './log';
 
 const DEMO_CREDENTIALS: CredentialEntry[] = [
-  { id: 'demo-1', group: 'air · test', user: 'mario.rossi@example.com', url: 'https://test-3.demo.test/Account/Login', note: 'holding con modulo X attivo (prove modulo X)' },
-  { id: 'demo-2', group: 'air · test', user: 'anna.bianchi@example.com', note: 'Prodotto B (area B), holding di prova' },
-  { id: 'demo-3', group: 'air · local', user: 'admin@localhost.test', url: 'https://localhost:44300/Account/Login', note: 'stack locale Prodotto A' },
+  { id: 'demo-1', group: 'ExampleApp · test', user: 'mario.rossi@example.com', url: 'https://test-3.demo.test/Account/Login', note: 'holding con modulo X attivo (prove modulo X)' },
+  { id: 'demo-2', group: 'ExampleApp · test', user: 'anna.bianchi@example.com', note: 'Prodotto B (area B), holding di prova' },
+  { id: 'demo-3', group: 'ExampleApp · local', user: 'admin@localhost.test', url: 'https://localhost:44300/Account/Login', note: 'stack locale Prodotto A' },
   { id: 'demo-4', group: 'sistemaTsTest', user: 'MEDICO-DEMO-01', note: 'Sistema TS TEST (invio 730), medico' },
 ];
 

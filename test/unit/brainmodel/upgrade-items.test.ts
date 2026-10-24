@@ -43,7 +43,7 @@ beforeEach(() => {
   log = new ChangeLog(userData, () => NOW);
   write('brain.json', JSON.stringify({ machinery: 'product-v1' }, null, 2));
   write('progetti/app.md', NOTE);
-  write('ideas.md', '# Idee e riflessioni da riprendere\n\nPensieri da non perdere.\n\n## 2026-09-01 · [lavoro] · Idea già scritta · `aperta`\n- **Idea:** esiste già.\n- **Fonte:** Davide\n');
+  write('ideas.md', '# Idee e riflessioni da riprendere\n\nPensieri da non perdere.\n\n## 2026-09-01 · [lavoro] · Idea già scritta · `aperta`\n- **Idea:** esiste già.\n- **Fonte:** Alex\n');
 });
 afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); fs.rmSync(userData, { recursive: true, force: true }); });
 

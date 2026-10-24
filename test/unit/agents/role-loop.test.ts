@@ -23,7 +23,7 @@ const DAY = 86_400_000, T0 = Date.UTC(2026, 9, 1, 12);
 
 let seq = 0;
 const run = (over: Partial<AgentRun> = {}): AgentRun => ({ runId: `r_${(++seq).toString(16).padStart(12, '0')}`, chatId: `c${seq}`, agentId: 'artisan', version: 1, goal: 'Fix', startedBy: 'orchestrator',
-  startedAt: T0, endedAt: T0 + 1000, endReason: 'completed', costUsd: 1, tokens: null, tags: { skills: ['air-test'], app: null, repo: null }, tier: 'mid',
+  startedAt: T0, endedAt: T0 + 1000, endReason: 'completed', costUsd: 1, tokens: null, tags: { skills: ['example-app-test'], app: null, repo: null }, tier: 'mid',
   outcome: { verdict: 'success', basis: 'human', by: 'user', at: T0 + 2000 }, counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null },
   corrections: { tagged: 2, afterReport: 0 }, ...over });
 
@@ -68,11 +68,11 @@ describe('trial evaluation', () => {
 
 describe('tier suggestions (daily, local)', () => {
   const roles = [{ id: 'artisan', name: 'Artisan', scope: 'role', tier: 'mid', tierMax: 'top' } as AgentProfile];
-  it('proposes the tier that does clearly better within the same skill set (Artisan + air-test: mid 40% vs top 100%)', () => {
+  it('proposes the tier that does clearly better within the same skill set (Artisan + example-app-test: mid 40% vs top 100%)', () => {
     const mid = Array.from({ length: TIER_MIN_KNOWN }, (_, i) => run({ outcome: { verdict: i < TIER_MIN_KNOWN * 0.4 ? 'success' : 'fail', basis: 'human', by: 'user', at: 1 } }));
     const top = Array.from({ length: TIER_MIN_KNOWN }, () => run({ tier: 'top' }));
     const [p] = suggestTiers({ roles, runs: [...mid, ...top] }, T0 + DAY);
-    expect(p).toMatchObject({ kind: 'tier', agentIds: ['artisan'], tier: 'top', skills: ['air-test'], state: 'pending' });
+    expect(p).toMatchObject({ kind: 'tier', agentIds: ['artisan'], tier: 'top', skills: ['example-app-test'], state: 'pending' });
     expect(p!.reason).toMatch(/40%.*100%|100%.*40%/);
   });
   it('needs enough known outcomes on both sides; opinions and self-reports never count', () => {
@@ -103,7 +103,7 @@ describe('the queue: nothing is applied without the user', () => {
   });
   it('a dismissed entry stays out; an entry that no longer matches its role is dropped', async () => {
     const w = world();
-    const p = { key: 'tier:artisan:top:["air-test"]', kind: 'tier' as const, agentIds: ['artisan'], tier: 'top' as const, skills: ['air-test'], reason: 'r', evidence: [], at: T0, state: 'pending' as const };
+    const p = { key: 'tier:artisan:top:["example-app-test"]', kind: 'tier' as const, agentIds: ['artisan'], tier: 'top' as const, skills: ['example-app-test'], reason: 'r', evidence: [], at: T0, state: 'pending' as const };
     w.loop.lifecycle.propose(p);
     await w.loop.api.decide({ key: p.key, decision: 'dismiss' });
     w.loop.lifecycle.propose(p);

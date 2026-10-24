@@ -37,6 +37,7 @@ import { MorningService } from './morning/service';
 import { createAgentLoop } from './agents/loop';
 import { childFeedbackTools } from './agents/child-feedback';
 import { delegationTools } from './agents/delegation';
+import { workDecisionTools } from './agents/work-decisions';
 import { strategyTools } from './agents/strategy-tools';
 import { portableId } from './agents/pack/flows';
 import { memoryTools } from './rules/memory-tool';
@@ -752,6 +753,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     remember: (roleId, line, chat) => writeAgentMemory(agentPacks.packs.root(), portableId(roleId), line, { scope: { roleId: portableId(roleId), project: chat.cwd }, sourceRunId: chat.run?.runId ?? `chat:${chat.id}`, sourceEventId: `report:${chat.run?.runId ?? chat.id}` }) }));
   // a Strategist's plan with the user (ADR 0108): proposed on its strip, approved by the user's click, its steps' progress
   addChatTools(strategyTools(manager));
+  addChatTools(workDecisionTools({ chats: manager, workflows }));
   // the independent reviews of finished runs (agents/judge-sample.ts): they spend tokens, so they run only in the user's
   // own app, never in tests or an agent's hidden run (judgeSamplingOn, issue #112), and only with the Agenti switch on
   const judgeSampler = new JudgeSampler({ file: path.join(ctx.userData, 'judge-samples.json'), runs: () => manager.runs.list(),

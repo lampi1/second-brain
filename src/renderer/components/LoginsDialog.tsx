@@ -1,5 +1,5 @@
 // The "Credenziali" panel: every entry of the user's credentials file (brain ops/credentials.md), grouped as in the
-// file ("air · test"), with a filter (every word must appear): user, note, "Apri" (the sign-in URL in a new internal browser tab of the user) and
+// file ("ExampleApp · test"), with a filter (every word must appear): user, note, "Apri" (the sign-in URL in a new internal browser tab of the user) and
 // Copia for user and password. The password never reaches this page: main reads it from the file at the click and
 // clears the clipboard after 30 s (credentials:copy, ADR 0012). Why: the user asked "dammi url e credenziali di test X"
 // ~12 times in 6 days (2026-10-13). Opened from the command palette and the top bar; rendered by App.tsx (modal 'credentials').

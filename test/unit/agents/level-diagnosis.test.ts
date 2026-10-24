@@ -45,6 +45,13 @@ describe('levels diagnostic', () => {
     expect(d.roles.find(r => r.agentId === 'scout')).toMatchObject({ rolled: { ended: 3, wins: 2, xp: null }, standing: { wins: 3, xp: 3 } });
     expect(() => diagnoseFile({ version: 2 }, NOW)).toThrow(/agent-runs/);
   });
+  it('keeps only the first valid record for each run ID, as the store does', () => {
+    const first = run({ outcome: { verdict: 'success', basis: 'human', at: NOW, by: 'user' } });
+    const next = run({ outcome: { verdict: 'success', basis: 'human', at: NOW, by: 'user' } });
+    const d = diagnoseFile({ version: 1, runs: [{ ...first, tokens: {} }, first, { ...first, turns: 8 }, next] }, NOW);
+    expect(d).toMatchObject({ runs: 2, invalid: 2 });
+    expect(d.roles.find(r => r.agentId === 'scout')?.standing).toMatchObject({ wins: 2, xp: 2 });
+  });
   it('on the frozen demo every veteran levels up, the Orchestrator above all, and Flash has its answers', () => {
     const d = diagnose(demoAgentRuns(DEMO_NOW), [], DEMO_NOW, demoFlashLog(DEMO_NOW));
     const by = new Map(d.roles.map(r => [r.agentId, r]));

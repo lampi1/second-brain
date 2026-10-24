@@ -8,6 +8,12 @@ import path from 'node:path';
 import { ChatManager, type ChatManagerOptions } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionSink } from '../../../src/main/chats/session';
 import { plainOwner } from '../../../src/main/agents/catalog';
+import { DEMO_NOW, demoAgentRuns, demoFlashLog } from '../../../src/main/demo-agent-runs';
+import { standings } from '../../../src/main/agents/standing';
+import { emptyTally } from '../../../src/main/agents/run-metrics';
+import { diagnoseFile } from '../../../src/main/agents/level-diagnosis';
+import { delegationTools } from '../../../src/main/agents/delegation';
+import { DELEGATION_DEFAULTS } from '../../../src/shared/roles';
 import { STALE_MS } from '../../../src/main/agents/runs';
 import type { AgentOwnerSnapshot } from '../../../src/shared/agents';
 
@@ -47,6 +53,58 @@ describe('agent runs on chats', () => {
     expect(f.file().runs.map(r => r.runId)).toEqual([f.run(c.id)!.runId]);
     const plain = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' });
     expect(f.run(plain.id)).toBeUndefined();
+  });
+
+  it('a role opened after recovering a mixed run store can report to its Orchestrator (#202)', async () => {
+    const f = fixture(), old = await f.create('agent');
+    const phrases = f.m.runs.start({ chatId: 'os_test', agentId: 'herald', version: 1,
+      goal: 'phrases', startedBy: 'app', startedAt: 1000, costKnown: true });
+    phrases.source = 'oneshot'; phrases.oneshot = { engine: 'claude', job: 'phrases', fallback: false, costBasis: 'reported' };
+    f.m.runs.save();
+    await f.m.shutdown(); managers.splice(managers.indexOf(f.m), 1);
+    const file = path.join(f.dir, 'agent-runs.json');
+    const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+    saved.runs.splice(1, 0, { ...phrases, runId: 'r_ffffffffffff', oneshot: { ...phrases.oneshot, job: 'future-job' } });
+    fs.writeFileSync(file, JSON.stringify(saved));
+    const recovered = fixture({ userData: f.dir });
+    expect(recovered.m.runs.problem).toBeNull();
+    expect(recovered.m.runs.get(old.run!.runId)).toBeDefined();
+    expect(recovered.m.runs.get(phrases.runId)?.oneshot?.job).toBe('phrases');
+    const orchestrator = await recovered.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true });
+    const role = await recovered.create('agent', {}, { id: 'herald' });
+    expect(role.run?.startedBy).toBe('orchestrator');
+    const report = delegationTools({ chats: recovered.m, roles: vi.fn(), settings: () => DELEGATION_DEFAULTS,
+      engineRefusal: () => null, label: '[agente]', runs: () => recovered.m.runs.list() }).find(t => t.name === 'agent_report')!;
+    const result = await report.run({ outcome: 'done', summary: 'Checked', output: 'Result', doneWhen: [] },
+      { mount: 'chat', params: { chatId: role.id }, sessionId: '', signal: new AbortController().signal } as never);
+    expect(JSON.parse(result as string)).toMatchObject({ reported: true, to: 'orchestrator', delivered: true });
+    expect(recovered.m.runs.get(role.run!.runId)?.report?.via).toBe('agent_report');
+    expect(recovered.m.items(orchestrator.id)).toContainEqual(expect.objectContaining({ code: 'resultReady' }));
+  });
+
+  it('restores the card levels, pruned XP, Orchestrator decisions and Flash after partial store recovery', () => {
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(DEMO_NOW);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-level-recovery-')); roots.push(dir);
+    const runs = demoAgentRuns(DEMO_NOW), flash = demoFlashLog(DEMO_NOW);
+    const phrases = { ...runs[0]!, runId: 'r_ffffffffffff', agentId: 'herald', source: 'oneshot' as const,
+      oneshot: { engine: 'claude', job: 'phrases' as const, fallback: false, costBasis: 'reported' as const },
+      outcome: { verdict: 'unknown' as const, basis: 'unknown' as const, at: DEMO_NOW, by: 'app' }, receipts: undefined, report: undefined };
+    runs.push(phrases);
+    const rollups = [{ ...emptyTally('artisan', 0), ended: 2, verdicts: { success: 2, partial: 0, fail: 0 }, xp: 6 }];
+    const expected = standings(runs, rollups, DEMO_NOW, flash);
+    expect(expected.get('artisan')!.level).toBeGreaterThan(1);
+    expect(expected.get('orchestrator')!.level).toBeGreaterThan(1);
+    expect(expected.get('flash')!.level).toBeGreaterThan(1);
+    const raw = { version: 1, runs: [null, runs[0], runs[0], ...runs.slice(1), { runId: 'bad' }], rollups, flash };
+    fs.writeFileSync(path.join(dir, 'agent-runs.json'), JSON.stringify(raw));
+    const f = fixture({ userData: dir });
+    const actual = new Map(f.m.runMetrics().map(m => [m.agentId, m.standing]));
+    expect(actual).toEqual(expected);
+    const diagnosed = diagnoseFile(raw, DEMO_NOW);
+    expect(diagnosed.invalid).toBe(3);
+    expect(new Map(diagnosed.roles.map(r => [r.agentId, r.standing]))).toEqual(expected);
+    // Metrics flush repairs the file; reopening must keep exactly the same earned progress.
+    expect(new Map(fixture({ userData: dir }).m.runMetrics().map(m => [m.agentId, m.standing]))).toEqual(expected);
   });
 
   it('ends as completed when its work is marked completed', async () => {
@@ -212,15 +270,15 @@ describe('agent runs on chats', () => {
     expect(g.m.runs.get(id)).toMatchObject({ endReason: 'closed' });
   });
 
-  it('a damaged runs file is kept and no run is recorded, while chats still start', async () => {
+  it('an unsupported runs file version is kept and no run is recorded, while chats still start', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-agent-runs-')); roots.push(dir);
-    fs.writeFileSync(path.join(dir, 'agent-runs.json'), '{"version":1,"runs":[{"runId":"bad"}]}');
+    fs.writeFileSync(path.join(dir, 'agent-runs.json'), '{"version":2,"runs":[]}');
     const f = fixture({ userData: dir });
     expect(f.m.runs.problem).toMatch(/non è leggibile/);
     const c = await f.create();
     expect(f.run(c.id)).toBeUndefined();
     await f.m.archive(c.id);
-    expect(fs.readFileSync(path.join(dir, 'agent-runs.json'), 'utf8')).toBe('{"version":1,"runs":[{"runId":"bad"}]}');
+    expect(fs.readFileSync(path.join(dir, 'agent-runs.json'), 'utf8')).toBe('{"version":2,"runs":[]}');
   });
 });
 

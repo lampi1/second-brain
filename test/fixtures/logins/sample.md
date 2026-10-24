@@ -5,13 +5,13 @@ the user's ops/credentials.md, no real secret.
 
 ```json
 {
-  "air": {
+  "ExampleApp": {
     "prod": [
       { "note": "Prodotto A PROD holding demo", "email": "prod.user@example.com", "password": "fake-prod-1" }
     ],
     "test": [
       { "email": "mario@example.com", "password": "fake-test-1" },
-      { "note": "holding with module X enabled\n(for module X checks)", "url": "https://test-3.example.test/Account/Login", "email": "rci@example.com", "password": "fake-test-2" }
+      { "note": "holding with module X enabled\n(for module X checks)", "url": "https://test-3.example.test/Account/Login", "email": "qa.user@example.com", "password": "fake-test-2" }
     ],
     "local": [
       { "note": "local stack", "url": "https://localhost:44300/", "email": "admin@localhost.test", "password": "fake-local-1" }

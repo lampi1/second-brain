@@ -16,6 +16,7 @@ describe('native Codex app tool approval', () => {
       'mcp_servers.second-brain.tools.agent_delegate.approval_mode=approve',
       'mcp_servers.second-brain.tools.agent_assign_task.approval_mode=approve',
       'mcp_servers.second-brain.tools.agent_task_events.approval_mode=approve',
+      'mcp_servers.second-brain.tools.agent_work_decisions.approval_mode=approve',
       'mcp_servers.second-brain.tools.agent_integrate_child.approval_mode=approve',
       'mcp_servers.second-brain.tools.agent_integrate_children.approval_mode=approve',
       'mcp_servers.second-brain.tools.agent_report.approval_mode=approve',

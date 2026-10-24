@@ -5,7 +5,7 @@ import { budgetMessage, budgetedTool, ORCHESTRATOR_TOOL_BUDGET, TurnToolBudget }
 
 describe('orchestrator turn budget', () => {
   it('counts workspace tools and external MCP servers, not the app\'s own tools', () => {
-    for (const t of ['Bash', 'PowerShell', 'Read', 'Grep', 'Glob', 'Edit', 'Write', 'WebFetch', 'mcp__oris-devops__wit_create', 'mcp__github__issue_write'])
+    for (const t of ['Bash', 'PowerShell', 'Read', 'Grep', 'Glob', 'Edit', 'Write', 'WebFetch', 'mcp__sample-devops__wit_create', 'mcp__github__issue_write'])
       expect(budgetedTool(t), t).toBe(true);
     for (const t of ['mcp__second-brain-app__app_create_chat', 'mcp__second-brain-app__task_estimate', 'mcp__second-brain__agent_delegate', 'AskUserQuestion', 'TodoWrite', 'Skill'])
       expect(budgetedTool(t), t).toBe(false);
@@ -28,7 +28,7 @@ describe('orchestrator turn budget', () => {
     const v = b.decide({ tool: 'Bash', input: { command: 'node gh-issue.mjs' } });
     expect(v?.deny).toContain('app_create_chat');
     expect(v?.deny).toBe(budgetMessage('Bash'));
-    expect(b.decide({ tool: 'mcp__oris-devops__wit_create', input: {} })).not.toBeNull();
+    expect(b.decide({ tool: 'mcp__sample-devops__wit_create', input: {} })).not.toBeNull();
   });
   it('never refuses the app\'s tools, nor a sub-agent\'s calls, even with the budget used', () => {
     const b = new TurnToolBudget(1);

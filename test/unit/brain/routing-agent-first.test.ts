@@ -19,7 +19,7 @@ const tmp = (): string => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-
 afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 
 describe('role first', () => {
-  const t = table([row({ kind: 'bug-fix', model: 'claude-opus-5-5', effort: 'high', why: 'scelta di Davide, nessun dato ancora' })]);
+  const t = table([row({ kind: 'bug-fix', model: 'claude-opus-5-5', effort: 'high', why: 'scelta di Alex, nessun dato ancora' })]);
 
   it('takes the resolved role as it is: no override, no exploration, no reason asked', () => {
     const r = routeChat({ ...base, agent: agent({ stats: '12 run, 9 con esito, 78% riuscite' }) }, t, REG, null);
@@ -64,8 +64,8 @@ describe('fresh reasons (#72)', () => {
     expect(statsLine({ chats: 0, known: 0, ok: 0 })).toBeNull();
     expect(statsLine({ chats: 5, known: 0, ok: 0 })).toBe('5 chat, nessuna con esito');
     expect(statsLine({ chats: 16, known: 10, ok: 7 })).toBe('16 chat, 10 con esito, 70% riuscite');
-    expect(freshReason('scelta di Davide, nessun dato ancora', { chats: 16, known: 10, ok: 7 })).toBe('scelta di Davide · 16 chat, 10 con esito, 70% riuscite');
-    expect(freshReason('scelta di Davide, nessun dato ancora', { chats: 0, known: 0, ok: 0 })).toBe('scelta di Davide, nessun dato ancora');
+    expect(freshReason('scelta di Alex, nessun dato ancora', { chats: 16, known: 10, ok: 7 })).toBe('scelta di Alex · 16 chat, 10 con esito, 70% riuscite');
+    expect(freshReason('scelta di Alex, nessun dato ancora', { chats: 0, known: 0, ok: 0 })).toBe('scelta di Alex, nessun dato ancora');
     expect(agentStatsLine({ ended: 12, successRate: { value: 0.78, n: 9 } })).toBe('12 run, 9 con esito, 78% riuscite');
     // a share from one outcome says nothing (#159)
     expect(agentStatsLine({ ended: 49, successRate: { value: 1, n: 1 } })).toBe('49 run, 1 con esito (troppo pochi per una percentuale)');
@@ -75,9 +75,9 @@ describe('fresh reasons (#72)', () => {
   });
 
   it('routes a table chat with the refreshed reason', () => {
-    const t = table([row({ kind: 'bug-fix', why: 'scelta di Davide, nessun dato ancora' })]);
+    const t = table([row({ kind: 'bug-fix', why: 'scelta di Alex, nessun dato ancora' })]);
     const r = routeChat({ ...base, counts: undefined, stats: () => ({ chats: 20, known: 12, ok: 9 }) }, t, REG, null);
-    expect(r).toMatchObject({ route: { source: 'table', reason: 'scelta di Davide · 20 chat, 12 con esito, 75% riuscite' } });
+    expect(r).toMatchObject({ route: { source: 'table', reason: 'scelta di Alex · 20 chat, 12 con esito, 75% riuscite' } });
   });
 });
 

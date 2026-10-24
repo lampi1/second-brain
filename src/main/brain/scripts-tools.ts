@@ -51,7 +51,7 @@ export function chatScriptAddTool(scripts: BrainScripts, titleOf: (chatId: strin
     inputSchema: {
       type: 'object',
       properties: {
-        name: { type: 'string', description: 'New file name with extension, e.g. "deploy-air-test.ps1" (letters, digits, . _ -).' },
+        name: { type: 'string', description: 'New file name with extension, e.g. "deploy-example-app-test.ps1" (letters, digits, . _ -).' },
         title: { type: 'string', description: 'Short human title, in the user’s language.' },
         description: { type: 'string', description: 'What it does and when to reuse it, one or two sentences, in the user’s language.' },
         usage: { type: 'string', description: 'How to run it: the command line(s) with placeholders, one per line.' },

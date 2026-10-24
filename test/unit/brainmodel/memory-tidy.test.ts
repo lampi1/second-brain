@@ -36,7 +36,7 @@ describe('tidyMemoryJob', () => {
   it('merges, generalizes and drops in one logged change per role, and the undo puts everything back', async () => {
     const root = tmp(), log = new ChangeLog(tmp(), () => NOW);
     store(root, [
-      { value: 'Statistiche prestazioni locally: https://localhost:44309/stats (after login Air runs on 44309, not 44319)' },
+      { value: 'Statistiche prestazioni locally: https://localhost:44309/stats (after login ExampleApp runs on 44309, not 44319)' },
       { value: 'Il bug era il work item 48213' },
       { value: 'Il server di test si riavvia ogni notte alle 6' },
       { value: 'il server di test si riavvia ogni notte alle 6.', observedAt: '2026-10-21T08:00:00.000Z' },

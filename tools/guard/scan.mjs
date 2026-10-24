@@ -163,7 +163,8 @@ function walk(dir) {
     const st = lstatSync(p);
     if (st.isDirectory()) { if (name !== '.git' && (flag('--no-skip') || !SKIP_DIRS.has(name))) walk(p); continue; }
     const rel = relative(root, p).split(sep).join('/');
-    if (rel === '.guardallow') continue;
+    // The allow file is published too: its comments and patterns can contain private data.
+    // scanFile applies the same review rules as every other file, including during a tree-only check.
     if (st.isSymbolicLink()) { scanName(rel, rel); add(rel, rel, 0, 'unscanned-link'); continue; }
     scanFile(rel, readFileSync(p));
   }

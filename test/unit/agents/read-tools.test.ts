@@ -16,7 +16,7 @@ function brain() {
   fs.mkdirSync(path.join(root, 'tools'));
   for (const f of ['my-tasks.mjs', 'azure-status.mjs', 'evil.mjs']) fs.writeFileSync(path.join(root, 'tools', f), 'console.log(1)\n');
   fs.writeFileSync(path.join(root, READ_TOOLS_FILE), ['# Strumenti di sola lettura', '', '- `tools/my-tasks.mjs`: i miei work item', '- tools/azure-status.mjs — stato di Azure',
-    '- tools/air-health.mjs: non ancora scritto', '- note senza script', ''].join('\n'));
+    '- tools/example-app-health.mjs: non ancora scritto', '- note senza script', ''].join('\n'));
   return root;
 }
 
@@ -42,7 +42,7 @@ describe('declared read-only tools', () => {
     // an absolute path with forward slashes (the parser drops backslashes, so a Windows path written with them stays
     // refused: fail closed)
     expect(ok(`node ${path.join(root, 'tools', 'my-tasks.mjs').replace(/\\/g, '/')}`, { ...scripts, cwd: os.tmpdir() })).toBe(true);
-    expect(ok('node tools/air-health.mjs 24')).toBe(false); // declared, missing
+    expect(ok('node tools/example-app-health.mjs 24')).toBe(false); // declared, missing
     expect(ok('node tools/evil.mjs')).toBe(false); // not declared
     expect(ok('node tools/my-tasks.mjs', { ...scripts, cwd: os.tmpdir() })).toBe(false); // another file from another folder
     expect(ok('node -e "require(1)" tools/my-tasks.mjs')).toBe(false);

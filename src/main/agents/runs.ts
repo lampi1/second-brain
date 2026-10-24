@@ -7,6 +7,8 @@
 import path from 'node:path';
 import crypto from 'node:crypto';
 import type { AgentRun, AgentRunCorrections, AgentRunEnd, AgentRunOutcome, AgentRunPlan, AgentRunReport, AgentRunTags, AgentRunTokens } from '../../shared/agents';
+import { ONE_SHOT_PURPOSES } from '../../shared/agents';
+import { log } from '../log';
 import { emptyFlashLog, flashAnswered, flashAsked, flashHanded, readFlashLog, type FlashLog } from './flash-outcomes';
 import { checkResult } from '../../shared/delegation';
 import { MODEL_TIERS, type ModelTier } from '../../shared/roles';
@@ -105,7 +107,7 @@ function readCorrections(v: unknown): AgentRunCorrections | null {
   return c && typeof c === 'object' && count(c.tagged) && count(c.afterReport) ? { tagged: c.tagged, afterReport: c.afterReport } : null;
 }
 
-/** A stored run, or null when any field is out of shape (the store refuses the file; chats.json drops the mirror). */
+/** A stored run, or null when any field is out of shape (the store skips that record; chats.json drops the mirror). */
 export function readRun(v: unknown): AgentRun | null {
   const r = v as Record<string, unknown> | null;
   if (!r || typeof r !== 'object' || !str(r.runId, 20) || !RUN_ID.test(r.runId) || !str(r.chatId, 80) || !str(r.agentId, 80) || !AGENT_ID.test(r.agentId)
@@ -117,7 +119,7 @@ export function readRun(v: unknown): AgentRun | null {
   if (r.source !== undefined && r.source !== 'chat' && r.source !== 'oneshot') return null;
   const oneshot = r.oneshot as AgentRun['oneshot'];
   if (oneshot !== undefined && (!oneshot || typeof oneshot !== 'object' || !str(oneshot.engine, 80)
-    || !['pulse', 'headline', 'upgrade'].includes(oneshot.job) || typeof oneshot.fallback !== 'boolean'
+    || !ONE_SHOT_PURPOSES.includes(oneshot.job) || typeof oneshot.fallback !== 'boolean'
     || !['reported', 'estimated', 'unknown'].includes(oneshot.costBasis))) return null;
   if (outcome === null) return null;
   const c = r.counters as Record<string, unknown> | null;
@@ -295,10 +297,17 @@ export class AgentRunStore {
         if (!t || keys.has(`${t.agentId}/${t.version}`)) throw new Error('Invalid agent run rollup');
         keys.add(`${t.agentId}/${t.version}`); this.rollups.push(t);
       }
+      let skipped = 0;
       for (const v of raw.runs) {
         const run = readRun(v);
-        if (!run || this.runs.has(run.runId)) throw new Error('Invalid agent run');
+        if (!run || this.runs.has(run.runId)) { skipped++; continue; }
         this.runs.set(run.runId, run);
+      }
+      if (skipped) {
+        // A bad record must not disable unrelated chats. Persist the repair on the next normal flush; never log contents.
+        this.dirty = true;
+        log.warn('agents', 'invalid agent run records skipped', { data: { skipped, kept: this.runs.size },
+          hint: 'valid runs were recovered; new runs can still be recorded' });
       }
     } catch { this.runs.clear(); this.rollups = []; this.prunedThrough = 0; this.flash = emptyFlashLog(); this.problem = 'Il registro delle esecuzioni degli Agenti non è leggibile. Il file è conservato; le nuove esecuzioni non vengono registrate.'; }
   }

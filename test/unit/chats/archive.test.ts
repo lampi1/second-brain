@@ -82,7 +82,7 @@ describe('ChatManager archive (auto-close)', () => {
   });
 
   for (const completeCensus of [false, true]) it(`a resumed background task restarts idle clocks (${completeCensus ? 'explicit complete census' : 'real partial census'})`, async () => {
-    // the 15/10 QA chats: SendMessage to a finished air-qa agent resumed it, the app kept counting 0 and closed the chat
+    // the 15/10 QA chats: SendMessage to a finished example-app-qa agent resumed it, the app kept counting 0 and closed the chat
     const { m, cwd } = setup(undefined, undefined, undefined, { FAKE_CLAUDE_TASK_MS: '400' }, completeCensus);
     const c = await m.create({ harness: 'claude', cwd, prompt: 'background resumed agent' });
     await waitFor(() => summary(m, c.id).state === 'idle' && summary(m, c.id).background === undefined && summary(m, c.id).backgroundEndedAt, 'first run ended');
