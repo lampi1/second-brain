@@ -54,7 +54,7 @@ export function routineLines(snap: FlowSnapshot | null | undefined): Entry[] {
   });
 }
 /** How the app runs routines (ADR 0155), so the Orchestrator answers from the code's rules, not a guess. */
-const ROUTINE_RULES = ['The app runs routines by itself (runner): at most two at once, the rest wait their turn; app_flow_overview says what each run is doing.',
+const ROUTINE_RULES = ['The app runs routines by itself (runner); app_flow_overview says what each run is doing. Runs a trigger starts: at most two at once and one per trigger, the rest wait in its queue; a start by hand (one item, or a routine without trigger) does not wait.',
   'A trigger (on the Routine page) checks DevOps or a timer and queues what it finds; a DevOps trigger can filter by tags (all of), excluded tags, a list of work item ids, an iteration path and a max per hour.',
   'Trigger paused: it detects and starts nothing, not even a start on one item; runs already started keep going but lose its DevOps writes and test DB reads at once, so a step that needs them stops. Pausing a run stops it: no new step starts, the one at work finishes; resume continues where it stopped.',
   'All paused (global): no trigger checks or starts. «Svuota coda» discards the waiting events (the count the user saw); they do not come back.',

@@ -156,7 +156,7 @@ describe('app_config: routines (the Routine page\'s own calls)', () => {
     expect(await tool.run({ action: 'set', area: 'routine', key: 'trigger', flowId: 'fix', value: true })).toMatchObject({ trigger: 'attivo', before: 'in pausa' });
     expect(r.pauseTrigger).toHaveBeenCalledWith('r1', 2, false);
     expect(await tool.run({ action: 'set', area: 'routine', key: 'trigger', flowId: 'fix', value: false })).toHaveProperty('note');
-    await expect(tool.run({ action: 'set', area: 'routine', key: 'queue', flowId: 'fix', value: 'tutto' })).rejects.toThrow(/ora 3/);
+    await expect(tool.run({ action: 'set', area: 'routine', key: 'queue', flowId: 'fix', value: 'tutto' })).rejects.toThrow(/diglielo prima/);
     expect(await tool.run({ action: 'set', area: 'routine', key: 'queue', flowId: 'fix', value: 3 })).toMatchObject({ discarded: 3 });
     expect(r.clearQueue).toHaveBeenCalledWith('r1', 3);
     await tool.run({ action: 'set', area: 'routine', key: 'run', runId: 'run-1', value: true });
