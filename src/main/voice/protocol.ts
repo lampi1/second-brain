@@ -8,7 +8,7 @@ export type VoiceIn =
   | { type: 'listen'; on: boolean; asr: VoiceAsr }
   | { type: 'audio'; samples: Float32Array }
   | { type: 'speak'; id: number; text: string; voice: VoiceName }
-  | { type: 'unload' };
+  | { type: 'unload'; asr: VoiceAsr };
 
 export type VoiceOut =
   | { type: 'up' }

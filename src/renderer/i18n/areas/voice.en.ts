@@ -14,6 +14,7 @@ export const voiceEn: typeof voiceIt = {
   'voice.speaking': 'Answering you',
   'voice.hush': 'quiet',
   'voice.sendsAlone': 'sends when you stop talking',
+  'voice.speakFailed': ({ error }: { error: string }) => `The voice could not speak: ${error}`,
   'voice.engineDown': 'The voice engine is not answering: try again shortly.',
   'voice.noMic': ({ error }: { error: string }) => `Microphone not available: ${error}`,
   'voice.noFlash': 'Open Flash to talk to it.',

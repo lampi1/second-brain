@@ -14,6 +14,7 @@ export const voiceDe: typeof voiceIt = {
   'voice.speaking': 'Antworte dir',
   'voice.hush': 'still',
   'voice.sendsAlone': 'geht los, wenn du aufhörst zu sprechen',
+  'voice.speakFailed': ({ error }: { error: string }) => `Die Stimme konnte nicht sprechen: ${error}`,
   'voice.engineDown': 'Die Sprach-Engine antwortet nicht: versuch es gleich nochmal.',
   'voice.noMic': ({ error }: { error: string }) => `Mikrofon nicht verfügbar: ${error}`,
   'voice.noFlash': 'Öffne Flash, um mit ihm zu reden.',

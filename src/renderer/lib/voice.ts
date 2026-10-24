@@ -22,6 +22,7 @@ const set = (p: Partial<VoiceUi>) => voice.set(s => ({ ...s, ...p }));
 
 let stream: MediaStream | null = null, ctx: AudioContext | null = null, proc: ScriptProcessorNode | null = null;
 let out: AudioContext | null = null, playing: AudioBufferSourceNode | null = null;
+let session = 0; // each start and stop; an await that comes back to another session gives up
 let onSince = 0, quietUntil = 0, startWhenReady = false, transcribeTimer: ReturnType<typeof setTimeout> | null = null;
 const spoken = new Set<string>();
 
@@ -38,9 +39,12 @@ export function startVoice(): void {
   if (wired || typeof window === 'undefined' || !window.sb) return;
   wired = true;
   window.sb.on('voice:changed', st => {
+    const was = voice.get().error;
     set({ engine: st, error: st.error });
-    if (st.error && voice.get().phase === 'preparing') { startWhenReady = false; set({ phase: 'off' }); }
-    if (startWhenReady && allReady(st)) { startWhenReady = false; void openMic(); }
+    // an engine error while voice is on (Whisper missing, the addon broken): said once, not at every chunk
+    if (st.error && st.error !== was && !['off', 'preparing'].includes(voice.get().phase)) toast(st.error, 'err');
+    if (st.error && voice.get().phase === 'preparing') { fail(st.error); return; }
+    if (startWhenReady && allReady(st)) { startWhenReady = false; void openMic(session); }
   });
   window.sb.on('voice:speech', ({ active }) => {
     const ph = voice.get().phase;
@@ -60,18 +64,31 @@ const allReady = (st: VoiceState | null) => !!st && st.ready.vad && st.ready.asr
 export async function toggleVoice(target?: VoiceTarget): Promise<void> {
   const s = voice.get();
   if (s.phase !== 'off') { if (target && target !== s.target) { set({ target }); return; } stopVoice(); return; }
-  set({ target: target ?? s.target, error: null });
+  // leaves «off» before the first await: a second click or Ctrl+M meanwhile turns it off instead of opening twice
+  const my = ++session;
+  set({ target: target ?? s.target, error: null, phase: 'starting' });
   const st = await window.sb.invoke('voice:state', undefined).catch(() => null);
+  if (my !== session) return;
   set({ engine: st });
-  if (!st) { set({ error: t('voice.engineDown') }); return; }
+  if (!st) { fail(t('voice.engineDown')); return; }
   if (!allReady(st)) {
     // the first time: the models download (once), then the mic opens by itself
     startWhenReady = true;
     set({ phase: 'preparing' });
-    set({ engine: await window.sb.invoke('voice:prepare', undefined).catch(() => st) });
+    const next = await window.sb.invoke('voice:prepare', undefined).catch(() => st);
+    if (my === session) set({ engine: next });
     return;
   }
-  await openMic();
+  await openMic(my);
+}
+
+/** Voice could not start or broke: off, the reason in the bar's place (a toast) and in Settings → Voce. */
+function fail(error: string): void {
+  session++;
+  startWhenReady = false;
+  closeMic();
+  set({ phase: 'off', level: 0, error });
+  toast(error, 'err');
 }
 
 /** Ctrl+M: on → off; off → on for Flash when the focus is in Flash's tile, else for the Orchestrator. */
@@ -81,16 +98,21 @@ export function shortcutVoice(): void {
   void toggleVoice(inFlash ? 'flash' : 'orchestrator');
 }
 
-async function openMic(): Promise<void> {
+async function openMic(my: number): Promise<void> {
   set({ phase: 'starting' });
   const fake = !!voice.get().engine?.fake;
+  let got: MediaStream | null = null;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+    got = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+    // turned off (or started again) while the permission or the device was pending: this stream is never used
+    if (my !== session) { got.getTracks().forEach(tr => tr.stop()); return; }
+    stream = got;
     ctx = new AudioContext();
     const src = ctx.createMediaStreamSource(stream);
     proc = ctx.createScriptProcessor(4096, 1, 1);
     const ratio = ctx.sampleRate / VOICE_RATE;
     proc.onaudioprocess = e => {
+      if (my !== session) return;
       const input = e.inputBuffer.getChannelData(0);
       let sum = 0;
       for (let i = 0; i < input.length; i++) sum += input[i]! * input[i]!;
@@ -102,9 +124,11 @@ async function openMic(): Promise<void> {
     src.connect(proc);
     proc.connect(ctx.destination); // a ScriptProcessor runs only while connected; its output stays silent
   } catch (e) {
+    if (my !== session) { got?.getTracks().forEach(tr => tr.stop()); return; }
     closeMic();
-    if (!fake) { set({ phase: 'off', error: t('voice.noMic', { error: e instanceof Error ? e.message : String(e) }) }); toast(t('voice.noMic', { error: e instanceof Error ? e.message : String(e) }), 'err'); return; }
+    if (!fake) { fail(t('voice.noMic', { error: e instanceof Error ? e.message : String(e) })); return; }
   }
+  if (my !== session) return;
   onSince = Date.now();
   set({ phase: 'listening' });
   await window.sb.invoke('voice:listen', { on: true }).catch(() => {});
@@ -132,6 +156,7 @@ function closeMic(): void {
 }
 
 export function stopVoice(): void {
+  session++;
   startWhenReady = false;
   closeMic();
   stopSpeaking();
@@ -171,7 +196,7 @@ export async function say(text: string, raw = false): Promise<void> {
   const r = await window.sb.invoke('voice:speak', { text: clean }).catch(() => null);
   if (n !== speakN || voice.get().phase === 'off') return;
   if (!r || r.error || !r.samples.length) {
-    if (r?.error) set({ error: r.error });
+    if (r?.error) { set({ error: r.error }); toast(t('voice.speakFailed', { error: r.error }), 'err'); }
     set({ phase: prev === 'speaking' ? 'listening' : prev });
     return;
   }

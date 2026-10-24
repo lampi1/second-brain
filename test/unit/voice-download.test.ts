@@ -69,6 +69,16 @@ describe('ensurePart', () => {
     await ensurePart(root, part, () => {}, counting);
     expect(calls).toBe(2);
   });
+  it('a catalog change (a new hash for the same part) makes the part missing again, its old files dropped', async () => {
+    const root = tmp(), a = Buffer.from('v1'), b = Buffer.from('v2');
+    const v1: VoicePart = { id: 'p', files: [{ name: 'm.onnx', url: 'https://x/1', check: { sha256: sha(a) }, bytes: 2 }] };
+    const v2: VoicePart = { id: 'p', files: [{ name: 'm.onnx', url: 'https://x/2', check: { sha256: sha(b) }, bytes: 2 }] };
+    await ensurePart(root, v1, () => {}, fetchOf({ 'https://x/1': a }));
+    expect(partReady(root, v2)).toBe(false);
+    await ensurePart(root, v2, () => {}, fetchOf({ 'https://x/2': b }));
+    expect(fs.readFileSync(path.join(root, 'p', 'm.onnx'), 'utf8')).toBe('v2');
+    expect(partReady(root, v2)).toBe(true);
+  });
   it('a file with another hash is deleted and the part never marked ready', async () => {
     const root = tmp();
     const part: VoicePart = { id: 'p', files: [{ name: 'm.onnx', url: 'https://x/m', check: { sha256: '0'.repeat(64) }, bytes: 3 }] };

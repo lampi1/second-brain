@@ -16,8 +16,13 @@ const port = (process as unknown as { parentPort: Port }).parentPort;
 const send = (m: VoiceOut) => port.postMessage(m);
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- sherpa-onnx-node ships JS without types */
-let sherpa: any = null;
-const lib = () => (sherpa ??= createRequire(import.meta.url)('sherpa-onnx-node'));
+let sherpa: any = null, loadError: Error | null = null;
+/** the native addon, loaded once; a failure is kept, so a broken install fails fast instead of on every chunk */
+const lib = () => {
+  if (loadError) throw loadError;
+  try { return (sherpa ??= createRequire(import.meta.url)('sherpa-onnx-node')); }
+  catch (e) { loadError = new Error(`motore voce non caricato: ${msg(e)}`); throw loadError; }
+};
 let root = '';
 let vad: any = null, rec: any = null, recFor = '', tts: any = null, ttsFor = '';
 const threads = () => Math.max(1, Math.min(4, Math.floor((globalThis.navigator?.hardwareConcurrency ?? 4) / 2)));
@@ -48,6 +53,7 @@ function ttsNow(voice: VoiceName): any {
 }
 
 let asrNow: VoiceAsr = 'fast';
+let preparing = false; // a download runs beside the decode/speak queue: voice mode keeps working meanwhile
 let queue: Promise<void> = Promise.resolve();
 const later = (fn: () => Promise<void> | void) => { queue = queue.then(fn, fn).catch(e => send({ type: 'error', message: msg(e) })); };
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -80,7 +86,7 @@ port.on('message', ({ data: m }) => {
     switch (m.type) {
       case 'init': root = m.root; asrNow = m.asr; return;
       case 'state': send({ type: 'state', ready: { vad: partReady(root, VAD), asr: partReady(root, ASR[m.asr]), tts: partReady(root, TTS[m.voice]) } }); return;
-      case 'prepare': later(async () => {
+      case 'prepare': if (preparing) return; preparing = true; void (async () => {
         const parts = partsFor(m.asr, m.voice).filter(p => !partReady(root, p));
         const total = parts.reduce((n, p) => n + partBytes(p), 0);
         let before = 0;
@@ -89,14 +95,15 @@ port.on('message', ({ data: m }) => {
           before += partBytes(p);
         }
         send({ type: 'prepared' });
-      }); return;
+      })().catch(e => send({ type: 'error', message: msg(e) })).finally(() => { preparing = false; }); return;
       case 'listen':
         asrNow = m.asr;
         if (!m.on) { if (vad) { vad.flush(); drain(); vad.reset(); } lastDetected = false; tail = new Float32Array(0); }
         return;
       case 'audio': {
         if (!partReady(root, VAD)) { if (!warned) send({ type: 'error', message: 'Modelli della voce mancanti: scaricali da Impostazioni → Voce.' }); warned = true; return; }
-        const v = vadNow();
+        let v: any;
+        try { v = vadNow(); } catch (e) { if (!warned) send({ type: 'error', message: msg(e) }); warned = true; return; }
         // Silero reads 512-sample windows: the microphone's chunks are cut to that size, the rest waits for the next one
         const all = tail.length ? concat(tail, m.samples) : m.samples;
         let at = 0;
@@ -109,11 +116,11 @@ port.on('message', ({ data: m }) => {
       }
       case 'speak': later(async () => {
         try {
-          const audio = await ttsNow(m.voice).generateAsync({ text: m.text, sid: 0, speed: 1 });
+          const audio = await ttsNow(m.voice).generateAsync({ text: m.text, sid: 0, speed: 1, enableExternalBuffer: false }) // Electron's memory cage refuses external buffers;
           send({ type: 'spoken', id: m.id, samples: audio.samples, rate: audio.sampleRate });
         } catch (e) { send({ type: 'spoken', id: m.id, samples: new Float32Array(0), rate: 22050, error: msg(e) }); }
       }); return;
-      case 'unload': vad = null; rec = null; tts = null; recFor = ''; ttsFor = ''; return;
+      case 'unload': asrNow = m.asr; rec = null; tts = null; recFor = ''; ttsFor = ''; return;
     }
   } catch (e) { send({ type: 'error', message: msg(e) }); }
 });

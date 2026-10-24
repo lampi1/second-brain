@@ -13,6 +13,7 @@ export const voiceIt = {
   'voice.speaking': 'Ti sto rispondendo',
   'voice.hush': 'zitto',
   'voice.sendsAlone': 'parte quando smetti di parlare',
+  'voice.speakFailed': ({ error }: { error: string }) => `La voce non ha potuto parlare: ${error}`,
   'voice.engineDown': 'Il motore voce non risponde: riprova tra poco.',
   'voice.noMic': ({ error }: { error: string }) => `Microfono non disponibile: ${error}`,
   'voice.noFlash': 'Apri Flash per parlargli.',

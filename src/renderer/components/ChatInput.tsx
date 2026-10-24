@@ -414,7 +414,10 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
           )}
           {ready ? (
             <button type="button" className="send" onClick={() => submit()} aria-label={mode ? t(busy ? 'chat.input.queueAsMode' : 'chat.input.sendAsMode', { mode: t(`chat.mode.${mode}`) }) : busy ? t('chat.input.queue') : t('chat.input.send')} data-tip={mode ? t(busy ? 'chat.input.queueAsModeTip' : 'chat.input.sendAsModeTip', { mode: t(`chat.mode.${mode}`) }) : busy ? t('chat.input.queueShort') : t('chat.input.sendShort')} data-testid={`${testid}-send`}><IconSend size={14} /></button>
-          ) : voice ? null : (
+          ) : voice ? (
+            // the mic takes the «Invio» key's place; what Enter does now (send the queued one) still shows
+            enterNow || (busy && !orchestrator) ? <span className="composer-hint" aria-hidden="true">{enterNow ? t('chat.input.hintNow') : t('chat.input.queuedInQueue')}</span> : null
+          ) : (
             <span className="composer-hint" aria-hidden="true">{enterNow ? t('chat.input.hintNow') : busy && !orchestrator ? t('chat.input.queuedInQueue') : ''} <Kbd>{auditText('audit.ChatInput.enter')}</Kbd></span>
           )}
           {voice && <MicButton target={voice} testid={testid} />}

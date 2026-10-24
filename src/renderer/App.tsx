@@ -73,11 +73,11 @@ function onKey(e: KeyboardEvent): void {
   if (!cmd) return;
   if (u.modal) {
     if (cmd.type === 'palette' && u.modal === 'palette') { e.preventDefault(); closeModal(); }
-    if (cmd.type === 'closeFocused') e.preventDefault(); // else Electron's default menu takes Ctrl+W and closes the window
+    if (cmd.type === 'closeFocused' || cmd.type === 'voice') e.preventDefault(); // else Electron's default menu takes Ctrl+W (close) or Ctrl+M (minimize)
     return; // an open dialog handles its own keys
   }
   // the questions window in front: only the palette, Ctrl+J and Esc act; nothing hidden under it (Ctrl+W, Ctrl+1-9…)
-  if (u.qwin.shown && cmd.type !== 'palette' && cmd.type !== 'next' && cmd.type !== 'escape') {
+  if (u.qwin.shown && cmd.type !== 'palette' && cmd.type !== 'next' && cmd.type !== 'escape' && cmd.type !== 'voice') {
     if (cmd.type === 'closeFocused') e.preventDefault();
     return;
   }
@@ -92,6 +92,7 @@ function onKey(e: KeyboardEvent): void {
       case 'closeFocused': if (!e.repeat) closeViewer(); break;
       case 'palette': openModal('palette'); break;
       case 'next': nextThing(); break;
+      case 'voice': if (!e.repeat) shortcutVoice(); break;
       default: return;
     }
     e.preventDefault();

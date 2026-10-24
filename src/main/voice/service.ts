@@ -26,10 +26,13 @@ export interface VoiceDeps {
   fake?: { text: string } | null;
 }
 
+const SPEAK_TIMEOUT_MS = 30_000;
+
 export class VoiceService {
   private child: Child | null = null;
   private downloading: VoiceState['downloading'] = null;
   private error: string | null = null;
+  private errorAt = 0;
   private speakId = 0;
   private readonly speaks = new Map<number, (r: { samples: Float32Array; rate: number; error?: string }) => void>();
   private fakeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -73,6 +76,8 @@ export class VoiceService {
       case 'speech': this.d.speech(m.active); return;
       case 'spoken': { const done = this.speaks.get(m.id); this.speaks.delete(m.id); done?.(m); return; }
       case 'error':
+        if (m.message === this.error && Date.now() - this.errorAt < 10_000) return;
+        this.errorAt = Date.now();
         log.warn('voice', 'voice engine error', { cause: m.message, hint: 'models in userData/voice; a bad download is deleted and fetched again with «Scarica»' });
         if (this.downloading) this.downloading = null;
         this.error = m.message;
@@ -114,13 +119,15 @@ export class VoiceService {
     if (this.d.fake) return Promise.resolve({ samples: new Float32Array(6615), rate: 22050 });
     const id = ++this.speakId;
     return new Promise(res => {
-      this.speaks.set(id, res);
+      // a stuck engine never leaves the renderer «speaking» (and deaf) for good
+      const timer = setTimeout(() => { if (this.speaks.delete(id)) res({ samples: new Float32Array(0), rate: 22050, error: 'la voce non ha risposto in tempo' }); }, SPEAK_TIMEOUT_MS);
+      this.speaks.set(id, r => { clearTimeout(timer); res(r); });
       this.proc().postMessage({ type: 'speak', id, text: clean, voice: voice ?? this.d.settings().voice });
     });
   }
 
   /** settings changed (another Whisper or voice): the loaded models are dropped, the next use loads the new ones */
-  settingsChanged(): void { this.child?.postMessage({ type: 'unload' }); this.emit(); }
+  settingsChanged(): void { this.child?.postMessage({ type: 'unload', asr: this.d.settings().asr }); this.emit(); }
 
   dispose(): void { if (this.fakeTimer) clearTimeout(this.fakeTimer); this.child?.kill(); this.child = null; }
 }

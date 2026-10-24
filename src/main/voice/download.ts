@@ -14,7 +14,11 @@ const STALL_MS = 30_000;
 const OK = '.ok';
 
 export const partDir = (root: string, p: VoicePart): string => path.join(root, p.id);
-export const partReady = (root: string, p: VoicePart): boolean => fs.existsSync(path.join(partDir(root, p), OK));
+/** what a part's `.ok` vouches for: its files' hashes; a catalog change (new hash) makes the part missing again */
+const stamp = (p: VoicePart): string => p.files.map(f => `${f.name} ${'sha256' in f.check ? f.check.sha256 : f.check.gitBlob}`).join('\n');
+export const partReady = (root: string, p: VoicePart): boolean => {
+  try { return fs.readFileSync(path.join(partDir(root, p), OK), 'utf8') === stamp(p); } catch { return false; }
+};
 
 /** Hash check of a whole buffer (sha256, or git's blob sha1 with its size). */
 export function verify(bytes: Uint8Array, check: VoiceFile['check']): boolean {
@@ -57,15 +61,17 @@ async function fetchFile(f: VoiceFile, dest: string, progress: (n: number) => vo
 export async function ensurePart(root: string, p: VoicePart, progress: (done: number) => void, fetchFn: typeof fetch = fetch): Promise<void> {
   const dir = partDir(root, p);
   if (partReady(root, p)) return;
+  // anything left from an earlier, unfinished or older-catalog attempt is never trusted: the part starts clean
+  fs.rmSync(dir, { recursive: true, force: true });
   fs.mkdirSync(dir, { recursive: true });
   let before = 0;
   for (const f of p.files) {
     const dest = path.join(dir, f.name);
-    if (!fs.existsSync(dest)) await fetchFile(f, dest, n => progress(before + n), fetchFn);
+    await fetchFile(f, dest, n => progress(before + n), fetchFn);
     before += f.bytes; progress(before);
     if (f.untar) { untarBz2(fs.readFileSync(dest), dir); fs.rmSync(dest, { force: true }); }
   }
-  fs.writeFileSync(path.join(dir, OK), new Date().toISOString());
+  fs.writeFileSync(path.join(dir, OK), stamp(p));
 }
 
 /** Unpacks a .tar.bz2 into `dir`, dropping the archive's top folder. Only plain files and folders; a name that would

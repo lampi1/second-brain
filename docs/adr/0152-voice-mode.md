@@ -20,7 +20,8 @@ quanto un click». Not now: the app speaking on its own initiative (recaps). The
 - **Questions by voice**: a question card on screen registers with `useVoiceQuestion` (renderer `lib/voice.ts`). In
   voice mode the app reads it, the bar says «In ascolto della tua risposta», and the next utterance goes to the card,
   never to the chat: a short yes / no / «non voglio rispondere» is the click, a longer sentence is the written answer.
-  Several open: the newest first, the next is read when it closes. A reply that ends while a question waits stays in
+  Several open: the newest first, the next is read when it closes. A card is the app's question, so it takes the words
+  whichever input the mic belongs to (Orchestrator or Flash); while one is open nothing said reaches the chat. A reply that ends while a question waits stays in
   the chat, unread.
 - **Engine: sherpa-onnx** (`sherpa-onnx-node` 1.13.8, Apache-2.0, prebuilt for win-x64): Silero VAD cuts the 16 kHz
   stream into utterances, **Whisper** transcribes in Italian (Veloce = small int8, 374 MB; Precisa = turbo int8, ~1 GB),
@@ -33,6 +34,8 @@ quanto un click». Not now: the app speaking on its own initiative (recaps). The
 - **Models downloaded once, pinned**: `main/voice/catalog.ts` lists every file with its source and hash — Hugging Face
   files by commit and sha256 (or the git blob id for the small vocabulary file), the k2-fsa GitHub release archives by
   the sha256 GitHub publishes. A mismatch deletes the file; a part gets its `.ok` marker only when all its files pass.
+  `.ok` holds the hashes it vouches for, so a catalog change makes the part missing again and it is fetched clean.
+  Downloads run beside the transcribe/speak queue (voice keeps working meanwhile); a speech request times out at 30 s.
   The first Ctrl+M downloads what is missing (Settings → Voce shows progress and has «Scarica» and «Prova»).
 - **Permission**: the app window grants `media` only when it asks for audio alone, from the app's own page
   (`window.ts micAllowed`); camera, screen capture and everything else stay refused.
