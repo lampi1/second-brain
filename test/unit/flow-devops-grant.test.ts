@@ -66,10 +66,12 @@ describe('DevOps write grant', () => {
   it('refuses a run without its rule event, a changed rule or a paused automation', async () => {
     const { auto, flow, enable, started } = setup(); const rule = enable();
     const run = await started();
-    // A hand-started run with a look-alike subject but no matching event never gets the grant.
-    const manual = flow.start({ flowId: 'fix', flowVersion: 1, subjectKey: `auto:${rule.id}:${rule.revision}:${'a'.repeat(64)}`, scope: { project: 'ProjectA', areaPath: 'Team' }, inputs: { workspace: '/project', 'work-item-id': '7' } }, 'orch');
-    expect(auto.grantFor(manual)).toBeNull();
-    expect(manual.status).toBe('blocked');
+    // auto: subjects are reserved: a manual start cannot copy one, even the approved event's own subject.
+    const start = { flowId: 'fix', flowVersion: 1, scope: { project: 'ProjectA', areaPath: 'Team' } };
+    expect(() => flow.start({ ...start, subjectKey: run.subjectKey, inputs: { ...run.inputs } }, 'orch')).toThrow('reserved');
+    expect(() => flow.start({ ...start, subjectKey: `auto:${rule.id}:${rule.revision}:${'a'.repeat(64)}`, inputs: { workspace: '/project', 'work-item-id': '7' } }, 'orch')).toThrow('reserved');
+    // A run with a copied subject that the host did not start from the event never gets the grant.
+    expect(auto.grantFor({ ...run, id: 'copied-run' })).toBeNull();
     expect(auto.grantFor({ ...run, inputs: { ...run.inputs, 'work-item-id': '43' } })).toBeNull();
     expect(auto.grantFor({ ...run, ownerOrchestratorId: 'other' })).toBeNull();
     auto.control({ expectedRevision: auto.snapshot().revision, paused: true, background: false });

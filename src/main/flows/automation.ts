@@ -61,6 +61,8 @@ export class FlowAutomationService {
   private data: Stored = empty();
   private storageError?: string;
   private stopped = false;
+  /** Event whose run flow.start is creating now (synchronous, in memory only). */
+  private starting?: string;
   private generation = 0;
   private running?: Promise<void>;
   private controller?: AbortController;
@@ -163,7 +165,11 @@ export class FlowAutomationService {
     try { this.usable(rule.config, event.inputs); } catch (error) { this.blockEvent(event, errorText(error)); throw error; }
     const occupied = snapshot.runs.filter(run => run.status !== 'completed' && this.data.rules.some(item => run.subjectKey.startsWith(`auto:${item.id}:`)));
     if (occupied.length >= 2 || occupied.some(run => run.subjectKey.startsWith(`auto:${rule.id}:`))) throw new Error('Automatic flow concurrency limit reached; event remains queued');
-    const run = flow.start({ flowId: rule.config.flowId, flowVersion: rule.config.flowVersion, subjectKey: event.subjectKey, scope: copy(rule.config.scope), inputs: copy(event.inputs) }, ownerId);
+    // While flow.start prepares the first step, grantFor accepts only this event's own start (before runId is recorded).
+    this.starting = event.id;
+    let run: FlowRun;
+    try { run = flow.start({ flowId: rule.config.flowId, flowVersion: rule.config.flowVersion, subjectKey: event.subjectKey, scope: copy(rule.config.scope), inputs: copy(event.inputs) }, ownerId, true); }
+    finally { this.starting = undefined; }
     this.change(() => { event.status = 'started'; event.runId = run.id; event.updatedAt = this.now(); delete event.reason; });
     return run;
   }
@@ -176,7 +182,9 @@ export class FlowAutomationService {
     if (!rule || String(rule.revision) !== match![2] || rule.status !== 'enabled' || rule.approvedRevision !== rule.revision || !rule.config.devopsWrite || rule.config.trigger.kind !== 'devops'
       || rule.config.flowId !== run.flowId || rule.config.flowVersion !== run.flowVersion || rule.ownerOrchestratorId !== run.ownerOrchestratorId || hash(rule.config.scope) !== hash(run.scope)) return null;
     const event = this.data.events.find(item => item.ruleId === rule.id && item.subjectKey === run.subjectKey);
-    if (!event || event.ruleRevision !== rule.revision || event.status === 'cancelled' || (event.runId !== undefined && event.runId !== run.id) || hash(event.inputs) !== hash(run.inputs)) return null;
+    // Only a run the host started from this event: recorded as started with this run id, or being started right now.
+    const own = (event?.status === 'started' && event.runId === run.id) || (event !== undefined && this.starting === event.id && event.runId === undefined);
+    if (!event || !own || event.ruleRevision !== rule.revision || hash(event.inputs) !== hash(run.inputs)) return null;
     const id = run.inputs['work-item-id'];
     if (!id || !/^[1-9]\d{0,9}$/.test(id) || !Number.isSafeInteger(Number(id))) return null;
     // No flow snapshot here: the flow service may call this inside its own commit; poll re-checks usable() each tick.

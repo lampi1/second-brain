@@ -13,7 +13,7 @@ const GUID = '11111111-2222-3333-4444-555555555555';
 const grant = (over: Partial<DevOpsWriteGrant> = {}): DevOpsWriteGrant => ({ organization: 'contoso', projects: ['ProjectA', 'ProjectB'], ops: ['tags', 'comment', 'fields', 'test-plans', 'test-results', 'pr-links'], fields: ['System.State', 'System.AreaPath'], ...over });
 interface Call { method: string; url: string; body: unknown; headers: Record<string, string> }
 
-function setup(options: { grant?: DevOpsWriteGrant; project?: string; status?: (call: Call) => number | undefined } = {}) {
+function setup(options: { grant?: DevOpsWriteGrant; project?: string; prProject?: string; status?: (call: Call) => number | undefined } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-dw-')); dirs.push(dir);
   const calls: Call[] = [], audit = vi.fn();
   const request = vi.fn(async (url: string, init: RequestInit) => {
@@ -27,6 +27,7 @@ function setup(options: { grant?: DevOpsWriteGrant; project?: string; status?: (
     else if (url.includes('$Test%20Case')) body = { id: 103 };
     else if (url.includes('/TestPoint?testCaseId')) body = { value: [{ id: 900 }] };
     else if (url.includes('/comments?')) body = { id: 5 };
+    else if (url.includes('/_apis/projects/')) body = { id: GUID, name: options.prProject ?? 'ProjectB' };
     return new Response(JSON.stringify(body), { status });
   });
   const writer = new DevOpsWriter({ file: path.join(dir, 'ledger.json'), token: async () => 'token-value', request, audit });
@@ -59,7 +60,8 @@ describe('DevOps write adapter', () => {
     expect(calls[1]!.url).toContain('/contoso/ProjectA/_apis/wit/workItems/42/comments?');
     expect(calls[1]!.body).toEqual({ text: '&lt;b&gt;done&lt;/b&gt;' });
     await run({ op: 'link-pr', projectId: GUID, repositoryId: GUID, pullRequestId: 9 });
-    expect(JSON.stringify(calls[3]!.body)).toContain(`vstfs:///Git/PullRequestId/${GUID}%2F${GUID}%2F9`);
+    expect(calls[2]!.url).toContain(`/contoso/_apis/projects/${GUID}?`);
+    expect(JSON.stringify(calls.at(-1)!.body)).toContain(`vstfs:///Git/PullRequestId/${GUID}%2F${GUID}%2F9`);
     await expect(run({ op: 'link-pr', projectId: 'x', repositoryId: GUID, pullRequestId: 9 })).rejects.toThrow('GUID');
   });
   it('creates plans, suites, cases and results only inside what this run created', async () => {
@@ -93,6 +95,18 @@ describe('DevOps write adapter', () => {
     await expect(run({ op: 'create-test-plan', project: 'Other', name: 'x' })).rejects.toThrow('Project is not in');
     await expect(run({ op: 'nope' })).rejects.toThrow('Unknown');
     await expect(run({ op: 'comment', text: 'x', workItemId: 1 })).rejects.toThrow();
+  });
+  it('refuses a pull request from a project outside the grant', async () => {
+    const { run, calls } = setup({ prProject: 'Elsewhere' });
+    await expect(run({ op: 'link-pr', projectId: GUID, repositoryId: GUID, pullRequestId: 9 })).rejects.toThrow('Project is not in');
+    expect(calls.filter(c => c.method !== 'GET')).toHaveLength(0);
+  });
+  it('refuses a create before any POST when the run ledger is full', async () => {
+    const { run, calls, file } = setup();
+    const testCases = Array.from({ length: 500 }, (_, i) => ({ project: 'ProjectA', planId: 1, suiteId: 2, id: i + 1 }));
+    fs.writeFileSync(file, JSON.stringify({ schema: 1, runs: { 'run-1': { plans: [], suites: [], testCases } } }));
+    await expect(run({ op: 'create-test-plan', project: 'ProjectA', name: 'Plan' })).rejects.toThrow('ledger limit');
+    expect(calls).toHaveLength(0);
   });
   it('maps login and conflict errors and fails closed on a corrupt ledger', async () => {
     await expect(setup({ status: () => 401 }).run({ op: 'comment', text: 'x' })).rejects.toThrow('az login');

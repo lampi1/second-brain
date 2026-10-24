@@ -19,9 +19,12 @@ The bound chat writes with one chat-endpoint MCP tool, `flow_devops_write`. The 
 chat (the running current step bound to it, same chat run and task version, inside the selected brain, before the step
 timeout) and re-checks the grant on every call: the rule is enabled at its approved revision, same flow version, owner
 and scope, and the run comes from that rule's own event with the same inputs; pausing, replacing or rejecting the rule
-withdraws it at once. The work item is always the run's `work-item-id`, read live, its project inside the grant.
+withdraws it at once. Subjects starting with `auto:` are reserved: only the automation service starts them, and the
+grant goes only to the run that event started (its `runId`), never to a manual run with a copied subject.
+The work item is always the run's `work-item-id`, read live, its project inside the grant; a linked pull request's
+project is resolved from its GUID and must be inside the grant too.
 Test plans, suites and cases can be changed only if this run created them (a per-brain ledger,
-`flows/<brain>/devops-ledger.json`). Requests are serialized, use the Azure CLI token in memory only, never follow
+`flows/<brain>/devops-ledger.json`, at most 500 per run, checked before any create). Requests are serialized, use the Azure CLI token in memory only, never follow
 redirects, and fail closed on login errors, concurrent edits (revision test, HTTP 412) and a corrupt ledger. An audit
 line (run, operation, target id) goes to the app log; no token or body is logged.
 

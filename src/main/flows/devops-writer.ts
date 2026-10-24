@@ -81,6 +81,8 @@ export class DevOpsWriter {
         if (owner.rootSuiteId === value || mine.suites.some(item => item.id === value && item.planId === planId)) return value;
         return deny('Only test suites created by this run can be changed');
       };
+      /** Refuse before the POST, so a full ledger never leaves an unrecorded resource behind. */
+      const room = () => { if (mine.plans.length + mine.suites.length + mine.testCases.length >= MAX_PER_RUN) deny('DevOps write ledger limit reached for this run'); };
       const record = (mutate: (entry: typeof mine) => void) => {
         const fresh = this.read(), entry = fresh.runs[context.runId] ?? { plans: [], suites: [], testCases: [] };
         mutate(entry);
@@ -134,12 +136,16 @@ export class DevOpsWriter {
           keys(raw, ['op', 'projectId', 'repositoryId', 'pullRequestId'], 'request');
           const projectId = safeText(raw.projectId, 'projectId', 36), repositoryId = safeText(raw.repositoryId, 'repositoryId', 36), pr = id(raw.pullRequestId, 'pullRequestId');
           if (!GUID.test(projectId) || !GUID.test(repositoryId)) deny('projectId and repositoryId must be GUIDs');
+          // The PR's project must be in the grant too: resolve its GUID to a name.
+          const prProject = await call('GET', `${org}/_apis/projects/${projectId}?${API}`);
+          if (typeof prProject.name !== 'string' || lower(String(prProject.id)) !== lower(projectId)) deny('DevOps: unexpected project response');
+          project(prProject.name);
           const item = await workItem();
           await patchItem([{ op: 'test', path: '/rev', value: item.rev }, { op: 'add', path: '/relations/-', value: { rel: 'ArtifactLink', url: `vstfs:///Git/PullRequestId/${projectId}%2F${repositoryId}%2F${pr}`, attributes: { name: 'Pull Request' } } }]);
           audit(`workitem:${context.workItemId}`); return { workItemId: context.workItemId, pullRequestId: pr };
         }
         case 'create-test-plan': {
-          keys(raw, ['op', 'project', 'name', 'areaPath', 'iteration'], 'request');
+          keys(raw, ['op', 'project', 'name', 'areaPath', 'iteration'], 'request'); room();
           const p = project(raw.project), name = safeText(raw.name, 'name', 256);
           const areaPath = raw.areaPath === undefined ? undefined : safeText(raw.areaPath, 'areaPath', 1000), iteration = raw.iteration === undefined ? undefined : safeText(raw.iteration, 'iteration', 1000);
           for (const value of [areaPath, iteration]) if (value && lower(projectOf(value)) !== lower(p)) deny('Test plan paths must be inside its project');
@@ -155,7 +161,7 @@ export class DevOpsWriter {
           audit(`testplan:${owned.id}`); return { planId: owned.id, name };
         }
         case 'create-test-suite': {
-          keys(raw, ['op', 'project', 'planId', 'parentSuiteId', 'name'], 'request');
+          keys(raw, ['op', 'project', 'planId', 'parentSuiteId', 'name'], 'request'); room();
           const p = project(raw.project), owned = plan(p, raw.planId), parent = suite(p, owned.id, raw.parentSuiteId), name = safeText(raw.name, 'name', 256);
           const created = await call('POST', `${org}/${encodeURIComponent(p)}/_apis/testplan/Plans/${owned.id}/suites?${API}`, { suiteType: 'staticTestSuite', name, parentSuite: { id: parent } });
           const suiteId = id(created.id, 'created suite id');
@@ -163,7 +169,7 @@ export class DevOpsWriter {
           audit(`testsuite:${suiteId}`); return { planId: owned.id, suiteId };
         }
         case 'create-test-case': {
-          keys(raw, ['op', 'project', 'planId', 'suiteId', 'title', 'steps'], 'request');
+          keys(raw, ['op', 'project', 'planId', 'suiteId', 'title', 'steps'], 'request'); room();
           const p = project(raw.project), owned = plan(p, raw.planId), suiteId = suite(p, owned.id, raw.suiteId), title = safeText(raw.title, 'title', 256);
           if (!Array.isArray(raw.steps) || raw.steps.length > 50) deny('steps: at most 50');
           const steps = (raw.steps as unknown[]).map((value, i) => { const s = object(value, `step ${i + 1}`); keys(s, ['action', 'expected'], 'step'); return { action: text(s.action, 'step action', 4000), expected: s.expected === undefined ? '' : text(s.expected, 'step expected', 4000, true) }; });

@@ -67,9 +67,11 @@ export class FlowService {
       return draft;
     });
   }
-  start(input: FlowStart, ownerId: string): FlowRun {
+  /** `automatic` is passed only by the automation service: `auto:` subjects are reserved for its event starts (ADR 0145). */
+  start(input: FlowStart, ownerId: string, automatic = false): FlowRun {
     keys(object(input, 'start'), ['flowId', 'flowVersion', 'subjectKey', 'scope', 'inputs'], 'start');
     const subjectKey = text(input.subjectKey, 'subjectKey', 500), owner = text(ownerId, 'owner', 200), scope = validateScope(input.scope), inputs = validateInputs(input.inputs);
+    if (!automatic && subjectKey.startsWith('auto:')) throw new Error('Subjects starting with auto: are reserved for automatic flow events');
     return this.change(() => {
       const version = this.version(input.flowId, input.flowVersion);
       if (this.data.active[input.flowId] !== input.flowVersion) throw new Error('Only the current user-activated flow version can start');
