@@ -106,7 +106,7 @@ it('an Apply that fails says why, on screen and in the log, and leaves the propo
   expect(data.approvals[0]!.state).toBe('pending');
   expect(await decide({ id: 'pa_1', decision: 'nope' as never }, undefined as never)).toEqual({ ok: false, error: 'Proposta non applicata.' });
 });
-it('makes no idea cards: ideas come only from the user\'s «Manutenzione» (ADR 0152)', async () => {
+it('makes no idea cards: ideas come only from the user\'s «Manutenzione» (ADR 0153)', async () => {
   const f = fixture();
   f.runOnce.mockResolvedValue({ ok: true, engine: 'claude', model: 'sonnet', costUsd: 0.01, costBasis: 'reported', tokens: null, durationMs: 1,
     text: JSON.stringify({ cards: [{ type: 'idea', title: 'Un’idea', body: 'Fai X.', why: 'Perché sì.', refs: ['d1'], places: ['board'] }] }) });

@@ -98,7 +98,7 @@
   `agent_rollback` / `agent_archive` / `agent_restore` apply at once; each change is a `BrainChange` in
   `userData/brain-changes.json` with "Annulla" (`brainmodel/changes.ts`), a behavioural agent change as a trial version.
   Tools, permissions and the engine of an agent wait for the user in Agenti → Da approvare (`agents:proposalDecide`).
-  The "Manutenzione" button (top bar, Orchestrator head, Memoria) is one click (`maintenance:run`, ADR 0152): the free
+  The "Manutenzione" button (top bar, Orchestrator head, Memoria) is one click (`maintenance:run`, ADR 0153): the free
   cleanup runs every job (`brainmodel:maintain`) and the log step, then one invisible app chat (no strip, no notice)
   researches with the app's best choice (strongest model, 5 $ cap, a data pack; `brainmodel/research.ts`, ADR 0132).
   Its findings are cards in Memoria → Proposte: brain changes and what to forget, applied through the change log on

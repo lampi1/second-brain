@@ -1,4 +1,4 @@
-// The skill and rule proposals of the app's other parts wait for the user's «Manutenzione» (ADR 0152,
+// The skill and rule proposals of the app's other parts wait for the user's «Manutenzione» (ADR 0153,
 // proposals/service.ts heldBack): a skill candidate or a Battito rule made after the last click is hidden until the
 // next one; the maintenance's own cards and the other sources never are.
 import { describe, expect, it } from 'vitest';

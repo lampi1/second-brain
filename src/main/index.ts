@@ -260,7 +260,7 @@ app.whenReady().then(async () => {
     'proposals:count': () => proposals.count(),
     'proposals:decide': a => proposals.decide(a),
     'brainmodel:maintain': a => s.brainModel.maintain(a?.job),
-    // the one-click maintenance (ADR 0132, 0152): the free cleanup, then the invisible research; its cards in Proposte
+    // the one-click maintenance (ADR 0132, 0153): the free cleanup, then the invisible research; its cards in Proposte
     'phrases:today': () => s.phrases?.today() ?? null,
     'maintenance:run': () => research().runAll(),
     'maintenance:status': () => research().status(),

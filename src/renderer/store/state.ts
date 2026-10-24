@@ -87,7 +87,7 @@ export function reduce(s: AppState, a: Action): AppState {
       return { ...s, items: { ...s.items, [a.chatId]: merged.slice(-MAX_ITEMS) } };
     }
     case 'chat:updated': {
-      // the maintenance research (ADR 0152) works out of sight: never a strip, a list entry or a notice
+      // the maintenance research (ADR 0153) works out of sight: never a strip, a list entry or a notice
       if (a.chat.research) return s;
       const prev = s.chats[a.chat.id];
       const chat = withLedger(a.chat, s.usage);

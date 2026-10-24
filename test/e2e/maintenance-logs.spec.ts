@@ -1,4 +1,4 @@
-// E2E of the «Manutenzione» from the Orchestrator's head (#150, ADR 0132, 0152) on the frozen demo: one click on the
+// E2E of the «Manutenzione» from the Orchestrator's head (#150, ADR 0132, 0153) on the frozen demo: one click on the
 // icon runs every brain job plus the log step and the research; each new log group (the demo logs: an elicitation
 // warning and a news-read error) becomes an «Apri issue» card in Proposte, the one already marked known does not; the
 // Orchestrator gets no message. Rejecting a log bug's card marks its group known. Also the Orchestrator card's line

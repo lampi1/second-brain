@@ -1,6 +1,6 @@
 // The maintenance panel of the Brain pages (ADR 0077): what the self-managing jobs changed, newest first, each with what,
 // why, the evidence and "Annulla" (or why it can no longer be undone) and the last pass (running is the one «Manutenzione»
-// button's, ADR 0152). No
+// button's, ADR 0153). No
 // approval anywhere: the jobs apply their changes and the user can take any of them back. The migration report (former
 // runbook and routine sections turned into skills) is a separate block for the Skill page. Used by SkillsPage.tsx,
 // RulesPage.tsx and MemoryPage.tsx (the Memoria hub's tabs, ADR 0122); Change also by LearningPage.tsx. Each change shows its evidence claim (ADR 0109): the
@@ -42,7 +42,7 @@ export function Change({ c, busy }: { c: BrainChange; busy: boolean }) {
   </li>;
 }
 
-/** The change log of the given kinds and the last pass. Running is the one «Manutenzione» button's (ADR 0122, 0152). */
+/** The change log of the given kinds and the last pass. Running is the one «Manutenzione» button's (ADR 0122, 0153). */
 export function MaintenancePanel({ kinds, testId = 'bm-maintenance' }: { kinds: BrainChange['kind'][]; testId?: string }) {
   const { state, busy } = useBrainModel();
   const [limit, setLimit] = useState(8);

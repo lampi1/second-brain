@@ -143,7 +143,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     // the log step of the Manutenzione (#150): made-up logs, whose new groups become app bug cards (ADR 0132)
     logDir: () => demoLogs,
     findings: logs => research.afterPass(logs) });
-  // the one-click maintenance (ADR 0132, 0152) on the demo chats: past findings written once, a research proposes two
+  // the one-click maintenance (ADR 0132, 0153) on the demo chats: past findings written once, a research proposes two
   // more; an approved issue card opens nothing (the demo records the page it would open)
   const research: ResearchService = new ResearchService({ userData: ctx.userData, lang: uiLang, root: () => demoBrainRoot, appVersion: () => app.getVersion(),
     issuesUrl: () => 'https://github.com/lampi1/second-brain/issues', now,

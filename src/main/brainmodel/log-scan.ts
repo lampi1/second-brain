@@ -3,7 +3,7 @@
 // count and one sample line each, no LLM. Numbers in the cause are folded (a pid, an id, a count), so the same problem
 // is one group. The groups the user marked "noto, ignora" (maintenance-noise.json in userData) are flagged known and
 // never made a card. Each new group becomes an app bug card «Apri issue» in Memoria → Proposte with its issue written
-// (brainmodel/research.ts afterPass, ADR 0132, 0152; before it the groups went to the Orchestrator, #150). Pure but for the
+// (brainmodel/research.ts afterPass, ADR 0132, 0153; before it the groups went to the Orchestrator, #150). Pure but for the
 // file reads; used by brainmodel/service.ts, pinned by test/unit/brainmodel/log-scan.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';

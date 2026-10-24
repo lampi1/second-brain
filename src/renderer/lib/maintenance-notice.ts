@@ -1,4 +1,4 @@
-// The end notice of the one-click «Manutenzione» (ADR 0152), on the app's one notice card (lib/notice.ts, ADR 0151): a
+// The end notice of the one-click «Manutenzione» (ADR 0153), on the app's one notice card (lib/notice.ts, ADR 0151): a
 // celebrate notice with its arpeggio when it made something (chips: proposals in Proposte, ideas in Idee, issues to
 // open) and «Apri Memoria»; a calm one when everything was already in order; a warning when the research failed, hit
 // its cap or was stopped. maintenanceSummary is the same result in one line (the hero's «Ultima: …»). Used by store/maintenance.ts and

@@ -1,5 +1,5 @@
-// The research's prompt (ADR 0132, 0152): the method and the app's fixed frame after it (tools, limits, safety, card
-// language). Since the one-click «Manutenzione» (ADR 0152) nobody edits it: the method is in the UI language (German
+// The research's prompt (ADR 0132, 0153): the method and the app's fixed frame after it (tools, limits, safety, card
+// language). Since the one-click «Manutenzione» (ADR 0153) nobody edits it: the method is in the UI language (German
 // gets the English one), the frame in English like the app's other prompts. Pure. Used by research.ts; tests:
 // test/unit/brainmodel/research.test.ts.
 import type { Lang } from '../../shared/contract';

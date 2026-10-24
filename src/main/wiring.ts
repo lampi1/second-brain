@@ -892,7 +892,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     // a pass the app ran by itself: a quiet feed event with Annulla (ADR 0102)
     applied: changes => { const e = maintenanceEvent(changes); if (e) brain.publish([e]); } });
   brainModelRef.current = brainModel;
-  // the one-click maintenance (ADR 0132, 0152): the free cleanup, the invisible research chat, its cards in Proposte
+  // the one-click maintenance (ADR 0132, 0153): the free cleanup, the invisible research chat, its cards in Proposte
   const issuesUrl = issuesUrlOf(app.getAppPath()), appIssuesUrl = () => issuesUrl;
   const research = new ResearchService({ userData: ctx.userData, lang: uiLang, root: () => brain.info().brainRoot, appVersion: () => app.getVersion(), issuesUrl: appIssuesUrl, appDir: () => app.getAppPath(),
     // engines that are on, read files (an API engine has no tools here) and report their cost (the cap is enforced on

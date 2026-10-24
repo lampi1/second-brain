@@ -1,4 +1,4 @@
-// The «Manutenzione» button (#150, ADR 0132; one click since ADR 0152). Always on the top bar (`bar`), on the
+// The «Manutenzione» button (#150, ADR 0132; one click since ADR 0153). Always on the top bar (`bar`), on the
 // Orchestrator's head (`compact`) and in Memoria's hero. One click and nothing else: the free cleanup runs at once, then
 // an invisible research with the app's best choice works in the background; its findings arrive as cards in Memoria →
 // Proposte (skills, rules, what to forget, «Apri issue»), app ideas also in Idee; the end notice says what it made

@@ -1,4 +1,4 @@
-// E2E of the one-click «Manutenzione» (ADR 0132, 0152) on the frozen demo: one click on the top bar's button and nothing
+// E2E of the one-click «Manutenzione» (ADR 0132, 0153) on the frozen demo: one click on the top bar's button and nothing
 // else (no dialog): it says it started, breathes while the invisible research works (its chat never shows as a strip
 // or in the sidebar), and ends in the celebrate notice with what it made and «Apri Memoria». In Proposte an idea or a
 // bug about the app is a card «Apro su GitHub la issue …?» with the issue as it will be opened; approving it opens it

@@ -107,5 +107,5 @@ export const memoryIt = {
   'mm.clean.errors': 'Gli errori ricorrenti', 'mm.clean.errorsText': 'Quando correggi un agente l’errore viene registrato; quelli che si ripetono diventano regole.',
   'mm.clean.skills': 'Le skill utili e inutili', 'mm.clean.skillsText': 'Per ogni skill: quante volte è servita, quanto bene e quando l’ultima volta.',
   'mm.clean.facts': 'Le curiosità', 'mm.clean.factsText': 'Il ricordo più usato, il giorno con più errori, la skill dimenticata.',
-  // the one-click maintenance (ADR 0132, 0152)
+  // the one-click maintenance (ADR 0132, 0153)
 };

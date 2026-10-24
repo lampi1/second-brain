@@ -1,4 +1,4 @@
-// Opening a maintenance card's issue (ADR 0152, brainmodel/issue-open.ts): gh first with the body on stdin, again
+// Opening a maintenance card's issue (ADR 0153, brainmodel/issue-open.ts): gh first with the body on stdin, again
 // without labels when gh refuses them, else the pre-filled new-issue page in the browser; a long body is cut to fit.
 import { describe, expect, it } from 'vitest';
 import { newIssueUrl, openIssue } from '../../../src/main/brainmodel/issue-open';

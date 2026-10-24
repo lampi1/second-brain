@@ -101,5 +101,5 @@ export const memoryEn: typeof memoryIt = {
   'mm.clean.errors': 'Recurring errors', 'mm.clean.errorsText': 'When you correct an agent the error is logged; those that repeat become rules.',
   'mm.clean.skills': 'Useful and useless skills', 'mm.clean.skillsText': 'For each skill: how often it served, how well and when last.',
   'mm.clean.facts': 'Curious facts', 'mm.clean.factsText': 'The most used memory, the day with the most errors, the forgotten skill.',
-  // the one-click maintenance (ADR 0132, 0152)
+  // the one-click maintenance (ADR 0132, 0153)
 };

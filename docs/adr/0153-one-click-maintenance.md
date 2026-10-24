@@ -1,4 +1,4 @@
-# ADR 0152 · One-click «Manutenzione»: proposals only on the user's click, issues opened from a card
+# ADR 0153 · One-click «Manutenzione»: proposals only on the user's click, issues opened from a card
 
 Date: 2026-10-24 · Status: accepted (owner asked for it in the project thread) · Supersedes: the dialog of ADR 0132 (§1),
 «Idee dell'app» and «Apri issue» through the Orchestrator (ADR 0132 §5), the six-hourly cleanup (ADR 0132 Consequences,

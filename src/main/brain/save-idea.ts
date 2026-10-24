@@ -1,5 +1,5 @@
 // Writes one idea the AI had to the brain's Idee (its «IA» side) through the brain's own tool, ops/tools/mem.mjs
-// `idea`, so the page reads it like every other idea: the Battito's «Salva» and the maintenance's app ideas (ADR 0152).
+// `idea`, so the page reads it like every other idea: the Battito's «Salva» and the maintenance's app ideas (ADR 0153).
 // The text goes through a temporary file (never a command line), removed after. Used by pulse/wiring.ts and wiring.ts.
 import fs from 'node:fs';
 import path from 'node:path';

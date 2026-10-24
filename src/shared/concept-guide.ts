@@ -966,7 +966,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
     summary: b('Solo quando premi «Manutenzione»: un clic, l’app riordina skill, regole e memoria e un agente invisibile propone miglioramenti come carte; ogni cambio ha un perché e un «Annulla».',
       'Only when you press "Manutenzione": one click, the app tidies skills, rules and memory and an invisible agent proposes improvements as cards; every change has a reason and an "Undo".'),
     points: [
-      // src/main/brainmodel/service.ts start(), brainmodel/research.ts runAll (ADR 0152)
+      // src/main/brainmodel/service.ts start(), brainmodel/research.ts runAll (ADR 0153)
       b('Parte solo dal tuo clic, mai da sola: la pulizia non spende token (lavoro sul testo fatto sul tuo PC), poi la ricerca usa il modello più forte con un tetto di 5 $ e ti avvisa quando finisce. Le idee sull’app vanno in Idee (lato IA) e ogni idea o bug diventa una carta «Apro la issue?» che, con il tuo sì, apre la issue su GitHub.',
         'It starts only from your click, never by itself: the cleanup spends no tokens (text work on your PC), then the research uses the strongest model with a 5 $ cap and gives you a notice when it ends. Ideas about the app go to Ideas (the AI’s side) and every idea or bug becomes a card "Open the issue?" that, with your yes, opens it on GitHub.'),
       // src/main/brainmodel/jobs.ts repeated-task, merge-skills

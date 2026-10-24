@@ -10,7 +10,7 @@ import type { ResearchKind, ResearchSource } from './maintenance-research';
 export const PROPOSAL_SOURCES = ['memory', 'candidate', 'change', 'setting', 'trial', 'tier', 'pulse', 'policy', 'research'] as const;
 export type ProposalSource = (typeof PROPOSAL_SOURCES)[number];
 /** The filter chips on top of the deck, in this order. */
-/** issue: a GitHub issue the maintenance wrote about the app's code, opened at once when approved (ADR 0152) */
+/** issue: a GitHub issue the maintenance wrote about the app's code, opened at once when approved (ADR 0153) */
 export const PROPOSAL_GROUPS = ['skill', 'rule', 'fact', 'script', 'role', 'setting', 'learning', 'forget', 'issue'] as const;
 export type ProposalGroup = (typeof PROPOSAL_GROUPS)[number];
 /** approve = Approva (or Tieni on an applied change); reject = Rifiuta (or Annulla on an applied change). */
