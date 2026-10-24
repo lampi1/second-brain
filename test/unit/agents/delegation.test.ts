@@ -991,7 +991,7 @@ describe('versioned task continuity and canonical results', () => {
     expect(run.delivery).toMatchObject({ attempts: 2, synthesisSubmittedAt: expect.any(Number), synthesisBatchId: expect.any(String) });
   });
 
-  it('backfills legacy identity and rebuilds every historical root result once after restart', async () => {
+  it('backfills legacy identity; after a restart the Orchestrator gets back only the results it never showed', async () => {
     const f = fixture();
     const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
     const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', title: 'Topic', prompt: 'one' }, 'agent');
@@ -1004,14 +1004,25 @@ describe('versioned task continuity and canonical results', () => {
     const p = await f.root('strategist');
     const child = (await f.call('agent_delegate', p.id, { tasks: [f.task('scout', 'Private child')] })).children[0].chatId;
     await f.call('agent_report', child, { ...result, output: 'PRIVATE CHILD OUTPUT' });
+    const shown = () => f.m.items(o.id).filter(i => i.kind === 'system' && i.code === 'resultReady');
+    expect(shown()).toHaveLength(2);
+    // a third root result whose notice the quit cut before it was shown
+    const unseen = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', title: 'Unseen', prompt: 'three' }, 'agent');
+    await f.call('agent_report', unseen.id, { ...result, output: 'UNSEEN DELIVERABLE' });
+    delete f.m.runs.get(unseen.run!.runId)!.delivery!.displayedAt; f.m.runs.save();
     await f.m.shutdown();
     const again = new ChatManager({ userData: f.dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0 });
     managers.push(again);
     again.resumeInterrupted(); again.resumeInterrupted();
     expect(again.runs.get(legacy.runId)?.report?.canonical?.output).toBe('FULL DELIVERABLE');
-    const notices = again.items(o.id).filter(i => i.kind === 'system' && i.code === 'resultReady');
-    expect(notices).toHaveLength(2);
-    expect(notices.map(i => (i as unknown as { result: { output: string } }).result.output)).toEqual(['FULL DELIVERABLE', 'SECOND DELIVERABLE']);
+    const notices = () => again.items(o.id).filter(i => i.kind === 'system' && i.code === 'resultReady');
+    expect(notices().map(i => (i as unknown as { result: { output: string } }).result.output)).toEqual(['UNSEEN DELIVERABLE']);
+    // shown now: the next restart brings nothing back
+    await again.shutdown();
+    const third = new ChatManager({ userData: f.dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0 });
+    managers.push(third);
+    third.resumeInterrupted();
+    expect(third.items(o.id).filter(i => i.kind === 'system' && i.code === 'resultReady')).toHaveLength(0);
   });
   it('rejects stale assignment versions and never authorizes an assignment by a display title', async () => {
     const f = fixture();
