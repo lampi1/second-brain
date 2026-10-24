@@ -13,6 +13,7 @@ import type { ProposalDecide, ProposalDecideResult, ProposalsState } from './pro
 import type { MaintenanceDone, MaintenanceStatus } from './maintenance-research';
 import type { PackFinding } from './agent-pack';
 import type { VoiceAsr, VoiceName, VoiceState } from './voice';
+import type { RecFound, RecSegment, RecSource, RecState, Recording } from './recordings';
 /** What the shareable brain zip holds (counts), or why it was not written: guard findings, or no brain / no guard. */
 export type BrainShareResult = { ok: true; path: string; skills: number; rules: number; roles: number; scripts: number; skipped: number } | { ok: false; findings: PackFinding[] } | { ok: false; error: string };
 import type { BrainModelState, ClassifiersState, MaintenanceJobId } from './brain-model';
@@ -1613,6 +1614,21 @@ export interface InvokeMap {
   'voice:listen': [{ on: boolean }, void];
   'voice:audio': [{ samples: Float32Array }, void];
   'voice:speak': [{ text: string; voice?: VoiceName }, { samples: Float32Array; rate: number; error?: string }];
+  /** call recordings (ADR 0154, main/recordings/): arm = the PC's audio may be captured for the next few seconds (the
+   *  user's «Registra call»), start one, its 16-bit chunks, stop (queues the local transcript), the transcript, «Trovate sul PC» and the bytes of
+   *  one of those files (only a listed one), open the audio / text / folder with the system */
+  'rec:state': [void, RecState];
+  'rec:arm': [void, void];
+  'rec:start': [{ source: RecSource; channels: 1 | 2; title?: string; from?: string; fromPath?: string; systemAudio?: boolean }, Recording];
+  'rec:chunk': [{ id: string; pcm: Uint8Array }, number];
+  'rec:stop': [{ id: string }, Recording | null];
+  'rec:transcribe': [{ id: string }, void];
+  'rec:rename': [{ id: string; title: string }, Recording];
+  'rec:remove': [{ id: string }, void];
+  'rec:transcript': [{ id: string }, { recording: Recording | null; segments: RecSegment[] }];
+  'rec:find': [void, RecFound[]];
+  'rec:readFound': [{ path: string }, Uint8Array];
+  'rec:open': [{ id: string; what: 'audio' | 'text' | 'folder' }, void];
   'orchestrator:held': [void, HeldNewsState];
   /** the user opened a held news item's chat from the list: that chat's items are read, never wake the Orchestrator (#123) */
   'orchestrator:heldSeen': [{ chatId: string }, HeldNewsState];
@@ -1737,6 +1753,8 @@ export interface EventMap {
   'voice:changed': VoiceState;
   'voice:heard': { text: string };
   'voice:speech': { active: boolean };
+  /** call recordings (ADR 0154): the list, the one running, a transcription's progress */
+  'rec:changed': RecState;
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -1776,6 +1794,7 @@ export const INVOKE_CHANNELS = [
   'sync:get', 'sync:now', 'sync:resolve', 'headline:get', 'log:list',
   'suggest:get', 'suggest:cancel', 'suggest:state',
   'voice:state', 'voice:prepare', 'voice:listen', 'voice:audio', 'voice:speak',
+  'rec:state', 'rec:arm', 'rec:start', 'rec:chunk', 'rec:stop', 'rec:transcribe', 'rec:rename', 'rec:remove', 'rec:transcript', 'rec:find', 'rec:readFound', 'rec:open',
   'orchestrator:held', 'orchestrator:heldSeen',
   'cloud:list', 'cloud:start', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:readiness', 'cloud:dismiss',
 ] as const satisfies readonly InvokeChannel[];
@@ -1796,6 +1815,7 @@ export const EVENT_CHANNELS = [
   'log:events',
   'personal:changed',
   'voice:changed', 'voice:heard', 'voice:speech',
+  'rec:changed',
 ] as const satisfies readonly EventChannel[];
 
 type Missing<All, Listed> = Exclude<All, Listed>;

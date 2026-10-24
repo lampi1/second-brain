@@ -1,7 +1,7 @@
 // Voice mode in main (ADR 0152): starts the voice process (voice/worker.ts, an Electron utility process) when the user
 // first needs it, keeps the VoiceState the renderer shows (models on disk, download progress, last error), and relays
-// the microphone's chunks in and the transcripts and spoken audio out. Nothing is recorded to disk and nothing leaves
-// the PC except the one-time model downloads (pinned files, voice/catalog.ts). SB_VOICE_FAKE=1 (e2e, demo) swaps the
+// the microphone's chunks in and the transcripts and spoken audio out; it also transcribes recordings (ADR 0154). Voice
+// mode records nothing to disk and nothing leaves the PC except the one-time model downloads (voice/catalog.ts). SB_VOICE_FAKE=1 (e2e, demo) swaps the
 // engine for a fake that "hears" SB_VOICE_FAKE_TEXT once per listening session and speaks a short silence.
 // Wired in main/index.ts (voice:* channels).
 import path from 'node:path';
@@ -10,6 +10,7 @@ import { log } from '../log';
 import { ASR, TTS, VAD, partBytes } from './catalog';
 import { partReady } from './download';
 import type { VoiceIn, VoiceOut } from './protocol';
+import type { TranscribedLine } from './transcribe';
 import type { VoiceAsr, VoiceName, VoiceState } from '@shared/voice';
 
 interface Child { postMessage(m: VoiceIn): void; on(ev: 'message', fn: (m: VoiceOut) => void): void; on(ev: 'exit', fn: (code: number) => void): void; kill(): boolean }
@@ -27,6 +28,13 @@ export interface VoiceDeps {
 }
 
 const SPEAK_TIMEOUT_MS = 30_000;
+/** what the fake engine "hears" in a recording (e2e, demo): a short call, both sides */
+const FAKE_LINES: TranscribedLine[] = [
+  { start: 1200, end: 4800, ch: 1, text: 'Ciao, allora, il bug è nella pagina di login: dopo il reset della password resta bianca.' },
+  { start: 5400, end: 8200, ch: 0, text: 'Ok, lo prendo io. Succede su tutti i browser?' },
+  { start: 8800, end: 12600, ch: 1, text: 'Sì, anche su Edge. Serve per venerdì, prima del rilascio.' },
+  { start: 13100, end: 15000, ch: 0, text: 'Perfetto, ci guardo oggi pomeriggio.' },
+];
 
 export class VoiceService {
   private child: Child | null = null;
@@ -36,6 +44,8 @@ export class VoiceService {
   private speakId = 0;
   private readonly speaks = new Map<number, (r: { samples: Float32Array; rate: number; error?: string }) => void>();
   private fakeTimer: ReturnType<typeof setTimeout> | null = null;
+  private jobId = 0;
+  private readonly jobs = new Map<number, { progress: (done: number) => void; done: (r: { lines: TranscribedLine[]; error?: string }) => void }>();
   constructor(private readonly d: VoiceDeps) {}
 
   state(): VoiceState {
@@ -60,6 +70,8 @@ export class VoiceService {
       if (this.downloading) { this.downloading = null; this.error = 'Il motore voce si è fermato durante il download: riprova.'; }
       for (const done of this.speaks.values()) done({ samples: new Float32Array(0), rate: 22050, error: 'motore voce fermo' });
       this.speaks.clear();
+      for (const j of this.jobs.values()) j.done({ lines: [], error: 'il motore voce si è fermato durante la trascrizione' });
+      this.jobs.clear();
       if (code) log.warn('voice', 'voice process exited', { cause: `exit code ${code}`, hint: 'started again on the next use; npm run logs -- --scope voice' });
       this.emit();
     });
@@ -74,6 +86,8 @@ export class VoiceService {
       case 'prepared': this.downloading = null; this.error = null; log.info('voice', 'models ready', { data: this.d.settings() }); this.emit(); return;
       case 'heard': this.d.heard(m.text); return;
       case 'speech': this.d.speech(m.active); return;
+      case 'tprogress': this.jobs.get(m.job)?.progress(m.done); return;
+      case 'transcribed': { const j = this.jobs.get(m.job); this.jobs.delete(m.job); j?.done(m); return; }
       case 'spoken': { const done = this.speaks.get(m.id); this.speaks.delete(m.id); done?.(m); return; }
       case 'error':
         if (m.message === this.error && Date.now() - this.errorAt < 10_000) return;
@@ -124,6 +138,30 @@ export class VoiceService {
       this.speaks.set(id, r => { clearTimeout(timer); res(r); });
       this.proc().postMessage({ type: 'speak', id, text: clean, voice: voice ?? this.d.settings().voice });
     });
+  }
+
+  /** A recording's WAV to text (ADR 0154), with the chosen Whisper; `progress` gets 0..1. The returned `cancel` stops
+   *  it (the promise then resolves with no lines). */
+  transcribe(wav: string, progress: (done: number) => void): { result: Promise<{ lines: TranscribedLine[]; error?: string }>; cancel: () => void } {
+    if (this.d.fake) {
+      let stop = false;
+      const result = new Promise<{ lines: TranscribedLine[]; error?: string }>(res => {
+        setTimeout(() => { progress(0.5); }, 150);
+        setTimeout(() => res(stop ? { lines: [] } : { lines: FAKE_LINES }), 400);
+      });
+      return { result, cancel: () => { stop = true; } };
+    }
+    const job = ++this.jobId;
+    const result = new Promise<{ lines: TranscribedLine[]; error?: string }>(res => {
+      this.jobs.set(job, { progress, done: res });
+      this.proc().postMessage({ type: 'transcribe', job, wav, asr: this.d.settings().asr });
+    });
+    return { result, cancel: () => {
+      const j = this.jobs.get(job);
+      this.jobs.delete(job);
+      this.child?.postMessage({ type: 'tcancel', job });
+      j?.done({ lines: [] });
+    } };
   }
 
   /** settings changed (another Whisper or voice): the loaded models are dropped, the next use loads the new ones */

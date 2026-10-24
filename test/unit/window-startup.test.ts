@@ -8,7 +8,7 @@ const windows = vi.hoisted(() => ({ all: [] as Array<InstanceType<typeof EventEm
 vi.mock('electron', () => ({
   BrowserWindow: class extends EventEmitter {
     webContents = Object.assign(new EventEmitter(), {
-      setWindowOpenHandler: vi.fn(), session: { setPermissionRequestHandler: vi.fn() },
+      setWindowOpenHandler: vi.fn(), session: { setPermissionRequestHandler: vi.fn(), setDisplayMediaRequestHandler: vi.fn() },
       setAudioMuted: vi.fn(), focus: vi.fn(),
     });
     loadURL = vi.fn(async () => undefined);

@@ -18,6 +18,7 @@
 //   "Aggiorna" in Settings, ADR 0075).
 // - After a recap the user asked for, an Orchestrator's own mount opens the questions window with everything waiting
 //   for him (app_unblock, ADR 0135); it never answers any of it.
+// - The user's call recordings and their local transcripts (app_recordings, ADR 0154): the Orchestrator's mount only.
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { ChatItem, ChatSummary, TasksState, Effort, EventMap, NewChat, PendingRequest, RoutingRow, RunInfo, TaskKind } from '../../shared/contract';
@@ -59,6 +60,7 @@ import type { Workflows } from '../workflows/service';
 import { guideTool, screenOutline } from './guide';
 import { CONFIG_ASK_MIN, configTool, type ConfigDeps } from './config';
 import { lastTyped } from './user-words';
+import { recordingTools, type RecordingsRead } from './recordings';
 
 export type ToolOut = string | { text?: string; images?: { data: string; mimeType: string; caption?: string }[] } | object;
 export interface ToolDef { name: string; description: string; inputSchema: object; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean }; run(args: Record<string, unknown>): Promise<ToolOut> | ToolOut }
@@ -99,6 +101,8 @@ export interface AppCtlDeps {
   skillTools?: SkillToolsSource;
   /** the brain's scripts and changelog (ADR 0076): the Orchestrator's brain_script_save / _delete / brain_changelog_add */
   brainScripts?: { scripts: BrainScripts; changelog: BrainChangelog };
+  /** the call recordings (ADR 0154): app_recordings / app_recording_import on the Orchestrator's own endpoint */
+  recordings?: RecordingsRead;
   /** the configuration the Orchestrator changes for the user (app_config, ADR 0149); settings come from `brain` */
   config?: Omit<ConfigDeps, 'callerId' | 'userAsked' | 'brain'>;
 }
@@ -205,6 +209,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     ...(d.agentLearning && authed() ? [toolDef(lessonReviewTool(d.agentLearning))] : []),
     ...(d.brainScripts && authed() ? scriptWriteTools(d.brainScripts.scripts, d.brainScripts.changelog, () => caller()?.title || 'Orchestrator') : []),
     ...(d.agents ? [toolDef(agentCatalogTool(d.agents, d.skillTools))] : []),
+    ...(d.recordings && authed() ? recordingTools(d.recordings, d.emitUi) : []),
     ...(d.runFeedback && authed() ? [metricsTool(d.runFeedback)] : []),
     ...(d.runFeedback && authed() ? [estimateTool(() => d.runFeedback!.runList())] : []),
     {

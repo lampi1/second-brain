@@ -2,14 +2,15 @@
 // CPU work and its own onnxruntime (sherpa-onnx bundles one) never share a process with main or with the hybrid
 // search's onnxruntime-node. It downloads and checks the models (download.ts), listens (Silero VAD cuts the
 // microphone's 16 kHz stream into utterances, Whisper turns each into Italian text) and speaks (Piper, an Italian
-// voice). Messages in and out: VoiceIn / VoiceOut (protocol.ts). Built to out/main/voice-worker.js.
+// voice). It also transcribes a recorded call or an imported file (transcribe.ts, ADR 0154). Messages in and out: VoiceIn / VoiceOut (protocol.ts). Built to out/main/voice-worker.js.
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { ASR, TTS, VAD, partBytes, partsFor } from './catalog';
 import { ensurePart, partDir, partReady } from './download';
 import type { VoiceIn, VoiceOut } from './protocol';
-import { VOICE_RATE, type VoiceAsr, type VoiceName } from '@shared/voice';
+import { transcribeWav } from './transcribe';
+import { VOICE_RATE, isNoise, type VoiceAsr, type VoiceName } from '@shared/voice';
 
 interface Port { on(ev: 'message', fn: (e: { data: VoiceIn }) => void): void; postMessage(m: VoiceOut): void }
 const port = (process as unknown as { parentPort: Port }).parentPort;
@@ -57,6 +58,31 @@ let preparing = false; // a download runs beside the decode/speak queue: voice m
 let queue: Promise<void> = Promise.resolve();
 const later = (fn: () => Promise<void> | void) => { queue = queue.then(fn, fn).catch(e => send({ type: 'error', message: msg(e) })); };
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+/** `later`, with the job's own result or failure */
+const queued = <T>(fn: () => Promise<T>) => new Promise<T>((res, rej) => later(async () => { try { res(await fn()); } catch (e) { rej(e); } }));
+
+/** a recording's transcription (ADR 0154): its own VADs, Whisper shared with voice mode through the queue */
+const cancelled = new Set<number>();
+async function transcribe(job: number, wav: string, asr: VoiceAsr): Promise<void> {
+  if (!partReady(root, VAD) || !partReady(root, ASR[asr])) throw new Error('Whisper non è ancora scaricato: Impostazioni → Voce → Scarica.');
+  const s = lib();
+  let last = 0;
+  const lines = await transcribeWav(wav, {
+    vad: () => new s.Vad({ sileroVad: { model: path.join(partDir(root, VAD), 'silero_vad.onnx'), threshold: 0.5, minSilenceDuration: 0.6, minSpeechDuration: 0.25, maxSpeechDuration: 25, windowSize: 512 }, sampleRate: VOICE_RATE, numThreads: 1, debug: 0 }, 60),
+    decode: async samples => {
+      const r = recNow(asr);
+      const stream = r.createStream();
+      stream.acceptWaveform({ samples, sampleRate: VOICE_RATE });
+      return String((await r.decodeAsync(stream))?.text ?? '');
+    },
+    queue: queued,
+    noise: isNoise,
+    cancelled: () => cancelled.has(job),
+    progress: done => { if (done - last >= 0.01 || done >= 1) { last = done; send({ type: 'tprogress', job, done }); } },
+  });
+  if (cancelled.delete(job)) return;
+  send({ type: 'transcribed', job, lines });
+}
 
 /** Every utterance the VAD closed: Whisper, then 'heard'. */
 function drain(): void {
@@ -120,6 +146,8 @@ port.on('message', ({ data: m }) => {
           send({ type: 'spoken', id: m.id, samples: audio.samples, rate: audio.sampleRate });
         } catch (e) { send({ type: 'spoken', id: m.id, samples: new Float32Array(0), rate: 22050, error: msg(e) }); }
       }); return;
+      case 'transcribe': void transcribe(m.job, m.wav, m.asr).catch(e => { cancelled.delete(m.job); send({ type: 'transcribed', job: m.job, lines: [], error: msg(e) }); }); return;
+      case 'tcancel': cancelled.add(m.job); return;
       case 'unload': asrNow = m.asr; rec = null; tts = null; recFor = ''; ttsFor = ''; return;
     }
   } catch (e) { send({ type: 'error', message: msg(e) }); }

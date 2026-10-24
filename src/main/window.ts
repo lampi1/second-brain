@@ -5,7 +5,7 @@
 // DevOps alert's chime from a test never reaches the speakers).
 // Its renderer is only a view: chats, CLIs, MCP and the brain live in main, so a crashed or hung page is reloaded and
 // nothing else is lost (guardRenderer; counted in health.ts for app_state).
-import { BrowserWindow, screen, shell, type WebContents } from 'electron';
+import { BrowserWindow, desktopCapturer, screen, shell, type WebContents } from 'electron';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { isAppPage, setAppPage } from './ipc';
@@ -31,6 +31,19 @@ export function splashQuery(env: NodeJS.ProcessEnv = process.env): string {
 export function micAllowed(perm: string, details: { mediaTypes?: readonly string[]; requestingUrl?: string } | undefined, pageUrl: string): boolean {
   const types = details?.mediaTypes ?? [];
   return perm === 'media' && types.length > 0 && types.every(t => t === 'audio') && isAppPage(pageUrl) && (!details?.requestingUrl || isAppPage(details.requestingUrl));
+}
+
+/** Call recording (ADR 0154): the PC's audio is handed out only for a few seconds after the user's «Registra call» armed
+ *  it (rec:start), only to our own page, once per click. Windows only («loopback»); elsewhere the call is mic only. */
+let loopbackUntil = 0;
+export const armLoopback = (ms = 5_000): void => { loopbackUntil = Date.now() + ms; };
+export function captureAllowed(armedUntil: number, now: number, frameUrl: string): boolean {
+  return now <= armedUntil && isAppPage(frameUrl);
+}
+/** getDisplayMedia's own permission request (display-capture, or media asking for the screen), when Chromium asks the
+ *  session first: granted only while armed, like the request handler below */
+export function displayPermission(perm: string, details: { mediaTypes?: readonly string[] } | undefined): boolean {
+  return perm === 'display-capture' || (perm === 'media' && !(details?.mediaTypes ?? []).length) || (perm === 'media' && (details?.mediaTypes ?? []).includes('video'));
 }
 
 /** The app page's URL as the window loads it (main/index.ts too): out/renderer/index.html plus the splash query. */
@@ -62,7 +75,16 @@ export function createWindow(outDir: string, loadImmediately = true): BrowserWin
   wc.on('will-redirect', (e, url) => { if (!isAppPage(url)) e.preventDefault(); });
   // the microphone only, only for our own page (voice mode, ADR 0152; the user's Ctrl+M or click): every other
   // permission, and the camera, stays refused
-  wc.session.setPermissionRequestHandler((who, perm, cb, details) => cb(micAllowed(perm, details, who.getURL())));
+  wc.session.setPermissionRequestHandler((who, perm, cb, details) => cb(micAllowed(perm, details, who.getURL())
+    || (displayPermission(perm, details as { mediaTypes?: string[] }) && captureAllowed(loopbackUntil, Date.now(), who.getURL()))));
+  // getDisplayMedia (call recording, ADR 0154): the PC's audio for an armed recording; the screen video it must carry
+  // is stopped by the renderer at once and never stored
+  wc.session.setDisplayMediaRequestHandler((req, cb) => {
+    if (!captureAllowed(loopbackUntil, Date.now(), req.frame?.url ?? '')) { cb({}); return; }
+    loopbackUntil = 0;
+    void desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } })
+      .then(src => cb(src[0] ? { video: src[0], ...(process.platform === 'win32' ? { audio: 'loopback' as const } : {}) } : {}), () => cb({}));
+  });
   if (hidden) wc.setAudioMuted(true);
   // DevTools pass unhandled keys to the window's default menu, whose Ctrl+W would quit the app (keyguard.ts)
   wc.on('devtools-opened', () => { if (wc.devToolsWebContents) swallowCloseKey(wc.devToolsWebContents); });
