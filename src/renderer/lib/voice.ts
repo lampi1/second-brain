@@ -5,7 +5,7 @@
 // started by itself). While a question card registered with useVoiceQuestion is on screen, the app reads it and the
 // spoken answer counts as the click (parseSpokenAnswer). The mic is ignored while the app speaks; Esc silences it.
 // Used by components/VoiceControls.tsx, ChatInput.tsx, App.tsx (Ctrl+M) and the question cards.
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { createStore } from '../store/createStore';
 import { app, send } from '../store/store';
 import { toast } from '../store/ui';
@@ -264,17 +264,21 @@ function sayQuestion(): void {
 /** A question card on screen: in voice mode the app reads it as a sentence (shared/voice.ts spokenQuestion) and the
  *  spoken answer calls onAnswer, as the click would. */
 export function useVoiceQuestion(id: string | null, speak: SpokenQuestionInput, onAnswer: (a: SpokenAnswer) => void): void {
+  const mine = useRef<VoiceQuestion | null>(null);
   useEffect(() => {
     if (!id) return;
-    const q: VoiceQuestion = { id, speak, onAnswer, said: false };
+    // the same request drawn twice (its chat strip and the questions window) is read once
+    const q: VoiceQuestion = { id, speak, onAnswer, said: questions.some(x => x.id === id && x.said) };
+    mine.current = q;
     questions.push(q);
     sayQuestion();
     return () => {
+      mine.current = null;
       const i = questions.indexOf(q);
       if (i >= 0) questions.splice(i, 1);
       if (voice.get().question === id) sayQuestion(); // the next open question, if any, is read now
     };
     // speak and onAnswer are read when the answer comes: a new closure each render must not re-read the question
   }, [id]);
-  useEffect(() => { const q = questions.find(x => x.id === id); if (q) q.onAnswer = onAnswer; });
+  useEffect(() => { if (mine.current) mine.current.onAnswer = onAnswer; });
 }

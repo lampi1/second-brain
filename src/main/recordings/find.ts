@@ -5,6 +5,7 @@
 // imported until the user (or the Orchestrator, for the user) asks.
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import type { Dirent } from 'node:fs';
 import { recExtensionOk, type RecFound } from '@shared/recordings';
 
 const DAYS = 30;
@@ -26,7 +27,7 @@ export async function recordingFolders(home: string): Promise<string[]> {
 }
 
 async function walk(dir: string, depth: number, since: number, out: RecFound[], folder: string): Promise<void> {
-  let entries: import('node:fs').Dirent[];
+  let entries: Dirent[];
   try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return; }
   for (const e of entries) {
     if (e.name.startsWith('.') || e.name.startsWith('~')) continue;

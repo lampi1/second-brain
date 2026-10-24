@@ -53,4 +53,6 @@ quanto un click». Not now: the app speaking on its own initiative (recaps). The
 
 - First use costs a one-time download (about 440 MB with Veloce + one voice) and some CPU while transcribing.
 - Speed on the owner's PC is not measured yet: the Linux container cannot download the models. Veloce is the default.
-- DecisionCard (the single yes/no card, another thread) wires `useVoiceQuestion` once it is on main.
+- The decision card (ADR 0150) registers with `useVoiceQuestion` itself (since ADR 0154's change): every question,
+  plan and approval it draws is read and answered by voice; a request shown twice (its strip and the questions window)
+  shares an id and is read once.

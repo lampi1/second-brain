@@ -6,7 +6,7 @@
 // main/index.ts (rec:* channels); the Orchestrator reads the list and the transcripts with app_recordings (appctl).
 import fs from 'node:fs';
 import { log } from '../log';
-import { RecordingStore } from './store';
+import type { RecordingStore } from './store';
 import { findRecordings } from './find';
 import { REC_IMPORT_MAX_BYTES, REC_MAX_MS, defaultTitle, dropEchoes, type RecFound, type RecSegment, type RecSource, type RecState, type Recording } from '@shared/recordings';
 import type { VoiceAsr } from '@shared/voice';

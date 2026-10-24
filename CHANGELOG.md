@@ -10,6 +10,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   or off; a red dot shows it listens, what you say goes as your message and the reply is read aloud in Italian (Piper,
   voice Paola by default); question cards can be answered by voice. Local and free (sherpa-onnx: Silero VAD, Whisper,
   Piper), models downloaded once and checked by hash. Settings → Voce.
+- **Call recordings** (ADR 0154): «Registra call» (Registrazioni page, the palette, a REC pill in the top bar) records
+  the PC's audio and the microphone (Teams, Meet…), the local Whisper transcribes it at zero tokens and tells «Tu» from
+  «Altri»; import an audio/video file or one «Trovate sul PC». Everything stays on the PC. The Orchestrator reads them
+  (app_recordings) when you mention a call. The decision card is now read aloud in voice mode and answered by voice.
 
 ### Changed
 - **One decision card for every question** (ADR 0150): agents' yes/no questions, the Strategist's plan, durable work,

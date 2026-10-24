@@ -72,6 +72,8 @@ export async function transcribeWav(file: string, e: TranscribeEngine): Promise<
       e.progress(VAD_SHARE * Math.min(1, (off + got) / Math.max(1, bytes)));
       await tick();
     }
+    // the last few samples, padded to a whole window, so the end of the call is not cut
+    tails.forEach((tl, ch) => { if (tl.length) { const w = new Float32Array(WINDOW); w.set(tl); vads[ch]!.acceptWaveform(w); } });
     vads.forEach(v => v.flush());
     drain();
     spans.sort((a, b) => a.start - b.start || a.ch - b.ch);
