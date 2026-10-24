@@ -300,7 +300,7 @@ export interface UiCards {
 export interface UiBoard { lanes: { title: string; status?: UiStatus; items: { title: string; detail?: string; status?: UiStatus; links?: UiLink[] }[] }[] }
 export interface UiDiffList { groups: { area: string; files: { path: string; why?: string; added?: number; removed?: number; href?: string }[] }[] }
 export interface UiBarChart { unit?: string; bars: { label: string; value: number; note?: string }[] }
-/** a question's brief (ADR 0149): what was done, its evidence and what Sì / No do, shown inside the question card so the
+/** a question's brief (ADR 0150): what was done, its evidence and what Sì / No do, shown inside the question card so the
  *  question never leans on the chat text before it (only with target next-ask) */
 export interface UiBrief {
   done: string[]; ifYes: string; ifNo: string;

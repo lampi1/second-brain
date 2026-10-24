@@ -8,7 +8,7 @@
 //      rewrite that is still case-specific counts as nothing reusable. Confirmed originals are never retired here: their
 //      rewrites are proposed supersessions (saved by step 3 of a later pass), and a drop leaves them untouched.
 //      Without an engine nothing is generalized or dropped (the next pass with one does it);
-//   3. saves the proposed facts left that are not tied to one case, with no card (the owner 2026-10-24, ADR 0149): a
+//   3. saves the proposed facts left that are not tied to one case, with no card (the owner 2026-10-24, ADR 0150): a
 //      newer value replaces the confirmed one it contradicts or supersedes; of values waiting together on one thing only
 //      the most recent is saved; a case-specific fact waits for an engine;
 //   4. keeps at most MEMORY_CAP confirmed facts per role: the least recent go;
@@ -25,7 +25,7 @@ import { changeText } from './change-text';
 import type { JobContext, JobResult } from './jobs';
 
 const MAX_ASKED = 20, BATCH = 10, LINE = 300;
-/** confirmed facts kept per role (the owner 2026-10-24, ADR 0149): over it, the least recent go, in the Log with Annulla */
+/** confirmed facts kept per role (the owner 2026-10-24, ADR 0150): over it, the least recent go, in the Log with Annulla */
 export const MEMORY_CAP = 40;
 export const TIDY_SYSTEM = [
   'You tidy the long-term memory of an AI agent that works for one user. Memory must hold general, reusable knowledge:',
@@ -114,7 +114,7 @@ export async function tidyMemoryJob(ctx: JobContext): Promise<JobResult> {
     });
   }
 
-  // 3. what is left is saved without a card (ADR 0149): a newer value replaces the confirmed one it contradicts; a fact
+  // 3. what is left is saved without a card (ADR 0150): a newer value replaces the confirmed one it contradicts; a fact
   // tied to one case waits for an engine to make it general, a fact the user undid stays as he left it
   const live = (r: MemoryRecord) => r.validTo === null && !r.derivedFiles?.length && !undone.has(r.memoryId) && !gone.has(r.memoryId);
   const saved = new Set<string>(), replaced = new Set<string>();

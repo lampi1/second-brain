@@ -1,4 +1,4 @@
-// The decision card every question and approval uses (DecisionCard.tsx, ADR 0149): its keys (1 / S yes, 2 / N no,
+// The decision card every question and approval uses (DecisionCard.tsx, ADR 0150): its keys (1 / S yes, 2 / N no,
 // 3 / T write, Enter the recommended one, Esc later), a free-text answer that never sends empty, composed or repeated
 // Enter, and nothing answered while it is busy or a key comes from a box. Without a DOM: React's state is mocked.
 import type * as React from 'react';

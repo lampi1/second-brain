@@ -326,7 +326,7 @@ export class AcpSession implements HarnessSession {
   private turnFiles: string[] = [];   // screenshots saved for this turn (no image support): deleted when it ends
   private open = false;          // session/new or session/load done
   private yesNoRefused = 0;      // questions sent back in a row for not being yes/no (ADR 0135)
-  // questions given BRIEF_GRACE_MS for their brief (ADR 0149), with their timer; briefOff = this chat sent none twice in a
+  // questions given BRIEF_GRACE_MS for their brief (ADR 0150), with their timer; briefOff = this chat sent none twice in a
   // row: it is not asked for again in this session (a chat without show_ui never pays the refusals on every question)
   private briefWaited = new Map<string | number, { rpcId: string | number; timer: NodeJS.Timeout | null }>();
   private briefOff = false;
@@ -1015,7 +1015,7 @@ export class AcpSession implements HarnessSession {
         acp.push({ text, id: s(q.id), byLabel: new Map(labels.map((l, j) => [l, s(opts[j]?.id)])) });
         questions.push({ question: text, ...(s(p.title) ? { header: cut(s(p.title), 30) } : {}), options: labels.map(label => ({ label })), multiSelect: q.allowMultiple === true });
       });
-      // not yes/no (ADR 0135), or yes/no without its brief (ADR 0149, after a moment for a show_ui sent in parallel):
+      // not yes/no (ADR 0135), or yes/no without its brief (ADR 0150, after a moment for a show_ui sent in parallel):
       // skipped with how to ask, at most YESNO_RETRIES times in a row, then shown as it is
       const gate = (this.opts.yesNo ?? yesNoGateOn(process.env)) && questions.length > 0;
       const yesNo = yesNoShape(questions);

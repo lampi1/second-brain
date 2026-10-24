@@ -1,4 +1,4 @@
-// A Strategist's plan in QuestionsWindow as the decision card (DecisionCard.tsx, ADR 0149): the steps, who does each,
+// A Strategist's plan in QuestionsWindow as the decision card (DecisionCard.tsx, ADR 0150): the steps, who does each,
 // when it is done and what is already known are its evidence, always open; Sì starts it, No or «Non voglio rispondere»
 // asks for another plan, «Scrivi una risposta…» sends what to change. Every decision carries the exact proposal timestamp;
 // No asks for a different plan through the existing change path and never starts the proposed steps.

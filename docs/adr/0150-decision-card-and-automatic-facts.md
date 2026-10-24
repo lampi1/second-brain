@@ -1,4 +1,4 @@
-# ADR 0149 · One decision card with the chat's brief; memory facts need no approval
+# ADR 0150 · One decision card with the chat's brief; memory facts need no approval
 
 Date: 2026-10-24 · Status: accepted (owner, 2026-10-24: «la ui delle domande fa schifo, a volte poi mi cita contenuto
 non direttamente nella modale ma magari nel messaggio che ha scritto prima di aprirla. E poi a volte ho 2 UI diverse con

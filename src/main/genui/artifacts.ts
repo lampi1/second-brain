@@ -90,7 +90,7 @@ export class Artifacts {
     return list.slice();
   }
 
-  /** A brief (ADR 0149) waits for this chat's next question: the question gates ask for one before a yes/no question. */
+  /** A brief (ADR 0150) waits for this chat's next question: the question gates ask for one before a yes/no question. */
   hasBrief(chatId: string): boolean {
     return this.items(chatId).some(i => i.waiting && i.ui.component === 'brief');
   }

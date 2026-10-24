@@ -1,6 +1,6 @@
 // The Proposte deck's main side (ADR 0123): the sources merged newest first with who / where / when, each decision on its
 // source's own path, the recheck before a decision (gone, blocked side, one at a time), the Tieni marks kept in userData,
-// what the applied-changes source leaves out, and the count event. Memory facts have no source since ADR 0149 (the
+// what the applied-changes source leaves out, and the count event. Memory facts have no source since ADR 0150 (the
 // maintenance saves them itself): the generic checks run on the other sources.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -57,7 +57,7 @@ describe('ProposalsService', () => {
     expect(more.find(c => c.id === 'candidate:due')!.provenance).toMatchObject({ who: { kind: 'role', id: 'sentinel' }, chat: { id: 'x' } });
   });
 
-  it('memory facts are no cards any more (ADR 0149): no memory source, even with facts waiting', async () => {
+  it('memory facts are no cards any more (ADR 0150): no memory source, even with facts waiting', async () => {
     expect(SOURCES.map(x => x.id)).not.toContain('memory');
     const { items } = await new ProposalsService({ ports: ports().p, userData: tmp() }).list();
     expect(items.filter(c => c.source === 'memory')).toEqual([]);

@@ -13,7 +13,7 @@
 // The tile, compact and Orchestrator sizes carry the request's context (AskContext.tsx: the turn's prose, its links and files), folded
 // in the chat's own tile, open in a work chat's Orchestrator card and in the questions window (`ctxOpen`).
 // Agents ask only yes/no questions (shared/yes-no.ts, ADR 0135): a yes/no question is drawn in every size as the one
-// decision card (DecisionCard.tsx, ADR 0149): who asks, the question, the chat's brief (what it did, its evidence, what
+// decision card (DecisionCard.tsx, ADR 0150): who asks, the question, the chat's brief (what it did, its evidence, what
 // Sì / No do) and the same four answers (Sì, No, «Scrivi una risposta…», «Non voglio rispondere»), Esc «Ci penso dopo»;
 // the chat's text before the question stays folded under it, open only when no brief came.
 // With `onLater` a "Ci penso dopo" button leaves it unanswered (every host passes lib/later.ts answerLater: it waits in
@@ -237,7 +237,7 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
       onChoose={() => finish(permissionAnswer(i))} testid={testBase + '-opt-' + (i + 1)} />
   ));
 
-  // a yes/no question (the only kind agents ask): the decision card, the same in every size (ADR 0149)
+  // a yes/no question (the only kind agents ask): the decision card, the same in every size (ADR 0150)
   if (!isPerm && q && yesNo) {
     const yi = q.options.findIndex(o => yesNoOf(o.label) === 'yes'), ni = q.options.findIndex(o => yesNoOf(o.label) === 'no');
     return (

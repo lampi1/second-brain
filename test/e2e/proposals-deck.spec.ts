@@ -1,4 +1,4 @@
-// Memoria → Proposte (ADR 0123) in the frozen demo: the demo's skill candidate, applied changes (never memory ones, ADR 0149), the
+// Memoria → Proposte (ADR 0123) in the frozen demo: the demo's skill candidate, applied changes (never memory ones, ADR 0150), the
 // Orchestrator's setting request, the Battito's rule and the improvement loop's policy are one deck, newest first, with
 // who / where / when / evidence. Swipe by mouse drag (a short drag springs back, a long one decides), the round
 // buttons, ← / →, Z and Ctrl+Z (undo of the held decision), a blocked side, the end state with its counts and the
@@ -47,7 +47,7 @@ test('the deck: every source in one stack, swipe / buttons / keys, undo, the end
     const first = await list(page);
     const sources = new Set(first.items.map(c => c.source));
     for (const s of ['candidate', 'change', 'setting', 'pulse', 'policy'] as const) expect(sources).toContain(s);
-    // memory facts and memory tidy-ups are never cards (ADR 0149): only skills, rules and the rest
+    // memory facts and memory tidy-ups are never cards (ADR 0150): only skills, rules and the rest
     expect(sources.has('memory')).toBe(false);
     expect(first.items.some(c => c.id === 'change:demo-p2')).toBe(false);
     // newest first, provenance resolved to the demo's chats

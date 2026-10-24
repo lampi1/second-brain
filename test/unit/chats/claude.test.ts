@@ -155,7 +155,7 @@ describe('ClaudeSession', () => {
     expect(sink.last('tool')?.output).toContain('only yes/no questions');
   });
 
-  it('a yes/no question without its brief waits a moment, then goes back with how to send one (ADR 0149)', async () => {
+  it('a yes/no question without its brief waits a moment, then goes back with how to send one (ADR 0150)', async () => {
     let ready = false;
     const { s, sink } = start({ yesNo: true, briefReady: () => ready });
     s.send('asksn');
@@ -171,7 +171,7 @@ describe('ClaudeSession', () => {
     expect(q.questions?.[0]?.question).toBe('Lo pubblico?');
   });
 
-  it('a yes/no question with its brief is shown at once (ADR 0149)', async () => {
+  it('a yes/no question with its brief is shown at once (ADR 0150)', async () => {
     const { s, sink } = start({ yesNo: true, briefReady: () => true });
     s.send('asksn');
     const q = await waitFor(() => sink.pendings[0], 'question', 1000);

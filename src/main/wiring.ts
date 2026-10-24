@@ -293,7 +293,7 @@ export function attachArtifacts(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: P
     ...(now ? { now } : {}), ...(process.env.SB_TEST === '1' && wait > 0 ? { askWaitMs: wait } : {}),
   });
   const send = ctx.emitter.emit.bind(ctx.emitter);
-  // a question's visuals are linked before the question reaches the page: its card draws with its brief (ADR 0149)
+  // a question's visuals are linked before the question reaches the page: its card draws with its brief (ADR 0150)
   ctx.emitter.emit = (ch, p) => { if (ch === 'pending:added') { store.observe(ch, p); send(ch, p); } else { send(ch, p); store.observe(ch, p); } };
   const items = chats.items.bind(chats);
   chats.items = chatId => store.merge(chatId, items(chatId));
@@ -495,7 +495,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const loopRef: { current?: { ended(run: AgentRun): void; outcome(run: AgentRun): void } } = {};
   const runFeedbackRef: { current?: { runList(): readonly AgentRun[] } } = {};
   const delegateWorktrees = new DelegateWorktrees(path.join(ctx.userData, 'delegation-worktrees.json'));
-  // the question gates ask for a brief before a yes/no question (ADR 0149): the visuals' store exists further down
+  // the question gates ask for a brief before a yes/no question (ADR 0150): the visuals' store exists further down
   const briefRef: { current?: Artifacts } = {};
   const manager = new ChatManager({
     briefReady: chatId => briefRef.current?.hasBrief(chatId) ?? true,

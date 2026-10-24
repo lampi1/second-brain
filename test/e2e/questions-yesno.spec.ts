@@ -1,4 +1,4 @@
-// E2E: the decision card (ADR 0149): a yes/no question whose chat sent its brief (show_ui brief, next-ask) shows, inside
+// E2E: the decision card (ADR 0150): a yes/no question whose chat sent its brief (show_ui brief, next-ask) shows, inside
 // the card, what was done, the screenshot, the checks and the files, what Sì / No do, and the four answers (Sì, No,
 // «Scrivi una risposta…», «Non voglio rispondere»), Esc / «Ci penso dopo»; the chat's text before the question stays
 // folded. A question set aside comes back on the Orchestrator's recap (ui:command unblock, what app_unblock sends).

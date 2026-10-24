@@ -56,7 +56,7 @@ describe('PlanApproval.tsx', () => {
     expect(html()).toBe('');
     expect(html(101)).toContain('data-testid="qp-approve"');
   });
-  it('is the decision card: question, steps always open, what Sì / No do, the four answers (ADR 0149)', () => {
+  it('is the decision card: question, steps always open, what Sì / No do, the four answers (ADR 0150)', () => {
     chats = { 's/1': { id: 's/1', plan: plan() } };
     const out = html();
     expect(out).toContain('data-request-key="s/1/plan@42"');

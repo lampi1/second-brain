@@ -1,6 +1,6 @@
 // The Proposte deck's sources (ADR 0123): each one turns what an existing module already keeps waiting for the user into
 // cards (shared/proposals.ts) with who, where, when and the evidence, and decides a card only through that module's own
-// path, the same call its old page made (memory facts have no cards since ADR 0149: the maintenance saves them itself,
+// path, the same call its old page made (memory facts have no cards since ADR 0150: the maintenance saves them itself,
 // brainmodel/memory-tidy.ts, at most MEMORY_CAP per role, in the Log with Annulla); a skill candidate → learning:promote
 // / the rollback of the change that wrote it; a change the maintenance applied → Tieni (a reviewed mark) / brainmodel:rollback; an agent's protected setting → settings:confirm; a role trial → agents:trialDecide; a tier
 // suggestion → agents:lifecycleDecide; a Battito rule → approvals:decide; an improvement-loop policy → learn:act.
@@ -142,7 +142,7 @@ const change: Source = {
   async list(p) {
     const since = p.now() - CHANGE_WINDOW_MS, stored = p.changes!.stored();
     const candidates = new Set((await p.candidates?.list() ?? []).map(c => c.name));
-    // memory tidy-ups stay in the Log with Annulla, never a card: the owner sees only skills and rules (ADR 0149)
+    // memory tidy-ups stay in the Log with Annulla, never a card: the owner sees only skills and rules (ADR 0150)
     return p.changes!.list().filter(c => c.at >= since && !c.rolledBackAt && !FORMAT_JOBS.includes(c.job) && c.kind !== 'memory' && !p.reviewed.has(c.id)).flatMap(c => {
       const snaps = stored.find(s => s.id === c.id)?.files ?? [], files = snaps.map(f => f.file);
       // a skill candidate is its own card (Approva / Rifiuta), never twice

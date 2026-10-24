@@ -4,19 +4,19 @@
 // QUESTION_RULE rides on every role frame (agents/orchestrator-role.ts roleFrame); yesNoShape() is the check the
 // engines' question gates use (chats/claude.ts AskUserQuestion, chats/acp.ts cursor/ask_question) to send a question
 // with other options back once with YESNO_REFUSAL; the renderer reads isYesNo() to tone the No card.
-// The decision card (ADR 0149, the owner 2026-10-24: «l'importante è che sia sempre chiaro il contesto della domanda»):
+// The decision card (ADR 0150, the owner 2026-10-24: «l'importante è che sia sempre chiaro il contesto della domanda»):
 // before the question the chat calls show_ui with the `brief` component and target next-ask (what it did, the evidence,
 // what Sì and No do), so the card holds all its context and never leans on the chat text before it; a yes/no question
 // without a brief is sent back once with BRIEF_REFUSAL (the same retry counter).
 // Pure, no Node or DOM: used by main and renderer. Unit tests: test/unit/yes-no.test.ts.
 
 /** What the role frame tells every chat about asking the user. */
-export const QUESTION_RULE = 'Questions to the user (the owner, 2026-10-23/24): ask only yes/no questions, with AskUserQuestion (or your engine\'s question tool), one question at a time, each with exactly two options "Sì" and "No" (mark the one you recommend "(consigliato)"); the user can also type his own answer, say he does not want to answer, or set it aside with «Ci penso dopo». Right before asking, call show_ui with component "brief" and target "next-ask": done = what you did (1-5 short lines), ifYes / ifNo = what happens with each answer, plus the evidence you have: images (screenshot paths), checks (tests, builds, commands with ok/fail), files (changed files). You may add another next-ask visual (table, diffList, barChart) as more evidence. The question text is then only the question, short and self-contained: never "come sopra", "vedi sopra" or a reference to your chat message, because he reads only the card, never your chat. A choice between options becomes a yes/no question on the one you recommend.';
+export const QUESTION_RULE = 'Questions to the user: only yes/no, with AskUserQuestion (or your engine\'s question tool), one at a time, exactly two options "Sì" and "No" (mark the recommended one "(consigliato)"); he can also type an answer, decline, or postpone. Right before asking, call show_ui component "brief" target "next-ask": done (what you did, 1-5 lines), ifYes, ifNo, and your evidence (images = screenshot paths, checks = tests/commands, files). He reads only the card, never your chat: the question is short and self-contained, never "come sopra". A choice between options: ask yes/no on the one you recommend.';
 
 /** What a question gate answers when a question is not yes/no (the agent re-asks in the right shape). */
 export const YESNO_REFUSAL = 'Not asked: the user answers only yes/no questions (second-brain). Ask again with one question whose two options are exactly "Sì" and "No" (mark the one you recommend "(consigliato)"); before it call show_ui component "brief" target "next-ask" with what you did, its evidence and what Sì / No do. A choice between options becomes a yes/no question on the one you recommend. He can still type his own answer or postpone it.';
 
-/** What the gate answers when a yes/no question comes without its brief (ADR 0149). */
+/** What the gate answers when a yes/no question comes without its brief (ADR 0150). */
 export const BRIEF_REFUSAL = 'Not asked yet: the user reads only the question card, never your chat, so it must carry its context. First call show_ui with component "brief" and target "next-ask" (props: done = 1-5 short lines on what you did; ifYes; ifNo; and the evidence you have: images [{path, caption}] for screenshots, checks [{label, status}] for tests or commands, files [{path, why}]), then ask the same yes/no question again, short and without "come sopra".';
 
 /** How many times in a row one chat's question is sent back before it is shown as it is (never a stuck chat). */

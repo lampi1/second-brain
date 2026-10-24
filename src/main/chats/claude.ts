@@ -197,7 +197,7 @@ export class ClaudeSession implements HarnessSession {
   private yesNoRefused = 0;
   /** questions already given BRIEF_GRACE_MS for their brief (show_ui may run in parallel with the question) */
   private briefWaited = new Set<string>();
-  /** this chat sent no brief twice in a row: it is not asked for again in this session (ADR 0149) */
+  /** this chat sent no brief twice in a row: it is not asked for again in this session (ADR 0150) */
   private briefOff = false;
   private tools = new Map<string, { item: ToolItem; input: unknown }>();
   private streams = new Map<string, Stream>();          // `${messageId}:${index}` → streamed block
@@ -764,7 +764,7 @@ export class ClaudeSession implements HarnessSession {
     // nothing readable (the CLI's input changed shape): shown as it is, never refused for the app's own parse
     if (!qs.length) { this.yesNoRefused = 0; return false; }
     const yesNo = yesNoShape(qs);
-    // a yes/no question without its brief (ADR 0149): a moment for a show_ui called in parallel, then sent back
+    // a yes/no question without its brief (ADR 0150): a moment for a show_ui called in parallel, then sent back
     const noBrief = yesNo && !this.briefOff && !!this.opts.briefReady && !this.opts.briefReady();
     if (noBrief && !this.briefWaited.has(id) && this.yesNoRefused < YESNO_RETRIES) {
       this.briefWaited.add(id);

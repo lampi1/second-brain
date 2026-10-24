@@ -1,4 +1,4 @@
-// Exact-version flow decisions as the decision card (DecisionCard.tsx, ADR 0149), with the shared modal's focus,
+// Exact-version flow decisions as the decision card (DecisionCard.tsx, ADR 0150), with the shared modal's focus,
 // postponement and bounded session drafts.
 import { useId, useRef, useState } from 'react';
 import type { FlowAsk } from '../lib/flow-ask';

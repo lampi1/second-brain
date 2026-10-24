@@ -176,7 +176,7 @@ export function deleteMemory(root: string, memoryId: string): string[] {
 // ── the maintenance's tidy-up (brainmodel/jobs.ts mergeMemory, ADR 0129) ───────────────────────────────────────────────
 /** One pass's work on the store: facts retired (merged into another, already known, not generalizable) and facts
  *  rewritten as the general rule behind them (a new record beside the old one, which is retired). */
-/** confirm: proposed facts saved without a card (the owner 2026-10-24, ADR 0149: «voglio vedere solo skill e rule»),
+/** confirm: proposed facts saved without a card (the owner 2026-10-24, ADR 0150: «voglio vedere solo skill e rule»),
  *  each replacing the confirmed facts it names; prune: confirmed facts over the role's cap, retired */
 export interface MemoryTidy { retire: { id: string; reason: string }[]; generalize: { id: string; value: string }[]; confirm?: { id: string; replaces: string[] }[]; prune?: { id: string; reason: string }[] }
 /** What undoes one tidy-up: the facts it retired, the ones it wrote and the ones it confirmed, under the tag of its change. */
@@ -218,7 +218,7 @@ export function tidyMemory(root: string, tidy: MemoryTidy, tag: string, now = ne
         if (open(old) && old.status === 'confirmed' && !undo.retired.includes(id)) retire(old, `replaced:${r.memoryId}`);
       }
       (r.transitions ??= [{ at: r.observedAt, status: 'proposed' }]).push({ at: now, status: 'confirmed', reason: `${tag}:auto` });
-      r.status = 'confirmed'; r.verification = { sourceEventId: `${tag}:auto`, sourceRunId: `maintenance:${tag}`, evidence: 'saved by maintenance (facts need no approval, ADR 0149)' };
+      r.status = 'confirmed'; r.verification = { sourceEventId: `${tag}:auto`, sourceRunId: `maintenance:${tag}`, evidence: 'saved by maintenance (facts need no approval, ADR 0150)' };
       (undo.confirmed ??= []).push(r.memoryId);
     }
     for (const x of tidy.prune ?? []) {

@@ -3,7 +3,7 @@
 // options), board (lanes of items: QA cases, chat status), diffList (changed files by area, clickable), barChart (inline
 // SVG). Each view sits in an error boundary whose fallback is the plain summary. ArtifactCard = a visual in a chat's
 // list (compact; click or ⤢ = full width over the app, Esc closes); AskArtifacts = the visuals attached to a question;
-// UiPreview = an option's preview with its sb-ui fences drawn; a question's brief (ADR 0149) is drawn by DecisionCard.tsx,
+// UiPreview = an option's preview with its sb-ui fences drawn; a question's brief (ADR 0150) is drawn by DecisionCard.tsx,
 // here only when it shows as a plain card. None of them answers anything: their keys stay theirs
 // (Esc in the full view never reaches a question panel). Used by ChatItems.tsx and AskContext.tsx.
 import { Component, createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';

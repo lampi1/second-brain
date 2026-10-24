@@ -99,7 +99,7 @@ const PREWARM_UNUSED_MS = 5 * 60_000;
 interface SubmissionReceipt { beforeSubmit(): void; submitted(): void; failed(error: unknown): void }
 
 export interface ChatManagerOptions {
-  /** a brief waits for this chat's next question (genui/artifacts.ts hasBrief, ADR 0149); absent = none asked for */
+  /** a brief waits for this chat's next question (genui/artifacts.ts hasBrief, ADR 0150); absent = none asked for */
   briefReady?: (chatId: string) => boolean;
   suggestSkills?: (goal: string) => Promise<string[]>;
   /** the roles in a few lines, for the Orchestrator's first message of a session (agents/discovery.ts roleCatalogBrief) */

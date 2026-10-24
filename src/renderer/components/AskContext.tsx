@@ -80,7 +80,7 @@ function docsOf(pieces: readonly { id: string; kind: string; text: string }[]): 
 
 export const AskContext = memo(function AskContext({ req, defaultOpen, testBase, onToggle, layout = 'panel', question, lead, noVisuals, label }: {
   req: PendingRequest; defaultOpen: boolean; testBase: string; onToggle?: () => void; layout?: 'panel' | 'window';
-  /** the decision card draws the attached visuals itself (ADR 0149) */
+  /** the decision card draws the attached visuals itself (ADR 0150) */
   noVisuals?: boolean;
   /** the toggle's name instead of «Contesto» */
   label?: string;

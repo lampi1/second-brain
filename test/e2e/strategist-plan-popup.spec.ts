@@ -38,7 +38,7 @@ test('the plan to approve opens in the questions window with its steps; approvin
     await pick.click();
     await expect(page.getByTestId('qwin-current')).toContainText('Piano da approvare');
 
-    // The decision card (ADR 0149): every step, who does it and what is known always open, then what Sì / No do.
+    // The decision card (ADR 0150): every step, who does it and what is known always open, then what Sì / No do.
     const card = page.getByTestId('qwin-plan');
     await expect(page.getByTestId('qwin-backdrop')).toBeVisible();
     await expect(card).toBeVisible();

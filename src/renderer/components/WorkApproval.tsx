@@ -1,4 +1,4 @@
-// One concrete durable proposal inside QuestionsWindow as the decision card (DecisionCard.tsx, ADR 0149): exact-version
+// One concrete durable proposal inside QuestionsWindow as the decision card (DecisionCard.tsx, ADR 0150): exact-version
 // Sì / No, its text and evidence always open, «Scrivi una risposta…» to the Orchestrator, «Non voglio rispondere» drops it.
 // The shared window owns focus, queue navigation and postponement; no summary board is mounted on Home.
 import { t } from '../i18n';

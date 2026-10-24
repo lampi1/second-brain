@@ -1,4 +1,4 @@
-// Launch selection injects only relevant confirmed facts (and proposed ones not tied to one case, ADR 0149), with hard limits and the scoped archive left unchanged.
+// Launch selection injects only relevant confirmed facts (and proposed ones not tied to one case, ADR 0150), with hard limits and the scoped archive left unchanged.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -29,7 +29,7 @@ describe('task-selective memory at launch', () => {
     expect(selectLaunchMemory(w.root, scope, 'the and please task review check').text).toBe('');
     expect(selectLaunchMemory(w.root, scope, 'unrelated').text).toBe('');
   });
-  it('loads proposed facts that are not tied to one case (ADR 0149), confirmed ones first on an equal score', () => {
+  it('loads proposed facts that are not tied to one case (ADR 0150), confirmed ones first on an equal score', () => {
     const w = world();
     w.add('Database backups are kept in the shared vault.');
     w.confirm(w.add('Database restores are kept in the shared vault.'));

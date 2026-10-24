@@ -1,4 +1,4 @@
-// The maintenance's memory tidy-up (ADR 0129, 0149): near-duplicate proposals merged, a proposal already confirmed retired,
+// The maintenance's memory tidy-up (ADR 0129, 0150): near-duplicate proposals merged, a proposal already confirmed retired,
 // case-specific facts rewritten as the rule behind them (a still-specific rewrite or "drop" retires them), the facts left
 // saved with no card (a newer value replacing the confirmed one it contradicts), at most MEMORY_CAP confirmed facts per
 // role (the least recent pruned), one logged change per role with its undo; the undo puts the store back and a fact the

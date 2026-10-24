@@ -1,4 +1,4 @@
-// The one card every question and approval uses (ADR 0149, proposal A «Scheda decisione», the owner 2026-10-24: «la
+// The one card every question and approval uses (ADR 0150, proposal A «Scheda decisione», the owner 2026-10-24: «la
 // prima, spingi tanto nella generative UI» · «l'importante è che sia sempre chiaro il contesto della domanda»). Top to
 // bottom: who asks, the question large, the evidence (a chat's `brief`: what it did as ✓ lines, its screenshots, checks
 // and files, plus any other visual it attached; a plan's steps; a proposal's text), what Sì and No do, then always the

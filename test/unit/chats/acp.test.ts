@@ -214,7 +214,7 @@ describe('AcpSession as Cursor', () => {
     await waitFor(() => sink.pendings[0], 'the third ask is shown');
   });
 
-  it('cursor/ask_question yes/no without its brief: skipped after a moment with how to send one (ADR 0149)', async () => {
+  it('cursor/ask_question yes/no without its brief: skipped after a moment with how to send one (ADR 0150)', async () => {
     let ready = false;
     const { s, sink, logFile } = start({ yesNo: true, briefReady: () => ready });
     s.send('asksn');

@@ -1,4 +1,4 @@
-/* The decision card (DecisionCard.tsx, ADR 0149): one calm layout for every question and approval. Who asks on one
+/* The decision card (DecisionCard.tsx, ADR 0150): one calm layout for every question and approval. Who asks on one
    line, the question large, the evidence in a soft panel (what was done as ✓ lines, screenshots, checks as chips,
    files), what Sì / No do, then Sì / No side by side (neutral surface, hue only on the icon, the recommended one with
    a thin colored border), «Scrivi una risposta…» dashed and «Non voglio rispondere» as a quiet link. Smaller in the

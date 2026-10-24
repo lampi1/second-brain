@@ -108,7 +108,7 @@ const question = (chatId: string, id = 'q1'): PendingRequest => ({ id, chatId, t
 
 const brief = { done: ['Ho corretto il bottone', 'Test verdi'], ifYes: 'Faccio il merge', ifNo: 'Resta sul branch', checks: [{ label: '42/42 test', status: 'ok' }], images: [{ path: 'C:\\qa\\dopo.png', caption: 'Dopo' }], files: [{ path: 'src/a.ts', why: 'il fix', added: 3, removed: 1 }] };
 
-describe('brief: a question\'s context (ADR 0149)', () => {
+describe('brief: a question\'s context (ADR 0150)', () => {
   it('checks the brief and says it as text', () => {
     const r = checkUi('brief', brief);
     expect(r.ok).toBe(true);
@@ -127,7 +127,7 @@ describe('brief: a question\'s context (ADR 0149)', () => {
 describe('Artifacts: the store behind show_ui', () => {
   afterEach(() => { vi.useRealTimers(); });
 
-  it('a brief goes only on the next question, and the gates see it waiting (ADR 0149)', () => {
+  it('a brief goes only on the next question, and the gates see it waiting (ADR 0150)', () => {
     const { store } = setup([chat('w')]);
     expect(() => store.show('w', args({ component: 'brief', props: brief }))).toThrow('brief: only with target "next-ask"');
     expect(store.hasBrief('w')).toBe(false);
