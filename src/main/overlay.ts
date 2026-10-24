@@ -50,6 +50,9 @@ export class OverlayLayer {
       webPreferences: {
         preload: path.join(this.outDir, 'preload', 'index.cjs'),
         contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true, spellcheck: false, transparent: true,
+        // its own in-memory session: its deny-all permission handler below must never replace the app window's, which
+        // grants the microphone (window.ts micAllowed); on the shared default session it refused it everywhere
+        partition: 'overlay',
       },
     });
     view.setBackgroundColor('#00000000');

@@ -38,7 +38,9 @@ quanto un click». Not now: the app speaking on its own initiative (recaps). The
   Downloads run beside the transcribe/speak queue (voice keeps working meanwhile); a speech request times out at 30 s.
   The first Ctrl+M downloads what is missing (Settings → Voce shows progress and has «Scarica» and «Prova»).
 - **Permission**: the app window grants `media` only when it asks for audio alone, from the app's own page
-  (`window.ts micAllowed`); camera, screen capture and everything else stay refused.
+  (`window.ts micAllowed`); camera, screen capture and everything else stay refused. The request layer's view (overlay.ts)
+  has its own in-memory session (`partition: 'overlay'`) with its deny-all handler: on the shared default session that
+  handler replaced the window's and the microphone was refused everywhere (fixed 2026-10-24, e2e `mic-permission.spec.ts`).
 - Settings `voiceAsr` (fast | accurate) and `voiceName` (paola | miro | dii), not protected: local and free.
 - `SB_VOICE_FAKE=1` (and the demo) swaps the engine for a fake that "hears" one sentence per session: e2e
   `test/e2e/voice.spec.ts` (runs on main, per ADR 0027).
