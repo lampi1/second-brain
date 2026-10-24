@@ -32,11 +32,13 @@ type Tab = 'now' | 'routines' | 'history';
 export function Flows() {
   const { snapshot, error, loading } = useFlows();
   const ready = useApp(s => !!orchestratorIdOf(s));
-  const [tab, setTab] = useState<Tab>('now'), [opened, setOpened] = useState<string | null>(null), [importing, setImporting] = useState(false);
+  const [picked, setTab] = useState<Tab | null>(null), [opened, setOpened] = useState<string | null>(null), [importing, setImporting] = useState(false);
   const [starting, setStarting] = useState<{ flowId?: string } | null>(null), [dry, setDry] = useState<{ result: FlowDryRun; title: string } | null>(null);
-  const [recovery, setRecovery] = useState<{ snapshot: FlowSnapshot; run: FlowRun; mode: 'from-step' | 'cancel' } | null>(null);
+  const [recovery, setRecovery] = useState<{ snapshot: FlowSnapshot; run: FlowRun; mode: 'from-step' | 'from-start' | 'cancel' } | null>(null);
   const count = snapshot ? new Set([...snapshot.versions.map(v => v.definition.id), ...snapshot.drafts.map(d => d.definition.id)]).size : 0;
   const yours = snapshot ? snapshot.runs.filter(run => needsYou(snapshot, run)).length : 0;
+  // with no run open, the page opens on the routines themselves (Adesso would only say «nothing to do»)
+  const tab: Tab = picked ?? (snapshot?.runs.some(run => run.status !== 'completed' && run.status !== 'cancelled') ? 'now' : 'routines');
   const dryRun = async (flowId: string) => {
     if (!snapshot) return;
     try { setDry({ result: await sb.invoke('flows:dryRun', { contextKey: snapshot.contextKey, flowId }), title: routineName(snapshot, flowId) }); }

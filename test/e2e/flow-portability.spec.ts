@@ -1,9 +1,10 @@
-// Portable-flow and fullscreen inspection UI coverage; authored here, executed only on main by the normal check.
+// Portable routines: import opens an inert draft form; an open routine shows every step and exports its version; a
+// finished run keeps its evidence in Storico.
 import { test, expect } from '@playwright/test';
 import type { FlowDefinition, FlowSnapshot } from '../../src/shared/flows';
-import { launchDemo, shot } from './helpers';
+import { launchDemo, shot, publishFlows } from './helpers';
 
-test('flow versions and fullscreen retain recorded evidence; import opens an inert draft form', async () => {
+test('import opens an inert draft form; a long routine shows every step, exports, and keeps run evidence', async () => {
   const { app, page } = await launchDemo({ orchestrator: true });
   try {
     await page.getByTestId('nav-flussi').click();
@@ -19,50 +20,18 @@ test('flow versions and fullscreen retain recorded evidence; import opens an ine
     definition.steps.push(...Array.from({ length: 19 }, (_, index) => ({ ...definition.steps[0]!, id: `followup-${index}`, title: `Verifica completa ${index + 2}`, instructions: `Controlla il passaggio ${index + 2}. ${'Confronta requisiti, documento selezionato e report con evidenze verificabili. '.repeat(6)}` })));
     const snapshot: FlowSnapshot = { contextKey: 'portable-ui-fixture', drafts: [], active: { [definition.id]: 2 }, versions: [1, 2].map(version => ({ definition, version, draftRevision: version, digest: `digest-${version}`, activatedAt: version })), runs: [{ id: 'recorded', revision: 1, flowId: definition.id, flowVersion: 1, definitionDigest: 'digest-1', ownerOrchestratorId: 'o', subjectKey: 'Documento selezionato', scope: {}, inputs: {}, status: 'completed', currentStep: 0, createdAt: 1, updatedAt: 2, steps: [{ stepId: 'review', status: 'completed', attempts: 1, receipt: { id: 'receipt', stepId: 'review', kind: 'agent-report', at: 2, summary: 'Documento verificato.', evidence: ['report: revisione selezionata'] } }] }] };
     snapshot.roles = { sentinel: { name: 'Sentinel', avatar: { kind: 'character', value: 'sentinel' }, tier: 'mid', tierMax: 'top', model: null, models: { mid: 'review-model' } } };
-    await app.evaluate(({ BrowserWindow }, value) => BrowserWindow.getAllWindows()[0]!.webContents.send('flows:changed', value), snapshot);
-    await expect(page.locator('.flow-export-group')).toContainText('v1');
-    await page.getByTestId('flow-fullscreen-open').click();
-    const full = page.getByTestId('flow-fullscreen');
-    await expect(full).toBeVisible();
-    await expect(full).toHaveAttribute('aria-modal', 'true');
-    await page.keyboard.press('Control+w');
-    await page.keyboard.press('Control+1');
-    await page.keyboard.press('g');
-    await page.keyboard.press('h');
-    await expect(full).toBeVisible();
-    await expect(full.getByTestId('flow-fullscreen-run')).toContainText('Documento selezionato');
-    const steps = full.getByTestId('flow-fullscreen-steps');
-    await expect(steps.locator('.flow-step')).toHaveCount(20);
-    expect((await full.locator('.modal-head').boundingBox())!.height).toBeLessThanOrEqual(100);
-    await expect(full.getByTestId('flow-fullscreen-exit').locator('svg')).toHaveCount(1);
-    await steps.locator('.flow-step').last().scrollIntoViewIfNeeded();
-    await expect(steps.locator('.flow-step').last()).toContainText('Controlla il passaggio 20.');
-    await expect(steps.getByTestId('flow-step-agent').first()).toContainText('Sentinel · mid · review-model');
-    await expect(steps.getByTestId('flow-step-agent').last()).toBeVisible();
-    await shot(page, 'flow-fullscreen-all-steps');
-    await app.evaluate(({ BrowserWindow }) => { const win = BrowserWindow.getAllWindows()[0]!; win.setMinimumSize(0, 0); win.setContentSize(600, 900); });
-    await steps.locator('.flow-step').last().scrollIntoViewIfNeeded();
-    await expect(steps.getByTestId('flow-step-agent').last()).toBeVisible();
-    expect(await full.locator('.modal-body').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
-    await shot(page, 'flow-fullscreen-long-narrow');
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setContentSize(1600, 1000));
-    await full.locator('.flow-fullscreen-diagram > summary').click();
-    await expect(full.getByTestId('flow-node').first()).toHaveAttribute('data-status', 'completed');
-    await full.locator('.flow-inspector .flow-report > summary').click();
-    await expect(full.locator('.flow-inspector')).toContainText('report: revisione selezionata');
-    await shot(page, 'flow-fullscreen-evidence');
-    await page.keyboard.press('Escape');
-    await expect(full).toHaveCount(0);
-    await expect(page.getByTestId('flow-fullscreen-open')).toBeFocused();
-    await page.locator('#flow-version-picker').selectOption('2');
-    await expect(page.locator('.flow-export-group')).toContainText('v2');
-    await expect(page.getByTestId('flow-run')).toHaveCount(0);
-    await page.getByTestId('flow-fullscreen-open').click();
-    await full.getByTestId('flow-fullscreen-exit').click();
-    await expect(full).toHaveCount(0);
-    await page.getByTestId('flow-fullscreen-open').click();
-    await full.locator('.flow-fullscreen-steps .ctx-link.file').first().click();
-    await expect(full).toHaveCount(0);
-    await expect(page.getByTestId('viewer-overlay')).toBeVisible();
+    await publishFlows(app, snapshot);
+    // the open routine exports its active version (with models and pinned scripts) for a cloud agent
+    await page.getByTestId('rt-tab-routines').click();
+    await page.getByTestId('rt-routine-card').filter({ hasText: 'Revisione documento' }).click();
+    const detail = page.getByTestId('rt-detail');
+    await expect(detail).toContainText('v2');
+    await expect(detail.locator('.rt-pipe > li')).toHaveCount(20);
+    await expect(detail.getByTestId('rt-export')).toBeVisible();
+    await shot(page, 'flow-routine-all-steps');
+    // the finished run keeps its evidence in Storico
+    await page.getByTestId('rt-tab-history').click();
+    await page.getByTestId('rt-history').locator('tbody tr').first().click();
+    await expect(page.getByTestId('rt-history')).toContainText('Documento verificato.');
   } finally { await app.close(); }
 });

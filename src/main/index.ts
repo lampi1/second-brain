@@ -1,5 +1,6 @@
 // second-brain main process: one window, the services (chats, browser + MCP, brain + feed) and the typed IPC.
 import { exportFlow, importFlow } from './flows/portable';
+import { stepFileText } from './flows/executor';
 import { app, dialog, nativeImage, session, shell, type BrowserWindow } from 'electron';
 import { DefaultBrain } from '../modules/ai-first/default-brain';
 import { detectProjectsFolder } from './brain/projects-folder';
@@ -491,7 +492,8 @@ app.whenReady().then(async () => {
       const service = s.flows?.service();
       if (!service || a.contextKey !== service.snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi il flusso.');
       const { contextKey: _context, ...input } = a;
-      return exportFlow(service.snapshot(), input);
+      const root = s.brain.info().brainRoot;
+      return exportFlow(service.snapshot(), input, (kind, ref) => root ? stepFileText(root, kind, ref) : null);
     },
     'flows:import': a => {
       const service = s.flows?.service();

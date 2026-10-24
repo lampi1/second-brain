@@ -75,7 +75,7 @@ export function FlowRecoveryContent({ snapshot, run, mode, proposal, onClose, on
     } finally { locked.current = false; setBusy(false); }
   };
   return <div className="flow-recovery" aria-busy={busy} data-testid="flow-recovery-content">
-    <p className="wq-lead">{run.subjectKey} · v{version?.version ?? run.flowVersion} · {mode === 'cancel' ? t('flows.cancelHint') : t(mode === 'from-start' ? 'flows.restartActive' : 'flows.restartPinned')}</p>
+    <p className="wq-lead">{run.subjectKey} · v{version?.version ?? run.flowVersion} · {mode === 'cancel' ? t('flows.cancelHint') : t(mode === 'from-start' ? 'flows.restartActive' : version && version.version !== run.flowVersion ? 'flows.restartMoved' : 'flows.restartPinned')}</p>
     {mode === 'cancel' && proposal?.run.pendingCancellation?.reason && <p>{proposal.run.pendingCancellation.reason}</p>}
     {mode !== 'cancel' && <p>{t('flows.restartHint')}</p>}
     {mode === 'from-start' && definition?.steps[0] && <p><strong>{t('flows.recoveryStep')}: 1. {definition.steps[0].title}</strong></p>}

@@ -4,7 +4,7 @@
 // work item and runs dry. Main's flow handlers are swapped for stand-ins: nothing runs, the test reads what was sent.
 import { test, expect } from '@playwright/test';
 import { routineSnapshot } from './routine.fixture';
-import { launchDemo, shot } from './helpers';
+import { launchDemo, shot, publishFlows } from './helpers';
 
 test('Routine page: now, routines, detail, history, start and dry run', async () => {
   const { app, page } = await launchDemo({ orchestrator: true, width: 1440, height: 900 });
@@ -17,7 +17,6 @@ test('Routine page: now, routines, detail, history, start and dry run', async ()
         ipcMain.removeHandler(channel);
         ipcMain.handle(channel, (_e, input: Record<string, unknown>) => { g.__rtSent.push({ channel, input }); return answer(input); });
       };
-      stand('flows:state', () => value);
       stand('flows:runCommand', () => value);
       stand('flows:editStepModel', () => value);
       stand('flows:previewItem', () => ({ id: 4812, title: 'Login fallisce con SSO su Edge', type: 'Bug', state: 'Active', areaPath: 'Air\\Web', tags: ['ai-ready', 'bug'], url: 'https://dev.azure.com/ex/Air/_workitems/edit/4812', revision: 3, matches: true, why: [], blocking: [] }));
@@ -30,7 +29,7 @@ test('Routine page: now, routines, detail, history, start and dry run', async ()
       ] }));
     }, snapshot);
     await page.getByTestId('nav-flussi').click();
-    await app.evaluate(({ BrowserWindow }, value) => BrowserWindow.getAllWindows()[0]!.webContents.send('flows:changed', value), snapshot);
+    await publishFlows(app, snapshot);
 
     // Adesso: the prod command waits for the user, the self-healing run is working, not «needs you»
     await page.getByTestId('rt-tab-now').click();

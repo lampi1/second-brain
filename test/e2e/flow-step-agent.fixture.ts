@@ -15,6 +15,7 @@ export const stepAgentSnapshot = (): FlowSnapshot => {
     runs: [{ id: 'run-1', revision: 2, flowId: 'demo-fix', flowVersion: 1, definitionDigest: 'fixture', ownerOrchestratorId: 'orc', subjectKey: 'Bug di prova', scope: {}, inputs: { workspace: 'C:/demo' },
       status: 'active', currentStep: 0, createdAt: now, updatedAt: now,
       steps: [{ stepId: 'investigate', status: 'running', attempts: 1, startedAt: now }, { stepId: 'fix', status: 'pending', attempts: 0 }, { stepId: 'free', status: 'pending', attempts: 0 }] }],
+    engines: [{ id: 'claude', name: 'Claude', models: ['demo-mid-model', 'demo-top-model'] }, { id: 'codex', name: 'Codex', models: ['gpt-5-codex'] }],
     roles: {
       scout: { name: 'Scout', avatar: { kind: 'character', value: 'scout' }, tier: 'light', tierMax: 'mid', model: null, models: { light: 'demo-light-model', mid: 'demo-mid-model' } },
       artisan: { name: 'Artisan', avatar: { kind: 'character', value: 'artisan' }, tier: 'mid', tierMax: 'top', model: null, models: { light: 'demo-light-model', mid: 'demo-mid-model', top: 'demo-top-model' } },

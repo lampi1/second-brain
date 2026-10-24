@@ -6,6 +6,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { APP_OWNER } from '../../shared/flows';
 import type { FlowAttachment, FlowCommandReceipt, FlowHealEntry, FlowActivate, FlowAgentBinding, FlowCancel, FlowDecision, FlowDefinition, FlowDraft, FlowMatch, FlowPropose, FlowReceipt, FlowReport, FlowRestart, FlowRestartDecision, FlowRestartProposal, FlowRun, FlowScope, FlowSnapshot, FlowStart, FlowStep, FlowTestDbEvidence, FlowStepTierEdit, FlowVerifiedReport, FlowVersion } from '../../shared/flows';
 import { adapted, commandStep, testDbAdapted, digest, type RoleTierMax, inScope, integer, keys, normalize, object, text, validateDefinition, validateInputs, validateScope } from './schema';
+import { roleOf, samePrefix } from '../../shared/routine';
 
 export interface FlowServiceOptions {
   file: string; contextKey: string; now?: () => number; changed?: (snapshot: FlowSnapshot) => void;
@@ -417,8 +418,10 @@ export class FlowService {
     keys(object(input, 'step model edit'), ['flowId', 'version', 'stepId', 'engine', 'model', 'effort'], 'step model edit');
     if (this.data.active[input.flowId] !== input.version) throw new Error('Definition changed; review its current version');
     const definition = copy(this.version(input.flowId, input.version).definition), step = definition.steps.find(item => item.id === input.stepId);
-    if (!step || step.kind !== 'agent' || !step.role) throw new Error('Only an agent step with a role takes an engine and a model');
+    if (!step || step.kind !== 'agent') throw new Error('Only an agent step takes an engine and a model');
     for (const key of ['engine', 'model', 'effort'] as const) { const value = input[key]; if (value === null || value === undefined || value === '') delete step[key]; else (step as unknown as Record<string, unknown>)[key] = value; }
+    // a pick on a step without a role pins the role it already ran as, so the pick has a role to belong to
+    if (!step.role && (step.engine || step.model || step.effort)) step.role = roleOf(step);
     return this.activateNow(definition);
   }
   /** The user approved a script/query's new content: the step pins the new hash in a new active version. */
@@ -660,6 +663,3 @@ function validateHeal(value: unknown): void {
   }
 }
 /** True when the first `count` steps of two versions are the same steps (a run can carry their evidence across). */
-function samePrefix(a: FlowDefinition | undefined, b: FlowDefinition, count: number): boolean {
-  return !!a && a.steps.length >= count && b.steps.length >= count && a.steps.slice(0, count).every((step, i) => JSON.stringify(step) === JSON.stringify(b.steps[i]));
-}

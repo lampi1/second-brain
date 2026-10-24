@@ -1,5 +1,6 @@
 // Portable flow regression tests: exact immutable selection, bounded input and fresh proposals without execution authority.
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it } from 'vitest';
@@ -107,4 +108,25 @@ it('preserves original CRLF prose when importing its unchanged Markdown export',
   const imported = importFlow(service(), exported.content);
   expect(imported.definition.description).toBe(original.description);
   expect(imported.definition.steps[0]!.instructions).toBe(original.steps[0]!.instructions);
+});
+it('exports what a cloud agent needs for the same result: engine, model, effort, params and the pinned script text', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-portable-')); dirs.push(dir);
+  const body = 'param($Env)\nWrite-Output "move $Env"\n', hash = createHash('sha256').update(body).digest('hex');
+  const target = new FlowService({ file: path.join(dir, 'flows.json'), contextKey: 'portable-test', now: () => 10, hashOf: () => hash });
+  const routine: FlowDefinition = { ...definition, params: [{ name: 'from', type: 'string', required: true }], steps: [
+    { ...definition.steps[0]!, engine: 'codex', model: 'gpt-5-codex', effort: 'high' },
+    { id: 'move', title: 'Move', kind: 'check', instructions: 'Run the move.', inputs: [], evidence: [], timeoutMs: 60000, maxAttempts: 1, effect: 'production', env: 'prod', action: { kind: 'script', ref: 'move.ps1' }, args: { Env: 'prod', From: '{{from}}' } }] };
+  const draft = target.propose({ definition: routine, expectedRevision: 0 }); target.decideDefinition({ id: routine.id, expectedRevision: draft.revision, answer: 'yes' });
+  const read = (kind: string, ref: string) => kind === 'script' && ref === 'move.ps1' ? body : null;
+  const parsed = JSON.parse(exportFlow(target.snapshot(), { flowId: routine.id, version: 1, format: 'json' }, read).content);
+  expect(parsed.definition.steps[0]).toMatchObject({ engine: 'codex', model: 'gpt-5-codex', effort: 'high' });
+  expect(parsed.definition.steps[1]).toMatchObject({ env: 'prod', args: { Env: 'prod', From: '{{from}}' }, action: { kind: 'script', ref: 'move.ps1', hash } });
+  expect(parsed.definition.params).toEqual(routine.params);
+  expect(parsed.files).toEqual([{ kind: 'script', ref: 'move.ps1', sha256: hash, content: body }]);
+  const md = exportFlow(target.snapshot(), { flowId: routine.id, version: 1, format: 'markdown' }, read).content;
+  for (const text of ['Engine / model / effort: codex / gpt-5-codex / high', 'only a person runs it', `sha256 ${hash}`, 'Write-Output "move $Env"']) expect(md).toContain(text);
+  // a script changed since it was pinned is left out, never exported under the old hash
+  expect(JSON.parse(exportFlow(target.snapshot(), { flowId: routine.id, version: 1, format: 'json' }, () => 'changed').content).files).toBeUndefined();
+  // the markdown still imports, as a draft, without writing any file
+  expect(importFlow(target, md).status).toBe('proposed');
 });

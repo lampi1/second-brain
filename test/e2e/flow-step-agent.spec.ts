@@ -1,64 +1,38 @@
-// Flussi shows, for each agent step, the role's avatar, the role and the model resolved from the routing table, in the
-// definition and on a running run's active step. A renderer fixture: no workflow starts, no agent is invoked.
-// Authored only: this suite runs on main after the merge (ADR 0027).
+// The open routine shows, for each agent step, the role's avatar and name (a step without a role shows the role the
+// runner picks), and a picker for engine, model and effort (ADR 0153): a pick is applied at once as a new version.
+// A renderer fixture and a stand-in host: no workflow starts, no agent is invoked.
 import { test, expect } from '@playwright/test';
 import { stepAgentSnapshot } from './flow-step-agent.fixture';
-import { launchDemo, shot } from './helpers';
+import { launchDemo, shot, publishFlows } from './helpers';
 
-
-test('Flussi shows each agent step\'s role avatar and resolved model', async () => {
+test('each agent step shows its role and takes an engine/model pick', async () => {
   const { app, page } = await launchDemo({ orchestrator: true, width: 1400, height: 900 });
   try {
-    await page.getByTestId('nav-flussi').click();
-    await app.evaluate(({ BrowserWindow }, value) => BrowserWindow.getAllWindows()[0]!.webContents.send('flows:changed', value), stepAgentSnapshot());
-    await expect(page.getByTestId('flow-definition')).toContainText('Correzione di prova');
-    await page.locator('.flow-full-definition > summary').click();
-    await expect(page.locator('.flow-full-definition').getByTestId('flow-step-agent').first()).toContainText('Scout · mid · demo-mid-model');
-    await expect(page.locator('.flow-full-definition').getByTestId('flow-step-agent').nth(1)).toContainText('Artisan · scelto dal ruolo');
-    await expect(page.locator('.flow-full-definition').getByTestId('flow-step-agent').nth(2)).toContainText('scelto dal ruolo');
-    // the running step's node carries its role's avatar too
-    await expect(page.locator('.flow-node[data-status=running]').getByTestId('flow-node-agent').locator('[data-character=scout]')).toBeVisible();
-    await shot(page, 'flow-step-agent');
-  } finally { await app.close(); }
-});
-
-test('a step tier pick proposes a new revision; the active version stays until the modal approves it', async () => {
-  const { app, page } = await launchDemo({ orchestrator: true, width: 1400, height: 900 });
-  try {
-    // stand-in host: records the exact request and answers like FlowService.editStepTier (a proposed draft revision)
     await app.evaluate(({ ipcMain }, base) => {
-      const g = globalThis as unknown as { tierEdits: unknown[] };
-      g.tierEdits = [];
-      ipcMain.removeHandler('flows:editStepTier');
-      ipcMain.handle('flows:editStepTier', (_event, edit: { stepId: string; tier: string | null }) => {
-        g.tierEdits.push(edit);
-        const definition = structuredClone(base.versions[0]!.definition);
-        const step = definition.steps.find(s => s.id === edit.stepId)!;
-        if (edit.tier) step.tier = edit.tier as never; else delete step.tier;
-        return { ...base, drafts: [{ definition, revision: 2, updatedAt: Date.now(), status: 'proposed' }] };
+      const g = globalThis as unknown as { modelEdits: unknown[] };
+      g.modelEdits = [];
+      ipcMain.removeHandler('flows:editStepModel');
+      ipcMain.handle('flows:editStepModel', (_event, edit: { stepId: string; engine: string | null; model: string | null }) => {
+        g.modelEdits.push(edit);
+        const definition = structuredClone(base.versions[0]!.definition), step = definition.steps.find(s => s.id === edit.stepId)!;
+        if (edit.engine) step.engine = edit.engine; if (edit.model) step.model = edit.model;
+        return { ...base, active: { 'demo-fix': 2 }, versions: [...base.versions, { definition, version: 2, draftRevision: 2, digest: 'fixture-2', activatedAt: Date.now() }] };
       });
     }, stepAgentSnapshot());
     await page.getByTestId('nav-flussi').click();
-    await app.evaluate(({ BrowserWindow }, value) => BrowserWindow.getAllWindows()[0]!.webContents.send('flows:changed', value), stepAgentSnapshot());
-    await expect(page.getByTestId('flow-definition')).toContainText('Correzione di prova');
-    await page.locator('#flow-run-picker').selectOption('definition');
-    await page.locator('.flow-full-definition > summary').click();
-    const menus = page.locator('.flow-full-definition').getByTestId('flow-step-tier');
-    await expect(menus).toHaveCount(2); // the role-less step has no menu
-    // only the tiers the role allows, up to its tierMax, each with its model
-    await expect(menus.first().locator('option')).toHaveText(['scelto dal ruolo', 'light · demo-light-model', 'mid · demo-mid-model']);
-    await expect(menus.nth(1).locator('option')).toHaveCount(4);
-    await menus.first().scrollIntoViewIfNeeded();
-    await shot(page, 'flow-step-tier-menu');
-    await menus.first().selectOption('light');
-    expect(await app.evaluate(() => (globalThis as unknown as { tierEdits: unknown[] }).tierEdits)).toEqual([
-      { flowId: 'demo-fix', base: { version: 1 }, stepId: 'investigate', tier: 'light', contextKey: 'flow-step-agent-fixture' },
+    await publishFlows(app, stepAgentSnapshot());
+    await page.getByTestId('rt-tab-routines').click();
+    await page.getByTestId('rt-routine-card').filter({ hasText: 'Correzione di prova' }).click();
+    const detail = page.getByTestId('rt-detail');
+    await expect(detail.locator('.rt-who')).toHaveText(['Scout', 'Artisan', 'Scout']);
+    await expect(detail.locator('[data-character=scout]').first()).toBeVisible();
+    const pickers = detail.getByTestId('rt-step-model');
+    await expect(pickers).toHaveCount(3); // every agent step, the role-less one too
+    await shot(page, 'flow-step-agent');
+    await pickers.first().locator('select').first().selectOption('codex');
+    await expect.poll(() => app.evaluate(() => (globalThis as unknown as { modelEdits: unknown[] }).modelEdits)).toEqual([
+      { contextKey: 'flow-step-agent-fixture', flowId: 'demo-fix', version: 1, stepId: 'investigate', engine: 'codex', model: null, effort: null },
     ]);
-    // the version shown is still v1 (mid); the new revision waits in the existing modal and locks further picks
-    await expect(page.locator('.flow-draft-notice')).toBeVisible();
-    await expect(page.locator('.flow-badge[data-status=active]')).toBeVisible();
-    await expect(menus.first()).toHaveValue('mid');
-    await expect(menus.first()).toBeDisabled();
-    await shot(page, 'flow-step-tier');
+    await expect(detail).toContainText('v2');
   } finally { await app.close(); }
 });

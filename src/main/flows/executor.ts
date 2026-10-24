@@ -55,6 +55,10 @@ function stepFile(root: string, step: FlowStep): string {
 export function contentHash(root: string, kind: 'script' | 'query', ref: string): string | null {
   try { return sha256(fs.readFileSync(stepFile(root, { action: { kind, ref } } as FlowStep))); } catch { return null; }
 }
+/** A brain script/query's text now (null = missing or outside its folder): exported with the routine. */
+export function stepFileText(root: string, kind: 'script' | 'query', ref: string): string | null {
+  try { return fs.readFileSync(stepFile(root, { action: { kind, ref } } as FlowStep), 'utf8'); } catch { return null; }
+}
 /** Fills {{name}} with a run input (typed params are run inputs under their own name), {{attachment:name}} with the attachment's path. */
 function fill(template: string, run: FlowRun, attachmentsDir: string, problems: string[]): string {
   let out = template;

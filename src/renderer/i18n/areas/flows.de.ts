@@ -170,6 +170,7 @@ export const flowsDe = {
   "flows.restartHint": "Der ursprüngliche Verlauf bleibt erhalten. Ja erlaubt das Wiederholen der genannten Schritte einschließlich externer Schreibvorgänge; Prüfungen bleiben erforderlich.",
   "flows.restartActive": "Von Beginn an mit der aktiven Version",
   "flows.restartPinned": "Ab dem gewählten Schritt mit der ursprünglichen Version",
+  "flows.restartMoved": "Ab dem gewählten Schritt mit der aktiven Version (die Schritte davor sind unverändert)",
   "flows.recoveryStep": "Startschritt",
   "flows.recoveryEffects": "Zu wiederholende externe Schreibvorgänge",
   "flows.recoveryNoEffects": "In den zu wiederholenden Schritten sind keine externen Schreibvorgänge angegeben.",

@@ -280,3 +280,20 @@ export async function windowShot(app: ElectronApplication, name: string): Promis
 
 /** Visual baseline options: tolerant to sub-pixel font rendering, strict on layout. */
 export const VISUAL = { maxDiffPixelRatio: 0.015, animations: 'disabled' as const, caret: 'hide' as const, timeout: 15_000 };
+
+/** Shows a flow snapshot on the Routine page as main would (flows:changed), and answers the page's own reloads
+ *  (flows:list, e.g. when a decision opens) with the same snapshot, so a fixture is not replaced by the demo brain. */
+export async function publishFlows(app: ElectronApplication, snapshot: unknown): Promise<void> {
+  await app.evaluate(({ BrowserWindow, ipcMain }, value) => {
+    ipcMain.removeHandler('flows:list');
+    ipcMain.handle('flows:list', () => value);
+    BrowserWindow.getAllWindows()[0]!.webContents.send('flows:changed', value);
+  }, snapshot);
+}
+
+/** Closes the questions window by setting every request it shows aside («Rispondi dopo»), e.g. after a test reopened it. */
+export async function closeQuestions(page: Page): Promise<void> {
+  const win = page.getByTestId('qwin');
+  for (let i = 0; i < 20 && await win.count(); i++) await page.getByTestId('qwin-later').click();
+  await expect(win).toHaveCount(0);
+}

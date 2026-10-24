@@ -9,7 +9,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { ChatSummary } from '../../shared/contract';
 import { APP_OWNER, type FlowAgentBinding, type FlowCancel, type FlowDecision, type FlowDryRun, type FlowItemPreview, type FlowOverviewRow, type FlowRestart, type FlowRestartDecision, type FlowRestartProposal, type FlowRoleInfo, type FlowRun, type FlowSnapshot, type FlowStartItem, type FlowStep, type FlowStepModelEdit, type FlowTestDbEvidence, type FlowVerifiedReport } from '../../shared/flows';
 import type { Effort } from '../../shared/contract';
-import { HOLD, healable as isHealable } from '../../shared/routine';
+import { HOLD, healable as isHealable, roleOf } from '../../shared/routine';
 import type { ModelTier, WorkRoleId } from '../../shared/roles';
 import { log } from '../log';
 import { FlowService } from './service';
@@ -48,8 +48,6 @@ export interface FlowRuntimeOptions {
   readItem?(organization: string, project: string, id: number, signal?: AbortSignal): Promise<DevOpsItem>;
   run?(command: ResolvedCommand, options: { cwd: string; timeoutMs: number; signal?: AbortSignal; env?: Record<string, string> }): Promise<CommandResult>;
 }
-/** The role an agent step without one runs as (ADR 0153): the runner picks by what the step does. */
-const defaultRole = (spec: FlowStep): WorkRoleId => spec.reviewOf ? 'sentinel' : spec.effect === 'read-only' ? 'scout' : 'artisan';
 export interface FlowWorkerRequest {
   flowRunId: string; stepId: string; ownerId: string; roleId: WorkRoleId; tier?: ModelTier;
   /** the user's per-step pick (ADR 0153), over the role's own engine and model */
@@ -286,7 +284,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
       const fail = (reason: string) => flow.blockStep(runId, run.revision, step.stepId, `${HOLD}${reason}`);
       // production never runs from an agent; an external write only as the granted DevOps adapter (prepare blocks the rest)
       if (spec.effect === 'production' || (spec.effect === 'external-write' && !adapted(spec))) { fail('questo passaggio scrive fuori dall’app senza un adattatore approvato.'); return; }
-      const role = spec.role ?? defaultRole(spec);
+      const role = roleOf(spec);
       const workspace = spec.workspaceInput && run.inputs[spec.workspaceInput];
       if (!workspace || !path.isAbsolute(workspace)) { fail('manca la cartella di lavoro (un percorso assoluto negli input della routine).'); return; }
       try { if (!fs.statSync(fs.realpathSync(workspace)).isDirectory()) throw new Error('not a directory'); }
@@ -597,7 +595,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
         const resolved = resolve(context.root, spec, fake, where.attachments, where.work);
         who = prod ? 'tu, con «Esegui»' : 'l’app'; command = resolved.command; problems.push(...resolved.problems);
       } else if (spec.kind === 'agent') {
-        const role = spec.role ?? defaultRole(spec), info = r[role];
+        const role = roleOf(spec), info = r[role];
         who = `${info?.name ?? role}${spec.engine ? ` · ${spec.engine}` : ''}${spec.model ? ` · ${spec.model}` : info?.models?.[spec.tier ?? info.tier] ? ` · ${info.models[spec.tier ?? info.tier]}` : ''}`;
         if (spec.effect === 'production') problems.push('un agente non tocca mai la produzione');
         if (spec.effect === 'external-write' && !adapted(spec)) problems.push('scrive fuori dall’app senza un adattatore approvato');

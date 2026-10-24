@@ -170,6 +170,7 @@ export const flowsIt = {
   "flows.restartHint": "La cronologia originale resta. Sì autorizza a ripetere i passaggi indicati, incluse le scritture esterne; le verifiche restano obbligatorie.",
   "flows.restartActive": "Dall’inizio, con la versione attiva",
   "flows.restartPinned": "Dal passaggio scelto, con la versione originale",
+  "flows.restartMoved": "Dal passaggio scelto, con la versione attiva (i passaggi prima sono uguali)",
   "flows.recoveryStep": "Passaggio da cui ripartire",
   "flows.recoveryEffects": "Scritture esterne da rieseguire",
   "flows.recoveryNoEffects": "Nessuna scrittura esterna dichiarata nei passaggi da ripetere.",

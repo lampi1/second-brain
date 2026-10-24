@@ -1,5 +1,6 @@
 // Recovery previews bind the visible run to its exact definition and explain prerequisites before the host decides.
 // The renderer never creates receipts or treats a preview as permission to skip a check.
+import { samePrefix } from '@shared/routine';
 import type { FlowDefinition, FlowRun, FlowSnapshot, FlowStep, FlowVersion } from '@shared/flows';
 
 export type FlowRecoveryMode = 'cancel' | 'from-start' | 'from-step';
@@ -17,9 +18,10 @@ export const flowRunVersion = (snapshot: FlowSnapshot, run: FlowRun): FlowVersio
   snapshot.versions.find(version => version.definition.id === run.flowId && version.version === run.flowVersion && version.digest === run.definitionDigest);
 
 export function flowRecoveryPreview(snapshot: FlowSnapshot, run: FlowRun, mode: Exclude<FlowRecoveryMode, 'cancel'>, stepId?: string): FlowRecoveryPreview {
-  const version = mode === 'from-start'
-    ? snapshot.versions.find(row => row.definition.id === run.flowId && row.version === snapshot.active[run.flowId])
-    : flowRunVersion(snapshot, run);
+  const active = snapshot.versions.find(row => row.definition.id === run.flowId && row.version === snapshot.active[run.flowId]), own = flowRunVersion(snapshot, run);
+  // from a step: the current version when the steps before it did not change (the run moves to it), else the run's own
+  const at = own?.definition.steps.findIndex(step => step.id === stepId) ?? -1;
+  const version = mode === 'from-start' ? active : active && at > 0 && samePrefix(own?.definition, active.definition, at) ? active : own;
   const start = mode === 'from-start' ? 0 : version?.definition.steps.findIndex(step => step.id === stepId) ?? -1;
   const prefix = version && start > 0 ? version.definition.steps.slice(0, start) : [];
   const missing = prefix.filter(step => !run.steps.some(record => record.stepId === step.id && record.status === 'completed' && record.receipt));

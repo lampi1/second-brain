@@ -8,6 +8,7 @@ import { useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react
 import type { FlowDefinition, FlowDryRun, FlowItemPreview, FlowRun, FlowSnapshot, FlowStep, FlowVersion } from '@shared/flows';
 import type { FlowAutomationRule } from '@shared/flow-automation';
 import type { Effort } from '@shared/contract';
+import { roleOf } from '@shared/routine';
 import { flowAsks } from '../lib/flow-ask';
 import { openQueue } from '../lib/later';
 import { activeVersion, ago, definitionOf, duration, itemOf, lastHeal, list, needsYou, prodSteps, queued, retrying, ruleFor, stepLook, working, type StepLook } from '../lib/routine-view';
@@ -15,6 +16,8 @@ import { stepAgentLabel } from '../lib/flow-step-agent';
 import { controlFlowAutomation, decideFlow, exportFlowDefinition, flowState, plain, routineControl } from '../store/flows';
 import { sb } from '../sb';
 import { toast } from '../store/ui';
+import { useApp } from '../store/store';
+import { openChatRef } from '../actions';
 import { t, locale } from '../i18n';
 import { AgentAvatar } from './AgentAvatar';
 import { Modal } from './ui';
@@ -47,6 +50,13 @@ function FilterChips({ rule }: { rule: FlowAutomationRule }) {
     ...(trigger.iterationPath ? [<Chip key="it">{trigger.iterationPath}</Chip>] : []), ...(trigger.workItemIds?.length ? [<Chip key="ids">#{trigger.workItemIds.join(', #')}</Chip>] : []),
     ...(trigger.maxPerHour ? [<Chip key="max">{t('rt.maxHour', { n: trigger.maxPerHour })}</Chip>] : [])];
   return chips.length ? <span className="rt-chips">{chips}</span> : <span className="rt-muted">{t('rt.all')}</span>;
+}
+
+/** The proposal of this routine waiting for the user (a new version or its trigger), reopened in the questions window. */
+const proposalOf = (snapshot: FlowSnapshot, flowId: string) => flowAsks(snapshot).find(ask => (ask.type === 'flow-definition' && ask.draft.definition.id === flowId) || (ask.type === 'flow-automation' && ask.rule.config.flowId === flowId));
+function DecideButton({ snapshot, flowId }: { snapshot: FlowSnapshot; flowId: string }) {
+  const ask = proposalOf(snapshot, flowId);
+  return ask ? <button type="button" className="btn btn-amber btn-s" onClick={() => openQueue(`${ask.chatId}/${ask.id}`)} data-testid="rt-proposal">{t(ask.type === 'flow-automation' ? 'rt.decideTrigger' : 'rt.decideVersion')}</button> : null;
 }
 
 // ---------------------------------------------------------------- Adesso
@@ -85,7 +95,7 @@ function ProdCard({ snapshot, run, definition }: { snapshot: FlowSnapshot; run: 
   </article>;
 }
 /** A run that stopped for the user: the reason in words and what they can do. */
-function StoppedCard({ snapshot, run, definition, onRecovery }: { snapshot: FlowSnapshot; run: FlowRun; definition?: FlowDefinition; onRecovery: (run: FlowRun, mode: 'from-step' | 'cancel') => void }) {
+function StoppedCard({ snapshot, run, definition, onRecovery }: { snapshot: FlowSnapshot; run: FlowRun; definition?: FlowDefinition; onRecovery: (run: FlowRun, mode: 'from-step' | 'from-start' | 'cancel') => void }) {
   const step = run.steps[run.currentStep], spec = definition?.steps[run.currentStep];
   const ask = flowAsks(snapshot).find(a => (a.type === 'flow-run' || a.type === 'flow-restart' || a.type === 'flow-cancel') && a.run.id === run.id);
   const canRetry = run.status === 'blocked' && !!spec && !!step && step.attempts < spec.maxAttempts && ask?.type === 'flow-run';
@@ -97,16 +107,19 @@ function StoppedCard({ snapshot, run, definition, onRecovery }: { snapshot: Flow
     {step?.reason && <p className="rt-reason">{step.reason}</p>}
     <div className="rt-actions">
       {canRetry && <button type="button" className="btn btn-primary btn-s" onClick={() => void decideFlow(ask, 'yes')} data-testid="rt-retry">{t('rt.retry')}</button>}
-      {ask && !canRetry && <button type="button" className="btn btn-amber btn-s" onClick={() => openQueue(`${ask.chatId}/${ask.id}`)}>{t('rt.decide')}</button>}
-      <button type="button" className="btn btn-ghost btn-s" onClick={() => onRecovery(run, 'from-step')}>{t('rt.fromStep')}</button>
-      <button type="button" className="btn btn-ghost btn-s" onClick={() => onRecovery(run, 'cancel')}>{t('rt.cancel')}</button>
+      {ask && !canRetry && <button type="button" className="btn btn-amber btn-s" onClick={() => openQueue(`${ask.chatId}/${ask.id}`)} data-testid="rt-decide">{t('rt.decide')}</button>}
+      <button type="button" className="btn btn-ghost btn-s" onClick={() => onRecovery(run, 'from-step')} data-testid="rt-from-step">{t('rt.fromStep')}</button>
+      <button type="button" className="btn btn-ghost btn-s" onClick={() => onRecovery(run, 'from-start')} data-testid="rt-from-start">{t('rt.fromStart')}</button>
+      <button type="button" className="btn btn-ghost btn-s" onClick={() => onRecovery(run, 'cancel')} data-testid="rt-cancel">{t('rt.cancel')}</button>
     </div>
   </article>;
 }
 const LOOK_DOT: Record<StepLook, string> = { done: 'done', now: 'now', retry: 'retry', you: 'you', todo: 'todo', sent: 'retry' };
-function WorkingCard({ snapshot, run, definition, onRecovery, open, onToggle }: { snapshot: FlowSnapshot; run: FlowRun; definition?: FlowDefinition; onRecovery: (run: FlowRun, mode: 'from-step' | 'cancel') => void; open: boolean; onToggle: () => void }) {
+function WorkingCard({ snapshot, run, definition, onRecovery, open, onToggle }: { snapshot: FlowSnapshot; run: FlowRun; definition?: FlowDefinition; onRecovery: (run: FlowRun, mode: 'from-step' | 'from-start' | 'cancel') => void; open: boolean; onToggle: () => void }) {
   const roles = snapshot.roles ?? {}, heal = lastHeal(run), item = itemOf(run);
   const [busy, setBusy] = useState(false);
+  // the chat working on the current step, while it still exists
+  const chatId = run.steps[run.currentStep]?.chatId, chat = useApp(s => chatId && s.chats[chatId] ? chatId : null);
   const pause = async () => { setBusy(true); const failed = await routineControl('flows:pauseRun', snapshot.contextKey, { runId: run.id, expectedRevision: run.revision, paused: !run.paused }); setBusy(false); if (failed) toast(failed, 'err'); };
   const healed = heal && run.status !== 'blocked' && run.steps[run.currentStep]?.stepId === (heal.to ?? heal.stepId);
   const steps = definition?.steps ?? [];
@@ -127,13 +140,14 @@ function WorkingCard({ snapshot, run, definition, onRecovery, open, onToggle }: 
         {steps.slice(0, run.currentStep + 1).map((spec, i) => {
           const look = stepLook(snapshot, run, i), state = run.steps[i]!;
           return <li key={spec.id} data-look={look}><span className="rt-dot" data-look={LOOK_DOT[look]} />
-            <span><b>{i + 1} · {spec.title}</b> <span className="rt-muted">{spec.kind === 'agent' ? stepAgentLabel(spec, spec.role ? roles[spec.role] : undefined) : spec.action?.kind === 'script' || spec.action?.kind === 'query' ? `${spec.action.ref}${state.status === 'running' && state.startedAt ? ` · ${duration(Date.now() - state.startedAt)}` : ''}` : t(`rt.k_${spec.kind}`)}{state.status === 'running' && state.startedAt && spec.kind === 'agent' ? ` · ${duration(Date.now() - state.startedAt)}` : ''}{state.attempts > 1 ? ` · ${t('rt.round', { n: state.attempts })}` : ''}</span></span>
-            <Chip tone={look === 'done' ? 'green' : look === 'now' ? 'blue' : look === 'you' ? 'red' : look === 'todo' ? undefined : 'amber'}>{t(`rt.s_${look}`)}</Chip></li>;
+            <span><b>{i + 1} · {spec.title}</b> <span className="rt-muted">{spec.kind === 'agent' ? stepAgentLabel(spec, roles[roleOf(spec)]) : spec.action?.kind === 'script' || spec.action?.kind === 'query' ? `${spec.action.ref}${state.status === 'running' && state.startedAt ? ` · ${duration(Date.now() - state.startedAt)}` : ''}` : t(`rt.k.${spec.kind}`)}{state.status === 'running' && state.startedAt && spec.kind === 'agent' ? ` · ${duration(Date.now() - state.startedAt)}` : ''}{state.attempts > 1 ? ` · ${t('rt.round', { n: state.attempts })}` : ''}</span>{state.receipt?.summary && <span className="rt-muted rt-proofline" title={state.receipt.summary}>{state.receipt.summary}</span>}</span>
+            <Chip tone={look === 'done' ? 'green' : look === 'now' ? 'blue' : look === 'you' ? 'red' : look === 'todo' ? undefined : 'amber'}>{t(`rt.s.${look}`)}</Chip></li>;
         })}
-        {next.length > 0 && <li data-look="todo"><span className="rt-dot" data-look="todo" /><span className="rt-muted">{t('rt.next')}: {next.map((s, i) => `${run.currentStep + 2 + i} · ${s.title}`).join(' → ')}</span><Chip>{t('rt.s_todo')}</Chip></li>}
+        {next.length > 0 && <li data-look="todo"><span className="rt-dot" data-look="todo" /><span className="rt-muted">{t('rt.next')}: {next.map((s, i) => `${run.currentStep + 2 + i} · ${s.title}`).join(' → ')}</span><Chip>{t('rt.s.todo')}</Chip></li>}
       </ol>
       <footer className="rt-actions">
         {item?.url && <a className="btn btn-ghost btn-s" href={item.url} target="_blank" rel="noreferrer">{t('rt.openItem')}</a>}
+        {chat && <button type="button" className="btn btn-ghost btn-s" onClick={() => openChatRef(chat)} data-testid="flow-open-agent">{t('flows.openAgent')}</button>}
         <span className="rt-sp" />
         <button type="button" className="btn btn-ghost btn-s" disabled={busy} onClick={() => void pause()} data-testid="rt-pause">{run.paused ? `▶ ${t('rt.resume')}` : `❚❚ ${t('rt.pause')}`}</button>
         <button type="button" className="btn btn-ghost btn-s" onClick={() => onRecovery(run, 'cancel')}>{t('rt.cancel')}</button>
@@ -142,7 +156,7 @@ function WorkingCard({ snapshot, run, definition, onRecovery, open, onToggle }: 
     </>}
   </article>;
 }
-export function RoutineNow({ snapshot, onRecovery }: { snapshot: FlowSnapshot; onRecovery: (run: FlowRun, mode: 'from-step' | 'cancel') => void }) {
+export function RoutineNow({ snapshot, onRecovery }: { snapshot: FlowSnapshot; onRecovery: (run: FlowRun, mode: 'from-step' | 'from-start' | 'cancel') => void }) {
   const runs = [...snapshot.runs].sort((a, b) => b.updatedAt - a.updatedAt);
   const yours = runs.filter(run => needsYou(snapshot, run)), busy = runs.filter(run => working(snapshot, run));
   const [opened, setOpened] = useState<string | null>(null);
@@ -155,7 +169,7 @@ export function RoutineNow({ snapshot, onRecovery }: { snapshot: FlowSnapshot; o
         : <StoppedCard key={run.id} snapshot={snapshot} run={run} definition={definitionOf(snapshot, run)} onRecovery={onRecovery} />)}
     </section>}
     <section><div className="rt-sec"><span className="rt-label">{t('rt.working')} · {busy.length}</span><span className="rt-muted">{t('rt.workingWhy')}</span><span className="rt-sp" />
-      <span className="rt-legend"><span><i className="rt-dot" data-look="done" />{t('rt.s_done')}</span><span><i className="rt-dot" data-look="now" />{t('rt.s_now')}</span><span><i className="rt-dot" data-look="retry" />{t('rt.s_retry')}</span><span><i className="rt-dot" data-look="you" />{t('rt.s_you')}</span></span></div>
+      <span className="rt-legend"><span><i className="rt-dot" data-look="done" />{t('rt.s.done')}</span><span><i className="rt-dot" data-look="now" />{t('rt.s.now')}</span><span><i className="rt-dot" data-look="retry" />{t('rt.s.retry')}</span><span><i className="rt-dot" data-look="you" />{t('rt.s.you')}</span></span></div>
       {busy.length ? busy.map(run => <WorkingCard key={run.id} snapshot={snapshot} run={run} definition={definitionOf(snapshot, run)} onRecovery={onRecovery} open={run.id === shown} onToggle={() => setOpened(run.id === shown ? '' : run.id)} />)
         : <p className="rt-calm">{yours.length ? t('rt.calmBusy') : t('rt.calm')}</p>}
     </section>
@@ -177,6 +191,7 @@ export function RoutineList({ snapshot, onOpen }: { snapshot: FlowSnapshot; onOp
       <header className="rt-card-head"><RuleSwitch snapshot={snapshot} rule={rule} /><button type="button" className="rt-title-btn" onClick={() => onOpen(id)}>{definition.title}</button><span className="rt-sp" />
         <Chip tone={status === 'active' ? 'green' : status === 'paused' ? undefined : 'amber'}>{t(status === 'active' ? 'rt.active' : status === 'paused' ? 'rt.pausedBadge' : 'rt.draft')}</Chip>{version && <Chip>v{version.version}</Chip>}</header>
       <p className="rt-desc">{definition.description}</p>
+      {proposalOf(snapshot, id) && <p className="rt-actions"><DecideButton snapshot={snapshot} flowId={id} /></p>}
       <dl className="rt-kv">
         <dt>{t('rt.when')}</dt><dd>{triggerText(rule)}{rule?.config.trigger.kind === 'devops' && <> <Chip>{rule.config.trigger.areaPath}</Chip></>}</dd>
         {rule?.config.trigger.kind === 'devops' && <><dt>{t('rt.onlyIf')}</dt><dd><FilterChips rule={rule} /></dd></>}
@@ -191,7 +206,7 @@ export function RoutineList({ snapshot, onOpen }: { snapshot: FlowSnapshot; onOp
 // ---------------------------------------------------------------- open routine
 
 function StepModel({ snapshot, version, step }: { snapshot: FlowSnapshot; version: FlowVersion; step: FlowStep }) {
-  const engines = snapshot.engines ?? [], role = step.role ? snapshot.roles?.[step.role] : undefined, [busy, setBusy] = useState(false);
+  const engines = snapshot.engines ?? [], roleId = roleOf(step), role = snapshot.roles?.[roleId], [busy, setBusy] = useState(false);
   const engine = engines.find(e => e.id === step.engine);
   const apply = async (patch: { engine?: string | null; model?: string | null; effort?: Effort | null }) => {
     setBusy(true);
@@ -200,15 +215,15 @@ function StepModel({ snapshot, version, step }: { snapshot: FlowSnapshot; versio
     const failed = await routineControl('flows:editStepModel', snapshot.contextKey, { flowId: version.definition.id, version: version.version, stepId: step.id, ...next });
     setBusy(false); if (failed) toast(failed, 'err'); else toast(t('rt.modelSaved'), 'info');
   };
-  if (step.kind !== 'agent' || !step.role) return null;
+  if (step.kind !== 'agent') return null;
   return <span className="rt-model" data-testid="rt-step-model">
     <select aria-label={t('rt.engine')} disabled={busy} value={step.engine ?? ''} onChange={e => void apply({ engine: e.target.value || null })}>
-      <option value="">{t('rt.engineOf', { name: role?.name ?? step.role })}</option>{engines.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}</select>
+      <option value="">{t('rt.engineOf', { name: role?.name ?? roleId })}</option>{engines.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}</select>
     <select aria-label={t('rt.model')} disabled={busy} value={step.model ?? ''} onChange={e => void apply({ model: e.target.value || null })}>
       <option value="">{step.engine ? t('rt.engineDefault') : role?.models?.[step.tier ?? role.tier] ?? role?.model ?? t('rt.byRole')}</option>
       {(engine ?? engines.find(e => e.models.includes(step.model ?? '')) ?? { models: engines.flatMap(e => e.models) }).models.map(m => <option key={m} value={m}>{m}</option>)}</select>
     <select aria-label={t('rt.effort')} disabled={busy} value={step.effort ?? ''} onChange={e => void apply({ effort: (e.target.value || null) as Effort | null })}>
-      <option value="">{t('rt.effortRole')}</option>{EFFORTS.map(v => <option key={v} value={v}>{t(`rt.e_${v}`)}</option>)}</select>
+      <option value="">{t('rt.effortRole')}</option>{EFFORTS.map(v => <option key={v} value={v}>{t(`rt.e.${v}`)}</option>)}</select>
   </span>;
 }
 function FiltersEditor({ snapshot, rule, onDone }: { snapshot: FlowSnapshot; rule: FlowAutomationRule; onDone: () => void }) {
@@ -254,20 +269,21 @@ export function RoutineDetail({ snapshot, flowId, onBack, onStart, onDryRun, onA
   const trigger = rule?.config.trigger.kind === 'devops' ? rule.config.trigger : undefined;
   return <div className="rt-detail" data-testid="rt-detail">
     <header className="rt-detail-head"><button type="button" className="btn btn-ghost btn-s" onClick={onBack}>‹ {t('rt.title')}</button><RuleSwitch snapshot={snapshot} rule={rule} /><h2>{definition.title}</h2>{version && <Chip>v{version.version}</Chip>}<span className="rt-sp" />
-      {version && <><button type="button" className="btn btn-ghost btn-s" onClick={() => void exportFlowDefinition(snapshot.contextKey, flowId, version.version, 'markdown')} data-testid="rt-export">⇪ {t('rt.export')}</button>
+      {version && <><span className="rt-export" data-testid="rt-export"><button type="button" className="btn btn-ghost btn-s" title={t('rt.exportJsonTip')} onClick={() => void exportFlowDefinition(snapshot.contextKey, flowId, version.version, 'json')} data-testid="flow-export-json">⇪ {t('rt.export')} JSON</button><button type="button" className="btn btn-ghost btn-s" onClick={() => void exportFlowDefinition(snapshot.contextKey, flowId, version.version, 'markdown')} data-testid="flow-export-markdown">Markdown</button></span>
         <button type="button" className="btn btn-ghost btn-s" onClick={() => onDryRun(flowId)} data-testid="rt-dry">◎ {t('rt.dry')}</button></>}
+      <DecideButton snapshot={snapshot} flowId={flowId} />
       <button type="button" className="btn btn-ghost btn-s" onClick={() => onAsk(version)}>✎ {t('rt.edit')}</button>
       {version && <button type="button" className="btn btn-primary btn-s" onClick={() => onStart(flowId)} data-testid="rt-start-here">▶ {t('rt.start')}</button>}</header>
     <p className="rt-desc">{definition.description}</p>
     <div className="rt-detail-body">
       <section><div className="rt-sec"><span className="rt-label">{t('rt.steps')}</span></div>
         <ol className="rt-pipe">{definition.steps.map((step, i) => {
-          const prod = step.env === 'prod' || step.effect === 'production', role = step.role ? snapshot.roles?.[step.role] : undefined;
+          const prod = step.env === 'prod' || step.effect === 'production', role = step.kind === 'agent' ? snapshot.roles?.[roleOf(step)] : undefined;
           return <li key={step.id} data-prod={prod || undefined}><span className="rt-num">{i + 1}</span><div className="rt-card rt-step">
             <header className="rt-card-head"><strong>{step.title}</strong><span className="rt-sp" />
-              {step.kind === 'agent' && step.role && <span className="rt-who">{role && <AgentAvatar avatar={role.avatar} name={role.name} size={18} />}{role?.name ?? step.role}</span>}
+              {step.kind === 'agent' && <span className="rt-who">{role && <AgentAvatar avatar={role.avatar} name={role.name} size={18} />}{role?.name ?? roleOf(step)}</span>}
               {version && <StepModel snapshot={snapshot} version={version} step={step} />}
-              {step.kind !== 'agent' && <Chip tone={prod ? 'red' : step.kind === 'check' ? 'green' : 'amber'}>{prod ? t('rt.prodYou') : step.kind === 'check' ? t('rt.auto') : t(`rt.k_${step.kind}`)}</Chip>}</header>
+              {step.kind !== 'agent' && <Chip tone={prod ? 'red' : step.kind === 'check' ? 'green' : 'amber'}>{prod ? t('rt.prodYou') : step.kind === 'check' ? t('rt.auto') : t(`rt.k.${step.kind}`)}</Chip>}</header>
             {step.kind === 'agent' && !step.role && <p className="rt-muted">{t('rt.roleAuto')}</p>}
             <p className="rt-muted rt-instr">{step.instructions}</p>
             <span className="rt-chips">

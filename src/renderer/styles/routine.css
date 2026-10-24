@@ -3,6 +3,8 @@
 .rt-page { display: flex; flex-direction: column; gap: 14px; }
 .rt-head { display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
 .rt-head h1 { font: 600 var(--fs-2xl) var(--font-display); margin: 0; }
+.rt-head > div:first-child { flex: 1 1 100%; }
+.rt-head > .rt-sp { display: none; }
 .rt-intro { color: var(--text-3); margin: 4px 0 0; max-width: 640px; }
 .rt-sp { flex: 1; min-width: 0; }
 .rt-muted { color: var(--text-3); font-size: var(--fs-s); }
@@ -82,6 +84,7 @@
 .rt-steps { list-style: none; margin: 0; padding: 4px 14px; display: flex; flex-direction: column; }
 .rt-steps li { display: grid; grid-template-columns: 18px 1fr auto; gap: 0 10px; padding: 6px 0; align-items: center; }
 .rt-steps li b { font-weight: 600; }
+.rt-proofline { display: block; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60ch; }
 .rt-work footer { padding-top: 8px; padding-bottom: 12px; border-top: 1px solid var(--border); margin-top: 4px; }
 
 /* routines grid */
@@ -153,3 +156,4 @@
 .rt-warn { margin: 0; color: var(--amber); }
 .rt-params { display: flex; flex-direction: column; gap: 8px; }
 .rt-attach { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: var(--r-l); border: 1px dashed var(--border-2); }
+.rt-export { display: inline-flex; gap: 2px; }
