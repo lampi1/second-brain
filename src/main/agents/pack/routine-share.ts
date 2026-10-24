@@ -9,12 +9,12 @@
 // written into the brain, each kind as one Log entry with Annulla; a memory line becomes a proposed fact of that role.
 // Used by pack/wiring.ts (flows:package* IPC). Unit tests: test/unit/agents/routine-share.test.ts.
 import fs from 'node:fs';
-import path from 'node:path';
 import { createHash } from 'node:crypto';
 import type { FlowDefinition } from '../../../shared/flows';
 import type { RoutineImportItem, RoutineImportPreview, RoutinePackageSummary } from '../../../shared/contract';
 import { roleOf } from '../../../shared/routine';
-import { isWorkRole } from '../../../shared/roles';
+import { FLASH_ID, RETIRED_ROLE_IDS, ROLE_IDS, isWorkRole } from '../../../shared/roles';
+import { READ_TOOLS_FILE } from '../read-tools';
 import { field, parseMd, setFields } from '../../../shared/skillmd';
 import { SCRIPTS_DIR } from '../../brain/scripts';
 import { QUERIES_DIR } from '../../brain/queries';
@@ -27,6 +27,20 @@ import { checkPackPath, type PackFiles } from './zip';
 export const MANIFEST = 'routine-package.json';
 const RESERVED = new Set(['agents.md', 'claude.md', 'readme.md', 'routine.md', 'routine.json', MANIFEST]);
 const MAX_FILE = 2 * 1024 ** 2, MAX_CITED = 120, MAX_DEPTH = 4;
+/** An import keeps a copy for «Annulla» (brainmodel/changes.ts keeps at most 256 KB a file): bigger files are not offered. */
+const MAX_IMPORT = 256 * 1024;
+/** Where an imported cited file or rule may land: plain notes only. Never the app's config or anything that runs:
+ *  scripts/ and queries/ come only through their sha256 pin, tools/ and read-only-tools.md decide what roles may run. */
+const IMPORT_EXT = /\.(md|txt|json|ya?ml|csv)$/i;
+const IMPORT_DENY = new Set([READ_TOOLS_FILE, 'tools.md', 'brain.json', 'package.json']);
+export const importable = (rel: string): boolean => {
+  const norm = rel.toLowerCase(), first = norm.split('/')[0]!;
+  if (!IMPORT_EXT.test(norm) || IMPORT_DENY.has(norm) || isPrivatePath(norm) || RESERVED.has(norm) || norm.startsWith('.') || norm.includes('/.')) return false;
+  if (['scripts', 'queries', 'tools', 'node_modules', 'ops', 'harness'].includes(first) || (!norm.includes('/') && norm.endsWith('.json'))) return false;
+  try { checkPackPath(rel); return true; } catch { return false; }
+};
+/** A skill named like a role (current or retired) would read as that role's know-how: never imported. */
+const ROLE_NAMES = new Set<string>([...ROLE_IDS, ...RETIRED_ROLE_IDS, FLASH_ID]);
 const EXT = /\.(md|txt|json|ya?ml|csv|sql|ps1|psm1|sh|py|m?js|ts|xml|html?|ini|toml)$/i;
 
 export interface RoutineRole { role: ShareRole; memory: string | null }
@@ -182,7 +196,9 @@ export function buildRoutinePackage(input: RoutinePackageInput): { files: PackFi
     if (SKILL_NAME.test(name) && md) skills.set(name, new Map([...own, ['SKILL.md', Buffer.from(setFields(md.toString('utf8'), {}, ['hooks']))]]));
   }
   for (const r of input.roles) if (!skills.has(r.role.skillName)) { const own = roleSkill(r.role, skipped); if (own) skills.set(r.role.skillName, own); }
-  for (const [name, data] of rules) files.set(name, Buffer.from(data));
+  // a cited rule keeps its own spelling; the zip refuses two names that differ only in case
+  const citedLower = new Set([...cited.files.keys()].map(k => k.toLowerCase()));
+  for (const [name, data] of rules) if (!citedLower.has(name.toLowerCase())) files.set(name, Buffer.from(data));
   for (const [name, data] of cited.files) files.set(name, Buffer.from(data));
   for (const [name, own] of skills) for (const dir of SKILL_DIRS) for (const [rel, data] of own) files.set(`${dir}/${name}/${rel}`, Buffer.from(data));
   const scripts: string[] = [];
@@ -196,7 +212,7 @@ export function buildRoutinePackage(input: RoutinePackageInput): { files: PackFi
     if (input.memory && r.memory?.trim()) { files.set(`agents/${r.role.skillName}/memory.md`, Buffer.from(r.memory)); memory.push(r.role.skillName); }
   }
   const manifest: Manifest = { format: 'second-brain-routine', schemaVersion: 1, title: definition.title, exportedAt: input.date,
-    cited: [...cited.files.keys()], rules: [...rules.keys()], skills: [...skills.keys()], roles: input.roles.map(r => r.role.skillName), memory, scripts };
+    cited: [...cited.files.keys()], rules: [...rules.keys()].filter(k => !citedLower.has(k.toLowerCase())), skills: [...skills.keys()], roles: input.roles.map(r => r.role.skillName), memory, scripts };
   const summary: RoutinePackageSummary = { title: definition.title, cited: manifest.cited, missing: cited.missing, rules: manifest.rules, skills: manifest.skills, roles: manifest.roles, memory, scripts, skipped };
   files.set('routine.json', Buffer.from(input.flowJson));
   files.set('ROUTINE.md', Buffer.from(markdown(definition, input.version)));
@@ -217,12 +233,20 @@ const digest = (files: PackFiles): string => {
 };
 export interface ImportProbe {
   root: string;
-  /** where a skill of this name already loads from (null = nowhere): the brain's own folder, or somewhere else */
-  skill(name: string): { folder: string; inBrain: boolean } | null;
+  /** where a skill of this name already loads from (null = nowhere): rel = its brain-relative folder (real paths
+   *  compared), null = outside the brain (home, the app's copy) */
+  skill(name: string): { rel: string | null } | null;
+}
+/** A brain file an import may write: inside the brain, no link on the way (brainPath), and not a folder. */
+function target(root: string, rel: string): string {
+  const file = brainPath(root, rel);
+  if (fs.existsSync(file) && !fs.lstatSync(file).isFile()) throw new Error(`${rel} is not a file`);
+  return file;
 }
 export interface ParsedPackage {
   flowJson: string; manifest: Manifest; digest: string;
   /** importable files by item key: `file:<path>`, `skill:<name>`, `script:<path>` */
+  /** dest: the brain-relative path it lands at (a skill: its folder) */
   writes: Map<string, { kind: RoutineImportItem['kind']; label: string; files: PackFiles; dest: (probe: ImportProbe) => string }>;
   memory: Map<string, string[]>;
 }
@@ -238,25 +262,24 @@ export function parsePackage(files: PackFiles): ParsedPackage {
     cited: strings(m.cited), rules: strings(m.rules), skills: strings(m.skills), roles: strings(m.roles), memory: strings(m.memory), scripts: strings(m.scripts) };
   const flowJson = flow.toString('utf8'), portable = parsePortable(flowJson);
   const writes: ParsedPackage['writes'] = new Map();
-  const plain = (rel: string): boolean => { try { checkPackPath(rel); } catch { return false; } return !isPrivatePath(rel.toLowerCase()) && !RESERVED.has(rel.toLowerCase()) && !rel.startsWith('.'); };
   for (const rel of new Set([...manifest.cited, ...manifest.rules])) {
     const data = files.get(rel);
-    if (!data || !plain(rel) || !text(data)) continue;
-    writes.set(`file:${rel}`, { kind: manifest.cited.includes(rel) ? 'cited' : 'rule', label: rel, files: new Map([['', data]]), dest: p => brainPath(p.root, rel) });
+    if (!data || !importable(rel) || data.length > MAX_IMPORT || !text(data)) continue;
+    writes.set(`file:${rel}`, { kind: manifest.cited.includes(rel) ? 'cited' : 'rule', label: rel, files: new Map([['', data]]), dest: () => rel });
   }
   for (const name of manifest.skills) {
-    if (!SKILL_NAME.test(name) || isWorkRole(name)) continue; // a role's own know-how stays with that role in each app
+    if (!SKILL_NAME.test(name) || ROLE_NAMES.has(name)) continue; // a role's own know-how stays with that role in each app
     const prefix = `.agents/skills/${name}/`, own: PackFiles = new Map();
-    for (const [file, data] of files) if (file.startsWith(prefix) && text(data)) own.set(file.slice(prefix.length), data);
+    for (const [file, data] of files) if (file.startsWith(prefix) && text(data) && data.length <= MAX_IMPORT) own.set(file.slice(prefix.length), data);
     const md = own.get('SKILL.md');
-    if (!md) continue;
+    if (!md || [...files.keys()].some(f => f.startsWith(prefix) && !own.has(f.slice(prefix.length)))) continue; // a skill comes whole or not at all
     own.set('SKILL.md', Buffer.from(setFields(md.toString('utf8'), {}, ['hooks'])));
-    writes.set(`skill:${name}`, { kind: 'skill', label: name, files: own, dest: p => p.skill(name)?.inBrain ? p.skill(name)!.folder : brainPath(p.root, `.agents/skills/${name}`) });
+    writes.set(`skill:${name}`, { kind: 'skill', label: name, files: own, dest: p => p.skill(name)?.rel ?? `.agents/skills/${name}` });
   }
   for (const file of portable.files) {
     const rel = scriptPath(file), data = files.get(rel);
-    if (!data || createHash('sha256').update(data).digest('hex') !== file.sha256) continue; // only the exact pinned text
-    writes.set(`script:${rel}`, { kind: file.kind, label: rel, files: new Map([['', data]]), dest: p => brainPath(p.root, rel) });
+    if (!data || data.length > MAX_IMPORT || createHash('sha256').update(data).digest('hex') !== file.sha256) continue; // only the exact pinned text
+    writes.set(`script:${rel}`, { kind: file.kind, label: rel, files: new Map([['', data]]), dest: () => rel });
   }
   const memory = new Map<string, string[]>();
   for (const role of manifest.memory) {
@@ -274,16 +297,16 @@ export function previewImport(pkg: ParsedPackage, probe: ImportProbe): RoutineIm
   const portable = parsePortable(pkg.flowJson), items: RoutineImportItem[] = [];
   for (const [key, w] of pkg.writes) {
     let status: RoutineImportItem['status'] = 'new';
-    if (w.kind === 'skill') {
-      const where = probe.skill(w.label);
-      if (where && !where.inBrain) status = 'elsewhere';
-      else if (where) status = [...w.files].every(([rel, data]) => readOr(path.join(where.folder, rel))?.equals(data)) ? 'same' : 'different';
-    } else {
-      let dest: string | null = null;
-      try { dest = w.dest(probe); } catch { continue; }
-      const before = readOr(dest);
-      status = before === null ? 'new' : before.equals(w.files.get('')!) ? 'same' : 'different';
-    }
+    try {
+      if (w.kind === 'skill') {
+        const where = probe.skill(w.label), folder = w.dest(probe);
+        const now = [...w.files].map(([rel, data]) => ({ data, before: where?.rel ? readOr(target(probe.root, `${folder}/${rel}`)) : null }));
+        status = where && !where.rel ? 'elsewhere' : !where ? 'new' : now.every(f => f.before?.equals(f.data)) ? 'same' : 'different';
+      } else {
+        const before = readOr(target(probe.root, w.dest(probe)));
+        status = before === null ? 'new' : before.equals(w.files.get('')!) ? 'same' : 'different';
+      }
+    } catch { continue; } // a link on the way, or a folder where the file goes: not importable
     const body = w.kind === 'skill' ? w.files.get('SKILL.md')! : w.files.get('')!;
     items.push({ key, kind: w.kind, label: w.label, status, files: w.kind === 'skill' ? [...w.files.keys()] : undefined, text: body.toString('utf8').slice(0, 6000) });
   }
@@ -292,30 +315,30 @@ export function previewImport(pkg: ParsedPackage, probe: ImportProbe): RoutineIm
 }
 
 export interface ImportWriter {
-  /** one Log entry with Annulla for the writes (null = nothing changed, or a file too big to keep its undo copy) */
+  /** one Log entry with Annulla for the writes, all or none (false = nothing written: a file too big to keep its undo copy) */
   apply(kind: 'skill' | 'rule' | 'script', target: string, summary: string, writes: { file: string; text: string }[]): boolean;
   remember(role: string, line: string): void;
 }
-/** Writes the items the user ticked (keys from previewImport) and, when asked, each role's memory lines as proposed facts. */
+/** Writes the items the user ticked (keys from previewImport) and, when asked, each role's memory lines as proposed facts.
+ *  Each item is its own Log entry, so one that fails leaves the others written and undoable. */
 export function applyImport(pkg: ParsedPackage, probe: ImportProbe, keys: string[], memory: boolean, writer: ImportWriter, title: string): { written: number; failed: string[]; remembered: number; refused: number } {
   const failed: string[] = [];
-  const files: { file: string; text: string }[] = [], scripts: { file: string; text: string }[] = [];
   let written = 0;
-  for (const key of keys) {
+  for (const key of new Set(keys)) {
     const w = pkg.writes.get(key);
     if (!w) continue;
     try {
-      if (w.kind === 'skill') {
-        if (probe.skill(w.label) && !probe.skill(w.label)!.inBrain) continue;
-        const dest = w.dest(probe);
-        const writes = [...w.files].map(([rel, data]) => { checkPackPath(`.claude/skills/x/${rel}`); return { file: path.join(dest, ...rel.split('/')), text: data.toString('utf8') }; });
-        if (writer.apply('skill', w.label, `Skill importata con la routine «${title}»: ${w.label}`, writes)) written++;
-        else failed.push(w.label);
-      } else (w.kind === 'script' || w.kind === 'query' ? scripts : files).push({ file: w.dest(probe), text: w.files.get('')!.toString('utf8') });
+      const where = w.kind === 'skill' ? probe.skill(w.label) : null;
+      if (where && !where.rel) continue; // loads from outside the brain: never written
+      const writes = w.kind === 'skill'
+        ? [...w.files].map(([rel, data]) => ({ file: target(probe.root, `${w.dest(probe)}/${rel}`), text: data.toString('utf8') }))
+        : [{ file: target(probe.root, w.dest(probe)), text: w.files.get('')!.toString('utf8') }];
+      const kind = w.kind === 'skill' ? 'skill' : w.kind === 'script' || w.kind === 'query' ? 'script' : 'rule';
+      const what = { skill: 'Skill', cited: 'File', rule: 'Regola', script: 'Script', query: 'Query' }[w.kind];
+      if (writer.apply(kind, w.label, `${what} importato con la routine «${title}»: ${w.label}`, writes)) written++;
+      else failed.push(w.label);
     } catch { failed.push(w.label); }
   }
-  if (files.length) { if (writer.apply('rule', title, `File importati con la routine «${title}»: ${files.length}`, files)) written += files.length; else failed.push(...files.map(f => path.basename(f.file))); }
-  if (scripts.length) { if (writer.apply('script', title, `Script e query importati con la routine «${title}»: ${scripts.length}`, scripts)) written += scripts.length; else failed.push(...scripts.map(f => path.basename(f.file))); }
   let remembered = 0, refused = 0;
   if (memory) for (const [role, lines] of pkg.memory) for (const line of lines) { try { writer.remember(role, oneLine(line)); remembered++; } catch { refused++; } }
   return { written, failed, remembered, refused };

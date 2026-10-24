@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AgentCatalogService } from '../../../src/main/agents/catalog';
 import { portableId } from '../../../src/main/agents/pack/flows';
-import { applyImport, buildRoutinePackage, citedPaths, parsePackage, previewImport, routineRoles, routineSkills, type ImportProbe, type ImportWriter } from '../../../src/main/agents/pack/routine-share';
+import { applyImport, buildRoutinePackage, citedPaths, importable, parsePackage, previewImport, routineRoles, routineSkills, type ImportProbe, type ImportWriter } from '../../../src/main/agents/pack/routine-share';
 import { BRAIN_ZIP_LIMITS, readZip, writeZip } from '../../../src/main/agents/pack/zip';
 import { exportFlow } from '../../../src/main/flows/portable';
 import { FlowService } from '../../../src/main/flows/service';
@@ -56,7 +56,7 @@ function source() {
   const skills = new Map(names.filter(n => n === 'deploy-check').map(n => [n, new Map([['SKILL.md', fs.readFileSync(path.join(root, '.agents/skills', n, 'SKILL.md'))]])]));
   return { root, flowJson, roles, skills, names };
 }
-const probe = (root: string): ImportProbe => ({ root, skill: name => fs.existsSync(path.join(root, '.agents/skills', name, 'SKILL.md')) ? { folder: path.join(root, '.agents/skills', name), inBrain: true } : null });
+const probe = (root: string): ImportProbe => ({ root, skill: name => fs.existsSync(path.join(root, '.agents/skills', name, 'SKILL.md')) ? { rel: `.agents/skills/${name}` } : null });
 const writer = (): ImportWriter & { entries: { kind: string; files: string[] }[]; facts: string[] } => {
   const entries: { kind: string; files: string[] }[] = [], facts: string[] = [];
   return { entries, facts, apply: (kind, _t, _s, writes) => { for (const w of writes) { fs.mkdirSync(path.dirname(w.file), { recursive: true }); fs.writeFileSync(w.file, w.text); } entries.push({ kind, files: writes.map(w => w.file) }); return true; }, remember: (role, line) => { facts.push(`${role}: ${line}`); } };
@@ -119,5 +119,31 @@ describe('routine package', () => {
     const manifest = JSON.parse(files.get('routine-package.json')!.toString()); manifest.cited.push('me.md', '../escape.md'); files.set('routine-package.json', Buffer.from(JSON.stringify(manifest)));
     const keys = [...parsePackage(files).writes.keys()];
     expect(keys).not.toContain('script:scripts/tag.ps1'); expect(keys).not.toContain('file:me.md'); expect(keys).not.toContain('file:../escape.md');
+  });
+  it('never imports what runs or configures the app, a role-named skill, a file too big to undo, or over a folder', () => {
+    for (const rel of ['read-only-tools.md', 'TOOLS.md', 'brain.json', 'tools/evil.mjs', 'scripts/evil.ps1', 'queries/x.sql', 'notes/run.ps1', 'notes/.hidden/x.md', 'me.md', 'agents/scout/memory.md']) expect(importable(rel), rel).toBe(false);
+    for (const rel of ['rules/qa.md', 'reviews/contract-v7.json', 'notes/a.md', 'reviews/data.csv']) expect(importable(rel), rel).toBe(true);
+    const s = source();
+    const { files } = buildRoutinePackage({ root: s.root, brainName: 'brain-v2', date: '2026-10-24', definition, version: 1, flowJson: s.flowJson, roles: s.roles, skills: s.skills, memory: false });
+    const manifest = JSON.parse(files.get('routine-package.json')!.toString());
+    for (const [rel, body] of [['read-only-tools.md', 'tools/evil.mjs\n'], ['tools/evil.mjs', 'x'], ['notes/big.md', 'x'.repeat(300 * 1024)], ['notes/b.md', 'b']] as const) { files.set(rel, Buffer.from(body)); manifest.cited.push(rel); }
+    files.set('.agents/skills/scout/SKILL.md', Buffer.from('---\nname: scout\n---\nx\n')); manifest.skills.push('scout');
+    files.set('routine-package.json', Buffer.from(JSON.stringify(manifest)));
+    const pkg = parsePackage(files), keys = [...pkg.writes.keys()];
+    for (const key of ['file:read-only-tools.md', 'file:tools/evil.mjs', 'file:notes/big.md', 'skill:scout']) expect(keys).not.toContain(key);
+    const target = brain('mine').root;
+    fs.mkdirSync(path.join(target, 'notes/b.md'), { recursive: true }); // a folder where the file would go
+    expect(previewImport(pkg, probe(target)).items.map(i => i.key)).not.toContain('file:notes/b.md');
+    const done = applyImport(pkg, probe(target), ['file:notes/b.md', 'file:reviews/contract-v7.json'], false, writer(), 'Bugfix');
+    expect(done.failed).toEqual(['notes/b.md']); expect(done.written).toBe(1);
+  });
+
+  it('keeps one copy of a rule cited with another case, so the zip still opens', () => {
+    const s = source();
+    put(s.root, 'rules/QA-Notes.md', '# QA notes\n');
+    const cased: FlowDefinition = { ...definition, steps: [{ ...definition.steps[0]!, instructions: 'Read rules/QA-Notes.md first.' }] };
+    const { files } = buildRoutinePackage({ root: s.root, brainName: 'brain-v2', date: '2026-10-24', definition: cased, version: 1, flowJson: s.flowJson, roles: s.roles, skills: s.skills, memory: false });
+    expect(files.has('rules/QA-Notes.md')).toBe(true); expect(files.has('rules/qa-notes.md')).toBe(false);
+    expect(() => readZip(writeZip(files, BRAIN_ZIP_LIMITS), BRAIN_ZIP_LIMITS)).not.toThrow();
   });
 });

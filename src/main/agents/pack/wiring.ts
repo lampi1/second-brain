@@ -120,15 +120,25 @@ export function createAgentPacks(userData: string, brain: BrainService, catalog:
     },
     probe: (): ImportProbe => {
       const brainRoot = packs.root(), found = packs.deps.sharedSkills?.() ?? [], base = fs.realpathSync(brainRoot);
-      return { root: brainRoot, skill: name => { const hit = found.find(s => s.name === name); return hit ? { folder: hit.folder, inBrain: path.resolve(hit.folder).startsWith(base + path.sep) } : null; } };
+      // real paths on both sides: a brain on a linked path still finds its skills, and a skill folder that links out of
+      // the brain counts as outside (never written)
+      return { root: brainRoot, skill: name => {
+        const hit = found.find(s => s.name === name);
+        if (!hit) return null;
+        let real: string;
+        try { real = fs.realpathSync(hit.folder); } catch { return { rel: null }; }
+        return { rel: real.startsWith(base + path.sep) ? path.relative(base, real).split(path.sep).join('/') : null };
+      } };
     },
     read: (data: string) => parsePackage(readZip(Buffer.from(data, 'base64'), BRAIN_ZIP_LIMITS)),
     inspect: (data: string): RoutineImportPreview => previewImport(routine.read(data), routine.probe()),
     apply: (data: string, digest: string, keys: string[], memory: boolean, writer: ImportWriter, propose: (flowJson: string) => void) => {
       const pkg = routine.read(data);
       if (pkg.digest !== digest) throw new Error('Il pacchetto è cambiato: riaprilo.');
+      // the files first (each its own Log entry), then the draft: a retry after a failed write never doubles the draft
+      const done = applyImport(pkg, routine.probe(), keys, memory, writer, pkg.manifest.title);
       propose(pkg.flowJson);
-      return applyImport(pkg, routine.probe(), keys, memory, writer, pkg.manifest.title);
+      return done;
     },
   };
   return { packs, learning, share, routine };
