@@ -47,3 +47,10 @@ also wants a good-looking notice when it ends.
 - A user without gh gets the pre-filled page and presses «Submit» there.
 - Tests: `test/unit/brainmodel/research.test.ts`, `test/unit/brainmodel/issue-open.test.ts`,
   `test/unit/proposals/held.test.ts`, `test/e2e/maintenance-research.spec.ts`, `test/e2e/maintenance-logs.spec.ts`.
+
+## Amendment (2026-10-24, owner's screenshot)
+- The repository is never unknown: package.json `bugs`, else its GitHub `repository`, else the app's own
+  (`APP_ISSUES_URL`, lampi1/second-brain). A frozen release's package.json now keeps `repository` and `bugs`
+  (`scripts/release.mjs`); before, it had only name and version, so every issue card said «Non so in quale repository».
+- The log step writes its issue in the user's language, and its card has no raw log line: the line is in the issue
+  only. The deck never quotes a log line, JSON or code under «da …» (it stays in «Mostra tutto»).
