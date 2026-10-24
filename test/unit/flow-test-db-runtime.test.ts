@@ -113,14 +113,14 @@ describe('test DB flow runtime', () => {
     expect(s.flow.snapshot().runs[0]!.testDbEvidence![0]!.status).toBe('error');
     expect(JSON.stringify(s.flow.snapshot())).not.toContain('fixture-password');
   });
-  it.each(['pause', 'revision', 'task', 'brain', 'owner'] as const)('withholds in-flight rows after %s changes and records the attempt', async kind => {
+  // the owning Orchestrator closing no longer withholds anything: runs belong to the app's runner (ADR 0153)
+  it.each(['pause', 'revision', 'task', 'brain'] as const)('withholds in-flight rows after %s changes and records the attempt', async kind => {
     const s = await setup();
     s.driver.mockImplementationOnce(async input => {
       if (kind === 'pause') s.auto.pause({ id: s.rule.id, expectedRevision: 1, paused: true });
       if (kind === 'revision') s.auto.propose({ config: s.config, expectedRevision: 1 }, 'o');
       if (kind === 'task') s.rows[1]!.run!.taskVersion = 2;
       if (kind === 'brain') s.switchBrain();
-      if (kind === 'owner') s.rows[0]!.closedAt = Date.now();
       input.authorize?.();
       return { columns: ['secret'], rows: [['withheld']], rowCount: 1, truncated: false };
     });

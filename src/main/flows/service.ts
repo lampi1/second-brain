@@ -631,7 +631,9 @@ function validateReceipt(r: FlowCommandReceipt): void {
   keys(r as unknown as Record<string, unknown>, ['id', 'stepId', 'kind', 'ref', 'command', 'args', 'sha256', 'env', 'startedAt', 'endedAt', 'exitCode', 'output', 'by'], 'receipt');
   text(r.id, 'receipt id', 200); text(r.stepId, 'receipt step', 80); text(r.ref, 'receipt ref', 80); text(r.command, 'receipt command', 16000); text(r.output, 'receipt output', 4000, true);
   if (!['script', 'query'].includes(r.kind) || !['test', 'prod'].includes(r.env) || !['runner', 'user'].includes(r.by) || !/^[a-f0-9]{64}$/.test(r.sha256)) throw new Error('Invalid receipt');
-  validateInputs(r.args); integer(r.startedAt, 'receipt start');
+  const args = object(r.args, 'receipt args');
+  if (Object.keys(args).length > 30 || Object.entries(args).some(([key, value]) => !/^[A-Za-z][A-Za-z0-9_-]{0,40}$/.test(key) || typeof value !== 'string' || value.length > 16000)) throw new Error('Invalid receipt args');
+  integer(r.startedAt, 'receipt start');
   if (r.endedAt !== undefined) integer(r.endedAt, 'receipt end');
   if (r.exitCode !== undefined && r.exitCode !== null && !Number.isSafeInteger(r.exitCode)) throw new Error('Invalid receipt exit code');
 }

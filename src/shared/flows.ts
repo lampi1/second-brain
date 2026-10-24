@@ -127,7 +127,9 @@ export interface FlowStart { flowId: string; flowVersion: number; subjectKey: st
 export const APP_OWNER = 'app';
 /** The user's start from the Routine page: one work item (id or link) and/or attachments, plus typed params. */
 export interface FlowStartItem { flowId: string; workItem?: string; params?: Record<string, string>; attachments?: { name: string; content: string }[]; dryRun?: boolean }
-export interface FlowItemPreview { id: number; title: string; type: string; state: string; areaPath: string; tags: string[]; url: string; revision: number; matches: boolean; why: string[]; activeRun?: string }
+/** A work item before a manual start: `why` = what the trigger's filters would say (a warning, the user may still start
+ *  it), `blocking` = why it cannot start here (another project than the routine's approved trigger, a run already active). */
+export interface FlowItemPreview { id: number; title: string; type: string; state: string; areaPath: string; tags: string[]; url: string; revision: number; matches: boolean; why: string[]; blocking: string[]; activeRun?: string }
 /** The user's engine/model pick on one agent step (null = back to the role's). Applied at once as a new version. */
 export interface FlowStepModelEdit { flowId: string; version: number; stepId: string; engine: string | null; model: string | null; effort?: Effort | null }
 export interface FlowReport { runId: string; expectedRevision: number; stepId: string; reportId: string }

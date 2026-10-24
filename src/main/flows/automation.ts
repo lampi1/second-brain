@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { renameRetrying } from '../rules/storage';
 import { createHash, randomUUID } from 'node:crypto';
-import type { FlowRestart, FlowRestartProposal, FlowRun } from '../../shared/flows';
+import type { FlowAttachment, FlowRestart, FlowRestartProposal, FlowRun } from '../../shared/flows';
 import { DEVOPS_WRITE_OPS, type DevOpsWriteGrant, type TestDbReadGrant } from '../../shared/flow-automation';
 import type { FlowAutomationClear, FlowAutomationFilters, FlowDetectionItem, FlowAutomationConfig, FlowAutomationControl, FlowAutomationDecision, FlowAutomationEvent, FlowAutomationPause, FlowAutomationPropose, FlowAutomationRule, FlowAutomationSnapshot, FlowDetectionResult } from '../../shared/flow-automation';
 import type { FlowService } from './service';
@@ -209,16 +209,19 @@ export class FlowAutomationService {
       return waiting.length;
     });
   }
-  /** The rule a flow's manual start goes through, when there is one the user approved. */
+  /** The rule a flow's manual start goes through, when there is one the user approved (paused included: the caller
+   *  says it must be resumed first, since a paused rule grants nothing). */
   ruleOf(flowId: string): FlowAutomationRule | null {
     const rule = this.data.rules.find(item => item.config.flowId === flowId);
     return rule && rule.approvedRevision === rule.revision && ['enabled', 'paused'].includes(rule.status) ? copy(rule) : null;
   }
+  get globallyPaused(): boolean { return this.data.paused; }
   /** One manual event for a rule, started at once by the host with the rule's owner. */
-  startManual(ruleId: string, detected: FlowDetectionItem): FlowRun {
+  startManual(ruleId: string, detected: FlowDetectionItem, attachments?: FlowAttachment[]): FlowRun {
     this.healthy();
     const rule = this.data.rules.find(item => item.id === ruleId);
     if (!rule || rule.approvedRevision !== rule.revision || !['enabled', 'paused'].includes(rule.status)) throw new Error('La routine non ha un trigger approvato');
+    if (rule.status !== 'enabled' || this.data.paused) throw new Error('Il trigger di questa routine è in pausa: riattivalo per avviarla su un work item (in pausa non concede permessi).');
     const item = this.result({ cursor: {}, items: [detected], summary: '' }).items[0]!;
     if (Object.keys(item.inputs).some(key => Object.hasOwn(rule.config.inputs, key))) throw new Error('Inputs conflict with the approved configuration');
     const inputs = validateInputs({ ...rule.config.inputs, ...item.inputs }), id = item.inputs['work-item-id'];
@@ -230,7 +233,7 @@ export class FlowAutomationService {
       const made: FlowAutomationEvent = { id: randomUUID(), ruleId: rule.id, ruleRevision: rule.revision, sourceKey, subjectKey: `auto:${rule.id}:${rule.revision}:${hash(sourceKey)}`, title: item.title, inputs, createdAt: this.now(), updatedAt: this.now(), status: 'pending', attempts: 0, manual: true };
       this.data.seen.push(hash([rule.id, rule.revision, sourceKey])); this.data.events.push(made); this.trim(); return made;
     });
-    return this.startEvent(event.id, rule.ownerOrchestratorId);
+    return this.startEvent(event.id, rule.ownerOrchestratorId, attachments);
   }
   /** A new approved revision of a rule, keeping its queue, cursor and the grants of runs it already started. */
   private advance(rule: FlowAutomationRule, config: FlowAutomationConfig): void {
@@ -244,7 +247,7 @@ export class FlowAutomationService {
     if (this.data.cursors[rule.id]) this.data.cursors[rule.id] = this.data.cursors[rule.id]!;
   }
   /** Called only by the authenticated Orchestrator mount; the event supplies all run identity and inputs. */
-  startEvent(eventId: string, ownerId: string): FlowRun {
+  startEvent(eventId: string, ownerId: string, attachments?: FlowAttachment[]): FlowRun {
     this.healthy();
     this.reconcileRuns();
     const event = this.data.events.find(item => item.id === text(eventId, 'eventId', 200));
@@ -269,7 +272,7 @@ export class FlowAutomationService {
     // While flow.start prepares the first step, grantFor accepts only this event's own start (before runId is recorded).
     this.starting = event.id;
     let run: FlowRun;
-    try { run = flow.start({ flowId: rule.config.flowId, flowVersion: rule.config.flowVersion, subjectKey: event.subjectKey, scope: copy(rule.config.scope), inputs: copy(event.inputs) }, ownerId, true); }
+    try { run = flow.start({ flowId: rule.config.flowId, flowVersion: rule.config.flowVersion, subjectKey: event.subjectKey, scope: copy(rule.config.scope), inputs: copy(event.inputs), title: event.title.slice(0, 300), ...(attachments?.length ? { attachments } : {}) }, ownerId, true); }
     finally { this.starting = undefined; }
     this.change(() => { event.status = 'started'; event.runId = run.id; event.updatedAt = this.now(); delete event.reason; });
     return run;
@@ -364,13 +367,13 @@ export class FlowAutomationService {
     const config = this.configFor(run);
     return config?.testDbRead ? copy(config.testDbRead) : null;
   }
-  /** The approved configuration that started this run (the current revision or one kept in history), or null. A paused
-   *  rule takes no new events but keeps the grant of the runs it started; a rejected or replaced rule withdraws it. */
+  /** The approved configuration that started this run (the current revision or one kept in history), or null. A paused,
+   *  rejected or replaced rule, or the global pause, withdraws the grant at once (in-flight adapter calls stop). */
   private configFor(run: FlowRun): FlowAutomationConfig | null {
-    if (this.stopped || this.storageError || ['completed', 'cancelled'].includes(run.status)) return null;
+    if (this.stopped || this.storageError || this.data.paused || ['completed', 'cancelled'].includes(run.status)) return null;
     const match = /^auto:([^:]+):(\d+):[a-f0-9]{64}$/.exec(run.subjectKey);
     const rule = match && this.data.rules.find(item => item.id === match[1]);
-    if (!rule || rule.approvedRevision !== rule.revision || !['enabled', 'paused'].includes(rule.status) || rule.ownerOrchestratorId !== run.ownerOrchestratorId) return null;
+    if (!rule || rule.approvedRevision !== rule.revision || rule.status !== 'enabled' || rule.ownerOrchestratorId !== run.ownerOrchestratorId) return null;
     const config = String(rule.revision) === match![2] ? rule.config : rule.history?.find(item => String(item.revision) === match![2])?.config;
     if (!config || config.flowId !== run.flowId || config.flowVersion !== run.flowVersion || hash(config.scope) !== hash(run.scope)) return null;
     const event = this.data.events.find(item => item.ruleId === rule.id && item.subjectKey === run.subjectKey);
