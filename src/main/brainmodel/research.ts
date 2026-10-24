@@ -10,7 +10,6 @@
 // Idee, on the AI's side. The pass also makes cards by itself, at zero tokens: one app bug per new log group and the
 // brain skills no job used in 60 days. When it is all over, `done` tells the renderer what it made (the end notice).
 // Used by wiring.ts and demo-wiring.ts; IPC maintenance:* (index.ts); tests: test/unit/brainmodel/research.test.ts.
-import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
