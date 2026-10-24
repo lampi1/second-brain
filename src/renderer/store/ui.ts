@@ -4,7 +4,7 @@
 // to flash/focus, the chat whose hand-off dialog is open, and the preferences the app remembers across restarts (density, theme, the Orchestrator column,
 // tile sizes, sections, last new-chat choices) in localStorage (the app's own file:// page, kept in userData).
 // Used by every component and by App.tsx's keyboard and ui:command handlers.
-import type { Effort, Harness, PermissionMode } from '@shared/contract';
+import type { Effort, Harness, NoticeTone, PermissionMode } from '@shared/contract';
 import { readFileViewArg } from '@shared/file-view';
 import {readAppearance,type AppearancePreference} from '@shared/appearance';
 import { BRAIN_PAGES, type BrainPageId } from '../brain';
@@ -54,7 +54,9 @@ export interface Prefs {
   lastFocus: string | null;
 }
 
-export interface Toast { id: number; text: string;labelKey?:TextKey; tone: 'info' | 'ok' | 'warn' | 'err'; action?: { label: string; run: () => void }; ttl: number;expiresAt:number }
+/** An in-app notice (components/Notice.tsx). `text` is the title; a rich one (lib/notice.ts notify) also has a small
+ *  label above it, a detail line and chips (the maintenance's summary). */
+export interface Toast { id: number; text: string;labelKey?:TextKey; tone: NoticeTone; action?: { label: string; run: () => void }; ttl: number;expiresAt:number; label?: string; detail?: string; chips?: string[] }
 export interface ConfirmSpec { title: string; body: string; items?: string[]; confirmLabel: string; danger?: boolean; onConfirm: () => void }
 
 export interface UiState {
@@ -240,15 +242,19 @@ const toastTimers=new Map<number,ReturnType<typeof setTimeout>>();
 export function toast(text: string, tone: Toast['tone'] = 'info', action?: Toast['action'], ttl = action ? 6000 : 4000): number {
   return pushToast(text,tone,action,ttl);
 }
+/** A rich notice (lib/notice.ts notify is the public way: it also rings). */
+export function pushNotice(n:{title:string;tone:Toast['tone'];label?:string;detail?:string;chips?:string[];action?:Toast['action'];ttl:number}):number{
+  return pushToast(n.title,n.tone,n.action,n.ttl,undefined,{...(n.label?{label:n.label}:{}),...(n.detail?{detail:n.detail}:{}),...(n.chips?.length?{chips:n.chips}:{})});
+}
 /** Render translated notifications in the current language, including a language change's own acknowledgement. */
 export function toastKey(labelKey:TextKey,tone:Toast['tone']='info'):number{return pushToast('',tone,undefined,4000,labelKey);}
-function pushToast(text:string,tone:Toast['tone'],action:Toast['action'],ttl:number,labelKey?:TextKey):number{
+function pushToast(text:string,tone:Toast['tone'],action:Toast['action'],ttl:number,labelKey?:TextKey,rich:Pick<Toast,'label'|'detail'|'chips'>={}):number{
   expireToasts();
   const same=ui.get().toasts.find(item=>item.text===text&&item.labelKey===labelKey&&item.tone===tone&&(!item.action&&!action||item.action?.run===action?.run&&item.action?.label===action?.label));
   if(same)return same.id; // A repeat never extends its original deadline or replaces a different undo operation.
-  ttl=Number.isFinite(ttl)?Math.max(0,Math.min(30000,ttl)):4000;
+  ttl=Number.isFinite(ttl)?Math.max(0,Math.min(tone==='celebrate'?60000:30000,ttl)):4000;
   const id = ++toastN;
-  const next=[...ui.get().toasts,{id,text,labelKey,tone,action,ttl,expiresAt:Date.now()+ttl}].slice(-MAX_TOASTS);
+  const next=[...ui.get().toasts,{id,text,labelKey,tone,action,ttl,expiresAt:Date.now()+ttl,...rich}].slice(-MAX_TOASTS);
   for(const old of ui.get().toasts)if(!next.some(item=>item.id===old.id))clearToastTimer(old.id);
   ui.set(s=>({...s,toasts:next}));
   toastTimers.set(id,setTimeout(()=>dismissToast(id),ttl));

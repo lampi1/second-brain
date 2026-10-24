@@ -16,6 +16,7 @@ import { nextThing, openLink, uiCommand } from './actions';
 import { checkDnd, startStore } from './store/store';
 import { now } from './lib/clock';
 import { startLayer } from './lib/layer';
+import './lib/notice'; // notify() and its e2e hook (__sbNotify)
 import { startFocusKeeper } from './lib/focusKeeper';
 import { startTypingWatch } from './lib/questions';
 import { OverlayApp } from './components/OverlayApp';

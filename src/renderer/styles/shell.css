@@ -121,24 +121,7 @@
 .nc-foot { flex: none; padding: 8px 16px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--text-3); display: flex; gap: 6px; align-items: center; }
 
 /* ---------------------------------------------------------------- event toasts in the global layer (tier b) */
-.ev-toast {
-  display: flex; align-items: center; gap: 10px; padding: 9px 8px 9px 12px; border-radius: var(--r-m); background: var(--surface-2); border: 1px solid var(--border-3);
-  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.3); animation: toastIn var(--dur-slow) var(--ease); min-width: 0;
-}
-.ev-toast.tone-err { border-color: color-mix(in srgb, var(--red) 45%, transparent); }
-.ev-toast.tone-warn { border-color: var(--amber-line); }
-.ev-icon { flex: none; display: grid; place-items: center; color: var(--blue); }
-.ev-toast.tone-ok .ev-icon { color: var(--green); }
-.ev-toast.tone-err .ev-icon { color: var(--red); }
-.ev-toast.tone-warn .ev-icon { color: var(--amber); }
-.ev-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.35; }
-.ev-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); }
-.ev-text b { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ev-detail { font-size: 12px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ev-act { flex: none; height: 28px; padding: 0 11px; border-radius: 7px; border: 1px solid var(--blue-line); background: var(--blue-bg); color: var(--text); font-weight: 600; font-size: 12px; cursor: pointer; }
-.ev-act:hover { background: color-mix(in srgb, var(--blue) 22%, transparent); }
-.ev-x { flex: none; width: 24px; height: 24px; border: 0; border-radius: 6px; background: none; color: var(--text-3); display: grid; place-items: center; cursor: pointer; }
-.ev-x:hover { background: var(--surface-4); color: var(--text); }
+/* drawn as the app's one notice card: styles/notif.css */
 
 /* ---------------------------------------------------------------- live turn: the spark and the workshop phrase */
 .typing { flex: none; max-width: 100%; display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-3); padding: 2px 2px 0; }

@@ -1134,6 +1134,10 @@ export interface OverlayModel {
   /** top is the absolute occupied bottom in content coordinates; right/bottom are edge reservations. */
   avoid?: { right: number; bottom: number; top?:number };
 }
+/** The look (color, icon) of a notice, the one notification design of the app and of the global layer
+ *  (renderer components/Notice.tsx, ADR 0151): attention = someone waits for the user's answer; celebrate = a big
+ *  finished job (the maintenance). */
+export type NoticeTone = 'info' | 'ok' | 'warn' | 'err' | 'attention' | 'celebrate';
 export interface OverlayToast {
   id: string;                 // group key (kind|chat)
   kind: string;
@@ -1142,7 +1146,7 @@ export interface OverlayToast {
   detail: string;
   count: number;              // grouped events of this kind (and chat)
   action: string;             // the one direct action: "Apri", "Rispondi"
-  tone: 'info' | 'ok' | 'warn' | 'err';
+  tone: NoticeTone;
 }
 /** The overlay page only renders the toasts: the app page acts on its behalf. */
 export type OverlayAction =
