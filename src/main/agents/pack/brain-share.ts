@@ -22,18 +22,18 @@ export interface ShareRole { profile: AgentProfile; skillName: string; own: Pack
 export interface BrainShareInput { root: string; name: string; date: string; roles: ShareRole[] }
 export interface BrainShareSummary { skills: string[]; rules: string[]; roles: string[]; scripts: string[]; skipped: string[] }
 
-const SKILL_DIRS = ['.agents/skills', '.claude/skills'];
-const SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+export const SKILL_DIRS = ['.agents/skills', '.claude/skills'];
+export const SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MAX_FILE = 2 * 1024 ** 2, MAX_SKILL = 10 * 1024 ** 2, MAX_SCRIPT = 200 * 1024;
 const OUTSIDE_APP = 'Outside the second-brain app: where these instructions name agent_delegate, use your tool\'s own subagents; agent_report means your final answer; agent_ask_parent means asking the user.';
 
-const text = (data: Buffer): boolean => {
+export const text = (data: Buffer): boolean => {
   if (data.includes(0)) return false;
   try { new TextDecoder('utf-8', { fatal: true }).decode(data); return true; } catch { return false; }
 };
 
 /** One skill folder as relative files; null when it is not a plain, text-only skill (links, binaries, too big). */
-function readSkill(folder: string, skipped: string[], label: string): PackFiles | null {
+export function readSkill(folder: string, skipped: string[], label: string): PackFiles | null {
   const files: PackFiles = new Map(); let total = 0;
   const walk = (dir: string, prefix: string): boolean => {
     for (const item of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -94,14 +94,14 @@ function brainScripts(root: string, skipped: string[]): PackFiles {
   return out;
 }
 
-const oneLine = (s: string) => s.replace(/\s+/g, ' ').trim();
-const description = (md: Buffer | undefined) => {
+export const oneLine = (s: string) => s.replace(/\s+/g, ' ').trim();
+export const description = (md: Buffer | undefined) => {
   const v = md && field(parseMd(md.toString('utf8')), 'description');
   return oneLine(typeof v === 'string' ? v.replace(/^["']|["']$/g, '') : '');
 };
 
 /** A rule's `when` ({"prompt":[…],"tools":[…],"paths":[…]}, rules/storage.ts) in words; free text as it is. */
-function whenText(when: string): string {
+export function whenText(when: string): string {
   if (!when.trim()) return 'Always';
   try {
     const w = JSON.parse(when) as Record<string, unknown>, list = (k: string) => Array.isArray(w[k]) ? (w[k] as unknown[]).filter(v => typeof v === 'string') as string[] : [];
@@ -113,6 +113,14 @@ function whenText(when: string): string {
 function roleBody(role: ShareRole, skills: string[]): string {
   const p = role.profile;
   return [p.instructions.trim(), OUTSIDE_APP, skills.length ? `Skills that fit this role: ${skills.join(', ')}.` : '', 'Read AGENTS.md at the brain root first: its rules apply to you.'].filter(Boolean).join('\n\n') + '\n';
+}
+
+/** A role as each tool's subagent (.claude/agents, .cursor/agents, .codex/agents), naming the skills it can load. */
+export function roleFiles(r: ShareRole, skills: Map<string, PackFiles>): [string, Buffer][] {
+  const declared = [...new Set([...(r.profile.skills ?? []), ...(r.profile.knowhow?.linked ?? []), r.skillName])].filter(n => skills.has(n));
+  return [[`.claude/agents/${r.skillName}.md`, Buffer.from(roleMd(r, declared, true))], [`.cursor/agents/${r.skillName}.md`, Buffer.from(roleMd(r, declared, false))],
+    [`.codex/agents/${r.skillName}.toml`, Buffer.from(emitAgentToml({ name: r.skillName, description: oneLine(r.profile.purpose), developer_instructions: roleBody(r, declared),
+      ...(r.profile.effort ? { model_reasoning_effort: r.profile.effort === 'max' ? 'xhigh' : r.profile.effort } : {}) }))]];
 }
 
 function roleMd(role: ShareRole, skills: string[], claude: boolean): string {
@@ -171,29 +179,29 @@ function readme(input: BrainShareInput, s: BrainShareSummary): string {
     'Per avere anche la memoria, il diario e l\'app: https://github.com/lampi1/second-brain.', ''].join('\n');
 }
 
+/** A role's own know-how (agents/<id>/skills/<id>) as a plain skill named after the role (null = none, or too big). */
+export function roleSkill(r: ShareRole, skipped: string[]): PackFiles | null {
+  if (!r.own.size) return null;
+  const own: PackFiles = new Map([...r.own].filter(([f]) => f.startsWith(`skills/${r.skillName}/`)).map(([f, d]) => [f.slice(`skills/${r.skillName}/`.length), d]));
+  for (const [f, d] of own) { let ok = d.length <= MAX_FILE && text(d); try { checkPackPath(`.claude/skills/x/${f}`); } catch { ok = false; } if (!ok) { own.delete(f); skipped.push(`agents/${r.skillName}/skills/${r.skillName}/${f}`); } }
+  const md = own.get('SKILL.md');
+  if (!md || [...own.values()].reduce((n, d) => n + d.length, 0) > MAX_SKILL) return null;
+  own.set('SKILL.md', Buffer.from(setFields(md.toString('utf8'), {}, ['hooks'])));
+  return own;
+}
+
 /** Every file of the shared brain, by its path in the zip, and what went in. */
 export function buildBrainShare(input: BrainShareInput): { files: PackFiles; summary: BrainShareSummary } {
   const skipped: string[] = [];
   const skills = brainSkills(input.root, skipped);
   const roles = input.roles.filter(r => isWorkRole(r.profile.id) && SKILL_NAME.test(r.skillName));
   // a role's own know-how (agents/<id>/skills) travels as a skill named after the role
-  for (const r of roles) if (r.own.size && !skills.has(r.skillName)) {
-    const own: PackFiles = new Map([...r.own].filter(([f]) => f.startsWith(`skills/${r.skillName}/`)).map(([f, d]) => [f.slice(`skills/${r.skillName}/`.length), d]));
-    for (const [f, d] of own) { let ok = d.length <= MAX_FILE && text(d); try { checkPackPath(`.claude/skills/x/${f}`); } catch { ok = false; } if (!ok) { own.delete(f); skipped.push(`agents/${r.skillName}/skills/${r.skillName}/${f}`); } }
-    const md = own.get('SKILL.md');
-    if (md && [...own.values()].reduce((n, d) => n + d.length, 0) <= MAX_SKILL) { own.set('SKILL.md', Buffer.from(setFields(md.toString('utf8'), {}, ['hooks']))); skills.set(r.skillName, own); }
-  }
+  for (const r of roles) if (!skills.has(r.skillName)) { const own = roleSkill(r, skipped); if (own) skills.set(r.skillName, own); }
   const rules = packRules(input.root), scripts = brainScripts(input.root, skipped), files: PackFiles = new Map();
   for (const [name, own] of skills) for (const dir of SKILL_DIRS) for (const [rel, data] of own) files.set(`${dir}/${name}/${rel}`, Buffer.from(data));
   for (const [name, data] of rules) files.set(name, Buffer.from(data));
   for (const [name, data] of scripts) files.set(name, Buffer.from(data));
-  for (const r of roles) {
-    const declared = [...new Set([...(r.profile.skills ?? []), ...(r.profile.knowhow?.linked ?? []), r.skillName])].filter(n => skills.has(n));
-    files.set(`.claude/agents/${r.skillName}.md`, Buffer.from(roleMd(r, declared, true)));
-    files.set(`.cursor/agents/${r.skillName}.md`, Buffer.from(roleMd(r, declared, false)));
-    files.set(`.codex/agents/${r.skillName}.toml`, Buffer.from(emitAgentToml({ name: r.skillName, description: oneLine(r.profile.purpose), developer_instructions: roleBody(r, declared),
-      ...(r.profile.effort ? { model_reasoning_effort: r.profile.effort === 'max' ? 'xhigh' : r.profile.effort } : {}) })));
-  }
+  for (const r of roles) for (const [name, data] of roleFiles(r, skills)) files.set(name, data);
   const summary: BrainShareSummary = { skills: [...skills.keys()], rules: [...rules.keys()], roles: roles.map(r => r.skillName), scripts: [...scripts.keys()], skipped };
   files.set('AGENTS.md', Buffer.from(agentsMd(input, skills, rules, roles, scripts)));
   files.set('CLAUDE.md', Buffer.from(['# Claude Code entry point', '', 'The canonical context is AGENTS.md; do not duplicate it here.', '', '@AGENTS.md', ''].join('\n')));

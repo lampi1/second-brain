@@ -17,6 +17,14 @@ const agents = (version: Record<string, number>): AgentRestorer & { restored: [s
 };
 
 describe('ChangeLog', () => {
+  it('writes all or none: a write that fails puts back the files it already wrote and leaves no temp file', () => {
+    const d = tmp(), log = new ChangeLog(d, () => 5), a = path.join(d, 'brain', 'a.md'), b = path.join(d, 'brain', 'b.md');
+    writeText(a, 'old'); fs.mkdirSync(b);
+    expect(() => log.apply(base, [{ file: a, text: 'new' }, { file: b, text: 'x' }])).toThrow();
+    expect(fs.readFileSync(a, 'utf8')).toBe('old');
+    expect(fs.readdirSync(path.join(d, 'brain')).sort()).toEqual(['a.md', 'b.md']);
+    expect(log.all()).toEqual([]);
+  });
   it('applies, lists newest first and undoes a file change; a created file is removed with its empty folder', () => {
     const d = tmp(), log = new ChangeLog(d, () => 5), file = path.join(d, 'brain', 'skill', 'SKILL.md');
     const c = log.apply(base, [{ file, text: 'nuovo' }])!;

@@ -16,6 +16,14 @@ import type { VoiceAsr, VoiceName, VoiceState } from './voice';
 import type { RecFound, RecSegment, RecSource, RecState, Recording } from './recordings';
 /** What the shareable brain zip holds (counts), or why it was not written: guard findings, or no brain / no guard. */
 export type BrainShareResult = { ok: true; path: string; skills: number; rules: number; roles: number; scripts: number; skipped: number } | { ok: false; findings: PackFinding[] } | { ok: false; error: string };
+/** What a routine package zip holds (ADR 0156): brain paths and names, before it is saved. */
+export interface RoutinePackageSummary { title: string; cited: string[]; missing: string[]; rules: string[]; skills: string[]; roles: string[]; memory: string[]; scripts: string[]; skipped: string[] }
+export type RoutinePackageResult = { ok: true; path: string; summary: RoutinePackageSummary } | { ok: false; findings: PackFinding[] } | { ok: false; error: string };
+/** One thing a routine package could write into the brain: new, the same as the brain's, different (kept unless
+ *  ticked), or a skill the brain already loads from elsewhere (home, the app's copy: never written). */
+export interface RoutineImportItem { key: string; kind: 'cited' | 'rule' | 'skill' | 'script' | 'query'; label: string; status: 'new' | 'same' | 'different' | 'elsewhere'; files?: string[]; text: string }
+export interface RoutineImportPreview { digest: string; title: string; steps: number; version: number; exportedAt: string; items: RoutineImportItem[]; memory: { role: string; lines: number; sample: string[] }[] }
+export interface RoutineImportResult { snapshot: FlowSnapshot; written: number; failed: string[]; remembered: number; refused: number }
 import type { BrainModelState, ClassifiersState, MaintenanceJobId } from './brain-model';
 import type { ApprovalDecision, ApprovalItem, PulseActResult, PulseDismissReason, PulseList, PulsePlace, PulseResult, PulseStatus, PulseSettings, PulseType } from './pulse';
 import type { ConnectorId, ConnectorState, ConnectorToken } from './connectors';
@@ -1264,6 +1272,12 @@ export interface InvokeMap {
   'flows:list': [void, FlowSnapshot];
   'flows:export': [FlowContext<{ flowId: string; version: number; format: 'json' | 'markdown' }>, { filename: string; content: string }];
   'flows:import': [FlowContext<{ content: string }>, FlowSnapshot];
+  /** the routine package (ADR 0156): what it would hold; then built, guard-scanned and saved where the user picks (null = cancelled) */
+  'flows:packagePreview': [FlowContext<{ flowId: string; version: number }>, RoutinePackageSummary];
+  'flows:packageExport': [FlowContext<{ flowId: string; version: number; memory: boolean }>, RoutinePackageResult | null];
+  /** a routine package zip (base64): what importing it would write; then the routine as a new draft plus the ticked items */
+  'flows:packageInspect': [FlowContext<{ data: string }>, RoutineImportPreview];
+  'flows:packageImport': [FlowContext<{ data: string; digest: string; keys: string[]; memory: boolean }>, RoutineImportResult];
   'flows:autoDecide': [FlowContext<FlowAutomationDecision>, FlowSnapshot];
   'flows:autoPause': [FlowContext<FlowAutomationPause>, FlowSnapshot];
   'flows:autoControl': [FlowContext<FlowAutomationControl>, FlowSnapshot];
@@ -1775,7 +1789,7 @@ export type InvokeResult<K extends InvokeChannel> = InvokeMap[K][1];
 
 // Runtime lists (the preload allow-list). Kept in sync with the maps by the compile-time checks below.
 export const INVOKE_CHANNELS = [
-  'flows:list', 'flows:export', 'flows:import', 'flows:definitionDecide', 'flows:decide', 'flows:cancel', 'flows:cancelDecide', 'flows:restart', 'flows:restartDecide', 'flows:editStepTier', 'flows:previewItem', 'flows:startItem', 'flows:dryRun', 'flows:pauseRun', 'flows:runCommand', 'flows:clearQueue', 'flows:editFilters', 'flows:editStepModel', 'flows:pinHash', 'flows:autoDecide', 'flows:autoPause', 'flows:autoControl',
+  'flows:list', 'flows:export', 'flows:import', 'flows:packagePreview', 'flows:packageExport', 'flows:packageInspect', 'flows:packageImport', 'flows:definitionDecide', 'flows:decide', 'flows:cancel', 'flows:cancelDecide', 'flows:restart', 'flows:restartDecide', 'flows:editStepTier', 'flows:previewItem', 'flows:startItem', 'flows:dryRun', 'flows:pauseRun', 'flows:runCommand', 'flows:clearQueue', 'flows:editFilters', 'flows:editStepModel', 'flows:pinHash', 'flows:autoDecide', 'flows:autoPause', 'flows:autoControl',
   'work:lessons', 'work:lessonDecide', 'work:list', 'work:decide',
   'pulse:list', 'pulse:status', 'pulse:seen', 'pulse:save', 'pulse:act', 'pulse:dismiss', 'pulse:runNow', 'approvals:list', 'approvals:decide',
   'connectors:list', 'connectors:login', 'connectors:cancelLogin', 'connectors:probe', 'connectors:select', 'connectors:disconnect', 'connectors:useToken',

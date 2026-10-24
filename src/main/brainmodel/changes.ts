@@ -42,7 +42,7 @@ export function writeText(file: string, text: string | null): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.${randomBytes(3).toString('hex')}.tmp`;
   fs.writeFileSync(tmp, text, 'utf8');
-  fs.renameSync(tmp, file);
+  try { fs.renameSync(tmp, file); } catch (e) { fs.rmSync(tmp, { force: true }); throw e; }
 }
 
 export class ChangeLog {
@@ -65,13 +65,19 @@ export class ChangeLog {
     const todo = writes.map(w => ({ ...w, before: read(w.file) })).filter(w => w.before !== w.text);
     if (todo.some(w => (w.before?.length ?? 0) > SNAP || (w.text?.length ?? 0) > SNAP)) return null;
     const files: FileSnapshot[] = [];
-    for (const w of todo) {
-      // Freeze the actual destination at write time: aliases such as macOS /var must not lose provenance,
-      // and a later retargeted directory link must never redirect this change's evidence or rollback.
-      if (w.text !== null) fs.mkdirSync(path.dirname(w.file), { recursive: true });
-      const file = path.join(fs.realpathSync(path.dirname(w.file)), path.basename(w.file));
-      writeText(file, w.text);
-      files.push({ file, before: w.before, after: w.text });
+    try {
+      for (const w of todo) {
+        // Freeze the actual destination at write time: aliases such as macOS /var must not lose provenance,
+        // and a later retargeted directory link must never redirect this change's evidence or rollback.
+        if (w.text !== null) fs.mkdirSync(path.dirname(w.file), { recursive: true });
+        const file = path.join(fs.realpathSync(path.dirname(w.file)), path.basename(w.file));
+        writeText(file, w.text);
+        files.push({ file, before: w.before, after: w.text });
+      }
+    } catch (e) {
+      // all or nothing: a write that fails puts back the files this change already wrote, so none is left without its Annulla
+      for (const f of [...files].reverse()) { try { writeText(f.file, f.before); } catch { /* best effort: the error below says it failed */ } }
+      throw e;
     }
     if (!files.length && !agent) return null;
     return this.record(change, files, agent);

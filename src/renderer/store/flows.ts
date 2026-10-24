@@ -1,7 +1,7 @@
 // Live flow catalog and exact-brain decisions. A changed brain clears cached proposals before any replacement read.
 import { useEffect } from 'react';
 import type { FlowAutomationControl, FlowAutomationPause } from '@shared/flow-automation';
-import type { InvokeArg } from '@shared/contract';
+import type { InvokeArg, RoutineImportResult } from '@shared/contract';
 import type { FlowCancel, FlowRestart, FlowSnapshot, FlowStepTierEdit } from '@shared/flows';
 import type { FlowAsk } from '../lib/flow-ask';
 import { clearDecisionDrafts } from '../lib/decision-drafts';
@@ -134,6 +134,17 @@ export async function importFlowDefinition(contextKey: string, content: string):
     toast(t('flows.imported'), 'info');
     return true;
   } catch { return false; }
+}
+
+/** A routine package import (ADR 0156): the routine as a new draft plus the items the user ticked; an error comes back as text. */
+export async function importRoutinePackage(contextKey: string, input: { data: string; digest: string; keys: string[]; memory: boolean }): Promise<RoutineImportResult | string> {
+  if (flowState.get().snapshot?.contextKey !== contextKey) return t('flows.recoveryStale');
+  const ticket = read;
+  try {
+    const result = await sb.invoke('flows:packageImport', { ...input, contextKey });
+    if (ticket === read && flowState.get().snapshot?.contextKey === contextKey) { ++read; acceptSnapshot(result.snapshot); }
+    return result;
+  } catch (error) { void reloadFlows(); return plain(error); }
 }
 
 /** The host exports only a portable definition; renderer downloads never serialize the live snapshot. */

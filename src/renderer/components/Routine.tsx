@@ -13,6 +13,7 @@ import { flowAsks } from '../lib/flow-ask';
 import { openQueue } from '../lib/later';
 import { activeVersion, ago, definitionOf, duration, itemOf, lastHeal, list, needsYou, prodSteps, queued, retrying, ruleFor, stepLook, working, type StepLook } from '../lib/routine-view';
 import { stepAgentLabel } from '../lib/flow-step-agent';
+import { RoutineExport } from './RoutinePackage';
 import { controlFlowAutomation, decideFlow, exportFlowDefinition, flowState, plain, routineControl } from '../store/flows';
 import { sb } from '../sb';
 import { toast } from '../store/ui';
@@ -264,16 +265,17 @@ function Queue({ snapshot, rule }: { snapshot: FlowSnapshot; rule: FlowAutomatio
 }
 export function RoutineDetail({ snapshot, flowId, onBack, onStart, onDryRun, onAsk }: { snapshot: FlowSnapshot; flowId: string; onBack: () => void; onStart: (flowId: string) => void; onDryRun: (flowId: string) => void; onAsk: (version?: FlowVersion) => void }) {
   const version = activeVersion(snapshot, flowId), draft = snapshot.drafts.filter(d => d.definition.id === flowId).sort((a, b) => b.revision - a.revision)[0];
-  const definition = version?.definition ?? draft?.definition, rule = ruleFor(snapshot, flowId), [editing, setEditing] = useState(false);
+  const definition = version?.definition ?? draft?.definition, rule = ruleFor(snapshot, flowId), [editing, setEditing] = useState(false), [packing, setPacking] = useState(false);
   if (!definition) return null;
   const trigger = rule?.config.trigger.kind === 'devops' ? rule.config.trigger : undefined;
   return <div className="rt-detail" data-testid="rt-detail">
     <header className="rt-detail-head"><button type="button" className="btn btn-ghost btn-s" onClick={onBack}>‹ {t('rt.title')}</button><RuleSwitch snapshot={snapshot} rule={rule} /><h2>{definition.title}</h2>{version && <Chip>v{version.version}</Chip>}<span className="rt-sp" />
-      {version && <><span className="rt-export" data-testid="rt-export"><button type="button" className="btn btn-ghost btn-s" title={t('rt.exportJsonTip')} onClick={() => void exportFlowDefinition(snapshot.contextKey, flowId, version.version, 'json')} data-testid="flow-export-json">⇪ {t('rt.export')} JSON</button><button type="button" className="btn btn-ghost btn-s" onClick={() => void exportFlowDefinition(snapshot.contextKey, flowId, version.version, 'markdown')} data-testid="flow-export-markdown">Markdown</button></span>
+      {version && <><span className="rt-export" data-testid="rt-export"><button type="button" className="btn btn-ghost btn-s" title={t('rt.exportPackTip')} onClick={() => setPacking(true)} data-testid="rt-export-package">⇪ {t('rt.exportPack')}</button><button type="button" className="btn btn-ghost btn-s" title={t('rt.exportJsonTip')} onClick={() => void exportFlowDefinition(snapshot.contextKey, flowId, version.version, 'json')} data-testid="flow-export-json">JSON</button><button type="button" className="btn btn-ghost btn-s" onClick={() => void exportFlowDefinition(snapshot.contextKey, flowId, version.version, 'markdown')} data-testid="flow-export-markdown">Markdown</button></span>
         <button type="button" className="btn btn-ghost btn-s" onClick={() => onDryRun(flowId)} data-testid="rt-dry">◎ {t('rt.dry')}</button></>}
       <DecideButton snapshot={snapshot} flowId={flowId} />
       <button type="button" className="btn btn-ghost btn-s" onClick={() => onAsk(version)}>✎ {t('rt.edit')}</button>
       {version && <button type="button" className="btn btn-primary btn-s" onClick={() => onStart(flowId)} data-testid="rt-start-here">▶ {t('rt.start')}</button>}</header>
+    {packing && version && <RoutineExport contextKey={snapshot.contextKey} flowId={flowId} version={version.version} onClose={() => setPacking(false)} />}
     <p className="rt-desc">{definition.description}</p>
     <div className="rt-detail-body">
       <section><div className="rt-sec"><span className="rt-label">{t('rt.steps')}</span></div>
