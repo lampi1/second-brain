@@ -102,7 +102,7 @@ describe('flow host boundaries', () => {
     s.rows.push({ id: 'w', run: { runId: 'r', taskVersion: 2, scope: { brainRoot: s.b, projectRoot: s.a } } } as ChatSummary);
     expect(s.runtime.resolveBinding('w', 'o', s.a)).toBeNull();
     s.rows[1]!.run!.scope!.brainRoot = s.a;
-    expect(s.runtime.resolveBinding('w', 'o', s.a)).toEqual({ chatId: 'w', chatRunId: 'r', taskVersion: 2 });
+    expect(s.runtime.resolveBinding('w', 'o', s.a)).toMatchObject({ chatId: 'w', chatRunId: 'r', taskVersion: 2, launched: {} });
     expect(s.runtime.resolveBinding('w', 'o', s.b)).toBeNull();
     s.rows[1]!.run!.endedAt = 1; expect(s.runtime.resolveBinding('w', 'o', s.a)).toBeNull();
     delete s.rows[1]!.run!.endedAt;
