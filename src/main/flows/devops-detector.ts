@@ -37,6 +37,7 @@ function checkedTrigger(config: FlowAutomationConfig): Trigger {
 }
 
 /** CLI output remains in memory only. Windows needs its .cmd launcher, with an entirely constant command line. */
+export function devopsToken(signal?: AbortSignal): Promise<string> { return azureToken(signal); }
 function azureToken(signal?: AbortSignal): Promise<string> {
   if (process.env.VITEST || process.env.SB_TEST || process.env.SB_DEMO) return Promise.reject(new DetectionError(LOGIN));
   const args = ['account', 'get-access-token', '--resource', RESOURCE, '--query', 'accessToken', '--output', 'tsv'];

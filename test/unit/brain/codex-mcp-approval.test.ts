@@ -16,6 +16,8 @@ describe('native Codex app tool approval', () => {
       'mcp_servers.second-brain.tools.agent_delegate.approval_mode=approve',
       'mcp_servers.second-brain.tools.agent_assign_task.approval_mode=approve',
       'mcp_servers.second-brain.tools.agent_task_events.approval_mode=approve',
+      'mcp_servers.second-brain.tools.agent_integrate_child.approval_mode=approve',
+      'mcp_servers.second-brain.tools.agent_integrate_children.approval_mode=approve',
       'mcp_servers.second-brain.tools.agent_report.approval_mode=approve',
       'mcp_servers.second-brain.tools.agent_children.approval_mode=approve',
       'mcp_servers.second-brain.tools.agent_ask_parent.approval_mode=approve',
@@ -24,6 +26,7 @@ describe('native Codex app tool approval', () => {
       'mcp_servers.second-brain.tools.plan_update.approval_mode=approve',
       'mcp_servers.second-brain.tools.maintenance_pack.approval_mode=approve',
       'mcp_servers.second-brain.tools.maintenance_propose.approval_mode=approve',
+      'mcp_servers.second-brain.tools.flow_devops_write.approval_mode=approve',
       'mcp_servers.second-brain-app.default_tools_approval_mode=approve',
     ]);
     expect(values).toContain('mcp_servers.second-brain.default_tools_approval_mode=prompt');

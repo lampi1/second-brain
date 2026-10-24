@@ -454,7 +454,9 @@ const MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'pla
  *  agent_catalog / agent_learn_propose are on its own endpoint already */
 const ORCHESTRATOR_HIDDEN: ReadonlySet<string> = new Set(['plan_propose', 'plan_update', 'agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_report', 'agent_ask_parent', 'agent_answer_child', 'agent_children', 'agent_child_feedback', 'agent_catalog', 'agent_learn_propose',
   // it saves scripts with brain_script_save on its own endpoint
-  'brain_script_add']);
+  'brain_script_add',
+  // DevOps writes belong to the chat bound to an adapter step of an automatic flow (ADR 0145)
+  'flow_devops_write']);
 /** the tools only a chat that may delegate can use (chatToolShown): a role that launches no role (Scout, Judge) never
  *  sees them (~1 500 tokens of schemas in every call, each call refused) */
 const DELEGATING_ONLY: ReadonlySet<string> = new Set(['agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_children', 'agent_answer_child', 'agent_child_feedback', 'agent_catalog', 'skills_suggest']);

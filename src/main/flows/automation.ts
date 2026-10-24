@@ -3,9 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import type { FlowRun } from '../../shared/flows';
+import { DEVOPS_WRITE_OPS, type DevOpsWriteGrant } from '../../shared/flow-automation';
 import type { FlowAutomationConfig, FlowAutomationControl, FlowAutomationDecision, FlowAutomationEvent, FlowAutomationPause, FlowAutomationPropose, FlowAutomationRule, FlowAutomationSnapshot, FlowDetectionResult } from '../../shared/flow-automation';
 import type { FlowService } from './service';
-import { identifier, inScope, integer, keys, object, text, validateInputs, validateScope } from './schema';
+import { adapted, identifier, inScope, integer, keys, object, text, validateInputs, validateScope } from './schema';
 
 export interface FlowAutomationOptions {
   file: string; flow: () => FlowService;
@@ -31,6 +32,28 @@ function validateCursor(value: unknown): Record<string, string> {
   }
   if (Buffer.byteLength(JSON.stringify(raw)) > 2 * 1024 * 1024) throw new Error('Detector cursor exceeds byte limit');
   return Object.fromEntries(entries) as Record<string, string>;
+}
+/** Azure DevOps organization, project and field reference names; values come only from the user-approved rule. */
+const ORGANIZATION = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,49}$/, FIELD = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+$/, PROJECT_UNSAFE = /[/\\\x00-\x1f\x7f]/;
+/** Fields no grant may name: identity, revision and project are host-owned. */
+const FIXED_FIELDS = ['system.id', 'system.rev', 'system.teamproject', 'system.workitemtype', 'system.tags'];
+function validateGrant(value: unknown, trigger: Extract<FlowAutomationConfig['trigger'], { kind: 'devops' }>): DevOpsWriteGrant {
+  const raw = object(value, 'devopsWrite'); keys(raw, ['organization', 'projects', 'ops', 'fields'], 'devopsWrite');
+  const organization = text(raw.organization, 'devopsWrite organization', 50);
+  if (!ORGANIZATION.test(organization) || organization.toLowerCase() !== trigger.organization.toLowerCase()) throw new Error('DevOps write organization must equal the trigger organization');
+  const list = (v: unknown, label: string, max: number, itemMax: number): string[] => {
+    if (!Array.isArray(v) || v.length > max) throw new Error(`${label}: invalid list`);
+    const values = v.map(item => text(item, label, itemMax));
+    if (new Set(values.map(item => item.toLowerCase())).size !== values.length) throw new Error(`${label}: duplicate value`);
+    return values;
+  };
+  const projects = list(raw.projects, 'devopsWrite projects', 10, 128), ops = list(raw.ops, 'devopsWrite ops', DEVOPS_WRITE_OPS.length, 40), fields = list(raw.fields, 'devopsWrite fields', 20, 128);
+  if (!projects.length || projects.some(p => PROJECT_UNSAFE.test(p) || p === '.' || p === '..')) throw new Error('DevOps write needs at least one valid project');
+  if (!projects.some(p => p.toLowerCase() === trigger.project.toLowerCase())) throw new Error('DevOps write projects must include the trigger project');
+  if (!ops.length || ops.some(op => !(DEVOPS_WRITE_OPS as readonly string[]).includes(op))) throw new Error('Unknown DevOps write operation');
+  if (fields.some(field => !FIELD.test(field) || FIXED_FIELDS.includes(field.toLowerCase()))) throw new Error('Invalid DevOps write field');
+  if (fields.length && !ops.includes('fields') || !fields.length && ops.includes('fields')) throw new Error('DevOps write fields and the fields operation go together');
+  return { organization, projects, ops: ops as DevOpsWriteGrant['ops'], fields };
 }
 const errorText = (error: unknown): string => (error instanceof Error ? error.message : 'Automatic flow operation failed').slice(0, 2000);
 
@@ -144,6 +167,21 @@ export class FlowAutomationService {
     this.change(() => { event.status = 'started'; event.runId = run.id; event.updatedAt = this.now(); delete event.reason; });
     return run;
   }
+  /** The DevOps write grant of a run started from this rule's own event, or null: enabled exact revision, same owner,
+   *  scope and inputs, the global switch on. Every adapter write re-checks it (ADR 0145). */
+  grantFor(run: FlowRun): { grant: DevOpsWriteGrant; workItemId: number } | null {
+    if (this.stopped || this.storageError || this.data.paused) return null;
+    const match = /^auto:([^:]+):(\d+):[a-f0-9]{64}$/.exec(run.subjectKey);
+    const rule = match && this.data.rules.find(item => item.id === match[1]);
+    if (!rule || String(rule.revision) !== match![2] || rule.status !== 'enabled' || rule.approvedRevision !== rule.revision || !rule.config.devopsWrite || rule.config.trigger.kind !== 'devops'
+      || rule.config.flowId !== run.flowId || rule.config.flowVersion !== run.flowVersion || rule.ownerOrchestratorId !== run.ownerOrchestratorId || hash(rule.config.scope) !== hash(run.scope)) return null;
+    const event = this.data.events.find(item => item.ruleId === rule.id && item.subjectKey === run.subjectKey);
+    if (!event || event.ruleRevision !== rule.revision || event.status === 'cancelled' || (event.runId !== undefined && event.runId !== run.id) || hash(event.inputs) !== hash(run.inputs)) return null;
+    const id = run.inputs['work-item-id'];
+    if (!id || !/^[1-9]\d{0,9}$/.test(id) || !Number.isSafeInteger(Number(id))) return null;
+    // No flow snapshot here: the flow service may call this inside its own commit; poll re-checks usable() each tick.
+    return { grant: copy(rule.config.devopsWrite), workItemId: Number(id) };
+  }
   stop(): void { this.stopped = true; this.invalidate(); }
   private async poll(): Promise<void> {
     const generation = this.generation, flow = this.options.flow(), context = flow.snapshot().contextKey;
@@ -217,7 +255,7 @@ export class FlowAutomationService {
     }
   }
   private config(value: unknown): FlowAutomationConfig {
-    const raw = object(value, 'automatic flow config'); keys(raw, ['flowId', 'flowVersion', 'trigger', 'scope', 'inputs', 'priority'], 'automatic flow config');
+    const raw = object(value, 'automatic flow config'); keys(raw, ['flowId', 'flowVersion', 'trigger', 'scope', 'inputs', 'priority', 'devopsWrite'], 'automatic flow config');
     const trigger = object(raw.trigger, 'trigger');
     if (!['interval', 'devops'].includes(trigger.kind as string)) throw new Error('Unsupported automatic flow trigger');
     keys(trigger, trigger.kind === 'interval' ? ['kind', 'everyMinutes'] : ['kind', 'everyMinutes', 'organization', 'project', 'areaPath', 'workItemType', 'states', 'includeExisting'], 'trigger');
@@ -229,7 +267,8 @@ export class FlowAutomationService {
       if (!Array.isArray(trigger.states) || trigger.states.length < 1 || trigger.states.length > 30 || typeof trigger.includeExisting !== 'boolean') throw new Error('Invalid DevOps trigger');
       config.trigger = { kind: 'devops', everyMinutes, organization: text(trigger.organization, 'organization', 300), project: text(trigger.project, 'project', 300), areaPath: text(trigger.areaPath, 'areaPath', 1000), workItemType: text(trigger.workItemType, 'workItemType', 200), states: [...new Set(trigger.states.map(value => text(value, 'state', 200)))], includeExisting: trigger.includeExisting };
       if (!scope.project || !scope.areaPath || !inScope(scope, config.trigger) || !inScope(config.trigger, scope)) throw new Error('DevOps trigger must exactly match approved project and area scope');
-    }
+      if (raw.devopsWrite !== undefined) config.devopsWrite = validateGrant(raw.devopsWrite, config.trigger);
+    } else if (raw.devopsWrite !== undefined) throw new Error('DevOps write needs a DevOps trigger');
     return config;
   }
   private usable(config: FlowAutomationConfig, eventInputs?: Record<string, string>): void {
@@ -242,7 +281,9 @@ export class FlowAutomationService {
     const required = new Set(version.definition.steps.flatMap(step => [...step.inputs, ...(step.workspaceInput ? [step.workspaceInput] : [])]));
     const inputs = eventInputs ?? config.inputs;
     if ([...required].some(key => !inputs[key]?.trim() && !(eventInputs === undefined && config.trigger.kind === 'devops' && DEVOPS_INPUTS.includes(key)))) throw new Error('Automatic flow is missing required step inputs or workspace');
-    if (version.definition.steps.some(step => step.effect === 'external-write' || step.effect === 'production' || step.action && step.action.kind !== 'builtin')) throw new Error('Automatic flow has an unsupported execution adapter');
+    if (version.definition.steps.some(step => step.effect === 'production' || step.action && step.action.kind !== 'builtin')) throw new Error('Automatic flow has an unsupported execution adapter');
+    // External writes run only through the DevOps write adapter, and only when this exact rule grants it.
+    if (version.definition.steps.some(step => step.effect === 'external-write' && (!adapted(step) || !config.devopsWrite || config.trigger.kind !== 'devops'))) throw new Error('Automatic flow external-write steps need the DevOps write adapter enabled in this configuration');
   }
   private result(value: unknown): FlowDetectionResult {
     const raw = object(value, 'detection'); keys(raw, ['cursor', 'items', 'summary'], 'detection');

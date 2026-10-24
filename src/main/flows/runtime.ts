@@ -9,6 +9,8 @@ import { log } from '../log';
 import { FlowService } from './service';
 import { FlowAutomationService } from './automation';
 import { createDevOpsDetector } from './devops-detector';
+import { DevOpsWriter, type DevOpsWriterOptions } from './devops-writer';
+import { adapted } from './schema';
 import type { FlowAutomationConfig, FlowDetectionResult } from '../../shared/flow-automation';
 
 export interface FlowRuntimeOptions {
@@ -16,10 +18,13 @@ export interface FlowRuntimeOptions {
   changed(snapshot: FlowSnapshot): void;
   send?(ownerId: string, message: string): Promise<void>;
   detect?(config: FlowAutomationConfig, cursor: Record<string, string>, signal?: AbortSignal): Promise<FlowDetectionResult>;
+  /** Tests inject token and fetch for the DevOps write adapter (ADR 0145). */
+  devopsWrite?: Pick<DevOpsWriterOptions, 'token' | 'request'>;
 }
 export function createFlowRuntime(options: FlowRuntimeOptions) {
   const instances = new Map<string, FlowService>();
   const automations = new Map<string, FlowAutomationService>();
+  const writers = new Map<string, DevOpsWriter>();
   const detector = options.detect ?? createDevOpsDetector();
   let selectedKey: string | null = null, stopped = false;
   const reportNotifications = new Map<string, number>();
@@ -48,6 +53,8 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     if (existing) return existing;
     const made = new FlowService({
       file: path.join(options.userData, 'flows', context.key, 'state.json'), contextKey: context.key,
+      // Read live from the automation ledger: a paused, replaced or rejected rule withdraws the grant at once.
+      adapterGranted: run => { try { return !stopped && current().key === context.key && !!automation().grantFor(run); } catch { return false; } },
       changed: snapshot => {
         try { if (options.brainRoot() && current().key === context.key) options.changed({ ...snapshot, automation: automations.get(context.key)?.snapshot() }); }
         catch (error) { log.warn('flows', 'Flow saved but notification unavailable', { cause: String(error), hint: 'Reload flows after reconnecting the brain.' }); }
@@ -149,6 +156,28 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     if (!catalog.length && !runs.length && !snapshot.drafts.length) return '[app flows] Catalogo vuoto. Per richieste ripetibili puoi proporre di costruire un flusso dal brain con domande Sì/No/Altro. Non inventare procedure aziendali; nessun flusso è attivo.';
     return `[app flows · context ${snapshot.contextKey}] ${JSON.stringify({ candidates: candidates.map(v => ({ id: v.definition.id, version: v.version, title: v.definition.title, scope: v.definition.scope })), activeRuns: runs.slice(0, 20).map(r => ({ id: r.id, revision: r.revision, status: r.status, step: r.steps[r.currentStep]?.stepId })), catalog: catalog.slice(0, 20).map(v => ({ id: v.definition.id, version: v.version, title: v.definition.title, aliases: v.definition.aliases })), automation: { paused: snapshot.automation.paused, rules: snapshot.automation.rules.filter(r => r.ownerOrchestratorId === ownerId).map(r => ({ id: r.id, status: r.status })), pendingEvents: snapshot.automation.events.filter(e => ['pending', 'notified', 'blocked'].includes(e.status)).map(e => ({ id: e.id, ruleId: e.ruleId, status: e.status })) }, more: catalog.length > 20 || runs.length > 20 })}. Read app_flow_list/status before acting; ambiguous matches need a question. Matching is not approval. Start/reuse flows only through authenticated Orchestrator tools; never replace required host evidence with prose.`;
   };
-  return { service, automation, snapshot, tick, stop, reportReady, resolveBinding, hint };
+  /** One DevOps write for the chat bound to the running adapter step of a granted automatic run; all limits host-side. */
+  const devopsWrite = async (chatId: string, request: Record<string, unknown>, signal?: AbortSignal): Promise<Record<string, unknown>> => {
+    if (stopped) throw new Error('Flow runtime stopped');
+    const context = current(), flow = service(), snap = flow.snapshot();
+    const chat = options.chats().find(c => c.id === chatId);
+    if (!chat?.run || chat.closedAt || chat.run.endedAt !== undefined || chat.run.report) throw new Error('DevOps write: this chat is not running a flow step.');
+    const run = snap.runs.find(r => { const step = r.steps[r.currentStep]; return r.status === 'active' && step?.status === 'running' && step.chatId === chatId && step.chatRunId === chat.run!.runId && step.taskVersion === (chat.run!.taskVersion ?? 1); });
+    const spec = run && snap.versions.find(v => v.definition.id === run.flowId && v.version === run.flowVersion)?.definition.steps[run.currentStep];
+    if (!run || !spec || !adapted(spec)) throw new Error('DevOps write: the current step of this chat does not declare the devops-write adapter.');
+    const step = run.steps[run.currentStep]!;
+    if (!scopedChat({ chatId, chatRunId: step.chatRunId!, taskVersion: step.taskVersion! }, context.root)) throw new Error('DevOps write: the chat is outside the selected brain.');
+    if (Date.now() - (step.startedAt ?? 0) > spec.timeoutMs) throw new Error('DevOps write: the step timed out.');
+    const granted = automation().grantFor(run);
+    if (!granted) throw new Error('DevOps write: not enabled for this run. The user must approve a configuration with DevOps write for this exact flow version.');
+    let writer = writers.get(context.key);
+    if (!writer) {
+      writer = new DevOpsWriter({ file: path.join(options.userData, 'flows', context.key, 'devops-ledger.json'), ...options.devopsWrite,
+        audit: entry => log.info('flows', 'DevOps write', { data: entry }) });
+      writers.set(context.key, writer);
+    }
+    return writer.execute({ runId: run.id, ...granted }, request, signal);
+  };
+  return { service, automation, snapshot, tick, stop, reportReady, resolveBinding, hint, devopsWrite };
 }
 export type FlowRuntime = ReturnType<typeof createFlowRuntime>;
