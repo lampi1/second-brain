@@ -28,3 +28,4 @@
 .flow-review{min-width:0;overflow-wrap:anywhere}.flow-facts dd,.flow-facts dt{min-width:0;overflow-wrap:anywhere}.flow-auto-summary{min-width:0;container:flow-summary / inline-size}.flow-inputs{grid-template-columns:minmax(70px,.6fr) minmax(0,1fr)}
 @container flow-summary (max-width:520px){.flow-facts{grid-template-columns:minmax(0,1fr);gap:3px}.flow-facts dd{margin-bottom:8px}}
 @container flow-detail (max-width:520px){.flow-facts{grid-template-columns:minmax(0,1fr);gap:3px}.flow-facts dd{margin-bottom:8px}}
+.flow-step-agent{display:inline-flex;align-items:center;gap:8px;margin:2px 0 8px;font-size:var(--fs-xs);color:var(--text-2)}.flow-step-agent[data-compact]{margin:0 0 0 auto;flex-shrink:0}

@@ -15,6 +15,7 @@ import { withApiModels } from './engines/sessions';
 import { AgentCatalogService } from './agents/catalog';
 import { RunFeedback } from './agents/run-feedback';
 import { tierModel } from './agents/model-tier';
+import { flowRoles } from './flows/roles';
 import { roleTableModel } from './agents/role-table';
 import { qualifiedSkillsLine, runtimePluginName } from './agents/role-gate';
 import { createAgentPacks } from './agents/pack/wiring';
@@ -697,6 +698,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   agentPacks.learning.evidenceRuns = () => manager.runs.list();
   const flows = flowsRef = createFlowRuntime({ userData: ctx.userData, brainRoot: () => brain.info().brainRoot,
     chats: () => chats.list(), changed: snapshot => ctx.emitter.emit('flows:changed', snapshot),
+    roles: () => flowRoles(agents.list().profiles, (engine, tier) => tierModel(engine, tier, brain.routingInfo().registry, brain.settings().modelTiers)),
     send: (ownerId, message) => chats.send(ownerId, message, undefined, false, 'Flussi automatici', false, { kind: 'app' }) });
   addChatTools(devopsWriteTools((chatId, request, signal) => flows.devopsWrite(chatId, request, signal)));
   const workflows = workflowsRef = new Workflows(path.join(ctx.userData, 'work-threads.json'), rows => ctx.emitter.emit('work:changed', rows), Date.now, row => {

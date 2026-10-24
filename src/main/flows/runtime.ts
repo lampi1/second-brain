@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import type { ChatSummary } from '../../shared/contract';
-import type { FlowAgentBinding, FlowSnapshot, FlowVerifiedReport } from '../../shared/flows';
+import type { FlowAgentBinding, FlowRoleInfo, FlowSnapshot, FlowVerifiedReport } from '../../shared/flows';
+import type { WorkRoleId } from '../../shared/roles';
 import { log } from '../log';
 import { FlowService } from './service';
 import { FlowAutomationService } from './automation';
@@ -20,6 +21,8 @@ export interface FlowRuntimeOptions {
   detect?(config: FlowAutomationConfig, cursor: Record<string, string>, signal?: AbortSignal): Promise<FlowDetectionResult>;
   /** Tests inject token and fetch for the DevOps write adapter (ADR 0145). */
   devopsWrite?: Pick<DevOpsWriterOptions, 'token' | 'request'>;
+  /** The work roles as the catalog and the routing table resolve them now (wiring.ts); shown per agent step, tierMax checked on propose. */
+  roles?(): Partial<Record<WorkRoleId, FlowRoleInfo>>;
 }
 export function createFlowRuntime(options: FlowRuntimeOptions) {
   const instances = new Map<string, FlowService>();
@@ -29,6 +32,10 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   let selectedKey: string | null = null, stopped = false;
   const reportNotifications = new Map<string, number>();
   const notifyingOwners = new Set<string>();
+  const roles = (): Partial<Record<WorkRoleId, FlowRoleInfo>> | undefined => {
+    try { return options.roles?.(); } catch (error) { log.warn('flows', 'Role catalog unavailable for flows', { cause: String(error), hint: 'Open Agenti to check the role catalog.' }); return undefined; }
+  };
+  const withRoles = (snapshot: FlowSnapshot): FlowSnapshot => { const r = roles(); return r ? { ...snapshot, roles: r } : snapshot; };
   const current = () => {
     const root = options.brainRoot();
     if (!root) { for (const auto of automations.values()) auto.stop(); automations.clear(); selectedKey = null; throw new Error('Collega il brain per definire e usare i flussi.'); }
@@ -54,9 +61,10 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     const made = new FlowService({
       file: path.join(options.userData, 'flows', context.key, 'state.json'), contextKey: context.key,
       // Read live from the automation ledger: a paused, replaced or rejected rule withdraws the grant at once.
+      ...(options.roles ? { tierMax: (role: WorkRoleId) => roles()?.[role]?.tierMax } : {}),
       adapterGranted: run => { try { return !stopped && current().key === context.key && !!automation().grantFor(run); } catch { return false; } },
       changed: snapshot => {
-        try { if (options.brainRoot() && current().key === context.key) options.changed({ ...snapshot, automation: automations.get(context.key)?.snapshot() }); }
+        try { if (options.brainRoot() && current().key === context.key) options.changed(withRoles({ ...snapshot, automation: automations.get(context.key)?.snapshot() })); }
         catch (error) { log.warn('flows', 'Flow saved but notification unavailable', { cause: String(error), hint: 'Reload flows after reconnecting the brain.' }); }
       },
       resolveReport: (binding, reportId): FlowVerifiedReport | null => {
@@ -81,7 +89,10 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
       if (!path.isAbsolute(workspace) || !c.run.scope?.projectRoot || fs.realpathSync(workspace) !== fs.realpathSync(c.run.scope.projectRoot)) return null;
     } catch { return null; }
     const binding = { chatId, chatRunId: c.run.runId, taskVersion: c.run.taskVersion ?? 1 };
-    return scopedChat(binding, current().root) ? binding : null;
+    if (!scopedChat(binding, current().root)) return null;
+    // the role it runs and the tier it launched on, as app_create_chat recorded them (route.agent)
+    const agent = c.route?.agent;
+    return { ...binding, launched: { roleId: c.run.agentId, ...(agent?.tier ? { tier: agent.tier } : {}), ...(agent?.modelFrom === 'table' ? { fromTable: true } : {}) } };
   };
   const automation = (): FlowAutomationService => {
     if (stopped) throw new Error('Flow runtime stopped');
@@ -101,7 +112,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
         return true;
       },
       changed: () => {
-        try { if (!stopped && current().key === context.key) options.changed({ ...flow.snapshot(), automation: automations.get(context.key)?.snapshot() }); }
+        try { if (!stopped && current().key === context.key) options.changed(withRoles({ ...flow.snapshot(), automation: automations.get(context.key)?.snapshot() })); }
         catch (error) { log.warn('flows', 'Automatic flow update unavailable', { cause: String(error), hint: 'Reconnect the brain and reload Flussi.' }); }
       },
     });
@@ -109,7 +120,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   };
   const snapshot = (): FlowSnapshot => {
     const flow = service(), auto = automation();
-    return { ...flow.snapshot(), automation: auto.snapshot() };
+    return withRoles({ ...flow.snapshot(), automation: auto.snapshot() });
   };
   const tick = async (): Promise<void> => {
     if (stopped) return;

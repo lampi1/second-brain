@@ -70,6 +70,8 @@ export const flowsEn = {
   'flows.evidenceFormat': "To approve, document each item on its own line: exact label, colon and result.",
   'flows.manualEvidence': "To confirm completion, describe what you did and the evidence collected.",
   'flows.openAgent': 'Open agent',
+  'flows.byRole': 'chosen by the role',
+  'flows.engineDefault': 'engine default model',
   'flows.workspaceInput': 'Workspace input',
   'flows.automatic': "Automatic",
   'flows.automate': "Set up automatic mode",

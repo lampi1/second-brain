@@ -70,6 +70,8 @@ export const flowsIt = {
   'flows.evidenceFormat': "Per approvare, documenta ogni evidenza su una riga: etichetta esatta, due punti e risultato.",
   'flows.manualEvidence': "Per confermare il completamento, descrivi ciò che hai fatto e le evidenze raccolte.",
   'flows.openAgent': 'Apri agente',
+  'flows.byRole': 'scelto dal ruolo',
+  'flows.engineDefault': 'modello predefinito del motore',
   'flows.workspaceInput': 'Input della cartella di lavoro',
   'flows.automatic': "Automatico",
   'flows.automate': "Configura automatico",

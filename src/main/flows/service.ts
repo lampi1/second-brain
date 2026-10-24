@@ -3,13 +3,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { FlowActivate, FlowAgentBinding, FlowDecision, FlowDraft, FlowMatch, FlowPropose, FlowReceipt, FlowReport, FlowRun, FlowScope, FlowSnapshot, FlowStart, FlowStep, FlowVerifiedReport, FlowVersion } from '../../shared/flows';
-import { adapted, digest, inScope, integer, keys, normalize, object, text, validateDefinition, validateInputs, validateScope } from './schema';
+import { adapted, digest, type RoleTierMax, inScope, integer, keys, normalize, object, text, validateDefinition, validateInputs, validateScope } from './schema';
 
 export interface FlowServiceOptions {
   file: string; contextKey: string; now?: () => number; changed?: (snapshot: FlowSnapshot) => void;
   resolveReport?: (binding: FlowAgentBinding, reportId: string) => FlowVerifiedReport | null;
   /** True only while the user-approved automatic rule that started this run grants the DevOps write adapter (ADR 0145). */
   adapterGranted?: (run: FlowRun) => boolean;
+  /** The catalog's tierMax per role, checked when a draft is proposed. */
+  tierMax?: RoleTierMax;
 }
 type Stored = Omit<FlowSnapshot, 'contextKey' | 'storageError'> & { schema: 1; bindings: string[] };
 const empty = (): Stored => ({ schema: 1, bindings: [], drafts: [], versions: [], active: {}, runs: [] });
@@ -42,7 +44,7 @@ export class FlowService {
   }
   propose(input: FlowPropose): FlowDraft {
     keys(object(input, 'proposal'), ['definition', 'expectedRevision'], 'proposal');
-    const definition = validateDefinition(input.definition), expected = integer(input.expectedRevision, 'expectedRevision');
+    const definition = validateDefinition(input.definition, this.options.tierMax), expected = integer(input.expectedRevision, 'expectedRevision');
     return this.change(() => {
       const previous = this.data.drafts.find(d => d.definition.id === definition.id);
       if ((previous?.revision ?? 0) !== expected) throw new Error('Draft changed; review its current revision');
@@ -96,6 +98,9 @@ export class FlowService {
       if (this.data.bindings.includes(bindingKey)) throw new Error('Agent run/task identity was already bound to a flow step');
       if (definition.reviewOf && run.steps.find(s => s.stepId === definition.reviewOf)?.chatId === binding.chatId) throw new Error('Independent review requires a different chat');
       if (binding.chatId === ownerId) throw new Error('The Orchestrator cannot certify its own flow step');
+      // a declared role and tier are what the chat really runs: open it with that role and tier (app_create_chat tier)
+      if (definition.role && binding.launched?.roleId !== definition.role) throw new Error(`This step runs as ${definition.role}: open the chat with that role`);
+      if (definition.tier && (binding.launched?.tier !== definition.tier || binding.launched.fromTable)) throw new Error(`This step runs on tier ${definition.tier}: open the chat with tier ${definition.tier}`);
       this.data.bindings.push(bindingKey);
       step.chatId = binding.chatId; step.chatRunId = binding.chatRunId; step.taskVersion = binding.taskVersion; step.status = 'running'; step.startedAt = this.now(); step.attempts++;
       this.touch(run); return run;

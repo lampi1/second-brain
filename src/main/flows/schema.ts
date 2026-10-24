@@ -1,6 +1,7 @@
 // Strict flow definition validation and canonical hashing; the host rejects unknown executable fields.
 import { createHash } from 'node:crypto';
 import type { FlowDefinition, FlowScope, FlowStep } from '../../shared/flows';
+import { MODEL_TIERS, WORK_ROLE_IDS, tierRank, type ModelTier, type WorkRoleId } from '../../shared/roles';
 
 export const BUILTIN_CHECKS = ['scope-present', 'inputs-present'] as const;
 /** The only host execution adapter (ADR 0145): DevOps writes through the app, limited by the user-approved grant. */
@@ -41,12 +42,14 @@ export function validateInputs(value: unknown): Record<string, string> {
   const raw = object(value, 'inputs'); if (Object.keys(raw).length > 100) throw new Error('Too many inputs');
   return Object.fromEntries(Object.entries(raw).sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => [identifier(key, 'input name'), text(value, 'input value', 16000, true)]));
 }
-export function validateDefinition(value: unknown): FlowDefinition {
+/** The highest tier a role may run now (the catalog's tierMax); given on propose so a step never asks above it. */
+export type RoleTierMax = (role: WorkRoleId) => ModelTier | undefined;
+export function validateDefinition(value: unknown, tierMax?: RoleTierMax): FlowDefinition {
   const raw = object(value, 'definition'); keys(raw, ['id', 'title', 'description', 'category', 'aliases', 'scope', 'steps'], 'definition');
   if (!Array.isArray(raw.steps) || !raw.steps.length || raw.steps.length > 60) throw new Error('A flow needs 1–60 steps');
   const ids: string[] = [];
   const steps: FlowStep[] = raw.steps.map((value: unknown) => {
-    const row = object(value, 'step'); keys(row, ['id', 'title', 'kind', 'instructions', 'inputs', 'action', 'evidence', 'timeoutMs', 'maxAttempts', 'effect', 'reviewOf', 'workspaceInput', 'adapter'], 'step');
+    const row = object(value, 'step'); keys(row, ['id', 'title', 'kind', 'instructions', 'inputs', 'action', 'evidence', 'timeoutMs', 'maxAttempts', 'effect', 'reviewOf', 'workspaceInput', 'adapter', 'role', 'tier'], 'step');
     const id = identifier(row.id, 'step id'); if (ids.includes(id)) throw new Error('Duplicate step id');
     const kind = text(row.kind, 'kind') as FlowStep['kind']; if (!['check', 'agent', 'approval', 'manual'].includes(kind)) throw new Error('Unknown step kind');
     const effect = text(row.effect, 'effect') as FlowStep['effect']; if (!['read-only', 'code', 'external-write', 'production'].includes(effect)) throw new Error('Unknown effect');
@@ -71,9 +74,16 @@ export function validateDefinition(value: unknown): FlowDefinition {
       reviewOf = identifier(row.reviewOf, 'reviewOf');
       if (kind !== 'agent' || !ids.includes(reviewOf) || (raw.steps as Record<string, unknown>[]).find(s => s.id === reviewOf)?.kind !== 'agent') throw new Error('Review must reference an earlier agent step');
     }
+    const role = row.role === undefined ? undefined : text(row.role, 'role', 40) as WorkRoleId;
+    if (role !== undefined && (!(WORK_ROLE_IDS as readonly string[]).includes(role) || kind !== 'agent')) throw new Error('role: one of strategist|scout|artisan|sentinel|herald, on an agent step only');
+    const tier = row.tier === undefined ? undefined : text(row.tier, 'tier', 10) as ModelTier;
+    if (tier !== undefined && (!(MODEL_TIERS as readonly string[]).includes(tier) || !role)) throw new Error('tier: one of light|mid|top, on a step that declares its role');
+    if (reviewOf && role && role !== 'sentinel') throw new Error('A review step runs as sentinel');
+    const max = role && tier && tierMax ? tierMax(role) : undefined;
+    if (role && tier && tierMax && (!max || tierRank(tier) > tierRank(max))) throw new Error(`tier ${tier} exceeds the ${role} role's maximum (${max ?? 'unknown role'})`);
     ids.push(id);
     return { id, title: text(row.title, 'step title', 300), kind, instructions: text(row.instructions, 'instructions', 16000), inputs,
-      ...(action ? { action } : {}), ...(workspaceInput ? { workspaceInput } : {}), evidence, timeoutMs: integer(row.timeoutMs, 'timeoutMs', 1000, 86_400_000), maxAttempts: integer(row.maxAttempts, 'maxAttempts', 1, 5), effect, ...(reviewOf ? { reviewOf } : {}), ...(row.adapter ? { adapter: DEVOPS_WRITE_ADAPTER } : {}) };
+      ...(action ? { action } : {}), ...(workspaceInput ? { workspaceInput } : {}), evidence, timeoutMs: integer(row.timeoutMs, 'timeoutMs', 1000, 86_400_000), maxAttempts: integer(row.maxAttempts, 'maxAttempts', 1, 5), effect, ...(reviewOf ? { reviewOf } : {}), ...(row.adapter ? { adapter: DEVOPS_WRITE_ADAPTER } : {}), ...(role ? { role } : {}), ...(tier ? { tier } : {}) };
   });
   const aliases = strings(raw.aliases, 'aliases', 40, 200);
   if (aliases.some(alias => !normalize(alias))) throw new Error('Aliases need at least one letter or number');

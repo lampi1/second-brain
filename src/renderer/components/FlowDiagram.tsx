@@ -5,6 +5,7 @@ import { t, locale } from '../i18n';
 import { useApp } from '../store/store';
 import { openChatRef } from '../actions';
 import { FlowLinks } from './FlowDefinition';
+import { FlowStepAgent } from './FlowStepAgent';
 export function FlowDiagram({ definition, run }: { definition: FlowDefinition; run?: FlowRun }) {
   const [picked, setPicked] = useState<string | null>(null);
   const prefix = useId();
@@ -33,6 +34,7 @@ export function FlowDiagram({ definition, run }: { definition: FlowDefinition; r
             return <li key={step.id} style={{ top: index * 112 + 24 }}><button type="button" className="flow-node" data-testid="flow-node" data-status={status} data-current={!!run && run.currentStep === index && run.status !== 'completed'} aria-pressed={selected?.id === step.id} aria-controls={`${prefix}-inspector`} onClick={() => setPicked(step.id)}>
               <span className="flow-node-index">{status === 'completed' ? '✓' : String(index + 1).padStart(2, '0')}</span>
               <span className="flow-node-content"><strong>{step.title}</strong><span>{t(`flows.${step.kind === 'approval' ? 'gate' : step.kind}`)}{recorded ? ` · ${t(`flows.${status}`)}` : ''}</span></span>
+              <FlowStepAgent step={step} chatId={recorded?.chatId} compact />
               {status === 'running' && <span className="flow-node-live" aria-hidden="true" />}
             </button></li>;
           })}
@@ -42,6 +44,7 @@ export function FlowDiagram({ definition, run }: { definition: FlowDefinition; r
     <aside className="flow-inspector" id={`${prefix}-inspector`} aria-label={t('flows.inspect')} data-testid="flow-inspector">
       {selected ? <><span className="flow-eyebrow">{t('flows.inspect')}</span><h3>{selected.title}</h3>
         <span className="flow-badge" data-status={state?.status}>{t(`flows.${state?.status ?? (selected.kind === 'approval' ? 'gate' : selected.kind)}`)}</span>
+        <FlowStepAgent step={selected} chatId={state?.chatId} />
         <p>{selected.instructions}</p>
         {selected.reviewOf && <p className="flow-review-relation">{t('flows.reviewOf')}: <strong>{definition.steps.find(step => step.id === selected.reviewOf)?.title ?? selected.reviewOf}</strong></p>}
         {state?.reason && <p className="flow-block" role="status">{state.reason}</p>}

@@ -70,6 +70,8 @@ export const flowsDe = {
   'flows.evidenceFormat': "Dokumentiere für die Freigabe jeden Nachweis in einer Zeile: genaue Bezeichnung, Doppelpunkt und Ergebnis.",
   'flows.manualEvidence': "Beschreibe zur Bestätigung des Abschlusses, was du getan und welche Nachweise du gesammelt hast.",
   'flows.openAgent': 'Agent öffnen',
+  'flows.byRole': 'von der Rolle gewählt',
+  'flows.engineDefault': 'Standardmodell der Engine',
   'flows.workspaceInput': 'Eingabe für den Arbeitsordner',
   'flows.automatic': "Automatisch",
   'flows.automate': "Automatik einrichten",

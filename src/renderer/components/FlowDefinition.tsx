@@ -3,6 +3,7 @@ import type { FlowDefinition as Definition, FlowRun } from '@shared/flows';
 import { t, locale } from '../i18n';
 import { linksIn } from '../lib/askContext';
 import { openFile } from './GenUi';
+import { FlowStepAgent } from './FlowStepAgent';
 export function FlowLinks({ sources, chatId }: { sources: string[]; chatId?: string }) {
   const links = linksIn(sources);
   return links.length ? <div className="ctx-links">{links.map(link => link.kind === 'file'
@@ -21,6 +22,7 @@ export function FlowDefinition({ definition, run }: { definition: Definition; ru
         return <li key={step.id} className="flow-step" data-current={run?.currentStep === index}>
           <span className="flow-step-n">{index + 1}</span><div>
             <div className="flow-step-title"><strong>{step.title}</strong><span className="flow-badge">{t(`flows.${step.kind === 'approval' ? 'gate' : step.kind}`)}</span>{state && <span className="flow-badge" data-status={state.status}>{t(`flows.${state.status}`)}</span>}</div>
+            <FlowStepAgent step={step} chatId={state?.chatId} />
             <p>{step.instructions}</p>
             {step.action && <p><code>{step.action.kind}: {step.action.ref}</code></p>}
             <details><summary>{t('flows.constraints')}</summary><dl className="flow-facts"><dt>{t('flows.inputs')}</dt><dd>{step.inputs.join(' · ') || '—'}</dd>{step.workspaceInput && <><dt>{t('flows.workspaceInput')}</dt><dd>{step.workspaceInput}</dd></>}<dt>{t('flows.effect')}</dt><dd>{step.effect}</dd><dt>{t('flows.timeout')}</dt><dd>{step.timeoutMs} ms</dd><dt>{t('flows.attempts')}</dt><dd>{state ? `${state.attempts} / ` : ''}{step.maxAttempts}</dd>{step.reviewOf && <><dt>{t('flows.reviewOf')}</dt><dd>{step.reviewOf}</dd></>}</dl></details>
