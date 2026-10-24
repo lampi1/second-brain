@@ -78,6 +78,8 @@ import { createBrowserModule, mcpPortFromEnv } from './browser/service';
 import { Workflows } from './workflows/service';
 import { createFlowRuntime, type FlowRuntime } from './flows/runtime';
 import { devopsWriteTools } from './flows/devops-write-tool';
+import { testDbReadTools } from './flows/test-db-tool';
+import { testDbCredential } from './flows/test-db-env';
 import { AGENT_LABEL, appControlTools, orchestratorEndpointAuth, type ToolDef, type ToolOut } from './appctl/tools';
 import { ChatMail, mailTools } from './chats/mail';
 import { brainClassifier } from './chats/orchestrator-delivery';
@@ -696,11 +698,12 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const autoCloseTimer = setInterval(() => { void autoCloseService.tick().catch(e => log.warn('chats', 'automatic archive suspended', { cause: errText(e) })); }, 1000);
   autoCloseTimer.unref();
   agentPacks.learning.evidenceRuns = () => manager.runs.list();
-  const flows = flowsRef = createFlowRuntime({ userData: ctx.userData, brainRoot: () => brain.info().brainRoot,
+  const flows = flowsRef = createFlowRuntime({ userData: ctx.userData, testDbRead: { env: testDbCredential }, brainRoot: () => brain.info().brainRoot,
     chats: () => chats.list(), changed: snapshot => ctx.emitter.emit('flows:changed', snapshot),
     roles: () => flowRoles(agents.list().profiles, (engine, tier) => tierModel(engine, tier, brain.routingInfo().registry, brain.settings().modelTiers)),
     send: (ownerId, message) => chats.send(ownerId, message, undefined, false, 'Flussi automatici', false, { kind: 'app' }) });
   addChatTools(devopsWriteTools((chatId, request, signal) => flows.devopsWrite(chatId, request, signal)));
+  addChatTools(testDbReadTools((chatId, request, signal) => flows.testDbRead(chatId, request, signal)));
   const workflows = workflowsRef = new Workflows(path.join(ctx.userData, 'work-threads.json'), rows => ctx.emitter.emit('work:changed', rows), Date.now, row => {
     const linked = chats.list().filter(c => row.chatIds.includes(c.id) && c.plan);
     const approved = linked.filter(c => ['running', 'done'].includes(c.plan!.phase) && (c.run?.plan?.approvedAt ?? 0) > 0);

@@ -1,5 +1,5 @@
 // Exact automatic configuration is shared by review and the catalog so consent stays tied to visible scope, inputs
-// and the DevOps write grant (ADR 0145).
+// and all host execution grants.
 import type { FlowAutomationConfig } from '@shared/flow-automation';
 import { t } from '../i18n';
 export function FlowAutomationSummary({ config }: { config: FlowAutomationConfig }) {
@@ -14,6 +14,7 @@ export function FlowAutomationSummary({ config }: { config: FlowAutomationConfig
       {trigger.kind === 'devops' && <><dt>{t('flows.devopsWrite')}</dt><dd data-testid="flow-auto-devops-write">{write
         ? <>{write.organization} · {write.projects.join(' · ')}<br />{write.ops.map(op => t(`flows.writeOp.${op}`)).join(' · ')}{write.fields.length ? <><br />{write.fields.join(' · ')}</> : null}{write.mentions?.length ? <><br /><span data-testid="flow-auto-mentions">{t('flows.devopsMentions')}: {write.mentions.join(' · ')}</span></> : null}<br /><span className="flows-muted">{t('flows.devopsWriteScope')}</span></>
         : t('flows.devopsWriteNone')}</dd></>}
+      <dt>{t('flows.testDbRead')}</dt><dd data-testid="flow-auto-test-db-read">{config.testDbRead ? <>{config.testDbRead.targetIds.join(' · ')}<br /><span className="flows-muted">{t('flows.testDbReadScope')}</span></> : t('flows.testDbReadNone')}</dd>
       <dt>{t('flows.inputs')}</dt><dd>{Object.entries(config.inputs).length ? <dl className="flow-facts flow-inputs">{Object.entries(config.inputs).map(([name, value]) => <div className="flow-input-pair" key={name}><dt>{name}</dt><dd>{value}</dd></div>)}</dl> : '—'}</dd>
       <dt>{t('flows.priority')}</dt><dd>{t(`flows.${config.priority}`)}</dd>
     </dl>

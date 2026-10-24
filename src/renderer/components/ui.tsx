@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 import { inSelectList } from './Select';
 import { useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ComponentProps, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import type { ChatSummary } from '@shared/contract';
+import { isolateModalKey, modalTabStops } from '../lib/modal-keyboard';
 import { stateInfo } from '../lib/format';
 import { registerOverlay, report, viewRects } from '../lib/viewports';
 import { splitTip } from '../lib/tips';
@@ -154,10 +155,10 @@ export type ModalSize = 's' | 'm' | 'side';
  *  default for a side panel); the children in the scrolling body; `footer` fixed at the bottom, the primary action last
  *  (on the right), a `.sp` in it pushes what comes before to the left. `onSubmit` wraps the three in a form (Enter in a
  *  field submits). Without `title` the children are the whole dialog (the palette, the image viewers, the setup wizard). */
-export function Modal({ onClose, children, label, testid, className = '', top, backdropCloses = true, size, title, subtitle, icon, aside, footer, closeButton, onSubmit, bodyClassName = '', style }: {
+export function Modal({ onClose, children, label, testid, className = '', top, backdropCloses = true, size, title, subtitle, icon, aside, footer, closeButton, onSubmit, bodyClassName = '', style, isolateWorkspace = false }: {
   onClose: () => void; children: ReactNode; label: string; testid?: string; className?: string; top?: boolean; backdropCloses?: boolean;
   size?: ModalSize; title?: ReactNode; subtitle?: ReactNode; icon?: ReactNode; aside?: ReactNode; footer?: ReactNode; closeButton?: boolean;
-  onSubmit?: () => void; bodyClassName?: string; style?: CSSProperties;
+  onSubmit?: () => void; bodyClassName?: string; style?: CSSProperties; isolateWorkspace?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const backdrop = useRef<HTMLDivElement>(null);
@@ -178,7 +179,7 @@ export function Modal({ onClose, children, label, testid, className = '', top, b
     const key = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { if (inSelectList(e.target)) return; e.preventDefault(); e.stopPropagation(); close.current(); return; }
       if (e.key !== 'Tab' || !el) return;
-      const f = [...el.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')].filter(x => !x.hasAttribute('disabled') && x.offsetParent !== null);
+      const f = modalTabStops(el);
       if (!f.length) return;
       const first = f[0]!;
       const last = f[f.length - 1]!;
@@ -208,7 +209,7 @@ export function Modal({ onClose, children, label, testid, className = '', top, b
   );
   return createPortal(
     <div ref={backdrop} className={`backdrop ${top ? 'backdrop-top' : ''} ${size === 'side' ? 'backdrop-side' : ''}`} onPointerDown={e => { if (backdropCloses && e.target === e.currentTarget) close.current(); }}>
-      <div ref={ref} className={`modal ${size ? `modal-${size}` : ''} ${title !== undefined ? 'modal-std' : ''} ${className}`} role="dialog" aria-modal="true" aria-label={label} data-testid={testid} tabIndex={-1} style={style}>
+      <div ref={ref} className={`modal ${size ? `modal-${size}` : ''} ${title !== undefined ? 'modal-std' : ''} ${className}`} role="dialog" aria-modal="true" aria-label={label} data-testid={testid} tabIndex={-1} style={style} onKeyDown={isolateWorkspace ? isolateModalKey : undefined} onPaste={isolateWorkspace ? event => event.stopPropagation() : undefined}>
         {onSubmit ? <form onSubmit={e => { e.preventDefault(); onSubmit(); }}>{parts}</form> : parts}
       </div>
     </div>,

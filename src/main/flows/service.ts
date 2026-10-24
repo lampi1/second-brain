@@ -2,15 +2,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { renameRetrying } from '../rules/storage';
-import { randomUUID } from 'node:crypto';
-import type { FlowActivate, FlowAgentBinding, FlowDecision, FlowDefinition, FlowDraft, FlowMatch, FlowPropose, FlowReceipt, FlowReport, FlowRun, FlowScope, FlowSnapshot, FlowStart, FlowStep, FlowStepTierEdit, FlowVerifiedReport, FlowVersion } from '../../shared/flows';
-import { adapted, digest, type RoleTierMax, inScope, integer, keys, normalize, object, text, validateDefinition, validateInputs, validateScope } from './schema';
+import { createHash, randomUUID } from 'node:crypto';
+import type { FlowActivate, FlowAgentBinding, FlowDecision, FlowDefinition, FlowDraft, FlowMatch, FlowPropose, FlowReceipt, FlowReport, FlowRun, FlowScope, FlowSnapshot, FlowStart, FlowStep, FlowTestDbEvidence, FlowStepTierEdit, FlowVerifiedReport, FlowVersion } from '../../shared/flows';
+import { adapted, testDbAdapted, digest, type RoleTierMax, inScope, integer, keys, normalize, object, text, validateDefinition, validateInputs, validateScope } from './schema';
 
 export interface FlowServiceOptions {
   file: string; contextKey: string; now?: () => number; changed?: (snapshot: FlowSnapshot) => void;
   resolveReport?: (binding: FlowAgentBinding, reportId: string) => FlowVerifiedReport | null;
-  /** True only while the user-approved automatic rule that started this run grants the DevOps write adapter (ADR 0145). */
-  adapterGranted?: (run: FlowRun) => boolean;
+  /** True only while the user-approved automatic rule that started this run grants the declared host adapter. */
+  adapterGranted?: (run: FlowRun, step: FlowStep) => boolean;
   /** The catalog's tierMax per role, checked when a draft is proposed. */
   tierMax?: RoleTierMax;
 }
@@ -124,6 +124,30 @@ export class FlowService {
       this.touch(run); return run;
     });
   }
+  /** Host-only journal: persist the query hash and trusted configured database before the executor is allowed to touch a test database. */
+  beginTestDbQuery(runId: string, binding: FlowAgentBinding, targetId: string, database: string, query: string): FlowTestDbEvidence {
+    return this.change(() => {
+      const run = this.run(runId), step = run.steps[run.currentStep];
+      const spec = this.version(run.flowId, run.flowVersion).definition.steps[run.currentStep];
+      if (run.status !== 'active' || step?.status !== 'running' || !spec || !testDbAdapted(spec) || this.unsupported(run, spec)
+        || step.chatId !== binding.chatId || step.chatRunId !== binding.chatRunId || step.taskVersion !== binding.taskVersion) throw new Error('Test DB query binding is stale');
+      if ((run.testDbEvidence?.length ?? 0) >= 500) throw new Error('Test DB query evidence limit reached');
+      text(query, 'query', 16384);
+      const evidence: FlowTestDbEvidence = { id: randomUUID(), runId: run.id, stepId: step.stepId, chatRunId: binding.chatRunId, taskVersion: binding.taskVersion,
+        targetId: text(targetId, 'targetId', 64), database: text(database, 'database', 128), queryHash: createHash('sha256').update(query, 'utf8').digest('hex'), at: this.now(), status: 'pending' };
+      (run.testDbEvidence ??= []).push(evidence); this.touch(run); return evidence;
+    });
+  }
+  /** Completion metadata only: raw driver errors and result rows never enter durable flow storage. */
+  finishTestDbQuery(runId: string, evidenceId: string, result?: { rowCount: number; truncated: boolean }): void {
+    this.change(() => {
+      const run = this.run(runId), evidence = run.testDbEvidence?.find(item => item.id === evidenceId);
+      if (!evidence || evidence.status !== 'pending') throw new Error('Test DB evidence is missing or already completed');
+      evidence.status = result ? 'ok' : 'error'; evidence.finishedAt = this.now();
+      if (result) { evidence.rowCount = integer(result.rowCount, 'rowCount'); evidence.truncated = result.truncated; }
+      this.touch(run);
+    });
+  }
   report(input: FlowReport, ownerId: string): FlowRun {
     keys(object(input, 'report'), ['runId', 'expectedRevision', 'stepId', 'reportId'], 'report');
     return this.change(() => {
@@ -189,9 +213,9 @@ export class FlowService {
   /** Production and non-builtin actions never run; an external write runs only as a granted DevOps adapter step. */
   private unsupported(run: FlowRun, spec: FlowStep): boolean {
     if (spec.effect === 'production' || (spec.action && spec.action.kind !== 'builtin')) return true;
-    if (spec.effect !== 'external-write') return false;
-    if (!adapted(spec)) return true;
-    try { return this.options.adapterGranted?.(run) !== true; } catch { return true; }
+    if (spec.effect !== 'external-write' && !testDbAdapted(spec)) return false;
+    if (!adapted(spec) && !testDbAdapted(spec)) return true;
+    try { return this.options.adapterGranted?.(run, spec) !== true; } catch { return true; }
   }
   private finish(run: FlowRun, receipt: FlowReceipt): void { const step = run.steps[run.currentStep]!; step.status = 'completed'; delete step.reason; delete step.decisionPending; step.receipt = receipt; run.currentStep++; }
   private block(run: FlowRun, reason: string): void { run.status = 'blocked'; run.steps[run.currentStep]!.status = 'blocked'; run.steps[run.currentStep]!.decisionPending = true; run.steps[run.currentStep]!.reason = reason; run.updatedAt = this.now(); }
@@ -237,11 +261,27 @@ export class FlowService {
     object(data.active, 'active');
     for (const [id, version] of Object.entries(data.active)) { integer(version, 'active version', 1); if (!versionIds.has(`${id}:${version}`)) throw new Error('Invalid active version'); }
     for (const run of data.runs) {
-      keys(object(run, 'run'), ['id', 'revision', 'flowId', 'flowVersion', 'definitionDigest', 'ownerOrchestratorId', 'subjectKey', 'scope', 'inputs', 'status', 'currentStep', 'steps', 'createdAt', 'updatedAt'], 'run');
+      keys(object(run, 'run'), ['id', 'revision', 'flowId', 'flowVersion', 'definitionDigest', 'ownerOrchestratorId', 'subjectKey', 'scope', 'inputs', 'status', 'currentStep', 'steps', 'createdAt', 'updatedAt', 'testDbEvidence'], 'run');
       text(run.id, 'run id', 200); integer(run.revision, 'revision', 1); text(run.ownerOrchestratorId, 'owner', 200); text(run.subjectKey, 'subjectKey', 500);
       validateScope(run.scope); validateInputs(run.inputs); integer(run.createdAt, 'createdAt'); integer(run.updatedAt, 'updatedAt');
       const version = data.versions.find(v => v.definition.id === run.flowId && v.version === run.flowVersion);
       if (!version || version.digest !== run.definitionDigest || !inScope(version.definition.scope, run.scope) || runIds.has(run.id) || !Array.isArray(run.steps) || run.steps.length !== version.definition.steps.length) throw new Error('Invalid pinned flow run'); runIds.add(run.id);
+      if (run.testDbEvidence !== undefined) {
+        if (!Array.isArray(run.testDbEvidence) || run.testDbEvidence.length > 500) throw new Error('Invalid test DB evidence');
+        const ids = new Set<string>();
+        for (const evidence of run.testDbEvidence) {
+          keys(object(evidence, 'test DB evidence'), ['id', 'runId', 'stepId', 'chatRunId', 'taskVersion', 'targetId', 'database', 'queryHash', 'at', 'status', 'finishedAt', 'rowCount', 'truncated'], 'test DB evidence');
+          text(evidence.id, 'evidence id', 200); text(evidence.targetId, 'targetId', 64); text(evidence.database, 'database', 128);
+          if (evidence.runId !== run.id || typeof evidence.queryHash !== 'string' || !/^[a-f0-9]{64}$/.test(evidence.queryHash)) throw new Error('Invalid test DB query hash or run');
+          integer(evidence.at, 'evidence time'); integer(evidence.taskVersion, 'evidence task', 1);
+          const index = run.steps.findIndex(step => step.stepId === evidence.stepId), step = run.steps[index], spec = version.definition.steps[index];
+          if (!step || !spec || !testDbAdapted(spec) || !data.bindings.includes(JSON.stringify([evidence.chatRunId, evidence.taskVersion])) || ids.has(evidence.id)
+            || !['pending', 'ok', 'error'].includes(evidence.status)) throw new Error('Invalid test DB evidence binding');
+          ids.add(evidence.id);
+          if (evidence.status !== 'pending') integer(evidence.finishedAt, 'evidence finish');
+          if (evidence.status === 'ok') { integer(evidence.rowCount, 'row count'); if (typeof evidence.truncated !== 'boolean') throw new Error('Invalid test DB truncation'); }
+        }
+      }
       integer(run.currentStep, 'currentStep', 0, run.steps.length);
       if (!['active', 'approval', 'blocked', 'completed'].includes(run.status) || (run.status === 'completed') !== (run.currentStep === run.steps.length)) throw new Error('Invalid run status');
       run.steps.forEach((step, i) => {

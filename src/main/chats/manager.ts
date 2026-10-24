@@ -456,7 +456,7 @@ const ORCHESTRATOR_HIDDEN: ReadonlySet<string> = new Set(['agent_work_decisions'
   // it saves scripts with brain_script_save on its own endpoint
   'brain_script_add',
   // DevOps writes belong to the chat bound to an adapter step of an automatic flow (ADR 0145)
-  'flow_devops_write']);
+  'flow_devops_write', 'flow_test_db_query']);
 /** the tools only a chat that may delegate can use (chatToolShown): a role that launches no role (Scout, Judge) never
  *  sees them (~1 500 tokens of schemas in every call, each call refused) */
 const DELEGATING_ONLY: ReadonlySet<string> = new Set(['agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_children', 'agent_answer_child', 'agent_child_feedback', 'agent_catalog', 'skills_suggest']);

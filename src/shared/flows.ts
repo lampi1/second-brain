@@ -9,8 +9,10 @@ export interface FlowStep {
   inputs: string[]; action?: { kind: 'builtin' | 'script' | 'query' | 'action'; ref: string };
   evidence: string[]; timeoutMs: number; maxAttempts: number;
   effect: 'read-only' | 'code' | 'external-write' | 'production'; reviewOf?: string; workspaceInput?: string;
-  /** An external-write agent step that writes only through the host's DevOps write adapter (ADR 0145). */
-  adapter?: 'devops-write';
+  /** A host-controlled adapter, authorized by the exact automatic-flow grant. */
+  adapter?: 'devops-write' | 'test-db-read';
+  /** Explicit test DB read capability; may accompany a DevOps write adapter, with both grants required. */
+  testDbRead?: true;
   /** An agent step's role: the bound chat must run it. Absent = the Orchestrator picks the role. */
   role?: WorkRoleId;
   /** An agent step's model tier (at most the role's tierMax; needs role): the bound chat must run on it. Absent = the role's own choice. */
@@ -38,11 +40,17 @@ export interface FlowStepRun {
   attempts: number; startedAt?: number; chatId?: string; chatRunId?: string; taskVersion?: number;
   reason?: string; receipt?: FlowReceipt; decisionPending?: boolean;
 }
+/** Durable query evidence. Never stores raw SQL, credentials, raw driver errors or database result rows. */
+export interface FlowTestDbEvidence {
+  id: string; runId: string; stepId: string; chatRunId: string; taskVersion: number; targetId: string; database: string; queryHash: string;
+  at: number; status: 'pending' | 'ok' | 'error'; finishedAt?: number; rowCount?: number; truncated?: boolean;
+}
 export interface FlowRun {
   id: string; revision: number; flowId: string; flowVersion: number; definitionDigest: string;
   ownerOrchestratorId: string; subjectKey: string; scope: FlowScope; inputs: Record<string, string>;
   status: 'active' | 'approval' | 'blocked' | 'completed'; currentStep: number; steps: FlowStepRun[];
   createdAt: number; updatedAt: number;
+  testDbEvidence?: FlowTestDbEvidence[];
 }
 export interface FlowSnapshot {
   contextKey: string; drafts: FlowDraft[]; versions: FlowVersion[]; active: Record<string, number>;

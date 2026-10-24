@@ -47,7 +47,8 @@ export function migrate(root: string, edits: readonly MigrationEdit[]): Migratio
   git(root, 'tag', tag);
   // No recursive deletes: on failure the stage and tag remain inspectable; the source remains recoverable.
   try {
-    fs.cpSync(root, stage, { recursive: true, errorOnExist: true, force: false });
+    // mkdtemp already reserved the destination: copy its absent children without relaxing no-overwrite protection.
+    for (const entry of fs.readdirSync(root)) fs.cpSync(path.join(root, entry), path.join(stage, entry), { recursive: true, errorOnExist: true, force: false });
     for (const edit of edits) {
       const file = confined(stage, edit.file);
       if (edit.after === null) fs.unlinkSync(file);
@@ -61,7 +62,7 @@ export function migrate(root: string, edits: readonly MigrationEdit[]): Migratio
     catch (error) { fs.renameSync(backup, root); fs.unlinkSync(journal); throw error; }
     fs.unlinkSync(journal);
     return { root, backup, tag };
-  } catch { throw new Error(`Migration failed; preserved stage ${stage}. Backup tag: ${tag}. Original brain was retained or restored.`); }
+  } catch (cause) { throw new Error(`Migration failed; preserved stage ${stage}. Backup tag: ${tag}. Original brain was retained or restored.`, { cause }); }
 }
 export function rollback(receipt: MigrationReceipt): string {
   const { root, backup, tag } = receipt;
