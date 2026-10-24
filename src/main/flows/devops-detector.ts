@@ -3,11 +3,12 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import type { FlowAutomationConfig, FlowDetectionItem, FlowDetectionResult, FlowTrigger } from '../../shared/flow-automation';
+import { filterMisses, splitTags } from './filters';
 
 const RESOURCE = '499b84ac-1321-427f-aa17-267ca6975798';
 const PAGE_SIZE = 200, MAX_ITEMS = 2000, MAX_CURSOR = 10_000, MAX_BYTES = 2 * 1024 * 1024;
 const TIMEOUT_MS = 60_000, BASELINE = '__devopsBaseline';
-const FIELDS = ['System.Id', 'System.Rev', 'System.Title', 'System.TeamProject', 'System.AreaPath', 'System.WorkItemType', 'System.State'];
+const FIELDS = ['System.Id', 'System.Rev', 'System.Title', 'System.TeamProject', 'System.AreaPath', 'System.WorkItemType', 'System.State', 'System.Tags', 'System.IterationPath'];
 const LOGIN = 'DevOps: accesso Azure CLI non disponibile. Esegui az login.';
 type Trigger = Extract<FlowTrigger, { kind: 'devops' }>;
 export interface DevOpsDetectorOptions {
@@ -33,7 +34,7 @@ function checkedTrigger(config: FlowAutomationConfig): Trigger {
     || t.states.length > 32 || !t.states.every(s => text(s, 128)) || typeof t.includeExisting !== 'boolean') {
     return fail('DevOps: filtro non valido. Specifica organizzazione, progetto, area, tipo e stati.');
   }
-  return { ...t, areaPath: areaOf(t.areaPath), states: [...t.states] };
+  return { ...t, areaPath: areaOf(t.areaPath), states: [...t.states], ...(t.iterationPath ? { iterationPath: areaOf(t.iterationPath) } : {}) };
 }
 
 /** CLI output remains in memory only. Windows needs its .cmd launcher, with an entirely constant command line. */
@@ -117,7 +118,8 @@ export function createDevOpsDetector(options: DevOpsDetectorOptions = {}) {
           headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(body) }), controller.signal);
         return readJson(response, controller.signal);
       };
-      const where = `[System.TeamProject] = ${literal(t.project)} AND [System.AreaPath] UNDER ${literal(t.areaPath)} AND [System.WorkItemType] = ${literal(t.workItemType)} AND [System.State] IN (${t.states.map(literal).join(', ')})`;
+      const where = `[System.TeamProject] = ${literal(t.project)} AND [System.AreaPath] UNDER ${literal(t.areaPath)} AND [System.WorkItemType] = ${literal(t.workItemType)} AND [System.State] IN (${t.states.map(literal).join(', ')})`
+        + (t.workItemIds?.length ? ` AND [System.Id] IN (${t.workItemIds.filter(positive).join(', ')})` : '');
       const items: FlowDetectionItem[] = [];
       let after = 0, count = 0, asOf = '';
       // WIQL has no continuation token. Stable ASOF + ordered ID keyset pages avoid omissions during edits.
@@ -151,7 +153,9 @@ export function createDevOpsDetector(options: DevOpsDetectorOptions = {}) {
           const idKey = String(id), previous = Number(next[idKey] ?? '0');
           if (Number(revision) > previous) {
             next[idKey] = String(revision);
-            if (!baseline || t.includeExisting) items.push({
+            // a revision outside the filters is remembered (cursor) but not queued: a later revision that matches is
+            const passes = !filterMisses(t, { id: id as number, tags: splitTags(fields['System.Tags']), iterationPath: typeof fields['System.IterationPath'] === 'string' ? fields['System.IterationPath'] : '' }).length;
+            if ((!baseline || t.includeExisting) && passes) items.push({
               key: `devops:${encodeURIComponent(t.organization)}:${encodeURIComponent(t.project)}:${id}:${revision}`,
               title: `#${id} ${(fields['System.Title'] as string).replace(/[\x00-\x1f\x7f]/g, ' ').trim()}`.slice(0, 240),
               inputs: { 'work-item-id': idKey, 'work-item-revision': String(revision), 'work-item-url': `https://dev.azure.com/${encodeURIComponent(t.organization)}/${encodeURIComponent(t.project)}/_workitems/edit/${id}` },
@@ -173,3 +177,29 @@ export function createDevOpsDetector(options: DevOpsDetectorOptions = {}) {
 }
 
 export const detectDevOps = createDevOpsDetector();
+
+/** One work item as the Routine page's preview shows it (ADR 0153): a fixed Azure read API, the same token as the detector. */
+export interface DevOpsItem { id: number; revision: number; title: string; type: string; state: string; project: string; areaPath: string; iterationPath: string; tags: string[]; url: string }
+export function createDevOpsItemReader(options: DevOpsDetectorOptions = {}) {
+  return async (organization: string, project: string, id: number, signal?: AbortSignal): Promise<DevOpsItem> => {
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9-]{0,49}$/.test(organization) || !project.trim() || /[/\\\x00-\x1f]/.test(project) || !positive(id)) fail('DevOps: work item non valido.');
+    const controller = new AbortController(), abort = () => controller.abort(), timer = setTimeout(abort, TIMEOUT_MS);
+    signal?.addEventListener('abort', abort, { once: true });
+    try {
+      let token: string;
+      try { token = await cancellable((options.token ?? azureToken)(controller.signal), controller.signal); } catch { return fail(LOGIN); }
+      const url = `https://dev.azure.com/${encodeURIComponent(organization)}/${encodeURIComponent(project)}/_apis/wit/workitems/${id}?api-version=7.1&fields=${FIELDS.join(',')}`;
+      const response = await cancellable((options.request ?? fetch)(url, { method: 'GET', redirect: 'error', signal: controller.signal, headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } }), controller.signal);
+      if (response.status === 404) fail(`DevOps: il work item ${id} non esiste o non lo vedi.`);
+      const item = await readJson(response, controller.signal), fields = record(item.fields);
+      if (item.id !== id || !positive(item.rev)) invalid();
+      const str = (key: string): string => typeof fields[key] === 'string' ? (fields[key] as string).replace(/[\x00-\x1f\x7f]/g, ' ').trim() : '';
+      return { id, revision: item.rev as number, title: str('System.Title').slice(0, 240), type: str('System.WorkItemType'), state: str('System.State'),
+        project: str('System.TeamProject'), areaPath: str('System.AreaPath'), iterationPath: str('System.IterationPath'), tags: splitTags(fields['System.Tags']),
+        url: `https://dev.azure.com/${encodeURIComponent(organization)}/${encodeURIComponent(project)}/_workitems/edit/${id}` };
+    } catch (error) {
+      if (error instanceof DetectionError) throw error;
+      throw new DetectionError('DevOps: lettura del work item non riuscita.');
+    } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); controller.abort(); }
+  };
+}

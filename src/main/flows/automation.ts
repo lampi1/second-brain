@@ -5,7 +5,7 @@ import { renameRetrying } from '../rules/storage';
 import { createHash, randomUUID } from 'node:crypto';
 import type { FlowRestart, FlowRestartProposal, FlowRun } from '../../shared/flows';
 import { DEVOPS_WRITE_OPS, type DevOpsWriteGrant, type TestDbReadGrant } from '../../shared/flow-automation';
-import type { FlowAutomationConfig, FlowAutomationControl, FlowAutomationDecision, FlowAutomationEvent, FlowAutomationPause, FlowAutomationPropose, FlowAutomationRule, FlowAutomationSnapshot, FlowDetectionResult } from '../../shared/flow-automation';
+import type { FlowAutomationClear, FlowAutomationFilters, FlowDetectionItem, FlowAutomationConfig, FlowAutomationControl, FlowAutomationDecision, FlowAutomationEvent, FlowAutomationPause, FlowAutomationPropose, FlowAutomationRule, FlowAutomationSnapshot, FlowDetectionResult } from '../../shared/flow-automation';
 import type { FlowService } from './service';
 import { adapted, testDbAdapted, identifier, inScope, integer, keys, object, text, validateInputs, validateScope } from './schema';
 
@@ -60,6 +60,26 @@ function validateGrant(value: unknown, trigger: Extract<FlowAutomationConfig['tr
   if (mentions.some(id => !GUID.test(id))) throw new Error('DevOps write mentions must be identity GUIDs');
   if (mentions.length && !ops.includes('comment')) throw new Error('DevOps write mentions need the comment operation');
   return { organization, projects, ops: ops as DevOpsWriteGrant['ops'], fields, ...(mentions.length ? { mentions } : {}) };
+}
+/** The trigger's filters (ADR 0153), each absent when empty so an old rule keeps its exact shape. */
+function filters(trigger: Record<string, unknown>): Partial<Extract<FlowAutomationConfig['trigger'], { kind: 'devops' }>> {
+  const tags = (value: unknown, label: string): string[] | undefined => {
+    if (value === undefined) return undefined;
+    if (!Array.isArray(value) || value.length > 20) throw new Error(`${label}: up to 20 tags`);
+    const list = [...new Set(value.map(tag => { const t = text(tag, label, 100); if (/[;\x00-\x1f]/.test(t)) throw new Error(`${label}: invalid tag`); return t; }))];
+    return list.length ? list : undefined;
+  };
+  const includeTags = tags(trigger.includeTags, 'includeTags'), excludeTags = tags(trigger.excludeTags, 'excludeTags');
+  if (includeTags && excludeTags?.some(tag => includeTags.some(other => other.toLowerCase() === tag.toLowerCase()))) throw new Error('A tag cannot be both required and excluded');
+  let workItemIds: number[] | undefined;
+  if (trigger.workItemIds !== undefined) {
+    if (!Array.isArray(trigger.workItemIds) || trigger.workItemIds.length > 200) throw new Error('workItemIds: up to 200');
+    workItemIds = [...new Set(trigger.workItemIds.map(id => integer(id, 'work item id', 1, 2_147_483_647)))];
+    if (!workItemIds.length) workItemIds = undefined;
+  }
+  const iterationPath = trigger.iterationPath === undefined ? undefined : text(trigger.iterationPath, 'iterationPath', 1000, true) || undefined;
+  const maxPerHour = trigger.maxPerHour === undefined ? undefined : integer(trigger.maxPerHour, 'maxPerHour', 1, 100);
+  return { ...(includeTags ? { includeTags } : {}), ...(excludeTags ? { excludeTags } : {}), ...(workItemIds ? { workItemIds } : {}), ...(iterationPath ? { iterationPath } : {}), ...(maxPerHour ? { maxPerHour } : {}) };
 }
 const errorText = (error: unknown): string => (error instanceof Error ? error.message : 'Automatic flow operation failed').slice(0, 2000);
 
@@ -153,6 +173,76 @@ export class FlowAutomationService {
     void this.poll().then(() => { this.running = undefined; resolve(); }, error => { this.running = undefined; reject(error); });
     return promise;
   }
+  /** The user's filter edit from the Routine page (ADR 0153): their click approves the new revision at once; the queue,
+   *  the detector cursor and the runs already started stay (their grant moves to `history`). */
+  editFilters(input: FlowAutomationFilters): FlowAutomationRule {
+    keys(object(input, 'filters'), ['id', 'expectedRevision', 'includeTags', 'excludeTags', 'workItemIds', 'iterationPath', 'maxPerHour'], 'filters');
+    return this.change(() => {
+      const rule = this.guarded(input.id, input.expectedRevision);
+      if (rule.config.trigger.kind !== 'devops' || rule.approvedRevision !== rule.revision || !['enabled', 'paused'].includes(rule.status)) throw new Error('Only an approved DevOps trigger takes filters');
+      const { includeTags: _a, excludeTags: _b, workItemIds: _c, iterationPath: _d, maxPerHour: _e, ...base } = rule.config.trigger;
+      const config = this.config({ ...rule.config, trigger: { ...base, ...filters({ includeTags: input.includeTags, excludeTags: input.excludeTags, workItemIds: input.workItemIds, iterationPath: input.iterationPath, maxPerHour: input.maxPerHour }) } });
+      this.advance(rule, config); return rule;
+    });
+  }
+  /** A new flow version the user activated: its enabled or paused rule follows it (their activation is the approval),
+   *  unless the new version needs a grant the rule lacks; then the rule waits for a fresh approval (ADR 0153). */
+  carry(flowId: string, version: number): FlowAutomationRule | null {
+    const rule = this.data.rules.find(item => item.config.flowId === flowId);
+    if (!rule || rule.config.flowVersion === version || rule.approvedRevision !== rule.revision || !['enabled', 'paused'].includes(rule.status)) return null;
+    const config = { ...copy(rule.config), flowVersion: version };
+    let usable = true; try { this.usable(config); } catch { usable = false; }
+    return this.change(() => {
+      const live = this.data.rules.find(item => item.id === rule.id)!;
+      if (usable) this.advance(live, config);
+      else { this.cancel(live.id, 'New flow version needs a new approval of the trigger'); live.history = [...(live.history ?? []), { revision: live.revision, config: copy(live.config) }].slice(-10); live.revision++; live.config = config; live.status = 'proposed'; live.updatedAt = this.now(); }
+      this.invalidate(); return live;
+    });
+  }
+  /** «Svuota coda»: discards exactly the waiting events the user saw counted (a different count = the queue moved). */
+  clearQueue(input: FlowAutomationClear): number {
+    keys(object(input, 'clear'), ['id', 'count'], 'clear');
+    return this.change(() => {
+      const waiting = this.data.events.filter(event => event.ruleId === input.id && pending(event) && !event.sourceKey.startsWith('restart:'));
+      if (waiting.length !== input.count) throw new Error(`La coda è cambiata: ora ha ${waiting.length} eventi. Ricontrolla.`);
+      for (const event of waiting) { event.status = 'cancelled'; event.reason = 'Scartato dall’utente (Svuota coda)'; event.updatedAt = this.now(); delete event.nextAttemptAt; }
+      return waiting.length;
+    });
+  }
+  /** The rule a flow's manual start goes through, when there is one the user approved. */
+  ruleOf(flowId: string): FlowAutomationRule | null {
+    const rule = this.data.rules.find(item => item.config.flowId === flowId);
+    return rule && rule.approvedRevision === rule.revision && ['enabled', 'paused'].includes(rule.status) ? copy(rule) : null;
+  }
+  /** One manual event for a rule, started at once by the host with the rule's owner. */
+  startManual(ruleId: string, detected: FlowDetectionItem): FlowRun {
+    this.healthy();
+    const rule = this.data.rules.find(item => item.id === ruleId);
+    if (!rule || rule.approvedRevision !== rule.revision || !['enabled', 'paused'].includes(rule.status)) throw new Error('La routine non ha un trigger approvato');
+    const item = this.result({ cursor: {}, items: [detected], summary: '' }).items[0]!;
+    if (Object.keys(item.inputs).some(key => Object.hasOwn(rule.config.inputs, key))) throw new Error('Inputs conflict with the approved configuration');
+    const inputs = validateInputs({ ...rule.config.inputs, ...item.inputs }), id = item.inputs['work-item-id'];
+    const runs = this.options.flow().snapshot().runs;
+    const active = id ? runs.find(run => occupied(run) && run.flowId === rule.config.flowId && run.inputs['work-item-id'] === id) : undefined;
+    if (active) throw new Error(`Questo work item ha già una run attiva (${active.id.slice(0, 8)}).`);
+    const sourceKey = `manual:${item.key}:${this.now()}`;
+    const event = this.change(() => {
+      const made: FlowAutomationEvent = { id: randomUUID(), ruleId: rule.id, ruleRevision: rule.revision, sourceKey, subjectKey: `auto:${rule.id}:${rule.revision}:${hash(sourceKey)}`, title: item.title, inputs, createdAt: this.now(), updatedAt: this.now(), status: 'pending', attempts: 0, manual: true };
+      this.data.seen.push(hash([rule.id, rule.revision, sourceKey])); this.data.events.push(made); this.trim(); return made;
+    });
+    return this.startEvent(event.id, rule.ownerOrchestratorId);
+  }
+  /** A new approved revision of a rule, keeping its queue, cursor and the grants of runs it already started. */
+  private advance(rule: FlowAutomationRule, config: FlowAutomationConfig): void {
+    const before = rule.revision;
+    rule.history = [...(rule.history ?? []), { revision: before, config: copy(rule.config) }].slice(-10);
+    rule.revision = before + 1; rule.approvedRevision = rule.revision; rule.approvedAt = this.now(); rule.updatedAt = this.now(); rule.config = config; delete rule.error; rule.failures = 0;
+    for (const event of this.data.events.filter(item => item.ruleId === rule.id && item.ruleRevision === before && pending(item))) {
+      event.ruleRevision = rule.revision; event.subjectKey = `auto:${rule.id}:${rule.revision}:${hash(event.sourceKey)}`; event.inputs = validateInputs({ ...config.inputs, ...Object.fromEntries(Object.entries(event.inputs).filter(([key]) => DEVOPS_INPUTS.includes(key) || !Object.hasOwn(rule.history!.at(-1)!.config.inputs, key))) });
+      const seen = hash([rule.id, rule.revision, event.sourceKey]); if (!this.data.seen.includes(seen)) this.data.seen.push(seen);
+    }
+    if (this.data.cursors[rule.id]) this.data.cursors[rule.id] = this.data.cursors[rule.id]!;
+  }
   /** Called only by the authenticated Orchestrator mount; the event supplies all run identity and inputs. */
   startEvent(eventId: string, ownerId: string): FlowRun {
     this.healthy();
@@ -170,11 +260,12 @@ export class FlowAutomationService {
       this.change(() => { event.status = existing.status === 'cancelled' ? 'cancelled' : 'started'; event.runId = existing.id; event.updatedAt = this.now(); delete event.reason; }); return existing;
     }
     if (event.sourceKey.startsWith('restart:')) throw new Error('Recovery events require the exact user-approved restart; they cannot start as ordinary events');
-    if (this.data.paused || rule.status !== 'enabled' || rule.approvedRevision !== rule.revision) throw new Error('Automatic flow is paused or not approved');
+    // a paused rule takes no new detected events; the user's own start on one item still goes (ADR 0153)
+    if ((this.data.paused || rule.status !== 'enabled') && !event.manual || rule.approvedRevision !== rule.revision) throw new Error('Automatic flow is paused or not approved');
     if (!['pending', 'notified'].includes(event.status)) throw new Error('Automatic flow event is blocked; resume explicitly to retry');
     try { this.usable(rule.config, event.inputs); } catch (error) { this.blockEvent(event, errorText(error)); throw error; }
     const running = snapshot.runs.filter(run => occupied(run) && this.data.rules.some(item => run.subjectKey.startsWith(`auto:${item.id}:`)));
-    if (running.length >= 2 || running.some(run => run.subjectKey.startsWith(`auto:${rule.id}:`))) throw new Error('Automatic flow concurrency limit reached; event remains queued');
+    if (!event.manual && (running.length >= 2 || running.some(run => run.subjectKey.startsWith(`auto:${rule.id}:`)))) throw new Error('Automatic flow concurrency limit reached; event remains queued');
     // While flow.start prepares the first step, grantFor accepts only this event's own start (before runId is recorded).
     this.starting = event.id;
     let run: FlowRun;
@@ -262,28 +353,31 @@ export class FlowAutomationService {
   /** The DevOps write grant of a run started from this rule's own event, or null: enabled exact revision, same owner,
    *  scope and inputs, the global switch on. Every adapter write re-checks it (ADR 0145). */
   grantFor(run: FlowRun): { grant: DevOpsWriteGrant; workItemId: number } | null {
-    const rule = this.ruleFor(run);
-    if (!rule?.config.devopsWrite || rule.config.trigger.kind !== 'devops') return null;
+    const config = this.configFor(run);
+    if (!config?.devopsWrite || config.trigger.kind !== 'devops') return null;
     const id = run.inputs['work-item-id'];
     if (!id || !/^[1-9]\d{0,9}$/.test(id) || !Number.isSafeInteger(Number(id))) return null;
-    return { grant: copy(rule.config.devopsWrite), workItemId: Number(id) };
+    return { grant: copy(config.devopsWrite), workItemId: Number(id) };
   }
   /** Read-only test DB access uses the same exact-revision event provenance as DevOps writes. */
   testDbGrantFor(run: FlowRun): TestDbReadGrant | null {
-    const rule = this.ruleFor(run);
-    return rule?.config.testDbRead ? copy(rule.config.testDbRead) : null;
+    const config = this.configFor(run);
+    return config?.testDbRead ? copy(config.testDbRead) : null;
   }
-  private ruleFor(run: FlowRun): FlowAutomationRule | null {
-    if (this.stopped || this.storageError || this.data.paused || ['completed', 'cancelled'].includes(run.status)) return null;
+  /** The approved configuration that started this run (the current revision or one kept in history), or null. A paused
+   *  rule takes no new events but keeps the grant of the runs it started; a rejected or replaced rule withdraws it. */
+  private configFor(run: FlowRun): FlowAutomationConfig | null {
+    if (this.stopped || this.storageError || ['completed', 'cancelled'].includes(run.status)) return null;
     const match = /^auto:([^:]+):(\d+):[a-f0-9]{64}$/.exec(run.subjectKey);
     const rule = match && this.data.rules.find(item => item.id === match[1]);
-    if (!rule || String(rule.revision) !== match![2] || rule.status !== 'enabled' || rule.approvedRevision !== rule.revision
-      || rule.config.flowId !== run.flowId || rule.config.flowVersion !== run.flowVersion || rule.ownerOrchestratorId !== run.ownerOrchestratorId || hash(rule.config.scope) !== hash(run.scope)) return null;
+    if (!rule || rule.approvedRevision !== rule.revision || !['enabled', 'paused'].includes(rule.status) || rule.ownerOrchestratorId !== run.ownerOrchestratorId) return null;
+    const config = String(rule.revision) === match![2] ? rule.config : rule.history?.find(item => String(item.revision) === match![2])?.config;
+    if (!config || config.flowId !== run.flowId || config.flowVersion !== run.flowVersion || hash(config.scope) !== hash(run.scope)) return null;
     const event = this.data.events.find(item => item.ruleId === rule.id && item.subjectKey === run.subjectKey);
     // Only a run the host started from this event: recorded as started with this run id, or being started right now.
     const own = (event?.status === 'started' && event.runId === run.id) || (event !== undefined && this.starting === event.id && event.runId === undefined);
-    if (!event || !own || event.ruleRevision !== rule.revision || hash(event.inputs) !== hash(run.inputs)) return null;
-    return rule;
+    if (!event || !own || String(event.ruleRevision) !== match![2] || hash(event.inputs) !== hash(run.inputs)) return null;
+    return config;
   }
   stop(): void { this.stopped = true; this.invalidate(); }
   private async poll(): Promise<void> {
@@ -316,14 +410,27 @@ export class FlowAutomationService {
           if (Object.keys(item.inputs).some(key => Object.hasOwn(rule.config.inputs, key))) throw new Error('Detected event inputs conflict with approved configuration');
           validateInputs({ ...rule.config.inputs, ...item.inputs });
         }
+        // one active run per work item per flow (ADR 0153): a newer revision of an item already running updates that
+        // run's input; a newer revision of an item still waiting replaces the waiting event
+        const runs = flow.snapshot().runs, merges: { runId: string; revision: string }[] = [];
+        const itemOf = (inputs: Record<string, string>) => inputs['work-item-id'];
         this.change(() => {
           for (const item of fresh) {
             this.data.seen.push(hash([rule.id, rule.revision, item.key]));
+            const id = itemOf(item.inputs);
+            if (!baseline && id) {
+              const running = runs.find(run => occupied(run) && run.flowId === rule.config.flowId && run.inputs['work-item-id'] === id);
+              if (running) { if (item.inputs['work-item-revision']) merges.push({ runId: running.id, revision: item.inputs['work-item-revision'] }); continue; }
+              for (const older of this.data.events.filter(event => event.ruleId === rule.id && pending(event) && !event.sourceKey.startsWith('restart:') && itemOf(event.inputs) === id)) {
+                older.status = 'cancelled'; older.reason = `Sostituito dalla revisione ${item.inputs['work-item-revision'] ?? 'nuova'}`; older.updatedAt = at; delete older.nextAttemptAt;
+              }
+            }
             if (!baseline) this.data.events.push({ id: randomUUID(), ruleId: rule.id, ruleRevision: rule.revision, sourceKey: item.key, subjectKey: `auto:${rule.id}:${rule.revision}:${hash(item.key)}`, title: item.title, inputs: validateInputs({ ...rule.config.inputs, ...item.inputs }), createdAt: at, updatedAt: at, status: 'pending', attempts: 0 });
           }
           this.data.cursors[rule.id] = checked.cursor; rule.lastCheckAt = at; rule.nextCheckAt = at + interval; rule.lastResult = baseline ? 'Initial baseline recorded; existing items not queued' : checked.summary; rule.failures = 0; delete rule.error;
           this.trim();
         });
+        for (const merge of merges) { try { flow.updateItemRevision(merge.runId, merge.revision); } catch { /* the run finished meanwhile */ } }
       } catch (error) {
         if (!valid()) return;
         this.change(() => { const current = this.data.rules.find(item => item.id === rule.id)!; current.failures++; current.error = errorText(error); current.lastCheckAt = this.now(); current.nextCheckAt = this.now() + Math.min(3600000, 60000 * 2 ** Math.min(current.failures - 1, 6)); });
@@ -343,6 +450,8 @@ export class FlowAutomationService {
         if (rule.error) break;
         const runs = flow.snapshot().runs.filter(run => occupied(run) && this.data.rules.some(item => run.subjectKey.startsWith(`auto:${item.id}:`)));
         if (runs.length >= 2 || runs.some(run => run.subjectKey.startsWith(`auto:${rule.id}:`))) break;
+        const max = rule.config.trigger.kind === 'devops' ? rule.config.trigger.maxPerHour : undefined;
+        if (max && this.data.events.filter(item => item.ruleId === rule.id && item.status === 'started' && !item.manual && item.updatedAt > this.now() - 3_600_000).length >= max) break;
         try {
           const sent = await this.options.dispatch(copy(rule), copy(event));
           if (!valid()) return;
@@ -362,14 +471,14 @@ export class FlowAutomationService {
     const raw = object(value, 'automatic flow config'); keys(raw, ['flowId', 'flowVersion', 'trigger', 'scope', 'inputs', 'priority', 'devopsWrite', 'testDbRead'], 'automatic flow config');
     const trigger = object(raw.trigger, 'trigger');
     if (!['interval', 'devops'].includes(trigger.kind as string)) throw new Error('Unsupported automatic flow trigger');
-    keys(trigger, trigger.kind === 'interval' ? ['kind', 'everyMinutes'] : ['kind', 'everyMinutes', 'organization', 'project', 'areaPath', 'workItemType', 'states', 'includeExisting'], 'trigger');
+    keys(trigger, trigger.kind === 'interval' ? ['kind', 'everyMinutes'] : ['kind', 'everyMinutes', 'organization', 'project', 'areaPath', 'workItemType', 'states', 'includeExisting', 'includeTags', 'excludeTags', 'workItemIds', 'iterationPath', 'maxPerHour'], 'trigger');
     const everyMinutes = integer(trigger.everyMinutes, 'everyMinutes', 1, 525600), scope = validateScope(raw.scope);
     const config: FlowAutomationConfig = { flowId: identifier(raw.flowId, 'flowId'), flowVersion: integer(raw.flowVersion, 'flowVersion', 1), scope, inputs: validateInputs(raw.inputs), priority: raw.priority as FlowAutomationConfig['priority'], trigger: { kind: 'interval', everyMinutes } };
     if (!['urgent', 'normal'].includes(config.priority)) throw new Error('Invalid automatic flow priority');
     if (trigger.kind === 'devops') {
       if (DEVOPS_INPUTS.some(key => Object.hasOwn(config.inputs, key))) throw new Error('DevOps event input names are reserved');
       if (!Array.isArray(trigger.states) || trigger.states.length < 1 || trigger.states.length > 30 || typeof trigger.includeExisting !== 'boolean') throw new Error('Invalid DevOps trigger');
-      config.trigger = { kind: 'devops', everyMinutes, organization: text(trigger.organization, 'organization', 300), project: text(trigger.project, 'project', 300), areaPath: text(trigger.areaPath, 'areaPath', 1000), workItemType: text(trigger.workItemType, 'workItemType', 200), states: [...new Set(trigger.states.map(value => text(value, 'state', 200)))], includeExisting: trigger.includeExisting };
+      config.trigger = { kind: 'devops', everyMinutes, organization: text(trigger.organization, 'organization', 300), project: text(trigger.project, 'project', 300), areaPath: text(trigger.areaPath, 'areaPath', 1000), workItemType: text(trigger.workItemType, 'workItemType', 200), states: [...new Set(trigger.states.map(value => text(value, 'state', 200)))], includeExisting: trigger.includeExisting, ...filters(trigger) };
       if (!scope.project || !scope.areaPath || !inScope(scope, config.trigger) || !inScope(config.trigger, scope)) throw new Error('DevOps trigger must exactly match approved project and area scope');
       if (raw.devopsWrite !== undefined) config.devopsWrite = validateGrant(raw.devopsWrite, config.trigger);
     } else if (raw.devopsWrite !== undefined) throw new Error('DevOps write needs a DevOps trigger');
@@ -445,7 +554,11 @@ export class FlowAutomationService {
     integer(raw.revision, 'revision'); object(raw.cursors, 'cursors'); const data = raw as unknown as Stored;
     const ids = new Set<string>(), flows = new Set<string>();
     for (const rule of data.rules) {
-      keys(object(rule, 'rule'), ['id', 'revision', 'config', 'ownerOrchestratorId', 'status', 'approvedRevision', 'createdAt', 'updatedAt', 'approvedAt', 'feedback', 'nextCheckAt', 'lastCheckAt', 'lastResult', 'error', 'failures'], 'rule');
+      keys(object(rule, 'rule'), ['id', 'revision', 'config', 'ownerOrchestratorId', 'status', 'approvedRevision', 'createdAt', 'updatedAt', 'approvedAt', 'feedback', 'nextCheckAt', 'lastCheckAt', 'lastResult', 'error', 'failures', 'history'], 'rule');
+      if (rule.history !== undefined) {
+        if (!Array.isArray(rule.history) || rule.history.length > 10) throw new Error('Invalid rule history');
+        for (const item of rule.history) { keys(object(item, 'rule history'), ['revision', 'config'], 'rule history'); integer(item.revision, 'history revision', 1, rule.revision - 1); this.config(item.config); }
+      }
       text(rule.id, 'rule id', 200); integer(rule.revision, 'rule revision', 1); this.config(rule.config); text(rule.ownerOrchestratorId, 'owner', 200);
       if (ids.has(rule.id) || flows.has(rule.config.flowId) || !['proposed', 'enabled', 'paused', 'rejected'].includes(rule.status)) throw new Error('Invalid rule'); ids.add(rule.id); flows.add(rule.config.flowId);
       for (const value of [rule.createdAt, rule.updatedAt, rule.failures]) integer(value, 'rule counter');
@@ -458,7 +571,8 @@ export class FlowAutomationService {
     if (new Set(data.seen).size !== data.seen.length || data.seen.some(key => typeof key !== 'string' || !/^[a-f0-9]{64}$/.test(key))) throw new Error('Invalid deduplication ledger');
     const eventIds = new Set<string>(), subjects = new Set<string>();
     for (const event of data.events) {
-      keys(object(event, 'event'), ['id', 'ruleId', 'ruleRevision', 'sourceKey', 'subjectKey', 'title', 'inputs', 'createdAt', 'updatedAt', 'status', 'attempts', 'nextAttemptAt', 'runId', 'reason'], 'event');
+      keys(object(event, 'event'), ['id', 'ruleId', 'ruleRevision', 'sourceKey', 'subjectKey', 'title', 'inputs', 'createdAt', 'updatedAt', 'status', 'attempts', 'nextAttemptAt', 'runId', 'reason', 'manual'], 'event');
+      if (event.manual !== undefined && event.manual !== true) throw new Error('Invalid manual event');
       text(event.id, 'event id', 200); text(event.sourceKey, 'source key', 500); text(event.title, 'event title', 500); validateInputs(event.inputs); integer(event.ruleRevision, 'event revision', 1); integer(event.createdAt, 'event time'); integer(event.updatedAt, 'event time'); integer(event.attempts, 'attempts', 0, 3);
       const rule = data.rules.find(item => item.id === event.ruleId);
       if (!rule || event.ruleRevision > rule.revision || (event.ruleRevision !== rule.revision && pending(event)) || event.subjectKey !== `auto:${event.ruleId}:${event.ruleRevision}:${hash(event.sourceKey)}` || !data.seen.includes(hash([event.ruleId, event.ruleRevision, event.sourceKey])) || eventIds.has(event.id) || subjects.has(event.subjectKey) || !['pending', 'notified', 'started', 'blocked', 'cancelled'].includes(event.status)) throw new Error('Invalid automatic event');
