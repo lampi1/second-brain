@@ -106,8 +106,12 @@ describe('flow execution authority', () => {
     expect(run.status).toBe('blocked'); expect(() => service.decide({ runId: run.id, expectedRevision: run.revision, stepId: 'danger', answer: 'yes', feedback: 'go' })).toThrow('adapter');
     expect(service.status(run.id, 'orch').steps[0]!.receipt).toBeUndefined();
   });
-  it.each(['script', 'query', 'action'] as const)('keeps unconfigured %s references blocked', kind => {
-    const { service } = setup(); activate(service, definition([step('ref', { kind: 'check', action: { kind, ref: 'saved-reference' } })])); expect(start(service).status).toBe('blocked');
+  it('keeps unconfigured action references blocked', () => {
+    const { service } = setup(); activate(service, definition([step('ref', { kind: 'check', action: { kind: 'action', ref: 'saved-reference' } })])); expect(start(service).status).toBe('blocked');
+  });
+  // ADR 0153: a script/query step pins the brain file's content hash on propose; a file the brain lacks cannot be proposed
+  it.each(['script', 'query'] as const)('refuses a %s reference the brain does not have', kind => {
+    const { service } = setup(); expect(() => service.propose({ definition: definition([step('ref', { kind: 'check', action: { kind, ref: 'saved-reference' } })]), expectedRevision: 0 })).toThrow('non trovat');
   });
   it('runs allowlisted host metadata checks without claiming real tests', () => {
     const { service } = setup(); activate(service, definition([step('metadata', { kind: 'check', action: { kind: 'builtin', ref: 'scope-present' }, evidence: ['metadata'] })])); const run = start(service);

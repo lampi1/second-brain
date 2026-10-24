@@ -98,12 +98,18 @@ app.whenReady().then(async () => {
   const s = await createServices({ emitter, window: () => win, userData: app.getPath('userData') });
   setUiLangSource(() => { const l = s.brain.settings().language; return isLang(l) ? l : systemLang(); });
   const flowBackground = createFlowBackground({ window: win, icon: path.join(outDir, process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
-    hidden: hiddenRun(), quit: () => app.quit(), enabled: () => !!s.brain.info().brainRoot && s.flows?.automation().snapshot().background === true });
+    hidden: hiddenRun(), quit: () => app.quit(), count: () => s.flows?.snapshot().runner?.active ?? 0,
+    enabled: () => !!s.brain.info().brainRoot && (s.flows?.automation().snapshot().background === true || (s.flows?.snapshot().runner?.active ?? 0) > 0) });
   emitter.tap(channel => { if (channel === 'flows:changed' || channel === 'settings:changed') flowBackground.sync(); });
   flowBackground.sync();
   // the Log page (ADR 0111): the app's own events, readable and live, kept 7 days at most; zero tokens
   const activity = attachActivity({ userData: app.getPath('userData'), emitter, chats: () => s.chats.list(), brainRoot: () => s.brain.info().brainRoot });
   if (process.env.SB_DEMO === '1') journal.seed(demoLog(process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now()));
+  /** The routine runtime for the brain the renderer showed (a switched brain refuses the action). */
+  const flowsFor = (contextKey: string) => {
+    if (!s.flows || contextKey !== s.flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la routine.');
+    return s.flows;
+  };
   const requireReviewRoot = (expected: unknown): void => {
     const actual = s.brain.info().brainRoot;
     if (!actual || typeof expected !== 'string' || path.resolve(expected) !== path.resolve(actual)) throw new Error('Brain changed: reload the review before acting.');
@@ -531,6 +537,17 @@ app.whenReady().then(async () => {
       service.editStepTier(edit);
       return s.flows!.snapshot();
     },
+    // the Routine page's own controls (ADR 0153); each checks the brain the user saw
+    'flows:previewItem': a => { const flows = flowsFor(a.contextKey); return flows.previewItem(a.flowId, a.workItem); },
+    'flows:startItem': a => { const flows = flowsFor(a.contextKey); const { contextKey: _context, ...input } = a; return flows.startItem(input); },
+    'flows:dryRun': a => flowsFor(a.contextKey).dryRun(a.flowId, a.params ?? {}),
+    'flows:pauseRun': a => { const flows = flowsFor(a.contextKey); flows.pauseRun(a.runId, a.expectedRevision, a.paused); return flows.snapshot(); },
+    // «Esegui» (prod): only this renderer click runs a prod command; no agent tool reaches runUserCommand
+    'flows:runCommand': async a => { const flows = flowsFor(a.contextKey); await flows.runUserCommand(a.runId, a.expectedRevision, a.stepId, a.command); return flows.snapshot(); },
+    'flows:clearQueue': a => { const flows = flowsFor(a.contextKey); flows.automation().clearQueue({ id: a.id, count: a.count }); return flows.snapshot(); },
+    'flows:editFilters': a => { const flows = flowsFor(a.contextKey); const { contextKey: _context, ...input } = a; flows.automation().editFilters(input); return flows.snapshot(); },
+    'flows:editStepModel': a => { const flows = flowsFor(a.contextKey); const { contextKey: _context, ...input } = a; return flows.editStepModel(input); },
+    'flows:pinHash': a => { const flows = flowsFor(a.contextKey); const { contextKey: _context, ...input } = a; return flows.pinHash(input); },
     'flows:decide': async a => {
       const service = s.flows?.service();
       if (!service || a.contextKey !== service.snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la decisione.');

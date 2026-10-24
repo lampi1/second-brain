@@ -188,6 +188,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       ownerId: callerId!, resolveBinding: d.flows.resolveBinding,
       proposeCancel: (input, ownerId) => d.flows!.proposeCancel(input, ownerId),
       proposeRestart: (input, ownerId) => d.flows!.proposeRestart(input, ownerId),
+      overview: ownerId => d.flows!.overview(ownerId), message: (runId, body, ownerId) => d.flows!.message(runId, body, ownerId),
+      startItem: input => d.flows!.startItem(input),
     }) : []),
     ...(d.workflows && authed() ? workflowTools(d.workflows, id => d.chats.list().some(c => c.id === id && mine(c) && !c.parentId && !c.isOrchestrator), id => d.chats.list().find(c => c.id === id)) : []),
     ...(d.agentLearning ? [learnTool(d, callerId, authed())] : []),

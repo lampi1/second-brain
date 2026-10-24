@@ -51,6 +51,10 @@ function stepFile(root: string, step: FlowStep): string {
   if (path.dirname(real) !== realDir) throw new Error(`${step.action!.ref} è fuori dalla cartella ${kind === 'script' ? SCRIPTS_DIR : QUERIES_DIR}`);
   return real;
 }
+/** The sha256 of a brain script/query now (null = missing or outside its folder): pinned on propose. */
+export function contentHash(root: string, kind: 'script' | 'query', ref: string): string | null {
+  try { return sha256(fs.readFileSync(stepFile(root, { action: { kind, ref } } as FlowStep))); } catch { return null; }
+}
 /** Fills {{name}} with a run input (typed params are run inputs under their own name), {{attachment:name}} with the attachment's path. */
 function fill(template: string, run: FlowRun, attachmentsDir: string, problems: string[]): string {
   let out = template;

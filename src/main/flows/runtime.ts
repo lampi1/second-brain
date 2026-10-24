@@ -14,7 +14,7 @@ import { log } from '../log';
 import { FlowService } from './service';
 import { FlowAutomationService } from './automation';
 import { createDevOpsDetector, createDevOpsItemReader, type DevOpsItem } from './devops-detector';
-import { attachmentFile, execute, resolve, saveAttachment, type CommandResult, type ResolvedCommand } from './executor';
+import { attachmentFile, contentHash, execute, resolve, saveAttachment, type CommandResult, type ResolvedCommand } from './executor';
 import { filterMisses, scopeMisses } from './filters';
 import { RunnerLock } from './lock';
 import { DevOpsWriter, type DevOpsWriterOptions } from './devops-writer';
@@ -121,6 +121,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
       file: path.join(options.userData, 'flows', context.key, 'state.json'), contextKey: context.key,
       // Read live from the automation ledger: a paused, replaced or rejected rule withdraws the grant at once.
       ...(options.roles ? { tierMax: (role: WorkRoleId) => roles()?.[role]?.tierMax } : {}),
+      hashOf: (kind, ref) => contentHash(context.root, kind, ref),
       adapterGranted: (run, spec) => { try { return !stopped && current().key === context.key && (!adapted(spec) || !!automation().grantFor(run)) && (!testDbAdapted(spec) || !!automation().testDbGrantFor(run)); } catch { return false; } },
       changed: snapshot => {
         try { if (options.brainRoot() && current().key === context.key) options.changed(withRoles({ ...snapshot, automation: automations.get(context.key)?.snapshot() })); }
@@ -486,7 +487,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     const s = service(), snapshot = { ...s.snapshot(), automation: automation().snapshot() };
     const catalog = Object.entries(snapshot.active).flatMap(([id, version]) => snapshot.versions.filter(v => v.definition.id === id && v.version === version));
     const candidates = s.match(text).candidates;
-    const runs = snapshot.runs.filter(r => r.ownerOrchestratorId === ownerId && !['completed', 'cancelled'].includes(r.status));
+    const runs = snapshot.runs.filter(r => (r.ownerOrchestratorId === ownerId || r.ownerOrchestratorId === APP_OWNER) && !['completed', 'cancelled'].includes(r.status));
     if (!catalog.length && !runs.length && !snapshot.drafts.length) return '[app flows] Catalogo vuoto. Per richieste ripetibili puoi proporre di costruire un flusso dal brain con domande Sì/No/Altro. Non inventare procedure aziendali; nessun flusso è attivo.';
     return `[app flows · context ${snapshot.contextKey}] ${JSON.stringify({ candidates: candidates.map(v => ({ id: v.definition.id, version: v.version, title: v.definition.title, scope: v.definition.scope })), activeRuns: runs.slice(0, 20).map(r => ({ id: r.id, revision: r.revision, status: r.status, step: r.steps[r.currentStep]?.stepId })), catalog: catalog.slice(0, 20).map(v => ({ id: v.definition.id, version: v.version, title: v.definition.title, aliases: v.definition.aliases })), automation: { paused: snapshot.automation.paused, rules: snapshot.automation.rules.filter(r => r.ownerOrchestratorId === ownerId).map(r => ({ id: r.id, status: r.status })), pendingEvents: snapshot.automation.events.filter(e => ['pending', 'notified', 'blocked'].includes(e.status)).map(e => ({ id: e.id, ruleId: e.ruleId, status: e.status })) }, more: catalog.length > 20 || runs.length > 20 })}. Read app_flow_list/status before acting; ambiguous matches need a question. Matching is not approval. Start/reuse flows only through authenticated Orchestrator tools; never replace required host evidence with prose.`;
   };

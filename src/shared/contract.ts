@@ -3,8 +3,8 @@
 // (src/preload/index.ts reads INVOKE_CHANNELS / EVENT_CHANNELS); main registers a handler for every invoke channel
 // (src/main/ipc.ts) and rejects senders that are not the app's own page. Change a shape here first, then both sides.
 import type { WorkThread, WorkDecision } from './workflows';
-import type { FlowAutomationDecision, FlowAutomationPause, FlowAutomationControl } from './flow-automation';
-import type { FlowSnapshot, FlowActivate, FlowDecision, FlowContext, FlowStepTierEdit, FlowCancel, FlowRestart, FlowRestartDecision } from './flows';
+import type { FlowAutomationDecision, FlowAutomationPause, FlowAutomationControl, FlowAutomationClear, FlowAutomationFilters } from './flow-automation';
+import type { FlowSnapshot, FlowActivate, FlowDecision, FlowContext, FlowStepTierEdit, FlowCancel, FlowRestart, FlowRestartDecision, FlowStartItem, FlowRun, FlowDryRun, FlowItemPreview, FlowStepModelEdit } from './flows';
 import type { LearnedRuleProposal } from './agent-pack';
 import type { LearningEvidence, LearningReviewState, MemoryReviewRecord, ReplayComparison, ReplayRecord, SkillCandidateView } from './learning-review';
 import type { SysCode, SysParams } from './sys';
@@ -1256,6 +1256,17 @@ export interface InvokeMap {
   'flows:restart': [FlowContext<FlowRestart>, FlowSnapshot];
   'flows:restartDecide': [FlowContext<FlowRestartDecision>, FlowSnapshot];
   'flows:editStepTier': [FlowContext<FlowStepTierEdit>, FlowSnapshot];
+  // the app's routine runner (ADR 0153): the user's own controls on the Routine page
+  'flows:previewItem': [FlowContext<{ flowId: string; workItem: string }>, FlowItemPreview];
+  'flows:startItem': [FlowContext<FlowStartItem>, FlowRun | FlowDryRun];
+  'flows:dryRun': [FlowContext<{ flowId: string; params?: Record<string, string> }>, FlowDryRun];
+  'flows:pauseRun': [FlowContext<{ runId: string; expectedRevision: number; paused: boolean }>, FlowSnapshot];
+  /** «Esegui» on a prod step: only this click runs a prod command; `command` is the exact text the user saw */
+  'flows:runCommand': [FlowContext<{ runId: string; expectedRevision: number; stepId: string; command: string }>, FlowSnapshot];
+  'flows:clearQueue': [FlowContext<FlowAutomationClear>, FlowSnapshot];
+  'flows:editFilters': [FlowContext<FlowAutomationFilters>, FlowSnapshot];
+  'flows:editStepModel': [FlowContext<FlowStepModelEdit>, FlowSnapshot];
+  'flows:pinHash': [FlowContext<{ flowId: string; version: number; stepId: string; hash: string }>, FlowSnapshot];
   'work:lessons': [void, LearnedRuleProposal[]];
   'work:lessonDecide': [{ id: string; rule: string; approve: boolean; feedback?: string }, void];
   'work:list': [void, WorkThread[]];
@@ -1722,7 +1733,7 @@ export type InvokeResult<K extends InvokeChannel> = InvokeMap[K][1];
 
 // Runtime lists (the preload allow-list). Kept in sync with the maps by the compile-time checks below.
 export const INVOKE_CHANNELS = [
-  'flows:list', 'flows:export', 'flows:import', 'flows:definitionDecide', 'flows:decide', 'flows:cancel', 'flows:cancelDecide', 'flows:restart', 'flows:restartDecide', 'flows:editStepTier', 'flows:autoDecide', 'flows:autoPause', 'flows:autoControl',
+  'flows:list', 'flows:export', 'flows:import', 'flows:definitionDecide', 'flows:decide', 'flows:cancel', 'flows:cancelDecide', 'flows:restart', 'flows:restartDecide', 'flows:editStepTier', 'flows:previewItem', 'flows:startItem', 'flows:dryRun', 'flows:pauseRun', 'flows:runCommand', 'flows:clearQueue', 'flows:editFilters', 'flows:editStepModel', 'flows:pinHash', 'flows:autoDecide', 'flows:autoPause', 'flows:autoControl',
   'work:lessons', 'work:lessonDecide', 'work:list', 'work:decide',
   'pulse:list', 'pulse:status', 'pulse:seen', 'pulse:save', 'pulse:act', 'pulse:dismiss', 'pulse:runNow', 'approvals:list', 'approvals:decide',
   'connectors:list', 'connectors:login', 'connectors:cancelLogin', 'connectors:probe', 'connectors:select', 'connectors:disconnect', 'connectors:useToken',

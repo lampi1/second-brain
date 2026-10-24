@@ -16,6 +16,9 @@ export interface FlowServiceOptions {
   adapterGranted?: (run: FlowRun, step: FlowStep) => boolean;
   /** The catalog's tierMax per role, checked when a draft is proposed. */
   tierMax?: RoleTierMax;
+  /** The sha256 of a brain script/query now: a proposed step without a hash gets the current one, so the user's
+   *  activation approves exactly that content (ADR 0153). */
+  hashOf?: (kind: 'script' | 'query', ref: string) => string | null;
 }
 type Stored = Omit<FlowSnapshot, 'contextKey' | 'storageError'> & { schema: 1; bindings: string[] };
 const empty = (): Stored => ({ schema: 1, bindings: [], drafts: [], versions: [], active: {}, runs: [] });
@@ -33,7 +36,12 @@ export class FlowService {
       let interrupted = false;
       for (const run of this.data.runs) {
         const step = run.steps[run.currentStep]!;
-        if (run.status === 'active' && step?.status === 'running') { this.block(run, 'Interrupted: inspect the linked agent before an explicit user retry.'); this.touch(run); interrupted = true; }
+        // the app closed mid-step: the step blocks with its attempt counted, so the runner retries it while attempts
+        // remain (ADR 0153); an open command receipt ends unknown
+        if (run.status === 'active' && step?.status === 'running') {
+          for (const receipt of run.receipts ?? []) if (receipt.stepId === step.stepId && receipt.endedAt === undefined) { receipt.endedAt = this.now(); receipt.exitCode = null; receipt.output = `${receipt.output}\n[interrotto: l’app si è chiusa]`.slice(-4000); }
+          this.block(run, 'Interrotto: l’app si è chiusa durante questo passaggio.'); this.touch(run); interrupted = true;
+        }
       }
       if (interrupted) this.save();
     } catch { this.storageError = 'Flow storage is invalid or unavailable; mutations are disabled. Restore the original file before restarting.'; this.data = empty(); }
@@ -49,6 +57,12 @@ export class FlowService {
   propose(input: FlowPropose): FlowDraft {
     keys(object(input, 'proposal'), ['definition', 'expectedRevision'], 'proposal');
     const definition = validateDefinition(input.definition, this.options.tierMax), expected = integer(input.expectedRevision, 'expectedRevision');
+    for (const step of definition.steps) {
+      if (step.kind !== 'check' || !step.action || !['script', 'query'].includes(step.action.kind) || step.action.hash) continue;
+      const hash = this.options.hashOf?.(step.action.kind as 'script' | 'query', step.action.ref);
+      if (!hash) throw new Error(`${step.action.kind === 'script' ? 'Script' : 'Query'} ${step.action.ref} non trovato nel brain`);
+      step.action.hash = hash;
+    }
     return this.change(() => {
       const previous = this.data.drafts.find(d => d.definition.id === definition.id);
       if ((previous?.revision ?? 0) !== expected) throw new Error('Draft changed; review its current revision');
