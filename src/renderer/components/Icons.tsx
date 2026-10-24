@@ -110,3 +110,6 @@ export function HarnessMark({ harness, orchestrator, size = 20 }: { harness: Har
     </span>
   );
 }
+// voice mode (ADR 0152): the mic button in the Orchestrator's and Flash's input, the voice preview in Settings
+export const IconMic = (p: P) => <Svg {...p}><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></Svg>;
+export const IconMicOff = (p: P) => <Svg {...p}><path d="M15 10V6a3 3 0 0 0-5.7-1.3M9 9v2a3 3 0 0 0 4.6 2.5M5.5 11a6.5 6.5 0 0 0 10.4 5.2M18.5 11a6.4 6.4 0 0 1-.5 2.5M12 17.5V21M4 4l16 16" /></Svg>;

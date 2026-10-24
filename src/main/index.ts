@@ -1,6 +1,6 @@
 // second-brain main process: one window, the services (chats, browser + MCP, brain + feed) and the typed IPC.
 import { exportFlow, importFlow } from './flows/portable';
-import { app, dialog, nativeImage, session, shell, type BrowserWindow } from 'electron';
+import { app, dialog, nativeImage, session, shell, utilityProcess, type BrowserWindow } from 'electron';
 import { DefaultBrain } from '../modules/ai-first/default-brain';
 import { detectProjectsFolder } from './brain/projects-folder';
 import { createAppConnectors } from '../modules/onboarding/app-host';
@@ -63,6 +63,7 @@ import { suggestRequest } from './skills/suggest';
 import type { CloudService } from './cloud/service';
 import { ProposalsService } from './proposals/service';
 import { Workflows } from './workflows/service';
+import { VoiceService, voiceRoot } from './voice/service';
 import type { InvokeArg, InvokeChannel, InvokeResult } from '../shared/contract';
 import { noteUserTyped } from './appctl/user-words';
 
@@ -174,6 +175,19 @@ app.whenReady().then(async () => {
     model: () => { const c = s.brain.settings(), reg = s.brain.routingInfo().registry; return tierModel(ANTHROPIC_API, 'light', reg, c.modelTiers) ?? tierModel('claude', 'light', reg, c.modelTiers) ?? SUGGEST_FALLBACK_MODEL; },
     calls: !demo && !process.env.SB_TEST && !process.env.VITEST,
   });
+  // voice mode (ADR 0152): the local speech engine in its own utility process, started on first use
+  const voice = new VoiceService({
+    root: voiceRoot(app.getPath('userData')),
+    script: path.join(outDir, 'main', 'voice-worker.js'),
+    settings: () => { const c = s.brain.settings(); return { asr: c.voiceAsr ?? 'fast', voice: c.voiceName ?? 'paola' }; },
+    fork: script => utilityProcess.fork(script, [], { serviceName: 'second-brain voice', stdio: 'ignore' }) as never,
+    changed: st => emitter.emit('voice:changed', st),
+    heard: text => emitter.emit('voice:heard', { text }),
+    speech: active => emitter.emit('voice:speech', { active }),
+    fake: process.env.SB_VOICE_FAKE === '1' || demo ? { text: process.env.SB_VOICE_FAKE_TEXT ?? 'Ciao, cosa c’è di nuovo?' } : null,
+  });
+  s.brain.onSettingChange(change => { if (change.key === 'voiceAsr' || change.key === 'voiceName') voice.settingsChanged(); });
+  app.on('will-quit', () => voice.dispose());
   const pulse = createPulse(s, { emitter, window: () => win, userData: app.getPath('userData') }, () => headline.get());
   // the Battito's proposals count in the morning block's "Da approvare" (ADR 0102)
   if (s.morning && pulse) s.morning.extraApprovals = () => pulse.pendingApprovals();
@@ -596,6 +610,11 @@ app.whenReady().then(async () => {
     'suggest:get': a => composerSuggest.suggest(a),
     'suggest:cancel': a => composerSuggest.cancel(String(a?.chatId ?? '')),
     'suggest:state': () => composerSuggest.state(),
+    'voice:state': () => voice.state(),
+    'voice:prepare': () => voice.prepare(),
+    'voice:listen': a => voice.listen(a?.on === true),
+    'voice:audio': a => voice.audio(a?.samples),
+    'voice:speak': a => voice.speak(String(a?.text ?? ''), a?.voice && ['paola', 'miro', 'dii'].includes(a.voice) ? a.voice : undefined),
     'orchestrator:held': () => s.heldNews?.get() ?? { items: [] },
     'orchestrator:heldSeen': a => { if (typeof a?.chatId !== 'string' || !a.chatId || a.chatId.length > 100) throw new Error('chatId required'); return s.heldNews?.seen(a.chatId) ?? { items: [] }; },
     ...(pulse?.handlers() ?? (demo ? pulseDemoHandlers(process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now(), {

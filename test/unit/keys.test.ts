@@ -44,6 +44,7 @@ describe('resolveShortcut', () => {
     expect(resolveShortcut(k('r', 'KeyR', ctrl))).toEqual({ type: 'orchestrator' });
     expect(resolveShortcut(k('R', 'KeyR', { ctrlKey: true, shiftKey: true }))).toEqual({ type: 'orchestratorRenew' });
     expect(resolveShortcut(k('M', 'KeyM', { ctrlKey: true, shiftKey: true }))).toEqual({ type: 'map' });
+    expect(resolveShortcut(k('m', 'KeyM', ctrl))).toEqual({ type: 'voice' }); // voice mode on / off (ADR 0152)
   });
 
   it('G then a letter goes to a section; a lone G waits; other keys pass', () => {

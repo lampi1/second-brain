@@ -26,7 +26,8 @@ export type Command =
   | { type: 'orchestratorRenew' }
   | { type: 'map' }
   | { type: 'stato' }
-  | { type: 'settings' };
+  | { type: 'settings' }
+  | { type: 'voice' };
 
 /** The keyboard map shown in the shortcuts dialog (Ctrl+/), in the same order as resolveShortcut. */
 export const getKeymap = (): readonly { keys: string; what: string }[] => [
@@ -43,6 +44,7 @@ export const getKeymap = (): readonly { keys: string; what: string }[] => [
   { keys: t('tools.keys.map3dKey'), what: t('tools.keys.map3dWhat') },
   { keys: t('tools.keys.newChatKey'), what: t('tools.keys.newChatWhat') },
   { keys: t('tools.keys.settingsKey'), what: t('tools.keys.settingsWhat') },
+  { keys: t('tools.keys.voiceKey'), what: t('tools.keys.voiceWhat') },
   { keys: t('tools.keys.stopChatKey'), what: t('tools.keys.stopChatWhat') },
   { keys: t('tools.keys.closeChatKey'), what: t('tools.keys.closeChatWhat') },
   { keys: t('tools.keys.stopAllKey'), what: t('tools.keys.stopAllWhat') },
@@ -80,6 +82,7 @@ export function resolveShortcut(e: KeyLike): Command | null {
     if (e.key.toLowerCase() === 'w') return { type: 'closeFocused' }; // the character, like Electron's menu (AZERTY)
     if (e.code === 'Slash' || e.key === '/') return { type: 'shortcuts' };
     if (e.code === 'Comma') return { type: 'settings' };
+    if (e.code === 'KeyM') return { type: 'voice' }; // voice mode on / off (ADR 0152)
     const digit = /^Digit([0-9])$/.exec(e.code) ?? /^Numpad([0-9])$/.exec(e.code);
     if (digit) return { type: 'focusTile', index: Number(digit[1]) };
     return null;
