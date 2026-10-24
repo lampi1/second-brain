@@ -546,6 +546,7 @@ export class ChatManager implements ChatService {
   private notesFor = new Map<string, string[]>();
   private userWroteListeners: ((n: UserWroteNote) => void)[] = [];
   private cleanReportListeners: ((n: CleanReportNote) => boolean)[] = [];
+  private reportSavedListeners: ((chatId: string) => void)[] = [];
   /** children's results waiting for their siblings', per parent (queueChildResult) */
   private childResults = new Map<string, { items: HeldChildResult[]; timer: NodeJS.Timeout | null }>();
   /** "Riprendi" in flight per old chat: a double click or two agents get the same new chat, never two. */
@@ -1545,6 +1546,8 @@ export class ChatManager implements ChatService {
   /** A root chat's clean result (done, every criterion met, no question): a listener that returns true took it as quiet
    *  news for the Orchestrator (orchestrator-wake.ts cleanReport); else it goes as a message, as any other result. */
   onCleanReport(fn: (n: CleanReportNote) => boolean): void { this.cleanReportListeners.push(fn); }
+  /** Every canonical root report, including blocked/partial results, is available to host workflow reconciliation. */
+  onReportSaved(fn: (chatId: string) => void): void { this.reportSavedListeners.push(fn); }
   /** the notes waiting for this chat's next message (tests, diagnostics) */
   notesWaiting(chatId: string): readonly string[] { return this.notesFor.get(chatId) ?? []; }
 
@@ -2371,6 +2374,10 @@ export class ChatManager implements ChatService {
     r.rootReportAt = at;
     this.persist();
     this.updated(r);
+    for (const listener of this.reportSavedListeners) {
+      try { listener(chatId); }
+      catch (error) { log.warn('flows', 'Saved report notification failed', { chat: chatId, cause: errText(error), hint: 'Routine reconciliation retries from the canonical report.' }); }
+    }
     const orchestrator = this.openOrchestrator();
     const role = r.s.agent?.id;
     // a clean result (done, every criterion met, no question) is quiet news: the user reads it in the chat, the
