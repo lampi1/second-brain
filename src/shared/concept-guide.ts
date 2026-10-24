@@ -426,32 +426,6 @@ export const CONCEPTS: readonly ConceptCard[] = [
     sources: ['src/main/brain/scripts.ts', 'src/main/brain/scripts-tools.ts', 'src/main/brain/changelog.ts', 'src/renderer/brain/pages/Script.tsx', 'src/renderer/components/LogPage.tsx', 'docs/adr/0076-brain-scripts-and-changelog.md'],
   },
   {
-    id: 'milestones',
-    title: b('Traguardi personali', 'Personal milestones'),
-    summary: b('Tre traguardi locali: primo ruolo personalizzato, spazio configurato e primo risultato confermato.',
-      'Three local milestones: first custom role, workspace set up and first confirmed result.'),
-    points: [
-      // src/shared/progress.ts ACHIEVEMENTS; src/renderer/lib/progress-bridge.ts labels
-      b('I traguardi sono: «Primo ruolo personalizzato», «Spazio di lavoro configurato», «Primo risultato confermato».',
-        'The milestones are: "First custom role", "Workspace set up", "First confirmed result".'),
-      // src/main/agents/progress.ts
-      b('Sono salvati in progress.json nella cartella dati dell’app.', 'They are saved in progress.json in the app’s data folder.'),
-      // src/main/wiring.ts ProgressService enabled:true; src/main/agents/progress.ts confirmResult
-      b('Personalizzare un ruolo e completare la configurazione assegnano i primi due; il primo risultato richiede una tua conferma su un risultato idoneo.',
-        'Customizing a role and completing setup award the first two; the first result requires your confirmation of an eligible result.'),
-      // src/renderer/components/ProgressPanel.tsx
-      b('Il pannello nella pagina Agenti mostra i traguardi e si può nascondere; in demo o con errori di salvataggio spiega il problema.',
-        'The panel on the Agenti page shows milestones and can be hidden; in demo or with storage errors it explains the problem.'),
-    ],
-    analogy: b('Come tre caselle da spuntare quando prepari il tuo spazio e confermi il primo lavoro riuscito.',
-      'Like three boxes to tick as you prepare your workspace and confirm the first successful job.'),
-    tech: [
-      tech(DATA, "ACHIEVEMENTS = ['first-agent', 'setup-complete', 'first-result'].", "ACHIEVEMENTS = ['first-agent', 'setup-complete', 'first-result']."),
-      tech(FILES, 'userData/progress.json; servizio ProgressService con enabled: true nel profilo personale.', 'userData/progress.json; ProgressService with enabled: true in the personal profile.'),
-    ],
-    sources: ['src/shared/progress.ts', 'src/main/agents/progress.ts', 'src/main/wiring.ts', 'src/renderer/lib/progress-bridge.ts', 'src/renderer/components/AgentStudio.tsx', 'src/renderer/components/ProgressPanel.tsx'],
-  },
-  {
     id: 'classifiers',
     title: b('I classificatori', 'The classifiers'),
     summary: b('Dove l’app smista qualcosa da sola senza spendere token: le skill adatte a un compito, il tipo di lavoro, la posta dell’Orchestrator, i comandi delicati.',

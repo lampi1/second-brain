@@ -31,7 +31,7 @@ export function FlowDiagram({ definition, run, onNavigate }: { definition: FlowD
           {definition.steps.map((step, index) => {
             const recorded = run?.steps.find(s => s.stepId === step.id);
             const status = recorded?.status ?? 'pending';
-            return <li key={step.id} style={{ top: index * 112 + 24 }}><button type="button" className="flow-node" data-testid="flow-node" data-status={status} data-current={!!run && run.currentStep === index && run.status !== 'completed'} aria-pressed={selected?.id === step.id} aria-controls={`${prefix}-inspector`} onClick={() => setPicked(step.id)}>
+            return <li key={step.id} style={{ top: index * 112 + 24 }}><button type="button" className="flow-node" data-testid="flow-node" data-status={status} data-current={!!run && run.currentStep === index && run.status !== 'completed' && run.status !== 'cancelled'} aria-pressed={selected?.id === step.id} aria-controls={`${prefix}-inspector`} onClick={() => setPicked(step.id)}>
               <span className="flow-node-index">{status === 'completed' ? '✓' : String(index + 1).padStart(2, '0')}</span>
               <span className="flow-node-content"><strong>{step.title}</strong><span>{t(`flows.${step.kind === 'approval' ? 'gate' : step.kind}`)}{recorded ? ` · ${t(`flows.${status}`)}` : ''}</span></span>
               <FlowStepAgent step={step} chatId={recorded?.chatId} compact />

@@ -498,7 +498,7 @@ app.whenReady().then(async () => {
       const { contextKey: _context, ...decision } = a;
       const rule = s.flows.automation().decide(decision);
       const target = s.chats.list().find(c => c.id === rule.ownerOrchestratorId && c.isOrchestrator && !c.closedAt);
-      if (target) void s.chats.send(target.id, `[evento app] Decisione sulla modalità automatica ${rule.id} salvata. Rileggi app_flow_auto_list; se c’è una risposta libera prepara la proposta corretta nella modale. Questa notifica non concede altri permessi.`, undefined, false, 'Flussi', false, { kind: 'app' }).catch(e => log.warn('flows', 'Automatic decision wake failed', { cause: errText(e), hint: 'Decision and feedback remain saved in Flussi.' }));
+      if (target) void s.chats.send(target.id, `[evento app] Decisione sulla modalità automatica ${rule.id} salvata. Rileggi app_flow_auto_list; se c’è una risposta libera prepara la proposta corretta nella modale. Questa notifica non concede altri permessi.`, undefined, false, 'Routine', false, { kind: 'app' }).catch(e => log.warn('flows', 'Automatic decision wake failed', { cause: errText(e), hint: 'Decision and feedback remain saved in Flussi.' }));
       return s.flows.snapshot();
     },
     'flows:autoPause': a => {
@@ -520,7 +520,7 @@ app.whenReady().then(async () => {
       const { contextKey: _context, ...decision } = a;
       service.decideDefinition(decision);
       const target = orchestrator.get();
-      if (target) void s.chats.send(target.id, '[evento app] Decisione sulla definizione del flusso salvata. Rileggi app_flow_list. Approvare la definizione non autorizza operazioni esterne o produzione.', undefined, false, 'Flussi', false, { kind: 'app' }).catch(e => log.warn('flows', 'Definition decision wake failed', { cause: errText(e), hint: 'Decision persisted; reread the catalog.' }));
+      if (target) void s.chats.send(target.id, '[evento app] Decisione sulla definizione del flusso salvata. Rileggi app_flow_list. Approvare la definizione non autorizza operazioni esterne o produzione.', undefined, false, 'Routine', false, { kind: 'app' }).catch(e => log.warn('flows', 'Definition decision wake failed', { cause: errText(e), hint: 'Decision persisted; reread the catalog.' }));
       return s.flows!.snapshot();
     },
     'flows:editStepTier': a => {
@@ -531,15 +531,43 @@ app.whenReady().then(async () => {
       service.editStepTier(edit);
       return s.flows!.snapshot();
     },
-    'flows:decide': a => {
+    'flows:decide': async a => {
       const service = s.flows?.service();
       if (!service || a.contextKey !== service.snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la decisione.');
       const { contextKey: _context, ...decision } = a;
-      service.decide(decision);
+      await s.flows!.decide(decision);
       const run = service.snapshot().runs.find(r => r.id === a.runId);
       const target = s.chats.list().find(c => c.id === run?.ownerOrchestratorId && c.isOrchestrator && !c.closedAt);
-      if (target) void s.chats.send(target.id, `[evento app] Decisione salvata per il flusso ${a.runId}. Rileggi app_flow_status; questa notifica non concede altri permessi.`, undefined, false, 'Flussi', false, { kind: 'app' }).catch(e => log.warn('flows', 'Run decision wake failed', { cause: errText(e), hint: 'Decision persisted in the flow run.' }));
+      if (target) void s.chats.send(target.id, `[evento app] Decisione salvata per il flusso ${a.runId}. Rileggi app_flow_status; questa notifica non concede altri permessi.`, undefined, false, 'Routine', false, { kind: 'app' }).catch(e => log.warn('flows', 'Run decision wake failed', { cause: errText(e), hint: 'Decision persisted in the flow run.' }));
       return s.flows!.snapshot();
+    },
+    'flows:cancel': async a => {
+      const flows = s.flows;
+      if (!flows || a.contextKey !== flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la routine.');
+      const { contextKey: _context, ...input } = a;
+      await flows.cancel(input);
+      return flows.snapshot();
+    },
+    'flows:cancelDecide': async a => {
+      const flows = s.flows;
+      if (!flows || a.contextKey !== flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la proposta.');
+      const { contextKey: _context, ...input } = a;
+      await flows.decideCancel(input);
+      return flows.snapshot();
+    },
+    'flows:restart': async a => {
+      const flows = s.flows;
+      if (!flows || a.contextKey !== flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la routine.');
+      const { contextKey: _context, ...input } = a;
+      await flows.restart(input);
+      return flows.snapshot();
+    },
+    'flows:restartDecide': async a => {
+      const flows = s.flows;
+      if (!flows || a.contextKey !== flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la proposta.');
+      const { contextKey: _context, ...input } = a;
+      await flows.decideRestart(input);
+      return flows.snapshot();
     },
     'work:list': () => workflows.list(),
     'work:decide': a => {

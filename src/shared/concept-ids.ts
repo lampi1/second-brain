@@ -3,7 +3,7 @@
 // loaded when the Guida opens. test/unit/guide-link.test.ts keeps the two lists equal.
 export const CONCEPT_IDS: readonly string[] = [
   'every-task-agent', 'delegation', 'agents', 'skills', 'orchestrator', 'runs', 'metrics', 'errors-rules', 'brain-scripts',
-  'milestones', 'classifiers', 'permissions', 'questions', 'grindhouse', 'memory-hub', 'task-fatto', 'setup', 'brain',
+  'classifiers', 'permissions', 'questions', 'grindhouse', 'memory-hub', 'task-fatto', 'setup', 'brain',
   'search', 'file-viewer', 'routing', 'costs', 'mcp-servers', 'updates', 'maintenance', 'proposals', 'trials', 'auto-close',
   'log', 'held-news', 'context', 'quality',
 ];

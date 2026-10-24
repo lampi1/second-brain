@@ -16,7 +16,7 @@ export function appBoot(root: string, tools?: string): string {
     'launch (`{tools}`); the copy there is never edited. Files that do not exist yet are created on first real use; never',
     'seed rules, skills or example notes the owner did not ask for. me.md is the owner\'s profile.',
     'Safety: production and shared systems: propose the exact action; the owner runs it. Production queries, read-only',
-    'too: show the full text first, run only after an explicit ok. No secrets in this folder; credentials stay outside',
+    'too: never execute them; show the full text for the owner to run. No secrets in this folder; credentials stay outside',
     'and must not be read. Do not recursively search the home directory. Do not change global CLI settings.',
     'Memory: use the product memory command supplied at launch for now.md and ai-errors.md; never edit their lines',
     'directly. Keep your thread current (where, state, next step). Log verified errors immediately.',

@@ -9,8 +9,13 @@ import { decisionDraft, saveDecisionDraft } from '../lib/decision-drafts';
 import { t } from '../i18n';
 import { FlowAutomationSummary } from './FlowAutomationSummary';
 import { FlowDefinition } from './FlowDefinition';
+import { FlowRestartApproval } from './FlowRunControls';
 import '../styles/flows.css';
 export function FlowApproval({ ask, onEscape }: { ask: FlowAsk; onEscape: () => void }) {
+  if (ask.type === 'flow-restart' || ask.type === 'flow-cancel') return <FlowRestartApproval ask={ask} onEscape={onEscape} />;
+  return <FlowStandardApproval ask={ask} onEscape={onEscape} />;
+}
+function FlowStandardApproval({ ask, onEscape }: { ask: Exclude<FlowAsk, { type: 'flow-restart' | 'flow-cancel' }>; onEscape: () => void }) {
   const key = `${ask.chatId}/${ask.id}`, inputId = useId(), evidenceId = useId();
   const evidenceKey = `${key}/evidence`;
   const [evidence, setEvidence] = useState(() => decisionDraft(evidenceKey));

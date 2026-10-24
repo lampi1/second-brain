@@ -109,15 +109,16 @@ try {
   await page.getByTestId('mm-insights').waitFor();
   await capture('memory');
   // Synthetic definition only: inspect fullscreen step details without launching any flow or provider.
-  const flow = { id: 'visual-flow', title: 'Revisione documento — demo sintetica', description: 'Ogni passaggio mostra descrizione, ruolo, livello e modello.', aliases: [], scope: { project: 'Demo sintetica' }, steps: Array.from({ length: 6 }, (_, i) => ({
-    id: `step-${i}`, title: `${i + 1}. ${['Analisi', 'Piano', 'Implementazione', 'Review', 'Verifica', 'Riepilogo'][i]}`,
+  const flow = { id: 'visual-flow', title: 'Revisione documentale completa con analisi, implementazione, verifiche e chiusura — routine sintetica per ispezione visuale', description: Array.from({ length: 10 }, (_, i) => `Obiettivo ${i + 1}: la routine verifica i documenti selezionati, esplicita dipendenze, approvazioni e criteri di completamento senza usare dati reali.`).join('\n'), aliases: [], scope: { project: 'Demo sintetica' }, steps: Array.from({ length: 20 }, (_, i) => ({
+    id: `step-${i}`, title: `${i + 1}. ${['Analisi dei requisiti e dei riferimenti', 'Piano con dipendenze e verifiche', 'Implementazione documentata', 'Review indipendente', 'Verifica dei risultati', 'Riepilogo con evidenze'][i % 6]}`,
     kind: 'agent', role: i === 3 ? 'sentinel' : 'artisan', tier: 'mid',
-    instructions: `Descrizione completa del passaggio ${i + 1}. Controlla i documenti selezionati e registra il risultato.\nMantieni visibili i vincoli e le evidenze prima di proseguire.`,
-    inputs: ['workspace'], workspaceInput: 'workspace', evidence: ['Report del passaggio e risultato verificabile.'], timeoutMs: 60000, maxAttempts: 2, effect: 'read-only',
+    instructions: `Descrizione completa del passaggio ${i + 1}. Controlla i documenti selezionati e registra il risultato con riferimenti verificabili, limiti dell’analisi e condizioni di completamento.\nMantieni visibili i vincoli e le evidenze prima di proseguire. Confronta il risultato con i requisiti iniziali, indica cosa resta da fare e richiedi la decisione necessaria quando manca un prerequisito.`,
+    inputs: ['workspace'], workspaceInput: 'workspace', evidence: ['Report del passaggio e risultato verificabile.'], timeoutMs: 60000, maxAttempts: 2, effect: i === 4 ? 'external-write' : 'read-only',
   })) };
   const flowSnapshot = { contextKey: 'synthetic-visual-flow', drafts: [], active: { [flow.id]: 1 }, versions: [{ definition: flow, version: 1, draftRevision: 1, digest: 'visual-only', activatedAt: 1 }], runs: [], roles: Object.fromEntries(['artisan', 'sentinel'].map(role => [role, {
-    name: role === 'artisan' ? 'Artisan' : 'Sentinel', avatar: { kind: 'character', value: role }, tier: 'mid', tierMax: 'top', model: null, models: { mid: 'demo-model' },
+    name: role === 'artisan' ? 'Artisan' : 'Sentinel', avatar: { kind: 'character', value: role }, tier: 'mid', tierMax: 'top', model: null, models: { mid: 'synthetic-reasoning-model-long-context-2026-10-24' },
   }])) };
+  flowSnapshot.runs.push({ id: 'synthetic-interrupted-run', revision: 4, flowId: flow.id, flowVersion: 1, definitionDigest: 'visual-only', ownerOrchestratorId: 'orchestrator', subjectKey: 'Documento sintetico con revisione da completare', scope: { project: 'Demo sintetica' }, inputs: { workspace: '/synthetic/workspace' }, status: 'blocked', currentStep: 3, steps: flow.steps.map((step, index) => ({ stepId: step.id, status: index < 3 ? 'completed' : index === 3 ? 'blocked' : 'pending', attempts: index < 4 ? 1 : 0, ...(index < 3 ? { receipt: { id: `receipt-${index}`, stepId: step.id, kind: 'user', at: 1, summary: 'Evidenza sintetica verificata', evidence: ['Report dimostrativo'] } } : index === 3 ? { reason: 'Sentinel attende la verifica del documento: report precedente incompleto.', decisionPending: false } : {}) })), createdAt: 1, updatedAt: 3 });
   await page.getByTestId('nav-flussi').click();
   await page.getByTestId('flow-import-open').waitFor();
   await app.evaluate(({ BrowserWindow }, snapshot) => {
@@ -127,6 +128,8 @@ try {
   await page.getByTestId('flow-fullscreen-open').click();
   const fullscreen = page.getByTestId('flow-fullscreen');
   await fullscreen.getByTestId('flow-fullscreen-steps').waitFor();
+  const dimensions = await fullscreen.evaluate(el => ({ header: el.querySelector('.modal-head').getBoundingClientRect().height, height: el.getBoundingClientRect().height, bodyScroll: el.querySelector('.modal-body').scrollHeight, bodyHeight: el.querySelector('.modal-body').clientHeight }));
+  if (dimensions.header > 100 || dimensions.bodyScroll <= dimensions.bodyHeight) throw new Error(`Fullscreen layout is not bounded: ${JSON.stringify(dimensions)}`);
   await capture('flow-fullscreen-details');
   await fullscreen.locator('.flow-step').last().scrollIntoViewIfNeeded();
   await capture('flow-fullscreen-last-step');
@@ -139,6 +142,16 @@ try {
   if (await page.evaluate(() => window.innerWidth) > 600) throw new Error('Narrow fullscreen capture did not resize');
   await capture('flow-fullscreen-narrow');
   await page.keyboard.press('Escape');
+  await page.getByTestId('flow-resume-step').click();
+  await page.getByTestId('flow-recovery-modal').waitFor();
+  await capture('routine-resume-confirmation');
+  await page.getByTestId('flow-recovery-step').selectOption('step-9');
+  await page.getByTestId('flow-recovery-blocker').waitFor();
+  await capture('routine-resume-prerequisite');
+  await page.getByTestId('flow-recovery-no').click();
+  await page.getByTestId('flow-cancel').click();
+  await capture('routine-cancel-confirmation');
+  await page.getByTestId('flow-recovery-no').click();
   // The demo has no review services. A separate isolated SB_TEST instance reads a clearly synthetic memory
   // store through the real services; no replay/run actions are clicked and all automatic work stays disabled.
   await app.close();

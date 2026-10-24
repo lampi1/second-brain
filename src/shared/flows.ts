@@ -36,7 +36,7 @@ export interface FlowAgentBinding { chatId: string; chatRunId: string; taskVersi
   launched?: { roleId?: string; tier?: ModelTier; fromTable?: boolean } }
 export interface FlowVerifiedReport extends FlowAgentBinding { id: string; summary: string; evidence: string[]; completed: boolean; roleId?: string; reviewOf?: string }
 export interface FlowStepRun {
-  stepId: string; status: 'pending' | 'ready' | 'running' | 'approval' | 'blocked' | 'completed';
+  stepId: string; status: 'pending' | 'ready' | 'running' | 'approval' | 'blocked' | 'completed' | 'cancelled';
   attempts: number; startedAt?: number; chatId?: string; chatRunId?: string; taskVersion?: number;
   reason?: string; receipt?: FlowReceipt; decisionPending?: boolean;
 }
@@ -48,9 +48,14 @@ export interface FlowTestDbEvidence {
 export interface FlowRun {
   id: string; revision: number; flowId: string; flowVersion: number; definitionDigest: string;
   ownerOrchestratorId: string; subjectKey: string; scope: FlowScope; inputs: Record<string, string>;
-  status: 'active' | 'approval' | 'blocked' | 'completed'; currentStep: number; steps: FlowStepRun[];
+  status: 'active' | 'approval' | 'blocked' | 'completed' | 'cancelled'; currentStep: number; steps: FlowStepRun[];
   createdAt: number; updatedAt: number;
   testDbEvidence?: FlowTestDbEvidence[];
+  cancellation?: { at: number; reason: string; by: 'user' | 'orchestrator'; expectedRevision: number; interruption?: 'pending' | 'confirmed' };
+  restartOf?: { runId: string; stepId: string; expectedRevision: number; mode: 'from-start' | 'from-step' };
+  pendingCancellation?: { revision: number; requestedAt: number; reason?: string };
+  recoveryFeedback?: { kind: 'cancel' | 'restart'; at: number; message: string; deliveredAt?: number };
+  pendingRecovery?: { mode: 'from-start' | 'from-step'; stepId?: string; revision: number; requestedAt: number; targetVersion: number; targetDigest: string; automationRule?: { id: string; revision: number } };
 }
 export interface FlowSnapshot {
   contextKey: string; drafts: FlowDraft[]; versions: FlowVersion[]; active: Record<string, number>;
@@ -69,5 +74,10 @@ export interface FlowStepTierEdit { flowId: string; base: { version: number } | 
 export interface FlowStart { flowId: string; flowVersion: number; subjectKey: string; scope: FlowScope; inputs: Record<string, string> }
 export interface FlowReport { runId: string; expectedRevision: number; stepId: string; reportId: string }
 export interface FlowDecision { runId: string; expectedRevision: number; stepId: string; answer: 'yes' | 'no' | 'other'; feedback?: string }
+/** Explicit controls preserve the original run and pin the exact version reviewed by the user. */
+export interface FlowCancel { runId: string; expectedRevision: number; reason?: string }
+export interface FlowRestart { runId: string; expectedRevision: number; mode: 'from-start' | 'from-step'; stepId?: string; acknowledgeEffects: boolean; targetVersion: number; targetDigest: string; automationRule?: { id: string; revision: number } }
+export type FlowRestartProposal = Omit<FlowRestart, 'acknowledgeEffects'>;
+export interface FlowRestartDecision { runId: string; expectedRevision: number; answer: 'yes' | 'no' | 'other'; feedback?: string }
 /** Binds a renderer decision to the brain whose proposal was actually displayed. */
 export type FlowContext<T> = T & { contextKey: string };

@@ -1,7 +1,7 @@
 // Live flow catalog and exact-brain decisions. A changed brain clears cached proposals before any replacement read.
 import { useEffect } from 'react';
 import type { FlowAutomationControl, FlowAutomationPause } from '@shared/flow-automation';
-import type { FlowSnapshot, FlowStepTierEdit } from '@shared/flows';
+import type { FlowCancel, FlowRestart, FlowSnapshot, FlowStepTierEdit } from '@shared/flows';
 import type { FlowAsk } from '../lib/flow-ask';
 import { clearDecisionDrafts } from '../lib/decision-drafts';
 import { flowAsks } from '../lib/flow-ask';
@@ -57,6 +57,10 @@ export async function decideFlow(ask: FlowAsk, answer: 'yes' | 'no' | 'other', f
       ? await sb.invoke('flows:autoDecide', { ...common, id: ask.rule.id, expectedRevision: ask.rule.revision })
       : ask.type === 'flow-definition'
       ? await sb.invoke('flows:definitionDecide', { ...common, id: ask.draft.definition.id, expectedRevision: ask.draft.revision })
+      : ask.type === 'flow-cancel'
+      ? await sb.invoke('flows:cancelDecide', { ...common, runId: ask.run.id, expectedRevision: ask.run.revision })
+      : ask.type === 'flow-restart'
+      ? await sb.invoke('flows:restartDecide', { ...common, runId: ask.run.id, expectedRevision: ask.run.revision })
       : await sb.invoke('flows:decide', { ...common, runId: ask.run.id, expectedRevision: ask.run.revision, stepId: ask.run.steps[ask.run.currentStep]!.stepId });
     if (ticket === read && flowState.get().snapshot?.contextKey === ask.contextKey) {
       ++read;
@@ -67,6 +71,26 @@ export async function decideFlow(ask: FlowAsk, answer: 'yes' | 'no' | 'other', f
     toast(t('flows.failedDecision'), 'err');
     void reloadFlows();
     return false;
+  }
+}
+
+export interface FlowRunControlResult { ok: boolean; runId?: string; error?: string }
+/** Direct user controls pin brain, run revision and target definition. Late replies never replace a newer brain. */
+export async function controlFlowRun(contextKey: string, control: FlowCancel | FlowRestart): Promise<FlowRunControlResult> {
+  const current = flowState.get().snapshot;
+  if (current?.contextKey !== contextKey || !current.runs.some(run => run.id === control.runId && run.revision === control.expectedRevision)) return { ok: false, error: t('flows.recoveryStale') };
+  const ticket = read;
+  try {
+    const snapshot = 'mode' in control
+      ? await sb.invoke('flows:restart', { ...control, contextKey })
+      : await sb.invoke('flows:cancel', { ...control, contextKey });
+    if (flowState.get().snapshot?.contextKey !== contextKey) return { ok: false, error: t('flows.recoveryStale') };
+    if (ticket === read) { ++read; acceptSnapshot(snapshot); }
+    const restarted = 'mode' in control ? snapshot.runs.filter(run => run.restartOf?.runId === control.runId && run.restartOf.expectedRevision === control.expectedRevision && run.restartOf.mode === control.mode).sort((a, b) => b.createdAt - a.createdAt)[0] : undefined;
+    return { ok: true, runId: restarted?.id ?? control.runId };
+  } catch (error) {
+    void reloadFlows();
+    return { ok: false, error: `${t('flows.recoveryFailed')} ${String(error)}` };
   }
 }
 

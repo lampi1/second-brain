@@ -43,7 +43,7 @@ import { useFlows } from '../store/flows';
 
 /** what the window shows: an open request, or a Strategist's plan to approve */
 type Ask = PendingRequest | PlanAsk | DurableAsk | FlowAsk;
-const isFlow = (ask: Ask): ask is FlowAsk => ask.type === 'flow-definition' || ask.type === 'flow-run' || ask.type === 'flow-automation';
+const isFlow = (ask: Ask): ask is FlowAsk => ask.type === 'flow-definition' || ask.type === 'flow-run' || ask.type === 'flow-automation' || ask.type === 'flow-restart' || ask.type === 'flow-cancel';
 const isHost = (ask: Ask): ask is DurableAsk | FlowAsk => isDurable(ask) || isFlow(ask);
 const isDurable = (ask: Ask): ask is DurableAsk => ask.type === 'work' || ask.type === 'lesson';
 

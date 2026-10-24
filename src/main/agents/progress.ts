@@ -1,3 +1,4 @@
+// Legacy milestone storage/API retained for compatibility; production wiring disables it without deleting history.
 import path from 'node:path';
 import { ACHIEVEMENTS, type AchievementId, type ProgressState } from '../../shared/progress';
 import type { ChatSummary } from '../../shared/contract';
@@ -18,7 +19,7 @@ export class ProgressService {
       this.value = { version: 1, hidden: raw.hidden, earned: raw.earned.map(({ id, at }) => ({ id, at })) };
     } catch { this.problem = 'I traguardi locali non sono leggibili. Il file è conservato.'; }
   }
-  get(): ProgressState { return structuredClone({ ...this.value, available: this.d.enabled && !this.problem, ...(!this.d.enabled ? { reason: 'I traguardi sono disponibili nel profilo personale, non nella demo.' } : this.problem ? { problem: this.problem, reason: this.problem } : {}) }); }
+  get(): ProgressState { return structuredClone({ ...this.value, available: this.d.enabled && !this.problem, ...(!this.d.enabled ? { reason: 'I traguardi personali sono disattivati.' } : this.problem ? { problem: this.problem, reason: this.problem } : {}) }); }
   private persist(next: Omit<ProgressState, 'available' | 'reason'>): ProgressState {
     if (!this.d.enabled || this.problem) return this.get();
     try { writeLocal(this.file, next); this.value = next; this.d.emit?.(this.get()); }
@@ -34,7 +35,7 @@ export class ProgressService {
     return hidden === this.value.hidden ? this.get() : this.persist({ ...this.value, hidden });
   }
   confirmResult(chatId: string, resultAt: number): ProgressState {
-    if (!this.d.enabled) throw new Error('I traguardi non vengono assegnati nella demo.');
+    if (!this.d.enabled) throw new Error('I traguardi personali sono disattivati.');
     const chat = this.d.chats().find(c => c.id === chatId);
     const result = chat?.lastResult;
     if (!chat || chat.closedAt || chat.state !== 'idle' || chat.pending || chat.lastError || !chat.lastText.trim() || !Number.isFinite(resultAt) || !result || result.at !== resultAt || result.isError || result.interrupted) throw new Error('Conferma un risultato concluso con successo e ancora disponibile.');

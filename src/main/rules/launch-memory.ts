@@ -1,30 +1,40 @@
-// Task-selective launch memory for AgentPackFlows. This is a read-only view; memory_recall still searches every fact.
-// User-confirmed facts, legacy text and unknown provenance stay present even when the optional-memory budget is full.
-import { budgetMemory, memoryWords, quoteMemory, readMemoryRecords, scopedMemory, type MemoryRecord, type MemoryScope } from './memory-records';
-import { read } from './storage';
+// Bounded task-relevant facts for AgentPackFlows. Launch selection never changes the searchable memory archive.
+// Confirmed facts are quoted evidence, not policy; role instructions and permission enforcement stay outside this view.
+import { memoryWords, scopedMemory, type MemoryRecord, type MemoryScope } from './memory-records';
 
-const STOP = new Set('the and for with from this that then into your task please una uno per con del della delle degli nel nella alla che come prima dopo'.split(' '));
+const STOP = new Set('the and for with from this that then into your task please review check help need want use using should about have has are was were will can could would all our not una uno per con del della delle degli nel nella alla che come prima dopo questo questa sono fare usa usare verifica controlla'.split(' '));
 const words = (s: string): Set<string> => new Set([...memoryWords(s)].filter(w => !STOP.has(w)));
-/** Only host-marked model proposals can be faded. Missing provenance is protected, never inferred to be generated. */
-export function protectedMemory(r: MemoryRecord): boolean {
-  return r.status === 'confirmed' || !!r.verification || !/^(memory-proposal:|report:)/.test(r.sourceEventId)
-    || /\b(security|sicurezza|permission|permissions|permessi|credential|credentials|credenziali|secret|secrets|segreti|password|sandbox|token|production|produzione)\b/i.test(`${r.subject} ${r.predicate} ${r.value}`);
+export const LAUNCH_MEMORY_TOKENS = 1200;
+export const LAUNCH_MEMORY_RECORDS = 8;
+export type LaunchMemoryContext = Omit<MemoryScope, 'roleId'> & { query?: string };
+export interface LaunchMemory { text: string; selected: number; omitted: number; estimatedTokens: number }
+
+/** Keep each fact and its provenance whole: truncating a condition or negation can change its meaning. */
+function quoteLaunchMemory(r: MemoryRecord): string {
+  return JSON.stringify({ id: r.memoryId, status: r.status, scope: r.scope, subject: r.subject, predicate: r.predicate,
+    value: r.value, sourceEventId: r.sourceEventId, sourceRunId: r.sourceRunId, observedAt: r.observedAt,
+    ...(r.verification ? { verification: { sourceEventId: r.verification.sourceEventId, sourceRunId: r.verification.sourceRunId, evidence: r.verification.evidence } } : {}) });
 }
-export interface LaunchMemory { text: string; selected: number; omitted: number; protected: number }
-export function selectLaunchMemory(root: string, scope: MemoryScope, query = '', budgetTokens = 1200): LaunchMemory {
-  const rows = scopedMemory(root, scope), pinned = rows.filter(protectedMemory), q = words(query.slice(0, 16000));
-  const optional = rows.filter(r => !protectedMemory(r)).map(r => ({ r, score: [...words(`${r.subject} ${r.predicate} ${r.value}`)].filter(w => q.has(w)).length }))
-    .filter(r => r.score > 0).sort((a, b) => b.score - a.score || b.r.observedAt.localeCompare(a.r.observedAt) || a.r.memoryId.localeCompare(b.r.memoryId));
-  const selectedText = budgetMemory(optional.slice(0, 40).map(({ r }) => quoteMemory(r)), budgetTokens);
-  const selected = selectedText ? selectedText.split('\n').length : 0;
-  const protectedText = pinned.sort((a, b) => a.memoryId.localeCompare(b.memoryId)).map(quoteMemory);
-  // A legacy file has no reliable author metadata. Preserve it in unscoped launches, including non-bullet notes;
-  // known record copies are excluded so retracted or out-of-scope facts cannot re-enter through the old Markdown.
-  if (!scope.userId && !scope.project && !scope.repository && !scope.environment) {
-    const known = readMemoryRecords(root).filter(r => r.scope.roleId === scope.roleId).map(r => r.value);
-    const legacy = read(root, `agents/${scope.roleId}/memory.md`).split('\n').filter(line => !known.some(value => line.endsWith(` · ${value}`))).join('\n').trim();
-    if (legacy) protectedText.push(JSON.stringify({ status: 'unverified-legacy', value: legacy }));
+
+/** No model calls or fallback to the entire archive. Missing task context loads no facts; recall stays available.
+ *  Scope and current confirmation are filtered before scoring. Every fact, including confirmed/security-related
+ *  ones, shares the same hard budget. Actual policy is supplied by the host's rules and role instructions. */
+export function selectLaunchMemory(root: string, scope: MemoryScope, query = '', budgetTokens = LAUNCH_MEMORY_TOKENS): LaunchMemory {
+  const rows = scopedMemory(root, scope), q = words(query.slice(0, 16000));
+  const candidates = rows.filter(r => r.status === 'confirmed').map(r => ({ r, words: words(`${r.subject} ${r.predicate} ${r.value}`) }));
+  const frequencies = new Map([...q].map(word => [word, candidates.filter(row => row.words.has(word)).length]));
+  const ranked = candidates.map(row => ({ r: row.r, score: [...q].reduce((sum, word) => sum + (row.words.has(word)
+    ? Math.log(1 + candidates.length / (frequencies.get(word) ?? 1)) : 0), 0) }))
+    .filter(row => row.score > 0).sort((a, b) => b.score - a.score || b.r.observedAt.localeCompare(a.r.observedAt) || a.r.memoryId.localeCompare(b.r.memoryId));
+  // Character-based token estimate, consistent with scoped recall. Non-finite budgets fail closed, never unbounded.
+  let left = Number.isFinite(budgetTokens) ? Math.max(0, Math.min(Math.floor(budgetTokens), LAUNCH_MEMORY_TOKENS)) * 3 : 0;
+  const chosen: string[] = [];
+  for (const { r } of ranked) {
+    if (chosen.length === LAUNCH_MEMORY_RECORDS) break;
+    const text = quoteLaunchMemory(r), cost = text.length + (chosen.length ? 1 : 0);
+    if (cost > left) continue;
+    chosen.push(text); left -= cost;
   }
-  const omitted = rows.length - pinned.length - selected;
-  return { text: [...protectedText, selectedText].filter(Boolean).join('\n'), selected, omitted, protected: protectedText.length };
+  const text = chosen.join('\n');
+  return { text, selected: chosen.length, omitted: rows.length - chosen.length, estimatedTokens: Math.ceil(text.length / 3) };
 }

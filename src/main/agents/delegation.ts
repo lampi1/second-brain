@@ -25,7 +25,7 @@ import { withinParent } from './worktrees';
 import { gapLines, skillGaps } from './skill-needs';
 import type { SkillToolsSource } from './discovery';
 import { log } from '../log';
-import { memoryWorth, specificHint } from '../rules/memory-worth';
+import { checkMemoryWorth } from '../rules/memory-worth';
 
 /** What delegation needs from the chats (ChatManager). */
 export interface DelegationChats {
@@ -287,7 +287,10 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (!lines) throw new Error(`agent_report: remember = up to ${REMEMBER_MAX} single lines of at most ${REMEMBER_LINE} characters.`);
     if (!lines.length) return () => 0;
     // the worth gate (ADR 0129) before the report is accepted: the agent generalizes the line or leaves it out
-    lines.forEach((line, i) => { const w = memoryWorth('setup', 'note', line); if (w.specific) throw new Error(`agent_report: remember line ${i + 1}: ${specificHint(w)}`); });
+    lines.forEach((line, i) => {
+      try { checkMemoryWorth('setup', 'note', line); }
+      catch (e) { throw new Error(`agent_report: remember line ${i + 1}: ${e instanceof Error ? e.message : String(e)}`); }
+    });
     const roleId = self?.agent?.source === 'catalog' ? self.agent.id : null;
     if (!roleId || !d.remember) throw new Error('agent_report: remember works only in a role chat with a brain; leave it out.');
     // the report is already delivered when this runs: a failed write is logged, never turned into a refused report

@@ -1,6 +1,6 @@
 // The Proposte deck's sources (ADR 0123): each one turns what an existing module already keeps waiting for the user into
 // cards (shared/proposals.ts) with who, where, when and the evidence, and decides a card only through that module's own
-// path, the same call its old page made: a memory fact → memory:confirm / memory:retract (near-duplicates, the daily
+// path, the same call its old page made: a memory fact → memory:confirm / memory:retract (near-duplicates, the per-role
 // cap and the batch card: memory-deck.ts, ADR 0129); a skill candidate →
 // learning:promote / the rollback of the change that wrote it; a change the maintenance applied → Tieni (a reviewed mark)
 // / brainmodel:rollback; an agent's protected setting → settings:confirm; a role trial → agents:trialDecide; a tier
@@ -14,10 +14,10 @@ import type { ChatSummary, LearnAction, LearnResult, SettingProposal } from '../
 import type { MemoryReviewRecord, SkillCandidateView } from '../../shared/learning-review';
 import type { ResearchProposal } from '../../shared/maintenance-research';
 import type { ApprovalItem as PulseApproval, PulseResult } from '../../shared/pulse';
-import { factSentence, type Proposal, type ProposalAsk, type ProposalGroup, type ProposalCode, type ProposalDecision, type ProposalKeep, type ProposalFact, type ProposalProvenance, type ProposalSource, type ProposalWho } from '../../shared/proposals';
+import { type Proposal, type ProposalAsk, type ProposalGroup, type ProposalCode, type ProposalDecision, type ProposalKeep, type ProposalFact, type ProposalProvenance, type ProposalSource, type ProposalWho } from '../../shared/proposals';
 import { isRoleId } from '../../shared/roles';
 import type { FileSnapshot, StoredChange } from '../brainmodel/changes';
-import { memoryCards, type FactGroup, type MemoryCard } from './memory-deck';
+import { memoryBatchContent, memoryCards, type FactGroup, type MemoryCard } from './memory-deck';
 
 /** Changes older than this are history, not news: they stay in the change log only. */
 export const CHANGE_WINDOW_MS = 14 * 86_400_000;
@@ -123,9 +123,10 @@ function batchCard(b: Extract<MemoryCard, { kind: 'batch' }>): Proposal {
   const first = b.groups[0]!.rep, latest = b.groups.map(g => g.rep.observedAt).sort().at(-1)!;
   const same = b.groups.every(g => JSON.stringify(scopeOf(g.rep)) === JSON.stringify(scopeOf(first)));
   return card('memory', b.id, {
-    group: 'fact', applied: false, title: `${b.role} · ${b.day}`, content: b.groups.map(g => `- ${factSentence(g.rep.subject, g.rep.predicate, g.rep.value)}`).join('\n'),
+    group: 'fact', applied: false, title: `${b.role} · ${b.day}`, content: memoryBatchContent(b.groups),
     ask: { kind: 'remember', ...(isRoleId(b.role) ? { role: b.role } : {}), subject: '', predicate: '', ...(same ? scopeOf(first) : {}), many: b.groups.length },
-    facts: [{ key: 'cases', value: String(b.groups.reduce((n, g) => n + 1 + g.dups.length, 0)) }],
+    facts: [{ key: 'scope', value: Object.entries(first.scope).map(([k, v]) => `${k}: ${v}`).join(' · ') },
+      { key: 'cases', value: String(b.groups.reduce((n, g) => n + 1 + g.dups.length, 0)) }],
     provenance: prov({ who: roleWho(b.role, { kind: 'app', id: 'agent' }), files: ['memory/records.json'], at: latest, evidence: b.groups.map(g => g.rep.sourceEventId) }),
     canApprove: true, canReject: true,
   });

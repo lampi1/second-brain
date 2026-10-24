@@ -52,6 +52,8 @@ describe('a role\'s know-how at launch', () => {
     expect(fs.existsSync(path.join(runtime.skillRoot, 'fatture/SKILL.md'))).toBe(true);
     expect(fs.existsSync(path.join(runtime.skillRoot, `${portableId(agent.id)}/SKILL.md`))).toBe(true);
     expect(fs.readdirSync(runtime.pluginDir, { recursive: true }).map(String).some(f => /memory/.test(f))).toBe(false);
-    expect(runtime.memory).toContain('- ricordo privato');
+    expect(runtime.memory).not.toContain('- ricordo privato');
+    expect(runtime.memory).toContain('memory_recall');
+    expect(fs.readFileSync(path.join(w.brain, `agents/${portableId(agent.id)}/memory.md`), 'utf8')).toBe('- ricordo privato\n');
   });
 });

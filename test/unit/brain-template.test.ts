@@ -18,13 +18,21 @@ function scripts(dir: string): string[] {
 }
 
 describe('brain-template', () => {
-  it('ships one action rules table without granting tools or weakening production query approval', () => {
+  it('ships one action rules table without granting tools or production query execution', () => {
     const text = fs.readFileSync(path.join(tpl, 'me.template.md'), 'utf8');
     expect(text.split('### Regole delle azioni')).toHaveLength(2);
     for (const action of ['push', 'PR', 'merge']) expect(text).toContain(`| ${action} | non produzione | mostra-e-conferma |`);
     for (const action of ['deploy', 'scritture']) expect(text).toContain(`| ${action} | produzione | l'agente propone e la persona esegue |`);
     expect(text).toContain('Queries on production databases');
+    expect(text).toContain('read-only too: never execute them');
+    expect(text).toContain('never execute them, even with approval');
     expect(text).toContain('This table grants no tool permissions');
+  });
+  it('keeps production queries owner-only in the shipped Orchestrator style', () => {
+    const text = fs.readFileSync(path.join(tpl, 'harness/claude/output-styles/orchestrator.md'), 'utf8');
+    expect(text).toContain('mai eseguire query su DB di produzione, neanche in sola lettura');
+    expect(text).toContain('Nessuna approvazione autorizza l\'agente a eseguirle');
+    expect(text).not.toContain('query e avuto l\'ok');
   });
   it('has the installer and the guides a new user opens first', () => {
     for (const f of ['install.mjs', 'README.md', 'START-HERE.md', 'AGENTS.md', 'me.template.md']) expect(fs.existsSync(path.join(tpl, f)), f).toBe(true);

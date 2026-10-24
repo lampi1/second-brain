@@ -36,7 +36,7 @@ export type ProposalAsk =
     same?: number;
     /** the signs of a one-off fact (ADR 0129): the card says the fact looks tied to one case */
     specific?: MemorySign[];
-    /** a batch card (ADR 0129): this many facts of one role and day, listed in the content, decided as a whole */
+    /** a batch card (ADR 0129): this many facts of one role and exact scope across dates, listed in full, decided as a whole */
     many?: number }
   /** a skill draft to add to the brain */
   | { kind: 'skill'; name: string }
