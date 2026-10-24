@@ -1,5 +1,7 @@
 // second-brain main process: one window, the services (chats, browser + MCP, brain + feed) and the typed IPC.
-import { exportFlow, importFlow } from './flows/portable';
+import { exportFlow, importFlow, parsePortable } from './flows/portable';
+import { writeAgentMemory } from './rules/memory';
+import type { ImportWriter } from './agents/pack/routine-share';
 import { stepFileText } from './flows/executor';
 import { app, dialog, nativeImage, session, shell, utilityProcess, type BrowserWindow } from 'electron';
 import { DefaultBrain } from '../modules/ai-first/default-brain';
@@ -113,6 +115,14 @@ app.whenReady().then(async () => {
   const flowsFor = (contextKey: string) => {
     if (!s.flows || contextKey !== s.flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la routine.');
     return s.flows;
+  };
+  const routineService = (contextKey: string) => flowsFor(contextKey).service();
+  /** A flow version as its portable JSON export (scripts/queries pinned), for the routine package (ADR 0156). */
+  const routinePortable = (a: { contextKey: string; flowId: string; version: number }) => {
+    const service = routineService(a.contextKey), root = s.brain.info().brainRoot;
+    const json = exportFlow(service.snapshot(), { flowId: a.flowId, version: a.version, format: 'json' }, (kind, ref) => root ? stepFileText(root, kind, ref) : null).content;
+    const { definition, version } = parsePortable(json);
+    return { json, definition, version };
   };
   const requireReviewRoot = (expected: unknown): void => {
     const actual = s.brain.info().brainRoot;
@@ -519,6 +529,22 @@ app.whenReady().then(async () => {
       const { contextKey: _context, ...input } = a;
       const root = s.brain.info().brainRoot;
       return exportFlow(service.snapshot(), input, (kind, ref) => root ? stepFileText(root, kind, ref) : null);
+    },
+    // the routine package (ADR 0156): the portable JSON plus what the steps, roles and skills need, in one zip
+    'flows:packagePreview': a => { const p = routinePortable(a); return s.agentPacks.routine.preview(p.definition, p.version, p.json); },
+    'flows:packageExport': a => { const p = routinePortable(a); return s.agentPacks.routine.export(p.definition, p.version, p.json, a.memory === true); },
+    'flows:packageInspect': a => { routineService(a.contextKey); return s.agentPacks.routine.inspect(a.data); },
+    'flows:packageImport': a => {
+      const service = routineService(a.contextKey), root = s.agentPacks.packs.root(), changes = s.brainModel.log;
+      const writer: ImportWriter = {
+        apply: (kind, target, summary, writes) => {
+          if (writes.every(w => { try { return fs.readFileSync(w.file, 'utf8') === w.text; } catch { return false; } })) return true;
+          return !!changes.apply({ job: 'user', kind, action: 'create', target, summary, reason: 'Importato da un pacchetto di routine (Routine → Importa), file scelti da te.', evidence: [target] }, writes);
+        },
+        remember: (role, line) => { writeAgentMemory(root, role, line, { scope: { roleId: role }, sourceEventId: `routine-import:${a.digest.slice(0, 16)}:${role}:${line.length}:${line.slice(0, 40)}`, sourceRunId: 'routine-import' }); },
+      };
+      const done = s.agentPacks.routine.apply(a.data, a.digest, Array.isArray(a.keys) ? a.keys.filter((k: unknown): k is string => typeof k === 'string') : [], a.memory === true, writer, json => { importFlow(service, json); });
+      return { snapshot: s.flows!.snapshot(), ...done };
     },
     'flows:import': a => {
       const service = s.flows?.service();

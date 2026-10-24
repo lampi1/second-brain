@@ -157,3 +157,24 @@
 .rt-params { display: flex; flex-direction: column; gap: 8px; }
 .rt-attach { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: var(--r-l); border: 1px dashed var(--border-2); }
 .rt-export { display: inline-flex; gap: 2px; }
+
+/* the routine package (ADR 0156): what the zip holds, what an import would write */
+.rp-body { display: flex; flex-direction: column; gap: 14px; margin-top: 4px; }
+.rp-group { display: flex; flex-direction: column; gap: 6px; }
+.rp-group[data-tone="warn"] .rt-label { color: var(--amber); }
+.rp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.rp-list code { display: inline-block; padding: 2px 8px; border-radius: var(--r-s, 6px); background: var(--surface-2); border: 1px solid var(--border); font: 11.5px var(--mono); color: var(--text-2); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-group[data-tone="warn"] .rp-list code { border-color: var(--amber); color: var(--amber); background: var(--amber-bg); }
+.rp-memory { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: var(--r-m); background: var(--surface-2); cursor: pointer; }
+.rp-memory input { margin-top: 3px; }
+.rp-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 340px; overflow: auto; }
+.rp-items li { border: 1px solid var(--border); border-radius: var(--r-m); padding: 6px 10px; }
+.rp-items li[data-status="same"], .rp-items li[data-status="elsewhere"] { opacity: .6; }
+.rp-items label { display: flex; align-items: center; gap: 8px; min-width: 0; cursor: pointer; }
+.rp-items label code { font: 12px var(--mono); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-kind { font: 600 10.5px var(--font-small); letter-spacing: .06em; text-transform: uppercase; color: var(--text-4); flex: none; width: 82px; }
+.rp-status { flex: none; font: 600 11px var(--font-small); padding: 1px 8px; border-radius: 10px; background: var(--surface-3); color: var(--text-2); }
+.rp-new { background: var(--green-bg); color: var(--green); }
+.rp-different { background: var(--amber-bg); color: var(--amber); }
+.rp-items details summary { cursor: pointer; color: var(--text-3); font-size: var(--fs-xs); margin: 4px 0 0 26px; }
+.rp-text { margin: 6px 0 2px; max-height: 220px; overflow: auto; padding: 10px; border-radius: var(--r-s, 6px); background: var(--surface-2); font: 11.5px/1.5 var(--mono); white-space: pre-wrap; word-break: break-word; }
