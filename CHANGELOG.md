@@ -6,6 +6,12 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- **One decision card for every question** (ADR 0150): agents' yes/no questions, the Strategist's plan, durable work,
+  lessons and routines all use the same card: who asks, the question, what was done with its evidence (the `brief`
+  generative-UI component: ✓ lines, screenshot, checks, files), what Sì and No do, then Sì / No / «Scrivi una
+  risposta…» / «Non voglio rispondere», Esc «Ci penso dopo». A yes/no question without its brief is sent back once.
+- **Memory facts need no approval** (ADR 0150): no fact cards in Proposte; maintenance saves them, keeps at most 40 per
+  role, one Log change per role with Annulla.
 - **The Orchestrator knows the app and changes its configuration** (ADR 0149): `app_guide` reads the app map live
   (rail, pages, Memoria tabs, Settings sections, shortcuts, help, every setting with its value, active routines),
   `app_ui` «outline» says what is on screen and where, and `app_config` changes settings (protected ones too), the
