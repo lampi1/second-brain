@@ -3,13 +3,14 @@
 // Requests never show here: every question, permission and command is answered in the questions window (always on since
 // 2026-10-22, QuestionsWindow.tsx). It only renders the model the app page sends (overlay:model) and relays what the user
 // does (overlay:action): a toast's action or ✕, Ctrl+J (the app opens what waits), Ctrl+K / Ctrl+N (back to the app).
-// It never takes the keyboard by itself. No sounds.
+// It never takes the keyboard by itself. No sounds here (the app page rings, lib/layer.ts). Each toast is the app's one
+// notice card (Notice.tsx).
 import { t as auditText } from '../i18n';
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { OverlayAction, OverlayModel, OverlayToast } from '@shared/contract';
 import { sb } from '../sb';
 import { freezeClock } from '../lib/clock';
-import { IconAlert, IconCheck, IconInfo, IconX } from './Icons';
+import { Notice } from './Notice';
 import { lang, langLoaded, loadLang, setLang } from '../i18n';
 
 const act = (a: OverlayAction) => { void sb.invoke('overlay:action', a).catch(() => {}); };
@@ -25,16 +26,10 @@ const subscribe = (fn: () => void) => { listeners.add(fn); return () => { listen
 
 function EventToast({ t }: { t: OverlayToast }) {
   return (
-    <div className={`ev-toast tone-${t.tone}`} role="status" data-testid={`ev-toast-${t.kind}`} data-toast={t.id}>
-      <span className="ev-icon">{t.tone === 'ok' ? <IconCheck size={14} /> : t.tone === 'err' || t.tone === 'warn' ? <IconAlert size={14} /> : <IconInfo size={14} />}</span>
-      <span className="ev-text">
-        <span className="ev-label">{t.label}{t.count > 1 ? ` · ${t.count}` : ''}</span>
-        <b>{t.title}</b>
-        {t.detail && <span className="ev-detail">{t.detail}</span>}
-      </span>
-      <button type="button" className="ev-act" onClick={() => act({ kind: 'toast', id: t.id, act: 'open' })} data-testid={`ev-toast-open-${t.kind}`}>{t.action}</button>
-      <button type="button" className="ev-x" aria-label={auditText('audit.OverlayApp.close')} onClick={() => act({ kind: 'toast', id: t.id, act: 'dismiss' })} data-testid={`ev-toast-close-${t.kind}`}><IconX size={12} /></button>
-    </div>
+    <Notice className="ev-toast" testid={`ev-toast-${t.kind}`} dataToast={t.id} tone={t.tone} label={t.label} count={t.count} title={t.title}
+      detail={t.detail || undefined} closeLabel={auditText('audit.OverlayApp.close')} closeTestid={`ev-toast-close-${t.kind}`}
+      onClose={() => act({ kind: 'toast', id: t.id, act: 'dismiss' })}
+      action={{ label: t.action, testid: `ev-toast-open-${t.kind}`, onClick: () => act({ kind: 'toast', id: t.id, act: 'open' }) }} />
   );
 }
 

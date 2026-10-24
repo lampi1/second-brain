@@ -972,8 +972,8 @@ export class DemoBrain implements BrainService {
   async setSettings(patch: SettingsPatch): Promise<Settings> { return this.cfg.set(patch); } // the store's default origin: the user
   settingsSchema(): SettingDef[] { return this.cfg.schema(); }
   settingsHistory(limit?: number): SettingChange[] { return this.cfg.history(limit); }
-  undoSetting(changeId: string, by?: ChangeBy): SettingChange { return by ? this.cfg.undo(changeId, { by }) : this.cfg.undo(changeId); }
-  requestSetting(key: string, value: unknown, origin: { by: ChangeBy; chatId?: string; reason?: string }): SettingRequestResult { return this.cfg.request(key, value, origin); }
+  undoSetting(changeId: string, by?: ChangeBy, origin?: { chatId?: string; direct?: boolean }): SettingChange { return by ? this.cfg.undo(changeId, { by, ...origin }) : this.cfg.undo(changeId); }
+  requestSetting(key: string, value: unknown, origin: { by: ChangeBy; chatId?: string; reason?: string; direct?: boolean }): SettingRequestResult { return this.cfg.request(key, value, origin); }
   pendingSettings(): SettingProposal[] { return this.cfg.pending(); }
   confirmSetting(proposalId: string, accept: boolean): { change: SettingChange | null } { return { change: this.cfg.confirm(proposalId, accept) }; }
   onSettingChange(fn: (c: SettingChange, now: Settings) => void): () => void { return this.cfg.onChange(fn); }

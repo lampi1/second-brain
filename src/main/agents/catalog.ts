@@ -317,14 +317,15 @@ export class AgentCatalogService {
     return structuredClone(profile);
   }
 
-  /** The user's edit (Brain → Agenti). */
-  save(value: unknown, id: string): AgentProfile {
+  /** The user's edit (Brain → Agenti), or the Orchestrator's on the user's ask (app_config, ADR 0149: `reason` says so
+   *  in the history). */
+  save(value: unknown, id: string, reason = 'Modificato dall’utente'): AgentProfile {
     this.writable();
     const old = this.find(id);
     const next = this.behaviour(obj(value), id, true, old);
     if (sameBehaviour(old, next)) return structuredClone(old);
     if (old.trial) throw new Error('C’è una prova in corso su questo ruolo: chiudila prima di cambiarne il comportamento.');
-    const p = this.version(old, next, 'user', 'Modificato dall’utente');
+    const p = this.version(old, next, 'user', reason);
     this.d.onCustomized?.();
     return p;
   }

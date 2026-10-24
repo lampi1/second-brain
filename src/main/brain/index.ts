@@ -250,7 +250,7 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
       && (patch as { judgingSince?: unknown }).judgingSince === undefined ? { ...patch, judgingSince: Date.now() } : patch, { by: 'user' }),
     settingsSchema: () => cfg.schema(),
     settingsHistory: limit => cfg.history(limit),
-    undoSetting: (changeId, by = 'user') => { if (typeof changeId !== 'string') throw new Error('changeId mancante'); return cfg.undo(changeId, { by }); },
+    undoSetting: (changeId, by = 'user', origin) => { if (typeof changeId !== 'string') throw new Error('changeId mancante'); return cfg.undo(changeId, { by, ...origin }); },
     requestSetting: (key, value, origin) => cfg.request(key, value, origin),
     pendingSettings: () => cfg.pending(),
     confirmSetting: (proposalId, accept) => {

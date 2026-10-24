@@ -1032,19 +1032,7 @@ html[data-blink="1"] .md.streaming > .md-b:last-child > :last-child::after { opa
   width: min(460px, calc(100vw - var(--orchestrator-r, 0px) - 32px)); max-height: calc(100vh - var(--topbar-h) - 120px); overflow: hidden;
   display:flex;flex-direction:column;gap:4px;pointer-events:none; }
 .toasts:empty{display:none}
-.toast {
-  pointer-events: auto; position: relative; overflow: hidden; display: flex; align-items: center; gap: 9px; padding: 9px 8px 9px 12px; border-radius: var(--r-m);
-  background: var(--surface-3); border: 1px solid var(--border-3); box-shadow: var(--shadow-pop); font-size: 12.5px; animation: toastIn var(--dur-slow) var(--ease);
-}
-.toast > svg:first-child { flex: none; color: var(--blue); }
-.toast-ok > svg:first-child { color: var(--green); }
-.toast-err { border-color: color-mix(in srgb, var(--red) 45%, transparent); }
-.toast-err > svg:first-child, .toast-warn > svg:first-child { color: var(--red); }
-.toast-text { flex: 1; min-width: 0; }
-.toast-action { flex: none; display: inline-flex; gap: 5px; align-items: center; height: 26px; padding: 0 9px; border-radius: 6px; border: 1px solid var(--blue-line); background: var(--blue-bg); color: var(--blue-strong); font-weight: 600; cursor: pointer; font-size: 12px; }
-.toast-x { flex: none; width: 24px; height: 24px; border: 0; border-radius: 5px; background: none; color: var(--text-3); display: grid; place-items: center; cursor: pointer; }
-.toast-x:hover { background: var(--surface-4); color: var(--text); }
-.toast-timer { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--blue); transform-origin: left; animation-name: shrink; animation-timing-function: linear; animation-fill-mode: forwards; }
+/* each toast is a notice card: styles/notif.css */
 .tooltip {
   position: fixed; z-index: 80; pointer-events: none; display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 7px;
   background: var(--tooltip-bg); border: 1px solid rgba(255, 255, 255, 0.08); color: #eef0f5; font-size: 12px; white-space: nowrap;
