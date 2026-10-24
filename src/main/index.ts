@@ -1,4 +1,5 @@
 // second-brain main process: one window, the services (chats, browser + MCP, brain + feed) and the typed IPC.
+import { exportFlow, importFlow } from './flows/portable';
 import { app, dialog, nativeImage, session, shell, type BrowserWindow } from 'electron';
 import { DefaultBrain } from '../modules/ai-first/default-brain';
 import { detectProjectsFolder } from './brain/projects-folder';
@@ -480,6 +481,18 @@ app.whenReady().then(async () => {
       if (a.feedback && target) void s.chats.send(target.id, `[evento app] L’utente chiede una proposta diversa per la regola ${reviewed.id}. Proposta rifiutata: ${JSON.stringify(reviewed.rule)}. Risposta: ${JSON.stringify(reviewed.note)}. Prepara la nuova proposta nella modale; nessuna modifica è approvata.`, undefined, false, 'Decisioni', false, { kind: 'app' }).catch(e => log.warn('chats', 'lesson feedback wake failed', { cause: errText(e), hint: 'The feedback is saved in the lesson review record.' }));
     },
     'flows:list': () => s.flows?.snapshot() ?? { contextKey: 'unavailable', drafts: [], versions: [], active: {}, runs: [] },
+    'flows:export': a => {
+      const service = s.flows?.service();
+      if (!service || a.contextKey !== service.snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi il flusso.');
+      const { contextKey: _context, ...input } = a;
+      return exportFlow(service.snapshot(), input);
+    },
+    'flows:import': a => {
+      const service = s.flows?.service();
+      if (!service || a.contextKey !== service.snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi il flusso.');
+      importFlow(service, a.content);
+      return s.flows!.snapshot();
+    },
     'flows:autoDecide': a => {
       if (!s.flows || a.contextKey !== s.flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la proposta.');
       const { contextKey: _context, ...decision } = a;

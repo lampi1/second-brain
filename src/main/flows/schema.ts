@@ -4,8 +4,10 @@ import type { FlowDefinition, FlowScope, FlowStep } from '../../shared/flows';
 import { MODEL_TIERS, WORK_ROLE_IDS, tierRank, type ModelTier, type WorkRoleId } from '../../shared/roles';
 
 export const BUILTIN_CHECKS = ['scope-present', 'inputs-present'] as const;
-/** The only host execution adapter (ADR 0145): DevOps writes through the app, limited by the user-approved grant. */
+/** Host execution adapters remain limited by the exact user-approved automation grant. */
 export const DEVOPS_WRITE_ADAPTER = 'devops-write';
+export const TEST_DB_READ_ADAPTER = 'test-db-read';
+export const testDbAdapted = (step: FlowStep): boolean => (step.testDbRead === true || step.adapter === TEST_DB_READ_ADAPTER) && step.kind === 'agent' && !step.action && (step.effect === 'read-only' || adapted(step));
 /** An external-write step the host can run: it declares the adapter; production and non-builtin actions never qualify. */
 export const adapted = (step: FlowStep): boolean => step.effect === 'external-write' && step.adapter === DEVOPS_WRITE_ADAPTER && step.kind === 'agent' && !step.action;
 const ID = /^[a-z0-9][a-z0-9._-]{0,79}$/;
@@ -49,7 +51,7 @@ export function validateDefinition(value: unknown, tierMax?: RoleTierMax): FlowD
   if (!Array.isArray(raw.steps) || !raw.steps.length || raw.steps.length > 60) throw new Error('A flow needs 1–60 steps');
   const ids: string[] = [];
   const steps: FlowStep[] = raw.steps.map((value: unknown) => {
-    const row = object(value, 'step'); keys(row, ['id', 'title', 'kind', 'instructions', 'inputs', 'action', 'evidence', 'timeoutMs', 'maxAttempts', 'effect', 'reviewOf', 'workspaceInput', 'adapter', 'role', 'tier'], 'step');
+    const row = object(value, 'step'); keys(row, ['id', 'title', 'kind', 'instructions', 'inputs', 'action', 'evidence', 'timeoutMs', 'maxAttempts', 'effect', 'reviewOf', 'workspaceInput', 'adapter', 'testDbRead', 'role', 'tier'], 'step');
     const id = identifier(row.id, 'step id'); if (ids.includes(id)) throw new Error('Duplicate step id');
     const kind = text(row.kind, 'kind') as FlowStep['kind']; if (!['check', 'agent', 'approval', 'manual'].includes(kind)) throw new Error('Unknown step kind');
     const effect = text(row.effect, 'effect') as FlowStep['effect']; if (!['read-only', 'code', 'external-write', 'production'].includes(effect)) throw new Error('Unknown effect');
@@ -68,7 +70,8 @@ export function validateDefinition(value: unknown, tierMax?: RoleTierMax): FlowD
     if (kind === 'check' && !action) throw new Error('Checks require an explicit action reference');
     if (action?.kind === 'builtin' && (kind !== 'check' || effect !== 'read-only' || !BUILTIN_CHECKS.includes(action.ref as typeof BUILTIN_CHECKS[number]))) throw new Error('Unknown or unsafe builtin');
     if (action?.kind === 'builtin' && evidence.some(label => label !== 'metadata')) throw new Error('Builtin checks can certify metadata evidence only');
-    if (row.adapter !== undefined && (row.adapter !== DEVOPS_WRITE_ADAPTER || kind !== 'agent' || effect !== 'external-write' || action)) throw new Error('The devops-write adapter fits only an external-write agent step without action');
+    if (row.adapter !== undefined && (kind !== 'agent' || action || !((row.adapter === DEVOPS_WRITE_ADAPTER && effect === 'external-write') || (row.adapter === TEST_DB_READ_ADAPTER && effect === 'read-only')))) throw new Error('Adapters require an agent step without action: devops-write is external-write; test-db-read is read-only');
+    if (row.testDbRead !== undefined && (row.testDbRead !== true || kind !== 'agent' || action || !(effect === 'read-only' || (effect === 'external-write' && row.adapter === DEVOPS_WRITE_ADAPTER)))) throw new Error('testDbRead requires a read-only agent or a DevOps write agent, without action');
     let reviewOf: string | undefined;
     if (row.reviewOf !== undefined) {
       reviewOf = identifier(row.reviewOf, 'reviewOf');
@@ -83,7 +86,7 @@ export function validateDefinition(value: unknown, tierMax?: RoleTierMax): FlowD
     if (role && tier && tierMax && (!max || tierRank(tier) > tierRank(max))) throw new Error(`tier ${tier} exceeds the ${role} role's maximum (${max ?? 'unknown role'})`);
     ids.push(id);
     return { id, title: text(row.title, 'step title', 300), kind, instructions: text(row.instructions, 'instructions', 16000), inputs,
-      ...(action ? { action } : {}), ...(workspaceInput ? { workspaceInput } : {}), evidence, timeoutMs: integer(row.timeoutMs, 'timeoutMs', 1000, 86_400_000), maxAttempts: integer(row.maxAttempts, 'maxAttempts', 1, 5), effect, ...(reviewOf ? { reviewOf } : {}), ...(row.adapter ? { adapter: DEVOPS_WRITE_ADAPTER } : {}), ...(role ? { role } : {}), ...(tier ? { tier } : {}) };
+      ...(action ? { action } : {}), ...(workspaceInput ? { workspaceInput } : {}), evidence, timeoutMs: integer(row.timeoutMs, 'timeoutMs', 1000, 86_400_000), maxAttempts: integer(row.maxAttempts, 'maxAttempts', 1, 5), effect, ...(reviewOf ? { reviewOf } : {}), ...(row.adapter ? { adapter: row.adapter as FlowStep['adapter'] } : {}), ...(row.testDbRead === true ? { testDbRead: true as const } : {}), ...(role ? { role } : {}), ...(tier ? { tier } : {}) };
   });
   const aliases = strings(raw.aliases, 'aliases', 40, 200);
   if (aliases.some(alias => !normalize(alias))) throw new Error('Aliases need at least one letter or number');

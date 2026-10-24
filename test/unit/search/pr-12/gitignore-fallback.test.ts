@@ -52,12 +52,8 @@ describe('brainFiles when git fails', () => {
 
   it('still leaves gitignored notes out when git ls-files fails', async () => {
     const root = repo();
-    if (process.getuid?.() === 0) {
-      // the realistic case: the folder belongs to another account, git exits 128 ("detected dubious ownership")
-      execFileSync('chown', ['-R', '1000:1000', root]);
-    } else {
-      process.env.PATH = ''; // git not found
-    }
+    // Force git inventory failure without requiring chown privileges or a second OS user.
+    process.env.PATH = '';
     await expect(brainFiles(root), 'failed git inventory must never fall back to unfiltered files').rejects.toThrow();
   });
 });

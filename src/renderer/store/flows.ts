@@ -97,3 +97,29 @@ export async function controlFlowAutomation(contextKey: string, control: FlowAut
     toast(t('flows.failedDecision'), 'err'); void reloadFlows(); return false;
   }
 }
+
+/** Import never approves or starts a flow. Late results cannot replace a different brain's state. */
+export async function importFlowDefinition(contextKey: string, content: string): Promise<boolean> {
+  if (flowState.get().snapshot?.contextKey !== contextKey) return false;
+  const ticket = read;
+  try {
+    const snapshot = await sb.invoke('flows:import', { contextKey, content });
+    if (flowState.get().snapshot?.contextKey !== contextKey) return false;
+    if (ticket === read) { ++read; acceptSnapshot(snapshot); }
+    toast(t('flows.imported'), 'info');
+    return true;
+  } catch { return false; }
+}
+
+/** The host exports only a portable definition; renderer downloads never serialize the live snapshot. */
+export async function exportFlowDefinition(contextKey: string, flowId: string, version: number, format: 'json' | 'markdown'): Promise<void> {
+  if (flowState.get().snapshot?.contextKey !== contextKey) return;
+  try {
+    const result = await sb.invoke('flows:export', { contextKey, flowId, version, format });
+    if (flowState.get().snapshot?.contextKey !== contextKey) return;
+    const url = URL.createObjectURL(new Blob([result.content], { type: format === 'json' ? 'application/json;charset=utf-8' : 'text/markdown;charset=utf-8' }));
+    const link = document.createElement('a'); link.href = url; link.download = result.filename;
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch { toast(t('flows.exportFailed'), 'err'); }
+}

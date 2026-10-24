@@ -9,7 +9,8 @@
 // --check only fetches and reports what GitHub has that the folder does not (the "Aggiorna" button's count).
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const DEP_FILES = ['package.json', 'package-lock.json', '.npmrc'];
 
@@ -74,7 +75,13 @@ function main() {
     message: `Aggiornata da ${from} a ${to} (${behind} commit${deps ? ', dipendenze reinstallate' : ''}${build ? ', build fatta' : ''}). Versione stabile: premi «Aggiorna» in Impostazioni → Aggiornamenti. Versione di sviluppo: riavviala (npm start).` });
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+// Node resolves import.meta.url through symlinks; argv may still use /var instead of /private/var on macOS.
+function invokedAsMain() {
+  if (!process.argv[1]) return false;
+  try { return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)); }
+  catch { return false; } // Importing the pure helpers must not require an existing argv entry.
+}
+if (invokedAsMain()) {
   try { main(); } catch (e) {
     const message = `Aggiornamento non riuscito: ${String(e instanceof Error ? e.message : e).split('\n')[0].slice(0, 300)}`;
     if (process.argv.includes('--json')) console.log(JSON.stringify({ ok: false, message })); else console.error(message);

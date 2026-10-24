@@ -1,5 +1,5 @@
 // Portable automatic-flow configuration and durable event envelope, shared with host and decision UI.
-// Activation authorizes detection and Orchestrator dispatch only; existing flow gates retain their authority.
+// Activation authorizes detection, dispatch and the explicit host grants below; existing flow gates retain their authority.
 import type { FlowScope } from './flows';
 export type FlowTrigger = { kind: 'interval'; everyMinutes: number } | {
   kind: 'devops'; everyMinutes: number; organization: string; project: string; areaPath: string;
@@ -12,11 +12,14 @@ export type DevOpsWriteOp = typeof DEVOPS_WRITE_OPS[number];
 export interface DevOpsWriteGrant { organization: string; projects: string[]; ops: DevOpsWriteOp[]; fields: string[];
   /** DevOps identity ids (GUIDs, lowercase) a comment may @mention; absent or empty = no mentions. Needs the comment op. */
   mentions?: string[] }
+/** Local test DB target identifiers explicitly approved for this exact automation revision; absent = deny-all. */
+export interface TestDbReadGrant { targetIds: string[] }
 export interface FlowAutomationConfig {
   flowId: string; flowVersion: number; trigger: FlowTrigger; scope: FlowScope;
   inputs: Record<string, string>; priority: 'urgent' | 'normal';
   /** Absent = deny-all. Only a devops trigger may carry it; approval is the rule's exact revision. */
   devopsWrite?: DevOpsWriteGrant;
+  testDbRead?: TestDbReadGrant;
 }
 export interface FlowAutomationRule {
   id: string; revision: number; config: FlowAutomationConfig; ownerOrchestratorId: string;

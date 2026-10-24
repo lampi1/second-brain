@@ -4,9 +4,9 @@ import type { FlowDefinition, FlowRun } from '@shared/flows';
 import { t, locale } from '../i18n';
 import { useApp } from '../store/store';
 import { openChatRef } from '../actions';
-import { FlowLinks } from './FlowDefinition';
+import { FlowLinks, FlowTestDbEvidence } from './FlowDefinition';
 import { FlowStepAgent } from './FlowStepAgent';
-export function FlowDiagram({ definition, run }: { definition: FlowDefinition; run?: FlowRun }) {
+export function FlowDiagram({ definition, run, onNavigate }: { definition: FlowDefinition; run?: FlowRun; onNavigate?: () => void }) {
   const [picked, setPicked] = useState<string | null>(null);
   const prefix = useId();
   const current = definition.steps[run?.currentStep ?? 0];
@@ -46,11 +46,14 @@ export function FlowDiagram({ definition, run }: { definition: FlowDefinition; r
         <span className="flow-badge" data-status={state?.status}>{t(`flows.${state?.status ?? (selected.kind === 'approval' ? 'gate' : selected.kind)}`)}</span>
         <FlowStepAgent step={selected} chatId={state?.chatId} />
         <p>{selected.instructions}</p>
+        {selected.testDbRead && <p>{t('flows.testDbRead')}</p>}
+        {selected.adapter && <p><code>{selected.adapter}</code></p>}
         {selected.reviewOf && <p className="flow-review-relation">{t('flows.reviewOf')}: <strong>{definition.steps.find(step => step.id === selected.reviewOf)?.title ?? selected.reviewOf}</strong></p>}
         {state?.reason && <p className="flow-block" role="status">{state.reason}</p>}
-        {chat && <button type="button" className="btn btn-ghost btn-s" onClick={() => openChatRef(chat)} data-testid="flow-open-agent">{t('flows.openAgent')}</button>}
-        <details><summary>{t('flows.evidence')}</summary>{selected.evidence.length ? <ul>{selected.evidence.map((e, i) => <li key={i}>{e}</li>)}</ul> : <p className="flows-muted">{t('flows.noEvidence')}</p>}<FlowLinks sources={[selected.instructions, ...selected.evidence]} /></details>
-        {state?.receipt && <details className="flow-report"><summary>{t('flows.history')}</summary><time>{new Date(state.receipt.at).toLocaleString(locale())}</time><p>{state.receipt.summary}</p>{state.receipt.evidence.map((e, i) => <p key={i}>{e}</p>)}<FlowLinks sources={[state.receipt.summary, ...state.receipt.evidence]} chatId={state.receipt.chatId} /></details>}
+        {chat && <button type="button" className="btn btn-ghost btn-s" onClick={() => { onNavigate?.(); openChatRef(chat); }} data-testid="flow-open-agent">{t('flows.openAgent')}</button>}
+        <details><summary>{t('flows.evidence')}</summary>{selected.evidence.length ? <ul>{selected.evidence.map((e, i) => <li key={i}>{e}</li>)}</ul> : <p className="flows-muted">{t('flows.noEvidence')}</p>}<FlowLinks onNavigate={onNavigate} sources={[selected.instructions, ...selected.evidence]} /></details>
+        <FlowTestDbEvidence run={run} stepId={selected.id} />
+        {state?.receipt && <details className="flow-report"><summary>{t('flows.history')}</summary><time>{new Date(state.receipt.at).toLocaleString(locale())}</time><p>{state.receipt.summary}</p>{state.receipt.evidence.map((e, i) => <p key={i}>{e}</p>)}<FlowLinks onNavigate={onNavigate} sources={[state.receipt.summary, ...state.receipt.evidence]} chatId={state.receipt.chatId} /></details>}
       </> : <p>{t('flows.noInspector')}</p>}
     </aside>
   </section>;

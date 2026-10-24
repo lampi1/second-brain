@@ -11,10 +11,11 @@ import { flowAsks } from '../../src/renderer/lib/flow-ask';
 import { flowDecisionMode, flowDecisionSubmission } from '../../src/renderer/lib/flow-decision';
 import { flowRequest } from '../../src/renderer/lib/flow-request';
 import { Flows } from '../../src/renderer/brain/pages/Flows';
+import { FlowFullscreenContent } from '../../src/renderer/components/FlowFullscreen';
 import { FlowDiagram } from '../../src/renderer/components/FlowDiagram';
 import { FlowAutomation } from '../../src/renderer/components/FlowAutomation';
 import { FlowApproval } from '../../src/renderer/components/FlowApproval';
-import { flowState, decideFlow, reloadFlows, controlFlowAutomation } from '../../src/renderer/store/flows';
+import { flowState, decideFlow, reloadFlows, controlFlowAutomation, importFlowDefinition, exportFlowDefinition } from '../../src/renderer/store/flows';
 import { answerLater, requestPostponed, startLater } from '../../src/renderer/lib/later';
 import { decisionDraft, saveDecisionDraft } from '../../src/renderer/lib/decision-drafts';
 const definition: FlowDefinition = { id: 'review-doc', title: 'Revisione documento', description: 'Solo i documenti selezionati.', category: 'Documenti', aliases: ['rivedi documento'], scope: { project: 'Demo' }, steps: [{ id: 'review', title: 'Conferma il testo', kind: 'approval', instructions: 'Controlla il testo e approva la versione.', inputs: ['document'], evidence: ['[Report](file:///tmp/review.md)'], timeoutMs: 5000, maxAttempts: 1, effect: 'read-only' }] };
@@ -269,4 +270,48 @@ it('keeps the newest completed run and its recorded evidence visible after work 
   expect(html).toContain('data-status="completed"');
   expect(html).toContain('Verified the selected document.');
   expect(html).not.toContain('Older result.');
+});
+
+it('offers import from an empty catalog without requiring an Orchestrator', () => {
+  flowState.set({ snapshot: { contextKey: 'empty', drafts: [], versions: [], active: {}, runs: [] }, loading: false, error: null });
+  const html = renderToStaticMarkup(createElement(Flows));
+  expect(html).toContain('data-testid="flow-import-open"');
+  expect(html).not.toMatch(/disabled=""[^>]*data-testid="flow-import-open"/);
+});
+it('exports the exact shown run version and offers all immutable versions in the picker', () => {
+  const state = snapshot(); state.active[definition.id] = 2;
+  state.versions.push({ ...state.versions[0]!, version: 2, definition: { ...definition, title: 'Current version' } });
+  state.runs = [run];
+  flowState.set({ snapshot: state, error: null, loading: false });
+  const html = renderToStaticMarkup(createElement(Flows));
+  expect(html).toContain('id="flow-version-picker"'); expect(html).toContain('value="2" selected=""');
+  expect(html).toContain('Esporta definizione · v1');
+  expect(html).toContain('data-testid="flow-fullscreen-open"');
+  expect(html).toContain('data-testid="flow-export-json"'); expect(html).toContain('data-testid="flow-export-markdown"');
+});
+it('keeps real run states, roles, evidence and receipts in the fullscreen inspection content', () => {
+  const def = { ...definition, steps: [{ ...definition.steps[0]!, kind: 'agent' as const, role: 'sentinel' as const, tier: 'mid' as const }] };
+  const recorded = { ...run, steps: [{ ...run.steps[0]!, status: 'blocked' as const, reason: 'Review required', receipt: { id: 'receipt', stepId: 'review', kind: 'user' as const, at: 1, summary: 'Recorded evidence summary', evidence: ['document: revision 3'] } }] };
+  const html = renderToStaticMarkup(createElement(FlowFullscreenContent, { definition: def, run: recorded }));
+  for (const value of ['flow-fullscreen-run', 'flow-diagram', 'flow-definition', 'Doc 1', 'sentinel', 'Review required', 'Recorded evidence summary', 'document: revision 3']) expect(html.toLowerCase()).toContain(value.toLowerCase());
+  expect(html).not.toContain('flow-step-tier');
+});
+it('imports only in the displayed brain and never restores a stale brain when the import completes', async () => {
+  const state = snapshot();
+  expect(await importFlowDefinition('another-brain', '{}')).toBe(false); expect(invoke).not.toHaveBeenCalled();
+  let complete!: (value: FlowSnapshot) => void; invoke.mockImplementation(() => new Promise(resolve => { complete = resolve; }));
+  const pending = importFlowDefinition(state.contextKey, '{"test":true}');
+  expect(invoke).toHaveBeenCalledWith('flows:import', { contextKey: state.contextKey, content: '{"test":true}' });
+  flowState.set({ snapshot: { ...state, contextKey: 'new-brain' }, loading: false, error: null });
+  complete(state); expect(await pending).toBe(false); expect(flowState.get().snapshot?.contextKey).toBe('new-brain');
+});
+it('submits export for the exact selected version and prevents a late cross-brain download', async () => {
+  const state = snapshot();
+  let complete!: (value: { content: string; filename: string }) => void; invoke.mockImplementation(() => new Promise(resolve => { complete = resolve; }));
+  const pending = exportFlowDefinition(state.contextKey, definition.id, 1, 'markdown');
+  expect(invoke).toHaveBeenCalledWith('flows:export', { contextKey: state.contextKey, flowId: definition.id, version: 1, format: 'markdown' });
+  flowState.set({ snapshot: { ...state, contextKey: 'new-brain' }, loading: false, error: null });
+  complete({ content: '# Definition', filename: 'flow.md' });
+  await pending; // No document exists in this node test: a late download would throw and toast.
+  expect(flowState.get().snapshot?.contextKey).toBe('new-brain');
 });

@@ -6,12 +6,14 @@ import { flowAsks } from '../../lib/flow-ask';
 import { flowRequest, type FlowRequestKind } from '../../lib/flow-request';
 import { orchestratorIdOf } from '../../lib/orchestrator-route';
 import { openQueue } from '../../lib/later';
-import { editFlowStepTier, reloadFlows, useFlows } from '../../store/flows';
+import { editFlowStepTier, exportFlowDefinition, reloadFlows, useFlows } from '../../store/flows';
 import { app, send, useApp } from '../../store/store';
 import { toast } from '../../store/ui';
 import { focusChat } from '../../actions';
 import { FlowDefinition } from '../../components/FlowDefinition';
 import { FlowDiagram } from '../../components/FlowDiagram';
+import { FlowFullscreen } from '../../components/FlowFullscreen';
+import { FlowImport } from '../../components/FlowImport';
 import { FlowAutomation, FlowAutomationControls } from '../../components/FlowAutomation';
 import { IconBranch } from '../../components/Icons';
 import { t, locale } from '../../i18n';
@@ -24,7 +26,11 @@ function askOrchestrator(kind: FlowRequestKind, version?: FlowVersion, draft?: F
   if (result === 'empty') return;
   focusChat(id); toast(t(result === 'queued' ? 'flows.queued' : 'flows.sent'), 'info');
 }
-function FlowDetail({ version, draft, snapshot, ready }: { version?: FlowVersion; draft?: FlowDraft; snapshot: FlowSnapshot; ready: boolean }) {
+function FlowDetail({ version: preferredVersion, draft, snapshot, ready }: { version?: FlowVersion; draft?: FlowDraft; snapshot: FlowSnapshot; ready: boolean }) {
+  const [pickedVersion, setPickedVersion] = useState<number | null>(null), [fullscreen, setFullscreen] = useState(false);
+  const flowId = preferredVersion?.definition.id ?? draft!.definition.id;
+  const versions = snapshot.versions.filter(row => row.definition.id === flowId).sort((a, b) => b.version - a.version);
+  const version = versions.find(row => row.version === pickedVersion) ?? preferredVersion;
   // An older proposal cannot replace the approved definition or its automatic configuration.
   const definition = version?.definition ?? draft!.definition;
   const [pickedRun, setPickedRun] = useState<string | null>(null);
@@ -43,7 +49,7 @@ function FlowDetail({ version, draft, snapshot, ready }: { version?: FlowVersion
     pick: (stepId: string, tier: ModelTier | null) => void editFlowStepTier(snapshot.contextKey, { flowId: definition.id, base: version ? { version: version.version } : { draftRevision: draft!.revision }, stepId, tier }),
   };
   return <article className="flow-detail" data-testid="flow-definition">
-    <header className="flow-detail-head"><div className="flow-card-head"><h2>{definition.title}</h2><span className="flow-version">{version ? `v${version.version}` : `r${draft!.revision}`}</span><span className="flow-badge" data-status={version && snapshot.active[definition.id] === version.version ? 'active' : 'draft'}>{t(version && snapshot.active[definition.id] === version.version ? 'flows.active' : 'flows.draft')}</span></div>
+    <header className="flow-detail-head"><div className="flow-card-head"><h2>{definition.title}</h2><span className="flow-version">{version ? `v${version.version}` : `r${draft!.revision}`}</span><span className="flow-badge" data-status={version && snapshot.active[definition.id] === version.version ? 'active' : 'draft'}>{t(version ? snapshot.active[definition.id] === version.version ? 'flows.active' : 'flows.approvedVersion' : 'flows.draft')}</span></div>
       <p>{definition.description}</p><div className="flow-actions">
         {version && snapshot.active[definition.id] === version.version && <><button type="button" className="btn btn-primary btn-s" disabled={!ready} onClick={() => askOrchestrator('start', version)}>{t('flows.runNow')}</button><button type="button" className="btn btn-ghost btn-s" disabled={!ready} onClick={() => askOrchestrator('automate', version)}>{t('flows.automate')}</button></>}
         <button type="button" className="btn btn-ghost btn-s" disabled={!ready} onClick={() => askOrchestrator('refine', version, !version || draft?.status === 'proposed' ? draft : undefined)}>{t('flows.refine')}</button>
@@ -52,8 +58,15 @@ function FlowDetail({ version, draft, snapshot, ready }: { version?: FlowVersion
     {draftAsk && <div className="flow-draft-notice"><p>{t(version ? 'flows.draftNotice' : 'flows.review')}</p><button type="button" className="btn btn-amber btn-s" onClick={() => openQueue(`${draftAsk.chatId}/${draftAsk.id}`)}>{t('flows.reviewOpen')}</button></div>}
     {version && <FlowAutomation version={version} snapshot={snapshot} />}
     {snapshot.versions.filter(other => other.definition.id === definition.id && other.version !== version?.version && snapshot.automation?.rules.some(rule => rule.config.flowId === definition.id && rule.config.flowVersion === other.version)).map(other => <FlowAutomation key={other.version} version={other} snapshot={snapshot} />)}
+    {versions.length > 1 && <div className="flow-view-picker"><label htmlFor="flow-version-picker">{t('flows.versionPicker')}</label><select id="flow-version-picker" value={version?.version} onChange={event => { setPickedVersion(Number(event.target.value)); setPickedRun('definition'); }}>{versions.map(row => <option key={row.version} value={row.version}>v{row.version}{snapshot.active[definition.id] === row.version ? ` · ${t('flows.active')}` : ''}</option>)}</select></div>}
     <div className="flow-view-picker"><label htmlFor="flow-run-picker">{t('flows.runs')}</label><select id="flow-run-picker" value={run?.id ?? 'definition'} onChange={e => setPickedRun(e.target.value)}><option value="definition">{t('flows.definitionView')}{version ? ` · v${version.version}` : ''}</option>{runs.map(row => <option key={row.id} value={row.id}>{row.subjectKey} · v{row.flowVersion} · {t(`flows.${row.status}`)} · {new Date(row.createdAt).toLocaleString(locale())}</option>)}</select></div>
     {run && <div className="flow-run-focus" data-testid="flow-run"><div className="flow-card-head"><strong>{run.subjectKey}</strong><span className="flow-version">v{run.flowVersion}</span><span className="flow-badge" data-status={run.status}>{t(`flows.${run.status}`)}</span>{runAsk && <button type="button" className="btn btn-amber btn-s" onClick={() => openQueue(`${runAsk.chatId}/${runAsk.id}`)}>{t('flows.reviewOpen')}</button>}</div><p className="flows-muted">{[run.scope.project, run.scope.areaPath].filter(Boolean).join(' · ')}</p></div>}
+    <div className="flow-portable-actions">
+      {(!run || runVersion) && <button type="button" className="btn btn-ghost btn-s" data-testid="flow-fullscreen-open" onClick={() => setFullscreen(true)}>{t('flows.fullscreen')}</button>}
+      {shownVersion && (!run || runVersion) && <div className="flow-export-group" aria-label={t('flows.export')}><span className="flows-muted">{t('flows.export')} · v{shownVersion.version}</span><button type="button" className="btn btn-ghost btn-s" onClick={() => void exportFlowDefinition(snapshot.contextKey, definition.id, shownVersion.version, 'json')} data-testid="flow-export-json">JSON</button><button type="button" className="btn btn-ghost btn-s" onClick={() => void exportFlowDefinition(snapshot.contextKey, definition.id, shownVersion.version, 'markdown')} data-testid="flow-export-markdown">Markdown</button></div>}
+    </div>
+    {shownVersion && <p className="flow-export-hint">{t('flows.exportHint')}</p>}
+    {fullscreen && (!run || runVersion) && <FlowFullscreen definition={shownDefinition} version={shownVersion?.version} run={run} onClose={() => setFullscreen(false)} />}
     {(!run || runVersion) && <FlowDiagram key={`${shownDefinition.id}/${shownVersion?.version ?? draft?.revision}/${run?.id ?? 'definition'}`} definition={shownDefinition} run={run} />}
     {(!run || runVersion) && <details className="flow-full-definition"><summary>{t('flows.details')}{shownVersion ? ` · v${shownVersion.version}` : ''}</summary><FlowDefinition definition={shownDefinition} run={runVersion ? run : undefined} edit={tierEdit} /></details>}
     {run && !runVersion && <p className="flow-block" role="status">{t('flows.versionUnavailable')}</p>}
@@ -63,6 +76,7 @@ function FlowDetail({ version, draft, snapshot, ready }: { version?: FlowVersion
 export function Flows() {
   const { snapshot, error, loading } = useFlows();
   const ready = useApp(s => !!orchestratorIdOf(s));
+  const [importing, setImporting] = useState(false);
   const [category, setCategory] = useState<string | null>(null), [picked, setPicked] = useState<string | null>(null);
   const rows = useMemo(() => {
     if (!snapshot) return [];
@@ -79,7 +93,8 @@ export function Flows() {
   const visible = rows.filter(row => !selectedCategory || row.definition.category === selectedCategory);
   const selected = visible.find(row => row.id === picked) ?? visible[0];
   return <section className="flows-page" data-testid="flows-page">
-    <header className="flows-head"><div><span className="flow-eyebrow">{t('flows.automaticHint')}</span><h1>{t('flows.title')}</h1><p>{t('flows.intro')}</p></div>{rows.length > 0 && <button type="button" className="btn btn-primary btn-m" disabled={!ready} onClick={() => askOrchestrator('create')}>{t('flows.ask')}</button>}</header>
+    <header className="flows-head"><div><span className="flow-eyebrow">{t('flows.automaticHint')}</span><h1>{t('flows.title')}</h1><p>{t('flows.intro')}</p></div><div className="flows-head-actions">{snapshot && <button type="button" className="btn btn-ghost btn-m" disabled={!!error} onClick={() => setImporting(true)} data-testid="flow-import-open">{t('flows.import')}</button>}{rows.length > 0 && <button type="button" className="btn btn-primary btn-m" disabled={!ready} onClick={() => askOrchestrator('create')}>{t('flows.ask')}</button>}</div></header>
+    {importing && snapshot && <FlowImport key={snapshot.contextKey} contextKey={snapshot.contextKey} onClose={() => setImporting(false)} />}
     {error && <div className="flow-block" role="alert"><strong>{t('flows.unavailable')}</strong><p>{error}</p><button type="button" className="btn btn-ghost btn-s" onClick={() => void reloadFlows()}>{t('flows.retry')}</button></div>}
     {loading && !snapshot && <p role="status" className="flows-muted">{t('flows.loading')}</p>}
     {!loading && !error && rows.length === 0 && <div className="flows-empty" data-testid="flows-empty"><IconBranch size={28} /><h2>{t('flows.empty')}</h2><p>{t('flows.emptyHint')}</p><button type="button" className="btn btn-primary btn-m" disabled={!ready} onClick={() => askOrchestrator('create')}>{t('flows.ask')}</button><span className="flows-muted">{t(ready ? 'flows.readOnly' : 'flows.noOrchestrator')}</span></div>}

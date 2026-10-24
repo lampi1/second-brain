@@ -1244,6 +1244,8 @@ export interface InputLagReport { keys: number; p50: number; p95: number; max: n
 
 export interface InvokeMap {
   'flows:list': [void, FlowSnapshot];
+  'flows:export': [FlowContext<{ flowId: string; version: number; format: 'json' | 'markdown' }>, { filename: string; content: string }];
+  'flows:import': [FlowContext<{ content: string }>, FlowSnapshot];
   'flows:autoDecide': [FlowContext<FlowAutomationDecision>, FlowSnapshot];
   'flows:autoPause': [FlowContext<FlowAutomationPause>, FlowSnapshot];
   'flows:autoControl': [FlowContext<FlowAutomationControl>, FlowSnapshot];
@@ -1716,7 +1718,7 @@ export type InvokeResult<K extends InvokeChannel> = InvokeMap[K][1];
 
 // Runtime lists (the preload allow-list). Kept in sync with the maps by the compile-time checks below.
 export const INVOKE_CHANNELS = [
-  'flows:list', 'flows:definitionDecide', 'flows:decide', 'flows:editStepTier', 'flows:autoDecide', 'flows:autoPause', 'flows:autoControl',
+  'flows:list', 'flows:export', 'flows:import', 'flows:definitionDecide', 'flows:decide', 'flows:editStepTier', 'flows:autoDecide', 'flows:autoPause', 'flows:autoControl',
   'work:lessons', 'work:lessonDecide', 'work:list', 'work:decide',
   'pulse:list', 'pulse:status', 'pulse:seen', 'pulse:save', 'pulse:act', 'pulse:dismiss', 'pulse:runNow', 'approvals:list', 'approvals:decide',
   'connectors:list', 'connectors:login', 'connectors:cancelLogin', 'connectors:probe', 'connectors:select', 'connectors:disconnect', 'connectors:useToken',

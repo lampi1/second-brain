@@ -4,14 +4,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import type { ChatSummary } from '../../shared/contract';
-import type { FlowAgentBinding, FlowRoleInfo, FlowSnapshot, FlowVerifiedReport } from '../../shared/flows';
+import type { FlowAgentBinding, FlowRoleInfo, FlowSnapshot, FlowTestDbEvidence, FlowVerifiedReport } from '../../shared/flows';
 import type { WorkRoleId } from '../../shared/roles';
 import { log } from '../log';
 import { FlowService } from './service';
 import { FlowAutomationService } from './automation';
 import { createDevOpsDetector } from './devops-detector';
 import { DevOpsWriter, type DevOpsWriterOptions } from './devops-writer';
-import { adapted } from './schema';
+import { adapted, testDbAdapted } from './schema';
+import { TestDbQueryExecutor, validateTestDbQueryRequest, type TestDbDriver } from './test-db-query';
 import type { FlowAutomationConfig, FlowDetectionResult } from '../../shared/flow-automation';
 
 export interface FlowRuntimeOptions {
@@ -21,6 +22,8 @@ export interface FlowRuntimeOptions {
   detect?(config: FlowAutomationConfig, cursor: Record<string, string>, signal?: AbortSignal): Promise<FlowDetectionResult>;
   /** Tests inject token and fetch for the DevOps write adapter (ADR 0145). */
   devopsWrite?: Pick<DevOpsWriterOptions, 'token' | 'request'>;
+  /** Test DB credentials stay in the host; tests inject only the bounded driver. */
+  testDbRead?: { driver?: TestDbDriver; env?: (name: 'SQLCMD_TEST_RO_USER' | 'SQLCMD_TEST_RO_PASSWORD') => string | undefined };
   /** The work roles as the catalog and the routing table resolve them now (wiring.ts); shown per agent step, tierMax checked on propose. */
   roles?(): Partial<Record<WorkRoleId, FlowRoleInfo>>;
 }
@@ -28,6 +31,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   const instances = new Map<string, FlowService>();
   const automations = new Map<string, FlowAutomationService>();
   const writers = new Map<string, DevOpsWriter>();
+  const testDbExecutor = new TestDbQueryExecutor({ file: path.join(options.userData, 'test-db-targets.json'), ...options.testDbRead });
   const detector = options.detect ?? createDevOpsDetector();
   let selectedKey: string | null = null, stopped = false;
   const reportNotifications = new Map<string, number>();
@@ -62,7 +66,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
       file: path.join(options.userData, 'flows', context.key, 'state.json'), contextKey: context.key,
       // Read live from the automation ledger: a paused, replaced or rejected rule withdraws the grant at once.
       ...(options.roles ? { tierMax: (role: WorkRoleId) => roles()?.[role]?.tierMax } : {}),
-      adapterGranted: run => { try { return !stopped && current().key === context.key && !!automation().grantFor(run); } catch { return false; } },
+      adapterGranted: (run, spec) => { try { return !stopped && current().key === context.key && (!adapted(spec) || !!automation().grantFor(run)) && (!testDbAdapted(spec) || !!automation().testDbGrantFor(run)); } catch { return false; } },
       changed: snapshot => {
         try { if (options.brainRoot() && current().key === context.key) options.changed(withRoles({ ...snapshot, automation: automations.get(context.key)?.snapshot() })); }
         catch (error) { log.warn('flows', 'Flow saved but notification unavailable', { cause: String(error), hint: 'Reload flows after reconnecting the brain.' }); }
@@ -189,6 +193,51 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     }
     return writer.execute({ runId: run.id, ...granted }, request, signal);
   };
-  return { service, automation, snapshot, tick, stop, reportReady, resolveBinding, hint, devopsWrite };
+  /** Only the authenticated chat bound to the current read-only adapter step may query an approved test target. */
+  const testDbRead = async (chatId: string, request: Record<string, unknown>, signal?: AbortSignal): Promise<Record<string, unknown>> => {
+    if (stopped) throw new Error('Flow runtime stopped');
+    const context = current(), flow = service();
+    const authorize = () => {
+      if (stopped || current().key !== context.key) throw new Error('Test DB read: brain context changed');
+      const snap = flow.snapshot(), chat = options.chats().find(c => c.id === chatId);
+      if (snap.storageError) throw new Error('Test DB read: flow storage unavailable');
+      if (!chat?.run || chat.closedAt || chat.run.endedAt !== undefined || chat.run.report) throw new Error('Test DB read: this chat is not running a flow step');
+      const run = snap.runs.find(r => { const step = r.steps[r.currentStep]; return r.status === 'active' && step?.status === 'running' && step.chatId === chatId && step.chatRunId === chat.run!.runId && step.taskVersion === (chat.run!.taskVersion ?? 1); });
+      const spec = run && snap.versions.find(v => v.definition.id === run.flowId && v.version === run.flowVersion)?.definition.steps[run.currentStep];
+      if (!run || !spec || !testDbAdapted(spec) || snap.active[run.flowId] !== run.flowVersion) throw new Error('Test DB read: no current test-db-read capability binding');
+      const step = run.steps[run.currentStep]!, binding = { chatId, chatRunId: step.chatRunId!, taskVersion: step.taskVersion! };
+      if (!scopedChat(binding, context.root) || !options.chats().some(c => c.id === run.ownerOrchestratorId && c.isOrchestrator && !c.closedAt)) throw new Error('Test DB read: chat or owner is outside the active flow');
+      if (Date.now() - (step.startedAt ?? 0) > spec.timeoutMs) throw new Error('Test DB read: the step timed out');
+      const grant = automation().testDbGrantFor(run);
+      if (!grant) throw new Error('Test DB read: no enabled exact-revision user-approved grant');
+      return { run, binding, grant };
+    };
+    const { run, binding, grant } = authorize(), query = validateTestDbQueryRequest(request);
+    if (!grant.targetIds.includes(query.targetId)) throw new Error('Test DB read: target is outside the user-approved grant');
+    let evidence: FlowTestDbEvidence | undefined;
+    try {
+      // Re-check consent before resolving the target; the executor repeats it after the durable evidence callback.
+      const latest = authorize();
+      if (latest.run.id !== run.id || latest.binding.chatRunId !== binding.chatRunId || latest.binding.taskVersion !== binding.taskVersion || !latest.grant.targetIds.includes(query.targetId)) throw new Error('Test DB read: grant changed');
+      const result = await testDbExecutor.execute(query, signal, () => {
+        const live = authorize();
+        if (live.run.id !== run.id || live.binding.chatRunId !== binding.chatRunId || live.binding.taskVersion !== binding.taskVersion || !live.grant.targetIds.includes(query.targetId)) throw new Error('Test DB read: grant changed');
+      }, database => { evidence = flow.beginTestDbQuery(run.id, binding, query.targetId, database, query.query); });
+      if (!evidence) throw new Error('Test DB read: query evidence missing');
+      // A revoked permission or stale binding also withholds in-flight results from the chat.
+      const final = authorize();
+      if (final.run.id !== run.id || final.binding.chatRunId !== binding.chatRunId || final.binding.taskVersion !== binding.taskVersion || !final.grant.targetIds.includes(query.targetId)) throw new Error('Test DB read: grant changed');
+      flow.finishTestDbQuery(run.id, evidence.id, result);
+      const delivered = authorize();
+      if (delivered.run.id !== run.id || delivered.binding.chatRunId !== binding.chatRunId || delivered.binding.taskVersion !== binding.taskVersion || !delivered.grant.targetIds.includes(query.targetId)) throw new Error('Test DB read: grant changed');
+      return { ...result, evidenceId: evidence.id };
+    } catch {
+      // Never leak server, credentials, SQL-driver diagnostics or result data through an error.
+      const evidenceId = evidence?.id;
+      if (evidenceId && flow.snapshot().runs.find(item => item.id === run.id)?.testDbEvidence?.find(item => item.id === evidenceId)?.status === 'pending') flow.finishTestDbQuery(run.id, evidenceId);
+      throw new Error('Test DB read failed or permission changed; inspect the run query evidence');
+    }
+  };
+  return { service, automation, snapshot, tick, stop, reportReady, resolveBinding, hint, devopsWrite, testDbRead };
 }
 export type FlowRuntime = ReturnType<typeof createFlowRuntime>;

@@ -70,6 +70,7 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "sqlite-vec": "0.1.9",
+    "tedious": "19.2.2",
     "three": "0.186.1",
     "three-spritetext": "1.9.6"
   },
