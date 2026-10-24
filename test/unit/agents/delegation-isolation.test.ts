@@ -195,6 +195,8 @@ describe('delegation isolation', () => {
     expect(git(f.repo, 'status', '--porcelain')).toBe('');
   });
 
+  // Two host-owned writers plus a detached union require repeated real Git safety/identity checks. Windows CI
+  // exceeded the unit default (15 s); bound this integration scenario separately without dropping those checks.
   it('combines parallel siblings in one union stage and keeps both pinned sources', async () => {
     const f = fixture();
     const a = f.child((await f.prepare(f.repo, 'a')).cwd, 'a'), b = f.child((await f.prepare(f.repo, 'b')).cwd, 'b');
@@ -208,7 +210,7 @@ describe('delegation isolation', () => {
     expect(git(result.cwd!, 'write-tree')).toBe(result.tree);
     expect(git(f.repo, 'status', '--porcelain')).toBe('');
     expect(await stageDelegatedChangesMany([requested[0]!, requested[0]!], f.parent)).toMatchObject({ status: 'blocked' });
-  });
+  }, 30_000);
 
   it('reports sibling overlaps and refuses custom merge drivers without executing them', async () => {
     const f = fixture();
