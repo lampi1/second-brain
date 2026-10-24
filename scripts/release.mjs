@@ -133,7 +133,7 @@ async function promote(staging = false, quick = false) {
   lease.begin();
   fs.mkdirSync(dest, { recursive: true });
   fs.cpSync(path.join(repo, 'out'), path.join(dest, 'out'), { recursive: true });
-  fs.writeFileSync(path.join(dest, 'package.json'), JSON.stringify({ name: pkg.name, productName: pkg.productName, version: pkg.version, type: pkg.type, main: pkg.main }, null, 2));
+  fs.writeFileSync(path.join(dest, 'package.json'), JSON.stringify({ name: pkg.name, productName: pkg.productName, version: pkg.version, type: pkg.type, main: pkg.main, repository: pkg.repository, bugs: pkg.bugs }, null, 2));
   const ev = JSON.parse(fs.readFileSync(path.join(repo, 'node_modules', 'electron', 'package.json'), 'utf8')).version;
   if (!fs.existsSync(electronFor(ev))) {
     say(`sharing Electron ${ev} runtime …`);

@@ -102,6 +102,11 @@ const CLEANUP_WORDS = {
     forgetWhy: (since: string | null) => `Nessun lavoro l'ha usata ${since ? `dal ${since}` : 'da quando l\'app tiene il conto'}: occupa spazio nella scelta delle skill senza aiutare.`,
     forgetExpected: 'Meno skill tra cui scegliere, nessun lavoro perso: se servisse, «Annulla» la rimette.',
     forgetRisk: 'Una skill usata di rado ma importante: in quel caso rifiuta.',
+    issueLead: (lvl: string, n: number) => `L'app ha scritto ${n} volte questo ${lvl === 'error' ? 'errore' : 'avviso'} dall'ultima manutenzione.`,
+    issueGroup: 'Gruppo di log', issueMessage: 'messaggio', issueCause: 'causa', issueSample: 'Riga di esempio',
+    issueExpectedH: 'Cosa ci si aspetta', issueExpected: 'Nessun avviso o errore del genere nell\'uso normale, o un motivo chiaro per cui è atteso.',
+    issueVerifyH: 'Come verificarlo', issueVerify: 'Dopo il fix rilancia la manutenzione: il gruppo non compare più in «Log dell\'app».',
+    issueBy: 'Scritta dalla manutenzione dell\'app dai suoi log.',
   },
   en: {
     bugRemoves: (msg: string, n: number) => `The warning «${msg}» in the app's logs (${n} times).`,
@@ -111,18 +116,31 @@ const CLEANUP_WORDS = {
     forgetWhy: (since: string | null) => `No job used it ${since ? `since ${since}` : 'since the app keeps count'}: it takes room in the choice of skills without helping.`,
     forgetExpected: 'Fewer skills to choose from, no work lost: if it is needed, «Undo» brings it back.',
     forgetRisk: 'A skill used rarely but important: then reject.',
+    issueLead: (lvl: string, n: number) => `The app logged this ${lvl} ${n} times since the last maintenance.`,
+    issueGroup: 'Log group', issueMessage: 'message', issueCause: 'cause', issueSample: 'Sample line',
+    issueExpectedH: 'Expected', issueExpected: 'No such warning or error in normal use, or a clear reason why it is expected.',
+    issueVerifyH: 'To verify', issueVerify: 'Run the maintenance again after the fix: the group no longer appears in «Log dell\'app».',
+    issueBy: 'Written by the app\'s maintenance from its own logs.',
   },
 } as const;
 const oneLine = (s: string): string => s.replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
 
-/** The app repository's issues page: package.json `bugs.url` (or `bugs` as a string) in the app's folder; null when
- *  missing or not an https page. */
-export function issuesUrlOf(appDir: string): string | null {
+/** The app's own repository, where its issues open when package.json says nothing (a frozen release's package.json
+ *  carried only name and version until 2026-10-24). */
+export const APP_ISSUES_URL = 'https://github.com/lampi1/second-brain/issues';
+
+/** The app repository's issues page: package.json `bugs.url` (or `bugs` as a string), else its GitHub `repository`,
+ *  in the app's folder; the app's own repository when neither is there. */
+export function issuesUrlOf(appDir: string): string {
   try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(appDir, 'package.json'), 'utf8')) as { bugs?: string | { url?: string } };
+    const pkg = JSON.parse(fs.readFileSync(path.join(appDir, 'package.json'), 'utf8')) as { bugs?: string | { url?: string }; repository?: string | { url?: string } };
     const url = typeof pkg.bugs === 'string' ? pkg.bugs : pkg.bugs?.url;
-    return typeof url === 'string' && /^https:\/\/[^\s]+$/.test(url) ? url : null;
-  } catch { return null; }
+    if (typeof url === 'string' && /^https:\/\/[^\s]+$/.test(url)) return url;
+    const rep = typeof pkg.repository === 'string' ? pkg.repository : pkg.repository?.url;
+    const gh = /github\.com[/:]([\w.-]+\/[\w.-]+?)(?:\.git)?\/?$/.exec(rep ?? '')?.[1];
+    if (gh) return `https://github.com/${gh}/issues`;
+  } catch { /* the app's own below */ }
+  return APP_ISSUES_URL;
 }
 
 /** owner/name of a GitHub issues page, null otherwise. */
@@ -382,15 +400,15 @@ export class ResearchService {
       if (all.some(x => x.logKey === g.key) || bugs >= RESEARCH_CAPS.app) continue;
       const where = `${g.scope} · ${g.msg}`;
       this.store.add({ chatId: null, kind: 'app-bug', title: scrub(where, p).slice(0, 120), adds: '', removes: scrub(w.bugRemoves(oneLine(g.msg), g.count), p),
-        why: w.bugWhy(g.count, g.lvl), evidence: [scrub(oneLine(g.sample), p).slice(0, 300)], sources: [], expected: '', risk: '', logKey: g.key,
+        why: w.bugWhy(g.count, g.lvl), evidence: [], sources: [], expected: '', risk: '', logKey: g.key,
         issue: { title: scrub(`${g.scope}: ${g.msg}`, p).slice(0, 120), labels: ['bug'], body: scrub([
-          `The app logged this ${g.lvl} ${g.count} times since the last maintenance.`, '',
-          '**Log group**', '', `- scope: \`${oneLine(g.scope).replace(/`/g, "'")}\``, `- message: ${oneLine(g.msg)}`, ...(g.cause ? [`- cause: ${oneLine(g.cause)}`] : []), '',
+          w.issueLead(g.lvl, g.count), '',
+          `**${w.issueGroup}**`, '', `- scope: \`${oneLine(g.scope).replace(/`/g, "'")}\``, `- ${w.issueMessage}: ${oneLine(g.msg)}`, ...(g.cause ? [`- ${w.issueCause}: ${oneLine(g.cause)}`] : []), '',
           // a sample with backticks cannot close the fence
-          '**Sample line**', '', '````', oneLine(g.sample).slice(0, 600).replace(/`{3,}/g, m => "'".repeat(m.length)), '````', '',
-          '**Expected**', '', 'No such warning or error in normal use, or a clear reason why it is expected.', '',
-          '**To verify**', '', 'Run the maintenance again after the fix: the group no longer appears in «Log dell\'app».',
-          '', '_Written by the app\'s maintenance from its own logs._',
+          `**${w.issueSample}**`, '', '````', oneLine(g.sample).slice(0, 600).replace(/`{3,}/g, m => "'".repeat(m.length)), '````', '',
+          `**${w.issueExpectedH}**`, '', w.issueExpected, '',
+          `**${w.issueVerifyH}**`, '', w.issueVerify,
+          '', `_${w.issueBy}_`,
         ].join('\n'), p).slice(0, 8000) } });
       bugs++;
     }

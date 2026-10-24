@@ -11,7 +11,7 @@ import type { AgentRun } from '../../../src/shared/agents';
 import type { BrainModelState, BrainSkill, LogScan } from '../../../src/shared/brain-model';
 import type { ChatSummary, NewChat } from '../../../src/shared/contract';
 import type { MaintenanceDone } from '../../../src/shared/maintenance-research';
-import { isAppCard, issuesUrlOf, repoOf, ResearchService, scrub, type ResearchDeps } from '../../../src/main/brainmodel/research';
+import { APP_ISSUES_URL, isAppCard, issuesUrlOf, repoOf, ResearchService, scrub, type ResearchDeps } from '../../../src/main/brainmodel/research';
 import { ResearchStore } from '../../../src/main/brainmodel/research-store';
 
 const dirs: string[] = [];
@@ -70,7 +70,11 @@ describe('scrub, issuesUrlOf, repoOf', () => {
     const d = tmp();
     fs.writeFileSync(path.join(d, 'package.json'), JSON.stringify({ bugs: { url: 'https://github.com/lampi1/second-brain/issues' } }));
     expect(issuesUrlOf(d)).toBe('https://github.com/lampi1/second-brain/issues');
-    expect(issuesUrlOf(tmp())).toBeNull();
+    // a frozen release's package.json had only name and version: its repository, else the app's own
+    const r = tmp();
+    fs.writeFileSync(path.join(r, 'package.json'), JSON.stringify({ name: 'x', repository: { url: 'git+https://github.com/someone/fork.git' } }));
+    expect(issuesUrlOf(r)).toBe('https://github.com/someone/fork/issues');
+    expect(issuesUrlOf(tmp())).toBe(APP_ISSUES_URL);
     expect(repoOf('https://github.com/lampi1/second-brain/issues')).toBe('lampi1/second-brain');
     expect(repoOf('https://example.com/x')).toBeNull();
   });
@@ -194,6 +198,9 @@ describe('ResearchService', () => {
     const bug = t.svc.cards().find(isAppCard)!;
     expect(bug).toMatchObject({ kind: 'app-bug', logKey: 'k1', chatId: null });
     expect(bug.issue!.body).not.toContain('/home/user');
+    // the issue in the user's language; no raw log line on the card (it is in the issue)
+    expect(bug.issue!.body).toContain('Riga di esempio');
+    expect(bug.evidence).toEqual([]);
     expect(t.svc.cards().filter(c => !isAppCard(c)).map(c => c.forget?.name)).toEqual(['old-one']);
     expect(t.applied).toEqual([]); // Finding an obsolete skill never authorizes deleting it.
   });

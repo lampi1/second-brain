@@ -47,6 +47,8 @@ const labels = (c: Proposal) => (c.applied ? { yes: t('proposals.keep'), no: t('
   : { yes: t('proposals.approve'), no: t('proposals.reject'), yesStamp: t('proposals.stamp.approve'), noStamp: t('proposals.stamp.reject') });
 /** The card's kind chip: a query change says «Query», not «Script». */
 const kindLabel = (c: Proposal): string => (c.ask.kind === 'applied' && c.ask.what === 'query' ? t('proposals.kind.query') : t(`proposals.kind.${c.group}`));
+/** A log line, JSON or code: never the quote on the card (it stays in «Mostra tutto»). */
+const rawText = (e: string): boolean => /^\s*[[{]/.test(e) || /"\w+"\s*:/.test(e) || /^\s*\w+\s*\|/.test(e);
 const blockedText = (code: string): string => (code === 'changed-since' ? t('proposals.blocked.changed-since') : code === 'noRepo' ? t('proposals.blocked.noRepo') : (['missing-provenance', 'invalid-steps', 'missing-verified-example', 'missing-holdout-replay', 'already-promoted'] as const).includes(code as never) ? t(`lr.problem.${code as 'missing-provenance'}`) : t('lr.problem.unknown'));
 /** A skill draft's header (--- name / description ---) apart from its body: the description is the card's lead. */
 export function splitHeader(md: string): { lead: string; body: string } {
@@ -141,7 +143,7 @@ export const ProposalCard = forwardRef<CardHandle, CardProps>(function ProposalC
       : { transform: `translateY(${depth * 14}px) scale(${1 - depth * 0.045})`, opacity: depth > 2 ? 0 : 1 - depth * 0.18 };
   const evidence = c.provenance.evidence;
   // the quote under who proposed it is words, never a bare run id or file:line (those stay in «Mostra tutto»)
-  const quote = evidence.find(e => /\s/.test(e.trim()) && !/^run \S+$/.test(e.trim()));
+  const quote = evidence.find(e => /\s/.test(e.trim()) && !/^run \S+$/.test(e.trim()) && !rawText(e));
   const root = app.use(s => s.info?.brainRoot ?? null);
   const files = c.provenance.files ?? [];
   const words = useMemo(() => cardWords(c, keep), [c, keep]);
