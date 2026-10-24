@@ -213,4 +213,5 @@ export const toolsDe: typeof toolsIt = {
   'tools.search.modelDownloading': p => `Suche nach Bedeutung: lade das Modell ${p.pct}%`,
   'tools.search.wordsOnly': 'Brain: Suche nur nach Wörtern',
   'tools.search.retry': 'Erneut versuchen',
+  'tools.genui.kindBrief': 'Zusammenfassung',
 };

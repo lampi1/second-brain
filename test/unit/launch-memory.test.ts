@@ -1,4 +1,4 @@
-// Launch selection injects only relevant confirmed facts, with hard limits and the scoped archive left unchanged.
+// Launch selection injects only relevant confirmed facts (and proposed ones not tied to one case, ADR 0150), with hard limits and the scoped archive left unchanged.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -29,19 +29,41 @@ describe('task-selective memory at launch', () => {
     expect(selectLaunchMemory(w.root, scope, 'the and please task review check').text).toBe('');
     expect(selectLaunchMemory(w.root, scope, 'unrelated').text).toBe('');
   });
-  it('never uses proposals, observed, disputed, retracted or not-yet-valid facts as launch context', () => {
+  it('loads proposed facts that are not tied to one case (ADR 0150), confirmed ones first on an equal score', () => {
     const w = world();
-    w.add('Database production credentials belong in the credential manager.');
-    w.add('Database deployment follows the release checklist.', scope, 'user:note');
-    w.add('Database formatting uses the project style guide.', scope, 'old-event');
+    w.add('Database backups are kept in the shared vault.');
+    w.confirm(w.add('Database restores are kept in the shared vault.'));
+    const selected = selectLaunchMemory(w.root, scope, 'Database vault shared kept');
+    const rows = selected.text.split('\n').map(line => JSON.parse(line) as { status: string; value: string });
+    expect(rows.map(r => [r.status, r.value])).toEqual([['confirmed', 'Database restores are kept in the shared vault.'], ['proposed', 'Database backups are kept in the shared vault.']]);
+  });
+  it('skips a proposed fact the user undid, one replacing a confirmed fact and one repeating it', () => {
+    const w = world();
+    const kept = w.add('Database backups are kept in the shared vault.');
+    w.confirm(kept);
+    const file = path.join(w.root, 'memory/records.json'), rows = JSON.parse(fs.readFileSync(file, 'utf8')) as MemoryRecord[], at = '2026-01-03T00:00:00Z';
+    const row = (id: string, value: string, f: Partial<MemoryRecord> = {}): MemoryRecord => ({ ...rows[0]!, memoryId: id, value, status: 'proposed', verification: undefined, supersedes: null, observedAt: at, validFrom: at, transitions: [{ at, status: 'proposed' }], ...f });
+    rows.push(row('m_undone', 'Database dumps are kept in the shared vault.', { transitions: [{ at, status: 'proposed' }, { at, status: 'proposed', reason: 'tidy-x:undone' }] }),
+      row('m_next', 'Database snapshots are kept in the shared vault.', { supersedes: kept.memoryId }),
+      row('m_same', 'Database backups are kept in the shared vault.'),
+      row('m_ok', 'Database exports are kept in the shared vault.'));
+    fs.writeFileSync(file, JSON.stringify(rows, null, 2));
+    const values = selectLaunchMemory(w.root, scope, 'Database vault shared kept').text.split('\n').map(line => (JSON.parse(line) as { value: string }).value);
+    expect(values.sort()).toEqual(['Database backups are kept in the shared vault.', 'Database exports are kept in the shared vault.']);
+  });
+  it('never uses case-specific proposals, observed, disputed, retracted or not-yet-valid facts as launch context', () => {
+    const w = world();
     const revoked = w.confirm(w.add('Database migrations use the retired runner.'));
     retractMemory(w.root, revoked.memoryId, 'rejected after review', '2026-02-01T00:00:00Z');
     const file = path.join(w.root, 'memory/records.json'), rows = readMemoryRecords(w.root);
+    // written straight to the store: the gate refuses a case-specific fact today, older stores may still hold one
+    rows.push({ ...revoked, memoryId: 'specific', value: 'Database production fix landed in PR 4821', status: 'proposed', verification: undefined, transitions: undefined, validTo: null });
     rows.push({ ...revoked, memoryId: 'observed', value: 'Database observed assertion', status: 'observed', transitions: undefined, validTo: null });
     rows.push({ ...revoked, memoryId: 'disputed', value: 'Database disputed assertion', status: 'disputed', transitions: undefined, validTo: null });
     rows.push({ ...revoked, memoryId: 'future', value: 'Database future assertion', status: 'confirmed', validFrom: '2999-01-01T00:00:00Z', transitions: undefined, validTo: null });
+    rows.push({ ...revoked, memoryId: 'future-proposal', value: 'Database future proposal', status: 'proposed', verification: undefined, validFrom: '2999-01-01T00:00:00Z', transitions: undefined, validTo: null });
     fs.writeFileSync(file, JSON.stringify(rows));
-    expect(selectLaunchMemory(w.root, scope, 'Database production credentials deployment formatting migrations observed disputed future').text).toBe('');
+    expect(selectLaunchMemory(w.root, scope, 'Database production fix landed migrations observed disputed future proposal').text).toBe('');
   });
   it('does not autoload legacy prose or re-enter a rejected record through its legacy copy', () => {
     const w = world(), revoked = w.confirm(w.add('Database migrations use the retired runner.'));

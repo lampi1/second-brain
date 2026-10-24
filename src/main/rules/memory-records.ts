@@ -176,9 +176,11 @@ export function deleteMemory(root: string, memoryId: string): string[] {
 // ── the maintenance's tidy-up (brainmodel/jobs.ts mergeMemory, ADR 0129) ───────────────────────────────────────────────
 /** One pass's work on the store: facts retired (merged into another, already known, not generalizable) and facts
  *  rewritten as the general rule behind them (a new record beside the old one, which is retired). */
-export interface MemoryTidy { retire: { id: string; reason: string }[]; generalize: { id: string; value: string }[] }
-/** What undoes one tidy-up: the facts it retired and the ones it wrote, under the tag of its change. */
-export interface MemoryTidyUndo { tag: string; retired: string[]; added: string[]; proposedFrom?: string[] }
+/** confirm: proposed facts saved without a card (the owner 2026-10-24, ADR 0150: «voglio vedere solo skill e rule»),
+ *  each replacing the confirmed facts it names; prune: confirmed facts over the role's cap, retired */
+export interface MemoryTidy { retire: { id: string; reason: string }[]; generalize: { id: string; value: string }[]; confirm?: { id: string; replaces: string[] }[]; prune?: { id: string; reason: string }[] }
+/** What undoes one tidy-up: the facts it retired, the ones it wrote and the ones it confirmed, under the tag of its change. */
+export interface MemoryTidyUndo { tag: string; retired: string[]; added: string[]; proposedFrom?: string[]; confirmed?: string[] }
 const open = (r: MemoryRecord | undefined): r is MemoryRecord => !!r && r.validTo === null && (r.status === 'proposed' || r.status === 'confirmed') && !r.derivedFiles?.length;
 /** Applies a tidy-up under the store's lock. Rewriting confirmed evidence creates an unverified proposed supersession;
  *  the original stays current until independent approval. Only proposed originals can be retired automatically.
@@ -208,6 +210,21 @@ export function tidyMemory(root: string, tidy: MemoryTidy, tag: string, now = ne
       const r = records.find(y => y.memoryId === x.id);
       if (open(r) && r.status === 'proposed' && !undo.retired.includes(r.memoryId)) retire(r, clean(x.reason, 200));
     }
+    for (const c of tidy.confirm ?? []) {
+      const r = records.find(y => y.memoryId === c.id);
+      if (!open(r) || r.status !== 'proposed' || undo.retired.includes(r.memoryId)) continue;
+      for (const id of c.replaces) {
+        const old = records.find(y => y.memoryId === id);
+        if (open(old) && old.status === 'confirmed' && !undo.retired.includes(id)) retire(old, `replaced:${r.memoryId}`);
+      }
+      (r.transitions ??= [{ at: r.observedAt, status: 'proposed' }]).push({ at: now, status: 'confirmed', reason: `${tag}:auto` });
+      r.status = 'confirmed'; r.verification = { sourceEventId: `${tag}:auto`, sourceRunId: `maintenance:${tag}`, evidence: 'saved by maintenance (facts need no approval, ADR 0150)' };
+      (undo.confirmed ??= []).push(r.memoryId);
+    }
+    for (const x of tidy.prune ?? []) {
+      const r = records.find(y => y.memoryId === x.id);
+      if (open(r) && r.status === 'confirmed' && !undo.retired.includes(r.memoryId) && !undo.confirmed?.includes(r.memoryId)) retire(r, clean(x.reason, 200));
+    }
     return undo;
   });
 }
@@ -216,12 +233,20 @@ export function canUndoMemoryTidy(root: string, undo: MemoryTidyUndo): boolean {
   let records: MemoryRecord[];
   try { records = readMemoryRecords(root); } catch { return false; }
   return undo.retired.every(id => { const r = records.find(x => x.memoryId === id); return r?.status === 'retracted' && !!r.transitions?.at(-1)?.reason?.startsWith(`${undo.tag}:`); })
-    && undo.added.every(id => { const r = records.find(x => x.memoryId === id); return !!r && r.validTo === null && r.transitions?.length === 1; });
+    && undo.added.every(id => { const r = records.find(x => x.memoryId === id); return !!r && r.validTo === null && r.transitions?.length === 1; })
+    && (undo.confirmed ?? []).every(id => { const r = records.find(x => x.memoryId === id); return r?.status === 'confirmed' && !r.validTo && !!r.transitions?.at(-1)?.reason?.startsWith(`${undo.tag}:`); });
 }
-/** Puts the store back as it was before the tidy-up: the retired facts open again, the written ones go. */
+/** Puts the store back as it was before the tidy-up: the retired facts open again, the written ones go, the saved ones
+ *  are proposals again. */
 export function undoMemoryTidy(root: string, undo: MemoryTidyUndo): void {
   if (!canUndoMemoryTidy(root, undo)) throw new Error('This memory change can no longer be undone: the facts changed since.');
   mutate(root, records => {
+    for (const id of undo.confirmed ?? []) {
+      const r = records.find(x => x.memoryId === id)!;
+      // marked, so launch memory stops quoting it until a person or a later pass decides again
+      r.transitions!.pop(); r.transitions!.push({ at: new Date().toISOString(), status: 'proposed', reason: `${undo.tag}:undone` });
+      r.status = 'proposed'; delete r.verification;
+    }
     for (const id of undo.retired) {
       const r = records.find(x => x.memoryId === id)!;
       r.transitions!.pop();

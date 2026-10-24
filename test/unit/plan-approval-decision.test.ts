@@ -1,7 +1,7 @@
 // Exercise PlanApproval's actual handlers without a DOM: explicit refusal is a timestamp-bound change, never approval;
 // free text, duplicate submissions, failed delivery retries and composing keyboard input preserve user intent.
 import type * as React from 'react';
-import type { KeyboardEvent, ReactElement, ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StrategyPlan } from '../../src/shared/strategy';
 
@@ -32,13 +32,15 @@ function walk(node: ReactNode): ReactElement<Record<string, unknown>>[] {
   const el = node as ReactElement<Record<string, unknown>>;
   return [el, ...walk(el.props.children as ReactNode)];
 }
-const render = () => {
+type Choice = { onChoose: () => void; disabled?: boolean };
+type Card = { busy?: boolean; yes: Choice; no: Choice; skip: Choice; write: { onSend: (text: string) => void; onDraft: (text: string) => void; initial?: string } };
+/** PlanApproval's decision card (DecisionCard.tsx draws and keys it: decision-card.test.ts) */
+const card = (): Card | null => {
   state.cursor = state.refCursor = 0;
-  return walk(PlanApproval({ ask: { type: 'plan', chatId: 'strategist', at: 42, id: 'plan@42' }, chatTitle: 'Example', onEscape: () => {}, testid: 'plan' }));
+  const el = PlanApproval({ ask: { type: 'plan', chatId: 'strategist', at: 42, id: 'plan@42' }, chatTitle: 'Example', onEscape: () => {}, testid: 'plan' }) as ReactElement<Record<string, unknown>> | null;
+  return el ? el.props as unknown as Card : null;
 };
-const get = (id: string) => render().find(el => el.props['data-testid'] === `plan-${id}`)!;
-const click = (id: string) => (get(id).props.onClick as () => void)();
-const key = (overrides: Record<string, unknown> = {}) => ({ key: 'Enter', nativeEvent: {}, preventDefault: vi.fn(), stopPropagation: vi.fn(), ...overrides });
+const evidence = () => walk((PlanApproval({ ask: { type: 'plan', chatId: 'strategist', at: 42, id: 'plan@42' }, chatTitle: 'Example', onEscape: () => {}, testid: 'plan' }) as ReactElement<Record<string, unknown>>).props.children as ReactNode);
 
 beforeEach(() => {
   state.values = []; state.refs = []; state.openFile.mockReset(); state.decide.mockReset().mockResolvedValue(true);
@@ -46,65 +48,51 @@ beforeEach(() => {
 });
 describe('PlanApproval decisions', () => {
   it('No needs no typing, requests a different plan and keeps the exact timestamp', () => {
-    click('reject');
+    card()!.no.onChoose();
     expect(state.decide).toHaveBeenCalledWith('strategist', 'change', 42,
       'Non approvo questo piano. Non avviare i passi proposti. Proponi un piano diverso e chiedi di nuovo la mia approvazione.');
     expect(state.decide).toHaveBeenCalledTimes(1);
   });
+  it('«Non voglio rispondere» never starts the plan', () => {
+    card()!.skip.onChoose();
+    expect(state.decide).toHaveBeenCalledWith('strategist', 'change', 42, expect.stringContaining('Non approvo questo piano'));
+  });
   it('guards rapid duplicate clicks and restores the controls after a delivery refusal', async () => {
     state.decide.mockResolvedValueOnce(false);
-    const handler = get('reject').props.onClick as () => void;
+    const handler = card()!.no.onChoose;
     handler(); handler();
     expect(state.decide).toHaveBeenCalledTimes(1);
-    expect(get('approve').props.disabled).toBe(true);
+    expect(card()!.busy).toBe(true);
     await Promise.resolve();
-    expect(get('approve').props.disabled).toBe(false);
-    click('approve');
+    expect(card()!.busy).toBe(false);
+    card()!.yes.onChoose();
     expect(state.decide).toHaveBeenLastCalledWith('strategist', 'approve', 42, '');
   });
-  it('free text is optional to open but cannot send an empty change', () => {
-    click('change');
-    expect(get('change-send').props.disabled).toBe(true);
-    click('change-send');
+  it('free text cannot send an empty change', () => {
+    card()!.write.onSend('  ');
     expect(state.decide).not.toHaveBeenCalled();
-    (get('change-text').props.onChange as (e: { target: { value: string } }) => void)({ target: { value: 'Prima i test' } });
-    click('change-send');
+    card()!.write.onSend('Prima i test');
     expect(state.decide).toHaveBeenCalledWith('strategist', 'change', 42, 'Prima i test');
-  });
-  it('does not submit composed, repeated or modified Enter from the alternative', () => {
-    click('change');
-    (get('change-text').props.onChange as (e: { target: { value: string } }) => void)({ target: { value: 'Prima i test' } });
-    const onKey = get('change-text').props.onKeyDown as (e: KeyboardEvent<HTMLTextAreaElement>) => void;
-    for (const overrides of [{ nativeEvent: { isComposing: true } }, { repeat: true }, { ctrlKey: true }, { metaKey: true }, { altKey: true }, { shiftKey: true }]) {
-      onKey(key(overrides) as unknown as KeyboardEvent<HTMLTextAreaElement>);
-    }
-    expect(state.decide).not.toHaveBeenCalled();
-    onKey(key() as unknown as KeyboardEvent<HTMLTextAreaElement>);
-    expect(state.decide).toHaveBeenCalledTimes(1);
   });
   it('opens a report in the source chat viewer without making a plan decision', () => {
     plan.doneWhen = '[Report](file:///C:/reports/plan.md)';
-    click('link-0');
+    (evidence().find(el => el.props['data-testid'] === 'plan-link-0')!.props.onClick as () => void)();
     expect(state.openFile).toHaveBeenCalledWith('file:///C:/reports/plan.md', 'strategist');
     expect(state.decide).not.toHaveBeenCalled();
   });
   it('renders no decision for a replaced plan', () => {
     plan.at = 43;
-    expect(render()).toEqual([]);
+    expect(card()).toBeNull();
     expect(state.decide).not.toHaveBeenCalled();
   });
   it('keeps an unsent alternative when the evidence viewer or queue remounts the same proposal', async () => {
-    click('change');
-    (get('change-text').props.onChange as (e: { target: { value: string } }) => void)({ target: { value: 'Controlla il report prima' } });
+    card()!.write.onDraft('Controlla il report prima');
     state.values = []; state.refs = [];
-    expect(get('change-text').props.value).toBe('Controlla il report prima');
+    expect(card()!.write.initial).toBe('Controlla il report prima');
     expect(state.decide).not.toHaveBeenCalled();
-    click('change-send');
+    card()!.write.onSend('Controlla il report prima');
     await Promise.resolve();
     state.values = []; state.refs = [];
-    expect(get('change')).toBeDefined();
-    click('change');
-    expect(get('change-text').props.value).toBe('');
+    expect(card()!.write.initial).toBeUndefined();
   });
-
 });

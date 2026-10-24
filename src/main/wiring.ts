@@ -296,7 +296,8 @@ export function attachArtifacts(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: P
     ...(now ? { now } : {}), ...(process.env.SB_TEST === '1' && wait > 0 ? { askWaitMs: wait } : {}),
   });
   const send = ctx.emitter.emit.bind(ctx.emitter);
-  ctx.emitter.emit = (ch, p) => { send(ch, p); store.observe(ch, p); };
+  // a question's visuals are linked before the question reaches the page: its card draws with its brief (ADR 0150)
+  ctx.emitter.emit = (ch, p) => { if (ch === 'pending:added') { store.observe(ch, p); send(ch, p); } else { send(ch, p); store.observe(ch, p); } };
   const items = chats.items.bind(chats);
   chats.items = chatId => store.merge(chatId, items(chatId));
   return store;
@@ -497,7 +498,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const loopRef: { current?: { ended(run: AgentRun): void; outcome(run: AgentRun): void } } = {};
   const runFeedbackRef: { current?: { runList(): readonly AgentRun[] } } = {};
   const delegateWorktrees = new DelegateWorktrees(path.join(ctx.userData, 'delegation-worktrees.json'));
+  // the question gates ask for a brief before a yes/no question (ADR 0150): the visuals' store exists further down
+  const briefRef: { current?: Artifacts } = {};
   const manager = new ChatManager({
+    briefReady: chatId => briefRef.current?.hasBrief(chatId) ?? true,
     prepareDelegation: delegateWorktrees.prepare,
     freshSessions: () => true,
     continuationContext: chatId => workflowsRef ? JSON.stringify(workflowsRef.list().filter(row => row.chatIds.includes(chatId))) : null,
@@ -662,6 +666,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   mail.start();
   // show_ui on every chat's own endpoint: a visual from the catalog instead of a wall of text (ADR 0033)
   const artifacts = attachArtifacts(ctx, chats);
+  briefRef.current = artifacts;
   addChatTools([showUiTool(artifacts)]);
 
   // a reusable command that ran fine with "Esegui" becomes a brain script by itself (issue #111, ADR 0096)

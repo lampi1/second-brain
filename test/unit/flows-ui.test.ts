@@ -40,7 +40,7 @@ it('binds asks to the brain and draft/run revisions and excludes already answere
 });
 it('shows complete immutable definition and evidence in expandable modal details with three answer paths', () => {
   const html = renderToStaticMarkup(createElement(FlowApproval, { ask: flowAsks(snapshot())[0]!, onEscape: vi.fn() }));
-  for (const text of ['Approvi questa versione', 'Solo i documenti selezionati.', 'Conferma il testo', '5000', 'read-only', 'document', 'Sì', 'No', 'Altro…', 'ctx-link file', 'Report']) expect(html).toContain(text);
+  for (const text of ['Approvi questa versione', 'Solo i documenti selezionati.', 'Conferma il testo', '5000', 'read-only', 'document', 'Sì', 'No', 'Scrivi una risposta…', 'ctx-link file', 'Report']) expect(html).toContain(text);
   expect(html).toContain('<details>'); expect(html).not.toContain('<details open');
   expect(html).toContain('flow/%2Fbrain%2Fa/definition/review-doc@2');
 });

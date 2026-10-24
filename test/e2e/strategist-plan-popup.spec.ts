@@ -38,19 +38,17 @@ test('the plan to approve opens in the questions window with its steps; approvin
     await pick.click();
     await expect(page.getByTestId('qwin-current')).toContainText('Piano da approvare');
 
-    // The default card stays short; the complete proposal is available without losing any step or constraint.
+    // The decision card (ADR 0150): every step, who does it and what is known always open, then what Sì / No do.
     const card = page.getByTestId('qwin-plan');
     await expect(page.getByTestId('qwin-backdrop')).toBeVisible();
     await expect(card).toBeVisible();
     await expect(card).toContainText('Piano da approvare');
     await expect(card).toContainText('Approvi questo piano?');
     await expect(page.getByTestId('qwin-plan-count')).toHaveText('4 step');
-    await expect(page.getByTestId('qwin-plan-details')).not.toHaveAttribute('open', '');
-    await expect(page.getByTestId('qwin-plan-step-1')).toBeHidden();
-    await expect(page.getByTestId('qwin-plan-approve')).toHaveText('Sì (consigliato)');
+    await expect(page.getByTestId('qwin-plan-approve')).toHaveText('SìConsigliata');
     await expect(page.getByTestId('qwin-plan-reject')).toHaveText('No');
+    await expect(page.getByTestId('qwin-plan-effects')).toContainText('Se Sì');
     await shot(page, 'strategist-plan-popup-compact-dark');
-    await page.getByTestId('qwin-plan-details').locator('summary').click();
     await expect(page.getByTestId('qwin-plan-steps').locator('li')).toHaveCount(4);
     await expect(page.getByTestId('qwin-plan-step-1')).toContainText('Trovo dove si calcola lo sconto oggi');
     await expect(page.getByTestId('qwin-plan-step-1')).toContainText('carrello, ordine e reso');

@@ -99,6 +99,8 @@ const PREWARM_UNUSED_MS = 5 * 60_000;
 interface SubmissionReceipt { beforeSubmit(): void; submitted(): void; failed(error: unknown): void }
 
 export interface ChatManagerOptions {
+  /** a brief waits for this chat's next question (genui/artifacts.ts hasBrief, ADR 0150); absent = none asked for */
+  briefReady?: (chatId: string) => boolean;
   suggestSkills?: (goal: string) => Promise<string[]>;
   /** the roles in a few lines, for the Orchestrator's first message of a session (agents/discovery.ts roleCatalogBrief) */
   roleCatalogBrief?: () => string;
@@ -3495,6 +3497,8 @@ export class ChatManager implements ChatService {
   /** A session on an engine: the test factory if given, else the engine's own adapter (engines/sessions.ts). The Orchestrator
    *  on any engine gets the app-control tools (app_create_chat…); r = undefined: a warm engine, never an Orchestrator. */
   private newSession(harness: Harness, opts: SessionOptions, sink: SessionSink, r: Rec | undefined): HarnessSession {
+    const brief = this.opts.briefReady;
+    if (brief) opts = { ...opts, briefReady: () => brief(opts.chatId) };
     if (this.opts.sessionFactory) return this.opts.sessionFactory(harness, opts, sink);
     const override = this.opts.enginePaths?.[harness];
     return sessionFor(engineOrThrow(harness), opts, sink, {

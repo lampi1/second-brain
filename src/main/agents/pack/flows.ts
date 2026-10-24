@@ -23,7 +23,7 @@ export interface PackFlowDeps {
 }
 const tokenId = (): string => randomBytes(16).toString('hex');
 /** When and what a role chat writes to its own memory: the `remember` field of agent_report, at the end of a job. */
-export const REMEMBER_HINT = 'Save only reusable knowledge future runs would need to rediscover: use memory_propose or the `remember` field of agent_report (up to 3 short lines). Generalize procedures, conventions or dead ends; omit task results and one-off URLs, identifiers, local paths, dates or branches. Proposals require user confirmation. Save nothing when there is no new reusable knowledge.';
+export const REMEMBER_HINT = 'Save only reusable knowledge future runs would need to rediscover: use memory_propose or the `remember` field of agent_report (up to 3 short lines). Generalize procedures, conventions or dead ends; omit task results and one-off URLs, identifiers, local paths, dates or branches. Facts are saved without asking the user (maintenance merges them and keeps the most recent 40 per role). Save nothing when there is no new reusable knowledge.';
 export const portableId = (id: string): string => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id) && id.length <= 64 && !/[a-f0-9]{8}-[a-f0-9]{4}-/.test(id) ? id : `agent-${createHash('sha256').update(id).digest('hex').slice(0, 16)}`;
 
 /** All paths beneath the brain are main-derived; reject symlink parents before reading/writing through them. */

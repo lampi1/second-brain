@@ -3,10 +3,11 @@
 // options), board (lanes of items: QA cases, chat status), diffList (changed files by area, clickable), barChart (inline
 // SVG). Each view sits in an error boundary whose fallback is the plain summary. ArtifactCard = a visual in a chat's
 // list (compact; click or ⤢ = full width over the app, Esc closes); AskArtifacts = the visuals attached to a question;
-// UiPreview = an option's preview with its sb-ui fences drawn. None of them answers anything: their keys stay theirs
+// UiPreview = an option's preview with its sb-ui fences drawn; a question's brief (ADR 0150) is drawn by DecisionCard.tsx,
+// here only when it shows as a plain card. None of them answers anything: their keys stay theirs
 // (Esc in the full view never reaches a question panel). Used by ChatItems.tsx and AskContext.tsx.
 import { Component, createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { ChatItem, PendingRequest, UiBoard, UiCards, UiDiffList, UiLink, UiSpec, UiStatus, UiTable } from '@shared/contract';
+import type { ChatItem, PendingRequest, UiBoard, UiBrief, UiCards, UiDiffList, UiLink, UiSpec, UiStatus, UiTable } from '@shared/contract';
 import { describeUi, safeHref, splitUiFences, textOfUi } from '@shared/genui';
 import { renderMarkdown } from '../lib/markdown';
 import { useApp } from '../store/store';
@@ -14,6 +15,7 @@ import { closeModal, openModal, toast, ui } from '../store/ui';
 import { IconAlert, IconChart, IconCheck, IconColumns, IconCopy, IconFile, IconGlobe, IconLayers, IconList, IconMaximize, IconX } from './Icons';
 import { Modal } from './ui';
 import { BarChart } from './genui/BarChart';
+import { BriefEvidence } from './DecisionCard';
 import { copyText } from '../brain/components/ui';
 import { t } from '../i18n';
 import { openFileViewer } from '../actions';
@@ -29,6 +31,7 @@ const getKind = (): Record<UiSpec['component'], { label: string; icon: ReactNode
   board: { label: t('tools.genui.kindBoard'), icon: <IconLayers size={13} /> },
   diffList: { label: t('tools.genui.kindDiffList'), icon: <IconFile size={13} /> },
   barChart: { label: t('tools.genui.kindBarChart'), icon: <IconChart size={13} /> },
+  brief: { label: t('tools.genui.kindBrief'), icon: <IconCheck size={13} /> },
 });
 
 const getRisk = () => ({ low: t('tools.genui.riskLow'), medium: t('tools.genui.riskMedium'), high: t('tools.genui.riskHigh') } as const);
@@ -171,7 +174,19 @@ export function UiView({ spec, cwd }: { spec: UiSpec; cwd?: string }) {
     case 'board': return <Board p={spec.props} />;
     case 'diffList': return <DiffList p={spec.props} cwd={cwd} />;
     case 'barChart': return <BarChart p={spec.props} />;
+    case 'brief': return <BriefCard p={spec.props} />;
   }
+}
+
+/** A brief that never met its question (shown as a plain card after the wait): the evidence and what Sì / No would do. */
+function BriefCard({ p }: { p: UiBrief }) {
+  const chatId = useContext(FileChat);
+  return (
+    <div className="gu-brief">
+      <BriefEvidence brief={p} testBase="brief" size="m" onFile={h => void openFile(h, chatId)} />
+      <p className="gu-brief-fx"><b>{t('genui.decision.ifYes')}:</b> {p.ifYes}<br /><b>{t('genui.decision.ifNo')}:</b> {p.ifNo}</p>
+    </div>
+  );
 }
 
 /** A view that fails to draw shows its plain summary instead (and never takes the chat down with it). */
@@ -247,11 +262,12 @@ export const ArtifactCard = memo(function ArtifactCard({ item, cwd, attached,cha
   );
 });
 
-/** The visuals a chat attached to this question (show_ui target next-ask), always in sight above its context. */
-export function AskArtifacts({ req, testBase }: { req: PendingRequest; testBase: string }) {
+/** The visuals a chat attached to this question (show_ui target next-ask), always in sight above its context
+ *  (`noBrief`: without its brief, which the decision card draws on its own). */
+export function AskArtifacts({ req, testBase, noBrief }: { req: PendingRequest; testBase: string; noBrief?: boolean }) {
   const arts = useApp(s => s.items[req.chatId]);
   const cwd = useApp(s => s.chats[req.chatId]?.cwd);
-  const mine = useMemo(() => (arts ?? []).filter((i): i is Art => i.kind === 'artifact' && i.askId === req.id), [arts, req.id]);
+  const mine = useMemo(() => (arts ?? []).filter((i): i is Art => i.kind === 'artifact' && i.askId === req.id && !(noBrief && i.ui.component === 'brief')), [arts, req.id, noBrief]);
   if (!mine.length) return null;
   return <div className="gu-ask" data-testid={`${testBase}-visuals`}>{mine.map(a => <ArtifactCard key={a.id} item={a} cwd={cwd} chatId={req.chatId} attached />)}</div>;
 }

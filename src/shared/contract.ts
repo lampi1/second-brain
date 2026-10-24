@@ -301,12 +301,21 @@ export interface UiCards {
 export interface UiBoard { lanes: { title: string; status?: UiStatus; items: { title: string; detail?: string; status?: UiStatus; links?: UiLink[] }[] }[] }
 export interface UiDiffList { groups: { area: string; files: { path: string; why?: string; added?: number; removed?: number; href?: string }[] }[] }
 export interface UiBarChart { unit?: string; bars: { label: string; value: number; note?: string }[] }
+/** a question's brief (ADR 0150): what was done, its evidence and what Sì / No do, shown inside the question card so the
+ *  question never leans on the chat text before it (only with target next-ask) */
+export interface UiBrief {
+  done: string[]; ifYes: string; ifNo: string;
+  checks?: { label: string; status: UiStatus; detail?: string }[];
+  images?: { path: string; caption?: string }[];
+  files?: { path: string; why?: string; added?: number; removed?: number; href?: string }[];
+}
 export type UiSpec =
   | { component: 'table'; props: UiTable }
   | { component: 'cards'; props: UiCards }
   | { component: 'board'; props: UiBoard }
   | { component: 'diffList'; props: UiDiffList }
-  | { component: 'barChart'; props: UiBarChart };
+  | { component: 'barChart'; props: UiBarChart }
+  | { component: 'brief'; props: UiBrief };
 export type UiComponent = UiSpec['component'];
 /** chat = a card in the calling chat · orchestrator = in its Orchestrator's panel · next-ask = on its next question (else a card) */
 export type ArtifactTarget = 'chat' | 'orchestrator' | 'next-ask';
