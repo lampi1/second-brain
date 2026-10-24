@@ -7,12 +7,16 @@
 // - agent: a role's card (Brain → Agenti) via the same save as the page (a new version; undo = the previous version);
 // - connector: an MCP server on/off and a role's access to it (Settings → Connettori); adding or removing a server, its
 //   tokens and the accounts' logins stay the user's, in Settings (they run commands or hold credentials);
-// - later: «Rispondi dopo».
+// - later: «Rispondi dopo»;
+// - routine: a routine's trigger on/off, its filters, emptying its queue (the count the user was told), one run's pause
+//   and the global pause: the Routine page's own calls (ADR 0155), never approving a trigger, a DevOps write or «Esegui».
 // Every change needs the user's own typed message to this Orchestrator in the last minutes, and that message must be
 // its latest (userAsked: appctl/user-words.ts), so neither app news, an agent's mail, the Battito card nor a turn they
 // woke can change a setting; the Orchestrator's own tools and permission ceiling stay the user's click. Secrets are never read or written.
 // Mounted only on the authenticated Orchestrator endpoint by appctl/tools.ts.
 import type { ChangeBy, SettingChange, SettingDef, SettingRequestResult, Settings } from '../../shared/contract';
+import type { FlowAutomationFilters } from '../../shared/flow-automation';
+import type { FlowSnapshot } from '../../shared/flows';
 import type { AgentCatalog, AgentDraft, AgentProfile, AgentVersion } from '../../shared/agents';
 import type { McpServersState, McpToolAccess } from '../../shared/mcp-servers';
 import { getAt } from '../brain/settings-schema';
@@ -34,10 +38,20 @@ export interface ConfigDeps {
   agents?: { list(): AgentCatalog; save(draft: AgentDraft, id: string, reason?: string): AgentProfile; history(id: string): AgentVersion[]; restore(id: string, version: number): AgentProfile };
   mcp?: { state(): McpServersState; save(a: { def: unknown; previousId?: string }): McpServersState; setAccess(a: { role: string; server: string; access: McpToolAccess }): McpServersState };
   later?: { get(): { on: boolean }; set(on: boolean): { on: boolean } };
+  /** the Routine page's calls (index.ts flows:*), on the selected brain's runtime */
+  routine?: {
+    snapshot(): FlowSnapshot;
+    pauseTrigger(id: string, expectedRevision: number, paused: boolean): void;
+    pauseAll(expectedRevision: number, paused: boolean): void;
+    clearQueue(id: string, count: number): number;
+    editFilters(input: FlowAutomationFilters): void;
+    pauseRun(runId: string, expectedRevision: number, paused: boolean): void;
+  };
 }
 
 export const CONFIG_ASK_MIN = 10;
-const AREAS = ['setting', 'view', 'agent', 'connector', 'later'] as const;
+const AREAS = ['setting', 'view', 'agent', 'connector', 'later', 'routine'] as const;
+const FILTER_FIELDS = ['includeTags', 'excludeTags', 'workItemIds', 'iterationPath', 'maxPerHour'] as const;
 /** The role card's fields an edit may set (name, summary and character are the role's own, fixed) */
 export const AGENT_FIELDS = ['instructions', 'engine', 'model', 'effort', 'tier', 'tierMax', 'maxContext', 'skills', 'launches', 'tools', 'permissionCeiling'] as const;
 const VIEW_FIELDS = ['theme', 'density', 'workProfile'] as const;
@@ -64,12 +78,13 @@ export function configTool(d: ConfigDeps): ToolDef {
   };
   return {
     name: 'app_config',
-    description: `Read and change the app's configuration for the user, exactly as their own click in the app would (every change is logged with its Annulla). action "get" (read, optional query), "set", "undo", "history". area: "setting" (every key of Impostazioni and more: key + value; get lists key, label, description, type, current value), "view" (theme system|light|dark, density comfortable|compact, workProfile: key + value), "agent" (a role's card in Brain → Agenti: agentId + key = one of ${AGENT_FIELDS.join('|')} + value; undo with agentId + version), "connector" (an MCP server: server + key "enabled" (boolean) or key "access" with role + value all|read|none|{tools:[...]}), "later" («Rispondi dopo»: value true|false). Change only what the user asked in their own words in the last ${CONFIG_ASK_MIN} minutes; then tell them in one line what changed and that Annulla is in the change log. Never secrets, tokens, logins or adding/removing MCP servers: those stay in Settings for the user. Where a setting is on screen: app_guide / app_ui outline.`,
+    description: `Read and change the app's configuration for the user, exactly as their own click in the app would (every change is logged with its Annulla). action "get" (read, optional query), "set", "undo", "history". area: "setting" (every key of Impostazioni and more: key + value; get lists key, label, description, type, current value), "view" (theme system|light|dark, density comfortable|compact, workProfile: key + value), "agent" (a role's card in Brain → Agenti: agentId + key = one of ${AGENT_FIELDS.join('|')} + value; undo with agentId + version), "connector" (an MCP server: server + key "enabled" (boolean) or key "access" with role + value all|read|none|{tools:[...]}), "later" («Rispondi dopo»: value true|false), "routine" (get: every trigger with state, filters, queue count, open runs; set key "trigger" + flowId + value true=attivo|false=in pausa; key "filters" + flowId + value {includeTags, excludeTags, workItemIds, iterationPath, maxPerHour} (only the fields to change, null clears one; DevOps triggers); key "queue" + flowId + value = the waiting count you told the user (discards them, no undo); key "run" + runId + value true=pause|false=resume; key "all" + value true|false = pause every trigger). A paused trigger detects and starts nothing, not even a start on one item; runs already started keep going but lose its DevOps writes at once: pause the run to stop it. Approving a new trigger and a prod «Esegui» stay the user's click on the Routine page. Change only what the user asked in their own words in the last ${CONFIG_ASK_MIN} minutes; then tell them in one line what changed and that Annulla is in the change log. Never secrets, tokens, logins or adding/removing MCP servers: those stay in Settings for the user. Where a setting is on screen: app_guide / app_ui outline.`,
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     inputSchema: { type: 'object', additionalProperties: false, required: ['action', 'area'], properties: {
       action: { type: 'string', enum: ['get', 'set', 'undo', 'history'] }, area: { type: 'string', enum: [...AREAS] },
       key: { type: 'string', description: 'setting key, view field, agent field, or connector field (enabled|access)' }, value: { description: 'the new value (JSON type of the field)' },
       query: { type: 'string', description: 'get: words to filter by (label, key, description)' }, agentId: { type: 'string' }, server: { type: 'string' }, role: { type: 'string' },
+      flowId: { type: 'string', description: 'routine: the routine\'s flowId' }, runId: { type: 'string', description: 'routine: a run id (get area routine)' },
       changeId: { type: 'string', description: 'undo of a setting: the change id from set or history' }, version: { type: 'integer', description: 'undo of an agent: the version to restore' },
       reason: { type: 'string', description: 'the user\'s ask, in a few words (a role change keeps it in its history)' },
     } },
@@ -176,6 +191,83 @@ export function configTool(d: ConfigDeps): ToolDef {
           asked('«Rispondi dopo»');
           const before = d.later.get().on;
           return { before, after: d.later.set(a.value).on };
+        }
+        case 'routine': {
+          if (!d.routine) throw new Error('routine non disponibili (nessun brain)');
+          const snap = d.routine.snapshot(), auto = snap.automation;
+          const titleOf = (flowId: string) => snap.versions.find(v => v.definition.id === flowId && v.version === snap.active[flowId])?.definition.title ?? flowId;
+          const waiting = (ruleId: string) => (auto?.events ?? []).filter(e => e.ruleId === ruleId && ['pending', 'notified', 'blocked'].includes(e.status) && !e.sourceKey.startsWith('restart:')).length;
+          const ruleOf = (flowId: unknown) => {
+            const r = auto?.rules.find(x => x.config.flowId === flowId);
+            if (!r) throw new Error(`nessun trigger per la routine ${String(flowId)} (routine con trigger: ${auto?.rules.map(x => x.config.flowId).join(', ') || 'nessuna'})`);
+            return r;
+          };
+          if (action === 'get') {
+            const open = snap.runs.filter(r => ['active', 'approval', 'blocked'].includes(r.status));
+            return {
+              allPaused: auto?.paused ?? false,
+              triggers: (auto?.rules ?? []).filter(r => r.status !== 'rejected').map(r => {
+                const t = r.config.trigger;
+                return { flowId: r.config.flowId, routine: titleOf(r.config.flowId), state: r.status === 'enabled' ? 'attivo' : r.status === 'paused' ? 'in pausa' : 'da approvare (Routine page)',
+                  kind: t.kind, everyMinutes: t.everyMinutes, ...(t.kind === 'devops' ? { project: t.project, areaPath: t.areaPath, workItemType: t.workItemType, states: t.states,
+                    filters: Object.fromEntries(FILTER_FIELDS.filter(f => t[f] !== undefined && !(Array.isArray(t[f]) && !(t[f] as unknown[]).length)).map(f => [f, t[f]])) } : {}),
+                  devopsWrites: r.config.devopsWrite ? r.config.devopsWrite.ops : 'none', queue: waiting(r.id), ...(r.lastResult ? { lastCheck: r.lastResult.slice(0, 200) } : {}), ...(r.error ? { error: r.error.slice(0, 200) } : {}) };
+              }),
+              openRuns: open.slice(0, 30).map(r => ({ runId: r.id, routine: titleOf(r.flowId), title: r.title ?? null, state: r.paused ? 'in pausa' : r.status, step: r.steps[r.currentStep]?.stepId ?? null })),
+            };
+          }
+          if (action !== 'set') break;
+          const key = String(a.key ?? '');
+          if (key === 'trigger') {
+            if (typeof a.value !== 'boolean') throw new Error('trigger: flowId + value true (attivo) | false (in pausa)');
+            const r = ruleOf(a.flowId);
+            asked('i trigger delle routine');
+            d.routine.pauseTrigger(r.id, r.revision, !a.value);
+            log.info('appctl', 'Orchestrator switched a routine trigger', { chat: d.callerId, data: { flow: r.config.flowId, on: a.value } });
+            return { routine: titleOf(r.config.flowId), trigger: a.value ? 'attivo' : 'in pausa', before: r.status === 'enabled' ? 'attivo' : 'in pausa', queue: waiting(r.id),
+              ...(!a.value ? { note: 'Le run già partite continuano; perdono subito i permessi del trigger (scritture DevOps, DB di test). Per fermarne una: key run.' } : {}) };
+          }
+          if (key === 'all') {
+            if (typeof a.value !== 'boolean') throw new Error('all: value true (tutte in pausa) | false (riprendi)');
+            asked('la pausa delle routine');
+            d.routine.pauseAll(auto?.revision ?? 0, a.value);
+            log.info('appctl', 'Orchestrator switched the global routine pause', { chat: d.callerId, data: { paused: a.value } });
+            return { allPaused: a.value, before: auto?.paused ?? false };
+          }
+          if (key === 'queue') {
+            const r = ruleOf(a.flowId), now = waiting(r.id);
+            // like «Svuota coda»: the count the user was told, so a queue that moved is not emptied blind
+            if (typeof a.value !== 'number') throw new Error(`queue: flowId + value = il numero di eventi in coda che hai detto all'utente (ora ${now})`);
+            asked('la coda delle routine');
+            const n = d.routine.clearQueue(r.id, a.value);
+            log.info('appctl', 'Orchestrator emptied a routine queue', { chat: d.callerId, data: { flow: r.config.flowId, count: n } });
+            return { routine: titleOf(r.config.flowId), discarded: n, note: 'non si annulla: gli eventi scartati non ripartono' };
+          }
+          if (key === 'filters') {
+            const r = ruleOf(a.flowId), t = r.config.trigger;
+            if (t.kind !== 'devops') throw new Error('i filtri valgono solo per un trigger DevOps');
+            const v = a.value;
+            if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).some(k => !(FILTER_FIELDS as readonly string[]).includes(k))) throw new Error(`filters: flowId + value {${FILTER_FIELDS.join(', ')}} (solo i campi da cambiare; [] o null li toglie)`);
+            asked('i filtri delle routine');
+            const before = { includeTags: t.includeTags ?? [], excludeTags: t.excludeTags ?? [], workItemIds: t.workItemIds ?? [], ...(t.iterationPath ? { iterationPath: t.iterationPath } : {}), ...(t.maxPerHour ? { maxPerHour: t.maxPerHour } : {}) };
+            const next = { ...before } as Record<string, unknown>;
+            for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+              if (x === null) { if (k === 'iterationPath' || k === 'maxPerHour') delete next[k]; else next[k] = []; } else next[k] = x;
+            }
+            d.routine.editFilters({ id: r.id, expectedRevision: r.revision, ...next } as unknown as FlowAutomationFilters);
+            log.info('appctl', 'Orchestrator changed a routine trigger\'s filters', { chat: d.callerId, data: { flow: r.config.flowId } });
+            return { routine: titleOf(r.config.flowId), before, after: next, undo: 'set filters back with the "before" value' };
+          }
+          if (key === 'run') {
+            if (typeof a.value !== 'boolean') throw new Error('run: runId + value true (in pausa) | false (riprendi)');
+            const run = snap.runs.find(x => x.id === a.runId);
+            if (!run) throw new Error(`run sconosciuta: ${String(a.runId)} (vedi app_config get area routine)`);
+            asked('le run delle routine');
+            d.routine.pauseRun(run.id, run.revision, a.value);
+            log.info('appctl', 'Orchestrator paused or resumed a routine run', { chat: d.callerId, data: { run: run.id, paused: a.value } });
+            return { runId: run.id, paused: a.value, note: a.value ? 'non parte nessun passaggio nuovo; quello già al lavoro finisce' : 'riprende da dove si era fermata' };
+          }
+          throw new Error('key: trigger | filters | queue | run | all');
         }
       }
       throw new Error(`action ${action} non vale per l'area ${area}`);

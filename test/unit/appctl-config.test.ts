@@ -133,3 +133,50 @@ describe('app_config on the app endpoints', () => {
     await expect(cfg.run({ action: 'set', area: 'setting', key: 'theme', value: 'dark' })).rejects.toThrow(/solo quando l'utente/);
   });
 });
+
+describe('app_config: routines (the Routine page\'s own calls)', () => {
+  const trigger = { kind: 'devops', everyMinutes: 5, organization: 'o', project: 'p', areaPath: 'Air', workItemType: 'Bug', states: ['New'], includeExisting: false, includeTags: ['auto'] };
+  const snap = (status: 'enabled' | 'paused', events = 3) => ({
+    contextKey: 'k', drafts: [], active: { fix: 12 }, versions: [{ version: 12, definition: { id: 'fix', title: 'Air bug auto-fix', steps: [] } }],
+    runs: [{ id: 'run-1', flowId: 'fix', flowVersion: 12, status: 'active', revision: 4, title: 'Air permessi', steps: [{ stepId: 'analisi' }], currentStep: 0 }],
+    automation: { revision: 7, paused: false, background: false, rules: [{ id: 'r1', revision: 2, status, config: { flowId: 'fix', flowVersion: 12, trigger, scope: {}, inputs: {}, priority: 'normal' } }],
+      events: Array.from({ length: events }, (_, i) => ({ id: `e${i}`, ruleId: 'r1', status: 'pending', sourceKey: `s${i}` })) },
+  }) as never;
+  const routine = (status: 'enabled' | 'paused' = 'paused') => ({ snapshot: vi.fn(() => snap(status)), pauseTrigger: vi.fn(), pauseAll: vi.fn(), clearQueue: vi.fn((_id: string, n: number) => n), editFilters: vi.fn(), pauseRun: vi.fn() });
+
+  it('get shows each trigger\'s state, filters and queue, and the open runs', async () => {
+    const got = await configTool(deps({ routine: routine() })).run({ action: 'get', area: 'routine' }) as { triggers: Record<string, unknown>[]; openRuns: unknown[] };
+    expect(got.triggers[0]).toMatchObject({ flowId: 'fix', routine: 'Air bug auto-fix', state: 'in pausa', queue: 3, filters: { includeTags: ['auto'] } });
+    expect(got.openRuns).toEqual([expect.objectContaining({ runId: 'run-1', step: 'analisi' })]);
+  });
+
+  it('resumes and pauses a trigger, empties the queue with the told count, pauses a run, all at the rule\'s revision', async () => {
+    const r = routine();
+    const tool = configTool(deps({ routine: r }));
+    expect(await tool.run({ action: 'set', area: 'routine', key: 'trigger', flowId: 'fix', value: true })).toMatchObject({ trigger: 'attivo', before: 'in pausa' });
+    expect(r.pauseTrigger).toHaveBeenCalledWith('r1', 2, false);
+    expect(await tool.run({ action: 'set', area: 'routine', key: 'trigger', flowId: 'fix', value: false })).toHaveProperty('note');
+    await expect(tool.run({ action: 'set', area: 'routine', key: 'queue', flowId: 'fix', value: 'tutto' })).rejects.toThrow(/ora 3/);
+    expect(await tool.run({ action: 'set', area: 'routine', key: 'queue', flowId: 'fix', value: 3 })).toMatchObject({ discarded: 3 });
+    expect(r.clearQueue).toHaveBeenCalledWith('r1', 3);
+    await tool.run({ action: 'set', area: 'routine', key: 'run', runId: 'run-1', value: true });
+    expect(r.pauseRun).toHaveBeenCalledWith('run-1', 4, true);
+    await tool.run({ action: 'set', area: 'routine', key: 'all', value: true });
+    expect(r.pauseAll).toHaveBeenCalledWith(7, true);
+    await expect(tool.run({ action: 'set', area: 'routine', key: 'trigger', flowId: 'altro', value: true })).rejects.toThrow(/nessun trigger/);
+  });
+
+  it('filters: only the fields asked change, null clears one, passed to the page\'s edit as given', async () => {
+    const r = routine('enabled');
+    const out = await configTool(deps({ routine: r })).run({ action: 'set', area: 'routine', key: 'filters', flowId: 'fix', value: { workItemIds: [4242], includeTags: null } }) as { before: unknown; after: unknown };
+    expect(r.editFilters).toHaveBeenCalledWith({ id: 'r1', expectedRevision: 2, includeTags: [], excludeTags: [], workItemIds: [4242] });
+    expect(out.before).toMatchObject({ includeTags: ['auto'] });
+    await expect(configTool(deps({ routine: r })).run({ action: 'set', area: 'routine', key: 'filters', flowId: 'fix', value: { states: ['Done'] } })).rejects.toThrow(/filters:/);
+  });
+
+  it('nothing changes without the user\'s own recent words', async () => {
+    const r = routine();
+    await expect(configTool(deps({ routine: r, userAsked: () => false })).run({ action: 'set', area: 'routine', key: 'trigger', flowId: 'fix', value: true })).rejects.toThrow(/solo quando l'utente/);
+    expect(r.pauseTrigger).not.toHaveBeenCalled();
+  });
+});
