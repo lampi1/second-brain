@@ -33,8 +33,8 @@ choice on the decision card, «Solo sul PC (dati app)», not the brain.
   call. Main reads back only a path the search just listed (`rec:readFound`).
 - **The Orchestrator** (`appctl/recordings.ts`, only on its own endpoint: a call is private): `app_recordings` lists
   them and reads a transcript (whole, in parts, or only the lines with some words), with `pc=true` the files not
-  imported yet; `app_recording_import` imports one of those (ui:command `recImport`). Its role text says to look there
-  when the user mentions a call. «Chiedi all'Orchestrator» on the page drafts a message that names the recording.
+  imported yet; `app_recording_import` imports one of those (ui:command `recImport`). Its description says to look there
+  when the user mentions a call (the role text has no room: its size is capped). «Chiedi all'Orchestrator» on the page drafts a message that names the recording.
 - **Voice answers on the decision card** (ADR 0150): `DecisionCard` registers with `useVoiceQuestion` itself.
 
 ## Consequences

@@ -7,7 +7,7 @@
 // (RequestPanel.tsx for agents' questions, PlanApproval.tsx, WorkApproval.tsx, FlowApproval.tsx). In voice mode the card is
 // read aloud and a spoken answer counts as the click (lib/voice.ts useVoiceQuestion, ADR 0152). BriefEvidence draws
 // a brief; it is also GenUi.tsx's view of one shown as a plain chat card.
-import { forwardRef, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { forwardRef, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { UiBrief } from '@shared/contract';
 import { t } from '../i18n';
 import { AskImages } from './AskImages';
@@ -51,6 +51,8 @@ export interface DecisionProps {
   voiceId?: string;
 }
 
+/** a card's own voice id when the host gives none */
+let cards = 0;
 const YES_KEYS = new Set(['1', 's', 'y', 'j']);
 const NO_KEYS = new Set(['2', 'n']);
 const WRITE_KEYS = new Set(['3', 't']);
@@ -70,7 +72,7 @@ export const DecisionCard = forwardRef<HTMLDivElement, DecisionProps>(function D
   const choose = (c: DecisionChoice, viaKey = false) => { if (!busy && !c.disabled) c.onChoose(viaKey); };
   // voice mode (ADR 0152): the card is read aloud and a spoken answer is the click (sì / no / «non voglio rispondere»,
   // anything longer is the written answer)
-  const auto = useId();
+  const auto = useRef(`dc-${++cards}`).current;
   useVoiceQuestion(busy ? null : p.voiceId ?? auto, { question: [p.lead, p.question].filter(Boolean).join(' '), done: p.speakDone, ifYes: p.ifYes, ifNo: p.ifNo, from: p.speakFrom }, a => {
     if (a.kind === 'yes') choose(p.yes);
     else if (a.kind === 'no') choose(p.no);
