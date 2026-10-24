@@ -63,6 +63,9 @@ import type { BrainService, BrowserService, ChatService, TasksApi, SkillsApi } f
 import { SkillsService } from './skills/service';
 import { BrainModelService } from './brainmodel/service';
 import { issuesUrlOf, ResearchService } from './brainmodel/research';
+import { ghRun, openIssue } from './brainmodel/issue-open';
+import { hiddenOpened, hiddenRun } from './window';
+import { saveAiIdea } from './brain/save-idea';
 import { DailyPhrasesService } from './daily-phrases';
 import { researchTools } from './brainmodel/research-tools';
 import { createBrain } from './brain';
@@ -82,6 +85,7 @@ import { devopsWriteTools } from './flows/devops-write-tool';
 import { testDbReadTools } from './flows/test-db-tool';
 import { testDbCredential } from './flows/test-db-env';
 import { AGENT_LABEL, appControlTools, orchestratorEndpointAuth, type ToolDef, type ToolOut } from './appctl/tools';
+import { readUi } from './appctl/guide';
 import { ChatMail, mailTools } from './chats/mail';
 import { brainClassifier } from './chats/orchestrator-delivery';
 import { readOrchestratorMail } from './brain/brain-settings';
@@ -292,7 +296,8 @@ export function attachArtifacts(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: P
     ...(now ? { now } : {}), ...(process.env.SB_TEST === '1' && wait > 0 ? { askWaitMs: wait } : {}),
   });
   const send = ctx.emitter.emit.bind(ctx.emitter);
-  ctx.emitter.emit = (ch, p) => { send(ch, p); store.observe(ch, p); };
+  // a question's visuals are linked before the question reaches the page: its card draws with its brief (ADR 0150)
+  ctx.emitter.emit = (ch, p) => { if (ch === 'pending:added') { store.observe(ch, p); send(ch, p); } else { send(ch, p); store.observe(ch, p); } };
   const items = chats.items.bind(chats);
   chats.items = chatId => store.merge(chatId, items(chatId));
   return store;
@@ -493,7 +498,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const loopRef: { current?: { ended(run: AgentRun): void; outcome(run: AgentRun): void } } = {};
   const runFeedbackRef: { current?: { runList(): readonly AgentRun[] } } = {};
   const delegateWorktrees = new DelegateWorktrees(path.join(ctx.userData, 'delegation-worktrees.json'));
+  // the question gates ask for a brief before a yes/no question (ADR 0150): the visuals' store exists further down
+  const briefRef: { current?: Artifacts } = {};
   const manager = new ChatManager({
+    briefReady: chatId => briefRef.current?.hasBrief(chatId) ?? true,
     prepareDelegation: delegateWorktrees.prepare,
     freshSessions: () => true,
     continuationContext: chatId => workflowsRef ? JSON.stringify(workflowsRef.list().filter(row => row.chatIds.includes(chatId))) : null,
@@ -658,6 +666,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   mail.start();
   // show_ui on every chat's own endpoint: a visual from the catalog instead of a wall of text (ADR 0033)
   const artifacts = attachArtifacts(ctx, chats);
+  briefRef.current = artifacts;
   addChatTools([showUiTool(artifacts)]);
 
   // a reusable command that ran fine with "Esegui" becomes a brain script by itself (issue #111, ADR 0096)
@@ -812,7 +821,14 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     },
     tell: (chatId, text) => chats.send(chatId, text),
   });
-  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, flows, personal, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog } };
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, flows, personal, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog },
+    // app_config (ADR 0149): each area through the module the app's own page uses
+    config: {
+      view: { read: () => readUi(ctx.window(), 'typeof window.__sbView === "function" ? window.__sbView() : null'), apply: patch => readUi(ctx.window(), `typeof window.__sbSetView === "function" ? window.__sbSetView(${JSON.stringify(JSON.stringify(patch))}) : null`) },
+      agents: { list: () => agents.list(), save: (draft, id, reason) => agentPacks.learning.save(draft, id, reason), history: id => agents.history(id), restore: (id, version) => agents.restoreVersion(id, version) },
+      mcp: { state: () => mcpServers.state(), save: a => mcpServers.save(a), setAccess: a => mcpServers.setAccess(a) },
+      later: { get: () => later.get(), set: on => later.set(on) },
+    } };
   attachAppTools(mcp, appDeps, source, false, orchestratorTokens);
 
   // Task page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
@@ -884,8 +900,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     // a pass the app ran by itself: a quiet feed event with Annulla (ADR 0102)
     applied: changes => { const e = maintenanceEvent(changes); if (e) brain.publish([e]); } });
   brainModelRef.current = brainModel;
-  // the maintenance with research (ADR 0132): the dialog's research chat, its cards in Proposte and «Idee dell'app»
-  const orchestratorChat = () => manager.list().find(c => c.isOrchestrator && !c.closedAt);
+  // the one-click maintenance (ADR 0132, 0153): the free cleanup, the invisible research chat, its cards in Proposte
   const issuesUrl = issuesUrlOf(app.getAppPath()), appIssuesUrl = () => issuesUrl;
   const research = new ResearchService({ userData: ctx.userData, lang: uiLang, root: () => brain.info().brainRoot, appVersion: () => app.getVersion(), issuesUrl: appIssuesUrl, appDir: () => app.getAppPath(),
     // engines that are on, read files (an API engine has no tools here) and report their cost (the cap is enforced on
@@ -894,11 +909,16 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     // the Claude CLI's «opus» is its strongest model, whatever its version; the others start on their CLI's default
     bestModel: h => (engineOf(h)?.kind === 'claude' ? 'opus' : null),
     runs: () => manager.runs.list(), roles: () => agents.list().profiles.filter(p => p.scope === 'role'),
-    brain: { state: () => brainModel.state(), apply: p => brainModel.applyResearch(p), noise: (key, known) => { brainModel.noise(key, known); } },
+    brain: { state: () => brainModel.state(), apply: p => brainModel.applyResearch(p), noise: (key, known) => { brainModel.noise(key, known); }, maintain: () => brainModel.maintain() },
     chats: { create: req => manager.create(req, 'app'), get: id => manager.list().find(c => c.id === id), stop: id => manager.stop(id) },
-    // «Apri issue» is the user's click: their request to the Orchestrator, as if typed (the permission rules still apply)
-    orchestrator: { open: () => !!orchestratorChat(), send: async text => { const o = orchestratorChat(); if (!o) return false; await manager.send(o.id, text); return true; } },
-    changed: () => ctx.emitter.emit('maintenance:changed', undefined) });
+    // an approved «Apri issue» card: gh with the user's own login, else GitHub's new-issue page already filled in; an
+    // agent's hidden run never reaches GitHub (it records the page like any link it would open)
+    issues: { open: (repo, issue) => openIssue(repo, issue, hiddenRun()
+      ? { run: () => Promise.reject(new Error('hidden run')), openUrl: async url => { hiddenOpened.push(`external ${url}`); } }
+      : { run: ghRun, openUrl: url => shell.openExternal(url) }) },
+    saveIdea: idea => saveAiIdea({ root: brain.info().brainRoot, userData: ctx.userData, ...idea, source: 'Manutenzione' }),
+    changed: () => ctx.emitter.emit('maintenance:changed', undefined),
+    done: d => ctx.emitter.emit('maintenance:done', d) });
   researchRef.current = research;
   ctx.emitter.tap((channel, payload) => { if (channel === 'chat:updated') research.chatUpdated(payload as ChatSummary); });
   addChatTools(researchTools(research));

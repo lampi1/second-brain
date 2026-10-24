@@ -120,10 +120,10 @@ export interface BrainService {
   setSettings(patch: SettingsPatch): Promise<Settings>;
   settingsSchema(): SettingDef[];
   settingsHistory(limit?: number): SettingChange[];
-  undoSetting(changeId: string, by?: ChangeBy): SettingChange;
+  undoSetting(changeId: string, by?: ChangeBy, origin?: { chatId?: string; direct?: boolean }): SettingChange;
   /** For the app-control MCP (by 'agent', with its chat id): non-protected keys apply live, protected ones become a
    *  proposal the user confirms with a click. The user's UI calls it with by 'user'. */
-  requestSetting(key: string, value: unknown, origin: { by: ChangeBy; chatId?: string; reason?: string }): SettingRequestResult;
+  requestSetting(key: string, value: unknown, origin: { by: ChangeBy; chatId?: string; reason?: string; direct?: boolean }): SettingRequestResult;
   pendingSettings(): SettingProposal[];
   confirmSetting(proposalId: string, accept: boolean): { change: SettingChange | null };
   /** Main-process listeners (e.g. the browser module restarts its MCP server on 'mcpPort'). */

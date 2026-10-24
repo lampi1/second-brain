@@ -47,7 +47,7 @@ const labels = (c: Proposal) => (c.applied ? { yes: t('proposals.keep'), no: t('
   : { yes: t('proposals.approve'), no: t('proposals.reject'), yesStamp: t('proposals.stamp.approve'), noStamp: t('proposals.stamp.reject') });
 /** The card's kind chip: a query change says «Query», not «Script». */
 const kindLabel = (c: Proposal): string => (c.ask.kind === 'applied' && c.ask.what === 'query' ? t('proposals.kind.query') : t(`proposals.kind.${c.group}`));
-const blockedText = (code: string): string => (code === 'changed-since' ? t('proposals.blocked.changed-since') : (['missing-provenance', 'invalid-steps', 'missing-verified-example', 'missing-holdout-replay', 'already-promoted'] as const).includes(code as never) ? t(`lr.problem.${code as 'missing-provenance'}`) : t('lr.problem.unknown'));
+const blockedText = (code: string): string => (code === 'changed-since' ? t('proposals.blocked.changed-since') : code === 'noRepo' ? t('proposals.blocked.noRepo') : (['missing-provenance', 'invalid-steps', 'missing-verified-example', 'missing-holdout-replay', 'already-promoted'] as const).includes(code as never) ? t(`lr.problem.${code as 'missing-provenance'}`) : t('lr.problem.unknown'));
 /** A skill draft's header (--- name / description ---) apart from its body: the description is the card's lead. */
 export function splitHeader(md: string): { lead: string; body: string } {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(md);

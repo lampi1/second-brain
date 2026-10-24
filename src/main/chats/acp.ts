@@ -59,7 +59,7 @@ import { writeImageFiles } from './images';
 import { cut, lastLine, nextId, stripAnsi, tokenUsage, toCommands, trimInput, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
 import { AgentChildrenReporter } from './agent-children';
 import type { ChildObservation } from '../../shared/agents';
-import { YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoShape } from '../../shared/yes-no';
+import { BRIEF_GRACE_MS, BRIEF_REFUSAL, YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoShape } from '../../shared/yes-no';
 
 export interface AcpOptions extends SessionOptions {
   /** send a question that is not yes/no back to the agent (shared/yes-no.ts, ADR 0135); default: yesNoGateOn(env) */
@@ -326,6 +326,10 @@ export class AcpSession implements HarnessSession {
   private turnFiles: string[] = [];   // screenshots saved for this turn (no image support): deleted when it ends
   private open = false;          // session/new or session/load done
   private yesNoRefused = 0;      // questions sent back in a row for not being yes/no (ADR 0135)
+  // questions given BRIEF_GRACE_MS for their brief (ADR 0150), with their timer; briefOff = this chat sent none twice in a
+  // row: it is not asked for again in this session (a chat without show_ui never pays the refusals on every question)
+  private briefWaited = new Map<string | number, { rpcId: string | number; timer: NodeJS.Timeout | null }>();
+  private briefOff = false;
   private prompting = false;
   private loading = false;
   private caps: Obj = {};
@@ -796,6 +800,8 @@ export class AcpSession implements HarnessSession {
     if (this.prompting && opts?.byUser) this.stopping = { sendNow: !!opts.keepQueued }; // only a prompt in flight ends with a result
     // cancel first, so the agent knows its turn is over when its waits resolve
     if (this.sessionId) this.notify('session/cancel', { sessionId: this.sessionId });
+    // a question still waiting for its brief was never shown: it is answered cancelled too
+    for (const [id, w] of [...this.briefWaited]) { if (w.timer) clearTimeout(w.timer); this.briefWaited.delete(id); this.respond(w.rpcId, { outcome: { outcome: 'cancelled' } }); }
     for (const [id, ask] of [...this.asks]) {
       this.respond(ask.rpcId, { outcome: { outcome: 'cancelled' } });
       this.asks.delete(id);
@@ -1009,11 +1015,28 @@ export class AcpSession implements HarnessSession {
         acp.push({ text, id: s(q.id), byLabel: new Map(labels.map((l, j) => [l, s(opts[j]?.id)])) });
         questions.push({ question: text, ...(s(p.title) ? { header: cut(s(p.title), 30) } : {}), options: labels.map(label => ({ label })), multiSelect: q.allowMultiple === true });
       });
-      // not yes/no (ADR 0135): skipped with how to ask, at most YESNO_RETRIES times in a row, then shown as it is
-      if ((this.opts.yesNo ?? yesNoGateOn(process.env)) && questions.length > 0 && !yesNoShape(questions) && this.yesNoRefused < YESNO_RETRIES) {
+      // not yes/no (ADR 0135), or yes/no without its brief (ADR 0150, after a moment for a show_ui sent in parallel):
+      // skipped with how to ask, at most YESNO_RETRIES times in a row, then shown as it is
+      const gate = (this.opts.yesNo ?? yesNoGateOn(process.env)) && questions.length > 0;
+      const yesNo = yesNoShape(questions);
+      const noBrief = gate && yesNo && !this.briefOff && !!this.opts.briefReady && !this.opts.briefReady();
+      if (noBrief && !this.briefWaited.has(id) && this.yesNoRefused < YESNO_RETRIES) {
+        const timer = setTimeout(() => {
+          const w = this.briefWaited.get(id);
+          if (!w) return;
+          w.timer = null;
+          if (!this.exited && !this.procExited) this.onAgentRequest(id, method, p);
+          this.briefWaited.delete(id);
+        }, BRIEF_GRACE_MS);
+        timer.unref?.();
+        this.briefWaited.set(id, { rpcId: id, timer });
+        return;
+      }
+      if (noBrief && this.yesNoRefused >= YESNO_RETRIES) this.briefOff = true;
+      if (gate && (!yesNo || noBrief) && this.yesNoRefused < YESNO_RETRIES) {
         this.yesNoRefused++;
-        log.info('chats', 'question sent back: not yes/no', { chat: this.opts.chatId, data: { engine: this.engine, attempt: this.yesNoRefused } });
-        this.respond(id, { outcome: { outcome: 'skipped', reason: YESNO_REFUSAL } });
+        log.info('chats', noBrief ? 'question sent back: no brief' : 'question sent back: not yes/no', { chat: this.opts.chatId, data: { engine: this.engine, attempt: this.yesNoRefused } });
+        this.respond(id, { outcome: { outcome: 'skipped', reason: noBrief ? BRIEF_REFUSAL : YESNO_REFUSAL } });
         return;
       }
       this.yesNoRefused = 0;
@@ -1305,6 +1328,8 @@ export class AcpSession implements HarnessSession {
   private markExited(): void {
     if (this.exited) return;
     this.exited = true;
+    for (const w of this.briefWaited.values()) if (w.timer) clearTimeout(w.timer);
+    this.briefWaited.clear();
     this.childTelemetry.end();
     this.cancelRetry('netRetryCancelledClosed');
     if (this.flushTimer) { clearTimeout(this.flushTimer); this.flushTimer = null; }

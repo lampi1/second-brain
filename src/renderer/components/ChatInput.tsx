@@ -16,6 +16,8 @@
 // "/" commands, roles, skills, chat titles, the chat's files: lib/composer-suggest.ts, zero tokens), else from a small
 // model after a typing pause ('suggest:get'; every key cancels the pause and the request in flight). Tab accepts it,
 // Esc hides it, any other key goes on as usual; with no suggestion Tab moves the focus as always.
+// The Orchestrator's and Flash's inputs have the mic instead of the «Invio» hint (voice mode, ADR 0152: components/
+// VoiceControls.tsx, lib/voice.ts; owner 2026-10-24: «togli la label invio … per fare spazio al microfono»).
 // Used by ChatTile and OrchestratorTile (also the Orchestrator docked with Ctrl+R).
 import { t as auditText } from '../i18n';
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ClipboardEvent, type DragEvent } from 'react';
@@ -37,6 +39,8 @@ import {validateRecoveryRaster} from '../lib/recovery-raster';
 import {updateIsFrozen} from '../lib/update-barrier';
 import { reviewedContextDraft, withReviewedContext } from '../lib/reviewed-context';
 import { ReviewedContextPreview } from './ReviewedContextPreview';
+import { MicButton, VoiceBar } from './VoiceControls';
+import { useVoice, type VoiceTarget } from '../lib/voice';
 
 // per chat, outside the component: a draft, its images and the screenshots still being read outlive a remount (the
 // Orchestrator moving to the dock) and never follow the input to another chat
@@ -123,14 +127,16 @@ export const hasDraft = (chatId: string): boolean =>
   !!drafts.get(chatId)?.trim() || !!draftImages.get(chatId)?.length || (readingN.get(chatId) ?? 0) > 0;
 
 export interface ChatInputHandle { focus(): void }
-type Props = { chat: ChatSummary; orchestrator?: boolean; testid: string };
+/** voice: the input has the mic (the Orchestrator's and Flash's only, ADR 0152) and no «Invio» hint */
+type Props = { chat: ChatSummary; orchestrator?: boolean; testid: string; voice?: VoiceTarget };
 
 // keyed by chat: a view that swaps the chat in place (focus mode) gets a fresh input, never the other chat's draft
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(props, handle) {
   return <ChatInputFor key={props.chat.id} {...props} ref={handle} />;
 });
 
-const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ chat, orchestrator, testid }, handle) {
+const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ chat, orchestrator, testid, voice }, handle) {
+  const voiceOn = useVoice(v => !!voice && v.phase !== 'off' && v.target === voice);
   const [text, setText] = useState(() => drafts.get(chat.id) ?? '');
   const context = reviewedContextDraft(text), visibleText = context?.message ?? text;
   const [mode, setModeState] = useState<SendMode | null>(() => (orchestrator ? modeOn.get(chat.id) ?? null : null));
@@ -255,7 +261,7 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
   };
   const busy = isBusy(chat) || chat.state === 'waiting' || chat.pending > 0;
   const enterNow = queued.length > 0 && !text.trim() && !images.length; // Enter = "Invia subito" on the last queued
-  const placeholder = enterNow ? t('chat.input.placeholderEnter') : orchestrator && mode ? t('chat.input.placeholderPlan') : orchestrator ? t('chat.input.placeholderOrchestrator') : chat.pending > 0 ? t('chat.input.placeholderPending') : busy ? t('chat.input.placeholderBusy') : chat.state === 'closed' ? t('chat.input.placeholderClosed') : t('chat.input.placeholderDefault');
+  const placeholder = enterNow ? t('chat.input.placeholderEnter') : voiceOn ? t('voice.placeholder') : orchestrator && mode ? t('chat.input.placeholderPlan') : orchestrator ? t('chat.input.placeholderOrchestrator') : chat.pending > 0 ? t('chat.input.placeholderPending') : busy ? t('chat.input.placeholderBusy') : chat.state === 'closed' ? t('chat.input.placeholderClosed') : t('chat.input.placeholderDefault');
   const ready = (text.trim() !== '' || images.length > 0) && reading === 0;
   const submit = (as = mode) => {
     if(updateIsFrozen())return;
@@ -356,7 +362,7 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
           })}
         </div>
       )}
-      <div className={`composer-box ${dragging ? 'is-drop' : ''}`} onDragOver={onDragOver} onDragLeave={() => setDragging(false)} onDrop={onDrop}>
+      <div className={`composer-box ${dragging ? 'is-drop' : ''} ${voiceOn ? 'is-voice' : ''}`} onDragOver={onDragOver} onDragLeave={() => setDragging(false)} onDrop={onDrop}>
         {context && <ReviewedContextPreview context={context} onRemove={() => { setText(context.message); drafts.set(chat.id, context.message); onSentHooks.delete(chat.id); ta.current?.focus(); }}/>}
         {(images.length > 0 || reading > 0) && (
           <div className="composer-images">
@@ -408,11 +414,16 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
           )}
           {ready ? (
             <button type="button" className="send" onClick={() => submit()} aria-label={mode ? t(busy ? 'chat.input.queueAsMode' : 'chat.input.sendAsMode', { mode: t(`chat.mode.${mode}`) }) : busy ? t('chat.input.queue') : t('chat.input.send')} data-tip={mode ? t(busy ? 'chat.input.queueAsModeTip' : 'chat.input.sendAsModeTip', { mode: t(`chat.mode.${mode}`) }) : busy ? t('chat.input.queueShort') : t('chat.input.sendShort')} data-testid={`${testid}-send`}><IconSend size={14} /></button>
+          ) : voice ? (
+            // the mic takes the «Invio» key's place; what Enter does now (send the queued one) still shows
+            enterNow || (busy && !orchestrator) ? <span className="composer-hint" aria-hidden="true">{enterNow ? t('chat.input.hintNow') : t('chat.input.queuedInQueue')}</span> : null
           ) : (
             <span className="composer-hint" aria-hidden="true">{enterNow ? t('chat.input.hintNow') : busy && !orchestrator ? t('chat.input.queuedInQueue') : ''} <Kbd>{auditText('audit.ChatInput.enter')}</Kbd></span>
           )}
+          {voice && <MicButton target={voice} testid={testid} />}
         </div>
       </div>
+      {voice && <VoiceBar target={voice} testid={testid} />}
     </div>
   );
 });

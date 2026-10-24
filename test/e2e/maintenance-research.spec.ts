@@ -1,70 +1,45 @@
-// E2E of the maintenance with research (ADR 0132) on the frozen demo: the «Manutenzione» button in the top bar opens the
-// dialog with the engine, model, effort and spending cap, the prompt shown and editable (Ripristina brings it back) and
-// the fixed frame; «Avvia pulizia e ricerca» runs the free cleanup and opens the research chat, whose findings arrive
-// as cards. In Memoria → «Idee dell'app» every idea or bug shows what it adds and removes and the issue as it will be
-// opened; «Apri issue» hands one to the Orchestrator and marks it, «Apri tutte» the rest in one message. A research
-// change in Proposte shows what it adds and removes. Screenshots: test-results/shots/maintenance-research-*.png.
+// E2E of the one-click «Manutenzione» (ADR 0132, 0153) on the frozen demo: one click on the top bar's button and nothing
+// else (no dialog): it says it started, breathes while the invisible research works (its chat never shows as a strip
+// or in the sidebar), and ends in the celebrate notice with what it made and «Apri Memoria». In Proposte an idea or a
+// bug about the app is a card «Apro su GitHub la issue …?» with the issue as it will be opened; approving it opens it
+// (the demo records the page instead of reaching GitHub) and the card leaves. Screenshots:
+// test-results/shots/maintenance-one-click-*.png.
 import { expect, test } from '@playwright/test';
-import { choose, launchDemo, shot } from './helpers';
+import { launchDemo, shot } from './helpers';
 
-test('Manutenzione con ricerca: dialog, prompt, cards, Idee dell’app with Apri issue and Apri tutte', async () => {
+test('Manutenzione: one click, invisible research, end notice, issue cards in Proposte', async () => {
   test.setTimeout(150_000);
   const { app, page } = await launchDemo({ orchestrator: true, height: 1100 });
   try {
-    await page.getByTestId('topbar-maint-run').click();
-    const dlg = page.getByTestId('topbar-maint-dialog');
-    await expect(dlg).toBeVisible();
-    await expect(dlg.getByTestId('topbar-maint-start')).toHaveText('Avvia la pulizia');
-    await dlg.getByTestId('mm-r-toggle').check();
-    await expect(dlg.getByTestId('topbar-maint-start')).toHaveText('Avvia pulizia e ricerca');
-    await expect(dlg.getByTestId('mm-r-engine')).toHaveAttribute('data-value', 'claude');
-    await expect(dlg.getByTestId('mm-r-cap')).toHaveValue('5');
-    // the prompt: shown, editable, Ripristina only once edited
-    const prompt = dlg.getByTestId('mm-r-prompt');
-    const original = await prompt.inputValue();
-    expect(original.length).toBeGreaterThan(200);
-    await expect(dlg.getByTestId('mm-r-reset')).toBeDisabled();
-    await prompt.fill(`${original}\nGuarda soprattutto i costi.`);
-    await expect(dlg.getByTestId('mm-r-reset')).toBeEnabled();
-    await dlg.getByTestId('mm-r-frame-toggle').click();
-    await expect(dlg.getByTestId('mm-r-frame')).toContainText('maintenance_propose');
+    const btn = page.getByTestId('topbar-maint-run');
+    await btn.click();
+    await expect(page.getByTestId('topbar-maint-dialog')).toHaveCount(0);
+    await expect(page.getByTestId('toast').filter({ hasText: 'Manutenzione avviata' })).toBeVisible();
+    // the end notice: celebrate, with chips and «Apri Memoria»
+    const notice = page.locator('.notif.tone-celebrate');
+    await expect(notice).toBeVisible({ timeout: 30_000 });
+    await expect(notice).toContainText('Manutenzione finita');
+    await expect(notice.locator('.notif-chip').first()).toBeVisible();
+    await expect(page.getByTestId('topbar-maint')).toHaveAttribute('data-state', 'done');
     await page.mouse.move(2, 2);
-    await shot(page, 'maintenance-research-setup-dark');
-    // Cursor has no effort: the effort choice goes
-    await choose(dlg.getByTestId('mm-r-engine'), 'cursor');
-    await expect(dlg.getByTestId('mm-r-effort')).toHaveCount(0);
-    await choose(dlg.getByTestId('mm-r-engine'), 'claude');
-    await dlg.getByTestId('topbar-maint-start').click();
-    await expect(dlg.getByTestId('mm-job-logs')).toBeVisible();
-    const status = dlg.getByTestId('mm-r-status');
-    await expect(status).toBeVisible();
-    await expect(status.getByTestId('mm-r-cards')).toHaveText('2 card', { timeout: 15_000 });
-    await shot(page, 'maintenance-research-run-dark');
-    await dlg.getByTestId('mm-r-to-ideas').click();
-    await expect(dlg).toHaveCount(0);
+    await shot(page, 'maintenance-one-click-done-dark');
+    // the research chat stayed out of sight
+    await expect(page.getByTestId('sidebar').getByText('Manutenzione', { exact: true })).toHaveCount(0);
+    await notice.getByTestId('toast-action').click();
 
-    // «Idee dell'app»
-    const tab = page.getByTestId('app-ideas');
-    await expect(tab).toBeVisible();
-    const cards = tab.getByTestId('ai-card');
-    expect(await cards.count()).toBeGreaterThanOrEqual(4);
-    const first = cards.first();
-    await first.getByTestId('ai-show').click();
-    await expect(first.getByTestId('ai-body')).not.toBeEmpty();
-    await shot(page, 'maintenance-research-ideas-dark');
-    const before = await tab.getByTestId('ai-open').count();
-    await first.getByTestId('ai-open').click();
-    await expect(page.getByTestId('tile-orchestrator')).toContainText('GitHub issue');
-    await page.getByTestId('nav-memoria').click();
-    await page.getByTestId('mh-tab-app').click();
-    await expect(tab.getByTestId('ai-asked')).toHaveCount(1);
-    await expect(tab.getByTestId('ai-open')).toHaveCount(before - 1);
-    await expect(tab.getByTestId('ai-open-all')).toContainText(String(before - 1));
-    await tab.getByTestId('ai-open-all').click();
-    await expect(page.getByTestId('tile-orchestrator')).toContainText(`these ${before - 1} GitHub issues`);
-    await page.getByTestId('nav-memoria').click();
-    await page.getByTestId('mh-tab-app').click();
-    await expect(tab.getByTestId('ai-open')).toHaveCount(0);
-    await expect(tab.getByTestId('ai-open-all')).toBeDisabled();
+    // Proposte: the issue cards
+    const deck = page.getByTestId('proposals-deck');
+    await expect(deck).toBeVisible();
+    await deck.getByTestId('pd-chip-issue').click();
+    await expect(deck).toContainText('Apro su GitHub la issue');
+    await expect(deck).toContainText('La issue, come sarà aperta');
+    await page.mouse.move(2, 2);
+    await shot(page, 'maintenance-one-click-issue-dark');
+    const before = await deck.getByTestId('pd-chip-issue').innerText();
+    await deck.getByTestId('pd-approve').click();
+    await expect.poll(() => deck.getByTestId('pd-chip-issue').innerText().catch(() => ''), { timeout: 20_000 }).not.toBe(before);
+    // the hero shows the last one
+    await page.getByTestId('mh-tab-proposte').click();
+    await expect(page.getByTestId('bm-maint-now-last')).toContainText('Ultima');
   } finally { await app.close(); }
 });

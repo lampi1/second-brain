@@ -1,6 +1,6 @@
 // The demo's maintenance findings (ADR 0132): a few made-up cards of a past research, written once into the real store,
 // for Memoria → Proposte (a rule for Artisan, a skill section, the never-used «pulizia-ambiente» to forget, one bold
-// idea) and «Idee dell'app» (a bug with its issue already written, an idea). And the canned findings a research started
+// idea) and two «Apri issue» cards (a bug with its issue already written, an idea). And the canned findings a research started
 // in the demo proposes while its demo chat answers. Used by demo-wiring.ts.
 import type { ResearchProposal } from '../../shared/maintenance-research';
 import type { ResearchStore } from './research-store';
@@ -39,11 +39,11 @@ export const DEMO_RESEARCH: readonly Card[] = [
     evidence: ['task | Lettura delle novità failed | Error: HTTP 503 on wiql ×12'], sources: [], expected: '', risk: '',
     issue: { title: 'Tasks: DevOps news read fails with HTTP 503 on wiql and is retried every hour', labels: ['bug'],
       body: '**What happens**\n\nThe Azure DevOps news read fails with `HTTP 503 on wiql` and the app retries it every hour, logging the same error.\n\n**Evidence**\n\n- log group `task | Lettura delle novità failed | Error: HTTP 503 on wiql`, 12 times in 2 days\n\n**Proposal**\n\nBack off after a 503 (15, 30, 60 minutes) and show the connector as «non raggiungibile» instead of logging each retry.\n\n**To verify**\n\nWith the service down, the log shows one line per back-off step, not one per hour.' } },
-  { chatId: PAST, kind: 'app-idea', title: 'Stima del costo prima di avviare la ricerca',
-    adds: 'Nel dialogo della Manutenzione, la stima dice anche quanto è costata l\'ultima ricerca simile.', removes: '',
-    why: 'La stima mostra solo la mediana: con poche ricerche non dice se l\'ultima era più cara.', evidence: ['3 ricerche: 1,80 $, 2,40 $, 4,10 $'], sources: [], expected: '', risk: '',
-    issue: { title: 'Maintenance dialog: show the last research\'s cost beside the median', labels: ['enhancement'],
-      body: '**Context**\n\nThe dialog shows the median cost of past researches only.\n\n**Proposal**\n\nShow the last research\'s cost and model beside the median.\n\n**To verify**\n\nAfter two researches, the dialog shows both numbers.' } },
+  { chatId: PAST, kind: 'app-idea', title: 'Le chat chiuse si cercano anche per contenuto',
+    adds: 'Nella ricerca rapida (Ctrl+K), le chat chiuse si trovano anche per quello che c\'è scritto dentro, non solo per titolo.', removes: '',
+    why: 'In 9 lavori su 30 l\'utente ha riaperto una chat chiusa cercandone il titolo a memoria.', evidence: ['9 / 30 riaperture dopo 2+ ricerche'], sources: [], expected: '', risk: '',
+    issue: { title: 'Command palette: search closed chats by their content', labels: ['enhancement'],
+      body: '**Context**\n\nClosed chats are found in Ctrl+K by title only.\n\n**Proposal**\n\nIndex the last messages of closed chats and match them in the palette\'s «Chiuse» group.\n\n**To verify**\n\nA closed chat is found by a word that appears only in its messages.' } },
 ];
 
 /** Written once (an empty store): the cards above, as a past research made them. */

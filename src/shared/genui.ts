@@ -1,11 +1,11 @@
 // Generative UI, the pure half (ADR 0033): the schema of each catalog component (table, cards, board, diffList,
-// barChart), checked by hand with a few combinators (no dependency), the size caps, and the ```sb-ui fence parser of
+// barChart, brief), checked by hand with a few combinators (no dependency), the size caps, and the ```sb-ui fence parser of
 // AskUserQuestion previews. A check strips unknown keys and returns a clean copy, or one error that names the path and
 // what is expected, so a model can fix its call and retry. Shared so main (show_ui, main/genui/artifacts.ts) and the
 // renderer (previews in AskContext.tsx, the views in GenUi.tsx) accept exactly the same things.
 import type { ArtifactTarget, UiComponent, UiLink, UiSpec, UiStatus } from './contract';
 
-export const UI_COMPONENTS: readonly UiComponent[] = ['table', 'cards', 'board', 'diffList', 'barChart'];
+export const UI_COMPONENTS: readonly UiComponent[] = ['table', 'cards', 'board', 'diffList', 'barChart', 'brief'];
 export const UI_STATUSES: readonly UiStatus[] = ['ok', 'fail', 'blocked', 'running', 'todo', 'info', 'warn'];
 export const ARTIFACT_TARGETS: readonly ArtifactTarget[] = ['chat', 'orchestrator', 'next-ask'];
 /** visuals kept per chat (the oldest go first) */
@@ -82,6 +82,11 @@ const SCHEMAS: { [K in UiComponent]: V<Extract<UiSpec, { component: K }>['props'
   board: obj({ lanes: arr(obj({ title: str(60), items: arr(obj({ title: str(160) }, { detail: str(300), status, links: arr(link, 4) }), 50) }, { status }), 8, 1) }, {}),
   diffList: obj({ groups: arr(obj({ area: str(80), files: arr(obj({ path: str(300) }, { why: str(200), added: count, removed: count, href }), 100, 1) }, {}), 20, 1) }, {}),
   barChart: obj({ bars: arr(obj({ label: str(60), value: num }, { note: str(80) }), 40, 1) }, { unit: str(12) }),
+  brief: obj({ done: arr(str(200), 5, 1), ifYes: str(200), ifNo: str(200) }, {
+    checks: arr(obj({ label: str(60), status }, { detail: str(120) }), 8),
+    images: arr(obj({ path: str(1000) }, { caption: str(120) }), 4),
+    files: arr(obj({ path: str(300) }, { why: str(200), added: count, removed: count, href }), 10),
+  }),
 };
 
 export type UiCheck = { ok: true; spec: UiSpec } | { ok: false; error: string };
@@ -109,6 +114,7 @@ export function describeUi(spec: UiSpec): string {
     case 'board': return `Bacheca: ${spec.props.lanes.map(l => `${l.title} ${l.items.length}`).join(' · ')}`;
     case 'diffList': return `File cambiati: ${spec.props.groups.reduce((n, g) => n + g.files.length, 0)} in ${spec.props.groups.length} aree`;
     case 'barChart': return `Grafico: ${spec.props.bars.map(b => `${b.label} ${b.value}${spec.props.unit ?? ''}`).join(' · ')}`;
+    case 'brief': return `Fatto: ${spec.props.done.join(' · ')}`;
   }
 }
 
@@ -156,6 +162,15 @@ export function textOfUi(spec: UiSpec, title?: string): string {
     case 'barChart':
       for (const b of spec.props.bars) out.push(`- ${b.label}: ${b.value}${spec.props.unit ? ` ${spec.props.unit}` : ''}${b.note ? ` (${b.note})` : ''}`);
       break;
+    case 'brief': {
+      const p = spec.props;
+      out.push('**Cosa ho fatto**', ...p.done.map(d => `- ${d}`));
+      if (p.checks?.length) out.push('', ...p.checks.map(c => `- [${STATUS_IT[c.status]}] ${c.label}${c.detail ? `: ${c.detail}` : ''}`));
+      if (p.images?.length) out.push('', ...p.images.map(i => `- ${i.caption ? `${i.caption}: ` : ''}${i.path}`));
+      if (p.files?.length) out.push('', ...p.files.map(f => `- \`${f.path}\`${f.why ? `: ${f.why}` : ''}`));
+      out.push('', `**Se Sì:** ${p.ifYes}`, `**Se No:** ${p.ifNo}`);
+      break;
+    }
   }
   return out.join('\n').trim();
 }

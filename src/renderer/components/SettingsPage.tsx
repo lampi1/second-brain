@@ -1,15 +1,16 @@
-// Settings page (rendered by App.tsx): essential settings only, laid out like the Dashboard: a page header with the
+// Settings page (rendered by App.tsx; each section's title, description and search words: lib/settings-sections.ts, which the Orchestrator's app map reads too, ADR 0149): essential settings only, laid out like the Dashboard: a page header with the
 // search (a group's title, description and keywords; clearing it keeps the focus in the field), a row of section links, then one card per group (icon, title, one-line description, rows of text left and
-// control right). Connettori: ConnectorsHub.tsx (accounts and MCP servers, ADR 0086; the tool catalog, ADR 0119). Avanzate: the technical MCP form and import (ConnectorsHub.tsx McpAdvanced, ADR 0119). Ruoli e deleghe: DelegationSettings.tsx (ADR 0083). Aggiornamenti: AppUpdateSettings.tsx (ADR 0075; "impostazioni/update" opens on it). Scrittura: SuggestSettings.tsx (the composer's inline suggestion, ADR 0118). Stored technical policies and engine denials are preserved, never enabled by rendering.
+// control right). Connettori: ConnectorsHub.tsx (accounts and MCP servers, ADR 0086; the tool catalog, ADR 0119). Avanzate: the technical MCP form and import (ConnectorsHub.tsx McpAdvanced, ADR 0119). Ruoli e deleghe: DelegationSettings.tsx (ADR 0083). Aggiornamenti: AppUpdateSettings.tsx (ADR 0075; "impostazioni/update" opens on it). Scrittura: SuggestSettings.tsx (the composer's inline suggestion, ADR 0118). Voce: VoiceSettings.tsx (voice mode, ADR 0152). Stored technical policies and engine denials are preserved, never enabled by rendering.
 // Account actions use existing typed login/secure-storage/trust boundaries; no provider routing matrix or policy wall.
 import{useEffect,useState,type ReactNode}from'react';
 import { Select } from './Select';
 import type{CliStatus,EngineInfo,SecretsStatus}from'@shared/contract';
 import { isLang, LANGS } from '@shared/contract';
-import{IconBell,IconBranch,IconEdit,IconFolder,IconLink,IconMoon,IconRefresh,IconSearch,IconSettings,IconTerminal,IconUser}from'./Icons';
+import{IconBell,IconBranch,IconEdit,IconFolder,IconLink,IconMic,IconMoon,IconRefresh,IconSearch,IconSettings,IconTerminal,IconUser}from'./Icons';
 import { DelegationSettings } from './DelegationSettings';
 import{useEngines}from'../lib/engines';
 import{matchesSettingsSearch}from'../lib/settings-page';
+import{settingsSections}from'../lib/settings-sections';
 import{useApp,setSetting}from'../store/store';
 import{ui,setPrefs,openModal,toast}from'../store/ui';
 import{t}from'../i18n';
@@ -27,6 +28,7 @@ import { CloudKeySetting } from './CloudKeySetting';
 import { PulseSettings } from './PulseSettings';
 import { TaskReadSettings } from './TaskReadSettings';
 import { SuggestSettings } from './SuggestSettings';
+import { VoiceSettings } from './VoiceSettings';
 import'../styles/settings.css';
 export function Switch({on,onChange,label,busy,testid}:{on:boolean;onChange:(on:boolean)=>void;label:string;busy?:boolean;testid?:string}){
  return <button type="button" role="switch" aria-checked={on} aria-label={label} disabled={busy} className={`st-switch ${on?'on':''}`} onClick={()=>onChange(!on)} data-testid={testid}><span className="st-knob" aria-hidden="true"/></button>;
@@ -60,13 +62,14 @@ export function SettingsPage(){
  // sections above it have loaded (the connectors and the update panel grow after the first paint)
  useEffect(()=>{if(!arg||!settings)return;const go=()=>document.getElementById(`st-section-${arg}`)?.scrollIntoView({block:'start'});const id=requestAnimationFrame(go);const again=setTimeout(go,700);return()=>{cancelAnimationFrame(id);clearTimeout(again);};},[arg,!!settings]);
  if(!settings)return null;
+ const meta=settingsSections(engines.map(engine=>engine.name));
  const groups=[
-  {id:'profile',icon:<IconUser size={18}/>,description:t('essential.desc.profile'),title:t('profile.group'),search:[t('profile.name'),t('profile.role'),t('profile.mainWork'),t('profile.replyStyle'),'me.md profilo profile'].join(' '),body:<ProfileSettings/>},
-  {id:'update',icon:<IconRefresh size={18}/>,description:t('essential.desc.update'),title:t('update.group'),search:'aggiorna update versione version GitHub',body:<AppUpdateSettings/>},
-  {id:'connectors',icon:<IconLink size={18}/>,description:t('essential.desc.connectors'),title:t('connector.group'),search:'GitHub Jira Azure DevOps collegamenti connectors projects MCP server strumenti tools token importa import Claude Cursor Codex',body:<ConnectorsHub/>},
-  {id:'accounts',icon:<IconTerminal size={18}/>,description:t('essential.desc.accounts'),title:t('essential.accounts'),search:engines.map(engine=>engine.name).join(' ')+' '+t('autonomy.title'),body:<>{engines.map(engine=><ToolConnection key={engine.id} engine={engine}/>)}</>},
-  {id:'roles',icon:<IconBranch size={18}/>,description:t('delegation.desc'),title:t('delegation.group'),search:'ruoli roles deleghe delegation profondità depth parallelo parallel revisioni reviews Sentinel modelli models livelli tiers',body:<DelegationSettings/>},
-  {id:'space',icon:<IconFolder size={18}/>,description:t('essential.desc.space'),title:t('essential.space'),search:[t('essential.memory'),t('share.title'),'zip esporta export colleghi condividi share',t('essential.archive'),t('setup.settings.projects'),'ruolo role Dev QA PO CTO progetti projects repository'].join(' '),body:<>
+  {...meta.profile,icon:<IconUser size={18}/>,body:<ProfileSettings/>},
+  {...meta.update,icon:<IconRefresh size={18}/>,body:<AppUpdateSettings/>},
+  {...meta.connectors,icon:<IconLink size={18}/>,body:<ConnectorsHub/>},
+  {...meta.accounts,icon:<IconTerminal size={18}/>,body:<>{engines.map(engine=><ToolConnection key={engine.id} engine={engine}/>)}</>},
+  {...meta.roles,icon:<IconBranch size={18}/>,body:<DelegationSettings/>},
+  {...meta.space,icon:<IconFolder size={18}/>,body:<>
    <WorkProfilePreferences/>
    <Row title={t('essential.memory')}><span className="st-value" title={settings.brainRoot??undefined}>{settings.brainRoot||t('essential.memoryEmpty')}</span><button type="button" className="btn btn-ghost btn-m" onClick={()=>void window.sb.invoke('app:pickBrain',undefined).catch(()=>toast(t('essential.error'),'err'))}>{t('essential.pickMemory')}</button></Row>
    <BrainShareSetting/>
@@ -74,15 +77,16 @@ export function SettingsPage(){
    <Row title={t('essential.archive')} description={t('essential.archiveHint')}><Select aria-label={t('essential.archive')} data-testid="st-archive-select" value={settings.autoCloseMin} onChange={event=>void setSetting({autoCloseMin:Number(event.target.value)})}>{[...new Set([0,2,5,10,30,settings.autoCloseMin])].sort((a,b)=>a-b).map(count=><option key={count} value={count}>{count?t('essential.minutes',{count}):t('essential.never')}</option>)}</Select></Row>
    <Row title={t('essential.setupTitle')} description={t('essential.setupHint')}><button type="button" className="btn btn-ghost btn-m" onClick={()=>openModal('setup')}>{t('essential.setup')}</button></Row>
   </>},
-  {id:'writing',icon:<IconEdit size={18}/>,description:t('suggest.groupDesc'),title:t('suggest.group'),search:[t('suggest.title'),t('suggest.model'),t('suggest.budget'),'tab autocomplete suggerimenti suggestions'].join(' '),body:<SuggestSettings/>},
-  {id:'appearance',icon:<IconMoon size={18}/>,description:t('essential.desc.appearance'),title:t('essential.appearance'),search:[t('essential.theme'),t('settings.language'),t('essential.density')].join(' '),body:<>
+  {...meta.writing,icon:<IconEdit size={18}/>,body:<SuggestSettings/>},
+  {...meta.voice,icon:<IconMic size={18}/>,body:<VoiceSettings/>},
+  {...meta.appearance,icon:<IconMoon size={18}/>,body:<>
    <Row title={t('essential.theme')}><Select aria-label={t('essential.theme')} data-testid="st-theme-select" value={prefs.theme} onChange={event=>{const theme=event.target.value;if(theme==='system'||theme==='light'||theme==='dark')setPrefs({theme});}}>{(['system','light','dark']as const).map(value=><option key={value} value={value}>{t(`essential.${value}`)}</option>)}</Select></Row>
    <Row title={t('settings.language')}><Select aria-label={t('settings.language')} value={settings.language} onChange={event=>{const language=event.target.value;if(language==='system'||isLang(language))void setSetting({language});}} data-testid="st-language-select">{(['system',...LANGS]as const).map(value=><option key={value} value={value}>{t(`settings.language.${value}`)}</option>)}</Select></Row>
    <Row title={t('essential.density')}><Select aria-label={t('essential.density')} data-testid="st-density-select" value={prefs.density} onChange={event=>{const density=event.target.value;if(density==='compact'||density==='comfortable')setPrefs({density});}}>{(['comfortable','compact']as const).map(value=><option key={value} value={value}>{t(`essential.${value}`)}</option>)}</Select></Row>
    <div className="st-row st-row-block"><AppearancePreview/></div>
   </>},
-  {id:'notifications',icon:<IconBell size={18}/>,description:t('essential.desc.notifications'),title:t('essential.notifications'),search:`${t('essential.toasts')} ${t('alive.pulse.title')} battito pulse budget ${t('brainPages.task.autoLabel')} ${t('brainPages.task.sound')} Task`,body:<><Row title={t('essential.toasts')} description={t('essential.notificationsHint')} help={<HelpTip title={t('explain.toasts.title')} testid="st-toasts-help"><p>{t('explain.toasts.p1')}</p></HelpTip>}><Select aria-label={t('essential.toasts')} data-testid="st-toasts-select" value={settings.osToasts} onChange={event=>{const osToasts=event.target.value;if(osToasts==='urgent'||osToasts==='normal'||osToasts==='off')void setSetting({osToasts});}}>{(['urgent','normal','off']as const).map(value=><option key={value} value={value}>{t(value==='off'?'essential.none':`essential.${value}`)}</option>)}</Select></Row><PulseSettings/><TaskReadSettings/></>},
-  {id:'advanced',icon:<IconSettings size={18}/>,description:t('hub.adv.groupDesc'),title:t('hub.adv.group'),search:'MCP server stdio http comando command argomenti args env variabili headers intestazioni importa import Claude Cursor Codex avanzate advanced',body:<McpAdvanced/>},
+  {...meta.notifications,icon:<IconBell size={18}/>,body:<><Row title={t('essential.toasts')} description={t('essential.notificationsHint')} help={<HelpTip title={t('explain.toasts.title')} testid="st-toasts-help"><p>{t('explain.toasts.p1')}</p></HelpTip>}><Select aria-label={t('essential.toasts')} data-testid="st-toasts-select" value={settings.osToasts} onChange={event=>{const osToasts=event.target.value;if(osToasts==='urgent'||osToasts==='normal'||osToasts==='off')void setSetting({osToasts});}}>{(['urgent','normal','off']as const).map(value=><option key={value} value={value}>{t(value==='off'?'essential.none':`essential.${value}`)}</option>)}</Select></Row><PulseSettings/><TaskReadSettings/></>},
+  {...meta.advanced,icon:<IconSettings size={18}/>,body:<McpAdvanced/>},
  ];
  const matched=groups.filter(group=>matchesSettingsSearch(query,group.title+' '+group.description+' '+group.search));
  const jump=(id:string)=>{const target=document.getElementById(`st-section-${id}`);target?.scrollIntoView({block:'start',behavior:'smooth'});target?.focus({preventScroll:true});};

@@ -100,6 +100,8 @@ export function tokenUsage(input: unknown, cacheRead: unknown, cacheWrite: unkno
 
 /** Options common to every harness. */
 export interface SessionOptions {
+  /** a brief (show_ui brief, next-ask) waits for this chat's next question (ADR 0150); absent = never asked for */
+  briefReady?: () => boolean;
   /** Main-generated immutable agent skill package, never supplied by the renderer. */
   agentAssets?: { pluginDir: string; skillRoot: string };
   chatId: string;

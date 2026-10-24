@@ -3,7 +3,7 @@
 // `-p --input-format stream-json --output-format stream-json` mode, with no model and no network.
 // Used by test/unit/chats/*.test.ts (ClaudeSession, ChatManager) and test/e2e/chats.spec.ts (SB_CLAUDE_PATH).
 // What a turn does is chosen by words in the user's message:
-//   ask → AskUserQuestion via can_use_tool, waits for the answer · bash → Bash permission (with a rule suggestion)
+//   ask → AskUserQuestion via can_use_tool, waits for the answer (asksn: a yes/no one, Sì / No) · bash → Bash permission (with a rule suggestion)
 //   locked → Bash permission with suppress_always_allow_rule · mode → Edit permission with a setMode suggestion
 //   readgate → a Read permission: "Letto a.txt" when allowed, "Lettura negata: <message>" when refused
 //     (readgate=<path> reads that path, relative to the cwd, instead of a.txt)
@@ -249,7 +249,9 @@ async function runTurn(text) {
   let final = 'Ciao dal motore';
   if (/waitqa/.test(text)) final = 'Fatto il fix.\nAspetto la QA sui controlli A, B e C…';
   if (/ask/.test(text) && !turn.aborted) {
-    const input = { questions: [{ question: 'Che colore?', header: 'Colore', options: [{ label: 'Blu', description: 'il mare' }, { label: 'Rosso' }], multiSelect: false }] };
+    const input = /asksn/.test(text)
+      ? { questions: [{ question: 'Lo pubblico?', header: 'Pubblica', options: [{ label: 'Sì (consigliato)' }, { label: 'No' }], multiSelect: false }] }
+      : { questions: [{ question: 'Che colore?', header: 'Colore', options: [{ label: 'Blu', description: 'il mare' }, { label: 'Rosso' }], multiSelect: false }] };
     assistant([{ type: 'tool_use', id: 'toolu_ask', name: 'AskUserQuestion', input }]);
     const r = await ask('AskUserQuestion', input, 'toolu_ask');
     if (r?.behavior === 'allow') { toolResult('toolu_ask', `Risposte: ${JSON.stringify(r.updatedInput?.answers ?? {})}`); final = `Hai scelto ${Object.values(r.updatedInput?.answers ?? {}).join(', ')}`; }

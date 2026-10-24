@@ -14,13 +14,16 @@ import { startBeat } from './lib/beat';
 import { startInputLag } from './lib/inputlag';
 import { nextThing, openLink, uiCommand } from './actions';
 import { checkDnd, startStore } from './store/store';
+import { startVoice } from './lib/voice';
 import { now } from './lib/clock';
 import { startLayer } from './lib/layer';
+import './lib/notice'; // notify() and its e2e hook (__sbNotify)
 import { startFocusKeeper } from './lib/focusKeeper';
 import { startTypingWatch } from './lib/questions';
 import { OverlayApp } from './components/OverlayApp';
 import { BrainTestRoute, isBrainTestRoute } from './brain/testRoute';
 import { startLater } from './lib/later';
+import { installAppMap } from './lib/app-map';
 import { LangRoot, startLang } from './i18n/LangRoot';
 import { Splash } from './components/Splash';
 import { splashMode, type SplashMode } from './lib/splash';
@@ -52,12 +55,14 @@ if (isBrainTestRoute()) {
   root.render(<div role="status">{auditText('cmp.main.restoring')}</div>);
   void startUpdateCheckpoint().catch(()=>toast(auditText('cmp.main.restoreUnavailable'),'err')).then(()=>{
   startStore();
+  startVoice();
   startViewports();
   startLater(); // "Rispondi dopo": main's flag, before the first popup can show
   startLayer(() => nextThing(), link => { openLink(link); });
   startInputLag(); // key → letter on screen, one summary a minute to the `perf` log while the user types
   startFocusKeeper();
   startTypingWatch();
+  installAppMap(); // the Orchestrator's app map and live screen outline (app_guide, app_ui outline)
   setInterval(() => checkDnd(now()), 60_000);
   started = true;
   for (const cmd of early.splice(0)) uiCommand(cmd);

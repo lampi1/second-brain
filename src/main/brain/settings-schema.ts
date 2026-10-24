@@ -84,6 +84,11 @@ const BASE: readonly SettingDef[] = [
     description: 'Quando le fonti locali non hanno niente, dopo una pausa nella scrittura chiede al modello più piccolo sulla chiave API (ultima riga e ultimo messaggio soltanto). Spento: solo i suggerimenti locali.' },
   { key: 'suggestDailyUsd', type: 'usd', min: 0.01, max: 1, default: 0.05, protected: true, label: 'Suggerimenti nella chat: budget giornaliero ($)',
     description: 'Raggiunto il budget, il modello si ferma fino a domani; i suggerimenti locali restano.' },
+  // voice mode (ADR 0152): local and free, so neither is protected; changing one only picks other models to download
+  { key: 'voiceAsr', type: 'enum', values: ['fast', 'accurate'], default: 'fast', protected: false, label: 'Voce: trascrizione',
+    description: 'Veloce = Whisper small (374 MB), risponde prima. Precisa = Whisper turbo (circa 1 GB), sbaglia meno parole ma è più lenta sul processore. Tutto in locale, gratis.' },
+  { key: 'voiceName', type: 'enum', values: ['paola', 'miro', 'dii'], default: 'paola', protected: false, label: 'Voce: chi parla',
+    description: 'La voce italiana con cui l’app ti risponde nella modalità voce (Piper, in locale, circa 64 MB ognuna).' },
   { key: 'osToasts', type: 'enum', values: ['urgent', 'normal', 'off'], default: 'urgent', protected: true, label: 'Notifiche di sistema',
     description: 'Solo le urgenti (una chat ti aspetta), anche le normali, o nessuna (resta tutto nel feed).' },
   { key: 'dndUntil', type: 'int', min: 0, max: 8.64e15, nullable: true, default: null, protected: true, label: 'Non disturbare fino a',
@@ -261,6 +266,7 @@ export function defaults(): Settings {
     projectsRoot: null,
     loadQueue: true, loadQueueCpu: 75, loadQueueRam: 15,
     suggestOn: true, suggestModel: true, suggestDailyUsd: 0.05,
+    voiceAsr: 'fast', voiceName: 'paola',
     delegation: { ...DELEGATION_DEFAULTS }, modelTiers: {},
   };
 }

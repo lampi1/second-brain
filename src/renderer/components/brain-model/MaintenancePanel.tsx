@@ -1,13 +1,14 @@
 // The maintenance panel of the Brain pages (ADR 0077): what the self-managing jobs changed, newest first, each with what,
-// why, the evidence and "Annulla" (or why it can no longer be undone), the "Esegui ora" button and the last pass. No
+// why, the evidence and "Annulla" (or why it can no longer be undone) and the last pass (running is the one «Manutenzione»
+// button's, ADR 0153). No
 // approval anywhere: the jobs apply their changes and the user can take any of them back. The migration report (former
 // runbook and routine sections turned into skills) is a separate block for the Skill page. Used by SkillsPage.tsx,
 // RulesPage.tsx and MemoryPage.tsx (the Memoria hub's tabs, ADR 0122); Change also by LearningPage.tsx. Each change shows its evidence claim (ADR 0109): the
 // hypothesis, where it is measured and what the data say so far, with the verdict. Styles: styles/brain-model.css.
 import { useState } from 'react';
-import type { BrainChange, MaintenanceJobId, MaintenanceRun, MigrationReport } from '@shared/brain-model';
+import type { BrainChange, MaintenanceRun, MigrationReport } from '@shared/brain-model';
 import { locale, t } from '../../i18n';
-import { brainModel, rollbackChange, runMaintenance, useBrainModel } from '../../store/brain-model';
+import { brainModel, rollbackChange, useBrainModel } from '../../store/brain-model';
 import { toast } from '../../store/ui';
 import { changesOf } from '../../lib/brain-model-view';
 import { claimLine, scopeLine, verdictTone } from '../../lib/learning-view';
@@ -41,25 +42,16 @@ export function Change({ c, busy }: { c: BrainChange; busy: boolean }) {
   </li>;
 }
 
-/** The change log of the given kinds, the run button and the last pass. `job` limits "Esegui ora" to one job. */
-export function MaintenancePanel({ kinds, job, runLabel, testId = 'bm-maintenance' }: { kinds: BrainChange['kind'][]; job?: MaintenanceJobId; runLabel?: string; testId?: string }) {
+/** The change log of the given kinds and the last pass. Running is the one «Manutenzione» button's (ADR 0122, 0153). */
+export function MaintenancePanel({ kinds, testId = 'bm-maintenance' }: { kinds: BrainChange['kind'][]; testId?: string }) {
   const { state, busy } = useBrainModel();
   const [limit, setLimit] = useState(8);
   const changes = changesOf(state?.changes ?? [], kinds);
-  const run = async () => {
-    const before = state?.changes.length ?? 0;
-    const err = await runMaintenance(job);
-    if (err) { toast(err, 'err'); return; }
-    const after = brainModel.get().state?.changes.length ?? before;
-    toast(t('bm.maint.done', { n: Math.max(0, after - before) }), 'ok');
-  };
   return <section className="bm-panel bm-maint" aria-labelledby={`${testId}-h`} data-testid={testId}>
     <header className="bm-panel-head">
       <div><h3 id={`${testId}-h`}>{t('bm.maint.title')}</h3><p>{t('bm.maint.lead')}</p></div>
       <div className="bm-panel-actions">
         <small className="bm-last">{state?.lastRun ? t('bm.maint.last', { at: when(state.lastRun.at) }) : t('bm.maint.never')}</small>
-        {/* only a single job has its own button: running every job is the hub's one «Manutenzione» (ADR 0122) */}
-        {job && <button type="button" className="btn btn-primary btn-s" disabled={busy || !state?.root} onClick={() => void run()} data-testid="bm-run">{busy ? t('bm.maint.running') : runLabel ?? t('bm.maint.run')}</button>}
       </div>
     </header>
     <p className="bm-note">{t('bm.maint.approvalNote')}</p>

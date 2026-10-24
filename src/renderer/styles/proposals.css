@@ -12,6 +12,7 @@
 .pd .pd-g-learning { --pd-c: var(--pair-1); }
 .pd .pd-g-script { --pd-c: var(--pair-2, var(--blue)); }
 .pd .pd-g-forget { --pd-c: var(--text-3); }
+.pd .pd-g-issue { --pd-c: var(--pair-3, var(--violet)); }
 
 /* ── head: chips and progress ─────────────────────────────────────────────────────────────────────────────── */
 .pd-head { width: min(780px, 100%); display: flex; flex-direction: column; gap: 12px; }

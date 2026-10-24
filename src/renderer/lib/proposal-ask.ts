@@ -38,7 +38,7 @@ const SIGN: Readonly<Record<MemorySign, Key>> = { url: 'proposals.sign.url', id:
 const signWord = (s: MemorySign): string => t(SIGN[s]);
 
 /** `keep`: on a fact that contradicts what is already remembered, the user's pick (replace it or keep both). */
-export function cardWords(c: Pick<Proposal, 'ask' | 'title' | 'content' | 'applied' | 'source' | 'facts'>, keep?: ProposalKeep | null): CardWords {
+export function cardWords(c: Pick<Proposal, 'ask' | 'title' | 'content' | 'applied' | 'source' | 'facts'> & Partial<Pick<Proposal, 'group'>>, keep?: ProposalKeep | null): CardWords {
   const a = c.ask;
   switch (a.kind) {
     case 'remember': {
@@ -82,6 +82,9 @@ export function cardWords(c: Pick<Proposal, 'ask' | 'title' | 'content' | 'appli
         yes: a.cases ? t('proposals.yes.policyCases', { name: a.name, n: a.cases }) : t('proposals.yes.policy', { name: a.name }), no: t('proposals.no.policy'), lead: '' };
     // a maintenance finding (ADR 0132): its title is the question; the deck shows its own words (adds, removes, why)
     case 'research':
+      // an idea or a bug about the app's code: approving opens its issue on GitHub at once (ADR 0153)
+      if (c.group === 'issue') return { question: t('proposals.ask.issue', { title: c.title.trim() }), yes: t('proposals.yes.issue'), no: t('proposals.no.issue'), lead: '',
+        ...(c.content ? { bodyLabel: t('proposals.research.issueBody') } : {}) };
       // the finding's title read as the question («Dimenticare la skill «x»?», «Artisan lancia i test prima di dire «fatto»?»)
       return { question: `${c.title.trim().replace(/[.!?:;…\s]+$/u, '')}?`, yes: t(a.finding === 'forget' ? 'proposals.yes.forget' : 'proposals.yes.research'), no: t('proposals.no.research'), lead: '',
         ...(c.content ? { bodyLabel: t(a.finding === 'forget' ? 'proposals.research.forgets' : 'proposals.research.exact') } : {}) };

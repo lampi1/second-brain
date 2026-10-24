@@ -31,12 +31,10 @@ import { PulseBoard } from '../ContextPulse';
 import { ThemesPanel } from '../../dashboard/Themes';
 import { Script } from '../../brain/pages/Script';
 import { useCountUp } from '../../dashboard/parts';
-import { IconBolt, IconBranch, IconCheck, IconChart, IconFile, IconLightbulb, IconShield, IconSparkle, IconTarget, IconTerminal } from '../Icons';
+import { IconBolt, IconCheck, IconChart, IconFile, IconLightbulb, IconShield, IconSparkle, IconTarget, IconTerminal } from '../Icons';
 import { SkillsPage } from '../SkillsPage';
 import { MaintenancePanel, when } from './MaintenancePanel';
 import { MaintenanceButton } from './MaintenanceButton';
-import { AppIdeasTab } from './AppIdeasTab';
-import { useAppIdeas } from '../../store/maintenance';
 import { InlineMd, MemoryInsights, OpenFile } from './MemoryInsights';
 import { RulesPage } from './RulesPage';
 import { LearningPage } from './LearningPage';
@@ -128,7 +126,7 @@ function MemoryFiles() {
     <Section id="knowledge" title={t('bm.mem.knowledge')} lead={t('bm.mem.knowledgeLead')} files={knowledge} empty={t('bm.mem.empty.knowledge')} />
     <Section id="happened" title={t('bm.mem.happened')} lead={t('bm.mem.happenedLead')} files={s.happened} empty={t('bm.mem.empty.happened')}><ErrorLog items={stats?.errors.items ?? []} groups={stats?.errors.groups ?? []} /></Section>
     <Section id="agents" title={t('bm.mem.agents')} lead={t('bm.mem.agentsLead')} files={s.agents} empty={t('bm.mem.empty.agents')} />
-    <MaintenancePanel kinds={['memory']} job="merge-memory" runLabel={t('bm.mem.mergeDup')} testId="bm-maint-memory" />
+    <MaintenancePanel kinds={['memory']} testId="bm-maint-memory" />
   </div>;
 }
 
@@ -205,7 +203,7 @@ function Hero({ onTab }: { onTab: (tab: HubTab) => void }) {
 // ── the tab bar ─────────────────────────────────────────────────────────────────────────────────────────────────────
 const ICON: Record<HubTab, ReactNode> = {
   proposte: <IconBolt />, approvate: <IconCheck />, skill: <IconSparkle />, regole: <IconShield />, script: <IconTerminal />,
-  idee: <IconLightbulb />, app: <IconBranch />, file: <IconFile />, apprendimento: <IconTarget />, statistiche: <IconChart />,
+  idee: <IconLightbulb />, file: <IconFile />, apprendimento: <IconTarget />, statistiche: <IconChart />,
 };
 
 function useCounts(): Partial<Record<HubTab, number>> {
@@ -214,11 +212,10 @@ function useCounts(): Partial<Record<HubTab, number>> {
   const approved = useApprovedCount();
   const scripts = useBrain('/api/scripts', normScripts);
   const tables = useBrain('/api/tables', normTables);
-  const { ideas } = useAppIdeas();
   return {
     proposte: proposals, approvate: approved,
     skill: state?.skills.length, regole: state?.rules.length, script: scripts.data?.scripts.filter(s => s.tested.state === 'ok').length, // only working scripts show (Script.tsx)
-    idee: tables.data?.ideas.length, app: ideas?.items.filter(p => p.state === 'open').length, file: state?.memory.length,
+    idee: tables.data?.ideas.length, file: state?.memory.length,
     apprendimento: state?.changes.filter(c => c.claim).length,
   };
 }
@@ -286,7 +283,6 @@ function TabContent({ tab, rest }: { tab: HubTab; rest: string | null }) {
     case 'regole': return <RulesPage />;
     case 'script': return <><Script arg={rest ?? undefined} /><QueriesTab /></>;
     case 'idee': return <IdeasTab rest={rest} />;
-    case 'app': return <AppIdeasTab />;
     case 'file': return <MemoryFiles />;
     case 'apprendimento': return <LearningPage />;
     case 'statistiche': return stats ? (memoryEmpty(stats) ? <CleanStart /> : <MemoryInsights s={stats} />) : <p className="bm-empty">{t('bm.loading')}</p>;
@@ -294,7 +290,7 @@ function TabContent({ tab, rest }: { tab: HubTab; rest: string | null }) {
 }
 
 /** Tabs that work with no brain folder chosen: the deck, the brain's server pages and the skills in ~/.claude/skills. */
-const NO_BRAIN_OK: ReadonlySet<HubTab> = new Set(['proposte', 'skill', 'script', 'idee', 'app']);
+const NO_BRAIN_OK: ReadonlySet<HubTab> = new Set(['proposte', 'skill', 'script', 'idee']);
 
 export function MemoryPage() {
   const { state, error } = useBrainModel();

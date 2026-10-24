@@ -1,12 +1,12 @@
 // Small overlays: the confirm dialog (only for what cannot be undone, e.g. Ferma tutto with several chats running),
 // the keyboard shortcuts sheet (Ctrl+/), and calm toasts (floating under the top bar, out of the layout flow so they
-// never move the page, #169; an undo action for undoable things). Used by App.tsx.
+// never move the page, #169; an undo action for undoable things), drawn as the app's one notice card (Notice.tsx). Used by App.tsx.
 import { getKeymap } from '../lib/keys';
 import { closeModal, dismissToast, expireToasts, ui } from '../store/ui';
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { registerOverlay, schedule } from '../lib/viewports';
 import { t } from '../i18n';
-import { IconAlert, IconCheck, IconInfo, IconUndo, IconX } from './Icons';
+import { Notice } from './Notice';
 import { Keys, Modal } from './ui';
 
 export function ConfirmDialog() {
@@ -46,17 +46,10 @@ export function Toasts() {
   return (
     <div ref={area} className="toasts" aria-live="polite" data-testid="toasts">
       {toasts.map(toast => (
-        <div key={toast.id} className={`toast toast-${toast.tone}`} role={toast.tone === 'err' ? 'alert' : 'status'} data-testid="toast">
-          {toast.tone === 'ok' ? <IconCheck size={14} /> : toast.tone === 'err' || toast.tone === 'warn' ? <IconAlert size={14} /> : <IconInfo size={14} />}
-          <span className="toast-text">{toast.labelKey?t(toast.labelKey):toast.text}</span>
-          {toast.action && (
-            <button type="button" className="toast-action" onClick={() => { toast.action?.run(); dismissToast(toast.id); }} data-testid="toast-action">
-              <IconUndo size={13} />{toast.action.label}
-            </button>
-          )}
-          <button type="button" className="toast-x" aria-label={closeLabel} onClick={() => dismissToast(toast.id)} data-testid="toast-close"><IconX size={12} /></button>
-          {toast.action && <span className="toast-timer" style={{ animationDuration: `${toast.ttl}ms` }} aria-hidden="true" />}
-        </div>
+        <Notice key={toast.id} className="toast" testid="toast" tone={toast.tone} title={toast.labelKey ? t(toast.labelKey) : toast.text}
+          label={toast.label} detail={toast.detail} chips={toast.chips} ttl={toast.ttl} closeLabel={closeLabel} closeTestid="toast-close"
+          onClose={() => dismissToast(toast.id)}
+          action={toast.action && { label: toast.action.label, testid: 'toast-action', onClick: () => { toast.action?.run(); dismissToast(toast.id); } }} />
       ))}
     </div>
   );

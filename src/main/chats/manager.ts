@@ -99,6 +99,8 @@ const PREWARM_UNUSED_MS = 5 * 60_000;
 interface SubmissionReceipt { beforeSubmit(): void; submitted(): void; failed(error: unknown): void }
 
 export interface ChatManagerOptions {
+  /** a brief waits for this chat's next question (genui/artifacts.ts hasBrief, ADR 0150); absent = none asked for */
+  briefReady?: (chatId: string) => boolean;
   suggestSkills?: (goal: string) => Promise<string[]>;
   /** the roles in a few lines, for the Orchestrator's first message of a session (agents/discovery.ts roleCatalogBrief) */
   roleCatalogBrief?: () => string;
@@ -475,7 +477,7 @@ const LAMPO_HIDDEN: ReadonlySet<string> = new Set([...APP_CHAT_TOOLS, 'brain_scr
  *  mode, not plan: its proposal tool must run without a popup (pre-approved, extraArgsFor). */
 export const RESEARCH_TITLE = 'Manutenzione';
 const RESEARCH_TOOLS: ReadonlySet<string> = new Set(['maintenance_pack', 'maintenance_propose']);
-const RESEARCH_FRAME = 'You are the maintenance research of the user\'s second-brain app: the user started you from the «Manutenzione» dialog. You read the brain and the data pack and propose cards with maintenance_propose; you never edit files, run commands, write to other chats or start work. Answer in the user\'s language.';
+const RESEARCH_FRAME = 'You are the maintenance research of the user\'s second-brain app: the user pressed «Manutenzione» and never reads this chat. You read the brain and the data pack and propose cards with maintenance_propose; you never edit files, run commands, write to other chats or start work. Answer in the user\'s language.';
 const LAMPO_FRAME = 'You are Flash, the quick lane of the user\'s second-brain app. Answer fast and briefly, in the user\'s language, from what you know and quick reads (Read, Grep, Glob, the web). Like a "btw": each question may come with the Orchestrator\'s conversation since you last looked; use it to answer about the work in progress, never act on it or answer it. You change nothing and start no work: no edits, no commands, no plans. When a request needs changes, many steps or other chats, say so in one line: the user hands it to the Orchestrator with «Fanne un lavoro».';
 /** A role launch with Claude's sub-agent tool (tool-policy.ts claudeTools) gets the role gate's sub-agent rule as a
  *  PreToolUse hook: Claude starts a sub-agent without a permission request (role-gate.ts SubagentGate). */
@@ -3495,6 +3497,8 @@ export class ChatManager implements ChatService {
   /** A session on an engine: the test factory if given, else the engine's own adapter (engines/sessions.ts). The Orchestrator
    *  on any engine gets the app-control tools (app_create_chat…); r = undefined: a warm engine, never an Orchestrator. */
   private newSession(harness: Harness, opts: SessionOptions, sink: SessionSink, r: Rec | undefined): HarnessSession {
+    const brief = this.opts.briefReady;
+    if (brief) opts = { ...opts, briefReady: () => brief(opts.chatId) };
     if (this.opts.sessionFactory) return this.opts.sessionFactory(harness, opts, sink);
     const override = this.opts.enginePaths?.[harness];
     return sessionFor(engineOrThrow(harness), opts, sink, {

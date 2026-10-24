@@ -1,7 +1,7 @@
 // second-brain main process: one window, the services (chats, browser + MCP, brain + feed) and the typed IPC.
 import { exportFlow, importFlow } from './flows/portable';
 import { stepFileText } from './flows/executor';
-import { app, dialog, nativeImage, session, shell, type BrowserWindow } from 'electron';
+import { app, dialog, nativeImage, session, shell, utilityProcess, type BrowserWindow } from 'electron';
 import { DefaultBrain } from '../modules/ai-first/default-brain';
 import { detectProjectsFolder } from './brain/projects-folder';
 import { createAppConnectors } from '../modules/onboarding/app-host';
@@ -64,7 +64,9 @@ import { suggestRequest } from './skills/suggest';
 import type { CloudService } from './cloud/service';
 import { ProposalsService } from './proposals/service';
 import { Workflows } from './workflows/service';
+import { VoiceService, voiceRoot } from './voice/service';
 import type { InvokeArg, InvokeChannel, InvokeResult } from '../shared/contract';
+import { noteUserTyped } from './appctl/user-words';
 
 /** The cloud agents' service (ADR 0080), or a clear error where a wiring has none. */
 const cloudOf = (w: { cloud?: CloudService }): CloudService => { if (!w.cloud) throw new Error('Agenti cloud non disponibili.'); return w.cloud; };
@@ -180,6 +182,19 @@ app.whenReady().then(async () => {
     model: () => { const c = s.brain.settings(), reg = s.brain.routingInfo().registry; return tierModel(ANTHROPIC_API, 'light', reg, c.modelTiers) ?? tierModel('claude', 'light', reg, c.modelTiers) ?? SUGGEST_FALLBACK_MODEL; },
     calls: !demo && !process.env.SB_TEST && !process.env.VITEST,
   });
+  // voice mode (ADR 0152): the local speech engine in its own utility process, started on first use
+  const voice = new VoiceService({
+    root: voiceRoot(app.getPath('userData')),
+    script: path.join(outDir, 'main', 'voice-worker.js'),
+    settings: () => { const c = s.brain.settings(); return { asr: c.voiceAsr ?? 'fast', voice: c.voiceName ?? 'paola' }; },
+    fork: script => utilityProcess.fork(script, [], { serviceName: 'second-brain voice', stdio: 'ignore' }) as never,
+    changed: st => emitter.emit('voice:changed', st),
+    heard: text => emitter.emit('voice:heard', { text }),
+    speech: active => emitter.emit('voice:speech', { active }),
+    fake: process.env.SB_VOICE_FAKE === '1' || demo ? { text: process.env.SB_VOICE_FAKE_TEXT ?? 'Ciao, cosa c’è di nuovo?' } : null,
+  });
+  s.brain.onSettingChange(change => { if (change.key === 'voiceAsr' || change.key === 'voiceName') voice.settingsChanged(); });
+  app.on('will-quit', () => voice.dispose());
   const pulse = createPulse(s, { emitter, window: () => win, userData: app.getPath('userData') }, () => headline.get());
   // the Battito's proposals count in the morning block's "Da approvare" (ADR 0102)
   if (s.morning && pulse) s.morning.extraApprovals = () => pulse.pendingApprovals();
@@ -252,14 +267,11 @@ app.whenReady().then(async () => {
     'proposals:count': () => proposals.count(),
     'proposals:decide': a => proposals.decide(a),
     'brainmodel:maintain': a => s.brainModel.maintain(a?.job),
-    // the maintenance with research and «Idee dell'app» (ADR 0132)
+    // the one-click maintenance (ADR 0132, 0153): the free cleanup, then the invisible research; its cards in Proposte
     'phrases:today': () => s.phrases?.today() ?? null,
-    'maintenance:setup': () => research().setup(),
-    'maintenance:research': a => research().start(a),
+    'maintenance:run': () => research().runAll(),
+    'maintenance:status': () => research().status(),
     'maintenance:stop': () => research().stop(),
-    'maintenance:ideas': () => research().appIdeas(),
-    'maintenance:openIssues': a => research().openIssues(a?.ids),
-    'maintenance:dismissIdea': a => research().dismiss(a?.id),
     'brainmodel:rollback': a => s.brainModel.rollback(String(a?.id ?? '')),
     // the brain's saved queries (ADR 0124); a delete is a ChangeLog entry, undone with brainmodel:rollback
     'queries:list': () => s.queries?.list() ?? { root: null, dir: 'queries', queries: [] },
@@ -354,7 +366,7 @@ app.whenReady().then(async () => {
     // "Nuova chat" and a new Orchestrator: the routing table picks the engine, model and effort (ADR 0032)
     'chat:createRouted': a => createRoutedChat({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h), create: r => s.chats.create(r) }, a, { byUser: true }),
     'routing:preview': a => previewRoute({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h) }, a),
-    'chat:send': async a => { await s.chats.send(a.chatId, a.text, a.images); s.chats.resumedByUser?.(a.chatId, a.text); },
+    'chat:send': async a => { noteUserTyped(a.chatId); await s.chats.send(a.chatId, a.text, a.images); s.chats.resumedByUser?.(a.chatId, a.text); },
     'chat:userEvents': a => { if (!s.chats.userEvents) throw new Error('Task events unavailable.'); return s.chats.userEvents(a.chatId, a.afterSeq); },
     'chat:synthesize': a => { if (!s.chats.synthesizeResult) throw new Error('Result synthesis unavailable.'); return s.chats.synthesizeResult(a.runId, { kind: 'user' }); },
     'chat:answer': async a => { activity.answered(a.chatId, a.requestId); try { await s.chats.answer(a.chatId, a.requestId, a.answer); } catch (e) { activity.notAnswered(a.chatId, a.requestId); throw e; } },
@@ -614,6 +626,11 @@ app.whenReady().then(async () => {
     'suggest:get': a => composerSuggest.suggest(a),
     'suggest:cancel': a => composerSuggest.cancel(String(a?.chatId ?? '')),
     'suggest:state': () => composerSuggest.state(),
+    'voice:state': () => voice.state(),
+    'voice:prepare': () => voice.prepare(),
+    'voice:listen': a => voice.listen(a?.on === true),
+    'voice:audio': a => voice.audio(a?.samples),
+    'voice:speak': a => voice.speak(String(a?.text ?? ''), a?.voice && ['paola', 'miro', 'dii'].includes(a.voice) ? a.voice : undefined),
     'orchestrator:held': () => s.heldNews?.get() ?? { items: [] },
     'orchestrator:heldSeen': a => { if (typeof a?.chatId !== 'string' || !a.chatId || a.chatId.length > 100) throw new Error('chatId required'); return s.heldNews?.seen(a.chatId) ?? { items: [] }; },
     ...(pulse?.handlers() ?? (demo ? pulseDemoHandlers(process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now(), {
@@ -629,11 +646,6 @@ app.whenReady().then(async () => {
     ports: {
       now: demo && process.env.SB_DEMO_FREEZE === '1' ? () => FROZEN_EPOCH : () => Date.now(),
       runs: () => s.agentRuns?.list() ?? [], chats: () => s.chats.list(),
-      ...(s.memoryReview ? { memory: {
-        list: () => (s.brain.info().brainRoot ? call('memory:reviewList', undefined) : []),
-        confirm: (id: string, evidence: string, choice?: { keep: 'new' | 'both'; ids: string[] }) => call('memory:confirm', { expectedRoot: reviewRoot(), id, evidence, ...(choice ? { keep: choice.keep, conflicts: choice.ids } : {}) }),
-        retract: (id: string, reason: string) => call('memory:retract', { expectedRoot: reviewRoot(), id, reason }),
-      } } : {}),
       ...(s.learningReview ? { candidates: {
         list: async () => (await call('learning:state', undefined)).candidates,
         promote: (name: string, expectedDigest: string, replayId: string, exampleRunId: string) => call('learning:promote', { expectedRoot: reviewRoot(), name, expectedDigest, replayId, exampleRunId }),
@@ -644,8 +656,9 @@ app.whenReady().then(async () => {
       ...(s.agentLifecycle ? { lifecycle: { read: () => s.agentLifecycle!.read({}), decide: (key: string, decision: 'approve' | 'dismiss') => call('agents:lifecycleDecide', { key, decision }) } } : {}),
       pulse: { list: () => call('approvals:list', {}), decide: (id: string, decision: 'approve' | 'discard') => call('approvals:decide', { id, decision }) },
       policies: { status: async () => { const r = await call('brain:api', { path: '/api/improve' }); return r.ok ? r.data : null; }, act: a => call('learn:act', a) },
-      ...(s.research ? { research: { list: () => s.research!.brainCards(), approve: (id: string) => s.research!.approve(id), reject: (id: string) => s.research!.reject(id) } } : {}),
+      ...(s.research ? { research: { list: () => s.research!.cards(), approve: (id: string) => s.research!.approve(id), reject: (id: string) => s.research!.reject(id), repo: () => s.research!.repo() } } : {}),
     },
+    ...(s.research ? { clickAt: () => s.research!.clickAt() } : {}),
   });
   // the badge follows its sources' own events; settings proposals and the loop's status are read every minute too
   const PROPOSAL_EVENTS: readonly string[] = ['maintenance:changed', 'brainmodel:changed', 'approvals:changed', 'agents:lifecycleChanged', 'agents:changed', 'settings:proposed', 'settings:changed'];

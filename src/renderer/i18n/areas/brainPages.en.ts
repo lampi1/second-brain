@@ -71,7 +71,7 @@ export const brainPagesEn: typeof brainPagesIt = {
   'brainPages.task.every': 'Every',
   'brainPages.task.everyLabel': 'How many minutes between reads',
   'brainPages.task.sound': 'Alert sound',
-  'brainPages.task.soundTip': 'An on-screen alert when someone mentions you or changes your things; the sound can be turned off',
+  'brainPages.task.soundTip': 'Every notice that arrives by itself plays a sound, a different one per kind: question, error, mention, login or sync problem, end of the maintenance',
   'brainPages.task.off': 'Off',
   'brainPages.task.on': 'On',
   'brainPages.task.next': (p: { when: string }) => `next read ${p.when}`,

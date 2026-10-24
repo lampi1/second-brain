@@ -5,14 +5,17 @@
 //   2. generalizes: a case-specific fact (memoryWorth: a URL with a port, a ticket / PR / commit id, a user path, a
 //      date, a branch) goes to a one-shot agent with no tools (the same engine as the upgrade job) that rewrites it as
 //      the reusable rule or procedure behind it, or says nothing reusable is left: then it is dropped (retired). A
-//      rewrite that is still case-specific counts as nothing reusable. Confirmed originals are never retired: their
-//      rewrites are proposed supersessions awaiting independent review, and a drop leaves them untouched.
-//      Without an engine nothing is generalized or
-//      dropped (the next pass with one does it);
-//   3. writes it all through rules/memory-records.ts tidyMemory and records one change per role in the change log, with
-//      what was merged, rewritten and dropped as its evidence, and its undo (ChangeLog → undoMemoryTidy). A fact a
-//      tidy-up touched and the user undid is never touched again.
-// Facts with derived copies and facts that contradict a confirmed one (they wait for the user's choice) are left alone.
+//      rewrite that is still case-specific counts as nothing reusable. Confirmed originals are never retired here: their
+//      rewrites are proposed supersessions (saved by step 3 of a later pass), and a drop leaves them untouched.
+//      Without an engine nothing is generalized or dropped (the next pass with one does it);
+//   3. saves the proposed facts left that are not tied to one case, with no card (the owner 2026-10-24, ADR 0150): a
+//      newer value replaces the confirmed one it contradicts or supersedes; of values waiting together on one thing only
+//      the most recent is saved; a case-specific fact waits for an engine;
+//   4. keeps at most MEMORY_CAP confirmed facts per role: the least recent go;
+//   5. writes it all through rules/memory-records.ts tidyMemory and records one change per role in the change log, with
+//      what was merged, rewritten, dropped, saved and pruned as its evidence, and its undo (ChangeLog → undoMemoryTidy).
+//      A fact a tidy-up touched and the user undid is never touched again.
+// Facts with derived copies are left alone.
 // Used by brainmodel/jobs.ts mergeMemory; unit tests: test/unit/brainmodel/memory-tidy.test.ts.
 import { randomBytes } from 'node:crypto';
 import { queueMemoryInvalidation } from '../rules/memory-invalidations';
@@ -22,6 +25,8 @@ import { changeText } from './change-text';
 import type { JobContext, JobResult } from './jobs';
 
 const MAX_ASKED = 20, BATCH = 10, LINE = 300;
+/** confirmed facts kept per role (the owner 2026-10-24, ADR 0150): over it, the least recent go, in the Log with Annulla */
+export const MEMORY_CAP = 40;
 export const TIDY_SYSTEM = [
   'You tidy the long-term memory of an AI agent that works for one user. Memory must hold general, reusable knowledge:',
   'procedures, conventions, how-tos, where things are kept, who decides what, dead ends to skip; never what held in one case.',
@@ -32,8 +37,8 @@ export const TIDY_SYSTEM = [
   'Answer with JSON only: {"items":[{"id":"m1","keep":"the general rule"},{"id":"m2","drop":true}]}.',
 ].join(' ');
 
-type Line = { kind: 'merged' | 'known' | 'generalized' | 'dropped'; old: string; to?: string };
-interface Plan { retire: { id: string; reason: string }[]; generalize: { id: string; value: string }[]; lines: Line[] }
+type Line = { kind: 'merged' | 'known' | 'generalized' | 'dropped' | 'saved' | 'pruned'; old: string; to?: string };
+interface Plan { retire: { id: string; reason: string }[]; generalize: { id: string; value: string }[]; confirm: { id: string; replaces: string[] }[]; prune: { id: string; reason: string }[]; lines: Line[] }
 
 const sameScope = (a: MemoryScope, b: MemoryScope): boolean => a.roleId === b.roleId && a.userId === b.userId && a.project === b.project && a.repository === b.repository && a.environment === b.environment;
 const clip = (s: string, n = 160): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
@@ -59,12 +64,12 @@ export async function tidyMemoryJob(ctx: JobContext): Promise<JobResult> {
   let records: MemoryRecord[];
   try { records = readMemoryRecords(ctx.root); } catch (e) { return { job, changes: 0, note: `memoria non leggibile: ${e instanceof Error ? e.message : String(e)}`.slice(0, 200) }; }
   // the facts a tidy-up touched and the user undid: their undo is the decision
-  const undone = new Set(ctx.log.all().filter(c => c.job === job && c.rolledBackAt && c.memory).flatMap(c => [...c.memory!.retired, ...(c.memory!.proposedFrom ?? [])]));
+  const undone = new Set(ctx.log.all().filter(c => c.job === job && c.rolledBackAt && c.memory).flatMap(c => [...c.memory!.retired, ...(c.memory!.proposedFrom ?? []), ...(c.memory!.confirmed ?? [])]));
   const open = records.filter(r => r.validTo === null && (r.status === 'proposed' || r.status === 'confirmed') && !r.derivedFiles?.length && !undone.has(r.memoryId)
     && !(r.status === 'confirmed' && records.some(x => x.supersedes === r.memoryId))
     && !(r.status === 'proposed' && (r.supersedes || memoryConflicts(records, r).length)));
   const plans = new Map<string, Plan>(), gone = new Set<string>();
-  const plan = (r: MemoryRecord): Plan => { let p = plans.get(r.scope.roleId); if (!p) plans.set(r.scope.roleId, p = { retire: [], generalize: [], lines: [] }); return p; };
+  const plan = (r: MemoryRecord): Plan => { let p = plans.get(r.scope.roleId); if (!p) plans.set(r.scope.roleId, p = { retire: [], generalize: [], confirm: [], prune: [], lines: [] }); return p; };
   const retire = (r: MemoryRecord, reason: string, line: Line) => { gone.add(r.memoryId); const p = plan(r); p.retire.push({ id: r.memoryId, reason }); p.lines.push(line); };
 
   // 1. merges: proposed facts already known, proposed duplicates (the best one stays)
@@ -109,22 +114,71 @@ export async function tidyMemoryJob(ctx: JobContext): Promise<JobResult> {
     });
   }
 
-  // 3. one change per role, with its undo
+  // 3. what is left is saved without a card (ADR 0150): a newer value replaces the confirmed one it contradicts; a fact
+  // tied to one case waits for an engine to make it general, a fact the user undid stays as he left it
+  const live = (r: MemoryRecord) => r.validTo === null && !r.derivedFiles?.length && !undone.has(r.memoryId) && !gone.has(r.memoryId);
+  const saved = new Set<string>(), replaced = new Set<string>();
+  const lastAt = (r: MemoryRecord) => r.transitions?.at(-1)?.at ?? r.observedAt;
+  const waiting = records.filter(r => r.status === 'proposed' && live(r) && !memoryWorth(r.subject, r.predicate, r.value).specific);
+  const asConfirmed = waiting.map(x => ({ ...x, status: 'confirmed' as const }));
+  for (const r of waiting) {
+    // two values of one thing (or one fact twice) waiting together: only the most recent is saved, the others are merged
+    // into it; a value older than the confirmed one it contradicts is merged into that one, never put in its place
+    const later = memoryConflicts(records, r).find(x => lastAt(x) >= lastAt(r))
+      ?? [...memoryConflicts(asConfirmed, r), ...waiting.filter(x => x !== r && sameScope(x.scope, r.scope) && sameMemoryFact(x, r))]
+        .find(x => lastAt(x) > lastAt(r) || (lastAt(x) === lastAt(r) && x.memoryId < r.memoryId));
+    if (later) { retire(r, `merged:${later.memoryId}`, { kind: 'merged', old: r.value, to: later.value }); continue; }
+    const replaces = [...memoryConflicts(records, r).map(x => x.memoryId), ...(r.supersedes && records.some(x => x.memoryId === r.supersedes && x.status === 'confirmed' && !x.validTo) ? [r.supersedes] : [])]
+      .filter(id => !undone.has(id));
+    saved.add(r.memoryId); replaces.forEach(id => replaced.add(id));
+    const p = plan(r); p.confirm.push({ id: r.memoryId, replaces }); p.lines.push({ kind: 'saved', old: r.value });
+  }
+  // 4. at most MEMORY_CAP confirmed facts per role. What the user confirmed himself goes last; among the rest the least
+  // recent go first (a fact saved now counts from when it was written), so an old backlog saved in one pass never pushes
+  // out what he chose. A fact saved in place of another one is never dropped in the same pass.
+  const replacing = new Set(plans.size ? [...plans.values()].flatMap(p => p.confirm.filter(c => c.replaces.length).map(c => c.id)) : []);
+  const human = (r: MemoryRecord) => r.status === 'confirmed' && !!r.verification?.sourceEventId?.startsWith('human-review:');
+  const byRole = new Map<string, MemoryRecord[]>();
+  for (const r of records) {
+    if (!(r.status === 'confirmed' || saved.has(r.memoryId)) || r.validTo !== null || r.derivedFiles?.length || replaced.has(r.memoryId)) continue;
+    byRole.set(r.scope.roleId, [...(byRole.get(r.scope.roleId) ?? []), r]);
+  }
+  for (const list of byRole.values()) {
+    // a fact the user brought back with Annulla is his: it does not count, so his undo never pushes out another one
+    const over = list.filter(r => !undone.has(r.memoryId)).length - MEMORY_CAP;
+    if (over <= 0) continue;
+    const oldest = list.filter(r => !undone.has(r.memoryId) && !replacing.has(r.memoryId))
+      .sort((a, b) => Number(human(a)) - Number(human(b)) || lastAt(a).localeCompare(lastAt(b)) || a.memoryId.localeCompare(b.memoryId)).slice(0, over);
+    for (const r of oldest) {
+      const p = plan(r);
+      if (saved.has(r.memoryId)) {
+        // not saved after all: it stays out, as a proposal retired by the cap
+        p.confirm = p.confirm.filter(c => c.id !== r.memoryId);
+        p.lines = p.lines.filter(l => !(l.kind === 'saved' && l.old === r.value));
+        saved.delete(r.memoryId);
+        p.retire.push({ id: r.memoryId, reason: `cap:${MEMORY_CAP}` });
+      } else p.prune.push({ id: r.memoryId, reason: `cap:${MEMORY_CAP}` });
+      p.lines.push({ kind: 'pruned', old: r.value });
+    }
+  }
+
+  // 5. one change per role, with its undo
   let changes = 0;
   const now = new Date(ctx.now()).toISOString();
   for (const [role, p] of plans) {
-    if (!p.retire.length && !p.generalize.length) continue;
+    if (!p.retire.length && !p.generalize.length && !p.confirm.length && !p.prune.length) continue;
     const tag = `tidy-${randomBytes(6).toString('hex')}`;
-    const undo = tidyMemory(ctx.root, { retire: p.retire, generalize: p.generalize }, tag, now);
-    if (!undo.retired.length && !undo.added.length) continue;
+    const undo = tidyMemory(ctx.root, { retire: p.retire, generalize: p.generalize, confirm: p.confirm, prune: p.prune }, tag, now);
+    if (!undo.retired.length && !undo.added.length && !undo.confirmed?.length) continue;
     try { queueMemoryInvalidation(ctx.root, ['memory/records.json']); } catch { /* the search index catches up at its next read of the store */ }
     const count = (k: Line['kind']) => p.lines.filter(l => l.kind === k).length;
     const name = ctx.profiles().find(x => x.id === role || x.id.replace(/[^a-z0-9-]+/g, '-') === role)?.name ?? role;
     const evidence = p.lines.map(l => l.kind === 'generalized' ? `«${clip(l.old)}» → «${clip(l.to!)}»` : l.kind === 'merged' ? `unito a «${clip(l.to!)}»: «${clip(l.old)}»`
-      : l.kind === 'known' ? `già ricordato: «${clip(l.old)}»` : `tolto, legato a un caso: «${clip(l.old)}»`).slice(0, 40);
+      : l.kind === 'known' ? `già ricordato: «${clip(l.old)}»` : l.kind === 'saved' ? `salvato: «${clip(l.old)}»` : l.kind === 'pruned' ? `tolto, oltre i ${MEMORY_CAP} fatti: «${clip(l.old)}»`
+      : `tolto, legato a un caso: «${clip(l.old)}»`).slice(0, 40);
     ctx.log.record({ job, kind: 'memory', action: 'merge', target: `agents/${role}/memory.md`,
-      summary: changeText().memoryTidy({ agent: name, generalized: count('generalized'), merged: count('merged') + count('known'), dropped: count('dropped') }),
-      reason: 'La memoria tiene regole e procedure che si ripetono, non i dettagli di un caso solo: i fatti doppi sono uniti, quelli legati a un caso riscritti come regola generale o tolti.',
+      summary: changeText().memoryTidy({ agent: name, generalized: count('generalized'), merged: count('merged') + count('known'), dropped: count('dropped'), saved: count('saved'), pruned: count('pruned') }),
+      reason: `La memoria tiene regole e procedure che si ripetono, non i dettagli di un caso solo: i fatti doppi sono uniti, quelli legati a un caso riscritti come regola generale o tolti, gli altri salvati senza chiederti nulla, al massimo ${MEMORY_CAP} per agente.`,
       evidence, memory: undo }, []);
     changes++;
   }

@@ -10,8 +10,9 @@ import type { LearningEvidence, LearningReviewState, MemoryReviewRecord, ReplayC
 import type { SysCode, SysParams } from './sys';
 import type { AgentLifecycleDecide, AgentLifecycleSnapshot } from './agent-lifecycle';
 import type { ProposalDecide, ProposalDecideResult, ProposalsState } from './proposals';
-import type { AppIdeasState, MaintenanceSetup, ResearchOptions, ResearchRunInfo } from './maintenance-research';
+import type { MaintenanceDone, MaintenanceStatus } from './maintenance-research';
 import type { PackFinding } from './agent-pack';
+import type { VoiceAsr, VoiceName, VoiceState } from './voice';
 /** What the shareable brain zip holds (counts), or why it was not written: guard findings, or no brain / no guard. */
 export type BrainShareResult = { ok: true; path: string; skills: number; rules: number; roles: number; scripts: number; skipped: number } | { ok: false; findings: PackFinding[] } | { ok: false; error: string };
 import type { BrainModelState, ClassifiersState, MaintenanceJobId } from './brain-model';
@@ -300,12 +301,21 @@ export interface UiCards {
 export interface UiBoard { lanes: { title: string; status?: UiStatus; items: { title: string; detail?: string; status?: UiStatus; links?: UiLink[] }[] }[] }
 export interface UiDiffList { groups: { area: string; files: { path: string; why?: string; added?: number; removed?: number; href?: string }[] }[] }
 export interface UiBarChart { unit?: string; bars: { label: string; value: number; note?: string }[] }
+/** a question's brief (ADR 0150): what was done, its evidence and what Sì / No do, shown inside the question card so the
+ *  question never leans on the chat text before it (only with target next-ask) */
+export interface UiBrief {
+  done: string[]; ifYes: string; ifNo: string;
+  checks?: { label: string; status: UiStatus; detail?: string }[];
+  images?: { path: string; caption?: string }[];
+  files?: { path: string; why?: string; added?: number; removed?: number; href?: string }[];
+}
 export type UiSpec =
   | { component: 'table'; props: UiTable }
   | { component: 'cards'; props: UiCards }
   | { component: 'board'; props: UiBoard }
   | { component: 'diffList'; props: UiDiffList }
-  | { component: 'barChart'; props: UiBarChart };
+  | { component: 'barChart'; props: UiBarChart }
+  | { component: 'brief'; props: UiBrief };
 export type UiComponent = UiSpec['component'];
 /** chat = a card in the calling chat · orchestrator = in its Orchestrator's panel · next-ask = on its next question (else a card) */
 export type ArtifactTarget = 'chat' | 'orchestrator' | 'next-ask';
@@ -856,6 +866,9 @@ export interface Settings {
   suggestOn?: boolean;
   suggestModel?: boolean;
   suggestDailyUsd?: number;
+  /** voice mode (ADR 0152): which Whisper transcribes (fast = small, accurate = turbo) and which Italian voice speaks */
+  voiceAsr?: VoiceAsr;
+  voiceName?: VoiceName;
   /** fields forced by the environment (SB_BRAIN, SB_MCP_PORT): shown read-only, never saved */
   locked?: ('brainRoot' | 'mcpPort')[];
 }
@@ -886,7 +899,7 @@ export type SettingKey =
   | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'orchestratorDayCompact' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'tasks.enabled' | 'tasks.everyMin' | 'tasks.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
   | `orchestratorChats.${keyof OrchestratorChatDefaults}` | 'orchestratorOpacity' | 'orchestratorEvents' | 'runResults' | 'judging' | 'judgingSince' | 'appRepo' | 'projectsRoot' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'codexAutonomyRoots'
-  | 'suggestOn' | 'suggestModel' | 'suggestDailyUsd'
+  | 'suggestOn' | 'suggestModel' | 'suggestDailyUsd' | 'voiceAsr' | 'voiceName'
   | `delegation.${keyof DelegationSettings}` | `modelTiers.${Harness}.${ModelTier}`;
 export interface SettingDef {
   key: SettingKey;            // 'mute.*' stands for every feed kind
@@ -1134,6 +1147,10 @@ export interface OverlayModel {
   /** top is the absolute occupied bottom in content coordinates; right/bottom are edge reservations. */
   avoid?: { right: number; bottom: number; top?:number };
 }
+/** The look (color, icon) of a notice, the one notification design of the app and of the global layer
+ *  (renderer components/Notice.tsx, ADR 0151): attention = someone waits for the user's answer; celebrate = a big
+ *  finished job (the maintenance). */
+export type NoticeTone = 'info' | 'ok' | 'warn' | 'err' | 'attention' | 'celebrate';
 export interface OverlayToast {
   id: string;                 // group key (kind|chat)
   kind: string;
@@ -1142,7 +1159,7 @@ export interface OverlayToast {
   detail: string;
   count: number;              // grouped events of this kind (and chat)
   action: string;             // the one direct action: "Apri", "Rispondi"
-  tone: 'info' | 'ok' | 'warn' | 'err';
+  tone: NoticeTone;
 }
 /** The overlay page only renders the toasts: the app page acts on its behalf. */
 export type OverlayAction =
@@ -1364,21 +1381,14 @@ export interface InvokeMap {
   /** the maintenance button: run every job now (or one); every change is logged and can be undone */
   'brainmodel:maintain': [{ job?: MaintenanceJobId } | undefined, BrainModelState];
   'brainmodel:rollback': [{ id: string }, BrainModelState];
-  /** the «Manutenzione» dialog (ADR 0132): its defaults, the method prompt (the user's last edit) and the research
-   *  running or last ended */
   /** the working-line phrases of the day (main/daily-phrases.ts): null = the fixed ones */
   'phrases:today': [void, DailyPhrases | null];
-  'maintenance:setup': [void, MaintenanceSetup];
-  /** starts a research with what the user picked (the cleanup runs first, zero tokens); one at a time */
-  'maintenance:research': [ResearchOptions, ResearchRunInfo];
-  /** stops the running research chat */
-  'maintenance:stop': [void, MaintenanceSetup];
-  /** Memoria → «Idee dell'app» (ADR 0132): app ideas and bugs with their issue already written */
-  'maintenance:ideas': [void, AppIdeasState];
-  /** «Apri issue» / «Apri tutte»: the issues go to the open Orchestrator, which opens them on GitHub */
-  'maintenance:openIssues': [{ ids: string[] }, { sent: boolean; why?: string; state: AppIdeasState }];
-  /** «Scarta»: the idea leaves the tab (kept in the store as dismissed, never proposed again) */
-  'maintenance:dismissIdea': [{ id: string }, AppIdeasState];
+  /** the «Manutenzione» button (ADR 0153): one click runs the free cleanup, then the invisible research with the app's
+   *  best choice; the result arrives as cards and the end notice (maintenance:done). One at a time. */
+  'maintenance:run': [void, MaintenanceStatus];
+  'maintenance:status': [void, MaintenanceStatus];
+  /** stops the running research */
+  'maintenance:stop': [void, MaintenanceStatus];
   /** the brain's saved queries (ADR 0124): list, one with its code, delete through the ChangeLog (undo = brainmodel:rollback with changeId) */
   'queries:list': [void, BrainQueryList];
   'queries:get': [{ id: string }, BrainQuery];
@@ -1606,6 +1616,14 @@ export interface InvokeMap {
   'suggest:get': [SuggestRequest, SuggestAnswer];
   'suggest:cancel': [{ chatId: string }, void];
   'suggest:state': [void, SuggestState];
+  /** voice mode (ADR 0152, main/voice/): the models and the engine now; prepare = download the missing ones (the user's
+   *  click or first Ctrl+M); listen = the microphone opened or closed; audio = a 16 kHz mono chunk of it (never stored);
+   *  speak = Italian speech for a text (the renderer plays it) */
+  'voice:state': [void, VoiceState];
+  'voice:prepare': [void, VoiceState];
+  'voice:listen': [{ on: boolean }, void];
+  'voice:audio': [{ samples: Float32Array }, void];
+  'voice:speak': [{ text: string; voice?: VoiceName }, { samples: Float32Array; rate: number; error?: string }];
   'orchestrator:held': [void, HeldNewsState];
   /** the user opened a held news item's chat from the list: that chat's items are read, never wake the Orchestrator (#123) */
   'orchestrator:heldSeen': [{ chatId: string }, HeldNewsState];
@@ -1718,12 +1736,18 @@ export interface EventMap {
   'approvals:changed': void;
   /** the number of open proposals changed (Memoria's badge, ADR 0123) */
   'proposals:changed': { count: number };
-  /** the research started, moved (cost) or ended (ADR 0132) */
   'phrases:changed': void;
+  /** the maintenance started, moved (cost) or ended, or one of its cards changed (ADR 0132, 0153) */
   'maintenance:changed': void;
-  /** the «Idee dell'app» list changed */
+  /** one click's maintenance is over: what it made (the end notice, ADR 0153) */
+  'maintenance:done': MaintenanceDone;
   'cloud:changed': CloudState;
   'mcpservers:changed': McpServersState;
+  /** voice mode (ADR 0152): the models or the download changed; the user said something (transcribed); speech started
+   *  or stopped on the microphone */
+  'voice:changed': VoiceState;
+  'voice:heard': { text: string };
+  'voice:speech': { active: boolean };
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -1743,7 +1767,7 @@ export const INVOKE_CHANNELS = [
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
   'chat:userEvents', 'chat:synthesize', 'memory:reviewList', 'memory:confirm', 'memory:retract', 'memory:delete', 'learning:evidence', 'learning:state', 'learning:import', 'learning:replay', 'learning:saveCandidate', 'learning:promote', 'learning:compare', 'proposals:list', 'proposals:count', 'proposals:decide',
-  'phrases:today', 'maintenance:setup', 'maintenance:research', 'maintenance:stop', 'maintenance:ideas', 'maintenance:openIssues', 'maintenance:dismissIdea',
+  'phrases:today', 'maintenance:run', 'maintenance:status', 'maintenance:stop',
   'agents:list', 'skills:suggest', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'agents:estimates', 'runs:macro', 'agents:judgingEstimate', 'run:outcome', 'agents:restoreVersion', 'avatars:get', 'avatars:set', 'avatars:reset', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:plan', 'chat:stop',
   'brain:share', 'brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'queries:list', 'queries:get', 'queries:delete', 'brainmodel:noise', 'brainmodel:link', 'brainmodel:remove', 'classifiers:state', 'morning:brief', 'agents:trialDecide', 'agents:lifecycleDecide',
@@ -1762,13 +1786,14 @@ export const INVOKE_CHANNELS = [
   'search:query', 'search:status', 'search:retryModel', 'later:get', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
   'sync:get', 'sync:now', 'sync:resolve', 'headline:get', 'log:list',
   'suggest:get', 'suggest:cancel', 'suggest:state',
+  'voice:state', 'voice:prepare', 'voice:listen', 'voice:audio', 'voice:speak',
   'orchestrator:held', 'orchestrator:heldSeen',
   'cloud:list', 'cloud:start', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:readiness', 'cloud:dismiss',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
   'flows:changed',
   'work:changed',
-  'pulse:changed', 'approvals:changed', 'proposals:changed', 'maintenance:changed', 'phrases:changed',
+  'pulse:changed', 'approvals:changed', 'proposals:changed', 'maintenance:changed', 'maintenance:done', 'phrases:changed',
   'update:state', 'update:checkpointRequest', 'update:checkpointRelease',
   'progress:changed',
   'chat:autoCloseStatus',
@@ -1781,6 +1806,7 @@ export const EVENT_CHANNELS = [
   'scripts:changed',
   'log:events',
   'personal:changed',
+  'voice:changed', 'voice:heard', 'voice:speech',
 ] as const satisfies readonly EventChannel[];
 
 type Missing<All, Listed> = Exclude<All, Listed>;

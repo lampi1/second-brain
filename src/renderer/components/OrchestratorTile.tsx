@@ -156,7 +156,7 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
       {postponed.length > 0 && <InWindowLine reqs={postponed} queued testid="orchestrator-queued" />}
       {open.length > 0 && <InWindowLine reqs={open} testid="orchestrator-in-window" />}
       {/* in the place of the old "Novità" feed (#88): what the app holds back for this Orchestrator */}
-      <ChatInput ref={input} chat={chat} orchestrator testid="orchestrator-input" />
+      <ChatInput ref={input} chat={chat} orchestrator testid="orchestrator-input" voice="orchestrator" />
       <ChatMenu chat={chat} anchor={menuBtn} open={menu} onClose={() => setMenu(false)} onRename={() => setRenaming(true)} orchestrator />
     </section>
   );

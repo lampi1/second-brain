@@ -18,6 +18,7 @@ import { connectorsDe } from './areas/connectors.de';
 // The German UI texts (de-AT, ADR 0117): the same keys as it.ts, typed by it (a missing key fails the typecheck). Plain
 // German with "du", short like the Italian. Used through t() (i18n/index.ts).
 import { genuiRequestDe } from './areas/genui-request.de';
+import { voiceDe } from './areas/voice.de';
 import { studioDe } from './areas/studio.de';
 import { permissionsDe } from './areas/permissions.de';
 import { langSwitchDe } from './areas/lang-switch.de';
@@ -78,6 +79,7 @@ export const de: Dict = {
   ...estimateDe,
   ...logDe,
   ...genuiRequestDe,
+  ...voiceDe,
   'genui.request.question': 'Frage',
   'genui.request.permission': 'Berechtigung',
   'genui.request.from': ({ kind, chat, title }) => `${kind} von ${chat ?? 'einem Chat'}: ${title}`,

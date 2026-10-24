@@ -47,6 +47,6 @@ export function RulesPage() {
       : state && !rules.length ? <p className="bm-empty" data-testid="bm-rules-empty">{t('bm.rules.empty')}</p>
         : <div className="catalog-grid">{rules.map((r, i) => <RuleCard key={r.file} rule={r} index={i} />)}</div>}
     <LearnedRules />
-    <MaintenancePanel kinds={['rule']} job="corrections" testId="bm-maint-rules" />
+    <MaintenancePanel kinds={['rule']} testId="bm-maint-rules" />
   </div>;
 }
