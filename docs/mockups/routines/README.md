@@ -35,3 +35,16 @@ choice only if you expect to watch many runs at once more than you answer them.
 ## Before
 
 `png/prima-app-reale.png`: the current Routine page with a run blocked on «Execution adapter unavailable».
+
+## Owner's choice (2026-10-24): B, revised as v2
+
+Asked: routines as a core feature, clear and self-explaining UI, no side column he could not read, and a bugfix run
+must not stop for him (it has no reason to need a person). `b-una-cosa.html` is now v2:
+
+- tabs **Adesso / Routine / Storico**; «Adesso» shows only what needs him (here a prod step), then the runs working
+  by themselves with a colour legend;
+- a failed check heals by itself: the routine sends the work back to the step it names, with the error, up to the
+  attempt limit; only the last failure calls him;
+- «Routine» explains each routine in plain words: what it does, when it starts, filters, queue, last run;
+- an open routine shows its steps with role, model and effort, scripts by hash, «se fallisce» per step, the
+  trigger filters and the queue with «Svuota».
