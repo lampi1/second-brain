@@ -15,7 +15,7 @@ quanto un click». Not now: the app speaking on its own initiative (recaps). The
 - **Two states only**: muted, or voice mode. Ctrl+M (or the mic button that replaced the «Invio» hint in the
   Orchestrator's and Flash's inputs) toggles. On: a red frame, a steady red dot «In ascolto», volume bars while the user
   talks, «Trascrivo…», «Ti sto rispondendo» (Esc silences). Each utterance is sent to that chat as the user's message;
-  the chat's reply to it is read aloud (`replyToSpeak`: only turns that follow the user's own message since voice went
+  the chat's reply to it is read aloud (`turnToSpeak`: only turns that follow the user's own message since voice went
   on, never one the app or another chat started). While the app speaks the microphone is ignored (no echo loop).
 - **Questions by voice**: a question card on screen registers with `useVoiceQuestion` (renderer `lib/voice.ts`). In
   voice mode the app reads it, the bar says «In ascolto della tua risposta», and the next utterance goes to the card,
@@ -64,3 +64,27 @@ quanto un click». Not now: the app speaking on its own initiative (recaps). The
   system default and comes back by itself (matched by id, else by name). Call recording uses the same choice; a call
   keeps its microphone until it stops. The choice is per PC (device ids are), so it is kept in localStorage, not in the
   brain's settings. Pinned by `test/unit/mic.test.ts` and `test/e2e/mic-permission.spec.ts`.
+- Dictation and conversation split, faster and interruptible (owner, 2026-10-24, after a real try: «lentissima, non
+  posso interrompere l'ia mentre parla … il pulsante microfono già presente deve essere quello per sola trascrizione,
+  la modalità voce continua invece dalle impostazioni»; he asked to look at how documented voice agents do it first):
+  - The mic button / Ctrl+M only dictates: the words go into that input, nothing is sent or read aloud. The spoken
+    conversation with the Orchestrator is the «Conversazione a voce» switch in Settings → Voce (not saved: the mic
+    never opens by itself at start).
+  - The reply is read while it streams (`turnToSpeak` + `settledText`): each finished sentence is synthesized at once,
+    the next one while the current one plays (`speechChunks`), instead of waiting for the whole turn and its whole
+    synthesis. Same idea as the voice-agent pipelines that send LLM text to TTS by sentence
+    (https://simbavoice.ai/resources/streaming-llm-outputs-to-voice-the-engineering) and prefetch the next segment
+    (https://www.vellum.ai/blog/vellum-assistant-ai-speech-pipeline-explained).
+  - Barge-in: the mic keeps listening while the app speaks (echo cancellation on; Chromium's AEC also covers WebAudio
+    output, https://devforum.zoom.us/t/issupportchromewideaec-sniffs-browser-name-version-breaking-echo-cancellation-on-microsoft-edge/145288).
+    Speech the VAD confirms (≥ 250 ms) and louder than `BARGE_LEVEL` stops the voice at once and drops the rest of that
+    reply; quieter speech while it talks is taken as its own echo and dropped. Pipecat stops TTS and drains playback on
+    a user turn start (https://docs.pipecat.ai/pipecat/fundamentals/interruptions); Vellum yields only to about 250 ms of
+    sustained speech so its own echo does not cut it off. `BARGE_LEVEL` is not calibrated on the owner's PC yet.
+  - Turn end: the VAD closes an utterance after 0.5 s of silence (0.8 before; 500 ms is the value in OpenAI's Realtime
+    VAD example, https://developers.openai.com/api/docs/guides/realtime-vad), and a conversation holds what was heard
+    0.7 s more for the rest of the thought before sending (like Pipecat's speech timeout after silence,
+    https://docs.pipecat.ai/guides/learn/speech-input). No semantic end-of-turn model yet.
+  - The engine loads Whisper (and, for a conversation, the voice) when listening starts; the voice has its own queue,
+    so a sentence never waits behind Whisper and the user's words never wait behind a long reply; Whisper gets more
+    cores.

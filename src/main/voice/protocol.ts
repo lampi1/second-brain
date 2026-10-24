@@ -5,7 +5,8 @@ export type VoiceIn =
   | { type: 'init'; root: string; asr: VoiceAsr }
   | { type: 'state'; asr: VoiceAsr; voice: VoiceName }
   | { type: 'prepare'; asr: VoiceAsr; voice: VoiceName }
-  | { type: 'listen'; on: boolean; asr: VoiceAsr }
+  /** on: Whisper (and, for a conversation, the voice) load now, not at the first sentence */
+  | { type: 'listen'; on: boolean; asr: VoiceAsr; voice?: VoiceName }
   | { type: 'audio'; samples: Float32Array }
   | { type: 'speak'; id: number; text: string; voice: VoiceName }
   | { type: 'unload'; asr: VoiceAsr }

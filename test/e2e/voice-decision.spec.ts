@@ -1,15 +1,15 @@
-// E2E: a decision card answered by voice (ADR 0150 + 0152, wired by ADR 0154): with voice mode on, the question card
+// E2E: a decision card answered by voice (ADR 0150 + 0152, wired by ADR 0154): with the voice conversation on (Settings → Voce), the question card
 // in the questions window is read aloud and the fake engine's «sì» is the click on Sì: the card closes and the chat
 // gets the answer. Demo app, fake voice engine (SB_VOICE_FAKE_TEXT).
 import { expect, test, type ElectronApplication } from '@playwright/test';
-import { launchDemo } from './helpers';
+import { goPage, launchDemo } from './helpers';
 
 type D = { stop(id: string): Promise<void>; ask(id: string, r: object): void };
 const demo = <A extends unknown[]>(app: ElectronApplication, fn: (d: D, ...a: A) => unknown, ...a: A) =>
   app.evaluate((_e, [src, args]) => { const d = (globalThis as unknown as { __sbDemo: D }).__sbDemo; return new Function('d', 'a', `return (${src})(d, ...a)`)(d, args); }, [fn.toString(), a] as const);
 const Q = 'Faccio il merge della PR?';
 
-test('voice mode: «sì» answers the open decision card', async () => {
+test('voice conversation: «sì» answers the open decision card', async () => {
   test.setTimeout(90_000);
   const { app, page } = await launchDemo({ env: { SB_VOICE_FAKE_TEXT: 'Sì.' } });
   try {
@@ -34,7 +34,10 @@ test('voice mode: «sì» answers the open decision card', async () => {
     // nothing answers it by itself
     await page.waitForTimeout(1500);
     await expect(page.getByTestId('qwin-card')).toHaveCount(1);
-    await page.keyboard.press('Control+m');
+    // dictation never answers a card: only the conversation does
+    await goPage(page, 'impostazioni');
+    // (the questions window covers the page: the switch is clicked through it, as if the window were moved aside)
+    await page.getByTestId('st-voice-talk-on').evaluate(el => (el as HTMLElement).click());
     await expect(page.getByTestId('qwin-card')).toHaveCount(0, { timeout: 15_000 });
     const answers = await app.evaluate(() => (globalThis as unknown as { __answers: unknown[] }).__answers);
     expect(answers).toEqual([expect.objectContaining({ chatId: 'fix', answer: { kind: 'question', answers: { [Q]: 'Sì' } } })]);

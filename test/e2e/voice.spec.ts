@@ -1,12 +1,12 @@
-// E2E of voice mode (ADR 0152) on the frozen demo, whose voice engine is the fake one (main/voice/service.ts: no
-// models, no microphone needed, it "hears" one sentence per listening session and speaks a short silence). The
-// Orchestrator's and Flash's inputs show the mic and no «Invio» hint; Ctrl+M turns voice on (red border, the steady red
-// dot «In ascolto»), the heard sentence goes to the Orchestrator as the user's message, Ctrl+M turns it off again.
-// Settings → Voce shows the three rows. Screenshots dark.
+// E2E of voice (ADR 0152) on the frozen demo, whose voice engine is the fake one (main/voice/service.ts: no models, no
+// microphone needed, it "hears" one sentence per listening session and speaks a short silence). The Orchestrator's and
+// Flash's inputs show the mic and no «Invio» hint; Ctrl+M turns dictation on (red border, «Detta»), the heard sentence
+// is written into the input and NOT sent, Ctrl+M turns it off again. Settings → Voce «Conversazione a voce» is the
+// spoken conversation: the heard sentence goes to the Orchestrator as the user's message. Screenshots dark.
 import { expect, test } from '@playwright/test';
 import { goPage, launchDemo, shot } from './helpers';
 
-test('voice mode: mic instead of «Invio», Ctrl+M on and off, the heard words go to the Orchestrator, Settings → Voce', async () => {
+test('voice: the mic dictates into the input, the conversation is switched on in Settings → Voce', async () => {
   test.setTimeout(90_000);
   const { app, page } = await launchDemo();
   try {
@@ -28,9 +28,13 @@ test('voice mode: mic instead of «Invio», Ctrl+M on and off, the heard words g
     await expect(bar.locator('.voice-dot')).toBeVisible();
     await shot(page, 'voice-listening-dark');
 
-    // the fake engine hears one sentence: it is the user's message in the Orchestrator's chat
+    await expect(bar).toHaveAttribute('data-mode', 'dictate');
+    // the fake engine hears one sentence: dictation writes it into the input, nothing is sent
     const said = 'Ciao, cosa c’è di nuovo?';
-    await expect(page.getByTestId('tile-orchestrator').getByText(said).first()).toBeVisible({ timeout: 10_000 });
+    await expect(input).toHaveValue(said, { timeout: 10_000 });
+    await page.waitForTimeout(1200);
+    await input.fill('');
+    await expect(page.getByTestId('tile-orchestrator').getByText(said)).toHaveCount(0); // never sent
 
     // off again: no bar, mic released
     await page.keyboard.press('Control+m');
@@ -52,6 +56,17 @@ test('voice mode: mic instead of «Invio», Ctrl+M on and off, the heard words g
     await page.getByTestId('st-voice-name-miro').click();
     await expect(page.getByTestId('st-voice-name-miro')).toHaveAttribute('aria-checked', 'true');
     await shot(page, 'voice-settings-dark');
+
+    // the conversation: switched on here, the heard sentence is the user's message to the Orchestrator
+    const talk = page.getByTestId('st-voice-talk-on');
+    await talk.click();
+    await expect(talk).toHaveAttribute('aria-checked', 'true');
+    await expect(bar).toHaveAttribute('data-mode', 'talk');
+    await expect(page.getByTestId('tile-orchestrator').getByText(said).first()).toBeVisible({ timeout: 10_000 });
+    await expect(input).toHaveValue('');
+    await talk.click();
+    await expect(talk).toHaveAttribute('aria-checked', 'false');
+    await expect(bar).toHaveCount(0);
   } finally {
     await app.close();
   }

@@ -26,19 +26,25 @@ const lib = () => {
 };
 let root = '';
 let vad: any = null, rec: any = null, recFor = '', tts: any = null, ttsFor = '';
-const threads = () => Math.max(1, Math.min(4, Math.floor((globalThis.navigator?.hardwareConcurrency ?? 4) / 2)));
+const cores = () => globalThis.navigator?.hardwareConcurrency ?? 4;
+const threads = () => Math.max(1, Math.min(4, Math.floor(cores() / 2)));
+/** Whisper is the wait between the end of a sentence and its text: it gets most of the cores (the voice runs beside it) */
+const asrThreads = () => Math.max(1, Math.min(8, cores() - 2));
 
+/** silence that ends an utterance: 0.5 s, the value OpenAI's Realtime VAD example uses (0.8 before: each sentence waited
+ *  that much longer); a conversation still holds what was heard 0.7 s more for the rest of the thought (lib/voice.ts) */
+const SILENCE_S = 0.5;
 function vadNow(): any {
   if (vad) return vad;
   const s = lib();
-  vad = new s.Vad({ sileroVad: { model: path.join(partDir(root, VAD), 'silero_vad.onnx'), threshold: 0.5, minSilenceDuration: 0.8, minSpeechDuration: 0.25, maxSpeechDuration: 25, windowSize: 512 }, sampleRate: VOICE_RATE, numThreads: 1, debug: 0 }, 60);
+  vad = new s.Vad({ sileroVad: { model: path.join(partDir(root, VAD), 'silero_vad.onnx'), threshold: 0.5, minSilenceDuration: SILENCE_S, minSpeechDuration: 0.25, maxSpeechDuration: 25, windowSize: 512 }, sampleRate: VOICE_RATE, numThreads: 1, debug: 0 }, 60);
   return vad;
 }
 function recNow(asr: VoiceAsr): any {
   if (rec && recFor === asr) return rec;
   const d = partDir(root, ASR[asr]);
   rec = new (lib().OfflineRecognizer)({ featConfig: { sampleRate: VOICE_RATE, featureDim: 80 },
-    modelConfig: { whisper: { encoder: path.join(d, 'encoder.onnx'), decoder: path.join(d, 'decoder.onnx'), language: 'it', task: 'transcribe', tailPaddings: -1 }, tokens: path.join(d, 'tokens.txt'), numThreads: threads(), provider: 'cpu', debug: 0 } });
+    modelConfig: { whisper: { encoder: path.join(d, 'encoder.onnx'), decoder: path.join(d, 'decoder.onnx'), language: 'it', task: 'transcribe', tailPaddings: -1 }, tokens: path.join(d, 'tokens.txt'), numThreads: asrThreads(), provider: 'cpu', debug: 0 } });
   recFor = asr;
   return rec;
 }
@@ -59,6 +65,10 @@ let queue: Promise<void> = Promise.resolve();
 const later = (fn: () => Promise<void> | void) => { queue = queue.then(fn, fn).catch(e => send({ type: 'error', message: msg(e) })); };
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 /** `later`, with the job's own result or failure */
+/** the voice has its own line: a sentence to say never waits behind Whisper, and Whisper (the user talking over it)
+ *  never waits behind a long reply */
+let speakQueue: Promise<void> = Promise.resolve();
+const laterSpeak = (fn: () => Promise<void> | void) => { speakQueue = speakQueue.then(fn, fn).catch(e => send({ type: 'error', message: msg(e) })); };
 const queued = <T>(fn: () => Promise<T>) => new Promise<T>((res, rej) => later(async () => { try { res(await fn()); } catch (e) { rej(e); } }));
 
 /** a recording's transcription (ADR 0154): its own VADs, Whisper shared with voice mode through the queue */
@@ -91,14 +101,17 @@ function drain(): void {
     const seg = v.front(false); // a copy: the native buffer is freed by pop() before Whisper runs
     v.pop();
     const samples: Float32Array = seg.samples;
+    const ms = Math.round((samples.length / VOICE_RATE) * 1000);
     later(async () => {
-      if (!partReady(root, ASR[asrNow])) throw new Error('Whisper non è ancora scaricato: Impostazioni → Voce.');
-      const r = recNow(asrNow);
-      const stream = r.createStream();
-      stream.acceptWaveform({ samples, sampleRate: VOICE_RATE });
-      const out = await r.decodeAsync(stream);
-      const text = String(out?.text ?? '').trim();
-      if (text) send({ type: 'heard', text, ms: Math.round((samples.length / VOICE_RATE) * 1000) });
+      // one 'heard' per utterance, empty when nothing was understood: the renderer pairs each with its start
+      let text = '';
+      try {
+        if (!partReady(root, ASR[asrNow])) throw new Error('Whisper non è ancora scaricato: Impostazioni → Voce.');
+        const r = recNow(asrNow);
+        const stream = r.createStream();
+        stream.acceptWaveform({ samples, sampleRate: VOICE_RATE });
+        text = String((await r.decodeAsync(stream))?.text ?? '').trim();
+      } finally { send({ type: 'heard', text, ms }); }
     });
   }
 }
@@ -124,7 +137,10 @@ port.on('message', ({ data: m }) => {
       })().catch(e => send({ type: 'error', message: msg(e) })).finally(() => { preparing = false; }); return;
       case 'listen':
         asrNow = m.asr;
-        if (!m.on) { if (vad) { vad.flush(); drain(); vad.reset(); } lastDetected = false; tail = new Float32Array(0); }
+        if (!m.on) { if (vad) { vad.flush(); drain(); vad.reset(); } lastDetected = false; tail = new Float32Array(0); return; }
+        // loaded now, so the first sentence does not also pay for loading the models
+        later(() => { if (partReady(root, ASR[m.asr])) recNow(m.asr); });
+        if (m.voice) { const v = m.voice; laterSpeak(() => { if (partReady(root, TTS[v])) ttsNow(v); }); }
         return;
       case 'audio': {
         if (!partReady(root, VAD)) { if (!warned) send({ type: 'error', message: 'Modelli della voce mancanti: scaricali da Impostazioni → Voce.' }); warned = true; return; }
@@ -140,7 +156,7 @@ port.on('message', ({ data: m }) => {
         drain();
         return;
       }
-      case 'speak': later(async () => {
+      case 'speak': laterSpeak(async () => {
         try {
           const audio = await ttsNow(m.voice).generateAsync({ text: m.text, sid: 0, speed: 1, enableExternalBuffer: false }) // Electron's memory cage refuses external buffers;
           send({ type: 'spoken', id: m.id, samples: audio.samples, rate: audio.sampleRate });
