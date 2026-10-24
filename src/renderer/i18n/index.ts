@@ -55,3 +55,11 @@ export function sysText(item: Extract<ChatItem, { kind: 'system' }>): string {
   const m = dict()[key] as string | ((p: unknown) => string);
   return typeof m === 'function' ? m(item.params ?? {}) : m;
 }
+
+/** The plain texts (no parameters) of the current language whose key passes `keep`: the app map reads its help and
+ *  page subtitles from here (lib/app-map.ts, app_guide), so it says what the UI says. */
+export function textsWhere(keep: (key: string) => boolean): Record<string, string> {
+  const d = dict() as Record<string, unknown>, out: Record<string, string> = {};
+  for (const k of Object.keys(d)) if (keep(k) && typeof d[k] === 'string') out[k] = d[k] as string;
+  return out;
+}

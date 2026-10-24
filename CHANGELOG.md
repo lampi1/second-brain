@@ -6,6 +6,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- **The Orchestrator knows the app and changes its configuration** (ADR 0149): `app_guide` reads the app map live
+  (rail, pages, Memoria tabs, Settings sections, shortcuts, help, every setting with its value, active routines),
+  `app_ui` «outline» says what is on screen and where, and `app_config` changes settings (protected ones too), the
+  view, role cards, connectors and «Rispondi dopo» when the user asks, logged with Annulla; a named routine starts at once.
 - **Maintenance with research** (ADR 0132): the «Manutenzione» button in the top bar opens a dialog; besides the free
   cleanup, «Ricerca e miglioramento» runs one chat on the engine, model and effort chosen, with a spending cap and the
   prompt shown and editable. Its findings are big cards with what is added and removed (what to forget included);

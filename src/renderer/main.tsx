@@ -22,6 +22,7 @@ import { startTypingWatch } from './lib/questions';
 import { OverlayApp } from './components/OverlayApp';
 import { BrainTestRoute, isBrainTestRoute } from './brain/testRoute';
 import { startLater } from './lib/later';
+import { installAppMap } from './lib/app-map';
 import { LangRoot, startLang } from './i18n/LangRoot';
 import { Splash } from './components/Splash';
 import { splashMode, type SplashMode } from './lib/splash';
@@ -59,6 +60,7 @@ if (isBrainTestRoute()) {
   startInputLag(); // key → letter on screen, one summary a minute to the `perf` log while the user types
   startFocusKeeper();
   startTypingWatch();
+  installAppMap(); // the Orchestrator's app map and live screen outline (app_guide, app_ui outline)
   setInterval(() => checkDnd(now()), 60_000);
   started = true;
   for (const cmd of early.splice(0)) uiCommand(cmd);

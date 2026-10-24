@@ -82,6 +82,7 @@ import { devopsWriteTools } from './flows/devops-write-tool';
 import { testDbReadTools } from './flows/test-db-tool';
 import { testDbCredential } from './flows/test-db-env';
 import { AGENT_LABEL, appControlTools, orchestratorEndpointAuth, type ToolDef, type ToolOut } from './appctl/tools';
+import { readUi } from './appctl/guide';
 import { ChatMail, mailTools } from './chats/mail';
 import { brainClassifier } from './chats/orchestrator-delivery';
 import { readOrchestratorMail } from './brain/brain-settings';
@@ -809,7 +810,14 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     },
     tell: (chatId, text) => chats.send(chatId, text),
   });
-  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, flows, personal, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog } };
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, flows, personal, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog },
+    // app_config (ADR 0149): each area through the module the app's own page uses
+    config: {
+      view: { read: () => readUi(ctx.window(), 'typeof window.__sbView === "function" ? window.__sbView() : null'), apply: patch => readUi(ctx.window(), `typeof window.__sbSetView === "function" ? window.__sbSetView(${JSON.stringify(JSON.stringify(patch))}) : null`) },
+      agents: { list: () => agents.list(), save: (draft, id, reason) => agentPacks.learning.save(draft, id, reason), history: id => agents.history(id), restore: (id, version) => agents.restoreVersion(id, version) },
+      mcp: { state: () => mcpServers.state(), save: a => mcpServers.save(a), setAccess: a => mcpServers.setAccess(a) },
+      later: { get: () => later.get(), set: on => later.set(on) },
+    } };
   attachAppTools(mcp, appDeps, source, false, orchestratorTokens);
 
   // Task page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
