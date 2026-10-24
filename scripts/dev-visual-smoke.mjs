@@ -108,6 +108,37 @@ try {
   await page.getByTestId('mh-tab-statistiche').click();
   await page.getByTestId('mm-insights').waitFor();
   await capture('memory');
+  // Synthetic definition only: inspect fullscreen step details without launching any flow or provider.
+  const flow = { id: 'visual-flow', title: 'Revisione documento — demo sintetica', description: 'Ogni passaggio mostra descrizione, ruolo, livello e modello.', aliases: [], scope: { project: 'Demo sintetica' }, steps: Array.from({ length: 6 }, (_, i) => ({
+    id: `step-${i}`, title: `${i + 1}. ${['Analisi', 'Piano', 'Implementazione', 'Review', 'Verifica', 'Riepilogo'][i]}`,
+    kind: 'agent', role: i === 3 ? 'sentinel' : 'artisan', tier: 'mid',
+    instructions: `Descrizione completa del passaggio ${i + 1}. Controlla i documenti selezionati e registra il risultato.\nMantieni visibili i vincoli e le evidenze prima di proseguire.`,
+    inputs: ['workspace'], workspaceInput: 'workspace', evidence: ['Report del passaggio e risultato verificabile.'], timeoutMs: 60000, maxAttempts: 2, effect: 'read-only',
+  })) };
+  const flowSnapshot = { contextKey: 'synthetic-visual-flow', drafts: [], active: { [flow.id]: 1 }, versions: [{ definition: flow, version: 1, draftRevision: 1, digest: 'visual-only', activatedAt: 1 }], runs: [], roles: Object.fromEntries(['artisan', 'sentinel'].map(role => [role, {
+    name: role === 'artisan' ? 'Artisan' : 'Sentinel', avatar: { kind: 'character', value: role }, tier: 'mid', tierMax: 'top', model: null, models: { mid: 'demo-model' },
+  }])) };
+  await page.getByTestId('nav-flussi').click();
+  await page.getByTestId('flow-import-open').waitFor();
+  await app.evaluate(({ BrowserWindow }, snapshot) => {
+    const win = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:') && !w.webContents.getURL().includes('#overlay'));
+    win.webContents.send('flows:changed', snapshot);
+  }, flowSnapshot);
+  await page.getByTestId('flow-fullscreen-open').click();
+  const fullscreen = page.getByTestId('flow-fullscreen');
+  await fullscreen.getByTestId('flow-fullscreen-steps').waitFor();
+  await capture('flow-fullscreen-details');
+  await fullscreen.locator('.flow-step').last().scrollIntoViewIfNeeded();
+  await capture('flow-fullscreen-last-step');
+  await app.evaluate(({ BrowserWindow }) => {
+    const win = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:') && !w.webContents.getURL().includes('#overlay'));
+    win.setMinimumSize(0, 0);
+    win.setContentSize(600, 900);
+  });
+  await fullscreen.locator('.flow-step').first().scrollIntoViewIfNeeded();
+  if (await page.evaluate(() => window.innerWidth) > 600) throw new Error('Narrow fullscreen capture did not resize');
+  await capture('flow-fullscreen-narrow');
+  await page.keyboard.press('Escape');
   // The demo has no review services. A separate isolated SB_TEST instance reads a clearly synthetic memory
   // store through the real services; no replay/run actions are clicked and all automatic work stays disabled.
   await app.close();
