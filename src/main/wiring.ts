@@ -840,6 +840,15 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       agents: { list: () => agents.list(), save: (draft, id, reason) => agentPacks.learning.save(draft, id, reason), history: id => agents.history(id), restore: (id, version) => agents.restoreVersion(id, version) },
       mcp: { state: () => mcpServers.state(), save: a => mcpServers.save(a), setAccess: a => mcpServers.setAccess(a) },
       later: { get: () => later.get(), set: on => later.set(on) },
+      // the Routine page's own calls (index.ts flows:*), on the selected brain
+      routine: {
+        snapshot: () => flows.snapshot(),
+        pauseTrigger: (id, expectedRevision, paused) => { flows.automation().pause({ id, expectedRevision, paused }); },
+        pauseAll: (expectedRevision, paused) => { flows.automation().control({ expectedRevision, paused }); },
+        clearQueue: (id, count) => flows.automation().clearQueue({ id, count }),
+        editFilters: input => { flows.automation().editFilters(input); },
+        pauseRun: (runId, expectedRevision, paused) => { flows.pauseRun(runId, expectedRevision, paused); },
+      },
     } };
   attachAppTools(mcp, appDeps, source, false, orchestratorTokens);
 

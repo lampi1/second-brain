@@ -9,6 +9,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - **Microphone choice in Settings → Voce** (ADR 0152): the PC's microphones, updated when one is plugged in or out; a
   USB microphone plugged in is used at once (with «Annulla»), an unplugged one falls back to the default. Voice mode and
   call recording both use it.
+- **The Orchestrator handles routine triggers** (ADR 0149): on your ask it resumes or pauses a trigger, changes its
+  filters (tags, ids, iteration, max per hour), empties its queue after telling you the count, pauses a run, and knows how
+  each pause behaves.
 - **Routines run by the app** (ADR 0155): the app starts, advances, retries and finishes routines with no Orchestrator
   open; a failed check sends the work back to the step it names and only the last failure calls you. Routine page with
   Adesso / Routine / Storico, trigger filters (tags in/out, ids, iteration, max per hour), «Avvia su un work item» with

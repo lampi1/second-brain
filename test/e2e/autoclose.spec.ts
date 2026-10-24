@@ -4,24 +4,20 @@
 import { expect, test } from '@playwright/test';
 import { launchDemo, shot } from './helpers';
 
-test('a real backend deadline is visible with an accessible keep-open action, and stays below a modal', async () => {
+test('a real backend deadline shows only on the chat tile, with no global popup', async () => {
   const { app, page } = await launchDemo();
   try {
+    await expect(page.getByTestId('tile-chat-fix')).toBeVisible();
     await app.evaluate(({ BrowserWindow }) => {
       const now = performance.timeOrigin + performance.now();
       BrowserWindow.getAllWindows()[0]!.webContents.send('chat:autoCloseStatus', [{ chatId: 'fix', deadline: now + 119_000, warningStartedAt: now, clockAt: now, generation: 7, keptOpen: false, reason: null }]);
     });
-    const warning = page.getByTestId('autoclose-warnings');
-    await expect(warning).toBeVisible();
-    await expect(warning).toContainText('Chiusura automatica tra');
-    await expect(warning.getByRole('button', { name: 'Resta aperto', exact: true })).toBeVisible();
-    await expect(page.getByTestId('tile-chat-fix')).toBeVisible();
+    const notice = page.getByTestId('autoclose-notice-fix');
+    await expect(notice).toBeVisible();
+    await expect(notice).toContainText('Chiusura automatica tra');
+    await expect(notice.getByRole('button', { name: 'Resta aperto', exact: true })).toBeVisible();
+    await expect(page.getByTestId('autoclose-warnings')).toHaveCount(0);
     await shot(page, 'autoclose-real-deadline');
-    await page.keyboard.press('Control+/');
-    await expect(page.getByTestId('shortcuts')).toBeVisible();
-    await expect(warning).not.toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(warning).toBeVisible();
   } finally { await app.close(); }
 });
 

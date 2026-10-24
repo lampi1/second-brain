@@ -190,7 +190,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   // app_guide's own list of the caller's tools is read when asked, so it names exactly what this endpoint offers
   const guideDeps = { window: d.window, settings: { schema: () => d.brain.settingsSchema(), get: () => d.brain.settings() },
     tools: () => tools.map(t => ({ name: t.name, description: t.description })), personalShown: () => !!d.personal?.anyShown(), showValues: authed,
-    ...(d.flows ? { flows: () => { try { return d.flows!.service().snapshot(); } catch { return null; } } } : {}) };
+    ...(d.flows ? { flows: () => { try { return d.flows!.snapshot(); } catch { return null; } } } : {}) };
   const tools: ToolDef[] = [
     guideTool(guideDeps),
     ...(d.config && authed() ? [configTool({ ...d.config, brain: d.brain, callerId: callerId!, userAsked: () => configAsked(callerId!) })] : []),

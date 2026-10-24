@@ -50,6 +50,17 @@ line with the token plan, ADR 0089):
 A rule line tells the Orchestrator to use these instead of memory, to make the change itself (no work chat) and to start
 a routine the user names at once (`app_flow_match`, then `app_flow_start`).
 
+### Routines (amendment, 2026-10-24)
+
+The owner found the Orchestrator sending him to the Routine page to resume a trigger, empty its queue and pause a run,
+and saying triggers cannot filter by tag or id. `app_config` area `routine` now makes the Routine page's own calls of
+ADR 0155: a trigger on/off (`automation.pause`), every trigger (`control`), the filters (`editFilters`, only the
+fields asked, as given), «Svuota coda» with the count the user was told (`clearQueue`, no undo), one run's pause
+(`pauseRun`). Same proof of the user's ask as every other change. Approving a new or changed trigger, DevOps write
+rights and a prod «Esegui» stay the user's click. `app_guide` shows each routine's trigger state, what it watches, its
+filters and queue, and how pauses behave: a paused trigger starts nothing (not even one item); runs already started keep
+going but lose its DevOps writes at once; pausing a run lets the step at work finish and starts no new one.
+
 ## Consequences
 
 A new page, tab, setting, shortcut or help text reaches the Orchestrator with no extra work. A Settings section must be

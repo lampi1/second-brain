@@ -2,7 +2,6 @@
 import type { auditIt } from './audit.it';
 export const auditDe: Record<keyof typeof auditIt, string> = {
   "audit.AutoCloseNotice.requestNotConfirmedTryAgainTo": "Anfrage nicht bestätigt. Versuch es nochmal, um den Agenten offen zu halten.",
-  "audit.AutoCloseNotice.agentsClosingSoon": "Agenten werden bald geschlossen",
   "audit.BrowserTile.back": "Zurück",
   "audit.BrowserTile.forward": "Vor",
   "audit.BrowserTile.reload": "Neu laden",

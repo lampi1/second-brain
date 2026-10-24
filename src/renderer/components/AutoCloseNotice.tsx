@@ -1,13 +1,9 @@
-// Discreet countdown from the authoritative backend deadline. Also listed globally for off-screen agents.
+// Discreet countdown from the authoritative backend deadline, on the chat's own tile only (no global popup).
 // A held work chat shows instead what it waits for ("In attesa di…", #86, ADR 0084): main names it, never the renderer.
 import { t as auditText } from '../i18n';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useNow } from '../lib/clock';
 import { autoCloseRemaining, autoCloseState, keepAgentOpen } from '../store/auto-close';
-import { useApp } from '../store/store';
-import { focusChat } from '../actions';
-import { registerOverlay } from '../lib/viewports';
-import { ui } from '../store/ui';
 import '../styles/auto-close.css';
 
 export function AutoCloseNotice({ chatId }: { chatId: string }) {
@@ -27,25 +23,4 @@ export function AutoCloseNotice({ chatId }: { chatId: string }) {
     <button type="button" className="link-btn" onClick={() => void keepAgentOpen(chatId, !row.keptOpen).then(ok => setFailed(!ok))}>{row.keptOpen ? auditText('auditExpression.AutoCloseNotice.text7') : auditText('auditExpression.AutoCloseNotice.text5')}</button>
     {failed && <span role="alert">{auditText('audit.AutoCloseNotice.requestNotConfirmedTryAgainTo')}</span>}
   </div>;
-}
-export function AutoCloseWarnings() {
-  const ref = useRef<HTMLElement>(null);
-  const modal = ui.use(s => !!s.modal || s.map);
-  const rows = autoCloseState.use(s => s), chats = useApp(s => s.chats);
-  useNow(1_000);
-  const [announcement, announce] = useState('');
-  const announced = useRef(new Set<string>());
-  const warnings = rows.filter(r => !r.keptOpen && r.deadline !== null && autoCloseRemaining(r) <= 120_000 && chats[r.chatId] && !chats[r.chatId]?.closedAt);
-  const warningKeys = warnings.map(r => `${r.chatId}:${r.generation}`).join('|');
-  useEffect(() => {
-    const fresh = warnings.filter(row => !announced.current.has(`${row.chatId}:${row.generation}`));
-    if (fresh.length && !modal) {
-      for (const row of fresh) announced.current.add(`${row.chatId}:${row.generation}`);
-      announce(auditText('cmp.autoClose.announce', { names: fresh.map(r => chats[r.chatId]?.title ?? auditText('cmp.autoClose.anAgent')).join(', ') }));
-    }
-  }, [warningKeys, modal]);
-  useLayoutEffect(() => { if (ref.current) return registerOverlay(ref.current); }, [warnings.length]);
-  return <><span className="sr-only" role="status" aria-live="polite">{announcement}</span>{warnings.length > 0 && <aside ref={ref} hidden={modal} className="autoclose-warnings" aria-label={auditText('audit.AutoCloseNotice.agentsClosingSoon')} data-testid="autoclose-warnings">
-    {warnings.map(row => <div key={row.chatId}><button type="button" className="link-btn" onClick={() => focusChat(row.chatId)}>{chats[row.chatId]?.title ?? auditText('auditExpression.AutoCloseNotice.text9')}</button><AutoCloseNotice chatId={row.chatId} /></div>)}
-  </aside>}</>;
 }
