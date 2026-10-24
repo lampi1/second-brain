@@ -4,7 +4,7 @@ import type { FlowScope } from './flows';
 export type FlowTrigger = { kind: 'interval'; everyMinutes: number } | {
   kind: 'devops'; everyMinutes: number; organization: string; project: string; areaPath: string;
   workItemType: string; states: string[]; includeExisting: boolean;
-  /** Filters (ADR 0154): every include tag must be on the item, no exclude tag may be; ids = only these items;
+  /** Filters (ADR 0155): every include tag must be on the item, no exclude tag may be; ids = only these items;
    *  iterationPath = under this iteration; maxPerHour = at most this many starts per hour (queue keeps the rest). */
   includeTags?: string[]; excludeTags?: string[]; workItemIds?: number[]; iterationPath?: string; maxPerHour?: number;
 };
@@ -30,7 +30,7 @@ export interface FlowAutomationRule {
   createdAt: number; updatedAt: number; approvedAt?: number; feedback?: string;
   nextCheckAt?: number; lastCheckAt?: number; lastResult?: string; error?: string; failures: number;
   /** Earlier approved revisions still granting the runs they started (a filter edit or a carried new flow version
-   *  keeps in-flight runs working, ADR 0154); newest last, at most 10. */
+   *  keeps in-flight runs working, ADR 0155); newest last, at most 10. */
   history?: { revision: number; config: FlowAutomationConfig }[];
 }
 export interface FlowAutomationEvent {

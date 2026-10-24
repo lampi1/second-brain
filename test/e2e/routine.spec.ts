@@ -1,4 +1,4 @@
-// The Routine page (ADR 0154) in the real app with an injected snapshot (routine.fixture.ts): «Adesso» shows only what
+// The Routine page (ADR 0155) in the real app with an injected snapshot (routine.fixture.ts): «Adesso» shows only what
 // needs the user (a prod command with «Esegui», a self-healing run as working), «Routine» lists them with trigger and
 // queue, a routine opens with its steps and per-step engine/model, «Storico» shows receipts, and «Avvia» previews a
 // work item and runs dry. Main's flow handlers are swapped for stand-ins: nothing runs, the test reads what was sent.

@@ -1,4 +1,4 @@
-// The filters of a DevOps trigger (ADR 0154): include tags (all of them), exclude tags (none of them), a list of work
+// The filters of a DevOps trigger (ADR 0155): include tags (all of them), exclude tags (none of them), a list of work
 // item ids and an iteration path. Pure: used by the detector (devops-detector.ts) on every detected revision, and by the
 // Routine page's preview of one work item (runtime.ts previewItem), so a manual start says why an item would or would
 // not match before the user starts it.

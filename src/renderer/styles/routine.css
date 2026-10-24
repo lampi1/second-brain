@@ -1,4 +1,4 @@
-/* The Routine page (ADR 0154, mockup B v2 in docs/mockups/routines/): tabs, run cards, the open routine, the start
+/* The Routine page (ADR 0155, mockup B v2 in docs/mockups/routines/): tabs, run cards, the open routine, the start
    dialog and the dry-run. Built on tokens.css; prefix rt-. Used by brain/pages/Flows.tsx and components/Routine.tsx. */
 .rt-page { display: flex; flex-direction: column; gap: 14px; }
 .rt-head { display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; }

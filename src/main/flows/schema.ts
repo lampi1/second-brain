@@ -9,7 +9,7 @@ export const BUILTIN_CHECKS = ['scope-present', 'inputs-present'] as const;
 export const DEVOPS_WRITE_ADAPTER = 'devops-write';
 export const TEST_DB_READ_ADAPTER = 'test-db-read';
 export const testDbAdapted = (step: FlowStep): boolean => (step.testDbRead === true || step.adapter === TEST_DB_READ_ADAPTER) && step.kind === 'agent' && !step.action && (step.effect === 'read-only' || adapted(step));
-/** A step that runs a saved brain script or query, pinned by content hash (ADR 0154): the runner executes it in test,
+/** A step that runs a saved brain script or query, pinned by content hash (ADR 0155): the runner executes it in test,
  *  never in prod (the user's «Esegui»). */
 export const commandStep = (step: FlowStep): boolean => step.kind === 'check' && (step.action?.kind === 'script' || step.action?.kind === 'query') && !!step.action.hash;
 export const PARAM_TYPES = ['string', 'int', 'list', 'file', 'enum', 'env'] as const;
@@ -111,7 +111,7 @@ export function validateDefinition(value: unknown, tierMax?: RoleTierMax): FlowD
     const env = row.env === undefined ? undefined : text(row.env, 'env', 4) as 'test' | 'prod';
     if (env !== undefined && (!['test', 'prod'].includes(env) || !action || !['script', 'query'].includes(action.kind))) throw new Error('env: test|prod, on a script or query step');
     if (env === 'prod' && effect !== 'production') throw new Error('A prod step has the production effect');
-    // either one makes a script/query step prod: it then waits for the user's «Esegui» (ADR 0154)
+    // either one makes a script/query step prod: it then waits for the user's «Esegui» (ADR 0155)
     if (effect === 'production' && action && ['script', 'query'].includes(action.kind) && env !== 'prod') throw new Error('A script or query step with the production effect declares env: prod');
     if (action && ['script', 'query'].includes(action.kind) && action.hash && kind !== 'check') throw new Error('A pinned script or query runs as a check step');
     let args: Record<string, string> | undefined;

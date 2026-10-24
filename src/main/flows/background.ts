@@ -1,4 +1,4 @@
-// Close-to-tray for the app's routine runner (ADR 0154): on when the user opted in, or while routine runs are open, so
+// Close-to-tray for the app's routine runner (ADR 0155): on when the user opted in, or while routine runs are open, so
 // closing the window does not stop them; the tray tells how many are open. Explicit quit always wins; hidden test runs
 // never show a tray.
 import { Menu, Tray, type BrowserWindow } from 'electron';

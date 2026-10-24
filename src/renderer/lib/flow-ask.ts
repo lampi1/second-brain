@@ -28,7 +28,7 @@ export function flowAsks(snapshot: FlowSnapshot | null): FlowAsk[] {
       const version = snapshot.versions.find(v => v.definition.id === run.flowId && v.version === proposal.targetVersion && v.digest === proposal.targetDigest);
       return { type: 'flow-restart', chatId: 'flow', id: `${context}/restart/${run.id}@${run.revision}:${proposal.revision}`, at: proposal.requestedAt, title: `${version?.definition.title ?? run.flowId} · ${run.subjectKey}`, contextKey: snapshot.contextKey, run, version };
     }),
-    // not a prod step waiting for «Esegui» (its own card on the Routine page) nor a failure the runner heals by itself (ADR 0154)
+    // not a prod step waiting for «Esegui» (its own card on the Routine page) nor a failure the runner heals by itself (ADR 0155)
     ...snapshot.runs.filter(run => !run.pendingRecovery && !run.pendingCancellation && (run.status === 'approval' || run.status === 'blocked') && run.steps[run.currentStep] && run.steps[run.currentStep]!.decisionPending !== false
       && !run.paused && !prodWait(snapshot, run) && !healable(run, snapshot.versions.find(v => v.definition.id === run.flowId && v.version === run.flowVersion)?.definition)).map((run): FlowRunAsk => {
       const version = snapshot.versions.find(v => v.definition.id === run.flowId && v.version === run.flowVersion && v.digest === run.definitionDigest);

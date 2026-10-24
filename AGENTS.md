@@ -91,7 +91,7 @@ first runs on main: say so in the hand-off, so the Orchestrator knows which bran
    (`claude --cloud`, `codex cloud`, Cursor's API with its own key) spends only its own vendor's plan or key (ADR 0080). An agent working on this repo inside Claude Code never runs the Cursor CLI.
 5. **No production from agents or routines**: no agent, tool or routine runner ever runs a prod command (prod DB,
    ops scripts, write `az`). A routine's prod step only shows the exact command; the app runs it on the user's own
-   «Esegui» click, after checking it equals what they saw, and keeps a receipt (owner, 2026-10-24; ADR 0154).
+   «Esegui» click, after checking it equals what they saw, and keeps a receipt (owner, 2026-10-24; ADR 0155).
 6. **Coexistence**: the app never changes Claude desktop / Cursor config, hooks or settings files; it reads their
    transcripts and state read-only; an external session is resumed only as a fork (never two writers).
 7. **Tests:** every module has unit tests; every user-visible feature has an e2e test with a screenshot; "done" =

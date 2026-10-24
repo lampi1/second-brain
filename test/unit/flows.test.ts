@@ -109,7 +109,7 @@ describe('flow execution authority', () => {
   it('keeps unconfigured action references blocked', () => {
     const { service } = setup(); activate(service, definition([step('ref', { kind: 'check', action: { kind: 'action', ref: 'saved-reference' } })])); expect(start(service).status).toBe('blocked');
   });
-  // ADR 0154: a script/query step pins the brain file's content hash on propose; a file the brain lacks cannot be proposed
+  // ADR 0155: a script/query step pins the brain file's content hash on propose; a file the brain lacks cannot be proposed
   it.each(['script', 'query'] as const)('refuses a %s reference the brain does not have', kind => {
     const { service } = setup(); expect(() => service.propose({ definition: definition([step('ref', { kind: 'check', action: { kind, ref: 'saved-reference' } })]), expectedRevision: 0 })).toThrow('non trovat');
   });

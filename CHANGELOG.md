@@ -6,7 +6,7 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
-- **Routines run by the app** (ADR 0154): the app starts, advances, retries and finishes routines with no Orchestrator
+- **Routines run by the app** (ADR 0155): the app starts, advances, retries and finishes routines with no Orchestrator
   open; a failed check sends the work back to the step it names and only the last failure calls you. Routine page with
   Adesso / Routine / Storico, trigger filters (tags in/out, ids, iteration, max per hour), «Avvia su un work item» with
   preview, params and attachments, dry run, engine/model per agent step, scripts and queries pinned by hash with a

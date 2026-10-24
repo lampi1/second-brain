@@ -716,7 +716,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     sendWorker: (chatId, prompt, authorize, failed) => manager.send(chatId, `${AGENT_LABEL}\n\n${prompt}`, undefined, false, 'Routine', false, { kind: 'app' },
       { beforeSubmit: authorize, submitted() {}, failed }),
     discardWorker: chatId => manager.close(chatId),
-    // the per-step engine/model picker on the Routine page (ADR 0154): the engines and models the registry knows
+    // the per-step engine/model picker on the Routine page (ADR 0155): the engines and models the registry knows
     engines: () => { const registry = brain.routingInfo().registry; return registry ? Object.keys(registry.harnesses).map(id => ({ id, name: id.charAt(0).toUpperCase() + id.slice(1), models: registry.models.filter(model => model.harness === id).map(model => model.id) })) : []; },
     steer: (chatId, text) => manager.send(chatId, text, undefined, false, 'Routine', false, { kind: 'app' }),
     roles: () => flowRoles(agents.list().profiles, (engine, tier) => tierModel(engine, tier, brain.routingInfo().registry, brain.settings().modelTiers)),

@@ -1,5 +1,5 @@
 // Routine stays outside Home and begins empty; a new routine's review uses the existing shared window and a postponed
-// review is reopened from the routine's card (ADR 0154).
+// review is reopened from the routine's card (ADR 0155).
 // Authored only: this suite is intentionally not run on a feature branch or to bypass Electron environment restrictions.
 import { test, expect } from '@playwright/test';
 import type { FlowSnapshot } from '../../src/shared/flows';

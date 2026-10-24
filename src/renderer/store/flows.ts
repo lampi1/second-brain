@@ -149,7 +149,7 @@ export async function exportFlowDefinition(contextKey: string, flowId: string, v
   } catch { toast(t('flows.exportFailed'), 'err'); }
 }
 
-// ---- the Routine page's own controls (ADR 0154): each pins the brain shown; errors come back as plain text ----
+// ---- the Routine page's own controls (ADR 0155): each pins the brain shown; errors come back as plain text ----
 type RoutineCall = 'flows:pauseRun' | 'flows:runCommand' | 'flows:clearQueue' | 'flows:editFilters' | 'flows:editStepModel' | 'flows:pinHash';
 /** A control that returns the new snapshot: applied unless the brain changed meanwhile. */
 export async function routineControl<K extends RoutineCall>(channel: K, contextKey: string, input: Omit<InvokeArg<K>, 'contextKey'>): Promise<string | null> {

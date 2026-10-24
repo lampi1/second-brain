@@ -113,7 +113,7 @@ describe('test DB flow runtime', () => {
     expect(s.flow.snapshot().runs[0]!.testDbEvidence![0]!.status).toBe('error');
     expect(JSON.stringify(s.flow.snapshot())).not.toContain('fixture-password');
   });
-  // the owning Orchestrator closing no longer withholds anything: runs belong to the app's runner (ADR 0154)
+  // the owning Orchestrator closing no longer withholds anything: runs belong to the app's runner (ADR 0155)
   it.each(['pause', 'revision', 'task', 'brain'] as const)('withholds in-flight rows after %s changes and records the attempt', async kind => {
     const s = await setup();
     s.driver.mockImplementationOnce(async input => {

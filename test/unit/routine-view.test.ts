@@ -1,4 +1,4 @@
-// What the Routine page shows (ADR 0154), on the e2e fixture: only a prod command, a gate or a block the runner will not
+// What the Routine page shows (ADR 0155), on the e2e fixture: only a prod command, a gate or a block the runner will not
 // heal is «Tocca a te»; a self-healing run is working; steps look done/now/retry/you/sent; queues skip restarts.
 import { expect, it } from 'vitest';
 import { routineSnapshot } from '../e2e/routine.fixture';

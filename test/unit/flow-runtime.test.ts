@@ -76,7 +76,7 @@ describe('flow host boundaries', () => {
     await s.runtime.tick(); expect(s.send).not.toHaveBeenCalled(); expect(flow.snapshot().runs).toHaveLength(1);
     s.runtime.stop();
   });
-  // ADR 0154: the runner starts the run itself; no Orchestrator turn, busy or idle
+  // ADR 0155: the runner starts the run itself; no Orchestrator turn, busy or idle
   it('starts the run itself on detection and rechecks automatic tool authentication', async () => {
     const s = setup(), flow = s.runtime.service();
     flow.propose({ expectedRevision: 0, definition: { id: 'check', title: 'Check', description: 'Fixture', aliases: [], scope: {}, steps: [{ id: 'gate', title: 'Gate', kind: 'approval', instructions: 'Confirm', inputs: [], evidence: [], timeoutMs: 1000, maxAttempts: 1, effect: 'read-only' }] } });

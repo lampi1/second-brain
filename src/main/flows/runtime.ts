@@ -1,4 +1,4 @@
-// Brain-scoped routine runner (ADR 0154): the app itself starts, advances, heals and finishes runs in the main process,
+// Brain-scoped routine runner (ADR 0155): the app itself starts, advances, heals and finishes runs in the main process,
 // without any chat; the Orchestrator observes and steers (app_flow_overview, app_flow_message). Triggers start runs
 // directly, a failed step retries or sends work back to the step its definition names, and only the last failure (or a
 // prod step's «Esegui», which only the user's click runs) needs the user. One runner per store (lock.ts).
@@ -50,7 +50,7 @@ export interface FlowRuntimeOptions {
 }
 export interface FlowWorkerRequest {
   flowRunId: string; stepId: string; ownerId: string; roleId: WorkRoleId; tier?: ModelTier;
-  /** the user's per-step pick (ADR 0154), over the role's own engine and model */
+  /** the user's per-step pick (ADR 0155), over the role's own engine and model */
   engine?: string; model?: string; effort?: Effort;
   workspace: string; title: string; goal: string; doneWhen: string[]; reviewOf?: string;
 }
@@ -176,7 +176,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
       file: path.join(options.userData, 'flows', context.key, 'automation.json'),
       flow: () => { if (stopped || current().key !== context.key) throw new Error('Brain context changed'); return flow; },
       detect: detector,
-      // the runner starts the run itself (ADR 0154): no Orchestrator turn, no chat needs to be open
+      // the runner starts the run itself (ADR 0155): no Orchestrator turn, no chat needs to be open
       dispatch: async (rule, event) => {
         if (stopped || current().key !== context.key) throw new Error('Brain context changed');
         made.startEvent(event.id, rule.ownerOrchestratorId);
@@ -213,7 +213,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     try { return resolve(context.root, spec, run, where.attachments, where.work); }
     catch (error) { return { kind: spec.action!.kind as 'script' | 'query', ref: spec.action!.ref, env: spec.env ?? 'test', command: `(${spec.action!.ref})`, program: '', args: [], file: '', sha256: '', values: {}, problems: [error instanceof Error ? error.message : String(error)] }; }
   };
-  /** The runner's self-heal (ADR 0154): a failed step with attempts left retries, or sends the work back to the step its
+  /** The runner's self-heal (ADR 0155): a failed step with attempts left retries, or sends the work back to the step its
    *  definition names. Not for the user's own blocks, a prod step, content that changed, or a paused run. */
   const healable = (run: FlowRun, _spec?: FlowStep): boolean => isHealable(run, service().snapshot().versions.find(version => version.definition.id === run.flowId && version.version === run.flowVersion)?.definition);
   const heal = (flow: FlowService, run: FlowRun, spec: FlowStep): boolean => {
@@ -457,7 +457,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     void options.send(owner.id, message).then(() => { if (feedback) instances.get(contextKey)?.acknowledgeRecoveryFeedback(run.id, feedback.at, feedback.message, feedback.kind); })
       .catch(error => log.warn('flows', 'Recovery wake failed', { cause: String(error), hint: 'The recovery remains in the run; delivery retries when the owner is idle.' })).finally(() => notifyingOwners.delete(owner.id));
   };
-  /** Only what needs the user reaches the Orchestrator (ADR 0154): a block the runner cannot heal, or a prod step
+  /** Only what needs the user reaches the Orchestrator (ADR 0155): a block the runner cannot heal, or a prod step
    *  waiting for «Esegui». Healable failures, retries and progress stay on the Routine page. */
   const blockedReady = (run: FlowRun): void => {
     if (!options.send || run.paused) return;
@@ -562,7 +562,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
       throw new Error('Test DB read failed or permission changed; inspect the run query evidence');
     } finally { active.done(); }
   };
-  // ---- the Routine page and the Orchestrator's tools (ADR 0154) ----
+  // ---- the Routine page and the Orchestrator's tools (ADR 0155) ----
   const ITEM_URL = /^https:\/\/(?:dev\.azure\.com\/([A-Za-z0-9][A-Za-z0-9-]{0,49})|([A-Za-z0-9][A-Za-z0-9-]{0,49})\.visualstudio\.com)\/([^/?#]+)\/_workitems\/edit\/(\d{1,10})(?:[/?#].*)?$/;
   /** A pasted work item (an id, or its link) resolved against the routine's trigger. */
   const itemTarget = (flowId: string, text: string): { organization: string; project: string; id: number; rule: ReturnType<FlowAutomationService['ruleOf']> } => {

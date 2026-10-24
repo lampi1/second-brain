@@ -1,4 +1,4 @@
-// The routine runner's lock (ADR 0154): one runner per flow store, so two app instances (or a dev clone next to the
+// The routine runner's lock (ADR 0155): one runner per flow store, so two app instances (or a dev clone next to the
 // installed app on the same userData) never advance the same runs twice. A file with the holder's pid and a heartbeat;
 // a lock whose process is gone or whose heartbeat is older than a minute is taken over. Used by runtime.ts.
 // Unit tests: test/unit/flows/lock.test.ts.
