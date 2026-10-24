@@ -209,4 +209,5 @@ export const toolsIt = {
   'tools.search.modelDownloading': (p: { pct: number }) => `Ricerca per significato: scarico il modello ${p.pct}%`,
   'tools.search.wordsOnly': 'Brain: ricerca solo per parole',
   'tools.search.retry': 'Riprova',
+  'tools.genui.kindBrief': 'Riepilogo',
 };

@@ -39,7 +39,7 @@ import { ownProcessGroup, sharedDir } from '../platform';
 import { AgentChildrenReporter } from './agent-children';
 import type { ChildObservation } from '../../shared/agents';
 import { claudeMcp, claudeTools, suggestedAbove } from '../agents/tool-policy';
-import { YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoShape } from '../../shared/yes-no';
+import { BRIEF_GRACE_MS, BRIEF_REFUSAL, YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoShape } from '../../shared/yes-no';
 
 export interface ClaudeOptions extends SessionOptions {
   /** claude binary or a .mjs fake (tests); default: `claude` resolved on PATH */
@@ -195,6 +195,8 @@ export class ClaudeSession implements HarnessSession {
   private elicitationLogged = false;
   /** questions sent back in a row for not being yes/no (ADR 0135): after YESNO_RETRIES the next one is shown as it is */
   private yesNoRefused = 0;
+  /** questions already given BRIEF_GRACE_MS for their brief (show_ui may run in parallel with the question) */
+  private briefWaited = new Set<string>();
   private tools = new Map<string, { item: ToolItem; input: unknown }>();
   private streams = new Map<string, Stream>();          // `${messageId}:${index}` → streamed block
   private order = new Map<string, Stream[]>();          // messageId → its streamed blocks, in arrival order
@@ -727,7 +729,7 @@ export class ClaudeSession implements HarnessSession {
     const tool = s(r.tool_name);
     const input = o(r.input);
     const question = tool === 'AskUserQuestion';
-    if (question && this.refuseNotYesNo(id, input, s(r.tool_use_id))) return;
+    if (question && this.refuseNotYesNo(id, input, s(r.tool_use_id), m)) return;
     const noAlways = r.suppress_always_allow_rule === true;
     // a suggested mode above the agent's ceiling is never offered ("Sempre" would raise it before the manager could react)
     const suggestions = arr(r.permission_suggestions).filter(x => o(x).type !== 'setMode' || !suggestedAbove(o(x).mode, this.opts.ceiling ?? null));
@@ -752,15 +754,24 @@ export class ClaudeSession implements HarnessSession {
 
   /** A question that is not yes/no goes back to the agent with how to ask (ADR 0135), at most YESNO_RETRIES times in a
    *  row per chat: then it is shown as it is, so a chat that cannot comply never stays stuck. */
-  private refuseNotYesNo(id: string, input: Obj, toolUseId: string): boolean {
+  private refuseNotYesNo(id: string, input: Obj, toolUseId: string, m: Obj): boolean {
     if (!(this.opts.yesNo ?? yesNoGateOn(process.env))) return false;
     const qs = questionsFrom(input);
     // nothing readable (the CLI's input changed shape): shown as it is, never refused for the app's own parse
-    if (!qs.length || yesNoShape(qs)) { this.yesNoRefused = 0; return false; }
+    if (!qs.length) { this.yesNoRefused = 0; return false; }
+    const yesNo = yesNoShape(qs);
+    // a yes/no question without its brief (ADR 0149): a moment for a show_ui called in parallel, then sent back
+    const noBrief = yesNo && !!this.opts.briefReady && !this.opts.briefReady();
+    if (noBrief && !this.briefWaited.has(id) && this.yesNoRefused < YESNO_RETRIES) {
+      this.briefWaited.add(id);
+      setTimeout(() => { if (!this.procExited) this.onControlRequest(m); this.briefWaited.delete(id); }, BRIEF_GRACE_MS).unref?.();
+      return true;
+    }
+    if (yesNo && !noBrief) { this.yesNoRefused = 0; return false; }
     if (this.yesNoRefused >= YESNO_RETRIES) { this.yesNoRefused = 0; return false; }
     this.yesNoRefused++;
-    log.info('chats', 'question sent back: not yes/no', { chat: this.opts.chatId, data: { requestId: id, attempt: this.yesNoRefused } });
-    try { this.write({ type: 'control_response', response: { subtype: 'success', request_id: id, response: { behavior: 'deny', message: YESNO_REFUSAL, toolUseID: toolUseId } } }); } catch { /* gone */ }
+    log.info('chats', noBrief ? 'question sent back: no brief' : 'question sent back: not yes/no', { chat: this.opts.chatId, data: { requestId: id, attempt: this.yesNoRefused } });
+    try { this.write({ type: 'control_response', response: { subtype: 'success', request_id: id, response: { behavior: 'deny', message: noBrief ? BRIEF_REFUSAL : YESNO_REFUSAL, toolUseID: toolUseId } } }); } catch { /* gone */ }
     return true;
   }
 

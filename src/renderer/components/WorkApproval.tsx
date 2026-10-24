@@ -1,4 +1,5 @@
-// One concrete durable proposal inside QuestionsWindow, with exact-version yes/no actions and optional evidence.
+// One concrete durable proposal inside QuestionsWindow as the decision card (DecisionCard.tsx, ADR 0149): exact-version
+// Sì / No, its text and evidence always open, «Scrivi una risposta…» to the Orchestrator, «Non voglio rispondere» drops it.
 // The shared window owns focus, queue navigation and postponement; no summary board is mounted on Home.
 import { t } from '../i18n';
 import { useMemo, useRef, useState } from 'react';
@@ -12,11 +13,11 @@ import { AskImages } from './AskImages';
 import { openFile } from './GenUi';
 import { useApp } from '../store/store';
 import { LessonEvidence, lessonCanApprove } from './LessonEvidence';
+import { DecisionCard } from './DecisionCard';
 export function WorkApproval({ ask, onEscape }: { ask: DurableAsk; onEscape: () => void }) {
   const [busy, setBusy] = useState(false);
   const submitting = useRef(false);
   const key = `${ask.chatId}/${ask.id}`;
-  const [changing, setChanging] = useState(() => !!decisionDraft(key)), [feedback, setFeedback] = useState(() => decisionDraft(key));
   const orchestratorReady = useApp(s => Object.values(s.chats).some(c => c.isOrchestrator && !c.closedAt));
   const brainRoot = useApp(s => s.info?.brainRoot);
   const work = ask.type === 'work' ? ask.row : null;
@@ -32,30 +33,26 @@ export function WorkApproval({ ask, onEscape }: { ask: DurableAsk; onEscape: () 
     if (ok) saveDecisionDraft(key, '');
     if (!ok) { submitting.current = false; setBusy(false); }
   };
-  return <div className={`wq ${busy ? 'sent' : ''}`} tabIndex={0} role="group" aria-label={ask.title} aria-busy={busy}
-    data-request-key={`${ask.chatId}/${ask.id}`} data-testid={`qwin-${ask.type}`} onKeyDown={e => {
-      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onEscape(); }
-    }}>
-    <div className="wq-kicker">{work ? WORK_LABELS[work.stage] : t('cmp.durable.approval.lesson')}</div>
-    <p className="wq-lead">{ask.title}</p>
-    {lesson && <p className="wq-lead"><strong>{t('cmp.durable.approval.scope')}</strong> {lesson.target === 'rule' ? t('cmp.durable.approval.rules') : lesson.target === 'skill' ? t('cmp.durable.approval.skill', { name: lesson.skill ?? t('cmp.durable.approval.missingName') }) : t('cmp.durable.approval.role', { name: lesson.agentId })}</p>}
-    <h2 className="wq-q">{withoutImages(work?.proposal?.text ?? lesson?.rule ?? '')}</h2>
+  return <DecisionCard testBase={`qwin-${ask.type}`} className="wq" busy={busy} laterButton={false} onLater={onEscape}
+    rootProps={{ 'data-request-key': key, 'aria-label': ask.title }}
+    head={<><span className="dc-chip">{work ? WORK_LABELS[work.stage] : t('cmp.durable.approval.lesson')}</span><b className="dc-who">{ask.title}</b></>}
+    question={withoutImages(work?.proposal?.text ?? lesson?.rule ?? '')}
+    ifYes={t('genui.decision.workYes')} ifNo={t('genui.decision.workNo')}
+    yes={{ onChoose: () => void decide(true), label: work ? t('cmp.durable.approval.proceed') : t('cmp.durable.approval.apply'), recommended: canApprove, disabled: !canApprove, testid: 'work-approve' }}
+    no={{ onChoose: () => void decide(false), label: work ? t('cmp.durable.approval.reject') : t('cmp.durable.approval.no'), recommended: !canApprove, testid: 'work-reject' }}
+    write={{ onSend: note => void decide(false, note), initial: decisionDraft(key) || undefined, onDraft: v => saveDecisionDraft(key, v), disabled: !orchestratorReady,
+      hint: orchestratorReady ? t('cmp.durable.approval.feedbackHint') : t('cmp.durable.approval.openOrchestrator') }}
+    skip={{ onChoose: () => void decide(false), hint: t('genui.decision.skipDiscard') }}>
+    {lesson && <p className="dc-nobrief"><strong>{t('cmp.durable.approval.scope')}</strong> {lesson.target === 'rule' ? t('cmp.durable.approval.rules') : lesson.target === 'skill' ? t('cmp.durable.approval.skill', { name: lesson.skill ?? t('cmp.durable.approval.missingName') }) : t('cmp.durable.approval.role', { name: lesson.agentId })}</p>}
+    {work && (work.summary !== work.proposal?.text || work.evidence || work.nextAction) && <div className="dc-brief-k">{t('cmp.durable.approval.context')}</div>}
+    {work && work.summary !== work.proposal?.text && <p className="dc-nobrief">{work.summary}</p>}
+    {work?.evidence && <p className="dc-nobrief">{work.evidence}</p>}
+    {work?.nextAction && <p className="dc-nobrief">{t('cmp.durable.approval.next', { action: work.nextAction })}</p>}
+    {lesson && <><div className="dc-brief-k">{t('cmp.durable.approval.sources')}</div><p className="dc-nobrief">{lesson.evidence}</p><LessonEvidence proposal={lesson} brainRoot={brainRoot} /></>}
+    <AskImages images={images} testBase="work-proposal" size="l" />
     {links.length > 0 && <div className="ctx-links">{links.map(link => link.kind === 'file'
       ? <button key={link.href} type="button" className="ctx-link file" onClick={() => void openFile(link.href, work?.chatIds[0] ?? lesson?.fromChat)}>{link.label}</button>
       : <a key={link.href} className="ctx-link" href={link.href} target="_blank" rel="noopener noreferrer">{link.label}</a>)}</div>}
-    <AskImages images={images} testBase="work-proposal" size="l" />
-    {work && <details><summary>{t('cmp.durable.approval.context')}</summary>{work.summary !== work.proposal?.text && <p>{work.summary}</p>}{work.evidence && <p>{work.evidence}</p>}{work.nextAction && <p>{t('cmp.durable.approval.next', { action: work.nextAction })}</p>}</details>}
-    {lesson && <><details><summary>{t('cmp.durable.approval.sources')}</summary><p>{lesson.evidence}</p><LessonEvidence proposal={lesson} brainRoot={brainRoot} /></details></>}
-    {!canApprove && <p className="wq-lead" role="status">{t('cmp.durable.approval.insufficient')}</p>}
-    <div className="wq-perm">
-      <button type="button" className="btn btn-primary btn-l" disabled={busy || !canApprove} onClick={() => void decide(true)} data-testid="work-approve">{work ? t('cmp.durable.approval.proceed') : t('cmp.durable.approval.apply')}{canApprove ? t('cmp.durable.approval.recommended') : ''}</button>
-      <button type="button" className="btn btn-ghost btn-l" disabled={busy} onClick={() => void decide(false)} data-testid="work-reject">{work ? t('cmp.durable.approval.reject') : t('cmp.durable.approval.no')}{!canApprove ? t('cmp.durable.approval.recommended') : ''}</button>
-      <button type="button" className="btn btn-ghost btn-l" disabled={busy} onClick={() => setChanging(x => !x)} aria-expanded={changing}>{t('ui.other')}</button>
-    </div>
-    {changing && <div className="pa-change"><label className="wq-label" htmlFor="work-feedback">{t('cmp.durable.approval.answer')}</label>
-      <textarea id="work-feedback" value={feedback} onChange={e => { setFeedback(e.target.value); saveDecisionDraft(key, e.target.value); }} rows={3} maxLength={2000} disabled={busy} autoFocus />
-      <p className="wq-lead">{orchestratorReady ? t('cmp.durable.approval.feedbackHint') : t('cmp.durable.approval.openOrchestrator')}</p>
-      <button type="button" className="btn btn-primary btn-l" disabled={busy || !feedback.trim() || !orchestratorReady} onClick={() => void decide(false, feedback.trim())}>{t('cmp.durable.approval.send')}</button>
-    </div>}
-  </div>;
+    {!canApprove && <p className="dc-nobrief" role="status">{t('cmp.durable.approval.insufficient')}</p>}
+  </DecisionCard>;
 }

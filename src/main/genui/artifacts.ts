@@ -52,6 +52,7 @@ export class Artifacts {
     const target = (a.target ?? 'chat') as ArtifactTarget;
     if (!ARTIFACT_TARGETS.includes(target)) throw new Error(`target: expected one of ${ARTIFACT_TARGETS.join(', ')}`);
     const ui = checkUi(a.component, a.props);
+    if (ui.ok && ui.spec.component === 'brief' && target !== 'next-ask') throw new Error('brief: only with target "next-ask" (it is the context of your next question)');
     if (!ui.ok) throw new Error(`${ui.error}. Fix the props and call show_ui again (the shapes are in the tool's description).`);
     if (a.id !== undefined && a.id !== null && (typeof a.id !== 'string' || !KEY.test(a.id))) throw new Error('id: 1-40 letters, digits, ".", "_" or "-"');
     const key = typeof a.id === 'string' ? a.id : `${this.now().toString(36)}${++this.n}`;
@@ -87,6 +88,11 @@ export class Artifacts {
       this.cache.set(chatId, list);
     }
     return list.slice();
+  }
+
+  /** A brief (ADR 0149) waits for this chat's next question: the question gates ask for one before a yes/no question. */
+  hasBrief(chatId: string): boolean {
+    return this.items(chatId).some(i => i.waiting && i.ui.component === 'brief');
   }
 
   /** A chat's items with its visuals put in by time (the chat's own order is kept as it is). */

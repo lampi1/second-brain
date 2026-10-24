@@ -78,15 +78,19 @@ function docsOf(pieces: readonly { id: string; kind: string; text: string }[]): 
     : []));
 }
 
-export const AskContext = memo(function AskContext({ req, defaultOpen, testBase, onToggle, layout = 'panel', question, lead }: {
+export const AskContext = memo(function AskContext({ req, defaultOpen, testBase, onToggle, layout = 'panel', question, lead, noVisuals, label }: {
   req: PendingRequest; defaultOpen: boolean; testBase: string; onToggle?: () => void; layout?: 'panel' | 'window';
+  /** the decision card draws the attached visuals itself (ADR 0149) */
+  noVisuals?: boolean;
+  /** the toggle's name instead of «Contesto» */
+  label?: string;
   /** the questions window: the question itself, drawn between the lead and the rest of the context */
   question?: ReactNode;
   /** the questions window: the context sentence the agent wrote in front of its question (lib/askSplit.ts) */
   lead?: string;
 }) {
   if (layout === 'window') return <WindowContext req={req} testBase={testBase} question={question} lead={lead} />;
-  return <PanelContext req={req} defaultOpen={defaultOpen} testBase={testBase} onToggle={onToggle} />;
+  return <PanelContext req={req} defaultOpen={defaultOpen} testBase={testBase} onToggle={onToggle} noVisuals={noVisuals} label={label} />;
 });
 
 /** The questions window's context, always open (the owner, 2026-10-22: «tutto il contesto nella modale deve essere
@@ -153,14 +157,14 @@ function WindowContext({ req, testBase, question, lead }: { req: PendingRequest;
   );
 }
 
-const PanelContext = memo(function PanelContext({ req, defaultOpen, testBase, onToggle }: { req: PendingRequest; defaultOpen: boolean; testBase: string; onToggle?: () => void }) {
+const PanelContext = memo(function PanelContext({ req, defaultOpen, testBase, onToggle, noVisuals, label }: { req: PendingRequest; defaultOpen: boolean; testBase: string; onToggle?: () => void; noVisuals?: boolean; label?: string }) {
   const items = useApp(s => s.items[req.chatId]);
   useEffect(() => { if (items === undefined) void loadItems(req.chatId); }, [items, req.chatId]);
   const ctx = useMemo(() => askContext(items, req), [items, req]);
   const previews = useMemo(() => (req.questions ?? []).flatMap(q => q.options.filter(o => o.preview?.trim()).map(o => ({ label: o.label, text: o.preview! }))), [req]);
   const [open, setOpen] = useState(defaultOpen);
   const hasBody = ctx.pieces.length > 0 || previews.length > 0;
-  const visuals = (items ?? []).some(i => i.kind === 'artifact' && i.askId === req.id);
+  const visuals = !noVisuals && (items ?? []).some(i => i.kind === 'artifact' && i.askId === req.id);
   const images = useAskImages(req, ctx.pieces);
   const links = useMemo(() => linksBut(ctx.links, images), [ctx.links, images]);
   if (!hasBody && !links.length && !ctx.again && !visuals && !images.length) return null;
@@ -173,11 +177,11 @@ const PanelContext = memo(function PanelContext({ req, defaultOpen, testBase, on
           {t('chat.context.again', { answer: ctx.again.answer })}
         </div>
       )}
-      <AskArtifacts req={req} testBase={testBase} />
+      {!noVisuals && <AskArtifacts req={req} testBase={testBase} />}
       <AskImages images={images} testBase={testBase} />
       {hasBody && (
         <button type="button" className="ctx-toggle" onClick={() => { setOpen(o => !o); onToggle?.(); }} aria-expanded={open} data-testid={`${testBase}-ctx-toggle`}>
-          <IconInfo size={12} /><b>{t('chat.context.label')}</b>
+          <IconInfo size={12} /><b>{label ?? t('chat.context.label')}</b>
           {!open && summary && <span className="ctx-summary">{summary}</span>}
           <IconChevronRight size={12} className="tool-chev" />
         </button>

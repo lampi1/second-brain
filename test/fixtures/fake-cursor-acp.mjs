@@ -7,7 +7,7 @@
 // No model, no network, no Cursor credits: the app's tests and e2e use ONLY this (the real engine is refused).
 // What a prompt does is chosen by words in it:
 //   perm → a shell tool call that asks permission (allow-always offered) · locked → the same without allow-always
-//   ask → cursor/ask_question (one single-choice and one multi-choice question) · plan → cursor/create_plan
+//   ask → cursor/ask_question (one single-choice and one multi-choice question; asksn: one yes/no question) · plan → cursor/create_plan
 //   edit → an edit tool call with a diff · todo → a plan update · slow → streams until cancelled
 //   think → streams reasoning ("Penso di usare la libreria vecchia. Passo 1. …", FAKE_CURSOR_THINK_TICKS) until cancelled
 //   readgate[=<path>] → a read tool call (of a.txt, or that path relative to the cwd) that asks permission, its
@@ -160,7 +160,9 @@ async function prompt(id, p) {
   // "ask cmd": a command for the user, then the question with no tool call in between (the Orchestrator's card shows the command)
   if (/ask cmd/.test(text)) await say(sid, 'agent_message_chunk', ['Lancia:\n```powershell\n', 'Get-Date\n```\n']);
   if (/ask/.test(text) && !turn.cancelled) {
-    const r = await ask('cursor/ask_question', { toolCallId: 'tc_ask', title: 'Due domande', questions: [
+    const r = await ask('cursor/ask_question', /asksn/.test(text) ? { toolCallId: 'tc_ask', title: 'Pubblica', questions: [
+      { id: 'q_pub', prompt: 'Lo pubblico?', options: [{ id: 'o_yes', label: 'Sì' }, { id: 'o_no', label: 'No' }], allowMultiple: false },
+    ] } : { toolCallId: 'tc_ask', title: 'Due domande', questions: [
       { id: 'q_color', prompt: 'Che colore?', options: [{ id: 'o_blue', label: 'Blu' }, { id: 'o_red', label: 'Rosso' }], allowMultiple: false },
       { id: 'q_files', prompt: 'Quali file?', options: [{ id: 'f_a', label: 'a.ts' }, { id: 'f_b', label: 'b.ts' }, { id: 'f_c', label: 'c.ts' }], allowMultiple: true },
     ] });

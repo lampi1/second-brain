@@ -155,6 +155,29 @@ describe('ClaudeSession', () => {
     expect(sink.last('tool')?.output).toContain('only yes/no questions');
   });
 
+  it('a yes/no question without its brief waits a moment, then goes back with how to send one (ADR 0149)', async () => {
+    let ready = false;
+    const { s, sink } = start({ yesNo: true, briefReady: () => ready });
+    s.send('asksn');
+    await waitFor(() => sink.trace.filter(t => t === 'result').length === 1, 'turn 1', 6000);
+    expect(sink.pendings).toHaveLength(0);
+    expect(sink.last('tool')?.output).toContain('show_ui with component "brief"');
+    // a brief that arrives during the wait (show_ui called in parallel): the question is shown
+    s.send('asksn');
+    await new Promise(r => setTimeout(r, 300));
+    expect(sink.pendings).toHaveLength(0);
+    ready = true;
+    const q = await waitFor(() => sink.pendings[0], 'shown once the brief is there', 4000);
+    expect(q.questions?.[0]?.question).toBe('Lo pubblico?');
+  });
+
+  it('a yes/no question with its brief is shown at once (ADR 0149)', async () => {
+    const { s, sink } = start({ yesNo: true, briefReady: () => true });
+    s.send('asksn');
+    const q = await waitFor(() => sink.pendings[0], 'question', 1000);
+    expect(q.questions?.[0]?.options.map(o => o.label)).toEqual(['Sì (consigliato)', 'No']);
+  });
+
   it('never offers a suggested mode above an agent ceiling (A2)', async () => {
     const free = start();
     free.s.send('mode');

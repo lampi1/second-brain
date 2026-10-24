@@ -12,8 +12,8 @@ it('renders the exact visible proposal, deferred details, file viewer link and a
   const ask = durableAsks([row], [])[0]!;
   const html = renderToStaticMarkup(createElement(WorkApproval, { ask, onEscape: vi.fn() }));
   expect(html).toContain(row.proposal!.text);
-  expect(html).toContain('General progress'); expect(html).toContain('Sì, procedi'); expect(html).toContain('No, proponi altro'); expect(html).toContain('Altro…');
-  expect(html).toContain('<details>'); expect(html).not.toContain('<details open');
+  expect(html).toContain('General progress'); expect(html).toContain('Sì, procedi'); expect(html).toContain('No, proponi altro'); expect(html).toContain('Scrivi una risposta…'); expect(html).toContain('Non voglio rispondere');
+  expect(html).not.toContain('<details'); // the context is always open in the decision card (ADR 0149)
   expect(html).toContain('ctx-link file'); expect(html).toContain('Report');
   expect(html).toContain('data-request-key="workflow/thread@4:proposal"');
 });
@@ -30,7 +30,7 @@ it('exposes unapproved lessons, binds their exact text and blocks unsupported ap
   const ask = durableAsks([], [lesson])[0]!;
   const html = renderToStaticMarkup(createElement(WorkApproval, { ask, onEscape: vi.fn() }));
   expect(html).toMatch(/disabled=""[^>]*data-testid="work-approve"/);
-  expect(html).toContain('Altro…'); expect(html).toContain('Fonti e verifiche');
+  expect(html).toContain('Scrivi una risposta…'); expect(html).toContain('Fonti e verifiche');
   expect(durableAsks([], [{ ...lesson, rule: 'Changed rule.' }])[0]!.id).not.toBe(ask.id);
   // The host waiting projection includes a previous approval whose evidence became insufficient.
   expect(durableAsks([], [{ ...lesson, userApproved: true }])).toHaveLength(1);

@@ -12,8 +12,10 @@
 // A "Comando da eseguire" (type 'command') is handed to CommandRequest.tsx, in the same sizes.
 // The tile, compact and Orchestrator sizes carry the request's context (AskContext.tsx: the turn's prose, its links and files), folded
 // in the chat's own tile, open in a work chat's Orchestrator card and in the questions window (`ctxOpen`).
-// Agents ask only yes/no questions (shared/yes-no.ts, ADR 0135): Sì / No as two big tiles (ChoiceCard yn), «Altro…»
-// for his own words and «Ci penso dopo».
+// Agents ask only yes/no questions (shared/yes-no.ts, ADR 0135): a yes/no question is drawn in every size as the one
+// decision card (DecisionCard.tsx, ADR 0149): who asks, the question, the chat's brief (what it did, its evidence, what
+// Sì / No do) and the same four answers (Sì, No, «Scrivi una risposta…», «Non voglio rispondere»), Esc «Ci penso dopo»;
+// the chat's text before the question stays folded under it, open only when no brief came.
 // With `onLater` a "Ci penso dopo" button leaves it unanswered (every host passes lib/later.ts answerLater: it waits in
 // "Da rispondere"; Esc does the same when the host gives `onEscape`; then a permission is rejected with 3, never Esc).
 // The questions window has its own size (`window`, ADR 0049): a muted lead on top (the agent's context sentence split
@@ -21,17 +23,17 @@
 // document, the options as large cards (the recommended one marked by color, border and a label), the
 // keys in the window's footer.
 // Used by NeedsLane, ChatTile, OrchestratorTile, OverlayApp, QuestionsWindow.
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { forwardRef, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import{t}from'../i18n';
 import { explainTool } from '@shared/explain';
 import { isYesNo, yesNoOf } from '@shared/yes-no';
-import type { Answer, EngineInfo, Harness, PendingRequest } from '@shared/contract';
-import { answerText, confirmPicks, getPermissionOptions, initialDraft, markedRecommended, permissionAnswer, pickOption, requestKey, type Draft, type KeyResult } from '../lib/keys';
+import type { Answer, ChatItem, EngineInfo, Harness, PendingRequest, Question, UiBrief } from '@shared/contract';
+import { answerText, cleanDescription, confirmPicks, getPermissionOptions, initialDraft, markedRecommended, permissionAnswer, pickOption, requestKey, type Draft, type KeyResult } from '../lib/keys';
 import { ago, toolLabel } from '../lib/format';
 import { useNow } from '../lib/clock';
 import { engineOf } from '../lib/engines';
-import { answer, app } from '../store/store';
+import { answer, app, useApp } from '../store/store';
 import { claimFocus, focusChat, reqKey } from '../actions';
 import { CommandRequest, type CommandHandlers } from './CommandRequest';
 import { AskContext } from './AskContext';
@@ -42,6 +44,9 @@ import { HarnessMark, IconQuestion, IconShield } from './Icons';
 import { Kbd } from './ui';
 import { Gist } from './Gist';
 import { ChoiceCard } from './genui/ChoiceCard';
+import { BriefEvidence, DecisionCard } from './DecisionCard';
+import { AskArtifacts, openFile } from './GenUi';
+import { AgentAvatar } from './AgentAvatar';
 
 /** plain = a question alone, inside a host card that already says who asks (a Strategist's plan card, StrategyPanel.tsx) */
 type Variant = 'lane' | 'tile' | 'orchestrator' | 'compact' | 'window' | 'plain';
@@ -232,6 +237,20 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
       onChoose={() => finish(permissionAnswer(i))} testid={testBase + '-opt-' + (i + 1)} />
   ));
 
+  // a yes/no question (the only kind agents ask): the decision card, the same in every size (ADR 0149)
+  if (!isPerm && q && yesNo) {
+    const yi = q.options.findIndex(o => yesNoOf(o.label) === 'yes'), ni = q.options.findIndex(o => yesNoOf(o.label) === 'no');
+    return (
+      <AskDecision ref={ref} req={req} q={q} testBase={testBase} compact={variant === 'lane' || variant === 'compact' || variant === 'plain'}
+        withHead={variant !== 'plain'} inWindow={variant === 'window'} keysTo={keysTo} chatTitle={chatTitle} age={age} step={stepBadge} sent={sent} keyAttr={key} context={!onAnswer}
+        ctxOpen={variant !== 'lane' && variant !== 'compact'} recommended={recIdx === yi ? 'yes' : recIdx === ni ? 'no' : null}
+        yesTestid={`${testBase}-opt-${yi + 1}`} noTestid={`${testBase}-opt-${ni + 1}`} otherInitial={other ?? undefined} onOtherDraft={v => setOther(v)}
+        onYes={() => apply(pickOption(req, draft, yi), true)} onNo={() => apply(pickOption(req, draft, ni), true)}
+        onWrite={text => apply(answerText(req, draft, text), true)} onSkip={() => apply(answerText(req, draft, t('genui.decision.skipAnswer')), true)}
+        onLater={onEscape ?? onLater} commands={commands} />
+    );
+  }
+
   // ---------- chips (lane, orchestrator, compact)
   const chips = () => {
     if (isPerm) {
@@ -420,3 +439,51 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
     </div>
   );
 }
+
+type Art = Extract<ChatItem, { kind: 'artifact' }>;
+
+/** A yes/no question as the decision card: the brief the chat attached (show_ui brief, next-ask) is its evidence and
+ *  says what Sì / No do; without one the option descriptions say it and the chat's text before the question is open. */
+const AskDecision = forwardRef<HTMLDivElement, {
+  req: PendingRequest; q: Question; testBase: string; compact: boolean; withHead: boolean; chatTitle?: string; age: string; step: ReactNode;
+  sent: boolean; keyAttr: string; context: boolean; ctxOpen: boolean; recommended: 'yes' | 'no' | null; yesTestid: string; noTestid: string;
+  otherInitial?: string; onOtherDraft: (v: string) => void; onYes: () => void; onNo: () => void; onWrite: (text: string) => void; onSkip: () => void;
+  onLater?: () => void; commands?: ReactNode; inWindow: boolean; keysTo?: HTMLElement | null;
+}>(function AskDecision(p, ref) {
+  const items = useApp(s => s.items[p.req.chatId]);
+  const chat = useApp(s => s.chats[p.req.chatId]);
+  const brief = useMemo(() => (items ?? []).filter((i): i is Art => i.kind === 'artifact' && i.askId === p.req.id && i.ui.component === 'brief').pop(), [items, p.req.id]);
+  const b = brief?.ui.component === 'brief' ? brief.ui.props as UiBrief : null;
+  const desc = (label: 'yes' | 'no') => { const o = p.q.options.find(x => yesNoOf(x.label) === label); return o?.description ? cleanDescription(withoutImages(o.description)) : undefined; };
+  const agent = chat?.agent;
+  const who = chat?.title ?? p.chatTitle ?? '';
+  const head = p.withHead ? (
+    <>
+      {agent?.avatar ? <AgentAvatar avatar={agent.avatar} name={agent.name} size={p.compact ? 20 : 26} /> : <IconQuestion size={14} />}
+      {agent && agent.name !== who && <span className="dc-agent">{agent.name}</span>}
+      {!p.inWindow && <b className="dc-who">{who}</b>}
+      {p.q.header && <span className="dc-chip" data-testid={`${p.testBase}-header`}>{p.q.header}</span>}
+      {p.step}
+      <span className="sp" />
+      {!p.inWindow && <span className="dc-age">{p.age}</span>}
+    </>
+  ) : <>{p.q.header && <span className="dc-chip" data-testid={`${p.testBase}-header`}>{p.q.header}</span>}{p.step}</>;
+  const cwd = chat?.cwd;
+  const onFile = (h: string) => void openFile(/^[a-z]:[\\/]|^\/|^file:|^https?:/i.test(h) || !cwd ? h : `${cwd.replace(/[\\/]+$/, '')}${cwd.startsWith('/') ? '/' : '\\'}${h}`, p.req.chatId);
+  return (
+    <DecisionCard ref={ref} testBase={p.testBase} head={head} question={withoutImages(p.q.question)} compact={p.compact} busy={p.sent}
+      rootProps={{ 'data-request-key': p.keyAttr, 'data-kind': 'question', 'data-brief': b ? '' : undefined, 'aria-label': t('genui.decision.label', { chat: who }) }}
+      ifYes={b?.ifYes ?? desc('yes')} ifNo={b?.ifNo ?? desc('no')}
+      yes={{ onChoose: p.onYes, recommended: p.recommended === 'yes', testid: p.yesTestid }}
+      no={{ onChoose: p.onNo, recommended: p.recommended === 'no', testid: p.noTestid }}
+      write={{ onSend: p.onWrite, initial: p.otherInitial, onDraft: p.onOtherDraft }}
+      skip={{ onChoose: p.onSkip, hint: t('genui.decision.skipHint') }}
+      onLater={p.onLater} laterButton={!p.inWindow} className={p.inWindow ? 'wq' : undefined}
+      footer={<>{p.commands}{p.keysTo && createPortal(<span>{t('genui.decision.keys')}</span>, p.keysTo)}</>}>
+      {b && <BriefEvidence brief={b} testBase={p.testBase} size={p.compact ? 'm' : 'l'} onFile={onFile} />}
+      {p.context && <AskArtifacts req={p.req} testBase={p.testBase} noBrief />}
+      {!b && p.context && p.ctxOpen && <p className="dc-nobrief" data-testid={`${p.testBase}-nobrief`}>{t('genui.decision.noBrief')}</p>}
+      {p.context && <AskContext req={p.req} defaultOpen={!b && p.ctxOpen} testBase={p.testBase} noVisuals label={t('genui.decision.chatText')} />}
+    </DecisionCard>
+  );
+});

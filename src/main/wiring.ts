@@ -493,7 +493,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const loopRef: { current?: { ended(run: AgentRun): void; outcome(run: AgentRun): void } } = {};
   const runFeedbackRef: { current?: { runList(): readonly AgentRun[] } } = {};
   const delegateWorktrees = new DelegateWorktrees(path.join(ctx.userData, 'delegation-worktrees.json'));
+  // the question gates ask for a brief before a yes/no question (ADR 0149): the visuals' store exists further down
+  const briefRef: { current?: Artifacts } = {};
   const manager = new ChatManager({
+    briefReady: chatId => briefRef.current?.hasBrief(chatId) ?? true,
     prepareDelegation: delegateWorktrees.prepare,
     freshSessions: () => true,
     continuationContext: chatId => workflowsRef ? JSON.stringify(workflowsRef.list().filter(row => row.chatIds.includes(chatId))) : null,
@@ -658,6 +661,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   mail.start();
   // show_ui on every chat's own endpoint: a visual from the catalog instead of a wall of text (ADR 0033)
   const artifacts = attachArtifacts(ctx, chats);
+  briefRef.current = artifacts;
   addChatTools([showUiTool(artifacts)]);
 
   // a reusable command that ran fine with "Esegui" becomes a brain script by itself (issue #111, ADR 0096)

@@ -56,7 +56,7 @@ describe('PlanApproval.tsx', () => {
     expect(html()).toBe('');
     expect(html(101)).toContain('data-testid="qp-approve"');
   });
-  it('shows concise context and yes/no/free text, preserving the complete scope in a closed disclosure', () => {
+  it('is the decision card: question, steps always open, what Sì / No do, the four answers (ADR 0149)', () => {
     chats = { 's/1': { id: 's/1', plan: plan() } };
     const out = html();
     expect(out).toContain('data-request-key="s/1/plan@42"');
@@ -69,13 +69,14 @@ describe('PlanApproval.tsx', () => {
     expect(out).toMatch(/data-testid="qp-step-3" data-role="strategist".*Strategist/s);
     expect(out).toContain('I test passano');
     expect(out).toContain('Offerte');
-    expect(out).toContain('Sì (consigliato)');
-    expect(out).toContain('data-testid="qp-reject">No</button>');
-    expect(out).toContain('Altro…');
-    expect(out).toContain('<details class="pa-details" data-testid="qp-details">');
-    expect(out).not.toContain('<details open');
-    expect(out.indexOf('qp-summary')).toBeLessThan(out.indexOf('<details'));
-    expect(out.indexOf('carrello e reso')).toBeGreaterThan(out.indexOf('<details'));
+    expect(out).toMatch(/data-testid="qp-approve".*<strong>Sì<\/strong>.*Consigliata/s);
+    expect(out).toMatch(/data-testid="qp-reject".*<strong>No<\/strong>/s);
+    expect(out).toContain('Scrivi una risposta…');
+    expect(out).toContain('Non voglio rispondere');
+    expect(out).toContain('Se Sì');
+    expect(out).not.toContain('<details');
+    expect(out.indexOf('qp-q')).toBeLessThan(out.indexOf('qp-steps'));
+    expect(out.indexOf('qp-steps')).toBeLessThan(out.indexOf('qp-approve'));
   });
   it('keeps report links and screenshot previews visible outside the full plan disclosure', () => {
     chats = { 's/1': { id: 's/1', plan: plan({ doneWhen: 'See [Report](file:///C:/reports/plan.md) and https://example.com/review',
@@ -85,8 +86,8 @@ describe('PlanApproval.tsx', () => {
     expect(out).toContain('href="https://example.com/review"');
     expect(out).toContain('rel="noopener noreferrer"');
     expect(out).toContain('data-testid="qp-imgs"');
-    expect(out.indexOf('qp-links')).toBeLessThan(out.indexOf('<details'));
-    expect(out.indexOf('qp-imgs')).toBeLessThan(out.indexOf('<details'));
+    expect(out.indexOf('qp-imgs')).toBeLessThan(out.indexOf('qp-approve'));
+    expect(out.indexOf('qp-links')).toBeLessThan(out.indexOf('qp-approve'));
   });
   it('speaks the user\'s language', () => {
     chats = { 's/1': { id: 's/1', plan: plan() } };
@@ -94,7 +95,7 @@ describe('PlanApproval.tsx', () => {
     expect(html()).toContain('Do you approve this plan?');
     setLang('de');
     expect(html()).toContain('Gibst du diesen Plan frei?');
-    expect(html()).toContain('Ja (empfohlen)');
+    expect(html()).toContain('<strong>Ja</strong>');
   });
   it('renders nothing once the plan no longer waits, or for an older proposal than the one shown', () => {
     chats = { 's/1': { id: 's/1', plan: plan({ phase: 'running' }) } };

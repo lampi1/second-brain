@@ -214,6 +214,19 @@ describe('AcpSession as Cursor', () => {
     await waitFor(() => sink.pendings[0], 'the third ask is shown');
   });
 
+  it('cursor/ask_question yes/no without its brief: skipped after a moment with how to send one (ADR 0149)', async () => {
+    let ready = false;
+    const { s, sink, logFile } = start({ yesNo: true, briefReady: () => ready });
+    s.send('asksn');
+    await waitFor(() => results(sink).length === 1, 'turn 1', 6000);
+    expect(sink.pendings).toHaveLength(0);
+    expect(answerOf(logFile)).toMatchObject({ outcome: 'skipped', reason: expect.stringContaining('component "brief"') });
+    ready = true;
+    s.send('asksn');
+    const q = await waitFor(() => sink.pendings[0], 'shown with a brief', 4000);
+    expect(q.questions?.[0]?.question).toBe('Lo pubblico?');
+  });
+
   it('cursor/ask_question: labels back to ACP ids, multi-select, skip', async () => {
     const { s, sink, logFile } = start();
     s.send('ask');

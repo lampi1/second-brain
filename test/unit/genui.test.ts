@@ -26,7 +26,7 @@ describe('checkUi: the catalog schemas', () => {
   });
 
   it('names the path and what is expected on a wrong call', () => {
-    expect(checkUi('pie', {})).toMatchObject({ ok: false, error: expect.stringContaining('expected one of table, cards, board, diffList, barChart') });
+    expect(checkUi('pie', {})).toMatchObject({ ok: false, error: expect.stringContaining('expected one of table, cards, board, diffList, barChart, brief') });
     expect(checkUi('table', { columns: ['a'] })).toEqual({ ok: false, error: 'table props.rows: missing' });
     expect(checkUi('table', { columns: ['a'], rows: [{ cells: ['x', 'y'] }] })).toEqual({ ok: false, error: 'table props.rows[0].cells: 2 cells for 1 columns' });
     expect(checkUi('table', { columns: ['a'], rows: [{ cells: ['x'], status: 'green' }] })).toMatchObject({ ok: false, error: expect.stringContaining('props.rows[0].status: expected one of ok, fail') });
@@ -106,8 +106,40 @@ function setup(chats: ChatSummary[], dir = fs.mkdtempSync(path.join(os.tmpdir(),
 const args = (p: Record<string, unknown> = {}) => ({ title: 'Esiti QA', summary: '1 passato su 2', component: 'table', props: table, ...p });
 const question = (chatId: string, id = 'q1'): PendingRequest => ({ id, chatId, type: 'question', tool: 'AskUserQuestion', title: 'Che faccio?', detail: '', input: {}, at: 0 });
 
+const brief = { done: ['Ho corretto il bottone', 'Test verdi'], ifYes: 'Faccio il merge', ifNo: 'Resta sul branch', checks: [{ label: '42/42 test', status: 'ok' }], images: [{ path: 'C:\\qa\\dopo.png', caption: 'Dopo' }], files: [{ path: 'src/a.ts', why: 'il fix', added: 3, removed: 1 }] };
+
+describe('brief: a question\'s context (ADR 0149)', () => {
+  it('checks the brief and says it as text', () => {
+    const r = checkUi('brief', brief);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(describeUi(r.spec)).toBe('Fatto: Ho corretto il bottone · Test verdi');
+    const text = textOfUi(r.spec, 'Riepilogo');
+    expect(text).toContain('- Ho corretto il bottone');
+    expect(text).toContain('[OK] 42/42 test');
+    expect(text).toContain('**Se Sì:** Faccio il merge');
+    expect(checkUi('brief', { ...brief, done: [] })).toEqual({ ok: false, error: 'brief props.done: needs at least 1 item' });
+    expect(checkUi('brief', { done: ['x'], ifYes: 'a' })).toEqual({ ok: false, error: 'brief props.ifNo: missing' });
+    expect(checkUi('brief', { ...brief, files: [{ path: 'a', href: 'javascript:alert(1)' }] }).ok).toBe(false);
+  });
+});
+
 describe('Artifacts: the store behind show_ui', () => {
   afterEach(() => { vi.useRealTimers(); });
+
+  it('a brief goes only on the next question, and the gates see it waiting (ADR 0149)', () => {
+    const { store } = setup([chat('w')]);
+    expect(() => store.show('w', args({ component: 'brief', props: brief }))).toThrow('brief: only with target "next-ask"');
+    expect(store.hasBrief('w')).toBe(false);
+    store.show('w', args({ id: 'tbl', target: 'next-ask' }));
+    expect(store.hasBrief('w')).toBe(false);                         // another visual is not a brief
+    store.show('w', args({ id: 'b', component: 'brief', props: brief, target: 'next-ask' }));
+    expect(store.hasBrief('w')).toBe(true);
+    store.observe('pending:added', question('w', 'q1'));
+    expect(store.hasBrief('w')).toBe(false);                         // used by that question: the next one needs its own
+    expect(store.items('w').find(i => i.key === 'b')).toMatchObject({ askId: 'q1' });
+    store.stop();
+  });
 
   it('target chat: an item of the calling chat, emitted and saved; a wrong call throws a clear error', () => {
     const { store, sent, dir } = setup([chat('w')]);
