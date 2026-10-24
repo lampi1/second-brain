@@ -296,6 +296,19 @@ it('keeps real run states, roles, evidence and receipts in the fullscreen inspec
   for (const value of ['flow-fullscreen-run', 'flow-diagram', 'flow-definition', 'Doc 1', 'sentinel', 'Review required', 'Recorded evidence summary', 'document: revision 3']) expect(html.toLowerCase()).toContain(value.toLowerCase());
   expect(html).not.toContain('flow-step-tier');
 });
+it('shows every fullscreen step description and resolved model before the optional diagram', () => {
+  const state = snapshot();
+  state.roles = { sentinel: { name: 'Sentinel', avatar: { kind: 'character', value: 'sentinel' }, tier: 'mid', tierMax: 'top', model: null, models: { mid: 'review-model' } } };
+  flowState.set({ snapshot: state, error: null, loading: false });
+  const def = { ...definition, steps: ['first', 'second', 'third'].map(id => ({ ...definition.steps[0]!, id, title: `Step ${id}`, instructions: `Complete description ${id}`, kind: 'agent' as const, role: 'sentinel' as const, tier: 'mid' as const })) };
+  const html = renderToStaticMarkup(createElement(FlowFullscreenContent, { definition: def }));
+  const primary = html.slice(0, html.indexOf('<details class="flow-fullscreen-diagram"'));
+  expect(primary).toContain('<section class="flow-fullscreen-steps"');
+  expect(primary.match(/class="flow-step"/g)).toHaveLength(3);
+  expect(primary.match(/Sentinel · mid · review-model<\/span>/g)).toHaveLength(3);
+  for (const step of def.steps) expect(primary).toContain(step.instructions);
+  expect(primary).not.toContain('<details class="flow-full-definition"');
+});
 it('imports only in the displayed brain and never restores a stale brain when the import completes', async () => {
   const state = snapshot();
   expect(await importFlowDefinition('another-brain', '{}')).toBe(false); expect(invoke).not.toHaveBeenCalled();
