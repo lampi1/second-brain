@@ -3034,12 +3034,16 @@ export class ChatManager implements ChatService {
     log.info('chats', 'engine started while the user types', { chat: r.s.id });
     this.ensureSession(r).catch(e => log.warn('chats', 'engine not started ahead of the message', { chat: r.s.id, cause: errText(e), hint: 'it starts with the message, as before' }));
     const sess = r.session as HarnessSession | null;
-    if (sess) setTimeout(() => {
-      if (this.quitting || this.chats.get(chatId) !== r || r.session !== sess || !sess.alive || sess.busy || r.working || r.lastTurnAt !== turns) return;
-      if (r.releasing || r.archiving || r.switching || r.pending.size > 0 || (r.deliveryHolds ?? 0) > 0 || this.deliveries.has(chatId)) return;
+    const unused = (): void => {
+      if (this.quitting || this.chats.get(chatId) !== r || r.session !== sess || !sess!.alive || r.working || r.lastTurnAt !== turns) return;
+      // still starting, or briefly held: look again later instead of leaving the engine running for good
+      if (sess!.busy || r.releasing || r.archiving || r.switching || r.pending.size > 0 || (r.deliveryHolds ?? 0) > 0 || this.deliveries.has(chatId)) {
+        setTimeout(unused, this.opts.prewarmUnusedMs ?? PREWARM_UNUSED_MS).unref(); return;
+      }
       log.info('chats', 'engine started while typing ended unused', { chat: r.s.id });
-      r.releasing = this.closeKeeping(r, sess).finally(() => { r.releasing = undefined; });
-    }, this.opts.prewarmUnusedMs ?? PREWARM_UNUSED_MS).unref();
+      r.releasing = this.closeKeeping(r, sess!).finally(() => { r.releasing = undefined; });
+    };
+    if (sess) setTimeout(unused, this.opts.prewarmUnusedMs ?? PREWARM_UNUSED_MS).unref();
     return true;
   }
 

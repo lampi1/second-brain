@@ -654,7 +654,7 @@ describe('ChatManager', () => {
     await waitFor(() => m.engines().live.length === 0, 'released');
     expect(m.prewarm(c.id)).toBe(true);
     await waitFor(() => m.engines().live.length === 1, 'engine started while typing');
-    await waitFor(() => m.engines().live.length === 0, 'ended unused', 5000);
+    await waitFor(() => m.engines().live.length === 0, 'ended unused');
     expect(results(m, c.id)).toHaveLength(1);
     await m.send(c.id, 'again');
     await waitFor(() => results(m, c.id).length === 2, 'the next message resumes as before');

@@ -45,8 +45,19 @@ export function configOf(root: string): BrainRulesConfig {
 export function atomicWrite(root: string, relative: string, text: string): void {
   const file = confined(root, relative);
   const temp = `${file}.${randomUUID()}.tmp`;
-  try { fs.writeFileSync(temp, text, { flag: 'wx', mode: 0o600 }); fs.renameSync(temp, file); }
+  try { fs.writeFileSync(temp, text, { flag: 'wx', mode: 0o600 }); renameRetrying(temp, file); }
   finally { fs.rmSync(temp, { force: true }); }
+}
+/** On Windows an antivirus or indexer briefly holding the target makes rename fail with EPERM/EACCES/EBUSY: retry a
+ * few times with a short pause (~1 s in all) before giving up with the real error. */
+export function renameRetrying(from: string, to: string): void {
+  for (let attempt = 0; ; attempt++) {
+    try { fs.renameSync(from, to); return; } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code;
+      if (attempt >= 8 || (code !== 'EPERM' && code !== 'EACCES' && code !== 'EBUSY')) throw e;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25 * (attempt + 1));
+    }
+  }
 }
 /** Locks are never stolen on time alone: a crashed writer requires an explicit recovery, avoiding two writers. */
 export function locked<T>(root: string, name: string, action: () => T): T {

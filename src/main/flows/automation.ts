@@ -1,6 +1,7 @@
 // Durable token-free automatic-flow detection and notification; authenticated Orchestrators alone start runs.
 import fs from 'node:fs';
 import path from 'node:path';
+import { renameRetrying } from '../rules/storage';
 import { createHash, randomUUID } from 'node:crypto';
 import type { FlowRun } from '../../shared/flows';
 import { DEVOPS_WRITE_OPS, type DevOpsWriteGrant } from '../../shared/flow-automation';
@@ -336,7 +337,7 @@ export class FlowAutomationService {
     const serialized = JSON.stringify(this.data);
     if (Buffer.byteLength(serialized) > 8 * 1024 * 1024) throw new Error('Automatic flow storage exceeds limit');
     fs.mkdirSync(path.dirname(this.options.file), { recursive: true }); const temp = `${this.options.file}.${randomUUID()}.tmp`;
-    try { const fd = fs.openSync(temp, 'wx', 0o600); try { fs.writeFileSync(fd, serialized); fs.fsyncSync(fd); } finally { fs.closeSync(fd); } fs.renameSync(temp, this.options.file); }
+    try { const fd = fs.openSync(temp, 'wx', 0o600); try { fs.writeFileSync(fd, serialized); fs.fsyncSync(fd); } finally { fs.closeSync(fd); } renameRetrying(temp, this.options.file); }
     finally { try { fs.rmSync(temp, { force: true }); } catch { /* Cleanup cannot undo the atomic rename. */ } }
   }
   private read(source: string): Stored {

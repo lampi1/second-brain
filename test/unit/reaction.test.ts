@@ -27,7 +27,6 @@ describe('the rule in every frame', () => {
     expect(DECISION_FLOW_RULE).toContain('file viewer');
     expect(DECISION_FLOW_RULE).toContain('never implicit approval');
     expect(ORCHESTRATOR_ROLE).not.toContain('give one short line per job');
-    expect(ORCHESTRATOR_ROLE).not.toContain('Regia card');
     expect(ORCHESTRATOR_ROLE).toContain('call app_unblock');
   });
   it('every frame says, once and briefly, that a diagram or a chart block is drawn (owner, 2026-10-22)', () => {

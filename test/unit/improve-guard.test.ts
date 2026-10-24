@@ -1,13 +1,14 @@
 // Regression: replacement refs must not hide the original private blob that Git would publish.
-// Real Git and shipped scanner, scratch fixtures only; no remote, push, PR or running application.
+// Real Git and shipped scanner, scratch fixtures in the OS temp folder (never left in the repo tree); no remote, push, PR or running application.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { expect, it } from 'vitest';
 import { scanCommits } from '../../src/main/brain/guard';
 
 it('scans original blobs even when refs/replace presents a safe replacement commit', async () => {
-  const root = fs.mkdtempSync(path.join(import.meta.dirname, 'replace-fixture-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-replace-fixture-'));
   const git = (...args: string[]) => execFileSync('git', args, { cwd: root, windowsHide: true, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
   try {
     git('init', '-q', '-b', 'main');
@@ -26,7 +27,7 @@ it('scans original blobs even when refs/replace presents a safe replacement comm
     expect('findings' in result && result.findings.some(f => f.rule === 'deny-list')).toBe(true);
     expect(JSON.stringify(result)).not.toContain('PRIVATE-CUSTOMER-MARKER');
   } finally {
-    if (!root.startsWith(path.join(import.meta.dirname, 'replace-fixture-'))) throw new Error('Unexpected fixture root');
+    if (!root.startsWith(path.join(os.tmpdir(), 'sb-replace-fixture-'))) throw new Error('Unexpected fixture root');
     fs.rmSync(root, { recursive: true, force: true });
   }
 });

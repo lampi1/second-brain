@@ -532,7 +532,7 @@ app.whenReady().then(async () => {
     'work:decide': a => {
       const row = workflows.decide(a);
       const target = orchestrator.get();
-      if (target) void s.chats.send(target.id, `[evento app] Decisione registrata nel filo ${row.id}. Rileggi app_work_list e prosegui dalla decisione salvata; questa notifica non concede altri permessi.`, undefined, false, 'Regia', false, { kind: 'app' }).catch(e => log.warn('chats', 'workflow decision wake failed', { cause: errText(e), hint: 'The decision is saved; Fai il punto resumes it.' }));
+      if (target) void s.chats.send(target.id, `[evento app] Decisione registrata nel filo ${row.id}. Rileggi app_work_list e prosegui dalla decisione salvata; questa notifica non concede altri permessi.`, undefined, false, 'Lavoro', false, { kind: 'app' }).catch(e => log.warn('chats', 'workflow decision wake failed', { cause: errText(e), hint: 'The decision is saved; Fai il punto resumes it.' }));
       return row;
     },
     'orchestrator:get': () => orchestrator.get(),

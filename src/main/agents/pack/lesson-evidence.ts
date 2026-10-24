@@ -38,7 +38,7 @@ export function assessLesson(p: LearnedRuleProposal, runs: readonly AgentRun[], 
   result.reason = 'Fonti verificate disponibili. La pertinenza della lezione va valutata dall’utente; il suo effetto non è misurato.';
   return result;
 }
-/** A changed source needs a new proposal and a new explicit user decision. Legacy approval has no evidence binding. */
+/** A changed source needs a new proposal and a new explicit user decision. An approval made before evidence binding has none. */
 export function sameLessonEvidence(stored: LearnedRuleAssessment | undefined, current: LearnedRuleAssessment): boolean {
   return stored?.state === 'supported' && stored.causal === false && current.state === 'supported'
     && stored.proposalHash === current.proposalHash && JSON.stringify(stored.sources) === JSON.stringify(current.sources);

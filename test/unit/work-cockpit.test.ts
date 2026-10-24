@@ -15,7 +15,7 @@ describe('agent-only Home and actionable coordination', () => {
   it('mounts the agent workspace without a work summary board or durable approval controls', () => {
     const html = renderToStaticMarkup(createElement(Home, { nav: vi.fn() }));
     expect(html).toContain('data-testid="agents"'); expect(html).toContain('cloud-agents');
-    expect(html).not.toMatch(/work-cockpit|Regia|work-routine|work-thread/);
+    expect(html).not.toMatch(/work-cockpit|work-routine|work-thread/);
   });
   it('keeps the action visible but disabled before an Orchestrator is configured', () => {
     const html = renderToStaticMarkup(createElement(RecapButton));

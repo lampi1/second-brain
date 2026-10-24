@@ -5,6 +5,7 @@
 // Used by flows/devops-write-tool.ts; tests inject token and fetch.
 import fs from 'node:fs';
 import path from 'node:path';
+import { renameRetrying } from '../rules/storage';
 import { randomUUID } from 'node:crypto';
 import type { DevOpsWriteGrant, DevOpsWriteOp } from '../../shared/flow-automation';
 import { devopsToken } from './devops-detector';
@@ -240,7 +241,7 @@ export class DevOpsWriter {
   private write(data: Ledger): void {
     fs.mkdirSync(path.dirname(this.options.file), { recursive: true });
     const temp = `${this.options.file}.${randomUUID()}.tmp`;
-    try { const fd = fs.openSync(temp, 'wx', 0o600); try { fs.writeFileSync(fd, JSON.stringify(data)); fs.fsyncSync(fd); } finally { fs.closeSync(fd); } fs.renameSync(temp, this.options.file); }
+    try { const fd = fs.openSync(temp, 'wx', 0o600); try { fs.writeFileSync(fd, JSON.stringify(data)); fs.fsyncSync(fd); } finally { fs.closeSync(fd); } renameRetrying(temp, this.options.file); }
     finally { try { fs.rmSync(temp, { force: true }); } catch { /* cleanup cannot undo the rename */ } }
   }
 }

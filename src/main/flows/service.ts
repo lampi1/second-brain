@@ -1,6 +1,7 @@
 // Durable, fail-closed flow execution; only the host can turn trusted reports and user decisions into receipts.
 import fs from 'node:fs';
 import path from 'node:path';
+import { renameRetrying } from '../rules/storage';
 import { randomUUID } from 'node:crypto';
 import type { FlowActivate, FlowAgentBinding, FlowDecision, FlowDefinition, FlowDraft, FlowMatch, FlowPropose, FlowReceipt, FlowReport, FlowRun, FlowScope, FlowSnapshot, FlowStart, FlowStep, FlowStepTierEdit, FlowVerifiedReport, FlowVersion } from '../../shared/flows';
 import { adapted, digest, type RoleTierMax, inScope, integer, keys, normalize, object, text, validateDefinition, validateInputs, validateScope } from './schema';
@@ -211,7 +212,7 @@ export class FlowService {
     const serialized = JSON.stringify(this.data, null, 2);
     if (Buffer.byteLength(serialized) > 20 * 1024 * 1024) throw new Error('Flow storage exceeds limit');
     const temp = `${this.options.file}.${randomUUID()}.tmp`;
-    try { const fd = fs.openSync(temp, 'wx', 0o600); try { fs.writeFileSync(fd, serialized); fs.fsyncSync(fd); } finally { fs.closeSync(fd); } fs.renameSync(temp, this.options.file); }
+    try { const fd = fs.openSync(temp, 'wx', 0o600); try { fs.writeFileSync(fd, serialized); fs.fsyncSync(fd); } finally { fs.closeSync(fd); } renameRetrying(temp, this.options.file); }
     finally { try { fs.rmSync(temp, { force: true }); } catch { /* cleanup must not undo an already renamed durable commit */ } }
   }
   private read(source: string): Stored {
