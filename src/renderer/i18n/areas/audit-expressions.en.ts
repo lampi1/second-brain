@@ -5,7 +5,6 @@ export const auditExpressionsEn: typeof auditExpressionsIt = {
   "auditExpression.AutoCloseNotice.text5": "Keep open",
   "auditExpression.AutoCloseNotice.text6": (p: { v0: string | number }) => `Automatic close in ${p.v0}`,
   "auditExpression.AutoCloseNotice.text7": "Allow automatic closing",
-  "auditExpression.AutoCloseNotice.text9": "Agent",
   "auditExpression.BrowserTile.text10": (p: { v0: string | number; v1: string | number }) => `Browser: ${p.v0}${p.v1}`,
   "auditExpression.BrowserTile.text11": (p: { v0: string | number }) => `, controlled by ${p.v0}`,
   "auditExpression.BrowserTile.text12": "Restore",

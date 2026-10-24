@@ -25,8 +25,8 @@ Auto-close was on by default (2 minutes), yet finished chats piled up. Three cau
    this (no saved result) counts as finished when it had turns. The saved result feeds only the auto-close
    (`Rec.savedResult`); the summary still starts without one. Their clock starts at start-up (full delay and warning).
    On resume, the sub-agent rows the previous engine never saw end (`unknown`) are dropped: they died with it.
-3. **The warning runs whether or not it is seen.** The notice still shows on the strip and in the corner list with
-   «Resta aperto»; any touch, draft, focus or queued message still stops it. With the window hidden or minimized
+3. **The warning runs whether or not it is seen.** The notice still shows on the strip with
+   «Resta aperto» (the corner list was removed on 2026-10-24, owner: it was noise); any touch, draft, focus or queued message still stops it. With the window hidden or minimized
    (`away`) a stale presence keeps its last holds instead of suspending the close. The renderer no longer sends
    `ackDeadline`/`ackGeneration` and `lib/notice-visible.ts` is gone.
 

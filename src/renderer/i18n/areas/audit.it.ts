@@ -1,7 +1,6 @@
 // Literal component UI translated for ADR 0057; used by the renderer's shared dictionary.
 export const auditIt = {
   "audit.AutoCloseNotice.requestNotConfirmedTryAgainTo": "Richiesta non confermata. Riprova per tenere aperto l’agente.",
-  "audit.AutoCloseNotice.agentsClosingSoon": "Agenti prossimi alla chiusura",
   "audit.BrowserTile.back": "Indietro",
   "audit.BrowserTile.forward": "Avanti",
   "audit.BrowserTile.reload": "Ricarica",

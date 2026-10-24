@@ -3,7 +3,6 @@ export const auditExpressionsIt = {
   "auditExpression.AutoCloseNotice.text5": "Resta aperto",
   "auditExpression.AutoCloseNotice.text6": (p: { v0: string | number }) => `Chiusura automatica tra ${p.v0}`,
   "auditExpression.AutoCloseNotice.text7": "Consenti chiusura automatica",
-  "auditExpression.AutoCloseNotice.text9": "Agente",
   "auditExpression.BrowserTile.text10": (p: { v0: string | number; v1: string | number }) => `Browser: ${p.v0}${p.v1}`,
   "auditExpression.BrowserTile.text11": (p: { v0: string | number }) => `, guidato da ${p.v0}`,
   "auditExpression.BrowserTile.text12": "Ripristina",

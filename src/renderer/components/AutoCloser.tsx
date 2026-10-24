@@ -7,7 +7,6 @@ import { now } from '../lib/clock';
 import { app } from '../store/store';
 import { ui } from '../store/ui';
 import { autoCloseProblem, reportAutoClosePresence } from '../store/auto-close';
-import { AutoCloseWarnings } from './AutoCloseNotice';
 
 let lastPresence = '', lastSentAt = 0;
 let interactionSequence = 0;
@@ -46,5 +45,5 @@ export function AutoCloser() {
     const timer = setInterval(report, 5_000); report();
     return () => { for (const event of events) document.removeEventListener(event, onTouch, options); offApp(); offUi(); clearInterval(timer); };
   }, []);
-  return problem ? <p role="status" className="auto-close-service-problem">{problem}</p> : <AutoCloseWarnings />;
+  return problem ? <p role="status" className="auto-close-service-problem">{problem}</p> : null;
 }
