@@ -292,7 +292,8 @@ export function attachArtifacts(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: P
     ...(now ? { now } : {}), ...(process.env.SB_TEST === '1' && wait > 0 ? { askWaitMs: wait } : {}),
   });
   const send = ctx.emitter.emit.bind(ctx.emitter);
-  ctx.emitter.emit = (ch, p) => { send(ch, p); store.observe(ch, p); };
+  // a question's visuals are linked before the question reaches the page: its card draws with its brief (ADR 0149)
+  ctx.emitter.emit = (ch, p) => { if (ch === 'pending:added') { store.observe(ch, p); send(ch, p); } else { send(ch, p); store.observe(ch, p); } };
   const items = chats.items.bind(chats);
   chats.items = chatId => store.merge(chatId, items(chatId));
   return store;

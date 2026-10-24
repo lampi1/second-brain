@@ -241,12 +241,12 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
   if (!isPerm && q && yesNo) {
     const yi = q.options.findIndex(o => yesNoOf(o.label) === 'yes'), ni = q.options.findIndex(o => yesNoOf(o.label) === 'no');
     return (
-      <AskDecision ref={ref} req={req} q={q} testBase={testBase} compact={variant === 'lane' || variant === 'compact' || variant === 'plain'}
+      <AskDecision key={draft.step} ref={ref} req={req} q={q} testBase={testBase} compact={variant === 'lane' || variant === 'compact' || variant === 'plain'}
         withHead={variant !== 'plain'} inWindow={variant === 'window'} keysTo={keysTo} chatTitle={chatTitle} age={age} step={stepBadge} sent={sent} keyAttr={key} context={!onAnswer}
         ctxOpen={variant !== 'lane' && variant !== 'compact'} recommended={recIdx === yi ? 'yes' : recIdx === ni ? 'no' : null}
-        yesTestid={`${testBase}-opt-${yi + 1}`} noTestid={`${testBase}-opt-${ni + 1}`} otherInitial={other ?? undefined} onOtherDraft={v => setOther(v)}
-        onYes={() => apply(pickOption(req, draft, yi), true)} onNo={() => apply(pickOption(req, draft, ni), true)}
-        onWrite={text => apply(answerText(req, draft, text), true)} onSkip={() => apply(answerText(req, draft, t('genui.decision.skipAnswer')), true)}
+        yesTestid={`${testBase}-opt-${yi + 1}`} noTestid={`${testBase}-opt-${ni + 1}`} otherInitial={other ?? undefined} onOtherDraft={v => setOther(v)} onOtherClose={() => setOther(null)}
+        onYes={k => apply(pickOption(req, draft, yi), k)} onNo={k => apply(pickOption(req, draft, ni), k)}
+        onWrite={(text, k) => { setOther(null); apply(answerText(req, draft, text), k); }} onSkip={k => { setOther(null); apply(answerText(req, draft, t('genui.decision.skipAnswer')), k); }}
         onLater={onEscape ?? onLater} commands={commands} />
     );
   }
@@ -447,7 +447,8 @@ type Art = Extract<ChatItem, { kind: 'artifact' }>;
 const AskDecision = forwardRef<HTMLDivElement, {
   req: PendingRequest; q: Question; testBase: string; compact: boolean; withHead: boolean; chatTitle?: string; age: string; step: ReactNode;
   sent: boolean; keyAttr: string; context: boolean; ctxOpen: boolean; recommended: 'yes' | 'no' | null; yesTestid: string; noTestid: string;
-  otherInitial?: string; onOtherDraft: (v: string) => void; onYes: () => void; onNo: () => void; onWrite: (text: string) => void; onSkip: () => void;
+  otherInitial?: string; onOtherDraft: (v: string) => void; onOtherClose: () => void; onYes: (viaKey?: boolean) => void; onNo: (viaKey?: boolean) => void;
+  onWrite: (text: string, viaKey?: boolean) => void; onSkip: (viaKey?: boolean) => void;
   onLater?: () => void; commands?: ReactNode; inWindow: boolean; keysTo?: HTMLElement | null;
 }>(function AskDecision(p, ref) {
   const items = useApp(s => s.items[p.req.chatId]);
@@ -478,14 +479,14 @@ const AskDecision = forwardRef<HTMLDivElement, {
       ifYes={b?.ifYes ?? desc('yes')} ifNo={b?.ifNo ?? desc('no')}
       yes={{ onChoose: p.onYes, recommended: p.recommended === 'yes', testid: p.yesTestid }}
       no={{ onChoose: p.onNo, recommended: p.recommended === 'no', testid: p.noTestid }}
-      write={{ onSend: p.onWrite, initial: p.otherInitial, onDraft: p.onOtherDraft }}
+      write={{ onSend: p.onWrite, initial: p.otherInitial, onDraft: p.onOtherDraft, onClose: p.onOtherClose }}
       skip={{ onChoose: p.onSkip, hint: t('genui.decision.skipHint') }}
       onLater={p.onLater} laterButton={!p.inWindow} className={p.inWindow ? 'wq' : undefined}
       footer={<>{p.commands}{p.keysTo && createPortal(<span>{t('genui.decision.keys')}</span>, p.keysTo)}</>}>
       {b && <BriefEvidence brief={b} testBase={p.testBase} size={p.compact ? 'm' : 'l'} onFile={onFile} />}
       {p.context && <AskArtifacts req={p.req} testBase={p.testBase} noBrief />}
       {!b && p.context && p.ctxOpen && <p className="dc-nobrief" data-testid={`${p.testBase}-nobrief`}>{t('genui.decision.noBrief')}</p>}
-      {p.context && <AskContext req={p.req} defaultOpen={!b && p.ctxOpen} testBase={p.testBase} noVisuals label={t('genui.decision.chatText')} />}
+      {p.context && <AskContext key={b ? 'brief' : 'none'} req={p.req} defaultOpen={!b && p.ctxOpen} testBase={p.testBase} noVisuals label={t('genui.decision.chatText')} />}
     </DecisionCard>
   );
 });

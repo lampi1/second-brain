@@ -40,6 +40,8 @@ const confirmedAt = (min: number, f: Partial<MemoryRecord> = {}): Partial<Memory
 const proposedAt = (min: number, f: Partial<MemoryRecord> = {}): Partial<MemoryRecord> => ({ observedAt: t(min), validFrom: t(min), transitions: [{ at: t(min), status: 'proposed' }], ...f });
 /** distinct general facts, no digits (never two of one thing, never case-specific) */
 const word = (i: number) => String.fromCharCode(97 + Math.floor(i / 26), 97 + (i % 26));
+/** the store as it was, but for the marker an undone save leaves (so launch memory stops quoting it) */
+const unmarked = (rows: MemoryRecord[]) => rows.map(r => ({ ...r, transitions: r.transitions?.filter(x => !x.reason?.endsWith(':undone')) }));
 const auto = (r: MemoryRecord | undefined) => r?.status === 'confirmed' && /^tidy-[0-9a-f]+:auto$/.test(r.transitions?.at(-1)?.reason ?? '');
 
 describe('tidyMemoryJob', () => {
@@ -96,7 +98,7 @@ describe('tidyMemoryJob', () => {
     expect(scout).toMatchObject({ summary: expect.stringMatching(/scout: 1 fatto salvato$/), memory: { confirmed: ['f6'] } });
     // the undo puts the store back: the new fact goes, the saved ones are proposals again
     for (const c of [change, scout]) { expect(log.canRollback(c, restorer(root))).toBe(true); log.rollback(c.id, restorer(root)); }
-    expect(readMemoryRecords(root)).toEqual(JSON.parse(before));
+    expect(unmarked(readMemoryRecords(root))).toEqual(JSON.parse(before));
     // a fact the user undid is never touched again; nothing new to do
     expect(await tidyMemoryJob(ctx(root, log, ask))).toMatchObject({ changes: 0 });
     expect(byId(root).get('f3')).toMatchObject({ status: 'proposed' });
@@ -193,7 +195,7 @@ describe('tidyMemoryJob', () => {
     // never two confirmed values of one thing
     expect([...rows.values()].filter(r => r.status === 'confirmed' && r.scope.roleId === 'artisan').map(r => r.value)).toEqual(['nine']);
     for (const c of log.all()) log.rollback(c.id, restorer(root));
-    expect(readMemoryRecords(root)).toEqual(JSON.parse(before));
+    expect(unmarked(readMemoryRecords(root))).toEqual(JSON.parse(before));
   });
   it(`keeps at most ${MEMORY_CAP} confirmed facts per role, pruning the least recently confirmed; the undo brings them back`, async () => {
     const root = tmp(), log = new ChangeLog(tmp(), () => NOW);
@@ -214,7 +216,17 @@ describe('tidyMemoryJob', () => {
     expect(change.summary).toMatch(/Artisan: 1 fatto salvato, 2 fatti vecchi tolti$/);
     expect(change.evidence.join('\n')).toMatch(new RegExp(`tolto, oltre i ${MEMORY_CAP} fatti: «Il modulo ab`));
     log.rollback(change.id, restorer(root));
-    expect(readMemoryRecords(root)).toEqual(JSON.parse(before));
+    expect(unmarked(readMemoryRecords(root))).toEqual(JSON.parse(before));
+  });
+  it('prunes the facts a person confirmed last: over the cap with only those, the new one is not saved', async () => {
+    const root = tmp(), log = new ChangeLog(tmp(), () => NOW);
+    const facts = Array.from({ length: MEMORY_CAP }, (_, i) => confirmedAt(i + 10, { value: `Il modulo ${word(i)} tiene i file nella sua cartella`, verification: { sourceEventId: `human-review:${i}`, sourceRunId: 'human', evidence: 'ok' } }));
+    store(root, [...facts, proposedAt(6000, { value: 'Il modulo nuovo tiene i file nella sua cartella' })]);
+    expect(await tidyMemoryJob(ctx(root, log))).toMatchObject({ changes: 1 });
+    const rows = byId(root);
+    for (let i = 0; i < MEMORY_CAP; i++) expect(rows.get(`f${i}`)).toMatchObject({ status: 'confirmed' });
+    expect(rows.get(`f${MEMORY_CAP}`)).toMatchObject({ status: 'retracted', transitions: expect.arrayContaining([expect.objectContaining({ reason: expect.stringMatching(`:cap:${MEMORY_CAP}$`) })]) });
+    expect(log.all()[0]!.memory).not.toHaveProperty('confirmed');
   });
   it('skips the facts whose earlier change the user rolled back', async () => {
     const root = tmp(), log = new ChangeLog(tmp(), () => NOW);
@@ -251,7 +263,8 @@ describe('tidyMemory', () => {
     expect(rows.get('f3')).toEqual(before[3]);
     expect(canUndoMemoryTidy(root, undo)).toBe(true);
     undoMemoryTidy(root, undo);
-    expect(readMemoryRecords(root)).toEqual(before);
+    expect(unmarked(readMemoryRecords(root))).toEqual(before);
+    expect(byId(root).get('f1')!.transitions!.at(-1)).toEqual({ at: expect.any(String), status: 'proposed', reason: 'tidy-x:undone' });
     expect(canUndoMemoryTidy(root, undo)).toBe(false);
   });
   it('a saved fact the user changed since blocks the undo', () => {

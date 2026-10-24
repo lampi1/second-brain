@@ -1,7 +1,7 @@
 // Bounded task-relevant facts for AgentPackFlows. Launch selection never changes the searchable memory archive.
 // Confirmed facts and proposed ones not tied to one case (ADR 0149) are quoted evidence, not policy; role instructions and permission enforcement stay outside this view.
 import { memoryConflicts, memoryWords, scopedMemory, type MemoryRecord, type MemoryScope } from './memory-records';
-import { memoryWorth } from './memory-worth';
+import { memoryWorth, sameMemoryFact } from './memory-worth';
 
 const STOP = new Set('the and for with from this that then into your task please review check help need want use using should about have has are was were will can could would all our not una uno per con del della delle degli nel nella alla che come prima dopo questo questa sono fare usa usare verifica controlla'.split(' '));
 const words = (s: string): Set<string> => new Set([...memoryWords(s)].filter(w => !STOP.has(w)));
@@ -22,9 +22,12 @@ function quoteLaunchMemory(r: MemoryRecord): string {
  *  ones, shares the same hard budget. Actual policy is supplied by the host's rules and role instructions. */
 export function selectLaunchMemory(root: string, scope: MemoryScope, query = '', budgetTokens = LAUNCH_MEMORY_TOKENS): LaunchMemory {
   const rows = scopedMemory(root, scope), q = words(query.slice(0, 16000));
-  // facts need no approval (ADR 0149): a proposed one that is not tied to one case and contradicts no confirmed one counts
-  // too, until maintenance saves it
-  const candidates = rows.filter(r => r.status === 'confirmed' || (r.status === 'proposed' && !memoryWorth(r.subject, r.predicate, r.value).specific && !memoryConflicts(rows, r).length))
+  // facts need no approval (ADR 0149): a proposed one that is not tied to one case, contradicts, replaces or repeats no
+  // confirmed one and was not taken back by the user's Annulla counts too, until maintenance saves it
+  const confirmed = rows.filter(r => r.status === 'confirmed');
+  const waiting = (r: MemoryRecord) => r.status === 'proposed' && !memoryWorth(r.subject, r.predicate, r.value).specific && !memoryConflicts(rows, r).length
+    && !r.transitions?.at(-1)?.reason?.endsWith(':undone') && !confirmed.some(c => c.memoryId === r.supersedes || sameMemoryFact(c, r));
+  const candidates = rows.filter(r => r.status === 'confirmed' || waiting(r))
     .map(r => ({ r, words: words(`${r.subject} ${r.predicate} ${r.value}`) }));
   const frequencies = new Map([...q].map(word => [word, candidates.filter(row => row.words.has(word)).length]));
   const ranked = candidates.map(row => ({ r: row.r, score: [...q].reduce((sum, word) => sum + (row.words.has(word)

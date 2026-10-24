@@ -9,6 +9,9 @@
 .dc-head:empty { display: none; }
 .dc-who { color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .dc-agent { color: var(--text-2); white-space: nowrap; }
+.dc-agent, .dc-chip { min-width: 0; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; }
+/* long paths and URLs wrap inside the card (it is an inline-size container: it never grows to fit) */
+.dc-q, .dc-lead, .dc-done li span, .dc-effect dd, .dc-why, .dc-check, .dc-nobrief { overflow-wrap: anywhere; }
 .dc-agent + .dc-who::before { content: '·'; margin-right: 8px; color: var(--text-3); font-weight: 400; }
 .dc-chip { padding: 1px 8px; border-radius: 999px; background: var(--surface-3); color: var(--text-2); white-space: nowrap; font-size: 11px; }
 .dc-age { color: var(--text-3); white-space: nowrap; }

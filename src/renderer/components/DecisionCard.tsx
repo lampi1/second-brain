@@ -14,7 +14,8 @@ import { IconCheck, IconEdit, IconX } from './Icons';
 import { Kbd } from './ui';
 import '../styles/decision.css';
 
-export interface DecisionChoice { onChoose: () => void; label?: string; recommended?: boolean; disabled?: boolean; testid?: string }
+/** onChoose(viaKey): true when the keyboard answered (a host moves the focus on only then) */
+export interface DecisionChoice { onChoose: (viaKey?: boolean) => void; label?: string; recommended?: boolean; disabled?: boolean; testid?: string }
 
 export interface DecisionProps {
   testBase: string;
@@ -28,9 +29,9 @@ export interface DecisionProps {
   ifYes?: string; ifNo?: string;
   yes: DecisionChoice; no: DecisionChoice;
   /** the free-text answer; absent = no box */
-  write?: { onSend: (text: string) => void; disabled?: boolean; hint?: string; initial?: string; onDraft?: (text: string) => void; testids?: { open?: string; input?: string; send?: string } };
+  write?: { onSend: (text: string, viaKey?: boolean) => void; onClose?: () => void; disabled?: boolean; hint?: string; initial?: string; onDraft?: (text: string) => void; testids?: { open?: string; input?: string; send?: string } };
   /** «Non voglio rispondere»: hint = what it does */
-  skip?: { onChoose: () => void; hint: string; testid?: string };
+  skip?: { onChoose: (viaKey?: boolean) => void; hint: string; testid?: string };
   /** «Ci penso dopo» (Esc); laterButton false = only the key (the questions window has its own button) */
   onLater?: () => void;
   laterButton?: boolean;
@@ -56,9 +57,10 @@ export const DecisionCard = forwardRef<HTMLDivElement, DecisionProps>(function D
   useEffect(() => { if (!writing && back.current) { back.current = false; writeBtn.current?.focus(); } }, [writing]);
   const busy = !!p.busy;
   const draft = (v: string) => { setText(v); p.write?.onDraft?.(v); };
-  const send = () => { const v = text.trim(); if (v && !busy && !p.write?.disabled) p.write?.onSend(v); };
-  const close = () => { back.current = true; setWriting(false); };
-  const choose = (c: DecisionChoice) => { if (!busy && !c.disabled) c.onChoose(); };
+  const send = (viaKey = false) => { const v = text.trim(); if (v && !busy && !p.write?.disabled) p.write?.onSend(v, viaKey); };
+  // Annulla / Esc in the box: the host forgets its draft, so a remount never reopens it
+  const close = () => { back.current = true; setWriting(false); setText(''); p.write?.onClose?.(); };
+  const choose = (c: DecisionChoice, viaKey = false) => { if (!busy && !c.disabled) c.onChoose(viaKey); };
 
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (busy || e.nativeEvent.isComposing || e.ctrlKey || e.metaKey || e.altKey) return;
@@ -69,10 +71,10 @@ export const DecisionCard = forwardRef<HTMLDivElement, DecisionProps>(function D
     const k = e.key.toLowerCase();
     let done = true;
     if (e.key === 'Escape' && p.onLater) p.onLater();
-    else if (YES_KEYS.has(k)) choose(p.yes);
-    else if (NO_KEYS.has(k)) choose(p.no);
+    else if (YES_KEYS.has(k)) choose(p.yes, true);
+    else if (NO_KEYS.has(k)) choose(p.no, true);
     else if (WRITE_KEYS.has(k) && p.write && !p.write.disabled) setWriting(true);
-    else if (e.key === 'Enter' && !e.shiftKey && (p.yes.recommended || p.no.recommended)) { if (!e.repeat) choose(p.yes.recommended ? p.yes : p.no); }
+    else if (e.key === 'Enter' && !e.shiftKey && (p.yes.recommended || p.no.recommended)) { if (!e.repeat) choose(p.yes.recommended ? p.yes : p.no, true); }
     else done = false;
     if (done) { e.preventDefault(); e.stopPropagation(); }
   };
@@ -110,14 +112,14 @@ export const DecisionCard = forwardRef<HTMLDivElement, DecisionProps>(function D
             onChange={e => draft(e.target.value)}
             onKeyDown={e => {
               if (e.nativeEvent.isComposing) return;
-              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); if (!e.repeat) send(); }
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); if (!e.repeat) send(true); }
               else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
             }} />
           <div className="dc-write-foot">
             {p.write.hint && <span className="dc-hint">{p.write.hint}</span>}
             <span className="sp" />
             <button type="button" className="btn btn-ghost btn-s" onClick={close} disabled={busy} data-testid={`${p.testBase}-other-cancel`}>{t('genui.decision.cancel')}</button>
-            <button type="button" className="btn btn-primary btn-s" onClick={send} disabled={busy || !text.trim() || p.write.disabled} data-testid={p.write.testids?.send ?? `${p.testBase}-other-send`}>{t('genui.decision.send')} <Kbd>{t('genui.request.enter')}</Kbd></button>
+            <button type="button" className="btn btn-primary btn-s" onClick={() => send()} disabled={busy || !text.trim() || p.write.disabled} data-testid={p.write.testids?.send ?? `${p.testBase}-other-send`}>{t('genui.decision.send')} <Kbd>{t('genui.request.enter')}</Kbd></button>
           </div>
         </div>
       ) : (

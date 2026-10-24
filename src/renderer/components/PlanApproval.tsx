@@ -62,7 +62,7 @@ export function PlanApproval({ ask, chatTitle, onEscape, keysTo, testid }: {
       ifYes={t('genui.decision.planYes')} ifNo={t('genui.decision.planNo')}
       yes={{ onChoose: () => decide('approve'), recommended: true, testid: `${testid}-approve` }}
       no={{ onChoose: () => decide('change', t('tree.plan.ask.rejection')), testid: `${testid}-reject` }}
-      write={{ onSend: answer => decide('change', answer), initial: changing ? text : undefined, onDraft: v => edit(true, v), hint: t('tree.plan.ask.changeHint'),
+      write={{ onSend: answer => decide('change', answer), initial: changing ? text : undefined, onDraft: v => edit(true, v), onClose: () => edit(false, ''), hint: t('tree.plan.ask.changeHint'),
         testids: { open: `${testid}-change`, input: `${testid}-change-text`, send: `${testid}-change-send` } }}
       skip={{ onChoose: () => decide('change', t('tree.plan.ask.rejection')), hint: t('genui.decision.skipDiscard') }}
       footer={keysTo ? createPortal(<span>{t('genui.decision.keys')}</span>, keysTo) : null}>

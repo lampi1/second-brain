@@ -243,7 +243,9 @@ export function undoMemoryTidy(root: string, undo: MemoryTidyUndo): void {
   mutate(root, records => {
     for (const id of undo.confirmed ?? []) {
       const r = records.find(x => x.memoryId === id)!;
-      r.transitions!.pop(); r.status = 'proposed'; delete r.verification;
+      // marked, so launch memory stops quoting it until a person or a later pass decides again
+      r.transitions!.pop(); r.transitions!.push({ at: new Date().toISOString(), status: 'proposed', reason: `${undo.tag}:undone` });
+      r.status = 'proposed'; delete r.verification;
     }
     for (const id of undo.retired) {
       const r = records.find(x => x.memoryId === id)!;

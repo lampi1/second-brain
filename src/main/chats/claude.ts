@@ -197,6 +197,8 @@ export class ClaudeSession implements HarnessSession {
   private yesNoRefused = 0;
   /** questions already given BRIEF_GRACE_MS for their brief (show_ui may run in parallel with the question) */
   private briefWaited = new Set<string>();
+  /** this chat sent no brief twice in a row: it is not asked for again in this session (ADR 0149) */
+  private briefOff = false;
   private tools = new Map<string, { item: ToolItem; input: unknown }>();
   private streams = new Map<string, Stream>();          // `${messageId}:${index}` → streamed block
   private order = new Map<string, Stream[]>();          // messageId → its streamed blocks, in arrival order
@@ -586,6 +588,7 @@ export class ClaudeSession implements HarnessSession {
   private finish(state: ChatState, code: number | null, error: string | null): void {
     if (this.exited) return;
     this.markExited();
+    this.briefWaited.clear(); // its timer finds nothing to show
     for (const c of this.controls.values()) { clearTimeout(c.timer); c.reject(new Error('La sessione è terminata.')); }
     this.controls.clear();
     for (const id of [...this.calls.keys()]) { this.calls.delete(id); this.sink.resolved(id); }
@@ -762,14 +765,14 @@ export class ClaudeSession implements HarnessSession {
     if (!qs.length) { this.yesNoRefused = 0; return false; }
     const yesNo = yesNoShape(qs);
     // a yes/no question without its brief (ADR 0149): a moment for a show_ui called in parallel, then sent back
-    const noBrief = yesNo && !!this.opts.briefReady && !this.opts.briefReady();
+    const noBrief = yesNo && !this.briefOff && !!this.opts.briefReady && !this.opts.briefReady();
     if (noBrief && !this.briefWaited.has(id) && this.yesNoRefused < YESNO_RETRIES) {
       this.briefWaited.add(id);
-      setTimeout(() => { if (!this.procExited && this.briefWaited.has(id)) this.onControlRequest(m); this.briefWaited.delete(id); }, BRIEF_GRACE_MS).unref?.();
+      setTimeout(() => { if (!this.exited && !this.procExited && this.briefWaited.has(id)) this.onControlRequest(m); this.briefWaited.delete(id); }, BRIEF_GRACE_MS).unref?.();
       return true;
     }
     if (yesNo && !noBrief) { this.yesNoRefused = 0; return false; }
-    if (this.yesNoRefused >= YESNO_RETRIES) { this.yesNoRefused = 0; return false; }
+    if (this.yesNoRefused >= YESNO_RETRIES) { if (noBrief) this.briefOff = true; this.yesNoRefused = 0; return false; }
     this.yesNoRefused++;
     log.info('chats', noBrief ? 'question sent back: no brief' : 'question sent back: not yes/no', { chat: this.opts.chatId, data: { requestId: id, attempt: this.yesNoRefused } });
     try { this.write({ type: 'control_response', response: { subtype: 'success', request_id: id, response: { behavior: 'deny', message: noBrief ? BRIEF_REFUSAL : YESNO_REFUSAL, toolUseID: toolUseId } } }); } catch { /* gone */ }

@@ -227,6 +227,29 @@ describe('AcpSession as Cursor', () => {
     expect(q.questions?.[0]?.question).toBe('Lo pubblico?');
   });
 
+  it('a chat that never sends a brief: shown on the third ask, then never held again; a stop during the wait cancels it', async () => {
+    const { s, sink } = start({ yesNo: true, briefReady: () => false });
+    s.send('asksn');
+    await waitFor(() => results(sink).length === 1, 'turn 1', 6000);
+    s.send('asksn');
+    await waitFor(() => results(sink).length === 2, 'turn 2', 6000);
+    s.send('asksn');
+    await waitFor(() => sink.pendings[0], 'third ask shown', 2000);
+    s.answer(sink.pendings[0]!.id, { kind: 'permission', allow: false, message: 'dopo' });
+    await waitFor(() => results(sink).length === 3, 'turn 3', 4000);
+    s.send('asksn');
+    await waitFor(() => sink.pendings[1], 'shown at once now', 1000);
+    s.answer(sink.pendings[1]!.id, { kind: 'permission', allow: false, message: 'dopo' });
+    await waitFor(() => results(sink).length === 4, 'turn 4', 4000);
+
+    const b = start({ yesNo: true, briefReady: () => false });
+    b.s.send('asksn');
+    await new Promise(r => setTimeout(r, 300));
+    b.s.interrupt();
+    await waitFor(() => answerOf(b.logFile)?.outcome === 'cancelled', 'cancelled', 4000);
+    expect(b.sink.pendings).toHaveLength(0);
+  });
+
   it('cursor/ask_question: labels back to ACP ids, multi-select, skip', async () => {
     const { s, sink, logFile } = start();
     s.send('ask');

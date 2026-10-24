@@ -45,9 +45,9 @@ function FlowStandardApproval({ ask, onEscape }: { ask: Exclude<FlowAsk, { type:
     question={t(ask.type === 'flow-definition' ? 'flows.proposalQuestion' : ask.type === 'flow-automation' ? 'flows.autoQuestion' : 'flows.stepQuestion')}
     yes={{ onChoose: () => void decide('yes'), label: t(mode === 'retry' ? 'flows.yesRetry' : 'flows.yes'), disabled: !canApprove, testid: 'flow-approve' }}
     no={{ onChoose: () => void decide('no'), label: t('flows.no'), testid: 'flow-reject' }}
-    write={{ onSend: text => void decide('other', text), initial: decisionDraft(key) || undefined, onDraft: v => { setFeedback(v); saveDecisionDraft(key, v); }, hint: t('flows.otherHint'),
+    write={{ onSend: text => void decide('other', text), initial: decisionDraft(key) || undefined, onDraft: v => { setFeedback(v); saveDecisionDraft(key, v); }, onClose: () => { setFeedback(''); saveDecisionDraft(key, ''); }, hint: t('flows.otherHint'),
       testids: { open: 'flow-other', input: 'flow-feedback', send: 'flow-feedback-send' } }}
-    skip={{ onChoose: () => void decide('no'), hint: t('genui.decision.skipDiscard') }}>
+    skip={{ onChoose: () => void decide('no', ''), hint: t('genui.decision.skipDiscard') }}>
     {ask.type === 'flow-definition' && <p className="wq-lead">{t('flows.activationHint')}</p>}
     {ask.type === 'flow-automation' && <><p className="wq-lead">{t('flows.autoHint')}</p><FlowAutomationSummary config={ask.rule.config} /></>}
     {definition?.description && <p>{definition.description}</p>}

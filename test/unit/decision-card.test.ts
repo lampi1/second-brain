@@ -95,7 +95,7 @@ describe('DecisionCard', () => {
     for (const over of [{ nativeEvent: { isComposing: true } }, { repeat: true }, { shiftKey: true }]) onKey()(key('Enter', over));
     expect(send).not.toHaveBeenCalled();
     onKey()(key('Enter'));
-    expect(send).toHaveBeenCalledWith('Prima i test');
+    expect(send).toHaveBeenCalledWith('Prima i test', true);
   });
 
   it('draws who asks, the question, the evidence, what Sì / No do and the four answers', () => {

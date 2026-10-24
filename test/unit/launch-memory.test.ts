@@ -37,6 +37,20 @@ describe('task-selective memory at launch', () => {
     const rows = selected.text.split('\n').map(line => JSON.parse(line) as { status: string; value: string });
     expect(rows.map(r => [r.status, r.value])).toEqual([['confirmed', 'Database restores are kept in the shared vault.'], ['proposed', 'Database backups are kept in the shared vault.']]);
   });
+  it('skips a proposed fact the user undid, one replacing a confirmed fact and one repeating it', () => {
+    const w = world();
+    const kept = w.add('Database backups are kept in the shared vault.');
+    w.confirm(kept);
+    const file = path.join(w.root, 'memory/records.json'), rows = JSON.parse(fs.readFileSync(file, 'utf8')) as MemoryRecord[], at = '2026-01-03T00:00:00Z';
+    const row = (id: string, value: string, f: Partial<MemoryRecord> = {}): MemoryRecord => ({ ...rows[0]!, memoryId: id, value, status: 'proposed', verification: undefined, supersedes: null, observedAt: at, validFrom: at, transitions: [{ at, status: 'proposed' }], ...f });
+    rows.push(row('m_undone', 'Database dumps are kept in the shared vault.', { transitions: [{ at, status: 'proposed' }, { at, status: 'proposed', reason: 'tidy-x:undone' }] }),
+      row('m_next', 'Database snapshots are kept in the shared vault.', { supersedes: kept.memoryId }),
+      row('m_same', 'Database backups are kept in the shared vault.'),
+      row('m_ok', 'Database exports are kept in the shared vault.'));
+    fs.writeFileSync(file, JSON.stringify(rows, null, 2));
+    const values = selectLaunchMemory(w.root, scope, 'Database vault shared kept').text.split('\n').map(line => (JSON.parse(line) as { value: string }).value);
+    expect(values.sort()).toEqual(['Database backups are kept in the shared vault.', 'Database exports are kept in the shared vault.']);
+  });
   it('never uses case-specific proposals, observed, disputed, retracted or not-yet-valid facts as launch context', () => {
     const w = world();
     const revoked = w.confirm(w.add('Database migrations use the retired runner.'));

@@ -38,13 +38,17 @@ knowledge for the agents.
 - **Facts need no approval.** The Proposte deck has no memory cards any more (only skills, rules and the other
   sources). The maintenance job `merge-memory` (`brainmodel/memory-tidy.ts`), after merging and generalizing, saves
   the remaining proposed facts as confirmed (a newer value replaces the confirmed fact it contradicts or supersedes),
-  and keeps at most `MEMORY_CAP` (40) confirmed facts per role: the least recently confirmed go first. Each pass is one
-  Log change per role with Annulla (`MemoryTidyUndo.confirmed`, `tidyMemory` confirm / prune); a fact whose change the
-  user undid is left as he left it. Until a pass runs, launch memory also takes proposed facts that are not tied to a
-  single case (`launch-memory.ts`). A fact tied to one case still waits for an engine to make it general.
+  and keeps at most `MEMORY_CAP` (40) confirmed facts per role: the least recently confirmed go first, facts a person
+  confirmed last. Each pass is one Log change per role with Annulla (`MemoryTidyUndo.confirmed`, `tidyMemory` confirm /
+  prune); a fact whose change the user undid is left as he left it, marked `<tag>:undone` so agents stop reading it.
+  Until a pass runs, launch memory also takes proposed facts that are not tied to a single case and do not contradict,
+  replace or repeat a confirmed one (`launch-memory.ts`). A fact tied to one case still waits for an engine to make it general.
 
 ## Consequences
 - The owner reads one card everywhere and never needs the chat to answer.
 - A chat that skips the brief costs one more turn (the gate), once per question.
 - Facts can be wrong without anyone checking them; the cap, the worth filter and the Log with Annulla bound the damage.
   "Least recently confirmed" stands in for "least used": the app does not count how often a fact is recalled.
+- A fact an agent proposes reaches later launches with no person in between, so a prompt injection that gets a chat
+  to call `memory_propose` persists across runs. Facts are quoted as evidence, never as policy, and the Log shows each
+  saved fact with Annulla.

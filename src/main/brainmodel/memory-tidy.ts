@@ -133,7 +133,11 @@ export async function tidyMemoryJob(ctx: JobContext): Promise<JobResult> {
     saved.add(r.memoryId); replaces.forEach(id => replaced.add(id));
     const p = plan(r); p.confirm.push({ id: r.memoryId, replaces }); p.lines.push({ kind: 'saved', old: r.value });
   }
-  // 4. at most MEMORY_CAP confirmed facts per role: the least recently confirmed or written go first
+  // 4. at most MEMORY_CAP confirmed facts per role. What the user confirmed himself goes last; among the rest the least
+  // recent go first (a fact saved now counts from when it was written), so an old backlog saved in one pass never pushes
+  // out what he chose. A fact saved in place of another one is never dropped in the same pass.
+  const replacing = new Set(plans.size ? [...plans.values()].flatMap(p => p.confirm.filter(c => c.replaces.length).map(c => c.id)) : []);
+  const human = (r: MemoryRecord) => r.status === 'confirmed' && !!r.verification?.sourceEventId?.startsWith('human-review:');
   const byRole = new Map<string, MemoryRecord[]>();
   for (const r of records) {
     if (!(r.status === 'confirmed' || saved.has(r.memoryId)) || r.validTo !== null || r.derivedFiles?.length || replaced.has(r.memoryId)) continue;
@@ -143,8 +147,19 @@ export async function tidyMemoryJob(ctx: JobContext): Promise<JobResult> {
     // a fact the user brought back with Annulla is his: it does not count, so his undo never pushes out another one
     const over = list.filter(r => !undone.has(r.memoryId)).length - MEMORY_CAP;
     if (over <= 0) continue;
-    const oldest = list.filter(r => !saved.has(r.memoryId) && !undone.has(r.memoryId)).sort((a, b) => lastAt(a).localeCompare(lastAt(b)) || a.memoryId.localeCompare(b.memoryId)).slice(0, over);
-    for (const r of oldest) { const p = plan(r); p.prune.push({ id: r.memoryId, reason: `cap:${MEMORY_CAP}` }); p.lines.push({ kind: 'pruned', old: r.value }); }
+    const oldest = list.filter(r => !undone.has(r.memoryId) && !replacing.has(r.memoryId))
+      .sort((a, b) => Number(human(a)) - Number(human(b)) || lastAt(a).localeCompare(lastAt(b)) || a.memoryId.localeCompare(b.memoryId)).slice(0, over);
+    for (const r of oldest) {
+      const p = plan(r);
+      if (saved.has(r.memoryId)) {
+        // not saved after all: it stays out, as a proposal retired by the cap
+        p.confirm = p.confirm.filter(c => c.id !== r.memoryId);
+        p.lines = p.lines.filter(l => !(l.kind === 'saved' && l.old === r.value));
+        saved.delete(r.memoryId);
+        p.retire.push({ id: r.memoryId, reason: `cap:${MEMORY_CAP}` });
+      } else p.prune.push({ id: r.memoryId, reason: `cap:${MEMORY_CAP}` });
+      p.lines.push({ kind: 'pruned', old: r.value });
+    }
   }
 
   // 5. one change per role, with its undo
