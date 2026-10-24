@@ -704,6 +704,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     sendWorker: (chatId, prompt, authorize, failed) => manager.send(chatId, `${AGENT_LABEL}\n\n${prompt}`, undefined, false, 'Routine', false, { kind: 'app' },
       { beforeSubmit: authorize, submitted() {}, failed }),
     discardWorker: chatId => manager.close(chatId),
+    // the per-step engine/model picker on the Routine page (ADR 0153): the engines and models the registry knows
+    engines: () => { const registry = brain.routingInfo().registry; return registry ? Object.keys(registry.harnesses).map(id => ({ id, name: id.charAt(0).toUpperCase() + id.slice(1), models: registry.models.filter(model => model.harness === id).map(model => model.id) })) : []; },
+    steer: (chatId, text) => manager.send(chatId, text, undefined, false, 'Routine', false, { kind: 'app' }),
     roles: () => flowRoles(agents.list().profiles, (engine, tier) => tierModel(engine, tier, brain.routingInfo().registry, brain.settings().modelTiers)),
     send: (ownerId, message) => chats.send(ownerId, message, undefined, false, 'Routine automatiche', false, { kind: 'app' }) });
   addChatTools(devopsWriteTools((chatId, request, signal) => flows.devopsWrite(chatId, request, signal)));

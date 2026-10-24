@@ -9,6 +9,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { ChatSummary } from '../../shared/contract';
 import { APP_OWNER, type FlowAgentBinding, type FlowCancel, type FlowDecision, type FlowDryRun, type FlowItemPreview, type FlowOverviewRow, type FlowRestart, type FlowRestartDecision, type FlowRestartProposal, type FlowRoleInfo, type FlowRun, type FlowSnapshot, type FlowStartItem, type FlowStep, type FlowStepModelEdit, type FlowTestDbEvidence, type FlowVerifiedReport } from '../../shared/flows';
 import type { Effort } from '../../shared/contract';
+import { HOLD, healable as isHealable } from '../../shared/routine';
 import type { ModelTier, WorkRoleId } from '../../shared/roles';
 import { log } from '../log';
 import { FlowService } from './service';
@@ -47,8 +48,6 @@ export interface FlowRuntimeOptions {
   readItem?(organization: string, project: string, id: number, signal?: AbortSignal): Promise<DevOpsItem>;
   run?(command: ResolvedCommand, options: { cwd: string; timeoutMs: number; signal?: AbortSignal; env?: Record<string, string> }): Promise<CommandResult>;
 }
-/** A block the runner must not heal by itself: it needs the user's ok on new content. */
-const HOLD = 'Da sistemare: ';
 /** The role an agent step without one runs as (ADR 0153): the runner picks by what the step does. */
 const defaultRole = (spec: FlowStep): WorkRoleId => spec.reviewOf ? 'sentinel' : spec.effect === 'read-only' ? 'scout' : 'artisan';
 export interface FlowWorkerRequest {
@@ -217,15 +216,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   };
   /** The runner's self-heal (ADR 0153): a failed step with attempts left retries, or sends the work back to the step its
    *  definition names. Not for the user's own blocks, a prod step, content that changed, or a paused run. */
-  const healable = (run: FlowRun, spec: FlowStep): boolean => {
-    const step = run.steps[run.currentStep]!;
-    if (run.status !== 'blocked' || step.status !== 'blocked' || !step.decisionPending || step.attempts === 0 || step.attempts >= spec.maxAttempts
-      || spec.env === 'prod' || (step.reason ?? '').startsWith(HOLD) || run.pendingRecovery || run.pendingCancellation || run.paused) return false;
-    if (!spec.onFail) return true;
-    const definition = service().snapshot().versions.find(version => version.definition.id === run.flowId && version.version === run.flowVersion)?.definition;
-    const target = definition?.steps.findIndex(item => item.id === spec.onFail!.goto) ?? -1;
-    return target >= 0 && run.steps[target]!.attempts < definition!.steps[target]!.maxAttempts;
-  };
+  const healable = (run: FlowRun, _spec?: FlowStep): boolean => isHealable(run, service().snapshot().versions.find(version => version.definition.id === run.flowId && version.version === run.flowVersion)?.definition);
   const heal = (flow: FlowService, run: FlowRun, spec: FlowStep): boolean => {
     const step = run.steps[run.currentStep]!;
     if (!healable(run, spec) || interrupting.has(run.id)) return false;

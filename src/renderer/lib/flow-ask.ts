@@ -1,6 +1,9 @@
 // Flow review and run gates join the single QuestionsWindow queue. Keys bind brain, immutable version and step.
 import type { FlowAutomationRule } from '@shared/flow-automation';
 import type { FlowDraft, FlowRun, FlowSnapshot, FlowVersion } from '@shared/flows';
+import { healable } from '@shared/routine';
+/** A prod script/query step: it waits for «Esegui», never a yes/no. */
+const prodWait = (snapshot: FlowSnapshot, run: FlowRun): boolean => run.status === 'approval' && snapshot.versions.find(v => v.definition.id === run.flowId && v.version === run.flowVersion)?.definition.steps[run.currentStep]?.env === 'prod';
 export interface FlowDefinitionAsk { type: 'flow-definition'; chatId: 'flow'; id: string; at: number; title: string; contextKey: string; draft: FlowDraft }
 export interface FlowRunAsk { type: 'flow-run'; chatId: 'flow'; id: string; at: number; title: string; contextKey: string; run: FlowRun; version?: FlowVersion }
 export interface FlowAutomationAsk { type: 'flow-automation'; chatId: 'flow'; id: string; at: number; title: string; contextKey: string; rule: FlowAutomationRule; version?: FlowVersion }
@@ -25,7 +28,9 @@ export function flowAsks(snapshot: FlowSnapshot | null): FlowAsk[] {
       const version = snapshot.versions.find(v => v.definition.id === run.flowId && v.version === proposal.targetVersion && v.digest === proposal.targetDigest);
       return { type: 'flow-restart', chatId: 'flow', id: `${context}/restart/${run.id}@${run.revision}:${proposal.revision}`, at: proposal.requestedAt, title: `${version?.definition.title ?? run.flowId} · ${run.subjectKey}`, contextKey: snapshot.contextKey, run, version };
     }),
-    ...snapshot.runs.filter(run => !run.pendingRecovery && !run.pendingCancellation && (run.status === 'approval' || run.status === 'blocked') && run.steps[run.currentStep] && run.steps[run.currentStep]!.decisionPending !== false).map((run): FlowRunAsk => {
+    // not a prod step waiting for «Esegui» (its own card on the Routine page) nor a failure the runner heals by itself (ADR 0153)
+    ...snapshot.runs.filter(run => !run.pendingRecovery && !run.pendingCancellation && (run.status === 'approval' || run.status === 'blocked') && run.steps[run.currentStep] && run.steps[run.currentStep]!.decisionPending !== false
+      && !run.paused && !prodWait(snapshot, run) && !healable(run, snapshot.versions.find(v => v.definition.id === run.flowId && v.version === run.flowVersion)?.definition)).map((run): FlowRunAsk => {
       const version = snapshot.versions.find(v => v.definition.id === run.flowId && v.version === run.flowVersion && v.digest === run.definitionDigest);
       return { type: 'flow-run', chatId: 'flow', id: `${context}/run/${run.id}@${run.revision}:${run.steps[run.currentStep]!.stepId}`, at: run.updatedAt, title: `${version?.definition.title ?? run.flowId} · ${run.subjectKey}`, contextKey: snapshot.contextKey, run, version };
     }),
