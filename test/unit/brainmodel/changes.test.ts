@@ -44,6 +44,31 @@ describe('ChangeLog', () => {
     expect(fs.existsSync(other)).toBe(false);
     expect(fs.readFileSync(file, 'utf8')).toBe('modificato a mano');
   });
+  it('freezes an aliased write destination so retargeting cannot redirect provenance or rollback', () => {
+    const a = tmp(), b = tmp(), holder = tmp(), alias = path.join(holder, 'chosen'), log = new ChangeLog(tmp());
+    fs.symlinkSync(a, alias, 'junction');
+    const file = path.join(alias, 'nested', 'candidate.md');
+    const c = log.apply(base, [{ file, text: 'new' }])!;
+    expect(c.files[0]!.file).toBe(path.join(fs.realpathSync(a), 'nested', 'candidate.md'));
+    expect(log.madeBy(file)).toBe('corrections');
+    fs.mkdirSync(path.join(b, 'nested')); fs.writeFileSync(path.join(b, 'nested', 'candidate.md'), 'new');
+    fs.unlinkSync(alias); fs.symlinkSync(b, alias, 'junction');
+    expect(log.madeBy(file)).toBeNull();
+    log.rollback(c.id, agents({}));
+    expect(fs.existsSync(path.join(a, 'nested', 'candidate.md'))).toBe(false);
+    expect(fs.readFileSync(file, 'utf8')).toBe('new');
+  });
+  it('captures an aliased deletion before its empty parent disappears and restores the original destination', () => {
+    const a = tmp(), b = tmp(), holder = tmp(), alias = path.join(holder, 'chosen'), log = new ChangeLog(tmp());
+    fs.symlinkSync(a, alias, 'junction');
+    fs.mkdirSync(path.join(a, 'nested')); fs.writeFileSync(path.join(a, 'nested', 'candidate.md'), 'old');
+    const c = log.apply(base, [{ file: path.join(alias, 'nested', 'candidate.md'), text: null }])!;
+    expect(c.files[0]!.file).toBe(path.join(fs.realpathSync(a), 'nested', 'candidate.md'));
+    fs.unlinkSync(alias); fs.symlinkSync(b, alias, 'junction');
+    log.rollback(c.id, agents({}));
+    expect(fs.readFileSync(path.join(a, 'nested', 'candidate.md'), 'utf8')).toBe('old');
+    expect(fs.existsSync(path.join(b, 'nested'))).toBe(false);
+  });
   it('undoes an agent change only while the agent is still on the version it left', () => {
     const d = tmp(), log = new ChangeLog(d);
     const c = log.record({ ...base, kind: 'agent', target: 'a1' }, [], { id: 'a1', before: 2, after: 3 });

@@ -18,6 +18,8 @@ const writer = { tools: { allow: ['edit' as const, 'shell' as const] }, ceiling:
 function fixture() {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-isolation-'))); roots.push(root);
   const repo = path.join(root, 'repo'); fs.mkdirSync(repo); git(repo, 'init', '-q', '-b', 'main');
+  // Checkout bytes must match this fixture's LF writes, independent of the user's Windows Git defaults.
+  git(repo, 'config', 'core.autocrlf', 'false'); git(repo, 'config', 'core.eol', 'lf');
   fs.mkdirSync(path.join(repo, 'pkg')); fs.writeFileSync(path.join(repo, 'pkg', 'code.txt'), 'original\n'); commit(repo, 'initial');
   const parent = { id: 'parent', cwd: repo, run: { runId: 'parent-run', taskVersion: 1 } } as ChatSummary;
   const service = new DelegateWorktrees();

@@ -153,7 +153,7 @@ describe('learning facade isolation', () => {
     expect(service.state().replays).toEqual([]);
     root = a;
     await vi.waitFor(() => expect(service.state().replays.find(r => r.id === receipt.id)?.status).toBe('passed'));
-    expect(captured).toEqual([a]);
+    expect(captured).toEqual([fs.realpathSync(a)]);
     expect(new LearningReviewService({ userData, root: () => b, log: new ChangeLog(userData), runs: () => runs }).state().replays).toEqual([]);
   });
   it('includes retained descendant effort once per task and keeps missing child cost unknown', () => {
@@ -200,6 +200,28 @@ describe('learning evidence inspector', () => {
     expect(service.evidence(source.runId).run.runId).toBe(source.runId);
     refs = []; expect(() => service.evidence(source.runId)).toThrow('selected brain');
     refs = [source.runId]; currentRoot = other; expect(() => service.evidence(source.runId)).toThrow('selected brain');
+  });
+  it('captures candidate provenance through a root alias without rebinding it when the alias moves', () => {
+    const a = tmp(), b = tmp(), holder = tmp(), data = tmp(), alias = path.join(holder, 'chosen'), source = recorded();
+    fs.symlinkSync(a, alias, 'junction');
+    const relative = path.join('memory', 'skill-candidates', 'check-source.md');
+    const log = new ChangeLog(data);
+    const change = log.apply({ job: 'repeated-task', kind: 'skill', action: 'create', target: 'check-source', summary: 'Candidate', reason: 'Repeated requests', evidence: [source.runId] },
+      [{ file: path.join(alias, relative), text: draft }])!;
+    expect(change.files[0]!.file).toBe(path.join(fs.realpathSync(a), relative));
+    const service = new LearningReviewService({ userData: data, root: () => alias, log, runs: () => [source] });
+    expect(service.evidence(source.runId).run.runId).toBe(source.runId);
+    fs.mkdirSync(path.dirname(path.join(b, relative)), { recursive: true });
+    fs.writeFileSync(path.join(b, relative), draft);
+    fs.unlinkSync(alias); fs.symlinkSync(b, alias, 'junction');
+    expect(service.state().candidates[0]?.sourceRunIds).toEqual([]);
+    expect(() => service.evidence(source.runId)).toThrow('selected brain');
+    // An old, noncanonical path has no captured identity: never reinterpret its current link as provenance.
+    const oldLog = new ChangeLog(tmp());
+    oldLog.record({ job: 'repeated-task', kind: 'skill', action: 'create', target: 'check-source', summary: 'Candidate', reason: 'Historical source', evidence: [source.runId] },
+      [{ file: path.join(alias, relative), before: null, after: draft }]);
+    const legacy = new LearningReviewService({ userData: data, root: () => alias, log: oldLog, runs: () => [source] });
+    expect(() => legacy.evidence(source.runId)).toThrow('selected brain');
   });
   it('allows candidate source evidence with historical missing scope but never invents full output', () => {
     const root = tmp(), data = tmp(), source = recorded();
