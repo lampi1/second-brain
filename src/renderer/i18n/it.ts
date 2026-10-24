@@ -1,4 +1,5 @@
 import { flowsIt } from './areas/flows.it';
+import { routineIt } from './areas/routine.it';
 import { appTextIt } from './areas/app-text.it';
 import { brainTextIt } from './areas/brain-text.it';
 import { learningReviewIt } from './areas/learning-review.it';
@@ -57,6 +58,7 @@ import { viewerOverlayIt } from './areas/viewer-overlay.it';
 
 export const it = {
   ...flowsIt,
+  ...routineIt,
   ...learningReviewIt,
   ...auditIt,
   ...auditExpressionsIt,

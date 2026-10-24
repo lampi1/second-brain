@@ -76,7 +76,8 @@ describe('flow host boundaries', () => {
     await s.runtime.tick(); expect(s.send).not.toHaveBeenCalled(); expect(flow.snapshot().runs).toHaveLength(1);
     s.runtime.stop();
   });
-  it('detects without starting runs and rechecks automatic tool authentication', async () => {
+  // ADR 0155: the runner starts the run itself; no Orchestrator turn, busy or idle
+  it('starts the run itself on detection and rechecks automatic tool authentication', async () => {
     const s = setup(), flow = s.runtime.service();
     flow.propose({ expectedRevision: 0, definition: { id: 'check', title: 'Check', description: 'Fixture', aliases: [], scope: {}, steps: [{ id: 'gate', title: 'Gate', kind: 'approval', instructions: 'Confirm', inputs: [], evidence: [], timeoutMs: 1000, maxAttempts: 1, effect: 'read-only' }] } });
     flow.decideDefinition({ id: 'check', expectedRevision: 1, answer: 'yes' });
@@ -84,7 +85,7 @@ describe('flow host boundaries', () => {
     const rule = auto.propose({ expectedRevision: 0, config: { flowId: 'check', flowVersion: 1, trigger: { kind: 'interval', everyMinutes: 1 }, scope: {}, inputs: {}, priority: 'normal' } }, 'o');
     auto.decide({ id: rule.id, expectedRevision: 1, answer: 'yes' });
     s.rows[0]!.state = 'running'; await s.runtime.tick(); expect(s.send).not.toHaveBeenCalled();
-    s.rows[0]!.state = 'idle'; await s.runtime.tick(); expect(s.send).toHaveBeenCalledOnce(); expect(flow.snapshot().runs).toEqual([]);
+    expect(flow.snapshot().runs).toHaveLength(1); expect(auto.snapshot().events[0]).toMatchObject({ status: 'started', runId: flow.snapshot().runs[0]!.id });
     const tools = appControlTools({ flows: s.runtime, chats: { list: () => s.rows } as ChatService, brain: {} as BrainService, browser: {} as BrowserService, window: () => null, emitUi: () => {}, version: '0' }, 'o');
     const start = tools.find(t => t.name === 'app_flow_auto_start')!;
     const args = { contextKey: flow.snapshot().contextKey, eventId: auto.snapshot().events[0]!.id };

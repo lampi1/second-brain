@@ -1,6 +1,7 @@
 // Live flow catalog and exact-brain decisions. A changed brain clears cached proposals before any replacement read.
 import { useEffect } from 'react';
 import type { FlowAutomationControl, FlowAutomationPause } from '@shared/flow-automation';
+import type { InvokeArg } from '@shared/contract';
 import type { FlowCancel, FlowRestart, FlowSnapshot, FlowStepTierEdit } from '@shared/flows';
 import type { FlowAsk } from '../lib/flow-ask';
 import { clearDecisionDrafts } from '../lib/decision-drafts';
@@ -147,3 +148,18 @@ export async function exportFlowDefinition(contextKey: string, flowId: string, v
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   } catch { toast(t('flows.exportFailed'), 'err'); }
 }
+
+// ---- the Routine page's own controls (ADR 0155): each pins the brain shown; errors come back as plain text ----
+type RoutineCall = 'flows:pauseRun' | 'flows:runCommand' | 'flows:clearQueue' | 'flows:editFilters' | 'flows:editStepModel' | 'flows:pinHash';
+/** A control that returns the new snapshot: applied unless the brain changed meanwhile. */
+export async function routineControl<K extends RoutineCall>(channel: K, contextKey: string, input: Omit<InvokeArg<K>, 'contextKey'>): Promise<string | null> {
+  if (flowState.get().snapshot?.contextKey !== contextKey) return t('flows.recoveryStale');
+  const ticket = read;
+  try {
+    const snapshot = await sb.invoke(channel, { ...input, contextKey } as InvokeArg<K>) as FlowSnapshot;
+    if (ticket === read && flowState.get().snapshot?.contextKey === contextKey) { ++read; acceptSnapshot(snapshot); }
+    return null;
+  } catch (error) { void reloadFlows(); return plain(error); }
+}
+/** The text of an IPC error without Electron's "Error invoking remote method" prefix. */
+export const plain = (error: unknown): string => String(error instanceof Error ? error.message : error).replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '');

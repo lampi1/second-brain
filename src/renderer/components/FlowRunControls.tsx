@@ -52,7 +52,7 @@ export function FlowRecoveryContent({ snapshot, run, mode, proposal, onClose, on
   const stale = currentSnapshot?.contextKey !== snapshot.contextKey || liveRun?.revision !== run.revision
     || (mode !== 'cancel' && (livePreview?.version?.version !== preview?.version?.version || livePreview?.version?.digest !== preview?.version?.digest))
     || !!pending && (preview?.version?.version !== pending.targetVersion || preview?.version?.digest !== pending.targetDigest);
-  const reason = stale || mode !== 'cancel' && automationStale ? t('flows.recoveryStale') : preview?.reason === 'active' ? t('flows.recoveryActive') : preview?.reason === 'version' ? t('flows.recoveryVersion') : preview?.reason === 'step' ? t('flows.recoveryPick') : preview?.reason === 'prefix' ? `${t('flows.recoveryMissing')} ${preview.missing.map(step => step.title).join(' · ')}` : preview?.reason === 'automation' || livePreview?.reason === 'automation' ? t('flows.recoveryAutomation') : mode !== 'cancel' && (!owner || owner.state === 'closed') ? t('flows.recoveryOwnerMissing') : mode === 'cancel' && !flowRunCanCancel(run) ? t('flows.runStopped') : null;
+  const reason = stale || mode !== 'cancel' && automationStale ? t('flows.recoveryStale') : preview?.reason === 'active' ? t('flows.recoveryActive') : preview?.reason === 'version' ? t('flows.recoveryVersion') : preview?.reason === 'step' ? t('flows.recoveryPick') : preview?.reason === 'prefix' ? `${t('flows.recoveryMissing')} ${preview.missing.map(step => step.title).join(' · ')}` : preview?.reason === 'automation' || livePreview?.reason === 'automation' ? t('flows.recoveryAutomation') : mode === 'cancel' && !flowRunCanCancel(run) ? t('flows.runStopped') : null;
   const answer = async (value: 'yes' | 'no' | 'other') => {
     if (locked.current || value === 'yes' && reason || value === 'other' && !feedback.trim()) return;
     if (value === 'no' && !proposal) { saveDecisionDraft(draftKey, ''); onClose(); return; }
@@ -75,7 +75,7 @@ export function FlowRecoveryContent({ snapshot, run, mode, proposal, onClose, on
     } finally { locked.current = false; setBusy(false); }
   };
   return <div className="flow-recovery" aria-busy={busy} data-testid="flow-recovery-content">
-    <p className="wq-lead">{run.subjectKey} · v{version?.version ?? run.flowVersion} · {mode === 'cancel' ? t('flows.cancelHint') : t(mode === 'from-start' ? 'flows.restartActive' : 'flows.restartPinned')}</p>
+    <p className="wq-lead">{run.subjectKey} · v{version?.version ?? run.flowVersion} · {mode === 'cancel' ? t('flows.cancelHint') : t(mode === 'from-start' ? 'flows.restartActive' : version && version.version !== run.flowVersion ? 'flows.restartMoved' : 'flows.restartPinned')}</p>
     {mode === 'cancel' && proposal?.run.pendingCancellation?.reason && <p>{proposal.run.pendingCancellation.reason}</p>}
     {mode !== 'cancel' && <p>{t('flows.restartHint')}</p>}
     {mode === 'from-start' && definition?.steps[0] && <p><strong>{t('flows.recoveryStep')}: 1. {definition.steps[0].title}</strong></p>}

@@ -11,6 +11,7 @@ import { flowAsks } from '../../src/renderer/lib/flow-ask';
 import { flowDecisionMode, flowDecisionSubmission } from '../../src/renderer/lib/flow-decision';
 import { flowRequest } from '../../src/renderer/lib/flow-request';
 import { Flows } from '../../src/renderer/brain/pages/Flows';
+import { RoutineDetail, RoutineHistory } from '../../src/renderer/components/Routine';
 import { FlowFullscreenContent } from '../../src/renderer/components/FlowFullscreen';
 import { FlowDiagram } from '../../src/renderer/components/FlowDiagram';
 import { FlowAutomation } from '../../src/renderer/components/FlowAutomation';
@@ -161,7 +162,9 @@ it('offers navigation to the bound agent only while that exact chat remains avai
   try {
     app.set(s => ({ ...s, chats: { ...s.chats, [bound.id]: bound } }));
     expect(renderToStaticMarkup(createElement(FlowApproval, { ask, onEscape: vi.fn() }))).toContain('data-testid="flow-open-agent"');
-    flowState.set({ snapshot: state, loading: false, error: null });
+    // the Routine page's working card for a run whose step has a chat
+    const working = { ...state, runs: [{ ...state.runs[0]!, status: 'active' as const, steps: [{ ...state.runs[0]!.steps[0]!, status: 'running' as const }] }] };
+    flowState.set({ snapshot: working, loading: false, error: null });
     expect(renderToStaticMarkup(createElement(Flows))).toContain('data-testid="flow-open-agent"');
     app.set(s => ({ ...s, chats }));
     expect(renderToStaticMarkup(createElement(FlowApproval, { ask, onEscape: vi.fn() }))).not.toContain('data-testid="flow-open-agent"');
@@ -249,11 +252,12 @@ it('renders only actual sequence and review edges with keyboard-operable recorde
   expect(noRun).not.toContain('data-status="running"');
 });
 it('keeps the approved definition and automatic mode visible when an older draft exists', () => {
-  const state = automated(); state.automation!.rules[0]!.status = 'enabled';
+  const state = automated(); state.automation!.rules[0]!.status = 'enabled'; state.automation!.rules[0]!.approvedRevision = 3;
   state.drafts = [{ definition: { ...definition, title: 'Obsolete draft title' }, revision: 1, updatedAt: 1, status: 'rejected' }];
   flowState.set({ snapshot: state, error: null, loading: false });
   const html = renderToStaticMarkup(createElement(Flows));
-  expect(html).toContain('Revisione documento'); expect(html).not.toContain('Obsolete draft title'); expect(html).toContain('flow-auto-rule'); expect(html).toContain('Automatico');
+  // no run open: the page opens on the routines, with the trigger switch on and its schedule in words
+  expect(html).toContain('Revisione documento'); expect(html).not.toContain('Obsolete draft title'); expect(html).toContain('data-testid="rt-rule-switch"'); expect(html).toContain('aria-checked="true"');
 });
 it('requests exact automatic configuration through the existing Orchestrator proposal tool', () => {
   const request = flowRequest('automate', { id: definition.id, name: definition.title, version: 1 });
@@ -265,11 +269,10 @@ it('keeps the newest completed run and its recorded evidence visible after work 
   const older: FlowRun = { ...finished, id: 'older-run', subjectKey: 'Old document', updatedAt: 7, steps: [{ ...finished.steps[0]!, receipt: { ...finished.steps[0]!.receipt!, summary: 'Older result.' } }] };
   flowState.set({ snapshot: { ...snapshot(), drafts: [], runs: [older, finished] }, error: null, loading: false });
   const html = renderToStaticMarkup(createElement(Flows));
-  expect(html).toContain('data-testid="flow-run"');
-  expect(html).toContain('value="r" selected=""');
-  expect(html).toContain('data-status="completed"');
-  expect(html).toContain('Verified the selected document.');
-  expect(html).not.toContain('Older result.');
+  // no run open: the page opens on the routines; finished runs live in Storico, newest first
+  expect(html).toContain('data-testid="rt-list"');
+  const history = renderToStaticMarkup(createElement(RoutineHistory, { snapshot: flowState.get().snapshot! }));
+  expect(history.match(/<tr aria-expanded/g)).toHaveLength(2);
 });
 
 it('offers import from an empty catalog without requiring an Orchestrator', () => {
@@ -284,10 +287,11 @@ it('exports the exact shown run version and offers all immutable versions in the
   state.runs = [run];
   flowState.set({ snapshot: state, error: null, loading: false });
   const html = renderToStaticMarkup(createElement(Flows));
-  expect(html).toContain('id="flow-version-picker"'); expect(html).toContain('value="2" selected=""');
-  expect(html).toContain('Esporta definizione · v1');
-  expect(html).toContain('data-testid="flow-fullscreen-open"');
-  expect(html).toContain('data-testid="flow-export-json"'); expect(html).toContain('data-testid="flow-export-markdown"');
+  // the run is open: the page opens on Adesso; the open routine exports its active version as JSON or Markdown
+  expect(html).toContain('data-testid="rt-now"');
+  const detail = renderToStaticMarkup(createElement(RoutineDetail, { snapshot: state, flowId: definition.id, onBack: vi.fn(), onStart: vi.fn(), onDryRun: vi.fn(), onAsk: vi.fn() }));
+  expect(detail).toContain('Current version'); expect(detail).toContain('v2');
+  expect(detail).toContain('data-testid="flow-export-json"'); expect(detail).toContain('data-testid="flow-export-markdown"');
 });
 it('keeps real run states, roles, evidence and receipts in the fullscreen inspection content', () => {
   const def = { ...definition, steps: [{ ...definition.steps[0]!, kind: 'agent' as const, role: 'sentinel' as const, tier: 'mid' as const }] };

@@ -1,10 +1,14 @@
-// Opt-in close-to-tray for the local flow runner. Explicit quit always wins; hidden test runs never show a tray.
+// Close-to-tray for the app's routine runner (ADR 0155): on when the user opted in, or while routine runs are open, so
+// closing the window does not stop them; the tray tells how many are open. Explicit quit always wins; hidden test runs
+// never show a tray.
 import { Menu, Tray, type BrowserWindow } from 'electron';
 import { uiLang } from '../locale';
 import { log } from '../log';
 interface TrayHandle { setToolTip(text: string): void; setContextMenu(menu: Electron.Menu): void; on(event: string, fn: () => void): unknown; destroy(): void }
 export interface FlowBackgroundOptions {
   window: BrowserWindow; icon: string; enabled(): boolean; quit(): void; hidden?: boolean;
+  /** open routine runs, for the tray's tooltip */
+  count?(): number;
   createTray?(icon: string): TrayHandle;
 }
 export function createFlowBackground(options: FlowBackgroundOptions) {
@@ -14,13 +18,18 @@ export function createFlowBackground(options: FlowBackgroundOptions) {
     if (options.window.isMinimized()) options.window.restore();
     options.window.show(); options.window.focus();
   };
+  const tooltip = (): string => {
+    let n = 0; try { n = options.count?.() ?? 0; } catch { n = 0; }
+    const words = { it: ['nessuna routine attiva', 'routine attiva', 'routine attive'], en: ['no routine running', 'routine running', 'routines running'], de: ['keine Routine aktiv', 'Routine aktiv', 'Routinen aktiv'] }[uiLang()];
+    return `second-brain · ${n ? `${n} ${n === 1 ? words[1] : words[2]}` : words[0]}`;
+  };
   const prepare = () => {
     if (stopped || options.hidden) throw new Error('Background mode unavailable in a hidden test run.');
     if (tray) return;
     const made = (options.createTray ?? (icon => new Tray(icon)))(options.icon);
     try {
       const labels = { it: ['Apri second-brain', 'Esci e ferma il servizio'], en: ['Open second-brain', 'Quit and stop the service'], de: ['second-brain öffnen', 'Beenden und Dienst stoppen'] }[uiLang()];
-      made.setToolTip('second-brain · Flussi');
+      made.setToolTip(tooltip());
       made.setContextMenu(Menu.buildFromTemplate([
         { label: labels[0], click: show },
         { type: 'separator' },
@@ -32,7 +41,7 @@ export function createFlowBackground(options: FlowBackgroundOptions) {
   const enabled = () => { try { return !stopped && !options.hidden && options.enabled(); } catch { return false; } };
   const sync = () => {
     if (enabled()) {
-      try { prepare(); } catch (error) { log.warn('flows', 'Background tray unavailable', { cause: String(error), hint: 'Keep the app window open; closing it will quit.' }); }
+      try { prepare(); tray?.setToolTip(tooltip()); } catch (error) { log.warn('flows', 'Background tray unavailable', { cause: String(error), hint: 'Keep the app window open; closing it will quit.' }); }
     } else if (tray) {
       // Do not strand an invisible window when its brain or background preference changes.
       if (!options.window.isDestroyed() && !options.window.isVisible() && !options.hidden && !quitting) options.window.show();

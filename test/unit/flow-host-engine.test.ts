@@ -41,11 +41,25 @@ describe('host routine engine', () => {
     expect(w.sendWorker.mock.calls[1]![1]).toContain('Fixture result'); expect(w.sendWorker.mock.calls[1]![1]).toContain('fixture-task'); expect(w.sendWorker.mock.calls[1]![1]).toContain('worker-1-run:42');
     w.report('worker-2'); await w.runtime.tick(); expect(w.flow.status(source.id, 'owner').status).toBe('completed');
   });
-  it.each(['partial', 'blocked', 'missing', 'prefix', 'stale'] as const)('blocks %s canonical reports with the host-known report id and no automatic retry', async kind => {
+  // ADR 0155: a failed step heals by itself while attempts remain (a fresh chat, the failure in its prompt); only the
+  // last failure stops the run and reaches the owner
+  it.each(['partial', 'blocked', 'missing', 'prefix', 'stale'] as const)('retries a %s canonical report once with its diagnostics, then stops for the user', async kind => {
     const w = world(), source = w.start(); await w.runtime.tick();
-    w.report('worker-1', report => { if (kind === 'partial' || kind === 'blocked') report!.outcome = kind; if (kind === 'missing') report!.canonical!.doneWhen[0]!.evidence = ''; if (kind === 'prefix') report!.canonical!.doneWhen[0]!.criterion = 'proof: unrelated'; if (kind === 'stale') report!.canonical!.taskVersion = 2; });
-    await w.runtime.tick(); const run = w.flow.status(source.id, 'owner');
-    expect(run.status).toBe('blocked'); expect(run.steps[0]!.reason).toContain('worker-1-run:42'); expect(run.steps[0]!.receipt).toBeUndefined(); expect(w.send).toHaveBeenCalledWith('owner', expect.stringContaining('bloccato')); await w.runtime.tick(); expect(w.create).toHaveBeenCalledTimes(1);
+    const bad = (report: NonNullable<ChatSummary['run']>['report']) => { if (kind === 'partial' || kind === 'blocked') report!.outcome = kind; if (kind === 'missing') report!.canonical!.doneWhen[0]!.evidence = ''; if (kind === 'prefix') report!.canonical!.doneWhen[0]!.criterion = 'proof: unrelated'; if (kind === 'stale') report!.canonical!.taskVersion = 2; };
+    w.report('worker-1', bad); await w.runtime.tick();
+    expect(w.create).toHaveBeenCalledTimes(2); expect(w.send).not.toHaveBeenCalled();
+    const healed = w.flow.status(source.id, 'owner'); expect(healed.heal?.[0]).toMatchObject({ stepId: 'first', action: 'retry', attempt: 2 }); expect(healed.heal?.[0]?.reason).toContain('worker-1-run:42');
+    expect(w.sendWorker.mock.calls[1]![1]).toContain('This is a new attempt'); expect(w.sendWorker.mock.calls[1]![1]).toContain('worker-1-run:42');
+    w.report('worker-2', bad); await w.runtime.tick(); const run = w.flow.status(source.id, 'owner');
+    expect(run.status).toBe('blocked'); expect(run.steps[0]!.reason).toContain('worker-2-run:42'); expect(run.steps[0]!.receipt).toBeUndefined(); expect(w.send).toHaveBeenCalledWith('owner', expect.stringContaining('fermo')); await w.runtime.tick(); expect(w.create).toHaveBeenCalledTimes(2);
+  });
+  it('sends work back to the step a failed check names, with the failure as that step\'s feedback', async () => {
+    const w = world([step('fix', { maxAttempts: 3 }), step('verify', { role: 'sentinel', reviewOf: 'fix', onFail: { goto: 'fix' }, maxAttempts: 3 })]), source = w.start();
+    await w.runtime.tick(); w.report('worker-1'); await w.runtime.tick();
+    w.report('worker-2', report => { report!.outcome = 'blocked'; }); await w.runtime.tick();
+    const run = w.flow.status(source.id, 'owner');
+    expect(run.currentStep).toBe(0); expect(run.heal?.at(-1)).toMatchObject({ stepId: 'verify', action: 'goto', to: 'fix' }); expect(w.create).toHaveBeenCalledTimes(3);
+    expect(w.sendWorker.mock.calls[2]![1]).toContain('Il passaggio verify è fallito e ha rimandato qui il lavoro'); expect(w.send).not.toHaveBeenCalled();
   });
   it('waits for native approval and binds an independent Sentinel review to the exact preceding run', async () => {
     const w = world([step('first'), { id: 'gate', title: 'Gate', kind: 'approval', instructions: 'Confirm', inputs: [], evidence: [], timeoutMs: 1000, maxAttempts: 1, effect: 'read-only' }, step('review', { role: 'sentinel', tier: 'mid', reviewOf: 'first' })]), source = w.start();
@@ -57,14 +71,22 @@ describe('host routine engine', () => {
   it.each([{ effect: 'external-write' as const }, { effect: 'production' as const }])('does not auto-launch an unsupported action %j', async extra => {
     const w = world([step('first', extra)]), source = w.start(); await w.runtime.tick(); expect(w.flow.status(source.id, 'owner').status).toBe('blocked'); expect(w.create).not.toHaveBeenCalled();
   });
-  it('leaves a legacy optional-role step ready for manual binding and explains the handoff once', async () => {
+  it('runs a step without a role as the role its effect implies (read-only: Scout), without waking anyone', async () => {
     const w = world([step('first', { role: undefined })]), source = w.start(); await w.runtime.tick();
-    const ready = w.flow.status(source.id, 'owner'); expect(ready.steps[0]!.status).toBe('ready'); expect(w.create).not.toHaveBeenCalled(); expect(w.send).toHaveBeenCalledTimes(1);
-    expect(w.flow.bindAgent(source.id, ready.revision, 'first', { chatId: 'manual-worker', chatRunId: 'manual-worker-run', taskVersion: 1 }, 'owner').steps[0]!.status).toBe('running');
+    expect(w.create).toHaveBeenCalledWith(expect.objectContaining({ roleId: 'scout' })); expect(w.flow.status(source.id, 'owner').steps[0]!.status).toBe('running'); expect(w.send).not.toHaveBeenCalled();
+  });
+  it('launches without any open Orchestrator and passes the step\'s engine and model pick', async () => {
+    const w = world([step('first', { engine: 'codex', model: 'gpt-5-codex', effort: 'high' })]); w.rows.splice(0, 1);
+    const source = w.start(); await w.runtime.tick();
+    expect(w.create).toHaveBeenCalledWith(expect.objectContaining({ engine: 'codex', model: 'gpt-5-codex', effort: 'high' })); expect(w.flow.status(source.id, 'owner').steps[0]!.status).toBe('running');
+  });
+  it('starts nothing new while a run is paused and continues on resume', async () => {
+    const w = world([step('first')]), source = w.start(); const paused = w.runtime.pauseRun(source.id, source.revision, true); await w.runtime.tick();
+    expect(w.create).not.toHaveBeenCalled(); w.runtime.pauseRun(source.id, paused.revision, false); await w.runtime.tick(); expect(w.create).toHaveBeenCalledTimes(1);
   });
   it('blocks an unusable workspace explicitly before creating a worker', async () => {
     const w = world([step('first')]), source = w.flow.start({ flowId: 'fixture', flowVersion: 1, subjectKey: 'relative-workspace', scope: {}, inputs: { workspace: '.' } }, 'owner'); await w.runtime.tick();
-    expect(w.flow.status(source.id, 'owner').steps[0]!.reason).toContain('absolute configured workspace'); expect(w.create).not.toHaveBeenCalled();
+    expect(w.flow.status(source.id, 'owner').steps[0]!.reason).toContain('cartella di lavoro'); expect(w.create).not.toHaveBeenCalled();
   });
   it('preserves the two-worker limit across concurrent routine pumps', async () => {
     const w = world([step('first')]); w.start('one'); w.start('two'); const third = w.start('three'); await Promise.all([w.runtime.tick(), w.runtime.tick()]);
@@ -83,7 +105,7 @@ describe('host routine engine', () => {
     expect(() => submit()).toThrow(/changed/); expect(w.flow.status(source.id, 'owner').status).toBe('cancelled'); expect(w.create).toHaveBeenCalledTimes(1);
   });
   it('records delayed queue failures immediately and notifies an unchanged blocker only once', async () => {
-    const w = world(); let failed!: (error: unknown) => void;
+    const w = world([step('first', { maxAttempts: 1 })]); let failed!: (error: unknown) => void;
     w.sendWorker.mockImplementation(async (_id, _prompt, _authorize, onFailure) => { failed = onFailure; });
     const source = w.start(); await w.runtime.tick(); failed(new Error('Synthetic queued delivery failure')); await w.runtime.tick(); await Promise.resolve();
     expect(w.flow.status(source.id, 'owner').steps[0]!.reason).toContain('Synthetic queued delivery failure'); expect(w.send).toHaveBeenCalledTimes(1);

@@ -170,6 +170,7 @@ export const flowsEn = {
   "flows.restartHint": "The original history remains. Yes authorizes repeating the listed steps, including external writes; required checks still apply.",
   "flows.restartActive": "From the beginning, with the active version",
   "flows.restartPinned": "From the selected step, with the original version",
+  "flows.restartMoved": "From the selected step, with the active version (the steps before are unchanged)",
   "flows.recoveryStep": "Step to restart from",
   "flows.recoveryEffects": "External writes to repeat",
   "flows.recoveryNoEffects": "No external writes declared in the steps to repeat.",
