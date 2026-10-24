@@ -90,6 +90,14 @@ function interpreter(file: string): { program: string; lead: string[]; flag: (ke
 export function resolve(root: string, step: FlowStep, run: FlowRun, attachmentsDir: string, workDir: string): ResolvedCommand {
   const problems: string[] = [], kind = step.action!.kind as 'script' | 'query', ref = step.action!.ref, env = step.env ?? 'test';
   const values = Object.fromEntries(Object.entries(step.args ?? {}).map(([key, value]) => [key, fill(value, run, attachmentsDir, problems)]));
+  // what a run input put into an argument (a work item, a param, an agent's start): it may never turn a test step to
+  // production, nor become an option of the program
+  for (const [key, template] of Object.entries(step.args ?? {})) {
+    if (!placeholders(template).length || template.includes('{{attachment:')) continue;
+    const value = values[key]!.trim();
+    if (env !== 'prod' && /^prod(uction)?$/i.test(value)) problems.push(`${key}: un passaggio di test non riceve "${value}" (la produzione si esegue solo con «Esegui»)`);
+    if (value.startsWith('-')) problems.push(`${key}: un valore da input non può iniziare con "-"`);
+  }
   let file = path.join(root, kind === 'script' ? SCRIPTS_DIR : QUERIES_DIR, ref), hash = '';
   try { file = stepFile(root, step); hash = sha256(fs.readFileSync(file)); } catch (error) { problems.push((error as NodeJS.ErrnoException).code === 'ENOENT' ? `${ref} non esiste più nel brain` : (error as Error).message); }
   if (hash && hash !== step.action!.hash) problems.push(`${ref} è cambiato dopo l'approvazione: serve il tuo ok sul nuovo contenuto`);
@@ -99,7 +107,7 @@ export function resolve(root: string, step: FlowStep, run: FlowRun, attachmentsD
     if (!how) problems.push(`${path.extname(file) || ref}: questo tipo di script non si esegue da una routine`);
     else {
       program = how.program; args = [...how.lead, ...Object.entries(values).flatMap(([key, value]) => [how.flag(key), value])];
-      if (program === 'cmd.exe' && Object.values(values).some(value => /[&|<>^%"!\r\n]/.test(value))) problems.push('un argomento contiene caratteri speciali che cmd interpreterebbe');
+      if (program === 'cmd.exe' && [...Object.values(values), ...how.lead].some(value => /[&|<>^%"!\r\n]/.test(value))) problems.push('un argomento o un percorso contiene caratteri speciali che cmd interpreterebbe');
     }
   } else {
     const { server, database, ...vars } = values;
@@ -112,6 +120,8 @@ export function resolve(root: string, step: FlowStep, run: FlowRun, attachmentsD
     if (!server) problems.push('la query non ha l\'argomento server');
     if (!database) problems.push('la query non ha l\'argomento database');
     for (const key of Object.keys(vars)) if (!/^[A-Za-z][A-Za-z0-9_]{0,40}$/.test(key)) problems.push(`variabile ${key} non valida per sqlcmd`);
+    // sqlcmd -v substitutes text into the SQL: no quote, statement end, comment or line break from a value
+    for (const [key, value] of Object.entries(vars)) if (/['";\r\n]|--|\/\*/.test(value)) problems.push(`variabile ${key}: contiene caratteri che cambierebbero la query`);
     // integrated auth (-E): credentials never pass through the app; -b exits non-zero on a SQL error
     program = 'sqlcmd'; args = ['-S', server ?? '', '-d', database ?? '', '-E', '-b', ...(step.effect === 'read-only' ? ['-K', 'ReadOnly'] : []), '-i', sql, ...Object.entries(vars).flatMap(([key, value]) => ['-v', `${key}=${value}`])];
   }

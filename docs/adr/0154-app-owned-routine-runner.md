@@ -22,7 +22,10 @@ Runs started without an Orchestrator belong to `app`. Owner checks no longer gat
 content, missing input or workspace, no adapter) never heal. Only blocks that need a person, and prod commands waiting
 for «Esegui», notify the Orchestrator (`healable()` in `shared/routine.ts`, read by runner and page alike).
 
-**Lock.** `userData/flows/runner.lock` (pid, heartbeat, token; stale after 60 s): never two runners on one store.
+**Lock.** `userData/flows/runner.lock` (pid, heartbeat, token; stale after 60 s, taken with an exclusive create):
+never two runners on one store. Each tick pumps active, blocked (to heal) and waiting runs; a prod command that
+was running when the app closed is closed as interrupted and stops for the user; a waiting prod command is
+recomputed and re-shown (or stopped) when its inputs or file change. Healing a timed-out step stops its old chat first.
 
 **Triggers.** DevOps rules take include/exclude tags, work item ids, an iteration path and a maximum of starts per hour.
 One active run per work item per flow: a newer revision of a running item updates that run's input, a newer revision
@@ -38,7 +41,10 @@ manual and automatic starts use the same grants and steps. A dry run resolves ev
 rechecked before every launch. Arguments come from typed params (validated before a run exists), run inputs and
 attachments (content-addressed, hash-checked, readable as `{{attachment:name}}`). Scripts run without a shell by
 extension (ps1, py, js, sh; cmd/bat on Windows only, refusing cmd metacharacters); queries run through
-`sqlcmd -E -b` (integrated auth, `-K ReadOnly` for read-only steps). Output is bounded; every run is a receipt.
+`sqlcmd -E -b` (integrated auth, `-K ReadOnly` for read-only steps). Output is bounded; every run is a receipt. What a
+run input puts into an argument may not turn a test step to prod, start with `-`, or (for a query) carry quotes,
+`;`, comments or line breaks; a query's `server` and `database` are literal in the definition. A script/query step
+with effect `production` must declare `env: prod`.
 
 **Production.** A step with `env: prod` (or effect `production`) never runs by itself, from an agent or from a tool.
 The page shows the exact command with «Esegui»; only that click (renderer IPC `flows:runCommand`) runs it, after the

@@ -54,6 +54,7 @@ export interface FlowWorkerRequest {
   engine?: string; model?: string; effort?: Effort;
   workspace: string; title: string; goal: string; doneWhen: string[]; reviewOf?: string;
 }
+const pumpable = (run: FlowRun): boolean => !run.paused && ['active', 'blocked', 'approval'].includes(run.status);
 export function createFlowRuntime(options: FlowRuntimeOptions) {
   const instances = new Map<string, FlowService>();
   const automations = new Map<string, FlowAutomationService>();
@@ -123,7 +124,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
       changed: snapshot => {
         try { if (options.brainRoot() && current().key === context.key) options.changed(withRoles({ ...snapshot, automation: automations.get(context.key)?.snapshot() })); }
         catch (error) { log.warn('flows', 'Flow saved but notification unavailable', { cause: String(error), hint: 'Reload flows after reconnecting the brain.' }); }
-        for (const run of snapshot.runs.filter(run => run.status === 'active')) void pumpRun(run.id, context.key);
+        for (const run of snapshot.runs.filter(pumpable)) void pumpRun(run.id, context.key);
       },
       reportFailure: (binding, reportId, requiredEvidence) => {
         const chat = scopedChat(binding, context.root), report = chat?.run?.report, canonical = report?.canonical;
@@ -219,6 +220,9 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     const step = run.steps[run.currentStep]!;
     if (!healable(run, spec) || interrupting.has(run.id)) return false;
     const reason = step.reason ?? 'Il passaggio non è riuscito';
+    // a step that timed out may still have its chat at work: stop it before another attempt touches the same workspace
+    const stale = step.chatId ? options.chats().find(chat => chat.id === step.chatId && !chat.closedAt && ['running', 'starting'].includes(chat.state)) : undefined;
+    if (stale) { if (!options.stopChat) return false; void Promise.resolve(options.stopChat(stale.id)).catch(() => {}); return false; }
     try { if (spec.onFail) flow.sendBack(run.id, run.revision, step.stepId, reason); else flow.hostRetry(run.id, run.revision, step.stepId, reason); return true; }
     catch {
       // a send-back the run cannot take (the target is before a restart's carried steps): retry the step itself
@@ -245,10 +249,15 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
       if (commandStep(spec)) {
         if (spec.env === 'prod') {
           // never launched here: the exact command waits for the user's «Esegui» (runUserCommand)
-          if (run.status !== 'approval' || step.status !== 'approval' || run.awaitingUser) return;
+          if (run.status !== 'approval' || step.status !== 'approval' || commands.has(run.id)) return;
+          // the app closed while the user's command ran: its receipt ends unknown and the step stops for the user
+          const open = run.receipts?.find(receipt => receipt.stepId === step.stepId && receipt.endedAt === undefined);
+          if (open) { flow.finishCommand(run.id, open.id, null, '[interrotto: l’app si è chiusa durante l’esecuzione: controlla prima di rieseguire]'); continue; }
+          // recomputed while it waits: a changed input, file or attachment re-shows the command or stops the step
           const resolved = resolveFor(run, spec, context);
           if (resolved.problems.length) flow.blockChanged(run.id, run.revision, step.stepId, `${HOLD}${resolved.problems.join('; ')}`);
-          else flow.awaitUser(run.id, run.revision, step.stepId, resolved.command);
+          else if (resolved.command !== run.awaitingUser?.command) flow.awaitUser(run.id, run.revision, step.stepId, resolved.command);
+          else return;
           continue;
         }
         if (run.status !== 'active' || commands.has(run.id)) return;
@@ -364,7 +373,8 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
       catch (error) { log.warn('flows', 'Cancelled flow still awaiting worker interruption', { cause: String(error), hint: 'The automatic slot remains reserved; interruption retries for the exact bound task.' }); }
       if (stopped || current().key !== context.key) return;
     }
-    for (const run of flow.snapshot().runs) { if (run.status === 'active') await pumpRun(run.id, context.key); }
+    // active runs advance; blocked ones may heal; a prod step waiting for the user gets (and keeps) its exact command
+    for (const run of flow.snapshot().runs) { if (pumpable(run)) await pumpRun(run.id, context.key); }
     if (stopped || !options.brainRoot() || current().key !== context.key) return;
     for (const run of flow.snapshot().runs) { recoveryReady(run); blockedReady(run); }
     await automation().tick();
@@ -628,6 +638,8 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     const inputs = { ...itemInputs, ...params.values };
     if (input.dryRun) return dryRun(input.flowId, inputs, attachments);
     const rule = automation().ruleOf(input.flowId);
+    // a paused trigger grants nothing: no start through its rule, with or without a work item
+    if (rule && (rule.status !== 'enabled' || automation().globallyPaused)) throw new Error('Il trigger di questa routine è in pausa: riattivalo per avviarla (in pausa non concede permessi).');
     if (rule && preview) return automation().startManual(rule.id, { key: `${preview.url}:${preview.revision}`, title: title!, inputs }, attachments);
     if (rule && Object.keys(params.values).some(key => Object.hasOwn(rule.config.inputs, key))) throw new Error('Un parametro ha lo stesso nome di un input della routine');
     return flow.start({ flowId: input.flowId, flowVersion: version, subjectKey: `item:${randomUUID()}`, scope: rule?.config.scope ?? definition.scope,

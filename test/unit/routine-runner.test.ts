@@ -180,3 +180,36 @@ describe('controls', () => {
     await w.runtime.tick(); expect(w.create).toHaveBeenLastCalledWith(expect.objectContaining({ stepId: 'fix', engine: 'codex', model: 'gpt-5-codex' }));
   });
 });
+
+describe('review fixes', () => {
+  const files = { 'scripts/move.js': 'console.log(1)\n', 'queries/check.sql': 'SELECT 1\n' };
+  it('refuses a production script without env prod, and a query whose target comes from an input', () => {
+    const w = world({ steps: [agent('a')] }, files), base = w.flow.snapshot().versions[0]!.definition, revision = w.flow.snapshot().drafts[0]!.revision;
+    expect(() => w.flow.propose({ expectedRevision: revision, definition: { ...base, steps: [command('x', 'script', 'move.js', { effect: 'production' })] } })).toThrow(/declares env: prod/);
+    expect(() => w.flow.propose({ expectedRevision: revision, definition: { ...base, steps: [command('x', 'query', 'check.sql', { args: { server: '{{server}}', database: 'Air' } })] } })).toThrow(/literally/);
+  });
+  it('refuses a start through a paused trigger even without a work item', async () => {
+    const w = world({ steps: [agent('a')] }), rule = enable(w), auto = w.runtime.automation();
+    auto.pause({ id: rule.id, expectedRevision: auto.snapshot().rules[0]!.revision, paused: true });
+    await expect(w.runtime.startItem({ flowId: 'fix' })).rejects.toThrow(/in pausa/);
+  });
+  it('closes a prod receipt the app lost mid-run and stops for the user instead of offering «Esegui» again', async () => {
+    const w = world({ steps: [command('prod', 'script', 'move.js', { env: 'prod', effect: 'production' })] }, files);
+    const started = await w.runtime.startItem({ flowId: 'fix' }) as FlowRun; await w.runtime.tick(); await settle(); await w.runtime.tick(); await settle();
+    const run = w.flow.snapshot().runs.find(r => r.id === started.id)!;
+    // the click started the command, then the app died before it finished
+    w.flow.beginCommand(run.id, run.revision, 'prod', { stepId: 'prod', kind: 'script', ref: 'move.js', command: run.awaitingUser!.command, args: {}, sha256: 'a'.repeat(64), env: 'prod', by: 'user' });
+    await w.runtime.tick(); await settle();
+    const after = w.flow.snapshot().runs.find(r => r.id === started.id)!;
+    expect(after.receipts?.[0]).toMatchObject({ exitCode: null }); expect(after.receipts?.[0]?.output).toContain('interrotto');
+    expect(after.status).toBe('blocked'); expect(after.awaitingUser).toBeUndefined(); expect(w.run).not.toHaveBeenCalled();
+  });
+  it('stops a waiting prod command when its script changes, instead of failing every click', async () => {
+    const w = world({ steps: [command('prod', 'script', 'move.js', { env: 'prod', effect: 'production' })] }, files);
+    const started = await w.runtime.startItem({ flowId: 'fix' }) as FlowRun; await w.runtime.tick(); await settle(); await w.runtime.tick(); await settle();
+    expect(w.flow.snapshot().runs.find(r => r.id === started.id)!.awaitingUser?.command).toContain('move.js');
+    fs.appendFileSync(path.join(w.brain, 'scripts', 'move.js'), '// changed\n'); await w.runtime.tick(); await settle();
+    const run = w.flow.snapshot().runs.find(r => r.id === started.id)!;
+    expect(run.status).toBe('blocked'); expect(run.steps[0]!.reason).toMatch(/^Da sistemare: .*cambiato/);
+  });
+});

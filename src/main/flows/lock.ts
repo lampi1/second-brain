@@ -14,14 +14,21 @@ export class RunnerLock {
   constructor(private readonly file: string, private readonly now: () => number = Date.now) {}
   /** Takes or refreshes the lock; false = another live runner holds it. */
   hold(): boolean {
-    const held = this.read();
-    if (held && held.token !== this.token && alive(held.pid) && this.now() - held.at < STALE_MS) return false;
+    const held = this.read(), data = JSON.stringify({ pid: process.pid, at: this.now(), token: this.token } satisfies Held);
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
-    const temp = `${this.file}.${process.pid}.tmp`;
-    fs.writeFileSync(temp, JSON.stringify({ pid: process.pid, at: this.now(), token: this.token } satisfies Held));
-    fs.renameSync(temp, this.file);
-    // two runners racing the rename: the last write wins, the other sees a foreign token on its next hold
-    return this.read()?.token === this.token;
+    if (held?.token === this.token) {
+      // ours: refresh the heartbeat in place (atomic rename; no other runner writes while we hold it)
+      const temp = `${this.file}.${process.pid}.tmp`;
+      fs.writeFileSync(temp, data); fs.renameSync(temp, this.file);
+      return true;
+    }
+    if (held && alive(held.pid) && this.now() - held.at < STALE_MS) return false;
+    // free or stale: remove the old file, then create it exclusively, so of two runners racing only one wins
+    const again = this.read();
+    if (again && again.token !== held?.token) return false; // another runner just took it
+    if (again || fs.existsSync(this.file)) { try { fs.unlinkSync(this.file); } catch { /* the other runner got there first */ } }
+    try { fs.writeFileSync(this.file, data, { flag: 'wx' }); return true; }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false; throw error; }
   }
   release(): void { if (this.read()?.token === this.token) { try { fs.unlinkSync(this.file); } catch { /* already gone */ } } }
   private read(): Held | null {

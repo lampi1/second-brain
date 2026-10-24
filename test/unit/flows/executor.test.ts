@@ -61,4 +61,13 @@ describe('routine executor', () => {
     expect(() => saveAttachment(b.attachments, '../evil', 'x')).toThrow(/nome non valido/);
     expect(() => saveAttachment(b.attachments, 'big.txt', 'x'.repeat(5 * 1024 * 1024 + 1))).toThrow(/5 MB/);
   });
+  it('never lets a run input turn a test step to prod, become an option, or rewrite a query', () => {
+    const b = brain({ 'scripts/echo.js': SCRIPT, 'queries/q.sql': 'SELECT 1' });
+    const script = step('script', 'echo.js', sha256(SCRIPT), { args: { Env: '{{env}}', Name: '{{name}}' } });
+    expect(resolve(b.root, script, run({ env: 'PROD', name: 'a' }), b.attachments, b.work).problems[0]).toMatch(/un passaggio di test non riceve "PROD"/);
+    expect(resolve(b.root, script, run({ env: 'test', name: '-Force' }), b.attachments, b.work).problems[0]).toMatch(/non può iniziare con "-"/);
+    expect(resolve(b.root, { ...script, env: 'prod' }, run({ env: 'prod', name: 'a' }), b.attachments, b.work).problems).toEqual([]);
+    const query = step('query', 'q.sql', sha256('SELECT 1'), { args: { server: 's', database: 'd', Id: '{{id}}' } });
+    expect(resolve(b.root, query, run({ id: "1'; DROP TABLE t --" }), b.attachments, b.work).problems[0]).toMatch(/cambierebbero la query/);
+  });
 });

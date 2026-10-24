@@ -6,7 +6,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { APP_OWNER } from '../../shared/flows';
 import type { FlowAttachment, FlowCommandReceipt, FlowHealEntry, FlowActivate, FlowAgentBinding, FlowCancel, FlowDecision, FlowDefinition, FlowDraft, FlowMatch, FlowPropose, FlowReceipt, FlowReport, FlowRestart, FlowRestartDecision, FlowRestartProposal, FlowRun, FlowScope, FlowSnapshot, FlowStart, FlowStep, FlowTestDbEvidence, FlowStepTierEdit, FlowVerifiedReport, FlowVersion } from '../../shared/flows';
 import { adapted, commandStep, testDbAdapted, digest, type RoleTierMax, inScope, integer, keys, normalize, object, text, validateDefinition, validateInputs, validateScope } from './schema';
-import { roleOf, samePrefix } from '../../shared/routine';
+import { HOLD, roleOf, samePrefix } from '../../shared/routine';
 
 export interface FlowServiceOptions {
   file: string; contextKey: string; now?: () => number; changed?: (snapshot: FlowSnapshot) => void;
@@ -460,7 +460,7 @@ export class FlowService {
     while (run.currentStep < definition.steps.length) {
       const spec = definition.steps[run.currentStep]!, step = run.steps[run.currentStep]!;
       run.status = 'active';
-      if (this.unsupported(run, spec)) { this.block(run, 'Execution adapter unavailable. No external or production action was performed.'); return; }
+      if (this.unsupported(run, spec)) { this.block(run, `${HOLD}Execution adapter unavailable. No external or production action was performed.`); return; }
       if (spec.inputs.some(key => !run.inputs[key]?.trim())) { this.block(run, 'Required inputs are missing. Revise the definition or start a new subject with complete inputs.'); return; }
       if (spec.kind === 'approval' || spec.kind === 'manual') { step.status = 'approval'; step.decisionPending = true; run.status = 'approval'; return; }
       if (spec.kind === 'agent') {

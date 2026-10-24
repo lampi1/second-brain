@@ -111,6 +111,8 @@ export function validateDefinition(value: unknown, tierMax?: RoleTierMax): FlowD
     const env = row.env === undefined ? undefined : text(row.env, 'env', 4) as 'test' | 'prod';
     if (env !== undefined && (!['test', 'prod'].includes(env) || !action || !['script', 'query'].includes(action.kind))) throw new Error('env: test|prod, on a script or query step');
     if (env === 'prod' && effect !== 'production') throw new Error('A prod step has the production effect');
+    // either one makes a script/query step prod: it then waits for the user's «Esegui» (ADR 0154)
+    if (effect === 'production' && action && ['script', 'query'].includes(action.kind) && env !== 'prod') throw new Error('A script or query step with the production effect declares env: prod');
     if (action && ['script', 'query'].includes(action.kind) && action.hash && kind !== 'check') throw new Error('A pinned script or query runs as a check step');
     let args: Record<string, string> | undefined;
     if (row.args !== undefined) {
@@ -119,6 +121,8 @@ export function validateDefinition(value: unknown, tierMax?: RoleTierMax): FlowD
         if (!/^[A-Za-z][A-Za-z0-9_-]{0,40}$/.test(key)) throw new Error('args: invalid name');
         return [key, text(value, 'arg value', 1000, true)];
       }));
+      // a query's target is part of what the user approved: never filled from a run input
+      if (action!.kind === 'query' && ['server', 'database'].some(key => args![key]?.includes('{{'))) throw new Error('A query names its server and database literally, never as {{input}}');
     }
     ids.push(id);
     return { id, title: text(row.title, 'step title', 300), kind, instructions: text(row.instructions, 'instructions', 16000), inputs,
