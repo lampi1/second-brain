@@ -108,6 +108,7 @@ import { Quality } from './brain/quality';
 import { AppSourceService, cleanEnv, findNode } from './update/source';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { askImageRoots, readAskImage } from './ask-image';
 import { electronNode, runNode } from './brain/node';
 import path from 'node:path';
 import { templateRoot } from './rules/tools';
@@ -292,10 +293,11 @@ export function attachRunResults(ctx: Pick<Ctx, 'emitter'>, chats: Pick<ChatServ
 /** show_ui's visuals (ADR 0033, genui/artifacts.ts): kept per chat in userData, merged into the chat's items (chat:items),
  *  attached to the chat's next question by watching the events main sends to the page (the emitter tapped once more).
  *  SB_ASK_WAIT_MS shortens the wait for that question, only under SB_TEST (e2e). */
-export function attachArtifacts(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: Pick<ChatService, 'list' | 'items'>, now?: () => number): Artifacts {
+export function attachArtifacts(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: Pick<ChatService, 'list' | 'items'>, now?: () => number, imageProblem?: (path: string) => string | null): Artifacts {
   const wait = Number(process.env.SB_ASK_WAIT_MS);
   const store = new Artifacts({
     dir: path.join(ctx.userData, 'artifacts'), chats: () => chats.list(), emit: (chatId, item) => ctx.emitter.emit('chat:item', { chatId, item }),
+    ...(imageProblem ? { imageProblem, evidenceDir: path.join(ctx.userData, 'evidence') } : {}),
     ...(now ? { now } : {}), ...(process.env.SB_TEST === '1' && wait > 0 ? { askWaitMs: wait } : {}),
   });
   const send = ctx.emitter.emit.bind(ctx.emitter);
@@ -668,7 +670,13 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   }));
   mail.start();
   // show_ui on every chat's own endpoint: a visual from the catalog instead of a wall of text (ADR 0033)
-  const artifacts = attachArtifacts(ctx, chats);
+  // a brief's screenshot is checked like the card will read it (app:askImage in index.ts: the same allowed folders)
+  const appCode = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const artifacts = attachArtifacts(ctx, chats, undefined, p => {
+    const r = readAskImage(p, askImageRoots({ userData: ctx.userData, appData: app.getPath('appData'), brainRoot: brain.info().brainRoot,
+      repos: [brain.settings().appRepo, fs.existsSync(path.join(appCode, '.git')) ? appCode : null] }));
+    return r.kind === 'image' ? null : r.reason;
+  });
   briefRef.current = artifacts;
   addChatTools([showUiTool(artifacts)]);
 

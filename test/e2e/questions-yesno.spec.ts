@@ -102,3 +102,33 @@ for (const scheme of ['dark', 'light'] as const) {
     await app.close();
   });
 }
+
+test('a brief whose screenshot cannot be shown: no empty column, the line and its «Apri» read across the card', async () => {
+  test.setTimeout(120_000);
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-decision-'));
+  const outside = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-outside-')), 'impostazioni-microfono.png');
+  fs.writeFileSync(outside, png(320, 200, [60, 60, 140]));
+  const { app, page } = await launchDemo({ width: 1366, height: 900, scheme: 'dark', userData, config: { theme: 'dark' } });
+  for (const id of ['orchestrator', 'qa', 'feedback', 'fix', 'sms', 'mappa']) await demo(app, (d, c) => d.stop(c), id);
+  for (let i = 0; i < 5; i++) {
+    await page.waitForTimeout(300);
+    const dismiss = page.getByTestId('qwin-card-dismiss');
+    if (!(await dismiss.count())) break;
+    await dismiss.click();
+  }
+  await demo(app, (d, id, a) => d.show(id, a), 'fix', { id: 'brief-mic', target: 'next-ask', component: 'brief', title: 'Microfono', summary: 'Permesso negato',
+    props: { done: ['Windows: accesso al microfono acceso', 'second-brain non compare tra le app desktop'], ifYes: 'Una chat Scout cerca dove l’app nega il permesso', ifNo: 'Il microfono resta non disponibile',
+      images: [{ path: outside, caption: 'Impostazioni microfono di Windows' }] } });
+  await demo(app, (d, id, q) => d.ask(id, q), 'fix', { type: 'question', tool: 'AskUserQuestion', title: 'Cerco il blocco nel codice?', detail: 'Cerco il blocco nel codice?', input: {},
+    questions: [{ question: 'Cerco il blocco nel codice?', header: 'Microfono', multiSelect: false, options: [{ label: 'Sì (consigliato)' }, { label: 'No' }] }] });
+  const bad = page.getByTestId('qwin-card-img-bad');
+  await expect(bad).toContainText('Fuori dalle cartelle ammesse');
+  const open = page.getByTestId('qwin-card-img-bad-open');
+  const box = (await open.boundingBox())!, done = (await page.locator('.qwin .dc-done').boundingBox())!, line = (await bad.boundingBox())!;
+  expect(box.height).toBeLessThan(32);                      // one line, never A-p-r-i down the card
+  expect(line.y).toBeGreaterThan(done.y + done.height - 1); // under what was done, not in a column beside it
+  expect(line.width).toBeGreaterThan(done.width - 40);
+  await page.mouse.move(2, 2);
+  await shot(page, 'qdecision-img-refused');
+  await app.close();
+});

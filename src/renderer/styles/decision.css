@@ -26,6 +26,10 @@
 .dc-brief.has-img .dc-brief-main { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 14px; align-items: start; }
 .dc-brief-main .ask-imgs { margin: 0; }
 .dc.compact .dc-brief.has-img .dc-brief-main { grid-template-columns: 1fr; }
+/* no screenshot could be shown: no empty column, the "not shown" line goes under what was done, full width */
+.dc-brief.has-img .dc-brief-main:has(.ask-imgs-row:empty) { grid-template-columns: 1fr; }
+.dc-brief-main:has(.ask-imgs-row:empty) .ask-imgs { order: 2; }
+.dc-brief-main .ask-imgs-row:empty { display: none; }
 .dc-brief-k { font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-3); }
 .dc-done { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .dc-done li { display: flex; gap: 8px; align-items: flex-start; line-height: 1.4; color: var(--text); }
