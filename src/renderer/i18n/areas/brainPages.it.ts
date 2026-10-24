@@ -69,7 +69,7 @@ export const brainPagesIt = {
   'brainPages.task.every': 'Ogni',
   'brainPages.task.everyLabel': 'Ogni quanti minuti',
   'brainPages.task.sound': 'Suono degli avvisi',
-  'brainPages.task.soundTip': 'Un avviso a schermo quando qualcuno ti menziona o cambia le tue cose; il suono si può spegnere',
+  'brainPages.task.soundTip': 'Ogni avviso che arriva da solo suona, con un suono diverso per tipo: domanda, errore, menzione, problema di login o sincronizzazione',
   'brainPages.task.off': 'Spento',
   'brainPages.task.on': 'Acceso',
   'brainPages.task.next': (p: { when: string }) => `prossima lettura ${p.when}`,

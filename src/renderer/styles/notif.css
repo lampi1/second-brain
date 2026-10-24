@@ -1,0 +1,58 @@
+/* The one notification card (components/Notice.tsx, ADR 0151): app toasts and the global layer's toasts. Every color
+   comes from the tone: --tone tints the icon square, the label, the border, the action and the time bar. «celebrate»
+   is the bigger card for the end of the maintenance, with a soft violet/green glow and a one-shot sparkle burst. */
+.notif {
+  --tone: var(--blue);
+  pointer-events: auto; position: relative; overflow: hidden; display: flex; align-items: center; gap: 11px; min-width: 0;
+  padding: 10px 8px 10px 10px; border-radius: var(--r-xl);
+  background: color-mix(in srgb, var(--surface-2) 93%, var(--tone));
+  border: 1px solid color-mix(in srgb, var(--tone) 24%, var(--border-3));
+  box-shadow: var(--shadow-pop); font-size: 12.5px; color: var(--text);
+  animation: notifIn 420ms cubic-bezier(.2, 1.35, .4, 1);
+}
+.notif.tone-ok { --tone: var(--green); }
+.notif.tone-attention { --tone: var(--pair-4); }
+.notif.tone-warn { --tone: var(--amber); }
+.notif.tone-err { --tone: var(--red); }
+.notif.tone-celebrate { --tone: var(--violet); }
+
+.notif-badge { flex: none; width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; color: var(--tone);
+  background: color-mix(in srgb, var(--tone) 16%, transparent); }
+.notif-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.35; }
+.notif-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--tone); }
+.notif-title { font-weight: 600; font-size: 13px; overflow-wrap: anywhere; }
+.ev-toast .notif-title, .notif-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notif-detail { font-size: 12px; color: var(--text-3); }
+.notif-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+.notif-chip { font-size: 11.5px; font-weight: 600; padding: 1px 8px; border-radius: 99px; color: var(--text-2);
+  background: color-mix(in srgb, var(--text) 7%, transparent); font-variant-numeric: tabular-nums; }
+
+.notif-act { flex: none; height: 28px; padding: 0 12px; border-radius: 8px; border: 0; cursor: pointer; font: 600 12px var(--font); color: var(--text);
+  background: color-mix(in srgb, var(--tone) 18%, transparent); transition: background var(--dur-fast); }
+.notif-act:hover { background: color-mix(in srgb, var(--tone) 28%, transparent); }
+.notif-x { flex: none; width: 24px; height: 24px; border: 0; border-radius: 6px; background: none; color: var(--text-3); display: grid; place-items: center; cursor: pointer; }
+.notif-x:hover { background: var(--surface-4); color: var(--text); }
+.notif-act:focus-visible, .notif-x:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.notif-timer { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--tone); opacity: 0.7; transform-origin: left;
+  animation-name: shrink; animation-timing-function: linear; animation-fill-mode: forwards; }
+
+/* the end of the maintenance */
+.notif.tone-celebrate { padding: 14px 10px 14px 14px; gap: 13px; border-radius: 16px;
+  background:
+    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--violet) 22%, transparent), transparent 55%),
+    radial-gradient(90% 120% at 100% 100%, color-mix(in srgb, var(--green) 14%, transparent), transparent 60%),
+    var(--surface-2);
+  border-color: color-mix(in srgb, var(--violet) 42%, var(--border-3)); }
+.tone-celebrate .notif-badge { width: 42px; height: 42px; border-radius: 13px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--violet) 34%, transparent), color-mix(in srgb, var(--green) 24%, transparent)); }
+.tone-celebrate .notif-title { font-size: 14.5px; }
+.tone-celebrate .notif-act { background: var(--violet); color: var(--on-accent); }
+.tone-celebrate .notif-act:hover { background: color-mix(in srgb, var(--violet) 86%, var(--text)); }
+.notif-sparks { position: absolute; left: 35px; top: 50%; width: 0; height: 0; pointer-events: none; }
+.notif-sparks i { position: absolute; width: 4px; height: 4px; margin: -2px; border-radius: 50%; background: var(--violet); opacity: 0;
+  animation: notifSpark 900ms ease-out forwards; }
+.notif-sparks i:nth-child(even) { background: var(--green); }
+
+@keyframes notifIn { from { opacity: 0; transform: translateY(-8px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes notifSpark { 0% { opacity: 1; transform: translate(0, 0) scale(1); } 100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.3); } }
+@media (prefers-reduced-motion: reduce) { .notif, .notif-sparks i { animation: none; } .notif-sparks { display: none; } }

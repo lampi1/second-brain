@@ -2,8 +2,9 @@
 // is the one source of truth. Requests no longer float here: every open question, permission and command is answered
 // in the questions window (QuestionsWindow.tsx, always on since 2026-10-22). What stays: important events
 // (lib/notify.ts TOAST_KINDS) as at most two grouped toasts with one action, unless muted or do-not-disturb; they
-// leave after 8 s, off the Orchestrator widget's corner (`avoid`, ADR 0028). A DevOps alert plays a short chime as it
-// arrives (feed:events, lib/chime.ts, setting tasks.sound), and so does every new request (ADR 0035). The model is pushed
+// leave after 8 s, off the Orchestrator widget's corner (`avoid`, ADR 0028). Each alert plays its kind's sound as it
+// arrives (feed:events, lib/chime.ts when, lib/sounds.ts which, setting tasks.sound), and a new request rings
+// «attention» (ADR 0035, 0151). The model is pushed
 // to main only when it changes; what the user does in the layer comes back as overlay:action. Started by main.tsx.
 import type { OverlayAction, OverlayModel, OverlayToast } from '@shared/contract';
 import { sb } from '../sb';
@@ -13,18 +14,17 @@ import { openQueue } from './later';
 import { now } from './clock';
 import { columnSize, viewport } from './orchestrator-dock';
 import { linkOfEvent, markRead, toastGroups, type ToastGroup } from './notify';
-import { playChime, requestChimes, toChime } from './chime';
+import { requestChimes, toChime } from './chime';
+import { EVENT_SOUND, ring } from './sounds';
 import { lang, t } from '../i18n';
 
 const TOAST_MS = 8000;
-/** requests arriving within this window ring once */
-const REQUEST_RING_MS = 400;
 /** events already there when the app opened never toast (they are in the center): only what arrives while it is open */
 let atStart: Set<string> | null = null;
 let groups: ToastGroup[] = [];
 /** event ids that already chimed (an event sent twice chimes once) */
 const chimed = new Set<string>();
-const toneOf = (kind: string): OverlayToast['tone'] => (kind === 'error' || kind === 'chat-failed' || kind.endsWith('-error') || kind.endsWith('-blocked') ? 'err' : kind === 'budget' || kind === 'login' || kind === 'chat-waiting' || kind === 'task-alert' ? 'warn' : kind === 'chat-done' ? 'ok' : 'info');
+const toneOf = (kind: string): OverlayToast['tone'] => (kind === 'error' || kind === 'chat-failed' || kind.endsWith('-error') || kind.endsWith('-blocked') ? 'err' : kind === 'chat-waiting' ? 'attention' : kind === 'budget' || kind === 'login' || kind === 'task-alert' ? 'warn' : kind === 'chat-done' ? 'ok' : 'info');
 
 const keyOf = (r: { chatId: string; id: string }) => `${r.chatId}/${r.id}`;
 let last = '';
@@ -100,15 +100,13 @@ export function startLayer(next: () => void, openLink: (link: string) => void): 
   // the chime on arrival: a minimized window repaints the toasts late (throttled timers), the IPC event is not
   sb.on('feed:events', evs => {
     const s = app.get();
-    const ring = toChime(evs, chimed, { soundOn: s.settings?.tasks?.sound !== false, muted: s.settings?.mute ?? {}, dnd: dndActive(now()) });
-    if (ring.length) { for (const id of ring) chimed.add(id); playChime(); }
+    const ids = toChime(evs, chimed, { soundOn: s.settings?.tasks?.sound !== false, muted: s.settings?.mute ?? {}, dnd: dndActive(now()) });
+    for (const id of ids) { chimed.add(id); const k = evs.find(e => e.id === id)?.kind; if (k && EVENT_SOUND[k]) ring(EVENT_SOUND[k]); }
   });
-  // every new request rings once (several arriving together ring once), also while "Rispondi dopo" keeps them quiet
-  let ringing: ReturnType<typeof setTimeout> | null = null;
+  // every new request rings (several arriving together ring once: sounds.ts BURST_MS), also while "Rispondi dopo" keeps them quiet
   sb.on('pending:added', () => {
     const s = app.get();
-    if (ringing || !requestChimes({ soundOn: s.settings?.tasks?.sound !== false, muted: s.settings?.mute ?? {}, dnd: dndActive(now()) })) return;
-    ringing = setTimeout(() => { ringing = null; playChime(); }, REQUEST_RING_MS);
+    if (requestChimes({ soundOn: s.settings?.tasks?.sound !== false, muted: s.settings?.mute ?? {}, dnd: dndActive(now()) })) ring('attention');
   });
   window.addEventListener('resize', scheduleLayer);
   setInterval(push, 800); // toasts expiring, the column resized: cheap and only sends on change

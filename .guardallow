@@ -135,3 +135,25 @@ test/unit/brainmodel/memory-worth.test.ts user-path sha256:7178a6995eb09661d5368
 test/unit/brainmodel/memory-worth.test.ts home-path sha256:7178a6995eb09661d5368d9c056bb00d430a7d080ae2e328ab7b6f55d8ca4e65
 test/unit/brainmodel/memory-worth.test.ts user-path sha256:2db3faeff757af65a1eeeb802a49294ec722dc3bd7cf6dcb1fe7531b46f71d63
 test/unit/brainmodel/memory-worth.test.ts home-path sha256:2db3faeff757af65a1eeeb802a49294ec722dc3bd7cf6dcb1fe7531b46f71d63
+# Routine page mockups (docs/mockups/routines, static HTML on fictional data) and the current page from the e2e demo
+# (fictional data), 2026-10-24: Playwright screenshots, no text chunks.
+docs/mockups/routines/png/a-quadro-1-dark.png binary-media sha256:f3d0cf2c881f4751190094c07981b6154d149410b188fdcb4831c0ffa479886b
+docs/mockups/routines/png/a-quadro-2-dark.png binary-media sha256:530c30a326059266e70ca473b584a6641ea2aac9368d29adc7b382d7af2ac5de
+docs/mockups/routines/png/a-quadro-3-dark.png binary-media sha256:de5362d75106e57d5f3d953ba66afada3c026379a4db119374e1d7454e6593fc
+docs/mockups/routines/png/a-quadro-4-dark.png binary-media sha256:e1d32559c187e9236ff5fa0d86d9049c28571c7b67ca948b90c9cf9f24e8faf1
+docs/mockups/routines/png/b-una-cosa-1-dark.png binary-media sha256:d167db5445c1a99af2529b469eb849bcec75c79386f31faab48284675b26b385
+docs/mockups/routines/png/b-una-cosa-2-dark.png binary-media sha256:dbf1fc3ec9903a3aca07e26ba3cc4e262f0987a240fc09377bf6bdf45333c207
+docs/mockups/routines/png/b-una-cosa-3-dark.png binary-media sha256:8b7936644f09a39b8b342098fb0e54d7af62c63dd1caf435d811e0686186332b
+docs/mockups/routines/png/b-una-cosa-4-dark.png binary-media sha256:e540039052016daad6cbeb42a15496be43efb10c9aaaaea778e0aa9a59281b1b
+docs/mockups/routines/png/b-una-cosa-5-dark.png binary-media sha256:81478802c6b6581f80ad4999fe2f54d974f60da62f30a3d16cf757c5d824c4a3
+docs/mockups/routines/png/b-una-cosa-6-dark.png binary-media sha256:ece16fd8c71ce602b4394ec51dd7e68fdc41c963afcb86e1a1299f3bd45bc14b
+docs/mockups/routines/png/c-binari-1-dark.png binary-media sha256:7d599a0999e414d40c442faf2a70206e2391564c27e0b954a314dd1d8f8e875e
+docs/mockups/routines/png/c-binari-2-dark.png binary-media sha256:2171e8ff3fc53e75567b498604be15eb7f8216291724df4ec9476477c27f5850
+docs/mockups/routines/png/c-binari-3-dark.png binary-media sha256:9974dbdec1f95ab2529c72bdf745aab09910bad1e5af8fb9531c5c23d7f55e8c
+docs/mockups/routines/png/c-binari-4-dark.png binary-media sha256:c8b4e97415f2ea7b1151e0abe04f034b256eb8e8870827ed8f8f951862bc1693
+docs/mockups/routines/png/prima-app-reale.png binary-media sha256:986b9c30068e4dbeeb568a6ea7d9ce8df906f1dcbf4ca472c85c2de0e0ccbef0
+# Earlier versions of the Routine mockup frames (kept for the history scan).
+docs/mockups/routines/png/b-una-cosa-1-dark.png binary-media sha256:3eb66d0373072bbdf010eecce4bad1f243b24bac5af162ced58ca4b237a32f2d
+docs/mockups/routines/png/b-una-cosa-2-dark.png binary-media sha256:09dc8974903bf0c4bccbd9c49b4ec4fd3c842f9d0ba99c5379d7a179b645f52d
+docs/mockups/routines/png/b-una-cosa-3-dark.png binary-media sha256:8535c65b86ddcd0066a3340d3d63b1cef90fbb25a1303129b759b39da48c0750
+docs/mockups/routines/png/b-una-cosa-4-dark.png binary-media sha256:bea24f86c25569c9b98adf374a3c1dc7a14e94b21fd41dde773dc6e33c2bb219

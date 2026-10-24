@@ -1,0 +1,301 @@
+<!doctype html>
+<!-- Routine page mockup A, "Quadro di controllo": routines | run timeline | step detail in three columns, the next
+     decision as a band on top. Static proposal for the owner's choice (docs/mockups/routines/README.md); no app code. -->
+<html lang="it"><head><meta charset="utf-8"><title>Routine · proposta A</title>
+<link rel="stylesheet" href="mockup.css">
+<style>
+.next { display: grid; grid-template-columns: 1fr 360px; gap: 14px; align-items: stretch; padding: 14px 16px; }
+.next .left { display: flex; flex-direction: column; gap: 8px; }
+.next .right { display: flex; flex-direction: column; gap: 8px; justify-content: center; }
+.more-q { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: var(--fs-s); color: var(--text-3); }
+.cols { flex: 1; min-height: 0; display: grid; grid-template-columns: 290px 1fr 360px; gap: 12px; padding-bottom: 16px; }
+.col { min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.col > .label { padding: 0 2px; }
+.rt { padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.rt.sel { border-color: var(--blue-line); background: color-mix(in srgb, var(--blue-bg) 50%, var(--surface)); }
+.rt .name { font-weight: 600; font-size: var(--fs-l); }
+.rt .meta { font-size: var(--fs-s); color: var(--text-3); display: flex; gap: 10px; }
+.filters { display: flex; flex-wrap: wrap; gap: 4px; }
+.runs { display: flex; gap: 6px; flex-wrap: wrap; }
+.runtab { padding: 6px 10px; border-radius: var(--r-s); border: 1px solid var(--border); background: var(--surface); font-size: var(--fs-s); display: flex; gap: 6px; align-items: center; }
+.runtab.sel { border-color: var(--blue-line); background: var(--blue-bg); }
+.tl { padding: 14px 16px; flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.tl-head { display: flex; gap: 10px; align-items: center; padding-bottom: 12px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+.st { display: grid; grid-template-columns: 28px 1fr auto; gap: 0 10px; position: relative; padding: 8px 0; }
+.st .rail { display: flex; flex-direction: column; align-items: center; }
+.st .node { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font: 700 11px var(--font); border: 2px solid var(--border-3); color: var(--text-3); background: var(--surface); z-index: 1; }
+.st .line { flex: 1; width: 2px; background: var(--border-2); margin-top: 2px; }
+.st.done .node { background: var(--green); border-color: var(--green); color: var(--on-accent); }
+.st.done .line { background: var(--green); }
+.st.block .node { background: var(--red); border-color: var(--red); color: #fff; }
+.st.prod .node { border-color: var(--red); color: var(--red); }
+.st.sel { background: var(--surface-2); border-radius: var(--r-m); margin: 0 -8px; padding: 8px; }
+.st .t { font-weight: 600; } .st .d { font-size: var(--fs-s); color: var(--text-3); }
+.detail { padding: 14px; display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; overflow: hidden; }
+.bubble { background: var(--surface-2); border-radius: var(--r-m); padding: 8px 10px; font-size: var(--fs-s); }
+.bubble.me { background: var(--blue-bg); align-self: flex-end; }
+.receipt { border: 1px solid var(--border); border-radius: var(--r-m); padding: 8px 10px; font-size: var(--fs-s); display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
+.receipt .k { color: var(--text-4); }
+.att { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: var(--r-m); padding: 8px 10px; font-size: var(--fs-s); }
+.tabs { display: flex; gap: 4px; background: var(--bg-2); border-radius: var(--r-s); padding: 3px; }
+.tabs span { flex: 1; text-align: center; padding: 6px; border-radius: 6px; color: var(--text-3); font-weight: 600; font-size: var(--fs-s); }
+.tabs span.on { background: var(--surface-3); color: var(--text); }
+.preview { border: 1px solid var(--border); border-radius: var(--r-m); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.dr { display: grid; grid-template-columns: 24px 1fr auto; gap: 6px 10px; align-items: start; padding: 8px 0; border-top: 1px solid var(--border); }
+</style></head><body>
+
+<p class="caption">Proposta A · Quadro di controllo · schermata principale</p>
+<div class="frame">
+  <div class="topbar"><span class="logo"></span><span class="search">Cerca chat… <span class="kbd">Ctrl K</span></span><span class="spacer"></span>
+    <span class="pill amber">⚡ Prossima cosa per te <b>3</b></span><span class="pill">● 3 routine attive</span><span class="pill">IT</span></div>
+  <div class="body">
+    <nav class="side">
+      <div class="it">Grindhouse <span class="badge">3</span></div>
+      <div class="sec">LAVORO</div>
+      <div class="it">Task</div>
+      <div class="it on">Routine <span class="badge">3</span></div>
+      <div class="it">Fatto e standup</div>
+      <div class="sec">BRAIN</div>
+      <div class="it">Agenti</div><div class="it">Memoria</div><div class="it">Classificatori</div><div class="it">Mappa</div>
+      <div class="sec">ANDAMENTO</div>
+      <div class="it">Costi</div><div class="it">Qualità</div>
+      <div class="sec">APP</div>
+      <div class="it">Log</div><div class="it">Guida</div>
+    </nav>
+    <main class="page">
+      <div class="head"><h1>Routine</h1><span class="sub">3 attive · 2 esecuzioni in corso · la prossima cosa è sotto</span><span class="grow"></span>
+        <span class="btn ghost">⇪ Esporta</span><span class="btn">◎ Prova a vuoto</span><span class="btn">📎 Avvia con allegato</span><span class="btn primary">▶ Avvia su un work item</span></div>
+
+      <section class="decision hot next">
+        <div class="left">
+          <div class="who"><span class="av n">S</span><b>Sentinel</b> · Bugfix automatico · Bug 48213 · 3 min fa</div>
+          <p class="q">Riprovo la Verifica del bug «Login SSO fallisce su Edge»?</p>
+          <div class="proof">
+            <span class="ko">2 test su 148 falliscono: AuthRedirectTests.EdgeRedirect, .EdgeCookie</span>
+            <span class="ok">Correzione già fatta nello step 2 (1 file, +14 −3)</span>
+            <div class="row"><span class="chip red">146/148 test</span><span class="chip">tentativo 2 di 3</span><span class="chip out">run-tests.ps1 · 9c1e…a7</span></div>
+          </div>
+        </div>
+        <div class="right">
+          <div class="yn-what"><b>Sì</b><span>rilancio i test (ultimo tentativo)</span><b>No</b><span>torno allo step 2 Correzione con questo errore</span></div>
+          <div class="yn"><span class="y">Sì</span><span class="n">No</span></div>
+          <div class="yn-more"><span>✎ Scrivi una risposta…</span><span>Ci penso dopo</span></div>
+          <div class="more-q">Poi: <span class="chip red">Rilascio prod da eseguire</span><span class="chip amber">Routine v8: migrare 1 esecuzione?</span></div>
+        </div>
+      </section>
+
+      <div class="cols">
+        <div class="col">
+          <span class="label">Routine</span>
+          <div class="card rt sel">
+            <div class="row"><span class="toggle on"></span><span class="name grow">Bugfix automatico</span><span class="chip">v7</span></div>
+            <div class="filters"><span class="chip blue">DevOps · Bug</span><span class="chip">Air\Backend</span><span class="chip green">+ ai-ok</span><span class="chip red">− ai-needs-human</span><span class="chip">≤ 4/ora</span></div>
+            <div class="meta"><span>Ultima: 12 min fa ✓</span><span>2 in corso</span></div>
+            <div class="row"><span class="chip amber">Coda: 92 bloccati</span><span class="grow"></span><span class="btn ghost">Svuota coda…</span></div>
+          </div>
+          <div class="card rt">
+            <div class="row"><span class="toggle on"></span><span class="name grow">Spostamento licenze</span><span class="chip">v2</span></div>
+            <div class="filters"><span class="chip">Solo a mano</span><span class="chip violet">📎 allegato .csv</span><span class="chip prod">prod: lo esegui tu</span></div>
+            <div class="meta"><span>Ultima: ieri 17:40 ✓</span><span>1 attende te</span></div>
+          </div>
+          <div class="card rt">
+            <div class="row"><span class="toggle"></span><span class="name grow">Deploy prod</span><span class="chip">v1</span></div>
+            <div class="filters"><span class="chip">Solo a mano</span><span class="chip prod">3 step prod</span><span class="chip out">solo prova a vuoto</span></div>
+            <div class="meta"><span>Mai eseguita</span></div>
+          </div>
+          <div class="card rt">
+            <div class="row"><span class="toggle"></span><span class="name grow muted">Note di rilascio</span><span class="chip">in pausa</span></div>
+            <div class="filters"><span class="chip">Ogni venerdì 16:00</span></div>
+            <div class="meta"><span>Ultima: 17/10 ✓</span><span>Coda: 0</span></div>
+          </div>
+        </div>
+
+        <div class="col">
+          <div class="runs">
+            <span class="runtab sel"><span class="dot red"></span>Bug 48213 · Verifica</span>
+            <span class="runtab"><span class="dot blue"></span>Bug 48190 · Correzione</span>
+            <span class="runtab"><span class="dot green"></span>Bug 48177 · finita</span>
+          </div>
+          <div class="card tl">
+            <div class="tl-head">
+              <div class="grow"><div style="font-weight:600;font-size:var(--fs-l)">Login SSO fallisce su Edge dopo il redirect</div>
+                <div class="muted" style="font-size:var(--fs-s)">Bug 48213 ↗ · avviata 14:01 da evento DevOps · v7</div></div>
+              <span class="btn">⏸ Pausa</span><span class="btn">↺ Riparti da…</span><span class="btn danger">Annulla</span>
+            </div>
+            <div class="st done"><div class="rail"><span class="node">✓</span><span class="line"></span></div>
+              <div><div class="t">1 · Analisi</div><div class="d">Scout · Sonnet 5.5 · 4 min · query bug-context.sql (test, sola lettura)</div></div><span class="chip green">fatto</span></div>
+            <div class="st done"><div class="rail"><span class="node">✓</span><span class="line"></span></div>
+              <div><div class="t">2 · Correzione</div><div class="d">Artisan · Opus 5.5 · 9 min · AuthRedirect.cs +14 −3</div></div><span class="chip green">fatto</span></div>
+            <div class="st block sel"><div class="rail"><span class="node">!</span><span class="line"></span></div>
+              <div><div class="t">3 · Verifica</div><div class="d">Sentinel · Opus 5.5 · run-tests.ps1 · 2 test rossi · tentativo 2/3</div></div><span class="chip red">ferma: tocca a te</span></div>
+            <div class="st"><div class="rail"><span class="node">4</span><span class="line"></span></div>
+              <div><div class="t">4 · Revisione PR</div><div class="d">Sentinel · Opus 5.5 · apre la PR su un ramo</div></div><span class="chip">da fare</span></div>
+            <div class="st"><div class="rail"><span class="node">5</span></div>
+              <div><div class="t">5 · Aggiorna work item</div><div class="d">Herald · Haiku 5.5 · commento + stato «Resolved»</div></div><span class="chip">da fare</span></div>
+          </div>
+        </div>
+
+        <div class="col">
+          <span class="label">Step 3 · Verifica</span>
+          <div class="card detail">
+            <div class="row"><span class="av n">S</span><b>Sentinel</b><span class="grow"></span><span class="btn ghost">Apri chat ↗</span></div>
+            <div class="bubble">Ho lanciato la suite Auth: 146 verdi, 2 rossi. Entrambi su Edge: il cookie di sessione si perde dopo il redirect.</div>
+            <div class="bubble me">Controlla se è solo il test o anche l'app.</div>
+            <span class="label">Prove</span>
+            <div class="row" style="flex-wrap:wrap"><span class="chip red">146/148 test</span><span class="chip">log-test.txt</span><span class="chip">screenshot Edge</span></div>
+            <span class="label">Ricevuta script</span>
+            <div class="receipt">
+              <span class="k">Script</span><span class="mono">run-tests.ps1 · sha 9c1e…a7 ✓</span>
+              <span class="k">Parametri</span><span class="mono">-Filter Auth -Env test</span>
+              <span class="k">Tempo</span><span>14:12 → 14:16 · 3 min 48 s</span>
+              <span class="k">Esito</span><span style="color:var(--red)">exit 1 · «2 failed, 146 passed»</span>
+              <span class="k">Chi</span><span>app (runner), nessun clic</span>
+            </div>
+            <span class="label">Allegati della run</span>
+            <div class="att">📄 <span class="grow">nessuno</span><span class="btn ghost">+ Aggiungi</span></div>
+            <div class="row" style="margin-top:auto"><span class="chip">Scrivi allo step…</span><span class="grow"></span><span class="kbd">Invio</span></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<p class="caption">Proposta A · Avvia su un work item (con allegato)</p>
+<div class="frame short" style="height:900px">
+  <div class="topbar"><span class="logo"></span><span class="search">Cerca chat… <span class="kbd">Ctrl K</span></span><span class="spacer"></span>
+    <span class="pill amber">⚡ Prossima cosa per te <b>3</b></span><span class="pill">● 3 routine attive</span><span class="pill">IT</span></div>
+  <div class="body">
+    <nav class="side">
+      <div class="it">Grindhouse <span class="badge">3</span></div>
+      <div class="sec">LAVORO</div>
+      <div class="it">Task</div>
+      <div class="it on">Routine <span class="badge">3</span></div>
+      <div class="it">Fatto e standup</div>
+      <div class="sec">BRAIN</div>
+      <div class="it">Agenti</div><div class="it">Memoria</div><div class="it">Classificatori</div><div class="it">Mappa</div>
+      <div class="sec">ANDAMENTO</div>
+      <div class="it">Costi</div><div class="it">Qualità</div>
+      <div class="sec">APP</div>
+      <div class="it">Log</div><div class="it">Guida</div>
+    </nav>
+    <main class="page" style="opacity:.35"><div class="head"><h1>Routine</h1></div></main>
+  </div>
+  <div class="scrim">
+    <div class="sheet">
+      <h2>Avvia una routine</h2>
+      <div class="tabs"><span class="on">Su un work item</span><span>Con allegato</span><span>Tutti e due</span></div>
+      <span class="label">Routine</span>
+      <div class="field row"><span class="grow">Bugfix automatico · v7</span><span class="faint">▾</span></div>
+      <span class="label">Work item</span>
+      <div class="field mono">dev.azure.com/{{org}}/Air/_workitems/edit/48231</div>
+      <div class="preview">
+        <div class="row"><span class="chip red">Bug</span><b class="grow">Il PDF della fattura ha il totale arrotondato male</b><span class="chip">Active</span></div>
+        <div class="muted" style="font-size:var(--fs-s)">Air\Backend · Sprint 44 · tag: fatture, ai-ok · aggiornato 2 h fa</div>
+        <div class="row"><span class="chip green">✓ dentro i filtri della routine</span><span class="chip green">✓ nessuna run attiva su questo item</span></div>
+      </div>
+      <span class="label">Allegato (facoltativo)</span>
+      <div class="drop">Incolla una lista o trascina un file qui · .csv .txt .xlsx</div>
+      <div class="row"><span class="muted grow" style="font-size:var(--fs-s)">Stessi passaggi di un avvio automatico. Nessuno step prod parte da solo.</span>
+        <span class="btn">Prova a vuoto</span><span class="btn primary big">▶ Avvia</span></div>
+    </div>
+  </div>
+</div>
+
+<p class="caption">Proposta A · Prova a vuoto (dry-run)</p>
+<div class="frame">
+  <div class="topbar"><span class="logo"></span><span class="search">Cerca chat… <span class="kbd">Ctrl K</span></span><span class="spacer"></span>
+    <span class="pill amber">⚡ Prossima cosa per te <b>3</b></span><span class="pill">● 3 routine attive</span><span class="pill">IT</span></div>
+  <div class="body">
+    <nav class="side">
+      <div class="it">Grindhouse <span class="badge">3</span></div>
+      <div class="sec">LAVORO</div>
+      <div class="it">Task</div>
+      <div class="it on">Routine <span class="badge">3</span></div>
+      <div class="it">Fatto e standup</div>
+      <div class="sec">BRAIN</div>
+      <div class="it">Agenti</div><div class="it">Memoria</div><div class="it">Classificatori</div><div class="it">Mappa</div>
+      <div class="sec">ANDAMENTO</div>
+      <div class="it">Costi</div><div class="it">Qualità</div>
+      <div class="sec">APP</div>
+      <div class="it">Log</div><div class="it">Guida</div>
+    </nav>
+    <main class="page" style="opacity:.35"><div class="head"><h1>Routine</h1></div></main>
+  </div>
+  <div class="scrim">
+    <div class="sheet" style="width:760px">
+      <div class="row"><h2 class="grow">Prova a vuoto · Deploy prod v1</h2><span class="chip green">non esegue nulla</span></div>
+      <div class="muted" style="font-size:var(--fs-s)">Parametri: release <span class="mono">air-build=20261024.3</span> · ambiente <b>prod</b> · allegato <span class="mono">migrazioni.txt</span> (4 righe, sha 3f9a…c2)</div>
+      <div>
+        <div class="dr"><span class="chip">1</span><div><b>Controllo pre-deploy</b> <span class="faint">query pre-deploy-check.sql · sha 51ab…0e ✓</span><div class="cmd" style="margin-top:6px">sqlcmd -S <span class="p">air-prod-sql</span> -d <span class="p">Air</span> -i pre-deploy-check.sql   <span class="faint">-- sola lettura</span></div></div><span class="chip prod">prod · lo esegui tu</span></div>
+        <div class="dr"><span class="chip">2</span><div><b>Migrazioni DB</b> <span class="faint">4 file dall'allegato</span><div class="cmd" style="margin-top:6px">sqlcmd -S <span class="p">air-prod-sql</span> -d <span class="p">Air</span> -i <span class="p">2026-10-24_01_fatture.sql</span>   <span class="faint">(+3)</span></div></div><span class="chip prod">prod · lo esegui tu</span></div>
+        <div class="dr"><span class="chip">3</span><div><b>Smoke test</b> <span class="faint">script smoke.ps1 · sha 77d0…1b ✓</span><div class="cmd" style="margin-top:6px">pwsh smoke.ps1 -Env <span class="p">test</span></div></div><span class="chip green">automatico</span></div>
+        <div class="dr"><span class="chip">4</span><div><b>Release Azure</b><div class="cmd" style="margin-top:6px">az pipelines release create --project <span class="p">Air</span> --definition-name <span class="p">"Air-Prod"</span> --artifact-metadata-list <span class="p">air-build=20261024.3</span></div></div><span class="chip prod">prod · lo esegui tu</span></div>
+      </div>
+      <div class="row"><span class="chip green">✓ tutti i parametri validi</span><span class="chip green">✓ hash degli script approvati</span><span class="grow"></span><span class="btn">Chiudi</span><span class="btn" style="opacity:.55">Avvio reale spento: solo prova</span></div>
+    </div>
+  </div>
+</div>
+<p class="caption">Proposta A · Esporta per un cloud agent</p>
+<div class="frame">
+  <div class="topbar"><span class="logo"></span><span class="search">Cerca chat… <span class="kbd">Ctrl K</span></span><span class="spacer"></span>
+    <span class="pill amber">⚡ Prossima cosa per te <b>3</b></span><span class="pill">● 3 routine attive</span><span class="pill">IT</span></div>
+  <div class="body">
+    <nav class="side">
+      <div class="it">Grindhouse <span class="badge">3</span></div>
+      <div class="sec">LAVORO</div>
+      <div class="it">Task</div>
+      <div class="it on">Routine <span class="badge">3</span></div>
+      <div class="it">Fatto e standup</div>
+      <div class="sec">BRAIN</div>
+      <div class="it">Agenti</div><div class="it">Memoria</div><div class="it">Classificatori</div><div class="it">Mappa</div>
+      <div class="sec">ANDAMENTO</div>
+      <div class="it">Costi</div><div class="it">Qualità</div>
+      <div class="sec">APP</div>
+      <div class="it">Log</div><div class="it">Guida</div>
+    </nav>
+    <main class="page" style="opacity:.35"><div class="head"><h1>Routine</h1></div></main>
+  </div>
+  <div class="scrim">
+    <div class="sheet" style="width:900px">
+      <div class="row"><h2 class="grow" style="margin:0;font:600 var(--fs-xl) var(--font-display)">Esporta routine · Bugfix automatico v7</h2><span class="chip green">nessun segreto dentro</span></div>
+      <div class="exp">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <span class="label">Cosa contiene</span>
+          <ul>
+            <li>Passaggi, istruzioni, criteri di uscita, evidenze richieste</li>
+            <li>Per ogni step: ruolo, motore, modello e sforzo fissati</li>
+            <li>Skill usate (SKILL.md) con hash</li>
+            <li>Script e query con hash e parametri tipizzati</li>
+            <li>Strumenti MCP richiesti (solo i nomi)</li>
+            <li>Trigger e filtri (tag, id, area, max/ora)</li>
+            <li>Step prod marcati: fuori dall'app restano «lo esegui tu»</li>
+            <li class="no">Token, password, connessioni: chiesti all'avvio</li>
+          </ul>
+          <span class="label">Dove deve girare</span>
+          <div class="target"><span class="on">Questa app</span><span class="on">Claude Code (cloud)</span><span>Cursor Cloud Agents</span><span>Codex cloud</span></div>
+          <div class="row" style="font-size:var(--fs-s)"><span class="chip green">✓ Claude Code: stessi modelli</span><span class="chip amber">Cursor: step 5 senza Haiku 5.5</span></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;min-width:0">
+          <span class="label">Anteprima</span>
+          <div class="tree">bugfix-automatico.routine/<br>├ routine.yaml<br>├ lock.json <span class="faint">(hash di tutto)</span><br>├ skills/bug-triage/SKILL.md<br>├ scripts/run-tests.ps1<br>├ queries/bug-context.sql<br>└ README.md <span class="faint">(come avviarla)</span></div>
+<div class="yaml"><span class="k">routine</span>: bugfix-automatico
+<span class="k">version</span>: 7
+<span class="k">steps</span>:
+  - <span class="k">id</span>: analyze
+    <span class="k">role</span>: Scout
+    <span class="k">engine</span>: claude-code
+    <span class="k">model</span>: claude-sonnet-5-5
+    <span class="k">effort</span>: medium
+    <span class="k">skills</span>: [bug-triage@41c0e2]
+  - <span class="k">id</span>: verify
+    <span class="k">run</span>: scripts/run-tests.ps1@9c1ea7
+    <span class="k">params</span>: { Filter: Auth, Env: test }
+  <span class="c"># … 3 passaggi</span></div>
+        </div>
+      </div>
+      <div class="row"><span class="faint grow" style="font-size:var(--fs-s)">Reimportabile qui o in un'altra installazione: stesso risultato con gli stessi modelli.</span><span class="btn">Copia prompt di avvio</span><span class="btn primary big">⇩ Scarica .zip</span></div>
+    </div>
+  </div>
+</div>
+</body></html>
