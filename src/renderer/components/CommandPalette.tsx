@@ -123,6 +123,11 @@ function buildCommands(): Cmd[] {
   return out;
 }
 
+/** The palette's own actions and places, without chats, requests or news: the Orchestrator's app map lists them
+ *  (lib/app-map.ts, app_guide), with the shortcut the user presses. */
+export const paletteActions = (): { group: string; title: string; sub?: string; shortcut?: string }[] =>
+  buildCommands().filter(c => c.group === 'Azioni' || c.group === 'Vai a').map(({ group, title, sub, shortcut }) => ({ group, title, ...(sub ? { sub } : {}), ...(shortcut ? { shortcut } : {}) }));
+
 const FOUND_GROUP: Record<SearchHit['kind'], string> = { chat: 'Chat trovate', message: 'Nei messaggi', branch: 'Branch', brain: 'Nel brain' };
 
 /** The day of a hit: the time today, else the day (and year when not this one). */

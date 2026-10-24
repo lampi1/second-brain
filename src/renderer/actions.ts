@@ -34,6 +34,7 @@ import {
   openOrchestratorRenew, setRead, setOrchestratorOpen, toast, ui, callQuestions, setQuestionsAside, setChatExpanded, setTreeCollapsed, setBrowserOpen, setViewer, type Place,type BrainPageId,
 } from './store/ui';
 import { currentEntry, pushEntry, stepEntry, type Shot, type ViewerEntry } from './lib/viewer-stack';
+import { applyViewPrefs } from './lib/view-prefs';
 
 /** The Orchestrator's id (the right column), null while there is none. */
 export const orchestratorId = (): string | null => orchestratorIdOf(app.get());
@@ -597,7 +598,8 @@ export function focusTile(index: number): void {
 /** ui:command from main (app-control MCP, notifications): view, focus, maximize, restore, page (home | mappa | a
  *  brain page id), link (sb://…), notifications, back, forward, palette, next; and for tools/tests: clock (frozen demo
  *  time), layout off|on (stop/resume reporting browser view rects); closeTab (Ctrl+W typed inside a browser page);
- *  unblock (app_unblock: the questions window with every waiting request, the postponed ones too). */
+ *  unblock (app_unblock: the questions window with every waiting request, the postponed ones too); prefs (app_config
+ *  "view": theme, density, work profile, lib/app-map.ts). */
 export function uiCommand(cmd: EventMap['ui:command']): void {
   const v = cmd.value ?? '';
   switch (cmd.action) {
@@ -627,6 +629,7 @@ export function uiCommand(cmd: EventMap['ui:command']): void {
     case 'layout': setReporting(v !== 'off'); break;
     case 'closeTab': closeTab(v); break;   // Ctrl+W inside a browser page (main browser/tabs.ts forwards it)
     case 'unblock': showQueue(); break; // the Orchestrator's recap (app_unblock, ADR 0135): everything waiting, «Ci penso dopo» too
+    case 'prefs': applyViewPrefs(v); break; // app_config area "view" (ADR 0149): theme, density, work profile; checked there
     default: break;
   }
 }

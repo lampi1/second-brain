@@ -56,6 +56,8 @@ import { automationTools } from '../flows/automation-tools';
 import type { FlowRuntime } from '../flows/runtime';
 import { workflowTools } from '../workflows/tools';
 import type { Workflows } from '../workflows/service';
+import { guideTool, screenOutline } from './guide';
+import { CONFIG_ASK_MIN, configTool, type ConfigDeps } from './config';
 
 export type ToolOut = string | { text?: string; images?: { data: string; mimeType: string; caption?: string }[] } | object;
 export interface ToolDef { name: string; description: string; inputSchema: object; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean }; run(args: Record<string, unknown>): Promise<ToolOut> | ToolOut }
@@ -96,6 +98,8 @@ export interface AppCtlDeps {
   skillTools?: SkillToolsSource;
   /** the brain's scripts and changelog (ADR 0076): the Orchestrator's brain_script_save / _delete / brain_changelog_add */
   brainScripts?: { scripts: BrainScripts; changelog: BrainChangelog };
+  /** the configuration the Orchestrator changes for the user (app_config, ADR 0149); settings come from `brain` */
+  config?: Omit<ConfigDeps, 'callerId' | 'userAsked' | 'brain'>;
 }
 
 /** agent_learn_propose on the app endpoints: all proposals require a renderer user decision before application;
@@ -178,7 +182,13 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   /** a chat another role delegated: the Orchestrator sees its state, never its content (ADR 0083) */
   const delegated = (chatId: string) => d.chats.list().some(c => c.id === chatId && !!c.parentId);
   const contentOf = (chatId: string) => { guard(chatId); if (delegated(chatId)) throw new Error('chat delegata da un altro ruolo: il suo contenuto lo legge il genitore; tu ne vedi lo stato (app_chats, app_digest)'); return chatId; };
+  // app_guide's own list of the caller's tools is read when asked, so it names exactly what this endpoint offers
+  const guideDeps = { window: d.window, settings: { schema: () => d.brain.settingsSchema(), get: () => d.brain.settings() },
+    tools: () => tools.map(t => ({ name: t.name, description: t.description })), personalShown: () => !!d.personal?.anyShown(),
+    ...(d.flows ? { flows: () => { try { return d.flows!.service().snapshot(); } catch { return null; } } } : {}) };
   const tools: ToolDef[] = [
+    guideTool(guideDeps),
+    ...(d.config && authed() ? [configTool({ ...d.config, brain: d.brain, callerId: callerId!, userAsked: () => { const o = caller(); return !!o && decidedSince(o.id, Date.now() - CONFIG_ASK_MIN * 60_000); } })] : []),
     ...(d.flows && authed() ? automationTools({
       service: () => { if (!authed()) throw new Error('Authenticated Orchestrator required'); return d.flows!.automation(); },
       contextKey: () => d.flows!.service().snapshot().contextKey, ownerId: callerId!,
@@ -383,13 +393,14 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       },
     },
     {
-      name: 'app_ui', description: 'Steer the UI (visual only, never the keyboard focus): action "maximize" (chat id), "restore", "page" (value: workspace|task|fatto|idee|costi|qualita|confronto|agenti|skill|regole|memoria|classificatori|collegamenti|esplora|mappa), "palette".',
-      inputSchema: obj({ action: str('maximize|restore|page|palette'), value: str('argument of the action') }, ['action']),
+      name: 'app_ui', description: 'Steer the UI (visual only, never the keyboard focus): action "maximize" (chat id), "restore", "page" (value: a page id from app_guide, optionally with a tab or section: "memoria/skill", "impostazioni/notifications"), "palette", or "outline" (read only: what is on screen now, one line per heading, tab and control with its state, section and position, the ones in view first; value = optional words to keep only one section of a long page; chats show only title and state).',
+      inputSchema: obj({ action: str('maximize|restore|page|palette|outline'), value: str('argument of the action') }, ['action']),
       // only visual steering: never actions that move the keyboard focus (next, focus…): an agent must not be able to
       // put the user's next keystroke on a permission or into another chat's input (review 2026-10-11)
       run: a => {
         const action = String(a.action);
-        if (!['maximize', 'restore', 'page', 'palette'].includes(action)) throw new Error(`app_ui: action not allowed for agents: ${action} (maximize|restore|page|palette)`);
+        if (action === 'outline') return screenOutline(guideDeps, a.value === undefined ? '' : String(a.value));
+        if (!['maximize', 'restore', 'page', 'palette'].includes(action)) throw new Error(`app_ui: action not allowed for agents: ${action} (maximize|restore|page|palette|outline)`);
         // a root chat and its browser can be maximized; a delegated chat's (or its browser's) cannot: maximize then
         // app_screenshot would show the Orchestrator its content (ADR 0083: it sees only the state)
         if (action === 'maximize' && a.value !== undefined) {

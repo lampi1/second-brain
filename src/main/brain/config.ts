@@ -220,14 +220,16 @@ export class ConfigStore {
     return this.get();
   }
 
-  /** One key from anyone. The user: applied. Agent: applied if not protected, else a proposal for the user's click. */
-  request(key: unknown, value: unknown, origin: Origin & { reason?: string }): SettingRequestResult {
+  /** One key from anyone. The user: applied. Agent: applied if not protected, else a proposal for the user's click;
+   *  `direct` = the Orchestrator doing what the user asked it in their own words (app_config, ADR 0149: the owner's
+   *  choice, protected keys too, logged as the agent's change with its Annulla). */
+  request(key: unknown, value: unknown, origin: Origin & { reason?: string; direct?: boolean }): SettingRequestResult {
     const c = validate(key, value);
     if (!c.ok) return { error: c.error };
     try { this.assertUnlocked(c.key); } catch (e) { return { error: (e as Error).message }; }
     const d = defOf(c.key)!;
-    if (origin.by === 'agent' && d.protected) return { proposal: this.propose(c.key, c.value, origin) };
-    const ch = this.apply(c.key, c.value, origin);
+    if (origin.by === 'agent' && d.protected && !origin.direct) return { proposal: this.propose(c.key, c.value, origin) };
+    const ch = this.apply(c.key, c.value, { by: origin.by, ...(origin.chatId ? { chatId: origin.chatId } : {}) });
     return ch ? { applied: ch } : { error: `${labelOf(c.key, d)}: è già così` };
   }
 
@@ -263,16 +265,16 @@ export class ConfigStore {
   }
 
   /** Restores the value before a change, as a new change (undoOf); the original is marked undone. */
-  undo(changeId: string, origin: Origin = { by: 'user' }): SettingChange {
+  undo(changeId: string, origin: Origin & { direct?: boolean } = { by: 'user' }): SettingChange {
     const orig = this.changes.find(c => c.id === changeId);
     if (!orig) throw new Error('modifica non trovata');
     if (orig.undone) throw new Error('modifica già annullata');
-    if (origin.by === 'agent' && defOf(orig.key)?.protected) throw new Error("impostazione protetta: solo l'utente può annullarla");
+    if (origin.by === 'agent' && defOf(orig.key)?.protected && !origin.direct) throw new Error("impostazione protetta: solo l'utente può annullarla");
     const c = validate(orig.key, orig.before);
     if (!c.ok) throw new Error(c.error);
     if (orig.key === 'codexAutonomyRoots' && !same(c.value, orig.before)) throw new Error('Cartella repository cambiata dalla modifica: scegli di nuovo il percorso attuale.');
     this.assertUnlocked(c.key);
-    const ch = this.apply(c.key, c.value, origin, { undoOf: orig.id, force: true })!;
+    const ch = this.apply(c.key, c.value, { by: origin.by, ...(origin.chatId ? { chatId: origin.chatId } : {}) }, { undoOf: orig.id, force: true })!;
     orig.undone = true;
     this.appendChange(orig);
     return ch;
