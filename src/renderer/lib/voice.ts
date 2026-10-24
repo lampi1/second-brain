@@ -115,6 +115,7 @@ async function startListening(mode: VoiceMode, target: VoiceTarget): Promise<voi
 function fail(error: string): void {
   session++;
   startWhenReady = false;
+  dropHeld();
   closeMic();
   stopSpeaking(false);
   set({ phase: 'off', level: 0, error });
@@ -204,8 +205,7 @@ export function stopVoice(): void {
   closeMic();
   stopSpeaking(false);
   if (transcribeTimer) clearTimeout(transcribeTimer);
-  if (holdTimer) clearTimeout(holdTimer);
-  held = '';
+  dropHeld();
   set({ phase: 'off', level: 0 });
   hinted = false;
   saidIds.clear(); // on again: the open questions are read again
@@ -218,23 +218,22 @@ export function stopVoice(): void {
  *  the voice agents that yield only to sustained speech) */
 export const BARGE_LEVEL = 0.18;
 
-/** an utterance the VAD opened on the app's own voice: dropped when its transcript comes */
-let echo = false;
+/** per utterance the VAD opened, in order: was it the app's own voice? Its transcript (one 'heard' each, empty when
+ *  nothing was understood) takes the first flag, so an echo is dropped and the user's next words are not */
+let echoes: boolean[] = [];
 function speech(active: boolean): void {
   const s = voice.get();
-  if (s.phase === 'off' || s.phase === 'preparing' || s.phase === 'starting') return;
   if (active) {
-    echo = false;
-    if (speakingNow() || Date.now() < quietUntil) {
-      // the app hearing itself (the fake engine has no microphone: what it «hears» is always the user)
-      if (loudLately() < BARGE_LEVEL && !s.engine?.fake) { echo = true; return; }
-      stopSpeaking(); // barge-in: the user talks over the app, it stops at once
-    }
+    // the app hearing itself (the fake engine has no microphone: what it «hears» is always the user)
+    const echo = (speakingNow() || Date.now() < quietUntil) && loudLately() < BARGE_LEVEL && !s.engine?.fake;
+    echoes.push(echo);
+    if (s.phase === 'off' || s.phase === 'preparing' || s.phase === 'starting' || echo) return;
+    if (speakingNow()) stopSpeaking(); // barge-in: the user talks over the app, it stops at once
     if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; } // still the same thought: what was heard waits for the rest
     set({ phase: 'hearing' });
     return;
   }
-  if (s.phase !== 'hearing') return;
+  if (s.phase === 'off' || s.phase !== 'hearing') return;
   set({ phase: 'transcribing' });
   if (transcribeTimer) clearTimeout(transcribeTimer);
   transcribeTimer = setTimeout(() => { if (voice.get().phase === 'transcribing') set({ phase: 'listening' }); }, 15_000);
@@ -244,15 +243,32 @@ function speech(active: boolean): void {
  *  VAD closes an utterance after 0.5 s of silence; a pause to think must not cut the message in two). */
 const HOLD_MS = 700;
 let turn: { key: string; said: string; cut: boolean } | null = null;
-let held = '', holdTimer: ReturnType<typeof setTimeout> | null = null;
+let held = '', heldChat = '', holdTimer: ReturnType<typeof setTimeout> | null = null;
+function dropHeld(): void {
+  if (holdTimer) clearTimeout(holdTimer);
+  holdTimer = null; held = ''; heldChat = ''; echoes = [];
+}
+/** what was heard goes HOLD_MS after the last piece, unless the user is talking again (then after that piece) */
+function sendHeldLater(): void {
+  if (!held || holdTimer) return;
+  const my = session;
+  holdTimer = setTimeout(() => {
+    holdTimer = null;
+    if (my !== session || !held) return;
+    if (voice.get().phase === 'hearing') return; // more is coming: speech(false) and its transcript set the timer again
+    const all = held, chatId = heldChat;
+    held = ''; heldChat = '';
+    send(chatId, all);
+  }, HOLD_MS);
+}
 
 function heard(raw: string): void {
+  const echo = echoes.shift() ?? false;
   const s = voice.get();
   if (s.phase === 'off') return;
-  if (s.phase !== 'speaking' && s.phase !== 'hearing') set({ phase: 'listening' });
-  if (echo) { echo = false; return; }
-  if (isNoise(raw)) return;
+  if (s.phase !== 'speaking' && s.phase !== 'hearing') set({ phase: speakingNow() ? 'speaking' : 'listening' });
   const text = raw.trim();
+  if (echo || !text || isNoise(text)) { sendHeldLater(); return; }
   const chatId = targetChat(s.target);
   if (!chatId) { toast(t(s.target === 'flash' ? 'voice.noFlash' : 'voice.noOrchestrator'), 'info'); return; }
   if (s.mode === 'dictate') { for (const fn of dictated) fn(chatId, text); return; }
@@ -261,17 +277,11 @@ function heard(raw: string): void {
     const a = parseSpokenAnswer(text);
     if (a) { q.onAnswer(a); return; }
   }
+  if (held && heldChat !== chatId) { const all = held, to = heldChat; held = ''; send(to, all); }
   held = held ? `${held} ${text}` : text;
-  if (holdTimer) clearTimeout(holdTimer);
-  const my = session;
-  holdTimer = setTimeout(() => {
-    holdTimer = null;
-    if (my !== session || !held) return;
-    if (voice.get().phase === 'hearing') return; // more is coming: sent with the next piece
-    const all = held;
-    held = '';
-    send(chatId, all);
-  }, HOLD_MS);
+  heldChat = chatId;
+  if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+  sendHeldLater();
 }
 
 // ── speaking ──
@@ -310,8 +320,9 @@ async function pump(): Promise<void> {
   line.audio ??= synth(line.text);
   if (lines[1] && !lines[1].audio) lines[1].audio = synth(lines[1].text); // the next one while this one plays
   const r = await line.audio;
+  if (n !== speakN) return; // stopped meanwhile: `pumping` belongs to whoever runs now
   pumping = false;
-  if (n !== speakN || voice.get().phase === 'off') return;
+  if (voice.get().phase === 'off') return;
   lines.shift();
   if (!r || r.error || !r.samples.length) {
     if (r?.error) { set({ error: r.error }); toast(t('voice.speakFailed', { error: r.error }), 'err'); lines = []; }
@@ -341,7 +352,8 @@ export async function previewVoice(name: VoiceName): Promise<string | null> {
   if (!r || r.error || !r.samples.length) return r?.error ?? t('voice.engineDown');
   stopSpeaking(false);
   playing = play(r.samples, r.rate);
-  playing.onended = () => { playing = null; };
+  const src = playing;
+  src.onended = () => { if (playing !== src) return; playing = null; void pump(); };
   return null;
 }
 

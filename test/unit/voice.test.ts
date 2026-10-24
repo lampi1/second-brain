@@ -71,8 +71,9 @@ describe('settledText', () => {
     expect(settledText('niente ancora', false)).toBe('');
     expect(settledText('Ciao. Sto contr', true)).toBe('Ciao. Sto contr');
   });
-  it('a dotted number or a file name does not end a sentence', () => {
+  it('a dotted number or a list number does not end a sentence', () => {
     expect(settledText('Versione 1.2 e poi', false)).toBe('');
+    expect(settledText('Ecco i passi:\n1. Apri', false)).toBe('Ecco i passi:\n');
   });
 });
 

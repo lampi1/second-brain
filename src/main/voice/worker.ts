@@ -101,14 +101,17 @@ function drain(): void {
     const seg = v.front(false); // a copy: the native buffer is freed by pop() before Whisper runs
     v.pop();
     const samples: Float32Array = seg.samples;
+    const ms = Math.round((samples.length / VOICE_RATE) * 1000);
     later(async () => {
-      if (!partReady(root, ASR[asrNow])) throw new Error('Whisper non è ancora scaricato: Impostazioni → Voce.');
-      const r = recNow(asrNow);
-      const stream = r.createStream();
-      stream.acceptWaveform({ samples, sampleRate: VOICE_RATE });
-      const out = await r.decodeAsync(stream);
-      const text = String(out?.text ?? '').trim();
-      if (text) send({ type: 'heard', text, ms: Math.round((samples.length / VOICE_RATE) * 1000) });
+      // one 'heard' per utterance, empty when nothing was understood: the renderer pairs each with its start
+      let text = '';
+      try {
+        if (!partReady(root, ASR[asrNow])) throw new Error('Whisper non è ancora scaricato: Impostazioni → Voce.');
+        const r = recNow(asrNow);
+        const stream = r.createStream();
+        stream.acceptWaveform({ samples, sampleRate: VOICE_RATE });
+        text = String((await r.decodeAsync(stream))?.text ?? '').trim();
+      } finally { send({ type: 'heard', text, ms }); }
     });
   }
 }

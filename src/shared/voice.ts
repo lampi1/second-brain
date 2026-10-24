@@ -111,7 +111,8 @@ export function settledText(md: string, done: boolean): string {
   let s = md;
   const fences = s.match(/```/g)?.length ?? 0;
   if (fences % 2) s = s.slice(0, s.lastIndexOf('```'));
-  const m = [...s.matchAll(/[.!?…:](?=\s)|\n/g)].at(-1);
+  // «1.» opening a list item is not the end of a sentence
+  const m = [...s.matchAll(/(?<!\d)[.!?…:](?=\s)|\n/g)].at(-1);
   return m ? s.slice(0, m.index! + 1) : '';
 }
 
