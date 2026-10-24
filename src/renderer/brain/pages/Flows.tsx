@@ -1,11 +1,12 @@
 // One focused catalog for manual and automatic flows. All creation/configuration/start requests go through the Orchestrator.
 import { useMemo, useState } from 'react';
 import type { FlowDraft, FlowSnapshot, FlowVersion } from '@shared/flows';
+import type { ModelTier } from '@shared/roles';
 import { flowAsks } from '../../lib/flow-ask';
 import { flowRequest, type FlowRequestKind } from '../../lib/flow-request';
 import { orchestratorIdOf } from '../../lib/orchestrator-route';
 import { openQueue } from '../../lib/later';
-import { reloadFlows, useFlows } from '../../store/flows';
+import { editFlowStepTier, reloadFlows, useFlows } from '../../store/flows';
 import { app, send, useApp } from '../../store/store';
 import { toast } from '../../store/ui';
 import { focusChat } from '../../actions';
@@ -34,6 +35,13 @@ function FlowDetail({ version, draft, snapshot, ready }: { version?: FlowVersion
   const shownVersion = runVersion ?? version;
   const draftAsk = flowAsks(snapshot).find(ask => ask.type === 'flow-definition' && ask.draft.definition.id === definition.id);
   const runAsk = run && flowAsks(snapshot).find(ask => ask.type === 'flow-run' && ask.run.id === run.id);
+  // Tier menu on the definition view only: the exact shown definition is the base; a pending proposal behind an active
+  // version locks it (decide that one first), a pick only proposes the next revision for the existing modal.
+  const pending = draft?.status === 'proposed' ? draft : undefined;
+  const tierEdit = run ? undefined : {
+    locked: version ? !!pending || snapshot.active[definition.id] !== version.version : !pending,
+    pick: (stepId: string, tier: ModelTier | null) => void editFlowStepTier(snapshot.contextKey, { flowId: definition.id, base: version ? { version: version.version } : { draftRevision: draft!.revision }, stepId, tier }),
+  };
   return <article className="flow-detail" data-testid="flow-definition">
     <header className="flow-detail-head"><div className="flow-card-head"><h2>{definition.title}</h2><span className="flow-version">{version ? `v${version.version}` : `r${draft!.revision}`}</span><span className="flow-badge" data-status={version && snapshot.active[definition.id] === version.version ? 'active' : 'draft'}>{t(version && snapshot.active[definition.id] === version.version ? 'flows.active' : 'flows.draft')}</span></div>
       <p>{definition.description}</p><div className="flow-actions">
@@ -47,7 +55,7 @@ function FlowDetail({ version, draft, snapshot, ready }: { version?: FlowVersion
     <div className="flow-view-picker"><label htmlFor="flow-run-picker">{t('flows.runs')}</label><select id="flow-run-picker" value={run?.id ?? 'definition'} onChange={e => setPickedRun(e.target.value)}><option value="definition">{t('flows.definitionView')}{version ? ` · v${version.version}` : ''}</option>{runs.map(row => <option key={row.id} value={row.id}>{row.subjectKey} · v{row.flowVersion} · {t(`flows.${row.status}`)} · {new Date(row.createdAt).toLocaleString(locale())}</option>)}</select></div>
     {run && <div className="flow-run-focus" data-testid="flow-run"><div className="flow-card-head"><strong>{run.subjectKey}</strong><span className="flow-version">v{run.flowVersion}</span><span className="flow-badge" data-status={run.status}>{t(`flows.${run.status}`)}</span>{runAsk && <button type="button" className="btn btn-amber btn-s" onClick={() => openQueue(`${runAsk.chatId}/${runAsk.id}`)}>{t('flows.reviewOpen')}</button>}</div><p className="flows-muted">{[run.scope.project, run.scope.areaPath].filter(Boolean).join(' · ')}</p></div>}
     {(!run || runVersion) && <FlowDiagram key={`${shownDefinition.id}/${shownVersion?.version ?? draft?.revision}/${run?.id ?? 'definition'}`} definition={shownDefinition} run={run} />}
-    {(!run || runVersion) && <details className="flow-full-definition"><summary>{t('flows.details')}{shownVersion ? ` · v${shownVersion.version}` : ''}</summary><FlowDefinition definition={shownDefinition} run={runVersion ? run : undefined} /></details>}
+    {(!run || runVersion) && <details className="flow-full-definition"><summary>{t('flows.details')}{shownVersion ? ` · v${shownVersion.version}` : ''}</summary><FlowDefinition definition={shownDefinition} run={runVersion ? run : undefined} edit={tierEdit} /></details>}
     {run && !runVersion && <p className="flow-block" role="status">{t('flows.versionUnavailable')}</p>}
     {runs.length === 0 && <p className="flows-muted">{t('flows.noRuns')}</p>}
   </article>;

@@ -1,16 +1,17 @@
-// Read-only complete flow definitions and host-recorded receipts shared by the catalog and QuestionsWindow.
+// Complete flow definitions and host-recorded receipts shared by the catalog and QuestionsWindow; read only, except the
+// catalog's step tier menu (`edit`), which only proposes a new revision.
 import type { FlowDefinition as Definition, FlowRun } from '@shared/flows';
 import { t, locale } from '../i18n';
 import { linksIn } from '../lib/askContext';
 import { openFile } from './GenUi';
-import { FlowStepAgent } from './FlowStepAgent';
+import { FlowStepAgent, type FlowStepTierControl } from './FlowStepAgent';
 export function FlowLinks({ sources, chatId }: { sources: string[]; chatId?: string }) {
   const links = linksIn(sources);
   return links.length ? <div className="ctx-links">{links.map(link => link.kind === 'file'
     ? <button key={link.href} type="button" className="ctx-link file" onClick={() => void openFile(link.href, chatId)}>{link.label}</button>
     : <a key={link.href} className="ctx-link" href={link.href} target="_blank" rel="noopener noreferrer">{link.label}</a>)}</div> : null;
 }
-export function FlowDefinition({ definition, run }: { definition: Definition; run?: FlowRun }) {
+export function FlowDefinition({ definition, run, edit }: { definition: Definition; run?: FlowRun; edit?: FlowStepTierControl }) {
   return <div className="flow-definition">
     <dl className="flow-facts">
       <dt>{t('flows.scope')}</dt><dd>{[definition.scope.project, definition.scope.areaPath].filter(Boolean).join(' · ') || '—'}</dd>
@@ -22,7 +23,7 @@ export function FlowDefinition({ definition, run }: { definition: Definition; ru
         return <li key={step.id} className="flow-step" data-current={run?.currentStep === index}>
           <span className="flow-step-n">{index + 1}</span><div>
             <div className="flow-step-title"><strong>{step.title}</strong><span className="flow-badge">{t(`flows.${step.kind === 'approval' ? 'gate' : step.kind}`)}</span>{state && <span className="flow-badge" data-status={state.status}>{t(`flows.${state.status}`)}</span>}</div>
-            <FlowStepAgent step={step} chatId={state?.chatId} />
+            <FlowStepAgent step={step} chatId={state?.chatId} edit={edit} />
             <p>{step.instructions}</p>
             {step.action && <p><code>{step.action.kind}: {step.action.ref}</code></p>}
             <details><summary>{t('flows.constraints')}</summary><dl className="flow-facts"><dt>{t('flows.inputs')}</dt><dd>{step.inputs.join(' · ') || '—'}</dd>{step.workspaceInput && <><dt>{t('flows.workspaceInput')}</dt><dd>{step.workspaceInput}</dd></>}<dt>{t('flows.effect')}</dt><dd>{step.effect}</dd><dt>{t('flows.timeout')}</dt><dd>{step.timeoutMs} ms</dd><dt>{t('flows.attempts')}</dt><dd>{state ? `${state.attempts} / ` : ''}{step.maxAttempts}</dd>{step.reviewOf && <><dt>{t('flows.reviewOf')}</dt><dd>{step.reviewOf}</dd></>}</dl></details>

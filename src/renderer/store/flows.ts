@@ -1,7 +1,7 @@
 // Live flow catalog and exact-brain decisions. A changed brain clears cached proposals before any replacement read.
 import { useEffect } from 'react';
 import type { FlowAutomationControl, FlowAutomationPause } from '@shared/flow-automation';
-import type { FlowSnapshot } from '@shared/flows';
+import type { FlowSnapshot, FlowStepTierEdit } from '@shared/flows';
 import type { FlowAsk } from '../lib/flow-ask';
 import { clearDecisionDrafts } from '../lib/decision-drafts';
 import { flowAsks } from '../lib/flow-ask';
@@ -67,6 +67,19 @@ export async function decideFlow(ask: FlowAsk, answer: 'yes' | 'no' | 'other', f
     toast(t('flows.failedDecision'), 'err');
     void reloadFlows();
     return false;
+  }
+}
+
+/** The user's tier pick on a step: only a new proposed revision, which the definition modal then activates or not. */
+export async function editFlowStepTier(contextKey: string, edit: FlowStepTierEdit): Promise<boolean> {
+  if (flowState.get().snapshot?.contextKey !== contextKey) return false;
+  const ticket = read;
+  try {
+    const snapshot = await sb.invoke('flows:editStepTier', { ...edit, contextKey });
+    if (ticket === read && flowState.get().snapshot?.contextKey === contextKey) { ++read; acceptSnapshot(snapshot); }
+    return true;
+  } catch {
+    toast(t('flows.failedTierEdit'), 'err'); void reloadFlows(); return false;
   }
 }
 

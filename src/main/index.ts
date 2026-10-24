@@ -510,6 +510,14 @@ app.whenReady().then(async () => {
       if (target) void s.chats.send(target.id, '[evento app] Decisione sulla definizione del flusso salvata. Rileggi app_flow_list. Approvare la definizione non autorizza operazioni esterne o produzione.', undefined, false, 'Flussi', false, { kind: 'app' }).catch(e => log.warn('flows', 'Definition decision wake failed', { cause: errText(e), hint: 'Decision persisted; reread the catalog.' }));
       return s.flows!.snapshot();
     },
+    'flows:editStepTier': a => {
+      // a new proposed revision only: the user activates it in the definition modal like any other proposal
+      const service = s.flows?.service();
+      if (!service || a.contextKey !== service.snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la definizione.');
+      const { contextKey: _context, ...edit } = a;
+      service.editStepTier(edit);
+      return s.flows!.snapshot();
+    },
     'flows:decide': a => {
       const service = s.flows?.service();
       if (!service || a.contextKey !== service.snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la decisione.');

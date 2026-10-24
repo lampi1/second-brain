@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { FlowActivate, FlowAgentBinding, FlowDecision, FlowDraft, FlowMatch, FlowPropose, FlowReceipt, FlowReport, FlowRun, FlowScope, FlowSnapshot, FlowStart, FlowStep, FlowVerifiedReport, FlowVersion } from '../../shared/flows';
+import type { FlowActivate, FlowAgentBinding, FlowDecision, FlowDefinition, FlowDraft, FlowMatch, FlowPropose, FlowReceipt, FlowReport, FlowRun, FlowScope, FlowSnapshot, FlowStart, FlowStep, FlowStepTierEdit, FlowVerifiedReport, FlowVersion } from '../../shared/flows';
 import { adapted, digest, type RoleTierMax, inScope, integer, keys, normalize, object, text, validateDefinition, validateInputs, validateScope } from './schema';
 
 export interface FlowServiceOptions {
@@ -51,6 +51,23 @@ export class FlowService {
       const draft: FlowDraft = { definition, revision: expected + 1, updatedAt: this.now(), status: 'proposed' };
       this.data.drafts = [...this.data.drafts.filter(d => d.definition.id !== definition.id), draft]; return draft;
     });
+  }
+  /** The user's tier pick on one agent step, from the exact definition shown: the pending proposal when there is one,
+   * otherwise the active version. Never activates: it only proposes the next draft revision for decideDefinition.
+   * Renderer IPC only, like decideDefinition; propose() re-validates the tier against the role's tierMax. */
+  editStepTier(input: FlowStepTierEdit): FlowDraft {
+    keys(object(input, 'step edit'), ['flowId', 'base', 'stepId', 'tier'], 'step edit');
+    const base = object(input.base, 'base') as Record<string, unknown>;
+    const draft = this.data.drafts.find(d => d.definition.id === input.flowId);
+    const pending = draft?.status === 'proposed' ? draft : undefined;
+    let source: FlowDefinition | undefined;
+    if ('draftRevision' in base) { keys(base, ['draftRevision'], 'base'); if (pending && pending.revision === base.draftRevision) source = pending.definition; }
+    else { keys(base, ['version'], 'base'); if (!pending && this.data.active[input.flowId] === base.version) source = this.data.versions.find(v => v.definition.id === input.flowId && v.version === base.version)?.definition; }
+    if (!source) throw new Error('Definition changed; review its current revision');
+    const definition = copy(source), step = definition.steps.find(s => s.id === input.stepId);
+    if (!step || step.kind !== 'agent' || !step.role) throw new Error('Only an agent step with a declared role takes a tier');
+    if (input.tier === null) delete step.tier; else step.tier = input.tier;
+    return this.propose({ definition, expectedRevision: draft?.revision ?? 0 });
   }
   /** Deliberately absent from agent tools. Exact-revision decisions originate only in authenticated renderer IPC. */
   decideDefinition(input: FlowActivate): FlowDraft {

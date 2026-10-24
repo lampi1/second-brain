@@ -55,6 +55,9 @@ export interface FlowRoleInfo { name: string; avatar: AgentAvatar; tier: ModelTi
 export interface FlowMatch { status: 'none' | 'match' | 'ambiguous'; candidates: FlowVersion[] }
 export interface FlowPropose { definition: FlowDefinition; expectedRevision: number }
 export interface FlowActivate { id: string; expectedRevision: number; answer: 'yes' | 'no' | 'other'; feedback?: string }
+/** The user's tier pick on one agent step (null = leave it to the role): from the exact draft revision or active version
+ * shown, it only ever yields a new proposed draft revision that the existing approval modal activates (or not). */
+export interface FlowStepTierEdit { flowId: string; base: { version: number } | { draftRevision: number }; stepId: string; tier: ModelTier | null }
 export interface FlowStart { flowId: string; flowVersion: number; subjectKey: string; scope: FlowScope; inputs: Record<string, string> }
 export interface FlowReport { runId: string; expectedRevision: number; stepId: string; reportId: string }
 export interface FlowDecision { runId: string; expectedRevision: number; stepId: string; answer: 'yes' | 'no' | 'other'; feedback?: string }
