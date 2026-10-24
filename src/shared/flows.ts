@@ -19,17 +19,17 @@ export interface FlowStep {
   /** An agent step's model tier (at most the role's tierMax; needs role): the bound chat must run on it. Absent = the role's own choice. */
   tier?: ModelTier;
   /** The user's pick for experiments (needs role): the engine and model this agent step runs on, over the role's own
-   *  (ADR 0153). Absent = the role's engine and the tier's model. */
+   *  (ADR 0154). Absent = the role's engine and the tier's model. */
   engine?: string; model?: string; effort?: Effort;
   /** What the runner does when this step fails and attempts remain: retry itself (default) or send the work back to an
-   *  earlier step with the failure as its feedback. Only the last failure needs the user (ADR 0153). */
+   *  earlier step with the failure as its feedback. Only the last failure needs the user (ADR 0154). */
   onFail?: { goto: string };
   /** The environment a script/query step targets: a prod step never runs by itself, the user clicks «Esegui». */
   env?: 'test' | 'prod';
   /** script/query arguments: name → literal or {{param}} / {{input}} / {{attachment:name}} placeholders */
   args?: Record<string, string>;
 }
-/** A typed run parameter, validated before the run starts (ADR 0153). */
+/** A typed run parameter, validated before the run starts (ADR 0154). */
 export interface FlowParam {
   name: string; label?: string; type: 'string' | 'int' | 'list' | 'file' | 'enum' | 'env';
   options?: string[]; required?: boolean; default?: string;
@@ -74,7 +74,7 @@ export interface FlowRun {
   pendingCancellation?: { revision: number; requestedAt: number; reason?: string };
   recoveryFeedback?: { kind: 'cancel' | 'restart'; at: number; message: string; deliveredAt?: number };
   pendingRecovery?: { mode: 'from-start' | 'from-step'; stepId?: string; revision: number; requestedAt: number; targetVersion: number; targetDigest: string; automationRule?: { id: string; revision: number } };
-  /** The user's pause: the runner starts nothing new for this run until «Riprendi» (ADR 0153). */
+  /** The user's pause: the runner starts nothing new for this run until «Riprendi» (ADR 0154). */
   paused?: { at: number };
   /** Files or pasted lists given at start: stored next to the state, hashed, read by steps as {{attachment:name}}. */
   attachments?: FlowAttachment[];
@@ -123,7 +123,7 @@ export interface FlowActivate { id: string; expectedRevision: number; answer: 'y
  * shown, it only ever yields a new proposed draft revision that the existing approval modal activates (or not). */
 export interface FlowStepTierEdit { flowId: string; base: { version: number } | { draftRevision: number }; stepId: string; tier: ModelTier | null }
 export interface FlowStart { flowId: string; flowVersion: number; subjectKey: string; scope: FlowScope; inputs: Record<string, string>; title?: string; attachments?: FlowAttachment[] }
-/** The owner of a run the app's runner started (the Routine page, a trigger): no Orchestrator needed (ADR 0153). */
+/** The owner of a run the app's runner started (the Routine page, a trigger): no Orchestrator needed (ADR 0154). */
 export const APP_OWNER = 'app';
 /** The user's start from the Routine page: one work item (id or link) and/or attachments, plus typed params. */
 export interface FlowStartItem { flowId: string; workItem?: string; params?: Record<string, string>; attachments?: { name: string; content: string }[]; dryRun?: boolean }

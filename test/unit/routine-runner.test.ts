@@ -1,4 +1,4 @@
-// The app-owned routine runner (ADR 0153) end to end in the main process: a manual start on one work item goes
+// The app-owned routine runner (ADR 0154) end to end in the main process: a manual start on one work item goes
 // through the approved rule and reaches step 2 with no Orchestrator open; a newer revision of a running item updates
 // that run instead of queueing a second; «Svuota coda» discards exactly the counted events; a test script runs by
 // itself with a receipt while a prod step only waits for the user's «Esegui» (the exact command, recomputed); a

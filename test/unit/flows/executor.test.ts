@@ -1,4 +1,4 @@
-// The routine command executor (ADR 0153): the exact command from a brain script/query pinned by hash, params and
+// The routine command executor (ADR 0154): the exact command from a brain script/query pinned by hash, params and
 // attachments filled in, refused when the file changed or an argument could reach cmd; `resolve` spawns nothing (the
 // dry run), `execute` launches without a shell and rechecks the hash; attachments are content-addressed and checked.
 import fs from 'node:fs';

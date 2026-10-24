@@ -61,7 +61,7 @@ function validateGrant(value: unknown, trigger: Extract<FlowAutomationConfig['tr
   if (mentions.length && !ops.includes('comment')) throw new Error('DevOps write mentions need the comment operation');
   return { organization, projects, ops: ops as DevOpsWriteGrant['ops'], fields, ...(mentions.length ? { mentions } : {}) };
 }
-/** The trigger's filters (ADR 0153), each absent when empty so an old rule keeps its exact shape. */
+/** The trigger's filters (ADR 0154), each absent when empty so an old rule keeps its exact shape. */
 function filters(trigger: Record<string, unknown>): Partial<Extract<FlowAutomationConfig['trigger'], { kind: 'devops' }>> {
   const tags = (value: unknown, label: string): string[] | undefined => {
     if (value === undefined) return undefined;
@@ -173,7 +173,7 @@ export class FlowAutomationService {
     void this.poll().then(() => { this.running = undefined; resolve(); }, error => { this.running = undefined; reject(error); });
     return promise;
   }
-  /** The user's filter edit from the Routine page (ADR 0153): their click approves the new revision at once; the queue,
+  /** The user's filter edit from the Routine page (ADR 0154): their click approves the new revision at once; the queue,
    *  the detector cursor and the runs already started stay (their grant moves to `history`). */
   editFilters(input: FlowAutomationFilters): FlowAutomationRule {
     keys(object(input, 'filters'), ['id', 'expectedRevision', 'includeTags', 'excludeTags', 'workItemIds', 'iterationPath', 'maxPerHour'], 'filters');
@@ -186,7 +186,7 @@ export class FlowAutomationService {
     });
   }
   /** A new flow version the user activated: its enabled or paused rule follows it (their activation is the approval),
-   *  unless the new version needs a grant the rule lacks; then the rule waits for a fresh approval (ADR 0153). */
+   *  unless the new version needs a grant the rule lacks; then the rule waits for a fresh approval (ADR 0154). */
   carry(flowId: string, version: number): FlowAutomationRule | null {
     const rule = this.data.rules.find(item => item.config.flowId === flowId);
     if (!rule || rule.config.flowVersion === version || rule.approvedRevision !== rule.revision || !['enabled', 'paused'].includes(rule.status)) return null;
@@ -263,7 +263,7 @@ export class FlowAutomationService {
       this.change(() => { event.status = existing.status === 'cancelled' ? 'cancelled' : 'started'; event.runId = existing.id; event.updatedAt = this.now(); delete event.reason; }); return existing;
     }
     if (event.sourceKey.startsWith('restart:')) throw new Error('Recovery events require the exact user-approved restart; they cannot start as ordinary events');
-    // a paused rule takes no new detected events; the user's own start on one item still goes (ADR 0153)
+    // a paused rule takes no new detected events; the user's own start on one item still goes (ADR 0154)
     if ((this.data.paused || rule.status !== 'enabled') && !event.manual || rule.approvedRevision !== rule.revision) throw new Error('Automatic flow is paused or not approved');
     if (!['pending', 'notified'].includes(event.status)) throw new Error('Automatic flow event is blocked; resume explicitly to retry');
     try { this.usable(rule.config, event.inputs); } catch (error) { this.blockEvent(event, errorText(error)); throw error; }
@@ -413,7 +413,7 @@ export class FlowAutomationService {
           if (Object.keys(item.inputs).some(key => Object.hasOwn(rule.config.inputs, key))) throw new Error('Detected event inputs conflict with approved configuration');
           validateInputs({ ...rule.config.inputs, ...item.inputs });
         }
-        // one active run per work item per flow (ADR 0153): a newer revision of an item already running updates that
+        // one active run per work item per flow (ADR 0154): a newer revision of an item already running updates that
         // run's input; a newer revision of an item still waiting replaces the waiting event
         const runs = flow.snapshot().runs, merges: { runId: string; revision: string }[] = [];
         const itemOf = (inputs: Record<string, string>) => inputs['work-item-id'];

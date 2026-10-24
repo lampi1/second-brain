@@ -1,4 +1,4 @@
-// The Routine page run by the app's runner (ADR 0153): tabs, run cards, the open routine, the start dialog, the dry-run.
+// The Routine page run by the app's runner (ADR 0154): tabs, run cards, the open routine, the start dialog, the dry-run.
 export const routineDe = {
   'rt.title': "Routinen",
   'rt.intro': "Abläufe, die die App selbst weiterführt, auch bei geschlossenem Fenster. Sie ruft dich nur, wenn deine Hand gebraucht wird.",

@@ -41,7 +41,7 @@ describe('host routine engine', () => {
     expect(w.sendWorker.mock.calls[1]![1]).toContain('Fixture result'); expect(w.sendWorker.mock.calls[1]![1]).toContain('fixture-task'); expect(w.sendWorker.mock.calls[1]![1]).toContain('worker-1-run:42');
     w.report('worker-2'); await w.runtime.tick(); expect(w.flow.status(source.id, 'owner').status).toBe('completed');
   });
-  // ADR 0153: a failed step heals by itself while attempts remain (a fresh chat, the failure in its prompt); only the
+  // ADR 0154: a failed step heals by itself while attempts remain (a fresh chat, the failure in its prompt); only the
   // last failure stops the run and reaches the owner
   it.each(['partial', 'blocked', 'missing', 'prefix', 'stale'] as const)('retries a %s canonical report once with its diagnostics, then stops for the user', async kind => {
     const w = world(), source = w.start(); await w.runtime.tick();

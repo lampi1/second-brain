@@ -1,4 +1,4 @@
-// What the Routine page shows, computed from the flow snapshot (ADR 0153): which runs need the user, which work by
+// What the Routine page shows, computed from the flow snapshot (ADR 0154): which runs need the user, which work by
 // themselves, each step's plain state, a trigger in words. Pure, so the page and its tests read the same rules.
 // Used by brain/pages/Flows.tsx and components/Routine*.tsx. Unit tests: test/unit/routine-view.test.ts.
 import type { FlowDefinition, FlowRun, FlowSnapshot, FlowStep, FlowVersion } from '@shared/flows';

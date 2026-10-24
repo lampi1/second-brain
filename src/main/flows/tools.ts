@@ -1,5 +1,5 @@
 // Authenticated Orchestrator flow tools; approval and user decisions intentionally have no agent tool. The app's runner
-// owns execution (ADR 0153): the Orchestrator reads app_flow_overview, steers a step with app_flow_message and starts a
+// owns execution (ADR 0154): the Orchestrator reads app_flow_overview, steers a step with app_flow_message and starts a
 // routine on the user's request with app_flow_start_item; a prod step's «Esegui» has no tool, only the user's click.
 import type { ToolDef } from '../appctl/tools';
 import { APP_OWNER, type FlowAgentBinding, type FlowCancel, type FlowDryRun, type FlowOverviewRow, type FlowPropose, type FlowReport, type FlowRestartProposal, type FlowRun, type FlowStart, type FlowStartItem } from '../../shared/flows';

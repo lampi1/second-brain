@@ -18,7 +18,7 @@ export interface FlowServiceOptions {
   /** The catalog's tierMax per role, checked when a draft is proposed. */
   tierMax?: RoleTierMax;
   /** The sha256 of a brain script/query now: a proposed step without a hash gets the current one, so the user's
-   *  activation approves exactly that content (ADR 0153). */
+   *  activation approves exactly that content (ADR 0154). */
   hashOf?: (kind: 'script' | 'query', ref: string) => string | null;
 }
 type Stored = Omit<FlowSnapshot, 'contextKey' | 'storageError'> & { schema: 1; bindings: string[] };
@@ -38,7 +38,7 @@ export class FlowService {
       for (const run of this.data.runs) {
         const step = run.steps[run.currentStep]!;
         // the app closed mid-step: the step blocks with its attempt counted, so the runner retries it while attempts
-        // remain (ADR 0153); an open command receipt ends unknown
+        // remain (ADR 0154); an open command receipt ends unknown
         if (run.status === 'active' && step?.status === 'running') {
           for (const receipt of run.receipts ?? []) if (receipt.stepId === step.stepId && receipt.endedAt === undefined) { receipt.endedAt = this.now(); receipt.exitCode = null; receipt.output = `${receipt.output}\n[interrotto: l’app si è chiusa]`.slice(-4000); }
           this.block(run, 'Interrotto: l’app si è chiusa durante questo passaggio.'); this.touch(run); interrupted = true;
@@ -183,7 +183,7 @@ export class FlowService {
     if (!['from-start', 'from-step'].includes(input.mode)) throw new Error('Invalid restart mode');
     if (input.mode === 'from-start' && input.stepId !== undefined) throw new Error('Restart from the beginning does not take a step');
     // from-step: the run's own version, or the current one when the steps before the restart point are unchanged
-    // (the run migrates to it, ADR 0153); from-start: always the current version
+    // (the run migrates to it, ADR 0154); from-start: always the current version
     const active = this.data.active[source.flowId]!, migrate = input.mode === 'from-step' && input.targetVersion === active && active !== source.flowVersion;
     const version = this.version(source.flowId, input.mode === 'from-start' || migrate ? active : source.flowVersion);
     if (version.version !== input.targetVersion || version.digest !== input.targetDigest) throw new Error('Restart target changed; review the exact version again');
@@ -331,7 +331,7 @@ export class FlowService {
       this.touch(run); return run;
     });
   }
-  /** The runner's own retry (ADR 0153): a failed or interrupted step with attempts left goes back to ready, with
+  /** The runner's own retry (ADR 0154): a failed or interrupted step with attempts left goes back to ready, with
    *  the failure kept in the run's heal log. Never for unsupported steps, prod steps or a step without attempts. */
   hostRetry(runId: string, expectedRevision: number, stepId: string, reason: string, action: 'retry' | 'resume' = 'retry'): FlowRun {
     return this.change(() => {
@@ -343,7 +343,7 @@ export class FlowService {
     });
   }
   /** A failed check sends the work back to the step its definition names (onFail.goto), with the failure as feedback
-   *  for that step's next attempt. The steps between start over; their attempts keep counting (ADR 0153). */
+   *  for that step's next attempt. The steps between start over; their attempts keep counting (ADR 0154). */
   sendBack(runId: string, expectedRevision: number, stepId: string, reason: string): FlowRun {
     return this.change(() => {
       const run = this.guarded(runId, expectedRevision, stepId), step = run.steps[run.currentStep]!, spec = this.spec(run);
@@ -413,7 +413,7 @@ export class FlowService {
     return this.change(() => { const run = this.guarded(runId, expectedRevision, stepId); this.block(run, text(reason, 'reason', 16000)); this.touch(run); return run; });
   }
   /** The user's engine/model pick on one agent step, applied at once as a new active version: their click is the
-   *  approval (ADR 0153). Running runs keep their pinned version; the next runs use the new one. */
+   *  approval (ADR 0154). Running runs keep their pinned version; the next runs use the new one. */
   editStepModel(input: { flowId: string; version: number; stepId: string; engine: string | null; model: string | null; effort?: string | null }): FlowVersion {
     keys(object(input, 'step model edit'), ['flowId', 'version', 'stepId', 'engine', 'model', 'effort'], 'step model edit');
     if (this.data.active[input.flowId] !== input.version) throw new Error('Definition changed; review its current version');

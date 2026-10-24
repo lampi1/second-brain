@@ -1,4 +1,4 @@
-// Runs a routine's script and query steps (ADR 0153): the saved brain file pinned by content hash, its arguments filled
+// Runs a routine's script and query steps (ADR 0154): the saved brain file pinned by content hash, its arguments filled
 // from typed params, run inputs and attachments, launched without a shell, output bounded, every run journaled as a
 // receipt by runtime.ts. A hash that no longer matches refuses to run. A prod step is never launched here by the runner:
 // runtime.ts only calls `execute` for it from the user's «Esegui» click. `resolve` alone backs the dry-run, which

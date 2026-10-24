@@ -9,7 +9,7 @@ export const BUILTIN_CHECKS = ['scope-present', 'inputs-present'] as const;
 export const DEVOPS_WRITE_ADAPTER = 'devops-write';
 export const TEST_DB_READ_ADAPTER = 'test-db-read';
 export const testDbAdapted = (step: FlowStep): boolean => (step.testDbRead === true || step.adapter === TEST_DB_READ_ADAPTER) && step.kind === 'agent' && !step.action && (step.effect === 'read-only' || adapted(step));
-/** A step that runs a saved brain script or query, pinned by content hash (ADR 0153): the runner executes it in test,
+/** A step that runs a saved brain script or query, pinned by content hash (ADR 0154): the runner executes it in test,
  *  never in prod (the user's «Esegui»). */
 export const commandStep = (step: FlowStep): boolean => step.kind === 'check' && (step.action?.kind === 'script' || step.action?.kind === 'query') && !!step.action.hash;
 export const PARAM_TYPES = ['string', 'int', 'list', 'file', 'enum', 'env'] as const;

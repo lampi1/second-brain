@@ -1,5 +1,5 @@
 // The open routine shows, for each agent step, the role's avatar and name (a step without a role shows the role the
-// runner picks), and a picker for engine, model and effort (ADR 0153): a pick is applied at once as a new version.
+// runner picks), and a picker for engine, model and effort (ADR 0154): a pick is applied at once as a new version.
 // A renderer fixture and a stand-in host: no workflow starts, no agent is invoked.
 import { test, expect } from '@playwright/test';
 import { stepAgentSnapshot } from './flow-step-agent.fixture';

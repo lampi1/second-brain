@@ -1,5 +1,5 @@
 // Opens an idle routine worker under existing catalog/engine policies; runtime binds it before sending any work.
-// The runner's runs need no open Orchestrator (ADR 0153): without one, the Orchestrator chats' default engine is the
+// The runner's runs need no open Orchestrator (ADR 0154): without one, the Orchestrator chats' default engine is the
 // opener. A step's engine/model pick (the user's, for experiments) wins over the role's routing, under the same
 // engine policy (openRefusal). Used by service wiring, with dependency ports so routing can be tested without Electron.
 import type { NewChat, ChatSummary } from '../../shared/contract';

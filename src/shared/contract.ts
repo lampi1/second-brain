@@ -1256,7 +1256,7 @@ export interface InvokeMap {
   'flows:restart': [FlowContext<FlowRestart>, FlowSnapshot];
   'flows:restartDecide': [FlowContext<FlowRestartDecision>, FlowSnapshot];
   'flows:editStepTier': [FlowContext<FlowStepTierEdit>, FlowSnapshot];
-  // the app's routine runner (ADR 0153): the user's own controls on the Routine page
+  // the app's routine runner (ADR 0154): the user's own controls on the Routine page
   'flows:previewItem': [FlowContext<{ flowId: string; workItem: string }>, FlowItemPreview];
   'flows:startItem': [FlowContext<FlowStartItem>, FlowRun | FlowDryRun];
   'flows:dryRun': [FlowContext<{ flowId: string; params?: Record<string, string> }>, FlowDryRun];

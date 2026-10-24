@@ -1,4 +1,4 @@
-// The routine runner's lock (ADR 0153): one live runner per flow store; a stale or dead holder is taken over.
+// The routine runner's lock (ADR 0154): one live runner per flow store; a stale or dead holder is taken over.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

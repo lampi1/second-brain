@@ -178,7 +178,7 @@ export function createDevOpsDetector(options: DevOpsDetectorOptions = {}) {
 
 export const detectDevOps = createDevOpsDetector();
 
-/** One work item as the Routine page's preview shows it (ADR 0153): a fixed Azure read API, the same token as the detector. */
+/** One work item as the Routine page's preview shows it (ADR 0154): a fixed Azure read API, the same token as the detector. */
 export interface DevOpsItem { id: number; revision: number; title: string; type: string; state: string; project: string; areaPath: string; iterationPath: string; tags: string[]; url: string }
 export function createDevOpsItemReader(options: DevOpsDetectorOptions = {}) {
   return async (organization: string, project: string, id: number, signal?: AbortSignal): Promise<DevOpsItem> => {
