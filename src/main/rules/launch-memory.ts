@@ -1,6 +1,7 @@
 // Bounded task-relevant facts for AgentPackFlows. Launch selection never changes the searchable memory archive.
-// Confirmed facts are quoted evidence, not policy; role instructions and permission enforcement stay outside this view.
-import { memoryWords, scopedMemory, type MemoryRecord, type MemoryScope } from './memory-records';
+// Confirmed facts and proposed ones not tied to one case (ADR 0149) are quoted evidence, not policy; role instructions and permission enforcement stay outside this view.
+import { memoryConflicts, memoryWords, scopedMemory, type MemoryRecord, type MemoryScope } from './memory-records';
+import { memoryWorth } from './memory-worth';
 
 const STOP = new Set('the and for with from this that then into your task please review check help need want use using should about have has are was were will can could would all our not una uno per con del della delle degli nel nella alla che come prima dopo questo questa sono fare usa usare verifica controlla'.split(' '));
 const words = (s: string): Set<string> => new Set([...memoryWords(s)].filter(w => !STOP.has(w)));
@@ -21,11 +22,14 @@ function quoteLaunchMemory(r: MemoryRecord): string {
  *  ones, shares the same hard budget. Actual policy is supplied by the host's rules and role instructions. */
 export function selectLaunchMemory(root: string, scope: MemoryScope, query = '', budgetTokens = LAUNCH_MEMORY_TOKENS): LaunchMemory {
   const rows = scopedMemory(root, scope), q = words(query.slice(0, 16000));
-  const candidates = rows.filter(r => r.status === 'confirmed').map(r => ({ r, words: words(`${r.subject} ${r.predicate} ${r.value}`) }));
+  // facts need no approval (ADR 0149): a proposed one that is not tied to one case and contradicts no confirmed one counts
+  // too, until maintenance saves it
+  const candidates = rows.filter(r => r.status === 'confirmed' || (r.status === 'proposed' && !memoryWorth(r.subject, r.predicate, r.value).specific && !memoryConflicts(rows, r).length))
+    .map(r => ({ r, words: words(`${r.subject} ${r.predicate} ${r.value}`) }));
   const frequencies = new Map([...q].map(word => [word, candidates.filter(row => row.words.has(word)).length]));
   const ranked = candidates.map(row => ({ r: row.r, score: [...q].reduce((sum, word) => sum + (row.words.has(word)
     ? Math.log(1 + candidates.length / (frequencies.get(word) ?? 1)) : 0), 0) }))
-    .filter(row => row.score > 0).sort((a, b) => b.score - a.score || b.r.observedAt.localeCompare(a.r.observedAt) || a.r.memoryId.localeCompare(b.r.memoryId));
+    .filter(row => row.score > 0).sort((a, b) => b.score - a.score || Number(b.r.status === 'confirmed') - Number(a.r.status === 'confirmed') || b.r.observedAt.localeCompare(a.r.observedAt) || a.r.memoryId.localeCompare(b.r.memoryId));
   // Character-based token estimate, consistent with scoped recall. Non-finite budgets fail closed, never unbounded.
   let left = Number.isFinite(budgetTokens) ? Math.max(0, Math.min(Math.floor(budgetTokens), LAUNCH_MEMORY_TOKENS)) * 3 : 0;
   const chosen: string[] = [];

@@ -1,39 +1,35 @@
 // The Proposte deck's main side (ADR 0123): the sources merged newest first with who / where / when, each decision on its
 // source's own path, the recheck before a decision (gone, blocked side, one at a time), the Tieni marks kept in userData,
-// what the applied-changes source leaves out, and the count event.
+// what the applied-changes source leaves out, and the count event. Memory facts have no source since ADR 0149 (the
+// maintenance saves them itself): the generic checks run on the other sources.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../../src/main/log', () => ({ log: { info: vi.fn(), warn: vi.fn() }, errText: (e: unknown) => String(e instanceof Error ? e.message : e) }));
 import { ProposalsService } from '../../../src/main/proposals/service';
-import { CHANGE_WINDOW_MS, DECK_EVIDENCE, type ProposalPorts } from '../../../src/main/proposals/sources';
-import type { MemoryReviewRecord, SkillCandidateView } from '../../../src/shared/learning-review';
+import { CHANGE_WINDOW_MS, SOURCES, type ProposalPorts } from '../../../src/main/proposals/sources';
+import type { SkillCandidateView } from '../../../src/shared/learning-review';
+import type { ApprovalItem } from '../../../src/shared/pulse';
 import type { BrainChange } from '../../../src/shared/brain-model';
 
 const NOW = Date.parse('2026-10-20T10:00:00Z');
 const H = 3_600_000;
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'sb-proposals-'));
-// distinct values: near-duplicates are one card (memory-deck.ts)
-const VALUES: Record<string, string> = { a: 'il modulo feedback scrive i log nella cartella logs del progetto', b: 'i test end to end si lanciano con npm run check sul ramo principale' };
-const fact = (id: string, at: number, run = 'r_000000000001'): MemoryReviewRecord => ({ memoryId: id, scope: { roleId: 'scout' }, subject: `Fatto ${id}`, predicate: 'usa', value: VALUES[id] ?? `valore ${id}`, sourceEventId: `ev-${id}`, sourceRunId: run, observedAt: new Date(at).toISOString(), validFrom: new Date(at).toISOString(), validTo: null, status: 'proposed', supersedes: null } as MemoryReviewRecord);
-const change = (id: string, at: number, x: Partial<BrainChange> = {}): BrainChange => ({ id, at, job: 'merge-memory', kind: 'memory', action: 'merge', target: 'agents/sentinel/memory.md', summary: `Cambio ${id}`, reason: 'doppioni', evidence: ['r_1'], canRollback: true, ...x } as BrainChange);
+const rule = (id: string, at: number): ApprovalItem => ({ id, kind: 'learned-rule', agentId: 'scout', title: `Regola ${id}`, text: `testo ${id}`, evidence: [`card-${id}`], engine: null, createdAt: at, state: 'pending' });
+const change = (id: string, at: number, x: Partial<BrainChange> = {}): BrainChange => ({ id, at, job: 'corrections', kind: 'rule', action: 'merge', target: 'rules/test.md', summary: `Cambio ${id}`, reason: 'doppioni', evidence: ['r_1'], canRollback: true, ...x } as BrainChange);
 const candidate = (x: Partial<SkillCandidateView> = {}): SkillCandidateView => ({ name: 'triage', text: '## Steps\n1. a\n2. b', digest: 'abcdef0123456789', stepsReady: true, sourceRunIds: ['r_000000000002'], verifiedExampleRunIds: ['r_000000000002'], eligibleReplayIds: ['rep-1'], promotionProblems: [], promoted: false, ...x });
 
 function ports(over: Partial<Omit<ProposalPorts, 'reviewed'>> = {}) {
   const calls: string[] = [];
-  let facts = [fact('a', NOW - 2 * H, 'r_000000000004'), fact('b', NOW - 5 * H)];
+  let rules = [rule('a', NOW - 2 * H), rule('b', NOW - 5 * H)];
   let changes: BrainChange[] = [change('c1', NOW - 1 * H)];
   let settings = [{ id: 's1', key: 'pulse.dailyUsd', label: 'Budget del Battito', before: 0.2, after: 0.4, reason: 'più controlli', chatId: 'orc', at: NOW - 30 * 60_000 }];
   const p: Omit<ProposalPorts, 'reviewed'> = {
     now: () => NOW,
     runs: () => [{ runId: 'r_000000000004', agentId: 'scout', chatId: 'feedback', goal: 'Studia il modulo', startedAt: NOW - 3 * H, report: { summary: 'Il modulo invia due volte' } }] as never,
     chats: () => [{ id: 'feedback', title: 'App · Feedback' }, { id: 'orc', title: 'Orchestratore', isOrchestrator: true }, { id: 'x', title: 'Altra', run: { runId: 'r_000000000001', agentId: 'sentinel', chatId: 'x' } }] as never,
-    memory: {
-      list: () => facts,
-      confirm: async (id, ev) => { calls.push(`confirm ${id} ${ev}`); facts = facts.filter(f => f.memoryId !== id); },
-      retract: async (id, why) => { calls.push(`retract ${id} ${why}`); facts = facts.filter(f => f.memoryId !== id); },
-    },
+    pulse: { list: () => rules, decide: async (id, d) => { calls.push(`${d} ${id}`); rules = rules.filter(r => r.id !== id); return { ok: true }; } },
     changes: {
       list: () => changes, stored: () => changes.map(c => ({ ...c, files: [] })) as never,
       rollback: id => { calls.push(`rollback ${id}`); changes = changes.map(c => (c.id === id ? { ...c, rolledBackAt: NOW } : c)); },
@@ -50,31 +46,40 @@ describe('ProposalsService', () => {
     const s = new ProposalsService({ ports: p, userData: tmp() });
     const { items, problems } = await s.list();
     expect(problems).toEqual([]);
-    expect(items.map(c => c.id)).toEqual(['setting:s1', 'change:c1', 'memory:a', 'memory:b']);
-    expect(items.find(c => c.id === 'memory:a')!.provenance).toMatchObject({ who: { kind: 'role', id: 'scout' }, chat: { id: 'feedback', title: 'App · Feedback' }, runId: 'r_000000000004' });
-    expect(items.find(c => c.id === 'memory:a')!.provenance.evidence).toContain('Il modulo invia due volte');
-    // a run known only from a chat's mirror
-    expect(items.find(c => c.id === 'memory:b')!.provenance).toMatchObject({ who: { kind: 'role', id: 'sentinel' }, chat: { id: 'x' } });
+    expect(items.map(c => c.id)).toEqual(['setting:s1', 'change:c1', 'pulse:a', 'pulse:b']);
     expect(items.find(c => c.id === 'setting:s1')!.provenance).toMatchObject({ who: { kind: 'role', id: 'orchestrator' }, chat: { id: 'orc' } });
-    expect(items.find(c => c.id === 'change:c1')).toMatchObject({ applied: true, group: 'fact', provenance: { who: { kind: 'maintenance', id: 'merge-memory' } } });
+    expect(items.find(c => c.id === 'change:c1')).toMatchObject({ applied: true, group: 'rule', provenance: { who: { kind: 'maintenance', id: 'corrections' } } });
+    expect(items.find(c => c.id === 'pulse:a')).toMatchObject({ group: 'rule', provenance: { at: new Date(NOW - 2 * H).toISOString(), evidence: ['card-a'] } });
+    // the run behind a card: from the run store, or known only from a chat's mirror
+    const runs = ports({ candidates: { list: () => [candidate({ name: 'uno', sourceRunIds: ['r_000000000004'] }), candidate({ name: 'due', sourceRunIds: ['r_000000000001'] })], promote: () => {} } });
+    const more = (await new ProposalsService({ ports: runs.p, userData: tmp() }).list()).items;
+    expect(more.find(c => c.id === 'candidate:uno')!.provenance).toMatchObject({ who: { kind: 'role', id: 'scout' }, chat: { id: 'feedback', title: 'App · Feedback' }, runId: 'r_000000000004' });
+    expect(more.find(c => c.id === 'candidate:due')!.provenance).toMatchObject({ who: { kind: 'role', id: 'sentinel' }, chat: { id: 'x' } });
   });
 
-  it('decides each card through its source, with the note or the default evidence', async () => {
+  it('memory facts are no cards any more (ADR 0149): no memory source, even with facts waiting', async () => {
+    expect(SOURCES.map(x => x.id)).not.toContain('memory');
+    const { items } = await new ProposalsService({ ports: ports().p, userData: tmp() }).list();
+    expect(items.filter(c => c.source === 'memory')).toEqual([]);
+    expect(await new ProposalsService({ ports: ports().p, userData: tmp() }).decide({ id: 'memory:a', decision: 'approve' })).toMatchObject({ ok: false, error: 'Fonte della proposta non disponibile.' });
+  });
+
+  it('decides each card through its source', async () => {
     const { p, calls } = ports();
     const s = new ProposalsService({ ports: p, userData: tmp() });
-    expect((await s.decide({ id: 'memory:a', decision: 'approve' })).ok).toBe(true);
-    expect((await s.decide({ id: 'memory:b', decision: 'reject', note: 'non vale più' })).ok).toBe(true);
+    expect((await s.decide({ id: 'pulse:a', decision: 'approve' })).ok).toBe(true);
+    expect((await s.decide({ id: 'pulse:b', decision: 'reject', note: 'non vale più' })).ok).toBe(true);
     expect((await s.decide({ id: 'setting:s1', decision: 'approve' })).ok).toBe(true);
     const last = await s.decide({ id: 'change:c1', decision: 'reject' });
-    expect(calls).toEqual([`confirm a ${DECK_EVIDENCE}`, 'retract b Rejected in Memoria → Proposte: non vale più', 'setting s1 true', 'rollback c1']);
+    expect(calls).toEqual(['approve a', 'discard b', 'setting s1 true', 'rollback c1']);
     expect(last).toMatchObject({ ok: true, state: { items: [] } });
   });
 
   it('rechecks before deciding: a gone card, a blocked side, a bad request and two decisions at once are refused', async () => {
     const { p, calls } = ports();
     const s = new ProposalsService({ ports: p, userData: tmp() });
-    expect(await s.decide({ id: 'memory:zzz', decision: 'approve' })).toMatchObject({ ok: false, error: expect.stringContaining('non è più da decidere') });
-    expect(await s.decide({ id: 'memory:a', decision: 'maybe' as never })).toMatchObject({ ok: false });
+    expect(await s.decide({ id: 'pulse:zzz', decision: 'approve' })).toMatchObject({ ok: false, error: expect.stringContaining('non è più da decidere') });
+    expect(await s.decide({ id: 'pulse:a', decision: 'maybe' as never })).toMatchObject({ ok: false });
     expect(await s.decide({ id: 'nope:a', decision: 'approve' })).toMatchObject({ ok: false });
     // a change that cannot roll back any more: Annulla is refused, Tieni still works
     const blocked = ports({ changes: { list: () => [change('c2', NOW - H, { canRollback: false })], stored: () => [], rollback: () => { throw new Error('no'); } } });
@@ -82,9 +87,9 @@ describe('ProposalsService', () => {
     expect((await b.list()).items.find(c => c.id === 'change:c2')).toMatchObject({ canReject: false, blocked: ['changed-since'] });
     expect(await b.decide({ id: 'change:c2', decision: 'reject' })).toMatchObject({ ok: false, error: expect.stringContaining('non è più possibile') });
     // one decision at a time on the same card
-    const [one, two] = await Promise.all([s.decide({ id: 'memory:a', decision: 'approve' }), s.decide({ id: 'memory:a', decision: 'approve' })]);
+    const [one, two] = await Promise.all([s.decide({ id: 'pulse:a', decision: 'approve' }), s.decide({ id: 'pulse:a', decision: 'approve' })]);
     expect([one.ok, two.ok].sort()).toEqual([false, true]);
-    expect(calls.filter(c => c.startsWith('confirm a'))).toHaveLength(1);
+    expect(calls.filter(c => c === 'approve a')).toHaveLength(1);
     // a source that throws: the card stays, the reason comes back
     const failing = ports({ settings: { pending: () => [{ id: 's9', key: 'k', label: 'L', before: 1, after: 2, at: NOW }] as never, confirm: () => { throw new Error('Impostazione protetta'); } } });
     const f = new ProposalsService({ ports: failing.p, userData: tmp() });
@@ -134,9 +139,9 @@ describe('ProposalsService', () => {
   });
 
   it('a source that fails is reported, the others still show', async () => {
-    const { p } = ports({ memory: { list: () => { throw new Error('disco'); }, confirm: async () => {}, retract: async () => {} } });
+    const { p } = ports({ pulse: { list: () => { throw new Error('disco'); }, decide: async () => ({ ok: true }) } });
     const st = await new ProposalsService({ ports: p, userData: tmp() }).list();
-    expect(st.problems).toEqual(['memory']);
+    expect(st.problems).toEqual(['pulse']);
     expect(st.items.map(c => c.id)).toEqual(['setting:s1', 'change:c1']);
   });
 
@@ -146,28 +151,8 @@ describe('ProposalsService', () => {
     expect(await s.count()).toBe(4);
     await s.list();
     expect(emit.mock.calls).toEqual([[4]]);
-    await s.decide({ id: 'memory:a', decision: 'approve' });
+    await s.decide({ id: 'pulse:a', decision: 'approve' });
     expect(emit.mock.calls).toEqual([[4], [3]]);
-  });
-
-  it('a fact that contradicts a confirmed one asks replace or keep both, and approves only with the choice', async () => {
-    const calls: string[] = [];
-    const old = { ...fact('old', NOW - 9 * H), subject: 'Fatto a', status: 'confirmed', value: 'vecchio' } as MemoryReviewRecord;
-    let rows = [fact('a', NOW - 2 * H), old];
-    const { p } = ports({ memory: { list: () => rows, confirm: async (id, _ev, choice) => { calls.push(`confirm ${id} ${JSON.stringify(choice)}`); rows = rows.filter(r => r.memoryId !== id); }, retract: async () => {} } });
-    const s = new ProposalsService({ ports: p, userData: tmp() });
-    const card = (await s.list()).items.find(c => c.id === 'memory:a')!;
-    expect(card.ask).toMatchObject({ kind: 'remember', role: 'scout', subject: 'Fatto a', conflicts: [{ id: 'old', value: 'vecchio' }] });
-    expect(await s.decide({ id: 'memory:a', decision: 'approve' })).toMatchObject({ ok: false, error: expect.stringContaining('sostituirlo o tenerli entrambi') });
-    // the choice holds only on the facts the card showed: another one appeared since → refused, nothing retracted
-    expect(await s.decide({ id: 'memory:a', decision: 'approve', keep: 'new', conflicts: [] })).toMatchObject({ ok: false, error: expect.stringContaining('rileggi la carta') });
-    expect(calls).toEqual([]);
-    expect((await s.decide({ id: 'memory:a', decision: 'approve', keep: 'new', conflicts: ['old'] })).ok).toBe(true);
-    expect(calls).toEqual(['confirm a {"keep":"new","ids":["old"]}']);
-    // a fact confirmed after the card was read: the store refuses, the reason comes back in words
-    rows = [fact('b', NOW - 2 * H), { ...old, subject: 'Fatto b' }];
-    const stale = ports({ memory: { list: () => rows, confirm: async () => { throw new Error('Conflicting confirmed fact requires explicit supersession.'); }, retract: async () => {} } });
-    expect(await new ProposalsService({ ports: stale.p, userData: tmp() }).decide({ id: 'memory:b', decision: 'approve', keep: 'both', conflicts: ['old'] })).toMatchObject({ ok: false, error: expect.stringContaining('rileggi la carta') });
   });
 
   it('a change to a script or a query shows its code and words its question from data', async () => {

@@ -95,7 +95,6 @@ export const genuiRequestDe: typeof genuiRequestIt = {
   'genui.gist.tool': 'Werkzeug nutzen',
   'genui.decision.label': ({ chat }: { chat: string }) => `Frage von ${chat}`,
   'genui.decision.done': 'Was ich getan habe',
-  'genui.decision.evidence': 'Belege',
   'genui.decision.ifYes': 'Bei Ja',
   'genui.decision.ifNo': 'Bei Nein',
   'genui.decision.yes': 'Ja',
@@ -112,8 +111,8 @@ export const genuiRequestDe: typeof genuiRequestIt = {
   'genui.decision.cancel': 'Abbrechen',
   'genui.decision.yesKey': 'J',
   'genui.decision.noKey': 'N',
-  'genui.decision.planYes': 'Der Stratege startet diese Schritte und gibt die Arbeit an die Agenten.',
-  'genui.decision.planNo': 'Der Plan startet nicht: der Stratege schlägt einen anderen vor.',
+  'genui.decision.planYes': 'Der Strategist startet diese Schritte und gibt die Arbeit an die Agenten.',
+  'genui.decision.planNo': 'Der Plan startet nicht: der Strategist schlägt einen anderen vor.',
   'genui.decision.workYes': 'Dieser Vorschlag wird umgesetzt.',
   'genui.decision.workNo': 'Der Vorschlag wird verworfen.',
 };

@@ -94,7 +94,6 @@ export const genuiRequestIt = {
   'genui.gist.tool': 'Usa strumento',
   'genui.decision.label': ({ chat }: { chat: string }) => `Domanda di ${chat}`,
   'genui.decision.done': 'Cosa ho fatto',
-  'genui.decision.evidence': 'Prove',
   'genui.decision.ifYes': 'Se Sì',
   'genui.decision.ifNo': 'Se No',
   'genui.decision.yes': 'Sì',
@@ -111,8 +110,8 @@ export const genuiRequestIt = {
   'genui.decision.cancel': 'Annulla',
   'genui.decision.yesKey': 'S',
   'genui.decision.noKey': 'N',
-  'genui.decision.planYes': 'Lo Stratega parte con questi passi e affida il lavoro agli agenti.',
-  'genui.decision.planNo': 'Il piano non parte: lo Stratega te ne propone un altro.',
+  'genui.decision.planYes': 'Lo Strategist parte con questi passi e affida il lavoro agli agenti.',
+  'genui.decision.planNo': 'Il piano non parte: lo Strategist te ne propone un altro.',
   'genui.decision.workYes': 'Si procede con questa proposta.',
   'genui.decision.workNo': 'La proposta viene scartata.',
 };

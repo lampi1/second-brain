@@ -1,8 +1,8 @@
-// Memoria → Proposte (ADR 0123) in the frozen demo: the demo's facts, skill candidate, applied changes, the
+// Memoria → Proposte (ADR 0123) in the frozen demo: the demo's skill candidate, applied changes (never memory ones, ADR 0149), the
 // Orchestrator's setting request, the Battito's rule and the improvement loop's policy are one deck, newest first, with
 // who / where / when / evidence. Swipe by mouse drag (a short drag springs back, a long one decides), the round
 // buttons, ← / →, Z and Ctrl+Z (undo of the held decision), a blocked side, the end state with its counts and the
-// sidebar badge. Decisions reach main and its sources (memory:confirm, settings:confirm, brainmodel:rollback …).
+// sidebar badge. Decisions reach main and its sources (settings:confirm, brainmodel:rollback …).
 // Screenshots dark and light: a card mid-drag, the end state, the empty state (test-results/shots/proposals-*.png).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -46,12 +46,13 @@ test('the deck: every source in one stack, swipe / buttons / keys, undo, the end
     await openDeck(page);
     const first = await list(page);
     const sources = new Set(first.items.map(c => c.source));
-    for (const s of ['memory', 'candidate', 'change', 'setting', 'pulse', 'policy'] as const) expect(sources).toContain(s);
+    for (const s of ['candidate', 'change', 'setting', 'pulse', 'policy'] as const) expect(sources).toContain(s);
+    // memory facts and memory tidy-ups are never cards (ADR 0149): only skills, rules and the rest
+    expect(sources.has('memory')).toBe(false);
+    expect(first.items.some(c => c.id === 'change:demo-p2')).toBe(false);
     // newest first, provenance resolved to the demo's chats
     const at = first.items.map(c => c.provenance.at);
     expect([...at].sort().reverse()).toEqual(at);
-    const fact = first.items.find(c => c.source === 'memory' && c.title.startsWith('Modulo feedback'))!;
-    expect(fact.provenance).toMatchObject({ who: { kind: 'role', id: 'scout' }, chat: { id: 'feedback', title: 'App · Feedback' }, runId: 'r_000000000004' });
     await expect(page.getByTestId('nav-badge-proposals')).toHaveText(String(first.items.length));
     await expect(page.getByTestId('pd-chip-all')).toContainText(String(first.items.length));
 
@@ -100,17 +101,7 @@ test('the deck: every source in one stack, swipe / buttons / keys, undo, the end
       await expect(page.getByTestId('pd-question')).toHaveText(/\?$/);
       await expect(page.getByTestId('pd-approve')).toHaveAttribute('title', /.+/);
       if (!snapped.has(card.source)) { snapped.add(card.source); await snap(page, `proposals-card-${card.source}-dark`); }
-      if (card.ask.kind === 'remember' && card.ask.conflicts?.length) {
-        // it contradicts what Scout already remembers: Approva waits for replace or keep both
-        await expect(page.getByTestId('pd-conflict')).toContainText(card.ask.conflicts[0]!.value);
-        await page.getByTestId('pd-approve').click();
-        await expect(top(page)).toHaveAttribute('data-card', id);
-        await expect(page.locator('.pd-hint')).not.toBeEmpty();
-        await page.getByTestId('pd-keep-both').click();
-        await snap(page, 'proposals-card-conflict-dark');
-        // the radio keeps the focus: → approves, it does not switch the choice
-        await page.keyboard.press('ArrowRight'); decided[id] = 'approve';
-      } else if (card.id === 'change:demo-p3') {
+      if (card.id === 'change:demo-p3') {
         await expect(page.getByTestId('pd-code')).toContainText('status === 500');
         await page.keyboard.press('ArrowRight'); decided[id] = 'approve';
       } else if (card.source === 'candidate') {
@@ -120,14 +111,7 @@ test('the deck: every source in one stack, swipe / buttons / keys, undo, the end
         await expect(page.locator('.pd-hint')).not.toBeEmpty();
         await snap(page, 'proposals-deck-blocked-dark');
         await page.getByTestId('pd-reject').click(); decided[id] = 'reject';
-      } else if (card.source === 'memory' && !Object.keys(decided).some(k => k.startsWith('memory:'))) {
-        await page.getByTestId('pd-more').click(); // the whole fact, its evidence and an optional note
-        await expect(page.getByTestId('pd-note')).toBeVisible();
-        await snap(page, 'proposals-deck-fact-dark');
-        await page.keyboard.press('ArrowLeft'); decided[id] = 'reject';
       }
-      else if (card.source === 'memory') { await drag(page, 260); decided[id] = 'approve'; }
-      else if (card.id === 'change:demo-p2') { await drag(page, -260); decided[id] = 'reject'; }
       else if (card.source === 'policy') { await page.keyboard.press('ArrowLeft'); decided[id] = 'reject'; }
       else { await page.keyboard.press('ArrowRight'); decided[id] = 'approve'; }
       await expect(top(page).and(page.locator(`[data-card="${id}"]`))).toHaveCount(0);
@@ -153,11 +137,7 @@ test('the deck: every source in one stack, swipe / buttons / keys, undo, the end
     // everything reached main through its own source: nothing open any more, the badge is gone
     await expect.poll(async () => (await list(page)).items.length, { timeout: 15_000 }).toBe(0);
     await expect(page.getByTestId('nav-badge-proposals')).toHaveCount(0);
-    const records = await page.evaluate(() => window.sb.invoke('memory:reviewList', undefined));
-    for (const [id, d] of Object.entries(decided)) if (id.startsWith('memory:'))
-      expect(records.find(r => r.memoryId === id.slice(7))?.status).toBe(d === 'approve' ? 'confirmed' : 'retracted');
     const changes = (await page.evaluate(() => window.sb.invoke('brainmodel:state', undefined))).changes;
-    expect(changes.find(c => c.id === 'demo-p2')?.rolledBackAt).toBeTruthy();
     expect(changes.find(c => c.id === 'demo-p1')?.rolledBackAt).toBeTruthy(); // the candidate's rejection undid its change
     expect(changes.find(c => c.id === 'demo-l6')?.rolledBackAt).toBeFalsy(); // kept
 

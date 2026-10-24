@@ -469,9 +469,11 @@ const AskDecision = forwardRef<HTMLDivElement, {
     </>
   ) : <>{p.q.header && <span className="dc-chip" data-testid={`${p.testBase}-header`}>{p.q.header}</span>}{p.step}</>;
   const cwd = chat?.cwd;
+  // the agent's context sentence muted above its question, when the split is certain (lib/askSplit.ts)
+  const split = splitAsk(withoutImages(p.q.question));
   const onFile = (h: string) => void openFile(/^[a-z]:[\\/]|^\/|^file:|^https?:/i.test(h) || !cwd ? h : `${cwd.replace(/[\\/]+$/, '')}${cwd.startsWith('/') ? '/' : '\\'}${h}`, p.req.chatId);
   return (
-    <DecisionCard ref={ref} testBase={p.testBase} head={head} question={withoutImages(p.q.question)} compact={p.compact} busy={p.sent}
+    <DecisionCard ref={ref} testBase={p.testBase} head={head} question={split?.ask ?? withoutImages(p.q.question)} lead={split?.lead} compact={p.compact} busy={p.sent}
       rootProps={{ 'data-request-key': p.keyAttr, 'data-kind': 'question', 'data-brief': b ? '' : undefined, 'aria-label': t('genui.decision.label', { chat: who }) }}
       ifYes={b?.ifYes ?? desc('yes')} ifNo={b?.ifNo ?? desc('no')}
       yes={{ onChoose: p.onYes, recommended: p.recommended === 'yes', testid: p.yesTestid }}

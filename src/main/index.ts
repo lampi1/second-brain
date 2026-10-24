@@ -610,11 +610,6 @@ app.whenReady().then(async () => {
     ports: {
       now: demo && process.env.SB_DEMO_FREEZE === '1' ? () => FROZEN_EPOCH : () => Date.now(),
       runs: () => s.agentRuns?.list() ?? [], chats: () => s.chats.list(),
-      ...(s.memoryReview ? { memory: {
-        list: () => (s.brain.info().brainRoot ? call('memory:reviewList', undefined) : []),
-        confirm: (id: string, evidence: string, choice?: { keep: 'new' | 'both'; ids: string[] }) => call('memory:confirm', { expectedRoot: reviewRoot(), id, evidence, ...(choice ? { keep: choice.keep, conflicts: choice.ids } : {}) }),
-        retract: (id: string, reason: string) => call('memory:retract', { expectedRoot: reviewRoot(), id, reason }),
-      } } : {}),
       ...(s.learningReview ? { candidates: {
         list: async () => (await call('learning:state', undefined)).candidates,
         promote: (name: string, expectedDigest: string, replayId: string, exampleRunId: string) => call('learning:promote', { expectedRoot: reviewRoot(), name, expectedDigest, replayId, exampleRunId }),

@@ -688,6 +688,7 @@ export class ClaudeSession implements HarnessSession {
       case 'control_response': return this.onControlResponse(o(m.response));
       case 'control_cancel_request': {
         const id = s(m.request_id);
+        this.briefWaited.delete(id); // withdrawn while it waited for its brief: never shown afterwards
         if (this.calls.delete(id)) {
           log.info('chats', 'permission withdrawn by CLI', { chat: this.opts.chatId, data: { requestId: id } });
           this.sink.resolved(id);
@@ -764,7 +765,7 @@ export class ClaudeSession implements HarnessSession {
     const noBrief = yesNo && !!this.opts.briefReady && !this.opts.briefReady();
     if (noBrief && !this.briefWaited.has(id) && this.yesNoRefused < YESNO_RETRIES) {
       this.briefWaited.add(id);
-      setTimeout(() => { if (!this.procExited) this.onControlRequest(m); this.briefWaited.delete(id); }, BRIEF_GRACE_MS).unref?.();
+      setTimeout(() => { if (!this.procExited && this.briefWaited.has(id)) this.onControlRequest(m); this.briefWaited.delete(id); }, BRIEF_GRACE_MS).unref?.();
       return true;
     }
     if (yesNo && !noBrief) { this.yesNoRefused = 0; return false; }

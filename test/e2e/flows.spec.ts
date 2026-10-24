@@ -20,7 +20,8 @@ test('Flussi starts empty, is reachable from the rail, and reviews definitions i
     await expect(card).toBeVisible();
     await expect(card.getByTestId('flow-approve')).toHaveText('Sì');
     await expect(card.getByTestId('flow-reject')).toHaveText('No');
-    await expect(card.getByTestId('flow-other')).toHaveText('Altro…');
+    await expect(card.getByTestId('flow-other')).toHaveText('Scrivi una rispostaT');
+    await expect(card.getByTestId('qwin-flow-definition-skip')).toHaveText('Non voglio rispondere');
     await expect(card.locator('details').first()).not.toHaveAttribute('open', '');
     await shot(page, 'flows-definition-review');
     await card.getByTestId('flow-other').click();

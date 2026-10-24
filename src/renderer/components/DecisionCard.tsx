@@ -21,6 +21,8 @@ export interface DecisionProps {
   /** who asks: avatar, name, chat and age on one line */
   head: ReactNode;
   question: string;
+  /** the context sentence the agent wrote in front of its question (lib/askSplit.ts), muted above it */
+  lead?: string;
   /** the evidence block (brief, plan steps, a proposal's text…) */
   children?: ReactNode;
   ifYes?: string; ifNo?: string;
@@ -80,7 +82,7 @@ export const DecisionCard = forwardRef<HTMLDivElement, DecisionProps>(function D
       <span className="dc-answer-icon" aria-hidden="true">{kind === 'yes' ? <IconCheck size={16} /> : <IconX size={16} />}</span>
       <strong>{c.label ?? t(kind === 'yes' ? 'genui.decision.yes' : 'genui.decision.no')}</strong>
       {c.recommended && <span className="dc-rec">{t('tools.genui.recommended')}</span>}
-      <span className="dc-key" aria-hidden="true">{key}</span>
+      <span className="dc-key" aria-hidden="true" data-key={key} />
     </button>
   );
 
@@ -88,6 +90,7 @@ export const DecisionCard = forwardRef<HTMLDivElement, DecisionProps>(function D
     <div ref={ref} tabIndex={0} role="group" onKeyDown={onKey} aria-busy={busy} aria-label={p.question}
       className={`dc ${p.compact ? 'compact' : ''} ${busy ? 'sent' : ''} ${p.className ?? ''}`} data-testid={p.testBase} data-decision="" {...p.rootProps}>
       <div className="dc-head">{p.head}</div>
+      {p.lead && <p className="dc-lead" data-testid={`${p.testBase}-ctx-lead`}>{p.lead}</p>}
       <h2 className="dc-q" data-testid={`${p.testBase}-q`}>{p.question}</h2>
       {p.children && <div className="dc-evidence" data-testid={`${p.testBase}-evidence`}>{p.children}</div>}
       {(p.ifYes || p.ifNo) && (
@@ -121,7 +124,7 @@ export const DecisionCard = forwardRef<HTMLDivElement, DecisionProps>(function D
         <div className="dc-more">
           {p.write && (
             <button ref={writeBtn} type="button" className="dc-write-open" onClick={() => setWriting(true)} disabled={busy || p.write.disabled} data-testid={p.write.testids?.open ?? `${p.testBase}-other`}>
-              <IconEdit size={13} /><span>{t('genui.decision.write')}</span><span className="dc-key" aria-hidden="true">T</span>
+              <IconEdit size={13} /><span>{t('genui.decision.write')}</span><span className="dc-key" aria-hidden="true" data-key="T" />
             </button>
           )}
           {p.skip && (
@@ -144,19 +147,23 @@ export const DecisionCard = forwardRef<HTMLDivElement, DecisionProps>(function D
 /** A chat's brief (show_ui brief): what it did, then its evidence (screenshots, checks, files). */
 export function BriefEvidence({ brief, testBase, onFile, size = 'l' }: { brief: UiBrief; testBase: string; onFile?: (path: string) => void; size?: 'l' | 'm' }) {
   return (
-    <div className="dc-brief" data-testid={`${testBase}-brief`}>
-      <div className="dc-brief-k">{t('genui.decision.done')}</div>
-      <ul className="dc-done">{brief.done.map((d, i) => <li key={i}><IconCheck size={13} /><span>{d}</span></li>)}</ul>
-      {!!brief.checks?.length && (
-        <div className="dc-checks" data-testid={`${testBase}-checks`}>
-          {brief.checks.map((c, i) => (
-            <span key={i} className={`dc-check gu-${c.status}`} title={c.detail}>
-              <span aria-hidden="true">{({ ok: '✓', fail: '×', blocked: '⊘', running: '↻', todo: '○', info: 'i', warn: '!' })[c.status]}</span>{c.label}{c.detail && <em>{c.detail}</em>}
-            </span>
-          ))}
+    <div className={`dc-brief ${brief.images?.length ? 'has-img' : ''}`} data-testid={`${testBase}-brief`}>
+      <div className="dc-brief-main">
+        {!!brief.images?.length && <AskImages images={brief.images.map(i => ({ path: i.path, caption: i.caption ?? i.path.split(/[\\/]/).pop() ?? '' }))} testBase={testBase} size={size} />}
+        <div className="dc-brief-done">
+          <div className="dc-brief-k">{t('genui.decision.done')}</div>
+          <ul className="dc-done">{brief.done.map((d, i) => <li key={i}><IconCheck size={13} /><span>{d}</span></li>)}</ul>
+          {!!brief.checks?.length && (
+            <div className="dc-checks" data-testid={`${testBase}-checks`}>
+              {brief.checks.map((c, i) => (
+                <span key={i} className={`dc-check gu-${c.status}`} title={c.detail}>
+                  <span aria-hidden="true">{({ ok: '✓', fail: '×', blocked: '⊘', running: '↻', todo: '○', info: 'i', warn: '!' })[c.status]}</span>{c.label}{c.detail && <em>{c.detail}</em>}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
-      )}
-      {!!brief.images?.length && <AskImages images={brief.images.map(i => ({ path: i.path, caption: i.caption ?? i.path.split(/[\\/]/).pop() ?? '' }))} testBase={testBase} size={size} />}
+      </div>
       {!!brief.files?.length && (
         <ul className="dc-files" data-testid={`${testBase}-files`}>
           {brief.files.map((f, i) => (

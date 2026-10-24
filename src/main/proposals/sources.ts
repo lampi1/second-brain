@@ -1,9 +1,8 @@
 // The Proposte deck's sources (ADR 0123): each one turns what an existing module already keeps waiting for the user into
 // cards (shared/proposals.ts) with who, where, when and the evidence, and decides a card only through that module's own
-// path, the same call its old page made: a memory fact → memory:confirm / memory:retract (near-duplicates, the per-role
-// cap and the batch card: memory-deck.ts, ADR 0129); a skill candidate →
-// learning:promote / the rollback of the change that wrote it; a change the maintenance applied → Tieni (a reviewed mark)
-// / brainmodel:rollback; an agent's protected setting → settings:confirm; a role trial → agents:trialDecide; a tier
+// path, the same call its old page made (memory facts have no cards since ADR 0149: the maintenance saves them itself,
+// brainmodel/memory-tidy.ts, at most MEMORY_CAP per role, in the Log with Annulla); a skill candidate → learning:promote
+// / the rollback of the change that wrote it; a change the maintenance applied → Tieni (a reviewed mark) / brainmodel:rollback; an agent's protected setting → settings:confirm; a role trial → agents:trialDecide; a tier
 // suggestion → agents:lifecycleDecide; a Battito rule → approvals:decide; an improvement-loop policy → learn:act.
 // Pure over injected ports (index.ts wires them to the handlers): unit-tested in test/unit/proposals/service.test.ts.
 import path from 'node:path';
@@ -11,27 +10,23 @@ import type { AgentProfile, AgentRun } from '../../shared/agents';
 import type { AgentLifecycleSnapshot } from '../../shared/agent-lifecycle';
 import type { BrainChange } from '../../shared/brain-model';
 import type { ChatSummary, LearnAction, LearnResult, SettingProposal } from '../../shared/contract';
-import type { MemoryReviewRecord, SkillCandidateView } from '../../shared/learning-review';
+import type { SkillCandidateView } from '../../shared/learning-review';
 import type { ResearchProposal } from '../../shared/maintenance-research';
 import type { ApprovalItem as PulseApproval, PulseResult } from '../../shared/pulse';
 import { type Proposal, type ProposalAsk, type ProposalGroup, type ProposalCode, type ProposalDecision, type ProposalKeep, type ProposalFact, type ProposalProvenance, type ProposalSource, type ProposalWho } from '../../shared/proposals';
 import { isRoleId } from '../../shared/roles';
 import type { FileSnapshot, StoredChange } from '../brainmodel/changes';
-import { memoryBatchContent, memoryCards, type FactGroup, type MemoryCard } from './memory-deck';
 
 /** Changes older than this are history, not news: they stay in the change log only. */
 export const CHANGE_WINDOW_MS = 14 * 86_400_000;
 /** Jobs whose changes are not news to review: moves of the brain's own format, the user's own edits, and the
  *  maintenance findings the user approved on their card already (ADR 0132). */
 const FORMAT_JOBS: readonly string[] = ['migration', 'upgrade', 'user', 'research'];
-/** The default verification a confirmed fact records when the user adds no note (memory-records.ts needs one line). */
-export const DECK_EVIDENCE = 'Confirmed by the user in Memoria → Proposte';
 
 export interface ProposalPorts {
   now(): number;
   runs(): readonly AgentRun[];
   chats(): readonly ChatSummary[];
-  memory?: { list(): MemoryReviewRecord[] | Promise<MemoryReviewRecord[]>; confirm(id: string, evidence: string, choice?: { keep: ProposalKeep; ids: string[] }): Promise<unknown>; retract(id: string, reason: string): Promise<unknown> };
   candidates?: { list(): SkillCandidateView[] | Promise<SkillCandidateView[]>; promote(name: string, digest: string, replayId: string, exampleRunId: string): unknown };
   changes?: { list(): BrainChange[]; stored(): StoredChange[]; rollback(id: string): unknown };
   settings?: { pending(): SettingProposal[]; confirm(id: string, accept: boolean): unknown };
@@ -103,66 +98,6 @@ function changeAsk(c: BrainChange, code: readonly ProposalCode[]): ProposalAsk {
 }
 const prov = (x: ProposalProvenance): ProposalProvenance => ({ ...x, evidence: x.evidence.filter(e => !!e && e.trim()).map(e => clip(e.trim())) });
 
-// ── memory facts to confirm (grouped, capped and flagged: memory-deck.ts, ADR 0129) ─────────────────────────────────
-const scopeOf = (r: MemoryReviewRecord) => ({ ...(r.scope.project ? { project: r.scope.project } : {}), ...(r.scope.repository ? { repository: r.scope.repository } : {}), ...(r.scope.environment ? { environment: r.scope.environment } : {}) });
-function oneCard(p: ProposalPorts, g: FactGroup): Proposal {
-  const r = g.rep, { run, chat } = whereFrom(p, r.sourceRunId);
-  const conflicts = g.conflicts.map(x => ({ id: x.memoryId, value: x.value }));
-  const scope = Object.entries(r.scope).map(([k, v]) => `${k}: ${v}`).join(' · ');
-  const evidence = [run?.report?.summary ?? '', run?.goal ? `${run.goal}` : '', `${r.sourceEventId}`, ...g.dups.map(d => d.value)];
-  return card('memory', r.memoryId, {
-    group: 'fact', applied: false, title: `${r.subject} · ${r.predicate}`, content: r.value,
-    ask: { kind: 'remember', ...(isRoleId(r.scope.roleId) ? { role: r.scope.roleId } : {}), subject: r.subject, predicate: r.predicate, ...scopeOf(r),
-      ...(conflicts.length ? { conflicts } : {}), ...(g.dups.length ? { same: g.dups.length + 1 } : {}), ...(g.worth.specific ? { specific: g.worth.signs } : {}) },
-    facts: [{ key: 'scope', value: scope }, ...(r.supersedes ? [{ key: 'before' as const, value: r.supersedes }] : []), ...(g.dups.length ? [{ key: 'cases' as const, value: String(g.dups.length + 1) }] : [])],
-    provenance: prov({ who: roleWho(run?.agentId ?? r.scope.roleId, { kind: 'app', id: 'agent' }), ...(chat ? { chat } : {}), runId: r.sourceRunId, files: ['memory/records.json'], at: r.observedAt, evidence }),
-    canApprove: true, canReject: true,
-  });
-}
-function batchCard(b: Extract<MemoryCard, { kind: 'batch' }>): Proposal {
-  const first = b.groups[0]!.rep, latest = b.groups.map(g => g.rep.observedAt).sort().at(-1)!;
-  const same = b.groups.every(g => JSON.stringify(scopeOf(g.rep)) === JSON.stringify(scopeOf(first)));
-  return card('memory', b.id, {
-    group: 'fact', applied: false, title: `${b.role} · ${b.day}`, content: memoryBatchContent(b.groups),
-    ask: { kind: 'remember', ...(isRoleId(b.role) ? { role: b.role } : {}), subject: '', predicate: '', ...(same ? scopeOf(first) : {}), many: b.groups.length },
-    facts: [{ key: 'scope', value: Object.entries(first.scope).map(([k, v]) => `${k}: ${v}`).join(' · ') },
-      { key: 'cases', value: String(b.groups.reduce((n, g) => n + 1 + g.dups.length, 0)) }],
-    provenance: prov({ who: roleWho(b.role, { kind: 'app', id: 'agent' }), files: ['memory/records.json'], at: latest, evidence: b.groups.map(g => g.rep.sourceEventId) }),
-    canApprove: true, canReject: true,
-  });
-}
-const memory: Source = {
-  id: 'memory',
-  available: p => !!p.memory,
-  async list(p) {
-    return memoryCards(await p.memory!.list()).map(c => (c.kind === 'one' ? oneCard(p, c.group) : batchCard(c)));
-  },
-  async decide(p, c, decision, note, choice) {
-    const id = native(c), text = note?.trim().replace(/[\x00-\x1f\x7f]+/g, ' ').slice(0, 900);
-    const fresh = memoryCards(await p.memory!.list()), found = fresh.find(x => (x.kind === 'one' ? x.group.rep.memoryId : x.id) === id);
-    if (!found) throw new Error('La proposta non è più da decidere: forse è già stata decisa altrove.');
-    const groups = found.kind === 'one' ? [found.group] : found.groups;
-    if (decision === 'reject') {
-      for (const g of groups) for (const r of [g.rep, ...g.dups]) await p.memory!.retract(r.memoryId, `Rejected in Memoria → Proposte${text ? `: ${text}` : ''}`);
-      return;
-    }
-    const conflicts = c.ask.kind === 'remember' ? c.ask.conflicts ?? [] : [];
-    if (conflicts.length && !choice) throw new Error('Scegli prima cosa fare con quello che ricordava già: sostituirlo o tenerli entrambi.');
-    // the choice holds only for the facts the card showed: one confirmed since is never retracted unseen
-    const stale = (ids: string[]): boolean => ids.length !== conflicts.length || conflicts.some(x => !ids.includes(x.id));
-    if (conflicts.length && stale(choice!.shown)) throw new Error('Nel frattempo è stato confermato un altro fatto sullo stesso argomento: rileggi la carta e scegli di nuovo.');
-    for (const g of groups) {
-      try { await p.memory!.confirm(g.rep.memoryId, text || DECK_EVIDENCE, ...(conflicts.length && choice ? [{ keep: choice.keep, ids: choice.shown }] : [])); }
-      catch (e) {
-        // another fact on the same topic was confirmed after the card was read: the card shows it now (#173)
-        if (e instanceof Error && /explicit supersession/.test(e.message)) throw new Error('Nel frattempo è stato confermato un altro fatto sullo stesso argomento: rileggi la carta e scegli di nuovo.');
-        throw e;
-      }
-      for (const d of g.dups) await p.memory!.retract(d.memoryId, `Merged into ${g.rep.memoryId} in Memoria → Proposte`);
-    }
-  },
-};
-
 // ── skill candidates waiting for promotion ───────────────────────────────────────────────────────────────────────
 const isCandidateFile = (file: string): boolean => /[\\/]memory[\\/]skill-candidates[\\/][^\\/]+\.md$/.test(file);
 /** The change that wrote a candidate (its rollback is the candidate's Rifiuta). */
@@ -207,7 +142,8 @@ const change: Source = {
   async list(p) {
     const since = p.now() - CHANGE_WINDOW_MS, stored = p.changes!.stored();
     const candidates = new Set((await p.candidates?.list() ?? []).map(c => c.name));
-    return p.changes!.list().filter(c => c.at >= since && !c.rolledBackAt && !FORMAT_JOBS.includes(c.job) && !p.reviewed.has(c.id)).flatMap(c => {
+    // memory tidy-ups stay in the Log with Annulla, never a card: the owner sees only skills and rules (ADR 0149)
+    return p.changes!.list().filter(c => c.at >= since && !c.rolledBackAt && !FORMAT_JOBS.includes(c.job) && c.kind !== 'memory' && !p.reviewed.has(c.id)).flatMap(c => {
       const snaps = stored.find(s => s.id === c.id)?.files ?? [], files = snaps.map(f => f.file);
       // a skill candidate is its own card (Approva / Rifiuta), never twice
       if (files.some(isCandidateFile) || (c.job === 'repeated-task' && candidates.has(c.target))) return [];
@@ -367,6 +303,6 @@ const research: Source = {
   },
 };
 
-export const SOURCES: readonly Source[] = [memory, candidate, change, setting, trial, tier, pulse, policy, research];
+export const SOURCES: readonly Source[] = [candidate, change, setting, trial, tier, pulse, policy, research];
 /** A path shown short: relative to the brain when it is inside it. */
 export const shortPath = (file: string, root: string | null): string => (root && path.isAbsolute(file) && path.resolve(file).startsWith(path.resolve(root) + path.sep) ? path.relative(root, file).split(path.sep).join('/') : file);

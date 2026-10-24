@@ -8,8 +8,8 @@
 // rank the Proposte deck shows them in. Destructive duplicate handling requires identical trimmed fields; lexical
 // similarity is advisory only. The creation gate also rejects obvious task updates and acknowledgements;
 // it does not reclassify or remove existing records. Pure. Used by memory-records.ts (the gate of every new fact), agents/
-// delegation.ts (agent_report's `remember`, checked before the report), proposals/sources.ts (the deck's grouping, cap
-// and flags) and brainmodel/jobs.ts (the maintenance's memory tidy-up). Unit tests: test/unit/brainmodel/memory-worth.test.ts.
+// delegation.ts (agent_report's `remember`, checked before the report), rules/launch-memory.ts (which proposals load
+// at launch) and brainmodel/jobs.ts (the maintenance's memory tidy-up). Unit tests: test/unit/brainmodel/memory-worth.test.ts.
 import type { MemorySign } from '../../shared/proposals';
 import { factSentence } from '../../shared/proposals';
 
