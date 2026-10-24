@@ -36,9 +36,14 @@ export function micAllowed(perm: string, details: { mediaTypes?: readonly string
 /** Call recording (ADR 0154): the PC's audio is handed out only for a few seconds after the user's «Registra call» armed
  *  it (rec:start), only to our own page, once per click. Windows only («loopback»); elsewhere the call is mic only. */
 let loopbackUntil = 0;
-export const armLoopback = (ms = 10_000): void => { loopbackUntil = Date.now() + ms; };
+export const armLoopback = (ms = 5_000): void => { loopbackUntil = Date.now() + ms; };
 export function captureAllowed(armedUntil: number, now: number, frameUrl: string): boolean {
   return now <= armedUntil && isAppPage(frameUrl);
+}
+/** getDisplayMedia's own permission request (display-capture, or media asking for the screen), when Chromium asks the
+ *  session first: granted only while armed, like the request handler below */
+export function displayPermission(perm: string, details: { mediaTypes?: readonly string[] } | undefined): boolean {
+  return perm === 'display-capture' || (perm === 'media' && !(details?.mediaTypes ?? []).length) || (perm === 'media' && (details?.mediaTypes ?? []).includes('video'));
 }
 
 /** The app page's URL as the window loads it (main/index.ts too): out/renderer/index.html plus the splash query. */
@@ -70,7 +75,8 @@ export function createWindow(outDir: string, loadImmediately = true): BrowserWin
   wc.on('will-redirect', (e, url) => { if (!isAppPage(url)) e.preventDefault(); });
   // the microphone only, only for our own page (voice mode, ADR 0152; the user's Ctrl+M or click): every other
   // permission, and the camera, stays refused
-  wc.session.setPermissionRequestHandler((who, perm, cb, details) => cb(micAllowed(perm, details, who.getURL())));
+  wc.session.setPermissionRequestHandler((who, perm, cb, details) => cb(micAllowed(perm, details, who.getURL())
+    || (displayPermission(perm, details as { mediaTypes?: string[] }) && captureAllowed(loopbackUntil, Date.now(), who.getURL()))));
   // getDisplayMedia (call recording, ADR 0154): the PC's audio for an armed recording; the screen video it must carry
   // is stopped by the renderer at once and never stored
   wc.session.setDisplayMediaRequestHandler((req, cb) => {

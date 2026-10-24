@@ -53,9 +53,11 @@ export class RecordingService {
     return r;
   }
 
-  /** A chunk of 16-bit samples; a call that passes REC_MAX_MS stops by itself. Returns the length so far (ms). */
+  /** A chunk of 16-bit samples; a call that passes REC_MAX_MS stops by itself. Returns the length so far (ms), or -1
+   *  when the recording was already stopped here (the maximum length, the renderer reloaded): the renderer stops too. */
   chunk(id: string, pcm: unknown): number {
     if (!(pcm instanceof Uint8Array) || pcm.byteLength > CHUNK_MAX) throw new Error('blocco audio non valido');
+    if (!this.d.store.isOpen(id) && this.d.store.get(id)) return -1;
     const ms = this.d.store.append(id, pcm);
     if (id === this.active && ms >= REC_MAX_MS) { this.stop(id); log.warn('recordings', 'recording stopped at the maximum length', { data: { id } }); }
     return ms;
@@ -71,6 +73,19 @@ export class RecordingService {
     this.queue(id);
     this.emit();
     return this.d.store.get(id);
+  }
+
+  /** The page went away (a reload, a renderer crash) while recording: a call is saved and transcribed as it is, an
+   *  import cut short is dropped, so nothing stays open with no one feeding it. */
+  abandonOpen(): void {
+    for (const id of this.d.store.openIds()) {
+      const r = this.d.store.get(id);
+      try {
+        if (r?.source === 'file') { this.d.store.stop(id); this.d.store.remove(id); } else this.stop(id);
+      } catch (e) { log.warn('recordings', 'open recording not closed', { cause: String(e), data: { id } }); }
+      if (this.active === id) this.active = null;
+    }
+    this.emit();
   }
 
   /** «Trascrivi» / «Riprova»: (again) into the queue. */
@@ -93,26 +108,28 @@ export class RecordingService {
     this.emit();
     const asr = this.d.asr();
     const started = this.now();
-    const job = this.d.transcribe(this.d.store.wav(id), done => {
-      if (!this.d.store.get(id)) return;
-      this.d.store.update(id, { progress: Math.round(done * 100) / 100 });
-      this.emit();
-    });
+    const failed = (error: string) => {
+      try { if (this.d.store.get(id)) this.d.store.update(id, { status: 'error', progress: undefined, error }); } catch { /* the list shows it at the next start */ }
+      log.warn('recordings', 'transcription failed', { cause: error, data: { id }, hint: 'Impostazioni → Voce: are the models downloaded?' });
+    };
+    let job: ReturnType<RecordingDeps['transcribe']>;
+    try {
+      job = this.d.transcribe(this.d.store.wav(id), done => {
+        try { if (this.d.store.get(id)) { this.d.store.update(id, { progress: Math.round(done * 100) / 100 }); this.emit(); } } catch { /* a progress tick is not worth a failure */ }
+      });
+    } catch (e) { failed(String(e)); this.emit(); this.next(); return; }
     this.running = { id, cancel: job.cancel };
     void job.result.then(({ lines, error }) => {
       if (this.running?.id !== id) return; // removed meanwhile
       this.running = null;
-      if (!this.d.store.get(id)) { this.next(); return; }
-      if (error) {
-        this.d.store.update(id, { status: 'error', progress: undefined, error });
-        log.warn('recordings', 'transcription failed', { cause: error, data: { id }, hint: 'Impostazioni → Voce: are the models downloaded?' });
-      } else {
+      try {
+        if (!this.d.store.get(id)) return;
+        if (error) { failed(error); return; }
         const segs: RecSegment[] = lines.map(l => ({ start: l.start, end: l.end, who: r.channels === 2 ? (l.ch === 0 ? 'me' : 'others') : null, text: l.text }));
         this.d.store.writeTranscript(id, dropEchoes(segs), asr, this.now());
         log.info('recordings', 'transcript written', { data: { id, lines: segs.length, ms: this.now() - started, audioMs: r.durationMs, asr } });
-      }
-      this.emit();
-      this.next();
+      } catch (e) { failed(String(e)); }
+      finally { this.emit(); this.next(); }
     });
   }
 
@@ -148,12 +165,12 @@ export class RecordingService {
   }
 
   /** The bytes of a file «Trovate sul PC» listed (only those: the renderer cannot ask for any other path). */
-  readFound(p: string): Uint8Array {
+  async readFound(p: string): Promise<Uint8Array> {
     const f = this.found.find(x => x.path === p);
     if (!f) throw new Error('file non trovato: aggiorna «Trovate sul PC»');
-    const st = fs.statSync(p);
-    if (st.size > REC_IMPORT_MAX_BYTES) throw new Error('file troppo grande (oltre 1 GB)');
-    return fs.readFileSync(p);
+    const st = await fs.promises.stat(p);
+    if (st.size > REC_IMPORT_MAX_BYTES) throw new Error('file troppo grande (oltre 500 MB)');
+    return fs.promises.readFile(p);
   }
 
   dispose(): void {

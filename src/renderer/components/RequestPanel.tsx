@@ -481,7 +481,7 @@ const AskDecision = forwardRef<HTMLDivElement, {
       no={{ onChoose: p.onNo, recommended: p.recommended === 'no', testid: p.noTestid }}
       write={{ onSend: p.onWrite, initial: p.otherInitial, onDraft: p.onOtherDraft, onClose: p.onOtherClose }}
       skip={{ onChoose: p.onSkip, hint: t('genui.decision.skipHint') }}
-      speakFrom={agent?.name ?? (who || undefined)} speakDone={b?.done.join('. ')} voiceId={`req:${p.req.chatId}/${p.req.id}/${p.q.question.slice(0, 40)}`}
+      speakFrom={agent?.name ?? (who || undefined)} speakDone={b?.done.join('. ')} voiceId={`req:${p.req.chatId}/${p.req.id}/${p.q.question}`}
       onLater={p.onLater} laterButton={!p.inWindow} className={p.inWindow ? 'wq' : undefined}
       footer={<>{p.commands}{p.keysTo && createPortal(<span>{t('genui.decision.keys')}</span>, p.keysTo)}</>}>
       {b && <BriefEvidence brief={b} testBase={p.testBase} size={p.compact ? 'm' : 'l'} onFile={onFile} />}

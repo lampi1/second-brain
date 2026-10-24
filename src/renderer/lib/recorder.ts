@@ -9,7 +9,7 @@
 import { createStore } from '../store/createStore';
 import { toast } from '../store/ui';
 import { t } from '../i18n';
-import { downsample, stopVoice, voice } from './voice';
+import { blockVoiceWhile, stopVoice, voice } from './voice';
 import { REC_IMPORT_MAX_BYTES, REC_RATE, recExtensionOk, type RecState } from '@shared/recordings';
 
 export interface RecorderUi {
@@ -29,23 +29,46 @@ export const recs = createStore<RecState | null>(null);
 const set = (p: Partial<RecorderUi>) => recorder.set(s => ({ ...s, ...p }));
 
 let wired = false;
-/** main's list, once (on first use of the page or the pill) */
+/** main's list, once (main.tsx): voice mode stays off while a call is recorded (it would answer the call) */
 export function startRecs(): void {
   if (wired || typeof window === 'undefined' || !window.sb) return;
   wired = true;
+  blockVoiceWhile(() => (recorder.get().phase !== 'off' ? t('rec.voiceBlocked') : null));
   window.sb.on('rec:changed', s => recs.set(s));
   void window.sb.invoke('rec:state', undefined).then(s => recs.set(x => x ?? s), () => {});
 }
 
 const errText = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
 
-let ctx: AudioContext | null = null, proc: ScriptProcessorNode | null = null;
-let streams: MediaStream[] = [];
+/** One call's devices and audio graph; a start that is stopped (or started again) before it is up releases its own. */
+interface Run { gen: number; ctx: AudioContext | null; proc: ScriptProcessorNode | null; streams: MediaStream[]; nodes: AudioScheduledSourceNode[]; channels: number }
+let gen = 0;
+let run: Run | null = null;
 let pending: Int16Array[] = [], pendingFrames = 0, chain: Promise<unknown> = Promise.resolve();
-let fakeNodes: AudioScheduledSourceNode[] = [];
 
 const toInt16 = (x: number) => Math.max(-32768, Math.min(32767, Math.round(x * 32767)));
 const rms = (a: Float32Array) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i]! * a[i]!; return Math.min(1, Math.sqrt(s / Math.max(1, a.length)) * 6); };
+
+/** A downsampler that keeps its fractional position across blocks: hours of audio keep their exact length (a per-block
+ *  floor would drop a sample every block, about a second an hour). Each output sample is the mean of its input span. */
+export function resampler(ratio: number): (input: Float32Array) => Float32Array {
+  let pos = 0; // where the next output sample starts, in input samples, relative to the start of the next block
+  let carry = 0, carryN = 0; // a span cut by the block's end: its sum and count so far
+  return input => {
+    const out: number[] = [];
+    let at = 0;
+    while (true) {
+      const end = pos + ratio;
+      const stop = Math.min(input.length, Math.floor(end));
+      for (; at < stop; at++) { carry += input[at]!; carryN++; }
+      if (end > input.length) break;
+      out.push(carryN ? carry / carryN : 0);
+      carry = 0; carryN = 0; pos = end;
+    }
+    pos -= input.length;
+    return Float32Array.from(out);
+  };
+}
 
 function flush(id: string, channels: number): void {
   if (!pendingFrames) return;
@@ -54,7 +77,11 @@ function flush(id: string, channels: number): void {
   for (const p of pending) { all.set(p, at); at += p.length; }
   pending = []; pendingFrames = 0;
   const pcm = new Uint8Array(all.buffer);
-  chain = chain.then(() => window.sb.invoke('rec:chunk', { id, pcm }).then(ms => { if (recorder.get().id === id) set({ ms }); }, e => { if (recorder.get().id === id) { toast(`${t('rec.failed')} ${errText(e)}`, 'err'); void stopCall(); } }));
+  chain = chain.then(() => window.sb.invoke('rec:chunk', { id, pcm }).then(ms => {
+    if (recorder.get().id !== id) return;
+    // main stopped it (the maximum length): stop here too, quietly
+    if (ms < 0) { toast(t('rec.maxLength'), 'info'); void stopCall(); } else set({ ms });
+  }, e => { if (recorder.get().id === id) { toast(`${t('rec.failed')} ${errText(e)}`, 'err'); void stopCall(); } }));
 }
 
 /** The PC's audio, if the system gives it: a stream with its audio track only (the screen video stopped at once). */
@@ -68,14 +95,26 @@ async function systemAudio(): Promise<MediaStream | null> {
   } catch { return null; }
 }
 
+function release(r: Run): void {
+  try { r.proc?.disconnect(); } catch { /* gone */ }
+  if (r.proc) r.proc.onaudioprocess = null;
+  for (const n of r.nodes) { try { n.stop(); } catch { /* stopped */ } }
+  r.streams.forEach(s => s.getTracks().forEach(tr => tr.stop()));
+  void r.ctx?.close().catch(() => {});
+  r.nodes = []; r.streams = []; r.ctx = null; r.proc = null;
+}
+
 export async function startCall(): Promise<void> {
   if (recorder.get().phase !== 'off') return;
+  const me: Run = { gen: ++gen, ctx: null, proc: null, streams: [], nodes: [], channels: 1 };
+  run = me;
+  const live = () => me.gen === gen && recorder.get().phase === 'starting';
   set({ phase: 'starting', ms: 0, me: 0, others: 0 });
   if (voice.get().phase !== 'off') { stopVoice(); toast(t('rec.voiceOff'), 'info'); }
   const fake = !!voice.get().engine?.fake || !!(await window.sb.invoke('voice:state', undefined).catch(() => null))?.fake;
   try {
     const ac = new AudioContext();
-    ctx = ac;
+    me.ctx = ac;
     const merger = ac.createChannelMerger(2);
     let sys = false;
     if (fake) {
@@ -84,29 +123,33 @@ export async function startCall(): Promise<void> {
         const o = ac.createOscillator(), g = ac.createGain();
         o.frequency.value = hz; g.gain.value = 0.05;
         o.connect(g).connect(merger, 0, ch); o.start();
-        fakeNodes.push(o);
+        me.nodes.push(o);
       }
       sys = true;
     } else {
       const mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
-      if (recorder.get().phase !== 'starting') { mic.getTracks().forEach(tr => tr.stop()); return; }
-      streams.push(mic);
+      me.streams.push(mic);
+      if (!live()) { release(me); return; }
       ac.createMediaStreamSource(mic).connect(merger, 0, 0);
-      mic.getAudioTracks()[0]?.addEventListener('ended', () => { if (recorder.get().phase === 'on') { toast(t('rec.micLost'), 'err'); void stopCall(); } });
+      mic.getAudioTracks()[0]?.addEventListener('ended', () => { if (run === me && recorder.get().phase === 'on') { toast(t('rec.micLost'), 'err'); void stopCall(); } });
       const pc = await systemAudio();
-      if (recorder.get().phase !== 'starting') { pc?.getTracks().forEach(tr => tr.stop()); return; }
-      if (pc) { streams.push(pc); ac.createMediaStreamSource(pc).connect(merger, 0, 1); sys = true; }
+      if (pc) me.streams.push(pc);
+      if (!live()) { release(me); return; }
+      if (pc) { ac.createMediaStreamSource(pc).connect(merger, 0, 1); sys = true; }
     }
     const channels = sys ? 2 : 1;
+    me.channels = channels;
     const r = await window.sb.invoke('rec:start', { source: 'call', channels, systemAudio: sys });
-    if (recorder.get().phase !== 'starting') { await window.sb.invoke('rec:remove', { id: r.id }).catch(() => {}); return; }
-    proc = ac.createScriptProcessor(4096, 2, 1);
+    if (!live()) { release(me); await window.sb.invoke('rec:remove', { id: r.id }).catch(() => {}); return; }
+    const proc = ac.createScriptProcessor(4096, 2, 1);
+    me.proc = proc;
     const ratio = ac.sampleRate / REC_RATE;
+    const left = resampler(ratio), right = resampler(ratio);
     let sinceFlush = 0;
     proc.onaudioprocess = e => {
       if (recorder.get().id !== r.id) return;
-      const l = downsample(e.inputBuffer.getChannelData(0), ratio);
-      const rr = sys ? downsample(e.inputBuffer.getChannelData(1), ratio) : null;
+      const l = left(e.inputBuffer.getChannelData(0));
+      const rr = sys ? right(e.inputBuffer.getChannelData(1)) : null;
       const out = new Int16Array(l.length * channels);
       for (let i = 0; i < l.length; i++) { out[i * channels] = toInt16(l[i]!); if (rr) out[i * channels + 1] = toInt16(rr[i] ?? 0); }
       pending.push(out); pendingFrames += l.length; sinceFlush += l.length;
@@ -115,39 +158,28 @@ export async function startCall(): Promise<void> {
     };
     merger.connect(proc);
     proc.connect(ac.destination); // silent: the processor only runs when connected
-    channelsNow = channels;
+    pending = []; pendingFrames = 0;
     set({ phase: 'on', id: r.id, systemAudio: sys });
     if (!sys) toast(t('rec.micOnly'), 'info');
   } catch (e) {
-    teardown();
-    set({ phase: 'off', id: null });
-    toast(`${t('rec.failed')} ${errText(e)}`, 'err');
+    release(me);
+    if (me.gen === gen) { set({ phase: 'off', id: null }); toast(`${t('rec.failed')} ${errText(e)}`, 'err'); }
   }
-}
-let channelsNow = 2;
-
-function teardown(): void {
-  try { proc?.disconnect(); } catch { /* gone */ }
-  for (const n of fakeNodes) { try { n.stop(); } catch { /* stopped */ } }
-  fakeNodes = [];
-  streams.forEach(s => s.getTracks().forEach(tr => tr.stop()));
-  streams = [];
-  void ctx?.close().catch(() => {});
-  ctx = null; proc = null;
 }
 
 export async function stopCall(): Promise<void> {
   const { id, phase } = recorder.get();
-  if (phase === 'starting') { set({ phase: 'off' }); teardown(); return; }
+  const r = run;
+  if (phase === 'starting') { gen++; set({ phase: 'off' }); if (r) release(r); return; }
   if (!id || phase !== 'on') return;
   set({ phase: 'stopping' });
-  if (proc) proc.onaudioprocess = null;
-  flush(id, channelsNow);
-  teardown();
+  if (r?.proc) r.proc.onaudioprocess = null;
+  flush(id, r?.channels ?? 1);
+  if (r) release(r);
   await chain.catch(() => {});
-  const r = await window.sb.invoke('rec:stop', { id }).catch(e => { toast(`${t('rec.failed')} ${errText(e)}`, 'err'); return null; });
+  const saved = await window.sb.invoke('rec:stop', { id }).catch(e => { toast(`${t('rec.failed')} ${errText(e)}`, 'err'); return null; });
   set({ phase: 'off', id: null, me: 0, others: 0 });
-  toast(r ? t('rec.saved') : t('rec.tooShort'), r ? 'ok' : 'info');
+  toast(saved ? t('rec.saved') : t('rec.tooShort'), saved ? 'ok' : 'info');
 }
 
 export const toggleCall = (): Promise<void> => (recorder.get().phase === 'off' ? startCall() : stopCall());

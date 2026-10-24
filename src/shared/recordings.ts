@@ -56,8 +56,8 @@ export interface RecState {
 export const REC_RATE = 16_000;
 /** a call longer than this stops by itself (about 1.8 GB of WAV) */
 export const REC_MAX_MS = 8 * 3600_000;
-/** an imported file larger than this is refused (the renderer decodes it in memory) */
-export const REC_IMPORT_MAX_BYTES = 1024 ** 3;
+/** an imported file larger than this is refused (the renderer decodes it in memory, and it crosses IPC once) */
+export const REC_IMPORT_MAX_BYTES = 500 * 1024 ** 2;
 export const REC_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.aac', '.ogg', '.oga', '.opus', '.webm', '.flac', '.mp4', '.m4v', '.mov', '.mkv'];
 
 /** The 44-byte header of a PCM 16-bit WAV with `dataBytes` of samples. */

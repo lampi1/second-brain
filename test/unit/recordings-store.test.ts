@@ -115,7 +115,7 @@ describe('service', () => {
   });
   it('reads back only a file the PC search listed', async () => {
     const { svc } = service([]);
-    expect(() => svc.readFound('/etc/passwd')).toThrow(/non trovato/);
+    await expect(svc.readFound('/etc/passwd')).rejects.toThrow(/non trovato/);
     expect(() => svc.chunk('x', 'not bytes')).toThrow();
   });
 });
@@ -144,5 +144,37 @@ describe('transcribeWav', () => {
     });
     expect(lines).toEqual([{ start: 1000, end: 2000, ch: 0, text: 'parola' }, { start: 2000, end: 3000, ch: 1, text: 'parola' }]);
     expect(seen).toEqual([16_000, 16_000]);
+  });
+});
+
+describe('after the review', () => {
+  it('an auto-stopped or abandoned recording answers -1 to the next chunk; a reload saves the call and drops an import', async () => {
+    const { svc, store } = service([]);
+    const call = svc.start({ source: 'call', channels: 1 }); svc.chunk(call.id, second(1)); svc.chunk(call.id, second(1));
+    const imp = svc.start({ source: 'file', channels: 1, from: 'x.mp3' }); svc.chunk(imp.id, second(1));
+    svc.abandonOpen();
+    expect(store.get(imp.id)).toBeNull();
+    expect(store.get(call.id)?.status).not.toBe('recording');
+    expect(svc.chunk(call.id, second(1))).toBe(-1);
+    expect(() => svc.start({ source: 'call', channels: 1 })).not.toThrow();
+  });
+  it('recover drops an import a crash cut short', () => {
+    const root = tmp();
+    const a = new RecordingStore(root);
+    const r = a.start({ source: 'file', channels: 1, title: 'x', startedAt: 1 });
+    a.append(r.id, second(1)); a.append(r.id, second(1));
+    a.closeAll();
+    const b = new RecordingStore(root);
+    expect(b.recover()).toEqual([]);
+    expect(b.list()).toEqual([]);
+  });
+  it('a failure while writing the transcript marks it failed and the queue goes on', async () => {
+    const { svc, store } = service([{ start: 0, end: 1, ch: 0, text: 'x' }]);
+    const a = svc.start({ source: 'call', channels: 1 }); svc.chunk(a.id, second(1)); svc.chunk(a.id, second(1));
+    const spy = vi.spyOn(store, 'writeTranscript').mockImplementation(() => { throw new Error('EPERM'); });
+    svc.stop(a.id);
+    await flush();
+    expect(store.get(a.id)).toMatchObject({ status: 'error' });
+    spy.mockRestore();
   });
 });

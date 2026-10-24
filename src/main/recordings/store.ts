@@ -90,7 +90,10 @@ export class RecordingStore {
    *  transcription that was running starts again. Returns the ids to transcribe. */
   recover(): string[] {
     const again: string[] = [];
+    try { for (const n of fs.readdirSync(this.root)) if (n.endsWith('.deleted')) fs.rmSync(path.join(this.root, n), { recursive: true, force: true }); } catch { /* no folder yet */ }
     for (const r of this.list()) {
+      // an import cut short is not the file: dropped (the user imports it again)
+      if (r.status === 'recording' && r.source === 'file' && !this.open.has(r.id)) { try { this.remove(r.id); } catch { /* next start */ } continue; }
       if (r.status === 'recording' && !this.open.has(r.id)) {
         const bytes = this.dataBytes(r.id) - (this.dataBytes(r.id) % (r.channels * 2));
         try {
@@ -128,8 +131,14 @@ export class RecordingStore {
 
   remove(id: string): void {
     if (this.open.has(id)) throw new Error('ferma prima la registrazione');
-    fs.rmSync(this.dir(id), { recursive: true, force: true });
+    // renamed first, so a file still held (the worker finishing a segment, a media player on Windows) never leaves a
+    // half-deleted recording in the list; what cannot go now goes at the next start
+    const gone = `${this.dir(id)}.deleted`;
+    try { fs.renameSync(this.dir(id), gone); } catch { fs.rmSync(this.dir(id), { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }); return; }
+    try { fs.rmSync(gone, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }); } catch { /* retried at start */ }
   }
+
+  openIds(): string[] { return [...this.open.keys()]; }
 
   /** The app quits: every open WAV gets its header (the recording stays «recording» until recover() at the next start). */
   closeAll(): void {

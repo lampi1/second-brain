@@ -61,9 +61,15 @@ export function startVoice(): void {
 const allReady = (st: VoiceState | null) => !!st && st.ready.vad && st.ready.asr && st.ready.tts;
 
 /** Ctrl+M / the mic button: muted ↔ on. `target` = where the words go (the button's input; Ctrl+M keeps the last). */
+/** something that keeps voice mode off for now (a call being recorded, lib/recorder.ts): its reason, or null */
+let blocked: () => string | null = () => null;
+export const blockVoiceWhile = (why: () => string | null): void => { blocked = why; };
+
 export async function toggleVoice(target?: VoiceTarget): Promise<void> {
   const s = voice.get();
   if (s.phase !== 'off') { if (target && target !== s.target) { set({ target }); return; } stopVoice(); return; }
+  const no = blocked();
+  if (no) { toast(no, 'info'); return; }
   // leaves «off» before the first await: a second click or Ctrl+M meanwhile turns it off instead of opening twice
   const my = ++session;
   set({ target: target ?? s.target, error: null, phase: 'starting' });
@@ -163,7 +169,8 @@ export function stopVoice(): void {
   if (transcribeTimer) clearTimeout(transcribeTimer);
   set({ phase: 'off', level: 0 });
   hinted = false;
-  for (const q of questions) q.said = false; // on again: the open questions are read again
+  saidIds.clear(); // on again: the open questions are read again
+  for (const q of questions) q.said = false;
   void window.sb.invoke('voice:listen', { on: false }).catch(() => {});
 }
 
@@ -252,11 +259,15 @@ interface VoiceQuestion { id: string; speak: SpokenQuestionInput; onAnswer: (a: 
 let hinted = false; // «puoi rispondere sì o no…» once per voice session
 const questions: VoiceQuestion[] = [];
 
+/** the questions read since voice went on, by id: the same request drawn twice is read once, whichever copy closes */
+const saidIds = new Set<string>();
 function sayQuestion(): void {
   const q = questions.at(-1);
   set({ question: q?.id ?? null });
+  if (q && saidIds.has(q.id)) q.said = true;
   if (!q || q.said || voice.get().phase === 'off' || voice.get().phase === 'preparing' || voice.get().phase === 'starting') return;
   q.said = true;
+  saidIds.add(q.id);
   void say(spokenQuestion(q.speak, !hinted), true);
   hinted = true;
 }
@@ -268,7 +279,7 @@ export function useVoiceQuestion(id: string | null, speak: SpokenQuestionInput, 
   useEffect(() => {
     if (!id) return;
     // the same request drawn twice (its chat strip and the questions window) is read once
-    const q: VoiceQuestion = { id, speak, onAnswer, said: questions.some(x => x.id === id && x.said) };
+    const q: VoiceQuestion = { id, speak, onAnswer, said: saidIds.has(id) };
     mine.current = q;
     questions.push(q);
     sayQuestion();

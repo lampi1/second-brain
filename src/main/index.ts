@@ -196,6 +196,10 @@ app.whenReady().then(async () => {
     changed: st => emitter.emit('rec:changed', st),
   });
   recordings.recover();
+  // the page reloaded or its process died mid-call: the recording it fed is closed, never left open (ADR 0154)
+  const recPageGone = () => { if (s.recordings.openIds().length) recordings.abandonOpen(); };
+  win?.webContents.on('did-start-navigation', d => { if (d.isMainFrame && !d.isSameDocument) recPageGone(); });
+  win?.webContents.on('render-process-gone', recPageGone);
   app.on('will-quit', () => { recordings.dispose(); voice.dispose(); });
   const pulse = createPulse(s, { emitter, window: () => win, userData: app.getPath('userData') }, () => headline.get());
   // the Battito's proposals count in the morning block's "Da approvare" (ADR 0102)

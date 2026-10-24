@@ -30,3 +30,10 @@ it('hands out the PC audio only while armed and only to the app page', () => {
   expect(captureAllowed(0, 5, app)).toBe(false);
   expect(captureAllowed(1000, 900, 'https://evil.example')).toBe(false);
 });
+it('the display-capture permission shapes', async () => {
+  const { displayPermission } = await import('../../src/main/window');
+  expect(displayPermission('display-capture', undefined)).toBe(true);
+  expect(displayPermission('media', { mediaTypes: ['video', 'audio'] })).toBe(true);
+  expect(displayPermission('media', { mediaTypes: ['audio'] })).toBe(false);
+  expect(displayPermission('geolocation', undefined)).toBe(false);
+});
