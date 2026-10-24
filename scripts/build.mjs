@@ -25,7 +25,12 @@ await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/search/hybrid
   banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" } });
 // its runtime packages (loaded with createRequire, never bundled: native code, ADR 0068) travel in out/node_modules, so
 // the dev build and every release (a copy of out/) resolve them; onnxruntime-node keeps only this platform's CPU binaries
-const runtime = ['onnxruntime-node', 'onnxruntime-common', '@huggingface/tokenizers', 'sqlite-vec', `sqlite-vec-${process.platform === 'win32' ? 'windows' : process.platform}-${process.arch}`];
+// the voice process (src/main/voice/worker.ts, ADR 0152): its own bundle, sherpa-onnx (native, with its own onnxruntime)
+// beside it in out/node_modules
+await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/voice/worker.ts')], outfile: path.join(root, 'out/main/voice-worker.js'), format: 'esm', external: ['sherpa-onnx-node'],
+  banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" } });
+const runtime = ['onnxruntime-node', 'onnxruntime-common', '@huggingface/tokenizers', 'sqlite-vec', `sqlite-vec-${process.platform === 'win32' ? 'windows' : process.platform}-${process.arch}`,
+  'sherpa-onnx-node', `sherpa-onnx-${process.platform === 'win32' ? 'win' : process.platform}-${process.arch}`];
 for (const pkg of runtime) {
   const src = path.join(root, 'node_modules', pkg);
   if (!fs.existsSync(src)) continue; // another platform's optional package

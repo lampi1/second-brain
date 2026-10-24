@@ -1,12 +1,12 @@
 // Settings page (rendered by App.tsx; each section's title, description and search words: lib/settings-sections.ts, which the Orchestrator's app map reads too, ADR 0149): essential settings only, laid out like the Dashboard: a page header with the
 // search (a group's title, description and keywords; clearing it keeps the focus in the field), a row of section links, then one card per group (icon, title, one-line description, rows of text left and
-// control right). Connettori: ConnectorsHub.tsx (accounts and MCP servers, ADR 0086; the tool catalog, ADR 0119). Avanzate: the technical MCP form and import (ConnectorsHub.tsx McpAdvanced, ADR 0119). Ruoli e deleghe: DelegationSettings.tsx (ADR 0083). Aggiornamenti: AppUpdateSettings.tsx (ADR 0075; "impostazioni/update" opens on it). Scrittura: SuggestSettings.tsx (the composer's inline suggestion, ADR 0118). Stored technical policies and engine denials are preserved, never enabled by rendering.
+// control right). Connettori: ConnectorsHub.tsx (accounts and MCP servers, ADR 0086; the tool catalog, ADR 0119). Avanzate: the technical MCP form and import (ConnectorsHub.tsx McpAdvanced, ADR 0119). Ruoli e deleghe: DelegationSettings.tsx (ADR 0083). Aggiornamenti: AppUpdateSettings.tsx (ADR 0075; "impostazioni/update" opens on it). Scrittura: SuggestSettings.tsx (the composer's inline suggestion, ADR 0118). Voce: VoiceSettings.tsx (voice mode, ADR 0152). Stored technical policies and engine denials are preserved, never enabled by rendering.
 // Account actions use existing typed login/secure-storage/trust boundaries; no provider routing matrix or policy wall.
 import{useEffect,useState,type ReactNode}from'react';
 import { Select } from './Select';
 import type{CliStatus,EngineInfo,SecretsStatus}from'@shared/contract';
 import { isLang, LANGS } from '@shared/contract';
-import{IconBell,IconBranch,IconEdit,IconFolder,IconLink,IconMoon,IconRefresh,IconSearch,IconSettings,IconTerminal,IconUser}from'./Icons';
+import{IconBell,IconBranch,IconEdit,IconFolder,IconLink,IconMic,IconMoon,IconRefresh,IconSearch,IconSettings,IconTerminal,IconUser}from'./Icons';
 import { DelegationSettings } from './DelegationSettings';
 import{useEngines}from'../lib/engines';
 import{matchesSettingsSearch}from'../lib/settings-page';
@@ -28,6 +28,7 @@ import { CloudKeySetting } from './CloudKeySetting';
 import { PulseSettings } from './PulseSettings';
 import { TaskReadSettings } from './TaskReadSettings';
 import { SuggestSettings } from './SuggestSettings';
+import { VoiceSettings } from './VoiceSettings';
 import'../styles/settings.css';
 export function Switch({on,onChange,label,busy,testid}:{on:boolean;onChange:(on:boolean)=>void;label:string;busy?:boolean;testid?:string}){
  return <button type="button" role="switch" aria-checked={on} aria-label={label} disabled={busy} className={`st-switch ${on?'on':''}`} onClick={()=>onChange(!on)} data-testid={testid}><span className="st-knob" aria-hidden="true"/></button>;
@@ -77,6 +78,7 @@ export function SettingsPage(){
    <Row title={t('essential.setupTitle')} description={t('essential.setupHint')}><button type="button" className="btn btn-ghost btn-m" onClick={()=>openModal('setup')}>{t('essential.setup')}</button></Row>
   </>},
   {...meta.writing,icon:<IconEdit size={18}/>,body:<SuggestSettings/>},
+  {...meta.voice,icon:<IconMic size={18}/>,body:<VoiceSettings/>},
   {...meta.appearance,icon:<IconMoon size={18}/>,body:<>
    <Row title={t('essential.theme')}><Select aria-label={t('essential.theme')} data-testid="st-theme-select" value={prefs.theme} onChange={event=>{const theme=event.target.value;if(theme==='system'||theme==='light'||theme==='dark')setPrefs({theme});}}>{(['system','light','dark']as const).map(value=><option key={value} value={value}>{t(`essential.${value}`)}</option>)}</Select></Row>
    <Row title={t('settings.language')}><Select aria-label={t('settings.language')} value={settings.language} onChange={event=>{const language=event.target.value;if(language==='system'||isLang(language))void setSetting({language});}} data-testid="st-language-select">{(['system',...LANGS]as const).map(value=><option key={value} value={value}>{t(`settings.language.${value}`)}</option>)}</Select></Row>

@@ -68,6 +68,6 @@ export function LampoTile({ onWork }: { onWork: () => void }) {
       <div className="chat-topic-row"><ModelChip chat={lampo} profileId={FLASH_ID} testid="lampo-model" /><span className="chat-topic">{t('lampo.hint')}</span></div>
     </header>
     <ItemList chatId={lampo.id} items={items ?? []} empty={t('lampo.empty')} footer={busy ? <Typing what={turnActivity(items)} testid="typing-lampo" topic={lastAsk(items)} /> : null} />
-    <ChatInput ref={input} chat={lampo} testid="lampo-input" />
+    <ChatInput ref={input} chat={lampo} testid="lampo-input" voice="flash" />
   </section>;
 }

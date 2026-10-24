@@ -27,6 +27,12 @@ export function splashQuery(env: NodeJS.ProcessEnv = process.env): string {
   if (v === '0' || hiddenRun(env) || env.SB_TEST === '1' || env.SB_DEMO_FREEZE === '1') return '';
   return '?splash=1';
 }
+/** A permission request the app window grants: 'media' asking for audio alone, from the app's own page. */
+export function micAllowed(perm: string, details: { mediaTypes?: readonly string[]; requestingUrl?: string } | undefined, pageUrl: string): boolean {
+  const types = details?.mediaTypes ?? [];
+  return perm === 'media' && types.length > 0 && types.every(t => t === 'audio') && isAppPage(pageUrl) && (!details?.requestingUrl || isAppPage(details.requestingUrl));
+}
+
 /** The app page's URL as the window loads it (main/index.ts too): out/renderer/index.html plus the splash query. */
 export const appPageUrl = (outDir: string): string => pathToFileURL(path.join(outDir, 'renderer', 'index.html')).href + splashQuery();
 
@@ -54,7 +60,9 @@ export function createWindow(outDir: string, loadImmediately = true): BrowserWin
   // the window only ever shows our own page: any navigation elsewhere (even another file:// URL) is blocked
   wc.on('will-navigate', (e, url) => { if (!isAppPage(url)) e.preventDefault(); });
   wc.on('will-redirect', (e, url) => { if (!isAppPage(url)) e.preventDefault(); });
-  wc.session.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
+  // the microphone only, only for our own page (voice mode, ADR 0152; the user's Ctrl+M or click): every other
+  // permission, and the camera, stays refused
+  wc.session.setPermissionRequestHandler((who, perm, cb, details) => cb(micAllowed(perm, details, who.getURL())));
   if (hidden) wc.setAudioMuted(true);
   // DevTools pass unhandled keys to the window's default menu, whose Ctrl+W would quit the app (keyguard.ts)
   wc.on('devtools-opened', () => { if (wc.devToolsWebContents) swallowCloseKey(wc.devToolsWebContents); });

@@ -12,6 +12,7 @@ import type { AgentLifecycleDecide, AgentLifecycleSnapshot } from './agent-lifec
 import type { ProposalDecide, ProposalDecideResult, ProposalsState } from './proposals';
 import type { AppIdeasState, MaintenanceSetup, ResearchOptions, ResearchRunInfo } from './maintenance-research';
 import type { PackFinding } from './agent-pack';
+import type { VoiceAsr, VoiceName, VoiceState } from './voice';
 /** What the shareable brain zip holds (counts), or why it was not written: guard findings, or no brain / no guard. */
 export type BrainShareResult = { ok: true; path: string; skills: number; rules: number; roles: number; scripts: number; skipped: number } | { ok: false; findings: PackFinding[] } | { ok: false; error: string };
 import type { BrainModelState, ClassifiersState, MaintenanceJobId } from './brain-model';
@@ -856,6 +857,9 @@ export interface Settings {
   suggestOn?: boolean;
   suggestModel?: boolean;
   suggestDailyUsd?: number;
+  /** voice mode (ADR 0152): which Whisper transcribes (fast = small, accurate = turbo) and which Italian voice speaks */
+  voiceAsr?: VoiceAsr;
+  voiceName?: VoiceName;
   /** fields forced by the environment (SB_BRAIN, SB_MCP_PORT): shown read-only, never saved */
   locked?: ('brainRoot' | 'mcpPort')[];
 }
@@ -886,7 +890,7 @@ export type SettingKey =
   | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'orchestratorDayCompact' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'tasks.enabled' | 'tasks.everyMin' | 'tasks.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
   | `orchestratorChats.${keyof OrchestratorChatDefaults}` | 'orchestratorOpacity' | 'orchestratorEvents' | 'runResults' | 'judging' | 'judgingSince' | 'appRepo' | 'projectsRoot' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'codexAutonomyRoots'
-  | 'suggestOn' | 'suggestModel' | 'suggestDailyUsd'
+  | 'suggestOn' | 'suggestModel' | 'suggestDailyUsd' | 'voiceAsr' | 'voiceName'
   | `delegation.${keyof DelegationSettings}` | `modelTiers.${Harness}.${ModelTier}`;
 export interface SettingDef {
   key: SettingKey;            // 'mute.*' stands for every feed kind
@@ -1599,6 +1603,14 @@ export interface InvokeMap {
   'suggest:get': [SuggestRequest, SuggestAnswer];
   'suggest:cancel': [{ chatId: string }, void];
   'suggest:state': [void, SuggestState];
+  /** voice mode (ADR 0152, main/voice/): the models and the engine now; prepare = download the missing ones (the user's
+   *  click or first Ctrl+M); listen = the microphone opened or closed; audio = a 16 kHz mono chunk of it (never stored);
+   *  speak = Italian speech for a text (the renderer plays it) */
+  'voice:state': [void, VoiceState];
+  'voice:prepare': [void, VoiceState];
+  'voice:listen': [{ on: boolean }, void];
+  'voice:audio': [{ samples: Float32Array }, void];
+  'voice:speak': [{ text: string; voice?: VoiceName }, { samples: Float32Array; rate: number; error?: string }];
   'orchestrator:held': [void, HeldNewsState];
   /** the user opened a held news item's chat from the list: that chat's items are read, never wake the Orchestrator (#123) */
   'orchestrator:heldSeen': [{ chatId: string }, HeldNewsState];
@@ -1717,6 +1729,11 @@ export interface EventMap {
   /** the «Idee dell'app» list changed */
   'cloud:changed': CloudState;
   'mcpservers:changed': McpServersState;
+  /** voice mode (ADR 0152): the models or the download changed; the user said something (transcribed); speech started
+   *  or stopped on the microphone */
+  'voice:changed': VoiceState;
+  'voice:heard': { text: string };
+  'voice:speech': { active: boolean };
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -1755,6 +1772,7 @@ export const INVOKE_CHANNELS = [
   'search:query', 'search:status', 'search:retryModel', 'later:get', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
   'sync:get', 'sync:now', 'sync:resolve', 'headline:get', 'log:list',
   'suggest:get', 'suggest:cancel', 'suggest:state',
+  'voice:state', 'voice:prepare', 'voice:listen', 'voice:audio', 'voice:speak',
   'orchestrator:held', 'orchestrator:heldSeen',
   'cloud:list', 'cloud:start', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:readiness', 'cloud:dismiss',
 ] as const satisfies readonly InvokeChannel[];
@@ -1774,6 +1792,7 @@ export const EVENT_CHANNELS = [
   'scripts:changed',
   'log:events',
   'personal:changed',
+  'voice:changed', 'voice:heard', 'voice:speech',
 ] as const satisfies readonly EventChannel[];
 
 type Missing<All, Listed> = Exclude<All, Listed>;

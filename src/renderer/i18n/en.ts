@@ -16,6 +16,7 @@ import { connectorsEn } from './areas/connectors.en';
 // The English UI texts (ADR 0057): the same keys as it.ts, typed by it (a missing key fails the typecheck). Write plain
 // English, short like the Italian. Used through t() (i18n/index.ts).
 import { genuiRequestEn } from './areas/genui-request.en';
+import { voiceEn } from './areas/voice.en';
 import {studioEn}from'./areas/studio.en';
 import { permissionsEn } from './areas/permissions.en';
 import { langSwitchEn } from './areas/lang-switch.en';
@@ -77,6 +78,7 @@ export const en: Dict = {
   ...estimateEn,
   ...logEn,
   ...genuiRequestEn,
+  ...voiceEn,
   'genui.request.question': 'Question',
   'genui.request.permission': 'Permission',
   'genui.request.from': ({ kind, chat, title }) => `${kind} from ${chat ?? 'a chat'}: ${title}`,

@@ -149,6 +149,8 @@ export const toolsIt = {
   'tools.keys.newChatWhat': 'Nuova richiesta all’Orchestrator',
   'tools.keys.settingsKey': 'Ctrl ,',
   'tools.keys.settingsWhat': 'Impostazioni',
+  'tools.keys.voiceKey': 'Ctrl M',
+  'tools.keys.voiceWhat': 'Modalità voce: accendi o spegni il microfono (Orchestrator e Flash)',
   'tools.keys.stopChatKey': 'Ctrl .',
   'tools.keys.stopChatWhat': 'Ferma la chat selezionata',
   'tools.keys.closeChatKey': 'Ctrl W',
