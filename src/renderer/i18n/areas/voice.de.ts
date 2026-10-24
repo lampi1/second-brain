@@ -38,4 +38,13 @@ export const voiceDe: typeof voiceIt = {
   'voice.modelsMissing': ({ mb }: { mb: number }) => `Einmal herunterzuladen: ${mb} MB. Startet auch von selbst beim ersten Strg+M.`,
   'voice.downloading': ({ pct }: { pct: number }) => `Lade… ${pct}%`,
   'voice.download': 'Herunterladen',
+  'mic.title': 'Mikrofon',
+  'mic.hint': 'Das Mikrofon für den Sprachmodus und aufgenommene Calls. Ein neu angeschlossenes (auch USB) wird sofort verwendet.',
+  'mic.default': 'Systemstandard',
+  'mic.none': 'Kein Mikrofon gefunden. Schließe eins an: es erscheint hier von selbst.',
+  'mic.away': ({ name }: { name: string }) => `„${name}“ ist nicht angeschlossen: Standard wird verwendet, bis es zurück ist.`,
+  'mic.unnamed': ({ n }: { n: number }) => `Mikrofon ${n}`,
+  'mic.plugged': ({ name }: { name: string }) => `Mikrofon angeschlossen: jetzt wird „${name}“ verwendet.`,
+  'mic.gone': ({ name }: { name: string }) => `„${name}“ getrennt: Standardmikrofon wird verwendet.`,
+  'mic.undo': 'Rückgängig',
 };

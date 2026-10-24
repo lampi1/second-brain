@@ -37,4 +37,13 @@ export const voiceIt = {
   'voice.modelsMissing': ({ mb }: { mb: number }) => `Da scaricare una volta sola: ${mb} MB. Partono da soli anche al primo Ctrl+M.`,
   'voice.downloading': ({ pct }: { pct: number }) => `Scarico… ${pct}%`,
   'voice.download': 'Scarica',
+  'mic.title': 'Microfono',
+  'mic.hint': 'Quello che ascolta nella modalità voce e nelle call registrate. Se ne colleghi uno (anche USB) lo uso subito.',
+  'mic.default': 'Predefinito di sistema',
+  'mic.none': 'Nessun microfono trovato. Collegane uno: compare qui da solo.',
+  'mic.away': ({ name }: { name: string }) => `«${name}» non è collegato: uso quello predefinito finché non torna.`,
+  'mic.unnamed': ({ n }: { n: number }) => `Microfono ${n}`,
+  'mic.plugged': ({ name }: { name: string }) => `Microfono collegato: ora uso «${name}».`,
+  'mic.gone': ({ name }: { name: string }) => `«${name}» scollegato: uso il microfono predefinito.`,
+  'mic.undo': 'Annulla',
 };

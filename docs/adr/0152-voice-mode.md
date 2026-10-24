@@ -58,3 +58,9 @@ quanto un click». Not now: the app speaking on its own initiative (recaps). The
 - The decision card (ADR 0150) registers with `useVoiceQuestion` itself (since ADR 0154's change): every question,
   plan and approval it draws is read and answered by voice; a request shown twice (its strip and the questions window)
   shares an id and is read once.
+- Which microphone (owner, 2026-10-24: «vorrei anche che rilevasse il mio microfono usb»): Settings → Voce lists the
+  PC's inputs and follows plug / unplug (`devicechange`, `src/renderer/lib/mic.ts`). A microphone plugged in while the
+  app runs is used at once (toast with «Annulla»), voice mode reopens on it; an unplugged choice falls back to the
+  system default and comes back by itself (matched by id, else by name). Call recording uses the same choice; a call
+  keeps its microphone until it stops. The choice is per PC (device ids are), so it is kept in localStorage, not in the
+  brain's settings. Pinned by `test/unit/mic.test.ts` and `test/e2e/mic-permission.spec.ts`.
