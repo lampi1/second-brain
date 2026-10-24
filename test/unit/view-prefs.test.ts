@@ -2,18 +2,19 @@
 // density and the work profile, only valid values; anything else in the patch is ignored. And the Settings sections the
 // app map lists are the page's own (renderer/lib/settings-sections.ts).
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { applyViewPrefs, viewPrefs } from '../../src/renderer/lib/view-prefs';
+import { applyViewPrefs, setViewPrefs, viewPrefs } from '../../src/renderer/lib/view-prefs';
 import { settingsSections, SETTINGS_SECTION_IDS } from '../../src/renderer/lib/settings-sections';
 import { ui } from '../../src/renderer/store/ui';
 import { WORK_PROFILES } from '../../src/shared/work-profiles';
 
 describe('view prefs from an agent', () => {
   beforeAll(() => { const m = new Map<string, string>(); vi.stubGlobal('localStorage', { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => { m.set(k, v); }, removeItem: (k: string) => { m.delete(k); } }); });
-  it('applies valid theme and density, ignores other fields and bad values', () => {
+  it('applies valid theme and density; a patch with any other field or a bad value changes nothing', () => {
     const size = ui.get().prefs.orchestratorSize;
-    applyViewPrefs(JSON.stringify({ theme: 'light', density: 'compact', orchestratorSize: { w: 1, h: 1 } }));
-    expect(viewPrefs()).toMatchObject({ theme: 'light', density: 'compact' });
+    expect(setViewPrefs(JSON.stringify({ theme: 'light', orchestratorSize: { w: 1, h: 1 } }))).toMatchObject({ ok: false, error: /orchestratorSize/ });
     expect(ui.get().prefs.orchestratorSize).toEqual(size);
+    expect(viewPrefs().theme).not.toBe('light');
+    expect(setViewPrefs(JSON.stringify({ theme: 'light', density: 'compact' }))).toMatchObject({ ok: true, view: { theme: 'light', density: 'compact' } });
     applyViewPrefs(JSON.stringify({ theme: 'pink', density: 'huge' }));
     expect(viewPrefs()).toMatchObject({ theme: 'light', density: 'compact' });
     applyViewPrefs('not json');

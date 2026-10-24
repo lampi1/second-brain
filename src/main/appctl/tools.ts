@@ -58,6 +58,7 @@ import { workflowTools } from '../workflows/tools';
 import type { Workflows } from '../workflows/service';
 import { guideTool, screenOutline } from './guide';
 import { CONFIG_ASK_MIN, configTool, type ConfigDeps } from './config';
+import { lastTyped } from './user-words';
 
 export type ToolOut = string | { text?: string; images?: { data: string; mimeType: string; caption?: string }[] } | object;
 export interface ToolDef { name: string; description: string; inputSchema: object; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean }; run(args: Record<string, unknown>): Promise<ToolOut> | ToolOut }
@@ -184,11 +185,11 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   const contentOf = (chatId: string) => { guard(chatId); if (delegated(chatId)) throw new Error('chat delegata da un altro ruolo: il suo contenuto lo legge il genitore; tu ne vedi lo stato (app_chats, app_digest)'); return chatId; };
   // app_guide's own list of the caller's tools is read when asked, so it names exactly what this endpoint offers
   const guideDeps = { window: d.window, settings: { schema: () => d.brain.settingsSchema(), get: () => d.brain.settings() },
-    tools: () => tools.map(t => ({ name: t.name, description: t.description })), personalShown: () => !!d.personal?.anyShown(),
+    tools: () => tools.map(t => ({ name: t.name, description: t.description })), personalShown: () => !!d.personal?.anyShown(), showValues: authed,
     ...(d.flows ? { flows: () => { try { return d.flows!.service().snapshot(); } catch { return null; } } } : {}) };
   const tools: ToolDef[] = [
     guideTool(guideDeps),
-    ...(d.config && authed() ? [configTool({ ...d.config, brain: d.brain, callerId: callerId!, userAsked: () => { const o = caller(); return !!o && decidedSince(o.id, Date.now() - CONFIG_ASK_MIN * 60_000); } })] : []),
+    ...(d.config && authed() ? [configTool({ ...d.config, brain: d.brain, callerId: callerId!, userAsked: () => configAsked(callerId!) })] : []),
     ...(d.flows && authed() ? automationTools({
       service: () => { if (!authed()) throw new Error('Authenticated Orchestrator required'); return d.flows!.automation(); },
       contextKey: () => d.flows!.service().snapshot().contextKey, ownerId: callerId!,
@@ -704,6 +705,16 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   function decidedSince(orchestratorId: string, at: number): boolean {
     return d.chats.items(orchestratorId).some(i => i.at >= at && (
       i.kind === 'user' ? !labelled(i.text) : i.kind === 'tool' && /question/i.test(i.name) && i.status === 'ok'));
+  }
+
+  /** app_config's proof (ADR 0149): the user typed to this very Orchestrator in the last minutes, and its latest
+   *  message is that one (not app news, an agent's mail or the Battito card, which also land as 'user' items) */
+  function configAsked(orchestratorId: string): boolean {
+    const at = lastTyped(orchestratorId);
+    if (at === undefined || at < Date.now() - CONFIG_ASK_MIN * 60_000) return false;
+    const last = d.chats.items(orchestratorId).filter(i => i.kind === 'user').at(-1);
+    // the item the send added carries (about) the time it was typed; any later 'user' item came from elsewhere
+    return !!last && Math.abs(last.at - at) <= 5_000;
   }
 
   /** is this turn the user's: the Orchestrator's latest message is one he wrote (not app news, not an agent's mail), at

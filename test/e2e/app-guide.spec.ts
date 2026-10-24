@@ -1,7 +1,8 @@
 // The Orchestrator's knowledge of the app (ADR 0149), in the real app over the app-control MCP: app_guide reads the
 // rail, Memoria's tabs and the Settings sections from the UI as drawn; app_ui "outline" lists what is on screen with
 // positions, chat strips by title and state only, and narrows a long page with a filter; a view change from an agent
-// (ui:command 'prefs', the path app_config "view" takes) switches the theme, and only valid fields pass.
+// (window.__sbSetView, the path app_config "view" takes, and ui:command 'prefs') switches the theme; a patch with an
+// unknown field changes nothing.
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
 import { launchDemo, shot } from './helpers';
 import { McpClient } from './fixture-server';
@@ -38,10 +39,14 @@ test('outline: controls with positions, chat strips by title only, a filter for 
 });
 
 test('a view change from an agent applies valid fields only', async () => {
+  type Sb = { __sbSetView: (j: string) => { ok: boolean; view: { theme: string } }; __sbView: () => { theme: string } };
+  const refused = await page.evaluate(() => (window as unknown as Sb).__sbSetView(JSON.stringify({ theme: 'light', orchestratorSize: { w: 1, h: 1 } })));
+  expect(refused.ok).toBe(false);
+  expect(await page.evaluate(() => (window as unknown as Sb).__sbView().theme)).toBe('dark');
   await app.evaluate(({ BrowserWindow }) => {
     const w = BrowserWindow.getAllWindows().find(x => x.webContents.getURL().includes('index.html') && !x.webContents.getURL().includes('#overlay'));
-    w?.webContents.send('ui:command', { action: 'prefs', value: JSON.stringify({ theme: 'light', orchestratorSize: { w: 1, h: 1 } }) });
+    w?.webContents.send('ui:command', { action: 'prefs', value: JSON.stringify({ theme: 'light' }) });
   });
-  await expect.poll(() => page.evaluate(() => (window as unknown as { __sbView: () => { theme: string } }).__sbView().theme)).toBe('light');
+  await expect.poll(() => page.evaluate(() => (window as unknown as Sb).__sbView().theme)).toBe('light');
   await shot(page, 'app-guide-light');
 });

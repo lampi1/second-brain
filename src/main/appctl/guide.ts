@@ -33,6 +33,8 @@ export interface GuideDeps {
   tools: () => { name: string; description: string }[];
   /** the user's personal browser is on screen (ADR 0133): the outline says only that */
   personalShown?: () => boolean;
+  /** false on the open /mcp/app mount: settings are listed without their current values (local paths, budgets) */
+  showValues?: () => boolean;
   /** the routines (flows/service.ts snapshot): the guide names the active ones and their last run, read only */
   flows?: () => FlowSnapshot | null;
 }
@@ -85,11 +87,11 @@ export function entries(ui: UiMap | null, d: GuideDeps, lang: GuideLang): Entry[
     for (const s of ui.settings) out.push({ kind: 'settings section', title: `Impostazioni › ${s.title}`, text: `${s.description} · open: app_ui page impostazioni/${s.id} · about: ${s.keywords}` });
     for (const a of ui.actions) out.push({ kind: a.group === 'Vai a' ? 'go to' : 'action', title: a.title, text: [a.sub, a.shortcut ? `keys ${a.shortcut}` : 'from the palette (Ctrl+K)'].filter(Boolean).join(' · ') });
     for (const h of ui.help) out.push({ kind: 'help', title: h.title, text: h.text });
-    out.push({ kind: 'view', title: 'Vista (tema, densità, profilo di lavoro)', text: `now: ${show(ui.view)} · change: app_config area view` });
+    out.push({ kind: 'view', title: 'Vista (tema, densità, profilo di lavoro)', text: `${d.showValues?.() === false ? '' : `now: ${show(ui.view)} · `}change: app_config area view` });
   }
-  const s = d.settings.get();
+  const s = d.settings.get(), values = d.showValues?.() ?? true;
   for (const x of d.settings.schema()) out.push({ kind: 'setting', title: `${x.label} (${x.key})`,
-    text: `${x.description} · type ${x.type}${x.values ? ` ${x.values.join('|')}` : ''}${x.key.includes('*') ? '' : ` · now ${show(getAt(s, x.key))}`} · change: app_config area setting` });
+    text: `${x.description} · type ${x.type}${x.values ? ` ${x.values.join('|')}` : ''}${x.key.includes('*') || !values ? '' : ` · now ${show(getAt(s, x.key))}`} · change: app_config area setting` });
   out.push(...routineLines(d.flows?.()));
   for (const c of CONCEPTS) out.push({ kind: 'concept', title: textOf(c.title, lang), text: `${textOf(c.summary, lang)} ${c.points.slice(0, 3).map(p => textOf(p, lang)).join(' ')} (more: the Guida page)` });
   for (const t of d.tools()) out.push({ kind: 'tool', title: t.name, text: t.description });
@@ -99,9 +101,14 @@ export function entries(ui: UiMap | null, d: GuideDeps, lang: GuideLang): Entry[
 /** A query word matches a word of the text that starts like it: the first 4 letters of a longer word, so Italian
  *  forms meet («chiusura» finds «Chiudi», «notifica» finds «notifiche»). */
 const stem = (w: string) => (w.length > 4 ? w.slice(0, 4) : w);
+/** Words that say how a question is asked, not what it is about (it, en, de): never matched. */
+const STOP = new Set(('dove come cosa quale quali quando perche posso puoi voglio vorrei fare cambio cambia cambiare modifica modificare '
+  + 'imposta impostare trovo trova trovare metti mettere sono della delle degli dello nella nelle negli con per che una uno gli le '
+  + 'where what which when how can could want change set find put the and for with this that does show '
+  + 'wie was wo wann kann ich mochte andern finde der die das und mit').split(' '));
 const tokens = (s: string) => norm(s).split(/[^a-z0-9]+/).filter(Boolean);
 export function search(list: Entry[], topic: string, max = 15): Entry[] {
-  const words = [...new Set(tokens(topic).filter(w => w.length > 2).map(stem))];
+  const words = [...new Set(tokens(topic).filter(w => w.length > 2 && !STOP.has(w)).map(stem))];
   if (!words.length) return [];
   const has = (toks: string[], w: string) => toks.some(t => t.startsWith(w));
   const scored = list.map(e => {

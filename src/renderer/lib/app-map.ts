@@ -14,7 +14,7 @@ import { paletteActions } from '../components/CommandPalette';
 import { lang, t, textsWhere, type Key } from '../i18n';
 import { app } from '../store/store';
 import { pageLabel, ui } from '../store/ui';
-import { viewPrefs, type ViewPrefs } from './view-prefs';
+import { setViewPrefs, viewPrefs, type ViewPrefs } from './view-prefs';
 
 export interface AppMapNav { group: string; items: { page: string; label: string; key?: string }[] }
 export interface AppMapUi {
@@ -78,10 +78,11 @@ export function appMap(): AppMapUi {
 }
 
 // ── the live screen ─────────────────────────────────────────────────────────────────────────────────────────────
-/** Containers whose content is private to the agent (a chat's messages, activity and questions, the questions window)
- *  or to the user (the personal browser): never read. A chat strip is one line with its title and state; the
+/** Containers whose content is private to the agent (a chat's messages, activity and questions, the questions window
+ *  and the lane of waiting requests, the notifications and toasts that may quote a chat) or to the user (the personal
+ *  browser): never read. A chat strip is one line with its title and state; the
  *  Orchestrator column shows only its bar's controls. */
-const PRIVATE = '.chat-tile, [data-testid="orchestrator-overlay"], [data-testid="qwin"], [data-testid="personal-browser"]';
+const PRIVATE = '.chat-tile, [data-testid="orchestrator-overlay"], [data-testid="qwin"], [data-testid="needs-lane"], [data-testid="nc-list"], [data-testid="toasts"], [data-testid="personal-browser"]';
 const HEADER = '.orchestrator-bar';
 const CONTROLS = 'h1, h2, h3, [role="tab"], button, a[href], input, select, textarea, [role="switch"], [role="checkbox"], [role="menuitem"], [role="dialog"]';
 const MAX_LINES = 220;
@@ -95,6 +96,7 @@ function labelOf(el: HTMLElement): string {
     const l = el.labels?.[0]?.textContent;
     if (clean(l)) return clean(l);
     if ('placeholder' in el && el.placeholder) return clean(el.placeholder);
+    return clean(el.getAttribute('title')) || clean(el.dataset.testid); // never its text: a textarea's text is its value
   }
   return clean(el.textContent) || clean(el.getAttribute('title')) || clean(el.dataset.testid);
 }
@@ -168,11 +170,12 @@ export function screenOutline(filter = ''): string {
     if (el instanceof HTMLInputElement && el.type === 'hidden') continue;
     const r = el.getBoundingClientRect();
     if (!r.width || !r.height) continue;
+    if (typeof el.checkVisibility === 'function' && !el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
     const label = labelOf(el);
     if (!label) continue;
     const kind = kindOf(el), region = regionOf(el), state = stateOf(el);
     if (!keep(`${label} ${region}`)) continue;
-    const key = `${kind}|${label}|${region}`;
+    const key = `${kind}|${label}|${region}|${Math.round(r.y / 8)}`; // the same button in another row is another line
     if (seen.has(key)) continue;
     seen.add(key);
     const shortcut = /^(Ctrl|Alt|Shift|F\d|[A-Z] [A-Z]$)/.test(el.dataset.tip?.split('|')[1] ?? '') ? el.dataset.tip!.split('|')[1] : undefined;
@@ -185,7 +188,7 @@ export function screenOutline(filter = ''): string {
   return lines.join('\n');
 }
 
-/** Puts the three readers on window for main's executeJavaScript (main/appctl/guide.ts). */
+/** Puts the readers and the view setter on window for main's executeJavaScript (main/appctl/guide.ts). */
 export function installAppMap(): void {
-  Object.assign(window as unknown as Record<string, unknown>, { __sbAppMap: appMap, __sbScreen: screenOutline, __sbView: viewPrefs });
+  Object.assign(window as unknown as Record<string, unknown>, { __sbAppMap: appMap, __sbScreen: screenOutline, __sbView: viewPrefs, __sbSetView: setViewPrefs });
 }

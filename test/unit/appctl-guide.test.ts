@@ -46,6 +46,12 @@ describe('app_guide', () => {
     expect(String(await guideTool(deps({ window: () => null })).run({ topic: 'chiusura automatica' }))).toContain('autoCloseMin');
   });
 
+  it('the description\'s own example finds the theme setting; question words are not matched', async () => {
+    const out = String(await guideTool(deps({ window: () => null })).run({ topic: 'dove cambio il tema' }));
+    expect(out.split('\n')[0]).toMatch(/\(theme\)/);
+    expect(String(await guideTool(deps()).run({ topic: 'come si fa' }))).toMatch(/^Nothing on/);
+  });
+
   it('search ranks title matches first and needs at least half the words', () => {
     const list = entries(UI, deps(), 'it');
     expect(search(list, 'proposte memoria')[0]!.title).toMatch(/Memoria/);

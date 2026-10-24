@@ -36,8 +36,13 @@ line with the token plan, ADR 0089):
 `direct` for this caller only, the change is logged as the agent's with its chat id and stays undoable. The old path
 (an agent without `direct` gets a proposal card) is unchanged for every other caller. Guards that stay:
 
-- every change needs the user's own words to the Orchestrator in the last 10 minutes (the `app_update_code` check:
-  app news, an agent's mail or a page it read can never change a setting);
+- every change needs a message the user typed into this Orchestrator (the renderer's `chat:send`, recorded by
+  `appctl/user-words.ts`) in the last 10 minutes, and it must be the Orchestrator's latest message: app news, an
+  agent's mail and the Battito card land as user items too, so a chat item alone is no proof, and a turn they woke can
+  never change a setting. What remains: content the Orchestrator reads during the user's own turn (a PR body, a page)
+  could steer that turn; the Orchestrator's own tools and permission ceiling therefore stay the user's click on its card;
+- the outline never reads chat tiles, the Orchestrator column (except its bar), the questions window, the lane of
+  waiting requests, notifications, toasts or the personal Browser page;
 - secrets, tokens, logins and adding or removing an MCP server stay the user's, in Settings (they hold credentials or
   run commands); production, updates and permissions answered for chats are untouched (ADR 0006, 0074, 0075);
 - the renderer applies only the listed view fields with valid values.

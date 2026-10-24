@@ -12,17 +12,26 @@ export function viewPrefs(): ViewPrefs {
   return { theme: p.theme, density: p.density, workProfile: p.workProfile ?? null, orchestratorOpen: p.orchestratorOpen, workProfiles: WORK_PROFILES.map(w => ({ id: w.id, title: w.title })) };
 }
 
-/** ui:command 'prefs': the patch as JSON text. */
-export function applyViewPrefs(json: string): void {
+/** The patch as JSON text (ui:command 'prefs', or window.__sbSetView from main): every field it holds must be one of
+ *  the three with a valid value, else nothing changes; the answer says which and what the view is now. */
+export function setViewPrefs(json: string): { ok: boolean; error?: string; view: ViewPrefs } {
   let v: Record<string, unknown>;
-  try { v = JSON.parse(json) as Record<string, unknown>; } catch { return; }
-  if (!v || typeof v !== 'object') return;
+  try { v = JSON.parse(json) as Record<string, unknown>; } catch { return { ok: false, error: 'not JSON', view: viewPrefs() }; }
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return { ok: false, error: 'not an object', view: viewPrefs() };
+  const bad = Object.keys(v).find(k => !(k === 'theme' ? v.theme === 'system' || v.theme === 'light' || v.theme === 'dark'
+    : k === 'density' ? v.density === 'comfortable' || v.density === 'compact'
+      : k === 'workProfile' ? v.workProfile === null || WORK_PROFILES.some(w => w.id === v.workProfile) : false));
+  if (bad) return { ok: false, error: `${bad}: not a valid field or value`, view: viewPrefs() };
   const patch: { theme?: Theme; density?: Density } = {};
-  if (v.theme === 'system' || v.theme === 'light' || v.theme === 'dark') patch.theme = v.theme;
-  if (v.density === 'comfortable' || v.density === 'compact') patch.density = v.density;
+  if (v.theme) patch.theme = v.theme as Theme;
+  if (v.density) patch.density = v.density as Density;
   if (Object.keys(patch).length) setPrefs(patch);
-  if ('workProfile' in v && (v.workProfile === null || WORK_PROFILES.some(w => w.id === v.workProfile))) {
-    try { saveWorkProfile(v.workProfile === null ? undefined : String(v.workProfile), ui.get().prefs.workProfile); } catch { /* changed meanwhile: the next ask reads it again */ }
+  if ('workProfile' in v) {
+    try { saveWorkProfile(v.workProfile === null ? undefined : String(v.workProfile), ui.get().prefs.workProfile); }
+    catch (e) { return { ok: false, error: (e as Error).message, view: viewPrefs() }; }
   }
+  return { ok: true, view: viewPrefs() };
 }
+/** ui:command 'prefs': the same, its answer dropped. */
+export function applyViewPrefs(json: string): void { setViewPrefs(json); }
 

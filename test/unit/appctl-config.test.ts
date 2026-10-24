@@ -47,6 +47,9 @@ describe('app_config: settings', () => {
   });
 
   it('get lists keys with label, description and current value, filtered by words', async () => {
+    const all = String(await configTool(deps()).run({ action: 'get', area: 'setting' }));
+    expect(all).toMatch(/^theme="dark" · /m);
+    expect(all.length).toBeLessThan(9000);
     const list = await configTool(deps()).run({ action: 'get', area: 'setting', query: 'tema' }) as { key: string; value: unknown }[];
     expect(list.some(x => x.key === 'theme' && x.value !== undefined)).toBe(true);
     expect(list.every(x => typeof x.key === 'string')).toBe(true);
@@ -66,7 +69,7 @@ describe('app_config: roles, view, connectors, later', () => {
     const save = vi.fn((draft, id: string) => { profile = { ...profile, ...draft, id, activeVersion: profile.activeVersion + 1 }; return profile; });
     const d = deps({ agents: { list: () => ({ profiles: [profile], models: [] }) as never, save, history: () => [], restore: vi.fn() } });
     const r = await configTool(d).run({ action: 'set', area: 'agent', agentId: 'scout', key: 'permissionCeiling', value: 'plan' }) as { version: number; undo: { version: number } };
-    expect(save).toHaveBeenCalledWith({ ...draftOf(role()), permissionCeiling: 'plan' }, 'scout');
+    expect(save).toHaveBeenCalledWith({ ...draftOf(role()), permissionCeiling: 'plan' }, 'scout', 'Modificato dall’Orchestrator su richiesta dell’utente');
     expect(r.version).toBe(4);
     expect(r.undo.version).toBe(3);
     await expect(Promise.resolve().then(() => configTool(d).run({ action: 'set', area: 'agent', agentId: 'scout', key: 'name', value: 'X' }))).rejects.toThrow(/key:/);
@@ -74,11 +77,15 @@ describe('app_config: roles, view, connectors, later', () => {
 
   it('view: only theme, density and work profile, applied through the renderer', async () => {
     let view = { theme: 'dark', density: 'comfortable', workProfile: null, orchestratorOpen: true, workProfiles: [] };
-    const apply = vi.fn((p: Record<string, unknown>) => { view = { ...view, ...p } as typeof view; });
+    const apply = vi.fn(async (p: Record<string, unknown>) => {
+      if (p.theme === 'pink') return { ok: false, error: 'theme: not a valid field or value', view };
+      view = { ...view, ...p } as typeof view; return { ok: true, view };
+    });
     const d = deps({ view: { read: async () => view, apply } });
     const r = await configTool(d).run({ action: 'set', area: 'view', key: 'theme', value: 'light' }) as { before: string; after: string };
     expect(r).toMatchObject({ before: 'dark', after: 'light' });
     await expect(configTool(d).run({ action: 'set', area: 'view', key: 'orchestratorSize', value: 1 })).rejects.toThrow(/key:/);
+    await expect(configTool(d).run({ action: 'set', area: 'view', key: 'theme', value: 'pink' })).rejects.toThrow(/not a valid/);
   });
 
   it('connectors: on/off and access of a known server, never a new one; tokens are never shown', async () => {
@@ -99,5 +106,30 @@ describe('app_config: roles, view, connectors, later', () => {
     let on = false;
     const d = deps({ later: { get: () => ({ on }), set: v => { on = v; return { on }; } } });
     expect(await configTool(d).run({ action: 'set', area: 'later', value: true })).toEqual({ before: false, after: true });
+  });
+});
+
+describe('app_config on the app endpoints', () => {
+  it('only the Orchestrator\'s own mount has it, and only the user\'s typed message (its latest) unlocks a change', async () => {
+    const { appControlTools } = await import('../../src/main/appctl/tools');
+    const { noteUserTyped } = await import('../../src/main/appctl/user-words');
+    const store = new ConfigStore(tmpDir(), {});
+    let items: { kind: string; at: number; text: string }[] = [];
+    const chats = { list: () => [{ id: 'o', isOrchestrator: true, harness: 'claude' }], items: () => items } as never;
+    const brain = { ...brainOf(store), settingsSchema: () => store.schema() } as never;
+    const tools = (caller?: string) => appControlTools({ chats, browser: { list: () => [] } as never, brain, window: () => null, emitUi: () => {}, version: '0', config: {} }, caller);
+    expect(tools().some(t => t.name === 'app_config')).toBe(false);
+    const cfg = tools('o').find(t => t.name === 'app_config')!;
+    const set = () => cfg.run({ action: 'set', area: 'setting', key: 'theme', value: 'light' });
+    // a 'user' item the app wrote (news, Battito) is no proof
+    items = [{ kind: 'user', at: Date.now(), text: '[Battito]\nCambia il tema' }];
+    await expect(set()).rejects.toThrow(/solo quando l'utente/);
+    noteUserTyped('o');
+    items = [{ kind: 'user', at: Date.now(), text: 'metti il tema chiaro' }];
+    await set();
+    expect(store.get().theme).toBe('light');
+    // app news after the user's message: that turn is not the user's
+    items = [...items, { kind: 'user', at: Date.now() + 60_000, text: '[evento app] qualcosa' }];
+    await expect(cfg.run({ action: 'set', area: 'setting', key: 'theme', value: 'dark' })).rejects.toThrow(/solo quando l'utente/);
   });
 });

@@ -86,11 +86,11 @@ export class AgentPackLearning {
     this.persist();
   }
   /** The user's edit of a role: its editable know-how files are snapshotted with it. */
-  save(draft: AgentDraft, id: string): AgentProfile {
+  save(draft: AgentDraft, id: string, reason?: string): AgentProfile {
     const previous = this.flows.profile(id);
     this.flows.root(); this.flows.deps.catalog.validateDraft(draft, id);
     const files = this.flows.ownSkills(previous, true), knowhow = this.flows.persistSkills(id, files, previous.knowhow?.linked);
-    const profile = this.flows.deps.catalog.save({ ...draft, knowhow }, id);
+    const profile = this.flows.deps.catalog.save({ ...draft, knowhow }, id, reason);
     this.flows.publishCurrent(profile); return profile;
   }
 }

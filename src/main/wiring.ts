@@ -813,8 +813,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, flows, personal, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog },
     // app_config (ADR 0149): each area through the module the app's own page uses
     config: {
-      view: { read: () => readUi(ctx.window(), 'typeof window.__sbView === "function" ? window.__sbView() : null'), apply: patch => ctx.emitter.emit('ui:command', { action: 'prefs', value: JSON.stringify(patch) }) },
-      agents: { list: () => agents.list(), save: (draft, id) => agentPacks.learning.save(draft, id), history: id => agents.history(id), restore: (id, version) => agents.restoreVersion(id, version) },
+      view: { read: () => readUi(ctx.window(), 'typeof window.__sbView === "function" ? window.__sbView() : null'), apply: patch => readUi(ctx.window(), `typeof window.__sbSetView === "function" ? window.__sbSetView(${JSON.stringify(JSON.stringify(patch))}) : null`) },
+      agents: { list: () => agents.list(), save: (draft, id, reason) => agentPacks.learning.save(draft, id, reason), history: id => agents.history(id), restore: (id, version) => agents.restoreVersion(id, version) },
       mcp: { state: () => mcpServers.state(), save: a => mcpServers.save(a), setAccess: a => mcpServers.setAccess(a) },
       later: { get: () => later.get(), set: on => later.set(on) },
     } };

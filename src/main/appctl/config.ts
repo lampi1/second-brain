@@ -8,8 +8,9 @@
 // - connector: an MCP server on/off and a role's access to it (Settings → Connettori); adding or removing a server, its
 //   tokens and the accounts' logins stay the user's, in Settings (they run commands or hold credentials);
 // - later: «Rispondi dopo».
-// Every change needs the user's own recent words to the Orchestrator (userAsked: the same check as app_update_code),
-// so neither app news, an agent's mail nor a page it read can change a setting. Secrets are never read or written.
+// Every change needs the user's own typed message to this Orchestrator in the last minutes, and that message must be
+// its latest (userAsked: appctl/user-words.ts), so neither app news, an agent's mail, the Battito card nor a turn they
+// woke can change a setting; the Orchestrator's own tools and permission ceiling stay the user's click. Secrets are never read or written.
 // Mounted only on the authenticated Orchestrator endpoint by appctl/tools.ts.
 import type { ChangeBy, SettingChange, SettingDef, SettingRequestResult, Settings } from '../../shared/contract';
 import type { AgentCatalog, AgentDraft, AgentProfile, AgentVersion } from '../../shared/agents';
@@ -28,8 +29,9 @@ export interface ConfigDeps {
     undoSetting(changeId: string, by?: ChangeBy, origin?: { chatId?: string; direct?: boolean }): SettingChange;
     requestSetting(key: string, value: unknown, origin: { by: ChangeBy; chatId?: string; reason?: string; direct?: boolean }): SettingRequestResult;
   };
-  view?: { read(): Promise<ViewPrefsRead | null>; apply(patch: Record<string, unknown>): void };
-  agents?: { list(): AgentCatalog; save(draft: AgentDraft, id: string): AgentProfile; history(id: string): AgentVersion[]; restore(id: string, version: number): AgentProfile };
+  /** apply: the renderer's checked setter (lib/view-prefs.ts), the result as it reads after it; null = no answer */
+  view?: { read(): Promise<ViewPrefsRead | null>; apply(patch: Record<string, unknown>): Promise<{ ok: boolean; error?: string; view: ViewPrefsRead } | null> };
+  agents?: { list(): AgentCatalog; save(draft: AgentDraft, id: string, reason?: string): AgentProfile; history(id: string): AgentVersion[]; restore(id: string, version: number): AgentProfile };
   mcp?: { state(): McpServersState; save(a: { def: unknown; previousId?: string }): McpServersState; setAccess(a: { role: string; server: string; access: McpToolAccess }): McpServersState };
   later?: { get(): { on: boolean }; set(on: boolean): { on: boolean } };
 }
@@ -69,7 +71,7 @@ export function configTool(d: ConfigDeps): ToolDef {
       key: { type: 'string', description: 'setting key, view field, agent field, or connector field (enabled|access)' }, value: { description: 'the new value (JSON type of the field)' },
       query: { type: 'string', description: 'get: words to filter by (label, key, description)' }, agentId: { type: 'string' }, server: { type: 'string' }, role: { type: 'string' },
       changeId: { type: 'string', description: 'undo of a setting: the change id from set or history' }, version: { type: 'integer', description: 'undo of an agent: the version to restore' },
-      reason: { type: 'string', description: 'the user\'s ask, in a few words (kept in the log)' },
+      reason: { type: 'string', description: 'the user\'s ask, in a few words (a role change keeps it in its history)' },
     } },
     run: async a => {
       const action = String(a.action ?? ''), area = String(a.area ?? '');
@@ -80,7 +82,9 @@ export function configTool(d: ConfigDeps): ToolDef {
         case 'setting': {
           if (action === 'get') {
             const s = d.brain.settings();
-            return d.brain.settingsSchema().filter(x => !q || matches(q, `${x.key} ${x.label} ${x.description}`)).map(x => ({
+            // without words: one short line per key (the full rows of all 86 keys are ~6k tokens)
+            if (!q) return d.brain.settingsSchema().map(x => `${x.key}${x.key.includes('*') ? '' : `=${JSON.stringify(getAt(s, x.key))}`} · ${x.label}`).join('\n');
+            return d.brain.settingsSchema().filter(x => matches(q, `${x.key} ${x.label} ${x.description}`)).map(x => ({
               key: x.key, label: x.label, description: x.description, type: x.type, ...(x.values ? { values: x.values } : {}), ...(x.min !== undefined ? { min: x.min, max: x.max } : {}),
               ...(x.nullable ? { nullable: true } : {}), ...(x.key.includes('*') ? {} : { value: getAt(s, x.key) }), default: x.default }));
           }
@@ -107,13 +111,11 @@ export function configTool(d: ConfigDeps): ToolDef {
           if (!(VIEW_FIELDS as readonly string[]).includes(key)) throw new Error(`key: ${VIEW_FIELDS.join(' | ')}`);
           asked('la vista');
           const before = await d.view.read();
-          d.view.apply({ [key]: a.value });
-          const after = await d.view.read();
-          if (before && after && JSON.stringify((before as unknown as Record<string, unknown>)[key]) === JSON.stringify((after as unknown as Record<string, unknown>)[key]) && JSON.stringify(a.value) !== JSON.stringify((before as unknown as Record<string, unknown>)[key])) {
-            throw new Error(`valore non valido per ${key} (vedi app_config get area view)`);
-          }
+          const r = await d.view.apply({ [key]: a.value });
+          if (!r) throw new Error('la finestra non ha risposto: riprova tra un attimo');
+          if (!r.ok) throw new Error(r.error ?? `valore non valido per ${key} (vedi app_config get area view)`);
           log.info('appctl', 'Orchestrator changed a view preference', { chat: d.callerId, data: { key } });
-          return { changed: key, before: before ? (before as unknown as Record<string, unknown>)[key] : null, after: after ? (after as unknown as Record<string, unknown>)[key] : a.value, undo: 'set it back with the "before" value' };
+          return { changed: key, before: before ? (before as unknown as Record<string, unknown>)[key] : null, after: (r.view as unknown as Record<string, unknown>)[key], undo: 'set it back with the "before" value' };
         }
         case 'agent': {
           if (!d.agents) throw new Error('ruoli non disponibili');
@@ -130,7 +132,10 @@ export function configTool(d: ConfigDeps): ToolDef {
           if (!(AGENT_FIELDS as readonly string[]).includes(key)) throw new Error(`key: ${AGENT_FIELDS.join(' | ')}`);
           asked('i ruoli');
           const old = role(a.agentId);
-          const p = d.agents.save({ ...draftOf(old), [key]: a.value } as AgentDraft, old.id);
+          // its own tools and permission ceiling stay the user's click on its card: a turn that read untrusted text
+          // must not be able to widen the Orchestrator itself
+          if (old.id === 'orchestrator' && (key === 'tools' || key === 'permissionCeiling')) throw new Error('bloccato: i permessi dell’Orchestrator li cambia solo l’utente, dalla sua carta in Brain → Agenti');
+          const p = d.agents.save({ ...draftOf(old), [key]: a.value } as AgentDraft, old.id, `Modificato dall’Orchestrator su richiesta dell’utente${reason ? `: ${reason}` : ''}`.slice(0, 600));
           if (p.activeVersion === old.activeVersion) return { agentId: p.id, unchanged: true, note: 'già così' };
           log.info('appctl', 'Orchestrator changed a role', { chat: d.callerId, data: { role: p.id, key, version: p.activeVersion } });
           return { agentId: p.id, changed: key, before: (old as unknown as Record<string, unknown>)[key] ?? null, after: (p as unknown as Record<string, unknown>)[key] ?? null, version: p.activeVersion, undo: { agentId: p.id, version: old.activeVersion } };
@@ -139,7 +144,7 @@ export function configTool(d: ConfigDeps): ToolDef {
           if (!d.mcp) throw new Error('connettori non disponibili');
           const st = d.mcp.state();
           if (action === 'get') return { servers: st.servers.map(s => ({ id: s.id, label: s.label, transport: s.transport, enabled: s.enabled, ...(s.purpose ? { purpose: s.purpose } : {}),
-            tokens: Object.values(s.secretMasks).every(Boolean) ? 'set' : 'missing', tools: s.lastTest?.tools.length ?? null, ...(s.lastTest?.error ? { error: s.lastTest.error.message } : {}) })), access: st.access };
+            tokens: !s.secrets.length ? 'none' : Object.values(s.secretMasks).every(Boolean) ? 'set' : 'missing', tools: s.lastTest?.tools.length ?? null, ...(s.lastTest?.error ? { error: s.lastTest.error.code } : {}) })), access: st.access };
           if (action !== 'set') break;
           const server = st.servers.find(s => s.id === a.server);
           if (!server) throw new Error(`server sconosciuto: ${String(a.server)} (aggiungerne uno lo fa l’utente in Impostazioni → Avanzate)`);
@@ -155,6 +160,7 @@ export function configTool(d: ConfigDeps): ToolDef {
             const v = a.value;
             const ok = v === 'all' || v === 'read' || v === 'none' || (!!v && typeof v === 'object' && Array.isArray((v as { tools?: unknown }).tools) && (v as { tools: unknown[] }).tools.every(x => typeof x === 'string'));
             if (!ok || typeof a.role !== 'string') throw new Error('access: role + value all | read | none | {"tools":[...]}');
+            if (d.agents && !d.agents.list().profiles.some(p => p.id === a.role)) throw new Error(`ruolo sconosciuto: ${a.role} (ruoli: ${d.agents.list().profiles.map(p => p.id).join(', ')})`);
             const before = st.access[a.role]?.servers[server.id] ?? 'all';
             d.mcp.setAccess({ role: a.role, server: server.id, access: v as McpToolAccess });
             log.info('appctl', 'Orchestrator changed a role\'s MCP access', { chat: d.callerId, data: { server: server.id, role: a.role } });
