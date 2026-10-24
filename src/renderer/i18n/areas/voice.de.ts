@@ -1,7 +1,7 @@
 // German (de-AT, informal "du") texts of voice mode (ADR 0152); same keys as voice.it.ts. Spread into i18n/de.ts.
 import type { voiceIt } from './voice.it';
 export const voiceDe: typeof voiceIt = {
-  'voice.on': 'Sprechen (Sprachmodus)',
+  'voice.on': 'Diktieren (schreibt ins Feld)',
   'voice.off': 'Mikrofon ausschalten',
   'voice.placeholder': 'Sprich einfach, oder schreib…',
   'voice.offShort': 'aus',
@@ -21,7 +21,7 @@ export const voiceDe: typeof voiceIt = {
   'voice.noOrchestrator': 'Öffne den Orchestrator, um mit ihm zu reden.',
   'voice.sample': 'Ciao! Sono la voce del tuo secondo cervello. Dimmi pure cosa vuoi fare.',
   'voice.group': 'Stimme',
-  'voice.groupDesc': 'Sprich mit dem Orchestrator und mit Flash und hör die Antworten. Lokal, gratis.',
+  'voice.groupDesc': 'Diktiere ins Textfeld oder sprich mit dem Orchestrator. Lokal, gratis.',
   'voice.asrTitle': 'Transkription',
   'voice.asrHint': 'Whisper auf deinem PC, nichts verlässt den Computer. Schnell antwortet früher; Genau verhört sich seltener, ist aber langsamer.',
   'voice.asr.fast': 'Schnell · 374 MB',
@@ -34,10 +34,14 @@ export const voiceDe: typeof voiceIt = {
   'voice.try': 'Testen',
   'voice.tryNeedsDownload': 'Lade zuerst die Stimme',
   'voice.modelsTitle': 'Modelle auf dem PC',
-  'voice.modelsReady': 'Bereit. Strg+M schaltet den Sprachmodus ein und aus.',
+  'voice.modelsReady': 'Bereit. Strg+M schaltet das Diktat ein und aus.',
   'voice.modelsMissing': ({ mb }: { mb: number }) => `Einmal herunterzuladen: ${mb} MB. Startet auch von selbst beim ersten Strg+M.`,
   'voice.downloading': ({ pct }: { pct: number }) => `Lade… ${pct}%`,
   'voice.download': 'Herunterladen',
+  'voice.talkTitle': 'Sprachgespräch',
+  'voice.talkHint': 'Sprich mit dem Orchestrator und höre die Antwort, während er schreibt. Sprich dazwischen, um ihn zu unterbrechen. Das Mikrofon im Textfeld schreibt nur, was du sagst.',
+  'voice.dictating': 'Diktat: schreibe ins Feld',
+  'voice.writesInInput': 'wird ins Feld geschrieben',
   'mic.title': 'Mikrofon',
   'mic.hint': 'Das Mikrofon für den Sprachmodus und aufgenommene Calls. Ein neu angeschlossenes (auch USB) wird sofort verwendet.',
   'mic.default': 'Systemstandard',

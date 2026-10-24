@@ -6,6 +6,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- **Voice: dictation and conversation split, faster, interruptible** (ADR 0152): the mic button in the inputs
+  only dictates into the field; «Conversazione a voce» in Settings → Voce talks with the Orchestrator, reads its reply
+  sentence by sentence while it writes, and stops as soon as you talk over it. Turns end sooner, models load when the
+  mic opens.
 - **Microphone choice in Settings → Voce** (ADR 0152): the PC's microphones, updated when one is plugged in or out; a
   USB microphone plugged in is used at once (with «Annulla»), an unplugged one falls back to the default. Voice mode and
   call recording both use it.

@@ -1622,7 +1622,7 @@ export interface InvokeMap {
    *  speak = Italian speech for a text (the renderer plays it) */
   'voice:state': [void, VoiceState];
   'voice:prepare': [void, VoiceState];
-  'voice:listen': [{ on: boolean }, void];
+  'voice:listen': [{ on: boolean; talk?: boolean }, void];
   'voice:audio': [{ samples: Float32Array }, void];
   'voice:speak': [{ text: string; voice?: VoiceName }, { samples: Float32Array; rate: number; error?: string }];
   /** call recordings (ADR 0154, main/recordings/): arm = the PC's audio may be captured for the next few seconds (the

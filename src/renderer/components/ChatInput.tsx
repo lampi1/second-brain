@@ -40,7 +40,7 @@ import {updateIsFrozen} from '../lib/update-barrier';
 import { reviewedContextDraft, withReviewedContext } from '../lib/reviewed-context';
 import { ReviewedContextPreview } from './ReviewedContextPreview';
 import { MicButton, VoiceBar } from './VoiceControls';
-import { useVoice, type VoiceTarget } from '../lib/voice';
+import { onDictated, useVoice, type VoiceTarget } from '../lib/voice';
 
 // per chat, outside the component: a draft, its images and the screenshots still being read outlive a remount (the
 // Orchestrator moving to the dock) and never follow the input to another chat
@@ -65,6 +65,14 @@ export function setDraft(chatId: string, text: string, onSent?: () => void): voi
   freshDrafts.add(chatId);
   for (const fn of draftSubs) fn(chatId);
 }
+/** Dictation (lib/voice.ts, the mic button): the words go at the end of the input, nothing is sent. */
+onDictated((chatId, text) => {
+  if (updateIsFrozen()) return;
+  const old = drafts.get(chatId) ?? '';
+  drafts.set(chatId, !old.trim() ? text : /\s$/.test(old) ? `${old}${text}` : `${old} ${text}`);
+  freshDrafts.add(chatId);
+  for (const fn of draftSubs) fn(chatId);
+});
 const draftImages = new CheckpointMap<string, ImageAttachment[]>();
 const readingN = new Map<string, number>();
 const watchers = new Set<() => void>();
