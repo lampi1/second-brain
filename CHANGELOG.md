@@ -6,6 +6,11 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- **Routines run by the app** (ADR 0154): the app starts, advances, retries and finishes routines with no Orchestrator
+  open; a failed check sends the work back to the step it names and only the last failure calls you. Routine page with
+  Adesso / Routine / Storico, trigger filters (tags in/out, ids, iteration, max per hour), «Avvia su un work item» with
+  preview, params and attachments, dry run, engine/model per agent step, scripts and queries pinned by hash with a
+  receipt per run. A prod step runs only on your «Esegui». Export carries models and script text for cloud agents.
 - **Voice mode in the Orchestrator and Flash** (ADR 0152): Ctrl+M or the mic (in place of the «Invio» hint) turns it on
   or off; a red dot shows it listens, what you say goes as your message and the reply is read aloud in Italian (Piper,
   voice Paola by default); question cards can be answered by voice. Local and free (sherpa-onnx: Silero VAD, Whisper,
