@@ -250,7 +250,7 @@ export function pushNotice(n:{title:string;tone:Toast['tone'];label?:string;deta
 export function toastKey(labelKey:TextKey,tone:Toast['tone']='info'):number{return pushToast('',tone,undefined,4000,labelKey);}
 function pushToast(text:string,tone:Toast['tone'],action:Toast['action'],ttl:number,labelKey?:TextKey,rich:Pick<Toast,'label'|'detail'|'chips'>={}):number{
   expireToasts();
-  const same=ui.get().toasts.find(item=>item.text===text&&item.labelKey===labelKey&&item.tone===tone&&(!item.action&&!action||item.action?.run===action?.run&&item.action?.label===action?.label));
+  const same=ui.get().toasts.find(item=>item.text===text&&item.labelKey===labelKey&&item.tone===tone&&item.label===rich.label&&item.detail===rich.detail&&String(item.chips)===String(rich.chips)&&(!item.action&&!action||item.action?.run===action?.run&&item.action?.label===action?.label));
   if(same)return same.id; // A repeat never extends its original deadline or replaces a different undo operation.
   ttl=Number.isFinite(ttl)?Math.max(0,Math.min(tone==='celebrate'?60000:30000,ttl)):4000;
   const id = ++toastN;
