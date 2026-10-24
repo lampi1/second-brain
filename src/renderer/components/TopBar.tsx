@@ -18,6 +18,7 @@ import { queuedCount, runningCount } from '../store/state';
 import { cliCheck, cliLogin, useApp } from '../store/store';
 import { openModal, ui } from '../store/ui';
 import { back, focusChat, forward, go, newBrowser, nextThing, recentPlaces, stopAllAsk, toggleCenter } from '../actions';
+import { RecPill } from './RecordingsPage';
 import { bellCount } from '../lib/notify';
 import { placeLabel } from '../store/ui';
 import { openQueue } from '../lib/later';
@@ -229,6 +230,8 @@ export function TopBar() {
       </button>
       </div>
       <div className="topbar-end">
+        {/* a call being recorded (ADR 0154): on every page, never shrunk away */}
+        <RecPill onOpen={() => go({ page: 'registrazioni' })} />
         <LangSwitch />
         <MoreButton />
         <Bell />

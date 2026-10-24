@@ -51,6 +51,7 @@ import { demoSkillsHome } from './skills/demo';
 import { createEngines } from './engines/service';
 import { safeStorageCipher } from './engines/secrets';
 import { PersonalBrowser } from './personal/browser';
+import { RecordingStore } from './recordings/store';
 import { demoCloud } from './cloud/demo';
 import fs from 'node:fs';
 import { createAgentCatalog } from './wiring';
@@ -205,7 +206,8 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   brain.serveApi('/api/agents/analytics', () => aggregateAgentUsage([]));
   // the user's own browser is real in the demo too (nothing to fake: it loads only what the user types)
   const personal = new PersonalBrowser({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, cipher: safeStorageCipher(safeStorage), appName: app.getName(), lang: () => (brain.settings().language === 'en' ? 'en' : 'it') });
-  attachAppTools(mcp, { personal, agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), resolveRole: req => agents.resolve(req), runFeedback, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), cloud }, source, true);
+  const recordings = new RecordingStore(path.join(ctx.userData, 'recordings'));
+  attachAppTools(mcp, { personal, recordings, agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), resolveRole: req => agents.resolve(req), runFeedback, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), cloud }, source, true);
   try { recordMcpPort(mcpPortFromEnv(), await mcp.listen(mcpPortFromEnv())); } catch (e) {
     log.warn('demo', 'MCP port busy, using a random one', { data: { error: errText(e) } });
     recordMcpPort(mcpPortFromEnv(), await mcp.listen(0), errText(e)); // the banner shows in the demo too (e2e)
@@ -280,7 +282,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
 
   return {
     morning,
-    cloud, chats, browser, personal, brain, mcp, mcpServers, runner, asks, wake, heldNews, tasks, skills, source, engines, later: createLater(ctx),
+    cloud, chats, browser, personal, recordings, brain, mcp, mcpServers, runner, asks, wake, heldNews, tasks, skills, source, engines, later: createLater(ctx),
     agents, runFeedback, agentLifecycle, agentPacks, brainModel, research, suggestSkills, queries, memoryReview, learningReview,
     setup: new SetupService(ctx.userData, true, now),
     autoClose: new AutoCloseService({ now: autoCloseNow, delayMs: () => 0, candidates: () => [], archive: async () => false, emit: states => ctx.emitter.emit('chat:autoCloseStatus', states) }),

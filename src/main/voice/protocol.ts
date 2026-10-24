@@ -8,7 +8,10 @@ export type VoiceIn =
   | { type: 'listen'; on: boolean; asr: VoiceAsr }
   | { type: 'audio'; samples: Float32Array }
   | { type: 'speak'; id: number; text: string; voice: VoiceName }
-  | { type: 'unload'; asr: VoiceAsr };
+  | { type: 'unload'; asr: VoiceAsr }
+  /** a recording's WAV to transcribe (ADR 0154): one line per utterance, per channel (a call: 0 = me, 1 = others) */
+  | { type: 'transcribe'; job: number; wav: string; asr: VoiceAsr }
+  | { type: 'tcancel'; job: number };
 
 export type VoiceOut =
   | { type: 'up' }
@@ -18,4 +21,6 @@ export type VoiceOut =
   | { type: 'speech'; active: boolean }
   | { type: 'heard'; text: string; ms: number }
   | { type: 'spoken'; id: number; samples: Float32Array; rate: number; error?: string }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'tprogress'; job: number; done: number }
+  | { type: 'transcribed'; job: number; lines: { start: number; end: number; ch: number; text: string }[]; error?: string };

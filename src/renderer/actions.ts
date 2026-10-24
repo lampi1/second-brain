@@ -35,6 +35,7 @@ import {
 } from './store/ui';
 import { currentEntry, pushEntry, stepEntry, type Shot, type ViewerEntry } from './lib/viewer-stack';
 import { applyViewPrefs } from './lib/view-prefs';
+import { importFound } from './lib/recorder';
 
 /** The Orchestrator's id (the right column), null while there is none. */
 export const orchestratorId = (): string | null => orchestratorIdOf(app.get());
@@ -629,7 +630,8 @@ export function uiCommand(cmd: EventMap['ui:command']): void {
     case 'layout': setReporting(v !== 'off'); break;
     case 'closeTab': closeTab(v); break;   // Ctrl+W inside a browser page (main browser/tabs.ts forwards it)
     case 'unblock': showQueue(); break; // the Orchestrator's recap (app_unblock, ADR 0135): everything waiting, «Ci penso dopo» too
-    case 'prefs': applyViewPrefs(v); break; // app_config area "view" (ADR 0149): theme, density, work profile; checked there
+    case 'prefs': applyViewPrefs(v); break;
+    case 'recImport': go({ page: 'registrazioni' }); void importFound(v); break; // app_recording_import (ADR 0154) // app_config area "view" (ADR 0149): theme, density, work profile; checked there
     default: break;
   }
 }

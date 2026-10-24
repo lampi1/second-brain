@@ -19,6 +19,7 @@ import { connectorsIt } from './areas/connectors.it';
 // areas/ (<area>.it.ts, <area>.en.ts), spread here. Used through t() (i18n/index.ts).
 import { genuiRequestIt } from './areas/genui-request.it';
 import { voiceIt } from './areas/voice.it';
+import { recIt } from './areas/rec.it';
 import {studioIt}from'./areas/studio.it';
 import { permissionsIt } from './areas/permissions.it';
 import { langSwitchIt } from './areas/lang-switch.it';
@@ -80,6 +81,7 @@ export const it = {
   ...logIt,
   ...genuiRequestIt,
   ...voiceIt,
+  ...recIt,
   'genui.request.question': 'Domanda',
   'genui.request.permission': 'Permesso',
   'genui.request.from': ({ kind, chat, title }: { kind: string; chat?: string; title: string }) => `${kind} da ${chat ?? 'una chat'}: ${title}`,

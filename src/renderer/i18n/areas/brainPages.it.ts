@@ -5,6 +5,8 @@ export const brainPagesIt = {
   'brainPages.nav.home': 'Grindhouse',
   'brainPages.nav.dashboard': 'Dashboard',
   'brainPages.nav.guida': 'Guida',
+  'brainPages.nav.registrazioni': 'Registrazioni',
+  'brainPages.registrazioni.subtitle': 'Le call registrate (audio del PC + microfono) e i file importati, trascritti sul PC a zero token: «Registra call», la trascrizione Tu/Altri, «Chiedi all’Orchestrator», «Trovate sul PC».',
   'brainPages.nav.browser': 'Browser',
   'brainPages.nav.task': 'Task',
   'brainPages.nav.fatto': 'Fatto e standup',
