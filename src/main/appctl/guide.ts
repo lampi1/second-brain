@@ -49,9 +49,26 @@ export function routineLines(snap: FlowSnapshot | null | undefined): Entry[] {
     const last = runs[0], open = runs.filter(r => r.status === 'active' || r.status === 'approval' || r.status === 'blocked').length;
     const def = v.definition;
     return [{ kind: 'routine', title: `${def.title} (flowId "${id}", v${version})`, text: [def.description, def.aliases.length ? `also called: ${def.aliases.join(', ')}` : '', `${def.steps.length} steps`,
-      last ? `last run ${new Date(last.updatedAt).toISOString()} ${last.status}` : 'never run', open ? `${open} open run(s): app_flow_status` : '',
-      'start for the user: app_flow_match then app_flow_start'].filter(Boolean).join(' · ') }];
+      last ? `last run ${new Date(last.updatedAt).toISOString()} ${last.status}` : 'never run', open ? `${open} open run(s): app_flow_overview` : '',
+      triggerText(snap, id), 'start for the user: app_flow_match then app_flow_start'].filter(Boolean).join(' · ') }];
   });
+}
+/** How the app runs routines (ADR 0155), so the Orchestrator answers from the code's rules, not a guess. */
+const ROUTINE_RULES = ['The app runs routines by itself (runner); app_flow_overview says what each run is doing. Runs a trigger starts: at most two at once and one per trigger, the rest wait in its queue; a start by hand (one item, or a routine without trigger) does not wait.',
+  'A trigger (on the Routine page) checks DevOps or a timer and queues what it finds; a DevOps trigger can filter by tags (all of), excluded tags, a list of work item ids, an iteration path and a max per hour.',
+  'Trigger paused: it detects and starts nothing, not even a start on one item; runs already started keep going but lose its DevOps writes and test DB reads at once, so a step that needs them stops. Pausing a run stops it: no new step starts, the one at work finishes; resume continues where it stopped.',
+  'All paused (global): no trigger checks or starts. «Svuota coda» discards the waiting events (the count the user saw); they do not come back.',
+  'The Orchestrator does each of these for the user with app_config area routine. Approving a new or changed trigger, DevOps write rights and a prod «Esegui» stay the user\'s click on the Routine page.'].join(' ');
+/** A routine's trigger as the Routine page shows it: state, what it watches, its filters, the queue (ADR 0155). */
+function triggerText(snap: FlowSnapshot, flowId: string): string {
+  const auto = snap.automation, r = auto?.rules.find(x => x.config.flowId === flowId && x.status !== 'rejected');
+  if (!r) return 'no trigger (starts only by hand)';
+  const t = r.config.trigger, queue = auto!.events.filter(e => e.ruleId === r.id && ['pending', 'notified', 'blocked'].includes(e.status) && !e.sourceKey.startsWith('restart:')).length;
+  const state = auto!.paused ? 'all routines paused' : r.status === 'enabled' ? 'on' : r.status === 'paused' ? 'paused' : 'waiting for the user\'s approval';
+  const watch = t.kind === 'devops' ? `DevOps ${t.workItemType} in ${t.areaPath} (${t.states.join('/')}) every ${t.everyMinutes} min` : `every ${t.everyMinutes} min`;
+  const filters = t.kind === 'devops' ? [t.includeTags?.length ? `tags ${t.includeTags.join('+')}` : '', t.excludeTags?.length ? `not tags ${t.excludeTags.join(', ')}` : '',
+    t.workItemIds?.length ? `only ids ${t.workItemIds.join(', ')}` : '', t.iterationPath ? `iteration ${t.iterationPath}` : '', t.maxPerHour ? `max ${t.maxPerHour}/h` : ''].filter(Boolean).join(', ') : '';
+  return `trigger ${state}: ${watch}${filters ? `, filters ${filters}` : t.kind === 'devops' ? ', no filters (tags, ids, iteration, max per hour can be set)' : ''}, queue ${queue}; change trigger, filters, queue, a run's pause: app_config area routine`;
 }
 
 /** Runs one of the renderer's fixed readers (never code an agent wrote) with a time limit. */
@@ -93,6 +110,7 @@ export function entries(ui: UiMap | null, d: GuideDeps, lang: GuideLang): Entry[
   for (const x of d.settings.schema()) out.push({ kind: 'setting', title: `${x.label} (${x.key})`,
     text: `${x.description} · type ${x.type}${x.values ? ` ${x.values.join('|')}` : ''}${x.key.includes('*') || !values ? '' : ` · now ${show(getAt(s, x.key))}`} · change: app_config area setting` });
   out.push(...routineLines(d.flows?.()));
+  if (d.flows) out.push({ kind: 'routine', title: 'Routine: trigger, pausa, coda, filtri (how routines run)', text: ROUTINE_RULES });
   for (const c of CONCEPTS) out.push({ kind: 'concept', title: textOf(c.title, lang), text: `${textOf(c.summary, lang)} ${c.points.slice(0, 3).map(p => textOf(p, lang)).join(' ')} (more: the Guida page)` });
   for (const t of d.tools()) out.push({ kind: 'tool', title: t.name, text: t.description });
   return out;
@@ -130,7 +148,7 @@ function index(ui: UiMap | null, d: GuideDeps, lang: GuideLang): string {
     lines.push('Help topics: ' + ui.help.map(h => h.title).join(', '));
   } else lines.push('(the window did not answer: pages and sections missing; try again)');
   const routines = routineLines(d.flows?.());
-  lines.push(routines.length ? `Routines (page Routine, active): ${routines.map(r => r.title).join(', ')}` : 'Routines: none active yet (page Routine).');
+  lines.push(routines.length ? `Routines (page Routine, active): ${routines.map(r => r.title).join(', ')}; triggers, filters, queue, pause: app_config area routine; how they run: app_guide topic "routine"` : 'Routines: none active yet (page Routine).');
   lines.push('Concepts (Guida page): ' + CONCEPTS.map(c => textOf(c.title, lang)).join(', '));
   lines.push(`Settings: ${d.settings.schema().length} keys, read and change them with app_config (area setting).`);
   lines.push('Ask app_guide with a topic for details ("tema", "notifiche", "Memoria", "chiusura automatica", "permessi Scout"…); app_ui action "outline" = what is on screen now with positions; app_config = change any configuration.');

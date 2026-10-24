@@ -67,6 +67,17 @@ describe('app_guide', () => {
     expect(lines[0]!.text).toContain('last run 2026-10-24T08:00:00.000Z completed');
     expect(String(await guideTool(deps({ flows: () => snap })).run({}))).toContain('Routines (page Routine, active): Standup del mattino');
   });
+
+  it('says a routine\'s trigger state, filters and queue, and how pauses work', async () => {
+    const snap = { contextKey: 'k', drafts: [], active: { fix: 1 }, runs: [],
+      versions: [{ version: 1, definition: { id: 'fix', title: 'Air bug auto-fix', description: '', aliases: [], scope: {}, steps: [{}] } }],
+      automation: { revision: 1, paused: false, background: false, rules: [{ id: 'r1', revision: 1, status: 'paused', config: { flowId: 'fix', trigger: { kind: 'devops', everyMinutes: 5, areaPath: 'Air', workItemType: 'Bug', states: ['New'], workItemIds: [7] } } }],
+        events: [{ ruleId: 'r1', status: 'pending', sourceKey: 'a' }, { ruleId: 'r1', status: 'started', sourceKey: 'b' }] } } as unknown as FlowSnapshot;
+    expect(routineLines(snap)[0]!.text).toMatch(/trigger paused: DevOps Bug in Air .*filters only ids 7, queue 1; .*app_config area routine/);
+    const how = String(await guideTool(deps({ flows: () => snap })).run({ topic: 'routine pausa' }));
+    expect(how).toMatch(/runs already started keep going but lose its DevOps writes/);
+    expect(how).toMatch(/filter by tags/);
+  });
 });
 
 describe('screen outline', () => {
