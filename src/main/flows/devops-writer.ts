@@ -127,10 +127,25 @@ export class DevOpsWriter {
           audit(`workitem:${context.workItemId}`); return { workItemId: context.workItemId, fields: patch.map(p => p.path.slice(8)) };
         }
         case 'comment': {
-          keys(raw, ['op', 'text'], 'request');
-          const body = text(raw.text, 'text', 10_000), item = await workItem();
-          const result = await call('POST', `${org}/${encodeURIComponent(item.project)}/_apis/wit/workItems/${context.workItemId}/comments?api-version=7.1-preview.4`, { text: html(body) });
-          audit(`workitem:${context.workItemId}`); return { workItemId: context.workItemId, commentId: result.id };
+          keys(raw, ['op', 'text', 'mentions'], 'request');
+          const body = text(raw.text, 'text', 10_000);
+          if (raw.mentions !== undefined && (!Array.isArray(raw.mentions) || raw.mentions.length > 10)) deny('mentions: at most 10 identity ids');
+          const ids = ((raw.mentions as unknown[] | undefined) ?? []).map(value => { const s = lower(safeText(value, 'mention', 36)); if (!GUID.test(s)) deny('mentions must be identity GUIDs'); return s; });
+          if (new Set(ids).size !== ids.length) deny('mentions: duplicate identity');
+          if (ids.some(v => !(grant.mentions ?? []).includes(v))) deny('Mention is not in the approved DevOps write grant');
+          const item = await workItem();
+          // the adapter builds each mention itself, the name read from DevOps; the agent's text stays escaped
+          const tags: string[] = [];
+          for (const identity of ids) {
+            const found = await call('GET', `https://vssps.dev.azure.com/${encodeURIComponent(grant.organization)}/_apis/identities?identityIds=${identity}&${API}`);
+            const row = Array.isArray(found.value) && found.value.length === 1 ? object(found.value[0], 'identity') : deny('DevOps: mention identity not found');
+            const pick = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+            const name = pick(row.customDisplayName) || pick(row.providerDisplayName);
+            if (lower(String(row.id)) !== identity || !name || name.length > 256 || CONTROL.test(name)) deny('DevOps: unexpected identity response');
+            tags.push(`<a href="#" data-vss-mention="version:2.0,${identity}">@${html(name)}</a>`);
+          }
+          const result = await call('POST', `${org}/${encodeURIComponent(item.project)}/_apis/wit/workItems/${context.workItemId}/comments?api-version=7.1-preview.4`, { text: `${tags.length ? `${tags.join(' ')}<br/>` : ''}${html(body)}` });
+          audit(`workitem:${context.workItemId}`); return { workItemId: context.workItemId, commentId: result.id, ...(ids.length ? { mentions: ids.length } : {}) };
         }
         case 'link-pr': {
           keys(raw, ['op', 'projectId', 'repositoryId', 'pullRequestId'], 'request');

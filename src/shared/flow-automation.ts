@@ -9,7 +9,9 @@ export type FlowTrigger = { kind: 'interval'; everyMinutes: number } | {
 export const DEVOPS_WRITE_OPS = ['tags', 'comment', 'fields', 'test-plans', 'test-results', 'pr-links'] as const;
 export type DevOpsWriteOp = typeof DEVOPS_WRITE_OPS[number];
 /** The exact write grant shown in the approval modal: one organization, its projects, ops and work item fields. */
-export interface DevOpsWriteGrant { organization: string; projects: string[]; ops: DevOpsWriteOp[]; fields: string[] }
+export interface DevOpsWriteGrant { organization: string; projects: string[]; ops: DevOpsWriteOp[]; fields: string[];
+  /** DevOps identity ids (GUIDs, lowercase) a comment may @mention; absent or empty = no mentions. Needs the comment op. */
+  mentions?: string[] }
 export interface FlowAutomationConfig {
   flowId: string; flowVersion: number; trigger: FlowTrigger; scope: FlowScope;
   inputs: Record<string, string>; priority: 'urgent' | 'normal';

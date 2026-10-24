@@ -14,6 +14,12 @@ without it, `usable()` refuses any external-write step and the flow service bloc
 trigger's; the projects must include the trigger project; `ops` is a subset of `tags`, `comment`, `fields`,
 `test-plans`, `test-results`, `pr-links`; `fields` lists the reference names `set-fields` may change, never identity,
 revision, project, type or tags. No organization, project or field is built in: all values are user configuration.
+An optional `mentions` list (at most 10 DevOps identity GUIDs, stored lowercase, only with the `comment` operation)
+names who a comment may @mention; the user sees the ids in the same modal. A `comment {text, mentions}` request may
+mention only ids in that list: the adapter reads each identity's display name from DevOps (`vssps` identities API,
+the returned id must match) and builds the `<a href="#" data-vss-mention="version:2.0,<id>">@<name></a>` tags itself,
+the name HTML-escaped; the agent's text stays fully escaped, so it can never inject markup or a mention of its own.
+An unknown, ungranted or duplicate id refuses the whole comment before any write.
 
 The bound chat writes with one chat-endpoint MCP tool, `flow_devops_write`. The host derives the run from the caller
 chat (the running current step bound to it, same chat run and task version, inside the selected brain, before the step

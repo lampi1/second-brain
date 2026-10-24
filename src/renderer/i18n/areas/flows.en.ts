@@ -84,6 +84,7 @@ export const flowsEn = {
   'flows.interval': "At intervals",
   'flows.existing': "Existing items",
   'flows.devopsWrite': "DevOps writes",
+  'flows.devopsMentions': "Comment mentions (DevOps ids)",
   'flows.devopsWriteNone': "None: the flow only reads",
   'flows.devopsWriteScope': "Only the run's work item and the test plans the run created",
   'flows.writeOp.tags': "tags",

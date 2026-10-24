@@ -12,7 +12,7 @@ export function FlowAutomationSummary({ config }: { config: FlowAutomationConfig
       <dt>{t('flows.scope')}</dt><dd>{[config.scope.project, config.scope.areaPath].filter(Boolean).join(' · ') || '—'}</dd>
       {trigger.kind === 'devops' && <><dt>Azure DevOps</dt><dd>{[trigger.organization, trigger.project, trigger.areaPath, trigger.workItemType].filter(Boolean).join(' · ')}<br />{trigger.states.join(' · ')}</dd><dt>{t('flows.existing')}</dt><dd>{t(trigger.includeExisting ? 'flows.included' : 'flows.excluded')}</dd></>}
       {trigger.kind === 'devops' && <><dt>{t('flows.devopsWrite')}</dt><dd data-testid="flow-auto-devops-write">{write
-        ? <>{write.organization} · {write.projects.join(' · ')}<br />{write.ops.map(op => t(`flows.writeOp.${op}`)).join(' · ')}{write.fields.length ? <><br />{write.fields.join(' · ')}</> : null}<br /><span className="flows-muted">{t('flows.devopsWriteScope')}</span></>
+        ? <>{write.organization} · {write.projects.join(' · ')}<br />{write.ops.map(op => t(`flows.writeOp.${op}`)).join(' · ')}{write.fields.length ? <><br />{write.fields.join(' · ')}</> : null}{write.mentions?.length ? <><br /><span data-testid="flow-auto-mentions">{t('flows.devopsMentions')}: {write.mentions.join(' · ')}</span></> : null}<br /><span className="flows-muted">{t('flows.devopsWriteScope')}</span></>
         : t('flows.devopsWriteNone')}</dd></>}
       <dt>{t('flows.inputs')}</dt><dd>{Object.entries(config.inputs).length ? <dl className="flow-facts flow-inputs">{Object.entries(config.inputs).map(([name, value]) => <div className="flow-input-pair" key={name}><dt>{name}</dt><dd>{value}</dd></div>)}</dl> : '—'}</dd>
       <dt>{t('flows.priority')}</dt><dd>{t(`flows.${config.priority}`)}</dd>

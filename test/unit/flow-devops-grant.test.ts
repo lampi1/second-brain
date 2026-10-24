@@ -51,9 +51,11 @@ describe('DevOps write grant', () => {
     const { auto } = setup();
     for (const devopsWrite of [{ ...grant, organization: 'fabrikam' }, { ...grant, projects: ['ProjectB'] }, { ...grant, projects: [] }, { ...grant, projects: ['ProjectA', 'projecta'] },
       { ...grant, projects: ['ProjectA', 'a/b'] }, { ...grant, ops: ['delete'] }, { ...grant, ops: [] }, { ...grant, fields: ['System.State'] }, { ...grant, ops: ['fields'], fields: [] },
-      { ...grant, ops: ['fields'], fields: ['System.TeamProject'] }, { ...grant, ops: ['fields'], fields: ['bad field'] }, { ...grant, extra: 1 }])
+      { ...grant, ops: ['fields'], fields: ['System.TeamProject'] }, { ...grant, ops: ['fields'], fields: ['bad field'] }, { ...grant, extra: 1 },
+      { ...grant, mentions: ['not-a-guid'] }, { ...grant, ops: ['tags'], mentions: ['aaaaaaaa-0000-0000-0000-000000000001'] }, { ...grant, mentions: ['aaaaaaaa-0000-0000-0000-000000000001', 'AAAAAAAA-0000-0000-0000-000000000001'] }])
       expect(() => auto.propose({ config: config(devopsWrite as DevOpsWriteGrant), expectedRevision: 0 }, 'orch')).toThrow();
     expect(auto.propose({ config: config({ ...grant, projects: ['ProjectA', 'ProjectB'], ops: ['fields'], fields: ['System.State'] }), expectedRevision: 0 }, 'orch').status).toBe('proposed');
+    expect(auto.propose({ config: config({ ...grant, mentions: ['AAAAAAAA-0000-0000-0000-000000000001'] }), expectedRevision: 1 }, 'orch').config.devopsWrite!.mentions).toEqual(['aaaaaaaa-0000-0000-0000-000000000001']);
   });
   it('grants a run started from its own approved event and lets the step run', async () => {
     const { auto, flow, enable, started } = setup(); enable();

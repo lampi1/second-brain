@@ -27,6 +27,7 @@ function setup(options: { grant?: DevOpsWriteGrant; project?: string; prProject?
     else if (url.includes('$Test%20Case')) body = { id: 103 };
     else if (url.includes('/TestPoint?testCaseId')) body = { value: [{ id: 900 }] };
     else if (url.includes('/comments?')) body = { id: 5 };
+    else if (url.includes('/_apis/identities?')) body = { value: [{ id: url.match(/identityIds=([^&]+)/)![1], providerDisplayName: 'Test <User>' }] };
     else if (url.includes('/_apis/projects/')) body = { id: GUID, name: options.prProject ?? 'ProjectB' };
     return new Response(JSON.stringify(body), { status });
   });
@@ -63,6 +64,22 @@ describe('DevOps write adapter', () => {
     expect(calls[2]!.url).toContain(`/contoso/_apis/projects/${GUID}?`);
     expect(JSON.stringify(calls.at(-1)!.body)).toContain(`vstfs:///Git/PullRequestId/${GUID}%2F${GUID}%2F9`);
     await expect(run({ op: 'link-pr', projectId: 'x', repositoryId: GUID, pullRequestId: 9 })).rejects.toThrow('GUID');
+  });
+  it('mentions only granted identities, with the name read from DevOps and the text still escaped', async () => {
+    const M1 = 'aaaaaaaa-0000-0000-0000-000000000001', M2 = 'aaaaaaaa-0000-0000-0000-000000000002';
+    const { run, calls } = setup({ grant: grant({ mentions: [M1, M2] }) });
+    expect(await run({ op: 'comment', text: '<i>x</i>', mentions: [M1.toUpperCase(), M2] })).toEqual({ workItemId: 42, commentId: 5, mentions: 2 });
+    expect(calls[1]!.url).toMatch(new RegExp(`^https://vssps\\.[^/]+/contoso/_apis/identities\\?identityIds=${M1}&api-version=7\\.1$`));
+    expect(calls.at(-1)!.body).toEqual({ text: `<a href="#" data-vss-mention="version:2.0,${M1}">@Test &lt;User&gt;</a> <a href="#" data-vss-mention="version:2.0,${M2}">@Test &lt;User&gt;</a><br/>&lt;i&gt;x&lt;/i&gt;` });
+    const n = calls.length;
+    await expect(run({ op: 'comment', text: 'x', mentions: ['aaaaaaaa-0000-0000-0000-000000000009'] })).rejects.toThrow('not in the approved');
+    await expect(run({ op: 'comment', text: 'x', mentions: ['not-a-guid'] })).rejects.toThrow('GUID');
+    await expect(run({ op: 'comment', text: 'x', mentions: [M1, M1] })).rejects.toThrow('duplicate');
+    await expect(setup().run({ op: 'comment', text: 'x', mentions: [M1] })).rejects.toThrow('not in the approved');
+    expect(calls.length).toBe(n);
+    const wrong = setup({ grant: grant({ mentions: [M1] }), status: c => (c.url.includes('/identities?') ? 404 : undefined) });
+    await expect(wrong.run({ op: 'comment', text: 'x', mentions: [M1] })).rejects.toThrow();
+    expect(wrong.calls.some(c => c.url.includes('/comments?'))).toBe(false);
   });
   it('creates plans, suites, cases and results only inside what this run created', async () => {
     const { run, calls, file } = setup();

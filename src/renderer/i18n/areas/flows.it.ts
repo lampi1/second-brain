@@ -84,6 +84,7 @@ export const flowsIt = {
   'flows.interval': "A intervalli",
   'flows.existing': "Elementi già presenti",
   'flows.devopsWrite': "Scritture DevOps",
+  'flows.devopsMentions': "Menzioni nei commenti (id DevOps)",
   'flows.devopsWriteNone': "Nessuna: il flusso legge soltanto",
   'flows.devopsWriteScope': "Solo l’elemento del run e i piani di test creati dal run",
   'flows.writeOp.tags': "tag",

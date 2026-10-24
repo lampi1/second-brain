@@ -37,8 +37,9 @@ function validateCursor(value: unknown): Record<string, string> {
 const ORGANIZATION = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,49}$/, FIELD = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+$/, PROJECT_UNSAFE = /[/\\\x00-\x1f\x7f]/;
 /** Fields no grant may name: identity, revision and project are host-owned. */
 const FIXED_FIELDS = ['system.id', 'system.rev', 'system.teamproject', 'system.workitemtype', 'system.tags'];
+const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 function validateGrant(value: unknown, trigger: Extract<FlowAutomationConfig['trigger'], { kind: 'devops' }>): DevOpsWriteGrant {
-  const raw = object(value, 'devopsWrite'); keys(raw, ['organization', 'projects', 'ops', 'fields'], 'devopsWrite');
+  const raw = object(value, 'devopsWrite'); keys(raw, ['organization', 'projects', 'ops', 'fields', 'mentions'], 'devopsWrite');
   const organization = text(raw.organization, 'devopsWrite organization', 50);
   if (!ORGANIZATION.test(organization) || organization.toLowerCase() !== trigger.organization.toLowerCase()) throw new Error('DevOps write organization must equal the trigger organization');
   const list = (v: unknown, label: string, max: number, itemMax: number): string[] => {
@@ -53,7 +54,10 @@ function validateGrant(value: unknown, trigger: Extract<FlowAutomationConfig['tr
   if (!ops.length || ops.some(op => !(DEVOPS_WRITE_OPS as readonly string[]).includes(op))) throw new Error('Unknown DevOps write operation');
   if (fields.some(field => !FIELD.test(field) || FIXED_FIELDS.includes(field.toLowerCase()))) throw new Error('Invalid DevOps write field');
   if (fields.length && !ops.includes('fields') || !fields.length && ops.includes('fields')) throw new Error('DevOps write fields and the fields operation go together');
-  return { organization, projects, ops: ops as DevOpsWriteGrant['ops'], fields };
+  const mentions = raw.mentions === undefined ? [] : list(raw.mentions, 'devopsWrite mentions', 10, 36).map(id => id.toLowerCase());
+  if (mentions.some(id => !GUID.test(id))) throw new Error('DevOps write mentions must be identity GUIDs');
+  if (mentions.length && !ops.includes('comment')) throw new Error('DevOps write mentions need the comment operation');
+  return { organization, projects, ops: ops as DevOpsWriteGrant['ops'], fields, ...(mentions.length ? { mentions } : {}) };
 }
 const errorText = (error: unknown): string => (error instanceof Error ? error.message : 'Automatic flow operation failed').slice(0, 2000);
 
