@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initRelease } from './release';
-import { appPageUrl, createWindow, hiddenOpened, hiddenRun } from './window';
+import { appPageUrl, armLoopback, createWindow, hiddenOpened, hiddenRun } from './window';
 import { createFlowBackground } from './flows/background';
 import { startTaskbar } from './taskbar';
 import { Emitter, registerHandlers, type Handlers } from './ipc';
@@ -65,6 +65,7 @@ import type { CloudService } from './cloud/service';
 import { ProposalsService } from './proposals/service';
 import { Workflows } from './workflows/service';
 import { VoiceService, voiceRoot } from './voice/service';
+import { RecordingService } from './recordings/service';
 import type { InvokeArg, InvokeChannel, InvokeResult } from '../shared/contract';
 import { noteUserTyped } from './appctl/user-words';
 
@@ -194,7 +195,19 @@ app.whenReady().then(async () => {
     fake: process.env.SB_VOICE_FAKE === '1' || demo ? { text: process.env.SB_VOICE_FAKE_TEXT ?? 'Ciao, cosa c’è di nuovo?' } : null,
   });
   s.brain.onSettingChange(change => { if (change.key === 'voiceAsr' || change.key === 'voiceName') voice.settingsChanged(); });
-  app.on('will-quit', () => voice.dispose());
+  // call recordings (ADR 0154): written to userData/recordings, transcribed by the same local Whisper, zero tokens
+  const recordings = new RecordingService({
+    store: s.recordings, home: app.getPath('home'),
+    transcribe: (wav, progress) => voice.transcribe(wav, progress),
+    asr: () => s.brain.settings().voiceAsr ?? 'fast',
+    changed: st => emitter.emit('rec:changed', st),
+  });
+  recordings.recover();
+  // the page reloaded or its process died mid-call: the recording it fed is closed, never left open (ADR 0154)
+  const recPageGone = () => { if (s.recordings.openIds().length) recordings.abandonOpen(); };
+  win?.webContents.on('did-start-navigation', d => { if (d.isMainFrame && !d.isSameDocument) recPageGone(); });
+  win?.webContents.on('render-process-gone', recPageGone);
+  app.on('will-quit', () => { recordings.dispose(); voice.dispose(); });
   const pulse = createPulse(s, { emitter, window: () => win, userData: app.getPath('userData') }, () => headline.get());
   // the Battito's proposals count in the morning block's "Da approvare" (ADR 0102)
   if (s.morning && pulse) s.morning.extraApprovals = () => pulse.pendingApprovals();
@@ -631,6 +644,25 @@ app.whenReady().then(async () => {
     'voice:listen': a => voice.listen(a?.on === true),
     'voice:audio': a => voice.audio(a?.samples),
     'voice:speak': a => voice.speak(String(a?.text ?? ''), a?.voice && ['paola', 'miro', 'dii'].includes(a.voice) ? a.voice : undefined),
+    'rec:state': () => recordings.state(),
+    'rec:arm': () => armLoopback(),
+    'rec:start': a => recordings.start({ source: a?.source === 'file' ? 'file' : 'call', channels: a?.channels === 2 ? 2 : 1, title: typeof a?.title === 'string' ? a.title : undefined,
+        from: typeof a?.from === 'string' ? a.from : undefined, fromPath: typeof a?.fromPath === 'string' ? a.fromPath : undefined, systemAudio: a?.systemAudio === true }),
+    'rec:chunk': a => recordings.chunk(String(a?.id ?? ''), a?.pcm),
+    'rec:stop': a => recordings.stop(String(a?.id ?? '')),
+    'rec:transcribe': a => recordings.queue(String(a?.id ?? '')),
+    'rec:rename': a => recordings.rename(String(a?.id ?? ''), String(a?.title ?? '')),
+    'rec:remove': a => recordings.remove(String(a?.id ?? '')),
+    'rec:transcript': a => recordings.transcript(String(a?.id ?? '')),
+    'rec:find': () => recordings.findOnPc(),
+    'rec:readFound': a => recordings.readFound(String(a?.path ?? '')),
+    'rec:open': async a => {
+      const id = String(a?.id ?? '');
+      if (!s.recordings.get(id)) throw new Error('registrazione sconosciuta');
+      if (a?.what === 'folder') { shell.showItemInFolder(s.recordings.wav(id)); return; }
+      const err = await shell.openPath(a?.what === 'text' ? s.recordings.textFile(id) : s.recordings.wav(id));
+      if (err) throw new Error(err);
+    },
     'orchestrator:held': () => s.heldNews?.get() ?? { items: [] },
     'orchestrator:heldSeen': a => { if (typeof a?.chatId !== 'string' || !a.chatId || a.chatId.length > 100) throw new Error('chatId required'); return s.heldNews?.seen(a.chatId) ?? { items: [] }; },
     ...(pulse?.handlers() ?? (demo ? pulseDemoHandlers(process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now(), {

@@ -4,7 +4,8 @@
 // and files, plus any other visual it attached; a plan's steps; a proposal's text), what Sì and No do, then always the
 // same four answers: Sì, No, «Scrivi una risposta…» and «Non voglio rispondere»; Esc = «Ci penso dopo». Keys: 1 / S
 // (Y, J) yes, 2 / N no, 3 / T write, Enter the recommended one. Presentational: each host decides what an answer does
-// (RequestPanel.tsx for agents' questions, PlanApproval.tsx, WorkApproval.tsx, FlowApproval.tsx). BriefEvidence draws
+// (RequestPanel.tsx for agents' questions, PlanApproval.tsx, WorkApproval.tsx, FlowApproval.tsx). In voice mode the card is
+// read aloud and a spoken answer counts as the click (lib/voice.ts useVoiceQuestion, ADR 0152). BriefEvidence draws
 // a brief; it is also GenUi.tsx's view of one shown as a plain chat card.
 import { forwardRef, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { UiBrief } from '@shared/contract';
@@ -12,6 +13,7 @@ import { t } from '../i18n';
 import { AskImages } from './AskImages';
 import { IconCheck, IconEdit, IconX } from './Icons';
 import { Kbd } from './ui';
+import { useVoiceQuestion } from '../lib/voice';
 import '../styles/decision.css';
 
 /** onChoose(viaKey): true when the keyboard answered (a host moves the focus on only then) */
@@ -42,8 +44,15 @@ export interface DecisionProps {
   rootProps?: Record<string, unknown>;
   /** under the answers (a turn's commands) */
   footer?: ReactNode;
+  /** voice mode (ADR 0152): who asks, said before the question («Lo Scout ti chiede una cosa»), and what it did (a
+   *  brief's ✓ lines); the same request shown twice shares `voiceId` so it is read once */
+  speakFrom?: string;
+  speakDone?: string;
+  voiceId?: string;
 }
 
+/** a card's own voice id when the host gives none */
+let cards = 0;
 const YES_KEYS = new Set(['1', 's', 'y', 'j']);
 const NO_KEYS = new Set(['2', 'n']);
 const WRITE_KEYS = new Set(['3', 't']);
@@ -61,6 +70,15 @@ export const DecisionCard = forwardRef<HTMLDivElement, DecisionProps>(function D
   // Annulla / Esc in the box: the host forgets its draft, so a remount never reopens it
   const close = () => { back.current = true; setWriting(false); setText(''); p.write?.onClose?.(); };
   const choose = (c: DecisionChoice, viaKey = false) => { if (!busy && !c.disabled) c.onChoose(viaKey); };
+  // voice mode (ADR 0152): the card is read aloud and a spoken answer is the click (sì / no / «non voglio rispondere»,
+  // anything longer is the written answer)
+  const auto = useRef(`dc-${++cards}`).current;
+  useVoiceQuestion(busy ? null : p.voiceId ?? auto, { question: [p.lead, p.question].filter(Boolean).join(' '), done: p.speakDone, ifYes: p.ifYes, ifNo: p.ifNo, from: p.speakFrom }, a => {
+    if (a.kind === 'yes') choose(p.yes);
+    else if (a.kind === 'no') choose(p.no);
+    else if (a.kind === 'skip') { if (p.skip && !busy) p.skip.onChoose(); else p.onLater?.(); }
+    else if (p.write && !p.write.disabled && !busy) p.write.onSend(a.text);
+  });
 
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (busy || e.nativeEvent.isComposing || e.ctrlKey || e.metaKey || e.altKey) return;

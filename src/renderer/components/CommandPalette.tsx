@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { SearchHit, SearchIndexStatus, SearchResult } from '@shared/contract';
 import { sb } from '../sb';
 import { locale, t, type TextKey } from '../i18n';
+import { recorder, toggleCall } from '../lib/recorder';
 import { chatName } from '@shared/orchestrator';
 import { fuzzyScore } from '../lib/fuzzy';
 import { closedTime, folderName, sameDay, stateInfo } from '../lib/format';
@@ -26,7 +27,7 @@ import {
 } from '../actions';
 import {
   HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconBook, IconBranch, IconFile, IconBrain, IconChart, IconTarget, IconCoins, IconShield, IconFocus, IconGlobe,
-  IconHistory, IconKeyboard, IconLayers, IconLightbulb, IconLink, IconList, IconLogin, IconMap, IconMaximize, IconPlus, IconQuestion, IconSearch, IconSettings, IconStop,
+  IconHistory, IconKeyboard, IconLayers, IconLightbulb, IconLink, IconList, IconLogin, IconMap, IconMaximize, IconMic, IconPlus, IconQuestion, IconSearch, IconSettings, IconStop,
   IconSparkle, IconTerminal, IconTicket,
 } from './Icons';
 import { Keys, Modal } from './ui';
@@ -43,7 +44,7 @@ const PAGE_ICON: Record<BrainPageId, ReactNode> = {
   agenti: <IconLayers />,
   fatto: <IconBook />, idee: <IconLightbulb />,
   costi: <IconCoins />, qualita: <IconChart />, apprendimento: <IconTarget />, script: <IconTerminal />, log: <IconList />, confronto: <IconLayers />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
-  guida: <IconQuestion />, browser: <IconGlobe />,
+  guida: <IconQuestion />, browser: <IconGlobe />, registrazioni: <IconMic />,
   regole: <IconShield />, memoria: <IconHistory />, classificatori: <IconBranch />, collegamenti: <IconMap />,
 };
 
@@ -115,6 +116,8 @@ function buildCommands(): Cmd[] {
   for (const p of BRAIN_PAGES) out.push({ id: `page:${p.id}`, group: 'Vai a', title: p.label, shortcut: p.id === 'home' ? 'Ctrl+1' : p.key, icon: PAGE_ICON[p.id], run: () => go({ page: p.id }),
     ...(p.id === 'home' ? { sub: t('home.workspace'), text: `${p.label} ${t('home.agents')} chat agents home` } : p.id === 'guida' ? { sub: t('guide.title'), text: `${p.label} guida guide aiuto help concetti concepts come funziona how it works` } : {}) });
   out.push({ id: 'page:mappa', group: 'Vai a', title: auditText('cmp.palette.map'), sub: auditText('cmp.palette.mapSub'), shortcut: 'Ctrl+Shift+M', icon: <IconMap />, run: () => go({ page: 'mappa' }) });
+  // call recording (ADR 0154): start or stop from anywhere
+  out.push({ id: 'rec:toggle', group: 'Azioni', title: recorder.get().phase === 'off' ? t('rec.start') : t('rec.stop'), sub: t('brainPages.nav.registrazioni'), icon: <IconMic />, run: () => void toggleCall() });
   recentPlaces(6).forEach((p, i) => {
     if (i === 0) return; // where you are now
     out.push({ id: `recent:${i}`, group: 'Recenti', title: placeLabel(p), icon: <IconHistory />, run: () => go(p) });

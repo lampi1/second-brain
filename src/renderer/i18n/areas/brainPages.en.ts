@@ -7,6 +7,8 @@ export const brainPagesEn: typeof brainPagesIt = {
   'brainPages.nav.home': 'Grindhouse',
   'brainPages.nav.dashboard': 'Dashboard',
   'brainPages.nav.guida': 'Guide',
+  'brainPages.nav.registrazioni': 'Recordings',
+  'brainPages.registrazioni.subtitle': 'Recorded calls (PC audio + microphone) and imported files, transcribed on the PC at zero tokens: «Record call», the You/Others transcript, «Ask the Orchestrator», «Found on the PC».',
   'brainPages.nav.browser': 'Browser',
   'brainPages.nav.task': 'Tasks',
   'brainPages.nav.fatto': 'Done & stand-up',

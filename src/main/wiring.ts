@@ -52,6 +52,7 @@ import { checkedDelegation } from '../shared/roles';
 import { createEngines, type EnginesApi } from './engines/service';
 import { safeStorageCipher } from './engines/secrets';
 import { PersonalBrowser } from './personal/browser';
+import { RecordingStore } from './recordings/store';
 import { systemLang } from './lang';
 import { CloudService, cloudFile } from './cloud/service';
 import { realExec, realHttp } from './cloud/exec';
@@ -173,6 +174,8 @@ export interface Wired {
   chats: ChatService; browser: BrowserService; brain: BrainService; tasks: TasksApi;
   /** the user's own everyday browser, the Browser page (personal/browser.ts, ADR 0133) */
   personal: PersonalBrowser;
+  /** the call recordings on disk (ADR 0154, recordings/store.ts): main/index.ts records and transcribes, app_recordings reads */
+  recordings: RecordingStore;
   /** the engines of the brain, which definitions the user turned on, the API keys (ADR 0046) */
   engines: EnginesApi;
   /** the chat folders' git branches ('chat:branches'); absent = read from disk (chats/branch.ts) */
@@ -821,7 +824,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     },
     tell: (chatId, text) => chats.send(chatId, text),
   });
-  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, flows, personal, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog },
+  const recordings = new RecordingStore(path.join(ctx.userData, 'recordings'));
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, flows, personal, recordings, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog },
     // app_config (ADR 0149): each area through the module the app's own page uses
     config: {
       view: { read: () => readUi(ctx.window(), 'typeof window.__sbView === "function" ? window.__sbView() : null'), apply: patch => readUi(ctx.window(), `typeof window.__sbSetView === "function" ? window.__sbSetView(${JSON.stringify(JSON.stringify(patch))}) : null`) },
@@ -944,7 +948,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     workflows, flows, brainModel, research, phrases, memoryReview, learningReview, queries: brainQueries,
     morning,
     mcpServers,
-    cloud, chats, browser, personal, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, suggestSkills,
+    cloud, chats, browser, personal, recordings, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, suggestSkills,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
       checkpoint: () => manager.checkpointForUpdate(),
