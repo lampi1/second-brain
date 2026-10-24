@@ -24,6 +24,7 @@ export const memoryDe: typeof memoryIt = {
   'mm.done.made': (p: { what: string }) => `Wartung fertig: ${p.what}`,
   'mm.done.nothing': 'Wartung fertig: Es war schon alles in Ordnung.',
   'mm.done.failed': 'Wartung fertig, aber die Recherche hat nicht geklappt',
+  'mm.done.stopped': 'Wartung vor dem Ende gestoppt',
   'mm.done.capped': 'Wartung beim Ausgabenlimit gestoppt',
   'mm.done.label': 'Wartung fertig', 'mm.done.title': 'Dein Brain ist in Ordnung',
   'mm.done.open': 'Memoria öffnen',

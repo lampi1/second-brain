@@ -112,6 +112,24 @@ describe('ResearchService', () => {
     expect(t.svc.status()).toMatchObject({ running: false, last: { state: 'done', issues: 2 } });
   });
 
+  it('counts once a log card the research rewrites, and waits for the ideas being saved', async () => {
+    let release = () => {};
+    const t = setup({ saveIdea: () => new Promise<void>(r => { release = r; }) });
+    t.deps.brain.maintain = async () => {
+      t.svc.afterPass({ since: null, files: [], groups: [{ key: 'k1', lvl: 'error', scope: 's', msg: 'boom', cause: '', count: 2, sample: 'boom' }] });
+      return { ...state([]), lastRun: { at: NOW, jobs: [], cards: { bugs: 1, forget: 0 } } };
+    };
+    await t.svc.runAll();
+    t.svc.propose('c1', { kind: 'app-bug', title: 'Boom on save', removes: 'The crash.', why: 'Seen twice.', logKey: 'k1', issue: { title: 'Save crashes', body: 'Steps…' } });
+    t.svc.propose('c1', idea);
+    const stopping = t.svc.stop();
+    await Promise.resolve();
+    expect(t.done).toHaveLength(0);
+    release();
+    await stopping;
+    expect(t.done[0]).toMatchObject({ state: 'stopped', issues: 2, ideas: 1, why: 'fermata da te' });
+  });
+
   it('with no engine, one click is the free cleanup and its notice', async () => {
     const t = setup({ engines: () => [] });
     const st = await t.svc.runAll();
@@ -128,7 +146,7 @@ describe('ResearchService', () => {
     t.chats.set('c1', { id: 'c1', state: 'running', costUsd: 5.2 } as ChatSummary);
     t.svc.chatUpdated({ id: 'c1', state: 'running', costUsd: 5.2 } as ChatSummary);
     await vi.waitFor(() => expect(t.stopped).toEqual(['c1']));
-    expect(t.svc.status().last).toMatchObject({ state: 'capped', costUsd: 5.2 });
+    await vi.waitFor(() => expect(t.svc.status().last).toMatchObject({ state: 'capped', costUsd: 5.2 }));
 
     const u = setup({}, 'idle');
     await u.svc.start(opts);

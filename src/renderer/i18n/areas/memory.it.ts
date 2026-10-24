@@ -25,6 +25,7 @@ export const memoryIt = {
   'mm.done.made': (p: { what: string }) => `Manutenzione finita: ${p.what}`,
   'mm.done.nothing': 'Manutenzione finita: era già tutto in ordine.',
   'mm.done.failed': 'Manutenzione finita, ma la ricerca non è riuscita',
+  'mm.done.stopped': 'Manutenzione fermata prima della fine',
   'mm.done.capped': 'Manutenzione finita al tetto di spesa',
   'mm.done.label': 'Manutenzione finita', 'mm.done.title': 'Il tuo brain è in ordine',
   'mm.done.open': 'Apri Memoria',

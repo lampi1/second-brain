@@ -133,7 +133,7 @@ export const isAppCard = (p: Pick<ResearchProposal, 'kind' | 'issue' | 'change'>
 
 export class ResearchService {
   readonly store: ResearchStore;
-  private run: (ResearchRunInfo & { sawWork: boolean; pack: Pack; timer: NodeJS.Timeout | null }) | null = null;
+  private run: (ResearchRunInfo & { sawWork: boolean; pack: Pack; timer: NodeJS.Timeout | null; saves: Promise<void>[] }) | null = null;
   /** a start between its checks and its chat: a second start is refused */
   private starting = false;
   constructor(private readonly d: ResearchDeps) {
@@ -225,7 +225,7 @@ export class ResearchService {
     const chat = await this.d.chats.create({ harness, cwd: root, title: RESEARCH_TITLE, research: { web }, prompt: researchMessage(method, frame),
       ...(model ? { model } : {}), ...(effort ? { effort } : {}) });
     const startedAt = this.now();
-    this.run = { chatId: chat.id, startedAt, harness, model, effort, capUsd: cap, costUsd: 0, state: 'running', proposals: 0, sawWork: false, pack, timer: null };
+    this.run = { chatId: chat.id, startedAt, harness, model, effort, capUsd: cap, costUsd: 0, state: 'running', proposals: 0, sawWork: false, pack, timer: null, saves: [] };
     const timer = setTimeout(() => { void this.finish('stopped', 'più di un\'ora senza finire').catch(() => { /* logged */ }); }, RESEARCH_MAX_MS);
     timer.unref?.();
     this.run.timer = timer;
@@ -268,6 +268,8 @@ export class ResearchService {
       try { await this.d.chats.stop(r.chatId); } catch (e) { log.warn('brain', 'maintenance research not stopped', { chat: r.chatId, cause: errText(e), hint: 'stop it from its chat' }); }
     }
     log.info('brain', 'maintenance research ended', { chat: r.chatId, data: { state, proposals: info.proposals, costUsd: info.costUsd } });
+    // the ideas still being written to Idee count in the notice
+    await Promise.allSettled(r.saves);
     this.announce({ state, costUsd: info.costUsd, ...(why ? { why } : {}) }, r.chatId);
     this.d.changed();
   }
@@ -295,14 +297,17 @@ export class ResearchService {
     if (this.store.all().some(p => same(p) && (p.state === 'open' || p.state === 'rejected'))) throw new Error('Duplicate: the same proposal is already open or was rejected.');
     // a better version of the bug card the log step wrote from the same log group: that card is rewritten
     const was = card.logKey ? this.store.all().find(p => p.logKey === card.logKey && p.state === 'open' && p.chatId === null) : undefined;
-    const saved = (was && this.store.replace(was.id, card)) || this.store.add(card);
+    const replaced = was ? this.store.replace(was.id, card) : null;
+    const saved = replaced || this.store.add(card);
+    // the cleanup's card the notice already counts is now this research's
+    if (replaced) this.passCards.bugs = Math.max(0, this.passCards.bugs - 1);
     r.proposals++;
     // an idea about the app also lands in the brain's Idee, on the AI's side (its issue stays a card in Proposte)
     if (kind === 'app-idea' && this.d.saveIdea) {
       const id = saved.id;
-      void this.d.saveIdea({ title: card.title, body: [card.adds, card.removes].filter(Boolean).join(' · ') || card.title, why: card.why })
+      r.saves.push(this.d.saveIdea({ title: card.title, body: [card.adds, card.removes].filter(Boolean).join(' · ') || card.title, why: card.why })
         .then(() => { this.store.update(id, { ideaSaved: true }); this.d.changed(); })
-        .catch(e => log.warn('brain', 'maintenance idea not written to Idee', { cause: errText(e), hint: 'its issue card is still in Proposte' }));
+        .catch(e => log.warn('brain', 'maintenance idea not written to Idee', { cause: errText(e), hint: 'its issue card is still in Proposte' })));
     }
     this.d.changed();
     const used = (f: keyof typeof RESEARCH_CAPS) => this.store.all().filter(p => p.chatId === chatId && familyOf(p.kind) === f).length;

@@ -24,6 +24,7 @@ export const memoryEn: typeof memoryIt = {
   'mm.done.made': (p: { what: string }) => `Maintenance done: ${p.what}`,
   'mm.done.nothing': 'Maintenance done: everything was already in order.',
   'mm.done.failed': 'Maintenance done, but the research failed',
+  'mm.done.stopped': 'Maintenance stopped before the end',
   'mm.done.capped': 'Maintenance stopped at the spending cap',
   'mm.done.label': 'Maintenance done', 'mm.done.title': 'Your brain is in order',
   'mm.done.open': 'Open Memoria',
