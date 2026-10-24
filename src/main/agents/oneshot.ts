@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import type { AgentProfile, AgentRunTokens } from '../../shared/agents';
+import type { AgentProfile, AgentRunTokens, OneShotPurpose } from '../../shared/agents';
 import type { ModelRegistry, Settings } from '../../shared/contract';
 import type { PulseCostBasis } from '../../shared/pulse';
 import type { HeadlessRunner } from '../compare/headless';
@@ -14,7 +14,7 @@ import { type AgentRunStore, endRun } from './runs';
 
 export interface OneShotRequest {
   agentId: string; system: string; prompt: string; maxOutputTokens: number; timeoutMs: number;
-  purpose: 'pulse' | 'headline' | 'upgrade' | 'phrases';
+  purpose: OneShotPurpose;
   /** the lightest model of the engine and no role text: a small job that is no role's work (the working-line phrases) */
   light?: boolean;
 }

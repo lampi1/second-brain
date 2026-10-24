@@ -34,7 +34,7 @@ describe('role gate: skills', () => {
     expect(gateRequest({ type: 'permission', tool: 'Skill', input: { skill: 'brain-edit' } }, { role: chat.role, skills: chat.skills, rewrite: true }).kind).toBe('deny');
   });
   it('names the launch skills by their qualified names for the role instructions', () => {
-    expect(qualifiedSkillsLine(plugin, ['air-qa', 'brain-edit'])).toContain(`${plugin}:air-qa, ${plugin}:brain-edit`);
+    expect(qualifiedSkillsLine(plugin, ['example-app-qa', 'brain-edit'])).toContain(`${plugin}:example-app-qa, ${plugin}:brain-edit`);
     expect(qualifiedSkillsLine(plugin, [])).toBe('');
   });
   it('refuses another prefix, a nested one and an unassigned skill', () => {

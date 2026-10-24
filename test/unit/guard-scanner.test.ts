@@ -42,6 +42,15 @@ describe('scanner input and history boundaries', () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('unknown option');
   });
+  it('scans private data in allow-file comments before any commit exists', () => {
+    const { base, root } = setup();
+    const deny = path.join(base, 'deny'); fs.writeFileSync(deny, WORD);
+    fs.writeFileSync(path.join(root, '.guardallow'), `# Reviewed by ${WORD}\n`);
+    const result = scan(root, '--deny', deny);
+    expect(result.status).toBe(2);
+    expect(JSON.parse(result.stdout).findings).toEqual([{ where: '.guardallow', line: 1, rule: 'deny-list' }]);
+    expect(result.stdout).not.toContain(WORD);
+  });
   it('fails closed when history is requested outside a Git repository', () => {
     const { root } = setup();
     const result = scan(root, '--history');

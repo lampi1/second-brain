@@ -1,13 +1,15 @@
-// The agent run store (A5): strict reading, the pure lifecycle steps, bounds that prune only ended runs, refused links.
-import { afterEach, describe, expect, it } from 'vitest';
+// The agent run store (A5): strict record reading with partial recovery, the pure lifecycle steps, bounds that prune only ended runs, refused links.
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { AgentRunStore, ROLLUP_BYTES, RUNS_MAX, STALE_MS, addTurn, endRun, fitRollups, readRun, readTally, reopenRun, staleDue, type RunStart } from '../../src/main/agents/runs';
+import { ONE_SHOT_PURPOSES } from '../../src/shared/agents';
+import { log } from '../../src/main/log';
 import { SAMPLE_MAX, emptyTally } from '../../src/main/agents/run-metrics';
 
 const roots: string[] = [];
-afterEach(() => { for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
+afterEach(() => { vi.restoreAllMocks(); for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
 const tmp = () => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-runs-')); roots.push(dir); return dir; };
 const start = (o: Partial<RunStart> = {}): RunStart => ({ chatId: 'c1', agentId: 'reviewer', version: 2, goal: '  Rivedi  ', startedBy: 'user', startedAt: 1000, costKnown: true, ...o });
 
@@ -103,6 +105,57 @@ describe('agent run store', () => {
     expect(() => s.start(start())).toThrow(/non è leggibile/);
     expect(() => s.save()).toThrow();
     expect(fs.readFileSync(file, 'utf8')).toBe('{"version":2,"runs":[]}');
+  });
+
+  it.each(ONE_SHOT_PURPOSES)('roundtrips the %s one-shot purpose through the run reader and store', job => {
+    const dir = tmp(), s = new AgentRunStore(dir), run = s.start(start());
+    run.source = 'oneshot';
+    run.oneshot = { engine: 'claude', job, fallback: false, costBasis: 'reported' };
+    expect(readRun(run)).toEqual(run);
+    s.save();
+    const restored = new AgentRunStore(dir);
+    expect(restored.problem).toBeNull();
+    expect(restored.get(run.runId)).toEqual(run);
+    expect(readRun({ ...run, oneshot: { ...run.oneshot, job: 'future-job' } })).toBeNull();
+  });
+
+  it('recovers valid runs around malformed and duplicate records, logs once, and keeps recording', () => {
+    const dir = tmp(), file = path.join(dir, 'agent-runs.json'), seed = new AgentRunStore(dir);
+    const first = seed.start(start()), last = seed.start(start({ chatId: 'c2' }));
+    const tally = emptyTally('reviewer', 1);
+    const stored = { version: 1, runs: [null, first, { ...first, goal: 'duplicate' },
+      { ...first, runId: 'r_ffffffffffff', oneshot: { engine: 'claude', job: 'future-job', fallback: false, costBasis: 'unknown' } },
+      { ...last, tokens: { input: -1 } }, last, 42], rollups: [tally], prunedThrough: 500 };
+    fs.writeFileSync(file, JSON.stringify(stored));
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
+    const recovered = new AgentRunStore(dir);
+    expect(recovered.problem).toBeNull();
+    expect(recovered.list()).toEqual([first, last]);
+    expect(recovered.rolledUp()).toEqual([tally]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith('agents', 'invalid agent run records skipped', {
+      data: { skipped: 5, kept: 2 }, hint: expect.any(String),
+    });
+    // Loading alone never writes; the next normal flush persists the repair once.
+    expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toEqual(stored);
+    recovered.flush();
+    expect(new AgentRunStore(dir).list()).toEqual([first, last]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    const next = recovered.start(start({ chatId: 'c3', startedBy: 'orchestrator' }));
+    const reloaded = new AgentRunStore(dir);
+    expect(reloaded.list()).toEqual([first, last, next]);
+    expect(reloaded.rolledUp()).toEqual([tally]);
+    expect(reloaded.adopt({ ...first, runId: 'r_eeeeeeeeeeee', endedAt: 500, endReason: 'closed' })).toBeUndefined();
+  });
+
+  it('an all-invalid run list still permits new runs', () => {
+    const dir = tmp();
+    fs.writeFileSync(path.join(dir, 'agent-runs.json'), JSON.stringify({ version: 1, runs: [null, {}] }));
+    const recovered = new AgentRunStore(dir);
+    expect(recovered.problem).toBeNull();
+    expect(recovered.list()).toEqual([]);
+    const run = recovered.start(start());
+    expect(new AgentRunStore(dir).get(run.runId)).toEqual(run);
   });
 
   it('the first end wins; a reopen clears the end and the verdict and counts', () => {

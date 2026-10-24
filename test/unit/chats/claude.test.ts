@@ -186,13 +186,13 @@ describe('ClaudeSession', () => {
 
   it('runs an allowed call with the input fields the app patched (the role gate\'s qualified skill, issue #101)', async () => {
     const { s, sink } = start();
-    s.send('skillgate air-qa');
+    s.send('skillgate example-app-qa');
     const p = await waitFor(() => sink.pendings[0], 'permission');
     expect(p.tool).toBe('Skill');
-    s.answer(p.id, { kind: 'permission', allow: true }, { skill: 'agent-0123456789abcdef:air-qa' });
+    s.answer(p.id, { kind: 'permission', allow: true }, { skill: 'agent-0123456789abcdef:example-app-qa' });
     await resultOf(sink);
     const out = sink.last('tool')?.output ?? '';
-    expect(out).toContain('"updatedInput":{"skill":"agent-0123456789abcdef:air-qa","args":"x"}');
+    expect(out).toContain('"updatedInput":{"skill":"agent-0123456789abcdef:example-app-qa","args":"x"}');
   });
 
   it('answers the CLI\'s PreToolUse hook callback in-process: a refusal reaches the model, turns reset it (ADR 0090)', async () => {

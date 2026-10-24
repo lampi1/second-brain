@@ -6,6 +6,10 @@ import type { AgentKnowhow, AgentPackIdentity } from './agent-pack';
 import type { CharacterId } from './characters';
 import type { ModelTier } from './roles';
 
+/** One-shot purposes: the service and persisted run reader share this list so new jobs survive a restart. */
+export const ONE_SHOT_PURPOSES = ['pulse', 'headline', 'upgrade', 'phrases'] as const;
+export type OneShotPurpose = (typeof ONE_SHOT_PURPOSES)[number];
+
 /** The cartoon character a role is drawn as (renderer/lib/character-art.ts): fixed per role, never user content. */
 export type AgentAvatar = { kind: 'character'; value: CharacterId };
 
@@ -217,7 +221,7 @@ export interface AgentRun {
   /** Snapshot captured before launch; missing means historical suggestions are unknown. */
   skillSuggestions?: { at: number; suggested: string[]; used: string[] };
   source?: 'chat' | 'oneshot';
-  oneshot?: { engine: string; job: 'pulse' | 'headline' | 'upgrade' | 'phrases'; fallback: boolean; costBasis: 'reported' | 'estimated' | 'unknown' };
+  oneshot?: { engine: string; job: OneShotPurpose; fallback: boolean; costBasis: 'reported' | 'estimated' | 'unknown' };
   runId: string; chatId: string; agentId: string;
   version: number;
   goal: string; startedBy: 'user' | 'orchestrator' | 'parent' | 'app'; startedAt: number;

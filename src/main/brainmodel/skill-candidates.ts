@@ -16,9 +16,10 @@ const MAX_TEXT = 24_000;
 
 /** Reject linked ancestors/files: generated candidate names never become arbitrary filesystem paths. */
 function safeFile(root: string, parts: string[]): string {
-  const base = path.resolve(root); let current = base;
-  const rootStat = fs.lstatSync(base);
+  const chosen = path.resolve(root);
+  const rootStat = fs.lstatSync(chosen);
   if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) throw new Error('Brain root must be a real directory.');
+  const base = fs.realpathSync(chosen); let current = base;
   for (const part of parts) {
     current = path.join(current, part);
     try {

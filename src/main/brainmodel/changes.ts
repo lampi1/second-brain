@@ -66,8 +66,12 @@ export class ChangeLog {
     if (todo.some(w => (w.before?.length ?? 0) > SNAP || (w.text?.length ?? 0) > SNAP)) return null;
     const files: FileSnapshot[] = [];
     for (const w of todo) {
-      writeText(w.file, w.text);
-      files.push({ file: w.file, before: w.before, after: w.text });
+      // Freeze the actual destination at write time: aliases such as macOS /var must not lose provenance,
+      // and a later retargeted directory link must never redirect this change's evidence or rollback.
+      if (w.text !== null) fs.mkdirSync(path.dirname(w.file), { recursive: true });
+      const file = path.join(fs.realpathSync(path.dirname(w.file)), path.basename(w.file));
+      writeText(file, w.text);
+      files.push({ file, before: w.before, after: w.text });
     }
     if (!files.length && !agent) return null;
     return this.record(change, files, agent);
@@ -118,7 +122,9 @@ export class ChangeLog {
   }
   /** Who made a file (the latest change that wrote it and is not undone): for "made by" on the Skill page. */
   madeBy(file: string): StoredChange['job'] | null {
-    for (const c of [...this.entries].reverse()) if (!c.rolledBackAt && c.files.some(f => path.resolve(f.file) === path.resolve(file) && f.after !== null)) return c.job;
+    let current: string;
+    try { current = fs.realpathSync(file); } catch { current = path.resolve(file); }
+    for (const c of [...this.entries].reverse()) if (!c.rolledBackAt && c.files.some(f => path.resolve(f.file) === current && f.after !== null)) return c.job;
     return null;
   }
 }

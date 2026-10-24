@@ -48,6 +48,13 @@ export interface StrategyPlan {
 export const STEPS_MIN = 1, STEPS_MAX = 8, STEP_TITLE_MAX = 120, STEP_DETAIL_MAX = 200, NO_QUESTION_MAX = 200, DONE_WHEN_MAX = 200, CLARIFIED_MAX = 8, CLARIFIED_TEXT_MAX = 120;
 /** what the user's «Approva e parti» sends to the Strategist (also how its transcript shows the click) */
 export const PLAN_APPROVED = 'Piano approvato: parti.';
+/** Only complete, unqualified approval phrases count, and only on a host-verified direct user message for a pending
+ * plan. Never search arbitrary prose for an approval: quotes, conditions and changes must leave the panel open. */
+export function isPlanApproval(text: string): boolean {
+  const normalized = text.trim().toLocaleLowerCase('it').replace(/[.!]+$/, '').replace(/[, :]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return ['piano approvato parti', 'approvo', 'approvo il piano', 'approvo parti', 'approvo e parti', 'parti', 'ok vai',
+    'approvo procedi', 'approved', 'i approve the plan', 'approve and proceed', 'go ahead'].includes(normalized);
+}
 /** the user's «Cambia qualcosa»: the Strategist proposes again */
 export const planChange = (text: string): string => `Cambia il piano: ${text.trim()}`;
 /** the answer «Basta domande» gives to the open question */
@@ -58,7 +65,7 @@ export const ENOUGH_QUESTIONS = 'Basta domande: proponi ora il piano con quello 
 export const STRATEGY_FLOW = [
   '[app · how you work with the user here]',
   '1. First find out what the user really wants, at a high level: ask ONE question at a time with your question tool (AskUserQuestion on Claude), in the user\'s language, as a yes/no question (ADR 0135): exactly two options "Sì" and "No", the one you recommend ending with " (consigliato)" (a choice between options is asked as yes/no on the one you recommend; the user can also type his own answer), and a short header naming the topic. Ask at least one real question whenever the request leaves anything open (goal, scope, constraints, what "done" means, a preference between reasonable options): never silently invent it. Skip what the request already says. Stop as soon as goal, scope, constraints and "done" are clear, after at most 5 questions (a «No» that needs a follow-up question does not count), or when the user answers "Basta domande". Only if the request truly settles everything may you propose without asking: then plan_propose needs `noQuestionReason`, one line saying why.',
-  `2. Then propose the plan with plan_propose: 2 to 6 steps, each one short plain line in the user's language with the role that does it (and, if useful, a short \`detail\`); no jargon, no sub-steps. The user's approval is required, always: end your turn and wait; the user approves ("${PLAN_APPROVED}") or writes what to change, and then you propose again. The app refuses agent_delegate and agent_assign_task until the user approved.`,
+  `2. Then propose the plan with plan_propose: 2 to 6 steps, each one short plain line in the user's language with the role that does it (and, if useful, a short \`detail\`); no jargon, no sub-steps. The user's approval is required, always: end your turn and wait; the user approves with the panel ("${PLAN_APPROVED}") or an explicit typed approval, or writes what to change, and then you propose again. The app refuses agent_delegate and agent_assign_task until the user approved.`,
   '3. Once approved, inspect agent_children and reuse a compatible child with agent_assign_task (read agent_task_events first), or delegate new work with agent_delegate, giving its number as `step` (independent steps in parallel). A step you do yourself: plan_update it to "now", then to "done". The user follows the steps on your strip. At the end, agent_report as usual.',
 ].join('\n');
 
@@ -102,7 +109,7 @@ export function delegationGate(plan: StrategyPlan | null, tool: 'agent_delegate'
     : plan.phase === 'revising'
       ? 'The user asked for changes: propose the changed plan with plan_propose, end your turn and wait.'
       : 'Finish your questions, propose the plan with plan_propose, end your turn and wait.';
-  return `${tool} refused: the user has not approved your plan yet. ${next} You may delegate only after «${PLAN_APPROVED}».`;
+  return `${tool} refused: the user has not approved your plan yet. ${next} You may delegate only after the app records the user’s approval (the button sends «${PLAN_APPROVED}»; an explicit typed approval also counts).`;
 }
 
 /** A step number (1-based) of the plan, or an error naming the range. */

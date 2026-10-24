@@ -46,6 +46,16 @@ describe('lib/plan-ask.ts', () => {
 });
 
 describe('PlanApproval.tsx', () => {
+  it('keeps the pending card after user chat activity and presents only the latest proposal key', () => {
+    chats = { 's/1': { id: 's/1', plan: plan(), state: 'running', updatedAt: 100 } };
+    const state = { chats } as { chats: Record<string, ChatSummary> };
+    expect(planAskKeys(state)).toEqual(['s/1/plan@42']);
+    expect(html()).toContain('data-testid="qp-approve"');
+    chats['s/1']!.plan = plan({ at: 101 });
+    expect(planAskKeys(state)).toEqual(['s/1/plan@101']);
+    expect(html()).toBe('');
+    expect(html(101)).toContain('data-testid="qp-approve"');
+  });
   it('shows concise context and yes/no/free text, preserving the complete scope in a closed disclosure', () => {
     chats = { 's/1': { id: 's/1', plan: plan() } };
     const out = html();

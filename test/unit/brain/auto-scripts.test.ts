@@ -17,8 +17,8 @@ let root: string;
 beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-auto-scripts-')); });
 afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
 
-const DEPLOY = 'npm run deploy:test -- --target air-test --src-path .\\air.zip --type zip --slot staging-two';
-const PROD = 'az webapp deploy --resource-group rg-test --name air-test --src-path .\\air.zip --type zip';
+const DEPLOY = 'npm run deploy:test -- --target example-app-test --src-path .\\example-app.zip --type zip --slot staging-two';
+const PROD = 'az webapp deploy --resource-group rg-test --name example-app-test --src-path .\\example-app.zip --type zip';
 // credentials split in pieces so the repo guard does not read them as real ones
 const PW = ['Hunt', 'er2Secret'].join(''), TOK = ['abcdefgh', '12345678'].join('');
 const CREDENTIAL_COMMANDS = [
@@ -39,7 +39,7 @@ const run = (code: string, over: Partial<RunInfo> = {}): RunInfo => ({
 const setup = () => {
   const changelog = new BrainChangelog(() => root);
   const scripts = new BrainScripts(() => root, changelog);
-  const auto = new AutoScripts({ scripts, root: () => root, chatTitle: () => 'Deploy Air', platform: 'win32' });
+  const auto = new AutoScripts({ scripts, root: () => root, chatTitle: () => 'Deploy ExampleApp', platform: 'win32' });
   return { changelog, scripts, auto };
 };
 
@@ -81,7 +81,7 @@ describe('AutoScripts', () => {
     expect(file).toMatch(/^scripts\/cmd-npm-[0-9a-f]{8}\.ps1$/);
     const [s] = scripts.list().scripts;
     expect(s).toMatchObject({ title: DEPLOY.slice(0, 69) + '…', tags: ['auto', 'esegui'], tested: { state: 'ok' } });
-    expect(s!.description).toContain('Deploy Air');
+    expect(s!.description).toContain('Deploy ExampleApp');
     const text = fs.readFileSync(path.join(root, file!), 'utf8');
     expect(text).toContain(DEPLOY);
     expect(parseHeader(text).usage).toContain('powershell -NoProfile -File scripts/');
@@ -136,7 +136,7 @@ describe('AutoScripts', () => {
 
   it('writes a shell script off Windows, named after the command only (never its arguments)', () => {
     expect(scriptNameOf('npm run build\nnpm run migrate', 'linux')).toMatch(/^cmd-npm-[0-9a-f]{8}\.sh$/);
-    expect(scriptNameOf('cd C:\\repo\n& "C:\\tools\\Populator.exe" --seed all --tenant air', 'win32')).toMatch(/^cmd-populator-[0-9a-f]{8}\.ps1$/);
+    expect(scriptNameOf('cd C:\\repo\n& "C:\\tools\\Populator.exe" --seed all --tenant example-app', 'win32')).toMatch(/^cmd-populator-[0-9a-f]{8}\.ps1$/);
     const name = scriptNameOf(`dotnet run -- --conn Server=x;User=sa;Pwd=${PW}`, 'win32');
     expect(name).toMatch(/^cmd-dotnet-[0-9a-f]{8}\.ps1$/);
     expect(name.toLowerCase()).not.toContain('hunter');
@@ -145,19 +145,19 @@ describe('AutoScripts', () => {
 
 describe('brain_script_add (work chats)', () => {
   const ctx = { mount: 'chat', params: { chatId: 'c7' }, sessionId: '', signal: new AbortController().signal, progress: () => false } as CallCtx;
-  const args = { name: 'deploy-air.ps1', title: 'Deploy Air test', description: 'Zip su web app di test', code: DEPLOY, note: 'deploy ok' };
+  const args = { name: 'deploy-example-app.ps1', title: 'Deploy ExampleApp test', description: 'Zip su web app di test', code: DEPLOY, note: 'deploy ok' };
 
   it('adds a new script logged under the chat title, and refuses to overwrite one', async () => {
     const changelog = new BrainChangelog(() => root);
     const scripts = new BrainScripts(() => root, changelog);
-    const tool = chatScriptAddTool(scripts, id => (id === 'c7' ? 'Lavoro Air' : null));
+    const tool = chatScriptAddTool(scripts, id => (id === 'c7' ? 'Lavoro ExampleApp' : null));
     const out = JSON.parse(await tool.run(args, ctx) as string);
-    expect(out).toMatchObject({ ok: true, action: 'added', file: 'scripts/deploy-air.ps1' });
+    expect(out).toMatchObject({ ok: true, action: 'added', file: 'scripts/deploy-example-app.ps1' });
     expect(scripts.list().scripts[0]!.tested.state).toBe('ok');
-    expect(changelog.list().entries[0]).toMatchObject({ by: 'Lavoro Air', action: 'added' });
+    expect(changelog.list().entries[0]).toMatchObject({ by: 'Lavoro ExampleApp', action: 'added' });
     await expect(async () => tool.run({ ...args, code: 'echo 2' }, ctx)).rejects.toThrow(/exists already/);
     // another case of the same name (a case-insensitive file system would overwrite it)
-    await expect(async () => tool.run({ ...args, name: 'Deploy-AIR.ps1', code: 'echo 2' }, ctx)).rejects.toThrow(/exists already/);
+    await expect(async () => tool.run({ ...args, name: 'Deploy-Example-App.ps1', code: 'echo 2' }, ctx)).rejects.toThrow(/exists already/);
   });
 
   it('never overwrites a file the list leaves out (an oversized script)', async () => {

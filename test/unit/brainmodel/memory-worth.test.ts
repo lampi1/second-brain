@@ -14,7 +14,7 @@ const w = (value: string, predicate = 'note', subject = 'setup') => memoryWorth(
 
 describe('memoryWorth', () => {
   it('flags the owner\'s example: a local URL with a port, one case', () => {
-    const r = w('Statistiche prestazioni locally: https://localhost:44309/stats (after login Air runs on 44309, not 44319)');
+    const r = w('Statistiche prestazioni locally: https://localhost:44309/stats (after login ExampleApp runs on 44309, not 44319)');
     expect(r).toMatchObject({ specific: true, rule: false, signs: ['url'] });
   });
   it.each([

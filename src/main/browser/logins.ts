@@ -16,7 +16,7 @@ import type { CredentialEntry, HandoffAccount } from '../../shared/contract';
 export const DEFAULT_CREDENTIALS_FILE = 'ops/credentials.md';
 const USER_KEYS = ['email', 'username', 'user', 'login'] as const;
 
-/** group: the keys that lead to the entry ("air · test"), array indexes left out. */
+/** group: the keys that lead to the entry ("ExampleApp · test"), array indexes left out. */
 interface Entry { user: string; password: string; url?: string; note?: string; group: string }
 
 const oneLine = (s: string, max: number) => s.replace(/\s+/g, ' ').trim().slice(0, max);

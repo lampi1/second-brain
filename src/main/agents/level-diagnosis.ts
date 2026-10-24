@@ -106,7 +106,12 @@ export function diagnoseFile(raw: unknown, now: number): Diagnosis {
   if (!f || typeof f !== 'object' || f.version !== 1 || !Array.isArray(f.runs)) throw new Error('not an agent-runs.json (version 1 with a runs list)');
   const runs: AgentRun[] = [];
   let invalid = 0;
-  for (const v of f.runs) { const r = readRun(v); if (r) runs.push(r); else invalid++; }
+  const seen = new Set<string>();
+  for (const v of f.runs) {
+    const r = readRun(v);
+    if (!r || seen.has(r.runId)) { invalid++; continue; }
+    seen.add(r.runId); runs.push(r);
+  }
   const rollups = (Array.isArray(f.rollups) ? f.rollups : []).map(readTally).filter((t): t is RunTally => !!t);
   return diagnose(runs, rollups, now, f.flash === undefined ? null : readFlashLog(f.flash), invalid);
 }

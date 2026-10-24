@@ -1,5 +1,5 @@
 // The daily local rule of the "Da approvare" queue (ADR 0083): a role whose runs do clearly better, or as well for less,
-// on another model tier within the same skill set gets a tier proposal (Artisan + air-test: mid 45% vs top 85% → top).
+// on another model tier within the same skill set gets a tier proposal (Artisan + example-app-test: mid 45% vs top 85% → top).
 // Only verified outcomes count (the user's verdict, a verified independent review, the facts once settled: ADR 0100,
 // shared/run-verdict.ts); nothing is applied here and no model is
 // called. Pure: used by lifecycle.ts daily(), pinned by test/unit/agents/role-loop.test.ts.

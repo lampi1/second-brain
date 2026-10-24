@@ -11,7 +11,7 @@ import { PASTE_KEYS } from '../../src/main/browser/tools';
 const ROOT = path.resolve('/brain');
 const md = (obj: unknown) => ['# Accounts', 'text before', '```json', JSON.stringify(obj, null, 2), '```', '```bash', 'echo not json', '```'].join('\n');
 const FILE = md({
-  air: {
+  ExampleApp: {
     prod: [{ note: 'prod holding\nsecond line', email: 'mario@example.com', password: 'pw-prod' }],
     test: [
       { url: 'https://test-3.example.com/Account/Login', email: 'mario@example.com', password: 'pw-test' },
@@ -87,10 +87,10 @@ describe('credentials file', () => {
     it('lists every entry with its group from the file keys, user, URL and one-line note, never a password', () => {
       const list = creds({ 'ops/credentials.md': FIXTURE }).list();
       expect(list.map(e => [e.group, e.user])).toEqual([
-        ['air · prod', 'prod.user@example.com'],
-        ['air · test', 'mario@example.com'],
-        ['air · test', 'rci@example.com'],
-        ['air · local', 'admin@localhost.test'],
+        ['ExampleApp · prod', 'prod.user@example.com'],
+        ['ExampleApp · test', 'mario@example.com'],
+        ['ExampleApp · test', 'qa.user@example.com'],
+        ['ExampleApp · local', 'admin@localhost.test'],
         ['sistemaTsTest', 'MEDICO01'],
       ]);
       expect(list[2]).toMatchObject({ url: 'https://test-3.example.test/Account/Login', note: 'holding with module X enabled (for module X checks)' });
@@ -117,10 +117,10 @@ describe('credentials file', () => {
 
     it('a stale id never copies a twin entry: removing the first of two same-user entries shifts the second to its place', () => {
       const twin = (note: string, pw: string) => ({ note, url: 'https://x.example.test/', email: 'mario@example.com', password: pw });
-      const files = { 'ops/credentials.md': md({ air: { test: [twin('vecchia', 'pw-old'), twin('nuova', 'pw-new')] } }) };
+      const files = { 'ops/credentials.md': md({ ExampleApp: { test: [twin('vecchia', 'pw-old'), twin('nuova', 'pw-new')] } }) };
       const c = creds(files);
       const [first] = c.list();
-      files['ops/credentials.md'] = md({ air: { test: [twin('nuova', 'pw-new')] } });
+      files['ops/credentials.md'] = md({ ExampleApp: { test: [twin('nuova', 'pw-new')] } });
       expect(c.byId(first!.id)).toBeNull();
     });
 

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
+import { ONE_SHOT_PURPOSES } from '../../../src/shared/agents';
 import { OneShotService } from '../../../src/main/agents/oneshot';
 import { AgentRunStore } from '../../../src/main/agents/runs';
 import { AgentCatalogService } from '../../../src/main/agents/catalog';
@@ -25,12 +26,12 @@ function setup(engine = 'cursor') {
   return { deps, service, run, runs, userData, off: () => { fallback = 'off'; } };
 }
 const request = { agentId: 'pulse', system: 'system', prompt: 'digest', maxOutputTokens: 1200, timeoutMs: 120000, purpose: 'pulse' as const };
-it('falls back from Cursor to tool-free Claude in a fresh folder and persists provenance', async () => {
-  const f = setup(); const r = await f.service.runOnce(request);
+it.each(ONE_SHOT_PURPOSES)('falls back to tool-free Claude and persists %s provenance through a restart', async purpose => {
+  const f = setup(); const r = await f.service.runOnce({ ...request, purpose });
   expect(r).toMatchObject({ ok: true, engine: 'claude', costBasis: 'reported' });
   expect(f.run).toHaveBeenCalledWith(expect.objectContaining({ noTools: true, maxTokens: 1200, timeoutMs: 120000 }));
   const saved = new AgentRunStore(f.userData).list()[0]!;
-  expect(saved).toMatchObject({ source: 'oneshot', oneshot: { engine: 'claude', fallback: true, job: 'pulse' }, endReason: 'completed' });
+  expect(saved).toMatchObject({ source: 'oneshot', oneshot: { engine: 'claude', fallback: true, job: purpose }, endReason: 'completed' });
   expect(saved.chatId).toMatch(/^os_[a-f0-9]{12}$/);
   expect(fs.readdirSync(path.join(f.userData, 'oneshot'))).toEqual([]);
 });

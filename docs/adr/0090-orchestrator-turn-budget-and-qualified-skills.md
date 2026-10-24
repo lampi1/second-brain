@@ -12,8 +12,8 @@ ADR 0085 (every role may do everything by default), ADR 0087 (the quick path) ·
 workspace tools rarely reach the permission prompt (Read, Grep and Glob never ask; with `auto` or `bypassPermissions`
 nothing asks), so the role gate (which sees only `can_use_tool`) cannot count them.
 
-**#101.** A delegated child called `Skill("air-qa")` first; the gate refused the bare name (it could resolve to a user
-or project skill of the same name) and the child retried as `agent-<hash>:air-qa`. Every launch with a skill paid a
+**#101.** A delegated child called `Skill("example-app-qa")` first; the gate refused the bare name (it could resolve to a user
+or project skill of the same name) and the child retried as `agent-<hash>:example-app-qa`. Every launch with a skill paid a
 refused call and its retry, because nothing told the child the plugin name, which changes with each launch's content.
 
 ## Decision

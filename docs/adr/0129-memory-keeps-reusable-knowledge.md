@@ -2,7 +2,7 @@
 
 Date: 2026-10-22 · Status: accepted (owner, 2026-10-22: «le proposte di Memoria mi sembrano troppe, ho paura che la
 memoria si riempia e perda valore; l'auto-miglioramento deve funzionare perfettamente»; on the card «setup · note:
-Statistiche prestazioni locally: https://localhost:44309/… (after login Air runs on 44309, not 44319)»: «è inutile,
+Statistiche prestazioni locally: https://localhost:44309/… (after login ExampleApp runs on 44309, not 44319)»: «è inutile,
 specifico di un caso. Mi aspetto che la memoria salvi cose importanti e procedure ripetibili, non cose specifiche;
 generalizza piuttosto i dati salvati. Voglio che anche la Manutenzione ne tenga conto») · Builds on: ADR 0077 (the
 maintenance), 0123 (the Proposte deck), 0126 (plain cards)

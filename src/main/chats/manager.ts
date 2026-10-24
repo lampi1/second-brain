@@ -66,7 +66,7 @@ import { autoPermit } from './auto-permit';
 import { TurnToolBudget } from '../agents/orchestrator-budget';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
 import { RESULT_OUTPUT_MAX, checkResult, resultMessage, type DelegationLimitHit, type DelegationResult, type TaskSource, type TaskAssignmentOptions } from '../../shared/delegation';
-import { finishPlan, afterReport, PLAN_APPROVED, planChange, STRATEGY_FLOW, withClarified, withDelegated, withStep, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
+import { finishPlan, afterReport, isPlanApproval, PLAN_APPROVED, planChange, STRATEGY_FLOW, withClarified, withDelegated, withStep, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
 import { aiErrorRuns, runMetrics } from '../agents/run-metrics';
 import { standings, withStandings } from '../agents/standing';
 import { isCorrection } from '../../shared/correction';
@@ -452,7 +452,7 @@ const MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'pla
 /** chat-endpoint tools the Orchestrator can never use (chatToolShown): it does not delegate, report, ask a parent or
  *  rate a child (its chats are roots: agent_child_feedback takes only a child's run), and
  *  agent_catalog / agent_learn_propose are on its own endpoint already */
-const ORCHESTRATOR_HIDDEN: ReadonlySet<string> = new Set(['plan_propose', 'plan_update', 'agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_report', 'agent_ask_parent', 'agent_answer_child', 'agent_children', 'agent_child_feedback', 'agent_catalog', 'agent_learn_propose',
+const ORCHESTRATOR_HIDDEN: ReadonlySet<string> = new Set(['agent_work_decisions', 'plan_propose', 'plan_update', 'agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_report', 'agent_ask_parent', 'agent_answer_child', 'agent_children', 'agent_child_feedback', 'agent_catalog', 'agent_learn_propose',
   // it saves scripts with brain_script_save on its own endpoint
   'brain_script_add',
   // DevOps writes belong to the chat bound to an adapter step of an automatic flow (ADR 0145)
@@ -893,6 +893,11 @@ export class ChatManager implements ChatService {
       (from === undefined && (!source || source.kind === 'user') || source?.kind === 'chat' && (source.chatId === this.openOrchestrator()?.s.id || source.chatId === r.s.parentId))) {
       if (source?.kind === 'chat' && (source.chatId === this.openOrchestrator()?.s.id || (r.userTaskEvents?.latestSeq ?? 0) > (r.userTaskEvents?.acknowledgedSeq ?? 0))) throw new Error('Use app_assign_task for a follow-up; it checks role, project and current task version.');
       this.beginAssignment(r, text, { mode: isCorrection(text) ? 'rework' : 'continue', source: source ?? { kind: 'user' } });
+    }
+    // Typed consent uses the same host transition as the panel; agent mail, replay and app text never approve.
+    if (!resumed && !liveOnly && from === undefined && (!source || source.kind === 'user') && r.s.plan?.phase === 'proposed'
+      && !checkImages(images).length && isPlanApproval(text)) {
+      return this.decidePlan(chatId, 'approve', r.s.plan.at, undefined, text, receipt);
     }
     // its parent's message (agent_answer_child, from = the parent's title) reached it: the answer it waited for
     if (from !== undefined && r.s.parentId && from === this.chats.get(r.s.parentId)?.s.title) delete r.askedParentAt;
@@ -1337,8 +1342,7 @@ export class ChatManager implements ChatService {
     const r = this.need(chatId), plan = r.s.plan;
     if (!plan) throw new Error('plan_propose: only a Strategist the Orchestrator or the user started has a plan with the user.');
     if (plan.phase === 'running' || plan.phase === 'done') throw new Error('plan_propose: the plan is approved and under way; update its steps with plan_update.');
-    if (plan.phase === 'proposed') throw new Error('plan_propose: your plan already waits for the user. End your turn: the answer arrives as a message.');
-    r.s.plan = { phase: 'proposed', clarified: plan.clarified, ...(plan.asked ? { asked: plan.asked } : {}), steps, ...(doneWhen ? { doneWhen } : {}), at: Date.now() };
+    r.s.plan = { phase: 'proposed', clarified: plan.clarified, ...(plan.asked ? { asked: plan.asked } : {}), steps, ...(doneWhen ? { doneWhen } : {}), at: Math.max(Date.now(), plan.at + 1) };
     // the run keeps the plan's fate: a decision signal for the Orchestrator (standing.ts, ADR 0131)
     const run = r.s.run;
     if (run && run.endedAt === undefined) { run.plan = { ...(run.plan ?? { proposals: 0, changes: 0 }), proposals: (run.plan?.proposals ?? 0) + 1 }; this.runSave(); }
@@ -1375,6 +1379,11 @@ export class ChatManager implements ChatService {
   /** The user's click on a proposed plan (chat:plan): «Approva e parti» or «Cambia qualcosa» with what to change; the
    *  Strategist gets it as the user's message. «Basta domande» is an answer to its open question (renderer). */
   async planDecide(chatId: string, decision: 'approve' | 'change', at: number, text?: string): Promise<void> {
+    return this.decidePlan(chatId, decision, at, text);
+  }
+
+  /** Common panel/typed decision path; keep the user's original wording in the transcript and roll back failed delivery. */
+  private async decidePlan(chatId: string, decision: 'approve' | 'change', at: number, text?: string, message?: string, receipt?: SubmissionReceipt): Promise<void> {
     const r = this.need(chatId), plan = r.s.plan;
     if (!plan || plan.phase !== 'proposed') throw new Error('Questo piano non aspetta più una risposta.');
     if (plan.at !== at) throw new Error('Il piano è cambiato nel frattempo: rileggilo.');
@@ -1382,10 +1391,10 @@ export class ChatManager implements ChatService {
     if (decision === 'change' && (!change || change.length > 2000)) throw new Error('Scrivi cosa cambiare (al massimo 2000 caratteri).');
     if (decision !== 'approve' && decision !== 'change') throw new Error('Scelta non valida.');
     // the phase moves first (a second click finds it decided) and comes back if the message does not reach the Strategist
-    r.s.plan = { ...plan, phase: decision === 'approve' ? 'running' : 'revising', at: Date.now() };
+    r.s.plan = { ...plan, phase: decision === 'approve' ? 'running' : 'revising', at: Math.max(Date.now(), plan.at + 1) };
     this.persist();
     this.updated(r);
-    try { await this.send(chatId, decision === 'approve' ? PLAN_APPROVED : planChange(change), undefined, false, undefined, false, { kind: 'user' }); } catch (e) {
+    try { await this.send(chatId, message ?? (decision === 'approve' ? PLAN_APPROVED : planChange(change)), undefined, false, undefined, false, { kind: 'user' }, receipt); } catch (e) {
       if (r.s.plan?.phase === (decision === 'approve' ? 'running' : 'revising')) { r.s.plan = plan; this.persist(); this.updated(r); }
       throw e;
     }

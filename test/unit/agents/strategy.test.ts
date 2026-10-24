@@ -6,7 +6,7 @@
 // app enforces the flow (ADR 0121): a first proposal before any question needs a reason, and every refusal of a
 // delegation before the user's ok says what to do next.
 // Pins shared/strategy.ts, agents/strategy-tools.ts and the plan part of chats/manager.ts and agents/delegation.ts.
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -19,7 +19,7 @@ import type { AgentCatalog } from '../../../src/shared/agents';
 import type { NewChat } from '../../../src/shared/contract';
 import type { McpTool } from '../../../src/main/mcp/server';
 import type { PermissionCeiling, ToolClass } from '../../../src/shared/agents';
-import { finishPlan, afterReport, checkProposal, delegationGate, proposalGate, ENOUGH_QUESTIONS, PLAN_APPROVED, readPlan, STRATEGY_FLOW, withClarified, withDelegated, withStep, type StrategyPlan } from '../../../src/shared/strategy';
+import { finishPlan, afterReport, isPlanApproval, checkProposal, delegationGate, proposalGate, ENOUGH_QUESTIONS, PLAN_APPROVED, readPlan, STRATEGY_FLOW, withClarified, withDelegated, withStep, type StrategyPlan } from '../../../src/shared/strategy';
 
 /** Roles a user narrowed: tools, ceiling and launches per role (the rest stays the default). */
 type Narrowed = Partial<Record<RoleId, { tools: ToolClass[]; ceiling: PermissionCeiling | null; launches: string[] }>>;
@@ -123,7 +123,10 @@ describe('a Strategist\'s plan with the user', () => {
     // «Cambia qualcosa»: revising, the change as the user's message; a new proposal is up again
     await expect(decide(f, s.id, 'change', '  ')).rejects.toThrow(/cosa cambiare/);
     // one proposal at a time, and only the one the user read can be approved
-    await expect(f.call('plan_propose', s.id, PLAN)).rejects.toThrow(/already waits/);
+    const previousAt = planOf(f, s.id).at;
+    await expect(f.call('plan_propose', s.id, PLAN)).resolves.toMatchObject({ shown: true });
+    expect(planOf(f, s.id).at).toBeGreaterThan(previousAt);
+    await expect(f.m.planDecide(s.id, 'approve', previousAt)).rejects.toThrow(/cambiato/);
     await expect(f.m.planDecide(s.id, 'approve', planOf(f, s.id).at - 1)).rejects.toThrow(/cambiato/);
     expect(planOf(f, s.id).phase).toBe('proposed');
     await decide(f, s.id, 'change', 'Prima i test');
@@ -133,9 +136,9 @@ describe('a Strategist\'s plan with the user', () => {
     await f.call('plan_propose', s.id, PLAN);
     await decide(f, s.id, 'approve');
     expect(planOf(f, s.id).phase).toBe('running');
-    // the run keeps the plan's fate for the Orchestrator's decision signals (ADR 0131): two proposals, one change, approved
+    // the run keeps the plan's fate for the Orchestrator's decision signals (ADR 0131): three presentations, one change, approved
     const runId = f.m.list().find(c => c.id === s.id)!.run!.runId;
-    expect(f.m.runs.get(runId)!.plan).toEqual({ proposals: 2, changes: 1, approvedAt: expect.any(Number) });
+    expect(f.m.runs.get(runId)!.plan).toEqual({ proposals: 3, changes: 1, approvedAt: expect.any(Number) });
     expect(f.sent.get(s.id)!.at(-1)).toBe(PLAN_APPROVED);
     await expect(f.call('plan_propose', s.id, PLAN)).rejects.toThrow(/approved and under way/);
   });
@@ -213,6 +216,57 @@ describe('a Strategist\'s plan with the user', () => {
     expect(planOf(f, s.id).steps[0]!.state).toBe('blocked');
   });
 
+  it('never reuses a proposal token when a change and reproposal share the same clock tick', async () => {
+    const f = fixture();
+    const s = await f.root('strategist');
+    const now = vi.spyOn(Date, 'now').mockReturnValue(Date.now());
+    try {
+      await f.call('plan_propose', s.id, PLAN);
+      const stale = planOf(f, s.id).at;
+      await decide(f, s.id, 'change', 'Prima i test');
+      await f.call('plan_propose', s.id, PLAN);
+      expect(planOf(f, s.id).at).toBeGreaterThan(stale);
+      await expect(f.m.planDecide(s.id, 'approve', stale)).rejects.toThrow(/cambiato/);
+    } finally { now.mockRestore(); }
+  });
+
+  it('accepts a direct typed approval, preserving its wording and unlocking delegation', async () => {
+    const f = fixture();
+    const s = await f.root('strategist');
+    await f.call('plan_propose', s.id, PLAN);
+    await f.m.send(s.id, 'Approvo, parti!');
+    expect(planOf(f, s.id).phase).toBe('running');
+    expect(f.sent.get(s.id)!.at(-1)).toBe('Approvo, parti!');
+    expect(f.m.list().find(c => c.id === s.id)!.run!.plan!.approvedAt).toEqual(expect.any(Number));
+    await expect(f.call('agent_delegate', s.id, { tasks: [{ ...f.task('scout', 'Dove'), step: 1 }] })).resolves.toBeDefined();
+  });
+
+  it('leaves the same proposal pending after unrelated, conditional, replayed or agent-authored text', async () => {
+    const f = fixture();
+    const s = await f.root('strategist');
+    await f.call('plan_propose', s.id, PLAN);
+    const pending = planOf(f, s.id);
+    await f.m.send(s.id, 'Quanto dura?');
+    await f.m.send(s.id, 'Approvo se prima aggiungi i test');
+    await f.m.send(s.id, PLAN_APPROVED, undefined, false, 'Orchestrator', false, { kind: 'chat', chatId: 'other' });
+    await f.m.send(s.id, PLAN_APPROVED, undefined, true);
+    await f.m.send(s.id, PLAN_APPROVED, undefined, false, undefined, false, { kind: 'app' });
+    expect(planOf(f, s.id)).toEqual(pending);
+    await expect(f.call('agent_delegate', s.id, { tasks: [f.task('scout', 'Dove')] })).rejects.toThrow(/not approved/);
+  });
+
+  it('rolls back a typed approval when the engine rejects delivery', async () => {
+    let fail = false;
+    const f = fixture({}, undefined, undefined, () => { if (fail) throw new Error('engine offline'); });
+    const s = await f.root('strategist');
+    await f.call('plan_propose', s.id, PLAN);
+    const pending = planOf(f, s.id);
+    fail = true;
+    await expect(f.m.send(s.id, 'approvo parti')).rejects.toThrow(/engine offline/);
+    expect(planOf(f, s.id)).toEqual(pending);
+    expect(f.m.list().find(c => c.id === s.id)!.run!.plan!.approvedAt).toBeUndefined();
+  });
+
   it('a decision whose message does not reach the Strategist leaves the plan waiting', async () => {
     const f = fixture();
     const s = await f.root('strategist');
@@ -241,6 +295,10 @@ describe('a Strategist\'s plan with the user', () => {
 
 describe('shared/strategy.ts', () => {
   const plan = (): StrategyPlan => ({ phase: 'running', at: 1, clarified: [], steps: checkProposal(PLAN).steps });
+  it('recognizes complete approvals without interpreting quotations or changes as consent', () => {
+    for (const text of [PLAN_APPROVED, 'approvo parti', 'ok vai', ' Approvo il piano! ']) expect(isPlanApproval(text)).toBe(true);
+    for (const text of ['non approvo', 'approvo se aggiungi i test', '"approvo"', 'ok vai ma cambia il piano', 'approvo?', 'sì', 'ok']) expect(isPlanApproval(text)).toBe(false);
+  });
   it('checks a proposal: steps, roles, lengths, unknown fields', () => {
     expect(checkProposal({ steps: [{ title: '  Due   spazi ' }] }).steps).toEqual([{ title: 'Due spazi', state: 'todo' }]);
     expect(() => checkProposal({ steps: Array(9).fill({ title: 'x' }) })).toThrow(/1 to 8/);

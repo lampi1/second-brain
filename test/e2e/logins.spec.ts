@@ -16,7 +16,7 @@ for (const scheme of ['dark', 'light'] as const) {
       await page.getByTestId('palette-item-credentials').click();
       const panel = page.getByTestId('credentials');
       await expect(panel).toBeVisible();
-      await expect(panel.locator('.cred-group-title')).toHaveText(['air · test', 'air · local', 'sistemaTsTest']);
+      await expect(panel.locator('.cred-group-title')).toHaveText(['ExampleApp · test', 'ExampleApp · local', 'sistemaTsTest']);
       await expect(panel.getByTestId(/^cred-user-/)).toHaveCount(4);
       await expect(panel.getByTestId(/^cred-open-/)).toHaveCount(2);
       await expect(panel.getByTestId('cred-copy-password-demo-1')).toBeVisible();

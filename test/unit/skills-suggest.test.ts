@@ -5,7 +5,7 @@ import { SkillSuggester } from '../../src/main/skills/suggest';
 import { skillName } from '../../src/main/brainmodel/jobs';
 
 const skills = [
-  { name: 'air-qa', description: 'Run the QA checklist of the AIR app before a release.' },
+  { name: 'example-app-qa', description: 'Run the QA checklist of the ExampleApp app before a release.' },
   { name: 'apri-issue-app', description: 'Apri una issue GitHub per un bug della app second-brain.' },
   { name: 'brief-mattutino', description: 'Il brief del mattino: calendario, mail, task del giorno.' },
   { name: 'caveman-review', description: 'Review a pull request in plain words, short sentences.' },
@@ -31,7 +31,7 @@ describe('skill suggestions (#159)', () => {
   });
 
   it('a generated name keeps the key words, at most 40 characters', () => {
-    const name = skillName('Brain maintenance: fai manutenzione solo quando Davide lo chiede esplicitamente in chat', new Set());
+    const name = skillName('Brain maintenance: fai manutenzione solo quando Alex lo chiede esplicitamente in chat', new Set());
     expect(name.length).toBeLessThanOrEqual(40);
     expect(name.startsWith('brain-maintenance-fai-manutenzione')).toBe(true);
     expect(skillName('Brief', new Set(['brief']))).toBe('brief-2');

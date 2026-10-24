@@ -39,7 +39,7 @@ wrong-field risks; may come later behind an explicit click).
   reach it.
 - Tests run with an in-memory clipboard (`SB_TEST`): a test never overwrites what the user copied.
 - 2026-10-13, "Credenziali" panel (command palette, top bar): the same file and the same rules outside a hand-off. Main
-  sends the renderer only group (the file's keys, "air · test"), user, URL, note and an id (a hash of position, group,
+  sends the renderer only group (the file's keys, "ExampleApp · test"), user, URL, note and an id (a hash of position, group,
   user, URL and note; an id two entries share copies nothing); Copia password reads the file again at the click (a stale id copies nothing), with the same 30 s clear
   and paste block. Not exposed over MCP (no app_* tool lists or copies entries). Why: the user asked a chat "dammi url e
   credenziali di test X" ~12 times in 6 days.

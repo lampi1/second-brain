@@ -512,7 +512,7 @@ export interface HandoffAccount {
  *  file on the user's click ('credentials:copy'), as for login hand-offs (ADR 0012). */
 export interface CredentialEntry {
   id: string;                 // stable while the file does not change (a Copia after a change finds nothing)
-  group: string;              // the keys that lead to it in the file: "air · test"
+  group: string;              // the keys that lead to it in the file: "ExampleApp · test"
   user: string;
   url?: string;               // sign-in URL, if the entry has one
   note?: string;              // one line: "holding with module X enabled"
