@@ -5,6 +5,12 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 
 ## [Unreleased]
 
+### Added
+- **Voice mode in the Orchestrator and Flash** (ADR 0152): Ctrl+M or the mic (in place of the «Invio» hint) turns it on
+  or off; a red dot shows it listens, what you say goes as your message and the reply is read aloud in Italian (Piper,
+  voice Paola by default); question cards can be answered by voice. Local and free (sherpa-onnx: Silero VAD, Whisper,
+  Piper), models downloaded once and checked by hash. Settings → Voce.
+
 ### Changed
 - **The Orchestrator knows the app and changes its configuration** (ADR 0149): `app_guide` reads the app map live
   (rail, pages, Memoria tabs, Settings sections, shortcuts, help, every setting with its value, active routines),

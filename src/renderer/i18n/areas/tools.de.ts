@@ -151,6 +151,8 @@ export const toolsDe: typeof toolsIt = {
   'tools.keys.newChatWhat': 'Neue Anfrage an den Orchestrator',
   'tools.keys.settingsKey': 'Strg ,',
   'tools.keys.settingsWhat': 'Einstellungen',
+  'tools.keys.voiceKey': 'Strg M',
+  'tools.keys.voiceWhat': 'Sprachmodus: Mikrofon an oder aus (Orchestrator und Flash)',
   'tools.keys.stopChatKey': 'Strg .',
   'tools.keys.stopChatWhat': 'Ausgewählten Chat stoppen',
   'tools.keys.closeChatKey': 'Strg W',
