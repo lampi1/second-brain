@@ -667,7 +667,7 @@ app.whenReady().then(async () => {
     'suggest:state': () => composerSuggest.state(),
     'voice:state': () => voice.state(),
     'voice:prepare': () => voice.prepare(),
-    'voice:listen': a => voice.listen(a?.on === true),
+    'voice:listen': a => voice.listen(a?.on === true, a?.talk === true),
     'voice:audio': a => voice.audio(a?.samples),
     'voice:speak': a => voice.speak(String(a?.text ?? ''), a?.voice && ['paola', 'miro', 'dii'].includes(a.voice) ? a.voice : undefined),
     'rec:state': () => recordings.state(),

@@ -1,7 +1,7 @@
 // Voice mode (ADR 0152): the mic button, the bar under the Orchestrator's and Flash's input, Settings → Voice.
 import type { voiceIt } from './voice.it';
 export const voiceEn: typeof voiceIt = {
-  'voice.on': 'Talk (voice mode)',
+  'voice.on': 'Dictate (types into the field)',
   'voice.off': 'Turn the microphone off',
   'voice.placeholder': 'Go ahead and talk, or type…',
   'voice.offShort': 'off',
@@ -21,7 +21,7 @@ export const voiceEn: typeof voiceIt = {
   'voice.noOrchestrator': 'Open the Orchestrator to talk to it.',
   'voice.sample': 'Ciao! Sono la voce del tuo secondo cervello. Dimmi pure cosa vuoi fare.',
   'voice.group': 'Voice',
-  'voice.groupDesc': 'Talk to the Orchestrator and Flash, and hear the answers. Local, free.',
+  'voice.groupDesc': 'Dictate into the text field, or talk with the Orchestrator. Local, free.',
   'voice.asrTitle': 'Transcription',
   'voice.asrHint': 'Whisper on your PC, nothing leaves the computer. Fast answers sooner; Accurate misses fewer words but is slower.',
   'voice.asr.fast': 'Fast · 374 MB',
@@ -34,10 +34,14 @@ export const voiceEn: typeof voiceIt = {
   'voice.try': 'Try',
   'voice.tryNeedsDownload': 'Download the voice first',
   'voice.modelsTitle': 'Models on this PC',
-  'voice.modelsReady': 'Ready. Ctrl+M turns voice mode on and off.',
+  'voice.modelsReady': 'Ready. Ctrl+M turns dictation on and off.',
   'voice.modelsMissing': ({ mb }: { mb: number }) => `To download once: ${mb} MB. Also starts by itself on the first Ctrl+M.`,
   'voice.downloading': ({ pct }: { pct: number }) => `Downloading… ${pct}%`,
   'voice.download': 'Download',
+  'voice.talkTitle': 'Voice conversation',
+  'voice.talkHint': 'Talk to the Orchestrator and hear its answer while it writes. Talk over it to interrupt. The mic in the text field only types what you say.',
+  'voice.dictating': 'Dictation: typing into the field',
+  'voice.writesInInput': 'typed into the field',
   'mic.title': 'Microphone',
   'mic.hint': 'The one that listens in voice mode and in recorded calls. Plug one in (USB too) and it is used at once.',
   'mic.default': 'System default',

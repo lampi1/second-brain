@@ -112,14 +112,15 @@ export class VoiceService {
     return this.state();
   }
 
-  listen(on: boolean): void {
+  /** talk: a spoken conversation (its voice is loaded now too) */
+  listen(on: boolean, talk = false): void {
     if (this.d.fake) {
       if (this.fakeTimer) clearTimeout(this.fakeTimer);
       this.fakeTimer = on ? setTimeout(() => { this.d.speech(true); this.d.speech(false); this.d.heard(this.d.fake!.text); }, 600) : null;
       return;
     }
     if (!on && !this.child) return;
-    this.proc().postMessage({ type: 'listen', on, asr: this.d.settings().asr });
+    this.proc().postMessage({ type: 'listen', on, asr: this.d.settings().asr, ...(on && talk ? { voice: this.d.settings().voice } : {}) });
   }
 
   audio(samples: Float32Array): void {

@@ -1,10 +1,12 @@
-// Settings → Voce (ADR 0152): which Whisper transcribes (Veloce / Precisa), which Italian voice answers (with «Prova»),
+// Settings → Voce (ADR 0152): the spoken conversation with the Orchestrator, on or off (the mic button in the inputs
+// only dictates, owner 2026-10-24), which Whisper transcribes (Veloce / Precisa), which Italian voice answers (with «Prova»),
 // which microphone listens (lib/mic.ts: the list follows what is plugged in), and the local models: what is on disk, what is missing, the one-time download with its progress. Writes go through
 // settings:set like every other row of the page. Mounted by SettingsPage.tsx.
 import { useEffect, useState } from 'react';
 import { VOICE_ASRS, VOICE_NAMES, type VoiceAsr, type VoiceName } from '@shared/voice';
 import { setSetting, useApp } from '../store/store';
-import { previewVoice, startVoice, useVoice, voice } from '../lib/voice';
+import { previewVoice, setTalk, startVoice, useVoice, voice } from '../lib/voice';
+import { Switch } from './SettingsPage';
 import { chooseMic, micName, pick, refreshMics, useMics } from '../lib/mic';
 import { IconPlay } from './Icons';
 import { Select } from './Select';
@@ -19,6 +21,7 @@ export function VoiceSettings() {
     void window.sb.invoke('voice:state', undefined).then(st => voice.set(s => ({ ...s, engine: st })), () => {});
   }, [settings?.voiceAsr, settings?.voiceName]);
   const mic = useMics(m => m);
+  const talking = useVoice(v => v.mode === 'talk' && v.phase !== 'off');
   useEffect(() => { refreshMics(); }, []);
   if (!settings) return null;
   const asr: VoiceAsr = settings.voiceAsr ?? 'fast', name: VoiceName = settings.voiceName ?? 'paola';
@@ -30,6 +33,10 @@ export function VoiceSettings() {
     setTrying(false);
   };
   return <>
+    <div className="st-row" data-testid="st-voice-talk">
+      <div className="st-text"><span className="st-title">{t('voice.talkTitle')}</span><p className="st-desc">{t('voice.talkHint')}</p></div>
+      <div className="st-ctl"><Switch on={talking} onChange={on => void setTalk(on)} label={t('voice.talkTitle')} testid="st-voice-talk-on" /></div>
+    </div>
     <div className="st-row" data-testid="st-voice-asr">
       <div className="st-text"><span className="st-title">{t('voice.asrTitle')}</span><p className="st-desc">{t('voice.asrHint')}</p></div>
       <div className="st-ctl"><div className="segmented" role="radiogroup" aria-label={t('voice.asrTitle')}>

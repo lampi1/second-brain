@@ -1,7 +1,8 @@
 // Voice mode's pure rules (ADR 0152, src/shared/voice.ts): a spoken answer to a yes/no card, Whisper's noise on
-// silence, what of a reply is said aloud, and which reply is read when a turn ends (never one the app started).
+// silence, what of a reply is said aloud, which turn is read while it streams (never one the app started), and how
+// a streaming reply is cut into the pieces synthesized one by one.
 import { describe, expect, it } from 'vitest';
-import { isNoise, parseSpokenAnswer, replyToSpeak, speakable, spokenQuestion } from '../../src/shared/voice';
+import { isNoise, parseSpokenAnswer, settledText, speakable, speechChunks, spokenQuestion, turnToSpeak } from '../../src/shared/voice';
 import type { ChatItem } from '../../src/shared/contract';
 
 describe('parseSpokenAnswer', () => {
@@ -49,21 +50,44 @@ describe('speakable', () => {
   it('an emoji-only reply says nothing', () => { expect(speakable('👍')).toBe(''); });
 });
 
-describe('replyToSpeak', () => {
+describe('turnToSpeak', () => {
   const user = (at: number, from?: string): ChatItem => ({ kind: 'user', id: `u${at}`, at, text: 'ciao', ...(from ? { from } : {}) });
-  const said = (at: number, text: string): ChatItem => ({ kind: 'assistant', id: `a${at}`, at, text });
-  const done = (at: number, extra: Partial<Extract<ChatItem, { kind: 'result' }>> = {}): ChatItem => ({ kind: 'result', id: `r${at}`, at, costUsd: 0, durationMs: 1, turns: 1, isError: false, ...extra });
-  it('the reply to the user own message after voice went on, once per result', () => {
-    expect(replyToSpeak([user(10), said(11, 'Uno.'), said(12, 'Due.'), done(13)], 5)).toEqual({ key: 'r13', text: 'Uno. Due.' });
+  const said = (at: number, text: string, streaming = false): ChatItem => ({ kind: 'assistant', id: `a${at}`, at, text, ...(streaming ? { streaming } : {}) });
+  const done = (at: number): ChatItem => ({ kind: 'result', id: `r${at}`, at, costUsd: 0, durationMs: 1, turns: 1, isError: false });
+  it('the reply to the user own message after voice went on, while it is still being written', () => {
+    expect(turnToSpeak([user(10), said(11, 'Uno. Du', true)], 5)).toEqual({ key: 'u10', text: 'Uno. Du', done: false });
+    expect(turnToSpeak([user(10), said(11, 'Uno.'), said(12, 'Due.'), done(13)], 5)).toEqual({ key: 'u10', text: 'Uno.\n\nDue.', done: true });
   });
-  it('never a turn started by the app or another chat, nor one from before voice mode', () => {
-    expect(replyToSpeak([user(10, 'Orchestrator'), said(11, 'Uno.'), done(12)], 5)).toBeNull();
-    expect(replyToSpeak([user(3), said(11, 'Uno.'), done(12)], 5)).toBeNull();
+  it('never a turn started by the app or another chat, nor one from before voice went on', () => {
+    expect(turnToSpeak([user(10, 'Orchestrator'), said(11, 'Uno.'), done(12)], 5)).toBeNull();
+    expect(turnToSpeak([user(3), said(11, 'Uno.'), done(12)], 5)).toBeNull();
   });
-  it('nothing while the turn runs, after an error or a stop', () => {
-    expect(replyToSpeak([user(10), said(11, 'Uno.')], 5)).toBeNull();
-    expect(replyToSpeak([user(10), said(11, 'Uno.'), done(12, { isError: true })], 5)).toBeNull();
-    expect(replyToSpeak([user(10), said(11, 'Uno.'), done(12, { interrupted: true })], 5)).toBeNull();
+});
+
+describe('settledText', () => {
+  it('a streaming reply: up to its last finished sentence, never inside an open code block', () => {
+    expect(settledText('Ciao. Sto contr', false)).toBe('Ciao.');
+    expect(settledText('Ecco:\n```js\nconst a', false)).toBe('Ecco:\n');
+    expect(settledText('niente ancora', false)).toBe('');
+    expect(settledText('Ciao. Sto contr', true)).toBe('Ciao. Sto contr');
+  });
+  it('a dotted number or a list number does not end a sentence', () => {
+    expect(settledText('Versione 1.2 e poi', false)).toBe('');
+    expect(settledText('Ecco i passi:\n1. Apri', false)).toBe('Ecco i passi:\n');
+  });
+});
+
+describe('speechChunks', () => {
+  it('one piece per sentence; a long one also at a comma, so the first sound comes soon', () => {
+    expect(speechChunks('Fatto. Ho aperto la PR! Vuoi altro?')).toEqual(['Fatto.', 'Ho aperto la PR!', 'Vuoi altro?']);
+    const long = `${'parola '.repeat(20).trim()}, ${'altra '.repeat(20).trim()}.`;
+    const parts = speechChunks(long, 180);
+    expect(parts.length).toBe(2);
+    expect(parts.every(p => p.length <= 180)).toBe(true);
+    expect(parts.join(' ')).toBe(long);
+  });
+  it('no piece without a word', () => {
+    expect(speechChunks('… . Ok.')).toEqual(['Ok.']);
   });
 });
 

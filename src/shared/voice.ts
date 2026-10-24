@@ -89,20 +89,48 @@ export function speakable(md: string, max = 700): string {
   return `${s} Il resto è in chat.`;
 }
 
-/** The reply to read aloud when a chat's turn ends: the assistant text after the user's own last message (not one a chat
- *  or the app sent: the app never speaks on its own initiative, owner 2026-10-24), only when that message came after
- *  `since` (voice mode on) and the turn ended with a result. key = the result's id, so each reply is said once. */
-export function replyToSpeak(items: readonly ChatItem[] | undefined, since: number): { key: string; text: string } | null {
+/** The turn being answered, while it streams (talk mode reads it aloud sentence by sentence, not after the whole reply
+ *  and all its synthesis: first audio after the first sentence, the way voice agents stream LLM text into TTS, see ADR
+ *  0152). The user's own last message after `since`; the assistant text after it (a partial one included); done = the
+ *  turn ended. key = the user's message, so a turn is read once. */
+export function turnToSpeak(items: readonly ChatItem[] | undefined, since: number): { key: string; text: string; done: boolean } | null {
   if (!items?.length) return null;
-  const last = items[items.length - 1]!;
-  if (last.kind !== 'result' || last.isError || last.interrupted) return null;
-  let u = items.length - 2;
+  let u = items.length - 1;
   while (u >= 0 && items[u]!.kind !== 'user') u--;
   const user = items[u];
   if (!user || user.kind !== 'user' || user.from || user.at < since) return null;
-  const text = items.slice(u + 1).filter((i): i is Extract<ChatItem, { kind: 'assistant' }> => i.kind === 'assistant').map(i => i.text).join('\n\n');
-  const say = speakable(text);
-  return say ? { key: last.id, text: say } : null;
+  const after = items.slice(u + 1);
+  const text = after.filter((i): i is Extract<ChatItem, { kind: 'assistant' }> => i.kind === 'assistant').map(i => i.text).join('\n\n');
+  return { key: user.id, text, done: after.some(i => i.kind === 'result') };
+}
+
+/** The part of a streaming reply that is safe to say now: up to its last finished sentence, never inside an open code
+ *  block; all of it once the turn is done. */
+export function settledText(md: string, done: boolean): string {
+  if (done) return md;
+  let s = md;
+  const fences = s.match(/```/g)?.length ?? 0;
+  if (fences % 2) s = s.slice(0, s.lastIndexOf('```'));
+  // «1.» opening a list item is not the end of a sentence
+  const m = [...s.matchAll(/(?<!\d)[.!?…:](?=\s)|\n/g)].at(-1);
+  return m ? s.slice(0, m.index! + 1) : '';
+}
+
+/** Spoken text cut into the pieces synthesized one by one: sentences; a long one also at a comma or a space, so the
+ *  first sound never waits for a whole paragraph. */
+export function speechChunks(text: string, max = 180): string[] {
+  const out: string[] = [];
+  for (const raw of text.split(/(?<=[.!?…])\s+/)) {
+    let s = raw.trim();
+    while (s.length > max) {
+      const cut = Math.max(s.lastIndexOf(', ', max), s.lastIndexOf('; ', max));
+      const at = cut > max / 3 ? cut + 1 : Math.max(s.lastIndexOf(' ', max), max / 2);
+      out.push(s.slice(0, at).trim());
+      s = s.slice(at).trim();
+    }
+    if (s && /[\p{L}\p{N}]/u.test(s)) out.push(s);
+  }
+  return out;
 }
 
 /** What a question card gives voice mode (DecisionCard: the question, what was done, what yes and no do; who asks). */
