@@ -90,3 +90,29 @@ it('opens the default when the chosen microphone vanished between the list and t
   getUserMedia.mockRejectedValueOnce(Object.assign(new Error('no'), { name: 'NotAllowedError' }));
   await expect(m.openMicStream()).rejects.toThrow('no');
 });
+
+it('one headset firing two changes is one switch and one toast, and «Annulla» goes back to the default', async () => {
+  const m = await import('../../src/renderer/lib/mic');
+  m.startMics();
+  await flush();
+  devices.push({ kind: 'audioinput', deviceId: 'hs', label: 'Cuffie USB' }, { kind: 'audiooutput', deviceId: 'hso', label: 'Cuffie USB' });
+  onChange!(); onChange!();
+  await flush(); await flush();
+  expect(toast).toHaveBeenCalledTimes(1);
+  toast.mock.calls[0]![2].run();
+  expect(m.mics.get().chosen).toBeNull();
+});
+
+it('unplugging the microphone in use on «Predefinito» still tells voice mode to reopen', async () => {
+  devices.push({ kind: 'audioinput', deviceId: 'usb', label: 'Microfono USB' });
+  const m = await import('../../src/renderer/lib/mic');
+  m.startMics();
+  await flush();
+  const changed = vi.fn();
+  m.onMicChange(changed);
+  devices = devices.filter(d => d.deviceId !== 'usb');
+  onChange!();
+  await flush();
+  expect(changed).toHaveBeenCalledTimes(1);
+  expect(toast).not.toHaveBeenCalled();
+});

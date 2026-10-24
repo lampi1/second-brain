@@ -10,7 +10,7 @@ import { createStore } from '../store/createStore';
 import { app, send } from '../store/store';
 import { toast } from '../store/ui';
 import { t } from '../i18n';
-import { onMicChange, openMicStream } from './mic';
+import { micAudio, onMicChange, openMicStream } from './mic';
 import { VOICE_RATE, isNoise, parseSpokenAnswer, replyToSpeak, speakable, spokenQuestion, type SpokenAnswer, type SpokenQuestionInput, type VoiceName, type VoiceState } from '@shared/voice';
 
 export type VoiceTarget = 'orchestrator' | 'flash';
@@ -117,7 +117,10 @@ async function openMic(my: number): Promise<void> {
   const fake = !!voice.get().engine?.fake;
   let got: MediaStream | null = null;
   try {
+    const want = JSON.stringify(micAudio().deviceId ?? null);
     got = await openMicStream();
+    // another microphone was chosen or plugged in while this one was opening: open that one instead
+    if (my === session && JSON.stringify(micAudio().deviceId ?? null) !== want) { got.getTracks().forEach(tr => tr.stop()); got = null; await openMic(my); return; }
     // turned off (or started again) while the permission or the device was pending: this stream is never used
     if (my !== session) { got.getTracks().forEach(tr => tr.stop()); return; }
     stream = got;

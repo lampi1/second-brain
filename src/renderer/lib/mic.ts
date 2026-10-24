@@ -50,14 +50,15 @@ const changed = new Set<() => void>();
 export const onMicChange = (fn: () => void): (() => void) => { changed.add(fn); return () => changed.delete(fn); };
 const tell = () => { for (const fn of changed) { try { fn(); } catch { /* a listener's own problem */ } } };
 
-let seen = false;
-async function refresh(): Promise<{ before: MicDevice[]; now: MicDevice[] }> {
-  const before = mics.get().devices;
+let asked = 0;
+/** The list now; an older answer that comes back after a newer one is dropped. */
+async function refresh(): Promise<MicDevice[]> {
+  const my = ++asked;
   let now: MicDevice[] = [];
   try { now = realInputs(await navigator.mediaDevices.enumerateDevices()); } catch { /* no media devices here */ }
-  const chosen = mics.get().chosen;
-  mics.set(s => ({ ...s, devices: now, using: !!pick(chosen, now) }));
-  return { before, now };
+  if (my !== asked) return mics.get().devices;
+  mics.set(s => ({ ...s, devices: now, using: !!pick(s.chosen, now) }));
+  return now;
 }
 
 /** Settings → Voce opened: the list again (names may have shown up since). */
@@ -71,19 +72,26 @@ export function chooseMic(m: MicDevice | null): void {
 }
 
 let wired = false;
+/** the microphones the plug watch has already met: only its own handler moves it, so no other refresh hides a plug-in */
+let known: MicDevice[] | null = null;
+let queue: Promise<void> = Promise.resolve();
 /** Once (main.tsx): the saved choice, the list, and the plug / unplug watch. */
 export function startMics(): void {
   if (wired || typeof navigator === 'undefined' || !navigator.mediaDevices) return;
   wired = true;
   mics.set(s => ({ ...s, chosen: load() }));
-  void refresh().then(() => { seen = true; });
-  navigator.mediaDevices.addEventListener('devicechange', () => { void plugged(); });
+  // one change at a time: Windows fires several for one headset (its input, its output)
+  const next = () => { queue = queue.then(plugged, () => {}); };
+  next();
+  navigator.mediaDevices.addEventListener('devicechange', next);
 }
 
 async function plugged(): Promise<void> {
   const wasUsing = mics.get().using;
-  const { before, now } = await refresh();
-  if (!seen) { seen = true; return; }
+  const now = await refresh();
+  const before = known;
+  known = now;
+  if (!before) return; // the first look: nothing was plugged in, it was there
   const fresh = added(before, now);
   const prev = mics.get().chosen;
   if (fresh.length) {
@@ -92,7 +100,10 @@ async function plugged(): Promise<void> {
     toast(t('mic.plugged', { name: micName(m) }), 'info', { label: t('mic.undo'), run: () => chooseMic(prev) }, 8000);
     return;
   }
-  if (wasUsing && !mics.get().using && prev) { toast(t('mic.gone', { name: micName(prev) }), 'info'); tell(); }
+  if (!added(now, before).length) return;
+  // a microphone went away: the one in use may be it (the chosen one, or the system's default), so voice reopens
+  if (wasUsing && !mics.get().using && prev) toast(t('mic.gone', { name: micName(prev) }), 'info');
+  tell();
 }
 
 /** The constraints for getUserMedia: the voice-friendly filters, on the chosen microphone when it is plugged in. */
