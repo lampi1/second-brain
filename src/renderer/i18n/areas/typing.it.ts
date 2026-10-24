@@ -1,12 +1,10 @@
 // Italian UI texts of the "typing" area (ADR 0057): the line of a working chat, picked by the task's kind of work
-// (lib/typing-line.ts, components/ChatItems.tsx Typing). Dev jokes, silly and a bit cringe on purpose (owner,
-// 2026-10-22: «battute divertenti, tipo deletando un db di prod, cercando su stack overflow, vado a fare la cacca…
-// esilaranti e cringe»), one short line each. Spread into it.ts. Keys: typing.<concept>.<n> (shared/work-concepts.ts
-// Concept, or "any").
+// (lib/typing-line.ts, components/ChatItems.tsx Typing). Short developer jokes, spread into it.ts.
+// Keys: typing.<concept>.<n> (shared/work-concepts.ts Concept, or "any").
 export const typingIt = {
   'typing.any.0': 'Cancello il DB di produzione… scherzo (forse)…',
   'typing.any.1': 'Cerco su Stack Overflow…',
-  'typing.any.2': 'Vado a fare la cacca, torno subito…',
+  'typing.any.2': 'Metto in ordine le idee…',
   'typing.any.3': 'Chiedo a un’altra IA, non dirlo a nessuno…',
   'typing.any.4': 'Riavvio e vediamo se passa…',
   'typing.any.5': 'Sulla mia macchina funziona…',
