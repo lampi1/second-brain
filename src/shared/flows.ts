@@ -7,6 +7,8 @@ export interface FlowStep {
   inputs: string[]; action?: { kind: 'builtin' | 'script' | 'query' | 'action'; ref: string };
   evidence: string[]; timeoutMs: number; maxAttempts: number;
   effect: 'read-only' | 'code' | 'external-write' | 'production'; reviewOf?: string; workspaceInput?: string;
+  /** An external-write agent step that writes only through the host's DevOps write adapter (ADR 0145). */
+  adapter?: 'devops-write';
 }
 export interface FlowDefinition {
   id: string; title: string; description: string; category?: string; aliases: string[];

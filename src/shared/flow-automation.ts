@@ -5,9 +5,16 @@ export type FlowTrigger = { kind: 'interval'; everyMinutes: number } | {
   kind: 'devops'; everyMinutes: number; organization: string; project: string; areaPath: string;
   workItemType: string; states: string[]; includeExisting: boolean;
 };
+/** User-approved DevOps write categories; anything not listed is denied by the host (ADR 0145). */
+export const DEVOPS_WRITE_OPS = ['tags', 'comment', 'fields', 'test-plans', 'test-results', 'pr-links'] as const;
+export type DevOpsWriteOp = typeof DEVOPS_WRITE_OPS[number];
+/** The exact write grant shown in the approval modal: one organization, its projects, ops and work item fields. */
+export interface DevOpsWriteGrant { organization: string; projects: string[]; ops: DevOpsWriteOp[]; fields: string[] }
 export interface FlowAutomationConfig {
   flowId: string; flowVersion: number; trigger: FlowTrigger; scope: FlowScope;
   inputs: Record<string, string>; priority: 'urgent' | 'normal';
+  /** Absent = deny-all. Only a devops trigger may carry it; approval is the rule's exact revision. */
+  devopsWrite?: DevOpsWriteGrant;
 }
 export interface FlowAutomationRule {
   id: string; revision: number; config: FlowAutomationConfig; ownerOrchestratorId: string;

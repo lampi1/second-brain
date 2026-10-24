@@ -151,7 +151,7 @@ describe('Orchestrator notification and event starts', () => {
   });
   it('recovers a flow commit whose event write was interrupted', async () => {
     const { auto, flow, enable, options } = setup(); enable(); await auto.tick(); const event = auto.snapshot().events[0]!;
-    const run = flow.start({ flowId: 'sample', flowVersion: 1, subjectKey: event.subjectKey, inputs: event.inputs, scope: config().scope }, 'orch');
+    const run = flow.start({ flowId: 'sample', flowVersion: 1, subjectKey: event.subjectKey, inputs: event.inputs, scope: config().scope }, 'orch', true);
     const restarted = new FlowAutomationService(options); expect(restarted.startEvent(event.id, 'orch').id).toBe(run.id); expect(restarted.snapshot().events[0]!.runId).toBe(run.id); expect(flow.snapshot().runs).toHaveLength(1);
   });
   it('caps automatic concurrency at two global and one per rule', async () => {

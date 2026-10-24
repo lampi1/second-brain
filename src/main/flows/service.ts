@@ -2,12 +2,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { FlowActivate, FlowAgentBinding, FlowDecision, FlowDraft, FlowMatch, FlowPropose, FlowReceipt, FlowReport, FlowRun, FlowScope, FlowSnapshot, FlowStart, FlowVerifiedReport, FlowVersion } from '../../shared/flows';
-import { digest, inScope, integer, keys, normalize, object, text, validateDefinition, validateInputs, validateScope } from './schema';
+import type { FlowActivate, FlowAgentBinding, FlowDecision, FlowDraft, FlowMatch, FlowPropose, FlowReceipt, FlowReport, FlowRun, FlowScope, FlowSnapshot, FlowStart, FlowStep, FlowVerifiedReport, FlowVersion } from '../../shared/flows';
+import { adapted, digest, inScope, integer, keys, normalize, object, text, validateDefinition, validateInputs, validateScope } from './schema';
 
 export interface FlowServiceOptions {
   file: string; contextKey: string; now?: () => number; changed?: (snapshot: FlowSnapshot) => void;
   resolveReport?: (binding: FlowAgentBinding, reportId: string) => FlowVerifiedReport | null;
+  /** True only while the user-approved automatic rule that started this run grants the DevOps write adapter (ADR 0145). */
+  adapterGranted?: (run: FlowRun) => boolean;
 }
 type Stored = Omit<FlowSnapshot, 'contextKey' | 'storageError'> & { schema: 1; bindings: string[] };
 const empty = (): Stored => ({ schema: 1, bindings: [], drafts: [], versions: [], active: {}, runs: [] });
@@ -65,9 +67,11 @@ export class FlowService {
       return draft;
     });
   }
-  start(input: FlowStart, ownerId: string): FlowRun {
+  /** `automatic` is passed only by the automation service: `auto:` subjects are reserved for its event starts (ADR 0145). */
+  start(input: FlowStart, ownerId: string, automatic = false): FlowRun {
     keys(object(input, 'start'), ['flowId', 'flowVersion', 'subjectKey', 'scope', 'inputs'], 'start');
     const subjectKey = text(input.subjectKey, 'subjectKey', 500), owner = text(ownerId, 'owner', 200), scope = validateScope(input.scope), inputs = validateInputs(input.inputs);
+    if (!automatic && subjectKey.startsWith('auto:')) throw new Error('Subjects starting with auto: are reserved for automatic flow events');
     return this.change(() => {
       const version = this.version(input.flowId, input.flowVersion);
       if (this.data.active[input.flowId] !== input.flowVersion) throw new Error('Only the current user-activated flow version can start');
@@ -86,7 +90,7 @@ export class FlowService {
     return this.change(() => {
       const run = this.guarded(runId, expectedRevision, stepId); this.owner(run, ownerId);
       const definition = this.version(run.flowId, run.flowVersion).definition.steps[run.currentStep]!, step = run.steps[run.currentStep]!;
-      if (definition.kind !== 'agent' || step.status !== 'ready' || step.attempts >= definition.maxAttempts || definition.effect === 'external-write' || definition.effect === 'production' || definition.action) throw new Error('Current step is not available for delegation');
+      if (definition.kind !== 'agent' || step.status !== 'ready' || step.attempts >= definition.maxAttempts || this.unsupported(run, definition) || definition.action) throw new Error('Current step is not available for delegation');
       text(binding.chatId, 'chatId', 200); text(binding.chatRunId, 'chatRunId', 200); integer(binding.taskVersion, 'taskVersion', 1);
       const bindingKey = JSON.stringify([binding.chatRunId, binding.taskVersion]);
       if (this.data.bindings.includes(bindingKey)) throw new Error('Agent run/task identity was already bound to a flow step');
@@ -120,7 +124,7 @@ export class FlowService {
       const run = this.guarded(input.runId, input.expectedRevision, input.stepId), step = run.steps[run.currentStep]!, definition = this.version(run.flowId, run.flowVersion).definition.steps[run.currentStep]!;
       if (!['approval', 'blocked'].includes(step.status)) throw new Error('Step does not have a pending user decision');
       if (input.answer !== 'yes') { this.block(run, feedback || 'User declined this step.'); step.decisionPending = false; this.touch(run); return run; }
-      if (definition.effect === 'external-write' || definition.effect === 'production' || (definition.action && definition.action.kind !== 'builtin')) throw new Error('No configured execution adapter; approval cannot bypass this blocker');
+      if (this.unsupported(run, definition)) throw new Error('No configured execution adapter; approval cannot bypass this blocker');
       if (step.status === 'blocked') {
         if (step.attempts >= definition.maxAttempts) throw new Error('Retry limit reached');
         delete step.chatId; delete step.chatRunId; delete step.taskVersion; delete step.startedAt; delete step.reason; step.status = 'pending'; this.prepare(run);
@@ -148,7 +152,7 @@ export class FlowService {
     while (run.currentStep < definition.steps.length) {
       const spec = definition.steps[run.currentStep]!, step = run.steps[run.currentStep]!;
       run.status = 'active';
-      if (spec.effect === 'external-write' || spec.effect === 'production' || (spec.action && spec.action.kind !== 'builtin')) { this.block(run, 'Execution adapter unavailable. No external or production action was performed.'); return; }
+      if (this.unsupported(run, spec)) { this.block(run, 'Execution adapter unavailable. No external or production action was performed.'); return; }
       if (spec.inputs.some(key => !run.inputs[key]?.trim())) { this.block(run, 'Required inputs are missing. Revise the definition or start a new subject with complete inputs.'); return; }
       if (spec.kind === 'approval' || spec.kind === 'manual') { step.status = 'approval'; step.decisionPending = true; run.status = 'approval'; return; }
       if (spec.kind === 'agent') { step.status = 'ready'; return; }
@@ -158,6 +162,13 @@ export class FlowService {
       this.finish(run, { id: randomUUID(), stepId: step.stepId, kind: 'check', at: this.now(), summary: `Host metadata check: ${spec.action?.ref}`, evidence: ['metadata: Metadata validated only; no test suite or external action was executed.'] });
     }
     run.status = 'completed';
+  }
+  /** Production and non-builtin actions never run; an external write runs only as a granted DevOps adapter step. */
+  private unsupported(run: FlowRun, spec: FlowStep): boolean {
+    if (spec.effect === 'production' || (spec.action && spec.action.kind !== 'builtin')) return true;
+    if (spec.effect !== 'external-write') return false;
+    if (!adapted(spec)) return true;
+    try { return this.options.adapterGranted?.(run) !== true; } catch { return true; }
   }
   private finish(run: FlowRun, receipt: FlowReceipt): void { const step = run.steps[run.currentStep]!; step.status = 'completed'; delete step.reason; delete step.decisionPending; step.receipt = receipt; run.currentStep++; }
   private block(run: FlowRun, reason: string): void { run.status = 'blocked'; run.steps[run.currentStep]!.status = 'blocked'; run.steps[run.currentStep]!.decisionPending = true; run.steps[run.currentStep]!.reason = reason; run.updatedAt = this.now(); }
@@ -219,7 +230,8 @@ export class FlowService {
         if (step.taskVersion !== undefined) integer(step.taskVersion, 'step task', 1);
         if (step.startedAt !== undefined) integer(step.startedAt, 'step start');
         if (step.status === 'ready' && (spec.kind !== 'agent' || step.attempts >= spec.maxAttempts) || step.status === 'approval' && !['manual', 'approval'].includes(spec.kind)) throw new Error('Invalid step kind state');
-        const unsupported = spec.effect === 'external-write' || spec.effect === 'production' || spec.action && spec.action.kind !== 'builtin';
+        // A declared adapter step may progress on disk; its grant is re-checked live at prepare, bind, retry and every write.
+        const unsupported = (spec.effect === 'external-write' && !adapted(spec)) || spec.effect === 'production' || spec.action && spec.action.kind !== 'builtin';
         if (unsupported && !['pending', 'blocked'].includes(step.status)) throw new Error('Unsupported action cannot progress');
         if (step.status !== 'completed' && step.receipt) throw new Error('Unfinished step cannot have a receipt');
         if (step.decisionPending !== undefined && typeof step.decisionPending !== 'boolean') throw new Error('Invalid decision state');
@@ -233,7 +245,7 @@ export class FlowService {
           text(receipt.id, 'receipt id', 200); integer(receipt.at, 'receipt time');
           if (spec.kind === 'agent' && (receipt.chatId !== step.chatId || !receipt.reportId || !step.chatRunId || !step.taskVersion || spec.evidence.some(label => !receipt.evidence.some(value => value.startsWith(`${label}: `))))) throw new Error('Invalid agent receipt binding');
           if (spec.reviewOf && run.steps.find(s => s.stepId === spec.reviewOf)?.chatId === step.chatId) throw new Error('Invalid independent reviewer');
-          if ((spec.kind === 'agent' && receipt.kind !== 'agent-report') || (spec.kind === 'check' && receipt.kind !== 'check') || (['approval', 'manual'].includes(spec.kind) && receipt.kind !== 'user') || spec.effect === 'external-write' || spec.effect === 'production') throw new Error('Invalid receipt authority');
+          if ((spec.kind === 'agent' && receipt.kind !== 'agent-report') || (spec.kind === 'check' && receipt.kind !== 'check') || (['approval', 'manual'].includes(spec.kind) && receipt.kind !== 'user') || (spec.effect === 'external-write' && !adapted(spec)) || spec.effect === 'production') throw new Error('Invalid receipt authority');
         }
         if (step.chatRunId) { const key = JSON.stringify([step.chatRunId, step.taskVersion]); if (observedBindings.has(key)) throw new Error('Replayed binding in storage'); observedBindings.add(key); }
         if (step.chatRunId && (!step.taskVersion || !data.bindings.includes(JSON.stringify([step.chatRunId, step.taskVersion])))) throw new Error('Missing binding ledger entry');

@@ -75,6 +75,7 @@ import type { McpServer, McpTool, ToolOutput } from './mcp/server';
 import { createBrowserModule, mcpPortFromEnv } from './browser/service';
 import { Workflows } from './workflows/service';
 import { createFlowRuntime, type FlowRuntime } from './flows/runtime';
+import { devopsWriteTools } from './flows/devops-write-tool';
 import { AGENT_LABEL, appControlTools, orchestratorEndpointAuth, type ToolDef, type ToolOut } from './appctl/tools';
 import { ChatMail, mailTools } from './chats/mail';
 import { brainClassifier } from './chats/orchestrator-delivery';
@@ -696,6 +697,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const flows = flowsRef = createFlowRuntime({ userData: ctx.userData, brainRoot: () => brain.info().brainRoot,
     chats: () => chats.list(), changed: snapshot => ctx.emitter.emit('flows:changed', snapshot),
     send: (ownerId, message) => chats.send(ownerId, message, undefined, false, 'Flussi automatici', false, { kind: 'app' }) });
+  addChatTools(devopsWriteTools((chatId, request, signal) => flows.devopsWrite(chatId, request, signal)));
   const workflows = workflowsRef = new Workflows(path.join(ctx.userData, 'work-threads.json'), rows => ctx.emitter.emit('work:changed', rows), Date.now, row => {
     const linked = chats.list().filter(c => row.chatIds.includes(c.id) && c.plan);
     const approved = linked.filter(c => ['running', 'done'].includes(c.plan!.phase) && (c.run?.plan?.approvedAt ?? 0) > 0);
