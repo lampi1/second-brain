@@ -47,14 +47,21 @@ describe('spoken turns in a chat', () => {
     const dir = tmp(), sent: string[] = [];
     const m = manager(dir, sent);
     const chat = await m.create({ harness: 'anthropic', cwd: tmp(), orchestrator: true, prompt: 'Ciao' });
-    m.spokenNext(chat.id);
+    m.spokenNext(chat.id, 'come va');
     await m.send(chat.id, 'come va');
     expect(sent.at(-1)).toBe(`come va${voiceReplyHint(false)}`);
-    m.spokenNext(chat.id);
+    m.spokenNext(chat.id, 'e adesso');
     await m.send(chat.id, 'e adesso');
     expect(sent.at(-1)).toBe(`e adesso${voiceReplyHint(true)}`);
     await m.send(chat.id, 'scritto');
     expect(sent.at(-1)).toBe('scritto');
+    // marked but another text goes first (app text, mail): it never takes the spoken line
+    m.spokenNext(chat.id, 'detto');
+    await m.send(chat.id, 'notizia dell’app');
+    expect(sent.at(-1)).toBe('notizia dell’app');
+    await m.send(chat.id, 'detto');
+    expect(sent.at(-1)).toBe(`detto${voiceReplyHint(true)}`);
+    m.spokenNext(chat.id, null);
     const items = m.items(chat.id);
     expect(items.filter(i => i.kind === 'user').map(i => (i as { text: string }).text)).not.toContainEqual(expect.stringContaining('Spoken turn'));
   });

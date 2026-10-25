@@ -188,7 +188,7 @@ async function sendNow(chatId: string, msg: QueuedMsg, before?: ChatSummary, opt
     if (before && optimistic && app.get().chats[chatId] === optimistic) dispatch({ type: 'chat:updated', chat: before });
     // images main refused would fail the same way at every retry: the text goes back without them
     const refused = !!msg.images?.length && /^(Immagine \d+:|Immagini|Troppe immagini)/.test(errText(e));
-    const back: QueuedMsg = refused ? { id: msg.id, text: msg.text } : msg;
+    const back: QueuedMsg = refused ? { id: msg.id, text: msg.text, ...(msg.voice ? { voice: true as const } : {}) } : msg;
     // back at the head of the queue: it goes before the messages queued after it
     if (back.text || back.images?.length) dispatch({ type: 'queue', chatId, msg: back, front: true });
     done(); // after the roll back: its idle flushes nothing, the failed message stays first (no retry loop)

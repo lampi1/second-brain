@@ -109,6 +109,12 @@ describe('forEar', () => {
   });
   it('a word that only contains a dictionary word stays as it is', () => {
     expect(forEar('Il bugiardo ha un profilo.')).toBe('Il bugiardo ha un profilo.');
+    expect(forEar('Ci sono le file alla cassa.')).toBe('Ci sono le file alla cassa.');
+  });
+  it('text in capitals and Roman numerals are words, not acronyms; km/h and e/o stay readable', () => {
+    expect(forEar('NON FARLO ADESSO.')).toBe('NON FARLO ADESSO.');
+    expect(forEar('Il capitolo XIV.')).toBe('Il capitolo XIV.');
+    expect(forEar('A 50 km/h, tu e/o lui.')).toBe('A 50 km/h, tu e o lui.');
   });
 });
 

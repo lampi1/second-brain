@@ -98,7 +98,7 @@ const SAY_AS: [RegExp, string][] = ([
   ['merge', 'mèrg'], ['merged', 'mèrgiato'], ['commit', 'commìt'], ['commits', 'commìt'], ['branch', 'brànch'], ['push', 'pùsh'],
   ['bug', 'bag'], ['bugs', 'bag'], ['fix', 'fics'], ['deploy', 'diplòi'], ['release', 'rilìs'], ['build', 'bìld'], ['review', 'riviù'],
   ['issue', 'ìssiu'], ['issues', 'ìssiu'], ['feature', 'fìciur'], ['features', 'fìciur'], ['task', 'tàsk'], ['tasks', 'tàsk'],
-  ['team', 'tìm'], ['teams', 'tìms'], ['meeting', 'mìting'], ['chat', 'ciàt'], ['email', 'imèil'], ['mail', 'mèil'], ['file', 'fàil'],
+  ['team', 'tìm'], ['teams', 'tìms'], ['meeting', 'mìting'], ['chat', 'ciàt'], ['email', 'imèil'], ['mail', 'mèil'],
   ['files', 'fàil'], ['update', 'apdèit'], ['login', 'loghìn'], ['password', 'pàssuord'], ['browser', 'bràuser'],
   ['default', 'difòlt'], ['dashboard', 'dèshbord'], ['workflow', 'uòrcflou'], ['screenshot', 'scrìnsciot'], ['script', 'scrìpt'],
   ['scripts', 'scrìpt'], ['query', 'quèri'], ['backend', 'bècchend'], ['frontend', 'fròntend'], ['plugin', 'plàghin'], ['token', 'tòken'],
@@ -108,6 +108,8 @@ const SAY_AS: [RegExp, string][] = ([
 const LETTER: Record<string, string> = { A: 'a', B: 'bi', C: 'ci', D: 'di', E: 'e', F: 'effe', G: 'gi', H: 'acca', I: 'i', J: 'i lunga', K: 'cappa', L: 'elle', M: 'emme',
   N: 'enne', O: 'o', P: 'pi', Q: 'cu', R: 'erre', S: 'esse', T: 'ti', U: 'u', V: 'vu', W: 'doppia vu', X: 'ics', Y: 'ipsilon', Z: 'zeta' };
 /** acronyms said as words, not letter by letter */
+/** a Roman numeral follows these words (capitolo XIV, Papa Leone XIV); elsewhere CI, DC, MI are acronyms */
+const ROMAN_BEFORE = /(?:capitolo|secolo|parte|atto|volume|fase|livello|papa|re|leone|luigi|pio)\s+$/i;
 const AS_WORD = new Set(['REST', 'NASA', 'FIAT', 'UE', 'ONU', 'IVA', 'INPS', 'COVID', 'RAM', 'SIM', 'LED', 'PIN', 'CAP']);
 
 export function forEar(text: string): string {
@@ -116,12 +118,17 @@ export function forEar(text: string): string {
     .replace(/\s*&\s*/g, ' e ')
     .replace(/(\d)\s*%/g, '$1 per cento')
     .replace(/#(\d+)/g, 'numero $1')
-    .replace(/(\p{L})\/(\p{L})/gu, '$1 o $2')
+    .replace(/(?<![\p{L}\p{N}])e\/o(?![\p{L}\p{N}])/giu, 'e o')
+    .replace(/(\p{L}{3,})\/(\p{L}{3,})/gu, '$1 o $2')
     .replace(/\s*[()[\]{}]\s*/g, ', ')
     .replace(/\s*[;:]\s+/g, ', ')
     .replace(/\s+[-–—]\s+/g, ', ');
   for (const [re, say] of SAY_AS) s = s.replace(re, say);
-  s = s.replace(/(?<![\p{L}\p{N}])([A-Z]{2,5})s?(?![\p{L}\p{N}])/gu, (m, a: string) => (AS_WORD.has(a) ? a.toLowerCase() : [...a].map(c => LETTER[c] ?? c).join(' ')));
+  // acronyms letter by letter; not in text written in capitals (shouting, a title: words, not acronyms), not Roman numerals
+  const shouting = /(?:\b[A-ZÀ-Ý]{2,}\b[\s,.!?]+){2,}\b[A-ZÀ-Ý]{2,}\b/u.test(s);
+  if (!shouting) s = s.replace(/(?<![\p{L}\p{N}])([A-Z]{2,5})s?(?![\p{L}\p{N}])/gu, (m, a: string, at: number, all: string) =>
+    /^[IVXLCDM]+$/.test(a) && ROMAN_BEFORE.test(all.slice(Math.max(0, at - 14), at)) ? m
+      : AS_WORD.has(a) ? a.toLowerCase() : [...a].map(c => LETTER[c] ?? c).join(' '));
   return s.replace(/\s*,\s*(?=[,.!?…])/g, '').replace(/,\s*,/g, ',').replace(/^\s*,\s*/, '').replace(/\s{2,}/g, ' ').trim();
 }
 
