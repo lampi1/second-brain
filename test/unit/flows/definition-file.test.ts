@@ -171,13 +171,15 @@ it('rejects a swapped ancestor above the selected brain instead of snapshotting 
   finally { restore(); }
 });
 it.each([false, true])('retries incidental ancestor metadata only, with a fixed attempt bound (continuous=%s)', continuous => {
-  const f = setup(), realpath = fs.realpathSync; let changes = 0;
+  const f = setup(), realpath = fs.realpathSync; let changes = 0, attempts = 0;
   vi.spyOn(fs, 'realpathSync').mockImplementation((file, options) => {
+    if (file === f.root) attempts++;
     const result = realpath(file, options);
     if (file === f.file && (continuous || changes === 0)) fs.writeFileSync(path.join(f.dir, `unrelated-${++changes}.txt`), 'unrelated file');
     return result;
   });
-  if (continuous) { expect(() => readDefinitionFile(f.root, f.file, f.args.contextKey)).toThrow('directory changed'); expect(changes).toBe(FLOW_DEFINITION_READ_ATTEMPTS); }
+  // Windows may expose directory timestamps at a later checkpoint; count complete attempts, not per-path checks.
+  if (continuous) { expect(() => readDefinitionFile(f.root, f.file, f.args.contextKey)).toThrow('directory changed'); expect(attempts).toBe(FLOW_DEFINITION_READ_ATTEMPTS); expect(changes).toBeGreaterThanOrEqual(attempts); }
   else { expect(readDefinitionFile(f.root, f.file, f.args.contextKey)).toEqual(definition()); expect(changes).toBe(1); }
 });
 it('rejects a root switched after authenticating the context, before opening or reading any definition', () => {
