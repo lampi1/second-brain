@@ -165,12 +165,12 @@ export class TestDeploymentCoordinator {
     if (artifacts.length !== 1 || artifacts[0]!.alias !== target.artifactAlias || artifacts[0]!.type !== 'Build') throw new Error('Test release must contain exactly the approved build artifact');
     const reference = object(artifacts[0]!.definitionReference, 'artifact reference');
     if (String(object(reference.definition, 'artifact definition').id) !== String(target.buildDefinitionId) || object(reference.project, 'artifact project').id !== target.projectId) throw new Error('Release artifact source differs from the approved build definition');
-    const phases = (v: unknown) => { if (target.kind === 'app-service') { validateAppServicePhases(v, target); return; } if (!Array.isArray(v) || v.length !== 1) throw new Error('Only one machine-group phase is supported'); const phase = object(v[0], 'phase'), input = object(phase.deploymentInput, 'deployment input');
+    const phases = (v: unknown, parameters = [definition.processParameters, environments[0]!.processParameters]) => { if (target.kind === 'app-service') return validateAppServicePhases(v, target, ...parameters); if (!Array.isArray(v) || v.length !== 1) throw new Error('Only one machine-group phase is supported'); const phase = object(v[0], 'phase'), input = object(phase.deploymentInput, 'deployment input');
       if (phase.phaseType !== 'machineGroupBasedDeployment' || input.queueId !== target.queueId || !Array.isArray(input.tags) || input.tags.length || (!Array.isArray(input.demands) || input.demands.length !== 2)) throw new Error('Unsupported or changed test-node routing');
       const demands = (input.demands as unknown[]).map(v => object(v, 'machine demand'));
       if (!demands.some(d => d.name === 'Agent.Name' && d.value === target.machineName) || !demands.some(d => d.name === 'Agent.ComputerName' && d.value === target.computerName) || demands.some(d => Object.keys(d).some(k => !['name', 'value'].includes(k)))) throw new Error('The server must enforce both the approved agent name and computer name');
       return phase; };
-    phases(environments[0]!.deployPhases);
+    const approvedPhases = phases(environments[0]!.deployPhases);
     if (target.kind === 'app-service') validateAppServiceDefinition(definition, target);
     const verifyNode = async () => {
       if (target.kind === 'app-service') { if (!p.arm) throw new Error('Read-only Azure resource verifier unavailable'); await verifyAppService(target, call, p.arm); return; }
@@ -197,7 +197,13 @@ export class TestDeploymentCoordinator {
     if (release.status !== 'draft' || release.definitionSnapshotRevision !== target.definitionRevision || object(release.releaseDefinition, 'release definition').id !== target.releaseDefinitionId || !Array.isArray(release.environments) || release.environments.length !== 1) throw new Error('Created draft does not match the approved definition snapshot; it remains inactive');
     const env = object(release.environments[0], 'release environment');
     if (env.definitionEnvironmentId !== target.environmentId || env.name !== target.environmentName) throw new Error('Draft environment identity differs');
-    phases(env.deployPhasesSnapshot);
+    // Azure may return process parameters on the created draft. Validate its effective values, not just the
+    // unchanged macro text. The host sends no variables or parameter overrides on creation/activation.
+    const draftPhases = phases(env.deployPhasesSnapshot, [release.processParameters === undefined ? definition.processParameters : release.processParameters, env.processParameters === undefined ? environments[0]!.processParameters : env.processParameters]);
+    if (target.kind === 'app-service') {
+      if ([release.variables, env.variables].some(v => v != null && Object.keys(object(v, 'release variables')).length)) throw new Error('Draft release variable overrides are unsupported');
+      if (deploymentHash(draftPhases) !== deploymentHash(approvedPhases)) throw new Error('Draft App Service parameter defaults differ from the approved definition');
+    }
     if (deploymentHash(env.deployPhasesSnapshot) !== deploymentHash(environments[0]!.deployPhases)) throw new Error('Draft deployment phase differs from the approved snapshot');
     const actual = Array.isArray(release.artifacts) ? release.artifacts.map(v => object(v, 'release artifact')) : [];
     if (actual.length !== 1 || actual[0]!.alias !== target.artifactAlias || String(object(object(actual[0]!.definitionReference, 'artifact reference').version, 'artifact version').id) !== String(buildId)) throw new Error('Draft contains a different build');

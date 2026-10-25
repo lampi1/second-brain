@@ -193,3 +193,6 @@ test/unit/flows/package.test.ts conn-string-password sha256:ecd42e13247c45eb6b3a
 test/unit/flows/package.test.ts assigned-secret sha256:ecd42e13247c45eb6b3ac3ba33c0273d97a093472a5fb8bf65fff37aabf68287
 test/unit/flows/package.test.ts internal-host sha256:ecd42e13247c45eb6b3ac3ba33c0273d97a093472a5fb8bf65fff37aabf68287
 test/unit/flows/pr-validation.test.ts guid sha256:ea1505c930f16d47b1346ab07406efe5b1b921d1b8793cd69da38bdd1cbe0224
+
+# Same public Microsoft App Service v4 task ID; parameter-resolution compatibility, no private target values.
+src/main/flows/app-service-target.ts guid sha256:51c98379263f9453378786e0647215e8f9ede426734dd83ea35fa9acd23402b7
