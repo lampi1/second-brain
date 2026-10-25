@@ -15,6 +15,7 @@ const description = (name: string): string => tools.find(tool => tool.name === n
 describe('Orchestrator context ownership', () => {
   it('keeps flow mechanics in current tool descriptions rather than an obsolete universal adapter list', () => {
     expect(ORCHESTRATOR_ROLE).toContain('relevant propose tool for supported fields, adapters and grants');
+    expect(ORCHESTRATOR_ROLE).toContain('Read app_flow_capabilities');
     expect(ORCHESTRATOR_ROLE).not.toContain('All company adapters remain unavailable');
     expect(ORCHESTRATOR_ROLE).not.toContain('explicit organization/project/area/type/states');
     expect(description('app_flow_propose')).toContain('workspaceInput');
