@@ -88,6 +88,25 @@ describe('one-time migration', () => {
     await w.service.maintain('migration');
     expect(fs.existsSync(path.join(w.brain, '.claude/skills', skillChange.target, 'SKILL.md'))).toBe(false);
   });
+  it('keeps equally named sections in different groups separate, and refuses ambiguous legacy associations', async () => {
+    const w = world();
+    put(w.brain, 'runbooks/grouped.md', '# Operations\n\n## First group\n\n### Deploy test\n1. Build the first fixture.\n2. Verify the first result.\n\n## Second group\n\n### Deploy test\n1. Build the second fixture.\n2. Verify the second result.\n');
+    const first = await w.service.maintain('migration');
+    expect(first.skills).toHaveLength(2);
+    const again = await w.service.maintain('migration');
+    expect(again.skills).toHaveLength(2);
+    expect(again.changes).toHaveLength(first.changes.length);
+    const texts = again.skills.map(skill => fs.readFileSync(skill.file, 'utf8'));
+    expect(texts.filter(text => text.includes('first fixture'))).toHaveLength(1);
+    expect(texts.filter(text => text.includes('second fixture'))).toHaveLength(1);
+    const legacy = world();
+    put(legacy.brain, 'runbooks/grouped.md', fs.readFileSync(path.join(w.brain, 'runbooks/grouped.md'), 'utf8'));
+    put(legacy.brain, '.claude/skills/deploy/SKILL.md', '---\nname: deploy\ndescription: Deploy.\n---\nSpostata qui da `runbooks/grouped.md` (sezione «Deploy test», riga 3) il 2026-10-19.\n');
+    const kept = await legacy.service.maintain('migration');
+    expect(kept.skills).toHaveLength(1);
+    expect(kept.changes).toHaveLength(0);
+    expect(kept.migration!.items.every(item => item.status === 'skipped')).toBe(true);
+  });
   it('an empty brain has nothing to migrate and nothing to show', async () => {
     const w = world();
     const state = await w.service.maintain();
@@ -95,6 +114,43 @@ describe('one-time migration', () => {
     expect(state.migration).toEqual({ at: NOW, items: [] });
     expect(state.lastRun!.jobs.map(j => j.job)).toEqual(['migration', 'upgrade', 'corrections', 'repeated-task', 'merge-skills', 'merge-memory']);
     expect(w.emitted()).toBe(1);
+  });
+  it('keeps source identity across line shifts and updates the same unedited generated skill', async () => {
+    const w = world(), source = '# Operations\n\n## Deploy test\n\n1. Build the test fixture.\n2. Verify the output.\n';
+    put(w.brain, 'runbooks/deploy.md', source);
+    const first = await w.service.maintain('migration'), name = first.skills[0]!.name;
+    const skill = first.skills[0]!.file, original = fs.readFileSync(skill, 'utf8');
+    put(w.brain, 'runbooks/deploy.md', `\n\n${source}`);
+    const moved = await w.service.maintain('migration');
+    expect(moved.skills.map(s => s.name)).toEqual([name]);
+    expect(moved.changes).toHaveLength(first.changes.length);
+    expect(moved.migration!.items).toHaveLength(1);
+    expect(fs.readFileSync(skill, 'utf8')).toBe(original);
+    put(w.brain, 'runbooks/deploy.md', source.replace('Verify the output', 'Verify both outputs'));
+    const updated = await w.service.maintain('migration');
+    expect(updated.skills.map(s => s.name)).toEqual([name]);
+    expect(fs.readFileSync(skill, 'utf8')).toContain('Verify both outputs');
+    const change = updated.changes.find(c => c.job === 'migration' && c.action === 'update')!;
+    expect(change).toBeDefined();
+    w.service.rollback(change.id);
+    await w.service.maintain('migration');
+    expect(fs.readFileSync(skill, 'utf8')).toBe(original);
+  });
+  it('recognizes old line-based provenance and preserves later user edits on source conflicts', async () => {
+    const w = world();
+    put(w.brain, 'runbooks/check.md', '# Ops\n\n\n## Check source\n\n1. Read the fixture.\n2. Check the output.\n');
+    put(w.brain, '.claude/skills/check-source/SKILL.md', '---\nname: check-source\ndescription: Check\n---\n\n# Check source\n\n1. Read the fixture.\n2. Check the output.\n\nSpostata qui da `runbooks/check.md` (sezione «Check source», riga 3) il 2026-10-01.\n');
+    const legacy = await w.service.maintain('migration');
+    expect(legacy.skills).toHaveLength(1); expect(legacy.changes).toHaveLength(0);
+    put(w.brain, 'runbooks/fresh.md', '# Ops\n\n## New check\n1. Read a fixture.\n2. Check a result.\n');
+    const made = await w.service.maintain('migration'), generated = made.skills.find(s => s.name === 'new-check')!;
+    fs.appendFileSync(generated.file, '\nMy additional condition.\n');
+    const edited = fs.readFileSync(generated.file, 'utf8');
+    put(w.brain, 'runbooks/fresh.md', '# Ops\n\n## New check\n1. Read a new fixture.\n2. Check a result.\n');
+    const conflict = await w.service.maintain('migration');
+    expect(conflict.skills).toHaveLength(2);
+    expect(fs.readFileSync(generated.file, 'utf8')).toBe(edited);
+    expect(conflict.migration!.items.find(i => i.skill === 'new-check')!.note).toMatch(/modificat/);
   });
 });
 
@@ -153,8 +209,19 @@ describe('corrections from a work chat', () => {
 });
 
 describe('repeated tasks, duplicates and the user toggle', () => {
-  const run = (n: number, goal: string, agentId = DEV): AgentRun => ({ runId: `r_00000000000${n}`, chatId: `c${n}`, agentId, version: 1, goal, startedBy: 'user', startedAt: NOW - n * 86400e3, endedAt: NOW - n * 86400e3 + 600e3,
-    counters: {} as AgentRun['counters'], costUsd: 0.2, tokens: null, report: { at: NOW - n * 86400e3 + 600e3, outcome: 'done', verified: 'yes', summary: `Esportate le fatture del mese ${n}` } });
+  const run = (n: number, goal: string, agentId = DEV): AgentRun => ({ runId: `r_00000000000${n}`, chatId: `c${n}`, agentId, version: 1, goal, startedBy: 'user', requestOrigin: 'user', startedAt: NOW - n * 86400e3, endedAt: NOW - n * 86400e3 + 600e3,
+    counters: {} as AgentRun['counters'], costUsd: 0.2, tokens: null, report: { at: NOW - n * 86400e3 + 600e3, outcome: 'done', verified: 'yes', summary: `Esportate le fatture del mese ${n}`, canonical: {
+      at: NOW, taskId: `task-${n}`, taskVersion: 1, runId: `r_00000000000${n}`, outcome: 'done', summary: 'Exported',
+      output: '## Passi\n1. Apri la lista delle fatture.\n2. Esporta il mese selezionato.\n', doneWhen: [{ criterion: 'Export', met: true, evidence: 'Fixture export' }],
+    } } });
+  it('ignores app reviews, reused agent assignments, unknown origins and requests without concrete steps', async () => {
+    for (const patch of [{ startedBy: 'app', requestOrigin: 'app' }, { reviewOf: 'r_000000000001' }, { requestOrigin: 'agent' }, { requestOrigin: undefined }, { report: undefined }, { goal: 'Export password=' + 'fixture'.repeat(3) + ' invoices' }] as Partial<AgentRun>[]) {
+      const runs = [1, 2, 3].map(n => ({ ...run(n, 'Independent verdict on export result'), ...patch }));
+      const w = world({ runs }); for (const r of runs) r.scope = { brainRoot: w.brain, projectRoot: w.brain };
+      await w.service.maintain('repeated-task');
+      expect(fs.existsSync(path.join(w.brain, 'memory/skill-candidates'))).toBe(false);
+    }
+  });
   it('keeps repeated tasks as non-loadable candidates until independent verification and replay', async () => {
     const runs = [run(1, 'Esporta le fatture di ottobre in Excel'), run(2, 'Esporta le fatture di settembre in Excel'), run(3, 'Esporta le fatture di agosto in Excel')];
     const w = world({ runs });
@@ -167,6 +234,20 @@ describe('repeated tasks, duplicates and the user toggle', () => {
     expect(w.agent(DEV).knowhow?.linked ?? []).toEqual([]);
     await w.service.maintain('repeated-task');
     expect(fs.readdirSync(candidates)).toHaveLength(1);
+  });
+  it('does not duplicate or revive a candidate when a shorter matching request changes its display name', async () => {
+    const runs = ['September', 'October', 'November'].map((month, i) => run(i + 1, `Export monthly invoices for ${month}`));
+    const w = world({ runs });
+    for (const r of runs) r.scope = { brainRoot: w.brain, projectRoot: w.brain };
+    const first = await w.service.maintain('repeated-task');
+    expect(first.changes).toHaveLength(1);
+    runs.push({ ...run(4, 'Export monthly invoices for May'), scope: { brainRoot: w.brain, projectRoot: w.brain } });
+    const next = await w.service.maintain('repeated-task');
+    expect(next.changes).toHaveLength(1);
+    w.service.rollback(first.changes[0]!.id);
+    const afterUndo = await w.service.maintain('repeated-task');
+    expect(afterUndo.changes).toHaveLength(1);
+    expect(fs.existsSync(path.join(w.brain, 'memory/skill-candidates'))).toBe(false);
   });
   it('counts distinct tasks in a reused conversation, never continuations or rework', async () => {
     const runs: AgentRun[] = [1, 2, 3].map(n => ({ ...run(n, 'Esporta le fatture del mese in Excel'), chatId: 'same-chat', taskId: `task-${n}` }));

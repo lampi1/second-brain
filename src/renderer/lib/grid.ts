@@ -1,13 +1,14 @@
 // Workspace tiles, pure: which tiles are on screen (chats in the given order, each browser right after the chat that
 // drives it; a finished chat stays until it closes by itself, lib/autoclose.ts) and the chat-browser pair colors.
 // Used by AgentStrips.tsx and lib/pairs.ts; pinned by test/unit/ui-lib.test.ts.
+import { routinePlacements } from './routine-chats';
 import type { BrowserTab, ChatSummary } from '@shared/contract';
 
 export type TileRef = { kind: 'chat'; id: string } | { kind: 'browser'; id: string };
 export const tileKey = (t: TileRef) => `${t.kind}:${t.id}`;
 
 /** Tiles of the workspace (the Orchestrator excluded: it has its own fixed column). */
-export function workspaceTiles(order: readonly string[], chats: Readonly<Record<string, ChatSummary>>, tabs: readonly BrowserTab[]): TileRef[] {
+export function workspaceTiles(order: readonly string[], chats: Readonly<Record<string, ChatSummary>>, tabs: readonly BrowserTab[], routineIds: ReadonlySet<string> = new Set(routinePlacements(chats).keys())): TileRef[] {
   const tiles: TileRef[] = [];
   const placed = new Set<string>();
   const orchestratorIds = new Set(order.filter(id => chats[id]?.isOrchestrator));
@@ -15,12 +16,13 @@ export function workspaceTiles(order: readonly string[], chats: Readonly<Record<
   for (const t of tabs) if (t.ownerChatId && orchestratorIds.has(t.ownerChatId)) { tiles.push({ kind: 'browser', id: t.id }); placed.add(t.id); }
   for (const id of order) {
     const c = chats[id];
+    if (routineIds.has(id)) continue;
     if (!c || c.isOrchestrator || c.quick || c.closedAt) continue; // Lampo lives in the Orchestrator's column // closed chats: the palette (Ctrl+K)
     tiles.push({ kind: 'chat', id });
     for (const t of tabs) if (t.ownerChatId === id && !placed.has(t.id)) { tiles.push({ kind: 'browser', id: t.id }); placed.add(t.id); }
   }
   // The user's own or orphaned tabs share the same workspace.
-  for (const t of tabs) if (!placed.has(t.id)) tiles.push({ kind: 'browser', id: t.id });
+  for (const t of tabs) if (!placed.has(t.id) && (!t.ownerChatId || !routineIds.has(t.ownerChatId))) tiles.push({ kind: 'browser', id: t.id });
   return tiles;
 }
 

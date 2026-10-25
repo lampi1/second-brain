@@ -166,3 +166,12 @@ docs/mockups/routines/png/app-routine-now.png binary-media sha256:c784be164e27e1
 docs/mockups/routines/png/app-routine-start.png binary-media sha256:64f77589bdda5f681fd9dc1f12727e881bb3d2e76fda8b934b2e41eb8cb4d659
 docs/mockups/routines/png/app-package-export.png binary-media sha256:3c6da75033cc368cd7df33186b64032067321f6fd89937f7b2122172c663e71f
 docs/mockups/routines/png/app-package-import.png binary-media sha256:327972341e1f866ac692455b1176589098c8c1d2517dae6f6cc41741fda74fb3
+
+# Mocked routine safety tests: public example organizations, adversarial dummy URL credentials and dummy secrets.
+# Independent security review verified exact bytes; no real endpoint, credential or personal data.
+test/unit/flows/devops-content.test.ts internal-host sha256:c8427ff5aec71f2f7196456134b59d8a968461b16717f0dc702b9d5c1c99022a
+test/unit/flows/devops-content.test.ts url-credentials sha256:c8427ff5aec71f2f7196456134b59d8a968461b16717f0dc702b9d5c1c99022a
+test/unit/flows/devops-content.test.ts email sha256:c8427ff5aec71f2f7196456134b59d8a968461b16717f0dc702b9d5c1c99022a
+test/unit/flows/devops-resources.test.ts internal-host sha256:178d3a9560eb20175c97f673c0ca9b9f8830e404128de52a3cd8aab2cca8e01f
+test/unit/flows/package.test.ts conn-string-password sha256:a28b83365b0e21aa4a7aa98d4dc3bdba4597132f01309da3b27a5e5c7dcad86a
+test/unit/flows/package.test.ts assigned-secret sha256:a28b83365b0e21aa4a7aa98d4dc3bdba4597132f01309da3b27a5e5c7dcad86a

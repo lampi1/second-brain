@@ -2,7 +2,7 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { ChatSummary } from '../../src/shared/contract';
 vi.mock('../../src/renderer/sb', () => ({ sb: { invoke: vi.fn(), on: () => () => {} } }));
-import { brainBridge, focusChat, go, toggleOrchestrator } from '../../src/renderer/actions';
+import { brainBridge, focusChat, go, showTab, toggleFocusMode, toggleMaximize, toggleOrchestrator } from '../../src/renderer/actions';
 import { dispatch } from '../../src/renderer/store/store';
 import { ui } from '../../src/renderer/store/ui';
 
@@ -45,4 +45,14 @@ it('keeps detail pages where the coordinator is already visible', () => {
   focusChat('r');
   expect(ui.get().page).toBe('memoria');
   expect(ui.get().pageArg).toBe('regole');
+});
+
+it('opens routine chats and owned browsers only in Routine, including focus shortcuts', () => {
+  dispatch({ type: 'chat:updated', chat: { id: 'routine-worker', title: 'Routine worker', state: 'running', routine: { runId: 'run', stepId: 'inspect' }, browserTabIds: [] } as unknown as ChatSummary });
+  focusChat('routine-worker'); expect(ui.get().page).toBe('flussi'); expect(ui.get().pageArg).toBe('chat:routine-worker');
+  go({ page: 'home' }); ui.set(state => ({ ...state, focused: 'chat:routine-worker', focusMode: null })); toggleFocusMode();
+  expect(ui.get().page).toBe('flussi'); expect(ui.get().focusMode).toBeNull();
+  go({ page: 'home' }); toggleMaximize('chat:routine-worker'); expect(ui.get().page).toBe('flussi'); expect(ui.get().maximized).toBeNull();
+  dispatch({ type: 'browser:tabs', tabs: [{ id: 'routine-browser', ownerChatId: 'routine-worker' }] as never });
+  showTab('routine-browser'); expect(ui.get().page).toBe('flussi'); expect(ui.get().pageArg).toBe('chat:routine-worker/browser:routine-browser');
 });

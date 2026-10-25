@@ -178,3 +178,19 @@
 .rp-different { background: var(--amber-bg); color: var(--amber); }
 .rp-items details summary { cursor: pointer; color: var(--text-3); font-size: var(--fs-xs); margin: 4px 0 0 26px; }
 .rp-text { margin: 6px 0 2px; max-height: 220px; overflow: auto; padding: 10px; border-radius: var(--r-s, 6px); background: var(--surface-2); font: 11.5px/1.5 var(--mono); white-space: pre-wrap; word-break: break-word; }
+
+/* The same immutable inspector stays reachable for active, blocked and historical runs. */
+.rt-inspect { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; }
+.flow-deploy-target, .flow-auto-summary dd { overflow-wrap: anywhere; min-width: 0; }
+
+.rt-history-scroll { overflow-x: auto; }
+.rt-history-scroll .rt-table { min-width: 680px; }
+.rt-history-scroll .rt-table th { white-space: nowrap; }
+
+/* Live step work stays in the routine; overlays and native browsers keep the normal page lifecycle. */
+.rt-agent-page { min-width: 0; display: flex; flex-direction: column; gap: 12px; padding: 12px; }
+.rt-agent-conversation { height: max(440px, 65vh); display: flex; min-width: 0; }
+.rt-agent-conversation .chat-tile { flex: 1; min-height: 0; min-width: 0; }
+.rt-agent-browser { min-width: 0; }
+.rt-agent-browser nav { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 8px; }
+.rt-agent-browser > .tile { height: 520px; }

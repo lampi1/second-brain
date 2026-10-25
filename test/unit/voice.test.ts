@@ -17,6 +17,9 @@ describe('parseSpokenAnswer', () => {
     expect(parseSpokenAnswer('Non voglio rispondere.')).toEqual({ kind: 'skip' });
     expect(parseSpokenAnswer('ci penso dopo')).toEqual({ kind: 'skip' });
   });
+  it.each(['Sì, ma aspetta', 'Sì, non farlo', 'No, fallo pure', 'Sì forse', 'Non voglio rispondere ora, però procedi', 'Sì… no'])('keeps a qualified answer as text: %s', text => {
+    expect(parseSpokenAnswer(text)).toEqual({ kind: 'text', text });
+  });
   it('a longer sentence is the user own answer, as typed', () => {
     expect(parseSpokenAnswer('Sì però prima fai girare i test sul branch di sviluppo')).toEqual({ kind: 'text', text: 'Sì però prima fai girare i test sul branch di sviluppo' });
     expect(parseSpokenAnswer('Usa la seconda opzione')).toEqual({ kind: 'text', text: 'Usa la seconda opzione' });

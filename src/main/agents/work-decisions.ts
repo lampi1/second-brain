@@ -17,7 +17,7 @@ export function workDecisionTools(d: DecisionDeps): McpTool[] {
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     run: async (args, ctx) => {
       if (Object.keys(args).length) throw new Error('No arguments: decisions are scoped to the authenticated chat.');
-      if (ctx.mount !== 'chat' || !ctx.params.chatId) throw new Error('This tool works only on a chat’s own endpoint.');
+      if (ctx.mount !== 'browser-chat' || !ctx.params.chatId) throw new Error('This tool works only on a chat’s own endpoint.');
       const chats = d.chats.list(), caller = chats.find(c => c.id === ctx.params.chatId);
       if (!caller || caller.isOrchestrator || caller.closedAt || !caller.run || caller.run.endedAt !== undefined || caller.run.report?.via === 'agent_report') throw new Error('An active work assignment is required.');
       const scope = new Map<string, ChatSummary>();

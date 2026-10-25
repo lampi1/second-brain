@@ -1,5 +1,6 @@
 // Host-driven routine steps: canonical receipts advance work without a coordinator turn; launch stays bound and scoped.
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -9,11 +10,12 @@ import { createFlowRuntime, type FlowRuntime, type FlowWorkerRequest } from '../
 const worlds: { root: string; runtime: FlowRuntime }[] = [];
 afterEach(() => { for (const world of worlds.splice(0)) { world.runtime.stop(); fs.rmSync(world.root, { recursive: true, force: true }); } });
 const step = (id: string, extra: Partial<FlowStep> = {}): FlowStep => ({ id, title: id, kind: 'agent', instructions: `Perform ${id} using the fixture.`, inputs: ['workspace'], workspaceInput: 'workspace', evidence: ['proof'], timeoutMs: 600000, maxAttempts: 2, effect: 'read-only', role: 'artisan', ...extra });
-function world(steps = [step('first'), step('second')]) {
+function world(steps = [step('first'), step('second')], sealed = false) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'host-flow-')), rows = [{ id: 'owner', isOrchestrator: true, state: 'idle' }] as ChatSummary[];
   let current: string | null = root, count = 0;
   const create = vi.fn(async (request: FlowWorkerRequest): Promise<ChatSummary> => {
     const id = `worker-${++count}`, chat = { id, state: 'idle', run: { runId: `${id}-run`, taskVersion: 1, agentId: request.roleId, ...(request.reviewOf ? { reviewOf: request.reviewOf } : {}), scope: { brainRoot: root, projectRoot: request.workspace } }, route: { agent: { tier: request.tier, modelFrom: 'tier' } } } as ChatSummary;
+    if (request.packageDigest) { chat.routinePackage = request.packageDigest; chat.routinePromptHash = createHash('sha256').update(request.agentPrompt!).digest('hex'); chat.harness = request.engine as ChatSummary['harness']; chat.model = request.model!; chat.effort = request.effort ?? null; chat.run!.tier = request.tier; delete chat.route; }
     rows.push(chat); return chat;
   });
   const sendWorker = vi.fn(async (id: string, _prompt: string, authorize: () => void, _onFailure: (error: unknown) => void) => { authorize(); rows.find(row => row.id === id)!.state = 'running'; });
@@ -21,7 +23,7 @@ function world(steps = [step('first'), step('second')]) {
   const stopChat = vi.fn(async (id: string) => { rows.find(row => row.id === id)!.state = 'idle'; }), send = vi.fn(async () => {});
   const runtime = createFlowRuntime({ userData: path.join(root, 'data'), brainRoot: () => current, chats: () => rows, changed: () => {}, createWorker: create, sendWorker, discardWorker, stopChat, send });
   worlds.push({ root, runtime }); const flow = runtime.service();
-  flow.propose({ expectedRevision: 0, definition: { id: 'fixture', title: 'Fixture', description: 'Synthetic routine.', aliases: [], scope: {}, steps } }); flow.decideDefinition({ id: 'fixture', expectedRevision: 1, answer: 'yes' });
+  flow.propose({ expectedRevision: 0, definition: { id: 'fixture', title: 'Fixture', description: 'Synthetic routine.', aliases: [], scope: {}, steps, ...(sealed ? { package: { schema: 1 as const, assets: [], outputs: [], requiredOps: [] } } : {}) } }); flow.decideDefinition({ id: 'fixture', expectedRevision: 1, answer: 'yes' });
   const start = (subjectKey = 'fixture-task') => flow.start({ flowId: 'fixture', flowVersion: 1, subjectKey, scope: {}, inputs: { workspace: root } }, 'owner');
   const report = (id: string, modify: (value: NonNullable<ChatSummary['run']>['report']) => void = () => {}) => {
     const chat = rows.find(row => row.id === id)!; chat.state = 'idle';
@@ -112,4 +114,28 @@ describe('host routine engine', () => {
     const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 61000); await w.runtime.tick(); expect(w.send).toHaveBeenCalledTimes(1); clock.mockRestore();
     failed(new Error('Duplicate delivery callback')); expect(w.flow.status(source.id, 'owner').steps[0]!.reason).toContain('Synthetic queued delivery failure');
   });
+});
+
+const sealedStep = (id: string, extra: Partial<FlowStep> = {}) => step(id, { agentPrompt: 'Use only the approved evidence contract.', tier: 'mid', engine: 'claude', model: 'sonnet', effort: 'high', maxAttempts: 1, ...extra });
+it('a sealed worker without route metadata binds by its host tier, advances and stops at approval', async () => {
+  const w = world([sealedStep('first'), sealedStep('second'), step('consent', { kind: 'approval', role: undefined })], true), source = w.start();
+  await w.runtime.tick(); expect(w.flow.status(source.id, 'owner').steps[0]!.status).toBe('running');
+  expect(w.runtime.resolveBinding('worker-1', 'owner', w.root)?.launched?.tier).toBe('mid');
+  w.report('worker-1'); await w.runtime.tick(); expect(w.flow.status(source.id, 'owner').steps[1]!.chatId).toBe('worker-2');
+  w.report('worker-2'); await w.runtime.tick(); expect(w.flow.status(source.id, 'owner').status).toBe('approval'); expect(w.create).toHaveBeenCalledTimes(2);
+  const dossier = w.runtime.dossier(source.id, 'owner'); expect(dossier.report.version.definition.package).toBeDefined(); expect(dossier.report.run.trace!.length).toBeGreaterThan(3);
+});
+it('rejects manual package binding and a post-bind frozen prompt identity change', async () => {
+  const w = world([sealedStep('first')], true), source = w.start();
+  expect(() => w.flow.bindAgent(source.id, source.revision, 'first', { chatId: 'ordinary', chatRunId: 'ordinary-run', taskVersion: 1, launched: { roleId: 'artisan', tier: 'mid' } }, 'owner')).toThrow('Frozen routine');
+  await w.runtime.tick(); w.rows.find(c => c.id === 'worker-1')!.routinePromptHash = '0'.repeat(64);
+  w.report('worker-1'); await w.runtime.tick(); const blocked = w.flow.status(source.id, 'owner');
+  expect(blocked.status).toBe('blocked'); expect(blocked.steps[0]!.receipt).toBeUndefined(); expect(w.create).toHaveBeenCalledTimes(1);
+});
+
+it('cancels the exact still-running task even after its package identity drifts', async () => {
+  const w = world([sealedStep('first')], true), source = w.start(); await w.runtime.tick();
+  w.rows.find(c => c.id === 'worker-1')!.model = 'changed-model';
+  const live = w.flow.status(source.id, 'owner'); await w.runtime.cancel({ runId: live.id, expectedRevision: live.revision });
+  expect(w.stopChat).toHaveBeenCalledWith('worker-1'); expect(w.flow.status(source.id, 'owner').cancellation?.interruption).toBe('confirmed');
 });

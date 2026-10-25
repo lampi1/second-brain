@@ -88,6 +88,9 @@ export class DailyPhrasesService {
     if (this.running || this.today() || (this.data?.triedDay === day && this.data.triedLang === lang)) return;
     this.running = true;
     try {
+      // Persist the attempt before asking: a rejected promise or an app restart must not retry all day.
+      this.data = { ...(this.data ?? { version: 1, day: '', lang, lines: {} }), triedDay: day, triedLang: lang };
+      writeLocal(this.file, this.data);
       const { system, prompt } = phrasesPrompt(lang);
       const r = await this.d.ask(system, prompt);
       const lines = r.ok ? parsePhrases(r.text) : {};

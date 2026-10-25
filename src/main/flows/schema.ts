@@ -1,4 +1,5 @@
 // Strict flow definition validation and canonical hashing; the host rejects unknown executable fields.
+import { validatePackage, validatePackagedSteps } from './package';
 import { createHash } from 'node:crypto';
 import type { FlowDefinition, FlowParam, FlowScope, FlowStep } from '../../shared/flows';
 import type { Effort } from '../../shared/contract';
@@ -56,11 +57,11 @@ export function validateInputs(value: unknown): Record<string, string> {
 /** The highest tier a role may run now (the catalog's tierMax); given on propose so a step never asks above it. */
 export type RoleTierMax = (role: WorkRoleId) => ModelTier | undefined;
 export function validateDefinition(value: unknown, tierMax?: RoleTierMax): FlowDefinition {
-  const raw = object(value, 'definition'); keys(raw, ['id', 'title', 'description', 'category', 'aliases', 'scope', 'steps', 'params'], 'definition');
+  const raw = object(value, 'definition'); keys(raw, ['id', 'title', 'description', 'category', 'aliases', 'scope', 'steps', 'params', 'package'], 'definition');
   if (!Array.isArray(raw.steps) || !raw.steps.length || raw.steps.length > 60) throw new Error('A flow needs 1–60 steps');
   const ids: string[] = [];
   const steps: FlowStep[] = raw.steps.map((value: unknown) => {
-    const row = object(value, 'step'); keys(row, ['id', 'title', 'kind', 'instructions', 'inputs', 'action', 'evidence', 'timeoutMs', 'maxAttempts', 'effect', 'reviewOf', 'workspaceInput', 'adapter', 'testDbRead', 'role', 'tier', 'engine', 'model', 'effort', 'onFail', 'env', 'args'], 'step');
+    const row = object(value, 'step'); keys(row, ['id', 'title', 'kind', 'instructions', 'inputs', 'action', 'evidence', 'timeoutMs', 'maxAttempts', 'effect', 'reviewOf', 'workspaceInput', 'adapter', 'testDbRead', 'role', 'tier', 'engine', 'model', 'effort', 'onFail', 'env', 'args', 'agentPrompt', 'assets'], 'step');
     const id = identifier(row.id, 'step id'); if (ids.includes(id)) throw new Error('Duplicate step id');
     const kind = text(row.kind, 'kind') as FlowStep['kind']; if (!['check', 'agent', 'approval', 'manual'].includes(kind)) throw new Error('Unknown step kind');
     const effect = text(row.effect, 'effect') as FlowStep['effect']; if (!['read-only', 'code', 'external-write', 'production'].includes(effect)) throw new Error('Unknown effect');
@@ -125,15 +126,18 @@ export function validateDefinition(value: unknown, tierMax?: RoleTierMax): FlowD
       if (action!.kind === 'query' && ['server', 'database'].some(key => args![key]?.includes('{{'))) throw new Error('A query names its server and database literally, never as {{input}}');
     }
     ids.push(id);
-    return { id, title: text(row.title, 'step title', 300), kind, instructions: text(row.instructions, 'instructions', 16000), inputs,
+    return { ...(row.agentPrompt === undefined ? {} : { agentPrompt: text(row.agentPrompt, 'agentPrompt', 64000) }), ...(row.assets === undefined ? {} : { assets: strings(row.assets, 'assets', 50, 80).map(v => identifier(v, 'asset id')) }), id, title: text(row.title, 'step title', 300), kind, instructions: text(row.instructions, 'instructions', 16000), inputs,
       ...(action ? { action } : {}), ...(workspaceInput ? { workspaceInput } : {}), evidence, timeoutMs: integer(row.timeoutMs, 'timeoutMs', 1000, 86_400_000), maxAttempts: integer(row.maxAttempts, 'maxAttempts', 1, 5), effect, ...(reviewOf ? { reviewOf } : {}), ...(row.adapter ? { adapter: row.adapter as FlowStep['adapter'] } : {}), ...(row.testDbRead === true ? { testDbRead: true as const } : {}), ...(role ? { role } : {}), ...(tier ? { tier } : {}),
       ...(engine ? { engine } : {}), ...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(onFail ? { onFail } : {}), ...(env ? { env } : {}), ...(args ? { args } : {}) };
   });
+  const pack = raw.package === undefined ? undefined : validatePackage(raw.package);
+  if (pack) validatePackagedSteps(steps, pack);
+  else if (steps.some(step => step.agentPrompt || step.assets)) throw new Error('Frozen prompts/assets require a package');
   const params = raw.params === undefined ? undefined : validateParams(raw.params);
   const aliases = strings(raw.aliases, 'aliases', 40, 200);
   if (aliases.some(alias => !normalize(alias))) throw new Error('Aliases need at least one letter or number');
   return { id: identifier(raw.id, 'flow id'), title: text(raw.title, 'title', 300), description: text(raw.description, 'description', 16000),
-    ...(raw.category === undefined ? {} : { category: text(raw.category, 'category', 200) }), aliases, scope: validateScope(raw.scope), steps, ...(params ? { params } : {}) };
+    ...(raw.category === undefined ? {} : { category: text(raw.category, 'category', 200) }), aliases, scope: validateScope(raw.scope), steps, ...(params ? { params } : {}), ...(pack ? { package: pack } : {}) };
 }
 function validateParams(value: unknown): FlowParam[] {
   if (!Array.isArray(value) || value.length > 30) throw new Error('params: up to 30');

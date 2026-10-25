@@ -6,16 +6,18 @@ import type { NewChat, ChatSummary } from '../../shared/contract';
 import type { AgentCatalogService } from '../agents/catalog';
 import type { BrainService } from '../services';
 import { openRefusal } from '../engines/policy';
+import { tierRank } from '../../shared/roles';
 import type { FlowWorkerRequest } from './runtime';
 
 interface WorkerPorts {
   catalog: Pick<AgentCatalogService, 'resolve' | 'list'>;
   brain: Pick<BrainService, 'settings' | 'route'>;
   chats(): readonly ChatSummary[];
-  create(request: NewChat): Promise<ChatSummary>;
+  create(request: NewChat, sealed?: { digest: string; instructions: string }, routine?: ChatSummary['routine']): Promise<ChatSummary>;
 }
 export function createFlowWorker(ports: WorkerPorts) {
   return async (request: FlowWorkerRequest): Promise<ChatSummary> => {
+    const routine = { runId: request.flowRunId, stepId: request.stepId };
     const settings = ports.brain.settings();
     const owner = ports.chats().find(chat => chat.id === request.ownerId && chat.isOrchestrator && !chat.closedAt);
     const opener = owner?.harness ?? settings.orchestratorChats.harness;
@@ -27,6 +29,12 @@ export function createFlowWorker(ports: WorkerPorts) {
       roleId: request.roleId, roleVersion: profile.activeVersion, goal: request.goal.slice(0, 2000),
       doneWhen: request.doneWhen.length <= 12 ? request.doneWhen : [], deliveryPolicy: 'display',
       ...(request.tier ? { tier: request.tier } : {}), ...(request.reviewOf ? { reviewOf: request.reviewOf } : {}) };
+    if (request.packageDigest) {
+      if (!request.agentPrompt || !request.engine || !request.model || !request.tier || tierRank(request.tier) > tierRank(profile.tierMax)) throw new Error('Incomplete frozen routine worker');
+      const refusal = openRefusal(settings, opener, request.engine as NewChat['harness']);
+      if (refusal) throw new Error(`Routine worker: ${refusal}`);
+      return ports.create({ ...input, harness: request.engine as NewChat['harness'], model: request.model, ...(request.effort ? { effort: request.effort } : {}) }, { digest: request.packageDigest, instructions: request.agentPrompt }, routine);
+    }
     const resolved = ports.catalog.resolve(input);
     const agent = { id: profile.id, name: profile.name, version: profile.activeVersion,
       harness: resolved.request.harness, model: resolved.request.model ?? null, effort: resolved.request.effort ?? null,
@@ -44,6 +52,6 @@ export function createFlowWorker(ports: WorkerPorts) {
     const effort = request.effort ?? routed.effort;
     const refusal = openRefusal(settings, opener, harness);
     if (refusal) throw new Error(`Routine worker: ${refusal}`);
-    return ports.create({ ...input, harness, ...(model ? { model } : {}), ...(effort ? { effort } : {}), route: routed.route });
+    return ports.create({ ...input, harness, ...(model ? { model } : {}), ...(effort ? { effort } : {}), route: routed.route }, undefined, routine);
   };
 }

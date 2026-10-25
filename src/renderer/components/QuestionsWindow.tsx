@@ -191,7 +191,7 @@ function Window({ cur, all, boxRef, hidden, openedAt }: { cur: Ask; all: readonl
   // Tab stays inside the window once the keyboard is there
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key !== 'Tab') return;
-    const all = [...(boxRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input, textarea, select, [tabindex]:not([tabindex="-1"])') ?? [])].filter(x => x.offsetParent !== null);
+    const all = [...(boxRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input, textarea, select, summary, [tabindex]:not([tabindex="-1"])') ?? [])].filter(x => x.offsetParent !== null);
     if (!all.length) return;
     const i = all.indexOf(document.activeElement as HTMLElement);
     const next = e.shiftKey ? (i <= 0 ? all[all.length - 1] : null) : (i === all.length - 1 ? all[0] : null);

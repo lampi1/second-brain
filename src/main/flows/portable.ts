@@ -20,11 +20,11 @@ function clean(value: unknown): unknown {
 }
 /** Explicit definition projection makes future host-only state non-portable by default. */
 function portableDefinition(value: FlowDefinition): FlowDefinition {
-  const { id, title, description, category, aliases, scope, steps, params } = value;
-  return validateDefinition(clean({ id, title, description, ...(category === undefined ? {} : { category }), aliases, scope, ...(params?.length ? { params } : {}),
+  const { id, title, description, category, aliases, scope, steps, params, package: pack } = value;
+  return validateDefinition(clean({ id, title, description, ...(category === undefined ? {} : { category }), aliases, scope, ...(pack ? { package: pack } : {}), ...(params?.length ? { params } : {}),
     steps: steps.map(step => {
-      const { id, title, kind, instructions, inputs, action, evidence, timeoutMs, maxAttempts, effect, reviewOf, workspaceInput, adapter, testDbRead, role, tier, engine, model, effort, env, args, onFail } = step;
-      return { id, title, kind, instructions, inputs, evidence, timeoutMs, maxAttempts, effect,
+      const { id, title, kind, instructions, inputs, action, evidence, timeoutMs, maxAttempts, effect, reviewOf, workspaceInput, adapter, testDbRead, role, tier, engine, model, effort, env, args, onFail, agentPrompt, assets } = step;
+      return { ...(agentPrompt ? { agentPrompt } : {}), ...(assets ? { assets } : {}), id, title, kind, instructions, inputs, evidence, timeoutMs, maxAttempts, effect,
         ...(action ? { action } : {}), ...(reviewOf ? { reviewOf } : {}), ...(workspaceInput ? { workspaceInput } : {}),
         ...(adapter ? { adapter } : {}), ...(testDbRead ? { testDbRead } : {}), ...(role ? { role } : {}), ...(tier ? { tier } : {}),
         ...(engine ? { engine } : {}), ...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(env ? { env } : {}), ...(args ? { args } : {}), ...(onFail ? { onFail } : {}) };
@@ -51,6 +51,12 @@ export function markdown(definition: FlowDefinition, version: number): string {
     if (step.testDbRead) lines.push('- Test database reads: requested; require a new approved grant');
     lines.push('', 'Required evidence:', ...(step.evidence.length ? step.evidence.map(label => `- ${md(label)}`) : ['- —']), '');
   }
+  if (definition.package) {
+    lines.push('## Approved package', '', `Required grants (must be approved locally): ${definition.package.requiredOps.join(', ') || 'none'}`, '', `Run history: ${!!definition.package.history}`, `Downgrade policy: ${JSON.stringify(definition.package.downgrade ?? null)}`, '', '### Declared outputs', '', ...definition.package.outputs.map(o => `- ${o.id} (${o.kind}): ${md(o.description)}${o.brainPath ? ` → ${md(o.brainPath)} (append only)` : ' → run artifact'}`), '');
+    if (definition.package.production?.length) lines.push('### Prepared production intents — NOT executable grants', '', ...definition.package.production.map(p => `- ${JSON.stringify(p)}`), '', 'No production adapter is enabled by this package. A future routine-only grant must pin the target, operation, recipe and version, with host enforcement.', '');
+    for (const step of definition.steps.filter(s => s.agentPrompt)) lines.push(`### Full role prompt: ${md(step.id)}`, '', md(step.agentPrompt!), '');
+    for (const asset of definition.package.assets) lines.push(`### Asset: ${md(asset.id)} (${asset.kind})`, '', `sha256 ${asset.sha256}`, '', md(asset.content), '');
+  }
   lines.push('Definition only. Runs, receipts, activation and automatic execution settings are excluded. Recognized credentials are redacted; review free text before sharing.', 'The portable block below imports this document as a new draft.', '');
   return lines.join('\n');
 }
@@ -71,10 +77,12 @@ export function exportFlow(snapshot: FlowSnapshot, input: ExportInput, read?: (k
   if (snapshot.storageError) throw new Error('Flow storage unavailable');
   const source = snapshot.versions.find(row => row.definition.id === id && row.version === version);
   if (!source) throw new Error('Flow version unavailable');
+  if (source.definition.package && JSON.stringify(clean(source.definition)) !== JSON.stringify(source.definition)) throw new Error('Export refused: approved package contains credential-shaped or registered secret text. Propose a scrubbed version; approved hashes cannot be changed silently.');
   const definition = portableDefinition(source.definition), files: PortableFile[] = [];
   for (const step of source.definition.steps) {
     const action = step.action;
     if (!read || !action?.hash || (action.kind !== 'script' && action.kind !== 'query') || files.some(file => file.kind === action.kind && file.ref === action.ref)) continue;
+    if (source.definition.package) continue;
     const text = read(action.kind, action.ref);
     if (text === null || createHash('sha256').update(text).digest('hex') !== action.hash) continue;
     const masked = clean(text) as string;

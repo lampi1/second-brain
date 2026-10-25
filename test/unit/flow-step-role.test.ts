@@ -86,3 +86,7 @@ describe('flow step role and tier', () => {
     expect(stepTierOptions(undefined)).toEqual([]);
   });
 });
+
+it('shows the frozen engine/model/effort rather than changed role defaults', () => {
+  expect(stepAgentLabel(step({ role: 'scout', tier: 'mid', engine: 'codex', model: 'pinned-model', effort: 'high', agentPrompt: 'Frozen' }), undefined)).toBe('scout · mid · codex · pinned-model · high');
+});

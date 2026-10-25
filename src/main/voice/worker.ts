@@ -60,6 +60,8 @@ function ttsNow(voice: VoiceName): any {
 }
 
 let asrNow: VoiceAsr = 'fast';
+let listening: string | null = null, utterance = 0, currentUtterance = 0;
+let pendingDecodes = 0, speechCancelledThrough = 0;
 let preparing = false; // a download runs beside the decode/speak queue: voice mode keeps working meanwhile
 let queue: Promise<void> = Promise.resolve();
 const later = (fn: () => Promise<void> | void) => { queue = queue.then(fn, fn).catch(e => send({ type: 'error', message: msg(e) })); };
@@ -94,24 +96,45 @@ async function transcribe(job: number, wav: string, asr: VoiceAsr): Promise<void
   send({ type: 'transcribed', job, lines });
 }
 
-/** Every utterance the VAD closed: Whisper, then 'heard'. */
+/** Every closed segment keeps its capture identity and model, including while native inference waits. */
 function drain(): void {
   const v = vadNow();
   while (!v.isEmpty()) {
-    const seg = v.front(false); // a copy: the native buffer is freed by pop() before Whisper runs
+    const seg = v.front(false);
     v.pop();
+    const session = listening;
+    if (!session) continue;
+    if (!currentUtterance) {
+      currentUtterance = ++utterance;
+      send({ type: 'speech', session, utterance: currentUtterance, active: true });
+    }
+    const id = currentUtterance, asr = asrNow;
+    send({ type: 'speech', session, utterance: id, active: false });
+    currentUtterance = 0;
+    lastDetected = false;
+    if (pendingDecodes >= 4) {
+      send({ type: 'heard', session, utterance: id, text: '', ms: 0 });
+      send({ type: 'error', message: 'La trascrizione è in ritardo: riattiva la voce e ripeti la frase.' });
+      continue;
+    }
     const samples: Float32Array = seg.samples;
-    const ms = Math.round((samples.length / VOICE_RATE) * 1000);
+    const ms = Math.round(samples.length / VOICE_RATE * 1000);
+    pendingDecodes++;
     later(async () => {
-      // one 'heard' per utterance, empty when nothing was understood: the renderer pairs each with its start
       let text = '';
       try {
-        if (!partReady(root, ASR[asrNow])) throw new Error('Whisper non è ancora scaricato: Impostazioni → Voce.');
-        const r = recNow(asrNow);
+        if (session !== listening) return;
+        if (!partReady(root, ASR[asr])) throw new Error('Whisper non è ancora scaricato: Impostazioni → Voce.');
+        const r = recNow(asr);
         const stream = r.createStream();
         stream.acceptWaveform({ samples, sampleRate: VOICE_RATE });
         text = String((await r.decodeAsync(stream))?.text ?? '').trim();
-      } finally { send({ type: 'heard', text, ms }); }
+      } catch (e) {
+        if (session === listening) send({ type: 'error', message: msg(e) });
+      } finally {
+        pendingDecodes--;
+        if (session === listening) send({ type: 'heard', session, utterance: id, text, ms });
+      }
     });
   }
 }
@@ -136,30 +159,43 @@ port.on('message', ({ data: m }) => {
         send({ type: 'prepared' });
       })().catch(e => send({ type: 'error', message: msg(e) })).finally(() => { preparing = false; }); return;
       case 'listen':
+        if (!m.on && listening !== m.session) return;
+        listening = m.on ? m.session : null;
         asrNow = m.asr;
-        if (!m.on) { if (vad) { vad.flush(); drain(); vad.reset(); } lastDetected = false; tail = new Float32Array(0); return; }
-        // loaded now, so the first sentence does not also pay for loading the models
-        later(() => { if (partReady(root, ASR[m.asr])) recNow(m.asr); });
-        if (m.voice) { const v = m.voice; laterSpeak(() => { if (partReady(root, TTS[v])) ttsNow(v); }); }
+        // Never flush a cancelled capture into the next conversation.
+        if (vad) { vad.reset(); while (!vad.isEmpty()) vad.pop(); }
+        lastDetected = false; currentUtterance = 0; tail = new Float32Array(0);
+        if (!m.on) return;
+        later(() => { if (listening === m.session && partReady(root, ASR[m.asr])) recNow(m.asr); });
+        if (m.voice) { const voice = m.voice; laterSpeak(() => { if (listening === m.session && partReady(root, TTS[voice])) ttsNow(voice); }); }
         return;
       case 'audio': {
+        if (!listening || m.session !== listening) return;
         if (!partReady(root, VAD)) { if (!warned) send({ type: 'error', message: 'Modelli della voce mancanti: scaricali da Impostazioni → Voce.' }); warned = true; return; }
         let v: any;
         try { v = vadNow(); } catch (e) { if (!warned) send({ type: 'error', message: msg(e) }); warned = true; return; }
         // Silero reads 512-sample windows: the microphone's chunks are cut to that size, the rest waits for the next one
         const all = tail.length ? concat(tail, m.samples) : m.samples;
         let at = 0;
-        for (; at + WINDOW <= all.length; at += WINDOW) v.acceptWaveform(all.subarray(at, at + WINDOW));
+        for (; at + WINDOW <= all.length; at += WINDOW) {
+          v.acceptWaveform(all.subarray(at, at + WINDOW));
+          const det = !!v.isDetected();
+          if (det && !lastDetected) {
+            currentUtterance = ++utterance;
+            send({ type: 'speech', session: m.session, utterance: currentUtterance, active: true });
+          }
+          lastDetected = det;
+          drain();
+        }
         tail = all.slice(at);
-        const det = !!v.isDetected();
-        if (det !== lastDetected) { lastDetected = det; send({ type: 'speech', active: det }); }
-        drain();
         return;
       }
+      case 'cancel-speech': speechCancelledThrough = Math.max(speechCancelledThrough, m.through); return;
       case 'speak': laterSpeak(async () => {
+        if (m.id <= speechCancelledThrough) return;
         try {
-          const audio = await ttsNow(m.voice).generateAsync({ text: m.text, sid: 0, speed: 1, enableExternalBuffer: false }) // Electron's memory cage refuses external buffers;
-          send({ type: 'spoken', id: m.id, samples: audio.samples, rate: audio.sampleRate });
+          const audio = await ttsNow(m.voice).generateAsync({ text: m.text, sid: 0, speed: 1, enableExternalBuffer: false, onProgress: () => m.id > speechCancelledThrough }) // Electron's memory cage refuses external buffers;
+          if (m.id > speechCancelledThrough) send({ type: 'spoken', id: m.id, samples: audio.samples, rate: audio.sampleRate });
         } catch (e) { send({ type: 'spoken', id: m.id, samples: new Float32Array(0), rate: 22050, error: msg(e) }); }
       }); return;
       case 'transcribe': void transcribe(m.job, m.wav, m.asr).catch(e => { cancelled.delete(m.job); send({ type: 'transcribed', job: m.job, lines: [], error: msg(e) }); }); return;

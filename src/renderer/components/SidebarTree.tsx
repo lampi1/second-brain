@@ -9,6 +9,8 @@
 // briefly highlighted (focusChat); the ✕ on hover closes the chat like its strip's ✕ (6 s Annulla; owner, 2026-10-21). Hidden while no agent is open. Mounted by Sidebar.tsx.
 import type { CSSProperties } from 'react';
 import type { ChatSummary } from '@shared/contract';
+import { flowState } from '../store/flows';
+import { routinePlacements } from '../lib/routine-chats';
 import { chatTree, childState, kidCounts, visibleTree, type ChildState, type TreeNode } from '../lib/chat-tree';
 import { useApp } from '../store/store';
 import { setTreeCollapsed, ui } from '../store/ui';
@@ -37,7 +39,8 @@ function rowState(c: ChatSummary): ChildState {
 }
 
 export function SidebarTree() {
-  const tree = useApp(s => chatTree(s.order.filter(id => !s.chats[id]?.isOrchestrator && !s.chats[id]?.quick), s.chats), sameTree);
+  const snapshot = flowState.use(state => state.snapshot);
+  const tree = useApp(s => { const routines = routinePlacements(s.chats, snapshot); return chatTree(s.order.filter(id => !routines.has(id) && !s.chats[id]?.isOrchestrator && !s.chats[id]?.quick), s.chats); }, sameTree);
   const collapsed = ui.use(s => s.prefs.treeCollapsed);
   const focused = ui.use(s => s.focusMode ?? (s.focused?.startsWith('chat:') ? s.focused.slice(5) : null));
   const chats = useApp(s => s.chats);

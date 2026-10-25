@@ -7,6 +7,8 @@
 // is kept across restarts); a root chat the Orchestrator started, or the app started or resumed by itself, says so above
 // it (Origin, ADR 0102).
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { flowState } from '../store/flows';
+import { routinePlacements } from '../lib/routine-chats';
 import { workspaceTiles, tileKey, type TileRef } from '../lib/grid';
 import { areaOf } from '../lib/agent-order';
 import { chatTree, childState, visibleTree, type TreeNode } from '../lib/chat-tree';
@@ -42,14 +44,17 @@ export function AgentStripsActions() {
 }
 
 export function AgentStrips() {
+  const snapshot = flowState.use(state => state.snapshot);
+  const routineIds = useApp(s => [...routinePlacements(s.chats, snapshot).keys()], sameList);
+  const routineSet = new Set(routineIds);
   const ready = useApp(s => s.ready);
   const panelsVersion = ui.use(s => s.prefs.chatPanelsV);
   const expansion = ui.use(s => s.prefs.chatExpanded);
   const browserOpen = ui.use(s => s.prefs.browserOpen);
   const hidden = ui.use(s => s.hidden, sameList), hiddenTabs = ui.use(s => s.hiddenTabs, sameList);
-  const tree = useApp(s => chatTree(s.order, s.chats), (a, b) => JSON.stringify(a) === JSON.stringify(b));
+  const tree = useApp(s => chatTree(s.order.filter(id => !routineSet.has(id)), s.chats), (a, b) => JSON.stringify(a) === JSON.stringify(b));
   const collapsed = ui.use(s => s.prefs.treeCollapsed);
-  const tiles = useApp(s => workspaceTiles(chatTree(s.order, s.chats).map(n => n.id), s.chats, s.tabs), equalTiles);
+  const tiles = useApp(s => workspaceTiles(chatTree(s.order.filter(id => !routineSet.has(id)), s.chats).map(n => n.id), s.chats, s.tabs, routineSet), equalTiles);
   const nodes = new Map<string, TreeNode>(tree.map(n => [n.id, n]));
   const inTree = new Set(visibleTree(tree, collapsed).map(n => n.id));
   const owners = useApp(s => Object.fromEntries(s.tabs.filter(t => t.ownerChatId).map(t => [t.id, t.ownerChatId!])), (a, b) => JSON.stringify(a) === JSON.stringify(b));

@@ -29,6 +29,8 @@ import { checkPermissionText } from '../agents/tool-policy';
 import { changeText } from './change-text';
 import type { UpgradeAsk } from './upgrade';
 import { tidyMemoryJob } from './memory-tidy';
+import { maskSecrets } from '../brain/mask';
+import { generatedUnchanged, legacyMarker, migrationReceipt, sealMigration, sourceHash, sourceId } from './migration-source';
 
 /** The role side of a job: only the role text and the declared skills. */
 export interface AgentWriter {
@@ -115,21 +117,45 @@ export function migrate(ctx: JobContext): JobResult {
   const items: MigrationItem[] = [];
   let changes = 0;
   for (const s of sections) {
-    const source = `${s.file}#${s.line}`;
+    const source = sourceId(s);
     const marker = `Spostata qui da \`${s.file}\` (sezione «${s.title}», riga ${s.line})`;
-    const already = existing.find(k => (readSmall(k.file) ?? '').includes(marker));
-    if (already) { items.push({ source, title: s.title, skill: already.name, status: 'existing' }); continue; }
+    if (sections.filter(other => sourceId(other) === source).length > 1) {
+      items.push({ source, title: s.title, skill: null, status: 'skipped', note: 'titoli duplicati nello stesso gruppo: serve un titolo univoco' }); continue;
+    }
+    const ambiguousLegacy = sections.filter(other => other.file === s.file && other.title === s.title).length > 1;
+    const matches = (value: string): boolean => {
+      const receipt = migrationReceipt(value);
+      return receipt ? receipt.source === source : !ambiguousLegacy && value.includes(legacyMarker(s));
+    };
+    if (ambiguousLegacy && existing.some(k => { const value = readSmall(k.file) ?? ''; return !migrationReceipt(value) && value.includes(legacyMarker(s)); })) {
+      items.push({ source, title: s.title, skill: null, status: 'skipped', note: 'fonte precedente ambigua tra gruppi: serve associare la skill alla sezione corretta' }); continue;
+    }
+    const already = existing.filter(k => k.home === 'brain').sort((a, b) => a.name.localeCompare(b.name)).find(k => matches(readSmall(k.file) ?? ''));
     const body = sectionText(ctx.root, s);
     if (!body || !body.text.trim()) { items.push({ source, title: s.title, skill: null, status: 'skipped', note: 'sezione vuota o file non leggibile' }); continue; }
-    const name = skillName(s.title, taken);
-    if (undone(ctx.log, 'migration', name)) { items.push({ source, title: s.title, skill: null, status: 'skipped', note: 'annullata da te: non la rifaccio' }); continue; }
+    const prior = already ? readSmall(already.file) ?? '' : '', receipt = migrationReceipt(prior);
+    const bodyHash = sourceHash(body.text);
+    if (already && (!receipt || receipt.bodyHash === bodyHash)) {
+      items.push({ source, title: s.title, skill: already.name, status: 'existing',
+        ...(!receipt && !prior.includes(body.text) ? { note: 'fonte modificata: rivedi la skill esistente, non creo una copia' } : {}) }); continue;
+    }
+    if (already && receipt && !generatedUnchanged(prior, receipt)) {
+      items.push({ source, title: s.title, skill: already.name, status: 'existing', note: 'fonte e skill modificate: aggiornamento da rivedere, testo personale conservato' }); continue;
+    }
+    const name = already?.name ?? skillName(s.title, taken);
+    const declined = ctx.log.all().some(c => c.job === 'migration' && c.rolledBackAt && c.files.some(f => {
+      if (!f.after || !matches(f.after)) return false;
+      return c.action === 'create' || migrationReceipt(f.after)?.bodyHash === bodyHash;
+    }));
+    if (declined || undone(ctx.log, 'migration', name) && !already) { items.push({ source, title: s.title, skill: already?.name ?? null, status: 'skipped', note: 'annullata da te: non la rifaccio' }); continue; }
     taken.add(name);
     const description = `${s.purpose || s.title}${s.area && s.area !== s.title ? ` (${s.area})` : ''}`;
-    const text = skillText(name, description, [`# ${s.title}`, '', body.text, '',
-      `${marker} il ${day(ctx.now())}.${body.masked ? ` ${body.masked} righe con possibili credenziali sono nascoste qui: il testo intero resta nel file originale.` : ''}`].join('\n'));
-    const file = path.join(ctx.skillDir, name, 'SKILL.md');
-    const c = ctx.log.apply({ job: 'migration', kind: 'skill', action: 'create', target: name, summary: changeText().newSkill({ name, file: s.file, title: s.title }), reason: 'Le procedure diventano skill: il contenuto è lo stesso, ora un ruolo la carica quando il compito la chiede (skills_suggest).', evidence: [source] }, [{ file, text }]);
-    if (c) changes++;
+    const text = sealMigration(skillText(name, description, [`# ${s.title}`, '', body.text, '',
+      `${marker} il ${day(ctx.now())}.${body.masked ? ` ${body.masked} righe con possibili credenziali sono nascoste qui: il testo intero resta nel file originale.` : ''}`].join('\n')), source, body.text, receipt?.createdAt ?? ctx.now());
+    const file = already?.file ?? path.join(ctx.skillDir, name, 'SKILL.md');
+    const c = ctx.log.apply({ job: 'migration', kind: 'skill', action: already ? 'update' : 'create', target: name, summary: already ? `${name}: aggiornata dalla stessa sezione sorgente` : changeText().newSkill({ name, file: s.file, title: s.title }), reason: 'Le procedure diventano skill: il contenuto è lo stesso, ora un ruolo la carica quando il compito la chiede (skills_suggest).', evidence: [source, `sha256:${bodyHash}`] }, [{ file, text }]);
+    if (!c) { items.push({ source, title: s.title, skill: already?.name ?? null, status: 'skipped', note: 'contenuto troppo grande per una modifica annullabile' }); continue; }
+    changes++;
     items.push({ source, title: s.title, skill: name, status: 'moved', ...(body.masked ? { note: `${body.masked} righe nascoste (credenziali)` } : {}) });
   }
   return { job: 'migration', changes, report: { at: ctx.now(), items } };
@@ -192,9 +218,14 @@ export function repeatedTask(ctx: JobContext): JobResult {
   const since = ctx.now() - REPEAT_DAYS * 86400e3;
   const scopePath = (value: string): string => process.platform === 'win32' ? path.resolve(value).toLowerCase() : path.resolve(value);
   const brainRoot = scopePath(ctx.root);
-  const runs = ctx.runs().filter(r => r.scope && scopePath(r.scope.brainRoot) === brainRoot && r.endedAt && r.startedAt >= since && r.goal.trim().length >= 12 && r.agentId !== ORCHESTRATOR_AGENT_ID);
+  const runs = ctx.runs().filter(r => r.requestOrigin === 'user' && maskSecrets(r.goal).masked === 0 && !r.reviewOf && !r.parentRunId && r.source !== 'oneshot'
+    && r.scope && scopePath(r.scope.brainRoot) === brainRoot && r.endedAt && r.startedAt >= since && r.goal.trim().length >= 12 && r.agentId !== ORCHESTRATOR_AGENT_ID)
+    .sort((a, b) => a.startedAt - b.startedAt || a.runId.localeCompare(b.runId));
+  // Deduplicate before clustering: one task with changed wording must not enter several topic groups.
+  const latestTasks = new Map<string, AgentRun>();
+  for (const r of runs) latestTasks.set(JSON.stringify([scopePath(r.scope!.projectRoot), r.taskId ?? `chat:${r.chatId}`]), r);
   const groups: { toks: Set<string>; runs: AgentRun[]; scope: string }[] = [];
-  for (const r of runs) {
+  for (const r of latestTasks.values()) {
     const t = tokens(r.goal);
     if (t.size < 2) continue;
     const scope = JSON.stringify([brainRoot, scopePath(r.scope!.projectRoot), r.tags?.app ?? null]);
@@ -217,7 +248,26 @@ export function repeatedTask(ctx: JobContext): JobResult {
     if (common.length < 1) continue;
     const key = tokens(common.join(' '));
     if (skills.some(s => jaccard(tokens(`${s.name.replace(/-/g, ' ')} ${s.description}`), key) >= 0.5)) continue;
-    const name = skillName(common.slice(0, 3).join(' '), taken);
+    // Goals alone are requests, not a procedure. Preserve actual ordered steps from a host-canonical report.
+    const procedure = g.runs.map(r => r.report?.canonical?.output ?? '').map(output => {
+      const section = /^#{1,6}\s+(?:passi|steps|procedura|procedure)\b[^\n]*\n([\s\S]*?)(?=^#{1,6}\s|$(?![\s\S]))/im.exec(maskSecrets(output).text)?.[1] ?? '';
+      return section.split(/\r?\n/).filter(line => /^\s*\d+[.)]\s+\S.{8,}/.test(line));
+    }).find(lines => lines.length >= 2);
+    if (!procedure) continue;
+    const representative = g.runs.map(r => r.goal).sort((a, b) => a.length - b.length || a.localeCompare(b))[0]!;
+    const scopeKey = sourceHash(g.scope).slice(0, 8);
+    const seenRuns = new Set(g.runs.map(r => r.runId));
+    // Naming is presentation, not identity. Retain prior candidates and the user's rollback even when a
+    // newer example changes the shortest representative or older evidence ages out of the run window.
+    const previous = ctx.log.all().some(c => c.job === 'repeated-task' && (
+      c.evidence.some(id => seenRuns.has(id)) || c.target.endsWith(`-${scopeKey}`) && c.files.some(file => {
+        const title = /^# ([^\n]+)/m.exec(parseMd(file.after ?? '').body)?.[1] ?? '';
+        return jaccard(tokens(title), tokens(representative)) >= REPEAT_SIM;
+      })
+    ));
+    if (previous) continue;
+    const name = `${skillName(representative, new Set())}-${scopeKey}`;
+    if (taken.has(name)) continue;
     if (undone(ctx.log, 'repeated-task', name) || ctx.log.all().some(c => c.job === 'repeated-task' && c.target === name)) continue;
     taken.add(name);
     const first = g.runs.reduce((a, b) => (a.startedAt <= b.startedAt ? a : b)), last = g.runs.reduce((a, b) => (a.startedAt >= b.startedAt ? a : b));
@@ -227,11 +277,11 @@ export function repeatedTask(ctx: JobContext): JobResult {
       ...g.runs.slice(-6).map(r => `- ${oneLine(r.goal, 160)}`), '',
       '## Esempi verificati indipendentemente', '',
       ...(good.length ? good.slice(-5).map(r => `- ${day(r.startedAt)}: ${oneLine(r.report ? r.report.summary : '', 220)}`) : ['- Nessun esempio verificato indipendentemente: il solo resoconto non prova la riuscita.']), '',
-      '## Passi', '', 'Documentare qui i passi concreti: le richieste ripetute non descrivono una procedura.', '',
+      '## Passi osservati (da verificare)', '', ...procedure, '',
       '## Candidata non verificata', '', 'Non eseguire automaticamente. Prima di promuoverla: documentare passi concreti, un esempio verificato indipendentemente e un replay riuscito con evidenze.', ''].join('\n');
     const file = path.join(ctx.root, 'memory', 'skill-candidates', `${name}.md`);
     const c = ctx.log.apply({ job: 'repeated-task', kind: 'skill', action: 'create', target: name, summary: changeText().candidate({ name, n: g.runs.length }), reason: `${distinctTasks.size} incarichi distinti in ${chats.size} chat nello stesso progetto: candidata in attesa di verifica indipendente e replay, non caricabile come skill.`, evidence: g.runs.slice(-6).map(r => r.runId) },
-      [{ file, text: skillText(name, `Come fare: ${oneLine(last.goal, 160)}`, body) }]);
+      [{ file, text: maskSecrets(skillText(name, `Come fare: ${oneLine(last.goal, 160)}`, body)).text }]);
     if (!c) continue;
     changes++;
   }
@@ -257,18 +307,22 @@ export function mergeSkills(ctx: JobContext): JobResult {
   for (const a of skills) for (const b of skills) {
     if (a.name >= b.name || gone.has(a.name) || gone.has(b.name)) continue;
     const ta = text.get(a.name)!, tb = text.get(b.name)!;
+    // Legacy semantic merging cannot represent several migration sources without losing update provenance.
+    if ([ta, tb].some(value => migrationReceipt(value) || value.includes('Spostata qui da `'))) continue;
     if (!ta || !tb || jaccard(tokens(parseMd(ta).body), tokens(parseMd(tb).body)) < MERGE_SIM) continue;
-    // keep the one more agents use (then the older one); merge only a lone SKILL.md (other files: left to the user)
-    const [keep, drop] = b.usedBy.length > a.usedBy.length || (b.usedBy.length === a.usedBy.length && (b.changedAt ?? 0) < (a.changedAt ?? 0)) ? [b, a] : [a, b];
+    // Creation provenance is stable across edits/undo; missing provenance falls back to the name, never mtime.
+    const born = (s: BrainSkill): number => migrationReceipt(text.get(s.name) ?? '')?.createdAt
+      ?? ctx.log.all().find(c => c.kind === 'skill' && c.action === 'create' && c.target === s.name)?.at ?? Number.MAX_SAFE_INTEGER;
+    const [keep, drop] = born(b) < born(a) ? [b, a] : [a, b];
     try { if (fs.readdirSync(path.dirname(drop.file)).length > 1) continue; } catch { continue; }
-    if (undone(ctx.log, 'merge-skills', `${drop.name}>${keep.name}`)) continue;
+    if (undone(ctx.log, 'merge-skills', `${drop.name}>${keep.name}`) || undone(ctx.log, 'merge-skills', `${keep.name}>${drop.name}`)) continue;
     const kt = text.get(keep.name)!, kp = parseMd(kt), have = new Set(kp.body.split(/\r?\n/).map(l => l.trim()).filter(Boolean));
     const extra = parseMd(text.get(drop.name)!).body.split(/\r?\n/).filter(l => l.trim() && !have.has(l.trim()) && !/^#\s/.test(l));
     const merged = extra.length ? setBody(kt, `${kp.body.replace(/\s+$/, '')}\n\n## Da «${drop.name}»\n\n${extra.join('\n')}\n`) : kt;
     const c = ctx.log.apply({ job: 'merge-skills', kind: 'skill', action: 'merge', target: `${drop.name}>${keep.name}`, summary: changeText().merge({ drop: drop.name, keep: keep.name }), reason: `Le due skill dicevano quasi le stesse cose (somiglianza ≥ ${Math.round(MERGE_SIM * 100)}%).`, evidence: [brainRel(ctx.root, drop.file), brainRel(ctx.root, keep.file)] },
       [{ file: keep.file, text: merged }, { file: drop.file, text: null }]);
     if (!c) continue;
-    changes++; gone.add(drop.name);
+    changes++; gone.add(drop.name); text.set(keep.name, merged);
     for (const p of ctx.profiles().filter(x => x.knowhow?.linked.includes(drop.name))) linkTo(ctx, p, keep.name, 'merge-skills', `«${drop.name}» non c’è più: è dentro «${keep.name}».`, drop.name);
   }
   return { job: 'merge-skills', changes };

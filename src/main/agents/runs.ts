@@ -5,6 +5,7 @@
 // The same file keeps Flash's answer outcomes (`flash`, agents/flash-outcomes.ts, ADR 0131: Flash records no run) and a
 // Strategist run's plan record (`plan`, a decision signal for the Orchestrator); both read leniently.
 import path from 'node:path';
+import fs from 'node:fs';
 import crypto from 'node:crypto';
 import type { AgentRun, AgentRunCorrections, AgentRunEnd, AgentRunOutcome, AgentRunPlan, AgentRunReport, AgentRunTags, AgentRunTokens } from '../../shared/agents';
 import { ONE_SHOT_PURPOSES } from '../../shared/agents';
@@ -117,6 +118,7 @@ export function readRun(v: unknown): AgentRun | null {
   if ((r.endedAt === undefined) !== (r.endReason === undefined) || (r.endedAt !== undefined && !time(r.endedAt)) || (r.endReason !== undefined && !ENDS.includes(r.endReason as AgentRunEnd))) return null;
   const outcome = r.outcome === undefined ? undefined : readOutcome(r.outcome);
   if (r.source !== undefined && r.source !== 'chat' && r.source !== 'oneshot') return null;
+  if (r.requestOrigin !== undefined && !['user', 'agent', 'app'].includes(r.requestOrigin as string)) return null;
   const oneshot = r.oneshot as AgentRun['oneshot'];
   if (oneshot !== undefined && (!oneshot || typeof oneshot !== 'object' || !str(oneshot.engine, 80)
     || !ONE_SHOT_PURPOSES.includes(oneshot.job) || typeof oneshot.fallback !== 'boolean'
@@ -168,6 +170,7 @@ export function readRun(v: unknown): AgentRun | null {
     ...(r.endedAt !== undefined ? { endedAt: r.endedAt, endReason: r.endReason as AgentRunEnd } : {}),
     ...(outcome ? { outcome } : {}),
     ...(r.source ? { source: r.source as AgentRun['source'] } : {}),
+    ...(r.requestOrigin ? { requestOrigin: r.requestOrigin as AgentRun['requestOrigin'] } : {}),
     ...(oneshot ? { oneshot: { engine: oneshot.engine, job: oneshot.job, fallback: oneshot.fallback, costBasis: oneshot.costBasis } } : {}),
     counters: { questions: c.questions, permissions: c.permissions, commands: c.commands, reopened: c.reopened, contextPeak: c.contextPeak as number | null },
     costUsd: r.costUsd as number | null, tokens,
@@ -214,7 +217,7 @@ export function addTurn(run: AgentRun, usd: number | null, tokens: AgentRunToken
 /** Links a new run may carry: the delegating chat's run (agent_delegate), the run an independent review (a Sentinel) reviews, the run it reworks;
  *  each must name a run the store knows. */
 export interface RunLinks { parentRunId?: string; reviewOf?: string; reworkOf?: string }
-export interface RunStart extends RunLinks { chatId: string; agentId: string; version: number; goal: string; startedBy: AgentRun['startedBy']; startedAt: number; costKnown: boolean; tags?: AgentRunTags; tier?: ModelTier; model?: string | null }
+export interface RunStart extends RunLinks { chatId: string; agentId: string; version: number; goal: string; startedBy: AgentRun['startedBy']; requestOrigin?: AgentRun['requestOrigin']; startedAt: number; costKnown: boolean; tags?: AgentRunTags; tier?: ModelTier; model?: string | null }
 
 const sample = (v: unknown): boolean => { const s = v as { n?: unknown; values?: unknown; sum?: unknown } | null; return !!s && count(s.n) && Array.isArray(s.values) && s.values.length <= SAMPLE_MAX && s.values.length <= s.n && s.values.every(time)
   && (s.sum === undefined || typeof s.sum === 'number' && Number.isFinite(s.sum) && s.sum >= 0); };
@@ -278,6 +281,8 @@ export class AgentRunStore {
   private prunedThrough = 0;
   private flash: FlashLog = emptyFlashLog();
   private dirty = false;
+  /** Exact preimage retained until an exclusive recovery copy is durable; repair never discards malformed rows. */
+  private recoverySource: Buffer | null = null;
   /** the runs just pruned (folded into the rollups): ChatManager drops their chat mirrors */
   onPrune?: (runIds: Set<string>) => void;
   /** set when the file cannot be read: it is kept as it is and no run is recorded until Brother fixes or moves it */
@@ -304,7 +309,10 @@ export class AgentRunStore {
         this.runs.set(run.runId, run);
       }
       if (skipped) {
-        // A bad record must not disable unrelated chats. Persist the repair on the next normal flush; never log contents.
+        // Preserve the original before the next repaired write; a concurrent file change refuses recovery.
+        const source = fs.readFileSync(this.file);
+        if (JSON.stringify(JSON.parse(source.toString('utf8'))) !== JSON.stringify(raw)) throw new Error('Run file changed during recovery');
+        this.recoverySource = source;
         this.dirty = true;
         log.warn('agents', 'invalid agent run records skipped', { data: { skipped, kept: this.runs.size },
           hint: 'valid runs were recovered; new runs can still be recorded' });
@@ -343,6 +351,7 @@ export class AgentRunStore {
     this.checkLinks(s);
     const run: AgentRun = {
       runId: newRunId(), chatId: s.chatId, agentId: s.agentId, version: s.version, goal: s.goal.trim().slice(0, GOAL_MAX), startedBy: s.startedBy, startedAt: s.startedAt,
+      requestOrigin: s.requestOrigin ?? (s.startedBy === 'user' ? 'user' : s.startedBy === 'app' ? 'app' : 'agent'),
       ...(s.parentRunId ? { parentRunId: s.parentRunId } : {}),
       ...(s.tier ? { tier: s.tier } : {}), ...(s.model !== undefined ? { model: s.model } : {}),
       ...(s.reviewOf ? { reviewOf: s.reviewOf } : {}), ...(s.reworkOf ? { reworkOf: s.reworkOf } : {}),
@@ -372,6 +381,22 @@ export class AgentRunStore {
 
   save(): void {
     if (this.problem) throw new Error(this.problem);
+    if (this.recoverySource) {
+      const stat = fs.lstatSync(this.file);
+      if (!stat.isFile() || stat.nlink !== 1 || !fs.readFileSync(this.file).equals(this.recoverySource)) throw new Error('Il registro è cambiato durante il recupero: riapri l’app prima di salvare.');
+      const hash = crypto.createHash('sha256').update(this.recoverySource).digest('hex');
+      const recovered = path.join(path.dirname(this.file), `agent-runs-recovery-${hash}.json`);
+      let fd: number | undefined;
+      try {
+        fd = fs.openSync(recovered, 'wx', 0o600);
+        fs.writeFileSync(fd, this.recoverySource); fs.fsyncSync(fd);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+        const saved = fs.lstatSync(recovered);
+        if (!saved.isFile() || saved.nlink !== 1 || !fs.readFileSync(recovered).equals(this.recoverySource)) throw new Error('La copia del registro recuperato non è valida; originale conservato.');
+      } finally { if (fd !== undefined) fs.closeSync(fd); }
+      this.recoverySource = null;
+    }
     const all = this.list();
     const ended = all.filter(r => r.endedAt !== undefined).sort((a, b) => a.endedAt! - b.endedAt! || a.startedAt - b.startedAt);
     // Runs on the main process at every run event: the file (up to RUNS_BYTES) is written compact and serialized once

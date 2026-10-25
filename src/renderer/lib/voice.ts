@@ -10,12 +10,13 @@
 // transcribes them locally (Whisper). Used by components/VoiceControls.tsx, ChatInput.tsx, VoiceSettings.tsx, App.tsx
 // (Ctrl+M) and the question cards.
 import { useEffect, useRef } from 'react';
+import { VoiceTurns, type VoiceTurnTarget } from './voice-turns';
 import { createStore } from '../store/createStore';
 import { app, send } from '../store/store';
 import { toast } from '../store/ui';
 import { t } from '../i18n';
 import { micAudio, onMicChange, openMicStream } from './mic';
-import { VOICE_RATE, forEar, isNoise, parseSpokenAnswer, settledText, speakable, speechChunks, spokenQuestion, turnToSpeak, type SpokenAnswer, type SpokenQuestionInput, type VoiceName, type VoiceState } from '@shared/voice';
+import { VOICE_RATE, forEar, isNoise, parseSpokenAnswer, settledText, speakable, speechChunks, spokenQuestion, turnToSpeak, type SpokenAnswer, type SpokenQuestionInput, type VoiceName, type VoiceState, type VoiceHeard, type VoiceSpeech } from '@shared/voice';
 
 export type VoiceTarget = 'orchestrator' | 'flash';
 /** dictate = the words go into the input; talk = a spoken conversation with the Orchestrator */
@@ -28,6 +29,7 @@ export const useVoice = voice.use;
 const set = (p: Partial<VoiceUi>) => voice.set(s => ({ ...s, ...p }));
 
 let stream: MediaStream | null = null, ctx: AudioContext | null = null, proc: ScriptProcessorNode | null = null;
+let captureSession: string | null = null;
 let session = 0; // each start and stop; an await that comes back to another session gives up
 let onSince = 0, startWhenReady = false, transcribeTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -52,14 +54,18 @@ export function startVoice(): void {
     set({ engine: st, error: st.error });
     // an engine error while voice is on (Whisper missing, the addon broken): said once, not at every chunk
     if (st.error && st.error !== was && !['off', 'preparing'].includes(voice.get().phase)) toast(st.error, 'err');
-    if (st.error && voice.get().phase === 'preparing') { fail(st.error); return; }
+    if (st.error && voice.get().phase !== 'off') { fail(st.error); return; }
     if (startWhenReady && allReady(st, voice.get().mode)) { startWhenReady = false; void openMic(session); }
   });
-  window.sb.on('voice:speech', ({ active }) => speech(active));
-  window.sb.on('voice:heard', ({ text }) => heard(text));
+  window.sb.on('voice:speech', event => { if (event.session === captureSession) speech(event); });
+  window.sb.on('voice:heard', event => { if (event.session === captureSession) heard(event); });
   app.subscribe(watchReplies);
   // another microphone (chosen in Settings → Voce, plugged in, unplugged) while voice is on: reopened on it at once
-  onMicChange(() => { if (stream && voice.get().phase !== 'off') { closeMic(); void openMic(session, true); } });
+  onMicChange(() => {
+    if (!stream || voice.get().phase === 'off') return;
+    const { mode, target } = voice.get();
+    stopVoice(true); void startListening(mode, target);
+  });
   window.addEventListener('keydown', e => { if (e.key === 'Escape' && voice.get().phase === 'speaking') { e.preventDefault(); e.stopPropagation(); stopSpeaking(); } }, true);
   void window.sb.invoke('voice:state', undefined).then(st => set({ engine: st }), () => {});
 }
@@ -75,7 +81,7 @@ export const blockVoiceWhile = (why: () => string | null): void => { blocked = w
 export async function toggleVoice(target?: VoiceTarget): Promise<void> {
   const s = voice.get();
   if (s.phase !== 'off') {
-    if (s.mode === 'dictate' && target && target !== s.target) { set({ target }); return; }
+    if (s.mode === 'dictate' && target && target !== s.target) { stopVoice(true); await startListening('dictate', target); return; }
     stopVoice();
     if (s.mode === 'dictate' || !target) return; // the mic button during a conversation: from talking to dictating
   }
@@ -91,6 +97,7 @@ export async function setTalk(on: boolean): Promise<void> {
 }
 
 async function startListening(mode: VoiceMode, target: VoiceTarget): Promise<void> {
+  if (!targetChat(target)) { toast(t(target === 'flash' ? 'voice.noFlash' : 'voice.noOrchestrator'), 'info'); return; }
   const no = blocked();
   if (no) { toast(no, 'info'); return; }
   // leaves «off» before the first await: a second click or Ctrl+M meanwhile turns it off instead of opening twice
@@ -116,6 +123,7 @@ function fail(error: string): void {
   session++;
   startWhenReady = false;
   dropHeld();
+  endCapture();
   closeMic();
   stopSpeaking(false);
   set({ phase: 'off', level: 0, error });
@@ -143,6 +151,7 @@ const loudLately = (now = Date.now()) => recent.filter(r => now - r.at <= 300).r
 /** reopen: another microphone while voice is on; the phase (speaking, hearing…) stays as it is */
 async function openMic(my: number, reopen = false): Promise<void> {
   if (!reopen) set({ phase: 'starting' });
+  const capture = crypto.randomUUID();
   const fake = !!voice.get().engine?.fake;
   let got: MediaStream | null = null;
   try {
@@ -158,7 +167,7 @@ async function openMic(my: number, reopen = false): Promise<void> {
     proc = ctx.createScriptProcessor(2048, 1, 1);
     const ratio = ctx.sampleRate / VOICE_RATE;
     proc.onaudioprocess = e => {
-      if (my !== session) return;
+      if (my !== session || captureSession !== capture) return;
       const input = e.inputBuffer.getChannelData(0);
       let sum = 0;
       for (let i = 0; i < input.length; i++) sum += input[i]! * input[i]!;
@@ -169,7 +178,7 @@ async function openMic(my: number, reopen = false): Promise<void> {
       if (Math.abs(level - voice.get().level) > 0.04) set({ level });
       // the mic keeps listening while the app speaks (echo cancellation on, see mic.ts micAudio): that is what lets the
       // user interrupt it; the echo that gets through is filtered by speech() below
-      void window.sb.invoke('voice:audio', { samples: downsample(input, ratio) }).catch(() => {});
+      void window.sb.invoke('voice:audio', { session: capture, samples: downsample(input, ratio) }).catch(() => {});
     };
     src.connect(proc);
     proc.connect(ctx.destination); // a ScriptProcessor runs only while connected; its output stays silent
@@ -180,9 +189,12 @@ async function openMic(my: number, reopen = false): Promise<void> {
   }
   if (my !== session || reopen) return;
   onSince = Date.now();
+  captureSession = capture;
+  recent.length = 0;
   set({ phase: 'listening' });
-  await window.sb.invoke('voice:listen', { on: true, talk: voice.get().mode === 'talk' }).catch(() => {});
-  if (voice.get().mode === 'talk') sayQuestion();
+  try { await window.sb.invoke('voice:listen', { on: true, session: capture, talk: voice.get().mode === 'talk' }); }
+  catch { if (my === session) fail(t('voice.engineDown')); return; }
+  if (my === session && voice.get().mode === 'talk') sayQuestion();
 }
 
 /** Averages each 16 kHz sample over the input samples it covers (enough for speech; the mic's own filter did the rest). */
@@ -205,18 +217,24 @@ function closeMic(): void {
   proc = null; stream = null; ctx = null;
 }
 
-export function stopVoice(): void {
+function endCapture(): void {
+  const prior = captureSession; captureSession = null;
+  if (prior) void window.sb.invoke('voice:listen', { on: false, session: prior }).catch(() => {});
+}
+
+export function stopVoice(preserve = false): void {
   session++;
+  endCapture();
   startWhenReady = false;
   closeMic();
   stopSpeaking(false);
   if (transcribeTimer) clearTimeout(transcribeTimer);
-  dropHeld();
   set({ phase: 'off', level: 0 });
+  thoughts.reset(preserve);
   hinted = false;
+  deliveredIds.clear();
   saidIds.clear(); // on again: the open questions are read again
   for (const q of questions) q.said = false;
-  void window.sb.invoke('voice:listen', { on: false }).catch(() => {});
 }
 
 // ── what was heard ──
@@ -224,75 +242,69 @@ export function stopVoice(): void {
  *  the voice agents that yield only to sustained speech) */
 export const BARGE_LEVEL = 0.18;
 
-/** per utterance the VAD opened, in order: was it the app's own voice? Its transcript (one 'heard' each, empty when
- *  nothing was understood) takes the first flag, so an echo is dropped and the user's next words are not */
-let echoes: boolean[] = [];
-function speech(active: boolean): void {
+/** Route once, when the utterance starts. A late transcript cannot answer a newly displayed question. */
+const questionVersion = (q: VoiceQuestion): string => JSON.stringify(q.speak);
+function targetNow(): VoiceTurnTarget | null {
+  const s = voice.get(), chatId = targetChat(s.target), q = s.mode === 'talk' ? questions.at(-1) : undefined;
+  return chatId ? { chatId, mode: s.mode, questionId: q?.id ?? null,
+    questionVersion: q ? questionVersion(q) : null, answerable: !q || deliveredIds.get(q.id) === questionVersion(q) } : null;
+}
+function preserveDraft(target: VoiceTurnTarget, text: string): void {
+  const q = questions.at(-1);
+  const now = targetNow();
+  const same = !!q && now?.chatId === target.chatId && now.mode === target.mode && q.id === target.questionId && questionVersion(q) === target.questionVersion;
+  if (same && voice.get().phase !== 'off' && parseSpokenAnswer(text)?.kind === 'text') { q.onAnswer({ kind: 'text', text }); return; }
+  for (const fn of dictated) fn(target.chatId, text);
+  if (target.mode === 'talk') {
+    toast(t('voice.contextChanged'), 'info');
+    // An interrupted prompt must not leave its question permanently unanswerable.
+    if (same && voice.get().phase !== 'off' && deliveredIds.get(q.id) !== questionVersion(q)) replayQuestion();
+  }
+}
+const thoughts = new VoiceTurns({
+  current: target => {
+    const now = targetNow();
+    return !!now && now.chatId === target.chatId && now.mode === target.mode && now.questionId === target.questionId && now.questionVersion === target.questionVersion;
+  },
+  draft: preserveDraft,
+  deliver: (target, text) => {
+    if (target.questionId) {
+      const q = questions.at(-1), answer = parseSpokenAnswer(text);
+      if (q?.id === target.questionId && questionVersion(q) === target.questionVersion && answer) q.onAnswer(answer);
+      else preserveDraft(target, text);
+    } else send(target.chatId, text, [], { voice: true });
+  },
+});
+let turn: { key: string; said: string; cut: boolean } | null = null;
+function dropHeld(): void { thoughts.reset(); }
+function speech({ active, utterance }: VoiceSpeech): void {
   const s = voice.get();
+  if (['off', 'preparing', 'starting'].includes(s.phase)) return;
   if (active) {
-    // the app hearing itself (the fake engine has no microphone: what it «hears» is always the user)
+    const target = targetNow();
+    if (!target) { toast(t(s.target === 'flash' ? 'voice.noFlash' : 'voice.noOrchestrator'), 'info'); stopVoice(true); return; }
     const echo = (speakingNow() || Date.now() < quietUntil) && loudLately() < BARGE_LEVEL && !s.engine?.fake;
-    echoes.push(echo);
-    if (s.phase === 'off' || s.phase === 'preparing' || s.phase === 'starting' || echo) return;
-    if (speakingNow()) stopSpeaking(); // barge-in: the user talks over the app, it stops at once
-    if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; } // still the same thought: what was heard waits for the rest
+    if (!thoughts.start(utterance, target, echo) || echo) return;
+    if (speakingNow()) stopSpeaking();
     set({ phase: 'hearing' });
     return;
   }
-  if (s.phase === 'off' || s.phase !== 'hearing') return;
+  if (s.phase !== 'hearing') return;
   set({ phase: 'transcribing' });
   if (transcribeTimer) clearTimeout(transcribeTimer);
   transcribeTimer = setTimeout(() => { if (voice.get().phase === 'transcribing') set({ phase: 'listening' }); }, 15_000);
 }
-
-/** A conversation sends a thought, not each pause: what was heard waits HOLD_MS for more speech before it goes (the
- *  VAD closes an utterance after 0.5 s of silence; a pause to think must not cut the message in two). */
-const HOLD_MS = 700;
-let turn: { key: string; said: string; cut: boolean } | null = null;
-let held = '', heldChat = '', holdTimer: ReturnType<typeof setTimeout> | null = null;
-function dropHeld(): void {
-  if (holdTimer) clearTimeout(holdTimer);
-  holdTimer = null; held = ''; heldChat = ''; echoes = [];
-}
-/** what was heard goes HOLD_MS after the last piece, unless the user is talking again (then after that piece) */
-function sendHeldLater(): void {
-  if (!held || holdTimer) return;
-  const my = session;
-  holdTimer = setTimeout(() => {
-    holdTimer = null;
-    if (my !== session || !held) return;
-    if (voice.get().phase === 'hearing') return; // more is coming: speech(false) and its transcript set the timer again
-    const all = held, chatId = heldChat;
-    held = ''; heldChat = '';
-    send(chatId, all, [], { voice: true });
-  }, HOLD_MS);
-}
-
-function heard(raw: string): void {
-  const echo = echoes.shift() ?? false;
+function heard({ text: raw, utterance }: VoiceHeard): void {
   const s = voice.get();
-  if (s.phase === 'off') return;
+  if (['off', 'preparing', 'starting'].includes(s.phase)) return;
   if (s.phase !== 'speaking' && s.phase !== 'hearing') set({ phase: speakingNow() ? 'speaking' : 'listening' });
   const text = raw.trim();
-  if (echo || !text || isNoise(text)) { sendHeldLater(); return; }
-  const chatId = targetChat(s.target);
-  if (!chatId) { toast(t(s.target === 'flash' ? 'voice.noFlash' : 'voice.noOrchestrator'), 'info'); return; }
-  if (s.mode === 'dictate') { for (const fn of dictated) fn(chatId, text); return; }
-  const q = questions.at(-1);
-  if (q && !held) {
-    const a = parseSpokenAnswer(text);
-    if (a) { q.onAnswer(a); return; }
-  }
-  if (held && heldChat !== chatId) { const all = held, to = heldChat; held = ''; send(to, all, [], { voice: true }); }
-  held = held ? `${held} ${text}` : text;
-  heldChat = chatId;
-  if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
-  sendHeldLater();
+  thoughts.finish(utterance, isNoise(text) ? '' : text);
 }
 
 // ── speaking ──
 /** The sentences of the reply being read: synthesized one ahead of the one playing, played back to back. */
-interface Line { text: string; audio: Promise<{ samples: Float32Array; rate: number; error?: string } | null> | null }
+interface Line { done?: () => void; text: string; audio: Promise<{ samples: Float32Array; rate: number; error?: string } | null> | null }
 let lines: Line[] = [];
 let speakN = 0; // each stop; a synthesis or a play that comes back to another one gives up
 let out: AudioContext | null = null, playing: AudioBufferSourceNode | null = null, pumping = false;
@@ -338,7 +350,7 @@ async function pump(): Promise<void> {
   }
   const src = play(r.samples, r.rate);
   playing = src;
-  src.onended = () => { if (playing !== src) return; playing = null; quietUntil = Date.now() + 400; void pump(); };
+  src.onended = () => { if (playing !== src) return; playing = null; line.done?.(); quietUntil = Date.now() + 400; void pump(); };
 }
 
 function play(samples: Float32Array, rate: number): AudioBufferSourceNode {
@@ -366,6 +378,7 @@ export async function previewVoice(name: VoiceName): Promise<string | null> {
 
 /** Esc, «zitto», or the user talking over it: the voice stops and what was still to be said is dropped. */
 export function stopSpeaking(back = true): void {
+  void window.sb.invoke('voice:cancelSpeech', undefined).catch(() => {});
   speakN++;
   lines = [];
   pumping = false;
@@ -408,6 +421,13 @@ const questions: VoiceQuestion[] = [];
 
 /** the questions read since voice went on, by id: the same request drawn twice is read once, whichever copy closes */
 const saidIds = new Set<string>();
+const deliveredIds = new Map<string, string>();
+export function replayQuestion(): void {
+  const q = questions.at(-1);
+  if (!q) return;
+  q.said = false; saidIds.delete(q.id); deliveredIds.delete(q.id);
+  sayQuestion();
+}
 function sayQuestion(): void {
   const q = questions.at(-1);
   set({ question: q?.id ?? null });
@@ -416,7 +436,10 @@ function sayQuestion(): void {
   q.said = true;
   saidIds.add(q.id);
   stopSpeaking(false);
+  const version = questionVersion(q);
   say(spokenQuestion(q.speak, !hinted), true);
+  const last = lines.at(-1);
+  if (last) last.done = () => { if (questions.some(item => item.id === q.id && questionVersion(item) === version)) deliveredIds.set(q.id, version); };
   hinted = true;
 }
 
@@ -439,5 +462,11 @@ export function useVoiceQuestion(id: string | null, speak: SpokenQuestionInput, 
     };
     // speak and onAnswer are read when the answer comes: a new closure each render must not re-read the question
   }, [id]);
-  useEffect(() => { if (mine.current) mine.current.onAnswer = onAnswer; });
+  useEffect(() => {
+    const q = mine.current;
+    if (!q) return;
+    const changed = questionVersion(q) !== JSON.stringify(speak);
+    q.onAnswer = onAnswer; q.speak = speak;
+    if (changed) { q.said = false; saidIds.delete(q.id); deliveredIds.delete(q.id); if (questions.at(-1) === q) sayQuestion(); }
+  });
 }

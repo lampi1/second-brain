@@ -11,7 +11,7 @@ const Q = 'Faccio il merge della PR?';
 
 test('voice conversation: «sì» answers the open decision card', async () => {
   test.setTimeout(90_000);
-  const { app, page } = await launchDemo({ env: { SB_VOICE_FAKE_TEXT: 'Sì.' } });
+  const { app, page } = await launchDemo({ env: { SB_VOICE_FAKE_TEXT: 'Sì.', SB_VOICE_FAKE_DELAY_MS: '4000' } });
   try {
     for (const id of ['orchestrator', 'qa', 'feedback', 'fix', 'sms', 'mappa']) await demo(app, (d, c) => d.stop(c), id);
     for (let i = 0; i < 5; i++) {
@@ -38,6 +38,7 @@ test('voice conversation: «sì» answers the open decision card', async () => {
     await goPage(page, 'impostazioni');
     // (the questions window covers the page: the switch is clicked through it, as if the window were moved aside)
     await page.getByTestId('st-voice-talk-on').evaluate(el => (el as HTMLElement).click());
+    // The utterance starts after the prompt finishes; early binary answers are preserved and replay the question.
     await expect(page.getByTestId('qwin-card')).toHaveCount(0, { timeout: 15_000 });
     const answers = await app.evaluate(() => (globalThis as unknown as { __answers: unknown[] }).__answers);
     expect(answers).toEqual([expect.objectContaining({ chatId: 'fix', answer: { kind: 'question', answers: { [Q]: 'Sì' } } })]);

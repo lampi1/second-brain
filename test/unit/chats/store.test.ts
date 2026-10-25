@@ -22,3 +22,10 @@ describe('ChatStore: a chats.json of the previous release', () => {
     expect(loaded[0]).not.toHaveProperty('closedAt');
   });
 });
+
+it('retains host routine placement and frozen prompt identity across restart', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-store-routine-')); roots.push(root);
+  const row = { id: 'worker', harness: 'claude', cwd: '/fixture', title: 'Routine worker', routine: { runId: 'run-1', stepId: 'inspect' }, routinePackage: 'a'.repeat(64), routinePromptHash: 'b'.repeat(64) };
+  fs.writeFileSync(path.join(root, 'chats.json'), JSON.stringify({ version: 2, chats: [row] }));
+  expect(new ChatStore(root).load()[0]).toMatchObject({ routine: row.routine, routinePackage: row.routinePackage, routinePromptHash: row.routinePromptHash });
+});

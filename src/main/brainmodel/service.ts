@@ -417,7 +417,14 @@ function listFiles(dir: string): string[] {
 /** A re-run keeps the earlier report's items and adds the new ones (one line per former section). */
 function mergeReport(old: MigrationReport | null, next: MigrationReport): MigrationReport {
   if (!old) return next;
-  const items = new Map(old.items.map(i => [i.source, i]));
-  for (const i of next.items) if (!items.has(i.source) || i.status === 'moved') items.set(i.source, i);
+  const items = new Map(old.items.map(i => {
+    const stable = /#\d+$/.test(i.source) ? next.items.find(n => n.title === i.title && n.skill === i.skill && n.source.split('#')[0] === i.source.split('#')[0]) : undefined;
+    const source = stable?.source ?? i.source;
+    return [source, { ...i, source }];
+  }));
+  for (const i of next.items) {
+    const prior = items.get(i.source);
+    items.set(i.source, prior?.status === 'moved' && i.status === 'existing' ? { ...i, status: 'moved' } : i);
+  }
   return { at: next.at, items: [...items.values()] };
 }

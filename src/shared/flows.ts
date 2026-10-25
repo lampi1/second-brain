@@ -1,12 +1,16 @@
 // Versioned reusable flow contracts shared by the host, Orchestrator tools and the decision UI.
 // Definitions describe work; only host evidence and exact user decisions advance execution.
-import type { FlowAutomationSnapshot } from './flow-automation';
+import type { FlowAutomationSnapshot, FlowAutomationConfig } from './flow-automation';
 import type { AgentAvatar } from './agents';
 import type { ModelTier, WorkRoleId } from './roles';
 import type { Effort } from './contract';
 export interface FlowScope { project?: string; areaPath?: string }
 export interface FlowStep {
   id: string; title: string; kind: 'check' | 'agent' | 'approval' | 'manual'; instructions: string;
+  /** Approved complete role prompt. Packaged workers do not load ambient brain memory or skills. */
+  agentPrompt?: string;
+  /** Package asset ids this step may read; their exact contents ship with this version. */
+  assets?: string[];
   inputs: string[]; action?: { kind: 'builtin' | 'script' | 'query' | 'action'; ref: string; hash?: string };
   evidence: string[]; timeoutMs: number; maxAttempts: number;
   effect: 'read-only' | 'code' | 'external-write' | 'production'; reviewOf?: string; workspaceInput?: string;
@@ -34,11 +38,36 @@ export interface FlowParam {
   name: string; label?: string; type: 'string' | 'int' | 'list' | 'file' | 'enum' | 'env';
   options?: string[]; required?: boolean; default?: string;
 }
+export interface FlowAsset {
+  id: string; kind: 'script' | 'query' | 'checklist' | 'reference'; content: string; sha256: string;
+  /** Authoring provenance only; never resolved at runtime. */
+  source?: { path: string; sha256: string };
+}
+export interface FlowOutput {
+  id: string; description: string; kind: 'lesson' | 'report';
+  /** An explicit append-only brain projection; otherwise the output stays in the run. */
+  brainPath?: string;
+}
+/** Portable production intent. It is a design contract, not an execution grant. */
+export interface RoutineProductionIntent {
+  id: string; operation: 'db-read' | 'db-write' | 'deploy'; targetId: string;
+  recipeAssetId: string; recipeSha256: string; timeoutMs: number;
+  maxRows?: number; maxAffectedRows?: number; rollbackAssetId?: string;
+}
+export interface FlowPackage {
+  schema: 1; assets: FlowAsset[]; outputs: FlowOutput[];
+  production?: RoutineProductionIntent[];
+  /** Required operation names are intent, never authority: automation approval grants them separately. */
+  requiredOps: string[];
+  history?: true;
+  downgrade?: { lessonOutput: string; removeTag: string; addTag: string; state: string };
+}
 export interface FlowDefinition {
   id: string; title: string; description: string; category?: string; aliases: string[];
   scope: FlowScope; steps: FlowStep[];
   /** typed parameters the user gives at start (or a trigger fills); steps read them as {{name}} */
   params?: FlowParam[];
+  package?: FlowPackage;
 }
 export interface FlowDraft {
   definition: FlowDefinition; revision: number; updatedAt: number;
@@ -51,7 +80,7 @@ export interface FlowReceipt {
 }
 export interface FlowAgentBinding { chatId: string; chatRunId: string; taskVersion: number;
   /** What the host read from the chat at bind (never stored): its role, the tier it launched on, whether its model came from the routing table's row instead of that tier. */
-  launched?: { roleId?: string; tier?: ModelTier; fromTable?: boolean } }
+  launched?: { roleId?: string; tier?: ModelTier; fromTable?: boolean; packageDigest?: string; promptHash?: string; engine?: string; model?: string | null; effort?: string } }
 export interface FlowVerifiedReport extends FlowAgentBinding { id: string; summary: string; evidence: string[]; completed: boolean; roleId?: string; reviewOf?: string }
 export interface FlowStepRun {
   stepId: string; status: 'pending' | 'ready' | 'running' | 'approval' | 'blocked' | 'completed' | 'cancelled';
@@ -69,7 +98,16 @@ export interface FlowRun {
   status: 'active' | 'approval' | 'blocked' | 'completed' | 'cancelled'; currentStep: number; steps: FlowStepRun[];
   createdAt: number; updatedAt: number;
   testDbEvidence?: FlowTestDbEvidence[];
-  cancellation?: { at: number; reason: string; by: 'user' | 'orchestrator'; expectedRevision: number; interruption?: 'pending' | 'confirmed' };
+  /** Host event timeline; never model-invented execution or hidden chain of thought. */
+  /** Historical exact approval; never used as live execution authority. */
+  approval?: { ruleId: string; ruleRevision: number; approvedAt: number; config: FlowAutomationConfig; sha256: string };
+  trace?: { id: string; at: number; kind: 'transition' | 'output' | 'cleanup' | 'pause' | 'decision'; stepId?: string; message: string }[];
+  dossierPath?: string;
+  settlementError?: string;
+  outputs?: { id: string; at: number; content: string; sha256: string; brainPath?: string; projectedAt?: number }[];
+  history?: { id: string; stepId: string; at: number; text: string; status: 'pending' | 'sent'; reason?: string; mentionReason?: 'intake' | 'block' | 'downgrade' | 'final' }[];
+  disposition?: { kind: 'needs-human'; reason: string; at: number; cleanup: 'pending' | 'complete'; phase: number; error?: string };
+  cancellation?: { at: number; reason: string; by: 'user' | 'orchestrator' | 'routine'; expectedRevision: number; interruption?: 'pending' | 'confirmed' };
   restartOf?: { runId: string; stepId: string; expectedRevision: number; mode: 'from-start' | 'from-step' };
   pendingCancellation?: { revision: number; requestedAt: number; reason?: string };
   recoveryFeedback?: { kind: 'cancel' | 'restart'; at: number; message: string; deliveredAt?: number };

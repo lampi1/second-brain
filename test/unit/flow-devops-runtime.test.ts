@@ -4,34 +4,37 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
+import { TestDeploymentCoordinator } from '../../src/main/flows/test-deployment';
 import { createFlowRuntime } from '../../src/main/flows/runtime';
 import { devopsWriteTools } from '../../src/main/flows/devops-write-tool';
 import type { ChatSummary } from '../../src/shared/contract';
 import type { FlowAutomationConfig } from '../../src/shared/flow-automation';
 
 const folders: string[] = [];
-afterEach(() => { for (const folder of folders.splice(0)) fs.rmSync(folder, { recursive: true, force: true }); });
+afterEach(() => { vi.restoreAllMocks(); for (const folder of folders.splice(0)) fs.rmSync(folder, { recursive: true, force: true }); });
 const config: FlowAutomationConfig = { flowId: 'fix', flowVersion: 1, scope: { project: 'ProjectA', areaPath: 'Team' }, inputs: { workspace: '/project' }, priority: 'normal',
   trigger: { kind: 'devops', everyMinutes: 1, organization: 'contoso', project: 'ProjectA', areaPath: 'Team', workItemType: 'Bug', states: ['New'], includeExisting: true },
   devopsWrite: { organization: 'contoso', projects: ['ProjectA'], ops: ['comment'], fields: [] } };
 
-async function setup() {
+async function setup(sealed = false) {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'flow-dw-')); folders.push(folder);
   const brain = path.join(folder, 'brain'); fs.mkdirSync(brain);
   const rows = [{ id: 'o', isOrchestrator: true, state: 'idle' }] as ChatSummary[];
   const request = vi.fn(async (url: string, init: RequestInit) => new Response(JSON.stringify(init.method === 'GET' ? { id: 42, rev: 1, fields: { 'System.TeamProject': 'ProjectA' } } : { id: 5 }), { status: 200 }));
   const detect = vi.fn(async () => ({ cursor: { revision: '1' }, summary: 'Read only', items: [{ key: '42', title: 'Bug 42', inputs: { 'work-item-id': '42' } }] }));
-  const runtime = createFlowRuntime({ userData: folder, brainRoot: () => brain, chats: () => rows, changed: () => {}, send: vi.fn(async () => {}), detect, devopsWrite: { token: async () => 'token-value', request } });
+  const runtime = createFlowRuntime({ userData: folder, brainRoot: () => brain, chats: () => rows, changed: () => {}, stopChat: async () => {}, send: vi.fn(async () => {}), detect, devopsWrite: { token: async () => 'token-value', request } });
   const flow = runtime.service(), auto = runtime.automation();
   flow.propose({ expectedRevision: 0, definition: { id: 'fix', title: 'Fix', description: 'Fixture', aliases: [], scope: { project: 'ProjectA', areaPath: 'Team' }, steps: [
-    { id: 'write', title: 'Write', kind: 'agent', instructions: 'Comment', inputs: ['workspace', 'work-item-id'], workspaceInput: 'workspace', evidence: [], effect: 'external-write', adapter: 'devops-write', maxAttempts: 1, timeoutMs: 600000 }] } });
+    { id: 'write', title: 'Write', kind: 'agent', instructions: 'Comment', inputs: ['workspace', 'work-item-id'], workspaceInput: 'workspace', evidence: [], effect: 'external-write', adapter: 'devops-write', maxAttempts: 1, timeoutMs: 600000, ...(sealed ? { role: 'scout' as const, tier: 'mid' as const, engine: 'claude', model: 'sonnet', agentPrompt: 'Frozen evidence contract' } : {}) }], ...(sealed ? { package: { schema: 1 as const, assets: [], outputs: [], requiredOps: ['comment'] } } : {}) } });
   flow.decideDefinition({ id: 'fix', expectedRevision: 1, answer: 'yes' });
   const rule = auto.propose({ config, expectedRevision: 0 }, 'o'); auto.decide({ id: rule.id, expectedRevision: 1, answer: 'yes' });
   await auto.tick(); const run = auto.startEvent(auto.snapshot().events[0]!.id, 'o');
   rows.push({ id: 'worker', state: 'running', run: { runId: 'wr', taskVersion: 1, scope: { brainRoot: brain, projectRoot: brain } } } as ChatSummary);
   rows.push({ id: 'intruder', state: 'running', run: { runId: 'ir', taskVersion: 1, scope: { brainRoot: brain, projectRoot: brain } } } as ChatSummary);
+  if (sealed) Object.assign(rows[1]!, { routinePackage: run.definitionDigest, routinePromptHash: createHash('sha256').update('Frozen evidence contract').digest('hex'), harness: 'claude', model: 'sonnet', run: { ...rows[1]!.run, agentId: 'scout', tier: 'mid' } });
   flow.bindAgent(run.id, run.revision, 'write', runtime.resolveBinding('worker', 'o', brain)!, 'o');
-  return { runtime, auto, rule, request };
+  return { runtime, auto, rule, request, rows, run, flow };
 }
 
 describe('DevOps write runtime', () => {
@@ -51,4 +54,21 @@ describe('DevOps write runtime', () => {
     await expect(runtime.devopsWrite('worker', { op: 'comment', text: 'x' })).rejects.toThrow('not enabled');
     expect(request).not.toHaveBeenCalled();
   });
+});
+
+it('one uncertain deployment settlement is visible and does not reject the scheduler tick', async () => {
+  const { runtime, flow, run } = await setup(true);
+  vi.spyOn(TestDeploymentCoordinator.prototype, 'ownedTargets').mockImplementation(id => id === run.id ? ['unknown-target'] : []);
+  const bound = flow.status(run.id, 'o');
+  await expect(runtime.cancel({ runId: run.id, expectedRevision: bound.revision })).resolves.toMatchObject({ status: 'cancelled' });
+  await expect(runtime.tick()).resolves.toBeUndefined();
+  const terminal = flow.status(run.id, 'o'); expect(terminal.settlementError).toContain('not enabled');
+  expect(runtime.dossier(run.id, 'o').report.coverage.unresolved).toContain(terminal.settlementError);
+  runtime.stop();
+});
+it('rechecks a changed sealed model after initial admission and sends no remote request', async () => {
+  const { runtime, rows, request } = await setup(true);
+  // The writer queues execution before authorize; drift after initial admission must be refused there too.
+  const pending = runtime.devopsWrite('worker', { op: 'comment', text: 'Do not send' }); rows[1]!.model = 'changed';
+  await expect(pending).rejects.toThrow('Frozen routine'); expect(request).not.toHaveBeenCalled(); runtime.stop();
 });

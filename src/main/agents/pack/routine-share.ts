@@ -185,6 +185,17 @@ function readme(input: RoutinePackageInput, s: RoutinePackageSummary): string {
 /** Every file of the routine package, by its path in the zip, and what went in. */
 export function buildRoutinePackage(input: RoutinePackageInput): { files: PackFiles; summary: RoutinePackageSummary } {
   const { definition } = input, skipped: string[] = [];
+  if (definition.package) {
+    // A sealed export is built exclusively from the approved portable copy, never the current brain/catalog.
+    const approved = parsePortable(input.flowJson).definition;
+    if (JSON.stringify(approved) !== JSON.stringify(definition)) throw new Error('Portable package differs from the approved definition');
+    const files: PackFiles = new Map([['routine.json', Buffer.from(input.flowJson)], ['ROUTINE.md', Buffer.from(markdown(approved, input.version))]]);
+    for (const asset of approved.package!.assets) files.set(`assets/${asset.id}`, Buffer.from(asset.content));
+    const manifest: Manifest = { format: 'second-brain-routine', schemaVersion: 1, title: definition.title, exportedAt: input.date, cited: [], rules: [], skills: [], roles: [], memory: [], scripts: [] };
+    files.set(MANIFEST, Buffer.from(JSON.stringify(manifest, null, 2)));
+    files.set('AGENTS.md', Buffer.from('# Routine package\n\nRead ROUTINE.md and routine.json. All approved prompts and assets are included. Grants must be approved locally; this export grants no authority. Never load ambient brain instructions.\n'));
+    return { files, summary: { title: definition.title, cited: [], missing: [], rules: [], skills: [], roles: [], memory: [], scripts: approved.package!.assets.filter(a => a.kind === 'script' || a.kind === 'query').map(a => a.id), skipped: [] } };
+  }
   const cited = collectCited(input.root, citedPaths(definition, input.brainName));
   skipped.push(...cited.skipped);
   const rules = packRules(input.root), files: PackFiles = new Map();

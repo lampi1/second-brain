@@ -90,6 +90,7 @@ export function createAgentPacks(userData: string, brain: BrainService, catalog:
   };
   /** The routine package (routine-share.ts, ADR 0156): its roles, their skills and memory, what the steps cite. */
   const routineInput = (definition: FlowDefinition, version: number, flowJson: string, memory: boolean): RoutinePackageInput => {
+    if (definition.package) return { root: '', brainName: '', date: new Date().toISOString().slice(0, 10), definition, version, flowJson, roles: [], skills: new Map(), memory: false };
     const brainRoot = packs.root(), wanted = routineRoles(definition), skipped: string[] = [];
     const roles = catalog.list().profiles.filter(p => isWorkRole(p.id) && wanted.includes(portableId(p.id))).map(profile => {
       let own = new Map<string, Buffer>();

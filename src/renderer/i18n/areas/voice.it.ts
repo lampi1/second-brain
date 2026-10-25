@@ -1,5 +1,6 @@
 // Voice mode (ADR 0152): the mic button, the bar under the Orchestrator's and Flash's input, Settings → Voce.
 export const voiceIt = {
+  'voice.contextChanged': 'Le tue parole sono in bozza e non sono state inviate.',
   'voice.on': 'Detta (scrive nel campo)',
   'voice.off': 'Spegni il microfono',
   'voice.placeholder': 'Parla pure, oppure scrivi…',

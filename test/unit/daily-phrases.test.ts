@@ -33,6 +33,27 @@ describe('parsePhrases', () => {
 });
 
 describe('DailyPhrasesService', () => {
+  it('persists thrown attempts across restarts and retries only the next day', async () => {
+    const userData = tmp();
+    let now = Date.parse('2026-10-23T09:00:00');
+    const ask = vi.fn(async () => { throw new Error('Run ledger unavailable'); });
+    const deps = { userData, lang: () => 'it' as const, ask, emit: vi.fn(), now: () => now };
+    const first = new DailyPhrasesService(deps);
+    await first.ensure(); await first.ensure();
+    const restarted = new DailyPhrasesService(deps);
+    await restarted.ensure();
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(restarted.today()).toBeNull();
+    now += 86_400_000;
+    await restarted.ensure();
+    expect(ask).toHaveBeenCalledTimes(2);
+  });
+  it('does not spend tokens if the attempt cannot be persisted', async () => {
+    const userData = tmp(), ask = vi.fn(async () => ({ ok: true, text: answer('any', 16) }));
+    const svc = new DailyPhrasesService({ userData, lang: () => 'it', ask, emit: vi.fn() });
+    const spy = vi.spyOn(fs, 'renameSync').mockImplementation(() => { throw new Error('disk full'); });
+    try { await svc.ensure(); expect(ask).not.toHaveBeenCalled(); } finally { spy.mockRestore(); }
+  });
   it('writes once a day per language and keeps a failed day', async () => {
     const userData = tmp();
     let now = Date.parse('2026-10-23T09:00:00');

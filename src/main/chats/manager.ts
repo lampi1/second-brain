@@ -20,6 +20,7 @@
 import { timersFor } from '../timers';
 const { setInterval, clearInterval, clearTimeout } = timersFor('chats/manager');
 import crypto from 'node:crypto';
+import type { ModelTier } from '../../shared/roles';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Answer, ChatCommand, ChatItem, ChatSummary, CliStatus, ContextStats, CursorReasoning, Effort, HandoffInfo, Harness, Lang, NewChat, PendingRequest, PermissionMode } from '../../shared/contract';
@@ -665,7 +666,7 @@ export class ChatManager implements ChatService {
 
   /** links = the run links an Orchestrator tool sets (A7): refused before anything starts when one names an unknown run. */
   /** by: who asks; 'app' = one of the app's own jobs (the Judge's sampled reviews): like an agent, its run says startedBy 'app' */
-  async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user', inherited?: { owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links: RunLinks = {}, opts: { boundByOrchestrator?: boolean; continuation?: boolean; continuationOf?: string } = {}): Promise<ChatSummary> {
+  async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user', inherited?: { tier?: ModelTier; routinePackage?: string; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links: RunLinks = {}, opts: { routine?: ChatSummary['routine']; boundByOrchestrator?: boolean; continuation?: boolean; continuationOf?: string } = {}): Promise<ChatSummary> {
     const createdT0 = Date.now();
     this.deliveryPolicy(req.deliveryPolicy, !!req.parentId);
     if (req.doneWhen && (req.doneWhen.length > 12 || req.doneWhen.some(x => typeof x !== 'string' || !x.trim() || x.length > 300))) throw new Error('Invalid task criteria.');
@@ -754,7 +755,7 @@ export class ChatManager implements ChatService {
     // only an engine launched with the same ones fits (launchSig)
     // a delegated chat takes only an engine launched for a child of the same role under the same role chain: its
     // endpoint lists the child's tools (agent_ask_parent) and its managed MCP servers are bounded by those ancestors
-    const warmable = caps.warm && !forkOf && !req.worktree && !req.orchestrator && req.permissionMode !== 'bypassPermissions';
+    const warmable = !inherited?.routinePackage && caps.warm && !forkOf && !req.worktree && !req.orchestrator && req.permissionMode !== 'bypassPermissions';
     const ancestors = delegator ? this.mcpContext(delegator.s.id)?.roles ?? null : undefined;
     const role = agent.owner?.source === 'catalog' ? agent.owner.id : null;
     const launch = this.warmLaunch(policy, agent.assets, agent.maxContext, delegator ? (ancestors ? { role, launches: agent.launches ?? null, child: { ancestors } } : undefined)
@@ -789,6 +790,8 @@ export class ChatManager implements ChatService {
     const r: Rec = {
       s: {
         agent: agent.owner,
+        ...(opts.routine ? { routine: { ...opts.routine } } : {}),
+        ...(inherited?.routinePackage ? { routinePackage: inherited.routinePackage, routinePromptHash: crypto.createHash('sha256').update(inherited.instructions).digest('hex') } : {}),
         ...(by !== 'user' ? {work:{status:'assigned' as const,updatedAt:now}} : {}),
         effortStatus: initialEffort(caps.effort, req.effort ?? null),
         id, harness: req.harness, origin: 'app', title, cwd, sessionId: forkOf || !caps.transcript ? null : warm?.sessionId ?? crypto.randomUUID(),
@@ -1048,7 +1051,7 @@ export class ChatManager implements ChatService {
     if (!t && !imgs.length) throw new Error('Messaggio vuoto.');
     if (!resumed && r.s.resumedAt) { delete r.s.resumedAt; this.updated(r); }
     this.ensureHistory(r);
-    const warning = engineOf(r.s.harness)?.kind === 'claude' ? '' : await recallWarning(t, this.opts.recall);
+    const warning = r.s.routinePackage || engineOf(r.s.harness)?.kind === 'claude' ? '' : await recallWarning(t, this.opts.recall);
     if (this.quitting || this.chats.get(chatId) !== r) throw new Error('La chat non è attiva.');
     if (liveOnly && ((!r.session && r.s.state !== 'idle') || r.archiving || r.s.closedAt)) throw new Error('La chat non è attiva: la posta resta da leggere.');
     if (r.archiving) await r.archiving; // never into a session that is closing: the archive ends first, then this reopens
@@ -1608,6 +1611,7 @@ export class ChatManager implements ChatService {
     this.finishRun(previous, previous.report ? 'completed' : 'closed', at);
     const next = this.runs.start({ chatId: r.s.id, agentId: previous.agentId, version: previous.version,
       goal: prompt, startedBy: previous.startedBy, startedAt: at, costKnown: previous.costUsd !== null,
+      requestOrigin: mode === 'new-task' ? (options.source?.kind === 'chat' ? 'agent' : options.source?.kind === 'app' ? 'app' : 'user') : previous.requestOrigin ?? 'app',
       tags: previous.tags ? { ...previous.tags, skills: [] } : undefined, tier: previous.tier, model: previous.model,
       ...(r.s.parentId && this.chats.get(r.s.parentId)?.s.run ? { parentRunId: this.chats.get(r.s.parentId)!.s.run!.runId } : {}),
       ...(mode === 'rework' ? { reworkOf: previous.runId } : {}) });
@@ -1875,8 +1879,8 @@ export class ChatManager implements ChatService {
       ...(r.s.route ? { route: { ...r.s.route, ledgerId: r.s.route.ledgerId ?? `app:${r.s.id}`, handoffs: (r.s.route.handoffs ?? 0) + 1 } } : {}),
       prompt: `${opts.promptPrefix ? `${opts.promptPrefix}\n\n` : ''}${continuePrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, h)}`,
       ...(parentRec ? { parentId: parentRec.s.id, ...(r.s.delegation ? { delegation: structuredClone(r.s.delegation) } : {}) } : {}),
-    }, 'user', { owner: r.s.agent ?? plainOwner(r.s.harness, r.choice.model), instructions: r.agentInstructions ?? '', policy: r.policy ?? null, assets: r.agentAssets, ...(r.skills ? { skills: [...r.skills] } : {}), ...(r.maxContext ? { maxContext: r.maxContext } : {}) },
-    {}, { continuation: !!parentRec, continuationOf: r.s.id });
+    }, 'user', { ...(r.s.run?.tier ? { tier: r.s.run.tier } : {}), ...(r.s.routinePackage ? { routinePackage: r.s.routinePackage, routinePromptHash: r.s.routinePromptHash } : {}), owner: r.s.agent ?? plainOwner(r.s.harness, r.choice.model), instructions: r.agentInstructions ?? '', policy: r.policy ?? null, assets: r.agentAssets, ...(r.skills ? { skills: [...r.skills] } : {}), ...(r.maxContext ? { maxContext: r.maxContext } : {}) },
+    {}, { ...(r.s.routine ? { routine: r.s.routine } : {}), continuation: !!parentRec, continuationOf: r.s.id });
     const nr = this.chats.get(c.id);
     // the worktree hint follows the chain (A → B → C)
     if (nr) { nr.s.continuedFrom = { id: r.s.id, title: r.s.title }; if (r.inWorktree) nr.inWorktree = true; this.updated(nr); }
@@ -3107,6 +3111,8 @@ export class ChatManager implements ChatService {
       ...(runPruned ? { runPruned } : {}),
       s: {
         agent: restoredOwner(c),
+        ...(c.routine ? { routine: c.routine } : {}),
+        ...(c.routinePackage ? { routinePackage: c.routinePackage, routinePromptHash: c.routinePromptHash } : {}),
         ...(run ? { run } : {}),
         ...(c.work ? {work:c.work} : {}),
         effortStatus: initialEffort(!!engineOf(c.harness)?.caps.effort, c.effort),
@@ -3163,6 +3169,8 @@ export class ChatManager implements ChatService {
   private persist(strict = false): void {
     const rows: StoredChat[] = [...this.chats.values()].map(r => ({
       id: r.s.id, harness: r.s.harness, cwd: r.s.cwd, sessionId: r.s.sessionId, ...(r.forkFrom ? { forkFrom: r.forkFrom } : {}),
+      ...(r.s.routine ? { routine: r.s.routine } : {}),
+      ...(r.s.routinePackage ? { routinePackage: r.s.routinePackage, routinePromptHash: r.s.routinePromptHash } : {}),
       ...(r.s.agent ? { agent: r.s.agent, agentInstructions: r.agentInstructions ?? '' } : {}),
       ...(r.agentAssets ? { agentAssets: r.agentAssets } : {}),
       ...(r.skills ? { agentSkills: r.skills } : {}),
@@ -3392,6 +3400,7 @@ export class ChatManager implements ChatService {
     if (warm) return !(DELEGATING_ONLY.has(tool) && warm.launches?.length === 0) && (tool !== 'agent_ask_parent' || !!warm.child) && !PLAN_TOOLS.has(tool) && !RESEARCH_TOOLS.has(tool);
     if (!r || !s) return !RESEARCH_TOOLS.has(tool);
     // the maintenance research (ADR 0132): its two tools and nothing of the app's mail, delegation or plans
+    if (s.routinePackage && /^(?:brain_|memory_|skills_|agent_learn|agent_delegate|agent_catalog)/.test(tool)) return false;
     if (s.research) return RESEARCH_TOOLS.has(tool) || (!LAMPO_HIDDEN.has(tool) && !tool.startsWith('agent_'));
     if (RESEARCH_TOOLS.has(tool)) return false;
     if (s.isOrchestrator) return !ORCHESTRATOR_HIDDEN.has(tool);
@@ -3478,7 +3487,7 @@ export class ChatManager implements ChatService {
       sessionId, resume, fork, worktree: r.worktree && !resume, mcpConfig: this.mcpConfig(chatId), costBaseUsd: r.costTotalUsd,
       compactWindowTokens: r.maxContext ?? this.compactWindow(),
       // Native subagents inherit this environment: a per-chat model cannot prove a memory event's producer.
-      env: { ...this.opts.env, SB_EVENT_CONTEXT: '' }, ...(extraArgs ? { extraArgs } : {}),
+      env: { ...this.opts.env, SB_EVENT_CONTEXT: '', ...(r.s.routinePackage ? { SB_ROUTINE_PACKAGE: r.s.routinePackage, SB_APP_RECALL: '' } : {}) }, ...(extraArgs ? { extraArgs } : {}),
     };
     r.worktree = false; // created once; a resume re-enters it
     let sess: HarnessSession | null = null;

@@ -1,6 +1,7 @@
 // Voice mode (ADR 0152): the mic button, the bar under the Orchestrator's and Flash's input, Settings → Voice.
 import type { voiceIt } from './voice.it';
 export const voiceEn: typeof voiceIt = {
+  'voice.contextChanged': 'Your words are saved as a draft and have not been sent.',
   'voice.on': 'Dictate (types into the field)',
   'voice.off': 'Turn the microphone off',
   'voice.placeholder': 'Go ahead and talk, or type…',

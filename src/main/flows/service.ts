@@ -1,11 +1,13 @@
 // Durable, fail-closed flow execution; only the host can turn trusted reports and user decisions into receipts.
 import fs from 'node:fs';
+import type { FlowAutomationRule } from '../../shared/flow-automation';
 import path from 'node:path';
 import { renameRetrying } from '../rules/storage';
 import { createHash, randomUUID } from 'node:crypto';
 import { APP_OWNER } from '../../shared/flows';
 import type { FlowAttachment, FlowCommandReceipt, FlowHealEntry, FlowActivate, FlowAgentBinding, FlowCancel, FlowDecision, FlowDefinition, FlowDraft, FlowMatch, FlowPropose, FlowReceipt, FlowReport, FlowRestart, FlowRestartDecision, FlowRestartProposal, FlowRun, FlowScope, FlowSnapshot, FlowStart, FlowStep, FlowTestDbEvidence, FlowStepTierEdit, FlowVerifiedReport, FlowVersion } from '../../shared/flows';
 import { adapted, commandStep, testDbAdapted, digest, type RoleTierMax, inScope, integer, keys, normalize, object, text, validateDefinition, validateInputs, validateScope } from './schema';
+import { assertPackageBinding } from './binding';
 import { HOLD, roleOf, samePrefix } from '../../shared/routine';
 
 export interface FlowServiceOptions {
@@ -17,8 +19,10 @@ export interface FlowServiceOptions {
   adapterGranted?: (run: FlowRun, step: FlowStep) => boolean;
   /** The catalog's tierMax per role, checked when a draft is proposed. */
   tierMax?: RoleTierMax;
+  restartBlocker?: (run: FlowRun, index: number) => string | undefined;
   /** The sha256 of a brain script/query now: a proposed step without a hash gets the current one, so the user's
    *  activation approves exactly that content (ADR 0155). */
+  freezeRole?: (step: FlowStep) => Pick<FlowStep, 'agentPrompt' | 'engine' | 'model' | 'tier' | 'effort'>;
   hashOf?: (kind: 'script' | 'query', ref: string) => string | null;
 }
 type Stored = Omit<FlowSnapshot, 'contextKey' | 'storageError'> & { schema: 1; bindings: string[] };
@@ -34,6 +38,7 @@ export class FlowService {
     if (!options.contextKey.trim()) throw new Error('Flow brain context is required');
     try {
       if (fs.existsSync(options.file)) { if (fs.statSync(options.file).size > 20 * 1024 * 1024) throw new Error('Flow storage exceeds limit'); this.data = this.read(fs.readFileSync(options.file, 'utf8')); }
+      const beforeRecovery = copy(this.data);
       let interrupted = false;
       for (const run of this.data.runs) {
         const step = run.steps[run.currentStep]!;
@@ -44,8 +49,47 @@ export class FlowService {
           this.block(run, 'Interrotto: l’app si è chiusa durante questo passaggio.'); this.touch(run); interrupted = true;
         }
       }
-      if (interrupted) this.save();
+      if (interrupted) { this.enqueueHistory(beforeRecovery); this.trace(beforeRecovery); this.save(); }
     } catch { this.storageError = 'Flow storage is invalid or unavailable; mutations are disabled. Restore the original file before restarting.'; this.data = empty(); }
+  }
+  private approval(run: FlowRun, rule: FlowAutomationRule): void {
+    if (rule.approvedRevision !== rule.revision || rule.approvedAt === undefined || run.flowId !== rule.config.flowId || run.flowVersion !== rule.config.flowVersion || run.ownerOrchestratorId !== rule.ownerOrchestratorId) throw new Error('Invalid original automation approval');
+    const approval = { ruleId: rule.id, ruleRevision: rule.revision, approvedAt: rule.approvedAt, config: copy(rule.config), sha256: createHash('sha256').update(JSON.stringify(rule.config)).digest('hex') };
+    if (run.approval && JSON.stringify(run.approval) !== JSON.stringify(approval)) throw new Error('Original approval is immutable'); run.approval = approval;
+  }
+  settlementResult(runId: string, error?: string): void {
+    const run = this.run(runId), reason = error?.slice(0, 2000); if (run.settlementError === reason) return;
+    this.change(() => { if (reason) run.settlementError = reason; else delete run.settlementError; });
+  }
+  /** Declared outputs are immutable evidence, never automatically learned behavioural instructions. */
+  output(runId: string, id: string, content: string, by: 'agent' | 'host' = 'agent'): FlowRun {
+    return this.change(() => {
+      const run = this.run(runId), declaration = this.version(run.flowId, run.flowVersion).definition.package?.outputs.find(o => o.id === id);
+      if (!declaration || ['completed', 'cancelled'].includes(run.status)) throw new Error('This output is not declared for an active run');
+      if (by !== 'host' && this.version(run.flowId, run.flowVersion).definition.package?.downgrade?.lessonOutput === id) throw new Error('The downgrade lesson is reserved for the host; use flow_downgrade');
+      const body = text(content, 'output content', 16000), sha256 = createHash('sha256').update(body).digest('hex');
+      const previous = run.outputs?.find(o => o.id === id);
+      if (previous) { if (by === 'host' && run.disposition) return run; /* Retain earlier evidence; the immutable disposition records the host correction. */ if (previous.sha256 !== sha256) throw new Error('Run output already exists with different content'); return run; }
+      (run.outputs ??= []).push({ id, content: body, sha256, at: this.now(), ...(declaration.brainPath ? { brainPath: declaration.brainPath } : {}) });
+      return run;
+    });
+  }
+  projected(runId: string, id: string): void { this.change(() => { const output = this.run(runId).outputs?.find(o => o.id === id); if (output) output.projectedAt = this.now(); }); }
+  historyResult(runId: string, id: string, error?: string): void { this.change(() => { const entry = this.run(runId).history?.find(h => h.id === id); if (!entry || entry.status === 'sent') return; if (error) entry.reason = text(error, 'history failure', 2000); else { entry.status = 'sent'; delete entry.reason; } }); }
+  beginDowngrade(runId: string, reason: string): FlowRun {
+    return this.change(() => {
+      const run = this.run(runId); if (!this.version(run.flowId, run.flowVersion).definition.package?.downgrade || ['completed', 'cancelled'].includes(run.status)) throw new Error('This run has no approved downgrade policy');
+      if (run.disposition) return run;
+      const why = text(reason, 'downgrade reason', 2000);
+      run.disposition = { kind: 'needs-human', reason: why, at: this.now(), cleanup: 'pending', phase: 0 };
+      this.block(run, `${HOLD}Human handoff: ${why}`); run.steps[run.currentStep]!.decisionPending = false; this.touch(run); return run;
+    });
+  }
+  downgradeProgress(runId: string, phase: number, error?: string): void {
+    this.change(() => { const run = this.run(runId), d = run.disposition; if (!d || d.cleanup === 'complete') return;
+      d.phase = integer(phase, 'cleanup phase', 0, 6); if (error) d.error = text(error, 'cleanup error', 2000); else delete d.error;
+      if (phase === 6) { d.cleanup = 'complete'; this.cancelRun(run, d.reason, 'routine'); }
+    });
   }
   snapshot(): FlowSnapshot { this.reconcileDeadlines(); return copy({ contextKey: this.options.contextKey, drafts: this.data.drafts, versions: this.data.versions, active: this.data.active, runs: this.data.runs, ...(this.storageError ? { storageError: this.storageError } : {}) }); }
   match(query: string, scope?: FlowScope): FlowMatch {
@@ -57,7 +101,15 @@ export class FlowService {
   }
   propose(input: FlowPropose): FlowDraft {
     keys(object(input, 'proposal'), ['definition', 'expectedRevision'], 'proposal');
-    const definition = validateDefinition(input.definition, this.options.tierMax), expected = integer(input.expectedRevision, 'expectedRevision');
+    const candidate = copy(input.definition);
+    if (candidate.package) {
+      for (const asset of candidate.package.assets ?? []) if (!asset.sha256 && typeof asset.content === 'string') asset.sha256 = createHash('sha256').update(asset.content).digest('hex');
+      for (const step of candidate.steps ?? []) {
+        if (step.kind === 'agent' && !step.agentPrompt && this.options.freezeRole) Object.assign(step, { ...this.options.freezeRole(step), ...step });
+        if (step.action && !step.action.hash) step.action.hash = candidate.package.assets?.find(a => a.id === step.action!.ref && a.kind === step.action!.kind)?.sha256;
+      }
+    }
+    const definition = validateDefinition(candidate, this.options.tierMax), expected = integer(input.expectedRevision, 'expectedRevision');
     for (const step of definition.steps) {
       if (step.kind !== 'check' || !step.action || !['script', 'query'].includes(step.action.kind) || step.action.hash) continue;
       const hash = this.options.hashOf?.(step.action.kind as 'script' | 'query', step.action.ref);
@@ -106,7 +158,7 @@ export class FlowService {
     });
   }
   /** `automatic` is passed only by the automation service: `auto:` subjects are reserved for its event starts (ADR 0145). */
-  start(input: FlowStart, ownerId: string, automatic = false): FlowRun {
+  start(input: FlowStart, ownerId: string, automatic = false, approval?: FlowAutomationRule): FlowRun {
     keys(object(input, 'start'), ['flowId', 'flowVersion', 'subjectKey', 'scope', 'inputs', 'title', 'attachments'], 'start');
     const title = input.title === undefined ? undefined : text(input.title, 'title', 300), attachments = input.attachments === undefined ? undefined : validateAttachments(input.attachments);
     const subjectKey = text(input.subjectKey, 'subjectKey', 500), owner = text(ownerId, 'owner', 200), scope = validateScope(input.scope), inputs = validateInputs(input.inputs);
@@ -121,6 +173,7 @@ export class FlowService {
         ownerOrchestratorId: owner, subjectKey, scope, inputs, status: 'active', currentStep: 0,
         steps: version.definition.steps.map(step => ({ stepId: step.id, status: 'pending', attempts: 0 })), createdAt: this.now(), updatedAt: this.now(),
         ...(title ? { title } : {}), ...(attachments?.length ? { attachments } : {}) };
+      if (approval) this.approval(run, approval);
       this.data.runs.push(run); this.prepare(run); return run;
     });
   }
@@ -191,6 +244,7 @@ export class FlowService {
     if (index < 0) throw new Error('Restart step not found');
     if (migrate && !samePrefix(this.version(source.flowId, source.flowVersion).definition, version.definition, index)) throw new Error('The steps before this point changed in the new version: restart from the beginning');
     if (source.steps.slice(0, index).some(step => step.status !== 'completed' || !step.receipt)) throw new Error('Every preceding step needs completed host evidence before restarting here');
+    const blocker = this.options.restartBlocker?.(source, index); if (blocker) throw new Error(blocker);
     return copy({ source, version, index });
   }
   /** A model can request a recovery decision, never execute it. Any source mutation invalidates the proposal. */
@@ -219,7 +273,7 @@ export class FlowService {
   }
   /** Renderer-approved recovery creates a new identity. A carried prefix is evidence from the same pinned version,
    * never newly executed work. Automatic overrides are supplied only by the approved event ledger. */
-  restart(input: FlowRestart, automatic?: Pick<FlowStart, 'subjectKey' | 'scope' | 'inputs'>): FlowRun {
+  restart(input: FlowRestart, automatic?: Pick<FlowStart, 'subjectKey' | 'scope' | 'inputs'>, approval?: FlowAutomationRule): FlowRun {
     keys(object(input, 'restart'), ['runId', 'expectedRevision', 'mode', 'stepId', 'acknowledgeEffects', 'targetVersion', 'targetDigest', 'automationRule'], 'restart');
     if (input.acknowledgeEffects !== true) throw new Error('Restart requires explicit acknowledgement of repeated effects');
     const existing = this.restarted(input); if (existing) return existing;
@@ -234,6 +288,7 @@ export class FlowService {
         status: 'active', currentStep: index, steps: version.definition.steps.map((step, i) => i < index ? copy(source.steps[i]!) : { stepId: step.id, status: 'pending', attempts: 0 }),
         createdAt: this.now(), updatedAt: this.now(), restartOf: { runId: source.id, stepId: version.definition.steps[index]!.id, expectedRevision: input.expectedRevision, mode: input.mode } };
       // Validate/prepare before cancelling the source; a thrown error rolls back the whole state transaction.
+      if (approval) this.approval(run, approval);
       this.prepare(run);
       if (!['completed', 'cancelled'].includes(source.status)) this.cancelRun(source, `Restarted as ${run.id}.`, 'user');
       else this.touch(source);
@@ -254,6 +309,7 @@ export class FlowService {
       // a declared role and tier are what the chat really runs: open it with that role and tier (app_create_chat tier)
       if (definition.role && binding.launched?.roleId !== definition.role) throw new Error(`This step runs as ${definition.role}: open the chat with that role`);
       if (definition.tier && (binding.launched?.tier !== definition.tier || binding.launched.fromTable)) throw new Error(`This step runs on tier ${definition.tier}: open the chat with tier ${definition.tier}`);
+      assertPackageBinding(run, definition, binding);
       this.data.bindings.push(bindingKey);
       step.chatId = binding.chatId; step.chatRunId = binding.chatRunId; step.taskVersion = binding.taskVersion; step.status = 'running'; step.startedAt = this.now(); step.attempts++;
       this.touch(run); return run;
@@ -295,6 +351,7 @@ export class FlowService {
       const failure = this.options.reportFailure?.(binding, reportId, definition.evidence); if (failure) throw new Error(failure);
       const report = this.options.resolveReport?.(binding, reportId);
       if (!report || !report.completed || report.id !== input.reportId || report.chatId !== step.chatId || report.chatRunId !== step.chatRunId || report.taskVersion !== step.taskVersion) throw new Error('A matching completed host-linked agent report is required');
+      assertPackageBinding(run, definition, report);
       if (definition.reviewOf && (report.roleId !== 'sentinel' || report.reviewOf !== run.steps.find(s => s.stepId === definition.reviewOf)?.chatRunId)) throw new Error('Independent review must bind the reviewed agent run and Sentinel role');
       if (!report.summary.trim() || !report.evidence.length || definition.evidence.some(label => !report.evidence.some(value => value.startsWith(`${label}: `) && value.length > label.length + 2))) throw new Error('The linked report is missing required evidence');
       this.finish(run, { id: randomUUID(), stepId: step.stepId, kind: 'agent-report', at: this.now(), summary: report.summary, chatId: step.chatId, reportId: report.id, evidence: copy(report.evidence) });
@@ -488,7 +545,7 @@ export class FlowService {
     try { return this.options.adapterGranted?.(run, spec) !== true; } catch { return true; }
   }
   private finish(run: FlowRun, receipt: FlowReceipt): void { const step = run.steps[run.currentStep]!; step.status = 'completed'; delete step.reason; delete step.decisionPending; step.receipt = receipt; run.currentStep++; }
-  private cancelRun(run: FlowRun, reason: string, by: 'user' | 'orchestrator'): void {
+  private cancelRun(run: FlowRun, reason: string, by: 'user' | 'orchestrator' | 'routine'): void {
     run.cancellation = { at: this.now(), reason, by, expectedRevision: run.revision, interruption: run.steps[run.currentStep]?.chatId ? 'pending' : 'confirmed' }; run.status = 'cancelled';
     const step = run.steps[run.currentStep]!; step.status = 'cancelled'; step.reason = reason; step.decisionPending = false; this.touch(run);
   }
@@ -503,8 +560,40 @@ export class FlowService {
   private healthy(): void { if (this.storageError) throw new Error(this.storageError); }
   private change<T>(mutate: () => T): T {
     this.healthy(); const before = copy(this.data);
-    try { const value = mutate(); this.save(); try { this.options.changed?.(this.snapshot()); } catch { /* observer failure must not undo a durable commit */ } return copy(value); }
+    try { const value = mutate(); this.enqueueHistory(before); this.trace(before); this.save(); try { this.options.changed?.(this.snapshot()); } catch { /* observer failure must not undo a durable commit */ } return copy(value); }
     catch (error) { this.data = before; throw error; }
+  }
+  private trace(before: Stored): void {
+    for (const run of this.data.runs) {
+      const old = before.runs.find(r => r.id === run.id), events: NonNullable<FlowRun['trace']> = [];
+      const add = (kind: NonNullable<FlowRun['trace']>[number]['kind'], message: string, stepId?: string) => events.push({ id: randomUUID(), at: this.now(), kind, message: message.slice(0, 4000), ...(stepId ? { stepId } : {}) });
+      if (!old) add('transition', `Run started on approved version ${run.flowVersion} (${run.definitionDigest})`);
+      if (old && old.status !== run.status) add('transition', `${old.status} → ${run.status}`);
+      if (!!old?.paused !== !!run.paused) add('pause', run.paused ? 'User paused the run' : 'User resumed the run');
+      for (const [index, step] of run.steps.entries()) {
+        const previous = old?.steps[index];
+        if (previous?.status !== step.status || previous?.attempts !== step.attempts || previous?.chatRunId !== step.chatRunId || previous?.reason !== step.reason) add(step.receipt?.kind === 'user' ? 'decision' : 'transition', `${previous?.status ?? 'new'} → ${step.status}; attempt ${step.attempts}; ${step.reason ?? step.receipt?.summary ?? ''}`, step.stepId);
+      }
+      for (const o of run.outputs ?? []) if (!old?.outputs?.some(x => x.id === o.id)) add('output', `Declared output ${o.id} saved with sha256 ${o.sha256}`);
+      if (old?.settlementError !== run.settlementError) add('cleanup', run.settlementError ?? 'Settlement recovered');
+      if (JSON.stringify(old?.disposition) !== JSON.stringify(run.disposition)) add('cleanup', JSON.stringify(run.disposition));
+      if (events.length) { if ((run.trace?.length ?? 0) + events.length > 2000) throw new Error('Routine timeline limit reached; stop and inspect the run'); (run.trace ??= []).push(...events); }
+    }
+  }
+  private enqueueHistory(before: Stored): void {
+    for (const run of this.data.runs) {
+      const definition = this.version(run.flowId, run.flowVersion).definition; if (!definition.package?.history) continue;
+      const old = before.runs.find(r => r.id === run.id), entries: NonNullable<FlowRun['history']> = [];
+      if (!old) entries.push({ id: `intake:${run.id}`, stepId: run.steps[0]!.stepId, at: this.now(), status: 'pending', text: `${definition.title} v${run.flowVersion} · intake. Run ${run.id}. Next: ${definition.steps[0]!.title}.`, mentionReason: 'intake' });
+      for (const [index, step] of run.steps.entries()) {
+        const previous = old?.steps[index]; if (!['completed', 'blocked', 'cancelled'].includes(step.status) || (previous?.status === step.status && previous.reason === step.reason && previous.receipt?.id === step.receipt?.id)) continue;
+        const summary = (step.receipt?.summary ?? step.reason ?? step.status).slice(0, 1200), evidence = (step.receipt?.evidence ?? []).slice(0, 4).map(e => e.slice(0, 350)).join(' · ');
+        const id = createHash('sha256').update(JSON.stringify([run.id, step.stepId, step.attempts, step.status, step.receipt?.id, step.reason])).digest('hex');
+        const next = run.disposition ? 'human handoff and cleanup' : definition.steps[run.currentStep]?.title ?? 'routine complete';
+        entries.push({ id, stepId: step.stepId, at: this.now(), status: 'pending', text: `${definition.steps[index]!.title} · ${step.status}. ${summary}${evidence ? ` Evidence: ${evidence}` : ''} Next: ${next}. Run ${run.id}.`, ...(run.disposition ? { mentionReason: 'downgrade' as const } : step.status === 'blocked' ? { mentionReason: 'block' as const } : run.status === 'completed' ? { mentionReason: 'final' as const } : {}) });
+      }
+      for (const entry of entries) if (!run.history?.some(h => h.id === entry.id)) { if ((run.history?.length ?? 0) >= 500) throw new Error('Run history limit reached'); (run.history ??= []).push(entry); }
+    }
   }
   private save(): void {
     fs.mkdirSync(path.dirname(this.options.file), { recursive: true });
@@ -536,17 +625,30 @@ export class FlowService {
     object(data.active, 'active');
     for (const [id, version] of Object.entries(data.active)) { integer(version, 'active version', 1); if (!versionIds.has(`${id}:${version}`)) throw new Error('Invalid active version'); }
     for (const run of data.runs) {
-      keys(object(run, 'run'), ['id', 'revision', 'flowId', 'flowVersion', 'definitionDigest', 'ownerOrchestratorId', 'subjectKey', 'scope', 'inputs', 'status', 'currentStep', 'steps', 'createdAt', 'updatedAt', 'testDbEvidence', 'cancellation', 'restartOf', 'pendingRecovery', 'pendingCancellation', 'recoveryFeedback', 'paused', 'attachments', 'receipts', 'heal', 'awaitingUser', 'title'], 'run');
+      keys(object(run, 'run'), ['id', 'revision', 'flowId', 'flowVersion', 'definitionDigest', 'ownerOrchestratorId', 'subjectKey', 'scope', 'inputs', 'status', 'currentStep', 'steps', 'createdAt', 'updatedAt', 'testDbEvidence', 'cancellation', 'restartOf', 'pendingRecovery', 'pendingCancellation', 'recoveryFeedback', 'paused', 'attachments', 'receipts', 'heal', 'awaitingUser', 'title', 'outputs', 'disposition', 'history', 'trace', 'approval', 'settlementError'], 'run');
       if (run.paused !== undefined) { keys(object(run.paused, 'paused'), ['at'], 'paused'); integer(run.paused.at, 'paused time'); }
       if (run.attachments !== undefined) validateAttachments(run.attachments);
       if (run.receipts !== undefined) { if (!Array.isArray(run.receipts) || run.receipts.length > 500) throw new Error('Invalid receipts'); run.receipts.forEach(validateReceipt); }
       if (run.heal !== undefined) validateHeal(run.heal);
       if (run.awaitingUser !== undefined) { keys(object(run.awaitingUser, 'awaiting'), ['stepId', 'command', 'at'], 'awaiting'); text(run.awaitingUser.stepId, 'awaiting step', 80); text(run.awaitingUser.command, 'awaiting command', 16000); integer(run.awaitingUser.at, 'awaiting time'); }
+      if (run.settlementError !== undefined) text(run.settlementError, 'settlement error', 2000);
       if (run.title !== undefined) text(run.title, 'title', 300);
       text(run.id, 'run id', 200); integer(run.revision, 'revision', 1); text(run.ownerOrchestratorId, 'owner', 200); text(run.subjectKey, 'subjectKey', 500);
       validateScope(run.scope); validateInputs(run.inputs); integer(run.createdAt, 'createdAt'); integer(run.updatedAt, 'updatedAt');
       const version = data.versions.find(v => v.definition.id === run.flowId && v.version === run.flowVersion);
       if (!version || version.digest !== run.definitionDigest || !inScope(version.definition.scope, run.scope) || runIds.has(run.id) || !Array.isArray(run.steps) || run.steps.length !== version.definition.steps.length) throw new Error('Invalid pinned flow run'); runIds.add(run.id);
+      if (run.approval) { const a = run.approval; keys(object(a, 'approval'), ['ruleId', 'ruleRevision', 'approvedAt', 'config', 'sha256'], 'approval'); integer(a.ruleRevision, 'approval revision', 1); integer(a.approvedAt, 'approval time'); text(a.ruleId, 'approval rule', 200); if (a.config.flowId !== run.flowId || a.config.flowVersion !== run.flowVersion || createHash('sha256').update(JSON.stringify(a.config)).digest('hex') !== a.sha256) throw new Error('Invalid original approval fingerprint'); }
+      if (run.trace) { if (!Array.isArray(run.trace) || run.trace.length > 2000) throw new Error('Invalid routine timeline'); for (const e of run.trace) { keys(object(e, 'trace'), ['id', 'at', 'kind', 'stepId', 'message'], 'trace'); text(e.id, 'event id', 200); integer(e.at, 'event time'); text(e.message, 'event message', 4000, true); if (!['transition', 'output', 'cleanup', 'pause', 'decision'].includes(e.kind) || (e.stepId && !run.steps.some(s => s.stepId === e.stepId))) throw new Error('Invalid trace event'); } }
+      if (run.outputs) {
+        if (!Array.isArray(run.outputs) || run.outputs.length > 50 || new Set(run.outputs.map(o => o.id)).size !== run.outputs.length) throw new Error('Invalid outputs');
+        for (const o of run.outputs) { keys(object(o, 'output'), ['id', 'at', 'content', 'sha256', 'brainPath', 'projectedAt'], 'output'); const declared = version.definition.package?.outputs.find(d => d.id === o.id);
+          if (!declared || declared.brainPath !== o.brainPath || createHash('sha256').update(text(o.content, 'output', 16000)).digest('hex') !== o.sha256) throw new Error('Invalid output provenance'); integer(o.at, 'output time'); if (o.projectedAt !== undefined) integer(o.projectedAt, 'projected time'); }
+      }
+      if (run.disposition) { const d = run.disposition; keys(object(d, 'disposition'), ['kind', 'reason', 'at', 'cleanup', 'phase', 'error'], 'disposition');
+        if (!version.definition.package?.downgrade || d.kind !== 'needs-human' || !['pending', 'complete'].includes(d.cleanup)) throw new Error('Invalid disposition'); text(d.reason, 'handoff reason', 2000); integer(d.at, 'handoff time'); integer(d.phase, 'handoff phase', 0, 6); if (d.error) text(d.error, 'handoff error', 2000); }
+      if (run.history) { if (!version.definition.package?.history || !Array.isArray(run.history) || run.history.length > 500) throw new Error('Invalid run history');
+        for (const h of run.history) { keys(object(h, 'history'), ['id', 'stepId', 'at', 'text', 'status', 'reason', 'mentionReason'], 'history'); text(h.id, 'history id', 200); integer(h.at, 'history time'); text(h.text, 'history text', 10000); if (!run.steps.some(s => s.stepId === h.stepId) || !['pending', 'sent'].includes(h.status)) throw new Error('Invalid history entry'); if (h.reason) text(h.reason, 'history error', 2000); if (h.mentionReason && !['intake', 'block', 'downgrade', 'final'].includes(h.mentionReason)) throw new Error('Invalid mention reason'); }
+      }
       if (run.testDbEvidence !== undefined) {
         if (!Array.isArray(run.testDbEvidence) || run.testDbEvidence.length > 500) throw new Error('Invalid test DB evidence');
         const ids = new Set<string>();
@@ -569,7 +671,7 @@ export class FlowService {
       if (run.cancellation) {
         keys(object(run.cancellation, 'cancellation'), ['at', 'reason', 'by', 'expectedRevision', 'interruption'], 'cancellation');
         integer(run.cancellation.at, 'cancellation time'); integer(run.cancellation.expectedRevision, 'cancellation revision', 1, run.revision - 1); text(run.cancellation.reason, 'cancellation reason', 2000);
-        if (!['user', 'orchestrator'].includes(run.cancellation.by)) throw new Error('Invalid cancellation authority');
+        if (!['user', 'orchestrator', 'routine'].includes(run.cancellation.by)) throw new Error('Invalid cancellation authority');
         if (run.cancellation.interruption !== undefined && !['pending', 'confirmed'].includes(run.cancellation.interruption)) throw new Error('Invalid cancellation interruption');
       }
       if (run.pendingRecovery) {

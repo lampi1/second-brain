@@ -12,7 +12,7 @@ import { engineStatuses } from './cli';
 import { engineReadiness } from './engines/readiness';
 import { anthropicApi, engineInfos, engineOf, enginePathsFromEnv, priceEnginesOf } from './engines/registry';
 import { withApiModels } from './engines/sessions';
-import { AgentCatalogService } from './agents/catalog';
+import { ownerOf, AgentCatalogService } from './agents/catalog';
 import { RunFeedback } from './agents/run-feedback';
 import { tierModel } from './agents/model-tier';
 import { flowRoles } from './flows/roles';
@@ -82,6 +82,7 @@ import { createBrowserModule, mcpPortFromEnv } from './browser/service';
 import { Workflows } from './workflows/service';
 import { createFlowRuntime, type FlowRuntime } from './flows/runtime';
 import { createFlowWorker } from './flows/worker';
+import { flowOutputTools } from './flows/output-tools';
 import { devopsWriteTools } from './flows/devops-write-tool';
 import { testDbReadTools } from './flows/test-db-tool';
 import { testDbCredential } from './flows/test-db-env';
@@ -720,16 +721,29 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   agentPacks.learning.evidenceRuns = () => manager.runs.list();
   const flows = flowsRef = createFlowRuntime({ userData: ctx.userData, testDbRead: { env: testDbCredential }, brainRoot: () => brain.info().brainRoot,
     chats: () => chats.list(), stopChat: chatId => chats.stop(chatId), changed: snapshot => ctx.emitter.emit('flows:changed', snapshot),
-    createWorker: createFlowWorker({ catalog: agents, brain, chats: () => manager.list(), create: request => manager.create(request, 'app') }),
+    createWorker: createFlowWorker({ catalog: agents, brain, chats: () => manager.list(), create: (request, sealed, routine) => {
+      if (!sealed) return manager.create(request, 'app', undefined, {}, { routine });
+      const profile = agents.list().profiles.find(p => p.id === request.roleId);
+      if (!profile) throw new Error('Routine role unavailable');
+      const policy = profile.tools || profile.permissionCeiling ? { tools: profile.tools ?? null, ceiling: profile.permissionCeiling } : null;
+      return manager.create(request, 'app', { owner: { ...ownerOf(profile), engine: request.harness, model: request.model ?? null }, instructions: sealed.instructions, policy, skills: [], tier: request.tier, routinePackage: sealed.digest, ...(profile.maxContext ? { maxContext: profile.maxContext } : {}) }, {}, { routine });
+    } }),
     sendWorker: (chatId, prompt, authorize, failed) => manager.send(chatId, `${AGENT_LABEL}\n\n${prompt}`, undefined, false, 'Routine', false, { kind: 'app' },
       { beforeSubmit: authorize, submitted() {}, failed }),
     discardWorker: chatId => manager.close(chatId),
     // the per-step engine/model picker on the Routine page (ADR 0155): the engines and models the registry knows
     engines: () => { const registry = brain.routingInfo().registry; return registry ? Object.keys(registry.harnesses).map(id => ({ id, name: id.charAt(0).toUpperCase() + id.slice(1), models: registry.models.filter(model => model.harness === id).map(model => model.id) })) : []; },
     steer: (chatId, text) => manager.send(chatId, text, undefined, false, 'Routine', false, { kind: 'app' }),
+    freezeRole: step => {
+      if (!step.role) throw new Error('Packaged agent steps must declare a role');
+      const resolved = agents.resolve({ harness: brain.settings().orchestratorChats.harness, cwd: '', roleId: step.role, ...(step.tier ? { tier: step.tier } : {}) });
+      if (!resolved.request.model) throw new Error('Choose an exact model before packaging');
+      return { agentPrompt: resolved.instructions, engine: resolved.request.harness, model: resolved.request.model, tier: resolved.tier, ...(resolved.request.effort ? { effort: resolved.request.effort } : {}) };
+    },
     roles: () => flowRoles(agents.list().profiles, (engine, tier) => tierModel(engine, tier, brain.routingInfo().registry, brain.settings().modelTiers)),
     send: (ownerId, message) => chats.send(ownerId, message, undefined, false, 'Routine automatiche', false, { kind: 'app' }) });
   addChatTools(devopsWriteTools((chatId, request, signal) => flows.devopsWrite(chatId, request, signal)));
+  addChatTools(flowOutputTools({ output: flows.output, downgrade: flows.downgrade }));
   addChatTools(testDbReadTools((chatId, request, signal) => flows.testDbRead(chatId, request, signal)));
   const workflows = workflowsRef = new Workflows(path.join(ctx.userData, 'work-threads.json'), rows => ctx.emitter.emit('work:changed', rows), Date.now, row => {
     const linked = chats.list().filter(c => row.chatIds.includes(c.id) && c.plan);

@@ -2,6 +2,10 @@
 // themselves), «Routine» (each routine in plain words; open one for its steps, models, trigger and queue), «Storico».
 // The app's runner does the work; starting on a work item or a pasted list happens here or through the Orchestrator;
 // creating or changing a routine goes through the Orchestrator and the existing approval modal.
+import { ui } from '../../store/ui';
+import { go } from '../../actions';
+import { RoutineChat } from '../../components/RoutineChat';
+import { routinePlacements, readRoutineChatArg } from '../../lib/routine-chats';
 import { useState } from 'react';
 import type { FlowDraft, FlowDryRun, FlowRun, FlowSnapshot, FlowVersion } from '@shared/flows';
 import { flowRequest, type FlowRequestKind } from '../../lib/flow-request';
@@ -31,6 +35,8 @@ function askOrchestrator(kind: FlowRequestKind, version?: FlowVersion, draft?: F
 type Tab = 'now' | 'routines' | 'history';
 export function Flows() {
   const { snapshot, error, loading } = useFlows();
+  const chatArg = ui.use(state => state.page === 'flussi' ? readRoutineChatArg(state.pageArg) : null);
+  const routineChat = useApp(state => chatArg && routinePlacements(state.chats, snapshot).has(chatArg.chatId) ? chatArg.chatId : null);
   const ready = useApp(s => !!orchestratorIdOf(s));
   const [picked, setTab] = useState<Tab | null>(null), [opened, setOpened] = useState<string | null>(null), [importing, setImporting] = useState(false);
   const [starting, setStarting] = useState<{ flowId?: string } | null>(null), [dry, setDry] = useState<{ result: FlowDryRun; title: string } | null>(null);
@@ -45,6 +51,7 @@ export function Flows() {
     catch (e) { toast(plain(e), 'err'); }
   };
   const hasActive = !!snapshot && Object.keys(snapshot.active).length > 0;
+  if (routineChat) return <RoutineChat chatId={routineChat} tabId={chatArg?.tabId} onClose={() => go({ page: 'flussi' })} />;
   return <section className="flows-page rt-page" data-testid="flows-page">
     <header className="rt-head"><div><h1>{t('rt.title')}</h1><p className="rt-intro">{t('rt.intro')}</p></div><span className="rt-sp" />
       {snapshot && <button type="button" className="btn btn-ghost btn-m" disabled={!!error} onClick={() => setImporting(true)} data-testid="flow-import-open">{t('flows.import')}</button>}
