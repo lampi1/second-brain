@@ -43,6 +43,8 @@ export interface ChatService {
   reopen(chatId: string): Promise<ChatSummary>;
   /** the user went on with this chat himself (chat:send, chat:reopen only): reopens its ended agent run (A5) */
   resumedByUser?(chatId: string, text?: string): void;
+  /** the user's next message to this chat was said in the voice conversation: the reply is made to be heard */
+  spokenNext?(chatId: string, text: string | null): void;
   /** the user typed this in the chat himself (chat:send only): the Orchestrator and the chat's parent learn it (ADR 0083) */
   userWrote?(chatId: string, text: string): void;
   /** the agent metrics (AGENTS-DESIGN §5, A6); aiErrors = the brain's ai-errors.md text */

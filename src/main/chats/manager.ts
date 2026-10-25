@@ -24,6 +24,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Answer, ChatCommand, ChatItem, ChatSummary, CliStatus, ContextStats, CursorReasoning, Effort, HandoffInfo, Harness, Lang, NewChat, PendingRequest, PermissionMode } from '../../shared/contract';
 import { replyLangTurn } from './reply-lang';
+import { voiceReplyHint } from './voice-reply';
 import { sysEn, type SysCode, type SysParams } from '../../shared/sys';
 import { checkImages } from './images';
 import type { Emitter } from '../ipc';
@@ -335,6 +336,10 @@ interface Rec {
   rolePrimed?: { session: string; sig: string } | undefined;
   /** the reply language this chat was last told (persisted, ADR 0120): a change goes in one line on its next turn */
   replyLang?: Lang;
+  /** the user's message being sent was said in the voice conversation (ADR 0152): its text, so only that delivery takes
+   *  the spoken-reply line; voiceTold = the session whose context already has the rules */
+  voiceText?: string;
+  voiceTold?: string;
   /** the role text was compared with rolePrimed since the engine started */
   roleChecked?: boolean;
   children?: AgentChildrenReducer;
@@ -886,7 +891,10 @@ export class ChatManager implements ChatService {
     // Flash follows its card (ADR 0107): the user's question goes to a Flash on the card's engine and model
     if (r.s.quick && from === undefined && !resumed && (!source || source.kind === 'user')) {
       const next = await this.flashFollow(r);
-      if (next !== chatId) return this.send(next, text, images, resumed, from, liveOnly, source, receipt);
+      if (next !== chatId) {
+        if (r.voiceText === text) { this.spokenNext(next, text); r.voiceText = undefined; } // the spoken message moves with it
+        return this.send(next, text, images, resumed, from, liveOnly, source, receipt);
+      }
     }
     if (!(typeof text === 'string' && text.trim()) && !checkImages(images).length) throw new Error('Messaggio vuoto.');
     this.autoActivity(r);
@@ -1105,6 +1113,11 @@ export class ChatManager implements ChatService {
     r.roleChecked = true;
     // the reply language (ADR 0120): with the role text, and once on the first turn after the user changed it
     const wantLang = this.opts.replyLang?.(), langHint = replyLangTurn(wantLang, role ? undefined : r.replyLang, !!role);
+    // a spoken turn: a reply made to be heard (voice-reply.ts); a new context (role text again, another session) gets
+    // the rules again. Only the spoken message itself: never mail, a resume or app text that happens to go first
+    const spoken = r.voiceText !== undefined && r.voiceText === text && from === undefined && !resumed;
+    const voiceHint = spoken ? voiceReplyHint(!role && r.voiceTold === (r.s.sessionId ?? '')) : '';
+    if (spoken) { r.voiceText = undefined; r.voiceTold = r.s.sessionId ?? ''; }
     // the files as they are before this turn (ADR 0103): what the user can put back with «Annulla l'ultimo turno»
     if (!this.midTurn(r)) r.turnCheckpoint = false;
     lapT = Date.now();
@@ -1112,7 +1125,7 @@ export class ChatManager implements ChatService {
     lap.checkpointMs = Date.now() - lapT;
     try {
       receipt?.beforeSubmit();
-      r.session.send(`${role}${warning}${body}${hint}${langHint}`, imgs);
+      r.session.send(`${role}${warning}${body}${hint}${langHint}${voiceHint}`, imgs);
       receipt?.submitted();
       if (r.continuationPending) { r.continuationPending = undefined; this.persist(true); }
       log.info('chats', 'timing: before send', { chat: r.s.id, data: { totalMs: Date.now() - t0, ...lap, engineStarted: !hadEngine, cold: !!cold, harness: r.s.harness } });
@@ -1619,6 +1632,13 @@ export class ChatManager implements ChatService {
   }
 
   /** Neutral follow-ups never count as corrections. Only an explicit correction does. */
+  /** chat:send with voice (ADR 0152): `text`, the user's message about to be sent to this chat, was said aloud; null =
+   *  that send is over (delivered or failed), nothing stays marked */
+  spokenNext(chatId: string, text: string | null): void {
+    const r = this.chats.get(chatId);
+    if (r) r.voiceText = text ?? undefined;
+  }
+
   resumedByUser(chatId: string, text?: string): void {
     const r = this.chats.get(chatId), run = r?.s.run;
     if (!r || !run || text === undefined) return;

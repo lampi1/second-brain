@@ -49,7 +49,7 @@ import { LogPage } from './components/LogPage';
 // the Guida (three languages of cards) loads when it opens, not with the first screen
 import { BrowserPage } from './components/BrowserPage';
 import { RecordingsPage } from './components/RecordingsPage';
-import { shortcutVoice } from './lib/voice';
+import { shortcutTalk, shortcutVoice } from './lib/voice';
 const GuidePage = lazy(() => import('./components/GuidePage').then(m => ({ default: m.GuidePage })));
 // the file viewer overlay loads when a file is first opened
 const ViewerOverlay = lazy(() => import('./components/viewer/ViewerOverlay').then(m => ({ default: m.ViewerOverlay })));
@@ -78,7 +78,7 @@ function onKey(e: KeyboardEvent): void {
     return; // an open dialog handles its own keys
   }
   // the questions window in front: only the palette, Ctrl+J and Esc act; nothing hidden under it (Ctrl+W, Ctrl+1-9…)
-  if (u.qwin.shown && cmd.type !== 'palette' && cmd.type !== 'next' && cmd.type !== 'escape' && cmd.type !== 'voice') {
+  if (u.qwin.shown && cmd.type !== 'palette' && cmd.type !== 'next' && cmd.type !== 'escape' && cmd.type !== 'voice' && cmd.type !== 'talk') {
     if (cmd.type === 'closeFocused') e.preventDefault();
     return;
   }
@@ -94,6 +94,7 @@ function onKey(e: KeyboardEvent): void {
       case 'palette': openModal('palette'); break;
       case 'next': nextThing(); break;
       case 'voice': if (!e.repeat) shortcutVoice(); break;
+      case 'talk': if (!e.repeat) shortcutTalk(); break;
       default: return;
     }
     e.preventDefault();
@@ -118,6 +119,7 @@ function onKey(e: KeyboardEvent): void {
     case 'map': if (u.map) setMap(false); else go({ page: 'mappa' }); break;
     case 'settings': go({ page: 'impostazioni' }); break;
     case 'voice': if (!e.repeat) shortcutVoice(); break;
+    case 'talk': if (!e.repeat) shortcutTalk(); break;
     case 'stato': openModal('stato'); break;
     case 'escape': if (!escapeOne()) return; break;
   }

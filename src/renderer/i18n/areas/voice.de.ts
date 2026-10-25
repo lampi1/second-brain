@@ -39,7 +39,7 @@ export const voiceDe: typeof voiceIt = {
   'voice.downloading': ({ pct }: { pct: number }) => `Lade… ${pct}%`,
   'voice.download': 'Herunterladen',
   'voice.talkTitle': 'Sprachgespräch',
-  'voice.talkHint': 'Sprich mit dem Orchestrator und höre die Antwort, während er schreibt. Sprich dazwischen, um ihn zu unterbrechen. Das Mikrofon im Textfeld schreibt nur, was du sagst.',
+  'voice.talkHint': 'Sprich mit dem Orchestrator und höre die Antwort, während er schreibt. Sprich dazwischen, um ihn zu unterbrechen. Strg+Umschalt+Leertaste schaltet es ein und aus. Das Mikrofon im Textfeld schreibt nur, was du sagst.',
   'voice.dictating': 'Diktat: schreibe ins Feld',
   'voice.writesInInput': 'wird ins Feld geschrieben',
   'mic.title': 'Mikrofon',

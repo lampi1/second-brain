@@ -6,6 +6,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- **Voice replies made to be heard** (ADR 0152): in the voice conversation the Orchestrator answers in short spoken
+  Italian sentences without English words or formatting; English terms and acronyms that remain are respelled for the
+  Italian voice; Ctrl+Shift+Space turns the conversation on and off.
 - **Routine package** (ADR 0156): «Esporta pacchetto» on an open routine saves one zip with everything it needs for the
   same results elsewhere: the brain files its steps cite, the brain rules, its roles as Claude Code/Cursor/Codex
   subagents with their skills, pinned scripts and queries, and the roles' memory (on by default, one switch). A cloud
