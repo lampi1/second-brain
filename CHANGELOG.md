@@ -248,6 +248,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   "Discusso", which leads back to the Orchestrator. The command card's "Apri chat" (an existing chat) is now "Vai alla
   chat".
 ### Fixed
+- **Taskbar icon still Electron on Windows**: a taskbar pin, or a Start-menu/desktop link written before the app had its
+  own icon, kept Electron's; the app now repairs those links (pins matched by its AppUserModelId) and gives its window
+  the icon and the launcher as relaunch command (`setAppDetails`), so a new pin shows second-brain and starts it.
 - **Fewer wasted agent calls and quiet warnings** (#172, #183-#187): `app_create_chat` / `app_assign_task` show their
   prompt and title limits in the schema and name the refused length; `agent_report` shows `verdict` / `verified` only to
   an independent reviewer (sent by another chat they are dropped, not refused); `agent_delegate` says in its schema and

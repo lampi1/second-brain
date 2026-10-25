@@ -21,7 +21,7 @@ import { demoLog } from './activity/demo';
 import { journal } from './activity/journal';
 import { errText, log } from './log';
 import { logInputLag } from './perf';
-import { APP_ID, ensureShortcuts } from './shortcuts';
+import { APP_ID, ensureShortcuts, taskbarDetails } from './shortcuts';
 import { installAppMenu } from './app-menu';
 import { engineStatus, openLogin } from './cli';
 import { engineInfos } from './engines/registry';
@@ -96,6 +96,9 @@ app.whenReady().then(async () => {
   if (process.platform === 'darwin') app.dock?.setIcon(path.join(outDir, 'icon.png'));
   log.info('app', 'start', { data: { version: app.getVersion(), electron: process.versions.electron, userData: app.getPath('userData') } });
   win = createWindow(outDir, false);
+  // Windows: the taskbar button's icon and relaunch command (a pin of the window shows the app, not Electron)
+  const appDetails = hiddenRun() ? null : taskbarDetails(outDir);
+  if (appDetails) win.setAppDetails(appDetails);
   // Attach before starting services: ready-to-show may fire while their asynchronous initialization is pending.
   const windowReady = new Promise<void>(resolve => win!.once('ready-to-show', resolve));
   const emitter = new Emitter(() => win?.webContents ?? null);
