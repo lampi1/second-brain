@@ -12,9 +12,12 @@ export const RULE_FILE = /^rules\/[a-z0-9][a-z0-9._-]{0,80}\.md$/;
 export const TOOLS_FILE = 'TOOLS.md';
 const MAX_RULE = 256 * 1024, MAX_RULES = 50;
 /** Folders whose files are memory or the app's state, never rules (even when listed as topic files). */
-const PRIVATE = /^(agents|memory|journal|ops\/state|\.[^/]+)\//;
-const PRIVATE_FILE = /^(me|now|agents|claude|ai-errors)\.md$/i;
+export const PRIVATE = /^(agents|memory|journal|ops\/state|\.[^/]+)\//;
+export const PRIVATE_FILE = /^(me|now|agents|claude|ai-errors)\.md$/i;
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'regola';
+
+/** Memory, the app's state or a credential-looking name: never shared (a lower-cased, `/`-separated brain path). */
+export const isPrivatePath = (norm: string): boolean => PRIVATE.test(norm) || PRIVATE_FILE.test(path.posix.basename(norm)) || path.posix.basename(norm) === 'memory.md' || /(credential|secret|password|token)/i.test(norm);
 
 /** The brain's rules as pack files: topic files first, then rules/ (one per name; private files never). */
 export function packRules(root: string): PackFiles {
@@ -26,7 +29,7 @@ export function packRules(root: string): PackFiles {
   for (const rel of rels) {
     // a topic file may be written with Windows separators or another case: test the normalized path
     const norm = rel.replace(/\\/g, '/').toLowerCase();
-    if (out.size >= MAX_RULES || PRIVATE.test(norm) || PRIVATE_FILE.test(path.posix.basename(norm)) || path.posix.basename(norm) === 'memory.md' || /(credential|secret|password|token)/i.test(norm)) continue;
+    if (out.size >= MAX_RULES || isPrivatePath(norm)) continue;
     const name = `rules/${slug(path.posix.basename(rel, '.md'))}.md`;
     if (out.has(name)) continue;
     try {

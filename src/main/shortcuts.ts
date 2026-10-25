@@ -7,6 +7,10 @@
 // The links' icon is always a file that exists (the shared dir's icon.ico, copied there from out/ when missing): a link
 // whose icon is gone makes Windows draw a blank page on the taskbar, since the AppUserModelId points the running window
 // at that link. A dev run writes no links but repairs that one field on an existing link (repairIcons).
+// A link still showing Electron (icon = an electron.exe, written before the app had its own icon) is repaired too, and so
+// is the taskbar pin (User Pinned\TaskBar, matched by our AppUserModelId): Windows draws a pinned button with the pin's
+// own icon, never the window's. The window itself carries the same icon and relaunch command (taskbarDetails →
+// BrowserWindow.setAppDetails), so a new pin gets the app's icon and starts the launcher, not bare Electron.
 import { app, shell } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -17,6 +21,18 @@ import { linuxDesktopEntry, macCommandFile, sharedDir } from './platform';
 export const APP_ID = 'second-brain';
 
 const linkDirs = (): string[] => [path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs'), app.getPath('desktop')];
+const pinDir = (): string => path.join(app.getPath('appData'), 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'TaskBar');
+
+/** A link icon that must be replaced: none, a file that is gone, or Electron's own (an electron.exe). */
+export const staleIcon = (icon: string | undefined): boolean => !icon || !fs.existsSync(icon) || path.win32.basename(icon).toLowerCase() === 'electron.exe';
+
+/** Our links: second-brain.lnk in the Start menu and on the desktop, and any taskbar pin carrying our AppUserModelId. */
+function ownLinks(): string[] {
+  const named = linkDirs().map(dir => path.join(dir, 'second-brain.lnk')).filter(f => fs.existsSync(f));
+  let pins: string[] = [];
+  try { pins = fs.readdirSync(pinDir()).filter(f => f.toLowerCase().endsWith('.lnk')).map(f => path.join(pinDir(), f)); } catch { /* no pins */ }
+  return [...named, ...pins.filter(f => { try { return shell.readShortcutLink(f).appUserModelId === APP_ID; } catch { return false; } })];
+}
 
 /** The shared dir's icon.ico, copied from the build (out/icon.ico) when missing; null when neither exists. */
 function durableIcon(base: string, outDir?: string): string | null {
@@ -28,20 +44,33 @@ function durableIcon(base: string, outDir?: string): string | null {
   catch (e) { log.warn('shortcuts', 'icon not copied', { data: { icon, error: String(e) } }); return null; }
 }
 
-/** An existing second-brain.lnk whose icon file is missing gets the durable icon; nothing else of the link changes. */
+/** Each of our links whose icon is stale (staleIcon) gets the durable icon; nothing else of the link changes. */
 function repairIcons(base: string, outDir?: string): void {
-  for (const dir of linkDirs()) {
-    const lnk = path.join(dir, 'second-brain.lnk');
-    if (!fs.existsSync(lnk)) continue;
+  for (const lnk of ownLinks()) {
     try {
       const cur = shell.readShortcutLink(lnk);
-      if (cur.icon && fs.existsSync(cur.icon)) continue;
+      if (!staleIcon(cur.icon)) continue;
       const icon = durableIcon(base, outDir);
       if (!icon) return;
       if (!shell.writeShortcutLink(lnk, 'update', { ...cur, icon, iconIndex: 0 })) log.warn('shortcuts', 'icon not repaired', { data: { lnk } });
       else log.info('shortcuts', 'shortcut icon repaired', { data: { lnk } });
     } catch (e) { log.warn('shortcuts', 'icon repair failed', { data: { lnk, error: String(e) } }); }
   }
+}
+
+/** The window's taskbar identity (BrowserWindow.setAppDetails): our AppUserModelId and icon, and for a stable release the
+ *  launcher as relaunch command, so pinning the running window pins second-brain, not Electron. Null outside Windows,
+ *  in tests and isolated stable runs. A dev run gets no relaunch command: its pin would start bare Electron. */
+export function taskbarDetails(outDir?: string): Electron.AppDetailsOptions | null {
+  if (process.platform !== 'win32' || process.env.SB_TEST) return null;
+  const base = sharedDir();
+  if (process.env.SB_RELEASES_ROOT && path.resolve(process.env.SB_RELEASES_ROOT) !== path.resolve(base)) return null;
+  const icon = durableIcon(base, outDir) ?? (outDir ? path.join(outDir, 'icon.ico') : null);
+  if (!icon) return null;
+  const vbs = path.join(base, 'launch.vbs');
+  const wscript = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'wscript.exe');
+  return { appId: APP_ID, appIconPath: icon, appIconIndex: 0,
+    ...(releaseId() && fs.existsSync(vbs) ? { relaunchCommand: `"${wscript}" "${vbs}"`, relaunchDisplayName: 'second-brain' } : {}) };
 }
 
 export function ensureShortcuts(outDir?: string): void {
@@ -69,6 +98,7 @@ export function ensureShortcuts(outDir?: string): void {
       if (!ok) log.warn('shortcuts', 'shortcut not written', { data: { lnk } });
     } catch (e) { log.warn('shortcuts', 'shortcut failed', { data: { lnk, error: String(e) } }); }
   }
+  repairIcons(base, outDir); // the taskbar pin, which the app never writes
 }
 
 function posixShortcuts(): void {

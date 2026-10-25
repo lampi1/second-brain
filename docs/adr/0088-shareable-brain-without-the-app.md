@@ -1,5 +1,7 @@
 # ADR 0088 · The brain without the app: a shareable zip and a standalone install
 
+> Amended by ADR 0156 (2026-10-24): a routine package may carry the memory of the roles that routine uses, on the user's
+> switch.
 > Amended by ADR 0125 (2026-10-22): the agent pack import/export this ADR builds on is gone; the shareable brain zip
 > stays, with the parts it shares (`pack/zip.ts`, `toml.ts`, `rules.ts packRules`, the guard scan).
 

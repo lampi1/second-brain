@@ -31,7 +31,7 @@ function portableDefinition(value: FlowDefinition): FlowDefinition {
     }) }));
 }
 const md = (value: string): string => value.replace(/[\\`*_{}[\]<>#|]/g, '\\$&');
-function markdown(definition: FlowDefinition, version: number): string {
+export function markdown(definition: FlowDefinition, version: number): string {
   const lines = [`# ${md(definition.title)}`, '', `Version: ${version}`, '', md(definition.description), '',
     `- Category: ${md(definition.category ?? '—')}`, `- Scope: ${md([definition.scope.project, definition.scope.areaPath].filter(Boolean).join(' / ') || '—')}`,
     `- When to use: ${definition.aliases.map(md).join('; ') || '—'}`, '', '## Steps', ''];
@@ -86,8 +86,8 @@ export function exportFlow(snapshot: FlowSnapshot, input: ExportInput, read?: (k
   if (Buffer.byteLength(content, 'utf8') > FLOW_PORTABLE_MAX_BYTES) throw new Error('Flow export exceeds size limit');
   return { filename: `${id}-v${version}.${input.format === 'json' ? 'json' : 'md'}`, content };
 }
-/** Every import is a fresh proposal; even importing the same file twice cannot replace or activate a flow. */
-export function importFlow(service: FlowService, content: string): FlowDraft {
+/** A portable JSON or Markdown export, checked: the definition, its source version and the scripts/queries it carried. */
+export function parsePortable(content: string): { definition: FlowDefinition; version: number; files: PortableFile[] } {
   if (typeof content !== 'string' || Buffer.byteLength(content, 'utf8') > FLOW_PORTABLE_MAX_BYTES) throw new Error('Flow import exceeds size limit');
   const normalized = content.replace(/\r\n/g, '\n').trim();
   const isMarkdown = !normalized.startsWith('{');
@@ -101,12 +101,27 @@ export function importFlow(service: FlowService, content: string): FlowDraft {
   let parsed: unknown;
   try { parsed = JSON.parse(json); } catch { throw new Error('Invalid flow JSON'); }
   const raw = object(parsed, 'portable flow');
-  // files travel for a cloud agent; an import never writes them into the brain (a step needs its own saved copy)
   keys(raw, ['format', 'schemaVersion', 'sourceVersion', 'definition', 'files'], 'portable flow');
   if (raw.format !== 'second-brain-flow' || raw.schemaVersion !== 1) throw new Error('Unsupported portable flow format');
   const version = integer(raw.sourceVersion, 'sourceVersion', 1);
   const definition = validateDefinition(raw.definition);
-  const files = Array.isArray(raw.files) ? raw.files as PortableFile[] : [];
+  const files = portableFiles(raw.files);
   if (isMarkdown && normalized !== portableMarkdown(definition, version, files).replace(/\r\n/g, '\n').trim()) throw new Error('Portable Markdown was changed; use an unchanged export or edit the JSON definition');
+  return { definition, version, files };
+}
+function portableFiles(value: unknown): PortableFile[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 50) throw new Error('Invalid portable files');
+  return value.map(item => {
+    const file = object(item, 'portable file');
+    keys(file, ['kind', 'ref', 'sha256', 'content', 'redacted'], 'portable file');
+    if ((file.kind !== 'script' && file.kind !== 'query') || typeof file.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(file.sha256) || typeof file.content !== 'string' || (file.redacted !== undefined && file.redacted !== true)) throw new Error('Invalid portable file');
+    return { kind: file.kind, ref: identifier(file.ref, 'file ref'), sha256: file.sha256, content: file.content, ...(file.redacted ? { redacted: true as const } : {}) };
+  });
+}
+/** Every import is a fresh proposal; even importing the same file twice cannot replace or activate a flow. The
+ *  scripts/queries it carries are written only by a routine package import (pack/routine-share.ts), on the user's pick. */
+export function importFlow(service: FlowService, content: string): FlowDraft {
+  const { definition } = parsePortable(content);
   return service.propose({ definition: { ...definition, id: `imported-${randomUUID()}` }, expectedRevision: 0 });
 }

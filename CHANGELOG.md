@@ -9,6 +9,11 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - **Voice replies made to be heard** (ADR 0152): in the voice conversation the Orchestrator answers in short spoken
   Italian sentences without English words or formatting; English terms and acronyms that remain are respelled for the
   Italian voice; Ctrl+Shift+Space turns the conversation on and off.
+- **Routine package** (ADR 0156): «Esporta pacchetto» on an open routine saves one zip with everything it needs for the
+  same results elsewhere: the brain files its steps cite, the brain rules, its roles as Claude Code/Cursor/Codex
+  subagents with their skills, pinned scripts and queries, and the roles' memory (on by default, one switch). A cloud
+  agent opens it and reads AGENTS.md; another app imports it from «Importa routine», sees what it would write, ticks
+  what it wants (a file that differs stays yours unless ticked), and every write lands in the Log with «Annulla».
 - **Voice: dictation and conversation split, faster, interruptible** (ADR 0152): the mic button in the inputs
   only dictates into the field; «Conversazione a voce» in Settings → Voce talks with the Orchestrator, reads its reply
   sentence by sentence while it writes, and stops as soon as you talk over it. Turns end sooner, models load when the
@@ -246,6 +251,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   "Discusso", which leads back to the Orchestrator. The command card's "Apri chat" (an existing chat) is now "Vai alla
   chat".
 ### Fixed
+- **Taskbar icon still Electron on Windows**: a taskbar pin, or a Start-menu/desktop link written before the app had its
+  own icon, kept Electron's; the app now repairs those links (pins matched by its AppUserModelId) and gives its window
+  the icon and the launcher as relaunch command (`setAppDetails`), so a new pin shows second-brain and starts it.
 - **Fewer wasted agent calls and quiet warnings** (#172, #183-#187): `app_create_chat` / `app_assign_task` show their
   prompt and title limits in the schema and name the refused length; `agent_report` shows `verdict` / `verified` only to
   an independent reviewer (sent by another chat they are dropped, not refused); `agent_delegate` says in its schema and
