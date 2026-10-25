@@ -38,7 +38,7 @@ export const voiceIt = {
   'voice.downloading': ({ pct }: { pct: number }) => `Scarico… ${pct}%`,
   'voice.download': 'Scarica',
   'voice.talkTitle': 'Conversazione a voce',
-  'voice.talkHint': 'Parli con l’Orchestrator e ti risponde a voce mentre scrive. Puoi interromperlo parlando. Il microfono nel campo di testo invece scrive soltanto quello che dici.',
+  'voice.talkHint': 'Parli con l’Orchestrator e ti risponde a voce mentre scrive. Puoi interromperlo parlando. Ctrl+Shift+Spazio la accende e la spegne. Il microfono nel campo di testo invece scrive soltanto quello che dici.',
   'voice.dictating': 'Detta: scrivo nel campo',
   'voice.writesInInput': 'lo scrivo nel campo',
   'mic.title': 'Microfono',

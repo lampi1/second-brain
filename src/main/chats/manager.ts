@@ -24,6 +24,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Answer, ChatCommand, ChatItem, ChatSummary, CliStatus, ContextStats, CursorReasoning, Effort, HandoffInfo, Harness, Lang, NewChat, PendingRequest, PermissionMode } from '../../shared/contract';
 import { replyLangTurn } from './reply-lang';
+import { voiceReplyHint } from './voice-reply';
 import { sysEn, type SysCode, type SysParams } from '../../shared/sys';
 import { checkImages } from './images';
 import type { Emitter } from '../ipc';
@@ -335,6 +336,9 @@ interface Rec {
   rolePrimed?: { session: string; sig: string } | undefined;
   /** the reply language this chat was last told (persisted, ADR 0120): a change goes in one line on its next turn */
   replyLang?: Lang;
+  /** the next delivery is a spoken turn (voice conversation, ADR 0152); this context already has the spoken-reply rules */
+  voiceNow?: boolean;
+  voiceTold?: boolean;
   /** the role text was compared with rolePrimed since the engine started */
   roleChecked?: boolean;
   children?: AgentChildrenReducer;
@@ -1105,6 +1109,12 @@ export class ChatManager implements ChatService {
     r.roleChecked = true;
     // the reply language (ADR 0120): with the role text, and once on the first turn after the user changed it
     const wantLang = this.opts.replyLang?.(), langHint = replyLangTurn(wantLang, role ? undefined : r.replyLang, !!role);
+    // a spoken turn: a reply made to be heard (voice-reply.ts); a new context gets the rules again
+    if (role) r.voiceTold = false;
+    const spoken = r.voiceNow && from === undefined && !resumed; // the user's own message, not mail or a resume
+    const voiceHint = spoken ? voiceReplyHint(!!r.voiceTold) : '';
+    if (spoken) r.voiceNow = false;
+    if (voiceHint) r.voiceTold = true;
     // the files as they are before this turn (ADR 0103): what the user can put back with «Annulla l'ultimo turno»
     if (!this.midTurn(r)) r.turnCheckpoint = false;
     lapT = Date.now();
@@ -1112,7 +1122,7 @@ export class ChatManager implements ChatService {
     lap.checkpointMs = Date.now() - lapT;
     try {
       receipt?.beforeSubmit();
-      r.session.send(`${role}${warning}${body}${hint}${langHint}`, imgs);
+      r.session.send(`${role}${warning}${body}${hint}${langHint}${voiceHint}`, imgs);
       receipt?.submitted();
       if (r.continuationPending) { r.continuationPending = undefined; this.persist(true); }
       log.info('chats', 'timing: before send', { chat: r.s.id, data: { totalMs: Date.now() - t0, ...lap, engineStarted: !hadEngine, cold: !!cold, harness: r.s.harness } });
@@ -1619,6 +1629,12 @@ export class ChatManager implements ChatService {
   }
 
   /** Neutral follow-ups never count as corrections. Only an explicit correction does. */
+  /** chat:send with voice: the user's next message to this chat was said in the voice conversation (ADR 0152) */
+  spokenNext(chatId: string): void {
+    const r = this.chats.get(chatId);
+    if (r) r.voiceNow = true;
+  }
+
   resumedByUser(chatId: string, text?: string): void {
     const r = this.chats.get(chatId), run = r?.s.run;
     if (!r || !run || text === undefined) return;

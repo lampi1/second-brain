@@ -2,7 +2,7 @@
 // silence, what of a reply is said aloud, which turn is read while it streams (never one the app started), and how
 // a streaming reply is cut into the pieces synthesized one by one.
 import { describe, expect, it } from 'vitest';
-import { isNoise, parseSpokenAnswer, settledText, speakable, speechChunks, spokenQuestion, turnToSpeak } from '../../src/shared/voice';
+import { forEar, isNoise, parseSpokenAnswer, settledText, speakable, speechChunks, spokenQuestion, turnToSpeak } from '../../src/shared/voice';
 import type { ChatItem } from '../../src/shared/contract';
 
 describe('parseSpokenAnswer', () => {
@@ -101,3 +101,14 @@ describe('spokenQuestion', () => {
     expect(spokenQuestion({ question: 'Vado avanti?' }, false)).toBe('Ho una domanda per te. Vado avanti?');
   });
 });
+
+describe('forEar', () => {
+  it('English words and acronyms respelled for the Italian voice, symbols said', () => {
+    expect(forEar('Ho aperto la PR #224 su GitHub: il merge è fatto (test verdi).')).toBe('Ho aperto la pi erre numero 224 su ghìt-hab, il mèrg è fatto, test verdi.');
+    expect(forEar('Fatto → ora la CI è ok, 100% dei test.')).toBe('Fatto, poi ora la ci i è okèi, 100 per cento dei test.');
+  });
+  it('a word that only contains a dictionary word stays as it is', () => {
+    expect(forEar('Il bugiardo ha un profilo.')).toBe('Il bugiardo ha un profilo.');
+  });
+});
+

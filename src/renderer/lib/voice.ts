@@ -15,7 +15,7 @@ import { app, send } from '../store/store';
 import { toast } from '../store/ui';
 import { t } from '../i18n';
 import { micAudio, onMicChange, openMicStream } from './mic';
-import { VOICE_RATE, isNoise, parseSpokenAnswer, settledText, speakable, speechChunks, spokenQuestion, turnToSpeak, type SpokenAnswer, type SpokenQuestionInput, type VoiceName, type VoiceState } from '@shared/voice';
+import { VOICE_RATE, forEar, isNoise, parseSpokenAnswer, settledText, speakable, speechChunks, spokenQuestion, turnToSpeak, type SpokenAnswer, type SpokenQuestionInput, type VoiceName, type VoiceState } from '@shared/voice';
 
 export type VoiceTarget = 'orchestrator' | 'flash';
 /** dictate = the words go into the input; talk = a spoken conversation with the Orchestrator */
@@ -120,6 +120,12 @@ function fail(error: string): void {
   stopSpeaking(false);
   set({ phase: 'off', level: 0, error });
   toast(error, 'err');
+}
+
+/** Ctrl+Shift+Space: the voice conversation on ↔ off (dictation on: it becomes the conversation). */
+export function shortcutTalk(): void {
+  const s = voice.get();
+  void setTalk(!(s.mode === 'talk' && s.phase !== 'off'));
 }
 
 /** Ctrl+M: on → off; off → dictation into Flash when the focus is in Flash's tile, else into the Orchestrator. */
@@ -258,7 +264,7 @@ function sendHeldLater(): void {
     if (voice.get().phase === 'hearing') return; // more is coming: speech(false) and its transcript set the timer again
     const all = held, chatId = heldChat;
     held = ''; heldChat = '';
-    send(chatId, all);
+    send(chatId, all, [], { voice: true });
   }, HOLD_MS);
 }
 
@@ -277,7 +283,7 @@ function heard(raw: string): void {
     const a = parseSpokenAnswer(text);
     if (a) { q.onAnswer(a); return; }
   }
-  if (held && heldChat !== chatId) { const all = held, to = heldChat; held = ''; send(to, all); }
+  if (held && heldChat !== chatId) { const all = held, to = heldChat; held = ''; send(to, all, [], { voice: true }); }
   held = held ? `${held} ${text}` : text;
   heldChat = chatId;
   if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
@@ -295,7 +301,8 @@ let quietUntil = 0;
 const speakingNow = () => !!playing || lines.length > 0 || pumping;
 
 function synth(text: string, voiceName?: VoiceName): NonNullable<Line['audio']> {
-  return window.sb.invoke('voice:speak', { text, ...(voiceName ? { voice: voiceName } : {}) }).catch(() => null);
+  // English words and acronyms respelled for the Italian voice (forEar): the speech only, the chat keeps the text
+  return window.sb.invoke('voice:speak', { text: forEar(text), ...(voiceName ? { voice: voiceName } : {}) }).catch(() => null);
 }
 
 /** Queues text to be said; raw: already written to be heard (a question): no markdown cleanup, no length cut. */

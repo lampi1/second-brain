@@ -89,6 +89,42 @@ export function speakable(md: string, max = 700): string {
   return `${s} Il resto è in chat.`;
 }
 
+/** How the Italian voice should say the English words and acronyms a reply still has (the reply itself is asked to
+ *  avoid them, chats/voice-reply.ts): a small pronunciation dictionary, like the reference pronunciations of OpenAI's
+ *  voice prompting guide and ElevenLabs' alias dictionaries. Spellings written for Piper's Italian phonemizer (espeak-ng):
+ *  an accent marks the stress. Applied to what is spoken only, never to the chat. */
+const SAY_AS: [RegExp, string][] = ([
+  ['pull request', 'pul ricuèst'], ['pull requests', 'pul ricuèst'], ['github', 'ghìt-hab'], ['gitlab', 'ghìt-lab'], ['git', 'ghit'],
+  ['merge', 'mèrg'], ['merged', 'mèrgiato'], ['commit', 'commìt'], ['commits', 'commìt'], ['branch', 'brànch'], ['push', 'pùsh'],
+  ['bug', 'bag'], ['bugs', 'bag'], ['fix', 'fics'], ['deploy', 'diplòi'], ['release', 'rilìs'], ['build', 'bìld'], ['review', 'riviù'],
+  ['issue', 'ìssiu'], ['issues', 'ìssiu'], ['feature', 'fìciur'], ['features', 'fìciur'], ['task', 'tàsk'], ['tasks', 'tàsk'],
+  ['team', 'tìm'], ['teams', 'tìms'], ['meeting', 'mìting'], ['chat', 'ciàt'], ['email', 'imèil'], ['mail', 'mèil'], ['file', 'fàil'],
+  ['files', 'fàil'], ['update', 'apdèit'], ['login', 'loghìn'], ['password', 'pàssuord'], ['browser', 'bràuser'],
+  ['default', 'difòlt'], ['dashboard', 'dèshbord'], ['workflow', 'uòrcflou'], ['screenshot', 'scrìnsciot'], ['script', 'scrìpt'],
+  ['scripts', 'scrìpt'], ['query', 'quèri'], ['backend', 'bècchend'], ['frontend', 'fròntend'], ['plugin', 'plàghin'], ['token', 'tòken'],
+  ['tokens', 'tòken'], ['prompt', 'pròmpt'], ['claude', 'clòd'], ['cursor', 'kèrsor'], ['flash', 'flèsh'], ['scout', 'scàut'],
+  ['windows', 'uìndous'], ['jira', 'gìra'], ['whisper', 'uìsper'], ['ok', 'okèi'], ['okay', 'okèi'], ['json', 'gèison'], ['online', 'onlàin'],
+] as const).map(([w, say]) => [new RegExp(`(?<![\\p{L}\\p{N}])${w}(?![\\p{L}\\p{N}])`, 'giu'), say]);
+const LETTER: Record<string, string> = { A: 'a', B: 'bi', C: 'ci', D: 'di', E: 'e', F: 'effe', G: 'gi', H: 'acca', I: 'i', J: 'i lunga', K: 'cappa', L: 'elle', M: 'emme',
+  N: 'enne', O: 'o', P: 'pi', Q: 'cu', R: 'erre', S: 'esse', T: 'ti', U: 'u', V: 'vu', W: 'doppia vu', X: 'ics', Y: 'ipsilon', Z: 'zeta' };
+/** acronyms said as words, not letter by letter */
+const AS_WORD = new Set(['REST', 'NASA', 'FIAT', 'UE', 'ONU', 'IVA', 'INPS', 'COVID', 'RAM', 'SIM', 'LED', 'PIN', 'CAP']);
+
+export function forEar(text: string): string {
+  let s = text
+    .replace(/\s*(?:→|->|=>|⇒)\s*/g, ', poi ')
+    .replace(/\s*&\s*/g, ' e ')
+    .replace(/(\d)\s*%/g, '$1 per cento')
+    .replace(/#(\d+)/g, 'numero $1')
+    .replace(/(\p{L})\/(\p{L})/gu, '$1 o $2')
+    .replace(/\s*[()[\]{}]\s*/g, ', ')
+    .replace(/\s*[;:]\s+/g, ', ')
+    .replace(/\s+[-–—]\s+/g, ', ');
+  for (const [re, say] of SAY_AS) s = s.replace(re, say);
+  s = s.replace(/(?<![\p{L}\p{N}])([A-Z]{2,5})s?(?![\p{L}\p{N}])/gu, (m, a: string) => (AS_WORD.has(a) ? a.toLowerCase() : [...a].map(c => LETTER[c] ?? c).join(' ')));
+  return s.replace(/\s*,\s*(?=[,.!?…])/g, '').replace(/,\s*,/g, ',').replace(/^\s*,\s*/, '').replace(/\s{2,}/g, ' ').trim();
+}
+
 /** The turn being answered, while it streams (talk mode reads it aloud sentence by sentence, not after the whole reply
  *  and all its synthesis: first audio after the first sentence, the way voice agents stream LLM text into TTS, see ADR
  *  0152). The user's own last message after `since`; the assistant text after it (a partial one included); done = the

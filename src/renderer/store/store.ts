@@ -176,7 +176,7 @@ async function sendNow(chatId: string, msg: QueuedMsg, before?: ChatSummary, opt
   inFlight.set(chatId, (inFlight.get(chatId) ?? 0) + 1);
   const done = () => { const n = (inFlight.get(chatId) ?? 1) - 1; if (n > 0) inFlight.set(chatId, n); else inFlight.delete(chatId); };
   try {
-    await sb.invoke('chat:send', { chatId, text: msg.text, ...(msg.images?.length ? { images: [...msg.images] } : {}) });
+    await sb.invoke('chat:send', { chatId, text: msg.text, ...(msg.images?.length ? { images: [...msg.images] } : {}), ...(msg.voice ? { voice: true } : {}) });
     done();
     // main took it and the chat is free again (a turn that already ended, a hand-off turn): the queue goes on
     const c = app.get().chats[chatId], next = app.get().queued[chatId]?.[0];
@@ -198,20 +198,21 @@ async function sendNow(chatId: string, msg: QueuedMsg, before?: ChatSummary, opt
 let localN = 0;
 /** Enter in a chat input: send now, or queue it while the chat is busy or waiting on a request (sent when idle).
  *  images: pasted or dropped screenshots (lib/images.ts); a message may be images only. */
-export function send(chatId: string, text: string, images: readonly ImageAttachment[] = []): 'sent' | 'queued' | 'empty' {
+export function send(chatId: string, text: string, images: readonly ImageAttachment[] = [], opts: { voice?: boolean } = {}): 'sent' | 'queued' | 'empty' {
   if(updateIsFrozen())return 'empty';
   const own = text.trim();
   if (!own && !images.length) return 'empty';
   const c = app.get().chats[chatId];
   // queued: the notes stay apart and ride on it when it leaves (the flush: withNotes), so removing it loses none
-  if (busyNow(chatId, c)) { dispatch({ type: 'queue', chatId, msg: { id: `q:${++localN}`, text: own, ...(images.length ? { images } : {}) } }); return 'queued'; }
+  const voice = opts.voice ? { voice: true as const } : {};
+  if (busyNow(chatId, c)) { dispatch({ type: 'queue', chatId, msg: { id: `q:${++localN}`, text: own, ...(images.length ? { images } : {}), ...voice } }); return 'queued'; }
   // the notes waiting for this chat ride on the user's message
-  return sendOut(chatId, [own, takeNotes(chatId).join('\n')].filter(Boolean).join('\n\n'), images, c);
+  return sendOut(chatId, [own, takeNotes(chatId).join('\n')].filter(Boolean).join('\n\n'), images, c, !!opts.voice);
 }
 
 /** Send now (the chat is free): the optimistic copy, then main. */
-function sendOut(chatId: string, t: string, images: readonly ImageAttachment[], c: ChatSummary | undefined): 'sent' {
-  const msg: QueuedMsg = { id: `q:${++localN}`, text: t, ...(images.length ? { images } : {}) };
+function sendOut(chatId: string, t: string, images: readonly ImageAttachment[], c: ChatSummary | undefined, voice = false): 'sent' {
+  const msg: QueuedMsg = { id: `q:${++localN}`, text: t, ...(images.length ? { images } : {}), ...(voice ? { voice: true as const } : {}) };
   // optimistic: the message and the state pill change at once; main's own user item replaces the copy
   const thumbs = images.flatMap(im => (im.thumb ? [im.thumb] : []));
   dispatch({ type: 'chat:item', chatId, item: { kind: 'user', id: `local:${++localN}`, at: Date.now(), text: t, ...(images.length ? { images: images.length } : {}), ...(thumbs.length ? { thumbs } : {}) } });
@@ -307,7 +308,7 @@ async function sendQueuedNowImpl(chatId: string, id: string): Promise<'sent' | '
   const c = s.chats[chatId];
   if (!busyNow(chatId, c)) {
     dispatch({ type: 'unqueue', chatId, id });
-    send(chatId, msg.text, msg.images ?? []);
+    send(chatId, msg.text, msg.images ?? [], { voice: !!msg.voice });
     return 'sent';
   }
   dispatch({ type: 'promote', chatId, id });

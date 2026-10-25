@@ -1442,7 +1442,8 @@ export interface InvokeMap {
   'chat:create': [NewChat, ChatSummary];
   'chat:createRouted': [RoutedNewChat, ChatSummary];
   /** text may be empty when images are attached */
-  'chat:send': [{ chatId: string; text: string; images?: ImageAttachment[] }, void];
+  /** voice: said in the voice conversation: the engine is asked for a reply made to be heard (ADR 0152) */
+  'chat:send': [{ chatId: string; text: string; images?: ImageAttachment[]; voice?: boolean }, void];
   'chat:answer': [{ chatId: string; requestId: string; answer: Answer }, void];
   /** a Strategist's proposed plan: «Approva e parti», or «Cambia qualcosa» with what to change (ADR 0108) */
   /** at = the proposal the user read (StrategyPlan.at): a newer one is refused, never approved unseen */

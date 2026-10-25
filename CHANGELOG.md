@@ -6,6 +6,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- **Voice replies made to be heard** (ADR 0152): in the voice conversation the Orchestrator answers in short spoken
+  Italian sentences without English words or formatting; English terms and acronyms that remain are respelled for the
+  Italian voice; Ctrl+Shift+Space turns the conversation on and off.
 - **Voice: dictation and conversation split, faster, interruptible** (ADR 0152): the mic button in the inputs
   only dictates into the field; «Conversazione a voce» in Settings → Voce talks with the Orchestrator, reads its reply
   sentence by sentence while it writes, and stops as soon as you talk over it. Turns end sooner, models load when the

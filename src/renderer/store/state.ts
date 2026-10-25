@@ -5,7 +5,8 @@
 import type { AppInfo, BrowserTab, ChatItem, ChatSummary, FeedEvent, ImageAttachment, PendingRequest, Settings, Usage } from '@shared/contract';
 
 /** A message waiting for its chat to be free: an id of its own (two equal texts stay two messages), text, images. */
-export interface QueuedMsg { id: string; text: string; images?: readonly ImageAttachment[] }
+/** voice: said in the voice conversation (lib/voice.ts): main asks the engine for a reply made to be heard */
+export interface QueuedMsg { id: string; text: string; images?: readonly ImageAttachment[]; voice?: true }
 
 export interface AppState {
   ready: boolean;

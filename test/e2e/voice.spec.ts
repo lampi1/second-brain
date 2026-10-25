@@ -67,6 +67,13 @@ test('voice: the mic dictates into the input, the conversation is switched on in
     await talk.click();
     await expect(talk).toHaveAttribute('aria-checked', 'false');
     await expect(bar).toHaveCount(0);
+
+    // its own shortcut: Ctrl+Shift+Space on and off
+    await page.keyboard.press('Control+Shift+Space');
+    await expect(bar).toHaveAttribute('data-mode', 'talk');
+    await expect(talk).toHaveAttribute('aria-checked', 'true');
+    await page.keyboard.press('Control+Shift+Space');
+    await expect(bar).toHaveCount(0);
   } finally {
     await app.close();
   }

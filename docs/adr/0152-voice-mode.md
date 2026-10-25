@@ -88,3 +88,17 @@ quanto un click». Not now: the app speaking on its own initiative (recaps). The
   - The engine loads Whisper (and, for a conversation, the voice) when listening starts; the voice has its own queue,
     so a sentence never waits behind Whisper and the user's words never wait behind a long reply; Whisper gets more
     cores.
+- Replies made to be heard (owner, 2026-10-25: the Italian voice said English terms badly and the replies were hard
+  to follow; he asked to copy the best documented practice):
+  - A message said in the conversation reaches the engine with an engine-only line (`chats/voice-reply.ts`, through
+    `chat:send` `voice` → `ChatManager.spokenNext`): 1-3 short sentences, plain spoken Italian with full stops, no
+    lists, code, links or symbols, Italian words instead of English ones and acronyms, numbers as said, actions not
+    reasoning, the essentials and an offer to go on. The rules come once per context, then a ~25-token reminder per
+    spoken turn; typed messages carry nothing. From OpenAI's voice prompting guide
+    (https://developers.openai.com/api/docs/guides/voice-prompting) and ElevenLabs' advice to have the LLM write
+    speech-ready text (https://elevenlabs.io/docs/best-practices/prompting/normalization).
+  - What is still English is respelled for the voice only (`forEar`, the chat keeps the text): a small pronunciation
+    dictionary (GitHub, merge, pull request, file…), acronyms letter by letter with Italian letter names, arrows,
+    percent, slashes, parentheses and colons said as words or pauses. Like the reference pronunciations in OpenAI's
+    guide and ElevenLabs' alias dictionaries. The respellings are not tried on the owner's PC yet.
+  - Ctrl+Shift+Space turns the conversation on and off (Ctrl+M stays dictation).

@@ -39,7 +39,7 @@ export const voiceEn: typeof voiceIt = {
   'voice.downloading': ({ pct }: { pct: number }) => `Downloading… ${pct}%`,
   'voice.download': 'Download',
   'voice.talkTitle': 'Voice conversation',
-  'voice.talkHint': 'Talk to the Orchestrator and hear its answer while it writes. Talk over it to interrupt. The mic in the text field only types what you say.',
+  'voice.talkHint': 'Talk to the Orchestrator and hear its answer while it writes. Talk over it to interrupt. Ctrl+Shift+Space turns it on and off. The mic in the text field only types what you say.',
   'voice.dictating': 'Dictation: typing into the field',
   'voice.writesInInput': 'typed into the field',
   'mic.title': 'Microphone',
