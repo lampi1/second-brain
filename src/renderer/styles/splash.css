@@ -1,96 +1,56 @@
-/* The opening splash (components/Splash.tsx): always dark, deep space with a violet glow, whatever the theme (the
-   window's own background is dark before the page paints, so a light theme never flashes). Phases on .splash: run
-   (the mark wakes up, the sparks fly into the word), hot (the word lights up with a shockwave and a glint, the
-   sentence rises), out (fades into the app). .splash-still: prefers-reduced-motion, nothing moves. */
+/* The opening splash (Splash.tsx): a violet/blue constellation and a pearl wordmark. Gradients/glows are painted
+   once; the shared JS timeline changes only opacity and transform. No CSS clocks, blur passes, layout animation
+   or infinite work while the final frame is held. The closing dissolve leaves the already rendered app below. */
 .splash {
   position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; overflow: hidden; cursor: pointer;
-  background: radial-gradient(ellipse at 50% 42%, #15122a 0%, #0a0a16 52%, #040409 100%);
-  color: #eceef3; font-family: var(--font-display); user-select: none;
-  transition: opacity 0.42s ease, transform 0.42s cubic-bezier(0.2, 0.7, 0.2, 1), filter 0.42s ease;
+  isolation: isolate; contain: layout paint; background: #070811; color: #eeeafa; font-family: var(--font-display);
+  user-select: none; will-change: opacity;
 }
-.splash-out { opacity: 0; transform: scale(1.05); filter: blur(3px); pointer-events: none; }
-.splash-still, .splash-still * { transition-duration: 0.12s !important; animation: none !important; }
-
-/* the light behind: two slow nebulae, violet and blue, breathing */
 .splash-aurora {
-  position: absolute; inset: -20%; pointer-events: none; opacity: 0; animation: splash-fade 0.9s ease 0.05s forwards;
+  position: absolute; inset: 0; pointer-events: none; opacity: 0.35; will-change: opacity;
   background:
-    radial-gradient(ellipse 34% 28% at 38% 44%, rgba(139, 108, 255, 0.24), transparent 70%),
-    radial-gradient(ellipse 30% 26% at 63% 56%, rgba(79, 140, 255, 0.18), transparent 70%);
-  filter: blur(10px);
+    radial-gradient(ellipse 44% 42% at 43% 43%, rgba(113, 74, 196, 0.24), transparent 76%),
+    radial-gradient(ellipse 36% 37% at 66% 49%, rgba(61, 114, 175, 0.15), transparent 76%),
+    radial-gradient(ellipse 70% 56% at 50% 50%, #101123, transparent 85%);
 }
-.splash:not(.splash-still) .splash-aurora { animation: splash-fade 0.9s ease 0.05s forwards, splash-drift 9s ease-in-out infinite alternate; }
-/* a faint dot field, fading out from the centre */
-.splash-grid {
-  position: absolute; inset: 0; pointer-events: none; opacity: 0.5;
-  background-image: radial-gradient(rgba(190, 180, 255, 0.16) 1px, transparent 1.4px); background-size: 28px 28px;
-  mask-image: radial-gradient(ellipse 55% 50% at 50% 50%, #000 0%, transparent 100%);
+.splash-stars {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0.35;
+  background-image: radial-gradient(circle at 18% 29%, #c0c2e4 0 1px, transparent 1.6px),
+    radial-gradient(circle at 76% 21%, #b2a5d9 0 1px, transparent 1.6px),
+    radial-gradient(circle at 87% 64%, #b2cbe4 0 1px, transparent 1.5px),
+    radial-gradient(circle at 27% 76%, #b2a5d9 0 1px, transparent 1.6px),
+    radial-gradient(circle at 65% 82%, #b2cbe4 0 0.8px, transparent 1.4px);
 }
-
-.splash-stage { position: relative; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 0 24px; max-width: 1200px; text-align: center; }
-
-/* the mark: build/icon.svg's network, waking up */
-.splash-mark { overflow: visible; margin-bottom: 6px; filter: drop-shadow(0 0 18px rgba(139, 108, 255, 0.55)); }
-.splash-halo { fill: none; stroke: rgba(160, 140, 255, 0.18); stroke-width: 1.5; stroke-dasharray: 3 9; transform-origin: center; animation: splash-pop 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.2) 0.05s both, splash-spin 14s linear infinite; }
-.splash-link { stroke: #ffffff; stroke-width: 11; stroke-linecap: round; opacity: 0.9; stroke-dasharray: 80; stroke-dashoffset: 80; animation: splash-draw 0.32s cubic-bezier(0.3, 0.7, 0.2, 1) both; }
-.splash-link-faint { opacity: 0.4; stroke-dasharray: 120; stroke-dashoffset: 120; animation-delay: 0.3s; }
-.splash-node { fill: #ffffff; transform-box: fill-box; transform-origin: center; animation: splash-pop 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.5) both; }
-.splash-hub { transform-box: fill-box; transform-origin: center; animation: splash-pop 0.42s cubic-bezier(0.2, 0.9, 0.3, 1.5) both; }
-.splash-core { fill: #6d5cff; transform-box: fill-box; transform-origin: center; animation: splash-pop 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.5) 0.08s both, splash-beat 0.9s ease-in-out 0.5s infinite; }
-/* the hub's pulse ring: at start, and again when the word lights up */
-.splash-ring { fill: none; stroke: #b9a8ff; stroke-width: 3; transform-box: fill-box; transform-origin: center; opacity: 0; animation: splash-wave 0.9s ease-out 0.12s; }
-.splash-hot .splash-ring { animation: splash-wave2 1s ease-out both; }
-/* signals running from the hub to each node */
-.splash-pulse { fill: none; stroke: #8fe3ff; stroke-width: 7; stroke-linecap: round; stroke-dasharray: 10 300; stroke-dashoffset: 10; opacity: 0; animation: splash-signal 0.55s ease-in both; filter: drop-shadow(0 0 6px #8fe3ff); }
-
-/* the word: hidden while the sparks build it, then it lights up over them */
+.splash-orbits { position: absolute; inset: 0; pointer-events: none; opacity: 0; will-change: opacity; }
+.splash-orbits > div { position: absolute; left: 50%; top: 46%; width: min(82vw, 1160px); height: min(49vw, 600px); border: 1px solid rgba(162, 146, 208, 0.13); border-radius: 50%; transform: translate(-50%, -50%) rotate(-23deg); }
+.splash-orbits > div:nth-child(2) { width: min(71vw, 1000px); height: min(33vw, 420px); border-color: rgba(135, 174, 216, 0.09); transform: translate(-50%, -50%) rotate(24deg); }
+.splash-orbits > div:nth-child(3) { width: min(96vw, 1380px); height: min(63vw, 740px); border-color: rgba(162, 146, 208, 0.05); transform: translate(-50%, -50%) rotate(-23deg); }
+.splash-stage { position: relative; display: flex; flex-direction: column; align-items: center; width: min(100%, 1200px); padding: 24px; text-align: center; box-sizing: border-box; }
+.splash-emblem { position: relative; display: grid; place-items: center; width: 136px; height: 136px; margin-bottom: 28px; opacity: 0; will-change: opacity, transform; }
+.splash-emblem::before { content: ''; position: absolute; inset: 8px; border-radius: 50%; background: radial-gradient(circle, rgba(172, 142, 255, 0.16), transparent 72%); }
+.splash-emblem-orbit { position: absolute; inset: 0; border: 1px solid rgba(192, 175, 245, 0.18); border-radius: 50%; }
+.splash-emblem-orbit::before, .splash-emblem-orbit::after { content: ''; position: absolute; width: 4px; height: 4px; border-radius: 50%; background: #c6b9ee; box-shadow: 0 0 12px rgba(184, 158, 255, 0.55); }
+.splash-emblem-orbit::before { top: 17px; left: 19px; }
+.splash-emblem-orbit::after { bottom: 17px; right: 19px; width: 3px; height: 3px; background: #99c4ed; }
+.splash-mark { position: relative; overflow: visible; }
 .splash-word {
-  position: relative; font: 800 clamp(60px, 9.4vw, 150px)/1.02 var(--font-display); letter-spacing: -0.01em; padding: 0 0.06em 0.08em;
-  color: transparent; -webkit-background-clip: text; background-clip: text; white-space: nowrap;
-  /* a glint band (moved in the hot phase) over a pearl-to-violet body */
-  background-image:
-    linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.95) 48%, transparent 56%),
-    linear-gradient(95deg, #ffffff 0%, #e6e0ff 30%, #b6a4ff 58%, #7fb2ff 82%, #8fe3ff 100%);
-  background-size: 260% 100%, 100% 100%; background-position: 120% 0, 0 0; background-repeat: no-repeat;
-  opacity: 0; filter: blur(10px); transform: scale(0.985);
-  transition: opacity 0.4s ease, filter 0.55s ease, transform 0.8s cubic-bezier(0.2, 0.7, 0.2, 1);
+  position: relative; font: 750 clamp(43px, 9.1vw, 138px)/1.08 var(--font-display); letter-spacing: -0.045em;
+  padding: 0 0.06em 0.12em; white-space: nowrap; color: #e7e1ff;
+  background: linear-gradient(110deg, #ffffff 8%, #f5efff 35%, #c5b8ee 68%, #a6c9ef 100%);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  opacity: 0; will-change: opacity, transform;
 }
-.splash-hot .splash-word, .splash-out .splash-word {
-  opacity: 1; transform: none;
-  filter: drop-shadow(0 0 28px rgba(139, 108, 255, 0.45)) drop-shadow(0 0 2px rgba(255, 255, 255, 0.25));
-  animation: splash-glint 1s ease-out 0.15s both;
-}
-/* the shockwave: a flat ellipse of light running out from the word */
-.splash-word::before {
-  content: ''; position: absolute; left: 50%; top: 50%; width: 120%; height: 160%; border-radius: 50%; pointer-events: none;
-  transform: translate(-50%, -50%) scale(0.2); opacity: 0; border: 2px solid rgba(180, 160, 255, 0.7);
-  box-shadow: 0 0 40px rgba(139, 108, 255, 0.5), inset 0 0 40px rgba(143, 227, 255, 0.25);
-}
-.splash-hot .splash-word::before { animation: splash-shock 0.85s cubic-bezier(0.1, 0.6, 0.3, 1) both; }
-
-.splash-rule { width: 0; height: 2px; margin-top: 2px; background: linear-gradient(90deg, transparent, #8b6cff 28%, #e6e0ff 50%, #4f8cff 72%, transparent); transition: width 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) 0.1s; }
-.splash-hot .splash-rule, .splash-out .splash-rule { width: min(58%, 620px); }
-
-.splash-sub { display: flex; flex-direction: column; align-items: center; gap: 10px; opacity: 0; transform: translateY(10px); transition: opacity 0.45s ease 0.18s, transform 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) 0.18s; }
-.splash-hot .splash-sub, .splash-out .splash-sub { opacity: 1; transform: none; }
-.splash-label { font: 700 11px var(--font); letter-spacing: 0.3em; text-transform: uppercase; color: #b6a4ff; }
-.splash-line { margin: 0; max-width: 46ch; font: 400 clamp(17px, 1.6vw, 23px)/1.45 var(--font-display); color: #e3e5ea; text-wrap: balance; }
-
-.splash-skip { position: absolute; bottom: 26px; left: 0; right: 0; text-align: center; font: 500 11px var(--font); letter-spacing: 0.08em; color: rgba(255, 255, 255, 0.34); animation: splash-fade 0.4s ease 0.7s both; }
-.splash-sparks { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-
-/* reduced motion: everything in its final place */
-.splash-still .splash-link { stroke-dashoffset: 0; }
-.splash-still .splash-pulse, .splash-still .splash-ring { display: none; }
-
-@keyframes splash-spin { to { transform: rotate(360deg); } }
-@keyframes splash-glint { from { background-position: 120% 0, 0 0; } to { background-position: -40% 0, 0 0; } }
-@keyframes splash-fade { from { opacity: 0; } to { opacity: 1; } }
-@keyframes splash-drift { from { transform: translate(-2%, -1%) scale(1); } to { transform: translate(2%, 1.5%) scale(1.08); } }
-@keyframes splash-draw { to { stroke-dashoffset: 0; } }
-@keyframes splash-pop { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-@keyframes splash-beat { 50% { transform: scale(1.25); } }
-@keyframes splash-wave { from { transform: scale(1); opacity: 0.9; } to { transform: scale(4.2); opacity: 0; } }
-@keyframes splash-wave2 { from { transform: scale(1); opacity: 1; stroke-width: 4; } to { transform: scale(6); opacity: 0; stroke-width: 1; } }
-@keyframes splash-signal { 0% { opacity: 0; stroke-dashoffset: 10; } 15% { opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; stroke-dashoffset: -75; } }
-@keyframes splash-shock { 0% { transform: translate(-50%, -50%) scale(0.2); opacity: 0.9; } 100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; } }
+.splash-rule { width: min(62%, 540px); height: 1px; margin: 14px 0 25px; opacity: 0; transform: scaleX(0); background: linear-gradient(90deg, transparent, #9b87c8 30%, #cfc1ee 50%, #809dc7 70%, transparent); will-change: opacity, transform; }
+.splash-sub { display: flex; flex-direction: column; align-items: center; gap: 17px; min-height: 111px; opacity: 0; will-change: opacity, transform; }
+.splash-label { font: 600 10px/1.8 var(--font); letter-spacing: 0.22em; text-transform: uppercase; color: #a797c7; }
+.splash-label-dot { margin: 0 9px; color: #706684; }
+.splash-line { margin: 0; max-width: 46ch; min-height: 2.9em; font: 400 clamp(17px, 1.65vw, 22px)/1.55 var(--font-display); color: #ded9e9; text-wrap: balance; }
+.splash-particles { position: absolute; inset: 0; pointer-events: none; }
+.splash-spark { position: absolute; left: 50%; top: 39%; width: 3px; height: 3px; border-radius: 50%; background: #d9c6ff; box-shadow: 0 0 9px rgba(192, 162, 255, 0.55); opacity: 0; will-change: opacity, transform; }
+.splash-spark:nth-child(3n) { width: 2px; height: 2px; background: #a8d5fa; }
+.splash-skip { position: absolute; bottom: max(28px, env(safe-area-inset-bottom)); left: 24px; right: 24px; text-align: center; font: 500 11px/1.4 var(--font); letter-spacing: 0.05em; color: #9b95ae; opacity: 0; will-change: opacity; }
+.splash-skip > span { margin-left: 9px; color: #6c657e; }
+.splash-still .splash-particles { display: none; }
+.splash-still .splash-emblem, .splash-still .splash-word, .splash-still .splash-sub { opacity: 1; transform: none; }
+@media (max-height: 650px) { .splash-emblem { width: 108px; height: 108px; margin-bottom: 10px; } .splash-mark { width: 84px; height: 84px; } .splash-rule { margin: 8px 0 18px; } .splash-skip { bottom: 18px; } }
+@media (max-width: 600px) { .splash-stage { padding: 20px; } .splash-label { max-width: 31ch; letter-spacing: 0.12em; } .splash-label-dot { margin: 0 4px; } .splash-line { font-size: 17px; } }
