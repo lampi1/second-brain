@@ -24,7 +24,7 @@ const command = (id: string, kind: 'script' | 'query', ref: string, extra: Parti
 const item = (id: number, revision = 3, tags = ['ai-ok']): DevOpsItem => ({ id, revision, title: `Bug ${id}`, type: 'Bug', state: 'New', project: 'ProjectA', areaPath: 'Team', iterationPath: 'Sprint 1', tags, url: `https://dev.azure.com/ab/ProjectA/_workitems/edit/${id}` });
 
 function world(definition: Omit<FlowDefinition, 'id' | 'title' | 'description' | 'aliases' | 'scope'> & { scope?: FlowDefinition['scope'] }, files: Record<string, string> = {}, extra: Partial<FlowRuntimeOptions> = {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'routine-')), brain = path.join(root, 'brain'), work = path.join(root, 'work');
+  const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'routine-')), brain = path.join(root, 'brain'), work = path.join(root, 'work');
   fs.mkdirSync(brain); fs.mkdirSync(work);
   for (const [file, body] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(brain, file)), { recursive: true }); fs.writeFileSync(path.join(brain, file), body); }
   // no Orchestrator at all: the app runs routines by itself

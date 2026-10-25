@@ -5,7 +5,7 @@ import path from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import { organizationUrl, readEvidenceImage, renderDevOpsComment } from '../../../src/main/flows/devops-content';
 const dirs: string[] = [];
-const temp = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'routine-images-')); dirs.push(d); return d; };
+const temp = () => { const d = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'routine-images-')); dirs.push(d); return d; };
 afterEach(() => { dirs.splice(0).forEach(d => fs.rmSync(d, { recursive: true, force: true })); });
 const image = { id: 'a1', url: 'https://dev.azure.com/contoso/Project/_apis/wit/attachments/a1', sha256: 'a'.repeat(64), name: 'before.png' };
 it('escapes all HTML while rendering only approved organization links and run-uploaded images', () => {

@@ -11,7 +11,7 @@ const worlds: { root: string; runtime: FlowRuntime }[] = [];
 afterEach(() => { for (const world of worlds.splice(0)) { world.runtime.stop(); fs.rmSync(world.root, { recursive: true, force: true }); } });
 const step = (id: string, extra: Partial<FlowStep> = {}): FlowStep => ({ id, title: id, kind: 'agent', instructions: `Perform ${id} using the fixture.`, inputs: ['workspace'], workspaceInput: 'workspace', evidence: ['proof'], timeoutMs: 600000, maxAttempts: 2, effect: 'read-only', role: 'artisan', ...extra });
 function world(steps = [step('first'), step('second')], sealed = false) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'host-flow-')), rows = [{ id: 'owner', isOrchestrator: true, state: 'idle' }] as ChatSummary[];
+  const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'host-flow-')), rows = [{ id: 'owner', isOrchestrator: true, state: 'idle' }] as ChatSummary[];
   let current: string | null = root, count = 0;
   const create = vi.fn(async (request: FlowWorkerRequest): Promise<ChatSummary> => {
     const id = `worker-${++count}`, chat = { id, state: 'idle', run: { runId: `${id}-run`, taskVersion: 1, agentId: request.roleId, ...(request.reviewOf ? { reviewOf: request.reviewOf } : {}), scope: { brainRoot: root, projectRoot: request.workspace } }, route: { agent: { tier: request.tier, modelFrom: 'tier' } } } as ChatSummary;

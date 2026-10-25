@@ -8,7 +8,7 @@ import type { DevOpsWriteGrant } from '../../../src/shared/flow-automation';
 const dirs: string[] = [], guid = '11111111-2222-3333-4444-555555555555';
 afterEach(() => dirs.splice(0).forEach(d => fs.rmSync(d, { recursive: true, force: true })));
 function setup(ops: DevOpsWriteGrant['ops']) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'routine-resources-')); dirs.push(root);
+  const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'routine-resources-')); dirs.push(root);
   const calls: { method: string; url: string; body: unknown }[] = [];
   let revoked = false, fail = false, draft = true;
   const authorize = vi.fn(() => { if (revoked) throw new Error('Grant revoked'); });

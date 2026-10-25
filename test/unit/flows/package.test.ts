@@ -11,7 +11,7 @@ import { FlowService } from '../../../src/main/flows/service';
 import { projectRunOutput } from '../../../src/main/flows/run-output';
 import { routineDossier, saveDossier } from '../../../src/main/flows/dossier';
 const dirs: string[] = [];
-const temp = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'routine-package-')); dirs.push(d); return d; };
+const temp = () => { const d = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'routine-package-')); dirs.push(d); return d; };
 afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 function definition(): FlowDefinition {
   const content = 'export const value = 42;\n';
@@ -49,7 +49,9 @@ it('projects only declared append-only notes idempotently and rejects linked des
   projectRunOutput(root, 'run-1', output); projectRunOutput(root, 'run-1', output);
   expect(fs.readFileSync(path.join(root, output.brainPath), 'utf8').match(/verified observation/g)).toHaveLength(1);
   expect(() => projectRunOutput(root, 'run-1', { ...output, brainPath: '../rules.md' })).toThrow('approved');
-  fs.unlinkSync(path.join(root, output.brainPath)); fs.symlinkSync(path.join(temp(), 'outside.md'), path.join(root, output.brainPath)); expect(() => projectRunOutput(root, 'run-2', output)).toThrow();
+  const outside = path.join(temp(), 'outside.md');
+  fs.unlinkSync(path.join(root, output.brainPath)); fs.symlinkSync(outside, path.join(root, output.brainPath));
+  expect(() => projectRunOutput(root, 'run-2', output)).toThrow('link'); expect(fs.existsSync(outside)).toBe(false);
 });
 it('production preparation pins recipes and row budgets without making a production adapter executable', () => {
   const d = definition(), content = 'SELECT id FROM sample'; d.package!.assets.push({ id: 'read.sql', kind: 'query', content, sha256: packageHash(content) });

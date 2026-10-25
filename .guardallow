@@ -175,3 +175,10 @@ test/unit/flows/devops-content.test.ts email sha256:c8427ff5aec71f2f7196456134b5
 test/unit/flows/devops-resources.test.ts internal-host sha256:178d3a9560eb20175c97f673c0ca9b9f8830e404128de52a3cd8aab2cca8e01f
 test/unit/flows/package.test.ts conn-string-password sha256:a28b83365b0e21aa4a7aa98d4dc3bdba4597132f01309da3b27a5e5c7dcad86a
 test/unit/flows/package.test.ts assigned-secret sha256:a28b83365b0e21aa4a7aa98d4dc3bdba4597132f01309da3b27a5e5c7dcad86a
+# Canonical cross-platform temp roots and explicit dangling-link regression; same synthetic values.
+test/unit/flows/devops-content.test.ts internal-host sha256:99774515df44c129fd74d7ff5b19da302fb4cba65612b96b690e2b354b9cbedf
+test/unit/flows/devops-content.test.ts url-credentials sha256:99774515df44c129fd74d7ff5b19da302fb4cba65612b96b690e2b354b9cbedf
+test/unit/flows/devops-content.test.ts email sha256:99774515df44c129fd74d7ff5b19da302fb4cba65612b96b690e2b354b9cbedf
+test/unit/flows/devops-resources.test.ts internal-host sha256:b895c996e0ea67edfcbe41ffbf29423244ab4f476f35e49544b11c3f1d188609
+test/unit/flows/package.test.ts conn-string-password sha256:e15458704bfd8fa940168660391acb3310f99f23277c8996c3f58eb9c9873330
+test/unit/flows/package.test.ts assigned-secret sha256:e15458704bfd8fa940168660391acb3310f99f23277c8996c3f58eb9c9873330
