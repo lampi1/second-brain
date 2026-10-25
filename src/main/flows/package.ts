@@ -13,7 +13,7 @@ const list = (v: unknown, label: string): unknown[] => { if (!Array.isArray(v) |
 /** Conservative authoring diagnostic, not a filesystem sandbox. Provenance is deliberately excluded. */
 export const brainReference = (s: string): boolean => /(?:\bbrain(?:-v\d+)?[/\\]|(?:^|[\s`"'])(?:rules|skills|memory)[/\\]|[A-Za-z]:[/\\][^\n]*\bbrain)/im.test(s);
 export function validatePackage(value: unknown): FlowPackage {
-  const p = object(value, 'package'); keys(p, ['schema', 'assets', 'outputs', 'requiredOps', 'history', 'downgrade', 'production'], 'package');
+  const p = object(value, 'package'); keys(p, ['schema', 'assets', 'outputs', 'requiredOps', 'history', 'intake', 'downgrade', 'production'], 'package');
   if (p.schema !== 1) throw new Error('Unsupported routine package schema');
   const assets = list(p.assets, 'assets').map(value => {
     const a = object(value, 'asset'); keys(a, ['id', 'kind', 'content', 'sha256', 'source'], 'asset');
@@ -40,6 +40,7 @@ export function validatePackage(value: unknown): FlowPackage {
   if (new Set(outputs.map(o => o.id)).size !== outputs.length) throw new Error('Duplicate output id');
   const requiredOps = list(p.requiredOps, 'requiredOps').map(v => text(v, 'required operation', 40));
   if (new Set(requiredOps).size !== requiredOps.length || requiredOps.some(op => !(DEVOPS_WRITE_OPS as readonly string[]).includes(op))) throw new Error('Unknown or duplicate required operation');
+  if (p.intake !== undefined && p.intake !== true) throw new Error('intake must be true or absent');
   if (p.history !== undefined && p.history !== true) throw new Error('history must be true or absent');
   if (p.history && !requiredOps.includes('comment')) throw new Error('Run history requires the comment operation');
   let downgrade: FlowPackage['downgrade'];
@@ -63,10 +64,12 @@ export function validatePackage(value: unknown): FlowPackage {
     return { id: identifier(intent.id, 'production intent id'), operation, targetId: identifier(intent.targetId, 'production target'), recipeAssetId, recipeSha256, timeoutMs: integer(intent.timeoutMs, 'timeoutMs', 1000, 3600000), ...(maxRows ? { maxRows } : {}), ...(maxAffectedRows ? { maxAffectedRows } : {}), ...(rollbackAssetId ? { rollbackAssetId } : {}) };
   });
   if (production && new Set(production.map(p => p.id)).size !== production.length) throw new Error('Duplicate production intent');
-  return { schema: 1, assets, outputs, requiredOps, ...(production?.length ? { production } : {}), ...(p.history ? { history: true } : {}), ...(downgrade ? { downgrade } : {}) };
+  return { schema: 1, assets, outputs, requiredOps, ...(p.intake ? { intake: true } : {}), ...(production?.length ? { production } : {}), ...(p.history ? { history: true } : {}), ...(downgrade ? { downgrade } : {}) };
 }
 export function validatePackagedSteps(steps: FlowStep[], pack: FlowPackage): void {
+  if (pack.intake && steps[0]?.kind !== 'agent') throw new Error('Explicit intake requires an initial agent step');
   for (const step of steps) {
+    if (step.testEnvironment && !pack.requiredOps.includes('test-environment')) throw new Error('Step environment leases require the test-environment operation');
     if (brainReference(step.instructions) || brainReference(step.agentPrompt ?? '')) throw new Error(`${step.id}: inline the brain instructions before packaging`);
     if (step.kind === 'agent' && (!step.agentPrompt || !step.role || !step.tier || !step.engine || !step.model)) throw new Error(`${step.id}: a packaged agent needs its full agentPrompt, role, tier, engine and model`);
     if (step.kind !== 'agent' && step.agentPrompt) throw new Error('agentPrompt belongs to agent steps only');

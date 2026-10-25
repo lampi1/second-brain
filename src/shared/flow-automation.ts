@@ -9,19 +9,29 @@ export type FlowTrigger = { kind: 'interval'; everyMinutes: number } | {
   includeTags?: string[]; excludeTags?: string[]; workItemIds?: number[]; iterationPath?: string; maxPerHour?: number;
 };
 /** User-approved DevOps write categories; anything not listed is denied by the host (ADR 0145). */
-export const DEVOPS_WRITE_OPS = ['tags', 'comment', 'fields', 'test-plans', 'test-results', 'pr-links', 'rich-comments', 'attachments', 'related-links', 'pr-create', 'pr-comment', 'pr-publish', 'pr-abandon', 'test-deploy'] as const;
+export const DEVOPS_WRITE_OPS = ['tags', 'comment', 'fields', 'test-plans', 'test-results', 'pr-links', 'rich-comments', 'attachments', 'related-links', 'pr-create', 'pr-comment', 'pr-publish', 'pr-abandon', 'test-deploy', 'test-environment', 'git-push', 'pr-validation'] as const;
 export type DevOpsWriteOp = typeof DEVOPS_WRITE_OPS[number];
 /** The exact write grant shown in the approval modal: one organization, its projects, ops and work item fields. */
 export interface DevOpsWriteGrant { organization: string; projects: string[]; ops: DevOpsWriteOp[]; fields: string[];
   /** DevOps identity ids (GUIDs, lowercase) a comment may @mention; absent or empty = no mentions. Needs the comment op. */
   mentions?: string[];
   /** Exact user-configured test-only targets, displayed in the approval modal and revalidated before every request. */
-  deployTargets?: TestDeployTarget[] }
-export interface TestDeployTarget {
+  deployTargets?: TestDeployTarget[];
+  /** Exact destination and host-bound workspace input for routine branch publication. */
+  pushTargets?: { project: string; repositoryId: string; workspaceInput: string }[] }
+export interface TestDeployTargetBase {
   id: string; organization: string; project: string; projectId: string; releaseDefinitionId: number; definitionRevision: number; definitionSha256: string;
-  environmentId: number; environmentName: string; deploymentGroupId: number; queueId: number; poolId: number; agentId: number; machineId: number; machineName: string; computerName: string;
+  environmentId: number; environmentName: string; queueId: number;
   artifactAlias: string; buildDefinitionId: number; repositoryId: string; confirmedTest: true;
 }
+export interface MachineTestDeployTarget extends TestDeployTargetBase {
+  kind?: 'deployment-group'; deploymentGroupId: number; poolId: number; agentId: number; machineId: number; machineName: string; computerName: string;
+}
+export interface AppServiceTestDeployTarget extends TestDeployTargetBase {
+  kind: 'app-service'; subscriptionId: string; resourceGroup: string; webAppName: string; serviceConnectionId: string;
+  allowedTaskIds: string[];
+}
+export type TestDeployTarget = MachineTestDeployTarget | AppServiceTestDeployTarget;
 /** Local test DB target identifiers explicitly approved for this exact automation revision; absent = deny-all. */
 export interface TestDbReadGrant { targetIds: string[] }
 export interface FlowAutomationConfig {

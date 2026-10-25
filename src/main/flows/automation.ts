@@ -42,7 +42,7 @@ const ORGANIZATION = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,49}$/, FIELD = /^[A-Za-z][A-Za-
 const FIXED_FIELDS = ['system.id', 'system.rev', 'system.teamproject', 'system.workitemtype', 'system.tags'];
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 function validateGrant(value: unknown, trigger: Extract<FlowAutomationConfig['trigger'], { kind: 'devops' }>): DevOpsWriteGrant {
-  const raw = object(value, 'devopsWrite'); keys(raw, ['organization', 'projects', 'ops', 'fields', 'mentions', 'deployTargets'], 'devopsWrite');
+  const raw = object(value, 'devopsWrite'); keys(raw, ['organization', 'projects', 'ops', 'fields', 'mentions', 'deployTargets', 'pushTargets'], 'devopsWrite');
   const organization = text(raw.organization, 'devopsWrite organization', 50);
   if (!ORGANIZATION.test(organization) || organization.toLowerCase() !== trigger.organization.toLowerCase()) throw new Error('DevOps write organization must equal the trigger organization');
   const list = (v: unknown, label: string, max: number, itemMax: number): string[] => {
@@ -61,9 +61,16 @@ function validateGrant(value: unknown, trigger: Extract<FlowAutomationConfig['tr
   if (mentions.some(id => !GUID.test(id))) throw new Error('DevOps write mentions must be identity GUIDs');
   if (mentions.length && !ops.includes('comment')) throw new Error('DevOps write mentions need the comment operation');
   const deployTargets = raw.deployTargets === undefined ? [] : Array.isArray(raw.deployTargets) && raw.deployTargets.length <= 10 ? raw.deployTargets.map(validateDeployTarget) : (() => { throw new Error('Invalid deployment targets'); })();
-  if (ops.includes('test-deploy') !== (deployTargets.length > 0)) throw new Error('test-deploy requires explicit test targets and vice versa');
+  if ((ops.includes('test-deploy') || ops.includes('test-environment') || ops.includes('pr-validation')) !== (deployTargets.length > 0)) throw new Error('test-deploy/test-environment require explicit test targets and vice versa');
   if (new Set(deployTargets.map(t => t.id)).size !== deployTargets.length || deployTargets.some(t => t.organization.toLowerCase() !== organization.toLowerCase() || !projects.some(p => p.toLowerCase() === t.project.toLowerCase()))) throw new Error('Deployment target is outside the approved organization/projects');
-  return { organization, projects, ...(deployTargets.length ? { deployTargets } : {}), ops: ops as DevOpsWriteGrant['ops'], fields, ...(mentions.length ? { mentions } : {}) };
+  const pushTargets = raw.pushTargets === undefined ? [] : Array.isArray(raw.pushTargets) && raw.pushTargets.length === 1 ? raw.pushTargets.map(value => {
+    const p = object(value, 'push target'); keys(p, ['project', 'repositoryId', 'workspaceInput'], 'push target');
+    const project = text(p.project, 'push project', 128), repositoryId = text(p.repositoryId, 'repositoryId', 36).toLowerCase(), workspaceInput = identifier(p.workspaceInput, 'workspaceInput');
+    if (!projects.some(v => v.toLowerCase() === project.toLowerCase()) || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(repositoryId)) throw new Error('Invalid exact push target');
+    return { project, repositoryId, workspaceInput };
+  }) : (() => { throw new Error('Exactly one push target is supported'); })();
+  if (ops.includes('git-push') !== (pushTargets.length === 1)) throw new Error('git-push requires one exact push target and workspace input');
+  return { organization, projects, ...(pushTargets.length ? { pushTargets } : {}), ...(deployTargets.length ? { deployTargets } : {}), ops: ops as DevOpsWriteGrant['ops'], fields, ...(mentions.length ? { mentions } : {}) };
 }
 /** The trigger's filters (ADR 0155), each absent when empty so an old rule keeps its exact shape. */
 function filters(trigger: Record<string, unknown>): Partial<Extract<FlowAutomationConfig['trigger'], { kind: 'devops' }>> {
@@ -425,17 +432,14 @@ export class FlowAutomationService {
           if (Object.keys(item.inputs).some(key => Object.hasOwn(rule.config.inputs, key))) throw new Error('Detected event inputs conflict with approved configuration');
           validateInputs({ ...rule.config.inputs, ...item.inputs });
         }
-        // one active run per work item per flow (ADR 0155): a newer revision of an item already running updates that
-        // run's input; a newer revision of an item still waiting replaces the waiting event
-        const runs = flow.snapshot().runs, merges: { runId: string; revision: string }[] = [];
+        // One active run per work item; coalesce waiting human revisions without mutating a running worker's inputs.
+        // Own revisions were already removed by the detector. Human changes stay queued behind occupied runs.
         const itemOf = (inputs: Record<string, string>) => inputs['work-item-id'];
         this.change(() => {
           for (const item of fresh) {
             this.data.seen.push(hash([rule.id, rule.revision, item.key]));
             const id = itemOf(item.inputs);
             if (!baseline && id) {
-              const running = runs.find(run => occupied(run) && run.flowId === rule.config.flowId && run.inputs['work-item-id'] === id);
-              if (running) { if (item.inputs['work-item-revision']) merges.push({ runId: running.id, revision: item.inputs['work-item-revision'] }); continue; }
               for (const older of this.data.events.filter(event => event.ruleId === rule.id && pending(event) && !event.sourceKey.startsWith('restart:') && itemOf(event.inputs) === id)) {
                 older.status = 'cancelled'; older.reason = `Sostituito dalla revisione ${item.inputs['work-item-revision'] ?? 'nuova'}`; older.updatedAt = at; delete older.nextAttemptAt;
               }
@@ -445,7 +449,6 @@ export class FlowAutomationService {
           this.data.cursors[rule.id] = checked.cursor; rule.lastCheckAt = at; rule.nextCheckAt = at + interval; rule.lastResult = baseline ? 'Initial baseline recorded; existing items not queued' : checked.summary; rule.failures = 0; delete rule.error;
           this.trim();
         });
-        for (const merge of merges) { try { flow.updateItemRevision(merge.runId, merge.revision); } catch { /* the run finished meanwhile */ } }
       } catch (error) {
         if (!valid()) return;
         this.change(() => { const current = this.data.rules.find(item => item.id === rule.id)!; current.failures++; current.error = errorText(error); current.lastCheckAt = this.now(); current.nextCheckAt = this.now() + Math.min(3600000, 60000 * 2 ** Math.min(current.failures - 1, 6)); });
@@ -518,6 +521,8 @@ export class FlowAutomationService {
     if (version.definition.steps.some(step => step.action?.kind === 'builtin' && step.action.ref === 'scope-present') && (!config.scope.project || !config.scope.areaPath)) throw new Error('Automatic flow scope-present check requires project and areaPath');
     const required = new Set(version.definition.steps.flatMap(step => [...step.inputs, ...(step.workspaceInput ? [step.workspaceInput] : [])]));
     const inputs = eventInputs ?? config.inputs;
+    if (config.devopsWrite?.pushTargets?.some(t => !inputs[t.workspaceInput] || !version.definition.steps.some(s => s.workspaceInput === t.workspaceInput))) throw new Error('Push target requires its exact declared workspace input');
+    if (version.definition.steps.some(s => s.testEnvironment && (!config.devopsWrite?.ops.includes('test-environment') || !config.devopsWrite.deployTargets?.some(t => t.id === s.testEnvironment)))) throw new Error('Step environment lease requires its exact approved target');
     if ([...required].some(key => !inputs[key]?.trim() && !(eventInputs === undefined && config.trigger.kind === 'devops' && DEVOPS_INPUTS.includes(key)))) throw new Error('Automatic flow is missing required step inputs or workspace');
     if (version.definition.steps.some(step => step.effect === 'production' || step.action && step.action.kind !== 'builtin')) throw new Error('Automatic flow has an unsupported execution adapter');
     if (version.definition.steps.some(step => testDbAdapted(step)) && !config.testDbRead) throw new Error('Automatic flow test-db-read adapter needs a testDbRead grant');

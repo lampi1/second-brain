@@ -46,6 +46,7 @@ export function FlowDiagram({ definition, run, onNavigate }: { definition: FlowD
         <span className="flow-badge" data-status={state?.status}>{t(`flows.${state?.status ?? (selected.kind === 'approval' ? 'gate' : selected.kind)}`)}</span>
         <FlowStepAgent step={selected} chatId={state?.chatId} />
         <p>{selected.instructions}</p>
+        {selected.testEnvironment && <p>{t('flows.testEnvironment')}: <strong>{selected.testEnvironment}</strong></p>}
         {selected.testDbRead && <p>{t('flows.testDbRead')}</p>}
         {selected.adapter && <p><code>{selected.adapter}</code></p>}
         {selected.reviewOf && <p className="flow-review-relation">{t('flows.reviewOf')}: <strong>{definition.steps.find(step => step.id === selected.reviewOf)?.title ?? selected.reviewOf}</strong></p>}

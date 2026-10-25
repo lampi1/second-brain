@@ -17,24 +17,31 @@ const config: FlowAutomationConfig = { flowId: 'fix', flowVersion: 1, scope: { p
   trigger: { kind: 'devops', everyMinutes: 1, organization: 'contoso', project: 'ProjectA', areaPath: 'Team', workItemType: 'Bug', states: ['New'], includeExisting: true },
   devopsWrite: { organization: 'contoso', projects: ['ProjectA'], ops: ['comment'], fields: [] } };
 
-async function setup(sealed = false) {
+async function setup(sealed = false, environment = false) {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'flow-dw-')); folders.push(folder);
   const brain = path.join(folder, 'brain'); fs.mkdirSync(brain);
   const rows = [{ id: 'o', isOrchestrator: true, state: 'idle' }] as ChatSummary[];
   const request = vi.fn(async (url: string, init: RequestInit) => new Response(JSON.stringify(init.method === 'GET' ? { id: 42, rev: 1, fields: { 'System.TeamProject': 'ProjectA' } } : { id: 5 }), { status: 200 }));
   const detect = vi.fn(async () => ({ cursor: { revision: '1' }, summary: 'Read only', items: [{ key: '42', title: 'Bug 42', inputs: { 'work-item-id': '42' } }] }));
-  const runtime = createFlowRuntime({ userData: folder, brainRoot: () => brain, chats: () => rows, changed: () => {}, stopChat: async () => {}, send: vi.fn(async () => {}), detect, devopsWrite: { token: async () => 'token-value', request } });
+  const stopChat = vi.fn(async (id: string) => { const row = rows.find(r => r.id === id); if (row) row.state = 'idle'; });
+  const runtime = createFlowRuntime({ userData: folder, brainRoot: () => brain, chats: () => rows, changed: () => {}, stopChat, send: vi.fn(async () => {}), detect, devopsWrite: { token: async () => 'token-value', request } });
   const flow = runtime.service(), auto = runtime.automation();
   flow.propose({ expectedRevision: 0, definition: { id: 'fix', title: 'Fix', description: 'Fixture', aliases: [], scope: { project: 'ProjectA', areaPath: 'Team' }, steps: [
-    { id: 'write', title: 'Write', kind: 'agent', instructions: 'Comment', inputs: ['workspace', 'work-item-id'], workspaceInput: 'workspace', evidence: [], effect: 'external-write', adapter: 'devops-write', maxAttempts: 1, timeoutMs: 600000, ...(sealed ? { role: 'scout' as const, tier: 'mid' as const, engine: 'claude', model: 'sonnet', agentPrompt: 'Frozen evidence contract' } : {}) }], ...(sealed ? { package: { schema: 1 as const, assets: [], outputs: [], requiredOps: ['comment'] } } : {}) } });
+    { id: 'write', title: 'Write', kind: 'agent', instructions: 'Comment', inputs: ['workspace', 'work-item-id'], workspaceInput: 'workspace', evidence: [], ...(environment ? { testEnvironment: 'test-fixture' } : {}), effect: 'external-write', adapter: 'devops-write', maxAttempts: 1, timeoutMs: 600000, ...(sealed ? { role: 'scout' as const, tier: 'mid' as const, engine: 'claude', model: 'sonnet', agentPrompt: 'Frozen evidence contract' } : {}) }], ...(sealed ? { package: { schema: 1 as const, assets: [], outputs: [], requiredOps: ['comment'] } } : {}) } });
   flow.decideDefinition({ id: 'fix', expectedRevision: 1, answer: 'yes' });
-  const rule = auto.propose({ config, expectedRevision: 0 }, 'o'); auto.decide({ id: rule.id, expectedRevision: 1, answer: 'yes' });
+  const configured = structuredClone(config);
+  if (environment) {
+    const guid = '11111111-2222-3333-4444-555555555555';
+    configured.devopsWrite!.ops.push('test-environment');
+    configured.devopsWrite!.deployTargets = [{ id: 'test-fixture', organization: 'contoso', project: 'ProjectA', projectId: guid, releaseDefinitionId: 4, definitionRevision: 2, definitionSha256: 'a'.repeat(64), environmentId: 9, environmentName: 'Test', queueId: 7, artifactAlias: '_app', buildDefinitionId: 6, repositoryId: guid, confirmedTest: true, deploymentGroupId: 2, poolId: 3, agentId: 4, machineId: 5, machineName: 'test', computerName: 'test' }];
+  }
+  const rule = auto.propose({ config: configured, expectedRevision: 0 }, 'o'); auto.decide({ id: rule.id, expectedRevision: 1, answer: 'yes' });
   await auto.tick(); const run = auto.startEvent(auto.snapshot().events[0]!.id, 'o');
   rows.push({ id: 'worker', state: 'running', run: { runId: 'wr', taskVersion: 1, scope: { brainRoot: brain, projectRoot: brain } } } as ChatSummary);
   rows.push({ id: 'intruder', state: 'running', run: { runId: 'ir', taskVersion: 1, scope: { brainRoot: brain, projectRoot: brain } } } as ChatSummary);
   if (sealed) Object.assign(rows[1]!, { routinePackage: run.definitionDigest, routinePromptHash: createHash('sha256').update('Frozen evidence contract').digest('hex'), harness: 'claude', model: 'sonnet', run: { ...rows[1]!.run, agentId: 'scout', tier: 'mid' } });
   flow.bindAgent(run.id, run.revision, 'write', runtime.resolveBinding('worker', 'o', brain)!, 'o');
-  return { runtime, auto, rule, request, rows, run, flow };
+  return { runtime, auto, rule, request, rows, run, flow, stopChat, folder };
 }
 
 describe('DevOps write runtime', () => {
@@ -71,4 +78,16 @@ it('rechecks a changed sealed model after initial admission and sends no remote 
   // The writer queues execution before authorize; drift after initial admission must be refused there too.
   const pending = runtime.devopsWrite('worker', { op: 'comment', text: 'Do not send' }); rows[1]!.model = 'changed';
   await expect(pending).rejects.toThrow('Frozen routine'); expect(request).not.toHaveBeenCalled(); runtime.stop();
+});
+it('interrupts a waiting environment worker before releasing its lease on cancellation', async () => {
+  const s = await setup(false, true); s.rows[1]!.state = 'waiting';
+  const reconcile = vi.spyOn(TestDeploymentCoordinator.prototype, 'reconcileSteps').mockImplementation(async () => { expect(s.rows[1]!.state).toBe('idle'); expect(s.stopChat).toHaveBeenCalledWith('worker'); });
+  await s.runtime.cancel({ runId: s.run.id, expectedRevision: s.flow.status(s.run.id, 'o').revision }); await s.runtime.tick();
+  expect(reconcile).toHaveBeenCalled(); s.runtime.stop();
+});
+it('retains environment ownership if a waiting worker does not stop', async () => {
+  const s = await setup(false, true); s.rows[1]!.state = 'waiting'; s.stopChat.mockImplementation(async () => {});
+  const reconcile = vi.spyOn(TestDeploymentCoordinator.prototype, 'reconcileSteps');
+  await s.runtime.cancel({ runId: s.run.id, expectedRevision: s.flow.status(s.run.id, 'o').revision }); await s.runtime.tick();
+  expect(s.stopChat).toHaveBeenCalledWith('worker'); expect(reconcile).not.toHaveBeenCalled(); s.runtime.stop();
 });

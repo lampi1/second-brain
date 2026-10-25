@@ -8,16 +8,24 @@ import path from 'node:path';
 import { renameRetrying } from '../rules/storage';
 import { createHash, randomUUID } from 'node:crypto';
 import type { DevOpsWriteGrant, DevOpsWriteOp } from '../../shared/flow-automation';
-import { devopsToken } from './devops-detector';
-import type { TestDeploymentCoordinator } from './test-deployment';
+import { devopsToken, armToken } from './devops-detector';
+import { type TestDeploymentCoordinator, validateDeployTarget, releaseDefinitionFingerprint, deploymentHash } from './test-deployment';
+import { validateAppServiceDefinition, verifyAppService } from './app-service-target';
 import { devopsResource, type ResourceLedger } from './devops-resources';
+import { queuePrValidation } from './pr-validation';
+import { testEnvironmentSnapshot } from './test-environment';
+import type { DevOpsRevisions } from './devops-revisions';
+import { pushRunBranch, runBranch } from './git-push';
 import { renderDevOpsComment } from './devops-content';
 import { integer, keys, object, text } from './schema';
 
-export const DEVOPS_WRITE_REQUESTS = ['add-tags', 'remove-tags', 'set-fields', 'comment', 'link-pr', 'create-test-plan', 'rename-test-plan', 'create-test-suite', 'create-test-case', 'set-test-outcome', 'upload-image', 'relate-work-item', 'relate-pr', 'create-pr', 'pr-comment', 'publish-pr', 'abandon-pr', 'deploy-test', 'test-deploy-status', 'cancel-test-deploy'] as const;
+export const DEVOPS_WRITE_REQUESTS = ['add-tags', 'remove-tags', 'set-fields', 'comment', 'link-pr', 'create-test-plan', 'rename-test-plan', 'create-test-suite', 'create-test-case', 'set-test-outcome', 'upload-image', 'relate-work-item', 'relate-pr', 'create-pr', 'pr-comment', 'publish-pr', 'abandon-pr', 'deploy-test', 'test-deploy-status', 'cancel-test-deploy', 'push-branch', 'test-environment-status', 'queue-pr-validation'] as const;
 export type DevOpsWriteRequestOp = typeof DEVOPS_WRITE_REQUESTS[number];
 /** Which user-approved category each request needs. */
 const CATEGORY: Record<DevOpsWriteRequestOp, DevOpsWriteOp> = {
+  'queue-pr-validation': 'pr-validation',
+  'test-environment-status': 'test-environment',
+  'push-branch': 'git-push',
   'upload-image': 'attachments', 'relate-work-item': 'related-links', 'relate-pr': 'related-links', 'create-pr': 'pr-create', 'pr-comment': 'pr-comment', 'publish-pr': 'pr-publish', 'abandon-pr': 'pr-abandon', 'deploy-test': 'test-deploy', 'test-deploy-status': 'test-deploy', 'cancel-test-deploy': 'test-deploy',
   'add-tags': 'tags', 'remove-tags': 'tags', 'set-fields': 'fields', comment: 'comment', 'link-pr': 'pr-links',
   'create-test-plan': 'test-plans', 'rename-test-plan': 'test-plans', 'create-test-suite': 'test-plans', 'create-test-case': 'test-plans', 'set-test-outcome': 'test-results',
@@ -29,17 +37,20 @@ const TIMEOUT_MS = 60_000, MAX_BYTES = 2 * 1024 * 1024, MAX_RUNS = 500, MAX_PER_
 const API = 'api-version=7.1';
 
 /** What the host resolved for the calling chat: never supplied by the agent. */
-export interface DevOpsWriteContext { runId: string; grant: DevOpsWriteGrant; workItemId: number; evidenceRoot?: string; authorize?: () => void; mentionReason?: 'intake' | 'block' | 'downgrade' | 'final' }
+export interface DevOpsWriteContext { runId: string; grant: DevOpsWriteGrant; workItemId: number; workspace?: string; workspaceInput?: string; evidenceRoot?: string; authorize?: () => void; mentionReason?: 'intake' | 'block' | 'downgrade' | 'final' }
 interface Plan { project: string; id: number; rootSuiteId: number }
 interface Suite { project: string; planId: number; id: number }
 interface TestCase { project: string; planId: number; suiteId: number; id: number }
-interface Ledger { schema: 1; runs: Record<string, ResourceLedger & { plans: Plan[]; suites: Suite[]; testCases: TestCase[] }>; operations?: Record<string, { runId: string; state: 'pending' | 'done'; op?: string; at?: number; completedAt?: number; result?: Record<string, unknown> }> }
+interface Ledger { schema: 1; runs: Record<string, ResourceLedger & { plans: Plan[]; suites: Suite[]; testCases: TestCase[] }>; operations?: Record<string, { runId: string; state: 'pending' | 'done'; op?: string; targetId?: string; at?: number; completedAt?: number; result?: Record<string, unknown> }> }
 export interface DevOpsWriterOptions {
   /** Brain-scoped ledger file of resources each run created. */
   file: string;
   token?: (signal?: AbortSignal) => Promise<string>;
   request?: (url: string, init: RequestInit) => Promise<Response>;
   deployments?: TestDeploymentCoordinator;
+  revisions?: DevOpsRevisions;
+  push?: typeof pushRunBranch;
+  armToken?: (signal?: AbortSignal) => Promise<string>;
   audit?: (entry: { runId: string; op: DevOpsWriteRequestOp; target: string }) => void;
 }
 export class DevOpsWriteError extends Error {}
@@ -60,6 +71,30 @@ export class DevOpsWriter {
     this.queue = next.catch(() => undefined);
     return next;
   }
+  /** Read-only authoring inspector. It returns a candidate file, never installs a target or activates a grant. */
+  async inspectTarget(value: unknown): Promise<unknown> {
+    const raw = object(value, 'target candidate'), signal = AbortSignal.timeout(60000);
+    const candidate = validateDeployTarget({ ...raw, definitionRevision: raw.definitionRevision ?? 1, definitionSha256: '0'.repeat(64) });
+    if (candidate.kind !== 'app-service') throw new Error('Inspector supports App Service targets; deployment-group targets retain their manual registration');
+    const token = await (this.options.token ?? devopsToken)(signal);
+    const call = (method: string, url: string) => this.call(token, method, url, undefined, 'application/json', signal);
+    const definition = await call('GET', `https://vsrm.dev.azure.com/${encodeURIComponent(candidate.organization)}/${candidate.projectId}/_apis/release/definitions/${candidate.releaseDefinitionId}?${API}`);
+    if (definition.id !== candidate.releaseDefinitionId || (raw.definitionRevision !== undefined && definition.revision !== raw.definitionRevision)) throw new Error('Release definition identity/revision differs from the requested target');
+    const target = validateDeployTarget({ ...candidate, definitionRevision: id(definition.revision, 'revision'), definitionSha256: releaseDefinitionFingerprint(definition) });
+    if (target.kind !== 'app-service') throw new Error('App Service target required');
+    validateAppServiceDefinition(definition, target);
+    const env = object((definition.environments as unknown[])[0], 'environment');
+    if (env.id !== target.environmentId || env.name !== target.environmentName) throw new Error('Environment identity differs');
+    const artifacts = Array.isArray(definition.artifacts) ? definition.artifacts : [];
+    if (artifacts.length !== 1) throw new Error('Exactly one approved artifact required');
+    const artifact = object(artifacts[0], 'artifact'), ref = object(artifact.definitionReference, 'artifact reference');
+    if (artifact.alias !== target.artifactAlias || artifact.type !== 'Build' || String(object(ref.definition, 'pipeline').id) !== String(target.buildDefinitionId) || object(ref.project, 'project').id !== target.projectId) throw new Error('Artifact identity differs');
+    await verifyAppService(target, call, async resourceId => this.call(await (this.options.armToken ?? armToken)(signal), 'GET', `https://management.azure.com${resourceId}?api-version=2024-04-01`, undefined, 'application/json', signal));
+    return { schema: 1, targets: [target] };
+  }
+  validateHistory(runId: string, grant: DevOpsWriteGrant, body: string): void {
+    renderDevOpsComment(body, grant.organization, this.read().runs[runId]?.images ?? []);
+  }
   operationsFor(runId: string) { return Object.entries(this.read().operations ?? {}).filter(([, v]) => v.runId === runId).map(([requestHash, v]) => ({ requestHash, ...structuredClone(v) })); }
   ownedPrs(runId: string) { return structuredClone(this.read().runs[runId]?.prs ?? []); }
   private async journal(context: DevOpsWriteContext, request: unknown, signal?: AbortSignal): Promise<Record<string, unknown>> {
@@ -67,11 +102,11 @@ export class DevOpsWriter {
     const raw = object(request, 'request');
     if (!(DEVOPS_WRITE_REQUESTS as readonly string[]).includes(String(raw.op))) deny('Unknown DevOps write operation');
     if (!context.grant.ops.includes(CATEGORY[raw.op as DevOpsWriteRequestOp])) deny(`DevOps write "${CATEGORY[raw.op as DevOpsWriteRequestOp]}" is not enabled for this flow`);
-    if (raw.op === 'test-deploy-status') return this.perform(context, raw, signal);
-    const key = createHash('sha256').update(JSON.stringify([context.runId, request])).digest('hex');
+    if (raw.op === 'test-deploy-status' || raw.op === 'test-environment-status') return this.perform(context, raw, signal);
+    const key = createHash('sha256').update(JSON.stringify([context.runId, request, ...(raw.op === 'push-branch' ? [randomUUID()] : [])])).digest('hex');
     const data = this.read(), previous = data.operations?.[key];
-    if (previous?.state === 'done') return previous.result!;
-    if (Object.values(data.operations ?? {}).some(op => op.runId === context.runId && op.state === 'pending')) deny('A previous DevOps write has an unknown outcome. Reconcile it in DevOps before retrying; do not duplicate the effect.');
+    if (previous?.state === 'done' && raw.op !== 'push-branch') return previous.result!;
+    if (!['abandon-pr', 'cancel-test-deploy'].includes(String(raw.op)) && Object.values(data.operations ?? {}).some(op => op.runId === context.runId && op.state === 'pending')) deny('A previous DevOps write has an unknown outcome. Reconcile it in DevOps before retrying; do not duplicate the effect.');
     // The request hash is only an idempotency identity; it stores neither request content nor credentials.
     let attempted = false;
     this.beforeMutation = () => {
@@ -79,11 +114,13 @@ export class DevOpsWriter {
       if (attempted) return;
       const latest = this.read();
       if (Object.keys(latest.operations ?? {}).length >= 20_000) deny('DevOps operation journal is full; archive reviewed completed runs first');
-      (latest.operations ??= {})[key] = { runId: context.runId, state: 'pending', op: String(raw.op), at: Date.now() }; this.write(latest); attempted = true;
+      this.options.revisions?.pending(context.grant.organization, context.workItemId, key);
+      (latest.operations ??= {})[key] = { runId: context.runId, state: 'pending', op: String(raw.op), ...(typeof raw.targetId === 'string' ? { targetId: raw.targetId } : {}), at: Date.now() }; this.write(latest); attempted = true;
     };
     try {
       const result = await this.perform(context, raw, signal);
       if (attempted) { const latest = this.read(); (latest.operations ??= {})[key] = { runId: context.runId, state: 'done', op: String(raw.op), at: latest.operations?.[key]?.at ?? Date.now(), completedAt: Date.now(), result }; this.write(latest); }
+      this.options.revisions?.done(context.grant.organization, context.workItemId, key);
       return result;
     } finally { this.beforeMutation = undefined; }
   }
@@ -136,22 +173,83 @@ export class DevOpsWriter {
         if (item.id !== context.workItemId || !Number.isSafeInteger(rev) || typeof fields['System.TeamProject'] !== 'string') deny('DevOps: unexpected work item response');
         return { project: project(fields['System.TeamProject']), rev: rev as number, tags: typeof fields['System.Tags'] === 'string' ? (fields['System.Tags'] as string).split(';').map(t => t.trim()).filter(Boolean) : [] };
       };
-      const patchItem = (patch: unknown[]) => call('PATCH', `${org}/_apis/wit/workitems/${context.workItemId}?${API}`, patch, 'application/json-patch+json');
+      const patchItem = async (patch: unknown[]) => {
+        const result = await call('PATCH', `${org}/_apis/wit/workitems/${context.workItemId}?${API}`, patch, 'application/json-patch+json');
+        if (this.options.revisions) { if (result.id !== context.workItemId) deny('Unexpected work-item write receipt'); this.options.revisions.revision(grant.organization, context.workItemId, id(result.rev, 'revision')); }
+        return result;
+      };
       const audit = (target: string) => { try { this.options.audit?.({ runId: context.runId, op, target }); } catch { /* audit is best effort */ } };
 
-      if (op === 'deploy-test' || op === 'test-deploy-status' || op === 'cancel-test-deploy') {
-        keys(raw, op === 'deploy-test' ? ['op', 'targetId', 'buildId'] : ['op', 'targetId'], 'request');
+      if (op === 'test-environment-status') {
+        keys(raw, ['op', 'targetId'], 'request');
+        const target = grant.deployTargets?.find(t => t.id === raw.targetId), local = this.options.deployments?.targets().find(t => t.id === raw.targetId);
+        if (!target || !local || JSON.stringify(target) !== JSON.stringify(local)) deny('Exact test environment target unavailable');
+        return { targetId: target!.id, snapshot: await testEnvironmentSnapshot(target!, call) };
+      }
+      if (op === 'push-branch') {
+        keys(raw, ['op', 'project', 'repositoryId'], 'request');
+        if (!context.workspace) deny('Host-bound workspace required for push');
+        const p = project(raw.project), repositoryId = safeText(raw.repositoryId, 'repositoryId', 36).toLowerCase();
+        if (!GUID.test(repositoryId)) deny('Invalid repository identity');
+        if (!grant.pushTargets?.some(t => t.repositoryId === repositoryId && lower(t.project) === lower(p) && t.workspaceInput === context.workspaceInput)) deny('Repository and workspace input are outside the exact approved push target');
+        const repository = await call('GET', `${org}/${encodeURIComponent(p)}/_apis/git/repositories/${repositoryId}?${API}`);
+        if (String(repository.id).toLowerCase() !== repositoryId || lower(String(object(repository.project, 'repository project').name)) !== lower(p)) deny('Repository is outside the exact project');
+        const branch = runBranch(context.runId), previous = mine.pushes?.find(push => push.repositoryId === repositoryId);
+        if (mine.pushes?.some(push => push.repositoryId !== repositoryId)) deny('A run can publish only one repository branch');
+        const refs = await call('GET', `${org}/${encodeURIComponent(p)}/_apis/git/repositories/${repositoryId}/refs?filter=${encodeURIComponent(branch.slice(5))}&${API}`);
+        const live = Array.isArray(refs.value) ? refs.value.map(v => object(v, 'git ref')).find(r => r.name === branch) : deny('Invalid ref response');
+        if (live && (!previous || live.objectId !== previous.commit)) deny('The run branch already exists or was changed outside this run');
+        this.beforeMutation?.();
+        const result = await (this.options.push ?? pushRunBranch)({ workspace: context.workspace!, runId: context.runId, organization: grant.organization, project: p, repositoryId, token, authorize: () => { context.authorize?.(); if (controller.signal.aborted) throw new Error('Push cancelled'); }, signal: controller.signal });
+        if (result.branch !== branch || !/^[a-f0-9]{40,64}$/.test(result.commit)) deny('Unexpected host push receipt');
+        record(entry => { entry.pushes = [{ project: p, repositoryId, ...result }]; });
+        return { repositoryId, ...result };
+      }
+      if (op === 'deploy-test' || op === 'test-deploy-status' || op === 'cancel-test-deploy' || op === 'queue-pr-validation') {
+        keys(raw, op === 'deploy-test' ? ['op', 'targetId', 'buildId'] : op === 'queue-pr-validation' ? ['op', 'targetId', 'mergeCommit'] : ['op', 'targetId'], 'request');
         const target = grant.deployTargets?.find(t => t.id === raw.targetId);
         if (!target || !this.options.deployments) deny('No exact test deployment target is approved/configured');
-        let source: { repositoryId: string; commit: string; branch: string } | undefined;
-        if (op === 'deploy-test') {
+        let verifySource: (() => Promise<void>) | undefined;
+        let source: { repositoryId: string; commit: string; branch: string; pullRequestId?: number } | undefined;
+        if (op === 'deploy-test' || op === 'queue-pr-validation') {
           const pr = mine.prs?.find(pr => pr.repositoryId === target!.repositoryId);
           if (!pr) deny('Deployment requires this run’s own PR');
           const live = await call('GET', `${org}/${encodeURIComponent(pr!.project)}/_apis/git/repositories/${pr!.repositoryId}/pullrequests/${pr!.id}?${API}`);
           if (live.pullRequestId !== pr!.id || live.sourceRefName !== pr!.source || live.targetRefName !== pr!.target || String(object(live.repository, 'PR repository').id).toLowerCase() !== pr!.repositoryId || live.status !== 'active') deny('Run PR identity changed');
-          source = { repositoryId: pr!.repositoryId, commit: text(object(live.lastMergeSourceCommit, 'PR source commit').commitId, 'commit', 64), branch: pr!.source };
+          if (live.mergeStatus !== 'succeeded') deny('The run PR merge is not ready; wait for merge computation');
+          source = { repositoryId: pr!.repositoryId, commit: text(object(live.lastMergeCommit, 'PR merge commit').commitId, 'commit', 64), branch: `refs/pull/${pr!.id}/merge`, pullRequestId: pr!.id };
+          verifySource = async () => {
+            const refs = await call('GET', `${org}/${encodeURIComponent(pr!.project)}/_apis/git/repositories/${pr!.repositoryId}/refs?filter=${encodeURIComponent(pr!.source.slice(5))}&${API}`);
+            const branchRef = Array.isArray(refs.value) ? refs.value.map(v => object(v, 'source ref')).find(r => r.name === pr!.source) : undefined;
+            const mergeRefs = await call('GET', `${org}/${encodeURIComponent(pr!.project)}/_apis/git/repositories/${pr!.repositoryId}/refs?filter=${encodeURIComponent(`pull/${pr!.id}/merge`)}&${API}`);
+            const mergeRef = Array.isArray(mergeRefs.value) ? mergeRefs.value.map(v => object(v, 'merge ref')).find(r => r.name === source!.branch) : undefined;
+
+            const fresh = await call('GET', `${org}/${encodeURIComponent(pr!.project)}/_apis/git/repositories/${pr!.repositoryId}/pullrequests/${pr!.id}?${API}`);
+            const published = mine.pushes?.find(push => push.repositoryId === pr!.repositoryId);
+            if (fresh.mergeStatus !== 'succeeded' || !branchRef || !mergeRef || mergeRef.objectId !== source!.commit || object(fresh.lastMergeSourceCommit, 'PR source commit').commitId !== branchRef.objectId || (grant.ops.includes('git-push') && (!published || published.commit !== branchRef.objectId))) deny('The PR merge build is stale relative to the run source branch');
+            if (fresh.pullRequestId !== pr!.id || fresh.status !== 'active' || fresh.sourceRefName !== pr!.source || fresh.targetRefName !== pr!.target || String(object(fresh.repository, 'PR repository').id).toLowerCase() !== pr!.repositoryId || object(fresh.lastMergeCommit, 'PR merge commit').commitId !== source!.commit) deny('The run PR merge identity changed before deployment');
+          };
+          if (op === 'queue-pr-validation') {
+            if (raw.mergeCommit !== source.commit) deny('mergeCommit must equal this PR live lastMergeCommit');
+            const targetCall = (method: string, url: string, body?: unknown) => { const local = this.options.deployments!.targets().find(t => t.id === target!.id); if (!local || deploymentHash(local) !== deploymentHash(target)) deny('Test target changed or was removed; approve it again'); return call(method, url, body); };
+            return queuePrValidation(target!, pr!, source.commit, targetCall, verifySource);
+          }
         }
-        return this.options.deployments!.execute(op, target!, op === 'deploy-test' ? id(raw.buildId, 'buildId') : undefined, { runId: context.runId, call, authorize: () => { context.authorize?.(); if (controller.signal.aborted) throw new Error('Deployment request cancelled'); }, source });
+        const deploymentResult = await this.options.deployments!.execute(op, target!, op === 'deploy-test' && raw.buildId !== undefined ? id(raw.buildId, 'buildId') : undefined, { runId: context.runId, call, authorize: () => { context.authorize?.(); if (controller.signal.aborted) throw new Error('Deployment request cancelled'); }, source, verifySource, arm: async resourceId => {
+          context.authorize?.();
+          if (!/^\/subscriptions\/[a-f0-9-]+\/resourceGroups\/[A-Za-z0-9._()-]+\/providers\/Microsoft.Web\/sites\/[A-Za-z0-9-]+$/.test(resourceId)) deny('Invalid ARM resource identity');
+          const secret = await (this.options.armToken ?? armToken)(controller.signal);
+          context.authorize?.();
+          return this.call(secret, 'GET', `https://management.azure.com${resourceId}?api-version=2024-04-01`, undefined, 'application/json', controller.signal);
+        } });
+        if (op === 'test-deploy-status' && deploymentResult.terminal === true) {
+          const journal = this.read();
+          for (const [key, pending] of Object.entries(journal.operations ?? {})) if (pending.runId === context.runId && pending.state === 'pending' && ['deploy-test', 'cancel-test-deploy'].includes(String(pending.op)) && pending.targetId === target!.id) {
+            pending.state = 'done'; pending.completedAt = Date.now(); pending.result = { ...deploymentResult, reconciled: true };
+            this.write(journal); this.options.revisions?.done(grant.organization, context.workItemId, key);
+          }
+        }
+        return deploymentResult;
       }
       const resource = await devopsResource(raw, { grant, workItemId: context.workItemId, evidenceRoot: context.evidenceRoot, mine, call, workItem, patchItem, record });
       if (resource) { audit(`run:${context.runId}`); return resource; }
@@ -204,6 +302,7 @@ export class DevOpsWriter {
             tags.push(`<a href="#" data-vss-mention="version:2.0,${identity}">@${html(name)}</a>`);
           }
           const result = await call('POST', `${org}/${encodeURIComponent(item.project)}/_apis/wit/workItems/${context.workItemId}/comments?api-version=7.1-preview.4`, { text: `${tags.length ? `${tags.join(' ')}<br/>` : ''}${rendered}` });
+          this.options.revisions?.comment(grant.organization, context.workItemId, id(result.id, 'comment id'));
           audit(`workitem:${context.workItemId}`); return { workItemId: context.workItemId, commentId: result.id, ...(ids.length ? { mentions: ids.length } : {}) };
         }
         case 'link-pr': {
@@ -253,10 +352,12 @@ export class DevOpsWriter {
             { op: 'add', path: '/fields/System.Title', value: title },
             ...(steps.length ? [{ op: 'add', path: '/fields/Microsoft.VSTS.TCM.Steps', value: xml }] : []),
             // "Tests" link to the run's own work item, the only one the test case may reference.
-            { op: 'add', path: '/relations/-', value: { rel: 'Microsoft.VSTS.Common.TestedBy-Reverse', url: `${org}/_apis/wit/workItems/${context.workItemId}` } },
+
           ], 'application/json-patch+json');
           const caseId = id(created.id, 'created test case id');
           record(entry => entry.testCases.push({ project: p, planId: owned.id, suiteId, id: caseId }));
+          const linkedItem = await workItem();
+          await patchItem([{ op: 'test', path: '/rev', value: linkedItem.rev }, { op: 'add', path: '/relations/-', value: { rel: 'Microsoft.VSTS.Common.TestedBy-Forward', url: `${org}/_apis/wit/workItems/${caseId}` } }]);
           await call('POST', `${org}/${encodeURIComponent(p)}/_apis/testplan/Plans/${owned.id}/Suites/${suiteId}/TestCase?${API}`, [{ workItem: { id: caseId } }]);
           audit(`testcase:${caseId}`); return { planId: owned.id, suiteId, testCaseId: caseId, linkedTo: context.workItemId };
         }
@@ -282,7 +383,7 @@ export class DevOpsWriter {
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': contentType }) },
       ...(body === undefined ? {} : { body: Buffer.isBuffer(body) ? new Uint8Array(body) : JSON.stringify(body) }) });
     if ([203, 401, 403].includes(response.status) || (response.status >= 300 && response.status < 400)) deny('DevOps: Azure CLI login unavailable or no permission. Run az login.');
-    if (response.headers.get('x-ms-continuationtoken')) deny('DevOps: paginated response requires a narrower target');
+    if (response.headers.get('x-ms-continuationtoken') && !(method === 'GET' && url.includes('/release/deployments?') && new URL(url).searchParams.get('$top') === '1')) deny('DevOps: paginated response requires a narrower target');
     if (response.status === 412) deny('DevOps: the work item changed meanwhile; read it again and retry.');
     if (!response.ok) deny(`DevOps: write refused (HTTP ${response.status}).`);
     const source = await response.text();

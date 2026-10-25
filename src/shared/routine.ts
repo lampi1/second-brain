@@ -21,5 +21,5 @@ export const roleOf = (spec: FlowStep): WorkRoleId => spec.role ?? (spec.reviewO
 /** True when the first `count` steps are the same in both versions: a restart from that step may move the run to the
  *  newer version (ADR 0155), its completed steps carried as they are. */
 export function samePrefix(a: FlowDefinition | undefined, b: FlowDefinition, count: number): boolean {
-  return !!a && a.steps.length >= count && b.steps.length >= count && a.steps.slice(0, count).every((step, i) => JSON.stringify(step) === JSON.stringify(b.steps[i]));
+  return !!a && (count === 0 || a.package?.intake === b.package?.intake) && a.steps.length >= count && b.steps.length >= count && a.steps.slice(0, count).every((step, i) => JSON.stringify(step) === JSON.stringify(b.steps[i]));
 }

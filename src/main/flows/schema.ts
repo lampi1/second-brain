@@ -61,7 +61,7 @@ export function validateDefinition(value: unknown, tierMax?: RoleTierMax): FlowD
   if (!Array.isArray(raw.steps) || !raw.steps.length || raw.steps.length > 60) throw new Error('A flow needs 1–60 steps');
   const ids: string[] = [];
   const steps: FlowStep[] = raw.steps.map((value: unknown) => {
-    const row = object(value, 'step'); keys(row, ['id', 'title', 'kind', 'instructions', 'inputs', 'action', 'evidence', 'timeoutMs', 'maxAttempts', 'effect', 'reviewOf', 'workspaceInput', 'adapter', 'testDbRead', 'role', 'tier', 'engine', 'model', 'effort', 'onFail', 'env', 'args', 'agentPrompt', 'assets'], 'step');
+    const row = object(value, 'step'); keys(row, ['id', 'title', 'kind', 'instructions', 'inputs', 'action', 'evidence', 'timeoutMs', 'maxAttempts', 'effect', 'reviewOf', 'workspaceInput', 'adapter', 'testDbRead', 'role', 'tier', 'engine', 'model', 'effort', 'onFail', 'env', 'args', 'agentPrompt', 'assets', 'testEnvironment'], 'step');
     const id = identifier(row.id, 'step id'); if (ids.includes(id)) throw new Error('Duplicate step id');
     const kind = text(row.kind, 'kind') as FlowStep['kind']; if (!['check', 'agent', 'approval', 'manual'].includes(kind)) throw new Error('Unknown step kind');
     const effect = text(row.effect, 'effect') as FlowStep['effect']; if (!['read-only', 'code', 'external-write', 'production'].includes(effect)) throw new Error('Unknown effect');
@@ -125,8 +125,9 @@ export function validateDefinition(value: unknown, tierMax?: RoleTierMax): FlowD
       // a query's target is part of what the user approved: never filled from a run input
       if (action!.kind === 'query' && ['server', 'database'].some(key => args![key]?.includes('{{'))) throw new Error('A query names its server and database literally, never as {{input}}');
     }
+    if (row.testEnvironment !== undefined && (kind !== 'agent' || effect === 'production')) throw new Error('testEnvironment requires a non-production agent step');
     ids.push(id);
-    return { ...(row.agentPrompt === undefined ? {} : { agentPrompt: text(row.agentPrompt, 'agentPrompt', 64000) }), ...(row.assets === undefined ? {} : { assets: strings(row.assets, 'assets', 50, 80).map(v => identifier(v, 'asset id')) }), id, title: text(row.title, 'step title', 300), kind, instructions: text(row.instructions, 'instructions', 16000), inputs,
+    return { ...(row.testEnvironment === undefined ? {} : { testEnvironment: identifier(row.testEnvironment, 'test environment') }), ...(row.agentPrompt === undefined ? {} : { agentPrompt: text(row.agentPrompt, 'agentPrompt', 64000) }), ...(row.assets === undefined ? {} : { assets: strings(row.assets, 'assets', 50, 80).map(v => identifier(v, 'asset id')) }), id, title: text(row.title, 'step title', 300), kind, instructions: text(row.instructions, 'instructions', 16000), inputs,
       ...(action ? { action } : {}), ...(workspaceInput ? { workspaceInput } : {}), evidence, timeoutMs: integer(row.timeoutMs, 'timeoutMs', 1000, 86_400_000), maxAttempts: integer(row.maxAttempts, 'maxAttempts', 1, 5), effect, ...(reviewOf ? { reviewOf } : {}), ...(row.adapter ? { adapter: row.adapter as FlowStep['adapter'] } : {}), ...(row.testDbRead === true ? { testDbRead: true as const } : {}), ...(role ? { role } : {}), ...(tier ? { tier } : {}),
       ...(engine ? { engine } : {}), ...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(onFail ? { onFail } : {}), ...(env ? { env } : {}), ...(args ? { args } : {}) };
   });

@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DevOpsWriteGrant } from '../../src/shared/flow-automation';
-import { DevOpsWriter, type DevOpsWriteContext } from '../../src/main/flows/devops-writer';
+import { DevOpsWriter, type DevOpsWriteContext, type DevOpsWriterOptions } from '../../src/main/flows/devops-writer';
 
 const dirs: string[] = [];
 afterEach(() => { dirs.splice(0).forEach(dir => fs.rmSync(dir, { recursive: true, force: true })); });
@@ -13,7 +13,7 @@ const GUID = '11111111-2222-3333-4444-555555555555';
 const grant = (over: Partial<DevOpsWriteGrant> = {}): DevOpsWriteGrant => ({ organization: 'contoso', projects: ['ProjectA', 'ProjectB'], ops: ['tags', 'comment', 'fields', 'test-plans', 'test-results', 'pr-links'], fields: ['System.State', 'System.AreaPath'], ...over });
 interface Call { method: string; url: string; body: unknown; headers: Record<string, string> }
 
-function setup(options: { grant?: DevOpsWriteGrant; project?: string; prProject?: string; status?: (call: Call) => number | undefined } = {}) {
+function setup(options: { grant?: DevOpsWriteGrant; project?: string; prProject?: string; push?: DevOpsWriterOptions['push']; status?: (call: Call) => number | undefined } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-dw-')); dirs.push(dir);
   const calls: Call[] = [], audit = vi.fn();
   const request = vi.fn(async (url: string, init: RequestInit) => {
@@ -28,10 +28,12 @@ function setup(options: { grant?: DevOpsWriteGrant; project?: string; prProject?
     else if (url.includes('/TestPoint?testCaseId')) body = { value: [{ id: 900 }] };
     else if (url.includes('/comments?')) body = { id: 5 };
     else if (url.includes('/_apis/identities?')) body = { value: [{ id: url.match(/identityIds=([^&]+)/)![1], providerDisplayName: 'Test <User>' }] };
+    else if (url.includes('/refs?')) body = { value: [] };
+    else if (url.includes('/_apis/git/repositories/')) body = { id: GUID, project: { name: 'ProjectA' } };
     else if (url.includes('/_apis/projects/')) body = { id: GUID, name: options.prProject ?? 'ProjectB' };
     return new Response(JSON.stringify(body), { status });
   });
-  const writer = new DevOpsWriter({ file: path.join(dir, 'ledger.json'), token: async () => 'token-value', request, audit });
+  const writer = new DevOpsWriter({ file: path.join(dir, 'ledger.json'), token: async () => 'token-value', request, audit, push: options.push });
   const context: DevOpsWriteContext = { runId: 'run-1', grant: options.grant ?? grant(), workItemId: 42 };
   return { writer, context, calls, audit, request, file: path.join(dir, 'ledger.json'), run: (req: Record<string, unknown>, ctx = context) => writer.execute(ctx, req) };
 }
@@ -87,7 +89,7 @@ describe('DevOps write adapter', () => {
     expect(calls[0]!.url).toContain('/contoso/ProjectA/_apis/testplan/plans?');
     expect(await run({ op: 'create-test-suite', project: 'ProjectA', planId: 100, parentSuiteId: 101, name: 'Suite' })).toEqual({ planId: 100, suiteId: 102 });
     expect(await run({ op: 'create-test-case', project: 'ProjectA', planId: 100, suiteId: 102, title: 'Case', steps: [{ action: 'Open', expected: 'Shown' }] })).toMatchObject({ testCaseId: 103, linkedTo: 42 });
-    expect(JSON.stringify(calls.find(c => c.url.includes('$Test%20Case'))!.body)).toContain('TestedBy-Reverse');
+    expect(calls.some(c => c.method === 'PATCH' && c.url.includes('/workitems/42?') && JSON.stringify(c.body).includes('TestedBy-Forward'))).toBe(true);
     expect(await run({ op: 'set-test-outcome', project: 'ProjectA', planId: 100, suiteId: 102, testCaseId: 103, outcome: 'passed' })).toEqual({ testCaseId: 103, outcome: 'passed', points: 1 });
     expect(calls.at(-1)!.body).toEqual([{ id: 900, results: { outcome: 'passed' } }]);
     expect(await run({ op: 'rename-test-plan', project: 'ProjectA', planId: 100, name: 'Renamed' })).toEqual({ planId: 100, name: 'Renamed' });
@@ -131,4 +133,24 @@ describe('DevOps write adapter', () => {
     const broken = setup(); fs.writeFileSync(broken.file, '{');
     await expect(broken.run({ op: 'comment', text: 'x' })).rejects.toThrow('ledger is unreadable');
   });
+});
+it('host push requires the exact granted repository and workspace, ignores arbitrary refs, and records the own branch', async () => {
+  const runId = 'aaaaaaaa-1111-2222-3333-bbbbbbbbbbbb', branch = `refs/heads/fix/routine-${runId}`;
+  const push = vi.fn(async () => ({ branch, commit: 'a'.repeat(40) }));
+  const s = setup({ push, grant: grant({ ops: ['git-push'], pushTargets: [{ project: 'ProjectA', repositoryId: GUID, workspaceInput: 'workspace' }] }) });
+  const context = { ...s.context, runId, workspace: '/fixture', workspaceInput: 'workspace' };
+  await expect(s.run({ op: 'push-branch', project: 'ProjectA', repositoryId: GUID, branch: 'refs/heads/main' }, context)).rejects.toThrow('unknown field');
+  await expect(s.run({ op: 'push-branch', project: 'ProjectA', repositoryId: 'aaaaaaaa-0000-0000-0000-000000000001' }, context)).rejects.toThrow('exact approved');
+  await expect(s.run({ op: 'push-branch', project: 'ProjectA', repositoryId: GUID }, { ...context, workspaceInput: 'other' })).rejects.toThrow('exact approved');
+  expect(push).not.toHaveBeenCalled();
+  await expect(s.run({ op: 'push-branch', project: 'ProjectA', repositoryId: GUID }, context)).resolves.toMatchObject({ branch });
+  expect(push).toHaveBeenCalledWith(expect.objectContaining({ runId, repositoryId: GUID, workspace: '/fixture' }));
+  expect(JSON.stringify(s.writer.operationsFor(runId))).not.toContain('token-value');
+});
+it('terminal status reconciles a lost cancellation response for only that run and target', async () => {
+  const s = setup({ grant: grant({ ops: ['test-deploy'] }) });
+  // Status must still pass the adapter grant; an absent exact target cannot clear an uncertain operation.
+  fs.writeFileSync(s.file, JSON.stringify({ schema: 1, runs: {}, operations: { unknown: { runId: 'run-1', state: 'pending', op: 'cancel-test-deploy', targetId: 'missing' } } }));
+  await expect(s.run({ op: 'test-deploy-status', targetId: 'missing' })).rejects.toThrow('exact test deployment');
+  expect(s.writer.operationsFor('run-1')[0]?.state).toBe('pending');
 });

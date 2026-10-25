@@ -27,7 +27,7 @@ export function FlowDefinition({ definition, run, edit, onNavigate }: { definiti
   return <div className="flow-definition">
     {run?.dossierPath && <button type="button" className="ctx-link file" data-testid="flow-dossier" onClick={() => { onNavigate?.(); void openFile(run.dossierPath!); }}>{t('flows.dossier')}</button>}
     {run?.settlementError && <p className="flow-block" role="status">{run.settlementError}</p>}
-    {run?.disposition && <p className="flow-block">{t('flows.packageDowngrade')}: {run.disposition.reason}<br />{run.disposition.cleanup} · {run.disposition.error ?? ''}</p>}
+    {run?.disposition && <p className="flow-block">{t(run.disposition.kind === 'skipped' ? 'flows.skipped' : run.disposition.lesson === false ? 'flows.needsHuman' : 'flows.packageDowngrade')}: {run.disposition.reason}<br />{run.disposition.cleanup} · {run.disposition.error ?? ''}</p>}
     {!!run?.trace?.length && <details className="flow-report"><summary>{t('flows.timeline')} · {run.trace.length}</summary>{run.trace.map(e => <p key={e.id}>{new Date(e.at).toLocaleString(locale())} · {e.stepId ?? e.kind} · {e.message}</p>)}</details>}
     {!!run?.history?.some(h => h.status === 'pending') && <p className="flow-block">{t('flows.historyPending')}: {run.history.find(h => h.status === 'pending')?.reason ?? '…'}</p>}
     <dl className="flow-facts">
@@ -53,6 +53,7 @@ export function FlowDefinition({ definition, run, edit, onNavigate }: { definiti
             <p style={{ whiteSpace: 'pre-wrap' }}>{step.instructions}</p>
             {step.agentPrompt && <details className="flow-report"><summary>{t('flows.frozenPrompt')}</summary><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{step.agentPrompt}</pre></details>}
             {!!step.assets?.length && <p>{t('flows.assets')}: {step.assets.join(' · ')}</p>}
+            {step.testEnvironment && <p>{t('flows.testEnvironment')}: <strong>{step.testEnvironment}</strong></p>}
             {step.testDbRead && <p>{t('flows.testDbRead')}</p>}
             {step.adapter && <p><code>{step.adapter}</code></p>}
             {step.action && <p><code>{step.action.kind}: {step.action.ref}</code></p>}

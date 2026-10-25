@@ -12,7 +12,7 @@ export function flowRoles(profiles: readonly AgentProfile[], tierModel: (engine:
   for (const p of profiles) {
     if (!isWorkRole(p.id)) continue;
     const models = Object.fromEntries(MODEL_TIERS.filter(tier => tierRank(tier) <= tierRank(p.tierMax)).map(tier => [tier, tierModel(p.engine, tier)]));
-    out[p.id] = { name: p.name, avatar: p.avatar, tier: p.tier, tierMax: p.tierMax, model: p.model ?? null, models };
+    out[p.id] = { engine: p.engine, name: p.name, avatar: p.avatar, tier: p.tier, tierMax: p.tierMax, model: p.model ?? null, models };
   }
   return out;
 }

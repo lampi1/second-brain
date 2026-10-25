@@ -22,6 +22,7 @@ export interface FlowServiceOptions {
   restartBlocker?: (run: FlowRun, index: number) => string | undefined;
   /** The sha256 of a brain script/query now: a proposed step without a hash gets the current one, so the user's
    *  activation approves exactly that content (ADR 0155). */
+  validateModels?: (definition: FlowDefinition) => void;
   freezeRole?: (step: FlowStep) => Pick<FlowStep, 'agentPrompt' | 'engine' | 'model' | 'tier' | 'effort'>;
   hashOf?: (kind: 'script' | 'query', ref: string) => string | null;
 }
@@ -65,6 +66,7 @@ export class FlowService {
   output(runId: string, id: string, content: string, by: 'agent' | 'host' = 'agent'): FlowRun {
     return this.change(() => {
       const run = this.run(runId), declaration = this.version(run.flowId, run.flowVersion).definition.package?.outputs.find(o => o.id === id);
+      if (by === 'agent' && this.version(run.flowId, run.flowVersion).definition.package?.intake && run.intake !== 'accepted') throw new Error('Accept intake before declared outputs');
       if (!declaration || ['completed', 'cancelled'].includes(run.status)) throw new Error('This output is not declared for an active run');
       if (by !== 'host' && this.version(run.flowId, run.flowVersion).definition.package?.downgrade?.lessonOutput === id) throw new Error('The downgrade lesson is reserved for the host; use flow_downgrade');
       const body = text(content, 'output content', 16000), sha256 = createHash('sha256').update(body).digest('hex');
@@ -76,12 +78,39 @@ export class FlowService {
   }
   projected(runId: string, id: string): void { this.change(() => { const output = this.run(runId).outputs?.find(o => o.id === id); if (output) output.projectedAt = this.now(); }); }
   historyResult(runId: string, id: string, error?: string): void { this.change(() => { const entry = this.run(runId).history?.find(h => h.id === id); if (!entry || entry.status === 'sent') return; if (error) entry.reason = text(error, 'history failure', 2000); else { entry.status = 'sent'; delete entry.reason; } }); }
-  beginDowngrade(runId: string, reason: string): FlowRun {
+  intake(runId: string, outcome: 'accept' | 'skip', reason: string): FlowRun {
+    return this.change(() => {
+      const run = this.run(runId), pack = this.version(run.flowId, run.flowVersion).definition.package;
+      if (!pack?.intake || run.currentStep !== 0 || run.status !== 'active' || run.steps[0]?.status !== 'running' || run.intake) throw new Error('Intake is available once, on the first running step before writes');
+      if (!['accept', 'skip'].includes(outcome)) throw new Error('Unknown intake outcome');
+      const why = text(reason, 'intake reason', 2000);
+      run.intake = outcome === 'accept' ? 'accepted' : 'skipped';
+      if (outcome === 'skip') { run.disposition = { kind: 'skipped', reason: why, at: this.now(), cleanup: 'complete', phase: 6 }; this.cancelRun(run, why, 'routine'); }
+      else this.touch(run);
+      return run;
+    });
+  }
+  fixable(runId: string): FlowRun {
+    return this.change(() => { const run = this.run(runId);
+      if (run.status !== 'active' || run.steps[run.currentStep]?.status !== 'running' || run.intake !== 'accepted') throw new Error('Accept intake before recording the ai-fixable verdict');
+      run.verdict ??= { kind: 'ai-fixable', at: this.now(), stepId: run.steps[run.currentStep]!.stepId }; this.touch(run); return run;
+    });
+  }
+  stepHistory(runId: string, body: string): FlowRun {
+    return this.change(() => { const run = this.run(runId);
+      if (run.status !== 'active' || run.steps[run.currentStep]?.status !== 'running' || !this.version(run.flowId, run.flowVersion).definition.package?.history) throw new Error('A running history-enabled step is required');
+      run.steps[run.currentStep]!.historyText = text(body, 'step history', 4000); this.touch(run); return run;
+    });
+  }
+  beginDowngrade(runId: string, reason: string, mode: 'downgrade' | 'needs-human' = 'downgrade'): FlowRun {
     return this.change(() => {
       const run = this.run(runId); if (!this.version(run.flowId, run.flowVersion).definition.package?.downgrade || ['completed', 'cancelled'].includes(run.status)) throw new Error('This run has no approved downgrade policy');
       if (run.disposition) return run;
+      const pack = this.version(run.flowId, run.flowVersion).definition.package!;
+      if (pack.intake && run.intake !== 'accepted') throw new Error('Accept or skip intake before human handoff');
+      if (pack.intake && ((mode === 'downgrade') !== !!run.verdict)) throw new Error('Use needs-human before a fixable verdict; downgrade only after an ai-fixable verdict');
       const why = text(reason, 'downgrade reason', 2000);
-      run.disposition = { kind: 'needs-human', reason: why, at: this.now(), cleanup: 'pending', phase: 0 };
+      run.disposition = { kind: 'needs-human', lesson: mode === 'downgrade', reason: why, at: this.now(), cleanup: 'pending', phase: 0 };
       this.block(run, `${HOLD}Human handoff: ${why}`); run.steps[run.currentStep]!.decisionPending = false; this.touch(run); return run;
     });
   }
@@ -92,6 +121,11 @@ export class FlowService {
     });
   }
   snapshot(): FlowSnapshot { this.reconcileDeadlines(); return copy({ contextKey: this.options.contextKey, drafts: this.data.drafts, versions: this.data.versions, active: this.data.active, runs: this.data.runs, ...(this.storageError ? { storageError: this.storageError } : {}) }); }
+  outputsSinceActive(flowId: string, ownerId: string, offset = 0): unknown {
+    const version = this.version(flowId, this.data.active[flowId] ?? 0), start = integer(offset, 'offset', 0, 100000);
+    const rows = this.data.runs.filter(r => r.flowId === flowId && (r.ownerOrchestratorId === ownerId || r.ownerOrchestratorId === APP_OWNER)).flatMap(r => (r.outputs ?? []).filter(o => o.at >= version.activatedAt).map(o => ({ runId: r.id, flowVersion: r.flowVersion, disposition: r.disposition?.kind, ...o }))).sort((a, b) => a.at - b.at || a.runId.localeCompare(b.runId) || a.id.localeCompare(b.id));
+    return { flowId, activeVersion: version.version, since: version.activatedAt, outputs: rows.slice(start, start + 20), nextOffset: start + 20 < rows.length ? start + 20 : null, total: rows.length };
+  }
   match(query: string, scope?: FlowScope): FlowMatch {
     this.healthy(); const normalized = ` ${normalize(text(query, 'query', 16000))} `, actual = scope === undefined ? undefined : validateScope(scope);
     const candidates = this.data.versions.filter(v => this.data.active[v.definition.id] === v.version && (!actual || inScope(v.definition.scope, actual))
@@ -105,11 +139,12 @@ export class FlowService {
     if (candidate.package) {
       for (const asset of candidate.package.assets ?? []) if (!asset.sha256 && typeof asset.content === 'string') asset.sha256 = createHash('sha256').update(asset.content).digest('hex');
       for (const step of candidate.steps ?? []) {
-        if (step.kind === 'agent' && !step.agentPrompt && this.options.freezeRole) Object.assign(step, { ...this.options.freezeRole(step), ...step });
+        if (step.kind === 'agent' && (!step.agentPrompt || !step.engine || !step.model || !step.tier) && this.options.freezeRole) Object.assign(step, { ...this.options.freezeRole(step), ...step });
         if (step.action && !step.action.hash) step.action.hash = candidate.package.assets?.find(a => a.id === step.action!.ref && a.kind === step.action!.kind)?.sha256;
       }
     }
     const definition = validateDefinition(candidate, this.options.tierMax), expected = integer(input.expectedRevision, 'expectedRevision');
+    this.options.validateModels?.(definition);
     for (const step of definition.steps) {
       if (step.kind !== 'check' || !step.action || !['script', 'query'].includes(step.action.kind) || step.action.hash) continue;
       const hash = this.options.hashOf?.(step.action.kind as 'script' | 'query', step.action.ref);
@@ -150,6 +185,7 @@ export class FlowService {
       draft.updatedAt = this.now(); draft.status = input.answer === 'yes' ? 'active' : 'rejected';
       if (feedback) draft.feedback = feedback;
       if (input.answer === 'yes') {
+        this.options.validateModels?.(draft.definition);
         const version = Math.max(0, ...this.data.versions.filter(v => v.definition.id === input.id).map(v => v.version)) + 1;
         this.data.versions.push({ definition: copy(draft.definition), version, draftRevision: draft.revision, digest: digest(draft.definition), activatedAt: this.now() });
         this.data.active[input.id] = version;
@@ -287,6 +323,8 @@ export class FlowService {
         ownerOrchestratorId: source.ownerOrchestratorId, subjectKey: automatic?.subjectKey ?? `restart:${source.id}:${randomUUID()}`, scope, inputs,
         status: 'active', currentStep: index, steps: version.definition.steps.map((step, i) => i < index ? copy(source.steps[i]!) : { stepId: step.id, status: 'pending', attempts: 0 }),
         createdAt: this.now(), updatedAt: this.now(), restartOf: { runId: source.id, stepId: version.definition.steps[index]!.id, expectedRevision: input.expectedRevision, mode: input.mode } };
+      if (index > 0 && version.definition.package?.intake && source.intake === 'accepted') run.intake = 'accepted';
+      if (index > 0 && version.definition.package?.intake && source.verdict && source.steps.slice(0, index).some(s => s.stepId === source.verdict!.stepId)) run.verdict = copy(source.verdict);
       // Validate/prepare before cancelling the source; a thrown error rolls back the whole state transaction.
       if (approval) this.approval(run, approval);
       this.prepare(run);
@@ -490,6 +528,7 @@ export class FlowService {
   }
   private activateNow(definition: FlowDefinition): FlowVersion {
     const checked = validateDefinition(definition, this.options.tierMax);
+    this.options.validateModels?.(checked);
     return this.change(() => {
       const prior = this.data.drafts.find(d => d.definition.id === checked.id), revision = (prior?.revision ?? 0) + 1;
       const version = Math.max(0, ...this.data.versions.filter(v => v.definition.id === checked.id).map(v => v.version)) + 1;
@@ -499,7 +538,7 @@ export class FlowService {
     });
   }
   private spec(run: FlowRun): FlowStep { return this.version(run.flowId, run.flowVersion).definition.steps[run.currentStep]!; }
-  private reset(step: FlowRun['steps'][number]): void { delete step.chatId; delete step.chatRunId; delete step.taskVersion; delete step.startedAt; delete step.reason; delete step.decisionPending; step.status = 'pending'; }
+  private reset(step: FlowRun['steps'][number]): void { delete step.chatId; delete step.chatRunId; delete step.taskVersion; delete step.startedAt; delete step.historyText; delete step.reason; delete step.decisionPending; step.status = 'pending'; }
   private healed(run: FlowRun, entry: FlowHealEntry): void { run.heal = [...(run.heal ?? []), entry].slice(-50); }
   private reconcileDeadlines(): void {
     if (this.reconciling || this.storageError) return;
@@ -544,7 +583,7 @@ export class FlowService {
     if (!adapted(spec) && !testDbAdapted(spec)) return true;
     try { return this.options.adapterGranted?.(run, spec) !== true; } catch { return true; }
   }
-  private finish(run: FlowRun, receipt: FlowReceipt): void { const step = run.steps[run.currentStep]!; step.status = 'completed'; delete step.reason; delete step.decisionPending; step.receipt = receipt; run.currentStep++; }
+  private finish(run: FlowRun, receipt: FlowReceipt): void { if (this.version(run.flowId, run.flowVersion).definition.package?.intake && run.currentStep === 0 && run.intake !== 'accepted') throw new Error('First call flow_intake accept or skip'); const step = run.steps[run.currentStep]!; step.status = 'completed'; delete step.reason; delete step.decisionPending; step.receipt = receipt; run.currentStep++; }
   private cancelRun(run: FlowRun, reason: string, by: 'user' | 'orchestrator' | 'routine'): void {
     run.cancellation = { at: this.now(), reason, by, expectedRevision: run.revision, interruption: run.steps[run.currentStep]?.chatId ? 'pending' : 'confirmed' }; run.status = 'cancelled';
     const step = run.steps[run.currentStep]!; step.status = 'cancelled'; step.reason = reason; step.decisionPending = false; this.touch(run);
@@ -582,15 +621,16 @@ export class FlowService {
   }
   private enqueueHistory(before: Stored): void {
     for (const run of this.data.runs) {
-      const definition = this.version(run.flowId, run.flowVersion).definition; if (!definition.package?.history) continue;
+      const definition = this.version(run.flowId, run.flowVersion).definition; if (!definition.package?.history || (definition.package.intake && run.intake !== 'accepted') || run.disposition?.kind === 'skipped') continue;
       const old = before.runs.find(r => r.id === run.id), entries: NonNullable<FlowRun['history']> = [];
-      if (!old) entries.push({ id: `intake:${run.id}`, stepId: run.steps[0]!.stepId, at: this.now(), status: 'pending', text: `${definition.title} v${run.flowVersion} · intake. Run ${run.id}. Next: ${definition.steps[0]!.title}.`, mentionReason: 'intake' });
+      if (!old && !definition.package.intake) entries.push({ id: `intake:${run.id}`, stepId: run.steps[0]!.stepId, at: this.now(), status: 'pending', text: `${definition.title} v${run.flowVersion} · intake. Run ${run.id}. Next: ${definition.steps[0]!.title}.`, mentionReason: 'intake' });
       for (const [index, step] of run.steps.entries()) {
         const previous = old?.steps[index]; if (!['completed', 'blocked', 'cancelled'].includes(step.status) || (previous?.status === step.status && previous.reason === step.reason && previous.receipt?.id === step.receipt?.id)) continue;
-        const summary = (step.receipt?.summary ?? step.reason ?? step.status).slice(0, 1200), evidence = (step.receipt?.evidence ?? []).slice(0, 4).map(e => e.slice(0, 350)).join(' · ');
+        if (run.disposition?.cleanup === 'complete' && old?.disposition) continue;
+        const summary = [step.reason ?? step.receipt?.summary ?? step.status, step.historyText].filter(Boolean).join(' · ').slice(0, 5000), evidence = (step.receipt?.evidence ?? []).slice(0, 4).map(e => e.slice(0, 350)).join(' · ');
         const id = createHash('sha256').update(JSON.stringify([run.id, step.stepId, step.attempts, step.status, step.receipt?.id, step.reason])).digest('hex');
         const next = run.disposition ? 'human handoff and cleanup' : definition.steps[run.currentStep]?.title ?? 'routine complete';
-        entries.push({ id, stepId: step.stepId, at: this.now(), status: 'pending', text: `${definition.steps[index]!.title} · ${step.status}. ${summary}${evidence ? ` Evidence: ${evidence}` : ''} Next: ${next}. Run ${run.id}.`, ...(run.disposition ? { mentionReason: 'downgrade' as const } : step.status === 'blocked' ? { mentionReason: 'block' as const } : run.status === 'completed' ? { mentionReason: 'final' as const } : {}) });
+        entries.push({ id, stepId: step.stepId, at: this.now(), status: 'pending', text: `${definition.steps[index]!.title} · attempt ${step.attempts} · ${step.status}. ${summary}${evidence ? ` Evidence: ${evidence}` : ''} Next: ${next}. Run ${run.id}.`, ...(run.disposition ? { mentionReason: run.disposition.lesson === false ? 'final' as const : 'downgrade' as const } : step.status === 'blocked' ? { mentionReason: 'block' as const } : run.status === 'completed' ? { mentionReason: 'final' as const } : index === 0 && definition.package.intake ? { mentionReason: 'intake' as const } : {}) });
       }
       for (const entry of entries) if (!run.history?.some(h => h.id === entry.id)) { if ((run.history?.length ?? 0) >= 500) throw new Error('Run history limit reached'); (run.history ??= []).push(entry); }
     }
@@ -625,7 +665,7 @@ export class FlowService {
     object(data.active, 'active');
     for (const [id, version] of Object.entries(data.active)) { integer(version, 'active version', 1); if (!versionIds.has(`${id}:${version}`)) throw new Error('Invalid active version'); }
     for (const run of data.runs) {
-      keys(object(run, 'run'), ['id', 'revision', 'flowId', 'flowVersion', 'definitionDigest', 'ownerOrchestratorId', 'subjectKey', 'scope', 'inputs', 'status', 'currentStep', 'steps', 'createdAt', 'updatedAt', 'testDbEvidence', 'cancellation', 'restartOf', 'pendingRecovery', 'pendingCancellation', 'recoveryFeedback', 'paused', 'attachments', 'receipts', 'heal', 'awaitingUser', 'title', 'outputs', 'disposition', 'history', 'trace', 'approval', 'settlementError'], 'run');
+      keys(object(run, 'run'), ['id', 'revision', 'flowId', 'flowVersion', 'definitionDigest', 'ownerOrchestratorId', 'subjectKey', 'scope', 'inputs', 'status', 'currentStep', 'steps', 'createdAt', 'updatedAt', 'testDbEvidence', 'cancellation', 'restartOf', 'pendingRecovery', 'pendingCancellation', 'recoveryFeedback', 'paused', 'attachments', 'receipts', 'heal', 'awaitingUser', 'title', 'outputs', 'disposition', 'history', 'trace', 'approval', 'settlementError', 'intake', 'verdict'], 'run');
       if (run.paused !== undefined) { keys(object(run.paused, 'paused'), ['at'], 'paused'); integer(run.paused.at, 'paused time'); }
       if (run.attachments !== undefined) validateAttachments(run.attachments);
       if (run.receipts !== undefined) { if (!Array.isArray(run.receipts) || run.receipts.length > 500) throw new Error('Invalid receipts'); run.receipts.forEach(validateReceipt); }
@@ -644,8 +684,10 @@ export class FlowService {
         for (const o of run.outputs) { keys(object(o, 'output'), ['id', 'at', 'content', 'sha256', 'brainPath', 'projectedAt'], 'output'); const declared = version.definition.package?.outputs.find(d => d.id === o.id);
           if (!declared || declared.brainPath !== o.brainPath || createHash('sha256').update(text(o.content, 'output', 16000)).digest('hex') !== o.sha256) throw new Error('Invalid output provenance'); integer(o.at, 'output time'); if (o.projectedAt !== undefined) integer(o.projectedAt, 'projected time'); }
       }
-      if (run.disposition) { const d = run.disposition; keys(object(d, 'disposition'), ['kind', 'reason', 'at', 'cleanup', 'phase', 'error'], 'disposition');
-        if (!version.definition.package?.downgrade || d.kind !== 'needs-human' || !['pending', 'complete'].includes(d.cleanup)) throw new Error('Invalid disposition'); text(d.reason, 'handoff reason', 2000); integer(d.at, 'handoff time'); integer(d.phase, 'handoff phase', 0, 6); if (d.error) text(d.error, 'handoff error', 2000); }
+      if (run.intake !== undefined && (!version.definition.package?.intake || !['accepted', 'skipped'].includes(run.intake))) throw new Error('Invalid intake outcome');
+      if (run.verdict) { keys(object(run.verdict, 'verdict'), ['kind', 'at', 'stepId'], 'verdict'); if (run.verdict.kind !== 'ai-fixable' || run.intake !== 'accepted' || !run.steps.some(s => s.stepId === run.verdict!.stepId)) throw new Error('Invalid fixable verdict'); integer(run.verdict.at, 'verdict time'); }
+      if (run.disposition) { const d = run.disposition; keys(object(d, 'disposition'), ['kind', 'reason', 'at', 'cleanup', 'phase', 'error', 'lesson'], 'disposition');
+        if (!version.definition.package || !['needs-human', 'skipped'].includes(d.kind) || (d.kind === 'needs-human' && !version.definition.package.downgrade) || (d.kind === 'skipped' && (!version.definition.package.intake || run.intake !== 'skipped' || run.status !== 'cancelled' || d.cleanup !== 'complete')) || (d.lesson !== undefined && typeof d.lesson !== 'boolean') || !['pending', 'complete'].includes(d.cleanup)) throw new Error('Invalid disposition'); text(d.reason, 'handoff reason', 2000); integer(d.at, 'handoff time'); integer(d.phase, 'handoff phase', 0, 6); if (d.error) text(d.error, 'handoff error', 2000); }
       if (run.history) { if (!version.definition.package?.history || !Array.isArray(run.history) || run.history.length > 500) throw new Error('Invalid run history');
         for (const h of run.history) { keys(object(h, 'history'), ['id', 'stepId', 'at', 'text', 'status', 'reason', 'mentionReason'], 'history'); text(h.id, 'history id', 200); integer(h.at, 'history time'); text(h.text, 'history text', 10000); if (!run.steps.some(s => s.stepId === h.stepId) || !['pending', 'sent'].includes(h.status)) throw new Error('Invalid history entry'); if (h.reason) text(h.reason, 'history error', 2000); if (h.mentionReason && !['intake', 'block', 'downgrade', 'final'].includes(h.mentionReason)) throw new Error('Invalid mention reason'); }
       }
@@ -696,7 +738,8 @@ export class FlowService {
           || (origin.mode === 'from-start' && inherited !== 0) || (origin.mode === 'from-step' && ((restartSource.flowVersion !== run.flowVersion && !samePrefix(data.versions.find(v => v.definition.id === run.flowId && v.version === restartSource!.flowVersion)?.definition, version.definition, inherited)) || JSON.stringify(restartSource.scope) !== JSON.stringify(run.scope) || JSON.stringify(restartSource.inputs) !== JSON.stringify(run.inputs)))) throw new Error('Invalid inherited flow evidence');
       }
       run.steps.forEach((step, i) => {
-        keys(object(step, 'step run'), ['stepId', 'status', 'attempts', 'startedAt', 'chatId', 'chatRunId', 'taskVersion', 'reason', 'receipt', 'decisionPending'], 'step run');
+        keys(object(step, 'step run'), ['stepId', 'status', 'attempts', 'startedAt', 'chatId', 'chatRunId', 'taskVersion', 'reason', 'receipt', 'decisionPending', 'historyText'], 'step run');
+        if (step.historyText !== undefined) text(step.historyText, 'step history', 4000);
         const spec = version.definition.steps[i]!;
         if (step.reason !== undefined) text(step.reason, 'step reason', 16000, true);
         if (step.chatId !== undefined) text(step.chatId, 'step chat', 200);

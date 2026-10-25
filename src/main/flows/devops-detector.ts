@@ -3,6 +3,7 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import type { FlowAutomationConfig, FlowDetectionItem, FlowDetectionResult, FlowTrigger } from '../../shared/flow-automation';
+import { UncertainWorkItem } from './devops-revisions';
 import { filterMisses, splitTags } from './filters';
 
 const RESOURCE = '499b84ac-1321-427f-aa17-267ca6975798';
@@ -12,6 +13,7 @@ const FIELDS = ['System.Id', 'System.Rev', 'System.Title', 'System.TeamProject',
 const LOGIN = 'DevOps: accesso Azure CLI non disponibile. Esegui az login.';
 type Trigger = Extract<FlowTrigger, { kind: 'devops' }>;
 export interface DevOpsDetectorOptions {
+  externalRevision?: (org: string, id: number, previous: number, latest: number, read: (revision: number) => Promise<Record<string, unknown>>) => Promise<number | null>;
   token?: (signal?: AbortSignal) => Promise<string>;
   request?: (url: string, init: RequestInit) => Promise<Response>;
 }
@@ -39,9 +41,10 @@ function checkedTrigger(config: FlowAutomationConfig): Trigger {
 
 /** CLI output remains in memory only. Windows needs its .cmd launcher, with an entirely constant command line. */
 export function devopsToken(signal?: AbortSignal): Promise<string> { return azureToken(signal); }
-function azureToken(signal?: AbortSignal): Promise<string> {
+export function armToken(signal?: AbortSignal): Promise<string> { return azureToken(signal, 'https://management.azure.com/'); }
+function azureToken(signal?: AbortSignal, resource = RESOURCE): Promise<string> {
   if (process.env.VITEST || process.env.SB_TEST || process.env.SB_DEMO) return Promise.reject(new DetectionError(LOGIN));
-  const args = ['account', 'get-access-token', '--resource', RESOURCE, '--query', 'accessToken', '--output', 'tsv'];
+  const args = ['account', 'get-access-token', '--resource', resource, '--query', 'accessToken', '--output', 'tsv'];
   const win = process.platform === 'win32';
   return new Promise((resolve, reject) => {
     execFile(win ? process.env.ComSpec ?? 'cmd.exe' : 'az', win ? ['/d', '/s', '/c', `az ${args.join(' ')}`] : args,
@@ -152,11 +155,16 @@ export function createDevOpsDetector(options: DevOpsDetectorOptions = {}) {
             || typeof fields['System.Title'] !== 'string') invalid();
           const idKey = String(id), previous = Number(next[idKey] ?? '0');
           if (Number(revision) > previous) {
-            next[idKey] = String(revision);
             // a revision outside the filters is remembered (cursor) but not queued: a later revision that matches is
             const passes = !filterMisses(t, { id: id as number, tags: splitTags(fields['System.Tags']), iterationPath: typeof fields['System.IterationPath'] === 'string' ? fields['System.IterationPath'] : '' }).length;
-            if ((!baseline || t.includeExisting) && passes) items.push({
-              key: `devops:${encodeURIComponent(t.organization)}:${encodeURIComponent(t.project)}:${id}:${revision}`,
+            let external: number | null;
+            try { external = options.externalRevision ? await cancellable(options.externalRevision(t.organization, id as number, previous, revision as number, async rev => {
+              const response = await (options.request ?? fetch)(`${base}/workItems/${id}/revisions/${rev}?api-version=7.1`, { method: 'GET', redirect: 'error', signal: controller.signal, headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } });
+              return readJson(response, controller.signal);
+            }), controller.signal) : revision as number; } catch (error) { if (error instanceof UncertainWorkItem) continue; throw error; }
+            next[idKey] = String(revision);
+            if ((!baseline || t.includeExisting) && passes && external !== null) items.push({
+              key: `devops:${encodeURIComponent(t.organization)}:${encodeURIComponent(t.project)}:${id}:${external}`,
               title: `#${id} ${(fields['System.Title'] as string).replace(/[\x00-\x1f\x7f]/g, ' ').trim()}`.slice(0, 240),
               inputs: { 'work-item-id': idKey, 'work-item-revision': String(revision), 'work-item-url': `https://dev.azure.com/${encodeURIComponent(t.organization)}/${encodeURIComponent(t.project)}/_workitems/edit/${id}` },
             });

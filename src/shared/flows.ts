@@ -18,6 +18,8 @@ export interface FlowStep {
   adapter?: 'devops-write' | 'test-db-read';
   /** Explicit test DB read capability; may accompany a DevOps write adapter, with both grants required. */
   testDbRead?: true;
+  /** Hold the exact approved test environment for this step, including BEFORE/AFTER checks. */
+  testEnvironment?: string;
   /** An agent step's role: the bound chat must run it. Absent = the Orchestrator picks the role. */
   role?: WorkRoleId;
   /** An agent step's model tier (at most the role's tierMax; needs role): the bound chat must run on it. Absent = the role's own choice. */
@@ -60,6 +62,8 @@ export interface FlowPackage {
   /** Required operation names are intent, never authority: automation approval grants them separately. */
   requiredOps: string[];
   history?: true;
+  /** First agent must call flow_intake before any external write; skip stays silent. */
+  intake?: true;
   downgrade?: { lessonOutput: string; removeTag: string; addTag: string; state: string };
 }
 export interface FlowDefinition {
@@ -85,6 +89,7 @@ export interface FlowVerifiedReport extends FlowAgentBinding { id: string; summa
 export interface FlowStepRun {
   stepId: string; status: 'pending' | 'ready' | 'running' | 'approval' | 'blocked' | 'completed' | 'cancelled';
   attempts: number; startedAt?: number; chatId?: string; chatRunId?: string; taskVersion?: number;
+  historyText?: string;
   reason?: string; receipt?: FlowReceipt; decisionPending?: boolean;
 }
 /** Durable query evidence. Never stores raw SQL, credentials, raw driver errors or database result rows. */
@@ -106,7 +111,9 @@ export interface FlowRun {
   settlementError?: string;
   outputs?: { id: string; at: number; content: string; sha256: string; brainPath?: string; projectedAt?: number }[];
   history?: { id: string; stepId: string; at: number; text: string; status: 'pending' | 'sent'; reason?: string; mentionReason?: 'intake' | 'block' | 'downgrade' | 'final' }[];
-  disposition?: { kind: 'needs-human'; reason: string; at: number; cleanup: 'pending' | 'complete'; phase: number; error?: string };
+  intake?: 'accepted' | 'skipped';
+  verdict?: { kind: 'ai-fixable'; at: number; stepId: string };
+  disposition?: { kind: 'needs-human' | 'skipped'; lesson?: boolean; reason: string; at: number; cleanup: 'pending' | 'complete'; phase: number; error?: string };
   cancellation?: { at: number; reason: string; by: 'user' | 'orchestrator' | 'routine'; expectedRevision: number; interruption?: 'pending' | 'confirmed' };
   restartOf?: { runId: string; stepId: string; expectedRevision: number; mode: 'from-start' | 'from-step' };
   pendingCancellation?: { revision: number; requestedAt: number; reason?: string };
@@ -153,7 +160,7 @@ export interface FlowSnapshot {
   runner?: { owner: 'here' | 'other'; active: number };
 }
 /** A role's launch facts: its own fixed model (null = none) and, per tier, the model the routing table gives on its engine. */
-export interface FlowRoleInfo { name: string; avatar: AgentAvatar; tier: ModelTier; tierMax: ModelTier; model: string | null; models: Partial<Record<ModelTier, string | null>> }
+export interface FlowRoleInfo { engine?: string; name: string; avatar: AgentAvatar; tier: ModelTier; tierMax: ModelTier; model: string | null; models: Partial<Record<ModelTier, string | null>> }
 export interface FlowMatch { status: 'none' | 'match' | 'ambiguous'; candidates: FlowVersion[] }
 export interface FlowPropose { definition: FlowDefinition; expectedRevision: number }
 export interface FlowActivate { id: string; expectedRevision: number; answer: 'yes' | 'no' | 'other'; feedback?: string }

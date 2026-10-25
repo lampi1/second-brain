@@ -80,3 +80,58 @@ it('recovery persists a blocked transition and work-item outbox entry, with rese
   restored.beginDowngrade(run.id, 'Fixture needs a human'); restored.output(run.id, 'lesson', 'Host correction', 'host'); restored.downgradeProgress(run.id, 1);
   expect(restored.status(run.id, 'owner').disposition?.phase).toBe(1);
 });
+
+// Explicit intake is a host state transition, not an instruction that can be bypassed with a successful report.
+function intakeRun() {
+  const d = definition(); d.package!.intake = true; d.package!.history = true; d.package!.requiredOps = ['comment', 'tags', 'fields', 'pr-abandon'];
+  d.package!.downgrade = { lessonOutput: 'lesson', removeTag: 'ai-fixable', addTag: 'ai-needs-human', state: 'New' };
+  const file = path.join(temp(), 'state.json'), flow = new FlowService({ file, contextKey: 'test' });
+  flow.propose({ definition: d, expectedRevision: 0 }); flow.decideDefinition({ id: d.id, expectedRevision: 1, answer: 'yes' });
+  const run = flow.start({ flowId: d.id, flowVersion: 1, subjectKey: 'sample', scope: {}, inputs: { workspace: '/fixture' } }, 'owner');
+  flow.bindAgent(run.id, run.revision, 'inspect', { chatId: 'worker', chatRunId: 'worker-run', taskVersion: 1, launched: { roleId: 'scout', tier: 'mid', packageDigest: run.definitionDigest, promptHash: packageHash(d.steps[0]!.agentPrompt!), engine: 'claude', model: 'sonnet' } }, 'owner');
+  return { flow, run, file };
+}
+it('intake skip is terminal, silent, lesson-free and persisted across restart', () => {
+  const { flow, run, file } = intakeRun(); expect(flow.status(run.id, 'owner').history).toBeUndefined();
+  const skipped = flow.intake(run.id, 'skip', 'Already needs human');
+  expect(skipped).toMatchObject({ status: 'cancelled', disposition: { kind: 'skipped', cleanup: 'complete' } });
+  expect(skipped.history).toBeUndefined(); expect(skipped.outputs).toBeUndefined();
+  expect(new FlowService({ file, contextKey: 'test' }).status(run.id, 'owner').disposition?.kind).toBe('skipped');
+});
+it('initial needs-human carries no lesson; only a recorded fixable verdict permits downgrade', () => {
+  const { flow, run } = intakeRun(); flow.intake(run.id, 'accept', 'Matches');
+  expect(() => flow.beginDowngrade(run.id, 'OTP needed')).toThrow('only after');
+  expect(flow.beginDowngrade(run.id, 'OTP needed', 'needs-human').disposition).toMatchObject({ lesson: false });
+  const next = intakeRun(); next.flow.intake(next.run.id, 'accept', 'Matches'); next.flow.fixable(next.run.id);
+  expect(() => next.flow.beginDowngrade(next.run.id, 'Later block', 'needs-human')).toThrow('downgrade');
+  expect(next.flow.beginDowngrade(next.run.id, 'Later block').disposition).toMatchObject({ lesson: true });
+});
+it('step-raised blocks get host mentions and keep the prepared concise history with evidence', () => {
+  const { flow, run } = intakeRun(); flow.intake(run.id, 'accept', 'Matches');
+  flow.stepHistory(run.id, '[Bug](https://dev.azure.com/contoso/Example/_workitems/edit/42) requires a human test.');
+  const current = flow.status(run.id, 'owner'); flow.blockStep(run.id, current.revision, 'inspect', 'OTP unavailable');
+  const entry = flow.status(run.id, 'owner').history!.at(-1)!;
+  expect(entry.mentionReason).toBe('block'); expect(entry.text).toContain('[Bug]'); expect(entry.text).toContain('blocked');
+});
+it('proposal and activation validate models without silently substituting the approved choice', () => {
+  let known = false;
+  const flow = new FlowService({ file: path.join(temp(), 'state.json'), contextKey: 'test', validateModels: d => { if (!known || d.steps[0]?.model !== 'sonnet') throw new Error('Unknown model'); } });
+  expect(() => flow.propose({ definition: definition(), expectedRevision: 0 })).toThrow('Unknown model');
+  known = true; flow.propose({ definition: definition(), expectedRevision: 0 }); known = false;
+  expect(() => flow.decideDefinition({ id: 'sample', expectedRevision: 1, answer: 'yes' })).toThrow('Unknown model'); expect(flow.snapshot().active).toEqual({});
+});
+it.each([true, false])('refuses partial migration across an intake protocol change (original=%s)', original => {
+  const file = path.join(temp(), 'state.json'); const flow: FlowService = new FlowService({ file, contextKey: 'test', resolveReport: (binding, id) => ({ ...binding, id, completed: true, summary: 'Verified', evidence: ['finding: evidence'], launched: { roleId: 'scout', tier: 'mid', packageDigest: flow.snapshot().runs[0]!.definitionDigest, promptHash: packageHash(definition().steps[0]!.agentPrompt!), engine: 'claude', model: 'sonnet' } }) });
+  const d = definition(); if (original) d.package!.intake = true;
+  d.steps.push({ id: 'gate', title: 'Gate', kind: 'approval', instructions: 'Confirm', inputs: [], evidence: [], timeoutMs: 60000, maxAttempts: 1, effect: 'read-only' });
+  flow.propose({ definition: d, expectedRevision: 0 }); flow.decideDefinition({ id: d.id, expectedRevision: 1, answer: 'yes' });
+  const run = flow.start({ flowId: d.id, flowVersion: 1, subjectKey: 'sample', scope: {}, inputs: { workspace: '/fixture' } }, 'owner');
+  flow.bindAgent(run.id, run.revision, 'inspect', { chatId: 'worker', chatRunId: 'worker-run', taskVersion: 1, launched: { roleId: 'scout', tier: 'mid', packageDigest: run.definitionDigest, promptHash: packageHash(d.steps[0]!.agentPrompt!), engine: 'claude', model: 'sonnet' } }, 'owner');
+  if (original) { flow.intake(run.id, 'accept', 'Matches'); flow.fixable(run.id); }
+  const source = flow.report({ runId: run.id, expectedRevision: flow.status(run.id, 'owner').revision, stepId: 'inspect', reportId: 'report' }, 'owner');
+  if (original) delete d.package!.intake; else d.package!.intake = true;
+  flow.propose({ definition: d, expectedRevision: 1 }); flow.decideDefinition({ id: d.id, expectedRevision: 2, answer: 'yes' });
+  const version = flow.snapshot().versions.at(-1)!;
+  expect(() => flow.restart({ runId: run.id, expectedRevision: source.revision, mode: 'from-step', stepId: 'gate', targetVersion: version.version, targetDigest: version.digest, acknowledgeEffects: true })).toThrow('restart from the beginning');
+  expect(new FlowService({ file, contextKey: 'test' }).snapshot().storageError).toBeUndefined();
+});
