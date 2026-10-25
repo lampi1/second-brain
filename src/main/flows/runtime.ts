@@ -4,8 +4,9 @@
 // prod step's «Esegui», which only the user's click runs) needs the user. One runner per store (lock.ts).
 // Host report resolution uses canonical agent_report records, never arbitrary assistant text.
 import fs from 'node:fs';
+import { flowBrainContextKey } from './context';
 import path from 'node:path';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import type { ChatSummary } from '../../shared/contract';
 import { APP_OWNER, type FlowAgentBinding, type FlowCancel, type FlowDecision, type FlowDryRun, type FlowItemPreview, type FlowOverviewRow, type FlowRestart, type FlowRestartDecision, type FlowRestartProposal, type FlowRoleInfo, type FlowReport, type FlowRun, type FlowSnapshot, type FlowStartItem, type FlowStep, type FlowStepModelEdit, type FlowTestDbEvidence, type FlowVerifiedReport } from '../../shared/flows';
 import type { Effort } from '../../shared/contract';
@@ -111,7 +112,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     if (!root) { if (selectedKey) void leaveContext(selectedKey).catch(() => {}); abortRequests(); for (const auto of automations.values()) auto.stop(); automations.clear(); selectedKey = null; throw new Error('Collega il brain per definire e usare i flussi.'); }
     let canonical: string;
     try { canonical = fs.realpathSync(root); } catch { canonical = path.resolve(root); }
-    const key = createHash('sha256').update(process.platform === 'win32' ? canonical.toLowerCase() : canonical).digest('hex');
+    const key = flowBrainContextKey(canonical);
     if (selectedKey !== key) {
       if (selectedKey) void leaveContext(selectedKey).catch(() => {});
       abortRequests();

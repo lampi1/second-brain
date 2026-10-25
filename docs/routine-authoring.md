@@ -4,6 +4,8 @@ A routine is user-owned versioned data, not a product feature for one company. C
 
 Ask the Orchestrator to read `app_flow_capabilities`: its small overview links to `authoring`, `devops` and `test-targets` sections. Details load only when needed, not into every agent prompt. `app_flow_models` supplies actual available model IDs; the proposal tools describe the accepted fields.
 
+For large definitions, call `app_flow_propose` with `{"contextKey":"<from app_flow_list>","expectedRevision":0,"definitionPath":"reviews/my-routine.json"}` instead of an inline `definition`. Use the current draft revision when revising. The UTF-8 JSON file must contain the plain definition, be inside the selected brain and stay within 1 MiB; absolute paths inside that brain also work. Loading preserves every field limit and validation, creates only an inert draft and returns a compact receipt. The full proposal is shown in Routine for approval; later file edits do not change it.
+
 | Need | Configuration |
 | --- | --- |
 | A different workflow | Compose agent, check, approval and manual steps with chosen evidence, timeouts and bounded retry/rework. |
