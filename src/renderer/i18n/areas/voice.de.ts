@@ -1,6 +1,7 @@
 // German (de-AT, informal "du") texts of voice mode (ADR 0152); same keys as voice.it.ts. Spread into i18n/de.ts.
 import type { voiceIt } from './voice.it';
 export const voiceDe: typeof voiceIt = {
+  'voice.contextChanged': 'Deine Worte sind als Entwurf gespeichert und noch nicht gesendet.',
   'voice.on': 'Diktieren (schreibt ins Feld)',
   'voice.off': 'Mikrofon ausschalten',
   'voice.placeholder': 'Sprich einfach, oder schreib…',

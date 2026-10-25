@@ -29,6 +29,8 @@ describe('native Codex app tool approval', () => {
       'mcp_servers.second-brain.tools.maintenance_propose.approval_mode=approve',
       'mcp_servers.second-brain.tools.flow_devops_write.approval_mode=approve',
       'mcp_servers.second-brain.tools.flow_test_db_query.approval_mode=approve',
+      'mcp_servers.second-brain.tools.flow_output.approval_mode=approve',
+      'mcp_servers.second-brain.tools.flow_downgrade.approval_mode=approve',
       'mcp_servers.second-brain-app.default_tools_approval_mode=approve',
     ]);
     expect(values).toContain('mcp_servers.second-brain.default_tools_approval_mode=prompt');

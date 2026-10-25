@@ -14,7 +14,7 @@ function fixture() {
   const child = chat('child', { parentId: 'parent', run: { runId: 'run-child', startedAt: 30, parentRunId: 'run-parent', taskVersion: 1 } as ChatSummary['run'] });
   const chats = [parent, child, chat('other')], threads = [thread('own', ['parent']), thread('private', ['other'])];
   const tool = workDecisionTools({ chats: { list: () => chats }, workflows: { list: () => structuredClone(threads) } })[0]!;
-  const read = async (id = 'child', args = {}, mount = 'chat') => JSON.parse(await tool.run(args, { mount, params: { chatId: id }, sessionId: '', signal: new AbortController().signal, progress: () => false } as Parameters<McpTool['run']>[1]) as string);
+  const read = async (id = 'child', args = {}, mount = 'browser-chat') => JSON.parse(await tool.run(args, { mount, params: { chatId: id }, sessionId: '', signal: new AbortController().signal, progress: () => false } as Parameters<McpTool['run']>[1]) as string);
   return { parent, child, chats, threads, read };
 }
 
@@ -29,6 +29,8 @@ describe('agent_work_decisions', () => {
     const f = fixture();
     await expect(f.read('child', { chatId: 'other' })).rejects.toThrow(/No arguments/);
     await expect(f.read('child', {}, 'app')).rejects.toThrow(/own endpoint/);
+    await expect(f.read('child', {}, 'browser')).rejects.toThrow(/own endpoint/);
+    await expect(f.read('child', {}, 'chat')).rejects.toThrow(/own endpoint/);
     await expect(f.read('missing')).rejects.toThrow(/active work assignment/);
     f.child.isOrchestrator = true;
     await expect(f.read()).rejects.toThrow(/active work assignment/);

@@ -13,6 +13,7 @@ import { flowAsks } from '../lib/flow-ask';
 import { openQueue } from '../lib/later';
 import { activeVersion, ago, definitionOf, duration, itemOf, lastHeal, list, needsYou, prodSteps, queued, retrying, ruleFor, stepLook, working, type StepLook } from '../lib/routine-view';
 import { stepAgentLabel } from '../lib/flow-step-agent';
+import { RoutineInspect } from './RoutineInspect';
 import { RoutineExport } from './RoutinePackage';
 import { controlFlowAutomation, decideFlow, exportFlowDefinition, flowState, plain, routineControl } from '../store/flows';
 import { sb } from '../sb';
@@ -75,6 +76,7 @@ function ProdCard({ snapshot, run, definition }: { snapshot: FlowSnapshot; run: 
   return <article className="rt-card rt-you rt-prod" data-collapsed={later || undefined} data-testid="rt-prod-card">
     <header className="rt-card-head"><span className="rt-mark">{(definition?.title ?? run.flowId).charAt(0)}</span><strong>{definition?.title ?? run.flowId}</strong>
       <span className="rt-muted">{t('rt.stepOf', { at: run.currentStep + 1, of: run.steps.length })}</span><Chip tone="red">prod</Chip><span className="rt-sp" /><span className="rt-muted">{t('rt.waitingSince', { ago: ago(run.awaitingUser.at) })}</span></header>
+    <RoutineInspect snapshot={snapshot} definition={definition} run={run} />
     <h3 className="rt-q">{t('rt.prodQuestion', { step: step.title })}</h3>
     {!later && <div className="rt-prod-body">
       <div className="rt-prod-main">
@@ -107,6 +109,7 @@ function StoppedCard({ snapshot, run, definition, onRecovery }: { snapshot: Flow
     {itemOf(run) && <p className="rt-muted">{itemOf(run)!.url ? <a href={itemOf(run)!.url} target="_blank" rel="noreferrer">{itemOf(run)!.title}</a> : itemOf(run)!.title}</p>}
     {step?.reason && <p className="rt-reason">{step.reason}</p>}
     <div className="rt-actions">
+      <RoutineInspect snapshot={snapshot} definition={definition} run={run} />
       {canRetry && <button type="button" className="btn btn-primary btn-s" onClick={() => void decideFlow(ask, 'yes')} data-testid="rt-retry">{t('rt.retry')}</button>}
       {ask && !canRetry && <button type="button" className="btn btn-amber btn-s" onClick={() => openQueue(`${ask.chatId}/${ask.id}`)} data-testid="rt-decide">{t('rt.decide')}</button>}
       <button type="button" className="btn btn-ghost btn-s" onClick={() => onRecovery(run, 'from-step')} data-testid="rt-from-step">{t('rt.fromStep')}</button>
@@ -147,6 +150,7 @@ function WorkingCard({ snapshot, run, definition, onRecovery, open, onToggle }: 
         {next.length > 0 && <li data-look="todo"><span className="rt-dot" data-look="todo" /><span className="rt-muted">{t('rt.next')}: {next.map((s, i) => `${run.currentStep + 2 + i} · ${s.title}`).join(' → ')}</span><Chip>{t('rt.s.todo')}</Chip></li>}
       </ol>
       <footer className="rt-actions">
+        <RoutineInspect snapshot={snapshot} definition={definition} run={run} />
         {item?.url && <a className="btn btn-ghost btn-s" href={item.url} target="_blank" rel="noreferrer">{t('rt.openItem')}</a>}
         {chat && <button type="button" className="btn btn-ghost btn-s" onClick={() => openChatRef(chat)} data-testid="flow-open-agent">{t('flows.openAgent')}</button>}
         <span className="rt-sp" />
@@ -272,6 +276,7 @@ export function RoutineDetail({ snapshot, flowId, onBack, onStart, onDryRun, onA
     <header className="rt-detail-head"><button type="button" className="btn btn-ghost btn-s" onClick={onBack}>‹ {t('rt.title')}</button><RuleSwitch snapshot={snapshot} rule={rule} /><h2>{definition.title}</h2>{version && <Chip>v{version.version}</Chip>}<span className="rt-sp" />
       {version && <><span className="rt-export" data-testid="rt-export"><button type="button" className="btn btn-ghost btn-s" title={t('rt.exportPackTip')} onClick={() => setPacking(true)} data-testid="rt-export-package">⇪ {t('rt.exportPack')}</button><button type="button" className="btn btn-ghost btn-s" title={t('rt.exportJsonTip')} onClick={() => void exportFlowDefinition(snapshot.contextKey, flowId, version.version, 'json')} data-testid="flow-export-json">JSON</button><button type="button" className="btn btn-ghost btn-s" onClick={() => void exportFlowDefinition(snapshot.contextKey, flowId, version.version, 'markdown')} data-testid="flow-export-markdown">Markdown</button></span>
         <button type="button" className="btn btn-ghost btn-s" onClick={() => onDryRun(flowId)} data-testid="rt-dry">◎ {t('rt.dry')}</button></>}
+      <RoutineInspect snapshot={snapshot} definition={definition} version={version?.version} />
       <DecideButton snapshot={snapshot} flowId={flowId} />
       <button type="button" className="btn btn-ghost btn-s" onClick={() => onAsk(version)}>✎ {t('rt.edit')}</button>
       {version && <button type="button" className="btn btn-primary btn-s" onClick={() => onStart(flowId)} data-testid="rt-start-here">▶ {t('rt.start')}</button>}</header>
@@ -321,11 +326,11 @@ export function RoutineHistory({ snapshot }: { snapshot: FlowSnapshot }) {
   const runs = snapshot.runs.filter(run => run.status === 'completed' || run.status === 'cancelled').sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 200);
   const [open, setOpen] = useState<string | null>(null);
   if (!runs.length) return <p className="rt-calm">{t('rt.histEmpty')}</p>;
-  return <table className="rt-table" data-testid="rt-history"><thead><tr><th>{t('rt.colRoutine')}</th><th>{t('rt.colItem')}</th><th>{t('rt.colResult')}</th><th>{t('rt.colTime')}</th><th>{t('rt.colWhen')}</th></tr></thead>
+  return <div className="rt-history-scroll"><table className="rt-table" data-testid="rt-history"><thead><tr><th>{t('rt.colRoutine')}</th><th>{t('rt.colItem')}</th><th>{t('rt.colResult')}</th><th>{t('rt.colTime')}</th><th>{t('rt.colWhen')}</th></tr></thead>
     <tbody>{runs.map(run => {
       const definition = definitionOf(snapshot, run), item = itemOf(run);
       return [<tr key={run.id} onClick={() => setOpen(open === run.id ? null : run.id)} aria-expanded={open === run.id}>
-        <td>{definition?.title ?? run.flowId}</td><td>{item?.url ? <a href={item.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>{item.title}</a> : item?.title ?? '—'}</td>
+        <td>{definition?.title ?? run.flowId}<RoutineInspect snapshot={snapshot} definition={definition} run={run} /></td><td>{item?.url ? <a href={item.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>{item.title}</a> : item?.title ?? '—'}</td>
         <td><Chip tone={run.status === 'completed' ? 'green' : undefined}>{t(run.status === 'completed' ? 'rt.completed' : 'rt.cancelled')}</Chip>{run.heal?.length ? <span className="rt-muted"> · ↻ {run.heal.length}</span> : null}</td>
         <td>{duration(run.updatedAt - run.createdAt)}</td><td>{new Date(run.updatedAt).toLocaleString(locale())}</td></tr>,
         open === run.id && <tr key={`${run.id}-x`} className="rt-hist-open"><td colSpan={5}>
@@ -333,7 +338,7 @@ export function RoutineHistory({ snapshot }: { snapshot: FlowSnapshot }) {
           {run.receipts?.length ? <><div className="rt-label">{t('rt.receipts')}</div><ul className="rt-receipts">{run.receipts.map(r => <li key={r.id}><code>{r.command}</code><span className="rt-muted">{r.env} · sha {short(r.sha256)} · {t(r.by === 'user' ? 'rt.byUser' : 'rt.byRunner')} · {new Date(r.startedAt).toLocaleTimeString(locale())}{r.endedAt ? `–${new Date(r.endedAt).toLocaleTimeString(locale())}` : ''} · {r.exitCode === undefined ? '…' : t('rt.exit', { code: r.exitCode ?? '?' })}</span>{r.output && <pre>{r.output.slice(-600)}</pre>}</li>)}</ul></> : null}
           {run.cancellation?.reason && <p className="rt-muted">{run.cancellation.reason}</p>}
         </td></tr>];
-    })}</tbody></table>;
+    })}</tbody></table></div>;
 }
 
 // ---------------------------------------------------------------- start and dry-run

@@ -14,6 +14,11 @@ export const VOICE_NAMES: readonly VoiceName[] = ['paola', 'miro', 'dii'];
 /** the microphone's sample rate: Whisper and Silero both want 16 kHz mono */
 export const VOICE_RATE = 16_000;
 
+/** Correlation survives IPC and asynchronous inference. Missing/stale identities are never routed. */
+export interface VoiceUtterance { session: string; utterance: number }
+export interface VoiceHeard extends VoiceUtterance { text: string; ms: number }
+export interface VoiceSpeech extends VoiceUtterance { active: boolean }
+
 /** What is on disk and what the engine is doing now (voice:state, voice:changed). */
 export interface VoiceState {
   /** each part present and checked: the VAD, the chosen Whisper, the chosen voice */
@@ -35,21 +40,17 @@ export type SpokenAnswer = { kind: 'yes' } | { kind: 'no' } | { kind: 'skip' } |
 
 const norm = (s: string): string => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ').trim();
 const YES = new Set(['si', 'sì', 'certo', 'ok', 'okay', 'va bene', 'vai', 'procedi', 'confermo', 'esatto', 'si grazie', 'si vai', 'si procedi', 'si certo', 'yes', 'certamente', 'assolutamente si', 'daccordo', "d'accordo", 'fallo', 'si fallo']);
-const NO = new Set(['no', 'no grazie', 'non ora', 'assolutamente no', 'nope', 'negativo', 'per niente', 'non farlo', 'no lascia stare', 'lascia stare', 'no no']);
+const NO = new Set(['no', 'no grazie', 'non ora', 'assolutamente no', 'nope', 'negativo', 'per niente', 'non farlo', 'no lascia stare', 'lascia stare', 'no no', 'no non ora']);
 const SKIP = ['non voglio rispondere', 'non rispondo', 'ci penso dopo', 'salta', 'dopo', 'piu tardi', 'passo'];
 
-/** Reads a transcribed answer to a yes/no card. A short yes or no (a few words, starting with it) counts as the
- *  click; anything longer is the user's own answer, sent as text, like «Scrivi una risposta…». */
+/** Only complete, unambiguous phrases map to buttons. Qualifications, corrections and uncertainty stay text. */
 export function parseSpokenAnswer(raw: string): SpokenAnswer | null {
   const text = raw.trim();
   const n = norm(text);
   if (!n) return null;
-  if (SKIP.some(s => n === s || n.startsWith(`${s} `))) return { kind: 'skip' };
+  if (SKIP.includes(n)) return { kind: 'skip' };
   if (YES.has(n)) return { kind: 'yes' };
   if (NO.has(n)) return { kind: 'no' };
-  const words = n.split(' ');
-  if (words.length <= 4 && words[0] === 'si') return { kind: 'yes' };
-  if (words.length <= 4 && words[0] === 'no') return { kind: 'no' };
   return { kind: 'text', text };
 }
 

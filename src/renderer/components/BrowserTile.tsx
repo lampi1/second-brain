@@ -26,7 +26,7 @@ function splitUrl(url: string): { host: string; rest: string } {
   } catch { return { host: url, rest: '' }; }
 }
 
-export const BrowserTile = memo(function BrowserTile({ tabId, maximized }: { tabId: string; maximized?: boolean }) {
+export const BrowserTile = memo(function BrowserTile({ tabId, maximized, embedded }: { tabId: string; maximized?: boolean; embedded?: boolean }) {
   const tab = useApp(s => s.tabs.find(t => t.id === tabId));
   const owner = useApp(s => (tab?.ownerChatId ? s.chats[tab.ownerChatId] : undefined));
   const key = `browser:${tabId}`;
@@ -63,9 +63,9 @@ export const BrowserTile = memo(function BrowserTile({ tabId, maximized }: { tab
             <IconButton label={auditText('audit.BrowserTile.forward')} onClick={() => void goTab(tabId, 'forward')} testid={`browser-forward-${tabId}`}><IconArrowRight size={14} /></IconButton>
             <IconButton label={auditText('audit.BrowserTile.reload')} onClick={() => void goTab(tabId, 'reload')} testid={`browser-reload-${tabId}`}><IconRefresh size={14} /></IconButton>
           </span>
-          <IconButton label={maximized ? auditText('auditExpression.BrowserTile.text12') : auditText('auditExpression.BrowserTile.text13')} shortcut={maximized ? 'Esc' : 'F11'} onClick={() => toggleMaximize(key)} testid={`browser-max-${tabId}`}>
+          {!embedded && <IconButton label={maximized ? auditText('auditExpression.BrowserTile.text12') : auditText('auditExpression.BrowserTile.text13')} shortcut={maximized ? 'Esc' : 'F11'} onClick={() => toggleMaximize(key)} testid={`browser-max-${tabId}`}>
             {maximized ? <IconMinimize size={14} /> : <IconMaximize size={14} />}
-          </IconButton>
+          </IconButton>}
           <IconButton label={auditText('audit.BrowserTile.closeTab')} shortcut="Ctrl+W" onClick={e => closeFromX(e, () => closeTab(tabId))} testid={`browser-x-${tabId}`}><IconX size={14} /></IconButton>
         </div>
         <div className="th-sub">

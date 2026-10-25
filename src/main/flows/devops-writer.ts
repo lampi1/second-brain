@@ -6,15 +6,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { renameRetrying } from '../rules/storage';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { DevOpsWriteGrant, DevOpsWriteOp } from '../../shared/flow-automation';
 import { devopsToken } from './devops-detector';
+import type { TestDeploymentCoordinator } from './test-deployment';
+import { devopsResource, type ResourceLedger } from './devops-resources';
+import { renderDevOpsComment } from './devops-content';
 import { integer, keys, object, text } from './schema';
 
-export const DEVOPS_WRITE_REQUESTS = ['add-tags', 'remove-tags', 'set-fields', 'comment', 'link-pr', 'create-test-plan', 'rename-test-plan', 'create-test-suite', 'create-test-case', 'set-test-outcome'] as const;
+export const DEVOPS_WRITE_REQUESTS = ['add-tags', 'remove-tags', 'set-fields', 'comment', 'link-pr', 'create-test-plan', 'rename-test-plan', 'create-test-suite', 'create-test-case', 'set-test-outcome', 'upload-image', 'relate-work-item', 'relate-pr', 'create-pr', 'pr-comment', 'publish-pr', 'abandon-pr', 'deploy-test', 'test-deploy-status', 'cancel-test-deploy'] as const;
 export type DevOpsWriteRequestOp = typeof DEVOPS_WRITE_REQUESTS[number];
 /** Which user-approved category each request needs. */
 const CATEGORY: Record<DevOpsWriteRequestOp, DevOpsWriteOp> = {
+  'upload-image': 'attachments', 'relate-work-item': 'related-links', 'relate-pr': 'related-links', 'create-pr': 'pr-create', 'pr-comment': 'pr-comment', 'publish-pr': 'pr-publish', 'abandon-pr': 'pr-abandon', 'deploy-test': 'test-deploy', 'test-deploy-status': 'test-deploy', 'cancel-test-deploy': 'test-deploy',
   'add-tags': 'tags', 'remove-tags': 'tags', 'set-fields': 'fields', comment: 'comment', 'link-pr': 'pr-links',
   'create-test-plan': 'test-plans', 'rename-test-plan': 'test-plans', 'create-test-suite': 'test-plans', 'create-test-case': 'test-plans', 'set-test-outcome': 'test-results',
 };
@@ -25,16 +29,17 @@ const TIMEOUT_MS = 60_000, MAX_BYTES = 2 * 1024 * 1024, MAX_RUNS = 500, MAX_PER_
 const API = 'api-version=7.1';
 
 /** What the host resolved for the calling chat: never supplied by the agent. */
-export interface DevOpsWriteContext { runId: string; grant: DevOpsWriteGrant; workItemId: number }
+export interface DevOpsWriteContext { runId: string; grant: DevOpsWriteGrant; workItemId: number; evidenceRoot?: string; authorize?: () => void; mentionReason?: 'intake' | 'block' | 'downgrade' | 'final' }
 interface Plan { project: string; id: number; rootSuiteId: number }
 interface Suite { project: string; planId: number; id: number }
 interface TestCase { project: string; planId: number; suiteId: number; id: number }
-interface Ledger { schema: 1; runs: Record<string, { plans: Plan[]; suites: Suite[]; testCases: TestCase[] }> }
+interface Ledger { schema: 1; runs: Record<string, ResourceLedger & { plans: Plan[]; suites: Suite[]; testCases: TestCase[] }>; operations?: Record<string, { runId: string; state: 'pending' | 'done'; op?: string; at?: number; completedAt?: number; result?: Record<string, unknown> }> }
 export interface DevOpsWriterOptions {
   /** Brain-scoped ledger file of resources each run created. */
   file: string;
   token?: (signal?: AbortSignal) => Promise<string>;
   request?: (url: string, init: RequestInit) => Promise<Response>;
+  deployments?: TestDeploymentCoordinator;
   audit?: (entry: { runId: string; op: DevOpsWriteRequestOp; target: string }) => void;
 }
 export class DevOpsWriteError extends Error {}
@@ -51,11 +56,40 @@ export class DevOpsWriter {
   /** Validate, authorize and perform one request; returns a short receipt the agent can quote as evidence.
    *  One request at a time, so the created-resources ledger never loses an update. */
   execute(context: DevOpsWriteContext, request: unknown, signal?: AbortSignal): Promise<Record<string, unknown>> {
-    const next = this.queue.then(() => this.perform(context, request, signal));
+    const next = this.queue.then(() => this.journal(context, request, signal));
     this.queue = next.catch(() => undefined);
     return next;
   }
+  operationsFor(runId: string) { return Object.entries(this.read().operations ?? {}).filter(([, v]) => v.runId === runId).map(([requestHash, v]) => ({ requestHash, ...structuredClone(v) })); }
+  ownedPrs(runId: string) { return structuredClone(this.read().runs[runId]?.prs ?? []); }
+  private async journal(context: DevOpsWriteContext, request: unknown, signal?: AbortSignal): Promise<Record<string, unknown>> {
+    context.authorize?.();
+    const raw = object(request, 'request');
+    if (!(DEVOPS_WRITE_REQUESTS as readonly string[]).includes(String(raw.op))) deny('Unknown DevOps write operation');
+    if (!context.grant.ops.includes(CATEGORY[raw.op as DevOpsWriteRequestOp])) deny(`DevOps write "${CATEGORY[raw.op as DevOpsWriteRequestOp]}" is not enabled for this flow`);
+    if (raw.op === 'test-deploy-status') return this.perform(context, raw, signal);
+    const key = createHash('sha256').update(JSON.stringify([context.runId, request])).digest('hex');
+    const data = this.read(), previous = data.operations?.[key];
+    if (previous?.state === 'done') return previous.result!;
+    if (Object.values(data.operations ?? {}).some(op => op.runId === context.runId && op.state === 'pending')) deny('A previous DevOps write has an unknown outcome. Reconcile it in DevOps before retrying; do not duplicate the effect.');
+    // The request hash is only an idempotency identity; it stores neither request content nor credentials.
+    let attempted = false;
+    this.beforeMutation = () => {
+      context.authorize?.();
+      if (attempted) return;
+      const latest = this.read();
+      if (Object.keys(latest.operations ?? {}).length >= 20_000) deny('DevOps operation journal is full; archive reviewed completed runs first');
+      (latest.operations ??= {})[key] = { runId: context.runId, state: 'pending', op: String(raw.op), at: Date.now() }; this.write(latest); attempted = true;
+    };
+    try {
+      const result = await this.perform(context, raw, signal);
+      if (attempted) { const latest = this.read(); (latest.operations ??= {})[key] = { runId: context.runId, state: 'done', op: String(raw.op), at: latest.operations?.[key]?.at ?? Date.now(), completedAt: Date.now(), result }; this.write(latest); }
+      return result;
+    } finally { this.beforeMutation = undefined; }
+  }
+  private beforeMutation?: () => void;
   private async perform(context: DevOpsWriteContext, request: unknown, signal?: AbortSignal): Promise<Record<string, unknown>> {
+    context.authorize?.();
     const raw = object(request, 'request'), op = raw.op as DevOpsWriteRequestOp;
     if (!(DEVOPS_WRITE_REQUESTS as readonly string[]).includes(op)) deny('Unknown DevOps write operation');
     const { grant } = context;
@@ -67,7 +101,10 @@ export class DevOpsWriter {
       let token: string;
       try { token = await (this.options.token ?? devopsToken)(controller.signal); } catch { return deny('DevOps: Azure CLI login unavailable. Run az login.'); }
       if (typeof token !== 'string' || !token || token.length > 32_768 || /\s/.test(token)) deny('DevOps: Azure CLI login unavailable. Run az login.');
-      const call = (method: string, url: string, body?: unknown, contentType = 'application/json') => this.call(token, method, url, body, contentType, controller.signal);
+      const call = (method: string, url: string, body?: unknown, contentType = 'application/json') => {
+        context.authorize?.(); if (controller.signal.aborted) throw new Error('DevOps request cancelled');
+        return this.call(token, method, url, body, contentType, controller.signal);
+      };
       const org = `https://dev.azure.com/${encodeURIComponent(grant.organization)}`;
       const project = (value: unknown): string => {
         const name = safeText(value, 'project', 128);
@@ -102,6 +139,22 @@ export class DevOpsWriter {
       const patchItem = (patch: unknown[]) => call('PATCH', `${org}/_apis/wit/workitems/${context.workItemId}?${API}`, patch, 'application/json-patch+json');
       const audit = (target: string) => { try { this.options.audit?.({ runId: context.runId, op, target }); } catch { /* audit is best effort */ } };
 
+      if (op === 'deploy-test' || op === 'test-deploy-status' || op === 'cancel-test-deploy') {
+        keys(raw, op === 'deploy-test' ? ['op', 'targetId', 'buildId'] : ['op', 'targetId'], 'request');
+        const target = grant.deployTargets?.find(t => t.id === raw.targetId);
+        if (!target || !this.options.deployments) deny('No exact test deployment target is approved/configured');
+        let source: { repositoryId: string; commit: string; branch: string } | undefined;
+        if (op === 'deploy-test') {
+          const pr = mine.prs?.find(pr => pr.repositoryId === target!.repositoryId);
+          if (!pr) deny('Deployment requires this run’s own PR');
+          const live = await call('GET', `${org}/${encodeURIComponent(pr!.project)}/_apis/git/repositories/${pr!.repositoryId}/pullrequests/${pr!.id}?${API}`);
+          if (live.pullRequestId !== pr!.id || live.sourceRefName !== pr!.source || live.targetRefName !== pr!.target || String(object(live.repository, 'PR repository').id).toLowerCase() !== pr!.repositoryId || live.status !== 'active') deny('Run PR identity changed');
+          source = { repositoryId: pr!.repositoryId, commit: text(object(live.lastMergeSourceCommit, 'PR source commit').commitId, 'commit', 64), branch: pr!.source };
+        }
+        return this.options.deployments!.execute(op, target!, op === 'deploy-test' ? id(raw.buildId, 'buildId') : undefined, { runId: context.runId, call, authorize: () => { context.authorize?.(); if (controller.signal.aborted) throw new Error('Deployment request cancelled'); }, source });
+      }
+      const resource = await devopsResource(raw, { grant, workItemId: context.workItemId, evidenceRoot: context.evidenceRoot, mine, call, workItem, patchItem, record });
+      if (resource) { audit(`run:${context.runId}`); return resource; }
       switch (op) {
         case 'add-tags': case 'remove-tags': {
           keys(raw, ['op', 'tags'], 'request');
@@ -128,12 +181,17 @@ export class DevOpsWriter {
           audit(`workitem:${context.workItemId}`); return { workItemId: context.workItemId, fields: patch.map(p => p.path.slice(8)) };
         }
         case 'comment': {
-          keys(raw, ['op', 'text', 'mentions'], 'request');
+          keys(raw, ['op', 'text', 'mentions', 'mentionReason', 'format'], 'request');
           const body = text(raw.text, 'text', 10_000);
           if (raw.mentions !== undefined && (!Array.isArray(raw.mentions) || raw.mentions.length > 10)) deny('mentions: at most 10 identity ids');
           const ids = ((raw.mentions as unknown[] | undefined) ?? []).map(value => { const s = lower(safeText(value, 'mention', 36)); if (!GUID.test(s)) deny('mentions must be identity GUIDs'); return s; });
           if (new Set(ids).size !== ids.length) deny('mentions: duplicate identity');
           if (ids.some(v => !(grant.mentions ?? []).includes(v))) deny('Mention is not in the approved DevOps write grant');
+          if (ids.length && context.evidenceRoot && !['intake', 'block', 'downgrade', 'final'].includes(String(context.mentionReason))) deny('Mentions are allowed only on intake, blocks, downgrades or final outcome');
+          if (raw.format !== undefined && !['plain', 'markdown'].includes(String(raw.format))) deny('Unknown comment format');
+          const rich = raw.format !== 'plain' && /!?\[[^\]]+\]\(/.test(body);
+          if (rich && !grant.ops.includes('rich-comments')) deny('Clickable links and inline images require rich-comments');
+          const rendered = rich ? renderDevOpsComment(body, grant.organization, mine.images ?? []) : html(body);
           const item = await workItem();
           // the adapter builds each mention itself, the name read from DevOps; the agent's text stays escaped
           const tags: string[] = [];
@@ -145,7 +203,7 @@ export class DevOpsWriter {
             if (lower(String(row.id)) !== identity || !name || name.length > 256 || CONTROL.test(name)) deny('DevOps: unexpected identity response');
             tags.push(`<a href="#" data-vss-mention="version:2.0,${identity}">@${html(name)}</a>`);
           }
-          const result = await call('POST', `${org}/${encodeURIComponent(item.project)}/_apis/wit/workItems/${context.workItemId}/comments?api-version=7.1-preview.4`, { text: `${tags.length ? `${tags.join(' ')}<br/>` : ''}${html(body)}` });
+          const result = await call('POST', `${org}/${encodeURIComponent(item.project)}/_apis/wit/workItems/${context.workItemId}/comments?api-version=7.1-preview.4`, { text: `${tags.length ? `${tags.join(' ')}<br/>` : ''}${rendered}` });
           audit(`workitem:${context.workItemId}`); return { workItemId: context.workItemId, commentId: result.id, ...(ids.length ? { mentions: ids.length } : {}) };
         }
         case 'link-pr': {
@@ -219,10 +277,12 @@ export class DevOpsWriter {
   }
 
   private async call(token: string, method: string, url: string, body: unknown, contentType: string, signal: AbortSignal): Promise<Record<string, unknown>> {
+    if (method !== 'GET') this.beforeMutation?.();
     const response = await (this.options.request ?? fetch)(url, { method, redirect: 'error', signal,
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': contentType }) },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+      ...(body === undefined ? {} : { body: Buffer.isBuffer(body) ? new Uint8Array(body) : JSON.stringify(body) }) });
     if ([203, 401, 403].includes(response.status) || (response.status >= 300 && response.status < 400)) deny('DevOps: Azure CLI login unavailable or no permission. Run az login.');
+    if (response.headers.get('x-ms-continuationtoken')) deny('DevOps: paginated response requires a narrower target');
     if (response.status === 412) deny('DevOps: the work item changed meanwhile; read it again and retry.');
     if (!response.ok) deny(`DevOps: write refused (HTTP ${response.status}).`);
     const source = await response.text();
@@ -235,7 +295,7 @@ export class DevOpsWriter {
       if (!fs.existsSync(this.options.file)) return { schema: 1, runs: {} };
       const raw = object(JSON.parse(fs.readFileSync(this.options.file, 'utf8')) as unknown, 'ledger');
       if (raw.schema !== 1) throw new Error('schema');
-      return { schema: 1, runs: object(raw.runs, 'ledger runs') as Ledger['runs'] };
+      return { schema: 1, runs: object(raw.runs, 'ledger runs') as Ledger['runs'], ...(raw.operations ? { operations: object(raw.operations, 'operation journal') as NonNullable<Ledger['operations']> } : {}) };
     } catch { return deny('DevOps write ledger is unreadable; restore it before writing.'); }
   }
   private write(data: Ledger): void {

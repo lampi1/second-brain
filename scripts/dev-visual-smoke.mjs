@@ -142,14 +142,14 @@ try {
   if (await page.evaluate(() => window.innerWidth) > 600) throw new Error('Narrow fullscreen capture did not resize');
   await capture('flow-fullscreen-narrow');
   await page.keyboard.press('Escape');
-  await page.getByTestId('flow-resume-step').click();
+  await page.getByTestId('rt-from-step').click();
   await page.getByTestId('flow-recovery-modal').waitFor();
   await capture('routine-resume-confirmation');
   await page.getByTestId('flow-recovery-step').selectOption('step-9');
   await page.getByTestId('flow-recovery-blocker').waitFor();
   await capture('routine-resume-prerequisite');
   await page.getByTestId('flow-recovery-no').click();
-  await page.getByTestId('flow-cancel').click();
+  await page.getByTestId('rt-cancel').click();
   await capture('routine-cancel-confirmation');
   await page.getByTestId('flow-recovery-no').click();
   // The demo has no review services. A separate isolated SB_TEST instance reads a clearly synthetic memory
@@ -165,7 +165,7 @@ try {
     memoryId: 'synthetic-visual-memory', scope: { roleId: 'scout', project: 'DEMO SINTETICA', environment: 'sandbox' },
     subject: 'Esempio sintetico', predicate: 'ramo di lavoro', value: 'main — dato dimostrativo, non una preferenza reale',
     sourceEventId: 'synthetic-event', sourceRunId: 'synthetic-run', observedAt, validFrom: observedAt, validTo: null,
-    status: 'proposed', supersedes: null, transitions: [{ at: observedAt, status: 'proposed' }],
+    status: 'confirmed', supersedes: null, transitions: [{ at: observedAt, status: 'confirmed' }],
   }], null, 2));
   const reviewEnv = { ...env, SB_BRAIN: brain, SB_USER_DATA: realProfile, SB_ORCHESTRATOR_EVENTS: '0', SB_RUN_RESULTS: '0', SB_BRAIN_JOBS: '0', SB_COMPARE_QUEUE: '0' };
   delete reviewEnv.SB_DEMO;
@@ -184,21 +184,22 @@ try {
   await setup.waitFor({ timeout: 3000 }).catch(() => {});
   if (await setup.isVisible()) { await page.keyboard.press('Escape'); await setup.waitFor({ state: 'hidden' }); }
   await page.getByTestId('nav-memoria').click();
-  await page.getByTestId('mh-tab-proposte').click();
-  await page.getByTestId('pd-chip-fact').click();
-  const memory = page.getByTestId('pd-card-top').and(page.locator('[data-card="memory:synthetic-visual-memory"]'));
+  // Facts no longer enter the proposals deck (ADR 0150). Inspect the saved fact in Approvate and check
+  // its source through the read-only review API, without resurrecting the retired approval path.
+  await page.getByTestId('mh-tab-approvate').click();
+  const memory = page.getByTestId('mh-ap-fact-synthetic-visual-memory');
   await memory.waitFor();
-  await memory.getByTestId('pd-more').click();
-  await memory.getByTestId('pd-provenance').getByText('synthetic-run', { exact: false }).waitFor();
+  const records = await page.evaluate(() => window.sb.invoke('memory:reviewList', undefined));
+  if (!records.some(record => record.memoryId === 'synthetic-visual-memory' && record.sourceRunId === 'synthetic-run')) throw new Error('Synthetic memory provenance missing');
   await memory.scrollIntoViewIfNeeded();
-  await capture('memory-provenance-synthetic');
+  await capture('memory-saved-fact-synthetic');
   // Review panels were replaced by hub tabs; capture the current learning view without running an evaluation.
   await page.getByTestId('mh-tab-apprendimento').click();
   const learning = page.getByTestId('learning-page');
   await learning.getByTestId('lr-counter').waitFor();
   await learning.scrollIntoViewIfNeeded();
   await capture('learning-cold-start-synthetic');
-  manifest.reviewFixture = 'Real services; synthetic memory proposal in Proposte and empty learning history in Apprendimento; no decisions, replay or provider launched';
+  manifest.reviewFixture = 'Real services; synthetic saved fact in Approvate and empty learning history in Apprendimento; no decisions, replay or provider launched';
   if (manifest.rendererErrors.length) throw new Error('Renderer errors; inspect manifest.json');
   console.log(`Captured ${manifest.captures.length} dev views in ${output}`);
 } catch (error) {

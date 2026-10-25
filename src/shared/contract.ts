@@ -12,7 +12,7 @@ import type { AgentLifecycleDecide, AgentLifecycleSnapshot } from './agent-lifec
 import type { ProposalDecide, ProposalDecideResult, ProposalsState } from './proposals';
 import type { MaintenanceDone, MaintenanceStatus } from './maintenance-research';
 import type { PackFinding } from './agent-pack';
-import type { VoiceAsr, VoiceName, VoiceState } from './voice';
+import type { VoiceHeard, VoiceSpeech, VoiceAsr, VoiceName, VoiceState } from './voice';
 import type { RecFound, RecSegment, RecSource, RecState, Recording } from './recordings';
 /** What the shareable brain zip holds (counts), or why it was not written: guard findings, or no brain / no guard. */
 export type BrainShareResult = { ok: true; path: string; skills: number; rules: number; roles: number; scripts: number; skipped: number } | { ok: false; findings: PackFinding[] } | { ok: false; error: string };
@@ -127,6 +127,10 @@ export type ChatOrigin = 'app';
 export interface QueuedInfo { kind: 'start' | 'turn'; position: number; since: number; cpu: number; freeRam: number }
 
 export interface ChatSummary {
+  /** Host-only immutable routine identity, never accepted by app_create_chat. */
+  routine?: { runId: string; stepId: string };
+  routinePackage?: string;
+  routinePromptHash?: string;
   userEvents?: { latestSeq: number; acknowledgedSeq: number };
   /** Root results the user can synthesize; private delegated results are excluded. */
   availableResultIds?: string[];
@@ -1637,8 +1641,9 @@ export interface InvokeMap {
    *  speak = Italian speech for a text (the renderer plays it) */
   'voice:state': [void, VoiceState];
   'voice:prepare': [void, VoiceState];
-  'voice:listen': [{ on: boolean; talk?: boolean }, void];
-  'voice:audio': [{ samples: Float32Array }, void];
+  'voice:listen': [{ on: boolean; session: string; talk?: boolean }, void];
+  'voice:cancelSpeech': [void, void];
+  'voice:audio': [{ session: string; samples: Float32Array }, void];
   'voice:speak': [{ text: string; voice?: VoiceName }, { samples: Float32Array; rate: number; error?: string }];
   /** call recordings (ADR 0154, main/recordings/): arm = the PC's audio may be captured for the next few seconds (the
    *  user's «Registra call»), start one, its 16-bit chunks, stop (queues the local transcript), the transcript, «Trovate sul PC» and the bytes of
@@ -1777,8 +1782,8 @@ export interface EventMap {
   /** voice mode (ADR 0152): the models or the download changed; the user said something (transcribed); speech started
    *  or stopped on the microphone */
   'voice:changed': VoiceState;
-  'voice:heard': { text: string };
-  'voice:speech': { active: boolean };
+  'voice:heard': VoiceHeard;
+  'voice:speech': VoiceSpeech;
   /** call recordings (ADR 0154): the list, the one running, a transcription's progress */
   'rec:changed': RecState;
 }
@@ -1819,7 +1824,7 @@ export const INVOKE_CHANNELS = [
   'search:query', 'search:status', 'search:retryModel', 'later:get', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
   'sync:get', 'sync:now', 'sync:resolve', 'headline:get', 'log:list',
   'suggest:get', 'suggest:cancel', 'suggest:state',
-  'voice:state', 'voice:prepare', 'voice:listen', 'voice:audio', 'voice:speak',
+  'voice:state', 'voice:prepare', 'voice:listen', 'voice:audio', 'voice:speak', 'voice:cancelSpeech',
   'rec:state', 'rec:arm', 'rec:start', 'rec:chunk', 'rec:stop', 'rec:transcribe', 'rec:rename', 'rec:remove', 'rec:transcript', 'rec:find', 'rec:readFound', 'rec:open',
   'orchestrator:held', 'orchestrator:heldSeen',
   'cloud:list', 'cloud:start', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:readiness', 'cloud:dismiss',

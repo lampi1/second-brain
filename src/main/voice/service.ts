@@ -11,7 +11,7 @@ import { ASR, TTS, VAD, partBytes } from './catalog';
 import { partReady } from './download';
 import type { VoiceIn, VoiceOut } from './protocol';
 import type { TranscribedLine } from './transcribe';
-import type { VoiceAsr, VoiceName, VoiceState } from '@shared/voice';
+import type { VoiceAsr, VoiceName, VoiceState, VoiceHeard, VoiceSpeech } from '@shared/voice';
 
 interface Child { postMessage(m: VoiceIn): void; on(ev: 'message', fn: (m: VoiceOut) => void): void; on(ev: 'exit', fn: (code: number) => void): void; kill(): boolean }
 export interface VoiceDeps {
@@ -22,9 +22,9 @@ export interface VoiceDeps {
   settings: () => { asr: VoiceAsr; voice: VoiceName };
   fork: (script: string) => Child;
   changed: (s: VoiceState) => void;
-  heard: (text: string) => void;
-  speech: (active: boolean) => void;
-  fake?: { text: string } | null;
+  heard: (event: VoiceHeard) => void;
+  speech: (event: VoiceSpeech) => void;
+  fake?: { text: string; delayMs?: number } | null;
 }
 
 const SPEAK_TIMEOUT_MS = 30_000;
@@ -42,6 +42,22 @@ export class VoiceService {
   private error: string | null = null;
   private errorAt = 0;
   private speakId = 0;
+  private listening: string | null = null;
+  private readonly utterances = new Map<number, ReturnType<typeof setTimeout>>();
+  private clearListening(): void {
+    this.listening = null;
+    for (const timer of this.utterances.values()) clearTimeout(timer);
+    this.utterances.clear();
+    if (this.fakeTimer) clearTimeout(this.fakeTimer);
+    this.fakeTimer = null;
+  }
+  private failListening(message: string): void {
+    this.clearListening();
+    this.error = message;
+    // Inference cannot be preempted reliably inside the native decoder. Fail every affected job explicitly.
+    this.child?.kill();
+    this.emit();
+  }
   private readonly speaks = new Map<number, (r: { samples: Float32Array; rate: number; error?: string }) => void>();
   private fakeTimer: ReturnType<typeof setTimeout> | null = null;
   private jobId = 0;
@@ -63,10 +79,11 @@ export class VoiceService {
     if (this.child) return this.child;
     fs.mkdirSync(this.d.root, { recursive: true });
     const c = this.d.fork(this.d.script);
-    c.on('message', m => this.onMessage(m));
+    c.on('message', m => { if (this.child === c) this.onMessage(m); });
     c.on('exit', code => {
       if (this.child !== c) return;
       this.child = null;
+      if (this.listening) { this.clearListening(); this.error = 'Il motore voce si è fermato: riattiva la conversazione.'; }
       if (this.downloading) { this.downloading = null; this.error = 'Il motore voce si è fermato durante il download: riprova.'; }
       for (const done of this.speaks.values()) done({ samples: new Float32Array(0), rate: 22050, error: 'motore voce fermo' });
       this.speaks.clear();
@@ -84,8 +101,20 @@ export class VoiceService {
     switch (m.type) {
       case 'progress': this.downloading = { done: m.done, total: m.total }; this.emit(); return;
       case 'prepared': this.downloading = null; this.error = null; log.info('voice', 'models ready', { data: this.d.settings() }); this.emit(); return;
-      case 'heard': this.d.heard(m.text); return;
-      case 'speech': this.d.speech(m.active); return;
+      case 'heard': {
+        if (m.session !== this.listening || !this.utterances.has(m.utterance)) return;
+        clearTimeout(this.utterances.get(m.utterance)); this.utterances.delete(m.utterance);
+        this.d.heard(m); return;
+      }
+      case 'speech': {
+        if (m.session !== this.listening || !Number.isSafeInteger(m.utterance) || m.utterance < 1) return;
+        if (m.active) {
+          if (this.utterances.has(m.utterance)) return;
+          if (this.utterances.size >= 4) { this.failListening('La trascrizione è in ritardo: riattiva la voce e ripeti la frase.'); return; }
+          this.utterances.set(m.utterance, setTimeout(() => this.failListening('La trascrizione non ha risposto: riattiva la voce e ripeti la frase.'), 75_000));
+        } else if (!this.utterances.has(m.utterance)) return;
+        this.d.speech(m); return;
+      }
       case 'tprogress': this.jobs.get(m.job)?.progress(m.done); return;
       case 'transcribed': { const j = this.jobs.get(m.job); this.jobs.delete(m.job); j?.done(m); return; }
       case 'spoken': { const done = this.speaks.get(m.id); this.speaks.delete(m.id); done?.(m); return; }
@@ -113,29 +142,51 @@ export class VoiceService {
   }
 
   /** talk: a spoken conversation (its voice is loaded now too) */
-  listen(on: boolean, talk = false): void {
+  listen(on: boolean, session: string, talk = false): void {
+    if (typeof session !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(session)) throw new Error('Invalid voice session');
+    if (!on && this.listening !== session) return; // a late stop must not stop a newer microphone
+    this.clearListening();
+    this.listening = on ? session : null;
+    if (on) this.error = null;
     if (this.d.fake) {
-      if (this.fakeTimer) clearTimeout(this.fakeTimer);
-      this.fakeTimer = on ? setTimeout(() => { this.d.speech(true); this.d.speech(false); this.d.heard(this.d.fake!.text); }, 600) : null;
+      this.fakeTimer = on ? setTimeout(() => {
+        if (this.listening !== session) return;
+        this.d.speech({ session, utterance: 1, active: true });
+        this.d.speech({ session, utterance: 1, active: false });
+        this.d.heard({ session, utterance: 1, text: this.d.fake!.text, ms: 600 });
+      }, Math.max(0, Math.min(60_000, this.d.fake.delayMs ?? 600))) : null;
       return;
     }
     if (!on && !this.child) return;
-    this.proc().postMessage({ type: 'listen', on, asr: this.d.settings().asr, ...(on && talk ? { voice: this.d.settings().voice } : {}) });
+    this.proc().postMessage({ type: 'listen', on, session, asr: this.d.settings().asr, ...(on && talk ? { voice: this.d.settings().voice } : {}) });
   }
 
-  audio(samples: Float32Array): void {
-    if (this.d.fake || !(samples instanceof Float32Array) || samples.length > 64_000) return;
-    this.proc().postMessage({ type: 'audio', samples });
+  audio(samples: Float32Array, session: string): void {
+    if (this.d.fake || !this.listening || session !== this.listening || !(samples instanceof Float32Array) || samples.length > 64_000) return;
+    this.proc().postMessage({ type: 'audio', session, samples });
+  }
+
+  /** Drop queued synthesis as well as playback; the worker cancels native generation at its next progress callback. */
+  cancelSpeech(): void {
+    this.child?.postMessage({ type: 'cancel-speech', through: this.speakId });
+    for (const done of this.speaks.values()) done({ samples: new Float32Array(0), rate: 22050 });
+    this.speaks.clear();
   }
 
   speak(text: string, voice?: VoiceName): Promise<{ samples: Float32Array; rate: number; error?: string }> {
     const clean = String(text ?? '').slice(0, 2000).trim();
     if (!clean) return Promise.resolve({ samples: new Float32Array(0), rate: 22050 });
     if (this.d.fake) return Promise.resolve({ samples: new Float32Array(6615), rate: 22050 });
+    if (this.speaks.size >= 8) return Promise.resolve({ samples: new Float32Array(0), rate: 22050, error: 'La coda della voce è piena: riprova.' });
     const id = ++this.speakId;
     return new Promise(res => {
       // a stuck engine never leaves the renderer «speaking» (and deaf) for good
-      const timer = setTimeout(() => { if (this.speaks.delete(id)) res({ samples: new Float32Array(0), rate: 22050, error: 'la voce non ha risposto in tempo' }); }, SPEAK_TIMEOUT_MS);
+      const timer = setTimeout(() => {
+        if (!this.speaks.delete(id)) return;
+        this.child?.postMessage({ type: 'cancel-speech', through: id });
+        res({ samples: new Float32Array(0), rate: 22050, error: 'la voce non ha risposto in tempo' });
+        this.failListening('Il motore voce non ha risposto: riattiva la voce per riprovare.');
+      }, SPEAK_TIMEOUT_MS);
       this.speaks.set(id, r => { clearTimeout(timer); res(r); });
       this.proc().postMessage({ type: 'speak', id, text: clean, voice: voice ?? this.d.settings().voice });
     });
@@ -168,7 +219,7 @@ export class VoiceService {
   /** settings changed (another Whisper or voice): the loaded models are dropped, the next use loads the new ones */
   settingsChanged(): void { this.child?.postMessage({ type: 'unload', asr: this.d.settings().asr }); this.emit(); }
 
-  dispose(): void { if (this.fakeTimer) clearTimeout(this.fakeTimer); this.child?.kill(); this.child = null; }
+  dispose(): void { this.clearListening(); this.cancelSpeech(); this.child?.kill(); this.child = null; }
 }
 
 export const voiceRoot = (userData: string): string => path.join(userData, 'voice');

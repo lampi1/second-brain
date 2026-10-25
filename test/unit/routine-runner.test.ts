@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ChatSummary } from '../../src/shared/contract';
 import type { FlowAutomationConfig } from '../../src/shared/flow-automation';
 import type { FlowDefinition, FlowDryRun, FlowRun, FlowStep } from '../../src/shared/flows';
+import { flowTools } from '../../src/main/flows/tools';
 import { createFlowRuntime, type FlowRuntimeOptions, type FlowWorkerRequest } from '../../src/main/flows/runtime';
 import type { DevOpsItem } from '../../src/main/flows/devops-detector';
 import type { CommandResult, ResolvedCommand } from '../../src/main/flows/executor';
@@ -23,7 +24,7 @@ const command = (id: string, kind: 'script' | 'query', ref: string, extra: Parti
 const item = (id: number, revision = 3, tags = ['ai-ok']): DevOpsItem => ({ id, revision, title: `Bug ${id}`, type: 'Bug', state: 'New', project: 'ProjectA', areaPath: 'Team', iterationPath: 'Sprint 1', tags, url: `https://dev.azure.com/ab/ProjectA/_workitems/edit/${id}` });
 
 function world(definition: Omit<FlowDefinition, 'id' | 'title' | 'description' | 'aliases' | 'scope'> & { scope?: FlowDefinition['scope'] }, files: Record<string, string> = {}, extra: Partial<FlowRuntimeOptions> = {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'routine-')), brain = path.join(root, 'brain'), work = path.join(root, 'work');
+  const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'routine-')), brain = path.join(root, 'brain'), work = path.join(root, 'work');
   fs.mkdirSync(brain); fs.mkdirSync(work);
   for (const [file, body] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(brain, file)), { recursive: true }); fs.writeFileSync(path.join(brain, file), body); }
   // no Orchestrator at all: the app runs routines by itself
@@ -68,6 +69,17 @@ describe('manual start on one work item', () => {
     w.report('worker-1'); await w.runtime.tick();
     const run = w.flow.snapshot().runs.find(r => r.id === started.id)!;
     expect(run.currentStep).toBe(1); expect(run.steps[1]!.status).toBe('running'); expect(w.create).toHaveBeenCalledTimes(2); expect(w.send).not.toHaveBeenCalled();
+  });
+  it('returns an actionable paused result through the host tool without reading DevOps or retrying', async () => {
+    const w = world({ steps: [agent('analyze')] }), rule = enable(w), auto = w.runtime.automation();
+    auto.pause({ id: rule.id, expectedRevision: auto.snapshot().rules[0]!.revision, paused: true });
+    const tool = flowTools({ ownerId: 'o', service: () => w.flow, resolveBinding: () => null, startItem: input => w.runtime.startItem(input) }).find(t => t.name === 'app_flow_start_item')!;
+    const result = await tool.run({ contextKey: w.flow.snapshot().contextKey, flowId: 'fix', workItem: '42' });
+    expect(result).toMatchObject({ status: 'blocked', code: 'trigger-paused', started: false, flowId: 'fix' });
+    expect(w.readItem).not.toHaveBeenCalled(); expect(w.create).not.toHaveBeenCalled();
+    expect(auto.snapshot().rules[0]!.status).toBe('paused');
+    const broken = flowTools({ ownerId: 'o', service: () => w.flow, resolveBinding: () => null, startItem: async () => { throw new Error('storage failure'); } }).find(t => t.name === 'app_flow_start_item')!;
+    await expect(broken.run({ contextKey: w.flow.snapshot().contextKey, flowId: 'fix' })).rejects.toThrow('storage failure');
   });
   it('says why an item misses the filters, refuses a second run on the same item and a paused trigger', async () => {
     const w = world({ steps: [agent('analyze')] }), rule = enable(w);
@@ -212,4 +224,14 @@ describe('review fixes', () => {
     const run = w.flow.snapshot().runs.find(r => r.id === started.id)!;
     expect(run.status).toBe('blocked'); expect(run.steps[0]!.reason).toMatch(/^Da sistemare: .*cambiato/);
   });
+});
+
+it('runs a packaged script from its version directory even when the authoring brain is removed', async () => {
+  const content = 'console.log("fixture")';
+  const w = world({ steps: [command('verify', 'script', 'verify.mjs')], package: { schema: 1, assets: [{ id: 'verify.mjs', kind: 'script', content, sha256: '' }], outputs: [], requiredOps: [] } });
+  fs.rmSync(w.brain, { recursive: true, force: true });
+  const source = w.flow.start({ flowId: 'fix', flowVersion: 1, subjectKey: 'offline-source', scope: { project: 'ProjectA', areaPath: 'Team' }, inputs: {} }, 'app');
+  await w.runtime.tick(); await settle();
+  expect(w.flow.status(source.id, 'app').status).toBe('completed');
+  const launch = w.run.mock.calls[0]!; expect(launch[1]).toHaveProperty('cwd', path.join(w.root, 'data', 'flows', w.flow.snapshot().contextKey, 'packages', source.definitionDigest));
 });

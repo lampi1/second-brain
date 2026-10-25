@@ -12,6 +12,8 @@ import { goSequence, resolveShortcut } from './lib/keys';
 import { schedule, setBlocked, setKnownTabs } from './lib/viewports';
 import { liveSource } from './lib/liveSource';
 import { sameList } from './store/state';
+import { flowState } from './store/flows';
+import { routinePlacements } from './lib/routine-chats';
 import { useApp } from './store/store';
 import { openModal, closeModal, pageLabel, setMap, setPrefs, toast, ui } from './store/ui';
 import {
@@ -223,6 +225,9 @@ export function App() {
   const modal = ui.use(s => s.modal);
   const focused = ui.use(s => s.focused);
   const tabIds = useApp(s => s.tabs.map(t => t.id), sameList);
+  const routineSnapshot = flowState.use(state => state.snapshot);
+  const routineFocus = useApp(state => focusMode && routinePlacements(state.chats, routineSnapshot).has(focusMode) ? focusMode : null);
+  useEffect(() => { if (routineFocus) focusChat(routineFocus); }, [routineFocus]);
   const focusChatExists = useApp(s => (focusMode ? !!s.chats[focusMode] : true));
   const dock = useDockReserve();
 
@@ -240,7 +245,7 @@ export function App() {
   useEffect(() => { if (focused) setPrefs({ lastFocus: focused }); }, [focused]);
   useEffect(() => { if (!focusChatExists) ui.set(s => ({ ...s, focusMode: null })); }, [focusChatExists]);
 
-  const inFocus = !!focusMode && page === 'home';
+  const inFocus = !!focusMode && !routineFocus && page === 'home';
   // the Grindhouse has no "Ti aspettano" strip any more (the user, 2026-10-12: "togli le domande che compaiono in alto ti
   // aspettano, adesso me le fa l’Orchestrator"): each request is in its tile, the Orchestrator or the global layer; focus mode keeps
   // its Ctrl+J peek

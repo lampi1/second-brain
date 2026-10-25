@@ -139,13 +139,31 @@ describe('agent run store', () => {
     // Loading alone never writes; the next normal flush persists the repair once.
     expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toEqual(stored);
     recovered.flush();
+    const copies = fs.readdirSync(dir).filter(name => name.startsWith('agent-runs-recovery-'));
+    expect(copies).toHaveLength(1);
+    expect(fs.readFileSync(path.join(dir, copies[0]!), 'utf8')).toBe(JSON.stringify(stored));
     expect(new AgentRunStore(dir).list()).toEqual([first, last]);
     expect(warn).toHaveBeenCalledTimes(1);
     const next = recovered.start(start({ chatId: 'c3', startedBy: 'orchestrator' }));
     const reloaded = new AgentRunStore(dir);
     expect(reloaded.list()).toEqual([first, last, next]);
     expect(reloaded.rolledUp()).toEqual([tally]);
+    expect(fs.readdirSync(dir).filter(name => name.startsWith('agent-runs-recovery-'))).toEqual(copies);
     expect(reloaded.adopt({ ...first, runId: 'r_eeeeeeeeeeee', endedAt: 500, endReason: 'closed' })).toBeUndefined();
+  });
+
+  it('does not replace malformed source when preserving its original bytes fails', () => {
+    const dir = tmp(), file = path.join(dir, 'agent-runs.json'), source = '{"version":1,"runs":[null]}';
+    fs.writeFileSync(file, source);
+    const recovered = new AgentRunStore(dir), open = fs.openSync;
+    const spy = vi.spyOn(fs, 'openSync').mockImplementation(((filePath: fs.PathLike, flags: fs.OpenMode, mode?: fs.Mode) => {
+      if (String(filePath).includes('agent-runs-recovery-')) throw Object.assign(new Error('Denied'), { code: 'EACCES' });
+      return open(filePath, flags, mode);
+    }) as typeof fs.openSync);
+    expect(() => recovered.flush()).toThrow('Denied');
+    expect(fs.readFileSync(file, 'utf8')).toBe(source);
+    spy.mockRestore(); recovered.flush();
+    expect(new AgentRunStore(dir).problem).toBeNull();
   });
 
   it('an all-invalid run list still permits new runs', () => {

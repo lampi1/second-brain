@@ -9,6 +9,7 @@ export function stepAgentLabel(step: FlowStep, role: FlowRoleInfo | undefined): 
   const byRole = t('flows.byRole');
   if (!step.role) return byRole;
   const name = role?.name ?? step.role;
+  if (step.engine || step.model || step.agentPrompt) return [name, step.tier ?? byRole, step.engine, step.model, step.effort].filter(Boolean).join(' · ');
   if (!step.tier) return `${name} · ${byRole}`;
   // the role's own fixed model wins over its tier (agents/catalog.ts resolve), else the tier's model on its engine
   const model = role ? role.model ?? role.models[step.tier] ?? t('flows.engineDefault') : null;

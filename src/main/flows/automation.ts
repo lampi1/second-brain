@@ -7,6 +7,7 @@ import type { FlowAttachment, FlowRestart, FlowRestartProposal, FlowRun } from '
 import { DEVOPS_WRITE_OPS, type DevOpsWriteGrant, type TestDbReadGrant } from '../../shared/flow-automation';
 import type { FlowAutomationClear, FlowAutomationFilters, FlowDetectionItem, FlowAutomationConfig, FlowAutomationControl, FlowAutomationDecision, FlowAutomationEvent, FlowAutomationPause, FlowAutomationPropose, FlowAutomationRule, FlowAutomationSnapshot, FlowDetectionResult } from '../../shared/flow-automation';
 import type { FlowService } from './service';
+import { validateDeployTarget } from './test-deployment';
 import { adapted, testDbAdapted, identifier, inScope, integer, keys, object, text, validateInputs, validateScope } from './schema';
 
 export interface FlowAutomationOptions {
@@ -41,7 +42,7 @@ const ORGANIZATION = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,49}$/, FIELD = /^[A-Za-z][A-Za-
 const FIXED_FIELDS = ['system.id', 'system.rev', 'system.teamproject', 'system.workitemtype', 'system.tags'];
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 function validateGrant(value: unknown, trigger: Extract<FlowAutomationConfig['trigger'], { kind: 'devops' }>): DevOpsWriteGrant {
-  const raw = object(value, 'devopsWrite'); keys(raw, ['organization', 'projects', 'ops', 'fields', 'mentions'], 'devopsWrite');
+  const raw = object(value, 'devopsWrite'); keys(raw, ['organization', 'projects', 'ops', 'fields', 'mentions', 'deployTargets'], 'devopsWrite');
   const organization = text(raw.organization, 'devopsWrite organization', 50);
   if (!ORGANIZATION.test(organization) || organization.toLowerCase() !== trigger.organization.toLowerCase()) throw new Error('DevOps write organization must equal the trigger organization');
   const list = (v: unknown, label: string, max: number, itemMax: number): string[] => {
@@ -59,7 +60,10 @@ function validateGrant(value: unknown, trigger: Extract<FlowAutomationConfig['tr
   const mentions = raw.mentions === undefined ? [] : list(raw.mentions, 'devopsWrite mentions', 10, 36).map(id => id.toLowerCase());
   if (mentions.some(id => !GUID.test(id))) throw new Error('DevOps write mentions must be identity GUIDs');
   if (mentions.length && !ops.includes('comment')) throw new Error('DevOps write mentions need the comment operation');
-  return { organization, projects, ops: ops as DevOpsWriteGrant['ops'], fields, ...(mentions.length ? { mentions } : {}) };
+  const deployTargets = raw.deployTargets === undefined ? [] : Array.isArray(raw.deployTargets) && raw.deployTargets.length <= 10 ? raw.deployTargets.map(validateDeployTarget) : (() => { throw new Error('Invalid deployment targets'); })();
+  if (ops.includes('test-deploy') !== (deployTargets.length > 0)) throw new Error('test-deploy requires explicit test targets and vice versa');
+  if (new Set(deployTargets.map(t => t.id)).size !== deployTargets.length || deployTargets.some(t => t.organization.toLowerCase() !== organization.toLowerCase() || !projects.some(p => p.toLowerCase() === t.project.toLowerCase()))) throw new Error('Deployment target is outside the approved organization/projects');
+  return { organization, projects, ...(deployTargets.length ? { deployTargets } : {}), ops: ops as DevOpsWriteGrant['ops'], fields, ...(mentions.length ? { mentions } : {}) };
 }
 /** The trigger's filters (ADR 0155), each absent when empty so an old rule keeps its exact shape. */
 function filters(trigger: Record<string, unknown>): Partial<Extract<FlowAutomationConfig['trigger'], { kind: 'devops' }>> {
@@ -272,7 +276,7 @@ export class FlowAutomationService {
     // While flow.start prepares the first step, grantFor accepts only this event's own start (before runId is recorded).
     this.starting = event.id;
     let run: FlowRun;
-    try { run = flow.start({ flowId: rule.config.flowId, flowVersion: rule.config.flowVersion, subjectKey: event.subjectKey, scope: copy(rule.config.scope), inputs: copy(event.inputs), title: event.title.slice(0, 300), ...(attachments?.length ? { attachments } : {}) }, ownerId, true); }
+    try { run = flow.start({ flowId: rule.config.flowId, flowVersion: rule.config.flowVersion, subjectKey: event.subjectKey, scope: copy(rule.config.scope), inputs: copy(event.inputs), title: event.title.slice(0, 300), ...(attachments?.length ? { attachments } : {}) }, ownerId, true, rule); }
     finally { this.starting = undefined; }
     this.change(() => { event.status = 'started'; event.runId = run.id; event.updatedAt = this.now(); delete event.reason; });
     return run;
@@ -320,7 +324,7 @@ export class FlowAutomationService {
     }
     this.starting = event.id;
     let run: FlowRun;
-    try { run = flow.restart(input, { subjectKey: event.subjectKey, inputs, scope: rule.config.scope }); }
+    try { run = flow.restart(input, { subjectKey: event.subjectKey, inputs, scope: rule.config.scope }, rule); }
     finally { this.starting = undefined; }
     const eventId = event.id;
     this.change(() => { const stored = this.data.events.find(item => item.id === eventId)!; stored.status = 'started'; stored.runId = run.id; stored.updatedAt = this.now(); delete stored.reason; });
@@ -362,6 +366,12 @@ export class FlowAutomationService {
     if (!id || !/^[1-9]\d{0,9}$/.test(id) || !Number.isSafeInteger(Number(id))) return null;
     return { grant: copy(config.devopsWrite), workItemId: Number(id) };
   }
+  approvedConfigFor(run: FlowRun): FlowAutomationConfig | undefined { if (run.approval) return copy(run.approval.config); const match = /^auto:([^:]+):(\d+):/.exec(run.subjectKey), rule = match && this.data.rules.find(r => r.id === match[1]); const config = rule && (String(rule.revision) === match![2] ? rule.config : rule.history?.find(h => String(h.revision) === match![2])?.config); return config ? copy(config) : undefined; }
+  /** Host outbox/cleanup only; terminal runs retain only already approved scope, never agent write authority. */
+  settlementGrantFor(run: FlowRun): { grant: DevOpsWriteGrant; workItemId: number } | null {
+    const config = this.configFor(run, true), id = run.inputs['work-item-id'];
+    return config?.devopsWrite && config.trigger.kind === 'devops' && id && /^[1-9]\d{0,9}$/.test(id) ? { grant: copy(config.devopsWrite), workItemId: Number(id) } : null;
+  }
   /** Read-only test DB access uses the same exact-revision event provenance as DevOps writes. */
   testDbGrantFor(run: FlowRun): TestDbReadGrant | null {
     const config = this.configFor(run);
@@ -369,8 +379,8 @@ export class FlowAutomationService {
   }
   /** The approved configuration that started this run (the current revision or one kept in history), or null. A paused,
    *  rejected or replaced rule, or the global pause, withdraws the grant at once (in-flight adapter calls stop). */
-  private configFor(run: FlowRun): FlowAutomationConfig | null {
-    if (this.stopped || this.storageError || this.data.paused || ['completed', 'cancelled'].includes(run.status)) return null;
+  private configFor(run: FlowRun, settlement = false): FlowAutomationConfig | null {
+    if (this.stopped || this.storageError || this.data.paused || (!settlement && ['completed', 'cancelled'].includes(run.status))) return null;
     const match = /^auto:([^:]+):(\d+):[a-f0-9]{64}$/.exec(run.subjectKey);
     const rule = match && this.data.rules.find(item => item.id === match[1]);
     if (!rule || rule.approvedRevision !== rule.revision || rule.status !== 'enabled' || rule.ownerOrchestratorId !== run.ownerOrchestratorId) return null;
@@ -378,8 +388,10 @@ export class FlowAutomationService {
     if (!config || config.flowId !== run.flowId || config.flowVersion !== run.flowVersion || hash(config.scope) !== hash(run.scope)) return null;
     const event = this.data.events.find(item => item.ruleId === rule.id && item.subjectKey === run.subjectKey);
     // Only a run the host started from this event: recorded as started with this run id, or being started right now.
-    const own = (event?.status === 'started' && event.runId === run.id) || (event !== undefined && this.starting === event.id && event.runId === undefined);
+    const own = ((event?.status === 'started' || (settlement && event?.status === 'cancelled' && !!run.cancellation)) && event.runId === run.id) || (event !== undefined && this.starting === event.id && event.runId === undefined);
     if (!event || !own || String(event.ruleRevision) !== match![2] || hash(event.inputs) !== hash(run.inputs)) return null;
+    const pack = this.options.flow().snapshot().versions.find(v => v.definition.id === run.flowId && v.version === run.flowVersion)?.definition.package;
+    if (pack?.requiredOps.some(op => !config.devopsWrite?.ops.includes(op as DevOpsWriteGrant['ops'][number])) || (pack?.downgrade && !config.devopsWrite?.fields.some(f => f.toLowerCase() === 'system.state'))) return null;
     return config;
   }
   stop(): void { this.stopped = true; this.invalidate(); }
@@ -499,6 +511,9 @@ export class FlowAutomationService {
     if (snapshot.storageError) throw new Error(snapshot.storageError);
     const version = snapshot.versions.find(item => item.definition.id === config.flowId && item.version === config.flowVersion);
     if (!version || snapshot.active[config.flowId] !== config.flowVersion) throw new Error('Automatic flow requires its pinned current user-activated version');
+    const pack = version.definition.package;
+    if (pack?.requiredOps.some(op => !config.devopsWrite?.ops.includes(op as DevOpsWriteGrant['ops'][number]))) throw new Error('Automatic configuration is missing required package operations');
+    if (pack?.downgrade && !config.devopsWrite?.fields.some(f => f.toLowerCase() === 'system.state')) throw new Error('Downgrade requires the System.State field grant');
     if (!inScope(version.definition.scope, config.scope)) throw new Error('Automatic flow scope does not match the approved flow');
     if (version.definition.steps.some(step => step.action?.kind === 'builtin' && step.action.ref === 'scope-present') && (!config.scope.project || !config.scope.areaPath)) throw new Error('Automatic flow scope-present check requires project and areaPath');
     const required = new Set(version.definition.steps.flatMap(step => [...step.inputs, ...(step.workspaceInput ? [step.workspaceInput] : [])]));

@@ -14,10 +14,11 @@ import { QUERIES_DIR, parseQueryNote } from '../brain/queries';
 import { placeholders } from './schema';
 
 export interface ResolvedCommand {
+  cwd?: string;
   kind: 'script' | 'query'; ref: string; env: 'test' | 'prod';
   /** what the user reads (and copies): the program and its arguments, quoted */
   command: string; program: string; args: string[]; file: string;
-  sha256: string; values: Record<string, string>; problems: string[];
+  sha256: string; derived?: { file: string; sha256: string }; values: Record<string, string>; problems: string[];
 }
 export interface CommandResult { exitCode: number | null; output: string }
 
@@ -115,7 +116,7 @@ export function resolve(root: string, step: FlowStep, run: FlowRun, attachmentsD
     if (path.extname(file).toLowerCase() === '.md' && hash) {
       const note = parseQueryNote(fs.readFileSync(file, 'utf8'));
       if (!note || !['sql', 'tsql', 't-sql', 'mssql'].includes(note.lang)) problems.push(`${ref}: solo le query SQL si eseguono da una routine`);
-      else { sql = path.join(workDir, `${hash}.sql`); if (!fs.existsSync(sql)) { fs.mkdirSync(workDir, { recursive: true }); fs.writeFileSync(sql, note.code); } }
+      else { sql = path.join(workDir, `${hash}.sql`); fs.mkdirSync(workDir, { recursive: true }); if (fs.existsSync(sql) && (fs.lstatSync(sql).isSymbolicLink() || fs.lstatSync(sql).nlink !== 1)) throw new Error('Unsafe derived SQL file'); fs.writeFileSync(sql, note.code); }
     } else if (path.extname(file).toLowerCase() !== '.sql') problems.push(`${ref}: solo le query SQL si eseguono da una routine`);
     if (!server) problems.push('la query non ha l\'argomento server');
     if (!database) problems.push('la query non ha l\'argomento database');
@@ -125,13 +126,14 @@ export function resolve(root: string, step: FlowStep, run: FlowRun, attachmentsD
     // integrated auth (-E): credentials never pass through the app; -b exits non-zero on a SQL error
     program = 'sqlcmd'; args = ['-S', server ?? '', '-d', database ?? '', '-E', '-b', ...(step.effect === 'read-only' ? ['-K', 'ReadOnly'] : []), '-i', sql, ...Object.entries(vars).flatMap(([key, value]) => ['-v', `${key}=${value}`])];
   }
-  return { kind, ref, env, command: program ? [program, ...args].map(quote).join(' ') : `(${ref})`, program, args, file, sha256: hash, values, problems };
+  return { kind, ref, env, command: program ? [program, ...args].map(quote).join(' ') : `(${ref})`, program, args, file, sha256: hash, ...(kind === 'query' && path.extname(file).toLowerCase() === '.md' && args.includes('-i') ? { derived: { file: args[args.indexOf('-i') + 1]!, sha256: sha256(parseQueryNote(fs.readFileSync(file, 'utf8'))?.code ?? '') } } : {}), values, problems };
 }
 /** Launches a resolved command: no shell, bounded output, killed at the timeout or on abort. */
 export function execute(resolved: ResolvedCommand, options: { cwd: string; timeoutMs: number; signal?: AbortSignal; env?: Record<string, string> }): Promise<CommandResult> {
   if (resolved.problems.length) return Promise.reject(new Error(resolved.problems.join('; ')));
   // recheck the hash right before launching: the file could change between the preview and the run
   if (sha256(fs.readFileSync(resolved.file)) !== resolved.sha256) return Promise.reject(new Error(`${resolved.ref} è cambiato prima dell'avvio`));
+  if (resolved.derived && (fs.lstatSync(resolved.derived.file).isSymbolicLink() || fs.lstatSync(resolved.derived.file).nlink !== 1 || sha256(fs.readFileSync(resolved.derived.file)) !== resolved.derived.sha256)) return Promise.reject(new Error('Derived SQL changed before launch'));
   return new Promise(done => {
     let output = '', finished = false;
     const keep = (chunk: Buffer) => { output = (output + chunk.toString('utf8')).slice(-OUTPUT_KEEP); };

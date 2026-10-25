@@ -221,6 +221,8 @@ export interface AgentRun {
   /** Snapshot captured before launch; missing means historical suggestions are unknown. */
   skillSuggestions?: { at: number; suggested: string[]; used: string[] };
   source?: 'chat' | 'oneshot';
+  /** Host-captured origin of this task, independent of who originally opened its reusable chat. Missing = unknown. */
+  requestOrigin?: 'user' | 'agent' | 'app';
   oneshot?: { engine: string; job: OneShotPurpose; fallback: boolean; costBasis: 'reported' | 'estimated' | 'unknown' };
   runId: string; chatId: string; agentId: string;
   version: number;

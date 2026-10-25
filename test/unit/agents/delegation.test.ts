@@ -1024,6 +1024,19 @@ describe('versioned task continuity and canonical results', () => {
     third.resumeInterrupted();
     expect(third.items(o.id).filter(i => i.kind === 'system' && i.code === 'resultReady')).toHaveLength(0);
   });
+  it('records the current requester on reused chats and preserves it across continuation', async () => {
+    const f = fixture();
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'initial user work' }, 'user');
+    await f.call('agent_report', c.id, result);
+    await f.m.set(c.id, { workStatus: 'completed' });
+    await f.m.assignTask(c.id, 'automatic housekeeping', { mode: 'new-task', expectedVersion: 1, source: { kind: 'app' } });
+    expect(f.m.list().find(x => x.id === c.id)!.run!.requestOrigin).toBe('app');
+    await f.call('agent_report', c.id, { ...result, taskVersion: 2 });
+    await f.m.set(c.id, { workStatus: 'completed' });
+    const version = f.m.list().find(x => x.id === c.id)!.run!.taskVersion;
+    await f.m.assignTask(c.id, 'continue housekeeping', { mode: 'continue', expectedVersion: version, source: { kind: 'user' } });
+    expect(f.m.list().find(x => x.id === c.id)!.run!.requestOrigin).toBe('app');
+  });
   it('rejects stale assignment versions and never authorizes an assignment by a display title', async () => {
     const f = fixture();
     await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
@@ -1037,6 +1050,7 @@ describe('versioned task continuity and canonical results', () => {
     const run = f.m.list().find(x => x.id === c.id)!.run!;
     expect(run.taskId).toBe(run.runId);
     expect(run.continuedFrom).toBeUndefined();
+    expect(run.requestOrigin).toBe('user'); // the reused chat was originally opened by an agent
   });
 });
 

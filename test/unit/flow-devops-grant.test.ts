@@ -83,4 +83,14 @@ describe('DevOps write grant', () => {
     auto.propose({ config: config(), expectedRevision: rule.revision }, 'orch');
     expect(auto.grantFor(run)).toBeNull();
   });
+  it('retains original approval for the dossier and permits only host settlement after cancellation', async () => {
+    const { auto, flow, enable, started } = setup(); const rule = enable(), run = await started();
+    expect(run.approval?.config).toEqual(config());
+    const cancelled = flow.cancel({ runId: run.id, expectedRevision: run.revision }, 'orch'); auto.reconcileRuns();
+    expect(auto.grantFor(cancelled)).toBeNull(); expect(auto.settlementGrantFor(cancelled)).toEqual({ grant, workItemId: 42 });
+    expect(auto.settlementGrantFor({ ...cancelled, id: 'spoofed' })).toBeNull();
+    auto.propose({ config: config({ ...grant, ops: ['comment'] }), expectedRevision: rule.revision }, 'orch');
+    expect(auto.settlementGrantFor(cancelled)).toBeNull(); expect(auto.approvedConfigFor(cancelled)).toEqual(config());
+  });
+
 });

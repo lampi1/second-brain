@@ -4,6 +4,8 @@
 // tools (Log = everything the app did, live, ADR 0111, Guida; the Dashboard is gone, ADR 0122). Role-specific pages
 // exclude destinations already supplied by the shell. Under the Grindhouse entry, the open agents as a delegation
 // tree (SidebarTree.tsx). Used by App.tsx.
+import { flowState } from '../store/flows';
+import { routinePlacements } from '../lib/routine-chats';
 import type { ReactNode } from 'react';
 import { BRAIN_PAGES, type BrainPageId } from '../brain';
 import { badges, WARN_SECTIONS } from '../lib/notify';
@@ -53,7 +55,8 @@ export function Sidebar() {
   const map = ui.use(s => s.map);
   const read = ui.use(s => s.read);
   const feed = useApp(s => s.feed);
-  const waiting = useApp(s => s.pending.length);
+  const flowSnapshot = flowState.use(state => state.snapshot);
+  const waiting = useApp(s => { const routines = routinePlacements(s.chats, flowSnapshot); return s.pending.filter(request => !routines.has(request.chatId)).length; });
   const tasksUnread = useTasks(s => s?.unread ?? 0);
   // Task only while the brain can read it: hidden once the read says the brain has no devops-me.mjs
   const tasksOn = useTasks(s => s !== null && s.error?.kind !== 'script'); // not before the first read: no flash

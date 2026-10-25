@@ -203,9 +203,9 @@ app.whenReady().then(async () => {
     settings: () => { const c = s.brain.settings(); return { asr: c.voiceAsr ?? 'fast', voice: c.voiceName ?? 'paola' }; },
     fork: script => utilityProcess.fork(script, [], { serviceName: 'second-brain voice', stdio: 'ignore' }) as never,
     changed: st => emitter.emit('voice:changed', st),
-    heard: text => emitter.emit('voice:heard', { text }),
-    speech: active => emitter.emit('voice:speech', { active }),
-    fake: process.env.SB_VOICE_FAKE === '1' || demo ? { text: process.env.SB_VOICE_FAKE_TEXT ?? 'Ciao, cosa c’è di nuovo?' } : null,
+    heard: event => emitter.emit('voice:heard', event),
+    speech: event => emitter.emit('voice:speech', event),
+    fake: process.env.SB_VOICE_FAKE === '1' || demo ? { text: process.env.SB_VOICE_FAKE_TEXT ?? 'Ciao, cosa c’è di nuovo?', delayMs: Number(process.env.SB_VOICE_FAKE_DELAY_MS) || 600 } : null,
   });
   s.brain.onSettingChange(change => { if (change.key === 'voiceAsr' || change.key === 'voiceName') voice.settingsChanged(); });
   // call recordings (ADR 0154): written to userData/recordings, transcribed by the same local Whisper, zero tokens
@@ -676,8 +676,9 @@ app.whenReady().then(async () => {
     'suggest:state': () => composerSuggest.state(),
     'voice:state': () => voice.state(),
     'voice:prepare': () => voice.prepare(),
-    'voice:listen': a => voice.listen(a?.on === true, a?.talk === true),
-    'voice:audio': a => voice.audio(a?.samples),
+    'voice:listen': a => voice.listen(a?.on === true, a?.session, a?.talk === true),
+    'voice:audio': a => voice.audio(a?.samples, a?.session),
+    'voice:cancelSpeech': () => voice.cancelSpeech(),
     'voice:speak': a => voice.speak(String(a?.text ?? ''), a?.voice && ['paola', 'miro', 'dii'].includes(a.voice) ? a.voice : undefined),
     'rec:state': () => recordings.state(),
     'rec:arm': () => armLoopback(),
