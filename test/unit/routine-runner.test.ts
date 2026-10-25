@@ -1,6 +1,6 @@
 // The app-owned routine runner (ADR 0155) end to end in the main process: a manual start on one work item goes
-// through the approved rule and reaches step 2 with no Orchestrator open; a newer revision of a running item updates
-// that run instead of queueing a second; «Svuota coda» discards exactly the counted events; a test script runs by
+// through the approved rule and reaches step 2 with no Orchestrator open; a newer human revision stays queued
+// behind that run without mutating its inputs; «Svuota coda» discards exactly the counted events; a test script runs by
 // itself with a receipt while a prod step only waits for the user's «Esegui» (the exact command, recomputed); a
 // dry run of the deploy-prod example executes nothing; a run restarts from a step after its routine got a new version.
 import fs from 'node:fs';
@@ -94,13 +94,14 @@ describe('manual start on one work item', () => {
 });
 
 describe('trigger queue', () => {
-  it('updates the running run with a newer revision of its item instead of queueing a second run', async () => {
+  it('keeps a human revision queued behind the occupied run without changing its approved inputs', async () => {
     const w = world({ steps: [agent('analyze')] }); enable(w);
     const started = await w.runtime.startItem({ flowId: 'fix', workItem: '42' }) as FlowRun;
     w.detect.mockResolvedValueOnce({ cursor: { revision: '2' }, summary: 'one', items: [{ key: 'ab/42:5', title: 'Bug 42', inputs: { 'work-item-id': '42', 'work-item-revision': '5' } }] });
     await w.runtime.automation().tick();
-    expect(w.runtime.automation().snapshot().events.filter(e => !e.manual)).toEqual([]);
-    expect(w.flow.snapshot().runs.find(r => r.id === started.id)!.inputs['work-item-revision']).toBe('5');
+    expect(w.runtime.automation().snapshot().events.filter(e => !e.manual)).toHaveLength(1);
+    expect(w.runtime.automation().snapshot().events.filter(e => !e.manual)[0]?.inputs['work-item-revision']).toBe('5');
+    expect(w.flow.snapshot().runs.find(r => r.id === started.id)!.inputs['work-item-revision']).toBe('3');
   });
   it('«Svuota coda» discards exactly the counted waiting events', async () => {
     const w = world({ steps: [agent('analyze')] }), rule = enable(w), auto = w.runtime.automation();

@@ -16,7 +16,7 @@ export function FlowFullscreenButton({ expanded = false, onClick }: { expanded?:
 export function FlowFullscreenContent({ definition, run, onNavigate, controls }: { definition: Definition; run?: FlowRun; onNavigate?: () => void; controls?: ReactNode }) {
   return <div className="flow-fullscreen-content">
     <p className="flow-fullscreen-description">{definition.description}</p>
-    {run && <div className="flow-run-focus" data-testid="flow-fullscreen-run"><div className="flow-card-head"><strong>{run.subjectKey}</strong><span className="flow-version">v{run.flowVersion}</span><span className="flow-badge" data-status={run.status}>{t(run.cancellation?.interruption === 'pending' ? 'flows.interruptionPending' : `flows.${run.status}`)}</span></div><p className="flows-muted">{[run.scope.project, run.scope.areaPath].filter(Boolean).join(' · ')}</p></div>}
+    {run && <div className="flow-run-focus" data-testid="flow-fullscreen-run"><div className="flow-card-head"><strong>{run.subjectKey}</strong><span className="flow-version">v{run.flowVersion}</span><span className="flow-badge" data-status={run.status}>{t(run.disposition?.kind === 'skipped' ? 'flows.skipped' : run.disposition?.kind === 'needs-human' ? 'flows.needsHuman' : run.cancellation?.interruption === 'pending' ? 'flows.interruptionPending' : `flows.${run.status}`)}</span></div><p className="flows-muted">{[run.scope.project, run.scope.areaPath].filter(Boolean).join(' · ')}</p></div>}
     {controls}
     <section className="flow-fullscreen-steps" aria-label={t('flows.steps')} data-testid="flow-fullscreen-steps">
       <h2>{t('flows.steps')} · {definition.steps.length}</h2>

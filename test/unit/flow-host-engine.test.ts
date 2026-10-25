@@ -91,13 +91,13 @@ describe('host routine engine', () => {
     expect(w.flow.status(source.id, 'owner').steps[0]!.reason).toContain('cartella di lavoro'); expect(w.create).not.toHaveBeenCalled();
   });
   it('preserves the two-worker limit across concurrent routine pumps', async () => {
-    const w = world([step('first')]); w.start('one'); w.start('two'); const third = w.start('three'); await Promise.all([w.runtime.tick(), w.runtime.tick()]);
-    expect(w.create).toHaveBeenCalledTimes(2); expect(w.flow.status(third.id, 'owner').steps[0]!.status).toBe('ready');
+    const w = world([step('first')]); w.start('one'); w.start('two'); w.start('three'); await Promise.all([w.runtime.tick(), w.runtime.tick()]);
+    expect(w.create).toHaveBeenCalledTimes(2); expect(w.flow.snapshot().runs.filter(r => r.steps[0]!.status === 'running')).toHaveLength(2); expect(w.flow.snapshot().runs.filter(r => r.steps[0]!.status === 'ready')).toHaveLength(1);
   });
   it('discards a freshly-created worker when cancellation wins before binding', async () => {
-    const w = world(); let release!: () => void; const original = w.create.getMockImplementation()!;
-    w.create.mockImplementation(async request => { await new Promise<void>(done => { release = done; }); return original(request); });
-    const source = w.start(), ticking = w.runtime.tick(); await Promise.resolve(); await Promise.resolve();
+    const w = world(); let release!: () => void, entered!: () => void; const creating = new Promise<void>(resolve => { entered = resolve; }); const original = w.create.getMockImplementation()!;
+    w.create.mockImplementation(async request => { await new Promise<void>(done => { release = done; entered(); }); return original(request); });
+    const source = w.start(), ticking = w.runtime.tick(); await creating;
     await w.runtime.cancel({ runId: source.id, expectedRevision: source.revision }); release(); await ticking;
     expect(w.sendWorker).not.toHaveBeenCalled(); expect(w.discardWorker).toHaveBeenCalledWith('worker-1'); expect(w.flow.status(source.id, 'owner').status).toBe('cancelled');
   });

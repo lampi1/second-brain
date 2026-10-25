@@ -5,7 +5,7 @@ import { integer, keys, object, text } from './schema';
 import { organizationUrl, readEvidenceImage, renderDevOpsComment, type UploadedImage } from './devops-content';
 
 export interface OwnedPullRequest { project: string; projectId: string; repositoryId: string; id: number; source: string; target: string }
-export interface ResourceLedger { images?: UploadedImage[]; prs?: OwnedPullRequest[] }
+export interface ResourceLedger { pushes?: { repositoryId: string; project: string; branch: string; commit: string }[]; images?: UploadedImage[]; prs?: OwnedPullRequest[] }
 export interface ResourcePorts {
   grant: DevOpsWriteGrant; workItemId: number; evidenceRoot?: string; mine: ResourceLedger;
   call(method: string, url: string, body?: unknown, contentType?: string): Promise<Record<string, unknown>>;
@@ -69,15 +69,18 @@ export async function devopsResource(raw: Record<string, unknown>, p: ResourcePo
       const project = text(raw.project, 'project', 128), repositoryId = guid(raw.repositoryId);
       if (!p.grant.projects.some(name => name.toLowerCase() === project.toLowerCase())) throw new Error('PR project is outside the grant');
       const source = branch(raw.sourceRef), target = branch(raw.targetRef); if (source === target) throw new Error('PR source and target must differ');
+      if (p.grant.ops.includes('git-push') && !p.mine.pushes?.some(push => push.repositoryId === repositoryId && push.project.toLowerCase() === project.toLowerCase() && push.branch === source)) throw new Error('PR source must be the branch published by this run through host git-push');
       const repository = await p.call('GET', `${org}/${encodeURIComponent(project)}/_apis/git/repositories/${repositoryId}?${API}`), projectInfo = object(repository.project, 'repository project');
       if (String(repository.id).toLowerCase() !== repositoryId || String(projectInfo.name).toLowerCase() !== project.toLowerCase()) throw new Error('Repository identity changed');
       const projectId = guid(projectInfo.id), title = text(raw.title, 'title', 300);
       const description = renderDevOpsComment(text(raw.text, 'text', 10_000), p.grant.organization, p.mine.images ?? [], 'markdown');
       if (/!?\[[^\]]+\]\(/.test(String(raw.text)) && !p.grant.ops.includes('rich-comments')) throw new Error('Formatted PR content needs rich-comments');
       await p.workItem();
-      const created = await p.call('POST', `${org}/${encodeURIComponent(project)}/_apis/git/repositories/${repositoryId}/pullrequests?${API}`, { sourceRefName: source, targetRefName: target, title, description, isDraft: true, workItemRefs: [{ id: String(p.workItemId) }] });
+      const created = await p.call('POST', `${org}/${encodeURIComponent(project)}/_apis/git/repositories/${repositoryId}/pullrequests?${API}`, { sourceRefName: source, targetRefName: target, title, description, isDraft: true });
       const prId = id(created.pullRequestId);
       p.record(entry => { (entry.prs ??= []).push({ project, projectId, repositoryId, id: prId, source, target }); });
+      const item = await p.workItem();
+      await p.patchItem([{ op: 'test', path: '/rev', value: item.rev }, { op: 'add', path: '/relations/-', value: { rel: 'ArtifactLink', url: `vstfs:///Git/PullRequestId/${projectId}%2F${repositoryId}%2F${prId}`, attributes: { name: 'Pull Request' } } }]);
       return { pullRequestId: prId, isDraft: true, url: `${org}/${encodeURIComponent(project)}/_git/${repositoryId}/pullrequest/${prId}` };
     }
     case 'pr-comment': {

@@ -182,3 +182,14 @@ test/unit/flows/devops-content.test.ts email sha256:99774515df44c129fd74d7ff5b19
 test/unit/flows/devops-resources.test.ts internal-host sha256:b895c996e0ea67edfcbe41ffbf29423244ab4f476f35e49544b11c3f1d188609
 test/unit/flows/package.test.ts conn-string-password sha256:e15458704bfd8fa940168660391acb3310f99f23277c8996c3f58eb9c9873330
 test/unit/flows/package.test.ts assigned-secret sha256:e15458704bfd8fa940168660391acb3310f99f23277c8996c3f58eb9c9873330
+
+# Public Microsoft App Service task/build-policy IDs; synthetic fixtures and pre-existing dummy redaction secrets.
+# Exact content reviewed for unattended routine contracts; no company configuration or credentials.
+docs/routine-test-targets.md guid sha256:b250b7d1d6e18cced61cf9b0fa2df8902bdbf261312ec018d3ee703c70449452
+src/main/flows/app-service-target.ts guid sha256:9ed7622aa6b6f39a05e06cbe9f365e3f6f0e4a481dfbde656bf22b0c5257004a
+src/main/flows/pr-validation.ts guid sha256:0df8b097185d1f86c35b85f75836b0b281c512ebe6974248749fbc07c76e0fcc
+test/fixtures/routine-consent.ts guid sha256:68c6eb32cc76e52855fee636e3bdbd670d33ea57b556f3d1f6d563302339570b
+test/unit/flows/package.test.ts conn-string-password sha256:ecd42e13247c45eb6b3ac3ba33c0273d97a093472a5fb8bf65fff37aabf68287
+test/unit/flows/package.test.ts assigned-secret sha256:ecd42e13247c45eb6b3ac3ba33c0273d97a093472a5fb8bf65fff37aabf68287
+test/unit/flows/package.test.ts internal-host sha256:ecd42e13247c45eb6b3ac3ba33c0273d97a093472a5fb8bf65fff37aabf68287
+test/unit/flows/pr-validation.test.ts guid sha256:ea1505c930f16d47b1346ab07406efe5b1b921d1b8793cd69da38bdd1cbe0224

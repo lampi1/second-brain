@@ -732,18 +732,20 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       { beforeSubmit: authorize, submitted() {}, failed }),
     discardWorker: chatId => manager.close(chatId),
     // the per-step engine/model picker on the Routine page (ADR 0155): the engines and models the registry knows
-    engines: () => { const registry = brain.routingInfo().registry; return registry ? Object.keys(registry.harnesses).map(id => ({ id, name: id.charAt(0).toUpperCase() + id.slice(1), models: registry.models.filter(model => model.harness === id).map(model => model.id) })) : []; },
+    engines: () => { const registry = brain.routingInfo().registry; return registry ? Object.keys(registry.harnesses).filter(id => agentsMayOpen(brain.settings(), id as Harness)).map(id => ({ id, name: id.charAt(0).toUpperCase() + id.slice(1), models: registry.models.filter(model => model.harness === id).map(model => model.id) })) : []; },
     steer: (chatId, text) => manager.send(chatId, text, undefined, false, 'Routine', false, { kind: 'app' }),
     freezeRole: step => {
       if (!step.role) throw new Error('Packaged agent steps must declare a role');
       const resolved = agents.resolve({ harness: brain.settings().orchestratorChats.harness, cwd: '', roleId: step.role, ...(step.tier ? { tier: step.tier } : {}) });
-      if (!resolved.request.model) throw new Error('Choose an exact model before packaging');
-      return { agentPrompt: resolved.instructions, engine: resolved.request.harness, model: resolved.request.model, tier: resolved.tier, ...(resolved.request.effort ? { effort: resolved.request.effort } : {}) };
+      const engine = (step.engine ?? resolved.request.harness) as Harness, tier = step.tier ?? resolved.tier;
+      const model = step.model ?? (engine === resolved.request.harness ? resolved.request.model : tierModel(engine, tier!, brain.routingInfo().registry, brain.settings().modelTiers));
+      if (!model) throw new Error('No exact model is resolved for this engine/tier. Read app_flow_models and choose one explicitly.');
+      return { agentPrompt: resolved.instructions, engine, model, tier, ...(resolved.request.effort ? { effort: resolved.request.effort } : {}) };
     },
     roles: () => flowRoles(agents.list().profiles, (engine, tier) => tierModel(engine, tier, brain.routingInfo().registry, brain.settings().modelTiers)),
     send: (ownerId, message) => chats.send(ownerId, message, undefined, false, 'Routine automatiche', false, { kind: 'app' }) });
   addChatTools(devopsWriteTools((chatId, request, signal) => flows.devopsWrite(chatId, request, signal)));
-  addChatTools(flowOutputTools({ output: flows.output, downgrade: flows.downgrade }));
+  addChatTools(flowOutputTools(flows));
   addChatTools(testDbReadTools((chatId, request, signal) => flows.testDbRead(chatId, request, signal)));
   const workflows = workflowsRef = new Workflows(path.join(ctx.userData, 'work-threads.json'), rows => ctx.emitter.emit('work:changed', rows), Date.now, row => {
     const linked = chats.list().filter(c => row.chatIds.includes(c.id) && c.plan);

@@ -331,7 +331,7 @@ export function RoutineHistory({ snapshot }: { snapshot: FlowSnapshot }) {
       const definition = definitionOf(snapshot, run), item = itemOf(run);
       return [<tr key={run.id} onClick={() => setOpen(open === run.id ? null : run.id)} aria-expanded={open === run.id}>
         <td>{definition?.title ?? run.flowId}<RoutineInspect snapshot={snapshot} definition={definition} run={run} /></td><td>{item?.url ? <a href={item.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>{item.title}</a> : item?.title ?? '—'}</td>
-        <td><Chip tone={run.status === 'completed' ? 'green' : undefined}>{t(run.status === 'completed' ? 'rt.completed' : 'rt.cancelled')}</Chip>{run.heal?.length ? <span className="rt-muted"> · ↻ {run.heal.length}</span> : null}</td>
+        <td><Chip tone={run.status === 'completed' ? 'green' : undefined}>{t(run.disposition?.kind === 'skipped' ? 'flows.skipped' : run.disposition?.kind === 'needs-human' ? 'flows.needsHuman' : run.status === 'completed' ? 'rt.completed' : 'rt.cancelled')}</Chip>{run.heal?.length ? <span className="rt-muted"> · ↻ {run.heal.length}</span> : null}</td>
         <td>{duration(run.updatedAt - run.createdAt)}</td><td>{new Date(run.updatedAt).toLocaleString(locale())}</td></tr>,
         open === run.id && <tr key={`${run.id}-x`} className="rt-hist-open"><td colSpan={5}>
           <ol className="rt-hsteps">{(definition?.steps ?? []).map((spec, i) => <li key={spec.id}><b>{i + 1} · {spec.title}</b> <span className="rt-muted">{run.steps[i]?.receipt?.summary ?? (run.steps[i]?.status === 'completed' ? '✓' : '—')}</span></li>)}</ol>

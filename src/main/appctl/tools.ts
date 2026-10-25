@@ -200,7 +200,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     }) : []),
     ...(d.flows && authed() ? flowTools({
       service: () => { if (!authed()) throw new Error('Authenticated Orchestrator required'); return d.flows!.service(); },
-      ownerId: callerId!, resolveBinding: d.flows.resolveBinding, deploymentTargets: d.flows.deploymentTargets, dossier: d.flows.dossier,
+      ownerId: callerId!, resolveBinding: d.flows.resolveBinding, manualBind: d.flows.manualBind, manualReport: d.flows.manualReport, deploymentTargets: d.flows.deploymentTargets, deploymentTargetFile: d.flows.deploymentTargetFile, modelCatalog: d.flows.modelCatalog, inspectTarget: d.flows.inspectTarget, dossier: d.flows.dossier,
       proposeCancel: (input, ownerId) => d.flows!.proposeCancel(input, ownerId),
       proposeRestart: (input, ownerId) => d.flows!.proposeRestart(input, ownerId),
       overview: ownerId => d.flows!.overview(ownerId), message: (runId, body, ownerId) => d.flows!.message(runId, body, ownerId),
