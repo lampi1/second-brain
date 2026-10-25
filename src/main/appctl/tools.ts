@@ -52,6 +52,9 @@ import type { BrainScripts } from '../brain/scripts';
 import type { BrainChangelog } from '../brain/changelog';
 import { scriptWriteTools } from '../brain/scripts-tools';
 import { AGENT_LABEL } from '../../shared/agent-label';
+import { voiceDiagnostics } from '../voice/diagnostics';
+import { workbenchTools } from '../flows/workbench-tools';
+import { componentTools } from '../components/tools';
 import { flowTools } from '../flows/tools';
 import { automationTools } from '../flows/automation-tools';
 import type { FlowRuntime } from '../flows/runtime';
@@ -193,10 +196,19 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     ...(d.flows ? { flows: () => { try { return d.flows!.snapshot(); } catch { return null; } } } : {}) };
   const tools: ToolDef[] = [
     guideTool(guideDeps),
+    ...(authed() ? [{ name: 'app_voice_diagnostics', description: 'Read local content-free voice diagnostics: rolling recognition/synthesis timing samples, stale events, cancellations and failures. No audio or transcript content. Coverage explicitly excludes end-to-end latency and accuracy. Unknown values stay null; small-sample p95 is not a reliability claim.', inputSchema: obj(), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false }, run: () => { if (!authed()) throw new Error('Authenticated Orchestrator required'); return { diagnostics: voiceDiagnostics() }; } }] : []),
     ...(d.config && authed() ? [configTool({ ...d.config, brain: d.brain, callerId: callerId!, userAsked: () => configAsked(callerId!) })] : []),
     ...(d.flows && authed() ? automationTools({
       service: () => { if (!authed()) throw new Error('Authenticated Orchestrator required'); return d.flows!.automation(); },
       contextKey: () => d.flows!.service().snapshot().contextKey, ownerId: callerId!,
+    }) : []),
+    ...(d.flows && authed() ? workbenchTools(key => {
+      if (!authed() || d.flows!.snapshot().contextKey !== key) throw new Error('Authenticated current-brain Orchestrator required');
+      return d.flows!.workbench();
+    }, callerId!) : []),
+    ...(d.flows && authed() ? componentTools(key => {
+      if (!authed() || d.flows!.snapshot().contextKey !== key) throw new Error('Authenticated current-brain Orchestrator required');
+      return d.flows!.components();
     }) : []),
     ...(d.flows && authed() ? flowTools({
       service: () => { if (!authed()) throw new Error('Authenticated Orchestrator required'); return d.flows!.service(); },
@@ -311,6 +323,11 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         d.brain.publish([{ kind: 'chat-closed', title: c.title, detail: 'chiusa dall’Orchestrator', chatId: id, who: c.harness }]);
         return 'closed';
       },
+    },
+    {
+      name: 'app_agent_context', description: 'Read the frozen launch context manifest for one visible work chat: selected memory IDs/provenance, omission reasons, skill hashes and estimated host-instruction size. No fact values, no live archive injection, no vendor-system prompt. Lexical scores are not probabilities; token estimates are characters/3. Legacy chats return unknown; sealed routines load no ambient memory.',
+      inputSchema: obj({ chatId: str('chat id') }, ['chatId']),
+      run: a => { const id = contentOf(String(a.chatId)); const chat = d.chats.list().find(c => c.id === id); if (!chat) throw new Error('Chat unavailable'); return { manifest: chat.launchContext ?? null, known: !!chat.launchContext }; },
     },
     {
       name: 'app_chat_items', description: 'Last items of one app chat (messages, tool rows, results), texts truncated.',

@@ -22,6 +22,10 @@ describe('task-selective memory at launch', () => {
     const file = path.join(w.root, 'memory/records.json'), before = fs.readFileSync(file, 'utf8');
     const selected = selectLaunchMemory(w.root, scope, 'Review database migrations');
     expect(selected.text).toContain('Database migrations'); expect(selected.text).not.toContain('Invoices'); expect(selected.omitted).toBe(1);
+    expect(selected.selection.available).toBe(true);
+    expect(selected.selection.records.map(r => r.id)).toEqual(selected.text.split('\n').map(line => JSON.parse(line).id));
+    expect(selected.selection.omitted).toEqual({ ineligible: 0, unmatched: 1, budget: 0 });
+    expect(JSON.stringify(selected.selection)).not.toContain('Database migrations');
     expect(JSON.parse(selected.text)).toMatchObject({ status: 'confirmed', scope, sourceEventId: 'memory-proposal:example', sourceRunId: 'r_example', verification: { sourceEventId: 'human:approval', evidence: 'Confirmed by the user after checking the repository guide' } });
     expect(recallMemory(w.root, scope, 'Invoices')).toContain('accounting workbook');
     expect(fs.readFileSync(file, 'utf8')).toBe(before);

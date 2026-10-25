@@ -22,6 +22,7 @@ const { setInterval, clearInterval, clearTimeout } = timersFor('chats/manager');
 import crypto from 'node:crypto';
 import type { ModelTier } from '../../shared/roles';
 import fs from 'node:fs';
+import type { AgentContextSnapshot } from '../../shared/agent-context';
 import path from 'node:path';
 import type { Answer, ChatCommand, ChatItem, ChatSummary, CliStatus, ContextStats, CursorReasoning, Effort, HandoffInfo, Harness, Lang, NewChat, PendingRequest, PermissionMode } from '../../shared/contract';
 import { replyLangTurn } from './reply-lang';
@@ -666,7 +667,7 @@ export class ChatManager implements ChatService {
 
   /** links = the run links an Orchestrator tool sets (A7): refused before anything starts when one names an unknown run. */
   /** by: who asks; 'app' = one of the app's own jobs (the Judge's sampled reviews): like an agent, its run says startedBy 'app' */
-  async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user', inherited?: { tier?: ModelTier; routinePackage?: string; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links: RunLinks = {}, opts: { routine?: ChatSummary['routine']; boundByOrchestrator?: boolean; continuation?: boolean; continuationOf?: string } = {}): Promise<ChatSummary> {
+  async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user', inherited?: { launchContext?: AgentContextSnapshot; tier?: ModelTier; routinePackage?: string; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links: RunLinks = {}, opts: { routine?: ChatSummary['routine']; boundByOrchestrator?: boolean; continuation?: boolean; continuationOf?: string } = {}): Promise<ChatSummary> {
     const createdT0 = Date.now();
     this.deliveryPolicy(req.deliveryPolicy, !!req.parentId);
     if (req.doneWhen && (req.doneWhen.length > 12 || req.doneWhen.some(x => typeof x !== 'string' || !x.trim() || x.length > 300))) throw new Error('Invalid task criteria.');
@@ -692,7 +693,7 @@ export class ChatManager implements ChatService {
       if (current && req.replaces !== current.id) return current;
       req = { ...req, orchestrator: true, title: ORCHESTRATOR_TITLE };
     }
-    const agent: Pick<ResolvedRole, 'request' | 'owner' | 'instructions' | 'policy' | 'maxContext' | 'tier'> & { skills?: string[]; launches?: string[]; assets?: { pluginDir: string; skillRoot: string } } = inherited ? { ...inherited, policy: inherited.policy ?? null, request: req }
+    const agent: Pick<ResolvedRole, 'request' | 'owner' | 'instructions' | 'policy' | 'maxContext' | 'tier' | 'launchContext'> & { skills?: string[]; launches?: string[]; assets?: { pluginDir: string; skillRoot: string } } = inherited ? { ...inherited, policy: inherited.policy ?? null, request: req }
       // Lampo reads and answers: read and web tools only, plan mode (no edit, no command, no popup), its own short frame
       // Flash (ADR 0107): its card's engine, model and instructions, under the fixed frame and the read-only policy
       : req.quick ? this.flashAgent(req)
@@ -787,9 +788,15 @@ export class ChatManager implements ChatService {
     // messages (ADR 0036) it never waits for the CPU queue (a start of 10-25 s was then followed by the queue's wait)
     const forUser = by === 'agent' && !delegator && !req.orchestrator && this.orchestratorAnswering();
     const viaQueue = by !== 'user' && !forUser && !!prompt && !!this.admission;
+    const observedContext: AgentContextSnapshot | undefined = agent.launchContext ?? (inherited?.routinePackage ? {
+      schema: 1, at: now, mode: 'sealed', packageDigest: inherited.routinePackage,
+      memory: { available: true, records: [], omitted: { ineligible: 0, unmatched: 0, budget: 0 }, estimatedTokens: 0, budgetTokens: 0 }, skills: [],
+      instructions: { sha256: crypto.createHash('sha256').update(agent.instructions).digest('hex'), characters: agent.instructions.length, estimatedTokens: Math.ceil(agent.instructions.length / 3) },
+    } : undefined);
     const r: Rec = {
       s: {
         agent: agent.owner,
+        ...(observedContext ? { launchContext: { ...observedContext, instructions: { sha256: crypto.createHash('sha256').update(agent.instructions).digest('hex'), characters: agent.instructions.length, estimatedTokens: Math.ceil(agent.instructions.length / 3) } } } : {}),
         ...(opts.routine ? { routine: { ...opts.routine } } : {}),
         ...(inherited?.routinePackage ? { routinePackage: inherited.routinePackage, routinePromptHash: crypto.createHash('sha256').update(inherited.instructions).digest('hex') } : {}),
         ...(by !== 'user' ? {work:{status:'assigned' as const,updatedAt:now}} : {}),
@@ -1879,7 +1886,7 @@ export class ChatManager implements ChatService {
       ...(r.s.route ? { route: { ...r.s.route, ledgerId: r.s.route.ledgerId ?? `app:${r.s.id}`, handoffs: (r.s.route.handoffs ?? 0) + 1 } } : {}),
       prompt: `${opts.promptPrefix ? `${opts.promptPrefix}\n\n` : ''}${continuePrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, h)}`,
       ...(parentRec ? { parentId: parentRec.s.id, ...(r.s.delegation ? { delegation: structuredClone(r.s.delegation) } : {}) } : {}),
-    }, 'user', { ...(r.s.run?.tier ? { tier: r.s.run.tier } : {}), ...(r.s.routinePackage ? { routinePackage: r.s.routinePackage, routinePromptHash: r.s.routinePromptHash } : {}), owner: r.s.agent ?? plainOwner(r.s.harness, r.choice.model), instructions: r.agentInstructions ?? '', policy: r.policy ?? null, assets: r.agentAssets, ...(r.skills ? { skills: [...r.skills] } : {}), ...(r.maxContext ? { maxContext: r.maxContext } : {}) },
+    }, 'user', { ...(r.s.launchContext ? { launchContext: r.s.launchContext } : {}), ...(r.s.run?.tier ? { tier: r.s.run.tier } : {}), ...(r.s.routinePackage ? { routinePackage: r.s.routinePackage, routinePromptHash: r.s.routinePromptHash } : {}), owner: r.s.agent ?? plainOwner(r.s.harness, r.choice.model), instructions: r.agentInstructions ?? '', policy: r.policy ?? null, assets: r.agentAssets, ...(r.skills ? { skills: [...r.skills] } : {}), ...(r.maxContext ? { maxContext: r.maxContext } : {}) },
     {}, { ...(r.s.routine ? { routine: r.s.routine } : {}), continuation: !!parentRec, continuationOf: r.s.id });
     const nr = this.chats.get(c.id);
     // the worktree hint follows the chain (A → B → C)
@@ -3111,6 +3118,7 @@ export class ChatManager implements ChatService {
       ...(runPruned ? { runPruned } : {}),
       s: {
         agent: restoredOwner(c),
+        ...(c.launchContext ? { launchContext: c.launchContext } : {}),
         ...(c.routine ? { routine: c.routine } : {}),
         ...(c.routinePackage ? { routinePackage: c.routinePackage, routinePromptHash: c.routinePromptHash } : {}),
         ...(run ? { run } : {}),
@@ -3168,6 +3176,7 @@ export class ChatManager implements ChatService {
 
   private persist(strict = false): void {
     const rows: StoredChat[] = [...this.chats.values()].map(r => ({
+      ...(r.s.launchContext ? { launchContext: r.s.launchContext } : {}),
       id: r.s.id, harness: r.s.harness, cwd: r.s.cwd, sessionId: r.s.sessionId, ...(r.forkFrom ? { forkFrom: r.forkFrom } : {}),
       ...(r.s.routine ? { routine: r.s.routine } : {}),
       ...(r.s.routinePackage ? { routinePackage: r.s.routinePackage, routinePromptHash: r.s.routinePromptHash } : {}),

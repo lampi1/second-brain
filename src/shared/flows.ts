@@ -138,7 +138,7 @@ export interface FlowCommandReceipt {
   sha256: string; env: 'test' | 'prod'; startedAt: number; endedAt?: number; exitCode?: number | null;
   output: string; by: 'runner' | 'user';
 }
-export interface FlowHealEntry { at: number; stepId: string; action: 'retry' | 'goto' | 'resume'; to?: string; attempt: number; reason: string }
+export interface FlowHealEntry { at: number; stepId: string; action: 'retry' | 'goto' | 'resume'; to?: string; attempt: number; reason: string; progress?: string }
 /** One line of the Dry-run: every step resolved, nothing executed. */
 export interface FlowDryRunStep {
   stepId: string; title: string; kind: FlowStep['kind']; who: string; command?: string; prod: boolean; auto: boolean; problems: string[];

@@ -32,6 +32,7 @@ export function VoiceSettings() {
     setProblem(await previewVoice(name));
     setTrying(false);
   };
+  const diagnostic = engine?.diagnostics;
   return <>
     <div className="st-row" data-testid="st-voice-talk">
       <div className="st-text"><span className="st-title">{t('voice.talkTitle')}</span><p className="st-desc">{t('voice.talkHint')}</p></div>
@@ -70,5 +71,12 @@ export function VoiceSettings() {
       </div>
       <div className="st-ctl">{!ready && <button type="button" className="btn btn-primary btn-s" disabled={!!dl} onClick={() => void window.sb.invoke('voice:prepare', undefined).then(st => voice.set(s => ({ ...s, engine: st })))} data-testid="st-voice-download">{t('voice.download')}</button>}</div>
     </div>
+    <details data-testid="voice-diagnostics"><summary>{t('rt.voice.diagnostics')}</summary>
+      <button type="button" className="btn btn-ghost btn-s" onClick={() => void window.sb.invoke('voice:state', undefined).then(st => voice.set(s => ({ ...s, engine: st })))}>{t('rt.voice.refresh')}</button>
+      <p className="st-desc">{t('rt.voice.hint')}</p>
+      {diagnostic && <><p>{t('rt.voice.recognition')}: {diagnostic.recognitionAfterEndpoint.meanMs === null ? '—' : `${Math.round(diagnostic.recognitionAfterEndpoint.meanMs)} ms`} · n={diagnostic.recognitionAfterEndpoint.count}</p>
+        <p>{t('rt.voice.synthesis')}: {diagnostic.synthesisRequestToAudio.meanMs === null ? '—' : `${Math.round(diagnostic.synthesisRequestToAudio.meanMs)} ms`} · n={diagnostic.synthesisRequestToAudio.count}</p>
+        <details><summary>{t('rt.voice.exact')}</summary><pre style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(diagnostic, null, 2)}</pre></details></>}
+    </details>
   </>;
 }

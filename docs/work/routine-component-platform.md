@@ -3,7 +3,7 @@
 
 Branch: `feat/routine-component-platform`
 Base: `2cd103fdd7889a826e9f62355810bbfc6dfcdc5d`
-Status: implementation started; no feature is complete yet.
+Status: first integrated implementation checkpoint; validation/reviews in progress. Not ready to merge.
 Scope: implement the actionable improvements from the component comparison report, preserving existing host approvals, validators and field limits. Add evidence-linked developer learning.
 
 ## Resume with any provider
@@ -32,5 +32,24 @@ No production execution, no external release changes, no runtime dependency on t
 Do not copy personal data or company-specific routine definitions into this public repository.
 
 ## Validation and publication
-Not run yet. The remote branch is a recovery checkpoint, not a completed or reviewed release.
+Implemented so far (unchecked acceptance items still need final verification):
+- Public GitHub/local inert catalog, commit/blob/hash checks, ancestor licenses, opt-in sources, daily metadata refresh,
+  search/inspect/stage tools and native component dialog. Import copies selected files into the normal routine draft.
+- Routine Doctor, retrospective immutable evaluation suites, version analytics, native workbench and aggregate export.
+- Repeated identical failures stop after three attempts without new host evidence, preserving explicit user retry.
+- Frozen launch memory/skill manifest, chat menu inspector and Orchestrator read tool; sealed workers load no ambient facts.
+- Optional developer-learning handoff and local content-free voice diagnostics.
+
+Verified: 93 focused unit tests across components, workbench, flows, memory, agent packs, context and voice passed.
+Typecheck passed before the final voice/file-input additions; rerun on the checkpoint. Initial independent security
+review found two issues (ancestor licenses and UTF-8 BOM preservation); fixed and covered by regression tests.
+
+Remaining before delivery: rerun typecheck/full branch checks/build; harden catalog metadata read validation;
+finish concise inspection/exports and capabilities/docs; add visual/e2e specs (do not execute branch e2e); verify
+screens in hidden dev; fresh final security/correctness/UI reviews; fix confirmed findings. Review repeated-failure
+integration and launch-manifest persistence in particular. Retrospective evaluation does not launch paid model jobs;
+existing Learning replay remains the explicit execution path. Companion is an offline read-only export, never an
+unauthenticated remote service. Remote hosting/mod execution are not enabled.
+
+The remote branch is a recovery checkpoint, not a completed or reviewed release.
 

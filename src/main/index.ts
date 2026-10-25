@@ -531,6 +531,8 @@ app.whenReady().then(async () => {
       const target = orchestrator.get();
       if (a.feedback && target) void s.chats.send(target.id, `[evento app] L’utente chiede una proposta diversa per la regola ${reviewed.id}. Proposta rifiutata: ${JSON.stringify(reviewed.rule)}. Risposta: ${JSON.stringify(reviewed.note)}. Prepara la nuova proposta nella modale; nessuna modifica è approvata.`, undefined, false, 'Decisioni', false, { kind: 'app' }).catch(e => log.warn('chats', 'lesson feedback wake failed', { cause: errText(e), hint: 'The feedback is saved in the lesson review record.' }));
     },
+    'routine:workbench': a => flowsFor(a.contextKey).workbench().perform(a.request),
+    'components:operate': a => flowsFor(a.contextKey).components().perform(a.request, true),
     'flows:list': () => s.flows?.snapshot() ?? { contextKey: 'unavailable', drafts: [], versions: [], active: {}, runs: [] },
     'flows:export': a => {
       const service = s.flows?.service();

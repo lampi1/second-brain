@@ -5,6 +5,7 @@
 // ADR 0100) is left out on load and a launches list naming one drops it, so an older roles.json still loads. resolve() turns a role id into what a chat starts with: engine,
 // model (the role's tier on that engine), the composed instructions, the tool policy. Used by ChatManager, the IPC
 // handlers (index.ts), the packs (pack/flows.ts) and the maintenance jobs (brainmodel/).
+import type { AgentContextSnapshot } from '../../shared/agent-context';
 import path from 'node:path';
 import { checkedKnowhow, checkedPackIdentity, packName } from '../../shared/agent-pack';
 import type { Effort, Harness, NewChat } from '../../shared/contract';
@@ -61,6 +62,7 @@ export interface AgentCatalogDeps {
 /** What a chat starts with: the request with the role's engine, model and effort, its owner snapshot, the composed
  *  instructions and the tool policy; skills = the role's default skills; launches = the roles it may delegate to. */
 export interface ResolvedRole {
+  launchContext?: AgentContextSnapshot;
   request: NewChat; owner: AgentOwnerSnapshot; instructions: string; policy: AgentPolicy | null;
   maxContext?: number; skills: string[]; launches: string[];
   /** the model tier a role chat runs on */

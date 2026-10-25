@@ -5,6 +5,7 @@
 // engine for a fake that "hears" SB_VOICE_FAKE_TEXT once per listening session and speaks a short silence.
 // Wired in main/index.ts (voice:* channels).
 import path from 'node:path';
+import { registerVoiceDiagnostics, VoiceMeasurements } from './diagnostics';
 import fs from 'node:fs';
 import { log } from '../log';
 import { ASR, TTS, VAD, partBytes } from './catalog';
@@ -37,6 +38,8 @@ const FAKE_LINES: TranscribedLine[] = [
 ];
 
 export class VoiceService {
+  private readonly measurements = new VoiceMeasurements();
+  private readonly releaseDiagnostics: () => void;
   private child: Child | null = null;
   private downloading: VoiceState['downloading'] = null;
   private error: string | null = null;
@@ -45,6 +48,7 @@ export class VoiceService {
   private listening: string | null = null;
   private readonly utterances = new Map<number, ReturnType<typeof setTimeout>>();
   private clearListening(): void {
+    this.measurements.clear();
     this.listening = null;
     for (const timer of this.utterances.values()) clearTimeout(timer);
     this.utterances.clear();
@@ -62,15 +66,15 @@ export class VoiceService {
   private fakeTimer: ReturnType<typeof setTimeout> | null = null;
   private jobId = 0;
   private readonly jobs = new Map<number, { progress: (done: number) => void; done: (r: { lines: TranscribedLine[]; error?: string }) => void }>();
-  constructor(private readonly d: VoiceDeps) {}
+  constructor(private readonly d: VoiceDeps) { this.releaseDiagnostics = registerVoiceDiagnostics(() => this.measurements.snapshot(!!d.fake)); }
 
   state(): VoiceState {
     const { asr, voice } = this.d.settings();
-    if (this.d.fake) return { ready: { vad: true, asr: true, tts: true }, asr, voice, downloading: null, error: null, missingMb: 0, fake: true };
+    if (this.d.fake) return { ready: { vad: true, asr: true, tts: true }, asr, voice, downloading: null, error: null, missingMb: 0, fake: true, diagnostics: this.measurements.snapshot(true) };
     const parts = [VAD, ASR[asr], TTS[voice]];
     const ready = { vad: partReady(this.d.root, VAD), asr: partReady(this.d.root, ASR[asr]), tts: partReady(this.d.root, TTS[voice]) };
     const missing = parts.filter(p => !partReady(this.d.root, p)).reduce((n, p) => n + partBytes(p), 0);
-    return { ready, asr, voice, downloading: this.downloading, error: this.error, missingMb: Math.round(missing / 1e6) };
+    return { ready, asr, voice, downloading: this.downloading, error: this.error, missingMb: Math.round(missing / 1e6), diagnostics: this.measurements.snapshot() };
   }
 
   private emit(): void { this.d.changed(this.state()); }
@@ -102,17 +106,18 @@ export class VoiceService {
       case 'progress': this.downloading = { done: m.done, total: m.total }; this.emit(); return;
       case 'prepared': this.downloading = null; this.error = null; log.info('voice', 'models ready', { data: this.d.settings() }); this.emit(); return;
       case 'heard': {
-        if (m.session !== this.listening || !this.utterances.has(m.utterance)) return;
+        if (m.session !== this.listening || !this.utterances.has(m.utterance)) { this.measurements.count('staleEvents'); return; }
         clearTimeout(this.utterances.get(m.utterance)); this.utterances.delete(m.utterance);
-        this.d.heard(m); return;
+        this.measurements.heard(m.utterance); this.d.heard(m); this.emit(); return;
       }
       case 'speech': {
         if (m.session !== this.listening || !Number.isSafeInteger(m.utterance) || m.utterance < 1) return;
         if (m.active) {
           if (this.utterances.has(m.utterance)) return;
           if (this.utterances.size >= 4) { this.failListening('La trascrizione è in ritardo: riattiva la voce e ripeti la frase.'); return; }
-          this.utterances.set(m.utterance, setTimeout(() => this.failListening('La trascrizione non ha risposto: riattiva la voce e ripeti la frase.'), 75_000));
+          this.utterances.set(m.utterance, setTimeout(() => { this.measurements.count('timeouts'); this.failListening('La trascrizione non ha risposto: riattiva la voce e ripeti la frase.'); }, 75_000));
         } else if (!this.utterances.has(m.utterance)) return;
+        else this.measurements.endpoint(m.utterance);
         this.d.speech(m); return;
       }
       case 'tprogress': this.jobs.get(m.job)?.progress(m.done); return;
@@ -121,6 +126,7 @@ export class VoiceService {
       case 'error':
         if (m.message === this.error && Date.now() - this.errorAt < 10_000) return;
         this.errorAt = Date.now();
+        this.measurements.count('errors');
         log.warn('voice', 'voice engine error', { cause: m.message, hint: 'models in userData/voice; a bad download is deleted and fetched again with «Scarica»' });
         if (this.downloading) this.downloading = null;
         this.error = m.message;
@@ -168,6 +174,7 @@ export class VoiceService {
 
   /** Drop queued synthesis as well as playback; the worker cancels native generation at its next progress callback. */
   cancelSpeech(): void {
+    this.measurements.count('cancellations', this.speaks.size);
     this.child?.postMessage({ type: 'cancel-speech', through: this.speakId });
     for (const done of this.speaks.values()) done({ samples: new Float32Array(0), rate: 22050 });
     this.speaks.clear();
@@ -179,15 +186,17 @@ export class VoiceService {
     if (this.d.fake) return Promise.resolve({ samples: new Float32Array(6615), rate: 22050 });
     if (this.speaks.size >= 8) return Promise.resolve({ samples: new Float32Array(0), rate: 22050, error: 'La coda della voce è piena: riprova.' });
     const id = ++this.speakId;
+    const measured = this.measurements.synthesisStarted();
     return new Promise(res => {
       // a stuck engine never leaves the renderer «speaking» (and deaf) for good
       const timer = setTimeout(() => {
         if (!this.speaks.delete(id)) return;
+        this.measurements.count('timeouts');
         this.child?.postMessage({ type: 'cancel-speech', through: id });
         res({ samples: new Float32Array(0), rate: 22050, error: 'la voce non ha risposto in tempo' });
         this.failListening('Il motore voce non ha risposto: riattiva la voce per riprovare.');
       }, SPEAK_TIMEOUT_MS);
-      this.speaks.set(id, r => { clearTimeout(timer); res(r); });
+      this.speaks.set(id, r => { clearTimeout(timer); if (!r.error && r.samples.length) measured(); else if (r.error) this.measurements.count('errors'); res(r); this.emit(); });
       this.proc().postMessage({ type: 'speak', id, text: clean, voice: voice ?? this.d.settings().voice });
     });
   }
@@ -219,7 +228,7 @@ export class VoiceService {
   /** settings changed (another Whisper or voice): the loaded models are dropped, the next use loads the new ones */
   settingsChanged(): void { this.child?.postMessage({ type: 'unload', asr: this.d.settings().asr }); this.emit(); }
 
-  dispose(): void { this.clearListening(); this.cancelSpeech(); this.child?.kill(); this.child = null; }
+  dispose(): void { this.clearListening(); this.cancelSpeech(); this.child?.kill(); this.child = null; this.releaseDiagnostics(); }
 }
 
 export const voiceRoot = (userData: string): string => path.join(userData, 'voice');

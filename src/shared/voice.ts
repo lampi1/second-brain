@@ -21,6 +21,7 @@ export interface VoiceSpeech extends VoiceUtterance { active: boolean }
 
 /** What is on disk and what the engine is doing now (voice:state, voice:changed). */
 export interface VoiceState {
+  diagnostics?: VoiceDiagnostics;
   /** each part present and checked: the VAD, the chosen Whisper, the chosen voice */
   ready: { vad: boolean; asr: boolean; tts: boolean };
   asr: VoiceAsr;
@@ -33,6 +34,14 @@ export interface VoiceState {
   missingMb: number;
   /** the fake engine (SB_VOICE_FAKE, the demo): no microphone needed */
   fake?: boolean;
+}
+
+export interface VoiceDiagnostics {
+  schema: 1; fake: boolean; window: number;
+  counters: { transcripts: number; missingEndpoints: number; staleEvents: number; errors: number; timeouts: number; cancellations: number };
+  recognitionAfterEndpoint: { count: number; meanMs: number | null; p95Ms: number | null };
+  synthesisRequestToAudio: { count: number; meanMs: number | null; p95Ms: number | null };
+  coverage: string[];
 }
 
 /** A spoken answer to a yes/no card: yes, no, «non voglio rispondere», or free text. */

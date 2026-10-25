@@ -2,6 +2,8 @@
 // themselves), «Routine» (each routine in plain words; open one for its steps, models, trigger and queue), «Storico».
 // The app's runner does the work; starting on a work item or a pasted list happens here or through the Orchestrator;
 // creating or changing a routine goes through the Orchestrator and the existing approval modal.
+import { ComponentCatalog } from '../../components/ComponentCatalog';
+import '../../styles/components.css';
 import { ui } from '../../store/ui';
 import { go } from '../../actions';
 import { RoutineChat } from '../../components/RoutineChat';
@@ -35,6 +37,7 @@ function askOrchestrator(kind: FlowRequestKind, version?: FlowVersion, draft?: F
 type Tab = 'now' | 'routines' | 'history';
 export function Flows() {
   const { snapshot, error, loading } = useFlows();
+  const [components, setComponents] = useState(false);
   const chatArg = ui.use(state => state.page === 'flussi' ? readRoutineChatArg(state.pageArg) : null);
   const routineChat = useApp(state => chatArg && routinePlacements(state.chats, snapshot).has(chatArg.chatId) ? chatArg.chatId : null);
   const ready = useApp(s => !!orchestratorIdOf(s));
@@ -54,10 +57,12 @@ export function Flows() {
   if (routineChat) return <RoutineChat chatId={routineChat} tabId={chatArg?.tabId} onClose={() => go({ page: 'flussi' })} />;
   return <section className="flows-page rt-page" data-testid="flows-page">
     <header className="rt-head"><div><h1>{t('rt.title')}</h1><p className="rt-intro">{t('rt.intro')}</p></div><span className="rt-sp" />
+      {snapshot && <button type="button" className="btn btn-ghost btn-m" onClick={() => setComponents(true)} data-testid="components-open">{t('rt.components.title')}</button>}
       {snapshot && <button type="button" className="btn btn-ghost btn-m" disabled={!!error} onClick={() => setImporting(true)} data-testid="flow-import-open">{t('flows.import')}</button>}
       <button type="button" className="btn btn-ghost btn-m" disabled={!ready} onClick={() => askOrchestrator('create')}>✦ {t('rt.new')}</button>
       {hasActive && <button type="button" className="btn btn-primary btn-m" onClick={() => setStarting({})} data-testid="rt-start-open">▶ {t('rt.startItem')}</button>}
     </header>
+    {components && snapshot && <ComponentCatalog key={snapshot.contextKey} contextKey={snapshot.contextKey} onClose={() => setComponents(false)} />}
     {importing && snapshot && <FlowImport key={snapshot.contextKey} contextKey={snapshot.contextKey} onClose={() => setImporting(false)} />}
     {error && <div className="flow-block" role="alert"><strong>{t('flows.unavailable')}</strong><p>{error}</p><button type="button" className="btn btn-ghost btn-s" onClick={() => void reloadFlows()}>{t('flows.retry')}</button></div>}
     {loading && !snapshot && <p role="status" className="flows-muted">{t('flows.loading')}</p>}
