@@ -40,11 +40,11 @@ try {
     handler('chat:items', (_event, { chatId, itemId, limit, maxBytes }) => {
       bench.reads++;
       const count = chatId === 'orchestrator' ? 4 : 600;
-      const items = Array.from({ length: count }, (_, i) => ({ kind: 'tool', id: `${chatId}-history-${i}`, at: at - count + i, name: ['Read', 'Grep', 'Bash'][i % 3], summary: `Inspect src/module-${i}.ts`, input: { file_path: `/synthetic/src/module-${i}.ts`, command: `node inspect.mjs --module ${i}` }, output: `${chatId}/${i}: ${'Synthetic result line. '.repeat(512)}`, status: 'ok' })).slice(-(limit ?? count));
+      const items = Array.from({ length: count }, (_, i) => ({ kind: 'tool', id: `${chatId}-history-${i}`, at: at - count + i, name: ['Read', 'Grep', 'Bash'][i % 3], summary: `Inspect src/module-${i}.ts`, input: { file_path: `/synthetic/src/module-${i}.ts`, command: `node inspect.mjs --module ${i}` }, output: `${chatId}/${i}: ${'Synthetic result line. '.repeat(512)}${i % 20 === 0 ? ` https://dev.azure.com/o/Profile/_build/results?buildId=${i + 1}` : ''}`, status: 'ok' })).slice(-(limit ?? count));
       if (itemId !== undefined) return items.filter(item => item.id === itemId);
       if (maxBytes === undefined) return items;
       const chars = Math.max(1, Math.floor(maxBytes / (2 * (limit ?? 600))));
-      return items.map(item => item.output.length <= chars ? item : { ...item, output: item.output.slice(0, chars).split('').join(''), outputPreviewChars: item.output.length });
+      return items.map(item => item.output.length <= chars ? item : { ...item, output: item.output.slice(0, chars).split('').join(''), outputPreviewChars: item.output.length, outputUrls: [...item.output.matchAll(/https:\/\/dev\.azure\.com\/o\/[^\s]+/g)].map(match => match[0].split('').join('')) });
     });
   }, templates);
   await page.addInitScript(() => {
@@ -77,7 +77,7 @@ try {
       for (let i = 0; i < 16; i++) {
         const chatId = `profile-${i}`, item = { kind: 'assistant', id: `${chatId}-stream-${group}`, at: Date.now(), text: `${chatId}/${group}: ${'Synthetic streamed evidence. '.repeat(phase * 32 + 1)}`, streaming: phase < 4 };
         win.webContents.send('chat:item', { chatId, item, replace: phase > 0 }); b.sent++;
-        if (phase === 4) { const chat = b.chats[i + 1]; chat.updatedAt = item.at; chat.lastText = item.text.slice(0, 120); win.webContents.send('chat:updated', chat); }
+        if (phase === 4) { const tool = { kind: 'tool', id: `${chatId}-tool-${group}`, at: item.at, name: 'Bash', summary: 'Check synthetic result', input: { command: `node check.mjs --sample ${group}` }, output: `${chatId}/${group}: ${'Synthetic tool evidence. '.repeat(512)}`, status: 'ok' }; win.webContents.send('chat:item', { chatId, item: tool, replace: false }); b.sent++; const chat = b.chats[i + 1]; chat.updatedAt = item.at; chat.lastText = item.text.slice(0, 120); win.webContents.send('chat:updated', chat); }
       }
     }, 100);
     b.flowTimer = setInterval(() => { b.snapshot.automation.lastTickAt = Date.now(); win.webContents.send('flows:changed', b.snapshot); }, 500);

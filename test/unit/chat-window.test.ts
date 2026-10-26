@@ -38,3 +38,9 @@ it('preserves output URLs beyond the preview and unchanged tool identity across 
   const second = chatWindow([...first, item('b')]);
   expect(second[0]).toBe(first[0]);
 });
+
+it('never invents a different PR from a URL cut in the middle of its number', () => {
+  const url='https://dev.azure.com/o/Shop/_git/shop/pullrequest/12345';
+  const original={...raw('partial'),output:'x'.repeat(Math.floor(1048576/(2*600))-(url.length-4))+url} as ChatItem;
+  expect(extractDevLinks(chatWindow([original]))).toEqual(extractDevLinks([original]));
+});

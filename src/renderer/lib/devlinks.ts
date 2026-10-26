@@ -189,7 +189,7 @@ const textOf = (it: ChatItem): string[] => {
     case 'tool': {
       let inp = '';
       try { inp = typeof it.input === 'string' ? it.input : JSON.stringify(it.input ?? '') ?? ''; } catch { /* cyclic: skip */ }
-      return [it.summary, inp, it.output ?? '', ...(it.outputUrls ?? [])];
+      return [it.summary, inp, ...(it.outputUrls ?? [it.output ?? ''])];
     }
     default: return [];
   }
