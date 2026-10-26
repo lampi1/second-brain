@@ -12,14 +12,16 @@ import { executionChecks } from '@shared/flow-execution';
 import { FlowConnectorDetails, FlowExecutionSummary } from './FlowExecutionDetails';
 import { FlowAutomationSummary } from './FlowAutomationSummary';
 import { FlowBrowserDetails, FlowDefinition } from './FlowDefinition';
+import { FlowReconcileApproval } from './FlowReconcileApproval';
 import { FlowRestartApproval } from './FlowRunControls';
 import { DecisionCard } from './DecisionCard';
 import '../styles/flows.css';
 export function FlowApproval({ ask, onEscape }: { ask: FlowAsk; onEscape: () => void }) {
+  if (ask.type === 'flow-reconcile') return <FlowReconcileApproval ask={ask} onEscape={onEscape} />;
   if (ask.type === 'flow-restart' || ask.type === 'flow-cancel') return <FlowRestartApproval ask={ask} onEscape={onEscape} />;
   return <FlowStandardApproval ask={ask} onEscape={onEscape} />;
 }
-function FlowStandardApproval({ ask, onEscape }: { ask: Exclude<FlowAsk, { type: 'flow-restart' | 'flow-cancel' }>; onEscape: () => void }) {
+function FlowStandardApproval({ ask, onEscape }: { ask: Exclude<FlowAsk, { type: 'flow-restart' | 'flow-cancel' | 'flow-reconcile' }>; onEscape: () => void }) {
   const key = `${ask.chatId}/${ask.id}`, evidenceId = useId();
   const evidenceKey = `${key}/evidence`;
   const [evidence, setEvidence] = useState(() => decisionDraft(evidenceKey));

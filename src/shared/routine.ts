@@ -10,7 +10,7 @@ export const HOLD = 'Da sistemare: ';
 export function healable(run: FlowRun, definition: FlowDefinition | undefined): boolean {
   const step = run.steps[run.currentStep], spec = definition?.steps[run.currentStep];
   if (!step || !spec || run.status !== 'blocked' || step.status !== 'blocked' || !step.decisionPending || step.attempts === 0 || step.attempts >= spec.maxAttempts
-    || spec.env === 'prod' || (step.reason ?? '').startsWith(HOLD) || run.pendingRecovery || run.pendingCancellation || run.paused) return false;
+    || spec.env === 'prod' || (step.reason ?? '').startsWith(HOLD) || run.pendingRecovery || run.pendingCancellation || run.pendingReconciliation || run.paused) return false;
   const browser = run.browserWrites?.findLast(e => e.stepId === step.stepId && e.chatRunId === step.chatRunId);
   const connector = run.connectorReceipts?.findLast(r => r.stepId === step.stepId);
   if (connector && connector.outcome !== 'not-done') return false;

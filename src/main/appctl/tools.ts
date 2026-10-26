@@ -215,6 +215,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       brainRoot: () => d.brain.info().brainRoot,
       connectors: d.flows.connectors, ownerId: callerId!, resolveBinding: d.flows.resolveBinding, manualBind: d.flows.manualBind, manualReport: d.flows.manualReport, deploymentTargets: d.flows.deploymentTargets, deploymentTargetFile: d.flows.deploymentTargetFile, modelCatalog: d.flows.modelCatalog, inspectTarget: d.flows.inspectTarget, dossier: d.flows.dossier,
       proposeCancel: (input, ownerId) => d.flows!.proposeCancel(input, ownerId),
+      reconciliation: runId => d.flows!.writeReconciliation(runId),
+      proposeReconcile: (input, ownerId) => d.flows!.proposeReconcile(input, ownerId),
       proposeRestart: (input, ownerId) => d.flows!.proposeRestart(input, ownerId),
       overview: ownerId => d.flows!.overview(ownerId), message: (runId, body, ownerId) => d.flows!.message(runId, body, ownerId),
       startItem: input => d.flows!.startItem(input),

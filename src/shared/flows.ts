@@ -1,5 +1,6 @@
 // Versioned reusable flow contracts shared by the host, Orchestrator tools and the decision UI.
 // Definitions describe work; only host evidence and exact user decisions advance execution.
+import type { PendingReconciliation } from './flow-reconciliation';
 import type { FlowConnectorCall, FlowConnectorReceipt } from './flow-connector';
 import type { FlowAutomationSnapshot, FlowAutomationConfig } from './flow-automation';
 import type { AgentAvatar } from './agents';
@@ -96,6 +97,8 @@ export interface FlowStepRun {
   stepId: string; status: 'pending' | 'ready' | 'running' | 'approval' | 'blocked' | 'completed' | 'cancelled';
   attempts: number; startedAt?: number; chatId?: string; chatRunId?: string; taskVersion?: number;
   historyText?: string;
+  /** One explicit recovery attempt per user-confirmed uncertain write; normal automatic limits stay unchanged. */
+  reconciliationAttempts?: number;
   reason?: string; receipt?: FlowReceipt; decisionPending?: boolean;
 }
 /** Durable query evidence. Never stores raw SQL, credentials, raw driver errors or database result rows. */
@@ -125,6 +128,7 @@ export interface FlowRun {
   disposition?: { kind: 'needs-human' | 'skipped'; lesson?: boolean; reason: string; at: number; cleanup: 'pending' | 'complete'; phase: number; error?: string };
   cancellation?: { at: number; reason: string; by: 'user' | 'orchestrator' | 'routine'; expectedRevision: number; interruption?: 'pending' | 'confirmed' };
   restartOf?: { runId: string; branchRunId?: string; stepId: string; expectedRevision: number; mode: 'from-start' | 'from-step' };
+  pendingReconciliation?: PendingReconciliation;
   pendingCancellation?: { revision: number; requestedAt: number; reason?: string };
   recoveryFeedback?: { kind: 'cancel' | 'restart'; at: number; message: string; deliveredAt?: number };
   pendingRecovery?: { mode: 'from-start' | 'from-step'; stepId?: string; revision: number; requestedAt: number; targetVersion: number; targetDigest: string; automationRule?: { id: string; revision: number } };

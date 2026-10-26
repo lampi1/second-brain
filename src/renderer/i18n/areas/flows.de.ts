@@ -1,5 +1,8 @@
 // Flow catalog, version review and run decisions: renderer text shared by the page and modal.
 export const flowsDe = {
+  'flows.reconcileProposedQuestion': 'Dieses überprüfte Schreibergebnis bestätigen?',
+  'flows.reconcileResumeHint': 'Prüfung speichern und den Schritt fortsetzen, sobald alle unklaren Schreibvorgänge geklärt und die Freigaben gültig sind.',
+  'flows.reconcileDeclineHint': 'Vorschlag verwerfen; der Lauf bleibt angehalten.',
   'flows.reconcileIdentity': 'Identität im Laufbericht',
   'flows.reconcileLegacy': 'Die ursprüngliche Anfrage ist hier nicht erfasst. ID und Zeitpunkt vor der Bestätigung mit Bericht und Schritt-Chat abgleichen.',
   'flows.reconcileTitle': 'Schreibvorgänge abgleichen',

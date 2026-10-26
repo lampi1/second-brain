@@ -1,5 +1,8 @@
 // Flow catalog, version review and run decisions: renderer text shared by the page and modal.
 export const flowsEn = {
+  'flows.reconcileProposedQuestion': 'Confirm this verified write outcome?',
+  'flows.reconcileResumeHint': 'Save the attestation and resume the step once all uncertain writes are resolved and grants remain valid.',
+  'flows.reconcileDeclineHint': 'Dismiss the proposal; the run stays stopped.',
   'flows.reconcileIdentity': 'Identity in the run report',
   'flows.reconcileLegacy': 'The original request is not recorded here. Match the ID and time to the report and step chat before confirming.',
   'flows.reconcileTitle': 'Reconcile writes',

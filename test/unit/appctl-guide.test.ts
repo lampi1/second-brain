@@ -87,3 +87,9 @@ describe('screen outline', () => {
     expect(await screenOutline(deps({ window: () => null }))).toMatch(/did not answer/);
   });
 });
+
+it('returns the complete live description for an exact tool name, including its approval contract', async () => {
+  const description = 'Propose the recovery. The user alone confirms Sì/No; the host resumes under the existing grant.';
+  const tool = guideTool(deps({ tools: () => [{ name: 'app_flow_reconcile_propose', description }] }));
+  expect(await tool.run({ topic: 'app_flow_reconcile_propose' })).toContain(description);
+});

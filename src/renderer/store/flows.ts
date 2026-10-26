@@ -58,6 +58,11 @@ export async function decideFlow(ask: FlowAsk, answer: 'yes' | 'no' | 'other', f
   if (flowState.get().snapshot?.contextKey !== ask.contextKey) return false;
   const ticket = read;
   try {
+    if (ask.type === 'flow-reconcile') {
+      if (answer === 'other') return false;
+      await sb.invoke('flows:reconcileDecide', { contextKey: ask.contextKey, runId: ask.run.id, expectedRevision: ask.run.revision, answer });
+      await reloadFlows(); return true;
+    }
     const common = { contextKey: ask.contextKey, answer, ...(feedback ? { feedback } : {}) };
     const snapshot = ask.type === 'flow-automation'
       ? await sb.invoke('flows:autoDecide', { ...common, id: ask.rule.id, expectedRevision: ask.rule.revision })
