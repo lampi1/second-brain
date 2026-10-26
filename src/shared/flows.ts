@@ -102,6 +102,10 @@ export interface FlowStepRun {
   /** The one extra attempt the user granted with Sì after the step's attempts ran out (e.g. a host bug since fixed);
    *  a second one is refused, so the run cannot loop. */
   userRetryUsed?: boolean;
+  /** The app build that granted the last extra attempt: after an app update (another build) Sì may grant one more. */
+  userRetryAppBuild?: string;
+  /** Extra attempts granted after app updates, on top of the first one. */
+  userRetryRegrants?: number;
   reason?: string; receipt?: FlowReceipt; decisionPending?: boolean;
 }
 /** Durable query evidence. Never stores raw SQL, credentials, raw driver errors or database result rows. */
@@ -168,6 +172,8 @@ export interface FlowOverviewRow {
 export interface FlowSnapshot {
   contextKey: string; drafts: FlowDraft[]; versions: FlowVersion[]; active: Record<string, number>;
   runs: FlowRun[]; storageError?: string; automation?: FlowAutomationSnapshot;
+  /** The running app build: a step whose extra attempt was granted by another build may get one more. */
+  appBuild?: string;
   /** The work roles as the catalog and the routing table resolve them now, for showing each agent step's role and model. */
   roles?: Partial<Record<WorkRoleId, FlowRoleInfo>>;
   /** The engines a step may run on and their models, for the per-step picker. */

@@ -1,6 +1,6 @@
 // Conservative UI capability for an exact flow gate: retries rerun an interrupted agent and never mark work complete.
 import { executionChecks, executionKind } from '@shared/flow-execution';
-import { attemptBudget, uncertainEffect } from '@shared/routine';
+import { attemptBudget, uncertainEffect, userRetryOpen } from '@shared/routine';
 import type { FlowAsk } from './flow-ask';
 export function flowDecisionMode(ask: FlowAsk): 'approve' | 'retry' | 'blocked' {
   if (ask.type === 'flow-automation') return ask.version ? 'approve' : 'blocked';
@@ -19,12 +19,14 @@ export function flowDecisionMode(ask: FlowAsk): 'approve' | 'retry' | 'blocked' 
 }
 
 /** A blocked step whose attempts are used up. extra: Sì may still grant the ONE last attempt the host allows past the
- *  limit (never twice, never over a write whose outcome is unknown); otherwise the host refuses with "Retry limit reached". */
-export function flowRetryLimit(ask: FlowAsk): { attempts: number; max: number; extra: boolean } | null {
+ *  limit (one more after each app update, never over a write whose outcome is unknown); otherwise the host refuses with
+ *  "Retry limit reached". updated: that attempt is open again because the app changed since the last one. */
+export function flowRetryLimit(ask: FlowAsk): { attempts: number; max: number; extra: boolean; updated: boolean } | null {
   if (ask.type !== 'flow-run' || ask.run.status !== 'blocked') return null;
   const step = ask.version?.definition.steps[ask.run.currentStep], current = ask.run.steps[ask.run.currentStep];
   if (!step || !current || current.stepId !== step.id || current.attempts < attemptBudget(step, current)) return null;
-  return { attempts: current.attempts, max: step.maxAttempts, extra: !current.userRetryUsed && current.attempts === attemptBudget(step, current) && !uncertainEffect(ask.run, current) };
+  const extra = userRetryOpen(current, ask.appBuild) && current.attempts === attemptBudget(step, current) && !uncertainEffect(ask.run, current);
+  return { attempts: current.attempts, max: step.maxAttempts, extra, updated: extra && !!current.userRetryUsed };
 }
 
 /** The host requires a completion note for manual gates and a value for each declared evidence label. */

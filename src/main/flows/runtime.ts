@@ -41,6 +41,13 @@ import { materializePackage } from './package';
 import { FlowStartBlocked } from './start-blocked';
 import { TestDbQueryExecutor, validateTestDbQueryRequest, type TestDbDriver } from './test-db-query';
 import type { FlowAutomationConfig, FlowDetectionResult } from '../../shared/flow-automation';
+import { fileURLToPath } from 'node:url';
+
+/** The running build: the main bundle's path and write time change with every release and every dev build, so a
+ *  step's extra attempt granted before an app update can be granted once more after it. */
+const APP_BUILD = (() => {
+  try { const file = fileURLToPath(import.meta.url); return `${file}@${Math.round(fs.statSync(file).mtimeMs)}`; } catch { return undefined; }
+})();
 
 export interface FlowRuntimeOptions {
   userData: string; brainRoot(): string | null; chats(): readonly ChatSummary[];
@@ -180,6 +187,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
         if (writer.ownedPrs(run.id).length > 0 || deployments.ownedTargets(run.id).length > 0 || writer.operationsFor(run.id).some(op => op.state !== 'not-done' && ['create-pr', 'deploy-test'].includes(op.op ?? ''))) return 'This run owns a PR or test deployment. Restart from the beginning after cleanup; carried steps cannot transfer resource ownership.';
       },
       uncertainWrites: run => writerFor(context.key).operationsFor(run.id).some(op => op.state === 'pending'),
+      appBuild: APP_BUILD,
       hashOf: (kind, ref) => contentHash(context.root, kind, ref),
       adapterGranted: (run, spec) => { try { return !stopped && current().key === context.key && (!adapted(spec) || !!automation().grantFor(run)) && (!testDbAdapted(spec) || !!automation().testDbGrantFor(run)); } catch { return false; } },
       changed: snapshot => {

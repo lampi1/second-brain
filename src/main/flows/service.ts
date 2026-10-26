@@ -14,7 +14,7 @@ import type { FlowAttachment, FlowCommandReceipt, FlowHealEntry, FlowActivate, F
 import { browserWriteStep, browserWriteResult } from '../../shared/flow-browser';
 import { adapted, commandStep, testDbAdapted, digest, type RoleTierMax, inScope, integer, keys, normalize, object, text, validateDefinition, validateInputs, validateScope } from './schema';
 import { assertPackageBinding } from './binding';
-import { HOLD, attemptBudget, healable, roleOf, samePrefix, uncertainEffect } from '../../shared/routine';
+import { HOLD, attemptBudget, userRetryOpen, healable, roleOf, samePrefix, uncertainEffect } from '../../shared/routine';
 
 export interface FlowServiceOptions {
   progressEvidence?: (run: FlowRun) => string[];
@@ -35,6 +35,8 @@ export interface FlowServiceOptions {
   hashOf?: (kind: 'script' | 'query', ref: string) => string | null;
   /** True while a DevOps write of this run has an unknown outcome (the writer's ledger): no extra user retry then. */
   uncertainWrites?: (run: FlowRun) => boolean;
+  /** The running app build: an extra attempt granted by another build may be granted once more after an update. */
+  appBuild?: string;
 }
 type Stored = Omit<FlowSnapshot, 'contextKey' | 'storageError'> & { schema: 1; bindings: string[] };
 const empty = (): Stored => ({ schema: 1, bindings: [], drafts: [], versions: [], active: {}, runs: [] });
@@ -137,7 +139,7 @@ export class FlowService {
       if (phase === 6) { d.cleanup = 'complete'; this.cancelRun(run, d.reason, 'routine'); }
     });
   }
-  snapshot(): FlowSnapshot { this.reconcileDeadlines(); return copy({ contextKey: this.options.contextKey, drafts: this.data.drafts, versions: this.data.versions, active: this.data.active, runs: this.data.runs, ...(this.storageError ? { storageError: this.storageError } : {}) }); }
+  snapshot(): FlowSnapshot { this.reconcileDeadlines(); return copy({ contextKey: this.options.contextKey, drafts: this.data.drafts, versions: this.data.versions, active: this.data.active, runs: this.data.runs, ...(this.options.appBuild ? { appBuild: this.options.appBuild } : {}), ...(this.storageError ? { storageError: this.storageError } : {}) }); }
   outputsSinceActive(flowId: string, ownerId: string, offset = 0): unknown {
     const version = this.version(flowId, this.data.active[flowId] ?? 0), start = integer(offset, 'offset', 0, 100000);
     const rows = this.data.runs.filter(r => r.flowId === flowId && (r.ownerOrchestratorId === ownerId || r.ownerOrchestratorId === APP_OWNER)).flatMap(r => (r.outputs ?? []).filter(o => o.at >= version.activatedAt).map(o => ({ runId: r.id, flowVersion: r.flowVersion, disposition: r.disposition?.kind, ...o }))).sort((a, b) => a.at - b.at || a.runId.localeCompare(b.runId) || a.id.localeCompare(b.id));
@@ -533,13 +535,14 @@ export class FlowService {
       if (this.unsupported(run, definition)) throw new Error('No configured execution adapter; approval cannot bypass this blocker');
       if (commandStep(definition) && step.status === 'approval') throw new Error('A prod step completes only through «Esegui» and its receipt');
       if (step.status === 'blocked') {
-        // past the limit the user's Sì grants ONE more attempt (e.g. the failure was a host bug since fixed), never a
-        // second, and never over an effect whose outcome is unknown: that one is reconciled first
-        const extra = step.attempts >= attemptBudget(definition, step);
-        if (extra && (step.userRetryUsed || step.attempts > attemptBudget(definition, step))) throw new Error('Retry limit reached');
+        // past the limit the user's Sì grants ONE more attempt (e.g. the failure was a host bug since fixed), and one
+        // more per app update after it, never over an effect whose outcome is unknown: that one is reconciled first
+        const extra = step.attempts >= attemptBudget(definition, step), again = extra && !!step.userRetryUsed;
+        if (extra && (!userRetryOpen(step, this.options.appBuild) || step.attempts > attemptBudget(definition, step))) throw new Error('Retry limit reached');
         if (extra && (uncertainEffect(run, step) || this.options.uncertainWrites?.(run))) throw new Error('An external write has an unknown outcome; reconcile it before the extra retry');
-        if (extra) step.userRetryUsed = true;
-        this.healed(run, { at: this.now(), stepId: step.stepId, action: 'resume', attempt: step.attempts + 1, reason: extra ? 'Explicit user retry past the attempt limit (one only)' : 'Explicit user retry' });
+        if (again) step.userRetryRegrants = (step.userRetryRegrants ?? 0) + 1;
+        if (extra) { step.userRetryUsed = true; if (this.options.appBuild) step.userRetryAppBuild = this.options.appBuild; }
+        this.healed(run, { at: this.now(), stepId: step.stepId, action: 'resume', attempt: step.attempts + 1, reason: again ? 'Explicit user retry past the attempt limit: app updated since the last extra attempt' : extra ? 'Explicit user retry past the attempt limit (one per app version)' : 'Explicit user retry' });
         this.reset(step); delete run.awaitingUser; this.prepare(run);
       } else {
         if (definition.evidence.some(label => !feedback.split('\n').some(line => line.startsWith(`${label}: `) && line.length > label.length + 2))) throw new Error('User note is missing required evidence labels');
@@ -884,7 +887,7 @@ export class FlowService {
         branchLineage(run, data.runs);
       }
       run.steps.forEach((step, i) => {
-        keys(object(step, 'step run'), ['stepId', 'status', 'attempts', 'startedAt', 'chatId', 'chatRunId', 'taskVersion', 'reason', 'receipt', 'decisionPending', 'historyText', 'reconciliationAttempts', 'userRetryUsed'], 'step run');
+        keys(object(step, 'step run'), ['stepId', 'status', 'attempts', 'startedAt', 'chatId', 'chatRunId', 'taskVersion', 'reason', 'receipt', 'decisionPending', 'historyText', 'reconciliationAttempts', 'userRetryUsed', 'userRetryAppBuild', 'userRetryRegrants'], 'step run');
         if (step.historyText !== undefined) text(step.historyText, 'step history', 4000);
         const spec = version.definition.steps[i]!;
         if (step.reason !== undefined) text(step.reason, 'step reason', 16000, true);
@@ -901,6 +904,8 @@ export class FlowService {
         if (step.decisionPending !== undefined && typeof step.decisionPending !== 'boolean') throw new Error('Invalid decision state');
         if (step.stepId !== spec.id || !['pending', 'ready', 'running', 'approval', 'blocked', 'completed', 'cancelled'].includes(step.status)) throw new Error('Invalid step');
         if (step.userRetryUsed !== undefined && step.userRetryUsed !== true) throw new Error('Invalid user retry state');
+        if (step.userRetryAppBuild !== undefined) text(step.userRetryAppBuild, 'user retry build', 500);
+        if (step.userRetryRegrants !== undefined) integer(step.userRetryRegrants, 'user retry regrants', 0, 500);
         if (step.reconciliationAttempts !== undefined) integer(step.reconciliationAttempts, 'reconciliation attempts', 0, 500);
         integer(step.attempts, 'attempts', 0, attemptBudget(spec, step));
         if ((i < run.currentStep) !== (step.status === 'completed') || (i > run.currentStep && step.status !== 'pending')) throw new Error('Invalid step sequence');

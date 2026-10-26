@@ -8,7 +8,13 @@ export const HOLD = 'Da sistemare: ';
 
 /** How many attempts a step may start: its own limit, one per user-reconciled write, one the user granted past the limit. */
 export function attemptBudget(spec: Pick<FlowStep, 'maxAttempts'>, step: FlowRun['steps'][number]): number {
-  return spec.maxAttempts + (step.reconciliationAttempts ?? 0) + (step.userRetryUsed ? 1 : 0);
+  return spec.maxAttempts + (step.reconciliationAttempts ?? 0) + (step.userRetryUsed ? 1 : 0) + (step.userRetryRegrants ?? 0);
+}
+
+/** Sì may grant an extra attempt past the limit: the first one, or one more once the app was updated since the last
+ *  grant (a step granted before builds were recorded counts as granted by another build). */
+export function userRetryOpen(step: FlowRun['steps'][number], appBuild: string | undefined): boolean {
+  return !step.userRetryUsed || (!!appBuild && step.userRetryAppBuild !== appBuild);
 }
 
 /** An effect of this step whose outcome the run does not know: it must be reconciled before any extra attempt. The
