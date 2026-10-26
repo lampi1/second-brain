@@ -240,6 +240,21 @@ it('stops an ended assignment whose actual worker is still executing', async () 
   const result = await s.runtime.decideReconcile({ runId: s.run.id, expectedRevision: proposed.revision, answer: 'yes' });
   expect(s.stopChat).toHaveBeenCalledWith('worker'); expect(s.rows[1]!.state).toBe('idle'); expect(result.status).toBe('active'); s.runtime.stop();
 });
+it('resumes when the worker chat was restored closed after a restart, its run never ended', async () => {
+  // After an app restart a chat is restored with state 'closed' (no engine process, no closedAt) and its run stays
+  // open: stopping it is a no-op, so waiting for it to go idle would keep the recovery pending forever.
+  const s = await blockedWrite(), proposed = await s.runtime.proposeReconcile(s.input, 'o');
+  s.rows[1]!.state = 'closed'; s.stopChat.mockImplementation(async () => {});
+  const result = await s.runtime.decideReconcile({ runId: s.run.id, expectedRevision: proposed.revision, answer: 'yes' });
+  expect(result.status).toBe('active'); expect(result.steps[0]).toMatchObject({ status: 'ready', reconciliationAttempts: 1 });
+  expect(s.runtime.writeReconciliation(s.run.id).operations[0]?.state).toBe('reconciled'); s.runtime.stop();
+});
+it('still refuses a restored closed worker that keeps queued work', async () => {
+  const s = await blockedWrite(), proposed = await s.runtime.proposeReconcile(s.input, 'o');
+  s.rows[1]!.state = 'closed'; s.rows[1]!.queued = { kind: 'turn', position: 1, since: Date.now(), cpu: 80, freeRam: 30 }; s.stopChat.mockImplementation(async () => {});
+  await expect(s.runtime.decideReconcile({ runId: s.run.id, expectedRevision: proposed.revision, answer: 'yes' })).rejects.toThrow('still active');
+  expect(s.runtime.writeReconciliation(s.run.id).operations[0]?.state).toBe('pending'); s.runtime.stop();
+});
 it('refuses reconciliation while an ended idle assignment retains queued work', async () => {
   const s = await blockedWrite(), proposed = await s.runtime.proposeReconcile(s.input, 'o');
   s.rows[1]!.run!.endedAt = Date.now(); s.rows[1]!.state = 'idle'; s.rows[1]!.queued = { kind: 'turn', position: 1, since: Date.now(), cpu: 80, freeRam: 30 };

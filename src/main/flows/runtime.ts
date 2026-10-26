@@ -732,7 +732,9 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   const quiesceReconciliationWorker = async (run: FlowRun, root: string): Promise<void> => {
     const step = run.steps[run.currentStep];
     const exact = () => options.chats().find(c => c.id === step?.chatId && c.run?.runId === step?.chatRunId && (c.run?.taskVersion ?? 1) === step?.taskVersion);
-    const busy = (worker: ChatSummary | undefined) => !!worker && !worker.closedAt && (!!worker.queued || (worker.background ?? 0) > 0 || (worker.agentChildren?.active ?? 0) > 0 || !['idle', 'error'].includes(worker.state));
+    // State 'closed' = no engine process (a chat restored after a restart has it without closedAt and keeps its run
+    // open): nothing left to stop, so it never counts as busy; queued or background work still does.
+    const busy = (worker: ChatSummary | undefined) => !!worker && !worker.closedAt && (!!worker.queued || (worker.background ?? 0) > 0 || (worker.agentChildren?.active ?? 0) > 0 || !['idle', 'error', 'closed'].includes(worker.state));
     const worker = exact();
     if (worker && !worker.closedAt) {
       if (!scopedChat({ chatId: step!.chatId!, chatRunId: step!.chatRunId!, taskVersion: step!.taskVersion! }, root, true)) throw new Error('Bound worker scope changed; recovery remains pending');
