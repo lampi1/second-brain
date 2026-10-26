@@ -1,6 +1,6 @@
 // Generative UI, the pure half (ADR 0033): the schema of each catalog component (table, cards, board, diffList,
 // barChart, brief), checked by hand with a few combinators (no dependency), the size caps, and the ```sb-ui fence parser of
-// AskUserQuestion previews. A check strips unknown keys and returns a clean copy, or one error that names the path and
+// AskUserQuestion previews. A check strips unknown keys and returns a clean copy, or one error collecting every invalid path and
 // what is expected, so a model can fix its call and retry. Shared so main (show_ui, main/genui/artifacts.ts) and the
 // renderer (previews in AskContext.tsx, the views in GenUi.tsx) accept exactly the same things.
 import type { ArtifactTarget, UiComponent, UiLink, UiSpec, UiStatus } from './contract';
@@ -36,7 +36,10 @@ const arr = <T>(item: V<T>, max: number, min = 0): V<T[]> => (v, at) => {
   if (!Array.isArray(v)) return fail(at, `expected an array, got ${kindOf(v)}`);
   if (v.length < min) return fail(at, `needs at least ${min} item${min === 1 ? '' : 's'}`);
   if (v.length > max) return fail(at, `too many items (${v.length}, max ${max})`);
-  return v.map((x, i) => item(x, `${at}[${i}]`));
+  const problems: string[] = [], out: T[] = [];
+  v.forEach((x, i) => { try { out.push(item(x, `${at}[${i}]`)); } catch (error) { if (!(error instanceof UiError)) throw error; problems.push(error.message); } });
+  if (problems.length) throw new UiError(problems.join('; '));
+  return out;
 };
 /** An object with these keys (optional ones may be missing or null); unknown keys are dropped. */
 function obj<R extends Record<string, V<unknown>>, O extends Record<string, V<unknown>>>(req: R, opt: O): V<{ [K in keyof R]: ReturnType<R[K]> } & { [K in keyof O]?: ReturnType<O[K]> }> {
@@ -44,11 +47,14 @@ function obj<R extends Record<string, V<unknown>>, O extends Record<string, V<un
     if (!v || typeof v !== 'object' || Array.isArray(v)) return fail(at, `expected an object, got ${kindOf(v)}`);
     const o = v as Record<string, unknown>;
     const out: Record<string, unknown> = {};
+    const problems: string[] = [];
+    const field = (k: string, f: V<unknown>) => { try { out[k] = f(o[k], `${at}.${k}`); } catch (error) { if (!(error instanceof UiError)) throw error; problems.push(error.message); } };
     for (const [k, f] of Object.entries(req)) {
-      if (o[k] === undefined || o[k] === null) return fail(`${at}.${k}`, 'missing');
-      out[k] = f(o[k], `${at}.${k}`);
+      if (o[k] === undefined || o[k] === null) problems.push(`${at}.${k}: missing`);
+      else field(k, f);
     }
-    for (const [k, f] of Object.entries(opt)) if (o[k] !== undefined && o[k] !== null) out[k] = f(o[k], `${at}.${k}`);
+    for (const [k, f] of Object.entries(opt)) if (o[k] !== undefined && o[k] !== null) field(k, f);
+    if (problems.length) throw new UiError(problems.join('; '));
     return out as never;
   };
 }
@@ -82,7 +88,7 @@ const SCHEMAS: { [K in UiComponent]: V<Extract<UiSpec, { component: K }>['props'
   board: obj({ lanes: arr(obj({ title: str(60), items: arr(obj({ title: str(160) }, { detail: str(300), status, links: arr(link, 4) }), 50) }, { status }), 8, 1) }, {}),
   diffList: obj({ groups: arr(obj({ area: str(80), files: arr(obj({ path: str(300) }, { why: str(200), added: count, removed: count, href }), 100, 1) }, {}), 20, 1) }, {}),
   barChart: obj({ bars: arr(obj({ label: str(60), value: num }, { note: str(80) }), 40, 1) }, { unit: str(12) }),
-  brief: obj({ done: arr(str(200), 5, 1), ifYes: str(200), ifNo: str(200) }, {
+  brief: obj({ done: (v, at) => arr(str(200), 5, 1)(typeof v === 'string' ? [v] : v, at), ifYes: str(200), ifNo: str(200) }, {
     checks: arr(obj({ label: str(60), status }, { detail: str(120) }), 8),
     images: arr(obj({ path: str(1000) }, { caption: str(120) }), 4),
     files: arr(obj({ path: str(300) }, { why: str(200), added: count, removed: count, href }), 10),

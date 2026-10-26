@@ -3,7 +3,7 @@
 import type { ChatSummary } from '@shared/contract';
 import type { FlowSnapshot } from '@shared/flows';
 type Chats = Readonly<Record<string, ChatSummary | undefined>>;
-export function routinePlacements(chats: Chats, snapshot?: FlowSnapshot | null): Map<string, NonNullable<ChatSummary['routine']>> {
+export function routinePlacements(chats: Chats, snapshot?: Pick<FlowSnapshot, 'runs'> | null): Map<string, NonNullable<ChatSummary['routine']>> {
   const found = new Map<string, NonNullable<ChatSummary['routine']>>();
   for (const chat of Object.values(chats)) if (chat?.routine) found.set(chat.id, chat.routine);
   for (const run of snapshot?.runs ?? []) for (const step of run.steps) if (step.chatId && chats[step.chatId] && (!step.chatRunId || chats[step.chatId]?.run?.runId === step.chatRunId)) found.set(step.chatId, { runId: run.id, stepId: step.stepId });

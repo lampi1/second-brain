@@ -6,7 +6,7 @@
 // threshold (Impostazioni → Ruoli e deleghe, stallMin; the same rule agents/delegation.ts stalledMin gives a parent).
 // Pure: used by components/StripActivity.tsx, pinned by test/unit/strip-status.test.ts.
 import type { ChatItem } from '@shared/contract';
-import { actionSteps, enginePlan, type RunStep } from './run-steps';
+import { lastActionStep, enginePlan, type RunStep } from './run-steps';
 
 /** Below this silence the line shows no clock: a model thinking for a minute is normal. */
 export const QUIET_MIN = 2;
@@ -27,12 +27,12 @@ export interface StripStatus {
 export function stripStatus(items: readonly ChatItem[] | undefined, now: number, stallMin: number): StripStatus {
   const list = items ?? [];
   const plan = enginePlan(list);
-  const actions = actionSteps(list, true);
+  const action = lastActionStep(list, true);
   const last = list[list.length - 1];
   const toolRunning = last?.kind === 'tool' && last.status === 'running';
-  const current = actions.length && actions[actions.length - 1]!.mark === 'cur' ? actions[actions.length - 1]! : null;
+  const current = action?.mark === 'cur' ? action : null;
   const planCur = plan?.find(p => p.mark === 'cur') ?? null;
-  const step = current ?? planCur ?? actions[actions.length - 1] ?? null;
+  const step = current ?? planCur ?? action;
   let planPos: StripStatus['plan'] = null;
   if (plan && plan.length >= 2) {
     const done = plan.filter(p => p.mark === 'done' || p.mark === 'bad').length;

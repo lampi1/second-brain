@@ -3,6 +3,7 @@
 // with selectors, so streaming one chat re-renders only that chat's tile. The actions here are the only place the UI
 // calls main (invoke), with optimistic updates and an error toast with the cause on failure.
 // Used by every component; App.tsx calls startStore() once.
+import { CHAT_WINDOW_BYTES, CHAT_WINDOW_ITEMS } from '@shared/chat-window';
 import type { Answer, ChatSummary, CliStatus, Effort, HandoffInfo, Harness, ImageAttachment, NewChat, PendingRequest, PermissionMode, RoutedNewChat, SettingsPatch } from '@shared/contract';
 import { sb as rawSb } from '../sb';
 import {trackBridge} from '../lib/tracked-bridge';
@@ -148,7 +149,7 @@ function syncSettings(): void {
 }
 
 export async function loadItems(chatId: string): Promise<void> {
-  try { dispatch({ type: 'items', chatId, items: await sb.invoke('chat:items', { chatId }) }); } catch { /* the tile shows its empty state */ }
+  try { dispatch({ type: 'items', chatId, items: await sb.invoke('chat:items', { chatId, limit: CHAT_WINDOW_ITEMS, maxBytes: CHAT_WINDOW_BYTES }) }); } catch { /* the tile shows its empty state */ }
 }
 
 export async function refreshInfo(): Promise<void> {

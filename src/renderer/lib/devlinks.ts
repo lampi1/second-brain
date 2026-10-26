@@ -4,6 +4,7 @@
 // result also gives the title. Why: the user asks "dammi il link alla PR / al bug" many times a day, and each ask makes
 // the model re-read the whole chat; the chips in the tile's header answer at once. Pure: used by
 // components/ChatLinkChips.tsx (with the cached DevOps data for titles) and test/unit/devlinks.test.ts.
+import { DEVOPS_URL_PATTERN } from '@shared/devops-urls';
 import type { ChatItem, TasksState } from '@shared/contract';
 
 export type DevLinkKind = 'pr' | 'workitem' | 'testplan' | 'build' | 'release';
@@ -24,7 +25,7 @@ const KIND_LABEL: Record<DevLinkKind, string> = { pr: 'PR', workitem: 'Work item
 export const linkLabel = (l: DevLink): string => `${l.type ?? KIND_LABEL[l.kind]} ${l.id}`;
 export const linkKindLabel = (l: DevLink): string => l.type ?? KIND_LABEL[l.kind];
 
-const URL_RE = /https?:\/\/(?:dev\.azure\.com\/[A-Za-z0-9_.-]+|[A-Za-z0-9-]+\.visualstudio\.com)\/[^\s"'<>()[\]{}`\\|]*/gi;
+const URL_RE = DEVOPS_URL_PATTERN;
 
 /** One DevOps web URL → its kind and id (null for anything else: API URLs, repos, boards). */
 export function parseDevopsUrl(raw: string): { kind: DevLinkKind; id: number; url: string; org: string } | null {
@@ -188,7 +189,7 @@ const textOf = (it: ChatItem): string[] => {
     case 'tool': {
       let inp = '';
       try { inp = typeof it.input === 'string' ? it.input : JSON.stringify(it.input ?? '') ?? ''; } catch { /* cyclic: skip */ }
-      return [it.summary, inp, it.output ?? ''];
+      return [it.summary, inp, ...(it.outputUrls ?? [it.output ?? ''])];
     }
     default: return [];
   }

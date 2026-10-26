@@ -1,4 +1,5 @@
 // Live flow catalog and exact-brain decisions. A changed brain clears cached proposals before any replacement read.
+import { shareSnapshot } from '../lib/share-snapshot';
 import { useEffect } from 'react';
 import type { FlowAutomationControl, FlowAutomationPause } from '@shared/flow-automation';
 import type { InvokeArg, RoutineImportResult } from '@shared/contract';
@@ -16,7 +17,11 @@ let started = false, read = 0;
 function acceptSnapshot(snapshot: FlowSnapshot): void {
   const previous = flowState.get().snapshot?.contextKey;
   if (previous && previous !== snapshot.contextKey) clearDecisionDrafts('flow/');
-  flowState.set(() => ({ snapshot, error: snapshot.storageError ?? null, loading: false }));
+  flowState.set(state => {
+    const shared = previous === snapshot.contextKey ? shareSnapshot(state.snapshot, snapshot) : snapshot;
+    const error = snapshot.storageError ?? null;
+    return shared === state.snapshot && error === state.error && !state.loading ? state : { snapshot: shared, error, loading: false };
+  });
 }
 export async function reloadFlows(): Promise<void> {
   const ticket = ++read;

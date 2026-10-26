@@ -225,8 +225,8 @@ export function App() {
   const modal = ui.use(s => s.modal);
   const focused = ui.use(s => s.focused);
   const tabIds = useApp(s => s.tabs.map(t => t.id), sameList);
-  const routineSnapshot = flowState.use(state => state.snapshot);
-  const routineFocus = useApp(state => focusMode && routinePlacements(state.chats, routineSnapshot).has(focusMode) ? focusMode : null);
+  const routineSnapshot = flowState.use(state => focusMode ? state.snapshot?.runs : undefined);
+  const routineFocus = useApp(state => focusMode && routinePlacements(state.chats, routineSnapshot ? { runs: routineSnapshot } : null).has(focusMode) ? focusMode : null);
   useEffect(() => { if (routineFocus) focusChat(routineFocus); }, [routineFocus]);
   const focusChatExists = useApp(s => (focusMode ? !!s.chats[focusMode] : true));
   const dock = useDockReserve();

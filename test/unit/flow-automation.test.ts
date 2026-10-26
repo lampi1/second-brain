@@ -186,7 +186,7 @@ describe('Orchestrator notification and event starts', () => {
   it('lists configuration revisions for owner recovery while keeping other-owner events out of tool output', async () => {
     const { auto, enable } = setup(); enable(); await auto.tick();
     const tools = automationTools({ service: () => auto, contextKey: () => 'brain', ownerId: 'new-orch' });
-    const snapshot = await tools[0]!.run({}) as { rules: { ownerOrchestratorId: string; revision: number }[]; events: unknown[] };
+    const snapshot = await tools[0]!.run({ allOwners: true }) as { rules: { ownerOrchestratorId: string; revision: number }[]; events: unknown[] };
     expect(snapshot.rules).toMatchObject([{ ownerOrchestratorId: 'orch', revision: 1 }]); expect(snapshot.events).toEqual([]);
     expect(() => auto.startEvent(auto.snapshot().events[0]!.id, 'new-orch')).toThrow('another');
   });

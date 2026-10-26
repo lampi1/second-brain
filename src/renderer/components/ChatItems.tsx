@@ -12,6 +12,8 @@
 // behind one "Ragionamento" row, and an emoji-only reply sticks to the user's bubble as a reaction (lib/chat-view.ts); a "sta scrivendo… / sta pensando…" line follows the turn; the list follows the bottom ONLY when the
 // user is already there (scrolled up to read, it never jumps: a "nuove righe" pill appears instead). Used by ChatTile
 // and OrchestratorTile.
+import { readToolOutput, toolOutputLoader } from '../lib/tool-output';
+import { sb } from '../sb';
 import { t as auditText } from '../i18n';
 import {useFollowBottom} from '../lib/use-follow-bottom';
 import '../styles/follow-bottom.css';
@@ -195,6 +197,25 @@ function Elapsed({ since }: { since: number }) {
  *  bubble's "Da «…»" header already says it to the user */
 export const withoutLabel = (text: string): string => text.replace(/^\[Messaggio [^\n]*\]\s*\n+/, '');
 
+function ToolOutput({ item }: { item: Tool }) {
+  const chatId = useContext(ChatIdCtx);
+  const [full, setFull] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const loader = useRef<ReturnType<typeof toolOutputLoader> | null>(null);
+  const preview = item.outputPreviewChars !== undefined;
+  useEffect(() => {
+    setFull(null); setFailed(false);
+    if (!preview) return;
+    if (!chatId) { setFailed(true); return; }
+    const next = toolOutputLoader(() => readToolOutput(chatId, item.id, args => sb.invoke('chat:items', args)), output => { setFull(output); setFailed(false); }, () => setFailed(true));
+    loader.current = next; next.refresh();
+    return () => { next.dispose(); loader.current = null; };
+  }, [chatId, item.id, preview]);
+  useEffect(() => { loader.current?.refresh(); }, [item]);
+  return <>{preview && (full === null || failed) && <div role="status">{t(failed ? 'chat.items.outputFailed' : 'chat.items.outputLoading')}{failed && <button type="button" onClick={() => loader.current?.refresh()}>{t('brainText.common.retry')}</button>}</div>}
+    <pre className="tool-pre out">{full ?? item.output}</pre></>;
+}
+
 const ToolRow = memo(function ToolRow({ item }: { item: Tool }) {
   const [open, setOpen] = useState(false);
   const totals = diffTotals(item.diff);
@@ -219,7 +240,7 @@ const ToolRow = memo(function ToolRow({ item }: { item: Tool }) {
           {item.diff?.length ? <DiffView diff={item.diff} /> : null}
           {!item.diff?.length && (ex.raw ? <pre className="tool-pre cmd" data-testid={`tool-raw-${item.id}`}>{ex.raw}</pre>
             : item.input !== undefined && <pre className="tool-pre">{typeof item.input === 'string' ? item.input : JSON.stringify(item.input, null, 2)}</pre>)}
-          {item.output && <pre className="tool-pre out">{item.output}</pre>}
+          {item.output && <ToolOutput item={item} />}
         </div>
       )}
     </div>

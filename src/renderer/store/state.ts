@@ -2,6 +2,7 @@
 // actions; every update keeps the references of the parts that did not change, so a tile that selects
 // `items[chatId]` re-renders only when its own chat changes (streaming one chat never re-renders the others).
 // Used by store.ts (the live store) and pinned by test/unit/state.test.ts.
+import { chatWindow, CHAT_WINDOW_ITEMS } from '@shared/chat-window';
 import type { AppInfo, BrowserTab, ChatItem, ChatSummary, FeedEvent, ImageAttachment, PendingRequest, Settings, Usage } from '@shared/contract';
 
 /** A message waiting for its chat to be free: an id of its own (two equal texts stay two messages), text, images. */
@@ -50,7 +51,7 @@ export type Action =
   | { type: 'promote'; chatId: string; id: string }
   | { type: 'settings'; settings: Settings };
 
-export const MAX_ITEMS = 600;
+export const MAX_ITEMS = CHAT_WINDOW_ITEMS;
 export const MAX_FEED = 300;
 
 const byAt = (a: { at: number }, b: { at: number }) => a.at - b.at;
@@ -85,7 +86,7 @@ export function reduce(s: AppState, a: Action): AppState {
       const fresh = new Map(have.map(i => [i.id, i]));
       // items that arrived by event during the load win (they are newer); the rest keep the loaded order
       const merged = [...a.items.map(i => fresh.get(i.id) ?? i), ...have.filter(i => !loaded.has(i.id))];
-      return { ...s, items: { ...s.items, [a.chatId]: merged.slice(-MAX_ITEMS) } };
+      return { ...s, items: { ...s.items, [a.chatId]: chatWindow(merged) } };
     }
     case 'chat:updated': {
       // the maintenance research (ADR 0153) works out of sight: never a strip, a list entry or a notice
@@ -117,7 +118,7 @@ export function reduce(s: AppState, a: Action): AppState {
       let next: ChatItem[];
       if (at >= 0) { next = [...list]; next[at] = a.item; }
       else next = [...list, a.item].slice(-MAX_ITEMS);
-      return { ...s, items: { ...s.items, [a.chatId]: next } };
+      return { ...s, items: { ...s.items, [a.chatId]: chatWindow(next) } };
     }
     case 'pending:added': return { ...s, pending: dedupePending([...s.pending, a.req]) };
     case 'pending:resolved': {

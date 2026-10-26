@@ -44,8 +44,8 @@ export function AgentStripsActions() {
 }
 
 export function AgentStrips() {
-  const snapshot = flowState.use(state => state.snapshot);
-  const routineIds = useApp(s => [...routinePlacements(s.chats, snapshot).keys()], sameList);
+  const snapshot = flowState.use(state => state.snapshot?.runs);
+  const routineIds = useApp(s => [...routinePlacements(s.chats, snapshot ? { runs: snapshot } : null).keys()], sameList);
   const routineSet = new Set(routineIds);
   const ready = useApp(s => s.ready);
   const panelsVersion = ui.use(s => s.prefs.chatPanelsV);
