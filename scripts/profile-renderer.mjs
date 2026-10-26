@@ -43,7 +43,7 @@ try {
       const items = Array.from({ length: count }, (_, i) => ({ kind: 'tool', id: `${chatId}-history-${i}`, at: at - count + i, name: ['Read', 'Grep', 'Bash'][i % 3], summary: `Inspect src/module-${i}.ts`, input: { file_path: `/synthetic/src/module-${i}.ts`, command: `node inspect.mjs --module ${i}` }, output: `${chatId}/${i}: ${'Synthetic result line. '.repeat(512)}`, status: 'ok' })).slice(-(limit ?? count));
       if (itemId !== undefined) return items.filter(item => item.id === itemId);
       if (maxBytes === undefined) return items;
-      const chars = Math.max(1, Math.floor(maxBytes / (2 * Math.max(1, items.length))));
+      const chars = Math.max(1, Math.floor(maxBytes / (2 * (limit ?? 600))));
       return items.map(item => item.output.length <= chars ? item : { ...item, output: item.output.slice(0, chars).split('').join(''), outputPreviewChars: item.output.length });
     });
   }, templates);

@@ -37,6 +37,7 @@ export function flowTools(deps: FlowToolsDeps): ToolDef[] {
       keys(object(args, 'arguments'), Object.keys(fields), 'arguments');
       const service = deps.service();
       if (!readOnly && args.contextKey !== service.snapshot().contextKey) throw new Error('Brain context changed; reread app_flow_list before acting');
+      if (name === 'app_flow_start_item' && args.dryRun !== true && (args.contentOffset !== undefined || args.expectedDigest !== undefined)) throw new Error('Pagination is read-only: app_flow_start_item requires dryRun:true');
       const clean = { ...args }; delete clean.contextKey;
       const result = run(service, clean);
       return (readOnly && name !== 'app_flow_list' || args.dryRun === true ? capReadResult(result, args, service.snapshot().contextKey) : capFlowResult(result)) as object;

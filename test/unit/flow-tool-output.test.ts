@@ -71,3 +71,10 @@ it('preserves oversized match candidates, lesson cursors and dry-run commands th
   }
   for (const [args] of dry.mock.calls) expect(args).not.toHaveProperty('contentOffset');
 });
+
+it('rejects pagination on real starts before invoking any mutation, including stale digests', () => {
+  const startItem=vi.fn();
+  const start=flowTools({ownerId:'owner',service:()=>({snapshot:()=>snapshot}) as unknown as FlowService,resolveBinding:()=>null,startItem}).find(tool=>tool.name==='app_flow_start_item')!;
+  for(const extra of [{contentOffset:0},{contentOffset:32000,expectedDigest:'stale'},{expectedDigest:'stale',dryRun:false}]) expect(()=>start.run({contextKey:'brain',flowId:'large',...extra})).toThrow('read-only');
+  expect(startItem).not.toHaveBeenCalled();
+});

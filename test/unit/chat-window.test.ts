@@ -2,6 +2,7 @@
 import { expect, it } from 'vitest';
 import type { ChatItem, PendingRequest } from '../../src/shared/contract';
 import { chatWindow, chatItemsReply } from '../../src/shared/chat-window';
+import { extractDevLinks } from '../../src/renderer/lib/devlinks';
 import { askContext } from '../../src/renderer/lib/askContext';
 const item = (id: string, text = id): ChatItem => ({ kind: 'assistant', id, at: 1, text });
 const raw = (id: string): ChatItem => ({ kind: 'tool', id, at: 2, name: 'Bash', input: {}, status: 'ok', summary: 'test', output: 'x'.repeat(600000) });
@@ -28,4 +29,12 @@ it('never projects MCP receipts or agent reports, and rejects unbounded window r
   expect(chatWindow([report], 600, 1)).toEqual([report]);
   for (const n of [0,-1,NaN,Infinity,601,1.5]) expect(() => chatWindow([],n)).toThrow('Invalid transcript window');
   expect(() => chatWindow([],600,2**30)).toThrow();
+});
+
+it('preserves output URLs beyond the preview and unchanged tool identity across unrelated appends', () => {
+  const original = { ...raw('large'), output: 'x'.repeat(600000) + '\nhttps://dev.azure.com/o/Shop/_build/results?buildId=42' } as ChatItem;
+  const first = chatWindow([original, item('a')]);
+  expect(extractDevLinks(first)).toEqual(extractDevLinks([original, item('a')]));
+  const second = chatWindow([...first, item('b')]);
+  expect(second[0]).toBe(first[0]);
 });

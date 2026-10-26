@@ -12,7 +12,7 @@
 // behind one "Ragionamento" row, and an emoji-only reply sticks to the user's bubble as a reaction (lib/chat-view.ts); a "sta scrivendo… / sta pensando…" line follows the turn; the list follows the bottom ONLY when the
 // user is already there (scrolled up to read, it never jumps: a "nuove righe" pill appears instead). Used by ChatTile
 // and OrchestratorTile.
-import { readToolOutput } from '../lib/tool-output';
+import { readToolOutput, toolOutputLoader } from '../lib/tool-output';
 import { sb } from '../sb';
 import { t as auditText } from '../i18n';
 import {useFollowBottom} from '../lib/use-follow-bottom';
@@ -201,17 +201,18 @@ function ToolOutput({ item }: { item: Tool }) {
   const chatId = useContext(ChatIdCtx);
   const [full, setFull] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
-  const [attempt, setAttempt] = useState(0);
+  const loader = useRef<ReturnType<typeof toolOutputLoader> | null>(null);
+  const preview = item.outputPreviewChars !== undefined;
   useEffect(() => {
-    let live = true;
     setFull(null); setFailed(false);
-    if (!chatId) { setFailed(item.outputPreviewChars !== undefined); return () => { live = false; }; }
-    const timer = item.outputPreviewChars === undefined ? undefined : setTimeout(() => {
-      void readToolOutput(chatId, item.id, args => sb.invoke('chat:items', args)).then(output => { if (live) setFull(output); }, () => { if (live) setFailed(true); });
-    }, 150);
-    return () => { live = false; clearTimeout(timer); };
-  }, [chatId, item, attempt]);
-  return <>{item.outputPreviewChars !== undefined && full === null && <div role="status">{t(failed ? 'chat.items.outputFailed' : 'chat.items.outputLoading')}{failed && <button type="button" onClick={() => setAttempt(n => n + 1)}>{t('brainText.common.retry')}</button>}</div>}
+    if (!preview) return;
+    if (!chatId) { setFailed(true); return; }
+    const next = toolOutputLoader(() => readToolOutput(chatId, item.id, args => sb.invoke('chat:items', args)), output => { setFull(output); setFailed(false); }, () => setFailed(true));
+    loader.current = next; next.refresh();
+    return () => { next.dispose(); loader.current = null; };
+  }, [chatId, item.id, preview]);
+  useEffect(() => { loader.current?.refresh(); }, [item]);
+  return <>{preview && (full === null || failed) && <div role="status">{t(failed ? 'chat.items.outputFailed' : 'chat.items.outputLoading')}{failed && <button type="button" onClick={() => loader.current?.refresh()}>{t('brainText.common.retry')}</button>}</div>}
     <pre className="tool-pre out">{full ?? item.output}</pre></>;
 }
 
