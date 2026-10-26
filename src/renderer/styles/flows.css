@@ -52,3 +52,5 @@
 .flow-browser-details p { margin: 6px 0; }
 .cred-site-identity { display: grid; gap: 4px; margin-bottom: 8px; }
 .flow-browser-result { border-left: 2px solid var(--border); padding-left: 10px; }
+
+.site-credential-add { align-self: flex-start; }
