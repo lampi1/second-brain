@@ -272,8 +272,11 @@ export class DevOpsWriter {
         return { targetId: target!.id, snapshot: await testEnvironmentSnapshot(target!, call) };
       }
       if (op === 'push-branch') {
-        keys(raw, ['op', 'project', 'repositoryId'], 'request');
+        keys(raw, ['op', 'project', 'repositoryId', 'commit'], 'request');
         if (!context.workspace) deny('Host-bound workspace required for push');
+        // Optional: publish an ancestor of the branch HEAD (e.g. a base commit for a deploy without the red test).
+        const commit = raw.commit === undefined ? undefined : lower(safeText(raw.commit, 'commit', 64));
+        if (commit !== undefined && !/^[a-f0-9]{40,64}$/.test(commit)) deny('commit must be a full commit sha');
         const p = project(raw.project), repositoryId = safeText(raw.repositoryId, 'repositoryId', 36).toLowerCase();
         if (!GUID.test(repositoryId)) deny('Invalid repository identity');
         if (!grant.pushTargets?.some(t => t.repositoryId === repositoryId && lower(t.project) === lower(p) && t.workspaceInput === context.workspaceInput)) deny('Repository and workspace input are outside the exact approved push target');
@@ -287,7 +290,7 @@ export class DevOpsWriter {
         const refs = await call('GET', `${org}/${encodeURIComponent(p)}/_apis/git/repositories/${repositoryId}/refs?filter=${encodeURIComponent(branch.slice(5))}&${API}`);
         const live = Array.isArray(refs.value) ? refs.value.map(v => object(v, 'git ref')).find(r => r.name === branch) : deny('Invalid ref response');
         if (live && (!previous || live.objectId !== previous.commit)) deny('The run branch already exists or was changed outside this run');
-        const result = await (this.options.push ?? pushRunBranch)({ workspace: context.workspace!, runId: lineage.at(-1)!, organization: grant.organization, project: p, repositoryId, token, beforePush: () => this.beforeMutation?.(), authorize: () => { context.authorize?.(); if (controller.signal.aborted) throw new Error('Push cancelled'); }, signal: controller.signal });
+        const result = await (this.options.push ?? pushRunBranch)({ workspace: context.workspace!, runId: lineage.at(-1)!, ...(commit ? { commit } : {}), organization: grant.organization, project: p, repositoryId, token, beforePush: () => this.beforeMutation?.(), authorize: () => { context.authorize?.(); if (controller.signal.aborted) throw new Error('Push cancelled'); }, signal: controller.signal });
         if (result.branch !== branch || !/^[a-f0-9]{40,64}$/.test(result.commit)) deny('Unexpected host push receipt');
         record(entry => { entry.pushes = [{ project: p, repositoryId, ...result }]; });
         return { repositoryId, ...result };

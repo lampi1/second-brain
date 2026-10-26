@@ -13,7 +13,7 @@ const list = (v: unknown, label: string): unknown[] => { if (!Array.isArray(v) |
 /** Conservative authoring diagnostic, not a filesystem sandbox. Provenance is deliberately excluded. */
 export const brainReference = (s: string): boolean => /(?:\bbrain(?:-v\d+)?[/\\]|(?:^|[\s`"'])(?:rules|skills|memory)[/\\]|[A-Za-z]:[/\\][^\n]*\bbrain)/im.test(s);
 export function validatePackage(value: unknown): FlowPackage {
-  const p = object(value, 'package'); keys(p, ['schema', 'assets', 'outputs', 'requiredOps', 'history', 'intake', 'downgrade', 'production'], 'package');
+  const p = object(value, 'package'); keys(p, ['schema', 'assets', 'outputs', 'requiredOps', 'history', 'historyMentions', 'intake', 'downgrade', 'production'], 'package');
   if (p.schema !== 1) throw new Error('Unsupported routine package schema');
   const assets = list(p.assets, 'assets').map(value => {
     const a = object(value, 'asset'); keys(a, ['id', 'kind', 'content', 'sha256', 'source'], 'asset');
@@ -43,6 +43,8 @@ export function validatePackage(value: unknown): FlowPackage {
   if (p.intake !== undefined && p.intake !== true) throw new Error('intake must be true or absent');
   if (p.history !== undefined && p.history !== true) throw new Error('history must be true or absent');
   if (p.history && !requiredOps.includes('comment')) throw new Error('Run history requires the comment operation');
+  const historyMentions = p.historyMentions === undefined ? undefined : list(p.historyMentions, 'historyMentions').map(v => text(v, 'history mention', 36).toLowerCase());
+  if (historyMentions && (!p.history || historyMentions.length > 10 || new Set(historyMentions).size !== historyMentions.length || historyMentions.some(v => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(v)))) throw new Error('historyMentions: at most 10 distinct identity GUIDs, with history');
   let downgrade: FlowPackage['downgrade'];
   if (p.downgrade !== undefined) {
     const d = object(p.downgrade, 'downgrade'); keys(d, ['lessonOutput', 'removeTag', 'addTag', 'state'], 'downgrade');
@@ -64,7 +66,7 @@ export function validatePackage(value: unknown): FlowPackage {
     return { id: identifier(intent.id, 'production intent id'), operation, targetId: identifier(intent.targetId, 'production target'), recipeAssetId, recipeSha256, timeoutMs: integer(intent.timeoutMs, 'timeoutMs', 1000, 3600000), ...(maxRows ? { maxRows } : {}), ...(maxAffectedRows ? { maxAffectedRows } : {}), ...(rollbackAssetId ? { rollbackAssetId } : {}) };
   });
   if (production && new Set(production.map(p => p.id)).size !== production.length) throw new Error('Duplicate production intent');
-  return { schema: 1, assets, outputs, requiredOps, ...(p.intake ? { intake: true } : {}), ...(production?.length ? { production } : {}), ...(p.history ? { history: true } : {}), ...(downgrade ? { downgrade } : {}) };
+  return { schema: 1, assets, outputs, requiredOps, ...(p.intake ? { intake: true } : {}), ...(production?.length ? { production } : {}), ...(p.history ? { history: true } : {}), ...(historyMentions ? { historyMentions } : {}), ...(downgrade ? { downgrade } : {}) };
 }
 export function validatePackagedSteps(steps: FlowStep[], pack: FlowPackage): void {
   if (pack.intake && steps[0]?.kind !== 'agent') throw new Error('Explicit intake requires an initial agent step');

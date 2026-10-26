@@ -878,11 +878,13 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
         if (!latest || latest.paused || !fresh || JSON.stringify(fresh) !== JSON.stringify(granted)) throw new Error('Routine settlement grant changed');
       };
       const writer = writerFor(contextKey), ctx = { runId, ...granted, authorize, ...(run.currentStep === 0 ? { mentionReason: 'intake' as const } : {}), evidenceRoot: path.join(options.userData, 'flows', contextKey, 'evidence', runId) };
+      // The package may narrow milestone mentions to a subset of the grant; never widen it.
+      const milestoneMentions = (granted.grant.mentions ?? []).filter(id => !definition.package!.historyMentions || definition.package!.historyMentions.includes(id));
       let historyFailure: string | undefined;
       for (const entry of run.history?.filter(h => h.status === 'pending') ?? []) {
         let format = granted.grant.ops.includes('rich-comments') ? 'markdown' : 'plain';
         try { writer.validateHistory(runId, granted.grant, entry.text); } catch { format = 'plain'; } // Host status survives malformed/unapproved evidence links.
-        try { await writer.execute({ ...ctx, mentionReason: entry.mentionReason }, { op: 'comment', format, text: entry.text, ...(entry.mentionReason ? { mentionReason: entry.mentionReason, mentions: granted.grant.mentions ?? [] } : {}) }); flow.historyResult(runId, entry.id); }
+        try { await writer.execute({ ...ctx, mentionReason: entry.mentionReason }, { op: 'comment', format, text: entry.text, ...(entry.mentionReason ? { mentionReason: entry.mentionReason, mentions: milestoneMentions } : {}) }); flow.historyResult(runId, entry.id); }
         catch (error) { if (error instanceof ReconciledWrite) { flow.historyReconciled(runId, entry.id, error.outcome); continue; } const reason = error instanceof Error ? error.message : 'History comment failed'; if (entry.reason !== reason) flow.historyResult(runId, entry.id, reason); historyFailure = reason; break; }
       }
       const cleanupWrite = async (context: Parameters<DevOpsWriter['execute']>[0], request: Parameters<DevOpsWriter['execute']>[1]) => {
@@ -907,7 +909,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
           if (d.phase <= 1) { await cleanupWrite(ctx, { op: 'remove-tags', tags: [policy.removeTag] }); flow.downgradeProgress(runId, 2); }
           if (d.phase <= 2) { await cleanupWrite(ctx, { op: 'add-tags', tags: [policy.addTag] }); flow.downgradeProgress(runId, 3); }
           if (d.phase <= 3) { await cleanupWrite(ctx, { op: 'set-fields', fields: { 'System.State': policy.state } }); flow.downgradeProgress(runId, 4); }
-          if (d.phase <= 4) { if (!definition.package.history) await cleanupWrite({ ...ctx, mentionReason: 'downgrade' }, { op: 'comment', format: 'plain', text: `Needs human: ${d.reason}. Routine ${runId} stopped; automated cleanup follows.`, mentionReason: 'downgrade', mentions: granted.grant.mentions ?? [] }); flow.downgradeProgress(runId, 5); }
+          if (d.phase <= 4) { if (!definition.package.history) await cleanupWrite({ ...ctx, mentionReason: 'downgrade' }, { op: 'comment', format: 'plain', text: `Needs human: ${d.reason}. Routine ${runId} stopped; automated cleanup follows.`, mentionReason: 'downgrade', mentions: milestoneMentions }); flow.downgradeProgress(runId, 5); }
           if (d.phase <= 5) {
             for (const pr of writer.ownedPrs(runId)) await cleanupWrite(ctx, { op: 'abandon-pr', pullRequestId: pr.id });
             for (const targetId of deployments.ownedTargets(runId)) { const status = await cleanupWrite(ctx, { op: 'test-deploy-status', targetId }); if (!status.terminal) { await cleanupWrite(ctx, { op: 'cancel-test-deploy', targetId }); await cleanupWrite(ctx, { op: 'test-deploy-status', targetId }); } }

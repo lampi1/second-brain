@@ -50,7 +50,7 @@ export function flowCapabilities(section: unknown = 'overview'): object {
     case 'devops': return {
       adapter: 'devops-write', tool: 'flow_devops_write', grant: 'devopsWrite', operations: [...DEVOPS_WRITE_OPS],
       proposal: 'app_flow_auto_propose', scope: 'Exact organization/projects/fields, run work item, run-created resources and own PR/branch; each operation must be approved.',
-      configuration: ['pushTargets: exact repository and workspace input for host git-push.', 'deployTargets: registered exact test targets for test-deploy/test-environment/pr-validation.', 'mentions: approved identities; host milestones control mentions.'],
+      configuration: ['pushTargets: exact repository and workspace input for host git-push.', 'deployTargets: registered exact test targets for test-deploy/test-environment/pr-validation.', 'mentions: approved identities; host milestones control work-item mentions (package.historyMentions narrows them to a subset); pr-comment may @mention grant identities.'],
       buildStatus: { tool: 'flow_pr_build_status', grant: 'test-deploy or pr-validation', scope: 'Latest build of the run-owned PR live merge commit on the approved target; read only.' },
       repeatDeploy: 'One deployment at a time, same exact target, each release retained. Poll test-deploy-status to terminal before deploying the next PR build; releaseId selects a historical receipt.',
       reconciliation: 'Routine page: open the stopped run (including History), Reconcile writes. User verifies each operation and records not-done/reverted/done with evidence. No agent reconciliation tool, no remote mutation, no automatic restart. Cancel the run and wait for workers to stop first. Deployment leases require their existing release checks.',

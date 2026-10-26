@@ -69,6 +69,8 @@ export interface FlowPackage {
   /** Required operation names are intent, never authority: automation approval grants them separately. */
   requiredOps: string[];
   history?: true;
+  /** Identities the host @mentions on work-item history milestones; absent = every grant identity. Only those also in the grant are used. */
+  historyMentions?: string[];
   /** First agent must call flow_intake before any external write; skip stays silent. */
   intake?: true;
   downgrade?: { lessonOutput: string; removeTag: string; addTag: string; state: string };

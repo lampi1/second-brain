@@ -9,7 +9,7 @@ export const runBranch = (runId: string): string => {
   return `refs/heads/fix/routine-${runId}`;
 };
 export class HostPushPreconditionError extends Error {}
-export interface HostPush { workspace: string; runId: string; organization: string; project: string; repositoryId: string; token: string; beforePush(): void; authorize(): void; signal: AbortSignal }
+export interface HostPush { workspace: string; runId: string; /** an ancestor of (or equal to) the branch HEAD; default HEAD */ commit?: string; organization: string; project: string; repositoryId: string; token: string; beforePush(): void; authorize(): void; signal: AbortSignal }
 export async function pushRunBranch(p: HostPush): Promise<{ branch: string; commit: string }> {
   const branch = runBranch(p.runId), directory = fs.mkdtempSync(path.join(os.tmpdir(), 'routine-push-'));
   const capture = path.join(directory, 'capture.git');
@@ -27,8 +27,8 @@ export async function pushRunBranch(p: HostPush): Promise<{ branch: string; comm
   try {
     const root = fs.realpathSync(p.workspace);
     if (await git(root, ['symbolic-ref', '--quiet', 'HEAD']) !== branch) throw new HostPushPreconditionError(`Checkout the host-owned branch ${branch} before pushing`);
-    const commit = await git(root, ['rev-parse', '--verify', 'HEAD']);
-    if (!/^[a-f0-9]{40,64}$/.test(commit)) throw new Error('Invalid local commit');
+    const head = await git(root, ['rev-parse', '--verify', 'HEAD']), commit = p.commit ?? head;
+    if (!/^[a-f0-9]{40,64}$/.test(head) || !/^[a-f0-9]{40,64}$/.test(commit)) throw new Error('Invalid local commit');
     const objects = fs.realpathSync(path.resolve(root, await git(root, ['rev-parse', '--git-path', 'objects'])));
     if (/[\r\n]/.test(objects)) throw new Error('Unsafe Git object directory');
     // Source-side calls above only read refs/paths. All object traversal runs with host-created configuration:
@@ -36,6 +36,7 @@ export async function pushRunBranch(p: HostPush): Promise<{ branch: string; comm
     await git(directory, ['init', '--bare', '--template=', capture]);
     fs.writeFileSync(path.join(capture, 'objects', 'info', 'alternates'), `${objects}\n`, { mode: 0o600 });
     if (await git(capture, ['rev-parse', '--verify', `${commit}^{commit}`]) !== commit) throw new Error('HEAD is not a readable commit');
+    if (commit !== head) await git(capture, ['merge-base', '--is-ancestor', commit, head]).catch(() => { throw new HostPushPreconditionError(`Commit ${commit} is not on ${branch}`); });
     await git(capture, ['update-ref', branch, commit]);
     const url = `https://dev.azure.com/${encodeURIComponent(p.organization)}/${encodeURIComponent(p.project)}/_git/${p.repositoryId}`;
     // Native send-pack negotiates objects already on the remote; never bundle/copy the complete repository.

@@ -84,10 +84,15 @@ export async function devopsResource(raw: Record<string, unknown>, p: ResourcePo
       return { pullRequestId: prId, isDraft: true, url: `${org}/${encodeURIComponent(project)}/_git/${repositoryId}/pullrequest/${prId}` };
     }
     case 'pr-comment': {
-      keys(raw, ['op', 'pullRequestId', 'text'], 'request');
+      keys(raw, ['op', 'pullRequestId', 'text', 'mentions'], 'request');
       const body = text(raw.text, 'text', 10_000);
+      // PR mentions: only approved grant identities, rendered by the host as Azure DevOps @<id> tokens (notified by DevOps).
+      if (raw.mentions !== undefined && (!Array.isArray(raw.mentions) || raw.mentions.length > 10)) throw new Error('mentions: at most 10 identity ids');
+      const mentions = ((raw.mentions as unknown[] | undefined) ?? []).map(v => guid(v));
+      if (new Set(mentions).size !== mentions.length) throw new Error('mentions: duplicate identity');
+      if (mentions.some(v => !(p.grant.mentions ?? []).includes(v))) throw new Error('Mention is not in the approved DevOps write grant');
       if (/!?\[[^\]]+\]\(/.test(body) && !p.grant.ops.includes('rich-comments')) throw new Error('Formatted PR comments need rich-comments');
-      const content = renderDevOpsComment(body, p.grant.organization, p.mine.images ?? [], 'markdown'), pr = await ownPr();
+      const content = (mentions.length ? `${mentions.map(v => `@<${v.toUpperCase()}>`).join(' ')}\n\n` : '') + renderDevOpsComment(body, p.grant.organization, p.mine.images ?? [], 'markdown'), pr = await ownPr();
       if (pr.live.status !== 'active') throw new Error('PR is no longer active');
       const result = await p.call('POST', `${pr.url}/threads?${API}`, { comments: [{ parentCommentId: 0, content, commentType: 1 }], status: 1 });
       return { pullRequestId: pr.mine.id, threadId: result.id };

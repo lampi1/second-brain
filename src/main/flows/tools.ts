@@ -70,7 +70,7 @@ export function flowTools(deps: FlowToolsDeps): ToolDef[] {
       'Recipes must be embedded assets. ' +
       'These are explicitly NOT grants and do not enable production execution. ' +
       'Read app_flow_capabilities before claiming support. ' +
-      'For new routines always include package {schema:1,assets:[{id,kind:script|query|checklist|reference,content,sha256?,source?:{path,sha256}}],outputs:[{id,kind:lesson|report,description,brainPath?:routine-outputs/name.md}],requiredOps:[approved operation names],history?:true,intake?:true,downgrade?:{lessonOutput,removeTag,addTag,state}}. ' +
+      'For new routines always include package {schema:1,assets:[{id,kind:script|query|checklist|reference,content,sha256?,source?:{path,sha256}}],outputs:[{id,kind:lesson|report,description,brainPath?:routine-outputs/name.md}],requiredOps:[approved operation names],history?:true,historyMentions?:[identity GUIDs the host @mentions on history milestones; a subset of the grant, absent = all],intake?:true,downgrade?:{lessonOutput,removeTag,addTag,state}}. ' +
       'Read useful brain material while authoring and embed the actual content; no brain file references in prompts/assets. ' +
       'Source paths are provenance only. ' +
       'Use intake:true for a quiet first-step accept/skip gate, explicit flow_verdict and lesson-free initial needs-human. ' +
