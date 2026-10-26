@@ -8,6 +8,7 @@ import { renameRetrying } from '../rules/storage';
 import { createHash, randomUUID } from 'node:crypto';
 import { APP_OWNER } from '../../shared/flows';
 import type { FlowAttachment, FlowCommandReceipt, FlowHealEntry, FlowActivate, FlowAgentBinding, FlowCancel, FlowDecision, FlowDefinition, FlowDraft, FlowMatch, FlowPropose, FlowReceipt, FlowReport, FlowRestart, FlowRestartDecision, FlowRestartProposal, FlowRun, FlowScope, FlowSnapshot, FlowStart, FlowStep, FlowTestDbEvidence, FlowStepTierEdit, FlowVerifiedReport, FlowVersion } from '../../shared/flows';
+import { browserWriteStep, browserWriteResult } from '../../shared/flow-browser';
 import { adapted, commandStep, testDbAdapted, digest, type RoleTierMax, inScope, integer, keys, normalize, object, text, validateDefinition, validateInputs, validateScope } from './schema';
 import { assertPackageBinding } from './binding';
 import { HOLD, roleOf, samePrefix } from '../../shared/routine';
@@ -356,6 +357,30 @@ export class FlowService {
       this.touch(run); return run;
     });
   }
+  /** Persist before browser dispatch, without typed text, URLs, credentials or page content. */
+  browserDispatch(runId: string, binding: FlowAgentBinding): void {
+    this.change(() => {
+      const run = this.run(runId), step = run.steps[run.currentStep];
+      if (run.status !== 'active' || run.paused || step?.status !== 'running' || !browserWriteStep(this.spec(run)) || step.chatId !== binding.chatId || step.chatRunId !== binding.chatRunId || step.taskVersion !== binding.taskVersion) throw new Error('Browser write binding is no longer active');
+      let entry = run.browserWrites?.find(e => e.chatRunId === binding.chatRunId && e.taskVersion === binding.taskVersion);
+      if (!entry) { entry = { stepId: step.stepId, chatRunId: binding.chatRunId, taskVersion: binding.taskVersion, at: this.now(), dispatched: 0, outcome: 'pending', evidence: [] }; (run.browserWrites ??= []).push(entry); }
+      if (entry.reportId) throw new Error('Browser write report already saved');
+      entry.dispatched++; this.touch(run);
+    });
+  }
+  /** Host-linked canonical report, distinct from a remote-server receipt. Retains failed attempts too. */
+  browserResult(runId: string, binding: FlowAgentBinding, reportId: string, result: unknown): void {
+    const value = browserWriteResult(result);
+    this.change(() => {
+      const run = this.run(runId), step = run.steps[run.currentStep];
+      if (run.status !== 'active' || step?.status !== 'running' || !browserWriteStep(this.spec(run)) || step.chatId !== binding.chatId || step.chatRunId !== binding.chatRunId || step.taskVersion !== binding.taskVersion) throw new Error('Browser report binding is stale');
+      const entry = run.browserWrites?.find(e => e.chatRunId === binding.chatRunId && e.taskVersion === binding.taskVersion);
+      if (entry?.reportId) { if (entry.reportId !== reportId) throw new Error('Browser report changed'); return; }
+      const saved = { stepId: step.stepId, chatRunId: binding.chatRunId, taskVersion: binding.taskVersion, at: this.now(), dispatched: entry?.dispatched ?? 0, ...value, reportId };
+      if (entry) Object.assign(entry, saved); else (run.browserWrites ??= []).push(saved);
+      this.touch(run);
+    });
+  }
   /** Host-only journal: persist the query hash and trusted configured database before the executor is allowed to touch a test database. */
   beginTestDbQuery(runId: string, binding: FlowAgentBinding, targetId: string, database: string, query: string): FlowTestDbEvidence {
     return this.change(() => {
@@ -395,6 +420,7 @@ export class FlowService {
       assertPackageBinding(run, definition, report);
       if (definition.reviewOf && (report.roleId !== 'sentinel' || report.reviewOf !== run.steps.find(s => s.stepId === definition.reviewOf)?.chatRunId)) throw new Error('Independent review must bind the reviewed agent run and Sentinel role');
       if (!report.summary.trim() || !report.evidence.length || definition.evidence.some(label => !report.evidence.some(value => value.startsWith(`${label}: `) && value.length > label.length + 2))) throw new Error('The linked report is missing required evidence');
+      if (browserWriteStep(definition) && !run.browserWrites?.some(e => e.chatRunId === step.chatRunId && e.taskVersion === step.taskVersion && e.reportId === reportId && e.outcome === 'done')) throw new Error('A matching browserWrite done outcome with screenshot/read-back evidence is required');
       this.finish(run, { id: randomUUID(), stepId: step.stepId, kind: 'agent-report', at: this.now(), summary: report.summary, chatId: step.chatId, reportId: report.id, evidence: copy(report.evidence) });
       this.prepare(run); this.touch(run); return run;
     });
@@ -583,6 +609,7 @@ export class FlowService {
   private unsupported(run: FlowRun, spec: FlowStep): boolean {
     if (commandStep(spec)) return false;
     if (spec.effect === 'production' || (spec.action && spec.action.kind !== 'builtin')) return true;
+    if (browserWriteStep(spec)) return false;
     if (spec.effect !== 'external-write' && !testDbAdapted(spec)) return false;
     if (!adapted(spec) && !testDbAdapted(spec)) return true;
     try { return this.options.adapterGranted?.(run, spec) !== true; } catch { return true; }
@@ -669,7 +696,7 @@ export class FlowService {
     object(data.active, 'active');
     for (const [id, version] of Object.entries(data.active)) { integer(version, 'active version', 1); if (!versionIds.has(`${id}:${version}`)) throw new Error('Invalid active version'); }
     for (const run of data.runs) {
-      keys(object(run, 'run'), ['id', 'revision', 'flowId', 'flowVersion', 'definitionDigest', 'ownerOrchestratorId', 'subjectKey', 'scope', 'inputs', 'status', 'currentStep', 'steps', 'createdAt', 'updatedAt', 'testDbEvidence', 'cancellation', 'restartOf', 'pendingRecovery', 'pendingCancellation', 'recoveryFeedback', 'paused', 'attachments', 'receipts', 'heal', 'awaitingUser', 'title', 'outputs', 'disposition', 'history', 'trace', 'approval', 'settlementError', 'intake', 'verdict'], 'run');
+      keys(object(run, 'run'), ['id', 'revision', 'flowId', 'flowVersion', 'definitionDigest', 'ownerOrchestratorId', 'subjectKey', 'scope', 'inputs', 'status', 'currentStep', 'steps', 'createdAt', 'updatedAt', 'testDbEvidence', 'browserWrites', 'cancellation', 'restartOf', 'pendingRecovery', 'pendingCancellation', 'recoveryFeedback', 'paused', 'attachments', 'receipts', 'heal', 'awaitingUser', 'title', 'outputs', 'disposition', 'history', 'trace', 'approval', 'settlementError', 'intake', 'verdict'], 'run');
       if (run.paused !== undefined) { keys(object(run.paused, 'paused'), ['at'], 'paused'); integer(run.paused.at, 'paused time'); }
       if (run.attachments !== undefined) validateAttachments(run.attachments);
       if (run.receipts !== undefined) { if (!Array.isArray(run.receipts) || run.receipts.length > 500) throw new Error('Invalid receipts'); run.receipts.forEach(validateReceipt); }
@@ -694,6 +721,17 @@ export class FlowService {
         if (!version.definition.package || !['needs-human', 'skipped'].includes(d.kind) || (d.kind === 'needs-human' && !version.definition.package.downgrade) || (d.kind === 'skipped' && (!version.definition.package.intake || run.intake !== 'skipped' || run.status !== 'cancelled' || d.cleanup !== 'complete')) || (d.lesson !== undefined && typeof d.lesson !== 'boolean') || !['pending', 'complete'].includes(d.cleanup)) throw new Error('Invalid disposition'); text(d.reason, 'handoff reason', 2000); integer(d.at, 'handoff time'); integer(d.phase, 'handoff phase', 0, 6); if (d.error) text(d.error, 'handoff error', 2000); }
       if (run.history) { if (!version.definition.package?.history || !Array.isArray(run.history) || run.history.length > 500) throw new Error('Invalid run history');
         for (const h of run.history) { keys(object(h, 'history'), ['id', 'stepId', 'at', 'text', 'status', 'reason', 'mentionReason'], 'history'); text(h.id, 'history id', 200); integer(h.at, 'history time'); text(h.text, 'history text', 10000); if (!run.steps.some(s => s.stepId === h.stepId) || !['pending', 'sent'].includes(h.status)) throw new Error('Invalid history entry'); if (h.reason) text(h.reason, 'history error', 2000); if (h.mentionReason && !['intake', 'block', 'downgrade', 'final'].includes(h.mentionReason)) throw new Error('Invalid mention reason'); }
+      }
+      if (run.browserWrites !== undefined) {
+        if (!Array.isArray(run.browserWrites) || run.browserWrites.length > 300) throw new Error('Invalid browser write journal');
+        for (const entry of run.browserWrites) {
+          keys(object(entry, 'browser write'), ['stepId', 'chatRunId', 'taskVersion', 'at', 'dispatched', 'outcome', 'reportId', 'evidence'], 'browser write');
+          if (!version.definition.steps.some(s => s.id === entry.stepId && browserWriteStep(s))) throw new Error('Invalid browser write step');
+          text(entry.chatRunId, 'browser chat run', 200); integer(entry.taskVersion, 'browser task', 1); integer(entry.at, 'browser time'); integer(entry.dispatched, 'browser dispatch count');
+          if (entry.reportId !== undefined) text(entry.reportId, 'browser report', 200);
+          if (entry.outcome === 'pending') { if (!Array.isArray(entry.evidence) || entry.evidence.length) throw new Error('Invalid pending browser evidence'); }
+          else browserWriteResult({ outcome: entry.outcome, evidence: entry.evidence });
+        }
       }
       if (run.testDbEvidence !== undefined) {
         if (!Array.isArray(run.testDbEvidence) || run.testDbEvidence.length > 500) throw new Error('Invalid test DB evidence');
@@ -754,7 +792,7 @@ export class FlowService {
         const command = commandStep(spec);
         if (step.status === 'ready' && ((spec.kind !== 'agent' && !command) || step.attempts >= spec.maxAttempts) || step.status === 'approval' && !['manual', 'approval'].includes(spec.kind) && !(command && spec.env === 'prod')) throw new Error('Invalid step kind state');
         // A declared adapter step may progress on disk; its grant is re-checked live at prepare, bind, retry and every write.
-        const unsupported = !command && ((spec.effect === 'external-write' && !adapted(spec)) || spec.effect === 'production' || spec.action && spec.action.kind !== 'builtin');
+        const unsupported = !command && ((spec.effect === 'external-write' && !adapted(spec) && !browserWriteStep(spec)) || spec.effect === 'production' || spec.action && spec.action.kind !== 'builtin');
         if (unsupported && !['pending', 'blocked', 'cancelled'].includes(step.status)) throw new Error('Unsupported action cannot progress');
         if (step.status !== 'completed' && step.receipt) throw new Error('Unfinished step cannot have a receipt');
         if (step.decisionPending !== undefined && typeof step.decisionPending !== 'boolean') throw new Error('Invalid decision state');
@@ -768,7 +806,7 @@ export class FlowService {
           text(receipt.id, 'receipt id', 200); integer(receipt.at, 'receipt time');
           if (spec.kind === 'agent' && (receipt.chatId !== step.chatId || !receipt.reportId || !step.chatRunId || !step.taskVersion || spec.evidence.some(label => !receipt.evidence.some(value => value.startsWith(`${label}: `))))) throw new Error('Invalid agent receipt binding');
           if (spec.reviewOf && run.steps.find(s => s.stepId === spec.reviewOf)?.chatId === step.chatId) throw new Error('Invalid independent reviewer');
-          if ((spec.kind === 'agent' && receipt.kind !== 'agent-report') || (spec.kind === 'check' && receipt.kind !== 'check') || (['approval', 'manual'].includes(spec.kind) && receipt.kind !== 'user') || (!command && ((spec.effect === 'external-write' && !adapted(spec)) || spec.effect === 'production'))) throw new Error('Invalid receipt authority');
+          if ((spec.kind === 'agent' && receipt.kind !== 'agent-report') || (spec.kind === 'check' && receipt.kind !== 'check') || (['approval', 'manual'].includes(spec.kind) && receipt.kind !== 'user') || (!command && ((spec.effect === 'external-write' && !adapted(spec) && !browserWriteStep(spec)) || spec.effect === 'production'))) throw new Error('Invalid receipt authority');
         }
         const carried = i < inherited;
         if (carried && (!restartSource || step.status !== 'completed' || JSON.stringify(step) !== JSON.stringify(restartSource.steps[i]))) throw new Error('Inherited prefix evidence changed');

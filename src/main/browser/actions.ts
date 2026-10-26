@@ -22,6 +22,7 @@ import { formatDetail, formatEntry, redactBody } from './netlog';
 import { consoleLine } from './console-line';
 import { globMatch } from './glob';
 import { hostOf, isLocalHost, passwordRefusal, urlCredentials } from './guard';
+import { assertBrowserOrigin } from './routine-policy';
 import { isLoginUrl } from './envs';
 import { localScriptOrigin } from './script-policy';
 
@@ -61,6 +62,15 @@ export class BrowserActions {
   /** decode: PNG bytes → NativeImage (service.ts passes nativeImage.createFromBuffer; absent in unit tests) */
   constructor(private readonly tabs: BrowserTabs, private readonly decode?: (png: Buffer) => NativeImage) {}
 
+  /** Scoped browser steps use host vault login or a human handoff, even on localhost. */
+  async routineLoginGuard(tab: Tab): Promise<void> {
+    if (!this.tabs.routinePolicy?.(tab.owner)) return;
+    for (const frame of tab.wc.mainFrame.framesInSubtree) {
+      const login = isLoginUrl(frame.url) || await this.evalIn<boolean>(tab, frame, pageCall(hasPasswordField, false), 1500).catch(() => true);
+      if (login) throw new Error('Routine browser: login page; call browser_login or handoff_to_user kind login. Never type passwords.');
+    }
+  }
+
   // ---------- plumbing ----------
 
   /** Throws an actionable error when the tab cannot take actions now. */
@@ -98,7 +108,10 @@ export class BrowserActions {
     const d = this.tabs.dialogOpened(tab);
     tab.agentInput = (tab.agentInput ?? 0) + 1;         // a Ctrl+W among these keys is the agent's, never the user's (tabs.ts)
     try {
+      let dispatched = false;
       for (const [method, raw] of steps) {
+        const policy = this.tabs?.assertRoutine?.(tab, true);
+        if (policy) { await this.routineLoginGuard(tab); const live = this.tabs.assertRoutine(tab, true); if (!dispatched) { live?.dispatch(); dispatched = true; } }
         // CDP mouse input is in view px: an agent tab shown scaled in its tile (tabs.ts emulate) gets its CSS px scaled
         const k = this.tabs.cssScale(tab);
         const params = method === 'Input.dispatchMouseEvent' && k !== 1 && typeof raw.x === 'number' && typeof raw.y === 'number'
@@ -203,7 +216,7 @@ export class BrowserActions {
   async guardPassword(tab: Tab, ref: unknown, what: string): Promise<void> {
     const check = async (frame: WebFrameMain, r: string | null) => {
       const host = frameHost(frame);
-      if (isLocalHost(host)) return;
+      if (isLocalHost(host) && !this.tabs.routinePolicy?.(tab.owner)) return;
       const facts = await this.evalIn<{ password: boolean; focused: boolean; desc: string; hasFocus: boolean }>(tab, frame, pageCall(fieldFacts, r), 3000).catch(() => null);
       // fail closed: a remote frame we cannot read might hold a password field
       if (!facts) throw new Error(`Refused: could not verify that ${what} is not a password field on ${host || 'a remote page'} (the page did not answer). Try again, or use handoff_to_user.`);
@@ -460,6 +473,7 @@ export class BrowserActions {
 
   async select(tab: Tab, ref: unknown, values: string[]): Promise<string> {
     const { frame, ref: r } = parseRef(ref);
+    this.tabs?.assertRoutine?.(tab, true)?.dispatch();
     const res = await this.evalIn<{ selected: string[] } | { error: string }>(tab, this.tabs.frameByNo(tab, frame), pageCall(selectOptions, r, values));
     if ('error' in res) throw new Error(res.error === 'stale' ? `${r} is no longer on the page: call read_page again.` : `${r}: ${res.error}`);
     return `Selected ${res.selected.map(s => `"${s}"`).join(', ')} in ${r}`;
@@ -475,7 +489,7 @@ export class BrowserActions {
       try { parsed = parseRef(f?.ref); } catch { continue; }
       const frame = this.tabs.frameByNo(tab, parsed.frame);
       const host = frameHost(frame);
-      if (isLocalHost(host)) continue;
+      if (isLocalHost(host) && !this.tabs.routinePolicy?.(tab.owner)) continue;
       const info = await this.evalIn<InputInfo | { error: string }>(tab, frame, pageCall(inputInfo, parsed.ref)).catch(() => null);
       if (!info) throw new Error(`Refused: could not verify that ${parsed.ref} is not a password field on ${host || 'a remote page'}. Try again, or use handoff_to_user.`);
       if (!('error' in info) && info.password) throw passwordRefusal(`${parsed.ref} (${info.desc})`, host, tab.env);
@@ -507,7 +521,8 @@ export class BrowserActions {
           if (info.kind === 'radio' && !want) throw new Error('a radio button cannot be unchecked: check another option of the group');
           if (info.checked !== want) await this.click(tab, { ref: f.ref });
         } else if (info.kind === 'select') {
-          const res = await this.evalIn<{ selected: string[] } | { error: string }>(tab, frame, pageCall(selectOptions, ref, Array.isArray(v) ? v.map(String) : [String(v ?? '')]));
+          this.tabs?.assertRoutine?.(tab, true)?.dispatch();
+    const res = await this.evalIn<{ selected: string[] } | { error: string }>(tab, frame, pageCall(selectOptions, ref, Array.isArray(v) ? v.map(String) : [String(v ?? '')]));
           if ('error' in res) throw new Error(res.error);
         } else if (info.kind === 'file') {
           throw new Error('file inputs are not supported yet: ask the user with handoff_to_user');
@@ -526,6 +541,8 @@ export class BrowserActions {
 
   async navigate(tab: Tab, url: string, force: boolean): Promise<string> {
     const wc = tab.wc;
+    const policy = this.tabs.routinePolicy?.(tab.owner);
+    if (policy) { if (/^(back|forward|reload)$/i.test(url)) this.tabs.assertRoutine(tab); else assertBrowserOrigin(policy, normalizeUrl(url)); policy.dispatch(); }
     if (tab.dialog && force) await this.answerDialog(tab, false).catch(() => {});
     tab.forceUnload = force;
     try {
@@ -691,6 +708,7 @@ export class BrowserActions {
   // ---------- dialogs, network, console, js ----------
 
   async handleDialog(tab: Tab, accept: boolean, promptText?: string): Promise<string> {
+    this.tabs?.assertRoutine?.(tab, true)?.dispatch();
     if (tab.wc.isDestroyed()) throw new Error(goneText(tab));
     const d = tab.dialog;
     if (!d) {

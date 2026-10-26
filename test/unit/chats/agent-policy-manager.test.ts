@@ -201,3 +201,13 @@ describe('agent policy on chats', () => {
     expect(FAIL_CLOSED.ceiling).toBe('plan');
   });
 });
+
+it('browser workers retain the exact routine engine/model, narrow actual session tools and reject unsupported engines', async () => {
+  const f = fixture({ resolveAgent: req => ({ request: { ...req, harness: 'cursor', model: 'role-model' }, owner: plainOwner('cursor', 'role-model'), instructions: 'Role instructions', policy: null, skills: [], launches: [] }) });
+  const routine = { runId: 'fixture-run', stepId: 'web', browserWrite: true as const };
+  const c = await f.m.create({ harness: 'claude', model: 'sonnet', cwd: f.dir, prompt: 'Use the approved browser.' }, 'app', undefined, {}, { routine });
+  expect(c.harness).toBe('claude'); expect(c.model).toBe('sonnet'); expect(c.agent?.engine).toBe('claude');
+  expect(f.starts.at(-1)).toMatchObject({ toolPolicy: { allow: ['read', 'browser'] }, env: { SB_ROUTINE_BROWSER: '1' } });
+  expect(f.starts.at(-1)?.agentAssets).toBeUndefined();
+  await expect(f.m.create({ harness: 'cursor', cwd: f.dir, prompt: 'Do not start' }, 'app', agent({ tools: { allow: ['read', 'browser'] }, ceiling: null }), {}, { routine })).rejects.toThrow('require Claude');
+});

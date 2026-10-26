@@ -41,3 +41,16 @@
 
 /* Fullscreen has one body scroller: long definitions cannot grow the header or clip step menus. */
 .flow-fullscreen>.modal-head{flex-wrap:nowrap;min-width:0;max-height:100px;padding:16px 24px;gap:16px}.flow-fullscreen .modal-titles{min-width:0;flex:1}.flow-fullscreen .modal-titles>h2{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.flow-fullscreen .modal-sub{margin-bottom:0}.flow-fullscreen>.modal-body{overflow-y:auto;overflow-x:hidden}.flow-fullscreen .flow-graph-scroll{max-height:none;min-height:0;overflow:visible}.flow-fullscreen .flow-inspector{max-height:none;overflow:visible}.flow-fullscreen-description{margin:0 0 24px;white-space:pre-wrap;line-height:1.6;color:var(--text-2)}.flow-fullscreen-toggle{flex-shrink:0;width:36px;height:36px}.flow-fullscreen-toggle:focus-visible{outline:2px solid var(--blue);outline-offset:3px}.flow-run-controls{padding:12px 0 18px}.flow-run-controls>p{margin:0 0 10px}.flow-run-controls .flow-actions{flex-wrap:wrap}.flow-recovery-modal{width:min(640px,calc(100vw - 32px))}.flow-recovery{min-width:0;overflow-wrap:anywhere}.flow-recovery-picker{display:grid;gap:8px;margin:18px 0}.flow-recovery-picker select{width:100%;min-width:0}.flow-recovery-effects{margin:16px 0}.flow-recovery-effects>summary{cursor:pointer}.flow-recovery-effects li{margin:6px 0}.flow-recovery .wq-perm{flex-wrap:wrap}.flow-badge[data-status=cancelled]{color:var(--text-3);background:var(--surface-2)}
+
+/* Compact, labeled vault editor; never a transcript or a persistent draft. */
+.site-credential-form { display: grid; gap: 10px; padding: 12px 0; }
+.site-credential-form label { display: grid; gap: 5px; font-size: 13px; }
+.site-credential-form input, .site-credential-form select { width: 100%; min-width: 0; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: inherit; }
+
+/* Approved browser scope and host-only site login editor, shared across routine surfaces. */
+.flow-browser-details, .cred-site-identity { overflow-wrap: anywhere; min-width: 0; }
+.flow-browser-details p { margin: 6px 0; }
+.cred-site-identity { display: grid; gap: 4px; margin-bottom: 8px; }
+.flow-browser-result { border-left: 2px solid var(--border); padding-left: 10px; }
+
+.site-credential-add { align-self: flex-start; }

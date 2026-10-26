@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
+import { DevOpsWriter } from '../../src/main/flows/devops-writer';
 import { TestDeploymentCoordinator } from '../../src/main/flows/test-deployment';
 import { createFlowRuntime } from '../../src/main/flows/runtime';
 import { devopsWriteTools } from '../../src/main/flows/devops-write-tool';
@@ -17,7 +18,7 @@ const config: FlowAutomationConfig = { flowId: 'fix', flowVersion: 1, scope: { p
   trigger: { kind: 'devops', everyMinutes: 1, organization: 'contoso', project: 'ProjectA', areaPath: 'Team', workItemType: 'Bug', states: ['New'], includeExisting: true },
   devopsWrite: { organization: 'contoso', projects: ['ProjectA'], ops: ['comment'], fields: [] } };
 
-async function setup(sealed = false, environment = false) {
+async function setup(sealed = false, environment = false, browser = false) {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'flow-dw-')); folders.push(folder);
   const brain = path.join(folder, 'brain'); fs.mkdirSync(brain);
   const rows = [{ id: 'o', isOrchestrator: true, state: 'idle' }] as ChatSummary[];
@@ -27,7 +28,7 @@ async function setup(sealed = false, environment = false) {
   const runtime = createFlowRuntime({ userData: folder, brainRoot: () => brain, chats: () => rows, changed: () => {}, stopChat, send: vi.fn(async () => {}), detect, devopsWrite: { token: async () => 'token-value', request } });
   const flow = runtime.service(), auto = runtime.automation();
   flow.propose({ expectedRevision: 0, definition: { id: 'fix', title: 'Fix', description: 'Fixture', aliases: [], scope: { project: 'ProjectA', areaPath: 'Team' }, steps: [
-    { id: 'write', title: 'Write', kind: 'agent', instructions: 'Comment', inputs: ['workspace', 'work-item-id'], workspaceInput: 'workspace', evidence: [], ...(environment ? { testEnvironment: 'test-fixture' } : {}), effect: 'external-write', adapter: 'devops-write', maxAttempts: 1, timeoutMs: 600000, ...(sealed ? { role: 'scout' as const, tier: 'mid' as const, engine: 'claude', model: 'sonnet', agentPrompt: 'Frozen evidence contract' } : {}) }], ...(sealed ? { package: { schema: 1 as const, assets: [], outputs: [], requiredOps: ['comment'] } } : {}) } });
+    { id: 'write', title: 'Write', kind: 'agent', instructions: 'Comment', inputs: ['workspace', 'work-item-id'], workspaceInput: 'workspace', evidence: [], ...(environment ? { testEnvironment: 'test-fixture' } : {}), effect: 'external-write', ...(browser ? { writeVia: 'browser' as const, browserTargets: ['https://qa.example.com'] } : { adapter: 'devops-write' as const }), maxAttempts: 1, timeoutMs: 600000, ...(sealed ? { role: 'scout' as const, tier: 'mid' as const, engine: 'claude', model: 'sonnet', agentPrompt: 'Frozen evidence contract' } : {}) }], ...(sealed ? { package: { schema: 1 as const, assets: [], outputs: [], requiredOps: ['comment'] } } : {}) } });
   flow.decideDefinition({ id: 'fix', expectedRevision: 1, answer: 'yes' });
   const configured = structuredClone(config);
   if (environment) {
@@ -100,4 +101,13 @@ it('exposes read-only PR status only through the same bound-step and grant check
   await expect(tool.run({ targetId: 'test', op: 'deploy-test' }, { params: { chatId: 'worker' } } as never)).rejects.toThrow();
   await expect(tool.run({ targetId: 'test' }, { params: {} } as never)).rejects.toThrow('own endpoint');
   expect(request).not.toHaveBeenCalled(); runtime.stop();
+});
+
+it('browser report journal revision does not invalidate the test-environment verification', async () => {
+  const s = await setup(false, true, true);
+  vi.spyOn(TestDeploymentCoordinator.prototype, 'verifyStepSnapshot').mockImplementation(() => {});
+  vi.spyOn(DevOpsWriter.prototype, 'execute').mockImplementation(async (scope) => { scope.authorize!(); return { snapshot:'fixture' }; });
+  s.rows[1]!.state = 'idle'; s.rows[1]!.run!.report = { at:42, via:'agent_report', outcome:'done', verified:'yes', blocking:0, summary:'Browser done', canonical:{ runId:'wr', taskVersion:1, outcome:'done', doneWhen:[{criterion:'proof',met:true,evidence:'read-back verified'}], browserWrite:{outcome:'done',evidence:['read-back verified']} } } as NonNullable<ChatSummary['run']>['report'];
+  await s.runtime.tick(); expect(s.flow.status(s.run.id,'o').steps[0]?.reason).toBeUndefined(); expect(s.flow.status(s.run.id,'o').status).toBe('completed');
+  expect(s.flow.status(s.run.id,'o').browserWrites?.[0]?.outcome).toBe('done'); s.runtime.stop();
 });

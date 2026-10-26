@@ -1,6 +1,6 @@
 // Complete flow definitions and host-recorded receipts shared by the catalog and QuestionsWindow; read only, except the
 // catalog's step tier menu (`edit`), which only proposes a new revision.
-import type { FlowDefinition as Definition, FlowRun } from '@shared/flows';
+import type { FlowDefinition as Definition, FlowRun, FlowStep } from '@shared/flows';
 import { openChatRef } from '../actions';
 import { t, locale } from '../i18n';
 import { linksIn } from '../lib/askContext';
@@ -11,6 +11,19 @@ export function FlowLinks({ sources, chatId, onNavigate }: { sources: string[]; 
   return links.length ? <div className="ctx-links">{links.map(link => link.kind === 'file'
     ? <button key={link.href} type="button" className="ctx-link file" onClick={() => { onNavigate?.(); void openFile(link.href, chatId); }}>{link.label}</button>
     : <a key={link.href} className="ctx-link" href={link.href} target="_blank" rel="noopener noreferrer">{link.label}</a>)}</div> : null;
+}
+export function FlowBrowserDetails({ step, run, onNavigate }: { step: FlowStep; run?: FlowRun; onNavigate?: () => void }) {
+  if (step.writeVia !== 'browser') return null;
+  const entries = run?.browserWrites?.filter(e => e.stepId === step.id) ?? [];
+  return <div className="flow-browser-details">
+    <p data-testid="flow-browser-targets">{t('flows.browserWrites')} <strong>{step.browserTargets?.join(', ')}</strong></p>
+    <p className="flows-muted">{t('flows.browserEngine')}</p>
+    {entries.map(e => <div key={`${e.chatRunId}:${e.taskVersion}`} className="flow-browser-result" data-testid="flow-browser-outcome">
+      <p>{t('flows.browserOutcome')}: <strong>{t(`flows.browserResult.${e.outcome}`)}</strong></p>
+      {e.outcome === 'partial' || e.outcome === 'pending' ? <p className="flow-block">{t('flows.browserRetryWarning')}</p> : null}
+      {!!e.evidence.length && <details><summary>{t('flows.evidence')} · {e.evidence.length}</summary>{e.evidence.map((text, i) => <p key={i}>{text}</p>)}<FlowLinks sources={e.evidence} chatId={run?.steps.find(s => s.stepId === step.id)?.chatId} onNavigate={onNavigate} /></details>}
+    </div>)}
+  </div>;
 }
 export function FlowTestDbEvidence({ run, stepId }: { run?: FlowRun; stepId: string }) {
   const entries = run?.testDbEvidence?.filter(entry => entry.stepId === stepId) ?? [];
@@ -55,6 +68,7 @@ export function FlowDefinition({ definition, run, edit, onNavigate }: { definiti
             {!!step.assets?.length && <p>{t('flows.assets')}: {step.assets.join(' · ')}</p>}
             {step.testEnvironment && <p>{t('flows.testEnvironment')}: <strong>{step.testEnvironment}</strong></p>}
             {step.testDbRead && <p>{t('flows.testDbRead')}</p>}
+            <FlowBrowserDetails step={step} run={run} onNavigate={onNavigate} />
             {step.adapter && <p><code>{step.adapter}</code></p>}
             {step.action && <p><code>{step.action.kind}: {step.action.ref}</code></p>}
             <details><summary>{t('flows.constraints')}</summary><dl className="flow-facts"><dt>{t('flows.inputs')}</dt><dd>{step.inputs.join(' · ') || '—'}</dd>{step.workspaceInput && <><dt>{t('flows.workspaceInput')}</dt><dd>{step.workspaceInput}</dd></>}<dt>{t('flows.effect')}</dt><dd>{step.effect}</dd><dt>{t('flows.timeout')}</dt><dd>{step.timeoutMs} ms</dd><dt>{t('flows.attempts')}</dt><dd>{state ? `${state.attempts} / ` : ''}{step.maxAttempts}</dd>{step.reviewOf && <><dt>{t('flows.reviewOf')}</dt><dd>{step.reviewOf}</dd></>}</dl></details>

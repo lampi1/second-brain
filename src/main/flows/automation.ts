@@ -1,5 +1,6 @@
 // Durable token-free automatic-flow detection and notification; authenticated Orchestrators alone start runs.
 import fs from 'node:fs';
+import { browserWriteStep } from '../../shared/flow-browser';
 import path from 'node:path';
 import { renameRetrying } from '../rules/storage';
 import { createHash, randomUUID } from 'node:crypto';
@@ -526,8 +527,8 @@ export class FlowAutomationService {
     if ([...required].some(key => !inputs[key]?.trim() && !(eventInputs === undefined && config.trigger.kind === 'devops' && DEVOPS_INPUTS.includes(key)))) throw new Error('Automatic flow is missing required step inputs or workspace');
     if (version.definition.steps.some(step => step.effect === 'production' || step.action && step.action.kind !== 'builtin')) throw new Error('Automatic flow has an unsupported execution adapter');
     if (version.definition.steps.some(step => testDbAdapted(step)) && !config.testDbRead) throw new Error('Automatic flow test-db-read adapter needs a testDbRead grant');
-    // External writes run only through the DevOps write adapter, and only when this exact rule grants it.
-    if (version.definition.steps.some(step => step.effect === 'external-write' && (!adapted(step) || !config.devopsWrite || config.trigger.kind !== 'devops'))) throw new Error('Automatic flow external-write steps need the DevOps write adapter enabled in this configuration');
+    // Browser writes use the exact definition targets; DevOps writes still require this rule’s adapter grant.
+    if (version.definition.steps.some(step => step.effect === 'external-write' && !browserWriteStep(step) && (!adapted(step) || !config.devopsWrite || config.trigger.kind !== 'devops'))) throw new Error('Automatic flow external-write steps need the DevOps write adapter enabled in this configuration');
   }
   private result(value: unknown): FlowDetectionResult {
     const raw = object(value, 'detection'); keys(raw, ['cursor', 'items', 'summary'], 'detection');

@@ -9,7 +9,7 @@ import { decideFlow } from '../store/flows';
 import { decisionDraft, saveDecisionDraft } from '../lib/decision-drafts';
 import { t } from '../i18n';
 import { FlowAutomationSummary } from './FlowAutomationSummary';
-import { FlowDefinition } from './FlowDefinition';
+import { FlowBrowserDetails, FlowDefinition } from './FlowDefinition';
 import { FlowRestartApproval } from './FlowRunControls';
 import { DecisionCard } from './DecisionCard';
 import '../styles/flows.css';
@@ -28,6 +28,7 @@ function FlowStandardApproval({ ask, onEscape }: { ask: Exclude<FlowAsk, { type:
   const run = ask.type === 'flow-run' ? ask.run : undefined;
   const current = run?.steps[run.currentStep];
   const boundChat = useApp(s => current?.chatId && s.chats[current.chatId] ? current.chatId : null);
+  const browserSteps = definition?.steps.filter(s => s.writeVia === 'browser' && (!run || s.id === current?.stepId)) ?? [];
   const mode = flowDecisionMode(ask);
   const gate = flowGateEvidence(ask);
   const canApprove = flowDecisionSubmission(ask, 'yes', feedback, evidence) !== null;
@@ -50,6 +51,8 @@ function FlowStandardApproval({ ask, onEscape }: { ask: Exclude<FlowAsk, { type:
     skip={{ onChoose: () => void decide('no', ''), hint: t('genui.decision.skipDiscard') }}>
     {ask.type === 'flow-definition' && <p className="wq-lead">{t('flows.activationHint')}</p>}
     {ask.type === 'flow-automation' && <><p className="wq-lead">{t('flows.autoHint')}</p><FlowAutomationSummary config={ask.rule.config} /></>}
+    {browserSteps.map(s => <div key={s.id} className="flow-target" data-testid="flow-browser-approval"><strong>{s.title}</strong><FlowBrowserDetails step={s} run={run} /></div>)}
+    {browserSteps.length > 0 && <p className="wq-lead">{t('flows.browserSafety')}</p>}
     {definition?.description && <p>{definition.description}</p>}
     {run && <><p className="flow-target" data-testid="flow-target"><strong>{t('flows.target')}:</strong> {run.subjectKey}<span className="flows-muted"> · {[run.scope.project, run.scope.areaPath].filter(Boolean).join(' · ') || '—'}</span></p><details data-testid="flow-run-context"><summary>{t('flows.runContext')}</summary><dl className="flow-facts"><dt>{t('flows.target')}</dt><dd>{run.subjectKey}</dd><dt>{t('flows.scope')}</dt><dd>{[run.scope.project, run.scope.areaPath].filter(Boolean).join(' · ') || '—'}</dd><dt>{t('flows.inputs')}</dt><dd>{Object.keys(run.inputs).length ? <dl className="flow-facts">{Object.entries(run.inputs).map(([name, value]) => <div key={name} className="flow-input-pair"><dt>{name}</dt><dd>{value}</dd></div>)}</dl> : '—'}</dd></dl></details></>}
     {current && <p>{t('flows.current')}: <strong>{definition?.steps[run!.currentStep]?.title ?? current.stepId}</strong></p>}

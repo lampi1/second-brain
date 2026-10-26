@@ -400,6 +400,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (!win) return 'no window';
         // the user's own browsing (ADR 0133) is never shown to an agent: not the page, not the address bar above it
         if (d.personal?.anyShown()) return 'The user is on their personal Browser page: its screenshot is private. Try app_state, or ask the user to switch page.';
+        const privacy = d.browser.capturePrivacyVersion?.();
+        if (d.browser.hasPrivateTabs?.()) return 'Routine login is private; finish the user handoff before taking an app screenshot.';
         const images: { data: string; mimeType: string; caption: string }[] = [];
         const ui = await win.webContents.capturePage();
         const p = previewOf(ui);
@@ -415,6 +417,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
           const t = previewOf(img);
           images.push({ data: t.data, mimeType: t.mimeType, caption: `browser tab ${redact(wc.getURL())} at x=${b.x} y=${b.y} ${b.width}x${b.height}, image ${t.width}x${t.height} (capture px = image px × ${fmtFactor(t.factor)})` });
         }
+        if (d.browser.hasPrivateTabs?.() || privacy !== d.browser.capturePrivacyVersion?.()) return 'Login privacy changed during capture; screenshot withheld.';
         return { text: `${images.length} images`, images };
       },
     },

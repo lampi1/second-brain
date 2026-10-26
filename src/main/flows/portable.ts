@@ -23,10 +23,10 @@ function portableDefinition(value: FlowDefinition): FlowDefinition {
   const { id, title, description, category, aliases, scope, steps, params, package: pack } = value;
   return validateDefinition(clean({ id, title, description, ...(category === undefined ? {} : { category }), aliases, scope, ...(pack ? { package: pack } : {}), ...(params?.length ? { params } : {}),
     steps: steps.map(step => {
-      const { id, title, kind, instructions, inputs, action, evidence, timeoutMs, maxAttempts, effect, reviewOf, workspaceInput, adapter, testDbRead, role, tier, engine, model, effort, env, args, onFail, agentPrompt, assets } = step;
+      const { id, title, kind, instructions, inputs, action, evidence, timeoutMs, maxAttempts, effect, reviewOf, workspaceInput, adapter, testDbRead, writeVia, browserTargets, role, tier, engine, model, effort, env, args, onFail, agentPrompt, assets } = step;
       return { ...(agentPrompt ? { agentPrompt } : {}), ...(assets ? { assets } : {}), id, title, kind, instructions, inputs, evidence, timeoutMs, maxAttempts, effect,
         ...(action ? { action } : {}), ...(reviewOf ? { reviewOf } : {}), ...(workspaceInput ? { workspaceInput } : {}),
-        ...(adapter ? { adapter } : {}), ...(testDbRead ? { testDbRead } : {}), ...(role ? { role } : {}), ...(tier ? { tier } : {}),
+        ...(writeVia ? { writeVia, browserTargets } : {}), ...(adapter ? { adapter } : {}), ...(testDbRead ? { testDbRead } : {}), ...(role ? { role } : {}), ...(tier ? { tier } : {}),
         ...(engine ? { engine } : {}), ...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(env ? { env } : {}), ...(args ? { args } : {}), ...(onFail ? { onFail } : {}) };
     }) }));
 }
@@ -37,7 +37,7 @@ export function markdown(definition: FlowDefinition, version: number): string {
     `- When to use: ${definition.aliases.map(md).join('; ') || '—'}`, '', '## Steps', ''];
   for (const [index, step] of definition.steps.entries()) {
     lines.push(`### ${index + 1}. ${md(step.title)}`, '', md(step.instructions), '',
-      `- Kind: ${step.kind}`, `- Role: ${step.role ?? 'by effect (read-only: scout, review: sentinel, else artisan)'}`, `- Tier: ${step.tier ?? 'Role default'}`,
+      ...(step.writeVia === 'browser' ? [`- Writes via browser: ${(step.browserTargets ?? []).map(md).join(', ')}`] : []), `- Kind: ${step.kind}`, `- Role: ${step.role ?? 'by effect (read-only: scout, review: sentinel, else artisan)'}`, `- Tier: ${step.tier ?? 'Role default'}`,
       `- Engine / model / effort: ${[step.engine, step.model, step.effort].map(v => md(v ?? 'role default')).join(' / ')}`,
       `- Effect: ${step.effect}`, `- Inputs: ${step.inputs.map(md).join(', ') || '—'}`,
       `- Timeout: ${step.timeoutMs} ms`, `- Maximum attempts: ${step.maxAttempts}`);

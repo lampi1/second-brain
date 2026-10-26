@@ -17,7 +17,7 @@ interface WorkerPorts {
 }
 export function createFlowWorker(ports: WorkerPorts) {
   return async (request: FlowWorkerRequest): Promise<ChatSummary> => {
-    const routine = { runId: request.flowRunId, stepId: request.stepId };
+    const routine = { runId: request.flowRunId, stepId: request.stepId, ...(request.browserWrite ? { browserWrite: true as const } : {}) };
     const settings = ports.brain.settings();
     const owner = ports.chats().find(chat => chat.id === request.ownerId && chat.isOrchestrator && !chat.closedAt);
     const opener = owner?.harness ?? settings.orchestratorChats.harness;

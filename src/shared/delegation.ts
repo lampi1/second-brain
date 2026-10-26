@@ -3,6 +3,7 @@
 // sides need: the checks of a contract and of a result, the child's first message (the contract only, never the
 // parent's history), the message that brings a result back, and the depth of a chat in the tree. Pure: used by
 // main/agents/delegation.ts (the tools), main/chats/manager.ts (the result delivery) and the renderer (the child cards).
+import { browserWriteResult, type BrowserWriteResult } from './flow-browser';
 import { TOOL_CLASSES, type ToolClass, type TaskDeliveryPolicy } from './agents';
 import { MODEL_TIERS, ROLE_DEFAULTS, currentRoleId, isWorkRole, type ModelTier, type WorkRoleId } from './roles';
 import { AGENT_LABEL, oneLine } from './agent-label';
@@ -39,6 +40,8 @@ export interface DelegationContract {
 export const RESULT_OUTCOMES = ['done', 'partial', 'blocked'] as const;
 export type DelegationOutcome = (typeof RESULT_OUTCOMES)[number];
 export interface DelegationResult {
+  /** Routine browser-write outcome with read-back/screenshot evidence. */
+  browserWrite?: BrowserWriteResult;
   /** Explicit assessment, accepted only from host-owned independent review runs. */
   verdict?: 'success' | 'partial' | 'fail';
   verified?: 'yes' | 'partial' | 'no';
@@ -129,7 +132,7 @@ export function checkResult(v: unknown, doneWhen: readonly string[]): Delegation
   // the names agents invent for doneWhen (app logs 2026-10-20/21, #147): the error says which field to use
   const misnamed = ['criteria', 'criteriaResults'].find(k => k in o);
   if (misnamed && !('doneWhen' in o)) throw new Error(`agent_report: use doneWhen, not ${misnamed}: one { criterion, met, evidence } per criterion of your contract.`);
-  only(o, ['outcome', 'summary', 'output', 'doneWhen', 'questions', 'goalChangedByUser', 'newGoal', 'taskVersion', 'verdict', 'verified'], 'agent_report');
+  only(o, ['outcome', 'summary', 'output', 'doneWhen', 'questions', 'goalChangedByUser', 'newGoal', 'taskVersion', 'verdict', 'verified', 'browserWrite'], 'agent_report');
   if ((o.verdict !== undefined) !== (o.verified !== undefined)) throw new Error('Review verdict and verified must be supplied together.');
   if (o.verdict !== undefined && !['success', 'partial', 'fail'].includes(o.verdict as string)) throw new Error('Invalid review verdict.');
   if (o.verified !== undefined && !['yes', 'partial', 'no'].includes(o.verified as string)) throw new Error('Invalid review verification.');
@@ -153,7 +156,9 @@ export function checkResult(v: unknown, doneWhen: readonly string[]): Delegation
   if (o.outcome === 'done' && answers.some(a => !a.met)) throw new Error('outcome "done" needs every criterion met: say "partial" or "blocked" instead.');
   const questions = o.questions === undefined ? undefined : Array.isArray(o.questions) && o.questions.length <= 8 ? o.questions.map((q, i) => text(q, 500, `questions[${i}]`)) : null;
   if (questions === null) throw new Error('questions: up to 8.');
-  return { ...(o.verdict !== undefined ? { verdict: o.verdict as DelegationResult['verdict'], verified: o.verified as DelegationResult['verified'] } : {}), ...(o.taskVersion !== undefined ? { taskVersion: o.taskVersion as number } : {}), outcome: o.outcome as DelegationOutcome, summary: text(o.summary, SUMMARY_MAX, 'summary'), output: text(o.output, RESULT_OUTPUT_MAX, 'output'), doneWhen: answers, ...(questions?.length ? { questions } : {}), ...(newGoal ? { goalChangedByUser: true as const, newGoal } : {}) };
+  const browserWrite = o.browserWrite === undefined ? undefined : browserWriteResult(o.browserWrite);
+  if (browserWrite && ((o.outcome === 'done') !== (browserWrite.outcome === 'done'))) throw new Error('browserWrite outcome must agree with agent_report outcome');
+  return { ...(browserWrite ? { browserWrite } : {}), ...(o.verdict !== undefined ? { verdict: o.verdict as DelegationResult['verdict'], verified: o.verified as DelegationResult['verified'] } : {}), ...(o.taskVersion !== undefined ? { taskVersion: o.taskVersion as number } : {}), outcome: o.outcome as DelegationOutcome, summary: text(o.summary, SUMMARY_MAX, 'summary'), output: text(o.output, RESULT_OUTPUT_MAX, 'output'), doneWhen: answers, ...(questions?.length ? { questions } : {}), ...(newGoal ? { goalChangedByUser: true as const, newGoal } : {}) };
 }
 
 /** The child's first message: who delegates and the contract (the rules on reporting and asking are its role frame's,

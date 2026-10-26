@@ -11,6 +11,8 @@ export function healable(run: FlowRun, definition: FlowDefinition | undefined): 
   const step = run.steps[run.currentStep], spec = definition?.steps[run.currentStep];
   if (!step || !spec || run.status !== 'blocked' || step.status !== 'blocked' || !step.decisionPending || step.attempts === 0 || step.attempts >= spec.maxAttempts
     || spec.env === 'prod' || (step.reason ?? '').startsWith(HOLD) || run.pendingRecovery || run.pendingCancellation || run.paused) return false;
+  const browser = run.browserWrites?.findLast(e => e.stepId === step.stepId && e.chatRunId === step.chatRunId);
+  if (browser && browser.outcome !== 'not-done') return false;
   if (!spec.onFail) return true;
   const target = definition!.steps.findIndex(item => item.id === spec.onFail!.goto);
   return target >= 0 && run.steps[target]!.attempts < definition!.steps[target]!.maxAttempts;

@@ -28,8 +28,8 @@ const SECRET_PATTERNS: RegExp[] = [
 const known = new Set<string>();
 
 /** Redacts this exact value from every later log line (an API key the app stores or reads). */
-export function addRedaction(value: string): void {
-  if (value.length < 8) return; // too short to be a key: redacting it would blank ordinary words
+export function addRedaction(value: string, force = false): void {
+  if (!value || (!force && value.length < 8)) return; // too short to be a key: redacting it would blank ordinary words
   known.add(value);
   known.add(JSON.stringify(value).slice(1, -1));
 }
@@ -68,7 +68,7 @@ class Logger {
     if (ORDER[lvl] < ORDER[this.min]) return;
     const e: Entry = { t: new Date().toISOString(), lvl, scope, msg, ...extra };
     let line: string;
-    try { line = redact(JSON.stringify(e)); } catch { line = JSON.stringify({ t: e.t, lvl, scope, msg: redact(msg), data: '[unserializable]' }); }
+    try { line = JSON.stringify(e, (key, value: unknown) => /^(password|passwd|secret|apiKey|api_key|token)$/i.test(key) ? '[redacted]' : typeof value === 'string' && key !== 'lvl' && key !== 't' ? redact(value) : value); } catch { line = JSON.stringify({ t: e.t, lvl, scope, msg: redact(msg), data: '[unserializable]' }); }
     const entry = JSON.parse(line) as Entry;
     this.recent.push(entry);
     if (this.recent.length > 500) this.recent.shift();

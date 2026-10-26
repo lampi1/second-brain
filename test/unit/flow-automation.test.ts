@@ -198,3 +198,14 @@ describe('Orchestrator notification and event starts', () => {
     expect(automationTools({ service: () => auto, contextKey: () => 'brain', ownerId: '' })).toEqual([]);
   });
 });
+
+it('activates and starts browser-write automation without granting unrelated DevOps writes', async () => {
+  const s = setup(), def = definition('browser');
+  def.steps[0] = { ...def.steps[0]!, kind: 'agent', effect: 'external-write', writeVia: 'browser', browserTargets: ['https://qa.example.com'], inputs: ['workspace'], workspaceInput: 'workspace' };
+  s.flow.propose({ definition: def, expectedRevision: 0 }); s.flow.decideDefinition({ id: def.id, expectedRevision: 1, answer: 'yes' });
+  s.enable(config(def.id)); await s.auto.tick();
+  expect(s.auto.startEvent(s.auto.snapshot().events[0]!.id, 'orch').status).toBe('active');
+  const mixed = structuredClone(def); mixed.id = 'mixed'; mixed.steps.push({ ...def.steps[0]!, id: 'devops', writeVia: undefined, browserTargets: undefined, adapter: 'devops-write' });
+  s.flow.propose({ definition: mixed, expectedRevision: 0 }); s.flow.decideDefinition({ id: mixed.id, expectedRevision: 1, answer: 'yes' });
+  expect(() => s.auto.propose({ config: config(mixed.id), expectedRevision: 0 }, 'orch')).toThrow('DevOps write adapter');
+});

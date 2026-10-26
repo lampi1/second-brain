@@ -1,7 +1,7 @@
 // Service interfaces of the main process. index.ts wires them to the IPC handlers; each module implements one.
 // Keeping them here lets the modules be built and tested apart (chats, browser + MCP, brain + feed).
 import type {
-  Answer, AppInfo, ChatCommand, BrainApiResult, CredentialEntry, BrowserEnv, BrowserHandoff, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, CompareState, ContextStats, LearnResult, Effort, FeedAction, FeedEvent, HandoffInfo, Harness, ImageAttachment, JobRecordInput, ModelsSeen, RoutingInfo, RoutingRow,
+  SiteCredentials, SiteCredentialInput, Answer, AppInfo, ChatCommand, BrainApiResult, CredentialEntry, BrowserEnv, BrowserHandoff, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, CompareState, ContextStats, LearnResult, Effort, FeedAction, FeedEvent, HandoffInfo, Harness, ImageAttachment, JobRecordInput, ModelsSeen, RoutingInfo, RoutingRow,
   NewChat, PendingRequest, PermissionMode, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, SyncChoice, SyncState, Usage, ViewLayout, TasksState, SkillCatalog, SkillDoc, SkillSave, SkillSaveResult,
 } from '../shared/contract';
 import type { AgentMetrics, AgentRunOutcome, UserTaskEvents } from '../shared/agents';
@@ -94,6 +94,11 @@ export interface BrowserService {
   /** The user clicked Copia on a login hand-off: user name or password (read from the credentials file now) to the clipboard. */
   copyFromHandoff(id: string, field: 'user' | 'password'): boolean;
   /** The "Credenziali" panel: entries of the credentials file without passwords, and Copia (password read at the click). */
+  capturePrivacyVersion?(): number;
+  hasPrivateTabs?(): boolean;
+  siteCredentials?(): SiteCredentials;
+  saveSiteCredential?(input: SiteCredentialInput): void;
+  removeSiteCredential?(id: string): void;
   credentials(): CredentialEntry[];
   copyCredential(id: string, field: 'user' | 'password'): boolean;
   /** How a chat is woken when the user answers a hand-off its agent no longer waits for (set by wiring). */

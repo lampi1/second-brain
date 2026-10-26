@@ -197,3 +197,54 @@ it('supplies the exact inherited branch and approved-write exception to ordinary
     expect(prompt).toContain('satisfies generic role instructions');
   } finally { grant.mockRestore(); }
 });
+
+describe('browser-write host steps', () => {
+  const browser = () => step('web', { effect:'external-write', writeVia:'browser', browserTargets:['https://qa.example.com'] });
+  it('activates and launches an exact-origin browser step without an adapter; completion revokes authority', async () => {
+    const w=world([browser(),step('after')]), r=w.start();await w.runtime.tick();
+    expect(w.create).toHaveBeenCalledTimes(1);expect(w.flow.status(r.id,'owner').steps[0]).toMatchObject({status:'running',attempts:1});
+    expect(w.create.mock.calls[0]![0].browserWrite).toBe(true);
+    expect(w.runtime.browserPolicy('worker-1')?.targets).toEqual(['https://qa.example.com']);
+    w.runtime.browserPolicy('worker-1')!.dispatch();
+    w.report('worker-1', x => { x!.canonical!.browserWrite={outcome:'done',evidence:['Screenshot: proof.png; read-back confirms the fixture']}; });
+    await w.runtime.tick();const next=w.flow.status(r.id,'owner');
+    expect(next.currentStep).toBe(1);expect(next.browserWrites).toHaveLength(1);expect(next.browserWrites![0]).toMatchObject({outcome:'done',dispatched:1});
+    expect(w.runtime.browserPolicy('worker-1')?.reason).toMatch(/binding/);
+    expect(w.runtime.browserPolicy('worker-2')).toBeNull();
+  });
+  it('not-done is retained without settlement error and automatically retries a fresh bounded worker', async () => {
+    const w=world([browser()]), r=w.start();await w.runtime.tick();
+    w.report('worker-1',x=>{x!.outcome='blocked';x!.canonical!.outcome='blocked';x!.canonical!.doneWhen[0]!.met=false;x!.canonical!.browserWrite={outcome:'not-done',evidence:['Read-back: unchanged; no submit occurred']};});
+    await w.runtime.tick();const next=w.flow.status(r.id,'owner');
+    expect(next.settlementError).toBeUndefined();expect(next.browserWrites![0]!.outcome).toBe('not-done');expect(w.create).toHaveBeenCalledTimes(2);expect(next.steps[0]!.attempts).toBe(2);
+  });
+  it('partial effects do not automatically repeat and a paused or stale task loses browser access', async () => {
+    const w=world([browser()]), r=w.start();await w.runtime.tick();
+    w.rows[1]!.run!.taskVersion=2;expect(w.runtime.browserPolicy('worker-1')?.reason).toMatch(/binding/);w.rows[1]!.run!.taskVersion=1;
+    w.runtime.browserPolicy('worker-1')!.dispatch();w.report('worker-1',x=>{x!.outcome='partial';x!.canonical!.outcome='partial';x!.canonical!.browserWrite={outcome:'partial',evidence:['First write visible; second write not verified']};});
+    await w.runtime.tick();expect(w.flow.status(r.id,'owner').status).toBe('blocked');expect(w.create).toHaveBeenCalledTimes(1);expect(w.runtime.browserPolicy('worker-1')?.reason).toBeTruthy();
+  });
+  it('a canonical done report cannot omit the browser effect evidence', async () => {
+    const w=world([browser()]), r=w.start();await w.runtime.tick();w.report('worker-1');await w.runtime.tick();
+    expect(w.flow.status(r.id,'owner').steps[0]!.reason).toContain('browserWrite');expect(w.create).toHaveBeenCalledTimes(1);
+  });
+});
+
+it('routine storage failure does not revoke ordinary browsers, but blocks marked routine workers', () => {
+  const w = world(); const original = w.flow.snapshot();
+  vi.spyOn(w.flow, 'snapshot').mockReturnValue({ ...original, storageError: 'fixture-corrupt' });
+  expect(w.runtime.browserPolicy('owner')).toBeNull();
+  w.rows.push({ id: 'browser-old', routine: { runId: 'old', stepId: 'web', browserWrite: true } } as ChatSummary);
+  expect(w.runtime.browserPolicy('browser-old')?.reason).toBeTruthy();
+});
+it('revokes browser access during pause, after cancel and after brain switch', async () => {
+  const w = world([step('web', { effect: 'external-write', writeVia: 'browser', browserTargets: ['https://qa.example.com'] })]), r = w.start();
+  await w.runtime.tick(); w.rows[1]!.routine = { runId: r.id, stepId: 'web', browserWrite: true };
+  const live = w.flow.status(r.id, 'owner'); w.runtime.pauseRun(r.id, live.revision, true);
+  expect(w.runtime.browserPolicy('worker-1')?.reason).toBeTruthy();
+  const paused = w.flow.status(r.id, 'owner'); w.runtime.pauseRun(r.id, paused.revision, false);
+  expect(w.runtime.browserPolicy('worker-1')?.targets).toHaveLength(1);
+  await w.runtime.cancel({ runId: r.id, expectedRevision: w.flow.status(r.id, 'owner').revision });
+  expect(w.runtime.browserPolicy('worker-1')?.reason).toBeTruthy();
+  w.switchBrain(null); expect(w.runtime.browserPolicy('worker-1')?.reason).toBeTruthy();
+});
