@@ -4,6 +4,7 @@ import type { FlowAsk } from './flow-ask';
 export function flowDecisionMode(ask: FlowAsk): 'approve' | 'retry' | 'blocked' {
   if (ask.type === 'flow-automation') return ask.version ? 'approve' : 'blocked';
   if (ask.type === 'flow-definition') return executionChecks(ask.draft.definition).some(c => c.state === 'unsupported') ? 'blocked' : 'approve';
+  if (ask.type === 'flow-reconcile') return ask.run.pendingReconciliation ? 'approve' : 'blocked';
   if (ask.type === 'flow-cancel') return ask.run.pendingCancellation && ['active', 'approval', 'blocked'].includes(ask.run.status) ? 'approve' : 'blocked';
   if (ask.type === 'flow-restart') return ask.version && ask.run.pendingRecovery ? 'approve' : 'blocked';
   const definition = ask.version?.definition, run = ask.run;

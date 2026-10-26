@@ -15,7 +15,7 @@ const open = (run: FlowRun): boolean => run.status !== 'completed' && run.status
 /** «Tocca a te»: a prod command waiting for «Esegui», a gate, or a block the runner will not heal. */
 export function needsYou(snapshot: FlowSnapshot, run: FlowRun): boolean {
   if (!open(run) || run.paused) return false;
-  if (run.awaitingUser || run.status === 'approval' || run.pendingCancellation || run.pendingRecovery) return true;
+  if (run.awaitingUser || run.status === 'approval' || run.pendingCancellation || run.pendingRecovery || run.pendingReconciliation) return true;
   return run.status === 'blocked' && !healable(run, definitionOf(snapshot, run));
 }
 export const working = (snapshot: FlowSnapshot, run: FlowRun): boolean => open(run) && !needsYou(snapshot, run);

@@ -1,6 +1,7 @@
 // Authenticated Orchestrator flow tools; approval and user decisions intentionally have no agent tool. The app's runner
 // owns execution (ADR 0155): the Orchestrator reads app_flow_overview, steers a step with app_flow_message and starts a
 // routine on the user's request with app_flow_start_item; a prod step's «Esegui» has no tool, only the user's click.
+import type { ReconcileProposal, ReconciliationView } from '../../shared/flow-reconciliation';
 import type { RoutineConnectors } from '../mcp-servers/routine';
 import type { ToolDef } from '../appctl/tools';
 import { type FlowAgentBinding, type FlowCancel, type FlowDryRun, type FlowOverviewRow, type FlowReport, type FlowRestartProposal, type FlowRun, type FlowStart, type FlowStartItem } from '../../shared/flows';
@@ -18,6 +19,8 @@ export interface FlowToolsDeps {
   manualReport?: (input: FlowReport, ownerId: string) => Promise<FlowRun>;
   manualBind?: (runId: string, revision: number, stepId: string, binding: FlowAgentBinding, ownerId: string) => Promise<FlowRun>;
   resolveBinding: (chatId: string, ownerId: string, workspace: string) => FlowAgentBinding | null;
+  reconciliation?: (runId: string) => ReconciliationView;
+  proposeReconcile?: (input: ReconcileProposal, ownerId: string) => Promise<FlowRun>;
   proposeCancel?: (input: FlowCancel, ownerId: string) => Promise<FlowRun>;
   proposeRestart?: (input: FlowRestartProposal, ownerId: string) => Promise<FlowRun>;
   overview?: (ownerId: string) => FlowOverviewRow[];
@@ -111,6 +114,8 @@ export function flowTools(deps: FlowToolsDeps): ToolDef[] {
       return (deps.manualBind ?? service.bindAgent.bind(service))(text(args.runId, 'runId', 200), args.expectedRevision as number, text(args.stepId, 'stepId', 80), binding, deps.ownerId);
     }),
     tool('app_flow_report', 'Manual recovery only: the host normally consumes final reports automatically. Propose completion using the host-recorded canonical reportId <chatRunId>:<report.at>; report.at comes from the agent run report, never a chat item timestamp. Text supplied here cannot certify anything. Host checks bound run/task identity, successful final report, required evidence labels and independent review. No approval bypass.', { contextKey: string, ...revision, reportId: string }, (service, args) => { const run = service.status(text(args.runId, 'runId', 200), deps.ownerId); const spec = service.snapshot().versions.find(v => v.definition.id === run.flowId && v.version === run.flowVersion)?.definition.steps[run.currentStep]; if (spec?.testEnvironment && !deps.manualReport) throw new Error('Host environment report verification unavailable'); return (deps.manualReport ?? service.report.bind(service))(args as unknown as FlowReport, deps.ownerId); }),
+    ...(deps.reconciliation ? [tool('app_flow_reconciliation', 'Read pending write identities, op, timestamp, requestHash, available routing ids and ledger digest for an owned run. Missing legacy request data never prevents user attestation. Verify the remote result before proposing; do not retry uncertain writes.', { runId: string }, (service, args) => { const run = service.status(text(args.runId, 'runId', 200), deps.ownerId); return deps.reconciliation!(run.id); }, true)] : []),
+    ...(deps.proposeReconcile ? [tool('app_flow_reconcile_propose', 'Propose ONE pending write outcome (applied or not-applied) with evidence of external verification. Requires the exact op, requestHash and run revision from app_flow_reconciliation. Opens the native Sì/No modal; never confirms on the user’s behalf. Yes records a local user receipt, stops the old worker and automatically resumes the SAME blocked agent step once all uncertain writes are resolved and the original grant is still valid. Completed steps and applied writes are not repeated. Never invent evidence or call another write to test the outcome.', { contextKey: string, runId: string, expectedRevision: integer, op: string, requestHash: string, outcome: { type: 'string', enum: ['applied', 'not-applied'] }, evidence: string }, (_service, args) => deps.proposeReconcile!(args as unknown as ReconcileProposal, deps.ownerId))] : []),
     tool('app_flow_cancel_propose', 'Request native user approval to cancel one owned run. This never stops execution by itself. The user reviews the exact run revision before its worker is interrupted and its automatic slot is released. Preserve history; never silently abandon work to free concurrency.', { contextKey: string, runId: string, expectedRevision: integer, reason: string }, (_service, args) => {
       if (!deps.proposeCancel) throw new Error('Host cancellation approval is unavailable'); return deps.proposeCancel(args as unknown as FlowCancel, deps.ownerId);
     }, false, ['contextKey', 'runId', 'expectedRevision']),

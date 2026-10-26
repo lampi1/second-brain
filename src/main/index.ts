@@ -630,6 +630,10 @@ app.whenReady().then(async () => {
       if (!s.flows || a.contextKey !== s.flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato.');
       return s.flows.writeReconciliation(a.runId);
     },
+    'flows:reconcileDecide': a => {
+      if (!s.flows || a.contextKey !== s.flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato.');
+      const { contextKey: _context, ...input } = a; return s.flows.decideReconcile(input);
+    },
     'flows:reconcileWrites': a => {
       if (!s.flows || a.contextKey !== s.flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato.');
       const { contextKey: _context, ...input } = a;

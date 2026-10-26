@@ -109,3 +109,8 @@ first runs on main: say so in the hand-off, so the Orchestrator knows which bran
 10. **Every file starts with a header comment**: what it does, why, who uses it. Decisions go to `docs/adr/`.
 11. **Parallel agents:** one worktree per agent (`git worktree add ../second-brain-wt/<name> -b feat/<name>`),
     one module each; shared files (`contract.ts`, `wiring.ts`, `index.ts`) are changed only by the integrator.
+
+12. **Orchestrator capability contract:** every user-facing feature must be discoverable through the live `app_guide`,
+    with its supported tool/configuration route and approval boundary. Mount new Orchestrator tools on its authenticated
+    endpoint and test the actual app-control wiring, not only the isolated tool factory. Update relevant capability
+    guidance and role instructions in the same change. Do not expose user-only confirmation or widen worker permissions.

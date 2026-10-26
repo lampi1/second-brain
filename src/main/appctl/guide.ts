@@ -55,6 +55,7 @@ export function routineLines(snap: FlowSnapshot | null | undefined): Entry[] {
 }
 /** How the app runs routines (ADR 0155), so the Orchestrator answers from the code's rules, not a guess. */
 const ROUTINE_BROWSER = 'Routine authoring: app_flow_capabilities lists reusable execution routes; app_flow_connectors discovers installed test connectors. app_flow_propose returns preflight, and app_flow_preflight rereads it: resolve configuration before suggesting app changes. Permissions can use a manual trigger (on demand only), independently of scheduling. Pinned scripts/queries are also supported automatically. Connector check steps pin server/tool/schema/arguments and record host receipts; uncertain writes require human reconciliation. Browser writes currently require a Claude engine with enforced browser-only tools; no silent engine fallback. Declare kind agent, effect external-write, writeVia browser, browserTargets [exact HTTPS origins], no adapter/action. Activation shows and approves these non-production targets for this step only. The host launches and restricts the browser by origin and live binding. Credentials: the user manages encrypted site logins in Credenziali; browser_login fills an exact-origin form without giving the password to the agent, otherwise handoff_to_user kind login. agent_report.browserWrite records done|partial|not-done with read-back/screenshots; partial/unknown stop automatic retry.';
+const ROUTINE_RECONCILIATION = 'Unknown DevOps writes: read app_flow_reconciliation, verify the result in DevOps, then app_flow_reconcile_propose with exact run revision, op, requestHash, applied/not-applied and evidence. The user confirms Sì/No in the questions modal; Yes stops the old worker, records the attestation and resumes the same blocked step under its original grants when no unknown writes remain. Missing legacy request details do not prevent attestation. Never claim verification without evidence.';
 const ROUTINE_RULES = ['The app runs routines by itself (runner); app_flow_overview says what each run is doing. Runs a trigger starts: at most two at once and one per trigger, the rest wait in its queue; a start by hand (one item, or a routine without trigger) does not wait.',
   'A trigger (on the Routine page) checks DevOps or a timer and queues what it finds; a DevOps trigger can filter by tags (all of), excluded tags, a list of work item ids, an iteration path and a max per hour.',
   'Trigger paused: it detects and starts nothing, not even a start on one item; runs already started keep going but lose its DevOps writes and test DB reads at once, so a step that needs them stops. Pausing a run stops it: no new step starts, the one at work finishes; resume continues where it stopped.',
@@ -112,6 +113,7 @@ export function entries(ui: UiMap | null, d: GuideDeps, lang: GuideLang): Entry[
   for (const x of d.settings.schema()) out.push({ kind: 'setting', title: `${x.label} (${x.key})`,
     text: `${x.description} · type ${x.type}${x.values ? ` ${x.values.join('|')}` : ''}${x.key.includes('*') || !values ? '' : ` · now ${show(getAt(s, x.key))}`} · change: app_config area setting` });
   out.push(...routineLines(d.flows?.()));
+  if (d.flows) out.push({ kind: 'routine', title: 'Routine: riconciliare scritture incerte (reconcile pending writes)', text: ROUTINE_RECONCILIATION });
   if (d.flows) out.push({ kind: 'routine', title: 'Routine: trigger, pausa, coda, filtri (how routines run)', text: ROUTINE_RULES });
   if (d.flows) out.push({ kind: 'routine', title: 'Routine: browser writes and encrypted site logins', text: ROUTINE_BROWSER });
   for (const c of CONCEPTS) out.push({ kind: 'concept', title: textOf(c.title, lang), text: `${textOf(c.summary, lang)} ${c.points.slice(0, 3).map(p => textOf(p, lang)).join(' ')} (more: the Guida page)` });
@@ -161,7 +163,7 @@ function index(ui: UiMap | null, d: GuideDeps, lang: GuideLang): string {
 export function guideTool(d: GuideDeps): ToolDef {
   return {
     name: 'app_guide',
-    description: 'How this app works and where everything is, read live from the app\'s own code: pages and the left rail with shortcuts, Memoria tabs, Impostazioni sections, every setting with its current value, palette actions and keys, the "?" help texts, the Guida concepts and your tools. No topic: a short index. topic: words in the user\'s language ("dove cambio il tema", "chiusura automatica") → the matching entries. Use it before answering a question about the app or telling the user where to click; for what is on screen now use app_ui action "outline"; to change a configuration use app_config.',
+    description: 'How this app works and where everything is, read live from the app\'s own code: pages and the left rail with shortcuts, Memoria tabs, Impostazioni sections, every setting with its current value, palette actions and keys, the "?" help texts, the Guida concepts and your tools. No topic: a short index. An exact tool name returns its complete live description (bounded), including approval rules. topic: words in the user\'s language ("dove cambio il tema", "chiusura automatica") → the matching entries. Use it before answering a question about the app or telling the user where to click; for what is on screen now use app_ui action "outline"; to change a configuration use app_config.',
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     inputSchema: { type: 'object', additionalProperties: false, properties: { topic: { type: 'string', description: 'optional: what to look up' } } },
     run: async a => {
@@ -169,6 +171,8 @@ export function guideTool(d: GuideDeps): ToolDef {
       const topic = typeof a.topic === 'string' ? a.topic.trim() : '';
       const lang: GuideLang = ui?.lang === 'en' || ui?.lang === 'de' ? ui.lang : 'it';
       if (!topic) return index(ui, d, lang);
+      const exact = d.tools().find(tool => tool.name === topic);
+      if (exact) return `[tool] ${exact.name}: ${exact.description.length <= 16000 ? exact.description : `${exact.description.slice(0, 15800)}… [truncated; read the mounted tool schema for the complete contract]`}`;
       const found = search(entries(ui, d, lang), topic);
       if (!found.length) return `Nothing on "${topic}". ${index(ui, d, lang)}`;
       return found.map(e => `[${e.kind}] ${e.title}: ${e.kind === 'tool' ? firstSentence(e.text) : e.text.length > 700 ? `${e.text.slice(0, 699)}…` : e.text}`).join('\n');

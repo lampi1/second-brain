@@ -102,7 +102,7 @@ function ProdCard({ snapshot, run, definition }: { snapshot: FlowSnapshot; run: 
 /** A run that stopped for the user: the reason in words and what they can do. */
 function StoppedCard({ snapshot, run, definition, onRecovery }: { snapshot: FlowSnapshot; run: FlowRun; definition?: FlowDefinition; onRecovery: (run: FlowRun, mode: 'from-step' | 'from-start' | 'cancel') => void }) {
   const step = run.steps[run.currentStep], spec = definition?.steps[run.currentStep];
-  const ask = flowAsks(snapshot).find(a => (a.type === 'flow-run' || a.type === 'flow-restart' || a.type === 'flow-cancel') && a.run.id === run.id);
+  const ask = flowAsks(snapshot).find(a => (a.type === 'flow-run' || a.type === 'flow-restart' || a.type === 'flow-cancel' || a.type === 'flow-reconcile') && a.run.id === run.id);
   const canRetry = run.status === 'blocked' && !!spec && !!step && step.attempts < spec.maxAttempts && ask?.type === 'flow-run';
   return <article className="rt-card rt-you" data-testid="rt-stopped-card">
     <header className="rt-card-head"><span className="rt-mark">{(definition?.title ?? run.flowId).charAt(0)}</span><strong>{definition?.title ?? run.flowId}</strong>

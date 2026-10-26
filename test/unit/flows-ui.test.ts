@@ -364,3 +364,13 @@ it('exposes write reconciliation from cancelled run history', () => {
   const html = renderToStaticMarkup(createElement(RoutineHistory, { snapshot: state }));
   expect(html).toContain('routine-reconcile-open'); expect(html).toContain('Riconcilia scritture');
 });
+
+it('replaces the blocked retry question with one exact reconciliation Sì/No and exposes its evidence', async () => {
+  const pending = { revision: 4, requestedAt: 1000, digest: 'a'.repeat(64), requestHash: 'b'.repeat(64), op: 'link-pr', outcome: 'applied' as const, evidence: 'Verified the exact PR link in the work item.' };
+  const state = { ...snapshot(), drafts: [], runs: [{ ...run, status: 'blocked' as const, pendingReconciliation: pending }] };
+  const asks = flowAsks(state); expect(asks).toHaveLength(1); expect(asks[0]?.type).toBe('flow-reconcile');
+  const html = renderToStaticMarkup(createElement(FlowApproval, { ask: asks[0]!, onEscape: vi.fn() }));
+  expect(html).toContain('flow-reconcile-yes'); expect(html).toContain('flow-reconcile-no'); expect(html).toContain(pending.evidence); expect(html).toContain(pending.requestHash);
+  flowState.set({ snapshot: state, error: null, loading: false }); invoke.mockResolvedValue(state);
+  await decideFlow(asks[0]!, 'yes'); expect(invoke).toHaveBeenCalledWith('flows:reconcileDecide', { contextKey: state.contextKey, runId: run.id, expectedRevision: 4, answer: 'yes' });
+});

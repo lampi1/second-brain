@@ -1,5 +1,8 @@
 // Flow catalog, version review and run decisions: renderer text shared by the page and modal.
 export const flowsIt = {
+  'flows.reconcileProposedQuestion': 'Confermi l’esito verificato di questa scrittura?',
+  'flows.reconcileResumeHint': 'Salva la verifica e riprendi il passo quando tutte le scritture incerte sono risolte e i permessi sono validi.',
+  'flows.reconcileDeclineHint': 'Scarta la proposta; la run resta ferma.',
   'flows.reconcileIdentity': 'Identità nel report della run',
   'flows.reconcileLegacy': 'La richiesta originale non è registrata qui. Confronta ID e ora con il report e la chat del passo prima di confermare.',
   'flows.reconcileTitle': 'Riconcilia scritture',

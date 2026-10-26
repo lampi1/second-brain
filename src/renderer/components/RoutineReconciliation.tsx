@@ -26,11 +26,11 @@ export function RoutineReconciliation({ contextKey, runId, onClose }: { contextK
     {view && !view.operations.length && <p>{t('flows.reconcileEmpty')}</p>}
     {view?.operations.map(op => <section className="flow-target" key={op.id} data-testid="reconcile-operation">
       <p><strong>{op.op}</strong> · {op.state} · <span>{op.at ? new Date(op.at).toLocaleString(locale()) : '—'}</span></p>
-      <details><summary>{t('flows.reconcileIdentity')}</summary><code style={{ overflowWrap: 'anywhere' }}>{op.id}</code><p>{op.target ?? t('flows.reconcileLegacy')}</p></details>
+      <div aria-label={t('flows.reconcileIdentity')}><code style={{ overflowWrap: 'anywhere' }}>{op.id}</code><p>{op.request ? `Work item #${op.request.workItemId} · PR #${op.request.pullRequestId} · ${op.request.projectId} / ${op.request.repositoryId}` : op.target ?? t('flows.reconcileLegacy')}</p></div>
       {op.reason && <p className="flows-muted">{op.reason}</p>}
       {op.reconciliation && <p>{t('flows.reconciled')}: {t(`flows.resolution.${op.reconciliation.outcome}`)} — {op.reconciliation.note}</p>}
       {op.eligible && <>
-        <label>{t('flows.reconcileOutcome')} <select className="st-input" disabled={busy || !view.canReconcile} value={decisions[op.id]?.outcome ?? ''} onChange={e => setDecisions(v => ({ ...v, [op.id]: { note: v[op.id]?.note ?? '', outcome: e.target.value as WriteResolution | '' } }))}>
+        <label>{t('flows.reconcileOutcome')} <select className="st-input" disabled={busy} value={decisions[op.id]?.outcome ?? ''} onChange={e => setDecisions(v => ({ ...v, [op.id]: { note: v[op.id]?.note ?? '', outcome: e.target.value as WriteResolution | '' } }))}>
           <option value="">{t('flows.reconcileUnselected')}</option>{(['not-done', 'reverted', 'done'] as const).map(value => <option key={value} value={value}>{t(`flows.resolution.${value}`)}</option>)}
         </select></label>
         {decisions[op.id]?.outcome && <label>{t('flows.reconcileEvidence')}<textarea className="st-input" rows={2} maxLength={2000} value={decisions[op.id]?.note ?? ''} disabled={busy} onChange={e => setDecisions(v => ({ ...v, [op.id]: { outcome: v[op.id]?.outcome ?? '', note: e.target.value } }))} /></label>}
