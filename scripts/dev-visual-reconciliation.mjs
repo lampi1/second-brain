@@ -16,6 +16,8 @@ export async function captureReconciliation(app, page, capture) {
   const modal = page.getByTestId('routine-reconciliation'); await modal.getByTestId('reconcile-operation').first().waitFor();
   await modal.locator('select').first().selectOption('reverted');
   await modal.locator('textarea').first().fill('Verificato in DevOps: il branch è stato eliminato manualmente.');
+  const readable = await modal.locator('textarea').first().evaluate(field => field.clientWidth >= 280 && field.clientHeight >= 70 && getComputedStyle(field).textAlign === 'left');
+  if (!readable) throw new Error('Reconciliation evidence field is clipped');
   await modal.locator('summary').first().click(); await capture('routine-write-reconciliation');
   await modal.getByTestId('reconcile-confirm').click(); await modal.getByText(/Riconciliata:/).waitFor();
   await capture('routine-write-reconciled'); await page.keyboard.press('Escape');

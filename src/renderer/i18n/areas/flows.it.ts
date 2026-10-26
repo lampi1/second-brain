@@ -12,7 +12,7 @@ export const flowsIt = {
   'flows.resolution.reverted': 'Effetto annullato',
   'flows.resolution.done': 'Eseguita e verificata',
   'flows.reconcileEvidence': 'Cosa hai verificato? Aggiungi un riferimento o link.',
-  'flows.reconcileQuestion': (p: { n: number }) => `Confermi gli esiti verificati di ${p.n} scritture?`,
+  'flows.reconcileQuestion': (p: { n: number }) => p.n === 1 ? 'Confermi l’esito verificato di questa scrittura?' : `Confermi gli esiti verificati di ${p.n} scritture?`,
   'flows.connectorRead': 'Lettura',
   'flows.connectorWrite': 'Scrittura esterna',
   'flows.executionBlocked': "Prima correggi i passaggi senza una modalità di esecuzione supportata.",

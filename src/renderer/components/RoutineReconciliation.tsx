@@ -19,7 +19,7 @@ export function RoutineReconciliation({ contextKey, runId, onClose }: { contextK
       setView(await sb.invoke('flows:reconcileWrites', { contextKey, ...input })); setDecisions({}); void reloadFlows();
     } catch (e) { setError(plain(e)); } finally { setBusy(false); }
   };
-  return <Modal label={t('flows.reconcileTitle')} title={t('flows.reconcileTitle')} onClose={onClose} size="m" testid="routine-reconciliation">
+  return <Modal label={t('flows.reconcileTitle')} title={t('flows.reconcileTitle')} onClose={onClose} size="m" bodyClassName="routine-reconciliation" testid="routine-reconciliation">
     <p>{t('flows.reconcileHint')}</p><p className="flows-muted">Run <code>{runId}</code></p>
     {view?.workItem && <p><a href={view.workItem.url} target="_blank" rel="noreferrer">{view.workItem.organization} · #{view.workItem.id}</a></p>}
     {view?.blockedReason && <p className="flow-block" role="status">{view.blockedReason}</p>}
