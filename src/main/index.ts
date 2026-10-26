@@ -1,5 +1,5 @@
 // second-brain main process: one window, the services (chats, browser + MCP, brain + feed) and the typed IPC.
-import { chatWindow } from '../shared/chat-window';
+import { chatItemsReply } from '../shared/chat-window';
 import { exportFlow, importFlow, parsePortable } from './flows/portable';
 import { writeAgentMemory } from './rules/memory';
 import type { ImportWriter } from './agents/pack/routine-share';
@@ -387,7 +387,7 @@ app.whenReady().then(async () => {
     'cli:status': a => engineStatus(a.harness, a.checkLogin !== false),
     'cli:login': a => openLogin(a.harness),
     'chat:list': () => s.chats.list(),
-    'chat:items': a => { const items = s.chats.items(a.chatId); return a.limit === undefined && a.maxBytes === undefined ? items : chatWindow(items, a.limit, a.maxBytes); },
+    'chat:items': a => chatItemsReply(s.chats.items(a.chatId), a),
     'chat:pending': () => [...s.chats.pending(), ...s.asks.pending()].sort((a, b) => a.at - b.at),
     'chat:create': a => s.chats.create(a),
     // "Nuova chat" and a new Orchestrator: the routing table picks the engine, model and effort (ADR 0032)

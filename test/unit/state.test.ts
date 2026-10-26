@@ -169,14 +169,13 @@ describe('selectors', () => {
   });
 });
 
-it('bounds retained transcript payload on initial loads, appends and growing replacements', () => {
-  const large = 'x'.repeat(180_000);
-  let s = reduce(init(), { type: 'items', chatId: 'a', items: Array.from({ length: 20 }, (_, i) => say(String(i), large)) });
-  expect(s.items.a!.length).toBeLessThan(4);
-  expect(s.items.a!.at(-1)?.id).toBe('19');
-  for (let i = 20; i < 40; i++) s = reduce(s, { type: 'chat:item', chatId: 'a', item: say(String(i), large) });
-  expect(s.items.a!.length).toBeLessThan(4);
-  s = reduce(s, { type: 'chat:item', chatId: 'a', item: say('39', large.repeat(2)), replace: true });
-  expect(s.items.a!.length).toBeLessThan(3);
-  expect(s.items.a!.at(-1)).toEqual(say('39', large.repeat(2)));
+it('budgets raw tool output without evicting pending-question context or reordering late completions', () => {
+  const tool = (id: string, at: number): ChatItem => ({ kind: 'tool', id, at, name: 'Bash', input: {}, summary: 'test', status: 'ok', output: 'x'.repeat(4000) });
+  let s = reduce(init(), { type: 'items', chatId: 'a', items: [say('rationale', 'Report: https://example.test/report'), tool('older', 1), ...Array.from({ length: 150 }, (_, i) => tool(`later-${i}`, i + 2))] });
+  expect(s.items.a).toHaveLength(152);
+  const before = s.items.a!.map(row => row.id);
+  s = reduce(s, { type: 'chat:item', chatId: 'a', item: { ...tool('older', 1), output: 'y'.repeat(600000) } as ChatItem, replace: true });
+  expect(s.items.a!.map(row => row.id)).toEqual(before);
+  expect(s.items.a![0]).toEqual(say('rationale', 'Report: https://example.test/report'));
+  expect(JSON.stringify(s.items.a).length).toBeLessThan(600000);
 });

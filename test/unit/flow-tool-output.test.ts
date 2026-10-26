@@ -1,5 +1,5 @@
 // Bounded routine discovery and detail transport: large definitions are paged, never dumped into an agent prompt.
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { capFlowResult, detailPage } from '../../src/main/flows/tool-output';
 import { flowTools } from '../../src/main/flows/tools';
 import { automationTools } from '../../src/main/flows/automation-tools';
@@ -46,4 +46,28 @@ it('caps escaped detail text and both synchronous and asynchronous large receipt
     expect(JSON.stringify(out).length).toBeLessThanOrEqual(40000); expect(out).toMatchObject({ truncated: true });
   }
   expect(capFlowResult(huge)).toMatchObject({ flowId: 'large', revision: 7, note: expect.stringContaining('contentOffset') });
+});
+
+it('preserves oversized match candidates, lesson cursors and dry-run commands through complete read pages', async () => {
+  const values = {
+    app_flow_match: { status: 'match', candidates: [{ ...version, definition: { ...definition, package: { assets: [{ content: 'a'.repeat(50000) }] } } }] },
+    app_flow_outputs_since_active: { outputs: Array.from({length:3}, (_,i) => ({id:String(i),content:'lesson'.repeat(3000)})), nextOffset: 3 },
+    app_flow_start_item: { flowId:'large', version:3, steps:[{stepId:'inspect',title:'Inspect',kind:'check' as const,who:'host',command:'command '.repeat(9000),prod:false,auto:true,problems:[]}], problems:['review these commands'] },
+  };
+  const dry = vi.fn(async (_args: unknown) => values.app_flow_start_item);
+  const candidates = flowTools({ ownerId:'owner', service:() => ({snapshot:()=>snapshot, match:()=>values.app_flow_match, outputsSinceActive:()=>values.app_flow_outputs_since_active}) as unknown as FlowService, resolveBinding:()=>null, startItem:dry });
+  for (const [name,value] of Object.entries(values)) {
+    const tool = candidates.find(tool=>tool.name===name)!;
+    const args = name==='app_flow_match' ? {text:'large'} : name==='app_flow_start_item' ? {contextKey:'brain',flowId:'large',dryRun:true} : {flowId:'large'};
+    let content='', offset=0, digest:string|undefined;
+    for (let n=0;n<100;n++) {
+      const result=await tool.run({...args,contentOffset:offset,...(digest?{expectedDigest:digest}:{})}) as {content:string;digest:string;nextContentOffset:number|null};
+      expect(JSON.stringify(result).length).toBeLessThanOrEqual(40000);
+      content+=result.content; digest=result.digest;
+      if(result.nextContentOffset===null)break;
+      expect(result.nextContentOffset).toBeGreaterThan(offset); offset=result.nextContentOffset;
+    }
+    expect(JSON.parse(content)).toEqual(name === 'app_flow_match' ? {contextKey:'brain',...value} : value);
+  }
+  for (const [args] of dry.mock.calls) expect(args).not.toHaveProperty('contentOffset');
 });

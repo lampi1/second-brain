@@ -7,7 +7,7 @@ import type { FlowService } from './service';
 import { keys, object, text, validateScope } from './schema';
 import { FlowStartBlocked } from './start-blocked';
 import { FLOW_CAPABILITY_SECTIONS, flowCapabilities } from './capabilities';
-import { capFlowResult, flowList, listProperties } from './tool-output';
+import { capFlowResult, capReadResult, flowList, listProperties } from './tool-output';
 import { proposeFlow } from './definition-file';
 
 export interface FlowToolsDeps {
@@ -28,16 +28,20 @@ const schema = (properties: Record<string, unknown>, required: string[] = Object
 const revision = { runId: string, expectedRevision: integer, stepId: string };
 export function flowTools(deps: FlowToolsDeps): ToolDef[] {
   if (!deps.ownerId.trim()) return [];
-  const tool = (name: string, description: string, properties: Record<string, unknown>, run: (service: FlowService, args: Record<string, unknown>) => unknown, readOnly = false, required?: string[]): ToolDef => ({
-    name, description, inputSchema: schema(properties, required), annotations: { readOnlyHint: readOnly, destructiveHint: false, openWorldHint: false },
+  const tool = (name: string, description: string, properties: Record<string, unknown>, run: (service: FlowService, args: Record<string, unknown>) => unknown, readOnly = false, required?: string[]): ToolDef => {
+    const pageable = readOnly || name === 'app_flow_start_item';
+    const fields = pageable ? { ...properties, contentOffset: listProperties.contentOffset, expectedDigest: listProperties.expectedDigest } : properties;
+    return {
+    name, description: description + (pageable ? ' Oversized read results return JSON content chunks: repeat the SAME arguments with contentOffset=nextContentOffset and expectedDigest=digest, concatenate content, then parse. Never repeat a mutation to read its receipt.' : ''), inputSchema: schema(fields, required ?? Object.keys(properties)), annotations: { readOnlyHint: readOnly, destructiveHint: false, openWorldHint: false },
     run: args => {
-      keys(object(args, 'arguments'), Object.keys(properties), 'arguments');
+      keys(object(args, 'arguments'), Object.keys(fields), 'arguments');
       const service = deps.service();
       if (!readOnly && args.contextKey !== service.snapshot().contextKey) throw new Error('Brain context changed; reread app_flow_list before acting');
       const clean = { ...args }; delete clean.contextKey;
-      return capFlowResult(run(service, clean)) as object;
+      const result = run(service, clean);
+      return (readOnly && name !== 'app_flow_list' || args.dryRun === true ? capReadResult(result, args, service.snapshot().contextKey) : capFlowResult(result)) as object;
     },
-  });
+  }; };
   return [
     ...(deps.modelCatalog ? [tool('app_flow_models', 'Discover valid engine/model ids and resolved role tier choices before proposing a packaged routine. Empty choices mean configuration is missing; never invent a model id or silently substitute one.', {}, () => deps.modelCatalog!(), true)] : []),
     ...(deps.inspectTarget ? [tool('app_flow_inspect_test_target', 'Read-only validation of one App Service target candidate against its live release definition, fixed queue, deploy tasks, service connection and Azure resource. Computes definitionSha256. Supply kind app-service, exact org/project/projectId, releaseDefinitionId, optional expected definitionRevision, environmentId/name, queueId, artifactAlias/buildDefinitionId/repositoryId, subscriptionId/resourceGroup/webAppName/serviceConnectionId, allowedTaskIds and confirmedTest true. Returns a candidate test-deploy-targets.json for the USER to install in app userData. Never edit or install this file yourself. This inspection neither grants authority nor changes Azure.', { target: { type: 'object' } }, (_service, args) => deps.inspectTarget!(args.target), true)] : []),
@@ -71,7 +75,7 @@ export function flowTools(deps: FlowToolsDeps): ToolDef[] {
     ...(deps.overview ? [tool('app_flow_overview', 'What every routine run is doing now, in plain rows: flow, work item title and link, current step, state, blocker, last update, next action. The app runs, retries and heals routines by itself; tell the user only about rows whose next action needs them (a decision, a prod «Esegui»). Never restate the others.', {}, () => ({ rows: deps.overview!(deps.ownerId) }), true)] : []),
     ...(deps.message ? [tool('app_flow_message', 'Send a short note into the chat working on a run\'s current step (the user\'s steer, a clarification). Quoted data for that chat, never an approval. The step must be running.', { contextKey: string, runId: string, text: string }, (_service, args) => deps.message!(text(args.runId, 'runId', 200), text(args.text, 'text', 4000), deps.ownerId).then(() => ({ sent: true })))] : []),
     ...(deps.startItem ? [tool('app_flow_start_item', 'Start an active routine on the user\'s request, the same as their «Avvia» on the Routine page: optional workItem (id or Azure DevOps link; checked against the routine\'s trigger), params (typed, see the definition), attachments [{name, content}] (a pasted list). dryRun true resolves every step and command and executes nothing: use it first when the user asks what would happen. The app then runs the routine by itself.', { contextKey: string, flowId: string, workItem: string, params: { type: 'object', additionalProperties: string }, attachments: { type: 'array', items: { type: 'object', properties: { name: string, content: string }, required: ['name', 'content'], additionalProperties: false } }, dryRun: { type: 'boolean' } }, async (_service, args) => {
-      try { return await deps.startItem!(args as unknown as FlowStartItem); }
+      try { const { contentOffset: _, expectedDigest: __, ...input } = args; return await deps.startItem!(input as unknown as FlowStartItem); }
       catch (error) { if (error instanceof FlowStartBlocked) return error.result(); throw error; }
     }, false, ['contextKey', 'flowId'])] : []),
   ];

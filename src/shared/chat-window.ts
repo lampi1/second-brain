@@ -1,29 +1,22 @@
-// Bounded transcript windows for renderer IPC and its live reducer. Durable transcripts are never changed.
-// Account for UTF-16 strings and object overhead without serializing every old tool result on each streamed token.
+// Renderer transcript projection: keep every item/context in the 600-item tail, budget bulky raw tool outputs.
+// Full output stays in the host; opening its row fetches that one original item. Never trim prose, prompts or grants.
 import type { ChatItem } from './contract';
 export const CHAT_WINDOW_ITEMS = 600;
 export const CHAT_WINDOW_BYTES = 1024 * 1024;
-const sizes = new WeakMap<object, number>();
-function size(value: unknown): number {
-  if (typeof value === 'string') return 24 + value.length * 2;
-  if (!value || typeof value !== 'object') return 8;
-  const cached = sizes.get(value);
-  if (cached !== undefined) return cached;
-  let bytes = 64;
-  // ChatItem is a JSON value; the sentinel also makes malformed cyclic objects finite.
-  sizes.set(value, bytes);
-  for (const [key, child] of Object.entries(value)) bytes += key.length * 2 + size(child);
-  sizes.set(value, bytes);
-  return bytes;
-}
-/** Contiguous newest tail. Keep a single oversized newest item intact: never silently mutilate a question/report. */
+// Only raw CLI/file outputs: app/MCP results include cards, reports and routing metadata and must remain intact.
+const RAW_OUTPUT = new Set(['Read', 'Grep', 'Glob', 'Search', 'LS', 'List', 'Bash', 'PowerShell', 'Shell']);
 export function chatWindow(items: readonly ChatItem[], limit = CHAT_WINDOW_ITEMS, maxBytes = CHAT_WINDOW_BYTES): ChatItem[] {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > CHAT_WINDOW_ITEMS || !Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > CHAT_WINDOW_BYTES) throw new Error('Invalid transcript window');
-  let start = items.length, bytes = 0;
-  while (start > 0 && items.length - start < limit) {
-    const next = size(items[start - 1]!);
-    if (start < items.length && bytes + next > maxBytes) break;
-    bytes += next; start--;
-  }
-  return items.slice(start);
+  const tail = items.slice(-limit);
+  const chars = Math.max(1, Math.floor(maxBytes / (2 * Math.max(1, tail.length))));
+  return tail.map(item => {
+    if (item.kind !== 'tool' || !RAW_OUTPUT.has(item.name) || !item.output || item.output.length <= chars) return item;
+    // Copy rather than retain a V8 sliced string's multi-MB backing store.
+    return { ...item, output: item.output.slice(0, chars).split('').join(''), outputPreviewChars: item.outputPreviewChars ?? item.output.length };
+  });
+}
+/** Explicit detail reads preserve the original item, including its full output; ordinary IPC remains compatible. */
+export function chatItemsReply(items: ChatItem[], args: { itemId?: string; limit?: number; maxBytes?: number }): ChatItem[] {
+  if (args.itemId !== undefined) return items.filter(item => item.id === args.itemId);
+  return args.limit === undefined && args.maxBytes === undefined ? items : chatWindow(items, args.limit, args.maxBytes);
 }

@@ -37,14 +37,14 @@ try {
     globalThis.__rendererProfile = bench;
     const handler = (name, fn) => { ipcMain.removeHandler(name); ipcMain.handle(name, fn); };
     handler('chat:list', () => chats); handler('chat:pending', () => []); handler('browser:list', () => []); handler('feed:list', () => []); handler('flows:list', () => snapshot);
-    handler('chat:items', (_event, { chatId, limit, maxBytes }) => {
+    handler('chat:items', (_event, { chatId, itemId, limit, maxBytes }) => {
       bench.reads++;
       const count = chatId === 'orchestrator' ? 4 : 600;
       const items = Array.from({ length: count }, (_, i) => ({ kind: 'tool', id: `${chatId}-history-${i}`, at: at - count + i, name: ['Read', 'Grep', 'Bash'][i % 3], summary: `Inspect src/module-${i}.ts`, input: { file_path: `/synthetic/src/module-${i}.ts`, command: `node inspect.mjs --module ${i}` }, output: `${chatId}/${i}: ${'Synthetic result line. '.repeat(512)}`, status: 'ok' })).slice(-(limit ?? count));
+      if (itemId !== undefined) return items.filter(item => item.id === itemId);
       if (maxBytes === undefined) return items;
-      let start = items.length, bytes = 0;
-      while (start > 0) { const next = JSON.stringify(items[start - 1]).length * 2 + 128; if (start < items.length && bytes + next > maxBytes) break; bytes += next; start--; }
-      return items.slice(start);
+      const chars = Math.max(1, Math.floor(maxBytes / (2 * Math.max(1, items.length))));
+      return items.map(item => item.output.length <= chars ? item : { ...item, output: item.output.slice(0, chars).split('').join(''), outputPreviewChars: item.output.length });
     });
   }, templates);
   await page.addInitScript(() => {
@@ -96,6 +96,10 @@ try {
   const a = result.samples[0], z = result.samples.at(-1), duration = z.elapsed - a.elapsed, sorted = z.lag.sort((a, b) => a - b);
   result.summary = { rendererCpuPctOfOneCore: 100 * (z.cpuSeconds - a.cpuSeconds) / duration, longTaskMsPerSecond: (z.longMs - a.longMs) / duration, inputLagP95Ms: sorted[Math.floor(sorted.length * .95)], startRetainedMb: a.retainedHeapMb, endRetainedMb: z.retainedHeapMb, retainedRangeLastHalfMb: result.samples.slice(Math.ceil(result.samples.length / 2)).map(s => s.retainedHeapMb), commitsPerSecond: (z.commits - a.commits) / duration };
   await page.screenshot({ path: path.join(output, `${label}.png`) });
+  await page.getByTestId('chat-expand-profile-63').click();
+  await page.getByTestId('tool-toggle-profile-63-history-599').click();
+  await page.waitForTimeout(750);
+  await page.screenshot({ path: path.join(output, `${label}-tool-detail.png`) });
   if (result.errors.length) throw new Error(`Renderer errors: ${result.errors.join('; ')}`);
   console.log(JSON.stringify({ label, summary: result.summary, host: result.host, hotspots: result.hotspots.slice(0, 12) }, null, 2));
 } finally {

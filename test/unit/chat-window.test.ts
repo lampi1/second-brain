@@ -1,23 +1,31 @@
-// Transcript windows bound IPC/live payload without truncating messages or changing durable history.
+// Compact raw outputs preserve all question context/order; explicit detail reads restore original bytes.
 import { expect, it } from 'vitest';
-import type { ChatItem } from '../../src/shared/contract';
-import { chatWindow } from '../../src/shared/chat-window';
+import type { ChatItem, PendingRequest } from '../../src/shared/contract';
+import { chatWindow, chatItemsReply } from '../../src/shared/chat-window';
+import { askContext } from '../../src/renderer/lib/askContext';
 const item = (id: string, text = id): ChatItem => ({ kind: 'assistant', id, at: 1, text });
-it('keeps a contiguous tail by count and bytes, leaving input untouched', () => {
-  const items = Array.from({ length: 700 }, (_, i) => item(String(i)));
-  expect(chatWindow(items)).toHaveLength(600);
-  expect(chatWindow(items, 2)).toEqual(items.slice(-2));
-  expect(chatWindow(items, 600, 1)).toEqual(items.slice(-1));
+const raw = (id: string): ChatItem => ({ kind: 'tool', id, at: 2, name: 'Bash', input: {}, status: 'ok', summary: 'test', output: 'x'.repeat(600000) });
+it('keeps the count boundary, budgets output previews, and leaves originals untouched', () => {
+  const items = Array.from({ length: 700 }, (_, i) => raw(String(i)));
+  const projected = chatWindow(items);
+  expect(projected).toHaveLength(600);
+  expect(JSON.stringify(projected).length).toBeLessThan(650000);
   expect(items).toHaveLength(700);
+  expect((items[699] as {output:string}).output).toHaveLength(600000);
 });
-it('preserves a single oversized report exactly and bounds later messages', () => {
-  const huge = item('huge', 'x'.repeat(1_100_000));
-  expect(chatWindow([item('before'), huge])).toEqual([huge]);
-  expect(chatWindow([huge, item('after')])).toEqual([item('after')]);
+it('preserves prose, artifacts and report links even behind a huge tool output and restores the full item on demand', () => {
+  const req = { id: 'ask', chatId: 'c', type: 'question', tool: 'AskUserQuestion', title: 'Proceed?', detail: '', at: 3, input: {} } as PendingRequest;
+  const items: ChatItem[] = [{kind:'user', id:'u', at:0,text:'Check'}, item('why','See [report](https://example.test/report).'), raw('large'), {kind:'tool',id:'ask',at:3,name:'AskUserQuestion',summary:'Proceed?',input:{},status:'running'}];
+  const projected = chatWindow(items);
+  expect(projected.map(row => row.id)).toEqual(items.map(row => row.id));
+  expect(askContext(projected, req)).toEqual(askContext(items, req));
+  expect(chatItemsReply(items, {itemId:'large'})).toEqual([items[2]]);
+  expect(chatItemsReply(items, {})).toBe(items);
+  expect(chatItemsReply(items, {itemId:'missing'})).toEqual([]);
 });
-it('counts nested outputs and images, and rejects unbounded caller limits', () => {
-  const tool: ChatItem = { kind: 'tool', id: 't', at: 1, name: 'Read', summary: 'read', status: 'ok', input: { nested: ['x'.repeat(600_000)] } };
-  expect(chatWindow([item('before'), tool])).toEqual([tool]);
-  for (const n of [0, -1, NaN, Infinity, 601, 1.5]) expect(() => chatWindow([], n)).toThrow('Invalid transcript window');
-  expect(() => chatWindow([], 600, 2 ** 30)).toThrow('Invalid transcript window');
+it('never projects MCP receipts or agent reports, and rejects unbounded window requests', () => {
+  const report = {...raw('report'), name:'mcp__app__agent_report'} as ChatItem;
+  expect(chatWindow([report], 600, 1)).toEqual([report]);
+  for (const n of [0,-1,NaN,Infinity,601,1.5]) expect(() => chatWindow([],n)).toThrow('Invalid transcript window');
+  expect(() => chatWindow([],600,2**30)).toThrow();
 });

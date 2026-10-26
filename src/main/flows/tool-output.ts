@@ -18,6 +18,12 @@ export function detailPage(value: unknown, args: Record<string, unknown>, contex
   while (low < high) { const end = Math.ceil((low + high) / 2); if (JSON.stringify(make(end)).length <= FLOW_TOOL_MAX) low = end; else high = end - 1; }
   return make(low);
 }
+/** Read-only results can always be reconstructed by repeating the same selection, pinned to its digest. */
+export function capReadResult(value: unknown, args: Record<string, unknown>, contextKey: string): unknown {
+  if (value && typeof (value as Promise<unknown>).then === 'function') return Promise.resolve(value).then(result => capReadResult(result, args, contextKey));
+  if (args.contentOffset !== undefined || args.expectedDigest !== undefined || (JSON.stringify(value)?.length ?? 0) > FLOW_TOOL_MAX) return detailPage(value, args, contextKey);
+  return value;
+}
 /** Last line of defence for every flow/automation tool, including a huge mutation receipt or dossier. */
 export function capFlowResult(value: unknown): unknown {
   if (value && typeof (value as Promise<unknown>).then === 'function') return Promise.resolve(value).then(capFlowResult);
