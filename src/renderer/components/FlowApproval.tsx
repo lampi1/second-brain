@@ -2,7 +2,7 @@
 // postponement and bounded session drafts.
 import { useId, useRef, useState } from 'react';
 import type { FlowAsk } from '../lib/flow-ask';
-import { flowDecisionMode, flowDecisionSubmission, flowGateEvidence } from '../lib/flow-decision';
+import { flowDecisionMode, flowDecisionSubmission, flowGateEvidence, flowRetryLimit } from '../lib/flow-decision';
 import { openChatRef } from '../actions';
 import { useApp } from '../store/store';
 import { decideFlow } from '../store/flows';
@@ -33,7 +33,7 @@ function FlowStandardApproval({ ask, onEscape }: { ask: Exclude<FlowAsk, { type:
   const current = run?.steps[run.currentStep];
   const boundChat = useApp(s => current?.chatId && s.chats[current.chatId] ? current.chatId : null);
   const browserSteps = definition?.steps.filter(s => s.writeVia === 'browser' && (!run || s.id === current?.stepId)) ?? [];
-  const mode = flowDecisionMode(ask);
+  const mode = flowDecisionMode(ask), retryLimit = flowRetryLimit(ask);
   const manual = ask.type === 'flow-automation' && ask.rule.config.trigger.kind === 'manual';
   const gate = flowGateEvidence(ask);
   const canApprove = flowDecisionSubmission(ask, 'yes', feedback, evidence) !== null && !(ask.type === 'flow-definition' && executionChecks(ask.draft.definition).some(c => c.state === 'unsupported'));
@@ -66,6 +66,7 @@ function FlowStandardApproval({ ask, onEscape }: { ask: Exclude<FlowAsk, { type:
     {current?.reason && <p className="flow-block" role="status">{current.reason}</p>}
     {boundChat && <button type="button" className="btn btn-ghost btn-s" onClick={() => { onEscape(); openChatRef(boundChat); }} data-testid="flow-open-agent">{t('flows.openAgent')}</button>}
     {mode === 'retry' && <p className="wq-lead">{t('flows.retryHint')}</p>}
+    {retryLimit && <p className="wq-lead" data-testid="flow-retry-limit">{t('flows.retryLimit', { at: retryLimit.attempts, of: retryLimit.max })}</p>}
     {definition && <details><summary>{t('flows.details')} · {definition.steps.length}</summary><FlowDefinition definition={definition} run={run} /></details>}
     {gate.required && <div className="pa-change flow-evidence">
       <label className="wq-label" htmlFor={evidenceId}>{t('flows.evidence')}</label>

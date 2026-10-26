@@ -165,6 +165,7 @@ export const flowsEn = {
   'flows.approvedVersion': 'Approved version',
   'flows.yesRetry': "Yes, retry",
   'flows.retryHint': 'Runs the step again. Completion requires new evidence.',
+  'flows.retryLimit': (p: { at: number; of: number }) => `No attempts left (${p.at} of ${p.of}): "Yes" cannot run the step again. Retrying needs a restart of the routine (ask the Orchestrator); "No" cancels the run. Text written here does not unblock it.`,
   'flows.target': "Target",
   'flows.runContext': "Scope and inputs for this run",
   'flows.evidenceFormat': "To approve, document each item on its own line: exact label, colon and result.",

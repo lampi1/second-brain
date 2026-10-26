@@ -17,6 +17,14 @@ export function flowDecisionMode(ask: FlowAsk): 'approve' | 'retry' | 'blocked' 
   return 'blocked';
 }
 
+/** A blocked step whose attempts are used up: Sì cannot retry it (the host refuses with "Retry limit reached"). */
+export function flowRetryLimit(ask: FlowAsk): { attempts: number; max: number } | null {
+  if (ask.type !== 'flow-run' || ask.run.status !== 'blocked') return null;
+  const step = ask.version?.definition.steps[ask.run.currentStep], current = ask.run.steps[ask.run.currentStep];
+  if (!step || !current || current.stepId !== step.id || current.attempts < step.maxAttempts) return null;
+  return { attempts: current.attempts, max: step.maxAttempts };
+}
+
 /** The host requires a completion note for manual gates and a value for each declared evidence label. */
 export function flowGateEvidence(ask: FlowAsk): { required: boolean; labels: string[] } {
   if (ask.type !== 'flow-run' || ask.run.status !== 'approval') return { required: false, labels: [] };

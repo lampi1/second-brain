@@ -9,7 +9,7 @@ import type { FlowSnapshot, FlowDefinition, FlowRun } from '../../src/shared/flo
 const invoke = vi.hoisted(() => vi.fn());
 vi.mock('../../src/renderer/sb', () => ({ sb: { invoke, on: vi.fn() } }));
 import { flowAsks } from '../../src/renderer/lib/flow-ask';
-import { flowDecisionMode, flowDecisionSubmission } from '../../src/renderer/lib/flow-decision';
+import { flowDecisionMode, flowDecisionSubmission, flowRetryLimit } from '../../src/renderer/lib/flow-decision';
 import { flowRequest } from '../../src/renderer/lib/flow-request';
 import { Flows } from '../../src/renderer/brain/pages/Flows';
 import { RoutineDetail, RoutineHistory } from '../../src/renderer/components/Routine';
@@ -102,6 +102,12 @@ it('offers bounded agent retries only with required inputs, no action adapter an
   expect(renderToStaticMarkup(createElement(FlowApproval, { ask: flowAsks(state)[0]!, onEscape: vi.fn() }))).toContain('Sì, riprova');
   const exhausted = { ...state, runs: [{ ...state.runs[0]!, steps: [{ ...state.runs[0]!.steps[0]!, attempts: 2 }] }] };
   expect(flowDecisionMode(flowAsks(exhausted)[0]!)).toBe('blocked');
+  expect(flowRetryLimit(flowAsks(exhausted)[0]!)).toEqual({ attempts: 2, max: 2 });
+  expect(flowRetryLimit(flowAsks(state)[0]!)).toBeNull();
+  // a disabled Sì must say why: the user otherwise clicks it and nothing happens
+  const exhaustedCard = renderToStaticMarkup(createElement(FlowApproval, { ask: flowAsks(exhausted)[0]!, onEscape: vi.fn() }));
+  expect(exhaustedCard).toContain('data-testid="flow-retry-limit"');
+  expect(exhaustedCard).toContain('Tentativi esauriti (2 di 2)');
   expect(flowDecisionMode(flowAsks({ ...state, runs: [{ ...state.runs[0]!, inputs: {} }] })[0]!)).toBe('blocked');
   for (const effect of ['production', 'external-write'] as const) {
     const dangerous = { ...state, versions: [{ ...state.versions[0]!, definition: { ...agentDefinition, steps: [{ ...agentDefinition.steps[0]!, effect }] } }] };
