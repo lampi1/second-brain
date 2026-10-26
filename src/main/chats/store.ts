@@ -3,6 +3,7 @@
 // size, the hand-off/"Riprendi" links and the past sessions of a cold continuation (ADR 0031) are stored:
 // never messages (they stay in each CLI's transcript) and never secrets. Writes are atomic (tmp + rename); a corrupt
 // file is set aside as chats.json.bad-<time> instead of being lost. Used by manager.ts.
+import { readAgentContext, type AgentContextSnapshot } from '../../shared/agent-context';
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -38,6 +39,7 @@ export interface HeldRootResult {
   userWaits: boolean;
 }
 export interface StoredChat {
+  launchContext?: AgentContextSnapshot;
   routine?: { runId: string; stepId: string };
   routinePackage?: string;
   routinePromptHash?: string;
@@ -166,6 +168,7 @@ function extras(c: Record<string, unknown>): Partial<StoredChat> {
   const ctx = c.context as Record<string, unknown> | undefined;
   const from = link(c.continuedFrom), by = link(c.continuedBy), route = validRoute(c.route), run = readRun(c.run);
   return {
+    ...(readAgentContext(c.launchContext) ? { launchContext: readAgentContext(c.launchContext)! } : {}),
     ...(readOwner(c.agent) ? { agent: readOwner(c.agent)! } : {}),
     // Cursor carries two bounded skill documents in addition to the 8000-character profile; every role also carries its
     // memory block (up to 4000 + 2000 characters with its hint, agents/pack/flows.ts) beside the role text and skills line

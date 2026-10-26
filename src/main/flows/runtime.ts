@@ -4,6 +4,9 @@
 // prod step's «Esegui», which only the user's click runs) needs the user. One runner per store (lock.ts).
 // Host report resolution uses canonical agent_report records, never arbitrary assistant text.
 import fs from 'node:fs';
+import { RoutineWorkbench } from './workbench';
+import { repeatedFailure } from './progress';
+import { ComponentService } from '../components/service';
 import { flowBrainContextKey } from './context';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -67,6 +70,14 @@ export interface FlowWorkerRequest {
 const pumpable = (run: FlowRun): boolean => !run.paused && ['active', 'blocked', 'approval'].includes(run.status);
 export function createFlowRuntime(options: FlowRuntimeOptions) {
   const instances = new Map<string, FlowService>();
+  const progressEvidence = (run: FlowRun): string[] => writerFor(current().key).operationsFor(run.id).map(value => JSON.stringify(value));
+  const workbench = () => new RoutineWorkbench(path.join(options.userData, 'flows', current().key, 'workbench'), snapshot, () => deployments.targets());
+  const componentStores = new Map<string, ComponentService>();
+  const components = (): ComponentService => {
+    const context = current(); let store = componentStores.get(context.key);
+    if (!store) { store = new ComponentService(path.join(options.userData, 'flows', context.key, 'components'), context.key, () => current().key, service, undefined, options.brainRoot); componentStores.set(context.key, store); }
+    return store;
+  };
   const automations = new Map<string, FlowAutomationService>();
   const writers = new Map<string, DevOpsWriter>();
   const activeRequests = new Map<string, Set<AbortController>>();
@@ -137,6 +148,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     const existing = instances.get(context.key);
     if (existing) return existing;
     const made = new FlowService({
+      progressEvidence,
       file: path.join(options.userData, 'flows', context.key, 'state.json'), contextKey: context.key,
       // Read live from the automation ledger: a paused, replaced or rejected rule withdraws the grant at once.
       ...(options.roles ? { tierMax: (role: WorkRoleId) => roles()?.[role]?.tierMax } : {}),
@@ -249,10 +261,14 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   const heal = (flow: FlowService, run: FlowRun, spec: FlowStep): boolean => {
     const step = run.steps[run.currentStep]!;
     if (!healable(run, spec) || interrupting.has(run.id)) return false;
-    const reason = step.reason ?? 'Il passaggio non è riuscito';
-    // a step that timed out may still have its chat at work: stop it before another attempt touches the same workspace
+    // Confirm interruption before either a new attempt or a no-progress hold: a timed-out worker may still write.
     const stale = step.chatId ? options.chats().find(chat => chat.id === step.chatId && !chat.closedAt && ['running', 'starting', 'waiting'].includes(chat.state)) : undefined;
     if (stale) { if (!options.stopChat) return false; void Promise.resolve(options.stopChat(stale.id)).catch(() => {}); return false; }
+    if (repeatedFailure(run, progressEvidence(run))) {
+      flow.blockChanged(run.id, run.revision, step.stepId, `${HOLD}Stesso errore per tre tentativi senza nuove prove osservate dall’host. Controlla il dossier prima di riprovare. Ultimo errore: ${step.reason ?? ''}`.slice(0, 16000));
+      return false;
+    }
+    const reason = step.reason ?? 'Il passaggio non è riuscito';
     try { if (spec.onFail) flow.sendBack(run.id, run.revision, step.stepId, reason); else flow.hostRetry(run.id, run.revision, step.stepId, reason); return true; }
     catch {
       // a send-back the run cannot take (the target is before a restart's carried steps): retry the step itself
@@ -484,6 +500,8 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     if (stopped || !options.brainRoot() || current().key !== context.key) return;
     for (const run of flow.snapshot().runs) { recoveryReady(run); blockedReady(run); }
     await automation().tick();
+    // Metadata refresh does not delay the runner and spends no model tokens.
+    void components().tick().catch(() => {});
   };
   const stop = () => { stopped = true; abortRequests(); for (const auto of automations.values()) auto.stop(); automations.clear(); const key = selectedKey; void (key ? leaveContext(key) : Promise.resolve()).catch(() => {}).finally(() => { if (holding) lock.release(); holding = null; }); };
   const interrupt = async (run: FlowRun, root: string): Promise<void> => {
@@ -923,7 +941,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   const editStepModel = (input: FlowStepModelEdit) => { const version = service().editStepModel(input); automation().carry(input.flowId, version.version); return snapshot(); };
   /** The user approved a script/query's new content: the step pins the new hash; the trigger follows the new version. */
   const pinHash = (input: { flowId: string; version: number; stepId: string; hash: string }) => { const version = service().pinHash(input); automation().carry(input.flowId, version.version); return snapshot(); };
-  return { service, automation, snapshot, tick, stop, manualBind, manualReport, cancel, proposeCancel, decideCancel, decide, restart, proposeRestart, decideRestart, reportReady, resolveBinding, hint, devopsWrite, testDbRead, output, downgrade, intake, verdict, stepHistory, dossier, deploymentTargets: () => deployments.targets(), deploymentTargetFile: () => path.join(options.userData, 'test-deploy-targets.json'), modelCatalog: () => ({ engines: options.engines?.() ?? [], roles: roles() ?? {} }), inspectTarget: (value: unknown) => writerFor(current().key).inspectTarget(value),
+  return { workbench, components, service, automation, snapshot, tick, stop, manualBind, manualReport, cancel, proposeCancel, decideCancel, decide, restart, proposeRestart, decideRestart, reportReady, resolveBinding, hint, devopsWrite, testDbRead, output, downgrade, intake, verdict, stepHistory, dossier, deploymentTargets: () => deployments.targets(), deploymentTargetFile: () => path.join(options.userData, 'test-deploy-targets.json'), modelCatalog: () => ({ engines: options.engines?.() ?? [], roles: roles() ?? {} }), inspectTarget: (value: unknown) => writerFor(current().key).inspectTarget(value),
     previewItem, dryRun, startItem, pauseRun, runUserCommand, message, overview, editStepModel, pinHash };
 }
 export type FlowRuntime = ReturnType<typeof createFlowRuntime>;

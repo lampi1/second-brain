@@ -5,7 +5,8 @@
 // "Cambia motore" (to the first other engine): both open the "Nuovo Orchestrator" confirm (OrchestratorRenewDialog); the old Orchestrator goes on as
 // a normal chat, history kept; the overlay's opacity (setting orchestratorOpacity, ADR 0021).
 // TitleInput is the inline rename field the menu's "Rinomina…" opens. Used by ChatTile and OrchestratorTile.
-import type { RefObject } from 'react';
+import { useState, type RefObject } from 'react';
+import { AgentContextInspector } from './AgentContextInspector';
 import type { AppInfo, ChatSummary, Harness, Settings } from '@shared/contract';
 import { EFFORTS, effortLabel, permissionLabel, PERMISSION_MODES, tokensShort } from '../lib/format';
 import { engineCan, engineName, otherEngine } from '../lib/engines';
@@ -40,6 +41,7 @@ export function ChatMenu({ chat, anchor, open, onClose, onRename, orchestrator }
   chat: ChatSummary; anchor: RefObject<HTMLElement | null>; open: boolean; onClose: () => void; onRename: () => void; orchestrator?: boolean;
 }) {
   const id = chat.id;
+  const [inspectContext, setInspectContext] = useState(false);
   const to = otherEngine(chat.harness);
   const blockOf = useEngineBlocks();
   const block = to ? blockOf(to) : null;
@@ -47,10 +49,12 @@ export function ChatMenu({ chat, anchor, open, onClose, onRename, orchestrator }
   const seen = useModelsSeen(open);
   const pick = (fn: () => void) => () => { fn(); onClose(); };
   const opacity = useApp(s => s.settings?.orchestratorOpacity ?? 100);
-  return (
+  return (<>
+    {inspectContext && <AgentContextInspector chat={chat} onClose={() => setInspectContext(false)} />}
     <Popover anchor={anchor} open={open} onClose={onClose} testid={`chat-menu-pop-${id}`} width={orchestrator ? 290 : 270}>
       <MenuItem onSelect={pick(onRename)} testid={`chat-rename-${id}`}>{t('chat.menu.rename')}</MenuItem>
       <MenuItem onSelect={pick(() => void copyLink(makeLink('home', orchestrator ? 'orchestrator' : `chat-${id}`)))} testid={`chat-link-${id}`}>{t('chat.menu.copyLink')}</MenuItem>
+      <MenuItem onSelect={pick(() => setInspectContext(true))} testid={`chat-context-${id}`}>{t('rt.context.title')}</MenuItem>
       {!orchestrator && <MenuItem onSelect={pick(() => { setFocused(`chat:${id}`); toggleFocusMode(); })} shortcut="Ctrl+Shift+F" testid={`chat-focusmode-${id}`}>{t('chat.menu.focusMode')}</MenuItem>}
       <MenuSep />
       {orchestrator && (
@@ -111,7 +115,7 @@ export function ChatMenu({ chat, anchor, open, onClose, onRename, orchestrator }
       )}
       <MenuSep />
       {!orchestrator && <MenuItem onSelect={pick(() => closeChat(id))} danger testid={`chat-close-${id}`}>{t('chat.menu.closeChat')}</MenuItem>}
-    </Popover>
+    </Popover></>
   );
 }
 

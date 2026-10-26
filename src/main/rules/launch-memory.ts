@@ -2,13 +2,14 @@
 // Confirmed facts and proposed ones not tied to one case (ADR 0150) are quoted evidence, not policy; role instructions and permission enforcement stay outside this view.
 import { memoryConflicts, memoryWords, scopedMemory, type MemoryRecord, type MemoryScope } from './memory-records';
 import { memoryWorth, sameMemoryFact } from './memory-worth';
+import type { MemorySelection } from '../../shared/agent-context';
 
 const STOP = new Set('the and for with from this that then into your task please review check help need want use using should about have has are was were will can could would all our not una uno per con del della delle degli nel nella alla che come prima dopo questo questa sono fare usa usare verifica controlla'.split(' '));
 const words = (s: string): Set<string> => new Set([...memoryWords(s)].filter(w => !STOP.has(w)));
 export const LAUNCH_MEMORY_TOKENS = 1200;
 export const LAUNCH_MEMORY_RECORDS = 8;
 export type LaunchMemoryContext = Omit<MemoryScope, 'roleId'> & { query?: string };
-export interface LaunchMemory { text: string; selected: number; omitted: number; estimatedTokens: number }
+export interface LaunchMemory { text: string; selected: number; omitted: number; estimatedTokens: number; selection: MemorySelection }
 
 /** Keep each fact and its provenance whole: truncating a condition or negation can change its meaning. */
 function quoteLaunchMemory(r: MemoryRecord): string {
@@ -36,12 +37,14 @@ export function selectLaunchMemory(root: string, scope: MemoryScope, query = '',
   // Character-based token estimate, consistent with scoped recall. Non-finite budgets fail closed, never unbounded.
   let left = Number.isFinite(budgetTokens) ? Math.max(0, Math.min(Math.floor(budgetTokens), LAUNCH_MEMORY_TOKENS)) * 3 : 0;
   const chosen: string[] = [];
-  for (const { r } of ranked) {
+  const records: MemorySelection['records'] = [];
+  for (const { r, score } of ranked) {
     if (chosen.length === LAUNCH_MEMORY_RECORDS) break;
     const text = quoteLaunchMemory(r), cost = text.length + (chosen.length ? 1 : 0);
     if (cost > left) continue;
     chosen.push(text); left -= cost;
+    records.push({ id: r.memoryId, status: r.status, sourceEventId: r.sourceEventId, sourceRunId: r.sourceRunId, estimatedTokens: Math.ceil(cost / 3), score });
   }
   const text = chosen.join('\n');
-  return { text, selected: chosen.length, omitted: rows.length - chosen.length, estimatedTokens: Math.ceil(text.length / 3) };
+  return { text, selected: chosen.length, omitted: rows.length - chosen.length, estimatedTokens: Math.ceil(text.length / 3), selection: { available: true, records, omitted: { ineligible: rows.length - candidates.length, unmatched: candidates.length - ranked.length, budget: ranked.length - chosen.length }, estimatedTokens: Math.ceil(text.length / 3), budgetTokens: Number.isFinite(budgetTokens) ? Math.max(0, Math.min(Math.floor(budgetTokens), LAUNCH_MEMORY_TOKENS)) : 0 } };
 }

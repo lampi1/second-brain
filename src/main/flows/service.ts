@@ -1,5 +1,6 @@
 // Durable, fail-closed flow execution; only the host can turn trusted reports and user decisions into receipts.
 import fs from 'node:fs';
+import { progressFingerprint } from './progress';
 import type { FlowAutomationRule } from '../../shared/flow-automation';
 import path from 'node:path';
 import { renameRetrying } from '../rules/storage';
@@ -11,6 +12,7 @@ import { assertPackageBinding } from './binding';
 import { HOLD, roleOf, samePrefix } from '../../shared/routine';
 
 export interface FlowServiceOptions {
+  progressEvidence?: (run: FlowRun) => string[];
   file: string; contextKey: string; now?: () => number; changed?: (snapshot: FlowSnapshot) => void;
   resolveReport?: (binding: FlowAgentBinding, reportId: string) => FlowVerifiedReport | null;
   /** Host diagnostics use the persisted report timestamp and canonical identity, never model-supplied receipts. */
@@ -417,6 +419,7 @@ export class FlowService {
       if (commandStep(definition) && step.status === 'approval') throw new Error('A prod step completes only through «Esegui» and its receipt');
       if (step.status === 'blocked') {
         if (step.attempts >= definition.maxAttempts) throw new Error('Retry limit reached');
+        this.healed(run, { at: this.now(), stepId: step.stepId, action: 'resume', attempt: step.attempts + 1, reason: 'Explicit user retry' });
         this.reset(step); delete run.awaitingUser; this.prepare(run);
       } else {
         if (definition.evidence.some(label => !feedback.split('\n').some(line => line.startsWith(`${label}: `) && line.length > label.length + 2))) throw new Error('User note is missing required evidence labels');
@@ -539,7 +542,7 @@ export class FlowService {
   }
   private spec(run: FlowRun): FlowStep { return this.version(run.flowId, run.flowVersion).definition.steps[run.currentStep]!; }
   private reset(step: FlowRun['steps'][number]): void { delete step.chatId; delete step.chatRunId; delete step.taskVersion; delete step.startedAt; delete step.historyText; delete step.reason; delete step.decisionPending; step.status = 'pending'; }
-  private healed(run: FlowRun, entry: FlowHealEntry): void { run.heal = [...(run.heal ?? []), entry].slice(-50); }
+  private healed(run: FlowRun, entry: FlowHealEntry): void { run.heal = [...(run.heal ?? []), { ...entry, progress: progressFingerprint(run, this.options.progressEvidence?.(run)) }].slice(-50); }
   private reconcileDeadlines(): void {
     if (this.reconciling || this.storageError) return;
     const now = this.now(), expired = this.data.runs.filter(run => {
@@ -802,7 +805,8 @@ function validateReceipt(r: FlowCommandReceipt): void {
 function validateHeal(value: unknown): void {
   if (!Array.isArray(value) || value.length > 50) throw new Error('Invalid heal log');
   for (const v of value) {
-    const e = object(v, 'heal'); keys(e, ['at', 'stepId', 'action', 'to', 'attempt', 'reason'], 'heal');
+    const e = object(v, 'heal'); keys(e, ['at', 'stepId', 'action', 'to', 'attempt', 'reason', 'progress'], 'heal');
+    if (e.progress !== undefined && (typeof e.progress !== 'string' || !/^[a-f0-9]{64}$/.test(e.progress))) throw new Error('Invalid progress fingerprint');
     integer(e.at, 'heal time'); text(e.stepId, 'heal step', 80); integer(e.attempt, 'heal attempt'); text(e.reason, 'heal reason', 16000);
     if (!['retry', 'goto', 'resume'].includes(e.action as string) || (e.to !== undefined && typeof e.to !== 'string')) throw new Error('Invalid heal entry');
   }

@@ -1,4 +1,4 @@
-// Legacy milestone storage/API retained for compatibility; production wiring disables it without deleting history.
+// Milestone storage/API preserves historical records; production wiring disables it without deleting history.
 import path from 'node:path';
 import { ACHIEVEMENTS, type AchievementId, type ProgressState } from '../../shared/progress';
 import type { ChatSummary } from '../../shared/contract';
