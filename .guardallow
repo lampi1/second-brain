@@ -187,12 +187,12 @@ test/unit/flows/package.test.ts assigned-secret sha256:e15458704bfd8fa9401686603
 # Exact content reviewed for unattended routine contracts; no company configuration or credentials.
 docs/routine-test-targets.md guid sha256:b250b7d1d6e18cced61cf9b0fa2df8902bdbf261312ec018d3ee703c70449452
 src/main/flows/app-service-target.ts guid sha256:9ed7622aa6b6f39a05e06cbe9f365e3f6f0e4a481dfbde656bf22b0c5257004a
-src/main/flows/pr-validation.ts guid sha256:0df8b097185d1f86c35b85f75836b0b281c512ebe6974248749fbc07c76e0fcc
+src/main/flows/pr-validation.ts guid sha256:6d55b300535fa39b90a78d9780f41cb87ad9ad64f4eba4bb43b37b0201e4d3af
 test/fixtures/routine-consent.ts guid sha256:68c6eb32cc76e52855fee636e3bdbd670d33ea57b556f3d1f6d563302339570b
 test/unit/flows/package.test.ts conn-string-password sha256:ecd42e13247c45eb6b3ac3ba33c0273d97a093472a5fb8bf65fff37aabf68287
 test/unit/flows/package.test.ts assigned-secret sha256:ecd42e13247c45eb6b3ac3ba33c0273d97a093472a5fb8bf65fff37aabf68287
 test/unit/flows/package.test.ts internal-host sha256:ecd42e13247c45eb6b3ac3ba33c0273d97a093472a5fb8bf65fff37aabf68287
-test/unit/flows/pr-validation.test.ts guid sha256:ea1505c930f16d47b1346ab07406efe5b1b921d1b8793cd69da38bdd1cbe0224
+test/unit/flows/pr-validation.test.ts guid sha256:d45ab90bace8a26e22c0e4360c5092617e1ad33b343d953b8a9f43f885132257
 
 # Same public Microsoft App Service v4 task ID; parameter-resolution compatibility, no private target values.
 src/main/flows/app-service-target.ts guid sha256:51c98379263f9453378786e0647215e8f9ede426734dd83ea35fa9acd23402b7

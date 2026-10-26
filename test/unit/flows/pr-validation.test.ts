@@ -12,6 +12,17 @@ it('queues exactly the owned PR existing pipeline policy while leaving the draft
   expect(await queuePrValidation(target, pr, 'a'.repeat(40), call, verify)).toMatchObject({ status: 'queued', pullRequestId: 23 });
   expect(verify).toHaveBeenCalledOnce(); expect(call.mock.calls.map(c => c[0])).toEqual(['GET', 'PATCH']);
 });
+it('matches the URL-encoded artifact id Azure DevOps returns (%2f between project and PR)', async () => {
+  const encoded = { ...evaluation, artifactId: `vstfs:///CodeReview/CodeReviewId/${guid}%2f23` };
+  const call = vi.fn(async (method: string) => method === 'GET' ? { value: [encoded] } : encoded);
+  expect(await queuePrValidation(target, pr, 'a'.repeat(40), call, async () => {})).toMatchObject({ status: 'queued', evaluationId: guid });
+});
+it('still refuses an encoded artifact id of a foreign PR or a malformed encoding', async () => {
+  for (const id of [`vstfs:///CodeReview/CodeReviewId/${guid}%2F234`, `vstfs:///CodeReview/CodeReviewId/${guid}%2/23`]) {
+    const call = vi.fn(async () => ({ value: [{ ...evaluation, artifactId: id }] }));
+    await expect(queuePrValidation(target, pr, 'a'.repeat(40), call, async () => {})).rejects.toThrow('Exactly one');
+  }
+});
 it.each(['foreign-pr', 'wrong-pipeline', 'disabled', 'multiple'])('refuses %s without a mutation', async variation => {
   const row = structuredClone(evaluation);
   if (variation === 'foreign-pr') row.artifactId += '4';
