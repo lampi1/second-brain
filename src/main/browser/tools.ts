@@ -4,6 +4,9 @@
 // (QA skills) transfer. Every call is scoped: an app chat sees only its own tab group, an external client only the group of
 // its MCP session (scopeOf). Write actions of one group run one at a time. Used by browser/service.ts (mounts).
 import type { CallCtx, McpTool, ToolOutput } from '../mcp/server';
+import type { SiteVault } from './site-vault';
+import { siteLogin } from './site-login';
+import { assertBrowserOrigin, BROWSER_INTERACTIONS } from './routine-policy';
 import { log, redact } from '../log';
 import type { BrowserTabs, Tab } from './tabs';
 import { normalizeUrl, type BrowserActions, type Shot } from './actions';
@@ -48,7 +51,7 @@ export function shotMapping(shot: Pick<Shot, 'scale' | 'origin' | 'page'>, img: 
   return `${head}: click coordinate = image px × ${k}`;
 }
 
-export function browserTools(tabs: BrowserTabs, actions: BrowserActions, scopeOf: (ctx: CallCtx) => Scope): McpTool[] {
+export function browserTools(tabs: BrowserTabs, actions: BrowserActions, scopeOf: (ctx: CallCtx) => Scope, siteVault?: SiteVault): McpTool[] {
   const queues = new Map<string, Promise<unknown>>();
   const handoffGroup = new Map<string, string>();       // hand-off id → the group that opened it (outlives the tab)
   /** Write actions of one group run in order (an agent sending parallel clicks must not interleave them). */
@@ -62,7 +65,7 @@ export function browserTools(tabs: BrowserTabs, actions: BrowserActions, scopeOf
   /** each tab's last read_page as served (browser/delta.ts): the next read of the same page sends only what changed */
   const lastRead = new WeakMap<Tab, { url: string; mode: string; text: string }>();
   const write = (label: (a: Args) => string, fn: (tab: Tab, a: Args) => Promise<string>, opts: { allowDialog?: boolean } = {}) =>
-    (a: Args, ctx: CallCtx) => serial(scopeOf(ctx).group, async () => { const tab = tabOf(ctx, a); return actions.act(tab, label(a), () => fn(tab, a), opts); });
+    (a: Args, ctx: CallCtx) => serial(scopeOf(ctx).group, async () => { const tab = tabOf(ctx, a); return actions.act(tab, label(a), async () => { if (tabs.assertRoutine?.(tab, true)) await actions.routineLoginGuard(tab); return fn(tab, a); }, opts); });
   const line = (t: Tab) => {
     const b = tabs.toBrowserTab(t);
     const shared = [...tabs.tabs.values()].filter(o => o.env === t.env && o.id !== t.id).length;
@@ -95,7 +98,7 @@ export function browserTools(tabs: BrowserTabs, actions: BrowserActions, scopeOf
       run: (a, ctx) => serial(scopeOf(ctx).group, async () => {
         const s = scopeOf(ctx);
         const url = a.url ? normalizeUrl(String(a.url)) : undefined;
-        if (url && a.env) { const no = envRefusal(url, envSlug(a.env)); if (no) throw new Error(no); }
+        if (url && a.env && !tabs.routinePolicy?.(s.owner)) { const no = envRefusal(url, envSlug(a.env)); if (no) throw new Error(no); }
         const tab = tabs.create(s.group, s.owner, url ? undefined : 'about:blank', a.env ? { env: String(a.env) } : url ? { env: envForUrl(url) } : {});
         tab.envExplicit = !!a.env;                       // a derived env can still follow the host on first navigate
         if (!url) return `Opened ${tab.id} (empty) in environment ${tab.env}\n${listTabs(s)}`;
@@ -137,12 +140,12 @@ export function browserTools(tabs: BrowserTabs, actions: BrowserActions, scopeOf
       run: (a, ctx) => serial(scopeOf(ctx).group, async () => {
         const url = str(a.url, 'url');
         const history = /^(?:back|forward|reload)$/i.test(url.trim());
-        if (!history && a.env) { const no = envRefusal(normalizeUrl(url), envSlug(a.env)); if (no) throw new Error(no); }
+        if (!history && a.env && !tabs.routinePolicy?.(scopeOf(ctx).owner)) { const no = envRefusal(normalizeUrl(url), envSlug(a.env)); if (no) throw new Error(no); }
         let tab = ensureTab(scopeOf(ctx), a);
         let note = '';
         if (!history) {
           // without env the url loads in the tab's environment (a fresh tab with a derived one follows the host)
-          if (!a.env && !(tab.fresh && !tab.envExplicit)) { const no = envRefusal(normalizeUrl(url), tab.env); if (no) throw new Error(no); }
+          if (!tabs.routinePolicy?.(tab.owner) && !a.env && !(tab.fresh && !tab.envExplicit)) { const no = envRefusal(normalizeUrl(url), tab.env); if (no) throw new Error(no); }
           ({ tab, note } = tabs.prepareFor(tab, normalizeUrl(url), a.env));
         }
         const t = tab;
@@ -160,7 +163,12 @@ export function browserTools(tabs: BrowserTabs, actions: BrowserActions, scopeOf
       }),
       run: async (a, ctx): Promise<ToolOutput> => {
         const tab = tabOf(ctx, a);
+        const policy = tabs.routinePolicy?.(tab.owner), privacy = tabs.capturePrivacyVersion?.();
         const shot = await actions.screenshot(tab, { region: a.region, full_page: a.full_page });
+        if (policy) {
+          await tabs.assertLoginReadable(tab); tabs.assertRoutine(tab, true);
+          if (privacy !== tabs.capturePrivacyVersion?.()) throw new Error('Routine browser: login privacy changed during capture; screenshot withheld');
+        }
         const saved = a.save_to !== undefined && a.save_to !== '' ? actions.saveShot(tab, shot, a.save_to) : null;
         const dialog = tab.dialog ? `
 Dialog open: ${tab.dialog.type} "${tab.dialog.message}" (handle_dialog)` : '';
@@ -306,11 +314,11 @@ PNG ${shot.width}x${shot.height}` : ''}${dialog}`, images: [{ data: img.data, mi
           const kind = a.kind === 'login' ? 'login' as const : 'other' as const;
           const reason = String(a.reason ?? (kind === 'login' ? `Rifai l'accesso a ${tab.env}` : 'Serve il tuo intervento')).slice(0, 200);
           const url = tab.wc.getURL();
-          if (kind === 'login') {
+          if (kind === 'login' && !tabs.routinePolicy?.(tab.owner)) {
             const no = loginRefusal({ url, account: typeof a.account === 'string' ? a.account : '', accounts: tabs.credentials.accountsFor(url), file: tabs.credentials.describe() });
-            if (no) { log.info('browser', 'login hand-off refused', { chat: s.chatId ?? undefined, data: { tab: tab.id, env: tab.env } }); throw new Error(no); }
+            if (no && !tabs.routinePolicy?.(tab.owner)) { log.info('browser', 'login hand-off refused', { chat: s.chatId ?? undefined, data: { tab: tab.id, env: tab.env } }); throw new Error(no); }
           }
-          const account = typeof a.account === 'string' && a.account.trim() ? tabs.credentials.lookup(a.account, url) : undefined;
+          const account = !tabs.routinePolicy?.(tab.owner) && typeof a.account === 'string' && a.account.trim() ? tabs.credentials.lookup(a.account, url) : undefined;
           h = tabs.handoffs.open({ tabId: tab.id, chatId: s.chatId, reason, instructions: String(a.instructions ?? '').slice(0, 2000), url: redact(url), env: tab.env, kind, ...(account ? { account } : {}) });
           handoffGroup.set(h.id, s.group);
           tabs.setLastAction(tab, `waiting for the user: ${h.reason}`);
@@ -339,5 +347,44 @@ PNG ${shot.width}x${shot.height}` : ''}${dialog}`, images: [{ data: img.data, mi
       },
     },
   ];
-  return tools;
+  tools.push({
+    name: 'browser_login', annotations: WRITE,
+    description: 'For an approved browser-write routine step only: host fills and submits one unambiguous same-origin login form using the user-managed encrypted site vault. No password argument or result. If no saved credential or the form needs SSO/MFA/CAPTCHA, opens handoff_to_user kind login. Never type passwords yourself.',
+    inputSchema: schema({}),
+    run: async (a, ctx) => {
+      const tab = tabOf(ctx, a);
+      if (!tabs.assertRoutine(tab, true)) throw new Error('browser_login requires an approved routine browser-write step');
+      if (siteVault && await serial(scopeOf(ctx).group, () => siteLogin(tabs, tab, siteVault))) return 'Host submitted the saved site login. Verify the signed-in page; if login needs another action use handoff_to_user kind login. Password withheld.';
+      return tools.find(t => t.name === 'handoff_to_user')!.run({ tabId: tab.id, kind: 'login', reason: 'Completa l’accesso al sito', instructions: 'Nessuna credenziale utilizzabile o accesso che richiede il tuo intervento.' }, ctx);
+    },
+  });
+  return tools.map(tool => ({ ...tool, run: (a, ctx) => {
+    const invoke = async (): Promise<ToolOutput> => {
+    const s = scopeOf(ctx), policy = tabs.routinePolicy?.(s.owner);
+    if (policy) {
+      if (policy.reason) throw new Error(policy.reason);
+      if (tool.name === 'javascript') throw new Error('Routine browser writes use validated browser tools only; javascript is unavailable');
+      if (['tabs_create', 'navigate'].includes(tool.name) && a.url && !/^(back|forward|reload|about:blank)$/i.test(String(a.url))) assertBrowserOrigin(policy, normalizeUrl(String(a.url)));
+      if (BROWSER_INTERACTIONS.has(tool.name)) {
+        const tab = tabOf(ctx, a); tabs.assertRoutine(tab, true);
+        if (tool.name !== 'browser_login') await actions.routineLoginGuard(tab);
+      }
+      if (!['tabs_list', 'tabs_create', 'tabs_select', 'tabs_close', 'environments', 'navigate', 'handoff_to_user', 'browser_login'].includes(tool.name)) {
+        const tab = tabOf(ctx, a); tabs.assertRoutine(tab, true); await tabs.assertLoginReadable(tab);
+        if (tool.name === 'network_requests' && a.requestId) throw new Error('Routine browser: raw response bodies are unavailable; use read_page for redacted read-back evidence');
+      }
+      if (['navigate', 'tabs_create'].includes(tool.name)) policy.dispatch();
+    }
+    const privacy = tabs.capturePrivacyVersion?.();
+    const result = await tool.run(a, ctx);
+    if (policy && tool.annotations?.readOnlyHint) {
+      const live = tabs.routinePolicy?.(s.owner);
+      if (!live || live.reason || JSON.stringify(live.targets) !== JSON.stringify(policy.targets)) throw new Error('Routine browser: authorization changed during read');
+      if (!['tabs_list', 'environments'].includes(tool.name)) { const tab = tabOf(ctx, a); await tabs.assertLoginReadable(tab); tabs.assertRoutine(tab, true); }
+      if (privacy !== tabs.capturePrivacyVersion?.()) throw new Error('Routine browser: login privacy changed during read; result withheld');
+    }
+    return policy ? typeof result === 'string' ? redact(result) : { ...result, ...('text' in result ? { text: redact(result.text) } : {}) } : result;
+    };
+    return tool.annotations?.readOnlyHint && tabs.routinePolicy?.(scopeOf(ctx).owner) ? serial(scopeOf(ctx).group, invoke) : invoke();
+  } }));
 }

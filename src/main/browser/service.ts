@@ -6,7 +6,7 @@
 // hand-off's user name or password on the clipboard (the password read from the credentials file at the click, cleared
 // after 30 s if still there: logins.ts, ADR 0012); the "Credenziali" panel copies the same way (credentials:copy).
 // Used by wiring.ts.
-import { app, clipboard, nativeImage } from 'electron';
+import { app, clipboard, nativeImage, safeStorage } from 'electron';
 import type { BrowserWindow } from 'electron';
 import type { BrowserService } from '../services';
 import type { Emitter } from '../ipc';
@@ -16,6 +16,10 @@ import { McpServer, type CallCtx, type McpTool } from '../mcp/server';
 import { EndpointTokens } from '../mcp/tokens';
 import { BrowserTabs } from './tabs';
 import { BrowserActions, normalizeUrl } from './actions';
+import path from 'node:path';
+import { safeStorageCipher } from '../engines/secrets';
+import { SiteVault } from './site-vault';
+import type { RoutineBrowserAccess } from './routine-policy';
 import { browserTools, type Scope } from './tools';
 import { SHOW_UI_HINT } from '../genui/artifacts';
 import { SCREENSHOT_HINT } from '../ask-image';
@@ -39,7 +43,7 @@ const INSTRUCTIONS = [
 /** addChatTools: more tools on every chat's own endpoint (/mcp/chat/:chatId/:token), e.g. send_to_chat (wiring.ts).
  *  setBrowserAccess: which of the browser tools each chat sees there (all, the reading ones for 'browser-read', or none).
  *  setChatToolFilter: which of the added tools a chat sees (ChatManager.chatToolShown). */
-export interface BrowserModule { service: BrowserService; mcp: McpServer; addChatTools: (tools: McpTool[]) => void; setBrowserAccess: (access: (chatId: string) => BrowserAccess) => void; setChatToolFilter: (shown: (chatId: string, tool: string) => boolean) => void }
+export interface BrowserModule { setApprovedBrowserOrigins(origins: () => string[]): void; setRoutineBrowserAccess(access: RoutineBrowserAccess): void; service: BrowserService; mcp: McpServer; addChatTools: (tools: McpTool[]) => void; setBrowserAccess: (access: (chatId: string) => BrowserAccess) => void; setChatToolFilter: (shown: (chatId: string, tool: string) => boolean) => void }
 
 /** The clipboard of Copia: the system one, or (SB_TEST=1) an in-memory one the e2e suite reads through
  *  globalThis.__sbClipboard, so a test never overwrites what the user copied. */
@@ -67,6 +71,8 @@ export const CLIPBOARD_CLEAR_MS = 30_000;
 export async function createBrowserModule(o: { emitter: Emitter; window: () => BrowserWindow | null; userData: string; port: number; brainRoot?: () => string | null }): Promise<BrowserModule> {
   const tabs = new BrowserTabs({ emitter: o.emitter, window: o.window, userData: o.userData });
   if (o.brainRoot) tabs.credentials.setRoot(o.brainRoot);
+  let approvedOrigins: () => string[] = () => [];
+  const siteVault = new SiteVault(path.join(o.userData, 'routine-site-credentials.json'), safeStorageCipher(safeStorage), () => approvedOrigins());
   const actions = new BrowserActions(tabs, png => nativeImage.createFromBuffer(png));
   const tokens = new EndpointTokens();
   const mcp = new McpServer({ name: 'second-brain-browser', version: app.getVersion() });
@@ -78,7 +84,7 @@ export async function createBrowserModule(o: { emitter: Emitter; window: () => B
     // an external client (Claude desktop, Cursor) ended its MCP session: its tabs would be unreachable, close them
     onSessionEnd: (_p, sid) => { const n = tabs.closeGroup(`mcp:${sid}`); log.info('browser', 'external session ended', { data: { session: sid.slice(0, 8), closedTabs: n } }); },
   });
-  const chatBrowserTools = browserTools(tabs, actions, perChat);
+  const chatBrowserTools = browserTools(tabs, actions, perChat, siteVault);
   const chatTools: McpTool[] = [];
   let browserAccess: (chatId: string) => BrowserAccess = () => 'all';
   const readTools = chatBrowserTools.filter(t => BROWSER_READ_TOOLS.includes(t.name));
@@ -194,6 +200,11 @@ ${SCREENSHOT_HINT}`;
       log.info('browser', 'password copied for a login hand-off', { chat: h.chatId ?? undefined, data: { id } });   // never the value
       return true;
     },
+    capturePrivacyVersion: () => tabs.capturePrivacyVersion(),
+    hasPrivateTabs: () => tabs.hasPrivateTabs(),
+    siteCredentials: () => siteVault.list(),
+    saveSiteCredential: input => siteVault.save(input),
+    removeSiteCredential: id => siteVault.remove(id),
     credentials: () => tabs.credentials.list(),
     copyCredential: (id, field) => {
       const e = tabs.credentials.byId(id);
@@ -217,5 +228,5 @@ ${SCREENSHOT_HINT}`;
       await mcp.close();
     },
   };
-  return { service, mcp, addChatTools: tools => { chatTools.push(...tools); }, setBrowserAccess: access => { browserAccess = access; }, setChatToolFilter: shown => { chatToolShown = shown; } };
+  return { setApprovedBrowserOrigins: origins => { approvedOrigins = origins; }, setRoutineBrowserAccess: access => tabs.setRoutineAccess(access), service, mcp, addChatTools: tools => { chatTools.push(...tools); }, setBrowserAccess: access => { browserAccess = access; }, setChatToolFilter: shown => { chatToolShown = shown; } };
 }

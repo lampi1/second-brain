@@ -17,6 +17,8 @@ import { timersFor } from '../timers';
 const { setInterval, clearInterval } = timersFor('browser/tabs');
 import { BrowserWindow, WebContentsView, app, screen, session as electronSession, type WebContents, type WebFrameMain, type Session } from 'electron';
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
+import { assertBrowserOrigin, type RoutineBrowserAccess, type RoutineBrowserPolicy } from './routine-policy';
 import path from 'node:path';
 import type { BrowserEnv, BrowserHandoff, BrowserSessionStatus, BrowserTab, Rect, ViewLayout } from '../../shared/contract';
 import type { Emitter } from '../ipc';
@@ -132,6 +134,47 @@ export class BrowserTabs {
     this.tick.unref?.();
   }
 
+  private captureVersion = 0;
+  capturePrivacyVersion(): number { return this.captureVersion; }
+  hasPrivateTabs(): boolean { return [...this.tabs.values()].some(t => this.isShown(t) && (!!this.loginSecrets.get(t) || !!this.routinePolicy(t.owner) && this.handoffs.list().some(h => h.tabId === t.id && h.state === 'open'))); }
+  private readonly loginSecrets = new WeakMap<Tab, { secret: string; origin: string; frame: string }>();
+  private routineAccess: RoutineBrowserAccess = () => null;
+  /** A pre-existing same-origin opener can inspect a filled form; host login requires one standalone tab. */
+  hostLoginAllowed(tab: Tab): boolean { return !tab.openedBy && this.tabsOf(tab.group).length === 1; }
+  private privateGroup(group: string): boolean { return this.tabsOf(group).some(t => this.loginSecrets.has(t) || this.handoffs.list().some(h => h.tabId === t.id && h.state === 'open' && h.kind === 'login')); }
+  protectLogin(tab: Tab, secret: string, origin: string): void {
+    if (!this.hostLoginAllowed(tab)) throw new Error('Routine host login requires one standalone tab; close other tabs or use login handoff');
+    this.captureVersion++;
+    this.loginSecrets.set(tab, { secret, origin, frame: tab.wc.mainFrame.url });
+    tab.net.clear(); tab.console = [];
+  }
+  /** No reads/screenshots while a host-filled secret remains in the login document. */
+  async assertLoginReadable(tab: Tab): Promise<void> {
+    const saved = this.loginSecrets.get(tab); if (!saved) return;
+    const safe = await tab.wc.executeJavaScriptInIsolatedWorld(1014, [{ code: `(() => {
+      const secret = ${JSON.stringify(saved.secret)};
+      if (globalThis.__sbRoutineLoginPrivate === true) return false;
+      return !document.body?.innerText.includes(secret) && ![...document.querySelectorAll('input,textarea')].some(e => e.value.includes(secret));
+    })()` }]).catch(() => false);
+    if (!safe) throw new Error('Routine browser: login document is protected; finish login with handoff_to_user kind login. No screenshot or page evidence is available yet.');
+    // A safe new document must not be able to revive the credential-bearing form through Back/BFCache.
+    tab.wc.navigationHistory.clear();
+    this.loginSecrets.delete(tab); this.captureVersion++;
+  }
+  setRoutineAccess(access: RoutineBrowserAccess): void { this.routineAccess = access; }
+  routinePolicy(owner: string | null): RoutineBrowserPolicy | null { return owner ? this.routineAccess(owner) : null; }
+  assertRoutine(tab: Tab, frames = false): RoutineBrowserPolicy | null {
+    const policy = this.routinePolicy(tab.owner);
+    if (!policy) return null;
+    assertBrowserOrigin(policy, tab.wc.getURL());
+    if (this.handoffs.list().some(h => this.tabs.get(h.tabId)?.group === tab.group && h.state === 'open')) throw new Error('Routine browser: user handoff active; wait for handoff_to_user');
+    if (frames) for (const frame of tab.wc.mainFrame.framesInSubtree) {
+      if (frame.url === 'about:blank' && frame.parent && policy.targets.includes(new URL(frame.parent.url).origin)) continue;
+      assertBrowserOrigin(policy, frame.url);
+    }
+    return policy;
+  }
+
   setFeed(fn: (e: FeedInput) => void): void { this.feed = fn; }
 
   evidenceDir(group: string): string { return path.join(this.opts.userData, 'evidence', groupFolder(group)); }
@@ -224,6 +267,7 @@ export class BrowserTabs {
   }
 
   private onHandoff(h: BrowserHandoff): void {
+    this.captureVersion++;
     this.opts.emitter.emit('browser:handoff', h);
     if (h.kind === 'login' && h.env) {
       if (h.state === 'open') this.feed({ kind: 'login', title: `Rifai l'accesso a ${h.env}`, detail: `${h.reason} · ${h.url}`.slice(0, 300), ...(h.chatId ? { chatId: h.chatId } : {}) });
@@ -285,7 +329,27 @@ export class BrowserTabs {
   create(group: string, owner: string | null, url?: string, opts: { webContents?: WebContents; view?: WebContentsView; openedBy?: string; env?: string; id?: string } = {}): Tab {
     if (this.tabsOf(group).length >= MAX_TABS_PER_GROUP) throw new Error(`Too many tabs (${MAX_TABS_PER_GROUP}) in this group: close some with tabs_close.`);
     const envExplicit = opts.env !== undefined && opts.env !== '';
-    const env = envExplicit ? envSlug(opts.env) : envForUrl(url);
+    const policy = this.routinePolicy(owner);
+    if (policy?.reason) throw new Error(policy.reason);
+    if (policy && this.privateGroup(group)) throw new Error('Routine browser: login in progress; new tabs are unavailable until the protected document is gone');
+    if (policy && opts.view) throw new Error('Routine browser: personal tabs cannot be lent to scoped routine steps');
+    if (policy && url && url !== 'about:blank') assertBrowserOrigin(policy, url);
+    const env = policy ? `routine-${createHash('sha256').update(owner!).digest('hex').slice(0, 32)}` : envExplicit ? envSlug(opts.env) : envForUrl(url);
+    if (!policy && env.startsWith('routine-')) throw new Error('Routine browser sessions cannot be opened by another chat');
+    if (policy && !this.sessions.has(env)) {
+      const ses = this.sessionFor(env);
+      ses.webRequest.onBeforeRequest((details, callback) => {
+        const target = this.byWc.get(details.webContentsId ?? -1);
+        try {
+          const current = this.routinePolicy(owner);
+          if (!current || !target || target.owner !== owner) throw new Error('Unowned routine request');
+          assertBrowserOrigin(current, details.url);
+          const login = this.loginSecrets.get(target);
+          if (login && new URL(details.url).origin !== login.origin) throw new Error('Host login cannot send credentials to another origin');
+          callback({ cancel: false });
+        } catch { callback({ cancel: true }); }
+      });
+    }
     const id = opts.id ?? `t${++this.seq}`;
     if (!opts.view) this.sessionFor(env);             // a lent personal view keeps its own session (ADR 0133)
     const view = opts.view ?? (opts.webContents
@@ -358,6 +422,8 @@ export class BrowserTabs {
   /** Before loading url in a tab: the right environment. A fresh tab is re-created there; an explicit env on a used tab
    *  opens a new tab in it; a used tab whose host would default elsewhere stays and the agent is told. */
   prepareFor(tab: Tab, url: string, envArg?: unknown): { tab: Tab; note: string } {
+    const policy = this.routinePolicy(tab.owner);
+    if (policy) { assertBrowserOrigin(policy, url); return { tab, note: '' }; }
     const want = envArg !== undefined && envArg !== null && envArg !== '' ? envSlug(envArg) : null;
     if (want) {
       if (want === tab.env) return { tab, note: '' };
@@ -487,6 +553,9 @@ export class BrowserTabs {
     });
     wc.on('render-process-gone', (_e, d) => log.warn('browser', 'tab renderer gone', { data: { tab: tab.id, reason: d.reason }, hint: 'reload the tab (navigate reload)' }));
     wc.setWindowOpenHandler(d => {
+      const policy = this.routinePolicy(tab.owner);
+      if (policy && this.privateGroup(tab.group)) return { action: 'deny' };
+      if (policy) { try { assertBrowserOrigin(policy, d.url); } catch { return { action: 'deny' }; } }
       if (!/^(?:https?:|about:blank)/i.test(d.url)) { log.info('browser', 'popup refused (scheme)', { data: { tab: tab.id, url: redact(d.url.slice(0, 200)) } }); return { action: 'deny' }; }
       if (this.tabsOf(tab.group).length >= MAX_TABS_PER_GROUP) { log.warn('browser', 'popup refused (too many tabs)', { data: { tab: tab.id } }); return { action: 'deny' }; }
       return {

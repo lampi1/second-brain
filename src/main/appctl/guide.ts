@@ -54,6 +54,7 @@ export function routineLines(snap: FlowSnapshot | null | undefined): Entry[] {
   });
 }
 /** How the app runs routines (ADR 0155), so the Orchestrator answers from the code's rules, not a guess. */
+const ROUTINE_BROWSER = 'Browser writes currently require a Claude engine with enforced browser-only tools; no silent engine fallback. Declare kind agent, effect external-write, writeVia browser, browserTargets [exact HTTPS origins], no adapter/action. Activation shows and approves these non-production targets for this step only. The host launches and restricts the browser by origin and live binding. Credentials: the user manages encrypted site logins in Credenziali; browser_login fills an exact-origin form without giving the password to the agent, otherwise handoff_to_user kind login. agent_report.browserWrite records done|partial|not-done with read-back/screenshots; partial/unknown stop automatic retry.';
 const ROUTINE_RULES = ['The app runs routines by itself (runner); app_flow_overview says what each run is doing. Runs a trigger starts: at most two at once and one per trigger, the rest wait in its queue; a start by hand (one item, or a routine without trigger) does not wait.',
   'A trigger (on the Routine page) checks DevOps or a timer and queues what it finds; a DevOps trigger can filter by tags (all of), excluded tags, a list of work item ids, an iteration path and a max per hour.',
   'Trigger paused: it detects and starts nothing, not even a start on one item; runs already started keep going but lose its DevOps writes and test DB reads at once, so a step that needs them stops. Pausing a run stops it: no new step starts, the one at work finishes; resume continues where it stopped.',
@@ -112,6 +113,7 @@ export function entries(ui: UiMap | null, d: GuideDeps, lang: GuideLang): Entry[
     text: `${x.description} · type ${x.type}${x.values ? ` ${x.values.join('|')}` : ''}${x.key.includes('*') || !values ? '' : ` · now ${show(getAt(s, x.key))}`} · change: app_config area setting` });
   out.push(...routineLines(d.flows?.()));
   if (d.flows) out.push({ kind: 'routine', title: 'Routine: trigger, pausa, coda, filtri (how routines run)', text: ROUTINE_RULES });
+  if (d.flows) out.push({ kind: 'routine', title: 'Routine: browser writes and encrypted site logins', text: ROUTINE_BROWSER });
   for (const c of CONCEPTS) out.push({ kind: 'concept', title: textOf(c.title, lang), text: `${textOf(c.summary, lang)} ${c.points.slice(0, 3).map(p => textOf(p, lang)).join(' ')} (more: the Guida page)` });
   for (const t of d.tools()) out.push({ kind: 'tool', title: t.name, text: t.description });
   return out;

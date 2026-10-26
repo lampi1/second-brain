@@ -202,3 +202,12 @@ test/unit/flows/devops-resources.test.ts internal-host sha256:892d482a816636b60c
 
 test/unit/flows/devops-resources.test.ts internal-host sha256:3614449f7df98c8e010c88a7ee5fcca148b4a7d6cbd398016a4c2efc8a78d574
 test/unit/flows/devops-resources.test.ts internal-host sha256:6568f12429dbdb43a9ed26d7dd811dbbf57693f4ff203a20f65eb1f4a8481591
+
+# Synthetic browser origin/credential fixtures, never real accounts (ADR 0165).
+test/unit/browser-routine-policy.test.ts url-credentials sha256:4884b5d25de13e0540b2a99e3d3ee341b97b9bcf2e8ecf52fe1981f7b2953d3a
+test/unit/browser-routine-policy.test.ts email sha256:4884b5d25de13e0540b2a99e3d3ee341b97b9bcf2e8ecf52fe1981f7b2953d3a
+test/unit/browser-site-vault.test.ts assigned-secret sha256:9fb301d404967ad951504c0b61b99883e216ca43653bf98b8f1848e01f6890ee
+test/unit/flows/browser-write.test.ts url-credentials sha256:3bb14568f2bb15b549647e85f6ab429da2eac66daae0bbd7d6a4e8f5f303149b
+test/unit/flows/browser-write.test.ts email sha256:3bb14568f2bb15b549647e85f6ab429da2eac66daae0bbd7d6a4e8f5f303149b
+test/unit/log.test.ts assigned-secret sha256:6bc1441b9e4d2e63366cef188a6de7414e5c7a344871d328bd51a4906b85abef
+test/unit/browser-site-vault.test.ts assigned-secret sha256:d775d7d97fdce3f9018dd34ca46e13543afa2401420f98850ed43a4965cc1bd0

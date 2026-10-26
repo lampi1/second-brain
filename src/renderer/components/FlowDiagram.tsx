@@ -4,7 +4,7 @@ import type { FlowDefinition, FlowRun } from '@shared/flows';
 import { t, locale } from '../i18n';
 import { useApp } from '../store/store';
 import { openChatRef } from '../actions';
-import { FlowLinks, FlowTestDbEvidence } from './FlowDefinition';
+import { FlowBrowserDetails, FlowLinks, FlowTestDbEvidence } from './FlowDefinition';
 import { FlowStepAgent } from './FlowStepAgent';
 export function FlowDiagram({ definition, run, onNavigate }: { definition: FlowDefinition; run?: FlowRun; onNavigate?: () => void }) {
   const [picked, setPicked] = useState<string | null>(null);
@@ -48,6 +48,7 @@ export function FlowDiagram({ definition, run, onNavigate }: { definition: FlowD
         <p>{selected.instructions}</p>
         {selected.testEnvironment && <p>{t('flows.testEnvironment')}: <strong>{selected.testEnvironment}</strong></p>}
         {selected.testDbRead && <p>{t('flows.testDbRead')}</p>}
+        <FlowBrowserDetails step={selected} run={run} onNavigate={onNavigate} />
         {selected.adapter && <p><code>{selected.adapter}</code></p>}
         {selected.reviewOf && <p className="flow-review-relation">{t('flows.reviewOf')}: <strong>{definition.steps.find(step => step.id === selected.reviewOf)?.title ?? selected.reviewOf}</strong></p>}
         {state?.reason && <p className="flow-block" role="status">{state.reason}</p>}

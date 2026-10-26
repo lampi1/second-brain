@@ -390,7 +390,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
 
   // the brain folder (bound below, once the brain exists) holds the credentials file of login hand-offs
   let brainRoot: () => string | null = () => null;
-  const { service: browser, mcp, addChatTools, setBrowserAccess, setChatToolFilter } = await createBrowserModule({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, port: mcpPortFromEnv(), brainRoot: () => brainRoot() });
+  const { service: browser, mcp, addChatTools, setBrowserAccess, setChatToolFilter, setRoutineBrowserAccess, setApprovedBrowserOrigins } = await createBrowserModule({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, port: mcpPortFromEnv(), brainRoot: () => brainRoot() });
   // the brain's chats.mjs poll leaves out the app's own chats (bound below, once the chat manager exists)
   let isOwn: (id: string) => boolean = () => false;
   // Retire the legacy global quiet flag before notifications start; postponement is request-local in the renderer.
@@ -634,7 +634,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const routedBase = new Map<string, { usd: number; turns: number; minutes: number; ctxPeak: number }>();
   const titleOf = (chatId: string) => manager.list().find(c => c.id === chatId)?.title ?? 'Chat';
   isOwn = id => manager.isOwnSession(id);
+  setApprovedBrowserOrigins(() => { if (!brainRoot() || !flowsRef) return []; const snap = flowsRef.service().snapshot(); return snap.versions.filter(v => snap.active[v.definition.id] === v.version).flatMap(v => v.definition.steps.flatMap(s => s.writeVia === 'browser' ? s.browserTargets ?? [] : [])); });
   setBrowserAccess(id => manager.browserAccess(id));
+  setRoutineBrowserAccess(id => flowsRef?.browserPolicy(id) ?? (manager.list().find(c => c.id === id)?.routine?.browserWrite ? { targets: [], reason: 'Routine browser not ready', dispatch() { throw new Error('Routine browser not ready'); } } : null));
   setChatToolFilter((id, tool) => manager.chatToolShown(id, tool));
   // a closed chat's browser tabs go away and its per-chat MCP token stops working
   const closeChat = manager.close.bind(manager);

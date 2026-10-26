@@ -40,7 +40,7 @@ export interface HeldRootResult {
 }
 export interface StoredChat {
   launchContext?: AgentContextSnapshot;
-  routine?: { runId: string; stepId: string };
+  routine?: { runId: string; stepId: string; browserWrite?: true };
   routinePackage?: string;
   routinePromptHash?: string;
   userTaskEvents?: UserTaskEvents;

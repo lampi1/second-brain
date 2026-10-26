@@ -57,7 +57,7 @@ function fakeTab(over: Partial<Record<string, unknown>> = {}) {
 /** The real BrowserTabs dialog methods on a fake `this` (the class needs Electron to be constructed). */
 function fakeTabs() {
   const emitTabs = vi.fn();
-  const self = Object.create(BrowserTabs.prototype) as BrowserTabs;
+  const self = Object.assign(Object.create(BrowserTabs.prototype), { routineAccess: () => null }) as BrowserTabs;
   Object.assign(self, { emitTabs, setLastAction: () => {}, tabsOf: () => [], activeOf: () => null, emulate: () => {} });
   return { tabs: self, emitTabs };
 }

@@ -16,6 +16,8 @@ export interface FlowStep {
   effect: 'read-only' | 'code' | 'external-write' | 'production'; reviewOf?: string; workspaceInput?: string;
   /** A host-controlled adapter, authorized by the exact automatic-flow grant. */
   adapter?: 'devops-write' | 'test-db-read';
+  /** Exact-version approval for this step only; never a production grant. */
+  writeVia?: 'browser'; browserTargets?: string[];
   /** Explicit test DB read capability; may accompany a DevOps write adapter, with both grants required. */
   testDbRead?: true;
   /** Hold the exact approved test environment for this step, including BEFORE/AFTER checks. */
@@ -103,6 +105,8 @@ export interface FlowRun {
   status: 'active' | 'approval' | 'blocked' | 'completed' | 'cancelled'; currentStep: number; steps: FlowStepRun[];
   createdAt: number; updatedAt: number;
   testDbEvidence?: FlowTestDbEvidence[];
+  /** Host dispatch observations plus explicitly agent-reported effects; no inference of remote atomicity. */
+  browserWrites?: { stepId: string; chatRunId: string; taskVersion: number; at: number; dispatched: number; outcome: 'pending' | 'done' | 'partial' | 'not-done'; reportId?: string; evidence: string[] }[];
   /** Host event timeline; never model-invented execution or hidden chain of thought. */
   /** Historical exact approval; never used as live execution authority. */
   approval?: { ruleId: string; ruleRevision: number; approvedAt: number; config: FlowAutomationConfig; sha256: string };

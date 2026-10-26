@@ -80,12 +80,12 @@ export class LoginVault {
   private saved: Saved[] = [];
   private seq = 0;
 
-  constructor(private readonly file: string, private readonly cipher: SecretCipher, private readonly now: () => number = Date.now) {
+  constructor(private readonly file: string, private readonly cipher: SecretCipher, private readonly now: () => number = Date.now, private readonly normalize: (url: unknown) => string | null = siteOf) {
     try {
       const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as { logins?: unknown };
       for (const x of Array.isArray(raw.logins) ? raw.logins : []) {
         const e = x as Partial<Saved>;
-        if (typeof e.id === 'string' && typeof e.site === 'string' && siteOf(e.site) === e.site && typeof e.user === 'string' && typeof e.cipher === 'string') this.saved.push({ id: e.id, site: e.site, user: e.user, cipher: e.cipher, at: typeof e.at === 'number' ? e.at : 0 });
+        if (typeof e.id === 'string' && typeof e.site === 'string' && this.normalize(e.site) === e.site && typeof e.user === 'string' && typeof e.cipher === 'string') this.saved.push({ id: e.id, site: e.site, user: e.user, cipher: e.cipher, at: typeof e.at === 'number' ? e.at : 0 });
       }
     } catch { /* first run */ }
   }
@@ -99,14 +99,14 @@ export class LoginVault {
 
   /** The logins of the page's site (its address, www. ignored). */
   forUrl(url: string): PersonalLogin[] {
-    const site = siteOf(url);
+    const site = this.normalize(url);
     return site ? this.list().filter(l => l.site === site) : [];
   }
 
   /** The password of a login, only for a page of its own site (null otherwise, or when it cannot be decrypted). */
   passwordFor(id: string, pageUrl: string | null): { user: string; password: string } | null {
     const e = this.saved.find(x => x.id === id);
-    if (!e || (pageUrl !== null && siteOf(pageUrl) !== e.site)) return null;
+    if (!e || (pageUrl !== null && this.normalize(pageUrl) !== e.site)) return null;
     try { return { user: e.user, password: this.cipher.decrypt(Buffer.from(e.cipher, 'base64')) }; } catch { return null; }
   }
 
@@ -116,6 +116,16 @@ export class LoginVault {
     try { const r = this.put(url, user, password); this.flush(); return r; } catch (e) { this.saved = before; throw e; }
   }
 
+  /** Exact user edit, including changed origin/account, with rollback on persistence failure. */
+  update(id: string, url: string, user: string, password: string): PersonalLogin {
+    const before = this.saved.map(x => ({ ...x }));
+    if (!before.some(x => x.id === id)) throw new Error('Credential not found');
+    try {
+      this.saved = this.saved.filter(x => x.id !== id);
+      const result = this.put(url, user, password).login;
+      this.flush(); return result;
+    } catch (error) { this.saved = before; throw error; }
+  }
   /** Many logins at once (the CSV import): one write. */
   saveMany(items: { site: string; user: string; password: string }[]): { added: number; updated: number } {
     // all or nothing: a failure half way (the limit, the OS encryption) leaves the saved list as it was
@@ -131,7 +141,7 @@ export class LoginVault {
   private put(url: string, user: string, password: string): { login: PersonalLogin; updated: boolean } {
     const why = this.cipher.unavailable();
     if (why) throw new Error(`Password non salvata: ${why}.`);
-    const site = siteOf(url);
+    const site = this.normalize(url);
     if (!site) throw new Error('Le password si salvano solo per siti https.');
     if (!password || password.length > MAX_FIELD || user.length > MAX_FIELD) throw new Error('Password non valida.');
     const cipher = this.cipher.encrypt(password).toString('base64');
@@ -144,7 +154,7 @@ export class LoginVault {
     return { login: { id: e.id, site, user: name, at: e.at }, updated: false };
   }
 
-  remove(id: string): void { this.saved = this.saved.filter(x => x.id !== id); this.flush(); }
+  remove(id: string): void { const before = this.saved; try { this.saved = this.saved.filter(x => x.id !== id); this.flush(); } catch (error) { this.saved = before; throw error; } }
 
   private flush(): void {
     const tmp = `${this.file}.${process.pid}.tmp`;

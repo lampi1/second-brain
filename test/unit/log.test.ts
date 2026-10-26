@@ -43,3 +43,14 @@ describe('log redaction of known values', () => {
     expect(redact('a short word')).toBe('a short word');
   });
 });
+
+it('redacts short punctuation passwords without corrupting structured JSON log keys', () => {
+  addRedaction('"', true);
+  expect(() => log.info('test', 'a " secret', { data: { value: '"' } })).not.toThrow();
+  expect(log.recent.at(-1)).toMatchObject({ lvl: 'info', data: { value: '[redacted]' } });
+});
+
+it('redacts sensitive structured keys including unregistered values and nested containers', () => {
+  log.info('test', 'fixture', { data: { password: 'unknown-fixture-value', nested: { token: { value: 'another-fixture' } }, ordinary: 'visible' } });
+  expect(log.recent.at(-1)?.data).toEqual({ password: '[redacted]', nested: { token: '[redacted]' }, ordinary: 'visible' });
+});

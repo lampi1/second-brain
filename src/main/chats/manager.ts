@@ -56,6 +56,7 @@ import { waitsForPeople, waitsForWork } from '../../shared/waiting';
 import { claudeHome, findTranscript, readHistory } from './transcript';
 import { orchestratorOwner, plainOwner, type ResolvedRole } from '../agents/catalog';
 import { withinParent } from '../agents/worktrees';
+import { browserWorkerPolicy, BROWSER_WORKER_TOOLS } from '../browser/worker-policy';
 import { FAIL_CLOSED, aboveCeiling, allowsClass, belowParent, browserAccess, claudeDefaultMode, claudeTools, COMMAND_TOOLS, commandsReadOnly, narrowest, readOnlyCommand, toolClassOf, within, type AgentPolicy, type BrowserAccess, type ReadScripts } from '../agents/tool-policy';
 import { readOnlyTools } from '../agents/read-tools';
 import { type UserTaskEvents, type TaskDeliveryPolicy, type AgentOwnerSnapshot, type AgentRun, type AgentRunEnd, type AgentRunOutcome, type AgentRunTags } from '../../shared/agents';
@@ -700,7 +701,12 @@ export class ChatManager implements ChatService {
       : req.research ? { request: req, owner: { ...plainOwner(req.harness, req.model ?? null), name: RESEARCH_TITLE }, instructions: RESEARCH_FRAME,
         policy: { tools: { allow: req.research.web ? ['read', 'web'] : ['read'] }, ceiling: 'default' } }
       : this.opts.resolveAgent?.(req) ?? { request: req, owner: plainOwner(req.harness, req.model ?? null), instructions: '', policy: null };
-    req = agent.request;
+    const routinePick = opts.routine?.browserWrite ? { harness: req.harness, model: req.model, effort: req.effort } : null;
+    req = routinePick ? { ...agent.request, ...routinePick } : agent.request;
+    if (opts.routine?.browserWrite) {
+      agent.owner = { ...agent.owner, engine: req.harness, model: req.model ?? null };
+      if (engineOrThrow(req.harness).kind !== 'claude') throw new Error('Browser-write routines currently require Claude: this engine cannot enforce browser-only tools. Select a Claude engine for this step and approve the new version.');
+      agent.policy = browserWorkerPolicy(agent.policy); agent.skills = []; agent.launches = []; agent.assets = undefined; }
     // a delegated chat (agent_delegate): only an agent's, under a live parent, in the parent's folder, linked to its run
     const delegator = req.parentId !== undefined ? await this.delegator(req, by, opts.continuation === true) : undefined;
     if (delegator?.s.run) links = { ...links, parentRunId: delegator.s.run.runId };
@@ -756,7 +762,7 @@ export class ChatManager implements ChatService {
     // only an engine launched with the same ones fits (launchSig)
     // a delegated chat takes only an engine launched for a child of the same role under the same role chain: its
     // endpoint lists the child's tools (agent_ask_parent) and its managed MCP servers are bounded by those ancestors
-    const warmable = !inherited?.routinePackage && caps.warm && !forkOf && !req.worktree && !req.orchestrator && req.permissionMode !== 'bypassPermissions';
+    const warmable = !opts.routine?.browserWrite && !inherited?.routinePackage && caps.warm && !forkOf && !req.worktree && !req.orchestrator && req.permissionMode !== 'bypassPermissions';
     const ancestors = delegator ? this.mcpContext(delegator.s.id)?.roles ?? null : undefined;
     const role = agent.owner?.source === 'catalog' ? agent.owner.id : null;
     const launch = this.warmLaunch(policy, agent.assets, agent.maxContext, delegator ? (ancestors ? { role, launches: agent.launches ?? null, child: { ancestors } } : undefined)
@@ -3409,6 +3415,7 @@ export class ChatManager implements ChatService {
     if (warm) return !(DELEGATING_ONLY.has(tool) && warm.launches?.length === 0) && (tool !== 'agent_ask_parent' || !!warm.child) && !PLAN_TOOLS.has(tool) && !RESEARCH_TOOLS.has(tool);
     if (!r || !s) return !RESEARCH_TOOLS.has(tool);
     // the maintenance research (ADR 0132): its two tools and nothing of the app's mail, delegation or plans
+    if (s.routine?.browserWrite) return BROWSER_WORKER_TOOLS.has(tool);
     if (s.routinePackage && /^(?:brain_|memory_|skills_|agent_learn|agent_delegate|agent_catalog)/.test(tool)) return false;
     if (s.research) return RESEARCH_TOOLS.has(tool) || (!LAMPO_HIDDEN.has(tool) && !tool.startsWith('agent_'));
     if (RESEARCH_TOOLS.has(tool)) return false;
@@ -3471,6 +3478,10 @@ export class ChatManager implements ChatService {
     let sessionId = r.s.sessionId;
     let resume = false, fork = false;
     const engine = engineOrThrow(r.s.harness);
+    if (r.s.routine?.browserWrite) {
+      if (engine.kind !== 'claude') throw new Error('Browser-write routines currently require Claude for enforced browser-only tools');
+      r.policy = browserWorkerPolicy(r.policy);
+    }
     if (!engine.caps.transcript) resume = isUuid(sessionId); // session/load; a new one gets its id from session/new
     else if (!sessionId && r.forkFrom) { sessionId = r.forkFrom; resume = true; fork = true; }
     else if (isUuid(sessionId) && findTranscript(sessionId, r.s.cwd, this.home)) resume = true;
@@ -3488,7 +3499,7 @@ export class ChatManager implements ChatService {
     const opts: SessionOptions = {
       chatId, cwd: r.s.cwd, model: r.choice.model, effort: r.choice.effort, permissionMode: this.modeFor(r), title: r.s.title,
       ...(r.policy ? { toolPolicy: r.policy.tools, ceiling: r.policy.ceiling } : {}),
-      ...(r.agentAssets ? { agentAssets: r.agentAssets } : {}),
+      ...(!r.s.routine?.browserWrite && r.agentAssets ? { agentAssets: r.agentAssets } : {}),
       // the Orchestrator's turn stays short: a few workspace calls, then it delegates (ADR 0090, issue #98)
       // a role chat with the sub-agent tool: only the Explore search, since Claude asks no permission to start one
       ...(engine.kind !== 'claude' ? {} : r.s.isOrchestrator ? { preToolUse: new TurnToolBudget() }
@@ -3496,7 +3507,7 @@ export class ChatManager implements ChatService {
       sessionId, resume, fork, worktree: r.worktree && !resume, mcpConfig: this.mcpConfig(chatId), costBaseUsd: r.costTotalUsd,
       compactWindowTokens: r.maxContext ?? this.compactWindow(),
       // Native subagents inherit this environment: a per-chat model cannot prove a memory event's producer.
-      env: { ...this.opts.env, SB_EVENT_CONTEXT: '', ...(r.s.routinePackage ? { SB_ROUTINE_PACKAGE: r.s.routinePackage, SB_APP_RECALL: '' } : {}) }, ...(extraArgs ? { extraArgs } : {}),
+      env: { ...this.opts.env, SB_EVENT_CONTEXT: '', ...(r.s.routine?.browserWrite ? { SB_ROUTINE_BROWSER: '1' } : {}), ...(r.s.routinePackage ? { SB_ROUTINE_PACKAGE: r.s.routinePackage, SB_APP_RECALL: '' } : {}) }, ...(extraArgs ? { extraArgs } : {}),
     };
     r.worktree = false; // created once; a resume re-enters it
     let sess: HarnessSession | null = null;
@@ -3515,6 +3526,7 @@ export class ChatManager implements ChatService {
    *  with Bash, 12/10). r = undefined: a warm engine (warm.ts), never an Orchestrator. */
   private extraArgsFor(harness: Harness, chatId: string, r: Rec | undefined): string[] | null {
     const allowed = !engineOf(harness)?.caps.preAllow ? [] : [
+      ...(r?.s.routine?.browserWrite ? ['mcp__second-brain'] : []),
       ...(this.appMcpFor(r) ? ['mcp__second-brain-app'] : []),
       ...(this.opts.mcpUrlFor?.(chatId) && !r?.s.quick ? APP_CHAT_TOOLS.map(t => `mcp__second-brain__${t}`) : []),
     ];

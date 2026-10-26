@@ -12,6 +12,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   Workers reuse approved write grants without duplicate questions (ADR 0164).
 
 ### Added
+- **Routine browser writes** (ADR 0165): exact approved site origins, isolated Claude workers, visible effect outcomes
+  and bounded retries. Credenziali now manages encrypted site logins; the host fills compatible forms without exposing
+  passwords to agents, with user handoff for missing credentials or complex login. Production rules stay unchanged.
 - **Voice replies made to be heard** (ADR 0152): in the voice conversation the Orchestrator answers in short spoken
   Italian sentences without English words or formatting; English terms and acronyms that remain are respelled for the
   Italian voice; Ctrl+Shift+Space turns the conversation on and off.

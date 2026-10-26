@@ -132,7 +132,7 @@ export interface QueuedInfo { kind: 'start' | 'turn'; position: number; since: n
 export interface ChatSummary {
   launchContext?: AgentContextSnapshot;
   /** Host-only immutable routine identity, never accepted by app_create_chat. */
-  routine?: { runId: string; stepId: string };
+  routine?: { browserWrite?: true; runId: string; stepId: string };
   routinePackage?: string;
   routinePromptHash?: string;
   userEvents?: { latestSeq: number; acknowledgedSeq: number };
@@ -537,6 +537,8 @@ export interface HandoffAccount {
 
 /** One entry of the "Credenziali" panel (the user's credentials file). Never the password: main copies it from the
  *  file on the user's click ('credentials:copy'), as for login hand-offs (ADR 0012). */
+export interface SiteCredentialInput { id?: string; origin: string; user: string; password: string }
+export interface SiteCredentials { entries: PersonalLogin[]; origins: string[]; unavailable: string | null }
 export interface CredentialEntry {
   id: string;                 // stable while the file does not change (a Copia after a change finds nothing)
   group: string;              // the keys that lead to it in the file: "ExampleApp · test"
@@ -1536,6 +1538,9 @@ export interface InvokeMap {
   'personal:onScreen': [{ on: boolean }, void];
   /** the "Credenziali" panel: the entries of the user's credentials file, without passwords */
   'credentials:list': [void, CredentialEntry[]];
+  'credentials:sites': [void, SiteCredentials];
+  'credentials:saveSite': [SiteCredentialInput, void];
+  'credentials:removeSite': [{ id: string }, void];
   /** main copies an entry's user name or password (read from the file now); a password is cleared from the clipboard
    *  after 30 s if still there. Returns false when it could not (no such entry, e.g. the file changed). */
   'credentials:copy': [{ id: string; field: 'user' | 'password' }, boolean];
@@ -1823,7 +1828,7 @@ export const INVOKE_CHANNELS = [
   'browser:handoffs', 'browser:handoffResolve', 'browser:handoffCopy', 'browser:envList',
   'personal:state', 'personal:open', 'personal:navigate', 'personal:go', 'personal:select', 'personal:close', 'personal:restore', 'personal:bookmarkAdd', 'personal:bookmarkRemove',
   'personal:sessionSave', 'personal:sessionOpen', 'personal:sessionRemove', 'personal:historyClear', 'personal:loginFill', 'personal:loginSave', 'personal:loginRemove', 'personal:loginCopy', 'personal:loginImport', 'personal:lend', 'personal:reclaim', 'personal:onScreen',
-  'credentials:list', 'credentials:copy', 'overlay:model', 'overlay:size', 'overlay:action', 'overlay:focus',
+  'credentials:sites', 'credentials:saveSite', 'credentials:removeSite', 'credentials:list', 'credentials:copy', 'overlay:model', 'overlay:size', 'overlay:action', 'overlay:focus',
   'run:start', 'run:stop', 'run:list', 'run:dismiss', 'app:inputLag', 'skills:list', 'skills:read', 'skills:save', 'skills:delete', 'chat:commands', 'source:get', 'source:dismissLaunch', 'source:check', 'source:updateNow',
   'clipboard:image',
   'orchestrator:get', 'orchestrator:ensure',

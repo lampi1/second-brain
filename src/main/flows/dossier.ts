@@ -35,6 +35,7 @@ export function dossierMarkdown(d: RoutineDossier): string {
   const block = (title: string, value: unknown) => lines.push(`## ${title}`, '', '```json', JSON.stringify(value, null, 2).replace(/`/g, '\\u0060'), '```', '');
   block('Original approved automation', d.approvedAutomation ?? null);
   block('Run inputs', run.inputs);
+  block('Browser writes (agent-reported outcomes, host dispatch counts)', run.browserWrites ?? []);
   block('Command receipts', run.receipts ?? []);
   block('Read-only test database receipts', run.testDbEvidence ?? []);
   block('Work item history delivery', run.history ?? []);

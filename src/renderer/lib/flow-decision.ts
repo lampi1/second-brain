@@ -1,4 +1,5 @@
 // Conservative UI capability for an exact flow gate: retries rerun an interrupted agent and never mark work complete.
+import { browserWriteStep } from '@shared/flow-browser';
 import type { FlowAsk } from './flow-ask';
 export function flowDecisionMode(ask: FlowAsk): 'approve' | 'retry' | 'blocked' {
   if (ask.type === 'flow-automation') return ask.version ? 'approve' : 'blocked';
@@ -8,7 +9,7 @@ export function flowDecisionMode(ask: FlowAsk): 'approve' | 'retry' | 'blocked' 
   const definition = ask.version?.definition, run = ask.run;
   const step = definition?.steps[run.currentStep], current = run.steps[run.currentStep];
   if (!step || !current || current.stepId !== step.id) return 'blocked';
-  if (step.effect === 'external-write' || step.effect === 'production') return 'blocked';
+  if ((step.effect === 'external-write' && !browserWriteStep(step)) || step.effect === 'production') return 'blocked';
   if (run.status === 'approval') return 'approve';
   if (run.status === 'blocked' && step.kind === 'agent' && !step.action && current.attempts < step.maxAttempts
     && step.inputs.every(key => !!run.inputs[key]?.trim())) return 'retry';

@@ -332,3 +332,10 @@ it('submits export for the exact selected version and prevents a late cross-brai
   await pending; // No document exists in this node test: a late download would throw and toast.
   expect(flowState.get().snapshot?.contextKey).toBe('new-brain');
 });
+
+it('shows exact browser-write targets in activation modal before collapsed definition details',()=>{
+ const d:FlowDefinition={...definition,steps:[{id:'browser',title:'Aggiorna il sito',kind:'agent',effect:'external-write',writeVia:'browser',browserTargets:['https://qa.example.com'],instructions:'Write the approved fixture',inputs:['workspace'],workspaceInput:'workspace',evidence:['proof'],timeoutMs:10000,maxAttempts:2}]};
+ const snap={...snapshot(),drafts:[{definition:d,revision:1,updatedAt:3,status:'proposed' as const}],versions:[],runs:[]};
+ const html=renderToStaticMarkup(createElement(FlowApproval,{ask:flowAsks(snap)[0]!,onEscape:vi.fn()}));
+ expect(html).toContain('flow-browser-approval');expect(html).toContain('scrive tramite browser su');expect(html.indexOf('https://qa.example.com')).toBeLessThan(html.indexOf('<details>'));expect(html).toContain('Nessuna autorizzazione di produzione');
+});
