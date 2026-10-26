@@ -16,7 +16,7 @@ import { type TestDeploymentCoordinator, validateDeployTarget, releaseDefinition
 import { validateAppServiceDefinition, verifyAppService } from './app-service-target';
 import { devopsResource, type ResourceLedger } from './devops-resources';
 import { prBuildStatus } from './pr-build-status';
-import { queuePrValidation } from './pr-validation';
+import { queuePrValidation, sameArtifact } from './pr-validation';
 import { testEnvironmentSnapshot } from './test-environment';
 import type { DevOpsRevisions } from './devops-revisions';
 import { HostPushPreconditionError, pushRunBranch, runBranch } from './git-push';
@@ -403,6 +403,11 @@ export class DevOpsWriter {
           if (typeof prProject.name !== 'string' || lower(String(prProject.id)) !== lower(projectId)) deny('DevOps: unexpected project response');
           project(prProject.name);
           const item = await workItem();
+          // create-pr already links its PR: a read (no journal entry) makes the repeat a no-op instead of an HTTP 400.
+          const linked = await call('GET', `${org}/_apis/wit/workitems/${context.workItemId}?$expand=relations&${API}`);
+          if (Array.isArray(linked.relations) && linked.relations.some(r => { const rel = object(r, 'relation'); return rel.rel === 'ArtifactLink' && sameArtifact(rel.url, `vstfs:///Git/PullRequestId/${projectId}/${repositoryId}/${pr}`); })) {
+            return { workItemId: context.workItemId, pullRequestId: pr, alreadyLinked: true };
+          }
           await patchItem([{ op: 'test', path: '/rev', value: item.rev }, { op: 'add', path: '/relations/-', value: { rel: 'ArtifactLink', url: `vstfs:///Git/PullRequestId/${projectId}%2F${repositoryId}%2F${pr}`, attributes: { name: 'Pull Request' } } }]);
           audit(`workitem:${context.workItemId}`); return { workItemId: context.workItemId, pullRequestId: pr };
         }

@@ -188,6 +188,8 @@ test/unit/flows/package.test.ts assigned-secret sha256:e15458704bfd8fa9401686603
 docs/routine-test-targets.md guid sha256:b250b7d1d6e18cced61cf9b0fa2df8902bdbf261312ec018d3ee703c70449452
 src/main/flows/app-service-target.ts guid sha256:9ed7622aa6b6f39a05e06cbe9f365e3f6f0e4a481dfbde656bf22b0c5257004a
 src/main/flows/pr-validation.ts guid sha256:6d55b300535fa39b90a78d9780f41cb87ad9ad64f4eba4bb43b37b0201e4d3af
+# Same public Azure DevOps Build policy type id; only sameArtifact became exported for link-pr.
+src/main/flows/pr-validation.ts guid sha256:de5446a0a6a06d3b059562a82d24af3598815140cf778a50a96da64a49c83dea
 test/fixtures/routine-consent.ts guid sha256:68c6eb32cc76e52855fee636e3bdbd670d33ea57b556f3d1f6d563302339570b
 test/unit/flows/package.test.ts conn-string-password sha256:ecd42e13247c45eb6b3ac3ba33c0273d97a093472a5fb8bf65fff37aabf68287
 test/unit/flows/package.test.ts assigned-secret sha256:ecd42e13247c45eb6b3ac3ba33c0273d97a093472a5fb8bf65fff37aabf68287

@@ -4,7 +4,7 @@ import type { TestDeployTarget } from '../../shared/flow-automation';
 import type { OwnedPullRequest } from './devops-resources';
 import { object, text } from './schema';
 // Policy evaluations return the artifact id URL-encoded (`{projectId}%2f{prId}`); compare decoded forms, malformed never matches.
-function sameArtifact(value: unknown, artifactId: string): boolean {
+export function sameArtifact(value: unknown, artifactId: string): boolean {
   if (typeof value !== 'string') return false;
   try { return decodeURIComponent(value) === artifactId; } catch { return false; }
 }
