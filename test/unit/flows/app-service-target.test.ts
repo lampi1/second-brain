@@ -205,3 +205,134 @@ it('refuses variables in the returned draft even though the host requested no ov
   await expect(f.coordinator.execute('deploy-test', f.target, 40, f.ports)).rejects.toThrow('variable overrides');
   expect(f.call.mock.calls.some(([method]) => method === 'PATCH')).toBe(false);
 });
+
+// Multiple immutable releases against one approved App Service, including the writer's idempotency journal.
+function sequentialFixture() {
+  const f = fixture(), original = f.call.getMockImplementation()!;
+  const releases = new Map<number, Record<string, unknown>>();
+  let nextRelease = 20, currentRelease = 0;
+  Object.assign(f.build, { buildNumber: 'build-40' });
+  f.call.mockImplementation(async (method, url, body) => {
+    if (method === 'POST' && url.includes('/release/releases?')) {
+      const draft = await original(method, url, body), releaseId = nextRelease++;
+      Object.assign(draft, { id: releaseId, artifacts: [{ alias: '_app', definitionReference: { version: { id: String(f.build.id) } } }] });
+      releases.set(releaseId, draft); currentRelease = releaseId; return structuredClone(draft);
+    }
+    const match = url.match(/\/release\/releases\/(\d+)\?/);
+    if (match && method === 'GET') return structuredClone(releases.get(Number(match[1]))!);
+    if (url.includes('/release/deployments?')) return { value: url.includes('queryOrder=') && currentRelease ? [{ id: 100 + currentRelease, release: { id: currentRelease }, releaseDefinition: { id: 4 }, definitionEnvironmentId: 9, deploymentStatus: 'succeeded', operationStatus: 'phaseSucceeded', lastModifiedOn: String(currentRelease), attempt: 1 }] : [] };
+    return original(method, url, body);
+  });
+  const finish = (releaseId: number, status = 'succeeded') => { const release = releases.get(releaseId)!; release.status = 'active'; (release.environments as Record<string, unknown>[])[0]!.status = status; };
+  const nextBuild = () => { f.build.id = 41; f.build.sourceVersion = 'b'.repeat(40); f.ports.source.commit = f.build.sourceVersion; Object.assign(f.build, { buildNumber: 'build-41' }); };
+  return { ...f, releases, finish, nextBuild };
+}
+it('deploys BEFORE and AFTER sequentially, retains both receipts, and selects latest or an owned release id', async () => {
+  const f = sequentialFixture();
+  await f.coordinator.execute('deploy-test', f.target, 40, f.ports);
+  f.finish(20); await f.coordinator.execute('test-deploy-status', f.target, undefined, f.ports);
+  f.nextBuild(); await f.coordinator.acquireStep('run-a', 'after-deploy', f.target, () => {}, 'baseline');
+  await expect(f.coordinator.execute('deploy-test', f.target, 41, f.ports)).resolves.toMatchObject({ releaseId: 21, buildId: 41, buildNumber: 'build-41', sourceVersion: 'b'.repeat(40) });
+  f.finish(21);
+  await expect(f.coordinator.execute('test-deploy-status', f.target, undefined, f.ports)).resolves.toMatchObject({ releaseId: 21, buildId: 41, sourceVersion: 'b'.repeat(40), success: true, latest: true });
+  await expect(f.coordinator.execute('test-deploy-status', f.target, undefined, f.ports, 20)).resolves.toMatchObject({ releaseId: 20, buildId: 40, buildNumber: 'build-40', sourceVersion: commit, success: true, latest: false });
+  await expect(f.coordinator.execute('test-deploy-status', f.target, undefined, f.ports, 999)).rejects.toThrow(/owned|no deployment/);
+  expect(f.coordinator.history('run-a').filter(d => (d as { releaseId?: number }).releaseId)).toHaveLength(2);
+  expect(f.coordinator.ownedTargets('run-a')).toEqual([f.target.id]);
+  await expect(f.coordinator.acquireStep('run-b', 'before', f.target, () => {})).rejects.toThrow('leased');
+  await f.coordinator.reconcileSteps('run-a'); expect(await f.coordinator.settle('run-a', () => {})).toBe(true);
+  await expect(f.coordinator.acquireStep('run-b', 'before', f.target, () => {})).resolves.toBeUndefined();
+});
+it.each(['queued', 'draft', 'creating'])('refuses another deployment while the earlier one is %s, including after a restart', async state => {
+  const f = sequentialFixture(); await f.coordinator.execute('deploy-test', f.target, 40, f.ports);
+  const ledger = JSON.parse(fs.readFileSync(f.state, 'utf8')); ledger.deployments[0].state = state; fs.writeFileSync(f.state, JSON.stringify(ledger)); f.nextBuild();
+  const restarted = new TestDeploymentCoordinator(f.file, f.state);
+  await expect(restarted.execute('deploy-test', f.target, 41, f.ports)).rejects.toThrow(/already requested|active|uncertain/);
+  expect(f.call.mock.calls.filter(([m]) => m === 'POST')).toHaveLength(1);
+});
+it('does not allow a repeat to switch the approved target or use a foreign/stale PR build', async () => {
+  const f = sequentialFixture(); await f.coordinator.execute('deploy-test', f.target, 40, f.ports); f.finish(20); await f.coordinator.execute('test-deploy-status', f.target, undefined, f.ports); await f.coordinator.settle('run-a', () => {});
+  const other = { ...f.target, id: 'other', webAppName: 'another-test' }; fs.writeFileSync(f.file, JSON.stringify({ schema: 1, targets: [f.target, other] })); f.nextBuild();
+  await expect(f.coordinator.execute('deploy-test', other, 41, f.ports)).rejects.toThrow(/same|different/);
+  f.build.sourceBranch = 'refs/pull/24/merge'; await expect(f.coordinator.execute('deploy-test', f.target, 41, f.ports)).rejects.toThrow(/merge build|successful build/);
+  expect(f.call.mock.calls.filter(([m]) => m === 'POST')).toHaveLength(1);
+});
+it('keeps the latest release lease until that deployment is terminal, even if an older status is read', async () => {
+  const f = sequentialFixture(); await f.coordinator.execute('deploy-test', f.target, 40, f.ports); f.finish(20); await f.coordinator.execute('test-deploy-status', f.target, undefined, f.ports); f.nextBuild(); await f.coordinator.execute('deploy-test', f.target, 41, f.ports);
+  await f.coordinator.execute('test-deploy-status', f.target, undefined, f.ports, 20);
+  expect(await f.coordinator.settle('run-a', () => {})).toBe(false);
+  await expect(f.coordinator.acquireStep('run-b', 'before', f.target, () => {})).rejects.toThrow('leased');
+});
+function writerFixture() {
+  const f = sequentialFixture(), ledgerFile = path.join(path.dirname(f.file), 'writer.json');
+  const pr = { id: 23, project: 'Example', projectId: guid, repositoryId: guid, source: 'refs/heads/fix/routine-run-a', target: 'refs/heads/main' };
+  fs.writeFileSync(ledgerFile, JSON.stringify({ schema: 1, runs: { 'run-a': { plans: [], suites: [], testCases: [], prs: [pr], pushes: [{ project: 'Example', repositoryId: guid, branch: pr.source, commit }] } } }));
+  const request = vi.fn(async (url: string, init: RequestInit) => {
+    let result;
+    if (url.includes('/pullrequests/')) result = { pullRequestId: 23, sourceRefName: pr.source, targetRefName: pr.target, repository: { id: guid }, status: 'active', mergeStatus: 'succeeded', lastMergeCommit: { commitId: f.build.sourceVersion }, lastMergeSourceCommit: { commitId: commit } };
+    else if (url.includes('/refs?')) result = { value: [{ name: pr.source, objectId: commit }, { name: 'refs/pull/23/merge', objectId: f.build.sourceVersion }] };
+    else if (url.startsWith('https://management.azure.com/')) result = await f.ports.arm();
+    else result = await f.call(init.method!, url, init.body ? JSON.parse(String(init.body)) : undefined);
+    return new Response(JSON.stringify(result));
+  });
+  const writer = new DevOpsWriter({ file: ledgerFile, deployments: f.coordinator, request, token: async () => 'fixture-token', armToken: async () => 'fixture-token' });
+  const context = { runId: 'run-a', workItemId: 42, grant: { organization: 'contoso', projects: ['Example'], fields: [], ops: ['test-deploy', 'git-push'] as ('test-deploy' | 'git-push' | 'pr-validation')[], deployTargets: [f.target] } };
+  return { ...f, writer, context, request, ledgerFile };
+}
+it('resolves omitted buildId before idempotency so a second PR revision creates a second release', async () => {
+  const f = writerFixture(), deploy = { op: 'deploy-test', targetId: f.target.id };
+  const first = await f.writer.execute(f.context, deploy); expect(first).toMatchObject({ releaseId: 20, buildId: 40 });
+  expect(await f.writer.execute(f.context, deploy)).toEqual(first);
+  f.finish(20); await f.writer.execute(f.context, { op: 'test-deploy-status', targetId: f.target.id }); f.nextBuild();
+  await expect(f.writer.execute(f.context, deploy)).resolves.toMatchObject({ releaseId: 21, buildId: 41 });
+  f.finish(21); await f.writer.execute(f.context, { op: 'test-deploy-status', targetId: f.target.id });
+  await expect(f.writer.execute(f.context, { op: 'test-deploy-status', targetId: f.target.id, releaseId: 20 })).resolves.toMatchObject({ releaseId: 20, buildId: 40, latest: false });
+  expect(f.call.mock.calls.filter(([m]) => m === 'POST')).toHaveLength(2);
+  expect(f.writer.operationsFor('run-a').filter(o => o.op === 'deploy-test')).toHaveLength(2);
+});
+it.each(['test-deploy', 'pr-validation'] as const)('reads live PR build status with the existing %s grant and no mutation', async grant => {
+  const f = writerFixture(); f.context.grant.ops = [grant];
+  await expect(f.writer.execute(f.context, { op: 'pr-build-status', targetId: f.target.id })).resolves.toMatchObject({ status: 'succeeded', buildId: 40, buildNumber: 'build-40', sourceVersion: commit });
+  f.build.result = 'failed'; await expect(f.writer.execute(f.context, { op: 'pr-build-status', targetId: f.target.id })).resolves.toMatchObject({ status: 'failed' });
+  expect(f.request.mock.calls.every(([, init]) => init.method === 'GET')).toBe(true); expect(f.writer.operationsFor('run-a')).toEqual([]);
+});
+it('refuses build reads without either grant, for an unowned PR, or after target removal', async () => {
+  const f = writerFixture(), read = { op: 'pr-build-status', targetId: f.target.id };
+  f.context.grant.ops = []; await expect(f.writer.execute(f.context, read)).rejects.toThrow('not enabled'); expect(f.request).not.toHaveBeenCalled();
+  f.context.grant.ops = ['test-deploy']; await expect(f.writer.execute({ ...f.context, runId: 'foreign' }, read)).rejects.toThrow('own PR');
+  fs.writeFileSync(f.file, JSON.stringify({ schema: 1, targets: [] })); await expect(f.writer.execute(f.context, read)).rejects.toThrow(/removed|changed/);
+});
+it.each(['failed', 'canceled'])('allows a new build after a verified %s release without releasing the environment to another run', async status => {
+  const f = sequentialFixture(); await f.coordinator.execute('deploy-test', f.target, 40, f.ports); f.finish(20, status);
+  await expect(f.coordinator.execute('test-deploy-status', f.target, undefined, f.ports)).resolves.toMatchObject({ terminal: true, success: false }); f.nextBuild();
+  await expect(f.coordinator.execute('deploy-test', f.target, 41, f.ports)).resolves.toMatchObject({ releaseId: 21 });
+  await expect(f.coordinator.execute('deploy-test', f.target, 41, { ...f.ports, runId: 'run-b' })).rejects.toThrow('leased');
+});
+it('does not let a historical status reconcile an uncertain later write', async () => {
+  const f = writerFixture(); await f.writer.execute(f.context, { op: 'deploy-test', targetId: f.target.id }); f.finish(20); await f.writer.execute(f.context, { op: 'test-deploy-status', targetId: f.target.id }); f.nextBuild();
+  await f.writer.execute(f.context, { op: 'deploy-test', targetId: f.target.id });
+  const ledger = JSON.parse(fs.readFileSync(f.ledgerFile, 'utf8')); ledger.operations.unknown = { runId: 'run-a', state: 'pending', op: 'deploy-test', targetId: f.target.id, buildId: 41 }; fs.writeFileSync(f.ledgerFile, JSON.stringify(ledger));
+  await f.writer.execute(f.context, { op: 'test-deploy-status', targetId: f.target.id, releaseId: 20 });
+  expect(f.writer.operationsFor('run-a').find(o => o.requestHash === 'unknown')?.state).toBe('pending');
+  f.finish(21); await f.writer.execute(f.context, { op: 'test-deploy-status', targetId: f.target.id });
+  expect(f.writer.operationsFor('run-a').find(o => o.requestHash === 'unknown')?.state).toBe('done');
+});
+it('cancels the latest release independently of an earlier cancellation receipt', async () => {
+  const f = writerFixture(), deploy = { op: 'deploy-test', targetId: f.target.id }, cancel = { op: 'cancel-test-deploy', targetId: f.target.id };
+  await f.writer.execute(f.context, deploy); await expect(f.writer.execute(f.context, cancel)).resolves.toMatchObject({ releaseId: 20, status: 'cancellation-requested' });
+  f.finish(20, 'canceled'); await f.writer.execute(f.context, { op: 'test-deploy-status', targetId: f.target.id }); f.nextBuild(); await f.writer.execute(f.context, deploy);
+  await expect(f.writer.execute(f.context, cancel)).resolves.toMatchObject({ releaseId: 21, status: 'cancellation-requested' });
+  expect(f.writer.operationsFor('run-a').filter(o => o.op === 'cancel-test-deploy')).toHaveLength(2);
+});
+it('reads pre-upgrade deployment records without changing their schema or inventing a build number', async () => {
+  const f = sequentialFixture(); await f.coordinator.execute('deploy-test', f.target, 40, f.ports); f.finish(20);
+  const ledger = JSON.parse(fs.readFileSync(f.state, 'utf8')); delete ledger.deployments[0].buildNumber; fs.writeFileSync(f.state, JSON.stringify(ledger));
+  await expect(f.coordinator.execute('test-deploy-status', f.target, undefined, f.ports)).resolves.toMatchObject({ buildId: 40, buildNumber: null, sourceVersion: commit, success: true });
+});
+it('invalidates cached terminal status and still cancels when a human restarts a release', async () => {
+  const f = writerFixture(); await f.writer.execute(f.context, { op: 'deploy-test', targetId: f.target.id }); f.finish(20); await f.writer.execute(f.context, { op: 'test-deploy-status', targetId: f.target.id });
+  f.finish(20, 'inProgress');
+  await expect(f.writer.execute(f.context, { op: 'test-deploy-status', targetId: f.target.id })).resolves.toMatchObject({ status: 'inProgress', terminal: false, success: false });
+  await expect(f.writer.execute(f.context, { op: 'cancel-test-deploy', targetId: f.target.id })).resolves.toMatchObject({ status: 'cancellation-requested', terminal: false, success: false });
+  expect(f.call.mock.calls.some(([m, u, b]) => m === 'PATCH' && u.includes('/environments/90?') && (b as {status?: string}).status === 'canceled')).toBe(true);
+});

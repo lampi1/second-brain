@@ -12,6 +12,7 @@ import { devopsToken, armToken } from './devops-detector';
 import { type TestDeploymentCoordinator, validateDeployTarget, releaseDefinitionFingerprint, deploymentHash } from './test-deployment';
 import { validateAppServiceDefinition, verifyAppService } from './app-service-target';
 import { devopsResource, type ResourceLedger } from './devops-resources';
+import { prBuildStatus } from './pr-build-status';
 import { queuePrValidation } from './pr-validation';
 import { testEnvironmentSnapshot } from './test-environment';
 import type { DevOpsRevisions } from './devops-revisions';
@@ -19,11 +20,11 @@ import { pushRunBranch, runBranch } from './git-push';
 import { renderDevOpsComment } from './devops-content';
 import { integer, keys, object, text } from './schema';
 
-export const DEVOPS_WRITE_REQUESTS = ['add-tags', 'remove-tags', 'set-fields', 'comment', 'link-pr', 'create-test-plan', 'rename-test-plan', 'create-test-suite', 'create-test-case', 'set-test-outcome', 'upload-image', 'relate-work-item', 'relate-pr', 'create-pr', 'pr-comment', 'publish-pr', 'abandon-pr', 'deploy-test', 'test-deploy-status', 'cancel-test-deploy', 'push-branch', 'test-environment-status', 'queue-pr-validation'] as const;
+export const DEVOPS_WRITE_REQUESTS = ['add-tags', 'remove-tags', 'set-fields', 'comment', 'link-pr', 'create-test-plan', 'rename-test-plan', 'create-test-suite', 'create-test-case', 'set-test-outcome', 'upload-image', 'relate-work-item', 'relate-pr', 'create-pr', 'pr-comment', 'publish-pr', 'abandon-pr', 'deploy-test', 'test-deploy-status', 'cancel-test-deploy', 'push-branch', 'test-environment-status', 'queue-pr-validation', 'pr-build-status'] as const;
 export type DevOpsWriteRequestOp = typeof DEVOPS_WRITE_REQUESTS[number];
 /** Which user-approved category each request needs. */
 const CATEGORY: Record<DevOpsWriteRequestOp, DevOpsWriteOp> = {
-  'queue-pr-validation': 'pr-validation',
+  'queue-pr-validation': 'pr-validation', 'pr-build-status': 'pr-validation',
   'test-environment-status': 'test-environment',
   'push-branch': 'git-push',
   'upload-image': 'attachments', 'relate-work-item': 'related-links', 'relate-pr': 'related-links', 'create-pr': 'pr-create', 'pr-comment': 'pr-comment', 'publish-pr': 'pr-publish', 'abandon-pr': 'pr-abandon', 'deploy-test': 'test-deploy', 'test-deploy-status': 'test-deploy', 'cancel-test-deploy': 'test-deploy',
@@ -41,7 +42,7 @@ export interface DevOpsWriteContext { runId: string; grant: DevOpsWriteGrant; wo
 interface Plan { project: string; id: number; rootSuiteId: number }
 interface Suite { project: string; planId: number; id: number }
 interface TestCase { project: string; planId: number; suiteId: number; id: number }
-interface Ledger { schema: 1; runs: Record<string, ResourceLedger & { plans: Plan[]; suites: Suite[]; testCases: TestCase[] }>; operations?: Record<string, { runId: string; state: 'pending' | 'done'; op?: string; targetId?: string; at?: number; completedAt?: number; result?: Record<string, unknown> }> }
+interface Ledger { schema: 1; runs: Record<string, ResourceLedger & { plans: Plan[]; suites: Suite[]; testCases: TestCase[] }>; operations?: Record<string, { runId: string; state: 'pending' | 'done'; op?: string; targetId?: string; buildId?: number; releaseId?: number; at?: number; completedAt?: number; result?: Record<string, unknown> }> }
 export interface DevOpsWriterOptions {
   /** Brain-scoped ledger file of resources each run created. */
   file: string;
@@ -99,11 +100,24 @@ export class DevOpsWriter {
   ownedPrs(runId: string) { return structuredClone(this.read().runs[runId]?.prs ?? []); }
   private async journal(context: DevOpsWriteContext, request: unknown, signal?: AbortSignal): Promise<Record<string, unknown>> {
     context.authorize?.();
-    const raw = object(request, 'request');
+    let raw = object(request, 'request');
     if (!(DEVOPS_WRITE_REQUESTS as readonly string[]).includes(String(raw.op))) deny('Unknown DevOps write operation');
-    if (!context.grant.ops.includes(CATEGORY[raw.op as DevOpsWriteRequestOp])) deny(`DevOps write "${CATEGORY[raw.op as DevOpsWriteRequestOp]}" is not enabled for this flow`);
-    if (raw.op === 'test-deploy-status' || raw.op === 'test-environment-status') return this.perform(context, raw, signal);
-    const key = createHash('sha256').update(JSON.stringify([context.runId, request, ...(raw.op === 'push-branch' ? [randomUUID()] : [])])).digest('hex');
+    if (!this.granted(context.grant, raw.op as DevOpsWriteRequestOp)) deny(`DevOps write "${CATEGORY[raw.op as DevOpsWriteRequestOp]}" is not enabled for this flow`);
+    if (raw.op === 'test-deploy-status' || raw.op === 'test-environment-status' || raw.op === 'pr-build-status') return this.perform(context, raw, signal);
+    // Resolve dynamic requests before hashing: the same input must not replay an earlier PR build/release.
+    if (raw.op === 'deploy-test' && raw.buildId === undefined) {
+      keys(raw, ['op', 'targetId', 'buildId'], 'request');
+      const build = await this.perform(context, { op: 'pr-build-status', targetId: raw.targetId }, signal);
+      if (build.status !== 'succeeded') deny(`The run PR build is ${build.status}; use flow_pr_build_status before deploying`);
+      raw = { ...raw, buildId: id(build.buildId, 'buildId') };
+    }
+    if (raw.op === 'cancel-test-deploy' && raw.releaseId === undefined) {
+      keys(raw, ['op', 'targetId', 'releaseId'], 'request');
+      const receipt = await this.perform(context, { op: 'test-deploy-status', targetId: raw.targetId }, signal);
+      if (receipt.terminal === true) return receipt;
+      raw = { ...raw, releaseId: id(receipt.releaseId, 'releaseId') };
+    }
+    const key = createHash('sha256').update(JSON.stringify([context.runId, raw, ...(raw.op === 'push-branch' ? [randomUUID()] : [])])).digest('hex');
     const data = this.read(), previous = data.operations?.[key];
     if (previous?.state === 'done' && raw.op !== 'push-branch') return previous.result!;
     if (!['abandon-pr', 'cancel-test-deploy'].includes(String(raw.op)) && Object.values(data.operations ?? {}).some(op => op.runId === context.runId && op.state === 'pending')) deny('A previous DevOps write has an unknown outcome. Reconcile it in DevOps before retrying; do not duplicate the effect.');
@@ -115,7 +129,7 @@ export class DevOpsWriter {
       const latest = this.read();
       if (Object.keys(latest.operations ?? {}).length >= 20_000) deny('DevOps operation journal is full; archive reviewed completed runs first');
       this.options.revisions?.pending(context.grant.organization, context.workItemId, key);
-      (latest.operations ??= {})[key] = { runId: context.runId, state: 'pending', op: String(raw.op), ...(typeof raw.targetId === 'string' ? { targetId: raw.targetId } : {}), at: Date.now() }; this.write(latest); attempted = true;
+      (latest.operations ??= {})[key] = { runId: context.runId, state: 'pending', op: String(raw.op), ...(typeof raw.targetId === 'string' ? { targetId: raw.targetId } : {}), ...(typeof raw.buildId === 'number' ? { buildId: raw.buildId } : {}), ...(typeof raw.releaseId === 'number' ? { releaseId: raw.releaseId } : {}), at: Date.now() }; this.write(latest); attempted = true;
     };
     try {
       const result = await this.perform(context, raw, signal);
@@ -125,12 +139,13 @@ export class DevOpsWriter {
     } finally { this.beforeMutation = undefined; }
   }
   private beforeMutation?: () => void;
+  private granted(grant: DevOpsWriteGrant, op: DevOpsWriteRequestOp): boolean { return op === 'pr-build-status' ? grant.ops.includes('test-deploy') || grant.ops.includes('pr-validation') : grant.ops.includes(CATEGORY[op]); }
   private async perform(context: DevOpsWriteContext, request: unknown, signal?: AbortSignal): Promise<Record<string, unknown>> {
     context.authorize?.();
     const raw = object(request, 'request'), op = raw.op as DevOpsWriteRequestOp;
     if (!(DEVOPS_WRITE_REQUESTS as readonly string[]).includes(op)) deny('Unknown DevOps write operation');
     const { grant } = context;
-    if (!grant.ops.includes(CATEGORY[op])) deny(`DevOps write "${CATEGORY[op]}" is not enabled for this flow`);
+    if (!this.granted(grant, op)) deny(`DevOps write "${CATEGORY[op]}" is not enabled for this flow`);
     const controller = new AbortController(), abort = () => controller.abort();
     const timer = setTimeout(abort, TIMEOUT_MS); signal?.addEventListener('abort', abort, { once: true });
     if (signal?.aborted) abort();
@@ -205,15 +220,15 @@ export class DevOpsWriter {
         record(entry => { entry.pushes = [{ project: p, repositoryId, ...result }]; });
         return { repositoryId, ...result };
       }
-      if (op === 'deploy-test' || op === 'test-deploy-status' || op === 'cancel-test-deploy' || op === 'queue-pr-validation') {
-        keys(raw, op === 'deploy-test' ? ['op', 'targetId', 'buildId'] : op === 'queue-pr-validation' ? ['op', 'targetId', 'mergeCommit'] : ['op', 'targetId'], 'request');
+      if (op === 'deploy-test' || op === 'test-deploy-status' || op === 'cancel-test-deploy' || op === 'queue-pr-validation' || op === 'pr-build-status') {
+        keys(raw, op === 'deploy-test' ? ['op', 'targetId', 'buildId'] : op === 'queue-pr-validation' ? ['op', 'targetId', 'mergeCommit'] : op === 'pr-build-status' ? ['op', 'targetId'] : ['op', 'targetId', 'releaseId'], 'request');
         const target = grant.deployTargets?.find(t => t.id === raw.targetId);
         if (!target || !this.options.deployments) deny('No exact test deployment target is approved/configured');
         let verifySource: (() => Promise<void>) | undefined;
         let source: { repositoryId: string; commit: string; branch: string; pullRequestId?: number } | undefined;
-        if (op === 'deploy-test' || op === 'queue-pr-validation') {
+        if (op === 'deploy-test' || op === 'queue-pr-validation' || op === 'pr-build-status') {
           const pr = mine.prs?.find(pr => pr.repositoryId === target!.repositoryId);
-          if (!pr) deny('Deployment requires this run’s own PR');
+          if (!pr || pr.projectId !== target!.projectId || lower(pr.project) !== lower(target!.project)) deny('Deployment requires this run’s own PR in the approved target project');
           const live = await call('GET', `${org}/${encodeURIComponent(pr!.project)}/_apis/git/repositories/${pr!.repositoryId}/pullrequests/${pr!.id}?${API}`);
           if (live.pullRequestId !== pr!.id || live.sourceRefName !== pr!.source || live.targetRefName !== pr!.target || String(object(live.repository, 'PR repository').id).toLowerCase() !== pr!.repositoryId || live.status !== 'active') deny('Run PR identity changed');
           if (live.mergeStatus !== 'succeeded') deny('The run PR merge is not ready; wait for merge computation');
@@ -229,9 +244,10 @@ export class DevOpsWriter {
             if (fresh.mergeStatus !== 'succeeded' || !branchRef || !mergeRef || mergeRef.objectId !== source!.commit || object(fresh.lastMergeSourceCommit, 'PR source commit').commitId !== branchRef.objectId || (grant.ops.includes('git-push') && (!published || published.commit !== branchRef.objectId))) deny('The PR merge build is stale relative to the run source branch');
             if (fresh.pullRequestId !== pr!.id || fresh.status !== 'active' || fresh.sourceRefName !== pr!.source || fresh.targetRefName !== pr!.target || String(object(fresh.repository, 'PR repository').id).toLowerCase() !== pr!.repositoryId || object(fresh.lastMergeCommit, 'PR merge commit').commitId !== source!.commit) deny('The run PR merge identity changed before deployment');
           };
-          if (op === 'queue-pr-validation') {
-            if (raw.mergeCommit !== source.commit) deny('mergeCommit must equal this PR live lastMergeCommit');
+          if (op === 'queue-pr-validation' || op === 'pr-build-status') {
+            if (op === 'queue-pr-validation' && raw.mergeCommit !== source.commit) deny('mergeCommit must equal this PR live lastMergeCommit');
             const targetCall = (method: string, url: string, body?: unknown) => { const local = this.options.deployments!.targets().find(t => t.id === target!.id); if (!local || deploymentHash(local) !== deploymentHash(target)) deny('Test target changed or was removed; approve it again'); return call(method, url, body); };
+            if (op === 'pr-build-status') return prBuildStatus(target!, { commit: source.commit, pullRequestId: pr!.id }, targetCall, verifySource);
             return queuePrValidation(target!, pr!, source.commit, targetCall, verifySource);
           }
         }
@@ -241,10 +257,10 @@ export class DevOpsWriter {
           const secret = await (this.options.armToken ?? armToken)(controller.signal);
           context.authorize?.();
           return this.call(secret, 'GET', `https://management.azure.com${resourceId}?api-version=2024-04-01`, undefined, 'application/json', controller.signal);
-        } });
+        } }, raw.releaseId === undefined ? undefined : id(raw.releaseId, 'releaseId'));
         if (op === 'test-deploy-status' && deploymentResult.terminal === true) {
           const journal = this.read();
-          for (const [key, pending] of Object.entries(journal.operations ?? {})) if (pending.runId === context.runId && pending.state === 'pending' && ['deploy-test', 'cancel-test-deploy'].includes(String(pending.op)) && pending.targetId === target!.id) {
+          for (const [key, pending] of Object.entries(journal.operations ?? {})) if (pending.runId === context.runId && pending.state === 'pending' && ['deploy-test', 'cancel-test-deploy'].includes(String(pending.op)) && pending.targetId === target!.id && deploymentResult.latest === true && (pending.buildId === undefined || pending.buildId === deploymentResult.buildId) && (pending.releaseId === undefined || pending.releaseId === deploymentResult.releaseId)) {
             pending.state = 'done'; pending.completedAt = Date.now(); pending.result = { ...deploymentResult, reconciled: true };
             this.write(journal); this.options.revisions?.done(grant.organization, context.workItemId, key);
           }
