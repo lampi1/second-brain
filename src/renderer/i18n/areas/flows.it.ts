@@ -166,6 +166,7 @@ export const flowsIt = {
   'flows.yesRetry': "Sì, riprova",
   'flows.retryHint': 'Ripete il passaggio. Il completamento richiede nuove evidenze.',
   'flows.retryLimit': (p: { at: number; of: number }) => `Tentativi esauriti (${p.at} di ${p.of}): «Sì» non può ripetere il passaggio. Per riprovare serve un riavvio della routine (chiedilo all'Orchestrator); «No» annulla la run. Un testo scritto qui non la sblocca.`,
+  'flows.retryExtra': (p: { at: number; of: number }) => `Tentativi esauriti (${p.at} di ${p.of}): «Sì» concede un ultimo tentativo extra, uno solo per passaggio, sulla stessa run, senza ripartire da capo. Usalo se l'errore era dell'app ed è stato corretto. «No» annulla la run.`,
   'flows.target': "Oggetto",
   'flows.runContext': "Ambito e input di questa esecuzione",
   'flows.evidenceFormat': "Per approvare, documenta ogni evidenza su una riga: etichetta esatta, due punti e risultato.",

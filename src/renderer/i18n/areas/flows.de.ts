@@ -166,6 +166,7 @@ export const flowsDe = {
   'flows.yesRetry': "Ja, erneut versuchen",
   'flows.retryHint': 'Führt den Schritt erneut aus. Der Abschluss erfordert neue Nachweise.',
   'flows.retryLimit': (p: { at: number; of: number }) => `Keine Versuche mehr (${p.at} von ${p.of}): „Ja" kann den Schritt nicht wiederholen. Für einen neuen Versuch braucht es einen Neustart der Routine (frag den Orchestrator); „Nein" bricht den Lauf ab. Ein Text hier gibt ihn nicht frei.`,
+  'flows.retryExtra': (p: { at: number; of: number }) => `Keine Versuche mehr (${p.at} von ${p.of}): „Ja" gewährt einen letzten zusätzlichen Versuch, nur einen pro Schritt, im selben Lauf, ohne Neustart. Nutze ihn, wenn der Fehler ein inzwischen behobener App-Fehler war. „Nein" bricht den Lauf ab.`,
   'flows.target': "Ziel",
   'flows.runContext': "Umfang und Eingaben dieses Durchlaufs",
   'flows.evidenceFormat': "Dokumentiere für die Freigabe jeden Nachweis in einer Zeile: genaue Bezeichnung, Doppelpunkt und Ergebnis.",

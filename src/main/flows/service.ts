@@ -14,7 +14,7 @@ import type { FlowAttachment, FlowCommandReceipt, FlowHealEntry, FlowActivate, F
 import { browserWriteStep, browserWriteResult } from '../../shared/flow-browser';
 import { adapted, commandStep, testDbAdapted, digest, type RoleTierMax, inScope, integer, keys, normalize, object, text, validateDefinition, validateInputs, validateScope } from './schema';
 import { assertPackageBinding } from './binding';
-import { HOLD, healable, roleOf, samePrefix } from '../../shared/routine';
+import { HOLD, attemptBudget, healable, roleOf, samePrefix, uncertainEffect } from '../../shared/routine';
 
 export interface FlowServiceOptions {
   progressEvidence?: (run: FlowRun) => string[];
@@ -33,6 +33,8 @@ export interface FlowServiceOptions {
   validateModels?: (definition: FlowDefinition) => void;
   freezeRole?: (step: FlowStep) => Pick<FlowStep, 'agentPrompt' | 'engine' | 'model' | 'tier' | 'effort'>;
   hashOf?: (kind: 'script' | 'query', ref: string) => string | null;
+  /** True while a DevOps write of this run has an unknown outcome (the writer's ledger): no extra user retry then. */
+  uncertainWrites?: (run: FlowRun) => boolean;
 }
 type Stored = Omit<FlowSnapshot, 'contextKey' | 'storageError'> & { schema: 1; bindings: string[] };
 const empty = (): Stored => ({ schema: 1, bindings: [], drafts: [], versions: [], active: {}, runs: [] });
@@ -428,7 +430,7 @@ export class FlowService {
     return this.change(() => {
       const run = this.guarded(runId, expectedRevision, stepId); this.owner(run, ownerId);
       const definition = this.version(run.flowId, run.flowVersion).definition.steps[run.currentStep]!, step = run.steps[run.currentStep]!;
-      if (definition.kind !== 'agent' || step.status !== 'ready' || step.attempts >= definition.maxAttempts + (step.reconciliationAttempts ?? 0) || this.unsupported(run, definition) || definition.action) throw new Error('Current step is not available for delegation');
+      if (definition.kind !== 'agent' || step.status !== 'ready' || step.attempts >= attemptBudget(definition, step) || this.unsupported(run, definition) || definition.action) throw new Error('Current step is not available for delegation');
       text(binding.chatId, 'chatId', 200); text(binding.chatRunId, 'chatRunId', 200); integer(binding.taskVersion, 'taskVersion', 1);
       const bindingKey = JSON.stringify([binding.chatRunId, binding.taskVersion]);
       if (this.data.bindings.includes(bindingKey)) throw new Error('Agent run/task identity was already bound to a flow step');
@@ -531,8 +533,13 @@ export class FlowService {
       if (this.unsupported(run, definition)) throw new Error('No configured execution adapter; approval cannot bypass this blocker');
       if (commandStep(definition) && step.status === 'approval') throw new Error('A prod step completes only through «Esegui» and its receipt');
       if (step.status === 'blocked') {
-        if (step.attempts >= definition.maxAttempts) throw new Error('Retry limit reached');
-        this.healed(run, { at: this.now(), stepId: step.stepId, action: 'resume', attempt: step.attempts + 1, reason: 'Explicit user retry' });
+        // past the limit the user's Sì grants ONE more attempt (e.g. the failure was a host bug since fixed), never a
+        // second, and never over an effect whose outcome is unknown: that one is reconciled first
+        const extra = step.attempts >= attemptBudget(definition, step);
+        if (extra && (step.userRetryUsed || step.attempts > attemptBudget(definition, step))) throw new Error('Retry limit reached');
+        if (extra && (uncertainEffect(run, step) || this.options.uncertainWrites?.(run))) throw new Error('An external write has an unknown outcome; reconcile it before the extra retry');
+        if (extra) step.userRetryUsed = true;
+        this.healed(run, { at: this.now(), stepId: step.stepId, action: 'resume', attempt: step.attempts + 1, reason: extra ? 'Explicit user retry past the attempt limit (one only)' : 'Explicit user retry' });
         this.reset(step); delete run.awaitingUser; this.prepare(run);
       } else {
         if (definition.evidence.some(label => !feedback.split('\n').some(line => line.startsWith(`${label}: `) && line.length > label.length + 2))) throw new Error('User note is missing required evidence labels');
@@ -676,12 +683,12 @@ export class FlowService {
       if (spec.inputs.some(key => !run.inputs[key]?.trim())) { this.block(run, 'Required inputs are missing. Revise the definition or start a new subject with complete inputs.'); return; }
       if (spec.kind === 'approval' || spec.kind === 'manual') { step.status = 'approval'; step.decisionPending = true; run.status = 'approval'; return; }
       if (spec.kind === 'agent') {
-        if (step.attempts >= spec.maxAttempts + (step.reconciliationAttempts ?? 0)) { this.block(run, 'Tentativi esauriti: serve una tua decisione.'); return; }
+        if (step.attempts >= attemptBudget(spec, step)) { this.block(run, 'Tentativi esauriti: serve una tua decisione.'); return; }
         step.status = 'ready'; return;
       }
       if (commandStep(spec) || spec.connector) {
         if (spec.env === 'prod') { step.status = 'approval'; step.decisionPending = true; run.status = 'approval'; return; }
-        if (step.attempts >= spec.maxAttempts + (step.reconciliationAttempts ?? 0)) { this.block(run, 'Tentativi esauriti: serve una tua decisione.'); return; }
+        if (step.attempts >= attemptBudget(spec, step)) { this.block(run, 'Tentativi esauriti: serve una tua decisione.'); return; }
         step.status = 'ready'; return;
       }
       step.attempts++;
@@ -877,7 +884,7 @@ export class FlowService {
         branchLineage(run, data.runs);
       }
       run.steps.forEach((step, i) => {
-        keys(object(step, 'step run'), ['stepId', 'status', 'attempts', 'startedAt', 'chatId', 'chatRunId', 'taskVersion', 'reason', 'receipt', 'decisionPending', 'historyText', 'reconciliationAttempts'], 'step run');
+        keys(object(step, 'step run'), ['stepId', 'status', 'attempts', 'startedAt', 'chatId', 'chatRunId', 'taskVersion', 'reason', 'receipt', 'decisionPending', 'historyText', 'reconciliationAttempts', 'userRetryUsed'], 'step run');
         if (step.historyText !== undefined) text(step.historyText, 'step history', 4000);
         const spec = version.definition.steps[i]!;
         if (step.reason !== undefined) text(step.reason, 'step reason', 16000, true);
@@ -886,15 +893,16 @@ export class FlowService {
         if (step.taskVersion !== undefined) integer(step.taskVersion, 'step task', 1);
         if (step.startedAt !== undefined) integer(step.startedAt, 'step start');
         const command = commandStep(spec) || !!spec.connector;
-        if (step.status === 'ready' && ((spec.kind !== 'agent' && !command) || step.attempts >= spec.maxAttempts + (step.reconciliationAttempts ?? 0)) || step.status === 'approval' && !['manual', 'approval'].includes(spec.kind) && !(command && spec.env === 'prod')) throw new Error('Invalid step kind state');
+        if (step.status === 'ready' && ((spec.kind !== 'agent' && !command) || step.attempts >= attemptBudget(spec, step)) || step.status === 'approval' && !['manual', 'approval'].includes(spec.kind) && !(command && spec.env === 'prod')) throw new Error('Invalid step kind state');
         // A declared adapter step may progress on disk; its grant is re-checked live at prepare, bind, retry and every write.
         const unsupported = executionKind(spec) === 'unsupported';
         if (unsupported && !['pending', 'blocked', 'cancelled'].includes(step.status)) throw new Error('Unsupported action cannot progress');
         if (step.status !== 'completed' && step.receipt) throw new Error('Unfinished step cannot have a receipt');
         if (step.decisionPending !== undefined && typeof step.decisionPending !== 'boolean') throw new Error('Invalid decision state');
         if (step.stepId !== spec.id || !['pending', 'ready', 'running', 'approval', 'blocked', 'completed', 'cancelled'].includes(step.status)) throw new Error('Invalid step');
+        if (step.userRetryUsed !== undefined && step.userRetryUsed !== true) throw new Error('Invalid user retry state');
         if (step.reconciliationAttempts !== undefined) integer(step.reconciliationAttempts, 'reconciliation attempts', 0, 500);
-        integer(step.attempts, 'attempts', 0, spec.maxAttempts + (step.reconciliationAttempts ?? 0));
+        integer(step.attempts, 'attempts', 0, attemptBudget(spec, step));
         if ((i < run.currentStep) !== (step.status === 'completed') || (i > run.currentStep && step.status !== 'pending')) throw new Error('Invalid step sequence');
         if (step.status === 'completed') {
           const receipt = step.receipt;

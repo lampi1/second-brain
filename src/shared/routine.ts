@@ -6,6 +6,21 @@ import type { WorkRoleId } from './roles';
 /** The reason prefix of a block the runner never heals by itself: it needs the user (changed content, a missing input). */
 export const HOLD = 'Da sistemare: ';
 
+/** How many attempts a step may start: its own limit, one per user-reconciled write, one the user granted past the limit. */
+export function attemptBudget(spec: Pick<FlowStep, 'maxAttempts'>, step: FlowRun['steps'][number]): number {
+  return spec.maxAttempts + (step.reconciliationAttempts ?? 0) + (step.userRetryUsed ? 1 : 0);
+}
+
+/** An effect of this step whose outcome the run does not know: it must be reconciled before any extra attempt. The
+ *  host also refuses on an unknown DevOps write, which lives in its ledger, not in the run. */
+export function uncertainEffect(run: FlowRun, step: FlowRun['steps'][number]): boolean {
+  const connector = run.connectorReceipts?.findLast(r => r.stepId === step.stepId);
+  const browser = run.browserWrites?.findLast(e => e.stepId === step.stepId);
+  const command = run.receipts?.findLast(r => r.stepId === step.stepId);
+  return !!run.pendingReconciliation || !!connector && ['pending', 'unknown'].includes(connector.outcome)
+    || !!browser && ['pending', 'partial'].includes(browser.outcome) || !!command && command.endedAt === undefined;
+}
+
 /** True when the run is blocked on a failure the runner retries by itself (or sends back to the step onFail names). */
 export function healable(run: FlowRun, definition: FlowDefinition | undefined): boolean {
   const step = run.steps[run.currentStep], spec = definition?.steps[run.currentStep];

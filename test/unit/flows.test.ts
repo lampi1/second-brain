@@ -127,7 +127,22 @@ describe('flow execution authority', () => {
   });
   it('blocks timed-out reports and bounds user retries', () => {
     const { service, advance } = setup(report); activate(service, definition([step('work', { maxAttempts: 1 })])); const run = bound(service, start(service)); advance(11_000);
-    const blocked = finish(service, run); expect(blocked.status).toBe('blocked'); expect(() => service.decide({ runId: blocked.id, expectedRevision: blocked.revision, stepId: 'work', answer: 'yes' })).toThrow('Retry limit');
+    const blocked = finish(service, run); expect(blocked.status).toBe('blocked');
+    // past the limit the user's Sì grants exactly one more attempt, recorded on the step and in the heal log
+    const extra = service.decide({ runId: blocked.id, expectedRevision: blocked.revision, stepId: 'work', answer: 'yes' });
+    expect(extra.steps[0]).toMatchObject({ status: 'ready', attempts: 1, userRetryUsed: true }); expect(extra.heal?.at(-1)?.reason).toContain('past the attempt limit');
+    const again = bound(service, extra, 'worker-2'); expect(again.steps[0]!.attempts).toBe(2); advance(11_000);
+    const blockedAgain = finish(service, again); expect(blockedAgain.status).toBe('blocked');
+    expect(() => service.decide({ runId: blockedAgain.id, expectedRevision: blockedAgain.revision, stepId: 'work', answer: 'yes' })).toThrow('Retry limit');
+  });
+  it('never grants the extra retry over a write whose outcome is unknown', () => {
+    let uncertain = true;
+    const { options, advance } = setup(report); const guarded = new FlowService({ ...options, uncertainWrites: () => uncertain });
+    activate(guarded, definition([step('work', { maxAttempts: 1 })])); const run = bound(guarded, start(guarded)); advance(11_000);
+    const blocked = finish(guarded, run);
+    expect(() => guarded.decide({ runId: blocked.id, expectedRevision: blocked.revision, stepId: 'work', answer: 'yes' })).toThrow('reconcile');
+    expect(guarded.status(blocked.id, 'orch').steps[0]!.userRetryUsed).toBeUndefined();
+    uncertain = false; expect(guarded.decide({ runId: blocked.id, expectedRevision: blocked.revision, stepId: 'work', answer: 'yes' }).steps[0]!.status).toBe('ready');
   });
 });
 describe('flow persistence and tool boundary', () => {

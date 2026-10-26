@@ -101,13 +101,25 @@ it('offers bounded agent retries only with required inputs, no action adapter an
   expect(flowDecisionMode(flowAsks(state)[0]!)).toBe('retry');
   expect(renderToStaticMarkup(createElement(FlowApproval, { ask: flowAsks(state)[0]!, onEscape: vi.fn() }))).toContain('Sì, riprova');
   const exhausted = { ...state, runs: [{ ...state.runs[0]!, steps: [{ ...state.runs[0]!.steps[0]!, attempts: 2 }] }] };
-  expect(flowDecisionMode(flowAsks(exhausted)[0]!)).toBe('blocked');
-  expect(flowRetryLimit(flowAsks(exhausted)[0]!)).toEqual({ attempts: 2, max: 2 });
+  // attempts used up: Sì grants the one last extra attempt the host allows, and the card says so
+  expect(flowDecisionMode(flowAsks(exhausted)[0]!)).toBe('retry');
+  expect(flowRetryLimit(flowAsks(exhausted)[0]!)).toEqual({ attempts: 2, max: 2, extra: true });
   expect(flowRetryLimit(flowAsks(state)[0]!)).toBeNull();
-  // a disabled Sì must say why: the user otherwise clicks it and nothing happens
   const exhaustedCard = renderToStaticMarkup(createElement(FlowApproval, { ask: flowAsks(exhausted)[0]!, onEscape: vi.fn() }));
   expect(exhaustedCard).toContain('data-testid="flow-retry-limit"');
   expect(exhaustedCard).toContain('Tentativi esauriti (2 di 2)');
+  expect(exhaustedCard).toContain('ultimo tentativo extra');
+  expect(flowDecisionSubmission(flowAsks(exhausted)[0]!, 'yes', '', '')).toEqual({ answer: 'yes' });
+  // the extra attempt is spent: a second one is refused and a disabled Sì says why
+  const spent = { ...state, runs: [{ ...state.runs[0]!, steps: [{ ...state.runs[0]!.steps[0]!, attempts: 3, userRetryUsed: true }] }] };
+  expect(flowDecisionMode(flowAsks(spent)[0]!)).toBe('blocked');
+  expect(flowRetryLimit(flowAsks(spent)[0]!)).toEqual({ attempts: 3, max: 2, extra: false });
+  expect(flowDecisionSubmission(flowAsks(spent)[0]!, 'yes', '', '')).toBeNull();
+  expect(renderToStaticMarkup(createElement(FlowApproval, { ask: flowAsks(spent)[0]!, onEscape: vi.fn() }))).toContain('«Sì» non può ripetere il passaggio');
+  // a write whose outcome is unknown is reconciled first: no extra attempt over it
+  const uncertain = { ...exhausted, runs: [{ ...exhausted.runs[0]!, browserWrites: [{ stepId: 'review', chatRunId: 'r1', taskVersion: 1, at: 1, dispatched: 1, outcome: 'partial' as const, evidence: [] }] }] };
+  expect(flowDecisionMode(flowAsks(uncertain)[0]!)).toBe('blocked');
+  expect(flowRetryLimit(flowAsks(uncertain)[0]!)?.extra).toBe(false);
   expect(flowDecisionMode(flowAsks({ ...state, runs: [{ ...state.runs[0]!, inputs: {} }] })[0]!)).toBe('blocked');
   for (const effect of ['production', 'external-write'] as const) {
     const dangerous = { ...state, versions: [{ ...state.versions[0]!, definition: { ...agentDefinition, steps: [{ ...agentDefinition.steps[0]!, effect }] } }] };

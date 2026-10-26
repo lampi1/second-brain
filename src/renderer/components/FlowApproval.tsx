@@ -65,8 +65,8 @@ function FlowStandardApproval({ ask, onEscape }: { ask: Exclude<FlowAsk, { type:
     {current && <p>{t('flows.current')}: <strong>{definition?.steps[run!.currentStep]?.title ?? current.stepId}</strong></p>}
     {current?.reason && <p className="flow-block" role="status">{current.reason}</p>}
     {boundChat && <button type="button" className="btn btn-ghost btn-s" onClick={() => { onEscape(); openChatRef(boundChat); }} data-testid="flow-open-agent">{t('flows.openAgent')}</button>}
-    {mode === 'retry' && <p className="wq-lead">{t('flows.retryHint')}</p>}
-    {retryLimit && <p className="wq-lead" data-testid="flow-retry-limit">{t('flows.retryLimit', { at: retryLimit.attempts, of: retryLimit.max })}</p>}
+    {mode === 'retry' && !retryLimit && <p className="wq-lead">{t('flows.retryHint')}</p>}
+    {retryLimit && <p className="wq-lead" data-testid="flow-retry-limit">{t(retryLimit.extra ? 'flows.retryExtra' : 'flows.retryLimit', { at: retryLimit.attempts, of: retryLimit.max })}</p>}
     {definition && <details><summary>{t('flows.details')} · {definition.steps.length}</summary><FlowDefinition definition={definition} run={run} /></details>}
     {gate.required && <div className="pa-change flow-evidence">
       <label className="wq-label" htmlFor={evidenceId}>{t('flows.evidence')}</label>

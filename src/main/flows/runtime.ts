@@ -179,6 +179,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
         if (lineage.some(id => writer.operationsFor(id).some(op => op.op === 'push-branch' && op.state === 'pending'))) return 'The inherited branch has an unknown push outcome; reconcile it before restarting here.';
         if (writer.ownedPrs(run.id).length > 0 || deployments.ownedTargets(run.id).length > 0 || writer.operationsFor(run.id).some(op => op.state !== 'not-done' && ['create-pr', 'deploy-test'].includes(op.op ?? ''))) return 'This run owns a PR or test deployment. Restart from the beginning after cleanup; carried steps cannot transfer resource ownership.';
       },
+      uncertainWrites: run => writerFor(context.key).operationsFor(run.id).some(op => op.state === 'pending'),
       hashOf: (kind, ref) => contentHash(context.root, kind, ref),
       adapterGranted: (run, spec) => { try { return !stopped && current().key === context.key && (!adapted(spec) || !!automation().grantFor(run)) && (!testDbAdapted(spec) || !!automation().testDbGrantFor(run)); } catch { return false; } },
       changed: snapshot => {

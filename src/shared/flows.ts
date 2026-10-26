@@ -99,6 +99,9 @@ export interface FlowStepRun {
   historyText?: string;
   /** One explicit recovery attempt per user-confirmed uncertain write; normal automatic limits stay unchanged. */
   reconciliationAttempts?: number;
+  /** The one extra attempt the user granted with Sì after the step's attempts ran out (e.g. a host bug since fixed);
+   *  a second one is refused, so the run cannot loop. */
+  userRetryUsed?: boolean;
   reason?: string; receipt?: FlowReceipt; decisionPending?: boolean;
 }
 /** Durable query evidence. Never stores raw SQL, credentials, raw driver errors or database result rows. */
