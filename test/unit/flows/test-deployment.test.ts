@@ -28,7 +28,7 @@ function setup() {
     if (url.includes('/pools/10/agents/11?')) return { id: 11, systemCapabilities: { 'Agent.Name': 'test-agent', 'Agent.ComputerName': 'test-host' } };
     if (method === 'POST' && url.includes('/release/releases?')) {
       if (failCreate) throw new Error('lost response');
-      return { id: 20, status: 'draft', definitionSnapshotRevision: snapshotRevision, releaseDefinition: { id: 4 }, environments: [{ id: 90, definitionEnvironmentId: 9, name: 'Test', deployPhasesSnapshot: [structuredClone(phase)] }], artifacts: [{ alias: 'app', definitionReference: { version: { id: '40' } } }] };
+      return { id: 20, status: 'draft', definitionSnapshotRevision: 1, releaseDefinitionRevision: snapshotRevision, releaseDefinition: { id: 4 }, environments: [{ id: 90, definitionEnvironmentId: 9, name: 'Test', deployPhasesSnapshot: [structuredClone(phase)] }], artifacts: [{ alias: 'app', definitionReference: { version: { id: '40' } } }] };
     }
     if (method === 'GET' && url.includes('/release/releases/20?')) return { id: 20, releaseDefinition: { id: 4 }, environments: [{ id: 90, definitionEnvironmentId: 9, status }] };
     if (method === 'PATCH') return {};

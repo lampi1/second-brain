@@ -224,7 +224,7 @@ export class TestDeploymentCoordinator {
       throw error;
     }
     entry.releaseId = pos(release.id); entry.state = 'draft'; this.save(state);
-    if (release.status !== 'draft' || release.definitionSnapshotRevision !== target.definitionRevision || object(release.releaseDefinition, 'release definition').id !== target.releaseDefinitionId || !Array.isArray(release.environments) || release.environments.length !== 1) throw new Error('Created draft does not match the approved definition snapshot; it remains inactive');
+    if (release.status !== 'draft' || release.releaseDefinitionRevision !== target.definitionRevision || object(release.releaseDefinition, 'release definition').id !== target.releaseDefinitionId || !Array.isArray(release.environments) || release.environments.length !== 1) throw new Error('Created draft does not match the approved definition snapshot; it remains inactive');
     const env = object(release.environments[0], 'release environment');
     if (env.definitionEnvironmentId !== target.environmentId || env.name !== target.environmentName) throw new Error('Draft environment identity differs');
     // Azure may return process parameters on the created draft. Validate its effective values, not just the

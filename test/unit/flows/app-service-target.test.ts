@@ -26,7 +26,7 @@ function fixture() {
     if (url.includes('/release/definitions/')) return structuredClone(definition);
     if (url.includes('/serviceendpoint/')) return { id: guid, type: 'azurerm', data: { subscriptionId: guid, environment: 'AzureCloud' } };
     if (url.includes('/queues/')) return { id: 7, pool: { isHosted: true } };
-    if (method === 'POST') return { id: 20, status: 'draft', processParameters: structuredClone((definition as Record<string, unknown>).processParameters), definitionSnapshotRevision: 2, releaseDefinition: { id: 4 }, environments: [{ id: 90, definitionEnvironmentId: 9, name: 'Test', processParameters: structuredClone((definition.environments[0]! as Record<string, unknown>).processParameters), deployPhasesSnapshot: [structuredClone(phase)] }], artifacts: [{ alias: '_app', definitionReference: { version: { id: '40' } } }] };
+    if (method === 'POST') return { id: 20, status: 'draft', processParameters: structuredClone((definition as Record<string, unknown>).processParameters), definitionSnapshotRevision: 1, releaseDefinitionRevision: 2, releaseDefinition: { id: 4 }, environments: [{ id: 90, definitionEnvironmentId: 9, name: 'Test', processParameters: structuredClone((definition.environments[0]! as Record<string, unknown>).processParameters), deployPhasesSnapshot: [structuredClone(phase)] }], artifacts: [{ alias: '_app', definitionReference: { version: { id: '40' } } }] };
     if (method === 'PATCH') return {};
     throw new Error(`Unexpected fixture request ${url}`);
   });
