@@ -1,5 +1,6 @@
 // Explicit test-only release adapter. Local user-managed targets pin one definition revision and one deployment-group
 // machine or one hosted App Service. A draft is validated before activation; ambiguous writes retain the lease. No approval or production API.
+import { NoRemoteEffect } from './write-refusal';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -110,7 +111,10 @@ export class TestDeploymentCoordinator {
   private async perform(op: string, target: TestDeployTarget, buildId: number | undefined, p: DeploymentPorts, releaseId?: number): Promise<Record<string, unknown>> {
     const authorize = () => { p.authorize(); const local = this.targets().find(t => t.id === target.id); if (!local || deploymentHash(local) !== deploymentHash(target)) throw new Error('Test target changed or is not locally configured: propose and approve its exact configuration again'); };
     authorize();
-    const call = (method: string, url: string, body?: unknown) => { authorize(); return p.call(method, url, body); };
+    const call = (method: string, url: string, body?: unknown) => {
+      try { authorize(); } catch (error) { if (method !== 'GET') throw new NoRemoteEffect(error instanceof Error ? error.message : 'Deployment refused before dispatch'); throw error; }
+      return p.call(method, url, body);
+    };
     const base = `https://dev.azure.com/${encodeURIComponent(target.organization)}/${target.projectId}`;
     const releaseBase = `https://vsrm.dev.azure.com/${encodeURIComponent(target.organization)}/${target.projectId}/_apis/release`;
     if (op === 'deploy-test') {
@@ -212,7 +216,13 @@ export class TestDeploymentCoordinator {
     const initiatingLease = state.stepLeases?.find(l => l.runId === p.runId && !l.releasedAt && deploymentLeaseKey(l.target) === deploymentLeaseKey(target));
     if (initiatingLease) entry.initiatingLease = { stepId: initiatingLease.stepId, at: initiatingLease.at };
     state.deployments.push(entry); this.save(state);
-    const release = await call('POST', `${releaseBase}/releases?${API}`, { definitionId: target.releaseDefinitionId, isDraft: true, manualEnvironments: [target.environmentName], description: `Routine ${p.runId} operation ${entry.token}`, artifacts: [{ alias: target.artifactAlias, instanceReference: { id: String(buildId) } }] });
+    let release: Record<string, unknown>;
+    try { release = await call('POST', `${releaseBase}/releases?${API}`, { definitionId: target.releaseDefinitionId, isDraft: true, manualEnvironments: [target.environmentName], description: `Routine ${p.runId} operation ${entry.token}`, artifacts: [{ alias: target.artifactAlias, instanceReference: { id: String(buildId) } }] }); }
+    catch (error) {
+      // Only a definitively unperformed first POST can relinquish this intent; a lost/invalid response stays leased.
+      if (error instanceof NoRemoteEffect) { state.deployments = state.deployments.filter(d => d.token !== entry.token); this.save(state); }
+      throw error;
+    }
     entry.releaseId = pos(release.id); entry.state = 'draft'; this.save(state);
     if (release.status !== 'draft' || release.definitionSnapshotRevision !== target.definitionRevision || object(release.releaseDefinition, 'release definition').id !== target.releaseDefinitionId || !Array.isArray(release.environments) || release.environments.length !== 1) throw new Error('Created draft does not match the approved definition snapshot; it remains inactive');
     const env = object(release.environments[0], 'release environment');

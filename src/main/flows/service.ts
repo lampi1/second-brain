@@ -1,4 +1,5 @@
 // Durable, fail-closed flow execution; only the host can turn trusted reports and user decisions into receipts.
+import { branchLineage } from './branch-lineage';
 import fs from 'node:fs';
 import { progressFingerprint } from './progress';
 import type { FlowAutomationRule } from '../../shared/flow-automation';
@@ -324,7 +325,7 @@ export class FlowService {
       const run: FlowRun = { id: randomUUID(), revision: 1, flowId: source.flowId, flowVersion: version.version, definitionDigest: version.digest,
         ownerOrchestratorId: source.ownerOrchestratorId, subjectKey: automatic?.subjectKey ?? `restart:${source.id}:${randomUUID()}`, scope, inputs,
         status: 'active', currentStep: index, steps: version.definition.steps.map((step, i) => i < index ? copy(source.steps[i]!) : { stepId: step.id, status: 'pending', attempts: 0 }),
-        createdAt: this.now(), updatedAt: this.now(), restartOf: { runId: source.id, stepId: version.definition.steps[index]!.id, expectedRevision: input.expectedRevision, mode: input.mode } };
+        createdAt: this.now(), updatedAt: this.now(), restartOf: { runId: source.id, stepId: version.definition.steps[index]!.id, expectedRevision: input.expectedRevision, mode: input.mode, ...(index > 0 ? { branchRunId: branchLineage(source, this.data.runs).at(-1)! } : {}) } };
       if (index > 0 && version.definition.package?.intake && source.intake === 'accepted') run.intake = 'accepted';
       if (index > 0 && version.definition.package?.intake && source.verdict && source.steps.slice(0, index).some(s => s.stepId === source.verdict!.stepId)) run.verdict = copy(source.verdict);
       // Validate/prepare before cancelling the source; a thrown error rolls back the whole state transaction.
@@ -733,12 +734,13 @@ export class FlowService {
       if (run.recoveryFeedback) { keys(object(run.recoveryFeedback, 'recovery feedback'), ['kind', 'at', 'message', 'deliveredAt'], 'recovery feedback'); integer(run.recoveryFeedback.at, 'recovery feedback time'); if (run.recoveryFeedback.deliveredAt !== undefined) integer(run.recoveryFeedback.deliveredAt, 'recovery delivery time'); text(run.recoveryFeedback.message, 'recovery feedback', 16000); if (!['cancel', 'restart'].includes(run.recoveryFeedback.kind)) throw new Error('Invalid recovery feedback'); }
       let inherited = 0, restartSource: FlowRun | undefined;
       if (run.restartOf) {
-        const origin = run.restartOf; keys(object(origin, 'restart origin'), ['runId', 'stepId', 'expectedRevision', 'mode'], 'restart origin');
+        const origin = run.restartOf; keys(object(origin, 'restart origin'), ['runId', 'branchRunId', 'stepId', 'expectedRevision', 'mode'], 'restart origin');
         restartSource = data.runs.find(item => item.id === origin.runId);
         integer(origin.expectedRevision, 'restart source revision', 1);
         inherited = version.definition.steps.findIndex(step => step.id === origin.stepId);
         if (!restartSource || restartSource.id === run.id || !runIds.has(restartSource.id) || restartSource.flowId !== run.flowId || restartSource.ownerOrchestratorId !== run.ownerOrchestratorId || inherited < 0 || !['from-start', 'from-step'].includes(origin.mode)
           || (origin.mode === 'from-start' && inherited !== 0) || (origin.mode === 'from-step' && ((restartSource.flowVersion !== run.flowVersion && !samePrefix(data.versions.find(v => v.definition.id === run.flowId && v.version === restartSource!.flowVersion)?.definition, version.definition, inherited)) || JSON.stringify(restartSource.scope) !== JSON.stringify(run.scope) || JSON.stringify(restartSource.inputs) !== JSON.stringify(run.inputs)))) throw new Error('Invalid inherited flow evidence');
+        branchLineage(run, data.runs);
       }
       run.steps.forEach((step, i) => {
         keys(object(step, 'step run'), ['stepId', 'status', 'attempts', 'startedAt', 'chatId', 'chatRunId', 'taskVersion', 'reason', 'receipt', 'decisionPending', 'historyText'], 'step run');

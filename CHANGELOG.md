@@ -5,6 +5,12 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 
 ## [Unreleased]
 
+### Fixed
+- Routine branch publication now uses native incremental Git push from an isolated host repository, so existing large
+  history does not trip a full-bundle limit. Partial restarts keep their host-owned branch; proven pre-dispatch and
+  HTTP 401/403/412 refusals remain retryable, while uncertain or partial effects still require reconciliation.
+  Workers reuse approved write grants without duplicate questions (ADR 0164).
+
 ### Added
 - **Voice replies made to be heard** (ADR 0152): in the voice conversation the Orchestrator answers in short spoken
   Italian sentences without English words or formatting; English terms and acronyms that remain are respelled for the

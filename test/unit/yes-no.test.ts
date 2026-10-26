@@ -1,6 +1,6 @@
 // Yes/no questions only (shared/yes-no.ts, ADR 0135): the shape check the question gates use and when the gate is on.
 import { describe, expect, it } from 'vitest';
-import { isYesNo, yesNoGateOn, yesNoOf, yesNoShape } from '../../src/shared/yes-no';
+import { QUESTION_RULE, YESNO_REFUSAL, isYesNo, yesNoGateOn, yesNoOf, yesNoShape } from '../../src/shared/yes-no';
 
 const q = (...labels: string[]) => ({ options: labels.map(label => ({ label })), multiSelect: false });
 
@@ -34,4 +34,11 @@ describe('yes/no questions', () => {
     expect(yesNoGateOn({ SB_TEST: '1' })).toBe(false);
     expect(yesNoGateOn({ VITEST: 'true', SB_YESNO: '1' })).toBe(true);
   });
+});
+
+it('recommends forward progress unless a concrete reason to stop is explained', () => {
+  for (const rule of [QUESTION_RULE, YESNO_REFUSAL]) {
+    expect(rule).toContain('moves the task forward');
+    expect(rule).toContain('concrete reason');
+  }
 });

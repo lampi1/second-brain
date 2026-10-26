@@ -115,7 +115,7 @@ export interface FlowRun {
   verdict?: { kind: 'ai-fixable'; at: number; stepId: string };
   disposition?: { kind: 'needs-human' | 'skipped'; lesson?: boolean; reason: string; at: number; cleanup: 'pending' | 'complete'; phase: number; error?: string };
   cancellation?: { at: number; reason: string; by: 'user' | 'orchestrator' | 'routine'; expectedRevision: number; interruption?: 'pending' | 'confirmed' };
-  restartOf?: { runId: string; stepId: string; expectedRevision: number; mode: 'from-start' | 'from-step' };
+  restartOf?: { runId: string; branchRunId?: string; stepId: string; expectedRevision: number; mode: 'from-start' | 'from-step' };
   pendingCancellation?: { revision: number; requestedAt: number; reason?: string };
   recoveryFeedback?: { kind: 'cancel' | 'restart'; at: number; message: string; deliveredAt?: number };
   pendingRecovery?: { mode: 'from-start' | 'from-step'; stepId?: string; revision: number; requestedAt: number; targetVersion: number; targetDigest: string; automationRule?: { id: string; revision: number } };
