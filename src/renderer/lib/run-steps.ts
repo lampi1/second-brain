@@ -124,6 +124,23 @@ export function actionSteps(items: readonly ChatItem[], live: boolean): RunStep[
   return out;
 }
 
+/** A collapsed strip needs only the last action group. Never format the hundreds of earlier groups on every token. */
+export function lastActionStep(items: readonly ChatItem[], live: boolean): RunStep | null {
+  const group: Tool[] = [];
+  let family: Set<string> | undefined;
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i]!;
+    if (item.kind !== 'tool' || SKIP.has(item.name) || isDelegationTool(item.name)) continue;
+    if (!group.length) {
+      family = READS.has(item.name) ? READS : EDITS.has(item.name) ? EDITS : undefined;
+      group.push(item);
+      if (!family) break;
+    } else if (family?.has(item.name)) group.push(item);
+    else break;
+  }
+  return actionSteps(group.reverse(), live)[0] ?? null;
+}
+
 /** The card's steps: the plan's done items, the latest actions, then the plan's open items (or the contract's).
  *  `all` (the card's «+ N azioni prima» clicked open): every one of them, nothing left out. */
 export function runSteps(items: readonly ChatItem[], opts: { live: boolean; doneWhen?: readonly string[]; result?: { doneWhen?: readonly { criterion: string; met: boolean }[] }; max?: number; all?: boolean }): RunSteps {

@@ -126,8 +126,8 @@ jobs:
           node scripts/build.mjs --dev
       - name: Profile both hidden renderers on the same runner
         run: |
-          xvfb-run --auto-servernum -s "-screen 0 1920x1080x24" node scripts/profile-renderer.mjs --app-root ../renderer-baseline --label baseline
-          xvfb-run --auto-servernum -s "-screen 0 1920x1080x24" node scripts/profile-renderer.mjs --label candidate
+          xvfb-run --auto-servernum -s "-screen 0 1920x1080x24" node scripts/profile-renderer.mjs --app-root ../renderer-baseline --label baseline --seconds 360
+          xvfb-run --auto-servernum -s "-screen 0 1920x1080x24" node scripts/profile-renderer.mjs --label candidate --seconds 360
       - name: Raw profiles and measurements
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

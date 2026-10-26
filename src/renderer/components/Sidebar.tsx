@@ -55,8 +55,8 @@ export function Sidebar() {
   const map = ui.use(s => s.map);
   const read = ui.use(s => s.read);
   const feed = useApp(s => s.feed);
-  const flowSnapshot = flowState.use(state => state.snapshot);
-  const waiting = useApp(s => { const routines = routinePlacements(s.chats, flowSnapshot); return s.pending.filter(request => !routines.has(request.chatId)).length; });
+  const flowSnapshot = flowState.use(state => state.snapshot?.runs);
+  const waiting = useApp(s => { const routines = routinePlacements(s.chats, flowSnapshot ? { runs: flowSnapshot } : null); return s.pending.filter(request => !routines.has(request.chatId)).length; });
   const tasksUnread = useTasks(s => s?.unread ?? 0);
   // Task only while the brain can read it: hidden once the read says the brain has no devops-me.mjs
   const tasksOn = useTasks(s => s !== null && s.error?.kind !== 'script'); // not before the first read: no flash

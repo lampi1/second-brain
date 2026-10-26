@@ -104,3 +104,14 @@ describe('runSteps', () => {
     expect(contract.steps.map(s => s.text)).toEqual(['Legge a.ts', 'a', 'b', 'c', 'd', 'e']);
   });
 });
+
+it('the collapsed-strip action equals the final full-history group across all boundaries', async () => {
+  const { actionSteps, lastActionStep } = await import('../../src/renderer/lib/run-steps');
+  const names = ['Read', 'Grep', 'Edit', 'Write', 'Bash', 'TodoWrite', 'mcp__app__agent_children'];
+  for (let n = 0; n < 100; n++) {
+    const items: ChatItem[] = Array.from({ length: 35 }, (_, i) => i % 4 === 0
+      ? { kind: 'assistant', id: String(i), at: i, text: 'words', streaming: true }
+      : { kind: 'tool', id: String(i), at: i, name: names[(n * 13 + i * i) % names.length]!, input: { file_path: 'src/example.ts', command: 'npm test' }, summary: 'action', status: i % 3 === 0 ? 'error' : i % 2 === 0 ? 'running' : 'ok' });
+    for (const live of [true, false]) expect(lastActionStep(items, live)).toEqual(actionSteps(items, live).at(-1) ?? null);
+  }
+});

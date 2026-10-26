@@ -168,3 +168,15 @@ describe('selectors', () => {
     expect(todayCost({ chats, usage: { todayUsd: 38.2, fiveHourPct: null, fiveHourResetsAt: null, weekPct: null } })).toBe(38.2);
   });
 });
+
+it('bounds retained transcript payload on initial loads, appends and growing replacements', () => {
+  const large = 'x'.repeat(180_000);
+  let s = reduce(init(), { type: 'items', chatId: 'a', items: Array.from({ length: 20 }, (_, i) => say(String(i), large)) });
+  expect(s.items.a!.length).toBeLessThan(4);
+  expect(s.items.a!.at(-1)?.id).toBe('19');
+  for (let i = 20; i < 40; i++) s = reduce(s, { type: 'chat:item', chatId: 'a', item: say(String(i), large) });
+  expect(s.items.a!.length).toBeLessThan(4);
+  s = reduce(s, { type: 'chat:item', chatId: 'a', item: say('39', large.repeat(2)), replace: true });
+  expect(s.items.a!.length).toBeLessThan(3);
+  expect(s.items.a!.at(-1)).toEqual(say('39', large.repeat(2)));
+});

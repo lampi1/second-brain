@@ -42,7 +42,7 @@ describe('flow host boundaries', () => {
     expect(tools.some(t => t.name === 'app_flow_start')).toBe(true);
     expect(tools.some(t => /app_flow_.*(approve|decide|activate)/.test(t.name))).toBe(false);
     const list = tools.find(t => t.name === 'app_flow_list')!;
-    expect(list.run({})).toMatchObject({ drafts: [], runs: [] });
+    expect(list.run({})).toMatchObject({ flows: [], runs: [] });
     s.rows[0]!.closedAt = 1;
     expect(() => list.run({})).toThrow(/Authenticated/);
   });

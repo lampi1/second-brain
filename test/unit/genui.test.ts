@@ -159,7 +159,7 @@ describe('Artifacts: the store behind show_ui', () => {
     expect(sent[0]).toMatchObject({ chatId: 'w', item: { kind: 'artifact', id: 'art-qa', key: 'qa', target: 'chat', ui: { component: 'table' } } });
     expect(JSON.parse(fs.readFileSync(path.join(dir, 'w.json'), 'utf8'))).toHaveLength(1);
     expect(() => store.show('w', args({ summary: '' }))).toThrow('summary: required');
-    expect(() => store.show('w', args({ props: { columns: [] } }))).toThrow(/table props.columns: needs at least 1 item\. Fix the props/);
+    expect(() => store.show('w', args({ props: { columns: [] } }))).toThrow(/table props.columns: needs at least 1 item; props.rows: missing\. Fix all fields/);
     expect(() => store.show('w', args({ target: 'popup' }))).toThrow('target: expected one of chat, orchestrator, next-ask');
     expect(() => store.show('w', args({ id: 'a b' }))).toThrow('id: 1-40');
     expect(() => store.show('gone', args())).toThrow('no longer in the app');
@@ -274,4 +274,20 @@ describe('Artifacts: the store behind show_ui', () => {
     expect(tool.description).not.toContain(SCREENSHOT_HINT);
     expect(SCREENSHOT_HINT).toMatch(/absolute path/);expect(SCREENSHOT_HINT).toMatch(/AskUserQuestion/);expect(SCREENSHOT_HINT).toMatch(/data: PNG/);expect(SCREENSHOT_HINT).toMatch(/Never an http URL/);
   });
+});
+it('normalizes a brief done string without relaxing its text limit', () => {
+  expect(checkUi('brief', { done: '  Verified the fix  ', ifYes: 'Proceed', ifNo: 'Wait' })).toEqual({ ok: true, spec: { component: 'brief', props: { done: ['Verified the fix'], ifYes: 'Proceed', ifNo: 'Wait' } } });
+  expect(checkUi('brief', { done: 'x'.repeat(201), ifYes: 'Proceed', ifNo: 'Wait' }).ok).toBe(false);
+});
+it('reports all brief call shape problems together, without persisting an artifact', () => {
+  const { store } = setup([chat('w')]);
+  let message = '';
+  try { store.show('w', { component: 'brief', target: 'next-ask', props: { done: ['ok'], ifYes: 'x'.repeat(201), checks: [{ label: '', status: 'invalid' }] } }); } catch (e) { message = String(e); }
+  for (const name of ['title', 'summary', 'props.ifYes', 'props.ifNo', 'props.checks[0].label', 'props.checks[0].status']) expect(message).toContain(name);
+  expect(store.items('w')).toEqual([]);
+});
+it('documents a complete brief example that show_ui accepts', () => {
+  const { store } = setup([chat('w')]); const description = showUiTool(store).description;
+  const example = description.match(/Brief example: (\{[^\n]+\})/)?.[1]; expect(example).toBeTruthy();
+  expect(() => store.show('w', JSON.parse(example!))).not.toThrow();
 });

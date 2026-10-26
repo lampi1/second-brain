@@ -51,13 +51,17 @@ export class Artifacts {
     const all = this.d.chats();
     const caller = all.find(c => c.id === callerId);
     if (!caller) throw new Error('this chat is no longer in the app');
-    const title = text(a.title, 'title', TITLE_MAX);
-    const summary = text(a.summary, 'summary', SUMMARY_MAX);
+    const problems: string[] = [];
+    const field = (value: unknown, name: string, max: number) => { try { return text(value, name, max); } catch (error) { problems.push(error instanceof Error ? error.message : String(error)); return ''; } };
+    const title = field(a.title, 'title', TITLE_MAX);
+    const summary = field(a.summary, 'summary', SUMMARY_MAX);
     const target = (a.target ?? 'chat') as ArtifactTarget;
-    if (!ARTIFACT_TARGETS.includes(target)) throw new Error(`target: expected one of ${ARTIFACT_TARGETS.join(', ')}`);
+    if (!ARTIFACT_TARGETS.includes(target)) problems.push(`target: expected one of ${ARTIFACT_TARGETS.join(', ')}`);
     const ui = checkUi(a.component, a.props);
-    if (ui.ok && ui.spec.component === 'brief' && target !== 'next-ask') throw new Error('brief: only with target "next-ask" (it is the context of your next question)');
-    if (!ui.ok) throw new Error(`${ui.error}. Fix the props and call show_ui again (the shapes are in the tool's description).`);
+    if (a.component === 'brief' && target !== 'next-ask') problems.push('brief: only with target "next-ask" (it is the context of your next question)');
+    if (!ui.ok) problems.push(ui.error);
+    if (a.id !== undefined && a.id !== null && (typeof a.id !== 'string' || !KEY.test(a.id))) problems.push('id: 1-40 letters, digits, ".", "_" or "-"');
+    if (problems.length || !ui.ok) throw new Error(`${problems.join('; ')}. Fix all fields and call show_ui again (see the complete brief example in the description).`);
     // a brief's screenshot the card cannot show is sent back now, while the chat can still move it (ADR 0150)
     if (ui.spec.component === 'brief' && this.d.imageProblem) {
       for (const [i, im] of (ui.spec.props.images ?? []).entries()) {
@@ -65,7 +69,6 @@ export class Artifacts {
         if (why) throw new Error(`images[${i}] (${im.path}): ${why} The question card cannot show it. Save the screenshot as PNG, JPG or WebP${this.d.evidenceDir ? ` under ${this.d.evidenceDir}` : ' under your evidence folder'} (or the brain, the app's repo), then call show_ui again with that absolute path.`);
       }
     }
-    if (a.id !== undefined && a.id !== null && (typeof a.id !== 'string' || !KEY.test(a.id))) throw new Error('id: 1-40 letters, digits, ".", "_" or "-"');
     const key = typeof a.id === 'string' ? a.id : `${this.now().toString(36)}${++this.n}`;
 
     let owner = caller.id, where = 'in questa chat';
@@ -237,6 +240,8 @@ export function showUiTool(store: Artifacts): McpTool {
   return {
     name: 'show_ui',
     description: [
+      'Brief example: {"title":"Fix verified","summary":"The regression test passes; approve the next step.","component":"brief","target":"next-ask","props":{"done":["Implemented the fix","Unit tests pass"],"ifYes":"Continue with the proposed next step","ifNo":"Keep the current state and revise the proposal"}}',
+      'brief requires title and summary plus props.done (1–5 strings, or one string; each ≤200 chars), ifYes and ifNo (each ≤200 chars). Use target next-ask, then ask the question. All shape errors are returned together.',
       'Show the user a visual instead of a wall of text: a trusted component of the app\'s catalog, drawn by the app (never HTML). Prefer it for tables, options to choose from, boards (QA test cases, chat status), changed-file lists, charts. Keep it short.',
       'summary = the same content in one or two plain sentences (shown when the visual cannot be drawn). target: chat (default: a card in this chat) · orchestrator (in your Orchestrator\'s panel) · next-ask (attached to your next AskUserQuestion; with no question within 60 s it becomes a card here). The same id again replaces that visual (a board you update). It never answers a question or a permission: still ask with AskUserQuestion.',
       'props per component:',

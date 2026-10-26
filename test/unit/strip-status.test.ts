@@ -1,7 +1,7 @@
 // What a collapsed strip says while its chat works (src/renderer/lib/strip-status.ts, ADR 0102): the step running now,
 // else the plan's item in progress, else the last action; "passo n/N" with an engine plan; the silence from the last
 // item's time, a running tool's clock apart from a stalled chat, amber past stallMin.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ChatItem } from '../../src/shared/contract';
 import { QUIET_MIN, stripStatus } from '../../src/renderer/lib/strip-status';
 
@@ -48,4 +48,12 @@ describe('stripStatus', () => {
   it('a reply streaming in is no silence', () => {
     expect(stripStatus([said('scrivo', MIN, true)], 30 * MIN, 10).quietMin).toBeNull();
   });
+});
+
+it('does not format old action groups when a collapsed strip only needs the last action', () => {
+  const read = vi.fn(() => 'src/old.ts');
+  const old = Array.from({ length: 500 }, (_, i) => tool('Read', { get file_path() { return read(); } }, i));
+  const latest = tool('Bash', { command: 'npm test' }, 501);
+  expect(stripStatus([...old, latest, said('stream', 502, true)], 502, 10).step?.code).toBe('npm test');
+  expect(read).not.toHaveBeenCalled();
 });

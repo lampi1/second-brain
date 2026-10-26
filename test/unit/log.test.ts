@@ -1,5 +1,7 @@
+// Structured log serialization and CLI readers preserve UTF-8 text while redacting secrets for app diagnostics.
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { addRedaction, log, redact } from '../../src/main/log';
@@ -23,6 +25,12 @@ describe('log', () => {
     expect(lines.at(-2)).toMatchObject({ lvl: 'info', scope: 'test', msg: 'hello', chat: 'c1', data: { n: 1 } });
     expect(lines.at(-1)).toMatchObject({ lvl: 'error', cause: 'claude.exe not found', hint: expect.stringContaining('SB_CLAUDE_PATH') });
     expect(log.recent.at(-1)?.msg).toBe('boom');
+    const title = 'Lettura delle novità — qualità ✓';
+    log.warn('task', `${title} failed`, { cause: 'ECONNRESET', hint: 'Riprovare più tardi' });
+    const bytes = fs.readFileSync(path.join(dir, 'logs', file));
+    expect(bytes.includes(Buffer.from(title, 'utf8'))).toBe(true);
+    const output = execFileSync(process.execPath, ['scripts/logs.mjs', '--dir', path.join(dir, 'logs'), '--scope', 'task', '--json'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    expect(JSON.parse(output.trim())).toMatchObject({ msg: `${title} failed`, hint: 'Riprovare più tardi' });
   });
 });
 

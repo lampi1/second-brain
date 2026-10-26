@@ -1461,7 +1461,7 @@ export interface InvokeMap {
   /** an image named in a question (main/ask-image.ts) */
   'app:askImage': [{ path: string }, AskImageResult];
   'chat:list': [void, ChatSummary[]];
-  'chat:items': [{ chatId: string }, ChatItem[]];
+  'chat:items': [{ chatId: string; limit?: number; maxBytes?: number }, ChatItem[]];
   'chat:pending': [void, PendingRequest[]];
   'chat:create': [NewChat, ChatSummary];
   'chat:createRouted': [RoutedNewChat, ChatSummary];

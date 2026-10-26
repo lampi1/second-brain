@@ -24,6 +24,7 @@ import path from 'node:path';
 import type { DevopsDetail, DevopsItem, DevopsPr, DevopsPrRef, TasksState, QaReport, Settings } from '../../shared/contract';
 import type { FeedInput } from '../services';
 import type { RunResult } from '../brain/node';
+import { retryTaskRead, transientReadError } from './read-retry';
 import { log, errText } from '../log';
 import { alertEvents, alertsFor, causeOf, detailsOf, errorOf, feedFor, itemOf, mergeNews, newsOf, parseNewsRun, parsePrsRun, parseQaRun, prOf, qaReportOf, prRefOf, windowDays, MAX_NOTIFIED, type StoredNews } from './model';
 
@@ -89,6 +90,8 @@ export class TaskService {
   private timer: NodeJS.Timeout | null = null;
   private nextAt: number | null = null;
   private stopped = false;
+  private readonly retryAbort = new AbortController();
+  private retryWarned = false;
   private readonly now: () => number;
   private readonly dirs = new Map<string, string | null>();
   private readonly readListeners = new Set<(s: TasksState) => void>();
@@ -173,11 +176,14 @@ export class TaskService {
 
   shutdown(): void {
     this.stopped = true;
+    this.retryAbort.abort();
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
   }
 
   private async read(): Promise<TasksState> {
+    this.retryWarned = false;
+    if (this.stopped) return this.get();
     const root = this.d.brainRoot();
     const script = root ? (this.d.locate ?? defaultLocate)(root) : null;
     if (!root || !script) {
@@ -187,11 +193,17 @@ export class TaskService {
     const now = this.now();
     const days = windowDays(this.saved.lastOk, now);
     const t0 = Date.now();
-    const news = await this.d.run(script, ['--json', '--full', '--days', String(days)], root, RUN_TIMEOUT_MS);
+    const run = (args: string[]) => retryTaskRead(() => this.d.run(script, args, root, RUN_TIMEOUT_MS), this.retryAbort.signal, () => this.d.brainRoot() === root, () => {
+      if (this.retryWarned) return; this.retryWarned = true;
+      log.warn('task', 'Transient connection failure; retrying read', { cause: 'Temporary network error', hint: 'Retrying up to three attempts with backoff; the last successful Task data remains available.' });
+    });
+    const news = await run(['--json', '--full', '--days', String(days)]);
+    if (!news) return this.get();
     if (news.code !== 0) return this.fail(news, 'Lettura delle novità');
     let parsed;
     try { parsed = parseNewsRun(news.stdout); } catch (e) { return this.fail({ ...news, code: 1, stderr: errText(e) }, 'Lettura delle novità'); }
-    const prs = await this.d.run(script, ['--prs', '--json', '--full'], root, RUN_TIMEOUT_MS);
+    const prs = await run(['--prs', '--json', '--full']);
+    if (!prs) return this.get();
     if (prs.code !== 0) return this.fail(prs, 'Lettura delle PR');
     let prList;
     try { prList = parsePrsRun(prs.stdout); } catch (e) { return this.fail({ ...prs, code: 1, stderr: errText(e) }, 'Lettura delle PR'); }
@@ -241,7 +253,7 @@ export class TaskService {
     this.error = errorOf(r, what);
     // an expired login says so in the feed once (also when the page is closed), not at every automatic read
     if (this.error.kind === 'login' && was !== 'login') this.d.feed([{ kind: 'task', title: 'DevOps: accesso scaduto', detail: 'Lancia «az login» in un terminale, poi «Aggiorna ora» nella pagina Task' }]);
-    log.warn('task', `${what} failed`, { cause: causeOf(r), hint: this.error.kind === 'login' ? 'run `az login` in a terminal, then Aggiorna ora' : `run node ${SCRIPT} --json in the brain folder to see the error`, data: { code: r.code } });
+    if (!this.retryWarned || !transientReadError(r)) log.warn('task', `${what} failed`, { cause: causeOf(r), hint: this.error.kind === 'login' ? 'run `az login` in a terminal, then Aggiorna ora' : `run node ${SCRIPT} --json in the brain folder to see the error`, data: { code: r.code } });
     return this.get();
   }
 

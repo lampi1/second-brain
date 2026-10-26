@@ -32,15 +32,19 @@ try {
     const at = Date.now(), worker = templates.find(c => !c.isOrchestrator), orchestrator = templates.find(c => c.isOrchestrator);
     const chats = [{ ...orchestrator, id: 'orchestrator', pending: 0, state: 'idle', lastText: '', plan: undefined }, ...Array.from({ length: 64 }, (_, i) => ({ ...worker, id: `profile-${i}`, title: `Synthetic task ${i + 1}`, pending: 0, state: i < 16 ? 'running' : 'idle', parentId: undefined, delegation: undefined, routine: undefined, run: undefined, agentChildren: undefined, browserTabIds: [], plan: undefined, closedAt: undefined, lastText: 'Inspecting synthetic code', updatedAt: at }))];
     const versions = Array.from({ length: 10 }, (_, i) => ({ version: 1, draftRevision: 1, digest: `profile-${i}`, activatedAt: 1, definition: { id: `profile-flow-${i}`, title: `Synthetic routine ${i}`, description: 'Synthetic profiling data', scope: {}, aliases: [], steps: Array.from({ length: 10 }, (_, j) => ({ id: `step-${j}`, title: `Step ${j}`, kind: 'agent', role: 'artisan', tier: 'mid', instructions: 'Inspect synthetic data. '.repeat(250), inputs: [], evidence: [], effect: 'read-only', timeoutMs: 60000, maxAttempts: 1 })) } }));
-    const snapshot = { contextKey: 'profile', active: Object.fromEntries(versions.map(v => [v.definition.id, 1])), drafts: [], versions, runs: [], automation: { contextKey: 'profile', revision: 1, paused: true, background: false, events: [], rules: Array.from({ length: 20 }, (_, i) => ({ id: `rule-${i}`, status: 'active', revision: 1, ownerOrchestratorId: 'orchestrator', updatedAt: 1, config: { flowId: `profile-flow-${i % 10}`, flowVersion: 1, inputs: { specification: 'Synthetic configuration. '.repeat(500) }, priority: 'normal', trigger: { kind: 'interval', everyMinutes: 60 }, scope: {} } })) } };
+    const snapshot = { contextKey: 'profile', active: Object.fromEntries(versions.map(v => [v.definition.id, 1])), drafts: [], versions, runs: [], automation: { contextKey: 'profile', revision: 1, paused: true, background: false, events: [], rules: Array.from({ length: 20 }, (_, i) => ({ id: `rule-${i}`, status: 'enabled', revision: 1, ownerOrchestratorId: 'orchestrator', updatedAt: 1, config: { flowId: `profile-flow-${i % 10}`, flowVersion: 1, inputs: { specification: 'Synthetic configuration. '.repeat(500) }, priority: 'normal', trigger: { kind: 'interval', everyMinutes: 60 }, scope: {} } })) } };
     const bench = { chats, snapshot, tick: 0, reads: 0, sent: 0, timer: null, flowTimer: null };
     globalThis.__rendererProfile = bench;
     const handler = (name, fn) => { ipcMain.removeHandler(name); ipcMain.handle(name, fn); };
     handler('chat:list', () => chats); handler('chat:pending', () => []); handler('browser:list', () => []); handler('feed:list', () => []); handler('flows:list', () => snapshot);
-    handler('chat:items', (_event, { chatId, limit }) => {
+    handler('chat:items', (_event, { chatId, limit, maxBytes }) => {
       bench.reads++;
       const count = chatId === 'orchestrator' ? 4 : 600;
-      return Array.from({ length: count }, (_, i) => ({ kind: 'tool', id: `${chatId}-history-${i}`, at: at - count + i, name: ['Read', 'Grep', 'Bash'][i % 3], summary: `Inspect src/module-${i}.ts`, input: { file_path: `/synthetic/src/module-${i}.ts`, command: `node inspect.mjs --module ${i}` }, output: `${chatId}/${i}: ${'Synthetic result line. '.repeat(48)}`, status: 'ok' })).slice(-(limit ?? count));
+      const items = Array.from({ length: count }, (_, i) => ({ kind: 'tool', id: `${chatId}-history-${i}`, at: at - count + i, name: ['Read', 'Grep', 'Bash'][i % 3], summary: `Inspect src/module-${i}.ts`, input: { file_path: `/synthetic/src/module-${i}.ts`, command: `node inspect.mjs --module ${i}` }, output: `${chatId}/${i}: ${'Synthetic result line. '.repeat(512)}`, status: 'ok' })).slice(-(limit ?? count));
+      if (maxBytes === undefined) return items;
+      let start = items.length, bytes = 0;
+      while (start > 0) { const next = JSON.stringify(items[start - 1]).length * 2 + 128; if (start < items.length && bytes + next > maxBytes) break; bytes += next; start--; }
+      return items.slice(start);
     });
   }, templates);
   await page.addInitScript(() => {
@@ -59,7 +63,7 @@ try {
   await cdp.send('Performance.enable'); await cdp.send('HeapProfiler.enable'); await cdp.send('Profiler.enable');
   const sample = async elapsed => {
     const performance = Object.fromEntries((await cdp.send('Performance.getMetrics')).metrics.map(m => [m.name, m.value]));
-    const cpu = await app.evaluate(({ app }) => app.getAppMetrics().filter(p => p.type === 'Tab').reduce((n, p) => n + (p.cpu.cumulativeCPUUsage ?? 0), 0));
+    const cpu = await app.evaluate(({ app, BrowserWindow }) => { const win = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:') && !w.webContents.getURL().includes('#overlay')); return app.getAppMetrics().find(p => p.pid === win.webContents.getOSProcessId())?.cpu.cumulativeCPUUsage ?? 0; });
     const ui = await page.evaluate(() => ({ ...globalThis.__profile, lag: [...globalThis.__profile.lag], nodes: document.getElementsByTagName('*').length }));
     await cdp.send('HeapProfiler.collectGarbage');
     const heap = await cdp.send('Runtime.getHeapUsage');
