@@ -73,8 +73,8 @@ export async function decideFlow(ask: FlowAsk, answer: 'yes' | 'no' | 'other', f
       acceptSnapshot(snapshot);
     }
     return true;
-  } catch {
-    toast(t('flows.failedDecision'), 'err');
+  } catch (error) {
+    toast(ask.type === 'flow-definition' ? plain(error) : t('flows.failedDecision'), 'err');
     void reloadFlows();
     return false;
   }

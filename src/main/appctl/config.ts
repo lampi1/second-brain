@@ -209,7 +209,7 @@ export function configTool(d: ConfigDeps): ToolDef {
               triggers: (auto?.rules ?? []).filter(r => r.status !== 'rejected').map(r => {
                 const t = r.config.trigger;
                 return { flowId: r.config.flowId, routine: titleOf(r.config.flowId), state: r.status === 'enabled' ? 'attivo' : r.status === 'paused' ? 'in pausa' : 'da approvare (Routine page)',
-                  kind: t.kind, everyMinutes: t.everyMinutes, ...(t.kind === 'devops' ? { project: t.project, areaPath: t.areaPath, workItemType: t.workItemType, states: t.states,
+                  kind: t.kind, ...(t.kind !== 'manual' ? { everyMinutes: t.everyMinutes } : {}), ...(t.kind === 'devops' ? { project: t.project, areaPath: t.areaPath, workItemType: t.workItemType, states: t.states,
                     filters: Object.fromEntries(FILTER_FIELDS.filter(f => t[f] !== undefined && !(Array.isArray(t[f]) && !(t[f] as unknown[]).length)).map(f => [f, t[f]])) } : {}),
                   devopsWrites: r.config.devopsWrite ? r.config.devopsWrite.ops : 'none', queue: waiting(r.id), ...(r.lastResult ? { lastCheck: r.lastResult.slice(0, 200) } : {}), ...(r.error ? { error: r.error.slice(0, 200) } : {}) };
               }),

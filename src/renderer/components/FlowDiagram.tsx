@@ -1,4 +1,5 @@
 // A dependency-free view of the real sequential step graph and explicit review relations, with an accessible inspector.
+import { FlowConnectorDetails } from './FlowExecutionDetails';
 import { useId, useState } from 'react';
 import type { FlowDefinition, FlowRun } from '@shared/flows';
 import { t, locale } from '../i18n';
@@ -49,6 +50,7 @@ export function FlowDiagram({ definition, run, onNavigate }: { definition: FlowD
         {selected.testEnvironment && <p>{t('flows.testEnvironment')}: <strong>{selected.testEnvironment}</strong></p>}
         {selected.testDbRead && <p>{t('flows.testDbRead')}</p>}
         <FlowBrowserDetails step={selected} run={run} onNavigate={onNavigate} />
+        <FlowConnectorDetails step={selected} run={run} />
         {selected.adapter && <p><code>{selected.adapter}</code></p>}
         {selected.reviewOf && <p className="flow-review-relation">{t('flows.reviewOf')}: <strong>{definition.steps.find(step => step.id === selected.reviewOf)?.title ?? selected.reviewOf}</strong></p>}
         {state?.reason && <p className="flow-block" role="status">{state.reason}</p>}

@@ -7,11 +7,11 @@ export function FlowAutomationSummary({ config }: { config: FlowAutomationConfig
   return <div className="flow-auto-summary" data-testid="flow-auto-summary">
     <dl className="flow-facts">
       <dt>{t('flows.approvedVersion')}</dt><dd>{config.flowId} · v{config.flowVersion}</dd>
-      <dt>{t('flows.trigger')}</dt><dd>{trigger.kind === 'interval' ? t('flows.interval') : 'Azure DevOps'}</dd>
-      <dt>{t('flows.cadence')}</dt><dd>{trigger.everyMinutes} {t('flows.minutes')}</dd>
+      <dt>{t('flows.trigger')}</dt><dd>{trigger.kind === 'manual' ? t('flows.manualTrigger') : trigger.kind === 'interval' ? t('flows.interval') : 'Azure DevOps'}</dd>
+      {trigger.kind !== 'manual' && <><dt>{t('flows.cadence')}</dt><dd>{trigger.everyMinutes} {t('flows.minutes')}</dd></>}
       <dt>{t('flows.scope')}</dt><dd>{[config.scope.project, config.scope.areaPath].filter(Boolean).join(' · ') || '—'}</dd>
       {trigger.kind === 'devops' && <><dt>Azure DevOps</dt><dd>{[trigger.organization, trigger.project, trigger.areaPath, trigger.workItemType].filter(Boolean).join(' · ')}<br />{trigger.states.join(' · ')}</dd><dt>{t('flows.existing')}</dt><dd>{t(trigger.includeExisting ? 'flows.included' : 'flows.excluded')}</dd></>}
-      {trigger.kind === 'devops' && <><dt>{t('flows.devopsWrite')}</dt><dd data-testid="flow-auto-devops-write">{write
+      {(write || trigger.kind === 'devops') && <><dt>{t('flows.devopsWrite')}</dt><dd data-testid="flow-auto-devops-write">{write
         ? <>{write.organization} · {write.projects.join(' · ')}<br />{write.ops.map(op => t(`flows.writeOp.${op}`)).join(' · ')}{write.fields.length ? <><br />{write.fields.join(' · ')}</> : null}{write.mentions?.length ? <><br /><span data-testid="flow-auto-mentions">{t('flows.devopsMentions')}: {write.mentions.join(' · ')}</span></> : null}<br /><span className="flows-muted">{t('flows.devopsWriteScope')}</span></>
         : t('flows.devopsWriteNone')}</dd></>}
       {write?.pushTargets?.map(target => <div className="flow-input-pair" key={target.repositoryId} data-testid="flow-push-target"><dt>{t('flows.writeOp.git-push')}</dt><dd>{target.project} · <code>{target.repositoryId}</code><br />{target.workspaceInput}: {config.inputs[target.workspaceInput] ?? '—'}<br /><code>refs/heads/fix/routine-&lt;run-id&gt;</code></dd></div>)}

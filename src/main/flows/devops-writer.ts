@@ -39,11 +39,11 @@ const TIMEOUT_MS = 60_000, MAX_BYTES = 2 * 1024 * 1024, MAX_RUNS = 500, MAX_PER_
 const API = 'api-version=7.1';
 
 /** What the host resolved for the calling chat: never supplied by the agent. */
-export interface DevOpsWriteContext { runId: string; branchRunIds?: string[]; grant: DevOpsWriteGrant; workItemId: number; workspace?: string; workspaceInput?: string; evidenceRoot?: string; authorize?: () => void; mentionReason?: 'intake' | 'block' | 'downgrade' | 'final' }
+export interface DevOpsWriteContext { runId: string; branchRunIds?: string[]; grant: DevOpsWriteGrant; workItemId: number; workspace?: string; workspaceInput?: string; evidenceRoot?: string; authorize?: () => void; mentionReason?: 'intake' | 'block' | 'downgrade' | 'final' | 'analysis' }
 interface Plan { project: string; id: number; rootSuiteId: number }
 interface Suite { project: string; planId: number; id: number }
 interface TestCase { project: string; planId: number; suiteId: number; id: number }
-interface Ledger { schema: 1; runs: Record<string, ResourceLedger & { plans: Plan[]; suites: Suite[]; testCases: TestCase[] }>; operations?: Record<string, { runId: string; state: 'pending' | 'done' | 'not-done'; reason?: string; op?: string; targetId?: string; buildId?: number; releaseId?: number; at?: number; completedAt?: number; result?: Record<string, unknown> }> }
+interface Ledger { schema: 1; runs: Record<string, ResourceLedger & { plans: Plan[]; suites: Suite[]; testCases: TestCase[] }>; operations?: Record<string, { runId: string; state: 'pending' | 'done' | 'not-done'; reason?: string; mentionReason?: 'analysis'; op?: string; targetId?: string; buildId?: number; releaseId?: number; at?: number; completedAt?: number; result?: Record<string, unknown> }> }
 export interface DevOpsWriterOptions {
   /** Brain-scoped ledger file of resources each run created. */
   file: string;
@@ -122,6 +122,8 @@ export class DevOpsWriter {
     const data = this.read(), previous = data.operations?.[key];
     if (previous?.state === 'done' && raw.op !== 'push-branch') return previous.result!;
     if (!['abandon-pr', 'cancel-test-deploy'].includes(String(raw.op)) && Object.values(data.operations ?? {}).some(op => op.runId === context.runId && op.state === 'pending')) deny('A previous DevOps write has an unknown outcome. Reconcile it in DevOps before retrying; do not duplicate the effect.');
+    const analysisMention = raw.op === 'comment' && raw.mentionReason === 'analysis' && Array.isArray(raw.mentions) && raw.mentions.length > 0;
+    if (analysisMention && Object.values(data.operations ?? {}).some(op => op.runId === context.runId && op.mentionReason === 'analysis' && op.state !== 'not-done')) deny('Only one mentioned analysis comment is allowed per run');
     // The request hash is only an idempotency identity; it stores neither request content nor credentials.
     let attempted = false, possibleEffects = 0;
     this.beforeMutation = () => {
@@ -130,12 +132,12 @@ export class DevOpsWriter {
       const latest = this.read();
       if (Object.keys(latest.operations ?? {}).length >= 20_000) deny('DevOps operation journal is full; archive reviewed completed runs first');
       this.options.revisions?.pending(context.grant.organization, context.workItemId, key);
-      (latest.operations ??= {})[key] = { runId: context.runId, state: 'pending', op: String(raw.op), ...(typeof raw.targetId === 'string' ? { targetId: raw.targetId } : {}), ...(typeof raw.buildId === 'number' ? { buildId: raw.buildId } : {}), ...(typeof raw.releaseId === 'number' ? { releaseId: raw.releaseId } : {}), at: Date.now() }; this.write(latest); attempted = true; possibleEffects++;
+      (latest.operations ??= {})[key] = { runId: context.runId, state: 'pending', ...(analysisMention ? { mentionReason: 'analysis' as const } : {}), op: String(raw.op), ...(typeof raw.targetId === 'string' ? { targetId: raw.targetId } : {}), ...(typeof raw.buildId === 'number' ? { buildId: raw.buildId } : {}), ...(typeof raw.releaseId === 'number' ? { releaseId: raw.releaseId } : {}), at: Date.now() }; this.write(latest); attempted = true; possibleEffects++;
     };
     this.mutationRefused = () => { possibleEffects--; };
     try {
       const result = await this.perform(context, raw, signal);
-      if (attempted || previous?.state === 'pending') { const latest = this.read(); (latest.operations ??= {})[key] = { runId: context.runId, state: 'done', op: String(raw.op), at: latest.operations?.[key]?.at ?? Date.now(), completedAt: Date.now(), result }; this.write(latest); }
+      if (attempted || previous?.state === 'pending') { const latest = this.read(); (latest.operations ??= {})[key] = { runId: context.runId, state: 'done', ...(analysisMention ? { mentionReason: 'analysis' as const } : {}), op: String(raw.op), at: latest.operations?.[key]?.at ?? Date.now(), completedAt: Date.now(), result }; this.write(latest); }
       this.options.revisions?.done(context.grant.organization, context.workItemId, key);
       return result;
     } catch (error) {
@@ -330,7 +332,8 @@ export class DevOpsWriter {
           const ids = ((raw.mentions as unknown[] | undefined) ?? []).map(value => { const s = lower(safeText(value, 'mention', 36)); if (!GUID.test(s)) deny('mentions must be identity GUIDs'); return s; });
           if (new Set(ids).size !== ids.length) deny('mentions: duplicate identity');
           if (ids.some(v => !(grant.mentions ?? []).includes(v))) deny('Mention is not in the approved DevOps write grant');
-          if (ids.length && context.evidenceRoot && !['intake', 'block', 'downgrade', 'final'].includes(String(context.mentionReason))) deny('Mentions are allowed only on intake, blocks, downgrades or final outcome');
+          if (raw.mentionReason === 'analysis' && context.mentionReason !== 'analysis') deny('Analysis mentions require this step to opt in with mentionReason: analysis');
+          if (ids.length && (context.evidenceRoot || context.mentionReason === 'analysis') && !(['intake', 'block', 'downgrade', 'final'].includes(String(context.mentionReason)) || context.mentionReason === 'analysis' && raw.mentionReason === 'analysis')) deny('Mentions are allowed only on intake, blocks, downgrades, final outcome or a step-approved analysis comment');
           if (raw.format !== undefined && !['plain', 'markdown'].includes(String(raw.format))) deny('Unknown comment format');
           const rich = raw.format !== 'plain' && /!?\[[^\]]+\]\(/.test(body);
           if (rich && !grant.ops.includes('rich-comments')) deny('Clickable links and inline images require rich-comments');

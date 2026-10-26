@@ -39,12 +39,12 @@ describe('DevOps write grant', () => {
     expect(bad({ effect: 'read-only' })).toThrow();
     expect(bad({ kind: 'manual' })).toThrow();
   });
-  it('is deny-all by default: an external-write flow needs an approved grant and a DevOps trigger', () => {
+  it('is deny-all by default: an external-write flow needs an approved grant and an owned work item', () => {
     const { auto } = setup();
     expect(() => auto.propose({ config: config(null), expectedRevision: 0 }, 'orch')).toThrow('adapter');
     const interval = { ...config(null), trigger: { kind: 'interval' as const, everyMinutes: 1 }, devopsWrite: grant };
-    expect(() => auto.propose({ config: interval, expectedRevision: 0 }, 'orch')).toThrow('DevOps trigger');
-    expect(() => setup(false).auto.propose({ config: config(), expectedRevision: 0 }, 'orch')).toThrow('adapter');
+    expect(() => auto.propose({ config: interval, expectedRevision: 0 }, 'orch')).toThrow('work-item-id');
+    expect(() => setup(false)).toThrow('Choose an agent');
     expect(auto.propose({ config: config(), expectedRevision: 0 }, 'orch').config.devopsWrite).toEqual(grant);
   });
   it('validates the grant against the trigger', () => {

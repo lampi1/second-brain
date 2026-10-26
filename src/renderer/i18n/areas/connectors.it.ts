@@ -30,6 +30,8 @@ export const connectorsIt = {
  'connector.usedByTip.jira':'Lo usa solo l’app: il token resta cifrato sul computer e non arriva agli agenti.',
  'connector.usedByTip.azure':'La pagina Task si aggiorna con questo accesso (lettura sola). Gli agenti usano Azure DevOps tramite gli script del brain o un server MCP.',
  'connector.usedByValue.github':'App','connector.usedByValue.jira':'App','connector.usedByValue.azure':'Pagina Task',
+ 'hub.f.routineTest': 'Consenti alle routine: questo account accede solo a sistemi di test',
+ 'hub.f.routineTestHint': 'Conferma solo con credenziali e destinazioni limitate al test. Ogni routine approva separatamente strumento e parametri.',
  'hub.lead':'Tutto ciò a cui l’app si collega, in un posto: gli account che usa lei e i server MCP che dà ai tuoi agenti.',
  'hub.whatTitle':'Connettori e server MCP','hub.whatTip':'Un connettore è un account dell’app: lo usa l’app per sé (la pagina Task, i progetti da ritrovare). Un server MCP è una cassetta di strumenti per gli agenti: Claude, Codex e Cursor lo ricevono all’avvio di ogni chat, con i permessi del ruolo. Lo configuri una volta qui, non nei file dei singoli motori.',
  'hub.total.working':'Funzionano','hub.total.workingTip':'Gli account verificati più i server MCP la cui ultima prova è riuscita, sul totale delle schede.','hub.total.of':({n}:{n:number})=>`su ${n}`,

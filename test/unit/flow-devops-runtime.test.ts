@@ -18,7 +18,7 @@ const config: FlowAutomationConfig = { flowId: 'fix', flowVersion: 1, scope: { p
   trigger: { kind: 'devops', everyMinutes: 1, organization: 'contoso', project: 'ProjectA', areaPath: 'Team', workItemType: 'Bug', states: ['New'], includeExisting: true },
   devopsWrite: { organization: 'contoso', projects: ['ProjectA'], ops: ['comment'], fields: [] } };
 
-async function setup(sealed = false, environment = false, browser = false) {
+async function setup(sealed = false, environment = false, browser = false, analysis = false) {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'flow-dw-')); folders.push(folder);
   const brain = path.join(folder, 'brain'); fs.mkdirSync(brain);
   const rows = [{ id: 'o', isOrchestrator: true, state: 'idle' }] as ChatSummary[];
@@ -28,7 +28,7 @@ async function setup(sealed = false, environment = false, browser = false) {
   const runtime = createFlowRuntime({ userData: folder, brainRoot: () => brain, chats: () => rows, changed: () => {}, stopChat, send: vi.fn(async () => {}), detect, devopsWrite: { token: async () => 'token-value', request } });
   const flow = runtime.service(), auto = runtime.automation();
   flow.propose({ expectedRevision: 0, definition: { id: 'fix', title: 'Fix', description: 'Fixture', aliases: [], scope: { project: 'ProjectA', areaPath: 'Team' }, steps: [
-    { id: 'write', title: 'Write', kind: 'agent', instructions: 'Comment', inputs: ['workspace', 'work-item-id'], workspaceInput: 'workspace', evidence: [], ...(environment ? { testEnvironment: 'test-fixture' } : {}), effect: 'external-write', ...(browser ? { writeVia: 'browser' as const, browserTargets: ['https://qa.example.com'] } : { adapter: 'devops-write' as const }), maxAttempts: 1, timeoutMs: 600000, ...(sealed ? { role: 'scout' as const, tier: 'mid' as const, engine: 'claude', model: 'sonnet', agentPrompt: 'Frozen evidence contract' } : {}) }], ...(sealed ? { package: { schema: 1 as const, assets: [], outputs: [], requiredOps: ['comment'] } } : {}) } });
+    { id: 'write', title: 'Write', kind: 'agent', instructions: 'Comment', inputs: ['workspace', 'work-item-id'], workspaceInput: 'workspace', evidence: [], ...(environment ? { testEnvironment: 'test-fixture' } : {}), effect: 'external-write', ...(browser ? { writeVia: 'browser' as const, browserTargets: ['https://qa.example.com'] } : { adapter: 'devops-write' as const, ...(analysis ? { mentionReason: 'analysis' as const } : {}) }), maxAttempts: 1, timeoutMs: 600000, ...(sealed ? { role: 'scout' as const, tier: 'mid' as const, engine: 'claude', model: 'sonnet', agentPrompt: 'Frozen evidence contract' } : {}) }], ...(sealed ? { package: { schema: 1 as const, assets: [], outputs: [], requiredOps: ['comment'] } } : {}) } });
   flow.decideDefinition({ id: 'fix', expectedRevision: 1, answer: 'yes' });
   const configured = structuredClone(config);
   if (environment) {
@@ -110,4 +110,13 @@ it('browser report journal revision does not invalidate the test-environment ver
   s.rows[1]!.state = 'idle'; s.rows[1]!.run!.report = { at:42, via:'agent_report', outcome:'done', verified:'yes', blocking:0, summary:'Browser done', canonical:{ runId:'wr', taskVersion:1, outcome:'done', doneWhen:[{criterion:'proof',met:true,evidence:'read-back verified'}], browserWrite:{outcome:'done',evidence:['read-back verified']} } } as NonNullable<ChatSummary['run']>['report'];
   await s.runtime.tick(); expect(s.flow.status(s.run.id,'o').steps[0]?.reason).toBeUndefined(); expect(s.flow.status(s.run.id,'o').status).toBe('completed');
   expect(s.flow.status(s.run.id,'o').browserWrites?.[0]?.outcome).toBe('done'); s.runtime.stop();
+});
+
+it('derives analysis mention authority from the approved step, never from request fields', async () => {
+  const run = vi.spyOn(DevOpsWriter.prototype, 'execute').mockResolvedValue({ commentId: 5 });
+  const allowed = await setup(false, false, false, true);
+  await allowed.runtime.devopsWrite('worker', { op: 'comment', text: 'Analysis', mentionReason: 'analysis' });
+  expect(run.mock.calls.at(-1)?.[0].mentionReason).toBe('analysis'); allowed.runtime.stop();
+  const denied = await setup(); await denied.runtime.devopsWrite('worker', { op: 'comment', text: 'Analysis', mentionReason: 'analysis' });
+  expect(run.mock.calls.at(-1)?.[0].mentionReason).toBeUndefined(); denied.runtime.stop();
 });

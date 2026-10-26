@@ -12,7 +12,7 @@ const dirs: string[] = [];
 afterEach(() => dirs.splice(0).forEach(dir => fs.rmSync(dir, { recursive: true, force: true })));
 function service() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-portable-')); dirs.push(dir);
-  return new FlowService({ file: path.join(dir, 'flows.json'), contextKey: 'portable-test', now: () => 10 });
+  return new FlowService({ file: path.join(dir, 'flows.json'), contextKey: 'portable-test', now: () => 10, validateConnector: () => {} });
 }
 const definition: FlowDefinition = { id: 'document-review', title: 'Document review', description: 'Review selected work.', aliases: ['review document'], scope: {}, steps: [{ id: 'review', title: 'Review', kind: 'agent', role: 'sentinel', tier: 'mid', instructions: 'Inspect the selected document.', workspaceInput: 'workspace', inputs: ['workspace'], evidence: ['report'], timeoutMs: 5000, maxAttempts: 1, effect: 'read-only' }] };
 function activate(target: FlowService, revision = 0, title = 'Document review') {
@@ -129,4 +129,14 @@ it('exports what a cloud agent needs for the same result: engine, model, effort,
   expect(JSON.parse(exportFlow(target.snapshot(), { flowId: routine.id, version: 1, format: 'json' }, () => 'changed').content).files).toBeUndefined();
   // the markdown still imports, as a draft, without writing any file
   expect(importFlow(target, md).status).toBe('proposed');
+});
+
+it('exports and imports exact connector recipes and step analysis opt-in without grants', () => {
+  const target = service(); const connector = { serverId: 'qa', tool: 'note', serverHash: 'a'.repeat(64), toolHash: 'b'.repeat(64), role: 'artisan' as const, arguments: { count: { $input: 'count', as: 'integer' } } };
+  const def: FlowDefinition = { ...definition, steps: [{ ...definition.steps[0]!, adapter: 'devops-write', effect: 'external-write', mentionReason: 'analysis' }, { id: 'call', title: 'Call', kind: 'check', instructions: 'Send test note', effect: 'external-write', inputs: ['count'], evidence: ['connector'], timeoutMs: 10000, maxAttempts: 1, connector }] };
+  const draft = target.propose({ definition: def, expectedRevision: 0 }); target.decideDefinition({ id: def.id, expectedRevision: draft.revision, answer: 'yes' });
+  for (const format of ['json', 'markdown'] as const) {
+    const exported = exportFlow(target.snapshot(), { flowId: def.id, version: 1, format });
+    const imported = importFlow(target, exported.content); expect(imported.status).toBe('proposed'); expect(imported.definition.steps).toEqual(def.steps);
+  }
 });

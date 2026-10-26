@@ -23,8 +23,8 @@ function portableDefinition(value: FlowDefinition): FlowDefinition {
   const { id, title, description, category, aliases, scope, steps, params, package: pack } = value;
   return validateDefinition(clean({ id, title, description, ...(category === undefined ? {} : { category }), aliases, scope, ...(pack ? { package: pack } : {}), ...(params?.length ? { params } : {}),
     steps: steps.map(step => {
-      const { id, title, kind, instructions, inputs, action, evidence, timeoutMs, maxAttempts, effect, reviewOf, workspaceInput, adapter, testDbRead, writeVia, browserTargets, role, tier, engine, model, effort, env, args, onFail, agentPrompt, assets } = step;
-      return { ...(agentPrompt ? { agentPrompt } : {}), ...(assets ? { assets } : {}), id, title, kind, instructions, inputs, evidence, timeoutMs, maxAttempts, effect,
+      const { id, title, kind, instructions, inputs, action, evidence, timeoutMs, maxAttempts, effect, reviewOf, workspaceInput, adapter, testDbRead, writeVia, browserTargets, role, tier, engine, model, effort, env, args, onFail, agentPrompt, assets, connector, testEnvironment, mentionReason } = step;
+      return { ...(mentionReason ? { mentionReason } : {}), ...(connector ? { connector } : {}), ...(testEnvironment ? { testEnvironment } : {}), ...(agentPrompt ? { agentPrompt } : {}), ...(assets ? { assets } : {}), id, title, kind, instructions, inputs, evidence, timeoutMs, maxAttempts, effect,
         ...(action ? { action } : {}), ...(reviewOf ? { reviewOf } : {}), ...(workspaceInput ? { workspaceInput } : {}),
         ...(writeVia ? { writeVia, browserTargets } : {}), ...(adapter ? { adapter } : {}), ...(testDbRead ? { testDbRead } : {}), ...(role ? { role } : {}), ...(tier ? { tier } : {}),
         ...(engine ? { engine } : {}), ...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(env ? { env } : {}), ...(args ? { args } : {}), ...(onFail ? { onFail } : {}) };
@@ -37,6 +37,7 @@ export function markdown(definition: FlowDefinition, version: number): string {
     `- When to use: ${definition.aliases.map(md).join('; ') || '—'}`, '', '## Steps', ''];
   for (const [index, step] of definition.steps.entries()) {
     lines.push(`### ${index + 1}. ${md(step.title)}`, '', md(step.instructions), '',
+      ...(step.connector ? [`- Connector: ${md(step.connector.serverId)} / ${md(step.connector.tool)}`, `- Connector arguments: ${md(JSON.stringify(step.connector.arguments))}`, `- Connector identity: ${step.connector.serverHash} / ${step.connector.toolHash}`] : []),
       ...(step.writeVia === 'browser' ? [`- Writes via browser: ${(step.browserTargets ?? []).map(md).join(', ')}`] : []), `- Kind: ${step.kind}`, `- Role: ${step.role ?? 'by effect (read-only: scout, review: sentinel, else artisan)'}`, `- Tier: ${step.tier ?? 'Role default'}`,
       `- Engine / model / effort: ${[step.engine, step.model, step.effort].map(v => md(v ?? 'role default')).join(' / ')}`,
       `- Effect: ${step.effect}`, `- Inputs: ${step.inputs.map(md).join(', ') || '—'}`,
@@ -47,6 +48,7 @@ export function markdown(definition: FlowDefinition, version: number): string {
     if (step.env) lines.push(`- Environment: ${step.env}${step.env === 'prod' ? ' (only a person runs it, never an agent)' : ''}`);
     if (step.args) lines.push(`- Arguments: ${Object.entries(step.args).map(([key, value]) => `${md(key)}=${md(value)}`).join(', ')}`);
     if (step.onFail) lines.push(`- If it fails: back to step ${md(step.onFail.goto)}`);
+    if (step.mentionReason) lines.push('- Analysis mentions: one comment per run, approved grant identities only');
     if (step.adapter) lines.push(`- Adapter: ${step.adapter}`);
     if (step.testDbRead) lines.push('- Test database reads: requested; require a new approved grant');
     lines.push('', 'Required evidence:', ...(step.evidence.length ? step.evidence.map(label => `- ${md(label)}`) : ['- —']), '');

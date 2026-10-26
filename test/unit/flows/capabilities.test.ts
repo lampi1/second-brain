@@ -19,7 +19,7 @@ it('preserves the empty-argument API and exposes detailed building blocks withou
   expect(tool.annotations?.readOnlyHint).toBe(true);
   expect(await tool.run({})).toMatchObject({ automaticProduction: { enabled: false }, testDeploy: { enabled: true } });
   const authoring = await tool.run({ section: 'authoring' });
-  expect(authoring).toMatchObject({ steps: { check: { actions: ['script', 'query'] } }, automation: { triggerKinds: ['interval', 'devops'] } });
+  expect(authoring).toMatchObject({ steps: { check: { actions: ['script', 'query'] } }, automation: { triggerKinds: ['manual', 'interval', 'devops'] } });
   expect(await tool.run({ section: 'devops' })).toMatchObject({ operations: [...DEVOPS_WRITE_OPS] });
   expect(await tool.run({ section: 'test-targets' })).toMatchObject({ deployment: { kinds: ['app-service', 'deployment-group'] }, database: { grant: 'testDbRead.targetIds' } });
   expect(service.snapshot()).toEqual(before);

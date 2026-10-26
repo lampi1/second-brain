@@ -51,7 +51,8 @@ export function checkDef(raw: unknown): McpServerDef {
   const secrets = checkSlots(d.secrets, transport);
   const purpose = str(d.purpose, 300, 'A cosa serve', true)?.trim();
   const importedFrom = d.importedFrom === 'claude' || d.importedFrom === 'cursor' || d.importedFrom === 'codex' ? d.importedFrom : undefined;
-  const base: McpServerDef = { id, label, transport, secrets, enabled: d.enabled !== false, ...(purpose ? { purpose } : {}), ...(importedFrom ? { importedFrom } : {}) };
+  if (d.routineTest !== undefined && d.routineTest !== true) throw new Error('routineTest: omit or explicitly confirm true');
+  const base: McpServerDef = { id, label, transport, secrets, enabled: d.enabled !== false, ...(d.routineTest === true ? { routineTest: true as const } : {}), ...(purpose ? { purpose } : {}), ...(importedFrom ? { importedFrom } : {}) };
   if (transport === 'stdio') {
     const command = str(d.command, 400, 'Comando')!.trim();
     if (SHELL_CHARS.test(command)) throw new Error('Comando: un nome (npx, node) o un percorso completo, senza virgolette né caratteri della shell.');

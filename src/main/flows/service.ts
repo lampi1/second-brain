@@ -1,4 +1,6 @@
 // Durable, fail-closed flow execution; only the host can turn trusted reports and user decisions into receipts.
+import { executionChecks, executionKind } from '../../shared/flow-execution';
+import type { FlowConnectorCall, FlowConnectorReceipt } from '../../shared/flow-connector';
 import { branchLineage } from './branch-lineage';
 import fs from 'node:fs';
 import { progressFingerprint } from './progress';
@@ -11,7 +13,7 @@ import type { FlowAttachment, FlowCommandReceipt, FlowHealEntry, FlowActivate, F
 import { browserWriteStep, browserWriteResult } from '../../shared/flow-browser';
 import { adapted, commandStep, testDbAdapted, digest, type RoleTierMax, inScope, integer, keys, normalize, object, text, validateDefinition, validateInputs, validateScope } from './schema';
 import { assertPackageBinding } from './binding';
-import { HOLD, roleOf, samePrefix } from '../../shared/routine';
+import { HOLD, healable, roleOf, samePrefix } from '../../shared/routine';
 
 export interface FlowServiceOptions {
   progressEvidence?: (run: FlowRun) => string[];
@@ -26,6 +28,7 @@ export interface FlowServiceOptions {
   restartBlocker?: (run: FlowRun, index: number) => string | undefined;
   /** The sha256 of a brain script/query now: a proposed step without a hash gets the current one, so the user's
    *  activation approves exactly that content (ADR 0155). */
+  validateConnector?: (recipe: FlowConnectorCall) => void;
   validateModels?: (definition: FlowDefinition) => void;
   freezeRole?: (step: FlowStep) => Pick<FlowStep, 'agentPrompt' | 'engine' | 'model' | 'tier' | 'effort'>;
   hashOf?: (kind: 'script' | 'query', ref: string) => string | null;
@@ -49,9 +52,15 @@ export class FlowService {
         const step = run.steps[run.currentStep]!;
         // the app closed mid-step: the step blocks with its attempt counted, so the runner retries it while attempts
         // remain (ADR 0155); an open command receipt ends unknown
+        const openConnectors = run.connectorReceipts?.filter(r => r.outcome === 'pending') ?? [];
+        for (const receipt of openConnectors) { receipt.finishedAt = this.now(); receipt.outcome = receipt.dispatched ? 'unknown' : 'not-done'; receipt.summary = 'Interrupted by app restart'; }
+        if (openConnectors.length) { interrupted = true; if (run.status === 'blocked' && openConnectors.some(r => r.dispatched)) this.block(run, `${HOLD}Connector outcome is unknown after restart.`); }
         if (run.status === 'active' && step?.status === 'running') {
           for (const receipt of run.receipts ?? []) if (receipt.stepId === step.stepId && receipt.endedAt === undefined) { receipt.endedAt = this.now(); receipt.exitCode = null; receipt.output = `${receipt.output}\n[interrotto: l’app si è chiusa]`.slice(-4000); }
-          this.block(run, 'Interrotto: l’app si è chiusa durante questo passaggio.'); this.touch(run); interrupted = true;
+          let unknownConnector = openConnectors.some(r => r.dispatched);
+          for (const receipt of run.connectorReceipts ?? []) if (receipt.outcome === 'pending') { receipt.finishedAt = this.now(); receipt.outcome = receipt.dispatched ? 'unknown' : 'not-done'; receipt.summary = 'Interrupted by app restart'; unknownConnector ||= receipt.dispatched; }
+          const externalCommand = this.spec(run).effect === 'external-write' && commandStep(this.spec(run));
+          this.block(run, `${unknownConnector || externalCommand ? HOLD : ''}Interrotto: l’app si è chiusa durante questo passaggio.`); this.touch(run); interrupted = true;
         }
       }
       if (interrupted) { this.enqueueHistory(beforeRecovery); this.trace(beforeRecovery); this.save(); }
@@ -162,6 +171,55 @@ export class FlowService {
       this.data.drafts = [...this.data.drafts.filter(d => d.definition.id !== definition.id), draft]; return draft;
     });
   }
+  /** Resolve known structural blockers before activation; missing run inputs remain explicit configuration. */
+  preflight(definition: FlowDefinition) {
+    const checks = executionChecks(definition);
+    for (const step of definition.steps.filter(s => s.connector)) {
+      const check = checks.find(c => c.stepId === step.id)!;
+      try { if (!this.options.validateConnector) throw new Error('Connector host unavailable'); this.options.validateConnector(step.connector!); }
+      catch (error) { check.state = 'configuration'; check.detail = error instanceof Error ? error.message : 'Connector configuration unavailable'; }
+    }
+    return { executable: !checks.some(c => c.state === 'unsupported'), checks };
+  }
+  private assertExecutable(definition: FlowDefinition): void {
+    const blockers = this.preflight(definition).checks.filter(c => c.state === 'unsupported');
+    if (blockers.length) throw new Error(blockers.map(c => `${c.stepId}: ${c.detail}`).join('\n'));
+    for (const step of definition.steps.filter(s => s.connector)) {
+      if (!this.options.validateConnector) throw new Error('Connector host unavailable');
+      this.options.validateConnector(step.connector!);
+    }
+  }
+  beginConnector(runId: string, revision: number, stepId: string): FlowConnectorReceipt {
+    return this.change(() => {
+      const run = this.guarded(runId, revision, stepId), spec = this.spec(run), step = run.steps[run.currentStep]!;
+      if (!spec.connector || run.paused || run.status !== 'active' || step.status !== 'ready' || (run.connectorReceipts?.length ?? 0) >= 500) throw new Error('Connector step is not ready');
+      const receipt: FlowConnectorReceipt = { id: randomUUID(), stepId, serverId: spec.connector.serverId, tool: spec.connector.tool, at: this.now(), outcome: 'pending', dispatched: false, summary: '' };
+      (run.connectorReceipts ??= []).push(receipt); step.status = 'running'; step.startedAt = this.now(); step.attempts++; this.touch(run); return receipt;
+    });
+  }
+  connectorDispatched(runId: string, receiptId: string): void {
+    this.change(() => {
+      const run = this.run(runId), receipt = run.connectorReceipts?.find(r => r.id === receiptId), step = run.steps[run.currentStep];
+      if (run.status !== 'active' || run.paused || !receipt || receipt.outcome !== 'pending' || receipt.dispatched || step?.stepId !== receipt.stepId || step.status !== 'running') throw new Error('Connector authorization changed before dispatch');
+      receipt.dispatched = true; this.touch(run);
+    });
+  }
+  finishConnector(runId: string, receiptId: string, outcome: 'done' | 'not-done' | 'unknown', summary: string): FlowRun {
+    return this.change(() => {
+      const run = this.run(runId), receipt = run.connectorReceipts?.find(r => r.id === receiptId);
+      if (!receipt || receipt.outcome !== 'pending') throw new Error('Connector receipt is not pending');
+      if (outcome === 'done' && !receipt.dispatched) throw new Error('Connector success requires dispatch evidence');
+      if (outcome === 'not-done' && receipt.dispatched) throw new Error('A dispatched connector call cannot be assumed not done');
+      receipt.outcome = outcome; receipt.finishedAt = this.now(); receipt.summary = summary.replace(/\u0000/g, '').slice(0, 8000);
+      const step = run.steps[run.currentStep];
+      if (run.status === 'blocked' && step?.stepId === receipt.stepId && outcome === 'unknown') this.block(run, `${HOLD}${receipt.summary}`);
+      if (run.status === 'active' && step?.status === 'running' && step.stepId === receipt.stepId) {
+        if (outcome === 'done') { this.finish(run, { id: randomUUID(), stepId: step.stepId, kind: 'check', at: this.now(), summary: receipt.summary || 'Connector returned success', evidence: [`connector: ${receipt.serverId}/${receipt.tool}; receipt ${receipt.id}; ${receipt.summary}`] }); this.prepare(run); }
+        else this.block(run, `${outcome === 'unknown' ? HOLD : ''}${summary}`);
+      }
+      this.touch(run); return run;
+    });
+  }
   /** The user's tier pick on one agent step, from the exact definition shown: the pending proposal when there is one,
    * otherwise the active version. Never activates: it only proposes the next draft revision for decideDefinition.
    * Renderer IPC only, like decideDefinition; propose() re-validates the tier against the role's tierMax. */
@@ -189,6 +247,7 @@ export class FlowService {
       draft.updatedAt = this.now(); draft.status = input.answer === 'yes' ? 'active' : 'rejected';
       if (feedback) draft.feedback = feedback;
       if (input.answer === 'yes') {
+        this.assertExecutable(draft.definition);
         this.options.validateModels?.(draft.definition);
         const version = Math.max(0, ...this.data.versions.filter(v => v.definition.id === input.id).map(v => v.version)) + 1;
         this.data.versions.push({ definition: copy(draft.definition), version, draftRevision: draft.revision, digest: digest(draft.definition), activatedAt: this.now() });
@@ -412,7 +471,7 @@ export class FlowService {
       const run = this.guarded(input.runId, input.expectedRevision, input.stepId); this.owner(run, ownerId);
       const step = run.steps[run.currentStep]!, definition = this.version(run.flowId, run.flowVersion).definition.steps[run.currentStep]!;
       if (definition.kind !== 'agent' || step.status !== 'running' || !step.chatId || !step.chatRunId || !step.taskVersion) throw new Error('No bound running agent step');
-      if (this.now() - (step.startedAt ?? 0) > definition.timeoutMs) { this.block(run, 'Step timed out; inspect evidence before retry.'); this.touch(run); return run; }
+      if (this.now() - (step.startedAt ?? 0) > definition.timeoutMs) { this.block(run, `${run.connectorReceipts?.some(r => r.stepId === run.steps[run.currentStep]?.stepId && r.outcome === 'pending') || this.spec(run).effect === 'external-write' && commandStep(this.spec(run)) ? HOLD : ''}Step timed out; inspect evidence before retry.`); this.touch(run); return run; }
       const binding = { chatId: step.chatId, chatRunId: step.chatRunId, taskVersion: step.taskVersion }, reportId = text(input.reportId, 'reportId', 200);
       const failure = this.options.reportFailure?.(binding, reportId, definition.evidence); if (failure) throw new Error(failure);
       const report = this.options.resolveReport?.(binding, reportId);
@@ -461,7 +520,7 @@ export class FlowService {
   hostRetry(runId: string, expectedRevision: number, stepId: string, reason: string, action: 'retry' | 'resume' = 'retry'): FlowRun {
     return this.change(() => {
       const run = this.guarded(runId, expectedRevision, stepId), step = run.steps[run.currentStep]!, spec = this.spec(run);
-      if (run.status !== 'blocked' || step.status !== 'blocked') throw new Error('Only a blocked step can be retried');
+      if (!healable(run, this.version(run.flowId, run.flowVersion).definition)) throw new Error('This step needs explicit user recovery; no automatic retry is safe');
       if (step.attempts >= spec.maxAttempts || this.unsupported(run, spec) || spec.env === 'prod') throw new Error('No automatic attempt left for this step');
       this.healed(run, { at: this.now(), stepId, action, attempt: step.attempts + 1, reason: text(reason, 'reason', 16000) });
       this.reset(step); this.prepare(run); this.touch(run); return run;
@@ -474,7 +533,7 @@ export class FlowService {
       const run = this.guarded(runId, expectedRevision, stepId), step = run.steps[run.currentStep]!, spec = this.spec(run);
       const definition = this.version(run.flowId, run.flowVersion).definition, target = definition.steps.findIndex(item => item.id === spec.onFail?.goto);
       const carried = run.restartOf ? definition.steps.findIndex(item => item.id === run.restartOf!.stepId) : 0;
-      if (run.status !== 'blocked' || step.status !== 'blocked' || target < 0 || target >= run.currentStep || target < carried) throw new Error('This step cannot send work back');
+      if (!healable(run, definition) || target < 0 || target >= run.currentStep || target < carried) throw new Error('This step cannot send work back');
       if (step.attempts >= spec.maxAttempts || run.steps[target]!.attempts >= definition.steps[target]!.maxAttempts) throw new Error('No automatic attempt left');
       this.healed(run, { at: this.now(), stepId, action: 'goto', to: definition.steps[target]!.id, attempt: step.attempts, reason: text(reason, 'reason', 16000) });
       for (let i = target; i <= run.currentStep; i++) { this.reset(run.steps[i]!); delete run.steps[i]!.receipt; }
@@ -521,7 +580,7 @@ export class FlowService {
         if (step.status === 'approval') step.attempts++;
         this.finish(run, { id: randomUUID(), stepId: step.stepId, kind: 'check', at: this.now(), summary: `${receipt.kind} ${receipt.ref} · exit 0`, evidence: [`receipt: ${receipt.id}`, `sha256: ${receipt.sha256}`] });
         this.prepare(run);
-      } else this.block(run, `${receipt.kind === 'script' ? 'Lo script' : 'La query'} ${receipt.ref} è finito con exit ${exitCode ?? 'sconosciuto'}: ${output.trim().split('\n').slice(-3).join(' ').slice(0, 600)}`);
+      } else this.block(run, `${this.spec(run).effect === 'external-write' ? HOLD : ''}${receipt.kind === 'script' ? 'Lo script' : 'La query'} ${receipt.ref} è finito con exit ${exitCode ?? 'sconosciuto'}: ${output.trim().split('\n').slice(-3).join(' ').slice(0, 600)}`);
       this.touch(run); return run;
     });
   }
@@ -578,7 +637,7 @@ export class FlowService {
     });
     if (!expired.length) return;
     this.reconciling = true;
-    try { this.change(() => { for (const run of expired) { this.block(run, 'Step timed out; inspect evidence before retry.'); this.touch(run); } }); }
+    try { this.change(() => { for (const run of expired) { this.block(run, `${run.connectorReceipts?.some(r => r.stepId === run.steps[run.currentStep]?.stepId && r.outcome === 'pending') || this.spec(run).effect === 'external-write' && commandStep(this.spec(run)) ? HOLD : ''}Step timed out; inspect evidence before retry.`); this.touch(run); } }); }
     finally { this.reconciling = false; }
   }
   private prepare(run: FlowRun): void {
@@ -593,7 +652,7 @@ export class FlowService {
         if (step.attempts >= spec.maxAttempts) { this.block(run, 'Tentativi esauriti: serve una tua decisione.'); return; }
         step.status = 'ready'; return;
       }
-      if (commandStep(spec)) {
+      if (commandStep(spec) || spec.connector) {
         if (spec.env === 'prod') { step.status = 'approval'; step.decisionPending = true; run.status = 'approval'; return; }
         if (step.attempts >= spec.maxAttempts) { this.block(run, 'Tentativi esauriti: serve una tua decisione.'); return; }
         step.status = 'ready'; return;
@@ -607,7 +666,7 @@ export class FlowService {
   }
   /** Production and non-builtin actions never run; an external write runs only as a granted DevOps adapter step. */
   private unsupported(run: FlowRun, spec: FlowStep): boolean {
-    if (commandStep(spec)) return false;
+    if (executionKind(spec) === 'user' || spec.connector || commandStep(spec)) return false;
     if (spec.effect === 'production' || (spec.action && spec.action.kind !== 'builtin')) return true;
     if (browserWriteStep(spec)) return false;
     if (spec.effect !== 'external-write' && !testDbAdapted(spec)) return false;
@@ -616,7 +675,7 @@ export class FlowService {
   }
   private finish(run: FlowRun, receipt: FlowReceipt): void { if (this.version(run.flowId, run.flowVersion).definition.package?.intake && run.currentStep === 0 && run.intake !== 'accepted') throw new Error('First call flow_intake accept or skip'); const step = run.steps[run.currentStep]!; step.status = 'completed'; delete step.reason; delete step.decisionPending; step.receipt = receipt; run.currentStep++; }
   private cancelRun(run: FlowRun, reason: string, by: 'user' | 'orchestrator' | 'routine'): void {
-    run.cancellation = { at: this.now(), reason, by, expectedRevision: run.revision, interruption: run.steps[run.currentStep]?.chatId ? 'pending' : 'confirmed' }; run.status = 'cancelled';
+    run.cancellation = { at: this.now(), reason, by, expectedRevision: run.revision, interruption: run.steps[run.currentStep]?.chatId || run.connectorReceipts?.some(r => r.outcome === 'pending') || run.receipts?.some(r => r.endedAt === undefined) ? 'pending' : 'confirmed' }; run.status = 'cancelled';
     const step = run.steps[run.currentStep]!; step.status = 'cancelled'; step.reason = reason; step.decisionPending = false; this.touch(run);
   }
   private block(run: FlowRun, reason: string): void { run.status = 'blocked'; run.steps[run.currentStep]!.status = 'blocked'; run.steps[run.currentStep]!.decisionPending = true; run.steps[run.currentStep]!.reason = reason; run.updatedAt = this.now(); }
@@ -696,7 +755,11 @@ export class FlowService {
     object(data.active, 'active');
     for (const [id, version] of Object.entries(data.active)) { integer(version, 'active version', 1); if (!versionIds.has(`${id}:${version}`)) throw new Error('Invalid active version'); }
     for (const run of data.runs) {
-      keys(object(run, 'run'), ['id', 'revision', 'flowId', 'flowVersion', 'definitionDigest', 'ownerOrchestratorId', 'subjectKey', 'scope', 'inputs', 'status', 'currentStep', 'steps', 'createdAt', 'updatedAt', 'testDbEvidence', 'browserWrites', 'cancellation', 'restartOf', 'pendingRecovery', 'pendingCancellation', 'recoveryFeedback', 'paused', 'attachments', 'receipts', 'heal', 'awaitingUser', 'title', 'outputs', 'disposition', 'history', 'trace', 'approval', 'settlementError', 'intake', 'verdict'], 'run');
+      keys(object(run, 'run'), ['id', 'revision', 'flowId', 'flowVersion', 'definitionDigest', 'ownerOrchestratorId', 'subjectKey', 'scope', 'inputs', 'status', 'currentStep', 'steps', 'createdAt', 'updatedAt', 'testDbEvidence', 'browserWrites', 'connectorReceipts', 'cancellation', 'restartOf', 'pendingRecovery', 'pendingCancellation', 'recoveryFeedback', 'paused', 'attachments', 'receipts', 'heal', 'awaitingUser', 'title', 'outputs', 'disposition', 'history', 'trace', 'approval', 'settlementError', 'intake', 'verdict'], 'run');
+      if (run.connectorReceipts !== undefined) {
+        if (!Array.isArray(run.connectorReceipts) || run.connectorReceipts.length > 500) throw new Error('Invalid connector receipts');
+        for (const r of run.connectorReceipts) { keys(object(r, 'connector receipt'), ['id', 'stepId', 'serverId', 'tool', 'at', 'finishedAt', 'outcome', 'dispatched', 'summary'], 'connector receipt'); text(r.id, 'id', 100); text(r.stepId, 'stepId', 80); text(r.serverId, 'serverId', 40); text(r.tool, 'tool', 128); integer(r.at, 'at'); if (r.finishedAt !== undefined) integer(r.finishedAt, 'finishedAt'); text(r.summary, 'summary', 8000, true); if (!['pending', 'done', 'not-done', 'unknown'].includes(r.outcome) || typeof r.dispatched !== 'boolean' || r.outcome === 'not-done' && r.dispatched) throw new Error('Invalid connector outcome'); }
+      }
       if (run.paused !== undefined) { keys(object(run.paused, 'paused'), ['at'], 'paused'); integer(run.paused.at, 'paused time'); }
       if (run.attachments !== undefined) validateAttachments(run.attachments);
       if (run.receipts !== undefined) { if (!Array.isArray(run.receipts) || run.receipts.length > 500) throw new Error('Invalid receipts'); run.receipts.forEach(validateReceipt); }
@@ -789,10 +852,10 @@ export class FlowService {
         if (step.chatRunId !== undefined) text(step.chatRunId, 'step chat run', 200);
         if (step.taskVersion !== undefined) integer(step.taskVersion, 'step task', 1);
         if (step.startedAt !== undefined) integer(step.startedAt, 'step start');
-        const command = commandStep(spec);
+        const command = commandStep(spec) || !!spec.connector;
         if (step.status === 'ready' && ((spec.kind !== 'agent' && !command) || step.attempts >= spec.maxAttempts) || step.status === 'approval' && !['manual', 'approval'].includes(spec.kind) && !(command && spec.env === 'prod')) throw new Error('Invalid step kind state');
         // A declared adapter step may progress on disk; its grant is re-checked live at prepare, bind, retry and every write.
-        const unsupported = !command && ((spec.effect === 'external-write' && !adapted(spec) && !browserWriteStep(spec)) || spec.effect === 'production' || spec.action && spec.action.kind !== 'builtin');
+        const unsupported = executionKind(spec) === 'unsupported';
         if (unsupported && !['pending', 'blocked', 'cancelled'].includes(step.status)) throw new Error('Unsupported action cannot progress');
         if (step.status !== 'completed' && step.receipt) throw new Error('Unfinished step cannot have a receipt');
         if (step.decisionPending !== undefined && typeof step.decisionPending !== 'boolean') throw new Error('Invalid decision state');
@@ -805,8 +868,20 @@ export class FlowService {
           keys(object(receipt, 'receipt'), ['id', 'stepId', 'kind', 'at', 'summary', 'chatId', 'reportId', 'evidence'], 'receipt');
           text(receipt.id, 'receipt id', 200); integer(receipt.at, 'receipt time');
           if (spec.kind === 'agent' && (receipt.chatId !== step.chatId || !receipt.reportId || !step.chatRunId || !step.taskVersion || spec.evidence.some(label => !receipt.evidence.some(value => value.startsWith(`${label}: `))))) throw new Error('Invalid agent receipt binding');
+          if (spec.connector) {
+            let origin = i < inherited ? restartSource : run;
+            const visited = new Set<string>(); let matched = false;
+            while (origin && !visited.has(origin.id)) {
+              visited.add(origin.id);
+              if (origin.connectorReceipts?.some(r => r.stepId === step.stepId && r.serverId === spec.connector!.serverId && r.tool === spec.connector!.tool && r.outcome === 'done' && r.dispatched && r.finishedAt !== undefined && receipt.evidence.some(e => e.includes(`receipt ${r.id};`)))) { matched = true; break; }
+              const parent = origin.restartOf;
+              if (!parent || parent.mode !== 'from-step' || origin.steps.findIndex(s => s.stepId === parent.stepId) <= i) break;
+              origin = data.runs.find(r => r.id === parent.runId);
+            }
+            if (!matched) throw new Error('Connector completion lacks matching host receipt');
+          }
           if (spec.reviewOf && run.steps.find(s => s.stepId === spec.reviewOf)?.chatId === step.chatId) throw new Error('Invalid independent reviewer');
-          if ((spec.kind === 'agent' && receipt.kind !== 'agent-report') || (spec.kind === 'check' && receipt.kind !== 'check') || (['approval', 'manual'].includes(spec.kind) && receipt.kind !== 'user') || (!command && ((spec.effect === 'external-write' && !adapted(spec) && !browserWriteStep(spec)) || spec.effect === 'production'))) throw new Error('Invalid receipt authority');
+          if ((spec.kind === 'agent' && receipt.kind !== 'agent-report') || (spec.kind === 'check' && receipt.kind !== 'check') || (['approval', 'manual'].includes(spec.kind) && receipt.kind !== 'user') || unsupported) throw new Error('Invalid receipt authority');
         }
         const carried = i < inherited;
         if (carried && (!restartSource || step.status !== 'completed' || JSON.stringify(step) !== JSON.stringify(restartSource.steps[i]))) throw new Error('Inherited prefix evidence changed');

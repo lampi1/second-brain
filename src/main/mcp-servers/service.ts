@@ -5,6 +5,8 @@
 // only). A test opens the server exactly as a chat would (its tokens included), lists its tools and records the result
 // with a clear error and fix. Created by wiring.ts (and demo-wiring.ts with a fake upstream and seeded servers).
 import os from 'node:os';
+import { RoutineConnectors } from './routine';
+import { FAIL_CLOSED, type AgentPolicy } from '../agents/tool-policy';
 import { log, errText } from '../log';
 import type { McpServer } from '../mcp/server';
 import type { SecretCipher } from '../engines/secrets';
@@ -30,6 +32,7 @@ export interface McpServersOptions {
   /** tests and the demo: a fake upstream instead of the network or a process */
   connect?: (ep: Endpoint, def: McpServerDef) => Upstream;
   testTimeoutMs?: number;
+  routinePolicy?: (role: string) => AgentPolicy | null;
   /** the clock of a test's time (the frozen demo) */
   now?: () => number;
 }
@@ -37,10 +40,12 @@ export interface McpServersOptions {
 export class McpServersService {
   readonly store: McpServerStore;
   readonly gateway: McpGateway;
+  readonly routines: RoutineConnectors;
   private imports: McpImportCandidate[] = [];
 
   constructor(private readonly opts: McpServersOptions) {
     this.store = new McpServerStore(opts.userData, opts.cipher);
+    this.routines = new RoutineConnectors({ definitions: () => this.store.servers(), endpoint: id => this.endpoint(id), access: role => this.store.roleAccess(role), policy: role => this.opts.routinePolicy ? this.opts.routinePolicy(role) : FAIL_CLOSED, ...(opts.connect ? { connect: opts.connect } : {}) });
     this.gateway = new McpGateway({
       mcp: opts.mcp, servers: () => this.store.servers(), roleAccess: r => this.store.roleAccess(r),
       endpoint: id => this.endpoint(id), context: opts.context, ...(opts.connect ? { connect: opts.connect } : {}),
