@@ -33,6 +33,29 @@ function world(steps = [step('first'), step('second')], sealed = false) {
   return { root, runtime, flow, rows, create, sendWorker, discardWorker, stopChat, send, start, report, switchBrain: (value: string | null) => { current = value; } };
 }
 describe('host routine engine', () => {
+  it('interrupts a third timed-out live worker before a no-progress hold', async () => {
+    let now = Date.now(); const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    try {
+      const w = world([step('first', { maxAttempts: 5, timeoutMs: 1000 })]), source = w.start(); await w.runtime.tick();
+      for (let i = 1; i <= 3; i++) {
+        now += 1001; await w.runtime.tick(); await w.runtime.tick();
+        expect(w.stopChat).toHaveBeenCalledWith(`worker-${i}`);
+      }
+      const held = w.flow.status(source.id, 'owner'); expect(held.status).toBe('blocked');
+      expect(held.steps[0]!.reason).toContain('tre tentativi'); expect(w.create).toHaveBeenCalledTimes(3);
+      expect(w.rows.find(c => c.id === 'worker-3')!.state).toBe('idle');
+    } finally { clock.mockRestore(); }
+  });
+  it('holds after three unchanged canonical failures despite fresh chat/report IDs, until explicit user retry', async () => {
+    const w = world([step('first', { maxAttempts: 5 })]), source = w.start(); await w.runtime.tick();
+    for (let i = 1; i <= 3; i++) { w.report(`worker-${i}`, r => { r!.at = i * 100; r!.outcome = 'partial'; }); await w.runtime.tick(); }
+    const held = w.flow.status(source.id, 'owner');
+    expect(held.status).toBe('blocked'); expect(held.steps[0]!.reason).toContain('tre tentativi');
+    expect(held.steps[0]!.reason).toContain('worker-3-run:300'); expect(w.create).toHaveBeenCalledTimes(3);
+    await w.runtime.tick(); expect(w.create).toHaveBeenCalledTimes(3);
+    await w.runtime.decide({ runId: source.id, expectedRevision: held.revision, stepId: 'first', answer: 'yes' });
+    await w.runtime.tick(); expect(w.create).toHaveBeenCalledTimes(4);
+  });
   it('binds before the first turn, consumes canonical evidence, and launches the next step without waking the owner', async () => {
     const w = world(), source = w.start();
     w.sendWorker.mockImplementation(async (id, _prompt, authorize) => { const run = w.flow.status(source.id, 'owner'); expect(run.steps[run.currentStep]).toMatchObject({ status: 'running', chatId: id }); authorize(); w.rows.find(row => row.id === id)!.state = 'running'; });

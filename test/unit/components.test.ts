@@ -10,6 +10,7 @@ import { ComponentService } from '../../src/main/components/service';
 import { componentTools } from '../../src/main/components/tools';
 import { FlowService } from '../../src/main/flows/service';
 import type { FlowDefinition } from '../../src/shared/flows';
+import { flowBrainContextKey } from '../../src/main/flows/context';
 const dirs: string[] = [];
 afterEach(() => dirs.splice(0).forEach(d => fs.rmSync(d, { recursive: true, force: true })));
 const source = { repository: 'example/catalog', ref: 'main', directory: 'components', enabled: true }, commit = 'a'.repeat(40);
@@ -67,6 +68,41 @@ describe('pinned public GitHub adapter', () => {
   });
 });
 describe('component authority', () => {
+  it('replaces a source case-insensitively and remains readable after restart', async () => {
+    const { service, dir, flow } = setup(); await service.perform({ op: 'source', source }, true);
+    await service.perform({ op: 'source', source: { ...source, repository: 'Example/Catalog' } }, true);
+    const loaded = new ComponentService(path.join(dir, 'components'), 'first', () => 'first', () => flow);
+    expect(loaded.state().sources.filter(s => s.repository.toLowerCase() === source.repository)).toHaveLength(1);
+  });
+  it('keeps tool responses compact and pages explicit file content without granting authority', async () => {
+    const { service } = setup(), tools = componentTools(() => service), content = 'sample evidence '.repeat(3000);
+    const staged = await tools.find(t => t.name === 'app_component_stage_local')!.run({ contextKey: 'first', name: 'local', files: [{ path: 'review.md', content }] }) as { bundle: { digest: string; files: { characters: number; content?: string }[] } };
+    expect(staged.bundle.files[0]!.content).toBeUndefined(); expect(staged.bundle.files[0]!.characters).toBe(content.length);
+    const inspect = tools.find(t => t.name === 'app_component_inspect')!, input = { contextKey: 'first', digest: staged.bundle.digest };
+    expect(JSON.stringify(await inspect.run(input))).not.toContain(content);
+    const page = await inspect.run({ ...input, filePath: 'review.md', offset: 100, maxCharacters: 25 }) as { file: { content: string; nextOffset: number } };
+    expect(page.file).toMatchObject({ content: content.slice(100, 125), nextOffset: 125 });
+    await expect(inspect.run({ ...input, filePath: 'review.md', maxCharacters: 16001 })).rejects.toThrow();
+    await expect(inspect.run({ ...input, filePath: '../other' })).rejects.toThrow('not in');
+  });
+  it('rejects malformed cached metadata and mismatched origins on restart', async () => {
+    const { dir, service, flow } = setup(); await service.perform({ op: 'source', source }, true);
+    const file = path.join(dir, 'components/catalog.json'), raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+    raw.catalogs = [{ source, commit, fetchedAt: 1, entries: [{ path: '../outside.md', sha: commit, kind: 'agent', title: 'Fake' }] }]; fs.writeFileSync(file, JSON.stringify(raw));
+    expect(() => new ComponentService(path.dirname(file), 'first', () => 'first', () => flow)).toThrow();
+    expect(() => bundleOf(files, { path: 'sample', repository: 'example/catalog' })).toThrow('Incomplete');
+  });
+  it('imports through the confined definition-file transport and rejects dual input', async () => {
+    const dir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'sb-component-file-')); dirs.push(dir);
+    const context = flowBrainContextKey(dir), flow = new FlowService({ file: path.join(dir, 'state.json'), contextKey: context });
+    const service = new ComponentService(path.join(dir, 'catalog'), context, () => context, () => flow, undefined, () => dir);
+    fs.writeFileSync(path.join(dir, 'definition.json'), JSON.stringify(definition()));
+    const staged = await service.perform({ op: 'local', name: 'sample', files });
+    const input = { op: 'propose' as const, digest: staged.bundle!.digest, definitionPath: 'definition.json', expectedRevision: 0, assets: files.map((f, i) => ({ path: f.path, id: `asset-${i}` })), stepIds: ['read'] };
+    await expect(service.perform({ ...input, definition: definition() })).rejects.toThrow('exactly one');
+    await expect(service.perform({ ...input, definitionPath: '../outside.json' })).rejects.toThrow();
+    expect((await service.perform(input)).proposal).toEqual({ flowId: 'sample', revision: 1 }); expect(flow.snapshot().active).toEqual({});
+  });
   it('starts offline and only native user configuration enables a source', async () => {
     const github = new GithubComponents(), spy = vi.spyOn(github, 'catalog'); const { service } = setup(github);
     await service.tick(); expect(spy).not.toHaveBeenCalled();

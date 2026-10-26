@@ -6,7 +6,7 @@ import type { FlowService } from '../flows/service';
 import { identifier, integer, keys, object, text } from '../flows/schema';
 import { atomicWrite } from '../rules/storage';
 import { bundleDiff, bundleOf, hash } from './bundle';
-import { GithubComponents, sourceOf } from './github';
+import { catalogOf, GithubComponents, sourceOf } from './github';
 import { readDefinitionFile } from '../flows/definition-file';
 const DEFAULT: ComponentSource = { repository: 'davila7/claude-code-templates', ref: 'main', directory: 'cli-tool/components', enabled: false };
 export class ComponentService {
@@ -21,12 +21,13 @@ export class ComponentService {
       if (fs.statSync(file).size > 12 * 1024 * 1024) throw new Error('Component catalog exceeds storage limit');
       const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as ComponentState;
       if (!Array.isArray(raw.sources) || raw.sources.length > 10 || !Array.isArray(raw.catalogs) || raw.catalogs.length > 10 || !Array.isArray(raw.bundles) || raw.bundles.length > 100) throw new Error('Invalid component catalog');
-      this.data = { sources: raw.sources.map(sourceOf), catalogs: raw.catalogs, bundles: raw.bundles.map(b => this.verify(b)) };
+      this.data = { sources: raw.sources.map(sourceOf), catalogs: raw.catalogs.map(catalogOf), bundles: raw.bundles.map(b => this.verify(b)) };
+      if (new Set(this.data.sources.map(s => s.repository.toLowerCase())).size !== this.data.sources.length || new Set(this.data.catalogs.map(c => c.source.repository.toLowerCase())).size !== this.data.catalogs.length || this.data.catalogs.some(c => !this.data.sources.some(s => JSON.stringify(s) === JSON.stringify(c.source)))) throw new Error('Component catalog source mismatch');
     }
   }
   private assert(): void { if (this.live() !== this.context) throw new Error('Brain context changed; reopen component catalog'); }
   private save(): void { this.assert(); const data = JSON.stringify(this.data); if (Buffer.byteLength(data) > 12 * 1024 * 1024) throw new Error('Component catalog full'); atomicWrite(this.directory, 'catalog.json', data); }
-  private verify(bundle: ComponentBundle): ComponentBundle { const checked = bundleOf(bundle.files, bundle.origin, bundle.createdAt); if (checked.digest !== bundle.digest) throw new Error('Stored component manifest changed'); return checked; }
+  private verify(bundle: ComponentBundle): ComponentBundle { const raw = object(bundle, 'component bundle'); keys(raw, ['schema', 'digest', 'origin', 'files', 'findings', 'license', 'createdAt'], 'component bundle'); if (raw.schema !== 1) throw new Error('Invalid component bundle schema'); const checked = bundleOf(bundle.files, bundle.origin, bundle.createdAt); if (checked.digest !== bundle.digest) throw new Error('Stored component manifest changed'); return checked; }
   state(): ComponentState { this.assert(); return structuredClone(this.data); }
   private source(repository: string): ComponentSource { const s = this.data.sources.find(s => s.repository === repository); if (!s?.enabled) throw new Error('Enable this source in the component dialog first'); return s; }
   private bundle(digest: string): ComponentBundle { if (!/^[a-f0-9]{64}$/.test(digest)) throw new Error('Invalid bundle digest'); const b = this.data.bundles.find(b => b.digest === digest); if (!b) throw new Error('Unknown staged bundle'); return this.verify(b); }
@@ -56,11 +57,12 @@ export class ComponentService {
     try {
       if (input.op === 'source') {
         if (!nativeUser) throw new Error('Only the user can configure component sources');
-        const source = sourceOf(input.source), rest = this.data.sources.filter(s => s.repository !== source.repository);
+        const source = sourceOf(input.source), rest = this.data.sources.filter(s => s.repository.toLowerCase() !== source.repository.toLowerCase());
         if (rest.length >= 10) throw new Error('At most ten component sources');
-        this.data.sources = [...rest, source]; this.data.catalogs = this.data.catalogs.filter(c => c.source.repository !== source.repository); this.checked = 0;
+        this.data.sources = [...rest, source]; this.data.catalogs = this.data.catalogs.filter(c => c.source.repository.toLowerCase() !== source.repository.toLowerCase()); this.checked = 0;
       } else if (input.op === 'refresh') {
-        const source = structuredClone(this.source(input.repository)), catalog = await this.github.catalog(source); this.assert();
+        const source = structuredClone(this.source(input.repository)), catalog = catalogOf(await this.github.catalog(source)); this.assert();
+        if (JSON.stringify(catalog.source) !== JSON.stringify(source)) throw new Error('Component catalog source mismatch');
         this.data.catalogs = [...this.data.catalogs.filter(c => c.source.repository !== source.repository), catalog];
       } else if (input.op === 'stage' || input.op === 'local') {
         const source = input.op === 'stage' ? this.source(input.repository) : undefined;

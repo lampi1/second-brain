@@ -261,14 +261,14 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   const heal = (flow: FlowService, run: FlowRun, spec: FlowStep): boolean => {
     const step = run.steps[run.currentStep]!;
     if (!healable(run, spec) || interrupting.has(run.id)) return false;
+    // Confirm interruption before either a new attempt or a no-progress hold: a timed-out worker may still write.
+    const stale = step.chatId ? options.chats().find(chat => chat.id === step.chatId && !chat.closedAt && ['running', 'starting', 'waiting'].includes(chat.state)) : undefined;
+    if (stale) { if (!options.stopChat) return false; void Promise.resolve(options.stopChat(stale.id)).catch(() => {}); return false; }
     if (repeatedFailure(run, progressEvidence(run))) {
       flow.blockChanged(run.id, run.revision, step.stepId, `${HOLD}Stesso errore per tre tentativi senza nuove prove osservate dall’host. Controlla il dossier prima di riprovare. Ultimo errore: ${step.reason ?? ''}`.slice(0, 16000));
       return false;
     }
     const reason = step.reason ?? 'Il passaggio non è riuscito';
-    // a step that timed out may still have its chat at work: stop it before another attempt touches the same workspace
-    const stale = step.chatId ? options.chats().find(chat => chat.id === step.chatId && !chat.closedAt && ['running', 'starting', 'waiting'].includes(chat.state)) : undefined;
-    if (stale) { if (!options.stopChat) return false; void Promise.resolve(options.stopChat(stale.id)).catch(() => {}); return false; }
     try { if (spec.onFail) flow.sendBack(run.id, run.revision, step.stepId, reason); else flow.hostRetry(run.id, run.revision, step.stepId, reason); return true; }
     catch {
       // a send-back the run cannot take (the target is before a restart's carried steps): retry the step itself

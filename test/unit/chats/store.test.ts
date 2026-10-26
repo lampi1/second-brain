@@ -29,3 +29,13 @@ it('retains host routine placement and frozen prompt identity across restart', (
   fs.writeFileSync(path.join(root, 'chats.json'), JSON.stringify({ version: 2, chats: [row] }));
   expect(new ChatStore(root).load()[0]).toMatchObject({ routine: row.routine, routinePackage: row.routinePackage, routinePromptHash: row.routinePromptHash });
 });
+
+it('persists the launch manifest without recomputing it or restoring raw context values', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-store-context-')); roots.push(root);
+  const context = { schema: 1, at: 1, mode: 'sealed', packageDigest: 'a'.repeat(64), memory: { available: true, records: [], omitted: { ineligible: 0, unmatched: 0, budget: 0 }, estimatedTokens: 0, budgetTokens: 0 }, skills: [], instructions: { sha256: 'b'.repeat(64), characters: 300, estimatedTokens: 100 } };
+  const row = { id: 'worker', harness: 'claude', cwd: '/fixture', launchContext: { ...context, rawPrompt: 'private-context' } };
+  fs.writeFileSync(path.join(root, 'chats.json'), JSON.stringify({ version: 2, chats: [row] }));
+  const store = new ChatStore(root), loaded = store.load(); expect(loaded[0]!.launchContext).toEqual(context);
+  store.save(loaded); expect(new ChatStore(root).load()[0]!.launchContext).toEqual(context);
+  expect(fs.readFileSync(path.join(root, 'chats.json'), 'utf8')).not.toContain('private-context');
+});

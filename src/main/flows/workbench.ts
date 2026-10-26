@@ -7,13 +7,19 @@ import { hash } from '../components/bundle';
 import { atomicWrite, read } from '../rules/storage';
 import type { TestDeployTarget } from '../../shared/flow-automation';
 import { deploymentHash } from './test-deployment';
+import { roleOf } from '../../shared/routine';
+import { tierRank } from '../../shared/roles';
 const terminal = (r: FlowRun) => ['completed', 'cancelled'].includes(r.status);
+// Manual/user receipts store the entire labelled response in one entry; agent receipts normally use one per label.
+const hasEvidence = (evidence: readonly string[], label: string): boolean => evidence.flatMap(e => e.split(/\r?\n/)).some(line => line.startsWith(`${label}: `) && !!line.slice(label.length + 2).trim());
 export function readiness(snapshot: FlowSnapshot, version: FlowVersion, values: Record<string, string>, targets: readonly TestDeployTarget[], directory: (p: string) => boolean, now = Date.now()): RoutineReadiness {
   const definition = version.definition, checks: RoutineCheck[] = [];
   const add = (id: string, state: RoutineCheck['state'], detail: string, stepId?: string) => checks.push({ id, state, detail, ...(stepId ? { stepId } : {}) });
   try { add('integrity', digest(definition) === version.digest ? 'pass' : 'fail', 'Stored definition and package digest'); } catch { add('integrity', 'fail', 'Stored definition no longer passes validation'); }
   add('sealed', definition.package ? 'pass' : 'unknown', definition.package ? 'Runtime content is embedded in this version' : 'Legacy routine may depend on ambient brain files');
-  const rules = snapshot.automation?.rules.filter(r => r.config.flowId === definition.id && r.config.flowVersion === version.version && r.approvedRevision === r.revision && r.status === 'enabled') ?? [];
+  const unavailable = snapshot.automation?.paused || !!snapshot.automation?.storageError;
+  if (unavailable) add('automation', 'fail', snapshot.automation?.storageError ? 'Automation storage is unavailable; grants cannot be verified' : 'Automation is paused; approved grants are currently unavailable');
+  const rules = unavailable ? [] : snapshot.automation?.rules.filter(r => r.config.flowId === definition.id && r.config.flowVersion === version.version && r.approvedRevision === r.revision && r.status === 'enabled') ?? [];
   const rule = rules.length === 1 ? rules[0] : undefined;
   const inputs = { ...(rule?.config.inputs ?? {}), ...values }, params = checkParams(definition.params, inputs);
   Object.assign(inputs, params.values);
@@ -24,9 +30,11 @@ export function readiness(snapshot: FlowSnapshot, version: FlowVersion, values: 
     const missing = step.inputs.filter(k => !inputs[k]?.trim()); addStep('inputs', missing.length ? 'fail' : 'pass', missing.length ? `Missing inputs: ${missing.join(', ')}` : 'Declared input values supplied');
     if (step.workspaceInput) { const workspace = inputs[step.workspaceInput]; addStep('workspace', workspace && directory(workspace) ? 'pass' : 'fail', 'Configured workspace must be an existing directory'); }
     if (step.kind === 'agent') {
-      const engine = snapshot.engines?.find(e => e.id === step.engine), role = step.role && snapshot.roles?.[step.role];
-      addStep('model', !snapshot.engines ? 'unknown' : engine?.models.includes(step.model ?? '') ? 'pass' : 'fail', 'Exact engine/model availability');
-      addStep('role', role ? 'pass' : 'unknown', 'Role and permission ceiling are resolved by the launch host');
+      const role = snapshot.roles?.[roleOf(step)], tier = step.tier ?? role?.tier, engineId = step.engine ?? role?.engine;
+      const model = step.model ?? ((!step.engine || step.engine === role?.engine) && role ? role.model ?? (tier && role.models[tier]) : undefined);
+      const engine = snapshot.engines?.find(e => e.id === engineId);
+      addStep('model', !snapshot.engines || !engineId || !model ? 'unknown' : engine?.models.includes(model) ? 'pass' : 'fail', 'Exact engine/model availability; unresolved defaults require launch-host resolution');
+      addStep('role', role && tier ? tierRank(tier) <= tierRank(role.tierMax) ? 'pass' : 'fail' : 'unknown', 'Requested tier must fit the current role ceiling; tools are also checked by the launch host');
     }
     if (step.testDbRead || step.adapter === 'test-db-read') { addStep('test-db-grant', rule?.config.testDbRead?.targetIds.length ? 'pass' : 'fail', 'Current approved read-only test DB targets'); addStep('test-db-connection', 'unknown', 'Dedicated credentials and live DB access are checked at query time; no query is run by Doctor'); }
     if (step.adapter === 'devops-write') addStep('devops-grant', rule?.config.devopsWrite ? 'pass' : 'fail', 'Approved DevOps write configuration for this version');
@@ -48,7 +56,7 @@ export function versionComparison(snapshot: FlowSnapshot, flowId: string): Routi
       cancelled: runs.filter(r => r.status === 'cancelled' && !r.disposition).length, skipped: runs.filter(r => r.disposition?.kind === 'skipped').length, needsHuman: runs.filter(r => r.disposition?.kind === 'needs-human').length,
       retries: runs.reduce((n, r) => n + r.steps.reduce((sum, s) => sum + Math.max(0, s.attempts - 1), 0), 0), observedDecisions: runs.reduce((n, r) => n + (r.trace?.filter(e => e.kind === 'decision').length ?? 0), 0),
       terminalElapsedMs: ended.length ? ended.reduce((n, r) => n + Math.max(0, r.updatedAt - r.createdAt), 0) / ended.length : null,
-      completeEvidence: runs.filter(r => r.status === 'completed' && !r.disposition && v.definition.steps.every(s => { const receipt = r.steps.find(x => x.stepId === s.id)?.receipt; return !!receipt && s.evidence.every(label => receipt.evidence.some(e => e.startsWith(`${label}: `) && e.length > label.length + 2)); })).length };
+      completeEvidence: runs.filter(r => r.status === 'completed' && !r.disposition && v.definition.steps.every(s => { const receipt = r.steps.find(x => x.stepId === s.id)?.receipt; return !!receipt && s.evidence.every(label => hasEvidence(receipt.evidence, label)); })).length };
   });
   const subjects = new Map<string, Set<number>>();
   for (const r of snapshot.runs.filter(r => r.flowId === flowId)) { const key = hash(JSON.stringify([r.subjectKey, r.scope, Object.entries(r.inputs).sort()])), set = subjects.get(key) ?? new Set<number>(); set.add(r.flowVersion); subjects.set(key, set); }
@@ -61,7 +69,7 @@ export function evaluateSuite(suite: RoutineEvalSuite, version: FlowVersion, run
     if (!terminal(run) && run.status !== 'blocked') return { id: c.id, split: c.split, state: 'unknown' as const, runId: run.id, reasons: ['Run has not reached an assessable outcome'] };
     const observed = run.disposition?.kind ?? run.status, reasons: string[] = [];
     if (observed !== c.expected) reasons.push(`Expected ${c.expected}; observed ${observed}`);
-    for (const required of c.evidence) if (!run.steps.find(s => s.stepId === required.stepId)?.receipt?.evidence.some(e => e.startsWith(`${required.label}: `) && e.length > required.label.length + 2)) reasons.push(`Missing evidence: ${required.stepId}/${required.label}`);
+    for (const required of c.evidence) if (!hasEvidence(run.steps.find(s => s.stepId === required.stepId)?.receipt?.evidence ?? [], required.label)) reasons.push(`Missing evidence: ${required.stepId}/${required.label}`);
     return { id: c.id, split: c.split, state: reasons.length ? 'fail' as const : 'pass' as const, runId: run.id, reasons };
   }), coverage: ['Retrospective deterministic checks of host receipts, not a new paid execution.', 'Latest run per subject is shown; all runs remain available in history.', 'Evidence labels establish presence, not truth of every agent claim; inspect linked reports and tests.'] };
 }
@@ -90,7 +98,7 @@ export class RoutineWorkbench {
       if (suites.length >= 40 || suites.some(s => s.id === next.id)) throw new Error('Use a new suite version id; existing cases are immutable');
       for (const old of suites.filter(s => s.flowId === next.flowId)) for (const c of next.cases) if (old.cases.some(p => p.subjectKey === c.subjectKey && p.split !== c.split)) throw new Error('A subject cannot cross tuning/holdout splits');
       const content = JSON.stringify([...suites, next]); if (Buffer.byteLength(content) > 2_000_000) throw new Error('Evaluation archive is full');
-      atomicWrite(this.directory, 'evaluations.json', content); return { suites: [...suites, next] };
+      atomicWrite(this.directory, 'evaluations.json', content); return { suites: [...suites, next].filter(s => s.flowId === next.flowId) };
     }
     const suite = request.op === 'evaluate' ? this.suites().find(s => s.id === request.suiteId) : undefined;
     if (request.op === 'evaluate' && !suite) throw new Error('Unknown evaluation suite');

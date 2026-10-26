@@ -1,7 +1,7 @@
 // Validate inert text bundles and derive immutable manifests before routine adoption. Never writes executable files.
 import { createHash } from 'node:crypto';
 import type { ComponentBundle, ComponentDiff, ComponentFile } from '../../shared/components';
-import { keys, object, text } from '../flows/schema';
+import { integer, keys, object, text } from '../flows/schema';
 export const hash = (s: string): string => createHash('sha256').update(s).digest('hex');
 export function componentPath(value: unknown): string {
   const p = text(value, 'component path', 500);
@@ -9,6 +9,11 @@ export function componentPath(value: unknown): string {
   return p;
 }
 export function bundleOf(files: unknown, origin: ComponentBundle['origin'], now = Date.now()): ComponentBundle {
+  const raw = object(origin, 'component origin'); keys(raw, ['repository', 'commit', 'path'], 'component origin');
+  if ((raw.repository === undefined) !== (raw.commit === undefined)) throw new Error('Incomplete component origin');
+  if (raw.repository !== undefined && (typeof raw.repository !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_.-]*\/[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(raw.repository) || raw.repository.length > 160 || typeof raw.commit !== 'string' || !/^[a-f0-9]{40}$/.test(raw.commit))) throw new Error('Invalid component origin');
+  origin = raw.repository === undefined ? { path: text(raw.path, 'bundle name', 120) } : { repository: raw.repository as string, commit: raw.commit as string, path: componentPath(raw.path) };
+  integer(now, 'createdAt');
   if (!Array.isArray(files) || !files.length || files.length > 50) throw new Error('A bundle needs 1–50 text files');
   let bytes = 0; const paths = new Set<string>(), findings: ComponentBundle['findings'] = [];
   const safe: ComponentFile[] = files.map(value => {

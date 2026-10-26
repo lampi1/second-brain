@@ -17,7 +17,9 @@ export function ComponentCatalog({ contextKey, onClose }: { contextKey: string; 
     setBusy(true); setError('');
     try {
       const result = await sb.invoke('components:operate', { contextKey, request }); if (!alive.current) return;
-      if (result.state) setState(result.state); if (result.matches) setMatches(result.matches); if (result.bundle) setBundle(result.bundle);
+      if (result.state) { setState(result.state); setMatches([]); }
+      if (result.matches) setMatches(result.matches);
+      if (result.bundle) { setBundle(result.bundle); setState(old => old ? { ...old, bundles: [...old.bundles.filter(b => b.digest !== result.bundle!.digest), result.bundle!] } : old); }
       return result;
     } catch (e) { if (alive.current) setError(plain(e)); } finally { if (alive.current) setBusy(false); }
   };

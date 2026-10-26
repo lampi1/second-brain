@@ -2,7 +2,7 @@
 // Discovery grants no authority. Keep detailed recipes out of the always-on prompt and point to live configuration.
 import { DEVOPS_WRITE_OPS } from '../../shared/flow-automation';
 
-export const FLOW_CAPABILITY_SECTIONS = ['overview', 'authoring', 'devops', 'test-targets'] as const;
+export const FLOW_CAPABILITY_SECTIONS = ['overview', 'authoring', 'devops', 'test-targets', 'components', 'verification'] as const;
 export function flowCapabilities(section: unknown = 'overview'): object {
   switch (section) {
     case 'overview': return {
@@ -10,6 +10,8 @@ export function flowCapabilities(section: unknown = 'overview'): object {
       authoring: { tool: 'app_flow_capabilities', section: 'authoring', rule: 'Compose new routines, parameters, scripts and checklists as versioned data. No app change is needed when existing primitives cover the task.' },
       automaticProduction: { enabled: false, scope: 'routine-only', operations: ['db-read', 'db-write', 'deploy'], requires: ['exact approved routine version', 'explicit user-managed production target', 'approved recipe hash and bounds', 'dedicated host adapter and audit'] },
       testDeploy: { enabled: true, requires: ['exact local target', 'approved test-deploy grant', 'pinned App Service or server-side node demands', 'run-owned PR build'] },
+      components: { section: 'components', purpose: 'Discover pinned authoring knowledge and propose copied assets, never install or silently activate it.' },
+      verification: { section: 'verification', purpose: 'Check readiness, compare recorded results and explain changes with evidence.' },
       boundaries: ['Discovery is not permission. Exact version and automation grants still require user approval.', 'Existing production commands require the user exact-command click.', 'An unsupported host integration needs an adapter implementation; scripts and MCP tools cannot bypass a host grant refusal.'],
     };
     case 'authoring': return {
@@ -25,6 +27,20 @@ export function flowCapabilities(section: unknown = 'overview'): object {
       recovery: { attempts: 'maxAttempts 1..5; onFail.goto may name an earlier step.', review: 'reviewOf binds an independent Sentinel review to an earlier agent step.', tools: ['app_flow_cancel_propose', 'app_flow_restart_propose', 'app_flow_message'] },
       automation: { triggerKinds: ['interval', 'devops'], tool: 'app_flow_auto_propose', note: 'devopsWrite requires a DevOps trigger. Do not assume an interval trigger can grant it.' },
       lifecycle: { start: 'app_flow_start_item', observe: 'app_flow_overview', inspect: 'app_flow_dossier', improve: 'app_flow_outputs_since_active', portable: 'Export/import from Routine; import creates an inert draft.' },
+    };
+    case 'components': return {
+      sources: 'User enables public GitHub sources in Routine → Components; local JSON bundles need no network. Refresh uses no model calls and never alters active routines.',
+      workflow: ['app_component_search: metadata only, bounded hits.', 'app_component_stage or app_component_stage_local: inert files, commit/hash identity, licenses and findings.', 'app_component_inspect: manifest/diff by default; filePath/offset/maxCharacters load individual files on demand.', 'app_component_import_propose: selected assets copied into a new sealed draft, through unchanged validators. Use definitionPath for a large JSON proposal.'],
+      review: 'Read the selected content and all licenses; explain intended adaptations with a native yes/no/free-text question. Required dependencies and compatibility are review findings, never an automated safety guarantee.',
+      update: 'Stage the new pinned version, inspect against the previous digest and propose a new routine version. User approval is required; no installer, hooks, CLI settings, new role or implicit grant.',
+    };
+    case 'verification': return {
+      beforeRun: 'app_flow_doctor checks the exact version snapshot. Unknowns are explicit; it runs nothing and never replaces effect-time checks or approval.',
+      afterRun: ['app_flow_dossier: actual receipts, failures, effects and outputs.', 'app_flow_compare_versions: observed outcomes, extra attempts and evidence coverage, not causal rankings.', 'app_flow_eval_suites / app_flow_eval_save / app_flow_eval: immutable tuning/holdout cases checked against recorded runs; absent results stay unknown. No paid executions or auto-promotion.'],
+      progress: 'Three identical failures without new host evidence stop automatic retries; explicit user recovery and existing maxAttempts still apply.',
+      context: 'app_agent_context shows the frozen launch manifest for an accessible chat; selected/omitted memory and skill hashes, no raw facts or vendor prompt. app_voice_diagnostics exposes content-free observed timings and coverage.',
+      learning: 'Capisci questa modifica opens a native choice: brief explanation, guided exploration, or free text. Link exact changes, tests and evidence; distinguish hypotheses from verified causes. Teach-back is optional; approval is never a knowledge score.',
+      companion: 'Routine workbench exports aggregate JSON or an offline static HTML report. No prompts, inputs, transcripts, remote control or exposed MCP. Re-export for fresh observations.',
     };
     case 'devops': return {
       adapter: 'devops-write', tool: 'flow_devops_write', grant: 'devopsWrite', operations: [...DEVOPS_WRITE_OPS],

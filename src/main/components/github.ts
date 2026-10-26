@@ -1,7 +1,7 @@
 // Bounded public GitHub adapter for authoring knowledge. No credentials, redirects, installer or moving-ref content.
 import type { ComponentCatalog, ComponentEntry, ComponentSource } from '../../shared/components';
 import { componentPath } from './bundle';
-import { keys, object, text } from '../flows/schema';
+import { integer, keys, object, text } from '../flows/schema';
 export type ComponentFetch = (url: string, init: RequestInit) => Promise<Response>;
 export const COMMIT = /^[a-f0-9]{40}$/;
 export function sourceOf(value: unknown): ComponentSource {
@@ -9,6 +9,20 @@ export function sourceOf(value: unknown): ComponentSource {
   const repository = text(s.repository, 'repository', 160), ref = text(s.ref, 'ref', 160), directory = componentPath(s.directory);
   if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*\/[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(repository) || !/^[A-Za-z0-9][A-Za-z0-9/_.-]*$/.test(ref) || ref.includes('..') || typeof s.enabled !== 'boolean') throw new Error('Invalid public GitHub source');
   return { repository, ref, directory, enabled: s.enabled };
+}
+/** Cached/network metadata is data, not a trusted deserialized object or arbitrary search payload. */
+export function catalogOf(value: unknown): ComponentCatalog {
+  const c = object(value, 'catalog'); keys(c, ['source', 'commit', 'fetchedAt', 'entries'], 'catalog');
+  const source = sourceOf(c.source), commit = text(c.commit, 'commit', 40);
+  if (!COMMIT.test(commit) || !Array.isArray(c.entries) || c.entries.length > 30_000) throw new Error('Invalid component catalog');
+  const paths = new Set<string>();
+  const entries = c.entries.map(value => {
+    const e = object(value, 'catalog entry'); keys(e, ['path', 'kind', 'title', 'sha'], 'catalog entry');
+    const path = componentPath(e.path), sha = text(e.sha, 'blob sha', 40);
+    if (!path.startsWith(`${source.directory}/`) || !COMMIT.test(sha) || !['agent', 'skill', 'command', 'reference'].includes(e.kind as string) || paths.has(path.toLowerCase())) throw new Error('Invalid component entry');
+    paths.add(path.toLowerCase()); return { path, sha, kind: e.kind as ComponentEntry['kind'], title: text(e.title, 'title', 500) };
+  });
+  return { source, commit, fetchedAt: integer(c.fetchedAt, 'fetchedAt'), entries };
 }
 async function bounded(request: ComponentFetch, url: string, max: number): Promise<string> {
   const response = await request(url, { redirect: 'error', credentials: 'omit', signal: AbortSignal.timeout(20_000), headers: { Accept: 'application/vnd.github+json' } });

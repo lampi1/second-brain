@@ -3,7 +3,7 @@
 
 Branch: `feat/routine-component-platform`
 Base: `2cd103fdd7889a826e9f62355810bbfc6dfcdc5d`
-Status: first integrated implementation checkpoint; validation/reviews in progress. Not ready to merge.
+Status: implementation and independent static reviews complete; final branch checks pending. Native visual verification is blocked by the cloud environment. Not ready to merge.
 Scope: implement the actionable improvements from the component comparison report, preserving existing host approvals, validators and field limits. Add evidence-linked developer learning.
 
 ## Resume with any provider
@@ -15,16 +15,16 @@ Scope: implement the actionable improvements from the component comparison repor
 6. Update this checkpoint with exact commands/results and remaining limitations.
 
 ## Deliverables and acceptance
-- [ ] A. Generic component sources: versioned catalog cache, bounded search and full inspection. Public pinned GitHub content and local bundles; refresh without model calls; no installer.
-- [ ] B. Immutable staged bundles: per-file hashes, licenses, dependencies, compatibility and changes; digest-bound user decision; routine conversion remains an inert draft through existing validation.
-- [ ] C. Orchestrator tools and native UI: discover, inspect, propose/update; no agent approval endpoint; clear yes/no/free-text decisions; no catalog in the always-on prompt.
-- [ ] D. Context inspector: selected/omitted memory, skills, provenance and estimated cost; no silent changes to sealed routine workers.
-- [ ] E. Routine readiness: host checks of package/models/workspace/interpreters/grants/targets and explicit unknowns; same read model in UI and tools; runtime revalidates effects.
-- [ ] F. Bounded progress/rework inspection: evidence-based repeated-failure detection and visible recovery, preserving existing limits and review checks.
-- [ ] G. Routine evaluation workbench: versioned cases, deterministic checks, host-linked observations, comparable version results and data coverage; no fabricated scores or automatic promotion.
-- [ ] H. Version analytics and improvement proposals: observed outcomes, attempts, waits, intervention counts; candidate versions only.
-- [ ] I. Developer learning: concise change brief, causal explanation, tradeoffs, evidence/commit links, optional guided questions and Orchestrator handoff; no knowledge scores inferred from approvals.
-- [ ] J. Voice diagnostics and portable read-only companion view: observed events, coverage and safe export; remote access must use explicit opt-in authentication, never expose local MCP.
+- [x] A. Generic component sources: versioned catalog cache, bounded search and full inspection. Public pinned GitHub content and local bundles; refresh without model calls; no installer.
+- [x] B. Immutable staged bundles: per-file hashes, licenses, dependencies, compatibility and changes; digest-bound user decision; routine conversion remains an inert draft through existing validation.
+- [x] C. Orchestrator tools and native UI: discover, inspect, propose/update; no agent approval endpoint; clear yes/no/free-text decisions; no catalog in the always-on prompt.
+- [x] D. Context inspector: selected/omitted memory, skills, provenance and estimated cost; no silent changes to sealed routine workers.
+- [x] E. Routine readiness: host checks of package/models/workspace/interpreters/grants/targets and explicit unknowns; same read model in UI and tools; runtime revalidates effects.
+- [x] F. Bounded progress/rework inspection: evidence-based repeated-failure detection and visible recovery, preserving existing limits and review checks.
+- [x] G. Routine evaluation workbench: versioned cases, deterministic checks, host-linked observations, comparable version results and data coverage; no fabricated scores or automatic promotion.
+- [x] H. Version analytics and improvement proposals: observed outcomes, attempts, waits, intervention counts; candidate versions only.
+- [x] I. Developer learning: concise change brief, causal explanation, tradeoffs, evidence/commit links, optional guided questions and Orchestrator handoff; no knowledge scores inferred from approvals.
+- [x] J. Voice diagnostics and portable read-only companion view: observed events, coverage and safe export; remote access must use explicit opt-in authentication, never expose local MCP.
 - [ ] K. Documentation, meaningful tests, visual verification and independent reviews.
 
 ## Boundaries retained
@@ -32,24 +32,38 @@ No production execution, no external release changes, no runtime dependency on t
 Do not copy personal data or company-specific routine definitions into this public repository.
 
 ## Validation and publication
-Implemented so far (unchecked acceptance items still need final verification):
-- Public GitHub/local inert catalog, commit/blob/hash checks, ancestor licenses, opt-in sources, daily metadata refresh,
-  search/inspect/stage tools and native component dialog. Import copies selected files into the normal routine draft.
-- Routine Doctor, retrospective immutable evaluation suites, version analytics, native workbench and aggregate export.
-- Repeated identical failures stop after three attempts without new host evidence, preserving explicit user retry.
-- Frozen launch memory/skill manifest, chat menu inspector and Orchestrator read tool; sealed workers load no ambient facts.
-- Optional developer-learning handoff and local content-free voice diagnostics.
+The complete implementation is in this branch. No migration, dependency addition, grant relaxation, active-routine
+mutation, external CLI configuration write or production operation is required. The README and ADR 0161 describe
+entry points and limitations; `app_flow_capabilities` discovers component and verification tools on demand.
 
-Verified: 93 focused unit tests across components, workbench, flows, memory, agent packs, context and voice passed.
-Typecheck passed before the final voice/file-input additions; rerun on the checkpoint. Initial independent security
-review found two issues (ancestor licenses and UTF-8 BOM preservation); fixed and covered by regression tests.
+Completed: pinned GitHub/local catalog, inert staging and user-approved adoption; compact tool inspection; launch
+context manifests; Doctor and version metrics; retrospective evaluation; bounded no-progress retry holds; optional
+evidence-linked learning; voice measurements; aggregate JSON and offline HTML companion exports.
 
-Remaining before delivery: rerun typecheck/full branch checks/build; harden catalog metadata read validation;
-finish concise inspection/exports and capabilities/docs; add visual/e2e specs (do not execute branch e2e); verify
-screens in hidden dev; fresh final security/correctness/UI reviews; fix confirmed findings. Review repeated-failure
-integration and launch-manifest persistence in particular. Retrospective evaluation does not launch paid model jobs;
-existing Learning replay remains the explicit execution path. Companion is an offline read-only export, never an
-unauthenticated remote service. Remote hosting/mod execution are not enabled.
+Validation already observed:
+- Original checkpoint 36b98f15: branch checks and build passed in the previous session (2384 tests passed, 6 skipped).
+- Review fixes: 72 focused tests in 6 files passed, plus typecheck and focused lint, exit 0.
+- New `test/e2e/routine-workbench.spec.ts` covers component inspection/history/focus, workbench checks/evaluation/HTML
+  export, context manifests and voice observations, each with screenshots. Authored only; no branch e2e executed.
+- Independent Astra xhigh security, correctness and UI reviews found issues; all confirmed findings were fixed and
+  rechecked without remaining confirmed findings. These are static/in-memory reviews, not native visual approval.
 
-The remote branch is a recovery checkpoint, not a completed or reviewed release.
+Fixed findings include ancestor licenses/BOM bytes; canonical report/command IDs incorrectly counted as progress;
+stopping timed-out live workers before a hold; multiline evidence; paused automation grants; cross-routine suite
+results; case-insensitive source identity; role defaults/ceilings; stale catalog matches/history; focus tokens and
+localized workbench summaries. Exact host diagnostics remain available under technical details.
 
+## Remaining release gate and recovery
+Run `npm run check:branch` and `npm run build` on the final clean commit; record exit codes in the handoff/PR.
+Native hidden-development inspection was attempted with an isolated synthetic profile, `SB_HIDDEN=1`, and no
+external services. Electron crashed before creating a window: `process_singleton_posix.cc: socket() EPERM`. No
+screenshots were produced. Do not claim a passed visual inspection or merge readiness from the static reviews.
+
+On an environment that can launch Electron, inspect Components, Verifica e confronta, Contesto dell’agente and
+Voice diagnostics in the hidden dev app, including keyboard focus and a narrow window. Capture actual screenshots.
+Do not execute branch e2e; its first execution remains on main under the repository policy. Keep this branch/PR
+unmerged until native visual verification and the owner's review are complete.
+
+Known limits: retrospective evaluation does not launch paid model jobs (existing Learning replay remains explicit);
+counts are not causal rankings; readiness cannot prove remote credentials or availability; voice timing is partial,
+not end-to-end latency; the companion is an offline export, not a remote service; executable mods are staged only.

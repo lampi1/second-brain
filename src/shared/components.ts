@@ -11,6 +11,8 @@ export interface ComponentBundle {
 }
 export interface ComponentState { sources: ComponentSource[]; catalogs: ComponentCatalog[]; bundles: ComponentBundle[]; error?: string }
 export interface ComponentDiff { added: string[]; removed: string[]; changed: string[]; unchanged: number }
+/** Tool responses are manifests by default; individual file text is fetched in bounded pages on demand. */
+export type ComponentManifest = Omit<ComponentBundle, 'files'> & { files: { path: string; sha256: string; characters: number }[] };
 export type ComponentOperation =
   | { op: 'state' }
   | { op: 'source'; source: ComponentSource }

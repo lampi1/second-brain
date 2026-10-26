@@ -15,6 +15,18 @@ const run: FlowRun = { id: 'run', revision: 1, flowId: 'sample', flowVersion: 1,
 const snapshot = (runs = [run]): FlowSnapshot => ({ contextKey: 'brain', active: { sample: 1 }, drafts: [], versions: [version], runs });
 const suite: RoutineEvalSuite = { id: 'suite-v1', flowId: 'sample', digest: 'a'.repeat(64), createdAt: 1, cases: [{ id: 'one', subjectKey: 'case-one', expected: 'completed', evidence: [{ stepId: 'check', label: 'metadata' }], split: 'holdout' }] };
 describe('readiness', () => {
+  it('resolves ordinary role defaults and rejects a frozen tier above the current ceiling', () => {
+    const v = structuredClone(version); v.definition.steps[0] = { ...definition.steps[0]!, kind: 'agent', action: undefined, role: 'scout', workspaceInput: 'workspace', inputs: ['workspace'] }; delete v.definition.package; v.digest = digest(v.definition);
+    const snap = snapshot(); snap.roles = { scout: { name: 'Scout', avatar: { kind: 'character', value: 'scout' }, engine: 'test', model: null, tier: 'mid', tierMax: 'mid', models: { mid: 'known', top: 'known' } } }; snap.engines = [{ id: 'test', name: 'Test', models: ['known'] }];
+    expect(readiness(snap, v, { workspace: '/fixture' }, [], () => true).checks.find(c => c.id === 'model')!.state).toBe('pass');
+    v.definition.steps[0]!.tier = 'top'; v.digest = digest(v.definition);
+    expect(readiness(snap, v, { workspace: '/fixture' }, [], () => true).checks.find(c => c.id === 'role')!.state).toBe('fail');
+  });
+  it.each([true, false])('does not present grants as available when automation cannot use them (paused=%s)', paused => {
+    const snap = snapshot(); snap.automation = { revision: 1, paused, background: false, rules: [], events: [], ...(!paused ? { storageError: 'unreadable' } : {}) };
+    const result = readiness(snap, version, {}, [], () => true);
+    expect(result.ready).toBe(false); expect(result.checks.find(c => c.id === 'automation')!.state).toBe('fail');
+  });
   it('checks package integrity and refuses a changed digest', () => {
     expect(readiness(snapshot(), version, {}, [], () => false).ready).toBe(true);
     const result = readiness(snapshot(), { ...version, digest: 'wrong' }, {}, [], () => true);
@@ -33,6 +45,24 @@ describe('readiness', () => {
   });
 });
 describe('recorded version evaluation', () => {
+  it('counts labels in multiline user receipts, but rejects whitespace-only evidence', () => {
+    const v = structuredClone(version); v.definition.steps[0]!.kind = 'manual'; delete v.definition.steps[0]!.action; v.definition.steps[0]!.evidence.push('tests'); v.digest = digest(v.definition);
+    const r = structuredClone(run); r.definitionDigest = v.digest; r.steps[0]!.receipt!.evidence = ['metadata: present\r\ntests: verified'];
+    const s = structuredClone(suite); s.cases[0]!.evidence.push({ stepId: 'check', label: 'tests' });
+    expect(evaluateSuite(s, v, [r]).cases[0]!.state).toBe('pass');
+    expect(versionComparison({ ...snapshot([r]), versions: [v] }, 'sample').versions[0]!.completeEvidence).toBe(1);
+    r.steps[0]!.receipt!.evidence = ['metadata: present\ntests:   '];
+    expect(evaluateSuite(s, v, [r]).cases[0]!.state).toBe('fail');
+  });
+  it('returns only the saved routine suites without dropping other stored suites', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-routine-eval-')); dirs.push(dir);
+    const workbench = new RoutineWorkbench(dir, () => snapshot(), () => []);
+    const input = { id: 'one', flowId: 'sample', cases: suite.cases };
+    workbench.perform({ op: 'suite-save', suite: { ...input, id: 'other', flowId: 'another' } });
+    const result = workbench.perform({ op: 'suite-save', suite: input });
+    expect(result.suites!.map(s => s.id)).toEqual(['one']);
+    expect(workbench.perform({ op: 'suites', flowId: 'another' }).suites!.map(s => s.id)).toEqual(['other']);
+  });
   it('missing or in-flight cases stay unknown; wrong digests never count', () => {
     expect(evaluateSuite(suite, version, []).cases[0]!.state).toBe('unknown');
     expect(evaluateSuite(suite, version, [{ ...run, status: 'active' }]).cases[0]!.state).toBe('unknown');
@@ -75,5 +105,20 @@ describe('bounded repeated-failure detection', () => {
   it('does not count new ids or timestamps on identical content as progress', () => {
     const a = structuredClone(run), b = structuredClone(run); b.steps[0]!.receipt!.id = 'other'; b.steps[0]!.receipt!.at = 999;
     expect(progressFingerprint(a)).toBe(progressFingerprint(b));
+  });
+  it('canonicalizes host command receipt references across send-back cycles but keeps real output changes', () => {
+    const a = structuredClone(run); a.receipts = [{ id: 'old', stepId: 'check', kind: 'script', ref: 'check.mjs', command: 'node check.mjs', args: {}, sha256: 'a'.repeat(64), env: 'test', startedAt: 1, endedAt: 2, exitCode: 0, output: 'unchanged', by: 'runner' }];
+    a.steps[0]!.receipt!.evidence = ['receipt: old', 'sha256: fixed'];
+    const b = structuredClone(a); b.receipts!.push({ ...b.receipts![0]!, id: 'new', startedAt: 3, endedAt: 4 }); b.steps[0]!.receipt!.evidence[0] = 'receipt: new';
+    expect(progressFingerprint(a)).toBe(progressFingerprint(b));
+    b.receipts![1]!.output = 'new evidence'; expect(progressFingerprint(a)).not.toBe(progressFingerprint(b));
+  });
+  it('ignores changing host report identities while preserving distinct failure causes', () => {
+    const r = retries(blocked());
+    const reason = (id: number) => `Report worker-${id}-run:${id * 100} is partial; the step did not complete. Expected reportId: worker-${id}-run:${id * 100}.`;
+    r.heal!.forEach((e, i) => { e.reason = reason(i + 1); }); r.steps[0]!.reason = reason(3);
+    expect(repeatedFailure(r)).toBe(true);
+    r.steps[0]!.reason = reason(3).replace('partial', 'blocked'); expect(repeatedFailure(r)).toBe(false);
+    r.heal!.forEach(e => { e.reason = 'Failed test 12'; }); r.steps[0]!.reason = 'Failed test 13'; expect(repeatedFailure(r)).toBe(false);
   });
 });

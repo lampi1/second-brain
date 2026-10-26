@@ -22,6 +22,8 @@ Tell the **Orchestrator** what you need. It plans with you, opens the right agen
 | **Memory with provenance** | Plain-text notes, rules and skills you own; reviewable proposals with sources and undo. Task-relevant memory is selected for launch instead of loading the whole brain. |
 | **Side questions without derailing the job** | Flash handles quick read-only questions alongside the Orchestrator. Turn an answer into a task when it needs action. |
 | **Evidence you can inspect** | Independent reviews, run history, screenshots, file previews and live logs expose what happened, what failed and what is waiting. |
+| **Reusable knowledge, deliberate adoption** | Browse opt-in component sources, inspect pinned files and licenses, then adapt selected content into an approved routine version. No template installer or hidden permission changes. |
+| **Understand what the agents changed** | Ask for a concise explanation linked to code, tests and evidence, or explore it through optional guided questions. Inspect the memory and skills selected at launch. |
 
 ## Speak, listen, keep your hands free
 
@@ -29,9 +31,13 @@ Dictate into a chat, listen to replies, and record or import audio for transcrip
 
 The opening has a slower six-second reveal and an original, quiet musical cue. It respects sound settings, Do Not Disturb and reduced motion, and stops immediately when skipped.
 
+On-demand voice diagnostics show observed recognition/synthesis timings, failures and sample counts without saving audio or transcripts. Missing measurements stay unknown; they are not an accuracy score.
+
 ## Automation with explicit boundaries
 
 Design a routine with the Orchestrator, inspect its steps in fullscreen, then approve the exact version and its automatic configuration. Package prompts, scripts and checklists with the version you approve. Export the complete definition; imports start as drafts. Workers and their browsers stay inside the current routine step, keeping the Grindhouse clear. Inspect the run dossier or ask the Orchestrator to propose improvements.
+
+**Verify and compare** checks prerequisites, compares recorded outcomes and evaluates explicit cases against host receipts. Repeated failures without new evidence stop for a decision. Export an offline report to inspect the observations outside the app; counts never become automatic quality claims or approvals.
 
 External capabilities are checked by the host: DevOps comments, screenshots, related links, run-owned PRs, pinned test deployments and read-only test databases require explicit grants. Downgrades to human review retain evidence and clean up owned resources. Production steps wait for the user's **Esegui** action on the exact displayed command. Routine-only production permissions can be designed as versioned intents; they do not enable execution. A chat message or another agent's approval cannot silently grant access.
 
