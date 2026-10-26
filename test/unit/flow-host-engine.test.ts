@@ -162,3 +162,38 @@ it('cancels the exact still-running task even after its package identity drifts'
   const live = w.flow.status(source.id, 'owner'); await w.runtime.cancel({ runId: live.id, expectedRevision: live.revision });
   expect(w.stopChat).toHaveBeenCalledWith('worker-1'); expect(w.flow.status(source.id, 'owner').cancellation?.interruption).toBe('confirmed');
 });
+
+it('keeps partial-restart branch ownership exclusive and sends current grant guidance to workers', async () => {
+  const w = world(), source = w.start(); await w.runtime.tick();
+  expect(w.sendWorker.mock.calls[0]![1]).toContain('No DevOps write grant');
+  w.report('worker-1'); await w.runtime.tick();
+  const original = w.flow.status(source.id, 'owner'), version = w.flow.snapshot().versions[0]!;
+  const next = await w.runtime.restart({ runId: original.id, expectedRevision: original.revision, mode: 'from-step', stepId: 'second', targetVersion: 1, targetDigest: version.digest, acknowledgeEffects: true });
+  const stopped = w.flow.status(source.id, 'owner');
+  expect(next.restartOf?.branchRunId).toBe(source.id);
+  await expect(w.runtime.restart({ runId: stopped.id, expectedRevision: stopped.revision, mode: 'from-step', stepId: 'second', targetVersion: 1, targetDigest: version.digest, acknowledgeEffects: true })).rejects.toThrow('Another active run');
+});
+
+it('refuses reuse of an older branch ancestor even after its successor is cancelled', async () => {
+  const w = world(), source = w.start(); await w.runtime.tick(); w.report('worker-1'); await w.runtime.tick();
+  const original = w.flow.status(source.id, 'owner'), version = w.flow.snapshot().versions[0]!;
+  const next = await w.runtime.restart({ runId: source.id, expectedRevision: original.revision, mode: 'from-step', stepId: 'second', targetVersion: 1, targetDigest: version.digest, acknowledgeEffects: true });
+  await w.runtime.cancel({ runId: next.id, expectedRevision: w.flow.status(next.id, 'owner').revision });
+  const old = w.flow.status(source.id, 'owner');
+  await expect(w.runtime.restart({ runId: old.id, expectedRevision: old.revision, mode: 'from-step', stepId: 'second', targetVersion: 1, targetDigest: version.digest, acknowledgeEffects: true })).rejects.toThrow('latest run');
+});
+
+it('supplies the exact inherited branch and approved-write exception to ordinary workers too', async () => {
+  const w = world([step('first'), step('publish', { effect: 'external-write', adapter: 'devops-write' })]);
+  const grant = vi.spyOn(w.runtime.automation(), 'grantFor').mockReturnValue({ workItemId: 42, grant: { organization: 'contoso', projects: ['Example'], ops: ['git-push'], fields: [], pushTargets: [{ project: 'Example', repositoryId: '11111111-2222-3333-4444-555555555555', workspaceInput: 'workspace' }] } });
+  try {
+    const source = w.start(); await w.runtime.tick(); w.report('worker-1'); await w.runtime.tick();
+    const old = w.flow.status(source.id, 'owner'), version = w.flow.snapshot().versions[0]!;
+    await w.runtime.restart({ runId: source.id, expectedRevision: old.revision, mode: 'from-step', stepId: 'publish', targetVersion: 1, targetDigest: version.digest, acknowledgeEffects: true });
+    await w.runtime.tick();
+    const prompt = w.sendWorker.mock.calls.at(-1)![1];
+    expect(prompt).toContain(`Host-owned branch: refs/heads/fix/routine-${source.id}`);
+    expect(prompt).toContain('without asking for approval again');
+    expect(prompt).toContain('satisfies generic role instructions');
+  } finally { grant.mockRestore(); }
+});

@@ -223,3 +223,21 @@ describe('worker interruption races', () => {
     await h.runtime.tick(); expect(h.send).toHaveBeenCalledTimes(1); expect(h.stopChat).not.toHaveBeenCalled();
   });
 });
+
+it('pins the original branch identity across partial restarts, legacy reloads and restart chains', () => {
+  const w = world(), source = w.finish(w.bind(w.start()));
+  const next = w.flow.restart(w.restart(source, 'second'));
+  expect(next.restartOf).toMatchObject({ branchRunId: source.id });
+  const disk = JSON.parse(fs.readFileSync(w.options.file, 'utf8'));
+  delete disk.runs[1].restartOf.branchRunId; // A run already restarted before this field existed.
+  fs.writeFileSync(w.options.file, JSON.stringify(disk));
+  const restored = new FlowService(w.options), second = restored.status(next.id, 'owner');
+  const chained = restored.restart({ ...w.restart(second, 'second'), expectedRevision: second.revision });
+  expect(chained.restartOf).toMatchObject({ branchRunId: source.id });
+  const fresh = restored.restart({ ...w.restart(chained), expectedRevision: chained.revision });
+  expect(fresh.restartOf?.branchRunId).toBeUndefined();
+  const forged = JSON.parse(fs.readFileSync(w.options.file, 'utf8'));
+  forged.runs[2].restartOf.branchRunId = fresh.id;
+  fs.writeFileSync(w.options.file, JSON.stringify(forged));
+  expect(new FlowService(w.options).snapshot().storageError).toBeTruthy();
+});

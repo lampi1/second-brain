@@ -1,5 +1,6 @@
 // Release adapter tests use fixed REST fixtures. They prove fail-closed target/commit/grant checks and durable leases,
 // not that a particular company's Azure release task is safe; no remote service is called.
+import { NoRemoteEffect } from '../../../src/main/flows/write-refusal';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -72,4 +73,24 @@ it('rechecks a terminal deployment-group release before allowing another build a
   await expect(s.coordinator.execute('deploy-test', s.target, 41, s.ports)).rejects.toThrow(/active|uncertain/);
   await expect(s.coordinator.execute('test-deploy-status', s.target, undefined, s.ports)).resolves.toMatchObject({ status: 'inProgress', terminal: false, success: false });
   expect(await s.coordinator.settle('run-a', () => {})).toBe(false); expect(s.call.mock.calls.filter(([m]) => m === 'POST')).toHaveLength(1);
+});
+
+it('releases only a definitively refused creation and permits another attempt on that test target', async () => {
+  const s = setup(), original = s.call.getMockImplementation()!; let refuse = true;
+  s.call.mockImplementation(async (method, url, body) => {
+    if (method === 'POST' && refuse) throw new NoRemoteEffect('DevOps: no permission (HTTP 403).');
+    return original(method, url, body);
+  });
+  await expect(s.coordinator.execute('deploy-test', s.target, 40, s.ports)).rejects.toThrow('HTTP 403');
+  expect(s.coordinator.ownedTargets('run-a')).toEqual([]);
+  refuse = false;
+  await expect(s.coordinator.execute('deploy-test', s.target, 40, s.ports)).resolves.toMatchObject({ status: 'queued' });
+});
+it('clears creation intent when authority is withdrawn after intent persistence but before dispatch', async () => {
+  const s = setup();
+  const file = path.join(path.dirname(s.config), 'state.json');
+  s.ports.authorize.mockImplementation(() => { if (fs.existsSync(file) && JSON.parse(fs.readFileSync(file, 'utf8')).deployments.some((d: { state: string }) => d.state === 'creating')) throw new Error('Grant revoked before POST'); });
+  await expect(s.coordinator.execute('deploy-test', s.target, 40, s.ports)).rejects.toThrow('Grant revoked');
+  expect(s.call.mock.calls.some(c => c[0] === 'POST')).toBe(false);
+  expect(s.coordinator.ownedTargets('run-a')).toEqual([]);
 });

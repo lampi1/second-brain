@@ -196,3 +196,9 @@ test/unit/flows/pr-validation.test.ts guid sha256:ea1505c930f16d47b1346ab07406ef
 
 # Same public Microsoft App Service v4 task ID; parameter-resolution compatibility, no private target values.
 src/main/flows/app-service-target.ts guid sha256:51c98379263f9453378786e0647215e8f9ede426734dd83ea35fa9acd23402b7
+# Synthetic contoso test URLs retained in the routine write-retry regression fixture (ADR 0164).
+test/unit/flows/devops-resources.test.ts internal-host sha256:ac6e8e3ba68a27cebcf8ff9833f704a00d27336abcf8450e7a4a93a7d2a34f7b
+test/unit/flows/devops-resources.test.ts internal-host sha256:892d482a816636b60c0c8d259656a0c23a5ddf35df651bdeb1319ee66d5a4a94
+
+test/unit/flows/devops-resources.test.ts internal-host sha256:3614449f7df98c8e010c88a7ee5fcca148b4a7d6cbd398016a4c2efc8a78d574
+test/unit/flows/devops-resources.test.ts internal-host sha256:6568f12429dbdb43a9ed26d7dd811dbbf57693f4ff203a20f65eb1f4a8481591

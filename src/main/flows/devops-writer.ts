@@ -3,6 +3,7 @@
 // the run's own work item and the test plans, suites and cases this run created (a durable ledger), and calls a fixed
 // set of REST endpoints with the host Azure CLI token. Never production, never Azure resources, no token in files/logs.
 // Used by flows/devops-write-tool.ts; tests inject token and fetch.
+import { DevOpsWriteError, NoRemoteEffect } from './write-refusal';
 import fs from 'node:fs';
 import path from 'node:path';
 import { renameRetrying } from '../rules/storage';
@@ -16,7 +17,7 @@ import { prBuildStatus } from './pr-build-status';
 import { queuePrValidation } from './pr-validation';
 import { testEnvironmentSnapshot } from './test-environment';
 import type { DevOpsRevisions } from './devops-revisions';
-import { pushRunBranch, runBranch } from './git-push';
+import { HostPushPreconditionError, pushRunBranch, runBranch } from './git-push';
 import { renderDevOpsComment } from './devops-content';
 import { integer, keys, object, text } from './schema';
 
@@ -38,11 +39,11 @@ const TIMEOUT_MS = 60_000, MAX_BYTES = 2 * 1024 * 1024, MAX_RUNS = 500, MAX_PER_
 const API = 'api-version=7.1';
 
 /** What the host resolved for the calling chat: never supplied by the agent. */
-export interface DevOpsWriteContext { runId: string; grant: DevOpsWriteGrant; workItemId: number; workspace?: string; workspaceInput?: string; evidenceRoot?: string; authorize?: () => void; mentionReason?: 'intake' | 'block' | 'downgrade' | 'final' }
+export interface DevOpsWriteContext { runId: string; branchRunIds?: string[]; grant: DevOpsWriteGrant; workItemId: number; workspace?: string; workspaceInput?: string; evidenceRoot?: string; authorize?: () => void; mentionReason?: 'intake' | 'block' | 'downgrade' | 'final' }
 interface Plan { project: string; id: number; rootSuiteId: number }
 interface Suite { project: string; planId: number; id: number }
 interface TestCase { project: string; planId: number; suiteId: number; id: number }
-interface Ledger { schema: 1; runs: Record<string, ResourceLedger & { plans: Plan[]; suites: Suite[]; testCases: TestCase[] }>; operations?: Record<string, { runId: string; state: 'pending' | 'done'; op?: string; targetId?: string; buildId?: number; releaseId?: number; at?: number; completedAt?: number; result?: Record<string, unknown> }> }
+interface Ledger { schema: 1; runs: Record<string, ResourceLedger & { plans: Plan[]; suites: Suite[]; testCases: TestCase[] }>; operations?: Record<string, { runId: string; state: 'pending' | 'done' | 'not-done'; reason?: string; op?: string; targetId?: string; buildId?: number; releaseId?: number; at?: number; completedAt?: number; result?: Record<string, unknown> }> }
 export interface DevOpsWriterOptions {
   /** Brain-scoped ledger file of resources each run created. */
   file: string;
@@ -54,7 +55,7 @@ export interface DevOpsWriterOptions {
   armToken?: (signal?: AbortSignal) => Promise<string>;
   audit?: (entry: { runId: string; op: DevOpsWriteRequestOp; target: string }) => void;
 }
-export class DevOpsWriteError extends Error {}
+export { DevOpsWriteError } from './write-refusal';
 const deny = (message: string): never => { throw new DevOpsWriteError(message); };
 const lower = (s: string): string => s.toLowerCase();
 const safeText = (value: unknown, label: string, max: number): string => { const s = text(value, label, max); if (CONTROL.test(s)) deny(`${label}: control characters are not allowed`); return s; };
@@ -122,23 +123,43 @@ export class DevOpsWriter {
     if (previous?.state === 'done' && raw.op !== 'push-branch') return previous.result!;
     if (!['abandon-pr', 'cancel-test-deploy'].includes(String(raw.op)) && Object.values(data.operations ?? {}).some(op => op.runId === context.runId && op.state === 'pending')) deny('A previous DevOps write has an unknown outcome. Reconcile it in DevOps before retrying; do not duplicate the effect.');
     // The request hash is only an idempotency identity; it stores neither request content nor credentials.
-    let attempted = false;
+    let attempted = false, possibleEffects = 0;
     this.beforeMutation = () => {
       context.authorize?.();
-      if (attempted) return;
+      if (attempted) { possibleEffects++; return; }
       const latest = this.read();
       if (Object.keys(latest.operations ?? {}).length >= 20_000) deny('DevOps operation journal is full; archive reviewed completed runs first');
       this.options.revisions?.pending(context.grant.organization, context.workItemId, key);
-      (latest.operations ??= {})[key] = { runId: context.runId, state: 'pending', op: String(raw.op), ...(typeof raw.targetId === 'string' ? { targetId: raw.targetId } : {}), ...(typeof raw.buildId === 'number' ? { buildId: raw.buildId } : {}), ...(typeof raw.releaseId === 'number' ? { releaseId: raw.releaseId } : {}), at: Date.now() }; this.write(latest); attempted = true;
+      (latest.operations ??= {})[key] = { runId: context.runId, state: 'pending', op: String(raw.op), ...(typeof raw.targetId === 'string' ? { targetId: raw.targetId } : {}), ...(typeof raw.buildId === 'number' ? { buildId: raw.buildId } : {}), ...(typeof raw.releaseId === 'number' ? { releaseId: raw.releaseId } : {}), at: Date.now() }; this.write(latest); attempted = true; possibleEffects++;
     };
+    this.mutationRefused = () => { possibleEffects--; };
     try {
       const result = await this.perform(context, raw, signal);
-      if (attempted) { const latest = this.read(); (latest.operations ??= {})[key] = { runId: context.runId, state: 'done', op: String(raw.op), at: latest.operations?.[key]?.at ?? Date.now(), completedAt: Date.now(), result }; this.write(latest); }
+      if (attempted || previous?.state === 'pending') { const latest = this.read(); (latest.operations ??= {})[key] = { runId: context.runId, state: 'done', op: String(raw.op), at: latest.operations?.[key]?.at ?? Date.now(), completedAt: Date.now(), result }; this.write(latest); }
       this.options.revisions?.done(context.grant.organization, context.workItemId, key);
       return result;
-    } finally { this.beforeMutation = undefined; }
+    } catch (error) {
+      // No dispatch, or an explicit rejection of the only dispatched mutation: safe to retry. A later rejection
+      // never erases earlier effects in a compound operation (e.g. a created test case whose linking failed).
+      const notDone = possibleEffects === 0 && previous?.state !== 'pending';
+      if (notDone) {
+        const latest = this.read();
+        if (latest.operations?.[key] || Object.keys(latest.operations ?? {}).length < 20_000) {
+          const reason = error instanceof DevOpsWriteError || error instanceof HostPushPreconditionError
+            ? error.message.slice(0, 2000) : 'Operation refused before any remote effect; correct the reported precondition and retry.';
+          (latest.operations ??= {})[key] = { runId: context.runId, state: 'not-done', op: String(raw.op), at: latest.operations?.[key]?.at ?? Date.now(), completedAt: Date.now(), reason };
+          this.write(latest);
+        }
+        this.options.revisions?.done(context.grant.organization, context.workItemId, key);
+      }
+      const cause = error instanceof Error ? error.message : 'Host operation failed';
+      throw new DevOpsWriteError(notDone
+        ? `DevOps write not done: ${cause} Correct the cause and retry this host tool.`
+        : `DevOps write outcome unknown: ${cause} Reconcile the remote state before retrying; do not duplicate the effect.`);
+    } finally { this.beforeMutation = undefined; this.mutationRefused = undefined; }
   }
   private beforeMutation?: () => void;
+  private mutationRefused?: () => void;
   private granted(grant: DevOpsWriteGrant, op: DevOpsWriteRequestOp): boolean { return op === 'pr-build-status' ? grant.ops.includes('test-deploy') || grant.ops.includes('pr-validation') : grant.ops.includes(CATEGORY[op]); }
   private async perform(context: DevOpsWriteContext, request: unknown, signal?: AbortSignal): Promise<Record<string, unknown>> {
     context.authorize?.();
@@ -154,7 +175,8 @@ export class DevOpsWriter {
       try { token = await (this.options.token ?? devopsToken)(controller.signal); } catch { return deny('DevOps: Azure CLI login unavailable. Run az login.'); }
       if (typeof token !== 'string' || !token || token.length > 32_768 || /\s/.test(token)) deny('DevOps: Azure CLI login unavailable. Run az login.');
       const call = (method: string, url: string, body?: unknown, contentType = 'application/json') => {
-        context.authorize?.(); if (controller.signal.aborted) throw new Error('DevOps request cancelled');
+        try { context.authorize?.(); if (controller.signal.aborted) throw new Error('DevOps request cancelled'); }
+        catch (error) { if (method !== 'GET') throw new NoRemoteEffect(error instanceof Error ? error.message : 'DevOps request refused before dispatch'); throw error; }
         return this.call(token, method, url, body, contentType, controller.signal);
       };
       const org = `https://dev.azure.com/${encodeURIComponent(grant.organization)}`;
@@ -165,6 +187,11 @@ export class DevOpsWriter {
       };
       const projectOf = (pathValue: string): string => project(pathValue.replace(/\//g, '\\').split('\\')[0]);
       const ledger = this.read(), mine = ledger.runs[context.runId] ?? { plans: [], suites: [], testCases: [] };
+      // Only branch publication evidence crosses a host-validated partial restart; no other resource ownership moves.
+      if (!mine.pushes?.length && context.branchRunIds?.[0] === context.runId) {
+        const inherited = context.branchRunIds.slice(1).map(runId => ledger.runs[runId]?.pushes).find(pushes => pushes?.length);
+        if (inherited) mine.pushes = structuredClone(inherited);
+      }
       const plan = (p: string, planId: unknown): Plan => mine.plans.find(item => item.id === id(planId, 'planId') && lower(item.project) === lower(p)) ?? deny('Only test plans created by this run can be changed');
       const suite = (p: string, planId: number, suiteId: unknown): number => {
         const value = id(suiteId, 'suiteId'), owner = plan(p, planId);
@@ -209,13 +236,15 @@ export class DevOpsWriter {
         if (!grant.pushTargets?.some(t => t.repositoryId === repositoryId && lower(t.project) === lower(p) && t.workspaceInput === context.workspaceInput)) deny('Repository and workspace input are outside the exact approved push target');
         const repository = await call('GET', `${org}/${encodeURIComponent(p)}/_apis/git/repositories/${repositoryId}?${API}`);
         if (String(repository.id).toLowerCase() !== repositoryId || lower(String(object(repository.project, 'repository project').name)) !== lower(p)) deny('Repository is outside the exact project');
-        const branch = runBranch(context.runId), previous = mine.pushes?.find(push => push.repositoryId === repositoryId);
+        const lineage = context.branchRunIds ?? [context.runId];
+        if (!lineage.length || lineage[0] !== context.runId) deny('Invalid host branch lineage');
+        const branch = runBranch(lineage.at(-1)!), previous = mine.pushes?.find(push => push.repositoryId === repositoryId);
+        if (Object.values(ledger.operations ?? {}).some(write => lineage.includes(write.runId) && write.op === 'push-branch' && write.state === 'pending')) deny('An inherited branch push has an unknown outcome; reconcile it before retrying');
         if (mine.pushes?.some(push => push.repositoryId !== repositoryId)) deny('A run can publish only one repository branch');
         const refs = await call('GET', `${org}/${encodeURIComponent(p)}/_apis/git/repositories/${repositoryId}/refs?filter=${encodeURIComponent(branch.slice(5))}&${API}`);
         const live = Array.isArray(refs.value) ? refs.value.map(v => object(v, 'git ref')).find(r => r.name === branch) : deny('Invalid ref response');
         if (live && (!previous || live.objectId !== previous.commit)) deny('The run branch already exists or was changed outside this run');
-        this.beforeMutation?.();
-        const result = await (this.options.push ?? pushRunBranch)({ workspace: context.workspace!, runId: context.runId, organization: grant.organization, project: p, repositoryId, token, authorize: () => { context.authorize?.(); if (controller.signal.aborted) throw new Error('Push cancelled'); }, signal: controller.signal });
+        const result = await (this.options.push ?? pushRunBranch)({ workspace: context.workspace!, runId: lineage.at(-1)!, organization: grant.organization, project: p, repositoryId, token, beforePush: () => this.beforeMutation?.(), authorize: () => { context.authorize?.(); if (controller.signal.aborted) throw new Error('Push cancelled'); }, signal: controller.signal });
         if (result.branch !== branch || !/^[a-f0-9]{40,64}$/.test(result.commit)) deny('Unexpected host push receipt');
         record(entry => { entry.pushes = [{ project: p, repositoryId, ...result }]; });
         return { repositoryId, ...result };
@@ -394,13 +423,24 @@ export class DevOpsWriter {
   }
 
   private async call(token: string, method: string, url: string, body: unknown, contentType: string, signal: AbortSignal): Promise<Record<string, unknown>> {
-    if (method !== 'GET') this.beforeMutation?.();
-    const response = await (this.options.request ?? fetch)(url, { method, redirect: 'error', signal,
+    let payload: string | Uint8Array<ArrayBuffer> | undefined;
+    try {
+      payload = body === undefined ? undefined : Buffer.isBuffer(body) ? new Uint8Array(body) : JSON.stringify(body);
+      if (signal.aborted) deny('DevOps request cancelled before dispatch');
+      if (method !== 'GET') this.beforeMutation?.();
+    } catch (error) { if (method !== 'GET') throw new NoRemoteEffect(error instanceof Error ? error.message : 'DevOps request refused before dispatch'); throw error; }
+    let response: Response;
+    try { response = await (this.options.request ?? fetch)(url, { method, redirect: 'error', signal,
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': contentType }) },
-      ...(body === undefined ? {} : { body: Buffer.isBuffer(body) ? new Uint8Array(body) : JSON.stringify(body) }) });
-    if ([203, 401, 403].includes(response.status) || (response.status >= 300 && response.status < 400)) deny('DevOps: Azure CLI login unavailable or no permission. Run az login.');
+      ...(payload === undefined ? {} : { body: payload }) }); }
+    catch { throw new DevOpsWriteError('DevOps transport failed; no definitive response was received.'); }
+    if (method !== 'GET' && [401, 403, 412].includes(response.status)) {
+      this.mutationRefused?.();
+      throw new NoRemoteEffect(response.status === 412 ? 'DevOps: the work item changed meanwhile (HTTP 412).' : `DevOps: Azure CLI login unavailable or no permission (HTTP ${response.status}). Run az login and check the required permissions.`);
+    }
+    if ([203, 401, 403].includes(response.status) || (response.status >= 300 && response.status < 400)) deny(`DevOps: Azure CLI login unavailable or no permission (HTTP ${response.status}). Run az login and check the required permissions.`);
     if (response.headers.get('x-ms-continuationtoken') && !(method === 'GET' && url.includes('/release/deployments?') && new URL(url).searchParams.get('$top') === '1')) deny('DevOps: paginated response requires a narrower target');
-    if (response.status === 412) deny('DevOps: the work item changed meanwhile; read it again and retry.');
+    if (response.status === 412) deny('DevOps: the work item changed meanwhile (HTTP 412).');
     if (!response.ok) deny(`DevOps: write refused (HTTP ${response.status}).`);
     const source = await response.text();
     if (Buffer.byteLength(source) > MAX_BYTES) deny('DevOps: response too large');

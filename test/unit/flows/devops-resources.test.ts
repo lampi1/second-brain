@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
+import { HostPushPreconditionError, type HostPush } from '../../../src/main/flows/git-push';
+import { DevOpsRevisions } from '../../../src/main/flows/devops-revisions';
 import { DevOpsWriter } from '../../../src/main/flows/devops-writer';
 import type { DevOpsWriteGrant } from '../../../src/shared/flow-automation';
 const dirs: string[] = [], guid = '11111111-2222-3333-4444-555555555555';
@@ -59,7 +61,7 @@ it('does not trust an agent-authored mention milestone', async () => {
 });
 it('retains ambiguous effects across writer restarts and refuses duplicated writes', async () => {
   const s = setup(['comment']); s.set({ fail: true });
-  await expect(s.writer.execute(s.context, { op: 'comment', text: 'Once' })).rejects.toThrow('Lost');
+  await expect(s.writer.execute(s.context, { op: 'comment', text: 'Once' })).rejects.toThrow('outcome unknown');
   const restarted = new DevOpsWriter({ file: path.join(s.root, 'ledger.json'), request: s.request, token: async () => 'mock-credential' }); s.set({ fail: false });
   await expect(restarted.execute(s.context, { op: 'comment', text: 'Once' })).rejects.toThrow('unknown outcome');
   await expect(restarted.execute(s.context, { op: 'comment', text: 'Different' })).rejects.toThrow('unknown outcome');
@@ -69,4 +71,70 @@ it('retains ambiguous effects across writer restarts and refuses duplicated writ
 it('checks revoked authority before a queued/cached request can act', async () => {
   const s = setup(['comment']); await s.writer.execute(s.context, { op: 'comment', text: 'Once' }); const count = s.calls.length; s.set({ revoked: true });
   await expect(s.writer.execute(s.context, { op: 'comment', text: 'Once' })).rejects.toThrow('revoked'); expect(s.calls).toHaveLength(count);
+});
+
+it.each([401, 403, 412])('records a first HTTP %i refusal as not-done, clears attribution and permits retry', async status => {
+  const s = setup(['test-plans']), revisions = new DevOpsRevisions(path.join(s.root, 'revisions.json'));
+  let refused = true;
+  const request = vi.fn(async () => refused ? new Response('sensitive provider body', { status }) : Response.json({ id: 21, rootSuite: { id: 22 } }));
+  const writer = new DevOpsWriter({ file: path.join(s.root, 'ledger.json'), revisions, request, token: async () => 'mock-credential' });
+  const input = { op: 'create-test-plan', project: 'Example', name: 'Regression' };
+  const failure = await writer.execute(s.context, input).catch(error => error as Error);
+  expect(failure.message).toContain('DevOps write not done:'); expect(failure.message).toContain(`HTTP ${status}`);
+  expect(writer.operationsFor(s.context.runId)).toEqual([expect.objectContaining({ state: 'not-done', reason: expect.stringContaining(`HTTP ${status}`) })]);
+  await expect(revisions.externalRevision('contoso', 42, 1, 2, async () => ({}))).resolves.toBe(2);
+  expect(fs.readFileSync(path.join(s.root, 'ledger.json'), 'utf8')).not.toMatch(/sensitive provider body|mock-credential/);
+  refused = false;
+  const restored = new DevOpsWriter({ file: path.join(s.root, 'ledger.json'), revisions, request, token: async () => 'mock-credential' });
+  await expect(restored.execute(s.context, input)).resolves.toMatchObject({ planId: 21 });
+  expect(request).toHaveBeenCalledTimes(2);
+});
+it('does not forget an earlier successful mutation when a later request returns 403', async () => {
+  const s = setup(['test-plans']);
+  // Seed only the owned plan; the following logical operation creates a case before its linking request is denied.
+  fs.writeFileSync(path.join(s.root, 'ledger.json'), JSON.stringify({ schema: 1, runs: { 'run-a': { plans: [{ project: 'Example', id: 21, rootSuiteId: 22 }], suites: [], testCases: [] } } }));
+  const request = vi.fn(async (url: string, init: RequestInit) => init.method === 'GET' ? Response.json({ id: 42, rev: 2, fields: { 'System.TeamProject': 'Example' } }) : url.includes('$Test%20Case') ? Response.json({ id: 50 }) : new Response('', { status: 403 }));
+  const writer = new DevOpsWriter({ file: path.join(s.root, 'ledger.json'), request, token: async () => 'mock-credential' });
+  const input = { op: 'create-test-case', project: 'Example', planId: 21, suiteId: 22, title: 'Case', steps: [] };
+  const failure = await writer.execute(s.context, input).catch(error => error as Error);
+  expect(failure.message).toContain('outcome unknown'); expect(failure.message).toContain('HTTP 403');
+  expect(writer.operationsFor('run-a')[0]).toMatchObject({ state: 'pending' });
+  await expect(writer.execute(s.context, input)).rejects.toThrow('unknown outcome');
+});
+it('records local push preconditions as not-done without poisoning later writes', async () => {
+  const s = setup(['git-push', 'comment']);
+  s.context.grant.pushTargets = [{ project: 'Example', repositoryId: guid, workspaceInput: 'workspace' }];
+  s.request.mockImplementation(async (url: string) => Response.json(url.includes('/refs?') ? { value: [] } : url.includes('/repositories/') ? { id: guid, project: { name: 'Example' } } : url.includes('/comments?') ? { id: 7 } : { id: 42, rev: 1, fields: { 'System.TeamProject': 'Example' } }));
+  let refused = true;
+  const push = vi.fn(async (p: HostPush) => {
+    if (refused) throw new HostPushPreconditionError('Local push precondition');
+    p.beforePush();
+    return { branch: `refs/heads/fix/routine-${guid}`, commit: 'a'.repeat(40) };
+  });
+  const writer = new DevOpsWriter({ file: path.join(s.root, 'ledger.json'), request: s.request, token: async () => 'mock-credential', push });
+  const context = { ...s.context, runId: guid, workspace: s.root, workspaceInput: 'workspace' };
+  await expect(writer.execute(context, { op: 'push-branch', project: 'Example', repositoryId: guid })).rejects.toThrow('Local push precondition');
+  expect(writer.operationsFor(guid)[0]).toMatchObject({ state: 'not-done', reason: 'Local push precondition' });
+  await expect(writer.execute(context, { op: 'comment', text: 'Blocked before sending' })).resolves.toMatchObject({ commentId: 7 });
+  refused = false;
+  await expect(writer.execute(context, { op: 'push-branch', project: 'Example', repositoryId: guid })).resolves.toMatchObject({ commit: 'a'.repeat(40) });
+});
+
+it.each([401, 403])('preserves a previous ambiguous cleanup when its retry is refused with HTTP %i', async status => {
+  const s = setup(['pr-create', 'pr-abandon', 'comment']); await s.writer.execute(s.context, pr);
+  s.set({ fail: true });
+  await expect(s.writer.execute(s.context, { op: 'abandon-pr', pullRequestId: 8 })).rejects.toThrow();
+  s.set({ fail: false }); s.request.mockImplementationOnce(async () => new Response('', { status }));
+  await expect(s.writer.execute(s.context, { op: 'abandon-pr', pullRequestId: 8 })).rejects.toThrow('outcome unknown');
+  expect(s.writer.operationsFor('run-a').find(op => op.op === 'abandon-pr')!.state).toBe('pending');
+  await expect(s.writer.execute(s.context, { op: 'comment', text: 'Do not send' })).rejects.toThrow('unknown outcome');
+});
+it('settles an ambiguous abandon only after the live PR confirms it is already abandoned', async () => {
+  const s = setup(['pr-create', 'pr-abandon', 'comment']); await s.writer.execute(s.context, pr);
+  s.set({ fail: true }); await expect(s.writer.execute(s.context, { op: 'abandon-pr', pullRequestId: 8 })).rejects.toThrow();
+  s.set({ fail: false });
+  s.request.mockImplementationOnce(async () => Response.json({ pullRequestId: 8, repository: { id: guid, project: { id: guid, name: 'Example' } }, sourceRefName: 'refs/heads/fix', targetRefName: 'refs/heads/main', status: 'abandoned', isDraft: true }));
+  await expect(s.writer.execute(s.context, { op: 'abandon-pr', pullRequestId: 8 })).resolves.toMatchObject({ status: 'abandoned' });
+  expect(s.writer.operationsFor('run-a').find(op => op.op === 'abandon-pr')!.state).toBe('done');
+  await expect(s.writer.execute(s.context, { op: 'comment', text: 'Confirmed' })).resolves.toMatchObject({ commentId: 10 });
 });
