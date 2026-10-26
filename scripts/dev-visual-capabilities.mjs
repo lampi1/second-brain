@@ -13,8 +13,8 @@ export async function captureRoutineCapabilities(app, page, capture) {
   }, value);
   await publish(snapshot);
   const approval = page.getByTestId('qwin-flow-definition');
-  await approval.getByTestId('flow-connector-target').waitFor();
-  await approval.getByText('Parametri esatti e identità approvate', { exact: true }).click();
+  await approval.getByTestId('flow-connector-target').first().waitFor();
+  await approval.getByText('Parametri esatti e identità approvate', { exact: true }).first().click();
   await capture('routine-connector-approval');
   await page.getByTestId('qwin-later').click();
   snapshot.drafts = [];
