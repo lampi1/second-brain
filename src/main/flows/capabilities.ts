@@ -53,6 +53,7 @@ export function flowCapabilities(section: unknown = 'overview'): object {
       configuration: ['pushTargets: exact repository and workspace input for host git-push.', 'deployTargets: registered exact test targets for test-deploy/test-environment/pr-validation.', 'mentions: approved identities; host milestones control mentions.'],
       buildStatus: { tool: 'flow_pr_build_status', grant: 'test-deploy or pr-validation', scope: 'Latest build of the run-owned PR live merge commit on the approved target; read only.' },
       repeatDeploy: 'One deployment at a time, same exact target, each release retained. Poll test-deploy-status to terminal before deploying the next PR build; releaseId selects a historical receipt.',
+      reconciliation: 'Routine page: open the stopped run (including History), Reconcile writes. User verifies each operation and records not-done/reverted/done with evidence. No agent reconciliation tool, no remote mutation, no automatic restart. Cancel the run and wait for workers to stop first. Deployment leases require their existing release checks.',
       documentation: 'flow_devops_write describes request fields for each operation. Never invent an op or retry a refused operation through shell or another connector.',
     };
     case 'test-targets': return {

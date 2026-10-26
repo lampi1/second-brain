@@ -626,6 +626,15 @@ app.whenReady().then(async () => {
       if (target) void s.chats.send(target.id, `[evento app] Decisione salvata per il flusso ${a.runId}. Rileggi app_flow_status; questa notifica non concede altri permessi.`, undefined, false, 'Routine', false, { kind: 'app' }).catch(e => log.warn('flows', 'Run decision wake failed', { cause: errText(e), hint: 'Decision persisted in the flow run.' }));
       return s.flows!.snapshot();
     },
+    'flows:writeReconciliation': a => {
+      if (!s.flows || a.contextKey !== s.flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato.');
+      return s.flows.writeReconciliation(a.runId);
+    },
+    'flows:reconcileWrites': a => {
+      if (!s.flows || a.contextKey !== s.flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato.');
+      const { contextKey: _context, ...input } = a;
+      return s.flows.reconcileWrites(input);
+    },
     'flows:cancel': async a => {
       const flows = s.flows;
       if (!flows || a.contextKey !== flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la routine.');

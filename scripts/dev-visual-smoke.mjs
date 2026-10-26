@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { captureRoutineWorkbench } from './dev-visual-workbench.mjs';
 import { captureRoutineCapabilities } from './dev-visual-capabilities.mjs';
+import { captureReconciliation } from './dev-visual-reconciliation.mjs';
 import { captureRoutineBrowser } from './dev-visual-browser.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
@@ -159,6 +160,7 @@ try {
   // store through the real services; no replay/run actions are clicked and all automatic work stays disabled.
   await captureRoutineWorkbench(app, page, capture, flowSnapshot);
   await captureRoutineCapabilities(app, page, capture);
+  await captureReconciliation(app, page, capture);
   await captureRoutineBrowser(app, page, capture);
   await app.close();
   app = undefined;

@@ -119,7 +119,7 @@ export interface FlowRun {
   dossierPath?: string;
   settlementError?: string;
   outputs?: { id: string; at: number; content: string; sha256: string; brainPath?: string; projectedAt?: number }[];
-  history?: { id: string; stepId: string; at: number; text: string; status: 'pending' | 'sent'; reason?: string; mentionReason?: 'intake' | 'block' | 'downgrade' | 'final' }[];
+  history?: { id: string; stepId: string; at: number; text: string; status: 'pending' | 'sent' | 'reconciled'; reason?: string; mentionReason?: 'intake' | 'block' | 'downgrade' | 'final' }[];
   intake?: 'accepted' | 'skipped';
   verdict?: { kind: 'ai-fixable'; at: number; stepId: string };
   disposition?: { kind: 'needs-human' | 'skipped'; lesson?: boolean; reason: string; at: number; cleanup: 'pending' | 'complete'; phase: number; error?: string };

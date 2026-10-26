@@ -1,4 +1,5 @@
 // Reachable immutable routine/run inspector, including exact grants and a dossier-based Orchestrator handoff.
+import { RoutineReconciliation } from './RoutineReconciliation';
 import { RoutineWorkbench } from './RoutineWorkbench';
 import { useState } from 'react';
 import type { FlowDefinition, FlowRun, FlowSnapshot } from '@shared/flows';
@@ -10,7 +11,7 @@ import { focusChat } from '../actions';
 import { toast } from '../store/ui';
 import { t } from '../i18n';
 export function RoutineInspect({ snapshot, definition, version, run }: { snapshot: FlowSnapshot; definition?: FlowDefinition; version?: number; run?: FlowRun }) {
-  const [open, setOpen] = useState(false), [workbench, setWorkbench] = useState(false);
+  const [open, setOpen] = useState(false), [workbench, setWorkbench] = useState(false), [reconcile, setReconcile] = useState(false);
   if (!definition) return null;
   const config = run?.approval?.config ?? (!run ? snapshot.automation?.rules.find(r => r.config.flowId === definition.id && r.config.flowVersion === version)?.config : undefined);
   const discuss = (learning = false) => {
@@ -24,6 +25,8 @@ export function RoutineInspect({ snapshot, definition, version, run }: { snapsho
     {(run?.flowVersion ?? version) && <button type="button" className="btn btn-ghost btn-s" data-testid="routine-workbench-open" onClick={() => setWorkbench(true)}>{t('rt.workbench.title')}</button>}
     {run && <button type="button" className="btn btn-ghost btn-s" data-testid="routine-learn" onClick={() => discuss(true)}>{t('rt.workbench.learn')}</button>}
     {workbench && (run?.flowVersion ?? version) && <RoutineWorkbench key={snapshot.contextKey} snapshot={snapshot} flowId={definition.id} version={(run?.flowVersion ?? version)!} run={run} onClose={() => setWorkbench(false)} onDiscuss={() => discuss(true)} />}
+    {run && <button type="button" className="btn btn-ghost btn-s" data-testid="routine-reconcile-open" onClick={() => setReconcile(true)}>{t('flows.reconcileTitle')}</button>}
+    {reconcile && run && <RoutineReconciliation key={snapshot.contextKey} contextKey={snapshot.contextKey} runId={run.id} onClose={() => setReconcile(false)} />}
     <FlowFullscreenButton onClick={() => setOpen(true)} />
     {run && <button type="button" className="btn btn-ghost btn-s" data-testid="flow-discuss-run" onClick={() => discuss()}>{t('flows.discussRun')}</button>}
     {open && <FlowFullscreen definition={definition} version={run?.flowVersion ?? version} run={run} onClose={() => setOpen(false)} controls={<>

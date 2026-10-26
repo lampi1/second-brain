@@ -4,6 +4,7 @@
 // prod step's «Esegui», which only the user's click runs) needs the user. One runner per store (lock.ts).
 // Host report resolution uses canonical agent_report records, never arbitrary assistant text.
 import fs from 'node:fs';
+import type { ReconcileWrites, ReconciliationView } from '../../shared/flow-reconciliation';
 import type { RoutineConnectors } from '../mcp-servers/routine';
 import { connectorArguments } from './connector-call';
 import { RoutineWorkbench } from './workbench';
@@ -28,10 +29,10 @@ import { createDevOpsDetector, createDevOpsItemReader, type DevOpsItem } from '.
 import { attachmentFile, contentHash, execute, resolve, saveAttachment, type CommandResult, type ResolvedCommand } from './executor';
 import { filterMisses, scopeMisses } from './filters';
 import { RunnerLock } from './lock';
-import { DevOpsWriter, type DevOpsWriterOptions } from './devops-writer';
+import { ReconciledWrite, DevOpsWriter, type DevOpsWriterOptions } from './devops-writer';
 import { browserWriteStep } from '../../shared/flow-browser';
 import type { RoutineBrowserPolicy } from '../browser/routine-policy';
-import { adapted, checkParams, commandStep, testDbAdapted } from './schema';
+import { adapted, checkParams, commandStep, testDbAdapted, keys, object } from './schema';
 import { routineDossier, saveDossier } from './dossier';
 import { projectRunOutput } from './run-output';
 import { TestDeploymentCoordinator } from './test-deployment';
@@ -726,6 +727,32 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     try { return await writer.execute({ runId: run.id, branchRunIds: branchLineage(run, snap.runs), ...granted, workspace: spec.workspaceInput ? run.inputs[spec.workspaceInput] : undefined, workspaceInput: spec.workspaceInput, authorize, ...(spec.mentionReason ? { mentionReason: spec.mentionReason } : {}), evidenceRoot: path.join(options.userData, 'flows', context.key, 'evidence', run.id) }, request, active.signal); }
     finally { active.done(); }
   };
+  const writeReconciliation = (runId: string): ReconciliationView => {
+    const context = current(), run = service().snapshot().runs.find(r => r.id === runId);
+    if (!run) throw new Error('Run non trovata.');
+    const stoppedRun = ['cancelled', 'completed'].includes(run.status) && run.cancellation?.interruption !== 'pending';
+    const busy = commands.has(runId) || activeRequests.has(runId) || settling.has(runId) || interrupting.has(runId);
+    const config = automation().approvedConfigFor(run);
+    const available = !!config?.devopsWrite && /^[1-9]\d{0,9}$/.test(run.inputs['work-item-id'] ?? '');
+    return { runId, revision: run.revision, ...(available ? { workItem: { organization: config!.devopsWrite!.organization, id: Number(run.inputs['work-item-id']), url: `https://dev.azure.com/${encodeURIComponent(config!.devopsWrite!.organization)}/_workitems/edit/${Number(run.inputs['work-item-id'])}` } } : {}), ...writerFor(context.key).reconciliationView(runId), canReconcile: stoppedRun && !busy && available,
+      ...(!stoppedRun ? { blockedReason: 'Annulla prima la run e attendi che gli agenti siano fermi.' } : busy ? { blockedReason: 'Operazioni ancora in arresto: riprova tra poco.' } : !available ? { blockedReason: 'Manca lo scope DevOps storico approvato della run.' } : {}) };
+  };
+  const reconcileWrites = async (input: ReconcileWrites): Promise<ReconciliationView> => {
+    keys(object(input, 'reconciliation'), ['runId', 'expectedRevision', 'digest', 'decisions'], 'reconciliation');
+    const context = current(), flow = service(), view = writeReconciliation(input.runId);
+    if (!view.canReconcile) throw new Error(view.blockedReason);
+    if (view.revision !== input.expectedRevision) throw new Error('La run è cambiata: riapri la riconciliazione.');
+    const run = flow.snapshot().runs.find(r => r.id === input.runId)!, grant = automation().approvedConfigFor(run)!.devopsWrite!;
+    interrupting.add(run.id);
+    try {
+      const authorize = () => {
+        const live = flow.snapshot().runs.find(r => r.id === run.id);
+        if (stopped || current().key !== context.key || !live || live.revision !== input.expectedRevision || !['cancelled', 'completed'].includes(live.status) || live.cancellation?.interruption === 'pending' || commands.has(run.id) || activeRequests.has(run.id) || settling.has(run.id)) throw new Error('La run o il brain sono cambiati; nessuna riconciliazione salvata.');
+      };
+      await writerFor(context.key).reconcile({ runId: run.id, workItemId: Number(run.inputs['work-item-id']), grant, authorize }, input);
+    } finally { interrupting.delete(run.id); }
+    options.changed(snapshot()); return writeReconciliation(run.id);
+  };
   const dossier = (runId: string, ownerId: string) => {
     const context = current(), flow = service(), run = flow.status(runId, ownerId), version = flow.snapshot().versions.find(v => v.definition.id === run.flowId && v.version === run.flowVersion)!;
     const report = routineDossier(run, version, writerFor(context.key).operationsFor(runId), deployments.history(runId), automation().approvedConfigFor(run));
@@ -766,7 +793,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   const stepHistory = (chatId: string, body: string) => { const { context, flow, run } = boundPackage(chatId), grant = automation().grantFor(run)?.grant; if (!grant) throw new Error('History grant unavailable'); writerFor(context.key).validateHistory(run.id, grant, body); return flow.stepHistory(run.id, body); };
   /** Flush durable output/history and a needs-human saga without any model turn or unapproved authority. */
   const settleRun = async (runId: string, contextKey: string): Promise<void> => {
-    if (settling.has(runId) || stopped || current().key !== contextKey) return;
+    if (interrupting.has(runId) || settling.has(runId) || stopped || current().key !== contextKey) return;
     settling.add(runId);
     try {
       const flow = service(), snap = flow.snapshot(), run = snap.runs.find(r => r.id === runId);
@@ -792,14 +819,18 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
         let format = granted.grant.ops.includes('rich-comments') ? 'markdown' : 'plain';
         try { writer.validateHistory(runId, granted.grant, entry.text); } catch { format = 'plain'; } // Host status survives malformed/unapproved evidence links.
         try { await writer.execute({ ...ctx, mentionReason: entry.mentionReason }, { op: 'comment', format, text: entry.text, ...(entry.mentionReason ? { mentionReason: entry.mentionReason, mentions: granted.grant.mentions ?? [] } : {}) }); flow.historyResult(runId, entry.id); }
-        catch (error) { const reason = error instanceof Error ? error.message : 'History comment failed'; if (entry.reason !== reason) flow.historyResult(runId, entry.id, reason); historyFailure = reason; break; }
+        catch (error) { if (error instanceof ReconciledWrite) { flow.historyReconciled(runId, entry.id, error.outcome); continue; } const reason = error instanceof Error ? error.message : 'History comment failed'; if (entry.reason !== reason) flow.historyResult(runId, entry.id, reason); historyFailure = reason; break; }
       }
+      const cleanupWrite = async (context: Parameters<DevOpsWriter['execute']>[0], request: Parameters<DevOpsWriter['execute']>[1]) => {
+        try { return await writer.execute(context, request); }
+        catch (error) { if (error instanceof ReconciledWrite && error.outcome === 'done') return { reconciled: true }; throw error; }
+      };
       const d = flow.snapshot().runs.find(r => r.id === runId)?.disposition, policy = definition.package.downgrade;
       const settleResources = async () => {
-        for (const pr of writer.ownedPrs(runId)) await writer.execute(ctx, { op: 'abandon-pr', pullRequestId: pr.id });
+        for (const pr of writer.ownedPrs(runId)) await cleanupWrite(ctx, { op: 'abandon-pr', pullRequestId: pr.id });
         for (const targetId of deployments.ownedTargets(runId)) {
-          const status = await writer.execute(ctx, { op: 'test-deploy-status', targetId });
-          if (!status.terminal) { await writer.execute(ctx, { op: 'cancel-test-deploy', targetId }); await writer.execute(ctx, { op: 'test-deploy-status', targetId }); }
+          const status = await cleanupWrite(ctx, { op: 'test-deploy-status', targetId });
+          if (!status.terminal) { await cleanupWrite(ctx, { op: 'cancel-test-deploy', targetId }); await cleanupWrite(ctx, { op: 'test-deploy-status', targetId }); }
         }
         if (!await deployments.settle(runId, authorize)) throw new Error('Test deployment still active or uncertain; cleanup retains its lease');
       };
@@ -809,20 +840,20 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
           // Compensate proven-owned resources even when uncertain metadata/history writes fence the work item.
           await settleResources();
           if (d.phase === 0) { if (d.lesson !== false) flow.output(runId, policy.lessonOutput, `Classification correction: ${d.reason}\nRun: ${runId}; step: ${run.steps[run.currentStep]?.stepId}. This is evidence for a future reviewed routine update, not an automatic rule.`, 'host'); flow.downgradeProgress(runId, 1); }
-          if (d.phase <= 1) { await writer.execute(ctx, { op: 'remove-tags', tags: [policy.removeTag] }); flow.downgradeProgress(runId, 2); }
-          if (d.phase <= 2) { await writer.execute(ctx, { op: 'add-tags', tags: [policy.addTag] }); flow.downgradeProgress(runId, 3); }
-          if (d.phase <= 3) { await writer.execute(ctx, { op: 'set-fields', fields: { 'System.State': policy.state } }); flow.downgradeProgress(runId, 4); }
-          if (d.phase <= 4) { if (!definition.package.history) await writer.execute({ ...ctx, mentionReason: 'downgrade' }, { op: 'comment', format: 'plain', text: `Needs human: ${d.reason}. Routine ${runId} stopped; automated cleanup follows.`, mentionReason: 'downgrade', mentions: granted.grant.mentions ?? [] }); flow.downgradeProgress(runId, 5); }
+          if (d.phase <= 1) { await cleanupWrite(ctx, { op: 'remove-tags', tags: [policy.removeTag] }); flow.downgradeProgress(runId, 2); }
+          if (d.phase <= 2) { await cleanupWrite(ctx, { op: 'add-tags', tags: [policy.addTag] }); flow.downgradeProgress(runId, 3); }
+          if (d.phase <= 3) { await cleanupWrite(ctx, { op: 'set-fields', fields: { 'System.State': policy.state } }); flow.downgradeProgress(runId, 4); }
+          if (d.phase <= 4) { if (!definition.package.history) await cleanupWrite({ ...ctx, mentionReason: 'downgrade' }, { op: 'comment', format: 'plain', text: `Needs human: ${d.reason}. Routine ${runId} stopped; automated cleanup follows.`, mentionReason: 'downgrade', mentions: granted.grant.mentions ?? [] }); flow.downgradeProgress(runId, 5); }
           if (d.phase <= 5) {
-            for (const pr of writer.ownedPrs(runId)) await writer.execute(ctx, { op: 'abandon-pr', pullRequestId: pr.id });
-            for (const targetId of deployments.ownedTargets(runId)) { const status = await writer.execute(ctx, { op: 'test-deploy-status', targetId }); if (!status.terminal) { await writer.execute(ctx, { op: 'cancel-test-deploy', targetId }); await writer.execute(ctx, { op: 'test-deploy-status', targetId }); } }
+            for (const pr of writer.ownedPrs(runId)) await cleanupWrite(ctx, { op: 'abandon-pr', pullRequestId: pr.id });
+            for (const targetId of deployments.ownedTargets(runId)) { const status = await cleanupWrite(ctx, { op: 'test-deploy-status', targetId }); if (!status.terminal) { await cleanupWrite(ctx, { op: 'cancel-test-deploy', targetId }); await cleanupWrite(ctx, { op: 'test-deploy-status', targetId }); } }
             if (!await deployments.settle(runId, authorize)) throw new Error('Test deployment still active or uncertain; cleanup retains its lease');
             const outputs = flow.snapshot().runs.find(r => r.id === runId)?.outputs ?? [];
             for (const o of outputs) if (o.brainPath && !o.projectedAt) { projectRunOutput(current().root, runId, o); flow.projected(runId, o.id); }
             flow.downgradeProgress(runId, 6);
           }
         } catch (error) { const currentPhase = flow.snapshot().runs.find(r => r.id === runId)?.disposition?.phase ?? d.phase; flow.downgradeProgress(runId, currentPhase, error instanceof Error ? error.message : 'Cleanup failed'); }
-      } else if (['completed', 'cancelled'].includes(run.status)) { for (const targetId of deployments.ownedTargets(runId)) { const status = await writer.execute(ctx, { op: 'test-deploy-status', targetId }); if (!status.terminal) { await writer.execute(ctx, { op: 'cancel-test-deploy', targetId }); await writer.execute(ctx, { op: 'test-deploy-status', targetId }); } } if (!await deployments.settle(runId, authorize)) throw new Error('Test deployment still active or uncertain; cleanup retains its lease'); }
+      } else if (['completed', 'cancelled'].includes(run.status)) { for (const targetId of deployments.ownedTargets(runId)) { const status = await cleanupWrite(ctx, { op: 'test-deploy-status', targetId }); if (!status.terminal) { await cleanupWrite(ctx, { op: 'cancel-test-deploy', targetId }); await cleanupWrite(ctx, { op: 'test-deploy-status', targetId }); } } if (!await deployments.settle(runId, authorize)) throw new Error('Test deployment still active or uncertain; cleanup retains its lease'); }
       flow.settlementResult(runId, historyFailure);
     } catch (error) {
       // One uncertain external effect must retain its lease without starving unrelated runs and triggers.
@@ -1029,7 +1060,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   const editStepModel = (input: FlowStepModelEdit) => { const version = service().editStepModel(input); automation().carry(input.flowId, version.version); return snapshot(); };
   /** The user approved a script/query's new content: the step pins the new hash; the trigger follows the new version. */
   const pinHash = (input: { flowId: string; version: number; stepId: string; hash: string }) => { const version = service().pinHash(input); automation().carry(input.flowId, version.version); return snapshot(); };
-  return { connectors: options.connectors, browserPolicy, workbench, components, service, automation, snapshot, tick, stop, manualBind, manualReport, cancel, proposeCancel, decideCancel, decide, restart, proposeRestart, decideRestart, reportReady, resolveBinding, hint, devopsWrite, testDbRead, output, downgrade, intake, verdict, stepHistory, dossier, deploymentTargets: () => deployments.targets(), deploymentTargetFile: () => path.join(options.userData, 'test-deploy-targets.json'), modelCatalog: () => ({ engines: options.engines?.() ?? [], roles: roles() ?? {} }), inspectTarget: (value: unknown) => writerFor(current().key).inspectTarget(value),
+  return { writeReconciliation, reconcileWrites, connectors: options.connectors, browserPolicy, workbench, components, service, automation, snapshot, tick, stop, manualBind, manualReport, cancel, proposeCancel, decideCancel, decide, restart, proposeRestart, decideRestart, reportReady, resolveBinding, hint, devopsWrite, testDbRead, output, downgrade, intake, verdict, stepHistory, dossier, deploymentTargets: () => deployments.targets(), deploymentTargetFile: () => path.join(options.userData, 'test-deploy-targets.json'), modelCatalog: () => ({ engines: options.engines?.() ?? [], roles: roles() ?? {} }), inspectTarget: (value: unknown) => writerFor(current().key).inspectTarget(value),
     previewItem, dryRun, startItem, pauseRun, runUserCommand, message, overview, editStepModel, pinHash };
 }
 export type FlowRuntime = ReturnType<typeof createFlowRuntime>;
