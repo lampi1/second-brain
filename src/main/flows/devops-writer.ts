@@ -3,6 +3,8 @@
 // the run's own work item and the test plans, suites and cases this run created (a durable ledger), and calls a fixed
 // set of REST endpoints with the host Azure CLI token. Never production, never Azure resources, no token in files/logs.
 // Used by flows/devops-write-tool.ts; tests inject token and fetch.
+import type { ReconcileWrites, WriteReconciliation } from '../../shared/flow-reconciliation';
+import { redact } from '../log';
 import { DevOpsWriteError, NoRemoteEffect } from './write-refusal';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -43,7 +45,7 @@ export interface DevOpsWriteContext { runId: string; branchRunIds?: string[]; gr
 interface Plan { project: string; id: number; rootSuiteId: number }
 interface Suite { project: string; planId: number; id: number }
 interface TestCase { project: string; planId: number; suiteId: number; id: number }
-interface Ledger { schema: 1; runs: Record<string, ResourceLedger & { plans: Plan[]; suites: Suite[]; testCases: TestCase[] }>; operations?: Record<string, { runId: string; state: 'pending' | 'done' | 'not-done'; reason?: string; mentionReason?: 'analysis'; op?: string; targetId?: string; buildId?: number; releaseId?: number; at?: number; completedAt?: number; result?: Record<string, unknown> }> }
+interface Ledger { schema: 1; runs: Record<string, ResourceLedger & { plans: Plan[]; suites: Suite[]; testCases: TestCase[] }>; operations?: Record<string, { runId: string; state: 'pending' | 'done' | 'not-done' | 'reconciled'; reconciliation?: WriteReconciliation; reason?: string; mentionReason?: 'analysis'; op?: string; targetId?: string; buildId?: number; releaseId?: number; at?: number; completedAt?: number; result?: Record<string, unknown> }> }
 export interface DevOpsWriterOptions {
   /** Brain-scoped ledger file of resources each run created. */
   file: string;
@@ -62,6 +64,9 @@ const safeText = (value: unknown, label: string, max: number): string => { const
 const id = (value: unknown, label: string): number => integer(value, label, 1, 2_147_483_647);
 const html = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/\r?\n/g, '<br/>');
 
+export class ReconciledWrite extends Error {
+  constructor(readonly outcome: WriteReconciliation['outcome']) { super(`User reconciled this write as ${outcome}; it will not be repeated.`); }
+}
 export class DevOpsWriter {
   private queue: Promise<unknown> = Promise.resolve();
   constructor(private readonly options: DevOpsWriterOptions) {}
@@ -98,6 +103,32 @@ export class DevOpsWriter {
     renderDevOpsComment(body, grant.organization, this.read().runs[runId]?.images ?? []);
   }
   operationsFor(runId: string) { return Object.entries(this.read().operations ?? {}).filter(([, v]) => v.runId === runId).map(([requestHash, v]) => ({ requestHash, ...structuredClone(v) })); }
+  /** Replays only local fence cleanup after a crash between the durable user receipt and the revision journal. */
+  reconciliationView(runId: string) {
+    const operations = this.operationsFor(runId);
+    for (const op of operations) if (op.state === 'reconciled' && op.reconciliation) this.options.revisions?.done(op.reconciliation.organization, op.reconciliation.workItemId, op.requestHash);
+    return { digest: createHash('sha256').update(JSON.stringify(operations)).digest('hex'), operations: operations.map(o => ({ id: o.requestHash, op: o.op ?? 'legacy-write', state: o.state, at: o.at, reason: o.reason, reconciliation: o.reconciliation, target: [o.targetId, o.buildId ? `build ${o.buildId}` : '', o.releaseId ? `release ${o.releaseId}` : ''].filter(Boolean).join(' ') || undefined, eligible: ['pending', 'not-done'].includes(o.state) && !['deploy-test', 'cancel-test-deploy'].includes(o.op ?? '') })) };
+  }
+  /** Local user attestation, never exposed as an agent tool and never a remote write. */
+  reconcile(context: Pick<DevOpsWriteContext, 'runId' | 'workItemId' | 'grant' | 'authorize'>, input: Pick<ReconcileWrites, 'digest' | 'decisions'>): Promise<void> {
+    const next = this.queue.then(() => {
+      context.authorize?.();
+      const view = this.reconciliationView(context.runId);
+      if (input.digest !== view.digest) throw new Error('Le scritture sono cambiate: riapri la riconciliazione.');
+      if (!Array.isArray(input.decisions) || !input.decisions.length || input.decisions.length > 100 || new Set(input.decisions.map(d => d.id)).size !== input.decisions.length) throw new Error('Selezione delle scritture non valida.');
+      const decisions = input.decisions.map(d => {
+        keys(object(d, 'decision'), ['id', 'outcome', 'note'], 'decision');
+        if (!view.operations.some(o => o.id === d.id && o.eligible) || !['done', 'not-done', 'reverted'].includes(d.outcome)) throw new Error('Scrittura non riconciliabile; i deploy richiedono la verifica della release.');
+        const note = redact(safeText(d.note, 'evidence note', 2000)); if (note.trim().length < 8) throw new Error('Descrivi la verifica effettuata (almeno 8 caratteri).');
+        return { id: d.id, receipt: { outcome: d.outcome, note, by: 'user' as const, at: Date.now(), organization: context.grant.organization, workItemId: context.workItemId } };
+      });
+      context.authorize?.(); const data = this.read();
+      for (const d of decisions) { const op = data.operations![d.id]!; op.state = 'reconciled'; op.reconciliation = d.receipt; op.completedAt = d.receipt.at; }
+      this.write(data); // save authority before clearing any detector fence
+      for (const d of decisions) this.options.revisions?.done(context.grant.organization, context.workItemId, d.id);
+    });
+    this.queue = next.catch(() => undefined); return next;
+  }
   ownedPrs(runId: string) { return structuredClone(this.read().runs[runId]?.prs ?? []); }
   private async journal(context: DevOpsWriteContext, request: unknown, signal?: AbortSignal): Promise<Record<string, unknown>> {
     context.authorize?.();
@@ -120,6 +151,7 @@ export class DevOpsWriter {
     }
     const key = createHash('sha256').update(JSON.stringify([context.runId, raw, ...(raw.op === 'push-branch' ? [randomUUID()] : [])])).digest('hex');
     const data = this.read(), previous = data.operations?.[key];
+    if (previous?.state === 'reconciled') throw new ReconciledWrite(previous.reconciliation!.outcome);
     if (previous?.state === 'done' && raw.op !== 'push-branch') return previous.result!;
     if (!['abandon-pr', 'cancel-test-deploy'].includes(String(raw.op)) && Object.values(data.operations ?? {}).some(op => op.runId === context.runId && op.state === 'pending')) deny('A previous DevOps write has an unknown outcome. Reconcile it in DevOps before retrying; do not duplicate the effect.');
     const analysisMention = raw.op === 'comment' && raw.mentionReason === 'analysis' && Array.isArray(raw.mentions) && raw.mentions.length > 0;

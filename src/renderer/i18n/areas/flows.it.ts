@@ -1,5 +1,18 @@
 // Flow catalog, version review and run decisions: renderer text shared by the page and modal.
 export const flowsIt = {
+  'flows.reconcileIdentity': 'Identità nel report della run',
+  'flows.reconcileLegacy': 'La richiesta originale non è registrata qui. Confronta ID e ora con il report e la chat del passo prima di confermare.',
+  'flows.reconcileTitle': 'Riconcilia scritture',
+  'flows.reconcileHint': 'Registra solo gli esiti che hai verificato in DevOps. Non esegue né annulla operazioni; conserva le prove.',
+  'flows.reconcileEmpty': 'Nessuna scrittura registrata.',
+  'flows.reconciled': 'Riconciliata',
+  'flows.reconcileOutcome': 'Esito verificato',
+  'flows.reconcileUnselected': 'Lascia invariata',
+  'flows.resolution.not-done': 'Non eseguita',
+  'flows.resolution.reverted': 'Effetto annullato',
+  'flows.resolution.done': 'Eseguita e verificata',
+  'flows.reconcileEvidence': 'Cosa hai verificato? Aggiungi un riferimento o link.',
+  'flows.reconcileQuestion': (p: { n: number }) => `Confermi gli esiti verificati di ${p.n} scritture?`,
   'flows.connectorRead': 'Lettura',
   'flows.connectorWrite': 'Scrittura esterna',
   'flows.executionBlocked': "Prima correggi i passaggi senza una modalità di esecuzione supportata.",

@@ -1,5 +1,18 @@
 // Flow catalog, version review and run decisions: renderer text shared by the page and modal.
 export const flowsEn = {
+  'flows.reconcileIdentity': 'Identity in the run report',
+  'flows.reconcileLegacy': 'The original request is not recorded here. Match the ID and time to the report and step chat before confirming.',
+  'flows.reconcileTitle': 'Reconcile writes',
+  'flows.reconcileHint': 'Record only outcomes you verified in DevOps. This does not execute or undo operations; evidence is retained.',
+  'flows.reconcileEmpty': 'No recorded writes.',
+  'flows.reconciled': 'Reconciled',
+  'flows.reconcileOutcome': 'Verified outcome',
+  'flows.reconcileUnselected': 'Leave unchanged',
+  'flows.resolution.not-done': 'Not performed',
+  'flows.resolution.reverted': 'Effect reversed',
+  'flows.resolution.done': 'Performed and verified',
+  'flows.reconcileEvidence': 'What did you verify? Add a reference or link.',
+  'flows.reconcileQuestion': (p: { n: number }) => `Confirm the verified outcomes of ${p.n} writes?`,
   'flows.connectorRead': 'Read',
   'flows.connectorWrite': 'External write',
   'flows.executionBlocked': "Fix steps without a supported execution route before activation.",

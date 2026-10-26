@@ -90,6 +90,7 @@ export class FlowService {
     });
   }
   projected(runId: string, id: string): void { this.change(() => { const output = this.run(runId).outputs?.find(o => o.id === id); if (output) output.projectedAt = this.now(); }); }
+  historyReconciled(runId: string, id: string, outcome: string): void { this.change(() => { const entry = this.run(runId).history?.find(h => h.id === id); if (entry?.status === 'pending') { entry.status = 'reconciled'; entry.reason = `User verified ${text(outcome, 'reconciled outcome', 40)}; not posted again by the host.`; } }); }
   historyResult(runId: string, id: string, error?: string): void { this.change(() => { const entry = this.run(runId).history?.find(h => h.id === id); if (!entry || entry.status === 'sent') return; if (error) entry.reason = text(error, 'history failure', 2000); else { entry.status = 'sent'; delete entry.reason; } }); }
   intake(runId: string, outcome: 'accept' | 'skip', reason: string): FlowRun {
     return this.change(() => {
@@ -783,7 +784,7 @@ export class FlowService {
       if (run.disposition) { const d = run.disposition; keys(object(d, 'disposition'), ['kind', 'reason', 'at', 'cleanup', 'phase', 'error', 'lesson'], 'disposition');
         if (!version.definition.package || !['needs-human', 'skipped'].includes(d.kind) || (d.kind === 'needs-human' && !version.definition.package.downgrade) || (d.kind === 'skipped' && (!version.definition.package.intake || run.intake !== 'skipped' || run.status !== 'cancelled' || d.cleanup !== 'complete')) || (d.lesson !== undefined && typeof d.lesson !== 'boolean') || !['pending', 'complete'].includes(d.cleanup)) throw new Error('Invalid disposition'); text(d.reason, 'handoff reason', 2000); integer(d.at, 'handoff time'); integer(d.phase, 'handoff phase', 0, 6); if (d.error) text(d.error, 'handoff error', 2000); }
       if (run.history) { if (!version.definition.package?.history || !Array.isArray(run.history) || run.history.length > 500) throw new Error('Invalid run history');
-        for (const h of run.history) { keys(object(h, 'history'), ['id', 'stepId', 'at', 'text', 'status', 'reason', 'mentionReason'], 'history'); text(h.id, 'history id', 200); integer(h.at, 'history time'); text(h.text, 'history text', 10000); if (!run.steps.some(s => s.stepId === h.stepId) || !['pending', 'sent'].includes(h.status)) throw new Error('Invalid history entry'); if (h.reason) text(h.reason, 'history error', 2000); if (h.mentionReason && !['intake', 'block', 'downgrade', 'final'].includes(h.mentionReason)) throw new Error('Invalid mention reason'); }
+        for (const h of run.history) { keys(object(h, 'history'), ['id', 'stepId', 'at', 'text', 'status', 'reason', 'mentionReason'], 'history'); text(h.id, 'history id', 200); integer(h.at, 'history time'); text(h.text, 'history text', 10000); if (!run.steps.some(s => s.stepId === h.stepId) || !['pending', 'sent', 'reconciled'].includes(h.status)) throw new Error('Invalid history entry'); if (h.reason) text(h.reason, 'history error', 2000); if (h.mentionReason && !['intake', 'block', 'downgrade', 'final'].includes(h.mentionReason)) throw new Error('Invalid mention reason'); }
       }
       if (run.browserWrites !== undefined) {
         if (!Array.isArray(run.browserWrites) || run.browserWrites.length > 300) throw new Error('Invalid browser write journal');

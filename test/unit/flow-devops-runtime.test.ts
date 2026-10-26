@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
-import { DevOpsWriter } from '../../src/main/flows/devops-writer';
+import { DevOpsWriter, ReconciledWrite } from '../../src/main/flows/devops-writer';
 import { TestDeploymentCoordinator } from '../../src/main/flows/test-deployment';
 import { createFlowRuntime } from '../../src/main/flows/runtime';
 import { devopsWriteTools } from '../../src/main/flows/devops-write-tool';
@@ -18,7 +18,7 @@ const config: FlowAutomationConfig = { flowId: 'fix', flowVersion: 1, scope: { p
   trigger: { kind: 'devops', everyMinutes: 1, organization: 'contoso', project: 'ProjectA', areaPath: 'Team', workItemType: 'Bug', states: ['New'], includeExisting: true },
   devopsWrite: { organization: 'contoso', projects: ['ProjectA'], ops: ['comment'], fields: [] } };
 
-async function setup(sealed = false, environment = false, browser = false, analysis = false) {
+async function setup(sealed = false, environment = false, browser = false, analysis = false, history = false) {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'flow-dw-')); folders.push(folder);
   const brain = path.join(folder, 'brain'); fs.mkdirSync(brain);
   const rows = [{ id: 'o', isOrchestrator: true, state: 'idle' }] as ChatSummary[];
@@ -28,7 +28,7 @@ async function setup(sealed = false, environment = false, browser = false, analy
   const runtime = createFlowRuntime({ userData: folder, brainRoot: () => brain, chats: () => rows, changed: () => {}, stopChat, send: vi.fn(async () => {}), detect, devopsWrite: { token: async () => 'token-value', request } });
   const flow = runtime.service(), auto = runtime.automation();
   flow.propose({ expectedRevision: 0, definition: { id: 'fix', title: 'Fix', description: 'Fixture', aliases: [], scope: { project: 'ProjectA', areaPath: 'Team' }, steps: [
-    { id: 'write', title: 'Write', kind: 'agent', instructions: 'Comment', inputs: ['workspace', 'work-item-id'], workspaceInput: 'workspace', evidence: [], ...(environment ? { testEnvironment: 'test-fixture' } : {}), effect: 'external-write', ...(browser ? { writeVia: 'browser' as const, browserTargets: ['https://qa.example.com'] } : { adapter: 'devops-write' as const, ...(analysis ? { mentionReason: 'analysis' as const } : {}) }), maxAttempts: 1, timeoutMs: 600000, ...(sealed ? { role: 'scout' as const, tier: 'mid' as const, engine: 'claude', model: 'sonnet', agentPrompt: 'Frozen evidence contract' } : {}) }], ...(sealed ? { package: { schema: 1 as const, assets: [], outputs: [], requiredOps: ['comment'] } } : {}) } });
+    { id: 'write', title: 'Write', kind: 'agent', instructions: 'Comment', inputs: ['workspace', 'work-item-id'], workspaceInput: 'workspace', evidence: [], ...(environment ? { testEnvironment: 'test-fixture' } : {}), effect: 'external-write', ...(browser ? { writeVia: 'browser' as const, browserTargets: ['https://qa.example.com'] } : { adapter: 'devops-write' as const, ...(analysis ? { mentionReason: 'analysis' as const } : {}) }), maxAttempts: 1, timeoutMs: 600000, ...(sealed ? { role: 'scout' as const, tier: 'mid' as const, engine: 'claude', model: 'sonnet', agentPrompt: 'Frozen evidence contract' } : {}) }], ...(sealed ? { package: { schema: 1 as const, assets: [], outputs: [], requiredOps: ['comment'], ...(history ? { history: true as const } : {}) } } : {}) } });
   flow.decideDefinition({ id: 'fix', expectedRevision: 1, answer: 'yes' });
   const configured = structuredClone(config);
   if (environment) {
@@ -119,4 +119,25 @@ it('derives analysis mention authority from the approved step, never from reques
   expect(run.mock.calls.at(-1)?.[0].mentionReason).toBe('analysis'); allowed.runtime.stop();
   const denied = await setup(); await denied.runtime.devopsWrite('worker', { op: 'comment', text: 'Analysis', mentionReason: 'analysis' });
   expect(run.mock.calls.at(-1)?.[0].mentionReason).toBeUndefined(); denied.runtime.stop();
+});
+
+it('allows local reconciliation only after cancellation and refuses a stale run revision', async () => {
+  const s = await setup(); const runId = s.run.id;
+  expect(s.runtime.writeReconciliation(runId).canReconcile).toBe(false);
+  await expect(s.runtime.reconcileWrites({ runId, expectedRevision: s.flow.status(runId, 'o').revision, digest: 'x', decisions: [] })).rejects.toThrow('Annulla');
+  await s.runtime.cancel({ runId, expectedRevision: s.flow.status(runId, 'o').revision });
+  const view = s.runtime.writeReconciliation(runId); expect(view.canReconcile).toBe(true);
+  await expect(s.runtime.reconcileWrites({ runId, expectedRevision: view.revision - 1, digest: view.digest, decisions: [] })).rejects.toThrow('cambiata');
+  expect(s.request).not.toHaveBeenCalled(); s.runtime.stop();
+});
+
+it('records user-reconciled history without pretending an absent comment was delivered', async () => {
+  vi.spyOn(DevOpsWriter.prototype, 'execute').mockRejectedValue(new ReconciledWrite('reverted'));
+  const s = await setup(true, false, false, false, true);
+  await s.runtime.tick(); for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r));
+  const run = s.flow.status(s.run.id, 'o');
+  expect(run.history?.[0]?.status).toBe('reconciled'); expect(run.history?.[0]?.reason).toContain('reverted');
+  s.runtime.stop();
+  const reloaded = createFlowRuntime({ userData: s.folder, brainRoot: () => path.join(s.folder, 'brain'), chats: () => [], changed: () => {} });
+  expect(reloaded.service().snapshot().storageError).toBeUndefined(); expect(reloaded.service().snapshot().runs[0]?.history?.[0]?.status).toBe('reconciled'); reloaded.stop();
 });

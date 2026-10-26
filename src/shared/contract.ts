@@ -2,6 +2,7 @@
 // result) and event channels (main → renderer). The preload exposes exactly these channels and nothing else
 // (src/preload/index.ts reads INVOKE_CHANNELS / EVENT_CHANNELS); main registers a handler for every invoke channel
 // (src/main/ipc.ts) and rejects senders that are not the app's own page. Change a shape here first, then both sides.
+import type { ReconcileWrites, ReconciliationView } from './flow-reconciliation';
 import type { AgentContextSnapshot } from './agent-context';
 import type { RoutineWorkbenchRequest, RoutineWorkbenchResult } from './routine-workbench';
 import type { ComponentOperation, ComponentResult } from './components';
@@ -1295,6 +1296,8 @@ export interface InvokeMap {
   'flows:autoControl': [FlowContext<FlowAutomationControl>, FlowSnapshot];
   'flows:definitionDecide': [FlowContext<FlowActivate>, FlowSnapshot];
   'flows:decide': [FlowContext<FlowDecision>, FlowSnapshot];
+  'flows:writeReconciliation': [FlowContext<{ runId: string }>, ReconciliationView];
+  'flows:reconcileWrites': [FlowContext<ReconcileWrites>, ReconciliationView];
   'flows:cancel': [FlowContext<FlowCancel>, FlowSnapshot];
   'flows:cancelDecide': [FlowContext<FlowRestartDecision>, FlowSnapshot];
   'flows:restart': [FlowContext<FlowRestart>, FlowSnapshot];
@@ -1806,7 +1809,7 @@ export type InvokeResult<K extends InvokeChannel> = InvokeMap[K][1];
 
 // Runtime lists (the preload allow-list). Kept in sync with the maps by the compile-time checks below.
 export const INVOKE_CHANNELS = [
-  'routine:workbench', 'components:operate', 'flows:list', 'flows:export', 'flows:import', 'flows:packagePreview', 'flows:packageExport', 'flows:packageInspect', 'flows:packageImport', 'flows:definitionDecide', 'flows:decide', 'flows:cancel', 'flows:cancelDecide', 'flows:restart', 'flows:restartDecide', 'flows:editStepTier', 'flows:previewItem', 'flows:startItem', 'flows:dryRun', 'flows:pauseRun', 'flows:runCommand', 'flows:clearQueue', 'flows:editFilters', 'flows:editStepModel', 'flows:pinHash', 'flows:autoDecide', 'flows:autoPause', 'flows:autoControl',
+  'routine:workbench', 'components:operate', 'flows:list', 'flows:export', 'flows:import', 'flows:packagePreview', 'flows:packageExport', 'flows:packageInspect', 'flows:packageImport', 'flows:definitionDecide', 'flows:decide', 'flows:writeReconciliation', 'flows:reconcileWrites', 'flows:cancel', 'flows:cancelDecide', 'flows:restart', 'flows:restartDecide', 'flows:editStepTier', 'flows:previewItem', 'flows:startItem', 'flows:dryRun', 'flows:pauseRun', 'flows:runCommand', 'flows:clearQueue', 'flows:editFilters', 'flows:editStepModel', 'flows:pinHash', 'flows:autoDecide', 'flows:autoPause', 'flows:autoControl',
   'work:lessons', 'work:lessonDecide', 'work:list', 'work:decide',
   'pulse:list', 'pulse:status', 'pulse:seen', 'pulse:save', 'pulse:act', 'pulse:dismiss', 'pulse:runNow', 'approvals:list', 'approvals:decide',
   'connectors:list', 'connectors:login', 'connectors:cancelLogin', 'connectors:probe', 'connectors:select', 'connectors:disconnect', 'connectors:useToken',

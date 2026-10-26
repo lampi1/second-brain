@@ -358,3 +358,9 @@ it('explains on-demand configuration and surfaces actionable activation errors',
   expect(ui.get().toasts.at(-1)?.text).toContain('confirm the account in Settings');
   ui.get().toasts.forEach(t => dismissToast(t.id));
 });
+
+it('exposes write reconciliation from cancelled run history', () => {
+  const state = { ...snapshot(), runs: [{ ...run, status: 'cancelled' as const, steps: [{ ...run.steps[0]!, status: 'cancelled' as const }] }] };
+  const html = renderToStaticMarkup(createElement(RoutineHistory, { snapshot: state }));
+  expect(html).toContain('routine-reconcile-open'); expect(html).toContain('Riconcilia scritture');
+});

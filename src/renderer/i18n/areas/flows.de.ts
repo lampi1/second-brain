@@ -1,5 +1,18 @@
 // Flow catalog, version review and run decisions: renderer text shared by the page and modal.
 export const flowsDe = {
+  'flows.reconcileIdentity': 'Identität im Laufbericht',
+  'flows.reconcileLegacy': 'Die ursprüngliche Anfrage ist hier nicht erfasst. ID und Zeitpunkt vor der Bestätigung mit Bericht und Schritt-Chat abgleichen.',
+  'flows.reconcileTitle': 'Schreibvorgänge abgleichen',
+  'flows.reconcileHint': 'Nur in DevOps überprüfte Ergebnisse erfassen. Es werden keine Vorgänge ausgeführt oder rückgängig gemacht; Nachweise bleiben erhalten.',
+  'flows.reconcileEmpty': 'Keine Schreibvorgänge erfasst.',
+  'flows.reconciled': 'Abgeglichen',
+  'flows.reconcileOutcome': 'Überprüftes Ergebnis',
+  'flows.reconcileUnselected': 'Unverändert lassen',
+  'flows.resolution.not-done': 'Nicht ausgeführt',
+  'flows.resolution.reverted': 'Wirkung rückgängig gemacht',
+  'flows.resolution.done': 'Ausgeführt und überprüft',
+  'flows.reconcileEvidence': 'Was wurde überprüft? Referenz oder Link hinzufügen.',
+  'flows.reconcileQuestion': (p: { n: number }) => `Überprüfte Ergebnisse von ${p.n} Schreibvorgängen bestätigen?`,
   'flows.connectorRead': 'Lesen',
   'flows.connectorWrite': 'Extern schreiben',
   'flows.executionBlocked': "Vor der Aktivierung Schritte ohne unterstützte Ausführung korrigieren.",
