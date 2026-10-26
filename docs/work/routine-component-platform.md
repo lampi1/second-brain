@@ -3,7 +3,7 @@
 
 Branch: `feat/routine-component-platform`
 Base: `2cd103fdd7889a826e9f62355810bbfc6dfcdc5d`
-Status: implementation and independent static reviews complete; final branch checks pending. Native visual verification is blocked by the cloud environment. Not ready to merge.
+Status: implementation and independent reviews complete. Branch checks, build and native CI screenshots passed on db3afdc; final visual polish is awaiting the same checks. PR #240 remains a draft because the whole-history privacy CI gate reports existing main-history findings.
 Scope: implement the actionable improvements from the component comparison report, preserving existing host approvals, validators and field limits. Add evidence-linked developer learning.
 
 ## Resume with any provider
@@ -25,7 +25,7 @@ Scope: implement the actionable improvements from the component comparison repor
 - [x] H. Version analytics and improvement proposals: observed outcomes, attempts, waits, intervention counts; candidate versions only.
 - [x] I. Developer learning: concise change brief, causal explanation, tradeoffs, evidence/commit links, optional guided questions and Orchestrator handoff; no knowledge scores inferred from approvals.
 - [x] J. Voice diagnostics and portable read-only companion view: observed events, coverage and safe export; remote access must use explicit opt-in authentication, never expose local MCP.
-- [ ] K. Documentation, meaningful tests, visual verification and independent reviews.
+- [x] K. Documentation, meaningful tests, native visual verification and independent reviews; final polish must pass the same gates.
 
 ## Boundaries retained
 No production execution, no external release changes, no runtime dependency on the catalog, no automatic import of hooks/mods/settings or native CLI configuration edits. Optional executable extensions are inspected/staged only until the user approves a concrete capability; catalog popularity and scanner scores never grant authority. New integrations require explicit adapters, not shell bypasses.
@@ -46,23 +46,27 @@ Validation already observed:
 - New `test/e2e/routine-workbench.spec.ts` covers component inspection/history/focus, workbench checks/evaluation/HTML
   export, context manifests and voice observations, each with screenshots. Authored only; no branch e2e executed.
 - Independent Astra xhigh security, correctness and UI reviews found issues; all confirmed findings were fixed and
-  rechecked without remaining confirmed findings. These are static/in-memory reviews, not native visual approval.
+  rechecked without remaining confirmed findings. The UI reviewer also inspected five actual native screenshots.
 
 Fixed findings include ancestor licenses/BOM bytes; canonical report/command IDs incorrectly counted as progress;
 stopping timed-out live workers before a hold; multiline evidence; paused automation grants; cross-routine suite
 results; case-insensitive source identity; role defaults/ceilings; stale catalog matches/history; focus tokens and
 localized workbench summaries. Exact host diagnostics remain available under technical details.
 
-## Remaining release gate and recovery
-Run `npm run check:branch` and `npm run build` on the final clean commit; record exit codes in the handoff/PR.
-Native hidden-development inspection was attempted with an isolated synthetic profile, `SB_HIDDEN=1`, and no
-external services. Electron crashed before creating a window: `process_singleton_posix.cc: socket() EPERM`. No
-screenshots were produced. Do not claim a passed visual inspection or merge readiness from the static reviews.
+## Final verification and recovery
+At db3afdc, `npm run check:branch && npm run build` passed with exit 0: 272 test files passed, 2 skipped;
+2403 tests passed, 6 skipped, plus the separate publish-guard test. Typecheck, changed-file lint and guard passed.
+GitHub run 40279840244 passed the branch gate on Windows, macOS and Linux. The hidden native dev-visual job also
+passed: 18 screenshots, no renderer errors, isolated synthetic fixtures, no paid services or branch E2E execution.
+Its artifact is https://github.com/lampi1/second-brain/actions/runs/40279840244/artifacts/12631182727 .
+The five new views were inspected independently. Final polish styles component fields, keeps the adaptation action
+in the fixed modal footer, aligns voice diagnostics and fixes singular counts. Re-run checks and native captures
+on that final commit; record the exact results in PR #240: https://github.com/lampi1/second-brain/pull/240 .
 
-On an environment that can launch Electron, inspect Components, Verifica e confronta, Contesto dell’agente and
-Voice diagnostics in the hidden dev app, including keyboard focus and a narrow window. Capture actual screenshots.
-Do not execute branch e2e; its first execution remains on main under the repository policy. Keep this branch/PR
-unmerged until native visual verification and the owner's review are complete.
+The whole-history privacy CI job reports ten email findings in nine historical commits already reachable from
+main at 2cd103f. They were not introduced by this branch. Do not rewrite main history or add guard exceptions to
+hide them. Keep the PR unmerged; the owner reviews the implementation and resolves the historical release gate.
+The new E2E spec is authored but deliberately not executed on this branch; its first run remains on main.
 
 Known limits: retrospective evaluation does not launch paid model jobs (existing Learning replay remains explicit);
 counts are not causal rankings; readiness cannot prove remote credentials or availability; voice timing is partial,

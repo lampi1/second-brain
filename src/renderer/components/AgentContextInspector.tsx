@@ -10,7 +10,7 @@ export function AgentContextInspector({ chat, onClose }: { chat: ChatSummary; on
       <p><strong>≈ {context.instructions.estimatedTokens}</strong> {t('rt.context.tokens')} · {context.instructions.characters} {t('rt.context.characters')}</p>
       <p className="rt-muted">{t('rt.context.estimateHint')}</p>
       <h3>{t('rt.context.memory')}</h3>
-      {context.memory.available ? <><p>{context.memory.records.length} {t('rt.context.selected')} · ≈ {context.memory.estimatedTokens}/{context.memory.budgetTokens} token</p>
+      {context.memory.available ? <><p>{t('rt.context.selected', { n: context.memory.records.length })} · ≈ {context.memory.estimatedTokens}/{context.memory.budgetTokens} token</p>
         <dl><dt>{t('rt.context.ineligible')}</dt><dd>{context.memory.omitted.ineligible}</dd><dt>{t('rt.context.unmatched')}</dt><dd>{context.memory.omitted.unmatched}</dd><dt>{t('rt.context.budget')}</dt><dd>{context.memory.omitted.budget}</dd></dl>
         {context.memory.records.map(r => <details key={r.id}><summary>{r.id} · {r.status} · ≈ {r.estimatedTokens} token</summary><p>{t('rt.context.source')}: {r.sourceRunId ?? r.sourceEventId ?? '—'}</p><p>{t('rt.context.score')}: {r.score.toFixed(3)}</p></details>)}
       </> : <p>{t('rt.context.unavailable')}</p>}

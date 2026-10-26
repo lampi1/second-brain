@@ -29,7 +29,7 @@ export async function captureRoutineWorkbench(app, page, capture, snapshot) {
   await components.locator('summary').filter({ hasText: 'Copie già ispezionate' }).click();
   const staged = components.getByRole('button', { name: /review-knowledge.json/ }); await staged.click();
   await page.getByTestId('component-inspection').locator('summary').filter({ hasText: 'review.md' }).click();
-  await staged.focus(); await capture('components-inspection-focus');
+  await staged.focus(); await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab'); await capture('components-inspection-focus');
   await app.evaluate(({ BrowserWindow }) => { const w = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:') && !w.webContents.getURL().includes('#overlay')); w.setContentSize(680, 900); });
   await capture('components-narrow'); await page.keyboard.press('Escape');
   await app.evaluate(({ BrowserWindow }) => { const w = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:') && !w.webContents.getURL().includes('#overlay')); w.setContentSize(1600, 1100); });

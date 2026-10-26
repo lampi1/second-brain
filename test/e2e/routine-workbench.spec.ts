@@ -17,7 +17,7 @@ test('local component inspection is inert, survives reopening and keeps full con
     await expect(modal.locator('summary').filter({ hasText: 'Copie già ispezionate' })).toBeVisible();
     await inspection.locator('summary').filter({ hasText: 'review.md' }).click();
     await expect(inspection.locator('pre').filter({ hasText: 'never execute' })).toBeVisible();
-    await expect(inspection.getByRole('button', { name: 'Adattiamo questo alla mia routine?' })).toBeVisible();
+    await expect(modal.getByRole('button', { name: 'Adattiamo questo alla mia routine?' })).toBeVisible();
     await shot(page, 'components-local-inspection');
     await page.keyboard.press('Escape'); await expect(modal).toHaveCount(0); await expect(page.getByTestId('components-open')).toBeFocused();
     await page.getByTestId('components-open').click();
@@ -44,7 +44,7 @@ test('routine verification exposes unknowns, localized checks, explicit case eva
     await publishFlows(app, snapshot); await page.getByTestId('nav-flussi').click(); await page.getByTestId('rt-tab-routines').click();
     await page.getByTestId('rt-routine-card').filter({ hasText: 'Verifica documento' }).click();
     await page.getByTestId('rt-detail').getByTestId('routine-workbench-open').click();
-    const modal = page.getByTestId('routine-workbench'); await expect(modal).toContainText('1 problemi · 1 verifiche ancora sconosciute');
+    const modal = page.getByTestId('routine-workbench'); await expect(modal).toContainText('1 problema · 1 verifica ancora sconosciuta');
     await expect(modal.locator('summary').filter({ hasText: 'Automazione disponibile' })).toContainText('Da risolvere');
     await modal.getByRole('button', { name: 'sample-v1 · 1' }).click();
     await expect(page.getByTestId('routine-evaluation')).toContainText('Non verificato');

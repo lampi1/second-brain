@@ -71,7 +71,7 @@ export function VoiceSettings() {
       </div>
       <div className="st-ctl">{!ready && <button type="button" className="btn btn-primary btn-s" disabled={!!dl} onClick={() => void window.sb.invoke('voice:prepare', undefined).then(st => voice.set(s => ({ ...s, engine: st })))} data-testid="st-voice-download">{t('voice.download')}</button>}</div>
     </div>
-    <details data-testid="voice-diagnostics"><summary>{t('rt.voice.diagnostics')}</summary>
+    <details className="st-row-block" data-testid="voice-diagnostics"><summary>{t('rt.voice.diagnostics')}</summary>
       <button type="button" className="btn btn-ghost btn-s" onClick={() => void window.sb.invoke('voice:state', undefined).then(st => voice.set(s => ({ ...s, engine: st })))}>{t('rt.voice.refresh')}</button>
       <p className="st-desc">{t('rt.voice.hint')}</p>
       {diagnostic && <><p>{t('rt.voice.recognition')}: {diagnostic.recognitionAfterEndpoint.meanMs === null ? '—' : `${Math.round(diagnostic.recognitionAfterEndpoint.meanMs)} ms`} · n={diagnostic.recognitionAfterEndpoint.count}</p>
