@@ -22,7 +22,10 @@ export async function queuePrValidation(target: TestDeployTarget, pr: OwnedPullR
   const evaluation = matches[0]!, id = text(evaluation.evaluationId, 'evaluation id', 36);
   if (!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(id)) throw new Error('Invalid policy evaluation identity');
   await verify();
-  if (['running', 'queued'].includes(String(evaluation.status).toLowerCase())) return { pullRequestId: pr.id, evaluationId: id, mergeCommit, status: 'already-running' };
+  // A draft PR's evaluation can sit `queued` with no build (context null): only a buildId proves a build is under way.
+  const context = evaluation.context, buildId = context && typeof context === 'object' ? (context as Record<string, unknown>).buildId : undefined;
+  const hasBuild = (typeof buildId === 'number' && buildId > 0) || (typeof buildId === 'string' && buildId.trim() !== '');
+  if (hasBuild && ['running', 'queued'].includes(String(evaluation.status).toLowerCase())) return { pullRequestId: pr.id, evaluationId: id, mergeCommit, status: 'already-running' };
   const queued = await call('PATCH', `${base}/${id}?api-version=7.1-preview.1`, { status: 'queued' });
   if (queued.evaluationId !== id || !sameArtifact(queued.artifactId, artifactId)) throw new Error('Unexpected policy reevaluation receipt; inspect the own PR before retrying');
   return { pullRequestId: pr.id, evaluationId: id, mergeCommit, buildDefinitionId: target.buildDefinitionId, status: 'queued', next: 'Wait for the succeeded PR merge build, then deploy-test. Queue acceptance is not a successful build.' };
