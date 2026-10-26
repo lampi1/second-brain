@@ -70,6 +70,18 @@ describe('manual start on one work item', () => {
     const run = w.flow.snapshot().runs.find(r => r.id === started.id)!;
     expect(run.currentStep).toBe(1); expect(run.steps[1]!.status).toBe('running'); expect(w.create).toHaveBeenCalledTimes(2); expect(w.send).not.toHaveBeenCalled();
   });
+  it('starts a configured on-demand routine without a work item through its approved host event', async () => {
+    const w = world({ steps: [agent('analyze')] }), auto = w.runtime.automation();
+    const cfg = { ...config(w.work), trigger: { kind: 'manual' as const } };
+    const proposal = auto.propose({ config: cfg, expectedRevision: 0 }, 'o');
+    auto.decide({ id: proposal.id, expectedRevision: proposal.revision, answer: 'yes' });
+    const run = await w.runtime.startItem({ flowId: 'fix' }) as FlowRun;
+    expect(run.subjectKey).toMatch(/^auto:/);
+    expect(auto.executionAllowed(run)).toBe(true);
+    expect(run.inputs.workspace).toBe(w.work);
+    await w.runtime.tick(); expect(w.create).toHaveBeenCalledOnce();
+    expect(w.readItem).not.toHaveBeenCalled();
+  });
   it('returns an actionable paused result through the host tool without reading DevOps or retrying', async () => {
     const w = world({ steps: [agent('analyze')] }), rule = enable(w), auto = w.runtime.automation();
     auto.pause({ id: rule.id, expectedRevision: auto.snapshot().rules[0]!.revision, paused: true });
@@ -235,4 +247,34 @@ it('runs a packaged script from its version directory even when the authoring br
   await w.runtime.tick(); await settle();
   expect(w.flow.status(source.id, 'app').status).toBe('completed');
   const launch = w.run.mock.calls[0]!; expect(launch[1]).toHaveProperty('cwd', path.join(w.root, 'data', 'flows', w.flow.snapshot().contextKey, 'packages', source.definitionDigest));
+});
+
+it('executes pinned scripts under a manual grant and keeps production at the user gate', async () => {
+  const w = world({ steps: [command('test', 'script', 'move.js'), command('prod', 'script', 'move.js', { env: 'prod', effect: 'production' })] }, { 'scripts/move.js': 'console.log(1)\n' });
+  const auto = w.runtime.automation(), proposal = auto.propose({ config: { ...config(w.work), trigger: { kind: 'manual' } }, expectedRevision: 0 }, 'o');
+  auto.decide({ id: proposal.id, expectedRevision: proposal.revision, answer: 'yes' });
+  const started = await w.runtime.startItem({ flowId: 'fix' }) as FlowRun;
+  await w.runtime.tick(); await settle();
+  const run = w.flow.snapshot().runs.find(r => r.id === started.id)!;
+  expect(w.run).toHaveBeenCalledOnce(); expect(run.status).toBe('approval'); expect(run.steps[run.currentStep]?.stepId).toBe('prod');
+});
+it('does not restart over an in-flight connector; cancellation waits for its receipt', async () => {
+  let complete!: (v: { outcome: 'done'; summary: string }) => void;
+  const execute = vi.fn(async (_recipe, _args, _readOnly, _signal, authorize, dispatched) => {
+    authorize(); dispatched(); return new Promise<{ outcome: 'done'; summary: string }>(resolve => { complete = resolve; });
+  });
+  const step: FlowStep = { id: 'publish', title: 'Publish', kind: 'check', instructions: 'Publish test note', effect: 'external-write', inputs: [], evidence: ['connector'], timeoutMs: 60000, maxAttempts: 2,
+    connector: { serverId: 'qa', tool: 'note', serverHash: 'a'.repeat(64), toolHash: 'b'.repeat(64), role: 'artisan', arguments: { text: 'fixture' } } };
+  const w = world({ steps: [step] }, {}, { connectors: { check: () => {}, execute, catalog: () => [], inspect: vi.fn() } });
+  const started = await w.runtime.startItem({ flowId: 'fix' }) as FlowRun;
+  await w.runtime.tick(); await settle(); expect(execute).toHaveBeenCalledOnce();
+  let live = w.flow.status(started.id, started.ownerOrchestratorId);
+  await expect(w.runtime.restart({ runId: live.id, expectedRevision: live.revision, mode: 'from-start', targetVersion: live.flowVersion, targetDigest: live.definitionDigest, acknowledgeEffects: true })).rejects.toThrow('still stopping');
+  expect(w.flow.snapshot().runs).toHaveLength(1);
+  live = w.flow.status(started.id, started.ownerOrchestratorId);
+  await w.runtime.cancel({ runId: live.id, expectedRevision: live.revision });
+  expect(w.flow.status(live.id, live.ownerOrchestratorId).cancellation?.interruption).toBe('pending');
+  complete({ outcome: 'done', summary: 'Created' }); await settle(); await w.runtime.tick();
+  expect(w.flow.status(live.id, live.ownerOrchestratorId).cancellation?.interruption).toBe('confirmed');
+  expect(execute).toHaveBeenCalledOnce();
 });

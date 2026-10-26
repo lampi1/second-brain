@@ -83,6 +83,30 @@ describe('DevOps write adapter', () => {
     await expect(wrong.run({ op: 'comment', text: 'x', mentions: [M1] })).rejects.toThrow();
     expect(wrong.calls.some(c => c.url.includes('/comments?'))).toBe(false);
   });
+  it('requires step opt-in and permits only one analysis mention across retries and reloads', async () => {
+    const identity = 'aaaaaaaa-0000-0000-0000-000000000001';
+    const s = setup({ grant: grant({ mentions: [identity] }) });
+    const request = { op: 'comment', text: 'Analysis complete', mentions: [identity], mentionReason: 'analysis' };
+    const ctx = { ...s.context, evidenceRoot: '/fixture/evidence' };
+    await expect(s.run(request, ctx)).rejects.toThrow('step to opt in');
+    expect(s.calls.some(c => c.method === 'POST')).toBe(false);
+    const allowed = { ...ctx, mentionReason: 'analysis' as const };
+    await expect(s.run({ ...request, mentionReason: undefined }, allowed)).rejects.toThrow('step-approved analysis');
+    await expect(s.run(request, allowed)).resolves.toMatchObject({ mentions: 1 });
+    await expect(s.run(request, allowed)).resolves.toMatchObject({ commentId: 5 }); // idempotent receipt
+    const reloaded = new DevOpsWriter({ file: s.file, token: async () => 'token-value', request: s.request });
+    await expect(reloaded.execute(allowed, { ...request, text: 'Another analysis' })).rejects.toThrow('Only one');
+    expect(s.calls.filter(c => c.method === 'POST')).toHaveLength(1);
+    await expect(reloaded.execute({ ...ctx, mentionReason: 'final' }, { ...request, text: 'Final outcome', mentionReason: 'final' })).resolves.toMatchObject({ mentions: 1 });
+  });
+  it('does not consume analysis mention allowance after a pre-change rejection', async () => {
+    const identity = 'aaaaaaaa-0000-0000-0000-000000000001'; let reject = true;
+    const s = setup({ grant: grant({ mentions: [identity] }), status: c => c.method === 'POST' && reject ? 403 : undefined });
+    const ctx = { ...s.context, evidenceRoot: '/fixture/evidence', mentionReason: 'analysis' as const };
+    const req = { op: 'comment', text: 'Analysis', mentions: [identity], mentionReason: 'analysis' };
+    await expect(s.run(req, ctx)).rejects.toThrow('403'); reject = false;
+    await expect(s.run(req, ctx)).resolves.toMatchObject({ mentions: 1 });
+  });
   it('creates plans, suites, cases and results only inside what this run created', async () => {
     const { run, calls, file } = setup();
     expect(await run({ op: 'create-test-plan', project: 'projecta', name: 'Plan' })).toEqual({ planId: 100, rootSuiteId: 101 });

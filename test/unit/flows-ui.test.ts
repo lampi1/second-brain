@@ -2,6 +2,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, expect, it, vi } from 'vitest';
+import { ui, dismissToast } from '../../src/renderer/store/ui';
 import { app } from '../../src/renderer/store/store';
 import type { ChatSummary } from '../../src/shared/contract';
 import type { FlowSnapshot, FlowDefinition, FlowRun } from '../../src/shared/flows';
@@ -338,4 +339,22 @@ it('shows exact browser-write targets in activation modal before collapsed defin
  const snap={...snapshot(),drafts:[{definition:d,revision:1,updatedAt:3,status:'proposed' as const}],versions:[],runs:[]};
  const html=renderToStaticMarkup(createElement(FlowApproval,{ask:flowAsks(snap)[0]!,onEscape:vi.fn()}));
  expect(html).toContain('flow-browser-approval');expect(html).toContain('scrive tramite browser su');expect(html.indexOf('https://qa.example.com')).toBeLessThan(html.indexOf('<details>'));expect(html).toContain('Nessuna autorizzazione di produzione');
+});
+
+it('shows pinned connector scope and analysis mention opt-in before approving the definition', () => {
+  const d: FlowDefinition = { ...definition, steps: [{ ...definition.steps[0]!, effect: 'external-write', adapter: 'devops-write', mentionReason: 'analysis' }, { id: 'connector', title: 'Write test note', kind: 'check', effect: 'external-write', instructions: 'Write fixture', inputs: [], evidence: ['connector'], timeoutMs: 10000, maxAttempts: 2, connector: { serverId: 'qa', tool: 'note', serverHash: 'a'.repeat(64), toolHash: 'b'.repeat(64), role: 'artisan', arguments: { text: 'fixture note' } } }] };
+  const snap = { ...snapshot(), drafts: [{ definition: d, revision: 1, updatedAt: 3, status: 'proposed' as const }], versions: [], runs: [] };
+  const html = renderToStaticMarkup(createElement(FlowApproval, { ask: flowAsks(snap)[0]!, onEscape: vi.fn() }));
+  expect(html).toContain('qa / note'); expect(html).toContain('fixture note'); expect(html).toContain('un solo commento di analisi per run');
+});
+
+it('explains on-demand configuration and surfaces actionable activation errors', async () => {
+  const state = automated(); state.automation!.rules[0]!.config.trigger = { kind: 'manual' };
+  const html = renderToStaticMarkup(createElement(FlowApproval, { ask: flowAsks(state)[0]!, onEscape: vi.fn() }));
+  expect(html).toContain('su richiesta'); expect(html).not.toContain('in automatico?');
+  const ask = flowAsks(snapshot())[0]!;
+  invoke.mockRejectedValueOnce(new Error('Connector not enabled for test routines: confirm the account in Settings')).mockResolvedValue(snapshot());
+  expect(await decideFlow(ask, 'yes')).toBe(false);
+  expect(ui.get().toasts.at(-1)?.text).toContain('confirm the account in Settings');
+  ui.get().toasts.forEach(t => dismissToast(t.id));
 });

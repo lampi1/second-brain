@@ -101,13 +101,16 @@ describe('flow execution authority', () => {
     expect(() => service.decide({ runId: run.id, expectedRevision: run.revision, stepId: 'manual', answer: 'yes' })).toThrow('evidence note');
     expect(service.decide({ runId: run.id, expectedRevision: run.revision, stepId: 'manual', answer: 'yes', feedback: 'User checked result' }).status).toBe('completed');
   });
-  it.each(['external-write', 'production'] as const)('never executes or approves away unsupported %s', effect => {
-    const { service } = setup(); activate(service, definition([step('danger', { effect, kind: 'manual' })])); const run = start(service);
-    expect(run.status).toBe('blocked'); expect(() => service.decide({ runId: run.id, expectedRevision: run.revision, stepId: 'danger', answer: 'yes', feedback: 'go' })).toThrow('adapter');
-    expect(service.status(run.id, 'orch').steps[0]!.receipt).toBeUndefined();
+  it.each(['external-write', 'production'] as const)('waits for user evidence without executing manual %s', effect => {
+    const { service } = setup(); activate(service, definition([step('danger', { effect, kind: 'manual', evidence: [] })])); const run = start(service);
+    expect(run.status).toBe('approval'); expect(run.steps[0]!.chatId).toBeUndefined();
+    expect(() => service.decide({ runId: run.id, expectedRevision: run.revision, stepId: 'danger', answer: 'yes' })).toThrow('evidence note');
+    expect(service.decide({ runId: run.id, expectedRevision: run.revision, stepId: 'danger', answer: 'yes', feedback: 'User performed and checked the action' }).status).toBe('completed');
   });
   it('keeps unconfigured action references blocked', () => {
-    const { service } = setup(); activate(service, definition([step('ref', { kind: 'check', action: { kind: 'action', ref: 'saved-reference' } })])); expect(start(service).status).toBe('blocked');
+    const { service } = setup(); service.propose({ definition: definition([step('ref', { kind: 'check', action: { kind: 'action', ref: 'saved-reference' } })]), expectedRevision: 0 });
+    expect(() => service.decideDefinition({ id: 'sample', expectedRevision: 1, answer: 'yes' })).toThrow();
+    expect(service.snapshot().versions).toHaveLength(0);
   });
   // ADR 0155: a script/query step pins the brain file's content hash on propose; a file the brain lacks cannot be proposed
   it.each(['script', 'query'] as const)('refuses a %s reference the brain does not have', kind => {

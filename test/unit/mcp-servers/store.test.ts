@@ -145,3 +145,8 @@ describe('access rules', () => {
     expect(idFrom('Città')).toBe('citta');
   });
 });
+
+it('requires an explicit true test-account confirmation, omitted by default', () => {
+  expect(checkDef(http).routineTest).toBeUndefined(); expect(checkDef({ ...http, routineTest: true }).routineTest).toBe(true);
+  for (const value of [false, 'true', 1]) expect(() => checkDef({ ...http, routineTest: value })).toThrow();
+});

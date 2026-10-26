@@ -8,6 +8,8 @@ import { useApp } from '../store/store';
 import { decideFlow } from '../store/flows';
 import { decisionDraft, saveDecisionDraft } from '../lib/decision-drafts';
 import { t } from '../i18n';
+import { executionChecks } from '@shared/flow-execution';
+import { FlowConnectorDetails, FlowExecutionSummary } from './FlowExecutionDetails';
 import { FlowAutomationSummary } from './FlowAutomationSummary';
 import { FlowBrowserDetails, FlowDefinition } from './FlowDefinition';
 import { FlowRestartApproval } from './FlowRunControls';
@@ -30,8 +32,9 @@ function FlowStandardApproval({ ask, onEscape }: { ask: Exclude<FlowAsk, { type:
   const boundChat = useApp(s => current?.chatId && s.chats[current.chatId] ? current.chatId : null);
   const browserSteps = definition?.steps.filter(s => s.writeVia === 'browser' && (!run || s.id === current?.stepId)) ?? [];
   const mode = flowDecisionMode(ask);
+  const manual = ask.type === 'flow-automation' && ask.rule.config.trigger.kind === 'manual';
   const gate = flowGateEvidence(ask);
-  const canApprove = flowDecisionSubmission(ask, 'yes', feedback, evidence) !== null;
+  const canApprove = flowDecisionSubmission(ask, 'yes', feedback, evidence) !== null && !(ask.type === 'flow-definition' && executionChecks(ask.draft.definition).some(c => c.state === 'unsupported'));
   const decide = async (answer: 'yes' | 'no' | 'other', text = feedback) => {
     const submission = flowDecisionSubmission(ask, answer, text, evidence);
     if (submitting.current || !submission) return;
@@ -43,16 +46,18 @@ function FlowStandardApproval({ ask, onEscape }: { ask: Exclude<FlowAsk, { type:
   return <DecisionCard testBase={`qwin-${ask.type}`} className="wq flow-review" busy={busy} laterButton={false} onLater={onEscape}
     rootProps={{ 'data-request-key': key, 'aria-label': ask.title }}
     head={<><span className="dc-chip">{t('flows.title')} · {ask.type === 'flow-definition' ? `r${ask.draft.revision}` : ask.type === 'flow-automation' ? `v${ask.rule.config.flowVersion} · r${ask.rule.revision}` : `v${ask.run.flowVersion} · r${ask.run.revision}`}</span><b className="dc-who">{ask.title}</b></>}
-    question={t(ask.type === 'flow-definition' ? 'flows.proposalQuestion' : ask.type === 'flow-automation' ? 'flows.autoQuestion' : 'flows.stepQuestion')}
+    question={t(ask.type === 'flow-definition' ? 'flows.proposalQuestion' : ask.type === 'flow-automation' ? (manual ? 'flows.manualQuestion' : 'flows.autoQuestion') : 'flows.stepQuestion')}
     yes={{ onChoose: () => void decide('yes'), label: t(mode === 'retry' ? 'flows.yesRetry' : 'flows.yes'), disabled: !canApprove, testid: 'flow-approve' }}
     no={{ onChoose: () => void decide('no'), label: t('flows.no'), testid: 'flow-reject' }}
     write={{ onSend: text => void decide('other', text), initial: decisionDraft(key) || undefined, onDraft: v => { setFeedback(v); saveDecisionDraft(key, v); }, onClose: () => { setFeedback(''); saveDecisionDraft(key, ''); }, hint: t('flows.otherHint'),
       testids: { open: 'flow-other', input: 'flow-feedback', send: 'flow-feedback-send' } }}
     skip={{ onChoose: () => void decide('no', ''), hint: t('genui.decision.skipDiscard') }}>
     {ask.type === 'flow-definition' && <p className="wq-lead">{t('flows.activationHint')}</p>}
-    {ask.type === 'flow-automation' && <><p className="wq-lead">{t('flows.autoHint')}</p><FlowAutomationSummary config={ask.rule.config} /></>}
+    {ask.type === 'flow-automation' && <><p className="wq-lead">{t((manual ? 'flows.manualHint' : 'flows.autoHint'))}</p><FlowAutomationSummary config={ask.rule.config} /></>}
+    {definition?.steps.filter(s => s.connector && (!run || s.id === current?.stepId)).map(s => <div key={s.id}><strong>{s.title}</strong><FlowConnectorDetails step={s} run={run} /></div>)}
     {browserSteps.map(s => <div key={s.id} className="flow-target" data-testid="flow-browser-approval"><strong>{s.title}</strong><FlowBrowserDetails step={s} run={run} /></div>)}
     {browserSteps.length > 0 && <p className="wq-lead">{t('flows.browserSafety')}</p>}
+    {ask.type === 'flow-definition' && <FlowExecutionSummary definition={ask.draft.definition} />}
     {definition?.description && <p>{definition.description}</p>}
     {run && <><p className="flow-target" data-testid="flow-target"><strong>{t('flows.target')}:</strong> {run.subjectKey}<span className="flows-muted"> · {[run.scope.project, run.scope.areaPath].filter(Boolean).join(' · ') || '—'}</span></p><details data-testid="flow-run-context"><summary>{t('flows.runContext')}</summary><dl className="flow-facts"><dt>{t('flows.target')}</dt><dd>{run.subjectKey}</dd><dt>{t('flows.scope')}</dt><dd>{[run.scope.project, run.scope.areaPath].filter(Boolean).join(' · ') || '—'}</dd><dt>{t('flows.inputs')}</dt><dd>{Object.keys(run.inputs).length ? <dl className="flow-facts">{Object.entries(run.inputs).map(([name, value]) => <div key={name} className="flow-input-pair"><dt>{name}</dt><dd>{value}</dd></div>)}</dl> : '—'}</dd></dl></details></>}
     {current && <p>{t('flows.current')}: <strong>{definition?.steps[run!.currentStep]?.title ?? current.stepId}</strong></p>}

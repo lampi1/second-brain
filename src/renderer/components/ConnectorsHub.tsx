@@ -121,6 +121,8 @@ export function ServerEditor({ server, onDone }: { server: McpServerView | null;
         {f.transport === 'http' && field('tokenPrefix', t('hub.f.prefix'), { mono: true, placeholder: 'Bearer ' })}
       </div>
       {field('purpose', t('hub.f.purpose'), { placeholder: t('hub.f.purposeHint') })}
+      <label className="hub-check"><input type="checkbox" checked={f.routineTest} onChange={e => set('routineTest', e.target.checked)} data-testid="connector-routine-test" />{t('hub.f.routineTest')}</label>
+      <p className="hub-muted">{t('hub.f.routineTestHint')}</p>
       <label className="hub-check"><input type="checkbox" checked={f.enabled} onChange={e => set('enabled', e.target.checked)} />{t('hub.f.enabled')}</label>
     </div>
     {error && <p role="alert" className="hub-problem"><b>{error}</b></p>}

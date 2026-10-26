@@ -106,9 +106,9 @@ export function readDefinitionFile(brainRoot: string | null | undefined, value: 
 export function proposeFlow(service: FlowService, args: Record<string, unknown>, brainRoot?: () => string | null) {
   const inline = Object.hasOwn(args, 'definition'), file = Object.hasOwn(args, 'definitionPath');
   if (inline === file) throw new Error('Supply exactly one of definition or definitionPath');
-  if (inline) return service.propose(args as unknown as FlowPropose);
+  if (inline) { const draft = service.propose(args as unknown as FlowPropose); return { ...draft, preflight: service.preflight(draft.definition) }; }
   const expectedRevision = integer(args.expectedRevision, 'expectedRevision');
   const definition = readDefinitionFile(brainRoot?.(), args.definitionPath, service.snapshot().contextKey);
   const draft = service.propose({ definition, expectedRevision });
-  return { flowId: draft.definition.id, title: draft.definition.title, revision: draft.revision, status: draft.status, updatedAt: draft.updatedAt, digest: digest(draft.definition), stepCount: draft.definition.steps.length };
+  return { flowId: draft.definition.id, title: draft.definition.title, revision: draft.revision, status: draft.status, updatedAt: draft.updatedAt, digest: digest(draft.definition), stepCount: draft.definition.steps.length, preflight: { executable: service.preflight(draft.definition).executable, tool: 'app_flow_preflight', flowId: draft.definition.id } };
 }

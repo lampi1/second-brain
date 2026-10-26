@@ -1,17 +1,17 @@
 // Conservative UI capability for an exact flow gate: retries rerun an interrupted agent and never mark work complete.
-import { browserWriteStep } from '@shared/flow-browser';
+import { executionChecks, executionKind } from '@shared/flow-execution';
 import type { FlowAsk } from './flow-ask';
 export function flowDecisionMode(ask: FlowAsk): 'approve' | 'retry' | 'blocked' {
   if (ask.type === 'flow-automation') return ask.version ? 'approve' : 'blocked';
-  if (ask.type === 'flow-definition') return 'approve';
+  if (ask.type === 'flow-definition') return executionChecks(ask.draft.definition).some(c => c.state === 'unsupported') ? 'blocked' : 'approve';
   if (ask.type === 'flow-cancel') return ask.run.pendingCancellation && ['active', 'approval', 'blocked'].includes(ask.run.status) ? 'approve' : 'blocked';
   if (ask.type === 'flow-restart') return ask.version && ask.run.pendingRecovery ? 'approve' : 'blocked';
   const definition = ask.version?.definition, run = ask.run;
   const step = definition?.steps[run.currentStep], current = run.steps[run.currentStep];
   if (!step || !current || current.stepId !== step.id) return 'blocked';
-  if ((step.effect === 'external-write' && !browserWriteStep(step)) || step.effect === 'production') return 'blocked';
+  if (executionKind(step) === 'unsupported' || step.env === 'prod') return 'blocked';
   if (run.status === 'approval') return 'approve';
-  if (run.status === 'blocked' && step.kind === 'agent' && !step.action && current.attempts < step.maxAttempts
+  if (run.status === 'blocked' && (step.kind === 'agent' && !step.action || step.kind === 'check') && current.attempts < step.maxAttempts
     && step.inputs.every(key => !!run.inputs[key]?.trim())) return 'retry';
   return 'blocked';
 }

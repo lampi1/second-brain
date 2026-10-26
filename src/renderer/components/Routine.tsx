@@ -13,6 +13,7 @@ import { flowAsks } from '../lib/flow-ask';
 import { openQueue } from '../lib/later';
 import { activeVersion, ago, definitionOf, duration, itemOf, lastHeal, list, needsYou, prodSteps, queued, retrying, ruleFor, stepLook, working, type StepLook } from '../lib/routine-view';
 import { stepAgentLabel } from '../lib/flow-step-agent';
+import { FlowConnectorDetails } from './FlowExecutionDetails';
 import { FlowBrowserDetails } from './FlowDefinition';
 import { RoutineInspect } from './RoutineInspect';
 import { RoutineExport } from './RoutinePackage';
@@ -44,7 +45,7 @@ function RuleSwitch({ snapshot, rule }: { snapshot: FlowSnapshot; rule?: FlowAut
 function triggerText(rule?: FlowAutomationRule): string {
   if (!rule) return t('rt.manualOnly');
   const trigger = rule.config.trigger;
-  return trigger.kind === 'devops' ? t('rt.trigDevops', { type: trigger.workItemType }) : t('rt.trigEvery', { min: trigger.everyMinutes });
+  return trigger.kind === 'manual' ? t('flows.manualTrigger') : trigger.kind === 'devops' ? t('rt.trigDevops', { type: trigger.workItemType }) : t('rt.trigEvery', { min: trigger.everyMinutes });
 }
 function FilterChips({ rule }: { rule: FlowAutomationRule }) {
   const trigger = rule.config.trigger;
@@ -109,7 +110,7 @@ function StoppedCard({ snapshot, run, definition, onRecovery }: { snapshot: Flow
     <h3 className="rt-q">{run.status === 'approval' ? t('rt.gate', { step: spec?.title ?? '' }) : t('rt.stopped', { step: spec?.title ?? '' })}</h3>
     {itemOf(run) && <p className="rt-muted">{itemOf(run)!.url ? <a href={itemOf(run)!.url} target="_blank" rel="noreferrer">{itemOf(run)!.title}</a> : itemOf(run)!.title}</p>}
     {step?.reason && <p className="rt-reason">{step.reason}</p>}
-    {spec && <FlowBrowserDetails step={spec} run={run} />}
+    {spec && <><FlowBrowserDetails step={spec} run={run} /><FlowConnectorDetails step={spec} run={run} /></>}
     <div className="rt-actions">
       <RoutineInspect snapshot={snapshot} definition={definition} run={run} />
       {canRetry && <button type="button" className="btn btn-primary btn-s" onClick={() => void decideFlow(ask, 'yes')} data-testid="rt-retry">{t('rt.retry')}</button>}
@@ -146,7 +147,7 @@ function WorkingCard({ snapshot, run, definition, onRecovery, open, onToggle }: 
         {steps.slice(0, run.currentStep + 1).map((spec, i) => {
           const look = stepLook(snapshot, run, i), state = run.steps[i]!;
           return <li key={spec.id} data-look={look}><span className="rt-dot" data-look={LOOK_DOT[look]} />
-            <div><b>{i + 1} · {spec.title}</b> <span className="rt-muted">{spec.kind === 'agent' ? stepAgentLabel(spec, roles[roleOf(spec)]) : spec.action?.kind === 'script' || spec.action?.kind === 'query' ? `${spec.action.ref}${state.status === 'running' && state.startedAt ? ` · ${duration(Date.now() - state.startedAt)}` : ''}` : t(`rt.k.${spec.kind}`)}{state.status === 'running' && state.startedAt && spec.kind === 'agent' ? ` · ${duration(Date.now() - state.startedAt)}` : ''}{state.attempts > 1 ? ` · ${t('rt.round', { n: state.attempts })}` : ''}</span>{state.receipt?.summary && <span className="rt-muted rt-proofline" title={state.receipt.summary}>{state.receipt.summary}</span>}<FlowBrowserDetails step={spec} run={run} /></div>
+            <div><b>{i + 1} · {spec.title}</b> <span className="rt-muted">{spec.kind === 'agent' ? stepAgentLabel(spec, roles[roleOf(spec)]) : spec.action?.kind === 'script' || spec.action?.kind === 'query' ? `${spec.action.ref}${state.status === 'running' && state.startedAt ? ` · ${duration(Date.now() - state.startedAt)}` : ''}` : t(`rt.k.${spec.kind}`)}{state.status === 'running' && state.startedAt && spec.kind === 'agent' ? ` · ${duration(Date.now() - state.startedAt)}` : ''}{state.attempts > 1 ? ` · ${t('rt.round', { n: state.attempts })}` : ''}</span>{state.receipt?.summary && <span className="rt-muted rt-proofline" title={state.receipt.summary}>{state.receipt.summary}</span>}<FlowBrowserDetails step={spec} run={run} /><FlowConnectorDetails step={spec} run={run} /></div>
             <Chip tone={look === 'done' ? 'green' : look === 'now' ? 'blue' : look === 'you' ? 'red' : look === 'todo' ? undefined : 'amber'}>{t(`rt.s.${look}`)}</Chip></li>;
         })}
         {next.length > 0 && <li data-look="todo"><span className="rt-dot" data-look="todo" /><span className="rt-muted">{t('rt.next')}: {next.map((s, i) => `${run.currentStep + 2 + i} · ${s.title}`).join(' → ')}</span><Chip>{t('rt.s.todo')}</Chip></li>}
@@ -337,7 +338,7 @@ export function RoutineHistory({ snapshot }: { snapshot: FlowSnapshot }) {
         <td><Chip tone={run.status === 'completed' ? 'green' : undefined}>{t(run.disposition?.kind === 'skipped' ? 'flows.skipped' : run.disposition?.kind === 'needs-human' ? 'flows.needsHuman' : run.status === 'completed' ? 'rt.completed' : 'rt.cancelled')}</Chip>{run.heal?.length ? <span className="rt-muted"> · ↻ {run.heal.length}</span> : null}</td>
         <td>{duration(run.updatedAt - run.createdAt)}</td><td>{new Date(run.updatedAt).toLocaleString(locale())}</td></tr>,
         open === run.id && <tr key={`${run.id}-x`} className="rt-hist-open"><td colSpan={5}>
-          <ol className="rt-hsteps">{(definition?.steps ?? []).map((spec, i) => <li key={spec.id}><b>{i + 1} · {spec.title}</b> <span className="rt-muted">{run.steps[i]?.receipt?.summary ?? (run.steps[i]?.status === 'completed' ? '✓' : '—')}</span><FlowBrowserDetails step={spec} run={run} /></li>)}</ol>
+          <ol className="rt-hsteps">{(definition?.steps ?? []).map((spec, i) => <li key={spec.id}><b>{i + 1} · {spec.title}</b> <span className="rt-muted">{run.steps[i]?.receipt?.summary ?? (run.steps[i]?.status === 'completed' ? '✓' : '—')}</span><FlowBrowserDetails step={spec} run={run} /><FlowConnectorDetails step={spec} run={run} /></li>)}</ol>
           {run.receipts?.length ? <><div className="rt-label">{t('rt.receipts')}</div><ul className="rt-receipts">{run.receipts.map(r => <li key={r.id}><code>{r.command}</code><span className="rt-muted">{r.env} · sha {short(r.sha256)} · {t(r.by === 'user' ? 'rt.byUser' : 'rt.byRunner')} · {new Date(r.startedAt).toLocaleTimeString(locale())}{r.endedAt ? `–${new Date(r.endedAt).toLocaleTimeString(locale())}` : ''} · {r.exitCode === undefined ? '…' : t('rt.exit', { code: r.exitCode ?? '?' })}</span>{r.output && <pre>{r.output.slice(-600)}</pre>}</li>)}</ul></> : null}
           {run.cancellation?.reason && <p className="rt-muted">{run.cancellation.reason}</p>}
         </td></tr>];

@@ -1,7 +1,7 @@
 // Portable automatic-flow configuration and durable event envelope, shared with host and decision UI.
 // Activation authorizes detection, dispatch and the explicit host grants below; existing flow gates retain their authority.
 import type { FlowScope } from './flows';
-export type FlowTrigger = { kind: 'interval'; everyMinutes: number } | {
+export type FlowTrigger = { kind: 'manual' } | { kind: 'interval'; everyMinutes: number } | {
   kind: 'devops'; everyMinutes: number; organization: string; project: string; areaPath: string;
   workItemType: string; states: string[]; includeExisting: boolean;
   /** Filters (ADR 0155): every include tag must be on the item, no exclude tag may be; ids = only these items;
@@ -37,7 +37,7 @@ export interface TestDbReadGrant { targetIds: string[] }
 export interface FlowAutomationConfig {
   flowId: string; flowVersion: number; trigger: FlowTrigger; scope: FlowScope;
   inputs: Record<string, string>; priority: 'urgent' | 'normal';
-  /** Absent = deny-all. Only a devops trigger may carry it; approval is the rule's exact revision. */
+  /** Absent = deny-all. Independent of trigger kind; approval is the configuration's exact revision. */
   devopsWrite?: DevOpsWriteGrant;
   testDbRead?: TestDbReadGrant;
 }

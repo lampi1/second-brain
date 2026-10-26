@@ -1,5 +1,6 @@
 // Host-observed readiness and retrospective evaluation, without executing tasks or manufacturing quality scores.
 import fs from 'node:fs';
+import { executionKind } from '../../shared/flow-execution';
 import type { FlowSnapshot, FlowVersion, FlowRun } from '../../shared/flows';
 import type { RoutineCheck, RoutineComparison, RoutineEvalResult, RoutineEvalSuite, RoutineReadiness, RoutineWorkbenchRequest, RoutineWorkbenchResult } from '../../shared/routine-workbench';
 import { checkParams, digest, identifier, integer, keys, object, text, validateInputs } from './schema';
@@ -29,6 +30,8 @@ export function readiness(snapshot: FlowSnapshot, version: FlowVersion, values: 
     const addStep = (id: string, state: RoutineCheck['state'], detail: string) => add(id, state, detail, step.id);
     const missing = step.inputs.filter(k => !inputs[k]?.trim()); addStep('inputs', missing.length ? 'fail' : 'pass', missing.length ? `Missing inputs: ${missing.join(', ')}` : 'Declared input values supplied');
     if (step.workspaceInput) { const workspace = inputs[step.workspaceInput]; addStep('workspace', workspace && directory(workspace) ? 'pass' : 'fail', 'Configured workspace must be an existing directory'); }
+    if (executionKind(step) === 'unsupported') addStep('execution', 'fail', 'No executable route; choose an existing capability before activation');
+    if (step.connector) addStep('connector', 'unknown', 'Pinned connector registration, schema, credentials and current role access require live app_flow_connectors inspection; Doctor executes no tool');
     if (step.kind === 'agent') {
       const role = snapshot.roles?.[roleOf(step)], tier = step.tier ?? role?.tier, engineId = step.engine ?? role?.engine;
       const model = step.model ?? ((!step.engine || step.engine === role?.engine) && role ? role.model ?? (tier && role.models[tier]) : undefined);

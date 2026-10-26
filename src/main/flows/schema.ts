@@ -1,4 +1,5 @@
 // Strict flow definition validation and canonical hashing; the host rejects unknown executable fields.
+import { validateConnector } from './connector-call';
 import { browserOrigins } from '../../shared/flow-browser';
 import { validatePackage, validatePackagedSteps } from './package';
 import { createHash } from 'node:crypto';
@@ -62,7 +63,7 @@ export function validateDefinition(value: unknown, tierMax?: RoleTierMax): FlowD
   if (!Array.isArray(raw.steps) || !raw.steps.length || raw.steps.length > 60) throw new Error('A flow needs 1–60 steps');
   const ids: string[] = [];
   const steps: FlowStep[] = raw.steps.map((value: unknown) => {
-    const row = object(value, 'step'); keys(row, ['id', 'title', 'kind', 'instructions', 'inputs', 'action', 'evidence', 'timeoutMs', 'maxAttempts', 'effect', 'reviewOf', 'workspaceInput', 'adapter', 'testDbRead', 'role', 'tier', 'engine', 'model', 'effort', 'onFail', 'env', 'args', 'agentPrompt', 'assets', 'testEnvironment', 'writeVia', 'browserTargets'], 'step');
+    const row = object(value, 'step'); keys(row, ['id', 'title', 'kind', 'instructions', 'inputs', 'action', 'evidence', 'timeoutMs', 'maxAttempts', 'effect', 'reviewOf', 'workspaceInput', 'adapter', 'testDbRead', 'role', 'tier', 'engine', 'model', 'effort', 'onFail', 'env', 'args', 'agentPrompt', 'assets', 'testEnvironment', 'writeVia', 'browserTargets', 'connector', 'mentionReason'], 'step');
     const id = identifier(row.id, 'step id'); if (ids.includes(id)) throw new Error('Duplicate step id');
     const kind = text(row.kind, 'kind') as FlowStep['kind']; if (!['check', 'agent', 'approval', 'manual'].includes(kind)) throw new Error('Unknown step kind');
     const effect = text(row.effect, 'effect') as FlowStep['effect']; if (!['read-only', 'code', 'external-write', 'production'].includes(effect)) throw new Error('Unknown effect');
@@ -80,10 +81,14 @@ export function validateDefinition(value: unknown, tierMax?: RoleTierMax): FlowD
       if (hash !== undefined && (!/^[a-f0-9]{64}$/.test(hash) || !['script', 'query'].includes(kind))) throw new Error('action hash: the sha256 of a script or query');
       action = { kind, ref: identifier(a.ref, 'action ref'), ...(hash ? { hash } : {}) };
     }
-    if (kind === 'check' && !action) throw new Error('Checks require an explicit action reference');
+    const connector = row.connector === undefined ? undefined : validateConnector(row.connector, inputs);
+    if (connector && (kind !== 'check' || action || row.adapter || row.writeVia || row.testDbRead || row.testEnvironment || !['read-only', 'external-write'].includes(effect))) throw new Error('Connector calls are non-production check steps without another execution route');
+    if (connector && (evidence.length !== 1 || evidence[0] !== 'connector')) throw new Error('Connector calls certify only connector evidence; use a later check/agent for independent verification');
+    if (kind === 'check' && !action && !connector) throw new Error('Checks require an explicit action reference');
     if (action?.kind === 'builtin' && (kind !== 'check' || effect !== 'read-only' || !BUILTIN_CHECKS.includes(action.ref as typeof BUILTIN_CHECKS[number]))) throw new Error('Unknown or unsafe builtin');
     if (action?.kind === 'builtin' && evidence.some(label => label !== 'metadata')) throw new Error('Builtin checks can certify metadata evidence only');
     if (row.adapter !== undefined && (kind !== 'agent' || action || !((row.adapter === DEVOPS_WRITE_ADAPTER && effect === 'external-write') || (row.adapter === TEST_DB_READ_ADAPTER && effect === 'read-only')))) throw new Error('Adapters require an agent step without action: devops-write is external-write; test-db-read is read-only');
+    if (row.mentionReason !== undefined && (row.mentionReason !== 'analysis' || kind !== 'agent' || row.adapter !== DEVOPS_WRITE_ADAPTER || effect !== 'external-write')) throw new Error('mentionReason analysis requires an agent with the devops-write adapter');
     if (row.testDbRead !== undefined && (row.testDbRead !== true || kind !== 'agent' || action || !(effect === 'read-only' || (effect === 'external-write' && row.adapter === DEVOPS_WRITE_ADAPTER)))) throw new Error('testDbRead requires a read-only agent or a DevOps write agent, without action');
     const browserTargets = row.browserTargets === undefined ? undefined : browserOrigins(row.browserTargets);
     if (row.writeVia !== undefined || browserTargets) {
@@ -132,8 +137,8 @@ export function validateDefinition(value: unknown, tierMax?: RoleTierMax): FlowD
     }
     if (row.testEnvironment !== undefined && (kind !== 'agent' || effect === 'production')) throw new Error('testEnvironment requires a non-production agent step');
     ids.push(id);
-    return { ...(browserTargets ? { writeVia: 'browser' as const, browserTargets } : {}), ...(row.testEnvironment === undefined ? {} : { testEnvironment: identifier(row.testEnvironment, 'test environment') }), ...(row.agentPrompt === undefined ? {} : { agentPrompt: text(row.agentPrompt, 'agentPrompt', 64000) }), ...(row.assets === undefined ? {} : { assets: strings(row.assets, 'assets', 50, 80).map(v => identifier(v, 'asset id')) }), id, title: text(row.title, 'step title', 300), kind, instructions: text(row.instructions, 'instructions', 16000), inputs,
-      ...(action ? { action } : {}), ...(workspaceInput ? { workspaceInput } : {}), evidence, timeoutMs: integer(row.timeoutMs, 'timeoutMs', 1000, 86_400_000), maxAttempts: integer(row.maxAttempts, 'maxAttempts', 1, 5), effect, ...(reviewOf ? { reviewOf } : {}), ...(row.adapter ? { adapter: row.adapter as FlowStep['adapter'] } : {}), ...(row.testDbRead === true ? { testDbRead: true as const } : {}), ...(role ? { role } : {}), ...(tier ? { tier } : {}),
+    return { ...(connector ? { connector } : {}), ...(browserTargets ? { writeVia: 'browser' as const, browserTargets } : {}), ...(row.testEnvironment === undefined ? {} : { testEnvironment: identifier(row.testEnvironment, 'test environment') }), ...(row.agentPrompt === undefined ? {} : { agentPrompt: text(row.agentPrompt, 'agentPrompt', 64000) }), ...(row.assets === undefined ? {} : { assets: strings(row.assets, 'assets', 50, 80).map(v => identifier(v, 'asset id')) }), id, title: text(row.title, 'step title', 300), kind, instructions: text(row.instructions, 'instructions', 16000), inputs,
+      ...(action ? { action } : {}), ...(workspaceInput ? { workspaceInput } : {}), evidence, timeoutMs: integer(row.timeoutMs, 'timeoutMs', 1000, 86_400_000), maxAttempts: integer(row.maxAttempts, 'maxAttempts', 1, 5), effect, ...(reviewOf ? { reviewOf } : {}), ...(row.mentionReason === 'analysis' ? { mentionReason: 'analysis' as const } : {}), ...(row.adapter ? { adapter: row.adapter as FlowStep['adapter'] } : {}), ...(row.testDbRead === true ? { testDbRead: true as const } : {}), ...(role ? { role } : {}), ...(tier ? { tier } : {}),
       ...(engine ? { engine } : {}), ...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(onFail ? { onFail } : {}), ...(env ? { env } : {}), ...(args ? { args } : {}) };
   });
   const pack = raw.package === undefined ? undefined : validatePackage(raw.package);

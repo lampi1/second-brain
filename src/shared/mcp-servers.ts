@@ -25,6 +25,8 @@ export interface McpServerDef {
   importedFrom?: McpImportSource;
   /** off: no chat gets it, the test still works */
   enabled: boolean;
+  /** User confirmation: this connector account and its targets are restricted to non-production routine work. */
+  routineTest?: true;
 }
 export type McpImportSource = 'claude' | 'cursor' | 'codex';
 export interface McpToolInfo { name: string; description: string; /** the server's own readOnlyHint; unknown = writes */ readOnly: boolean }

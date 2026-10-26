@@ -6,6 +6,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Fixed
+- Routines compose existing browser, pinned script/query and registered MCP connector capabilities, with preflight
+  before activation and on-demand grants independent of scheduling. Durable receipts prevent duplicate unknown
+  effects; analysis mentions are opt-in and limited to one comment per run (ADR 0166).
 - Routine branch publication now uses native incremental Git push from an isolated host repository, so existing large
   history does not trip a full-bundle limit. Partial restarts keep their host-owned branch; proven pre-dispatch and
   HTTP 401/403/412 refusals remain retryable, while uncertain or partial effects still require reconciliation.

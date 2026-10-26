@@ -1,5 +1,6 @@
 // Complete flow definitions and host-recorded receipts shared by the catalog and QuestionsWindow; read only, except the
 // catalog's step tier menu (`edit`), which only proposes a new revision.
+import { FlowConnectorDetails } from './FlowExecutionDetails';
 import type { FlowDefinition as Definition, FlowRun, FlowStep } from '@shared/flows';
 import { openChatRef } from '../actions';
 import { t, locale } from '../i18n';
@@ -69,6 +70,7 @@ export function FlowDefinition({ definition, run, edit, onNavigate }: { definiti
             {step.testEnvironment && <p>{t('flows.testEnvironment')}: <strong>{step.testEnvironment}</strong></p>}
             {step.testDbRead && <p>{t('flows.testDbRead')}</p>}
             <FlowBrowserDetails step={step} run={run} onNavigate={onNavigate} />
+        <FlowConnectorDetails step={step} run={run} />
             {step.adapter && <p><code>{step.adapter}</code></p>}
             {step.action && <p><code>{step.action.kind}: {step.action.ref}</code></p>}
             <details><summary>{t('flows.constraints')}</summary><dl className="flow-facts"><dt>{t('flows.inputs')}</dt><dd>{step.inputs.join(' · ') || '—'}</dd>{step.workspaceInput && <><dt>{t('flows.workspaceInput')}</dt><dd>{step.workspaceInput}</dd></>}<dt>{t('flows.effect')}</dt><dd>{step.effect}</dd><dt>{t('flows.timeout')}</dt><dd>{step.timeoutMs} ms</dd><dt>{t('flows.attempts')}</dt><dd>{state ? `${state.attempts} / ` : ''}{step.maxAttempts}</dd>{step.reviewOf && <><dt>{t('flows.reviewOf')}</dt><dd>{step.reviewOf}</dd></>}</dl></details>

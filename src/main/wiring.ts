@@ -494,7 +494,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // Claude <-> Cursor rule, so a local process may not take the Orchestrator's identity
   const orchestratorTokens = new EndpointTokens();
   // the user's MCP servers (ADR 0086): reached by every chat through the app's gateway, tokens only in main
-  const mcpServers: McpServersService = new McpServersService({ userData: ctx.userData, cipher: safeStorageCipher(safeStorage), mcp, context: (id): ChatMcpContext | null => manager.mcpContext(id), emit: st => ctx.emitter.emit('mcpservers:changed', st) });
+  const mcpServers: McpServersService = new McpServersService({ routinePolicy: role => { const p = agents.list().profiles.find(p => p.id === role); return p ? { tools: p.tools ?? null, ceiling: p.permissionCeiling ?? null } : { tools: { allow: [] }, ceiling: 'plan' }; }, userData: ctx.userData, cipher: safeStorageCipher(safeStorage), mcp, context: (id): ChatMcpContext | null => manager.mcpContext(id), emit: st => ctx.emitter.emit('mcpservers:changed', st) });
   const coldTest = process.env.SB_TEST && process.env.SB_COLD_MS ? process.env.SB_COLD_MS.split(',').map(Number) as [number, number, number] : null;
   // rules on the chats' replies, checked at every turn end so they hold with any model (ADR 0063)
   const replyRules = new ReplyRules({ send: (chatId, text) => manager.send(chatId, text, undefined, false, 'App', false, { kind: 'app' }) });
@@ -721,7 +721,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const autoCloseTimer = setInterval(() => { void autoCloseService.tick().catch(e => log.warn('chats', 'automatic archive suspended', { cause: errText(e) })); }, 1000);
   autoCloseTimer.unref();
   agentPacks.learning.evidenceRuns = () => manager.runs.list();
-  const flows = flowsRef = createFlowRuntime({ userData: ctx.userData, testDbRead: { env: testDbCredential }, brainRoot: () => brain.info().brainRoot,
+  const flows = flowsRef = createFlowRuntime({ connectors: mcpServers.routines, browserEngineAllowed: id => engineOf(id as Harness)?.kind === 'claude', userData: ctx.userData, testDbRead: { env: testDbCredential }, brainRoot: () => brain.info().brainRoot,
     chats: () => chats.list(), stopChat: chatId => chats.stop(chatId), changed: snapshot => ctx.emitter.emit('flows:changed', snapshot),
     createWorker: createFlowWorker({ catalog: agents, brain, chats: () => manager.list(), create: (request, sealed, routine) => {
       if (!sealed) return manager.create(request, 'app', undefined, {}, { routine });

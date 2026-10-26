@@ -1,5 +1,6 @@
 // Versioned reusable flow contracts shared by the host, Orchestrator tools and the decision UI.
 // Definitions describe work; only host evidence and exact user decisions advance execution.
+import type { FlowConnectorCall, FlowConnectorReceipt } from './flow-connector';
 import type { FlowAutomationSnapshot, FlowAutomationConfig } from './flow-automation';
 import type { AgentAvatar } from './agents';
 import type { ModelTier, WorkRoleId } from './roles';
@@ -11,11 +12,14 @@ export interface FlowStep {
   agentPrompt?: string;
   /** Package asset ids this step may read; their exact contents ship with this version. */
   assets?: string[];
+  connector?: FlowConnectorCall;
   inputs: string[]; action?: { kind: 'builtin' | 'script' | 'query' | 'action'; ref: string; hash?: string };
   evidence: string[]; timeoutMs: number; maxAttempts: number;
   effect: 'read-only' | 'code' | 'external-write' | 'production'; reviewOf?: string; workspaceInput?: string;
   /** A host-controlled adapter, authorized by the exact automatic-flow grant. */
   adapter?: 'devops-write' | 'test-db-read';
+  /** Opt in to one analysis comment per run mentioning only identities from the approved grant. */
+  mentionReason?: 'analysis';
   /** Exact-version approval for this step only; never a production grant. */
   writeVia?: 'browser'; browserTargets?: string[];
   /** Explicit test DB read capability; may accompany a DevOps write adapter, with both grants required. */
@@ -106,6 +110,7 @@ export interface FlowRun {
   createdAt: number; updatedAt: number;
   testDbEvidence?: FlowTestDbEvidence[];
   /** Host dispatch observations plus explicitly agent-reported effects; no inference of remote atomicity. */
+  connectorReceipts?: FlowConnectorReceipt[];
   browserWrites?: { stepId: string; chatRunId: string; taskVersion: number; at: number; dispatched: number; outcome: 'pending' | 'done' | 'partial' | 'not-done'; reportId?: string; evidence: string[] }[];
   /** Host event timeline; never model-invented execution or hidden chain of thought. */
   /** Historical exact approval; never used as live execution authority. */

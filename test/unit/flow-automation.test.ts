@@ -46,7 +46,7 @@ describe('automatic flow authorization and persistence', () => {
     const { auto, flow } = setup();
     for (const value of [{ ...config(), flowVersion: 2 }, { ...config(), scope: {} }, { ...devops(), inputs: { 'work-item-id': 'spoof' } }, { ...devops(), scope: { project: 'Project', areaPath: 'Team/Sub' } }, { ...config(), trigger: { kind: 'shell', everyMinutes: 1 } }]) expect(() => auto.propose({ config: value as FlowAutomationConfig, expectedRevision: 0 }, 'orch')).toThrow();
     const def = definition('unsafe'); def.steps[0]!.effect = 'production'; flow.propose({ definition: def, expectedRevision: 0 }); flow.decideDefinition({ id: 'unsafe', expectedRevision: 1, answer: 'yes' });
-    expect(() => auto.propose({ config: config('unsafe'), expectedRevision: 0 }, 'orch')).toThrow('unsupported');
+    expect(auto.propose({ config: config('unsafe'), expectedRevision: 0 }, 'orch').status).toBe('proposed'); // manual production stays a user gate, never autonomous
   });
   it('requires all step inputs and workspace before proposal and activation', () => {
     const { auto, flow } = setup(); const def = definition('required'); def.steps[0]!.inputs = ['workspace', 'target']; def.steps[0]!.workspaceInput = 'workspace';

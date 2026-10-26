@@ -4,6 +4,8 @@
 // prod step's «Esegui», which only the user's click runs) needs the user. One runner per store (lock.ts).
 // Host report resolution uses canonical agent_report records, never arbitrary assistant text.
 import fs from 'node:fs';
+import type { RoutineConnectors } from '../mcp-servers/routine';
+import { connectorArguments } from './connector-call';
 import { RoutineWorkbench } from './workbench';
 import { repeatedFailure } from './progress';
 import { ComponentService } from '../components/service';
@@ -15,7 +17,7 @@ import { APP_OWNER, type FlowAgentBinding, type FlowCancel, type FlowDecision, t
 import type { Effort } from '../../shared/contract';
 import { HOLD, healable as isHealable, roleOf } from '../../shared/routine';
 import type { ModelTier, WorkRoleId } from '../../shared/roles';
-import { log } from '../log';
+import { log, redact } from '../log';
 import { workerWritePolicy } from './worker-policy';
 import { assertLatestBranch, branchLineage } from './branch-lineage';
 import { runBranch } from './git-push';
@@ -55,6 +57,8 @@ export interface FlowRuntimeOptions {
   /** Test DB credentials stay in the host; tests inject only the bounded driver. */
   testDbRead?: { driver?: TestDbDriver; env?: (name: 'SQLCMD_TEST_RO_USER' | 'SQLCMD_TEST_RO_PASSWORD') => string | undefined };
   /** The work roles as the catalog and the routing table resolve them now (wiring.ts); shown per agent step, tierMax checked on propose. */
+  connectors?: Pick<RoutineConnectors, 'catalog' | 'inspect' | 'check' | 'execute'>;
+  browserEngineAllowed?: (id: string) => boolean;
   freezeRole?: (step: FlowStep) => Pick<FlowStep, 'agentPrompt' | 'engine' | 'model' | 'tier' | 'effort'>;
   roles?(): Partial<Record<WorkRoleId, FlowRoleInfo>>;
   /** The engines a step may run on, with their models, for the per-step picker (wiring.ts). */
@@ -158,7 +162,9 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
       // Read live from the automation ledger: a paused, replaced or rejected rule withdraws the grant at once.
       ...(options.roles ? { tierMax: (role: WorkRoleId) => roles()?.[role]?.tierMax } : {}),
       freezeRole: options.freezeRole,
+      validateConnector: options.connectors ? c => options.connectors!.check(c) : undefined,
       validateModels: definition => {
+        for (const step of definition.steps.filter(browserWriteStep)) { const engine = step.engine ?? roles()?.[roleOf(step)]?.engine; if (engine && options.browserEngineAllowed && !options.browserEngineAllowed(engine)) throw new Error(`${step.id}: browser writes require a Claude engine. Choose an available Claude model; no app code change is needed.`); }
         if (!definition.package) return;
         const engines = options.engines?.();
         if (!engines) return; // Unit/injected hosts can supply their own catalog; the product always supplies one.
@@ -272,7 +278,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   const healable = (run: FlowRun, _spec?: FlowStep): boolean => isHealable(run, service().snapshot().versions.find(version => version.definition.id === run.flowId && version.version === run.flowVersion)?.definition);
   const heal = (flow: FlowService, run: FlowRun, spec: FlowStep): boolean => {
     const step = run.steps[run.currentStep]!;
-    if (!healable(run, spec) || interrupting.has(run.id)) return false;
+    if (!healable(run, spec) || commands.has(run.id) || interrupting.has(run.id)) return false;
     // Confirm interruption before either a new attempt or a no-progress hold: a timed-out worker may still write.
     const stale = step.chatId ? options.chats().find(chat => chat.id === step.chatId && !chat.closedAt && ['running', 'starting', 'waiting'].includes(chat.state)) : undefined;
     if (stale) { if (!options.stopChat) return false; void Promise.resolve(options.stopChat(stale.id)).catch(() => {}); return false; }
@@ -365,6 +371,29 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
       if (!step || !spec) return;
       await reconcileEnvironment(run, flow);
       if (run.status === 'blocked') { if (heal(flow, run, spec)) continue; return; }
+      if (spec.connector) {
+        if (run.status !== 'active' || commands.has(run.id)) return;
+        if (step.status !== 'ready') return;
+        if (!options.connectors) { flow.blockStep(run.id, run.revision, step.stepId, `${HOLD}Connector host unavailable`); return; }
+        const receipt = flow.beginConnector(run.id, run.revision, step.stepId), active = requestSignal(run.id, AbortSignal.timeout(spec.timeoutMs));
+        commands.add(run.id);
+        const authorize = () => {
+          const live = flow.status(run.id, run.ownerOrchestratorId), currentStep = live.steps[live.currentStep];
+          if (!valid() || active.signal.aborted || live.paused || live.status !== 'active' || currentStep?.stepId !== spec.id || currentStep.status !== 'running' || live.definitionDigest !== run.definitionDigest || run.subjectKey.startsWith('auto:') && !automation().executionAllowed(live)) throw new Error('Routine connector authorization is no longer active');
+        };
+        void (async () => {
+          try {
+            authorize();
+            const args = connectorArguments(spec.connector!.arguments, spec.inputs, run.inputs);
+            const result = await options.connectors!.execute(spec.connector!, args, spec.effect === 'read-only', active.signal, authorize, () => flow.connectorDispatched(run.id, receipt.id));
+            flow.finishConnector(run.id, receipt.id, result.outcome, result.summary);
+          } catch (error) {
+            const dispatched = flow.status(run.id, run.ownerOrchestratorId).connectorReceipts?.find(r => r.id === receipt.id)?.dispatched;
+            flow.finishConnector(run.id, receipt.id, dispatched ? 'unknown' : 'not-done', dispatched ? 'Connector call interrupted or refused after dispatch; inspect remote effects before retrying.' : `Connector call not sent: ${redact(error instanceof Error ? error.message : 'configuration unavailable').slice(0, 1000)}. Use app_flow_connectors to inspect configuration.`);
+          }
+        })().catch(() => { /* Durable pending receipt is recovered as unknown after an app restart. */ }).finally(() => { commands.delete(run.id); active.done(); void pumpRun(run.id, contextKey); });
+        return;
+      }
       if (commandStep(spec)) {
         if (spec.env === 'prod') {
           // never launched here: the exact command waits for the user's «Esegui» (runUserCommand)
@@ -388,6 +417,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
           continue;
         }
         if (step.status !== 'ready') return;
+        if (run.subjectKey.startsWith('auto:') && !automation().executionAllowed(run)) { flow.blockChanged(run.id, run.revision, step.stepId, `${HOLD}Execution configuration is paused or no longer approved.`); return; }
         const resolved = resolveFor(run, spec, context);
         if (resolved.problems.length) { flow.blockChanged(run.id, run.revision, step.stepId, `${HOLD}${resolved.problems.join('; ')}`); continue; }
         const receipt = flow.beginCommand(run.id, run.revision, step.stepId, { stepId: step.stepId, kind: resolved.kind, ref: resolved.ref, command: resolved.command, args: resolved.values, sha256: resolved.sha256, env: 'test', by: 'runner' });
@@ -545,6 +575,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   const confirmStopped = async (run: FlowRun, context: { key: string; root: string }): Promise<void> => {
     if (run.status === 'cancelled' && run.cancellation?.interruption === 'pending') {
       abortRequests(run.id); await interrupt(run, context.root);
+      if (commands.has(run.id) || activeRequests.has(run.id)) return;
       instances.get(context.key)!.confirmInterruption(run.id, run.cancellation.expectedRevision);
     }
   };
@@ -580,6 +611,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     interrupting.add(source.id);
     try {
       abortRequests(source.id); await interrupt(source, context.root);
+      if (commands.has(source.id) || activeRequests.has(source.id)) throw new Error('Host operation is still stopping; wait for its receipt before restarting');
       if (stopped || current().key !== context.key) throw new Error('Brain context changed during restart');
       const run = source.subjectKey.startsWith('auto:') ? automation().restart(input) : flow.restart(input);
       const cancelled = flow.status(source.id, source.ownerOrchestratorId);
@@ -691,7 +723,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
       assertPackageBinding(latest, spec, { chatId, chatRunId: bound.chatRunId!, taskVersion: bound.taskVersion!, launched: launchOf(live) });
       const fresh = automation().grantFor(latest); if (!fresh || JSON.stringify(fresh) !== JSON.stringify(granted)) throw new Error('DevOps write grant changed');
     };
-    try { return await writer.execute({ runId: run.id, branchRunIds: branchLineage(run, snap.runs), ...granted, workspace: spec.workspaceInput ? run.inputs[spec.workspaceInput] : undefined, workspaceInput: spec.workspaceInput, authorize, evidenceRoot: path.join(options.userData, 'flows', context.key, 'evidence', run.id) }, request, active.signal); }
+    try { return await writer.execute({ runId: run.id, branchRunIds: branchLineage(run, snap.runs), ...granted, workspace: spec.workspaceInput ? run.inputs[spec.workspaceInput] : undefined, workspaceInput: spec.workspaceInput, authorize, ...(spec.mentionReason ? { mentionReason: spec.mentionReason } : {}), evidenceRoot: path.join(options.userData, 'flows', context.key, 'evidence', run.id) }, request, active.signal); }
     finally { active.done(); }
   };
   const dossier = (runId: string, ownerId: string) => {
@@ -848,11 +880,11 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   const ITEM_URL = /^https:\/\/(?:dev\.azure\.com\/([A-Za-z0-9][A-Za-z0-9-]{0,49})|([A-Za-z0-9][A-Za-z0-9-]{0,49})\.visualstudio\.com)\/([^/?#]+)\/_workitems\/edit\/(\d{1,10})(?:[/?#].*)?$/;
   /** A pasted work item (an id, or its link) resolved against the routine's trigger. */
   const itemTarget = (flowId: string, text: string): { organization: string; project: string; id: number; rule: ReturnType<FlowAutomationService['ruleOf']> } => {
-    const rule = automation().ruleOf(flowId), trigger = rule?.config.trigger.kind === 'devops' ? rule.config.trigger : undefined, value = text.trim();
+    const rule = automation().ruleOf(flowId), trigger = rule?.config.trigger.kind === 'devops' ? rule.config.trigger : rule?.config.devopsWrite && rule.config.scope.project ? { organization: rule.config.devopsWrite.organization, project: rule.config.scope.project } : undefined, value = text.trim();
     const link = ITEM_URL.exec(value);
     if (link) return { organization: link[1] ?? link[2]!, project: decodeURIComponent(link[3]!), id: Number(link[4]), rule };
     if (/^#?\d{1,10}$/.test(value)) {
-      if (!trigger) throw new Error('Questa routine non ha un trigger DevOps: incolla il link completo del work item.');
+      if (!trigger) throw new Error('Questa routine non ha un progetto DevOps configurato: incolla il link completo del work item.');
       return { organization: trigger.organization, project: trigger.project, id: Number(value.replace('#', '')), rule };
     }
     throw new Error('Incolla il numero del work item o il suo link di Azure DevOps.');
@@ -860,6 +892,8 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   const previewItem = async (flowId: string, text: string, signal?: AbortSignal): Promise<FlowItemPreview> => {
     const target = itemTarget(flowId, text), item = await readItem(target.organization, target.project, target.id, signal);
     const trigger = target.rule?.config.trigger.kind === 'devops' ? target.rule.config.trigger : undefined, blocking: string[] = [];
+    const approved = target.rule?.config.devopsWrite;
+    if (approved && (approved.organization.toLowerCase() !== target.organization.toLowerCase() || !approved.projects.some(p => p.toLowerCase() === target.project.toLowerCase()) || target.rule!.config.scope.project?.toLowerCase() !== target.project.toLowerCase())) blocking.push('il work item è fuori dall’organizzazione/progetto approvati');
     const facts = { id: item.id, tags: item.tags, iterationPath: item.iterationPath, areaPath: item.areaPath, state: item.state, type: item.type };
     const why = trigger ? [...scopeMisses(trigger, facts), ...filterMisses(trigger, facts)] : [];
     const fold = (s: string) => s.normalize('NFKC').trim().toLowerCase();
@@ -887,6 +921,9 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
         const root = definition.package ? materializePackage(path.join(options.userData, 'flows', context.key, 'packages', snap.versions.find(v => v.definition.id === flowId && v.version === version)!.digest), definition.package) : context.root;
         const resolved = resolve(root, spec, fake, where.attachments, where.work);
         who = prod ? 'tu, con «Esegui»' : 'l’app'; command = resolved.command; problems.push(...resolved.problems);
+      } else if (spec.connector) {
+        who = `l’app · ${spec.connector.serverId}/${spec.connector.tool}`;
+        try { if (!options.connectors) throw new Error('Connector host unavailable'); options.connectors.check(spec.connector); connectorArguments(spec.connector.arguments, spec.inputs, fake.inputs); } catch (error) { problems.push(error instanceof Error ? error.message : 'Connector configuration unavailable'); }
       } else if (spec.kind === 'agent') {
         const role = roleOf(spec), info = r[role];
         who = `${info?.name ?? role}${spec.engine ? ` · ${spec.engine}` : ''}${spec.model ? ` · ${spec.model}` : info?.models?.[spec.tier ?? info.tier] ? ` · ${info.models[spec.tier ?? info.tier]}` : ''}`;
@@ -929,10 +966,9 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     if (input.dryRun) return dryRun(input.flowId, inputs, attachments);
     // a paused trigger grants nothing: no start through its rule, with or without a work item
     if (rule && (rule.status !== 'enabled' || automation().globallyPaused)) throw new FlowStartBlocked('trigger-paused', 'Il trigger di questa routine è in pausa: riattivalo per avviarla (in pausa non concede permessi).', input.flowId);
-    if (rule && preview) return automation().startManual(rule.id, { key: `${preview.url}:${preview.revision}`, title: title!, inputs }, attachments);
-    if (rule && Object.keys(params.values).some(key => Object.hasOwn(rule.config.inputs, key))) throw new Error('Un parametro ha lo stesso nome di un input della routine');
-    return flow.start({ flowId: input.flowId, flowVersion: version, subjectKey: `item:${randomUUID()}`, scope: rule?.config.scope ?? definition.scope,
-      inputs: { ...(rule?.config.inputs ?? {}), ...inputs }, title: title ?? definition.title, ...(attachments.length ? { attachments } : {}) }, APP_OWNER);
+    if (rule) return automation().startManual(rule.id, { key: preview ? `${preview.url}:${preview.revision}` : `request:${randomUUID()}`, title: title ?? definition.title, inputs }, attachments);
+    return flow.start({ flowId: input.flowId, flowVersion: version, subjectKey: `item:${randomUUID()}`, scope: definition.scope,
+      inputs, title: title ?? definition.title, ...(attachments.length ? { attachments } : {}) }, APP_OWNER);
   };
   /** «Pausa» / «Riprendi» on one run: a paused run starts nothing new; a resumed one continues where it stopped. */
   const pauseRun = (runId: string, expectedRevision: number, paused: boolean): FlowRun => {
@@ -993,7 +1029,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   const editStepModel = (input: FlowStepModelEdit) => { const version = service().editStepModel(input); automation().carry(input.flowId, version.version); return snapshot(); };
   /** The user approved a script/query's new content: the step pins the new hash; the trigger follows the new version. */
   const pinHash = (input: { flowId: string; version: number; stepId: string; hash: string }) => { const version = service().pinHash(input); automation().carry(input.flowId, version.version); return snapshot(); };
-  return { browserPolicy, workbench, components, service, automation, snapshot, tick, stop, manualBind, manualReport, cancel, proposeCancel, decideCancel, decide, restart, proposeRestart, decideRestart, reportReady, resolveBinding, hint, devopsWrite, testDbRead, output, downgrade, intake, verdict, stepHistory, dossier, deploymentTargets: () => deployments.targets(), deploymentTargetFile: () => path.join(options.userData, 'test-deploy-targets.json'), modelCatalog: () => ({ engines: options.engines?.() ?? [], roles: roles() ?? {} }), inspectTarget: (value: unknown) => writerFor(current().key).inspectTarget(value),
+  return { connectors: options.connectors, browserPolicy, workbench, components, service, automation, snapshot, tick, stop, manualBind, manualReport, cancel, proposeCancel, decideCancel, decide, restart, proposeRestart, decideRestart, reportReady, resolveBinding, hint, devopsWrite, testDbRead, output, downgrade, intake, verdict, stepHistory, dossier, deploymentTargets: () => deployments.targets(), deploymentTargetFile: () => path.join(options.userData, 'test-deploy-targets.json'), modelCatalog: () => ({ engines: options.engines?.() ?? [], roles: roles() ?? {} }), inspectTarget: (value: unknown) => writerFor(current().key).inspectTarget(value),
     previewItem, dryRun, startItem, pauseRun, runUserCommand, message, overview, editStepModel, pinHash };
 }
 export type FlowRuntime = ReturnType<typeof createFlowRuntime>;

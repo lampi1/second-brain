@@ -94,7 +94,7 @@ describe('host routine engine', () => {
     w.report('worker-2'); await w.runtime.tick(); expect(w.flow.status(source.id, 'owner').status).toBe('completed');
   });
   it.each([{ effect: 'external-write' as const }, { effect: 'production' as const }])('does not auto-launch an unsupported action %j', async extra => {
-    const w = world([step('first', extra)]), source = w.start(); await w.runtime.tick(); expect(w.flow.status(source.id, 'owner').status).toBe('blocked'); expect(w.create).not.toHaveBeenCalled();
+    expect(() => world([step('first', extra)])).toThrow('Choose an agent'); // rejected before activation, never launches
   });
   it('runs a step without a role as the role its effect implies (read-only: Scout), without waking anyone', async () => {
     const w = world([step('first', { role: undefined })]), source = w.start(); await w.runtime.tick();

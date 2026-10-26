@@ -36,6 +36,7 @@ export function dossierMarkdown(d: RoutineDossier): string {
   block('Original approved automation', d.approvedAutomation ?? null);
   block('Run inputs', run.inputs);
   block('Browser writes (agent-reported outcomes, host dispatch counts)', run.browserWrites ?? []);
+  block('Connector receipts', run.connectorReceipts ?? []);
   block('Command receipts', run.receipts ?? []);
   block('Read-only test database receipts', run.testDbEvidence ?? []);
   block('Work item history delivery', run.history ?? []);
