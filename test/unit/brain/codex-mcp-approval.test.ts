@@ -28,6 +28,7 @@ describe('native Codex app tool approval', () => {
       'mcp_servers.second-brain.tools.maintenance_pack.approval_mode=approve',
       'mcp_servers.second-brain.tools.maintenance_propose.approval_mode=approve',
       'mcp_servers.second-brain.tools.flow_devops_write.approval_mode=approve',
+      'mcp_servers.second-brain.tools.flow_pr_build_status.approval_mode=approve',
       'mcp_servers.second-brain.tools.flow_test_db_query.approval_mode=approve',
       'mcp_servers.second-brain.tools.flow_output.approval_mode=approve',
       'mcp_servers.second-brain.tools.flow_downgrade.approval_mode=approve',

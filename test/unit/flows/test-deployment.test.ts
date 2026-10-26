@@ -66,3 +66,10 @@ it('rechecks authority and node membership before release creation', async () =>
   const revoked = setup(); revoked.set({ revoke: true }); await expect(revoked.coordinator.execute('deploy-test', revoked.target, 40, revoked.ports)).rejects.toThrow('revoked'); expect(revoked.call).not.toHaveBeenCalled();
   const added = setup(); added.set({ extraNode: true }); await expect(added.coordinator.execute('deploy-test', added.target, 40, added.ports)).rejects.toThrow('only the exact'); expect(added.call.mock.calls.some(c => c[0] === 'POST')).toBe(false);
 });
+it('rechecks a terminal deployment-group release before allowing another build and retains a restarted release lease', async () => {
+  const s = setup(); await s.coordinator.execute('deploy-test', s.target, 40, s.ports); s.set({ status: 'succeeded' }); await s.coordinator.execute('test-deploy-status', s.target, undefined, s.ports);
+  s.set({ status: 'inProgress' });
+  await expect(s.coordinator.execute('deploy-test', s.target, 41, s.ports)).rejects.toThrow(/active|uncertain/);
+  await expect(s.coordinator.execute('test-deploy-status', s.target, undefined, s.ports)).resolves.toMatchObject({ status: 'inProgress', terminal: false, success: false });
+  expect(await s.coordinator.settle('run-a', () => {})).toBe(false); expect(s.call.mock.calls.filter(([m]) => m === 'POST')).toHaveLength(1);
+});

@@ -91,3 +91,13 @@ it('retains environment ownership if a waiting worker does not stop', async () =
   await s.runtime.cancel({ runId: s.run.id, expectedRevision: s.flow.status(s.run.id, 'o').revision }); await s.runtime.tick();
   expect(s.stopChat).toHaveBeenCalledWith('worker'); expect(reconcile).not.toHaveBeenCalled(); s.runtime.stop();
 });
+it('exposes read-only PR status only through the same bound-step and grant checks', async () => {
+  const { runtime, request } = await setup();
+  const tool = devopsWriteTools((id, req, sig) => runtime.devopsWrite(id, req, sig)).find(t => t.name === 'flow_pr_build_status')!;
+  expect(tool.annotations?.readOnlyHint).toBe(true);
+  await expect(tool.run({ targetId: 'test' }, { params: { chatId: 'intruder' } } as never)).rejects.toThrow('adapter');
+  await expect(tool.run({ targetId: 'test' }, { params: { chatId: 'worker' } } as never)).rejects.toThrow('not enabled');
+  await expect(tool.run({ targetId: 'test', op: 'deploy-test' }, { params: { chatId: 'worker' } } as never)).rejects.toThrow();
+  await expect(tool.run({ targetId: 'test' }, { params: {} } as never)).rejects.toThrow('own endpoint');
+  expect(request).not.toHaveBeenCalled(); runtime.stop();
+});

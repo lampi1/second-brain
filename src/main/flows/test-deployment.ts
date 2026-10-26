@@ -53,7 +53,7 @@ export function releaseDefinitionFingerprint(value: unknown): string {
   }), artifacts: d.artifacts, variables: d.variables, variableGroups: d.variableGroups, processParameters: d.processParameters });
 }
 export const deploymentLeaseKey = (t: TestDeployTarget): string => t.kind === 'app-service' ? appServiceResourceId(t).toLowerCase() : `${t.organization.toLowerCase()}/${t.poolId}/${t.agentId}`;
-interface Deployment { runId: string; target: TestDeployTarget; buildId: number; commit: string; state: 'creating' | 'draft' | 'queued' | 'succeeded' | 'failed' | 'canceled'; releaseId?: number; environmentId?: number; token: string; released?: boolean; initiatingLease?: { stepId: string; at: number }; successfulDeploymentId?: number; evidenceConflict?: string }
+interface Deployment { runId: string; target: TestDeployTarget; buildId: number; buildNumber?: string; commit: string; state: 'creating' | 'draft' | 'queued' | 'succeeded' | 'failed' | 'canceled'; releaseId?: number; environmentId?: number; token: string; released?: boolean; initiatingLease?: { stepId: string; at: number }; successfulDeploymentId?: number; evidenceConflict?: string }
 interface State { schema: 1; deployments: Deployment[]; stepLeases?: { runId: string; stepId: string; target: TestDeployTarget; at: number; remoteSnapshot?: string; releasedAt?: number }[] }
 export interface DeploymentPorts {
   runId: string; authorize(): void;
@@ -73,7 +73,7 @@ export class TestDeploymentCoordinator {
       for (const d of owned) d.released = true; if (owned.length) this.save(state); return true; }); this.queue = job.catch(() => undefined); return job;
   }
   history(runId: string): unknown[] { const s = this.read(); return structuredClone([...s.deployments.filter(d => d.runId === runId), ...(s.stepLeases ?? []).filter(l => l.runId === runId)]); }
-  ownedTargets(runId: string): string[] { return this.read().deployments.filter(d => d.runId === runId && !d.released).map(d => d.target.id); }
+  ownedTargets(runId: string): string[] { return [...new Set(this.read().deployments.filter(d => d.runId === runId && !d.released).map(d => d.target.id))]; }
   targets(): TestDeployTarget[] { return readDeployTargets(this.targetsFile); }
   /** Called only once after acquiring the exclusive runner lock; prior-process step workers are interrupted. */
   async recoverStepLeases(): Promise<void> {
@@ -104,30 +104,48 @@ export class TestDeploymentCoordinator {
     const lease = this.read().stepLeases?.find(l => l.runId === runId && l.stepId === stepId && !l.releasedAt);
     if (!lease || lease.remoteSnapshot !== snapshot) throw new Error('Shared test environment changed during this step; its test evidence cannot be accepted');
   }
-  execute(op: 'deploy-test' | 'test-deploy-status' | 'cancel-test-deploy', target: TestDeployTarget, buildId: number | undefined, ports: DeploymentPorts): Promise<Record<string, unknown>> {
-    const job = this.queue.then(() => this.perform(op, target, buildId, ports)); this.queue = job.catch(() => undefined); return job;
+  execute(op: 'deploy-test' | 'test-deploy-status' | 'cancel-test-deploy', target: TestDeployTarget, buildId: number | undefined, ports: DeploymentPorts, releaseId?: number): Promise<Record<string, unknown>> {
+    const job = this.queue.then(() => this.perform(op, target, buildId, ports, releaseId)); this.queue = job.catch(() => undefined); return job;
   }
-  private async perform(op: string, target: TestDeployTarget, buildId: number | undefined, p: DeploymentPorts): Promise<Record<string, unknown>> {
+  private async perform(op: string, target: TestDeployTarget, buildId: number | undefined, p: DeploymentPorts, releaseId?: number): Promise<Record<string, unknown>> {
     const authorize = () => { p.authorize(); const local = this.targets().find(t => t.id === target.id); if (!local || deploymentHash(local) !== deploymentHash(target)) throw new Error('Test target changed or is not locally configured: propose and approve its exact configuration again'); };
     authorize();
     const call = (method: string, url: string, body?: unknown) => { authorize(); return p.call(method, url, body); };
     const base = `https://dev.azure.com/${encodeURIComponent(target.organization)}/${target.projectId}`;
     const releaseBase = `https://vsrm.dev.azure.com/${encodeURIComponent(target.organization)}/${target.projectId}/_apis/release`;
-    const state = this.read(), own = state.deployments.find(d => d.runId === p.runId && d.target.id === target.id);
+    if (op === 'deploy-test') {
+      const previous = this.read().deployments.filter(d => d.runId === p.runId);
+      if (previous.some(d => deploymentHash(d.target) !== deploymentHash(target))) throw new Error('Further deployments must use the same exact approved target');
+      if (previous.some(d => !['succeeded', 'failed', 'canceled'].includes(d.state))) throw new Error('This run already requested an active or uncertain deployment. Read test-deploy-status before creating another.');
+      const last = previous.at(-1);
+      if (last) {
+        const receipt = await this.perform('test-deploy-status', target, undefined, p, last.releaseId);
+        if (!receipt.terminal) throw new Error('The previous deployment is active or uncertain again; wait before deploying');
+        // A human can restart any historical release. Check all active attempts, including deployment-group targets.
+        if (target.kind !== 'app-service') await testEnvironmentSnapshot(target, call);
+      }
+    }
+    const state = this.read(), history = state.deployments.filter(d => d.runId === p.runId), latest = history.filter(d => d.target.id === target.id).at(-1);
+    const own = releaseId === undefined ? latest : history.find(d => d.target.id === target.id && d.releaseId === releaseId);
+    const identity = (d: Deployment) => ({ targetId: target.id, releaseId: d.releaseId, environmentId: d.environmentId, buildId: d.buildId, buildNumber: d.buildNumber ?? null, sourceVersion: d.commit, latest: d === latest });
     if (op === 'test-deploy-status' || op === 'cancel-test-deploy') {
-      if (!own) throw new Error('This run has no deployment on this target');
+      if (!own) throw new Error('This run has no deployment on this target with that owned release id');
+      if (deploymentHash(own.target) !== deploymentHash(target)) throw new Error('Deployment target differs from the approved historical target');
       if (!own.releaseId || !own.environmentId) throw new Error('Release creation has an unknown outcome; the test lease remains held. Reconcile in Azure DevOps before any new release.');
       const release = await call('GET', `${releaseBase}/releases/${own.releaseId}?${API}`);
       const env = Array.isArray(release.environments) ? release.environments.map(v => object(v, 'release environment')).find(e => e.id === own.environmentId && e.definitionEnvironmentId === target.environmentId) : undefined;
       if (!env || object(release.releaseDefinition, 'release definition').id !== target.releaseDefinitionId) throw new Error('Deployment identity changed');
       const status = release.status === 'abandoned' ? 'canceled' : String(env.status);
-      if (op === 'cancel-test-deploy' && !['succeeded', 'failed', 'canceled', 'rejected', 'partiallySucceeded'].includes(status)) {
+      const terminal = ['succeeded', 'failed', 'canceled', 'rejected', 'partiallySucceeded'].includes(status);
+      own.state = terminal ? status === 'succeeded' ? 'succeeded' : status === 'canceled' ? 'canceled' : 'failed' : release.status === 'draft' ? 'draft' : 'queued';
+      if (!terminal) own.released = false;
+      this.save(state);
+      if (op === 'cancel-test-deploy' && !terminal) {
         if (release.status === 'draft') await call('PATCH', `${releaseBase}/releases/${own.releaseId}?${API}`, { status: 'abandoned', comment: 'Routine cleanup of its own draft test release' });
         else await call('PATCH', `${releaseBase}/releases/${own.releaseId}/environments/${own.environmentId}?${API}`, { status: 'canceled', comment: 'Routine cleanup of its own test deployment' });
-        return { targetId: target.id, releaseId: own.releaseId, status: 'cancellation-requested', terminal: false, success: false };
+        return { ...identity(own), status: 'cancellation-requested', terminal: false, success: false };
       }
-      if (['succeeded', 'failed', 'canceled', 'rejected', 'partiallySucceeded'].includes(status)) { own.state = status === 'succeeded' ? 'succeeded' : status === 'canceled' ? 'canceled' : 'failed'; this.save(state); }
-      if (status === 'succeeded' && (target.kind === 'app-service' || own.initiatingLease) && !own.evidenceConflict) {
+      if (own === latest && status === 'succeeded' && (target.kind === 'app-service' || own.initiatingLease) && !own.evidenceConflict) {
         try {
         const snapshot = await testEnvironmentSnapshot(target, call), observed: unknown[] = snapshot === 'empty' ? [] : JSON.parse(snapshot);
         if (observed[1] !== own.releaseId || observed[5] !== 1 || (own.successfulDeploymentId !== undefined && observed[0] !== own.successfulDeploymentId)) throw new Error('Another release or deployment attempt replaced this run deployment; test evidence is invalid');
@@ -141,11 +159,12 @@ export class TestDeploymentCoordinator {
         } catch (error) { own.evidenceConflict = String(error); }
         this.save(state);
       }
-      return { targetId: target.id, releaseId: own.releaseId, environmentId: own.environmentId, status, terminal: ['succeeded', 'failed', 'canceled'].includes(own.state), success: own.state === 'succeeded' && !own.evidenceConflict, ...(own.evidenceConflict ? { evidenceConflict: own.evidenceConflict } : {}) };
+      return { ...identity(own), status, terminal: ['succeeded', 'failed', 'canceled'].includes(own.state), success: own.state === 'succeeded' && !own.evidenceConflict, ...(own.evidenceConflict ? { evidenceConflict: own.evidenceConflict } : {}) };
     }
-    if (own) throw new Error('This run already requested a deployment. Read test-deploy-status; never create it again.');
+    if (history.some(d => deploymentHash(d.target) !== deploymentHash(target))) throw new Error('Further deployments must use the same exact approved target');
+    if (history.some(d => !['succeeded', 'failed', 'canceled'].includes(d.state))) throw new Error('This run already requested an active or uncertain deployment. Read test-deploy-status before creating another.');
     const leaseKey = deploymentLeaseKey;
-    if (state.stepLeases?.some(l => !l.releasedAt && leaseKey(l.target) === leaseKey(target) && l.runId !== p.runId) || state.deployments.some(d => leaseKey(d.target) === leaseKey(target) && !d.released)) throw new Error('The exact test node is leased by another deployment or an unresolved request');
+    if (state.stepLeases?.some(l => !l.releasedAt && leaseKey(l.target) === leaseKey(target) && l.runId !== p.runId) || state.deployments.some(d => leaseKey(d.target) === leaseKey(target) && !d.released && d.runId !== p.runId)) throw new Error('The exact test node is leased by another deployment or an unresolved request');
     if (!p.source || p.source.repositoryId !== target.repositoryId || !/^[a-f0-9]{40,64}$/i.test(p.source.commit)) throw new Error('Test deployment requires a verified source commit from this run’s own PR');
     if (buildId === undefined && p.source.pullRequestId) {
       const builds = await call('GET', `${base}/_apis/build/builds?definitions=${target.buildDefinitionId}&reasonFilter=pullRequest&statusFilter=completed&resultFilter=succeeded&branchName=${encodeURIComponent(p.source.branch)}&queryOrder=finishTimeDescending&$top=100&${API}`);
@@ -156,6 +175,7 @@ export class TestDeploymentCoordinator {
     const build = await call('GET', `${base}/_apis/build/builds/${pos(buildId)}?${API}`);
     if (p.source.pullRequestId && (p.source.branch !== `refs/pull/${p.source.pullRequestId}/merge` || build.reason !== 'pullRequest')) throw new Error('Expected this run PR merge build, not a branch build');
     if (build.id !== buildId || build.status !== 'completed' || build.result !== 'succeeded' || object(build.project, 'build project').id !== target.projectId || object(build.definition, 'build definition').id !== target.buildDefinitionId || String(object(build.repository, 'build repository').id).toLowerCase() !== target.repositoryId || build.sourceVersion !== p.source.commit || build.sourceBranch !== p.source.branch) throw new Error('Build is not the successful build of the run-owned PR verified commit');
+    if (history.some(d => d.buildId === buildId)) throw new Error('This run already deployed this build; read test-deploy-status with its releaseId');
     const definition = await call('GET', `${releaseBase}/definitions/${target.releaseDefinitionId}?${API}`);
     if (definition.id !== target.releaseDefinitionId || definition.revision !== target.definitionRevision || releaseDefinitionFingerprint(definition) !== target.definitionSha256) throw new Error('Release definition changed since the test target was approved');
     const environments = Array.isArray(definition.environments) ? definition.environments.map(v => object(v, 'environment')) : [];
@@ -186,9 +206,9 @@ export class TestDeploymentCoordinator {
     };
     if (target.kind === 'app-service') await testEnvironmentSnapshot(target, call);
     await verifyNode(); await p.verifySource?.(); authorize();
-    const latest = await call('GET', `${releaseBase}/definitions/${target.releaseDefinitionId}?${API}`);
-    if (releaseDefinitionFingerprint(latest) !== target.definitionSha256) throw new Error('Release definition changed before creation');
-    const entry: Deployment = { runId: p.runId, target, buildId: pos(buildId), commit: p.source.commit, state: 'creating', token: randomUUID() };
+    const liveDefinition = await call('GET', `${releaseBase}/definitions/${target.releaseDefinitionId}?${API}`);
+    if (releaseDefinitionFingerprint(liveDefinition) !== target.definitionSha256) throw new Error('Release definition changed before creation');
+    const entry: Deployment = { runId: p.runId, target, buildId: pos(buildId), ...(typeof build.buildNumber === 'string' ? { buildNumber: text(build.buildNumber, 'build number', 256) } : {}), commit: p.source.commit, state: 'creating', token: randomUUID() };
     const initiatingLease = state.stepLeases?.find(l => l.runId === p.runId && !l.releasedAt && deploymentLeaseKey(l.target) === deploymentLeaseKey(target));
     if (initiatingLease) entry.initiatingLease = { stepId: initiatingLease.stepId, at: initiatingLease.at };
     state.deployments.push(entry); this.save(state);
@@ -215,7 +235,7 @@ export class TestDeploymentCoordinator {
     if (target.kind === 'app-service') await testEnvironmentSnapshot(target, call, [entry.releaseId!]);
     await call('PATCH', `${releaseBase}/releases/${entry.releaseId}/environments/${entry.environmentId}?${API}`, { status: 'inProgress', comment: 'Approved routine exact test target' });
     entry.state = 'queued'; this.save(state);
-    return { targetId: target.id, releaseId: entry.releaseId, environmentId: entry.environmentId, status: 'queued', success: false, next: 'Poll test-deploy-status; queue acceptance is not successful deployment' };
+    return { ...identity(entry), latest: true, status: 'queued', success: false, next: 'Poll test-deploy-status; queue acceptance is not successful deployment' };
   }
   private read(): State { if (!fs.existsSync(this.stateFile)) return { schema: 1, deployments: [] }; const v = object(JSON.parse(fs.readFileSync(this.stateFile, 'utf8')), 'deployment ledger'); if (v.schema !== 1 || !Array.isArray(v.deployments) || v.deployments.length > 2000) throw new Error('Invalid deployment ledger'); return v as unknown as State; }
   private save(state: State): void { if (state.deployments.length > 2000) throw new Error('Deployment ledger limit reached'); fs.mkdirSync(path.dirname(this.stateFile), { recursive: true }); const tmp = `${this.stateFile}.${randomUUID()}.tmp`; const fd = fs.openSync(tmp, 'wx', 0o600); try { fs.writeFileSync(fd, JSON.stringify(state)); fs.fsyncSync(fd); } finally { fs.closeSync(fd); } renameRetrying(tmp, this.stateFile); }
