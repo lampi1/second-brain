@@ -1,7 +1,7 @@
 // A local stand-in for Air's login (used by the routine browser tests and the CLI demo test): /Account/Login shows the
 // AJAX local login form (Air's real markup) only with ?mode=local (like Air), its button posts the credentials with fetch, /home needs the
 // session cookie (else a redirect to /Account/Login?ReturnUrl=… that drops mode=local), /logout ends the session, /form
-// has a text input and a password input. With `{ portal: true }` it acts like an Air node behind its portal: a request
+// has a text input and a password input, /users sets a second user's password and has a hidden-checkbox toggle. With `{ portal: true }` it acts like an Air node behind its portal: a request
 // with no session (the bare root included) and /Account/Login without ?mode=local are redirected to a second server,
 // another origin, whose /Account/Login shows a login form the runtime must never fill. 127.0.0.1 only, random ports.
 import fs from 'node:fs';
@@ -14,6 +14,8 @@ export const AIR_LOGIN_FORM = fs.readFileSync(path.join(__dirname, 'fixtures', '
 
 export const FIXTURE_USER = 'qa.user';
 export const FIXTURE_PASSWORD = 'fixture-Pass-7781';
+/** a second user: signs in only with the password set for it on /users (none at start), like a tester set up by an admin */
+export const FIXTURE_USER2 = 'qa.tester';
 
 const page = (title: string, body: string) => `<!doctype html><html><head><title>${title}</title></head><body>${body}</body></html>`;
 
@@ -24,7 +26,8 @@ const listen = async (server: http.Server): Promise<string> => {
 const shut = (server: http.Server) => new Promise<void>(resolve => { server.closeAllConnections(); server.close(() => resolve()); });
 
 export async function startFixtureSite(opts: { portal?: boolean } = {}): Promise<{ origin: string; portalOrigin: string | null; logins: number; portalHits: number; close(): Promise<void> }> {
-  const sessions = new Set<string>();
+  const sessions = new Map<string, string>();
+  const passwords = new Map<string, string>([[FIXTURE_USER, FIXTURE_PASSWORD]]);
   const state = { logins: 0, portalHits: 0 };
   // the portal: another origin with its own login form (Email, Password, Access), like test.air.orisline.com
   const portal = opts.portal ? http.createServer((req, res) => {
@@ -53,9 +56,9 @@ export async function startFixtureSite(opts: { portal?: boolean } = {}): Promise
       req.on('data', c => { body += String(c); });
       req.on('end', () => {
         const { u, p } = JSON.parse(body || '{}') as { u?: string; p?: string };
-        if (u !== FIXTURE_USER || p !== FIXTURE_PASSWORD) { res.writeHead(401); res.end(); return; }
+        if (!u || !p || passwords.get(u) !== p) { res.writeHead(401); res.end(); return; }
         const id = Math.random().toString(36).slice(2);
-        sessions.add(id); state.logins++;
+        sessions.set(id, u); state.logins++;
         res.writeHead(200, { 'set-cookie': `sid=${id}; Path=/; HttpOnly` }); res.end('{}');
       });
       return;
@@ -63,7 +66,17 @@ export async function startFixtureSite(opts: { portal?: boolean } = {}): Promise
     if (url.pathname === '/logout') { if (sid) sessions.delete(sid); return html(200, page('Bye', '<p>signed out</p>')); }
     if (!signed && portalOrigin) return toPortal(res);
     if (!signed) { res.writeHead(302, { location: `/Account/Login?ReturnUrl=${encodeURIComponent(url.pathname)}` }); res.end(); return; }
-    if (url.pathname === '/home' || url.pathname === '/') return html(200, page('Home', `<h1>Agenda</h1><p>Welcome ${FIXTURE_USER} (debug: ${FIXTURE_PASSWORD})</p><a href="/form">Form</a>`));
+    if (url.pathname === '/home' || url.pathname === '/') return html(200, page('Home', `<h1>Agenda</h1><p>Welcome ${sessions.get(sid!)} (debug: ${FIXTURE_PASSWORD})</p><a href="/form">Form</a>`));
+    // an admin page: sets qa.tester's password (POST from its page script) and a toggle styled like Air's checkbox-slider
+    if (url.pathname === '/users/password' && req.method === 'POST') {
+      let body = '';
+      req.on('data', c => { body += String(c); });
+      req.on('end', () => { passwords.set(FIXTURE_USER2, String((JSON.parse(body || '{}') as { p?: string }).p ?? '')); res.writeHead(200); res.end('{}'); });
+      return;
+    }
+    if (url.pathname === '/users') return html(200, page('Users', `<style>.slider input { position: absolute; opacity: 0; width: 0; height: 0; } .slider span { display: inline-block; width: 30px; height: 14px; background: #ccc; }</style>
+      <label>Password of ${FIXTURE_USER2} <input type="password" id="up"></label><button onclick="fetch('/users/password', { method: 'POST', body: JSON.stringify({ p: document.getElementById('up').value }) }).then(() => { document.getElementById('saved').textContent = 'saved'; })">Save</button><p id="saved"></p>
+      <label for="print" class="wrap"><span>Stampa</span><div class="slider"><input id="print" type="checkbox" checked><span></span></div></label>`));
     if (url.pathname === '/form') return html(200, page('Form', '<label>Note <input type="text" id="note"></label><label>New password <input type="password" id="np"></label><select id="s"><option value="a">Alpha</option><option value="b">Beta</option></select>'));
     html(404, page('404', 'not found'));
   });

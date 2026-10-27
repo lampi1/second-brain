@@ -5,7 +5,11 @@
 // visit to a credential's site in a step the server opens that loginUrl and fills the credential itself with
 // driveLogin; a navigate to the credential's bare origin with no session yet becomes that login; whenever a page lands
 // on a login page (the stored path on its origin, or the same path on another origin: the portal redirect) it logs in
-// again from the stored loginUrl and goes back where the agent wanted to go. Every navigation stays inside `routine.browser.origins`; `type` refuses password fields; credential
+// again from the stored loginUrl and goes back where the agent wanted to go. A second user: `login` {credential, user?}
+// clears the session and signs in as a named credential (user override allowed, password always the stored one;
+// the profile remembers that user so the next step's default login signs it out first); `fill_secret` puts a named
+// credential's password into a password field (an admin page setting that user's password), the value never in a
+// reply. Every navigation stays inside `routine.browser.origins`; `type` refuses password fields; credential
 // values are masked in every reply; screenshots go to the step's evidence folder and to events.jsonl. The browser
 // profile (cookies) is one folder per run, so a login survives the steps of a run. Config: the 0600 temp file named by
 // SB_ROUTINE_BROWSER_CONFIG (it holds the credentials, so it never lives in the run folder). A failed login names its
@@ -21,8 +25,9 @@ import { driveLoginResult, LOGIN_FAIL_REASONS, type LoginResult, type LoginSucce
 import { playwrightLoginDriver, SNAPSHOT_SCRIPT, type BrowserPage } from './browser-page';
 
 export const BROWSER_SERVER_NAME = 'routine-browser';
-export const BROWSER_TOOLS = ['navigate', 'snapshot', 'click', 'type', 'select_option', 'screenshot'] as const;
-export interface BrowserLogin { loginUrl: string; user: string; password: string; success?: LoginSuccessRule }
+export const BROWSER_TOOLS = ['navigate', 'snapshot', 'click', 'type', 'select_option', 'screenshot', 'login', 'fill_secret'] as const;
+/** `id`: a named credential (a second user of the same login page); the first login of a page is its default. */
+export interface BrowserLogin { id?: string; loginUrl: string; user: string; password: string; success?: LoginSuccessRule }
 export interface BrowserServerConfig {
   origins: string[];
   /** the run's Chromium profile folder (cookies kept across the steps of the run) */
@@ -46,7 +51,11 @@ const TOOLS = [
   { name: 'type', description: 'Replace the text of an input or textarea by ref (never a password field).', inputSchema: { type: 'object', additionalProperties: false, required: ['ref', 'text'], properties: { ref: REF, text: { type: 'string' } } } },
   { name: 'select_option', description: 'Choose an option of a select by ref, by its value or label.', inputSchema: { type: 'object', additionalProperties: false, required: ['ref', 'value'], properties: { ref: REF, value: { type: 'string' } } } },
   { name: 'screenshot', description: 'Save a PNG of the page into this step\'s evidence folder; returns its path.', inputSchema: { type: 'object', additionalProperties: false, properties: { name: { type: 'string', description: 'file name without extension' } } } },
+  { name: 'login', description: 'Sign out and in again as a named credential of the routine (the runtime fills the password). user: another login name for that credential\'s stored password. No credential: back to the default login.', inputSchema: { type: 'object', additionalProperties: false, properties: { credential: { type: 'string', description: 'a credential id' }, user: { type: 'string', description: 'the login name to use instead of the stored one' } } } },
+  { name: 'fill_secret', description: 'Fill a password field by ref with the password of a named credential (e.g. to set a user\'s password in an admin page). The value is never shown.', inputSchema: { type: 'object', additionalProperties: false, required: ['ref', 'credential'], properties: { ref: REF, credential: { type: 'string', description: 'a credential id' } } } },
 ];
+/** The profile file naming the non-default user whose session the profile's cookies hold, per origin (no values). */
+const ACTIVE_LOGIN_FILE = 'routine-active-login.json';
 const ACTION_TIMEOUT = 15_000;
 
 export interface BrowserServerIo {
@@ -83,7 +92,7 @@ export function loginPageFor(config: Pick<BrowserServerConfig, 'logins'>, url: s
   const p = loginPath(url);
   const same = p ? config.logins.filter(l => loginPath(l.loginUrl) === p) : [];
   if (wanted && same.includes(wanted)) return wanted;
-  return same.length === 1 ? same[0]! : null;
+  return same.length && same.every(l => originOf(l.loginUrl) === originOf(same[0]!.loginUrl)) ? same[0]! : null; // one site (its users)
 }
 
 /** The bare root of a site (`https://node/`): on Air it redirects to the portal, so it is never opened without a session. */
@@ -106,21 +115,42 @@ export const CLEAR_PASSWORDS_SCRIPT = `(() => { const set = Object.getOwnPropert
 /** One server's session: the page, its login state, the JSON-RPC handler. */
 export function createBrowserSession(config: BrowserServerConfig, io: BrowserServerIo) {
   const masker = createMasker(config.logins.map(l => l.password));
+  /** the logins in lookup order: the one switched to with `login` comes first, so every lookup picks it */
+  const state = { logins: [...config.logins] };
   let shots = 0;
   /** logins done (or found still valid) by this server; one server per step, so each step starts from its loginUrl */
   const signedIn = new Set<BrowserLogin>();
   let lastLogin: BrowserLogin | null = null;
 
+  const activeFile = path.join(config.profileDir, ACTIVE_LOGIN_FILE);
+  const whoKey = (l: BrowserLogin) => `${l.id ?? ''}|${l.user}`;
+  const readActive = (): Record<string, string> => { try { return JSON.parse(fs.readFileSync(activeFile, 'utf8')) as Record<string, string>; } catch { return {}; } };
+  /** Remembers in the run's profile which non-default user the cookies of an origin belong to: a later step's server
+   *  signs that user out before its default login (the site would otherwise keep it in as that user). */
+  function recordActive(login: BrowserLogin): void {
+    const origin = originOf(login.loginUrl), all = readActive();
+    if (config.logins.find(l => originOf(l.loginUrl) === origin) === login) delete all[origin]; else all[origin] = whoKey(login);
+    try { fs.mkdirSync(config.profileDir, { recursive: true }); fs.writeFileSync(activeFile, JSON.stringify(all)); } catch { /* best effort */ }
+  }
+  /** Ends every session of the run's browser (its cookies: the browser opens only the declared origins). */
+  async function signOut(page: BrowserPage): Promise<void> {
+    await page.context().clearCookies();
+    signedIn.clear();
+  }
+
   /** Opens the stored loginUrl (query included: Air's ?mode=local) and signs in; a page that leaves by itself = already in. */
   async function logIn(page: BrowserPage, login: BrowserLogin): Promise<string | null> {
+    const held = readActive()[originOf(login.loginUrl)];
+    if (held !== undefined && held !== whoKey(login)) await signOut(page); // the cookies hold another user's session
     lastLogin = login;
     await page.goto(login.loginUrl, { waitUntil: 'load', timeout: 30_000 });
-    if (loginPageFor(config, page.url(), login)) {
+    if (loginPageFor(state, page.url(), login)) {
       const result = await driveLoginResult(playwrightLoginDriver(page), originOf(login.loginUrl), login, login.success ?? { urlNotContaining: new URL(login.loginUrl).pathname }, { timeoutMs: 20_000 })
         .catch((): LoginResult => ({ ok: false, reason: 'driver-error' }));
       if (!result.ok) { signedIn.delete(login); return loginFailedText(result, await failureShot(page)); }
     }
     signedIn.add(login);
+    recordActive(login);
     return null;
   }
 
@@ -147,23 +177,23 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
   /** When the page sits on a login page (the portal's included): log in from the stored loginUrl, then return to
    *  `target` once; back on a login page after that = an error, never a loop. */
   async function ensureLoggedIn(page: BrowserPage, target?: string): Promise<string | null> {
-    const login = loginPageFor(config, page.url(), (target ? credentialFor(config, target) : null) ?? lastLogin);
+    const login = loginPageFor(state, page.url(), (target ? credentialFor(state, target) : null) ?? lastLogin);
     if (!login) return null;
     const failed = await logIn(page, login);
     if (failed) return failed;
-    if (!target || loginPageFor(config, target, login) || page.url() === target) return null;
-    if (bareOrigin(target) && credentialFor(config, target) === login) return null; // the bare root redirects: stay on the signed-in home
+    if (!target || loginPageFor(state, target, login) || page.url() === target) return null;
+    if (bareOrigin(target) && credentialFor(state, target) === login) return null; // the bare root redirects: stay on the signed-in home
     await page.goto(target, { waitUntil: 'load', timeout: 30_000 });
-    if (loginPageFor(config, page.url(), login)) return `Signed in from ${login.loginUrl}, but ${target} went back to a login page (${page.url()}). Report it as needs-human.`;
+    if (loginPageFor(state, page.url(), login)) return `Signed in from ${login.loginUrl}, but ${target} went back to a login page (${page.url()}). Report it as needs-human.`;
     return null;
   }
 
   /** Opens a URL: the step's first visit to a credential's site signs in from its loginUrl first; its bare origin with
    *  no session is that login; a landing on any login page signs in again and returns to the URL. */
   async function goto(page: BrowserPage, url: string): Promise<string | null> {
-    const own = loginFor(config, url);
+    const own = loginFor(state, url);
     if (own) return logIn(page, own); // the agent asked for the login page itself: the runtime does it
-    const cred = credentialFor(config, url);
+    const cred = credentialFor(state, url);
     if (cred && !signedIn.has(cred)) {
       const failed = await logIn(page, cred);
       if (failed) return failed;
@@ -180,6 +210,12 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
   async function settle(page: BrowserPage): Promise<string | null> {
     await page.waitForLoadState('load', { timeout: ACTION_TIMEOUT }).catch(() => undefined);
     return ensureLoggedIn(page);
+  }
+
+  /** The named credential with its stored values, or the error text. */
+  function namedLogin(id: unknown): BrowserLogin | string {
+    const found = typeof id === 'string' ? config.logins.find(l => l.id === id) : undefined;
+    return found ?? `credential: one of ${config.logins.filter(l => l.id).map(l => `"${l.id}"`).join(', ') || '(none: this routine names no credential)'}.`;
   }
 
   async function call(name: string, args: Json): Promise<{ text: string; isError?: boolean }> {
@@ -218,6 +254,29 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
       case 'screenshot': {
         const file = await saveShot(page, String(args.name ?? ''));
         return { text: `Saved ${file}. ${await where(page)}` };
+      }
+      case 'login': {
+        const named = args.credential === undefined ? null : namedLogin(args.credential);
+        if (typeof named === 'string') return { text: named, isError: true };
+        const site = lastLogin ? originOf(lastLogin.loginUrl) : '';
+        const base = named ?? config.logins.find(l => originOf(l.loginUrl) === site) ?? config.logins[0];
+        if (!base) return { text: 'This routine has no site login.', isError: true };
+        const user = args.user === undefined ? base.user : String(args.user).trim();
+        if (!user || user.length > 256) return { text: 'user: a login name up to 256 characters.', isError: true };
+        const login: BrowserLogin = user === base.user ? base : { ...base, user };
+        state.logins = [login, ...config.logins.filter(l => l !== base)];
+        await signOut(page);
+        const failed = await logIn(page, login);
+        return failed ? { text: failed, isError: true } : { text: `Signed in as ${login.user}${login.id ? ` (credential ${login.id})` : ''}. ${await where(page)}` };
+      }
+      case 'fill_secret': {
+        const named = namedLogin(args.credential);
+        if (typeof named === 'string') return { text: named, isError: true };
+        const el = locate(page, args.ref);
+        const kind = await el.evaluate(e => `${e.tagName.toLowerCase()}:${(e.getAttribute('type') ?? '').toLowerCase()}`);
+        if (kind !== 'input:password') return { text: 'Refused: fill_secret fills only password fields (a text field would show the value).', isError: true };
+        await el.fill(named.password, { timeout: ACTION_TIMEOUT });
+        return { text: `Filled ${String(args.ref)} with the password of credential ${named.id}.` };
       }
       default: throw new Error('Unknown tool');
     }

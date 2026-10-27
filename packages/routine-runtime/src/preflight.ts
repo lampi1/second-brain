@@ -118,9 +118,12 @@ export function preflightRoutinePackage(value: unknown, options: PreflightOption
   const loginKey = (u: string) => { const x = new URL(u); return `${x.origin}${x.pathname.replace(/\/+$/, '')}`.toLowerCase(); };
   const seen = new Map<string, number>();
   credentials.forEach((c, i) => {
-    const key = loginKey(c.loginUrl);
-    if (seen.has(key)) err(`credentials[${i}].loginUrl`, `the same login page as credentials[${seen.get(key)}]`, 'Keep one login per login page; the runtime could not tell them apart.');
-    seen.set(key, i);
+    // a second login of the same page needs its own id (the first one of a page is the default login)
+    const key = loginKey(c.loginUrl), idKey = `id:${c.id}`;
+    if (c.id && seen.has(idKey)) err(`credentials[${i}].id`, `the same id as credentials[${seen.get(idKey)}]`, 'Give each credential its own id.');
+    else if (!c.id && seen.has(key)) err(`credentials[${i}].loginUrl`, `the same login page as credentials[${seen.get(key)}]`, 'Give each further login of a page its own "id" (the first one stays the default); the runtime could not tell them apart.');
+    if (!seen.has(key)) seen.set(key, i);
+    if (c.id) seen.set(idKey, i);
     if (c.password === SECRET_PLACEHOLDER) missing(`credentials[${i}].password`, `the password for ${c.loginUrl}`);
   });
   (r.loginSuccess ?? []).forEach((l, i) => {

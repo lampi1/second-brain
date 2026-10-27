@@ -9,7 +9,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { bareOrigin, createBrowserSession, credentialFor, launchBrowser, launchOnProfile, loginFailedText, loginFor, loginPageFor, profileHolders, type BrowserServerConfig, type ProfileRecovery } from '../../../packages/routine-runtime/src/browser-mcp';
 import { classifyLoginForm, inspectLoginForm, type LoginFormFacts } from '../../../packages/routine-runtime/src/login-form';
 import { parseRoutinePackage } from '../../../packages/routine-runtime/src/index';
-import { FIXTURE_PASSWORD, FIXTURE_USER, startFixtureSite } from './fixture-site';
+import { FIXTURE_PASSWORD, FIXTURE_USER, FIXTURE_USER2, startFixtureSite } from './fixture-site';
+const TESTER_PASSWORD = 'tester-Pass-5521';
 import { tempDir } from './fakes';
 
 const browserAvailable = (() => {
@@ -145,7 +146,8 @@ describe.skipIf(!browserAvailable)('routine browser over a fixture login page', 
     fs.writeFileSync(path.join(dir, 'events.jsonl'), '');
     config = {
       origins: [site.origin], profileDir: path.join(dir, 'profile'), evidence: path.join(dir, 'evidence'), events: { file: path.join(dir, 'events.jsonl'), n: 1 },
-      headless: true, logins: [{ loginUrl: `${site.origin}/Account/Login?mode=local`, user: FIXTURE_USER, password: FIXTURE_PASSWORD }],
+      headless: true, logins: [{ loginUrl: `${site.origin}/Account/Login?mode=local`, user: FIXTURE_USER, password: FIXTURE_PASSWORD },
+        { id: 'tester', loginUrl: `${site.origin}/Account/Login?mode=local`, user: 'set-by-the-step', password: TESTER_PASSWORD }],
     };
     browser = await launchBrowser(config);
     session = createBrowserSession(config, { page: async () => browser.page, now: () => 42 });
@@ -200,6 +202,32 @@ describe.skipIf(!browserAvailable)('routine browser over a fixture login page', 
     expect(facts).toMatchObject({ passwords: 1, users: 1, bare: true, submits: [], buttons: ['btnlogin access'] });
     expect(classifyLoginForm(facts, site.origin)).toEqual({ mode: 'ajax', button: 0 });
     expect(classifyLoginForm({ ...facts, buttons: [] }, site.origin)).toBeNull(); // what the runtime saw before the fix
+  }, 60_000);
+
+  it('a second user: toggles a hidden checkbox, sets its password with fill_secret, logs in as it, next step is the default again', async () => {
+    await call('navigate', { url: `${site.origin}/users` });
+    const ref = (text: string, label: string) => new RegExp(`\\[(e\\d+)\\] [^\\n]*${label}`).exec(text)?.[1];
+    const snap = (await call('snapshot')).text;
+    expect(snap).toMatch(/input\[checkbox\] "Stampa" = on/);
+    await call('click', { ref: ref(snap, 'Stampa') });
+    expect((await call('snapshot')).text).toMatch(/"Stampa" = off/);
+    expect(await call('fill_secret', { ref: ref(snap, 'Password of'), credential: 'nope' })).toMatchObject({ isError: true });
+    expect(await call('fill_secret', { ref: ref(snap, 'Save'), credential: 'tester' })).toMatchObject({ isError: true });
+    const filled = await call('fill_secret', { ref: ref(snap, 'Password of'), credential: 'tester' });
+    expect(filled).toEqual({ isError: false, text: `Filled ${ref(snap, 'Password of')} with the password of credential tester.` });
+    await call('click', { ref: ref(snap, 'Save') });
+    for (let i = 0; i < 40 && await browser.page.evaluate<string>('document.getElementById("saved").textContent') !== 'saved'; i++) await browser.page.waitForTimeout(100);
+    const as = await call('login', { credential: 'tester', user: FIXTURE_USER2 });
+    expect(as.isError).toBe(false);
+    expect(as.text).toContain(`Signed in as ${FIXTURE_USER2}`);
+    await call('navigate', { url: `${site.origin}/home` });
+    const home = (await call('snapshot')).text;
+    expect(home).toContain(`Welcome ${FIXTURE_USER2}`);
+    expect(home + as.text + filled.text).not.toContain(TESTER_PASSWORD);
+    const next = createBrowserSession(config, { page: async () => browser.page });
+    const callOn = async (s: typeof next, name: string, args: Record<string, unknown> = {}) => ((await s.handle({ jsonrpc: '2.0', id: ++seq, method: 'tools/call', params: { name, arguments: args } })) as Reply).result!.content[0]!;
+    await callOn(next, 'navigate', { url: `${site.origin}/home` });
+    expect((await callOn(next, 'snapshot')).text).toContain(`Welcome ${FIXTURE_USER} `);
   }, 60_000);
 });
 

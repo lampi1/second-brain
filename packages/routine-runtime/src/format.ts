@@ -80,8 +80,9 @@ export interface RoutineDefinition {
   /** the login success rule per loginUrl (absent: the URL left the login page's path) */
   loginSuccess?: { loginUrl: string; success: LoginSuccessRule }[];
 }
-/** A site login: the same shape as the app's JSON export (PortableCredential). */
-export interface PackageCredential { loginUrl: string; user: string; password: string }
+/** A site login: the same shape as the app's JSON export (PortableCredential). `id` names it for the browser's
+ *  `login` / `fill_secret` tools: a second user of the same login page (the first one of a page is its default login). */
+export interface PackageCredential { id?: string; loginUrl: string; user: string; password: string }
 export interface PackageSecrets { devopsPat?: string; testDbs?: Record<string, { user: string; password: string }> }
 export interface PackageFile { kind: 'script' | 'query' | 'asset'; ref: string; content: string }
 export interface RoutinePackage {
@@ -268,8 +269,8 @@ export function parseRoutinePackage(value: unknown): RoutinePackage {
     return { kind: f.kind as PackageFile['kind'], ref: str(f.ref, `files[${i}].ref`, 256), content: str(f.content, `files[${i}].content`, 1_000_000, true) };
   });
   const credentials = p.credentials === undefined ? undefined : list(p.credentials, 'credentials', 100).map((x, i) => {
-    const c = obj(x, `credentials[${i}]`); only(c, ['loginUrl', 'user', 'password'], `credentials[${i}]`);
-    return { loginUrl: url(c.loginUrl, `credentials[${i}].loginUrl`), user: str(c.user, `credentials[${i}].user`, 256), password: str(c.password, `credentials[${i}].password`, 1024) };
+    const c = obj(x, `credentials[${i}]`); only(c, ['id', 'loginUrl', 'user', 'password'], `credentials[${i}]`);
+    return { ...(c.id === undefined ? {} : { id: id(c.id, `credentials[${i}].id`) }), loginUrl: url(c.loginUrl, `credentials[${i}].loginUrl`), user: str(c.user, `credentials[${i}].user`, 256), password: str(c.password, `credentials[${i}].password`, 1024) };
   });
   let secrets: PackageSecrets | undefined;
   if (p.secrets !== undefined) {

@@ -370,9 +370,11 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
       const logins: BrowserServerConfig['logins'] = [];
       for (const c of pkg.credentials ?? []) {
         if (!origins.includes(new URL(c.loginUrl).origin)) continue;
-        const credential = await credentials.forLogin(c.loginUrl) ?? c;
+        // the first login of a page comes from the run's store; a further named one (a second user) is the package's own
+        const first = (pkg.credentials ?? []).find(x => sameLogin(x.loginUrl, c.loginUrl)) === c;
+        const credential = (first ? await credentials.forLogin(c.loginUrl) : null) ?? c;
         const success = routine.loginSuccess?.find(l => sameLogin(l.loginUrl, c.loginUrl))?.success;
-        logins.push({ loginUrl: c.loginUrl, user: credential.user, password: credential.password, ...(success ? { success } : {}) });
+        logins.push({ ...(c.id ? { id: c.id } : {}), loginUrl: c.loginUrl, user: credential.user, password: credential.password, ...(success ? { success } : {}) });
       }
       const profileDir = browserProfile(runId);
       fs.mkdirSync(profileDir, { recursive: true });
@@ -385,6 +387,8 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
       mcpServers[BROWSER_SERVER_NAME] = { command: options.browser.server.command, args: options.browser.server.args, env: { ...(options.browser.server.env ?? {}), SB_ROUTINE_BROWSER_CONFIG: file } };
       browserNote = `A browser for ${origins.join(', ')}: the ${BROWSER_SERVER_NAME} MCP tools ${BROWSER_TOOLS.join(', ')}. `
         + 'Site logins are done for you by the runtime when a page asks for one: never type a password, never ask for one. '
+        + (logins.some(l => l.id) ? `Named credentials: ${logins.filter(l => l.id).map(l => `"${l.id}"`).join(', ')}: \`login\` {credential, user?} signs out and in again as one of them (user = another login name, the password stays the stored one; no credential = back to the default login); \`fill_secret\` {ref, credential} fills a password field with that credential's password (e.g. setting a user's password in an admin page). `
+          : '')
         + 'Use snapshot to see the page and its element refs; save evidence with screenshot (it lands in the evidence folder of this step).';
     }
     let mcpConfig: string | undefined;

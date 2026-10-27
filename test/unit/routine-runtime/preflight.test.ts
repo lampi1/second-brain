@@ -62,6 +62,14 @@ describe('routine package preflight', () => {
     const ok = preflightRoutinePackage(p);
     expect(ok).toMatchObject({ ok: true, warnings: [] });
     expect(ok.pkg!.credentials![0]!.loginUrl).toBe('https://air.example.test/Account/Login?mode=local');
+    // a second user of the same login page needs its own id
+    p.credentials.push({ loginUrl: p.credentials[0].loginUrl, user: 'v', password: 'pw-secret-2' });
+    expect(paths(p)).toEqual(['credentials[1].loginUrl']);
+    p.credentials[1].id = 'tester';
+    expect(preflightRoutinePackage(p)).toMatchObject({ ok: true });
+    p.credentials.push({ id: 'tester', loginUrl: 'https://air.example.test/x', user: 'w', password: 'pw-secret-3' });
+    expect(paths(p)).toEqual(['credentials[2].id']);
+    p.credentials.length = 1;
     p.routine.steps[0].prompt = 'Log in with pw-secret-1';
     expect(preflightRoutinePackage(p).errors[0]!.message).toContain('password');
   });

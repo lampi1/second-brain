@@ -13,6 +13,7 @@ export interface BrowserPage {
   waitForTimeout(ms: number): Promise<void>;
   waitForLoadState(state?: 'load' | 'domcontentloaded', options?: { timeout?: number }): Promise<void>;
   screenshot(options: { path: string; fullPage?: boolean }): Promise<unknown>;
+  context(): { clearCookies(): Promise<void> };
   locator(selector: string): {
     count(): Promise<number>;
     click(options?: { timeout?: number }): Promise<void>;
@@ -54,15 +55,21 @@ export function playwrightLoginDriver(page: BrowserPage): LoginPageDriver {
  *  inputs never show their value. */
 export const SNAPSHOT_SCRIPT = `(() => {
   const visible = e => { const r = e.getBoundingClientRect(); const s = getComputedStyle(e); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
-  const els = [...document.querySelectorAll('a[href],button,input,select,textarea,[role="button"],[role="link"],[role="tab"],[role="menuitem"],[onclick],[contenteditable="true"]')].filter(visible).slice(0, 400);
+  // a styled toggle (Air's checkbox-slider) hides its checkbox and paints a label/span: the ref goes on that visible part
+  const proxyOf = e => { if (visible(e)) return e; if (e.tagName !== 'INPUT' || !/^(checkbox|radio)$/i.test(e.type)) return null;
+    return [...(e.labels || []), e.nextElementSibling, e.parentElement].find(x => x && visible(x)) || null; };
+  const seen = new Set();
+  const els = [...document.querySelectorAll('a[href],button,input,select,textarea,[role="button"],[role="link"],[role="tab"],[role="menuitem"],[onclick],[contenteditable="true"]')]
+    .map(e => [e, proxyOf(e)]).filter(([, t]) => t && !seen.has(t) && seen.add(t)).slice(0, 400);
   document.querySelectorAll('[data-routine-ref]').forEach(e => e.removeAttribute('data-routine-ref'));
   const clip = (s, n) => { s = (s || '').replace(/\\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
-  const lines = els.map((e, i) => {
-    const ref = 'e' + (i + 1); e.setAttribute('data-routine-ref', ref);
+  const lines = els.map(([e, target], i) => {
+    const ref = 'e' + (i + 1); target.setAttribute('data-routine-ref', ref);
     const tag = e.tagName.toLowerCase(), type = (e.getAttribute('type') || '').toLowerCase();
     const label = clip(e.getAttribute('aria-label') || (e.labels && e.labels[0] && e.labels[0].textContent) || e.getAttribute('placeholder') || e.getAttribute('title') || e.textContent || e.getAttribute('name') || e.id, 80);
     let value = '';
-    if (tag === 'input' || tag === 'textarea') value = type === 'password' ? (e.value ? '***' : '') : clip(e.value, 60);
+    if (tag === 'input' && (type === 'checkbox' || type === 'radio')) value = e.checked ? 'on' : 'off';
+    else if (tag === 'input' || tag === 'textarea') value = type === 'password' ? (e.value ? '***' : '') : clip(e.value, 60);
     if (tag === 'select') value = clip(e.selectedOptions[0] ? e.selectedOptions[0].textContent : '', 60) + ' | options: ' + clip([...e.options].map(o => o.value + '=' + o.textContent).join('; '), 200);
     return '[' + ref + '] ' + tag + (type ? '[' + type + ']' : '') + (label ? ' "' + label + '"' : '') + (value ? ' = ' + value : '') + (e.disabled ? ' (disabled)' : '');
   });
