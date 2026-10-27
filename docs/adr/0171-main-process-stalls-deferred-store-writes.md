@@ -32,7 +32,11 @@ The garbage from these copies also explains many unlabelled stalls (GC pauses).
    into one write per burst. The body is serialized once, written to a fresh tmp asynchronously, renamed
    synchronously (writes of one file land in start order), and retried asynchronously on EPERM, EACCES or EBUSY
    (`writeLocalTextAsync`). A newer write supersedes one in flight (a generation check before each rename), so an
-   older body never lands. An unchanged body is not written. Strict checkpoints (`persist(true)`, a run's start
+   older body never lands; after the write the generation is checked again, so a sync save or checkpoint that ran
+   meanwhile is never undone in memory (the "last body" of chats.json, a prune's rollups and `prunedThrough`). A
+   renamed tmp is not unlinked (nothing to await after the rename). A failed deferred write is tried again on its own
+   after `writeRetryMs` (2 s, doubling up to 60 s), not only at the next change. At startup each store removes its
+   own `<file>.<uuid>.tmp` left by an exit in the middle of a write. An unchanged body is not written. Strict checkpoints (`persist(true)`, a run's start
    through `runs.start`) stay synchronous. `shutdown()` and the process `exit` handler call `flushWrites()`, which
    writes everything pending or in flight synchronously. Unit tests keep the old synchronous saves (no
    `writeDelayMs`).

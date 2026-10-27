@@ -21,7 +21,7 @@ import { sanitizeAgentChildren } from './agent-children';
 import { readDelegation, type ChatDelegation } from '../../shared/delegation';
 import { readPlan, type StrategyPlan } from '../../shared/strategy';
 import { slowStep } from '../perf';
-import { writeLocalTextAsync } from '../agents/local-store';
+import { cleanOrphanTmps, writeLocalTextAsync } from '../agents/local-store';
 
 function validAssets(value: unknown): value is NonNullable<StoredChat['agentAssets']> {
   if (!value || typeof value !== 'object') return false;
@@ -282,6 +282,7 @@ export class ChatStore {
   constructor(userData: string) { this.file = path.join(userData, 'chats.json'); }
 
   load(): StoredChat[] {
+    cleanOrphanTmps(this.file);
     let text: string;
     try { text = fs.readFileSync(this.file, 'utf8'); } catch { return []; }
     try {
@@ -328,19 +329,23 @@ export class ChatStore {
   }
 
   /** The deferred save (ChatManager with writeDelayMs): serialized now, written asynchronously (tmp + rename, retries
-   *  without blocking), skipped when nothing changed. A newer save, sync or deferred, supersedes it. Never throws. */
-  async saveAsync(chats: StoredChat[]): Promise<void> {
+   *  without blocking), skipped when nothing changed. A newer save, sync or deferred, supersedes it. Never throws: false
+   *  = the write failed (the caller schedules a retry), true = written, unchanged or superseded. */
+  async saveAsync(chats: StoredChat[]): Promise<boolean> {
     const t = performance.now();
     const body = `${JSON.stringify({ version: 2, chats })}\n`;
     slowStep('chats.json serialize', performance.now() - t);
-    if (body === this.last && !this.inflight) return;
+    if (body === this.last && !this.inflight) return true;
     const gen = ++this.gen;
     this.inflight++;
     try {
-      if (await writeLocalTextAsync(this.file, body, () => this.gen === gen, { maxBytes: Infinity })) this.last = body;
+      // a sync save or checkpoint may have run during the await: only this write's own generation may set `last`
+      if (await writeLocalTextAsync(this.file, body, () => this.gen === gen, { maxBytes: Infinity }) && this.gen === gen) this.last = body;
+      return true;
     } catch (e) {
       if (this.gen === gen) this.last = null;
-      log.warn('chats', 'chats.json not saved (deferred)', { cause: errText(e), hint: 'the next chat change or the quit writes it again' });
+      log.warn('chats', 'chats.json not saved (deferred)', { cause: errText(e), hint: 'retried shortly; the quit writes it too' });
+      return this.gen !== gen; // superseded: the newer write carries this state
     } finally { this.inflight--; }
   }
 

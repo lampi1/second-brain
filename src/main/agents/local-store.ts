@@ -61,12 +61,14 @@ export async function writeLocalTextAsync(file: string, body: string, current: (
   try { const s = await fs.promises.lstat(file); if (!s.isFile() || s.nlink !== 1) throw new Error('Archivio locale collegato: scrittura rifiutata.'); }
   catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e; }
   const tmp = `${file}.${randomUUID()}.tmp`, waits = opts.waits ?? RENAME_WAITS_MS;
+  let renamed = false;
   try {
     await fs.promises.writeFile(tmp, body, { flag: 'wx', mode: 0o600 });
     for (let attempt = 0; ; attempt++) {
       if (!current()) return false;
       try {
         fs.renameSync(tmp, file);
+        renamed = true;
         if (attempt > 0) log.warn('agents', 'local store saved after a retried rename', { data: { file: path.basename(file), retries: attempt }, hint: 'another process held the file for a moment (antivirus, indexer, backup); nothing was lost' });
         return true;
       } catch (e) {
@@ -74,5 +76,21 @@ export async function writeLocalTextAsync(file: string, body: string, current: (
         await new Promise(r => setTimeout(r, waits[attempt]!));
       }
     }
-  } finally { await fs.promises.unlink(tmp).catch(() => { /* renamed or not created */ }); }
+  } finally { if (!renamed) await fs.promises.unlink(tmp).catch(() => { /* not created */ }); }
+}
+
+/** Removes the `<file>.<uuid>.tmp` left by a deferred write cut by an exit (writeLocalTextAsync); only that exact
+ *  pattern, at startup, before this process writes the file. Returns how many it removed. */
+export function cleanOrphanTmps(file: string): number {
+  const dir = path.dirname(file), base = path.basename(file);
+  const re = /^\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.tmp$/;
+  let names: string[];
+  try { names = fs.readdirSync(dir); } catch { return 0; }
+  let n = 0;
+  for (const name of names) {
+    if (!name.startsWith(base) || !re.test(name.slice(base.length))) continue;
+    try { fs.unlinkSync(path.join(dir, name)); n++; } catch { /* gone or locked: the next start tries again */ }
+  }
+  if (n) log.info('agents', 'orphan temp files removed', { data: { file: base, n } });
+  return n;
 }

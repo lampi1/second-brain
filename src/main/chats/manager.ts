@@ -109,6 +109,8 @@ export interface ChatManagerOptions {
    *  of changes, never blocking the main process on the disk); strict checkpoints, the quit and the exit write at once.
    *  0 / absent: every save is synchronous (unit tests read the files right after an action). */
   writeDelayMs?: number;
+  /** first wait before a failed deferred write is tried again (doubles up to 60 s; default 2 s) */
+  writeRetryMs?: number;
   /** a brief waits for this chat's next question (genui/artifacts.ts hasBrief, ADR 0150); absent = none asked for */
   briefReady?: (chatId: string) => boolean;
   suggestSkills?: (goal: string) => Promise<string[]>;
@@ -2913,11 +2915,32 @@ export class ChatManager implements ChatService {
   private runWriteTimer: ReturnType<typeof setTimeout> | undefined;
   private runWriteSoon(ms: number): void {
     if (this.runWriteTimer) return;
-    this.runWriteTimer = setTimeout(() => { this.runWriteTimer = undefined; void this.runs.saveAsync(); }, ms);
+    this.runWriteTimer = setTimeout(() => { this.runWriteTimer = undefined; this.deferredRunWrite(); }, ms);
     this.runWriteTimer.unref?.();
   }
-  /** one deferred chats.json write within writeDelayMs, of the chats as they are then */
+  /** one deferred chats.json write within `ms`, of the chats as they are then (an earlier one already due stays) */
   private persistTimer: ReturnType<typeof setTimeout> | undefined;
+  private persistSoon(ms: number): void {
+    if (this.persistTimer) return;
+    this.persistTimer = setTimeout(() => { this.persistTimer = undefined; this.deferredChatWrite(); }, ms);
+    this.persistTimer.unref?.();
+  }
+  /** Failed deferred writes in a row, per file: a failure is tried again on its own (no later change may come to
+   *  trigger it), after writeRetryMs doubling up to 60 s; a success resets it. */
+  private readonly writeFails = { chats: 0, runs: 0 };
+  private retryDelay(fails: number): number { return Math.min(60_000, (this.opts.writeRetryMs ?? 2_000) * 2 ** (fails - 1)); }
+  private deferredRunWrite(): void {
+    void this.runs.saveAsync().then(ok => {
+      if (ok) { this.writeFails.runs = 0; return; }
+      if (this.deferWrites() && !this.runs.problem) this.runWriteSoon(this.retryDelay(++this.writeFails.runs));
+    });
+  }
+  private deferredChatWrite(): void {
+    void this.store.saveAsync(this.rows()).then(ok => {
+      if (ok) { this.writeFails.chats = 0; return; }
+      if (this.deferWrites()) this.persistSoon(this.retryDelay(++this.writeFails.chats));
+    });
+  }
 
   /** Everything still waiting or being written, now and synchronously: the quit, the process exit, a test. A failure
    *  is logged (the next start reads the last good write), never thrown. */
@@ -2941,7 +2964,7 @@ export class ChatManager implements ChatService {
     if (this.runSaveTimer) return;
     this.runSaveTimer = setTimeout(() => {
       this.runSaveTimer = undefined;
-      if (this.deferWrites()) { void this.runs.saveAsync(); return; }
+      if (this.deferWrites()) { this.deferredRunWrite(); return; }
       try { this.runs.flush(); } catch (e) { log.warn('chats', 'agent runs not saved', { cause: errText(e), hint: 'the next run change writes them again' }); }
     }, RUN_SAVE_MS);
     this.runSaveTimer.unref?.();
@@ -3251,9 +3274,7 @@ export class ChatManager implements ChatService {
       return;
     }
     // persist runs from ~60 places, often several times per event: one write per burst, of the state as it is then
-    if (this.persistTimer) return;
-    this.persistTimer = setTimeout(() => { this.persistTimer = undefined; void this.store.saveAsync(this.rows()); }, this.opts.writeDelayMs);
-    this.persistTimer.unref?.();
+    this.persistSoon(this.opts.writeDelayMs!);
   }
 
   private rows(): StoredChat[] {

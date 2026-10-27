@@ -15,7 +15,7 @@ import { checkResult } from '../../shared/delegation';
 import { MODEL_TIERS, type ModelTier } from '../../shared/roles';
 import { SUMMARY_MAX } from './run-report';
 import { rollUp, SAMPLE_MAX, type RunTally, type TagTally } from './run-metrics';
-import { readLocal, writeLocalText, writeLocalTextAsync } from './local-store';
+import { cleanOrphanTmps, readLocal, writeLocalText, writeLocalTextAsync } from './local-store';
 import { readReceipts } from './receipts';
 import { XP_MAX } from './xp';
 import { slowStep } from '../perf';
@@ -290,6 +290,7 @@ export class AgentRunStore {
   problem: string | null = null;
   constructor(userData: string) {
     this.file = path.join(userData, 'agent-runs.json');
+    cleanOrphanTmps(this.file);
     try {
       const raw = readLocal(this.file) as { version?: unknown; runs?: unknown; rollups?: unknown; prunedThrough?: unknown } | undefined;
       if (raw === undefined) return;
@@ -394,23 +395,27 @@ export class AgentRunStore {
 
   /** The deferred save (ChatManager with writeDelayMs): serialized now, written asynchronously (tmp + rename with
    *  retries that never block the main process). Its prune (if any) is committed only when its own body landed and no
-   *  newer write was started meanwhile; a failure leaves the store dirty for the next flush. Never throws. */
-  async saveAsync(): Promise<void> {
-    if (!this.dirty || this.problem) return;
+   *  newer write was started meanwhile; a failure leaves the store dirty. Never throws: false = not saved (the caller
+   *  schedules a retry), true = written, nothing to write or superseded. */
+  async saveAsync(): Promise<boolean> {
+    if (!this.dirty || this.problem) return true;
     // a pending recovery copy is a rare, synchronous, one-off path
-    if (this.recoverySource) { try { this.save(); } catch (e) { log.warn('agents', 'agent runs not saved', { cause: errText(e), hint: 'the next run change writes them again' }); } return; }
+    if (this.recoverySource) { try { this.save(); return true; } catch (e) { log.warn('agents', 'agent runs not saved', { cause: errText(e), hint: 'retried shortly' }); return false; } }
     const t = performance.now();
     let w: { body: string; commit: () => void };
-    try { w = this.prepare(); } catch (e) { log.warn('agents', 'agent runs not saved', { cause: errText(e), hint: 'the next run change writes them again' }); return; }
+    try { w = this.prepare(); } catch (e) { log.warn('agents', 'agent runs not saved', { cause: errText(e), hint: 'retried shortly' }); return false; }
     finally { slowStep('agent-runs.json serialize', performance.now() - t); }
     const gen = ++this.gen;
     this.dirty = false; // a change from now on sets it again
     this.inflight++;
     try {
-      if (await writeLocalTextAsync(this.file, w.body, () => this.gen === gen)) w.commit();
+      // a sync save may have run (and pruned) during the await: committing this older prune would roll it back
+      if (await writeLocalTextAsync(this.file, w.body, () => this.gen === gen) && this.gen === gen) w.commit();
+      return true;
     } catch (e) {
       if (this.gen === gen) this.dirty = true;
-      log.warn('agents', 'agent runs not saved (deferred)', { cause: errText(e), hint: 'the next run change or the quit writes them again' });
+      log.warn('agents', 'agent runs not saved (deferred)', { cause: errText(e), hint: 'retried shortly; the quit writes them too' });
+      return this.gen !== gen;
     } finally { this.inflight--; }
   }
 
