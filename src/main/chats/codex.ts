@@ -949,7 +949,7 @@ export class CodexSession implements HarnessSession {
     st.item = { ...st.item, text: st.item.text + text };
     st.dirty = true;
     this.chars += text.length;
-    if (!this.flushTimer) { this.flushTimer = setTimeout(() => { this.flushTimer = null; this.flushAll(false); }, 50); this.flushTimer.unref(); }
+    if (!this.flushTimer) { this.flushTimer = setTimeout(() => { this.flushTimer = null; this.flushAll(false); }, 16); this.flushTimer.unref(); }
   }
 
   private flushOne(st: Stream): void {

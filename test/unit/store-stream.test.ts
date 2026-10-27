@@ -1,5 +1,5 @@
 // Unit tests of the renderer store's streaming steps (src/renderer/store/store.ts startStore, "Lag nell'app"
-// 2026-10-12): new versions of a streamed item are held and applied together every STREAM_MS; a new item or any other
+// 2026-10-12, one frame since 2026-10-27): new versions of a streamed item are held and applied together every STREAM_MS; a new item or any other
 // event first applies what is held, so the order on screen never changes.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatItem, ChatSummary } from '@shared/contract';

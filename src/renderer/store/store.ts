@@ -23,8 +23,10 @@ import { now as clockNow } from '../lib/clock';
 import { costHistory } from '../lib/live-costs';
 
 export const app = createStore<AppState>(initialState, { batch: true });
-/** How often streamed text reaches the screen (startStore). */
-export const STREAM_MS = 100;
+/** How often streamed text reaches the screen (startStore): one frame, so words show as they come. */
+export const STREAM_MS = 16;
+/** The same while the window is hidden: nobody sees those renders ("Lag nell'app", 2026-10-12). */
+export const STREAM_HIDDEN_MS = 250;
 export const useApp = app.use;
 
 export function dispatch(a: Action): void {
@@ -69,10 +71,11 @@ export function startStore(): void {
   let loaded = false;
   const buffer: Action[] = [];
   const now = (a: Action) => (loaded ? dispatch(a) : buffer.push(a));
-  // Streamed text comes as new versions of the same item (main sends one per chat every ~100 ms): they are applied
-  // together every STREAM_MS, so every chat that changed shows its new words in the same single render, a step at a
-  // time instead of word by word ("Lag nell'app", owner 2026-10-12). Anything else first applies what is held, so
-  // the order on screen never changes (a chat never reads "finito" above words still to come).
+  // Streamed text comes as new versions of the same item (main sends at most one per chat per frame): they are applied
+  // together every STREAM_MS (one frame), so every chat that changed shows its new words in the same single render
+  // and the text grows word by word as it arrives (owner 2026-10-27; it was 100 ms steps since "Lag nell'app"
+  // 2026-10-12, the hidden window keeps a slow pace). Anything else first applies what is held, so the order on screen
+  // never changes (a chat never reads "finito" above words still to come).
   const held = new Map<string, Action>();
   let heldTimer: ReturnType<typeof setTimeout> | null = null;
   const release = () => {
@@ -88,7 +91,7 @@ export function startStore(): void {
   sb.on('chat:item', ({ chatId, item, replace }) => {
     if (!replace) { put({ type: 'chat:item', chatId, item, replace }); return; }
     held.set(`${chatId}/${item.id}`, { type: 'chat:item', chatId, item, replace });
-    heldTimer ??= setTimeout(release, STREAM_MS);
+    heldTimer ??= setTimeout(release, typeof document !== 'undefined' && document.hidden ? STREAM_HIDDEN_MS : STREAM_MS);
   });
   sb.on('pending:added', req => put({ type: 'pending:added', req }));
   sb.on('pending:resolved', ({ chatId, requestId }) => put({ type: 'pending:resolved', chatId, requestId }));

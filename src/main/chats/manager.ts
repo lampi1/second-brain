@@ -467,6 +467,8 @@ function sysItem<C extends SysCode>(code: C, params: SysParams | undefined, leve
 }
 
 const MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions'];
+/** One screen frame: how long newer versions of a streamed item are collapsed before they go to the window (emitItem). */
+const ITEM_FRAME_MS = 16;
 /** chat-endpoint tools the Orchestrator can never use (chatToolShown): it does not delegate, report, ask a parent or
  *  rate a child (its chats are roots: agent_child_feedback takes only a child's run), and
  *  agent_catalog / agent_learn_propose are on its own endpoint already */
@@ -3385,14 +3387,15 @@ export class ChatManager implements ChatService {
     this.emitItem(r.s.id, item, rep);
   }
 
-  /** Streaming without flooding IPC: newer versions of the same item within 100 ms collapse into one event (at most
-   *  10 flushes a second per chat: the screen shows streamed text in steps, "Lag nell'app" 2026-10-12). A new item
-   *  first flushes what is pending, so the order on screen is kept. */
+  /** Streaming without flooding IPC: newer versions of the same item within one frame (ITEM_FRAME_MS) collapse into
+   *  one event, so words reach the screen as they come, not in 100 ms steps (owner 2026-10-27: «una parola alla volta
+   *  come su claude»; it was 100 ms since "Lag nell'app" 2026-10-12). Nothing waits for the screen: the engine's output
+   *  is read as fast as before. A new item first flushes what is pending, so the order on screen is kept. */
   private emitItem(chatId: string, item: ChatItem, replace: boolean): void {
     if (replace) {
       let b = this.coalesce.get(chatId);
       if (!b) {
-        const timer = setTimeout(() => this.flushItems(chatId), 100);
+        const timer = setTimeout(() => this.flushItems(chatId), ITEM_FRAME_MS);
         timer.unref();
         b = { items: new Map(), timer };
         this.coalesce.set(chatId, b);
