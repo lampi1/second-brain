@@ -43,7 +43,7 @@ import { drift, record } from './drift';
 import { estimateTokens } from './handoff';
 import { writeImageFiles } from './images';
 import type { CodexExecutionPolicy } from '../brain/adapters/codex-policy';
-import { closePipes, engineKills, jobGuard, killEngineTree } from './jobguard';
+import { closePipes, engineKills, jobGuard, killEngineTree, lowerEnginePriority } from './jobguard';
 import { reapEnabled, reapEngine, type Root } from './proctree';
 import { AgentChildrenReporter } from './agent-children';
 import { codexChildren } from './codex-children';
@@ -246,6 +246,7 @@ export class CodexSession implements HarnessSession {
       return this.fail(`Avvio di ${label} non riuscito: ${errText(e)}`, errText(e), `check the ${label} CLI install`);
     }
     const p = this.proc;
+    lowerEnginePriority(p.pid); // below the app's window: a busy PC slows agents, not the app (jobguard.ts)
     // the key is never logged: only whether one was given
     log.info('chats', 'codex session start', { chat, data: { engine, pid: p.pid, kind: cmd.kind, command: cmd.display, cwd: this.opts.cwd, args: redactArgs(this.args()), key: !!this.opts.env?.CODEX_API_KEY } });
     p.stdout.setEncoding('utf8');

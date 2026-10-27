@@ -16,13 +16,15 @@
 // Jobs are named by our own ids, never by pid: Windows reuses pids, and a kept engine's job outlives its process.
 // The helper is a normal child of the app, so libuv kills it with the app (quit or crash): its handles close and every
 // job not released dies with it. No helper (not Windows, Add-Type blocked, tests) = the taskkill paths alone.
-// Also the engines' common end (killEngineTree, closePipes) and the forced-kill count for app_state's health.
+// Also the engines' common end (killEngineTree, closePipes), their CPU priority (lowerEnginePriority) and the forced-kill
+// count for app_state's health.
 // Used by claude.ts, acp.ts, proctree.ts, manager.ts and index.ts (start).
 import { spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import { log } from '../log';
+import { errText, log } from '../log';
 import { killTrees } from './cli';
 
 const CS = `
@@ -396,6 +398,24 @@ export function killEngineTree(pid: number | null | undefined, job: number | nul
   if (jobGuard.has(job)) { void jobGuard.kill(job, chatId).then(ok => { if (!ok) killTrees([pid], { fallback }); }); return true; }
   killTrees([pid], { fallback });
   return false;
+}
+
+/** Puts a just-spawned engine below normal CPU priority (Windows: BELOW_NORMAL_PRIORITY_CLASS; elsewhere nice 10).
+ *  Why: on 2026-10-27 the owner's window froze for 1-70 s while 15-20 engines, their MCP servers and the CLIs' taskkill
+ *  storms kept the PC at 80-100% CPU; the app's main process (the window's UI thread and Node's event loop) ran at the
+ *  same priority and waited for the CPU, with almost none of the freeze inside the app's own code (perf.ts cpuMs).
+ *  Every process the engine starts later (MCP servers, shells, git, builds, taskkill) inherits the class (CreateProcess
+ *  gives a child of a below-normal parent its class), so the app's window always goes first and agents use what is
+ *  left; on an idle PC they run as fast as before. Called right after spawn, before the engine starts anything.
+ *  False = not lowered (no pid, or the OS refused): the engine runs anyway, logged once. */
+let priorityWarned = false;
+export function lowerEnginePriority(pid: number | null | undefined, setPriority: (pid: number, p: number) => void = os.setPriority): boolean {
+  if (!pid) return false;
+  try { setPriority(pid, os.constants.priority.PRIORITY_BELOW_NORMAL); return true; }
+  catch (e) {
+    if (!priorityWarned) { priorityWarned = true; log.warn('chats', 'engine priority not lowered', { data: { pid }, cause: errText(e), hint: 'the engine runs at normal priority: a busy PC can slow the window again' }); }
+    return false;
+  }
 }
 
 /** The engine exited but 'close' waits: a leftover it started inherited its stdout/stderr and keeps them open. Ending

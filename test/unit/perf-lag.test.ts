@@ -2,7 +2,7 @@
 // log line (main/perf.ts: clamped numbers, a warning above 100 ms p95), and the alive-marks heartbeat
 // (renderer/lib/beat.ts: steps only while a mark is on the page, attributes in turn).
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanReport, logInputLag, SLOW_P95_MS, SLOW_STEP_MS, STALL_MS, slowStep, stallOf, startStallWatch, timedStep } from '../../src/main/perf';
+import { cleanReport, logInputLag, SLOW_P95_MS, SLOW_STEP_MS, STALL_MS, slowStep, stallCause, stallOf, startStallWatch, timedStep } from '../../src/main/perf';
 import { log } from '../../src/main/log';
 
 const invoke = vi.fn(() => Promise.resolve());
@@ -137,4 +137,21 @@ describe('main-process stall watch (2026-10-27: "va a scatti")', () => {
     expect(second.topSinceLast[0]!.label).toBe('ipc flows:list');
     stop(); warn.mockRestore(); vi.useRealTimers();
   });
+  it('a stall with little CPU for the app says it waited for a busy PC, with the PC\'s load', () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
+    let t = 0, cpu = 0, busy = 0, total = 0;
+    const stop = startStallWatch(() => t, () => ({ user: cpu, system: 0 }), () => ({ busy, total }));
+    // 2 s late, the main process got 40 ms of CPU, the PC was 95% busy
+    t += 2100; cpu += 40_000; busy += 9500; total += 10_000; vi.advanceTimersByTime(100);
+    const call = warn.mock.calls[0]![2]!;
+    expect(call.data).toMatchObject({ ms: 2000, cpuMs: 40, machineCpu: 95 });
+    expect(String(call.cause)).toContain('waiting for a busy PC (CPU 95%)');
+    stop(); warn.mockRestore(); vi.useRealTimers();
+  });
+  it('a stall the app spent on the CPU is not blamed on the PC', () => {
+    expect(stallCause({ ms: 1000, steps: [], cpuMs: 900 })).toContain('no labelled step ran');
+    expect(stallCause({ ms: 1000, steps: [{ label: 'x', ms: 800 }], cpuMs: 10 })).toContain('while x 800 ms');
+  });
 });
+

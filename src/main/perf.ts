@@ -6,6 +6,10 @@
 // main process's JS runs on the browser UI thread, which routes input to the page and presents its frames, so a long
 // synchronous step there (a big JSON write, a sync rename retry) freezes the whole window with no spinner. It logs
 // each stall with the slow steps noted during it (slowStep), so `npm run logs -- --scope perf` names the cause.
+// Each stall also says how much CPU the app's main process got while it was late (cpuMs, all its threads) and how busy
+// the PC was (machineCpu %): a stall with little cpuMs was not the app's own work but the app waiting for the CPU
+// (2026-10-27: 0.13% of 995 s of stalls was inside labelled steps; the PC sat at 80-100% with the agents' processes).
+import os from 'node:os';
 import type { InputLagReport } from '../shared/contract';
 import { log } from './log';
 
@@ -63,23 +67,52 @@ const topOf = (t: Iterable<[string, { ms: number; n: number }]>, max: number) =>
 
 /** What one tick saw: a stall (late by at least STALL_MS) with its suspects (labels by total time), or null. Pure, for
  *  the tests. labeledMs = the part of the stall spent inside labelled steps (the rest: GC, unlabelled callbacks). */
-export function stallOf(lateMs: number, noted: readonly { label: string; ms: number; n?: number }[], labeledMs?: number): { ms: number; steps: { label: string; ms: number; n?: number }[]; labeledMs?: number } | null {
+export function stallOf(lateMs: number, noted: readonly { label: string; ms: number; n?: number }[], labeledMs?: number, cpu?: { cpuMs: number; machineCpu?: number | null }): Stall | null {
   if (lateMs < STALL_MS) return null;
   const t: Tally = new Map();
   for (const s of noted) add(t, s.label, s.ms, s.n ?? 1);
-  return { ms: Math.round(lateMs), steps: topOf(t, 5), ...(labeledMs !== undefined ? { labeledMs: Math.round(labeledMs) } : {}) };
+  return {
+    ms: Math.round(lateMs), steps: topOf(t, 5), ...(labeledMs !== undefined ? { labeledMs: Math.round(labeledMs) } : {}),
+    ...(cpu ? { cpuMs: Math.round(cpu.cpuMs), ...(typeof cpu.machineCpu === 'number' ? { machineCpu: cpu.machineCpu } : {}) } : {}),
+  };
+}
+interface Stall { ms: number; steps: { label: string; ms: number; n?: number }[]; labeledMs?: number; cpuMs?: number; machineCpu?: number }
+
+/** Below this share of the stall spent on the CPU (cpuMs / ms), the main process was waiting, not working: the PC's
+ *  CPU went to other processes (or a lock or the disk held it). */
+export const STARVED_SHARE = 0.25;
+/** Why the window froze, for the log line's `cause`. Pure, for the tests. */
+export function stallCause(s: Stall): string {
+  if (s.steps.length) return `the window froze ${s.ms} ms while ${named(s.steps)}`;
+  if (s.cpuMs !== undefined && s.cpuMs < s.ms * STARVED_SHARE) {
+    return `the window froze ${s.ms} ms with the app on the CPU for only ${s.cpuMs} ms: it was waiting for a busy PC${s.machineCpu !== undefined ? ` (CPU ${s.machineCpu}%)` : ''}, not running its own code`;
+  }
+  return `the window froze ${s.ms} ms (no labelled step ran: GC, a native call, an unlabelled callback or the PC itself)`;
+}
+
+/** Busy share of all the PC's cores since `from` (os.cpus() times), 0-100; null when nothing elapsed. */
+const cpuTimes = () => { let busy = 0, total = 0; for (const c of os.cpus()) { const t = c.times, all = t.user + t.nice + t.sys + t.idle + t.irq; total += all; busy += all - t.idle; } return { busy, total }; };
+function machineBusy(from: { busy: number; total: number }, to: { busy: number; total: number }): number | null {
+  const total = to.total - from.total;
+  return total > 0 ? Math.round(((to.busy - from.busy) / total) * 100) : null;
 }
 
 const named = (steps: { label: string; ms: number; n?: number }[]) => steps.map(s => `${s.label} ${s.ms} ms${s.n ? ` (${s.n}×)` : ''}`).join(', ');
 
 /** Watches the main thread: a tick late by STALL_MS or more logs a `perf` warning (at most one a minute, the rest
  *  counted, with the labels that ran in them: topSinceLast). */
-export function startStallWatch(now: () => number = () => performance.now()): () => void {
-  let last = now(), lastLog = -Infinity, missed = 0, worst = 0;
+export function startStallWatch(now: () => number = () => performance.now(), usage: () => NodeJS.CpuUsage = () => process.cpuUsage(), machine: () => { busy: number; total: number } = cpuTimes): () => void {
+  let last = now(), lastLog = -Infinity, missed = 0, worst = 0, ticks = 0;
+  let lastCpu = usage(), lastMachine = machine();
   const timer = setInterval(() => {
     const t = now(), late = t - last - TICK_MS;
     last = t;
-    const stall = stallOf(late, [...tally].map(([label, v]) => ({ label, ms: v.ms, n: v.n })), outer);
+    const cpuNow = usage(), cpuMs = (cpuNow.user - lastCpu.user + cpuNow.system - lastCpu.system) / 1000;
+    lastCpu = cpuNow;
+    // the PC's load: read at a stall, else once a second (os.cpus() is not free)
+    let machineCpu: number | null = null;
+    if (late >= STALL_MS || ++ticks % 10 === 0) { const m = machine(); if (late >= STALL_MS) machineCpu = machineBusy(lastMachine, m); lastMachine = m; }
+    const stall = stallOf(late, [...tally].map(([label, v]) => ({ label, ms: v.ms, n: v.n })), outer, { cpuMs, machineCpu });
     const seen = tally;
     tally = new Map(); outer = 0;
     if (!stall) return;
@@ -90,7 +123,7 @@ export function startStallWatch(now: () => number = () => performance.now()): ()
     }
     const top = topOf(minute, 8);
     log.warn('perf', 'main process blocked', { data: { ...stall, ...(missed ? { sinceLast: missed, worstSinceLast: worst, ...(top.length ? { topSinceLast: top } : {}) } : {}) },
-      cause: stall.steps.length ? `the window froze ${stall.ms} ms while ${named(stall.steps)}` : `the window froze ${stall.ms} ms (no labelled step ran: GC, a native call, an unlabelled callback or the PC itself)`,
+      cause: stallCause(stall),
       hint: 'a synchronous step on the main process blocks input and frames; see the steps named here (topSinceLast: the stalls of the last minute)' });
     lastLog = t; missed = 0; worst = 0; minute = new Map();
   }, TICK_MS);

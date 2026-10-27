@@ -29,7 +29,7 @@ import { sysEn, type SysCode, type SysParams } from '../../shared/sys';
 import { errText, log } from '../log';
 import { timedStep } from '../perf';
 import { CLOSE_GRACE_MS, commandFor, findCli, killTrees, resolveClaude } from './cli';
-import { closePipes, engineKills, jobGuard, killEngineTree } from './jobguard';
+import { closePipes, engineKills, jobGuard, killEngineTree, lowerEnginePriority } from './jobguard';
 import { reapEnabled, reapEngine, type Root } from './proctree';
 import { LiveCost, priceUsage } from './live-cost';
 import { describeSuggestions, diffFor, diffFromResult, flattenAnswers, permissionText, questionsFrom, resultText, resumedAgent, shellExit, toolSummary } from './claude-map';
@@ -327,6 +327,7 @@ export class ClaudeSession implements HarnessSession {
     }
     const spawnMs = Date.now();
     const p = this.proc;
+    lowerEnginePriority(p.pid); // below the app's window: a busy PC slows agents, not the app (jobguard.ts)
     log.info('chats', 'session start', { chat, data: { pid: p.pid, cli, cwd: this.opts.cwd, args } });
     p.stdout.setEncoding('utf8');
     p.stdout.on('data', (d: string) => timedStep('engine claude output', () => this.onStdout(d)));
