@@ -15,7 +15,7 @@ import { type AgentRunStore, endRun } from './runs';
 export interface OneShotRequest {
   agentId: string; system: string; prompt: string; maxOutputTokens: number; timeoutMs: number;
   purpose: OneShotPurpose;
-  /** the lightest model of the engine and no role text: a small job that is no role's work (the working-line phrases) */
+  /** the lightest model of the engine and no role text: a small job that is no role's work */
   light?: boolean;
 }
 export type OneShotResult = {

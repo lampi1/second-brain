@@ -25,8 +25,7 @@ import { CodeBlock } from './CodeBlock';
 import { VisualBlock, isVisualLang } from './VisualBlock';
 import { explainTool } from '@shared/explain';
 import { useNow } from '../lib/clock';
-import { LINE_MS, typingText } from '../lib/typing-line';
-import { useDailyPhrases } from '../store/daily-phrases';
+import { liveLine } from '../lib/typing-line';
 import { IconAlert, IconArrowDown, IconArrowRight, IconBell, IconBolt, IconBranch, IconCheck, IconChevronDown, IconChevronRight, IconInfo, IconLink, IconPlus, IconRefresh, IconSend, IconSparkle, IconSpinner, IconTerminal, IconX } from './Icons';
 import { splitNotes } from '../lib/sendable';
 import { getForeignLabel, foreignOf, showsSender, type Foreign, type ForeignKind } from '../lib/foreign';
@@ -156,14 +155,12 @@ const Message = memo(function Message({ id, text, streaming }: { id: string; tex
   );
 });
 
-/** The running turn's line: a turning spark and, while it thinks or works, a workshop phrase picked by the task's kind of
- *  work (lib/typing-line.ts; `topic` = the task's title or request), "sta scrivendo…" while it writes. `children`
- *  replaces the words with what the chat does (a collapsed strip's step, StripActivity.tsx); the data-what hook stays. */
-export function Typing({ what, testid, topic = '', children }: { what: 'scrive' | 'pensa' | 'lavora'; testid?: string; topic?: string; children?: ReactNode }) {
-  const now = useNow(LINE_MS);
-  const daily = useDailyPhrases();
-  const line = what === 'scrive' ? t('chat.items.typing.writing') : typingText(topic, now, daily);
-  return <div className="typing" role="status" aria-live="off" data-testid={testid} data-what={what}><TypingSpark />{children ?? <span key={line} className="typing-line">{line}</span>}</div>;
+/** The running turn's line: a turning spark and what the chat does now (lib/typing-line.ts: the tool or command running,
+ *  the plan item in progress, else "sta pensando…"), "sta scrivendo…" while it writes. `children` replaces the words with
+ *  a collapsed strip's step and silence (StripActivity.tsx); the data-what hook stays. */
+export function Typing({ what, testid, items, children }: { what: 'scrive' | 'pensa' | 'lavora'; testid?: string; items?: readonly ChatItem[]; children?: ReactNode }) {
+  const line = children ? null : liveLine(items, what);
+  return <div className="typing" role="status" aria-live="off" data-testid={testid} data-what={what}><TypingSpark />{children ?? (line && <span key={line.text + (line.code ?? '')} className="typing-line">{line.text}{line.code && <> <code>{line.code}</code></>}</span>)}</div>;
 }
 
 /** The working mark: a four-point spark that turns and breathes (transform and opacity only: the compositor draws it). */

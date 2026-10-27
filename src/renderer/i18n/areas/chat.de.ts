@@ -62,6 +62,8 @@ export const chatDe: typeof chatIt = {
   'chat.items.modeTip.plan': 'An einen Strategist-Chat übergeben, der plant und delegiert',
   'chat.items.modeTip.new': 'Der Orchestrator öffnet für diese Anfrage einen neuen Chat',
   'chat.items.typing.writing': 'schreibt…',
+  'chat.items.typing.thinking': 'denkt nach…',
+  'chat.items.typing.working': 'arbeitet…',
   'chat.items.toolStatus.running': 'läuft',
   'chat.items.toolStatus.ok': 'fertig',
   'chat.items.toolStatus.error': 'Fehler',

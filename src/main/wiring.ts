@@ -67,7 +67,6 @@ import { issuesUrlOf, ResearchService } from './brainmodel/research';
 import { ghRun, openIssue } from './brainmodel/issue-open';
 import { hiddenOpened, hiddenRun } from './window';
 import { saveAiIdea } from './brain/save-idea';
-import { DailyPhrasesService } from './daily-phrases';
 import { researchTools } from './brainmodel/research-tools';
 import { createBrain } from './brain';
 import { setLaunchRules } from './brain/adapters/domains';
@@ -168,8 +167,6 @@ export interface Wired {
   brainModel: BrainModelService;
   /** the maintenance with research (ADR 0132): maintenance:* IPC, the Proposte deck's 'research' source */
   research?: ResearchService;
-  /** the working-line phrases of the day: 'phrases:today' */
-  phrases?: DailyPhrasesService;
   /** the morning block ("Mentre eri via", ADR 0102); absent = the channel answers "nothing to show" */
   morning?: MorningService;
   setup: SetupService;
@@ -973,10 +970,6 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   researchRef.current = research;
   ctx.emitter.tap((channel, payload) => { if (channel === 'chat:updated') research.chatUpdated(payload as ChatSummary); });
   addChatTools(researchTools(research));
-  // the working-line phrases of the day (owner, 2026-10-23): one small request a day to the lightest model, never in the tests
-  const phrases = new DailyPhrasesService({ userData: ctx.userData, lang: uiLang, emit: () => ctx.emitter.emit('phrases:changed', undefined),
-    ask: async (system, prompt) => { const r = await oneShot.runOnce({ agentId: 'herald', purpose: 'phrases', light: true, system, prompt, maxOutputTokens: 2400, timeoutMs: 90_000 }); return { ok: r.ok, text: r.text, ...(r.reason ? { reason: r.reason } : {}) }; } });
-  if (!process.env.SB_TEST) phrases.start();
   const replayRoot = () => { const root = brain.info().brainRoot; return root ? fs.realpathSync(root) : null; };
   const executeReplay = replayExecutor({ root: replayRoot, runs: () => manager.runs.list(),
     roleEngine: role => agents.list().profiles.find(p => p.id === role)?.engine ?? 'claude',
@@ -992,7 +985,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     stallMin: () => checkedDelegation(brain.settings().delegation).stallMin, lastEventAt: id => manager.lastEventAt(id) });
 
   return {
-    workflows, flows, brainModel, research, phrases, memoryReview, learningReview, queries: brainQueries,
+    workflows, flows, brainModel, research, memoryReview, learningReview, queries: brainQueries,
     morning,
     mcpServers,
     cloud, chats, browser, personal, recordings, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, suggestSkills,
@@ -1003,7 +996,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { flows.stop(); mcpServers.stop(); brainModel.stop(); phrases.stop(); cloud.shutdown(); clearInterval(autoCloseTimer); if (flowDeadlineTimer) clearInterval(flowDeadlineTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), personal.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { flows.stop(); mcpServers.stop(); brainModel.stop(); cloud.shutdown(); clearInterval(autoCloseTimer); if (flowDeadlineTimer) clearInterval(flowDeadlineTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), personal.shutdown(), brain.shutdown()]); },
     killNow: () => { compareRuns.killNow(); manager.killAll(); runner.shutdown(); },
   };
 }

@@ -1,38 +1,26 @@
-// The line of a working chat (owner, 2026-10-22: "frasi belle divertenti a tema … a tema del task", then «battute
-// esilaranti e cringe»): a short dev joke picked by the task's kind of work, read from its title or request with the routing lexicon
-// (shared/work-concepts.ts conceptsOf: fix, build, qa, research…), "any" when none matches. Zero tokens. The phrase
-// changes every LINE_MS on the shared UI clock (frozen in the demo, so screenshots stay stable), each chat starting from
-// its own place so two chats rarely say the same thing. The phrases of the day (main/daily-phrases.ts: the lightest
-// model rewrites them once a day, owner 2026-10-23) replace a kind's fixed ones when they are there
-// (store/daily-phrases.ts reads them). Pure; used by components/ChatItems.tsx Typing and StripActivity.tsx.
-import type { ChatItem, DailyPhrases } from '@shared/contract';
-import { conceptsOf, type Concept } from '@shared/work-concepts';
-import type { typingIt } from '../i18n/areas/typing.it';
+// The line of a working chat (owner, 2026-10-27: «al posto delle frasi divertenti … quello che sta realmente facendo»,
+// ADR 0173): what the chat does now, read from its transcript at zero tokens, the same for every engine (Claude, Cursor,
+// Codex, cloud): the tool or command running ("Lancia `npm test`", "Sto modificando login.ts", "Delega a Artisan"),
+// else the engine's plan item in progress, else a plain "sta pensando…" / "sta lavorando…", "sta scrivendo…" while the
+// reply streams. The words come from lib/run-steps.ts (the delegated cards' lines). Pure; used by components/ChatItems.tsx
+// Typing and StripActivity.tsx, pinned by test/unit/typing-line.test.ts.
+import type { ChatItem } from '@shared/contract';
+import { enginePlan, lastActionStep } from './run-steps';
 import { t } from '../i18n';
 
-export type TypingKey = keyof typeof typingIt;
+export interface LiveLine { text: string; code?: string }
 
-export const LINE_MS = 5000; // a joke takes longer to read than a word
-/** How many phrases each kind has (the keys typing.<kind>.0 … n-1 in i18n/areas/typing.*.ts). */
-export const LINES: Readonly<Record<Concept | 'any', number>> = { any: 16, fix: 6, build: 6, review: 6, qa: 6, cause: 6, ops: 6, runbook: 6, research: 6, write: 6, inbox: 6, plan: 6 };
-
-const seed = (s: string): number => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); };
-
-/** The i18n key of the phrase for `topic` (the task's title or request) at `now`. */
-export function typingKey(topic: string, now: number): TypingKey {
-  const kind: Concept | 'any' = conceptsOf(topic)[0] ?? 'any';
-  return `typing.${kind}.${(Math.floor(now / LINE_MS) + seed(topic)) % LINES[kind]}` as TypingKey;
-}
-
-/** The line for `topic` at `now`: the day's phrase of its kind when there is one, else the fixed one (typingKey). */
-export function typingText(topic: string, now: number, daily: DailyPhrases | null): string {
-  const kind: Concept | 'any' = conceptsOf(topic)[0] ?? 'any';
-  const lines = daily?.lines[kind];
-  return lines?.length ? lines[(Math.floor(now / LINE_MS) + seed(topic)) % lines.length]! : t(typingKey(topic, now));
-}
-
-/** The topic of a chat with no task title (the Orchestrator, Flash): the user's last request. */
-export function lastAsk(items: readonly ChatItem[] | undefined): string {
-  for (let i = (items?.length ?? 0) - 1; i >= 0; i--) { const it = items![i]!; if (it.kind === 'user') return it.text.slice(0, 400); }
-  return '';
+/** What the chat does now; `what` is turnActivity's reading of the last item. */
+export function liveLine(items: readonly ChatItem[] | undefined, what: 'scrive' | 'pensa' | 'lavora'): LiveLine {
+  if (what === 'scrive') return { text: t('chat.items.typing.writing') };
+  // only this turn: a plan item left "in progress" by a stopped earlier turn is no "now"
+  const all = items ?? [];
+  let from = all.length;
+  while (from > 0 && all[from - 1]!.kind !== 'user') from--;
+  const list = all.slice(from);
+  const action = lastActionStep(list, true);
+  if (action?.mark === 'cur') return { text: action.text, ...(action.code ? { code: action.code } : {}) };
+  const planCur = enginePlan(list)?.find(p => p.mark === 'cur');
+  if (planCur) return { text: planCur.text };
+  return { text: t(what === 'lavora' ? 'chat.items.typing.working' : 'chat.items.typing.thinking') };
 }

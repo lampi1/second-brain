@@ -25,10 +25,9 @@ export const ChatTranscript = memo(function ChatTranscript({ chatId, busy, expan
   }, []);
   const active = visible && expanded;
   const items = useApp(s => snapshot.current(s.items[chatId], active));
-  const title = useApp(s => s.chats[chatId]?.title ?? '');
   return <div ref={ref} className="chat-transcript" data-transcript-visible={active ? 'true' : 'false'}>
     {items === undefined ? <div className="items-wrap"><div className={`items skeleton${active ? '' : ' still'}`} aria-label={t('product.transcriptLoading')}><i /><i /><i className="short" /></div></div> :
       <ItemList chatId={chatId} items={items ?? EMPTY} empty={t('product.transcriptEmpty')}
-        footer={busy ? <Typing what={turnActivity(items)} testid={`typing-${chatId}`} topic={title} /> : null} />}
+        footer={busy ? <Typing what={turnActivity(items)} testid={`typing-${chatId}`} items={items} /> : null} />}
   </div>;
 });
