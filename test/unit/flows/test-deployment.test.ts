@@ -63,6 +63,23 @@ it('does not activate a different definition snapshot and does not repeat an amb
   await expect(lost.coordinator.execute('deploy-test', lost.target, 40, lost.ports)).rejects.toThrow('already requested'); expect(await lost.coordinator.settle('run-a', lost.ports.authorize)).toBe(false);
   expect(lost.call.mock.calls.filter(c => c[0] === 'POST')).toHaveLength(1);
 });
+it('persists the environment instance of a rejected draft so status and cancel can reach it', async () => {
+  const s = setup(); s.set({ snapshotRevision: 3 }); await expect(s.coordinator.execute('deploy-test', s.target, 40, s.ports)).rejects.toThrow('snapshot');
+  expect(s.coordinator.history('run-a')[0]).toMatchObject({ state: 'draft', releaseId: 20, environmentId: 90 });
+  await expect(s.coordinator.execute('cancel-test-deploy', s.target, undefined, s.ports, 20)).resolves.toMatchObject({ status: 'cancellation-requested', environmentId: 90 });
+});
+it('recovers a missing environment id from the release for status and cancel', async () => {
+  const s = setup(), file = path.join(path.dirname(s.config), 'state.json');
+  const legacy = () => fs.writeFileSync(file, JSON.stringify({ schema: 1, deployments: [{ runId: 'run-a', target: s.target, buildId: 40, commit, state: 'draft', releaseId: 20, token: 't' }] }));
+  legacy(); await expect(s.coordinator.execute('test-deploy-status', s.target, undefined, s.ports, 20)).resolves.toMatchObject({ releaseId: 20, environmentId: 90, terminal: false });
+  expect(s.coordinator.history('run-a')[0]).toMatchObject({ environmentId: 90 });
+  legacy(); await expect(s.coordinator.execute('cancel-test-deploy', s.target, undefined, s.ports, 20)).resolves.toMatchObject({ status: 'cancellation-requested', environmentId: 90 });
+  expect(s.call.mock.calls.some(c => c[0] === 'PATCH' && c[1].includes('/releases/20/environments/90?'))).toBe(true);
+  const ambiguous = setup(), original = ambiguous.call.getMockImplementation()!;
+  ambiguous.call.mockImplementation(async (method, url, body) => url.includes('/release/releases/20?') ? { id: 20, releaseDefinition: { id: 4 }, environments: [{ id: 90, definitionEnvironmentId: 9 }, { id: 91, definitionEnvironmentId: 9 }] } : original(method, url, body));
+  fs.writeFileSync(path.join(path.dirname(ambiguous.config), 'state.json'), JSON.stringify({ schema: 1, deployments: [{ runId: 'run-a', target: ambiguous.target, buildId: 40, commit, state: 'draft', releaseId: 20, token: 't' }] }));
+  await expect(ambiguous.coordinator.execute('test-deploy-status', ambiguous.target, undefined, ambiguous.ports, 20)).rejects.toThrow('unknown outcome');
+});
 it('rechecks authority and node membership before release creation', async () => {
   const revoked = setup(); revoked.set({ revoke: true }); await expect(revoked.coordinator.execute('deploy-test', revoked.target, 40, revoked.ports)).rejects.toThrow('revoked'); expect(revoked.call).not.toHaveBeenCalled();
   const added = setup(); added.set({ extraNode: true }); await expect(added.coordinator.execute('deploy-test', added.target, 40, added.ports)).rejects.toThrow('only the exact'); expect(added.call.mock.calls.some(c => c[0] === 'POST')).toBe(false);

@@ -135,8 +135,15 @@ export class TestDeploymentCoordinator {
     if (op === 'test-deploy-status' || op === 'cancel-test-deploy') {
       if (!own) throw new Error('This run has no deployment on this target with that owned release id');
       if (deploymentHash(own.target) !== deploymentHash(target)) throw new Error('Deployment target differs from the approved historical target');
-      if (!own.releaseId || !own.environmentId) throw new Error('Release creation has an unknown outcome; the test lease remains held. Reconcile in Azure DevOps before any new release.');
+      const unknownOutcome = 'Release creation has an unknown outcome; the test lease remains held. Reconcile in Azure DevOps before any new release.';
+      if (!own.releaseId) throw new Error(unknownOutcome);
       const release = await call('GET', `${releaseBase}/releases/${own.releaseId}?${API}`);
+      if (!own.environmentId) {
+        // Older entries saved the release id before its environment id: recover the one instance of the approved environment.
+        const matches = Array.isArray(release.environments) ? release.environments.map(v => object(v, 'release environment')).filter(e => e.definitionEnvironmentId === target.environmentId) : [];
+        if (matches.length !== 1) throw new Error(unknownOutcome);
+        own.environmentId = pos(matches[0]!.id); this.save(state);
+      }
       const env = Array.isArray(release.environments) ? release.environments.map(v => object(v, 'release environment')).find(e => e.id === own.environmentId && e.definitionEnvironmentId === target.environmentId) : undefined;
       if (!env || object(release.releaseDefinition, 'release definition').id !== target.releaseDefinitionId) throw new Error('Deployment identity changed');
       const status = release.status === 'abandoned' ? 'canceled' : String(env.status);
@@ -223,7 +230,12 @@ export class TestDeploymentCoordinator {
       if (error instanceof NoRemoteEffect) { state.deployments = state.deployments.filter(d => d.token !== entry.token); this.save(state); }
       throw error;
     }
-    entry.releaseId = pos(release.id); entry.state = 'draft'; this.save(state);
+    entry.releaseId = pos(release.id); entry.state = 'draft';
+    // Persist the environment instance before validating, so status/cancel can always reach a rejected draft.
+    const created = Array.isArray(release.environments) ? release.environments.map(v => object(v, 'release environment')).filter(e => e.definitionEnvironmentId === target.environmentId) : [];
+    const createdId = created.length === 1 ? created[0]!.id : undefined;
+    if (typeof createdId === 'number' && Number.isSafeInteger(createdId) && createdId > 0) entry.environmentId = createdId;
+    this.save(state);
     if (release.status !== 'draft' || release.releaseDefinitionRevision !== target.definitionRevision || object(release.releaseDefinition, 'release definition').id !== target.releaseDefinitionId || !Array.isArray(release.environments) || release.environments.length !== 1) throw new Error('Created draft does not match the approved definition snapshot; it remains inactive');
     const env = object(release.environments[0], 'release environment');
     if (env.definitionEnvironmentId !== target.environmentId || env.name !== target.environmentName) throw new Error('Draft environment identity differs');
