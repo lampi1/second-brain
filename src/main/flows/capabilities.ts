@@ -61,7 +61,7 @@ export function flowCapabilities(section: unknown = 'overview'): object {
     };
     case 'browser': return {
       model: 'The runtime owns one browser per run and signs in itself, host side, with the package credentials (the stored loginUrl, query included, e.g. https://host/Account/Login?mode=local); it signs in again when a page lands on the login path. The session gets it through the runtime MCP server routine-browser.',
-      declare: 'routine.browser {origins: ["https://exact.origin"]} (the origins it may open; each credential\'s loginUrl origin must be one of them) and browser: true on each step that uses it; allowedTools mcp__routine-browser__*.',
+      declare: 'routine.browser {origins: ["https://exact.origin"], hide?: ["#overlay"]} (the origins it may open; each credential\'s loginUrl origin must be one of them; hide = CSS selectors of overlays hidden on every page, e.g. Air\'s Maia chat "#draggable", "ai-chat") and browser: true on each step that uses it; allowedTools mcp__routine-browser__*.',
       tools: 'navigate {url}, snapshot {} (page text + elements with refs e1..), click {ref}, type {ref, text} (refuses password fields), select_option {ref, value}, screenshot {name?} (saved as step evidence).',
       prompt: 'Say "the browser is already logged into <site>"; never write login steps, credentials or selectors into a prompt.',
       loginSuccess: '[{loginUrl, success: {urlNotContaining:"/Account/Login"} | {selector}}]: for AJAX login pages (e.g. Air: the button is type=button, success = the URL leaves /Account/Login); loginUrl equal to the credential\'s, query included.',

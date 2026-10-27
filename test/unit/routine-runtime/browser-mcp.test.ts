@@ -32,6 +32,10 @@ describe('routine browser format', () => {
     const pkg = parseRoutinePackage({ ...base, routine: { id: 'r', title: 'R', steps, browser: { origins: ['https://a.test'] } } });
     expect(pkg.routine.browser).toEqual({ origins: ['https://a.test'] });
     expect(pkg.routine.steps[0]!.browser).toBe(true);
+    // hide: plain selectors only, never a rule of their own
+    const hide = (h: string[]) => parseRoutinePackage({ ...base, routine: { id: 'r', title: 'R', steps, browser: { origins: ['https://a.test'], hide: h } } }).routine.browser;
+    expect(hide(['#draggable', 'ai-chat'])).toEqual({ origins: ['https://a.test'], hide: ['#draggable', 'ai-chat'] });
+    expect(() => hide(['a} body { display: none'])).toThrow(/CSS selector/);
   });
   it('the login page is matched by origin and path, whatever the query', () => {
     const logins = [{ loginUrl: 'https://a.test/Account/Login?mode=local', user: 'u', password: 'p' }];
@@ -148,6 +152,7 @@ describe.skipIf(!browserAvailable)('routine browser over a fixture login page', 
       origins: [site.origin], profileDir: path.join(dir, 'profile'), evidence: path.join(dir, 'evidence'), events: { file: path.join(dir, 'events.jsonl'), n: 1 },
       headless: true, logins: [{ loginUrl: `${site.origin}/Account/Login?mode=local`, user: FIXTURE_USER, password: FIXTURE_PASSWORD },
         { id: 'tester', loginUrl: `${site.origin}/Account/Login?mode=local`, user: 'set-by-the-step', password: TESTER_PASSWORD }],
+      hide: ['#chat'],
     };
     browser = await launchBrowser(config);
     session = createBrowserSession(config, { page: async () => browser.page, now: () => 42 });
@@ -182,7 +187,11 @@ describe.skipIf(!browserAvailable)('routine browser over a fixture login page', 
     expect((await call('snapshot')).text).toMatch(/= hello/);
   }, 60_000);
 
-  it('stays inside the declared origins', async () => {
+  it('stays inside the declared origins; a new tab elsewhere is blocked without ending the server', async () => {
+    // the click used to throw inside the route handler (a new tab's request has no frame yet) and end the server
+    const snap = (await call('snapshot')).text;
+    expect(await call('click', { ref: /\[(e\d+)\] a "Elsewhere"/.exec(snap)?.[1] })).toMatchObject({ isError: false });
+    expect((await call('snapshot')).text).toContain(`URL: ${site.origin}/form`);
     const other = site.origin.replace('127.0.0.1', 'localhost');
     expect(await call('navigate', { url: `${other}/home` })).toMatchObject({ isError: true });
     expect(await call('navigate', { url: 'file:///C:/Windows/win.ini' })).toMatchObject({ isError: true });

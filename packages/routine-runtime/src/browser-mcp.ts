@@ -9,7 +9,8 @@
 // clears the session and signs in as a named credential (user override allowed, password always the stored one;
 // the profile remembers that user so the next step's default login signs it out first); `fill_secret` puts a named
 // credential's password into a password field (an admin page setting that user's password), the value never in a
-// reply. Every navigation stays inside `routine.browser.origins`; `type` refuses password fields; credential
+// reply. Every top-level navigation (a new tab's included) stays inside `routine.browser.origins`; the selectors of
+// `routine.browser.hide` (an overlay like Air's Maia chat) are hidden on every page; `type` refuses password fields; credential
 // values are masked in every reply; screenshots go to the step's evidence folder and to events.jsonl. The browser
 // profile (cookies) is one folder per run, so a login survives the steps of a run. Config: the 0600 temp file named by
 // SB_ROUTINE_BROWSER_CONFIG (it holds the credentials, so it never lives in the run folder). A failed login names its
@@ -40,6 +41,8 @@ export interface BrowserServerConfig {
   /** a Playwright channel ('msedge', 'chrome'); none = Playwright's Chromium, else Edge on Windows */
   channel?: string;
   logins: BrowserLogin[];
+  /** CSS selectors hidden on every page (`routine.browser.hide`: an overlay such as Air's Maia chat) */
+  hide?: string[];
 }
 
 type Json = Record<string, unknown>;
@@ -56,6 +59,15 @@ const TOOLS = [
 ];
 /** The profile file naming the non-default user whose session the profile's cookies hold, per origin (no values). */
 const ACTIVE_LOGIN_FILE = 'routine-active-login.json';
+
+/** The init script that hides `routine.browser.hide` on every page: one style element, added as soon as the document
+ *  exists; the selectors carry no braces (format.ts), so each one is a rule of its own. */
+export const HIDE_SCRIPT = (selectors: string[]): string => `(() => {
+  const css = ${JSON.stringify(selectors.map(s => `${s} { display: none !important; }`).join('\n'))};
+  const add = () => { if (document.getElementById('routine-hide') || !document.documentElement) return;
+    const s = document.createElement('style'); s.id = 'routine-hide'; s.textContent = css; (document.head || document.documentElement).appendChild(s); };
+  add(); document.addEventListener('DOMContentLoaded', add);
+})()`;
 const ACTION_TIMEOUT = 15_000;
 
 export interface BrowserServerIo {
@@ -402,9 +414,17 @@ export async function launchBrowser(config: BrowserServerConfig, recovery: Profi
   }, recovery);
   await context.route('**/*', async route => {
     const request = route.request();
-    if (request.isNavigationRequest() && request.frame().parentFrame() === null && !allowedOrigin(config, request.url())) await route.abort('blockedbyclient');
-    else await route.continue();
+    // a new tab's first navigation (target=_blank, window.open) has no frame yet: request.frame() throws, and a throw
+    // here is an unhandled rejection that ends the whole server ("Connection closed" mid-step); it is a top-level one
+    let topLevel = false;
+    if (request.isNavigationRequest()) { try { topLevel = request.frame().parentFrame() === null; } catch { topLevel = true; } }
+    try {
+      if (topLevel && !allowedOrigin(config, request.url())) await route.abort('blockedbyclient');
+      else await route.continue();
+    } catch { /* the page or the request is gone: nothing to route */ }
   });
+  // overlays the package names (Air's Maia chat) never cover what a step clicks: hidden by a style on every page
+  if (config.hide?.length) await context.addInitScript(HIDE_SCRIPT(config.hide));
   const page = context.pages()[0] ?? await context.newPage();
   return { page: page as unknown as BrowserPage, close: () => context.close() };
 }
@@ -426,6 +446,9 @@ export async function browserMain(): Promise<void> {
   if (!file) { process.stderr.write('SB_ROUTINE_BROWSER_CONFIG is not set\n'); process.exit(2); }
   // read once and deleted: the login passwords it holds never stay where the session could read them
   const config = readConfigOnce<BrowserServerConfig>(file);
+  // a stray Playwright rejection must not end the server: it cannot be restarted (its config file is gone), so the
+  // step would lose its browser for good; the failing call already answers with its own error
+  process.on('unhandledRejection', e => { process.stderr.write(`routine-browser: ${e instanceof Error ? e.message.split('\n')[0] : String(e)}\n`); });
   let launched: Promise<{ page: BrowserPage; close(): Promise<void> }> | undefined;
   const browser = () => (launched ??= launchBrowser(config));
   try {

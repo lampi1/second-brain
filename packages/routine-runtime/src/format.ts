@@ -65,8 +65,9 @@ export interface RoutineDevOps {
 }
 /** Who is asked on DevOps when a step needs a person: a DevOps identity id (lowercase GUID). */
 export interface RoutineEscalation { contact: string; contactName?: string; pollMinutes?: number; reminderMinutes?: number }
-/** The runtime's browser (ADR 0175): the only origins its pages may open; logins come from `credentials`. */
-export interface RoutineBrowser { origins: string[] }
+/** The runtime's browser (ADR 0175): the only origins its pages may open; logins come from `credentials`. `hide` =
+ *  CSS selectors of overlays (a chat widget) the runtime hides on every page, so they never cover what a step clicks. */
+export interface RoutineBrowser { origins: string[]; hide?: string[] }
 export interface RoutineMcpServer { command: string; args?: string[]; env?: Record<string, string> }
 /** A read-only SQL Server test target; its login is in `secrets.testDbs[id]`. */
 export interface RoutineTestDb { id: string; server: string; port?: number; database: string; confirmedTestDatabase?: true }
@@ -197,9 +198,9 @@ function url(v: unknown, what: string): string {
   return s;
 }
 
-/** `browser.origins`: http(s) origins only (scheme://host[:port], no path), at least one. */
+/** `browser.origins`: http(s) origins only (scheme://host[:port], no path), at least one; `browser.hide`: plain selectors. */
 function browserRule(v: unknown): RoutineBrowser {
-  const b = obj(v, 'browser'); only(b, ['origins'], 'browser');
+  const b = obj(v, 'browser'); only(b, ['origins', 'hide'], 'browser');
   const origins = strs(b.origins, 'browser.origins', 16).map((o, i) => {
     const u = url(o, `browser.origins[${i}]`);
     const origin = new URL(u).origin;
@@ -207,7 +208,12 @@ function browserRule(v: unknown): RoutineBrowser {
     return origin;
   });
   if (!origins.length) fail('browser.origins: at least one origin');
-  return { origins: [...new Set(origins)] };
+  const hide = b.hide === undefined ? [] : strs(b.hide, 'browser.hide', 16).map((h, i) => {
+    // a selector only: no braces, comments or tags, so it cannot add CSS rules of its own
+    if (!h.trim() || h.length > 200 || /[{}<>;]|\/\*/.test(h)) fail(`browser.hide[${i}]: a CSS selector, e.g. #draggable`);
+    return h.trim();
+  });
+  return { origins: [...new Set(origins)], ...(hide.length ? { hide } : {}) };
 }
 
 export function parseRoutineDefinition(v: unknown): RoutineDefinition {

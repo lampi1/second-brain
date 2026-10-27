@@ -76,7 +76,8 @@ export const SNAPSHOT_SCRIPT = `(() => {
   // Air-like pages may render inside iframes or keep the body hidden while loading: say so instead of an empty page
   const frames = [...document.querySelectorAll('iframe,frame')].filter(visible).slice(0, 10).map(f => {
     let doc = null; try { doc = f.contentDocument; } catch (e) { doc = null; }
-    const src = clip(f.getAttribute('src') || '', 120);
+    // no query: a widget frame's URL can carry its auth token (Air's Maia: ?auth=…)
+    const src = clip((f.getAttribute('src') || '').split('?')[0].split('#')[0], 120);
     return doc && doc.body ? '[frame ' + src + ', elements inside are not clickable by ref]\\n' + clip(doc.body.innerText || doc.body.textContent, 5000) : '[cross-origin frame ' + src + ', not readable]';
   });
   const body = document.body ? clip(document.body.innerText || document.body.textContent, 15000) : '';

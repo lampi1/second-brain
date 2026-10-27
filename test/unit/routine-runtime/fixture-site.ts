@@ -1,7 +1,7 @@
 // A local stand-in for Air's login (used by the routine browser tests and the CLI demo test): /Account/Login shows the
 // AJAX local login form (Air's real markup) only with ?mode=local (like Air), its button posts the credentials with fetch, /home needs the
 // session cookie (else a redirect to /Account/Login?ReturnUrl=… that drops mode=local), /logout ends the session, /form
-// has a text input and a password input, /users sets a second user's password and has a hidden-checkbox toggle. With `{ portal: true }` it acts like an Air node behind its portal: a request
+// has a text input and a password input under a full-page chat overlay plus a new-tab link elsewhere, /users sets a second user's password and has a hidden-checkbox toggle. With `{ portal: true }` it acts like an Air node behind its portal: a request
 // with no session (the bare root included) and /Account/Login without ?mode=local are redirected to a second server,
 // another origin, whose /Account/Login shows a login form the runtime must never fill. 127.0.0.1 only, random ports.
 import fs from 'node:fs';
@@ -77,7 +77,8 @@ export async function startFixtureSite(opts: { portal?: boolean } = {}): Promise
     if (url.pathname === '/users') return html(200, page('Users', `<style>.slider input { position: absolute; opacity: 0; width: 0; height: 0; } .slider span { display: inline-block; width: 30px; height: 14px; background: #ccc; }</style>
       <label>Password of ${FIXTURE_USER2} <input type="password" id="up"></label><button onclick="fetch('/users/password', { method: 'POST', body: JSON.stringify({ p: document.getElementById('up').value }) }).then(() => { document.getElementById('saved').textContent = 'saved'; })">Save</button><p id="saved"></p>
       <label for="print" class="wrap"><span>Stampa</span><div class="slider"><input id="print" type="checkbox" checked><span></span></div></label>`));
-    if (url.pathname === '/form') return html(200, page('Form', '<label>Note <input type="text" id="note"></label><label>New password <input type="password" id="np"></label><select id="s"><option value="a">Alpha</option><option value="b">Beta</option></select>'));
+    // a chat overlay over the whole page (like Air's Maia: hidden by routine.browser.hide) and a link to a new tab elsewhere
+    if (url.pathname === '/form') return html(200, page('Form', '<div id="chat" style="position:fixed;inset:0;background:#fff">Chat</div><a href="https://blocked.example.test/" target="_blank">Elsewhere</a><label>Note <input type="text" id="note"></label><label>New password <input type="password" id="np"></label><select id="s"><option value="a">Alpha</option><option value="b">Beta</option></select>'));
     html(404, page('404', 'not found'));
   });
   const origin = await listen(server);

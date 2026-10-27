@@ -382,7 +382,8 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
       disposers.push(() => { try { fs.rmSync(temp, { recursive: true, force: true }); } catch { /* temp */ } });
       const file = path.join(temp, 'browser.json');
       const config: BrowserServerConfig = { origins, profileDir, evidence: path.join(dir, 'evidence'), events: { file: path.join(paths.runsRoot, runId, EVENTS_FILE), n: record.n },
-        headless: options.browser.headless !== false, ...(options.browser.channel ? { channel: options.browser.channel } : {}), logins };
+        headless: options.browser.headless !== false, ...(options.browser.channel ? { channel: options.browser.channel } : {}), logins,
+        ...(routine.browser.hide ? { hide: routine.browser.hide } : {}) };
       fs.writeFileSync(file, JSON.stringify(config), { mode: 0o600 });
       mcpServers[BROWSER_SERVER_NAME] = { command: options.browser.server.command, args: options.browser.server.args, env: { ...(options.browser.server.env ?? {}), SB_ROUTINE_BROWSER_CONFIG: file } };
       browserNote = `A browser for ${origins.join(', ')}: the ${BROWSER_SERVER_NAME} MCP tools ${BROWSER_TOOLS.join(', ')}. `

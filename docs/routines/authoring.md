@@ -58,7 +58,7 @@ A step gets these by declaring them, never by adding them to `routine.mcpServers
 |--------|--------------------|-------|
 | `routine-devops` | the run has a work item | `get_work_item`, `get_work_item_comments`, `get_attachment` (read only) |
 | `routine-testdb` | the step lists ids in `testDbs` | `test_db_query` (read only, TEST databases only) |
-| `routine-browser` | the step has `browser: true` and the routine `browser.origins` | `navigate`, `snapshot`, `click`, `type`, `select_option`, `screenshot` |
+| `routine-browser` | the step has `browser: true` and the routine `browser.origins` | `navigate`, `snapshot`, `click`, `type`, `select_option`, `screenshot`, `login`, `fill_secret` |
 
 Allow their tools with `mcp__<server>__*` in `allowedTools`.
 
@@ -67,6 +67,9 @@ Allow their tools with `mcp__<server>__*` in `allowedTools`.
 login pages, uses `loginSuccess` (Air: success = the URL leaves `/Account/Login`). The session never sees a password
 and `type` refuses password fields. A prompt says "the browser is already logged into <site>"; never login steps,
 credentials or selectors.
+
+`browser.hide` (optional): CSS selectors of overlays the runtime hides on every page, so they never cover what a step
+clicks (Air: `["#draggable", "ai-chat"]`, the Maia chat). Plain selectors only (no braces).
 
 ## Workflow (the Orchestrator)
 
