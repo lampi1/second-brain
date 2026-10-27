@@ -1,5 +1,5 @@
 // Explicit test-only release adapter. Local user-managed targets pin one definition revision and one deployment-group
-// machine or one hosted App Service. A draft is validated before activation; ambiguous writes retain the lease. No approval or production API.
+// machine or one hosted App Service. Every check runs before one creating request that starts the stage; ambiguous writes retain the lease. No approval or production API.
 import { NoRemoteEffect } from './write-refusal';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -54,7 +54,7 @@ export function releaseDefinitionFingerprint(value: unknown): string {
   }), artifacts: d.artifacts, variables: d.variables, variableGroups: d.variableGroups, processParameters: d.processParameters });
 }
 export const deploymentLeaseKey = (t: TestDeployTarget): string => t.kind === 'app-service' ? appServiceResourceId(t).toLowerCase() : `${t.organization.toLowerCase()}/${t.poolId}/${t.agentId}`;
-interface Deployment { runId: string; target: TestDeployTarget; buildId: number; buildNumber?: string; commit: string; state: 'creating' | 'draft' | 'queued' | 'succeeded' | 'failed' | 'canceled'; releaseId?: number; environmentId?: number; token: string; released?: boolean; initiatingLease?: { stepId: string; at: number }; successfulDeploymentId?: number; evidenceConflict?: string }
+interface Deployment { runId: string; target: TestDeployTarget; buildId: number; buildNumber?: string; commit: string; state: 'creating' | 'draft' | 'queued' | 'succeeded' | 'failed' | 'canceled'; releaseId?: number; environmentId?: number; token: string; released?: boolean; deleted?: boolean; initiatingLease?: { stepId: string; at: number }; successfulDeploymentId?: number; evidenceConflict?: string }
 interface State { schema: 1; deployments: Deployment[]; stepLeases?: { runId: string; stepId: string; target: TestDeployTarget; at: number; remoteSnapshot?: string; releasedAt?: number }[] }
 export interface DeploymentPorts {
   runId: string; authorize(): void;
@@ -137,6 +137,13 @@ export class TestDeploymentCoordinator {
       if (deploymentHash(own.target) !== deploymentHash(target)) throw new Error('Deployment target differs from the approved historical target');
       const unknownOutcome = 'Release creation has an unknown outcome; the test lease remains held. Reconcile in Azure DevOps before any new release.';
       if (!own.releaseId) throw new Error(unknownOutcome);
+      const deleted = () => ({ ...identity(own), status: 'canceled', deleted: true, terminal: true, success: false });
+      if (own.deleted) return deleted();
+      if (own.state === 'draft') {
+        // A deleted draft no longer answers GET: prove a delete with an unknown outcome from the soft-deleted list.
+        const gone = await call('GET', `${releaseBase}/releases?definitionId=${target.releaseDefinitionId}&releaseIdFilter=${own.releaseId}&isDeleted=true&${API}`);
+        if (Array.isArray(gone.value) && gone.value.map(v => object(v, 'deleted release')).some(r => r.id === own.releaseId && object(r.releaseDefinition, 'release definition').id === target.releaseDefinitionId)) { own.state = 'canceled'; own.deleted = true; this.save(state); return deleted(); }
+      }
       const release = await call('GET', `${releaseBase}/releases/${own.releaseId}?${API}`);
       if (!own.environmentId) {
         // Older entries saved the release id before its environment id: recover the one instance of the approved environment.
@@ -152,8 +159,13 @@ export class TestDeploymentCoordinator {
       if (!terminal) own.released = false;
       this.save(state);
       if (op === 'cancel-test-deploy' && !terminal) {
-        if (release.status === 'draft') await call('PATCH', `${releaseBase}/releases/${own.releaseId}?${API}`, { status: 'abandoned', comment: 'Routine cleanup of its own draft test release' });
-        else await call('PATCH', `${releaseBase}/releases/${own.releaseId}/environments/${own.environmentId}?${API}`, { status: 'canceled', comment: 'Routine cleanup of its own test deployment' });
+        if (release.status === 'draft') {
+          // Azure abandons only active releases (a draft answers HTTP 400); a never-activated draft is deleted instead.
+          await call('DELETE', `${releaseBase}/releases/${own.releaseId}?comment=${encodeURIComponent('Routine cleanup of its own draft test release')}&${API}`);
+          own.state = 'canceled'; own.deleted = true; this.save(state);
+          return deleted();
+        }
+        await call('PATCH', `${releaseBase}/releases/${own.releaseId}/environments/${own.environmentId}?${API}`, { status: 'canceled', comment: 'Routine cleanup of its own test deployment' });
         return { ...identity(own), status: 'cancellation-requested', terminal: false, success: false };
       }
       if (own === latest && status === 'succeeded' && (target.kind === 'app-service' || own.initiatingLease) && !own.evidenceConflict) {
@@ -219,44 +231,44 @@ export class TestDeploymentCoordinator {
     await verifyNode(); await p.verifySource?.(); authorize();
     const liveDefinition = await call('GET', `${releaseBase}/definitions/${target.releaseDefinitionId}?${API}`);
     if (releaseDefinitionFingerprint(liveDefinition) !== target.definitionSha256) throw new Error('Release definition changed before creation');
+    // The one creating request also starts the stage: only a stage triggered by ReleaseStarted deploys by itself.
+    const liveStage = (Array.isArray(liveDefinition.environments) ? liveDefinition.environments.map(v => object(v, 'environment')) : []).find(e => e.id === target.environmentId);
+    if (!Array.isArray(liveStage?.conditions) || !liveStage.conditions.some(c => { const o = object(c, 'stage condition'); return o.conditionType === 'event' && o.name === 'ReleaseStarted'; })) throw new Error('The test stage must start automatically after release creation (trigger ReleaseStarted)');
     const entry: Deployment = { runId: p.runId, target, buildId: pos(buildId), ...(typeof build.buildNumber === 'string' ? { buildNumber: text(build.buildNumber, 'build number', 256) } : {}), commit: p.source.commit, state: 'creating', token: randomUUID() };
     const initiatingLease = state.stepLeases?.find(l => l.runId === p.runId && !l.releasedAt && deploymentLeaseKey(l.target) === deploymentLeaseKey(target));
     if (initiatingLease) entry.initiatingLease = { stepId: initiatingLease.stepId, at: initiatingLease.at };
     state.deployments.push(entry); this.save(state);
     let release: Record<string, unknown>;
-    try { release = await call('POST', `${releaseBase}/releases?${API}`, { definitionId: target.releaseDefinitionId, isDraft: true, manualEnvironments: [target.environmentName], description: `Routine ${p.runId} operation ${entry.token}`, artifacts: [{ alias: target.artifactAlias, instanceReference: { id: String(buildId) } }] }); }
+    // Same request as the user's own test deploy (az pipelines release create): an active release whose only stage
+    // starts at once. Every definition, target, node and source check ran above, before this single write.
+    try { release = await call('POST', `${releaseBase}/releases?${API}`, { definitionId: target.releaseDefinitionId, isDraft: false, description: `Routine ${p.runId} operation ${entry.token}`, artifacts: [{ alias: target.artifactAlias, instanceReference: { id: String(buildId) } }] }); }
     catch (error) {
       // Only a definitively unperformed first POST can relinquish this intent; a lost/invalid response stays leased.
       if (error instanceof NoRemoteEffect) { state.deployments = state.deployments.filter(d => d.token !== entry.token); this.save(state); }
       throw error;
     }
-    entry.releaseId = pos(release.id); entry.state = 'draft';
-    // Persist the environment instance before validating, so status/cancel can always reach a rejected draft.
+    entry.releaseId = pos(release.id); entry.state = 'queued';
+    // Persist the environment instance before validating, so status/cancel can always reach a mismatching release.
     const created = Array.isArray(release.environments) ? release.environments.map(v => object(v, 'release environment')).filter(e => e.definitionEnvironmentId === target.environmentId) : [];
     const createdId = created.length === 1 ? created[0]!.id : undefined;
     if (typeof createdId === 'number' && Number.isSafeInteger(createdId) && createdId > 0) entry.environmentId = createdId;
     this.save(state);
-    if (release.status !== 'draft' || release.releaseDefinitionRevision !== target.definitionRevision || object(release.releaseDefinition, 'release definition').id !== target.releaseDefinitionId || !Array.isArray(release.environments) || release.environments.length !== 1) throw new Error('Created draft does not match the approved definition snapshot; it remains inactive');
+    // The release already runs: a mismatch below keeps the lease and is stopped by cancel-test-deploy (settlement).
+    const mismatch = 'Created release does not match the approved definition snapshot; cancel it with cancel-test-deploy';
+    if (release.status !== 'active' || release.releaseDefinitionRevision !== target.definitionRevision || object(release.releaseDefinition, 'release definition').id !== target.releaseDefinitionId || !Array.isArray(release.environments) || release.environments.length !== 1) throw new Error(mismatch);
     const env = object(release.environments[0], 'release environment');
-    if (env.definitionEnvironmentId !== target.environmentId || env.name !== target.environmentName) throw new Error('Draft environment identity differs');
-    // Azure may return process parameters on the created draft. Validate its effective values, not just the
-    // unchanged macro text. The host sends no variables or parameter overrides on creation/activation.
-    const draftPhases = phases(env.deployPhasesSnapshot, [release.processParameters === undefined ? definition.processParameters : release.processParameters, env.processParameters === undefined ? environments[0]!.processParameters : env.processParameters]);
+    if (env.definitionEnvironmentId !== target.environmentId || env.name !== target.environmentName) throw new Error(`${mismatch} (environment identity)`);
+    // Azure may return process parameters on the created release. Validate its effective values, not just the
+    // unchanged macro text. The host sends no variables or parameter overrides on creation.
+    const createdPhases = phases(env.deployPhasesSnapshot, [release.processParameters === undefined ? definition.processParameters : release.processParameters, env.processParameters === undefined ? environments[0]!.processParameters : env.processParameters]);
     if (target.kind === 'app-service') {
-      if ([release.variables, env.variables].some(v => v != null && Object.keys(object(v, 'release variables')).length)) throw new Error('Draft release variable overrides are unsupported');
-      if (deploymentHash(draftPhases) !== deploymentHash(approvedPhases)) throw new Error('Draft App Service parameter defaults differ from the approved definition');
+      if ([release.variables, env.variables].some(v => v != null && Object.keys(object(v, 'release variables')).length)) throw new Error(`${mismatch} (variable overrides)`);
+      if (deploymentHash(createdPhases) !== deploymentHash(approvedPhases)) throw new Error(`${mismatch} (App Service parameter defaults)`);
     }
-    if (deploymentHash(env.deployPhasesSnapshot) !== deploymentHash(environments[0]!.deployPhases)) throw new Error('Draft deployment phase differs from the approved snapshot');
+    if (deploymentHash(env.deployPhasesSnapshot) !== deploymentHash(environments[0]!.deployPhases)) throw new Error(`${mismatch} (deployment phase)`);
     const actual = Array.isArray(release.artifacts) ? release.artifacts.map(v => object(v, 'release artifact')) : [];
-    if (actual.length !== 1 || actual[0]!.alias !== target.artifactAlias || String(object(object(actual[0]!.definitionReference, 'artifact reference').version, 'artifact version').id) !== String(buildId)) throw new Error('Draft contains a different build');
+    if (actual.length !== 1 || actual[0]!.alias !== target.artifactAlias || String(object(object(actual[0]!.definitionReference, 'artifact reference').version, 'artifact version').id) !== String(buildId)) throw new Error(`${mismatch} (different build)`);
     entry.environmentId = pos(env.id); this.save(state);
-    await verifyNode(); await p.verifySource?.();
-    if (target.kind === 'app-service') await testEnvironmentSnapshot(target, call, [entry.releaseId!]);
-    await call('PATCH', `${releaseBase}/releases/${entry.releaseId}?${API}`, { status: 'active', comment: 'Approved routine test deployment' });
-    await verifyNode(); await p.verifySource?.();
-    if (target.kind === 'app-service') await testEnvironmentSnapshot(target, call, [entry.releaseId!]);
-    await call('PATCH', `${releaseBase}/releases/${entry.releaseId}/environments/${entry.environmentId}?${API}`, { status: 'inProgress', comment: 'Approved routine exact test target' });
-    entry.state = 'queued'; this.save(state);
     return { ...identity(entry), latest: true, status: 'queued', success: false, next: 'Poll test-deploy-status; queue acceptance is not successful deployment' };
   }
   private read(): State { if (!fs.existsSync(this.stateFile)) return { schema: 1, deployments: [] }; const v = object(JSON.parse(fs.readFileSync(this.stateFile, 'utf8')), 'deployment ledger'); if (v.schema !== 1 || !Array.isArray(v.deployments) || v.deployments.length > 2000) throw new Error('Invalid deployment ledger'); return v as unknown as State; }

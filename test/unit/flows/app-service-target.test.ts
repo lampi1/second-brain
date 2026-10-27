@@ -14,7 +14,7 @@ const guid = '11111111-2222-3333-4444-555555555555', commit = 'a'.repeat(40);
 function fixture() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'app-target-')); dirs.push(dir);
   const phase = { phaseType: 'agentBasedDeployment', deploymentInput: { queueId: 7, demands: [] }, workflowTasks: [{ taskId: APP_SERVICE_TASK_IDS[0]!, definitionType: 'task' as string | null | undefined, version: '4.*', enabled: true, inputs: { ConnectionType: 'AzureRM', ConnectedServiceName: guid, WebAppName: 'sample-test', WebAppKind: 'webApp', Package: '$(System.DefaultWorkingDirectory)/_app/**/*.zip' } }] };
-  const definition = { id: 4, revision: 2, environments: [{ id: 9, name: 'Test', deployPhases: [phase], variables: {}, variableGroups: [], preDeployApprovals: { approvals: [{ isAutomated: true }] } }], artifacts: [{ alias: '_app', type: 'Build', definitionReference: { project: { id: guid }, definition: { id: '6' } } }], variables: {}, variableGroups: [] };
+  const definition = { id: 4, revision: 2, environments: [{ id: 9, name: 'Test', deployPhases: [phase], variables: {}, variableGroups: [], preDeployApprovals: { approvals: [{ isAutomated: true }] }, conditions: [{ conditionType: 'event', name: 'ReleaseStarted', value: '' }] }], artifacts: [{ alias: '_app', type: 'Build', definitionReference: { project: { id: guid }, definition: { id: '6' } } }], variables: {}, variableGroups: [] };
   const target: AppServiceTestDeployTarget = { kind: 'app-service', id: 'test-app', organization: 'contoso', project: 'Example', projectId: guid, releaseDefinitionId: 4, definitionRevision: 2, definitionSha256: releaseDefinitionFingerprint(definition), environmentId: 9, environmentName: 'Test', queueId: 7, artifactAlias: '_app', buildDefinitionId: 6, repositoryId: guid, subscriptionId: guid, serviceConnectionId: guid, resourceGroup: 'Sample_Test', webAppName: 'sample-test', allowedTaskIds: [...APP_SERVICE_TASK_IDS], confirmedTest: true };
   const file = path.join(dir, 'targets.json'); fs.writeFileSync(file, JSON.stringify({ schema: 1, targets: [target] }));
   const state = path.join(dir, 'state.json'), coordinator = new TestDeploymentCoordinator(file, state);
@@ -26,7 +26,7 @@ function fixture() {
     if (url.includes('/release/definitions/')) return structuredClone(definition);
     if (url.includes('/serviceendpoint/')) return { id: guid, type: 'azurerm', data: { subscriptionId: guid, environment: 'AzureCloud' } };
     if (url.includes('/queues/')) return { id: 7, pool: { isHosted: true } };
-    if (method === 'POST') return { id: 20, status: 'draft', processParameters: structuredClone((definition as Record<string, unknown>).processParameters), definitionSnapshotRevision: 1, releaseDefinitionRevision: 2, releaseDefinition: { id: 4 }, environments: [{ id: 90, definitionEnvironmentId: 9, name: 'Test', processParameters: structuredClone((definition.environments[0]! as Record<string, unknown>).processParameters), deployPhasesSnapshot: [structuredClone(phase)] }], artifacts: [{ alias: '_app', definitionReference: { version: { id: '40' } } }] };
+    if (method === 'POST') return { id: 20, status: 'active', processParameters: structuredClone((definition as Record<string, unknown>).processParameters), definitionSnapshotRevision: 1, releaseDefinitionRevision: 2, releaseDefinition: { id: 4 }, environments: [{ id: 90, definitionEnvironmentId: 9, name: 'Test', processParameters: structuredClone((definition.environments[0]! as Record<string, unknown>).processParameters), deployPhasesSnapshot: [structuredClone(phase)] }], artifacts: [{ alias: '_app', definitionReference: { version: { id: '40' } } }] };
     if (method === 'PATCH') return {};
     throw new Error(`Unexpected fixture request ${url}`);
   });
@@ -38,7 +38,8 @@ it('registers an exact App Service shape and deploys the latest successful own P
   const f = fixture(); expect(validateDeployTarget(f.target)).toEqual(f.target);
   await expect(f.coordinator.execute('deploy-test', f.target, undefined, f.ports)).resolves.toMatchObject({ status: 'queued', environmentId: 90 });
   expect(f.call.mock.calls.some(([, url]) => /deploymentgroup|\/agents\//.test(url))).toBe(false);
-  expect(f.ports.verifySource).toHaveBeenCalledTimes(3);
+  expect(f.ports.verifySource).toHaveBeenCalledTimes(1);
+  expect(f.call.mock.calls.filter(([method]) => method !== 'GET')).toHaveLength(1);
   expect(f.ports.arm).toHaveBeenCalledWith(appServiceResourceId(f.target));
 });
 it.each(['reason', 'sourceBranch', 'sourceVersion', 'repository'])('rejects a build with the wrong %s before creating a release', async field => {
@@ -134,8 +135,8 @@ it.each(['definition', 'environment'] as const)('inspects and deploys null-type 
   await expect(writer.inspectTarget(candidate)).resolves.toEqual({ schema: 1, targets: [f.target] });
   await expect(f.coordinator.execute('deploy-test', f.target, 40, f.ports)).resolves.toMatchObject({ status: 'queued' });
   const mutations = f.call.mock.calls.filter(([method]) => method !== 'GET');
-  expect(mutations[0]![2]).toEqual({ definitionId: 4, isDraft: true, manualEnvironments: ['Test'], description: expect.stringMatching(/^Routine run-a operation /), artifacts: [{ alias: '_app', instanceReference: { id: '40' } }] });
-  expect(mutations.slice(1).map(([, , body]) => Object.keys(body as object).sort())).toEqual([['comment', 'status'], ['comment', 'status']]);
+  expect(mutations[0]![2]).toEqual({ definitionId: 4, isDraft: false, description: expect.stringMatching(/^Routine run-a operation /), artifacts: [{ alias: '_app', instanceReference: { id: '40' } }] });
+  expect(mutations).toHaveLength(1);
   expect(JSON.stringify(f.definition)).toBe(original);
 });
 it.each(['definition', 'environment'] as const)('resolves user-selected parameter aliases in %s without field-name or routine-specific rules', async scope => {
@@ -316,6 +317,25 @@ it('does not let a historical status reconcile an uncertain later write', async 
   expect(f.writer.operationsFor('run-a').find(o => o.requestHash === 'unknown')?.state).toBe('pending');
   f.finish(21); await f.writer.execute(f.context, { op: 'test-deploy-status', targetId: f.target.id });
   expect(f.writer.operationsFor('run-a').find(o => o.requestHash === 'unknown')?.state).toBe('done');
+});
+it('closes a stuck draft: a refused cancel stays retryable, the delete settles both pending writes and frees the slot', async () => {
+  const f = writerFixture(), original = f.request.getMockImplementation()!; let refuse = true;
+  f.request.mockImplementation(async (url: string, init: RequestInit) => {
+    if (init.method === 'DELETE') return refuse ? new Response(JSON.stringify({ message: 'Draft release cannot be abandoned.' }), { status: 400 }) : new Response(null, { status: 204 });
+    if (url.includes('isDeleted=true')) return new Response(JSON.stringify({ value: [] }));
+    return original(url, init);
+  });
+  await f.writer.execute(f.context, { op: 'deploy-test', targetId: f.target.id });
+  Object.assign(f.releases.get(20)!, { status: 'draft' }); (f.releases.get(20)!.environments as Record<string, unknown>[])[0]!.status = 'notStarted';
+  const ledger = JSON.parse(fs.readFileSync(f.ledgerFile, 'utf8')); for (const op of Object.values(ledger.operations) as { op: string; state: string }[]) if (op.op === 'deploy-test') op.state = 'pending'; fs.writeFileSync(f.ledgerFile, JSON.stringify(ledger));
+  const cancel = { op: 'cancel-test-deploy', targetId: f.target.id };
+  await expect(f.writer.execute(f.context, cancel)).rejects.toThrow(/HTTP 400\)\. Draft release cannot be abandoned\./);
+  expect(f.writer.operationsFor('run-a').find(o => o.op === 'cancel-test-deploy')?.state).toBe('pending');
+  refuse = false;
+  await expect(f.writer.execute(f.context, cancel)).resolves.toMatchObject({ releaseId: 20, status: 'canceled', deleted: true, terminal: true });
+  await expect(f.writer.execute(f.context, { op: 'test-deploy-status', targetId: f.target.id })).resolves.toMatchObject({ status: 'canceled', terminal: true });
+  expect(f.writer.operationsFor('run-a').filter(o => ['deploy-test', 'cancel-test-deploy'].includes(String(o.op))).map(o => o.state)).toEqual(['done', 'done']);
+  expect(await f.coordinator.settle('run-a', () => {})).toBe(true);
 });
 it('cancels the latest release independently of an earlier cancellation receipt', async () => {
   const f = writerFixture(), deploy = { op: 'deploy-test', targetId: f.target.id }, cancel = { op: 'cancel-test-deploy', targetId: f.target.id };

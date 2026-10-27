@@ -493,7 +493,12 @@ export class DevOpsWriter {
     if ([203, 401, 403].includes(response.status) || (response.status >= 300 && response.status < 400)) deny(`DevOps: Azure CLI login unavailable or no permission (HTTP ${response.status}). Run az login and check the required permissions.`);
     if (response.headers.get('x-ms-continuationtoken') && !(method === 'GET' && url.includes('/release/deployments?') && new URL(url).searchParams.get('$top') === '1')) deny('DevOps: paginated response requires a narrower target');
     if (response.status === 412) deny('DevOps: the work item changed meanwhile (HTTP 412).');
-    if (!response.ok) deny(`DevOps: write refused (HTTP ${response.status}).`);
+    if (!response.ok) {
+      // Keep Azure's own short reason (e.g. which transition it refused), so a refusal is diagnosable from the run.
+      let reason = '';
+      try { const parsed = JSON.parse((await response.text()).slice(0, 16_384)) as unknown; if (parsed && typeof parsed === 'object' && typeof (parsed as { message?: unknown }).message === 'string') reason = ` ${(parsed as { message: string }).message.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, 300)}`; } catch { /* no readable reason */ }
+      deny(`DevOps: write refused (HTTP ${response.status}).${reason}`);
+    }
     const source = await response.text();
     if (Buffer.byteLength(source) > MAX_BYTES) deny('DevOps: response too large');
     if (!source.trim()) return {};
