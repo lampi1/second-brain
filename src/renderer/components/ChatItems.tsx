@@ -159,8 +159,8 @@ const Message = memo(function Message({ id, text, streaming }: { id: string; tex
  *  the plan item in progress, else "sta pensando…"), "sta scrivendo…" while it writes. `children` replaces the words with
  *  a collapsed strip's step and silence (StripActivity.tsx); the data-what hook stays. */
 export function Typing({ what, testid, items, children }: { what: 'scrive' | 'pensa' | 'lavora'; testid?: string; items?: readonly ChatItem[]; children?: ReactNode }) {
-  const line = liveLine(items, what);
-  return <div className="typing" role="status" aria-live="off" data-testid={testid} data-what={what}><TypingSpark />{children ?? <span key={line.text + (line.code ?? '')} className="typing-line">{line.text}{line.code && <> <code>{line.code}</code></>}</span>}</div>;
+  const line = children ? null : liveLine(items, what);
+  return <div className="typing" role="status" aria-live="off" data-testid={testid} data-what={what}><TypingSpark />{children ?? (line && <span key={line.text + (line.code ?? '')} className="typing-line">{line.text}{line.code && <> <code>{line.code}</code></>}</span>)}</div>;
 }
 
 /** The working mark: a four-point spark that turns and breathes (transform and opacity only: the compositor draws it). */

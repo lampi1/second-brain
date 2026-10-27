@@ -13,7 +13,11 @@ export interface LiveLine { text: string; code?: string }
 /** What the chat does now; `what` is turnActivity's reading of the last item. */
 export function liveLine(items: readonly ChatItem[] | undefined, what: 'scrive' | 'pensa' | 'lavora'): LiveLine {
   if (what === 'scrive') return { text: t('chat.items.typing.writing') };
-  const list = items ?? [];
+  // only this turn: a plan item left "in progress" by a stopped earlier turn is no "now"
+  const all = items ?? [];
+  let from = all.length;
+  while (from > 0 && all[from - 1]!.kind !== 'user') from--;
+  const list = all.slice(from);
   const action = lastActionStep(list, true);
   if (action?.mark === 'cur') return { text: action.text, ...(action.code ? { code: action.code } : {}) };
   const planCur = enginePlan(list)?.find(p => p.mark === 'cur');

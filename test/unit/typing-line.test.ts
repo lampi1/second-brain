@@ -28,6 +28,10 @@ describe('liveLine', () => {
     expect(liveLine([tool('Edit', { file_path: 'src/x.ts' })], 'pensa')).toEqual({ text: 'sta pensando…' });
     expect(liveLine([todos('completed', 'in_progress', 'pending'), tool('Read', { file_path: 'a.ts' })], 'pensa')).toEqual({ text: 'Faccio il passo 2' });
   });
+  it('a plan item an earlier, stopped turn left in progress is not shown in the next turn', () => {
+    const user: ChatItem = { kind: 'user', id: `u${++n}`, at: n, text: 'altro' } as ChatItem;
+    expect(liveLine([todos('completed', 'in_progress'), user], 'pensa')).toEqual({ text: 'sta pensando…' });
+  });
   it('a running tool that is no step of the work reads as working; a streaming reply as writing', () => {
     expect(liveLine([tool('AskUserQuestion', {}, 'running')], 'lavora')).toEqual({ text: 'sta lavorando…' });
     expect(liveLine([tool('Bash', { command: 'ls' }, 'running')], 'scrive')).toEqual({ text: 'sta scrivendo…' });
