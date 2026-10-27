@@ -9,7 +9,7 @@ import path from 'node:path';
 import type { AgentRun, AgentRunReceipts } from '../../../src/shared/agents';
 import type { AgentFeedbackArgs } from '../../../src/shared/agent-lifecycle';
 import type { ChatSummary, NewChat } from '../../../src/shared/contract';
-import { AUDIT_EVERY, auditPicked, gradeReceipt, JudgeSampler, judgeSamplingOn, judgingEstimate, MAX_RUNNING, pickAudits, pickReceiptAudits, pickSamples, RECEIPTS_WAIT_MS, reviewPrompt, REVIEW_CRITERIA } from '../../../src/main/agents/judge-sample';
+import { AUDIT_EVERY, auditPicked, gradeReceipt, JudgeSampler, judgeSamplingOn, judgingEstimate, MAX_RUNNING, pickAudits, pickReceiptAudits, pickSamples, RECEIPTS_WAIT_MS, reviewPrompt, REVIEW_CRITERIA, reviewRuns } from '../../../src/main/agents/judge-sample';
 import { emptyReceipts, noteTool, noteTurnFiles, receiptVerdict } from '../../../src/main/agents/receipts';
 
 const NOW = Date.UTC(2026, 9, 19, 12);
@@ -23,6 +23,19 @@ const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 
 describe('pickSamples', () => {
+  it('never picks a review: a later task in a review chat, or a run continued from a review (no «Revisione · Revisione»)', () => {
+    const runs = [
+      run('1'),
+      run('2', { agentId: 'sentinel', chatId: 'c_rev', reviewOf: 'r_000000000099' }),
+      run('3', { agentId: 'sentinel', chatId: 'c_rev' }),                                    // a new task given to the review chat
+      run('4', { agentId: 'sentinel', chatId: 'c_next', continuedFrom: 'r_000000000003' }),  // continued in a new chat
+      run('5', { agentId: 'sentinel', chatId: 'c_more', continuedFrom: 'r_000000000004' }),
+    ];
+    expect([...reviewRuns(runs)].sort()).toEqual(['r_000000000002', 'r_000000000003', 'r_000000000004', 'r_000000000005']);
+    expect(pickSamples(runs, new Set(), NOW, 10).map(r => r.runId)).toEqual(['r_000000000001']);
+    expect(judgingEstimate(runs, NOW).runsPerDay).toBeCloseTo(0.1);
+  });
+
   it('takes reported, recent, unjudged runs that no review covered, at most n', () => {
     const runs = [
       run('1'), run('2'),

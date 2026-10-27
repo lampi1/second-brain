@@ -261,3 +261,14 @@ it('refuses reconciliation while an ended idle assignment retains queued work', 
   await expect(s.runtime.decideReconcile({ runId: s.run.id, expectedRevision: proposed.revision, answer: 'yes' })).rejects.toThrow('still active');
   expect(s.runtime.writeReconciliation(s.run.id).operations[0]?.state).toBe('pending'); s.runtime.stop();
 });
+it('reconciles a pending write whose run lost its approved DevOps scope, from the scope the write kept', async () => {
+  const s = await blockedWrite();
+  const op = s.runtime.writeReconciliation(s.run.id).operations[0]!;
+  expect(op.scope).toEqual({ organization: 'contoso', workItemId: 42 });
+  vi.spyOn(s.auto, 'approvedConfigFor').mockReturnValue(undefined);
+  const view = s.runtime.writeReconciliation(s.run.id);
+  expect(view.canReconcile).toBe(true); expect(view.workItem).toMatchObject({ organization: 'contoso', id: 42 });
+  await s.runtime.reconcileWrites({ runId: s.run.id, expectedRevision: view.revision, digest: view.digest, decisions: [{ id: op.id, outcome: 'done', note: 'Seen in the work item history at that time' }] });
+  expect(s.runtime.writeReconciliation(s.run.id).operations[0]?.reconciliation).toMatchObject({ outcome: 'done', organization: 'contoso', workItemId: 42 });
+  s.runtime.stop();
+});

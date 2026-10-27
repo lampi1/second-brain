@@ -11,7 +11,7 @@
 // disponibile" for screen readers and in its tooltip, never as zero. Styles: styles/agent-catalog.css (card) and
 // styles/brain-model.css (flip).
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import type { AgentMetrics, AgentProfile, AgentStanding } from '@shared/agents';
+import { completedRuns, type AgentMetrics, type AgentProfile, type AgentStanding } from '@shared/agents';
 import { characterOf } from '@shared/characters';
 import { characterTone } from '../lib/character-art';
 import type { MemoryFile } from '@shared/brain-model';
@@ -136,7 +136,7 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
     return () => window.removeEventListener('keydown', esc, true);
   }, [flipped]);
   const stats = metrics?.all, standing = loaded ? metrics?.standing ?? NONE : null;
-  const ended = loaded ? stats?.ended ?? 0 : null;
+  const ended = loaded ? completedRuns(metrics) : null;
   const open = loaded ? metrics?.open ?? 0 : null;
   const unknown = t('catalog.unknown');
   const rate = stats?.successRate, cost = stats?.costPerRun.median;

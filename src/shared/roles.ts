@@ -145,13 +145,11 @@ export interface DelegationSettings {
   maxParallel: number;
   /** minutes without any event before a running child counts as stalled */
   stallMin: number;
-  /** independent reviews of finished runs per day, each a Sentinel chat (0 = off). The key keeps its pre-ADR 0100
-   *  name: it is stored in the user's settings */
-  judgeDaily: number;
 }
-export const DELEGATION_DEFAULTS: DelegationSettings = { maxDepth: 2, maxParallel: 5, stallMin: 10, judgeDaily: 3 };
+// The daily review count (judgeDaily) is gone: reviews are only on/off (Settings.judging); a stored value is dropped here.
+export const DELEGATION_DEFAULTS: DelegationSettings = { maxDepth: 2, maxParallel: 5, stallMin: 10 };
 export const DELEGATION_RANGE: Record<keyof DelegationSettings, { min: number; max: number }> = {
-  maxDepth: { min: 1, max: 4 }, maxParallel: { min: 1, max: 10 }, stallMin: { min: 2, max: 120 }, judgeDaily: { min: 0, max: 20 },
+  maxDepth: { min: 1, max: 4 }, maxParallel: { min: 1, max: 10 }, stallMin: { min: 2, max: 120 },
 };
 export function checkedDelegation(v: unknown): DelegationSettings {
   const o = v && typeof v === 'object' ? v as Record<string, unknown> : {};

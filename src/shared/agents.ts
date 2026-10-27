@@ -172,6 +172,10 @@ export interface VersionMetrics {
 export interface AgentMetrics { agentId: string; versions: VersionMetrics[]; all: VersionMetrics | null; open: number;
   /** level and performance on the agent card (agents/standing.ts), over all its runs whatever the filter */
   standing?: AgentStanding }
+/** The card's «Lavori conclusi»: the agent's ended runs, or its standing's count when that is larger. The Orchestrator
+ *  has no run of its own (its count is the ended root jobs it opened, ADR 0097) and Flash none at all (its answers,
+ *  ADR 0131): reading only `all.ended` showed 0 for both however much they did. */
+export const completedRuns = (m: AgentMetrics | null | undefined): number => Math.max(m?.all?.ended ?? 0, m?.standing?.runs ?? 0);
 /** The agent card's level (from the XP of its verified successful runs, ADR 0100, 0131) and performance % (a Bayesian
  *  estimate of its verdicts weighted by trust and recency): agents/standing.ts. */
 export interface AgentStanding {
@@ -223,7 +227,9 @@ export interface AgentRun {
   source?: 'chat' | 'oneshot';
   /** Host-captured origin of this task, independent of who originally opened its reusable chat. Missing = unknown. */
   requestOrigin?: 'user' | 'agent' | 'app';
-  oneshot?: { engine: string; job: OneShotPurpose; fallback: boolean; costBasis: 'reported' | 'estimated' | 'unknown' };
+  oneshot?: { engine: string; job: OneShotPurpose; fallback: boolean; costBasis: 'reported' | 'estimated' | 'unknown';
+    /** the engine answered within its limits (agents/oneshot.ts); absent = recorded before it was kept */
+    ok?: boolean };
   runId: string; chatId: string; agentId: string;
   version: number;
   goal: string; startedBy: 'user' | 'orchestrator' | 'parent' | 'app'; startedAt: number;

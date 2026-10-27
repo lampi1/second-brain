@@ -115,6 +115,7 @@ export class OneShotService {
       result.durationMs = now() - startedAt;
       run.costUsd = result.costUsd; run.tokens = result.tokens; run.executionMs = result.durationMs;
       run.oneshot.costBasis = result.costBasis;
+      run.oneshot.ok = result.ok; // Pulse's level reads it (standing.ts pulseProxy)
       run.outcome = { verdict: 'unknown', basis: 'unknown', at: now(), by: 'Battito' };
       endRun(run, 'completed', now()); this.d.runs.save();
     }

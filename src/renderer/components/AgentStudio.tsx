@@ -11,7 +11,7 @@
 // styles/agent-studio.css.
 import { Select } from './Select';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
-import { MAX_CONTEXT_RANGE, type AgentDraft, type AgentMetrics, type AgentProfile, type AgentVersion } from '@shared/agents';
+import { completedRuns, MAX_CONTEXT_RANGE, type AgentDraft, type AgentMetrics, type AgentProfile, type AgentVersion } from '@shared/agents';
 import { MODEL_TIERS, WORK_ROLE_IDS, FLASH_ID, isRoleId, roleName, tierRank, type ModelTier } from '@shared/roles';
 import { characterOf } from '@shared/characters';
 import { agentHistory, refreshAgents, resetAgent, restoreAgentVersion, saveAgent, useAgents } from '../store/agents';
@@ -238,10 +238,10 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
   const unknown = t('catalog.unknown');
   const stats = metrics?.all;
   const loaded = metrics !== undefined;
-  const sample = (n: number) => loaded ? t('catalog.samples', { n, total: stats?.ended ?? 0 }) : '';
+  const sample = (n: number) => loaded ? t('catalog.samples', { n, total: completedRuns(metrics) }) : '';
   const last = lastStart ? new Date(lastStart).toLocaleString(locale(), { dateStyle: 'medium', timeStyle: 'short' }) : null;
   const numbers: { label: string; value: string | null; note?: string }[] = [
-    { label: t('catalog.runs'), value: loaded ? (stats?.ended ?? 0).toLocaleString(locale()) : null },
+    { label: t('catalog.runs'), value: loaded ? completedRuns(metrics).toLocaleString(locale()) : null },
     { label: t('catalog.open'), value: loaded ? open.toLocaleString(locale()) : null },
     { label: t('catalog.success'), value: stats?.successRate.value != null ? percent(stats.successRate.value) : null, note: sample(stats?.successRate.n ?? 0) },
     { label: t('catalog.cost'), value: stats?.costPerRun.median.value != null ? usd(stats.costPerRun.median.value) : null, note: sample(stats?.costPerRun.median.n ?? 0) },

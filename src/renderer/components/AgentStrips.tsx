@@ -159,7 +159,7 @@ function ChildRails({ node }: { node: TreeNode }) {
 
 /** Who started a root chat, above it, only when it was not the Orchestrator (every chat is, so that line said nothing; the
  *  owner, 2026-10-22): a chat the app started by itself
- *  ("Avviata dall'app · revisione a campione · 2 di 3 oggi", the Judge's sampled reviews, agents/judge-sample.ts) or
+ *  ("Avviata dall'app · revisione indipendente", the Sentinel's automatic reviews, agents/judge-sample.ts) or
  *  resumed after a restart ("Ripresa dall'app dopo il riavvio · 09:12") says so too (ADR 0102): a strip never appears
  *  from nowhere. */
 function Origin({ chatId }: { chatId: string }) {
