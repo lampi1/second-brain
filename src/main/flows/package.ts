@@ -44,7 +44,8 @@ export function validatePackage(value: unknown): FlowPackage {
   if (p.history !== undefined && p.history !== true) throw new Error('history must be true or absent');
   if (p.history && !requiredOps.includes('comment')) throw new Error('Run history requires the comment operation');
   const historyMentions = p.historyMentions === undefined ? undefined : list(p.historyMentions, 'historyMentions').map(v => text(v, 'history mention', 36).toLowerCase());
-  if (historyMentions && (!p.history || historyMentions.length > 10 || new Set(historyMentions).size !== historyMentions.length || historyMentions.some(v => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(v)))) throw new Error('historyMentions: at most 10 distinct identity GUIDs, with history');
+  // Without history it still narrows the host's needs-human/downgrade comment.
+  if (historyMentions && (historyMentions.length > 10 || new Set(historyMentions).size !== historyMentions.length || historyMentions.some(v => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(v)))) throw new Error('historyMentions: at most 10 distinct identity GUIDs');
   let downgrade: FlowPackage['downgrade'];
   if (p.downgrade !== undefined) {
     const d = object(p.downgrade, 'downgrade'); keys(d, ['lessonOutput', 'removeTag', 'addTag', 'state'], 'downgrade');
@@ -68,6 +69,12 @@ export function validatePackage(value: unknown): FlowPackage {
   if (production && new Set(production.map(p => p.id)).size !== production.length) throw new Error('Duplicate production intent');
   return { schema: 1, assets, outputs, requiredOps, ...(p.intake ? { intake: true } : {}), ...(production?.length ? { production } : {}), ...(p.history ? { history: true } : {}), ...(historyMentions ? { historyMentions } : {}), ...(downgrade ? { downgrade } : {}) };
 }
+/** Identities the host @mentions on work-item milestones: the grant's, narrowed (never widened) by historyMentions. */
+export const milestoneMentions = (grant: readonly string[] | undefined, pack: FlowPackage): string[] => (grant ?? []).filter(id => !pack.historyMentions || pack.historyMentions.includes(id));
+/** Worker prompt line for per-step history; flow_step_history refuses when the package has no history. */
+export const historyInstruction = (pack: FlowPackage): string => pack.history ? ' Prepare one concise flow_step_history with safe Markdown evidence before agent_report; the host posts it and mentions blockers. Do not duplicate host history with comment writes.' : '';
+/** Host comment on a needs-human/downgrade handoff without history: plain Italian for the team, no run id. */
+export const needsHumanComment = (reason: string): string => `Serve un intervento umano: ${reason}. La routine si è fermata; segue la pulizia automatica.`;
 export function validatePackagedSteps(steps: FlowStep[], pack: FlowPackage): void {
   if (pack.intake && steps[0]?.kind !== 'agent') throw new Error('Explicit intake requires an initial agent step');
   for (const step of steps) {

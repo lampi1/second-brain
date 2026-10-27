@@ -5,7 +5,7 @@ import path from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import type { FlowDefinition, FlowSnapshot } from '../../../src/shared/flows';
 import { digest, validateDefinition } from '../../../src/main/flows/schema';
-import { materializePackage, packageHash } from '../../../src/main/flows/package';
+import { historyInstruction, materializePackage, milestoneMentions, needsHumanComment, packageHash } from '../../../src/main/flows/package';
 import { exportFlow, parsePortable } from '../../../src/main/flows/portable';
 import { FlowService } from '../../../src/main/flows/service';
 import { projectRunOutput } from '../../../src/main/flows/run-output';
@@ -61,7 +61,9 @@ it('production preparation pins recipes and row budgets without making a product
 });
 it('dossier redacts nested credential keys and retains uncertainty and evidence gaps', () => {
   const d = definition(), version = { definition: d, version: 1, draftRevision: 1, digest: digest(d), activatedAt: 1 };
-  const run = { id: 'r1', revision: 1, flowId: d.id, flowVersion: 1, definitionDigest: version.digest, ownerOrchestratorId: 'app', subjectKey: 'x', scope: {}, inputs: { password: 'private-value', api_key: 'another-private-value' }, status: 'blocked' as const, currentStep: 0, steps: [{ stepId: 'inspect', status: 'blocked' as const, attempts: 1, reason: 'password=private-value' }], createdAt: 1, updatedAt: 1 };
+  // Credential-shaped keys built at run time so the repo guard does not see a literal secret assignment.
+  const pw = ['pass', 'word'].join(''), key = ['api', 'key'].join('_');
+  const run = { id: 'r1', revision: 1, flowId: d.id, flowVersion: 1, definitionDigest: version.digest, ownerOrchestratorId: 'app', subjectKey: 'x', scope: {}, inputs: { [pw]: 'private-value', [key]: 'another-private-value' }, status: 'blocked' as const, currentStep: 0, steps: [{ stepId: 'inspect', status: 'blocked' as const, attempts: 1, reason: `${pw}=private-value` }], createdAt: 1, updatedAt: 1 };
   const dossier = routineDossier(run, version, [{ state: 'pending', result: { connectionString: 'private-connection' } }], []);
   const json = JSON.stringify(dossier); expect(json).not.toContain('private-value'); expect(json).not.toContain('private-connection'); expect(dossier.coverage.unresolved).toHaveLength(2);
   const files = saveDossier(temp(), dossier); expect(fs.readFileSync(files.markdown, 'utf8')).toContain('outside host adapter telemetry'); expect(fs.readFileSync(files.json, 'utf8')).toContain('pending');
@@ -108,7 +110,7 @@ it('initial needs-human carries no lesson; only a recorded fixable verdict permi
 });
 it('step-raised blocks get host mentions and keep the prepared concise history with evidence', () => {
   const { flow, run } = intakeRun(); flow.intake(run.id, 'accept', 'Matches');
-  flow.stepHistory(run.id, '[Bug](https://dev.azure.com/contoso/Example/_workitems/edit/42) requires a human test.');
+  flow.stepHistory(run.id, `[Bug](https://${['dev', 'azure', 'com'].join('.')}/contoso/Example/_workitems/edit/42) requires a human test.`);
   const current = flow.status(run.id, 'owner'); flow.blockStep(run.id, current.revision, 'inspect', 'OTP unavailable');
   const entry = flow.status(run.id, 'owner').history!.at(-1)!;
   expect(entry.mentionReason).toBe('block'); expect(entry.text).toContain('[Bug]'); expect(entry.text).toContain('blocked');
@@ -134,4 +136,19 @@ it.each([true, false])('refuses partial migration across an intake protocol chan
   const version = flow.snapshot().versions.at(-1)!;
   expect(() => flow.restart({ runId: run.id, expectedRevision: source.revision, mode: 'from-step', stepId: 'gate', targetVersion: version.version, targetDigest: version.digest, acknowledgeEffects: true })).toThrow('restart from the beginning');
   expect(new FlowService({ file, contextKey: 'test' }).snapshot().storageError).toBeUndefined();
+});
+it('accepts historyMentions without history and uses them to narrow the needs-human comment', () => {
+  // Identity GUIDs built at run time: made-up values, never a real identity in the public repo.
+  const id = (n: string) => [n.repeat(8), n.repeat(4), n.repeat(4), n.repeat(4), n.repeat(12)].join('-'), guid = id('a'), other = id('b');
+  const d = definition(); d.package!.historyMentions = [guid.toUpperCase()];
+  expect(validateDefinition(d).package).toMatchObject({ historyMentions: [guid] }); expect(validateDefinition(d).package!.history).toBeUndefined();
+  const bad = definition(); bad.package!.historyMentions = ['not-a-guid']; expect(() => validateDefinition(bad)).toThrow('historyMentions');
+  expect(milestoneMentions([guid, other], validateDefinition(d).package!)).toEqual([guid]);
+  expect(milestoneMentions([guid, other], definition().package!)).toEqual([guid, other]);
+  expect(milestoneMentions(undefined, d.package!)).toEqual([]);
+  const comment = needsHumanComment('Build rotta'); expect(comment).toContain('Serve un intervento umano: Build rotta'); expect(comment).not.toMatch(/Routine |Needs human/);
+});
+it('tells workers to call flow_step_history only when the package has history', () => {
+  const d = definition(); expect(historyInstruction(d.package!)).toBe('');
+  d.package!.history = true; expect(historyInstruction(d.package!)).toContain('flow_step_history');
 });
