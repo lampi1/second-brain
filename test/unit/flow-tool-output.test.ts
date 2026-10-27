@@ -8,7 +8,7 @@ import type { FlowAutomationService } from '../../src/main/flows/automation';
 const definition = { id: 'large', title: 'Large routine', steps: [{ id: 'step', title: 'Inspect', instructions: 'Evidence\n'.repeat(50000) }] };
 const version = { definition, version: 3, draftRevision: 7, digest: 'digest', activatedAt: 1 };
 const snapshot = { contextKey: 'brain', drafts: [], versions: [version], active: { large: 3 }, runs: [{ id: 'mine', flowId: 'large', flowVersion: 3, ownerOrchestratorId: 'owner', status: 'active', revision: 2, currentStep: 0, steps: [{ stepId: 'step', status: 'running' }] }, { id: 'foreign', flowId: 'large', ownerOrchestratorId: 'other', steps: [] }] };
-const tools = () => flowTools({ ownerId: 'owner', service: () => ({ snapshot: () => snapshot }) as unknown as FlowService, resolveBinding: () => null });
+const tools = () => flowTools({ ownerId: 'owner', service: () => ({ snapshot: () => snapshot }) as unknown as FlowService });
 it('defaults to compact discovery with active versions and owned current steps, no full prompts', async () => {
   const out = await tools().find(t => t.name === 'app_flow_list')!.run({}) as Record<string, unknown>;
   expect(JSON.stringify(out).length).toBeLessThanOrEqual(40000); expect(JSON.stringify(out)).not.toContain('foreign'); expect(JSON.stringify(out)).not.toContain('Evidence');
@@ -55,7 +55,7 @@ it('preserves oversized match candidates, lesson cursors and dry-run commands th
     app_flow_start_item: { flowId:'large', version:3, steps:[{stepId:'inspect',title:'Inspect',kind:'check' as const,who:'host',command:'command '.repeat(9000),prod:false,auto:true,problems:[]}], problems:['review these commands'] },
   };
   const dry = vi.fn(async (_args: unknown) => values.app_flow_start_item);
-  const candidates = flowTools({ ownerId:'owner', service:() => ({snapshot:()=>snapshot, match:()=>values.app_flow_match, outputsSinceActive:()=>values.app_flow_outputs_since_active}) as unknown as FlowService, resolveBinding:()=>null, startItem:dry });
+  const candidates = flowTools({ ownerId:'owner', service:() => ({snapshot:()=>snapshot, match:()=>values.app_flow_match, outputsSinceActive:()=>values.app_flow_outputs_since_active}) as unknown as FlowService, startItem:dry });
   for (const [name,value] of Object.entries(values)) {
     const tool = candidates.find(tool=>tool.name===name)!;
     const args = name==='app_flow_match' ? {text:'large'} : name==='app_flow_start_item' ? {contextKey:'brain',flowId:'large',dryRun:true} : {flowId:'large'};
@@ -74,7 +74,7 @@ it('preserves oversized match candidates, lesson cursors and dry-run commands th
 
 it('rejects pagination on real starts before invoking any mutation, including stale digests', () => {
   const startItem=vi.fn();
-  const start=flowTools({ownerId:'owner',service:()=>({snapshot:()=>snapshot}) as unknown as FlowService,resolveBinding:()=>null,startItem}).find(tool=>tool.name==='app_flow_start_item')!;
+  const start=flowTools({ownerId:'owner',service:()=>({snapshot:()=>snapshot}) as unknown as FlowService,startItem}).find(tool=>tool.name==='app_flow_start_item')!;
   for(const extra of [{contentOffset:0},{contentOffset:32000,expectedDigest:'stale'},{expectedDigest:'stale',dryRun:false}]) expect(()=>start.run({contextKey:'brain',flowId:'large',...extra})).toThrow('read-only');
   expect(startItem).not.toHaveBeenCalled();
 });

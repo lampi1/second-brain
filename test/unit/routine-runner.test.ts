@@ -85,12 +85,12 @@ describe('manual start on one work item', () => {
   it('returns an actionable paused result through the host tool without reading DevOps or retrying', async () => {
     const w = world({ steps: [agent('analyze')] }), rule = enable(w), auto = w.runtime.automation();
     auto.pause({ id: rule.id, expectedRevision: auto.snapshot().rules[0]!.revision, paused: true });
-    const tool = flowTools({ ownerId: 'o', service: () => w.flow, resolveBinding: () => null, startItem: input => w.runtime.startItem(input) }).find(t => t.name === 'app_flow_start_item')!;
+    const tool = flowTools({ ownerId: 'o', service: () => w.flow, startItem: input => w.runtime.startItem(input) }).find(t => t.name === 'app_flow_start_item')!;
     const result = await tool.run({ contextKey: w.flow.snapshot().contextKey, flowId: 'fix', workItem: '42' });
     expect(result).toMatchObject({ status: 'blocked', code: 'trigger-paused', started: false, flowId: 'fix' });
     expect(w.readItem).not.toHaveBeenCalled(); expect(w.create).not.toHaveBeenCalled();
     expect(auto.snapshot().rules[0]!.status).toBe('paused');
-    const broken = flowTools({ ownerId: 'o', service: () => w.flow, resolveBinding: () => null, startItem: async () => { throw new Error('storage failure'); } }).find(t => t.name === 'app_flow_start_item')!;
+    const broken = flowTools({ ownerId: 'o', service: () => w.flow, startItem: async () => { throw new Error('storage failure'); } }).find(t => t.name === 'app_flow_start_item')!;
     await expect(broken.run({ contextKey: w.flow.snapshot().contextKey, flowId: 'fix' })).rejects.toThrow('storage failure');
   });
   it('says why an item misses the filters, refuses a second run on the same item and a paused trigger', async () => {

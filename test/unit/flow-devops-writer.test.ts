@@ -111,13 +111,34 @@ describe('DevOps write adapter', () => {
     const { run, calls, file } = setup();
     expect(await run({ op: 'create-test-plan', project: 'projecta', name: 'Plan' })).toEqual({ planId: 100, rootSuiteId: 101 });
     expect(calls[0]!.url).toContain('/contoso/ProjectA/_apis/testplan/plans?');
-    expect(await run({ op: 'create-test-suite', project: 'ProjectA', planId: 100, parentSuiteId: 101, name: 'Suite' })).toEqual({ planId: 100, suiteId: 102 });
-    expect(await run({ op: 'create-test-case', project: 'ProjectA', planId: 100, suiteId: 102, title: 'Case', steps: [{ action: 'Open', expected: 'Shown' }] })).toMatchObject({ testCaseId: 103, linkedTo: 42 });
-    expect(calls.some(c => c.method === 'PATCH' && c.url.includes('/workitems/42?') && JSON.stringify(c.body).includes('TestedBy-Forward'))).toBe(true);
+    expect(await run({ op: 'create-test-suite', project: 'ProjectA', planId: 100, parentSuiteId: 101, name: 'Suite' })).toEqual({ planId: 100, suiteId: 102, relatedTo: 42 });
+    // the suite (a work item) gets one Related link to the run's work item
+    const related = calls.find(c => c.method === 'PATCH' && c.url.includes('/workitems/102?'))!;
+    expect(related.body).toEqual([{ op: 'add', path: '/relations/-', value: { rel: 'System.LinkTypes.Related', url: expect.stringMatching(/\/contoso\/_apis\/wit\/workItems\/42$/) } }]);
+    const before = calls.length;
+    expect(await run({ op: 'create-test-case', project: 'ProjectA', planId: 100, suiteId: 102, title: 'Case', steps: [{ action: 'Open', expected: 'Shown' }] })).toMatchObject({ testCaseId: 103 });
+    // no Tested By link: nothing patches the work item's relations
+    expect(calls.slice(before).some(c => c.method === 'PATCH' && c.url.includes('/workitems/42?'))).toBe(false);
+    expect(calls.slice(before).find(c => c.url.includes('$Test%20Case'))!.body).toEqual([
+      { op: 'add', path: '/fields/System.Title', value: 'Case' }, expect.objectContaining({ path: '/fields/Microsoft.VSTS.TCM.Steps' })]);
     expect(await run({ op: 'set-test-outcome', project: 'ProjectA', planId: 100, suiteId: 102, testCaseId: 103, outcome: 'passed' })).toEqual({ testCaseId: 103, outcome: 'passed', points: 1 });
     expect(calls.at(-1)!.body).toEqual([{ id: 900, results: { outcome: 'passed' } }]);
     expect(await run({ op: 'rename-test-plan', project: 'ProjectA', planId: 100, name: 'Renamed' })).toEqual({ planId: 100, name: 'Renamed' });
     expect(JSON.parse(fs.readFileSync(file, 'utf8')).runs['run-1']).toMatchObject({ plans: [{ id: 100 }], suites: [{ id: 102 }], testCases: [{ id: 103 }] });
+  });
+  it('writes a test case description, priority and tags only when given', async () => {
+    const { run, calls } = setup();
+    await run({ op: 'create-test-plan', project: 'ProjectA', name: 'Plan' });
+    await run({ op: 'create-test-suite', project: 'ProjectA', planId: 100, parentSuiteId: 101, name: 'Suite' });
+    await run({ op: 'create-test-case', project: 'ProjectA', planId: 100, suiteId: 102, title: 'Case', steps: [], description: 'User Story: #42 - A <b>\nTipo Test: Funzionale', priority: 1, tags: ['#42', '#pr7'] });
+    expect(calls.find(c => c.url.includes('$Test%20Case'))!.body).toEqual([
+      { op: 'add', path: '/fields/System.Title', value: 'Case' },
+      { op: 'add', path: '/fields/System.Description', value: 'User Story: #42 - A &lt;b&gt;<br/>Tipo Test: Funzionale' },
+      { op: 'add', path: '/fields/Microsoft.VSTS.Common.Priority', value: 1 },
+      { op: 'add', path: '/fields/System.Tags', value: '#42; #pr7' },
+    ]);
+    await expect(run({ op: 'create-test-case', project: 'ProjectA', planId: 100, suiteId: 102, title: 'C', steps: [], priority: 0 })).rejects.toThrow('priority');
+    await expect(run({ op: 'create-test-case', project: 'ProjectA', planId: 100, suiteId: 102, title: 'C', steps: [], tags: ['a;b'] })).rejects.toThrow('tags');
   });
   it('refuses plans, suites and cases another run created', async () => {
     const { run, context } = setup(); await run({ op: 'create-test-plan', project: 'ProjectA', name: 'Plan' });

@@ -1,4 +1,5 @@
 // Confined file access and serialized atomic updates for product rules. Never follows brain links or reads credentials.
+import { renameRetrying } from '../../../packages/routine-runtime/src/fs-util';
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -48,17 +49,8 @@ export function atomicWrite(root: string, relative: string, text: string): void 
   try { fs.writeFileSync(temp, text, { flag: 'wx', mode: 0o600 }); renameRetrying(temp, file); }
   finally { fs.rmSync(temp, { force: true }); }
 }
-/** On Windows an antivirus or indexer briefly holding the target makes rename fail with EPERM/EACCES/EBUSY: retry a
- * few times with a short pause (~1 s in all) before giving up with the real error. */
-export function renameRetrying(from: string, to: string): void {
-  for (let attempt = 0; ; attempt++) {
-    try { fs.renameSync(from, to); return; } catch (e) {
-      const code = (e as NodeJS.ErrnoException).code;
-      if (attempt >= 8 || (code !== 'EPERM' && code !== 'EACCES' && code !== 'EBUSY')) throw e;
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25 * (attempt + 1));
-    }
-  }
-}
+// renameRetrying lives in the shared routine runtime (ADR 0175), re-exported for the app's other stores.
+export { renameRetrying } from '../../../packages/routine-runtime/src/fs-util';
 /** Locks are never stolen on time alone: a crashed writer requires an explicit recovery, avoiding two writers. */
 export function locked<T>(root: string, name: string, action: () => T): T {
   const lock = confined(root, `${name}.lock`);

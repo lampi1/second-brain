@@ -1,5 +1,7 @@
 # Build routines as configuration
 
+> Superseded for new routines: routines are packages run by plain Claude Code sessions. See [routines/authoring.md](routines/authoring.md). This page describes the legacy role-based flows.
+
 A routine is user-owned versioned data, not a product feature for one company. Compose supported steps, prompts, models, inputs, scripts, queries, checklists, retries and outputs through the Orchestrator. A new workflow using these primitives needs no app patch. There is no built-in requirement to follow a bug-fix lifecycle.
 
 Ask the Orchestrator to read `app_flow_capabilities`: its small overview links to `authoring`, `devops` and `test-targets` sections. Details load only when needed, not into every agent prompt. `app_flow_models` supplies actual available model IDs; the proposal tools describe the accepted fields.

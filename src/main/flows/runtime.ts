@@ -42,6 +42,8 @@ import { FlowStartBlocked } from './start-blocked';
 import { TestDbQueryExecutor, validateTestDbQueryRequest, type TestDbDriver } from './test-db-query';
 import type { FlowAutomationConfig, FlowDetectionResult } from '../../shared/flow-automation';
 import { fileURLToPath } from 'node:url';
+import { workItemOf as routineWorkItemOf, type RoutineHost } from './routine-host';
+import type { RunRecord as RunRecordLike } from '../../../packages/routine-runtime/src/index';
 
 /** The running build: the main bundle's path and write time change with every release and every dev build, so a
  *  step's extra attempt granted before an app update can be granted once more after it. */
@@ -75,6 +77,11 @@ export interface FlowRuntimeOptions {
   steer?(chatId: string, text: string): Promise<void>;
   /** Tests inject the work item reader and the command launcher. */
   readItem?(organization: string, project: string, id: number, signal?: AbortSignal): Promise<DevOpsItem>;
+  /** The shared routine runtime (ADR 0175): when set, every run is executed by the package and only mirrored here;
+   *  the legacy step engine below (chats per role, app tools) is not reached. */
+  routineHost?: RoutineHost;
+  /** a routine already converted to a package (Routine section): its trigger lives there, the legacy rule never polls */
+  packaged?: (flowId: string) => boolean;
   run?(command: ResolvedCommand, options: { cwd: string; timeoutMs: number; signal?: AbortSignal; env?: Record<string, string> }): Promise<CommandResult>;
 }
 export interface FlowWorkerRequest {
@@ -100,6 +107,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   const activeRequests = new Map<string, Set<AbortController>>();
   const interrupting = new Set<string>();
   const pumps = new Map<string, Promise<void>>(), dirtyPumps = new Set<string>();
+  const packageRuns = new Set<string>();
   let creatingWorkers = 0;
   /** runs whose script/query is running in this process right now */
   const commands = new Set<string>();
@@ -222,6 +230,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
       },
     });
     instances.set(context.key, made);
+    if (options.routineHost) migrateLegacy(options.routineHost, made, context.key);
     return made;
   };
   const resolveBinding = (chatId: string, ownerId: string, workspace: string): FlowAgentBinding | null => {
@@ -235,6 +244,57 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     // the role it runs and the tier it launched on, as app_create_chat recorded them (route.agent)
     return { ...binding, launched: launchOf(c) };
   };
+  /** The DevOps trigger through the package's shared loop (ADR 0175): the loop detects and dedups one run per work
+   *  item in the routine's run store; only the items it starts reach the app's queue, which starts the app run. */
+  /** Legacy runs stuck in cleanup or holding a pending DevOps write (ADR 0175): each write is verified on DevOps
+   *  (present → done, absent → not done, unclear → not verified) and the runs end, with no human step. Once per
+   *  context; never blocks the context or a run, a failure is only logged. */
+  const migrated = new Set<string>(), migrating = new Map<string, Promise<void>>(), waiting = new Set<string>();
+  const migrateLegacy = (host: RoutineHost, flow: FlowService, key: string): void => {
+    if (migrated.has(key)) return; migrated.add(key);
+    const job = (async () => {
+      const runs = flow.snapshot().runs, writer = writerFor(key);
+      const operations = runs.flatMap(run => writer.operationsFor(run.id).filter(op => op.state === 'pending').map(op => ({ id: op.requestHash, runId: run.id, op: op.op ?? 'unknown-write', state: op.state, ...(op.at ? { at: op.at } : {}), ...(op.organization ? { organization: op.organization } : {}), ...(op.workItemId ? { workItemId: op.workItemId } : {}) })));
+      // stuck in cleanup, holding a pending write, or active with progress and no package run (M2: ended, never restarted)
+      const progressed = (run: FlowRun) => run.steps.some(s => !['pending', 'ready'].includes(s.status));
+      const active = (run: FlowRun) => !['completed', 'cancelled'].includes(run.status) && !host.packageRunOf(run.id) && progressed(run);
+      const legacy = runs.filter(run => run.disposition?.cleanup === 'pending' || operations.some(op => op.runId === run.id) || active(run)).map(run => {
+        const workItem = routineWorkItemOf(run);
+        return { runId: run.id, status: run.status, linked: Boolean(host.packageRunOf(run.id)), progressed: progressed(run), ...(workItem !== undefined ? { workItem } : {}), ...(run.disposition ? { cleanup: run.disposition.cleanup } : {}) };
+      });
+      if (!legacy.length) return;
+      const result = await host.migrateLegacy(legacy, operations);
+      writer.settleLegacy(result.operations.filter(o => o.outcome !== 'not-verified').map(o => ({ id: o.id, outcome: o.outcome as 'done' | 'not-done', note: o.note })));
+      for (const run of result.runs) {
+        const before = flow.snapshot(), own = before.runs.find(r => r.id === run.runId), definition = own && before.versions.find(v => v.definition.id === own.flowId && v.version === own.flowVersion)?.definition;
+        // the interrupted run gets its package run folder (report + events) and its item counts as done for the trigger
+        if (run.interrupted && own && definition) host.interruptLegacy(own, definition, run.note);
+        flow.endLegacyRun(run.runId, run.note);
+        if (definition) host.cancel(run.runId, definition);
+      }
+      log.info('flows', 'Legacy routine runs migrated', { data: { runs: result.runs.length, operations: result.operations.map(o => ({ op: o.op, outcome: o.outcome })) } });
+    })().catch(error => log.warn('flows', 'Legacy routine migration incomplete', { cause: String(error), hint: 'Runs stay as they are; the migration retries at the next app start.' }))
+      .finally(() => migrating.delete(key));
+    migrating.set(key, job);
+  };
+  const sharedDetect = (host: RoutineHost, flow: FlowService) => async (config: FlowAutomationConfig, _cursor: Record<string, string>, signal?: AbortSignal): Promise<FlowDetectionResult> => {
+    if (options.packaged?.(config.flowId)) throw new Error('La routine è un pacchetto: il suo trigger è nella sezione Routine.');
+    const definition = flow.snapshot().versions.find(v => v.definition.id === config.flowId && v.version === config.flowVersion)?.definition;
+    if (!definition) throw new Error('Routine version unavailable');
+    const prefix = `app:${config.flowId}:`, events = automations.get(flow.snapshot().contextKey)?.snapshot().events ?? [];
+    const of = (inputs: Record<string, string>) => Number(inputs['work-item-id']);
+    host.releaseLost(definition, prefix, workItem => events.some(e => of(e.inputs) === workItem) || flow.snapshot().runs.some(r => r.flowId === config.flowId && of(r.inputs) === workItem));
+    let base: FlowDetectionResult | undefined;
+    const items: FlowDetectionResult['items'] = [];
+    const loop = host.trigger(definition, config, async (c, cursor, own) => (base = await detector(c, cursor, own ?? signal)), workItem => {
+      const item = base?.items.find(i => Number(i.inputs['work-item-id']) === workItem);
+      if (item) items.push(item);
+      return { runId: `app:${config.flowId}:${workItem}` };
+    });
+    const result = await loop.tick();
+    if (!base) throw new Error(result.summary);
+    return { ...base, items, summary: result.summary };
+  };
   const automation = (): FlowAutomationService => {
     if (stopped) throw new Error('Flow runtime stopped');
     const context = current(), existing = automations.get(context.key);
@@ -243,7 +303,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     const made = new FlowAutomationService({
       file: path.join(options.userData, 'flows', context.key, 'automation.json'),
       flow: () => { if (stopped || current().key !== context.key) throw new Error('Brain context changed'); return flow; },
-      detect: detector,
+      detect: options.routineHost ? sharedDetect(options.routineHost, flow) : detector,
       // the runner starts the run itself (ADR 0155): no Orchestrator turn, no chat needs to be open
       dispatch: async (rule, event) => {
         if (stopped || current().key !== context.key) throw new Error('Brain context changed');
@@ -372,6 +432,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   const advanceRun = async (runId: string, contextKey: string): Promise<void> => {
     const valid = () => !stopped && holding && !!options.brainRoot() && current().key === contextKey && !interrupting.has(runId);
     if (!valid()) return;
+    if (options.routineHost) { packageRun(options.routineHost, runId, contextKey); return; }
     const context = current(), flow = service();
     for (;;) {
       if (!valid()) return;
@@ -553,6 +614,39 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
       // A fast canonical report may arrive before sendWorker resolves. Re-read it under the same run lock.
     }
   };
+  /** Hands a run to the shared routine runtime and mirrors its run folder back (ADR 0175). One package run per app run;
+   *  an app restart resumes the same package run from its unfinished step. */
+  const packageRun = (host: RoutineHost, runId: string, contextKey: string): void => {
+    if (packageRuns.has(runId)) return;
+    const flow = service(), snap = flow.snapshot(), run = snap.runs.find(r => r.id === runId);
+    // blocked = the package run failed or needs a human: only the user's retry (back to active) resumes it, never a pump
+    if (!run || run.status === 'completed' || run.status === 'cancelled' || run.status === 'blocked' || run.paused || run.pendingCancellation) return;
+    // the legacy migration of this context decides first: a run it ends must never start in the package
+    const migration = migrating.get(contextKey);
+    if (migration) { if (!waiting.has(runId)) { waiting.add(runId); void migration.finally(() => { waiting.delete(runId); packageRun(host, runId, contextKey); }); } return; }
+    const definition = snap.versions.find(v => v.definition.id === run.flowId && v.version === run.flowVersion)?.definition;
+    if (!definition) return;
+    const grant = automation().grantFor(run)?.grant;
+    packageRuns.add(runId);
+    const mirror = (record: RunRecordLike) => {
+      if (stopped || current().key !== contextKey) return;
+      try {
+        flow.mirrorPackageRun(runId, { runId: record.runId, folder: path.join(host.runsRoot(record.routineId), record.runId), status: record.status,
+          ...(record.error ? { error: record.error } : {}),
+          steps: record.steps.map(s => ({ id: s.id, status: s.status, ...(s.summary ? { summary: s.summary } : {}), ...(s.error ? { error: s.error } : {}), ...(s.endedAt ? { endedAt: s.endedAt } : {}) })) });
+      } catch (error) { log.warn('flows', 'Routine run mirror failed', { cause: String(error), hint: 'The run folder under userData/routine-runs is the source of truth.' }); }
+    };
+    try {
+      const handle = host.execute(run, definition, grant ? { devopsWrite: grant } : {}, mirror);
+      void handle.finished.then(mirror, (error: unknown) => {
+        log.warn('flows', 'Routine runtime run failed', { cause: String(error), hint: 'Open its report.md and events.jsonl under userData/routine-runs.' });
+        try { flow.blockStep(run.id, flow.status(run.id, run.ownerOrchestratorId).revision, run.steps[run.currentStep]!.stepId, `Routine runtime: ${redact(String(error)).slice(0, 1000)}`); } catch { /* changed meanwhile */ }
+      }).finally(() => packageRuns.delete(runId));
+    } catch (error) {
+      packageRuns.delete(runId);
+      try { flow.blockStep(run.id, run.revision, run.steps[run.currentStep]!.stepId, `Routine runtime: ${redact(String(error)).slice(0, 1000)}`); } catch { /* changed meanwhile */ }
+    }
+  };
   const tick = async (): Promise<void> => {
     if (stopped) return;
     if (!options.brainRoot()) { if (selectedKey) await leaveContext(selectedKey); abortRequests(); for (const auto of automations.values()) auto.stop(); automations.clear(); selectedKey = null; return; }
@@ -596,7 +690,9 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   };
   const cancel = async (input: FlowCancel, ownerId?: string): Promise<FlowRun> => {
     if (stopped) throw new Error('Flow runtime stopped');
-    const context = current(), flow = service(), run = flow.cancel(input, ownerId); await reconcileRecovery(run, context); return flow.status(run.id, run.ownerOrchestratorId);
+    const context = current(), flow = service(), run = flow.cancel(input, ownerId);
+    if (options.routineHost) { const definition = flow.snapshot().versions.find(v => v.definition.id === run.flowId && v.version === run.flowVersion)?.definition; if (definition) options.routineHost.cancel(run.id, definition); }
+    await reconcileRecovery(run, context); return flow.status(run.id, run.ownerOrchestratorId);
   };
   const proposeCancel = async (input: FlowCancel, ownerId: string): Promise<FlowRun> => service().proposeCancel(input, ownerId);
   const decideCancel = async (input: FlowRestartDecision): Promise<FlowRun> => {

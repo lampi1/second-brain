@@ -215,3 +215,5 @@ test/unit/flows/browser-write.test.ts url-credentials sha256:3bb14568f2bb15b5496
 test/unit/flows/browser-write.test.ts email sha256:3bb14568f2bb15b549647e85f6ab429da2eac66daae0bbd7d6a4e8f5f303149b
 test/unit/log.test.ts assigned-secret sha256:6bc1441b9e4d2e63366cef188a6de7414e5c7a344871d328bd51a4906b85abef
 test/unit/browser-site-vault.test.ts assigned-secret sha256:d775d7d97fdce3f9018dd34ca46e13543afa2401420f98850ed43a4965cc1bd0
+packages/routine-runtime/src/devops-host/app-service-target.ts guid sha256:bd1fb5655f951e404f8ab0b800720f7ad5be1a8a8e73d682606d8f3d404839a1
+packages/routine-runtime/src/devops-host/pr-validation.ts guid sha256:d5b439c4cd2a35d3eb76afaa80cf4410dcfb409c059aed8d2db717896cc8e740

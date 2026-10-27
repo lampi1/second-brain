@@ -3,34 +3,33 @@ import type { Tab, BrowserTabs } from './tabs';
 import type { SiteVault } from './site-vault';
 import { assertBrowserOrigin } from './routine-policy';
 import { addRedaction } from '../log';
+import { classifyLoginForm, inspectLoginForm } from './login-form';
 export const SITE_LOGIN_WORLD = 1014;
-/** Refuse ambiguous forms, cross-origin actions, two-step/SSO/CAPTCHA flows: hand those to the user. */
+/** Refuse ambiguous forms, cross-origin actions, two-step/SSO/CAPTCHA flows: hand those to the user (rules: login-form.ts). */
 export function siteLoginScript(origin: string, user: string, password: string): string {
   return `(() => {
     if (location.origin !== ${JSON.stringify(origin)}) return false;
-    const visible = e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && !e.disabled; };
-    const pws = [...document.querySelectorAll('input[type="password"]')].filter(visible);
-    if (pws.length !== 1) return false;
-    const pw = pws[0], form = pw.form;
-    if (!form || form.method.toLowerCase() !== 'post' || new URL(form.action, location.href).origin !== location.origin) return false;
-    const users = [...form.querySelectorAll('input[autocomplete="username"],input[type="email"],input[type="text"]')].filter(visible);
-    const submits = [...form.querySelectorAll('button:not([type]),button[type="submit"],input[type="submit"]')].filter(visible);
-    if (users.length !== 1 || submits.length !== 1 || (submits[0].formAction && new URL(submits[0].formAction, location.href).origin !== location.origin)) return false;
-    const valid = () => (!((submits[0].getAttribute('formtarget') || form.target)) || (submits[0].getAttribute('formtarget') || form.target) === '_self') && location.origin === ${JSON.stringify(origin)} && form.isConnected && pw.isConnected && pw.type === 'password' && pw.form === form && submits[0].form === form && (submits[0].getAttribute('formmethod') || form.method).toLowerCase() === 'post' && new URL(submits[0].getAttribute('formaction') || form.action, location.href).origin === location.origin;
-    if (!valid()) return false;
+    const inspect = ${inspectLoginForm.toString()};
+    const classify = ${classifyLoginForm.toString()};
+    const first = inspect(), plan = classify(first.facts, ${JSON.stringify(origin)});
+    if (!plan || !first.user || !first.password) return false;
+    const pw = first.password, userEl = first.user, control = plan.mode === 'post' ? first.submits[0] : first.buttons[plan.button];
+    const valid = () => { const now = inspect(), again = classify(now.facts, ${JSON.stringify(origin)}); return location.origin === ${JSON.stringify(origin)} && !!again && JSON.stringify(again) === JSON.stringify(plan) && now.password === pw && now.user === userEl && (plan.mode === 'post' ? now.submits[0] : now.buttons[plan.button]) === control; };
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
     const set = (el, val) => { setter.call(el, val); el.dispatchEvent(new Event('input', { bubbles:true })); el.dispatchEvent(new Event('change', { bubbles:true })); };
     globalThis.__sbRoutineLoginPrivate = true;
+    if (plan.mode === 'ajax') globalThis.__sbRoutineLoginAjax = true;
     let submitted = false;
     try {
-      set(users[0], ${JSON.stringify(user)});
+      set(userEl, ${JSON.stringify(user)});
       if (!valid()) return false;
       set(pw, ${JSON.stringify(password)});
       if (!valid()) return false;
-      HTMLFormElement.prototype.requestSubmit.call(form, submits[0]);
+      if (plan.mode === 'post') HTMLFormElement.prototype.requestSubmit.call(first.form, control);
+      else HTMLElement.prototype.click.call(control); // the page's own script posts the credentials (same origin)
       submitted = true;
       return true;
-    } finally { if (!submitted) { setter.call(pw, ''); setter.call(users[0], ''); } }
+    } finally { if (!submitted) { setter.call(pw, ''); setter.call(userEl, ''); } }
 
   })()`;
 }
@@ -52,10 +51,12 @@ export async function siteLogin(tabs: BrowserTabs, tab: Tab, vault: SiteVault): 
     for (let attempt = 0; attempt < 40; attempt++) {
       tabs.assertRoutine(tab, true);
       try { await tabs.assertLoginReadable(tab); return true; } catch { /* login document still active */ }
-      const reload = await tab.wc.executeJavaScriptInIsolatedWorld(SITE_LOGIN_WORLD, [{ code: `globalThis.__sbRoutineLoginPrivate === true && ![...document.querySelectorAll('input[type="password"]')].some(e => { const r=e.getBoundingClientRect(); return r.width>0 && r.height>0; })` }]).catch(() => false);
+      const reload = await tab.wc.executeJavaScriptInIsolatedWorld(SITE_LOGIN_WORLD, [{ code: `globalThis.__sbRoutineLoginPrivate === true && globalThis.__sbRoutineLoginAjax !== true && ![...document.querySelectorAll('input[type="password"]')].some(e => { const r=e.getBoundingClientRect(); return r.width>0 && r.height>0; })` }]).catch(() => false);
       if (reload) { tabs.assertRoutine(tab, true); tab.wc.reload(); }
       await new Promise(resolve => setTimeout(resolve, 250));
     }
+    // An AJAX login that never left its page keeps the filled form: empty it before the user's handoff.
+    await tab.wc.executeJavaScriptInIsolatedWorld(SITE_LOGIN_WORLD, [{ code: `globalThis.__sbRoutineLoginAjax === true && document.querySelectorAll('input[type="password"]').forEach(e => { e.value = ''; })` }]).catch(() => false);
     return false;
   } catch { return false; } // never propagate Electron's script/error text (it may carry a literal)
 }

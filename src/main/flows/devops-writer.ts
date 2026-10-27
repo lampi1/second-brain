@@ -102,6 +102,13 @@ export class DevOpsWriter {
   validateHistory(runId: string, grant: DevOpsWriteGrant, body: string): void {
     renderDevOpsComment(body, grant.organization, this.read().runs[runId]?.images ?? []);
   }
+  /** The legacy migration's verdicts (ADR 0175): a pending write verified on DevOps becomes done or not done. */
+  settleLegacy(decisions: { id: string; outcome: 'done' | 'not-done'; note: string }[]): void {
+    if (!decisions.length) return;
+    const data = this.read();
+    for (const d of decisions) { const op = data.operations?.[d.id]; if (op?.state !== 'pending') continue; op.state = d.outcome; op.completedAt = Date.now(); op.reason = d.note.slice(0, 2000); }
+    this.write(data);
+  }
   operationsFor(runId: string) { return Object.entries(this.read().operations ?? {}).filter(([, v]) => v.runId === runId).map(([requestHash, v]) => ({ requestHash, ...structuredClone(v) })); }
   /** Replays only local fence cleanup after a crash between the durable user receipt and the revision journal. */
   reconciliationView(runId: string) {
@@ -443,27 +450,34 @@ export class DevOpsWriter {
           const created = await call('POST', `${org}/${encodeURIComponent(p)}/_apis/testplan/Plans/${owned.id}/suites?${API}`, { suiteType: 'staticTestSuite', name, parentSuite: { id: parent } });
           const suiteId = id(created.id, 'created suite id');
           record(entry => entry.suites.push({ project: p, planId: owned.id, id: suiteId }));
-          audit(`testsuite:${suiteId}`); return { planId: owned.id, suiteId };
+          // A suite is a work item: its one Related link points at the run's own work item, set by the host.
+          await workItem();
+          await call('PATCH', `${org}/_apis/wit/workitems/${suiteId}?${API}`, [{ op: 'add', path: '/relations/-', value: { rel: 'System.LinkTypes.Related', url: `${org}/_apis/wit/workItems/${context.workItemId}` } }], 'application/json-patch+json');
+          audit(`testsuite:${suiteId}`); return { planId: owned.id, suiteId, relatedTo: context.workItemId };
         }
         case 'create-test-case': {
-          keys(raw, ['op', 'project', 'planId', 'suiteId', 'title', 'steps'], 'request'); room();
+          keys(raw, ['op', 'project', 'planId', 'suiteId', 'title', 'steps', 'description', 'priority', 'tags'], 'request'); room();
           const p = project(raw.project), owned = plan(p, raw.planId), suiteId = suite(p, owned.id, raw.suiteId), title = safeText(raw.title, 'title', 256);
           if (!Array.isArray(raw.steps) || raw.steps.length > 50) deny('steps: at most 50');
           const steps = (raw.steps as unknown[]).map((value, i) => { const s = object(value, `step ${i + 1}`); keys(s, ['action', 'expected'], 'step'); return { action: text(s.action, 'step action', 4000), expected: s.expected === undefined ? '' : text(s.expected, 'step expected', 4000, true) }; });
           const xml = `<steps id="0" last="${steps.length + 1}">${steps.map((s, i) => `<step id="${i + 2}" type="ValidateStep"><parameterizedString isformatted="true">${html(html(s.action))}</parameterizedString><parameterizedString isformatted="true">${html(html(s.expected))}</parameterizedString><description/></step>`).join('')}</steps>`;
-          await workItem(); // the linked work item must still be inside the grant
+          const description = raw.description === undefined ? undefined : text(raw.description, 'description', 10_000);
+          if (raw.priority !== undefined && !(Number.isInteger(raw.priority) && (raw.priority as number) >= 1 && (raw.priority as number) <= 4)) deny('priority: an integer 1-4');
+          if (raw.tags !== undefined && (!Array.isArray(raw.tags) || raw.tags.length > 20)) deny('tags: at most 20');
+          const caseTags = ((raw.tags as unknown[] | undefined) ?? []).map(t => { const s = safeText(t, 'tag', 100); if (s.includes(';')) deny('tags cannot contain ;'); return s; });
+          await workItem(); // the run's work item must still be inside the grant
+          // No link to the bug: the test case reaches it through its suite's Related link (create-test-suite).
           const created = await call('POST', `${org}/${encodeURIComponent(p)}/_apis/wit/workitems/$Test%20Case?${API}`, [
             { op: 'add', path: '/fields/System.Title', value: title },
             ...(steps.length ? [{ op: 'add', path: '/fields/Microsoft.VSTS.TCM.Steps', value: xml }] : []),
-            // "Tests" link to the run's own work item, the only one the test case may reference.
-
+            ...(description ? [{ op: 'add', path: '/fields/System.Description', value: html(description) }] : []),
+            ...(raw.priority !== undefined ? [{ op: 'add', path: '/fields/Microsoft.VSTS.Common.Priority', value: raw.priority }] : []),
+            ...(caseTags.length ? [{ op: 'add', path: '/fields/System.Tags', value: caseTags.join('; ') }] : []),
           ], 'application/json-patch+json');
           const caseId = id(created.id, 'created test case id');
           record(entry => entry.testCases.push({ project: p, planId: owned.id, suiteId, id: caseId }));
-          const linkedItem = await workItem();
-          await patchItem([{ op: 'test', path: '/rev', value: linkedItem.rev }, { op: 'add', path: '/relations/-', value: { rel: 'Microsoft.VSTS.Common.TestedBy-Forward', url: `${org}/_apis/wit/workItems/${caseId}` } }]);
           await call('POST', `${org}/${encodeURIComponent(p)}/_apis/testplan/Plans/${owned.id}/Suites/${suiteId}/TestCase?${API}`, [{ workItem: { id: caseId } }]);
-          audit(`testcase:${caseId}`); return { planId: owned.id, suiteId, testCaseId: caseId, linkedTo: context.workItemId };
+          audit(`testcase:${caseId}`); return { planId: owned.id, suiteId, testCaseId: caseId };
         }
         case 'set-test-outcome': {
           keys(raw, ['op', 'project', 'planId', 'suiteId', 'testCaseId', 'outcome'], 'request');

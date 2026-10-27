@@ -18,7 +18,12 @@ fs.cpSync(path.join(root, 'src/main/rules/hooks'), path.join(root, 'out/rules/ho
 // the Task page's own DevOps reader for brains without ops/tools/devops-me.mjs (tasks/service.ts appScript, issue #95)
 fs.mkdirSync(path.join(root, 'out/tasks'), { recursive: true });
 fs.copyFileSync(path.join(root, 'src/main/tasks/devops-me.mjs'), path.join(root, 'out/tasks/devops-me.mjs'));
-await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/index.ts')], outfile: path.join(root, 'out/main/index.js'), format: 'esm', external: ['electron'],
+await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/index.ts')], outfile: path.join(root, 'out/main/index.js'), format: 'esm', external: ['electron', 'playwright-core'],
+  banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" } });
+// the routine runtime's stdio MCP servers (packages/routine-runtime/src/mcp-main.ts, ADR 0175: `testdb` | `devops` |
+// `browser`), started per step by the routine host with Electron as Node; playwright-core (the browser) is not bundled:
+// it travels in out/node_modules like the packages below
+await esbuild({ ...common, entryPoints: [path.join(root, 'packages/routine-runtime/src/mcp-main.ts')], outfile: path.join(root, 'out/main/routine-mcp.js'), format: 'esm', external: ['playwright-core'],
   banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" } });
 // the hybrid search's worker thread (src/main/search/hybrid/worker.ts), next to the main bundle
 await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/search/hybrid/worker.ts')], outfile: path.join(root, 'out/main/search-worker.js'), format: 'esm',
@@ -30,7 +35,7 @@ await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/search/hybrid
 await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/voice/worker.ts')], outfile: path.join(root, 'out/main/voice-worker.js'), format: 'esm', external: ['sherpa-onnx-node'],
   banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" } });
 const runtime = ['onnxruntime-node', 'onnxruntime-common', '@huggingface/tokenizers', 'sqlite-vec', `sqlite-vec-${process.platform === 'win32' ? 'windows' : process.platform}-${process.arch}`,
-  'sherpa-onnx-node', `sherpa-onnx-${process.platform === 'win32' ? 'win' : process.platform}-${process.arch}`];
+  'sherpa-onnx-node', `sherpa-onnx-${process.platform === 'win32' ? 'win' : process.platform}-${process.arch}`, 'playwright-core'];
 for (const pkg of runtime) {
   const src = path.join(root, 'node_modules', pkg);
   if (!fs.existsSync(src)) continue; // another platform's optional package

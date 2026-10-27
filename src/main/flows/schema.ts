@@ -1,5 +1,6 @@
 // Strict flow definition validation and canonical hashing; the host rejects unknown executable fields.
 import { validateConnector } from './connector-call';
+import { identifier, integer, keys, object, text } from '../../../packages/routine-runtime/src/devops-host/schema';
 import { browserOrigins } from '../../shared/flow-browser';
 import { validatePackage, validatePackagedSteps } from './package';
 import { createHash } from 'node:crypto';
@@ -22,25 +23,8 @@ const PLACEHOLDER = /\{\{\s*([a-z0-9][a-z0-9._:-]{0,100})\s*\}\}/gi;
 export const placeholders = (value: string): string[] => [...value.matchAll(PLACEHOLDER)].map(m => m[1]!.toLowerCase());
 /** An external-write step the host can run: it declares the adapter; production and non-builtin actions never qualify. */
 export const adapted = (step: FlowStep): boolean => step.effect === 'external-write' && step.adapter === DEVOPS_WRITE_ADAPTER && step.kind === 'agent' && !step.action;
-const ID = /^[a-z0-9][a-z0-9._-]{0,79}$/;
-export function object(value: unknown, label: string): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${label}: expected object`);
-  return value as Record<string, unknown>;
-}
-export function keys(value: Record<string, unknown>, allowed: readonly string[], label: string): void {
-  if (Object.keys(value).some(key => !allowed.includes(key))) throw new Error(`${label}: unknown field`);
-}
-export function text(value: unknown, label: string, max = 4000, empty = false): string {
-  if (typeof value !== 'string' || value.length > max || (!empty && !value.trim()) || /[\u0000]/u.test(value)) throw new Error(`${label}: invalid text`);
-  return value.trim();
-}
-export function identifier(value: unknown, label: string): string {
-  const result = text(value, label, 80); if (!ID.test(result)) throw new Error(`${label}: invalid identifier`); return result;
-}
-export function integer(value: unknown, label: string, min = 0, max = Number.MAX_SAFE_INTEGER): number {
-  if (!Number.isSafeInteger(value) || (value as number) < min || (value as number) > max) throw new Error(`${label}: invalid integer`);
-  return value as number;
-}
+// The basic value checks live with the routine runtime's DevOps modules (ADR 0175); one copy for both.
+export { identifier, integer, keys, object, text };
 function strings(value: unknown, label: string, max: number, itemMax = 4000): string[] {
   if (!Array.isArray(value) || value.length > max) throw new Error(`${label}: invalid list`);
   const values = value.map((v: unknown) => text(v, label, itemMax));

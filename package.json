@@ -67,6 +67,7 @@
     "mermaid": "12.1.0",
     "onnxruntime-node": "1.30.0",
     "pdfjs-dist": "6.4.299",
+    "playwright-core": "1.63.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "seek-bzip": "2.0.0",

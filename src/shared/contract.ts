@@ -2,13 +2,11 @@
 // result) and event channels (main → renderer). The preload exposes exactly these channels and nothing else
 // (src/preload/index.ts reads INVOKE_CHANNELS / EVENT_CHANNELS); main registers a handler for every invoke channel
 // (src/main/ipc.ts) and rejects senders that are not the app's own page. Change a shape here first, then both sides.
-import type { ReconcileWrites, ReconciliationView, ReconcileDecision } from './flow-reconciliation';
+import type { ReconcileDecision } from './flow-reconciliation';
 import type { AgentContextSnapshot } from './agent-context';
-import type { RoutineWorkbenchRequest, RoutineWorkbenchResult } from './routine-workbench';
-import type { ComponentOperation, ComponentResult } from './components';
 import type { WorkThread, WorkDecision } from './workflows';
-import type { FlowAutomationDecision, FlowAutomationPause, FlowAutomationControl, FlowAutomationClear, FlowAutomationFilters } from './flow-automation';
-import type { FlowSnapshot, FlowActivate, FlowDecision, FlowContext, FlowStepTierEdit, FlowCancel, FlowRestart, FlowRestartDecision, FlowStartItem, FlowRun, FlowDryRun, FlowItemPreview, FlowStepModelEdit } from './flows';
+import type { FlowAutomationDecision } from './flow-automation';
+import type { FlowSnapshot, FlowActivate, FlowDecision, FlowContext, FlowCancel, FlowRestart, FlowRestartDecision, FlowRun } from './flows';
 import type { LearnedRuleProposal } from './agent-pack';
 import type { LearningEvidence, LearningReviewState, MemoryReviewRecord, ReplayComparison, ReplayRecord, SkillCandidateView } from './learning-review';
 import type { SysCode, SysParams } from './sys';
@@ -54,6 +52,7 @@ import type { RunEstimates } from './task-estimate';
 import type { MacroTask } from './macro-tasks';
 import type { JudgingEstimate } from './agents';
 import type { AgentImages } from './agent-images';
+import type { RoutineRunDetail, RoutineRunRef, RoutinesSnapshot, RoutineTerminalExport, RoutineTriggerFilters } from './routines';
 export type { CloudAgent, CloudApplyResult, CloudCaps, CloudEngine, CloudMessage, CloudReady, CloudStartRequest, CloudState, CloudStatus } from './cloud';
 
 /** An engine id from the engine registry (src/main/engines/registry.ts, ADR 0046): 'claude', 'cursor', … */
@@ -1278,41 +1277,30 @@ export interface SearchIndexStatus { model: SearchModelState; docs: number; chun
 export interface InputLagReport { keys: number; p50: number; p95: number; max: number; longTaskMs: number; windowSec: number }
 
 export interface InvokeMap {
+  // the Routine section (ADR 0175, 0176): packages, their trigger and secrets, runs read from the run folders
+  'routines:list': [void, RoutinesSnapshot];
+  'routines:import': [{ data: string }, RoutinesSnapshot];
+  /** writes the filled zip under %LOCALAPPDATA%/routine-runtime/packages/<id>/ in main: the zip never crosses IPC */
+  'routines:export': [{ id: string }, RoutineTerminalExport];
+  'routines:startItem': [{ id: string; workItem: number }, RoutineRunRef];
+  'routines:setTrigger': [{ id: string; enabled: boolean; filters?: RoutineTriggerFilters }, RoutinesSnapshot];
+  'routines:setSecrets': [{ id: string; values: Record<string, string> }, RoutinesSnapshot];
+  'routines:run': [RoutineRunRef, RoutineRunDetail];
+  'routines:cancel': [RoutineRunRef, void];
+  'routines:convert': [{ flowId: string }, RoutinesSnapshot];
   'flows:list': [void, FlowSnapshot];
-  'routine:workbench': [FlowContext<{ request: RoutineWorkbenchRequest }>, RoutineWorkbenchResult];
-  'components:operate': [FlowContext<{ request: ComponentOperation }>, ComponentResult];
-  'flows:export': [FlowContext<{ flowId: string; version: number; format: 'json' | 'markdown' }>, { filename: string; content: string }];
-  'flows:import': [FlowContext<{ content: string }>, FlowSnapshot];
   /** the routine package (ADR 0156): what it would hold; then built, guard-scanned and saved where the user picks (null = cancelled) */
-  'flows:packagePreview': [FlowContext<{ flowId: string; version: number }>, RoutinePackageSummary];
-  'flows:packageExport': [FlowContext<{ flowId: string; version: number; memory: boolean }>, RoutinePackageResult | null];
   /** a routine package zip (base64): what importing it would write; then the routine as a new draft plus the ticked items */
-  'flows:packageInspect': [FlowContext<{ data: string }>, RoutineImportPreview];
-  'flows:packageImport': [FlowContext<{ data: string; digest: string; keys: string[]; memory: boolean }>, RoutineImportResult];
   'flows:autoDecide': [FlowContext<FlowAutomationDecision>, FlowSnapshot];
-  'flows:autoPause': [FlowContext<FlowAutomationPause>, FlowSnapshot];
-  'flows:autoControl': [FlowContext<FlowAutomationControl>, FlowSnapshot];
   'flows:definitionDecide': [FlowContext<FlowActivate>, FlowSnapshot];
   'flows:decide': [FlowContext<FlowDecision>, FlowSnapshot];
-  'flows:writeReconciliation': [FlowContext<{ runId: string }>, ReconciliationView];
   'flows:reconcileDecide': [FlowContext<ReconcileDecision>, FlowRun];
-  'flows:reconcileWrites': [FlowContext<ReconcileWrites>, ReconciliationView];
   'flows:cancel': [FlowContext<FlowCancel>, FlowSnapshot];
   'flows:cancelDecide': [FlowContext<FlowRestartDecision>, FlowSnapshot];
   'flows:restart': [FlowContext<FlowRestart>, FlowSnapshot];
   'flows:restartDecide': [FlowContext<FlowRestartDecision>, FlowSnapshot];
-  'flows:editStepTier': [FlowContext<FlowStepTierEdit>, FlowSnapshot];
   // the app's routine runner (ADR 0155): the user's own controls on the Routine page
-  'flows:previewItem': [FlowContext<{ flowId: string; workItem: string }>, FlowItemPreview];
-  'flows:startItem': [FlowContext<FlowStartItem>, FlowRun | FlowDryRun];
-  'flows:dryRun': [FlowContext<{ flowId: string; params?: Record<string, string> }>, FlowDryRun];
-  'flows:pauseRun': [FlowContext<{ runId: string; expectedRevision: number; paused: boolean }>, FlowSnapshot];
   /** «Esegui» on a prod step: only this click runs a prod command; `command` is the exact text the user saw */
-  'flows:runCommand': [FlowContext<{ runId: string; expectedRevision: number; stepId: string; command: string }>, FlowSnapshot];
-  'flows:clearQueue': [FlowContext<FlowAutomationClear>, FlowSnapshot];
-  'flows:editFilters': [FlowContext<FlowAutomationFilters>, FlowSnapshot];
-  'flows:editStepModel': [FlowContext<FlowStepModelEdit>, FlowSnapshot];
-  'flows:pinHash': [FlowContext<{ flowId: string; version: number; stepId: string; hash: string }>, FlowSnapshot];
   'work:lessons': [void, LearnedRuleProposal[]];
   'work:lessonDecide': [{ id: string; rule: string; approve: boolean; feedback?: string }, void];
   'work:list': [void, WorkThread[]];
@@ -1805,7 +1793,8 @@ export type InvokeResult<K extends InvokeChannel> = InvokeMap[K][1];
 
 // Runtime lists (the preload allow-list). Kept in sync with the maps by the compile-time checks below.
 export const INVOKE_CHANNELS = [
-  'routine:workbench', 'components:operate', 'flows:list', 'flows:export', 'flows:import', 'flows:packagePreview', 'flows:packageExport', 'flows:packageInspect', 'flows:packageImport', 'flows:definitionDecide', 'flows:decide', 'flows:writeReconciliation', 'flows:reconcileWrites', 'flows:reconcileDecide', 'flows:cancel', 'flows:cancelDecide', 'flows:restart', 'flows:restartDecide', 'flows:editStepTier', 'flows:previewItem', 'flows:startItem', 'flows:dryRun', 'flows:pauseRun', 'flows:runCommand', 'flows:clearQueue', 'flows:editFilters', 'flows:editStepModel', 'flows:pinHash', 'flows:autoDecide', 'flows:autoPause', 'flows:autoControl',
+  'routines:list', 'routines:import', 'routines:export', 'routines:startItem', 'routines:setTrigger', 'routines:setSecrets', 'routines:run', 'routines:cancel', 'routines:convert',
+  'flows:list', 'flows:definitionDecide', 'flows:decide', 'flows:reconcileDecide', 'flows:cancel', 'flows:cancelDecide', 'flows:restart', 'flows:restartDecide', 'flows:autoDecide',
   'work:lessons', 'work:lessonDecide', 'work:list', 'work:decide',
   'pulse:list', 'pulse:status', 'pulse:seen', 'pulse:save', 'pulse:act', 'pulse:dismiss', 'pulse:runNow', 'approvals:list', 'approvals:decide',
   'connectors:list', 'connectors:login', 'connectors:cancelLogin', 'connectors:probe', 'connectors:select', 'connectors:disconnect', 'connectors:useToken',

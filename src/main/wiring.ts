@@ -81,6 +81,9 @@ import { createBrowserModule, mcpPortFromEnv } from './browser/service';
 import { Workflows } from './workflows/service';
 import { createFlowRuntime, type FlowRuntime } from './flows/runtime';
 import { createFlowWorker } from './flows/worker';
+import { createRoutineHost, packageOf } from './flows/routine-host';
+import { createRoutines, type LegacyRoutine, type Routines } from './routines/service';
+import { devopsPatFromConnectors, devopsPatFromCursorConfig } from './routines/secret-fill';
 import { flowOutputTools } from './flows/output-tools';
 import { devopsWriteTools } from './flows/devops-write-tool';
 import { testDbReadTools } from './flows/test-db-tool';
@@ -112,7 +115,7 @@ import { askImageRoots, readAskImage } from './ask-image';
 import { electronNode, runNode } from './brain/node';
 import path from 'node:path';
 import { templateRoot } from './rules/tools';
-import { log, errText } from './log';
+import { log, errText, addRedaction } from './log';
 import { AnswerLaterStore, REQUEST_KINDS } from './later';
 import { Artifacts, showUiTool } from './genui/artifacts';
 import { releaseId } from './release';
@@ -136,6 +139,7 @@ import { brainQueriesTool, chatQueryAddTool } from './brain/queries-tools';
 import { AutoScripts } from './brain/auto-scripts';
 import { mountRecallTool, RECALL_ENV } from './search/hybrid/recall';
 import { timersFor } from './timers';
+import { createFolderPackageStore } from './flows/package-authoring';
 const { setInterval, clearInterval } = timersFor('wiring/auto-close');
 
 export interface Ctx { emitter: Emitter; window: () => BrowserWindow | null; userData: string }
@@ -157,6 +161,8 @@ export interface Wired {
   /** the brain skills that fit a request, best first (skills/suggest.ts) */
   workflows?: Workflows;
   flows?: FlowRuntime;
+  /** the Routine section's packages and runs (routines:* IPC); absent in the demo */
+  routines?: Routines;
   suggestSkills?: (request: string) => Promise<SkillSuggestions>;
   updateChats?: { problem: () => string | null; checkpoint: () => void };
   progress: ProgressService;
@@ -387,7 +393,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
 
   // the brain folder (bound below, once the brain exists) holds the credentials file of login hand-offs
   let brainRoot: () => string | null = () => null;
-  const { service: browser, mcp, addChatTools, setBrowserAccess, setChatToolFilter, setRoutineBrowserAccess, setApprovedBrowserOrigins } = await createBrowserModule({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, port: mcpPortFromEnv(), brainRoot: () => brainRoot() });
+  const { service: browser, mcp, addChatTools, setBrowserAccess, setChatToolFilter, setRoutineBrowserAccess, setApprovedBrowserOrigins, sitePackageLogin } = await createBrowserModule({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, port: mcpPortFromEnv(), brainRoot: () => brainRoot() });
   // the brain's chats.mjs poll leaves out the app's own chats (bound below, once the chat manager exists)
   let isOwn: (id: string) => boolean = () => false;
   // Retire the legacy global quiet flag before notifications start; postponement is request-local in the renderer.
@@ -728,7 +734,11 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const autoCloseTimer = setInterval(() => { void autoCloseService.tick().catch(e => log.warn('chats', 'automatic archive suspended', { cause: errText(e) })); }, 1000);
   autoCloseTimer.unref();
   agentPacks.learning.evidenceRuns = () => manager.runs.list();
-  const flows = flowsRef = createFlowRuntime({ connectors: mcpServers.routines, browserEngineAllowed: id => engineOf(id as Harness)?.kind === 'claude', userData: ctx.userData, testDbRead: { env: testDbCredential }, brainRoot: () => brain.info().brainRoot,
+  // every routine runs through the shared routine runtime (ADR 0175): plain Claude sessions, run folders under
+  // userData/routine-runs; the bundled MCP entry serves the read-only test DB and work item tools to its sessions
+  const routineHost = createRoutineHost({ userData: ctx.userData, mcpEntry: path.join(path.dirname(fileURLToPath(import.meta.url)), 'routine-mcp.js') });
+  let routinesRef: Routines | undefined;
+  const flows = flowsRef = createFlowRuntime({ routineHost, packaged: flowId => routinesRef?.packaged(flowId) ?? false, connectors: mcpServers.routines, browserEngineAllowed: id => engineOf(id as Harness)?.kind === 'claude', userData: ctx.userData, testDbRead: { env: testDbCredential }, brainRoot: () => brain.info().brainRoot,
     chats: () => chats.list(), stopChat: chatId => chats.stop(chatId), changed: snapshot => ctx.emitter.emit('flows:changed', snapshot),
     createWorker: createFlowWorker({ catalog: agents, brain, chats: () => manager.list(), create: (request, sealed, routine) => {
       if (!sealed) return manager.create(request, 'app', undefined, {}, { routine });
@@ -753,6 +763,41 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     },
     roles: () => flowRoles(agents.list().profiles, (engine, tier) => tierModel(engine, tier, brain.routingInfo().registry, brain.settings().modelTiers)),
     send: (ownerId, message) => chats.send(ownerId, message, undefined, false, 'Routine automatiche', false, { kind: 'app' }) });
+  // the Routine section (ADR 0175, 0176): packages in userData/routines, run on the same host adapters; the active
+  // legacy routines become packages once (an enabled legacy trigger moves to the package and is paused there)
+  const routines = routinesRef = createRoutines({ userData: ctx.userData, runtimeFor: pkg => routineHost.runtimeFor(pkg), convert: packageOf,
+    // the '<set-by-user>' secrets the app already holds (owner, 2026-10-27): values go only into the package, each one
+    // redacted from the logs; the export never lands in this repo or the brain
+    secrets: {
+      devopsPat: () => devopsPatFromConnectors(mcpServers.store.servers(), (id, slot) => mcpServers.store.secret(id, slot)),
+      // Cursor's MCP config, read only (AGENTS.md rule 6; the owner's request, ADR 0176)
+      cursorDevopsPat: organization => {
+        let text: string | null = null;
+        try { text = fs.readFileSync(path.join(os.homedir(), '.cursor', 'mcp.json'), 'utf8'); } catch { /* no Cursor config */ }
+        const r = devopsPatFromCursorConfig(text, organization);
+        if ('value' in r) addRedaction(r.value);
+        return r;
+      },
+      siteLogin: origin => { const r = sitePackageLogin(origin); if ('value' in r) addRedaction(r.value.password); return r; },
+      testDbLogin: () => {
+        const [user, password] = [testDbCredential('SQLCMD_TEST_RO_USER'), testDbCredential('SQLCMD_TEST_RO_PASSWORD')];
+        if (!user || !password) return { reason: 'login DB di test non configurato (SQLCMD_TEST_RO_USER/PASSWORD)' };
+        addRedaction(password);
+        return { value: { user, password } };
+      },
+    },
+    forbiddenRoots: () => [source.repo(), app.getAppPath(), process.cwd(), brain.info().brainRoot],
+    legacy: () => {
+      let snap, auto;
+      try { snap = flows.service().snapshot(); auto = flows.automation().snapshot(); } catch { return null; }
+      return snap.versions.filter(v => snap.active[v.definition.id] === v.version).map((v): LegacyRoutine => {
+        const rule = auto.rules.find(r => r.config.flowId === v.definition.id && r.approvedRevision === r.revision && (r.status === 'enabled' || r.status === 'paused'));
+        return { flowId: v.definition.id, title: v.definition.title, definition: v.definition,
+          ...(rule ? { rule: { id: rule.id, revision: rule.revision, enabled: rule.status === 'enabled' && !auto.paused, automation: { trigger: rule.config.trigger, ...(rule.config.devopsWrite ? { devopsWrite: rule.config.devopsWrite } : {}) } } } : {}) };
+      });
+    },
+    pauseLegacy: (id, revision) => { flows.automation().pause({ id, expectedRevision: revision, paused: true }); } });
+  routines.start();
   addChatTools(devopsWriteTools((chatId, request, signal) => flows.devopsWrite(chatId, request, signal)));
   addChatTools(flowOutputTools(flows));
   addChatTools(testDbReadTools((chatId, request, signal) => flows.testDbRead(chatId, request, signal)));
@@ -860,7 +905,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     tell: (chatId, text) => chats.send(chatId, text),
   });
   const recordings = new RecordingStore(path.join(ctx.userData, 'recordings'));
-  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, flows, personal, recordings, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog },
+  // routine packages the Orchestrator authors (ADR 0175): <userData>/routines/<id>/routine.json, the Routine section's store
+  const routinePackageStore = createFolderPackageStore(path.join(ctx.userData, 'routines'));
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, flows, routinePackages: () => routinePackageStore, personal, recordings, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog },
     // app_config (ADR 0149): each area through the module the app's own page uses
     config: {
       view: { read: () => readUi(ctx.window(), 'typeof window.__sbView === "function" ? window.__sbView() : null'), apply: patch => readUi(ctx.window(), `typeof window.__sbSetView === "function" ? window.__sbSetView(${JSON.stringify(JSON.stringify(patch))}) : null`) },
@@ -877,6 +924,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
         pauseRun: (runId, expectedRevision, paused) => { flows.pauseRun(runId, expectedRevision, paused); },
       },
     } };
+  appDeps.routines = { has: id => routines.has(id), exportForTerminal: id => routines.exportForTerminal(id) };
   attachAppTools(mcp, appDeps, source, false, orchestratorTokens);
 
   // Task page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
@@ -985,7 +1033,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     stallMin: () => checkedDelegation(brain.settings().delegation).stallMin, lastEventAt: id => manager.lastEventAt(id) });
 
   return {
-    workflows, flows, brainModel, research, memoryReview, learningReview, queries: brainQueries,
+    workflows, flows, routines, brainModel, research, memoryReview, learningReview, queries: brainQueries,
     morning,
     mcpServers,
     cloud, chats, browser, personal, recordings, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, suggestSkills,
@@ -996,7 +1044,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { flows.stop(); mcpServers.stop(); brainModel.stop(); cloud.shutdown(); clearInterval(autoCloseTimer); if (flowDeadlineTimer) clearInterval(flowDeadlineTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), personal.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { flows.stop(); routines.stop(); mcpServers.stop(); brainModel.stop(); cloud.shutdown(); clearInterval(autoCloseTimer); if (flowDeadlineTimer) clearInterval(flowDeadlineTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), personal.shutdown(), brain.shutdown()]); },
     killNow: () => { compareRuns.killNow(); manager.killAll(); runner.shutdown(); },
   };
 }

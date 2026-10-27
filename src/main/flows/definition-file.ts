@@ -1,10 +1,9 @@
-// Bounded JSON transport for large routine proposals from the selected brain. Used only by the Orchestrator tool.
-// Loading grants nothing: the unchanged FlowService proposal path validates and snapshots the complete definition.
+// Bounded, confined JSON reader for files in the selected brain: routine package proposals (app_flow_propose, package-tools.ts)
+// and component import definitions (components/service.ts). Loading grants nothing: the caller validates the content.
 import fs from 'node:fs';
 import path from 'node:path';
-import type { FlowDefinition, FlowPropose } from '../../shared/flows';
-import type { FlowService } from './service';
-import { digest, integer, object, text } from './schema';
+import type { FlowDefinition } from '../../shared/flows';
+import { object, text } from './schema';
 import { flowBrainContextKey } from './context';
 
 export const FLOW_DEFINITION_FILE_MAX_BYTES = 1024 * 1024;
@@ -101,14 +100,4 @@ export function readDefinitionFile(brainRoot: string | null | undefined, value: 
     try { return readDefinitionFileOnce(brainRoot, value, expectedContextKey); }
     catch (error) { if (!(error instanceof DirectoryMetadataChanged) || attempt >= FLOW_DEFINITION_READ_ATTEMPTS) throw error; }
   }
-}
-/** Preserve the inline result; a file proposal returns a small receipt instead of echoing the large source to the AI. */
-export function proposeFlow(service: FlowService, args: Record<string, unknown>, brainRoot?: () => string | null) {
-  const inline = Object.hasOwn(args, 'definition'), file = Object.hasOwn(args, 'definitionPath');
-  if (inline === file) throw new Error('Supply exactly one of definition or definitionPath');
-  if (inline) { const draft = service.propose(args as unknown as FlowPropose); return { ...draft, preflight: service.preflight(draft.definition) }; }
-  const expectedRevision = integer(args.expectedRevision, 'expectedRevision');
-  const definition = readDefinitionFile(brainRoot?.(), args.definitionPath, service.snapshot().contextKey);
-  const draft = service.propose({ definition, expectedRevision });
-  return { flowId: draft.definition.id, title: draft.definition.title, revision: draft.revision, status: draft.status, updatedAt: draft.updatedAt, digest: digest(draft.definition), stepCount: draft.definition.steps.length, preflight: { executable: service.preflight(draft.definition).executable, tool: 'app_flow_preflight', flowId: draft.definition.id } };
 }

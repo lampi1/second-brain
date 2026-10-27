@@ -16,7 +16,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { FlowTestDbEvidence } from '../../src/renderer/components/FlowDefinition';
 
 // Prevent even loading a real transport dependency in these host authorization tests.
-vi.mock('../../src/main/flows/test-db-driver', () => ({ runTestDbQuery: vi.fn(() => { throw new Error('Real transport forbidden in tests'); }) }));
+vi.mock('../../packages/routine-runtime/src/test-db-driver', () => ({ runTestDbQuery: vi.fn(() => { throw new Error('Real transport forbidden in tests'); }) }));
 vi.mock('../../src/renderer/sb', () => ({ sb: { invoke: vi.fn(), on: vi.fn() } }));
 const folders: string[] = [];
 afterEach(() => { for (const folder of folders.splice(0)) fs.rmSync(folder, { recursive: true, force: true }); });

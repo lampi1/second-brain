@@ -1,5 +1,6 @@
 import { flowsEn } from './areas/flows.en';
 import { routineEn } from './areas/routine.en';
+import { routinesEn } from './areas/routines.en';
 import { appTextEn } from './areas/app-text.en';
 import { brainTextEn } from './areas/brain-text.en';
 import { learningReviewEn } from './areas/learning-review.en';
@@ -57,6 +58,7 @@ import { viewerOverlayEn } from './areas/viewer-overlay.en';
 export const en: Dict = {
   ...flowsEn,
   ...routineEn,
+  ...routinesEn,
   ...learningReviewEn,
   ...auditEn,
   ...auditExpressionsEn,

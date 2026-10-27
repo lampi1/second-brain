@@ -21,4 +21,10 @@ export default tseslint.config(
     files: ['src/main/**', 'src/preload/**'],
     rules: { 'no-restricted-imports': ['error', { patterns: ['**/renderer/**'] }] },
   },
+  // The shared routine runtime (ADR 0175) runs in the app and in a terminal CLI: never Electron, the main process or the
+  // renderer; the host gives it ports (test/unit/routine-runtime/boundary.test.ts checks the same on every file).
+  {
+    files: ['packages/routine-runtime/**'],
+    rules: { 'no-restricted-imports': ['error', { paths: ['electron'], patterns: ['electron/*', '**/src/main/**', '**/main/**', '**/renderer/**', '**/preload/**'] }] },
+  },
 );

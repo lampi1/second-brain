@@ -1,0 +1,24 @@
+{
+  "format": "second-brain-routine",
+  "schemaVersion": 1,
+  "routine": {
+    "id": "release-notes",
+    "title": "Note di rilascio da git",
+    "description": "Writes Italian release notes for the commits between two refs of a local repository, grouped by feature and fix.",
+    "inputs": [
+      { "name": "repoPath", "label": "Local repository", "required": true },
+      { "name": "from", "label": "From (tag or commit)", "required": true },
+      { "name": "to", "label": "To", "default": "HEAD" }
+    ],
+    "steps": [
+      {
+        "id": "notes",
+        "title": "Scrivi le note",
+        "prompt": "Write release notes for the repository at {{repoPath}}, for the commits in {{from}}..{{to}}.\n\nRead the commits with git log (subject and body; skip merge commits). Group them as Novità (feat), Correzioni (fix) and Altro; one line per change, in plain Italian for users, without commit hashes or file names. Drop pure refactors, tests and CI changes.\n\nSave the notes as evidence/release-notes.md in your step folder. Done = the file exists and the summary says how many changes are in each group. If the range is empty or a ref does not exist, the step failed: say which ref.",
+        "model": "claude-sonnet-5",
+        "effort": "low",
+        "allowedTools": ["Read", "Write", "Bash(git log *)", "Bash(git rev-parse *)"]
+      }
+    ]
+  }
+}

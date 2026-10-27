@@ -160,19 +160,12 @@ describe('flow persistence and tool boundary', () => {
     const corrupted = mode === 'json' ? '{' : JSON.stringify(data); fs.writeFileSync(file, corrupted); const restarted = new FlowService(options);
     expect(restarted.snapshot().storageError).toBeTruthy(); expect(() => restarted.propose({ definition: definition(), expectedRevision: 0 })).toThrow('storage'); expect(fs.readFileSync(file, 'utf8')).toBe(corrupted);
   });
-  it('has no approval tool and rejects stale brain context or fabricated chat bindings', async () => {
-    const { service } = setup(); const tools = flowTools({ service: () => service, ownerId: 'orch', resolveBinding: () => null });
+  it('has no approval tool and rejects a stale brain context', async () => {
+    const { service } = setup(); const tools = flowTools({ service: () => service, ownerId: 'orch' });
     expect(tools.map(t => t.name).join(' ')).not.toMatch(/approve|activate|decide/);
-    expect(() => tools.find(t => t.name === 'app_flow_propose')!.run({ contextKey: 'other-brain', definition: definition(), expectedRevision: 0 })).toThrow('context changed');
     activate(service); const run = start(service);
-    expect(() => tools.find(t => t.name === 'app_flow_bind')!.run({ contextKey: 'brain-1', runId: run.id, expectedRevision: run.revision, stepId: 'work', chatId: 'arbitrary' })).toThrow('eligible');
-    expect(flowTools({ service: () => service, ownerId: '', resolveBinding: () => null })).toEqual([]);
-  });
-  it('passes the pinned step workspace to the host binding resolver', () => {
-    const { service } = setup(); activate(service); const run = start(service); let observed = '';
-    const tool = flowTools({ service: () => service, ownerId: 'orch', resolveBinding: (chatId, ownerId, workspace) => { observed = `${ownerId}:${workspace}`; return { chatId, chatRunId: 'fresh', taskVersion: 1 }; } }).find(t => t.name === 'app_flow_bind')!;
-    tool.run({ contextKey: 'brain-1', runId: run.id, expectedRevision: run.revision, stepId: 'work', chatId: 'worker' });
-    expect(observed).toBe('orch:/workspace/project');
+    expect(() => tools.find(t => t.name === 'app_flow_cancel_propose')!.run({ contextKey: 'other-brain', runId: run.id, expectedRevision: run.revision, reason: 'x' })).toThrow('context changed');
+    expect(flowTools({ service: () => service, ownerId: '' })).toEqual([]);
   });
   it('does not confuse independent brains or permit failed saves to advance memory', () => {
     const { service, file } = setup(); const other = setup().service; activate(service); expect(other.snapshot().versions).toEqual([]);

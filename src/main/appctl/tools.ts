@@ -57,6 +57,8 @@ import { workbenchTools } from '../flows/workbench-tools';
 import { componentTools } from '../components/tools';
 import { flowTools } from '../flows/tools';
 import { automationTools } from '../flows/automation-tools';
+import { packageTools } from '../flows/package-tools';
+import type { RoutinePackageStore } from '../flows/package-authoring';
 import type { FlowRuntime } from '../flows/runtime';
 import { workflowTools } from '../workflows/tools';
 import type { Workflows } from '../workflows/service';
@@ -64,6 +66,7 @@ import { guideTool, screenOutline } from './guide';
 import { CONFIG_ASK_MIN, configTool, type ConfigDeps } from './config';
 import { lastTyped } from './user-words';
 import { recordingTools, type RecordingsRead } from './recordings';
+import type { RoutineTerminalExport } from '../../shared/routines';
 
 export type ToolOut = string | { text?: string; images?: { data: string; mimeType: string; caption?: string }[] } | object;
 export interface ToolDef { name: string; description: string; inputSchema: object; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean }; run(args: Record<string, unknown>): Promise<ToolOut> | ToolOut }
@@ -71,6 +74,8 @@ export interface ToolDef { name: string; description: string; inputSchema: objec
 export interface AppCtlDeps {
   workflows?: Workflows;
   flows?: FlowRuntime;
+  /** the routine package store (ADR 0175): app_flow_propose saves there; absent = no package authoring tools */
+  routinePackages?: () => RoutinePackageStore;
   /** cloud agents (ADR 0080): app_create_chat where:'cloud' starts one, app_chats lists them */
   cloud?: CloudService;
   agentLearning?: AgentPackLearning;
@@ -108,6 +113,24 @@ export interface AppCtlDeps {
   recordings?: RecordingsRead;
   /** the configuration the Orchestrator changes for the user (app_config, ADR 0149); settings come from `brain` */
   config?: Omit<ConfigDeps, 'callerId' | 'userAsked' | 'brain'>;
+  /** the Routine section's packages (routines/service.ts): app_routine_export on the Orchestrator's own endpoint */
+  routines?: { has(id: string): boolean; exportForTerminal(id: string): RoutineTerminalExport };
+}
+
+/** app_routine_export: the filled package zip for the terminal; the answer names secrets, never carries a value. */
+export function routineExportTool(r: NonNullable<AppCtlDeps['routines']>): ToolDef {
+  return {
+    name: 'app_routine_export',
+    description: 'Export a routine package (Routine section) for the terminal `routine` CLI: the app first fills every <set-by-user> secret it already holds (DevOps token from the Azure DevOps connector, site logins from the routine site passwords, the test-only SQL login for a test DB), then writes the zip only to %LOCALAPPDATA%/routine-runtime/packages/<id>/. Returns only the zip path and the names of the filled and missing secrets with the reason: never a value. Never copy the zip into a repository or the brain.',
+    inputSchema: { type: 'object', properties: { id: { type: 'string', description: 'the package id (its folder name on the Routine page)' } }, required: ['id'] },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    run: a => {
+      const id = typeof a.id === 'string' ? a.id.trim() : '';
+      if (!id || !r.has(id)) throw new Error(`Routine non trovata: ${id.slice(0, 64)} (l'id è il nome del pacchetto nella sezione Routine)`);
+      const out = r.exportForTerminal(id);
+      return { path: out.path, filled: out.filled, missing: out.missing };
+    },
+  };
 }
 
 /** agent_learn_propose on the app endpoints: all proposals require a renderer user decision before application;
@@ -197,6 +220,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   const tools: ToolDef[] = [
     guideTool(guideDeps),
     ...(authed() ? [{ name: 'app_voice_diagnostics', description: 'Read local content-free voice diagnostics: rolling recognition/synthesis timing samples, stale events, cancellations and failures. No audio or transcript content. Coverage explicitly excludes end-to-end latency and accuracy. Unknown values stay null; small-sample p95 is not a reliability claim.', inputSchema: obj(), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false }, run: () => { if (!authed()) throw new Error('Authenticated Orchestrator required'); return { diagnostics: voiceDiagnostics() }; } }] : []),
+    ...(d.routines && authed() ? [routineExportTool(d.routines)] : []),
     ...(d.config && authed() ? [configTool({ ...d.config, brain: d.brain, callerId: callerId!, userAsked: () => configAsked(callerId!) })] : []),
     ...(d.flows && authed() ? automationTools({
       service: () => { if (!authed()) throw new Error('Authenticated Orchestrator required'); return d.flows!.automation(); },
@@ -212,15 +236,13 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     }) : []),
     ...(d.flows && authed() ? flowTools({
       service: () => { if (!authed()) throw new Error('Authenticated Orchestrator required'); return d.flows!.service(); },
-      brainRoot: () => d.brain.info().brainRoot,
-      connectors: d.flows.connectors, ownerId: callerId!, resolveBinding: d.flows.resolveBinding, manualBind: d.flows.manualBind, manualReport: d.flows.manualReport, deploymentTargets: d.flows.deploymentTargets, deploymentTargetFile: d.flows.deploymentTargetFile, modelCatalog: d.flows.modelCatalog, inspectTarget: d.flows.inspectTarget, dossier: d.flows.dossier,
+      ownerId: callerId!, deploymentTargets: d.flows.deploymentTargets, deploymentTargetFile: d.flows.deploymentTargetFile, modelCatalog: d.flows.modelCatalog, inspectTarget: d.flows.inspectTarget, dossier: d.flows.dossier,
       proposeCancel: (input, ownerId) => d.flows!.proposeCancel(input, ownerId),
-      reconciliation: runId => d.flows!.writeReconciliation(runId),
-      proposeReconcile: (input, ownerId) => d.flows!.proposeReconcile(input, ownerId),
       proposeRestart: (input, ownerId) => d.flows!.proposeRestart(input, ownerId),
       overview: ownerId => d.flows!.overview(ownerId), message: (runId, body, ownerId) => d.flows!.message(runId, body, ownerId),
       startItem: input => d.flows!.startItem(input),
     }) : []),
+    ...(d.routinePackages && authed() ? packageTools({ store: d.routinePackages, brainRoot: () => d.brain.info().brainRoot, authed }) : []),
     ...(d.workflows && authed() ? workflowTools(d.workflows, id => d.chats.list().some(c => c.id === id && mine(c) && !c.parentId && !c.isOrchestrator), id => d.chats.list().find(c => c.id === id)) : []),
     ...(d.agentLearning ? [learnTool(d, callerId, authed())] : []),
     ...(d.agentLearning && authed() ? [toolDef(lessonReviewTool(d.agentLearning))] : []),

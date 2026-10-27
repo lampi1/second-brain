@@ -10,7 +10,7 @@ import path from 'node:path';
 import { renameRetrying } from '../rules/storage';
 import { createHash, randomUUID } from 'node:crypto';
 import { APP_OWNER } from '../../shared/flows';
-import type { FlowAttachment, FlowCommandReceipt, FlowHealEntry, FlowActivate, FlowAgentBinding, FlowCancel, FlowDecision, FlowDefinition, FlowDraft, FlowMatch, FlowPropose, FlowReceipt, FlowReport, FlowRestart, FlowRestartDecision, FlowRestartProposal, FlowRun, FlowScope, FlowSnapshot, FlowStart, FlowStep, FlowTestDbEvidence, FlowStepTierEdit, FlowVerifiedReport, FlowVersion } from '../../shared/flows';
+import type { FlowAttachment, FlowStepRun, FlowCommandReceipt, FlowHealEntry, FlowActivate, FlowAgentBinding, FlowCancel, FlowDecision, FlowDefinition, FlowDraft, FlowMatch, FlowPropose, FlowReceipt, FlowReport, FlowRestart, FlowRestartDecision, FlowRestartProposal, FlowRun, FlowScope, FlowSnapshot, FlowStart, FlowStep, FlowTestDbEvidence, FlowStepTierEdit, FlowVerifiedReport, FlowVersion } from '../../shared/flows';
 import { browserWriteStep, browserWriteResult } from '../../shared/flow-browser';
 import { adapted, commandStep, testDbAdapted, digest, type RoleTierMax, inScope, integer, keys, normalize, object, text, validateDefinition, validateInputs, validateScope } from './schema';
 import { assertPackageBinding } from './binding';
@@ -137,6 +137,43 @@ export class FlowService {
     this.change(() => { const run = this.run(runId), d = run.disposition; if (!d || d.cleanup === 'complete') return;
       d.phase = integer(phase, 'cleanup phase', 0, 6); if (error) d.error = text(error, 'cleanup error', 2000); else delete d.error;
       if (phase === 6) { d.cleanup = 'complete'; this.cancelRun(run, d.reason, 'routine'); }
+    });
+  }
+  /** A legacy run the migration ended (ADR 0175): its cleanup is closed without a human step, an open run cancelled. */
+  endLegacyRun(runId: string, note: string): void {
+    this.change(() => {
+      const run = this.run(runId), why = text(note, 'migration note', 2000), d = run.disposition;
+      if (d && d.cleanup === 'pending') { d.cleanup = 'complete'; d.phase = 6; delete d.error; }
+      if (!['completed', 'cancelled'].includes(run.status)) this.cancelRun(run, why, 'routine'); else this.touch(run);
+    });
+  }
+  /** The shared routine runtime (ADR 0175) ran this run: mirror its run folder's steps and end state into the app's
+   *  view. Steps the package does not have (approvals, removed by the conversion) follow their next step. */
+  mirrorPackageRun(runId: string, mirror: { runId: string; folder: string; status: 'running' | 'waiting-human' | 'done' | 'failed' | 'needs-human' | 'cancelled'; error?: string;
+    steps: { id: string; status: 'pending' | 'running' | 'done' | 'failed' | 'needs-human'; summary?: string; error?: string; endedAt?: number }[] }): FlowRun {
+    return this.change(() => {
+      const run = this.run(runId);
+      if (['completed', 'cancelled'].includes(run.status)) return run;
+      let changed = false;
+      const later = (index: number) => run.steps.slice(index + 1).map(s => mirror.steps.find(p => p.id === s.stepId)).find(Boolean);
+      for (const [index, step] of run.steps.entries()) {
+        const own = mirror.steps.find(p => p.id === step.stepId), next = own ?? later(index);
+        const status: FlowStepRun['status'] = !next ? 'completed' : next.status === 'done' ? 'completed' : !own ? (next.status === 'pending' ? 'pending' : 'completed')
+          : own.status === 'running' ? 'running' : own.status === 'pending' ? 'pending' : 'blocked';
+        if (step.status === status) continue;
+        changed = true; step.status = status;
+        if (status === 'completed') step.receipt = { id: randomUUID(), stepId: step.stepId, kind: 'check', at: own?.endedAt ?? this.now(),
+          summary: text(own ? own.summary ?? 'done' : 'Approval step: removed by the routine runtime (ADR 0175)', 'summary', 4000, true) || 'done',
+          evidence: [`run folder: ${text(mirror.folder, 'run folder', 1000)}`] };
+        if (status === 'blocked') step.reason = text(own?.error ?? mirror.error ?? 'Step failed', 'reason', 2000);
+      }
+      const current = run.steps.findIndex(s => s.status !== 'completed');
+      run.currentStep = current < 0 ? run.steps.length - 1 : current;
+      const status: FlowRun['status'] = mirror.status === 'done' ? 'completed' : mirror.status === 'failed' || mirror.status === 'needs-human' ? 'blocked' : run.status === 'blocked' ? 'active' : run.status;
+      if (status === 'completed') run.currentStep = run.steps.length;
+      if (status !== run.status) { run.status = status; changed = true; }
+      if (changed) this.touch(run);
+      return run;
     });
   }
   snapshot(): FlowSnapshot { this.reconcileDeadlines(); return copy({ contextKey: this.options.contextKey, drafts: this.data.drafts, versions: this.data.versions, active: this.data.active, runs: this.data.runs, ...(this.options.appBuild ? { appBuild: this.options.appBuild } : {}), ...(this.storageError ? { storageError: this.storageError } : {}) }); }

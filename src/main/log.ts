@@ -8,38 +8,16 @@
 // level, scope, chat, text, since). Used by every main-process module: `import { log } from './log'`.
 import fs from 'node:fs';
 import path from 'node:path';
+import { redact } from '../../packages/routine-runtime/src/mask';
 
 export type Level = 'debug' | 'info' | 'warn' | 'error';
 const ORDER: Record<Level, number> = { debug: 0, info: 1, warn: 2, error: 3 };
 
 export interface Entry { t: string; lvl: Level; scope: string; msg: string; chat?: string; data?: unknown; cause?: string; hint?: string }
 
-const SECRET_PATTERNS: RegExp[] = [
-  /\b(sk-[A-Za-z0-9_-]{16,})\b/g,                       // API keys
-  /\b(eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,})\b/g, // JWTs
-  /(authorization["']?\s*[:=]\s*["']?)(bearer\s+)?[^\s"',}]+/gi,
-  /([?&](?:token|access_token|code|password|pwd)=)[^&\s"]+/gi,
-  /(\/mcp\/chat\/[^/\s"]+\/)[A-Za-z0-9_-]{8,}/g,          // per-chat MCP endpoint tokens
-  /("(?:password|passwd|secret|apiKey|api_key|token)"\s*:\s*")[^"]*(?=")/gi,
-  /\b([a-z][a-z0-9+.-]{0,15}:\/\/)[^/\s:@"']{1,256}:[^/\s@"']{0,256}(?=@)/gi,  // user:password@ in URLs (bounded: no backtracking blow-up)
-];
-
-/** The API keys main has read (engines/secrets.ts), as they appear in a JSON line too: replaced whatever their shape. */
-const known = new Set<string>();
-
-/** Redacts this exact value from every later log line (an API key the app stores or reads). */
-export function addRedaction(value: string, force = false): void {
-  if (!value || (!force && value.length < 8)) return; // too short to be a key: redacting it would blank ordinary words
-  known.add(value);
-  known.add(JSON.stringify(value).slice(1, -1));
-}
-
-export function redact(s: string): string {
-  let out = s;
-  for (const k of known) if (out.includes(k)) out = out.split(k).join('[redacted]');
-  for (const re of SECRET_PATTERNS) out = out.replace(re, (m, p1?: string) => (typeof p1 === 'string' && m.startsWith(p1) && p1 !== m ? `${p1}[redacted]` : '[redacted]'));
-  return out;
-}
+// The masking itself lives in the shared routine runtime (ADR 0175): the app log and the routine run folders use one
+// list of secret shapes and one set of registered values.
+export { addRedaction, redact } from '../../packages/routine-runtime/src/mask';
 
 class Logger {
   private dir: string | null = null;

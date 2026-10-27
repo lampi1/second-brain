@@ -1,0 +1,61 @@
+/* The Routine section (ADR 0175, 0176): package cards, run rows, the package detail (trigger, credentials, commands)
+   and the live run view. Built on tokens.css; prefix rs-. Used by brain/pages/Routines.tsx and components/RoutineRun.tsx. */
+.rs-page { display: flex; flex-direction: column; gap: 14px; }
+.rs-head { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+.rs-head h1 { font: 600 var(--fs-2xl) var(--font-display); margin: 0; }
+.rs-head h2 { font: 600 var(--fs-xl) var(--font-display); margin: 0; }
+.rs-head p { margin: 4px 0 0; max-width: 680px; }
+.rs-sp { flex: 1; min-width: 0; }
+.rs-muted { color: var(--text-3); font-size: var(--fs-s); }
+.rs-red { color: var(--red); font-style: normal; }
+.rs-dir { font-family: var(--mono); overflow-wrap: anywhere; margin: 0; }
+.rs-section { font: 600 10.5px var(--font-small); letter-spacing: .08em; text-transform: uppercase; color: var(--text-4); margin: 6px 0 0; }
+.rs-link { color: var(--blue); }
+.rs-error { color: var(--red); font-size: var(--fs-s); margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.rs-warn { margin: 0; padding: 8px 12px; border-radius: var(--r-m); background: var(--amber-bg); color: var(--amber); font-size: var(--fs-s); }
+.rs-warn ul { margin: 4px 0 0; padding-left: 18px; }
+
+.rs-badge { display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border-radius: 11px; font: 600 11px var(--font-small); background: var(--surface-3); color: var(--text-2); white-space: nowrap; }
+.rs-badge[data-tone="green"] { background: var(--green-bg); color: var(--green); }
+.rs-badge[data-tone="red"] { background: var(--red-bg); color: var(--red); }
+.rs-badge[data-tone="blue"] { background: var(--blue-bg); color: var(--blue); }
+.rs-badges { display: flex; gap: 4px; flex-wrap: wrap; }
+
+.rs-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.rs-routine { text-align: left; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-l); color: var(--text); font: inherit; cursor: pointer; }
+.rs-routine:hover { border-color: var(--border-2); background: var(--surface-2); }
+.rs-rows { display: flex; flex-direction: column; gap: 4px; }
+.rs-row { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-m); color: var(--text); font: inherit; text-align: left; cursor: pointer; min-width: 0; }
+.rs-row:hover { background: var(--surface-2); }
+.rs-row[data-status="waiting-human"], .rs-row[data-status="needs-human"] { border-color: var(--red); }
+.rs-row-title { white-space: nowrap; }
+.rs-row-step { color: var(--text-2); font-size: var(--fs-s); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+.rs-detail { display: flex; flex-direction: column; gap: 12px; }
+.rs-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-l); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.rs-card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rs-card-head h3 { margin: 0; font: 600 var(--fs-m) var(--font); }
+.rs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px 12px; }
+.rs-grid label { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-s); color: var(--text-2); }
+.rs-grid input, .rs-inline input { padding: 6px 8px; border-radius: var(--r-m); border: 1px solid var(--border-2); background: var(--bg-2); color: var(--text); font: inherit; }
+.rs-inline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rs-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.rs-switch { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-s); cursor: pointer; }
+.rs-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.rs-step { display: flex; flex-direction: column; gap: 2px; }
+.rs-step p { margin: 0; font-size: var(--fs-s); color: var(--text-2); }
+.rs-step-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rs-files { display: flex; gap: 4px; flex-wrap: wrap; }
+.rs-cmd { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.rs-cmd > .rs-muted { flex: none; width: 140px; }
+.rs-cmd code { flex: 1; min-width: 0; font: 12px var(--mono); padding: 6px 8px; border-radius: var(--r-s); background: var(--surface-2); overflow-x: auto; white-space: nowrap; }
+
+.rs-run { display: flex; flex-direction: column; gap: 10px; }
+.rs-run-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rs-now { padding: 10px 12px; border-radius: var(--r-m); background: var(--surface-2); }
+.rs-action { margin: 4px 0 0; color: var(--text-2); font-size: var(--fs-s); }
+.rs-waiting { padding: 12px 14px; border-radius: var(--r-l); background: var(--red-bg); border: 1px solid var(--red); color: var(--red); display: flex; flex-direction: column; gap: 4px; }
+.rs-waiting p { margin: 0; color: var(--text); }
+.rs-waiting .rs-muted { color: var(--text-3); }
+.rs-shot { padding: 0; border: 1px solid var(--border); border-radius: var(--r-m); background: none; cursor: zoom-in; max-width: 560px; overflow: hidden; }
+.rs-shot img { display: block; width: 100%; height: auto; }

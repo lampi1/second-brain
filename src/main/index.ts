@@ -1,9 +1,5 @@
 // second-brain main process: one window, the services (chats, browser + MCP, brain + feed) and the typed IPC.
 import { chatItemsReply } from '../shared/chat-window';
-import { exportFlow, importFlow, parsePortable } from './flows/portable';
-import { writeAgentMemory } from './rules/memory';
-import type { ImportWriter } from './agents/pack/routine-share';
-import { stepFileText } from './flows/executor';
 import { app, dialog, nativeImage, session, shell, utilityProcess, type BrowserWindow } from 'electron';
 import { DefaultBrain } from '../modules/ai-first/default-brain';
 import { detectProjectsFolder } from './brain/projects-folder';
@@ -44,6 +40,8 @@ import { gitBranch } from './search/sources';
 import { findTranscript } from './chats/transcript';
 import { createRoutedChat, previewRoute } from './chats/routed';
 import { FROZEN_EPOCH } from './demo';
+import { createDemoRoutines } from './routines/demo';
+import type { Routines } from './routines/service';
 import { checkRunIds, demoEstimateRuns, estimatesState, mergeRuns } from './agents/run-estimates';
 import { macroTasks } from '../shared/macro-tasks';
 import { judgingEstimate } from './agents/judge-sample';
@@ -116,18 +114,12 @@ app.whenReady().then(async () => {
   // the Log page (ADR 0111): the app's own events, readable and live, kept 7 days at most; zero tokens
   const activity = attachActivity({ userData: app.getPath('userData'), emitter, chats: () => s.chats.list(), brainRoot: () => s.brain.info().brainRoot });
   if (process.env.SB_DEMO === '1') journal.seed(demoLog(process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now()));
-  /** The routine runtime for the brain the renderer showed (a switched brain refuses the action). */
-  const flowsFor = (contextKey: string) => {
-    if (!s.flows || contextKey !== s.flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la routine.');
-    return s.flows;
-  };
-  const routineService = (contextKey: string) => flowsFor(contextKey).service();
-  /** A flow version as its portable JSON export (scripts/queries pinned), for the routine package (ADR 0156). */
-  const routinePortable = (a: { contextKey: string; flowId: string; version: number }) => {
-    const service = routineService(a.contextKey), root = s.brain.info().brainRoot;
-    const json = exportFlow(service.snapshot(), { flowId: a.flowId, version: a.version, format: 'json' }, (kind, ref) => root ? stepFileText(root, kind, ref) : null).content;
-    const { definition, version } = parsePortable(json);
-    return { json, definition, version };
+  /** The Routine section's service; the demo gets seeded run folders read by the same code. */
+  let demoRoutines: Routines | undefined;
+  const routinesOf = (): Routines => {
+    if (s.routines) return s.routines;
+    if (process.env.SB_DEMO === '1') return demoRoutines ??= createDemoRoutines(app.getPath('userData'), process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now());
+    throw new Error('Routine non disponibili: riavvia l’app.');
   };
   const requireReviewRoot = (expected: unknown): void => {
     const actual = s.brain.info().brainRoot;
@@ -535,57 +527,23 @@ app.whenReady().then(async () => {
       const target = orchestrator.get();
       if (a.feedback && target) void s.chats.send(target.id, `[evento app] L’utente chiede una proposta diversa per la regola ${reviewed.id}. Proposta rifiutata: ${JSON.stringify(reviewed.rule)}. Risposta: ${JSON.stringify(reviewed.note)}. Prepara la nuova proposta nella modale; nessuna modifica è approvata.`, undefined, false, 'Decisioni', false, { kind: 'app' }).catch(e => log.warn('chats', 'lesson feedback wake failed', { cause: errText(e), hint: 'The feedback is saved in the lesson review record.' }));
     },
-    'routine:workbench': a => flowsFor(a.contextKey).workbench().perform(a.request),
-    'components:operate': a => flowsFor(a.contextKey).components().perform(a.request, true),
+    // the Routine section (ADR 0175, 0176): package secrets stay in main, the renderer only sees which slots are set
+    'routines:list': () => routinesOf().snapshot(),
+    'routines:import': a => routinesOf().importZip(Buffer.from(String(a.data), 'base64')),
+    'routines:export': a => routinesOf().exportForTerminal(String(a.id)),
+    'routines:startItem': a => routinesOf().startItem(a.id, Number(a.workItem)),
+    'routines:setTrigger': a => routinesOf().setTrigger(a.id, a.enabled === true, a.filters),
+    'routines:setSecrets': a => routinesOf().setSecrets(a.id, a.values && typeof a.values === 'object' ? a.values : {}),
+    'routines:run': a => routinesOf().run(a),
+    'routines:cancel': a => { routinesOf().cancel(a); },
+    'routines:convert': a => routinesOf().convert(a.flowId),
     'flows:list': () => s.flows?.snapshot() ?? { contextKey: 'unavailable', drafts: [], versions: [], active: {}, runs: [] },
-    'flows:export': a => {
-      const service = s.flows?.service();
-      if (!service || a.contextKey !== service.snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi il flusso.');
-      const { contextKey: _context, ...input } = a;
-      const root = s.brain.info().brainRoot;
-      return exportFlow(service.snapshot(), input, (kind, ref) => root ? stepFileText(root, kind, ref) : null);
-    },
-    // the routine package (ADR 0156): the portable JSON plus what the steps, roles and skills need, in one zip
-    'flows:packagePreview': a => { const p = routinePortable(a); return s.agentPacks.routine.preview(p.definition, p.version, p.json); },
-    'flows:packageExport': a => { const p = routinePortable(a); return s.agentPacks.routine.export(p.definition, p.version, p.json, a.memory === true); },
-    'flows:packageInspect': a => { routineService(a.contextKey); return s.agentPacks.routine.inspect(a.data); },
-    'flows:packageImport': a => {
-      const service = routineService(a.contextKey), root = s.agentPacks.packs.root(), changes = s.brainModel.log;
-      const writer: ImportWriter = {
-        apply: (kind, target, summary, writes) => {
-          if (writes.every(w => { try { return fs.readFileSync(w.file, 'utf8') === w.text; } catch { return false; } })) return true;
-          return !!changes.apply({ job: 'user', kind, action: 'create', target, summary, reason: 'Importato da un pacchetto di routine (Routine → Importa), file scelti da te.', evidence: [target] }, writes);
-        },
-        remember: (role, line) => { writeAgentMemory(root, role, line, { scope: { roleId: role }, sourceEventId: `routine-import:${a.digest.slice(0, 16)}:${role}:${line.length}:${line.slice(0, 40)}`, sourceRunId: 'routine-import' }); },
-      };
-      const done = s.agentPacks.routine.apply(a.data, a.digest, Array.isArray(a.keys) ? a.keys.filter((k: unknown): k is string => typeof k === 'string') : [], a.memory === true, writer, json => { importFlow(service, json); });
-      return { snapshot: s.flows!.snapshot(), ...done };
-    },
-    'flows:import': a => {
-      const service = s.flows?.service();
-      if (!service || a.contextKey !== service.snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi il flusso.');
-      importFlow(service, a.content);
-      return s.flows!.snapshot();
-    },
     'flows:autoDecide': a => {
       if (!s.flows || a.contextKey !== s.flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la proposta.');
       const { contextKey: _context, ...decision } = a;
       const rule = s.flows.automation().decide(decision);
       const target = s.chats.list().find(c => c.id === rule.ownerOrchestratorId && c.isOrchestrator && !c.closedAt);
       if (target) void s.chats.send(target.id, `[evento app] Decisione sulla modalità automatica ${rule.id} salvata. Rileggi app_flow_auto_list; se c’è una risposta libera prepara la proposta corretta nella modale. Questa notifica non concede altri permessi.`, undefined, false, 'Routine', false, { kind: 'app' }).catch(e => log.warn('flows', 'Automatic decision wake failed', { cause: errText(e), hint: 'Decision and feedback remain saved in Flussi.' }));
-      return s.flows.snapshot();
-    },
-    'flows:autoPause': a => {
-      if (!s.flows || a.contextKey !== s.flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi il flusso.');
-      const { contextKey: _context, ...decision } = a;
-      s.flows.automation().pause(decision);
-      return s.flows.snapshot();
-    },
-    'flows:autoControl': a => {
-      if (!s.flows || a.contextKey !== s.flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi i controlli.');
-      const { contextKey: _context, ...decision } = a;
-      if (decision.background === true) flowBackground.prepare();
-      try { s.flows.automation().control(decision); } finally { flowBackground.sync(); }
       return s.flows.snapshot();
     },
     'flows:definitionDecide': a => {
@@ -597,25 +555,6 @@ app.whenReady().then(async () => {
       if (target) void s.chats.send(target.id, '[evento app] Decisione sulla definizione del flusso salvata. Rileggi app_flow_list. Approvare la definizione non autorizza operazioni esterne o produzione.', undefined, false, 'Routine', false, { kind: 'app' }).catch(e => log.warn('flows', 'Definition decision wake failed', { cause: errText(e), hint: 'Decision persisted; reread the catalog.' }));
       return s.flows!.snapshot();
     },
-    'flows:editStepTier': a => {
-      // a new proposed revision only: the user activates it in the definition modal like any other proposal
-      const service = s.flows?.service();
-      if (!service || a.contextKey !== service.snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la definizione.');
-      const { contextKey: _context, ...edit } = a;
-      service.editStepTier(edit);
-      return s.flows!.snapshot();
-    },
-    // the Routine page's own controls (ADR 0155); each checks the brain the user saw
-    'flows:previewItem': a => { const flows = flowsFor(a.contextKey); return flows.previewItem(a.flowId, a.workItem); },
-    'flows:startItem': a => { const flows = flowsFor(a.contextKey); const { contextKey: _context, ...input } = a; return flows.startItem(input); },
-    'flows:dryRun': a => flowsFor(a.contextKey).dryRun(a.flowId, a.params ?? {}),
-    'flows:pauseRun': a => { const flows = flowsFor(a.contextKey); flows.pauseRun(a.runId, a.expectedRevision, a.paused); return flows.snapshot(); },
-    // «Esegui» (prod): only this renderer click runs a prod command; no agent tool reaches runUserCommand
-    'flows:runCommand': async a => { const flows = flowsFor(a.contextKey); await flows.runUserCommand(a.runId, a.expectedRevision, a.stepId, a.command); return flows.snapshot(); },
-    'flows:clearQueue': a => { const flows = flowsFor(a.contextKey); flows.automation().clearQueue({ id: a.id, count: a.count }); return flows.snapshot(); },
-    'flows:editFilters': a => { const flows = flowsFor(a.contextKey); const { contextKey: _context, ...input } = a; flows.automation().editFilters(input); return flows.snapshot(); },
-    'flows:editStepModel': a => { const flows = flowsFor(a.contextKey); const { contextKey: _context, ...input } = a; return flows.editStepModel(input); },
-    'flows:pinHash': a => { const flows = flowsFor(a.contextKey); const { contextKey: _context, ...input } = a; return flows.pinHash(input); },
     'flows:decide': async a => {
       const service = s.flows?.service();
       if (!service || a.contextKey !== service.snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la decisione.');
@@ -626,18 +565,9 @@ app.whenReady().then(async () => {
       if (target) void s.chats.send(target.id, `[evento app] Decisione salvata per il flusso ${a.runId}. Rileggi app_flow_status; questa notifica non concede altri permessi.`, undefined, false, 'Routine', false, { kind: 'app' }).catch(e => log.warn('flows', 'Run decision wake failed', { cause: errText(e), hint: 'Decision persisted in the flow run.' }));
       return s.flows!.snapshot();
     },
-    'flows:writeReconciliation': a => {
-      if (!s.flows || a.contextKey !== s.flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato.');
-      return s.flows.writeReconciliation(a.runId);
-    },
     'flows:reconcileDecide': a => {
       if (!s.flows || a.contextKey !== s.flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato.');
       const { contextKey: _context, ...input } = a; return s.flows.decideReconcile(input);
-    },
-    'flows:reconcileWrites': a => {
-      if (!s.flows || a.contextKey !== s.flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato.');
-      const { contextKey: _context, ...input } = a;
-      return s.flows.reconcileWrites(input);
     },
     'flows:cancel': async a => {
       const flows = s.flows;

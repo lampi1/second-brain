@@ -6,11 +6,10 @@ import type { FlowDefinition, FlowRun, FlowSnapshot } from '../../src/shared/flo
 import type { ChatSummary } from '../../src/shared/contract';
 const invoke = vi.hoisted(() => vi.fn());
 vi.mock('../../src/renderer/sb', () => ({ sb: { invoke, on: vi.fn() } }));
-import { flowRecoveryPreview, flowRecoveryQuestion } from '../../src/renderer/lib/flow-recovery';
+import { flowRecoveryPreview } from '../../src/renderer/lib/flow-recovery';
 import { flowAsks } from '../../src/renderer/lib/flow-ask';
 import { FlowApproval } from '../../src/renderer/components/FlowApproval';
 import { FlowRecoveryContent, FlowRecoveryQuestionFrame, FlowRunControls } from '../../src/renderer/components/FlowRunControls';
-import { FlowFullscreenButton, FlowFullscreenContent } from '../../src/renderer/components/FlowFullscreen';
 import { controlFlowRun, decideFlow, flowState } from '../../src/renderer/store/flows';
 import { saveDecisionDraft } from '../../src/renderer/lib/decision-drafts';
 import { app } from '../../src/renderer/store/store';
@@ -68,17 +67,6 @@ it('sends only explicit pinned recovery and never installs late cross-brain resu
   const pending = controlFlowRun('brain', payload); expect(invoke).toHaveBeenCalledWith('flows:restart', { ...payload, contextKey: 'brain' });
   flowState.set({ snapshot: { ...snapshot(), contextKey: 'new-brain' }, error: null, loading: false }); complete(snapshot()); expect((await pending).ok).toBe(false); expect(flowState.get().snapshot?.contextKey).toBe('new-brain');
 });
-it('keeps free text separate from execution and uses labelled icon-only fullscreen controls', () => {
-  expect(flowRecoveryQuestion(run, definition, 'from-step', 'b', 'Spiega')).toContain('non approva né avvia');
-  for (const expanded of [false, true]) { const html = renderToStaticMarkup(createElement(FlowFullscreenButton, { expanded, onClick: vi.fn() })); expect(html).toContain('<svg'); expect(html).toContain('aria-label='); expect(html).toContain('title='); expect(html).not.toMatch(/>Schermo intero<|>Esci da schermo intero</); }
-});
-it('shows all twenty long descriptions, model labels and the final step before optional fullscreen diagram', () => {
-  const state = snapshot(); state.roles = { sentinel: { name: 'Sentinel', avatar: { kind: 'character', value: 'sentinel' }, tier: 'mid', tierMax: 'top', model: null, models: { mid: 'synthetic-reasoning-model-long-context-2026-10-24' } } }; flowState.set({ snapshot: state, error: null, loading: false });
-  const long = { ...definition, description: 'Long complete description. '.repeat(60), steps: Array.from({ length: 20 }, (_, index) => ({ ...step(`s${index}`), kind: 'agent' as const, role: 'sentinel' as const, tier: 'mid' as const, instructions: `Step ${index}: ${'Inspect requirements, inputs, receipts and missing evidence. '.repeat(10)}` })) };
-  const html = renderToStaticMarkup(createElement(FlowFullscreenContent, { definition: long })); const primary = html.slice(0, html.indexOf('<details class="flow-fullscreen-diagram"'));
-  expect(primary.match(/class="flow-step"/g)).toHaveLength(20); for (const row of long.steps) expect(primary).toContain(row.instructions); expect(primary.match(/synthetic-reasoning-model-long-context-2026-10-24<\/span>/g)).toHaveLength(20);
-});
-
 it('restores postponed clarification drafts and makes recovery questions focusable with isolated Escape', () => {
   const state = snapshot(); state.runs[0]!.pendingRecovery = { mode: 'from-step', stepId: 'b', revision: 1, requestedAt: 3, targetVersion: 1, targetDigest: 'one' }; flowState.set({ snapshot: state, error: null, loading: false });
   const ask = flowAsks(state)[0]!; if (ask.type !== 'flow-restart') throw new Error('Expected recovery');

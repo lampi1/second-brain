@@ -71,7 +71,7 @@ describe('terminal cancellation and fresh recovery', () => {
     const next = w.flow.restart(input); expect(next.flowVersion).toBe(2); expect(next.steps[0]!.stepId).toBe('new-step'); expect(next.steps.every(step => !step.receipt)).toBe(true);
   });
   it('requires native approval for model cancellation/recovery and invalidates proposals on source changes', async () => {
-    const w = world(), run = w.start(), tools = flowTools({ service: () => w.flow, ownerId: 'owner', resolveBinding: () => null,
+    const w = world(), run = w.start(), tools = flowTools({ service: () => w.flow, ownerId: 'owner',
       proposeCancel: async (input, owner) => w.flow.proposeCancel(input, owner), proposeRestart: async (input, owner) => w.flow.proposeRestart(input, owner) });
     const cancel = tools.find(tool => tool.name === 'app_flow_cancel_propose')!;
     expect(tools.some(tool => tool.name === 'app_flow_cancel')).toBe(false);

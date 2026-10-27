@@ -25,7 +25,7 @@ import { preloadEngine } from './map/engine';
 import { brainClient } from './api';
 import { DiscussContext, type DiscussBridge } from './components/Discuss';
 import { t } from '../i18n';
-const Flows = lazy(() => import('./pages/Flows').then(module => ({ default: module.Flows })));
+const Routines = lazy(() => import('./pages/Routines').then(module => ({ default: module.Routines })));
 const Home = lazy(() => import('./pages/Home').then(module => ({ default: module.Home })));
 export type { DiscussBridge };
 export type { LiveSnapshot, LiveSource, LiveTool } from './lib/live';
@@ -109,7 +109,7 @@ export function BrainPage({ id, arg, onNavigate, bridge }: { id: BrainPageId; ar
   let page: ReactNode;
   switch (cur.id) {
     case 'home': page = <Suspense fallback={null}><Home nav={nav} /></Suspense>; break;
-    case 'flussi': page = <Suspense fallback={null}><Flows /></Suspense>; break;
+    case 'flussi': page = <Suspense fallback={null}><Routines /></Suspense>; break;
     case 'fatto': page = <Fatto arg={cur.arg} nav={nav} />; break;
     case 'idee': page = <Idee arg={cur.arg} nav={nav} />; break;
     case 'costi': page = <Costi arg={cur.arg} nav={nav} />; break;

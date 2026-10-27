@@ -43,7 +43,7 @@ const INSTRUCTIONS = [
 /** addChatTools: more tools on every chat's own endpoint (/mcp/chat/:chatId/:token), e.g. send_to_chat (wiring.ts).
  *  setBrowserAccess: which of the browser tools each chat sees there (all, the reading ones for 'browser-read', or none).
  *  setChatToolFilter: which of the added tools a chat sees (ChatManager.chatToolShown). */
-export interface BrowserModule { setApprovedBrowserOrigins(origins: () => string[]): void; setRoutineBrowserAccess(access: RoutineBrowserAccess): void; service: BrowserService; mcp: McpServer; addChatTools: (tools: McpTool[]) => void; setBrowserAccess: (access: (chatId: string) => BrowserAccess) => void; setChatToolFilter: (shown: (chatId: string, tool: string) => boolean) => void }
+export interface BrowserModule { setApprovedBrowserOrigins(origins: () => string[]): void; /** host-only: a routine package's login for an exact origin (routines/secret-fill.ts) */ sitePackageLogin(origin: string): ReturnType<SiteVault['forPackage']>; setRoutineBrowserAccess(access: RoutineBrowserAccess): void; service: BrowserService; mcp: McpServer; addChatTools: (tools: McpTool[]) => void; setBrowserAccess: (access: (chatId: string) => BrowserAccess) => void; setChatToolFilter: (shown: (chatId: string, tool: string) => boolean) => void }
 
 /** The clipboard of Copia: the system one, or (SB_TEST=1) an in-memory one the e2e suite reads through
  *  globalThis.__sbClipboard, so a test never overwrites what the user copied. */
@@ -228,5 +228,5 @@ ${SCREENSHOT_HINT}`;
       await mcp.close();
     },
   };
-  return { setApprovedBrowserOrigins: origins => { approvedOrigins = origins; }, setRoutineBrowserAccess: access => tabs.setRoutineAccess(access), service, mcp, addChatTools: tools => { chatTools.push(...tools); }, setBrowserAccess: access => { browserAccess = access; }, setChatToolFilter: shown => { chatToolShown = shown; } };
+  return { setApprovedBrowserOrigins: origins => { approvedOrigins = origins; }, sitePackageLogin: origin => siteVault.forPackage(origin), setRoutineBrowserAccess: access => tabs.setRoutineAccess(access), service, mcp, addChatTools: tools => { chatTools.push(...tools); }, setBrowserAccess: access => { browserAccess = access; }, setChatToolFilter: shown => { chatToolShown = shown; } };
 }

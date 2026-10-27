@@ -74,9 +74,10 @@ describe('app_guide', () => {
       automation: { revision: 1, paused: false, background: false, rules: [{ id: 'r1', revision: 1, status: 'paused', config: { flowId: 'fix', trigger: { kind: 'devops', everyMinutes: 5, areaPath: 'Air', workItemType: 'Bug', states: ['New'], workItemIds: [7] } } }],
         events: [{ ruleId: 'r1', status: 'pending', sourceKey: 'a' }, { ruleId: 'r1', status: 'started', sourceKey: 'b' }] } } as unknown as FlowSnapshot;
     expect(routineLines(snap)[0]!.text).toMatch(/trigger paused: DevOps Bug in Air .*filters only ids 7, queue 1; .*app_config area routine/);
-    const how = String(await guideTool(deps({ flows: () => snap })).run({ topic: 'routine pausa' }));
-    expect(how).toMatch(/runs already started keep going but lose its DevOps writes/);
-    expect(how).toMatch(/filter by tags/);
+    const how = String(await guideTool(deps({ flows: () => snap })).run({ topic: 'routine trigger filtri' }));
+    expect(how).toMatch(/starts a run for each new work item it finds/);
+    expect(how).toMatch(/tags all of, excluded tags, work item ids/);
+    expect(how).toMatch(/app_config area routine switches and pauses only the old routines/);
   });
 });
 
@@ -90,8 +91,8 @@ describe('screen outline', () => {
 
 it('returns the complete live description for an exact tool name, including its approval contract', async () => {
   const description = 'Propose the recovery. The user alone confirms Sì/No; the host resumes under the existing grant.';
-  const tool = guideTool(deps({ tools: () => [{ name: 'app_flow_reconcile_propose', description }] }));
-  expect(await tool.run({ topic: 'app_flow_reconcile_propose' })).toContain(description);
+  const tool = guideTool(deps({ tools: () => [{ name: 'app_flow_cancel_propose', description }] }));
+  expect(await tool.run({ topic: 'app_flow_cancel_propose' })).toContain(description);
 });
 
 it('knows the review switch (no daily limit, never a review of a review) and how completed work and levels are counted', async () => {

@@ -1,15 +1,12 @@
-// File transport must accept large definitions while preserving validation, exact approvals and brain confinement.
+// The confined brain JSON reader (routine definitions for components, routine packages for app_flow_propose): bounded,
+// inside the selected brain only, no links, no swapped files or directories.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { FlowDefinition } from '../../../src/shared/flows';
-import { appControlTools } from '../../../src/main/appctl/tools';
 import { FLOW_DEFINITION_FILE_MAX_BYTES, FLOW_DEFINITION_READ_ATTEMPTS, readDefinitionFile } from '../../../src/main/flows/definition-file';
-import { digest } from '../../../src/main/flows/schema';
-import { FlowService } from '../../../src/main/flows/service';
 import { flowBrainContextKey } from '../../../src/main/flows/context';
-import { flowTools } from '../../../src/main/flows/tools';
 const dirs: string[] = [];
 afterEach(() => { vi.restoreAllMocks(); for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
 function definition(large = false): FlowDefinition {
@@ -21,70 +18,10 @@ function setup() {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'flow-file-'))); dirs.push(dir);
   const root = path.join(dir, 'brain'), file = path.join(root, 'reviews', 'routine.json');
   fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify(definition()));
-  const contextKey = flowBrainContextKey(root), service = new FlowService({ file: path.join(dir, 'state.json'), contextKey });
-  const brainRoot = vi.fn(() => root);
-  const tool = flowTools({ ownerId: 'owner', service: () => service, resolveBinding: () => null, brainRoot }).find(t => t.name === 'app_flow_propose')!;
+  const contextKey = flowBrainContextKey(root);
   const args = { contextKey, expectedRevision: 0, definitionPath: 'reviews/routine.json' };
-  return { dir, root, file, service, tool, brainRoot, args };
+  return { dir, root, file, args };
 }
-it.each(['relative', 'absolute'])('proposes a >88k definition by %s file path with a compact receipt and exact immutable approval', async mode => {
-  const f = setup(), d = definition(true), json = JSON.stringify(d); expect(json.length).toBeGreaterThan(88000);
-  fs.writeFileSync(f.file, json);
-  const receipt = await f.tool.run({ ...f.args, definitionPath: mode === 'absolute' ? f.file : f.args.definitionPath });
-  expect(receipt).toMatchObject({ flowId: d.id, revision: 1, status: 'proposed', digest: digest(d), stepCount: 6 });
-  expect(JSON.stringify(receipt).length).toBeLessThan(1000);
-  expect(f.service.snapshot()).toMatchObject({ active: {}, runs: [] });
-  expect(f.service.snapshot().drafts[0]!.definition).toEqual(d);
-  fs.writeFileSync(f.file, JSON.stringify({ ...d, title: 'Changed later' }));
-  f.service.decideDefinition({ id: d.id, expectedRevision: 1, answer: 'yes' });
-  expect(f.service.snapshot().versions[0]!.definition).toEqual(d);
-});
-it('keeps inline proposals backward compatible and permits file-only arguments in the client-compatible object schema', async () => {
-  const f = setup(), d = definition();
-  expect(await f.tool.run({ contextKey: f.args.contextKey, expectedRevision: 0, definition: d })).toMatchObject({ definition: d, revision: 1, status: 'proposed' });
-  expect(f.brainRoot).not.toHaveBeenCalled();
-  expect(f.tool.inputSchema).toMatchObject({ type: 'object', required: ['contextKey', 'expectedRevision'], properties: { definition: { type: 'object' }, definitionPath: { type: 'string' } } });
-  expect(f.tool.inputSchema).not.toHaveProperty('oneOf');
-});
-it('requires exactly one source, current context and valid revision before touching a file', () => {
-  const f = setup();
-  expect(() => f.tool.run({ ...f.args, definition: definition() })).toThrow('exactly one');
-  expect(() => f.tool.run({ contextKey: f.args.contextKey, expectedRevision: 0 })).toThrow('exactly one');
-  expect(() => f.tool.run({ ...f.args, contextKey: 'previous-brain' })).toThrow('context changed');
-  expect(() => f.tool.run({ ...f.args, expectedRevision: -1 })).toThrow('expectedRevision');
-  expect(() => f.tool.run({ ...f.args, approved: true })).toThrow('unknown field');
-  expect(f.brainRoot).not.toHaveBeenCalled(); expect(f.service.snapshot().drafts).toEqual([]);
-});
-it('rejects a stale draft revision and never activates or grants from file metadata', () => {
-  const f = setup(); f.tool.run(f.args);
-  expect(() => f.tool.run(f.args)).toThrow('Draft changed');
-  fs.writeFileSync(f.file, JSON.stringify({ ...definition(), approved: true, devopsWrite: { ops: ['comment'] } }));
-  expect(() => f.tool.run({ ...f.args, expectedRevision: 1 })).toThrow('unknown field');
-  expect(f.service.snapshot()).toMatchObject({ active: {}, runs: [] });
-  expect(f.service.snapshot().drafts).toHaveLength(1);
-});
-it.each(['field-limit', 'brain-instructions', 'brain-asset', 'asset-hash', 'unknown-step'] as const)('preserves the same %s rejection as inline proposals', kind => {
-  const f = setup(), d = definition();
-  if (kind === 'field-limit') d.steps[0]!.instructions = 'x'.repeat(16001);
-  if (kind === 'brain-instructions') d.steps[0]!.instructions = 'Read rules/example.md';
-  if (kind === 'brain-asset') d.package!.assets = [{ id: 'notes', kind: 'checklist', content: 'Read rules/example.md', sha256: '' }];
-  if (kind === 'asset-hash') d.package!.assets = [{ id: 'notes', kind: 'checklist', content: 'Review evidence.', sha256: '0'.repeat(64) }];
-  if (kind === 'unknown-step') Object.assign(d.steps[0]!, { arbitraryPermission: true });
-  let message = '';
-  try { f.service.propose({ definition: d, expectedRevision: 0 }); } catch (e) { message = (e as Error).message; }
-  expect(message).toBeTruthy(); fs.writeFileSync(f.file, JSON.stringify(d));
-  expect(() => f.tool.run(f.args)).toThrow(message); expect(f.service.snapshot().drafts).toEqual([]);
-});
-it('runs the same model and role-tier checks after file loading', () => {
-  const f = setup(), validateModels = vi.fn(() => { throw new Error('Model unavailable'); });
-  const models = new FlowService({ file: path.join(f.dir, 'models.json'), contextKey: f.args.contextKey, validateModels });
-  const tiers = new FlowService({ file: path.join(f.dir, 'tiers.json'), contextKey: f.args.contextKey, tierMax: () => 'light' });
-  for (const [service, reason] of [[models, 'Model unavailable'], [tiers, 'exceeds']] as const) {
-    const tool = flowTools({ ownerId: 'owner', service: () => service, resolveBinding: () => null, brainRoot: f.brainRoot }).find(t => t.name === 'app_flow_propose')!;
-    expect(() => tool.run(f.args)).toThrow(reason); expect(service.snapshot().drafts).toEqual([]);
-  }
-  expect(validateModels).toHaveBeenCalledOnce();
-});
 it('confines absolute and relative paths to the selected brain, including sibling-prefix and alternate-stream tricks', () => {
   const f = setup(), sibling = path.join(f.dir, 'brain-other'); fs.mkdirSync(sibling);
   const outside = path.join(sibling, 'routine.json'); fs.copyFileSync(f.file, outside);
@@ -181,39 +118,4 @@ it.each([false, true])('retries incidental ancestor metadata only, with a fixed 
   // Windows may expose directory timestamps at a later checkpoint; count complete attempts, not per-path checks.
   if (continuous) { expect(() => readDefinitionFile(f.root, f.file, f.args.contextKey)).toThrow('directory changed'); expect(attempts).toBe(FLOW_DEFINITION_READ_ATTEMPTS); expect(changes).toBeGreaterThanOrEqual(attempts); }
   else { expect(readDefinitionFile(f.root, f.file, f.args.contextKey)).toEqual(definition()); expect(changes).toBe(1); }
-});
-it('rejects a root switched after authenticating the context, before opening or reading any definition', () => {
-  const f = setup(), other = setup();
-  f.brainRoot.mockReturnValue(other.root);
-  const open = vi.spyOn(fs, 'openSync'), read = vi.spyOn(fs, 'readSync');
-  expect(() => f.tool.run(f.args)).toThrow('Brain context changed');
-  expect(open).not.toHaveBeenCalled(); expect(read).not.toHaveBeenCalled();
-  expect(f.service.snapshot().drafts).toEqual([]);
-});
-it('never trusts a different canonical brain when retrying incidental metadata changes', () => {
-  const f = setup(), other = setup(), realpath = fs.realpathSync; let changed = false;
-  vi.spyOn(fs, 'realpathSync').mockImplementation((file, options) => {
-    if (file === f.root && changed) return realpath(other.root, options);
-    const result = realpath(file, options);
-    if (file === f.file && !changed) { changed = true; fs.writeFileSync(path.join(f.dir, 'noise.txt'), 'unrelated'); }
-    return result;
-  });
-  const read = vi.spyOn(fs, 'readSync');
-  expect(() => f.tool.run(f.args)).toThrow('Brain context changed'); expect(read).not.toHaveBeenCalled();
-});
-it('accepts a user-configured root alias only when it still resolves to the authenticated canonical brain', () => {
-  const f = setup(), alias = path.join(f.dir, 'alias');
-  fs.symlinkSync(f.root, alias, process.platform === 'win32' ? 'junction' : 'dir');
-  expect(readDefinitionFile(alias, 'reviews/routine.json', f.args.contextKey)).toEqual(definition());
-});
-it('uses the live brain only on an authenticated Orchestrator mount and rechecks caller revocation', () => {
-  const f = setup(); let closed = false;
-  type Deps = Parameters<typeof appControlTools>[0];
-  const deps = { chats: { list: () => [{ id: 'owner', isOrchestrator: true, ...(closed ? { closedAt: 1 } : {}) }] }, browser: {}, brain: { info: () => ({ brainRoot: f.root }) },
-    flows: { service: () => f.service, resolveBinding: () => null }, window: () => null, emitUi: () => {}, version: 'test' } as unknown as Deps;
-  expect(appControlTools(deps).find(t => t.name === 'app_flow_propose')).toBeUndefined();
-  const tool = appControlTools(deps, 'owner').find(t => t.name === 'app_flow_propose')!;
-  expect(tool.run(f.args)).toMatchObject({ flowId: 'example-routine', status: 'proposed' });
-  closed = true;
-  expect(() => tool.run({ ...f.args, expectedRevision: 1 })).toThrow('Authenticated Orchestrator');
 });

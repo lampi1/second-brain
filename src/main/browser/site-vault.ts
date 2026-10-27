@@ -23,4 +23,17 @@ export class SiteVault {
     const matches = this.vault.forUrl(origin);
     return matches.length === 1 ? this.vault.passwordFor(matches[0]!.id, origin) : null;
   }
+  /** Host-only, to fill a routine package's login for this exact origin (routines/secret-fill.ts). Every entry was saved
+   *  by the user for an approved origin, so no current approval is needed; one account only, else the user chooses. */
+  forPackage(origin: string): { value: { user: string; password: string } } | { reason: string } {
+    const exact = exactOrigin(origin);
+    if (!exact) return { reason: 'indirizzo di login non valido' };
+    const why = this.vault.unavailable();
+    if (why) return { reason: `password dei siti non leggibili: ${why}` };
+    const matches = this.vault.forUrl(exact);
+    if (!matches.length) return { reason: 'nessuna password salvata per questo sito' };
+    if (matches.length > 1) return { reason: 'più account salvati per questo sito: inseriscilo tu' };
+    const login = this.vault.passwordFor(matches[0]!.id, exact);
+    return login ? { value: login } : { reason: 'password salvata non decifrabile' };
+  }
 }
