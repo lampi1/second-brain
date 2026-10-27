@@ -46,6 +46,7 @@ import path from 'node:path';
 import type { Answer, ChatItem, ChatState, CursorReasoning, Effort, ImageAttachment, PendingRequest, PermissionMode, Question } from '../../shared/contract';
 import { missFragment, sysEn, type SysCode, type SysParams } from '../../shared/sys';
 import { errText, log } from '../log';
+import { timedStep } from '../perf';
 import { lineDiff, resultText, shortPath } from './claude-map';
 import { CLOSE_GRACE_MS, cliArgv, engineAllowed, killTrees, resolveAcp, type CliCommand } from './cli';
 import { drift, record } from './drift';
@@ -448,7 +449,7 @@ export class AcpSession implements HarnessSession {
     const p = this.proc;
     log.info('chats', 'acp session start', { chat, data: { engine, pid: p.pid, kind: cmd.kind, command: cmd.display, cwd: this.opts.cwd, args: this.args() } });
     p.stdout.setEncoding('utf8');
-    p.stdout.on('data', (d: string) => this.onStdout(d));
+    p.stdout.on('data', (d: string) => timedStep('engine acp output', () => this.onStdout(d)));
     p.stderr.setEncoding('utf8');
     p.stderr.on('data', (d: string) => { this.errTail = (this.errTail + d).slice(-4000); log.debug('chats', 'acp stderr', { chat, data: { engine, text: cut(d, 500) } }); });
     p.stdin.on('error', e => log.warn('chats', 'acp stdin error', { chat, data: { engine, error: errText(e) } }));

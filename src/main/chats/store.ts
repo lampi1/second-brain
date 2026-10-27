@@ -1,7 +1,8 @@
 // Persistence of the app's own chats in <userData>/chats.json, so tiles come back after a restart as 'closed' and
 // resume on the first message (docs/architecture.md "Data and state"). Only ids, folders, choices, the last context
 // size, the hand-off/"Riprendi" links and the past sessions of a cold continuation (ADR 0031) are stored:
-// never messages (they stay in each CLI's transcript) and never secrets. Writes are atomic (tmp + rename); a corrupt
+// never messages (they stay in each CLI's transcript) and never secrets. Writes are atomic (tmp + rename), synchronous
+// or deferred and asynchronous (saveAsync, ADR 0171); a corrupt
 // file is set aside as chats.json.bad-<time> instead of being lost. Used by manager.ts.
 import { readAgentContext, type AgentContextSnapshot } from '../../shared/agent-context';
 import fs from 'node:fs';
@@ -20,6 +21,7 @@ import { sanitizeAgentChildren } from './agent-children';
 import { readDelegation, type ChatDelegation } from '../../shared/delegation';
 import { readPlan, type StrategyPlan } from '../../shared/strategy';
 import { slowStep } from '../perf';
+import { writeLocalTextAsync } from '../agents/local-store';
 
 function validAssets(value: unknown): value is NonNullable<StoredChat['agentAssets']> {
   if (!value || typeof value !== 'object') return false;
@@ -295,8 +297,12 @@ export class ChatStore {
 
   /** the body last written: ChatManager saves from many places, often with nothing changed (no write then) */
   private last: string | null = null;
+  /** bumped by every write started: a deferred write that sees a newer one drops itself (never lands an older body) */
+  private gen = 0;
+  /** deferred writes started and not settled: a sync save writes even an unchanged body while one is in flight */
+  private inflight = 0;
 
-  /** Synchronous (callers read the file right after), compact and skipped when nothing changed: it runs on the main
+  /** Synchronous (callers read the file right after; the quit flush), compact and skipped when nothing changed: it runs on the main
    *  process for every chat change. */
   save(chats: StoredChat[]): void {
     const t = performance.now();
@@ -304,7 +310,9 @@ export class ChatStore {
   }
   private write(chats: StoredChat[]): void {
     const body = `${JSON.stringify({ version: 2, chats })}\n`;
-    if (body === this.last) return;
+    // a deferred write in flight is superseded (gen): this body is written even when equal to the last one
+    if (body === this.last && !this.inflight) return;
+    this.gen++;
     const tmp = `${this.file}.tmp`;
     try {
       fs.mkdirSync(path.dirname(this.file), { recursive: true });
@@ -319,10 +327,28 @@ export class ChatStore {
     }
   }
 
+  /** The deferred save (ChatManager with writeDelayMs): serialized now, written asynchronously (tmp + rename, retries
+   *  without blocking), skipped when nothing changed. A newer save, sync or deferred, supersedes it. Never throws. */
+  async saveAsync(chats: StoredChat[]): Promise<void> {
+    const t = performance.now();
+    const body = `${JSON.stringify({ version: 2, chats })}\n`;
+    slowStep('chats.json serialize', performance.now() - t);
+    if (body === this.last && !this.inflight) return;
+    const gen = ++this.gen;
+    this.inflight++;
+    try {
+      if (await writeLocalTextAsync(this.file, body, () => this.gen === gen, { maxBytes: Infinity })) this.last = body;
+    } catch (e) {
+      if (this.gen === gen) this.last = null;
+      log.warn('chats', 'chats.json not saved (deferred)', { cause: errText(e), hint: 'the next chat change or the quit writes it again' });
+    } finally { this.inflight--; }
+  }
+
   /** Update boundary: throw on any failure, never fall back to a direct overwrite or claim a logged error is saved. */
   checkpoint(chats: StoredChat[]): void {
     const body = `${JSON.stringify({ version: 2, chats })}\n`;
     this.last = null;
+    this.gen++;
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     try { const stat = fs.lstatSync(this.file); if (!stat.isFile() || stat.nlink !== 1 || stat.isSymbolicLink()) throw new Error('Archivio chat collegato: aggiornamento fermato.'); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }

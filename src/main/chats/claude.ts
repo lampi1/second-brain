@@ -27,6 +27,7 @@ import path from 'node:path';
 import type { Answer, ChatItem, ChatState, Effort, ImageAttachment, PendingRequest, PermissionMode } from '../../shared/contract';
 import { sysEn, type SysCode, type SysParams } from '../../shared/sys';
 import { errText, log } from '../log';
+import { timedStep } from '../perf';
 import { CLOSE_GRACE_MS, commandFor, findCli, killTrees, resolveClaude } from './cli';
 import { closePipes, engineKills, jobGuard, killEngineTree } from './jobguard';
 import { reapEnabled, reapEngine, type Root } from './proctree';
@@ -328,7 +329,7 @@ export class ClaudeSession implements HarnessSession {
     const p = this.proc;
     log.info('chats', 'session start', { chat, data: { pid: p.pid, cli, cwd: this.opts.cwd, args } });
     p.stdout.setEncoding('utf8');
-    p.stdout.on('data', (d: string) => this.onStdout(d));
+    p.stdout.on('data', (d: string) => timedStep('engine claude output', () => this.onStdout(d)));
     p.stderr.setEncoding('utf8');
     p.stderr.on('data', (d: string) => {
       this.errTail = (this.errTail + d).slice(-4000);

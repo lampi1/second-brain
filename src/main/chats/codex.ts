@@ -36,6 +36,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { Answer, ChatItem, ChatState, Effort, FileDiff, ImageAttachment, PendingRequest, PermissionMode, Question } from '../../shared/contract';
 import { errText, log } from '../log';
+import { timedStep } from '../perf';
 import { shortPath } from './claude-map';
 import { CLOSE_GRACE_MS, cliArgv, engineAllowed, killTrees, resolveAcp, type CliCommand } from './cli';
 import { drift, record } from './drift';
@@ -248,7 +249,7 @@ export class CodexSession implements HarnessSession {
     // the key is never logged: only whether one was given
     log.info('chats', 'codex session start', { chat, data: { engine, pid: p.pid, kind: cmd.kind, command: cmd.display, cwd: this.opts.cwd, args: redactArgs(this.args()), key: !!this.opts.env?.CODEX_API_KEY } });
     p.stdout.setEncoding('utf8');
-    p.stdout.on('data', (d: string) => this.onStdout(d));
+    p.stdout.on('data', (d: string) => timedStep('engine codex output', () => this.onStdout(d)));
     p.stderr.setEncoding('utf8');
     p.stderr.on('data', (d: string) => { this.errTail = (this.errTail + d).slice(-4000); log.debug('chats', 'codex stderr', { chat, data: { engine, text: cut(d, 500) } }); });
     p.stdin.on('error', e => log.warn('chats', 'codex stdin error', { chat, data: { engine, error: errText(e) } }));

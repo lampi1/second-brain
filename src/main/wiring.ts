@@ -507,6 +507,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // the question gates ask for a brief before a yes/no question (ADR 0150): the visuals' store exists further down
   const briefRef: { current?: Artifacts } = {};
   const manager = new ChatManager({
+    writeDelayMs: 250, // chats.json and agent-runs.json: one asynchronous write per burst (the main-process freezes, 2026-10-27)
     briefReady: chatId => briefRef.current?.hasBrief(chatId) ?? true,
     prepareDelegation: delegateWorktrees.prepare,
     freshSessions: () => true,
@@ -664,7 +665,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // send_to_chat / list_chats on its own MCP endpoint (chats/mail.ts)
   // the words that time the mail to an Orchestrator come from the brain (chats/orchestrator-delivery.ts)
   const classify = brainClassifier(() => { const root = brain.info().brainRoot; return root ? readOrchestratorMail(root) : undefined; });
-  const mail = new ChatMail({ root: () => brain.info().brainRoot, chats, instance: path.basename(ctx.userData), classify, holdActivity: id => manager.holdActivity(id) });
+  const mail = new ChatMail({ root: () => brain.info().brainRoot, chats: manager, instance: path.basename(ctx.userData), classify, holdActivity: id => manager.holdActivity(id) });
   addChatTools(mailTools({ classify,
     root: () => brain.info().brainRoot, chats: () => chats.list(), crossRefusal: (from, to) => crossRefusal(brain.settings(), from, to),
     agentsMayOpen: h => agentsMayOpen(brain.settings(), h),
@@ -700,8 +701,15 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       kept = saved.ids as string[];
     }
   } catch { keptProblem = true; }
+  // asked several times per open chat at each tick: settings() clones every setting, so it is read at most once a second
+  let autoCloseMin = { at: -Infinity, min: 2 };
+  const autoCloseDelay = () => {
+    const now = Date.now();
+    if (now - autoCloseMin.at >= 1000) autoCloseMin = { at: now, min: brain.settings().autoCloseMin ?? 2 };
+    return autoCloseMin.min * 60_000;
+  };
   const autoCloseService = new AutoCloseService({ now: autoCloseNow,
-    delayMs: () => keptProblem ? 0 : (brain.settings().autoCloseMin ?? 2) * 60_000,
+    delayMs: () => keptProblem ? 0 : autoCloseDelay(),
     // what holds a chat open, named for its "In attesa di…" label (ADR 0084); an open tab alone no longer holds it (the
     // archive closes its tabs): only a hand-off, a dialog or a page still loading
     candidates: () => manager.autoCloseCandidates(id => asks.pending().some(p => p.chatId === id) ? 'command'
@@ -709,6 +717,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       : runner.list(id).some(r => r.state === 'running') || browser.list().some(t => t.ownerChatId === id && t.loading) ? 'work'
       : mail.hasWork(id) ? 'mail' : false),
     archive: async (id, _reservation, valid) => {
+      // hasWork trusts a mailbox listing for BOX_TTL_MS: mail that came in since keeps the chat open
+      if (mail.hasWork(id, true)) return false;
       const done = await manager.archiveAutomatic(id, valid);
       if (done) for (const tab of browser.list()) if (tab.ownerChatId === id) browser.close(tab.id);
       return done;
@@ -755,11 +765,13 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     return { pending: linked.some(c => !['running', 'done'].includes(c.plan!.phase)), approved: approved.length === linked.length ? approved.map(c => `${c.id} / task ${c.run?.taskVersion ?? 1}: ${c.plan!.steps.map(s => s.title).join('; ')}`).join('\n') : '' };
   });
   // Poll without model calls; relevant events and canonical reports wake the owning Orchestrator.
-  const flowDeadlineTimer = process.env.SB_TEST ? null : setInterval(() => {
+  // SB_BENCH_TIMERS=1: scripts/bench-stalls.mjs measures an idle app with these production pollers on (fake engines only)
+  const prodPollers = !process.env.SB_TEST || process.env.SB_BENCH_TIMERS === '1';
+  const flowDeadlineTimer = prodPollers ? setInterval(() => {
     if (!brain.info().brainRoot) return;
     try { void flows.tick().catch(error => log.warn('flows', 'Automatic flow tick failed', { cause: errText(error), hint: 'Inspect Flussi for blocked checks.' })); }
     catch (error) { log.warn('flows', 'Flow deadline reconciliation unavailable', { cause: String(error), hint: 'Reconnect the selected brain and reopen Flussi.' }); }
-  }, 5_000);
+  }, 5_000) : null;
   flowDeadlineTimer?.unref();
   const wake = attachOrchestratorWake(ctx, chats, () => brain.settings().orchestratorEvents !== false && (!process.env.SB_TEST || process.env.SB_ORCHESTRATOR_EVENTS === '1'));
   manager.onUserWrote(n => wake.userMessage(n)); // the user typed in a work chat: quiet news (ADR 0083)
@@ -832,7 +844,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   judgeFirst?.unref();
   const judgeTimer = judging.on ? setInterval(judgeTick, 30 * 60_000) : null;
   judgeTimer?.unref();
-  const lifecycleTimer = process.env.SB_TEST ? null : setInterval(() => loop.tick(), 10_000);
+  const lifecycleTimer = prodPollers ? setInterval(() => loop.tick(), 10_000) : null;
   lifecycleTimer?.unref();
   // a role chat's route says how its active version has done so far
   const agentStats = (agentId: string, version: number) => agentStatsLine(runMetrics(manager.runs.list(), { rollups: manager.runs.rolledUp() }).find(m => m.agentId === agentId)?.versions.find(v => v.version === version));

@@ -398,3 +398,12 @@ describe('agent run evidence (A6)', () => {
     expect(f.file().runs.find(r => r.runId === f.run(n.id)!.runId)).toMatchObject({ continuedFrom: old });
   });
 });
+
+describe('one chat summary (mail.hasWork asks it for each open chat every second)', () => {
+  it('summary(id) is the same row list() gives, results included; an unknown id is undefined', async () => {
+    const f = fixture();
+    const a = await f.create(), b = await f.create('agent');
+    for (const id of [a.id, b.id]) expect(f.m.summary(id)).toEqual(f.m.list().find(c => c.id === id));
+    expect(f.m.summary('nobody')).toBeUndefined();
+  });
+});

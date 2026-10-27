@@ -189,6 +189,11 @@ export class ConfigStore {
     return l;
   }
 
+  /** The effective brain folder alone, without cloning every setting (brain.info() runs many times a second). */
+  brainRoot(): string | null {
+    return this.env.SB_BRAIN ? path.normalize(this.env.SB_BRAIN) : this.saved.brainRoot ?? null;
+  }
+
   /** Effective settings: the saved ones with the env overrides on top. */
   get(): Settings {
     const s = structuredClone(this.saved);

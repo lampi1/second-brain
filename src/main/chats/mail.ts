@@ -190,7 +190,8 @@ export function render(msgs: MailMsg[], key = crypto.randomBytes(4).toString('he
 export interface ChatMailDeps {
   holdActivity?: (chatId: string) => () => void;
   root: () => string | null;
-  chats: { list(): ChatSummary[]; send(chatId: string, text: string, images?: undefined, resumed?: boolean, from?: string, liveOnly?: boolean): Promise<void> };
+  /** summary: one chat without the whole list (hasWork runs for each open chat every second) */
+  chats: { list(): ChatSummary[]; summary?(chatId: string): ChatSummary | undefined; send(chatId: string, text: string, images?: undefined, resumed?: boolean, from?: string, liveOnly?: boolean): Promise<void> };
   /** the instance's name (userData folder): stable and dev keep separate heartbeats */
   instance: string;
   everyMs?: number;
@@ -202,7 +203,11 @@ export interface ChatMailDeps {
   now?: () => number;
 }
 
+/** how long hasWork trusts its last listing of a mailbox (ms) */
+export const BOX_TTL_MS = 2000;
+
 /** Delivers inbox mail to the app's live chats, every everyMs (default 2 s) and right after a send_to_chat. */
+
 export class ChatMail {
   private readonly delivering = new Set<string>();
   private timer: NodeJS.Timeout | null = null;
@@ -318,15 +323,25 @@ export class ChatMail {
   }
 
   /** The scheduler reads unread disk state too; unreadable mailboxes fail closed. */
-  hasWork(chatId: string): boolean {
+  hasWork(chatId: string, fresh = false): boolean {
     if (this.delivering.has(chatId)) return true;
-    const root = this.d.root(), chat = this.d.chats.list().find(c => c.id === chatId);
+    const root = this.d.root(), chat = this.d.chats.summary ? this.d.chats.summary(chatId) : this.d.chats.list().find(c => c.id === chatId);
     if (!root || !chat) return false;
     const box = slug(chat.title);
     if (!box) return true;
-    try { return fs.readdirSync(path.join(inboxDir(root), box)).some(name => name.endsWith('.json') && !name.startsWith('.')); }
-    catch (e) { return (e as NodeJS.ErrnoException).code !== 'ENOENT'; }
+    // the automatic archive asks this for every open chat each second: a mailbox listed less than BOX_TTL_MS ago is not
+    // listed again (a sync readdir per chat per second on the window's UI thread, 2026-10-27); a delivery under way
+    // answers above at once, and the archive asks again with fresh = true right before it archives
+    const dir = path.join(inboxDir(root), box), now = Date.now(), seen = this.boxSeen.get(dir);
+    if (!fresh && seen && now - seen.at < BOX_TTL_MS) return seen.work;
+    let work: boolean;
+    try { work = fs.readdirSync(dir).some(name => name.endsWith('.json') && !name.startsWith('.')); }
+    catch (e) { work = (e as NodeJS.ErrnoException).code !== 'ENOENT'; }
+    if (this.boxSeen.size > 500) this.boxSeen.clear();
+    this.boxSeen.set(dir, { at: now, work });
+    return work;
   }
+  private readonly boxSeen = new Map<string, { at: number; work: boolean }>();
 
   async tick(): Promise<number> {
     if (this.stopped || updateActivity.frozen) return 0;

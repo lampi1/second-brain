@@ -53,6 +53,8 @@ export interface BrainCtx {
 }
 
 const FEED_MAX = 500;
+/** how long brain.info() trusts its last check of the brain folder (ms) */
+const INFO_TTL_MS = 2000;
 
 export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
   const env = ctx.env ?? process.env;
@@ -60,6 +62,7 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
   // a hidden run (SB_HIDDEN=1: tests, the agents' dev instance) never pops Windows toasts nor raises the window
   const quiet = testing || env.SB_HIDDEN === '1';
   const cfg = new ConfigStore(ctx.userData, env);
+  let folderCheck: { root: string; at: number; problem: string | null } | null = null;
   // Discovery is only a suggestion in the interview. Until an explicit choice, start without a brain.
   const node = electronNode();
   const file = (f: string) => path.join(ctx.userData, f);
@@ -240,9 +243,16 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
     mute: (kind, muted) => { if (!kindOk(kind) || typeof muted !== 'boolean') throw new Error('feed:mute: tipo e true/false'); cfg.set({ mute: { [kind]: muted } }); },
     usage: () => lastUsage ?? usage?.get() ?? { todayUsd: 0, fiveHourPct: null, fiveHourResetsAt: null, weekPct: null },
     info: () => {
-      const root = cfg.get().brainRoot;
-      const problem = cfg.loadError ?? (!root ? 'nessuna cartella del brain scelta' : !fs.existsSync(path.join(root, 'ops', 'tools', 'brain-site.mjs')) && !isProduct(root) ? `la cartella ${root} non ha il server dati del brain (ops/tools/brain-site.mjs)` : null);
-      return { brainRoot: root, brainProblem: problem };
+      const root = cfg.brainRoot();
+      if (cfg.loadError || !root) return { brainRoot: root, brainProblem: cfg.loadError ?? 'nessuna cartella del brain scelta' };
+      // the folder check reads brain.json through realpath + lstat of each part: asked many times a second (mailbox,
+      // automatic archive, MCP), it is checked again only when the folder changes or after INFO_TTL_MS (2026-10-27)
+      const now = Date.now();
+      if (!folderCheck || folderCheck.root !== root || now - folderCheck.at >= INFO_TTL_MS) {
+        const problem = !fs.existsSync(path.join(root, 'ops', 'tools', 'brain-site.mjs')) && !isProduct(root) ? `la cartella ${root} non ha il server dati del brain (ops/tools/brain-site.mjs)` : null;
+        folderCheck = { root, at: now, problem };
+      }
+      return { brainRoot: root, brainProblem: folderCheck.problem };
     },
     settings: () => cfg.get(),
     // turning judging on starts it from now (ADR 0114: no backlog), whoever sends the patch, not only the Agenti switch

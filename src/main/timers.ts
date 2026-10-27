@@ -1,5 +1,7 @@
 // Live inventory of periodic timers and scheduled pollers for app_state and doctor (ADR 0056).
 // Owners opt in explicitly; native handles/ref behavior stay unchanged. No global timer monkey-patching.
+// Each run is timed as a main-process step "timer <owner>" (perf.ts), so a frozen window names the poller that ran.
+import { timedStep } from './perf';
 export interface TimerSnapshot {
   id: number; owner: string; kind: 'interval' | 'scheduled'; delayMs: number;
   startedAt: number; nextAt: number; lastRunAt: number | null; runs: number;
@@ -30,7 +32,7 @@ export function timersFor(owner: string): {
     const run = () => {
       row.lastRunAt = Date.now(); row.runs++; row.nextAt = row.lastRunAt + delayMs;
       if (kind === 'scheduled') active.delete(handle);
-      callback();
+      timedStep(`timer ${owner}`, callback);
     };
     const handle = kind === 'interval' ? globalThis.setInterval(run, ms) : globalThis.setTimeout(run, ms);
     active.set(handle, row);

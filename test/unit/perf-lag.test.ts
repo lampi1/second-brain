@@ -2,7 +2,7 @@
 // log line (main/perf.ts: clamped numbers, a warning above 100 ms p95), and the alive-marks heartbeat
 // (renderer/lib/beat.ts: steps only while a mark is on the page, attributes in turn).
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanReport, logInputLag, SLOW_P95_MS, SLOW_STEP_MS, STALL_MS, slowStep, stallOf, startStallWatch } from '../../src/main/perf';
+import { cleanReport, logInputLag, SLOW_P95_MS, SLOW_STEP_MS, STALL_MS, slowStep, stallOf, startStallWatch, timedStep } from '../../src/main/perf';
 import { log } from '../../src/main/log';
 
 const invoke = vi.fn(() => Promise.resolve());
@@ -112,6 +112,29 @@ describe('main-process stall watch (2026-10-27: "va a scatti")', () => {
     expect(String(warn.mock.calls[0]![2]?.cause)).not.toContain('fast');
     t += 500; vi.advanceTimersByTime(100);
     expect(warn).toHaveBeenCalledTimes(1);
+    stop(); warn.mockRestore(); vi.useRealTimers();
+  });
+  it('names many small steps of one label by their sum, counts nested steps once, and lists the minute\'s labels', () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
+    let t = 0;
+    const stop = startStallWatch(() => t);
+    // 30 stdout chunks of 2 ms each: none is slow alone, together they are the stall's suspect
+    for (let i = 0; i < 30; i++) slowStep('engine claude output', 2);
+    // a timed step with a labelled step inside: the outer time counts once in labeledMs
+    timedStep('timer wiring/auto-close', () => slowStep('chats.json write', 5));
+    t += 400; vi.advanceTimersByTime(100);
+    const first = warn.mock.calls[0]![2]?.data as { steps: { label: string; ms: number; n?: number }[]; labeledMs: number };
+    expect(first.steps[0]).toEqual({ label: 'engine claude output', ms: 60, n: 30 });
+    expect(first.labeledMs).toBeLessThan(70); // 60 + the timed step's own few ms, the nested 5 not added again
+    // the next stalls in the same minute are counted with their labels, then shown on the next log line
+    slowStep('ipc flows:list', 300);
+    t += 500; vi.advanceTimersByTime(100);
+    t += 61_000; vi.advanceTimersByTime(100);
+    expect(warn).toHaveBeenCalledTimes(2);
+    const second = warn.mock.calls[1]![2]?.data as { sinceLast: number; topSinceLast: { label: string }[] };
+    expect(second.sinceLast).toBe(1);
+    expect(second.topSinceLast[0]!.label).toBe('ipc flows:list');
     stop(); warn.mockRestore(); vi.useRealTimers();
   });
 });

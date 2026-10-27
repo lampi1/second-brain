@@ -31,45 +31,68 @@ export function logInputLag(a: unknown): void {
   } else log.info('perf', 'input lag', { data: r });
 }
 
-/** a main-process step this long (ms) is noted as a suspect for the next stall */
-export const SLOW_STEP_MS = 50;
+/** a label whose steps add up to this much (ms) during one stall is named in its log line */
+export const SLOW_STEP_MS = 20;
 /** the main thread late by this much (ms) is a freeze the user sees */
 export const STALL_MS = 200;
 const TICK_MS = 100;
-let steps: { label: string; ms: number }[] = [];
+type Tally = Map<string, { ms: number; n: number }>;
+/** every labelled step since the last tick (label → total ms, count); outer = time inside outermost steps only */
+let tally: Tally = new Map(), outer = 0, depth = 0;
+/** the labels of the stalls counted but not logged since the last log line (once a minute) */
+let minute: Tally = new Map();
+const add = (t: Tally, label: string, ms: number, n = 1) => { const e = t.get(label); if (e) { e.ms += ms; e.n += n; } else t.set(label, { ms, n }); };
 
-/** A synchronous main-process step that took `ms`: kept (the slowest few) for the stall it may have caused. */
+/** A synchronous main-process step that took `ms`: added to its label's total for the stall it may be part of. */
 export function slowStep(label: string, ms: number): void {
-  if (ms < SLOW_STEP_MS) return;
-  steps.push({ label, ms: Math.round(ms) });
-  if (steps.length > 20) steps = steps.sort((a, b) => b.ms - a.ms).slice(0, 10);
+  if (!(ms > 0)) return;
+  add(tally, label, ms);
+  if (depth === 0) outer += ms;
+  if (tally.size > 200) tally = new Map([...tally].sort((a, b) => b[1].ms - a[1].ms).slice(0, 50));
 }
-/** Times fn as one main-process step (slowStep). */
+/** Times fn as one main-process step (slowStep): its synchronous part only (an async fn's await is not counted). */
 export function timedStep<T>(label: string, fn: () => T): T {
   const t = performance.now();
-  try { return fn(); } finally { slowStep(label, performance.now() - t); }
+  depth++;
+  try { return fn(); } finally { depth--; slowStep(label, performance.now() - t); }
 }
 
-/** What one tick saw: a stall (late by at least STALL_MS) with its suspects, or null. Pure, for the tests. */
-export function stallOf(lateMs: number, noted: readonly { label: string; ms: number }[]): { ms: number; steps: { label: string; ms: number }[] } | null {
+/** The labels of a tally that add up to SLOW_STEP_MS or more, slowest first (at most `max`). */
+const topOf = (t: Iterable<[string, { ms: number; n: number }]>, max: number) => [...t].filter(([, v]) => v.ms >= SLOW_STEP_MS)
+  .sort((a, b) => b[1].ms - a[1].ms).slice(0, max).map(([label, v]) => ({ label, ms: Math.round(v.ms), ...(v.n > 1 ? { n: v.n } : {}) }));
+
+/** What one tick saw: a stall (late by at least STALL_MS) with its suspects (labels by total time), or null. Pure, for
+ *  the tests. labeledMs = the part of the stall spent inside labelled steps (the rest: GC, unlabelled callbacks). */
+export function stallOf(lateMs: number, noted: readonly { label: string; ms: number; n?: number }[], labeledMs?: number): { ms: number; steps: { label: string; ms: number; n?: number }[]; labeledMs?: number } | null {
   if (lateMs < STALL_MS) return null;
-  return { ms: Math.round(lateMs), steps: [...noted].sort((a, b) => b.ms - a.ms).slice(0, 5) };
+  const t: Tally = new Map();
+  for (const s of noted) add(t, s.label, s.ms, s.n ?? 1);
+  return { ms: Math.round(lateMs), steps: topOf(t, 5), ...(labeledMs !== undefined ? { labeledMs: Math.round(labeledMs) } : {}) };
 }
 
-/** Watches the main thread: a tick late by STALL_MS or more logs a `perf` warning (at most one a minute, the rest counted). */
+const named = (steps: { label: string; ms: number; n?: number }[]) => steps.map(s => `${s.label} ${s.ms} ms${s.n ? ` (${s.n}×)` : ''}`).join(', ');
+
+/** Watches the main thread: a tick late by STALL_MS or more logs a `perf` warning (at most one a minute, the rest
+ *  counted, with the labels that ran in them: topSinceLast). */
 export function startStallWatch(now: () => number = () => performance.now()): () => void {
   let last = now(), lastLog = -Infinity, missed = 0, worst = 0;
   const timer = setInterval(() => {
     const t = now(), late = t - last - TICK_MS;
     last = t;
-    const stall = stallOf(late, steps);
-    steps = [];
+    const stall = stallOf(late, [...tally].map(([label, v]) => ({ label, ms: v.ms, n: v.n })), outer);
+    const seen = tally;
+    tally = new Map(); outer = 0;
     if (!stall) return;
-    if (t - lastLog < 60_000) { missed++; worst = Math.max(worst, stall.ms); return; }
-    log.warn('perf', 'main process blocked', { data: { ...stall, ...(missed ? { sinceLast: missed, worstSinceLast: worst } : {}) },
-      cause: stall.steps.length ? `the window froze ${stall.ms} ms while ${stall.steps.map(s => `${s.label} ${s.ms} ms`).join(', ')}` : `the window froze ${stall.ms} ms (no slow step noted: GC, a native call or the PC itself)`,
-      hint: 'a synchronous step on the main process blocks input and frames; see the steps named here' });
-    lastLog = t; missed = 0; worst = 0;
+    if (t - lastLog < 60_000) {
+      missed++; worst = Math.max(worst, stall.ms);
+      for (const [label, v] of seen) add(minute, label, v.ms, v.n);
+      return;
+    }
+    const top = topOf(minute, 8);
+    log.warn('perf', 'main process blocked', { data: { ...stall, ...(missed ? { sinceLast: missed, worstSinceLast: worst, ...(top.length ? { topSinceLast: top } : {}) } : {}) },
+      cause: stall.steps.length ? `the window froze ${stall.ms} ms while ${named(stall.steps)}` : `the window froze ${stall.ms} ms (no labelled step ran: GC, a native call, an unlabelled callback or the PC itself)`,
+      hint: 'a synchronous step on the main process blocks input and frames; see the steps named here (topSinceLast: the stalls of the last minute)' });
+    lastLog = t; missed = 0; worst = 0; minute = new Map();
   }, TICK_MS);
   timer.unref?.();
   return () => clearInterval(timer);

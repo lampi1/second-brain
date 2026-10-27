@@ -49,3 +49,30 @@ export function writeLocalText(file: string, body: string): void {
     if (retries > 0) log.warn('agents', 'local store saved after a retried rename', { data: { file: path.basename(file), retries }, hint: 'another process held the file for a moment (antivirus, indexer, backup); nothing was lost' });
   } finally { try { fs.unlinkSync(tmp); } catch { /* renamed or not created */ } }
 }
+
+/** writeLocalText off the main thread's critical path (the deferred saves of chats.json and agent-runs.json): the body
+ *  goes to a fresh tmp asynchronously, the rename stays synchronous (one quick call, so writes of one file land in the
+ *  order they were started) and its retries wait asynchronously instead of blocking the main process (Atomics.wait,
+ *  up to 300 ms, froze the window: 2026-10-27). `current()` is asked before every rename attempt: false = a newer write
+ *  of the same file was started since, this one is dropped (false returned). Throws like writeLocalText. */
+export async function writeLocalTextAsync(file: string, body: string, current: () => boolean, opts: { maxBytes?: number; waits?: readonly number[] } = {}): Promise<boolean> {
+  if (Buffer.byteLength(body, 'utf8') > (opts.maxBytes ?? 8_000_000)) throw new Error('Archivio locale troppo grande. Il file precedente è conservato.');
+  await fs.promises.mkdir(path.dirname(file), { recursive: true });
+  try { const s = await fs.promises.lstat(file); if (!s.isFile() || s.nlink !== 1) throw new Error('Archivio locale collegato: scrittura rifiutata.'); }
+  catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e; }
+  const tmp = `${file}.${randomUUID()}.tmp`, waits = opts.waits ?? RENAME_WAITS_MS;
+  try {
+    await fs.promises.writeFile(tmp, body, { flag: 'wx', mode: 0o600 });
+    for (let attempt = 0; ; attempt++) {
+      if (!current()) return false;
+      try {
+        fs.renameSync(tmp, file);
+        if (attempt > 0) log.warn('agents', 'local store saved after a retried rename', { data: { file: path.basename(file), retries: attempt }, hint: 'another process held the file for a moment (antivirus, indexer, backup); nothing was lost' });
+        return true;
+      } catch (e) {
+        if (!RETRY_CODES.has((e as NodeJS.ErrnoException).code ?? '') || attempt >= waits.length) throw e;
+        await new Promise(r => setTimeout(r, waits[attempt]!));
+      }
+    }
+  } finally { await fs.promises.unlink(tmp).catch(() => { /* renamed or not created */ }); }
+}

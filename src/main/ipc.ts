@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { INVOKE_CHANNELS, type EventChannel, type EventMap, type InvokeArg, type InvokeChannel, type InvokeResult } from '../shared/contract';
 import { updateActivity } from './update/activity';
+import { timedStep } from './perf';
 
 type Handler<K extends InvokeChannel> = (arg: InvokeArg<K>, e: IpcMainInvokeEvent) => InvokeResult<K> | Promise<InvokeResult<K>>;
 export type Handlers = { [K in InvokeChannel]: Handler<K> };
@@ -45,7 +46,8 @@ export function registerHandlers(handlers: Handlers, appContents: () => WebConte
       const ok = isAppSender(e, appContents()) || (!!extra && extra.channels.includes(ch) && isAppSender(e, extra.contents()));
       if (!ok) throw new Error('forbidden sender');
       const invoke = () => (handlers[ch] as Handler<typeof ch>)(arg as never, e);
-      return updateActivity.tracks(ch) ? updateActivity.run(invoke) : invoke();
+      // the handler's synchronous part is one main-process step (perf.ts): a frozen window names the channel
+      return timedStep(`ipc ${ch}`, () => updateActivity.tracks(ch) ? updateActivity.run(invoke) : invoke());
     });
   }
 }
@@ -58,7 +60,8 @@ export class Emitter {
   constructor(private target: () => WebContents | null) {}
   /** Sees every event, before the window; a tap that throws never stops the event. */
   tap(fn: EmitTap): void { this.taps.push(fn); }
-  emit<K extends EventChannel>(channel: K, payload: EventMap[K]): void {
+  emit<K extends EventChannel>(channel: K, payload: EventMap[K]): void { timedStep(`emit ${channel}`, () => this.send(channel, payload)); }
+  private send<K extends EventChannel>(channel: K, payload: EventMap[K]): void {
     for (const fn of this.taps) try { fn(channel, payload); } catch { /* the log never breaks the app */ }
     if (channel === 'ui:command' && updateActivity.frozen) return;
     const wc = this.target();

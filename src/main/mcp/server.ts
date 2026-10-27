@@ -15,6 +15,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { log, errText } from '../log';
+import { timedStep } from '../perf';
 import { updateActivity } from '../update/activity';
 
 export const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'] as const;
@@ -258,7 +259,7 @@ export class McpServer {
             let leaveActivity: (() => void) | undefined;
             try {
               leaveActivity = updateActivity.enter();
-              const out = await tool.run(args, { ...ctx, signal: ac.signal });
+              const out = await timedStep(`mcp ${name}`, () => tool.run(args, { ...ctx, signal: ac.signal }));
             log.debug('mcp', `call ${name}`, { chat: who, data: { mount: mount.name, ms: Date.now() - t0, args: Object.keys(args) } });
             if (typeof out === 'object' && 'raw' in out) return ok(id, { content: out.raw.content, ...(out.raw.isError ? { isError: true } : {}), ...(out.raw.structuredContent !== undefined ? { structuredContent: out.raw.structuredContent } : {}) });
             return ok(id, { content: toContent(out) });

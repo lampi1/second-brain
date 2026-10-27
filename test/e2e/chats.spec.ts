@@ -41,9 +41,9 @@ test('a Claude chat runs a turn, asks a question, takes the answer and streams e
   await expect.poll(async () => (await page.evaluate(() => window.sb.invoke('chat:list', undefined)))[0]?.state).toBe('idle');
   expect(await page.evaluate(() => window.sb.invoke('chat:stopAll', undefined))).toBe(0);
 
-  // persisted for the next start
-  const stored = JSON.parse(fs.readFileSync(path.join(userData, 'chats.json'), 'utf8')) as { chats: { id: string; title: string }[] };
-  expect(stored.chats[0]).toMatchObject({ id: chat.id, title: 'E2E' });
+  // persisted for the next start (written asynchronously, at most writeDelayMs after the change)
+  const stored = (): { chats: { id: string; title: string }[] } | null => { try { return JSON.parse(fs.readFileSync(path.join(userData, 'chats.json'), 'utf8')); } catch { return null; } };
+  await expect.poll(() => stored()?.chats[0]).toMatchObject({ id: chat.id, title: 'E2E' });
   await shot(page, 'chats-protocol');
 
   await page.evaluate(id => window.sb.invoke('chat:close', { chatId: id }), chat.id);

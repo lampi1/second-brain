@@ -9,13 +9,13 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import type { AgentRun, AgentRunCorrections, AgentRunEnd, AgentRunOutcome, AgentRunPlan, AgentRunReport, AgentRunTags, AgentRunTokens } from '../../shared/agents';
 import { ONE_SHOT_PURPOSES } from '../../shared/agents';
-import { log } from '../log';
+import { errText, log } from '../log';
 import { emptyFlashLog, flashAnswered, flashAsked, flashHanded, readFlashLog, type FlashLog } from './flash-outcomes';
 import { checkResult } from '../../shared/delegation';
 import { MODEL_TIERS, type ModelTier } from '../../shared/roles';
 import { SUMMARY_MAX } from './run-report';
 import { rollUp, SAMPLE_MAX, type RunTally, type TagTally } from './run-metrics';
-import { readLocal, writeLocalText } from './local-store';
+import { readLocal, writeLocalText, writeLocalTextAsync } from './local-store';
 import { readReceipts } from './receipts';
 import { XP_MAX } from './xp';
 import { slowStep } from '../perf';
@@ -378,13 +378,44 @@ export class AgentRunStore {
   }
   /** Something changed in a record that is worth a write on the next flush (cost, tokens, context peak). */
   touch(): void { this.dirty = true; }
-  flush(): void { if (this.dirty) this.save(); }
+  /** A deferred write still in flight counts as unsaved: the quit's flush writes synchronously over it. */
+  flush(): void { if (this.dirty || this.inflight) this.save(); }
+  /** something is waiting to be written (dirty) or being written (a deferred write in flight) */
+  get pending(): boolean { return this.dirty || this.inflight > 0; }
+
+  /** bumped by every write started: a deferred write that sees a newer one drops itself and commits nothing */
+  private gen = 0;
+  private inflight = 0;
 
   save(): void {
     const t = performance.now();
-    try { this.write(); } finally { slowStep('agent-runs.json write', performance.now() - t); }
+    try { const w = this.prepare(); this.gen++; writeLocalText(this.file, w.body); this.dirty = false; w.commit(); } finally { slowStep('agent-runs.json write', performance.now() - t); }
   }
-  private write(): void {
+
+  /** The deferred save (ChatManager with writeDelayMs): serialized now, written asynchronously (tmp + rename with
+   *  retries that never block the main process). Its prune (if any) is committed only when its own body landed and no
+   *  newer write was started meanwhile; a failure leaves the store dirty for the next flush. Never throws. */
+  async saveAsync(): Promise<void> {
+    if (!this.dirty || this.problem) return;
+    // a pending recovery copy is a rare, synchronous, one-off path
+    if (this.recoverySource) { try { this.save(); } catch (e) { log.warn('agents', 'agent runs not saved', { cause: errText(e), hint: 'the next run change writes them again' }); } return; }
+    const t = performance.now();
+    let w: { body: string; commit: () => void };
+    try { w = this.prepare(); } catch (e) { log.warn('agents', 'agent runs not saved', { cause: errText(e), hint: 'the next run change writes them again' }); return; }
+    finally { slowStep('agent-runs.json serialize', performance.now() - t); }
+    const gen = ++this.gen;
+    this.dirty = false; // a change from now on sets it again
+    this.inflight++;
+    try {
+      if (await writeLocalTextAsync(this.file, w.body, () => this.gen === gen)) w.commit();
+    } catch (e) {
+      if (this.gen === gen) this.dirty = true;
+      log.warn('agents', 'agent runs not saved (deferred)', { cause: errText(e), hint: 'the next run change or the quit writes them again' });
+    } finally { this.inflight--; }
+  }
+
+  /** The body to write now and what to apply once it is on disk (the pruned runs leave memory, the rollups grow). */
+  private prepare(): { body: string; commit: () => void } {
     if (this.problem) throw new Error(this.problem);
     if (this.recoverySource) {
       const stat = fs.lstatSync(this.file);
@@ -418,7 +449,7 @@ export class AgentRunStore {
     let bytes = Buffer.byteLength(whole, 'utf8');
     const over = () => all.length - drop.size > RUNS_MAX || bytes > budget;
     this.dirty = true; // stays set when the write fails: the next flush tries again
-    if (!over()) { writeLocalText(this.file, whole); this.dirty = false; return; }
+    if (!over()) return { body: whole, commit: () => {} };
     const take = (r: AgentRun) => { if (!drop.has(r)) { drop.add(r); bytes -= bytesOf(r); } };
     // a review goes with the run it reviews (its findings count there); then, if still over, any ended run
     for (const r of ended) {
@@ -432,11 +463,14 @@ export class AgentRunStore {
     const rollups = drop.size ? fitRollups(rollUp(this.rollups, [...drop], all)) : this.rollups;
     const next = all.filter(r => !drop.has(r));
     const prunedThrough = Math.max(this.prunedThrough, ...[...drop].map(r => r.endedAt!));
-    writeLocalText(this.file, `${JSON.stringify(record(next, rollups, prunedThrough))}\n`);
-    for (const r of drop) this.runs.delete(r.runId);
-    this.rollups = rollups; this.prunedThrough = prunedThrough;
-    this.dirty = false;
-    if (drop.size) this.onPrune?.(new Set([...drop].map(r => r.runId)));
+    return {
+      body: `${JSON.stringify(record(next, rollups, prunedThrough))}\n`,
+      commit: () => {
+        for (const r of drop) this.runs.delete(r.runId);
+        this.rollups = rollups; this.prunedThrough = prunedThrough;
+        if (drop.size) this.onPrune?.(new Set([...drop].map(r => r.runId)));
+      },
+    };
   }
 }
 

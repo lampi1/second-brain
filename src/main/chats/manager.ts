@@ -101,8 +101,14 @@ function uniqueChildResults(items: readonly HeldChildResult[]): HeldChildResult[
 const PREWARM_UNUSED_MS = 5 * 60_000;
 /** Internal outbox receipts are tied to engine submission, never CPU queue admission. */
 interface SubmissionReceipt { beforeSubmit(): void; submitted(): void; failed(error: unknown): void }
+/** Canonical root results by chat (user chats) and the Orchestrator's roots: built once per list() (resultIndex). */
+interface ResultIndex { byChat: Map<string, AgentRun[]>; roots: AgentRun[] }
 
 export interface ChatManagerOptions {
+  /** > 0: chats.json and agent-runs.json are written at most once per this many ms, asynchronously (one write per burst
+   *  of changes, never blocking the main process on the disk); strict checkpoints, the quit and the exit write at once.
+   *  0 / absent: every save is synchronous (unit tests read the files right after an action). */
+  writeDelayMs?: number;
   /** a brief waits for this chat's next question (genui/artifacts.ts hasBrief, ADR 0150); absent = none asked for */
   briefReady?: (chatId: string) => boolean;
   suggestSkills?: (goal: string) => Promise<string[]>;
@@ -577,7 +583,7 @@ export class ChatManager implements ChatService {
   private lastUsageChat: string | null = null;
   private coldTimer: NodeJS.Timeout | null = null;
   private readonly counters: ContextCounters;
-  private readonly onExit = (): void => { this.killAll(true); if (!this.runs.problem) try { this.runs.flush(); } catch { /* exiting: the next start reads the last write */ } };
+  private readonly onExit = (): void => { this.killAll(true); this.flushWrites(); };
   /** the CPU queue (ADR 0036); null = not wired: everything runs at once */
   private readonly admission: AdmissionQueue | null;
   // no engine is started ahead while the machine is busy or chats wait in the CPU queue (ADR 0036)
@@ -625,8 +631,19 @@ export class ChatManager implements ChatService {
 
   // ---- ChatService ----
 
+  /** Every chat, oldest first. Called many times a second (the automatic archive's tick, the mailbox, the app MCP):
+   *  the result ids come from one pass over the runs (resultIndex), never one pass per chat (O(chats × runs) froze the
+   *  window every second with ~75 chats and ~800 runs, 2026-10-27). */
   list(): ChatSummary[] {
-    return [...this.chats.values()].sort((a, b) => a.createdAt - b.createdAt).map(r => { this.refreshTaskSummary(r); return { ...r.s }; });
+    const index = this.resultIndex();
+    return [...this.chats.values()].sort((a, b) => a.createdAt - b.createdAt).map(r => { this.refreshTaskSummary(r, index); return { ...r.s }; });
+  }
+  /** One chat's summary, without building the whole list (mail.hasWork asks it for each open chat every second). */
+  summary(chatId: string): ChatSummary | undefined {
+    const r = this.chats.get(chatId);
+    if (!r) return undefined;
+    this.refreshTaskSummary(r);
+    return { ...r.s };
   }
 
   items(chatId: string): ChatItem[] {
@@ -644,17 +661,22 @@ export class ChatManager implements ChatService {
     return structuredClone({ ...ledger, events: ledger.events.filter(event => event.seq > afterSeq) });
   }
 
-  private refreshTaskSummary(r: Rec): void {
-    if (r.userTaskEvents) r.s.userEvents = { latestSeq: r.userTaskEvents.latestSeq, acknowledgedSeq: r.userTaskEvents.acknowledgedSeq };
-    if (!r.s.isOrchestrator) {
-      const local = this.runs.list().filter(run => run.chatId === r.s.id && run.startedBy === 'user' && !run.parentRunId && run.report?.canonical);
-      r.s.availableResultIds = local.filter(run => !run.delivery?.synthesisSubmittedAt).map(run => run.runId);
-      r.s.pendingResultIds = local.filter(run => !run.delivery?.displayedAt || run.delivery?.synthesisPending).map(run => run.runId);
-      return;
+  /** The finished canonical results a chat can still show: a user chat's own root runs, and for the Orchestrator the
+   *  root runs it started in top-level chats. One pass over the runs, kept in their order. */
+  private resultIndex(): ResultIndex {
+    const byChat = new Map<string, AgentRun[]>(), roots: AgentRun[] = [];
+    for (const run of this.runs.list()) {
+      if (run.parentRunId || !run.report?.canonical) continue;
+      if (run.startedBy === 'user') { const l = byChat.get(run.chatId); if (l) l.push(run); else byChat.set(run.chatId, [run]); }
+      else if (run.startedBy === 'orchestrator' && !this.chats.get(run.chatId)?.s.parentId) roots.push(run);
     }
-    const roots = this.runs.list().filter(run => run.startedBy === 'orchestrator' && !run.parentRunId && run.report?.canonical && !this.chats.get(run.chatId)?.s.parentId);
-    r.s.availableResultIds = roots.filter(run => !run.delivery?.synthesisSubmittedAt).map(run => run.runId);
-    r.s.pendingResultIds = roots.filter(run => !run.delivery?.displayedAt || run.delivery?.synthesisPending).map(run => run.runId);
+    return { byChat, roots };
+  }
+  private refreshTaskSummary(r: Rec, index: ResultIndex = this.resultIndex()): void {
+    if (r.userTaskEvents) r.s.userEvents = { latestSeq: r.userTaskEvents.latestSeq, acknowledgedSeq: r.userTaskEvents.acknowledgedSeq };
+    const runs = r.s.isOrchestrator ? index.roots : index.byChat.get(r.s.id) ?? [];
+    r.s.availableResultIds = runs.filter(run => !run.delivery?.synthesisSubmittedAt).map(run => run.runId);
+    r.s.pendingResultIds = runs.filter(run => !run.delivery?.displayedAt || run.delivery?.synthesisPending).map(run => run.runId);
   }
 
   /** The commands its engine reported, null when it has not reported any yet (the caller falls back to the disk). */
@@ -2172,8 +2194,7 @@ export class ChatManager implements ChatService {
     if (this.runTimer) clearInterval(this.runTimer);
     for (const q of this.childResults.values()) if (q.timer) clearTimeout(q.timer); // the results stay on the children (agent_children)
     this.counters.flush();
-    if (this.runSaveTimer) { clearTimeout(this.runSaveTimer); this.runSaveTimer = undefined; }
-    if (!this.runs.problem) try { this.runs.flush(); } catch (e) { log.warn('chats', 'agent runs not saved at quit', { cause: errText(e) }); }
+    this.flushWrites();
     process.off('exit', this.onExit);
     log.info('chats', 'manager stopped', { data: { sessions: live.length, left: live.filter(x => x.alive).length, ms: Date.now() - end + capMs, spawnMs } });
   }
@@ -2883,7 +2904,29 @@ export class ChatManager implements ChatService {
   }
   private runSave(): void {
     if (this.runs.problem) return;
+    if (this.deferWrites()) { this.runs.touch(); this.runWriteSoon(this.opts.writeDelayMs!); return; }
     try { this.runs.save(); } catch (e) { log.warn('chats', 'agent runs not saved', { cause: errText(e), hint: 'the next run change writes them again' }); }
+  }
+  /** writeDelayMs set and not quitting: saves are coalesced and asynchronous */
+  private deferWrites(): boolean { return (this.opts.writeDelayMs ?? 0) > 0 && !this.quitting; }
+  /** one deferred agent-runs.json write within `ms` (an earlier one already due stays) */
+  private runWriteTimer: ReturnType<typeof setTimeout> | undefined;
+  private runWriteSoon(ms: number): void {
+    if (this.runWriteTimer) return;
+    this.runWriteTimer = setTimeout(() => { this.runWriteTimer = undefined; void this.runs.saveAsync(); }, ms);
+    this.runWriteTimer.unref?.();
+  }
+  /** one deferred chats.json write within writeDelayMs, of the chats as they are then */
+  private persistTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** Everything still waiting or being written, now and synchronously: the quit, the process exit, a test. A failure
+   *  is logged (the next start reads the last good write), never thrown. */
+  flushWrites(): void {
+    if (this.persistTimer) { clearTimeout(this.persistTimer); this.persistTimer = undefined; }
+    if (this.runWriteTimer) { clearTimeout(this.runWriteTimer); this.runWriteTimer = undefined; }
+    if (this.runSaveTimer) { clearTimeout(this.runSaveTimer); this.runSaveTimer = undefined; }
+    this.store.save(this.rows());
+    if (!this.runs.problem) try { this.runs.flush(); } catch (e) { log.warn('chats', 'agent runs not saved at quit', { cause: errText(e) }); }
   }
   /** The per-turn run changes (cost, tokens, turns, skills used) are written once per RUN_SAVE_MS, not at each event:
    *  agent-runs.json grows to RUNS_BYTES (7 MB) and every write is a synchronous serialize + write + rename on the main
@@ -2898,6 +2941,7 @@ export class ChatManager implements ChatService {
     if (this.runSaveTimer) return;
     this.runSaveTimer = setTimeout(() => {
       this.runSaveTimer = undefined;
+      if (this.deferWrites()) { void this.runs.saveAsync(); return; }
       try { this.runs.flush(); } catch (e) { log.warn('chats', 'agent runs not saved', { cause: errText(e), hint: 'the next run change writes them again' }); }
     }, RUN_SAVE_MS);
     this.runSaveTimer.unref?.();
@@ -3201,7 +3245,19 @@ export class ChatManager implements ChatService {
   }
 
   private persist(strict = false): void {
-    const rows: StoredChat[] = [...this.chats.values()].map(r => ({
+    if (strict || !this.deferWrites()) {
+      if (this.persistTimer) { clearTimeout(this.persistTimer); this.persistTimer = undefined; }
+      if (strict) this.store.checkpoint(this.rows()); else this.store.save(this.rows());
+      return;
+    }
+    // persist runs from ~60 places, often several times per event: one write per burst, of the state as it is then
+    if (this.persistTimer) return;
+    this.persistTimer = setTimeout(() => { this.persistTimer = undefined; void this.store.saveAsync(this.rows()); }, this.opts.writeDelayMs);
+    this.persistTimer.unref?.();
+  }
+
+  private rows(): StoredChat[] {
+    return [...this.chats.values()].map(r => ({
       ...(r.s.launchContext ? { launchContext: r.s.launchContext } : {}),
       id: r.s.id, harness: r.s.harness, cwd: r.s.cwd, sessionId: r.s.sessionId, ...(r.forkFrom ? { forkFrom: r.forkFrom } : {}),
       ...(r.s.routine ? { routine: r.s.routine } : {}),
@@ -3247,7 +3303,6 @@ export class ChatManager implements ChatService {
       ...(r.s.plan ? { plan: r.s.plan } : {}),
       ...(r.mcpAncestors ? { mcpAncestors: r.mcpAncestors } : {}),
     }));
-    if (strict) this.store.checkpoint(rows); else this.store.save(rows);
   }
 
   /** Explicit update consent permits closing idle CLI sessions, including partially observable providers.

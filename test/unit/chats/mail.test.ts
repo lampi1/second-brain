@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { ChatSummary } from '../../../src/shared/contract';
 import { mailClassifier } from '../../../src/main/chats/orchestrator-delivery';
-import { ChatMail, inboxDir, mailTools, MAX_SENDS_PER_MINUTE, ORCHESTRATOR_GROUP_MS, ORCHESTRATOR_HOLD_MS, render, sendMail, slug, take, unread, verified, type MailMsg } from '../../../src/main/chats/mail';
+import { BOX_TTL_MS, ChatMail, inboxDir, mailTools, MAX_SENDS_PER_MINUTE, ORCHESTRATOR_GROUP_MS, ORCHESTRATOR_HOLD_MS, render, sendMail, slug, take, unread, verified, type MailMsg } from '../../../src/main/chats/mail';
 import { AgentMayNotWake } from '../../../src/main/engines/policy';
 import { tmp } from './helpers';
 
@@ -357,5 +357,28 @@ describe('mail to an idle Orchestrator', () => {
     const { call, reports } = setup([chat('w', 'Ricerca'), chat('o', 'Orchestrator', { isOrchestrator: true })]);
     call('send_to_chat', 'w', { to: 'Orchestrator', text: 'Report finale: fatto.' });
     expect(reports).toEqual([['w', 'o', 'Report finale: fatto.']]);
+  });
+});
+
+describe('hasWork, asked for every open chat each second by the automatic archive (2026-10-27 freezes)', () => {
+  it('lists a mailbox at most once per BOX_TTL_MS, asks one chat by summary, and fresh = true reads it again', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const root = tmp('mail-ttl'), dir = inboxDir(root), w = chat('worker', 'Worker');
+      fs.mkdirSync(dir, { recursive: true });
+      const list = vi.fn(() => [w]), summary = vi.fn((id: string) => (id === w.id ? w : undefined));
+      const mail = new ChatMail({ root: () => root, instance: 'isolated-test', chats: { list, summary, send: async () => {} } }); mails.push(mail);
+      const reads = vi.spyOn(fs, 'readdirSync');
+      expect(mail.hasWork('worker')).toBe(false);
+      sendMail(dir, { from: 'Sender', fromHarness: 'claude', to: 'Worker', toHarness: 'claude', text: 'Nuovo', refusal: () => null });
+      reads.mockClear();
+      expect(mail.hasWork('worker')).toBe(false); // within the TTL: the last listing
+      expect(reads).not.toHaveBeenCalled();
+      expect(mail.hasWork('worker', true)).toBe(true); // the archive's last check reads the box now
+      vi.setSystemTime(Date.now() + BOX_TTL_MS);
+      expect(mail.hasWork('worker')).toBe(true);
+      expect(list).not.toHaveBeenCalled(); // one chat by summary, never the whole list
+      expect(summary).toHaveBeenCalled();
+    } finally { vi.useRealTimers(); vi.restoreAllMocks(); }
   });
 });
