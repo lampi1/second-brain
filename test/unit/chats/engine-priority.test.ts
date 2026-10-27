@@ -13,14 +13,14 @@ const open: ClaudeSession[] = [];
 afterEach(async () => { await Promise.all(open.splice(0).map(s => s.close(500))); vi.restoreAllMocks(); });
 
 describe('engine CPU priority', () => {
-  it('a Claude engine starts below normal priority, below the app itself', async () => {
+  it('a Claude engine starts below normal priority, never above the app itself', async () => {
     const s = new ClaudeSession({ chatId: 'c_prio', cwd: tmp('cwd'), claudePath: FAKE, sessionId: '11111111-2222-4333-8444-555555555555' }, recSink());
     open.push(s);
     s.start();
     const pid = await waitFor(() => s.pid, 'engine pid');
     expect(os.getPriority(pid)).toBe(BELOW);
-    // the app's own priority is untouched (a CI runner may start it above normal: nice -10 on macOS)
-    expect(os.getPriority(pid)).toBeGreaterThan(os.getPriority());
+    // never above the app's own (CI runners start it at nice -10 on macOS, below normal on Windows)
+    expect(os.getPriority(pid)).toBeGreaterThanOrEqual(os.getPriority());
   });
 
   it('a child of a lowered process inherits its priority (the MCP servers, shells and taskkill an engine starts)', () => {
