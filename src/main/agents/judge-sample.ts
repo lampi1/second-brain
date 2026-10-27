@@ -244,7 +244,8 @@ export class JudgeSampler {
         if (started >= left) break;
         const existing = this.d.chat(run.chatId);
         if (existing?.parentId) { child++; continue; }
-        if (existing?.title.startsWith(REVIEW_TITLE)) continue; // a review chat (an older one may lack reviewOf)
+        // a review chat the app opened (a Sentinel or Judge titled «Revisione · …»; an older one may lack reviewOf)
+        if (existing?.title.startsWith(REVIEW_TITLE) && REVIEWERS.has(existing.run?.agentId ?? '')) continue;
         // An archived run has its own immutable result and project scope; never borrow another task's preview.
         const project = run.scope?.projectRoot;
         const chat = existing ?? (run.report?.canonical && project && path.isAbsolute(project) ? { title: run.runId, cwd: project } : undefined);

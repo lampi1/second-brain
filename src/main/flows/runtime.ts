@@ -780,7 +780,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     if (view.revision !== input.expectedRevision) throw new Error('La run è cambiata: riapri la riconciliazione.');
     const run = flow.snapshot().runs.find(r => r.id === input.runId)!, scope = reconcileScope(run, view.operations)!;
     // a receipt is local bookkeeping: it needs only the organization and work item the write was made under
-    const grant = automation().approvedConfigFor(run)?.devopsWrite ?? { organization: scope.organization, projects: [], ops: [], fields: [] };
+    const grant = { ...(automation().approvedConfigFor(run)?.devopsWrite ?? { projects: [], ops: [], fields: [] }), organization: scope.organization };
     interrupting.add(run.id);
     try {
       await quiesceReconciliationWorker(run, context.root);
