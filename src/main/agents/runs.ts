@@ -18,6 +18,7 @@ import { rollUp, SAMPLE_MAX, type RunTally, type TagTally } from './run-metrics'
 import { readLocal, writeLocalText } from './local-store';
 import { readReceipts } from './receipts';
 import { XP_MAX } from './xp';
+import { slowStep } from '../perf';
 
 export const RUNS_MAX = 5000;
 /** Below the local store's 8 MB cap, with headroom for the run being added. */
@@ -380,6 +381,10 @@ export class AgentRunStore {
   flush(): void { if (this.dirty) this.save(); }
 
   save(): void {
+    const t = performance.now();
+    try { this.write(); } finally { slowStep('agent-runs.json write', performance.now() - t); }
+  }
+  private write(): void {
     if (this.problem) throw new Error(this.problem);
     if (this.recoverySource) {
       const stat = fs.lstatSync(this.file);

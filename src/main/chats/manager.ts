@@ -497,6 +497,8 @@ const CHILD_RESULTS_MS = 60_000;
 export interface CleanReportNote { chatId: string; title: string; role: string; summary: string; at: number }
 /** archived chats kept (the oldest beyond this leave the app; their transcripts stay where the CLI keeps them) */
 const MAX_ARCHIVED = 60;
+/** run changes are written at most this often (runSave) */
+export const RUN_SAVE_MS = 1000;
 /** the user's words carried in a note (ADR 0083: the user's own message, never the child's) */
 export const USER_NOTE_MAX = 300;
 export const USER_NOTES_LABEL = "[nota dell'app · l'utente ha scritto direttamente in chat che hai delegato: tienine conto nel piano, non disfare ciò che le ha chiesto]";
@@ -575,7 +577,7 @@ export class ChatManager implements ChatService {
   private lastUsageChat: string | null = null;
   private coldTimer: NodeJS.Timeout | null = null;
   private readonly counters: ContextCounters;
-  private readonly onExit = (): void => { this.killAll(true); };
+  private readonly onExit = (): void => { this.killAll(true); if (!this.runs.problem) try { this.runs.flush(); } catch { /* exiting: the next start reads the last write */ } };
   /** the CPU queue (ADR 0036); null = not wired: everything runs at once */
   private readonly admission: AdmissionQueue | null;
   // no engine is started ahead while the machine is busy or chats wait in the CPU queue (ADR 0036)
@@ -2170,6 +2172,7 @@ export class ChatManager implements ChatService {
     if (this.runTimer) clearInterval(this.runTimer);
     for (const q of this.childResults.values()) if (q.timer) clearTimeout(q.timer); // the results stay on the children (agent_children)
     this.counters.flush();
+    if (this.runSaveTimer) { clearTimeout(this.runSaveTimer); this.runSaveTimer = undefined; }
     if (!this.runs.problem) try { this.runs.flush(); } catch (e) { log.warn('chats', 'agent runs not saved at quit', { cause: errText(e) }); }
     process.off('exit', this.onExit);
     log.info('chats', 'manager stopped', { data: { sessions: live.length, left: live.filter(x => x.alive).length, ms: Date.now() - end + capMs, spawnMs } });
@@ -2881,6 +2884,23 @@ export class ChatManager implements ChatService {
   private runSave(): void {
     if (this.runs.problem) return;
     try { this.runs.save(); } catch (e) { log.warn('chats', 'agent runs not saved', { cause: errText(e), hint: 'the next run change writes them again' }); }
+  }
+  /** The per-turn run changes (cost, tokens, turns, skills used) are written once per RUN_SAVE_MS, not at each event:
+   *  agent-runs.json grows to RUNS_BYTES (7 MB) and every write is a synchronous serialize + write + rename on the main
+   *  process, i.e. the window's UI thread. Written at every settled turn of every chat, it froze the app for 50-250 ms
+   *  each time (measured 2026-10-27: 45 ms a write at 7 MB on a fast Linux disk, 236 ms with a prune; slower on Windows
+   *  with an antivirus scanning each new file): the owner's "va a scatti … si freeza senza loader". A run's start and
+   *  end still write at once; the pending write is flushed at stop, at exit and whenever metrics are read. */
+  private runSaveTimer: ReturnType<typeof setTimeout> | undefined;
+  private runSaveSoon(): void {
+    if (this.runs.problem) return;
+    this.runs.touch();
+    if (this.runSaveTimer) return;
+    this.runSaveTimer = setTimeout(() => {
+      this.runSaveTimer = undefined;
+      try { this.runs.flush(); } catch (e) { log.warn('chats', 'agent runs not saved', { cause: errText(e), hint: 'the next run change writes them again' }); }
+    }, RUN_SAVE_MS);
+    this.runSaveTimer.unref?.();
   }
 
   /** The role gate (agents/role-gate.ts) on a request before it reaches the user: an assigned skill is allowed at once,
@@ -3659,7 +3679,7 @@ export class ChatManager implements ChatService {
         // a skill Claude loaded while the run is open joins its tags (only Claude reports skills as a tool)
         if (item.kind === 'tool' && item.name === 'Skill' && r.s.harness === 'claude' && r.s.run) {
           const input = item.input as { skill?: unknown; command?: unknown } | null;
-          if (addSkill(r.s.run, input?.skill ?? input?.command)) { if (r.s.run.skillSuggestions) r.s.run.skillSuggestions.used = [...r.s.run.tags!.skills]; this.runs.touch(); this.runSave(); }
+          if (addSkill(r.s.run, input?.skill ?? input?.command)) { if (r.s.run.skillSuggestions) r.s.run.skillSuggestions.used = [...r.s.run.tags!.skills]; this.runSaveSoon(); }
         }
         if (item.kind === 'tool' && r.s.run) this.noteReceipt(r, item);
         if (item.kind === 'result' && !replace) this.turnEnded(r, item);
@@ -3799,7 +3819,7 @@ export class ChatManager implements ChatService {
     if (p.turnCostUsd !== undefined) {
       // Engines publish result before accounting. Completion or reassignment can happen between the two.
       const owner = r.turnAccounting ? r.turnAccounting.pending.shift() : run;
-      if (owner) { addTurn(owner, p.costKnown === false ? null : p.turnCostUsd, p.turnTokens, !!r.turnAccounting); this.runs.touch(); this.runSave(); }
+      if (owner) { addTurn(owner, p.costKnown === false ? null : p.turnCostUsd, p.turnTokens, !!r.turnAccounting); this.runSaveSoon(); }
       // Flash answered (a turn's result): what the user does next decides it (agents/flash-outcomes.ts, ADR 0131)
       if (r.s.quick) this.runs.flashEvent({ kind: 'answered', at: Date.now() });
     }

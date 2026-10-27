@@ -19,6 +19,7 @@ import { readPolicy, type AgentPolicy } from '../agents/tool-policy';
 import { sanitizeAgentChildren } from './agent-children';
 import { readDelegation, type ChatDelegation } from '../../shared/delegation';
 import { readPlan, type StrategyPlan } from '../../shared/strategy';
+import { slowStep } from '../perf';
 
 function validAssets(value: unknown): value is NonNullable<StoredChat['agentAssets']> {
   if (!value || typeof value !== 'object') return false;
@@ -298,6 +299,10 @@ export class ChatStore {
   /** Synchronous (callers read the file right after), compact and skipped when nothing changed: it runs on the main
    *  process for every chat change. */
   save(chats: StoredChat[]): void {
+    const t = performance.now();
+    try { this.write(chats); } finally { slowStep('chats.json write', performance.now() - t); }
+  }
+  private write(chats: StoredChat[]): void {
     const body = `${JSON.stringify({ version: 2, chats })}\n`;
     if (body === this.last) return;
     const tmp = `${this.file}.tmp`;

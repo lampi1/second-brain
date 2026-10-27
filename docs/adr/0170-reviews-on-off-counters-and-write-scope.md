@@ -40,3 +40,14 @@ with its label and asks to pick an outcome instead of "Confermi … di 0 scrittu
 
 `app_guide` has entries for the review switch and for how completed work and levels are counted; the reconciliation
 tools were already mounted and indexed (ADR 0169).
+
+## Stutter («va a scatti», «si freeza senza loader»)
+
+The main process's JS runs on the browser UI thread, which routes input and presents frames: any long synchronous step
+there freezes the window without a spinner. Every settled turn of every chat wrote the whole `agent-runs.json` (up to
+7 MB: serialize + write + rename, synchronous): measured 45 ms a write at 7 MB on a fast Linux disk and 236 ms with a
+prune; on Windows an antivirus scans each new file. The per-turn changes (cost, tokens, turns, skills used) are now
+written once per second (`ChatManager.runSaveSoon`), flushed at stop, exit and metrics reads; a run's start and end
+still write at once. `perf.ts startStallWatch` logs each main-thread stall over 200 ms (`npm run logs -- --scope perf`,
+«main process blocked») with the slow steps seen meanwhile (agent-runs.json and chats.json writes are timed), so the
+next cause, if any, is named by real use instead of guessed.

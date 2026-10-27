@@ -21,7 +21,7 @@ import { attachActivity } from './activity/wiring';
 import { demoLog } from './activity/demo';
 import { journal } from './activity/journal';
 import { errText, log } from './log';
-import { logInputLag } from './perf';
+import { logInputLag, startStallWatch } from './perf';
 import { APP_ID, ensureShortcuts, taskbarDetails } from './shortcuts';
 import { installAppMenu } from './app-menu';
 import { engineStatus, openLogin } from './cli';
@@ -91,6 +91,7 @@ let win: BrowserWindow | null = null;
 
 app.whenReady().then(async () => {
   log.init(app.getPath('userData'));
+  startStallWatch(); // a frozen window (main thread blocked) is logged with its cause, scope perf
   ensureShortcuts(outDir);
   installAppMenu();
   // macOS: the Dock shows the shared Electron bundle's icon unless told otherwise (no app bundle of our own, ADR 0054)

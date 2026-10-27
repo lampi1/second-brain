@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ChatManager, type ChatManagerOptions } from '../../../src/main/chats/manager';
+import { ChatManager, RUN_SAVE_MS, type ChatManagerOptions } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionSink } from '../../../src/main/chats/session';
 import { plainOwner } from '../../../src/main/agents/catalog';
 import { DEMO_NOW, demoAgentRuns, demoFlashLog } from '../../../src/main/demo-agent-runs';
@@ -14,7 +14,7 @@ import { emptyTally } from '../../../src/main/agents/run-metrics';
 import { diagnoseFile } from '../../../src/main/agents/level-diagnosis';
 import { delegationTools } from '../../../src/main/agents/delegation';
 import { DELEGATION_DEFAULTS } from '../../../src/shared/roles';
-import { STALE_MS } from '../../../src/main/agents/runs';
+import { AgentRunStore, STALE_MS } from '../../../src/main/agents/runs';
 import type { AgentOwnerSnapshot } from '../../../src/shared/agents';
 
 const roots: string[] = [], managers: ChatManager[] = [];
@@ -242,6 +242,19 @@ describe('agent runs on chats', () => {
     f.sink(c.id).changed({ turnCostUsd: 0.1 }); // a turn without tokens: the total is unknown from now on
     f.sink(c.id).changed({ turnCostUsd: 0, costKnown: false });
     expect(f.run(c.id)).toMatchObject({ costUsd: null, tokens: null });
+  });
+
+  it('writes a settled turn to agent-runs.json once per RUN_SAVE_MS, not at each turn (a 7 MB sync write froze the window)', async () => {
+    const f = fixture();
+    const c = await f.create();
+    const tokens = { input: 10, cacheRead: 5, cacheWrite: 1, output: 2 };
+    const save = vi.spyOn(AgentRunStore.prototype, 'save');
+    for (let i = 0; i < 20; i++) f.sink(c.id).changed({ turnCostUsd: 0.01, turnTokens: tokens });
+    expect(save).not.toHaveBeenCalled();
+    await new Promise(r => setTimeout(r, RUN_SAVE_MS + 100));
+    expect(save).toHaveBeenCalledTimes(1);
+    expect((f.file().runs[0] as { turns?: number }).turns).toBe(20);
+    save.mockRestore();
   });
 
   it('keeps the run across a restart, as the same record in the store and in the chat', async () => {
