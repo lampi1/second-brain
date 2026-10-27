@@ -51,7 +51,7 @@ import { lineDiff, resultText, shortPath } from './claude-map';
 import { CLOSE_GRACE_MS, cliArgv, engineAllowed, killTrees, resolveAcp, type CliCommand } from './cli';
 import { drift, record } from './drift';
 import { ownProcessGroup } from '../platform';
-import { closePipes, engineKills, jobGuard, killEngineTree } from './jobguard';
+import { closePipes, engineKills, jobGuard, killEngineTree, lowerEnginePriority } from './jobguard';
 import { runSubagentHooks, userHooksFile } from './cursor-hooks';
 import { reapEnabled, reapEngine, type Root } from './proctree';
 import { costOf, type AcpUsage } from './cursor-prices';
@@ -447,6 +447,7 @@ export class AcpSession implements HarnessSession {
       return this.fail(`Avvio di ${label} non riuscito: ${errText(e)}`, errText(e), `check the ${label} CLI install`);
     }
     const p = this.proc;
+    lowerEnginePriority(p.pid); // below the app's window: a busy PC slows agents, not the app (jobguard.ts)
     log.info('chats', 'acp session start', { chat, data: { engine, pid: p.pid, kind: cmd.kind, command: cmd.display, cwd: this.opts.cwd, args: this.args() } });
     p.stdout.setEncoding('utf8');
     p.stdout.on('data', (d: string) => timedStep('engine acp output', () => this.onStdout(d)));
