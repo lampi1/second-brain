@@ -232,8 +232,6 @@ export interface ChatSummary {
   research?: true;
 }
 
-/** The working-line phrases of the day (main/daily-phrases.ts): lines per kind (typing kinds), in `lang`. */
-export interface DailyPhrases { day: string; lang: Lang; lines: Record<string, string[]> }
 
 export interface ChatLink { id: string; title: string }
 /** chat = written by the chat itself on request · auto = built by the app without tokens (no decisions inside) */
@@ -1412,8 +1410,6 @@ export interface InvokeMap {
   /** the maintenance button: run every job now (or one); every change is logged and can be undone */
   'brainmodel:maintain': [{ job?: MaintenanceJobId } | undefined, BrainModelState];
   'brainmodel:rollback': [{ id: string }, BrainModelState];
-  /** the working-line phrases of the day (main/daily-phrases.ts): null = the fixed ones */
-  'phrases:today': [void, DailyPhrases | null];
   /** the «Manutenzione» button (ADR 0153): one click runs the free cleanup, then the invisible research with the app's
    *  best choice; the result arrives as cards and the end notice (maintenance:done). One at a time. */
   'maintenance:run': [void, MaintenanceStatus];
@@ -1787,7 +1783,6 @@ export interface EventMap {
   'approvals:changed': void;
   /** the number of open proposals changed (Memoria's badge, ADR 0123) */
   'proposals:changed': { count: number };
-  'phrases:changed': void;
   /** the maintenance started, moved (cost) or ended, or one of its cards changed (ADR 0132, 0153) */
   'maintenance:changed': void;
   /** one click's maintenance is over: what it made (the end notice, ADR 0153) */
@@ -1820,7 +1815,7 @@ export const INVOKE_CHANNELS = [
   'progress:get', 'progress:setHidden', 'progress:confirmResult',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
   'chat:userEvents', 'chat:synthesize', 'memory:reviewList', 'memory:confirm', 'memory:retract', 'memory:delete', 'learning:evidence', 'learning:state', 'learning:import', 'learning:replay', 'learning:saveCandidate', 'learning:promote', 'learning:compare', 'proposals:list', 'proposals:count', 'proposals:decide',
-  'phrases:today', 'maintenance:run', 'maintenance:status', 'maintenance:stop',
+  'maintenance:run', 'maintenance:status', 'maintenance:stop',
   'agents:list', 'skills:suggest', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'agents:estimates', 'runs:macro', 'agents:judgingEstimate', 'run:outcome', 'agents:restoreVersion', 'avatars:get', 'avatars:set', 'avatars:reset', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:plan', 'chat:stop',
   'brain:share', 'brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'queries:list', 'queries:get', 'queries:delete', 'brainmodel:noise', 'brainmodel:link', 'brainmodel:remove', 'classifiers:state', 'morning:brief', 'agents:trialDecide', 'agents:lifecycleDecide',
@@ -1847,7 +1842,7 @@ export const INVOKE_CHANNELS = [
 export const EVENT_CHANNELS = [
   'flows:changed',
   'work:changed',
-  'pulse:changed', 'approvals:changed', 'proposals:changed', 'maintenance:changed', 'maintenance:done', 'phrases:changed',
+  'pulse:changed', 'approvals:changed', 'proposals:changed', 'maintenance:changed', 'maintenance:done',
   'update:state', 'update:checkpointRequest', 'update:checkpointRelease',
   'progress:changed',
   'chat:autoCloseStatus',

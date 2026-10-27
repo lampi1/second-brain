@@ -50,7 +50,7 @@ Orchestrator as a message. The owner wanted:
 6. **The free cleanup makes cards too**, at zero tokens, in the UI language: one app bug per new log group (replacing the hand-off message
    to the Orchestrator of ADR 0112; a research may rewrite that card) and one forget card per brain skill no job used
    in 60 days and older than 30 (never re-proposed within 90 days).
-7. **The phrases of the day** (`main/daily-phrases.ts`): once a day, 90 s after the app opens (and hourly after), one
+7. **The phrases of the day** (removed by ADR 0173: the line shows the real activity) (`main/daily-phrases.ts`): once a day, 90 s after the app opens (and hourly after), one
    one-shot request on the lightest model (`OneShotService` `light`: no role text, low effort) rewrites the working-line
    jokes in the UI language. Each line is checked (one line, at most 70 characters, no link or markup); a kind with
    fewer than half its lines keeps the fixed ones. A failed day waits for the next. Off in the tests.

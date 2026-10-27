@@ -12,7 +12,6 @@
 // one. Under its head, a line with the chats it started today by state and the cost apart, its own and theirs (#153,
 // lib/orchestrator-tally.ts); on its head the one «Manutenzione» for every page (#150, MaintenanceButton compact); the morning block's line while strips are open (no plan panel: the strips carry each estimate, #124) (MorningBlock.tsx, ADR 0102). When it drives a browser, it wears that pair's accent like any chat (lib/pairs.ts). Used by OrchestratorOverlay.tsx.
 import { RecapButton } from './WorkCockpit';
-import { lastAsk } from '../lib/typing-line';
 import { memo, useEffect, useRef, useState } from 'react';
 import { chatCost, formatCost, modelWithEffort } from '../lib/format';
 import { orchestratorTally, type OrchestratorTally } from '../lib/orchestrator-tally';
@@ -152,7 +151,7 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
       <ChildStrips chatId={chat.id} />
       {/* "Mentre eri via" in one line while strips (or another page) take the Grindhouse's place (ADR 0102) */}
       <MorningLine />
-      <ItemList chatId={chat.id} items={items ?? []} empty={t('dialogs.orchestrator.emptyPrompt')} footer={isBusy(chat) ? <Typing what={turnActivity(items)} testid="typing-orchestrator" topic={lastAsk(items)} /> : null} />
+      <ItemList chatId={chat.id} items={items ?? []} empty={t('dialogs.orchestrator.emptyPrompt')} footer={isBusy(chat) ? <Typing what={turnActivity(items)} testid="typing-orchestrator" items={items} /> : null} />
       {postponed.length > 0 && <InWindowLine reqs={postponed} queued testid="orchestrator-queued" />}
       {open.length > 0 && <InWindowLine reqs={open} testid="orchestrator-in-window" />}
       {/* in the place of the old "Novità" feed (#88): what the app holds back for this Orchestrator */}

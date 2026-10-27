@@ -1,24 +1,35 @@
-// The working line's phrase (src/renderer/lib/typing-line.ts): picked by the task's kind of work, "any" when none
-// matches, changing every LINE_MS, every key present in the three dictionaries.
+// The working line (src/renderer/lib/typing-line.ts, ADR 0173): what the chat does now, read from the transcript for
+// every engine: the tool running, else the plan's item in progress, else a plain "sta pensando…" / "sta lavorando…";
+// "sta scrivendo…" while the reply streams. A finished tool is no "now".
 import { describe, expect, it } from 'vitest';
-import { LINE_MS, LINES, lastAsk, typingKey } from '../../src/renderer/lib/typing-line';
-import { typingIt } from '../../src/renderer/i18n/areas/typing.it';
+import type { ChatItem } from '../../src/shared/contract';
+import { liveLine } from '../../src/renderer/lib/typing-line';
 
-describe('typing line', () => {
-  it('follows the kind of task', () => {
-    expect(typingKey('Correggi il bug del login', 0)).toMatch(/^typing\.fix\.\d+$/);
-    expect(typingKey('Ricerca fonti sui modelli', 0)).toMatch(/^typing\.research\.\d+$/);
-    expect(typingKey('Ciao', 0)).toMatch(/^typing\.any\.\d+$/);
+let n = 0;
+const tool = (name: string, input: unknown, status: 'running' | 'ok' | 'error' = 'ok', summary = `${name}: x`): ChatItem =>
+  ({ kind: 'tool', id: `t${++n}`, at: n, name, summary, input, status });
+const todos = (...st: string[]): ChatItem => tool('TodoWrite', { todos: st.map((s, i) => ({ content: `Passo ${i + 1}`, activeForm: `Faccio il passo ${i + 1}`, status: s })) });
+
+describe('liveLine', () => {
+  it('nothing yet: a plain thinking line, never a joke', () => {
+    expect(liveLine([], 'pensa')).toEqual({ text: 'sta pensando…' });
+    expect(liveLine(undefined, 'pensa')).toEqual({ text: 'sta pensando…' });
   });
-  it('changes phrase over time and every key exists', () => {
-    const seen = new Set<string>();
-    for (let i = 0; i < 40; i++) seen.add(typingKey('', i * LINE_MS));
-    expect(seen.size).toBe(LINES.any);
-    for (const [kind, n] of Object.entries(LINES)) for (let i = 0; i < n; i++) expect(typingIt).toHaveProperty([`typing.${kind}.${i}`]);
-    expect(Object.keys(typingIt).length).toBe(Object.values(LINES).reduce((a, b) => a + b, 0));
+  it('a command running now (Claude Bash, Cursor/Codex Shell) is the line, with its command', () => {
+    expect(liveLine([tool('Bash', { command: 'npm test\nmore' }, 'running')], 'lavora')).toEqual({ text: 'Lancia', code: 'npm test' });
+    expect(liveLine([tool('Shell', { command: 'dotnet build' }, 'running')], 'lavora')).toEqual({ text: 'Lancia', code: 'dotnet build' });
   });
-  it('reads the last request', () => {
-    expect(lastAsk([{ kind: 'user', id: 'a', at: 1, text: 'primo' }, { kind: 'user', id: 'b', at: 2, text: 'testa il login' }] as never)).toBe('testa il login');
-    expect(lastAsk(undefined)).toBe('');
+  it('a file being read or edited names it; a delegation says so', () => {
+    expect(liveLine([tool('Edit', { file_path: 'src/login.ts' }, 'running')], 'lavora').text).toContain('login.ts');
+    expect(liveLine([tool('Read', { file_path: 'src/a.ts' }, 'running')], 'lavora').text).toContain('a.ts');
+    expect(liveLine([tool('mcp__second-brain__agent_delegate', { tasks: [{ title: 'Correggi il login', role: 'artisan' }] }, 'running')], 'lavora').text).toBe('Delega «Correggi il login» (Artisan)');
+  });
+  it('a finished tool is no "now": the plan item in progress, else thinking', () => {
+    expect(liveLine([tool('Edit', { file_path: 'src/x.ts' })], 'pensa')).toEqual({ text: 'sta pensando…' });
+    expect(liveLine([todos('completed', 'in_progress', 'pending'), tool('Read', { file_path: 'a.ts' })], 'pensa')).toEqual({ text: 'Faccio il passo 2' });
+  });
+  it('a running tool that is no step of the work reads as working; a streaming reply as writing', () => {
+    expect(liveLine([tool('AskUserQuestion', {}, 'running')], 'lavora')).toEqual({ text: 'sta lavorando…' });
+    expect(liveLine([tool('Bash', { command: 'ls' }, 'running')], 'scrive')).toEqual({ text: 'sta scrivendo…' });
   });
 });
