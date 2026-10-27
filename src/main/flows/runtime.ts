@@ -754,14 +754,23 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     }
     if (busy(exact())) throw new Error('L’agente è ancora in arresto (worker still active); recovery remains pending');
   };
+  /** Where a user receipt for this run's writes belongs: the run's approved DevOps scope, else the one each pending write
+   *  kept when it was made (a paused, replaced or changed trigger withdraws the grant, which used to leave the select
+   *  disabled and the run blocked for ever). Null = neither is known (a write recorded before its scope was kept). */
+  const reconcileScope = (run: FlowRun, operations: ReconciliationView['operations']): { organization: string; workItemId: number } | null => {
+    const config = automation().approvedConfigFor(run), id = run.inputs['work-item-id'] ?? '';
+    if (config?.devopsWrite && /^[1-9]\d{0,9}$/.test(id)) return { organization: config.devopsWrite.organization, workItemId: Number(id) };
+    const kept = operations.filter(o => o.eligible).map(o => o.scope);
+    const first = kept[0];
+    return first && kept.every(k => k && k.organization === first.organization && k.workItemId === first.workItemId) ? first : null;
+  };
   const writeReconciliation = (runId: string): ReconciliationView => {
     const context = current(), run = service().snapshot().runs.find(r => r.id === runId);
     if (!run) throw new Error('Run non trovata.');
     const stoppedRun = ['blocked', 'cancelled', 'completed'].includes(run.status) && run.cancellation?.interruption !== 'pending';
     const busy = commands.has(runId) || activeRequests.has(runId) || settling.has(runId) || interrupting.has(runId);
-    const config = automation().approvedConfigFor(run);
-    const available = !!config?.devopsWrite && /^[1-9]\d{0,9}$/.test(run.inputs['work-item-id'] ?? '');
-    return { runId, revision: run.revision, ...(available ? { workItem: { organization: config!.devopsWrite!.organization, id: Number(run.inputs['work-item-id']), url: `https://dev.azure.com/${encodeURIComponent(config!.devopsWrite!.organization)}/_workitems/edit/${Number(run.inputs['work-item-id'])}` } } : {}), ...writerFor(context.key).reconciliationView(runId), canReconcile: stoppedRun && !busy && available,
+    const scope = reconcileScope(run, writerFor(context.key).reconciliationView(runId).operations), available = !!scope;
+    return { runId, revision: run.revision, ...(scope ? { workItem: { organization: scope.organization, id: scope.workItemId, url: `https://dev.azure.com/${encodeURIComponent(scope.organization)}/_workitems/edit/${scope.workItemId}` } } : {}), ...writerFor(context.key).reconciliationView(runId), canReconcile: stoppedRun && !busy && available,
       ...(!stoppedRun ? { blockedReason: 'La run deve essere bloccata, annullata o completata prima di riconciliare.' } : busy ? { blockedReason: 'Operazioni ancora in arresto: riprova tra poco.' } : !available ? { blockedReason: 'Manca lo scope DevOps storico approvato della run.' } : {}) };
   };
   const reconcileWrites = async (input: ReconcileWrites): Promise<ReconciliationView> => {
@@ -769,7 +778,9 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     const context = current(), flow = service(), view = writeReconciliation(input.runId);
     if (!view.canReconcile) throw new Error(view.blockedReason);
     if (view.revision !== input.expectedRevision) throw new Error('La run è cambiata: riapri la riconciliazione.');
-    const run = flow.snapshot().runs.find(r => r.id === input.runId)!, grant = automation().approvedConfigFor(run)!.devopsWrite!;
+    const run = flow.snapshot().runs.find(r => r.id === input.runId)!, scope = reconcileScope(run, view.operations)!;
+    // a receipt is local bookkeeping: it needs only the organization and work item the write was made under
+    const grant = automation().approvedConfigFor(run)?.devopsWrite ?? { organization: scope.organization, projects: [], ops: [], fields: [] };
     interrupting.add(run.id);
     try {
       await quiesceReconciliationWorker(run, context.root);
@@ -777,7 +788,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
         const live = flow.snapshot().runs.find(r => r.id === run.id);
         if (stopped || current().key !== context.key || !live || live.revision !== input.expectedRevision || !['blocked', 'cancelled', 'completed'].includes(live.status) || live.cancellation?.interruption === 'pending' || commands.has(run.id) || activeRequests.has(run.id) || settling.has(run.id)) throw new Error('La run o il brain sono cambiati; nessuna riconciliazione salvata.');
       };
-      await writerFor(context.key).reconcile({ runId: run.id, workItemId: Number(run.inputs['work-item-id']), grant, authorize }, input);
+      await writerFor(context.key).reconcile({ runId: run.id, workItemId: scope.workItemId, grant, authorize }, input);
     } finally { interrupting.delete(run.id); }
     options.changed(snapshot()); return writeReconciliation(run.id);
   };

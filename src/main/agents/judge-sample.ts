@@ -1,5 +1,6 @@
 // The app's independent reviews (ADR 0083, the app owns the improvement loop): with the Agenti page's switch «Abilita
-// controllo livello e performance» on (setting judging, 2026-10-22; it replaced the daily count delegation.judgeDaily),
+// controllo livello e performance» on (setting judging, 2026-10-22; it replaced the daily count delegation.judgeDaily, whose
+// setting is gone since 2026-10-27: on = every finished run is reviewed, off = none; a review is never reviewed, reviewRuns),
 // every finished root role run that ended since it was switched on (judgingSince) and nobody judged yet (no verdict of the user or of a review; a delegated child's run is never
 // sampled: its content belongs to its parent, which judged the result when it read it), starts a Sentinel chat on each
 // (ADR 0100: the Judge's job is Sentinel's; a root chat linked to the run with reviewOf: a new session that never saw the
@@ -34,6 +35,8 @@ import { log, errText } from '../log';
 /** the role that runs the sampled reviews (ADR 0100); 'judge' = a review started before it */
 export const REVIEWER_ROLE = 'sentinel';
 export const REVIEW_CRITERIA = ['Assess the reviewed result and cite checked evidence or explicit verification limits.'];
+/** every review chat's title starts with it */
+export const REVIEW_TITLE = 'Revisione · ';
 const REVIEWERS: ReadonlySet<string> = new Set([REVIEWER_ROLE, 'judge']);
 /** a run older than this is not sampled any more */
 export const SAMPLE_WINDOW_MS = 7 * 86_400_000;
@@ -75,6 +78,19 @@ interface State { version: 1; day: string; started: number; reviews: Review[] }
 const dayOf = (t: number): string => new Date(t).toISOString().slice(0, 10);
 const UNJUDGED = new Set(['self-report', 'unknown']);
 
+/** Every run that is a review, so it is never reviewed itself: a run with reviewOf, any later run of the same chat (a new
+ *  task given to a «Revisione · …» chat starts a run without reviewOf) and any run continued from one (continuedFrom,
+ *  also across a «Continua in una nuova chat»). Before this, those runs were sampled and got «Revisione · Revisione · …». */
+export function reviewRuns(runs: readonly AgentRun[]): Set<string> {
+  const chats = new Set(runs.flatMap(r => r.reviewOf ? [r.chatId] : []));
+  const out = new Set(runs.filter(r => r.reviewOf || chats.has(r.chatId)).map(r => r.runId));
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const r of runs) if (!out.has(r.runId) && r.continuedFrom && out.has(r.continuedFrom)) { out.add(r.runId); grew = true; }
+  }
+  return out;
+}
+
 /** The runs to review now: finished with a report in the last week, not a review itself, not judged by anyone, not
  *  reviewed already, not a delegated child's (its content is its parent's: a root review chat would show it to the
  *  Orchestrator, ADR 0083; the parent judged its result when it read it); a stable pseudo-random order per day, so the sample is spread over roles and not just the newest. */
@@ -82,8 +98,9 @@ export function pickSamples(runs: readonly AgentRun[], reviewed: ReadonlySet<str
   if (n <= 0) return [];
   const day = dayOf(now);
   const hasReview = new Set(runs.flatMap(r => r.reviewOf ? [r.reviewOf] : []));
+  const review = reviewRuns(runs);
   return runs.filter(r => r.endedAt !== undefined && r.endReason === 'completed' && now - r.endedAt <= SAMPLE_WINDOW_MS
-      && r.source !== 'oneshot' && !r.parentRunId && !r.reviewOf && isWorkRole(r.agentId) && !!r.report
+      && r.source !== 'oneshot' && !r.parentRunId && !review.has(r.runId) && isWorkRole(r.agentId) && !!r.report
       && (!r.outcome || UNJUDGED.has(r.outcome.basis)) && !hasReview.has(r.runId) && !reviewed.has(r.runId))
     .map(r => ({ r, k: createHash('sha256').update(`${day}:${r.runId}`).digest('hex') }))
     .sort((a, b) => a.k.localeCompare(b.k)).slice(0, n).map(x => x.r);
@@ -96,8 +113,9 @@ export function pickAudits(runs: readonly AgentRun[], audited: ReadonlySet<strin
   if (n <= 0) return [];
   const byId = new Map(runs.map(r => [r.runId, r])), reviews = new Map<string, AgentRun[]>();
   for (const r of runs) if (r.reviewOf) reviews.set(r.reviewOf, [...(reviews.get(r.reviewOf) ?? []), r]);
-  const out: { run: AgentRun; at: number }[] = [];
+  const out: { run: AgentRun; at: number }[] = [], review = reviewRuns(runs);
   for (const [id, list] of reviews) {
+    if (review.has(id)) continue;
     const run = byId.get(id), first = list[0];
     if (!run || list.length !== 1 || !first || !verifiedReview(first) || now - first.endedAt! > SAMPLE_WINDOW_MS || audited.has(id) || !auditPicked(id)) continue;
     if (run.outcome?.basis === 'human' || run.parentRunId || run.source === 'oneshot' || !isWorkRole(run.agentId) || run.endedAt === undefined) continue;
@@ -110,8 +128,8 @@ export function pickAudits(runs: readonly AgentRun[], audited: ReadonlySet<strin
  *  picked by auditPicked, ended in the last week, never reviewed, not audited already. Oldest end first. */
 export function pickReceiptAudits(runs: readonly AgentRun[], audited: ReadonlySet<string>, now: number, n: number): AgentRun[] {
   if (n <= 0) return [];
-  const reviewed = new Set(runs.flatMap(r => r.reviewOf ? [r.reviewOf] : []));
-  return runs.filter(r => r.outcome?.basis === 'receipts' && r.endedAt !== undefined && now - r.endedAt <= SAMPLE_WINDOW_MS && !r.parentRunId && r.source !== 'oneshot'
+  const reviewed = new Set(runs.flatMap(r => r.reviewOf ? [r.reviewOf] : [])), review = reviewRuns(runs);
+  return runs.filter(r => r.outcome?.basis === 'receipts' && !review.has(r.runId) && r.endedAt !== undefined && now - r.endedAt <= SAMPLE_WINDOW_MS && !r.parentRunId && r.source !== 'oneshot'
       && isWorkRole(r.agentId) && !reviewed.has(r.runId) && !audited.has(r.runId) && auditPicked(r.runId))
     .sort((a, b) => a.endedAt! - b.endedAt! || a.runId.localeCompare(b.runId)).slice(0, n);
 }
@@ -149,8 +167,9 @@ const decidedByReceipts = (r: AgentRun): boolean => r.outcome?.basis === 'receip
  *  their receipts decide, ADR 0130), plus the audits of both, times what a review has cost so far. */
 export function judgingEstimate(runs: readonly AgentRun[], now: number): JudgingEstimate {
   const week = 7 * 86_400_000;
+  const review = reviewRuns(runs);
   const finished = runs.filter(r => r.endedAt !== undefined && now - r.endedAt <= week && r.endReason === 'completed' && r.source !== 'oneshot'
-    && !r.parentRunId && !r.reviewOf && isWorkRole(r.agentId) && !!r.report);
+    && !r.parentRunId && !review.has(r.runId) && isWorkRole(r.agentId) && !!r.report);
   const byReceipts = finished.filter(decidedByReceipts).length, reviewable = finished.length - byReceipts;
   const costs = (f: (r: AgentRun) => boolean) => runs.filter(r => r.endedAt !== undefined && r.costUsd !== null && now - r.endedAt <= 30 * 86_400_000 && f(r)).map(r => r.costUsd!);
   const reviews = costs(r => !!r.reviewOf && REVIEWERS.has(r.agentId));
@@ -204,8 +223,8 @@ export class JudgeSampler {
     return 0;
   }
 
-  /** Starts today's remaining reviews (one call at a time). Every candidate is tried in the day's order until the
-   *  day's cap is met: a run whose chat is gone or is a delegated child's is passed over, not counted. */
+  /** Starts the reviews of every finished run (one call at a time, at most MAX_RUNNING at once; no daily cap: the
+   *  switch is on or off). A run whose chat is gone, is a delegated child's or is itself a review is passed over. */
   async tick(): Promise<number> {
     if (this.ticking) return 0;
     this.ticking = true;
@@ -225,12 +244,13 @@ export class JudgeSampler {
         if (started >= left) break;
         const existing = this.d.chat(run.chatId);
         if (existing?.parentId) { child++; continue; }
+        if (existing?.title.startsWith(REVIEW_TITLE)) continue; // a review chat (an older one may lack reviewOf)
         // An archived run has its own immutable result and project scope; never borrow another task's preview.
         const project = run.scope?.projectRoot;
         const chat = existing ?? (run.report?.canonical && project && path.isAbsolute(project) ? { title: run.runId, cwd: project } : undefined);
         if (!chat) { gone++; continue; }
         try {
-          const judge = await this.d.create({ harness: engine, cwd: chat.cwd, title: `Revisione · ${chat.title}`.slice(0, 80), roleId: REVIEWER_ROLE, reviewOf: run.runId,
+          const judge = await this.d.create({ harness: engine, cwd: chat.cwd, title: `${REVIEW_TITLE}${chat.title}`.slice(0, 80), roleId: REVIEWER_ROLE, reviewOf: run.runId,
             goal: `Independent verdict on «${chat.title}»`, doneWhen: [...REVIEW_CRITERIA], prompt: reviewPrompt(run, chat) });
           this.state.reviews.push({ runId: run.runId, chatId: judge.id, at: now, state: 'running' });
           this.state.started++; started++;
@@ -255,7 +275,7 @@ export class JudgeSampler {
           const chat = existing ?? (run.report?.canonical && project && path.isAbsolute(project) ? { title: run.runId, cwd: project } : undefined);
           if (!chat) continue;
           try {
-            const judge = await this.d.create({ harness: engine, cwd: chat.cwd, title: `Revisione · ${chat.title}`.slice(0, 80), roleId: REVIEWER_ROLE, reviewOf: run.runId,
+            const judge = await this.d.create({ harness: engine, cwd: chat.cwd, title: `${REVIEW_TITLE}${chat.title}`.slice(0, 80), roleId: REVIEWER_ROLE, reviewOf: run.runId,
               goal: `Independent verdict on «${chat.title}»`, doneWhen: [...REVIEW_CRITERIA], prompt: reviewPrompt(run, chat) });
             const receipt = receipts.get(run.runId);
             this.state.reviews.push({ runId: run.runId, chatId: judge.id, at: now, state: 'running', audit: true, ...(receipt ? { receipt } : {}) });

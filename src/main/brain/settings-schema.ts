@@ -131,7 +131,7 @@ const BASE: readonly SettingDef[] = [
   // comando dal play senza che ti scriva fatto")
   // the Agenti page's switch (agents/judge-sample.ts): protected, it spends tokens
   { key: 'judging', type: 'boolean', default: true, protected: true, label: 'Controllo livello e performance',
-    description: 'Ogni lavoro finito viene rivisto da un Sentinel in una sessione nuova: livello e performance dei ruoli si basano su verdetti veri. Spende token.' },
+    description: 'Revisioni automatiche («Revisione · …»): acceso = ogni lavoro finito viene rivisto da un Sentinel in una sessione nuova (mai una revisione); spento = nessuna. Nessun limite al giorno. Livello e performance dei ruoli si basano su verdetti veri. Spende token.' },
   { key: 'judgingSince', type: 'int', min: 0, max: 8_640_000_000_000, default: 0, protected: true, label: 'Controllo acceso dal',
     description: 'Quando il controllo è stato acceso (ms): i lavori finiti prima non vengono rivisti.' },
   { key: 'runResults', type: 'boolean', default: true, protected: true, label: 'Esito dei comandi alla chat',
@@ -149,8 +149,6 @@ const BASE: readonly SettingDef[] = [
     description: 'Quante chat figlie di uno stesso genitore lavorano insieme. Oltre, la delega è rifiutata e il genitore lo vede.' },
   { key: 'delegation.stallMin', type: 'int', ...DELEGATION_RANGE.stallMin, default: DELEGATION_DEFAULTS.stallMin, protected: true, label: 'Deleghe: ferma dopo (minuti)',
     description: 'Una chat figlia senza alcun evento per tanti minuti risulta ferma: l’Orchestrator e il genitore lo sanno.' },
-  { key: 'delegation.judgeDaily', type: 'int', ...DELEGATION_RANGE.judgeDaily, default: DELEGATION_DEFAULTS.judgeDaily, protected: true, label: 'Revisioni indipendenti al giorno',
-    description: 'Quante esecuzioni finite un Sentinel rivede ogni giorno, in una sessione nuova, per misurare i ruoli. 0 = nessuna.' },
 ];
 /** a CLI model id as the CLIs accept it ("claude-opus-5-5", "grok-4.7", "gpt-5.6-sol[effort=high]"), '' = the default */
 export const MODEL_ID = /^[\w.:@/=[\],-]{0,120}$/;

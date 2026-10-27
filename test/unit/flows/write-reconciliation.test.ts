@@ -91,3 +91,19 @@ it('does not reserve the analysis-mention quota for a user-verified absent comme
   await expect(writer.execute({ ...s.context, retryReconciled: true, mentionReason: 'analysis' }, raw)).resolves.toMatchObject({ commentId: 99 });
   await expect(writer.execute({ ...s.context, retryReconciled: true, mentionReason: 'analysis' }, { ...raw, text: 'Another analysis' })).rejects.toThrow('Only one');
 });
+it('keeps relate-pr routing, PR ids and the write scope, so no pending write shows «not recorded»', async () => {
+  const s = setup(), guid = '11111111-2222-3333-4444-555555555555'; fs.writeFileSync(s.file, JSON.stringify({ schema: 1, runs: {}, operations: {} }));
+  s.context.grant.ops = ['related-links', 'pr-comment'];
+  const request = vi.fn(async (url: string, init: RequestInit) => {
+    if (init.method === 'GET') return new Response(JSON.stringify(url.includes('/projects/') ? { id: guid, name: 'Example' } : url.includes('pullrequests') ? { pullRequestId: 17, isDraft: true, status: 'active', repository: { id: guid, project: { id: guid, name: 'Example' } } } : { id: 42, rev: 1, fields: { 'System.TeamProject': 'Example' }, relations: [] }));
+    throw new Error('response lost');
+  });
+  const writer = new DevOpsWriter({ ...s.options, token: async () => 'fixture-token', request });
+  await expect(writer.execute(s.context, { op: 'relate-pr', projectId: guid, repositoryId: guid, pullRequestId: 17 })).rejects.toThrow();
+  const ops = writer.reconciliationView('run').operations;
+  expect(ops.filter(o => o.state === 'pending')).toHaveLength(1); expect(ops[0]?.request?.pullRequestId).toBe(17);
+  for (const op of ops.filter(o => o.state === 'pending')) {
+    expect(op.request ?? op.target).toBeTruthy();
+    expect(op.scope).toEqual({ organization: 'contoso', workItemId: 42 });
+  }
+});

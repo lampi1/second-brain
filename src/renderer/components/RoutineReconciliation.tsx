@@ -1,4 +1,6 @@
 // User-only, per-operation reconciliation with explicit evidence; no remote action or hidden blanket acknowledgement.
+// Every pending write shows its op, time and hash and can always be marked, even when its original request was never
+// recorded (main/flows/runtime.ts reconcileScope keeps the scope it was written under).
 import { useEffect, useState } from 'react';
 import type { ReconcileWrites, ReconciliationView, WriteResolution } from '@shared/flow-reconciliation';
 import { sb } from '../sb';
@@ -26,7 +28,7 @@ export function RoutineReconciliation({ contextKey, runId, onClose }: { contextK
     {view && !view.operations.length && <p>{t('flows.reconcileEmpty')}</p>}
     {view?.operations.map(op => <section className="flow-target" key={op.id} data-testid="reconcile-operation">
       <p><strong>{op.op}</strong> · {op.state} · <span>{op.at ? new Date(op.at).toLocaleString(locale()) : '—'}</span></p>
-      <div aria-label={t('flows.reconcileIdentity')}><code style={{ overflowWrap: 'anywhere' }}>{op.id}</code><p>{op.request ? `Work item #${op.request.workItemId} · PR #${op.request.pullRequestId} · ${op.request.projectId} / ${op.request.repositoryId}` : op.target ?? t('flows.reconcileLegacy')}</p></div>
+      <div aria-label={t('flows.reconcileIdentity')}>{t('flows.reconcileHash')} <code style={{ overflowWrap: 'anywhere' }} data-testid="reconcile-hash">{op.id}</code><p>{op.request ? `Work item #${op.request.workItemId} · PR #${op.request.pullRequestId} · ${op.request.projectId} / ${op.request.repositoryId}` : op.target ?? t('flows.reconcileLegacy')}</p></div>
       {op.reason && <p className="flows-muted">{op.reason}</p>}
       {op.reconciliation && <p>{t('flows.reconciled')}: {t(`flows.resolution.${op.reconciliation.outcome}`)} — {op.reconciliation.note}</p>}
       {op.eligible && <>
@@ -37,7 +39,7 @@ export function RoutineReconciliation({ contextKey, runId, onClose }: { contextK
       </>}
     </section>)}
     {error && <p className="flow-block" role="alert">{error}</p>}
-    <p>{t('flows.reconcileQuestion', { n: chosen.length })}</p>
+    <p>{chosen.length ? t('flows.reconcileQuestion', { n: chosen.length }) : t('flows.reconcilePick')}</p>
     <div className="flow-actions"><button type="button" className="btn btn-primary" data-testid="reconcile-confirm" disabled={!valid || busy} onClick={() => void save()}>{t('flows.yes')}</button><button type="button" className="btn btn-ghost" onClick={onClose} disabled={busy}>{t('flows.no')}</button></div>
   </Modal>;
 }

@@ -45,7 +45,7 @@ export interface DevOpsWriteContext { runId: string; retryReconciled?: boolean; 
 interface Plan { project: string; id: number; rootSuiteId: number }
 interface Suite { project: string; planId: number; id: number }
 interface TestCase { project: string; planId: number; suiteId: number; id: number }
-interface Ledger { schema: 1; runs: Record<string, ResourceLedger & { plans: Plan[]; suites: Suite[]; testCases: TestCase[] }>; operations?: Record<string, { runId: string; requestKey?: string; request?: WriteRequestIdentity; state: 'pending' | 'done' | 'not-done' | 'reconciled'; reconciliation?: WriteReconciliation; reason?: string; mentionReason?: 'analysis'; op?: string; targetId?: string; buildId?: number; releaseId?: number; at?: number; completedAt?: number; result?: Record<string, unknown> }> }
+interface Ledger { schema: 1; runs: Record<string, ResourceLedger & { plans: Plan[]; suites: Suite[]; testCases: TestCase[] }>; operations?: Record<string, { runId: string; requestKey?: string; request?: WriteRequestIdentity; state: 'pending' | 'done' | 'not-done' | 'reconciled'; reconciliation?: WriteReconciliation; reason?: string; mentionReason?: 'analysis'; op?: string; targetId?: string; buildId?: number; releaseId?: number; pullRequestId?: number; relatedWorkItemId?: number; organization?: string; workItemId?: number; at?: number; completedAt?: number; result?: Record<string, unknown> }> }
 export interface DevOpsWriterOptions {
   /** Brain-scoped ledger file of resources each run created. */
   file: string;
@@ -107,7 +107,9 @@ export class DevOpsWriter {
   reconciliationView(runId: string) {
     const operations = this.operationsFor(runId);
     for (const op of operations) if (op.state === 'reconciled' && op.reconciliation) this.options.revisions?.done(op.reconciliation.organization, op.reconciliation.workItemId, op.requestHash);
-    return { digest: createHash('sha256').update(JSON.stringify(operations)).digest('hex'), operations: operations.map(o => ({ id: o.requestHash, op: o.op ?? 'unknown-write', state: o.state, at: o.at, reason: o.reason, request: o.request, reconciliation: o.reconciliation, target: [o.targetId, o.buildId ? `build ${o.buildId}` : '', o.releaseId ? `release ${o.releaseId}` : ''].filter(Boolean).join(' ') || undefined, eligible: ['pending', 'not-done'].includes(o.state) && !['deploy-test', 'cancel-test-deploy'].includes(o.op ?? '') })) };
+    return { digest: createHash('sha256').update(JSON.stringify(operations)).digest('hex'), operations: operations.map(o => ({ id: o.requestHash, op: o.op ?? 'unknown-write', state: o.state, at: o.at, reason: o.reason, request: o.request, reconciliation: o.reconciliation,
+      target: [o.targetId, o.buildId ? `build ${o.buildId}` : '', o.releaseId ? `release ${o.releaseId}` : '', o.pullRequestId ? `PR #${o.pullRequestId}` : '', o.relatedWorkItemId ? `work item #${o.relatedWorkItemId}` : ''].filter(Boolean).join(' ') || undefined,
+      ...(o.organization && o.workItemId ? { scope: { organization: o.organization, workItemId: o.workItemId } } : {}), eligible: ['pending', 'not-done'].includes(o.state) && !['deploy-test', 'cancel-test-deploy'].includes(o.op ?? '') })) };
   }
   /** Local user attestation, never exposed as an agent tool and never a remote write. */
   reconcile(context: Pick<DevOpsWriteContext, 'runId' | 'workItemId' | 'grant' | 'authorize'>, input: Pick<ReconcileWrites, 'digest' | 'decisions'>): Promise<void> {
@@ -164,7 +166,9 @@ export class DevOpsWriter {
     const analysisMention = raw.op === 'comment' && raw.mentionReason === 'analysis' && Array.isArray(raw.mentions) && raw.mentions.length > 0;
     if (analysisMention && Object.values(data.operations ?? {}).some(op => op.runId === context.runId && op.mentionReason === 'analysis' && op.state !== 'not-done' && !(op.state === 'reconciled' && ['not-done', 'reverted'].includes(op.reconciliation?.outcome ?? '')))) deny('Only one mentioned analysis comment is allowed per run');
     // Persist only validated link routing identifiers before dispatch, never comment bodies or raw tool arguments.
-    const identity: WriteRequestIdentity | undefined = raw.op === 'link-pr' && typeof raw.projectId === 'string' && GUID.test(raw.projectId) && typeof raw.repositoryId === 'string' && GUID.test(raw.repositoryId) && Number.isSafeInteger(raw.pullRequestId) && Number(raw.pullRequestId) > 0
+    // relate-pr carries the same routing identity as link-pr (before, only link-pr kept it: a pending relate-pr showed
+    // «La richiesta originale non è registrata qui»); a PR-only op keeps its PR id, relate-work-item the related item.
+    const identity: WriteRequestIdentity | undefined = (raw.op === 'link-pr' || raw.op === 'relate-pr') && typeof raw.projectId === 'string' && GUID.test(raw.projectId) && typeof raw.repositoryId === 'string' && GUID.test(raw.repositoryId) && Number.isSafeInteger(raw.pullRequestId) && Number(raw.pullRequestId) > 0
       ? { workItemId: context.workItemId, projectId: raw.projectId, repositoryId: raw.repositoryId, pullRequestId: Number(raw.pullRequestId) } : undefined;
     let attempted = false, possibleEffects = 0;
     this.beforeMutation = () => {
@@ -173,7 +177,10 @@ export class DevOpsWriter {
       const latest = this.read();
       if (Object.keys(latest.operations ?? {}).length >= 20_000) deny('DevOps operation journal is full; archive reviewed completed runs first');
       this.options.revisions?.pending(context.grant.organization, context.workItemId, key);
-      (latest.operations ??= {})[key] = { runId: context.runId, requestKey, ...(identity ? { request: identity } : {}), state: 'pending', ...(analysisMention ? { mentionReason: 'analysis' as const } : {}), op: String(raw.op), ...(typeof raw.targetId === 'string' ? { targetId: raw.targetId } : {}), ...(typeof raw.buildId === 'number' ? { buildId: raw.buildId } : {}), ...(typeof raw.releaseId === 'number' ? { releaseId: raw.releaseId } : {}), at: Date.now() }; this.write(latest); attempted = true; possibleEffects++;
+      (latest.operations ??= {})[key] = { runId: context.runId, requestKey, ...(identity ? { request: identity } : {}), state: 'pending', ...(analysisMention ? { mentionReason: 'analysis' as const } : {}), op: String(raw.op), ...(typeof raw.targetId === 'string' ? { targetId: raw.targetId } : {}), ...(typeof raw.buildId === 'number' ? { buildId: raw.buildId } : {}), ...(typeof raw.releaseId === 'number' ? { releaseId: raw.releaseId } : {}),
+        ...(!identity && Number.isSafeInteger(raw.pullRequestId) && Number(raw.pullRequestId) > 0 ? { pullRequestId: Number(raw.pullRequestId) } : {}), ...(Number.isSafeInteger(raw.relatedWorkItemId) && Number(raw.relatedWorkItemId) > 0 ? { relatedWorkItemId: Number(raw.relatedWorkItemId) } : {}),
+        // the scope a user receipt needs, kept with the write: it can be reconciled even after the run's grant is gone
+        organization: context.grant.organization, workItemId: context.workItemId, at: Date.now() }; this.write(latest); attempted = true; possibleEffects++;
     };
     this.mutationRefused = () => { possibleEffects--; };
     try {

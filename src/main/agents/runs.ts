@@ -122,7 +122,7 @@ export function readRun(v: unknown): AgentRun | null {
   const oneshot = r.oneshot as AgentRun['oneshot'];
   if (oneshot !== undefined && (!oneshot || typeof oneshot !== 'object' || !str(oneshot.engine, 80)
     || !ONE_SHOT_PURPOSES.includes(oneshot.job) || typeof oneshot.fallback !== 'boolean'
-    || !['reported', 'estimated', 'unknown'].includes(oneshot.costBasis))) return null;
+    || !['reported', 'estimated', 'unknown'].includes(oneshot.costBasis) || (oneshot.ok !== undefined && typeof oneshot.ok !== 'boolean'))) return null;
   if (outcome === null) return null;
   const c = r.counters as Record<string, unknown> | null;
   if (!c || typeof c !== 'object' || !count(c.questions) || !count(c.permissions) || !count(c.commands) || !count(c.reopened) || !(c.contextPeak === null || count(c.contextPeak))) return null;
@@ -171,7 +171,7 @@ export function readRun(v: unknown): AgentRun | null {
     ...(outcome ? { outcome } : {}),
     ...(r.source ? { source: r.source as AgentRun['source'] } : {}),
     ...(r.requestOrigin ? { requestOrigin: r.requestOrigin as AgentRun['requestOrigin'] } : {}),
-    ...(oneshot ? { oneshot: { engine: oneshot.engine, job: oneshot.job, fallback: oneshot.fallback, costBasis: oneshot.costBasis } } : {}),
+    ...(oneshot ? { oneshot: { engine: oneshot.engine, job: oneshot.job, fallback: oneshot.fallback, costBasis: oneshot.costBasis, ...(oneshot.ok !== undefined ? { ok: oneshot.ok } : {}) } } : {}),
     counters: { questions: c.questions, permissions: c.permissions, commands: c.commands, reopened: c.reopened, contextPeak: c.contextPeak as number | null },
     costUsd: r.costUsd as number | null, tokens,
     ...(report ? { report } : {}), ...(corrections ? { corrections } : {}), ...(r.executionMs !== undefined ? { executionMs: r.executionMs as number } : {}),

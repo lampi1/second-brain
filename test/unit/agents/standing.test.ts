@@ -6,8 +6,9 @@ import type { AgentRun } from '../../../src/shared/agents';
 import { HALF_LIFE_MS, MAX_SPREAD, MIN_EVALUATED, PRIOR, TRUST, decisionSignals, decisionXp, estimate, earnIndex, earnedVerdict, levelOf, levelStart, orchestratorDecision, routeVerdict, standings, verdictOf, withStandings } from '../../../src/main/agents/standing';
 import { emptyTally, mergeTallies, rollUp } from '../../../src/main/agents/run-metrics';
 import { emptyFlashLog, flashAnswered, flashAsked } from '../../../src/main/agents/flash-outcomes';
-import { FLASH_XP, PLAN_XP } from '../../../src/main/agents/xp';
-import { FLASH_ID } from '../../../src/shared/roles';
+import { FLASH_XP, PLAN_XP, PULSE_XP } from '../../../src/main/agents/xp';
+import { FLASH_ID, PULSE_ID } from '../../../src/shared/roles';
+import { completedRuns } from '../../../src/shared/agents';
 import { readTally } from '../../../src/main/agents/runs';
 
 const NOW = Date.UTC(2026, 9, 19, 12);
@@ -368,5 +369,32 @@ describe('XP, decision signals and the Bayesian performance (ADR 0131)', () => {
     expect(s.performance).not.toBeNull();
     expect(standings([], [], NOW, emptyFlashLog()).has(FLASH_ID)).toBe(false);
     expect(TRUST.quick).toBeLessThan(TRUST.chain);
+  });
+  it('Pulse: its card runs move its level, even on a fallback engine; a verdict on its cards outranks the proxy', () => {
+    const pulse = (ok: boolean, over: Partial<AgentRun> = {}) => run({ agentId: PULSE_ID, source: 'oneshot', startedBy: 'orchestrator',
+      oneshot: { engine: 'anthropic', job: 'pulse', fallback: true, costBasis: 'reported', ok }, outcome: { verdict: 'unknown', basis: 'unknown', at: NOW, by: 'Battito' }, ...over });
+    const runs = [...Array.from({ length: 30 }, () => pulse(true)), pulse(false), pulse(true, { outcome: human('success') }),
+      pulse(true, { oneshot: { engine: 'anthropic', job: 'headline', fallback: true, costBasis: 'reported', ok: true } })];
+    const s = standings(runs, [], NOW).get(PULSE_ID)!;
+    expect(s.runs).toBe(32);                                     // the headline is not its work
+    expect(s.wins).toBe(1);                                      // only the user's verdict is a verified win
+    expect(s.xp).toBeGreaterThan(30 * PULSE_XP);                 // 30 answers + one verified success
+    expect(s.level).toBeGreaterThan(1);
+    expect(s.sources).toMatchObject({ quick: 31, human: 1 });
+    // pruned: the rollup keeps its runs and XP
+    const rolled = rollUp([], runs, runs, NOW).find(t => t.agentId === PULSE_ID)!;
+    expect(rolled.ended).toBe(32);
+    expect(standings([], [rolled], NOW).get(PULSE_ID)!.xp).toBeCloseTo(s.xp, 2);
+    // a run recorded before `ok` was kept earns nothing from the proxy
+    expect(standings([pulse(true, { oneshot: { engine: 'anthropic', job: 'pulse', fallback: false, costBasis: 'reported' } })], [], NOW).get(PULSE_ID)!.xp).toBe(0);
+  });
+  it('the card counts the Orchestrator\'s and Flash\'s completed work, not 0', () => {
+    const decisions = [run({ startedBy: 'orchestrator' }), run({ startedBy: 'orchestrator' }), run({ startedBy: 'orchestrator', agentId: 'artisan' })];
+    const log = emptyFlashLog();
+    for (let i = 0; i < 4; i++) { flashAsked(log, `domanda ${i} sul progetto numero ${i}`, NOW - 3600_000 + i * 600_000); flashAnswered(log, NOW - 3600_000 + i * 600_000 + 5000); }
+    const st = standings(decisions, [], NOW, log), metrics = withStandings([], st);
+    expect(completedRuns(metrics.find(m => m.agentId === 'orchestrator'))).toBe(3);
+    expect(completedRuns(metrics.find(m => m.agentId === FLASH_ID))).toBe(4);
+    expect(completedRuns(undefined)).toBe(0);
   });
 });

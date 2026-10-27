@@ -27,15 +27,16 @@
 // success (and PLAN_XP), with one or two changes a partial. A decision's XP is its job's size (with its delegated chats),
 // halved when it was re-delegated or reworked. The decisions among pruned runs live on in the rollups
 // (RunTally.decisions, decisionWins, decisionXp; the chain, graded and receipts successes in earnedWins, all XP in xp).
-// Flash records no run: its answers' outcomes (flash-outcomes.ts) give it a small XP and a low-trust performance.
+// Flash records no run: its answers' outcomes (flash-outcomes.ts) give it a small XP and a low-trust performance. Pulse
+// (Battito) gets the same from its own card runs (pulseProxy) when the user said nothing on their cards.
 // Used by ChatManager.runMetrics (agents:metrics), run-metrics.ts rollUp, the levels diagnostic (level-diagnosis.ts) and
 // the demo; the card's "?" tips repeat these rules.
 import type { AgentMetrics, AgentRun, AgentStanding } from '../../shared/agents';
-import { FLASH_ID } from '../../shared/roles';
+import { FLASH_ID, PULSE_ID } from '../../shared/roles';
 import { reworkedWithin, reworkStartsOf, verifiedVerdict, type VerifiedBasis, type VerifiedVerdict } from '../../shared/run-verdict';
 import type { RunTally } from './run-metrics';
 import { receiptDecision } from './receipts';
-import { FLASH_XP, LEGACY_XP, PLAN_XP, XP_MAX, jobSignals, jobXp, levelOf } from './xp';
+import { FLASH_XP, LEGACY_XP, PLAN_XP, PULSE_XP, XP_MAX, jobSignals, jobXp, levelOf } from './xp';
 import { settleDue, type FlashLog } from './flash-outcomes';
 
 export { levelOf, levelStart, MAX_LEVEL } from './xp';
@@ -56,7 +57,18 @@ type Source = keyof typeof TRUST;
 type Verdict = keyof typeof SCORE;
 
 /** Same exclusions as the §5 metrics (run-metrics.ts foldRun): headline and fallback one-shots are not the agent's work. */
-export const counts = (r: AgentRun): boolean => r.endedAt !== undefined && !r.oneshot?.fallback && r.oneshot?.job !== 'headline';
+export const counts = (r: AgentRun): boolean => r.endedAt !== undefined && (!r.oneshot?.fallback || pulseJob(r)) && r.oneshot?.job !== 'headline';
+/** A Battito (Pulse) card job. It counts even on a fallback engine: Pulse's own engine is often not an isolated one
+ *  (oneshot.ts pick), so nearly all its runs were fallbacks and its level stayed at the start for ever. */
+export const pulseJob = (r: AgentRun): boolean => r.agentId === PULSE_ID && r.source === 'oneshot' && r.oneshot?.job === 'pulse';
+/** Pulse's observed proxy when the user said nothing on its cards (most expire unseen): an answer within its limits is a
+ *  low-trust success with PULSE_XP, a failed run a fail; a saved / acted / dismissed card (pulse/service.ts outcomes, basis
+ *  human) outranks it. Like Flash (ADR 0131): it weighs little and earns little, but it moves. */
+export function pulseProxy(r: AgentRun): Verdict | null {
+  if (!pulseJob(r) || r.endedAt === undefined || r.oneshot?.ok === undefined) return null;
+  if (r.outcome && r.outcome.verdict !== 'unknown') return null;
+  return r.oneshot.ok ? 'success' : 'fail';
+}
 
 /** A root run the Orchestrator opened: one of its decisions (ADR 0097). */
 export const orchestratorDecision = (r: AgentRun): boolean => r.startedBy === 'orchestrator' && r.source !== 'oneshot' && !r.oneshot
@@ -237,6 +249,8 @@ export function standings(runs: readonly AgentRun[], rollups: readonly RunTally[
     own.runs++;
     if (e?.verdict === 'success') { own.wins++; own.xp += runXp(r, ix); }
     if (v) add(own, v.source, v.verdict, age);
+    const pulse = !e && !v ? pulseProxy(r) : null;
+    if (pulse) { add(own, 'quick', pulse, age); if (pulse === 'success') own.xp += PULSE_XP; }
     if (!orchestratorDecision(r)) continue;
     const o = of('orchestrator');
     o.runs++;
