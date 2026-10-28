@@ -22,15 +22,17 @@
 // call log, masked like every reply.
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
 import { createMasker } from './mask';
+import { createWatcher, safeUrl } from './browser-watch';
 import { readConfigOnce } from './fs-util';
 import { driveLoginResult, LOGIN_FAIL_REASONS, type LoginResult, type LoginSuccessRule } from './login-form';
 import { evalScript, PASSWORD_HELD_SCRIPT, playwrightLoginDriver, SNAPSHOT_SCRIPT, type BrowserPage } from './browser-page';
 
 export const BROWSER_SERVER_NAME = 'routine-browser';
-export const BROWSER_TOOLS = ['navigate', 'snapshot', 'click', 'type', 'select_option', 'press', 'hover', 'click_at', 'scroll', 'wait', 'eval', 'screenshot', 'login', 'fill_secret'] as const;
+export const BROWSER_TOOLS = ['navigate', 'history', 'tabs', 'snapshot', 'click', 'type', 'select_option', 'check', 'press', 'hover', 'drag', 'click_at', 'scroll', 'upload', 'dialog', 'wait', 'eval', 'console', 'network', 'resize', 'screenshot', 'login', 'fill_secret'] as const;
 /** `id`: a named credential (a second user of the same login page); the first login of a page is its default. */
 export interface BrowserLogin { id?: string; loginUrl: string; user: string; password: string; success?: LoginSuccessRule }
 export interface BrowserServerConfig {
@@ -55,17 +57,26 @@ const PX = { type: 'number', minimum: 0, description: 'page pixels, as in the fu
 const KEY = { type: 'string', description: 'a key or chord: Enter, Tab, Escape, ArrowDown, PageDown, Control+a…' };
 const TOOLS = [
   { name: 'navigate', description: 'Open a URL (only the routine\'s declared origins). Logins are done for you.', inputSchema: { type: 'object', additionalProperties: false, required: ['url'], properties: { url: { type: 'string' } } } },
-  { name: 'snapshot', description: 'The current page as text plus its interactive elements with refs (e1, e2…; f1e1… inside an iframe) and their centre @x,y, for click/type/select_option/hover. Take a new one after the page changes.', inputSchema: { type: 'object', additionalProperties: false, properties: {} } },
-  { name: 'click', description: 'Click an element by ref. force: skip the checks when another element covers it (the error says "intercepts pointer events").', inputSchema: { type: 'object', additionalProperties: false, required: ['ref'], properties: { ref: REF, force: { type: 'boolean' } } } },
+  { name: 'history', description: 'Go back, forward or reload the page (logins are redone for you).', inputSchema: { type: 'object', additionalProperties: false, required: ['action'], properties: { action: { type: 'string', enum: ['back', 'forward', 'reload'] } } } },
+  { name: 'tabs', description: 'The open tabs (popups and target=_blank links open new ones): list them, select one to act on, or close one.', inputSchema: { type: 'object', additionalProperties: false, properties: { action: { type: 'string', enum: ['list', 'select', 'close'] }, index: { type: 'number', minimum: 0 } } } },
+  { name: 'snapshot', description: 'The current page as text plus its interactive elements with refs (e1, e2…; f1e1… inside an iframe) and their centre @x,y, for the element tools. Take a new one after the page changes. aria: true = the full accessibility tree instead (roles, names, states; no refs).', inputSchema: { type: 'object', additionalProperties: false, properties: { aria: { type: 'boolean' } } } },
+  { name: 'click', description: 'Click an element by ref; button right = context menu, double = double click. force: skip the checks when another element covers it (the error says "intercepts pointer events").', inputSchema: { type: 'object', additionalProperties: false, required: ['ref'], properties: { ref: REF, button: { type: 'string', enum: ['left', 'right', 'middle'] }, double: { type: 'boolean' }, force: { type: 'boolean' } } } },
+  { name: 'check', description: 'Check (or with checked: false uncheck) a checkbox, radio or switch by ref; its label works too.', inputSchema: { type: 'object', additionalProperties: false, required: ['ref'], properties: { ref: REF, checked: { type: 'boolean' }, force: { type: 'boolean' } } } },
+  { name: 'drag', description: 'Drag an element by ref and drop it onto another (an appointment onto a time slot).', inputSchema: { type: 'object', additionalProperties: false, required: ['from', 'to'], properties: { from: REF, to: REF } } },
+  { name: 'upload', description: 'Set the files of a file input by ref: paths of files inside your working folder, your evidence folder or the temp folder (never a secret).', inputSchema: { type: 'object', additionalProperties: false, required: ['ref', 'files'], properties: { ref: REF, files: { type: 'array', maxItems: 10, items: { type: 'string' } } } } },
+  { name: 'dialog', description: 'How the next alert/confirm/prompt is answered (default: alerts accepted, confirms and prompts dismissed). Call it before the action that opens the dialog; text = a prompt\'s answer; always: every later dialog too.', inputSchema: { type: 'object', additionalProperties: false, required: ['accept'], properties: { accept: { type: 'boolean' }, text: { type: 'string' }, always: { type: 'boolean' } } } },
+  { name: 'console', description: 'The page\'s console messages and uncaught errors with their stack (level: error, warning = errors and warnings, all). clear: empty the list after reading.', inputSchema: { type: 'object', additionalProperties: false, properties: { level: { type: 'string', enum: ['error', 'warning', 'all'] }, clear: { type: 'boolean' } } } },
+  { name: 'network', description: 'The page\'s recent requests: filter failed (default: failed ones and responses >= 400 with a short body) or all. clear: empty the list after reading.', inputSchema: { type: 'object', additionalProperties: false, properties: { filter: { type: 'string', enum: ['failed', 'all'] }, clear: { type: 'boolean' } } } },
+  { name: 'resize', description: 'Set the viewport size in pixels (default 1366x900): a small screen, a tablet.', inputSchema: { type: 'object', additionalProperties: false, required: ['width', 'height'], properties: { width: { type: 'number', minimum: 320, maximum: 3840 }, height: { type: 'number', minimum: 240, maximum: 2160 } } } },
   { name: 'type', description: 'Replace the text of an input, textarea or editable element by ref with real key presses (a datepicker sees them; never a password field). then: a key pressed after it (Tab or Escape closes a picker, Enter submits).', inputSchema: { type: 'object', additionalProperties: false, required: ['ref', 'text'], properties: { ref: REF, text: { type: 'string' }, then: { type: 'string', enum: ['Tab', 'Enter', 'Escape'] } } } },
   { name: 'select_option', description: 'Choose an option of a select by ref, by its value or label.', inputSchema: { type: 'object', additionalProperties: false, required: ['ref', 'value'], properties: { ref: REF, value: { type: 'string' } } } },
   { name: 'press', description: 'Press a key, on an element by ref or on whatever has the focus.', inputSchema: { type: 'object', additionalProperties: false, required: ['key'], properties: { key: KEY, ref: REF } } },
   { name: 'hover', description: 'Move the mouse over an element by ref (menus and tooltips that open on hover).', inputSchema: { type: 'object', additionalProperties: false, required: ['ref'], properties: { ref: REF } } },
   { name: 'click_at', description: 'Click a point of the page, for what has no ref (a canvas, a cross-origin frame): x,y in the full-page screenshot\'s pixels. Returns what was there.', inputSchema: { type: 'object', additionalProperties: false, required: ['x', 'y'], properties: { x: PX, y: PX, button: { type: 'string', enum: ['left', 'right', 'middle'] }, double: { type: 'boolean' } } } },
   { name: 'scroll', description: 'Scroll an element by ref into view, or scroll the wheel by dx,dy pixels (default 600 down) over the point x,y (a scrolling panel) or the page.', inputSchema: { type: 'object', additionalProperties: false, properties: { ref: REF, dx: { type: 'number' }, dy: { type: 'number' }, x: PX, y: PX } } },
-  { name: 'wait', description: 'Wait ms milliseconds, or until a text shows on the page or a CSS selector is visible (gone: true = until it disappears, a spinner), at most timeout ms (default 10000, max 30000).', inputSchema: { type: 'object', additionalProperties: false, properties: { ms: { type: 'number', minimum: 0, maximum: 30000 }, text: { type: 'string' }, selector: { type: 'string' }, gone: { type: 'boolean' }, timeout: { type: 'number', minimum: 0, maximum: 30000 } } } },
+  { name: 'wait', description: 'Wait ms milliseconds, until the network is idle (idle: true), or until a text shows on the page or a CSS selector is visible (gone: true = until it disappears, a spinner), at most timeout ms (default 10000, max 30000).', inputSchema: { type: 'object', additionalProperties: false, properties: { ms: { type: 'number', minimum: 0, maximum: 30000 }, idle: { type: 'boolean' }, text: { type: 'string' }, selector: { type: 'string' }, gone: { type: 'boolean' }, timeout: { type: 'number', minimum: 0, maximum: 30000 } } } },
   { name: 'eval', description: 'Run a JavaScript expression in the page (only on the routine\'s origins) and return its value as JSON (a promise is awaited; statements: wrap them in (() => { …; return x; })()). Powerful: use it when no other tool can, e.g. to read a widget\'s state or call the page\'s own functions. Refused while a password field holds a value.', inputSchema: { type: 'object', additionalProperties: false, required: ['expression'], properties: { expression: { type: 'string' } } } },
-  { name: 'screenshot', description: 'Save a PNG of the page into this step\'s evidence folder; returns its path. highlight: refs of the proving elements, drawn with a red box in this PNG.', inputSchema: { type: 'object', additionalProperties: false, properties: { name: { type: 'string', description: 'file name without extension' }, highlight: { type: 'array', maxItems: 5, items: REF, description: 'element refs from snapshot to mark with a red box' } } } },
+  { name: 'screenshot', description: 'Save a PNG of the page (full page; fullPage: false = the viewport) or of one element (ref) into this step\'s evidence folder; returns its path, and the image itself with view: true. highlight: refs of the proving elements, drawn with a red box in this PNG.', inputSchema: { type: 'object', additionalProperties: false, properties: { name: { type: 'string', description: 'file name without extension' }, ref: REF, fullPage: { type: 'boolean' }, view: { type: 'boolean' }, highlight: { type: 'array', maxItems: 5, items: REF, description: 'element refs from snapshot to mark with a red box' } } } },
   { name: 'login', description: 'Sign out and in again as a named credential of the routine (the runtime fills the password). user: another login name for that credential\'s stored password. No credential: back to the default login.', inputSchema: { type: 'object', additionalProperties: false, properties: { credential: { type: 'string', description: 'a credential id' }, user: { type: 'string', description: 'the login name to use instead of the stored one' } } } },
   { name: 'fill_secret', description: 'Fill a password field by ref with the password of a named credential (e.g. to set a user\'s password in an admin page). The value is never shown.', inputSchema: { type: 'object', additionalProperties: false, required: ['ref', 'credential'], properties: { ref: REF, credential: { type: 'string', description: 'a credential id' } } } },
 ];
@@ -148,6 +159,8 @@ export const CLEAR_PASSWORDS_SCRIPT = `(() => { const set = Object.getOwnPropert
 /** One server's session: the page, its login state, the JSON-RPC handler. */
 export function createBrowserSession(config: BrowserServerConfig, io: BrowserServerIo) {
   const masker = createMasker(config.logins.map(l => l.password));
+  const watcher = createWatcher(config.evidence, io.now);
+  let current: BrowserPage | null = null;
   /** the logins in lookup order: the one switched to with `login` comes first, so every lookup picks it */
   const state = { logins: [...config.logins] };
   let shots = 0;
@@ -196,13 +209,14 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
   }
 
   /** Saves a full-page PNG to the step's evidence folder and announces it in events.jsonl; `fresh` never overwrites. */
-  async function saveShot(page: BrowserPage, name: string, fresh = false): Promise<string> {
+  async function saveShot(page: BrowserPage, name: string, fresh = false, png?: Buffer, fullPage = true): Promise<string> {
     shots += 1;
     const base = name.replace(/[^\w.-]+/g, '_').replace(/^[._]+/, '').slice(0, 60) || `browser-${shots}`;
     fs.mkdirSync(config.evidence, { recursive: true });
     let file = path.join(config.evidence, `${base}.png`);
     for (let i = 2; fresh && fs.existsSync(file); i++) file = path.join(config.evidence, `${base}-${i}.png`);
-    await page.screenshot({ path: file, fullPage: true });
+    if (png) fs.writeFileSync(file, png);
+    else await page.screenshot({ path: file, fullPage });
     if (config.events) fs.appendFileSync(config.events.file, `${JSON.stringify({ type: 'screenshot', at: io.now?.() ?? Date.now(), n: config.events.n, path: file })}\n`);
     return file;
   }
@@ -274,9 +288,93 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
     return found ?? `credential: one of ${config.logins.filter(l => l.id).map(l => `"${l.id}"`).join(', ') || '(none: this routine names no credential)'}.`;
   }
 
-  async function call(name: string, args: Json): Promise<{ text: string; isError?: boolean }> {
-    const page = await io.page();
+  /** The tab the tools act on: the first page, a tab the agent selected, or (that one closed) the last one open. */
+  async function activePage(): Promise<BrowserPage> {
+    if (current && !current.isClosed()) return current;
+    if (!current) {
+      const first = await io.page();
+      watcher.watch(first);
+      const context = first.context();
+      context.pages().forEach(p => watcher.watch(p));
+      context.on('page', p => {
+        watcher.watch(p);
+        watcher.note(`A new tab opened (tab ${context.pages().indexOf(p)}${p.url() && p.url() !== 'about:blank' ? `, ${safeUrl(p.url())}` : ''}): tabs {action: "select", index} to work in it.`);
+      });
+      current = first;
+      return first;
+    }
+    const open = current.context().pages().filter(p => !p.isClosed());
+    current = open[open.length - 1] ?? await io.page();
+    return current;
+  }
+
+  /** A file the agent may upload: an existing file inside the step's folder, its evidence or the temp folder, never one
+   *  named like a secret (.env, keys, certificates). */
+  function uploadable(file: unknown): string {
+    const resolved = path.resolve(String(file ?? ''));
+    let real: string;
+    try { real = fs.realpathSync(resolved); } catch { throw new Error(`files: ${resolved} does not exist`); }
+    if (!fs.statSync(real).isFile()) throw new Error(`files: ${real} is not a file`);
+    const inside = (root: string) => { try { const r = fs.realpathSync(root); const rel = path.relative(r, real); return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel); } catch { return false; } };
+    if (![process.cwd(), config.evidence, os.tmpdir()].some(inside)) throw new Error(`files: only files inside the step's folder (${process.cwd()}), its evidence or the temp folder`);
+    if (/(^|[\\/])\.env|secret|credential|password|\.(pem|key|pfx|p12)$/i.test(real)) throw new Error('files: refused, the name looks like a secret');
+    return real;
+  }
+
+  async function call(name: string, args: Json): Promise<{ text: string; isError?: boolean; image?: Buffer }> {
+    const page = await activePage();
     switch (name) {
+      case 'tabs': {
+        const pages = page.context().pages();
+        const action = String(args.action ?? 'list');
+        const list = async () => (await Promise.all(pages.map(async (p, i) => `${i}${p === page ? ' (active)' : ''}: ${safeUrl(p.url())} "${await p.title().catch(() => '')}"`))).join('\n');
+        if (action === 'list') return { text: await list() };
+        const i = num(args.index, 'index', 0, pages.length - 1);
+        if (action === 'select') { current = pages[i]!; await current.bringToFront(); return { text: `Tab ${i} is active. ${await where(current)}` }; }
+        if (action === 'close') {
+          if (pages.length === 1) return { text: 'Refused: the last tab stays open (navigate it instead).', isError: true };
+          await pages[i]!.close();
+          return { text: `Closed tab ${i}. Active: ${await where(await activePage())}` };
+        }
+        return { text: 'action: list, select or close.', isError: true };
+      }
+      case 'history': {
+        const action = String(args.action ?? '');
+        if (action === 'back') await page.goBack({ timeout: 30_000 });
+        else if (action === 'forward') await page.goForward({ timeout: 30_000 });
+        else if (action === 'reload') await page.reload({ timeout: 30_000 });
+        else return { text: 'action: back, forward or reload.', isError: true };
+        const failed = await settle(page);
+        return failed ? { text: failed, isError: true } : { text: await where(page) };
+      }
+      case 'dialog': {
+        if (typeof args.accept !== 'boolean') return { text: 'accept: true or false.', isError: true };
+        watcher.setPolicy({ accept: args.accept, ...(args.text === undefined ? {} : { text: String(args.text) }), once: args.always !== true });
+        return { text: `The ${args.always === true ? '' : 'next '}dialog${args.always === true ? 's' : ''} will be ${args.accept ? 'accepted' : 'dismissed'}. Now do the action that opens it.` };
+      }
+      case 'console': return { text: watcher.consoleText(String(args.level ?? 'warning'), args.clear === true) };
+      case 'network': return { text: await watcher.networkText(String(args.filter ?? 'failed'), args.clear === true) };
+      case 'check': {
+        const checked = args.checked !== false;
+        await locate(page, args.ref).setChecked(checked, { timeout: ACTION_TIMEOUT, ...(args.force === true ? { force: true } : {}) });
+        const failed = await settle(page);
+        return failed ? { text: failed, isError: true } : { text: `${checked ? 'Checked' : 'Unchecked'} ${String(args.ref)}.` };
+      }
+      case 'drag': {
+        await locate(page, args.from).dragTo(locate(page, args.to), { timeout: ACTION_TIMEOUT });
+        const failed = await settle(page);
+        return failed ? { text: failed, isError: true } : { text: `Dragged ${String(args.from)} onto ${String(args.to)}.` };
+      }
+      case 'upload': {
+        const files = (Array.isArray(args.files) ? args.files : [args.files]).slice(0, 10).map(uploadable);
+        await locate(page, args.ref).setInputFiles(files, { timeout: ACTION_TIMEOUT });
+        return { text: `Set ${files.length} file${files.length > 1 ? 's' : ''} on ${String(args.ref)}: ${files.map(f => path.basename(f)).join(', ')}.` };
+      }
+      case 'resize': {
+        const size = { width: Math.round(num(args.width, 'width', 320, 3840)), height: Math.round(num(args.height, 'height', 240, 2160)) };
+        await page.setViewportSize(size);
+        return { text: `The viewport is ${size.width}x${size.height}.` };
+      }
       case 'navigate': {
         const url = String(args.url ?? '');
         if (!allowedOrigin(config, url)) return { text: `Not allowed: the routine's browser opens only ${config.origins.join(', ')}.`, isError: true };
@@ -285,13 +383,19 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
       }
       case 'snapshot': {
         await page.waitForLoadState('load', { timeout: ACTION_TIMEOUT }).catch(() => undefined);
+        // the accessibility tree (roles, names, states) as Playwright's aria snapshot: no refs, for reading structure
+        if (args.aria === true) return { text: `URL: ${page.url()}\n\n${await page.ariaSnapshot({ timeout: ACTION_TIMEOUT })}` };
         let s = await page.evaluate<{ url: string; title: string; text: string; elements: string[] }>(SNAPSHOT_SCRIPT);
         // a SPA (Air's agenda) paints after 'load': wait a little for something to read
         for (let i = 0; i < 10 && !s.text.trim() && !s.elements.length; i++) { await page.waitForTimeout(500); s = await page.evaluate(SNAPSHOT_SCRIPT); }
         return { text: `URL: ${s.url}\nTitle: ${s.title}\n\nElements:\n${s.elements.join('\n') || '(none)'}\n\nText:\n${s.text}` };
       }
       case 'click': {
-        await locate(page, args.ref).click({ timeout: ACTION_TIMEOUT, ...(args.force === true ? { force: true } : {}) });
+        const el = locate(page, args.ref), force = args.force === true ? { force: true } : {};
+        const button = args.button === undefined ? 'left' : String(args.button);
+        if (button !== 'left' && button !== 'right' && button !== 'middle') return { text: 'button: left, right or middle.', isError: true };
+        if (args.double === true) await el.dblclick({ timeout: ACTION_TIMEOUT, ...force });
+        else await el.click({ timeout: ACTION_TIMEOUT, button, ...force });
         const failed = await settle(page);
         return failed ? { text: failed, isError: true } : { text: `Clicked ${String(args.ref)}. ${await where(page)}` };
       }
@@ -359,10 +463,15 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
           await page.waitForTimeout(ms);
           return { text: `Waited ${ms} ms. ${await where(page)}` };
         }
+        const timeout = args.timeout === undefined ? 10_000 : num(args.timeout, 'timeout', 0, 30_000);
+        if (args.idle === true) {
+          const start = Date.now();
+          const idle = await page.waitForLoadState('networkidle', { timeout }).then(() => true, () => false);
+          return idle ? { text: `The network is idle after ${Date.now() - start} ms. ${await where(page)}` } : { text: `The network was still busy after ${timeout} ms (network shows the requests).`, isError: true };
+        }
         const text = args.text === undefined ? undefined : String(args.text);
         const selector = args.selector === undefined ? undefined : String(args.selector);
-        if (!text === !selector) return { text: 'wait: ms, or one of text and selector.', isError: true };
-        const timeout = args.timeout === undefined ? 10_000 : num(args.timeout, 'timeout', 0, 30_000);
+        if (!text === !selector) return { text: 'wait: ms, idle, or one of text and selector.', isError: true };
         const gone = args.gone === true;
         const probe = text !== undefined
           ? `(document.body ? document.body.innerText : '').includes(${JSON.stringify(text)})`
@@ -398,6 +507,13 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
         for (const ref of refs) locate(page, ref); // validates each ref before the page is touched
         // the originals live here, not on the page: only the elements really marked get their own style back
         let marked: Array<[ref: string, style: string]> = [];
+        const view = args.view === true;
+        if (args.ref !== undefined) {
+          // one element only (its own PNG, the same evidence folder)
+          const shot = await locate(page, args.ref).screenshot({ timeout: ACTION_TIMEOUT });
+          const file = await saveShot(page, String(args.name ?? ''), false, shot);
+          return { text: `Saved ${file} (element ${String(args.ref)}).`, ...(view ? { image: shot } : {}) };
+        }
         try {
           const found = await page.evaluate<{ marked: Array<[string, string]>; missing?: string }>(`((refs) => { const marked = [];
             for (const ref of refs) { const e = document.querySelector('[data-routine-ref="' + ref + '"]'); if (!e) return { marked, missing: ref };
@@ -405,8 +521,8 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
             return { marked }; })(${JSON.stringify(refs)})`);
           marked = found.marked;
           if (found.missing) return { text: `highlight: ${found.missing} is not on the page; take a new snapshot.`, isError: true };
-          const file = await saveShot(page, String(args.name ?? ''));
-          return { text: `Saved ${file}${refs.length ? ` with a red box on ${refs.join(', ')}` : ''}. ${await where(page)}` };
+          const file = await saveShot(page, String(args.name ?? ''), false, undefined, args.fullPage !== false);
+          return { text: `Saved ${file}${refs.length ? ` with a red box on ${refs.join(', ')}` : ''}. ${await where(page)}`, ...(view ? { image: fs.readFileSync(file) } : {}) };
         } finally {
           if (marked.length) await page.evaluate(`((marked) => { for (const [ref, style] of marked) { const e = document.querySelector('[data-routine-ref="' + ref + '"]'); if (e) e.style.cssText = style; } })(${JSON.stringify(marked)})`).catch(() => undefined);
         }
@@ -454,11 +570,15 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
         const params = (message.params ?? {}) as Json;
         const name = String(params.name ?? '');
         if (!(BROWSER_TOOLS as readonly string[]).includes(name)) return { jsonrpc: '2.0', id, error: { code: -32602, message: 'Unknown tool' } };
+        // every reply but console/network ends with what went wrong meanwhile (errors, failed requests, dialogs, tabs)
+        const tail = () => { const s = name === 'console' || name === 'network' ? '' : watcher.summary(); return s ? `\n${s}` : ''; };
         try {
           const r = await call(name, (params.arguments ?? {}) as Json);
-          return reply({ content: [{ type: 'text', text: masker.mask(r.text) }], ...(r.isError ? { isError: true } : {}) });
+          const content: Json[] = [{ type: 'text', text: masker.mask(r.text + tail()) }];
+          if (r.image) content.push({ type: 'image', data: r.image.toString('base64'), mimeType: 'image/png' });
+          return reply({ content, ...(r.isError ? { isError: true } : {}) });
         } catch (e) {
-          return reply({ content: [{ type: 'text', text: masker.mask(`Browser ${name} failed: ${errorText(e)}`) }], isError: true });
+          return reply({ content: [{ type: 'text', text: masker.mask(`Browser ${name} failed: ${errorText(e)}${tail()}`) }], isError: true });
         }
       }
       default: return { jsonrpc: '2.0', id, error: { code: -32601, message: 'Method not found' } };

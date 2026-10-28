@@ -12,9 +12,19 @@ export interface BrowserPage {
   goto(url: string, options?: { waitUntil?: 'load' | 'domcontentloaded'; timeout?: number }): Promise<unknown>;
   evaluate<T>(expression: string): Promise<T>;
   waitForTimeout(ms: number): Promise<void>;
-  waitForLoadState(state?: 'load' | 'domcontentloaded', options?: { timeout?: number }): Promise<void>;
-  screenshot(options: { path: string; fullPage?: boolean }): Promise<unknown>;
-  context(): { clearCookies(): Promise<void> };
+  waitForLoadState(state?: 'load' | 'domcontentloaded' | 'networkidle', options?: { timeout?: number }): Promise<void>;
+  screenshot(options: { path?: string; fullPage?: boolean }): Promise<Buffer>;
+  context(): { clearCookies(): Promise<void>; pages(): BrowserPage[]; on(event: 'page', handler: (page: BrowserPage) => void): unknown };
+  on(event: string, handler: (arg: never) => void): unknown;
+  goBack(options?: { timeout?: number }): Promise<unknown>;
+  goForward(options?: { timeout?: number }): Promise<unknown>;
+  reload(options?: { timeout?: number }): Promise<unknown>;
+  setViewportSize(size: { width: number; height: number }): Promise<void>;
+  viewportSize(): { width: number; height: number } | null;
+  ariaSnapshot(options?: { timeout?: number }): Promise<string>;
+  bringToFront(): Promise<void>;
+  close(): Promise<void>;
+  isClosed(): boolean;
   locator(selector: string): BrowserLocator;
   /** a same-origin iframe's elements (refs f1e3…) */
   frameLocator(selector: string): { locator(selector: string): BrowserLocator };
@@ -29,7 +39,13 @@ export interface BrowserPage {
 /** The Playwright Locator methods the routine browser uses. */
 export interface BrowserLocator {
   count(): Promise<number>;
-  click(options?: { timeout?: number; force?: boolean }): Promise<void>;
+  click(options?: { timeout?: number; force?: boolean; button?: 'left' | 'right' | 'middle' }): Promise<void>;
+  dblclick(options?: { timeout?: number; force?: boolean }): Promise<void>;
+  setChecked(checked: boolean, options?: { timeout?: number; force?: boolean }): Promise<void>;
+  dragTo(target: BrowserLocator, options?: { timeout?: number }): Promise<void>;
+  setInputFiles(files: string[], options?: { timeout?: number }): Promise<void>;
+  screenshot(options?: { timeout?: number }): Promise<Buffer>;
+  ariaSnapshot(options?: { timeout?: number }): Promise<string>;
   fill(value: string, options?: { timeout?: number }): Promise<void>;
   pressSequentially(text: string, options?: { timeout?: number }): Promise<void>;
   press(key: string, options?: { timeout?: number }): Promise<void>;
