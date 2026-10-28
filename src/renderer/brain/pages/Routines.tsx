@@ -1,11 +1,8 @@
-// The Routine page (ADR 0175, 0176): routines are self-contained packages run by packages/routine-runtime, in the app
-// or from a terminal on this PC. The list shows each package (trigger on/off, «Credenziali da inserire») and every run
-// read from the run folders (app and terminal); a package opens on its trigger and filters, a single work item start,
-// its write-only credentials, its steps, the copyable terminal commands and its runs; a run opens on the live view.
-// Import/export move the package zip (credentials included). Authoring a routine goes through the Orchestrator.
-// A routine step's chat (pageArg `chat:<id>`) still opens in RoutineChat.
+// Terminal routine packages, commands, history and the explicitly opened live run (ADR 0179).
+// No starts, triggers, approvals or polling. Only RunPage owns an fs.watch subscription; closing it releases it.
+// Package credentials and import/export remain explicit user actions. Old routine chats are readable archives.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { RoutineRunDetail, RoutineRunRef, RoutineRunSummary, RoutineSummary, RoutineTriggerFilters, RoutinesSnapshot } from '@shared/routines';
+import type { RoutineRunDetail, RoutineRunRef, RoutineRunSummary, RoutineSummary, RoutinesSnapshot } from '@shared/routines';
 import { sb } from '../../sb';
 import { t } from '../../i18n';
 import { ui, toast } from '../../store/ui';
@@ -15,14 +12,11 @@ import { copyText } from '../components/ui';
 import { ago } from '../../lib/format';
 import { RoutineChat } from '../../components/RoutineChat';
 import { readRoutineChatArg, routinePlacements } from '../../lib/routine-chats';
-import { useFlows } from '../../store/flows';
+import { LegacyRoutineHistory } from '../../components/LegacyRoutineHistory';
 import { RoutineRunView, statusLabel, statusTone } from '../../components/RoutineRun';
 import '../../styles/routines.css';
 
 const plain = (e: unknown) => (e instanceof Error ? e.message : String(e)).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
-const live = (status: string) => status === 'running' || status === 'waiting-human' || status === 'pending';
-const list = (text: string) => text.split(/[,\n]/).map(s => s.trim()).filter(Boolean);
-const ids = (text: string) => list(text).map(Number).filter(n => Number.isInteger(n) && n > 0);
 const missing = (r: RoutineSummary) => r.secretSlots.filter(s => !s.set).length;
 
 function toBase64(buffer: ArrayBuffer): string {
@@ -33,7 +27,7 @@ function toBase64(buffer: ArrayBuffer): string {
 }
 async function copy(text: string) { toast(await copyText(text) ? t('rs.copied') : t('rs.copyFailed'), 'info'); }
 
-function usePoll<T>(load: () => Promise<T>, everyMs: number | null, deps: unknown[]): { value: T | null; error: string | null; reload: () => Promise<void> } {
+function useRead<T>(load: () => Promise<T>, deps: unknown[]): { value: T | null; error: string | null; reload: () => Promise<void> } {
   const [value, setValue] = useState<T | null>(null), [error, setError] = useState<string | null>(null);
   const ticket = useRef(0);
   const reload = useCallback(async () => {
@@ -43,10 +37,8 @@ function usePoll<T>(load: () => Promise<T>, everyMs: number | null, deps: unknow
   }, deps);
   useEffect(() => {
     void reload();
-    if (everyMs === null) return;
-    const timer = setInterval(() => void reload(), everyMs);
-    return () => clearInterval(timer);
-  }, [reload, everyMs]);
+    return () => { ++ticket.current; };
+  }, [reload]);
   return { value, error, reload };
 }
 
@@ -60,47 +52,6 @@ function RunRow({ run, onOpen, now }: { run: RoutineRunSummary; onOpen: () => vo
     <span className="rs-sp" />
     <span className="rs-muted">{ago(run.updatedAt, now)}</span>
   </button>;
-}
-
-function TriggerForm({ routine, onSaved }: { routine: RoutineSummary; onSaved: (s: RoutinesSnapshot) => void }) {
-  const tr = routine.trigger!;
-  const [states, setStates] = useState(tr.states.join(', ')), [include, setInclude] = useState(tr.includeTags.join(', '));
-  const [exclude, setExclude] = useState(tr.excludeTags.join(', ')), [only, setOnly] = useState(tr.workItemIds.join(', '));
-  const [every, setEvery] = useState(String(tr.everyMinutes)), [maxPerHour, setMax] = useState(tr.maxPerHour ? String(tr.maxPerHour) : '');
-  const [busy, setBusy] = useState(false);
-  const filters = (): RoutineTriggerFilters => ({
-    everyMinutes: Math.max(1, Number(every) || tr.everyMinutes), states: list(states), includeTags: list(include), excludeTags: list(exclude),
-    workItemIds: ids(only), ...(Number(maxPerHour) > 0 ? { maxPerHour: Number(maxPerHour) } : {}),
-  });
-  const save = async (enabled: boolean, withFilters: boolean) => {
-    setBusy(true);
-    try { onSaved(await sb.invoke('routines:setTrigger', { id: routine.id, enabled, ...(withFilters ? { filters: filters() } : {}) })); }
-    catch (e) { toast(plain(e), 'err'); }
-    finally { setBusy(false); }
-  };
-  const blocked = missing(routine) > 0;
-  return <section className="rs-card" data-testid="routine-trigger">
-    <header className="rs-card-head">
-      <h3>{t('rs.trigger')}</h3>
-      <span className="rs-muted">{tr.organization}/{tr.project} · {tr.workItemType}{tr.areaPath ? ` · ${tr.areaPath}` : ''}</span>
-      <span className="rs-sp" />
-      <label className="rs-switch">
-        <input type="checkbox" checked={tr.enabled} disabled={busy || (blocked && !tr.enabled)} onChange={e => void save(e.target.checked, false)} data-testid="routine-trigger-toggle" />
-        <span>{tr.enabled ? t('rs.triggerOn') : t('rs.triggerOff')}</span>
-      </label>
-    </header>
-    {blocked && !tr.enabled && <p className="rs-warn">{t('rs.secretsFirst')}</p>}
-    {tr.lastCheckAt && <p className="rs-muted">{t('rs.lastCheck', { when: ago(tr.lastCheckAt, Date.now()) })}{tr.lastResult ? ` · ${tr.lastResult}` : ''}</p>}
-    <div className="rs-grid">
-      <label>{t('rs.f.states')}<input value={states} onChange={e => setStates(e.target.value)} data-testid="routine-filter-states" /></label>
-      <label>{t('rs.f.include')}<input value={include} onChange={e => setInclude(e.target.value)} data-testid="routine-filter-include" /></label>
-      <label>{t('rs.f.exclude')}<input value={exclude} onChange={e => setExclude(e.target.value)} /></label>
-      <label>{t('rs.f.ids')}<input value={only} onChange={e => setOnly(e.target.value)} placeholder={t('rs.f.idsHint')} /></label>
-      <label>{t('rs.f.every')}<input type="number" min={1} value={every} onChange={e => setEvery(e.target.value)} /></label>
-      <label>{t('rs.f.max')}<input type="number" min={0} value={maxPerHour} onChange={e => setMax(e.target.value)} /></label>
-    </div>
-    <div className="rs-actions"><button type="button" className="btn btn-ghost btn-s" disabled={busy} onClick={() => void save(tr.enabled, true)} data-testid="routine-filters-save">{t('rs.f.save')}</button></div>
-  </section>;
 }
 
 function SecretsForm({ routine, onSaved }: { routine: RoutineSummary; onSaved: (s: RoutinesSnapshot) => void }) {
@@ -131,16 +82,7 @@ function SecretsForm({ routine, onSaved }: { routine: RoutineSummary; onSaved: (
 function RoutineDetail({ routine, runs, onBack, onOpenRun, onSaved, now }: {
   routine: RoutineSummary; runs: RoutineRunSummary[]; onBack: () => void; onOpenRun: (r: RoutineRunRef) => void; onSaved: (s: RoutinesSnapshot) => void; now: number;
 }) {
-  const [item, setItem] = useState(''), [busy, setBusy] = useState(false);
-  const blocked = missing(routine) > 0;
-  const start = async () => {
-    const workItem = Number(item);
-    if (!Number.isInteger(workItem) || workItem <= 0) { toast(t('rs.badItem'), 'warn'); return; }
-    setBusy(true);
-    try { const ref = await sb.invoke('routines:startItem', { id: routine.id, workItem }); toast(t('rs.started'), 'info'); onOpenRun(ref); }
-    catch (e) { toast(plain(e), 'err'); }
-    finally { setBusy(false); }
-  };
+  const [item, setItem] = useState('');
   const exportZip = async () => {
     // main writes the filled zip under the terminal's packages folder: only its path and the secrets' names come back
     try {
@@ -159,17 +101,6 @@ function RoutineDetail({ routine, runs, onBack, onOpenRun, onSaved, now }: {
     </header>
     {(routine.secrets.logins.length > 0 || routine.secrets.devopsPat || routine.secrets.testDbs > 0) && <p className="rs-warn">{t('rs.exportWarn')}</p>}
 
-    <section className="rs-card">
-      <header className="rs-card-head"><h3>{t('rs.startTitle')}</h3></header>
-      <div className="rs-inline">
-        <input inputMode="numeric" value={item} onChange={e => setItem(e.target.value.replace(/\D/g, ''))} placeholder={t('rs.itemPlaceholder')} data-testid="routine-item-input"
-          onKeyDown={e => { if (e.key === 'Enter') void start(); }} />
-        <button type="button" className="btn btn-primary btn-s" disabled={busy || blocked || !item} onClick={() => void start()} data-testid="routine-item-start">▶ {t('rs.start')}</button>
-      </div>
-      {blocked && <p className="rs-warn">{t('rs.secretsFirst')}</p>}
-    </section>
-
-    {routine.trigger && <TriggerForm key={JSON.stringify(routine.trigger)} routine={routine} onSaved={onSaved} />}
     <SecretsForm routine={routine} onSaved={onSaved} />
 
     <section className="rs-card">
@@ -182,6 +113,8 @@ function RoutineDetail({ routine, runs, onBack, onOpenRun, onSaved, now }: {
 
     <section className="rs-card" data-testid="routine-commands">
       <header className="rs-card-head"><h3>{t('rs.commands')}</h3></header>
+      <p className="rs-muted">{t('rs.terminalOnly')}</p>
+      <label>{t('rs.itemPlaceholder')}<input inputMode="numeric" value={item} onChange={e => setItem(e.target.value.replace(/\D/g, ''))} data-testid="routine-item-input" /></label>
       {([['rs.cmd.run', routine.commands.run], ['rs.cmd.item', itemCommand], ['rs.cmd.watch', routine.commands.watch]] as const).map(([label, cmd]) => <div key={label} className="rs-cmd">
         <span className="rs-muted">{t(label)}</span><code>{cmd}</code>
         <button type="button" className="btn btn-ghost btn-xs" onClick={() => void copy(cmd)}>{t('rs.copy')}</button>
@@ -196,32 +129,38 @@ function RoutineDetail({ routine, runs, onBack, onOpenRun, onSaved, now }: {
 }
 
 function RunPage({ runRef, onBack }: { runRef: RoutineRunRef; onBack: () => void }) {
-  const [following, setFollowing] = useState(true);
-  const { value: run, error, reload } = usePoll<RoutineRunDetail>(() => sb.invoke('routines:run', runRef), following ? 1500 : null, [runRef.source, runRef.routineId, runRef.runId, following]);
-  useEffect(() => { if (run && !live(run.status)) setFollowing(false); }, [run]);
-  const cancel = async () => {
-    try { await sb.invoke('routines:cancel', runRef); toast(t('rs.cancelled'), 'info'); setFollowing(true); void reload(); }
-    catch (e) { toast(plain(e), 'err'); }
-  };
+  const [run, setRun] = useState<RoutineRunDetail | null>(null), [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    const subscription = crypto.randomUUID();
+    let closed = false, received = false;
+    setRun(null); setError(null);
+    const off = sb.on('routines:progress', change => {
+      if (closed || change.subscription !== subscription) return;
+      received = true;
+      if (change.run) { setRun(change.run); setError(null); }
+      else if (change.error) setError(change.error);
+    });
+    void sb.invoke('routines:watch', { ref: runRef, subscription }).then(value => { if (!closed && !received) setRun(value); }).catch(e => { if (!closed) setError(plain(e)); });
+    return () => { closed = true; off(); void sb.invoke('routines:unwatch', { subscription }).catch(() => {}); };
+  }, [runRef.source, runRef.routineId, runRef.runId]);
   return <div className="rs-detail">
     <header className="rs-head">
       <button type="button" className="btn btn-ghost btn-s" onClick={onBack}>← {t('rs.back')}</button>
       <h2>{run?.title ?? runRef.routineId}</h2>
     </header>
     {error && <p className="rs-error" role="alert">{error}</p>}
-    {run && <RoutineRunView run={run} onOpenFile={path => openFileViewer(path)} onCopy={text => void copy(text)} onCancel={() => void cancel()} />}
+    {run && <RoutineRunView run={run} onOpenFile={path => openFileViewer(path)} onCopy={text => void copy(text)} />}
   </div>;
 }
 
 type View = { kind: 'list' } | { kind: 'routine'; id: string } | { kind: 'run'; ref: RoutineRunRef; from?: string };
 
 export function Routines() {
-  const { snapshot: flows } = useFlows();
   const chatArg = ui.use(state => state.page === 'flussi' ? readRoutineChatArg(state.pageArg) : null);
-  const routineChat = useApp(state => chatArg && routinePlacements(state.chats, flows).has(chatArg.chatId) ? chatArg.chatId : null);
+  const routineChat = useApp(state => chatArg && routinePlacements(state.chats).has(chatArg.chatId) ? chatArg.chatId : null);
   const [view, setView] = useState<View>({ kind: 'list' });
   const [override, setOverride] = useState<RoutinesSnapshot | null>(null);
-  const { value, error, reload } = usePoll<RoutinesSnapshot>(() => sb.invoke('routines:list', undefined), view.kind === 'run' ? null : 3000, []);
+  const { value, error, reload } = useRead<RoutinesSnapshot>(() => sb.invoke('routines:list', undefined), []);
   useEffect(() => { if (value) setOverride(null); }, [value]);
   const snapshot = override ?? value;
   const fileInput = useRef<HTMLInputElement>(null);
@@ -246,6 +185,7 @@ export function Routines() {
         <header className="rs-head">
           <div><h1>{t('rs.title')}</h1><p className="rs-muted">{t('rs.intro')}</p></div>
           <span className="rs-sp" />
+          <button type="button" className="btn btn-ghost btn-m" onClick={() => void reload()} data-testid="routine-refresh">{t('rs.refresh')}</button>
           <input ref={fileInput} type="file" accept=".zip,application/zip" hidden onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void importZip(f); }} data-testid="routine-import-file" />
           <button type="button" className="btn btn-ghost btn-m" onClick={() => fileInput.current?.click()} data-testid="routine-import">{t('rs.import')}</button>
         </header>
@@ -267,7 +207,7 @@ export function Routines() {
                 <strong>{r.title}</strong>
                 <span className="rs-muted">{t('rs.stepsCount', { n: r.steps.length })}</span>
                 <span className="rs-badges">
-                  {r.trigger && <span className="rs-badge" data-tone={r.trigger.enabled ? 'green' : 'grey'}>{r.trigger.enabled ? t('rs.triggerOn') : t('rs.triggerOff')}</span>}
+                  {r.trigger && <span className="rs-badge" data-tone="grey">routine watch</span>}
                   {missing(r) > 0 && <span className="rs-badge" data-tone="red">{t('rs.secretsMissing')}</span>}
                   {waiting > 0 && <span className="rs-badge" data-tone="red">{t('rs.waitingCount', { n: waiting })}</span>}
                 </span>
@@ -276,6 +216,7 @@ export function Routines() {
           <h3 className="rs-section">{t('rs.runs')}</h3>
           {snapshot.runs.length === 0 ? <p className="rs-muted">{t('rs.noRuns')}</p>
             : <div className="rs-rows">{snapshot.runs.map(r => <RunRow key={`${r.source}/${r.routineId}/${r.runId}`} run={r} now={now} onOpen={() => setView({ kind: 'run', ref: r })} />)}</div>}
+          <LegacyRoutineHistory />
           <p className="rs-muted rs-dir">{t('rs.dirs', { app: snapshot.dirs.appRuns, terminal: snapshot.dirs.terminalRuns })}</p>
         </>}
       </>}

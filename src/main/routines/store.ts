@@ -71,8 +71,7 @@ function keepFields(cur: { user: string; password: string }, prev: { user: strin
 
 export const APP_FILE = 'app.json';
 const ASSETS = 'assets';
-export interface RoutineAppState { triggerEnabled: boolean }
-export interface StoredRoutine { id: string; dir: string; pkg: RoutinePackage; app: RoutineAppState }
+export interface StoredRoutine { id: string; dir: string; pkg: RoutinePackage }
 
 const validId = (id: string): string => {
   if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(id)) throw new Error('Id routine non valido');
@@ -93,10 +92,6 @@ export type RoutineFill = (pkg: RoutinePackage, loginOrigins?: readonly string[]
 
 export function createRoutineStore(root: string, fill?: RoutineFill) {
   const dirOf = (id: string) => path.join(root, validId(id));
-  const readApp = (id: string): RoutineAppState => {
-    try { const v = JSON.parse(fs.readFileSync(path.join(dirOf(id), APP_FILE), 'utf8')) as Partial<RoutineAppState>; return { triggerEnabled: v.triggerEnabled === true }; }
-    catch { return { triggerEnabled: false }; }
-  };
   const store = {
     root,
     dirOf,
@@ -107,7 +102,7 @@ export function createRoutineStore(root: string, fill?: RoutineFill) {
     get(id: string): StoredRoutine {
       const dir = dirOf(id);
       const pkg = parseRoutinePackage(JSON.parse(fs.readFileSync(path.join(dir, ROUTINE_FILE), 'utf8')) as unknown);
-      return { id, dir, pkg, app: readApp(id) };
+      return { id, dir, pkg };
     },
     /** Every readable package; an unreadable one is reported, never hidden. */
     list(): { routines: StoredRoutine[]; broken: { id: string; error: string }[] } {
@@ -147,9 +142,6 @@ export function createRoutineStore(root: string, fill?: RoutineFill) {
     setSecrets(id: string, values: Record<string, string>): StoredRoutine {
       const current = store.get(id);
       return store.save(withSecrets(current.pkg, values));
-    },
-    setApp(id: string, state: RoutineAppState): void {
-      fs.writeFileSync(path.join(dirOf(id), APP_FILE), `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
     },
     /** A package zip: `routine.json` at the root (or inside one top folder) and `assets/…`. Other files are refused. */
     importZip(bytes: Buffer): StoredRoutine {

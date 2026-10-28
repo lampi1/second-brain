@@ -44,9 +44,9 @@ export function hubTotals(servers: readonly McpServerView[], connectors: readonl
 /** What the add/edit form holds: plain text fields, turned into a definition only on save. */
 export interface ServerForm {
   label: string; transport: 'stdio' | 'http'; command: string; args: string; env: string; url: string; headers: string;
-  tokenName: string; tokenPrefix: string; purpose: string; enabled: boolean; routineTest: boolean;
+  tokenName: string; tokenPrefix: string; purpose: string; enabled: boolean;
 }
-export const emptyForm = (): ServerForm => ({ label: '', transport: 'stdio', command: '', args: '', env: '', url: '', headers: '', tokenName: '', tokenPrefix: 'Bearer ', purpose: '', enabled: true, routineTest: false });
+export const emptyForm = (): ServerForm => ({ label: '', transport: 'stdio', command: '', args: '', env: '', url: '', headers: '', tokenName: '', tokenPrefix: 'Bearer ', purpose: '', enabled: true });
 
 export function formOf(s: McpServerDef): ServerForm {
   const slot = s.secrets[0];
@@ -54,7 +54,7 @@ export function formOf(s: McpServerDef): ServerForm {
     label: s.label, transport: s.transport, command: s.command ?? '', args: (s.args ?? []).join('\n'),
     env: Object.entries(s.env ?? {}).map(([k, v]) => `${k}=${v}`).join('\n'), url: s.url ?? '',
     headers: Object.entries(s.headers ?? {}).map(([k, v]) => `${k}: ${v}`).join('\n'),
-    tokenName: slot?.name ?? '', tokenPrefix: slot?.prefix ?? (s.transport === 'http' ? 'Bearer ' : ''), purpose: s.purpose ?? '', enabled: s.enabled, routineTest: s.routineTest === true,
+    tokenName: slot?.name ?? '', tokenPrefix: slot?.prefix ?? (s.transport === 'http' ? 'Bearer ' : ''), purpose: s.purpose ?? '', enabled: s.enabled,
   };
 }
 
@@ -67,7 +67,7 @@ export function defOf(f: ServerForm, base?: McpServerDef): McpServerDef {
   const name = f.tokenName.trim();
   const slot = name ? [{ where: f.transport === 'stdio' ? 'env' as const : 'header' as const, name, ...(f.transport === 'http' && f.tokenPrefix ? { prefix: f.tokenPrefix } : {}) }] : [];
   const others = (base?.secrets ?? []).slice(1).filter(s => s.where === (f.transport === 'stdio' ? 'env' : 'header'));
-  const common = { id: base?.id ?? idFrom(f.label), label: f.label.trim(), transport: f.transport, secrets: [...slot, ...others], enabled: f.enabled, ...(f.routineTest ? { routineTest: true as const } : {}),
+  const common = { id: base?.id ?? idFrom(f.label), label: f.label.trim(), transport: f.transport, secrets: [...slot, ...others], enabled: f.enabled,
     ...(f.purpose.trim() ? { purpose: f.purpose.trim() } : {}), ...(base?.importedFrom ? { importedFrom: base.importedFrom } : {}) };
   if (f.transport === 'stdio') {
     const env = pairs(f.env, /=/);

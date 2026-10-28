@@ -12,7 +12,6 @@ import { goSequence, resolveShortcut } from './lib/keys';
 import { schedule, setBlocked, setKnownTabs } from './lib/viewports';
 import { liveSource } from './lib/liveSource';
 import { sameList } from './store/state';
-import { flowState } from './store/flows';
 import { routinePlacements } from './lib/routine-chats';
 import { useApp } from './store/store';
 import { openModal, closeModal, pageLabel, setMap, setPrefs, toast, ui } from './store/ui';
@@ -225,8 +224,7 @@ export function App() {
   const modal = ui.use(s => s.modal);
   const focused = ui.use(s => s.focused);
   const tabIds = useApp(s => s.tabs.map(t => t.id), sameList);
-  const routineSnapshot = flowState.use(state => focusMode ? state.snapshot?.runs : undefined);
-  const routineFocus = useApp(state => focusMode && routinePlacements(state.chats, routineSnapshot ? { runs: routineSnapshot } : null).has(focusMode) ? focusMode : null);
+  const routineFocus = useApp(state => focusMode && routinePlacements(state.chats).has(focusMode) ? focusMode : null);
   useEffect(() => { if (routineFocus) focusChat(routineFocus); }, [routineFocus]);
   const focusChatExists = useApp(s => (focusMode ? !!s.chats[focusMode] : true));
   const dock = useDockReserve();

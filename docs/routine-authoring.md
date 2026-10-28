@@ -1,24 +1,9 @@
-# Build routines as configuration
+<!-- Current routine architecture: terminal-only execution, retained here so old documentation links remain useful. -->
+# Terminal-only routines
 
-> Superseded for new routines: routines are packages run by plain Claude Code sessions. See [routines/authoring.md](routines/authoring.md). This page describes the legacy role-based flows.
+The in-app flows executor, automation rules, triggers, approval panels and `app_flow_*` tools are retired
+(ADR [0179](adr/0179-terminal-only-routines.md)). The app never starts, advances, settles or reconciles routine runs.
 
-A routine is user-owned versioned data, not a product feature for one company. Compose supported steps, prompts, models, inputs, scripts, queries, checklists, retries and outputs through the Orchestrator. A new workflow using these primitives needs no app patch. There is no built-in requirement to follow a bug-fix lifecycle.
-
-Ask the Orchestrator to read `app_flow_capabilities`: its small overview links to `authoring`, `devops` and `test-targets` sections. Details load only when needed, not into every agent prompt. `app_flow_models` supplies actual available model IDs; the proposal tools describe the accepted fields.
-
-For large definitions, call `app_flow_propose` with `{"contextKey":"<from app_flow_list>","expectedRevision":0,"definitionPath":"reviews/my-routine.json"}` instead of an inline `definition`. Use the current draft revision when revising. The UTF-8 JSON file must contain the plain definition, be inside the selected brain and stay within 1 MiB; absolute paths inside that brain also work. Loading preserves every field limit and validation, creates only an inert draft and returns a compact receipt. The full proposal is shown in Routine for approval; later file edits do not change it.
-
-| Need | Configuration |
-| --- | --- |
-| A different workflow | Compose agent, check, approval and manual steps with chosen evidence, timeouts and bounded retry/rework. |
-| Deterministic processing | Embed reviewed scripts or query assets; pin their content hash and pass typed parameters or attachments. Required interpreters must be installed. |
-| Reusable knowledge | Embed full prompts and checklists in the package. Brain changes become explicit new versions. |
-| Automatic starts | Propose an interval or DevOps trigger. DevOps host writes require the approved DevOps configuration. |
-| A different supported test environment | Inspect/register its exact target, then approve it in the routine grant. Organization, repository, app, service connection, queue and parameter names are data, never app-specific constants. |
-| Review and improvement | Inspect the run dossier and declared outputs, then propose an updated version. Import/export carries the package; imports remain drafts. |
-
-The user approves the exact routine and its automatic grants in the existing modals. Discovery does not grant permissions. Ordinary agent/MCP tools retain their role permissions; generic scripts have local process authority and are not a sandbox or a replacement for host-controlled write grants. Production remains an explicit user action.
-
-Current limits are explicit: target registration still uses the user-managed configuration file returned by the inspection tools; the Orchestrator cannot install it. A new target within a supported adapter is configuration; a new deployment technology or privileged host operation needs adapter code and security tests. An unknown operation must block clearly, never fall back to an unrestricted shell command.
-
-For App Service registration and the supported deployment shape, see [routine-test-targets.md](routine-test-targets.md).
+Use the [package authoring guide](routines/authoring.md) and `packages/routine-runtime` (`routine run | watch | resume`).
+The app prepares packages on request and observes runs only while their view is open or when the user explicitly
+asks the Orchestrator. Historical app runs remain read-only evidence; unknown DevOps outcomes are never retried.

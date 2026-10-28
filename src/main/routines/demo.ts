@@ -6,8 +6,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { randomUUID } from 'node:crypto';
-import { ROUTINE_FORMAT, stepFolderName, type RoutinePackage, type RoutineRuntime, type RunEvent, type RunRecord } from '../../../packages/routine-runtime/src/index';
-import { createRoutines } from './service';
+import { ROUTINE_FORMAT, stepFolderName, type RoutinePackage, type RunEvent, type RunRecord } from '../../../packages/routine-runtime/src/index';
+import { createRoutines, type RoutinesOptions } from './service';
 import { SECRET_PLACEHOLDER } from './store';
 
 const CRC = (() => { const t: number[] = []; for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t.push(c >>> 0); } return t; })();
@@ -81,7 +81,7 @@ function demoRuns(now: number, appRuns: string, terminalRuns: string): DemoRun[]
   const base = (runId: string, wi: number, createdAt: number) => ({ schema: 1 as const, runId, routineId: 'air-bugfix', routineTitle: title, attempt: 1, inputs: { workItem: String(wi) }, workItem: wi, createdAt, updatedAt: createdAt });
   const waitingAt = now - 12 * min;
   return [{
-    root: appRuns, shotStep: 2,
+    root: terminalRuns, shotStep: 2,
     record: { ...base('20261027-091500-a1b2c3', 48213, now - 40 * min), status: 'waiting-human', updatedAt: waitingAt,
       steps: [step(1, 'done', { summary: 'Bug riprodotto su test: il salvataggio del piano di cura perde lo sconto.', startedAt: now - 40 * min, endedAt: now - 28 * min }), step(2, 'running', { startedAt: now - 28 * min }), step(3, 'pending'), step(4, 'pending')],
       escalation: { stepId: 'fix', contact: randomUUID(), state: 'waiting', at: waitingAt, question: 'Lo sconto va applicato prima o dopo l’IVA? Il codice e la specifica non concordano.', commentId: 9001, ignored: [], count: 1 } },
@@ -97,7 +97,7 @@ function demoRuns(now: number, appRuns: string, terminalRuns: string): DemoRun[]
       begin(now - 105 * min, 4), { type: 'write', at: now - 100 * min, n: 4, what: 'commento di esito', status: 'done' }, { type: 'write', at: now - 98 * min, n: 4, what: 'stato Resolved', status: 'not-verified' }, end(now - 95 * min, 4, 'Commento e tag scritti'), { type: 'run-end', at: now - 95 * min, status: 'done' }],
     report: '# Air · bugfix ai-fixable · work item 48190\n\nEsito: **fatto**.\n\n## Passi\n\n1. Riproduci il bug su test: riprodotto.\n2. Correggi e apri la PR: PR aperta (fix arrotondamento importi).\n3. Verifica su test: verificato con il paziente demo.\n4. Aggiorna il work item: commento e tag scritti.\n\n## Non verificato\n\n- stato Resolved (DevOps non ha confermato la scrittura)\n',
   }, {
-    root: appRuns,
+    root: terminalRuns,
     record: { ...base('20261027-100200-0a0b0c', 48231, now - 6 * min), status: 'running', updatedAt: now - min, steps: [step(1, 'running', { startedAt: now - 6 * min }), step(2, 'pending'), step(3, 'pending'), step(4, 'pending')] },
     events: [start(now - 6 * min, 48231), begin(now - 6 * min, 1), { type: 'action', at: now - min, n: 1, text: 'Accede ad Air test (login locale)' }],
   }, {
@@ -109,7 +109,7 @@ function demoRuns(now: number, appRuns: string, terminalRuns: string): DemoRun[]
 }
 
 /** The demo routines service, its folders re-seeded at each app start. */
-export function createDemoRoutines(userData: string, now: number) {
+export function createDemoRoutines(userData: string, now: number, changed?: RoutinesOptions['changed']) {
   const root = path.join(userData, 'demo-routines');
   fs.rmSync(root, { recursive: true, force: true });
   const appRuns = path.join(root, 'app'), terminalRuns = path.join(root, 'terminal');
@@ -129,9 +129,7 @@ export function createDemoRoutines(userData: string, now: number) {
     fs.writeFileSync(path.join(dir, 'events.jsonl'), events.map(e => JSON.stringify(e)).join('\n') + '\n');
     if (run.report) fs.writeFileSync(path.join(dir, 'report.md'), run.report);
   }
-  const refuse = (): never => { throw new Error('Demo: nessun motore, la routine non parte.'); };
-  const runtime = { start: refuse, startItem: refuse, resume: refuse, cancel: refuse, store: { trigger: () => ({ schema: 1, cursor: {}, subjects: {}, starts: [], lastCheckAt: now - 3 * 60_000, lastResult: '2 work item trovati, 0 nuovi. Avviate 0 run.' }) } } as unknown as RoutineRuntime;
-  const routines = createRoutines({ userData: appRuns, terminalRuns, runtimeFor: () => runtime, convert: () => refuse(), loop: () => ({ start() {}, stop() {} }) });
-  for (const pkg of demoPackages()) { routines.store.save(pkg); routines.store.setApp(pkg.routine.id, { triggerEnabled: pkg.routine.id === 'air-bugfix' }); }
+  const routines = createRoutines({ userData: appRuns, terminalRuns, ...(changed ? { changed } : {}) });
+  for (const pkg of demoPackages()) routines.store.save(pkg);
   return routines;
 }

@@ -1,5 +1,5 @@
-// What a routine package can do (ADR 0175, 0176), read on demand by the Orchestrator through app_flow_capabilities and
-// app_flow_connectors before it writes a package from the user's plain-language need. One source: the app_guide topic
+// What a routine package can do (ADR 0175, 0176), read on demand by the Orchestrator through app_routine_capabilities and
+// app_routine_connectors before it writes a package from the user's plain-language need. One source: the app_guide topic
 // "routine" and docs/routines/authoring.md say the same. A step is a plain Claude Code session: no app roles, no app
 // tools, no approvals; the runtime (packages/routine-runtime) reads step-result.json and does every DevOps write itself.
 import { DEVOPS_OPS, SECRET_PLACEHOLDER } from '../../../packages/routine-runtime/src/index';
@@ -9,10 +9,10 @@ export const ROUTINE_CAPABILITY_SECTIONS = ['overview', 'steps', 'devops', 'brow
 /** The authoring recipe in one paragraph: the guide topic and the role text point here. */
 export const ROUTINE_AUTHORING_SUMMARY = 'Routine packages (ADR 0175): from the user\'s need write ONE routine.json object ' +
   '{format:"second-brain-routine",schemaVersion:1,routine:{id,title,description,inputs,steps,trigger?,devops?,escalation?,mcpServers?,testDbs?,browser?,loginSuccess?},credentials?,secrets?,files?} ' +
-  'and save it with app_flow_propose: it runs the package preflight and returns each problem with its field and fix. Each step is a plain Claude Code session ' +
+  'and save it with app_routine_save: it runs the package preflight and returns each problem with its field and fix. Each step is a plain Claude Code session ' +
   '(prompt, optional model/effort/allowedTools/mcpServers/testDbs/browser): never an app role, chat, agent_* or app_* tool. The runtime appends the step-result.json ' +
   'contract to every prompt and does the DevOps writes a step lists there. Never write a password or PAT: leave it out, the user types it on the Routine page. ' +
-  'app_flow_capabilities (sections) and app_flow_connectors say the rest; docs/routines/authoring.md has two worked examples.';
+  'app_routine_capabilities (sections) and app_routine_connectors say the rest; docs/routines/authoring.md has two worked examples.';
 
 const ROUTINE_SHAPE = {
   format: 'second-brain-routine', schemaVersion: 1,
@@ -38,8 +38,8 @@ export function flowCapabilities(section: unknown = 'overview'): object {
       workflow: [
         'Ask the user (native questions) only what the need leaves open: inputs, the site and test account, DevOps project/area/states/tags, who is asked when a person is needed.',
         'Write every know-how the steps need into their prompts (read the brain now; a run never reads the brain).',
-        'app_flow_propose {package} (or packagePath: a JSON file in the brain). invalid = fix each error (field + fix) and propose again; needs-human secrets = saved, tell the user which secrets to type on the Routine page; ready = saved.',
-        'Saving never runs anything and never switches a trigger on: the user starts it or enables its trigger on the Routine page.',
+        'app_routine_save {package} (or packagePath: a JSON file in the brain). invalid = fix each error (field + fix) and propose again; needs-human secrets = saved, tell the user which secrets to type on the Routine page; ready = saved.',
+        'Saving never runs anything and never switches a trigger on: the user runs routine run, watch or resume in a terminal. The app only reads runs on explicit request or in an open run view.',
       ],
       placeholders: '{{input}} for each declared input; {{workItem}}, {{work-item-id}}, {{work-item-url}} need a trigger or a workItem input.',
       never: ['app roles (Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald) or role/roleId/tier/engine fields', 'app tools (agent_*, app_*, flow_*, browser_login, handoff_to_user, mcp__second-brain__*)', 'approval or manual steps (a person is asked through outcome needs-human)', 'passwords, PATs, production databases or production commands'],
@@ -55,7 +55,7 @@ export function flowCapabilities(section: unknown = 'overview'): object {
     case 'devops': return {
       trigger: '{kind:"devops", everyMinutes, organization, project, areaPath, workItemType, states:["New"], includeExisting:false, includeTags?:["ai-fixable"], excludeTags?, workItemIds?, iterationPath?, maxPerHour?}: one run per matching work item; the item is {{workItem}}. Always narrow with includeTags or workItemIds.',
       grant: `devops {organization, projects, ops: subset of ${DEVOPS_OPS.join('|')}, fields: [reference names, needed with op fields]}: the ONLY writes a run may do, on its own work item, made by the runtime from devopsWrites in step-result.json. A step never calls DevOps itself.`,
-      reading: 'The runtime puts the work item (title, description, repro steps) in every prompt; for comments and attachments a step uses the runtime server routine-devops (allowedTools mcp__routine-devops__*), see app_flow_connectors.',
+      reading: 'The runtime puts the work item (title, description, repro steps) in every prompt; for comments and attachments a step uses the runtime server routine-devops (allowedTools mcp__routine-devops__*), see app_routine_connectors.',
       escalation: '{contact: DevOps identity GUID (lowercase), contactName?, pollMinutes?, reminderMinutes?}: on needs-human the runtime comments on the work item mentioning the contact, then polls for their reply and resumes. Ask the user whose identity; never guess a GUID.',
       pat: 'secrets.devopsPat: the user types it (section secrets); without it the app uses its own DevOps sign-in, a terminal fails.',
     };
@@ -73,7 +73,7 @@ export function flowCapabilities(section: unknown = 'overview'): object {
       never: 'Production databases, write queries, connection strings in prompts.',
     };
     case 'secrets': return {
-      rule: `Agents never write or see secrets. Leave password/devopsPat out (or write "${SECRET_PLACEHOLDER}"): app_flow_propose refuses any other value, keeps the ones the user already stored for the same routine id and saves with status needs-secrets, listing the fields (secret: true) the user types on the Routine page.`,
+      rule: `Agents never write or see secrets. Leave password/devopsPat out (or write "${SECRET_PLACEHOLDER}"): app_routine_save refuses any other value, keeps the ones the user already stored for the same routine id and saves with status needs-secrets, listing the fields (secret: true) the user types on the Routine page.`,
       where: 'credentials[].password (site logins), secrets.devopsPat, secrets.testDbs.<id>.password.',
       tell: 'Tell the user which secrets to type and where (Routine page → the routine → Credenziali); never ask for a value in chat.',
     };

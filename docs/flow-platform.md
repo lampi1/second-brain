@@ -1,30 +1,9 @@
-<!-- Reusable flow platform boundaries and host integration, for maintainers and reviewers. -->
-# Governed flow execution
+<!-- Current routine architecture: terminal-only execution, retained here so old documentation links remain useful. -->
+# Terminal-only routines
 
-Since ADR 0155 the app's runner advances every run (no Orchestrator turn), script/query steps run pinned by hash, and a prod step runs only on the user's «Esegui». The lines below that say otherwise are kept for the history of the trust model; ADR 0155 wins.
+The in-app flows executor, automation rules, triggers, approval panels and `app_flow_*` tools are retired
+(ADR [0179](adr/0179-terminal-only-routines.md)). The app never starts, advances, settles or reconciles routine runs.
 
-The catalog starts empty. The authenticated Orchestrator learns a procedure from the selected brain and the user's native questions, then proposes a definition. A native user decision activates one exact draft revision. Rejected or revised drafts do not alter an already approved version, and existing runs retain their original version and digest.
-
-Definitions describe ordered steps with explicit scope, inputs, evidence labels, timeout and attempt limits. Every agent step names a `workspaceInput` declared in its inputs; that run input is the exact local workspace for this step. Different steps may name different workspaces for work spanning repositories. Optional categories are user vocabulary, not an inferred company process. A match is deterministic: normalized whole alias phrases plus project/area scope. Omitted scope discovers candidates only. Multiple matches remain ambiguous. Starting always enforces scope.
-
-Only authenticated Orchestrator tools can start or operate runs. Each run permanently records its owner, subject and immutable version. Repeating a version and subject returns the existing run, while conflicting scope or inputs are rejected. Brain selection must resolve to a separate service/storage file; mutating tools and native decisions carry a context key to prevent an old modal or tool result changing another brain.
-
-## Trust boundaries
-
-- `FlowService` owns synchronous, revision-guarded transitions and persists before notifying observers. Writes use an exclusive temporary file, file synchronization and atomic rename. A failed save restores the previous in-memory state. Invalid JSON, mismatched version hashes, invalid pointers or impossible run states disable mutations and preserve the original file.
-- `app_flow_propose` proposes; it cannot activate. No tool exposes definition activation or user decisions. The renderer decision channel alone calls `decideDefinition` and `decide` after checking its displayed context key.
-- `app_flow_bind` names a chat only. The host resolves its eligibility and current run/task identity and checks the configured workspace against the canonical project root of the actual chat run. A durable binding ledger prevents one run/task identity from being reused across subjects, completed steps or explicit retries, including after restart. It does not launch a chat automatically or grant new capabilities.
-- `app_flow_report` supplies a report identifier only. The injected host resolver must read the immutable canonical final agent report for the bound chat/run/task, never trust supplied completion prose. Evidence is derived from met canonical done-when criteria as `criterion: evidence`. Every configured evidence label must appear. Independent review additionally requires a different chat, the Sentinel role and the exact earlier agent run in `reviewOf`.
-- Host receipts distinguish metadata checks, linked agent reports and user decisions. A manual completion needs a user evidence note; configured evidence labels require separate `label: evidence` lines. A user approval cannot certify an unsupported action.
-- The only builtins are `scope-present` and `inputs-present`. They validate metadata and can certify only the optional `metadata` evidence label. A `check` step with a script/query action runs that saved brain file through `executor.ts` (pinned sha256, no shell, bounded output, a receipt per run); a prod one waits for the user's «Esegui» (ADR 0155). Other action references, external writes without an approved adapter and production effects from agents always block.
-- An interrupted running agent becomes blocked on restart and its run revision changes; the runner then heals it like any failure while attempts remain (ADR 0155). A reason prefixed `Da sistemare: ` is never retried by itself. A user retry removes the old binding and consumes the same bounded attempt budget on the next binding. Snapshots and status reads reconcile expired running steps into durable blockers; no report is needed to expose a hung worker. Late reports cannot advance a timed-out step. A declined/other decision remains blocked with persisted feedback and `decisionPending: false` so it is not reopened as a fresh modal.
-
-## Integration
-
-Construct `FlowService({file, contextKey, resolveReport, changed})` for each canonical brain identity. Expose `flowTools({service, ownerId, resolveBinding})` only on authenticated Orchestrator mounts. The service getter must resolve the current selected brain on each call. Read-only list filters runs to the authenticated owner. The native snapshot can show all runs in that brain for user oversight.
-
-Work chats are shared in the cockpit; the authenticated owner of a flow may bind an eligible fresh work chat. The host must reject stale or already-reported runs, non-work chats, and chats whose actual project is incompatible with the configured step workspace. Flow operation remains restricted to its immutable authenticated owner. Canonical report lookup must bind the exact final report timestamp identifier and retain the canonical review relationship. These facts are checked at their existing chat manager source, not inferred from tool arguments.
-
-## Verification
-
-`test/unit/flows.test.ts` covers revisions, inactive drafts, immutable pinning, deterministic scope/ambiguity, idempotency, owner checks, trusted reports, independent review, native gates, metadata-only receipts, unsupported actions, retry/timeout limits, restart, corruption, brain context and write rollback. This change does not run E2E, launch a desktop/browser, execute a company procedure, publish or perform production operations.
+Use the [package authoring guide](routines/authoring.md) and `packages/routine-runtime` (`routine run | watch | resume`).
+The app prepares packages on request and observes runs only while their view is open or when the user explicitly
+asks the Orchestrator. Historical app runs remain read-only evidence; unknown DevOps outcomes are never retried.

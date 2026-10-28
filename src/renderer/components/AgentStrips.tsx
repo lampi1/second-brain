@@ -7,7 +7,6 @@
 // is kept across restarts); a root chat the Orchestrator started, or the app started or resumed by itself, says so above
 // it (Origin, ADR 0102).
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
-import { flowState } from '../store/flows';
 import { routinePlacements } from '../lib/routine-chats';
 import { workspaceTiles, tileKey, type TileRef } from '../lib/grid';
 import { areaOf } from '../lib/agent-order';
@@ -44,8 +43,7 @@ export function AgentStripsActions() {
 }
 
 export function AgentStrips() {
-  const snapshot = flowState.use(state => state.snapshot?.runs);
-  const routineIds = useApp(s => [...routinePlacements(s.chats, snapshot ? { runs: snapshot } : null).keys()], sameList);
+  const routineIds = useApp(s => [...routinePlacements(s.chats).keys()], sameList);
   const routineSet = new Set(routineIds);
   const ready = useApp(s => s.ready);
   const panelsVersion = ui.use(s => s.prefs.chatPanelsV);

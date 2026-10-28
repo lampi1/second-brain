@@ -5,8 +5,6 @@
 // switch (LangSwitch.tsx, ADR 0120), so it is always reachable.
 import { useWorkflows, reloadWorkflows, reloadLessons } from '../store/workflows';
 import { durableAsks } from '../lib/work-ask';
-import { flowAsks } from '../lib/flow-ask';
-import { useFlows, reloadFlows } from '../store/flows';
 import { planAskKeys } from '../lib/plan-ask';
 import { t as auditText } from '../i18n';
 import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
@@ -179,8 +177,7 @@ function useFit(head: RefObject<HTMLElement | null>, main: RefObject<HTMLElement
 
 export function TopBar() {
   const { rows, lessons, error, lessonError } = useWorkflows();
-  const flows = useFlows();
-  const waiting = useApp(s => s.pending.length + planAskKeys(s).length) + durableAsks(rows, lessons).length + flowAsks(flows.snapshot).length;
+  const waiting = useApp(s => s.pending.length + planAskKeys(s).length) + durableAsks(rows, lessons).length;
   const later = ui.use(s => s.later);
   const inQueue = later && waiting > 0; // "Da rispondere" (not the CPU queue below)
   // "Rispondi dopo" on with nothing waiting: say it, a click turns the popups back on (lib/later.ts)
@@ -212,7 +209,7 @@ export function TopBar() {
           <span className="queue-label">{auditText('audit.TopBar.queued')}</span><span className="count-badge">{queued}</span>
         </button>
       )}
-      {(error || lessonError || flows.error) && <button type="button" className="btn btn-amber btn-s" role="status" onClick={() => { void reloadWorkflows(); void reloadLessons(); void reloadFlows(); }} data-testid="work-queue-retry">{t('cmp.durable.queue.retry')}</button>}
+      {(error || lessonError) && <button type="button" className="btn btn-amber btn-s" role="status" onClick={() => { void reloadWorkflows(); void reloadLessons(); }} data-testid="work-queue-retry">{t('cmp.durable.queue.retry')}</button>}
       <CliStatusButton />
       <SyncStatus />
       <button type="button" className={`btn btn-m ${waiting ? 'btn-amber' : 'btn-ghost'} next-btn`} onClick={() => (paused ? openQueue(null) : nextThing())} data-testid="topbar-next" data-queue={inQueue ? '' : undefined} data-paused={paused ? '' : undefined}

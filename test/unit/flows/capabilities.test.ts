@@ -1,4 +1,4 @@
-// The routine package catalog (app_flow_capabilities) describes the package model: plain Claude Code steps, runtime
+// The routine package catalog (app_routine_capabilities) describes the package model: plain Claude Code steps, runtime
 // DevOps writes, the runtime-owned browser, user-typed secrets. Discovery changes nothing and grants nothing.
 import { expect, it } from 'vitest';
 import { flowCapabilities, ROUTINE_CAPABILITY_SECTIONS } from '../../../src/main/flows/capabilities';

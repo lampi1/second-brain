@@ -38,7 +38,7 @@ vi.mock('tedious', async () => {
   }
   return { Connection, Request, ISOLATION_LEVEL: { READ_UNCOMMITTED: 1 } };
 });
-import { runTestDbQuery } from '../../../src/main/flows/test-db-driver';
+import { runTestDbQuery } from '../../../packages/routine-runtime/src/test-db-driver';
 
 const input = () => ({ target: { id: 'test-a', server: 'sql.example.invalid', port: 1433, database: 'ExplicitSandbox' }, userName: 'restricted_reader', password: 'test-only-secret', query: 'SELECT value FROM dbo.Items', maxRows: 2 });
 beforeEach(() => { fake.sql = []; fake.events = []; fake.database = 'ExplicitSandbox'; fake.failQuery = false; fake.hold = false; fake.rollbackFails = false; fake.beforeUser = undefined; fake.rows = [[1], [2], [3]]; });

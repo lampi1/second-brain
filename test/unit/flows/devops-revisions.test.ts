@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import { DevOpsRevisions } from '../../../src/main/flows/devops-revisions';
+import { DevOpsRevisions } from '../../../packages/routine-runtime/src/devops-revisions';
 const dirs: string[] = [];
 afterEach(() => dirs.splice(0).forEach(dir => fs.rmSync(dir, { recursive: true, force: true })));
 const setup = () => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'revision-test-')); dirs.push(dir); const file = path.join(dir, 'journal.json'); return { file, journal: new DevOpsRevisions(file) }; };

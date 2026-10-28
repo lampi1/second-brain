@@ -1,9 +1,7 @@
-// Bounded, confined JSON reader for files in the selected brain: routine package proposals (app_flow_propose, package-tools.ts)
+// Bounded, confined JSON reader for files in the selected brain: routine package proposals (app_routine_save, package-tools.ts)
 // and component import definitions (components/service.ts). Loading grants nothing: the caller validates the content.
 import fs from 'node:fs';
 import path from 'node:path';
-import type { FlowDefinition } from '../../shared/flows';
-import { object, text } from './schema';
 import { flowBrainContextKey } from './context';
 
 export const FLOW_DEFINITION_FILE_MAX_BYTES = 1024 * 1024;
@@ -51,14 +49,15 @@ function checkPath(root: string, file: string): fs.Stats {
   return stat;
 }
 const unchanged = (a: fs.Stats, b: fs.Stats): boolean => a.dev === b.dev && a.ino === b.ino && a.size === b.size && a.mtimeMs === b.mtimeMs && a.ctimeMs === b.ctimeMs && b.nlink === 1 && b.isFile();
-function readDefinitionFileOnce(brainRoot: string | null | undefined, value: unknown, expectedContextKey: string): FlowDefinition {
-  const requested = text(value, 'definitionPath', 4096);
+function readDefinitionFileOnce(brainRoot: string | null | undefined, value: unknown, expectedContextKey: string): Record<string, unknown> {
+  if (typeof value !== 'string' || !value.trim() || value.length > 4096) throw new Error('definitionPath: expected text (1-4096 characters)');
+  const requested = value.trim();
   if (!brainRoot) fail('Connect a brain before proposing a routine from a file');
   if (path.extname(requested).toLowerCase() !== '.json' || requested.split(/[\\/]/).includes('..')) fail('definitionPath must name a JSON file inside the selected brain, without traversal');
   let bytes: Buffer;
   try {
     const configured = path.resolve(brainRoot), root = fs.realpathSync(configured), candidate = path.resolve(configured, requested);
-    if (flowBrainContextKey(root) !== expectedContextKey) fail('Brain context changed; reread app_flow_list before loading a definition file');
+    if (flowBrainContextKey(root) !== expectedContextKey) fail('Brain context changed; reselect the brain before loading a package file');
     // Accept both the configured root and its canonical spelling (e.g. macOS /tmp), never another root.
     const base = inside(configured, candidate) ? configured : root;
     if (!inside(base, candidate)) fail('Routine definition file must be inside the selected brain');
@@ -91,11 +90,12 @@ function readDefinitionFileOnce(brainRoot: string | null | undefined, value: unk
   let parsed: unknown;
   try { parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); }
   catch { throw new Error('Routine definition file must contain valid UTF-8 JSON (a plain definition object)'); }
-  return object(parsed, 'definition file') as unknown as FlowDefinition;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('definition file: expected object');
+  return parsed as Record<string, unknown>;
 }
 /** Unrelated siblings may change ancestor metadata. Discard that read and retry all checks with the SAME context.
  * Identity changes, links, file mutation, parsing and validation errors are never retried or treated as success. */
-export function readDefinitionFile(brainRoot: string | null | undefined, value: unknown, expectedContextKey: string): FlowDefinition {
+export function readDefinitionFile(brainRoot: string | null | undefined, value: unknown, expectedContextKey: string): Record<string, unknown> {
   for (let attempt = 1; ; attempt++) {
     try { return readDefinitionFileOnce(brainRoot, value, expectedContextKey); }
     catch (error) { if (!(error instanceof DirectoryMetadataChanged) || attempt >= FLOW_DEFINITION_READ_ATTEMPTS) throw error; }

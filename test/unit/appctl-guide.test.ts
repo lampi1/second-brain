@@ -3,9 +3,8 @@
 // silence is said plainly.
 import { describe, expect, it } from 'vitest';
 import type { BrowserWindow } from 'electron';
-import { entries, guideTool, routineLines, screenOutline, search, type GuideDeps } from '../../src/main/appctl/guide';
+import { entries, guideTool, screenOutline, search, type GuideDeps } from '../../src/main/appctl/guide';
 import { DEFAULTS, schema } from '../../src/main/brain/config';
-import type { FlowSnapshot } from '../../src/shared/flows';
 
 const UI = {
   lang: 'it',
@@ -64,27 +63,13 @@ describe('app_guide', () => {
     expect(search(list, 'zzz qqq')).toEqual([]);
   });
 
-  it('names the active routines with how to start them', async () => {
-    const snap = { contextKey: 'k', drafts: [], active: { standup: 2 }, runs: [{ flowId: 'standup', status: 'completed', updatedAt: Date.parse('2026-10-24T08:00:00Z') }],
-      versions: [{ version: 2, draftRevision: 1, digest: 'd', activatedAt: 1, definition: { id: 'standup', title: 'Standup del mattino', description: 'Prepara lo standup', aliases: ['standup'], scope: {}, steps: [{}, {}] } }] } as unknown as FlowSnapshot;
-    const lines = routineLines(snap);
-    expect(lines[0]!.title).toContain('Standup del mattino');
-    expect(lines[0]!.text).toContain('app_flow_start');
-    expect(lines[0]!.text).toContain('last run 2026-10-24T08:00:00.000Z completed');
-    expect(String(await guideTool(deps({ flows: () => snap })).run({}))).toContain('Routines (page Routine, active): Standup del mattino');
+  it('explains terminal execution without reading any routine data', async () => {
+    const out = String(await guideTool(deps()).run({ topic: 'routine' }));
+    expect(out).toContain('terminal');
+    expect(out).not.toContain('app_flow_start');
+    expect(out).not.toContain('app_config area routine');
   });
 
-  it('says a routine\'s trigger state, filters and queue, and how pauses work', async () => {
-    const snap = { contextKey: 'k', drafts: [], active: { fix: 1 }, runs: [],
-      versions: [{ version: 1, definition: { id: 'fix', title: 'Air bug auto-fix', description: '', aliases: [], scope: {}, steps: [{}] } }],
-      automation: { revision: 1, paused: false, background: false, rules: [{ id: 'r1', revision: 1, status: 'paused', config: { flowId: 'fix', trigger: { kind: 'devops', everyMinutes: 5, areaPath: 'Air', workItemType: 'Bug', states: ['New'], workItemIds: [7] } } }],
-        events: [{ ruleId: 'r1', status: 'pending', sourceKey: 'a' }, { ruleId: 'r1', status: 'started', sourceKey: 'b' }] } } as unknown as FlowSnapshot;
-    expect(routineLines(snap)[0]!.text).toMatch(/trigger paused: DevOps Bug in Air .*filters only ids 7, queue 1; .*app_config area routine/);
-    const how = String(await guideTool(deps({ flows: () => snap })).run({ topic: 'routine trigger filtri' }));
-    expect(how).toMatch(/starts a run for each new work item it finds/);
-    expect(how).toMatch(/tags all of, excluded tags, work item ids/);
-    expect(how).toMatch(/app_config area routine switches and pauses only the old routines/);
-  });
 });
 
 describe('screen outline', () => {

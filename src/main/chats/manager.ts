@@ -56,7 +56,6 @@ import { waitsForPeople, waitsForWork } from '../../shared/waiting';
 import { claudeHome, findTranscript, readHistory } from './transcript';
 import { orchestratorOwner, plainOwner, type ResolvedRole } from '../agents/catalog';
 import { withinParent } from '../agents/worktrees';
-import { browserWorkerPolicy, BROWSER_WORKER_TOOLS } from '../browser/worker-policy';
 import { FAIL_CLOSED, aboveCeiling, allowsClass, belowParent, browserAccess, claudeDefaultMode, claudeTools, COMMAND_TOOLS, commandsReadOnly, narrowest, readOnlyCommand, toolClassOf, within, type AgentPolicy, type BrowserAccess, type ReadScripts } from '../agents/tool-policy';
 import { readOnlyTools } from '../agents/read-tools';
 import { type UserTaskEvents, type TaskDeliveryPolicy, type AgentOwnerSnapshot, type AgentRun, type AgentRunEnd, type AgentRunOutcome, type AgentRunTags } from '../../shared/agents';
@@ -116,8 +115,6 @@ export interface ChatManagerOptions {
   suggestSkills?: (goal: string) => Promise<string[]>;
   /** the roles in a few lines, for the Orchestrator's first message of a session (agents/discovery.ts roleCatalogBrief) */
   roleCatalogBrief?: () => string;
-  /** Live brain-scoped flow discovery on each user turn, separate from model routing estimates. */
-  flowContext?: (text: string, chatId: string) => string;
   /** the language the user wants replies in (ADR 0120: locale.ts uiLang, the setting or Windows'); absent = not named */
   replyLang?: () => Lang;
   /** the review pack under a Sentinel's first message (agents/review-pack.ts): the change it checks, gathered with git */
@@ -475,8 +472,7 @@ const ITEM_FRAME_MS = 16;
 const ORCHESTRATOR_HIDDEN: ReadonlySet<string> = new Set(['agent_work_decisions', 'plan_propose', 'plan_update', 'agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_report', 'agent_ask_parent', 'agent_answer_child', 'agent_children', 'agent_child_feedback', 'agent_catalog', 'agent_learn_propose',
   // it saves scripts with brain_script_save on its own endpoint
   'brain_script_add',
-  // DevOps writes belong to the chat bound to an adapter step of an automatic flow (ADR 0145)
-  'flow_devops_write', 'flow_pr_build_status', 'flow_test_db_query']);
+]);
 /** the tools only a chat that may delegate can use (chatToolShown): a role that launches no role (Scout, Judge) never
  *  sees them (~1 500 tokens of schemas in every call, each call refused) */
 const DELEGATING_ONLY: ReadonlySet<string> = new Set(['agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_children', 'agent_answer_child', 'agent_child_feedback', 'agent_catalog', 'skills_suggest']);
@@ -568,7 +564,6 @@ export class ChatManager implements ChatService {
   private notesFor = new Map<string, string[]>();
   private userWroteListeners: ((n: UserWroteNote) => void)[] = [];
   private cleanReportListeners: ((n: CleanReportNote) => boolean)[] = [];
-  private reportSavedListeners: ((chatId: string) => void)[] = [];
   /** children's results waiting for their siblings', per parent (queueChildResult) */
   private childResults = new Map<string, { items: HeldChildResult[]; timer: NodeJS.Timeout | null }>();
   /** "Riprendi" in flight per old chat: a double click or two agents get the same new chat, never two. */
@@ -697,6 +692,7 @@ export class ChatManager implements ChatService {
   /** links = the run links an Orchestrator tool sets (A7): refused before anything starts when one names an unknown run. */
   /** by: who asks; 'app' = one of the app's own jobs (the Judge's sampled reviews): like an agent, its run says startedBy 'app' */
   async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user', inherited?: { launchContext?: AgentContextSnapshot; tier?: ModelTier; routinePackage?: string; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links: RunLinks = {}, opts: { routine?: ChatSummary['routine']; boundByOrchestrator?: boolean; continuation?: boolean; continuationOf?: string } = {}): Promise<ChatSummary> {
+    if (opts.routine || inherited?.routinePackage) throw new Error('Routine execution is terminal-only.');
     const createdT0 = Date.now();
     this.deliveryPolicy(req.deliveryPolicy, !!req.parentId);
     if (req.doneWhen && (req.doneWhen.length > 12 || req.doneWhen.some(x => typeof x !== 'string' || !x.trim() || x.length > 300))) throw new Error('Invalid task criteria.');
@@ -729,12 +725,7 @@ export class ChatManager implements ChatService {
       : req.research ? { request: req, owner: { ...plainOwner(req.harness, req.model ?? null), name: RESEARCH_TITLE }, instructions: RESEARCH_FRAME,
         policy: { tools: { allow: req.research.web ? ['read', 'web'] : ['read'] }, ceiling: 'default' } }
       : this.opts.resolveAgent?.(req) ?? { request: req, owner: plainOwner(req.harness, req.model ?? null), instructions: '', policy: null };
-    const routinePick = opts.routine?.browserWrite ? { harness: req.harness, model: req.model, effort: req.effort } : null;
-    req = routinePick ? { ...agent.request, ...routinePick } : agent.request;
-    if (opts.routine?.browserWrite) {
-      agent.owner = { ...agent.owner, engine: req.harness, model: req.model ?? null };
-      if (engineOrThrow(req.harness).kind !== 'claude') throw new Error('Browser-write routines currently require Claude: this engine cannot enforce browser-only tools. Select a Claude engine for this step and approve the new version.');
-      agent.policy = browserWorkerPolicy(agent.policy); agent.skills = []; agent.launches = []; agent.assets = undefined; }
+    req = agent.request;
     // a delegated chat (agent_delegate): only an agent's, under a live parent, in the parent's folder, linked to its run
     const delegator = req.parentId !== undefined ? await this.delegator(req, by, opts.continuation === true) : undefined;
     if (delegator?.s.run) links = { ...links, parentRunId: delegator.s.run.runId };
@@ -790,7 +781,7 @@ export class ChatManager implements ChatService {
     // only an engine launched with the same ones fits (launchSig)
     // a delegated chat takes only an engine launched for a child of the same role under the same role chain: its
     // endpoint lists the child's tools (agent_ask_parent) and its managed MCP servers are bounded by those ancestors
-    const warmable = !opts.routine?.browserWrite && !inherited?.routinePackage && caps.warm && !forkOf && !req.worktree && !req.orchestrator && req.permissionMode !== 'bypassPermissions';
+    const warmable = caps.warm && !forkOf && !req.worktree && !req.orchestrator && req.permissionMode !== 'bypassPermissions';
     const ancestors = delegator ? this.mcpContext(delegator.s.id)?.roles ?? null : undefined;
     const role = agent.owner?.source === 'catalog' ? agent.owner.id : null;
     const launch = this.warmLaunch(policy, agent.assets, agent.maxContext, delegator ? (ancestors ? { role, launches: agent.launches ?? null, child: { ancestors } } : undefined)
@@ -822,17 +813,11 @@ export class ChatManager implements ChatService {
     // messages (ADR 0036) it never waits for the CPU queue (a start of 10-25 s was then followed by the queue's wait)
     const forUser = by === 'agent' && !delegator && !req.orchestrator && this.orchestratorAnswering();
     const viaQueue = by !== 'user' && !forUser && !!prompt && !!this.admission;
-    const observedContext: AgentContextSnapshot | undefined = agent.launchContext ?? (inherited?.routinePackage ? {
-      schema: 1, at: now, mode: 'sealed', packageDigest: inherited.routinePackage,
-      memory: { available: true, records: [], omitted: { ineligible: 0, unmatched: 0, budget: 0 }, estimatedTokens: 0, budgetTokens: 0 }, skills: [],
-      instructions: { sha256: crypto.createHash('sha256').update(agent.instructions).digest('hex'), characters: agent.instructions.length, estimatedTokens: Math.ceil(agent.instructions.length / 3) },
-    } : undefined);
+    const observedContext = agent.launchContext;
     const r: Rec = {
       s: {
         agent: agent.owner,
         ...(observedContext ? { launchContext: { ...observedContext, instructions: { sha256: crypto.createHash('sha256').update(agent.instructions).digest('hex'), characters: agent.instructions.length, estimatedTokens: Math.ceil(agent.instructions.length / 3) } } } : {}),
-        ...(opts.routine ? { routine: { ...opts.routine } } : {}),
-        ...(inherited?.routinePackage ? { routinePackage: inherited.routinePackage, routinePromptHash: crypto.createHash('sha256').update(inherited.instructions).digest('hex') } : {}),
         ...(by !== 'user' ? {work:{status:'assigned' as const,updatedAt:now}} : {}),
         effortStatus: initialEffort(caps.effort, req.effort ?? null),
         id, harness: req.harness, origin: 'app', title, cwd, sessionId: forkOf || !caps.transcript ? null : warm?.sessionId ?? crypto.randomUUID(),
@@ -932,6 +917,7 @@ export class ChatManager implements ChatService {
   async send(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false, source?: TaskSource, receipt?: SubmissionReceipt): Promise<void> {
     updateActivity.assertOpen();
     const r = this.need(chatId);
+    if (r.s.routine || r.s.routinePackage) throw new Error('Archived routine chat: use the terminal routine CLI.');
     // Flash follows its card (ADR 0107): the user's question goes to a Flash on the card's engine and model
     if (r.s.quick && from === undefined && !resumed && (!source || source.kind === 'user')) {
       const next = await this.flashFollow(r);
@@ -1135,15 +1121,7 @@ export class ChatManager implements ChatService {
     r.undoNote = undefined;
     // the user's own request to the Orchestrator carries the app's estimate (zero tokens), never the app's news or mail
     const estimate = r.s.isOrchestrator && !from && !resumed && t && !t.startsWith('[') ? this.requestEstimate(t) : null;
-    let flowHint = '';
-    if (r.s.isOrchestrator && !from && !resumed && t && !t.startsWith('[') && this.opts.flowContext) {
-      try { flowHint = this.opts.flowContext(t, chatId); }
-      catch (e) {
-        log.warn('flows', 'flow discovery unavailable', { cause: errText(e), hint: 'Read app_flow_list before using a saved flow.' });
-        flowHint = '[app flows] Catalogo non disponibile: non assumere che sia vuoto e non ricostruire un flusso dalla memoria. Verifica app_flow_list; segnala il blocco in una domanda.';
-      }
-    }
-    const asked0 = [noted, estimate, flowHint].filter(Boolean).join('\n\n');
+    const asked0 = [noted, estimate].filter(Boolean).join('\n\n');
     // Lampo is a "btw" (ADR 0106): the user's question carries what the Orchestrator said and did since it last looked
     const lampo = r.s.quick && !from && !resumed ? this.lampoContext(r) : null;
     const body = lampo ? `${lampo.text}${asked0}` : asked0;
@@ -1574,6 +1552,7 @@ export class ChatManager implements ChatService {
   /** Back on the grid; the session resumes on the next message (Claude --resume, Cursor session/load). */
   async reopen(chatId: string): Promise<ChatSummary> {
     const r = this.need(chatId);
+    if (r.s.routine || r.s.routinePackage) throw new Error('Archived routine chat: use the terminal routine CLI.');
     if (r.s.closedAt) this.unarchive(r);
     return { ...r.s };
   }
@@ -1605,8 +1584,6 @@ export class ChatManager implements ChatService {
   /** A root chat's clean result (done, every criterion met, no question): a listener that returns true took it as quiet
    *  news for the Orchestrator (orchestrator-wake.ts cleanReport); else it goes as a message, as any other result. */
   onCleanReport(fn: (n: CleanReportNote) => boolean): void { this.cleanReportListeners.push(fn); }
-  /** Every canonical root report, including blocked/partial results, is available to host workflow reconciliation. */
-  onReportSaved(fn: (chatId: string) => void): void { this.reportSavedListeners.push(fn); }
   /** the notes waiting for this chat's next message (tests, diagnostics) */
   notesWaiting(chatId: string): readonly string[] { return this.notesFor.get(chatId) ?? []; }
 
@@ -2441,10 +2418,7 @@ export class ChatManager implements ChatService {
     r.rootReportAt = at;
     this.persist();
     this.updated(r);
-    for (const listener of this.reportSavedListeners) {
-      try { listener(chatId); }
-      catch (error) { log.warn('flows', 'Saved report notification failed', { chat: chatId, cause: errText(error), hint: 'Routine reconciliation retries from the canonical report.' }); }
-    }
+
     const orchestrator = this.openOrchestrator();
     const role = r.s.agent?.id;
     // a clean result (done, every criterion met, no question) is quiet news: the user reads it in the chat, the
@@ -3201,6 +3175,7 @@ export class ChatManager implements ChatService {
   }
 
   private restore(c: StoredChat): Rec {
+    if (c.routine || c.routinePackage) c = { ...c, closedAt: c.closedAt ?? c.createdAt, closedBy: 'auto' };
     const restored = new AgentChildrenReducer(c.agentChildren);
     restored.end();
     const children = new AgentChildrenReducer(restored.snapshot());
@@ -3514,8 +3489,6 @@ export class ChatManager implements ChatService {
     if (warm) return !(DELEGATING_ONLY.has(tool) && warm.launches?.length === 0) && (tool !== 'agent_ask_parent' || !!warm.child) && !PLAN_TOOLS.has(tool) && !RESEARCH_TOOLS.has(tool);
     if (!r || !s) return !RESEARCH_TOOLS.has(tool);
     // the maintenance research (ADR 0132): its two tools and nothing of the app's mail, delegation or plans
-    if (s.routine?.browserWrite) return BROWSER_WORKER_TOOLS.has(tool);
-    if (s.routinePackage && /^(?:brain_|memory_|skills_|agent_learn|agent_delegate|agent_catalog)/.test(tool)) return false;
     if (s.research) return RESEARCH_TOOLS.has(tool) || (!LAMPO_HIDDEN.has(tool) && !tool.startsWith('agent_'));
     if (RESEARCH_TOOLS.has(tool)) return false;
     if (s.isOrchestrator) return !ORCHESTRATOR_HIDDEN.has(tool);
@@ -3577,10 +3550,7 @@ export class ChatManager implements ChatService {
     let sessionId = r.s.sessionId;
     let resume = false, fork = false;
     const engine = engineOrThrow(r.s.harness);
-    if (r.s.routine?.browserWrite) {
-      if (engine.kind !== 'claude') throw new Error('Browser-write routines currently require Claude for enforced browser-only tools');
-      r.policy = browserWorkerPolicy(r.policy);
-    }
+
     if (!engine.caps.transcript) resume = isUuid(sessionId); // session/load; a new one gets its id from session/new
     else if (!sessionId && r.forkFrom) { sessionId = r.forkFrom; resume = true; fork = true; }
     else if (isUuid(sessionId) && findTranscript(sessionId, r.s.cwd, this.home)) resume = true;
@@ -3598,7 +3568,7 @@ export class ChatManager implements ChatService {
     const opts: SessionOptions = {
       chatId, cwd: r.s.cwd, model: r.choice.model, effort: r.choice.effort, permissionMode: this.modeFor(r), title: r.s.title,
       ...(r.policy ? { toolPolicy: r.policy.tools, ceiling: r.policy.ceiling } : {}),
-      ...(!r.s.routine?.browserWrite && r.agentAssets ? { agentAssets: r.agentAssets } : {}),
+      ...(r.agentAssets ? { agentAssets: r.agentAssets } : {}),
       // the Orchestrator's turn stays short: a few workspace calls, then it delegates (ADR 0090, issue #98)
       // a role chat with the sub-agent tool: only the Explore search, since Claude asks no permission to start one
       ...(engine.kind !== 'claude' ? {} : r.s.isOrchestrator ? { preToolUse: new TurnToolBudget() }
@@ -3606,7 +3576,7 @@ export class ChatManager implements ChatService {
       sessionId, resume, fork, worktree: r.worktree && !resume, mcpConfig: this.mcpConfig(chatId), costBaseUsd: r.costTotalUsd,
       compactWindowTokens: r.maxContext ?? this.compactWindow(),
       // Native subagents inherit this environment: a per-chat model cannot prove a memory event's producer.
-      env: { ...this.opts.env, SB_EVENT_CONTEXT: '', ...(r.s.routine?.browserWrite ? { SB_ROUTINE_BROWSER: '1' } : {}), ...(r.s.routinePackage ? { SB_ROUTINE_PACKAGE: r.s.routinePackage, SB_APP_RECALL: '' } : {}) }, ...(extraArgs ? { extraArgs } : {}),
+      env: { ...this.opts.env, SB_EVENT_CONTEXT: '' }, ...(extraArgs ? { extraArgs } : {}),
     };
     r.worktree = false; // created once; a resume re-enters it
     let sess: HarnessSession | null = null;
@@ -3625,7 +3595,6 @@ export class ChatManager implements ChatService {
    *  with Bash, 12/10). r = undefined: a warm engine (warm.ts), never an Orchestrator. */
   private extraArgsFor(harness: Harness, chatId: string, r: Rec | undefined): string[] | null {
     const allowed = !engineOf(harness)?.caps.preAllow ? [] : [
-      ...(r?.s.routine?.browserWrite ? ['mcp__second-brain'] : []),
       ...(this.appMcpFor(r) ? ['mcp__second-brain-app'] : []),
       ...(this.opts.mcpUrlFor?.(chatId) && !r?.s.quick ? APP_CHAT_TOOLS.map(t => `mcp__second-brain__${t}`) : []),
     ];

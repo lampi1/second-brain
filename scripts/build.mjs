@@ -20,11 +20,7 @@ fs.mkdirSync(path.join(root, 'out/tasks'), { recursive: true });
 fs.copyFileSync(path.join(root, 'src/main/tasks/devops-me.mjs'), path.join(root, 'out/tasks/devops-me.mjs'));
 await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/index.ts')], outfile: path.join(root, 'out/main/index.js'), format: 'esm', external: ['electron', 'playwright-core'],
   banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" } });
-// the routine runtime's stdio MCP servers (packages/routine-runtime/src/mcp-main.ts, ADR 0175: `testdb` | `devops` |
-// `browser`), started per step by the routine host with Electron as Node; playwright-core (the browser) is not bundled:
-// it travels in out/node_modules like the packages below
-await esbuild({ ...common, entryPoints: [path.join(root, 'packages/routine-runtime/src/mcp-main.ts')], outfile: path.join(root, 'out/main/routine-mcp.js'), format: 'esm', external: ['playwright-core'],
-  banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" } });
+
 // the hybrid search's worker thread (src/main/search/hybrid/worker.ts), next to the main bundle
 await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/search/hybrid/worker.ts')], outfile: path.join(root, 'out/main/search-worker.js'), format: 'esm',
   banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" } });

@@ -2,10 +2,8 @@
 export const routineDe = {
   'rt.title': "Routinen",
   'rt.start': "Starten",
-  'rt.run': "Ausführen",
   'rt.cancel': "Abbrechen",
   'rt.save': "Speichern",
-  'rt.completed': "beendet",
   'rt.item': "Work Item (optional)",
   'rt.context.title': "Agentenkontext",
   'rt.context.unknown': "Für diesen Chat wurde kein Startmanifest aufgezeichnet.",

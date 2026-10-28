@@ -5,7 +5,6 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { convertFlowToPackage, createRoutineRuntime, loadRoutinePackage, type LoginPageDriver } from '../../../packages/routine-runtime/src/index';
-import { appCredentials } from '../../../src/main/flows/routine-host';
 import { done, routinePackage, scriptedEngine, tempDir } from './fakes';
 
 const AIR = 'https://air.example.test';
@@ -53,11 +52,6 @@ describe('routine site login', () => {
     const { pkg } = convertFlowToPackage({ format: 'second-brain-flow', schemaVersion: 1, definition: { id: 'air-check', title: 'Air check', description: '', steps: [{ id: 'read', title: 'Read', kind: 'agent', instructions: 'Open Air.' }] }, credentials: [{ loginUrl: LOCAL_LOGIN, user: 'qa', password: PASSWORD }] });
     expect(pkg.credentials).toEqual([{ loginUrl: LOCAL_LOGIN, user: 'qa', password: PASSWORD }]);
     expect(pkg.routine.steps.map(s => s.prompt).join('\n')).not.toContain('mode=local');
-  });
-
-  it('the app vault (origin only) still logs in on the package\'s stored URL with its query', () => {
-    const store = appCredentials(routinePackage({}, { credentials: [{ loginUrl: LOCAL_LOGIN, user: 'qa', password: PASSWORD }] }), () => ({ user: 'vault', password: PASSWORD }));
-    expect(store.forLogin(`${AIR}/Account/Login?ReturnUrl=x`)).toEqual({ loginUrl: LOCAL_LOGIN, user: 'vault', password: PASSWORD });
   });
 
   it('an origin-only login (filled by the app from its site vault) opens the page that asked for it, query included', async () => {

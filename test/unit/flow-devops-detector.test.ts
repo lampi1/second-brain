@@ -1,6 +1,6 @@
 // Fake-only Azure detector regressions: scope, baseline, bounded snapshots, cancellation and secret-safe failures.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createDevOpsDetector, detectDevOps } from '../../src/main/flows/devops-detector';
+import { createDevOpsDetector, detectDevOps } from '../../packages/routine-runtime/src/devops-detector';
 import type { FlowAutomationConfig, FlowTrigger } from '../../src/shared/flow-automation';
 
 const AS_OF = '2026-01-02T03:04:05.000Z';

@@ -1,6 +1,6 @@
 // Latest PR merge-build observations: only the approved pipeline/repository/commit; no remote writes or fallback successes.
 import { expect, it, vi } from 'vitest';
-import { prBuildStatus } from '../../../src/main/flows/pr-build-status';
+import { prBuildStatus } from '../../../packages/routine-runtime/src/devops-host/pr-build-status';
 import type { TestDeployTarget } from '../../../src/shared/flow-automation';
 const guid = '11111111-2222-3333-4444-555555555555', commit = 'a'.repeat(40);
 const target = { id: 'test', organization: 'contoso', projectId: guid, repositoryId: guid, buildDefinitionId: 6 } as TestDeployTarget;

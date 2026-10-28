@@ -2,12 +2,8 @@
 // mimics Air's AJAX login page (#loginForm without method/action, #btnLogin type=button posting via script) and a
 // classic POST form. Checks: AJAX accepted, POST still accepted, foreign origin refused, ok/fail only, no password leak.
 import vm from 'node:vm';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AIR_LOGIN_SUCCESS, classifyLoginForm, driveLogin, inspectLoginForm, loginSucceeded, type LoginFormFacts, type LoginPageDriver, type LoginPlan } from '../../src/main/browser/login-form';
-import { siteLogin, siteLoginScript } from '../../src/main/browser/site-login';
-import { log } from '../../src/main/log';
-import type { BrowserTabs, Tab } from '../../src/main/browser/tabs';
-import type { SiteVault } from '../../src/main/browser/site-vault';
+import { describe, expect, it } from 'vitest';
+import { AIR_LOGIN_SUCCESS, classifyLoginForm, driveLogin, inspectLoginForm, loginSucceeded, type LoginFormFacts, type LoginPageDriver, type LoginPlan } from '../../packages/routine-runtime/src/login-form';
 
 const AIR = 'https://air.example.test';
 const SECRET = ['fixture', 'ajax', 'value'].join('-'); // built at run time: the guard refuses secret-shaped literals
@@ -74,7 +70,6 @@ function pageWorld(location: { href: string; origin: string }, passwords: Input[
     HTMLInputElement: Input, HTMLElement: El, HTMLFormElement,
   };
 }
-const run = (p: Page, origin = AIR) => vm.runInNewContext(siteLoginScript(origin, 'tester', SECRET), p.world) as unknown;
 const factsOf = (p: Page): LoginFormFacts => vm.runInNewContext(`(${inspectLoginForm.toString()})().facts`, p.world) as LoginFormFacts;
 
 describe('classifyLoginForm', () => {
@@ -137,67 +132,5 @@ describe('driveLogin (page-driver flow for a terminal runtime)', () => {
     const evil = airPage('https://evil.example.test/Account/Login'), calls: unknown[] = [];
     expect(await driveLogin(driver(evil, calls), AIR, { user: 'tester', password: SECRET }, AIR_LOGIN_SUCCESS)).toBe(false);
     expect(calls).toEqual([]); expect(evil.pw.value).toBe('');
-  });
-});
-
-describe('siteLoginScript (Electron isolated world)', () => {
-  it('AJAX page: fills both fields and clicks #btnLogin; the page script posts', () => {
-    const p = airPage();
-    expect(run(p)).toBe(true);
-    expect(p.button.clicks).toBe(1); expect(p.posted).toHaveLength(1); expect(p.pw.value).toBe(SECRET);
-    expect(p.world.__sbRoutineLoginAjax).toBe(true);
-  });
-  it('POST page still uses requestSubmit with its single submit button', () => {
-    const p = postPage();
-    expect(run(p)).toBe(true); expect(p.form.submitted).toBe(p.button); expect(p.world.__sbRoutineLoginAjax).toBeUndefined();
-  });
-  it('foreign origin or a form changed after the user field: refused, fields left empty', () => {
-    const evil = airPage('https://evil.example.test/Account/Login');
-    expect(run(evil)).toBe(false); expect(evil.pw.value).toBe(''); expect(evil.button.clicks).toBe(0);
-    const p = airPage(); p.user.dispatchEvent = () => { p.form.attrs.action = 'https://evil.example.test/'; return true; }; // the page reacts to the input event
-    expect(run(p)).toBe(false); expect(p.pw.value).toBe(''); expect(p.button.clicks).toBe(0);
-  });
-});
-
-describe('siteLogin on an AJAX page', () => {
-  afterEach(() => vi.restoreAllMocks());
-  const harness = (p: Page) => {
-    const location = p.world.location as { href: string };
-    let navigated = false;
-    const tab = { owner: 'worker', wc: {
-      getURL: () => location.href,
-      executeJavaScriptInIsolatedWorld: async (_w: number, [s]: { code: string }[]) => vm.runInNewContext(s!.code, p.world),
-      reload: vi.fn(),
-    } } as unknown as Tab;
-    const startHref = location.href;
-    const tabs = {
-      hostLoginAllowed: () => true, assertRoutine: () => ({ targets: [AIR], dispatch: () => undefined }), protectLogin: vi.fn(),
-      // stands in for tabs.ts: readable once the login document is gone (Air navigates on success)
-      assertLoginReadable: async () => { navigated = location.href !== startHref; if (!navigated) throw new Error('protected'); },
-    } as unknown as BrowserTabs;
-    const vault = { forLogin: (o: string) => (o === AIR ? { user: 'tester', password: SECRET } : null) } as unknown as SiteVault;
-    return { tab, tabs, vault };
-  };
-  it('logs in, returns ok only; no password in the result or in any log call', async () => {
-    const writes = vi.spyOn(log, 'write'), out = vi.spyOn(console, 'log');
-    const p = airPage(), { tab, tabs, vault } = harness(p);
-    const result = await siteLogin(tabs, tab, vault);
-    expect(result).toBe(true);
-    expect(p.posted).toHaveLength(1);
-    expect(JSON.stringify([result, writes.mock.calls, out.mock.calls])).not.toContain(SECRET);
-  });
-  it('wrong password: fail, never reloads mid-request, and empties the password before the handoff', async () => {
-    vi.useFakeTimers();
-    try {
-      const writes = vi.spyOn(log, 'write');
-      const p = airPage(undefined, false), { tab, tabs, vault } = harness(p);
-      const pending = siteLogin(tabs, tab, vault);
-      await vi.runAllTimersAsync();
-      const result = await pending;
-      expect(result).toBe(false);
-      expect(tab.wc.reload).not.toHaveBeenCalled();
-      expect(p.pw.value).toBe('');
-      expect(JSON.stringify([result, writes.mock.calls])).not.toContain(SECRET);
-    } finally { vi.useRealTimers(); }
   });
 });

@@ -1,4 +1,4 @@
-// The confined brain JSON reader (routine definitions for components, routine packages for app_flow_propose): bounded,
+// The confined brain JSON reader (routine definitions for components, routine packages for app_routine_save): bounded,
 // inside the selected brain only, no links, no swapped files or directories.
 import fs from 'node:fs';
 import os from 'node:os';

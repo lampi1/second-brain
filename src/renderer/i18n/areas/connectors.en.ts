@@ -31,8 +31,6 @@ export const connectorsEn: typeof connectorsIt = {
  'connector.usedByTip.jira':'Only the app uses it: the token stays encrypted on this computer and never reaches the agents.',
  'connector.usedByTip.azure':'The Task page refreshes with this access (read only). Agents use Azure DevOps through the brain’s scripts or an MCP server.',
  'connector.usedByValue.github':'App','connector.usedByValue.jira':'App','connector.usedByValue.azure':'Task page',
- 'hub.f.routineTest': 'Allow routines: this account accesses test systems only',
- 'hub.f.routineTestHint': 'Confirm only with test-restricted credentials and targets. Each routine separately approves its tool and arguments.',
  'hub.lead':'Everything the app connects to, in one place: the accounts it uses itself and the MCP servers it gives your agents.',
  'hub.whatTitle':'Connectors and MCP servers','hub.whatTip':'A connector is an app account: the app uses it for itself (the Task page, projects to keep). An MCP server is a toolbox for the agents: Claude, Codex and Cursor get it when each chat starts, with the role’s permissions. You set it up once here, not in each engine’s files.',
  'hub.total.working':'Working','hub.total.workingTip':'Verified accounts plus MCP servers whose last test passed, out of all cards.','hub.total.of':({n}:{n:number})=>`of ${n}`,

@@ -63,9 +63,3 @@ describe('cards', () => {
     expect(renderToStaticMarkup(createElement(AgentMcpSection, { roleId: 'herald', roleName: 'Herald' }))).toContain('Server MCP');
   });
 });
-
-it('round trips the explicit routine test-account opt-in and removes it when unchecked', () => {
-  const form = { ...emptyForm(), label: 'Test API', command: 'node', args: 'test.mjs', routineTest: true };
-  const enabled = defOf(form); expect(enabled.routineTest).toBe(true); expect(formOf(enabled).routineTest).toBe(true);
-  expect(defOf({ ...formOf(enabled), routineTest: false }, enabled).routineTest).toBeUndefined();
-});

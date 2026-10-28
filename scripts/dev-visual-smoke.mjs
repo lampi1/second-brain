@@ -4,9 +4,8 @@ import { _electron as electron } from 'playwright';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { captureTerminalRoutine, startRoutineTrace, idleRoutineTrace } from './dev-visual-routines.mjs';
 import { captureRoutineWorkbench } from './dev-visual-workbench.mjs';
-import { captureRoutineCapabilities } from './dev-visual-capabilities.mjs';
-import { captureRoutineBrowser } from './dev-visual-browser.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const output = path.join(root, 'test-results/dev-visual-smoke');
@@ -25,10 +24,10 @@ const mainPage = async application => {
   throw new Error('Main app renderer not found');
 };
 const deadline = setTimeout(() => {
-  console.error('Dev visual capture exceeded 180 seconds');
+  console.error('Dev visual capture exceeded 300 seconds');
   app?.process().kill('SIGKILL');
   process.exitCode = 1;
-}, 180_000);
+}, 300_000);
 try {
   const env = { ...process.env, SB_DEMO: '1', SB_DEMO_FREEZE: '1', SB_HIDDEN: '1', SB_TEST: '1',
     SB_USER_DATA: profile, SB_MCP_PORT: '0', SB_LANG: 'it' };
@@ -135,8 +134,6 @@ try {
   // The demo has no review services. A separate isolated SB_TEST instance reads a clearly synthetic memory
   // store through the real services; no replay/run actions are clicked and all automatic work stays disabled.
   await captureRoutineWorkbench(app, page, capture);
-  await captureRoutineCapabilities(app, page, capture);
-  await captureRoutineBrowser(app, page, capture);
   await app.close();
   app = undefined;
   const brain = path.join(profile, 'synthetic-brain'), realProfile = path.join(profile, 'review-profile');
@@ -150,7 +147,8 @@ try {
     sourceEventId: 'synthetic-event', sourceRunId: 'synthetic-run', observedAt, validFrom: observedAt, validTo: null,
     status: 'confirmed', supersedes: null, transitions: [{ at: observedAt, status: 'confirmed' }],
   }], null, 2));
-  const reviewEnv = { ...env, SB_BRAIN: brain, SB_USER_DATA: realProfile, SB_ORCHESTRATOR_EVENTS: '0', SB_RUN_RESULTS: '0', SB_BRAIN_JOBS: '0', SB_COMPARE_QUEUE: '0' };
+  const routineRuns = path.join(profile, 'terminal-runs');
+  const reviewEnv = { ...env, ROUTINE_RUNS_DIR: routineRuns, SB_BRAIN: brain, SB_USER_DATA: realProfile, SB_ORCHESTRATOR_EVENTS: '0', SB_RUN_RESULTS: '0', SB_BRAIN_JOBS: '0', SB_COMPARE_QUEUE: '0' };
   delete reviewEnv.SB_DEMO;
   delete reviewEnv.SB_DEMO_FREEZE;
   app = await electron.launch({ cwd: root, args: ['.'], env: reviewEnv, timeout: 30_000 });
@@ -166,6 +164,9 @@ try {
   const setup = page.getByTestId('first-interview');
   await setup.waitFor({ timeout: 3000 }).catch(() => {});
   if (await setup.isVisible()) { await page.keyboard.press('Escape'); await setup.waitFor({ state: 'hidden' }); }
+  await startRoutineTrace(app, [routineRuns, path.join(realProfile, 'flows'), path.join(realProfile, 'routines'), path.join(realProfile, 'routine-runs')]);
+  manifest.routineIdle = await idleRoutineTrace(app, 'home before opening routines');
+  await captureTerminalRoutine({ app, page, capture, root, profile, runs: routineRuns, output, manifest });
   await page.getByTestId('nav-memoria').click();
   // Facts no longer enter the proposals deck (ADR 0150). Inspect the saved fact in Approvate and check
   // its source through the read-only review API, without resurrecting the retired approval path.

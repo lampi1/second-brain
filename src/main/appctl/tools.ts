@@ -53,28 +53,22 @@ import type { BrainChangelog } from '../brain/changelog';
 import { scriptWriteTools } from '../brain/scripts-tools';
 import { AGENT_LABEL } from '../../shared/agent-label';
 import { voiceDiagnostics } from '../voice/diagnostics';
-import { workbenchTools } from '../flows/workbench-tools';
-import { componentTools } from '../components/tools';
-import { flowTools } from '../flows/tools';
-import { automationTools } from '../flows/automation-tools';
 import { packageTools } from '../flows/package-tools';
 import type { RoutinePackageStore } from '../flows/package-authoring';
-import type { FlowRuntime } from '../flows/runtime';
 import { workflowTools } from '../workflows/tools';
 import type { Workflows } from '../workflows/service';
 import { guideTool, screenOutline } from './guide';
 import { CONFIG_ASK_MIN, configTool, type ConfigDeps } from './config';
 import { lastTyped } from './user-words';
 import { recordingTools, type RecordingsRead } from './recordings';
-import type { RoutineTerminalExport } from '../../shared/routines';
+import type { RoutineTerminalExport, RoutineRunRef } from '../../shared/routines';
 
 export type ToolOut = string | { text?: string; images?: { data: string; mimeType: string; caption?: string }[] } | object;
 export interface ToolDef { name: string; description: string; inputSchema: object; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean }; run(args: Record<string, unknown>): Promise<ToolOut> | ToolOut }
 
 export interface AppCtlDeps {
   workflows?: Workflows;
-  flows?: FlowRuntime;
-  /** the routine package store (ADR 0175): app_flow_propose saves there; absent = no package authoring tools */
+  /** the routine package store (ADR 0175): app_routine_save saves there; absent = no package authoring tools */
   routinePackages?: () => RoutinePackageStore;
   /** cloud agents (ADR 0080): app_create_chat where:'cloud' starts one, app_chats lists them */
   cloud?: CloudService;
@@ -114,7 +108,7 @@ export interface AppCtlDeps {
   /** the configuration the Orchestrator changes for the user (app_config, ADR 0149); settings come from `brain` */
   config?: Omit<ConfigDeps, 'callerId' | 'userAsked' | 'brain'>;
   /** the Routine section's packages (routines/service.ts): app_routine_export on the Orchestrator's own endpoint */
-  routines?: { has(id: string): boolean; exportForTerminal(id: string): RoutineTerminalExport };
+  routines?: { has(id: string): boolean; exportForTerminal(id: string): RoutineTerminalExport; snapshot(): object; archive?(): object; run(ref: RoutineRunRef): Promise<object> };
 }
 
 /** app_routine_export: the filled package zip for the terminal; the answer names secrets, never carries a value. */
@@ -215,33 +209,24 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   const contentOf = (chatId: string) => { guard(chatId); if (delegated(chatId)) throw new Error('chat delegata da un altro ruolo: il suo contenuto lo legge il genitore; tu ne vedi lo stato (app_chats, app_digest)'); return chatId; };
   // app_guide's own list of the caller's tools is read when asked, so it names exactly what this endpoint offers
   const guideDeps = { window: d.window, settings: { schema: () => d.brain.settingsSchema(), get: () => d.brain.settings() },
-    tools: () => tools.map(t => ({ name: t.name, description: t.description })), personalShown: () => !!d.personal?.anyShown(), showValues: authed,
-    ...(d.flows ? { flows: () => { try { return d.flows!.snapshot(); } catch { return null; } } } : {}) };
+    tools: () => tools.map(t => ({ name: t.name, description: t.description })), personalShown: () => !!d.personal?.anyShown(), showValues: authed };
   const tools: ToolDef[] = [
     guideTool(guideDeps),
     ...(authed() ? [{ name: 'app_voice_diagnostics', description: 'Read local content-free voice diagnostics: rolling recognition/synthesis timing samples, stale events, cancellations and failures. No audio or transcript content. Coverage explicitly excludes end-to-end latency and accuracy. Unknown values stay null; small-sample p95 is not a reliability claim.', inputSchema: obj(), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false }, run: () => { if (!authed()) throw new Error('Authenticated Orchestrator required'); return { diagnostics: voiceDiagnostics() }; } }] : []),
-    ...(d.routines && authed() ? [routineExportTool(d.routines)] : []),
+    ...(d.routines && authed() ? [routineExportTool(d.routines), {
+      name: 'app_routine_status', description: 'Read routine packages and run history only when the user asks about routines. Supply source (terminal or app), routineId and runId for the live progress and evidence of one run; omit all three for the list. archive: true reads the old state.json history (including unresolved writes). Never executes, resumes, reconciles or cleans up a run. Old app runs are archived. Execution belongs to the terminal routine CLI.',
+      inputSchema: obj({ archive: { type: 'boolean' }, source: { type: 'string', enum: ['terminal', 'app'] }, routineId: { type: 'string' }, runId: { type: 'string' } }),
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      run: (a: Record<string, unknown>) => { if (!authed()) throw new Error('Authenticated Orchestrator required');
+        if (a.archive === true) {
+          if (a.source !== undefined || a.routineId !== undefined || a.runId !== undefined) throw new Error('Archive cannot be combined with a run reference');
+          return d.routines!.archive?.() ?? { runs: [] };
+        }
+        if (a.source === undefined && a.routineId === undefined && a.runId === undefined) return d.routines!.snapshot();
+        if (!['terminal', 'app'].includes(String(a.source)) || typeof a.routineId !== 'string' || typeof a.runId !== 'string') throw new Error('Supply source, routineId and runId together');
+        return d.routines!.run({ source: a.source as 'terminal' | 'app', routineId: a.routineId, runId: a.runId }); },
+    }] : []),
     ...(d.config && authed() ? [configTool({ ...d.config, brain: d.brain, callerId: callerId!, userAsked: () => configAsked(callerId!) })] : []),
-    ...(d.flows && authed() ? automationTools({
-      service: () => { if (!authed()) throw new Error('Authenticated Orchestrator required'); return d.flows!.automation(); },
-      contextKey: () => d.flows!.service().snapshot().contextKey, ownerId: callerId!,
-    }) : []),
-    ...(d.flows && authed() ? workbenchTools(key => {
-      if (!authed() || d.flows!.snapshot().contextKey !== key) throw new Error('Authenticated current-brain Orchestrator required');
-      return d.flows!.workbench();
-    }, callerId!) : []),
-    ...(d.flows && authed() ? componentTools(key => {
-      if (!authed() || d.flows!.snapshot().contextKey !== key) throw new Error('Authenticated current-brain Orchestrator required');
-      return d.flows!.components();
-    }) : []),
-    ...(d.flows && authed() ? flowTools({
-      service: () => { if (!authed()) throw new Error('Authenticated Orchestrator required'); return d.flows!.service(); },
-      ownerId: callerId!, deploymentTargets: d.flows.deploymentTargets, deploymentTargetFile: d.flows.deploymentTargetFile, modelCatalog: d.flows.modelCatalog, inspectTarget: d.flows.inspectTarget, dossier: d.flows.dossier,
-      proposeCancel: (input, ownerId) => d.flows!.proposeCancel(input, ownerId),
-      proposeRestart: (input, ownerId) => d.flows!.proposeRestart(input, ownerId),
-      overview: ownerId => d.flows!.overview(ownerId), message: (runId, body, ownerId) => d.flows!.message(runId, body, ownerId),
-      startItem: input => d.flows!.startItem(input),
-    }) : []),
     ...(d.routinePackages && authed() ? packageTools({ store: d.routinePackages, brainRoot: () => d.brain.info().brainRoot, authed }) : []),
     ...(d.workflows && authed() ? workflowTools(d.workflows, id => d.chats.list().some(c => c.id === id && mine(c) && !c.parentId && !c.isOrchestrator), id => d.chats.list().find(c => c.id === id)) : []),
     ...(d.agentLearning ? [learnTool(d, callerId, authed())] : []),
@@ -427,8 +412,6 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (!win) return 'no window';
         // the user's own browsing (ADR 0133) is never shown to an agent: not the page, not the address bar above it
         if (d.personal?.anyShown()) return 'The user is on their personal Browser page: its screenshot is private. Try app_state, or ask the user to switch page.';
-        const privacy = d.browser.capturePrivacyVersion?.();
-        if (d.browser.hasPrivateTabs?.()) return 'Routine login is private; finish the user handoff before taking an app screenshot.';
         const images: { data: string; mimeType: string; caption: string }[] = [];
         const ui = await win.webContents.capturePage();
         const p = previewOf(ui);
@@ -444,7 +427,6 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
           const t = previewOf(img);
           images.push({ data: t.data, mimeType: t.mimeType, caption: `browser tab ${redact(wc.getURL())} at x=${b.x} y=${b.y} ${b.width}x${b.height}, image ${t.width}x${t.height} (capture px = image px × ${fmtFactor(t.factor)})` });
         }
-        if (d.browser.hasPrivateTabs?.() || privacy !== d.browser.capturePrivacyVersion?.()) return 'Login privacy changed during capture; screenshot withheld.';
         return { text: `${images.length} images`, images };
       },
     },
@@ -726,15 +708,9 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const plans = d.chats.list().filter(c => !c.closedAt && !other(c.id) && c.plan?.phase === 'proposed').length;
         const workflows = d.workflows?.list().filter(r => r.status === 'approval' && r.proposal).length ?? 0;
         const lessons = d.agentLearning?.waiting().length ?? 0;
-        let flows = 0;
-        try {
-          const state = d.flows?.snapshot();
-          flows = (state?.automation?.rules.filter(r => r.status === 'proposed').length ?? 0) + (state?.drafts.filter(x => x.status === 'proposed').length ?? 0)
-            + (state?.runs.filter(x => (x.status === 'approval' || x.status === 'blocked') && x.steps[x.currentStep]?.decisionPending !== false).length ?? 0);
-        } catch { /* An unavailable brain must not hide ordinary questions. */ }
-        if (!asks && !plans && !workflows && !lessons && !flows) return { waiting: 0, note: 'Niente aspetta l’utente: non c’è nulla da aprire.' };
+        if (!asks && !plans && !workflows && !lessons) return { waiting: 0, note: 'Niente aspetta l’utente: non c’è nulla da aprire.' };
         d.emitUi({ action: 'unblock' });
-        return { waiting: asks + plans + workflows + lessons + flows, questionsAndPermissions: asks, plans, workflows, lessons, flows, note: 'La finestra delle domande è aperta con tutte le richieste in attesa.' };
+        return { waiting: asks + plans + workflows + lessons, questionsAndPermissions: asks, plans, workflows, lessons, note: 'La finestra delle domande è aperta con tutte le richieste in attesa.' };
       },
     });
   }
