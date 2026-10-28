@@ -40,6 +40,16 @@ it('approved links and this run\'s images stay clickable, a URL in their label i
   expect(out).toContain('<img src="https://dev.azure.com/xy/_apis/wit/attachments/abc?fileName=a.png" alt="a@b">');
 });
 
+it('an approved link in a table cell stays one link: a | in its href or label never splits the cell', () => {
+  const render = (source: string) => marked.parse(renderDevOpsComment(source, 'xy', [], 'markdown'), { async: false });
+  const out = render('| a | b |\n|---|---|\n| [P|R](https://dev.azure.com/xy/x?q=|https://evil.example/steal) | z |');
+  expect([...out.matchAll(/href="([^"]*)"/g)].map(m => m[1])).toEqual(['https://dev.azure.com/xy/x?q=%7Chttps://evil.example/steal']);
+  expect(out).toContain('>P|R</a></td>');
+  expect(out).toContain('<td>z</td>');
+  // other characters outside plain URL syntax are percent-encoded too
+  expect(render('[x](https://dev.azure.com/xy/x?a={b}^[c]\'d)')).toContain('href="https://dev.azure.com/xy/x?a=%7Bb%7D%5E%5Bc%5D%27d"');
+});
+
 it('code spans keep their content verbatim: no escapes or entities shown in the code', () => {
   expect(md('Firma: `List<int> Get(int[] a)` e `a[0] > 1`.')).toBe('Firma: `List<int> Get(int[] a)` e `a[0] > 1`.');
   const out = html('Firma: `List<int> Get(int[] a)` e `a[0] > 1`.');

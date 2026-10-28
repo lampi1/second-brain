@@ -87,7 +87,10 @@ export function renderDevOpsComment(source: string, organization: string, images
 /** Plain text: escaped, except the approved links and this run's images. */
 function renderPlain(source: string, organization: string, images: readonly UploadedImage[], format: 'html' | 'markdown', out: string[]): void {
   const escape = format === 'html' ? escapeHtml : escapeMd;
-  const target = (url: string) => url.replace(/[()`]/g, c => encodeURIComponent(c));
+  // a generated link survives every pass a renderer runs before links: a GFM table splits its cells on | first, so the
+  // href keeps only plain URL characters (the rest percent-encoded) and the label escapes |
+  const target = (url: string) => url.replace(/[^A-Za-z0-9\-._~:/?#@!$&'*+,;=%]/g, c => encodeURIComponent(c));
+  const text = (label: string) => escapeMd(label).replace(/\|/g, '\\|');
   let at = 0;
   for (const match of source.matchAll(/(!?)\[([^\]\n]{1,300})\]\(([^)\s]{1,2000})\)/g)) {
     out.push(escape(source.slice(at, match.index))); at = match.index! + match[0].length;
@@ -96,10 +99,10 @@ function renderPlain(source: string, organization: string, images: readonly Uplo
       const image = images.find(i => `attachment:${i.id}` === href);
       if (!image) throw new Error('Images must reference an attachment uploaded by this run');
       const url = organizationUrl(image.url, organization);
-      out.push(format === 'html' ? `<img src="${escapeHtml(url)}" alt="${escapeHtml(label)}"/>` : `![${escapeMd(label)}](${target(url)})`);
+      out.push(format === 'html' ? `<img src="${escapeHtml(url)}" alt="${escapeHtml(label)}"/>` : `![${text(label)}](${target(url)})`);
     } else {
       const url = organizationUrl(href, organization);
-      out.push(format === 'html' ? `<a href="${escapeHtml(url)}" rel="noopener noreferrer">${escapeHtml(label)}</a>` : `[${escapeMd(label)}](${target(url)})`);
+      out.push(format === 'html' ? `<a href="${escapeHtml(url)}" rel="noopener noreferrer">${escapeHtml(label)}</a>` : `[${text(label)}](${target(url)})`);
     }
   }
   out.push(escape(source.slice(at)));
