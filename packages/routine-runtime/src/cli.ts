@@ -60,9 +60,12 @@ Options (all commands):
   --engine claude        the agent engine (only claude today)
   --runs-dir <folder>    where runs are kept (default: ${'$'}ROUTINE_RUNS_DIR or the per-user default)
   --headed               show the routine browser window (default: headless)
-  --test-dbs <file.json> the test databases this machine recognises: [{"server","port","database"}]`;
+  --test-dbs <file.json> the test databases this machine recognises: [{"server","port","database"}]
+                         (default: test-dbs.json in the package folder, when it exists; resume: the run's package)`;
 
 class UsageError extends Error {}
+
+type RuntimeFor = (pkg: RoutinePackage, paths: Paths, recognised: RecognisedTestDb[] | undefined) => RoutineRuntime;
 
 interface Parsed {
   command: string; target?: string; inputs: Record<string, string>; fromStep?: string; engine: string;
@@ -98,10 +101,15 @@ export function parseArgs(argv: readonly string[]): Parsed {
   return out;
 }
 
-/** The recognised test databases of `--test-dbs`: a JSON list of {server, port, database}. */
+/** The file a package folder may keep next to routine.json: the test databases this machine recognises for it. */
+export const PACKAGE_TEST_DBS_FILE = 'test-dbs.json';
+
+/** The recognised test databases of `--test-dbs`: a JSON list of {server, port, database}. The file may hold
+ *  connection secrets: an error names the file, never its text (a JSON parse message quotes it). */
 export function readTestDbs(file: string): RecognisedTestDb[] {
   let raw: unknown;
-  try { raw = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { throw new UsageError(`--test-dbs: cannot read ${file} as JSON (${e instanceof Error ? e.message : String(e)})`); }
+  try { raw = JSON.parse(fs.readFileSync(file, 'utf8')); }
+  catch (e) { throw new UsageError(`--test-dbs: cannot read ${file} as JSON (${e instanceof SyntaxError ? 'not valid JSON' : e instanceof Error && 'code' in e ? String(e.code) : 'unreadable'})`); }
   if (!Array.isArray(raw)) throw new UsageError('--test-dbs: expected a JSON list of {"server","port","database"}');
   return raw.map((x, i) => {
     const o = x as Record<string, unknown>;
@@ -110,6 +118,16 @@ export function readTestDbs(file: string): RecognisedTestDb[] {
       throw new UsageError(`--test-dbs: item ${i} needs "server", "database" and an optional numeric "port"`);
     return { server: o.server.trim(), port, database: o.database.trim() };
   });
+}
+
+/** The test databases for a package: `--test-dbs` when given, else the package folder's test-dbs.json (the folder, or
+ *  the folder of a routine.json or .zip) when it exists, else none (preflight then accepts only test/dev/qa names). */
+export function testDbsFor(flag: string | undefined, location: string): RecognisedTestDb[] | undefined {
+  if (flag) return readTestDbs(flag);
+  const abs = path.resolve(location);
+  const dir = fs.existsSync(abs) && fs.statSync(abs).isDirectory() ? abs : path.dirname(abs);
+  const file = path.join(dir, PACKAGE_TEST_DBS_FILE);
+  return fs.existsSync(file) ? readTestDbs(file) : undefined;
 }
 
 /** A package location as a folder holding routine.json: a .zip is extracted into a private temp folder. */
@@ -181,10 +199,9 @@ export async function main(argv: readonly string[], partial: Partial<CliDeps> = 
     warn: (_scope, msg, extra) => { stderr.write(`warning: ${msg}${extra?.cause ? ` (${extra.cause})` : ''}\n`); },
   };
   try {
-    const recognised = args.testDbs ? readTestDbs(args.testDbs) : undefined;
     const runsDir = path.resolve(args.runsDir ?? defaultRunsDir(deps.env));
     const locks = deps.locksDir === false ? undefined : createLocks(deps.locksDir ?? defaultLocksDir(deps.env));
-    const runtimeFor = (pkg: RoutinePackage, paths: Paths): RoutineRuntime => {
+    const runtimeFor: RuntimeFor = (pkg, paths, recognised) => {
       const devopsMcp = deps.mcp('devops'), testDbServer = deps.mcp('testdb'), browserServer = deps.mcp('browser');
       return createRoutineRuntime({
         pkg, paths, engine: deps.engine(), log, ...(locks ? { locks } : {}),
@@ -193,9 +210,9 @@ export async function main(argv: readonly string[], partial: Partial<CliDeps> = 
         ...(browserServer ? { browser: { server: browserServer, headless: !args.headed } } : {}),
       });
     };
-    if (args.command === 'run') return await run(args, runsDir, recognised, runtimeFor, deps);
-    if (args.command === 'resume') return await resume(args, recognised, runtimeFor, deps);
-    return await watch(args, runsDir, recognised, runtimeFor, deps, locks);
+    if (args.command === 'run') return await run(args, runsDir, runtimeFor, deps);
+    if (args.command === 'resume') return await resume(args, runtimeFor, deps);
+    return await watch(args, runsDir, runtimeFor, deps, locks);
   } catch (e) {
     stderr.write(`${e instanceof Error ? e.message : String(e)}\n`);
     return e instanceof UsageError ? 2 : 1;
@@ -227,11 +244,12 @@ const writeSource = (runDir: string, location: string) => {
   try { fs.writeFileSync(path.join(runDir, PACKAGE_SOURCE_FILE), `${JSON.stringify({ package: path.resolve(location) }, null, 2)}\n`); } catch { /* resume can take --package */ }
 };
 
-async function run(args: Parsed, runsDir: string, recognised: RecognisedTestDb[] | undefined, runtimeFor: (p: RoutinePackage, paths: Paths) => RoutineRuntime, deps: CliDeps): Promise<number> {
+async function run(args: Parsed, runsDir: string, runtimeFor: RuntimeFor, deps: CliDeps): Promise<number> {
+  const recognised = testDbsFor(args.testDbs, args.target!);
   const loaded = loadChecked(args.target!, recognised, deps.stderr);
   if (!loaded) return 1;
   try {
-    const runtime = runtimeFor(loaded.pkg, routinePaths(runsDir, loaded.pkg.routine.id));
+    const runtime = runtimeFor(loaded.pkg, routinePaths(runsDir, loaded.pkg.routine.id), recognised);
     const handle = runtime.start({ inputs: args.inputs, ...(args.fromStep ? { fromStep: args.fromStep } : {}) });
     const runDir = path.join(runsDir, loaded.pkg.routine.id, handle.runId);
     writeSource(runDir, args.target!);
@@ -241,7 +259,7 @@ async function run(args: Parsed, runsDir: string, recognised: RecognisedTestDb[]
   } finally { loaded.dispose(); }
 }
 
-async function resume(args: Parsed, recognised: RecognisedTestDb[] | undefined, runtimeFor: (p: RoutinePackage, paths: Paths) => RoutineRuntime, deps: CliDeps): Promise<number> {
+async function resume(args: Parsed, runtimeFor: RuntimeFor, deps: CliDeps): Promise<number> {
   const runDir = path.resolve(args.target!);
   const runFile = path.join(runDir, 'run.json');
   if (!fs.existsSync(runFile)) throw new UsageError(`not a run folder (no run.json): ${runDir}`);
@@ -251,12 +269,13 @@ async function resume(args: Parsed, recognised: RecognisedTestDb[] | undefined, 
     try { location = (JSON.parse(fs.readFileSync(path.join(runDir, PACKAGE_SOURCE_FILE), 'utf8')) as { package?: string }).package; } catch { /* below */ }
     if (!location) throw new UsageError(`this run does not say where its package is: add --package <package>`);
   }
+  const recognised = testDbsFor(args.testDbs, location);
   const loaded = loadChecked(location, recognised, deps.stderr);
   if (!loaded) return 1;
   try {
     if (loaded.pkg.routine.id !== previous.routineId) throw new UsageError(`the package is routine "${loaded.pkg.routine.id}", the run is of "${previous.routineId}"`);
     const runsRoot = path.dirname(runDir), runId = path.basename(runDir);
-    const runtime = runtimeFor(loaded.pkg, { runsRoot, workspace: id => path.join(runsRoot, id, 'workspace') });
+    const runtime = runtimeFor(loaded.pkg, { runsRoot, workspace: id => path.join(runsRoot, id, 'workspace') }, recognised);
     const handle = runtime.resume(runId);
     const attempt = runtime.store.read(runId).attempt;
     if (args.pkg) writeSource(runDir, args.pkg);
@@ -266,7 +285,8 @@ async function resume(args: Parsed, recognised: RecognisedTestDb[] | undefined, 
   } finally { loaded.dispose(); }
 }
 
-async function watch(args: Parsed, runsDir: string, recognised: RecognisedTestDb[] | undefined, runtimeFor: (p: RoutinePackage, paths: Paths) => RoutineRuntime, deps: CliDeps, locks?: Locks): Promise<number> {
+async function watch(args: Parsed, runsDir: string, runtimeFor: RuntimeFor, deps: CliDeps, locks?: Locks): Promise<number> {
+  const recognised = testDbsFor(args.testDbs, args.target!);
   const loaded = loadChecked(args.target!, recognised, deps.stderr);
   if (!loaded) return 1;
   const { stdout } = deps;
@@ -280,7 +300,7 @@ async function watch(args: Parsed, runsDir: string, recognised: RecognisedTestDb
       deps.stderr.write(`Another routine watch of "${pkg.routine.id}" is running (pid ${holder?.pid ?? '?'} on ${holder?.host ?? '?'}): stop it first, or close that terminal.\n`);
       return 1;
     }
-    const runtime = runtimeFor(pkg, routinePaths(runsDir, pkg.routine.id));
+    const runtime = runtimeFor(pkg, routinePaths(runsDir, pkg.routine.id), recognised);
     const active = new Map<string, Promise<RunRecord>>();
     const stop = new AbortController();
     const authorization: TokenProvider = deps.devops?.authorization ?? (pkg.secrets?.devopsPat ? patTokenProvider(pkg.secrets.devopsPat) : azureCliTokenProvider());

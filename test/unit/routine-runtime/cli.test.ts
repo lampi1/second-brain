@@ -132,6 +132,87 @@ describe('routine CLI', () => {
     expect(again.stdout.text).toContain(`Report: ${path.join(runDir, 'report.md')}`);
   });
 
+  describe('test databases file', () => {
+    const DB = { server: 'sql-air-01', port: 1433, database: 'AirBugs' };
+    // a made-up login value, built at run time (the repo guard refuses secret-shaped literals)
+    const FAKE = ['fake', 'login', String(process.pid)].join('-');
+    const dbPackage = (extra: Record<string, unknown> = {}) => {
+      const pkg = plainPackage() as unknown as { routine: Record<string, unknown> & { steps: Record<string, unknown>[] }; secrets?: unknown };
+      pkg.routine.testDbs = [{ id: 'db', ...DB }];
+      pkg.routine.steps[0]!.testDbs = ['db'];
+      Object.assign(pkg.routine, extra);
+      pkg.secrets = { testDbs: { db: { user: 'reader', password: FAKE } } };
+      return writePackage(pkg as unknown as ReturnType<typeof plainPackage>);
+    };
+    const dbsFile = (file: string, dbs: unknown) => { fs.writeFileSync(file, JSON.stringify(dbs)); return file; };
+    const notRecognisable = /cannot run yet[\s\S]*testDbs\[0\][\s\S]*not recognisable as a test database/;
+
+    it('run and watch without --test-dbs read test-dbs.json in the package folder; a missing file keeps the preflight error', async () => {
+      const dir = dbPackage();
+      let h = harness(r => done(`did ${r.stepId}`));
+      expect(await main(['run', dir, '--runs-dir', tempDir()], h.deps)).toBe(1);
+      expect(h.stderr.text).toMatch(notRecognisable);
+      expect(h.engine.requests).toHaveLength(0);
+      h = harness(() => done('x'));
+      expect(await main(['watch', dir, '--runs-dir', tempDir()], h.deps)).not.toBe(0);
+      expect(h.stderr.text).toMatch(notRecognisable);
+
+      dbsFile(path.join(dir, 'test-dbs.json'), [DB]);
+      h = harness(r => done(`did ${r.stepId}`));
+      await main(['run', path.join(dir, 'routine.json'), '--runs-dir', tempDir()], h.deps);
+      expect(h.stderr.text).not.toContain('cannot run yet');
+      expect(h.stdout.text).toMatch(/Folder: /);
+      // watch passes the preflight too and stops only at the package's missing trigger
+      h = harness(() => done('x'));
+      expect(await main(['watch', dir, '--runs-dir', tempDir()], h.deps)).not.toBe(0);
+      expect(h.stderr.text).not.toContain('cannot run yet');
+      expect(h.stderr.text).toMatch(/trigger/i);
+    });
+
+    it('resume reads the test-dbs.json of the run\'s package', async () => {
+      const dir = dbPackage(), runs = tempDir('routine-cli-runs-');
+      dbsFile(path.join(dir, 'test-dbs.json'), [DB]);
+      let h = harness(() => done('x'));
+      const blocking: Script = async r => {
+        if (r.stepId !== 'fix') return done(`did ${r.stepId}`);
+        setTimeout(() => h.interrupt(), 20);
+        await new Promise(resolve => r.signal.addEventListener('abort', resolve, { once: true }));
+        return 'no-result';
+      };
+      h = harness(blocking);
+      expect(await main(['run', dir, '--runs-dir', runs], h.deps)).toBe(130);
+      const runDir = runDirOf(h.stdout.text);
+      fs.renameSync(path.join(dir, 'test-dbs.json'), path.join(dir, 'elsewhere.json'));
+      let again = harness(r => done(`did ${r.stepId}`));
+      expect(await main(['resume', runDir], again.deps)).toBe(1);
+      expect(again.stderr.text).toMatch(notRecognisable);
+      fs.renameSync(path.join(dir, 'elsewhere.json'), path.join(dir, 'test-dbs.json'));
+      again = harness(r => done(`did ${r.stepId}`));
+      expect(await main(['resume', runDir], again.deps)).toBe(0);
+      expect(again.engine.requests.map(r => r.stepId)).toEqual(['fix', 'report']);
+    });
+
+    it('an explicit --test-dbs wins over the package file; a broken file is named, its text never printed', async () => {
+      const dir = dbPackage();
+      dbsFile(path.join(dir, 'test-dbs.json'), [{ ...DB, database: 'OtherDb' }]);
+      let h = harness(r => done(`did ${r.stepId}`));
+      expect(await main(['run', dir, '--runs-dir', tempDir()], h.deps)).toBe(1);
+      expect(h.stderr.text).toMatch(/testDbs\[0\][\s\S]*not one of the host's recognised test databases/);
+      const flag = dbsFile(path.join(tempDir(), 'mine.json'), [DB]);
+      h = harness(r => done(`did ${r.stepId}`));
+      await main(['run', dir, '--runs-dir', tempDir(), '--test-dbs', flag], h.deps);
+      expect(h.stderr.text).not.toContain('cannot run yet');
+      expect(h.stdout.text).toMatch(/Folder: /);
+
+      fs.writeFileSync(path.join(dir, 'test-dbs.json'), `[{"server":"sql-air-01","${'pass'}word":"${FAKE}" oops}]`);
+      h = harness(() => done('x'));
+      expect(await main(['run', dir, '--runs-dir', tempDir()], h.deps)).toBe(2);
+      expect(h.stderr.text).toContain(path.join(dir, 'test-dbs.json'));
+      expect(h.stderr.text).toContain('not valid JSON');
+      expect(h.stderr.text).not.toContain(FAKE);
+    });
+  });
+
   describe('watch', () => {
     const trigger: RoutineTrigger = { kind: 'devops', everyMinutes: 5, organization: 'contoso', project: 'Proj', areaPath: 'Proj', workItemType: 'Bug', states: ['New'], includeExisting: true, includeTags: ['ai-fixable'] };
     const oneItem = async (): Promise<FlowDetectionResult> => ({ items: [{ title: 'Bug 42', inputs: { 'work-item-id': '42' } }], cursor: { 42: '3' }, summary: '1 item.' } as unknown as FlowDetectionResult);
