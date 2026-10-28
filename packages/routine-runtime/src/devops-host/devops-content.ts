@@ -6,7 +6,8 @@ import { createHash } from 'node:crypto';
 
 export interface UploadedImage { id: string; url: string; sha256: string; name: string }
 export const escapeHtml = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-const escapeMd = (s: string): string => s.replace(/([\\`*_{}[\]()!#|>])/g, '\\$1').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+// only what could build a link, an image or HTML is escaped: bold, lists, headings, tables and code stay Markdown
+const escapeMd = (s: string): string => s.replace(/([\\[\]()!])/g, '\\$1').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 export function organizationUrl(raw: string, organization: string): string {
   if (/[\s\\\x00-\x1f]/.test(raw)) throw new Error('Only HTTPS links to the approved DevOps organization are allowed');
   let url: URL; try { url = new URL(raw); } catch { throw new Error('Invalid DevOps link'); }

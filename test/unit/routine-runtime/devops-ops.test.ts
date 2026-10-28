@@ -217,6 +217,19 @@ describe('test plan writes', () => {
     expect(lines).toContain(`test case "tc01": id ${tc.id} in suite ${suite.id}, outcome passed`);
   });
 
+  it('tag-test-case adds a tag to a test case of this run once the PR exists, keeping its tags', async () => {
+    const { ado, exec } = setup();
+    await exec(testPlanWrites.slice(0, 3).map(w => w.op === 'create-test-case' ? { ...w, tags: ['#127906', '#orisdentair'] } : w));
+    const out = await exec([{ op: 'tag-test-case', testCase: 'tc01', add: ['#pr5', '#orisdentair'] }]);
+    expect(out.failed).toEqual([]); expect(out.notVerified).toEqual([]);
+    const tc = [...ado.items.values()].find(i => i.type === 'Test Case')!;
+    expect(tc.fields['System.Tags']).toBe('#127906; #orisdentair; #pr5');
+    expect((await exec([{ op: 'tag-test-case', testCase: 'tc01', add: ['#PR5'] }])).failed).toEqual([]);
+    expect(tc.fields['System.Tags']).toBe('#127906; #orisdentair; #pr5'); // a tag it already has is not added twice
+    expect((await exec([{ op: 'tag-test-case', testCase: 'tc09', add: ['#pr5'] }])).failed[0]).toMatch(/no test case with that ref/);
+    expect(() => validateStepResult({ outcome: 'done', summary: 's', devopsWrites: [{ op: 'tag-test-case', testCase: 'tc01', add: [] }] })).toThrow(/at least one tag/);
+  });
+
   it('the same writes again are already done: nothing is created twice', async () => {
     const { ado, exec } = setup();
     await exec(testPlanWrites);
