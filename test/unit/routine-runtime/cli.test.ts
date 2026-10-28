@@ -15,6 +15,7 @@ import { done, fakeDevOps, routinePackage, scriptedEngine, tempDir, type Script 
 
 const sink = () => { let text = ''; return { write: (s: string) => { text += s; return true; }, get text() { return text; } }; };
 
+const baseHarness = harness;
 function harness(script: Script, over: Partial<CliDeps> = {}) {
   const stdout = sink(), stderr = sink();
   const engine = scriptedEngine(script);
@@ -136,22 +137,33 @@ describe('routine CLI', () => {
     const DB = { server: 'sql-air-01', port: 1433, database: 'AirBugs' };
     // a made-up login value, built at run time (the repo guard refuses secret-shaped literals)
     const FAKE = ['fake', 'login', String(process.pid)].join('-');
-    const dbPackage = (extra: Record<string, unknown> = {}) => {
+    // the runtime's own packages folder of these tests (the CLI's default is %LOCALAPPDATA%\routine-runtime\packages)
+    const packagesDir = tempDir('routine-cli-packages-');
+    const dbJson = () => {
       const pkg = plainPackage() as unknown as { routine: Record<string, unknown> & { steps: Record<string, unknown>[] }; secrets?: unknown };
       pkg.routine.testDbs = [{ id: 'db', ...DB }];
       pkg.routine.steps[0]!.testDbs = ['db'];
-      Object.assign(pkg.routine, extra);
       pkg.secrets = { testDbs: { db: { user: 'reader', password: FAKE } } };
-      return writePackage(pkg as unknown as ReturnType<typeof plainPackage>);
+      return JSON.stringify(pkg, null, 2);
+    };
+    /** a package folder: by default right inside the runtime's packages folder */
+    const dbPackage = (parent = fs.mkdtempSync(path.join(packagesDir, 'pkg-'))) => {
+      fs.mkdirSync(parent, { recursive: true });
+      fs.writeFileSync(path.join(parent, 'routine.json'), dbJson());
+      return parent;
     };
     const dbsFile = (file: string, dbs: unknown) => { fs.writeFileSync(file, JSON.stringify(dbs)); return file; };
     const notRecognisable = /cannot run yet[\s\S]*testDbs\[0\][\s\S]*not recognisable as a test database/;
+    const harness = (script: Script, over: Partial<CliDeps> = {}) => baseHarness(script, { packagesDir, ...over });
+    const real = (p: string) => fs.realpathSync.native(p);
 
     it('run and watch without --test-dbs read test-dbs.json in the package folder; a missing file keeps the preflight error', async () => {
       const dir = dbPackage();
       let h = harness(r => done(`did ${r.stepId}`));
       expect(await main(['run', dir, '--runs-dir', tempDir()], h.deps)).toBe(1);
       expect(h.stderr.text).toMatch(notRecognisable);
+      expect(h.stderr.text).toContain('Hint: pass --test-dbs');
+      expect(h.stdout.text).not.toContain('test databases:');
       expect(h.engine.requests).toHaveLength(0);
       h = harness(() => done('x'));
       expect(await main(['watch', dir, '--runs-dir', tempDir()], h.deps)).not.toBe(0);
@@ -161,6 +173,9 @@ describe('routine CLI', () => {
       h = harness(r => done(`did ${r.stepId}`));
       await main(['run', path.join(dir, 'routine.json'), '--runs-dir', tempDir()], h.deps);
       expect(h.stderr.text).not.toContain('cannot run yet');
+      expect(h.stdout.text).toContain(`test databases: ${real(path.join(dir, 'test-dbs.json'))}
+`);
+      expect(h.stdout.text).not.toContain(FAKE);
       expect(h.stdout.text).toMatch(/Folder: /);
       // watch passes the preflight too and stops only at the package's missing trigger
       h = harness(() => done('x'));
@@ -207,9 +222,55 @@ describe('routine CLI', () => {
       fs.writeFileSync(path.join(dir, 'test-dbs.json'), `[{"server":"sql-air-01","${'pass'}word":"${FAKE}" oops}]`);
       h = harness(() => done('x'));
       expect(await main(['run', dir, '--runs-dir', tempDir()], h.deps)).toBe(2);
-      expect(h.stderr.text).toContain(path.join(dir, 'test-dbs.json'));
+      expect(h.stderr.text).toContain(`the package's test-dbs.json: cannot read ${real(path.join(dir, 'test-dbs.json'))}`);
       expect(h.stderr.text).toContain('not valid JSON');
       expect(h.stderr.text).not.toContain(FAKE);
+    });
+
+    it('reads no package test-dbs.json outside the runtime packages folder, beside a .zip, deeper, or through a link', async () => {
+      const outside = dbPackage(tempDir('routine-cli-pkg-'));
+      dbsFile(path.join(outside, 'test-dbs.json'), [DB]);
+      const nested = dbPackage(path.join(fs.mkdtempSync(path.join(packagesDir, 'group-')), 'inner'));
+      dbsFile(path.join(nested, 'test-dbs.json'), [DB]);
+      const zipDir = fs.mkdtempSync(path.join(packagesDir, 'zip-'));
+      dbsFile(path.join(zipDir, 'test-dbs.json'), [DB]);
+      const zip = path.join(zipDir, 'pkg.zip');
+      fs.writeFileSync(zip, zipOf({ 'demo/routine.json': dbJson() }));
+      const linked = path.join(packagesDir, `link-${process.pid}`);
+      fs.symlinkSync(outside, linked, 'junction');
+      for (const target of [outside, path.join(outside, 'routine.json'), nested, zip, linked]) {
+        const h = harness(r => done(`did ${r.stepId}`));
+        expect(await main(['run', target, '--runs-dir', tempDir()], h.deps), target).toBe(1);
+        expect(h.stderr.text, target).toMatch(notRecognisable);
+        expect(h.stderr.text, target).toContain('Hint: pass --test-dbs');
+        expect(h.stdout.text, target).not.toContain('test databases:');
+      }
+      // the same folder through the runtime's packages folder is trusted
+      const h = harness(r => done(`did ${r.stepId}`));
+      expect(await main(['run', outside, '--runs-dir', tempDir()], { ...h.deps, packagesDir: path.dirname(outside) })).toBe(0);
+    });
+
+    it('a missing package path never reads the test-dbs.json of its parent folder', async () => {
+      const dir = fs.mkdtempSync(path.join(packagesDir, 'pkg-'));
+      fs.writeFileSync(path.join(dir, 'test-dbs.json'), 'not json');
+      const h = harness(() => done('x'));
+      expect(await main(['run', path.join(dir, 'missing'), '--runs-dir', tempDir()], h.deps)).not.toBe(0);
+      expect(h.stdout.text).not.toContain('test databases:');
+      expect(h.stderr.text).not.toContain('not valid JSON');
+      expect(h.stderr.text).toMatch(/missing/);
+    });
+
+    it('a null entry is refused with exit 2, naming its source', async () => {
+      const dir = dbPackage();
+      fs.writeFileSync(path.join(dir, 'test-dbs.json'), '[null]');
+      let h = harness(() => done('x'));
+      expect(await main(['run', dir, '--runs-dir', tempDir()], h.deps)).toBe(2);
+      expect(h.stderr.text).toMatch(/^the package's test-dbs\.json: item 0 of .+ needs "server"/m);
+      const flag = path.join(tempDir(), 'mine.json');
+      fs.writeFileSync(flag, '[null]');
+      h = harness(() => done('x'));
+      expect(await main(['run', dir, '--runs-dir', tempDir(), '--test-dbs', flag], h.deps)).toBe(2);
+      expect(h.stderr.text).toMatch(/^--test-dbs: item 0 of .+ needs "server"/m);
     });
   });
 
