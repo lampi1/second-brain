@@ -15,7 +15,10 @@ interface Segment { raw: boolean; text: string }
  * text. Safety rests on one invariant: every backtick (and fence-like tilde run) left in plain text is escaped, so a
  * renderer can only see the fences and spans chosen here, never pair them differently around plain text. Anything
  * ambiguous stays plain: a fence right after a possible table row (some renderers keep it in the table), a span
- * holding `|` (table cells split on it, even inside code). Indented code blocks are not recognized (escapes show). */
+ * holding `|` (table cells split on it, even inside code). Indented code blocks are not recognized (escapes show).
+ * A line only some renderers close a fence on leaves the code and turns fences off for the rest: their backticks are
+ * then escaped as plain text, so a renderer still in its fence stays in it to the end and one that left it sees only
+ * escaped text. Expects \n line endings only (renderDevOpsComment normalizes them). */
 function splitMarkdownCode(source: string): Segment[] {
   const out: Segment[] = [];
   const push = (raw: boolean, text: string) => {
@@ -23,17 +26,23 @@ function splitMarkdownCode(source: string): Segment[] {
     const last = out.at(-1);
     if (last && last.raw === raw) last.text += text; else out.push({ raw, text });
   };
-  let fence: { char: string; size: number } | undefined, table = false;
+  let fence: { char: string; size: number; marker: string } | undefined, table = false, fences = true;
   for (const line of source.split(/(?<=\n)/)) {
-    const body = line.replace(/\r?\n$/, ''), end = line.slice(body.length);
+    const body = line.replace(/\n$/, ''), end = line.slice(body.length);
     if (fence) {
       push(true, line);
-      const close = /^ {0,3}(`+|~+)[ \t]*$/.exec(body);
-      if (close && close[1]![0] === fence.char && close[1]!.length >= fence.size) fence = undefined;
+      // CommonMark closes on the fence char at least size times, then spaces or tabs; marked 18 on the opener, any
+      // mix of ` and ~, then spaces only. Any of them closing is enough to leave the code.
+      const close = /^ {0,3}(`+|~+)([`~]*)([ \t]*)$/.exec(body);
+      if (close && close[1]![0] === fence.char && close[1]!.length >= fence.size) {
+        const commonMark = !close[2], marked = close[1]!.startsWith(fence.marker) && !close[3]!.includes('\t');
+        if (!(commonMark && marked)) fences = false; // only some renderers close here: no fence is trusted after it
+        fence = undefined;
+      }
       continue;
     }
     const open = /^(`{3,}|~{3,})(.*)$/.exec(body);
-    if (open && !table && FENCE_INFO.test(open[2]!.trim())) { fence = { char: open[1]![0]!, size: open[1]!.length }; push(true, line); continue; }
+    if (open && fences && !table && FENCE_INFO.test(open[2]!.trim())) { fence = { char: open[1]![0]!, size: open[1]!.length, marker: open[1]! }; push(true, line); continue; }
     table = body.trim() ? table || TABLE_RULE.test(body) : false;
     let rest = body;
     const tildes = /^( {0,3})(~{3,})/.exec(rest);
@@ -63,7 +72,10 @@ export function organizationUrl(raw: string, organization: string): string {
 export function renderDevOpsComment(source: string, organization: string, images: readonly UploadedImage[], format: 'html' | 'markdown' = 'html'): string {
   if (!source.trim() || source.length > 10_000 || /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(source)) throw new Error('Invalid comment text');
   const out: string[] = [];
-  for (const segment of format === 'html' ? [{ raw: false, text: source }] : splitMarkdownCode(source)) {
+  // Markdown: every line ending a renderer may see (CRLF, a lone CR as in CommonMark, U+2028/2029/0085 in some) becomes
+  // \n, so the lines split here are the renderer's lines
+  const markdown = () => splitMarkdownCode(source.replace(/\r\n?|[\u2028\u2029\u0085]/g, '\n'));
+  for (const segment of format === 'html' ? [{ raw: false, text: source }] : markdown()) {
     if (segment.raw) out.push(segment.text); else renderPlain(segment.text, organization, images, format, out);
   }
   return format === 'html' ? out.join('').replace(/\r?\n/g, '<br/>') : out.join('');

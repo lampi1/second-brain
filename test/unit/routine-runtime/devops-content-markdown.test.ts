@@ -68,3 +68,53 @@ it('no link, image or HTML can be injected around code, whatever the backtick an
     expect(out, source).not.toMatch(/<a\s|<img|<script|<b>|<i>|href=/i);
   }
 });
+
+/** Each layout with an HTML-only payload must render inert; with link and image syntax it is refused or inert. */
+const hostile = (layout: (payload: string) => string) => {
+  // html() fails on any tag outside plain formatting (escaped text such as &lt;a href=…&gt; is fine)
+  expect(html(layout('<img src=x onerror=alert(1)> <b>x</b> <a href=/evil>e</a>'))).not.toMatch(/<a\s|<img|<b>/i);
+  let out: string;
+  try { out = html(layout('[click](https://evil.example/x) ![p](https://evil.example/p.png)')); } catch (e) { expect(String(e)).toMatch(/outside the approved|Images must reference/); return; }
+  expect(out).not.toMatch(/<a\s|<img/i);
+};
+
+it('every line ending a renderer may see splits lines: a lone CR, CRLF, U+2028/2029/0085 never hide plain text in code', () => {
+  for (const nl of ['\r', '\r\n', '\n', '\u2028', '\u2029', '\u0085', '\r\r\n', '\n\r']) {
+    hostile(p => `a \`b${nl}${nl}${p}${nl}${nl}\` c`);
+    hostile(p => `x${nl}\`\`\`${nl}${p}${nl}\`\`\``);
+    hostile(p => `\`\`\`${nl}code${nl}\`\`\`${nl}${p}${nl}\`x\``);
+  }
+  hostile(p => 'a `b\r\n\r' + p + '\n\r` c');
+  hostile(p => '```\r\ncode\r```\n' + p);
+  // tab, form feed: a tab is plain whitespace, a form feed is refused
+  hostile(p => '`a\t' + p + '\tb` c');
+  expect(() => md('a `b\f<b>x</b>\f` c')).toThrow(/Invalid comment text/);
+});
+
+it('a line only some renderers close a fence on leaves the code, and no later fence is trusted', () => {
+  hostile(p => '```\ncode\n```~\n' + p + '\n');
+  hostile(p => '~~~\ncode\n~~~`\n' + p + '\n');
+  hostile(p => '```\ncode\n```\t\n' + p + '\n');
+  hostile(p => '````\ncode\n`````~ \n' + p + '\n');
+  // after the ambiguous close a CommonMark renderer is still in the first fence: a later ``` must not reopen raw code
+  hostile(p => '```\ncode\n```~\nmore\n```\n' + p + '\n```');
+  hostile(p => '```\ncode\n```\t\n\n```\n' + p + '\n```');
+  expect(md('```\na\n```~\n```\n<b>x</b>\n```')).toBe('```\na\n```~\n\\`\\`\\`\n&lt;b&gt;x&lt;/b&gt;\n\\`\\`\\`');
+  // a clean close keeps the next fence verbatim
+  expect(md('```\na\n```\n\n```\n<b>x</b>\n```')).toBe('```\na\n```\n\n```\n<b>x</b>\n```');
+});
+
+it('the normal text of a routine still renders well, CRLF included', () => {
+  const source = '**Esito**: passato\r\n\r\n## Passi\r\n\r\n1. Login\r\n2. Apri *paziente*\r\n- voce\r\n\r\n| a | b |\r\n|---|---|\r\n| 1 | 2 |\r\n\r\n' +
+    'Vedi [PR](https://dev.azure.com/xy/p/_git/r/pullrequest/1) e `List<int>`\r\n\r\n```csharp\r\nvar x = new List<int>(); // a\\b (c)\r\n```\r\nfine';
+  // a two-letter organization: a neutral example host
+  const out = marked.parse(renderDevOpsComment(source, 'xy', [], 'markdown'), { async: false });
+  expect(out).toContain('<strong>Esito</strong>: passato');
+  expect(out).toContain('<h2>Passi</h2>');
+  expect(out).toContain('<li>Apri <em>paziente</em></li>');
+  expect(out).toContain('<td>1</td>');
+  expect(out).toContain('<code>List&lt;int&gt;</code>');
+  expect(out).toContain('<pre><code class="language-csharp">var x = new List&lt;int&gt;(); // a\\b (c)\n</code></pre>');
+  expect(out).toContain('<p>fine</p>');
+  expect(out).toMatch(/<a href="https:\/\/dev\.azure\.com\/xy\/p\/_git\/r\/pullrequest\/1">PR<\/a>/);
+});
