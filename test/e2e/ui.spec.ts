@@ -194,6 +194,8 @@ test('the live demo streams text and finishes running tools', async () => {
   const n = await rows.count();
   await expect.poll(async () => rows.count(), { timeout: 10_000 }).toBeGreaterThan(n);
   await page.getByTestId('tile-browser-tab-sms').scrollIntoViewIfNeeded();
+  // A narrow split card intentionally hides this caption; inspect it in the user's expanded browser view.
+  await page.getByTestId('browser-max-tab-sms').click();
   await expect(page.getByTestId('browser-action-tab-sms')).toBeVisible();
   await expect(page.getByTestId('browser-action-tab-sms')).not.toHaveText('click ref_12 · «Attività»', { timeout: 10_000 });
   // and the permission it asks for is an open request (the questions window shows it; set aside here, launchDemo)

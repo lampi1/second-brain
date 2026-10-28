@@ -85,11 +85,14 @@ for (const engine of ['claude', 'cursor'] as const) {
     const bubble = page.getByTestId(`tile-chat-${chat.id}`).locator('.msg-user').last();
     await expect(bubble.locator('.img-thumb')).toHaveCount(2);
     await expect(bubble.locator('.bubble')).toHaveText('cosa vedi in questi screenshot?');
+    await expect(page.getByTestId(`chat-state-${chat.id}`)).toHaveAttribute('data-state', 'idle', { timeout: 15000 });
 
     // a long turn: a screenshot alone goes in the queue (chip with its preview) and leaves with the message after it
     await page.getByTestId(input).fill('slow');
     await page.getByTestId(input).press('Enter');
     await expect(page.getByTestId(`chat-state-${chat.id}`)).toHaveAttribute('data-state', 'running');
+    // "running" must belong to this turn, not the first response still finishing on a busy native runner.
+    await expect.poll(sent, { timeout: 15000 }).toEqual([[img, img, 'text'], ['text']]);
     await putImages(page, input, 1, 'paste', 120);
     await expect(page.getByTestId(`${input}-images-0`)).toBeVisible();
     await page.getByTestId(input).press('Enter');

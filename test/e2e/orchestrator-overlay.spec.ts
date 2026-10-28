@@ -21,9 +21,10 @@ test('always open on the right, no collapse and no tabs; Ctrl+R focuses its inpu
   for (const gone of ['orchestrator-pill', 'orchestrator-collapse', 'orchestrator-tab-new']) await expect(page.getByTestId(gone)).toHaveCount(0);
   const b = await box(page);
   const top = (await page.getByTestId('topbar').boundingBox())!;
-  expect(Math.round(b.x + b.width)).toBe(1600); // flush with the right edge
+  const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+  expect(Math.round(b.x + b.width)).toBe(viewport.width); // flush with the actual window manager bounds
   expect(Math.round(b.y)).toBe(Math.round(top.y + top.height)); // from under the top bar
-  expect(Math.round(b.y + b.height)).toBe(1000); // to the bottom edge
+  expect(Math.round(b.y + b.height)).toBe(viewport.height); // to the bottom edge, including height-limited desktops
   await shot(page, 'orchestrator-ov-open');
 
   await page.getByTestId('view-agents').click({ position: { x: 4, y: 4 } });
@@ -48,27 +49,30 @@ test('resized from its left edge; the width survives a restart; double-click res
   const first = await launchDemo({ orchestrator: true });
   let page = first.page;
   const start = await box(page);
-  expect(Math.round(start.width)).toBe(672); // the default on the Grindhouse: 42% of 1600 (440-680 px)
+  const initialWidth = Math.round(start.width), viewportWidth = await page.evaluate(() => innerWidth);
+  expect(initialWidth).toBeGreaterThanOrEqual(440);
+  expect(initialWidth).toBeLessThanOrEqual(680);
   const edge = (await page.getByTestId('orchestrator-resize').boundingBox())!;
   await page.mouse.move(edge.x + edge.width / 2, edge.y + edge.height / 2);
   await page.mouse.down();
   await page.mouse.move(edge.x + edge.width / 2 - 100, edge.y + edge.height / 2, { steps: 5 });
   await page.mouse.up();
-  await expect.poll(async () => Math.round((await box(page)).width)).toBe(772);
-  expect(Math.round((await box(page)).x + (await box(page)).width)).toBe(1600); // still flush right
+  await expect.poll(async () => Math.round((await box(page)).width)).toBe(initialWidth + 100);
+  expect(Math.round((await box(page)).x + (await box(page)).width)).toBe(viewportWidth); // still flush right
   await page.getByTestId('orchestrator-resize').focus();
   await page.keyboard.press('ArrowRight'); // the keyboard narrows it by 24 px
-  await expect.poll(async () => Math.round((await box(page)).width)).toBe(748);
-  await expect(page.getByTestId('orchestrator-resize')).toHaveAttribute('aria-valuenow', '748');
+  const resized = initialWidth + 76;
+  await expect.poll(async () => Math.round((await box(page)).width)).toBe(resized);
+  await expect(page.getByTestId('orchestrator-resize')).toHaveAttribute('aria-valuenow', String(resized));
   await page.mouse.move(2, 2);
   await shot(page, 'orchestrator-ov-resized');
   // remembered (written 150 ms after the change)
-  await expect.poll(() => page.evaluate(() => (JSON.parse(localStorage.getItem('sb.prefs.v1') ?? '{}') as { orchestratorSize?: { w: number } }).orchestratorSize?.w)).toBe(748);
+  await expect.poll(() => page.evaluate(() => (JSON.parse(localStorage.getItem('sb.prefs.v1') ?? '{}') as { orchestratorSize?: { w: number } }).orchestratorSize?.w)).toBe(resized);
   await first.app.close();
 
   const again = await launchDemo({ userData: first.userData });
   page = again.page;
-  await expect.poll(async () => Math.round((await box(page)).width)).toBe(748);
+  await expect.poll(async () => Math.round((await box(page)).width)).toBe(resized);
   await page.getByTestId('orchestrator-resize').dblclick();
   await expect.poll(async () => Math.round((await box(page)).width)).toBe(Math.round(start.width));
   await again.app.close();

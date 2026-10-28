@@ -28,7 +28,8 @@ const textOf = (i: ChatItem) => ('text' in i && typeof i.text === 'string' ? i.t
 
 async function start(userData?: string, env: Record<string, string> = {}) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-claude-'));
-  const l = await launch({ SB_CLAUDE_PATH: FAKE, CLAUDE_CONFIG_DIR: home, ...env }, userData);
+  // Delegation behavior is independent of runner contention; admission.spec.ts covers the busy-machine queue.
+  const l = await launch({ SB_CLAUDE_PATH: FAKE, CLAUDE_CONFIG_DIR: home, SB_LOAD_FORCE: '10,60', ...env }, userData);
   await setSize(l.app, 1500, 950);
   await l.page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
   return { ...l, home };

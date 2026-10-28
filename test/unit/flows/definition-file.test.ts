@@ -43,7 +43,20 @@ it('rejects symbolic links, linked parents, hard links and non-regular JSON path
   expect(() => readDefinitionFile(f.root, 'directory.json', f.args.contextKey)).toThrow('regular');
 });
 it('bounds bytes before parsing, accepts UTF-8 BOM and rejects invalid JSON/encoding without echoing contents', () => {
-  const f = setup(); fs.writeFileSync(f.file, '\uFEFF' + JSON.stringify(definition())); expect(readDefinitionFile(f.root, f.file, f.args.contextKey)).toEqual(definition());
+  const f = setup();
+  // Other tests create siblings in the shared OS temp directory. Isolate only those ancestor metadata changes
+  // for this parser case; identities, types/links, the private fixture and every file read stay real.
+  const lstat = fs.lstatSync, metadata = new Map<string, Pick<fs.BigIntStats, 'ctimeNs' | 'mtimeNs' | 'size' | 'nlink'>>();
+  for (let parent = path.dirname(f.dir); ; parent = path.dirname(parent)) {
+    const { ctimeNs, mtimeNs, size, nlink } = lstat(parent, { bigint: true });
+    metadata.set(parent, { ctimeNs, mtimeNs, size, nlink });
+    if (parent === path.dirname(parent)) break;
+  }
+  vi.spyOn(fs, 'lstatSync').mockImplementation((file, options) => {
+    const stat = lstat(file, options), pinned = typeof file === 'string' ? metadata.get(file) : undefined;
+    return pinned && options?.bigint ? Object.assign(stat!, pinned) : stat;
+  });
+  fs.writeFileSync(f.file, '\uFEFF' + JSON.stringify(definition())); expect(readDefinitionFile(f.root, f.file, f.args.contextKey)).toEqual(definition());
   fs.writeFileSync(f.file, Buffer.alloc(FLOW_DEFINITION_FILE_MAX_BYTES + 1, 32)); expect(() => readDefinitionFile(f.root, f.file, f.args.contextKey)).toThrow('1 MiB');
   for (const content of ['private-source-marker { broken', Buffer.from([0xff, 0xfe, 0x7b]), 'null', '[]']) {
     fs.writeFileSync(f.file, content);

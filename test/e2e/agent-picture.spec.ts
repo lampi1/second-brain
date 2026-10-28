@@ -5,7 +5,7 @@ import { expect, test, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { goPage, launchDemo, openAgents, shot } from './helpers';
+import { goPage, launchDemo, openAgents, shot, waitForExit } from './helpers';
 
 /** a 480 × 320 PNG (wider than tall: the badge keeps its middle), drawn by the page itself */
 const top = async (page: Page) => {
@@ -60,7 +60,7 @@ test('a role takes the user\'s own picture, keeps it across a restart, and "Imma
     await expect(hero.locator('svg.agent-avatar.character')).toBeVisible();
     await expect(hero.locator('img.agent-avatar.picture')).toHaveCount(0);
     await expect(second.page.getByTestId('agent-picture-reset')).toHaveCount(0);
-  } finally { await second.app.close(); fs.rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
+  } finally { await second.app.close(); await waitForExit(userData); fs.rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
 });
 
 test('a file that is not a picture is refused with a readable line', async () => {

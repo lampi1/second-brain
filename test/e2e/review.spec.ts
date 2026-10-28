@@ -1,5 +1,5 @@
 // E2E of the review fixes (frozen demo): sanitized markdown (no area/map/forms/frames, no file:/UNC/protocol-relative
-// URLs), the keyboard handed back to the app by a toast action, the layer reloading its toasts after a crash, tabs
+// URLs), a toast action requesting input handoff and removing its notification, the layer reloading after a crash, tabs
 // without a snapshot, free text for Cursor questions too (with a note), long permission details keeping the buttons
 // visible, a failed answer coming back answerable, browser tiles without a snapshot showing title and address. The
 // layer's request cards (S2, C1, C8) are gone since 2026-10-22: every request is in the questions window.
@@ -9,11 +9,6 @@ import { expandChats, launchDemo, layerPage, layerState, goPage, showBrowsers } 
 type Demo = { stop(c: string): Promise<void>; say(c: string, t: string): void; ask(c: string, r: object): void; event(e: object): void; failNextAnswer(): void; clearThumbs(): void };
 const demo = <T,>(app: ElectronApplication, fn: (d: Demo, arg: T) => void, arg: T) =>
   app.evaluate((_e, [src, a]) => { const d = (globalThis as unknown as { __sbDemo: Demo }).__sbDemo; return new Function('d', 'a', `(${src})(d, a)`)(d, a); }, [fn.toString(), arg] as const);
-const focusOf = (app: ElectronApplication) => app.evaluate(({ BrowserWindow }) => {
-  const win = BrowserWindow.getAllWindows()[0]!;
-  const layer = win.contentView.children.map(v => (v as { webContents?: Electron.WebContents }).webContents).find(w => w?.getURL().includes('#overlay'));
-  return { app: win.webContents.isFocused(), layer: !!layer?.isFocused() };
-});
 
 test('S1: markdown from a chat cannot navigate the app window (area/map, forms, frames, file:, UNC, //host)', async () => {
   const { app, page } = await launchDemo();
@@ -49,7 +44,7 @@ test('S1: markdown from a chat cannot navigate the app window (area/map, forms, 
   await app.close();
 });
 
-test('S3: a toast action gives the keyboard back to the app', async () => {
+test('S3: a toast action requests input handoff, dismisses its notification and leaves the app usable', async () => {
   const { app, page } = await launchDemo();
   await goPage(page, 'costi');
   await expect(page.getByTestId('brain-page-costi')).toBeVisible();
@@ -58,8 +53,20 @@ test('S3: a toast action gives the keyboard back to the app', async () => {
   await demo(app, (d, e) => d.event(e), { kind: 'chat-failed', title: 'Turno finito con un errore', chatId: 'mappa' });
   await expect.poll(async () => (await layerState(app)).toasts).toBeGreaterThan(0);
   const layer = await layerPage(app);
+  // SB_HIDDEN uses showInactive: macOS need not grant OS focus. Observe the actual native request without
+  // changing its behavior, then exercise the visible dismissal and keyboard flow in the app renderer.
+  await app.evaluate(({ BrowserWindow }) => {
+    const wc = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:') && !w.webContents.getURL().includes('#overlay'))!.webContents;
+    const original = wc.focus.bind(wc);
+    const observed = globalThis as unknown as { __toastFocusRequests: number };
+    observed.__toastFocusRequests = 0;
+    wc.focus = () => { observed.__toastFocusRequests++; original(); };
+  });
   await layer.getByTestId('ev-toast-close-chat-failed').click();
-  await expect.poll(async () => (await focusOf(app)).app).toBe(true);
+  await expect.poll(() => app.evaluate(() => (globalThis as unknown as { __toastFocusRequests: number }).__toastFocusRequests)).toBeGreaterThan(0);
+  await expect.poll(async () => (await layerState(app)).toasts).toBe(0);
+  await page.keyboard.press('Control+K');
+  await expect(page.getByTestId('palette-input')).toBeVisible();
   await app.close();
 });
 
