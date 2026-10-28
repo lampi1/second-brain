@@ -337,7 +337,7 @@ async function watch(args: Parsed, runsDir: string, packagesDir: string, runtime
       return 1;
     }
     const runtime = runtimeFor(pkg, routinePaths(runsDir, pkg.routine.id), recognised);
-    const active = new Map<string, Promise<RunRecord>>();
+    const active = new Map<string, Promise<RunRecord | undefined>>();
     const stop = new AbortController();
     const authorization: TokenProvider = deps.devops?.authorization ?? (pkg.secrets?.devopsPat ? patTokenProvider(pkg.secrets.devopsPat) : azureCliTokenProvider());
     const loop = createTriggerLoop({
@@ -372,6 +372,11 @@ async function watch(args: Parsed, runsDir: string, packagesDir: string, runtime
         stdout.write(`Work item ${record.workItem ?? '?'}: run ${handle.runId} ${renderProgress(readProgress(runDir), Date.now())[0] ?? record.status}\n`);
         if (fs.existsSync(path.join(runDir, 'report.md'))) stdout.write(`  report: ${path.join(runDir, 'report.md')}\n`);
         return record;
+      }, (e: unknown) => {
+        // a run whose end could not be written: said, never an unhandled rejection that kills the watch
+        active.delete(handle.runId);
+        deps.stderr.write(`Run ${handle.runId} stopped with an error: ${e instanceof Error ? e.message : String(e)}\n`);
+        return undefined;
       }));
     }
     const off = deps.onInterrupt(() => { if (stop.signal.aborted) return; stdout.write('\nStopping the watch…\n'); stop.abort(); loop.stop(); });

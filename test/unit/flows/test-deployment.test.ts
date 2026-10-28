@@ -171,3 +171,22 @@ it('keeps an active or uncertain deployment of a settled run leased, and heals t
   const live = new TestDeploymentCoordinator(steps.config, stepState, () => false);
   await expect(live.acquireStep('run-c', 'before', steps.target, () => {})).rejects.toThrow('already leased');
 });
+it('a run that let its node go (park) takes it back only while the node still runs its release; another run\'s redeploy is a lasting conflict, never success', async () => {
+  const s = setup(); let latest = { release: 20, attempt: 1 };
+  // the environment's deployments: nothing active, the latest one is `latest`
+  const call = async (method: string, url: string, body?: unknown): Promise<Record<string, unknown>> => url.includes('/release/deployments?')
+    ? url.includes('queryOrder=descending') ? { value: [{ id: 300 + latest.release, releaseDefinition: { id: 4 }, definitionEnvironmentId: 9, release: { id: latest.release }, deploymentStatus: 'succeeded', operationStatus: 'Approved', lastModifiedOn: 't', attempt: latest.attempt }] } : { value: [] }
+    : s.call(method, url, body);
+  const ports = { ...s.ports, call };
+  await s.coordinator.execute('deploy-test', s.target, 40, ports); s.set({ status: 'succeeded' });
+  expect(await s.coordinator.execute('test-deploy-status', s.target, undefined, ports)).toMatchObject({ success: true });
+  // parked: the node is free; nobody touched it, so the resumed run takes it back and another run is refused again
+  expect(await s.coordinator.settle('run-a', ports.authorize)).toBe(true);
+  expect(await s.coordinator.reclaim('run-a', ports)).toEqual([]);
+  await expect(s.coordinator.execute('deploy-test', s.target, 40, { ...ports, runId: 'run-b' })).rejects.toThrow('leased');
+  // parked again; meanwhile run B deploys its own release on the node; run A resumes
+  expect(await s.coordinator.settle('run-a', ports.authorize)).toBe(true);
+  latest = { release: 21, attempt: 1 };
+  expect(await s.coordinator.reclaim('run-a', ports)).toEqual([expect.objectContaining({ targetId: 'test-a', releaseId: 20, replaced: true })]);
+  expect(await s.coordinator.execute('test-deploy-status', s.target, undefined, ports)).toMatchObject({ success: false, evidenceConflict: expect.stringContaining('replaced') });
+});

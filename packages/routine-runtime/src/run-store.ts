@@ -61,6 +61,8 @@ export interface RunRecord {
   parks?: number;
   /** a park that could not be written, retried by the watch (runtime.recover): bounded, each retry runs the step again */
   parkRetries?: number;
+  /** test deployments of this run another release replaced (target:release), each stopped the run once for a person */
+  lostNodes?: string[];
   /** the @AI comment that admitted an item already carrying the park tag: guidance for every step */
   admitted?: AiAnswer;
 }
