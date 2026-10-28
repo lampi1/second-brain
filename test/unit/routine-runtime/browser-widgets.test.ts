@@ -105,7 +105,10 @@ describe.skipIf(!browserAvailable)('routine browser on Air-like widgets', () => 
     expect((await call('dialog', { accept: true })).isError).toBe(false);
     const second = await call('click', { ref: broken });
     expect(second.text).toMatch(/was accepted/);
-    expect(second.text).toMatch(/New: \d console errors?, 1 failed request/); // boom, and Chromium's own line for the 404
+    // boom, and Chromium's own line for the 404; the 404 may land after the click's reply, then the next action says it
+    const after = `${second.text}\n${(await call('wait', { idle: true })).text}`;
+    expect(after).toMatch(/\d console errors?/);
+    expect(after).toMatch(/1 failed request/);
     expect(await log()).toContain('deleted;');
   }, 60_000);
 

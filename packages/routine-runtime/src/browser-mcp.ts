@@ -466,7 +466,8 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
         const timeout = args.timeout === undefined ? 10_000 : num(args.timeout, 'timeout', 0, 30_000);
         if (args.idle === true) {
           const start = Date.now();
-          const idle = await page.waitForLoadState('networkidle', { timeout }).then(() => true, () => false);
+          const loaded = await page.waitForLoadState('networkidle', { timeout }).then(() => true, () => false);
+          const idle = loaded && await watcher.idle(Math.max(0, timeout - (Date.now() - start)));
           return idle ? { text: `The network is idle after ${Date.now() - start} ms. ${await where(page)}` } : { text: `The network was still busy after ${timeout} ms (network shows the requests).`, isError: true };
         }
         const text = args.text === undefined ? undefined : String(args.text);

@@ -27,6 +27,8 @@ export interface DialogPolicy { accept: boolean; text?: string; once: boolean }
 const MAX_LOG = 300;
 const MAX_NET = 300;
 const BODY = 300;
+/** long-lived or decorative requests that never make the page busy */
+const QUIET = new Set(['eventsource', 'websocket', 'image', 'font', 'media']);
 const SECRETISH = /token|auth|key|secret|pass|pwd|code|sig|session|jwt/i;
 
 /** A URL with the values of token-like query parameters hidden (a widget frame's ?auth=…). */
@@ -51,6 +53,19 @@ export function createWatcher(evidence: string, now: () => number = Date.now) {
   let policy: DialogPolicy | null = null;
   const watched = new WeakSet<object>();
   const bodies = new Set<Promise<unknown>>();
+  /** requests in flight (an AJAX call after a click) and since when: Playwright's 'networkidle' only covers a page load; one open for 15 s (a long poll) no longer counts */
+  const open = new Map<Request, number>();
+  let lastActivity = 0;
+
+  /** Resolves true once no request has been in flight for `quiet` ms, false after `timeout` ms. */
+  async function idle(timeout: number, quiet = 500): Promise<boolean> {
+    const end = Date.now() + timeout;
+    for (;;) {
+      if (![...open.values()].some(at => Date.now() - at < 15_000) && Date.now() - lastActivity >= quiet) return true;
+      if (Date.now() >= end) return false;
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+  }
 
   function watch(page: WatchedPage): void {
     if (watched.has(page)) return;
@@ -62,7 +77,10 @@ export function createWatcher(evidence: string, now: () => number = Date.now) {
     page.on('pageerror', ((e: Error) => {
       push(logs, { seq: ++seq, at: now(), level: 'pageerror', text: (e.stack || `${e.name}: ${e.message}`).split('\n').slice(0, 12).join('\n').slice(0, 2000) }, MAX_LOG);
     }) as (arg: never) => void);
+    page.on('request', ((r: Request) => { if (!QUIET.has(r.resourceType())) { open.set(r, Date.now()); lastActivity = Date.now(); } }) as (arg: never) => void);
+    page.on('requestfinished', ((r: Request) => { if (open.delete(r)) lastActivity = Date.now(); }) as (arg: never) => void);
     page.on('requestfailed', ((r: Request) => {
+      if (open.delete(r)) lastActivity = Date.now();
       push(net, { seq: ++seq, at: now(), method: r.method(), url: safeUrl(r.url()), status: null, error: r.failure()?.errorText ?? 'failed' }, MAX_NET);
     }) as (arg: never) => void);
     page.on('response', ((r: Response) => {
@@ -119,7 +137,7 @@ export function createWatcher(evidence: string, now: () => number = Date.now) {
   }
 
   return {
-    watch, summary, consoleText, networkText,
+    watch, summary, consoleText, networkText, idle,
     setPolicy: (p: DialogPolicy | null) => { policy = p; },
     note: (text: string) => { notes.push(text); },
   };
