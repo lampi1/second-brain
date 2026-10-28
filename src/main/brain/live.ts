@@ -16,6 +16,7 @@ import type { ChatSummary, FeedAction, FeedEvent, Priority } from '../../shared/
 import { log, errText } from '../log';
 import { runNode, type NodeRunner } from './node';
 import { brainScript } from '../rules/tools';
+import type { InputRevision } from './input-revision';
 
 /** urgent = the user is needed now (toast by default) · normal = worth a look · quiet = feed only. Labels are Italian UI. */
 export const KINDS: Record<string, { label: string; priority: Priority }> = {
@@ -127,7 +128,7 @@ export function diffRows(src: Source, before: Map<string, Prev> | null, now: Key
   return out;
 }
 
-export interface ChatRow { harness: string; title: string; folder: string; when: string; state: string; id: string }
+export interface ChatRow { harness: string; title: string; folder: string; when: string; state: string; id: string; at?: number }
 
 /** chats.mjs list output: `- Harness · title (may hold " · ") · folder · dd/mm, hh:mm · state · id xxxxxxxx`. */
 export function parseChatList(text: string): ChatRow[] {
@@ -140,6 +141,22 @@ export function parseChatList(text: string): ChatRow[] {
     out.push({ harness, title: p.join(' · '), folder, when, state, id });
   }
   return out;
+}
+
+/** Shipped-script metadata preserves the rolling two-day window without a subprocess just to age old rows. */
+export function parseLiveChatList(text: string): { rows: ChatRow[]; complete: boolean } | null {
+  try {
+    const value = JSON.parse(text) as { complete?: boolean; chats?: { line?: unknown; at?: unknown }[] };
+    if (!Array.isArray(value.chats)) return null;
+    const out: ChatRow[] = [];
+    for (const row of value.chats) {
+      if (!row || typeof row.line !== 'string' || typeof row.at !== 'number' || !Number.isFinite(row.at)) return null;
+      const parsed = parseChatList(row.line);
+      if (parsed.length !== 1) return null;
+      out.push({ ...parsed[0]!, at: row.at });
+    }
+    return { rows: out, complete: value.complete === true };
+  } catch { return null; }
 }
 
 /** Chat list before vs now → waiting / done transitions. First poll (before null) is a baseline. */
@@ -190,6 +207,7 @@ export interface LiveOptions {
   node: NodeRunner;           // how to run chats.mjs
   onEvents: (events: RawEvent[]) => void;
   chatsEveryMs?: number;      // default 15 s
+  chatInputs?: InputRevision; // shipped tools only: skip unchanged inputs; null token means retry normally
   debounceMs?: number;        // default 400 ms
   /** chats to leave out of the poll (the app's own chats: their events come from the chat manager) */
   skipChat?: (id: string) => boolean;
@@ -209,6 +227,7 @@ export class Live {
   private stopped = false;
   private src: Source[] = [];
   private chatsScript: string;
+  private chatRevision: string | null = null;
 
   constructor(private o: LiveOptions) { this.chatsScript = brainScript(o.root, 'harness/cursor/chats.mjs') ?? path.join(o.root, 'harness', 'cursor', 'chats.mjs'); }
 
@@ -244,6 +263,7 @@ export class Live {
   stop(): void {
     this.stopped = true;
     this.watcher?.close();
+    this.o.chatInputs?.stop();
     if (this.chatTimer) clearInterval(this.chatTimer);
     for (const t of this.timers.values()) clearTimeout(t);
     this.timers.clear();
@@ -320,13 +340,23 @@ export class Live {
     if (this.polling || this.stopped) return;
     this.polling = true;
     try {
-      const r = await runNode(this.o.node, this.chatsScript, ['list', '--days', '2'], this.o.root, 60000);
+      const revision = await this.o.chatInputs?.revision() ?? null;
+      const token = revision;
+      // A waiting chat that ages out must become a fresh waiting event if it later resumes waiting.
+      for (const [id, chat] of this.chats ?? []) if (chat.at !== undefined && chat.at < Date.now() - 2 * 864e5) this.chats!.delete(id);
+      if (this.stopped || (!first && token !== null && token === this.chatRevision)) return;
+      const r = await runNode(this.o.node, this.chatsScript, ['list', '--days', '2', ...(this.o.chatInputs ? ['--live-json'] : [])], this.o.root, 60000);
       if (this.stopped) return;
       if (r.error && !r.stdout) { log.warn('brain', 'chats.mjs list failed', { data: { error: r.error, stderr: r.stderr.slice(0, 300) } }); return; }
-      const list = parseChatList(r.stdout).filter(c => !this.o.skipChat?.(c.id));
+      const metadata = this.o.chatInputs ? parseLiveChatList(r.stdout) : null;
+      const rows = this.o.chatInputs ? metadata?.rows : parseChatList(r.stdout);
+      if (!rows) { log.warn('brain', 'chats.mjs list returned invalid live metadata'); return; }
+      const list = rows.filter(c => !this.o.skipChat?.(c.id));
       const events = diffChats(first ? null : this.chats, list);
       this.chats = new Map(list.map(c => [c.id, c]));
       this.chatPolls++;
+      // Capture before the child starts: a write during its scan must trigger the next pass too.
+      this.chatRevision = r.error || !metadata?.complete ? null : token;
       if (events.length) this.o.onEvents(events);
     } finally { this.polling = false; }
   }

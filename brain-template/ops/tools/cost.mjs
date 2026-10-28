@@ -49,10 +49,11 @@ export function kind(name, input = {}) {
 
 // One record per API response. Sessions: <projects>/<dir>/<id>.jsonl; subagents: <projects>/<dir>/<id>/subagents/*.jsonl.
 export function scan(root, fromMs, toMs) {
+  let complete = true;
   const msgs = new Map(), chats = new Map();
   const files = [];
   const walk = (dir, chat) => {
-    let ents; try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    let ents; try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { if (e?.code !== 'ENOENT') complete = false; return; }
     for (const e of ents) {
       const p = path.join(dir, e.name);
       if (e.isDirectory()) walk(p, /^[0-9a-f]{8}-[0-9a-f-]{27}$/.test(e.name) ? e.name : chat);
@@ -83,7 +84,7 @@ export function scan(root, fromMs, toMs) {
       for (const x of j.message.content ?? []) if (x.type === 'tool_use' && !m.tools.has(x.id ?? x)) { m.tools.add(x.id ?? x); m.kinds.push(kind(x.name, x.input)); }
     }
   }
-  return { msgs: [...msgs.values()].filter(m => m.usage), chats };
+  return { msgs: [...msgs.values()].filter(m => m.usage), chats, complete };
 }
 
 const add = (o, k, usd, calls = 0) => { const r = (o[k] ??= { usd: 0, calls: 0 }); r.usd += usd; r.calls += calls; };
@@ -173,11 +174,12 @@ async function main() {
   const fromMs = Date.parse(`${from}T00:00:00+02:00`) - 864e5, toMs = Date.parse(`${to}T23:59:59+02:00`) + 864e5; // ±1 day, then exact by Rome day
   const root = arg('--root') ?? path.join(os.homedir(), '.claude', 'projects');
   const scanned = scan(root, fromMs, toMs);
+  let complete = scanned.complete;
   scanned.msgs = scanned.msgs.filter(m => m.day >= from && m.day <= to);
   let cursorRows = [], cursorFile = null, cursorInfo = null;
   if (!argv.includes('--no-cursor')) {
     const { readUsageCsv, newestExport } = await import('../../harness/compare/cursor-usage.mjs');
-    cursorFile = arg('--cursor') ?? newestExport();
+    cursorFile = arg('--cursor') ?? newestExport(undefined, () => { complete = false; });
     if (cursorFile) {
       const all = readUsageCsv(cursorFile);
       // how fresh the Cursor numbers are: when the CSV was downloaded and its newest row (Cursor costs stop there)
@@ -190,7 +192,7 @@ async function main() {
   if (!arg('--root') && !argv.includes('--summary')) { try { fixedChars = JSON.parse(spawnSync(process.execPath, [path.join(HERE, 'brain-lint.mjs'), '--json'], { encoding: 'utf8' }).stdout).fixedTotal ?? 0; } catch {} }
   const S = summarize(scanned, cursorRows, fixedChars);
   if (cursorInfo) Object.assign(S.cursor, cursorInfo);
-  if (argv.includes('--json')) console.log(JSON.stringify({ from, to, ...S, ...(argv.includes('--summary') ? {} : { advice: advice(S) }) }, null, 1));
+  if (argv.includes('--json')) console.log(JSON.stringify({ from, to, ...S, ...(argv.includes('--summary') ? { complete } : { advice: advice(S) }) }, null, 1));
   else console.log(render(S, { from, to, top: Number(arg('--top') ?? 8), cursorFile }));
 }
 

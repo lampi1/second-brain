@@ -92,6 +92,7 @@ export async function captureIdlePerformance(app, page, output) {
   const renderer = await page.evaluate(() => { const p = globalThis.__idlePerformance; p.observer.disconnect(); return p.entries; });
   const result = { environment: 'Hidden Electron on CI, synthetic product brain and usage ledger; wiring read-only pollers enabled; paid jobs, personal probes and engine sweeper disabled; no input or turns', samplingIntervalMs: 10, stallDelayThresholdMs: 90, processCoverage: 'Successful asynchronous Node child launches by main; excludes synchronous launches, Chromium/utility processes and grandchildren', startedAt, endedAt: new Date().toISOString(), minutes, ...main, rendererLongTasks: renderer };
   await fs.writeFile(path.join(output, 'idle-performance.json'), JSON.stringify(result, null, 2));
+  if (main.processStarts.length) throw new Error(`Idle main launched ${main.processStarts.length} child processes; see idle-performance.json`);
   if (minutes.some(m => m.routineReads || m.routineWatches)) throw new Error('Routine background IO during idle trace');
   if (result.stalls.length) throw new Error('Main timer delay reached 90ms during the 10ms-cadence idle trace');
   if (renderer.reduce((sum, entry) => sum + entry.durationMs, 0) > 6000) throw new Error('Renderer long tasks exceeded 1% of the idle trace');

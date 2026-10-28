@@ -62,6 +62,20 @@ main, not synchronous launches, Chromium/utility processes or grandchildren. Pai
 the engine sweeper remain disabled in these fixtures; the wiring read-only pollers are enabled.
 The synthetic renderer comparison completed twice; its temporary opt-in for this cleanup branch was then removed.
 
+The corrected probe in CI [40686620146](https://github.com/lampi1/second-brain/actions/runs/40686620146), tree
+`bc13be9e77b64ee521a3c72b0ae87c113d2934d7`, recorded `2026-10-28T12:19:19.036Z`–`12:29:19.075Z`:
+zero delays at or above 90 ms with a 10 ms cadence (maximum 12.44 ms), zero renderer long tasks, and zero routine
+reads/watchers. It also found **43 direct asynchronous child launches**: 40 external-chat polls and three cost reads.
+These counts supersede the invalid early zero-process claim. CLI screenshot latencies were 107 / 46 / 33 ms.
+
+The follow-up removes those unconditional launches for the shipped product tools. Existing cadence checks a small
+set of asynchronous directory identities and filesystem change tokens; unchanged transcript/DB/CSV inputs reuse the
+previous result. Missing roots, replacement, watch failure, incomplete script reads, writes during a scan and Rome
+day rollover are covered. Chat rows expire locally using numeric source timestamps, preserving fresh waiting events
+after two days. Explicit usage refresh still runs. Custom legacy tools retain polling because their input contracts
+are unknown. New tests execute the real shipped metadata paths as well as filesystem/consumer regressions. The native
+idle capture now fails if any direct asynchronous main child launches; the resulting trace is attached to PR #261.
+
 The first report PNG was not valid proof: the tracing wrapper had dropped `realpathSync.native`, making the generic
 viewer report a missing file. The wrapper now preserves and instruments that API; capture waits for the actual report
 heading. Screenshot previews are bounded to 240 px; opening one uses a scrollable fit-width view.

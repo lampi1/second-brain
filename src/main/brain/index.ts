@@ -35,7 +35,8 @@ import { electronNode } from './node';
 import { discoverDomains } from './domains';
 import { findGuard } from './guard';
 import { DomainSync } from './sync';
-import { isProduct } from '../rules/tools';
+import { brainScript, isProduct } from '../rules/tools';
+import { FileRevision, chatInputs, costInputs } from './input-revision';
 
 export interface BrainCtx {
   emitter: Emitter; window: () => BrowserWindow | null; userData: string; env?: NodeJS.ProcessEnv;
@@ -179,8 +180,11 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
 
   const startParts = async () => {
     const root = cfg.get().brainRoot;
+    const product = !!root && isProduct(root);
+    const costScript = product ? brainScript(root!, 'ops/tools/cost.mjs') : null;
     usage = new UsageMonitor({
       root, node, claudeConfig: testing ? null : claudeConfigFile(env),
+      ...(costScript ? { costInputs: new FileRevision(costInputs(root!, costScript, node.env)) } : {}),
       // tests point it at their own folders (never the user's ledger or Downloads)
       ...(!testing || env.SB_CURSOR_LEDGER ? { cursor: () => cursorToday({ dir: env.SB_CURSOR_LEDGER || undefined, downloads: env.SB_DOWNLOADS || undefined }) } : {}),
       onUsage: (u, spend) => { lastUsage = u; ctx.emitter.emit('usage', u); onSpend(spend); },
@@ -197,7 +201,8 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
       if (migration === 'migrated') log.info('settings', 'retired brain messaging switch migrated to always available', { data: { key: 'crossHarnessMessages', from: false, to: true } });
       else if (migration === 'unreadable') log.warn('settings', 'legacy brain settings unreadable: left unchanged', { hint: 'the app still exchanges messages; update the installed inbox tool to ignore the retired switch outside the app' });
     } catch (e) { log.warn('settings', 'legacy brain messaging migration not saved', { cause: errText(e), hint: 'the app still exchanges messages; the next start retries, or update the installed inbox tool' }); }
-    live = new Live({ root, stateFile: file('live-state.json'), node, onEvents: publishRaw, onFile: onBrainFile, ...(ctx.skipChat ? { skipChat: ctx.skipChat } : {}) });
+    live = new Live({ root, stateFile: file('live-state.json'), node, onEvents: publishRaw, onFile: onBrainFile,
+      ...(product ? { chatInputs: new FileRevision(chatInputs(root, node.env)) } : {}), ...(ctx.skipChat ? { skipChat: ctx.skipChat } : {}) });
     try { await live.start(); } catch (e) { log.error('brain', 'live feed failed to start', { cause: errText(e), hint: `check the brain folder ${root}` }); }
     // estimates from day one: past chats from cost.mjs, a little after boot (it reads 30 days of transcripts)
     backfillTimer = setTimeout(() => {

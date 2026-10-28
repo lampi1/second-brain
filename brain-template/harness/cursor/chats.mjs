@@ -22,6 +22,8 @@ const opt = (f, d) => (argv.includes(f) ? argv[argv.indexOf(f) + 1] : d);
 const DB = process.env.BRAIN_CURSOR_DB || path.join(process.env.APPDATA || '', 'Cursor', 'User', 'globalStorage', 'state.vscdb');
 const PROJECTS = process.env.BRAIN_CURSOR_PROJECTS || path.join(os.homedir(), '.cursor', 'projects');
 const CLAUDE = process.env.BRAIN_CLAUDE_PROJECTS || path.join(os.homedir(), '.claude', 'projects');
+let complete = true;
+const readFailed = e => { if (e?.code !== 'ENOENT') complete = false; };
 const one = s => String(s ?? '').replace(/\s+/g, ' ').trim();
 const cut = (s, n) => { const t = one(s); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
 const when = ms => (ms ? new Date(ms).toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '?');
@@ -33,22 +35,23 @@ const AUTO = /^(Briefly inform the user about the task result|Perform any necess
 function transcripts() {
   const map = new Map();
   let dirs = [];
-  try { dirs = fs.readdirSync(PROJECTS); } catch { return map; }
+  try { dirs = fs.readdirSync(PROJECTS); } catch (e) { readFailed(e); return map; }
   for (const d of dirs) {
     const base = path.join(PROJECTS, d, 'agent-transcripts');
     let ids = [];
-    try { ids = fs.readdirSync(base); } catch { continue; }
+    try { ids = fs.readdirSync(base); } catch (e) { readFailed(e); continue; }
     for (const id of ids) {
       const f = path.join(base, id, `${id}.jsonl`);
-      try { map.set(id, { file: f, mtime: fs.statSync(f).mtimeMs, folder: d }); } catch { /* no main transcript */ }
+      try { map.set(id, { file: f, mtime: fs.statSync(f).mtimeMs, folder: d }); } catch (e) { readFailed(e); }
     }
   }
   return map;
 }
-const rowsOf = f => { try { return fs.readFileSync(f, 'utf8').split('\n').filter(Boolean).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean); } catch { return []; } };
+const rowsOf = f => { try { return fs.readFileSync(f, 'utf8').split('\n').filter(Boolean).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean); } catch (e) { readFailed(e); return []; } };
 
 async function headers() {
   try {
+    fs.statSync(DB); // absent is normal; an existing but unreadable database must be retried
     const { DatabaseSync } = await import('node:sqlite');
     const db = new DatabaseSync(DB, { readOnly: true });
     try {
@@ -59,9 +62,9 @@ async function headers() {
           unread: !!v.hasUnreadMessages, blocking: !!v.hasBlockingPendingActions, folder: v.workspaceIdentifier?.uri?.fsPath || '', worktree: !!v.isWorktree };
       });
       const st = db.prepare("SELECT json_extract(value, '$.status') AS s FROM cursorDiskKV WHERE key = ?");
-      return { hs, status: id => { try { return st.get(`composerData:${id}`)?.s || ''; } catch { return ''; } } };
+      return { hs, status: id => { try { return st.get(`composerData:${id}`)?.s || ''; } catch (e) { readFailed(e); return ''; } } };
     } finally { /* statements are used after return: closed at process exit */ }
-  } catch { return null; }
+  } catch (e) { readFailed(e); return null; }
 }
 
 // State for the Orchestrator: "in corso" / "aspetta te" / "finito" (+ why).
@@ -139,16 +142,16 @@ function claudeChats({ since = 0, idPrefix = '', titleQ = '' } = {}) {
   const out = [];
   const cache = loadCache();
   let dirs = [];
-  try { dirs = fs.readdirSync(CLAUDE, { withFileTypes: true }).filter(d => d.isDirectory()); } catch { return out; }
+  try { dirs = fs.readdirSync(CLAUDE, { withFileTypes: true }).filter(d => d.isDirectory()); } catch (e) { readFailed(e); return out; }
   for (const d of dirs) {
     let files = [];
-    try { files = fs.readdirSync(path.join(CLAUDE, d.name)).filter(f => f.endsWith('.jsonl') && f.startsWith(idPrefix)); } catch { continue; }
+    try { files = fs.readdirSync(path.join(CLAUDE, d.name)).filter(f => f.endsWith('.jsonl') && f.startsWith(idPrefix)); } catch (e) { readFailed(e); continue; }
     for (const f of files) {
       const file = path.join(CLAUDE, d.name, f);
-      let st; try { st = fs.statSync(file); } catch { continue; }
+      let st; try { st = fs.statSync(file); } catch (e) { readFailed(e); continue; }
       const mtime = st.mtimeMs;
       if (mtime < since) continue;
-      let fd; try { fd = fs.openSync(file, 'r'); } catch { continue; }
+      let fd; try { fd = fs.openSync(file, 'r'); } catch (e) { readFailed(e); continue; }
       try {
         const { name, cwd } = scanHead(cache, file, fd, st);
         if (titleQ && !name.toLowerCase().includes(titleQ)) continue;
@@ -156,7 +159,7 @@ function claudeChats({ since = 0, idPrefix = '', titleQ = '' } = {}) {
         if (!tail.some(r => r.type === 'user' || r.type === 'assistant')) continue;
         const wt = cwd.split(/[\\/]\.claude[\\/]worktrees[\\/]/); // a worktree shows its repo ({{BRAIN_NAME}}), not its random name
         out.push({ harness: 'Claude', id: f.slice(0, -6), at: mtime, name, folder: wt[0], worktree: wt.length > 1, file, rows: tail });
-      } catch { continue; } finally { fs.closeSync(fd); }
+      } catch (e) { readFailed(e); continue; } finally { fs.closeSync(fd); }
     }
   }
   saveCache(cache);
@@ -221,6 +224,12 @@ async function list() {
   chats = chats.map(c => ({ ...c, harness: 'Cursor', state: state(c, c.t ? rowsOf(c.t.file) : []) }))
     .concat(claudeChats({ since }).map(c => ({ ...c, state: claudeState(c.rows) })))
     .filter(c => !ws || (c.folder || '').toLowerCase().includes(ws)).sort((a, b) => b.at - a.at);
+  // App feed only: numeric activity times let it expire old rows without launching this process at rest.
+  // Reuse the masked display line: no transcript paths/content or extra identifiers cross this boundary.
+  if (argv.includes('--live-json')) {
+    console.log(JSON.stringify({ complete, chats: chats.map(c => ({ line: line(c), at: c.at })) }));
+    return;
+  }
   const out = [`Chat Claude e Cursor aggiornate negli ultimi ${argv.includes('--all') ? 'tutti i' : days} giorni: ${chats.length}${db ? '' : ' (Cursor: titoli dal primo messaggio, database non leggibile)'}`];
   for (const c of chats) out.push(line(c));
   console.log(out.join('\n'));
