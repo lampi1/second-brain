@@ -151,6 +151,10 @@ describe('requestKey', () => {
     expect(answerText(permission, initialDraft(permission), 'usa npm ci').answer).toEqual({ kind: 'permission', allow: false, message: 'usa npm ci' });
     expect(answerText(permission, initialDraft(permission), '   ').handled).toBe(false);
   });
+  it('MCP fields preserve exact text, including an explicitly submitted empty string', () => {
+    const req = { ...question(), tool: 'mcp__fixture' };
+    for (const text of ['', '  exact  ']) expect(answerText(req, initialDraft(req), text).answer).toEqual({ kind: 'question', answers: { 'Cosa faccio?': text } });
+  });
 
   it('the digit after the last option opens "Altro…" (never an answer)', () => {
     const r = question();

@@ -12,6 +12,7 @@ export const genuiRequestEn: typeof genuiRequestIt = {
   'genui.request.backHint': 'back to choices',
   'genui.request.cancel': 'Cancel',
   'genui.request.send': 'Send',
+  'genui.request.declineForm': 'Decline form',
   'genui.request.later': 'Think about it later',
   'genui.request.laterHint': 'Leave this unanswered: the chat keeps waiting and the Orchestrator brings it back when you ask for a recap',
   'genui.request.confirm': 'Confirm',

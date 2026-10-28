@@ -308,6 +308,16 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     const self = chat(callerId);
     // `remember` is the role memory's, not the result's: the result keeps its exact shape (shared/delegation.ts checkResult)
     const { remember: _remember, ...a } = all, write = rememberLines(all, self);
+    const warnings: string[] = [];
+    // Small cosmetic overflows must not require another model turn. Full evidence stays in output/doneWhen;
+    // neither outcome nor the host's completion criteria are repaired or relaxed.
+    if (typeof a.summary === 'string' && a.summary.trim().length > SUMMARY_MAX && a.summary.trim().length <= Math.floor(SUMMARY_MAX * 1.1)) {
+      const prefix = a.summary.trim().slice(0, SUMMARY_MAX - 1), boundary = prefix.search(/\s+\S*$/);
+      if (boundary > 0) { a.summary = `${prefix.slice(0, boundary)}…`; warnings.push(`summary shortened at a word boundary to ${SUMMARY_MAX} characters.`); }
+    }
+    // Agents commonly attach top-level evidence. It is not canonical verification; explicitly discard it, never
+    // merge it into doneWhen or a review verdict. Other unknown keys still report likely misspellings.
+    if (Object.hasOwn(a, 'evidence')) { delete a.evidence; warnings.push('Ignored top-level evidence; put evidence in doneWhen entries or output.'); }
     const review = independentReview(self);
     if ((a.verdict !== undefined || a.verified !== undefined) && review && (self?.closedAt || self?.run?.endedAt !== undefined)) throw new Error('Review fields require an active app-owned independent reviewer run.');
     // any other chat never had the fields in its schema (reportSchema); one sent anyway (an engine that listed tools
@@ -320,12 +330,12 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     // Root contracts are host-owned. Direct-user and explicit app replay roots retain their results locally.
     if (self && !self.delegation && !self.parentId && !self.isOrchestrator && self.run && (self.run.startedBy === 'orchestrator' || self.run.startedBy === 'user' || self.run.taskContract?.reportExpected) && d.chats.reportRoot) {
       const done = d.chats.reportRoot(callerId, checkResult(a, self.run.taskContract?.doneWhen ?? [])), remembered = write();
-      return { reported: true, to: self.run.startedBy === 'orchestrator' ? 'orchestrator' : 'this-chat', delivered: done.delivered, ...(remembered ? { remembered } : {}), ...(done.delivered ? {} : { note: 'The canonical result is retained on its run; pending delivery retries.' }) };
+      return { reported: true, to: self.run.startedBy === 'orchestrator' ? 'orchestrator' : 'this-chat', delivered: done.delivered, ...(warnings.length ? { warnings } : {}), ...(remembered ? { remembered } : {}), ...(done.delivered ? {} : { note: 'The canonical result is retained on its run; pending delivery retries.' }) };
     }
     if (!self?.delegation || !self.parentId) throw new Error('agent_report: only a chat the Orchestrator or a parent started reports with it (agent_delegate or app_create_chat). Answer in this chat instead.');
     const result = checkResult(a, self.delegation.doneWhen);
     const done = d.chats.reportDelegation(callerId, result), remembered = write();
-    return { reported: true, parentId: done.parentId, delivered: done.delivered, ...(remembered ? { remembered } : {}) };
+    return { reported: true, parentId: done.parentId, delivered: done.delivered, ...(warnings.length ? { warnings } : {}), ...(remembered ? { remembered } : {}) };
   }
 
   function children(callerId: string): unknown {

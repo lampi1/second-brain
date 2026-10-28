@@ -3,6 +3,7 @@
 // an answer, and the digit after the last option into "Altro…" (RequestPanel uses it in every size). Both are pinned by
 // test/unit/keys.test.ts.
 import type { Answer, PendingRequest } from '@shared/contract';
+import { isMcpFormRequest } from '@shared/mcp-form';
 import { t } from '../i18n';
 
 export interface KeyLike { key: string; code: string; ctrlKey: boolean; shiftKey: boolean; altKey: boolean; metaKey: boolean }
@@ -156,8 +157,8 @@ export function pickOption(req: PendingRequest, draft: Draft, index: number): Ke
 
 /** Free-text answer to the current question ("Altro…"). */
 export function answerText(req: PendingRequest, draft: Draft, text: string): KeyResult {
-  const t = text.trim();
-  if (!t) return { handled: false, draft };
+  const form = isMcpFormRequest(req), t = form ? text : text.trim();
+  if (!t && !form) return { handled: false, draft };
   if (req.type === 'permission') return { handled: true, draft, answer: { kind: 'permission', allow: false, message: t } };
   const qs = req.questions ?? [];
   const q = qs[draft.step];

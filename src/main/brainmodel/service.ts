@@ -99,9 +99,9 @@ export class BrainModelService {
     if (this.d.home) dirs.push({ dir: path.join(this.d.home, '.claude', 'skills'), home: 'user' }, { dir: path.join(this.d.home, '.agents', 'skills'), home: 'user' });
     return dirs;
   }
-  private restorer(): AgentRestorer {
+  private restorer(profiles?: readonly AgentProfile[]): AgentRestorer {
     return {
-      activeVersion: id => this.profiles().find(p => p.id === id)?.activeVersion ?? null,
+      activeVersion: id => (profiles ?? this.profiles()).find(p => p.id === id)?.activeVersion ?? null,
       // a change that opened a trial: undoing it rejects the trial, as the feed's undo does
       restore: (id, version, expected) => {
         const p = this.profiles().find(x => x.id === id);
@@ -143,7 +143,7 @@ export class BrainModelService {
   private lastRun(): MaintenanceRun | null { try { return (readLocal(this.runFile) as MaintenanceRun | undefined) ?? null; } catch { return null; } }
 
   state(): BrainModelState {
-    const root = this.root(), profiles = this.profiles(), restorer = this.restorer();
+    const root = this.root(), profiles = this.profiles(), restorer = this.restorer(profiles);
     const skills = readSkills(this.skillDirs(root), root, profiles).map(s => ({ ...s, madeBy: this.log.madeBy(s.file) }));
     const roles = profiles.filter(p => p.scope === 'role'), memory = readMemory(root, roles);
     const runs = (() => { try { return this.d.runs(); } catch { return []; } })();

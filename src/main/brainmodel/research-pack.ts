@@ -102,7 +102,7 @@ export function buildPack(i: PackInput): Pack {
     const u = used.get(s.name);
     return `- ${s.name} [${s.home}] ${s.rel ?? ''} · ${s.lines} lines · used by ${u?.uses ?? 0} jobs in ${PACK_DAYS} days${u ? `, last ${day(u.last)}` : ''} · declared by ${s.usedBy.join(', ') || 'no role'} · changed ${day(s.changedAt)}${s.madeBy ? ` by ${s.madeBy}` : ''}\n  ${one(s.description, 200)}`;
   });
-  const ruleLines = i.state.rules.map(r => `- ${r.file} · ${r.title} · loaded ${r.loaded} · ${r.lines} lines · changed ${day(r.changedAt)}\n  ${one(r.summary, 200)}`);
+  const ruleLines = i.state.rules.map(r => `- ${r.file} · ${r.title} · loaded ${r.loaded} · ${r.lines} lines · changed ${day(r.changedAt)}\n  ${one(r.summary, 200)}\n  ${r.loaded === 'none' ? 'No configured consumer; do not claim behavioural effects.' : r.loaded === 'always' ? 'Configured for every role at launch.' : `Available to every role on matching hooks: tools=${(r.when?.tools ?? []).join(', ') || 'none'}; prompt=${(r.when?.prompt ?? []).join(', ') || 'none'}; paths=${(r.when?.paths ?? []).join(', ') || 'none'}. This is configuration, not proof of actual use.`}`);
   const memoryLines = i.state.memory.map(m => `- ${m.file} · ${m.kind}${m.agentId ? ` (${m.agentId})` : ''} · ${m.entries} entries · changed ${day(m.changedAt)}\n  latest: ${m.preview.slice(0, 3).map(x => one(x, 140)).join(' | ')}`);
   const changes = i.state.changes.filter(c => c.at >= since);
   const changeLines = changes.map(c => `- ${day(c.at)} · ${c.job} · ${c.kind} ${c.action} ${c.target} · ${one(c.summary, 160)}${c.rolledBackAt ? ' · UNDONE by the user' : ''}${c.claim ? ` · effect on corrections: ${c.claim.verdict}` : ''}`);

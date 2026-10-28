@@ -4,11 +4,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ChangeLog, writeText, type AgentRestorer } from '../../../src/main/brainmodel/changes';
 
 const dirs: string[] = [];
-afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
+afterEach(() => { vi.restoreAllMocks(); for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 const tmp = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-changes-')); dirs.push(d); return d; };
 const base = { job: 'corrections' as const, kind: 'skill' as const, action: 'update' as const, target: 'x', summary: 's', reason: 'r', evidence: [] };
 const agents = (version: Record<string, number>): AgentRestorer & { restored: [string, number, number][] } => {
@@ -17,6 +17,17 @@ const agents = (version: Record<string, number>): AgentRestorer & { restored: [s
 };
 
 describe('ChangeLog', () => {
+  it('reads each changed file once per view and rechecks it before undo', () => {
+    const d = tmp(), log = new ChangeLog(d), file = path.join(d, 'shared.md');
+    for (let i = 0; i < 30; i++) log.apply(base, [{ file, text: `version ${i}` }]);
+    const read = vi.spyOn(fs, 'readFileSync');
+    const rows = log.list(agents({}));
+    expect(read.mock.calls.filter(([p]) => p === file)).toHaveLength(1);
+    expect(rows.filter(row => row.canRollback)).toHaveLength(1);
+    fs.writeFileSync(file, 'manual edit');
+    expect(() => log.rollback(rows[0]!.id, agents({}))).toThrow('non si può');
+    expect(log.list(agents({})).every(row => !row.canRollback)).toBe(true);
+  });
   it('writes all or none: a write that fails puts back the files it already wrote and leaves no temp file', () => {
     const d = tmp(), log = new ChangeLog(d, () => 5), a = path.join(d, 'brain', 'a.md'), b = path.join(d, 'brain', 'b.md');
     writeText(a, 'old'); fs.mkdirSync(b);

@@ -26,6 +26,7 @@ import type { AgentSnapshot, ChangeLog } from './changes';
 import { procedureSections, sectionText } from './procedure-sources';
 import { readSmall } from './model';
 import { checkPermissionText } from '../agents/tool-policy';
+import { checkMemoryWorth } from '../rules/memory-worth';
 import { changeText } from './change-text';
 import type { UpgradeAsk } from './upgrade';
 import { tidyMemoryJob } from './memory-tidy';
@@ -170,6 +171,7 @@ export function corrections(ctx: JobContext): JobResult {
     const p = ctx.profiles().find(x => x.id === l.agentId);
     if (!p) { ctx.lessons.settle(l.id, 'discarded', 'ruolo sconosciuto'); continue; }
     if (l.fromChat || l.userApproved !== true || l.assessment?.state !== 'supported') continue; // exact evidence is rechecked by learning.pending()
+    try { checkMemoryWorth('setup', 'note', l.rule); } catch { ctx.lessons.settle(l.id, 'discarded', 'la lezione deve essere riutilizzabile, senza dati di un singolo caso'); continue; }
     try { checkPermissionText(l.rule); } catch { ctx.lessons.settle(l.id, 'discarded', 'una lezione non concede permessi'); continue; }
     const line = `- ${l.rule} (${day(l.createdAt)}; ${l.evidence})`;
     const skill = l.target === 'skill' ? ctx.skills().find(s => s.name === l.skill && s.home === 'brain') : undefined;

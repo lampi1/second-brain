@@ -25,6 +25,19 @@ function bound(service: FlowService, run: FlowRun, chatId = 'worker'): FlowRun {
 function report(binding: { chatId: string; chatRunId: string; taskVersion: number }, id: string): FlowVerifiedReport { return { ...binding, id, completed: true, summary: 'Reported result', evidence: ['result: recorded output'] }; }
 function finish(service: FlowService, run: FlowRun): FlowRun { return service.report({ runId: run.id, expectedRevision: run.revision, stepId: run.steps[run.currentStep]!.stepId, reportId: 'recorded-report' }, 'orch'); }
 describe('flow definitions and matching', () => {
+  it('isolates narrow snapshots and reconciles expired grants before returning a run', () => {
+    const { service, advance } = setup(report); activate(service);
+    const run = bound(service, start(service));
+    service.runSnapshot(run.id)!.steps[0]!.status = 'completed';
+    service.runsSnapshot()[0]!.status = 'completed';
+    service.versionSnapshot('sample', 1)!.definition.steps[0]!.instructions = 'Changed copy';
+    expect(service.runSnapshot(run.id)!.steps[0]!.status).toBe('running');
+    expect(service.versionSnapshot('sample', 1)!.definition.steps[0]!.instructions).toBe('Follow the explicitly configured task.');
+    advance(11_000);
+    expect(service.runSnapshot(run.id)!.status).toBe('blocked');
+    expect(service.runSnapshot('missing')).toBeUndefined();
+    expect(service.versionSnapshot('sample', 999)).toBeUndefined();
+  });
   it('starts empty and requires exact user activation of every immutable version', () => {
     const { service } = setup(); expect(service.snapshot().drafts).toEqual([]);
     const draft = service.propose({ definition: definition(), expectedRevision: 0 });

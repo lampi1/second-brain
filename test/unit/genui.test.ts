@@ -284,10 +284,14 @@ it('reports all brief call shape problems together, without persisting an artifa
   let message = '';
   try { store.show('w', { component: 'brief', target: 'next-ask', props: { done: ['ok'], ifYes: 'x'.repeat(201), checks: [{ label: '', status: 'invalid' }] } }); } catch (e) { message = String(e); }
   for (const name of ['title', 'summary', 'props.ifYes', 'props.ifNo', 'props.checks[0].label', 'props.checks[0].status']) expect(message).toContain(name);
+  expect(message).toContain('Minimal brief example:');
   expect(store.items('w')).toEqual([]);
 });
 it('documents a complete brief example that show_ui accepts', () => {
   const { store } = setup([chat('w')]); const description = showUiTool(store).description;
   const example = description.match(/Brief example: (\{[^\n]+\})/)?.[1]; expect(example).toBeTruthy();
   expect(() => store.show('w', JSON.parse(example!))).not.toThrow();
+  expect(showUiTool(store).inputSchema).toMatchObject({ properties: { props: { properties: {
+    done: { type: 'array', minItems: 1, maxItems: 5, items: { maxLength: 200 } }, ifYes: { maxLength: 200 }, ifNo: { maxLength: 200 },
+  } } } });
 });

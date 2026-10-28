@@ -104,16 +104,23 @@ export class ChangeLog {
   seedOf(id: string): ClaimSeed | undefined { const s = this.entries.find(e => e.id === id)?.seed; return s ? structuredClone(s) : undefined; }
 
   /** Can it still be undone: not undone yet, every file still as the change left it, the role still on its version. */
-  canRollback(c: StoredChange, agents: AgentRestorer): boolean {
+  canRollback(c: StoredChange, agents: AgentRestorer, readFile: (file: string) => string | null = read): boolean {
     if (c.rolledBackAt) return false;
-    if (c.files.some(f => read(f.file) !== f.after)) return false;
+    if (c.files.some(f => readFile(f.file) !== f.after)) return false;
     if (c.agent && agents.activeVersion(c.agent.id) !== c.agent.after) return false;
     if (c.memory && !agents.memory?.canUndo(c.memory)) return false;
     return true;
   }
   /** The renderer's view, newest first. */
   list(agents: AgentRestorer, limit = 120): BrainChange[] {
-    return [...this.entries].reverse().slice(0, limit).map(({ files: _f, agent: _a, seed: _s, memory: _m, ...c }) => { void _f; void _a; void _s; void _m; return { ...c, canRollback: this.canRollback(this.entries.find(e => e.id === c.id)!, agents) }; });
+    // Many changes refer to the same file. Read it once per view; an actual rollback always rechecks fresh bytes.
+    const files = new Map<string, string | null>();
+    const current = (file: string) => { if (!files.has(file)) files.set(file, read(file)); return files.get(file)!; };
+    return [...this.entries].reverse().slice(0, limit).map(entry => {
+      const { files: _f, agent: _a, seed: _s, memory: _m, ...c } = entry;
+      void _f; void _a; void _s; void _m;
+      return { ...c, canRollback: this.canRollback(entry, agents, current) };
+    });
   }
   rollback(id: string, agents: AgentRestorer): StoredChange {
     const c = this.entries.find(e => e.id === id);

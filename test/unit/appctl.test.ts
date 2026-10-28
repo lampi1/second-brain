@@ -87,7 +87,7 @@ describe('app control tools', () => {
       const answered: unknown[] = [];
       const chats = {
         list: () => [{ id: 'orchestrator', isOrchestrator: true, harness: 'claude' }, { id: 'w', isOrchestrator: false, harness: 'claude' }],
-        pending: () => [q, perm, { ...q, id: 'rq', chatId: 'orchestrator' }],
+        pending: () => [q, perm, { ...q, id: 'rq', chatId: 'orchestrator' }, { ...q, id: 'form', tool: 'mcp__fixture' }],
         items: (id: string) => (id === 'orchestrator' ? orchestratorItems : []),
         answer: async (chatId: string, requestId: string, answer: unknown) => { answered.push({ chatId, requestId, answer }); },
       } as unknown as ChatService;
@@ -123,6 +123,7 @@ describe('app control tools', () => {
     it('never a permission, the Orchestrator\'s own question, a closed request or a partial answer', async () => {
       const { answered, run } = setup([{ kind: 'user', id: 'u', at: 150, text: 'ok' }]);
       await expect(run({ chatId: 'w', requestId: 'p1', answers: {} })).rejects.toThrow(/solo le domande/);
+      await expect(run({ chatId: 'w', requestId: 'form', answers: both })).rejects.toThrow(/modulo MCP/);
       await expect(run({ chatId: 'orchestrator', requestId: 'rq', answers: both })).rejects.toThrow(/solo l'utente/);
       await expect(run({ chatId: 'w', requestId: 'nope', answers: both })).rejects.toThrow(/non è più aperta/);
       await expect(run({ chatId: 'w', requestId: 'q1', answers: { 'Apro il bug?': 'Sì' } })).rejects.toThrow(/ogni domanda/);

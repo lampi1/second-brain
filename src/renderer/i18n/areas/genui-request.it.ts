@@ -11,6 +11,7 @@ export const genuiRequestIt = {
   'genui.request.backHint': 'torna alle scelte',
   'genui.request.cancel': 'Annulla',
   'genui.request.send': 'Invia',
+  'genui.request.declineForm': 'Rifiuta modulo',
   'genui.request.later': 'Ci penso dopo',
   'genui.request.laterHint': 'Non rispondi adesso: la chat resta in attesa e l’Orchestrator te la ripropone quando gli chiedi un recap',
   'genui.request.confirm': 'Conferma',
