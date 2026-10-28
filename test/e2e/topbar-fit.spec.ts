@@ -75,7 +75,8 @@ test('settings and every action stay reachable at 1280, 1366 and 1920 px, window
     // real full screen (F11-like): whatever the display, the bar fits it
     await fullScreen(app, true);
     await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.isFullScreen())).toBe(true);
-    await page.waitForFunction(() => innerWidth >= 1200);
+    // Hidden native fullscreen does not promise a particular monitor resolution.
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
     await settingsWork(page);
     expect(await allOnScreen(page)).toEqual([]);
     await shot(page, 'topbar-fit-fullscreen');

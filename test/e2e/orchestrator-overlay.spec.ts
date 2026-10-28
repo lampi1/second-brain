@@ -21,9 +21,10 @@ test('always open on the right, no collapse and no tabs; Ctrl+R focuses its inpu
   for (const gone of ['orchestrator-pill', 'orchestrator-collapse', 'orchestrator-tab-new']) await expect(page.getByTestId(gone)).toHaveCount(0);
   const b = await box(page);
   const top = (await page.getByTestId('topbar').boundingBox())!;
-  expect(Math.round(b.x + b.width)).toBe(1600); // flush with the right edge
+  const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+  expect(Math.round(b.x + b.width)).toBe(viewport.width); // flush with the actual window manager bounds
   expect(Math.round(b.y)).toBe(Math.round(top.y + top.height)); // from under the top bar
-  expect(Math.round(b.y + b.height)).toBe(1000); // to the bottom edge
+  expect(Math.round(b.y + b.height)).toBe(viewport.height); // to the bottom edge, including height-limited desktops
   await shot(page, 'orchestrator-ov-open');
 
   await page.getByTestId('view-agents').click({ position: { x: 4, y: 4 } });
