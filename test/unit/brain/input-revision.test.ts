@@ -22,11 +22,12 @@ describe('script input revisions', () => {
     const before = await g.revision(); expect(before).not.toBeNull();
     expect(await g.revision()).toBe(before);
     fs.appendFileSync(file, '\nsecond');
-    await vi.waitFor(async () => expect(await g.revision()).not.toBe(before));
+    // Native recursive notifications may be batched (notably macOS FSEvents); this checks delivery, not latency.
+    await vi.waitFor(async () => expect(await g.revision()).not.toBe(before), { timeout: 5000 });
     const appended = await g.revision();
     fs.writeFileSync(path.join(nested, 'next'), 'replacement'); fs.renameSync(path.join(nested, 'next'), file);
-    await vi.waitFor(async () => expect(await g.revision()).not.toBe(appended));
-  });
+    await vi.waitFor(async () => expect(await g.revision()).not.toBe(appended), { timeout: 5000 });
+  }, 15000);
 
   it('detects creation of missing roots, then re-arms after root replacement', async () => {
     const root = temporary(), target = path.join(root, 'new', 'projects');
@@ -37,8 +38,8 @@ describe('script input revisions', () => {
     fs.renameSync(target, path.join(root, 'old')); fs.mkdirSync(target);
     const replaced = await g.revision(); expect(replaced).not.toBe(created);
     fs.writeFileSync(path.join(target, 'session.jsonl'), 'new');
-    await vi.waitFor(async () => expect(await g.revision()).not.toBe(replaced));
-  });
+    await vi.waitFor(async () => expect(await g.revision()).not.toBe(replaced), { timeout: 5000 });
+  }, 15000);
 
   it('ignores unrelated files, but invalidates for matching CSV changes', async () => {
     const root = temporary();
@@ -48,8 +49,8 @@ describe('script input revisions', () => {
     await new Promise(r => setTimeout(r, 100));
     expect(await g.revision()).toBe(before);
     fs.writeFileSync(path.join(root, 'team-usage-events-demo.csv'), 'csv');
-    await vi.waitFor(async () => expect(await g.revision()).not.toBe(before));
-  });
+    await vi.waitFor(async () => expect(await g.revision()).not.toBe(before), { timeout: 5000 });
+  }, 15000);
 
   it('falls back on watch errors and recovers without trusting the old token', async () => {
     const root = temporary(), g = gate([{ directory: root }]);

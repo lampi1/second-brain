@@ -80,8 +80,8 @@ for (const [name, extra] of [['demo', 0], ['large', 140]] as const) {
 
       // a narrower, taller window: the map re-fits to the new shape
       await setSize(app, 1100, 1000);
-      await expect.poll(async () => (await measure(page)).fillX).toBeGreaterThan(.75);
-      expectFilled(await measure(page));
+      // ResizeObserver and the map layout settle separately; horizontal fill alone can already pass on old geometry.
+      await expect(async () => expectFilled(await measure(page))).toPass({ timeout: 5000 });
       await shot(page, `dashboard-map-fit-${name}-narrow`);
       if (name === 'large') {
         await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'light' }));
