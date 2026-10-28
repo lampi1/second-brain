@@ -66,6 +66,8 @@ export interface RunPark {
   commentId?: number; branch: string; pushed: boolean;
   /** the contact's answer, kept while the resumed steps run */
   answer?: { commentId: number; at: number; text: string; author: string };
+  /** resumed by hand before an answer: spent, a later comment of the contact no longer resumes it */
+  spent?: boolean;
 }
 /** A DevOps write of a run. "writing" = sent, outcome not known yet (verified on DevOps before anything else);
  *  "not-verified" = its effect could not be confirmed; "failed" = DevOps refused it. None of them blocks the run.

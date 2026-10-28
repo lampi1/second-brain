@@ -94,6 +94,28 @@ describe('parked runs', () => {
     expect(again.parked?.commentId).toBe(comments[1]!.id);
   });
 
+  it('the park counter never goes back on the contact\'s resume; a park resumed by hand is spent, a later answer no longer resumes it', async () => {
+    const { devops, runtime } = parkingRuntime({ fixNeedsHuman: call => call === 0 });
+    const { runId } = await runtime.startItem(5).finished;
+    // a counter already past this park's number (an earlier park spent by hand) stays where it is
+    runtime.store.claim(runId, r => { r.parks = 3; });
+    devops.reply(5, CONTACT, 'Usa il campo Note');
+    const resumed = await (await runtime.resumeParked(runId))!.finished;
+    expect(resumed.status).toBe('done');
+    expect(resumed.parks).toBe(3);
+
+    const other = parkingRuntime({ fixNeedsHuman: call => call === 0 });
+    const parked = await other.runtime.startItem(5).finished;
+    const byHand = await other.runtime.resume(parked.runId).finished;
+    expect(byHand.status).toBe('done');
+    expect(byHand.parks).toBe(1);
+    expect(byHand.parked).toMatchObject({ n: 1, spent: true });
+    // even if the run is found waiting for a person again, the contact's comment does not resume the spent park
+    other.runtime.store.claim(parked.runId, r => { r.status = 'needs-human'; });
+    other.devops.reply(5, CONTACT, 'ecco il dato');
+    expect(await other.runtime.resumeParked(parked.runId)).toBeNull();
+  });
+
   it('the watch recovers a run stopped by Ctrl+C or a crash, unless a live process holds it; never a done or failed one', async () => {
     const lockDir = tempDir(), other = createLocks(lockDir, { alive: () => true });
     const { engine, runtime } = parkingRuntime({ fixNeedsHuman: () => false, locks: createLocks(lockDir) });

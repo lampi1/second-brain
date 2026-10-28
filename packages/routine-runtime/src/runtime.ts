@@ -259,7 +259,7 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
         run.status = run.escalation && run.escalation.state !== 'answered' ? 'waiting-human' : 'running';
         delete run.error; delete run.endedAt;
         // a parked run resumed by hand: its park is spent, the next park takes the next number (its own ledger keys)
-        if (run.parked) run.parks = Math.max(run.parks ?? 0, run.parked.n);
+        if (run.parked) { run.parks = Math.max(run.parks ?? 0, run.parked.n); if (!run.parked.answer) run.parked.spent = true; }
         for (const s of run.steps) if (s.status === 'running' || s.status === 'failed' || (s.status === 'needs-human' && !run.escalation)) { s.status = 'pending'; delete s.error; }
         mutate?.(run);
       });
@@ -277,7 +277,7 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     if (running.has(runId)) return null;
     const run = store.read(runId);
     const stopped = run.status === 'cancelled' || run.status === 'running' || run.status === 'waiting-human';
-    const parkFailed = run.status === 'needs-human' && parking(run) && (!run.parked || Boolean(run.parked.answer)) && (run.parkRetries ?? 0) < PARK_RETRIES;
+    const parkFailed = run.status === 'needs-human' && parking(run) && (!run.parked || Boolean(run.parked.answer || run.parked.spent)) && (run.parkRetries ?? 0) < PARK_RETRIES;
     if (!stopped && !parkFailed) return null;
     if (lockNames(run).some(name => options.locks?.holder(name))) return null;
     info('run recovered', { runId, status: run.status });
@@ -702,7 +702,7 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
   async function resumeParked(runId: string): Promise<RunHandle | null> {
     if (running.has(runId)) return null;
     const run = store.read(runId), p = run.parked, policy = routine.devops?.downgrade;
-    if (run.status !== 'needs-human' || !p || p.answer || run.workItem === undefined || !routine.escalation || !organization || !policy) return null;
+    if (run.status !== 'needs-human' || !p || p.answer || p.spent || run.workItem === undefined || !routine.escalation || !organization || !policy) return null;
     const item = await devops().item(organization, run.workItem);
     const contact = routine.escalation.contact.toLowerCase();
     const answers = (await devops().comments(organization, item.project, run.workItem))
@@ -718,7 +718,7 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     try {
       claimed = store.claim(runId, r => {
         r.status = 'running'; delete r.error; delete r.endedAt;
-        r.parks = p.n; r.parked = { ...p, answer };
+        r.parks = Math.max(r.parks ?? 0, p.n); r.parked = { ...p, answer };
         for (const s of r.steps) if (range.has(s.id)) { s.status = 'pending'; s.round = (s.round ?? 1) + 1; delete s.error; delete s.endedAt; }
       });
     } catch (e) { unlockRun(runId, run); throw e; }
