@@ -145,7 +145,19 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     ...(options.devops?.request ? { request: options.devops.request } : {}),
   });
   /** test deployments of every run of this runtime's runs root: one lease per target (devops-host/test-deployment.ts) */
-  const deployments: Deployments = options.devops?.deployments ?? new TestDeploymentCoordinator(() => routine.devops?.deployTargets ?? [], path.join(paths.runsRoot, 'test-deployments.json'));
+  const deployments: Deployments = options.devops?.deployments ?? new TestDeploymentCoordinator(() => routine.devops?.deployTargets ?? [], path.join(paths.runsRoot, 'test-deployments.json'), runId => runSettled(runId));
+  /** A run whose leases are stale: not running here, and its run.json says done, failed or cancelled, or `running`
+   *  while none of its locks has a live holder (its process is gone: Ctrl+C, a closed terminal). A parked or escalated
+   *  run (needs-human, waiting-human) is never settled: it resumes and may still need its node. */
+  function runSettled(runId: string): boolean {
+    if (running.has(runId)) return false;
+    let run: RunRecord;
+    try { run = store.read(runId); } catch { return false; }
+    if (run.status === 'done' || run.status === 'failed' || run.status === 'cancelled') return true;
+    if (run.status !== 'running' || !options.locks) return false;
+    const names = lockNames(run);
+    return names.length > 0 && !names.some(name => options.locks!.holder(name));
+  }
   const arm = options.devops?.arm ?? (async (resourceId: string) => {
     if (!/^\/subscriptions\/[a-zA-Z0-9-]+\/resourceGroups\/[^?#\s]+$/.test(resourceId)) throw new Error('Invalid Azure resource id');
     const token = await azureCliToken(AbortSignal.timeout(60_000), 'https://management.azure.com/');
@@ -411,12 +423,18 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
   /** The run's browser profile (cookies of its logins): one temp folder per run, removed when the run ends. */
   const browserProfile = (runId: string) => path.join(os.tmpdir(), 'routine-browser', `${routine.id}-${runId}`);
 
-  function finish(runId: string, attempt: number, signal: AbortSignal): RunRecord {
+  async function finish(runId: string, attempt: number, signal: AbortSignal): Promise<RunRecord> {
     try { fs.rmSync(browserProfile(runId), { recursive: true, force: true }); } catch { /* a browser still closing: temp */ }
     let run = store.read(runId);
     if (run.attempt !== attempt) return run;
     if (signal.aborted && (run.status === 'running' || run.status === 'waiting-human')) {
       run = store.update(runId, attempt, r => { r.status = 'cancelled'; r.endedAt = clock.now(); for (const s of r.steps) if (s.status === 'running') s.status = 'pending'; });
+    }
+    // the run stopped (done, failed, cancelled, needs a person): its finished test deployments free the node for the
+    // next run; an active or uncertain one keeps it (settle refuses), and so does a run still waiting for its person
+    if (run.status !== 'running' && run.status !== 'waiting-human') {
+      const freed = await deployments.settle(runId, () => {}).catch((e: unknown) => { warn('test deployment lease not released', { runId }, e instanceof Error ? e.message : String(e)); return true; });
+      if (!freed) warn('test deployment still active or uncertain: its lease is kept', { runId });
     }
     unlockRun(runId, run);
     writeReport(store, run);
@@ -827,6 +845,6 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     return driveLogin(page, target.origin, { user: credential.user, password: credential.password }, rule);
   }
 
-  return { pkg, store, masker, start, startItem, resume, resumeParked, recover, admitItem, cancel, login, isRunning: (runId: string) => running.has(runId) };
+  return { pkg, store, masker, start, startItem, resume, resumeParked, recover, admitItem, cancel, login, isRunning: (runId: string) => running.has(runId), leaseSettled: runSettled };
 }
 export type RoutineRuntime = ReturnType<typeof createRoutineRuntime>;
