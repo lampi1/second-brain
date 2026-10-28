@@ -4,7 +4,7 @@
 // resumed first, items already carrying the park tag admitted only after a comment of the contact, maxActive.
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { createMasker, createRoutineRuntime, createRunStore, createTriggerLoop, preflightRoutinePackage, type RoutineTrigger, type StepResult } from '../../../packages/routine-runtime/src/index';
+import { createDevOpsDetector, createMasker, createRoutineRuntime, createRunStore, createTriggerLoop, preflightRoutinePackage, type RoutineTrigger, type StepResult } from '../../../packages/routine-runtime/src/index';
 import type { FlowDetectionResult } from '../../../src/shared/flow-automation';
 import { done, fakeDevOps, routinePackage, scriptedEngine, tempDir } from './fakes';
 
@@ -120,5 +120,36 @@ describe('trigger loop for parked runs', () => {
     const held = createTriggerLoop({ routineId: 'demo', trigger: { ...trigger, areas: [] }, store, start: id => ({ runId: `run-${id}` }), detect: async () => result(1), admit: async () => false });
     expect((await held.tick()).started).toEqual([]);
     expect(store.trigger().cursor).toEqual({ 1: '3' });
+  });
+
+  it('an area override narrows only that area: new items from the main area, only park-tagged ones from the other', async () => {
+    // the real detector on a fake DevOps: Dash holds new bugs, Plan holds untagged New bugs and one parked bug
+    const bug = (id: number, project: string, tags = '') => ({ id, rev: 2, fields: { 'System.Title': `Bug ${id}`, 'System.TeamProject': project, 'System.AreaPath': `${project}\\A`, 'System.WorkItemType': 'Bug', 'System.State': 'New', 'System.Tags': tags } });
+    const items = [bug(1, 'Dash'), bug(2, 'Dash', 'ai-fixable'), bug(3, 'Plan'), bug(4, 'Plan', 'other'), bug(5, 'Plan', 'ai-needs-human')];
+    const request = async (url: string, init: RequestInit) => {
+      const project = decodeURIComponent(url.split('/')[4]!);
+      const body = JSON.parse(String(init.body)) as { query?: string; ids?: number[] };
+      const here = items.filter(w => w.fields['System.TeamProject'] === project);
+      if (body.query) {
+        const after = Number(body.query.match(/\[System.Id\] > (\d+)/)?.[1]);
+        return new Response(JSON.stringify({ asOf: '2026-01-02T03:04:05.000Z', workItems: here.filter(w => w.id > after).map(w => ({ id: w.id })) }));
+      }
+      return new Response(JSON.stringify({ value: here.filter(w => body.ids?.includes(w.id)) }));
+    };
+    const routineTrigger: RoutineTrigger = { kind: 'devops', everyMinutes: 10, organization: 'contoso', project: 'Dash', areaPath: 'Dash\\A', workItemType: 'Bug', states: ['New'],
+      includeExisting: true, excludeTags: ['ai-fixable'], areas: [{ project: 'Plan', areaPath: 'Plan\\A', includeTags: ['ai-needs-human'] }] };
+    const parsed = preflightRoutinePackage(routinePackage({ trigger: routineTrigger, devops: { organization: 'contoso', projects: ['Dash', 'Plan'], ops: [], fields: [] } }));
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.pkg?.routine.trigger?.areas).toEqual(routineTrigger.areas);
+    const store = createRunStore(path.join(tempDir(), 'runs'), createMasker());
+    // 1 was started earlier and is parked now (moved to Plan with the tag in real life): never started again as new
+    store.setTrigger({ ...store.trigger(), subjects: { 'item:1': { runId: 'run-1', at: 1 } } });
+    const started: number[] = [];
+    const loop = createTriggerLoop({ routineId: 'demo', trigger: routineTrigger, store, start: id => { started.push(id); return { runId: `run-${id}` }; },
+      detect: createDevOpsDetector({ authorization: { authorization: async () => 'Bearer fake' }, request }) });
+    await loop.tick();
+    // 1: already a subject (resume's job); 2: excluded tag; 3, 4: Plan without the park tag; 5: the parked Plan bug
+    expect(started).toEqual([5]);
+    expect((await loop.tick()).started).toEqual([]);
   });
 });

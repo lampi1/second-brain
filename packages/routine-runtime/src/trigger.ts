@@ -40,10 +40,11 @@ export function createTriggerLoop(options: TriggerLoopOptions) {
   const clock = options.clock ?? { now: () => Date.now() };
   const detect: Detect = options.detect ?? createDevOpsDetector(options.authorization ? { authorization: options.authorization } : {});
   let timer: ReturnType<typeof setTimeout> | undefined, controller: AbortController | undefined, busy: Promise<TickResult> | undefined, stopped = true;
-  // the detector sees one area per call: the trigger's own, then each further one with its own cursor
+  // the detector sees one area per call: the trigger's own, then each further one with its own cursor and its overrides
+  // (an override replaces the rule's value: an area's includeTags narrows only that area)
   const scopes = (): { key: string; trigger: FlowAutomationConfig['trigger'] }[] => {
     const { areas, maxActive: _maxActive, ...base } = options.trigger;
-    return [{ key: '', trigger: { ...base } }, ...(areas ?? []).map(a => ({ key: `${a.project}|${a.areaPath}`, trigger: { ...base, project: a.project, areaPath: a.areaPath } }))];
+    return [{ key: '', trigger: { ...base } }, ...(areas ?? []).map(a => ({ key: `${a.project}|${a.areaPath}`, trigger: { ...base, ...a } }))];
   };
   const config = (trigger: FlowAutomationConfig['trigger']): FlowAutomationConfig => ({ flowId: options.routineId, flowVersion: 1, trigger, scope: {}, inputs: {}, priority: 'normal' });
   const busyNow = () => options.trigger.maxActive !== undefined && (options.active?.() ?? 0) >= options.trigger.maxActive;

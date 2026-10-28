@@ -50,10 +50,15 @@ export interface RoutineTrigger {
   kind: 'devops'; everyMinutes: number; organization: string; project: string; areaPath: string; workItemType: string;
   states: string[]; includeExisting: boolean;
   includeTags?: string[]; excludeTags?: string[]; workItemIds?: number[]; iterationPath?: string; maxPerHour?: number;
-  /** more areas watched with the same rule (another project's area too): one cursor each, one dedup for all */
-  areas?: { project: string; areaPath: string }[];
+  /** more areas watched with the same rule (another project's area too): one cursor each, one dedup for all; an area
+   *  may override the rule's states, tags and includeExisting (e.g. only the tagged items of the area work moves to) */
+  areas?: RoutineTriggerArea[];
   /** at most this many runs at once (a shared test environment or checkout); more items wait for the next poll */
   maxActive?: number;
+}
+export interface RoutineTriggerArea {
+  project: string; areaPath: string;
+  states?: string[]; includeExisting?: boolean; includeTags?: string[]; excludeTags?: string[];
 }
 /** What step results may write on the run's work item; anything else is refused by the runtime. */
 export interface RoutineDevOps {
@@ -148,9 +153,20 @@ export function parseTrigger(v: unknown): RoutineTrigger {
     ...opt(t, 'includeTags', x => strs(x, 'trigger.includeTags')), ...opt(t, 'excludeTags', x => strs(x, 'trigger.excludeTags')),
     ...opt(t, 'workItemIds', x => list(x, 'trigger.workItemIds', 500).map((n, i) => int(n, `trigger.workItemIds[${i}]`, 1, Number.MAX_SAFE_INTEGER))),
     ...opt(t, 'iterationPath', x => str(x, 'trigger.iterationPath', 512)), ...opt(t, 'maxPerHour', x => int(x, 'trigger.maxPerHour', 1, 1000)),
-    ...opt(t, 'areas', x => list(x, 'trigger.areas', 8).map((a, i) => { const o = obj(a, `trigger.areas[${i}]`); only(o, ['project', 'areaPath'], `trigger.areas[${i}]`); return { project: str(o.project, `trigger.areas[${i}].project`, 128), areaPath: str(o.areaPath, `trigger.areas[${i}].areaPath`, 512) }; })),
+    ...opt(t, 'areas', x => list(x, 'trigger.areas', 8).map((a, i) => parseArea(a, `trigger.areas[${i}]`))),
     ...opt(t, 'maxActive', x => int(x, 'trigger.maxActive', 1, 20)),
   } as RoutineTrigger;
+}
+
+function parseArea(v: unknown, at: string): RoutineTriggerArea {
+  const o = obj(v, at);
+  only(o, ['project', 'areaPath', 'states', 'includeExisting', 'includeTags', 'excludeTags'], at);
+  if (o.includeExisting !== undefined && typeof o.includeExisting !== 'boolean') fail(`${at}.includeExisting: expected true or false`);
+  return {
+    project: str(o.project, `${at}.project`, 128), areaPath: str(o.areaPath, `${at}.areaPath`, 512),
+    ...opt(o, 'states', x => strs(x, `${at}.states`, 32)), ...opt(o, 'includeExisting', x => x as boolean),
+    ...opt(o, 'includeTags', x => strs(x, `${at}.includeTags`)), ...opt(o, 'excludeTags', x => strs(x, `${at}.excludeTags`)),
+  };
 }
 
 function devops(v: unknown): RoutineDevOps {
