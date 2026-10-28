@@ -18,7 +18,26 @@ it('a PR comment keeps its Markdown formatting; only link, image and HTML syntax
   const out = md('**Commit colpevole:** `abc1234`\n- _TC01_ # | ok\n[x][1] <b>\n\n[1]: https://evil.example');
   expect(out).toContain('**Commit colpevole:** `abc1234`\n- _TC01_ # | ok');
   expect(out).toContain('\\[x\\]\\[1\\] &lt;b&gt;');
-  expect(out).toContain('\\[1\\]: https://evil.example');
+  expect(out).toContain('\\[1\\]: https\\://evil.example');
+});
+
+it('a bare URL, www host or e-mail never becomes a link, nor swallows the backticks of a code span after it', () => {
+  for (const word of ['https://example.com/', 'HTTP://example.com/a', 'ftp://example.com/', 'www.example.com/', 'WWW.example.com', 'a@example.com', 'x.https://e.co', 'example.com/', 'a:']) {
+    // html() fails on any <a>, <img> or other active tag
+    html(`vedi ${word}\`<img src=x onerror=alert(1)> <a href=/evil>e</a>\` fine`);
+    hostile(p => `vedi ${word}\`${p}\` fine`);
+  }
+  expect(md('https://example.com/`<b>x</b>`')).toBe('https\\://example.com/\\`&lt;b&gt;x&lt;/b&gt;\\`');
+  expect(html('mail a@example.com e www.example.com e https://example.com')).toContain('mail a@example.com e www.example.com e https://example.com');
+  // a span after a space or after plain punctuation still renders as code
+  expect(html('vedi `a` (`b`) **`c`**')).toContain('vedi <code>a</code> (<code>b</code>) <strong><code>c</code></strong>');
+});
+
+it('approved links and this run\'s images stay clickable, a URL in their label included', () => {
+  const images = [{ id: 'img1', url: 'https://dev.azure.com/xy/_apis/wit/attachments/abc?fileName=a.png', sha256: 'x', name: 'a.png' }];
+  const out = marked.parse(renderDevOpsComment('[https://dev.azure.com/xy/p](https://dev.azure.com/xy/p/_workitems/edit/1) `x` ![a@b](attachment:img1)', 'xy', images, 'markdown'), { async: false });
+  expect(out).toContain('<a href="https://dev.azure.com/xy/p/_workitems/edit/1">https://dev.azure.com/xy/p</a> <code>x</code>');
+  expect(out).toContain('<img src="https://dev.azure.com/xy/_apis/wit/attachments/abc?fileName=a.png" alt="a@b">');
 });
 
 it('code spans keep their content verbatim: no escapes or entities shown in the code', () => {

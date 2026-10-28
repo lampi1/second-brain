@@ -6,8 +6,10 @@ import { createHash } from 'node:crypto';
 
 export interface UploadedImage { id: string; url: string; sha256: string; name: string }
 export const escapeHtml = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-// only what could build a link, an image, HTML or a code span is escaped: bold, lists, headings and tables stay Markdown
-const escapeMd = (s: string): string => s.replace(/([\\[\]()!`])/g, '\\$1').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+// only what could build a link, an image, HTML or a code span is escaped: bold, lists, headings and tables stay Markdown;
+// the GFM autolink triggers (scheme://, www., @) too, so a bare URL or e-mail never becomes a link nor swallows a backtick
+const escapeMd = (s: string): string => s.replace(/([\\[\]()!`@])/g, '\\$1').replace(/(https?|ftp):\/\//gi, '$1\\://').replace(/(www)\./gi, '$1\\.')
+  .replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const FENCE_INFO = /^[\w#+.-]*$/;
 const TABLE_RULE = /^[ \t|:-]*-[ \t|:-]*$/;
 interface Segment { raw: boolean; text: string }
@@ -15,7 +17,8 @@ interface Segment { raw: boolean; text: string }
  * text. Safety rests on one invariant: every backtick (and fence-like tilde run) left in plain text is escaped, so a
  * renderer can only see the fences and spans chosen here, never pair them differently around plain text. Anything
  * ambiguous stays plain: a fence right after a possible table row (some renderers keep it in the table), a span
- * holding `|` (table cells split on it, even inside code). Indented code blocks are not recognized (escapes show).
+ * holding `|` (table cells split on it, even inside code), a span glued to a word with `:./@` (a renderer's linkifier
+ * may take its opening backticks into a bare link, whatever autolink syntax it knows). Indented code blocks are not recognized (escapes show).
  * A line only some renderers close a fence on leaves the code and turns fences off for the rest: their backticks are
  * then escaped as plain text, so a renderer still in its fence stays in it to the end and one that left it sees only
  * escaped text. Expects \n line endings only (renderDevOpsComment normalizes them). */
@@ -53,7 +56,8 @@ function splitMarkdownCode(source: string): Segment[] {
       const size = runs[i]![0].length, j = runs.findIndex((r, k) => k > i && r[0].length === size);
       if (j < 0) continue;
       const from = runs[i]!.index!, to = runs[j]!.index! + size;
-      if (!rest.slice(from + size, to - size).includes('|')) { push(false, rest.slice(at, from)); push(true, rest.slice(from, to)); at = to; }
+      // a span glued to a word that may be a bare link (scheme, domain, path, e-mail) stays plain: a linkifier may swallow its opening backticks
+      if (!rest.slice(from + size, to - size).includes('|') && !/[:./@]\S*$/.test(rest.slice(0, from))) { push(false, rest.slice(at, from)); push(true, rest.slice(from, to)); at = to; }
       i = j;
     }
     push(false, rest.slice(at) + end);
