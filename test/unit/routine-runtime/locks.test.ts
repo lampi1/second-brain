@@ -2,7 +2,7 @@
 // workspace folder or the same package's watch at once; a lock expires or is taken over when its process is gone.
 import fs from 'node:fs';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createLocks, createRoutineRuntime, createRunStore, createMasker, createTriggerLoop, pathLockName, ResourceBusy, type RoutineTrigger } from '../../../packages/routine-runtime/src/index';
 import type { FlowDetectionResult } from '../../../src/shared/flow-automation';
 import { done, fakeDevOps, routinePackage, scriptedEngine, tempDir } from './fakes';
@@ -33,6 +33,23 @@ describe('locks', () => {
     expect(b.acquire('m', 'run-b')).toBeNull();
     now += 101;
     expect(b.acquire('m', 'run-b')?.owner).toBe('run-b');
+  });
+
+  it('a new lock appears already written: a fully written temp file is hard-linked into place, then removed', () => {
+    const dir = tempDir(), locks = createLocks(dir, { alive: () => true });
+    let links = 0;
+    const link = vi.spyOn(fs, 'linkSync').mockImplementation((from, to) => {
+      expect(fs.existsSync(to)).toBe(false); // the lock name is never visible before its content
+      expect(JSON.parse(fs.readFileSync(from, 'utf8'))).toMatchObject({ owner: 'run-a' });
+      links++; link.mockRestore(); fs.linkSync(from, to);
+    });
+    try {
+      expect(locks.acquire('item-x-2', 'run-a')?.owner).toBe('run-a');
+      expect(links).toBe(1);
+    } finally { link.mockRestore(); }
+    expect(fs.readdirSync(dir)).toEqual(['item-x-2.lock']); // no temp file left behind
+    expect(locks.acquire('item-x-2', 'run-b')).toBeNull(); // EEXIST: taken
+    expect(fs.readdirSync(dir)).toEqual(['item-x-2.lock']);
   });
 
   it('path lock names ignore case and separators', () => {
