@@ -7,7 +7,7 @@
 // (escalationText, reminderText, the poll loop's reply filter, ESCALATION_POLL_MS / ESCALATION_REMINDER_MIN /
 // MAX_ESCALATIONS), adapted to a run folder instead of a brain state file.
 import type { DevOpsClient, DevOpsComment } from './devops';
-import { commentHtml, mentionHtml, signedHtml } from './devops';
+import { commentHtml, mentionHtml, replyText, signedHtml } from './devops';
 import type { RoutineEscalation } from './format';
 import type { RunEscalation, RunRecord } from './run-store';
 import type { Masker } from './mask';
@@ -54,11 +54,7 @@ export function findReply(escalation: RunEscalation, comments: DevOpsComment[]):
 export const reminderDue = (escalation: RunEscalation, reminderMs: number, now: number): boolean =>
   escalation.reminder?.state === 'writing' || (!escalation.reminder && reminderMs > 0 && now - escalation.at >= reminderMs);
 
-/** Comment HTML → plain text for the next prompt (DevOps returns HTML). */
-export const replyText = (htmlText: string): string =>
-  htmlText.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|li)>/gi, '\n').replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, '\'').replace(/&amp;/g, '&')
-    .replace(/\n{3,}/g, '\n\n').trim().slice(0, 4000);
+export { replyText };
 
 export interface EscalationIo {
   runId: string; client: DevOpsClient; organization: string; project: string; workItem: number;

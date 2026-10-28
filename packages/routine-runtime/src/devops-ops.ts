@@ -342,7 +342,7 @@ export async function executeExtended(ctx: ExtendedContext, write: Exclude<StepW
       if (write.images?.length && ledger()[key]?.state !== 'done') images = await uploadImages(ctx, write.images, settle, out);
       const body = prCommentBody(masker.mask(write.text), images);
       await settle({ key, what: `PR ${pr.id} comment`,
-        async once(t) { await devopsResource({ op: 'pr-comment', pullRequestId: pr.id, text: `${body}\n\n${marker}${ctx.signature ? `\n\n${ctx.signature}` : ''}`, ...(write.mentions ? { mentions: write.mentions } : {}) }, resourcePorts(t)); },
+        async once(t) { await devopsResource({ op: 'pr-comment', pullRequestId: pr.id, text: `${body}\n\n${marker}`, ...(ctx.signature ? { signature: ctx.signature } : {}), ...(write.mentions ? { mentions: write.mentions } : {}) }, resourcePorts(t)); },
         async verify() {
           const r = await client.call('GET', threads);
           return (Array.isArray(r.value) ? r.value : []).some(th => (Array.isArray(object(th, 'thread').comments) ? (object(th, 'thread').comments as unknown[]) : []).some(c => String(object(c, 'comment').content ?? '').includes(marker))) ? { seen: 'present' } : { seen: 'absent' };
@@ -492,12 +492,13 @@ async function cancelDeploy(ctx: ExtendedContext, target: TestDeployTarget, key:
 }
 
 /** The comment a downgrade leaves (the app's text, Italian like its other routine comments). */
-export const needsHumanComment = (reason: string): string => `Serve un intervento umano: ${reason}. La routine si è fermata; segue la pulizia automatica.`;
+export const needsHumanComment = (reason: string): string => `Serve un umano: ${reason}. La routine si è fermata; segue la pulizia automatica.`;
 
-/** The one comment of a parked run (Italian, for its contact): why, then only the step number (owner, 2026-10-28). */
+/** The one comment of a parked run (Italian, for its contact): why, the step number, how to resume (owner, 2026-10-28). */
 export const parkComment = (reason: string, park: ParkStop): string => [
   `Serve un umano: ${reason.trim().replace(/[.\s]+$/, '')}.`,
   `${park.position}.`,
+  'Per riprendere rispondi con un commento che inizia con @AI.',
 ].join('\n');
 
 /** Publishes the run branch before a park when a push target's checkout is on it (fast-forward, like push-branch).

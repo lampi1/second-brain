@@ -55,7 +55,7 @@ export interface RunRecord {
   createdAt: number; updatedAt: number; endedAt?: number; error?: string;
   steps: RunStepRecord[];
   escalation?: RunEscalation;
-  /** a parked run (escalation.park): stopped at stepId, resumes from resumeFrom when its contact answers on the work item */
+  /** a parked run (escalation.park): stopped at stepId, resumes from resumeFrom on a comment starting with @AI on the work item */
   parked?: RunPark;
   /** parks already answered: the next park takes the next number (its own ledger keys) */
   parks?: number;
@@ -66,7 +66,7 @@ export interface RunPark {
   n: number; stepId: string; resumeFrom: string; at: number; question: string;
   /** the park comment: an answer is a later comment of the contact */
   commentId?: number; branch: string; pushed: boolean;
-  /** the contact's answer, kept while the resumed steps run */
+  /** the @AI answer (its instruction), kept while the resumed steps run */
   answer?: { commentId: number; at: number; text: string; author: string };
   /** resumed by hand before an answer: spent, a later comment of the contact no longer resumes it */
   spent?: boolean;

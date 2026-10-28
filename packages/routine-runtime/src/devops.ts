@@ -113,10 +113,25 @@ export const commentHtml = (text: string): string => html(text).replace(/\r?\n/g
 export const mentionHtml = (identity: string, name?: string): string => `<a href="#" data-vss-mention="version:2.0,${identity}">@${html(name ?? identity)}</a>`;
 /** The visible marker that makes a comment findable after a crash (no secret, no prompt text). */
 export const runMarker = (runId: string, key: string): string => `routine run ${runId} · ${key.slice(0, 12)}`;
-/** The last line of every comment the runtime writes: the model and effort of the step behind it (owner, 2026-10-28). */
-export const commentSignature = (model: string, effort?: string): string => `— ${model}${effort ? ` · ${effort}` : ''}`;
-/** Comment HTML with the signature as its last line. */
-export const signedHtml = (body: string, signature?: string): string => signature ? `${body}<br/>${html(signature)}` : body;
+/** Comment HTML → plain text for the next prompt (DevOps returns HTML). */
+export const replyText = (htmlText: string): string =>
+  htmlText.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|li)>/gi, '\n').replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, '\'').replace(/&amp;/g, '&')
+    .replace(/\n{3,}/g, '\n\n').trim().slice(0, 4000);
+const MODEL_NAMES: [RegExp, string][] = [[/^claude-opus-5-5/i, 'Opus 5.5'], [/^claude-sonnet-5(?![-.\d])/i, 'Sonnet 5'], [/^claude-fable-5-1/i, 'Fable 5.1'], [/^claude-haiku-4-5/i, 'Haiku 4.5']];
+/** A model id as people read it (claude-opus-5-5 → Opus 5.5); an unknown id loses the vendor word. */
+export const modelDisplayName = (id: string): string => MODEL_NAMES.find(([re]) => re.test(id))?.[1] ?? id.replace(/claude-?/gi, '').trim();
+/** The first line of every comment the runtime writes: AI, the model and effort of the step behind it (owner, 2026-10-28). */
+export const commentSignature = (model?: string, effort?: string): string => ['AI', ...(model && modelDisplayName(model) ? [modelDisplayName(model)] : []), ...(effort ? [effort] : [])].join(' · ');
+/** Comment HTML with the signature as its first line. */
+export const signedHtml = (body: string, signature?: string): string => signature ? `${html(signature)}<br/>${body}` : body;
+/** Whether a comment is the runtime's own: it starts with the signature or carries a run marker. */
+export const isRoutineComment = (htmlText: string): boolean => /^AI(?: · |\s|$)/.test(replyText(htmlText).trimStart()) || htmlText.includes('routine run ');
+/** The instruction of a comment that starts with @AI (any case), the prefix removed; undefined for any other comment. */
+export const aiInstruction = (htmlText: string): string | undefined => {
+  const text = replyText(htmlText).trimStart();
+  return /^@AI\b/i.test(text) ? text.replace(/^@AI\b[\s:,.;-]*/i, '').trim() : undefined;
+};
 
 export interface WriteContext {
   runId: string; attempt: number; stepId: string; workItem: number;
