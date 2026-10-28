@@ -18,7 +18,7 @@ const agents = (version: Record<string, number>): AgentRestorer & { restored: [s
 
 describe('ChangeLog', () => {
   it('reads each changed file once per view and rechecks it before undo', () => {
-    const d = tmp(), log = new ChangeLog(d), file = path.join(d, 'shared.md');
+    const d = fs.realpathSync(tmp()), log = new ChangeLog(d), file = path.join(d, 'shared.md');
     for (let i = 0; i < 30; i++) log.apply(base, [{ file, text: `version ${i}` }]);
     const read = vi.spyOn(fs, 'readFileSync');
     const rows = log.list(agents({}));
