@@ -218,6 +218,16 @@ describe.skipIf(!browserAvailable)('routine browser over a fixture login page', 
     expect(plain.text).not.toContain('red box');
     expect(await style()).toBe(before); // the page is left as it was
     expect(await call('screenshot', { name: 'x', highlight: ['e1', 'e2', 'e3', 'e4', 'e5', 'e6'] })).toMatchObject({ isError: true });
+    // a repeated ref and a ref not on the page: the marked element gets its own original style back, display:none included
+    await browser.page.evaluate(`document.querySelector('[data-routine-ref="${ref}"]').style.cssText = 'display: none;'`);
+    expect(await call('screenshot', { name: 'twice', highlight: [ref, ref] })).toMatchObject({ isError: false });
+    expect(await style()).toBe('display: none;');
+    const missing = await call('screenshot', { name: 'missing', highlight: [ref, 'e9999'] });
+    expect(missing).toMatchObject({ isError: true });
+    expect(missing.text).toContain('e9999 is not on the page');
+    expect(fs.existsSync(path.join(config.evidence, 'missing.png'))).toBe(false);
+    expect(await style()).toBe('display: none;');
+    await browser.page.evaluate(`document.querySelector('[data-routine-ref="${ref}"]').style.cssText = ${JSON.stringify(before)}`);
   }, 60_000);
 
   it("recognises Air's real login form (<input type=button> login button) in a real browser", async () => {
