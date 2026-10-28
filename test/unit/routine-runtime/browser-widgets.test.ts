@@ -29,6 +29,7 @@ const PAGE = `<!doctype html><html><head><title>Widgets</title><style>
 <svg width="200" height="100"><g id="tooth-11"><g class="body"><rect x="10" y="10" width="40" height="40"></rect></g></g></svg>
 <input type="password" id="pw">
 <p id="log"></p>
+<button id="broken" onclick="console.error('boom'); fetch('/missing?token=abc'); if (confirm('Delete?')) log('deleted');">Broken</button>
 <script>
   const log = t => { document.getElementById('log').textContent += t + ';'; };
   document.getElementById('print').addEventListener('click', () => log('print'));
@@ -57,7 +58,10 @@ describe.skipIf(!browserAvailable)('routine browser on Air-like widgets', () => 
   const log = () => browser.page.evaluate<string>('document.getElementById("log").textContent');
 
   beforeAll(async () => {
-    server = http.createServer((_req, res) => { res.writeHead(200, { 'content-type': 'text/html' }); res.end(PAGE); });
+    server = http.createServer((req, res) => {
+      if (req.url?.startsWith('/missing')) { res.writeHead(404, { 'content-type': 'text/plain' }); res.end('no such record'); return; }
+      res.writeHead(200, { 'content-type': 'text/html' }); res.end(PAGE);
+    });
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
     origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
     const dir = tempDir();
@@ -90,8 +94,23 @@ describe.skipIf(!browserAvailable)('routine browser on Air-like widgets', () => 
     expect(await log()).toContain('blur;');
   }, 60_000);
 
+  it('an action reports new console errors and failed requests; a confirm is dismissed unless dialog accepts it', async () => {
+    const broken = refOf((await call('snapshot')).text, 'button "Broken"');
+    const first = await call('click', { ref: broken });
+    expect(first.text).toMatch(/confirm dialog said "Delete\?" and was dismissed/);
+    await call('wait', { idle: true });
+    expect((await call('network')).text).toMatch(/GET \S+\/missing\?token=\*\*\* → 404 \| no such record/);
+    expect((await call('console', { level: 'error' })).text).toContain('[error] boom');
+    expect(await log()).not.toContain('deleted');
+    expect((await call('dialog', { accept: true })).isError).toBe(false);
+    const second = await call('click', { ref: broken });
+    expect(second.text).toMatch(/was accepted/);
+    expect(second.text).toMatch(/New: \d console errors?, 1 failed request/); // boom, and Chromium's own line for the 404
+    expect(await log()).toContain('deleted;');
+  }, 60_000);
+
   it('eval masks the passwords, is refused while a password field holds one and off the declared origins', async () => {
-    expect(await call('eval', { expression: `document.title + ' ' + ${JSON.stringify(SECRET)}` })).toEqual({ text: 'Result: "Widgets ***"', isError: false });
+    expect(await call('eval', { expression: `document.title + ' ' + ${JSON.stringify(SECRET)}` })).toMatchObject({ text: expect.stringMatching(/^Result: "Widgets \*\*\*"/), isError: false });
     const snap = (await call('snapshot')).text;
     expect((await call('fill_secret', { ref: refOf(snap, 'input\\[password\\]'), credential: 'tester' })).isError).toBe(false);
     const held = await call('eval', { expression: 'document.getElementById("pw").value.split("").reverse().join("")' });
