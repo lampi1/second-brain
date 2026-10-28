@@ -57,6 +57,8 @@ export interface RunRecord {
   parked?: RunPark;
   /** parks already answered: the next park takes the next number (its own ledger keys) */
   parks?: number;
+  /** a park that could not be written, retried by the watch (runtime.recover): bounded, each retry runs the step again */
+  parkRetries?: number;
 }
 export interface RunPark {
   n: number; stepId: string; resumeFrom: string; at: number; question: string;

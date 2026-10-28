@@ -4,7 +4,7 @@
 // resumed first, items already carrying the park tag admitted only after a comment of the contact, maxActive.
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { createDevOpsDetector, createMasker, createRoutineRuntime, createRunStore, createTriggerLoop, preflightRoutinePackage, type RoutineTrigger, type StepResult } from '../../../packages/routine-runtime/src/index';
+import { createDevOpsDetector, createLocks, createMasker, createRoutineRuntime, createRunStore, createTriggerLoop, PARK_RETRIES, preflightRoutinePackage, type Locks, type RoutineTrigger, type StepResult } from '../../../packages/routine-runtime/src/index';
 import type { FlowDetectionResult } from '../../../src/shared/flow-automation';
 import { done, fakeDevOps, routinePackage, scriptedEngine, tempDir } from './fakes';
 
@@ -12,11 +12,12 @@ import { done, fakeDevOps, routinePackage, scriptedEngine, tempDir } from './fak
 const g = (c: string) => [8, 4, 4, 4, 12].map(n => c.repeat(n)).join('-');
 const MENTION = g('c'), CONTACT = g('d');
 
-function parkingRuntime() {
+function parkingRuntime(opts: { fixNeedsHuman?: (call: number) => boolean; locks?: Locks } = {}) {
   const root = tempDir(), devops = fakeDevOps();
   devops.addItem({ id: 5, fields: { 'System.Title': 'x', 'System.Tags': 'ai-fixable', 'System.State': 'New' } });
   let fixCalls = 0;
-  const engine = scriptedEngine((r): StepResult => r.stepId === 'fix' && fixCalls++ === 0
+  const needsHuman = opts.fixNeedsHuman ?? (call => call === 0);
+  const engine = scriptedEngine((r): StepResult => r.stepId === 'fix' && needsHuman(fixCalls++)
     ? { outcome: 'needs-human', summary: 'serve un dato', question: 'Quale campo devo usare' } : done('ok'));
   const pkg = routinePackage({
     inputs: [{ name: 'workItem' }, { name: 'workspace', default: path.join(root, 'ws-{{workItem}}') }],
@@ -24,7 +25,8 @@ function parkingRuntime() {
     devops: { organization: 'contoso', projects: ['Proj'], ops: ['comment', 'state', 'fields', 'tags', 'downgrade'], fields: [], mentions: [MENTION],
       downgrade: { removeTag: 'ai-fixable', addTag: 'ai-needs-human', state: 'New' } },
   });
-  const runtime = createRoutineRuntime({ pkg, paths: { runsRoot: path.join(root, 'runs'), workspace: id => path.join(root, 'ws', id) }, engine, devops: { authorization: devops.authorization, request: devops.request } });
+  const runtime = createRoutineRuntime({ pkg, paths: { runsRoot: path.join(root, 'runs'), workspace: id => path.join(root, 'ws', id) }, engine, devops: { authorization: devops.authorization, request: devops.request },
+    ...(opts.locks ? { locks: opts.locks } : {}) });
   return { root, devops, engine, runtime };
 }
 
@@ -79,6 +81,52 @@ describe('parked runs', () => {
     expect(await runtime.admitItem(6)).toBe(false);
     devops.reply(6, CONTACT, 'ecco il dato');
     expect(await runtime.admitItem(6)).toBe(true);
+  });
+
+  it('a parked run resumed by hand that parks again writes a new park comment (the next park number)', async () => {
+    const { devops, runtime } = parkingRuntime({ fixNeedsHuman: call => call < 2 });
+    const { runId } = await runtime.startItem(5).finished;
+    const again = await runtime.resume(runId).finished;
+    expect(again.status).toBe('needs-human');
+    expect(again.parked?.n).toBe(2);
+    const comments = devops.comments.get(5)!;
+    expect(comments).toHaveLength(2);
+    expect(again.parked?.commentId).toBe(comments[1]!.id);
+  });
+
+  it('the watch recovers a run stopped by Ctrl+C or a crash, unless a live process holds it; never a done or failed one', async () => {
+    const lockDir = tempDir(), other = createLocks(lockDir, { alive: () => true });
+    const { engine, runtime } = parkingRuntime({ fixNeedsHuman: () => false, locks: createLocks(lockDir) });
+    const { runId } = await runtime.startItem(5).finished;
+    expect(runtime.recover(runId)).toBeNull();
+    // Ctrl+C on the watch left it cancelled at the second step
+    runtime.store.claim(runId, r => { r.status = 'cancelled'; r.steps[1]!.status = 'pending'; r.steps[2]!.status = 'pending'; });
+    const run = await runtime.recover(runId)!.finished;
+    expect(run.status).toBe('done');
+    expect(engine.requests.map(r => r.stepId)).toEqual(['analyse', 'fix', 'report', 'fix', 'report']);
+    // a crashed process left it running; another live process holds the item: not taken
+    runtime.store.claim(runId, r => { r.status = 'running'; r.steps[2]!.status = 'pending'; });
+    other.acquire('item-contoso-5', 'run-elsewhere');
+    expect(runtime.recover(runId)).toBeNull();
+    other.release(['item-contoso-5'], 'run-elsewhere');
+    expect((await runtime.recover(runId)!.finished).status).toBe('done');
+    runtime.store.claim(runId, r => { r.status = 'failed'; });
+    expect(runtime.recover(runId)).toBeNull();
+  });
+
+  it('a park that could not be written is retried at most PARK_RETRIES times', async () => {
+    const { engine, runtime } = parkingRuntime({ fixNeedsHuman: () => true });
+    const { runId } = await runtime.startItem(5).finished;
+    // the park comment was refused: needs-human without a park
+    const unpark = () => runtime.store.claim(runId, r => { delete r.parked; r.status = 'needs-human'; });
+    unpark();
+    for (let i = 0; i < PARK_RETRIES; i++) {
+      const run = await runtime.recover(runId)!.finished;
+      expect(run.parkRetries).toBe(i + 1);
+      unpark();
+    }
+    expect(runtime.recover(runId)).toBeNull();
+    expect(engine.requests.filter(r => r.stepId === 'fix')).toHaveLength(1 + PARK_RETRIES);
   });
 
   it('preflight: park needs the downgrade op; a trigger area outside devops.projects is an error', () => {

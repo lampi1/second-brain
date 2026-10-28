@@ -32,6 +32,8 @@ export const DEFAULT_STEP_TIMEOUT_MS = 60 * 60_000;
 export const DEFAULT_MAX_ATTEMPTS = 2;
 /** review→fix: how many times a step with `loop` may send the run back when the package sets no `max` */
 export const DEFAULT_LOOP_MAX = 2;
+/** a park that could not be written: how many times the watch runs its step again (runtime.recover) */
+export const PARK_RETRIES = 2;
 
 type Request = (url: string, init: RequestInit) => Promise<Response>;
 
@@ -246,19 +248,40 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     start({ workItem, subjectKey, ...(inputs ? { inputs } : {}) });
 
   /** Continues the same run from the step that did not finish; any older runtime of this run stops at its next write. */
-  function resume(runId: string): RunHandle {
+  function resume(runId: string, mutate?: (run: RunRecord) => void): RunHandle {
     running.get(runId)?.abort();
     const before = store.read(runId);
     if (before.status === 'done') throw new Error(`Run ${runId} is done`);
     lockRun(runId, before);
-    const claimed = store.claim(runId, run => {
-      run.status = run.escalation && run.escalation.state !== 'answered' ? 'waiting-human' : 'running';
-      delete run.error; delete run.endedAt;
-      for (const s of run.steps) if (s.status === 'running' || s.status === 'failed' || (s.status === 'needs-human' && !run.escalation)) { s.status = 'pending'; delete s.error; }
-    });
+    let claimed: RunRecord;
+    try {
+      claimed = store.claim(runId, run => {
+        run.status = run.escalation && run.escalation.state !== 'answered' ? 'waiting-human' : 'running';
+        delete run.error; delete run.endedAt;
+        // a parked run resumed by hand: its park is spent, the next park takes the next number (its own ledger keys)
+        if (run.parked) run.parks = Math.max(run.parks ?? 0, run.parked.n);
+        for (const s of run.steps) if (s.status === 'running' || s.status === 'failed' || (s.status === 'needs-human' && !run.escalation)) { s.status = 'pending'; delete s.error; }
+        mutate?.(run);
+      });
+    } catch (e) { unlockRun(runId, before); throw e; }
     emit(runId, { type: 'run-resume', at: clock.now(), attempt: claimed.attempt });
     info('run resumed', { runId, attempt: claimed.attempt });
     return { runId, finished: execute(runId, claimed.attempt) };
+  }
+
+  /** A trigger run that stopped without finishing and with nobody to wait for goes on from its step: interrupted (Ctrl+C
+   *  on the watch), left `running` by a crashed process, or stopped because its park could not be written (retried at
+   *  most PARK_RETRIES times: each retry runs the step again). null = nothing to recover, or a live process holds its
+   *  item or workspace (e.g. a `routine resume` in another terminal). */
+  function recover(runId: string): RunHandle | null {
+    if (running.has(runId)) return null;
+    const run = store.read(runId);
+    const stopped = run.status === 'cancelled' || run.status === 'running' || run.status === 'waiting-human';
+    const parkFailed = run.status === 'needs-human' && parking(run) && (!run.parked || Boolean(run.parked.answer)) && (run.parkRetries ?? 0) < PARK_RETRIES;
+    if (!stopped && !parkFailed) return null;
+    if (lockNames(run).some(name => options.locks?.holder(name))) return null;
+    info('run recovered', { runId, status: run.status });
+    return resume(runId, parkFailed ? r => { r.parkRetries = (r.parkRetries ?? 0) + 1; } : undefined);
   }
 
   /** Stops a run: its session is killed, the run stays resumable. */
@@ -742,6 +765,6 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     return driveLogin(page, target.origin, { user: credential.user, password: credential.password }, rule);
   }
 
-  return { pkg, store, masker, start, startItem, resume, resumeParked, admitItem, cancel, login, isRunning: (runId: string) => running.has(runId) };
+  return { pkg, store, masker, start, startItem, resume, resumeParked, recover, admitItem, cancel, login, isRunning: (runId: string) => running.has(runId) };
 }
 export type RoutineRuntime = ReturnType<typeof createRoutineRuntime>;
