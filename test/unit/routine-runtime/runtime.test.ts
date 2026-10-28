@@ -120,7 +120,7 @@ describe('routine runtime: resume', () => {
     let t = 1_000_000;
     const devops = fakeDevOps({ now: () => t });
     devops.addItem({ id: 42, fields: { 'System.Title': 'Bug' } });
-    const pkg = routinePackage({ escalation: { contact }, steps: [{ id: 'fix', title: 'Fix', prompt: 'p' }] });
+    const pkg = routinePackage({ escalation: { contact }, steps: [{ id: 'fix', title: 'Fix', prompt: 'p', effort: 'high' }] });
     const io = { authorization: devops.authorization, request: devops.request };
     // the first process waits in its poll interval until it is "killed" (wake)
     let wake: (() => void) | undefined;
@@ -130,6 +130,8 @@ describe('routine runtime: resume', () => {
     const handle = a.startItem(42);
     for (let i = 0; i < 400 && !wake; i++) await new Promise(r => setTimeout(r, 5));
     expect(a.store.read(handle.runId).escalation?.state).toBe('waiting');
+    // the escalation comment is signed with the escalated step's reported model and declared effort
+    expect(devops.comments.get(42)![0]!.text).toMatch(/<br\/>— claude-sonnet-5 · high$/);
 
     devops.reply(42, contact, '<div>riprova</div>');
     t += 5 * 60_000;

@@ -89,3 +89,11 @@ export function actionFromStreamLine(line: string): string | undefined {
   }
   return undefined;
 }
+
+/** The model a session reports in its stream-json init line; undefined for any other line. */
+export function modelFromStreamLine(line: string): string | undefined {
+  try {
+    const v = JSON.parse(line) as Record<string, unknown>;
+    return v.type === 'system' && v.subtype === 'init' && typeof v.model === 'string' && v.model.trim() ? v.model.trim().slice(0, 100) : undefined;
+  } catch { return undefined; }
+}

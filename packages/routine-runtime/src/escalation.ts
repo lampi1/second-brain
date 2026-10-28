@@ -7,7 +7,7 @@
 // (escalationText, reminderText, the poll loop's reply filter, ESCALATION_POLL_MS / ESCALATION_REMINDER_MIN /
 // MAX_ESCALATIONS), adapted to a run folder instead of a brain state file.
 import type { DevOpsClient, DevOpsComment } from './devops';
-import { commentHtml, mentionHtml } from './devops';
+import { commentHtml, mentionHtml, signedHtml } from './devops';
 import type { RoutineEscalation } from './format';
 import type { RunEscalation, RunRecord } from './run-store';
 import type { Masker } from './mask';
@@ -32,8 +32,8 @@ export function escalationText(run: Pick<RunRecord, 'runId' | 'routineTitle' | '
 export const reminderText = (runId: string, stepId: string): string =>
   `Promemoria: la routine (run ${runId}, passaggio «${stepId}») aspetta ancora una tua risposta al commento qui sopra. Non ne scriverò altri.`;
 
-/** Comment HTML: the mention first, then the text. */
-export const escalationHtml = (contact: RoutineEscalation, text: string): string => `${mentionHtml(contact.contact, contact.contactName)} ${commentHtml(text)}`;
+/** Comment HTML: the mention first, then the text, the step's signature last. */
+export const escalationHtml = (contact: RoutineEscalation, text: string, signature?: string): string => signedHtml(`${mentionHtml(contact.contact, contact.contactName)} ${commentHtml(text)}`, signature);
 
 /**
  * Mirrors the watchdog's reply rule: comments after ours, not ours, oldest first; the first by the contact with text is
@@ -63,6 +63,8 @@ export const replyText = (htmlText: string): string =>
 export interface EscalationIo {
   runId: string; client: DevOpsClient; organization: string; project: string; workItem: number;
   contact: RoutineEscalation; masker: Masker;
+  /** the commentSignature of the escalated step: the last line of the comment and its reminder */
+  signature?: string;
   /** persists the escalation in run.json (fenced by the run attempt) */
   save(escalation: RunEscalation): void;
   now(): number;
@@ -75,7 +77,7 @@ export async function writeEscalation(io: EscalationIo, escalation: RunEscalatio
   // a crash after POST: our comment is the newest one by us quoting this run and step
   const marker = `(run ${run.runId}): il passaggio «${escalation.stepId}»`;
   const existing = (await io.client.comments(io.organization, io.project, io.workItem)).find(c => c.createdAt >= escalation.at - 60_000 && c.text.includes(marker));
-  const commentId = existing?.id ?? await io.client.comment(io.organization, io.project, io.workItem, escalationHtml(io.contact, text));
+  const commentId = existing?.id ?? await io.client.comment(io.organization, io.project, io.workItem, escalationHtml(io.contact, text, io.signature));
   const next: RunEscalation = { ...escalation, state: 'waiting', commentId, at: io.now() };
   io.save(next);
   return next;
@@ -88,7 +90,7 @@ export async function pollEscalation(io: EscalationIo, escalation: RunEscalation
   if (reminderDue(current, reminderMs, io.now())) {
     current = { ...current, reminder: current.reminder ?? { state: 'writing' } };
     io.save(current);
-    const commentId = await io.client.comment(io.organization, io.project, io.workItem, escalationHtml(io.contact, reminderText(io.runId, current.stepId)));
+    const commentId = await io.client.comment(io.organization, io.project, io.workItem, escalationHtml(io.contact, reminderText(io.runId, current.stepId), io.signature));
     current = { ...current, reminder: { state: 'sent', commentId } };
     io.save(current);
   }

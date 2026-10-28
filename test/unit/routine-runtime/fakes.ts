@@ -95,7 +95,8 @@ export function scriptedEngine(script: Script, extra: { leak?: string } = {}): E
     requests,
     async run(request) {
       requests.push(request);
-      request.onLine(JSON.stringify({ type: 'system', subtype: 'init', session_id: `s-${request.stepId}-${request.attempt}` }));
+      // like the CLI, the init line reports the model in use (the requested one, else the default)
+      request.onLine(JSON.stringify({ type: 'system', subtype: 'init', session_id: `s-${request.stepId}-${request.attempt}`, model: request.model ?? 'claude-sonnet-5' }));
       request.onLine(JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: `echo working on ${request.stepId}${extra.leak ? ` ${extra.leak}` : ''}` } }] } }));
       fs.writeFileSync(path.join(request.stepDir, 'evidence', 'notes.md'), `step ${request.stepId}${extra.leak ? ` password ${extra.leak}` : ''}\n`);
       fs.writeFileSync(path.join(request.stepDir, 'screenshots', `${request.stepId}.png`), Buffer.from([0x89, 0x50, 0x4e, 0x47]));

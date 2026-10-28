@@ -113,6 +113,10 @@ export const commentHtml = (text: string): string => html(text).replace(/\r?\n/g
 export const mentionHtml = (identity: string, name?: string): string => `<a href="#" data-vss-mention="version:2.0,${identity}">@${html(name ?? identity)}</a>`;
 /** The visible marker that makes a comment findable after a crash (no secret, no prompt text). */
 export const runMarker = (runId: string, key: string): string => `routine run ${runId} · ${key.slice(0, 12)}`;
+/** The last line of every comment the runtime writes: the model and effort of the step behind it (owner, 2026-10-28). */
+export const commentSignature = (model: string, effort?: string): string => `— ${model}${effort ? ` · ${effort}` : ''}`;
+/** Comment HTML with the signature as its last line. */
+export const signedHtml = (body: string, signature?: string): string => signature ? `${body}<br/>${html(signature)}` : body;
 
 export interface WriteContext {
   runId: string; attempt: number; stepId: string; workItem: number;
@@ -132,6 +136,8 @@ export interface WriteContext {
   stepDir?: string;
   /** the review→fix round of the step (1 = first pass): a later round's writes are new writes, not duplicates */
   round?: number;
+  /** the commentSignature of the step: the last line of its comments (bug, PR, park) */
+  signature?: string;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
 }
@@ -274,7 +280,7 @@ export async function executeWrites(context: WriteContext, writes: StepWrite[]):
     const once = async (): Promise<'ok' | 'definite' | 'unknown'> => {
       try {
         if (write.op === 'comment') {
-          const commentId = await client.comment(grant.organization, project!, workItem, `${before}${commentHtml(masker.mask(write.text))}${after}<br/><small>${html(marker)}</small>`);
+          const commentId = await client.comment(grant.organization, project!, workItem, signedHtml(`${before}${commentHtml(masker.mask(write.text))}${after}<br/><small>${html(marker)}</small>`, context.signature));
           save('done', { commentId }); return 'ok';
         }
         let ops: { op: 'add' | 'replace' | 'remove'; path: string; value?: unknown }[];
@@ -326,6 +332,7 @@ export async function executeWrites(context: WriteContext, writes: StepWrite[]):
       ...(context.deployments ? { deployments: context.deployments } : {}), ...(context.arm ? { arm: context.arm } : {}),
       ...(context.contact ? { contact: context.contact } : {}), ...(context.push ? { push: context.push } : {}),
       ...(context.park ? { park: context.park } : {}), ...(context.headOf ? { headOf: context.headOf } : {}),
+      ...(context.signature ? { signature: context.signature } : {}),
       sleep: context.sleep ?? (ms => new Promise(resolve => setTimeout(resolve, ms))), now,
     }, write, resourceKey, settle, ext, (w, k) => isClassic(w) ? classic(w, k) : Promise.resolve());
     if (out.downgraded) break;
