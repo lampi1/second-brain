@@ -22,6 +22,7 @@ export type StepWrite =
   | { op: 'create-test-suite'; ref: string; plan: string; parent?: string; name: string }
   | { op: 'create-test-case'; ref: string; suite: string; title: string; steps: { action: string; expected?: string }[]; description?: string; priority?: number; tags?: string[] }
   | { op: 'set-test-outcome'; testCase: string; outcome: TestOutcome }
+  | { op: 'tag-test-case'; testCase: string; add: string[] }
   // the run's PR and links
   | { op: 'create-pr'; project: string; repositoryId: string; sourceRef: string; targetRef: string; title: string; text: string }
   | { op: 'link-pr'; projectId: string; repositoryId: string; pullRequestId: number }
@@ -43,7 +44,7 @@ export type StepWriteOp = StepWrite['op'];
 /** The package grant category each write needs (format.ts DEVOPS_OPS). */
 export const WRITE_CATEGORY: Record<StepWriteOp, RoutineDevOpsOp> = {
   comment: 'comment', state: 'state', fields: 'fields', tags: 'tags',
-  'create-test-plan': 'test-plans', 'rename-test-plan': 'test-plans', 'create-test-suite': 'test-plans', 'create-test-case': 'test-plans', 'set-test-outcome': 'test-results',
+  'create-test-plan': 'test-plans', 'rename-test-plan': 'test-plans', 'create-test-suite': 'test-plans', 'create-test-case': 'test-plans', 'set-test-outcome': 'test-results', 'tag-test-case': 'test-plans',
   'create-pr': 'pr-create', 'link-pr': 'pr-links', 'relate-pr': 'related-links', 'relate-work-item': 'related-links', 'pr-comment': 'pr-comment', 'publish-pr': 'pr-publish', 'abandon-pr': 'pr-abandon',
   'push-branch': 'git-push', 'queue-pr-validation': 'pr-validation', 'deploy-test': 'test-deploy', 'cancel-test-deploy': 'test-deploy',
   downgrade: 'downgrade',
@@ -130,6 +131,12 @@ function write(v: unknown, i: number): StepWrite {
       keysOnly(w, ['op', 'testCase', 'outcome'], what);
       if (!(TEST_OUTCOMES as readonly string[]).includes(w.outcome as string)) bad(`${what}.outcome: one of ${TEST_OUTCOMES.join(', ')}`);
       return { op: 'set-test-outcome', testCase: ref(w.testCase, `${what}.testCase`), outcome: w.outcome as TestOutcome };
+    case 'tag-test-case': {
+      keysOnly(w, ['op', 'testCase', 'add'], what);
+      const add = tagList(w.add, `${what}.add`);
+      if (!add?.length) bad(`${what}.add: at least one tag`);
+      return { op: 'tag-test-case', testCase: ref(w.testCase, `${what}.testCase`), add: add! };
+    }
     case 'create-pr':
       keysOnly(w, ['op', 'project', 'repositoryId', 'sourceRef', 'targetRef', 'title', 'text'], what);
       return { op: 'create-pr', project: text(w.project, `${what}.project`, 128), repositoryId: guid(w.repositoryId, `${what}.repositoryId`), sourceRef: branchRef(w.sourceRef, `${what}.sourceRef`), targetRef: branchRef(w.targetRef, `${what}.targetRef`), title: text(w.title, `${what}.title`, 300), text: text(w.text, `${what}.text`, 10_000) };
@@ -196,6 +203,7 @@ const SHAPES: Record<StepWriteOp, string> = {
   'create-test-suite': '{"op":"create-test-suite","ref":"suite","plan":"<plan ref>","parent?":"<suite ref>","name":"..."} (the runtime links the suite Related to this run\'s work item)',
   'create-test-case': '{"op":"create-test-case","ref":"tc01","suite":"<suite ref>","title":"...","steps":[{"action":"...","expected":"..."}],"description?":"...","priority?":1-4,"tags?":["..."]}',
   'set-test-outcome': '{"op":"set-test-outcome","testCase":"<test case ref>","outcome":"passed|failed|blocked|notApplicable"}',
+  'tag-test-case': '{"op":"tag-test-case","testCase":"<test case ref>","add":["#pr123"]} (adds tags to a test case of this run)',
   'create-pr': '{"op":"create-pr","project":"...","repositoryId":"<GUID>","sourceRef":"refs/heads/...","targetRef":"refs/heads/...","title":"...","text":"..."} (a draft PR, linked to the work item; one per run)',
   'link-pr': '{"op":"link-pr","projectId":"<GUID>","repositoryId":"<GUID>","pullRequestId":123}',
   'relate-pr': '{"op":"relate-pr","projectId":"<GUID>","repositoryId":"<GUID>","pullRequestId":123} (the PR that introduced the bug)',

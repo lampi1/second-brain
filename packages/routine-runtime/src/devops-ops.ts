@@ -262,6 +262,21 @@ export async function executeExtended(ctx: ExtendedContext, write: Exclude<StepW
         } });
       return;
     }
+    case 'tag-test-case': {
+      // tags a test case of this run after its creation (e.g. #pr<n> once the PR exists); existing tags are kept
+      const tc = resources().cases.find(c => c.ref === write.testCase);
+      if (!tc) { out.failed.push(`test case tags "${write.testCase}": no test case with that ref in this run`); return; }
+      const url = `${org}/_apis/wit/workitems/${tc.id}?${API}`;
+      const read = async () => { const item = await client.call('GET', `${org}/_apis/wit/workitems/${tc.id}?fields=System.Tags&${API}`); return { rev: item.rev as number, tags: String(object(item.fields ?? {}, 'test case fields')['System.Tags'] ?? '').split(';').map(s => s.trim()).filter(Boolean) }; };
+      const missing = (tags: string[]) => write.add.filter(a => !tags.some(t => lower(t) === lower(a)));
+      await settle({ key, what: `test case "${write.testCase}" tags +${write.add.join(',')}`,
+        async once(t) {
+          const now = await read(), add = missing(now.tags);
+          if (add.length) await t.call('PATCH', url, [{ op: 'test', path: '/rev', value: now.rev }, { op: 'add', path: '/fields/System.Tags', value: [...now.tags, ...add].join('; ') }], 'application/json-patch+json');
+        },
+        async verify() { return missing((await read()).tags).length ? { seen: 'absent' } : { seen: 'present' }; } });
+      return;
+    }
     case 'link-pr': case 'relate-pr': {
       const artifact = `vstfs:///Git/PullRequestId/${write.projectId}/${write.repositoryId}/${write.pullRequestId}`;
       const present = async () => (await relations()).some(r => r.rel === 'ArtifactLink' && sameArtifact(r.url, artifact));
