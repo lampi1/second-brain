@@ -225,7 +225,7 @@ export function DelegationCard({ chatId }: { chatId: string }) {
  *  and the fold (kept across restarts); the limit it hit, when it did. */
 export function KidsBar({ chatId }: { chatId: string }) {
   const kids = useApp(s => Object.values(s.chats).filter((c): c is ChatSummary => !!c && c.parentId === chatId && !c.closedAt)
-    .sort((a, b) => (a.delegation?.at ?? 0) - (b.delegation?.at ?? 0)), (a, b) => JSON.stringify(a.map(k => [k.id, k.state, k.pending, k.queued, k.delegation?.result?.outcome, k.agent?.avatar])) === JSON.stringify(b.map(k => [k.id, k.state, k.pending, k.queued, k.delegation?.result?.outcome, k.agent?.avatar])));
+    .sort((a, b) => (a.delegation?.at ?? 0) - (b.delegation?.at ?? 0)), (a, b) => JSON.stringify(a.map(k => [k.id, childState(k), k.agent?.avatar, k.agent?.name])) === JSON.stringify(b.map(k => [k.id, childState(k), k.agent?.avatar, k.agent?.name])));
   const folded = ui.use(s => s.prefs.treeCollapsed[chatId] === true);
   const title = useApp(s => s.chats[chatId]?.title ?? '');
   const limit = useApp(s => s.chats[chatId]?.limitHit);

@@ -14,6 +14,23 @@ export async function captureRoutineWorkbench(app, page, capture) {
   await page.getByTestId('agent-skill-add').click();
   await page.getByTestId('agent-skills-edit').getByRole('button', { name: /brain-edit/ }).waitFor();
   await page.getByTestId('nav-home').click();
+  const child = await page.evaluate(async () => (await window.sb.invoke('chat:list', undefined)).find(c => c.parentId && c.delegation && !c.closedAt));
+  if (!child) throw new Error('Synthetic delegated chat missing');
+  const idle = { ...child, state: 'idle', pending: 0, queued: undefined, background: 0, agentChildren: undefined, delegation: { ...child.delegation, result: undefined } };
+  const publish = chat => app.evaluate(({ BrowserWindow }, chat) => { const w = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:') && !w.webContents.getURL().includes('#overlay')); w.webContents.send('chat:updated', chat); }, chat);
+  await publish(idle);
+  await page.waitForFunction(id => document.querySelector(`[data-testid="delegation-card-${id}"]`)?.getAttribute('data-child-state') === 'stall', child.id);
+  const segments = page.getByTestId(`tree-kids-${child.parentId}`).locator('.kids-segs .seg-run');
+  const before = await segments.count();
+  await publish({ ...idle, background: 1 });
+  await page.waitForFunction(({ id, parent, count }) => document.querySelector(`[data-testid="delegation-card-${id}"]`)?.getAttribute('data-child-state') === 'run'
+    && document.querySelectorAll(`[data-testid="tree-kids-${parent}"] .kids-segs .seg-run`).length === count, { id: child.id, parent: child.parentId, count: before + 1 });
+  await page.getByTestId(`delegation-card-${child.id}`).scrollIntoViewIfNeeded();
+  await capture('delegation-background-work');
+  await publish(idle);
+  await page.waitForFunction(({ id, parent, count }) => document.querySelector(`[data-testid="delegation-card-${id}"]`)?.getAttribute('data-child-state') === 'stall'
+    && document.querySelectorAll(`[data-testid="tree-kids-${parent}"] .kids-segs .seg-run`).length === count, { id: child.id, parent: child.parentId, count: before });
+  await publish(child);
   const chat = await page.evaluate(async () => (await window.sb.invoke('chat:list', undefined)).find(c => !c.isOrchestrator && !c.closedAt && !c.parentId));
   if (!chat) throw new Error('Synthetic work chat missing for context capture');
   chat.launchContext = { schema: 1, at: 1, mode: 'scoped', memory: { available: true, records: [{ id: 'fact-sample', status: 'confirmed', sourceRunId: 'run-sample', estimatedTokens: 30, score: 1 }], estimatedTokens: 30, budgetTokens: 1200, omitted: { ineligible: 2, unmatched: 14, budget: 1 } }, skills: [{ name: 'review', sha256: 'b'.repeat(64) }], instructions: { sha256: 'c'.repeat(64), characters: 3000, estimatedTokens: 1000 } };

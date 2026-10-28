@@ -2,7 +2,7 @@
 // their parent, a folded parent hides its whole subtree, closed chats leave; the fold is kept in the prefs across a
 // restart (store/ui.ts loadPrefs); a child's open request shows in its ancestors' chat (lib/child-requests.ts).
 import { describe, expect, it } from 'vitest';
-import { chatTree, visibleTree } from '../../src/renderer/lib/chat-tree';
+import { chatTree, childState, kidCounts, visibleTree } from '../../src/renderer/lib/chat-tree';
 import { childRequestsFor, requestHost } from '../../src/renderer/lib/child-requests';
 import type { ChatSummary, PendingRequest } from '../../src/shared/contract';
 
@@ -14,6 +14,17 @@ const chats: Record<string, ChatSummary> = {
 };
 
 describe('chatTree', () => {
+  it('counts live background work after a turn ends, while preserving requests and final reports', () => {
+    const child = c('child', { state: 'idle', pending: 0, background: 1 });
+    expect(kidCounts([childState(child)])).toEqual({ run: 1, wait: 0, stuck: 0, done: 0 });
+    expect(childState({ ...child, background: 0 })).toBe('stall');
+    expect(childState({ ...child, background: 0, agentChildren: { coverage: 'complete', active: 1, total: 1, observedActive: 1, observedTotal: 1, observedAt: 1, children: [] } })).toBe('run');
+    expect(childState({ ...child, background: 0, agentChildren: { coverage: 'partial', active: null, total: null, observedActive: 1, observedTotal: 1, observedAt: 1, children: [] } })).toBe('run');
+    expect(childState({ ...child, pending: 1 })).toBe('wait');
+    expect(childState({ ...child, state: 'error' })).toBe('err');
+    expect(childState({ ...child, closedAt: 10 })).toBe('closed');
+    expect(childState({ ...child, delegation: chats.s2!.delegation })).toBe('done');
+  });
   it('puts each child after its parent, depth first, and counts who still works', () => {
     const tree = chatTree(['r', 'other', 's1', 's2', 'g', 'gone'], chats);
     expect(tree.map(n => [n.id, n.depth])).toEqual([['r', 0], ['s1', 1], ['g', 2], ['s2', 1], ['other', 0]]);

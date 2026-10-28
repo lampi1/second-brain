@@ -54,7 +54,7 @@ export function visibleTree(nodes: readonly TreeNode[], collapsed: Readonly<Reco
 }
 
 export type ChildState = 'start' | 'run' | 'wait' | 'queued' | 'err' | 'stall' | 'refused' | 'done' | 'partial' | 'blocked' | 'noreport' | 'closed';
-type StateRow = Pick<ChatSummary, 'state' | 'pending' | 'queued' | 'closedAt' | 'delegation'>;
+type StateRow = Pick<ChatSummary, 'state' | 'pending' | 'queued' | 'closedAt' | 'delegation' | 'background' | 'agentChildren'>;
 /** Where a delegated chat stands, for its card (DelegationCard.tsx, the states of the tree design): its result once it
  *  reported; otherwise asking the user, queued, failed, starting, working; a turn that ended without agent_report is
  *  "fermo" (it owes its result), or "permesso negato" when the app refused it a permission above its parent's. */
@@ -68,7 +68,7 @@ export function childState(c: StateRow, refused = false): ChildState {
   if (c.queued && c.state !== 'running' && c.state !== 'error') return 'queued';
   if (c.state === 'error') return 'err';
   if (c.state === 'starting') return 'start';
-  if (c.state === 'running') return 'run';
+  if (c.state === 'running' || (c.background ?? 0) > 0 || (c.agentChildren?.active ?? c.agentChildren?.observedActive ?? 0) > 0) return 'run';
   return refused ? 'refused' : 'stall';
 }
 /** Still on the delegated work (a full thread card); the others fold into a compact row. */
